@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAIE-JARVIS Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAFAF8;
+    --panel:#FFFFFF;
+    --ink:#151414;
+    --ink-soft:#5B5856;
+    --line: rgba(20,20,20,0.12);
+    --crimson:#C81D25;
+    --crimson-soft:#F6DCDD;
+    --yellow:#D6E600;
+    --yellow-soft:#F5FBC8;
+    --violet:#5B21B6;
+    --violet-soft:#E7DEF8;
+    --green:#3FA34D;
+    --green-soft:#DFF3E3;
+    --disp: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --body: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:28px 20px 60px;}
+
+  header.top{display:flex; align-items:flex-end; justify-content:space-between; border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:18px; flex-wrap:wrap; gap:10px;}
+  .wordmark{font-family:var(--disp); font-size:44px; letter-spacing:2px; line-height:0.9;}
+  .wordmark span{color:var(--crimson);}
+  .tagline{font-size:12.5px; color:var(--ink-soft); margin-top:4px; letter-spacing:0.3px; max-width:420px;}
+  .streak-badge{font-family:var(--mono); font-size:13px; background:var(--ink); color:var(--bg); padding:8px 12px; display:flex; gap:8px; align-items:baseline;}
+  .streak-badge b{font-family:var(--disp); font-size:22px; color:var(--yellow); letter-spacing:1px;}
+
+  nav.tabs{display:flex; gap:2px; margin-bottom:22px; border:1px solid var(--ink); flex-wrap:wrap;}
+  nav.tabs button{
+    flex:1; min-width:90px; padding:11px 6px; background:var(--panel); border:none; border-right:1px solid var(--ink);
+    font-family:var(--body); font-weight:600; font-size:13px; cursor:pointer; color:var(--ink-soft);
+  }
+  nav.tabs button:last-child{border-right:none;}
+  nav.tabs button.active{background:var(--ink); color:var(--yellow);}
+  nav.tabs button:hover:not(.active){background:#F0EFEC;}
+
+  .panel{background:var(--panel); border:1px solid var(--line); padding:22px;}
+  .panel + .panel{margin-top:16px;}
+  h2.sec{font-family:var(--disp); font-size:26px; letter-spacing:0.5px; margin:0 0 4px;}
+  p.sub{color:var(--ink-soft); font-size:13px; margin:0 0 14px;}
+
+  /* onboarding + explanatory copy */
+  .banner{background:var(--violet-soft); border:1px solid var(--violet); padding:14px 16px; margin-bottom:16px; font-size:13px; line-height:1.55; display:flex; justify-content:space-between; gap:16px; align-items:flex-start;}
+  .banner b.h{display:block; font-family:var(--disp); font-size:17px; letter-spacing:0.5px; margin-bottom:4px; color:var(--violet);}
+  .banner button{background:var(--ink); color:var(--bg); border:none; padding:6px 12px; cursor:pointer; font-size:11px; white-space:nowrap; font-weight:700;}
+  .beginner-note{background:#F5F4F1; border-left:3px solid var(--ink); padding:10px 12px; font-size:12.5px; margin-bottom:16px; line-height:1.55;}
+  .beginner-note b{color:var(--ink);}
+  .gloss{border-bottom:1px dotted var(--ink-soft); cursor:help;}
+
+  /* dashboard */
+  .stat-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:22px;}
+  .stat{border:1px solid var(--line); padding:12px;}
+  .stat .n{font-family:var(--mono); font-size:26px; font-weight:600;}
+  .stat .l{font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px;}
+
+  .cal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .cal-head h3{font-family:var(--disp); font-size:20px; margin:0; letter-spacing:0.5px;}
+  .cal-head button{background:none; border:1px solid var(--ink); font-family:var(--mono); padding:4px 10px; cursor:pointer;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
+  .cal-dow{font-size:10px; text-align:center; color:var(--ink-soft); padding-bottom:4px; text-transform:uppercase;}
+  .cal-day{aspect-ratio:1; border:1px solid var(--line); padding:4px; font-family:var(--mono); font-size:11px; cursor:pointer; position:relative; display:flex; flex-direction:column;}
+  .cal-day.empty{border:none; cursor:default;}
+  .cal-day.today{border-color:var(--ink); border-width:2px;}
+  .cal-day:hover:not(.empty){background:#F5F4F1;}
+  .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:wrap;}
+  .dot{width:6px; height:6px; border-radius:50%;}
+  .dot.fc{background:var(--crimson);} .dot.br{background:var(--yellow); border:1px solid var(--ink);} .dot.cg{background:var(--violet);} .dot.lg{background:#8A8681;}
+  .dot-legend{display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--ink-soft); margin-top:12px; padding-top:10px; border-top:1px dashed var(--line);}
+  .dot-legend .item{display:flex; gap:6px; align-items:center;}
+  .dot-legend .dot{width:9px; height:9px;}
+
+  #dayDetail{margin-top:14px; font-size:13px; border-top:1px dashed var(--line); padding-top:12px;}
+  #dayDetail .entry{padding:6px 0; border-bottom:1px solid var(--line);}
+  .reset-link{font-size:11px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; background:none; border:none; padding:0; margin-top:18px;}
+
+  /* flashcards */
+  select, input[type=number], textarea{font-family:var(--body); font-size:13px; padding:7px 9px; border:1px solid var(--ink); background:var(--panel); color:var(--ink);}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .btn{font-family:var(--body); font-weight:700; font-size:13px; padding:10px 18px; background:var(--ink); color:var(--yellow); border:none; cursor:pointer;}
+  .btn:hover{opacity:0.85;}
+  .btn.secondary{background:none; color:var(--ink); border:1px solid var(--ink);}
+  .btn:disabled{opacity:0.35; cursor:not-allowed;}
+  .toggle-row{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-soft); margin:0 0 16px; cursor:pointer; user-select:none;}
+  .toggle-row input{cursor:pointer;}
+
+  /* legend + figure */
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin:10px 0 0; font-size:12px;}
+  .legend .item{display:flex; gap:6px; align-items:center;}
+  .legend .swatch{width:13px; height:13px; border-radius:50%; border:1.5px solid var(--ink); flex-shrink:0;}
+  .swatch.guard{background:var(--green);} .swatch.tell{background:var(--crimson);} .swatch.target{background:var(--yellow);} .swatch.hurt{background:var(--violet);}
+  .figure-wrap{display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; padding:14px 0 0;}
+  .figure-box{flex:0 0 200px; background:#fff; border:1px solid var(--line);}
+  .figure-caption{font-size:11px; text-align:center; color:var(--ink-soft); padding:4px 8px 8px; line-height:1.4;}
+  .fig-pair{display:flex; gap:14px; flex-wrap:wrap; padding-top:6px;}
+  .fig-pair .figure-box{flex:1 1 180px;}
+  .telemetry{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft); border:1px dashed var(--line); padding:8px 10px; flex:1; min-width:180px;}
+  .telemetry .t-head{font-size:9.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:4px; border-bottom:1px solid var(--line); padding-bottom:4px;}
+  .telemetry .t-row{display:flex; justify-content:space-between; padding:2px 0; gap:8px;}
+  .telemetry b{color:var(--ink);}
+  @keyframes pulseGlow{0%{opacity:0.45;}50%{opacity:1;}100%{opacity:0.45;}}
+  .hurt-pulse{animation:pulseGlow 1.1s ease-in-out infinite;}
+
+  .card-stage{border:2px solid var(--ink); padding:0; min-height:220px; display:flex; flex-direction:column;}
+  .stage-tag{font-family:var(--mono); font-size:11px; letter-spacing:1px; padding:6px 12px; color:var(--panel);}
+  .stage-tag.telegraph{background:var(--crimson);}
+  .stage-tag.visualize{background:var(--ink);}
+  .stage-tag.quiz{background:var(--yellow); color:var(--ink);}
+  .card-body{padding:20px; flex:1; display:flex; flex-direction:column; justify-content:center;}
+  .card-body .move-name{font-family:var(--disp); font-size:28px; letter-spacing:0.5px; margin-bottom:2px;}
+  .cat-chip{display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:0.5px; color:var(--ink-soft); text-transform:uppercase; margin-bottom:8px;}
+  .card-body .desc{font-size:14px; line-height:1.5;}
+  .viz-ring{width:90px; height:90px; border-radius:50%; border:3px solid var(--ink); margin:14px auto; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:26px;}
+  .opt{display:block; width:100%; text-align:left; padding:11px 14px; margin-bottom:8px; border:1px solid var(--ink); background:var(--panel); cursor:pointer; font-size:13px;}
+  .opt:hover{background:#F5F4F1;}
+  .opt.correct{background:var(--yellow-soft); border-color:var(--yellow); font-weight:600;}
+  .opt.wrong{background:var(--crimson-soft); border-color:var(--crimson);}
+  .feedback{padding:14px 20px; font-size:13px; background:#F5F4F1; border-top:1px solid var(--line);}
+  .feedback .tip{margin-top:10px; font-style:italic; color:var(--ink-soft);}
+  .session-summary{text-align:center; padding:30px 20px;}
+  .session-summary .big{font-family:var(--disp); font-size:52px; color:var(--violet);}
+  .session-summary .tip{font-size:12.5px; color:var(--ink-soft); margin-top:4px;}
+  .progress-mini{font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-bottom:10px;}
+
+  /* breathing */
+  .breath-stage{display:flex; flex-direction:column; align-items:center; padding:20px 0;}
+  .breath-ring{width:180px; height:180px; border-radius:50%; border:3px solid var(--ink); background:var(--yellow-soft); display:flex; align-items:center; justify-content:center; transition:transform 1s linear, background 0.5s; margin-bottom:16px;}
+  .breath-ring .phase{font-family:var(--disp); font-size:22px; letter-spacing:1px;}
+  .breath-ring .count{font-family:var(--mono); font-size:34px; display:block;}
+  .clock{font-family:var(--mono); font-size:15px; color:var(--ink-soft);}
+
+  /* cognition */
+  .rt-field{position:relative; height:260px; border:2px solid var(--ink); overflow:hidden; margin-bottom:14px; background:#fff;}
+  .rt-target{position:absolute; width:70px; height:70px; border-radius:50%; cursor:pointer;}
+  .rt-target.go{background:var(--yellow);}
+  .rt-target.nogo{background:var(--crimson);}
+  .rt-msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-size:22px; color:var(--ink-soft);}
+
+  /* logs */
+  .tagset{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0;}
+  .tag{font-size:11px; padding:5px 10px; border:1px solid var(--ink); cursor:pointer; user-select:none;}
+  .tag.on{background:var(--ink); color:var(--yellow);}
+  .log-entry{border-bottom:1px solid var(--line); padding:8px 0; font-size:13px; display:flex; justify-content:space-between; gap:10px;}
+  .log-entry button{background:none; border:none; color:var(--crimson); cursor:pointer; font-size:12px;}
+
+  .disclaimer{font-size:11px; color:var(--ink-soft); border-top:1px solid var(--line); margin-top:26px; padding-top:12px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="wordmark">RAIE<span>-</span>JARVIS</div>
+      <div class="tagline">Closed-loop combat training console — read tells, breathe on cue, sharpen reaction time, and log the rest. Four short drills, one streak.</div>
+    </div>
+    <div class="streak-badge">CURRENT STREAK <b id="streakNum">0</b> DAYS</div>
+  </header>
+
+  <nav class="tabs" id="tabNav"></nav>
+  <div id="content"></div>
+
+  <div class="disclaimer">
+    All data is stored to your account only. This tool is for training organization and general conditioning/breathing education — it isn't medical guidance. Scale intensity to your actual condition, and check with a coach or physician before pushing max-effort work.
+  </div>
+</div>
+
+<script>
+/* ---------------- storage helpers ---------------- */
+const todayStr = (d=new Date()) => d.toISOString().slice(0,10);
+async function getJSON(key, fallback){
+  try{ const r = await window.storage.get(key, false); return r ? JSON.parse(r.value) : fallback; }
+  catch(e){ return fallback; }
+}
+async function setJSON(key, val){
+  try{ await window.storage.set(key, JSON.stringify(val), false); return true; }
+  catch(e){ console.error('storage error', e); return false; }
+}
+function emptyDay(){ return { flashcards:[], breathing:[], cognition:[], nutrition:[], cardio:[] }; }
+async function getDay(dateStr){ return await getJSON('day:'+dateStr, emptyDay()); }
+async function saveDay(dateStr, dayObj){
+  await setJSON('day:'+dateStr, dayObj);
+  let days = await getJSON('index:days', []);
+  if(!days.includes(dateStr)){ days.push(dateStr); await setJSON('index:days', days); STATE.days = new Set(days); }
+}
+
+/* ---------------- state ---------------- */
+const STATE = {
+  tab:'dashboard',
+  days: new Set(),
+  calMonth: new Date().getMonth(),
+  calYear: new Date().getFullYear(),
+  selectedDay: null,
+  showTelemetry: false, // beginners keep this off; it just reveals the raw x/y/z math behind each figure
+};
+
+/* ---------------- technique bank (subset, pulled from the library) ---------------- */
+/* pose = which stick-figure family to draw · zone = body region for the target/hurt marker */
+const BANK = [
+  {cat:'Punches', name:'Lead Jab', telegraph:'Lead elbow flares 2 in. outward, lead shoulder hitches before extension.', exposure:'Slipped outside — floating ribs, liver, solar plexus open.', cascade:'Liver strike drops guard — temple opens for follow-up hook.', pose:'punch-lead', zone:'ribs'},
+  {cat:'Punches', name:'Rear Cross', telegraph:'Rear heel pivots off canvas early, rear hip rotates in.', exposure:'Ducked under — solar plexus or takedown entry opens.', cascade:'Breath stoppage freezes posture — chin/throat open for overhand.', pose:'punch-rear', zone:'solarPlexus'},
+  {cat:'Punches', name:'Lead Hook', telegraph:'Lead hand drops below chest, weight shifts to lead hip.', exposure:'Leanback — floating ribs, liver, rear thigh open.', cascade:'Body impact drops head — temple opens for follow-up.', pose:'punch-lead', zone:'liver'},
+  {cat:'Punches', name:'Overhand Right', telegraph:'Head dips low outside lead knee, rear arm winds back wide.', exposure:'Stepped inside — back of legs open for double-leg.', cascade:'Takedown lands them — neck opens for ground-and-pound.', pose:'punch-rear', zone:'hip'},
+  {cat:'Punches', name:'Lead Uppercut', telegraph:'Lead shoulder and hip dip, hand drops below waist.', exposure:'Slip/leanback — chest, solar plexus, or reactive double-leg opens.', cascade:'Head snaps up — throat/jaw open for rear cross.', pose:'punch-lead', zone:'chin'},
+  {cat:'Kicks', name:'Rear Low Leg Kick', telegraph:'Lead foot steps 45° outward, rear hand drops for balance.', exposure:'Checked/stepped inside — head fully open.', cascade:'Weight collapses onto lead leg — head kick opens.', pose:'kick-rear', zone:'temple'},
+  {cat:'Kicks', name:'Front Teep', telegraph:'Lead knee chambers to chest height, torso leans back.', exposure:'Caught foot — hip and back exposed for takedown.', cascade:'Driven into fence — cage-clinch knees open.', pose:'kick-lead', zone:'hip'},
+  {cat:'Kicks', name:'Spinning Heel Kick', telegraph:'Lead foot steps across body line, head turns over rear shoulder.', exposure:'Opponent backs up straight — midsection open to the long arc.', cascade:'Core spasm drops guard — chin opens for follow-up.', pose:'kick-rear', zone:'liver'},
+  {cat:'Clinch', name:'Rear Elbow (Clinch)', telegraph:'Rear thumb to collarbone, elbow flares high and horizontal.', exposure:'Blocked high — midsection open for body knees or underhooks.', cascade:'High shell forms — knee-to-body or double-leg opens.', pose:'clinch', zone:'ribs'},
+  {cat:'Clinch', name:'Thai Clinch Knee', telegraph:'Hands cup behind crown, elbows pinch to seal throat.', exposure:'Posture broken down — sternum and face open to knee.', cascade:'Breath drains — hands drop, top of head opens.', pose:'clinch', zone:'sternum'},
+  {cat:'Takedowns', name:'Double-Leg Shoot', telegraph:'Eyes drop to waist, hips sink, lead knee bends past 90°.', exposure:'Sprawled — neck open for guillotine, or solar plexus for knees.', cascade:'Knee halts the drive — jaw angle opens.', pose:'shoot', zone:'neck'},
+  {cat:'Takedowns', name:'Single-Leg Entry', telegraph:'Torso lowers, lead leg steps deep, lead hand scoops behind the knee.', exposure:'Sprawled/stuffed — top of head opens for front headlock.', cascade:'Takedown lands — guard pass or knee-on-belly opens.', pose:'shoot', zone:'neck'},
+  {cat:'Defense', name:'Sprawl', telegraph:'Hips drive down, legs shoot back wide, hands frame the neck.', exposure:'Stuffed shot — neck and ribs open under weight.', cascade:'Forced to knees — front headlock or elbows open.', pose:'defense', zone:'neck'},
+  {cat:'Defense', name:'Check Hook', telegraph:'Lead foot pivots 90° back as opponent rushes forward.', exposure:'Charging opponent — jaw exposed to double impact force.', cascade:'Spins them 180° — back or rear leg high kick opens.', pose:'punch-lead', zone:'chin'},
+  {cat:'Ground', name:'Half-Guard Pass', telegraph:'Cross-face frame, weight to lead hip, knee slices across the bottom leg.', exposure:'Flattens under cross-face — far armpit and neck open.', cascade:'Pass completes — kimura or rear-naked choke opens.', pose:'ground', zone:'neck'},
+  {cat:'Ground', name:'Rear-Naked Choke', telegraph:'Seatbelt hooks engaged, choking arm under chin, bicep on trachea.', exposure:'Both hands fight the arm — body triangle or face-leverage opens.', cascade:'Carotid compression — temple shots or tap opens.', pose:'ground', zone:'throat'},
+  {cat:'Submissions', name:'Guillotine', telegraph:'Head trapped under armpit, free arm grips own wrist, hips sit back.', exposure:'Postures up or drives forward — throat trapped in the path.', cascade:'Hands rise to fight the grip — back exposes for a takedown.', pose:'ground', zone:'throat'},
+  {cat:'Submissions', name:'Kimura', telegraph:'Underhook converts to a figure-four grip on the wrist.', exposure:'Posts the trapped arm to block a pass — shoulder fully loaded.', cascade:'Forced roll to escape — back exposes, or the lock finishes.', pose:'ground', zone:'sternum'},
+  {cat:'Psych Traps', name:'Jab Feint to Overhand', telegraph:'Rapid 2 in. lead-hand extension plus a foot stomp.', exposure:'High parry shell reaction — blind side flank opens.', cascade:'Overhand breaches shell — neck opens for guillotine.', pose:'punch-lead', zone:'temple'},
+  {cat:'Psych Traps', name:'Cage-Wall Bait', telegraph:'Back up to the mesh, drop guard 2 in. to invite aggression.', exposure:'Opponent overcommits forward — lead leg and flank open.', cascade:'Pivot spins them into the fence — spine opens.', pose:'defense', zone:'thigh'},
+];
+
+/* ---------------- stick-figure skeleton system ---------------- */
+/* Every joint is stored as {x, y, z}. x/y are position in a body-space grid (y=up),
+   z is depth from -1 (rear, away from opponent) to 1 (lead, toward opponent).
+   A cheap x/y/z-to-2D projection (scale + parallax skew by z) gives the pseudo-3D look:
+   joints closer to you (z>0) draw slightly bigger, offset sideways, and in front of the others. */
+const BASE_POSE = {
+  head:{x:2, y:172, z:0.1}, neck:{x:0, y:150, z:0},
+  chest:{x:0, y:128, z:0}, hips:{x:0, y:80, z:0},
+  leadShoulder:{x:16, y:130, z:0.5}, rearShoulder:{x:-16, y:126, z:-0.5},
+  leadElbow:{x:32, y:108, z:0.65}, rearElbow:{x:-26, y:100, z:-0.65},
+  leadHand:{x:40, y:140, z:0.85}, rearHand:{x:-8, y:148, z:-0.85},
+  leadHip:{x:13, y:80, z:0.35}, rearHip:{x:-13, y:80, z:-0.35},
+  leadKnee:{x:20, y:44, z:0.45}, rearKnee:{x:-16, y:44, z:-0.45},
+  leadFoot:{x:28, y:4, z:0.55}, rearFoot:{x:-30, y:4, z:-0.55},
+};
+const BONES = [
+  ['head','neck'],['neck','chest'],['chest','leadShoulder'],['chest','rearShoulder'],
+  ['leadShoulder','leadElbow'],['leadElbow','leadHand'],
+  ['rearShoulder','rearElbow'],['rearElbow','rearHand'],
+  ['chest','hips'],['hips','leadHip'],['hips','rearHip'],
+  ['leadHip','leadKnee'],['leadKnee','leadFoot'],
+  ['rearHip','rearKnee'],['rearKnee','rearFoot'],
+];
+const ZONES = {
+  liver:{x:-9,y:96}, ribs:{x:11,y:101}, solarPlexus:{x:0,y:112}, sternum:{x:0,y:120},
+  chin:{x:2,y:164}, temple:{x:11,y:172}, throat:{x:0,y:150}, neck:{x:0,y:150},
+  knee:{x:20,y:44}, thigh:{x:16,y:64}, hip:{x:13,y:80},
+};
+/* human-readable label for a zone key, e.g. "solarPlexus" -> "Solar Plexus" */
+function zoneLabel(z){
+  return z.replace(/([A-Z])/g,' $1').replace(/^./,ch=>ch.toUpperCase());
+}
+/* per-pose-family deltas applied on top of BASE_POSE. small=telegraph, big=exposure(+cascade) */
+const POSE_FAMILIES = {
+  'punch-lead': { tellJoint:'leadElbow',
+    small:{leadElbow:{x:10,y:-8,z:0.1}, leadShoulder:{x:2,y:-4,z:0}},
+    big:{leadElbow:{x:26,y:6,z:0.35}, leadHand:{x:34,y:14,z:0.5}, leadShoulder:{x:6,y:-2,z:0.1}, head:{x:14,y:-6,z:0.2}} },
+  'punch-rear': { tellJoint:'rearShoulder',
+    small:{rearFoot:{x:6,y:2,z:0.1}, rearHip:{x:4,y:0,z:0.1}},
+    big:{rearHand:{x:38,y:2,z:0.7}, rearElbow:{x:24,y:-2,z:0.5}, rearShoulder:{x:14,y:-4,z:0.4}, head:{x:16,y:-8,z:0.3}} },
+  'kick-lead': { tellJoint:'leadKnee',
+    small:{leadKnee:{x:-4,y:20,z:-0.1}, leadFoot:{x:-10,y:14,z:-0.2}},
+    big:{leadKnee:{x:0,y:10,z:0.4}, leadFoot:{x:30,y:6,z:0.6}, hips:{x:-4,y:-4,z:0}, head:{x:-4,y:-6,z:-0.1}} },
+  'kick-rear': { tellJoint:'rearKnee',
+    small:{rearKnee:{x:6,y:16,z:0.1}, rearFoot:{x:2,y:12,z:0.1}},
+    big:{rearKnee:{x:26,y:4,z:0.5}, rearFoot:{x:44,y:-2,z:0.8}, hips:{x:6,y:-6,z:0.1}, head:{x:-2,y:-8,z:-0.1}} },
+  'clinch': { tellJoint:'leadHand',
+    small:{leadHand:{x:-16,y:14,z:-0.3}, rearHand:{x:10,y:8,z:0.3}},
+    big:{leadHand:{x:-22,y:20,z:-0.4}, rearHand:{x:16,y:14,z:0.4}, head:{x:0,y:-14,z:0}, chest:{x:0,y:-6,z:0}} },
+  'shoot': { tellJoint:'hips',
+    small:{hips:{x:0,y:-14,z:0.1}, head:{x:0,y:-10,z:0.2}, chest:{x:0,y:-10,z:0.1}},
+    big:{hips:{x:0,y:-30,z:0.3}, head:{x:6,y:-26,z:0.5}, chest:{x:2,y:-24,z:0.3}, leadHand:{x:-10,y:-28,z:0.4}} },
+  'defense': { tellJoint:'chest',
+    small:{chest:{x:-6,y:-4,z:-0.1}, head:{x:-8,y:-2,z:-0.1}},
+    big:{chest:{x:-14,y:-10,z:-0.2}, hips:{x:-14,y:-4,z:-0.2}, head:{x:-16,y:-6,z:-0.2}} },
+  'ground': { tellJoint:'chest',
+    small:{chest:{x:0,y:-18,z:0}, head:{x:0,y:-14,z:0}, hips:{x:0,y:-30,z:0}},
+    big:{chest:{x:4,y:-24,z:0.1}, head:{x:6,y:-20,z:0.15}, hips:{x:0,y:-34,z:0}, rearHand:{x:14,y:-16,z:0.3}} },
+};
+
+function addDelta(base, delta){ const o={}; for(const k in base){ const d=delta&&delta[k]; o[k]={x:base[k].x+(d?d.x:0), y:base[k].y+(d?d.y:0), z:base[k].z+(d?d.z:0)}; } return o; }
+
+function poseFor(family, state){
+  const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
+  if(state==='telegraph') return addDelta(BASE_POSE, fam.small);
+  const exposed = addDelta(BASE_POSE, fam.big);
+  if(state==='exposure') return exposed;
+  /* cascade: exposure pose plus a further collapse toward the ground */
+  const collapse = {}; for(const k in exposed){ collapse[k] = {x:exposed[k].x*0.9, y:exposed[k].y-16, z:exposed[k].z}; }
+  return collapse;
+}
+
+function project(p, cx, cy, s){
+  const depth = 1 + p.z*0.16;
+  return { x: cx + (p.x + p.z*11) * s * depth, y: cy - (p.y) * s * depth };
+}
+
+function renderStickFigure(family, state, zoneKey){
+  const pose = poseFor(family, state);
+  const cx=100, cy=182, s=0.72;
+  const proj = {}; for(const k in pose) proj[k] = project(pose[k], cx, cy, s);
+  const bones = BONES.map(([a,b])=>{
+    const pa=proj[a], pb=proj[b];
+    const front = (pose[a].z+pose[b].z)/2 > 0;
+    return `<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" stroke="${front?'#151414':'#8A8681'}" stroke-width="${front?4:3}" stroke-linecap="round"/>`;
+  }).join('');
+  const joints = Object.keys(pose).filter(k=>k!=='head').map(k=>{
+    const p=proj[k]; const r = 3 + (pose[k].z>0?1.5:0);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="#151414"/>`;
+  }).join('');
+  const headP = proj.head;
+  const headR = 14 * (1+pose.head.z*0.16);
+  const headCircle = `<circle cx="${headP.x.toFixed(1)}" cy="${headP.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="#fff" stroke="#151414" stroke-width="3.5"/>`;
+
+  /* guard marker: shown only in the telegraph state, green rings on both hands = "still guarded" */
+  let guardMarks = '';
+  if(state==='telegraph'){
+    ['leadHand','rearHand'].forEach(k=>{
+      const p = proj[k];
+      guardMarks += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="none" stroke="#3FA34D" stroke-width="2.5"/>`;
+    });
+  }
+  /* tell marker: crimson ring on the joint giving away the move, telegraph state only */
+  let tellMark = '';
+  if(state==='telegraph'){
+    const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
+    const p = proj[fam.tellJoint];
+    tellMark = `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="11" fill="none" stroke="#C81D25" stroke-width="3"/>`;
+  }
+  /* target/hurt marker at the body zone */
+  let zoneMark = '';
+  if((state==='exposure' || state==='cascade') && ZONES[zoneKey]){
+    const zp = project({...ZONES[zoneKey], z:0.3}, cx, cy, s);
+    if(state==='exposure'){
+      zoneMark = `<g>
+        <circle cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="14" fill="none" stroke="#D6E600" stroke-width="3"/>
+        <line x1="${(zp.x-18).toFixed(1)}" y1="${zp.y.toFixed(1)}" x2="${(zp.x+18).toFixed(1)}" y2="${zp.y.toFixed(1)}" stroke="#D6E600" stroke-width="1.5"/>
+        <line x1="${zp.x.toFixed(1)}" y1="${(zp.y-18).toFixed(1)}" x2="${zp.x.toFixed(1)}" y2="${(zp.y+18).toFixed(1)}" stroke="#D6E600" stroke-width="1.5"/>
+      </g>`;
+    } else {
+      zoneMark = `<circle class="hurt-pulse" cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="16" fill="#5B21B6" fill-opacity="0.45" stroke="#5B21B6" stroke-width="2"/>`;
+    }
+  }
+  return { svg: `<svg viewBox="0 0 200 200" width="100%" height="200">${bones}${joints}${headCircle}${guardMarks}${tellMark}${zoneMark}</svg>`, pose, proj };
+}
+
+function telemetryTable(pose, family, state, zoneKey){
+  const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
+  const rows = [];
+  const tj = fam.tellJoint;
+  rows.push(['TELL·'+tj, pose[tj]]);
+  if(ZONES[zoneKey]) rows.push(['ZONE·'+zoneKey, {...ZONES[zoneKey], z:0.3}]);
+  rows.push(['HEAD', pose.head]);
+  return `<div class="t-head">Joint coordinates (x, y = position on the body grid · z = depth toward/away from you)</div>` +
+    rows.map(([label,p])=>
+      `<div class="t-row"><span>${label}</span><b>x:${p.x.toFixed(1)} y:${p.y.toFixed(1)} z:${p.z.toFixed(2)}</b></div>`
+    ).join('');
+}
+
+/* legend explaining what each marker color means, reused across every flashcard stage */
+function markerLegend(){
+  return `<div class="legend">
+    <div class="item"><span class="swatch guard"></span> Guard — hands still covering</div>
+    <div class="item"><span class="swatch tell"></span> Tell — the giveaway movement</div>
+    <div class="item"><span class="swatch target"></span> Opening — where you can land now</div>
+    <div class="item"><span class="swatch hurt"></span> Follow-up — what opens next if unanswered</div>
+  </div>`;
+}
+
+/* builds one figure + (optional) telemetry readout, used by every flashcard stage */
+function figureBlock(card, state, caption){
+  const { svg, pose } = renderStickFigure(card.pose, state, card.zone);
+  const tel = STATE.showTelemetry ? `<div class="telemetry">${telemetryTable(pose, card.pose, state, card.zone)}</div>` : '';
+  return `<div class="figure-wrap">
+    <div class="figure-box">${svg}<div class="figure-caption">${caption}</div></div>
+    ${tel}
+  </div>`;
+}
+
+/* ---------------- init ---------------- */
+async function init(){
+  const days = await getJSON('index:days', []);
+  STATE.days = new Set(days);
+  renderNav();
+  renderTab();
+}
+
+function renderNav(){
+  const tabs = [['dashboard','Dashboard'],['flashcards','Flashcards'],['breathing','Breathing'],['cognition','Cognition'],['logs','Logs']];
+  const nav = document.getElementById('tabNav');
+  nav.innerHTML = tabs.map(([id,label]) =>
+    `<button class="${STATE.tab===id?'active':''}" onclick="switchTab('${id}')">${label}</button>`
+  ).join('');
+}
+window.switchTab = function(id){
+  stopLiveTimers(); // leaving a tab mid-drill must not leave a timer running against DOM that's about to be replaced
+  STATE.tab = id; renderNav(); renderTab();
+};
+/* clears any interval/timeout owned by an in-progress drill; called whenever we navigate away from it */
+function stopLiveTimers(){
+  if(brSession){ clearInterval(brSession.timer); brSession = null; }
+  if(cogSession){ clearTimeout(cogSession.timeoutId); clearTimeout(cogSession.noGoTimeout); cogSession = null; }
+  if(fcVizTimer){ clearInterval(fcVizTimer); fcVizTimer = null; }
+}
+
+function renderTab(){
+  const c = document.getElementById('content');
+  if(STATE.tab==='dashboard') return renderDashboard(c);
+  if(STATE.tab==='flashcards') return renderFlashcards(c);
+  if(STATE.tab==='breathing') return renderBreathing(c);
+  if(STATE.tab==='cognition') return renderCognition(c);
+  if(STATE.tab==='logs') return renderLogs(c);
+}
+
+/* ================= DASHBOARD ================= */
+async function computeStreak(){
+  let streak = 0;
+  let d = new Date();
+  while(true){
+    const ds = todayStr(d);
+    if(STATE.days.has(ds)){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+async function weekCounts(){
+  const counts = {flashcards:0, breathing:0, cognition:0, logs:0};
+  const now = new Date();
+  for(let i=0;i<7;i++){
+    const d = new Date(now); d.setDate(now.getDate()-i);
+    const ds = todayStr(d);
+    if(!STATE.days.has(ds)) continue;
+    const day = await getDay(ds);
+    counts.flashcards += day.flashcards.length;
+    counts.breathing += day.breathing.length;
+    counts.cognition += day.cognition.length;
+    counts.logs += day.nutrition.length + day.cardio.length;
+  }
+  return counts;
+}
+
+async function renderDashboard(c){
+  c.innerHTML = `<div class="panel">Loading…</div>`;
+  const streak = await computeStreak();
+  document.getElementById('streakNum').textContent = streak;
+  const wk = await weekCounts();
+  const dismissed = await getJSON('ui:onboardingDismissed', false);
+
+  const banner = dismissed ? '' : `<div class="banner">
+      <div><b class="h">Welcome — here's the loop</b>
+      Four short drills, one console: <b>Flashcards</b> train you to spot an opponent's tell and call the opening it creates before it lands. <b>Breathing</b> paces your nervous system with a simple on-screen timer. <b>Cognition</b> is a quick reaction/impulse-control test. <b>Logs</b> is a no-pressure place to jot nutrition and cardio. Complete any of them and today lights up on the calendar below — do that daily and the streak counter (top right) climbs.</div>
+      <button onclick="dismissOnboarding()">Got it</button>
+    </div>`;
+
+  c.innerHTML = `
+    <div class="panel">
+      <h2 class="sec">Dashboard</h2>
+      <p class="sub">Everything you've completed, at a glance.</p>
+      ${banner}
+      <div class="stat-row">
+        <div class="stat"><div class="n">${wk.flashcards}</div><div class="l">Flashcard drills · 7d</div></div>
+        <div class="stat"><div class="n">${wk.breathing}</div><div class="l">Breathing sessions · 7d</div></div>
+        <div class="stat"><div class="n">${wk.cognition}</div><div class="l">Cognition tests · 7d</div></div>
+        <div class="stat"><div class="n">${wk.logs}</div><div class="l">Nutrition/cardio logs · 7d</div></div>
+      </div>
+      <div class="cal-head">
+        <button onclick="calNav(-1)">‹</button>
+        <h3 id="calTitle"></h3>
+        <button onclick="calNav(1)">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="dot-legend">
+        <div class="item"><span class="dot fc"></span> Flashcards done</div>
+        <div class="item"><span class="dot br"></span> Breathing done</div>
+        <div class="item"><span class="dot cg"></span> Cognition done</div>
+        <div class="item"><span class="dot lg"></span> Nutrition/cardio logged</div>
+      </div>
+      <p class="sub" style="margin:8px 0 0;">Click any day to see exactly what you did.</p>
+      <div id="dayDetail"></div>
+      <button class="reset-link" onclick="resetAll()">Reset all stored data</button>
+    </div>
+  `;
+  renderCalendar();
+}
+
+window.dismissOnboarding = async function(){
+  await setJSON('ui:onboardingDismissed', true);
+  renderTab();
+};
+
+function calNav(delta){
+  STATE.calMonth += delta;
+  if(STATE.calMonth<0){ STATE.calMonth=11; STATE.calYear--; }
+  if(STATE.calMonth>11){ STATE.calMonth=0; STATE.calYear++; }
+  renderCalendar();
+}
+
+async function renderCalendar(){
+  const y = STATE.calYear, m = STATE.calMonth;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calTitle').textContent = `${monthNames[m]} ${y}`;
+  const first = new Date(y,m,1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const dows = ['S','M','T','W','T','F','S'];
+  let html = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<startDow;i++) html += `<div class="cal-day empty"></div>`;
+  const todayDs = todayStr();
+  const dateStrs = [];
+  for(let day=1; day<=daysInMonth; day++){
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    dateStrs.push(ds);
+    html += `<div class="cal-day ${ds===todayDs?'today':''}" id="cal-${ds}" onclick="showDay('${ds}')">${day}
+      <div class="dots" id="dots-${ds}"></div>
+    </div>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
+
+  /* fill in per-category dots for days that have entries, so the calendar shows
+     which of the four drills you actually did (not just "something happened") */
+  for(const ds of dateStrs){
+    if(!STATE.days.has(ds)) continue;
+    const day = await getDay(ds);
+    const dotsEl = document.getElementById('dots-'+ds);
+    if(!dotsEl) continue;
+    let d = '';
+    if(day.flashcards.length) d += '<div class="dot fc" title="Flashcards"></div>';
+    if(day.breathing.length) d += '<div class="dot br" title="Breathing"></div>';
+    if(day.cognition.length) d += '<div class="dot cg" title="Cognition"></div>';
+    if(day.nutrition.length || day.cardio.length) d += '<div class="dot lg" title="Logs"></div>';
+    dotsEl.innerHTML = d;
+  }
+}
+
+window.calNav = calNav;
+window.showDay = async function(ds){
+  const day = await getDay(ds);
+  const rows = [];
+  day.flashcards.forEach(x=>rows.push(`Flashcards — ${x.category}: ${x.correct}/${x.total} correct, avg reaction ${x.avgMs}ms`));
+  day.breathing.forEach(x=>rows.push(`Breathing — ${x.protocol}, ${x.cycles} cycles, ${x.durationSec}s`));
+  day.cognition.forEach(x=>rows.push(`Cognition — ${x.mode}, avg ${x.avgMs}ms`));
+  day.nutrition.forEach(x=>rows.push(`Nutrition — ${x.text}${x.tags.length?' ('+x.tags.join(', ')+')':''}`));
+  day.cardio.forEach(x=>rows.push(`Cardio — ${x.type}, ${x.minutes} min, RPE ${x.rpe}`));
+  const el = document.getElementById('dayDetail');
+  el.innerHTML = `<b>${ds}</b>` + (rows.length ? rows.map(r=>`<div class="entry">${r}</div>`).join('') : `<div class="entry">No entries logged.</div>`);
+};
+
+window.resetAll = async function(){
+  if(!confirm('This clears all locally stored training data for this account. Continue?')) return;
+  const days = await getJSON('index:days', []);
+  for(const ds of days){ await setJSON('day:'+ds, emptyDay()); }
+  await setJSON('index:days', []);
+  STATE.days = new Set();
+  renderTab();
+};
+
+/* ================= FLASHCARDS ================= */
+let fcSession = null;
+let fcVizTimer = null;
+
+function renderFlashcards(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2 class="sec">Flashcard Drills</h2>
+      <p class="sub">Telegraph → visualize the reaction → call the exposure before it's shown. Reaction time is timed from the moment the question appears.</p>
+      <div class="beginner-note">
+        <b>How this drill works:</b> Every strike gives off a small "tell" before it lands — a shoulder dipping, a foot turning, a hand dropping. <b>State 1</b> shows you that tell on a stick figure. <b>Visualize</b> gives you three seconds to picture the reaction. <b>State 2</b> asks you to name the opening it creates — pick before it's revealed. The feedback then shows the danger zone that opens <i>next</i> if it goes unanswered.
+        ${markerLegend()}
+      </div>
+      <div class="row">
+        <select id="fcCat">
+          <option value="All">All categories</option>
+          ${[...new Set(BANK.map(b=>b.cat))].map(cat=>`<option value="${cat}">${cat}</option>`).join('')}
+        </select>
+        <select id="fcLen">
+          <option value="5">5 cards</option>
+          <option value="10" selected>10 cards</option>
+          <option value="15">15 cards</option>
+        </select>
+        <button class="btn" onclick="startFlashcards()">Start Session</button>
+      </div>
+      <label class="toggle-row"><input type="checkbox" id="fcTelemetry" ${STATE.showTelemetry?'checked':''} onchange="STATE.showTelemetry=this.checked"> Show the raw x/y/z targeting math under each figure (optional, for the curious)</label>
+      <div id="fcStage"></div>
+    </div>
+  `;
+}
+
+window.startFlashcards = function(){
+  const cat = document.getElementById('fcCat').value;
+  const len = parseInt(document.getElementById('fcLen').value);
+  let pool = cat==='All' ? BANK.slice() : BANK.filter(b=>b.cat===cat);
+  pool = pool.sort(()=>Math.random()-0.5).slice(0, Math.min(len, pool.length));
+  fcSession = { cards: pool, idx: 0, correct:0, reactions:[], phase:'telegraph' };
+  runFlashcardStage();
+};
+
+function runFlashcardStage(){
+  const stage = document.getElementById('fcStage');
+  if(!fcSession || fcSession.idx >= fcSession.cards.length){
+    const avg = fcSession && fcSession.reactions.length ? Math.round(fcSession.reactions.reduce((a,b)=>a+b,0)/fcSession.reactions.length) : 0;
+    if(fcSession){
+      logFlashcardSession(fcSession);
+    }
+    const tip = avg===0 ? '' : avg<600 ? 'Sharp — that\'s fight-pace recognition.' : avg<1000 ? 'Solid. Keep drilling to shave off tenths of a second.' : 'No rush — recognition speed comes with reps. Use the Visualize step fully.';
+    stage.innerHTML = `
+      <div class="card-stage"><div class="session-summary">
+        <div class="big">${fcSession ? fcSession.correct : 0}/${fcSession ? fcSession.cards.length : 0}</div>
+        <p>Avg reaction: <b>${avg}ms</b></p>
+        <p class="tip">${tip}</p>
+        <button class="btn" onclick="renderFlashcards(document.getElementById('content'))">Run Another Session</button>
+      </div></div>`;
+    fcSession = null;
+    return;
+  }
+  const card = fcSession.cards[fcSession.idx];
+  fcSession.phase = 'telegraph';
+  stage.innerHTML = `
+    <div class="progress-mini">Card ${fcSession.idx+1} / ${fcSession.cards.length} · ${card.cat}</div>
+    <div class="card-stage">
+      <div class="stage-tag telegraph">STATE 1 — TELEGRAPH</div>
+      <div class="card-body">
+        <div class="move-name">${card.name}</div>
+        <div class="desc">${card.telegraph}</div>
+        ${figureBlock(card,'telegraph','Green rings = still guarded. Red ring = the tell that gives it away.')}
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button class="btn" onclick="startVisualize()">Visualize The Reaction</button>
+    </div>
+  `;
+}
+
+window.startVisualize = function(){
+  const card = fcSession.cards[fcSession.idx];
+  const stage = document.getElementById('fcStage');
+  let secs = 3;
+  stage.innerHTML = `
+    <div class="card-stage">
+      <div class="stage-tag visualize">VISUALIZE</div>
+      <div class="card-body" style="text-align:center;">
+        <div class="desc">Close your eyes. See the telegraph. Feel yourself already reacting.</div>
+        <div class="viz-ring"><span id="vizCount">${secs}</span></div>
+        ${figureBlock(card,'telegraph','Hold this picture in your head — where does this opponent open up?')}
+      </div>
+    </div>
+  `;
+  fcVizTimer = setInterval(()=>{
+    secs--;
+    const el = document.getElementById('vizCount');
+    if(el) el.textContent = secs;
+    if(secs<=0){ clearInterval(fcVizTimer); fcVizTimer = null; startQuiz(); }
+  }, 1000);
+};
+
+function startQuiz(){
+  const card = fcSession.cards[fcSession.idx];
+  const distractors = BANK.filter(b=>b!==card).sort(()=>Math.random()-0.5).slice(0,2).map(b=>b.exposure);
+  const options = [card.exposure, ...distractors].sort(()=>Math.random()-0.5);
+  fcSession.qStart = performance.now();
+  const stage = document.getElementById('fcStage');
+  stage.innerHTML = `
+    <div class="card-stage">
+      <div class="stage-tag quiz">STATE 2 — WHAT DOES THIS EXPOSE?</div>
+      <div class="card-body">
+        <div class="move-name">${card.name}</div>
+        ${figureBlock(card,'telegraph','Same tell as before — pick the opening it creates.')}
+        ${options.map(o=>`<button class="opt" onclick="answerFlashcard(this,'${escapeAttr(o)}')">${o}</button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+function escapeAttr(s){ return s.replace(/'/g,"\\'"); }
+
+window.answerFlashcard = function(btn, chosen){
+  const card = fcSession.cards[fcSession.idx];
+  const reactionMs = Math.round(performance.now() - fcSession.qStart);
+  fcSession.reactions.push(reactionMs);
+  const isCorrect = chosen === card.exposure;
+  if(isCorrect) fcSession.correct++;
+  document.querySelectorAll('.opt').forEach(o=>{
+    o.style.pointerEvents='none';
+    if(o.textContent === card.exposure) o.classList.add('correct');
+    else if(o===btn) o.classList.add('wrong');
+  });
+  const stage = document.getElementById('fcStage');
+  const feedback = document.createElement('div');
+  feedback.className = 'feedback';
+  feedback.innerHTML = `<b>${isCorrect?'Correct':'Missed it'}</b> · ${reactionMs}ms reaction
+    <div class="fig-pair">
+      ${figureBlock(card,'exposure','Opening: ' + zoneLabel(card.zone))}
+      ${figureBlock(card,'cascade','If unanswered: ' + card.cascade)}
+    </div>
+    <button class="btn" onclick="nextFlashcard()" style="margin-top:6px;">Next Card</button>`;
+  stage.querySelector('.card-stage').appendChild(feedback);
+};
+
+window.nextFlashcard = function(){
+  fcSession.idx++;
+  runFlashcardStage();
+};
+
+async function logFlashcardSession(sess){
+  const ds = todayStr();
+  const day = await getDay(ds);
+  const avg = sess.reactions.length ? Math.round(sess.reactions.reduce((a,b)=>a+b,0)/sess.reactions.length) : 0;
+  day.flashcards.push({ ts: Date.now(), category: document.getElementById('fcCat') ? document.getElementById('fcCat').value : 'All', correct: sess.correct, total: sess.cards.length, avgMs: avg });
+  await saveDay(ds, day);
+}
+
+/* ================= BREATHING ================= */
+const PROTOCOLS = {
+  box: { label:'Box Breathing 4-4-4-4', blurb:'Breathe in for 4 seconds, hold 4, breathe out 4, hold 4 — repeat. A fast, even way to settle your nervous system before or after training.', phases:[['Inhale',4],['Hold',4],['Exhale',4],['Hold',4]] },
+  exhale: { label:'Extended-Exhale 4-7', blurb:'In for 4, out for 7. The longer exhale nudges your body toward "rest and digest" — good for winding down after a hard session.', phases:[['Inhale',4],['Exhale',7]] },
+  nasal: { label:'Nasal Steady-State', blurb:'One long, steady 60-second breathing cycle through the nose. Use it as a baseline check — can you stay smooth and unhurried for the full minute?', phases:[['Breathe',60]] },
+};
+let brSession = null;
+
+function renderBreathing(c){
+  const proto = PROTOCOLS[document.getElementById('brProto')?.value || 'box'];
+  c.innerHTML = `
+    <div class="panel">
+      <h2 class="sec">Breathing Timer</h2>
+      <p class="sub">Pick a protocol and a target cycle count. The ring paces you; the clock is your stopwatch.</p>
+      <div class="beginner-note" id="brBlurb">${PROTOCOLS.box.blurb} Watch the ring: it grows on the inhale, shrinks on the exhale, and just pauses on a hold.</div>
+      <div class="row">
+        <select id="brProto" onchange="updateBrBlurb()">
+          ${Object.entries(PROTOCOLS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+        </select>
+        <label style="font-size:13px;">Target cycles <input type="number" id="brCycles" value="6" min="1" max="30" style="width:60px;"></label>
+      </div>
+      <div class="breath-stage">
+        <div class="breath-ring" id="brRing"><span><span class="phase" id="brPhase">Ready</span><span class="count" id="brCount">—</span></span></div>
+        <div class="clock" id="brClock">00:00 · Cycle 0</div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn" id="brStart" onclick="startBreathing()">Start</button>
+          <button class="btn secondary" id="brStop" onclick="stopBreathing()" disabled>Stop &amp; Log</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.updateBrBlurb = function(){
+  const key = document.getElementById('brProto').value;
+  const blurb = document.getElementById('brBlurb');
+  if(blurb) blurb.textContent = PROTOCOLS[key].blurb + ' Watch the ring: it grows on the inhale, shrinks on the exhale, and just pauses on a hold.';
+};
+
+window.startBreathing = function(){
+  const protoKey = document.getElementById('brProto').value;
+  const targetCycles = parseInt(document.getElementById('brCycles').value) || 6;
+  const proto = PROTOCOLS[protoKey];
+  brSession = { protoKey, proto, targetCycles, cycle:0, phaseIdx:0, secLeft:proto.phases[0][1], startTime:Date.now(), timer:null };
+  document.getElementById('brStart').disabled = true;
+  document.getElementById('brStop').disabled = false;
+  tickBreathing();
+  brSession.timer = setInterval(tickBreathing, 1000);
+};
+
+function tickBreathing(){
+  if(!brSession) return;
+  const ring = document.getElementById('brRing');
+  const [label] = brSession.proto.phases[brSession.phaseIdx];
+  document.getElementById('brPhase').textContent = label;
+  document.getElementById('brCount').textContent = brSession.secLeft;
+  ring.style.transform = label==='Inhale' ? 'scale(1.25)' : label==='Exhale' ? 'scale(0.85)' : 'scale(1.05)';
+  ring.style.background = label==='Inhale' ? 'var(--yellow-soft)' : label==='Exhale' ? 'var(--violet-soft)' : 'var(--crimson-soft)';
+  const elapsed = Math.floor((Date.now()-brSession.startTime)/1000);
+  const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
+  const ss = String(elapsed%60).padStart(2,'0');
+  document.getElementById('brClock').textContent = `${mm}:${ss} · Cycle ${brSession.cycle}/${brSession.targetCycles}`;
+
+  brSession.secLeft--;
+  if(brSession.secLeft < 0){
+    brSession.phaseIdx++;
+    if(brSession.phaseIdx >= brSession.proto.phases.length){
+      brSession.phaseIdx = 0;
+      brSession.cycle++;
+      if(brSession.cycle >= brSession.targetCycles){
+        stopBreathing();
+        return;
+      }
+    }
+    brSession.secLeft = brSession.proto.phases[brSession.phaseIdx][1];
+  }
+}
+
+window.stopBreathing = async function(){
+  if(!brSession) return;
+  clearInterval(brSession.timer);
+  const durationSec = Math.floor((Date.now()-brSession.startTime)/1000);
+  const ds = todayStr();
+  const day = await getDay(ds);
+  day.breathing.push({ ts: Date.now(), protocol: brSession.proto.label, cycles: brSession.cycle, durationSec });
+  await saveDay(ds, day);
+  document.getElementById('brStart').disabled = false;
+  document.getElementById('brStop').disabled = true;
+  document.getElementById('brPhase').textContent = 'Logged';
+  document.getElementById('brCount').textContent = '✓';
+  brSession = null;
+};
+
+/* ================= COGNITION ================= */
+let cogSession = null;
+
+function renderCognition(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2 class="sec">Cognition Test</h2>
+      <p class="sub">Simple reaction: click the yellow target as fast as you can. Go/No-Go: click yellow, never crimson.</p>
+      <div class="beginner-note"><b>Simple Reaction</b> measures pure speed — click the target the instant it appears. <b>Go/No-Go</b> adds impulse control on top: click a <span class="gloss" title="Click this one — it's a real target.">yellow</span> circle, but if it's <span class="gloss" title="Don't click this one — holding back is the correct move.">crimson</span>, hold back. Clicking crimson counts as a "false alarm" — the whole point is to train not just speed, but restraint.</div>
+      <div class="row">
+        <select id="cogMode">
+          <option value="simple">Simple Reaction (10 trials)</option>
+          <option value="gonogo">Go / No-Go (12 trials)</option>
+        </select>
+        <button class="btn" onclick="startCognition()">Start Test</button>
+      </div>
+      <div class="rt-field" id="rtField"><div class="rt-msg">Press start</div></div>
+      <div id="cogResult" class="progress-mini"></div>
+    </div>
+  `;
+}
+
+window.startCognition = function(){
+  const mode = document.getElementById('cogMode').value;
+  const trials = mode==='simple' ? 10 : 12;
+  cogSession = { mode, trials, done:0, results:[], falseAlarms:0, misses:0 };
+  document.getElementById('cogResult').textContent = '';
+  nextCogTrial();
+};
+
+function nextCogTrial(){
+  if(!cogSession) return; // tab was switched away from mid-test; nothing to advance
+  if(cogSession.done >= cogSession.trials){
+    finishCognition();
+    return;
+  }
+  const field = document.getElementById('rtField');
+  field.innerHTML = `<div class="rt-msg">Wait…</div>`;
+  const delay = 800 + Math.random()*1700;
+  cogSession.timeoutId = setTimeout(()=>showTarget(field), delay);
+}
+
+function showTarget(field){
+  if(!cogSession) return;
+  const isNoGo = cogSession.mode==='gonogo' && Math.random() < 0.3;
+  const x = Math.random()*70, y = Math.random()*70;
+  field.innerHTML = `<div class="rt-target ${isNoGo?'nogo':'go'}" style="left:${x}%; top:${y}%;" onclick="cogClick(${isNoGo})"></div>`;
+  cogSession.shownAt = performance.now();
+  cogSession.isNoGo = isNoGo;
+  if(isNoGo){
+    cogSession.noGoTimeout = setTimeout(()=>{
+      cogSession.done++;
+      field.innerHTML = `<div class="rt-msg">Held ✓</div>`;
+      setTimeout(nextCogTrial, 400);
+    }, 1000);
+  }
+}
+
+window.cogClick = function(isNoGo){
+  if(!cogSession) return;
+  const rt = Math.round(performance.now() - cogSession.shownAt);
+  const field = document.getElementById('rtField');
+  if(isNoGo){
+    clearTimeout(cogSession.noGoTimeout);
+    cogSession.falseAlarms++;
+    field.innerHTML = `<div class="rt-msg">False alarm</div>`;
+  } else {
+    cogSession.results.push(rt);
+    field.innerHTML = `<div class="rt-msg">${rt}ms</div>`;
+  }
+  cogSession.done++;
+  setTimeout(nextCogTrial, 400);
+};
+
+async function finishCognition(){
+  if(!cogSession) return;
+  const avg = cogSession.results.length ? Math.round(cogSession.results.reduce((a,b)=>a+b,0)/cogSession.results.length) : 0;
+  const best = cogSession.results.length ? Math.min(...cogSession.results) : 0;
+  document.getElementById('rtField').innerHTML = `<div class="rt-msg">Done</div>`;
+  document.getElementById('cogResult').innerHTML = `Avg ${avg}ms · Best ${best}ms` + (cogSession.mode==='gonogo' ? ` · False alarms: ${cogSession.falseAlarms}` : '');
+  const ds = todayStr();
+  const day = await getDay(ds);
+  day.cognition.push({ ts: Date.now(), mode: cogSession.mode, avgMs: avg, bestMs: best, falseAlarms: cogSession.falseAlarms });
+  await saveDay(ds, day);
+  cogSession = null;
+}
+
+/* ================= LOGS ================= */
+const NUTRI_TAGS = ['Protein','Carbs','Fats','Hydration','Pre-training','Post-training'];
+let selectedTags = new Set();
+
+function renderLogs(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2 class="sec">Nutrition Log</h2>
+      <p class="sub">Quick notes — what you ate/drank, tagged for pattern-spotting. No calorie or weight targets here by design.</p>
+      <div class="beginner-note">This is deliberately loose: jot a quick note and tag it, and over weeks you can spot patterns yourself — e.g. "I always crash in Round 3 on days I skip the Pre-training tag." No numbers to hit, no targets to miss.</div>
+      <textarea id="nutriText" rows="2" style="width:100%;" placeholder="e.g. Chicken, rice, greens + 500ml water"></textarea>
+      <div class="tagset" id="nutriTags">
+        ${NUTRI_TAGS.map(t=>`<div class="tag" onclick="toggleTag(this,'${t}')">${t}</div>`).join('')}
+      </div>
+      <button class="btn" onclick="addNutrition()">Add Entry</button>
+      <div id="nutriList" style="margin-top:14px;"></div>
+    </div>
+    <div class="panel">
+      <h2 class="sec">Cardio Log</h2>
+      <p class="beginner-note" style="margin-bottom:16px;"><b>RPE</b> (Rate of Perceived Exertion) is just your own 1–10 read on effort: 1 is barely moving, 10 is all-out. No device needed — go with your gut.</p>
+      <div class="row">
+        <select id="cardioType">
+          <option>Run</option><option>Bike</option><option>Row</option><option>Jump Rope</option><option>Swim</option><option>Other</option>
+        </select>
+        <label style="font-size:13px;">Minutes <input type="number" id="cardioMin" value="20" min="1" style="width:60px;"></label>
+        <label style="font-size:13px;">RPE (1–10) <input type="number" id="cardioRpe" value="6" min="1" max="10" style="width:50px;"></label>
+        <button class="btn" onclick="addCardio()">Add Entry</button>
+      </div>
+      <div id="cardioList"></div>
+    </div>
+  `;
+  refreshLogLists();
+}
+
+window.toggleTag = function(el, tag){
+  if(selectedTags.has(tag)){ selectedTags.delete(tag); el.classList.remove('on'); }
+  else { selectedTags.add(tag); el.classList.add('on'); }
+};
+
+window.addNutrition = async function(){
+  const text = document.getElementById('nutriText').value.trim();
+  if(!text) return;
+  const ds = todayStr();
+  const day = await getDay(ds);
+  day.nutrition.push({ ts: Date.now(), text, tags: [...selectedTags] });
+  await saveDay(ds, day);
+  document.getElementById('nutriText').value = '';
+  selectedTags = new Set();
+  document.querySelectorAll('#nutriTags .tag').forEach(t=>t.classList.remove('on'));
+  refreshLogLists();
+};
+
+window.addCardio = async function(){
+  const type = document.getElementById('cardioType').value;
+  const minutes = parseInt(document.getElementById('cardioMin').value) || 0;
+  const rpe = parseInt(document.getElementById('cardioRpe').value) || 0;
+  const ds = todayStr();
+  const day = await getDay(ds);
+  day.cardio.push({ ts: Date.now(), type, minutes, rpe });
+  await saveDay(ds, day);
+  refreshLogLists();
+};
+
+async function refreshLogLists(){
+  const ds = todayStr();
+  const day = await getDay(ds);
+  const nList = document.getElementById('nutriList');
+  const cList = document.getElementById('cardioList');
+  if(nList) nList.innerHTML = day.nutrition.map((n,i)=>
+    `<div class="log-entry"><span>${n.text}${n.tags.length?' — '+n.tags.join(', '):''}</span><button onclick="delEntry('nutrition',${i})">remove</button></div>`
+  ).join('') || '<p class="sub">No entries today yet.</p>';
+  if(cList) cList.innerHTML = day.cardio.map((cd,i)=>
+    `<div class="log-entry"><span>${cd.type} — ${cd.minutes} min, RPE ${cd.rpe}</span><button onclick="delEntry('cardio',${i})">remove</button></div>`
+  ).join('') || '<p class="sub">No entries today yet.</p>';
+}
+
+window.delEntry = async function(kind, idx){
+  const ds = todayStr();
+  const day = await getDay(ds);
+  day[kind].splice(idx,1);
+  await saveDay(ds, day);
+  refreshLogLists();
+};
+
+/* ---------------- go ---------------- */
+init();
+</script>
+</body>
+</html>
