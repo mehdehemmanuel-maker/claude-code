@@ -213,6 +213,21 @@
   .graph-node .n-btn:hover{color:var(--ink);}
   .graph-node .n-btn.star{color:var(--gold);}
 
+  /* career ladder */
+  .career-row{display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid var(--line);}
+  .career-row:last-child{border-bottom:none;}
+  .career-row.locked{opacity:0.4;}
+  .career-rank{font-family:var(--disp); font-size:26px; color:var(--ink-faint); width:34px; text-align:center; flex-shrink:0;}
+  .career-row:not(.locked) .career-rank{color:var(--red);}
+  .career-info{flex:1;}
+  .career-name{font-family:var(--hud); font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:0.5px;}
+  .career-badge{font-family:var(--mono); font-size:9px; background:var(--gold); color:#1A0508; padding:2px 6px; margin-left:6px; letter-spacing:0.5px;}
+  .career-tag{font-size:12.5px; color:var(--ink-dim); margin-top:2px;}
+  .career-meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); margin-top:4px; text-transform:uppercase; letter-spacing:0.3px;}
+  .career-result{font-family:var(--disp); font-size:38px; letter-spacing:1px; text-transform:uppercase;}
+  .career-result.win{color:var(--green); text-shadow:0 0 20px var(--green-soft);}
+  .career-result.loss{color:var(--red); text-shadow:0 0 20px var(--red-glow);}
+
   .disclaimer{font-size:11px; color:var(--ink-faint); border-top:1px solid var(--line); margin-top:26px; padding-top:12px; line-height:1.5;}
 </style>
 </head>
@@ -295,6 +310,17 @@ const BANK = [
   {cat:'Submissions', name:'Kimura', telegraph:'Underhook converts to a figure-four grip on the wrist.', exposure:'Posts the trapped arm to block a pass — shoulder fully loaded.', cascade:'Forced roll to escape — back exposes, or the lock finishes.', pose:'ground', zone:'sternum'},
   {cat:'Psych Traps', name:'Jab Feint to Overhand', telegraph:'Rapid 2 in. lead-hand extension plus a foot stomp.', exposure:'High parry shell reaction — blind side flank opens.', cascade:'Overhand breaches shell — neck opens for guillotine.', pose:'punch-lead', zone:'temple'},
   {cat:'Psych Traps', name:'Cage-Wall Bait', telegraph:'Back up to the mesh, drop guard 2 in. to invite aggression.', exposure:'Opponent overcommits forward — lead leg and flank open.', cascade:'Pivot spins them into the fence — spine opens.', pose:'defense', zone:'thigh'},
+];
+
+/* ---------------- career ladder ---------------- */
+/* each opponent draws only from their own technique pool; beat their accuracy bar (and, late, their clock) to unlock the next */
+const ALL_CATS = [...new Set(BANK.map(b=>b.cat))];
+const OPPONENTS = [
+  { id:'sparring', name:'Sparring Partner', tagline:'Basic hands. Learn to read the simplest tells first.', cats:['Punches'], count:8, accThreshold:0.5 },
+  { id:'brawler', name:'The Brawler', tagline:'Heavy hands, heavy feet, and no patience for a slow read.', cats:['Punches','Kicks'], count:8, accThreshold:0.55 },
+  { id:'wrestler', name:'The Wrestler', tagline:'Lives on the mat. Survive the shot, survive the pass.', cats:['Takedowns','Ground','Defense'], count:8, accThreshold:0.6 },
+  { id:'technician', name:'The Technician', tagline:'Clinch, locks, and traps — punishes hesitation.', cats:['Clinch','Submissions','Psych Traps'], count:8, accThreshold:0.65 },
+  { id:'champion', name:'The Champion', tagline:'Everything, at full speed. Beat the clock and the odds.', cats:ALL_CATS, count:10, accThreshold:0.75, maxAvgMs:900 },
 ];
 
 /* ---------------- stick-figure skeleton system ---------------- */
@@ -568,7 +594,7 @@ async function init(){
 }
 
 function renderNav(){
-  const tabs = [['dashboard','HQ'],['flashcards','Tells'],['sequences','Sequences'],['breathing','Recovery'],['cognition','Reflex'],['logs','Fuel']];
+  const tabs = [['dashboard','HQ'],['flashcards','Tells'],['sequences','Sequences'],['career','Career'],['breathing','Recovery'],['cognition','Reflex'],['logs','Fuel']];
   const nav = document.getElementById('tabNav');
   nav.innerHTML = tabs.map(([id,label]) =>
     `<button class="${STATE.tab===id?'active':''}" onclick="switchTab('${id}')">${label}</button>`
@@ -591,6 +617,7 @@ function renderTab(){
   if(STATE.tab==='dashboard') return renderDashboard(c);
   if(STATE.tab==='flashcards') return renderFlashcards(c);
   if(STATE.tab==='sequences') return renderSequences(c);
+  if(STATE.tab==='career') return renderCareer(c);
   if(STATE.tab==='breathing') return renderBreathing(c);
   if(STATE.tab==='cognition') return renderCognition(c);
   if(STATE.tab==='logs') return renderLogs(c);
@@ -631,11 +658,12 @@ async function renderDashboard(c){
   const wk = await weekCounts();
   const stats = await computeFighterStats();
   const rank = rankForOvr(stats.ovr);
+  const careerProg = await getCareerProgress();
   const dismissed = await getJSON('ui:onboardingDismissed', false);
 
   const banner = dismissed ? '' : `<div class="banner">
-      <div><b class="h">Six systems. One machine.</b>
-      <b>Tells</b> trains you to read an opponent's giveaway movement and call the opening it creates before it lands. <b>Sequences</b> lets you chain tells into real combos on a node board and drill the live branch. <b>Recovery</b> paces your nervous system. <b>Reflex</b> sharpens raw speed and stops you flinching. <b>Fuel</b> tracks what goes in the tank. Every rep hardens the profile below — a zone glows red on your avatar until you fix it.</div>
+      <div><b class="h">Seven systems. One machine.</b>
+      <b>Tells</b> trains you to read an opponent's giveaway movement and call the opening it creates before it lands. <b>Sequences</b> lets you chain tells into real combos on a node board and drill the live branch. <b>Career</b> puts those reps against a ladder of opponents, each gated by an accuracy bar you have to clear. <b>Recovery</b> paces your nervous system. <b>Reflex</b> sharpens raw speed and stops you flinching. <b>Fuel</b> tracks what goes in the tank. Every rep hardens the profile below — a zone glows red on your avatar until you fix it.</div>
       <button onclick="dismissOnboarding()">Got it</button>
     </div>`;
 
@@ -651,7 +679,7 @@ async function renderDashboard(c){
         </div>
         <div>
           <div class="rank-name" style="color:${rank.color}">${rank.label}</div>
-          <div class="hq-sub">STREAK ${streak}D · ${wk.flashcards+wk.breathing+wk.cognition+wk.logs} REPS THIS WEEK</div>
+          <div class="hq-sub">STREAK ${streak}D · ${wk.flashcards+wk.breathing+wk.cognition+wk.logs} REPS THIS WEEK · CAREER ${careerProg.wins}-${careerProg.losses}</div>
         </div>
       </div>
       <div class="hq-body">
@@ -766,6 +794,7 @@ window.resetAll = async function(){
   for(const ds of days){ await setJSON('day:'+ds, emptyDay()); }
   await setJSON('index:days', []);
   await setJSON('stats:zone', {});
+  await setJSON('career:progress', {unlockedIdx:0, wins:0, losses:0, beaten:[]});
   STATE.days = new Set();
   renderTab();
 };
@@ -813,27 +842,41 @@ window.startFlashcards = function(){
   runFlashcardStage();
 };
 
-function runFlashcardStage(){
+async function runFlashcardStage(){
   const stage = stageEl();
   if(!fcSession || fcSession.idx >= fcSession.cards.length){
     const isSeq = fcSession && fcSession.isSequence;
+    const isCareer = fcSession && fcSession.isCareer;
     const correctSnap = fcSession ? fcSession.correct : 0;
     const totalSnap = fcSession ? fcSession.cards.length : 0;
     const avg = fcSession && fcSession.reactions.length ? Math.round(fcSession.reactions.reduce((a,b)=>a+b,0)/fcSession.reactions.length) : 0;
     const seqNameSnap = fcSession ? fcSession.seqName : '';
+    const opponentSnap = fcSession ? fcSession.opponent : null;
     if(fcSession){
-      logFlashcardSession(fcSession);
+      await logFlashcardSession(fcSession);
+    }
+    let careerBlock = '';
+    if(isCareer && opponentSnap){
+      const acc = totalSnap>0 ? correctSnap/totalSnap : 0;
+      const win = acc >= opponentSnap.accThreshold && (!opponentSnap.maxAvgMs || avg<=opponentSnap.maxAvgMs);
+      await settleCareerFight(opponentSnap, win);
+      careerBlock = `<div class="career-result ${win?'win':'loss'}">${win?'Victory':'Defeat'}</div>
+        <p class="tip">vs ${escapeHtml(opponentSnap.name)} · needed ${Math.round(opponentSnap.accThreshold*100)}%${opponentSnap.maxAvgMs?(' & under '+opponentSnap.maxAvgMs+'ms'):''} · you hit ${Math.round(acc*100)}%${opponentSnap.maxAvgMs?(' at '+avg+'ms'):''}</p>`;
     }
     const tip = avg===0 ? '' : avg<600 ? 'Sharp — that\'s fight-pace recognition.' : avg<1000 ? 'Solid. Keep drilling to shave off tenths of a second.' : 'No rush — recognition speed comes with reps. Use the Visualize step fully.';
     stage.innerHTML = `
       <div class="card-stage"><div class="session-summary">
         ${isSeq ? `<div class="progress-mini">COMBO: ${escapeHtml(seqNameSnap)}</div>` : ''}
+        ${isCareer && opponentSnap ? `<div class="progress-mini">OPPONENT: ${escapeHtml(opponentSnap.name)}</div>` : ''}
+        ${careerBlock}
         <div class="big">${correctSnap}/${totalSnap}</div>
         <p>Avg reaction: <b>${avg}ms</b></p>
-        <p class="tip">${tip}</p>
+        ${!isCareer ? `<p class="tip">${tip}</p>` : ''}
         ${isSeq
           ? `<button class="btn" onclick="drillSequence()">Drill Again</button> <button class="btn secondary" onclick="backToBuilder()">Back to Builder</button>`
-          : `<button class="btn" onclick="renderFlashcards(document.getElementById('content'))">Run Another Session</button>`}
+          : isCareer
+            ? `<button class="btn" onclick="fightOpponent('${opponentSnap.id}')">Rematch</button> <button class="btn secondary" onclick="backToLadder()">Back to Ladder</button>`
+            : `<button class="btn" onclick="renderFlashcards(document.getElementById('content'))">Run Another Session</button>`}
       </div></div>`;
     fcSession = null;
     return;
@@ -928,7 +971,7 @@ async function logFlashcardSession(sess){
   const ds = todayStr();
   const day = await getDay(ds);
   const avg = sess.reactions.length ? Math.round(sess.reactions.reduce((a,b)=>a+b,0)/sess.reactions.length) : 0;
-  const category = sess.isSequence ? 'Combo: '+sess.seqName : (sess.category || 'All');
+  const category = sess.isSequence ? 'Combo: '+sess.seqName : sess.isCareer ? 'Career: '+sess.opponent.name : (sess.category || 'All');
   day.flashcards.push({ ts: Date.now(), category, correct: sess.correct, total: sess.cards.length, avgMs: avg });
   await saveDay(ds, day);
 }
@@ -1178,6 +1221,73 @@ window.backToBuilder = function(){
   currentStageEl = 'fcStage';
   fcSession = null;
 };
+
+/* ================= CAREER (opponent ladder) ================= */
+async function getCareerProgress(){
+  return await getJSON('career:progress', {unlockedIdx:0, wins:0, losses:0, beaten:[]});
+}
+
+function careerRowHTML(op, i, locked, beaten){
+  return `<div class="career-row ${locked?'locked':''}">
+    <div class="career-rank">${i+1}</div>
+    <div class="career-info">
+      <div class="career-name">${escapeHtml(op.name)} ${beaten?'<span class="career-badge">BEATEN</span>':''}</div>
+      <div class="career-tag">${escapeHtml(op.tagline)}</div>
+      <div class="career-meta">${op.cats.join(' · ')} · needs ${Math.round(op.accThreshold*100)}%+${op.maxAvgMs?(' · under '+op.maxAvgMs+'ms avg'):''}</div>
+    </div>
+    <button class="btn ${locked?'secondary':''}" ${locked?'disabled':''} onclick="fightOpponent('${op.id}')">${locked?'Locked':(beaten?'Rematch':'Fight')}</button>
+  </div>`;
+}
+
+async function renderCareer(c){
+  c.innerHTML = `<div class="panel">Loading…</div>`;
+  const prog = await getCareerProgress();
+  const rows = OPPONENTS.map((op,i)=> careerRowHTML(op, i, i > prog.unlockedIdx, prog.beaten.includes(op.id))).join('');
+  c.innerHTML = `
+    <div class="panel corner-hud" id="careerLadderPanel">
+      <h2 class="sec">Career Ladder</h2>
+      <p class="sub">Climb it. Each opponent draws from their own technique pool — beat their accuracy bar (and, late, their clock) to advance.</p>
+      <div class="beginner-note">Fighting an opponent runs the same telegraph → visualize → call-it drill as Tells, just themed and gated. Hit their accuracy threshold to win, fall short and it's a loss — no shame, run it back. Record: <b>${prog.wins}-${prog.losses}</b>.</div>
+      <div id="careerLadder">${rows}</div>
+    </div>
+    <div class="panel" id="careerFightWrap" style="display:none;">
+      <div class="row"><button class="btn secondary" onclick="backToLadder()">‹ Back to Ladder</button></div>
+      <div class="progress-mini" id="careerOpponentLabel"></div>
+      <div id="careerStage"></div>
+    </div>
+  `;
+}
+
+window.fightOpponent = function(id){
+  const op = OPPONENTS.find(o=>o.id===id);
+  if(!op) return;
+  let pool = BANK.filter(b=>op.cats.includes(b.cat));
+  pool = pool.sort(()=>Math.random()-0.5).slice(0, Math.min(op.count, pool.length));
+  document.getElementById('careerLadderPanel').style.display='none';
+  const fightWrap = document.getElementById('careerFightWrap');
+  fightWrap.style.display='block';
+  document.getElementById('careerOpponentLabel').textContent = 'OPPONENT: ' + op.name.toUpperCase();
+  currentStageEl = 'careerStage';
+  fcSession = { cards: pool, idx:0, correct:0, reactions:[], isCareer:true, opponent: op };
+  runFlashcardStage();
+};
+window.backToLadder = function(){
+  currentStageEl = 'fcStage';
+  fcSession = null;
+  renderCareer(document.getElementById('content'));
+};
+async function settleCareerFight(op, win){
+  const prog = await getCareerProgress();
+  if(win){
+    prog.wins++;
+    if(!prog.beaten.includes(op.id)) prog.beaten.push(op.id);
+    const opIdx = OPPONENTS.findIndex(o=>o.id===op.id);
+    if(opIdx === prog.unlockedIdx && opIdx < OPPONENTS.length-1) prog.unlockedIdx = opIdx+1;
+  } else {
+    prog.losses++;
+  }
+  await setJSON('career:progress', prog);
+}
 
 /* ================= RECOVERY (breathing) ================= */
 const PROTOCOLS = {
