@@ -92,6 +92,18 @@
   .attr-track{height:10px; background:var(--panel); border:1px solid var(--line); position:relative; overflow:hidden;}
   .attr-fill{height:100%; background:linear-gradient(90deg, var(--red-deep), var(--red)); box-shadow:0 0 8px var(--red-glow);}
   .attr-val{font-family:var(--mono); font-size:13px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .cardio-badge{width:76px; height:76px;}
+  .cardio-badge .ovr-num{font-size:26px;}
+  .power-caption{font-size:10.5px; color:var(--ink-faint); text-align:center; margin:8px 4px 0; line-height:1.4;}
+  .vitals-head{font-family:var(--hud); font-size:12px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--ink-dim); margin:22px 0 8px; padding-top:16px; border-top:1px dashed var(--line);}
+  .vitals-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:2px 16px;}
+  .vital-row{display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .vital-name{font-family:var(--hud); font-weight:600; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.3px;}
+  .vital-stat{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  .vital-row.good .vital-stat{color:var(--green);}
+  .vital-row.mid .vital-stat{color:var(--gold);}
+  .vital-row.bad .vital-stat{color:var(--red);}
+  .vital-row.untested .vital-stat{color:var(--ink-faint);}
 
   /* dashboard / calendar */
   .stat-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin:20px 0;}
@@ -165,6 +177,8 @@
   .opt.wrong{background:var(--red-glow); border-color:var(--red);}
   .feedback{padding:14px 20px; font-size:13px; background:var(--panel-raised); border-top:1px solid var(--line);}
   .feedback .tip{margin-top:10px; font-style:italic; color:var(--ink-faint);}
+  .counter-cue{margin-top:12px; padding:10px 12px; background:var(--green-soft); border-left:3px solid var(--green); font-size:12.5px; line-height:1.5;}
+  .counter-cue b{color:var(--green); text-transform:uppercase; font-family:var(--hud); letter-spacing:0.5px; font-size:11px; margin-right:4px;}
   .session-summary{text-align:center; padding:30px 20px;}
   .session-summary .big{font-family:var(--disp); font-size:54px; color:var(--red); text-shadow:0 0 24px var(--red-glow);}
   .session-summary .tip{font-size:12.5px; color:var(--ink-faint); margin-top:4px;}
@@ -302,26 +316,26 @@ const STATE = {
 /* ---------------- technique bank ---------------- */
 /* pose = which stick-figure family to draw · zone = body region for the target/hurt marker */
 const BANK = [
-  {cat:'Punches', name:'Lead Jab', telegraph:'Lead elbow flares 2 in. outward, lead shoulder hitches before extension.', exposure:'Slipped outside — floating ribs, liver, solar plexus open.', cascade:'Liver strike drops guard — temple opens for follow-up hook.', pose:'punch-lead', zone:'ribs'},
-  {cat:'Punches', name:'Rear Cross', telegraph:'Rear heel pivots off canvas early, rear hip rotates in.', exposure:'Ducked under — solar plexus or takedown entry opens.', cascade:'Breath stoppage freezes posture — chin/throat open for overhand.', pose:'punch-rear', zone:'solarPlexus'},
-  {cat:'Punches', name:'Lead Hook', telegraph:'Lead hand drops below chest, weight shifts to lead hip.', exposure:'Leanback — floating ribs, liver, rear thigh open.', cascade:'Body impact drops head — temple opens for follow-up.', pose:'punch-lead', zone:'liver'},
-  {cat:'Punches', name:'Overhand Right', telegraph:'Head dips low outside lead knee, rear arm winds back wide.', exposure:'Stepped inside — back of legs open for double-leg.', cascade:'Takedown lands them — neck opens for ground-and-pound.', pose:'punch-rear', zone:'hip'},
-  {cat:'Punches', name:'Lead Uppercut', telegraph:'Lead shoulder and hip dip, hand drops below waist.', exposure:'Slip/leanback — chest, solar plexus, or reactive double-leg opens.', cascade:'Head snaps up — throat/jaw open for rear cross.', pose:'punch-lead', zone:'chin'},
-  {cat:'Kicks', name:'Rear Low Leg Kick', telegraph:'Lead foot steps 45° outward, rear hand drops for balance.', exposure:'Checked/stepped inside — head fully open.', cascade:'Weight collapses onto lead leg — head kick opens.', pose:'kick-rear', zone:'temple'},
-  {cat:'Kicks', name:'Front Teep', telegraph:'Lead knee chambers to chest height, torso leans back.', exposure:'Caught foot — hip and back exposed for takedown.', cascade:'Driven into fence — cage-clinch knees open.', pose:'kick-lead', zone:'hip'},
-  {cat:'Kicks', name:'Spinning Heel Kick', telegraph:'Lead foot steps across body line, head turns over rear shoulder.', exposure:'Opponent backs up straight — midsection open to the long arc.', cascade:'Core spasm drops guard — chin opens for follow-up.', pose:'kick-rear', zone:'liver'},
-  {cat:'Clinch', name:'Rear Elbow (Clinch)', telegraph:'Rear thumb to collarbone, elbow flares high and horizontal.', exposure:'Blocked high — midsection open for body knees or underhooks.', cascade:'High shell forms — knee-to-body or double-leg opens.', pose:'clinch', zone:'ribs'},
-  {cat:'Clinch', name:'Thai Clinch Knee', telegraph:'Hands cup behind crown, elbows pinch to seal throat.', exposure:'Posture broken down — sternum and face open to knee.', cascade:'Breath drains — hands drop, top of head opens.', pose:'clinch', zone:'sternum'},
-  {cat:'Takedowns', name:'Double-Leg Shoot', telegraph:'Eyes drop to waist, hips sink, lead knee bends past 90°.', exposure:'Sprawled — neck open for guillotine, or solar plexus for knees.', cascade:'Knee halts the drive — jaw angle opens.', pose:'shoot', zone:'neck'},
-  {cat:'Takedowns', name:'Single-Leg Entry', telegraph:'Torso lowers, lead leg steps deep, lead hand scoops behind the knee.', exposure:'Sprawled/stuffed — top of head opens for front headlock.', cascade:'Takedown lands — guard pass or knee-on-belly opens.', pose:'shoot', zone:'neck'},
-  {cat:'Defense', name:'Sprawl', telegraph:'Hips drive down, legs shoot back wide, hands frame the neck.', exposure:'Stuffed shot — neck and ribs open under weight.', cascade:'Forced to knees — front headlock or elbows open.', pose:'defense', zone:'neck'},
-  {cat:'Defense', name:'Check Hook', telegraph:'Lead foot pivots 90° back as opponent rushes forward.', exposure:'Charging opponent — jaw exposed to double impact force.', cascade:'Spins them 180° — back or rear leg high kick opens.', pose:'punch-lead', zone:'chin'},
-  {cat:'Ground', name:'Half-Guard Pass', telegraph:'Cross-face frame, weight to lead hip, knee slices across the bottom leg.', exposure:'Flattens under cross-face — far armpit and neck open.', cascade:'Pass completes — kimura or rear-naked choke opens.', pose:'ground', zone:'neck'},
-  {cat:'Ground', name:'Rear-Naked Choke', telegraph:'Seatbelt hooks engaged, choking arm under chin, bicep on trachea.', exposure:'Both hands fight the arm — body triangle or face-leverage opens.', cascade:'Carotid compression — temple shots or tap opens.', pose:'ground', zone:'throat'},
-  {cat:'Submissions', name:'Guillotine', telegraph:'Head trapped under armpit, free arm grips own wrist, hips sit back.', exposure:'Postures up or drives forward — throat trapped in the path.', cascade:'Hands rise to fight the grip — back exposes for a takedown.', pose:'ground', zone:'throat'},
-  {cat:'Submissions', name:'Kimura', telegraph:'Underhook converts to a figure-four grip on the wrist.', exposure:'Posts the trapped arm to block a pass — shoulder fully loaded.', cascade:'Forced roll to escape — back exposes, or the lock finishes.', pose:'ground', zone:'sternum'},
-  {cat:'Psych Traps', name:'Jab Feint to Overhand', telegraph:'Rapid 2 in. lead-hand extension plus a foot stomp.', exposure:'High parry shell reaction — blind side flank opens.', cascade:'Overhand breaches shell — neck opens for guillotine.', pose:'punch-lead', zone:'temple'},
-  {cat:'Psych Traps', name:'Cage-Wall Bait', telegraph:'Back up to the mesh, drop guard 2 in. to invite aggression.', exposure:'Opponent overcommits forward — lead leg and flank open.', cascade:'Pivot spins them into the fence — spine opens.', pose:'defense', zone:'thigh'},
+  {cat:'Punches', name:'Lead Jab', telegraph:'Lead elbow flares 2 in. outward, lead shoulder hitches before extension.', exposure:'Slipped outside — floating ribs, liver, solar plexus open.', cascade:'Liver strike drops guard — temple opens for follow-up hook.', counter:'Parry the lead hand across your centerline and return a straight cross down the pipe.', pose:'punch-lead', zone:'ribs'},
+  {cat:'Punches', name:'Rear Cross', telegraph:'Rear heel pivots off canvas early, rear hip rotates in.', exposure:'Ducked under — solar plexus or takedown entry opens.', cascade:'Breath stoppage freezes posture — chin/throat open for overhand.', counter:'Slip outside off the back foot, fire the lead hook to the exposed jaw as they recover.', pose:'punch-rear', zone:'solarPlexus'},
+  {cat:'Punches', name:'Lead Hook', telegraph:'Lead hand drops below chest, weight shifts to lead hip.', exposure:'Leanback — floating ribs, liver, rear thigh open.', cascade:'Body impact drops head — temple opens for follow-up.', counter:'Catch it on the rear shoulder, step in behind it with a rear uppercut to the dropped chin.', pose:'punch-lead', zone:'liver'},
+  {cat:'Punches', name:'Overhand Right', telegraph:'Head dips low outside lead knee, rear arm winds back wide.', exposure:'Stepped inside — back of legs open for double-leg.', cascade:'Takedown lands them — neck opens for ground-and-pound.', counter:'Take a short step back or catch on the guard, then shoot the exposed legs before they reset.', pose:'punch-rear', zone:'hip'},
+  {cat:'Punches', name:'Lead Uppercut', telegraph:'Lead shoulder and hip dip, hand drops below waist.', exposure:'Slip/leanback — chest, solar plexus, or reactive double-leg opens.', cascade:'Head snaps up — throat/jaw open for rear cross.', counter:'Frame with the lead forearm, counter the raised chin with a rear straight.', pose:'punch-lead', zone:'chin'},
+  {cat:'Kicks', name:'Rear Low Leg Kick', telegraph:'Lead foot steps 45° outward, rear hand drops for balance.', exposure:'Checked/stepped inside — head fully open.', cascade:'Weight collapses onto lead leg — head kick opens.', counter:'Check by lifting the lead shin into the strike, then counter the open head with a rear kick.', pose:'kick-rear', zone:'temple'},
+  {cat:'Kicks', name:'Front Teep', telegraph:'Lead knee chambers to chest height, torso leans back.', exposure:'Caught foot — hip and back exposed for takedown.', cascade:'Driven into fence — cage-clinch knees open.', counter:'Catch the foot, step through, and drive for the takedown while their base is gone.', pose:'kick-lead', zone:'hip'},
+  {cat:'Kicks', name:'Spinning Heel Kick', telegraph:'Lead foot steps across body line, head turns over rear shoulder.', exposure:'Opponent backs up straight — midsection open to the long arc.', cascade:'Core spasm drops guard — chin opens for follow-up.', counter:'Step off-line as they spin — the exposed back is there, go to the body first.', pose:'kick-rear', zone:'liver'},
+  {cat:'Clinch', name:'Rear Elbow (Clinch)', telegraph:'Rear thumb to collarbone, elbow flares high and horizontal.', exposure:'Blocked high — midsection open for body knees or underhooks.', cascade:'High shell forms — knee-to-body or double-leg opens.', counter:'Change level under the elbow, secure a double underhook before it lands again.', pose:'clinch', zone:'ribs'},
+  {cat:'Clinch', name:'Thai Clinch Knee', telegraph:'Hands cup behind crown, elbows pinch to seal throat.', exposure:'Posture broken down — sternum and face open to knee.', cascade:'Breath drains — hands drop, top of head opens.', counter:'Post an inside frame on the bicep to break the collar tie before the knee fires.', pose:'clinch', zone:'sternum'},
+  {cat:'Takedowns', name:'Double-Leg Shoot', telegraph:'Eyes drop to waist, hips sink, lead knee bends past 90°.', exposure:'Sprawled — neck open for guillotine, or solar plexus for knees.', cascade:'Knee halts the drive — jaw angle opens.', counter:'Sprawl hips back and down, cross-face to flatten them out, hunt the guillotine.', pose:'shoot', zone:'neck'},
+  {cat:'Takedowns', name:'Single-Leg Entry', telegraph:'Torso lowers, lead leg steps deep, lead hand scoops behind the knee.', exposure:'Sprawled/stuffed — top of head opens for front headlock.', cascade:'Takedown lands — guard pass or knee-on-belly opens.', counter:'Sprawl the free leg back, circle away from the trapped leg, strip the grip.', pose:'shoot', zone:'neck'},
+  {cat:'Defense', name:'Sprawl', telegraph:'Hips drive down, legs shoot back wide, hands frame the neck.', exposure:'Stuffed shot — neck and ribs open under weight.', cascade:'Forced to knees — front headlock or elbows open.', counter:'Post on the hips, work for an underhook — don’t let them cut the corner to your back.', pose:'defense', zone:'neck'},
+  {cat:'Defense', name:'Check Hook', telegraph:'Lead foot pivots 90° back as opponent rushes forward.', exposure:'Charging opponent — jaw exposed to double impact force.', cascade:'Spins them 180° — back or rear leg high kick opens.', counter:'Reset your angle immediately — don’t chase the pivot, or the follow-up kick finds you.', pose:'punch-lead', zone:'chin'},
+  {cat:'Ground', name:'Half-Guard Pass', telegraph:'Cross-face frame, weight to lead hip, knee slices across the bottom leg.', exposure:'Flattens under cross-face — far armpit and neck open.', cascade:'Pass completes — kimura or rear-naked choke opens.', counter:'Frame on the near hip, shrimp to recover guard before the cross-face locks in.', pose:'ground', zone:'neck'},
+  {cat:'Ground', name:'Rear-Naked Choke', telegraph:'Seatbelt hooks engaged, choking arm under chin, bicep on trachea.', exposure:'Both hands fight the arm — body triangle or face-leverage opens.', cascade:'Carotid compression — temple shots or tap opens.', counter:'Both hands to the choking arm immediately, tuck the chin, hand-fight the escape before it sinks.', pose:'ground', zone:'throat'},
+  {cat:'Submissions', name:'Guillotine', telegraph:'Head trapped under armpit, free arm grips own wrist, hips sit back.', exposure:'Postures up or drives forward — throat trapped in the path.', cascade:'Hands rise to fight the grip — back exposes for a takedown.', counter:'Posture up hard — don’t pull straight back. Circle your head toward their same-side hip to relieve pressure.', pose:'ground', zone:'throat'},
+  {cat:'Submissions', name:'Kimura', telegraph:'Underhook converts to a figure-four grip on the wrist.', exposure:'Posts the trapped arm to block a pass — shoulder fully loaded.', cascade:'Forced roll to escape — back exposes, or the lock finishes.', counter:'Roll toward the lock, not away from it — rolling with it protects the shoulder while you escape.', pose:'ground', zone:'sternum'},
+  {cat:'Psych Traps', name:'Jab Feint to Overhand', telegraph:'Rapid 2 in. lead-hand extension plus a foot stomp.', exposure:'High parry shell reaction — blind side flank opens.', cascade:'Overhand breaches shell — neck opens for guillotine.', counter:'Don’t commit your parry to the feint — stay centered and check the real shot as it comes.', pose:'punch-lead', zone:'temple'},
+  {cat:'Psych Traps', name:'Cage-Wall Bait', telegraph:'Back up to the mesh, drop guard 2 in. to invite aggression.', exposure:'Opponent overcommits forward — lead leg and flank open.', cascade:'Pivot spins them into the fence — spine opens.', counter:'Recognize the invitation — don’t overcommit forward against the fence, circle off at an angle.', pose:'defense', zone:'thigh'},
 ];
 
 /* ---------------- career ladder ---------------- */
@@ -340,164 +354,252 @@ const OPPONENTS = [
    z is depth from -1 (rear, away from opponent) to 1 (lead, toward opponent).
    A cheap x/y/z-to-2D projection (scale + parallax skew by z) gives the pseudo-3D look:
    joints closer to you (z>0) draw slightly bigger, offset sideways, and in front of the others. */
+/* ---------------- anatomical body renderer ----------------
+   A front-view muscle-map figure built from filled shapes (not thin lines):
+   limbs are tapered "capsules" (or, for a bent arm, one continuous mitered
+   polygon through shoulder->elbow->hand so the bend doesn't look like two
+   disconnected blobs), and the torso is a width-at-height profile smoothed
+   into a single silhouette. Pose "telegraph"/"exposure" states are still
+   driven by small/big deltas on the same joints as before, just without the
+   old pseudo-depth (z) — this is a flat front-on anatomical diagram now. */
 const BASE_POSE = {
-  head:{x:2, y:172, z:0.1}, neck:{x:0, y:150, z:0},
-  chest:{x:0, y:128, z:0}, hips:{x:0, y:80, z:0},
-  leadShoulder:{x:16, y:130, z:0.5}, rearShoulder:{x:-16, y:126, z:-0.5},
-  leadElbow:{x:32, y:108, z:0.65}, rearElbow:{x:-26, y:100, z:-0.65},
-  leadHand:{x:40, y:140, z:0.85}, rearHand:{x:-8, y:148, z:-0.85},
-  leadHip:{x:13, y:80, z:0.35}, rearHip:{x:-13, y:80, z:-0.35},
-  leadKnee:{x:20, y:44, z:0.45}, rearKnee:{x:-16, y:44, z:-0.45},
-  leadFoot:{x:28, y:4, z:0.55}, rearFoot:{x:-30, y:4, z:-0.55},
+  head:{x:150,y:46}, neck:{x:150,y:78},
+  lSho:{x:114,y:98}, rSho:{x:186,y:98},
+  lElb:{x:85,y:135}, rElb:{x:215,y:135},
+  lHand:{x:135,y:140}, rHand:{x:165,y:140},
+  lHip:{x:126,y:220}, rHip:{x:174,y:220},
+  lKnee:{x:118,y:312}, rKnee:{x:182,y:312},
+  lFoot:{x:110,y:408}, rFoot:{x:190,y:408},
 };
-const BONES = [
-  ['head','neck'],['neck','chest'],['chest','leadShoulder'],['chest','rearShoulder'],
-  ['leadShoulder','leadElbow'],['leadElbow','leadHand'],
-  ['rearShoulder','rearElbow'],['rearElbow','rearHand'],
-  ['chest','hips'],['hips','leadHip'],['hips','rearHip'],
-  ['leadHip','leadKnee'],['leadKnee','leadFoot'],
-  ['rearHip','rearKnee'],['rearKnee','rearFoot'],
-];
+const LIMB_CHAINS = { lArm:['lSho','lElb','lHand'], rArm:['rSho','rElb','rHand'], lLeg:['lHip','lKnee','lFoot'], rLeg:['rHip','rKnee','rFoot'] };
+const LIMB_WIDTHS = { lArm:[15,12,10], rArm:[15,12,10], lLeg:[24,16,10], rLeg:[24,16,10] };
+const TORSO_LEVELS = [ {y:86,w:26}, {y:102,w:46}, {y:130,w:42}, {y:170,w:29}, {y:216,w:37}, {y:230,w:17} ];
+/* real anatomical target zones, positioned on the torso/head silhouette above; `side` picks which way its leader-line label points */
 const ZONES = {
-  liver:{x:-9,y:96}, ribs:{x:11,y:101}, solarPlexus:{x:0,y:112}, sternum:{x:0,y:120},
-  chin:{x:2,y:164}, temple:{x:11,y:172}, throat:{x:0,y:150}, neck:{x:0,y:150},
-  knee:{x:20,y:44}, thigh:{x:16,y:64}, hip:{x:13,y:80},
+  liver:{x:126,y:150,side:'left'}, ribs:{x:174,y:150,side:'right'}, solarPlexus:{x:150,y:145,side:'right'},
+  sternum:{x:150,y:115,side:'right'}, chin:{x:150,y:80,side:'right'}, temple:{x:168,y:38,side:'right'},
+  throat:{x:150,y:70,side:'left'}, neck:{x:150,y:78,side:'left'},
+  hip:{x:180,y:222,side:'right'}, thigh:{x:184,y:265,side:'right'}, knee:{x:182,y:305,side:'right'},
 };
 /* human-readable label for a zone key, e.g. "solarPlexus" -> "Solar Plexus" */
 function zoneLabel(z){
   return z.replace(/([A-Z])/g,' $1').replace(/^./,ch=>ch.toUpperCase());
 }
-/* per-pose-family deltas applied on top of BASE_POSE. small=telegraph, big=exposure(+cascade) */
+/* per-pose-family deltas applied on top of BASE_POSE. small=telegraph, big=exposure(+cascade). torsoShift moves the whole torso silhouette (a lean, a level change) since the torso itself isn't a joint chain. */
 const POSE_FAMILIES = {
-  'punch-lead': { tellJoint:'leadElbow',
-    small:{leadElbow:{x:10,y:-8,z:0.1}, leadShoulder:{x:2,y:-4,z:0}},
-    big:{leadElbow:{x:26,y:6,z:0.35}, leadHand:{x:34,y:14,z:0.5}, leadShoulder:{x:6,y:-2,z:0.1}, head:{x:14,y:-6,z:0.2}} },
-  'punch-rear': { tellJoint:'rearShoulder',
-    small:{rearFoot:{x:6,y:2,z:0.1}, rearHip:{x:4,y:0,z:0.1}},
-    big:{rearHand:{x:38,y:2,z:0.7}, rearElbow:{x:24,y:-2,z:0.5}, rearShoulder:{x:14,y:-4,z:0.4}, head:{x:16,y:-8,z:0.3}} },
-  'kick-lead': { tellJoint:'leadKnee',
-    small:{leadKnee:{x:-4,y:20,z:-0.1}, leadFoot:{x:-10,y:14,z:-0.2}},
-    big:{leadKnee:{x:0,y:10,z:0.4}, leadFoot:{x:30,y:6,z:0.6}, hips:{x:-4,y:-4,z:0}, head:{x:-4,y:-6,z:-0.1}} },
-  'kick-rear': { tellJoint:'rearKnee',
-    small:{rearKnee:{x:6,y:16,z:0.1}, rearFoot:{x:2,y:12,z:0.1}},
-    big:{rearKnee:{x:26,y:4,z:0.5}, rearFoot:{x:44,y:-2,z:0.8}, hips:{x:6,y:-6,z:0.1}, head:{x:-2,y:-8,z:-0.1}} },
-  'clinch': { tellJoint:'leadHand',
-    small:{leadHand:{x:-16,y:14,z:-0.3}, rearHand:{x:10,y:8,z:0.3}},
-    big:{leadHand:{x:-22,y:20,z:-0.4}, rearHand:{x:16,y:14,z:0.4}, head:{x:0,y:-14,z:0}, chest:{x:0,y:-6,z:0}} },
-  'shoot': { tellJoint:'hips',
-    small:{hips:{x:0,y:-14,z:0.1}, head:{x:0,y:-10,z:0.2}, chest:{x:0,y:-10,z:0.1}},
-    big:{hips:{x:0,y:-30,z:0.3}, head:{x:6,y:-26,z:0.5}, chest:{x:2,y:-24,z:0.3}, leadHand:{x:-10,y:-28,z:0.4}} },
-  'defense': { tellJoint:'chest',
-    small:{chest:{x:-6,y:-4,z:-0.1}, head:{x:-8,y:-2,z:-0.1}},
-    big:{chest:{x:-14,y:-10,z:-0.2}, hips:{x:-14,y:-4,z:-0.2}, head:{x:-16,y:-6,z:-0.2}} },
-  'ground': { tellJoint:'chest',
-    small:{chest:{x:0,y:-18,z:0}, head:{x:0,y:-14,z:0}, hips:{x:0,y:-30,z:0}},
-    big:{chest:{x:4,y:-24,z:0.1}, head:{x:6,y:-20,z:0.15}, hips:{x:0,y:-34,z:0}, rearHand:{x:14,y:-16,z:0.3}} },
+  'punch-lead': { tellJoint:'rElb',
+    small:{rElb:{x:8,y:-8}, rSho:{x:2,y:-3}},
+    big:{rHand:{x:55,y:-18}, rElb:{x:22,y:-28}, head:{x:6,y:-4}} },
+  'punch-rear': { tellJoint:'lSho',
+    small:{lSho:{x:-4,y:2}, lFoot:{x:-6,y:2}},
+    big:{lHand:{x:-55,y:-18}, lElb:{x:-22,y:-28}, head:{x:-6,y:-4}} },
+  'kick-lead': { tellJoint:'rKnee',
+    small:{rKnee:{x:6,y:-14}, rFoot:{x:4,y:-28}},
+    big:{rKnee:{x:22,y:-40}, rFoot:{x:62,y:-58}, lKnee:{x:-4,y:6}, torsoShift:{x:-6,y:4}} },
+  'kick-rear': { tellJoint:'lKnee',
+    small:{lKnee:{x:-6,y:-14}, lFoot:{x:-4,y:-28}},
+    big:{lKnee:{x:-22,y:-40}, lFoot:{x:-62,y:-58}, rKnee:{x:4,y:6}, torsoShift:{x:6,y:4}} },
+  'clinch': { tellJoint:'rHand',
+    small:{rHand:{x:-10,y:-10}, lHand:{x:6,y:-6}},
+    big:{rHand:{x:-32,y:-45}, lHand:{x:30,y:-45}, head:{x:0,y:10}, torsoShift:{x:0,y:8}} },
+  'shoot': { tellJoint:'torso',
+    small:{torsoShift:{x:0,y:14}, head:{x:0,y:10}},
+    big:{torsoShift:{x:0,y:50}, head:{x:8,y:56}, lKnee:{x:-6,y:20}, rKnee:{x:6,y:20}, lHand:{x:-10,y:40}, rHand:{x:10,y:40}} },
+  'defense': { tellJoint:'torso',
+    small:{torsoShift:{x:-6,y:-2}, head:{x:-6,y:-2}},
+    big:{torsoShift:{x:-18,y:-6}, head:{x:-18,y:-6}, lHip:{x:-8,y:0}, rHip:{x:-8,y:0}} },
+  'ground': { tellJoint:'torso',
+    small:{torsoShift:{x:0,y:20}, head:{x:0,y:16}},
+    big:{torsoShift:{x:4,y:70}, head:{x:6,y:60}, lHand:{x:-4,y:40}, rHand:{x:16,y:30}} },
 };
 
-function addDelta(base, delta){ const o={}; for(const k in base){ const d=delta&&delta[k]; o[k]={x:base[k].x+(d?d.x:0), y:base[k].y+(d?d.y:0), z:base[k].z+(d?d.z:0)}; } return o; }
+/* one continuous mitered limb from a chain of joints -- handles elbow/knee bends without the old two-capsule overlap glitch */
+function limbPath(pts, widths){
+  const n = pts.length;
+  const normals = [];
+  for(let i=0;i<n;i++){
+    let nx=0, ny=0, count=0;
+    if(i>0){ const dx=pts[i].x-pts[i-1].x, dy=pts[i].y-pts[i-1].y, len=Math.hypot(dx,dy)||1; nx+=-dy/len; ny+=dx/len; count++; }
+    if(i<n-1){ const dx=pts[i+1].x-pts[i].x, dy=pts[i+1].y-pts[i].y, len=Math.hypot(dx,dy)||1; nx+=-dy/len; ny+=dx/len; count++; }
+    nx/=count; ny/=count;
+    const nlen=Math.hypot(nx,ny)||1;
+    normals.push({x:nx/nlen, y:ny/nlen});
+  }
+  const outer = pts.map((p,i)=>({x:p.x+normals[i].x*widths[i], y:p.y+normals[i].y*widths[i]}));
+  const inner = pts.map((p,i)=>({x:p.x-normals[i].x*widths[i], y:p.y-normals[i].y*widths[i]})).reverse();
+  const all = outer.concat(inner);
+  const f=v=>v.toFixed(1);
+  let d = `M${f(all[0].x)},${f(all[0].y)} `;
+  for(let i=1;i<all.length;i++) d += `L${f(all[i].x)},${f(all[i].y)} `;
+  return d + 'Z';
+}
+/* torso silhouette from a width-at-height profile, smoothed through each level and mirrored about cx */
+function torsoPath(cx, levels){
+  const f=n=>n.toFixed(1);
+  let d = `M${f(cx-levels[0].w)},${f(levels[0].y)} `;
+  for(let i=1;i<levels.length;i++){
+    const prev=levels[i-1], cur=levels[i];
+    d += `Q${f(cx-prev.w*0.3-cur.w*0.7)},${f((prev.y+cur.y)/2)} ${f(cx-cur.w)},${f(cur.y)} `;
+  }
+  const last = levels[levels.length-1];
+  d += `L${f(cx)},${f(last.y+10)} `;
+  for(let i=levels.length-1;i>0;i--){
+    const cur=levels[i], prev=levels[i-1];
+    d += `Q${f(cx+cur.w*0.7+prev.w*0.3)},${f((prev.y+cur.y)/2)} ${f(cx+prev.w)},${f(prev.y)} `;
+  }
+  return d + 'Z';
+}
 
 function poseFor(family, state){
   const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
-  if(state==='telegraph') return addDelta(BASE_POSE, fam.small);
-  const exposed = addDelta(BASE_POSE, fam.big);
+  const applyDelta = delta => {
+    const joints = {};
+    for(const k in BASE_POSE){ const d=delta&&delta[k]; joints[k] = {x:BASE_POSE[k].x+(d?d.x:0), y:BASE_POSE[k].y+(d?d.y:0)}; }
+    const ts = (delta&&delta.torsoShift) || {x:0,y:0};
+    return { joints, torsoShift:ts };
+  };
+  if(state==='telegraph') return applyDelta(fam.small);
+  const exposed = applyDelta(fam.big);
   if(state==='exposure') return exposed;
-  /* cascade: exposure pose plus a further collapse toward the ground */
-  const collapse = {}; for(const k in exposed){ collapse[k] = {x:exposed[k].x*0.9, y:exposed[k].y-16, z:exposed[k].z}; }
-  return collapse;
+  /* cascade: exposure pose collapsed further toward the ground */
+  const joints = {}; for(const k in exposed.joints){ joints[k] = {x:exposed.joints[k].x, y:exposed.joints[k].y+22}; }
+  return { joints, torsoShift:{x:exposed.torsoShift.x, y:exposed.torsoShift.y+22} };
 }
 
-function project(p, cx, cy, s){
-  const depth = 1 + p.z*0.16;
-  return { x: cx + (p.x + p.z*11) * s * depth, y: cy - (p.y) * s * depth };
+/* leader-line + text label pointing at an anatomical zone, like a diagram callout -- this is the actual "show me the liver" fix */
+function organCallout(zk, zp, color){
+  const meta = ZONES[zk] || {side:'right'};
+  const dir = meta.side==='left' ? -1 : 1;
+  const endX = zp.x + dir*36;
+  const f=v=>v.toFixed(1);
+  return `<line x1="${f(zp.x)}" y1="${f(zp.y)}" x2="${f(endX)}" y2="${f(zp.y)}" stroke="${color}" stroke-width="1" opacity="0.75"/>
+    <text x="${f(endX+dir*3)}" y="${f(zp.y+3)}" font-size="9.5" font-family="Rajdhani,sans-serif" font-weight="700" letter-spacing="0.4" fill="${color}" text-anchor="${dir<0?'end':'start'}">${zoneLabel(zk).toUpperCase()}</text>`;
 }
 
-function renderStickFigure(family, state, zoneKey){
-  const pose = poseFor(family, state);
-  const cx=100, cy=182, s=0.72;
-  const proj = {}; for(const k in pose) proj[k] = project(pose[k], cx, cy, s);
-  const bones = BONES.map(([a,b])=>{
-    const pa=proj[a], pb=proj[b];
-    const front = (pose[a].z+pose[b].z)/2 > 0;
-    return `<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" stroke="${front?'#F2F0EA':'#5C5A64'}" stroke-width="${front?4:3}" stroke-linecap="round"/>`;
-  }).join('');
-  const joints = Object.keys(pose).filter(k=>k!=='head').map(k=>{
-    const p=proj[k]; const r = 3 + (pose[k].z>0?1.5:0);
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="#F2F0EA"/>`;
-  }).join('');
-  const headP = proj.head;
-  const headR = 14 * (1+pose.head.z*0.16);
-  const headCircle = `<circle cx="${headP.x.toFixed(1)}" cy="${headP.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="rgba(255,255,255,0.05)" stroke="#F2F0EA" stroke-width="3.5"/>`;
+function renderBody(family, state, zoneKey){
+  const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
+  const { joints, torsoShift } = poseFor(family, state);
+  const f=v=>v.toFixed(1);
 
-  /* guard marker: shown only in the telegraph state, green rings on both hands = "still guarded" */
-  let guardMarks = '';
+  const limbFill = id => id==='lArm'||id==='lLeg' ? 'url(#gArmL)' : 'url(#gArmR)';
+  const limbPathFor = id => limbPath(LIMB_CHAINS[id].map(k=>joints[k]), LIMB_WIDTHS[id]);
+
+  const rearLimbs = `<path fill="${limbFill('lArm')}" d="${limbPathFor('lArm')}"/>
+    <path fill="${limbFill('lLeg')}" d="${limbPathFor('lLeg')}"/>
+    <path fill="${limbFill('rLeg')}" d="${limbPathFor('rLeg')}"/>`;
+
+  const torso = `<g transform="translate(${f(torsoShift.x)},${f(torsoShift.y)})">
+    <path fill="url(#gBody)" d="${torsoPath(150,TORSO_LEVELS)}"/>
+    <g stroke="#08080a" stroke-width="1.8" opacity="0.5" fill="none">
+      <path d="M150,100 L150,198"/>
+      <path d="M124,110 Q150,126 176,110"/>
+      <path d="M130,152 Q150,157 170,152"/>
+      <path d="M130,168 Q150,173 170,168"/>
+      <path d="M130,184 Q150,189 170,184"/>
+      <path d="M112,152 C118,168 121,184 118,200"/>
+      <path d="M188,152 C182,168 179,184 182,200"/>
+    </g>
+  </g>`;
+
+  const neckHead = `<g transform="translate(${f(torsoShift.x*0.6)},${f(torsoShift.y*0.6)})">
+    <path fill="url(#gBody)" d="M136,64 C136,74 138,82 150,84 C162,82 164,74 164,64 L164,52 L136,52 Z"/>
+  </g>
+  <g transform="translate(${f(joints.head.x-150)},${f(joints.head.y-46)})">
+    <ellipse cx="150" cy="40" rx="21" ry="24" fill="url(#gBody)"/>
+  </g>`;
+
+  const frontLimb = `<path fill="${limbFill('rArm')}" d="${limbPathFor('rArm')}"/>`;
+
+  let guardMarks='', tellMark='', zoneMark='';
   if(state==='telegraph'){
-    ['leadHand','rearHand'].forEach(k=>{
-      const p = proj[k];
-      guardMarks += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="none" stroke="#28D17C" stroke-width="2.5"/>`;
+    ['lHand','rHand'].forEach(k=>{
+      const p=joints[k];
+      guardMarks += `<circle cx="${f(p.x)}" cy="${f(p.y)}" r="10" fill="none" stroke="#28D17C" stroke-width="2.3"/>`;
     });
+    const tj = fam.tellJoint;
+    const tp = tj==='torso' ? {x:150+torsoShift.x, y:150+torsoShift.y} : joints[tj];
+    tellMark = `<circle cx="${f(tp.x)}" cy="${f(tp.y)}" r="17" fill="none" stroke="#FF1E3C" stroke-width="3"/>`;
   }
-  /* tell marker: red ring on the joint giving away the move, telegraph state only */
-  let tellMark = '';
-  if(state==='telegraph'){
-    const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
-    const p = proj[fam.tellJoint];
-    tellMark = `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="11" fill="none" stroke="#FF1E3C" stroke-width="3"/>`;
-  }
-  /* target/hurt marker at the body zone */
-  let zoneMark = '';
   if((state==='exposure' || state==='cascade') && ZONES[zoneKey]){
-    const zp = project({...ZONES[zoneKey], z:0.3}, cx, cy, s);
+    const zp = ZONES[zoneKey];
     if(state==='exposure'){
       zoneMark = `<g>
-        <circle cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="14" fill="none" stroke="#E8B923" stroke-width="3"/>
-        <line x1="${(zp.x-18).toFixed(1)}" y1="${zp.y.toFixed(1)}" x2="${(zp.x+18).toFixed(1)}" y2="${zp.y.toFixed(1)}" stroke="#E8B923" stroke-width="1.5"/>
-        <line x1="${zp.x.toFixed(1)}" y1="${(zp.y-18).toFixed(1)}" x2="${zp.x.toFixed(1)}" y2="${(zp.y+18).toFixed(1)}" stroke="#E8B923" stroke-width="1.5"/>
+        <circle cx="${f(zp.x)}" cy="${f(zp.y)}" r="13" fill="none" stroke="#E8B923" stroke-width="3"/>
+        <line x1="${f(zp.x-16)}" y1="${f(zp.y)}" x2="${f(zp.x+16)}" y2="${f(zp.y)}" stroke="#E8B923" stroke-width="1.5"/>
+        <line x1="${f(zp.x)}" y1="${f(zp.y-16)}" x2="${f(zp.x)}" y2="${f(zp.y+16)}" stroke="#E8B923" stroke-width="1.5"/>
+        ${organCallout(zoneKey, zp, '#E8B923')}
       </g>`;
     } else {
-      zoneMark = `<circle class="hurt-pulse" cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="16" fill="#B14CFF" fill-opacity="0.45" stroke="#B14CFF" stroke-width="2"/>`;
+      zoneMark = `<g class="hurt-pulse">
+        <circle cx="${f(zp.x)}" cy="${f(zp.y)}" r="15" fill="#B14CFF" fill-opacity="0.5" stroke="#B14CFF" stroke-width="2"/>
+        ${organCallout(zoneKey, zp, '#B14CFF')}
+      </g>`;
     }
   }
-  return { svg: `<svg viewBox="0 0 200 200" width="100%" height="200">${bones}${joints}${headCircle}${guardMarks}${tellMark}${zoneMark}</svg>`, pose, proj };
+
+  const svg = `<svg viewBox="0 0 300 440" width="100%" height="230">
+    <defs>
+      <linearGradient id="gBody" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#3c3c44"/><stop offset="38%" stop-color="#5c5c66"/>
+        <stop offset="62%" stop-color="#3e3e46"/><stop offset="100%" stop-color="#17171b"/>
+      </linearGradient>
+      <linearGradient id="gArmR" x1="0.1" y1="0" x2="0.9" y2="0.3"><stop offset="0%" stop-color="#5c5c66"/><stop offset="100%" stop-color="#1c1c21"/></linearGradient>
+      <linearGradient id="gArmL" x1="0.9" y1="0" x2="0.1" y2="0.3"><stop offset="0%" stop-color="#5c5c66"/><stop offset="100%" stop-color="#1c1c21"/></linearGradient>
+    </defs>
+    ${rearLimbs}
+    ${torso}
+    ${neckHead}
+    ${frontLimb}
+    <ellipse cx="${f(joints.lHand.x)}" cy="${f(joints.lHand.y)}" rx="11" ry="9.5" fill="#1c1c21"/>
+    <ellipse cx="${f(joints.rHand.x)}" cy="${f(joints.rHand.y)}" rx="11" ry="9.5" fill="#1c1c21"/>
+    <ellipse cx="${f(joints.lFoot.x-3)}" cy="${f(joints.lFoot.y+5)}" rx="17" ry="7" fill="#17171b"/>
+    <ellipse cx="${f(joints.rFoot.x+3)}" cy="${f(joints.rFoot.y+5)}" rx="17" ry="7" fill="#17171b"/>
+    ${guardMarks}${tellMark}${zoneMark}
+  </svg>`;
+  return { svg, joints };
 }
 
-function telemetryTable(pose, family, state, zoneKey){
+function telemetryTable(joints, family, state, zoneKey){
   const fam = POSE_FAMILIES[family] || POSE_FAMILIES['defense'];
   const rows = [];
   const tj = fam.tellJoint;
-  rows.push(['TELL·'+tj, pose[tj]]);
-  if(ZONES[zoneKey]) rows.push(['ZONE·'+zoneKey, {...ZONES[zoneKey], z:0.3}]);
-  rows.push(['HEAD', pose.head]);
-  return `<div class="t-head">Joint coordinates (x, y = position on the body grid · z = depth toward/away from you)</div>` +
+  if(tj!=='torso') rows.push(['TELL·'+tj, joints[tj]]);
+  if(ZONES[zoneKey]) rows.push(['ZONE·'+zoneKey, ZONES[zoneKey]]);
+  rows.push(['HEAD', joints.head]);
+  return `<div class="t-head">Joint coordinates on the body grid (x, y in SVG units)</div>` +
     rows.map(([label,p])=>
-      `<div class="t-row"><span>${label}</span><b>x:${p.x.toFixed(1)} y:${p.y.toFixed(1)} z:${p.z.toFixed(2)}</b></div>`
+      `<div class="t-row"><span>${label}</span><b>x:${p.x.toFixed(1)} y:${p.y.toFixed(1)}</b></div>`
     ).join('');
 }
 
-/* full-body avatar: thick "silhouette" skeleton + a live dot per zone colored by that zone's flashcard accuracy */
-function renderAvatar(zoneStats){
-  const pose = BASE_POSE;
-  const cx=110, cy=200, s=0.95;
-  const proj = {}; for(const k in pose) proj[k] = project(pose[k], cx, cy, s);
-  const silBones = BONES.map(([a,b])=>{
-    const pa=proj[a], pb=proj[b];
-    return `<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" stroke="#08080B" stroke-width="15" stroke-linecap="round"/>`;
-  }).join('');
-  const silJoints = Object.keys(pose).filter(k=>k!=='head').map(k=>{
-    const p=proj[k];
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="#08080B"/>`;
-  }).join('');
-  const headP = proj.head; const headR = 22*(1+pose.head.z*0.16);
-  const head = `<circle cx="${headP.x.toFixed(1)}" cy="${headP.y.toFixed(1)}" r="${headR.toFixed(1)}" fill="#08080B"/>`;
-  const rimBones = BONES.map(([a,b])=>{
-    const pa=proj[a], pb=proj[b];
-    const front = (pose[a].z+pose[b].z)/2 > 0;
-    return `<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" stroke="${front?'#FF1E3C':'#5C1420'}" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>`;
-  }).join('');
-  const targetRing = `<circle cx="110" cy="150" r="95" fill="none" stroke="#FF1E3C" stroke-width="1" stroke-dasharray="2 6" opacity="0.22"/>`;
+/* full-body avatar: dark "statue" silhouette with a live glowing dot per zone, colored by that zone's flashcard accuracy,
+   plus a rim-light intensity on arms/legs that scales with real power/conditioning data (the "fast-twitch" ask). */
+function renderAvatar(zoneStats, powerStats){
+  const joints = BASE_POSE;
+  const f=v=>v.toFixed(1);
+  const armGlow = Math.max(0.12, Math.min(0.95, (powerStats.armPower||0)/99));
+  const legGlow = Math.max(0.12, Math.min(0.95, (powerStats.legPower||0)/99));
+
+  const limbPathFor = id => limbPath(LIMB_CHAINS[id].map(k=>joints[k]), LIMB_WIDTHS[id]);
+  const rim = (id, glow) => `<path d="${limbPathFor(id)}" fill="none" stroke="#FF1E3C" stroke-width="${(1+glow*2.4).toFixed(1)}" opacity="${glow.toFixed(2)}"/>`;
+
+  const limbs = `
+    <path fill="url(#gStatue)" d="${limbPathFor('lArm')}"/>
+    <path fill="url(#gStatue)" d="${limbPathFor('lLeg')}"/>
+    <path fill="url(#gStatue)" d="${limbPathFor('rLeg')}"/>
+    <path fill="url(#gStatue)" d="${torsoPath(150,TORSO_LEVELS)}"/>
+    <path fill="url(#gStatue)" d="M136,64 C136,74 138,82 150,84 C162,82 164,74 164,64 L164,52 L136,52 Z"/>
+    <ellipse cx="150" cy="40" rx="21" ry="24" fill="url(#gStatue)"/>
+    <path fill="url(#gStatue)" d="${limbPathFor('rArm')}"/>
+    <ellipse cx="${f(joints.lFoot.x-3)}" cy="${f(joints.lFoot.y+5)}" rx="17" ry="7" fill="#0e0e11"/>
+    <ellipse cx="${f(joints.rFoot.x+3)}" cy="${f(joints.rFoot.y+5)}" rx="17" ry="7" fill="#0e0e11"/>
+    ${rim('lArm',armGlow)}${rim('rArm',armGlow)}${rim('lLeg',legGlow)}${rim('rLeg',legGlow)}
+  `;
+
+  const targetRing = `<circle cx="150" cy="180" r="105" fill="none" stroke="#FF1E3C" stroke-width="1" stroke-dasharray="2 6" opacity="0.2"/>`;
   const zoneMarks = Object.keys(ZONES).map(zk=>{
     const st = zoneStats[zk] || {correct:0,total:0};
-    const zp = project({...ZONES[zk], z:0.3}, cx, cy, s);
+    const zp = ZONES[zk];
     let color, pulse='';
     if(st.total===0){ color='#4A4850'; }
     else {
@@ -507,15 +609,21 @@ function renderAvatar(zoneStats){
       else { color='#E8B923'; }
     }
     const label = st.total ? zoneLabel(zk)+': '+Math.round((st.correct/st.total)*100)+'% ('+st.total+' reps)' : zoneLabel(zk)+': untested';
-    return `<circle cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="15" fill="${color}" opacity="0.18"/>` +
-      `<circle class="${pulse}" cx="${zp.x.toFixed(1)}" cy="${zp.y.toFixed(1)}" r="9" fill="${color}" opacity="0.92"><title>${label}</title></circle>`;
+    return `<circle cx="${f(zp.x)}" cy="${f(zp.y)}" r="14" fill="${color}" opacity="0.2"/>` +
+      `<circle class="${pulse}" cx="${f(zp.x)}" cy="${f(zp.y)}" r="8" fill="${color}" opacity="0.95"><title>${label}</title></circle>`;
   }).join('');
-  return `<svg viewBox="0 0 220 220" width="100%" height="300">
+
+  return `<svg viewBox="0 0 300 440" width="100%" height="320">
+    <defs>
+      <linearGradient id="gStatue" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#26262c"/><stop offset="42%" stop-color="#3d3d45"/>
+        <stop offset="58%" stop-color="#28282e"/><stop offset="100%" stop-color="#0a0a0c"/>
+      </linearGradient>
+    </defs>
     ${targetRing}
-    <g filter="url(#avatarGlow)">${silBones}${silJoints}${head}</g>
-    ${rimBones}
+    <g filter="url(#avatarGlow)">${limbs}</g>
+    <defs><filter id="avatarGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#FF1E3C" flood-opacity="0.5"/></filter></defs>
     ${zoneMarks}
-    <defs><filter id="avatarGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#FF1E3C" flood-opacity="0.55"/></filter></defs>
   </svg>`;
 }
 
@@ -531,8 +639,8 @@ function markerLegend(){
 
 /* builds one figure + (optional) telemetry readout, used by every drill stage */
 function figureBlock(card, state, caption){
-  const { svg, pose } = renderStickFigure(card.pose, state, card.zone);
-  const tel = STATE.showTelemetry ? `<div class="telemetry">${telemetryTable(pose, card.pose, state, card.zone)}</div>` : '';
+  const { svg, joints } = renderBody(card.pose, state, card.zone);
+  const tel = STATE.showTelemetry ? `<div class="telemetry">${telemetryTable(joints, card.pose, state, card.zone)}</div>` : '';
   return `<div class="figure-wrap">
     <div class="figure-box">${svg}<div class="figure-caption">${caption}</div></div>
     ${tel}
@@ -557,7 +665,7 @@ async function computeFighterStats(){
   const discipline = Math.min(99, streak*7);
 
   const daysSorted = [...STATE.days].sort().reverse().slice(0,30);
-  let cogSum=0, cogCount=0, gngFalse=0, gngTotal=0, breathCount7=0, cardioMin30=0;
+  let cogSum=0, cogCount=0, gngFalse=0, gngTotal=0, breathCount7=0, cardioMin30=0, cardioSessions30=0;
   const now = new Date();
   for(const ds of daysSorted){
     const day = await getDay(ds);
@@ -567,7 +675,7 @@ async function computeFighterStats(){
     });
     const daysAgo = Math.floor((now - new Date(ds+'T00:00:00'))/86400000);
     if(daysAgo<7) breathCount7 += day.breathing.length;
-    if(daysAgo<30) day.cardio.forEach(cd=> cardioMin30 += cd.minutes);
+    if(daysAgo<30){ day.cardio.forEach(cd=> cardioMin30 += cd.minutes); cardioSessions30 += day.cardio.length; }
   }
   const cogAvg = cogCount>0 ? cogSum/cogCount : null;
   const reflex = cogAvg==null ? 0 : Math.round(Math.max(0, Math.min(99, 130 - (cogAvg/12))));
@@ -578,7 +686,10 @@ async function computeFighterStats(){
   const conditioning = Math.min(99, Math.round(cardioMin30/2));
 
   const ovr = Math.round((striking+reflex+composure+conditioning+discipline)/5);
-  return { striking, reflex, composure, conditioning, discipline, ovr, zoneStats, streak };
+  /* "power" figures feed the avatar's limb glow -- arms scale with striking+reflex (punching speed/power), legs with conditioning (kick endurance/drive) */
+  const armPower = Math.round((striking+reflex)/2);
+  const legPower = conditioning;
+  return { striking, reflex, composure, conditioning, discipline, ovr, zoneStats, streak, cardioMin30, cardioSessions30, armPower, legPower };
 }
 
 function rankForOvr(ovr){
@@ -587,6 +698,18 @@ function rankForOvr(ovr){
   if(ovr>=60) return {label:'RANKED', color:'#E8B923'};
   if(ovr>=40) return {label:'CONTENDER', color:'#9A98A3'};
   return {label:'ROOKIE', color:'#5C5A64'};
+}
+
+/* separate, visible cardio ranking (not just the Conditioning bar) -- built from real logged cardio volume over the last 30 days */
+function cardioRankFor(min30, sessions30){
+  const score = Math.min(99, Math.round(min30/2));
+  let label, color;
+  if(score>=80){ label='IRON LUNGS'; color='#E8B923'; }
+  else if(score>=60){ label='DIESEL ENGINE'; color='#FF1E3C'; }
+  else if(score>=40){ label='CONDITIONED'; color='#28D17C'; }
+  else if(score>=15){ label='BUILDING'; color='#9A98A3'; }
+  else { label='GASSED'; color='#5C5A64'; }
+  return { score, label, color, min30, sessions30 };
 }
 
 function attrBar(label, val){
@@ -719,6 +842,7 @@ async function renderDashboard(c){
   const wk = await weekCounts();
   const stats = await computeFighterStats();
   const rank = rankForOvr(stats.ovr);
+  const cardio = cardioRankFor(stats.cardioMin30, stats.cardioSessions30);
   const careerProg = await getCareerProgress();
   const totals = await computeAllTimeTotals();
   const seqIdx = await getJSON('seq:list', []);
@@ -742,19 +866,25 @@ async function renderDashboard(c){
           <div class="ovr-num">${stats.ovr}</div>
           <div class="ovr-lbl">OVR</div>
         </div>
+        <div class="ovr-badge cardio-badge" style="--ring:${cardio.color}">
+          <div class="ovr-num">${cardio.score}</div>
+          <div class="ovr-lbl">ENGINE</div>
+        </div>
         <div>
           <div class="rank-name" style="color:${rank.color}">${rank.label}</div>
           <div class="hq-sub">STREAK ${streak}D · ${wk.flashcards+wk.breathing+wk.cognition+wk.logs} REPS THIS WEEK · CAREER ${careerProg.wins}-${careerProg.losses}</div>
+          <div class="hq-sub" style="margin-top:2px;">CARDIO RANK: <b style="color:${cardio.color}">${cardio.label}</b> · ${cardio.min30} min logged / 30d · ${cardio.sessions30} sessions</div>
         </div>
       </div>
       <div class="hq-body">
         <div class="avatar-col">
-          ${renderAvatar(stats.zoneStats)}
+          ${renderAvatar(stats.zoneStats, {armPower:stats.armPower, legPower:stats.legPower})}
           <div class="legend" style="justify-content:center;">
             <div class="item"><span class="swatch guard"></span> Hardened</div>
             <div class="item"><span class="swatch target"></span> Developing</div>
             <div class="item"><span class="swatch hurt"></span> Exposed</div>
           </div>
+          <p class="power-caption">Limb glow = explosive output. Arms scale with Striking+Reflex (${stats.armPower}); legs scale with Conditioning (${stats.legPower}).</p>
         </div>
         <div class="attr-col">
           ${attrBar('Striking', stats.striking)}
@@ -763,6 +893,16 @@ async function renderDashboard(c){
           ${attrBar('Conditioning', stats.conditioning)}
           ${attrBar('Discipline', stats.discipline)}
         </div>
+      </div>
+      <div class="vitals-head">Anatomical Report — every target zone, hardened or not</div>
+      <div class="vitals-list">
+        ${Object.keys(ZONES).filter(zk=>zk!=='neck').map(zk=>{
+          const st = stats.zoneStats[zk] || {correct:0,total:0};
+          const pct = st.total ? Math.round((st.correct/st.total)*100) : null;
+          const cls = st.total===0 ? 'untested' : pct>=70 ? 'good' : pct<40 ? 'bad' : 'mid';
+          const stat = st.total===0 ? 'Untested' : pct+'% · '+st.total+' reps';
+          return `<div class="vital-row ${cls}"><span class="vital-name">${zoneLabel(zk)}</span><span class="vital-stat">${stat}</span></div>`;
+        }).join('')}
       </div>
     </div>
     <div class="panel">
@@ -1030,6 +1170,7 @@ window.answerFlashcard = async function(btn, chosen){
       ${figureBlock(card,'exposure','Opening: ' + zoneLabel(card.zone))}
       ${figureBlock(card,'cascade','If unanswered: ' + card.cascade)}
     </div>
+    <div class="counter-cue"><b>Counter:</b> ${card.counter}</div>
     <button class="btn" onclick="nextFlashcard()" style="margin-top:6px;">Next Card</button>`;
   stage.querySelector('.card-stage').appendChild(feedback);
 };
