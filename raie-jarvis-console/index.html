@@ -228,6 +228,18 @@
   .career-result.win{color:var(--green); text-shadow:0 0 20px var(--green-soft);}
   .career-result.loss{color:var(--red); text-shadow:0 0 20px var(--red-glow);}
 
+  /* trophy case */
+  .badge-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin-top:14px;}
+  .badge-chip{border:1px solid var(--line-strong); background:var(--panel-raised); padding:10px 12px; border-left:3px solid var(--ink-faint);}
+  .badge-chip.unlocked{border-left-color:var(--gold); box-shadow:0 0 10px -4px var(--gold-soft);}
+  .badge-name{font-family:var(--hud); font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:0.4px; color:var(--ink);}
+  .badge-chip.locked .badge-name{color:var(--ink-faint);}
+  .badge-desc{font-size:11px; color:var(--ink-dim); margin-top:3px; line-height:1.4;}
+  .badge-chip.locked .badge-desc{color:var(--ink-faint);}
+  .badge-status{font-family:var(--mono); font-size:9.5px; letter-spacing:0.5px; margin-top:6px; text-transform:uppercase;}
+  .badge-chip.unlocked .badge-status{color:var(--gold);}
+  .badge-chip.locked .badge-status{color:var(--ink-faint);}
+
   .disclaimer{font-size:11px; color:var(--ink-faint); border-top:1px solid var(--line); margin-top:26px; padding-top:12px; line-height:1.5;}
 </style>
 </head>
@@ -585,6 +597,55 @@ function attrBar(label, val){
   </div>`;
 }
 
+/* ---------------- achievements ---------------- */
+/* scans every day ever logged (not just the recent window computeFighterStats uses) for all-time totals and "ever done X" flags */
+async function computeAllTimeTotals(){
+  let flashTotal=0, breathingTotal=0, cognitionTotal=0, fuelTotal=0;
+  let bestReflexMs=null, anyNoFlinch=false;
+  const doneEver = {tells:false, recovery:false, reflex:false, fuel:false};
+  for(const ds of STATE.days){
+    const day = await getDay(ds);
+    if(day.flashcards.length){ flashTotal += day.flashcards.length; doneEver.tells = true; }
+    if(day.breathing.length){ breathingTotal += day.breathing.length; doneEver.recovery = true; }
+    if(day.cognition.length){
+      cognitionTotal += day.cognition.length; doneEver.reflex = true;
+      day.cognition.forEach(cg=>{
+        if(cg.bestMs>0 && (bestReflexMs===null || cg.bestMs<bestReflexMs)) bestReflexMs = cg.bestMs;
+        if(cg.mode==='gonogo' && cg.falseAlarms===0) anyNoFlinch = true;
+      });
+    }
+    const fuelCount = day.nutrition.length + day.cardio.length;
+    if(fuelCount){ fuelTotal += fuelCount; doneEver.fuel = true; }
+  }
+  return { flashTotal, breathingTotal, cognitionTotal, fuelTotal, bestReflexMs, anyNoFlinch, doneEver };
+}
+function computeNoOpenings(zoneStats){
+  const tested = Object.keys(ZONES).filter(z => zoneStats[z] && zoneStats[z].total>0);
+  if(tested.length < 5) return false;
+  return tested.every(z => (zoneStats[z].correct/zoneStats[z].total) >= 0.7);
+}
+const ACHIEVEMENTS = [
+  { id:'disc1', name:'Discipline I', desc:'Hit a 3-day streak.', check: ctx => ctx.streak>=3 },
+  { id:'disc2', name:'Discipline II', desc:'Hit a 14-day streak.', check: ctx => ctx.streak>=14 },
+  { id:'firstblood', name:'First Blood', desc:'Win your first career fight.', check: ctx => ctx.careerProg.wins>=1 },
+  { id:'climber', name:'Ladder Climber', desc:'Reach The Technician tier.', check: ctx => ctx.careerProg.unlockedIdx>=3 },
+  { id:'undisputed', name:'Undisputed', desc:'Beat every opponent on the ladder.', check: ctx => ctx.careerProg.beaten.length>=OPPONENTS.length },
+  { id:'architect', name:'Combo Architect', desc:'Save your first sequence.', check: ctx => ctx.seqCount>=1 },
+  { id:'strategist', name:'Combo Strategist', desc:'Save 3 different sequences.', check: ctx => ctx.seqCount>=3 },
+  { id:'ironreflex', name:'Iron Reflexes', desc:'Post a sub-300ms best reaction.', check: ctx => ctx.totals.bestReflexMs!==null && ctx.totals.bestReflexMs<=300 },
+  { id:'noflinch', name:'No Flinch', desc:'Clear a Go/No-Go round with zero false alarms.', check: ctx => ctx.totals.anyNoFlinch },
+  { id:'noopenings', name:'No Openings', desc:'Hold 70%+ accuracy across 5+ tested zones.', check: ctx => computeNoOpenings(ctx.stats.zoneStats) },
+  { id:'fullcamp', name:'Full Camp', desc:'Log a rep in Tells, Recovery, Reflex, and Fuel at least once.', check: ctx => Object.values(ctx.totals.doneEver).every(Boolean) },
+  { id:'champbody', name:'Champion Body', desc:'Reach a 90+ OVR.', check: ctx => ctx.stats.ovr>=90 },
+];
+function achievementChip(a, unlocked){
+  return `<div class="badge-chip ${unlocked?'unlocked':'locked'}">
+    <div class="badge-name">${escapeHtml(a.name)}</div>
+    <div class="badge-desc">${escapeHtml(a.desc)}</div>
+    <div class="badge-status">${unlocked?'Unlocked':'Locked'}</div>
+  </div>`;
+}
+
 /* ---------------- init ---------------- */
 async function init(){
   const days = await getJSON('index:days', []);
@@ -659,6 +720,10 @@ async function renderDashboard(c){
   const stats = await computeFighterStats();
   const rank = rankForOvr(stats.ovr);
   const careerProg = await getCareerProgress();
+  const totals = await computeAllTimeTotals();
+  const seqIdx = await getJSON('seq:list', []);
+  const achCtx = { streak, careerProg, stats, totals, seqCount: seqIdx.length };
+  const unlocked = ACHIEVEMENTS.filter(a=>a.check(achCtx));
   const dismissed = await getJSON('ui:onboardingDismissed', false);
 
   const banner = dismissed ? '' : `<div class="banner">
@@ -698,6 +763,13 @@ async function renderDashboard(c){
           ${attrBar('Conditioning', stats.conditioning)}
           ${attrBar('Discipline', stats.discipline)}
         </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2 class="sec">Trophy Case</h2>
+      <p class="sub">${unlocked.length} / ${ACHIEVEMENTS.length} unlocked — earned from what you've actually logged, not handed out for showing up.</p>
+      <div class="badge-grid">
+        ${ACHIEVEMENTS.map(a=>achievementChip(a, unlocked.includes(a))).join('')}
       </div>
     </div>
     <div class="panel">
