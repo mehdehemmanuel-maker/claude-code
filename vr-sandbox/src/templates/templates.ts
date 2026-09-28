@@ -56,28 +56,37 @@ export const TEMPLATES: Template[] = [
   {
     id: 'catapult',
     name: 'Counterweight catapult',
-    blurb: 'An 80 kg counterweight on a 2 m Douglas-fir arm, held by a steel latch wire.',
-    tryThis: ['Erase the latch wire to fire.', 'Swap the counterweight mass and watch the range change.', 'Weaken the counterweight bolts to M6 4.6 and fire again.'],
+    blurb: 'An 80 kg counterweight on a 2 m Douglas-fir arm, on a steel axle in ball bearings, held by a steel latch wire.',
+    tryThis: ['Erase the latch wire to fire.', 'Change the counterweight mass (up to 150 kg fits the frame) and watch the range change.', 'Loosen the counterweight bolts to hand tight and fire again: they slip, and the throw falls short.'],
     build: () => {
       const b = new BuildBuilder('Counterweight catapult', 202);
-      const pivot: [number, number, number] = [0, 1.2, 0];
+      // The arm swings freely after the throw (there is no stop bar), so every part of it must clear the floor
+      // and the frame on every turn: the pivot sits above the 1.6 m reach of the long arm, and the uprights
+      // stand far enough apart for a counterweight of up to 150 kg (a 298 mm cylinder) to pass between them.
+      const H = 1.75;
+      const pivot: [number, number, number] = [0, H, 0];
       const tilt = -35 * deg;
-      const R = (x: number, y: number, z: number) => rotateAbout(P(x, y, z), pivot, [0, 0, 1], tilt);
+      const R = (x: number, y: number, z: number) => rotateAbout(P(x, H + y, z), pivot, [0, 0, 1], tilt);
+      const cwD = (kg: number) => Math.cbrt((4 * kg) / (Math.PI * 7200));
+      const uprightZ = cwD(150) / 2 + 0.02 + 0.0445;
       const uprights = [-1, 1].map((s) =>
-        b.part('lumber', P(0, 0.65, s * 0.091, Z90), { frozen: true, params: { size: '4x4', length: 1.3 }, name: 'Upright' }));
-      const arm = b.part('lumber', R(0.6, 1.2, 0), { params: { size: '2x4', length: 2 }, name: 'Throwing arm' });
-      for (const u of uprights) b.joint('bearing', arm, u, along(pivot, [0, 0, 1]), { bore: 0.025, staticRating: 10000 });
-      const cwD = Math.cbrt((4 * 80) / (Math.PI * 7200));
-      const cw = b.part('weight', R(-0.28, 1.219 + cwD / 2, 0), { params: { mass: 80 }, name: 'Counterweight' });
-      b.joint('bolted', arm, cw, R(-0.28, 1.219, 0), { size: 'M12', class: '8.8', count: 2, bondW: 0.089, bondL: 0.2 });
-      const cup = b.part('plate', R(1.45, 1.225, 0), { material: 'wood.birch-plywood', params: { length: 0.25, width: 0.2, thickness: 0.012 }, name: 'Cup' });
-      b.joint('screwed', cup, arm, R(1.45, 1.219, 0), { diameter: 0.004, length: 0.04, count: 4, bondW: 0.089, bondL: 0.25 });
+        b.part('lumber', P(0, (H + 0.1) / 2, s * uprightZ, Z90), { frozen: true, params: { size: '4x4', length: H + 0.1 }, name: 'Upright' }));
+      const arm = b.part('lumber', R(0.6, 0, 0), { params: { size: '2x4', length: 2 }, name: 'Throwing arm' });
+      // an M24 threaded-rod axle clamped through the arm by torqued nuts (a bolted joint along the axle), turning
+      // in a 25 mm deep-groove bearing in each upright (6205: C0 7.8 kN)
+      const axle = b.part('rod.round', { p: pivot, q: along(pivot, [0, 0, 1]).q }, { material: 'steel.1018-cd', params: { length: 2 * uprightZ + 0.06, diameter: 0.024 }, name: 'Axle (M24 rod)' });
+      b.joint('bolted', arm, axle, along(pivot, [0, 0, 1]), { size: 'M24', class: '8.8', count: 1, bondW: 0.089, bondL: 0.089 });
+      for (const s of [-1, 1]) b.joint('bearing', axle, uprights[s < 0 ? 0 : 1]!, along([0, H, s * uprightZ], [0, 0, 1]), { bore: 0.025, staticRating: 7800 });
+      const cw = b.part('weight', R(-0.28, 0.019 + cwD(80) / 2, 0), { params: { mass: 80 }, name: 'Counterweight' });
+      b.joint('bolted', arm, cw, R(-0.28, 0.019, 0), { size: 'M12', class: '8.8', count: 2, bondW: 0.089, bondL: 0.2 });
+      const cup = b.part('plate', R(1.45, 0.025, 0), { material: 'wood.birch-plywood', params: { length: 0.25, width: 0.2, thickness: 0.012 }, name: 'Cup' });
+      b.joint('screwed', cup, arm, R(1.45, 0.019, 0), { diameter: 0.004, length: 0.04, count: 4, bondW: 0.089, bondL: 0.25 });
       for (const x of [1.335, 1.565]) {
-        const lip = b.part('block', R(x, 1.256, 0), { material: 'wood.birch-plywood', params: { x: 0.02, y: 0.05, z: 0.2 }, name: 'Lip' });
-        b.joint('glued', lip, cup, R(x, 1.231, 0), { adhesive: 'epoxy-structural', bondW: 0.02, bondL: 0.2 });
+        const lip = b.part('block', R(x, 0.056, 0), { material: 'wood.birch-plywood', params: { x: 0.02, y: 0.05, z: 0.2 }, name: 'Lip' });
+        b.joint('glued', lip, cup, R(x, 0.031, 0), { adhesive: 'epoxy-structural', bondW: 0.02, bondL: 0.2 });
       }
-      b.part('sphere', R(1.45, 1.231 + 0.041, 0), { material: 'wood.hard-maple', params: { diameter: 0.08 }, name: 'Projectile' });
-      const end = R(1.5, 1.181, 0).p;
+      b.part('sphere', R(1.45, 0.031 + 0.041, 0), { material: 'wood.hard-maple', params: { diameter: 0.08 }, name: 'Projectile' });
+      const end = R(1.5, -0.019, 0).p;
       const stake = b.part('block', P(end[0], 0.06, 0), { frozen: true, material: 'steel.a36', params: { x: 0.12, y: 0.12, z: 0.12 }, name: 'Ground stake' });
       b.link('rope', stake, [end[0], 0.12, 0], arm, end, { grade: 'steel-wire-6x19', diameter: 0.003 });
       return b.doc;
