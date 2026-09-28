@@ -412,7 +412,7 @@ export class App {
     }
   }
 
-  checkpoint(label = 'Checkpoint') {
+  checkpoint(label = 'Checkpoint', announce = true) {
     this.commitLivePoses();
     const velocities = new Map<string, { linear: Vec3; angular: Vec3 }>();
     for (const id of this.live.ids()) {
@@ -421,8 +421,10 @@ export class App {
     }
     this.checkpoints.push({ label, time: this.simTime, doc: structuredClone(this.store.doc), velocities });
     if (this.checkpoints.length > 12) this.checkpoints.shift();
-    this.toast(`${label} saved (${this.checkpoints.length})`, 'ok');
-    this.audio.ui('save');
+    if (announce) {
+      this.toast(`Checkpoint ${this.checkpoints.length} saved: rewind returns here`, 'ok');
+      this.audio.ui('save');
+    }
     this.notify();
   }
 
@@ -445,7 +447,8 @@ export class App {
   loadDoc(doc: BuildDoc, label: string) {
     this.store.replace(doc);
     this.checkpoints = [];
-    this.checkpoint(`Loaded ${label}`);
+    // a silent checkpoint, so rewind always has the build as loaded to return to
+    this.checkpoint(`Loaded ${label}`, false);
   }
 
   loadTemplate(id: string) {
