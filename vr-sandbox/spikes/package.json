@@ -1,0 +1,12 @@
+{
+  "name": "vr-sandbox-spikes",
+  "private": true,
+  "type": "module",
+  "description": "De-risking spikes backing PLAN.md. Run: npm install && npm run physics",
+  "scripts": {
+    "physics": "node physics-spike.mjs"
+  },
+  "dependencies": {
+    "jolt-physics": "1.1.0"
+  }
+}

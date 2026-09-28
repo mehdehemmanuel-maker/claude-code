@@ -1,0 +1,32 @@
+{
+  "name": "vr-creative-sandbox",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Physics-real VR creative sandbox (WebXR, Quest 3S target, desktop fallback)",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52",
+    "fflate": "^0.8.3",
+    "jolt-physics": "^1.1.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.4",
+    "@types/three": "^0.186.0",
+    "fast-check": "^4.10.2",
+    "iwer": "^2.5.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

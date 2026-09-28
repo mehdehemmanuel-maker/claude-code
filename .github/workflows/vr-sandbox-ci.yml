@@ -1,0 +1,46 @@
+name: vr-sandbox CI
+
+on:
+  push:
+    paths:
+      - 'vr-sandbox/**'
+      - '.github/workflows/vr-sandbox-*.yml'
+  pull_request:
+    paths:
+      - 'vr-sandbox/**'
+      - '.github/workflows/vr-sandbox-*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: vr-sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vr-sandbox/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit, golden, codec and physics conformance tests
+        run: npm test
+      - name: Install Chromium for end-to-end tests
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests (desktop + emulated Quest)
+        run: npm run e2e
+        env:
+          CI: '1'
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: vr-sandbox/test-results
+          retention-days: 7
