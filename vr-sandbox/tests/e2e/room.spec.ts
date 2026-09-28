@@ -142,8 +142,8 @@ test('walk mode: calibrates the room into the workshop, walks instead of flying,
   expect(onTable).toBeCloseTo(0.79, 1);
   // with the room made non-solid, the same block falls through the (virtual) table to the workshop floor
   await sb(page, (s) => { s.app.roomSolid = false; s.app.applyRoom(); });
-  await page.waitForFunction(() => { const { app } = (window as any).sandbox; return app.livePose(Object.keys(app.doc.parts)[0]).p[1] < 0.1; }, null, { timeout: 30_000 });
-  const [dropped] = await heights(page);
-  expect(dropped).toBeLessThan(0.1);
+  // it lands from 0.7 m and bounces: judge it at rest (a resting 100 mm cube's centre is below 0.087 m)
+  const [dropped] = await settle(page);
+  expect(dropped).toBeLessThan(0.09);
   expect(errors).toEqual([]);
 });
