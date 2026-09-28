@@ -28,6 +28,12 @@ export interface Feature {
   through: boolean;
 }
 
+/** Physical damage of a breakable part: broken bonds between segments and, once damaged, each segment's pose. */
+export interface PartDamage {
+  broken: number[];
+  segments: Pose[] | null;
+}
+
 export interface Part {
   id: string;
   kind: string;
@@ -38,6 +44,7 @@ export interface Part {
   frozen: boolean;
   assembly: string | null;
   features: Feature[];
+  damage: PartDamage;
 }
 
 /** One end of a connection: a part and a frame expressed in that part's local space. */

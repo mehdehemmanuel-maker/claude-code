@@ -38,6 +38,10 @@ export const PartSchema = Type.Object({
   frozen: Type.Boolean(),
   assembly: Type.Union([Id('a'), Type.Null()]),
   features: Type.Array(FeatureSchema, { maxItems: 256 }),
+  damage: Type.Object({
+    broken: Type.Array(Type.Integer({ minimum: 0, maximum: 63 }), { maxItems: 64 }),
+    segments: Type.Union([Type.Array(Pose, { maxItems: 64 }), Type.Null()]),
+  }, { additionalProperties: false }),
 }, { additionalProperties: false });
 
 const Endpoint = Type.Object({ part: Id('p'), frame: Pose }, { additionalProperties: false });

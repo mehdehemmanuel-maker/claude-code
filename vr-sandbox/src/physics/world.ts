@@ -1,19 +1,29 @@
 // The physics world: parts become Jolt bodies, connections become Jolt constraints, and every tick the
 // real forces carried by each constraint are read back and checked against spec-derived capacities.
-// Nothing here knows about specific builds; behaviour comes only from geometry, materials and specs.
+// Breakable stock (rods, tubes, beams, lumber, strips) is a chain of segment bodies bonded at their shared
+// faces; the bonds carry real section forces and yield or fracture at capacities from the section and
+// material. Nothing here knows about specific builds; behaviour comes only from geometry, materials and specs.
 
 import type JoltNS from 'jolt-physics';
 import type { Material } from '../data/materials';
 import { getConnectorKind, type ConnectorKind, type Derived } from '../connectors/registry';
-import { getPartKind, effectiveParams, type PartDims, type PartKind, type MagnetGeometry } from '../parts/registry';
+import {
+  getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
+  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout,
+} from '../parts/registry';
 import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
   chargeInteraction, cylinderCharges, blockCharges, imageCharges, plateSaturationFactor, ringsForGap, dipoleMoment,
   type Charge, type Vec3 as MVec3,
 } from '../engineering/magnets';
 import { neoHookeanBandForce } from '../engineering/mechanics';
-import { composePose, cross, dot, length, normalize, rotate, sub, add, scale } from '../doc/math';
-import type { Connection, Part, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
+import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
+import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
+import {
+  ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
+  quatFromRotationVector, quatMul, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
+} from './rigid';
+import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
 import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, StepResult } from './protocol';
 
 type J = typeof JoltNS;
@@ -25,13 +35,22 @@ const MAX_SUBSTEPS = 8;
 /** Largest omega * dt per substep at which a spring is still simulated accurately (spike: 0.11 -> 0.36% period error). */
 const SUBSTEP_OMEGA_DT = 0.12;
 const SUBGROUPS = 4096;
+/** A fractured bond whose faces are still this well aligned (rad) lets its two pieces collide with each other. */
+const CLEAN_BREAK_ANGLE = 0.15;
+const IDENTITY_Q: Quat = [0, 0, 0, 1];
+const BOND_VELOCITY_STEPS = 20;
+const BOND_POSITION_STEPS = 4;
 
+/** One Jolt body: a whole part, or one segment of a breakable part. */
 interface BodyRec {
+  /** Body id: the part id, or "part#k" for segment k. */
   id: string;
+  partId: string;
+  seg: number;
+  pr: PartRec;
   slot: number;
   subgroup: number;
   body: JoltNS.Body;
-  part: Part;
   kind: PartKind;
   material: Material;
   shape: CollisionShape;
@@ -43,6 +62,47 @@ interface BodyRec {
   frozen: boolean;
   grabbed: GrabMode | null;
   inFluid: boolean;
+  /** Body-space inertia tensor (row-major 3x3), read from Jolt; null for static bodies. */
+  Iloc: number[] | null;
+  /** State at the start of the current tick (for the rigid-cluster projection). */
+  prior: { pose: Pose; v: Vec3; w: Vec3 } | null;
+}
+
+interface BondRec {
+  /** Between segment k and k + 1. */
+  k: number;
+  a: BodyRec;
+  b: BodyRec;
+  plastic: boolean;
+  constraint: JoltNS.Constraint;
+  typed: JoltNS.SixDOFConstraint;
+  pairKey: number;
+  over: number;
+  u: number;
+  mode: string;
+  /** Pose of segment k + 1 relative to segment k that the bond holds. */
+  rest: Pose;
+  loads: BondLoads;
+  /** Section force / moment on the far side added by the rigid-cluster projection this tick (N, N m, world). */
+  corrF: Vec3;
+  corrT: Vec3;
+}
+
+interface PartRec {
+  id: string;
+  part: Part;
+  kind: PartKind;
+  material: Material;
+  layout: SegmentLayout | null;
+  segs: BodyRec[];
+  /** Bond k joins segment k and k + 1; null when broken (or when the part is frozen). */
+  bonds: (BondRec | null)[];
+  broken: Set<number>;
+  cap: BondCapacity | null;
+  /** Slot reporting the part's own pose: its body, or for segmented parts a virtual slot derived from segment 0. */
+  slot: number;
+  /** Collision pairs kept disabled between pieces that tore apart while bent (they overlap at the tear). */
+  heldPairs: number[];
 }
 
 interface ConnRec {
@@ -50,8 +110,13 @@ interface ConnRec {
   conn: Connection;
   kind: ConnectorKind;
   derived: Derived;
+  pa: PartRec;
+  pb: PartRec | null;
+  /** The bodies the joint attaches to (the segment under each endpoint) and the frames in their coordinates. */
   a: BodyRec;
   b: BodyRec | null;
+  frameA: Pose;
+  frameB: Pose | null;
   constraint: JoltNS.Constraint | null;
   extra: JoltNS.Constraint[];
   typed: JoltNS.SixDOFConstraint | JoltNS.HingeConstraint | JoltNS.SliderConstraint | JoltNS.SwingTwistConstraint | JoltNS.DistanceConstraint | null;
@@ -67,15 +132,110 @@ interface ConnRec {
   bandRest: number;
   materials: Record<string, Material>;
   lastPositionLambda: number;
+  pairKeys: number[];
+  /** Force / moment this joint supplied to hold a projected breakable part (lambda convention: on body 2). */
+  corrF: Vec3;
+  corrT: Vec3;
+  /** For a joint to the world: where in the world it holds endpoint A (fixed when the joint is built). */
+  worldB: Pose | null;
+}
+
+/** A rigid link inside an assembly: segment bond or rigid joint, holding v at `rest` in u's frame. */
+interface RigidEdge {
+  u: BodyRec;
+  v: BodyRec;
+  rest: Pose;
+  bond: BondRec | null;
+  conn: ConnRec | null;
+}
+
+/** A stiff joint holding a body to something immovable (for the rigid-cluster projection). */
+interface Anchor {
+  c: ConnRec;
+  sign: number;
+  frame: Pose;
+  other: BodyRec | null;
+  /** The frame on the immovable side, in its body's coordinates (null for the world). */
+  otherFrame: Pose | null;
+}
+
+interface ClusterWork {
+  comp: BodyRec[];
+  adj: Map<BodyRec, { e: RigidEdge; other: BodyRec }[]>;
+}
+
+/** An assembly after fitting: pose, prediction and the bookkeeping for its internal loads. */
+interface FittedCluster extends ClusterWork {
+  index: Map<BodyRec, number>;
+  order: number[];
+  parent: Int32Array;
+  parentEdge: (RigidEdge | null)[];
+  disc: Int32Array;
+  low: Int32Array;
+  /** Rest shape (poses in body 0's frame), rigid pose and centre of mass at tick start. */
+  T: Pose[];
+  C0: Pose;
+  com0: Vec3;
+  M: number;
+  NP0: Pose[];
+  P0: Pose[];
+  Iw0: number[][];
+  pri: { pose: Pose; v: Vec3; w: Vec3 }[];
+  joltP: Vec3[];
+  joltL: Vec3[];
+  newV: Vec3[];
+  ent: Ent;
+  /** The rigid motion it started the tick with (for restitution). */
+  priorEnt: Entity;
+}
+
+/** A solver entity: a whole assembly, or a lone body. */
+interface Ent {
+  e: Entity;
+  work: FittedCluster | null;
+  single: BodyRec | null;
+  touched: boolean;
+  /** A lone body's pose at tick start (if known) and the velocity it entered the solve with. */
+  start: Pose | null;
+  v0: Vec3;
+  w0: Vec3;
+  /** Intact rigid joints to something immovable: the entity is immovable too, and these share its reaction. */
+  fixed: { r: BodyRec; a: Anchor }[];
+}
+
+interface RowTag {
+  kind: 'anchor' | 'hinge' | 'contact';
+  /** Bodies on the row's a and b sides (for per-body impulse bookkeeping; null = world / immovable). */
+  ma: BodyRec | null;
+  mb: BodyRec | null;
+  anchor?: Anchor;
+  bond?: BondRec;
+}
+
+interface RecordedContact {
+  key: string;
+  m: BodyRec;
+  o: BodyRec | null;
+  oStatic: boolean;
+  oBody: JoltNS.Body;
+  /** From m toward o. */
+  n: Vec3;
+  /** Contact points on m and on o, world, at tick start. */
+  points: { pm: Vec3; po: Vec3 }[];
+  friction: number;
+  restitution: number;
 }
 
 interface Grab {
   hand: string;
   rec: BodyRec;
+  /** Bonded pieces moved with the held body in creative mode, with their pose relative to it. */
+  followers: { rec: BodyRec; rel: Pose }[];
   mode: GrabMode;
   target: Pose;
   strength: number;
-  prevMotion: 'static' | 'dynamic';
+  mass: number;
+  inertia: number;
 }
 
 export interface WorldOptions {
@@ -90,11 +250,13 @@ export class PhysicsWorld {
   private ps: JoltNS.PhysicsSystem;
   private bi: JoltNS.BodyInterface;
   private groupFilter: JoltNS.GroupFilterTable;
+  private parts = new Map<string, PartRec>();
   private bodies = new Map<string, BodyRec>();
-  private bySlot: (BodyRec | null)[] = [];
+  private bySlot: (BodyRec | PartRec | null)[] = [];
   private freeSlots: number[] = [];
   private freeSubgroups: number[] = [];
   private nextSubgroup = 1;
+  private pairRefs = new Map<number, number>();
   private conns = new Map<string, ConnRec>();
   private envBodies: JoltNS.Body[] = [];
   private grabs = new Map<string, Grab>();
@@ -208,6 +370,7 @@ export class PhysicsWorld {
       case 'grabTarget': { const g = this.grabs.get(op.hand); if (g) g.target = op.target; return; }
       case 'release': return this.release(op.hand, op.linear, op.angular);
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
+      case 'damage': return this.setDamage(op.id, op.damage);
       case 'options': this.opts = { ...this.opts, ...(op.maxMagnetRings ? { maxMagnetRings: op.maxMagnetRings } : {}), ...(op.filterTicks ? { filterTicks: op.filterTicks } : {}) }; return;
     }
   }
@@ -242,8 +405,35 @@ export class PhysicsWorld {
 
   clear() {
     for (const id of [...this.conns.keys()]) this.removeConnection(id);
-    for (const id of [...this.bodies.keys()]) this.removePart(id);
+    for (const id of [...this.parts.keys()]) this.removePart(id);
     this.grabs.clear();
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // collision filtering between subgroups (reference counted: several joints can link the same pair)
+
+  private pairKey(a: number, b: number) {
+    return a < b ? a * SUBGROUPS + b : b * SUBGROUPS + a;
+  }
+
+  private holdPair(a: number, b: number): number {
+    if (a === 0 || b === 0 || a === b) return -1;
+    const key = this.pairKey(a, b);
+    const n = this.pairRefs.get(key) ?? 0;
+    if (n === 0) this.groupFilter.DisableCollision(a, b);
+    this.pairRefs.set(key, n + 1);
+    return key;
+  }
+
+  private releasePair(key: number) {
+    if (key < 0) return;
+    const n = this.pairRefs.get(key) ?? 0;
+    if (n <= 1) {
+      this.pairRefs.delete(key);
+      this.groupFilter.EnableCollision(Math.floor(key / SUBGROUPS), key % SUBGROUPS);
+    } else {
+      this.pairRefs.set(key, n - 1);
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -288,11 +478,18 @@ export class PhysicsWorld {
     return out;
   }
 
-  private allocSlot(): number {
+  private allocSlot(reuse: number[]): number {
+    const r = reuse.shift();
+    if (r !== undefined) return r;
     const s = this.freeSlots.pop();
     if (s !== undefined) return s;
     this.bySlot.push(null);
     return this.bySlot.length - 1;
+  }
+
+  private freeSlot(s: number) {
+    this.bySlot[s] = null;
+    this.freeSlots.push(s);
   }
 
   private allocSubgroup(): number {
@@ -302,100 +499,170 @@ export class PhysicsWorld {
     return this.nextSubgroup++;
   }
 
+  private freeSubgroup(sg: number) {
+    if (sg <= 0) return;
+    // anything still disabled against this subgroup goes back to colliding before it is recycled
+    for (const key of [...this.pairRefs.keys()]) {
+      const a = Math.floor(key / SUBGROUPS), b = key % SUBGROUPS;
+      if (a === sg || b === sg) {
+        this.pairRefs.delete(key);
+        this.groupFilter.EnableCollision(a, b);
+      }
+    }
+    this.freeSubgroups.push(sg);
+  }
+
+  /** Straight segment poses for a part pose. */
+  private straightPoses(pose: Pose, layout: SegmentLayout | null): Pose[] {
+    if (!layout) return [pose];
+    return layout.centers.map((_, k) => composePose(pose, segmentOffset(layout, k)));
+  }
+
+  private velocityOf(r: BodyRec): [Vec3, Vec3] {
+    const lv = this.bi.GetLinearVelocity(r.body.GetID());
+    const av = this.bi.GetAngularVelocity(r.body.GetID());
+    return [[lv.GetX(), lv.GetY(), lv.GetZ()], [av.GetX(), av.GetY(), av.GetZ()]];
+  }
+
   upsertPart(part: Part, material: Material, keepLivePose: boolean) {
     const J = this.J;
-    const existing = this.bodies.get(part.id);
-    let pose = part.pose;
-    let linear: Vec3 = [0, 0, 0];
-    let angular: Vec3 = [0, 0, 0];
-    if (existing && keepLivePose) {
-      pose = this.poseOf(existing);
-      const lv = this.bi.GetLinearVelocity(existing.body.GetID());
-      const av = this.bi.GetAngularVelocity(existing.body.GetID());
-      linear = [lv.GetX(), lv.GetY(), lv.GetZ()];
-      angular = [av.GetX(), av.GetY(), av.GetZ()];
-    }
-    // Connections attached to this part must be rebuilt against the new body.
-    const attached = [...this.conns.values()].filter((c) => c.a.id === part.id || c.b?.id === part.id);
-    for (const c of attached) this.destroyConstraint(c);
-    const slot = existing ? existing.slot : this.allocSlot();
-    const subgroup = existing ? existing.subgroup : this.allocSubgroup();
-    if (existing) this.destroyBody(existing);
-
+    const existing = this.parts.get(part.id);
     const kind = getPartKind(part.kind);
     const params = effectiveParams(kind, part.params, material);
-    const shapeDesc = kind.collision(params);
-    const volume = Math.max(kind.volume(params, material), 1e-9);
-    const mass = volume * material.density;
-    const shape = this.buildShape(shapeDesc, material.density);
-    const motion = part.frozen ? J.EMotionType_Static : J.EMotionType_Dynamic;
-    const cs = new J.BodyCreationSettings(shape, this.R(pose.p), this.Q(pose.q), motion, LAYER_MOVING);
-    shape.Release();
-    cs.mAllowDynamicOrKinematic = true;
-    cs.mFriction = material.friction;
-    cs.mRestitution = material.restitution;
-    cs.mLinearDamping = 0;
-    cs.mAngularDamping = 0.02;
-    cs.mMaxAngularVelocity = 400;
-    cs.mUserData = slot + 1;
-    cs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
-    cs.mMassPropertiesOverride.mMass = mass;
-    const dims = kind.dims(params);
-    if (dims.b < 0.03) cs.mMotionQuality = J.EMotionQuality_LinearCast;
-    this.cg.SetSubGroupID(subgroup);
-    cs.mCollisionGroup = this.cg;
-    const body = this.bi.CreateBody(cs);
-    J.destroy(cs);
-    this.bi.AddBody(body.GetID(), part.frozen ? J.EActivation_DontActivate : J.EActivation_Activate);
-    if (!part.frozen && (length(linear) > 0 || length(angular) > 0)) {
-      this.v1.Set(...linear);
-      this.v2.Set(...angular);
-      this.bi.SetLinearAndAngularVelocity(body.GetID(), this.v1, this.v2);
+    const layout = segmentLayout(kind, params);
+    const count = layout ? layout.count : 1;
+
+    // Where each new body goes, and how fast it is moving.
+    let poses: Pose[];
+    let vels: [Vec3, Vec3][] | null = null;
+    if (existing && keepLivePose) {
+      if (existing.segs.length === count) {
+        poses = existing.segs.map((s) => this.poseOf(s));
+        vels = existing.segs.map((s) => this.velocityOf(s));
+      } else {
+        poses = this.straightPoses(this.virtualPose(existing), layout);
+        const v = this.velocityOf(existing.segs[0]!);
+        vels = poses.map(() => v);
+      }
+    } else if (layout && part.damage.segments && part.damage.segments.length === count) {
+      poses = part.damage.segments;
+    } else {
+      poses = this.straightPoses(part.pose, layout);
     }
+
+    // Connections attached to this part must be rebuilt against the new bodies; held parts are re-grabbed.
+    const attached = [...this.conns.values()].filter((c) => c.pa.id === part.id || c.pb?.id === part.id);
+    for (const c of attached) this.destroyConstraint(c);
+    const regrab = [...this.grabs.values()].filter((g) => g.rec.partId === part.id);
+    for (const g of regrab) this.grabs.delete(g.hand);
+    const reuse: number[] = [];
+    if (existing) {
+      reuse.push(...existing.segs.map((s) => s.slot));
+      if (existing.layout) reuse.push(existing.slot);
+      this.destroyPartBodies(existing);
+    }
+
+    const segParams = layout ? layout.segParams : params;
+    const shapeDesc = kind.collision(segParams);
+    const volume = Math.max(kind.volume(segParams, material), 1e-9);
+    const mass = volume * material.density;
+    const dims = kind.dims(segParams);
     const bounds = shapeBounds(shapeDesc);
     const ext = sub(bounds.max, bounds.min);
     const magGeom = kind.magnet?.(params);
-    const rec: BodyRec = {
-      id: part.id, slot, subgroup, body, part, kind, material, shape: shapeDesc, dims, mass, volume,
-      faceAreas: [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]],
-      magnet: magGeom && material.remanence ? { geom: magGeom, Br: material.remanence } : undefined,
-      frozen: part.frozen, grabbed: null, inFluid: false,
+    const pr: PartRec = {
+      id: part.id, part, kind, material, layout, segs: [], bonds: [],
+      broken: new Set(layout ? part.damage.broken.filter((k) => k >= 0 && k < count - 1) : []),
+      cap: layout && kind.bond ? bondCapacity(kind.bond(params), material) : null,
+      slot: -1, heldPairs: [],
     };
-    this.bodies.set(part.id, rec);
-    this.bySlot[slot] = rec;
+    for (let k = 0; k < count; k++) {
+      const pose = poses[k]!;
+      const shape = this.buildShape(shapeDesc, material.density);
+      const motion = part.frozen ? J.EMotionType_Static : J.EMotionType_Dynamic;
+      const cs = new J.BodyCreationSettings(shape, this.R(pose.p), this.Q(pose.q), motion, LAYER_MOVING);
+      shape.Release();
+      const slot = this.allocSlot(reuse);
+      const subgroup = this.allocSubgroup();
+      cs.mAllowDynamicOrKinematic = true;
+      cs.mFriction = material.friction;
+      cs.mRestitution = material.restitution;
+      cs.mLinearDamping = 0;
+      cs.mAngularDamping = 0.02;
+      cs.mMaxAngularVelocity = 400;
+      // Torque-free bodies conserve angular momentum (tumbling, precession), not angular velocity. Segments of
+      // breakable parts get this at the level of the whole rigid assembly in the projection instead.
+      cs.mApplyGyroscopicForce = !layout;
+      cs.mUserData = slot + 1;
+      cs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
+      cs.mMassPropertiesOverride.mMass = mass;
+      if (dims.b < 0.03) cs.mMotionQuality = J.EMotionQuality_LinearCast;
+      this.cg.SetSubGroupID(subgroup);
+      cs.mCollisionGroup = this.cg;
+      const body = this.bi.CreateBody(cs);
+      J.destroy(cs);
+      this.bi.AddBody(body.GetID(), part.frozen ? J.EActivation_DontActivate : J.EActivation_Activate);
+      const v = vels?.[k];
+      if (!part.frozen && v && (length(v[0]) > 0 || length(v[1]) > 0)) {
+        this.v1.Set(...v[0]);
+        this.v2.Set(...v[1]);
+        this.bi.SetLinearAndAngularVelocity(body.GetID(), this.v1, this.v2);
+      }
+      const rec: BodyRec = {
+        id: layout ? segmentBodyId(part.id, k) : part.id, partId: part.id, seg: layout ? k : -1, pr,
+        slot, subgroup, body, kind, material, shape: shapeDesc, dims, mass, volume,
+        faceAreas: [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]],
+        magnet: magGeom && material.remanence ? { geom: magGeom, Br: material.remanence } : undefined,
+        frozen: part.frozen, grabbed: null, inFluid: false, Iloc: null, prior: null,
+      };
+      if (!part.frozen) rec.Iloc = k > 0 && pr.segs[0]?.Iloc ? pr.segs[0].Iloc : this.localInertia(rec);
+      pr.segs.push(rec);
+      this.bodies.set(rec.id, rec);
+      this.bySlot[slot] = rec;
+    }
+    pr.slot = layout ? this.allocSlot(reuse) : pr.segs[0]!.slot;
+    if (layout) this.bySlot[pr.slot] = pr;
+    for (const s of reuse) this.freeSlot(s);
+    this.parts.set(part.id, pr);
+    for (let k = 0; k < count - 1; k++) pr.bonds.push(!part.frozen && !pr.broken.has(k) ? this.buildBond(pr, k, false) : null);
     this.slotsDirty = true;
     for (const c of attached) {
-      if (c.a.id === part.id) c.a = rec;
-      if (c.b?.id === part.id) c.b = rec;
+      this.resolveEnds(c);
       this.buildConstraint(c);
     }
-    // re-grab if this part was held
-    for (const g of this.grabs.values()) if (g.rec.id === part.id) { g.rec = rec; if (g.mode === 'creative') this.bi.SetMotionType(body.GetID(), J.EMotionType_Kinematic, J.EActivation_Activate); }
+    for (const g of regrab) {
+      const seg = g.rec.seg >= 0 ? Math.min(g.rec.seg, count - 1) : 0;
+      this.grab(g.hand, pr.segs[seg]!.id, g.mode, g.target, g.strength);
+    }
   }
 
-  private destroyBody(r: BodyRec) {
-    const id = r.body.GetID();
-    this.bi.RemoveBody(id);
-    this.bi.DestroyBody(id);
+  /** Remove a part's bonds and bodies (slots and subgroups are released; the caller re-allocates). */
+  private destroyPartBodies(pr: PartRec) {
+    for (const b of pr.bonds) if (b) this.destroyBond(b);
+    pr.bonds = [];
+    for (const key of pr.heldPairs) this.releasePair(key);
+    pr.heldPairs = [];
+    for (const r of pr.segs) {
+      const id = r.body.GetID();
+      this.bi.RemoveBody(id);
+      this.bi.DestroyBody(id);
+      this.bodies.delete(r.id);
+      this.bySlot[r.slot] = null;
+      this.freeSubgroup(r.subgroup);
+    }
+    if (pr.layout && pr.slot >= 0) this.bySlot[pr.slot] = null;
+    this.slotsDirty = true;
   }
 
   removePart(id: string) {
-    const r = this.bodies.get(id);
-    if (!r) return;
-    for (const c of [...this.conns.values()]) if (c.a.id === id || c.b?.id === id) this.removeConnection(c.id);
-    for (const [hand, g] of this.grabs) if (g.rec.id === id) this.grabs.delete(hand);
-    this.destroyBody(r);
-    this.bodies.delete(id);
-    this.bySlot[r.slot] = null;
-    this.freeSlots.push(r.slot);
-    if (r.subgroup > 0) {
-      // re-enable any pairs this subgroup had disabled before recycling it
-      for (let other = 0; other < SUBGROUPS; other++) {
-        if (other !== r.subgroup && !this.groupFilter.IsCollisionEnabled(r.subgroup, other)) this.groupFilter.EnableCollision(r.subgroup, other);
-      }
-      this.freeSubgroups.push(r.subgroup);
-    }
-    this.slotsDirty = true;
+    const pr = this.parts.get(id);
+    if (!pr) return;
+    for (const c of [...this.conns.values()]) if (c.pa === pr || c.pb === pr) this.removeConnection(c.id);
+    for (const [hand, g] of this.grabs) if (g.rec.pr === pr) this.grabs.delete(hand);
+    const slots = [...pr.segs.map((s) => s.slot), ...(pr.layout ? [pr.slot] : [])];
+    this.destroyPartBodies(pr);
+    for (const s of slots) this.freeSlot(s);
+    this.parts.delete(id);
   }
 
   private poseOf(r: BodyRec): Pose {
@@ -404,29 +671,91 @@ export class PhysicsWorld {
     return { p: [p.GetX(), p.GetY(), p.GetZ()], q: [q.GetX(), q.GetY(), q.GetZ(), q.GetW()] };
   }
 
+  /** The part's own pose: its body, or for segmented parts the frame carried by segment 0. */
+  private virtualPose(pr: PartRec): Pose {
+    const s0 = this.poseOf(pr.segs[0]!);
+    if (!pr.layout) return s0;
+    return composePose(s0, { p: scale(segmentOffset(pr.layout, 0).p, -1), q: IDENTITY_Q });
+  }
+
+  /** Live pose of a part (its own frame) or of one body ("part#k"). */
   livePose(id: string): Pose | null {
+    const pr = this.parts.get(id);
+    if (pr) return this.virtualPose(pr);
     const r = this.bodies.get(id);
     return r ? this.poseOf(r) : null;
   }
 
-  private setPose(id: string, pose: Pose, linear?: Vec3, angular?: Vec3) {
+  /** Resolve an id to a body: a body id, or a part id (nearest segment to `near`, else the first). */
+  private bodyFor(id: string, near?: Vec3): BodyRec | null {
     const r = this.bodies.get(id);
-    if (!r) return;
-    const bid = r.body.GetID();
-    this.r1.Set(...pose.p);
-    this.q1.Set(...pose.q);
-    this.bi.SetPositionAndRotation(bid, this.r1, this.q1, r.frozen ? this.J.EActivation_DontActivate : this.J.EActivation_Activate);
-    if (!r.frozen) {
-      this.v1.Set(...(linear ?? [0, 0, 0]));
-      this.v2.Set(...(angular ?? [0, 0, 0]));
-      this.bi.SetLinearAndAngularVelocity(bid, this.v1, this.v2);
+    if (r) return r;
+    const pr = this.parts.get(id);
+    if (!pr) return null;
+    if (pr.segs.length === 1 || !near) return pr.segs[0]!;
+    let best = pr.segs[0]!, bd = Infinity;
+    for (const s of pr.segs) {
+      const d = length(sub(this.poseOf(s).p, near));
+      if (d < bd) { bd = d; best = s; }
     }
-    // constraints were built against the old pose
-    for (const c of this.conns.values()) if (c.a === r || c.b === r) this.buildConstraint(c);
+    return best;
+  }
+
+  /** Bodies of the same part still held together (by intact bonds, or undamaged when frozen). */
+  private cluster(r: BodyRec): BodyRec[] {
+    const pr = r.pr;
+    if (pr.segs.length === 1) return [r];
+    let lo = r.seg, hi = r.seg;
+    while (lo > 0 && !pr.broken.has(lo - 1)) lo--;
+    while (hi < pr.segs.length - 1 && !pr.broken.has(hi)) hi++;
+    return pr.segs.slice(lo, hi + 1);
+  }
+
+  private clusterMass(r: BodyRec) {
+    let m = 0;
+    for (const s of this.cluster(r)) m += s.mass;
+    return m;
+  }
+
+  /** Rough moment of inertia of a body's cluster about its middle (slender-bar estimate). */
+  private clusterInertia(r: BodyRec) {
+    const members = this.cluster(r);
+    const m = members.reduce((s, x) => s + x.mass, 0);
+    const L = r.pr.layout ? r.pr.layout.segLen * members.length : r.dims.length;
+    return (m * (L * L + r.dims.a * r.dims.a)) / 12 + 1e-6;
+  }
+
+  private setPose(id: string, pose: Pose, linear?: Vec3, angular?: Vec3) {
+    const pr = this.parts.get(id);
+    const single = pr ? null : this.bodies.get(id) ?? null;
+    if (!pr && !single) return;
+    // Move rigidly: every body of the part keeps its place relative to the part frame.
+    const members = pr ? pr.segs : [single!];
+    const cur = pr ? this.virtualPose(pr) : this.poseOf(single!);
+    const moved = members.map((r) => composePose(pose, relativePose(cur, this.poseOf(r))));
+    const lin = linear ?? [0, 0, 0];
+    const ang = angular ?? [0, 0, 0];
+    members.forEach((r, i) => {
+      const bid = r.body.GetID();
+      const np = moved[i]!;
+      this.r1.Set(...np.p);
+      this.q1.Set(...np.q);
+      this.bi.SetPositionAndRotation(bid, this.r1, this.q1, r.frozen ? this.J.EActivation_DontActivate : this.J.EActivation_Activate);
+      if (!r.frozen) {
+        this.v1.Set(...add(lin, cross(ang, sub(np.p, pose.p))));
+        this.v2.Set(...ang);
+        this.bi.SetLinearAndAngularVelocity(bid, this.v1, this.v2);
+      }
+    });
+    // a single segment moved on its own: its bonds are rebuilt around the new geometry
+    if (single) for (const b of single.pr.bonds) if (b && (b.a === single || b.b === single)) this.rebuildBond(single.pr, b.k, b.plastic);
+    // joints were built against the old pose
+    const set = new Set(members);
+    for (const c of this.conns.values()) if (set.has(c.a) || (c.b && set.has(c.b))) this.buildConstraint(c);
   }
 
   private impulse(id: string, point: Vec3, imp: Vec3) {
-    const r = this.bodies.get(id);
+    const r = this.bodyFor(id, point);
     if (!r || r.frozen) return;
     this.v1.Set(...imp);
     this.r1.Set(...point);
@@ -435,19 +764,753 @@ export class PhysicsWorld {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // bonds inside breakable parts
+
+  private buildBond(pr: PartRec, k: number, plastic: boolean): BondRec {
+    const J = this.J;
+    const L = pr.layout!;
+    const a = pr.segs[k]!, b = pr.segs[k + 1]!;
+    const pa = this.poseOf(a), pb = this.poseOf(b);
+    const h = L.segLen / 2;
+    // Both frames share the world axes of segment k, so the bond holds the current (possibly bent) shape.
+    const ax = rotate(pa.q, L.axis);
+    const ay = rotate(pa.q, L.perps[0]);
+    const s = new J.SixDOFConstraintSettings();
+    s.mPosition1 = this.R(transformPoint(pa, scale(L.axis, h)));
+    s.mPosition2 = this.R(transformPoint(pb, scale(L.axis, -h)));
+    s.mAxisX1 = this.V(ax);
+    s.mAxisY1 = this.V(ay);
+    s.mAxisX2 = this.V(ax);
+    s.mAxisY2 = this.V(ay);
+    for (let i = 0; i < 6; i++) s.MakeFixedAxis(i as JoltNS.SixDOFConstraintSettings_EAxis);
+    // an island holding bonded segments gets more solver iterations, so joints and contacts on one light segment
+    // feel the rest of the part within the step (the assembly pass then makes it exact)
+    s.mNumVelocityStepsOverride = BOND_VELOCITY_STEPS;
+    s.mNumPositionStepsOverride = BOND_POSITION_STEPS;
+    if (plastic && pr.cap) {
+      // Plastic hinge: bending rotation is free but resisted by the plastic moment (Coulomb-like, rate independent).
+      s.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_RotationY);
+      s.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_RotationZ);
+      s.set_mMaxFriction(J.SixDOFConstraintSettings_EAxis_RotationY, pr.cap.Mp[0]);
+      s.set_mMaxFriction(J.SixDOFConstraintSettings_EAxis_RotationZ, pr.cap.Mp[1]);
+    }
+    const constraint = s.Create(a.body, b.body);
+    J.destroy(s);
+    this.ps.AddConstraint(constraint);
+    const pairKey = this.holdPair(a.subgroup, b.subgroup);
+    return {
+      k, a, b, plastic, constraint, typed: J.castObject(constraint, J.SixDOFConstraint), pairKey, over: 0, u: 0, mode: '',
+      rest: relativePose(pa, pb), corrF: [0, 0, 0], corrT: [0, 0, 0], loads: { N: 0, V: 0, T: 0, M1: 0, M2: 0 },
+    };
+  }
+
+  private destroyBond(b: BondRec, keepPair = false) {
+    this.ps.RemoveConstraint(b.constraint);
+    if (!keepPair) this.releasePair(b.pairKey);
+  }
+
+  private rebuildBond(pr: PartRec, k: number, plastic: boolean) {
+    const old = pr.bonds[k];
+    if (old) this.destroyBond(old);
+    pr.bonds[k] = this.buildBond(pr, k, plastic);
+  }
+
+  /** Relative rotation angle between the two segments of a bond (0 when straight). */
+  private bondAngle(b: BondRec) {
+    const qa = this.poseOf(b.a).q, qb = this.poseOf(b.b).q;
+    const w = Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]);
+    return 2 * Math.acos(Math.min(1, w));
+  }
+
+  private localInertia(r: BodyRec): number[] {
+    const m = r.body.GetMotionProperties().GetLocalSpaceInverseInertia();
+    // Jolt returns temporaries: read each column before asking for the next
+    const x = m.GetAxisX(); const c0 = [x.GetX(), x.GetY(), x.GetZ()];
+    const y = m.GetAxisY(); const c1 = [y.GetX(), y.GetY(), y.GetZ()];
+    const z = m.GetAxisZ(); const c2 = [z.GetX(), z.GetY(), z.GetZ()];
+    return inverse3([c0[0]!, c1[0]!, c2[0]!, c0[1]!, c1[1]!, c2[1]!, c0[2]!, c1[2]!, c2[2]!]);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // rigid assemblies
+  //
+  // An iterative solver lets chains of rigidly joined bodies sag and under-transmit load: a bonded segment or a
+  // bolted plate is light next to the assembly it belongs to, so joints and contacts acting on it see the wrong
+  // inertia. After each Jolt step every rigid assembly (bodies joined by intact elastic bonds and intact rigid
+  // joints) is therefore treated as the one rigid body it physically is:
+  //  1. its pose is fitted to the rest shape (anchored DOFs held where their joints hold them);
+  //  2. its velocity is predicted from the state it started the tick in, plus the momentum Jolt's impulses added
+  //     from outside (internal solver impulses cancel, however unconverged), plus the torque-free rigid term;
+  //  3. anchors, plastic hinges between assemblies and contacts with everything else are then re-solved with
+  //     sequential impulses on the assemblies' true mass and inertia;
+  //  4. every impulse is accounted, so the force through each bond or joint is exact Newton-Euler for the free
+  //     side of it, and each anchor, hinge and contact reaction is known.
+
+  private clusters: ClusterWork[] = [];
+  private hinges: BondRec[] = [];
+  private watch = new Set<BodyRec>();
+  private contacts = new Map<string, RecordedContact>();
+  /** Accumulated impulses of last tick's assembly rows, by row key. */
+  private warm = new Map<string, number>();
+
+  /** Before the step: rigid assemblies, plastic hinges, and the state their bodies start the tick in. */
+  private prepareClusters() {
+    this.clusters = [];
+    this.hinges = [];
+    this.watch.clear();
+    this.contacts.clear();
+    const free = (r: BodyRec) => !r.frozen && r.grabbed !== 'creative' && r.Iloc !== null;
+    for (const pr of this.parts.values()) for (const b of pr.bonds) if (b?.plastic && free(b.a) && free(b.b) && (b.a.body.IsActive() || b.b.body.IsActive())) this.hinges.push(b);
+    const edges = this.collectEdges();
+    const adj = new Map<BodyRec, { e: RigidEdge; other: BodyRec }[]>();
+    const link = (a: BodyRec, e: RigidEdge, b: BodyRec) => (adj.get(a) ?? adj.set(a, []).get(a)!).push({ e, other: b });
+    for (const e of edges) { link(e.u, e, e.v); link(e.v, e, e.u); }
+    const seen = new Set<BodyRec>();
+    for (const start of adj.keys()) {
+      if (seen.has(start)) continue;
+      const comp: BodyRec[] = [];
+      const stack = [start];
+      seen.add(start);
+      while (stack.length) {
+        const cur = stack.pop()!;
+        comp.push(cur);
+        for (const { other } of adj.get(cur)!) if (!seen.has(other)) { seen.add(other); stack.push(other); }
+      }
+      if (comp.length < 2 || !comp.some((r) => r.body.IsActive())) continue;
+      // Only assemblies that contain bonded segments need this: ordinary joined parts stay with Jolt, whose joints
+      // to wheels, motors and sliders (not modelled in this pass) they are usually part of.
+      if (!comp.some((r) => r.seg >= 0)) continue;
+      for (const r of comp) {
+        const [v, w] = this.velocityOf(r);
+        r.prior = { pose: this.poseOf(r), v, w };
+        this.watch.add(r);
+      }
+      this.clusters.push({ comp, adj });
+    }
+    for (const b of this.hinges) for (const r of [b.a, b.b]) {
+      if (this.watch.has(r)) continue;
+      const [v, w] = this.velocityOf(r);
+      r.prior = { pose: this.poseOf(r), v, w };
+      this.watch.add(r);
+    }
+  }
+
+  private collectEdges(): RigidEdge[] {
+    // Rigid edges: intact elastic bonds and intact rigid joints, between two free dynamic bodies.
+    const edges: RigidEdge[] = [];
+    const free = (r: BodyRec) => !r.frozen && r.grabbed !== 'creative' && r.Iloc !== null;
+    // Only links already close to their rest shape join an assembly; a fresh or badly misaligned joint is left
+    // to the solver to pull in first, so nothing is ever teleported.
+    const seated = (u: BodyRec, v: BodyRec, rest: Pose) => {
+      const rel = relativePose(this.poseOf(u), this.poseOf(v));
+      const dq = Math.abs(rel.q[0] * rest.q[0] + rel.q[1] * rest.q[1] + rel.q[2] * rest.q[2] + rel.q[3] * rest.q[3]);
+      return length(sub(rel.p, rest.p)) < 0.005 + 0.01 * length(rest.p) && 2 * Math.acos(Math.min(1, dq)) < 0.03;
+    };
+    for (const pr of this.parts.values()) {
+      for (const b of pr.bonds) if (b && !b.plastic && free(b.a) && free(b.b) && seated(b.a, b.b, b.rest)) edges.push({ u: b.a, v: b.b, rest: b.rest, bond: b, conn: null });
+    }
+    for (const c of this.conns.values()) {
+      if (c.status !== 'intact' || !c.constraint || c.kind.model !== 'rigid' || !c.b || !c.frameB) continue;
+      if (!free(c.a) || !free(c.b) || c.a === c.b) continue;
+      const rest = composePose(c.frameA, invertPose(c.frameB));
+      if (seated(c.a, c.b, rest)) edges.push({ u: c.a, v: c.b, rest, bond: null, conn: c });
+    }
+    return edges;
+  }
+
+  /** Called from the contact listener during the step: remember contacts touching an assembly or a hinge. */
+  private recordContact(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, settings: JoltNS.ContactSettings) {
+    const r1 = this.recOf(b1), r2 = this.recOf(b2);
+    const w1 = !!r1 && this.watch.has(r1), w2 = !!r2 && this.watch.has(r2);
+    if (!w1 && !w2) return;
+    // the watched body is the "member" side; the normal points from it to the other body
+    const flip = !w1;
+    const m = (flip ? r2 : r1)!, o = flip ? r1 : r2;
+    const mb = flip ? b2 : b1, ob = flip ? b1 : b2;
+    const nn = man.mWorldSpaceNormal;
+    const n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
+    const count = Math.min(4, man.mRelativeContactPointsOn1.size());
+    // world points as the contact saw them (tick-start geometry, which is what the assembly solve uses)
+    const points: { pm: Vec3; po: Vec3 }[] = [];
+    for (let i = 0; i < count; i++) {
+      const c1 = man.GetWorldSpaceContactPointOn1(i); const p1: Vec3 = [c1.GetX(), c1.GetY(), c1.GetZ()];
+      const c2 = man.GetWorldSpaceContactPointOn2(i); const p2: Vec3 = [c2.GetX(), c2.GetY(), c2.GetZ()];
+      points.push(flip ? { pm: p2, po: p1 } : { pm: p1, po: p2 });
+    }
+    const key = `${m.id}|${o?.id ?? `env${ob.GetID().GetIndexAndSequenceNumber()}`}`;
+    this.contacts.set(key, {
+      key, m, o, oStatic: !o || o.frozen || ob.IsStatic() || ob.IsKinematic(), oBody: ob, n, points,
+      friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution,
+    });
+  }
+
+  private recOf(b: JoltNS.Body): BodyRec | null {
+    const s = b.GetUserData() - 1;
+    const e = s >= 0 ? this.bySlot[s] : null;
+    return e && !('segs' in e) ? e : null;
+  }
+
+  /** After the step: fit, predict and re-solve every assembly, then account every impulse. */
+  private solveAssemblies(dt: number) {
+    const contacts = [...this.contacts.values()];
+    this.contacts.clear();
+    if (!this.clusters.length && !this.hinges.length) return;
+    const anchored = this.anchoredBodies();
+    const ents = new Map<BodyRec, Ent>();
+    const works = this.clusters.map((c) => this.fitCluster(c, dt));
+    for (const w of works) for (const r of w.comp) ents.set(r, w.ent);
+    // lone bodies (hinge pieces, things touching an assembly): start-of-tick geometry, Jolt's velocity as prediction
+    const entOf = (r: BodyRec): Ent => {
+      let e = ents.get(r);
+      if (!e) {
+        const [v, w] = this.velocityOf(r);
+        const start = r.prior && this.watch.has(r) ? r.prior.pose : null;
+        const pose = start ?? this.poseOf(r);
+        const still = r.frozen || r.grabbed === 'creative' || !r.Iloc;
+        e = {
+          e: { origin: pose.p, v, w, invMass: still ? 0 : 1 / r.mass, invI: still ? [...ZERO3] : inverse3(worldInertia(r.Iloc!, pose.q)) },
+          work: null, single: r, touched: false, start, v0: [...v] as Vec3, w0: [...w] as Vec3, fixed: [],
+        };
+        ents.set(r, e);
+      }
+      return e;
+    };
+    const startPose = (en: Ent, r: BodyRec) => (en.work ? en.work.NP0[en.work.index.get(r)!]! : en.start ?? this.poseOf(r));
+    const rows: Row[] = [];
+    const beta = 0.2 / dt;
+    // An intact rigid joint to something immovable makes the whole entity immovable (it moves with a hand-held
+    // part if that is what holds it). Solving it as such is exact, where iterating a light held piece against a
+    // heavy load converges hopelessly slowly; its reaction is recovered from the momentum balance afterwards.
+    for (const [r, list] of anchored) {
+      const en = ents.get(r) ?? (this.watch.has(r) ? entOf(r) : null);
+      if (!en) continue;
+      for (const a of list) if (a.c.kind.model === 'rigid' && a.c.status === 'intact') en.fixed.push({ r, a });
+    }
+    for (const en of new Set(ents.values())) {
+      if (!en.fixed.length) continue;
+      const held = en.fixed.find((f) => f.a.other && !f.a.other.frozen)?.a.other ?? null;
+      en.e.invMass = 0;
+      en.e.invI = [...ZERO3];
+      en.e.v = held ? this.pointVelocity(held, en.e.origin) : [0, 0, 0];
+      en.e.w = held ? this.velocityOf(held)[1] : [0, 0, 0];
+    }
+    // other anchors (bearings, ball joints, sliders to the world, frozen parts, hand-held parts)
+    for (const [r, list] of anchored) {
+      const en = ents.get(r) ?? (this.watch.has(r) ? entOf(r) : null);
+      if (!en || en.fixed.length) continue;
+      const pose = startPose(en, r);
+      for (const a of list) {
+        const held = composePose(pose, a.frame);
+        const target = a.other && a.otherFrame ? composePose(this.poseOf(a.other), a.otherFrame) : a.c.worldB ?? held;
+        const dofs = anchorDofs(a.c.kind.model, rotate(held.q, [0, 1, 0]));
+        const other: Entity | null = a.other && !a.other.frozen ? { origin: this.poseOf(a.other).p, v: this.velocityOf(a.other)[0], w: this.velocityOf(a.other)[1], invMass: 0, invI: [...ZERO3] } : null;
+        // drift is taken out at position level for assemblies (the anchored pose fit); a lone body is pulled in
+        const posErr = en.work ? [0, 0, 0] as Vec3 : sub(target.p, held.p);
+        const rotErr = en.work ? [0, 0, 0] as Vec3 : rotationVector(quatMul(target.q, quatConj(held.q)));
+        const tag: RowTag = { kind: 'anchor', ma: r, mb: null, anchor: a };
+        const key = `a:${a.c.id}:${a.sign}`;
+        rows.push(...pointRows(en.e, other, held.p, held.p, dofs.point, scale(posErr, -beta), tag, key));
+        rows.push(...angularRows(en.e, other, dofs.rot, scale(rotErr, -beta), tag, key));
+        en.touched = true;
+      }
+    }
+    // plastic hinges: point and twist held, bending resisted by the plastic moment (minus what Jolt already applied)
+    const inv = this.lastSubsteps / dt;
+    for (const b of this.hinges) {
+      const ea = entOf(b.a), eb = entOf(b.b);
+      if (ea === eb) continue;
+      const L = b.a.pr.layout!, cap = b.a.pr.cap!;
+      const pa = startPose(ea, b.a), pb = startPose(eb, b.b);
+      const ha = transformPoint(pa, scale(L.axis, L.segLen / 2)), hb = transformPoint(pb, scale(L.axis, -L.segLen / 2));
+      const ax = rotate(pa.q, L.axis), ay = rotate(pa.q, L.perps[0]), az = cross(ax, ay);
+      const tag: RowTag = { kind: 'hinge', ma: b.a, mb: b.b, bond: b };
+      const key = `h:${b.a.id}`;
+      rows.push(...pointRows(ea.e, eb.e, ha, hb, ID3, scale(sub(hb, ha), beta), tag, key));
+      rows.push(...angularRows(ea.e, eb.e, projectors(ax).along, [0, 0, 0], tag, key));
+      const lm = b.typed.GetTotalLambdaMotorRotation();
+      const jy = lm.GetY() * inv * dt, jz = lm.GetZ() * inv * dt;
+      const my = cap.Mp[0] * dt, mz = cap.Mp[1] * dt;
+      rows.push({ a: ea.e, b: eb.e, kind: 'angular', pa: [0, 0, 0], pb: [0, 0, 0], dir: ay, target: 0, lo: -my - jy, hi: my - jy, acc: 0, tag, key: `${key}:by` });
+      rows.push({ a: ea.e, b: eb.e, kind: 'angular', pa: [0, 0, 0], pb: [0, 0, 0], dir: az, target: 0, lo: -mz - jz, hi: mz - jz, acc: 0, tag, key: `${key}:bz` });
+      ea.touched = eb.touched = true;
+    }
+    // contacts on assemblies and hinge pieces, with everything else (geometry as the contact saw it, at tick start)
+    for (const c of contacts) {
+      const em = entOf(c.m);
+      const eo = c.o && !c.oStatic ? entOf(c.o) : null;
+      if (eo === em) continue;
+      const still: Entity | null = c.oStatic && c.o && c.o.grabbed === 'creative' ? { origin: this.poseOf(c.o).p, v: this.velocityOf(c.o)[0], w: this.velocityOf(c.o)[1], invMass: 0, invI: [...ZERO3] } : null;
+      const tag: RowTag = { kind: 'contact', ma: c.m, mb: c.o && !c.oStatic ? c.o : null };
+      const [t1, t2] = tangents(c.n);
+      for (const [pi, { pm, po }] of c.points.entries()) {
+        const key = `c:${c.key}:${pi}`;
+        const sep = dot(sub(po, pm), c.n);
+        let target = sep < 0 ? Math.max(0, -sep - 0.002) * beta : -sep / dt;
+        const vm0 = em.work ? pointVelocity(em.work.priorEnt, pm) : pointVelocity({ ...em.e, v: em.v0, w: em.w0 }, pm);
+        const vo = eo ? pointVelocity({ ...eo.e, v: eo.v0, w: eo.w0 }, po) : still ? pointVelocity(still, po) : [0, 0, 0] as Vec3;
+        const vPre = dot(sub(vo, vm0), c.n);
+        if (vPre < -1) target = Math.max(target, -c.restitution * vPre);
+        const normal: Row = { a: em.e, b: eo ? eo.e : still, kind: 'linear', pa: pm, pb: po, dir: c.n, target, lo: 0, hi: Infinity, acc: 0, tag, key };
+        rows.push(normal);
+        // friction rows along fixed tangents keep their identity from tick to tick for warm starting
+        [t1, t2].forEach((t, ti) => rows.push({ a: em.e, b: eo ? eo.e : still, kind: 'linear', pa: pm, pb: po, dir: t, target: 0, lo: 0, hi: 0, frictionOf: normal, mu: c.friction, acc: 0, tag, key: `${key}:t${ti}` }));
+      }
+      em.touched = true;
+      if (eo) eo.touched = true;
+    }
+    solveRows(rows, 12, this.warm);
+    // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does)
+    for (const w of works) this.placeCluster(w, anchored, dt);
+    for (const en of ents.values()) {
+      if (en.work || !en.touched || !en.single || (en.e.invMass === 0 && !en.fixed.length)) continue;
+      const r = en.single;
+      const cur = this.poseOf(r);
+      const pin = en.fixed[0];
+      const pinTarget = pin ? (pin.a.other && pin.a.otherFrame ? composePose(this.poseOf(pin.a.other), pin.a.otherFrame) : pin.a.c.worldB) : null;
+      const pose: Pose = pin && pinTarget
+        ? composePose(pinTarget, invertPose(pin.a.frame))
+        : en.start
+        ? { p: add(en.start.p, scale(en.e.v, dt)), q: normQuat(quatMul(quatFromRotationVector(scale(en.e.w, dt)), en.start.q)) }
+        : { p: add(cur.p, scale(sub(en.e.v, en.v0), dt)), q: normQuat(quatMul(quatFromRotationVector(scale(sub(en.e.w, en.w0), dt)), cur.q)) };
+      this.r1.Set(...pose.p);
+      this.q1.Set(...pose.q);
+      this.v1.Set(...en.e.v);
+      this.v2.Set(...en.e.w);
+      this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
+    }
+    // impulses our rows put on each body (linear, and angular about the world origin)
+    const ourP = new Map<BodyRec, Vec3>(), ourL = new Map<BodyRec, Vec3>();
+    const put = (r: BodyRec | null, J: Vec3, L: Vec3) => {
+      if (!r) return;
+      ourP.set(r, add(ourP.get(r) ?? [0, 0, 0], J));
+      ourL.set(r, add(ourL.get(r) ?? [0, 0, 0], L));
+    };
+    const anchorAcc = new Map<Anchor, { J: Vec3; T: Vec3 }>();
+    const hingeAcc = new Map<BondRec, { J: Vec3; T: Vec3 }>();
+    for (const r of rows) {
+      if (!r.acc) continue;
+      const tag = r.tag as RowTag;
+      const Jb: Vec3 = scale(r.dir, r.acc); // on b; -Jb on a
+      if (r.kind === 'linear') {
+        put(tag.ma, scale(Jb, -1), cross(r.pa, scale(Jb, -1)));
+        put(tag.mb, Jb, cross(r.pb, Jb));
+      } else {
+        put(tag.ma, [0, 0, 0], scale(Jb, -1));
+        put(tag.mb, [0, 0, 0], Jb);
+      }
+      if (tag.kind === 'anchor') {
+        const acc = anchorAcc.get(tag.anchor!) ?? { J: [0, 0, 0], T: [0, 0, 0] };
+        if (r.kind === 'linear') acc.J = sub(acc.J, Jb); else acc.T = sub(acc.T, Jb); // on the held body (side a)
+        anchorAcc.set(tag.anchor!, acc);
+      } else if (tag.kind === 'hinge') {
+        const acc = hingeAcc.get(tag.bond!) ?? { J: [0, 0, 0], T: [0, 0, 0] };
+        if (r.kind === 'linear') acc.J = add(acc.J, Jb); else acc.T = add(acc.T, Jb); // on segment k + 1 (side b)
+        hingeAcc.set(tag.bond!, acc);
+      }
+    }
+    for (const [r, list] of anchored) {
+      const en = ents.get(r);
+      if (!en || en.fixed.length) continue;
+      for (const a of list) {
+        const acc = anchorAcc.get(a);
+        a.c.corrF = acc ? scale(acc.J, a.sign / dt) : [0, 0, 0];
+        a.c.corrT = acc ? scale(acc.T, a.sign / dt) : [0, 0, 0];
+      }
+    }
+    // reactions of immovable entities: whatever momentum they did not gain came through their rigid anchors
+    for (const en of new Set(ents.values())) {
+      if (!en.fixed.length) continue;
+      const members = en.work ? en.work.comp : [en.single!];
+      let J: Vec3 = [0, 0, 0], L: Vec3 = [0, 0, 0];
+      members.forEach((r, i) => {
+        const w = en.work;
+        const v0 = w ? w.pri[i]!.v : en.v0, w0 = w ? w.pri[i]!.w : en.w0;
+        const p0 = w ? w.NP0[i]!.p : (en.start ?? this.poseOf(r)).p;
+        const q0 = w ? w.NP0[i]!.q : (en.start ?? this.poseOf(r)).q;
+        const vNew = w ? w.newV[i]! : pointVelocity(en.e, p0);
+        const dp = scale(sub(vNew, v0), r.mass);
+        const jp = w ? w.joltP[i]! : scale(sub(this.velocityOf(r)[0], v0), r.mass);
+        const jl = w ? w.joltL[i]! : mat3Vec(worldInertia(r.Iloc ?? [...ZERO3], q0), sub(this.velocityOf(r)[1], w0));
+        const I = worldInertia(r.Iloc ?? [...ZERO3], q0);
+        J = add(J, sub(sub(dp, jp), ourP.get(r) ?? [0, 0, 0]));
+        L = add(L, sub(sub(add(mat3Vec(I, sub(en.e.w, w0)), cross(p0, dp)), add(jl, cross(p0, jp))), ourL.get(r) ?? [0, 0, 0]));
+      });
+      const share = 1 / en.fixed.length;
+      for (const { r, a } of en.fixed) {
+        const pj = this.anchorWorld(a.c).p;
+        const Jj = scale(J, share), Lj = scale(L, share);
+        // the anchor's impulse on its body joins the bookkeeping so the assembly's bridge loads stay exact
+        ourP.set(r, add(ourP.get(r) ?? [0, 0, 0], Jj));
+        ourL.set(r, add(ourL.get(r) ?? [0, 0, 0], Lj));
+        a.c.corrF = scale(Jj, a.sign / dt);
+        a.c.corrT = scale(sub(Lj, cross(pj, Jj)), a.sign / dt);
+      }
+    }
+    for (const b of this.hinges) {
+      const acc = hingeAcc.get(b);
+      b.corrF = acc ? scale(acc.J, 1 / dt) : [0, 0, 0];
+      b.corrT = acc ? scale(acc.T, 1 / dt) : [0, 0, 0];
+    }
+    for (const w of works) this.bridgeLoads(w, ourP, ourL, dt);
+  }
+
+  /** End-of-tick pose of an assembly: its start pose advanced by the solved motion, anchored DOFs pinned. */
+  private placeCluster(w: FittedCluster, anchored: Map<BodyRec, Anchor[]>, dt: number) {
+    const { comp, T, C0, com0, ent, M } = w;
+    const dq = quatFromRotationVector(scale(ent.e.w, dt));
+    const comE = add(com0, scale(ent.e.v, dt));
+    let C: Pose = { p: add(comE, rotate(dq, sub(C0.p, com0))), q: normQuat(quatMul(dq, C0.q)) };
+    const anchors: { i: number; a: Anchor }[] = [];
+    comp.forEach((r, i) => { for (const a of anchored.get(r) ?? []) anchors.push({ i, a }); });
+    if (anchors.length) {
+      const Kp = M * 1e6;
+      let Imax = 0;
+      for (const r of comp) Imax = Math.max(Imax, r.Iloc![0]!, r.Iloc![4]!, r.Iloc![8]!);
+      const Kr = Imax * comp.length * 1e6;
+      const fit = new RigidFit(comE);
+      comp.forEach((r, i) => {
+        const fp = composePose(C, T[i]!);
+        fit.point(fp.p, r.mass, [0, 0, 0]);
+        fit.rotation(worldInertia(r.Iloc!, fp.q), [0, 0, 0]);
+      });
+      for (const { i, a } of anchors) {
+        const fitted = composePose(composePose(C, T[i]!), a.frame);
+        const held = a.other && a.otherFrame ? composePose(this.poseOf(a.other), a.otherFrame) : a.c.worldB ?? fitted;
+        const dofs = anchorDofs(a.c.kind.model, rotate(held.q, [0, 1, 0]));
+        fit.point(fitted.p, Kp, sub(held.p, fitted.p), dofs.point);
+        fit.rotation(scaleMat(dofs.rot, Kr), rotationVector(quatMul(held.q, quatConj(fitted.q))));
+      }
+      const d = fit.solve();
+      const cq = quatFromRotationVector(d.w);
+      C = { p: add(add(comE, d.v), rotate(cq, sub(C.p, comE))), q: normQuat(quatMul(cq, C.q)) };
+    }
+    comp.forEach((r, i) => {
+      const np = composePose(C, T[i]!);
+      const v = add(ent.e.v, cross(ent.e.w, sub(np.p, comE)));
+      w.newV[i] = v;
+      this.r1.Set(...np.p);
+      this.q1.Set(...np.q);
+      this.v1.Set(...v);
+      this.v2.Set(...ent.e.w);
+      this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
+    });
+  }
+
+  /**
+   * Bodies held by a stiff joint to the world, a frozen part or a hand-held (kinematic) part, with those joints.
+   * sign: -1 when the held body is the joint's body 1 (it receives -lambda), +1 when it is body 2.
+   */
+  private anchoredBodies(): Map<BodyRec, Anchor[]> {
+    const out = new Map<BodyRec, Anchor[]>();
+    const put = (r: BodyRec, a: Anchor) => (out.get(r) ?? out.set(r, []).get(r)!).push(a);
+    for (const c of this.conns.values()) {
+      if (c.status === 'broken' || !c.constraint) continue;
+      const m = c.kind.model;
+      if (m !== 'rigid' && m !== 'revolute' && m !== 'prismatic' && m !== 'spherical') continue;
+      const fixedB = !c.b || c.b.frozen || c.b.grabbed === 'creative';
+      const fixedA = c.a.frozen || c.a.grabbed === 'creative';
+      if (fixedB && !c.a.frozen) put(c.a, { c, sign: -1, frame: c.frameA, other: c.b, otherFrame: c.b ? c.frameB : null });
+      if (fixedA && c.b && !c.b.frozen) put(c.b, { c, sign: 1, frame: c.frameB!, other: c.a, otherFrame: c.frameA });
+    }
+    return out;
+  }
+
+  /** One assembly at tick start: rigid shape and pose, predicted velocity, spanning tree for load bookkeeping. */
+  private fitCluster(cl: ClusterWork, dt: number): FittedCluster {
+    const { comp, adj } = cl;
+    const n = comp.length;
+    const index = new Map<BodyRec, number>();
+    comp.forEach((r, i) => index.set(r, i));
+    // spanning tree (DFS from body 0) with rest poses in body 0's frame, discovery order and Tarjan low-links
+    const T: Pose[] = new Array(n);
+    const parent = new Int32Array(n).fill(-1);
+    const parentEdge: (RigidEdge | null)[] = new Array(n).fill(null);
+    const disc = new Int32Array(n).fill(-1);
+    const low = new Int32Array(n);
+    const order: number[] = [];
+    T[0] = { p: [0, 0, 0], q: IDENTITY_Q };
+    const iter: number[] = new Array(n).fill(0);
+    const stack = [0];
+    disc[0] = low[0] = 0;
+    order.push(0);
+    let time = 1;
+    while (stack.length) {
+      const i = stack[stack.length - 1]!;
+      const nb = adj.get(comp[i]!)!;
+      if (iter[i]! < nb.length) {
+        const { e, other } = nb[iter[i]!++]!;
+        const j = index.get(other)!;
+        if (e === parentEdge[i]) continue;
+        if (disc[j] === -1) {
+          disc[j] = low[j] = time++;
+          parent[j] = i;
+          parentEdge[j] = e;
+          T[j] = composePose(T[i]!, e.u === comp[i] ? e.rest : invertPose(e.rest));
+          order.push(j);
+          stack.push(j);
+        } else {
+          low[i] = Math.min(low[i]!, disc[j]!);
+        }
+      } else {
+        stack.pop();
+        const p = parent[i]!;
+        if (p >= 0) low[p] = Math.min(low[p]!, low[i]!);
+      }
+    }
+    const vel = comp.map((r) => this.velocityOf(r));
+    const pri = comp.map((r, i) => r.prior ?? { pose: this.poseOf(r), v: vel[i]![0], w: vel[i]![1] });
+    const P0 = pri.map((p) => p.pose);
+    let M = 0;
+    let com0: Vec3 = [0, 0, 0], comRest: Vec3 = [0, 0, 0];
+    comp.forEach((r, i) => {
+      M += r.mass;
+      com0 = add(com0, scale(P0[i]!.p, r.mass));
+      comRest = add(comRest, scale(T[i]!.p, r.mass));
+    });
+    com0 = scale(com0, 1 / M);
+    comRest = scale(comRest, 1 / M);
+    // rigid pose at tick start (the assembly was projected rigid last tick, so this is exact after the first)
+    const q0 = quatMul(P0[0]!.q, quatConj(T[0]!.q));
+    let qs: Quat = [0, 0, 0, 0];
+    comp.forEach((r, i) => {
+      let qi = quatMul(P0[i]!.q, quatConj(T[i]!.q));
+      if (qi[0] * q0[0] + qi[1] * q0[1] + qi[2] * q0[2] + qi[3] * q0[3] < 0) qi = [-qi[0], -qi[1], -qi[2], -qi[3]];
+      qs = [qs[0] + qi[0] * r.mass, qs[1] + qi[1] * r.mass, qs[2] + qi[2] * r.mass, qs[3] + qi[3] * r.mass];
+    });
+    const qc = normQuat(qs);
+    const C0: Pose = { p: sub(com0, rotate(qc, comRest)), q: qc };
+    const NP0 = T.map((t) => composePose(C0, t));
+    const Iw0 = comp.map((r, i) => worldInertia(r.Iloc!, NP0[i]!.q));
+    // predicted velocity: the start rigid motion plus the momentum Jolt's impulses added (internal impulses
+    // cancel), plus the torque-free term; inertia at the start configuration (semi-implicit, well conditioned
+    // even for a slender rod's tiny axial inertia)
+    const f0 = new RigidFit(com0);
+    const mass = new RigidFit(com0);
+    comp.forEach((r, i) => {
+      f0.point(P0[i]!.p, r.mass, pri[i]!.v);
+      f0.rotation(worldInertia(r.Iloc!, P0[i]!.q), pri[i]!.w);
+      mass.point(NP0[i]!.p, r.mass, [0, 0, 0]);
+      mass.rotation(Iw0[i]!, [0, 0, 0]);
+    });
+    const u0 = f0.solve();
+    const joltP = comp.map((r, i) => scale(sub(vel[i]![0], pri[i]!.v), r.mass));
+    const joltL = comp.map((r, i) => mat3Vec(worldInertia(r.Iloc!, P0[i]!.q), sub(vel[i]![1], pri[i]!.w)));
+    let dPsum: Vec3 = [0, 0, 0], dLsum: Vec3 = [0, 0, 0];
+    comp.forEach((_, i) => {
+      dPsum = add(dPsum, joltP[i]!);
+      dLsum = add(dLsum, add(joltL[i]!, cross(sub(P0[i]!.p, com0), joltP[i]!)));
+    });
+    const Ic = mass.angularBlock();
+    const invIc = inverse3(Ic);
+    const L0 = mat3Vec(Ic, u0.w);
+    const wPred = mat3Vec(invIc, add(add(L0, dLsum), scale(cross(L0, u0.w), dt)));
+    const vPred = add(u0.v, scale(dPsum, 1 / M));
+    const ent: Ent = { e: { origin: com0, v: vPred, w: wPred, invMass: 1 / M, invI: invIc }, work: null, single: null, touched: false, start: null, v0: [...u0.v] as Vec3, w0: [...u0.w] as Vec3, fixed: [] };
+    const work: FittedCluster = {
+      comp, adj, index, order, parent, parentEdge, disc, low, T, C0, com0, M, NP0, P0, Iw0, pri, joltP, joltL, newV: new Array(n),
+      ent, priorEnt: { origin: com0, v: u0.v, w: u0.w, invMass: 0, invI: [...ZERO3] },
+    };
+    ent.work = work;
+    return work;
+  }
+
+  /**
+   * Force / moment through each bridge edge of an assembly (on its v side, about the edge point, per second): the
+   * v side's real momentum change minus every impulse already accounted on it (Jolt's, and the anchors', hinges'
+   * and contacts' from our solve), all at tick-start geometry. Edges on a loop share their load in a statically
+   * indeterminate way; they keep the solver's own reading.
+   */
+  private bridgeLoads(w: FittedCluster, ourP: Map<BodyRec, Vec3>, ourL: Map<BodyRec, Vec3>, dt: number) {
+    const { comp, order, parent, parentEdge, disc, low, NP0, P0, Iw0, pri, joltP, joltL, newV, index } = w;
+    const wNew = w.ent.e.w;
+    const dP: Vec3[] = comp.map((r, i) => sub(sub(scale(sub(newV[i]!, pri[i]!.v), r.mass), joltP[i]!), ourP.get(r) ?? [0, 0, 0]));
+    const dLo: Vec3[] = comp.map((r, i) => sub(sub(
+      add(mat3Vec(Iw0[i]!, sub(wNew, pri[i]!.w)), cross(NP0[i]!.p, scale(sub(newV[i]!, pri[i]!.v), r.mass))),
+      add(joltL[i]!, cross(P0[i]!.p, joltP[i]!))), ourL.get(r) ?? [0, 0, 0]));
+    const subP: Vec3[] = dP.map((v) => [...v] as Vec3);
+    const subL: Vec3[] = dLo.map((v) => [...v] as Vec3);
+    for (let k = order.length - 1; k >= 1; k--) {
+      const j = order[k]!, p = parent[j]!;
+      subP[p] = add(subP[p]!, subP[j]!);
+      subL[p] = add(subL[p]!, subL[j]!);
+    }
+    const tP = subP[order[0]!]!, tL = subL[order[0]!]!;
+    for (const r of comp) for (const { e } of w.adj.get(r)!) {
+      if (e.bond) { e.bond.corrF = [0, 0, 0]; e.bond.corrT = [0, 0, 0]; } else if (e.conn) { e.conn.corrF = [0, 0, 0]; e.conn.corrT = [0, 0, 0]; }
+    }
+    for (let k = 1; k < order.length; k++) {
+      const j = order[k]!, p = parent[j]!;
+      if (low[j]! <= disc[p]!) continue; // not a bridge
+      const e = parentEdge[j]!;
+      const childIsV = e.v === comp[j];
+      const vP = childIsV ? subP[j]! : sub(tP, subP[j]!);
+      const vL = childIsV ? subL[j]! : sub(tL, subL[j]!);
+      const pe = e.bond
+        ? transformPoint(NP0[index.get(e.u)!]!, scale(e.bond.a.pr.layout!.axis, e.bond.a.pr.layout!.segLen / 2))
+        : composePose(NP0[index.get(e.u)!]!, e.conn!.frameA).p;
+      const F = scale(vP, 1 / dt), Tq = scale(sub(vL, cross(pe, vP)), 1 / dt);
+      if (e.bond) { e.bond.corrF = F; e.bond.corrT = Tq; } else if (e.conn) { e.conn.corrF = F; e.conn.corrT = Tq; }
+    }
+  }
+
+  /** Read the section forces carried by every bond and yield / fracture them against the section's capacity. */
+  private evaluateBonds(inv: number) {
+    for (const pr of this.parts.values()) {
+      const cap = pr.cap;
+      const L = pr.layout;
+      if (!cap || !L) continue;
+      for (const b of pr.bonds) {
+        if (!b) continue;
+        const pa = this.poseOf(b.a);
+        const ax = rotate(pa.q, L.axis);
+        const ay = rotate(pa.q, L.perps[0]);
+        const az = cross(ax, ay);
+        const s = b.typed;
+        const lp = s.GetTotalLambdaPosition();
+        const F: Vec3 = add([lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv], b.corrF);
+        const N = -dot(F, ax);
+        const V = length(sub(F, scale(ax, dot(F, ax))));
+        let Tt: number, M1: number, M2: number;
+        if (!b.plastic) {
+          const lr = s.GetTotalLambdaRotation();
+          const T: Vec3 = add([lr.GetX() * inv, lr.GetY() * inv, lr.GetZ() * inv], b.corrT);
+          Tt = Math.abs(dot(T, ax));
+          M1 = Math.abs(dot(T, ay));
+          M2 = Math.abs(dot(T, az));
+        } else {
+          // constraint space: X twist (torsion), Y / Z bending (limit + hinge friction)
+          const lr = s.GetTotalLambdaRotation();
+          const lm = s.GetTotalLambdaMotorRotation();
+          Tt = Math.abs(lr.GetX()) * inv;
+          M1 = Math.abs(lr.GetY() + lm.GetY()) * inv;
+          M2 = Math.abs(lr.GetZ() + lm.GetZ()) * inv;
+        }
+        b.loads = { N, V, T: Tt, M1, M2 };
+        const chk = checkBond(cap, b.loads);
+        const point = transformPoint(pa, scale(L.axis, L.segLen / 2));
+        if (b.plastic) {
+          // A hinge keeps carrying Mp; it tears when its rotation passes the material's ductility.
+          const theta = this.bondAngle(b);
+          const uRot = theta / Math.max(cap.thetaF, 1e-6);
+          const other = chk.mode === 'bending' ? { ...chk, u: 0 } : chk;
+          b.u = Math.max(uRot, other.u);
+          b.mode = uRot >= other.u ? 'bending' : other.mode;
+          if (uRot >= 1) {
+            this.fracture(pr, b, 'bending', theta, cap.thetaF, point, `bent ${(theta * 180 / Math.PI).toFixed(0)}° past its ${(cap.thetaF * 180 / Math.PI).toFixed(0)}° ductility and tore`);
+            continue;
+          }
+          if (other.u > 1) b.over++; else b.over = 0;
+          if (other.u > 1.5 || b.over >= this.opts.filterTicks) this.fracture(pr, b, other.mode, other.load, other.capacity, point, `failed in ${other.mode}: ${fmtLoad(other.mode, other.load)} on a ${fmtLoad(other.mode, other.capacity)} capacity`);
+          continue;
+        }
+        b.u = chk.u;
+        b.mode = chk.mode;
+        if (chk.u > 1) b.over++; else b.over = 0;
+        if (chk.u > 1.5 || b.over >= this.opts.filterTicks) {
+          if (chk.outcome === 'yield') {
+            this.rebuildBond(pr, b.k, true);
+            this.events.push({ type: 'yield', part: pr.id, bond: b.k, point, note: `${pr.part.name} yielded in bending (${fmtLoad('bending', chk.load)} ≥ Mp ${fmtLoad('bending', chk.capacity)}) and is bending plastically` });
+          } else {
+            this.fracture(pr, b, chk.mode, chk.load, chk.capacity, point, `fractured in ${chk.mode}: ${fmtLoad(chk.mode, chk.load)} on a ${fmtLoad(chk.mode, chk.capacity)} capacity`);
+          }
+        }
+      }
+    }
+  }
+
+  private fracture(pr: PartRec, b: BondRec, mode: string, load: number, capacity: number, point: Vec3, what: string) {
+    const clean = this.bondAngle(b) < CLEAN_BREAK_ANGLE;
+    this.destroyBond(b, !clean);
+    if (!clean && b.pairKey >= 0) pr.heldPairs.push(b.pairKey);
+    pr.bonds[b.k] = null;
+    pr.broken.add(b.k);
+    pr.part = { ...pr.part, damage: { broken: [...pr.broken].sort((x, y) => x - y), segments: null } };
+    this.bi.ActivateBody(b.a.body.GetID());
+    this.bi.ActivateBody(b.b.body.GetID());
+    this.events.push({
+      type: 'fracture', part: pr.id, bond: b.k, mode, load, capacity, point,
+      note: `${pr.part.name} ${what}`,
+      segments: pr.segs.map((s) => this.poseOf(s)),
+    });
+  }
+
+  /** Damage set from the document (undo, redo, repair). Bonds that come back are re-seated first. */
+  private setDamage(id: string, damage: PartDamage) {
+    const pr = this.parts.get(id);
+    if (!pr || !pr.layout) return;
+    const L = pr.layout;
+    const n = L.count;
+    pr.part = { ...pr.part, damage };
+    const want = new Set(damage.broken.filter((k) => k >= 0 && k < n - 1));
+    const moved = new Set<BodyRec>();
+    if (want.size === 0 && damage.segments === null) {
+      // Repair: straighten about segment 0 and rebuild every bond intact.
+      const [lin, ang] = this.velocityOf(pr.segs[0]!);
+      const straight = this.straightPoses(this.virtualPose(pr), L);
+      for (const b of pr.bonds) if (b) this.destroyBond(b);
+      for (const key of pr.heldPairs) this.releasePair(key);
+      pr.heldPairs = [];
+      pr.broken.clear();
+      pr.segs.forEach((s, i) => { this.placeBody(s, straight[i]!, lin, ang); moved.add(s); });
+      pr.bonds = pr.segs.slice(0, -1).map((_, k) => (pr.part.frozen ? null : this.buildBond(pr, k, false)));
+    } else {
+      for (let k = 0; k < n - 1; k++) {
+        const isBroken = pr.broken.has(k);
+        if (want.has(k) && !isBroken) {
+          const b = pr.bonds[k];
+          if (b) this.destroyBond(b);
+          pr.bonds[k] = null;
+          pr.broken.add(k);
+        } else if (!want.has(k) && isBroken) {
+          // bring the far piece back so the faces meet straight, then bond it again
+          pr.broken.delete(k);
+          const near = this.poseOf(pr.segs[k]!);
+          const target = composePose(near, { p: scale(L.axis, L.segLen), q: IDENTITY_Q });
+          const cur = this.poseOf(pr.segs[k + 1]!);
+          const [lin, ang] = this.velocityOf(pr.segs[k]!);
+          for (let j = k + 1; j < n; j++) {
+            const s = pr.segs[j]!;
+            this.placeBody(s, composePose(target, relativePose(cur, this.poseOf(s))), lin, ang);
+            moved.add(s);
+            if (j < n - 1 && pr.broken.has(j)) break;
+          }
+          if (!pr.part.frozen) pr.bonds[k] = this.buildBond(pr, k, false);
+        }
+      }
+    }
+    if (moved.size) for (const c of this.conns.values()) if (moved.has(c.a) || (c.b && moved.has(c.b))) this.buildConstraint(c);
+  }
+
+  private placeBody(r: BodyRec, pose: Pose, linear: Vec3, angular: Vec3) {
+    const bid = r.body.GetID();
+    this.r1.Set(...pose.p);
+    this.q1.Set(...pose.q);
+    this.bi.SetPositionAndRotation(bid, this.r1, this.q1, r.frozen ? this.J.EActivation_DontActivate : this.J.EActivation_Activate);
+    if (!r.frozen) {
+      this.v1.Set(...linear);
+      this.v2.Set(...angular);
+      this.bi.SetLinearAndAngularVelocity(bid, this.v1, this.v2);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // grabbing
 
   private grab(hand: string, id: string, mode: GrabMode, target: Pose, strength: number) {
-    const r = this.bodies.get(id);
+    const r = this.bodyFor(id, target.p);
     if (!r) return;
     this.release(hand);
-    const prevMotion = r.frozen ? 'static' : 'dynamic';
     // Frozen parts are always moved precisely; physical grabbing applies to free parts.
     const m: GrabMode = r.frozen ? 'creative' : mode;
-    if (m === 'creative') this.bi.SetMotionType(r.body.GetID(), this.J.EMotionType_Kinematic, this.J.EActivation_Activate);
-    else this.bi.ActivateBody(r.body.GetID());
-    r.grabbed = m;
-    this.grabs.set(hand, { hand, rec: r, mode: m, target, strength, prevMotion });
+    const members = this.cluster(r);
+    const rp = this.poseOf(r);
+    const followers = m === 'creative' ? members.filter((x) => x !== r).map((x) => ({ rec: x, rel: relativePose(rp, this.poseOf(x)) })) : [];
+    for (const x of m === 'creative' ? members : [r]) {
+      if (m === 'creative') this.bi.SetMotionType(x.body.GetID(), this.J.EMotionType_Kinematic, this.J.EActivation_Activate);
+      else this.bi.ActivateBody(x.body.GetID());
+      x.grabbed = m;
+    }
+    this.grabs.set(hand, { hand, rec: r, followers, mode: m, target, strength, mass: this.clusterMass(r), inertia: this.clusterInertia(r) });
   }
 
   private release(hand: string, linear?: Vec3, angular?: Vec3) {
@@ -455,22 +1518,30 @@ export class PhysicsWorld {
     if (!g) return;
     this.grabs.delete(hand);
     const r = g.rec;
-    r.grabbed = null;
+    const members = [r, ...g.followers.map((f) => f.rec)];
+    for (const x of members) x.grabbed = null;
     if (g.mode === 'creative') {
-      const bid = r.body.GetID();
-      if (r.frozen) {
-        this.bi.SetMotionType(bid, this.J.EMotionType_Static, this.J.EActivation_DontActivate);
-      } else {
-        this.bi.SetMotionType(bid, this.J.EMotionType_Dynamic, this.J.EActivation_Activate);
-        if (linear || angular) {
-          this.v1.Set(...(linear ?? [0, 0, 0]));
-          this.v2.Set(...(angular ?? [0, 0, 0]));
-          this.bi.SetLinearAndAngularVelocity(bid, this.v1, this.v2);
+      const origin = this.poseOf(r).p;
+      for (const x of members) {
+        const bid = x.body.GetID();
+        if (x.frozen) {
+          this.bi.SetMotionType(bid, this.J.EMotionType_Static, this.J.EActivation_DontActivate);
+        } else {
+          this.bi.SetMotionType(bid, this.J.EMotionType_Dynamic, this.J.EActivation_Activate);
+          if (linear || angular) {
+            const w = angular ?? [0, 0, 0];
+            this.v1.Set(...add(linear ?? [0, 0, 0], cross(w, sub(this.poseOf(x).p, origin))));
+            this.v2.Set(...w);
+            this.bi.SetLinearAndAngularVelocity(bid, this.v1, this.v2);
+          }
         }
       }
     }
     // The held part may have moved relative to static joints; rebuild so frames stay consistent.
-    if (r.frozen) for (const c of this.conns.values()) if (c.a === r || c.b === r) this.buildConstraint(c);
+    if (r.frozen) {
+      const set = new Set(members);
+      for (const c of this.conns.values()) if (set.has(c.a) || (c.b && set.has(c.b))) this.buildConstraint(c);
+    }
   }
 
   private driveGrabs(dt: number) {
@@ -481,6 +1552,12 @@ export class PhysicsWorld {
         this.r1.Set(...g.target.p);
         this.q1.Set(...g.target.q);
         this.bi.MoveKinematic(bid, this.r1, this.q1, dt);
+        for (const f of g.followers) {
+          const p = composePose(g.target, f.rel);
+          this.r1.Set(...p.p);
+          this.q1.Set(...p.q);
+          this.bi.MoveKinematic(f.rec.body.GetID(), this.r1, this.q1, dt);
+        }
         continue;
       }
       // Physical grab: a critically damped spring to the hand, limited to human strength.
@@ -490,7 +1567,7 @@ export class PhysicsWorld {
       const w = 2 * Math.PI * 5;
       const err = sub(g.target.p, pose.p);
       const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
-      let F = sub(scale(err, r.mass * w * w), scale(v, 2 * r.mass * w));
+      let F = sub(scale(err, g.mass * w * w), scale(v, 2 * g.mass * w));
       const fl = length(F);
       if (fl > g.strength) F = scale(F, g.strength / fl);
       // orientation error as axis * angle
@@ -499,7 +1576,7 @@ export class PhysicsWorld {
       const angle = 2 * Math.acos(Math.min(1, Math.abs(qe[3])));
       const s = Math.sqrt(Math.max(1e-12, 1 - qe[3] * qe[3]));
       const axis: Vec3 = [(qe[0] * sgn) / s, (qe[1] * sgn) / s, (qe[2] * sgn) / s];
-      const I = r.mass * (r.dims.length * r.dims.length + r.dims.a * r.dims.a) / 12 + 1e-6;
+      const I = g.inertia;
       const wv: Vec3 = [av.GetX(), av.GetY(), av.GetZ()];
       let T = sub(scale(axis, angle * I * w * w), scale(wv, 2 * I * w));
       const maxT = g.strength * 0.12; // wrist torque ~ 30 N m at 250 N
@@ -515,18 +1592,20 @@ export class PhysicsWorld {
   // connections
 
   upsertConnection(conn: Connection, materials: Record<string, Material>) {
-    const a = this.bodies.get(conn.a.part);
-    const b = conn.b ? this.bodies.get(conn.b.part) ?? null : null;
-    if (!a || (conn.b && !b)) return;
+    const pa = this.parts.get(conn.a.part);
+    const pb = conn.b ? this.parts.get(conn.b.part) ?? null : null;
+    if (!pa || (conn.b && !pb)) return;
     const prev = this.conns.get(conn.id);
     if (prev) this.destroyConstraint(prev);
     const kind = getConnectorKind(conn.kind);
     const rec: ConnRec = {
-      id: conn.id, conn, kind, derived: undefined as unknown as Derived, a, b, constraint: null, extra: [], typed: null,
+      id: conn.id, conn, kind, derived: undefined as unknown as Derived, pa, pb,
+      a: pa.segs[0]!, b: null, frameA: conn.a.frame, frameB: null, constraint: null, extra: [], typed: null,
       status: conn.state.status, over: 0, slipTicks: 0, cure: prev?.cure ?? conn.state.cure, lastDerive: this.time,
       load: { id: conn.id, u: 0, mode: '', axial: 0, shear: 0, bending: 0, torsion: 0, extent: 0 },
-      springRigid: false, omega: 0, bandRest: 0, materials, lastPositionLambda: 0,
+      springRigid: false, omega: 0, bandRest: 0, materials, lastPositionLambda: 0, pairKeys: [], corrF: [0, 0, 0], corrT: [0, 0, 0], worldB: null,
     };
+    this.resolveEnds(rec);
     rec.derived = this.derive(rec);
     this.conns.set(conn.id, rec);
     if (rec.status !== 'broken' && rec.derived.instantFailure) {
@@ -534,6 +1613,30 @@ export class PhysicsWorld {
       this.events.push({ type: 'break', conn: rec.id, mode: 'instant', load: 0, capacity: 0, point: this.anchorWorld(rec).p, note: rec.derived.instantFailure });
     }
     this.buildConstraint(rec);
+  }
+
+  /** Attach each endpoint to the body (segment) under it, with the frame in that body's coordinates. */
+  private resolveEnds(c: ConnRec) {
+    c.pa = this.parts.get(c.conn.a.part) ?? c.pa;
+    const ea = this.endpointBody(c.pa, c.conn.a);
+    c.a = ea.body;
+    c.frameA = ea.frame;
+    if (c.conn.b) {
+      c.pb = this.parts.get(c.conn.b.part) ?? c.pb;
+      const eb = this.endpointBody(c.pb!, c.conn.b);
+      c.b = eb.body;
+      c.frameB = eb.frame;
+    } else {
+      c.pb = null;
+      c.b = null;
+      c.frameB = null;
+    }
+  }
+
+  private endpointBody(pr: PartRec, ep: Endpoint): { body: BodyRec; frame: Pose } {
+    if (!pr.layout) return { body: pr.segs[0]!, frame: ep.frame };
+    const s = segmentOfFrame(pr.layout, ep.frame);
+    return { body: pr.segs[s.seg]!, frame: s.frame };
   }
 
   removeConnection(id: string) {
@@ -559,12 +1662,12 @@ export class PhysicsWorld {
   }
 
   private anchorWorld(c: ConnRec): Pose {
-    return composePose(this.poseOf(c.a), c.conn.a.frame);
+    return composePose(this.poseOf(c.a), c.frameA);
   }
 
   private anchorWorldB(c: ConnRec): Pose {
-    if (!c.b || !c.conn.b) return composePose(this.poseOf(c.a), c.conn.a.frame);
-    return composePose(this.poseOf(c.b), c.conn.b.frame);
+    if (!c.b || !c.frameB) return composePose(this.poseOf(c.a), c.frameA);
+    return composePose(this.poseOf(c.b), c.frameB);
   }
 
   private destroyConstraint(c: ConnRec) {
@@ -575,12 +1678,20 @@ export class PhysicsWorld {
     this.setPairCollision(c, true);
   }
 
+  /** Joined parts do not collide with each other (every body of one against every body of the other). */
   private setPairCollision(c: ConnRec, enabled: boolean) {
-    if (!c.b || c.a.subgroup === 0 || c.b.subgroup === 0) return;
+    if (enabled) {
+      for (const k of c.pairKeys) this.releasePair(k);
+      c.pairKeys = [];
+      return;
+    }
+    if (!c.pb || c.pairKeys.length) return;
     const model = c.kind.model;
     if (model === 'spring' || model === 'rope' || model === 'band') return;
-    if (enabled) this.groupFilter.EnableCollision(c.a.subgroup, c.b.subgroup);
-    else this.groupFilter.DisableCollision(c.a.subgroup, c.b.subgroup);
+    for (const sa of c.pa.segs) for (const sb of c.pb.segs) {
+      const key = this.holdPair(sa.subgroup, sb.subgroup);
+      if (key >= 0) c.pairKeys.push(key);
+    }
   }
 
   private buildConstraint(c: ConnRec) {
@@ -589,6 +1700,7 @@ export class PhysicsWorld {
     if (c.status === 'broken') return;
     const wa = this.anchorWorld(c);
     const wb = c.b ? this.anchorWorldB(c) : wa;
+    c.worldB = c.b ? null : wb;
     const axA = rotate(wa.q, [1, 0, 0]);
     const ayA = rotate(wa.q, [0, 1, 0]);
     const axB = rotate(wb.q, [1, 0, 0]);
@@ -643,10 +1755,15 @@ export class PhysicsWorld {
           ms.mMaxTorqueLimit = 1e9;
         }
         if (rv?.servo) {
+          // A 6 Hz, critically damped position loop on the real inertia about the joint axis. (Jolt's frequency
+          // mode would scale it by the inertia of the one body the joint touches, a single light segment of a
+          // breakable part, and leave the servo far too soft for the part it actually has to turn.)
+          const I = this.jointAxisInertia(c, ayA, wa.p);
+          const w = 2 * Math.PI * 6;
           const ms = s.mMotorSettings;
-          ms.mSpringSettings.mMode = J.ESpringMode_FrequencyAndDamping;
-          ms.mSpringSettings.mFrequency = 6;
-          ms.mSpringSettings.mDamping = 1;
+          ms.mSpringSettings.mMode = J.ESpringMode_StiffnessAndDamping;
+          ms.mSpringSettings.mStiffness = I * w * w;
+          ms.mSpringSettings.mDamping = 2 * I * w;
           ms.mMinTorqueLimit = -rv.servo.maxTorque;
           ms.mMaxTorqueLimit = rv.servo.maxTorque;
         }
@@ -768,8 +1885,8 @@ export class PhysicsWorld {
   }
 
   private effMass(c: ConnRec) {
-    const ma = c.a.frozen ? Infinity : c.a.mass;
-    const mb = !c.b || c.b.frozen ? Infinity : c.b.mass;
+    const ma = c.a.frozen ? Infinity : this.clusterMass(c.a);
+    const mb = !c.b || c.b.frozen ? Infinity : this.clusterMass(c.b);
     if (!Number.isFinite(ma) && !Number.isFinite(mb)) return 1;
     if (!Number.isFinite(ma)) return mb;
     if (!Number.isFinite(mb)) return ma;
@@ -788,8 +1905,31 @@ export class PhysicsWorld {
     return total > 0 ? 1 / total : Infinity;
   }
 
+  /**
+   * Reduced moment of inertia of the two sides of a joint about its axis (a line through `point`): each side is the
+   * body's still-bonded run of segments, with the parallel-axis term for every piece.
+   */
+  private jointAxisInertia(c: ConnRec, axis: Vec3, point: Vec3) {
+    const side = (r: BodyRec | null) => {
+      if (!r || r.frozen || !r.Iloc) return Infinity;
+      let I = 0;
+      for (const s of this.cluster(r)) {
+        const pose = this.poseOf(s);
+        const d = sub(pose.p, point);
+        const perp = sub(d, scale(axis, dot(d, axis)));
+        I += dot(axis, mat3Vec(worldInertia(s.Iloc!, pose.q), axis)) + s.mass * dot(perp, perp);
+      }
+      return Math.max(I, 1e-9);
+    };
+    const ia = side(c.a), ib = side(c.b);
+    if (!Number.isFinite(ia) && !Number.isFinite(ib)) return 1;
+    if (!Number.isFinite(ia)) return ib;
+    if (!Number.isFinite(ib)) return ia;
+    return (ia * ib) / (ia + ib);
+  }
+
   private effInertia(c: ConnRec) {
-    const I = (r: BodyRec) => (r.frozen ? Infinity : (r.mass * (r.dims.length ** 2 + r.dims.a ** 2)) / 12);
+    const I = (r: BodyRec) => (r.frozen ? Infinity : this.clusterInertia(r));
     const ia = I(c.a);
     const ib = c.b ? I(c.b) : Infinity;
     if (!Number.isFinite(ia) && !Number.isFinite(ib)) return 1;
@@ -1059,10 +2199,13 @@ export class PhysicsWorld {
     this.applyFields(dt);
     const n = this.substepsNeeded();
     this.lastSubsteps = n;
+    this.prepareClusters();
     this.jolt.Step(dt, n);
+    this.solveAssemblies(dt);
     this.time += dt;
     this.ticks++;
     this.evaluateConnections(dt, n);
+    this.evaluateBonds(n / dt);
     const stepMs = performance.now() - t0;
     return this.collect(stepMs);
   }
@@ -1072,8 +2215,25 @@ export class PhysicsWorld {
     const transforms = new Float32Array(count * 7);
     const velocities = new Float32Array(count * 6);
     for (let s = 0; s < count; s++) {
-      const r = this.bySlot[s];
-      if (!r) continue;
+      const entry = this.bySlot[s];
+      if (!entry) continue;
+      if ('segs' in entry) {
+        // virtual slot: the part frame carried by segment 0
+        const vp = this.virtualPose(entry);
+        const o = s * 7;
+        transforms[o] = vp.p[0]; transforms[o + 1] = vp.p[1]; transforms[o + 2] = vp.p[2];
+        transforms[o + 3] = vp.q[0]; transforms[o + 4] = vp.q[1]; transforms[o + 5] = vp.q[2]; transforms[o + 6] = vp.q[3];
+        const s0 = entry.segs[0]!;
+        if (s0.body.IsActive()) {
+          const [lv, av] = this.velocityOf(s0);
+          const lin = add(lv, cross(av, sub(vp.p, this.poseOf(s0).p)));
+          const v = s * 6;
+          velocities[v] = lin[0]; velocities[v + 1] = lin[1]; velocities[v + 2] = lin[2];
+          velocities[v + 3] = av[0]; velocities[v + 4] = av[1]; velocities[v + 5] = av[2];
+        }
+        continue;
+      }
+      const r = entry;
       const p = r.body.GetPosition();
       const q = r.body.GetRotation();
       const o = s * 7;
@@ -1091,12 +2251,15 @@ export class PhysicsWorld {
     this.events = [];
     const cure: Record<string, number> = {};
     for (const c of this.conns.values()) if (c.kind.id === 'glued') cure[c.id] = c.cure;
+    const bonds: Record<string, number[]> = {};
+    for (const pr of this.parts.values()) if (pr.layout && pr.cap) bonds[pr.id] = pr.bonds.map((b) => (b ? b.u : -1));
     const result: StepResult = {
       slotVersion: this.slotVersion,
       transforms,
       velocities,
       events,
       loads: [...this.conns.values()].map((c) => ({ ...c.load })),
+      bonds,
       cure,
       stats: {
         stepMs,
@@ -1149,12 +2312,14 @@ export class PhysicsWorld {
           }
           const lr = s.GetTotalLambdaRotation();
           T = [lr.GetX() * inv, lr.GetY() * inv, lr.GetZ() * inv];
+          F = add(F, c.corrF);
+          T = add(T, c.corrT);
           break;
         }
         case 'revolute': {
           const h = c.typed as JoltNS.HingeConstraint;
           const lp = h.GetTotalLambdaPosition();
-          F = [lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv];
+          F = add([lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv], c.corrF);
           const lr = h.GetTotalLambdaRotation();
           bending = Math.hypot(lr.GetComponent(0), lr.GetComponent(1)) * inv;
           break;
@@ -1171,7 +2336,7 @@ export class PhysicsWorld {
         case 'spherical': {
           const st = c.typed as JoltNS.SwingTwistConstraint;
           const lp = st.GetTotalLambdaPosition();
-          F = [lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv];
+          F = add([lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv], c.corrF);
           break;
         }
         case 'spring':
@@ -1249,13 +2414,17 @@ export class PhysicsWorld {
     const J = this.J;
     const listener = new J.ContactListenerJS();
     listener.OnContactValidate = () => J.ValidateResult_AcceptAllContactsForThisBodyPair;
-    listener.OnContactPersisted = () => {};
+    listener.OnContactPersisted = (b1p: number, b2p: number, manp: number, setp: number) => {
+      if (!this.watch.size) return;
+      this.recordContact(J.wrapPointer(b1p, J.Body), J.wrapPointer(b2p, J.Body), J.wrapPointer(manp, J.ContactManifold), J.wrapPointer(setp, J.ContactSettings));
+    };
     listener.OnContactRemoved = () => {};
-    listener.OnContactAdded = (b1p: number, b2p: number, manp: number) => {
-      if (this.events.length > 48) return;
+    listener.OnContactAdded = (b1p: number, b2p: number, manp: number, setp: number) => {
       const b1 = J.wrapPointer(b1p, J.Body);
       const b2 = J.wrapPointer(b2p, J.Body);
       const man = J.wrapPointer(manp, J.ContactManifold);
+      if (this.watch.size) this.recordContact(b1, b2, man, J.wrapPointer(setp, J.ContactSettings));
+      if (this.events.length > 48) return;
       const n = man.mWorldSpaceNormal;
       const normal: Vec3 = [n.GetX(), n.GetY(), n.GetZ()];
       const cp = man.GetWorldSpaceContactPointOn1(0);
@@ -1271,8 +2440,8 @@ export class PhysicsWorld {
       const s2 = b2.GetUserData() - 1;
       this.events.push({
         type: 'contact',
-        a: s1 >= 0 ? this.bySlot[s1]?.id ?? null : null,
-        b: s2 >= 0 ? this.bySlot[s2]?.id ?? null : null,
+        a: s1 >= 0 ? partIdOf(this.bySlot[s1]) : null,
+        b: s2 >= 0 ? partIdOf(this.bySlot[s2]) : null,
         point, normal, speed, impulse: speed * mEff,
       });
     };
@@ -1292,23 +2461,54 @@ export class PhysicsWorld {
     return this.conns.get(id)?.derived;
   }
 
+  /** Mass of a part (all its segments) or of one body. */
   bodyMass(id: string) {
+    const pr = this.parts.get(id);
+    if (pr) return pr.segs.reduce((m, s) => m + s.mass, 0);
     return this.bodies.get(id)?.mass;
   }
 
+  /** Linear velocity of a body, or a part's mass-weighted mean. */
   linearVelocity(id: string): Vec3 | null {
-    const r = this.bodies.get(id);
-    if (!r) return null;
-    const v = this.bi.GetLinearVelocity(r.body.GetID());
-    return [v.GetX(), v.GetY(), v.GetZ()];
+    const pr = this.parts.get(id);
+    const members = pr ? pr.segs : this.bodies.has(id) ? [this.bodies.get(id)!] : [];
+    if (!members.length) return null;
+    let v: Vec3 = [0, 0, 0], m = 0;
+    for (const r of members) {
+      v = add(v, scale(this.velocityOf(r)[0], r.mass));
+      m += r.mass;
+    }
+    return scale(v, 1 / m);
   }
 
   angularVelocity(id: string): Vec3 | null {
-    const r = this.bodies.get(id);
-    if (!r) return null;
-    const v = this.bi.GetAngularVelocity(r.body.GetID());
-    return [v.GetX(), v.GetY(), v.GetZ()];
+    const r = this.bodyFor(id);
+    return r ? this.velocityOf(r)[1] : null;
   }
+
+  /** Bond states of a breakable part: 'intact' | 'plastic' | 'broken' per bond, plus utilisation. */
+  bondStates(id: string): { state: 'intact' | 'plastic' | 'broken'; u: number; mode: string; loads: BondLoads | null }[] {
+    const pr = this.parts.get(id);
+    if (!pr?.layout) return [];
+    return pr.segs.slice(0, -1).map((_, k) => {
+      const b = pr.bonds[k];
+      if (b) return { state: b.plastic ? 'plastic' : 'intact', u: b.u, mode: b.mode, loads: { ...b.loads } };
+      return { state: pr.broken.has(k) ? 'broken' : 'intact', u: 0, mode: '', loads: null };
+    });
+  }
+
+  bondCapacityOf(id: string) {
+    return this.parts.get(id)?.cap ?? null;
+  }
+
+  segmentCount(id: string) {
+    return this.parts.get(id)?.segs.length ?? 0;
+  }
+}
+
+function partIdOf(entry: BodyRec | PartRec | null | undefined): string | null {
+  if (!entry) return null;
+  return 'segs' in entry ? entry.id : entry.partId;
 }
 
 function bodyPointVelocity(b: JoltNS.Body, p: Vec3): Vec3 {
@@ -1322,17 +2522,32 @@ function bodyPointVelocity(b: JoltNS.Body, p: Vec3): Vec3 {
   return [lv.GetX() + wr[0], lv.GetY() + wr[1], lv.GetZ() + wr[2]];
 }
 
-function quatConj(q: Quat): Quat {
-  return [-q[0], -q[1], -q[2], q[3]];
+/** Which DOFs a joint to an immovable support holds: point directions and rotation directions (projectors). */
+function anchorDofs(model: string, axis: Vec3): { point: number[]; rot: number[] } {
+  const { perp } = projectors(axis);
+  if (model === 'revolute') return { point: ID3, rot: perp };
+  if (model === 'spherical') return { point: ID3, rot: [...ZERO3] };
+  if (model === 'prismatic') return { point: perp, rot: ID3 };
+  return { point: ID3, rot: ID3 };
 }
 
-function quatMul(a: Quat, b: Quat): Quat {
-  const [ax, ay, az, aw] = a;
-  const [bx, by, bz, bw] = b;
-  return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz];
+function invertPose(p: Pose): Pose {
+  const q = quatConj(p.q);
+  return { p: scale(rotate(q, p.p), -1), q };
+}
+
+function bodyPose(b: JoltNS.Body): Pose {
+  const p = b.GetPosition(), q = b.GetRotation();
+  return { p: [p.GetX(), p.GetY(), p.GetZ()], q: [q.GetX(), q.GetY(), q.GetZ(), q.GetW()] };
 }
 
 function fmtN(n: number) {
   if (!Number.isFinite(n)) return '∞';
   return n >= 1000 ? `${(n / 1000).toFixed(2)} kN` : `${n.toFixed(1)} N`;
+}
+
+function fmtLoad(mode: string, n: number) {
+  if (mode !== 'bending' && mode !== 'torsion') return fmtN(n);
+  if (!Number.isFinite(n)) return '∞';
+  return n >= 1000 ? `${(n / 1000).toFixed(2)} kN·m` : n >= 10 ? `${n.toFixed(0)} N·m` : `${n.toFixed(2)} N·m`;
 }

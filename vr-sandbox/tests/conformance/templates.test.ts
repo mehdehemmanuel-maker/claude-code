@@ -23,7 +23,9 @@ async function load(doc: BuildDoc) {
 
 const run = (w: PhysicsWorld, seconds: number) => {
   const breaks: string[] = [];
-  for (let i = 0; i < Math.round(seconds * 90); i++) for (const e of w.step().events) if (e.type === 'break') breaks.push(e.note);
+  for (let i = 0; i < Math.round(seconds * 90); i++) {
+    for (const e of w.step().events) if (e.type === 'break' || e.type === 'fracture' || e.type === 'yield') breaks.push(e.note);
+  }
   return breaks;
 };
 
@@ -58,9 +60,17 @@ describe('templates', () => {
     const latch = Object.values(doc.connections).find((c) => c.kind === 'rope')!;
     w.apply({ op: 'removeConnection', id: latch.id });
     const ball = byName(doc, 'Projectile')[0]!;
-    let maxX = -Infinity;
-    for (let i = 0; i < 270; i++) { w.step(); maxX = Math.max(maxX, w.livePose(ball.id)!.p[0]); }
-    expect(maxX).toBeGreaterThan(2);
+    // no stop bar: the rigid cup carries the ball over the top, so measure the throw in either direction
+    const start = w.livePose(ball.id)!.p;
+    let reach = 0, speed = 0;
+    for (let i = 0; i < 270; i++) {
+      w.step();
+      const p = w.livePose(ball.id)!.p;
+      reach = Math.max(reach, Math.hypot(p[0] - start[0], p[2] - start[2]));
+      speed = Math.max(speed, Math.hypot(...w.linearVelocity(ball.id)!));
+    }
+    expect(speed).toBeGreaterThan(7);
+    expect(reach).toBeGreaterThan(2);
     w.destroy();
   });
 

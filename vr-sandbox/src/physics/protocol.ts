@@ -1,7 +1,7 @@
 // Messages between the app and the physics world (in a Web Worker or inline). Plain data only.
 
 import type { Material } from '../data/materials';
-import type { Connection, Part, Pose, SimSettings, Vec3 } from '../doc/types';
+import type { Connection, Part, PartDamage, Pose, SimSettings, Vec3 } from '../doc/types';
 
 export interface EnvironmentBox {
   half: Vec3;
@@ -25,13 +25,16 @@ export type PhysicsOp =
   | { op: 'grabTarget'; hand: string; target: Pose }
   | { op: 'release'; hand: string; linear?: Vec3; angular?: Vec3 }
   | { op: 'controls'; channels: Record<string, number> }
+  | { op: 'damage'; id: string; damage: PartDamage }
   | { op: 'options'; maxMagnetRings?: number; filterTicks?: number };
 
 export type PhysicsEvent =
   | { type: 'contact'; a: string | null; b: string | null; point: Vec3; normal: Vec3; speed: number; impulse: number }
   | { type: 'break'; conn: string; mode: string; load: number; capacity: number; point: Vec3; note: string }
   | { type: 'slip'; conn: string; point: Vec3; note: string }
-  | { type: 'splash'; part: string; point: Vec3; speed: number; size: number };
+  | { type: 'splash'; part: string; point: Vec3; speed: number; size: number }
+  | { type: 'fracture'; part: string; bond: number; mode: string; load: number; capacity: number; point: Vec3; note: string; segments: Pose[] }
+  | { type: 'yield'; part: string; bond: number; point: Vec3; note: string };
 
 export interface ConnectionLoad {
   id: string;
@@ -47,7 +50,7 @@ export interface ConnectionLoad {
 }
 
 export interface StepResult {
-  /** Slot table (part IDs by slot), sent when it changes. */
+  /** Slot table (body IDs by slot: the part id, or "part#k" for segment k of a breakable part). */
   slots?: (string | null)[];
   slotVersion: number;
   /** Per slot: px py pz qx qy qz qw. */
@@ -56,6 +59,8 @@ export interface StepResult {
   velocities: Float32Array;
   events: PhysicsEvent[];
   loads: ConnectionLoad[];
+  /** Per breakable part: utilisation of each bond between its segments (-1 = broken). */
+  bonds: Record<string, number[]>;
   cure: Record<string, number>;
   stats: { stepMs: number; bodies: number; awake: number; substeps: number; magnetPairs: number; ticks: number };
 }

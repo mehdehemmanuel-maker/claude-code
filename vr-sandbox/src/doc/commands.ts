@@ -62,6 +62,7 @@ export function makePart(spec: PartSpec, ids: IdSource = randomId): Part {
     frozen: spec.frozen ?? false,
     assembly: spec.assembly ?? null,
     features: [],
+    damage: { broken: [], segments: null },
   };
 }
 
@@ -143,6 +144,9 @@ export function duplicateParts(store: DocStore, ids: string[], offset: Vec3, idS
       copy.id = idSource('p');
       copy.pose = canonicalPose({ p: [src.pose.p[0] + offset[0], src.pose.p[1] + offset[1], src.pose.p[2] + offset[2]], q: src.pose.q });
       copy.features = copy.features.map((f) => ({ ...f, id: idSource('f') }));
+      if (copy.damage.segments) {
+        copy.damage.segments = copy.damage.segments.map((sp) => canonicalPose({ p: [sp.p[0] + offset[0], sp.p[1] + offset[1], sp.p[2] + offset[2]], q: sp.q }));
+      }
       map.set(id, copy.id);
       tx.create('parts', copy.id, copy);
     }
@@ -211,16 +215,34 @@ export function addFluid(store: DocStore, fluid: FluidVolume) {
   setSim(store, { fluids: [...store.doc.sim.fluids.filter((f) => f.id !== fluid.id), fluid] });
 }
 
-/** Write live physics poses back into the design (not an undo step). */
-export function commitPoses(store: DocStore, poses: Map<string, Pose>) {
+/** Write live physics poses back into the design (not an undo step). Damaged parts also record each segment. */
+export function commitPoses(store: DocStore, poses: Map<string, Pose>, segments = new Map<string, Pose[]>()) {
   store.transact('Commit poses', (tx) => {
     for (const [id, pose] of poses) {
       const part = store.doc.parts[id];
       if (!part || part.frozen) continue;
-      const c = canonicalPose(pose);
-      tx.update('parts', id, { pose: c });
+      tx.update('parts', id, { pose: canonicalPose(pose) });
+    }
+    for (const [id, segs] of segments) {
+      const part = store.doc.parts[id];
+      if (!part || part.frozen) continue;
+      tx.update('parts', id, { damage: { ...part.damage, segments: segs.map(canonicalPose) } });
     }
   }, { undoable: false });
+}
+
+/** Record a fracture of bond `bond` (undoable, so a crash test can be taken back). */
+export function recordFracture(store: DocStore, id: string, bond: number, segments: Pose[] | null, label: string) {
+  const part = store.doc.parts[id];
+  if (!part || part.damage.broken.includes(bond)) return;
+  const broken = [...part.damage.broken, bond].sort((a, b) => a - b);
+  store.transact(label, (tx) => tx.update('parts', id, { damage: { broken, segments: segments ? segments.map(canonicalPose) : part.damage.segments } }));
+}
+
+export function repairPart(store: DocStore, id: string) {
+  const part = store.doc.parts[id];
+  if (!part) return;
+  store.transact('Repair part', (tx) => tx.update('parts', id, { damage: { broken: [], segments: null } }));
 }
 
 /** Parts reachable from `start` through intact connections. */
