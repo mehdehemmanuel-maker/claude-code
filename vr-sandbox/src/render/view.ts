@@ -13,6 +13,8 @@ import type { BuildDoc, Connection, Part, Pose } from '../doc/types';
 import { numberOf } from '../schema/params';
 import { POOL, workshopEnvironment } from '../physics/environment';
 import type { LiveState } from '../app/live';
+import type { RoomSurface } from '../physics/protocol';
+import { isFurniture, isWallLike } from '../xr/room';
 import { buildVisual, helixGeometry } from './geometry';
 import { ghostBadMaterial, ghostMaterial, highlighted, renderMaterial, stressMaterial, tintMaterial } from './materials';
 
@@ -69,13 +71,22 @@ export class SceneView {
   private markers = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   readonly sun: THREE.DirectionalLight;
+  /** Everything that makes up the virtual workshop (hidden in mixed reality, where the real room is the world). */
+  private workshop: THREE.Object3D[] = [];
+  private workshopVisible = true;
+  private readonly background = new THREE.Color(0x1d2126);
+  private readonly fog = new THREE.Fog(0x1d2126, 40, 120);
+  /** The user's real room (scene understanding), drawn to suit the XR mode. */
+  private room = new THREE.Group();
+  private roomPick: THREE.Mesh[] = [];
+  private roomKey = '';
 
-  constructor(renderer: THREE.WebGLRenderer) {
+  constructor(private renderer: THREE.WebGLRenderer) {
     this.camera = new THREE.PerspectiveCamera(70, 1, 0.01, 400);
     this.rig.add(this.camera);
     this.scene.add(this.rig);
-    this.scene.background = new THREE.Color(0x1d2126);
-    this.scene.fog = new THREE.Fog(0x1d2126, 40, 120);
+    this.scene.background = this.background;
+    this.scene.fog = this.fog;
     const pmrem = new THREE.PMREMGenerator(renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.55;
@@ -89,7 +100,81 @@ export class SceneView {
     this.sun.shadow.bias = -0.0004;
     this.scene.add(this.sun, this.sun.target);
     this.scene.add(this.markers);
+    this.scene.add(this.room);
     this.buildEnvironment();
+  }
+
+  /** Show or hide the virtual workshop. Hidden, the background is transparent so passthrough shows through. */
+  setWorkshopVisible(visible: boolean) {
+    if (visible === this.workshopVisible) return;
+    this.workshopVisible = visible;
+    for (const o of this.workshop) o.visible = visible;
+    this.scene.background = visible ? this.background : null;
+    this.scene.fog = visible ? this.fog : null;
+    this.renderer.setClearColor(0x000000, visible ? 1 : 0);
+    this.pickDirty = true;
+  }
+
+  get isWorkshopVisible() {
+    return this.workshopVisible;
+  }
+
+  /**
+   * Draw the real room. Mixed reality: real horizontal surfaces catch the parts' shadows, and every surface writes
+   * depth only, so real furniture hides the virtual parts behind it. Walk mode (in the virtual workshop): real
+   * furniture shows as solid-looking pieces and walls as faint panels, so the room can be walked safely.
+   */
+  setRoom(surfaces: RoomSurface[], style: 'mixed' | 'walk' | 'none', showScan = false) {
+    const key = `${style}|${showScan}|${surfaces.map((s) => `${s.id}:${s.pose.p.join(',')}:${s.polygon?.length ?? s.indices?.length}`).join(';')}`;
+    if (key === this.roomKey) return;
+    this.roomKey = key;
+    for (const c of [...this.room.children]) {
+      this.room.remove(c);
+      c.traverse((o) => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); });
+    }
+    this.roomPick = [];
+    this.pickDirty = true;
+    if (style === 'none') return;
+    for (const s of surfaces) {
+      const geo = roomGeometry(s);
+      if (!geo) continue;
+      let mat: THREE.Material | null;
+      let order = 0;
+      let catcher = false;
+      if (style === 'mixed') {
+        // depth first (renderOrder -1) so real surfaces hide the parts behind them, then a shadow layer on top;
+        // the whole-room mesh only occludes, or its shadows would double up with the planes'
+        mat = roomOccluder;
+        order = -1;
+        catcher = s.label !== 'global mesh';
+      } else {
+        // walk: the workshop floor already is the floor; the ceiling and the whole-room scan mesh would just clutter
+        if (s.label === 'floor' || s.label === 'ceiling' || s.label === 'global mesh') mat = null;
+        else if (isWallLike(s.label)) mat = roomWall;
+        else mat = isFurniture(s.label) ? roomFurniture : null;
+      }
+      const group = new THREE.Group();
+      group.position.set(...s.pose.p);
+      group.quaternion.set(...s.pose.q);
+      if (mat) {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = order;
+        mesh.receiveShadow = true;
+        mesh.castShadow = style === 'walk' && mat === roomFurniture;
+        mesh.userData.pick = { type: 'env', id: null };
+        group.add(mesh);
+        this.roomPick.push(mesh);
+        if (catcher) {
+          const shadow = new THREE.Mesh(geo, roomShadowCatcher);
+          shadow.receiveShadow = true;
+          group.add(shadow);
+        }
+      }
+      if ((showScan && style === 'mixed') || (style === 'walk' && mat === roomWall)) {
+        if (s.kind === 'plane') group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), roomOutline));
+      }
+      this.room.add(group);
+    }
   }
 
   private buildEnvironment() {
@@ -111,6 +196,7 @@ export class SceneView {
       mesh.userData.pick = { type: 'env', id: null };
       this.scene.add(mesh);
       this.envMeshes.push(mesh);
+      this.workshop.push(mesh);
     }
     // water surface
     const water = new THREE.Mesh(
@@ -121,6 +207,7 @@ export class SceneView {
     water.position.set(POOL.x, POOL.water, POOL.z);
     water.renderOrder = 2;
     this.scene.add(water);
+    this.workshop.push(water);
     // back walls give a sense of place
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x3b4148, roughness: 0.95 });
     for (const [x, z, w, rot] of [[0, -14, 40, 0], [-20, 0, 28, Math.PI / 2]] as const) {
@@ -129,7 +216,18 @@ export class SceneView {
       wall.rotation.y = rot;
       wall.receiveShadow = true;
       this.scene.add(wall);
+      this.workshop.push(wall);
     }
+    // Sky dome in the background colour. A passthrough-capable (AR) session always clears to transparent, so
+    // walk mode, which uses one for the room scan, needs real geometry to keep the workshop opaque.
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(300, 24, 12),
+      new THREE.MeshBasicMaterial({ color: this.background, side: THREE.BackSide, fog: false, depthWrite: false }),
+    );
+    sky.renderOrder = -10;
+    sky.frustumCulled = false;
+    this.scene.add(sky);
+    this.workshop.push(sky);
   }
 
   resize(w: number, h: number) {
@@ -501,7 +599,7 @@ export class SceneView {
 
   pick(origin: THREE.Vector3, direction: THREE.Vector3, far = 60): Pick | null {
     if (this.pickDirty) {
-      this.pickables = [...this.envMeshes];
+      this.pickables = [...(this.workshopVisible ? this.envMeshes : []), ...this.roomPick];
       for (const v of this.parts.values()) this.pickables.push(...v.meshes);
       for (const v of this.conns.values()) this.pickables.push(...v.meshes);
       this.pickDirty = false;
@@ -521,6 +619,42 @@ export class SceneView {
   partObject(id: string) {
     return this.parts.get(id)?.root ?? null;
   }
+}
+
+const roomShadowCatcher = new THREE.ShadowMaterial({ opacity: 0.4, depthWrite: false });
+const roomOccluder = new THREE.MeshBasicMaterial({ colorWrite: false });
+const roomFurniture = new THREE.MeshStandardMaterial({ color: 0xb9a78a, roughness: 0.8, metalness: 0, transparent: true, opacity: 0.92 });
+const roomWall = new THREE.MeshBasicMaterial({ color: 0x8fc8ff, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
+const roomOutline = new THREE.LineBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.55 });
+
+/** Geometry of a scanned surface in its own frame: a plane's outline (X-Z, facing +Y), or a mesh. */
+function roomGeometry(s: RoomSurface): THREE.BufferGeometry | null {
+  if (s.kind === 'plane' && s.polygon && s.polygon.length >= 6) {
+    const pts: THREE.Vector2[] = [];
+    for (let i = 0; i + 1 < s.polygon.length; i += 2) pts.push(new THREE.Vector2(s.polygon[i]!, s.polygon[i + 1]!));
+    const tris = THREE.ShapeUtils.triangulateShape(pts, []);
+    const pos: number[] = [];
+    for (const p of pts) pos.push(p.x, 0, p.y);
+    const idx: number[] = [];
+    for (const [a, b, c] of tris) {
+      // wind so the face points along +Y (the side facing into the room)
+      const ab = pts[b]!.clone().sub(pts[a]!), ac = pts[c]!.clone().sub(pts[a]!);
+      if (ab.x * ac.y - ab.y * ac.x > 0) idx.push(a, c, b); else idx.push(a, b, c);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+  if (s.kind === 'mesh' && s.vertices && s.indices && s.indices.length >= 3) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(Array.from(s.vertices), 3));
+    g.setIndex(Array.from(s.indices));
+    g.computeVertexNormals();
+    return g;
+  }
+  return null;
 }
 
 function relativePoseOf(parent: Pose, world: Pose): Pose {

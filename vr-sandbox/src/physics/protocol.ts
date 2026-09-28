@@ -11,6 +11,24 @@ export interface EnvironmentBox {
 
 export type GrabMode = 'creative' | 'physical';
 
+/**
+ * A surface of the user's real room from the headset's scene understanding (WebXR plane / mesh detection),
+ * already placed in world coordinates. Planes lie in their pose's local X-Z plane with +Y pointing out of the
+ * surface (into the room); meshes are triangle soups in their pose's frame.
+ */
+export interface RoomSurface {
+  id: string;
+  kind: 'plane' | 'mesh';
+  /** WebXR semantic label (floor, wall, table, couch, global mesh, ...), '' when unknown. */
+  label: string;
+  pose: Pose;
+  /** Plane outline: x, z pairs. */
+  polygon?: number[];
+  /** Mesh: x, y, z triples and triangle indices. */
+  vertices?: number[];
+  indices?: number[];
+}
+
 export type PhysicsOp =
   | { op: 'environment'; boxes: EnvironmentBox[]; materials: Record<string, Material> }
   | { op: 'clear' }
@@ -26,6 +44,7 @@ export type PhysicsOp =
   | { op: 'release'; hand: string; linear?: Vec3; angular?: Vec3 }
   | { op: 'controls'; channels: Record<string, number> }
   | { op: 'damage'; id: string; damage: PartDamage }
+  | { op: 'room'; surfaces: RoomSurface[] }
   | { op: 'options'; maxMagnetRings?: number; filterTicks?: number };
 
 export type PhysicsEvent =

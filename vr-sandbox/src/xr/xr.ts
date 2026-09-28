@@ -1,12 +1,42 @@
 // WebXR mode for Meta Quest (3S target). Controllers drive the same tools as the mouse; the wrist tablet
 // replaces the HTML panels. Standard xr-standard gamepad layout: 0 trigger, 1 squeeze, 3 stick press,
 // 4 A/X, 5 B/Y; axes 2/3 thumbstick.
+//
+// Three ways to be there:
+//  relax  - the virtual workshop, flying with the sticks, any size.
+//  walk   - the workshop at 1:1, calibrated so your real room sits in it: you walk to move, and your real walls
+//           and furniture (from the headset's room scan) appear and are solid to the parts.
+//  mixed  - passthrough: the build is in your real room, which is the physics (parts land on your real table).
 
 import * as THREE from 'three';
 import type { App } from '../app/app';
 import type { DesktopControls } from '../interaction/desktop';
 import type { PointerEvt, ToolManager } from '../tools/tools';
+import { RoomScanner } from './room';
 import { Tablet } from './tablet';
+
+export type XRStyle = 'relax' | 'walk' | 'mixed';
+/** Where walk mode puts the spot you calibrate from: open floor, facing the workbench 2 m ahead. */
+const HOME = { x: -3, z: -1.6, yaw: 0 };
+const STYLE_KEY = 'vrsb.xrStyle';
+const WALK_KEY = 'vrsb.walk';
+
+function stored<T>(key: string): T | null {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function store(key: string, v: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 type Handedness = 'left' | 'right';
 
@@ -30,9 +60,22 @@ export class XRMode {
   private session: XRSession | null = null;
   private savedShadows = true;
   private lastScale = 1;
+  /** The mode picked for the next session, and the one running now. */
+  style: XRStyle = stored<XRStyle>(STYLE_KEY) ?? 'relax';
+  active: XRStyle = 'relax';
+  /** Whether the running session can show passthrough (so every mode is available in it). */
+  passthrough = false;
+  private refType: XRReferenceSpaceType = 'local-floor';
+  private scanner = new RoomScanner();
+  private needCalibration = false;
+  private scanWarned = false;
+  private sessionStart = 0;
+  private bounds: THREE.LineLoop | null = null;
+  private lastHead = new THREE.Vector3();
 
   constructor(private app: App, private tools: ToolManager, private desktop: DesktopControls) {
     this.tablet = new Tablet(app, tools);
+    this.tablet.room = this;
     const renderer = app.renderer;
     for (const i of [0, 1]) {
       const ray = renderer.xr.getController(i);
@@ -62,14 +105,150 @@ export class XRMode {
     app.onFrame.push((dt, time) => this.frame(dt, time));
   }
 
-  async enter() {
+  static async passthroughSupported() {
+    try {
+      return !!navigator.xr && (await navigator.xr.isSessionSupported('immersive-ar'));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Start a session in the given mode. Walk and mixed ask for an AR-capable session where the headset has one:
+   * that is what grants the room scan (and lets the session switch among all three modes); walk keeps the
+   * workshop opaque over the passthrough.
+   */
+  async enter(style: XRStyle = this.style) {
     if (this.session) return;
+    this.style = style;
+    store(STYLE_KEY, style);
     void this.app.audio.start();
-    const session = await navigator.xr!.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] });
-    this.app.renderer.xr.setReferenceSpaceType('local-floor');
+    const xr = navigator.xr!;
+    const ar = style !== 'relax' && (await XRMode.passthroughSupported());
+    if (style === 'mixed' && !ar) {
+      this.app.toast('This headset has no passthrough, so mixed reality is not available: starting walk mode', 'warn');
+      style = 'walk';
+    }
+    const features = ['local-floor', 'bounded-floor', 'hand-tracking'];
+    if (style !== 'relax') features.push('plane-detection', 'mesh-detection');
+    if (ar) features.push('anchors');
+    const session = await xr.requestSession(ar ? 'immersive-ar' : 'immersive-vr', { optionalFeatures: features });
+    this.passthrough = ar;
+    this.active = style;
+    // walk: the bounded (guardian) space is fixed to the real room across sessions, so a calibration keeps
+    this.refType = 'local-floor';
+    if (style === 'walk') {
+      try {
+        await session.requestReferenceSpace('bounded-floor');
+        this.refType = 'bounded-floor';
+      } catch {
+        /* no bounded space: calibrate every session */
+      }
+    }
+    this.app.renderer.xr.setReferenceSpaceType(this.refType);
     this.app.renderer.xr.setFoveation(1);
     await this.app.renderer.xr.setSession(session);
     this.session = session;
+  }
+
+  /** Switch mode inside a running session (mixed needs a passthrough session). */
+  setStyle(style: XRStyle) {
+    if (style === 'mixed' && !this.passthrough) {
+      this.app.toast('Mixed reality needs a passthrough session: exit VR and enter with Mixed reality', 'warn');
+      return;
+    }
+    this.style = style;
+    store(STYLE_KEY, style);
+    if (!this.app.renderer.xr.isPresenting) {
+      this.app.notify();
+      return;
+    }
+    this.active = style;
+    this.applyStyle();
+  }
+
+  private applyStyle() {
+    const app = this.app;
+    const rig = app.view.rig;
+    const style = this.active;
+    this.scanner.reset();
+    app.setWorld(style === 'mixed' ? 'mixed' : 'workshop');
+    app.setRoom(this.scanner.surfaces, style === 'relax' ? 'none' : style);
+    if (style === 'mixed') {
+      // the reference space is the real room: identity rig, real scale
+      rig.position.set(0, 0, 0);
+      rig.rotation.set(0, 0, 0);
+      this.needCalibration = false;
+      // shadows on the real table are most of what makes a part look present
+      app.view.sun.castShadow = true;
+    } else {
+      app.view.sun.castShadow = app.settings.shadows;
+    }
+    if (style === 'walk') {
+      const saved = this.refType === 'bounded-floor' ? stored<{ x: number; z: number; yaw: number }>(WALK_KEY) : null;
+      if (saved) {
+        rig.position.set(saved.x, 0, saved.z);
+        rig.rotation.set(0, saved.yaw, 0);
+        this.needCalibration = false;
+      } else this.needCalibration = true;
+    }
+    if (style === 'relax') {
+      rig.position.y = Math.max(0, rig.position.y);
+    }
+    this.updateBounds();
+    app.notify();
+  }
+
+  /** Walk mode: map where you stand and face now onto the workshop's home spot. */
+  recalibrate() {
+    if (this.active === 'walk') this.needCalibration = true;
+  }
+
+  get calibrated() {
+    return this.active === 'walk' && !this.needCalibration;
+  }
+
+  /** Quest: open Space Setup to scan (or rescan) the room. */
+  get canScan() {
+    return typeof (this.session as unknown as { initiateRoomCapture?: unknown } | null)?.initiateRoomCapture === 'function';
+  }
+
+  scan() {
+    const s = this.session as unknown as { initiateRoomCapture?: () => Promise<void> } | null;
+    void s?.initiateRoomCapture?.().catch(() => this.app.toast('The headset declined to start a room scan', 'warn'));
+  }
+
+  private calibrate(view: XRRigidTransform) {
+    const rig = this.app.view.rig;
+    const q = new THREE.Quaternion(view.orientation.x, view.orientation.y, view.orientation.z, view.orientation.w);
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    const viewYaw = Math.atan2(-fwd.x, -fwd.z);
+    const yaw = HOME.yaw - viewYaw;
+    const local = new THREE.Vector3(view.position.x, 0, view.position.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    rig.position.set(HOME.x - local.x, 0, HOME.z - local.z);
+    rig.rotation.set(0, yaw, 0);
+    this.needCalibration = false;
+    if (this.refType === 'bounded-floor') store(WALK_KEY, { x: rig.position.x, z: rig.position.z, yaw });
+    this.app.haptic?.(0.3, 40);
+    this.app.toast('Calibrated: walk to move. Your walls and furniture are outlined and solid.', 'ok');
+    this.app.notify();
+  }
+
+  /** Walk mode: the headset's play-area boundary drawn on the workshop floor. */
+  private updateBounds() {
+    const rig = this.app.view.rig;
+    if (this.bounds) {
+      rig.remove(this.bounds);
+      this.bounds.geometry.dispose();
+      this.bounds = null;
+    }
+    if (this.active !== 'walk') return;
+    const ref = this.app.renderer.xr.getReferenceSpace() as (XRReferenceSpace & { boundsGeometry?: DOMPointReadOnly[] }) | null;
+    const pts = ref?.boundsGeometry;
+    if (!pts || pts.length < 3) return;
+    const geo = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p.x, 0.004, p.z)));
+    this.bounds = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.8 }));
+    rig.add(this.bounds);
   }
 
   private connect(ray: THREE.Group, grip: THREE.Group, src: XRInputSource) {
@@ -104,20 +283,35 @@ export class XRMode {
     // Quest budget: real-time shadow maps cost a full extra scene pass per frame; start without.
     this.app.settings.shadows = false;
     this.app.view.sun.castShadow = false;
+    this.scanWarned = false;
+    this.sessionStart = performance.now();
+    this.applyStyle();
     document.getElementById('crosshair')?.setAttribute('style', 'display:none');
-    this.app.toast('VR: trigger = tool · grip = grab · left stick = fly · right stick = turn / rise · B = menu', 'info');
+    const hints: Record<XRStyle, string> = {
+      relax: 'VR: trigger = tool · grip = grab · left stick = fly · right stick = turn / rise · B = menu',
+      walk: 'Walk mode: stand where you want to start, facing into your room. Walk to move · B = menu',
+      mixed: 'Mixed reality: your room is the world. Parts land on your real table and floor · B = menu',
+    };
+    this.app.toast(hints[this.active], 'info');
   }
 
   private onEnd() {
     this.session = null;
     this.desktop.enabled = true;
     const rig = this.app.view.rig;
-    this.desktop.pos.set(rig.position.x, rig.position.y + 1.6, rig.position.z);
+    // carry on at the desktop from where the head was
+    this.desktop.pos.set(this.lastHead.x, Math.max(0.3, this.lastHead.y), this.lastHead.z);
     this.desktop.yaw = rig.rotation.y;
     rig.scale.setScalar(1);
+    this.lastScale = 1;
     this.app.settings.shadows = this.savedShadows;
     this.app.view.sun.castShadow = this.savedShadows;
     this.tools.grab.release();
+    this.active = 'relax';
+    this.scanner.reset();
+    this.updateBounds();
+    this.app.setRoom([], 'none');
+    this.app.setWorld('workshop');
   }
 
   private evt(h: Hand): PointerEvt {
@@ -132,14 +326,18 @@ export class XRMode {
   private frame(dt: number, time: number) {
     if (!this.app.renderer.xr.isPresenting) return;
     const rig = this.app.view.rig;
-    const scale = this.app.settings.playerScale;
+    // walking and mixed reality are 1:1 with the real room; only relax mode flies and resizes
+    const free = this.active === 'relax';
+    const scale = free ? this.app.settings.playerScale : 1;
     if (scale !== this.lastScale) {
       rig.scale.setScalar(scale);
       this.lastScale = scale;
     }
+    this.sceneFrame(time);
     const cam = this.app.renderer.xr.getCamera();
     const head = new THREE.Vector3();
     cam.getWorldPosition(head);
+    this.lastHead.copy(head);
     let tabletUv: THREE.Vector2 | null = null;
     for (const side of ['left', 'right'] as const) {
       const h = this.hands[side];
@@ -212,14 +410,16 @@ export class XRMode {
         fwd.normalize();
         const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
         const speed = 2.2 * scale;
-        rig.position.addScaledVector(fwd, -dead(ay) * speed * dt);
-        rig.position.addScaledVector(right, dead(ax) * speed * dt);
+        if (free) {
+          rig.position.addScaledVector(fwd, -dead(ay) * speed * dt);
+          rig.position.addScaledVector(right, dead(ax) * speed * dt);
+        }
         // left stick also steers vehicles while the menu is hidden
         this.app.channels['throttle'] = this.tablet.visible ? 0 : -dead(ay);
         this.app.channels['steer'] = this.tablet.visible ? 0 : -dead(ax);
       } else {
-        // snap turn about the head
-        if (Math.abs(ax) > 0.7 && h.turnArmed) {
+        // snap turn about the head (relax only: turning would unhook the real room)
+        if (free && Math.abs(ax) > 0.7 && h.turnArmed) {
           h.turnArmed = false;
           const a = (ax > 0 ? -1 : 1) * (Math.PI / 6);
           const offset = rig.position.clone().sub(head);
@@ -231,10 +431,36 @@ export class XRMode {
         // push/pull a held part, otherwise fly up/down
         if (this.tools.grab.holdingWith('right')) this.tools.grab.adjustDistance('right', Math.exp(-dead(ay) * dt * 2.5));
         else if (this.tools.grab.holdingWith('left')) this.tools.grab.adjustDistance('left', Math.exp(-dead(ay) * dt * 2.5));
-        else rig.position.y = Math.max(0, rig.position.y - dead(ay) * 1.6 * scale * dt);
+        else if (free) rig.position.y = Math.max(0, rig.position.y - dead(ay) * 1.6 * scale * dt);
         this.app.channels['aux'] = 0;
       }
     }
     this.tablet.update(time, tabletUv);
+  }
+
+  /** Calibration and the room scan, from this frame's XR data. */
+  private sceneFrame(time: number) {
+    if (this.active === 'relax') return;
+    const xr = this.app.renderer.xr;
+    const frame = xr.getFrame();
+    const ref = xr.getReferenceSpace();
+    if (!frame || !ref) return;
+    if (this.needCalibration) {
+      const pose = frame.getViewerPose(ref);
+      if (pose) this.calibrate(pose.transform);
+    }
+    const rig = this.app.view.rig;
+    rig.updateMatrixWorld();
+    const surfaces = this.scanner.update(frame, ref, rig.matrixWorld, time);
+    if (surfaces) this.app.setRoom(surfaces, this.active);
+    if (!this.scanner.available && !this.scanWarned && performance.now() - this.sessionStart > 3000) {
+      this.scanWarned = true;
+      this.app.toast(
+        this.active === 'walk'
+          ? 'No room scan from this headset: the play-area outline is shown. Run Space Setup to get walls and furniture.'
+          : 'No room scan yet: run Space Setup (menu → World → Scan room) so parts can land on your furniture.',
+        'warn',
+      );
+    }
   }
 }

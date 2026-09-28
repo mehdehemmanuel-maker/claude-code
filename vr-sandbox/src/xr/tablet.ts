@@ -11,6 +11,18 @@ import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/pa
 import { STANDARD_GRAVITY } from '../data/materials';
 import { TEMPLATES } from '../templates/templates';
 
+/** What the tablet needs from the XR mode to offer the room controls. */
+export interface RoomControls {
+  style: 'relax' | 'walk' | 'mixed';
+  active: 'relax' | 'walk' | 'mixed';
+  passthrough: boolean;
+  calibrated: boolean;
+  canScan: boolean;
+  setStyle(style: 'relax' | 'walk' | 'mixed'): void;
+  recalibrate(): void;
+  scan(): void;
+}
+
 type Page = 'tools' | 'parts' | 'join' | 'selected' | 'world' | 'builds';
 
 interface Widget {
@@ -38,6 +50,7 @@ export class Tablet {
   private lastDraw = 0;
   private scroll = 0;
   visible = true;
+  room: RoomControls | null = null;
 
   constructor(private app: App, private tools: ToolManager) {
     this.canvas.width = W;
@@ -278,7 +291,33 @@ export class Tablet {
     const presets: [string, number][] = [['Earth', STANDARD_GRAVITY], ['Moon', 1.62]];
     presets.forEach(([n, v], i) => this.btn(`g-${n}`, 20 + (2 + i) * (bw + 8), row(3), bw, 76, n, () => setSim(app.store, { gravity: [0, -v, 0] }), { on: Math.abs(g - v) < 0.01, sub: `${v} m/s²` }));
     this.btn('zerog', 20, row(4), bw, 76, 'Zero-g', () => setSim(app.store, { gravity: [0, 0, 0] }), { on: g < 1e-3 });
+    this.drawRoom(row(5) + 10, bw);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 20 + bw + 16, row(4) + 48, 22, '#9aa4af');
+  }
+
+  /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */
+  private drawRoom(y: number, bw: number) {
+    const r = this.room;
+    if (!r) return;
+    const app = this.app;
+    const sw = (bw * 2 + 8 - 16) / 3;
+    const modes: ['relax' | 'walk' | 'mixed', string][] = [['relax', 'Relax'], ['walk', 'Walk'], ['mixed', 'Mixed']];
+    modes.forEach(([m, label], i) =>
+      this.btn(`mode-${m}`, 20 + i * (sw + 8), y, sw, 76, label, () => r.setStyle(m), {
+        on: r.active === m,
+        sub: m === 'relax' ? 'fly' : m === 'walk' ? '1:1 room' : r.passthrough ? 'passthrough' : 'needs AR',
+      }));
+    const x2 = 20 + 2 * (bw + 8);
+    if (r.active === 'walk') {
+      this.btn('recal', x2, y, bw, 76, 'Recalibrate', () => r.recalibrate(), { sub: r.calibrated ? 'stand + face, then press' : 'waiting…' });
+      this.btn('solid', x2 + bw + 8, y, bw, 76, 'Room solid', () => { app.roomSolid = !app.roomSolid; app.applyRoom(); }, { on: app.roomSolid, sub: `${app.room.length} surfaces` });
+    } else if (r.active === 'mixed') {
+      this.btn('scan', x2, y, bw, 76, 'Scan room', () => r.scan(), { sub: r.canScan ? 'Space Setup' : 'not on this device' });
+      this.btn('showscan', x2 + bw + 8, y, bw, 76, 'Show scan', () => { app.showScan = !app.showScan; app.applyRoom(); }, { on: app.showScan, sub: `${app.room.length} surfaces` });
+    } else {
+      this.text('Walk: your real room, 1:1 in the workshop.', x2, y + 32, 21, '#9aa4af');
+      this.text('Mixed: build in your room (passthrough).', x2, y + 62, 21, '#9aa4af');
+    }
   }
 }
 

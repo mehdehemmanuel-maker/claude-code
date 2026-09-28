@@ -13,19 +13,37 @@ npm run dev          # http://localhost:5173 (desktop)
 ```
 
 - **Desktop:** right-drag to look, WASD/QE to fly, keys 1–9 pick tools, left click uses the tool. Press **H** for all controls.
-- **Try VR without a headset:** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3), and **Enter VR** works in any browser.
+- **Try VR without a headset:** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3) with a synthetic scanned room (floor, walls, a table and a couch), and **Enter VR** works in any browser in all three modes. `?iwer=noroom` leaves the room out.
 - **On a Quest 3S:** WebXR needs HTTPS or `localhost`. Either:
   - use GitHub Pages: enable *Settings → Pages → Source: GitHub Actions*, then run the **vr-sandbox Pages** workflow (it deploys from `main`); or
   - plug the headset in over USB and run `adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173` in the Quest Browser.
 - **Debug:** `?physics=inline` runs physics on the main thread instead of the worker.
+
+### Three ways to be there
+
+Pick one next to **Enter VR**, or switch any time on the wrist tablet (**World** page).
+
+- **Relax:** the virtual workshop. Fly with the sticks, snap turn, and shrink or grow yourself.
+- **Walk:** the workshop at 1:1, calibrated to your real room.
+  - The spot where you stand, and the way you face, when the session starts become the workshop's home spot, 2 m in front of the workbench. **Recalibrate** redoes it wherever you stand.
+  - With a bounded (guardian) space the calibration is remembered between sessions.
+  - You move by walking; the sticks don't move you.
+  - Your real walls and furniture, from the headset's room scan (Space Setup), appear in the workshop and are solid to the parts. **Room solid** turns that off. The play-area boundary is drawn on the floor.
+- **Mixed reality:** passthrough, so the build sits in your real room.
+  - The scanned floor, walls, table and couch are the physics: parts land on your real table.
+  - Real surfaces hide the virtual parts behind them and catch their shadows.
+  - The workshop and its test pool are gone.
+  - **Scan room** opens Space Setup; **Show scan** outlines what the headset found.
+
+Walk and mixed reality ask for an AR-capable session, which is what grants the room scan (WebXR `plane-detection` and `mesh-detection`). Walk keeps the workshop opaque over the passthrough. On a headset without passthrough, walk runs without the room and shows only the play-area boundary.
 
 ### VR controls
 | Input | Action |
 |---|---|
 | Trigger | Use the active tool, or tap the wrist tablet |
 | Grip | Grab what the ray points at (each hand holds its own part; wrist rotation carries over) |
-| Left stick | Fly (head-relative). Steers vehicles while the menu is hidden |
-| Right stick | Snap turn, rise/sink, or push/pull a held part |
+| Left stick | Fly (head-relative, relax mode). Steers vehicles while the menu is hidden |
+| Right stick | Snap turn and rise/sink (relax mode), or push/pull a held part |
 | A / B | Next tool / show-hide the wrist tablet |
 | X / Y | Undo / redo |
 | Stick clicks | Checkpoint (left) / rewind (right) |
@@ -71,8 +89,8 @@ npm run dev          # http://localhost:5173 (desktop)
 
 ```bash
 npm run typecheck
-npm test        # 117 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 8 browser tests incl. an emulated Quest session
+npm test        # 118 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 10 browser tests incl. emulated Quest sessions in walk and mixed reality
 ```
 
 The physics conformance suite checks laws, not builds:
@@ -99,7 +117,7 @@ The physics conformance suite checks laws, not builds:
 | Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds; breakable stock (plastic hinges, fracture, damage in the build) | Buckling; elastic flex (springboards, bows); the rigid-assembly solve for joints to wheels and motors (Jolt handles those) |
 | Transmissions | Motors, servos, bearings, eddy brakes | Gears, racks, lead screws, belts |
 | Tools | Grab, place, join (every joining method), erase, freeze, clone, poke, inspect, measure | Physical tool models (drill making holes, welder settings → bead quality, grinder cutting, hammer and nails) |
-| VR | Controllers, wrist tablet, two-hand grab, locomotion, haptics, player scale, IWER testing | Hand tracking, mixed-reality passthrough, measured Quest 3S performance |
+| VR | Controllers, wrist tablet, two-hand grab, locomotion, haptics, player scale; relax, walk (room-scale, calibrated, real furniture) and mixed-reality (passthrough, the scanned room as physics) modes; IWER testing with a synthetic room | Hand tracking, measured Quest 3S performance, a device check of the room scan and passthrough |
 | Rendering | Classic WebGLRenderer, instancing-ready materials, foveation | Multiview `WebGPURenderer` A/B on device, instancing/batching, adaptive quality |
 | Stretch | – | Text/voice → 3D part (needs a provider and an API key) |
 

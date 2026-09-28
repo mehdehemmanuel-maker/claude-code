@@ -30,6 +30,11 @@ export function workshopEnvironment(): EnvironmentBox[] {
   return boxes;
 }
 
+/** In mixed reality the real room is the world; only a floor at the real floor's height, so nothing falls forever. */
+export function realFloor(): EnvironmentBox[] {
+  return [{ half: [60, 0.5, 60], pose: { p: [0, -0.5, 0], q: I }, material: 'concrete.c30' }];
+}
+
 export function poolFluid(): FluidVolume {
   const { x, z, w, d, water } = POOL;
   return { id: 'w_p00100000000', name: 'Test pool (fresh water)', min: [x - w / 2, 0, z - d / 2], max: [x + w / 2, water, z + d / 2], density: 998.2 };

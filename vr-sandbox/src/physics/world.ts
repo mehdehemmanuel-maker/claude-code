@@ -24,7 +24,7 @@ import {
   quatFromRotationVector, quatMul, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
-import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, StepResult } from './protocol';
+import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, RoomSurface, StepResult } from './protocol';
 
 type J = typeof JoltNS;
 
@@ -39,6 +39,8 @@ const SUBGROUPS = 4096;
 const CLEAN_BREAK_ANGLE = 0.15;
 const IDENTITY_Q: Quat = [0, 0, 0, 1];
 const BOND_VELOCITY_STEPS = 20;
+/** Thickness of the slab behind each scanned room plane (m). */
+const ROOM_SLAB = 0.04;
 const BOND_POSITION_STEPS = 4;
 
 /** One Jolt body: a whole part, or one segment of a breakable part. */
@@ -259,6 +261,7 @@ export class PhysicsWorld {
   private pairRefs = new Map<number, number>();
   private conns = new Map<string, ConnRec>();
   private envBodies: JoltNS.Body[] = [];
+  private roomBodies: JoltNS.Body[] = [];
   private grabs = new Map<string, Grab>();
   private sim: SimSettings;
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
@@ -371,6 +374,7 @@ export class PhysicsWorld {
       case 'release': return this.release(op.hand, op.linear, op.angular);
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
       case 'damage': return this.setDamage(op.id, op.damage);
+      case 'room': return this.setRoom(op.surfaces);
       case 'options': this.opts = { ...this.opts, ...(op.maxMagnetRings ? { maxMagnetRings: op.maxMagnetRings } : {}), ...(op.filterTicks ? { filterTicks: op.filterTicks } : {}) }; return;
     }
   }
@@ -401,6 +405,81 @@ export class PhysicsWorld {
       this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
       this.envBodies.push(body);
     }
+  }
+
+  /**
+   * The real room as static colliders: each detected plane becomes a thin slab behind its surface (so parts rest
+   * on the real table top, floor, or against a wall), each detected mesh a triangle-mesh shape.
+   */
+  private setRoom(surfaces: RoomSurface[]) {
+    const J = this.J;
+    for (const b of this.roomBodies) {
+      this.bi.RemoveBody(b.GetID());
+      this.bi.DestroyBody(b.GetID());
+    }
+    this.roomBodies = [];
+    for (const s of surfaces) {
+      let shape: JoltNS.Shape | null = null;
+      try {
+        if (s.kind === 'plane' && s.polygon && s.polygon.length >= 6) {
+          const hull = new J.ConvexHullShapeSettings();
+          for (let i = 0; i + 1 < s.polygon.length; i += 2) {
+            const x = s.polygon[i]!, z = s.polygon[i + 1]!;
+            hull.mPoints.push_back(this.V([x, 0, z]));
+            hull.mPoints.push_back(this.V([x, -ROOM_SLAB, z]));
+          }
+          hull.mMaxConvexRadius = 0.001;
+          const res = hull.Create();
+          if (res.IsValid()) { shape = res.Get(); shape.AddRef(); }
+          J.destroy(hull);
+        } else if (s.kind === 'mesh' && s.vertices && s.indices && s.indices.length >= 3) {
+          const verts = new J.VertexList();
+          for (let i = 0; i + 2 < s.vertices.length; i += 3) {
+            const f = new J.Float3(s.vertices[i]!, s.vertices[i + 1]!, s.vertices[i + 2]!);
+            verts.push_back(f);
+            J.destroy(f);
+          }
+          // scans arrive with either winding and Jolt ignores back faces, so every triangle goes in both ways
+          const tris = new J.IndexedTriangleList();
+          for (let i = 0; i + 2 < s.indices.length; i += 3) {
+            const a = s.indices[i]!, b = s.indices[i + 1]!, c = s.indices[i + 2]!;
+            if (a === b || b === c || a === c) continue;
+            for (const [x, y, z] of [[a, b, c], [a, c, b]] as const) {
+              const t = new J.IndexedTriangle(x, y, z, 0);
+              tris.push_back(t);
+              J.destroy(t);
+            }
+          }
+          const mats = new J.PhysicsMaterialList();
+          const ms = new J.MeshShapeSettings(verts, tris, mats);
+          const res = ms.Create();
+          if (res.IsValid()) { shape = res.Get(); shape.AddRef(); }
+          J.destroy(ms);
+          J.destroy(verts);
+          J.destroy(tris);
+          J.destroy(mats);
+        }
+      } catch {
+        shape = null; // a degenerate scan surface is skipped, never fatal
+      }
+      if (!shape) continue;
+      const cs = new J.BodyCreationSettings(shape, this.R(s.pose.p), this.Q(s.pose.q), J.EMotionType_Static, LAYER_STATIC);
+      shape.Release();
+      cs.mFriction = 0.6;
+      cs.mRestitution = 0.3;
+      cs.mUserData = 0;
+      const body = this.bi.CreateBody(cs);
+      J.destroy(cs);
+      this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
+      this.roomBodies.push(body);
+    }
+    // anything resting where the room changed must re-check its support
+    for (const r of this.bodies.values()) if (!r.frozen) this.bi.ActivateBody(r.body.GetID());
+  }
+
+  /** Number of static colliders currently standing in for the real room (tests, stats). */
+  roomColliderCount() {
+    return this.roomBodies.length;
   }
 
   clear() {

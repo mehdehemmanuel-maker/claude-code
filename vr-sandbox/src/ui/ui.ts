@@ -30,8 +30,11 @@ export class UI {
   private liveRefs: { el: HTMLElement; get: () => string }[] = [];
   private loadBar: { bar: HTMLElement; text: HTMLElement; id: string } | null = null;
   private search = '';
-  onEnterVR: (() => void) | null = null;
+  onEnterVR: ((style: 'relax' | 'walk' | 'mixed') => void) | null = null;
   vrSupported = false;
+  /** Whether the headset can do passthrough (mixed reality), and the mode to enter VR in. */
+  arSupported = false;
+  vrStyle: 'relax' | 'walk' | 'mixed' = 'relax';
 
   constructor(private app: App, private tools: ToolManager) {
     this.buildTopbar();
@@ -80,7 +83,14 @@ export class UI {
         btn('Grab: physical', 'Physical grab (strength-limited) or creative grab (G)', () => this.toggleGrab(), 'grabmode'),
       ),
       h('div', { class: 'group right' },
-        btn('Enter VR', 'Enter VR on Quest (WebXR)', () => this.onEnterVR?.(), 'vr'),
+        h('select', {
+          id: 'vrmode', title: 'How to be there: Relax flies around the workshop; Walk maps your real room 1:1 into it; Mixed reality builds in your real room',
+          onchange: (e: Event) => { this.vrStyle = (e.target as HTMLSelectElement).value as 'relax' | 'walk' | 'mixed'; },
+        },
+          h('option', { value: 'relax' }, 'Relax (fly)'),
+          h('option', { value: 'walk' }, 'Walk (room-scale)'),
+          h('option', { value: 'mixed', id: 'vrmode-mixed' }, 'Mixed reality')),
+        btn('Enter VR', 'Enter VR on Quest (WebXR)', () => this.onEnterVR?.(this.vrStyle), 'vr'),
         btn('?', 'Controls and help (H)', () => this.helpModal()),
       ),
     );
@@ -179,6 +189,12 @@ export class UI {
     const vr = document.getElementById('vr') as HTMLButtonElement;
     vr.disabled = !this.vrSupported;
     vr.title = this.vrSupported ? 'Enter VR (WebXR)' : 'No WebXR headset detected. Open this page in the Meta Quest browser.';
+    const mode = document.getElementById('vrmode') as HTMLSelectElement | null;
+    if (mode) {
+      mode.disabled = !this.vrSupported;
+      (document.getElementById('vrmode-mixed') as HTMLOptionElement).disabled = !this.arSupported;
+      if (document.activeElement !== mode) mode.value = this.vrStyle;
+    }
     const speed = document.getElementById('speed') as HTMLSelectElement | null;
     if (speed && document.activeElement !== speed) speed.value = String(s.timeScale);
   }

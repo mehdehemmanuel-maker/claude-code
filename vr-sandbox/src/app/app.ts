@@ -12,8 +12,9 @@ import { DocStore, touched, type Change, type ChangeSource } from '../doc/store'
 import type { BuildDoc, Connection, Part, Pose, Vec3 } from '../doc/types';
 import { decodeDocText, encodeDocText, fromShareCode, toShareCode, DecodeError } from '../persistence/codec';
 import { PhysicsClient } from '../physics/client';
-import { workshopEnvironment } from '../physics/environment';
-import type { GrabMode, PhysicsEvent } from '../physics/protocol';
+import { poolFluid, realFloor, workshopEnvironment } from '../physics/environment';
+import type { GrabMode, PhysicsEvent, RoomSurface } from '../physics/protocol';
+import type { SimSettings } from '../doc/types';
 import { AudioEngine } from '../audio/audio';
 import { SceneView } from '../render/view';
 import { Particles } from '../render/particles';
@@ -43,6 +44,9 @@ interface Checkpoint {
 }
 
 export type Toast = { text: string; kind: 'info' | 'warn' | 'break' | 'ok' };
+
+/** Where the build lives: the virtual workshop, or the user's real room seen through passthrough. */
+export type WorldKind = 'workshop' | 'mixed';
 
 const ENV_MATERIAL = getMaterial('concrete.c30');
 
@@ -76,13 +80,20 @@ export class App {
   private frames = 0;
   private fpsTime = 0;
   onFrame: ((dt: number, time: number) => void)[] = [];
+  world: WorldKind = 'workshop';
+  /** The user's real room as last scanned (world coordinates), and how it is shown. */
+  room: RoomSurface[] = [];
+  roomStyle: 'mixed' | 'walk' | 'none' = 'none';
+  /** Walk mode: whether the real walls and furniture are solid to the parts. */
+  roomSolid = true;
+  showScan = false;
 
   private constructor(readonly renderer: THREE.WebGLRenderer, readonly physics: PhysicsClient, doc: BuildDoc) {
     this.store = new DocStore(doc);
     this.view = new SceneView(renderer);
     this.view.scene.add(this.particles.group);
     this.physics.onResult((r) => this.live.ingest(r));
-    this.physics.send({ op: 'environment', boxes: workshopEnvironment(), materials: Object.fromEntries(MATERIALS.map((m) => [m.id, m])) });
+    this.sendEnvironment();
     this.store.subscribe((changes, source) => this.reconcile(changes, source));
     this.reconcile([], 'load');
   }
@@ -100,6 +111,51 @@ export class App {
     const doc = getTemplate('blank').build();
     const physics = await PhysicsClient.create(doc.sim, physicsMode);
     return new App(renderer, physics, doc);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // world: workshop or the real room
+
+  private sendEnvironment() {
+    const boxes = this.world === 'workshop' ? workshopEnvironment() : realFloor();
+    this.physics.send({ op: 'environment', boxes, materials: Object.fromEntries(MATERIALS.map((m) => [m.id, m])) });
+  }
+
+  /** The build's sim settings as they apply in this world (the workshop's test pool is not in a real room). */
+  private worldSim(sim: SimSettings): SimSettings {
+    if (this.world === 'workshop') return sim;
+    const pool = poolFluid().id;
+    return { ...sim, fluids: sim.fluids.filter((f) => f.id !== pool) };
+  }
+
+  setWorld(world: WorldKind) {
+    if (world === this.world) return;
+    this.world = world;
+    this.sendEnvironment();
+    this.physics.send({ op: 'sim', sim: this.worldSim(this.doc.sim) });
+    this.view.setWorkshopVisible(world === 'workshop');
+    this.notify();
+  }
+
+  /**
+   * The real room from the headset's scan. Mixed reality: every surface is solid and hides what is behind it.
+   * Walk mode: the walls and furniture (what is drawn) are solid unless turned off; floor and ceiling are left to
+   * the workshop so a build is not boxed in by a ceiling nobody can see.
+   */
+  setRoom(surfaces: RoomSurface[], style: 'mixed' | 'walk' | 'none') {
+    this.room = surfaces;
+    this.roomStyle = style;
+    this.applyRoom();
+  }
+
+  applyRoom() {
+    const style = this.roomStyle;
+    let solid: RoomSurface[] = [];
+    if (style === 'mixed') solid = this.room;
+    else if (style === 'walk' && this.roomSolid) solid = this.room.filter((s) => !['floor', 'ceiling', 'global mesh'].includes(s.label));
+    this.physics.send({ op: 'room', surfaces: solid });
+    this.view.setRoom(this.room, style, this.showScan);
+    this.notify();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -130,7 +186,7 @@ export class App {
     const doc = this.store.doc;
     if (source === 'load') {
       this.physics.send({ op: 'clear' });
-      this.physics.send({ op: 'sim', sim: doc.sim });
+      this.physics.send({ op: 'sim', sim: this.worldSim(doc.sim) });
       this.mirrorParts.clear();
       this.mirrorConns.clear();
       for (const p of Object.values(doc.parts)) {
@@ -192,7 +248,7 @@ export class App {
       this.physics.send({ op: 'upsertConnection', conn: c, materials: doc.materials });
       this.mirrorConns.set(id, structuredClone(c));
     }
-    if (t.sim) this.physics.send({ op: 'sim', sim: doc.sim });
+    if (t.sim) this.physics.send({ op: 'sim', sim: this.worldSim(doc.sim) });
     this.view.syncParts(doc, t.parts);
     this.view.syncConnections(doc, t.connections);
     this.view.setSelection(this.selection.parts, this.selection.conn);

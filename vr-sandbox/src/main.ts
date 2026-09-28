@@ -29,6 +29,11 @@ async function main() {
     const device = new XRDevice(metaQuest3);
     device.installRuntime({ forceInstall: true });
     (window as unknown as { iwer: unknown }).iwer = device;
+    // a synthetic room (floor, walls, a table) so walk and mixed reality have a scan to use
+    if (params.get('iwer') !== 'noroom') {
+      const { installTestRoom } = await import('./xr/testRoom');
+      installTestRoom(device);
+    }
   }
 
   // WebXR (Quest). Loaded lazily so desktop users never pay for it.
@@ -40,7 +45,9 @@ async function main() {
         const { XRMode } = await import('./xr/xr');
         const xr = new XRMode(app, tools, desktop);
         handles['xr'] = xr;
-        ui.onEnterVR = () => void xr.enter().catch((e) => app.toast(`Could not enter VR: ${String(e?.message ?? e)}`, 'warn'));
+        ui.arSupported = await XRMode.passthroughSupported();
+        ui.vrStyle = xr.style === 'mixed' && !ui.arSupported ? 'walk' : xr.style;
+        ui.onEnterVR = (style) => void xr.enter(style).catch((e) => app.toast(`Could not enter VR: ${String(e?.message ?? e)}`, 'warn'));
       }
     } catch {
       ui.vrSupported = false;
