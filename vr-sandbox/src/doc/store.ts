@@ -165,6 +165,13 @@ export class DocStore {
     this.emit([], 'load');
   }
 
+  /** Swap in a document snapshot (checkpoint rewind) while keeping undo history. */
+  restore(doc: BuildDoc) {
+    this.doc = doc;
+    this.revision++;
+    this.emit([], 'load');
+  }
+
   /** Apply a change directly. `lenient` skips missing targets (undo of entities already gone). */
   applyOne(c: Change, lenient: boolean) {
     if (c.op === 'sim') {
