@@ -959,6 +959,22 @@ export class PhysicsWorld {
       // Only assemblies that contain bonded segments need this: ordinary joined parts stay with Jolt, whose joints
       // to wheels, motors and sliders (not modelled in this pass) they are usually part of.
       if (!comp.some((r) => r.seg >= 0)) continue;
+      // Root the load bookkeeping where the assembly is held (its joints to the outside), else at its heaviest
+      // body: each joint's load is read from the branch beyond it, so no bookkeeping remainder reaches it.
+      const inComp = new Set(comp);
+      const held = new Map<BodyRec, number>();
+      for (const c of this.conns.values()) {
+        if (c.status === 'broken' || !c.constraint) continue;
+        if (inComp.has(c.a) && (!c.b || !inComp.has(c.b))) held.set(c.a, (held.get(c.a) ?? 0) + 1);
+        if (c.b && inComp.has(c.b) && !inComp.has(c.a)) held.set(c.b, (held.get(c.b) ?? 0) + 1);
+      }
+      let root = 0;
+      comp.forEach((r, i) => {
+        const b = comp[root]!;
+        const hr = held.get(r) ?? 0, hb = held.get(b) ?? 0;
+        if (hr > hb || (hr === hb && r.mass > b.mass)) root = i;
+      });
+      [comp[0], comp[root]] = [comp[root]!, comp[0]!];
       for (const r of comp) {
         const [v, w] = this.velocityOf(r);
         r.prior = { pose: this.poseOf(r), v, w };
@@ -1239,6 +1255,7 @@ export class PhysicsWorld {
     const dq = quatFromRotationVector(scale(ent.e.w, dt));
     const comE = add(com0, scale(ent.e.v, dt));
     let C: Pose = { p: add(comE, rotate(dq, sub(C0.p, com0))), q: normQuat(quatMul(dq, C0.q)) };
+    let comRef = comE;
     const anchors: { i: number; a: Anchor }[] = [];
     comp.forEach((r, i) => { for (const a of anchored.get(r) ?? []) anchors.push({ i, a }); });
     if (anchors.length) {
@@ -1262,10 +1279,13 @@ export class PhysicsWorld {
       const d = fit.solve();
       const cq = quatFromRotationVector(d.w);
       C = { p: add(add(comE, d.v), rotate(cq, sub(C.p, comE))), q: normQuat(quatMul(cq, C.q)) };
+      // A position correction moves the assembly; its velocity moves with it. The centre of mass keeps the
+      // solved velocity, or every correction would slip in momentum w x d with no force behind it.
+      comRef = add(comE, d.v);
     }
     comp.forEach((r, i) => {
       const np = composePose(C, T[i]!);
-      const v = add(ent.e.v, cross(ent.e.w, sub(np.p, comE)));
+      const v = add(ent.e.v, cross(ent.e.w, sub(np.p, comRef)));
       w.newV[i] = v;
       this.r1.Set(...np.p);
       this.q1.Set(...np.q);
@@ -1413,7 +1433,6 @@ export class PhysicsWorld {
       subP[p] = add(subP[p]!, subP[j]!);
       subL[p] = add(subL[p]!, subL[j]!);
     }
-    const tP = subP[order[0]!]!, tL = subL[order[0]!]!;
     for (const r of comp) for (const { e } of w.adj.get(r)!) {
       if (e.bond) { e.bond.corrF = [0, 0, 0]; e.bond.corrT = [0, 0, 0]; } else if (e.conn) { e.conn.corrF = [0, 0, 0]; e.conn.corrT = [0, 0, 0]; }
     }
@@ -1421,9 +1440,10 @@ export class PhysicsWorld {
       const j = order[k]!, p = parent[j]!;
       if (low[j]! <= disc[p]!) continue; // not a bridge
       const e = parentEdge[j]!;
+      // the branch beyond the joint (away from the root) says what the joint carries; on the v side by Newton's third law
       const childIsV = e.v === comp[j];
-      const vP = childIsV ? subP[j]! : sub(tP, subP[j]!);
-      const vL = childIsV ? subL[j]! : sub(tL, subL[j]!);
+      const vP = childIsV ? subP[j]! : scale(subP[j]!, -1);
+      const vL = childIsV ? subL[j]! : scale(subL[j]!, -1);
       const pe = e.bond
         ? transformPoint(NP0[index.get(e.u)!]!, scale(e.bond.a.pr.layout!.axis, e.bond.a.pr.layout!.segLen / 2))
         : composePose(NP0[index.get(e.u)!]!, e.conn!.frameA).p;

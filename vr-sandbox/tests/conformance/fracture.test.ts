@@ -279,6 +279,49 @@ describe('breakable stock: bookkeeping', () => {
     expect(solid.err).toBeLessThan(0.25); // Jolt's own gyroscopic integration, for comparison
   });
 
+  it('a part glued to a spinning pinned arm carries exactly its centripetal force, whichever side of the joint it is', async () => {
+    // A 1 m 2x4 on a bearing at one end (to a frozen post), no gravity, spinning, with two 30 mm steel cubes glued
+    // on top near the far end: one as the glue joint's first part, one as its second. Tick by tick each glue line
+    // must carry m w^2 r as shear, at the arm's actual spin rate, and exactly the moment of that force about the
+    // glue line. Which side is "A" is bookkeeping: it must never change a load.
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const w0 = 4;
+    const Zaxis: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // frame y along world z (the bearing axis)
+    const arm = r.part('lumber', at(0.4, 1, 0), { params: { size: '2x4', length: 1, fracture: '6' } });
+    const post = r.part('block', at(0, 1, -0.12), { frozen: true, params: { x: 0.1, y: 0.1, z: 0.1 } });
+    r.connect('bearing', { part: arm, frame: at(-0.4, 0, 0, Zaxis) }, { part: post, frame: at(0, 0, 0.12, Zaxis) }, { bore: 0.025, staticRating: 10000 });
+    const spin = (x: Vec3): Vec3 => [-w0 * (x[1] - 1), w0 * x[0], 0];
+    r.world.apply({ op: 'setPose', id: arm.id, pose: at(0.4, 1, 0), linear: spin([0.4, 1, 0]), angular: [0, 0, w0] });
+    const glue = { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.03 };
+    const cubes = ([[0.8, 0.02, 'cube is B'], [0.7, -0.02, 'cube is A']] as const).map(([x, z, side]) => {
+      const p: Vec3 = [x, 1 + 0.019 + 0.015, z];
+      const cube = r.part('block', at(...p), { material: 'steel.a36', params: { x: 0.03, y: 0.03, z: 0.03 } });
+      const onArm = { part: arm, frame: at(x - 0.4, 0.019, z) }, onCube = { part: cube, frame: at(0, -0.015, 0) };
+      const c = side === 'cube is B' ? r.connect('glued', onArm, onCube, glue) : r.connect('glued', onCube, onArm, glue);
+      r.world.apply({ op: 'setPose', id: cube.id, pose: at(...p), linear: spin(p), angular: [0, 0, w0] });
+      return { side, conn: c.id, m: r.world.bodyMass(cube.id)!, rc: Math.hypot(x, p[1] - 1), shear: 0, bending: 0 };
+    });
+    let n = 0;
+    for (let i = 0; i < 180; i++) {
+      const res = r.world.step();
+      if (i < 20) continue; // let the first ticks settle the joint preload
+      const w = r.world.angularVelocity(`${arm.id}#0`)![2];
+      for (const c of cubes) {
+        const l = res.loads.find((x) => x.id === c.conn)!;
+        const F = c.m * w * w * c.rc;
+        c.shear = Math.max(c.shear, Math.abs(l.shear / F - 1));
+        c.bending = Math.max(c.bending, Math.abs(l.bending / (F * 0.015) - 1));
+      }
+      n++;
+    }
+    expect(n).toBeGreaterThan(100);
+    for (const c of cubes) {
+      expect(c.shear, c.side).toBeLessThan(0.02);
+      // the glue line also carries the moment of that force about it: F x half the cube, exactly
+      expect(c.bending, c.side).toBeLessThan(0.05);
+    }
+  });
+
   it('repair re-seats the pieces straight and bonds them intact', async () => {
     const c = await cantilever('lumber', 'wood.douglas-fir', { length: 1.2, size: '2x4', fracture: '6' }, 1.3, 'Me');
     c.r.run(0.5);
