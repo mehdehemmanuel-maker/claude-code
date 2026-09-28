@@ -35,6 +35,15 @@ npm run dev          # http://localhost:5173 (desktop)
 - **Physics:** Jolt (WASM) in a Web Worker at a fixed 90 Hz, interpolated for rendering. Mass comes from exact
   parametric volume × material density. Every joint's real constraint force is read back each tick,
   resolved into axial, shear, bending and torsion loads, and checked against spec-derived capacities.
+- **Breakable stock:** rods, bars, tubes, beams, angles, lumber and long strips are bonded segments whose strength
+  comes from the section and the material:
+  - Ductile metals yield into a plastic hinge at Mp = Z·Fy, keep carrying Mp while they bend, and tear once the
+    hinge has rotated past their ductility.
+  - Wood snaps at S × modulus of rupture; glass, ceramics and cast iron snap at their tensile strength.
+  - Tension, shear, torsion and crushing fail at handbook ratios.
+  - Damage (fractures and bent pieces) is saved in the build, undoable, and repairable.
+  - Rigid assemblies with bonded stock stay exactly rigid under load. After each Jolt step they are re-solved as
+    the single rigid bodies they are, and every section force is exact Newton–Euler statics and dynamics.
 - **Joining (from specs):**
   - Bolts: ISO 898-1 classes, VDI 2230 torque → preload. They slip, then bear, then shear or snap, and can be over-torqued.
   - Wood screws and nails: USDA Wood Handbook withdrawal, NDS yield modes.
@@ -62,8 +71,8 @@ npm run dev          # http://localhost:5173 (desktop)
 
 ```bash
 npm run typecheck
-npm test        # 99 tests: engineering golden values, codec property tests, 21 physics laws, template behaviour
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 7 browser tests incl. an emulated Quest session
+npm test        # 117 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 8 browser tests incl. an emulated Quest session
 ```
 
 The physics conformance suite checks laws, not builds:
@@ -73,12 +82,21 @@ The physics conformance suite checks laws, not builds:
 - bolt tensile failure and slip, rope static, dynamic-amplification and snatch loads
 - weld compatibility, adhesive cure
 - magnet force and polarity, motor no-load speed, eddy-brake decay
+- breakable stock:
+  - exact section forces along a cantilever and in a hanging rod
+  - a plank on knife edges carrying a resting weight
+  - ductile hold below Mp, and a plastic hinge arresting where M0·sin θ = Mp·θ
+  - tearing past the material's ductility
+  - wood and glass holding at 0.8× and snapping at 1.2× capacity
+  - a tumbling bar matching Euler's equations
+  - servo response identical on segmented and solid bars
+  - repair, and frozen parts that never break
 
 ## Status against the plan
 
 | Area | Done | Not yet |
 |---|---|---|
-| Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds | Parts themselves bending or breaking (segmented bodies, plastic hinges, buckling) |
+| Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds; breakable stock (plastic hinges, fracture, damage in the build) | Buckling; elastic flex (springboards, bows); the rigid-assembly solve for joints to wheels and motors (Jolt handles those) |
 | Transmissions | Motors, servos, bearings, eddy brakes | Gears, racks, lead screws, belts |
 | Tools | Grab, place, join (every joining method), erase, freeze, clone, poke, inspect, measure | Physical tool models (drill making holes, welder settings → bead quality, grinder cutting, hammer and nails) |
 | VR | Controllers, wrist tablet, two-hand grab, locomotion, haptics, player scale, IWER testing | Hand tracking, mixed-reality passthrough, measured Quest 3S performance |

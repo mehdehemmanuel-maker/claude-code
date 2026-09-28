@@ -7,7 +7,9 @@ import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { PART_CATEGORIES, PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
 import { MATERIALS, MATERIAL_GROUPS, getMaterial, STANDARD_GRAVITY } from '../data/materials';
 import { DISPLAY, formatForce, formatMass, type NumberParam, type ParamDef, type Params, type ParamValue } from '../schema/params';
-import { renamePart, setConnectionParam, setConnectionState, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
+import { renamePart, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
+import { maxBend, partLayout } from '../app/segments';
+import { bondCapacity, isWoodMaterial } from '../engineering/fracture';
 import { composePose, length, sub } from '../doc/math';
 import type { Connection, Part } from '../doc/types';
 import { TEMPLATES } from '../templates/templates';
@@ -343,6 +345,7 @@ export class UI {
       ),
       h('div', { class: `source ${mat.confidence}` }, mat.confidence === 'estimated' ? 'ⓘ estimated · ' : '', mat.source),
       ...this.paramGroups(kind.params, part.params, (k, v) => setPartParam(app.store, part.id, k, v)),
+      this.damagePanel(part),
       h('div', { class: 'pgroup' }, h('div', { class: 'gtitle' }, 'State'),
         h('label', { class: 'prm bool' }, h('input', { type: 'checkbox', checked: part.frozen, onchange: (e: Event) => { app.commitLivePoses(); setFrozen(app.store, [part.id], (e.target as HTMLInputElement).checked); } }), 'Frozen (pinned to the world)'),
         h('div', { class: 'facts' }, fact('Speed', '', undefined, this.live(speed, () => {
@@ -381,14 +384,46 @@ export class UI {
     );
   }
 
+  /** Breakable stock: segments, section strength, live bond utilisation, damage and repair. */
+  private damagePanel(part: Part) {
+    const app = this.app;
+    const layout = partLayout(part);
+    const kind = getPartKind(part.kind);
+    if (!layout || !kind.bond) return null;
+    const cap = bondCapacity(kind.bond(part.params), app.materialOf(part));
+    const Nm = (v: number) => (!Number.isFinite(v) ? '∞' : v >= 1000 ? `${(v / 1000).toFixed(2)} kN·m` : `${v.toFixed(v >= 10 ? 0 : 1)} N·m`);
+    const bending = cap.ductile
+      ? `yields at ${Nm(Math.min(cap.Mp[0], cap.Mp[1]))}–${Nm(Math.max(cap.Mp[0], cap.Mp[1]))} (Mp = Z·Fy), tears after ~${Math.round((cap.thetaF * 180) / Math.PI)}° of hinge rotation`
+      : `snaps at ${Nm(Math.min(cap.Me[0], cap.Me[1]))}–${Nm(Math.max(cap.Me[0], cap.Me[1]))} (S × ${isWoodMaterial(app.materialOf(part)) ? 'MOR' : 'Fu'})`;
+    const util = h('span');
+    const broken = part.damage.broken.length;
+    const bent = maxBend(part, layout, (id) => app.livePose(id));
+    const damaged = broken > 0 || part.damage.segments !== null || bent > 0.01;
+    return h('div', { class: 'pgroup' }, h('div', { class: 'gtitle' }, 'Strength of the stock'),
+      h('div', { class: 'facts' },
+        fact('Segments', `${layout.count} × ${(layout.segLen * 1000).toFixed(0)} mm`, 'bonded pieces; a bond yields or breaks at the section capacity'),
+        fact('Bending', bending, cap.source),
+        fact('Tension', formatForce(cap.tension)),
+        fact('Worst bond now', '', undefined, this.live(util, () => {
+          const u = app.live.bonds[part.id];
+          if (!u?.length) return '—';
+          const max = Math.max(0, ...u);
+          return `${(max * 100).toFixed(0)}% of capacity`;
+        })),
+        damaged ? fact('Damage', `${broken ? `${broken} fracture${broken > 1 ? 's' : ''}` : 'no fractures'}${bent > 0.01 ? ` · bent ${Math.round((bent * 180) / Math.PI)}°` : ''}`) : null,
+      ),
+      damaged ? h('div', { class: 'actions' }, h('button', { onclick: () => { repairPart(app.store, part.id); app.audio.ui('place'); } }, 'Repair (straighten and re-bond)')) : null,
+    );
+  }
+
   private connectionPanel(c: Connection) {
     const app = this.app;
     const kind = getConnectorKind(c.kind);
     const pa = app.doc.parts[c.a.part];
     const pb = c.b ? app.doc.parts[c.b.part] : null;
     if (!pa) return;
-    const wa = composePose(app.livePose(pa.id)!, c.a.frame);
-    const wb = pb && c.b ? composePose(app.livePose(pb.id)!, c.b.frame) : wa;
+    const wa = app.endpointWorld(c.a) ?? composePose(pa.pose, c.a.frame);
+    const wb = pb && c.b ? app.endpointWorld(c.b) ?? wa : wa;
     const derived = kind.derive({
       params: c.params, matA: app.materialOf(pa), matB: pb ? app.materialOf(pb) : null,
       thicknessA: app.partDims(pa).b, thicknessB: pb ? app.partDims(pb).b : app.partDims(pa).b,

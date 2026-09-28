@@ -1359,6 +1359,10 @@ export class PhysicsWorld {
       const cap = pr.cap;
       const L = pr.layout;
       if (!cap || !L) continue;
+      // A part fails at most once per tick, at its most overloaded bond: that crack changes the load path,
+      // so the other bonds are judged again next tick instead of all snapping together.
+      let worst: { u: number; act: () => void } | null = null;
+      const candidate = (u: number, act: () => void) => { if (!worst || u > worst.u) worst = { u, act }; };
       for (const b of pr.bonds) {
         if (!b) continue;
         const pa = this.poseOf(b.a);
@@ -1378,12 +1382,13 @@ export class PhysicsWorld {
           M1 = Math.abs(dot(T, ay));
           M2 = Math.abs(dot(T, az));
         } else {
-          // constraint space: X twist (torsion), Y / Z bending (limit + hinge friction)
+          // constraint space: X twist (torsion), Y / Z bending (limit + hinge friction), plus the assembly solve
           const lr = s.GetTotalLambdaRotation();
           const lm = s.GetTotalLambdaMotorRotation();
-          Tt = Math.abs(lr.GetX()) * inv;
-          M1 = Math.abs(lr.GetY() + lm.GetY()) * inv;
-          M2 = Math.abs(lr.GetZ() + lm.GetZ()) * inv;
+          const T: Vec3 = add(add(add(scale(ax, lr.GetX() * inv), scale(ay, (lr.GetY() + lm.GetY()) * inv)), scale(az, (lr.GetZ() + lm.GetZ()) * inv)), b.corrT);
+          Tt = Math.abs(dot(T, ax));
+          M1 = Math.abs(dot(T, ay));
+          M2 = Math.abs(dot(T, az));
         }
         b.loads = { N, V, T: Tt, M1, M2 };
         const chk = checkBond(cap, b.loads);
@@ -1396,11 +1401,13 @@ export class PhysicsWorld {
           b.u = Math.max(uRot, other.u);
           b.mode = uRot >= other.u ? 'bending' : other.mode;
           if (uRot >= 1) {
-            this.fracture(pr, b, 'bending', theta, cap.thetaF, point, `bent ${(theta * 180 / Math.PI).toFixed(0)}° past its ${(cap.thetaF * 180 / Math.PI).toFixed(0)}° ductility and tore`);
+            candidate(uRot, () => this.fracture(pr, b, 'bending', theta, cap.thetaF, point, `bent ${(theta * 180 / Math.PI).toFixed(0)}° past its ${(cap.thetaF * 180 / Math.PI).toFixed(0)}° ductility and tore`));
             continue;
           }
           if (other.u > 1) b.over++; else b.over = 0;
-          if (other.u > 1.5 || b.over >= this.opts.filterTicks) this.fracture(pr, b, other.mode, other.load, other.capacity, point, `failed in ${other.mode}: ${fmtLoad(other.mode, other.load)} on a ${fmtLoad(other.mode, other.capacity)} capacity`);
+          if (other.u > 1.5 || b.over >= this.opts.filterTicks) {
+            candidate(other.u, () => this.fracture(pr, b, other.mode, other.load, other.capacity, point, `failed in ${other.mode}: ${fmtLoad(other.mode, other.load)} on a ${fmtLoad(other.mode, other.capacity)} capacity`));
+          }
           continue;
         }
         b.u = chk.u;
@@ -1408,13 +1415,16 @@ export class PhysicsWorld {
         if (chk.u > 1) b.over++; else b.over = 0;
         if (chk.u > 1.5 || b.over >= this.opts.filterTicks) {
           if (chk.outcome === 'yield') {
-            this.rebuildBond(pr, b.k, true);
-            this.events.push({ type: 'yield', part: pr.id, bond: b.k, point, note: `${pr.part.name} yielded in bending (${fmtLoad('bending', chk.load)} ≥ Mp ${fmtLoad('bending', chk.capacity)}) and is bending plastically` });
+            candidate(chk.u, () => {
+              this.rebuildBond(pr, b.k, true);
+              this.events.push({ type: 'yield', part: pr.id, bond: b.k, point, note: `${pr.part.name} yielded in bending (${fmtLoad('bending', chk.load)} ≥ Mp ${fmtLoad('bending', chk.capacity)}) and is bending plastically` });
+            });
           } else {
-            this.fracture(pr, b, chk.mode, chk.load, chk.capacity, point, `fractured in ${chk.mode}: ${fmtLoad(chk.mode, chk.load)} on a ${fmtLoad(chk.mode, chk.capacity)} capacity`);
+            candidate(chk.u, () => this.fracture(pr, b, chk.mode, chk.load, chk.capacity, point, `fractured in ${chk.mode}: ${fmtLoad(chk.mode, chk.load)} on a ${fmtLoad(chk.mode, chk.capacity)} capacity`));
           }
         }
       }
+      (worst as { act: () => void } | null)?.act();
     }
   }
 
@@ -2208,6 +2218,11 @@ export class PhysicsWorld {
     this.evaluateBonds(n / dt);
     const stepMs = performance.now() - t0;
     return this.collect(stepMs);
+  }
+
+  /** Current state without stepping (after ops applied while paused). Events and loads carry over. */
+  snapshot(): StepResult {
+    return this.collect(0);
   }
 
   private collect(stepMs: number): StepResult {

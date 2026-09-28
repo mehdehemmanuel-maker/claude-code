@@ -12,6 +12,8 @@ export class LiveState {
   private vel: Float32Array<ArrayBufferLike> = new Float32Array(0);
   alpha = 1;
   loads = new Map<string, ConnectionLoad>();
+  /** Per breakable part: utilisation of each bond between its segments (-1 = broken). */
+  bonds: Record<string, number[]> = {};
   cure: Record<string, number> = {};
   stats: AdvanceResult['stats'] | null = null;
   pendingEvents: PhysicsEvent[] = [];
@@ -29,6 +31,7 @@ export class LiveState {
     this.loads.clear();
     for (const l of r.loads) this.loads.set(l.id, l);
     this.cure = r.cure;
+    this.bonds = r.bonds ?? {};
     this.stats = r.stats;
     this.pendingEvents.push(...r.events);
   }

@@ -6,7 +6,7 @@ import type { App } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
-import { deleteParts, setConnectionParam, setConnectionState, setFrozen, setPartParam, setSim } from '../doc/commands';
+import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
 import { STANDARD_GRAVITY } from '../data/materials';
 import { TEMPLATES } from '../templates/templates';
@@ -245,6 +245,11 @@ export class Tablet {
     const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
     nums.forEach((p, i) => this.stepper(`pp-${p.key}`, 24, y0 + 96 + i * 56, p, Number(part.params[p.key]), (v) => setPartParam(app.store, part.id, p.key, v)));
     const by = H - 76;
+    const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
+    if (damaged) {
+      this.text(`Damaged: ${part.damage.broken.length} fracture(s)`, W - 24, y0 + 36, 22, '#ff9b73', 'right');
+      this.btn('repair', W - 254, by - 66, 230, 56, 'Repair', () => repairPart(app.store, part.id), { tone: 'accent' });
+    }
     this.btn('freeze', 24, by, 230, 56, part.frozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, [part.id], !part.frozen); }, { on: part.frozen });
     this.btn('dup', 264, by, 230, 56, 'Duplicate', () => app.duplicateSelection());
     this.btn('del', W - 254, by, 230, 56, 'Delete', () => deleteParts(app.store, [part.id]), { tone: 'danger' });

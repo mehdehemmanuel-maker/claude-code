@@ -188,7 +188,7 @@ export class XRMode {
         const pick = this.app.view.pick(e.ray.origin, e.ray.dir, 4 * scale);
         if (pick?.type === 'part' && pick.id) {
           this.app.select([pick.id]);
-          this.tools.grab.begin(pick.id, [pick.point.x, pick.point.y, pick.point.z], pick.distance, e, side);
+          this.tools.grab.begin(pick.id, [pick.point.x, pick.point.y, pick.point.z], pick.distance, e, side, pick.seg);
         }
       } else if (sq === -1) this.tools.grab.release(side);
       // buttons

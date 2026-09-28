@@ -6,7 +6,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { Material } from '../data/materials';
 import { getMaterial } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
-import { effectiveParams, getPartKind } from '../parts/registry';
+import { effectiveParams, getPartKind, segmentBodyId, segmentOffset, type SegmentLayout } from '../parts/registry';
+import { endpointWorld, partLayout, segmentPose } from '../app/segments';
 import { composePose, length, sub } from '../doc/math';
 import type { BuildDoc, Connection, Part, Pose } from '../doc/types';
 import { numberOf } from '../schema/params';
@@ -18,6 +19,8 @@ import { ghostBadMaterial, ghostMaterial, highlighted, renderMaterial, stressMat
 export interface Pick {
   type: 'part' | 'conn' | 'env';
   id: string | null;
+  /** Segment of a breakable part that was hit (null for single-body parts). */
+  seg: number | null;
   point: THREE.Vector3;
   normal: THREE.Vector3;
   distance: number;
@@ -28,6 +31,11 @@ interface PartView {
   key: string;
   meshes: THREE.Mesh[];
   base: THREE.Material[];
+  /** Breakable parts: one group per segment, placed from each segment's own physics pose. */
+  layout: SegmentLayout | null;
+  segs: THREE.Object3D[];
+  /** Segment index of each mesh (for per-segment stress colouring). */
+  meshSeg: number[];
 }
 
 interface ConnView {
@@ -157,21 +165,40 @@ export class SceneView {
 
   private buildPart(part: Part, mat: Material, key: string): PartView {
     const kind = getPartKind(part.kind);
-    const visual = kind.visual(effectiveParams(kind, part.params, mat));
+    const params = effectiveParams(kind, part.params, mat);
+    const layout = partLayout(part);
     const root = new THREE.Group();
-    const obj = buildVisual(visual, renderMaterial(mat), tintMaterial);
-    root.add(obj);
+    const segs: THREE.Object3D[] = [];
     const meshes: THREE.Mesh[] = [];
-    root.traverse((o) => {
+    const meshSeg: number[] = [];
+    const material = renderMaterial(mat);
+    const collect = (obj: THREE.Object3D, seg: number | null) => obj.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) {
         const m = o as THREE.Mesh;
         m.castShadow = true;
         m.receiveShadow = true;
-        m.userData.pick = { type: 'part', id: part.id };
+        m.userData.pick = { type: 'part', id: part.id, seg };
         meshes.push(m);
+        meshSeg.push(seg ?? 0);
       }
     });
-    return { root, key, meshes, base: meshes.map((m) => m.material as THREE.Material) };
+    if (layout) {
+      const visual = kind.visual(layout.segParams);
+      for (let k = 0; k < layout.count; k++) {
+        const g = new THREE.Group();
+        g.add(buildVisual(visual, material, tintMaterial));
+        const off = segmentOffset(layout, k);
+        g.position.set(...off.p);
+        root.add(g);
+        segs.push(g);
+        collect(g, k);
+      }
+    } else {
+      const obj = buildVisual(kind.visual(params), material, tintMaterial);
+      root.add(obj);
+      collect(obj, null);
+    }
+    return { root, key, meshes, base: meshes.map((m) => m.material as THREE.Material), layout, segs, meshSeg };
   }
 
   syncConnections(doc: BuildDoc, ids: Iterable<string> | 'all') {
@@ -310,6 +337,7 @@ export class SceneView {
   // per frame
 
   update(doc: BuildDoc, live: LiveState, overrides: Map<string, Pose>) {
+    const source = (id: string) => overrides.get(id) ?? live.pose(id);
     for (const [id, v] of this.parts) {
       const o = overrides.get(id);
       const pose = o ?? live.pose(id, tmpPose);
@@ -317,20 +345,29 @@ export class SceneView {
         v.root.position.set(pose.p[0], pose.p[1], pose.p[2]);
         v.root.quaternion.set(pose.q[0], pose.q[1], pose.q[2], pose.q[3]);
       }
+      const part = doc.parts[id];
+      if (!v.layout || !part || o) continue;
+      // each segment where physics has it, relative to the part frame (bent and broken pieces show as they are)
+      const rootPose: Pose = pose ? { p: [pose.p[0], pose.p[1], pose.p[2]], q: [pose.q[0], pose.q[1], pose.q[2], pose.q[3]] } : part.pose;
+      for (let k = 0; k < v.segs.length; k++) {
+        const sp = live.pose(segmentBodyId(id, k)) ?? segmentPose(part, v.layout, k, () => null);
+        if (!sp) continue;
+        const rel = relativePoseOf(rootPose, sp);
+        v.segs[k]!.position.set(rel.p[0], rel.p[1], rel.p[2]);
+        v.segs[k]!.quaternion.set(rel.q[0], rel.q[1], rel.q[2], rel.q[3]);
+      }
     }
     for (const [id, v] of this.conns) {
       const c = doc.connections[id];
       if (!c) continue;
-      const pa = this.partPose(c.a.part, live, overrides) ?? doc.parts[c.a.part]?.pose;
-      if (!pa) continue;
-      const wa = composePose(pa, c.a.frame);
+      const wa = endpointWorld(doc.parts[c.a.part], c.a, source);
+      if (!wa) continue;
       if (v.dynamic === 'none') {
         v.root.position.set(...wa.p);
         v.root.quaternion.set(...wa.q);
         continue;
       }
-      const pb = c.b ? this.partPose(c.b.part, live, overrides) ?? doc.parts[c.b.part]?.pose : null;
-      const wb = c.b && pb ? composePose(pb, c.b.frame) : wa;
+      const wb = c.b ? endpointWorld(doc.parts[c.b.part], c.b, source) ?? wa : wa;
       const a = new THREE.Vector3(...wa.p);
       const b = new THREE.Vector3(...wb.p);
       const dir = b.clone().sub(a);
@@ -357,10 +394,6 @@ export class SceneView {
       if (L > 1e-6) v.root.quaternion.setFromUnitVectors(Y, dir.clone().normalize());
       v.root.scale.set(1, Math.max(L, 1e-4), 1);
     }
-  }
-
-  private partPose(id: string, live: LiveState, overrides: Map<string, Pose>): Pose | null {
-    return overrides.get(id) ?? live.pose(id);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -402,8 +435,14 @@ export class SceneView {
       }
     }
     for (const [id, v] of this.parts) {
-      const m = stressMaterial(partU.get(id) ?? 0);
-      for (const mesh of v.meshes) mesh.material = m;
+      const joint = partU.get(id) ?? 0;
+      const bonds = live.bonds[id];
+      v.meshes.forEach((mesh, i) => {
+        // a segment shows its worst neighbouring bond (breakable stock), or its worst joint
+        const k = v.meshSeg[i]!;
+        const u = bonds ? Math.max(joint, bonds[k - 1] ?? 0, bonds[k] ?? 0) : joint;
+        mesh.material = stressMaterial(u);
+      });
     }
   }
 
@@ -471,10 +510,10 @@ export class SceneView {
     this.raycaster.far = far;
     const hits = this.raycaster.intersectObjects(this.pickables, false);
     for (const h of hits) {
-      const info = h.object.userData.pick as { type: Pick['type']; id: string | null } | undefined;
+      const info = h.object.userData.pick as { type: Pick['type']; id: string | null; seg?: number | null } | undefined;
       if (!info) continue;
       const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
-      return { type: info.type, id: info.id, point: h.point.clone(), normal: n, distance: h.distance };
+      return { type: info.type, id: info.id, seg: info.seg ?? null, point: h.point.clone(), normal: n, distance: h.distance };
     }
     return null;
   }
@@ -482,6 +521,13 @@ export class SceneView {
   partObject(id: string) {
     return this.parts.get(id)?.root ?? null;
   }
+}
+
+function relativePoseOf(parent: Pose, world: Pose): Pose {
+  const ip = new THREE.Quaternion(parent.q[0], parent.q[1], parent.q[2], parent.q[3]).invert();
+  const d = new THREE.Vector3(world.p[0] - parent.p[0], world.p[1] - parent.p[1], world.p[2] - parent.p[2]).applyQuaternion(ip);
+  const q = ip.multiply(new THREE.Quaternion(world.q[0], world.q[1], world.q[2], world.q[3]));
+  return { p: [d.x, d.y, d.z], q: [q.x, q.y, q.z, q.w] };
 }
 
 function sizeD(size: string) {

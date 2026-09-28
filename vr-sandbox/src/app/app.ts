@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import { getMaterial, MATERIALS, type Material } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { effectiveParams, getPartKind, type PartDims } from '../parts/registry';
-import { commitPoses, connectedComponent, deleteParts, duplicateParts, setConnectionState, setFrozen } from '../doc/commands';
+import { commitPoses, connectedComponent, deleteParts, duplicateParts, recordFracture, setConnectionState, setFrozen } from '../doc/commands';
+import { endpointWorld, isBent, partLayout, segmentPose } from './segments';
+import { segmentBodyId, segmentOffset, segmentOfFrame } from '../parts/registry';
 import { canonicalPose, composePose, length, relativePose, sub } from '../doc/math';
 import { DocStore, touched, type Change, type ChangeSource } from '../doc/store';
 import type { BuildDoc, Connection, Part, Pose, Vec3 } from '../doc/types';
@@ -163,6 +165,7 @@ export class App {
       }
       const poseChanged = !prev || JSON.stringify(prev.pose) !== JSON.stringify(part.pose);
       const shapeChanged = !prev || prev.kind !== part.kind || prev.material !== part.material || JSON.stringify(prev.params) !== JSON.stringify(part.params) || prev.frozen !== part.frozen;
+      const damageChanged = !!prev && JSON.stringify(prev.damage) !== JSON.stringify(part.damage);
       const live = this.live.latest(id);
       const nearLive = live ? length(sub(live.p, part.pose.p)) < 2e-3 : false;
       if (!prev) {
@@ -172,6 +175,8 @@ export class App {
       } else if (poseChanged && !nearLive) {
         this.physics.send({ op: 'setPose', id, pose: part.pose });
       }
+      // undo / redo / repair of a fracture: physics re-seats or re-breaks the bonds (a no-op for its own events)
+      if (prev && !shapeChanged && damageChanged) this.physics.send({ op: 'damage', id, damage: part.damage });
       this.mirrorParts.set(id, structuredClone(part));
     }
     for (const id of t.connections) {
@@ -197,12 +202,28 @@ export class App {
   /** Undoing a failure: bring part B back to where the joint frames coincide before rebuilding it. */
   private realign(c: Connection) {
     if (!c.b) return;
-    const pa = this.livePose(c.a.part);
-    if (!pa) return;
-    const world = composePose(pa, c.a.frame);
-    const inv = relativePose(c.b.frame, { p: [0, 0, 0], q: [0, 0, 0, 1] });
-    const poseB = composePose(world, inv);
+    const world = this.endpointWorld(c.a);
+    const partB = this.store.doc.parts[c.b.part];
+    if (!world || !partB) return;
+    const origin = { p: [0, 0, 0] as Vec3, q: [0, 0, 0, 1] as [number, number, number, number] };
+    const layout = partLayout(partB);
+    let poseB: Pose;
+    if (layout) {
+      // seat the segment the joint is on, and move the whole part rigidly with it
+      const s = segmentOfFrame(layout, c.b.frame);
+      const segTarget = composePose(world, relativePose(s.frame, origin));
+      const segNow = segmentPose(partB, layout, s.seg, (id) => this.livePose(id));
+      const partNow = this.livePose(partB.id) ?? partB.pose;
+      poseB = segNow ? composePose(segTarget, relativePose(segNow, partNow)) : composePose(segTarget, relativePose(segmentOffset(layout, s.seg), origin));
+    } else {
+      poseB = composePose(world, relativePose(c.b.frame, origin));
+    }
     this.physics.send({ op: 'setPose', id: c.b.part, pose: poseB });
+  }
+
+  /** World pose of a joint endpoint (on the segment it is attached to, for breakable parts). */
+  endpointWorld(ep: { part: string; frame: Pose }): Pose | null {
+    return endpointWorld(this.store.doc.parts[ep.part], ep, (id) => this.livePose(id));
   }
 
   materialOf(p: Part): Material {
@@ -303,14 +324,27 @@ export class App {
 
   commitLivePoses() {
     const poses = new Map<string, Pose>();
+    const segments = new Map<string, Pose[]>();
+    const latest = (id: string) => this.live.latest(id);
     for (const id of this.live.ids()) {
       const p = this.live.latest(id);
       const part = this.store.doc.parts[id];
       if (!p || !part || part.frozen) continue;
       const cp = canonicalPose(p);
       if (JSON.stringify(cp) !== JSON.stringify(part.pose)) poses.set(id, cp);
+      // broken or bent stock keeps each piece where it is
+      const layout = partLayout(part);
+      if (layout && (part.damage.broken.length > 0 || isBent(part, layout, latest))) {
+        const segs: Pose[] = [];
+        for (let k = 0; k < layout.count; k++) {
+          const sp = this.live.latest(segmentBodyId(id, k));
+          if (!sp) break;
+          segs.push(canonicalPose(sp));
+        }
+        if (segs.length === layout.count && JSON.stringify(segs) !== JSON.stringify(part.damage.segments)) segments.set(id, segs);
+      }
     }
-    if (poses.size) commitPoses(this.store, poses);
+    if (poses.size || segments.size) commitPoses(this.store, poses, segments);
     // cure progress is physical state worth keeping
     const cure = this.live.cure;
     const doc = this.store.doc;
@@ -450,9 +484,9 @@ export class App {
     for (const [id, l] of this.live.loads) {
       const c = doc.connections[id];
       if (!c || c.state.status === 'broken') continue;
-      const pa = this.livePose(c.a.part);
-      if (!pa) continue;
-      const p = composePose(pa, c.a.frame).p;
+      const wa = this.endpointWorld(c.a);
+      if (!wa) continue;
+      const p = wa.p;
       if (l.u > 0.8) {
         const m = doc.parts[c.a.part] ? this.materialOf(doc.parts[c.a.part]!) : null;
         creaks.push({ u: l.u, p, wood: m?.sound === 'wood' });
@@ -509,6 +543,22 @@ export class App {
       } else if (e.type === 'splash') {
         this.audio.splash(e.speed, e.size, e.point);
         this.particles.splash(e.point, e.speed, e.size);
+      } else if (e.type === 'fracture') {
+        const part = doc.parts[e.part];
+        if (!part) continue;
+        recordFracture(this.store, part.id, e.bond, e.segments, `Fractured: ${part.name}`);
+        const m = this.materialOf(part);
+        this.audio.breakSound(m, e.load * (e.mode === 'bending' || e.mode === 'torsion' ? 10 : 1), e.point);
+        this.particles.debris(m, e.point, m.sound === 'wood' ? 24 : 12);
+        if (m.sound === 'wood' || m.sound === 'stone') this.particles.dustFor(m, e.point, 2);
+        this.toast(e.note, 'break');
+        this.haptic?.(1, 80);
+      } else if (e.type === 'yield') {
+        const part = doc.parts[e.part];
+        if (!part) continue;
+        this.audio.slip(e.point);
+        this.toast(e.note, 'warn');
+        this.haptic?.(0.5, 40);
       }
     }
   }

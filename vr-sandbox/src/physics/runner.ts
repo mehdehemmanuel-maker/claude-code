@@ -47,7 +47,15 @@ export class Runner {
       events.push(...r.events);
       this.last = r;
     }
+    // nothing stepped (paused, or too little time): still report the world as the ops just left it
     if (!this.last) this.last = this.world.step();
+    else if (ticks === 0) {
+      const snap = this.world.snapshot();
+      if (snap.slots) this.slots = snap.slots;
+      events.push(...snap.events);
+      prev = snap.transforms;
+      this.last = snap;
+    }
     const cur = this.last;
     const out: AdvanceResult = {
       ...cur,

@@ -6,7 +6,7 @@ import { getConnectorKind } from '../connectors/registry';
 import { getPartKind } from '../parts/registry';
 import { sanitizeParams, type Params, type ParamValue } from '../schema/params';
 import { randomId, type IdSource } from './ids';
-import { canonicalPose, clonePose } from './math';
+import { canonicalPose, clonePose, composePose, relativePose } from './math';
 import type { DocStore, TxBuilder } from './store';
 import {
   APP_VERSION, CATALOG_VERSION, type BuildDoc, type Connection, type Endpoint, type FluidVolume, type Part, type Pose,
@@ -84,7 +84,9 @@ export function setPartParam(store: DocStore, id: string, key: string, value: Pa
   if (!part) return;
   const kind = getPartKind(part.kind);
   const params = sanitizeParams(kind.params, { ...part.params, [key]: value });
-  store.transact(`Set ${key}`, (tx) => tx.update('parts', id, { params }), { mergeKey: `param:${id}:${key}` });
+  // a re-dimensioned part is a new piece of stock: its old damage no longer applies
+  const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
+  store.transact(`Set ${key}`, (tx) => tx.update('parts', id, damaged ? { params, damage: { broken: [], segments: null } } : { params }), { mergeKey: `param:${id}:${key}` });
 }
 
 export function setPartMaterial(store: DocStore, ids: string[], material: string) {
@@ -94,15 +96,36 @@ export function setPartMaterial(store: DocStore, ids: string[], material: string
   });
 }
 
+/** Moving a part moves its recorded segment poses (bent or broken pieces) rigidly with it. */
+function movedFields(part: Part, pose: Pose): Partial<Part> {
+  const next = canonicalPose(pose);
+  if (!part.damage.segments) return { pose: next };
+  const delta = composePose(next, relativePose(part.pose, { p: [0, 0, 0], q: [0, 0, 0, 1] }));
+  return { pose: next, damage: { ...part.damage, segments: part.damage.segments.map((sp) => canonicalPose(composePose(delta, sp))) } };
+}
+
 export function setPartPose(store: DocStore, id: string, pose: Pose, mergeKey?: string) {
-  if (!store.doc.parts[id]) return;
-  store.transact('Move', (tx) => tx.update('parts', id, { pose: canonicalPose(pose) }), { mergeKey });
+  const part = store.doc.parts[id];
+  if (!part) return;
+  store.transact('Move', (tx) => tx.update('parts', id, movedFields(part, pose)), { mergeKey });
 }
 
 export function setPartPoses(store: DocStore, poses: Map<string, Pose>, label = 'Move') {
   store.transact(label, (tx) => {
-    for (const [id, pose] of poses) if (store.doc.parts[id]) tx.update('parts', id, { pose: canonicalPose(pose) });
+    for (const [id, pose] of poses) {
+      const part = store.doc.parts[id];
+      if (part) tx.update('parts', id, movedFields(part, pose));
+    }
   });
+}
+
+/** Place a part exactly as it now is, pieces included (a hand-moved frozen part). Undoable. */
+export function placePart(store: DocStore, id: string, pose: Pose, segments: Pose[] | null) {
+  const part = store.doc.parts[id];
+  if (!part) return;
+  store.transact('Move', (tx) => tx.update('parts', id, segments
+    ? { pose: canonicalPose(pose), damage: { ...part.damage, segments: segments.map(canonicalPose) } }
+    : { pose: canonicalPose(pose) }));
 }
 
 export function setFrozen(store: DocStore, ids: string[], frozen: boolean) {

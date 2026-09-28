@@ -29,6 +29,8 @@ const docArb = fc.record({
     frozen: fc.boolean(),
     label: fc.string({ maxLength: 20, unit: 'grapheme' }),
     tweak: fc.double({ noNaN: true, noDefaultInfinity: true, min: -10, max: 10 }),
+    broken: fc.uniqueArray(fc.integer({ min: 0, max: 11 }), { maxLength: 4 }),
+    segments: fc.option(fc.array(pose, { minLength: 1, maxLength: 12 }), { nil: null }),
   }), { maxLength: 12 }),
   links: fc.array(fc.record({ a: fc.nat(), b: fc.nat(), kind: fc.constantFrom(...CONNECTOR_KINDS.map((k) => k.id)), fa: pose, fb: pose, world: fc.boolean() }), { maxLength: 12 }),
   gravity: fc.tuple(finite, finite, finite),
@@ -46,6 +48,7 @@ const docArb = fc.record({
     const params = first ? { [first.key]: spec.tweak } : {};
     const part = makePart({ kind: spec.kind, pose: { p: [0, 0, 0], q: [0, 0, 0, 1] }, material, params, frozen: spec.frozen, name: spec.label }, ids);
     part.pose = spec.pose; // raw floats, including -0 and long fractions
+    part.damage = { broken: [...spec.broken].sort((x, y) => x - y), segments: spec.segments };
     doc.parts[part.id] = part;
     doc.materials[material] = getMaterial(material);
     return part;

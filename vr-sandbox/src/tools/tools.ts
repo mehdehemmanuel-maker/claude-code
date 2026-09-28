@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import type { App } from '../app/app';
 import { getMaterial, MATERIALS } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
-import { addConnection, addPart, deleteParts, duplicateParts, setPartPose } from '../doc/commands';
+import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose } from '../doc/commands';
+import { frameOnPart, partLayout } from '../app/segments';
 import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub } from '../doc/math';
 import type { Pose, Quat, Vec3 } from '../doc/types';
-import { effectiveParams, getPartKind } from '../parts/registry';
+import { effectiveParams, getPartKind, segmentBodyId } from '../parts/registry';
 import { shapeBounds, type CollisionShape } from '../parts/shapes';
 import { defaultsOf, sanitizeParams, type Params } from '../schema/params';
 import { buildVisual } from '../render/geometry';
@@ -124,7 +125,10 @@ export class ToolManager {
 // -------------------------------------------------------------------------------------------------
 
 interface Hold {
+  /** Part being held. */
   id: string;
+  /** Physics body held: the part, or the one segment of a breakable part that was grabbed. */
+  body: string;
   hand: string;
   local: Vec3;
   dist: number;
@@ -168,19 +172,21 @@ export class GrabTool implements Tool {
       return;
     }
     this.app.select([pick.id]);
-    this.begin(pick.id, v3(pick.point), pick.distance, e);
+    this.begin(pick.id, v3(pick.point), pick.distance, e, e.source, pick.seg);
   }
 
-  begin(id: string, point: Vec3, dist: number, e: PointerEvt, hand: string = e.source) {
-    const pose = this.app.livePose(id);
+  begin(id: string, point: Vec3, dist: number, e: PointerEvt, hand: string = e.source, seg: number | null = null) {
     const part = this.app.doc.parts[id];
+    // a breakable part is held by the piece that was grabbed (its still-bonded neighbours come along)
+    const body = seg !== null && part && partLayout(part) ? segmentBodyId(id, seg) : id;
+    const pose = this.app.livePose(body) ?? this.app.livePose(id);
     if (!pose || !part) return;
     for (const [h, other] of this.held) if (other.id === id && h !== hand) this.release(h); // hand-over
     const local = inverseTransformPoint(pose, point);
     const relQ = e.handQuat ? qmul(qconj(e.handQuat), pose.q) : undefined;
-    const hold: Hold = { id, hand, local, dist, q: pose.q, frozen: part.frozen, relQ };
+    const hold: Hold = { id, body, hand, local, dist, q: pose.q, frozen: part.frozen, relQ };
     this.held.set(hand, hold);
-    this.app.physics.send({ op: 'grab', hand, id, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength });
+    this.app.physics.send({ op: 'grab', hand, id: body, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength });
     this.app.audio.ui('grab', point);
     this.app.haptic?.(0.3, 20, hand);
   }
@@ -219,7 +225,15 @@ export class GrabTool implements Tool {
       // Frozen parts moved by hand are a design edit (undoable). Free parts keep flying under physics.
       if (h.frozen) {
         const live = this.app.live.latest(h.id);
-        if (live) setPartPose(this.app.store, h.id, live);
+        const part = this.app.doc.parts[h.id];
+        const layout = part ? partLayout(part) : null;
+        if (live && part && layout) {
+          const segs: Pose[] = [];
+          for (let k = 0; k < layout.count; k++) { const sp = this.app.live.latest(segmentBodyId(h.id, k)); if (sp) segs.push(sp); }
+          placePart(this.app.store, h.id, live, segs.length === layout.count && (part.damage.segments || part.damage.broken.length) ? segs : null);
+        } else if (live) {
+          setPartPose(this.app.store, h.id, live);
+        }
       }
       this.app.audio.ui('drop');
     }
@@ -366,7 +380,7 @@ class JoinTool implements Tool {
   label = 'Join';
   icon = '🔩';
   hint = 'Click part A, then part B (or the floor to anchor). R: cycle joint axis · pick the joint type in the palette';
-  private first: { part: string; point: Vec3; normal: Vec3 } | null = null;
+  private first: { part: string; point: Vec3; normal: Vec3; seg: number | null } | null = null;
   private axisMode = 0;
 
   constructor(private app: App) {}
@@ -381,7 +395,7 @@ class JoinTool implements Tool {
         this.app.audio.ui('error');
         return;
       }
-      this.first = { part: pick.id, point: v3(pick.point), normal: normalize(v3(pick.normal)) };
+      this.first = { part: pick.id, point: v3(pick.point), normal: normalize(v3(pick.normal)), seg: pick.seg };
       this.app.view.setMarkers([pick.point.clone()], 0xffc14d);
       this.app.audio.ui('click', this.first.point);
       return;
@@ -393,8 +407,12 @@ class JoinTool implements Tool {
       this.app.audio.ui('error');
       return;
     }
-    const aPose = this.app.livePose(a.part)!;
-    const bPose = bId ? this.app.livePose(bId) : null;
+    const aPart = this.app.doc.parts[a.part]!;
+    const bPart = bId ? this.app.doc.parts[bId] ?? null : null;
+    const source = (id: string) => this.app.livePose(id);
+    // frames in part coordinates; on breakable stock, relative to the piece that was clicked
+    const onA = (world: Pose) => frameOnPart(aPart, world, a.seg, source);
+    const onB = (world: Pose) => frameOnPart(bPart!, world, pick.seg, source);
     const model = kind.model;
     let conn;
     if (model === 'spring' || model === 'rope' || model === 'band') {
@@ -403,8 +421,8 @@ class JoinTool implements Tool {
       const q = fromTo([0, 1, 0], dir);
       conn = addConnection(this.app.store, {
         kind: kind.id,
-        a: { part: a.part, frame: relativePose(aPose, { p: a.point, q }) },
-        b: bId && bPose ? { part: bId, frame: relativePose(bPose, { p: pb, q }) } : null,
+        a: { part: a.part, frame: onA({ p: a.point, q }) },
+        b: bId && bPart ? { part: bId, frame: onB({ p: pb, q }) } : null,
         params: sanitizeParams(kind.params, defaultsOf(kind.params)),
       });
     } else {
@@ -419,8 +437,8 @@ class JoinTool implements Tool {
       }
       conn = addConnection(this.app.store, {
         kind: kind.id,
-        a: { part: a.part, frame: relativePose(aPose, world) },
-        b: bId && bPose ? { part: bId, frame: relativePose(bPose, world) } : null,
+        a: { part: a.part, frame: onA(world) },
+        b: bId && bPart ? { part: bId, frame: onB(world) } : null,
         params,
       });
     }

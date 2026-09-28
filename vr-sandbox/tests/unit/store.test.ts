@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DocStore } from '../../src/doc/store';
 import {
-  addConnection, addPart, commitPoses, connectedComponent, deleteParts, duplicateParts, newDoc, setPartParam,
+  addConnection, addPart, commitPoses, connectedComponent, deleteParts, duplicateParts, newDoc, recordFracture, repairPart,
+  setPartParam, setPartPose,
 } from '../../src/doc/commands';
 import { seededIds } from '../../src/doc/ids';
 import { encodeDoc } from '../../src/persistence/codec';
@@ -87,5 +88,28 @@ describe('document store', () => {
       tx.create('parts', a.id, {});
     })).toThrow();
     expect(Buffer.from(encodeDoc(store.doc)).equals(Buffer.from(before))).toBe(true);
+  });
+
+  it('fractures are undoable, repair clears them, and moving a damaged part moves its pieces', () => {
+    const store = new DocStore(newDoc('t', '2026-01-01T00:00:00Z'));
+    const ids = seededIds(7);
+    const rod = addPart(store, { kind: 'rod.square', pose: origin, params: { length: 1, side: 0.02, fracture: '4' } }, ids);
+    const pieces = [0, 1, 2, 3].map((k) => ({ p: [-0.375 + 0.25 * k, 0, 0] as [number, number, number], q: [0, 0, 0, 1] as [number, number, number, number] }));
+    const before = encodeDoc(store.doc);
+    recordFracture(store, rod.id, 2, pieces, 'Fractured');
+    recordFracture(store, rod.id, 0, null, 'Fractured');
+    expect(store.doc.parts[rod.id]!.damage.broken).toEqual([0, 2]);
+    // a whole move carries every recorded piece along
+    setPartPose(store, rod.id, { p: [1, 2, 3], q: [0, 0, 0, 1] });
+    expect(store.doc.parts[rod.id]!.damage.segments![3]!.p).toEqual([1.375, 2, 3]);
+    store.undo(); store.undo(); store.undo();
+    expect(Buffer.from(encodeDoc(store.doc)).equals(Buffer.from(before))).toBe(true);
+    store.redo(); store.redo();
+    repairPart(store, rod.id);
+    expect(store.doc.parts[rod.id]!.damage).toEqual({ broken: [], segments: null });
+    // re-dimensioning stock is new stock: damage is cleared with it
+    recordFracture(store, rod.id, 1, null, 'Fractured');
+    setPartParam(store, rod.id, 'length', 1.5);
+    expect(store.doc.parts[rod.id]!.damage.broken).toEqual([]);
   });
 });
