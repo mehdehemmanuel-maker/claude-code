@@ -23,17 +23,23 @@ function blocks(points: [number, number, number][]) {
   return encodeDocText(b.doc);
 }
 
-/** Wait until every block has come to rest (checked over a few frames), then read the heights. */
+/**
+ * Wait until every block has come to rest: at least 0.8 s of *physics* time since now (under load physics runs
+ * slower than the app clock), then unchanged heights across polls between which physics really stepped.
+ */
 async function settle(page: Page) {
-  await page.evaluate(() => { const w = window as any; w.t0 = w.sandbox.app.simTime; w.lastHeights = undefined; });
+  await page.evaluate(() => { const w = window as any; w.t0 = w.sandbox.app.live.ticks; w.lastHeights = undefined; w.lastTicks = -1; });
   await page.waitForFunction(() => {
     const { app } = (window as any).sandbox;
-    const now = Object.values(app.doc.parts).map((p: any) => app.livePose(p.id).p[1]);
     const w = window as any;
+    const ticks = app.live.ticks;
+    if (ticks - w.lastTicks < 5) return false; // nothing new has been simulated since the last look
+    const now = Object.values(app.doc.parts).map((p: any) => app.livePose(p.id).p[1]);
     const prev: number[] | undefined = w.lastHeights;
     w.lastHeights = now;
-    return prev && prev.length === now.length && now.every((y: number, i: number) => Math.abs(y - prev[i]!) < 1e-4) && app.simTime - w.t0 > 0.8;
-  }, null, { timeout: 60_000, polling: 250 });
+    w.lastTicks = ticks;
+    return !!prev && prev.length === now.length && now.every((y: number, i: number) => Math.abs(y - prev[i]!) < 1e-4) && ticks - w.t0 > 72;
+  }, null, { timeout: 90_000, polling: 250 });
   return heights(page);
 }
 

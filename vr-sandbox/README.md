@@ -46,8 +46,8 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
 |---|---|
 | Trigger | Use the active tool, or tap the wrist tablet |
 | Grip | Grab what the ray points at (each hand holds its own part; wrist rotation carries over) |
-| Left stick | Fly (head-relative, relax mode). Steers vehicles while the menu is hidden |
-| Right stick | Snap turn and rise/sink (relax mode), or push/pull a held part |
+| Left stick | Relax mode: fly where you look, or, in a build with motors, drive it (menu hidden). Switch with **World → Left stick**. Walk and mixed reality: always drives |
+| Right stick | Snap turn (about your head) and rise/sink (relax mode), or push/pull a held part |
 | A / B | Next tool / show-hide the wrist tablet |
 | X / Y | Undo / redo |
 | Stick clicks | Checkpoint (left) / rewind (right) |
@@ -94,7 +94,7 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
 ```bash
 npm run typecheck
 npm test        # 118 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 12 browser tests incl. emulated Quest sessions in walk and mixed reality, and the Pages subpath
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 14 browser tests incl. emulated Quest sessions (movement, driving, walk and mixed reality) and the Pages subpath
 ```
 
 The physics conformance suite checks laws, not builds:

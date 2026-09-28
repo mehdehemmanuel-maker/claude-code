@@ -20,8 +20,8 @@ test('the build boots and simulates when served from a Pages subpath', async ({ 
   const state = await page.evaluate(async () => {
     const { app } = (window as any).sandbox;
     app.loadTemplate('newtons-cradle');
-    const t0 = app.simTime;
-    await new Promise<void>((res) => { const k = () => (app.simTime - t0 > 0.5 && app.live.stats ? res() : requestAnimationFrame(k)); k(); });
+    const t0 = app.live.ticks;
+    await new Promise<void>((res) => { const k = () => (app.live.ticks - t0 > 45 && app.live.stats ? res() : requestAnimationFrame(k)); k(); });
     return { mode: app.physics.mode, bodies: app.live.stats.bodies as number, error: app.physics.lastError };
   });
   expect(state.mode).toBe('worker');

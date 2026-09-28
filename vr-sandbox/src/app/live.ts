@@ -17,6 +17,9 @@ export class LiveState {
   cure: Record<string, number> = {};
   stats: AdvanceResult['stats'] | null = null;
   pendingEvents: PhysicsEvent[] = [];
+  /** Physics ticks actually run. Under load physics slows down rather than spiralling, so this, not the app's
+   *  clock, is how much simulated time has passed. */
+  ticks = 0;
 
   ingest(r: AdvanceResult) {
     if (r.slots) {
@@ -33,6 +36,7 @@ export class LiveState {
     this.cure = r.cure;
     this.bonds = r.bonds ?? {};
     this.stats = r.stats;
+    this.ticks += r.ticksRun;
     this.pendingEvents.push(...r.events);
   }
 

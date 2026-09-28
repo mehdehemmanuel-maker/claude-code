@@ -72,6 +72,8 @@ export class XRMode {
   private sessionStart = 0;
   private bounds: THREE.LineLoop | null = null;
   private lastHead = new THREE.Vector3();
+  /** Relax mode: the left stick drives the build's motors and steering instead of flying you. */
+  drive = false;
 
   constructor(private app: App, private tools: ToolManager, private desktop: DesktopControls) {
     this.tablet = new Tablet(app, tools);
@@ -100,6 +102,12 @@ export class XRMode {
         }
       }
     };
+    // a build with motors on the stick channels is for driving; anything else, the stick flies you
+    app.onLoad.push(() => {
+      this.drive = app.hasStickControls();
+      if (this.app.renderer.xr.isPresenting && this.drive) this.app.toast('This build has motors: the left stick drives it. Menu → World → "Left stick" switches to flying.', 'info');
+    });
+    this.drive = app.hasStickControls();
     renderer.xr.addEventListener('sessionstart', () => this.onStart());
     renderer.xr.addEventListener('sessionend', () => this.onEnd());
     app.onFrame.push((dt, time) => this.frame(dt, time));
@@ -152,6 +160,13 @@ export class XRMode {
   }
 
   /** Switch mode inside a running session (mixed needs a passthrough session). */
+  setDrive(drive: boolean) {
+    this.drive = drive;
+    this.app.channels['throttle'] = 0;
+    this.app.channels['steer'] = 0;
+    this.app.notify();
+  }
+
   setStyle(style: XRStyle) {
     if (style === 'mixed' && !this.passthrough) {
       this.app.toast('Mixed reality needs a passthrough session: exit VR and enter with Mixed reality', 'warn');
@@ -334,9 +349,18 @@ export class XRMode {
       this.lastScale = scale;
     }
     this.sceneFrame(time);
-    const cam = this.app.renderer.xr.getCamera();
+    // Head pose in the world from the scene camera, which three.js keeps inside the rig. (The XR array camera's
+    // own getWorldPosition/Direction recompute it without the rig: reference-space values, which point the wrong
+    // way as soon as the rig has turned.)
+    // The head itself is between the eyes: the combined camera sits a little behind them to cover both views.
+    const cam = this.app.view.camera;
     const head = new THREE.Vector3();
-    cam.getWorldPosition(head);
+    const eyes = this.app.renderer.xr.getCamera().cameras;
+    if (eyes.length) {
+      const e = new THREE.Vector3();
+      for (const c of eyes) head.add(e.setFromMatrixPosition(c.matrixWorld));
+      head.multiplyScalar(1 / eyes.length);
+    } else cam.getWorldPosition(head);
     this.lastHead.copy(head);
     let tabletUv: THREE.Vector2 | null = null;
     for (const side of ['left', 'right'] as const) {
@@ -403,20 +427,23 @@ export class XRMode {
       const ay = gp.axes[3] ?? 0;
       const dead = (v: number) => (Math.abs(v) < 0.15 ? 0 : v);
       if (side === 'left') {
-        // fly in the direction the head faces (yaw only), speed scales with player size
-        const fwd = new THREE.Vector3();
-        cam.getWorldDirection(fwd);
-        fwd.y = 0;
-        fwd.normalize();
-        const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-        const speed = 2.2 * scale;
-        if (free) {
+        // In relax mode the stick either flies you or drives the build, never both (you would fly off the kart).
+        // Walk and mixed reality don't fly, so there it always drives.
+        const driving = this.drive || !free;
+        if (free && !driving) {
+          // fly the way the head faces (yaw only); looking straight down, the top of the view points forward
+          const fwd = new THREE.Vector3();
+          cam.getWorldDirection(fwd);
+          fwd.y = 0;
+          if (fwd.lengthSq() < 0.04) fwd.set(0, 1, 0).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion())).setY(0);
+          fwd.normalize();
+          const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+          const speed = 2.2 * scale;
           rig.position.addScaledVector(fwd, -dead(ay) * speed * dt);
           rig.position.addScaledVector(right, dead(ax) * speed * dt);
         }
-        // left stick also steers vehicles while the menu is hidden
-        this.app.channels['throttle'] = this.tablet.visible ? 0 : -dead(ay);
-        this.app.channels['steer'] = this.tablet.visible ? 0 : -dead(ax);
+        this.app.channels['throttle'] = driving && !this.tablet.visible ? -dead(ay) : 0;
+        this.app.channels['steer'] = driving && !this.tablet.visible ? -dead(ax) : 0;
       } else {
         // snap turn about the head (relax only: turning would unhook the real room)
         if (free && Math.abs(ax) > 0.7 && h.turnArmed) {
