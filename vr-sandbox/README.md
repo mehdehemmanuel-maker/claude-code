@@ -15,8 +15,12 @@ npm run dev          # http://localhost:5173 (desktop)
 - **Desktop:** right-drag to look, WASD/QE to fly, keys 1–9 pick tools, left click uses the tool. Press **H** for all controls.
 - **Try VR without a headset:** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3) with a synthetic scanned room (floor, walls, a table and a couch), and **Enter VR** works in any browser in all three modes. `?iwer=noroom` leaves the room out.
 - **On a Quest 3S:** WebXR needs HTTPS or `localhost`. Either:
-  - use GitHub Pages: enable *Settings → Pages → Source: GitHub Actions*, then run the **vr-sandbox Pages** workflow (it deploys from `main`); or
-  - plug the headset in over USB and run `adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173` in the Quest Browser.
+  - use GitHub Pages (once per repository):
+    1. Go to *Settings → Pages → Build and deployment → Source* and pick **GitHub Actions**.
+    2. Merge to `main`. The **vr-sandbox Pages** workflow builds, tests and deploys. If you merged before step 1, run the workflow by hand: *Actions → vr-sandbox Pages → Run workflow*.
+    3. Open the site in the Quest Browser, e.g. `https://<owner>.github.io/<repo>/`. The build uses relative paths, so it works from the subpath (tested in `tests/e2e/deploy.spec.ts`).
+  - or plug the headset in over USB and run `adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173` in the Quest Browser.
+- **First time in the headset:** pick a mode next to **Enter VR**, then press it. Mixed reality asks for permission to use your room scan (Space Setup). If you've never run Space Setup, the tablet's **Scan room** starts it.
 - **Debug:** `?physics=inline` runs physics on the main thread instead of the worker.
 
 ### Three ways to be there
@@ -90,7 +94,7 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
 ```bash
 npm run typecheck
 npm test        # 118 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 10 browser tests incl. emulated Quest sessions in walk and mixed reality
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 12 browser tests incl. emulated Quest sessions in walk and mixed reality, and the Pages subpath
 ```
 
 The physics conformance suite checks laws, not builds:

@@ -16,10 +16,19 @@ export default defineConfig({
       args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     },
   },
-  webServer: {
-    command: 'npx vite build && npx vite preview --port 4173 --strictPort',
-    url: 'http://localhost:4173/',
-    reuseExistingServer: !process.env['CI'],
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      command: 'npx vite build && npx vite preview --port 4173 --strictPort',
+      url: 'http://localhost:4173/',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 180_000,
+    },
+    {
+      // the same build served the way GitHub Pages serves a project site: from a subpath
+      command: 'npx vite build --outDir dist-pages && npx vite preview --outDir dist-pages --port 4174 --strictPort --base /claude-code/',
+      url: 'http://localhost:4174/claude-code/',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 180_000,
+    },
+  ],
 });
