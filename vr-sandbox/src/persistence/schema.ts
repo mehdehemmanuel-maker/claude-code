@@ -46,6 +46,8 @@ export const PartSchema = Type.Object({
 
 const Endpoint = Type.Object({ part: Id('p'), frame: Pose }, { additionalProperties: false });
 
+const WeldBead = Type.Object({ p0: Vec3, p1: Vec3, leg: Num, q: Num, Q: Num }, { additionalProperties: false });
+
 export const ConnectionSchema = Type.Object({
   id: Id('c'),
   kind: Key,
@@ -57,6 +59,7 @@ export const ConnectionSchema = Type.Object({
     cure: Num,
     note: Text(300),
   }, { additionalProperties: false }),
+  weld: Type.Optional(Type.Object({ beads: Type.Array(WeldBead, { maxItems: 4096 }) }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
 export const MaterialSchema = Type.Object({

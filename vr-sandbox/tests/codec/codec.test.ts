@@ -32,7 +32,13 @@ const docArb = fc.record({
     broken: fc.uniqueArray(fc.integer({ min: 0, max: 11 }), { maxLength: 4 }),
     segments: fc.option(fc.array(pose, { minLength: 1, maxLength: 12 }), { nil: null }),
   }), { maxLength: 12 }),
-  links: fc.array(fc.record({ a: fc.nat(), b: fc.nat(), kind: fc.constantFrom(...CONNECTOR_KINDS.map((k) => k.id)), fa: pose, fb: pose, world: fc.boolean() }), { maxLength: 12 }),
+  links: fc.array(fc.record({
+    a: fc.nat(), b: fc.nat(), kind: fc.constantFrom(...CONNECTOR_KINDS.map((k) => k.id)), fa: pose, fb: pose, world: fc.boolean(),
+    beads: fc.array(fc.record({
+      p0: fc.tuple(finite, finite, finite), p1: fc.tuple(finite, finite, finite),
+      leg: fc.double({ noNaN: true, min: 1e-4, max: 0.05 }), q: fc.double({ noNaN: true, min: 0, max: 1 }), Q: fc.double({ noNaN: true, min: 0, max: 5e6 }),
+    }), { maxLength: 6 }),
+  }), { maxLength: 12 }),
   gravity: fc.tuple(finite, finite, finite),
   cureClock: fc.double({ noNaN: true, noDefaultInfinity: true, min: 0, max: 1000 }),
 }).map(({ seed, name, parts, links, gravity, cureClock }) => {
@@ -58,6 +64,7 @@ const docArb = fc.record({
       const a = made[l.a % made.length]!;
       const b = made[(l.a + 1 + (l.b % (made.length - 1))) % made.length]!;
       const c = makeConnection({ kind: l.kind, a: { part: a.id, frame: l.fa }, b: l.world ? null : { part: b.id, frame: l.fb } }, ids);
+      if (c.kind === 'weld' && l.beads.length) c.weld = { beads: l.beads };
       doc.connections[c.id] = c;
     }
   }
