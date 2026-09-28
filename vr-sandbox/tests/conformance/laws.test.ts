@@ -204,6 +204,33 @@ describe('fasteners fail at their real capacities', () => {
     r.done();
   });
 
+  it('failure and slip notes give the governing load and capacity in that load\'s units', async () => {
+    const unitOf = (mode: string) => (mode === 'bending' || mode === 'torsion' ? /N·m/ : /\d N( |$)/);
+    // a glued cantilever root fails in bending: moments read in N·m
+    const r = await rig({}, false);
+    const L = 0.6;
+    const bar = r.part('rod.square', at(L / 2, 1, 0), { material: 'steel.a36', params: { length: L, side: 0.03, fracture: 'off' } });
+    r.connect('glued', { part: bar, frame: at(-L / 2, 0, 0, axisAngle([0, 0, 1], Math.PI / 2)) }, null, { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.03 });
+    const notes: { mode: string; note: string }[] = [];
+    for (let i = 0; i < 60 && !notes.length; i++) for (const e of r.world.step().events) if (e.type === 'break') notes.push({ mode: e.mode, note: e.note });
+    r.done();
+    expect(notes.length).toBe(1);
+    expect(notes[0]!.mode).toBe('bending');
+    expect(notes[0]!.note).toMatch(/failed in bending: [\d.]+ (k)?N·m on a [\d.]+ (k)?N·m capacity/);
+    // a hand-tight bolt slips in shear: forces read in N, against the grip of that same mode
+    const s2 = await rig({}, false);
+    const plate = s2.part('plate', at(0, 1, 0), { material: 'steel.a36', params: { length: 0.1, width: 0.1, thickness: 0.01 } });
+    const joint = s2.connect('bolted', { part: plate, frame: at(0, 0, 0, axisAngle([0, 0, 1], -Math.PI / 2)) }, null, { size: 'M8', class: '8.8', tightening: 'hand' });
+    const slip = s2.world.connectionDerived(joint.id)!.slip!.shear;
+    const weight = s2.part('weight', at(0, 0.6, 0), { params: { mass: (1.6 * slip) / g } });
+    s2.connect('fixed', { part: plate, frame: at(0, -0.005, 0, axisAngle([1, 0, 0], Math.PI)) }, { part: weight, frame: at(0, 0.6 - 0.995 + 0.3, 0) });
+    let slipNote = '';
+    for (let i = 0; i < 90 && !slipNote; i++) for (const e of s2.world.step().events) if (e.type === 'slip') slipNote = e.note;
+    s2.done();
+    expect(slipNote).toMatch(/^Slipped: shear [\d.]+ (k)?N beat the friction grip of [\d.]+ (k)?N$/);
+    expect(unitOf('shear').test(slipNote)).toBe(true);
+  });
+
   it('a rope breaks at its minimum breaking strength', async () => {
     const mbs = 1.5e8 * 0.004 ** 2; // paracord-550 model, 2.4 kN
     const run = async (kg: number) => {

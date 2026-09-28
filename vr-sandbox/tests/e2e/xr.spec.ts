@@ -97,3 +97,104 @@ test('Quest emulation: tablet taps, grip grab, tool cycling', async ({ page }) =
   expect(cycle).toEqual([0, 1]);
   expect(errors).toEqual([]);
 });
+
+test('relax mode: the stick flies where you look, also after turning, and snap turns pivot on your head', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page, '?iwer=noroom');
+  await page.waitForFunction(() => (window as any).sandbox.xr, null, { timeout: 30_000 });
+  await page.evaluate(() => {
+    const w = window as any;
+    w.sandbox.app.renderer.xr.setFramebufferScaleFactor(0.25);
+    w.frames = (n: number) => new Promise<void>((res) => { let k = 0; const t = () => (++k >= n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t); });
+    // head pose in the world, straight from the eye cameras three.js renders with (rig transform included)
+    w.head = () => {
+      const cams = w.sandbox.app.renderer.xr.getCamera().cameras;
+      const V = w.sandbox.app.view.camera.position.constructor;
+      const p = new V(), e = new V();
+      for (const c of cams) p.add(e.setFromMatrixPosition(c.matrixWorld).multiplyScalar(1 / cams.length));
+      const f = new V(0, 0, -1).transformDirection(cams[0].matrixWorld);
+      return { p: p.toArray(), f: f.toArray() };
+    };
+    w.iwer.position.set(0.3, 1.6, 0.2);
+    w.iwer.quaternion.set(0, 0, 0, 1);
+  });
+  await page.selectOption('#vrmode', 'relax');
+  await page.click('#vr');
+  await page.waitForFunction(() => (window as any).sandbox.app.renderer.xr.isPresenting, null, { timeout: 20_000 });
+  const result = await page.evaluate(async () => {
+    const w = window as any;
+    await w.frames(10);
+    const start = w.head();
+    // six snap turns to the right: 180 degrees, each one pivoting about the head
+    let drift = 0;
+    for (let i = 0; i < 6; i++) {
+      const before = w.head().p;
+      w.iwer.controllers.right.updateAxes('thumbstick', 1, 0);
+      await w.frames(4);
+      w.iwer.controllers.right.updateAxes('thumbstick', 0, 0);
+      await w.frames(4);
+      const after = w.head().p;
+      drift = Math.max(drift, Math.hypot(after[0] - before[0], after[2] - before[2]));
+    }
+    const turned = w.head();
+    // fly forward: the head must move the way it now looks
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, -1);
+    await w.frames(30);
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, 0);
+    await w.frames(2);
+    const moved = w.head().p;
+    const d = [moved[0] - turned.p[0], moved[2] - turned.p[2]];
+    const len = Math.hypot(d[0], d[1]);
+    const along = (d[0] * turned.f[0] + d[1] * turned.f[2]) / (len * Math.hypot(turned.f[0], turned.f[2]));
+    return { lookBefore: start.f[2], lookAfter: turned.f[2], drift, len, along };
+  });
+  expect(result.lookBefore).toBeLessThan(-0.99); // looking along -Z to start
+  expect(result.lookAfter).toBeGreaterThan(0.99); // and along +Z after turning 180 degrees
+  expect(result.drift).toBeLessThan(0.01); // a snap turn keeps the head where it is
+  expect(result.len).toBeGreaterThan(0.3);
+  expect(result.along).toBeGreaterThan(0.98); // forward is where you look
+  expect(errors).toEqual([]);
+});
+
+test('relax mode: in a build with motors the left stick drives it and leaves you in place; switched to Fly, it flies you', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page, '?iwer=noroom');
+  await page.waitForFunction(() => (window as any).sandbox.xr, null, { timeout: 30_000 });
+  await page.evaluate(() => {
+    const w = window as any;
+    w.sandbox.app.renderer.xr.setFramebufferScaleFactor(0.25);
+    w.frames = (n: number) => new Promise<void>((res) => { let k = 0; const t = () => (++k >= n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t); });
+    w.sandbox.app.loadTemplate('go-kart');
+  });
+  await page.selectOption('#vrmode', 'relax');
+  await page.click('#vr');
+  await page.waitForFunction(() => (window as any).sandbox.app.renderer.xr.isPresenting, null, { timeout: 20_000 });
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const { app, xr } = w.sandbox;
+    xr.tablet.setVisible(false);
+    await w.frames(10);
+    const drive0 = xr.drive;
+    const rig0 = app.view.rig.position.clone();
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, -1);
+    await w.frames(20);
+    const throttle = app.channels.throttle;
+    const rigMovedDriving = app.view.rig.position.distanceTo(rig0);
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, 0);
+    await w.frames(2);
+    xr.setDrive(false);
+    const rig1 = app.view.rig.position.clone();
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, -1);
+    await w.frames(20);
+    const throttleFlying = app.channels.throttle;
+    const rigMovedFlying = app.view.rig.position.distanceTo(rig1);
+    w.iwer.controllers.left.updateAxes('thumbstick', 0, 0);
+    return { drive0, throttle, rigMovedDriving, throttleFlying, rigMovedFlying };
+  });
+  expect(r.drive0).toBe(true); // the go-kart has motors on the stick channels
+  expect(r.throttle).toBeCloseTo(1, 5);
+  expect(r.rigMovedDriving).toBeLessThan(1e-6);
+  expect(r.throttleFlying).toBe(0);
+  expect(r.rigMovedFlying).toBeGreaterThan(0.2);
+  expect(errors).toEqual([]);
+});

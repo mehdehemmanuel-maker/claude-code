@@ -2501,7 +2501,9 @@ export class PhysicsWorld {
         c.slipTicks++;
         if (c.slipTicks >= this.opts.filterTicks) {
           c.status = 'slipped';
-          this.events.push({ type: 'slip', conn: c.id, point: frame.p, note: `Slipped: ${shear > c.derived.slip.shear ? 'shear' : 'torsion'} beat friction grip (${Math.round(Math.max(shear, torsion))} vs ${Math.round(c.derived.slip.shear)})` });
+          const byShear = shear > c.derived.slip.shear;
+          const [m, l, cap] = byShear ? ['shear', shear, c.derived.slip.shear] : ['torsion', torsion, c.derived.slip.torsion];
+          this.events.push({ type: 'slip', conn: c.id, point: frame.p, note: `Slipped: ${m} ${fmtLoad(m, l)} beat the friction grip of ${fmtLoad(m, cap)}` });
           this.buildConstraint(c);
           continue;
         }
@@ -2515,7 +2517,7 @@ export class PhysicsWorld {
         this.destroyConstraint(c);
         this.events.push({
           type: 'break', conn: c.id, mode, load, capacity, point: frame.p,
-          note: `${c.kind.label} failed in ${mode}: ${fmtN(load)} on a ${fmtN(capacity)} capacity`,
+          note: `${c.kind.label} failed in ${mode}: ${fmtLoad(mode, load)} on a ${fmtLoad(mode, capacity)} capacity`,
         });
       }
     }

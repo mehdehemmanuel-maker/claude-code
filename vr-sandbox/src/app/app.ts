@@ -80,6 +80,8 @@ export class App {
   private frames = 0;
   private fpsTime = 0;
   onFrame: ((dt: number, time: number) => void)[] = [];
+  /** Called after a whole build is loaded (template, file, share code, rewind). */
+  onLoad: (() => void)[] = [];
   world: WorldKind = 'workshop';
   /** The user's real room as last scanned (world coordinates), and how it is shown. */
   room: RoomSurface[] = [];
@@ -182,6 +184,15 @@ export class App {
     return this.store.doc;
   }
 
+  /** Whether the build has motors or servos on the stick channels (throttle, steer): something to drive. */
+  hasStickControls() {
+    return Object.values(this.doc.connections).some((c) => {
+      if (c.state.status === 'broken') return false;
+      const ch = c.params['channel'];
+      return (c.kind === 'motor' || c.kind === 'servo') && (ch === 'throttle' || ch === 'steer' || ch === undefined);
+    });
+  }
+
   private reconcile(changes: Change[], source: ChangeSource) {
     const doc = this.store.doc;
     if (source === 'load') {
@@ -206,6 +217,7 @@ export class App {
       this.selection = { parts: new Set(), conn: null };
       this.view.setSelection([], null);
       this.notify();
+      for (const f of this.onLoad) f();
       return;
     }
     const t = touched(changes);

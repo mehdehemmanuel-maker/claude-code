@@ -23,17 +23,23 @@ function blocks(points: [number, number, number][]) {
   return encodeDocText(b.doc);
 }
 
-/** Wait until every block has come to rest (checked over a few frames), then read the heights. */
+/**
+ * Wait until every block has come to rest: at least 0.8 s of *physics* time since now (under load physics runs
+ * slower than the app clock), then unchanged heights across polls between which physics really stepped.
+ */
 async function settle(page: Page) {
-  await page.evaluate(() => { const w = window as any; w.t0 = w.sandbox.app.simTime; w.lastHeights = undefined; });
+  await page.evaluate(() => { const w = window as any; w.t0 = w.sandbox.app.live.ticks; w.lastHeights = undefined; w.lastTicks = -1; });
   await page.waitForFunction(() => {
     const { app } = (window as any).sandbox;
-    const now = Object.values(app.doc.parts).map((p: any) => app.livePose(p.id).p[1]);
     const w = window as any;
+    const ticks = app.live.ticks;
+    if (ticks - w.lastTicks < 5) return false; // nothing new has been simulated since the last look
+    const now = Object.values(app.doc.parts).map((p: any) => app.livePose(p.id).p[1]);
     const prev: number[] | undefined = w.lastHeights;
     w.lastHeights = now;
-    return prev && prev.length === now.length && now.every((y: number, i: number) => Math.abs(y - prev[i]!) < 1e-4) && app.simTime - w.t0 > 0.8;
-  }, null, { timeout: 60_000, polling: 250 });
+    w.lastTicks = ticks;
+    return !!prev && prev.length === now.length && now.every((y: number, i: number) => Math.abs(y - prev[i]!) < 1e-4) && ticks - w.t0 > 72;
+  }, null, { timeout: 90_000, polling: 250 });
   return heights(page);
 }
 
@@ -142,8 +148,8 @@ test('walk mode: calibrates the room into the workshop, walks instead of flying,
   expect(onTable).toBeCloseTo(0.79, 1);
   // with the room made non-solid, the same block falls through the (virtual) table to the workshop floor
   await sb(page, (s) => { s.app.roomSolid = false; s.app.applyRoom(); });
-  await page.waitForFunction(() => { const { app } = (window as any).sandbox; return app.livePose(Object.keys(app.doc.parts)[0]).p[1] < 0.1; }, null, { timeout: 30_000 });
-  const [dropped] = await heights(page);
-  expect(dropped).toBeLessThan(0.1);
+  // it lands from 0.7 m and bounces: judge it at rest (a resting 100 mm cube's centre is below 0.087 m)
+  const [dropped] = await settle(page);
+  expect(dropped).toBeLessThan(0.09);
   expect(errors).toEqual([]);
 });

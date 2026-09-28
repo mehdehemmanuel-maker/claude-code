@@ -11,14 +11,16 @@ import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/pa
 import { STANDARD_GRAVITY } from '../data/materials';
 import { TEMPLATES } from '../templates/templates';
 
-/** What the tablet needs from the XR mode to offer the room controls. */
-export interface RoomControls {
+/** What the tablet needs from the XR mode: room modes and controls, and what the left stick does. */
+export interface XRControls {
   style: 'relax' | 'walk' | 'mixed';
   active: 'relax' | 'walk' | 'mixed';
   passthrough: boolean;
   calibrated: boolean;
   canScan: boolean;
   setStyle(style: 'relax' | 'walk' | 'mixed'): void;
+  drive: boolean;
+  setDrive(drive: boolean): void;
   recalibrate(): void;
   scan(): void;
 }
@@ -50,7 +52,7 @@ export class Tablet {
   private lastDraw = 0;
   private scroll = 0;
   visible = true;
-  room: RoomControls | null = null;
+  room: XRControls | null = null;
 
   constructor(private app: App, private tools: ToolManager) {
     this.canvas.width = W;
@@ -291,8 +293,14 @@ export class Tablet {
     const presets: [string, number][] = [['Earth', STANDARD_GRAVITY], ['Moon', 1.62]];
     presets.forEach(([n, v], i) => this.btn(`g-${n}`, 20 + (2 + i) * (bw + 8), row(3), bw, 76, n, () => setSim(app.store, { gravity: [0, -v, 0] }), { on: Math.abs(g - v) < 0.01, sub: `${v} m/s²` }));
     this.btn('zerog', 20, row(4), bw, 76, 'Zero-g', () => setSim(app.store, { gravity: [0, 0, 0] }), { on: g < 1e-3 });
+    const r = this.room;
+    if (r && r.active === 'relax') {
+      this.btn('stick', 20 + (bw + 8), row(4), bw * 2 + 8, 76, r.drive ? 'Left stick: Drive' : 'Left stick: Fly', () => r.setDrive(!r.drive), {
+        on: r.drive, sub: r.drive ? 'motors and steering (menu hidden)' : 'fly where you look',
+      });
+    }
     this.drawRoom(row(5) + 10, bw);
-    this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 20 + bw + 16, row(4) + 48, 22, '#9aa4af');
+    this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
   }
 
   /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */

@@ -31,6 +31,11 @@ const run = (w: PhysicsWorld, seconds: number) => {
 
 const byName = (doc: BuildDoc, name: string) => Object.values(doc.parts).filter((p) => p.name === name);
 
+/** Step once, collecting every failure (break, fracture, yield, slip) with its note. */
+const stepping = (w: PhysicsWorld, failures: string[]) => () => {
+  for (const e of w.step().events) if (e.type === 'break' || e.type === 'fracture' || e.type === 'yield' || e.type === 'slip') failures.push(e.note);
+};
+
 describe('templates', () => {
   for (const t of TEMPLATES) {
     it(`${t.id}: round-trips byte for byte and is deterministic`, () => {
@@ -63,15 +68,60 @@ describe('templates', () => {
     // no stop bar: the rigid cup carries the ball over the top, so measure the throw in either direction
     const start = w.livePose(ball.id)!.p;
     let reach = 0, speed = 0;
+    const failures: string[] = [];
+    const step = stepping(w, failures);
     for (let i = 0; i < 270; i++) {
-      w.step();
+      step();
       const p = w.livePose(ball.id)!.p;
       reach = Math.max(reach, Math.hypot(p[0] - start[0], p[2] - start[2]));
       speed = Math.max(speed, Math.hypot(...w.linearVelocity(ball.id)!));
     }
     expect(speed).toBeGreaterThan(7);
     expect(reach).toBeGreaterThan(2);
+    // the card promises a throw, not a wreck: nothing fails while the arm swings and settles
+    for (let i = 0; i < 270; i++) step();
+    expect(failures).toEqual([]);
     w.destroy();
+  });
+
+  // Fire a catapult build: failures during the throw and three seconds after, and where the ball first lands.
+  const fireCatapult = async (edit: (d: BuildDoc) => void = () => {}) => {
+    const doc = getTemplate('catapult').build();
+    edit(doc);
+    const w = await load(doc);
+    const failures = run(w, 0.5);
+    w.apply({ op: 'removeConnection', id: Object.values(doc.connections).find((c) => c.kind === 'rope')!.id });
+    const ball = byName(doc, 'Projectile')[0]!;
+    const s = w.livePose(ball.id)!.p;
+    const step = stepping(w, failures);
+    let landed = NaN;
+    for (let i = 0; i < 360; i++) {
+      step();
+      const p = w.livePose(ball.id)!.p;
+      if (Number.isNaN(landed) && i > 20 && p[1] < 0.06) landed = Math.hypot(p[0] - s[0], p[2] - s[2]);
+    }
+    w.destroy();
+    return { failures, landed };
+  };
+  const counterweightBolts = (d: BuildDoc) => {
+    const cw = byName(d, 'Counterweight')[0]!;
+    return Object.values(d.connections).find((c) => c.kind === 'bolted' && c.b?.part === cw.id)!;
+  };
+
+  it('catapult card: a heavier counterweight throws farther, and 40 to 150 kg all fit the frame', async () => {
+    const throws = [];
+    for (const kg of [40, 80, 150]) throws.push(await fireCatapult((d) => { byName(d, 'Counterweight')[0]!.params['mass'] = kg; }));
+    for (const t of throws) expect(t.failures).toEqual([]);
+    expect(throws[0]!.landed).toBeLessThan(throws[1]!.landed);
+    expect(throws[1]!.landed).toBeLessThan(throws[2]!.landed);
+  });
+
+  it('catapult card: hand-tight counterweight bolts slip, and the throw falls short', async () => {
+    const tight = await fireCatapult();
+    const loose = await fireCatapult((d) => { counterweightBolts(d).params['tightening'] = 'hand'; });
+    expect(loose.failures.length).toBeGreaterThan(0);
+    expect(loose.failures.every((f) => f.startsWith('Slipped: shear'))).toBe(true);
+    expect(loose.landed).toBeLessThan(0.8 * tight.landed);
   });
 
   it('spring launcher: erasing the latch launches the ball upward', async () => {
@@ -82,8 +132,11 @@ describe('templates', () => {
     w.apply({ op: 'removeConnection', id: latch.id });
     const ball = byName(doc, 'Ball')[0]!;
     let maxY = 0;
-    for (let i = 0; i < 180; i++) { w.step(); maxY = Math.max(maxY, w.livePose(ball.id)!.p[1]); }
+    const failures: string[] = [];
+    const step = stepping(w, failures);
+    for (let i = 0; i < 270; i++) { step(); maxY = Math.max(maxY, w.livePose(ball.id)!.p[1]); }
     expect(maxY).toBeGreaterThan(0.6);
+    expect(failures).toEqual([]);
     w.destroy();
   });
 
@@ -95,15 +148,18 @@ describe('templates', () => {
     const x0 = w.livePose(last.id)!.p[0];
     w.apply({ op: 'upsertPart', part: { ...first, frozen: false }, material: doc.materials[first.material]!, keepLivePose: true });
     let maxX = x0;
-    for (let i = 0; i < 90; i++) { w.step(); maxX = Math.max(maxX, w.livePose(last.id)!.p[0]); }
+    const failures: string[] = [];
+    const step = stepping(w, failures);
+    for (let i = 0; i < 270; i++) { step(); maxX = Math.max(maxX, w.livePose(last.id)!.p[0]); }
     expect(maxX - x0).toBeGreaterThan(0.05);
+    expect(failures).toEqual([]);
     w.destroy();
   });
 
   it('raft floats and the steel block sinks', async () => {
     const doc = getTemplate('raft').build();
     const w = await load(doc);
-    run(w, 8);
+    expect(run(w, 8)).toEqual([]);
     for (const p of byName(doc, 'Plank')) expect(Math.abs(w.livePose(p.id)!.p[1] - 0.9)).toBeLessThan(0.05);
     expect(w.livePose(byName(doc, 'Steel block')[0]!.id)!.p[1]).toBeLessThan(0.2);
     expect(w.livePose(byName(doc, 'Balsa')[0]!.id)!.p[1]).toBeGreaterThan(0.88);
@@ -119,11 +175,12 @@ describe('templates', () => {
     const start = w.livePose(chassis.id)!.p;
     // Short straight run: the kart starts pointed at the pool, whose wall is ~6 m away.
     w.apply({ op: 'controls', channels: { throttle: 1, steer: 0 } });
-    run(w, 1.2);
+    const failures = run(w, 1.2);
     const mid = w.livePose(chassis.id)!.p;
     expect(mid[0] - start[0]).toBeGreaterThan(1.5);
     w.apply({ op: 'controls', channels: { throttle: 0.6, steer: 1 } });
-    run(w, 1.5);
+    failures.push(...run(w, 1.5));
+    expect(failures).toEqual([]);
     const end = w.livePose(chassis.id)!.p;
     expect(Math.abs(end[2] - mid[2])).toBeGreaterThan(0.5);
     w.destroy();
@@ -135,12 +192,15 @@ describe('templates', () => {
     const free = byName(doc, 'Free disc')[0]!;
     const braked = byName(doc, 'Eddy-braked disc')[0]!;
     let freePeak = 0, brakedPeak = 0;
+    const failures: string[] = [];
+    const step = stepping(w, failures);
     for (let i = 0; i < 180; i++) {
-      w.step();
+      step();
       freePeak = Math.max(freePeak, Math.abs(w.angularVelocity(free.id)![2]));
       brakedPeak = Math.max(brakedPeak, Math.abs(w.angularVelocity(braked.id)![2]));
     }
     expect(freePeak).toBeGreaterThan(3 * brakedPeak);
+    expect(failures).toEqual([]);
     w.destroy();
   });
 });
