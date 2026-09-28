@@ -24,6 +24,7 @@ export class UI {
   private topbar = document.getElementById('topbar')!;
   private tooltip = document.getElementById('tooltip')!;
   private inspectorKey = '';
+  private dragging = false;
   private liveRefs: { el: HTMLElement; get: () => string }[] = [];
   private loadBar: { bar: HTMLElement; text: HTMLElement; id: string } | null = null;
   private search = '';
@@ -37,6 +38,8 @@ export class UI {
     app.subscribe(() => this.refresh());
     app.onToast((t) => this.showToast(t));
     window.addEventListener('keydown', (e) => this.onKey(e));
+    this.inspector.addEventListener('pointerdown', (e) => { if ((e.target as HTMLInputElement).type === 'range') this.dragging = true; });
+    window.addEventListener('pointerup', () => { if (this.dragging) { this.dragging = false; this.refresh(); } });
     this.refresh();
   }
 
@@ -225,9 +228,13 @@ export class UI {
     } else {
       key = `w:${JSON.stringify(app.doc.sim)}:${JSON.stringify(app.settings)}`;
     }
-    const focused = this.inspector.contains(document.activeElement) && document.activeElement !== document.body;
-    if (key !== this.inspectorKey && !(focused && key.slice(0, 2) === this.inspectorKey.slice(0, 2) && key.split(':')[1] === this.inspectorKey.split(':')[1])) {
+    // Rebuild whenever the inspected state changes, except mid slider-drag (that would drop the drag);
+    // keyboard focus is restored to the same control afterwards so typing flows on.
+    if (key !== this.inspectorKey && !this.dragging) {
+      const active = document.activeElement as HTMLElement | null;
+      const focusKey = active && this.inspector.contains(active) ? active.dataset['key'] : undefined;
       this.inspectorKey = key;
+      const scroll = this.inspector.scrollTop;
       clear(this.inspector);
       this.liveRefs = [];
       this.loadBar = null;
@@ -235,6 +242,8 @@ export class UI {
       else if (sel.parts.size === 1 && app.doc.parts[[...sel.parts][0]!]) this.partPanel(app.doc.parts[[...sel.parts][0]!]!);
       else if (sel.parts.size > 1) this.multiPanel([...sel.parts]);
       else this.worldPanel();
+      this.inspector.scrollTop = scroll;
+      if (focusKey) (this.inspector.querySelector(`[data-key="${CSS.escape(focusKey)}"]`) as HTMLElement | null)?.focus();
     }
     for (const r of this.liveRefs) r.el.textContent = r.get();
     if (this.loadBar) {
@@ -266,8 +275,8 @@ export class UI {
     const toSlider = (v: number) => useLog ? Math.log10(Math.max(v, loLog(lo, hi)) / loLog(lo, hi)) / Math.log10(hi / loLog(lo, hi)) * 1000 : ((v - lo) / (hi - lo)) * 1000;
     const fromSlider = (s: number) => useLog ? (s <= 0 && lo === 0 ? 0 : loLog(lo, hi) * Math.pow(hi / loLog(lo, hi), s / 1000)) : lo + (s / 1000) * (hi - lo);
     const fmt = (v: number) => def.integer ? String(Math.round(v * d.scale)) : (v * d.scale).toFixed(d.digits);
-    const num = h('input', { type: 'number', class: 'num', value: fmt(value), step: def.step ?? (def.integer ? 1 : 'any') });
-    const slider = h('input', { type: 'range', min: 0, max: 1000, step: 1, value: toSlider(value) });
+    const num = h('input', { type: 'number', class: 'num', value: fmt(value), step: def.step ?? (def.integer ? 1 : 'any'), 'data-key': `${def.key}:num` });
+    const slider = h('input', { type: 'range', min: 0, max: 1000, step: 1, value: toSlider(value), 'data-key': `${def.key}:range` });
     slider.addEventListener('input', () => {
       let v = fromSlider(Number(slider.value));
       if (def.integer) v = Math.round(v);
