@@ -1,0 +1,386 @@
+// Parametric part families. Every dimension is a live parameter; presets are only starting values.
+// Mass always comes from the exact volume of the parametric geometry times the material density.
+
+import type { Material } from '../data/materials';
+import type { Quat, Vec3 } from '../doc/types';
+import { axisAngle } from '../doc/math';
+import { choice, num, numberOf, stringOf, type ParamDef, type Params } from '../schema/params';
+import {
+  iBeamSection, rectSection, rectTubeSection, roundSection, tubeSection, type Section,
+} from '../engineering/sections';
+import type { CollisionShape, ConvexShape, VisualShape } from './shapes';
+
+export interface PartDims {
+  /** Longest dimension, m. */
+  length: number;
+  /** The two cross-section dimensions (a >= b), m. */
+  a: number;
+  b: number;
+}
+
+export interface MagnetGeometry {
+  shape: 'cylinder' | 'block';
+  /** Cylinder radius or block face half-sizes. */
+  radius: number;
+  w: number;
+  h: number;
+  /** Length along the magnetisation axis (local +Y). */
+  length: number;
+}
+
+export interface PartKind {
+  id: string;
+  label: string;
+  category: string;
+  params: ParamDef[];
+  defaultMaterial: string;
+  materialFilter?: (m: Material) => boolean;
+  collision(p: Params): CollisionShape;
+  visual(p: Params): VisualShape;
+  /** Exact volume of the solid, m^3. */
+  volume(p: Params, m: Material): number;
+  dims(p: Params): PartDims;
+  section?(p: Params): Section;
+  magnet?(p: Params): MagnetGeometry;
+  dragCd: number;
+  /** Orientation a freshly spawned part takes (e.g. rods lie along world X). */
+  spawnRotation: Quat;
+}
+
+const Y_TO_X: Quat = axisAngle([0, 0, 1], -Math.PI / 2);
+const IDENTITY: Quat = [0, 0, 0, 1];
+
+const sorted = (x: number, y: number, z: number): PartDims => {
+  const d = [x, y, z].sort((m, n) => n - m);
+  return { length: d[0]!, a: d[1]!, b: d[2]! };
+};
+
+const box = (hx: number, hy: number, hz: number): ConvexShape => ({ type: 'box', half: [hx, hy, hz] });
+
+function ringCompound(outer: number, inner: number, halfHeight: number, n = 12): CollisionShape {
+  const rc = (outer + inner) / 2;
+  const wall = Math.max(outer - inner, 1e-4);
+  const half = outer * Math.sin(Math.PI / n) * 1.02;
+  return {
+    type: 'compound',
+    children: Array.from({ length: n }, (_, i) => {
+      const th = (2 * Math.PI * i) / n;
+      const q = axisAngle([0, 1, 0], -th);
+      return { shape: box(wall / 2, halfHeight, half), p: [Math.cos(th) * rc, 0, Math.sin(th) * rc] as Vec3, q };
+    }),
+  };
+}
+
+const LUMBER: Record<string, [number, number]> = {
+  '1x4': [0.019, 0.089], '1x6': [0.019, 0.14], '2x2': [0.038, 0.038], '2x4': [0.038, 0.089],
+  '2x6': [0.038, 0.14], '2x8': [0.038, 0.184], '4x4': [0.089, 0.089],
+};
+
+const isMagnet = (m: Material) => m.category === 'magnet';
+const isWood = (m: Material) => m.category === 'wood' || m.category === 'engineered-wood';
+const notMagnet = (m: Material) => m.category !== 'magnet';
+
+export const PART_KINDS: PartKind[] = [
+  {
+    id: 'block', label: 'Block', category: 'Solids', defaultMaterial: 'wood.douglas-fir', dragCd: 1.05, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('x', 'Length (X)', 0.1, 0.005, 20, 'mm', { group: 'Geometry' }),
+      num('y', 'Height (Y)', 0.1, 0.005, 20, 'mm', { group: 'Geometry' }),
+      num('z', 'Depth (Z)', 0.1, 0.005, 20, 'mm', { group: 'Geometry' }),
+    ],
+    collision: (p) => box(n(p, 'x') / 2, n(p, 'y') / 2, n(p, 'z') / 2),
+    visual: (p) => ({ type: 'box', half: [n(p, 'x') / 2, n(p, 'y') / 2, n(p, 'z') / 2] }),
+    volume: (p) => n(p, 'x') * n(p, 'y') * n(p, 'z'),
+    dims: (p) => sorted(n(p, 'x'), n(p, 'y'), n(p, 'z')),
+    section: (p) => rectSection(n(p, 'y'), n(p, 'z')),
+  },
+  {
+    id: 'plate', label: 'Plate / sheet', category: 'Stock', defaultMaterial: 'aluminum.6061-t6', dragCd: 1.28, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 0.3, 0.01, 12, 'mm', { group: 'Geometry' }),
+      num('width', 'Width (Z)', 0.2, 0.01, 6, 'mm', { group: 'Geometry' }),
+      num('thickness', 'Thickness', 0.006, 0.0005, 0.2, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => box(n(p, 'length') / 2, n(p, 'thickness') / 2, n(p, 'width') / 2),
+    visual: (p) => ({ type: 'box', half: [n(p, 'length') / 2, n(p, 'thickness') / 2, n(p, 'width') / 2] }),
+    volume: (p) => n(p, 'length') * n(p, 'width') * n(p, 'thickness'),
+    dims: (p) => sorted(n(p, 'length'), n(p, 'thickness'), n(p, 'width')),
+    section: (p) => rectSection(n(p, 'width'), n(p, 'thickness')),
+  },
+  {
+    id: 'lumber', label: 'Lumber', category: 'Stock', defaultMaterial: 'wood.douglas-fir', dragCd: 1.1, spawnRotation: IDENTITY,
+    materialFilter: isWood,
+    params: [
+      choice('size', 'Nominal size', '2x4', Object.keys(LUMBER).map((k) => ({ value: k, label: `${k} (${LUMBER[k]![0] * 1000}×${LUMBER[k]![1] * 1000} mm)` })), { group: 'Geometry' }),
+      num('length', 'Length', 1.2, 0.05, 8, 'mm', { group: 'Geometry' }),
+    ],
+    collision: (p) => { const [t, w] = lumberDims(p); return box(n(p, 'length') / 2, t / 2, w / 2); },
+    visual: (p) => { const [t, w] = lumberDims(p); return { type: 'box', half: [n(p, 'length') / 2, t / 2, w / 2], bevel: 0.003 }; },
+    volume: (p) => { const [t, w] = lumberDims(p); return t * w * n(p, 'length'); },
+    dims: (p) => { const [t, w] = lumberDims(p); return sorted(n(p, 'length'), t, w); },
+    section: (p) => { const [t, w] = lumberDims(p); return rectSection(w, t); },
+  },
+  {
+    id: 'rod.round', label: 'Round rod', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 0.82, spawnRotation: Y_TO_X,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length', 0.5, 0.005, 12, 'mm', { group: 'Geometry' }),
+      num('diameter', 'Diameter', 0.02, 0.001, 1, 'mm', { group: 'Geometry', step: 0.5 }),
+    ],
+    collision: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'length') / 2 }),
+    visual: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'length') / 2 }),
+    volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'length'),
+    dims: (p) => sorted(n(p, 'length'), n(p, 'diameter'), n(p, 'diameter')),
+    section: (p) => roundSection(n(p, 'diameter')),
+  },
+  {
+    id: 'rod.square', label: 'Square bar', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 1.05, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 0.5, 0.005, 12, 'mm', { group: 'Geometry' }),
+      num('side', 'Side', 0.02, 0.001, 1, 'mm', { group: 'Geometry', step: 0.5 }),
+    ],
+    collision: (p) => box(n(p, 'length') / 2, n(p, 'side') / 2, n(p, 'side') / 2),
+    visual: (p) => ({ type: 'box', half: [n(p, 'length') / 2, n(p, 'side') / 2, n(p, 'side') / 2] }),
+    volume: (p) => n(p, 'side') ** 2 * n(p, 'length'),
+    dims: (p) => sorted(n(p, 'length'), n(p, 'side'), n(p, 'side')),
+    section: (p) => rectSection(n(p, 'side'), n(p, 'side')),
+  },
+  {
+    id: 'tube.round', label: 'Round tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 0.82, spawnRotation: Y_TO_X,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length', 1, 0.01, 12, 'mm', { group: 'Geometry' }),
+      num('od', 'Outside diameter', 0.0422, 0.003, 1, 'mm', { group: 'Geometry', step: 0.1 }),
+      num('wall', 'Wall thickness', 0.0036, 0.0003, 0.05, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => ringCompound(n(p, 'od') / 2, innerR(p), n(p, 'length') / 2),
+    visual: (p) => ({ type: 'tube', outer: n(p, 'od') / 2, inner: innerR(p), halfHeight: n(p, 'length') / 2 }),
+    volume: (p) => Math.PI * ((n(p, 'od') / 2) ** 2 - innerR(p) ** 2) * n(p, 'length'),
+    dims: (p) => sorted(n(p, 'length'), n(p, 'od'), n(p, 'od')),
+    section: (p) => tubeSection(n(p, 'od'), wallOf(p, 'od')),
+  },
+  {
+    id: 'tube.square', label: 'Square tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.05, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 1, 0.01, 12, 'mm', { group: 'Geometry' }),
+      num('side', 'Side', 0.04, 0.005, 1, 'mm', { group: 'Geometry' }),
+      num('wall', 'Wall thickness', 0.003, 0.0003, 0.05, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => {
+      const s = n(p, 'side') / 2, t = wallOf(p, 'side'), L = n(p, 'length') / 2;
+      return {
+        type: 'compound', children: [
+          { shape: box(L, t / 2, s), p: [0, s - t / 2, 0], q: IDENTITY },
+          { shape: box(L, t / 2, s), p: [0, -s + t / 2, 0], q: IDENTITY },
+          { shape: box(L, s - t, t / 2), p: [0, 0, s - t / 2], q: IDENTITY },
+          { shape: box(L, s - t, t / 2), p: [0, 0, -s + t / 2], q: IDENTITY },
+        ],
+      };
+    },
+    visual: (p) => ({ type: 'rect-tube', halfW: n(p, 'side') / 2, halfH: n(p, 'side') / 2, wall: wallOf(p, 'side'), halfLength: n(p, 'length') / 2 }),
+    volume: (p) => { const s = n(p, 'side'), t = wallOf(p, 'side'); return (s * s - (s - 2 * t) ** 2) * n(p, 'length'); },
+    dims: (p) => sorted(n(p, 'length'), n(p, 'side'), n(p, 'side')),
+    section: (p) => rectTubeSection(n(p, 'side'), n(p, 'side'), wallOf(p, 'side')),
+  },
+  {
+    id: 'beam.i', label: 'I-beam', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.6, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 2, 0.05, 20, 'mm', { group: 'Geometry' }),
+      num('depth', 'Depth h', 0.2, 0.02, 1.2, 'mm', { group: 'Geometry' }),
+      num('flange', 'Flange width b', 0.1, 0.02, 0.6, 'mm', { group: 'Geometry' }),
+      num('tf', 'Flange thickness', 0.0085, 0.001, 0.08, 'mm', { group: 'Geometry', step: 0.1 }),
+      num('tw', 'Web thickness', 0.0056, 0.001, 0.06, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => {
+      const { L, h, b, tf, tw } = ibeam(p);
+      return {
+        type: 'compound', children: [
+          { shape: box(L / 2, tf / 2, b / 2), p: [0, h / 2 - tf / 2, 0], q: IDENTITY },
+          { shape: box(L / 2, tf / 2, b / 2), p: [0, -h / 2 + tf / 2, 0], q: IDENTITY },
+          { shape: box(L / 2, h / 2 - tf, tw / 2), p: [0, 0, 0], q: IDENTITY },
+        ],
+      };
+    },
+    visual: (p) => { const { L, h, b, tf, tw } = ibeam(p); return { type: 'ibeam', halfLength: L / 2, flange: b, depth: h, tf, tw }; },
+    volume: (p) => { const { L, h, b, tf, tw } = ibeam(p); return (2 * b * tf + (h - 2 * tf) * tw) * L; },
+    dims: (p) => { const { L, h, b } = ibeam(p); return sorted(L, h, b); },
+    section: (p) => { const { h, b, tf, tw } = ibeam(p); return iBeamSection(b, h, tf, tw); },
+  },
+  {
+    id: 'angle', label: 'Angle (L)', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.4, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 1, 0.01, 12, 'mm', { group: 'Geometry' }),
+      num('leg', 'Leg', 0.04, 0.005, 0.3, 'mm', { group: 'Geometry' }),
+      num('t', 'Thickness', 0.004, 0.0005, 0.04, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => {
+      const L = n(p, 'length') / 2, a = n(p, 'leg'), t = Math.min(n(p, 't'), a * 0.5);
+      return {
+        type: 'compound', children: [
+          { shape: box(L, t / 2, a / 2), p: [0, t / 2, a / 2], q: IDENTITY },
+          { shape: box(L, (a - t) / 2, t / 2), p: [0, t + (a - t) / 2, t / 2], q: IDENTITY },
+        ],
+      };
+    },
+    visual: (p) => ({ type: 'angle', halfLength: n(p, 'length') / 2, legA: n(p, 'leg'), legB: n(p, 'leg'), t: Math.min(n(p, 't'), n(p, 'leg') * 0.5) }),
+    volume: (p) => { const a = n(p, 'leg'), t = Math.min(n(p, 't'), a * 0.5); return (2 * a - t) * t * n(p, 'length'); },
+    dims: (p) => sorted(n(p, 'length'), n(p, 'leg'), n(p, 'leg')),
+    section: (p) => rectSection(n(p, 'leg'), n(p, 't')),
+  },
+  {
+    id: 'disc', label: 'Disc', category: 'Solids', defaultMaterial: 'steel.a36', dragCd: 1.1, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('diameter', 'Diameter', 0.1, 0.002, 6, 'mm', { group: 'Geometry' }),
+      num('thickness', 'Thickness', 0.01, 0.0005, 2, 'mm', { group: 'Geometry', step: 0.1 }),
+    ],
+    collision: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'thickness') / 2 }),
+    visual: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'thickness') / 2, segments: 48 }),
+    volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'thickness'),
+    dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'thickness')),
+  },
+  {
+    id: 'sphere', label: 'Sphere / ball', category: 'Solids', defaultMaterial: 'steel.52100', dragCd: 0.47, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [num('diameter', 'Diameter', 0.05, 0.002, 6, 'mm', { group: 'Geometry' })],
+    collision: (p) => ({ type: 'sphere', radius: n(p, 'diameter') / 2 }),
+    visual: (p) => ({ type: 'sphere', radius: n(p, 'diameter') / 2 }),
+    volume: (p) => (Math.PI / 6) * n(p, 'diameter') ** 3,
+    dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'diameter')),
+  },
+  {
+    id: 'wheel', label: 'Wheel', category: 'Motion', defaultMaterial: 'rubber.natural', dragCd: 0.9, spawnRotation: axisAngle([1, 0, 0], Math.PI / 2),
+    materialFilter: notMagnet,
+    params: [
+      num('diameter', 'Diameter', 0.25, 0.02, 3, 'mm', { group: 'Geometry' }),
+      num('width', 'Width', 0.06, 0.005, 1, 'mm', { group: 'Geometry' }),
+    ],
+    collision: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'width') / 2 }),
+    visual: (p) => ({ type: 'wheel', radius: n(p, 'diameter') / 2, halfWidth: n(p, 'width') / 2, hub: n(p, 'diameter') * 0.18 }),
+    volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'width'),
+    dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'width')),
+  },
+  {
+    id: 'wedge', label: 'Wedge / ramp', category: 'Solids', defaultMaterial: 'wood.birch-plywood', dragCd: 1, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [
+      num('length', 'Length (X)', 0.6, 0.02, 10, 'mm', { group: 'Geometry' }),
+      num('height', 'Height (Y)', 0.2, 0.005, 5, 'mm', { group: 'Geometry' }),
+      num('width', 'Width (Z)', 0.3, 0.01, 10, 'mm', { group: 'Geometry' }),
+    ],
+    collision: (p) => {
+      const L = n(p, 'length') / 2, H = n(p, 'height') / 2, W = n(p, 'width') / 2;
+      return {
+        type: 'hull', points: [
+          [-L, -H, -W], [-L, -H, W], [L, -H, -W], [L, -H, W], [L, H, -W], [L, H, W],
+        ],
+      };
+    },
+    visual: (p) => ({ type: 'wedge', length: n(p, 'length'), height: n(p, 'height'), width: n(p, 'width') }),
+    volume: (p) => 0.5 * n(p, 'length') * n(p, 'height') * n(p, 'width'),
+    dims: (p) => sorted(n(p, 'length'), n(p, 'height'), n(p, 'width')),
+  },
+  {
+    id: 'weight', label: 'Test weight', category: 'Test gear', defaultMaterial: 'cast-iron.gray-30', dragCd: 0.9, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [num('mass', 'Mass', 10, 0.01, 5000, 'kg', { group: 'Load', log: true })],
+    collision: (p) => ({ type: 'cylinder', radius: weightD(p) / 2, halfHeight: weightD(p) / 2 }),
+    visual: (p) => ({ type: 'cylinder', radius: weightD(p) / 2, halfHeight: weightD(p) / 2, segments: 40 }),
+    // Sized so that the chosen mass is exact for the chosen material (d = h).
+    volume: (p, m) => n(p, 'mass') / m.density,
+    dims: (p) => sorted(weightD(p), weightD(p), weightD(p)),
+  },
+  {
+    id: 'magnet.disc', label: 'Disc magnet', category: 'Magnets', defaultMaterial: 'magnet.n42', dragCd: 1.1, spawnRotation: IDENTITY,
+    materialFilter: isMagnet,
+    params: [
+      num('diameter', 'Diameter', 0.02, 0.002, 0.3, 'mm', { group: 'Geometry', step: 0.5 }),
+      num('thickness', 'Thickness (axis)', 0.01, 0.0005, 0.2, 'mm', { group: 'Geometry', step: 0.5 }),
+    ],
+    collision: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'thickness') / 2 }),
+    visual: (p) => magnetVisual({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'thickness') / 2, segments: 40 }, n(p, 'thickness'),
+      { type: 'cylinder', radius: n(p, 'diameter') / 2 * 1.001, halfHeight: n(p, 'thickness') * 0.05, segments: 40 }),
+    volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'thickness'),
+    dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'thickness')),
+    magnet: (p) => ({ shape: 'cylinder', radius: n(p, 'diameter') / 2, w: 0, h: 0, length: n(p, 'thickness') }),
+  },
+  {
+    id: 'magnet.block', label: 'Block magnet', category: 'Magnets', defaultMaterial: 'magnet.n42', dragCd: 1.05, spawnRotation: IDENTITY,
+    materialFilter: isMagnet,
+    params: [
+      num('x', 'Length (X)', 0.04, 0.002, 0.3, 'mm', { group: 'Geometry', step: 0.5 }),
+      num('z', 'Width (Z)', 0.02, 0.002, 0.3, 'mm', { group: 'Geometry', step: 0.5 }),
+      num('y', 'Thickness (axis)', 0.01, 0.0005, 0.2, 'mm', { group: 'Geometry', step: 0.5 }),
+    ],
+    collision: (p) => box(n(p, 'x') / 2, n(p, 'y') / 2, n(p, 'z') / 2),
+    visual: (p) => magnetVisual({ type: 'box', half: [n(p, 'x') / 2, n(p, 'y') / 2, n(p, 'z') / 2] }, n(p, 'y'),
+      { type: 'box', half: [n(p, 'x') / 2 * 1.001, n(p, 'y') * 0.05, n(p, 'z') / 2 * 1.001] }),
+    volume: (p) => n(p, 'x') * n(p, 'y') * n(p, 'z'),
+    dims: (p) => sorted(n(p, 'x'), n(p, 'y'), n(p, 'z')),
+    magnet: (p) => ({ shape: 'block', radius: 0, w: n(p, 'x'), h: n(p, 'z'), length: n(p, 'y') }),
+  },
+];
+
+function n(p: Params, key: string) {
+  return numberOf(p, key, 0.01);
+}
+
+function lumberDims(p: Params): [number, number] {
+  return LUMBER[stringOf(p, 'size', '2x4')] ?? LUMBER['2x4']!;
+}
+
+function wallOf(p: Params, outerKey: string) {
+  return Math.min(n(p, 'wall'), n(p, outerKey) * 0.45);
+}
+
+function innerR(p: Params) {
+  return Math.max(0, n(p, 'od') / 2 - wallOf(p, 'od'));
+}
+
+function ibeam(p: Params) {
+  const h = n(p, 'depth');
+  const b = n(p, 'flange');
+  const tf = Math.min(n(p, 'tf'), h * 0.3);
+  const tw = Math.min(n(p, 'tw'), b * 0.5);
+  return { L: n(p, 'length'), h, b, tf, tw };
+}
+
+function weightD(p: Params) {
+  // Uses cast iron density for the visual size if the material is unknown here; the physics mass comes from volume().
+  const rho = numberOf(p, '_density', 7200);
+  return Math.cbrt((4 * n(p, 'mass')) / (Math.PI * rho));
+}
+
+function magnetVisual(body: VisualShape, thickness: number, cap: VisualShape): VisualShape {
+  // Paint the north face red, like real magnets are often marked.
+  return {
+    type: 'group', children: [
+      { shape: body, p: [0, 0, 0], q: IDENTITY },
+      { shape: cap, p: [0, thickness / 2 - thickness * 0.045, 0], q: IDENTITY, tint: 0xc23b22 },
+    ],
+  };
+}
+
+const kindById = new Map(PART_KINDS.map((k) => [k.id, k]));
+
+export function getPartKind(id: string): PartKind {
+  const k = kindById.get(id);
+  if (!k) throw new Error(`Unknown part kind ${id}`);
+  return k;
+}
+
+export const hasPartKind = (id: string) => kindById.has(id);
+
+export const PART_CATEGORIES = [...new Set(PART_KINDS.map((k) => k.category))];
+
+/** Parameters with runtime-derived hidden inputs (e.g. the weight's material density for sizing). */
+export function effectiveParams(kind: PartKind, params: Params, material: Material): Params {
+  if (kind.id === 'weight') return { ...params, _density: material.density };
+  return params;
+}
