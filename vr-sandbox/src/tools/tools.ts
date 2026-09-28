@@ -123,17 +123,34 @@ export class ToolManager {
 
 // -------------------------------------------------------------------------------------------------
 
-class GrabTool implements Tool {
+interface Hold {
+  id: string;
+  hand: string;
+  local: Vec3;
+  dist: number;
+  q: Quat;
+  frozen: boolean;
+  relQ?: Quat;
+}
+
+/** Grabbing, per hand: the mouse, and each VR controller can hold its own part at the same time. */
+export class GrabTool implements Tool {
   id = 'grab';
   label = 'Grab';
   icon = '✋';
   hint = 'Drag parts. Wheel: distance · R / Y: rotate · Shift+click: multi-select · G: physical/creative grab';
-  private held: { id: string; hand: string; local: Vec3; dist: number; q: Quat; frozen: boolean; relQ?: Quat } | null = null;
+  private held = new Map<string, Hold>();
 
   constructor(private app: App) {}
 
+  /** Any held part (for UI hints). */
   get holding() {
-    return this.held?.id ?? null;
+    for (const h of this.held.values()) return h.id;
+    return null;
+  }
+
+  holdingWith(hand: string) {
+    return this.held.get(hand)?.id ?? null;
   }
 
   down(e: PointerEvt) {
@@ -154,75 +171,93 @@ class GrabTool implements Tool {
     this.begin(pick.id, v3(pick.point), pick.distance, e);
   }
 
-  begin(id: string, point: Vec3, dist: number, e: PointerEvt, hand = e.source) {
+  begin(id: string, point: Vec3, dist: number, e: PointerEvt, hand: string = e.source) {
     const pose = this.app.livePose(id);
     const part = this.app.doc.parts[id];
     if (!pose || !part) return;
+    for (const [h, other] of this.held) if (other.id === id && h !== hand) this.release(h); // hand-over
     const local = inverseTransformPoint(pose, point);
     const relQ = e.handQuat ? qmul(qconj(e.handQuat), pose.q) : undefined;
-    this.held = { id, hand, local, dist, q: pose.q, frozen: part.frozen, relQ };
-    this.app.physics.send({ op: 'grab', hand, id, mode: this.app.settings.grabMode, target: this.target(e), strength: this.app.settings.strength });
+    const hold: Hold = { id, hand, local, dist, q: pose.q, frozen: part.frozen, relQ };
+    this.held.set(hand, hold);
+    this.app.physics.send({ op: 'grab', hand, id, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength });
     this.app.audio.ui('grab', point);
-    this.app.haptic?.(0.3, 20);
+    this.app.haptic?.(0.3, 20, hand);
   }
 
-  private target(e: PointerEvt): Pose {
-    const h = this.held!;
+  private target(h: Hold, e: PointerEvt): Pose {
     const q = e.handQuat && h.relQ ? qmul(e.handQuat, h.relQ) : h.q;
     const hit = add(v3(e.ray.origin), scale(v3(e.ray.dir), h.dist));
     return { p: sub(hit, rotate(q, h.local)), q };
   }
 
+  /** Feed the latest pointer for a hand (mouse via move/frame, VR controllers every frame). */
+  updateHand(e: PointerEvt) {
+    const h = this.held.get(e.source);
+    if (h) this.app.physics.send({ op: 'grabTarget', hand: h.hand, target: this.target(h, e) });
+  }
+
   move(e: PointerEvt) {
-    if (this.held && e.source === this.held.hand) this.app.physics.send({ op: 'grabTarget', hand: this.held.hand, target: this.target(e) });
+    this.updateHand(e);
   }
 
   frame(_dt: number, e: PointerEvt | null) {
-    if (this.held && e && e.source === this.held.hand) this.app.physics.send({ op: 'grabTarget', hand: this.held.hand, target: this.target(e) });
+    if (e && e.source === 'mouse') this.updateHand(e);
   }
 
   up(e: PointerEvt) {
-    if (!this.held || e.source !== this.held.hand) return;
-    this.release();
+    if (this.held.has(e.source)) this.release(e.source);
   }
 
-  release() {
-    const h = this.held;
-    if (!h) return;
-    this.held = null;
-    this.app.physics.send({ op: 'release', hand: h.hand });
-    // Frozen parts moved by hand are a design edit (undoable). Free parts keep flying under physics.
-    if (h.frozen) {
-      const live = this.app.live.latest(h.id);
-      if (live) setPartPose(this.app.store, h.id, live);
+  release(hand?: string) {
+    const hands = hand ? [hand] : [...this.held.keys()];
+    for (const hd of hands) {
+      const h = this.held.get(hd);
+      if (!h) continue;
+      this.held.delete(hd);
+      this.app.physics.send({ op: 'release', hand: h.hand });
+      // Frozen parts moved by hand are a design edit (undoable). Free parts keep flying under physics.
+      if (h.frozen) {
+        const live = this.app.live.latest(h.id);
+        if (live) setPartPose(this.app.store, h.id, live);
+      }
+      this.app.audio.ui('drop');
     }
-    this.app.audio.ui('drop');
+  }
+
+  /** Push or pull a held part along the ray (mouse wheel, VR thumbstick). */
+  adjustDistance(hand: string, factor: number) {
+    const h = this.held.get(hand);
+    if (!h) return false;
+    h.dist = Math.min(30, Math.max(0.1, h.dist * factor));
+    return true;
   }
 
   wheel(delta: number) {
-    if (!this.held) return false;
-    this.held.dist = Math.min(30, Math.max(0.15, this.held.dist * Math.exp(-delta * 0.0012)));
+    return this.adjustDistance('mouse', Math.exp(-delta * 0.0012));
+  }
+
+  rotateHeld(hand: string, axis: Vec3, angle: number) {
+    const h = this.held.get(hand);
+    if (!h) return false;
+    h.q = qmul(axisAngle(axis, angle), h.q);
+    if (h.relQ) h.relQ = qmul(axisAngle(axis, angle), h.relQ);
     return true;
   }
 
   key(e: KeyboardEvent) {
-    if (!this.held) return false;
+    if (!this.held.has('mouse')) return false;
     const step = ((this.app.settings.angleSnap * Math.PI) / 180) * (e.shiftKey ? -1 : 1);
-    if (e.code === 'KeyR') {
-      this.held.q = qmul(axisAngle([0, 1, 0], step), this.held.q);
-      return true;
-    }
+    if (e.code === 'KeyR') return this.rotateHeld('mouse', [0, 1, 0], step);
     if (e.code === 'KeyY') {
       const cam = this.app.view.camera.getWorldDirection(new THREE.Vector3());
-      const right = normalize(cross([cam.x, cam.y, cam.z], [0, 1, 0]));
-      this.held.q = qmul(axisAngle(right, step), this.held.q);
-      return true;
+      return this.rotateHeld('mouse', normalize(cross([cam.x, cam.y, cam.z], [0, 1, 0])), step);
     }
     return false;
   }
 
   cancel() {
-    this.release();
+    this.release('mouse');
   }
 }
 

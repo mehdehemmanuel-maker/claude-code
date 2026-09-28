@@ -12,6 +12,8 @@ async function main() {
   const tools = new ToolManager(app);
   const desktop = new DesktopControls(app, tools, app.renderer.domElement);
   const ui = new UI(app, tools);
+  const handles: Record<string, unknown> = { app, tools, ui, desktop, xr: null };
+  (window as unknown as { sandbox: unknown }).sandbox = handles;
   app.onFrame.push((dt) => {
     if (!app.renderer.xr.isPresenting) desktop.update(dt);
     tools.frame(dt);
@@ -19,6 +21,15 @@ async function main() {
   const resize = () => app.resize(host.clientWidth, host.clientHeight);
   window.addEventListener('resize', resize);
   resize();
+
+  // ?iwer installs Meta's WebXR emulator (a virtual Quest 3) so the VR mode can be tried and tested
+  // without a headset. It never loads otherwise.
+  if (params.has('iwer')) {
+    const { XRDevice, metaQuest3 } = await import('iwer');
+    const device = new XRDevice(metaQuest3);
+    device.installRuntime({ forceInstall: true });
+    (window as unknown as { iwer: unknown }).iwer = device;
+  }
 
   // WebXR (Quest). Loaded lazily so desktop users never pay for it.
   if ('xr' in navigator) {
@@ -28,7 +39,8 @@ async function main() {
       if (ok) {
         const { XRMode } = await import('./xr/xr');
         const xr = new XRMode(app, tools, desktop);
-        ui.onEnterVR = () => void xr.enter();
+        handles['xr'] = xr;
+        ui.onEnterVR = () => void xr.enter().catch((e) => app.toast(`Could not enter VR: ${String(e?.message ?? e)}`, 'warn'));
       }
     } catch {
       ui.vrSupported = false;
@@ -41,7 +53,6 @@ async function main() {
 
   app.start();
   document.getElementById('loading')?.remove();
-  (window as unknown as { sandbox: unknown }).sandbox = { app, tools, ui, desktop };
   try {
     if (!localStorage.getItem('vrsb.seenTemplates') && !hash.startsWith('build=')) {
       localStorage.setItem('vrsb.seenTemplates', '1');

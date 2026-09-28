@@ -514,7 +514,7 @@ export class App {
   }
 
   /** Optional XR haptic hook (set by the XR controller). */
-  haptic?: (intensity: number, ms: number) => void;
+  haptic?: (intensity: number, ms: number, hand?: string) => void;
 
   resize(w: number, h: number) {
     this.renderer.setSize(w, h);
