@@ -23,7 +23,7 @@ import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Mul, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
   quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
-import { implicitForce, restoringPart, solveDense, symmetricEigen3 } from './implicit';
+import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
 import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, RoomSurface, StepResult } from './protocol';
@@ -93,8 +93,9 @@ interface MagnetLatch {
 }
 
 interface MagnetStiffness {
-  Kt: number[];
-  Kr: number[];
+  /** Restoring modes (negative eigenvalues of the symmetrised Jacobians) in translation and rotation. */
+  modesT: { lam: number; e: Vec3 }[];
+  modesR: { lam: number; e: Vec3 }[];
   mu: number;
   Ired: number[];
   /** Fastest growth or oscillation rate of the pair's motion, s^-1. */
@@ -2275,7 +2276,7 @@ export class PhysicsWorld {
     const kt = Math.max(...symmetricEigen3(sym(Jt)).values.map(Math.abs));
     const kr = Math.max(...symmetricEigen3(sym(Jr)).values.map(Math.abs));
     const Imin = Math.max(1e-12, Math.min(...symmetricEigen3(Ired).values));
-    return { Kt: restoringPart(Jt), Kr: restoringPart(Jr), mu, Ired, rate: Math.max(Math.sqrt(kt / mu), Math.sqrt(kr / Imin)) };
+    return { modesT: restoringModes(Jt), modesR: restoringModes(Jr), mu, Ired, rate: Math.max(Math.sqrt(kt / mu), Math.sqrt(kr / Imin)) };
   }
 
   /**
@@ -2300,10 +2301,15 @@ export class PhysicsWorld {
     }
     const F: Vec3 = [f[0]!, f[1]!, f[2]!], T: Vec3 = [f[3]!, f[4]!, f[5]!];
     if (!k) return { F, T };
+    // Only the restoring modes the substep cannot follow (omega dt > 1) are taken implicitly: backward Euler is stable
+    // for any stiffness but damps what it treats. The rest the substeps follow explicitly (symplectic, undamped), as a
+    // real magnet wobbling near another hardly loses energy (M3).
     const mu = k.mu;
+    const unresolved = (modes: { lam: number; e: Vec3 }[], inertia: (e: Vec3) => number) => stiffnessOf(modes.filter((m) => -m.lam * dt * dt > inertia(m.e)));
+    const Kt = unresolved(k.modesT, () => mu), Kr = unresolved(k.modesR, (e) => dot(e, mat3Vec(k.Ired, e)));
     return {
-      F: implicitForce([mu, 0, 0, 0, mu, 0, 0, 0, mu], k.Kt, F, sub(vB, vA), dt),
-      T: implicitForce(k.Ired, k.Kr, T, sub(wB, wA), dt),
+      F: implicitForce([mu, 0, 0, 0, mu, 0, 0, 0, mu], Kt, F, sub(vB, vA), dt),
+      T: implicitForce(k.Ired, Kr, T, sub(wB, wA), dt),
     };
   }
 
@@ -2327,8 +2333,20 @@ export class PhysicsWorld {
       const vol = geom.shape === 'cylinder' ? Math.PI * geom.radius ** 2 * geom.length : geom.w * geom.h * geom.length;
       const feature = Math.min(geom.shape === 'cylinder' ? geom.radius : Math.min(geom.w, geom.h) / 2, geom.length);
       const face = geom.shape === 'cylinder' ? Math.PI * geom.radius ** 2 : geom.w * geom.h;
-      return { r, pose, n, size, feature, face, m: dipoleMoment(r.magnet!.Br, vol), bound: Math.hypot(size, geom.length / 2) };
+      const Imin = r.frozen || !r.Iloc ? Infinity : Math.min(...symmetricEigen3(r.Iloc).values);
+      return { r, pose, n, size, feature, face, m: dipoleMoment(r.magnet!.Br, vol), bound: Math.hypot(size, geom.length / 2), Imin };
     });
+    /**
+     * Is a pair stiff: faster than a tick can follow (rate TICK > 0.25), so that its stiffness must be measured and the
+     * tick divided? Close pairs are; further off, the dipoles bound how fast it can turn (torque stiffness
+     * mu0 m_a m_b / (2 pi r^3) over the lighter inertia) or close in (dF/dr = 12 mu0 m_a m_b / (2 pi r^5) over the lighter
+     * mass): a light magnet can wobble tens of times a second several centimetres from a strong one.
+     */
+    const stiff = (gap: number, size: number, ma: number, mb: number, r: number, mass: number, Imin: number) => {
+      if (gap < 4 * size) return true;
+      const kRot = (MU0 * ma * mb) / (2 * Math.PI * r ** 3), kTr = (12 * MU0 * ma * mb) / (2 * Math.PI * r ** 5);
+      return Math.max(Math.sqrt(kRot / Imin), Math.sqrt(kTr / mass)) * TICK > 0.25;
+    };
     const facesCache = new Map<string, PoleFace[]>();
     const facesOf = (k: (typeof info)[number]) => {
       let f = facesCache.get(k.r.id);
@@ -2378,8 +2396,8 @@ export class PhysicsWorld {
         pairs.push({
           key: `${A.r.id}|${B.r.id}`, a: A.r, b: B.r,
           face: { n: towards, p: add(A.pose.p, scale(towards, A.r.magnet!.geom.length / 2)) },
-          // close pairs are stiff (a small magnet near another flips or wobbles within milliseconds); far ones are not
-          close: gap < 4 * Math.min(A.size, B.size), feature: Math.min(A.feature, B.feature),
+          // close pairs are stiff (a small magnet near another flips or wobbles within milliseconds); far ones may be
+          close: stiff(gap, Math.min(A.size, B.size), A.m, B.m, dist, light, Math.min(A.Imin, B.Imin)), feature: Math.min(A.feature, B.feature),
           wrench: (dx, rot) => blendedInteraction(level, (rings) => {
             const chB = dx[0] || dx[1] || dx[2] || rot[0] || rot[1] || rot[2] ? transformCharges(chargesOf(B, rings), B.pose.p as MVec3, dx as MVec3, rot as MVec3) : chargesOf(B, rings);
             return magnetWrench(facesOf(A), chB, add(B.pose.p, dx) as MVec3);
@@ -2407,7 +2425,8 @@ export class PhysicsWorld {
         const factor = 0.95 * plateSaturationFactor(S.dims.b, M.r.magnet!.Br, poleArea, polePerimeter);
         pairs.push({
           key: `${S.id}|${M.r.id}`, a: S, b: M.r, face: { n: nrm, p: o },
-          close: gap < 4 * M.size, feature: M.feature,
+          // against its image in the steel, 2 d away
+          close: stiff(gap, M.size, M.m * factor, M.m, 2 * Math.max(hit.d, M.bound), M.r.mass, M.Imin), feature: M.feature,
           wrench: (dx, rot) => blendedInteraction(level, (rings) => {
             const moved = dx[0] || dx[1] || dx[2] || rot[0] || rot[1] || rot[2];
             let mc = moved ? transformCharges(chargesOf(M, rings), M.pose.p as MVec3, dx as MVec3, rot as MVec3) : chargesOf(M, rings);

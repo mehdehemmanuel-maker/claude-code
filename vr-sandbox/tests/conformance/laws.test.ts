@@ -472,6 +472,34 @@ describe('magnets', () => {
     await both(m, [1, 0, 0], (pullOnSteel(m) * 0.02) / 0.06);
   });
 
+  it('a magnet on a pivot near another wobbles about alignment at sqrt(k / I), and keeps wobbling (no numerical damping)', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 0.02, thickness: 0.01 } });
+    // two 20 x 10 mm discs, 40 mm between their faces: about 23 Hz, well inside what 90 ticks a second can sample
+    const R = 0.01, L = 0.01, y = 0.005 + 0.04 + L / 2;
+    const th0 = 0.1;
+    const b = r.part('magnet.disc', at(0, y, 0, axisAngle([0, 0, 1], th0)), { params: { diameter: 2 * R, thickness: L } });
+    r.connect('ball', { part: b, frame: at(0, 0, 0) }, null, { friction: 0, cone: Math.PI });
+    // the model's restoring torque stiffness about the pivot, and b's moment of inertia about a diameter
+    const A = cylinderFaces([0, 0, 0], [0, 1, 0], 0.01, 0.01, 1.3);
+    const torque = (th: number) => magnetWrench(A, cylinderCharges([0, y, 0], [-Math.sin(th), Math.cos(th), 0], R, L, 1.3, 4), [0, y, 0])[5]!;
+    const k = -(torque(1e-3) - torque(-1e-3)) / 2e-3;
+    const I = (r.world.bodyMass(b.id)! * (3 * R * R + L * L)) / 12;
+    const tilt = () => { const q = r.world.livePose(b.id)!.q; return 2 * Math.atan2(q[2], q[3]); };
+    let crossings = 0, first = -1, last = -1, prev = tilt(), late = 0;
+    for (let i = 1; i <= 180; i++) {
+      r.world.step();
+      const t = tilt();
+      if (Math.sign(t) !== Math.sign(prev)) { crossings++; if (first < 0) first = i; last = i; }
+      if (i > 90) late = Math.max(late, Math.abs(t));
+      prev = t;
+    }
+    const period = (2 * (last - first) * TICK) / (crossings - 1);
+    within(period, 2 * Math.PI * Math.sqrt(I / k), 0.03);
+    expect(late / th0).toBeGreaterThan(0.95); // still swinging as wide in its second second
+    r.done();
+  });
+
   it('knocked straight off steel, a magnet escapes once its kinetic energy beats the pull\'s well, 1/2 m v^2 = int P dz', async () => {
     const R = 0.005, L = 0.005;
     const f = 0.95 * plateSaturationFactor(0.006, 1.3, Math.PI * R * R, 2 * Math.PI * R);

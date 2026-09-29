@@ -111,14 +111,29 @@ steel, a magnet sunk into the surface would pass its own images, and the pull wo
 lifted out along the normal. [conformance: small magnets snap onto steel and lie flush and still]
 
 **M3 Momentum and integration.** The world applies −F to A with torque −T − (x_B − x_A) × F, so momentum and angular
-momentum are exact. The wrench is evaluated afresh every substep, and a close pair is divided into as many substeps as
-the rate of its motion needs (up to 16 a tick). Near contact the pull changes over a fraction of a millimetre, so a
-magnet leaving or arriving fast can cross that in one substep. Where a substep carries B more than a tenth of its
-feature size relative to A, the wrench applied is its average along the substep's path (two-point Gauss), so it does
-the work the field does along the way. At the start of the substep, the force overstates the pull on a magnet
-leaving: knocked straight off steel, a 10 × 5 mm disc then needed twice its escape speed.
-[conformance: the world applies the model force integrated along the path; a stuck magnet knocked straight off escapes
-just above the speed at which its kinetic energy beats the pull's well, ½ m v² = ∫ P dz, and falls back just below]
+momentum are exact. The wrench is evaluated afresh every substep. A stiff pair is divided into as many substeps as the
+rate of its motion needs (ω dt ≤ 0.5, up to 16 a tick), its rate measured from the stiffness (central differences,
+remeasured once B has moved 2% of its size or turned 0.02 rad relative to A). A pair is stiff when close (gap under
+four magnet radii) or when the dipoles say it can turn or close in faster than a quarter of a tick allows: a light
+magnet can wobble tens of times a second several centimetres from a strong one.
+
+The restoring modes the substeps can follow (ω dt ≤ 1) are integrated explicitly, and symplectically (Jolt's
+integrator), so a magnet wobbling near another keeps wobbling, as a real one does: its own eddy currents damp it at
+only ~1.6 s⁻¹ (M4). Only modes faster than that, beyond the 16-substep cap, are taken by backward Euler (implicit.ts),
+which is stable for any stiffness but damps them numerically.
+
+Near contact the pull changes over a fraction of a millimetre, so a magnet leaving or arriving fast can cross that in
+one substep. Where a substep carries B more than a tenth of its feature size relative to A, the wrench applied is its
+average along the substep's path (two-point Gauss), so it does the work the field does along the way. At the start of
+the substep, the force overstates the pull on a magnet leaving: knocked straight off steel, a 10 × 5 mm disc then
+needed twice its escape speed.
+
+Limit: a wobble faster than 16 substeps can follow (above about 230 Hz, e.g. a small magnet within a few millimetres of
+another) is damped numerically, within a few periods.
+
+[conformance: the world applies the model force integrated along the path; a magnet on a pivot near another wobbles
+at √(k/I) and keeps its amplitude; a stuck magnet knocked straight off escapes just above the speed at which its
+kinetic energy beats the pull's well, ½ m v² = ∫ P dz, and falls back just below]
 
 **M4 Eddy currents (Lenz's law).** Take a conductor C of conductivity σ moving relative to a field source S. A
 point x of C moves at u(x) relative to S. In the quasi-static limit (magnetic Reynolds number μ0 σ u ℓ ≪ 1), the
