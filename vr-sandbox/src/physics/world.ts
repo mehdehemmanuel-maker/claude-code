@@ -21,7 +21,7 @@ import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../e
 import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
 import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
-  quatFromRotationVector, quatMul, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
+  quatFromRotationVector, quatMul, rotationVector, scaleMat, solvePositions, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
 import { implicitForce, restoringPart, solveDense, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, placeMesh, rigidBasis, type EddyMesh } from '../engineering/eddy';
@@ -94,6 +94,10 @@ interface MagnetStiffness {
   rate: number;
 }
 
+/** Penetration the contacts leave alone (Jolt's mPenetrationSlop, as set below). */
+const SLOP = 0.002;
+/** Most overlap taken out in one tick, as Jolt does (its mMaxPenetrationDistance default). */
+const MAX_CORRECTION = 0.2;
 /** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
 const MIN_IMPACT_FOR_RESTITUTION = 1;
 
@@ -409,7 +413,7 @@ export class PhysicsWorld {
     this.bi = this.ps.GetBodyInterface();
     // Solver tuned for workshop-scale parts (millimetres to metres), not the metre-scale defaults.
     const settings = this.ps.GetPhysicsSettings();
-    settings.mPenetrationSlop = 0.002;
+    settings.mPenetrationSlop = SLOP;
     settings.mSpeculativeContactDistance = 0.01;
     settings.mNumVelocitySteps = 12;
     settings.mNumPositionSteps = 3;
@@ -431,8 +435,14 @@ export class PhysicsWorld {
     this.applySim(sim);
   }
 
+  /** Free everything the world allocated in the WebAssembly heap (the system, its bodies and constraints, and ours). */
   destroy() {
-    this.J.destroy(this.jolt);
+    const J = this.J;
+    J.destroy(this.jolt);
+    // the collision group holds the last reference to the group filter (its 4096-group pair table), freeing it
+    J.destroy(this.cg);
+    J.destroy(this.contactListener);
+    for (const o of [this.v1, this.v2, this.r1, this.q1, ...this.pv, ...this.pr, ...this.pq]) J.destroy(o);
   }
 
   // Rotating scratch values: Jolt copies them on assignment / construction, so no WASM allocation leaks.
@@ -781,7 +791,9 @@ export class PhysicsWorld {
       cs.mUserData = slot + 1;
       cs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
       cs.mMassPropertiesOverride.mMass = mass;
-      if (dims.b < 0.03) cs.mMotionQuality = J.EMotionQuality_LinearCast;
+      // Continuous collision for every moving part: Jolt sweeps a body only when it moves further than a fraction of
+      // its own size in one step, so this costs nothing at rest and stops a fast part stepping through a wall
+      cs.mMotionQuality = J.EMotionQuality_LinearCast;
       this.cg.SetSubGroupID(subgroup);
       cs.mCollisionGroup = this.cg;
       const body = this.bi.CreateBody(cs);
@@ -1008,6 +1020,11 @@ export class PhysicsWorld {
     return 2 * Math.acos(Math.min(1, w));
   }
 
+  /** Radius about `o` of a body whose centre is at `p`: how far from o its farthest point can be. */
+  private extentAbout(r: BodyRec, p: Vec3, o: Vec3) {
+    return length(sub(p, o)) + Math.hypot(r.dims.length, r.dims.a, r.dims.b) / 2;
+  }
+
   private localInertia(r: BodyRec): number[] {
     const m = r.body.GetMotionProperties().GetLocalSpaceInverseInertia();
     // Jolt returns temporaries: read each column before asking for the next
@@ -1170,7 +1187,7 @@ export class PhysicsWorld {
         const pose = start ?? this.poseOf(r);
         const still = r.frozen || r.grabbed === 'creative' || !r.Iloc;
         e = {
-          e: { origin: pose.p, v, w, invMass: still ? 0 : 1 / r.mass, invI: still ? [...ZERO3] : inverse3(worldInertia(r.Iloc!, pose.q)) },
+          e: { origin: pose.p, v, w, invMass: still ? 0 : 1 / r.mass, invI: still ? [...ZERO3] : inverse3(worldInertia(r.Iloc!, pose.q)), extent: this.extentAbout(r, pose.p, pose.p) },
           work: null, single: r, touched: false, start, v0: [...v] as Vec3, w0: [...w] as Vec3, fixed: [],
         };
         ents.set(r, e);
@@ -1247,12 +1264,14 @@ export class PhysicsWorld {
       for (const [pi, { pm, po }] of c.points.entries()) {
         const key = `c:${c.key}:${pi}`;
         const sep = dot(sub(po, pm), c.n);
-        let target = sep < 0 ? Math.max(0, -sep - 0.002) * beta : -sep / dt;
+        // a gap may close this tick; an overlap is taken out at position level (solvePositions), never as speed
+        let target = sep > 0 ? -sep / dt : 0;
+        const bias = sep < 0 ? Math.min(Math.max(0, -sep - SLOP) * beta, MAX_CORRECTION / dt) : 0;
         const vm0 = em.work ? pointVelocity(em.work.priorEnt, pm) : pointVelocity({ ...em.e, v: em.v0, w: em.w0 }, pm);
         const vo = eo ? pointVelocity({ ...eo.e, v: eo.v0, w: eo.w0 }, po) : still ? pointVelocity(still, po) : [0, 0, 0] as Vec3;
         const vPre = dot(sub(vo, vm0), c.n);
         if (vPre < -1) target = Math.max(target, -c.restitution * vPre);
-        const normal: Row = { a: em.e, b: eo ? eo.e : still, kind: 'linear', pa: pm, pb: po, dir: c.n, target, lo: 0, hi: Infinity, acc: 0, tag, key };
+        const normal: Row = { a: em.e, b: eo ? eo.e : still, kind: 'linear', pa: pm, pb: po, dir: c.n, target, bias, lo: 0, hi: Infinity, acc: 0, tag, key };
         rows.push(normal);
         // friction rows along fixed tangents keep their identity from tick to tick for warm starting
         [t1, t2].forEach((t, ti) => rows.push({ a: em.e, b: eo ? eo.e : still, kind: 'linear', pa: pm, pb: po, dir: t, target: 0, lo: 0, hi: 0, frictionOf: normal, mu: c.friction, acc: 0, tag, key: `${key}:t${ti}` }));
@@ -1261,19 +1280,23 @@ export class PhysicsWorld {
       if (eo) eo.touched = true;
     }
     solveRows(rows, 12, this.warm);
-    // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does)
-    for (const w of works) this.placeCluster(w, anchored, dt);
+    const pseudo = solvePositions(rows, 12, dt, SLOP);
+    const none = { v: [0, 0, 0] as Vec3, w: [0, 0, 0] as Vec3 };
+    // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does), plus the
+    // position correction, which moves the pose and leaves the velocity alone
+    for (const w of works) this.placeCluster(w, anchored, dt, pseudo.get(w.ent.e) ?? none);
     for (const en of ents.values()) {
       if (en.work || !en.touched || !en.single || (en.e.invMass === 0 && !en.fixed.length)) continue;
       const r = en.single;
       const cur = this.poseOf(r);
       const pin = en.fixed[0];
       const pinTarget = pin ? (pin.a.other && pin.a.otherFrame ? composePose(this.poseOf(pin.a.other), pin.a.otherFrame) : pin.a.c.worldB) : null;
+      const ps = pseudo.get(en.e) ?? none;
       const pose: Pose = pin && pinTarget
         ? composePose(pinTarget, invertPose(pin.a.frame))
         : en.start
-        ? { p: add(en.start.p, scale(en.e.v, dt)), q: normQuat(quatMul(quatFromRotationVector(scale(en.e.w, dt)), en.start.q)) }
-        : { p: add(cur.p, scale(sub(en.e.v, en.v0), dt)), q: normQuat(quatMul(quatFromRotationVector(scale(sub(en.e.w, en.w0), dt)), cur.q)) };
+        ? { p: add(en.start.p, scale(add(en.e.v, ps.v), dt)), q: normQuat(quatMul(quatFromRotationVector(scale(add(en.e.w, ps.w), dt)), en.start.q)) }
+        : { p: add(cur.p, scale(add(sub(en.e.v, en.v0), ps.v), dt)), q: normQuat(quatMul(quatFromRotationVector(scale(add(sub(en.e.w, en.w0), ps.w), dt)), cur.q)) };
       this.r1.Set(...pose.p);
       this.q1.Set(...pose.q);
       this.v1.Set(...en.e.v);
@@ -1356,11 +1379,14 @@ export class PhysicsWorld {
     for (const w of works) this.bridgeLoads(w, ourP, ourL, dt);
   }
 
-  /** End-of-tick pose of an assembly: its start pose advanced by the solved motion, anchored DOFs pinned. */
-  private placeCluster(w: FittedCluster, anchored: Map<BodyRec, Anchor[]>, dt: number) {
+  /**
+   * End-of-tick pose of an assembly: its start pose advanced by the solved motion and its position correction
+   * (pseudo-velocity: it moves the pose, not the velocity), anchored DOFs pinned.
+   */
+  private placeCluster(w: FittedCluster, anchored: Map<BodyRec, Anchor[]>, dt: number, ps: { v: Vec3; w: Vec3 }) {
     const { comp, T, C0, com0, ent, M } = w;
-    const dq = quatFromRotationVector(scale(ent.e.w, dt));
-    const comE = add(com0, scale(ent.e.v, dt));
+    const dq = quatFromRotationVector(scale(add(ent.e.w, ps.w), dt));
+    const comE = add(com0, scale(add(ent.e.v, ps.v), dt));
     let C: Pose = { p: add(comE, rotate(dq, sub(C0.p, com0))), q: normQuat(quatMul(dq, C0.q)) };
     let comRef = comE;
     const anchors: { i: number; a: Anchor }[] = [];
@@ -1511,7 +1537,8 @@ export class PhysicsWorld {
     const L0 = mat3Vec(Ic, u0.w);
     const wPred = mat3Vec(invIc, add(add(L0, dLsum), scale(cross(L0, u0.w), dt)));
     const vPred = add(u0.v, scale(dPsum, 1 / M));
-    const ent: Ent = { e: { origin: com0, v: vPred, w: wPred, invMass: 1 / M, invI: invIc }, work: null, single: null, touched: false, start: null, v0: [...u0.v] as Vec3, w0: [...u0.w] as Vec3, fixed: [] };
+    const extent = comp.reduce((x, r, i) => Math.max(x, this.extentAbout(r, NP0[i]!.p, com0)), 0);
+    const ent: Ent = { e: { origin: com0, v: vPred, w: wPred, invMass: 1 / M, invI: invIc, extent }, work: null, single: null, touched: false, start: null, v0: [...u0.v] as Vec3, w0: [...u0.w] as Vec3, fixed: [] };
     const work: FittedCluster = {
       comp, adj, index, order, parent, parentEdge, disc, low, T, C0, com0, M, NP0, P0, Iw0, pri, joltP, joltL, newV: new Array(n),
       ent, priorEnt: { origin: com0, v: u0.v, w: u0.w, invMass: 0, invI: [...ZERO3] },
@@ -1776,31 +1803,65 @@ export class PhysicsWorld {
         }
         continue;
       }
-      // Physical grab: a critically damped spring to the hand, limited to human strength.
+      // Physical grab: the held piece (with its still-bonded neighbours) follows the hand as the one rigid body it is,
+      // on a critically damped spring about the grip, with gravity carried, and within what a hand can do (force at
+      // the grip up to the strength setting, wrist torque up to 0.12 of it). The wrench is shared out over the
+      // pieces in proportion to what each needs for that rigid motion, so the bonds between them carry none of it.
+      const members = this.cluster(r);
       const pose = this.poseOf(r);
-      const lv = this.bi.GetLinearVelocity(bid);
-      const av = this.bi.GetAngularVelocity(bid);
+      const [v, wv] = this.velocityOf(r);
       const w = 2 * Math.PI * 5;
-      const err = sub(g.target.p, pose.p);
-      const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
-      let F = sub(scale(err, g.mass * w * w), scale(v, 2 * g.mass * w));
-      const fl = length(F);
-      if (fl > g.strength) F = scale(F, g.strength / fl);
-      // orientation error as axis * angle
+      const grav: Vec3 = [...this.sim.gravity] as Vec3;
+      // centres of mass as Jolt has them (a wedge's or a hull's is not at its origin)
+      const com = (x: BodyRec): Vec3 => { const c = x.body.GetCenterOfMassPosition(); return [c.GetX(), c.GetY(), c.GetZ()]; };
+      let M = 0, xc: Vec3 = [0, 0, 0];
+      for (const x of members) { M += x.mass; xc = add(xc, scale(com(x), x.mass)); }
+      xc = scale(xc, 1 / M);
+      // inertia of the whole piece about its centre of mass (parallel axis theorem)
+      const Ic = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      const Is = new Map<BodyRec, number[]>();
+      for (const x of members) {
+        const Ii = x.Iloc ? worldInertia(x.Iloc, this.poseOf(x).q) : [0, 0, 0, 0, 0, 0, 0, 0, 0];
+        Is.set(x, Ii);
+        const d = sub(com(x), xc), dd = dot(d, d);
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) Ic[i * 3 + j] += Ii[i * 3 + j]! + x.mass * ((i === j ? dd : 0) - d[i]! * d[j]!);
+      }
+      // wanted accelerations of the grip and of the piece's turning: towards the hand at w times the error, but never
+      // faster than the hand could stop it within the remaining distance (sqrt(2 a_max d)), so a heavy piece that the
+      // hand turns at the limit of its strength comes to rest instead of overshooting
       const qe = quatMul(g.target.q, quatConj(pose.q));
       const sgn = qe[3] < 0 ? -1 : 1;
       const angle = 2 * Math.acos(Math.min(1, Math.abs(qe[3])));
-      const s = Math.sqrt(Math.max(1e-12, 1 - qe[3] * qe[3]));
-      const axis: Vec3 = [(qe[0] * sgn) / s, (qe[1] * sgn) / s, (qe[2] * sgn) / s];
-      const I = g.inertia;
-      const wv: Vec3 = [av.GetX(), av.GetY(), av.GetZ()];
-      let T = sub(scale(axis, angle * I * w * w), scale(wv, 2 * I * w));
-      const maxT = g.strength * 0.12; // wrist torque ~ 30 N m at 250 N
-      const tl = length(T);
-      if (tl > maxT) T = scale(T, maxT / tl);
-      this.v1.Set(...F);
-      this.v2.Set(...T);
-      this.bi.AddForceAndTorque(bid, this.v1, this.v2, this.J.EActivation_Activate);
+      const sq = Math.sqrt(Math.max(1e-12, 1 - qe[3] * qe[3]));
+      const axis: Vec3 = [(qe[0] * sgn) / sq, (qe[1] * sgn) / sq, (qe[2] * sgn) / sq];
+      const Iaxis = Math.max(1e-9, dot(axis, mat3Vec(Ic, axis)));
+      const wStar = Math.min(w * angle, Math.sqrt((2 * 0.5 * g.strength * 0.12 * angle) / Iaxis));
+      let alpha = scale(sub(scale(axis, wStar), wv), 2 * w);
+      const e = sub(g.target.p, pose.p), el = length(e);
+      const vStar = el > 1e-9 ? scale(e, Math.min(w * el, Math.sqrt(2 * 0.5 * (g.strength / M) * el)) / el) : ([0, 0, 0] as Vec3);
+      const aGrip = scale(sub(vStar, v), 2 * w);
+      const lever = sub(pose.p, xc);
+      let ac = sub(aGrip, cross(alpha, lever));
+      // the hand's wrench at the grip, and its limits
+      let F = scale(sub(ac, grav), M);
+      let Tgrip = sub(mat3Vec(Ic, alpha), cross(lever, F));
+      const fl = length(F), maxT = g.strength * 0.12, tl = length(Tgrip);
+      if (fl > g.strength || tl > maxT) {
+        if (fl > g.strength) F = scale(F, g.strength / fl);
+        if (tl > maxT) Tgrip = scale(Tgrip, maxT / tl);
+        alpha = mat3Vec(inverse3(Ic), add(Tgrip, cross(lever, F)));
+        ac = add(scale(F, 1 / M), grav);
+      }
+      // each piece gets what the rigid motion asks of it beyond its own weight
+      for (const x of members) {
+        if (x.frozen) continue;
+        const d = sub(com(x), xc);
+        const Fi = scale(sub(add(ac, cross(alpha, d)), grav), x.mass);
+        const Ti = mat3Vec(Is.get(x)!, alpha);
+        this.v1.Set(...Fi);
+        this.v2.Set(...Ti);
+        this.bi.AddForceAndTorque(x.body.GetID(), this.v1, this.v2, this.J.EActivation_Activate);
+      }
     }
   }
 
@@ -3170,6 +3231,22 @@ export class PhysicsWorld {
 
   connectionDerived(id: string) {
     return this.conns.get(id)?.derived;
+  }
+
+  /** Gravity now. */
+  gravity(): Vec3 {
+    return [...this.sim.gravity] as Vec3;
+  }
+
+  /** Bodies a hand is holding now (and the pieces that move with them). */
+  heldBodies(): string[] {
+    return [...this.bodies.values()].filter((r) => r.grabbed).map((r) => r.id);
+  }
+
+  /** World-space inertia tensor (row-major 3 x 3, about the centre of mass) of one body, or null if it does not move. */
+  bodyInertia(id: string): number[] | null {
+    const r = this.bodies.get(id);
+    return r?.Iloc ? worldInertia(r.Iloc, this.poseOf(r).q) : null;
   }
 
   /** Mass of a part (all its segments) or of one body. */

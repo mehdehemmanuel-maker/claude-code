@@ -79,7 +79,7 @@ export class Tablet {
   update(time: number, hoverUv: THREE.Vector2 | null) {
     const id = hoverUv ? this.hitId(hoverUv) : null;
     if (id !== this.hoverId) { this.hoverId = id; this.dirty = true; }
-    const live = this.page === 'selected' && time - this.lastDraw > 200;
+    const live = (this.page === 'selected' || this.page === 'world') && time - this.lastDraw > 200;
     if ((this.dirty || live) && this.visible) {
       this.draw();
       this.lastDraw = time;
@@ -300,7 +300,19 @@ export class Tablet {
       });
     }
     this.drawRoom(row(5) + 10, bw);
+    this.drawHealth(H - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
+  }
+
+  /** The live watchdog's verdict on this session: all clear, or how many problems and the latest one. */
+  private drawHealth(y: number) {
+    const h = this.app.live.health;
+    if (!h.length) { this.text('● Watchdog: all clear', 24, y, 22, '#4dd68c', 'left', '600'); return; }
+    const crit = h.filter((a) => a.severity === 'critical').length;
+    const last = h[h.length - 1]!;
+    const name = last.id ? (this.app.doc.parts[last.id.split('#')[0]!]?.name ?? 'a part') : 'the scene';
+    const line = `● Watchdog: ${crit ? `${crit} critical` : ''}${crit && h.length > crit ? ', ' : ''}${h.length > crit ? `${h.length - crit} warning` : ''} · ${last.kind}: ${name} ${last.detail}`;
+    this.text(line.length > 92 ? `${line.slice(0, 91)}…` : line, 24, y, 22, crit ? '#ff5b4d' : '#ffc14d', 'left', '600');
   }
 
   /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */

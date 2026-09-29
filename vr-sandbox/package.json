@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "stress": "vitest run --config vitest.stress.config.ts tests/stress/spiderweb.test.ts",
+    "immune": "vitest run --config vitest.stress.config.ts tests/stress/immune.test.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

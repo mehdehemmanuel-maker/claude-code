@@ -3,6 +3,7 @@
 import type { Pose, Vec3 } from '../doc/types';
 import type { ConnectionLoad, PhysicsEvent } from '../physics/protocol';
 import type { AdvanceResult } from '../physics/runner';
+import type { Anomaly } from '../diagnostics/watchdog';
 
 export class LiveState {
   private slots: (string | null)[] = [];
@@ -20,8 +21,15 @@ export class LiveState {
   /** Physics ticks actually run. Under load physics slows down rather than spiralling, so this, not the app's
    *  clock, is how much simulated time has passed. */
   ticks = 0;
+  /** What the live watchdog has flagged this session, newest last (bounded). */
+  health: (Anomaly & { at: number })[] = [];
 
   ingest(r: AdvanceResult) {
+    for (const a of r.watchdog ?? []) {
+      this.health.push({ ...a, at: this.ticks });
+      if (this.health.length > 50) this.health.shift();
+      console.warn(`[watchdog] ${a.severity} ${a.kind}${a.id ? ` ${a.id}` : ''}: ${a.detail}`);
+    }
     if (r.slots) {
       this.slots = r.slots;
       this.index.clear();

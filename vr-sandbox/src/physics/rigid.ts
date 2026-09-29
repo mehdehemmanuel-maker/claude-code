@@ -186,6 +186,8 @@ export interface Entity {
   invMass: number;
   /** World inverse inertia about origin (3x3). */
   invI: number[];
+  /** Radius of its geometry about origin (m): how far a turn moves its farthest point (position pass). */
+  extent?: number;
 }
 
 export const pointVelocity = (e: Entity, p: Vec3): Vec3 => add(e.v, cross(e.w, sub(p, e.origin)));
@@ -221,6 +223,12 @@ export interface Row {
   key?: string;
   /** Unbounded rows sharing a group are solved together as one block (exact coupling, e.g. a 6-DOF anchor). */
   group?: string;
+  /**
+   * Position error to take out (as a velocity: error x beta), solved apart from the velocities by solvePositions.
+   * Pushed into the velocity solve instead, it would become real momentum: two overlapping bodies would leave
+   * each other faster the deeper they overlapped, with energy nothing supplied.
+   */
+  bias?: number;
 }
 
 /** Jacobian of a row on one of its entities: linear part and angular part (impulse response directions). */
@@ -395,13 +403,54 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
   }
 }
 
+/**
+ * Split impulse (Catto): the position errors of the rows (their `bias`) solved on pseudo-velocities that start at
+ * rest and move the entities' poses only. Contacts push apart but never pull, joints hold together, friction and
+ * impulse-bounded rows play no part. Returns each moving entity's pseudo-velocity; its real velocity is untouched,
+ * so taking out an overlap or a drift adds no momentum and no kinetic energy.
+ *
+ * The rows are linear in the motion, so the answer holds only for small turns: turning by theta about the origin
+ * moves a point at radius r off its linear prediction by r theta^2 / 2. Each entity's correction is therefore
+ * scaled down (direction kept) until that error is within `slop` at its extent; what is left is taken out on the
+ * following ticks. (A deep overlap resolved in one linear step would swing a long part through its neighbours.)
+ */
+export function solvePositions(rows: Row[], iterations: number, dt: number, slop: number): Map<Entity, { v: Vec3; w: Vec3 }> {
+  const pseudo = new Map<Entity, Entity>();
+  const of = (e: Entity | null): Entity | null => {
+    if (!e) return null;
+    let p = pseudo.get(e);
+    if (!p) pseudo.set(e, (p = { origin: e.origin, v: [0, 0, 0], w: [0, 0, 0], invMass: e.invMass, invI: e.invI }));
+    return p;
+  };
+  const prow: Row[] = [];
+  let any = false;
+  for (const r of rows) {
+    if (r.frictionOf) continue;
+    const contact = r.lo === 0 && r.hi === Infinity;
+    if (!contact && (r.lo !== -Infinity || r.hi !== Infinity)) continue;
+    if (r.bias) any = true;
+    prow.push({ a: of(r.a), b: of(r.b), kind: r.kind, pa: r.pa, pb: r.pb, dir: r.dir, target: r.bias ?? 0, lo: r.lo, hi: r.hi, acc: 0, group: r.group });
+  }
+  const out = new Map<Entity, { v: Vec3; w: Vec3 }>();
+  if (!any) return out;
+  solveRows(prow, iterations);
+  for (const [e, p] of pseudo) {
+    if (e.invMass === 0) continue;
+    const turn = length(p.w) * dt;
+    const most = e.extent ? Math.sqrt((2 * slop) / e.extent) : Infinity;
+    const k = turn > most ? most / turn : 1;
+    out.set(e, { v: scale(p.v, k), w: scale(p.w, k) });
+  }
+  return out;
+}
+
 /** Rows for a point held together between a and b (or to the world), in the directions P keeps (one block per key). */
 export function pointRows(a: Entity | null, b: Entity | null, pa: Vec3, pb: Vec3, P: number[], bias: Vec3, tag?: unknown, key?: string): Row[] {
-  return basisOf(P).map((axis, i) => ({ a, b, kind: 'linear' as const, pa, pb, dir: axis, target: -dot(bias, axis), lo: -Infinity, hi: Infinity, acc: 0, tag, key: key && `${key}:p${i}`, group: key }));
+  return basisOf(P).map((axis, i) => ({ a, b, kind: 'linear' as const, pa, pb, dir: axis, target: 0, bias: -dot(bias, axis), lo: -Infinity, hi: Infinity, acc: 0, tag, key: key && `${key}:p${i}`, group: key }));
 }
 
 export function angularRows(a: Entity | null, b: Entity | null, P: number[], bias: Vec3, tag?: unknown, key?: string, lo = -Infinity, hi = Infinity): Row[] {
-  return basisOf(P).map((axis, i) => ({ a, b, kind: 'angular' as const, pa: [0, 0, 0] as Vec3, pb: [0, 0, 0] as Vec3, dir: axis, target: -dot(bias, axis), lo, hi, acc: 0, tag, key: key && `${key}:r${i}`, group: key }));
+  return basisOf(P).map((axis, i) => ({ a, b, kind: 'angular' as const, pa: [0, 0, 0] as Vec3, pb: [0, 0, 0] as Vec3, dir: axis, target: 0, bias: -dot(bias, axis), lo, hi, acc: 0, tag, key: key && `${key}:r${i}`, group: key }));
 }
 
 /** Orthonormal basis of the range of a symmetric projector (identity, axis, or plane). */
