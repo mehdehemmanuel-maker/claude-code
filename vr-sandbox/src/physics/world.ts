@@ -24,7 +24,7 @@ import {
   quatFromRotationVector, quatMul, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
 import { implicitForce, restoringPart, solveDense, symmetricEigen3 } from './implicit';
-import { annulusMesh, boxMesh, eddyDamping, placeMesh, rigidBasis, type EddyMesh } from '../engineering/eddy';
+import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
 import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, RoomSurface, StepResult } from './protocol';
 
@@ -96,6 +96,9 @@ interface MagnetStiffness {
 
 /** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
 const MIN_IMPACT_FOR_RESTITUTION = 1;
+/** A contact point this close to a segment's joined end (m) lies on the seam; a normal this far off the end's plane leaves through it. */
+const SEAM_TOL = 1e-4;
+const SEAM_NORMAL = 1e-3;
 
 /** A 20 mm magnet near another evolves at ~200-1000 s^-1: sixteen substeps resolve that at 90 Hz. */
 const MAX_MAGNET_SUBSTEPS = 16;
@@ -103,6 +106,8 @@ const MAX_MAGNET_SUBSTEPS = 16;
 /** Eddy damping is computed for conductors of at least this conductivity (S/m) moving faster than this (m/s). */
 const EDDY_MIN_SIGMA = 1e7;
 const EDDY_MIN_SPEED = 1e-3;
+/** About how many finite-volume cells a conductor is meshed with near a magnet (M4, Limits). */
+const EDDY_CELLS = 240;
 
 /** A magnetic pair latches once touching with its contact slower than this (m/s) for LATCH_SETTLE_TICKS ticks. */
 const LATCH_SPEED = 0.02;
@@ -2159,12 +2164,13 @@ export class PhysicsWorld {
 
   private applyFields(dt: number) {
     this.applyMagnets(dt);
-    this.applyEddies(dt);
     this.applyFluids(dt);
     if (this.sim.airDrag) this.applyAirDrag();
     this.applyBands();
     this.driveJoints();
     this.driveGrabs(dt);
+    // last: the drag is taken at the velocity the step ends with, under everything else (M4)
+    this.applyEddies(dt);
   }
 
   /**
@@ -2376,26 +2382,25 @@ export class PhysicsWorld {
   }
 
   /**
-   * Finite-volume mesh (world space) of the part of conductor C within `reach` of the local point `near`: a whole
-   * magnet, a box, a cylinder, or a tube (its ring of staves meshed as the annulus it is, so currents circulate).
+   * Finite-volume mesh, in C's own frame, of the part of conductor C within `reach` of the local point `near`: a
+   * whole magnet, a box, a cylinder, or a tube (its ring of staves meshed as the annulus it is, so currents
+   * circulate).
    */
   private conductorMesh(C: BodyRec, near: Vec3, reach: number): EddyMesh | null {
-    const pose = this.poseOf(C);
     const win = { lo: sub(near, [reach, reach, reach]) as Vec3, hi: add(near, [reach, reach, reach]) as Vec3 };
-    let mesh: EddyMesh | null = null;
     const g = C.magnet?.geom, sh = C.shape;
-    if (g) mesh = g.shape === 'cylinder' ? annulusMesh(g.radius, 0, g.length / 2, null, 96, 3, 16) : boxMesh([g.w / 2, g.length / 2, g.h / 2], null, 96);
-    else if (sh.type === 'box') mesh = boxMesh(sh.half, win, 240);
-    else if (sh.type === 'cylinder') mesh = annulusMesh(sh.radius, 0, sh.halfHeight, win, 240);
-    else if (sh.type === 'compound' && sh.children.length >= 6 && sh.children.every((c) => c.shape.type === 'box' && Math.abs(c.p[1]) < 1e-9)) {
+    if (g) return g.shape === 'cylinder' ? annulusMesh(g.radius, 0, g.length / 2, null, 96, 3, 16) : boxMesh([g.w / 2, g.length / 2, g.h / 2], null, 96);
+    if (sh.type === 'box') return boxMesh(sh.half, win, EDDY_CELLS);
+    if (sh.type === 'cylinder') return annulusMesh(sh.radius, 0, sh.halfHeight, win, EDDY_CELLS);
+    if (sh.type === 'compound' && sh.children.length >= 6 && sh.children.every((c) => c.shape.type === 'box' && Math.abs(c.p[1]) < 1e-9)) {
       // a tube's ring of staves: radius of the stave centres, wall = stave thickness
       const rc = Math.hypot(sh.children[0]!.p[0], sh.children[0]!.p[2]);
       const b0 = sh.children[0]!.shape as { type: 'box'; half: Vec3 };
       if (sh.children.every((c) => Math.abs(Math.hypot(c.p[0], c.p[2]) - rc) < 1e-6 * Math.max(rc, 1))) {
-        mesh = annulusMesh(rc + b0.half[0], Math.max(0, rc - b0.half[0]), b0.half[1], win, 240);
+        return annulusMesh(rc + b0.half[0], Math.max(0, rc - b0.half[0]), b0.half[1], win, EDDY_CELLS);
       }
     }
-    return mesh ? placeMesh(mesh, pose.p, (v) => rotate(pose.q, v) as Vec3) : null;
+    return null;
   }
 
   /**
@@ -2429,7 +2434,8 @@ export class PhysicsWorld {
       for (const C of conductors) {
         if (M.frozen && C.frozen) continue;
         const poseC = this.poseOf(C);
-        const local = rotate(quatConj(poseC.q), sub(poseM.p, poseC.p));
+        const toC = (v: Vec3) => rotate(quatConj(poseC.q), v);
+        const local = toC(sub(poseM.p, poseC.p));
         const hit = closestOnShape(C.shape, local);
         // the dissipation density falls as r^-6, its integral beyond six sizes is under 1%
         if (hit.d > 6 * bound) continue;
@@ -2440,8 +2446,11 @@ export class PhysicsWorld {
         // mesh the conductor out to three times its distance from the magnet (a tube: +-3 radii along its axis)
         const mesh = this.conductorMesh(C, local, Math.max(2 * bound, 3 * (Math.max(0, hit.d) + bound)));
         if (!mesh) continue;
+        // everything in C's frame: its mesh as built, the magnet's faces moved into it
         facesM ??= this.magnetFacesOf(M, poseM);
-        this.eddies.push({ S: M, C, D: eddyDamping(mesh, C.material.conductivity, field(facesM, mesh), rigidBasis(poseM.p)) });
+        const facesC = facesM.map((f) => ({ ...f, c: toC(sub(f.c, poseC.p)) as MVec3, o: toC(f.o) as MVec3, t1: toC(f.t1) as MVec3, t2: toC(f.t2) as MVec3 }));
+        const Dl = eddyDamping(mesh, C.material.conductivity, field(facesC, mesh), rigidBasis(local));
+        this.eddies.push({ S: M, C, D: rotate6(Dl, poseC.q) });
       }
     }
   }
@@ -2456,9 +2465,18 @@ export class PhysicsWorld {
     return out;
   }
 
+  /** Everything pushing on a body this (sub)step so far, as a wrench about its centre: its weight and the field forces. */
+  private loadOf(r: BodyRec): number[] {
+    if (r.frozen || r.grabbed === 'creative') return [0, 0, 0, 0, 0, 0];
+    const f = r.body.GetAccumulatedForce(), t = r.body.GetAccumulatedTorque(), g = this.sim.gravity;
+    return [f.GetX() + r.mass * g[0], f.GetY() + r.mass * g[1], f.GetZ() + r.mass * g[2], t.GetX(), t.GetY(), t.GetZ()];
+  }
+
   /**
-   * Apply the eddy drag for a (sub)step, implicitly: q' = (I + dt Minv D)^-1 q, drag -D q' on C and its reaction on S.
-   * q is C's velocity relative to S, at S's centre; Minv maps a wrench there to that relative velocity.
+   * Apply the eddy drag for a (sub)step, implicitly at the velocity the step ends with (M4):
+   * q' = (I + dt Minv D)^-1 (q + dt a), a the relative acceleration the rest of the load (weight, field forces) gives,
+   * then drag -D q' on C and its reaction on S. q is C's velocity relative to S, at S's centre; Minv maps a wrench
+   * there to that relative velocity. Called after every other field force of the step, so they are all in a.
    */
   private applyEddies(dt: number) {
     for (const e of this.eddies) {
@@ -2471,18 +2489,24 @@ export class PhysicsWorld {
       for (let i = 0; i < 6; i++) J[i * 6 + i] = 1;
       const dx = [[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]];
       for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) J[i * 6 + 3 + j] = -dx[i]![j]!;
-      const MC = this.inverseMass6(e.C), Minv = this.inverseMass6(e.S);
+      const MC = this.inverseMass6(e.C), MS = this.inverseMass6(e.S);
+      const Minv = [...MS];
       for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
         let s = 0;
         for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) s += J[i * 6 + a]! * MC[a * 6 + b]! * J[j * 6 + b]!;
         Minv[i * 6 + j] += s;
       }
+      // the relative velocity the rest of the load would give by the end of the step
+      const LC = this.loadOf(e.C), LS = this.loadOf(e.S);
+      const aC = [0, 1, 2, 3, 4, 5].map((i) => MC.slice(i * 6, i * 6 + 6).reduce((s, v, j) => s + v * LC[j]!, 0));
+      const aS = [0, 1, 2, 3, 4, 5].map((i) => MS.slice(i * 6, i * 6 + 6).reduce((s, v, j) => s + v * LS[j]!, 0));
+      const qp = q.map((v, i) => v + dt * (J.slice(i * 6, i * 6 + 6).reduce((s, x, j) => s + x * aC[j]!, 0) - aS[i]!));
       const A = new Array<number>(36).fill(0);
       for (let i = 0; i < 6; i++) {
         A[i * 6 + i] = 1;
         for (let j = 0; j < 6; j++) for (let k = 0; k < 6; k++) A[i * 6 + j] += dt * Minv[i * 6 + k]! * e.D[k * 6 + j]!;
       }
-      const qn = solveDense(A, q, 6);
+      const qn = solveDense(A, qp, 6);
       const W = [0, 1, 2, 3, 4, 5].map((i) => -e.D.slice(i * 6, i * 6 + 6).reduce((s, v, j) => s + v * qn[j]!, 0));
       const F: Vec3 = [W[0]!, W[1]!, W[2]!], T: Vec3 = [W[3]!, W[4]!, W[5]!];
       // the wrench acts about the reference point: on C that is T + d x F about its own centre
@@ -3124,6 +3148,7 @@ export class PhysicsWorld {
     listener.OnContactPersisted = (b1p: number, b2p: number, manp: number, setp: number) => {
       const b1 = J.wrapPointer(b1p, J.Body), b2 = J.wrapPointer(b2p, J.Body);
       const man = J.wrapPointer(manp, J.ContactManifold), settings = J.wrapPointer(setp, J.ContactSettings);
+      if (this.seamGhost(b1, b2, man)) { settings.mIsSensor = true; return; }
       if (this.impactSpeed(b1, b2, man) < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
       if (this.watch.size) this.recordContact(b1, b2, man, settings);
       this.recordMagnetTouch(b1, b2, man, settings);
@@ -3134,6 +3159,7 @@ export class PhysicsWorld {
       const b2 = J.wrapPointer(b2p, J.Body);
       const man = J.wrapPointer(manp, J.ContactManifold);
       const settings = J.wrapPointer(setp, J.ContactSettings);
+      if (this.seamGhost(b1, b2, man)) { settings.mIsSensor = true; return; }
       const speed = Math.max(0, this.impactSpeed(b1, b2, man));
       if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
       if (this.watch.size) this.recordContact(b1, b2, man, settings);
@@ -3157,6 +3183,54 @@ export class PhysicsWorld {
       });
     };
     return listener;
+  }
+
+  /**
+   * Is this contact a ghost of the segmentation (A10 in docs/ARCHITECTURE.md)? Joined segments are one continuous
+   * piece: there is no surface at the seam between them. A contact with a segment's end that it shares, flush, with a
+   * joined neighbour (bond intact, or both frozen), its normal leaving the segment through that end, touches nothing
+   * real; the neighbour's own contact is the real one.
+   */
+  private seamGhost(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold): boolean {
+    const r1 = this.recOf(b1), r2 = this.recOf(b2);
+    if (!(r1?.pr.layout || r2?.pr.layout)) return false;
+    const count = man.mRelativeContactPointsOn1.size();
+    if (!count) return false;
+    const nn = man.mWorldSpaceNormal;
+    const n: Vec3 = [nn.GetX(), nn.GetY(), nn.GetZ()]; // from body 1 to body 2
+    // Jolt's manifold points need not lie on either shape (a speculative contact projects them onto a supporting
+    // face's plane), so the contact is placed at their midpoints and the segment's feature found from there
+    const mids = Array.from({ length: count }, (_, i) => {
+      const c1 = man.GetWorldSpaceContactPointOn1(i), c2 = man.GetWorldSpaceContactPointOn2(i);
+      return [(c1.GetX() + c2.GetX()) / 2, (c1.GetY() + c2.GetY()) / 2, (c1.GetZ() + c2.GetZ()) / 2] as Vec3;
+    });
+    return (!!r1 && this.onJoinedSeam(r1, mids, n)) || (!!r2 && this.onJoinedSeam(r2, mids, scale(n, -1)));
+  }
+
+  /** Is segment r's nearest feature to `points` an end it shares, flush, with a joined neighbour, `out` leaving through it? */
+  private onJoinedSeam(r: BodyRec, points: Vec3[], out: Vec3): boolean {
+    const L = r.pr.layout;
+    if (!L || r.seg < 0) return false;
+    const pose = this.poseOf(r);
+    const axis = rotate(pose.q, L.axis);
+    const along = dot(out, axis);
+    if (Math.abs(along) < SEAM_NORMAL) return false;
+    const end = along > 0 ? 1 : -1;
+    const k = end > 0 ? r.seg : r.seg - 1; // the bond at that end
+    if (k < 0 || k >= r.pr.segs.length - 1 || r.pr.broken.has(k)) return false;
+    if (!r.pr.bonds[k] && !r.pr.part.frozen) return false;
+    // the neighbour's end lies flush on this one: centres together, axes aligned to within SEAM_TOL at the rim
+    const h = L.segLen / 2;
+    const nb = r.pr.segs[end > 0 ? r.seg + 1 : r.seg - 1]!;
+    const pn = this.poseOf(nb);
+    const axisN = rotate(pn.q, L.axis);
+    const bb = shapeBounds(r.shape);
+    const rim = Math.hypot(...[0, 1, 2].map((i) => (1 - Math.abs(L.axis[i]!)) * Math.max(Math.abs(bb.min[i]!), Math.abs(bb.max[i]!))));
+    const offset = length(sub(add(pose.p, scale(axis, end * h)), sub(pn.p, scale(axisN, end * h))));
+    if (offset + length(cross(axis, axisN)) * rim > SEAM_TOL) return false;
+    // and it is that end the contact is with
+    const inv = quatConj(pose.q);
+    return points.every((p) => Math.abs(dot(closestOnShape(r.shape, rotate(inv, sub(p, pose.p))).p, L.axis) - end * h) < SEAM_TOL);
   }
 
   // debug / tests
@@ -3273,6 +3347,16 @@ function ccw(poly: [number, number][]): [number, number][] {
     a += x0 * y1 - x1 * y0;
   }
   return a < 0 ? [...poly].reverse() : poly;
+}
+
+/** A 6 x 6 matrix over (velocity, angular velocity) given in a frame turned by q, in world axes: T D T^T. */
+function rotate6(D: number[], q: Quat): number[] {
+  const cols = [0, 1, 2].map((j) => rotate(q, [j === 0 ? 1 : 0, j === 1 ? 1 : 0, j === 2 ? 1 : 0]));
+  const T = (i: number, j: number) => (Math.floor(i / 3) === Math.floor(j / 3) ? cols[j % 3]![i % 3]! : 0);
+  const TD = new Array<number>(36).fill(0), out = new Array<number>(36).fill(0);
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) for (let k = 0; k < 6; k++) TD[i * 6 + j] += T(i, k) * D[k * 6 + j]!;
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) for (let k = 0; k < 6; k++) out[i * 6 + j] += TD[i * 6 + k]! * T(j, k);
+  return out;
 }
 
 /** Intersection of two convex counter-clockwise polygons (Sutherland-Hodgman). */

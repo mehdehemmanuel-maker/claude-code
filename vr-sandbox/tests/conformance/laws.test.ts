@@ -5,9 +5,10 @@ import { at, rig, within } from './helpers';
 import { axisAngle } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
-import { cylinderCharges, cylinderFaces, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
+import { cylinderCharges, cylinderFaces, dipoleMoment, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
+import { tubeDipoleDrag } from '../../src/engineering/eddy';
 import { dcMotorSpecs } from '../../src/engineering/mechanics';
-import { FLUIDS, STANDARD_GRAVITY as g } from '../../src/data/materials';
+import { FLUIDS, getMaterial, STANDARD_GRAVITY as g } from '../../src/data/materials';
 
 const up: [number, number, number, number] = [0, 0, 0, 1];
 const down = axisAngle([1, 0, 0], Math.PI); // frame whose +Y points down
@@ -437,6 +438,29 @@ describe('magnets', () => {
     const b = r.part('magnet.disc', at(0, 0.03, 0, axisAngle([1, 0, 0], Math.PI)));
     r.run(TICK * 3);
     expect(r.world.linearVelocity(b.id)![1]).toBeGreaterThan(0);
+    r.done();
+  });
+
+  it('a magnet falls down a copper pipe at the Lenz-drag terminal speed m g / c, smoothly past every seam of the pipe', async () => {
+    const r = await rig({ gravity: [0, -g, 0] }, false);
+    const od = 0.02, wall = 0.0015;
+    // a 1.2 m pipe is six bonded segments: the magnet passes five seams between them on the way down (A10)
+    r.part('tube.round', at(0, 0.6, 0), { frozen: true, material: 'copper.c110', params: { length: 1.2, od, wall } });
+    const b = r.part('magnet.disc', at(0, 1.1, 0), { params: { diameter: 0.004, thickness: 0.004 } });
+    const m = r.world.bodyMass(b.id)!;
+    // Levin et al. (2006): a point dipole in a thin pipe of mean radius a meets F = c v
+    const c = tubeDipoleDrag(dipoleMoment(1.3, Math.PI * 0.002 ** 2 * 0.004), getMaterial('copper.c110').conductivity, wall, od / 2 - wall / 2);
+    const vt = (m * g) / c;
+    let prev = 0, t = 0;
+    while (r.world.livePose(b.id)!.p[1] > 0.05) {
+      r.world.step();
+      t += TICK;
+      const vy = r.world.linearVelocity(b.id)![1];
+      expect(vy, `at ${t.toFixed(3)} s`).toBeLessThan(prev + 1e-3); // it only ever speeds up towards terminal speed
+      prev = vy;
+      if (t > 0.55) within(-vy, vt, 0.08); // three time constants m / c in
+    }
+    expect(t).toBeGreaterThan(0.6);
     r.done();
   });
 

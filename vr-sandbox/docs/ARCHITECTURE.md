@@ -72,6 +72,7 @@ these changes without the conservation tests and the full suite.
 | A7 | Failure messages | **Fixed** (was fail) | Notes give the governing load and capacity in that load's units. | Joint failures printed moments in N; slip notes compared torsion against the shear grip. | `fmtN` used where `fmtLoad` belongs. Pinned by a wording test. |
 | A8 | Saving, loading, sharing | Pass | Byte-exact round trips, share codes and links. | – | – |
 | A9 | Panels, tablet, modes | Pass | Desktop panels, tablet pages, and relax, walk and mixed modes (e2e). | – | – |
+| A10 | Seams between segments | **Fixed** (was fail) | – | A magnet falling down a copper tube bounced back up (−1.74 → +0.96 m/s) as it passed the seam between two of the tube's segments. | Ghost contacts. Jolt makes a contact up to 1 cm before bodies touch (speculative), and when the closing speed along its normal beats gap/dt it applies restitution then. At a seam, the lower segment's nearest feature is its joined end edge, whose normal points up through the seam: the magnet bounced off an edge that does not exist, since joined segments are one continuous wall. A contact that lies on a segment's joined end (bond intact, or both frozen, and the neighbour's end flush at that point), with its normal leaving through that end, now gets no response; the neighbour's own contact is the real one. Test: the copper-tube drop (conformance, magnets). |
 
 ## Magnets: model, derivations and contracts
 
@@ -116,21 +117,41 @@ carries no current: it is an open-circuit Faraday disc.
 
 For rigid relative motion q = (V, Ω) about a reference point x_r, u = V + Ω × (x − x_r) is linear in q. The dissipated
 power is P = ∫ |J|²/σ dV = qᵀ D q, with D a 6 × 6 positive semi-definite matrix. The drag wrench on C is −D q, which
-dissipates exactly P, and S gets the opposite wrench with the moment of the couple. The damping is applied implicitly,
-q' = (I + dt M⁻¹ D)⁻¹ q, so it is stable however strong it is.
+dissipates exactly P, and S gets the opposite wrench with the moment of the couple. The drag is taken implicitly, at
+the velocity each (sub)step ends with:
 
-Discretisation: finite volumes on a regular grid of the cells inside C near the magnet. φ is solved per basis
-motion, and D is summed over cell faces. Materials carry their measured conductivity (NdFeB 0.67 MS/m, copper
-58 MS/m, sintered ferrite effectively an insulator).
+    q' = (I + dt M⁻¹ D)⁻¹ (q + dt a)
+
+where a is the relative acceleration that the rest of the load (weight, the other field forces) gives in the step.
+So it is stable however strong it is, and in steady motion the drag balances the load exactly: a magnet falls down a
+pipe at m g / D_yy. (Damping only the step's starting velocity, q' = (I + dt M⁻¹ D)⁻¹ q, would let it fall
+(1 + dt D/m) times faster: 6% for the pipe below.)
+
+Discretisation: finite volumes on a structured grid of the cells inside C near the magnet (Cartesian in a box, polar
+in a cylinder or tube, so currents can circulate round its wall). φ is solved per basis motion, and D is summed over
+cell faces. The grid's Laplacian is separable, so φ is solved exactly: cosine transforms along the Neumann
+directions, a Fourier transform round the tube, a tridiagonal solve along its radius (it agrees with conjugate
+gradients to 1e-12). Materials carry their measured conductivity (NdFeB 0.67 MS/m, copper 58 MS/m, sintered ferrite
+effectively an insulator).
+
+Scope: the world computes this for non-magnetic conductors of at least 10 MS/m (aluminium, copper, brass) near a
+magnet moving faster than 1 mm/s relative to them. There Lenz braking is strong and the free-space field is the true
+one. Left out: a magnet's own currents (NdFeB is 0.67 MS/m: they damp a 10 × 5 mm disc rocking on another magnet at
+only about 1.6 s⁻¹, and bouncing on it at 2.2 s⁻¹, measured with this solver on a fine mesh; see M6), and steel (see
+the limits).
 
 Limits, stated rather than hidden:
 - The currents' own field is neglected. That overstates the drag at high magnetic Reynolds number (thick copper at
   metres per second).
 - In steel, B is taken as the magnet's free-space field. That understates the drag, because steel concentrates flux.
+- The world meshes about 240–500 cells within three magnet distances of the magnet, recomputed every tick. For a
+  4 × 4 mm magnet in a 20 mm copper pipe that gives 96% of the converged drag (a 50 000-cell mesh is within 0.5% of
+  Levin's formula), so it falls about 4% fast.
 
-[golden: an axisymmetric spin dissipates nothing; a point dipole in a thin tube meets
-F = 45 μ0² m² σ δ v / (1024 a⁴) (Levin et al., Am. J. Phys. 74, 815, 2006). Conformance: a magnet falls through a
-copper pipe at that terminal speed; a rocking magnet settles on steel or another magnet by itself]
+[golden: an axisymmetric spin dissipates nothing; the transform solve matches conjugate gradients; a point dipole in a
+thin tube meets F = 45 μ0² m² σ δ v / (1024 a⁴) (Levin et al., Am. J. Phys. 74, 815, 2006). Conformance: a
+4 × 4 mm magnet falls down a 20 mm copper pipe at that terminal speed (within 8%), speeding up smoothly past the
+pipe's five seams]
 
 **M5 Contact statics of a stuck magnet.** Let n be the contact normal (A to B), and c the centroid of the footprint
 (the overlap of B's face with the face it lies on). The contact wrench on B, about c, is (F_c, M_c). It is admissible
