@@ -159,6 +159,14 @@ const SUBGROUPS = 4096;
 /** A fractured bond whose faces are still this well aligned (rad) lets its two pieces collide with each other. */
 const CLEAN_BREAK_ANGLE = 0.15;
 const IDENTITY_Q: Quat = [0, 0, 0, 1];
+/**
+ * Largest ratio of a bonded segment's principal moments of inertia that Jolt's constraint solver holds together (A13).
+ * A locked bond between two segments inverts their summed inverse inertias in single precision; measured on a
+ * six-segment chain dropped on the floor, it converges up to a ratio of 1e4 and diverges (500 m/s, then NaN) at
+ * 3.3e4. Held here to 1e3, a tenth of the last ratio seen stable. Only a segment's spin about its own axis changes,
+ * and only for segments longer than about 77 radii (a round section's ratio is about 6 r^2 / L^2).
+ */
+const MAX_BONDED_KAPPA = 1e3;
 const BOND_VELOCITY_STEPS = 20;
 /** Thickness of the slab behind each scanned room plane (m). */
 const ROOM_SLAB = 0.04;
@@ -168,6 +176,8 @@ const BOND_POSITION_STEPS = 4;
 interface BodyRec {
   /** Body id: the part id, or "part#k" for segment k. */
   id: string;
+  /** Its pose at the end of the last tick in which its state was a number (fault containment). */
+  good?: Pose;
   partId: string;
   seg: number;
   pr: PartRec;
@@ -827,7 +837,7 @@ export class PhysicsWorld {
       cs.mCollisionGroup = this.cg;
       const body = this.bi.CreateBody(cs);
       J.destroy(cs);
-      if (!part.frozen) this.checkInertia(body, mass);
+      if (!part.frozen) this.checkInertia(body, mass, !!layout);
       this.bi.AddBody(body.GetID(), part.frozen ? J.EActivation_DontActivate : J.EActivation_Activate);
       const v = vels?.[k];
       if (!part.frozen && v && (length(v[0]) > 0 || length(v[1]) > 0)) {
@@ -1061,9 +1071,10 @@ export class PhysicsWorld {
   /**
    * A body's inertia is its shape's mass properties scaled to its mass. Jolt takes a principal diagonal shorter than
    * 1e-6 kg m^2 for a failed decomposition and substitutes a 1 m sphere's (A11), so it is checked, and set here
-   * where Jolt fell back.
+   * where Jolt fell back. A bonded segment's smallest principal moment is also held to at least 1 / MAX_BONDED_KAPPA
+   * of its largest (A13).
    */
-  private checkInertia(body: JoltNS.Body, mass: number) {
+  private checkInertia(body: JoltNS.Body, mass: number, bonded: boolean) {
     const mp = body.GetShape().GetMassProperties();
     mp.ScaleToMass(mass);
     const M = mp.mInertia;
@@ -1073,13 +1084,15 @@ export class PhysicsWorld {
     const z = M.GetAxisZ(); const c2 = [z.GetX(), z.GetY(), z.GetZ()];
     const { values, vectors } = symmetricEigen3([c0[0]!, c1[0]!, c2[0]!, c0[1]!, c1[1]!, c2[1]!, c0[2]!, c1[2]!, c2[2]!]);
     if (!values.every((v) => v > 0)) return;
+    const top = Math.max(...values);
+    const moments = bonded ? values.map((v) => Math.max(v, top / MAX_BONDED_KAPPA)) : values;
     const motion = body.GetMotionProperties();
     const d = motion.GetInverseInertiaDiagonal();
-    const have = [1 / d.GetX(), 1 / d.GetY(), 1 / d.GetZ()].sort((a, b) => a - b), want = [...values].sort((a, b) => a - b);
+    const have = [1 / d.GetX(), 1 / d.GetY(), 1 / d.GetZ()].sort((a, b) => a - b), want = [...moments].sort((a, b) => a - b);
     if (want.every((w, i) => Math.abs(have[i]! - w) <= 1e-3 * w)) return;
     const [e0, e1, e2raw] = vectors as [Vec3, Vec3, Vec3];
     const e2 = dot(cross(e0, e1), e2raw) < 0 ? scale(e2raw, -1) : e2raw; // right-handed principal axes
-    motion.SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    motion.SetInverseInertia(this.V(moments.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
   }
 
   private localInertia(r: BodyRec): number[] {
@@ -3222,10 +3235,12 @@ export class PhysicsWorld {
     for (let s = 0; s < k; s++) {
       this.applyFields(dt / k);
       this.cachePreStepVelocities();
+      this.containFaults();
       this.jolt.Step(dt / k, per);
       this.accumulateLatches();
     }
     this.solveAssemblies(dt);
+    this.containFaults();
     this.updateLatches();
     this.time += dt;
     this.ticks++;
@@ -3234,6 +3249,34 @@ export class PhysicsWorld {
     this.evaluateBonds(this.lastSubsteps / dt);
     const stepMs = performance.now() - t0;
     return this.collect(stepMs);
+  }
+
+  /**
+   * Fault containment (F3). A body whose state is not a number is put back where it last was, at rest, before
+   * Jolt sees it: Jolt does not return from a step given one, and every body it touches would follow. Whatever made
+   * it is a defect elsewhere, so it is reported (a fault event; the watchdog flags nonfinite) rather than hidden.
+   * Within one Jolt step of several collision steps it cannot help; it is a last line, not the fix.
+   */
+  private containFaults() {
+    for (const r of this.bodies.values()) {
+      if (r.frozen || !r.body.IsActive()) continue;
+      const b = r.body;
+      // Jolt returns temporaries: read each vector before asking for the next
+      const p = b.GetPosition(); const px = p.GetX(), py = p.GetY(), pz = p.GetZ();
+      const q = b.GetRotation(); const qx = q.GetX(), qy = q.GetY(), qz = q.GetZ(), qw = q.GetW();
+      const v = b.GetLinearVelocity(); const vx = v.GetX(), vy = v.GetY(), vz = v.GetZ();
+      const w = b.GetAngularVelocity(); const wx = w.GetX(), wy = w.GetY(), wz = w.GetZ();
+      if (Number.isFinite(px + py + pz + qx + qy + qz + qw + vx + vy + vz + wx + wy + wz)) continue;
+      const good = r.good ?? r.pr.part.pose;
+      this.r1.Set(...good.p);
+      this.q1.Set(...good.q);
+      this.v1.Set(0, 0, 0);
+      this.v2.Set(0, 0, 0);
+      this.bi.SetPositionRotationAndVelocity(b.GetID(), this.r1, this.q1, this.v1, this.v2);
+      if (!this.events.some((e) => e.type === 'fault' && e.body === r.id)) {
+        this.events.push({ type: 'fault', part: r.partId, body: r.id, note: 'the physics produced a non-number here; it was put back where it last was and stopped' });
+      }
+    }
   }
 
   /** Current state without stepping (after ops applied while paused). Events and loads carry over. */
@@ -3270,6 +3313,11 @@ export class PhysicsWorld {
       const o = s * 7;
       transforms[o] = p.GetX(); transforms[o + 1] = p.GetY(); transforms[o + 2] = p.GetZ();
       transforms[o + 3] = q.GetX(); transforms[o + 4] = q.GetY(); transforms[o + 5] = q.GetZ(); transforms[o + 6] = q.GetW();
+      if (Number.isFinite(transforms[o]! + transforms[o + 1]! + transforms[o + 2]! + transforms[o + 3]! + transforms[o + 4]! + transforms[o + 5]! + transforms[o + 6]!)) {
+        const g = (r.good ??= { p: [0, 0, 0], q: [0, 0, 0, 1] });
+        g.p[0] = transforms[o]!; g.p[1] = transforms[o + 1]!; g.p[2] = transforms[o + 2]!;
+        g.q[0] = transforms[o + 3]!; g.q[1] = transforms[o + 4]!; g.q[2] = transforms[o + 5]!; g.q[3] = transforms[o + 6]!;
+      }
       if (r.body.IsActive()) {
         const lv = r.body.GetLinearVelocity();
         const av = r.body.GetAngularVelocity();

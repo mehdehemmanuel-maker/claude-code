@@ -630,6 +630,9 @@ export class App {
         this.audio.slip(e.point);
         this.toast(e.note, 'warn');
         this.haptic?.(0.5, 40);
+      } else if (e.type === 'fault') {
+        console.error(`[physics fault] ${e.body}: ${e.note}`);
+        this.toast(`${doc.parts[e.part]?.name ?? 'A part'}: ${e.note}`, 'warn');
       }
     }
   }

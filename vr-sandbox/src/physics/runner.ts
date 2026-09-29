@@ -108,6 +108,11 @@ export class Runner {
       stats: { ...cur.stats, stepMs },
       watchdog: [],
     };
+    // a contained fault (world.ts, F3) is still a defect: the world put the body back, the watch must still see it
+    for (const e of events) if (e.type === 'fault' && !this.reported.has(`nonfinite|${e.body}`)) {
+      this.reported.add(`nonfinite|${e.body}`);
+      out.watchdog.push({ kind: 'nonfinite', severity: 'critical', id: e.body, tick: this.last.stats.ticks, value: NaN, limit: 0, detail: `contained: ${e.note}` });
+    }
     for (const a of this.watchdog.anomalies()) {
       const k = `${a.kind}|${a.id}`;
       if (!this.reported.has(k)) { this.reported.add(k); out.watchdog.push(a); }

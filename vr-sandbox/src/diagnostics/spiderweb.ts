@@ -135,7 +135,7 @@ function contrasting(kind: string): string | null {
 }
 
 /** The procedure a case puts its subject through (antibodies select cases by it). */
-export type Procedure = 'rest' | 'drop' | 'stack' | 'throw' | 'hold' | 'turn' | 'weld' | 'snap' | 'template' | 'pile' | 'extreme' | 'joint' | 'chaos' | 'memory';
+export type Procedure = 'rest' | 'drop' | 'stack' | 'throw' | 'hold' | 'turn' | 'weld' | 'snap' | 'template' | 'pile' | 'extreme' | 'overlap' | 'joint' | 'chaos' | 'memory';
 
 export interface Case {
   proc: Procedure;
@@ -352,6 +352,36 @@ function extremeCases(): Case[] {
 }
 
 /**
+ * Overlap: every kind, and every kind with its geometry at each extreme, placed through a fixed block in zero gravity.
+ * Two solids cannot share space and pushing them apart supplies no energy: the scene's energy (all kinetic, with
+ * nothing to fall) must stay what it was, zero.
+ */
+function overlapCases(): Case[] {
+  const out: Case[] = [];
+  for (const k of PART_KINDS) {
+    if (k.category === 'Test' || k.category === 'Magnets') continue;
+    const variants: [string, Params][] = [['default size', defaults(k)]];
+    for (const pr of k.params) {
+      if (pr.type !== 'number' || (pr as { group?: string }).group !== 'Geometry') continue;
+      for (const end of ['min', 'max'] as const) variants.push([`${pr.key} = ${end}`, { ...defaults(k), [pr.key]: end === 'min' ? pr.min : pr.max } as Params]);
+    }
+    for (const [label, params] of variants) {
+      out.push({
+        proc: 'overlap', kind: k.id, group: 'overlap', node: `${k.id} ${label}`, scenario: 'placed through a fixed block, zero g', material: k.defaultMaterial, seconds: 1,
+        setup(J) {
+          const b = new Bench(J, { gravity: [0, 0, 0] }, []);
+          b.part('block', { p: [0.03, 1.02, 0.01], q: Q_ID }, { material: 'steel.a36', frozen: true, params: { x: 0.2, y: 0.2, z: 0.2 } });
+          b.part(k.id, { p: [0, 1, 0], q: qmul(aboutZ(20), k.spawnRotation) }, { params });
+          // no floor here, so nothing can fall out of the world: only energy, speed and numbers are watched
+          return { bench: b, watch: { gravity: [0, 0, 0], floorY: -Infinity, passive: true, flungSpeed: 5, budgetMs: 11 } };
+        },
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Chaos: seeded random scenes of random parts (random kinds, sizes over each parameter's whole range, materials,
  * poses), randomly joined by every kind of connector, with magnets and steel among them, dropped together. Anything
  * physical may happen (joints break, parts fly apart under a motor); what must not is a crash, a non-number, something
@@ -466,7 +496,7 @@ export function spiderwebCases(filter = ''): Case[] {
     const mats = [k.defaultMaterial, contrasting(k.id)].filter((m): m is string => !!m);
     for (const m of mats) cases.push(...partCases(k.id, m));
   }
-  cases.push(...magnetCases(), ...templateCases(), scaleCase(), ...extremeCases(), ...jointCases(), ...chaosCases(Number(process.env['SPIDERWEB_SEEDS'] ?? 24)), ...memoryCases());
+  cases.push(...magnetCases(), ...templateCases(), scaleCase(), ...extremeCases(), ...overlapCases(), ...jointCases(), ...chaosCases(Number(process.env['SPIDERWEB_SEEDS'] ?? 24)), ...memoryCases());
   const f = filter.toLowerCase();
   return f ? cases.filter((c) => `${c.group} ${c.node} ${c.scenario} ${c.material}`.toLowerCase().includes(f)) : cases;
 }
@@ -491,6 +521,8 @@ export function runCase(J: typeof JoltNS, c: Case): WebRun {
       sum += r.stats.stepMs;
       max = Math.max(max, r.stats.stepMs);
       wd.observe(bench.states(r), r.stats.stepMs);
+      // a contained fault is still a defect: the world put the body back, the web must still see it
+      for (const e of r.events) if (e.type === 'fault') extra.push({ kind: 'nonfinite', severity: 'critical', id: e.body, tick: i, value: NaN, limit: 0, detail: `contained: ${e.note}` });
       for (const l of r.loads) {
         if (!Number.isFinite(l.u) || ![l.axial, l.shear, l.bending, l.torsion].every(Number.isFinite)) {
           extra.push({ kind: 'nonfinite', severity: 'critical', id: l.id, tick: i, value: NaN, limit: 0, detail: 'a joint load is not a number' });

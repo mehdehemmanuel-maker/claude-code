@@ -135,6 +135,18 @@ export const ANTIBODIES: Antibody[] = [
     .fix('pending')
     .guards('energy')
     .on(is('rest', 'drop', 'stack', 'pile', 'extreme')).open().build(),
+  antibody('AB-010', 'A part placed through another is moved out with no energy gained')
+    .found('2026-09-29', 'Chaos seeds: overlapping parts left each other at 150 to 600 m/s, and then the world went NaN')
+    .cause('The assembly solver took overlap and joint drift out as velocity (Baumgarte): the deeper the overlap, the faster the parts left, with energy nothing supplied (0.6 to 13 J in zero g); deep overlaps also swung long parts through their neighbours in one linear step')
+    .fix('Split impulse: position errors are solved on pseudo-velocities that move poses only, inside a trust region where the linear solve holds (turn error within the contact slop), at most 0.2 m per tick as Jolt does')
+    .guards('energy', 'flung', 'nonfinite', 'crash')
+    .on(is('overlap')).build(),
+  antibody('AB-011', 'Bonded stock of any slenderness stays finite and physical')
+    .found('2026-09-29', 'A breakable 1.4 mm wire 1.89 m long exploded to 500 m/s, then NaN, on its own, and hung the world')
+    .cause('Single precision: a locked bond inverts its segments\' summed inverse inertia, whose moments differed by 3.3e4 (stable to 1e4, measured in Jolt alone)')
+    .fix('A bonded segment\'s smallest moment is held to at least 1/1000 of its largest (A13); only its spin about its own axis changes, and only for segments over about 77 radii long. Non-numbers that still arise are contained before Jolt sees them (F3) and reported')
+    .guards('nonfinite', 'flung', 'crash')
+    .on((t) => t.segmented && (t.proc === 'extreme' || t.proc === 'overlap' || t.proc === 'drop' || t.proc === 'rest')).build(),
   antibody('AB-009', 'Any joint, shaken then overloaded, gives way without an explosion')
     .found('2026-09-29', 'The stress web (joint torture)')
     .cause('to be learnt')
