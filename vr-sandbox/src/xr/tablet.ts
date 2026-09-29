@@ -131,6 +131,27 @@ export class Tablet {
     this.widgets.push({ id, x, y, w, h, onClick });
   }
 
+  /** Text in at most `lines` lines of `width` pixels, `size * 1.3` apart from the baseline y down. */
+  private wrapped(s: string, x: number, y: number, width: number, size: number, color: string, lines: number) {
+    const g = this.ctx;
+    g.font = `400 ${size}px system-ui, sans-serif`;
+    const out: string[] = [];
+    let cur = '';
+    for (const word of s.split(/\s+/)) {
+      const next = cur ? `${cur} ${word}` : word;
+      if (g.measureText(next).width <= width || !cur) { cur = next; continue; }
+      out.push(cur);
+      cur = word;
+    }
+    if (cur) out.push(cur);
+    if (out.length > lines) {
+      let last = out.slice(lines - 1).join(' ');
+      while (last && g.measureText(`${last}…`).width > width) last = last.slice(0, -1);
+      out.splice(lines - 1, out.length, `${last.trimEnd()}…`);
+    }
+    out.forEach((l, i) => this.text(l, x, y + i * size * 1.3, size, color));
+  }
+
   private text(s: string, x: number, y: number, size = 24, color = '#e8ecf1', align: CanvasTextAlign = 'left', weight = '400') {
     const g = this.ctx;
     g.font = `${weight} ${size}px system-ui, sans-serif`;
@@ -177,7 +198,11 @@ export class Tablet {
       case 'tools': {
         this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 150, 8, (t, x, y, i) =>
           this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 150, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
-        this.text(this.tools.tool.hint.split('·')[0]!.trim(), 24, H - 24, 22, '#9aa4af');
+        // what the active tool can do besides its trigger action
+        const acts = this.tools.actions();
+        const aw = (W - 40 - 3 * 8) / 4;
+        acts.slice(0, 4).forEach((a, i) => this.btn(`act-${a.id}`, 20 + i * (aw + 8), H - 142, aw, 64, a.label, () => a.run(), { on: a.on }));
+        this.wrapped(this.tools.tool.hint, 24, H - 50, W - 48, 21, '#9aa4af', 2);
         break;
       }
       case 'parts': {

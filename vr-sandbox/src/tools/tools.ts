@@ -23,9 +23,10 @@ export interface Ray {
 export interface PointerEvt {
   ray: Ray;
   button: number;
+  /** "Whole assembly" (or add to the selection): the tablet's modifier, held for the next action. */
   shift: boolean;
   ctrl: boolean;
-  source: 'mouse' | 'left' | 'right';
+  source: 'left' | 'right';
   /** Controller orientation (VR) so held parts can follow wrist rotation. */
   handQuat?: Quat;
 }
@@ -38,10 +39,17 @@ export interface Tool {
   down?(e: PointerEvt): void;
   move?(e: PointerEvt): void;
   up?(e: PointerEvt): void;
-  wheel?(delta: number): boolean;
-  key?(e: KeyboardEvent): boolean;
   frame?(dt: number, e: PointerEvt | null): void;
   cancel?(): void;
+  /** What the tool can do besides its trigger action (shown on the tablet while it is the active tool). */
+  actions?(): ToolAction[];
+}
+
+export interface ToolAction {
+  id: string;
+  label: string;
+  run: () => void;
+  on?: boolean;
 }
 
 const v3 = (v: THREE.Vector3): Vec3 => [v.x, v.y, v.z];
@@ -52,6 +60,8 @@ export class ToolManager {
   last: PointerEvt | null = null;
   hover: Pick | null = null;
   readonly grab: GrabTool;
+  /** The tablet's modifier (what Shift was on a keyboard): whole assembly, or add to the selection. */
+  whole = false;
 
   constructor(readonly app: App) {
     this.grab = new GrabTool(app);
@@ -102,12 +112,11 @@ export class ToolManager {
     this.tool.up?.(e);
   }
 
-  wheel(delta: number) {
-    return this.tool.wheel?.(delta) ?? false;
-  }
-
-  key(e: KeyboardEvent) {
-    return this.tool.key?.(e) ?? false;
+  /** The active tool's actions for the tablet, with the modifier where the tool has one. */
+  actions(): ToolAction[] {
+    const own = this.tool.actions?.() ?? [];
+    const modifier = { grab: 'Add to selection', erase: 'Whole assembly', freeze: 'Whole assembly', clone: 'Whole assembly' }[this.tool.id];
+    return modifier ? [...own, { id: 'whole', label: modifier, on: this.whole, run: () => { this.whole = !this.whole; } }] : own;
   }
 
   frame(dt: number) {
@@ -118,7 +127,6 @@ export class ToolManager {
       this.app.view.setHover(pick && pick.type !== 'env' ? pick.id : null);
     }
     this.tool.frame?.(dt, e);
-    if (this.tool !== this.grab) this.grab.frame(dt, e); // keep holding while other tools are active
   }
 }
 
@@ -142,7 +150,7 @@ export class GrabTool implements Tool {
   id = 'grab';
   label = 'Grab';
   icon = '✋';
-  hint = 'Drag parts. Wheel: distance · R / Y: rotate · Shift+click: multi-select · G: physical/creative grab';
+  hint = 'Trigger: drag a part (it turns with your wrist) · with "Add to selection" on, trigger adds parts to the selection';
   private held = new Map<string, Hold>();
 
   constructor(private app: App) {}
@@ -207,10 +215,6 @@ export class GrabTool implements Tool {
     this.updateHand(e);
   }
 
-  frame(_dt: number, e: PointerEvt | null) {
-    if (e && e.source === 'mouse') this.updateHand(e);
-  }
-
   up(e: PointerEvt) {
     if (this.held.has(e.source)) this.release(e.source);
   }
@@ -247,10 +251,6 @@ export class GrabTool implements Tool {
     return true;
   }
 
-  wheel(delta: number) {
-    return this.adjustDistance('mouse', Math.exp(-delta * 0.0012));
-  }
-
   rotateHeld(hand: string, axis: Vec3, angle: number) {
     const h = this.held.get(hand);
     if (!h) return false;
@@ -259,19 +259,9 @@ export class GrabTool implements Tool {
     return true;
   }
 
-  key(e: KeyboardEvent) {
-    if (!this.held.has('mouse')) return false;
-    const step = ((this.app.settings.angleSnap * Math.PI) / 180) * (e.shiftKey ? -1 : 1);
-    if (e.code === 'KeyR') return this.rotateHeld('mouse', [0, 1, 0], step);
-    if (e.code === 'KeyY') {
-      const cam = this.app.view.camera.getWorldDirection(new THREE.Vector3());
-      return this.rotateHeld('mouse', normalize(cross([cam.x, cam.y, cam.z], [0, 1, 0])), step);
-    }
-    return false;
-  }
-
   cancel() {
-    this.release('mouse');
+    // the trigger-held part (grip holds are the grip's own, whatever the tool)
+    this.release('right');
   }
 }
 
@@ -292,7 +282,7 @@ class PlaceTool implements Tool {
   id = 'place';
   label = 'Place';
   icon = '＋';
-  hint = 'Click to place the selected part. R: yaw 90° · Y: tip over · pick parts in the palette';
+  hint = 'Trigger: place the part chosen on the Parts page · turn or tip it first with the buttons below';
   private yaw = 0;
   private tilt = 0;
 
@@ -340,10 +330,12 @@ class PlaceTool implements Tool {
     this.app.haptic?.(0.2, 15);
   }
 
-  key(e: KeyboardEvent) {
-    if (e.code === 'KeyR') { this.yaw += (Math.PI / 2) * (e.shiftKey ? -1 : 1); return true; }
-    if (e.code === 'KeyY') { this.tilt += (Math.PI / 2) * (e.shiftKey ? -1 : 1); return true; }
-    return false;
+  actions(): ToolAction[] {
+    return [
+      { id: 'turn', label: 'Turn 90°', run: () => { this.yaw += Math.PI / 2; } },
+      { id: 'tip', label: 'Tip 90°', run: () => { this.tilt += Math.PI / 2; } },
+      { id: 'upright', label: 'Upright', run: () => { this.yaw = 0; this.tilt = 0; } },
+    ];
   }
 
   cancel() {
@@ -379,7 +371,7 @@ class JoinTool implements Tool {
   id = 'join';
   label = 'Join';
   icon = '🔩';
-  hint = 'Click part A, then part B (or the floor to anchor). R: cycle joint axis · pick the joint type in the palette';
+  hint = 'Trigger part A, then part B (or the floor to anchor it) · choose the joint on the Join page';
   private first: { part: string; point: Vec3; normal: Vec3; seg: number | null } | null = null;
   private axisMode = 0;
 
@@ -465,14 +457,12 @@ class JoinTool implements Tool {
     return fromTo([0, 1, 0], this.axisMode === 1 ? t : t2);
   }
 
-  key(e: KeyboardEvent) {
-    if (e.code === 'KeyR') {
-      this.axisMode = (this.axisMode + 1) % 3;
-      this.app.toast(['Joint axis: surface normal', 'Joint axis: along surface (1)', 'Joint axis: along surface (2)'][this.axisMode]!);
-      return true;
-    }
-    if (e.code === 'Escape' && this.first) { this.cancel(); return true; }
-    return false;
+  actions(): ToolAction[] {
+    const axes = ['Axis: through the surface', 'Axis: along it (1)', 'Axis: along it (2)'];
+    return [
+      { id: 'axis', label: axes[this.axisMode]!, run: () => { this.axisMode = (this.axisMode + 1) % 3; } },
+      ...(this.first ? [{ id: 'restart', label: 'Start again', run: () => this.cancel() }] : []),
+    ];
   }
 
   cancel() {
@@ -495,7 +485,7 @@ class EraseTool implements Tool {
   id = 'erase';
   label = 'Erase';
   icon = '✂';
-  hint = 'Click a part or joint to remove it. Shift: the whole connected assembly';
+  hint = 'Trigger a part or joint to remove it · "Whole assembly" removes everything joined to it';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -516,7 +506,7 @@ class FreezeTool implements Tool {
   id = 'freeze';
   label = 'Freeze';
   icon = '❄';
-  hint = 'Click to pin a part to the world (or release it). Shift: the whole assembly';
+  hint = 'Trigger a part to pin it to the world (or free it) · "Whole assembly" pins everything joined to it';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -529,7 +519,7 @@ class CloneTool implements Tool {
   id = 'clone';
   label = 'Clone';
   icon = '⧉';
-  hint = 'Click to duplicate a part. Shift: duplicate the whole connected assembly with its joints';
+  hint = 'Trigger a part to duplicate it · "Whole assembly" duplicates everything joined to it, joints and all';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -548,7 +538,7 @@ class PokeTool implements Tool {
   id = 'poke';
   label = 'Poke';
   icon = '👉';
-  hint = 'Click to strike a part with an impulse along your aim (strength in settings)';
+  hint = 'Trigger: strike a part along your aim';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -563,7 +553,7 @@ class InspectTool implements Tool {
   id = 'inspect';
   label = 'Inspect';
   icon = '🔍';
-  hint = 'Click parts or joints to see their properties and live loads without moving them';
+  hint = 'Trigger a part or joint: its properties and live loads, on the Selected page';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -579,7 +569,7 @@ class MeasureTool implements Tool {
   id = 'measure';
   label = 'Measure';
   icon = '📏';
-  hint = 'Click two points to measure the distance between them';
+  hint = 'Trigger two points: the distance between them';
   private a: Vec3 | null = null;
   constructor(private app: App) {}
   down(e: PointerEvt) {

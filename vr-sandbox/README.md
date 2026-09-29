@@ -1,6 +1,6 @@
 # Creative Sandbox (WebXR)
 
-A physics-real creative sandbox for Meta Quest 3S, with a full desktop fallback. You get unlimited parts,
+A physics-real creative sandbox for Meta Quest 3S (a headset app only: the web page just gets you into VR). You get unlimited parts,
 real materials and joints, and nothing is scripted: joints and parts behave, and fail, because of their
 geometry, material data and specs. The design and roadmap are in [PLAN.md](PLAN.md).
 
@@ -9,11 +9,11 @@ geometry, material data and specs. The design and roadmap are in [PLAN.md](PLAN.
 ```bash
 cd vr-sandbox
 npm install
-npm run dev          # http://localhost:5173 (desktop)
+npm run dev          # http://localhost:5173 (open it in the headset, or ?iwer to emulate one)
 ```
 
-- **Desktop:** right-drag to look, WASD/QE to fly, keys 1–9 pick tools, left click uses the tool. Press **H** for all controls.
-- **Try VR without a headset:** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3) with a synthetic scanned room (floor, walls, a table and a couch), and **Enter VR** works in any browser in all three modes. `?iwer=noroom` leaves the room out.
+- **In the headset:** trigger uses the active tool, grip grabs, A cycles tools, B shows or hides the wrist tablet, X / Y undo and redo. The tablet's Tools page shows what the active tool can do besides its trigger (turn or tip a part before placing it, the joint axis, "Whole assembly").
+- **Without a headset (development and tests only):** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3) with a synthetic scanned room (floor, walls, a table and a couch), and **Enter VR** works in any browser in all three modes. `?iwer=noroom` leaves the room out.
 - **On a Quest 3S:** WebXR needs HTTPS or `localhost`. Either:
   - use GitHub Pages (once per repository):
     1. Go to *Settings → Pages → Build and deployment → Source* and pick **GitHub Actions**.

@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import type { App } from '../app/app';
-import type { DesktopControls } from '../interaction/desktop';
+import { Hud } from './hud';
 import type { PointerEvt, ToolManager } from '../tools/tools';
 import { RoomScanner } from './room';
 import { Tablet } from './tablet';
@@ -75,8 +75,13 @@ export class XRMode {
   /** Relax mode: the left stick drives the build's motors and steering instead of flying you. */
   drive = false;
 
-  constructor(private app: App, private tools: ToolManager, private desktop: DesktopControls) {
+  /** Where the player stands (and faces) on entering VR: the workshop's doorway at first, then where they left. */
+  private resume = { x: 0, z: 3.4, yaw: 0 };
+  readonly hud: Hud;
+
+  constructor(private app: App, private tools: ToolManager) {
     this.tablet = new Tablet(app, tools);
+    this.hud = new Hud(app, app.view.camera);
     this.tablet.room = this;
     const renderer = app.renderer;
     for (const i of [0, 1]) {
@@ -288,10 +293,9 @@ export class XRMode {
   }
 
   private onStart() {
-    this.desktop.enabled = false;
     const rig = this.app.view.rig;
-    rig.position.set(this.desktop.pos.x, 0, this.desktop.pos.z);
-    rig.rotation.set(0, this.desktop.yaw, 0);
+    rig.position.set(this.resume.x, 0, this.resume.z);
+    rig.rotation.set(0, this.resume.yaw, 0);
     this.app.view.camera.position.set(0, 0, 0);
     this.app.view.camera.rotation.set(0, 0, 0);
     this.savedShadows = this.app.settings.shadows;
@@ -301,7 +305,6 @@ export class XRMode {
     this.scanWarned = false;
     this.sessionStart = performance.now();
     this.applyStyle();
-    document.getElementById('crosshair')?.setAttribute('style', 'display:none');
     const hints: Record<XRStyle, string> = {
       relax: 'VR: trigger = tool · grip = grab · left stick = fly · right stick = turn / rise · B = menu',
       walk: 'Walk mode: stand where you want to start, facing into your room. Walk to move · B = menu',
@@ -312,11 +315,9 @@ export class XRMode {
 
   private onEnd() {
     this.session = null;
-    this.desktop.enabled = true;
     const rig = this.app.view.rig;
-    // carry on at the desktop from where the head was
-    this.desktop.pos.set(this.lastHead.x, Math.max(0.3, this.lastHead.y), this.lastHead.z);
-    this.desktop.yaw = rig.rotation.y;
+    // back in the headset later, carry on from where the head was
+    this.resume = { x: this.lastHead.x, z: this.lastHead.z, yaw: rig.rotation.y };
     rig.scale.setScalar(1);
     this.lastScale = 1;
     this.app.settings.shadows = this.savedShadows;
@@ -335,7 +336,7 @@ export class XRMode {
     h.ray.getWorldPosition(origin);
     h.ray.getWorldQuaternion(q);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    return { ray: { origin, dir }, button: 0, shift: false, ctrl: false, source: h.side, handQuat: [q.x, q.y, q.z, q.w] };
+    return { ray: { origin, dir }, button: 0, shift: this.tools.whole, ctrl: false, source: h.side, handQuat: [q.x, q.y, q.z, q.w] };
   }
 
   private frame(dt: number, time: number) {
@@ -463,6 +464,7 @@ export class XRMode {
       }
     }
     this.tablet.update(time, tabletUv);
+    this.hud.update(dt);
   }
 
   /** Calibration and the room scan, from this frame's XR data. */

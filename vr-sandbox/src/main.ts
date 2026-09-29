@@ -1,29 +1,32 @@
-// Entry point: boot physics, the scene, desktop controls, UI, and (if available) WebXR.
+// Entry point. The app runs in a Meta Quest headset; this page boots physics and the scene, then offers to enter VR
+// (a WebXR session can only start from a button press). Everything else happens in the headset.
 
 import { App } from './app/app';
-import { DesktopControls } from './interaction/desktop';
 import { ToolManager } from './tools/tools';
-import { UI } from './ui/ui';
+
+const FIRST_VISIT_KEY = 'vrsb.seenTemplates';
 
 async function main() {
   const params = new URLSearchParams(location.search);
   const host = document.getElementById('viewport')!;
+  const launch = document.getElementById('launch')!;
+  const status = document.getElementById('status')!;
+  const button = document.getElementById('vr') as HTMLButtonElement;
+  const mode = document.getElementById('vrmode') as HTMLSelectElement;
   const app = await App.create(host, params.get('physics') === 'inline' ? 'inline' : 'worker');
   const tools = new ToolManager(app);
-  const desktop = new DesktopControls(app, tools, app.renderer.domElement);
-  const ui = new UI(app, tools);
-  const handles: Record<string, unknown> = { app, tools, ui, desktop, xr: null };
+  const handles: Record<string, unknown> = { app, tools, xr: null };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
-  app.onFrame.push((dt) => {
-    if (!app.renderer.xr.isPresenting) desktop.update(dt);
-    tools.frame(dt);
-  });
+  app.onFrame.push((dt) => tools.frame(dt));
+  // behind the launch card, a still view into the workshop
+  app.view.camera.position.set(0, 1.7, 3.4);
+  app.view.camera.rotation.set(-0.28, 0, 0);
   const resize = () => app.resize(host.clientWidth, host.clientHeight);
   window.addEventListener('resize', resize);
   resize();
 
-  // ?iwer installs Meta's WebXR emulator (a virtual Quest 3) so the VR mode can be tried and tested
-  // without a headset. It never loads otherwise.
+  // ?iwer installs Meta's WebXR emulator (a virtual Quest 3) so the headset can be emulated in tests and in
+  // development. It never loads otherwise.
   if (params.has('iwer')) {
     const { XRDevice, metaQuest3 } = await import('iwer');
     const device = new XRDevice(metaQuest3);
@@ -36,22 +39,44 @@ async function main() {
     }
   }
 
-  // WebXR (Quest). Loaded lazily so desktop users never pay for it.
-  if ('xr' in navigator) {
+  let supported = false;
+  try {
+    supported = 'xr' in navigator && (await navigator.xr!.isSessionSupported('immersive-vr'));
+  } catch {
+    supported = false;
+  }
+  if (supported) {
+    const { XRMode } = await import('./xr/xr');
+    const xr = new XRMode(app, tools);
+    handles['xr'] = xr;
+    const passthrough = await XRMode.passthroughSupported();
+    (document.getElementById('vrmode-mixed') as HTMLOptionElement).disabled = !passthrough;
+    mode.value = xr.style === 'mixed' && !passthrough ? 'walk' : xr.style;
+    mode.disabled = false;
+    button.disabled = false;
+    status.textContent = 'Ready. Press Enter VR.';
+    button.onclick = () => {
+      void xr.enter(mode.value as 'relax' | 'walk' | 'mixed').catch((e) => {
+        status.textContent = `Could not enter VR: ${String(e?.message ?? e)}`;
+      });
+    };
+    app.renderer.xr.addEventListener('sessionstart', () => { launch.hidden = true; });
+    app.renderer.xr.addEventListener('sessionend', () => {
+      launch.hidden = false;
+      app.view.camera.position.set(0, 1.7, 3.4);
+      app.view.camera.rotation.set(-0.28, 0, 0);
+    });
+    // on the very first visit, the tablet opens on the ready-made builds
     try {
-      const ok = await navigator.xr!.isSessionSupported('immersive-vr');
-      ui.vrSupported = ok;
-      if (ok) {
-        const { XRMode } = await import('./xr/xr');
-        const xr = new XRMode(app, tools, desktop);
-        handles['xr'] = xr;
-        ui.arSupported = await XRMode.passthroughSupported();
-        ui.vrStyle = xr.style === 'mixed' && !ui.arSupported ? 'walk' : xr.style;
-        ui.onEnterVR = (style) => void xr.enter(style).catch((e) => app.toast(`Could not enter VR: ${String(e?.message ?? e)}`, 'warn'));
+      if (!localStorage.getItem(FIRST_VISIT_KEY)) {
+        localStorage.setItem(FIRST_VISIT_KEY, '1');
+        xr.tablet.page = 'builds';
       }
     } catch {
-      ui.vrSupported = false;
+      /* storage unavailable (private mode): no first-visit hint */
     }
+  } else {
+    status.textContent = 'This is a Meta Quest app: open this page in the Quest browser to enter VR.';
   }
 
   // #build=VRSB1... links open a shared build
@@ -60,19 +85,10 @@ async function main() {
 
   app.start();
   document.getElementById('loading')?.remove();
-  try {
-    if (!localStorage.getItem('vrsb.seenTemplates') && !hash.startsWith('build=')) {
-      localStorage.setItem('vrsb.seenTemplates', '1');
-      ui.templatesModal();
-    }
-  } catch {
-    /* storage unavailable (private mode): skip first-run hint */
-  }
-  ui.refresh();
 }
 
 main().catch((e) => {
   console.error(e);
-  const l = document.getElementById('loading');
-  if (l) l.innerHTML = `<div style="max-width:560px;text-align:center">Could not start: ${String(e?.message ?? e)}</div>`;
+  const s = document.getElementById('status');
+  if (s) s.textContent = `Could not start: ${String(e?.message ?? e)}`;
 });
