@@ -46,13 +46,15 @@ known violation is tracked in the audit and gets a test before it is fixed.
 
 Inside `PhysicsWorld.step`, in order:
 
-1. `applyFields` (drag, buoyancy, magnets)
+1. once a tick: the magnetic pairs' stiffness (and so the substep count, M3) and the eddy-current damping (M4)
 2. `prepareClusters`: rigid assemblies of bonded segments and rigid joints
-3. Jolt step
+3. for each substep: `applyFields` (magnets, fluids, drag, bands, motors, grabs, then eddy currents last, M4), a Jolt
+   step, and the magnetic latches' impulses summed (M6)
 4. `solveAssemblies`: sequential impulses for anchors, plastic hinges and contacts, then `placeCluster`
 5. `bridgeLoads`: exact joint and bond loads
-6. `evaluateConnections` and `evaluateBonds`: failures
-7. events
+6. the latches: let go where the contact cannot hold, latch pairs come to rest (M6)
+7. `evaluateConnections` and `evaluateBonds`: failures, from the last substep's impulses (A12)
+8. events
 
 Risk is shared consumers × how much the code changes state. The highest-risk code is the assembly solve
 (`solveAssemblies`, `placeCluster`, `bridgeLoads`), because every load reading, every failure decision and every
