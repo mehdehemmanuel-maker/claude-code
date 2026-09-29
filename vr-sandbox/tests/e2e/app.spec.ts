@@ -74,6 +74,48 @@ test('a parameter stepped on the tablet changes the part', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('build mode: a part lifted by hand snaps to the grid and stays; Play drops it; Back to build restores it', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 450 });
+  const errors = await boot(page, '?iwer');
+  await enterVR(page);
+  await tap(page, 'tab-tools');
+  await tap(page, 'tool-place');
+  await triggerAt(page, [0, 0, 0]);
+  await frames(page, 4);
+  await tap(page, 'build');
+  await tap(page, 'tool-grab');
+  // grab the block with the trigger, raise the aim, let go
+  await page.evaluate(async () => {
+    const w = window as any;
+    w.iwer.controllers.left.position.set(-0.45, 0.5, 0.25);
+    await w.frames(6);
+    w.aim('right', [0.15, 1.15, -0.1], w.vec([0, 0.05, 0.05]));
+    await w.frames(4);
+    w.iwer.controllers.right.updateButtonValue('trigger', 1);
+    await w.frames(6);
+    for (let k = 1; k <= 10; k++) { w.aim('right', [0.15, 1.15, -0.1], w.vec([0, 0.05 + 0.05 * k, 0.05])); await w.frames(3); }
+    await w.frames(10);
+    w.iwer.controllers.right.updateButtonValue('trigger', 0);
+    await w.frames(10);
+  });
+  const built = await sb(page, (s) => { const p = Object.values(s.app.doc.parts)[0] as any; return { p: p.pose.p, build: s.app.settings.build }; });
+  expect(built.build).toBe(true);
+  expect(built.p[1]).toBeGreaterThan(0.25); // lifted, and held there
+  for (const x of built.p) expect(Math.abs(x / 0.01 - Math.round(x / 0.01))).toBeLessThan(1e-6); // on the 1 cm grid
+  await frames(page, 30);
+  const still = await sb(page, (s) => s.app.live.latest(Object.keys(s.app.doc.parts)[0]).p[1]);
+  expect(Math.abs(still - built.p[1])).toBeLessThan(1e-4); // it does not fall while building
+  // Play: real physics, it falls
+  await tap(page, 'play');
+  await page.waitForFunction(() => { const s = (window as any).sandbox; return s.app.live.latest(Object.keys(s.app.doc.parts)[0]).p[1] < 0.1; }, null, { timeout: 20_000 });
+  // Back to build: where it was
+  await tap(page, 'stop');
+  await frames(page, 6);
+  const back = await sb(page, (s) => s.app.live.latest(Object.keys(s.app.doc.parts)[0]).p);
+  expect(Math.hypot(back[0] - built.p[0], back[1] - built.p[1], back[2] - built.p[2])).toBeLessThan(1e-3);
+  expect(errors).toEqual([]);
+});
+
 test('messages show in the headset, then fade', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');

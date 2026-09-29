@@ -24,6 +24,8 @@ import { LiveState } from './live';
 export interface Settings {
   grabMode: GrabMode;
   placeFrozen: boolean;
+  /** Build phase: physics holds every part still and what you move snaps to the grid; Play runs the build. */
+  build: boolean;
   grid: number;
   angleSnap: number;
   strength: number;
@@ -57,7 +59,7 @@ export class App {
   readonly particles = new Particles();
   readonly view: SceneView;
   readonly settings: Settings = {
-    grabMode: 'physical', placeFrozen: false, grid: 0.01, angleSnap: 15, strength: 250, pokeImpulse: 6,
+    grabMode: 'physical', placeFrozen: false, build: false, grid: 0.01, angleSnap: 15, strength: 250, pokeImpulse: 6,
     timeScale: 1, paused: false, volume: 0.8, particles: true, shadows: true, playerScale: 1,
   };
   selection = { parts: new Set<string>(), conn: null as string | null };
@@ -201,7 +203,7 @@ export class App {
       this.mirrorParts.clear();
       this.mirrorConns.clear();
       for (const p of Object.values(doc.parts)) {
-        this.physics.send({ op: 'upsertPart', part: p, material: this.materialOf(p), keepLivePose: false });
+        this.physics.send({ op: 'upsertPart', part: this.physicsPart(p), material: this.materialOf(p), keepLivePose: false });
         this.mirrorParts.set(p.id, structuredClone(p));
       }
       for (const c of Object.values(doc.connections)) {
@@ -237,9 +239,9 @@ export class App {
       const live = this.live.latest(id);
       const nearLive = live ? length(sub(live.p, part.pose.p)) < 2e-3 : false;
       if (!prev) {
-        this.physics.send({ op: 'upsertPart', part, material: this.materialOf(part), keepLivePose: false });
+        this.physics.send({ op: 'upsertPart', part: this.physicsPart(part), material: this.materialOf(part), keepLivePose: false });
       } else if (shapeChanged) {
-        this.physics.send({ op: 'upsertPart', part, material: this.materialOf(part), keepLivePose: !poseChanged || nearLive });
+        this.physics.send({ op: 'upsertPart', part: this.physicsPart(part), material: this.materialOf(part), keepLivePose: !poseChanged || nearLive });
       } else if (poseChanged && !nearLive) {
         this.physics.send({ op: 'setPose', id, pose: part.pose });
       }
@@ -424,6 +426,57 @@ export class App {
     }
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // build and play
+
+  /** The build as it was when Play was pressed: Stop returns to it. */
+  private buildPoint: Checkpoint | null = null;
+
+  /** What physics is given for a part: in the build phase every part is held still, whatever the document says. */
+  private physicsPart(p: Part): Part {
+    return this.settings.build && !p.frozen ? { ...p, frozen: true } : p;
+  }
+
+  private resyncParts() {
+    for (const p of Object.values(this.store.doc.parts)) {
+      this.physics.send({ op: 'upsertPart', part: this.physicsPart(p), material: this.materialOf(p), keepLivePose: true });
+    }
+  }
+
+  /** Into the build phase: everything stops where it is, and that is the design. */
+  enterBuild() {
+    if (this.settings.build) return;
+    this.commitLivePoses();
+    this.settings.build = true;
+    this.resyncParts();
+    this.toast('Build: parts hold still, and what you move snaps to the grid. Play runs it.', 'info');
+    this.notify();
+  }
+
+  /** Run the build under real physics; Stop comes back to it as it is now. */
+  play() {
+    if (!this.settings.build) return;
+    this.buildPoint = { label: 'the build', time: this.simTime, doc: structuredClone(this.store.doc), velocities: new Map() };
+    this.settings.build = false;
+    this.resyncParts();
+    this.toast('Playing: real physics. Back to build returns to it as it was.', 'info');
+    this.notify();
+  }
+
+  get canStop() {
+    return !this.settings.build && this.buildPoint !== null;
+  }
+
+  /** Back to the build as it was when Play was pressed. */
+  stop() {
+    if (!this.canStop) return;
+    this.settings.build = true;
+    this.store.restore(structuredClone(this.buildPoint!.doc));
+    this.simTime = this.buildPoint!.time;
+    this.toast('Back to the build', 'ok');
+    this.notify();
+  }
+
   checkpoint(label = 'Checkpoint', announce = true) {
     this.commitLivePoses();
     const velocities = new Map<string, { linear: Vec3; angular: Vec3 }>();
@@ -442,7 +495,7 @@ export class App {
 
   rewind(index = this.checkpoints.length - 1) {
     const cp = this.checkpoints[index];
-    if (!cp) { this.toast('No checkpoint yet (press C to take one)', 'warn'); this.audio.ui('error'); return; }
+    if (!cp) { this.toast('No checkpoint yet: ⚑ Checkpoint on the tablet (or click the left stick) takes one', 'warn'); this.audio.ui('error'); return; }
     this.store.restore(structuredClone(cp.doc));
     for (const [id, v] of cp.velocities) {
       const p = cp.doc.parts[id];

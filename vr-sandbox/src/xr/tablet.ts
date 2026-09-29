@@ -196,8 +196,9 @@ export class Tablet {
     const app = this.app;
     switch (this.page) {
       case 'tools': {
-        this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 150, 8, (t, x, y, i) =>
-          this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 150, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
+        this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 112, 8, (t, x, y, i) =>
+          this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
+        this.drawBuildRow(y0 + 3 * 120 + 6);
         // what the active tool can do besides its trigger action
         const acts = this.tools.actions();
         const aw = (W - 40 - 3 * 8) / 4;
@@ -327,6 +328,24 @@ export class Tablet {
     this.drawRoom(row(5) + 10, bw);
     this.drawHealth(H - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
+  }
+
+  /**
+   * Build and play (as in Besiege): in the build phase physics holds every part still and a moved part snaps to the
+   * grid and to the angle step; Play runs the build for real; Back to build returns to it as it was.
+   */
+  private drawBuildRow(y: number) {
+    const app = this.app, s = app.settings;
+    const bw = (W - 40 - 4 * 8) / 5;
+    const grids: [number, string][] = [[0, 'off'], [0.001, '1 mm'], [0.005, '5 mm'], [0.01, '1 cm'], [0.05, '5 cm'], [0.1, '10 cm']];
+    const angles = [0, 5, 15, 45, 90];
+    const next = <T,>(list: T[], cur: T) => list[(Math.max(0, list.indexOf(cur)) + 1) % list.length]!;
+    this.btn('build', 20, y, bw, 64, '■ Build', () => app.enterBuild(), { on: s.build });
+    this.btn('play', 20 + (bw + 8), y, bw, 64, '▶ Play', () => app.play(), { on: !s.build });
+    this.btn('stop', 20 + 2 * (bw + 8), y, bw, 64, '⏮ Back to build', () => app.stop(), { tone: app.canStop ? 'accent' : undefined });
+    const g = grids.find(([v]) => Math.abs(v - s.grid) < 1e-9) ?? grids[3]!;
+    this.btn('grid', 20 + 3 * (bw + 8), y, bw, 64, `Grid ${g[1]}`, () => { s.grid = next(grids.map(([v]) => v), g[0]); app.notify(); });
+    this.btn('angle', 20 + 4 * (bw + 8), y, bw, 64, `Angle ${s.angleSnap ? `${s.angleSnap}°` : 'off'}`, () => { s.angleSnap = next(angles, s.angleSnap); app.notify(); });
   }
 
   /** The live watchdog's verdict on this session: all clear, or how many problems and the latest one. */

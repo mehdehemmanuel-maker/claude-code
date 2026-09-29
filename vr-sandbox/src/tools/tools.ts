@@ -192,7 +192,8 @@ export class GrabTool implements Tool {
     for (const [h, other] of this.held) if (other.id === id && h !== hand) this.release(h); // hand-over
     const local = inverseTransformPoint(pose, point);
     const relQ = e.handQuat ? qmul(qconj(e.handQuat), pose.q) : undefined;
-    const hold: Hold = { id, body, hand, local, dist, q: pose.q, frozen: part.frozen, relQ };
+    // in the build phase every part is held still, so moving one is a design edit, as for a frozen part
+    const hold: Hold = { id, body, hand, local, dist, q: pose.q, frozen: part.frozen || this.app.settings.build, relQ };
     this.held.set(hand, hold);
     this.app.physics.send({ op: 'grab', hand, id: body, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength });
     this.app.audio.ui('grab', point);
@@ -202,7 +203,9 @@ export class GrabTool implements Tool {
   private target(h: Hold, e: PointerEvt): Pose {
     const q = e.handQuat && h.relQ ? qmul(e.handQuat, h.relQ) : h.q;
     const hit = add(v3(e.ray.origin), scale(v3(e.ray.dir), h.dist));
-    return { p: sub(hit, rotate(q, h.local)), q };
+    const pose = { p: sub(hit, rotate(q, h.local)), q };
+    const s = this.app.settings;
+    return s.build ? snapPose(pose, s.grid, s.angleSnap) : pose;
   }
 
   /** Feed the latest pointer for a hand (mouse via move/frame, VR controllers every frame). */
@@ -266,6 +269,20 @@ export class GrabTool implements Tool {
 }
 
 const qconj = (q: Quat): Quat => [-q[0], -q[1], -q[2], q[3]];
+
+/**
+ * A pose on the build grid: its origin on the nearest point of a `grid` metre lattice, its rotation to the nearest
+ * multiple of `angle` degrees about each world axis (yaw, then pitch, then roll). 0 leaves that part free.
+ */
+export function snapPose(pose: Pose, grid: number, angle: number): Pose {
+  const p: Vec3 = grid > 0 ? [Math.round(pose.p[0] / grid) * grid, Math.round(pose.p[1] / grid) * grid, Math.round(pose.p[2] / grid) * grid] : pose.p;
+  if (!(angle > 0)) return { p, q: pose.q };
+  const step = (angle * Math.PI) / 180;
+  const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion(...pose.q), 'YXZ');
+  e.set(Math.round(e.x / step) * step, Math.round(e.y / step) * step, Math.round(e.z / step) * step, 'YXZ');
+  const q = new THREE.Quaternion().setFromEuler(e);
+  return { p, q: [q.x, q.y, q.z, q.w] };
+}
 
 // -------------------------------------------------------------------------------------------------
 
