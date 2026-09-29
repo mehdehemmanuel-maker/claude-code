@@ -126,15 +126,15 @@ export const ANTIBODIES: Antibody[] = [
   antibody('AB-007', 'Nothing thrown passes through a wall')
     .found('2026-09-29', 'The stress web: spheres and rods thrown at 10 m/s went through a 10 cm wall')
     .cause('Discrete collision detection: a fast, thin body steps past a wall between ticks')
-    .fix('pending: continuous collision (Jolt linear cast) for moving bodies')
+    .fix('Continuous collision (Jolt linear cast) for every moving body: a body is swept along its path each tick, not only placed at its end')
     .guards('tunnel')
-    .on(is('throw')).open().build(),
+    .on(is('throw')).build(),
   antibody('AB-008', 'A scene with nothing to power it never gains energy')
     .found('2026-09-28', 'Energy audit A5; the stress web: bonded stock lying still or dropped gains energy')
-    .cause('under investigation: bonded segment chains and the assembly solver')
-    .fix('pending')
+    .cause('Two faults and a false alarm. The assembly solver stepped the gyroscopic term explicitly, which adds energy every tick to a fast-spinning uneven part (a thin angle bounced higher than it fell, 2 J to 34 J in flight); it re-solved contacts Jolt had already overshot (a bonded chain on the floor rocking at the tick rate); and the watchdog counted a breakable part twice, once as its own frame with a guessed inertia')
+    .fix('The gyroscopic term taken implicitly (Catto: one Newton step), which never adds energy; resting and sliding contacts on assemblies solved by the assembly solve alone (impacts stay Jolt\'s, with continuous collision); the watchdog watches bodies only')
     .guards('energy')
-    .on(is('rest', 'drop', 'stack', 'pile', 'extreme')).open().build(),
+    .on(is('rest', 'drop', 'stack', 'pile', 'extreme')).build(),
   antibody('AB-010', 'A part placed through another is moved out with no energy gained')
     .found('2026-09-29', 'Chaos seeds: overlapping parts left each other at 150 to 600 m/s, and then the world went NaN')
     .cause('The assembly solver took overlap and joint drift out as velocity (Baumgarte): the deeper the overlap, the faster the parts left, with energy nothing supplied (0.6 to 13 J in zero g); deep overlaps also swung long parts through their neighbours in one linear step')
@@ -148,11 +148,11 @@ export const ANTIBODIES: Antibody[] = [
     .guards('nonfinite', 'flung', 'crash')
     .on((t) => t.segmented && (t.proc === 'extreme' || t.proc === 'overlap' || t.proc === 'drop' || t.proc === 'rest')).build(),
   antibody('AB-009', 'Any joint, shaken then overloaded, gives way without an explosion')
-    .found('2026-09-29', 'The stress web (joint torture)')
-    .cause('to be learnt')
-    .fix('to be learnt')
+    .found('2026-09-29', 'The stress web (joint torture): every joint "flung" its block when overloaded')
+    .cause('The test, not the joints: its 20 kN push went on after the joint gave, firing the freed block. A real test rig is a ram with a stroke')
+    .fix('The overload is a stroke-limited ram (25 mm), so a freed block can take no more than force x stroke of work; every connector then gives way cleanly')
     .guards('crash', 'nonfinite', 'flung')
-    .on(is('joint')).open().build(),
+    .on(is('joint')).build(),
 ];
 
 export interface ImmuneResult {

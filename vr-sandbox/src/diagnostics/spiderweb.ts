@@ -81,7 +81,7 @@ class Bench {
       const kind = getPartKind(p.kind);
       const d = kind.dims(effectiveParams(kind, p.params, getMaterial(p.material)));
       const gyr = Math.hypot(d.length, d.a, d.b) / Math.sqrt(12);
-      for (const id of this.bodyIds(p)) out.set(id, { mass: this.world.bodyMass(id) ?? 1, gyration: gyr, inertia: () => this.world.bodyInertia(id) });
+      for (const id of this.bodyIds(p)) if (this.world.isBody(id)) out.set(id, { mass: this.world.bodyMass(id) ?? 1, gyration: gyr, inertia: () => this.world.bodyInertia(id) });
     }
     return out;
   }
@@ -97,7 +97,8 @@ class Bench {
     const out = [];
     for (let i = 0; i < this.slots.length; i++) {
       const id = this.slots[i];
-      if (!id) continue;
+      // bodies only: a breakable part's own slot is its frame, already counted in its segments
+      if (!id || !this.world.isBody(id)) continue;
       const t = r.transforms, v = r.velocities;
       out.push({ id, p: [t[i * 7]!, t[i * 7 + 1]!, t[i * 7 + 2]!] as Vec3, v: [v[i * 6]!, v[i * 6 + 1]!, v[i * 6 + 2]!] as Vec3, w: [v[i * 6 + 3]!, v[i * 6 + 4]!, v[i * 6 + 5]!] as Vec3 });
     }
@@ -340,8 +341,11 @@ function extremeCases(): Case[] {
             setup(J) {
               const b = new Bench(J, { gravity: [0, -9.81, 0] }, [floor]);
               const q = drop ? qmul(aboutX(30), q0) : q0;
-              b.part(k.id, { p: [0, restHeight(k.id, params, q, k.defaultMaterial) + (drop ? 0.5 : 0.002), 0], q }, { params });
-              return { bench: b, watch: { passive: k.category !== 'Magnets', settleTicks: 180, flungSpeed: 8, budgetMs: 11 } };
+              const y0 = restHeight(k.id, params, q, k.defaultMaterial) + (drop ? 0.5 : 0.002);
+              b.part(k.id, { p: [0, y0, 0], q }, { params });
+              // nothing but gravity acts, so no centre of mass can move faster than a fall from where it starts allows
+              const fastest = 1.05 * Math.sqrt(2 * 9.81 * y0) + 0.5;
+              return { bench: b, watch: { passive: k.category !== 'Magnets', settleTicks: 180, flungSpeed: fastest, budgetMs: 11 } };
             },
           });
         }
@@ -386,6 +390,9 @@ function overlapCases(): Case[] {
  * poses), randomly joined by every kind of connector, with magnets and steel among them, dropped together. Anything
  * physical may happen (joints break, parts fly apart under a motor); what must not is a crash, a non-number, something
  * leaving the world or moving impossibly fast, or a tick blowing the budget.
+ *
+ * Every scene is one a person could make: no part starts inside another (overlap is its own procedure), and a joint
+ * joins parts placed next to each other, anchored between them, not across the room.
  */
 function chaosCases(seeds: number): Case[] {
   const kinds = PART_KINDS.filter((k) => k.category !== 'Test');
@@ -396,7 +403,10 @@ function chaosCases(seeds: number): Case[] {
       const R = rng(seed);
       const b = new Bench(J, { gravity: [0, -9.81, 0] }, [floor]);
       const n = 6 + Math.floor(R() * 12);
-      const made: Part[] = [];
+      // bounding sphere of each part (any rotation), and where the placed ones are
+      const placed: { part: Part; c: Vec3; r: number }[] = [];
+      const clear = (c: Vec3, r: number) => c[1] - r > 0.005 && placed.every((o) => Math.hypot(c[0] - o.c[0], c[1] - o.c[1], c[2] - o.c[2]) >= r + o.r + 0.005);
+      const pairs: [number, number][] = [];
       for (let i = 0; i < n; i++) {
         const k = kinds[Math.floor(R() * kinds.length)]!;
         const params: Params = { ...defaults(k) };
@@ -409,19 +419,46 @@ function chaosCases(seeds: number): Case[] {
         const mats = allowed(k);
         const material = R() < 0.5 ? k.defaultMaterial : mats[Math.floor(R() * mats.length)]!.id;
         const q = normalizeQ([R() - 0.5, R() - 0.5, R() - 0.5, R() - 0.5]);
-        made.push(b.part(k.id, { p: [(R() - 0.5) * 1.2, 0.2 + R() * 1.2, (R() - 0.5) * 1.2], q }, { material, params }));
+        const bb = shapeBounds(k.collision(effectiveParams(k, params, getMaterial(material))));
+        const r = Math.hypot(Math.max(-bb.min[0], bb.max[0]), Math.max(-bb.min[1], bb.max[1]), Math.max(-bb.min[2], bb.max[2]));
+        // half the time next to a part already placed (to be joined to it), else anywhere free
+        let c: Vec3 | null = null;
+        const next = placed.length && R() < 0.5 ? Math.floor(R() * placed.length) : -1;
+        for (let tries = 0; tries < 200 && !c; tries++) {
+          let t: Vec3;
+          if (next >= 0 && tries < 50) {
+            const o = placed[next]!;
+            const d = normalizeQ([R() - 0.5, R() - 0.5, R() - 0.5, 0]).slice(0, 3) as Vec3;
+            const len = Math.hypot(...d) || 1;
+            t = [o.c[0] + (d[0] / len) * (o.r + r + 0.006), o.c[1] + (d[1] / len) * (o.r + r + 0.006), o.c[2] + (d[2] / len) * (o.r + r + 0.006)];
+          } else {
+            const spread = 0.6 + (tries / 200) * 20;
+            t = [(R() - 0.5) * 2 * spread, r + 0.01 + R() * 1.2, (R() - 0.5) * 2 * spread];
+          }
+          if (clear(t, r)) c = t;
+        }
+        if (!c) continue;
+        if (next >= 0 && touching(placed[next]!, c, r)) pairs.push([next, placed.length]);
+        placed.push({ part: b.part(k.id, { p: c, q }, { material, params }), c, r });
       }
-      for (let i = 0; i < n / 2; i++) {
-        const a = made[Math.floor(R() * n)]!, c = made[Math.floor(R() * n)]!;
-        if (a === c) continue;
+      for (const [i, j] of pairs) {
+        const a = placed[i]!, o = placed[j]!;
         const kind = conns[Math.floor(R() * conns.length)]!;
-        const mid: Pose = { p: [(a.pose.p[0] + c.pose.p[0]) / 2, (a.pose.p[1] + c.pose.p[1]) / 2, (a.pose.p[2] + c.pose.p[2]) / 2], q: Q_ID };
-        const conn = makeConnection({ kind: kind.id, a: { part: a.id, frame: relativePose(a.pose, mid) }, b: { part: c.id, frame: relativePose(c.pose, mid) } }, b.ids);
+        // anchored on the line between them, where their bounding spheres meet
+        const d = Math.hypot(o.c[0] - a.c[0], o.c[1] - a.c[1], o.c[2] - a.c[2]) || 1;
+        const f = a.r / d;
+        const mid: Pose = { p: [a.c[0] + (o.c[0] - a.c[0]) * f, a.c[1] + (o.c[1] - a.c[1]) * f, a.c[2] + (o.c[2] - a.c[2]) * f], q: Q_ID };
+        const conn = makeConnection({ kind: kind.id, a: { part: a.part.id, frame: relativePose(a.part.pose, mid) }, b: { part: o.part.id, frame: relativePose(o.part.pose, mid) } }, b.ids);
         b.world.apply({ op: 'upsertConnection', conn, materials: materialsById });
       }
       return { bench: b, watch: { flungSpeed: 40, budgetMs: 15 } };
     },
   }));
+}
+
+/** Was c placed touching o (bounding spheres meeting), rather than somewhere free? */
+function touching(o: { c: Vec3; r: number }, c: Vec3, r: number) {
+  return Math.hypot(c[0] - o.c[0], c[1] - o.c[1], c[2] - o.c[2]) < o.r + r + 0.01;
 }
 
 /**

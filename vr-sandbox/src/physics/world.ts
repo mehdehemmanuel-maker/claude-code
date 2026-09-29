@@ -21,7 +21,7 @@ import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../e
 import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
 import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Mul, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
-  quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solvePositions, solveRows, tangents, worldInertia, type Entity, type Row,
+  gyroscopicStep, quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solvePositions, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
 import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
@@ -1120,6 +1120,8 @@ export class PhysicsWorld {
   //     side of it, and each anchor, hinge and contact reaction is known.
 
   private clusters: ClusterWork[] = [];
+  /** Which assembly (index into clusters) each member body belongs to this tick. */
+  private clusterOf = new Map<BodyRec, number>();
   private hinges: BondRec[] = [];
   private watch = new Set<BodyRec>();
   private contacts = new Map<string, RecordedContact>();
@@ -1129,6 +1131,7 @@ export class PhysicsWorld {
   /** Before the step: rigid assemblies, plastic hinges, and the state their bodies start the tick in. */
   private prepareClusters() {
     this.clusters = [];
+    this.clusterOf.clear();
     this.hinges = [];
     this.watch.clear();
     this.contacts.clear();
@@ -1174,6 +1177,7 @@ export class PhysicsWorld {
         r.prior = { pose: this.poseOf(r), v, w };
         this.watch.add(r);
       }
+      for (const r of comp) this.clusterOf.set(r, this.clusters.length);
       this.clusters.push({ comp, adj });
     }
     for (const b of this.hinges) for (const r of [b.a, b.b]) {
@@ -1208,10 +1212,22 @@ export class PhysicsWorld {
   }
 
   /** Called from the contact listener during the step: remember contacts touching an assembly or a hinge. */
-  private recordContact(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, settings: JoltNS.ContactSettings) {
+  /**
+   * A contact on an assembly or a hinge piece. Each contact has one solver. A resting or sliding one (closing slower
+   * than an impact) is recorded and solved by the assembly solve alone: Jolt's own response, unconverged against the
+   * stiff bonds of a long chain, overshoots it (a bonded bar on the floor rocks at the tick rate for ever, even in
+   * Jolt alone), and the assembly solve, which can only push, would keep that overshoot. An impact is Jolt's alone,
+   * with its restitution and continuous collision (so nothing fast passes through a wall); re-solving it here too
+   * bounced a clattering part twice, each time with more energy than it came in with.
+   */
+  private recordContact(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, settings: JoltNS.ContactSettings, speed: number) {
     const r1 = this.recOf(b1), r2 = this.recOf(b2);
     const w1 = !!r1 && this.watch.has(r1), w2 = !!r2 && this.watch.has(r2);
     if (!w1 && !w2) return;
+    const c1 = r1 ? this.clusterOf.get(r1) : undefined, c2 = r2 ? this.clusterOf.get(r2) : undefined;
+    if (c1 !== undefined && c1 === c2) return; // within one rigid assembly: nothing moves between them
+    if (speed >= MIN_IMPACT_FOR_RESTITUTION) return;
+    settings.mIsSensor = true;
     // the watched body is the "member" side; the normal points from it to the other body
     const flip = !w1;
     const m = (flip ? r2 : r1)!, o = flip ? r1 : r2;
@@ -1349,7 +1365,8 @@ export class PhysicsWorld {
       em.touched = true;
       if (eo) eo.touched = true;
     }
-    solveRows(rows, 12, this.warm);
+    // iterated to convergence (a heavy load on a light bonded part needs more passes than a lone part), within a cap
+    solveRows(rows, 40, this.warm, 1e-5);
     const pseudo = solvePositions(rows, 12, dt, SLOP);
     const none = { v: [0, 0, 0] as Vec3, w: [0, 0, 0] as Vec3 };
     // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does), plus the
@@ -1605,7 +1622,7 @@ export class PhysicsWorld {
     const Ic = mass.angularBlock();
     const invIc = inverse3(Ic);
     const L0 = mat3Vec(Ic, u0.w);
-    const wPred = mat3Vec(invIc, add(add(L0, dLsum), scale(cross(L0, u0.w), dt)));
+    const wPred = gyroscopicStep(Ic, mat3Vec(invIc, add(L0, dLsum)), dt);
     const vPred = add(u0.v, scale(dPsum, 1 / M));
     const extent = comp.reduce((x, r, i) => Math.max(x, this.extentAbout(r, NP0[i]!.p, com0)), 0);
     const ent: Ent = { e: { origin: com0, v: vPred, w: wPred, invMass: 1 / M, invI: invIc, extent }, work: null, single: null, touched: false, start: null, v0: [...u0.v] as Vec3, w0: [...u0.w] as Vec3, fixed: [] };
@@ -3499,8 +3516,9 @@ export class PhysicsWorld {
       const b1 = J.wrapPointer(b1p, J.Body), b2 = J.wrapPointer(b2p, J.Body);
       const man = J.wrapPointer(manp, J.ContactManifold), settings = J.wrapPointer(setp, J.ContactSettings);
       if (this.seamGhost(b1, b2, man)) { settings.mIsSensor = true; return; }
-      if (this.impactSpeed(b1, b2, man) < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
-      if (this.watch.size) this.recordContact(b1, b2, man, settings);
+      const speed = this.impactSpeed(b1, b2, man);
+      if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
+      if (this.watch.size) this.recordContact(b1, b2, man, settings, speed);
       this.recordMagnetTouch(b1, b2, man, settings);
     };
     listener.OnContactRemoved = () => {};
@@ -3512,7 +3530,7 @@ export class PhysicsWorld {
       if (this.seamGhost(b1, b2, man)) { settings.mIsSensor = true; return; }
       const speed = Math.max(0, this.impactSpeed(b1, b2, man));
       if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
-      if (this.watch.size) this.recordContact(b1, b2, man, settings);
+      if (this.watch.size) this.recordContact(b1, b2, man, settings, speed);
       this.recordMagnetTouch(b1, b2, man, settings);
       if (this.events.length > 48) return;
       const n = man.mWorldSpaceNormal;
@@ -3610,6 +3628,14 @@ export class PhysicsWorld {
   bodyInertia(id: string): number[] | null {
     const r = this.bodies.get(id);
     return r?.Iloc ? worldInertia(r.Iloc, this.poseOf(r).q) : null;
+  }
+
+  /**
+   * Whether a slot id is a real body. A breakable part's own id names its frame, carried by segment 0: reporting it
+   * as a body as well counts the part twice (with a guessed inertia) in anything that sums over bodies.
+   */
+  isBody(id: string) {
+    return this.bodies.has(id);
   }
 
   /** Mass of a part (all its segments) or of one body. */

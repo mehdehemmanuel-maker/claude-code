@@ -50,7 +50,8 @@ export class Runner {
     const bodies = [];
     for (let i = 0; i < slots.length; i++) {
       const id = slots[i];
-      if (!id) continue;
+      // bodies only: a breakable part's own slot is its frame, already counted in its segments
+      if (!id || !this.world.isBody(id)) continue;
       if (!this.info.has(id)) {
         const m = this.world.bodyMass(id);
         if (m === undefined) continue;

@@ -110,17 +110,20 @@ export class Watchdog {
       if (vals.some((x) => !Number.isFinite(x))) { this.flag('nonfinite', b.id, NaN, 0, 'pose or velocity is not a number'); continue; }
       const info = this.info.get(b.id) ?? { mass: 1, gyration: 0.05 };
       const speed = Math.hypot(...b.v), spin = Math.hypot(...b.w);
-      const rim = speed + spin * info.gyration;
+      const I = info.inertia?.();
+      // w . I w, and from it the radius of gyration about the axis it is actually turning on
+      const wIw = I
+        ? b.w[0] * (I[0]! * b.w[0] + I[1]! * b.w[1] + I[2]! * b.w[2]) + b.w[1] * (I[3]! * b.w[0] + I[4]! * b.w[1] + I[5]! * b.w[2]) + b.w[2] * (I[6]! * b.w[0] + I[7]! * b.w[1] + I[8]! * b.w[2])
+        : null;
+      const gyration = wIw !== null && spin > 0 ? Math.sqrt(wIw / (info.mass * spin * spin)) : info.gyration;
+      const rim = speed + spin * gyration;
       if (b.p[1] < o.floorY - 2) this.flag('fell', b.id, b.p[1], o.floorY - 2, `at y = ${b.p[1].toFixed(2)} m, below the floor at ${o.floorY} m`);
       if (speed > o.flungSpeed) this.flag('flung', b.id, speed, o.flungSpeed, `moving at ${speed.toFixed(1)} m/s (nothing here should pass ${o.flungSpeed} m/s)`);
       for (const w of o.walls) {
         const s = w.n[0] * b.p[0] + w.n[1] * b.p[1] + w.n[2] * b.p[2];
         if (s < w.d - w.margin) this.flag('tunnel', b.id, w.d - s, w.margin, `${((w.d - s) * 1000).toFixed(0)} mm through a wall`);
       }
-      const I = info.inertia?.();
-      const rot = I
-        ? b.w[0] * (I[0]! * b.w[0] + I[1]! * b.w[1] + I[2]! * b.w[2]) + b.w[1] * (I[3]! * b.w[0] + I[4]! * b.w[1] + I[5]! * b.w[2]) + b.w[2] * (I[6]! * b.w[0] + I[7]! * b.w[1] + I[8]! * b.w[2])
-        : info.mass * (spin * info.gyration) ** 2;
+      const rot = wIw ?? info.mass * (spin * info.gyration) ** 2;
       energy += 0.5 * (info.mass * speed * speed + rot) + info.mass * g * (b.p[1] - o.floorY);
       // history for jitter and rest
       let h = this.hist.get(b.id);

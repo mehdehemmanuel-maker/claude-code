@@ -36,6 +36,33 @@ export function skew(r: Vec3): number[] {
 
 export const scaleMat = (m: number[], s: number) => m.map((v) => v * s);
 
+/**
+ * One tick of torque-free rotation: the angular velocity w2 at the end of the tick from w1 (the start, once the tick's
+ * impulses are in), by the implicit midpoint rule on Euler's equations, I (w2 - w1) + dt wm x (I wm) = 0 with
+ * wm = (w1 + w2) / 2 and I the inertia (world frame, at the start of the tick), solved by Newton's method. The
+ * midpoint rule keeps every quadratic invariant of the motion exactly, and a free body's kinetic energy (w.Iw / 2)
+ * and angular momentum magnitude (|Iw|) are both quadratic: it neither adds nor removes energy, at any spin rate.
+ * (Taken explicitly the gyroscopic term adds energy every tick, without bound for a fast-spinning uneven body;
+ * backward Euler never adds any but bleeds a quarter of a 30 rad/s tumble's energy in two seconds.)
+ */
+export function gyroscopicStep(I: number[], w1: Vec3, dt: number): Vec3 {
+  let w2: Vec3 = [...w1];
+  const scaleW = length(w1) + 1e-30;
+  for (let it = 0; it < 16; it++) {
+    const wm = scale(add(w1, w2), 0.5);
+    const Iwm = mat3Vec(I, wm);
+    const F = add(mat3Vec(I, sub(w2, w1)), scale(cross(wm, Iwm), dt));
+    // dF/dw2 = I + dt/2 (skew(wm) I - skew(I wm))
+    const sI = mat3Mul(skew(wm), I), sIw = skew(Iwm);
+    const J = I.map((v, k) => v + (dt / 2) * (sI[k]! - sIw[k]!));
+    const d = mat3Vec(inverse3(J), F);
+    w2 = sub(w2, d);
+    if (length(d) <= 1e-13 * scaleW) break;
+  }
+  return w2;
+}
+
+
 export function quatToMat3(q: Quat): number[] {
   const [x, y, z, w] = q;
   return [
@@ -329,7 +356,7 @@ function push(p: Prepared, lambda: number) {
  * accumulated impulses by row key: applying them first is what lets heavy-on-light stacks converge; it is
  * refreshed on exit. Entity velocities are updated in place.
  */
-export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>) {
+export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0) {
   const prep = rows.map(prepare);
   const byRow = new Map<Row, Prepared>();
   prep.forEach((p) => byRow.set(p.r, p));
@@ -368,6 +395,8 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
   }
   const res = new Float64Array(6);
   for (let it = 0; it < iterations; it++) {
+    // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
+    let change = 0, largest = 0;
     for (const p of prep) {
       const block = blockOf.get(p);
       if (block) {
@@ -377,7 +406,7 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
           let d = 0;
           const row = block.Kinv[i]!;
           for (let j = 0; j < n; j++) d += row[j]! * res[j]!;
-          if (d) { block.rows[i]!.r.acc += d; push(block.rows[i]!, d); }
+          if (d) { block.rows[i]!.r.acc += d; push(block.rows[i]!, d); change = Math.max(change, Math.abs(d)); }
         }
         continue;
       }
@@ -395,6 +424,11 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
       if (lambda === 0) continue;
       r.acc = next;
       push(p, lambda);
+      change = Math.max(change, Math.abs(lambda));
+    }
+    if (tolerance > 0) {
+      for (const p of prep) largest = Math.max(largest, Math.abs(p.r.acc));
+      if (change <= tolerance * largest) break;
     }
   }
   if (warm) {
