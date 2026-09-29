@@ -35,6 +35,25 @@ describe('eddy-current drag', () => {
     expect(D[1 * 6 + 1]!).toBeGreaterThan(0);
   });
 
+  it('structured meshes are solved exactly: the transform solve agrees with conjugate gradients', () => {
+    const faces = cylinderFaces([0.001, 0.003, 0.0005], [0.1, 0.99, 0], 0.002, 0.004, 1.3);
+    const meshes = [
+      annulusMesh(0.01, 0.0085, 0.034, null, 240)!, // a pipe's wall, one cell thick
+      annulusMesh(0.01, 0.007, 0.02, null, 600, 3)!,
+      annulusMesh(0.005, 0, 0.0025, null, 400, 4, 24)!, // a solid cylinder
+      boxMesh([0.02, 0.003, 0.015], { lo: [-0.01, -1, -0.01], hi: [0.012, 1, 0.01] }, 240)!, // part of a plate
+    ];
+    for (const m0 of meshes) {
+      expect(m0.grid).toBeDefined();
+      const mesh = placeMesh(m0, [0.0003, -0.006, 0.0002], identity);
+      const B = fieldAt(faces, mesh.cells.map((c) => c.p));
+      const D = eddyDamping(mesh, 5.8e7, B, rigidBasis([0.001, 0.003, 0.0005]));
+      const Dcg = eddyDamping({ cells: mesh.cells, faces: mesh.faces }, 5.8e7, B, rigidBasis([0.001, 0.003, 0.0005]));
+      const scale = Math.max(...Dcg.map(Math.abs));
+      for (let i = 0; i < 36; i++) expect(Math.abs(D[i]! - Dcg[i]!) / scale).toBeLessThan(1e-9);
+    }
+  });
+
   it('dissipation is never negative, and a uniform field induces nothing in straight translation', () => {
     const mesh = placeMesh(boxMesh([0.01, 0.002, 0.01], null, 400)!, [0, 0, 0], identity);
     const uniform = mesh.cells.map(() => [0, 0.5, 0.2] as Vec3);

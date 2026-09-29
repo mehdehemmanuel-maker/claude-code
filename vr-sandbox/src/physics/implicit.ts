@@ -5,9 +5,11 @@
 // than the last and the motion explodes (a small magnet near another would spin up to hundreds of rad/s and be flung
 // off). Backward Euler instead solves for the end-of-tick velocity with the force linearised there:
 //   m (v' - v) = dt (F + K dx),  dx = dt v'   =>   F_eff = m (m - dt^2 K)^-1 (F + dt K v)
-// which is stable for any stiffness and damps the fast wobble, as eddy currents damp a real magnet. Only the
-// restoring part of K is treated so: along a direction where the force grows as the bodies close (attraction
-// towards contact) the step stays explicit, so an approach is never slowed.
+// which is stable for any stiffness. It also damps what it treats, numerically: a real magnet's own eddy currents
+// damp its wobble at only ~2 s^-1 (M4), so the world uses it only for the restoring modes its substeps cannot follow
+// (w dt > 1) and leaves the rest explicit, undamped (M3). Only restoring modes are treated so: along a direction where
+// the force grows as the bodies close (attraction towards contact) the step stays explicit, so an approach is never
+// slowed.
 
 import type { Vec3 } from '../doc/types';
 import { inverse3, mat3Vec } from './rigid';
@@ -49,17 +51,23 @@ export function symmetricEigen3(m: number[]): { values: Vec3; vectors: Vec3[] } 
   };
 }
 
-/** The restoring part of a stiffness matrix dF/dx: symmetrised, keeping only its negative eigenvalues. */
-export function restoringPart(J: number[]): number[] {
+/** The restoring modes of a stiffness matrix dF/dx (symmetrised): its negative eigenvalues and their directions. */
+export function restoringModes(J: number[]): { lam: number; e: Vec3 }[] {
   const S = [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => (J[i * 3 + j]! + J[j * 3 + i]!) / 2));
   const { values, vectors } = symmetricEigen3(S);
+  return values.flatMap((lam, k) => (lam < 0 ? [{ lam, e: vectors[k]! }] : []));
+}
+
+/** Stiffness from modes: sum of lam e e^T. */
+export function stiffnessOf(modes: { lam: number; e: Vec3 }[]): number[] {
   const out = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  values.forEach((lam, k) => {
-    if (lam >= 0) return;
-    const e = vectors[k]!;
-    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) out[i * 3 + j] += lam * e[i]! * e[j]!;
-  });
+  for (const { lam, e } of modes) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) out[i * 3 + j] += lam * e[i]! * e[j]!;
   return out;
+}
+
+/** The restoring part of a stiffness matrix dF/dx: symmetrised, keeping only its negative eigenvalues. */
+export function restoringPart(J: number[]): number[] {
+  return stiffnessOf(restoringModes(J));
 }
 
 /**

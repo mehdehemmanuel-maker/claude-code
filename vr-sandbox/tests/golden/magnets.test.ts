@@ -12,6 +12,7 @@ import {
   type Vec3,
 } from '../../src/engineering/magnets';
 import { discField, discFieldFast, ellipticG, ellipticKE, rectField } from '../../src/engineering/magnetField';
+import { meanRadius } from '../../src/physics/world';
 
 const MU0 = 4e-7 * Math.PI;
 
@@ -245,5 +246,20 @@ describe('quadrature level', () => {
       expect(Math.abs(cur - prev) / prev).toBeLessThan(0.05);
       prev = cur;
     }
+  });
+});
+
+describe('contact statics of a stuck magnet (M5)', () => {
+  it("a footprint's twist radius is its mean distance from the centroid: 2R/3 for a disc, a quarter of a line", () => {
+    const R = 0.005;
+    // the latch's disc footprint is a 32-gon inscribed in the rim, within 0.4% of the disc's
+    const disc = Array.from({ length: 32 }, (_, i) => [R * Math.cos((i * Math.PI) / 16), 0, R * Math.sin((i * Math.PI) / 16)] as Vec3);
+    expect(Math.abs(meanRadius(disc, [0, 0, 0], [0, 1, 0]) / ((2 * R) / 3) - 1)).toBeLessThan(0.004);
+    // a square of side s: s (sqrt 2 + asinh 1) / 6
+    const s = 0.01;
+    const square: Vec3[] = [[-s / 2, 0, -s / 2], [s / 2, 0, -s / 2], [s / 2, 0, s / 2], [-s / 2, 0, s / 2]];
+    expect(Math.abs(meanRadius(square, [0, 0, 0], [0, 1, 0]) / ((s * (Math.SQRT2 + Math.asinh(1))) / 6) - 1)).toBeLessThan(1e-4);
+    // a cylinder lying on its side touches along a line
+    expect(meanRadius([[-0.01, 0, 0], [0.01, 0, 0]], [0, 0, 0], [0, 1, 0])).toBeCloseTo(0.005, 9);
   });
 });

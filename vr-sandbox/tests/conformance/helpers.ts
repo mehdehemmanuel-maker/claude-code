@@ -14,6 +14,8 @@ export interface Rig {
   part(kind: string, pose: Pose, opts?: { material?: string; params?: Params; frozen?: boolean }): Part;
   connect(kind: string, a: { part: Part; frame: Pose }, b: { part: Part; frame: Pose } | null, params?: Params): Connection;
   run(seconds: number, each?: (t: number) => void): void;
+  /** Change simulation settings mid-run (e.g. gravity as a constant body force). */
+  setSim(patch: Partial<SimSettings>): void;
   pos(p: Part): [number, number, number];
   done(): void;
 }
@@ -21,7 +23,7 @@ export interface Rig {
 export async function rig(sim: Partial<SimSettings> = {}, floor = true): Promise<Rig> {
   const J = await jolt();
   const doc = newDoc('conformance', '2026-01-01T00:00:00Z');
-  const settings = { ...doc.sim, airDrag: false, ...sim };
+  let settings = { ...doc.sim, airDrag: false, ...sim };
   const world = new PhysicsWorld(J, settings);
   const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
   if (floor) world.apply({ op: 'environment', boxes: [{ half: [50, 0.5, 50], pose: { p: [0, -0.5, 0], q: [0, 0, 0, 1] }, material: 'concrete.c30' }], materials });
@@ -44,6 +46,10 @@ export async function rig(sim: Partial<SimSettings> = {}, floor = true): Promise
         world.step();
         each?.((i + 1) * TICK);
       }
+    },
+    setSim(patch) {
+      settings = { ...settings, ...patch };
+      world.apply({ op: 'sim', sim: settings });
     },
     pos(p) {
       return world.livePose(p.id)!.p;
