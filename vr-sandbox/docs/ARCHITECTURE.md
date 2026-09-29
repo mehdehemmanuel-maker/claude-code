@@ -262,6 +262,11 @@ is what the clack dissipates. B is seated only if all of these hold:
 Otherwise it is held where it touches, over its touching points, only moved out of any overlap along the contact
 normal.
 
+Limit: the constraint's position correction takes a fraction of the remaining error each substep, so a large seat
+is seen to settle over a few ticks rather than in the millisecond of the real clack (the 10 × 10 × 2 mm block latched
+3° askew on its twin lay within 1° after 3 ticks and within 0.05° after 11). The latch holds it throughout; only the
+pose lags.
+
 Measured with the seat switched off: the simulation now brings every common magnet flat by itself, through rim impacts
 that are inelastic in this world below 1 m/s, as they are in reality. The magnet's own eddy currents would damp its
 rocking at only about 1.6 s⁻¹ (M4). (Before A11, the 30 000-fold inertia of these magnets had them rocking for seconds
