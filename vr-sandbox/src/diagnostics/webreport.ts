@@ -113,7 +113,11 @@ groups.forEach((g, gi) => {
   el('line', { x1: C, y1: C, x2: gx, y2: gy, class: 'thread' });
   const worst = members.reduce((s, n) => (rank[n.status] > rank[s] ? n.status : s), 'pass');
   el('circle', { cx: gx, cy: gy, r: 9, class: 'node ' + worst });
-  const lbl = el('text', { x: gx, y: gy - 13, 'text-anchor': 'middle', class: 'grp' }); lbl.textContent = g.replace('parts/', '');
+  // each group's name runs along its own spoke, inside its hub, so neighbours never overprint
+  const la = a0 + span / 2, lx = C + 136 * Math.cos(la), ly = C + 136 * Math.sin(la), flip = Math.cos(la) < 0;
+  const deg = (la * 180) / Math.PI + (flip ? 180 : 0);
+  const lbl = el('text', { x: lx, y: ly + 4, 'text-anchor': flip ? 'start' : 'end', class: 'grp', transform: 'rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')' });
+  lbl.textContent = g.replace('parts/', '');
   members.forEach((n, i) => {
     const a = a0 + span * ((i + 0.5) / members.length);
     const rr = 300 - (i % 2) * 40;
