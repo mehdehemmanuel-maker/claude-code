@@ -206,9 +206,11 @@ export const MATERIALS: Material[] = [
     friction: 0.6, restitution: 0.25, sound: 'stone', loss: 0.01, sparks: 'none', color: 0x9a9a96, metalness: 0, roughness: 0.95,
     source: 'EN 1992-1-1 C30/37: f_ctm 2.9 MPa, E_cm 33 GPa', confidence: 'spec',
   },
-  magnet('magnet.n42', 'Neodymium NdFeB N42', 1.3, 7500, 0xb9bec4, 'IEC 60404-8-1 / grade tables 1.28-1.32 T'),
-  magnet('magnet.n52', 'Neodymium NdFeB N52', 1.455, 7500, 0xc2c7cc, 'grade tables 1.43-1.48 T'),
-  magnet('magnet.ferrite-c8', 'Ferrite C8', 0.39, 4900, 0x3a3a3c, 'MMPA 0100 ceramic 8, 0.38-0.40 T'),
+  // conductivity: sintered NdFeB 1.5 uOhm m (manufacturer data sheets); sintered hard ferrite is a ceramic, above
+  // 1e4 Ohm m, so effectively an insulator
+  magnet('magnet.n42', 'Neodymium NdFeB N42', 1.3, 7500, 6.7e5, 0xb9bec4, 'IEC 60404-8-1 / grade tables 1.28-1.32 T'),
+  magnet('magnet.n52', 'Neodymium NdFeB N52', 1.455, 7500, 6.7e5, 0xc2c7cc, 'grade tables 1.43-1.48 T'),
+  magnet('magnet.ferrite-c8', 'Ferrite C8', 0.39, 4900, 1e-4, 0x3a3a3c, 'MMPA 0100 ceramic 8, 0.38-0.40 T'),
 ];
 
 function wood(id: string, name: string, G: number, density: number, EGPa: number, MOR: number, color: number,
@@ -232,10 +234,10 @@ function polymer(id: string, name: string, category: MaterialCategory, density: 
   };
 }
 
-function magnet(id: string, name: string, Br: number, density: number, color: number, source: string): Material {
+function magnet(id: string, name: string, Br: number, density: number, conductivity: number, color: number, source: string): Material {
   return {
     id, name, category: 'magnet', density, E: 160 * GPa, nu: 0.24, yield: 80 * MPa, ultimate: 80 * MPa, elongation: 0.001,
-    ductile: false, ferromagnetic: true, conductivity: 6.7e5, weld: 'none', friction: 0.5, restitution: 0.4, sound: 'steel',
+    ductile: false, ferromagnetic: true, conductivity, weld: 'none', friction: 0.5, restitution: 0.4, sound: 'steel',
     loss: 0.002, sparks: 'none', remanence: Br, color, metalness: 0.95, roughness: 0.2, source, confidence: 'handbook',
   };
 }

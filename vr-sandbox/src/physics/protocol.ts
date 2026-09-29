@@ -45,7 +45,7 @@ export type PhysicsOp =
   | { op: 'controls'; channels: Record<string, number> }
   | { op: 'damage'; id: string; damage: PartDamage }
   | { op: 'room'; surfaces: RoomSurface[] }
-  | { op: 'options'; maxMagnetRings?: number; filterTicks?: number };
+  | { op: 'options'; maxMagnetRings?: number; filterTicks?: number; magnetLatch?: boolean };
 
 export type PhysicsEvent =
   | { type: 'contact'; a: string | null; b: string | null; point: Vec3; normal: Vec3; speed: number; impulse: number }

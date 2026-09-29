@@ -13,8 +13,8 @@ import {
 } from '../parts/registry';
 import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
-  chargeInteraction, cylinderCharges, blockCharges, imageCharges, plateSaturationFactor, ringsForGap, dipoleMoment,
-  type Charge, type Vec3 as MVec3,
+  magnetWrench, cylinderCharges, blockCharges, cylinderFaces, blockFaces, imageFaces, transformFaces, plateSaturationFactor, ringLevel, faceField,
+  blendedInteraction, transformCharges, dipoleMoment, type Charge, type PoleFace, type Vec3 as MVec3,
 } from '../engineering/magnets';
 import { neoHookeanBandForce } from '../engineering/mechanics';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
@@ -23,8 +23,96 @@ import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
   quatFromRotationVector, quatMul, rotationVector, scaleMat, solveRows, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
+import { implicitForce, restoringPart, solveDense, symmetricEigen3 } from './implicit';
+import { annulusMesh, boxMesh, eddyDamping, placeMesh, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
 import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, RoomSurface, StepResult } from './protocol';
+
+/** A magnetic interaction between two bodies at this instant (see magnetPairs). */
+interface MagnetPair {
+  key: string;
+  a: BodyRec;
+  b: BodyRec;
+  close: boolean;
+  feature: number;
+  /** Wrench on b [F, T about b's centre] with b moved rigidly by dx and turned by rot. */
+  wrench: (dx: Vec3, rot: Vec3) => number[];
+  /** The plane of a's surface facing b (a magnet's pole face, a steel part's nearest face): outward normal, point. */
+  face: { n: Vec3; p: Vec3 };
+}
+
+/**
+ * Eddy-current damping this tick (M4): currents induced in C by magnet S's field as C moves relative to S. D is 6 x 6
+ * about S's centre (where the interaction is: C may be a long tube), acting on C's velocity relative to S there; the
+ * drag -D q goes to C and its reaction to S.
+ */
+interface EddyElement {
+  S: BodyRec;
+  C: BodyRec;
+  D: number[];
+}
+
+/** This tick's contact between a magnet and another body, from the contact listener. */
+interface MagnetTouch {
+  r1: BodyRec;
+  /** Normal from r1 towards the other body. */
+  n: Vec3;
+  /** Points of the manifold that are actually touching (world). */
+  points: Vec3[];
+  friction: number;
+}
+
+/**
+ * Two magnets, or a magnet and steel, stuck together: held rigidly, as the real pair is, until the load on the
+ * contact is more than the magnet can hold. Everything is stored in a's body frame (the pair does not move
+ * relative to it while latched): the contact centroid, its normal (a to b), the touching points, and the magnetic
+ * wrench the latch stands for (force on b, torque about the centroid).
+ */
+interface MagnetLatch {
+  key: string;
+  a: BodyRec;
+  b: BodyRec;
+  constraint: JoltNS.Constraint;
+  typed: JoltNS.SixDOFConstraint;
+  pairKey: number;
+  c: Vec3;
+  n: Vec3;
+  points: Vec3[];
+  Fm: Vec3;
+  Tm: Vec3;
+  mu: number;
+  /** Consecutive ticks the contact could not hold. A clack's impact or a knock is a moment; a load that lasts pulls it off. */
+  over: number;
+}
+
+interface MagnetStiffness {
+  Kt: number[];
+  Kr: number[];
+  mu: number;
+  Ired: number[];
+  /** Fastest growth or oscillation rate of the pair's motion, s^-1. */
+  rate: number;
+}
+
+/** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
+const MIN_IMPACT_FOR_RESTITUTION = 1;
+
+/** A 20 mm magnet near another evolves at ~200-1000 s^-1: sixteen substeps resolve that at 90 Hz. */
+const MAX_MAGNET_SUBSTEPS = 16;
+
+/** Eddy damping is computed for conductors of at least this conductivity (S/m) moving faster than this (m/s). */
+const EDDY_MIN_SIGMA = 1e7;
+const EDDY_MIN_SPEED = 1e-3;
+
+/** A magnetic pair latches once touching with its contact slower than this (m/s) for LATCH_SETTLE_TICKS ticks. */
+const LATCH_SPEED = 0.02;
+const LATCH_SETTLE_TICKS = 3;
+/** Manifold points within this of touching (m) count as the contact's footprint. */
+const LATCH_TOUCH = 1e-4;
+/** A pole face touching within this of flush (rad) clacks flat as it latches. */
+const SEAT_ANGLE = (20 * Math.PI) / 180;
+/** A latching pair may still wobble on its edge up to this rim speed (m/s): the clack flat absorbs it. */
+const LATCH_WOBBLE = 0.5;
 
 type J = typeof JoltNS;
 
@@ -244,6 +332,8 @@ export interface WorldOptions {
   maxMagnetRings: number;
   /** Consecutive over-capacity ticks before a yield-type failure. */
   filterTicks: number;
+  /** Hold magnets at rest in contact with a latch (M6); off, their contact is simulated as forces throughout. */
+  magnetLatch: boolean;
 }
 
 export class PhysicsWorld {
@@ -270,9 +360,18 @@ export class PhysicsWorld {
   private slotsDirty = true;
   private time = 0;
   private ticks = 0;
-  private opts: WorldOptions = { maxMagnetRings: 4, filterTicks: 2 };
+  private opts: WorldOptions = { maxMagnetRings: 4, filterTicks: 2, magnetLatch: true };
   private lastSubsteps = 1;
   private lastMagnetPairs = 0;
+  /** Velocity of every awake body at the start of the current (sub)step, keyed by Jolt body id: what it hit with. */
+  private preStep = new Map<number, [Vec3, Vec3]>();
+  /** Stiffness of close magnetic pairs, measured at the start of each tick. */
+  private magnetStiffness = new Map<string, MagnetStiffness>();
+  private latches = new Map<string, MagnetLatch>();
+  private eddies: EddyElement[] = [];
+  private touches = new Map<string, MagnetTouch>();
+  /** Consecutive ticks each touching magnetic pair has been at rest in contact. */
+  private settled = new Map<string, number>();
   private contactListener: JoltNS.ContactListenerJS;
   // scratch objects (reused to avoid WASM allocations on hot paths)
   private v1: JoltNS.Vec3;
@@ -375,7 +474,14 @@ export class PhysicsWorld {
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
       case 'damage': return this.setDamage(op.id, op.damage);
       case 'room': return this.setRoom(op.surfaces);
-      case 'options': this.opts = { ...this.opts, ...(op.maxMagnetRings ? { maxMagnetRings: op.maxMagnetRings } : {}), ...(op.filterTicks ? { filterTicks: op.filterTicks } : {}) }; return;
+      case 'options':
+        this.opts = {
+          ...this.opts,
+          ...(op.maxMagnetRings ? { maxMagnetRings: op.maxMagnetRings } : {}),
+          ...(op.filterTicks ? { filterTicks: op.filterTicks } : {}),
+          ...(op.magnetLatch !== undefined ? { magnetLatch: op.magnetLatch } : {}),
+        };
+        return;
     }
   }
 
@@ -717,6 +823,7 @@ export class PhysicsWorld {
 
   /** Remove a part's bonds and bodies (slots and subgroups are released; the caller re-allocates). */
   private destroyPartBodies(pr: PartRec) {
+    for (const l of [...this.latches.values()]) if (l.a.pr === pr || l.b.pr === pr) this.unlatch(l);
     for (const b of pr.bonds) if (b) this.destroyBond(b);
     pr.bonds = [];
     for (const key of pr.heldPairs) this.releasePair(key);
@@ -2051,7 +2158,8 @@ export class PhysicsWorld {
   // per-tick external effects
 
   private applyFields(dt: number) {
-    this.applyMagnets();
+    this.applyMagnets(dt);
+    this.applyEddies(dt);
     this.applyFluids(dt);
     if (this.sim.airDrag) this.applyAirDrag();
     this.applyBands();
@@ -2059,12 +2167,70 @@ export class PhysicsWorld {
     this.driveGrabs(dt);
   }
 
-  private applyMagnets() {
-    this.lastMagnetPairs = 0;
-    if (!this.sim.magnetism) return;
+  /**
+   * Stiffness of a magnetic pair, from `wrench(dx, rot)` (force and torque on the second body when it is moved by dx
+   * and turned by a small rotation): the Jacobians by central differences, their restoring parts (for the
+   * linearly implicit step, see implicit.ts) and the fastest rate at which the pair's motion evolves, growing or
+   * oscillating (s^-1), which sets how finely the tick must be divided to follow it.
+   */
+  /**
+   * Stiffness of a magnetic pair by central differences, with steps small against `feature` (the smallest magnet
+   * dimension). Central, not one-sided: at contact the pull changes steeply with position, and a forward difference
+   * of a force that is even in a sideways offset (the axial pull) reads a false coupling between the axes, whose
+   * implicit treatment then turns the pull into a sideways kick.
+   */
+  private pairStiffness(wrench: (dx: Vec3, rot: Vec3) => number[], A: BodyRec | null, B: BodyRec, feature: number): MagnetStiffness | null {
+    if (!B.Iloc) return null;
+    const h = Math.min(1e-4, 0.02 * feature), ha = 2e-3;
+    const Jt = [0, 0, 0, 0, 0, 0, 0, 0, 0], Jr = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      const dx: Vec3 = [0, 0, 0], rot: Vec3 = [0, 0, 0];
+      dx[i] = h;
+      rot[i] = ha;
+      const tp = wrench(dx, [0, 0, 0]), tm = wrench(scale(dx, -1), [0, 0, 0]);
+      const rp = wrench([0, 0, 0], rot), rm = wrench([0, 0, 0], scale(rot, -1));
+      for (let r = 0; r < 3; r++) {
+        Jt[r * 3 + i] = (tp[r]! - tm[r]!) / (2 * h);
+        Jr[r * 3 + i] = (rp[3 + r]! - rm[3 + r]!) / (2 * ha);
+      }
+    }
+    const aFree = !!A && !A.frozen && A.grabbed !== 'creative' && !!A.Iloc;
+    const mu = aFree ? (A!.mass * B.mass) / (A!.mass + B.mass) : B.mass;
+    const IB = worldInertia(B.Iloc, this.poseOf(B).q);
+    const Ired = aFree ? inverse3(inverse3(worldInertia(A!.Iloc!, this.poseOf(A!).q)).map((x, i) => x + inverse3(IB)[i]!)) : IB;
+    const sym = (J: number[]) => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => (J[i * 3 + j]! + J[j * 3 + i]!) / 2));
+    const kt = Math.max(...symmetricEigen3(sym(Jt)).values.map(Math.abs));
+    const kr = Math.max(...symmetricEigen3(sym(Jr)).values.map(Math.abs));
+    const Imin = Math.max(1e-12, Math.min(...symmetricEigen3(Ired).values));
+    return { Kt: restoringPart(Jt), Kr: restoringPart(Jr), mu, Ired, rate: Math.max(Math.sqrt(kt / mu), Math.sqrt(kr / Imin)) };
+  }
+
+  /** Force and torque on the second body of a magnetic pair over a (sub)step, implicit where it is stiff. */
+  private pairWrench(wrench: (dx: Vec3, rot: Vec3) => number[], A: BodyRec | null, B: BodyRec, k: MagnetStiffness | undefined, dt: number): { F: Vec3; T: Vec3 } {
+    const f = wrench([0, 0, 0], [0, 0, 0]);
+    const F: Vec3 = [f[0]!, f[1]!, f[2]!], T: Vec3 = [f[3]!, f[4]!, f[5]!];
+    if (!k) return { F, T };
+    const aFree = !!A && !A.frozen && A.grabbed !== 'creative';
+    const [vB, wB] = this.velocityOf(B);
+    const [vA, wA] = aFree ? this.velocityOf(A!) : [[0, 0, 0] as Vec3, [0, 0, 0] as Vec3];
+    const mu = k.mu;
+    return {
+      F: implicitForce([mu, 0, 0, 0, mu, 0, 0, 0, mu], k.Kt, F, sub(vB, vA), dt),
+      T: implicitForce(k.Ired, k.Kr, T, sub(wB, wA), dt),
+    };
+  }
+
+  /**
+   * The magnetic interactions at this instant: for each pair close enough to matter, the wrench on `b` (force, and
+   * torque about its centre) from `a` as a function of a small rigid displacement of b. Magnet pairs: a's pole faces
+   * act on samples of b's (b the smaller magnet, unless only a is free). Steel: a is the steel part, acting through
+   * the image of b's faces in its nearest face.
+   */
+  private magnetPairs(): MagnetPair[] {
+    const pairs: MagnetPair[] = [];
     const g = length(this.sim.gravity) || 9.81;
     const magnets = [...this.bodies.values()].filter((r) => r.magnet);
-    if (magnets.length === 0) return;
+    if (magnets.length === 0) return [];
     const ferro = [...this.bodies.values()].filter((r) => !r.magnet && r.material.ferromagnetic);
     const info = magnets.map((r) => {
       const pose = this.poseOf(r);
@@ -2072,8 +2238,23 @@ export class PhysicsWorld {
       const n = rotate(pose.q, [0, 1, 0]);
       const size = geom.shape === 'cylinder' ? geom.radius : Math.max(geom.w, geom.h) / 2;
       const vol = geom.shape === 'cylinder' ? Math.PI * geom.radius ** 2 * geom.length : geom.w * geom.h * geom.length;
-      return { r, pose, n, size, m: dipoleMoment(r.magnet!.Br, vol), bound: Math.hypot(size, geom.length / 2) };
+      const feature = Math.min(geom.shape === 'cylinder' ? geom.radius : Math.min(geom.w, geom.h) / 2, geom.length);
+      const face = geom.shape === 'cylinder' ? Math.PI * geom.radius ** 2 : geom.w * geom.h;
+      return { r, pose, n, size, feature, face, m: dipoleMoment(r.magnet!.Br, vol), bound: Math.hypot(size, geom.length / 2) };
     });
+    const facesCache = new Map<string, PoleFace[]>();
+    const facesOf = (k: (typeof info)[number]) => {
+      let f = facesCache.get(k.r.id);
+      if (!f) {
+        const geom = k.r.magnet!.geom;
+        const c = k.pose.p as MVec3;
+        f = geom.shape === 'cylinder'
+          ? cylinderFaces(c, k.n as MVec3, geom.radius, geom.length, k.r.magnet!.Br)
+          : blockFaces(c, k.n as MVec3, rotate(k.pose.q, [1, 0, 0]) as MVec3, rotate(k.pose.q, [0, 0, 1]) as MVec3, geom.w, geom.h, geom.length, k.r.magnet!.Br);
+        facesCache.set(k.r.id, f);
+      }
+      return f;
+    };
     const chargesCache = new Map<string, Charge[]>();
     const chargesOf = (k: (typeof info)[number], rings: number) => {
       const key = `${k.r.id}:${rings}`;
@@ -2095,23 +2276,28 @@ export class PhysicsWorld {
     // magnet <-> magnet
     for (let i = 0; i < info.length; i++) {
       for (let j = i + 1; j < info.length; j++) {
-        const A = info[i]!, B = info[j]!;
+        let A = info[i]!, B = info[j]!;
         if (A.r.frozen && B.r.frozen) continue;
-        const dvec = sub(B.pose.p, A.pose.p);
-        const dist = length(dvec);
+        if (A.face < B.face) [A, B] = [B, A];
+        if (B.r.frozen) [A, B] = [B, A];
+        const dist = length(sub(B.pose.p, A.pose.p));
         const light = Math.min(A.r.frozen ? Infinity : A.r.mass, B.r.frozen ? Infinity : B.r.mass);
         // Cutoff where the dipole force drops below 0.1% of the lighter magnet's weight.
         const cutoff = Math.pow((3 * MU0 * A.m * B.m) / (2 * Math.PI * 0.001 * light * g), 0.25);
         if (dist > cutoff) continue;
         const gap = Math.max(0, dist - A.bound - B.bound);
-        const rings = Math.min(this.opts.maxMagnetRings, ringsForGap(gap, Math.min(A.size, B.size)));
-        const f = chargeInteraction(chargesOf(A, rings), chargesOf(B, rings), B.pose.p as MVec3);
-        const F: Vec3 = [f[0]!, f[1]!, f[2]!];
-        const TB: Vec3 = [f[3]!, f[4]!, f[5]!];
-        const TA = sub(scale(TB, -1), cross(dvec, F));
-        this.applyForceTorque(B.r, F, TB);
-        this.applyForceTorque(A.r, scale(F, -1), TA);
-        this.lastMagnetPairs++;
+        const level = ringLevel(gap, Math.min(A.size, B.size), this.opts.maxMagnetRings);
+        const towards = dot(A.n, sub(B.pose.p, A.pose.p)) >= 0 ? A.n : scale(A.n, -1);
+        pairs.push({
+          key: `${A.r.id}|${B.r.id}`, a: A.r, b: B.r,
+          face: { n: towards, p: add(A.pose.p, scale(towards, A.r.magnet!.geom.length / 2)) },
+          // close pairs are stiff (a small magnet near another flips or wobbles within milliseconds); far ones are not
+          close: gap < 4 * Math.min(A.size, B.size), feature: Math.min(A.feature, B.feature),
+          wrench: (dx, rot) => blendedInteraction(level, (rings) => {
+            const chB = dx[0] || dx[1] || dx[2] || rot[0] || rot[1] || rot[2] ? transformCharges(chargesOf(B, rings), B.pose.p as MVec3, dx as MVec3, rot as MVec3) : chargesOf(B, rings);
+            return magnetWrench(facesOf(A), chB, add(B.pose.p, dx) as MVec3);
+          }),
+        });
       }
     }
     // magnet <-> ferromagnetic parts (method of images on the nearest steel face)
@@ -2127,24 +2313,388 @@ export class PhysicsWorld {
         const o = add(sp.p, rotate(sp.q, hit.p));
         const nrm = normalize(rotate(sp.q, hit.n));
         const gap = Math.max(0, hit.d - M.bound);
-        const rings = Math.min(this.opts.maxMagnetRings, ringsForGap(gap, M.size));
+        const level = ringLevel(gap, M.size, this.opts.maxMagnetRings);
         const geom = M.r.magnet!.geom;
         const poleArea = geom.shape === 'cylinder' ? Math.PI * geom.radius ** 2 : geom.w * geom.h;
         const polePerimeter = geom.shape === 'cylinder' ? 2 * Math.PI * geom.radius : 2 * (geom.w + geom.h);
         const factor = 0.95 * plateSaturationFactor(S.dims.b, M.r.magnet!.Br, poleArea, polePerimeter);
-        const mc = chargesOf(M, rings);
-        const img = imageCharges(mc, o as MVec3, nrm as MVec3, factor);
-        const f = chargeInteraction(img, mc, M.pose.p as MVec3);
-        const F: Vec3 = [f[0]!, f[1]!, f[2]!];
-        this.applyForceTorque(M.r, F, [f[3]!, f[4]!, f[5]!]);
-        if (!S.frozen) {
-          this.v1.Set(-F[0], -F[1], -F[2]);
-          this.r1.Set(...o);
-          this.bi.AddForce(S.body.GetID(), this.v1, this.r1, this.J.EActivation_Activate);
-        }
-        this.lastMagnetPairs++;
+        pairs.push({
+          key: `${S.id}|${M.r.id}`, a: S, b: M.r, face: { n: nrm, p: o },
+          close: gap < 4 * M.size, feature: M.feature,
+          wrench: (dx, rot) => blendedInteraction(level, (rings) => {
+            const moved = dx[0] || dx[1] || dx[2] || rot[0] || rot[1] || rot[2];
+            const mc = moved ? transformCharges(chargesOf(M, rings), M.pose.p as MVec3, dx as MVec3, rot as MVec3) : chargesOf(M, rings);
+            const mf = moved ? transformFaces(facesOf(M), M.pose.p as MVec3, dx as MVec3, rot as MVec3) : facesOf(M);
+            return magnetWrench(imageFaces(mf, o as MVec3, nrm as MVec3, factor), mc, add(M.pose.p, dx) as MVec3);
+          }),
+        });
       }
     }
+    return pairs;
+  }
+
+  /**
+   * Magnetic forces. `estimate` (once per tick, before stepping) measures the stiffness of close pairs and returns
+   * how many substeps the tick needs to follow them (a 20 mm magnet near another flips in a few milliseconds);
+   * otherwise it applies the forces for a (sub)step of length dt, implicitly on the stiff pairs' restoring part.
+   * Latched pairs are skipped: their latch stands for the force (see updateLatches).
+   */
+  private applyMagnets(dt: number, estimate = false): number {
+    if (!estimate) this.lastMagnetPairs = 0;
+    else this.magnetStiffness.clear();
+    if (!this.sim.magnetism) return 1;
+    let rate = 0;
+    for (const pr of this.magnetPairs()) {
+      if (this.latches.has(pr.key)) continue;
+      if (estimate) {
+        if (pr.close && !pr.b.frozen) {
+          const k = this.pairStiffness(pr.wrench, pr.a, pr.b, pr.feature);
+          if (k) { this.magnetStiffness.set(pr.key, k); rate = Math.max(rate, k.rate); }
+        }
+        continue;
+      }
+      const { F, T } = this.pairWrench(pr.wrench, pr.a, pr.b, this.magnetStiffness.get(pr.key), dt);
+      this.applyForceTorque(pr.b, F, T);
+      // the reaction on a is exactly opposite, with the moment of the couple, so momentum and angular momentum hold
+      const d = sub(this.poseOf(pr.b).p, this.poseOf(pr.a).p);
+      this.applyForceTorque(pr.a, scale(F, -1), sub(scale(T, -1), cross(d, F)));
+      this.lastMagnetPairs++;
+    }
+    return estimate ? Math.max(1, Math.min(MAX_MAGNET_SUBSTEPS, Math.ceil((rate * TICK) / 0.5))) : 1;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // eddy currents (M4 in docs/ARCHITECTURE.md)
+
+  /** Pole faces of a magnet body at a pose. */
+  private magnetFacesOf(r: BodyRec, pose: Pose): PoleFace[] {
+    const g = r.magnet!.geom;
+    const n = rotate(pose.q, [0, 1, 0]) as MVec3;
+    return g.shape === 'cylinder'
+      ? cylinderFaces(pose.p as MVec3, n, g.radius, g.length, r.magnet!.Br)
+      : blockFaces(pose.p as MVec3, n, rotate(pose.q, [1, 0, 0]) as MVec3, rotate(pose.q, [0, 0, 1]) as MVec3, g.w, g.h, g.length, r.magnet!.Br);
+  }
+
+  /**
+   * Finite-volume mesh (world space) of the part of conductor C within `reach` of the local point `near`: a whole
+   * magnet, a box, a cylinder, or a tube (its ring of staves meshed as the annulus it is, so currents circulate).
+   */
+  private conductorMesh(C: BodyRec, near: Vec3, reach: number): EddyMesh | null {
+    const pose = this.poseOf(C);
+    const win = { lo: sub(near, [reach, reach, reach]) as Vec3, hi: add(near, [reach, reach, reach]) as Vec3 };
+    let mesh: EddyMesh | null = null;
+    const g = C.magnet?.geom, sh = C.shape;
+    if (g) mesh = g.shape === 'cylinder' ? annulusMesh(g.radius, 0, g.length / 2, null, 96, 3, 16) : boxMesh([g.w / 2, g.length / 2, g.h / 2], null, 96);
+    else if (sh.type === 'box') mesh = boxMesh(sh.half, win, 240);
+    else if (sh.type === 'cylinder') mesh = annulusMesh(sh.radius, 0, sh.halfHeight, win, 240);
+    else if (sh.type === 'compound' && sh.children.length >= 6 && sh.children.every((c) => c.shape.type === 'box' && Math.abs(c.p[1]) < 1e-9)) {
+      // a tube's ring of staves: radius of the stave centres, wall = stave thickness
+      const rc = Math.hypot(sh.children[0]!.p[0], sh.children[0]!.p[2]);
+      const b0 = sh.children[0]!.shape as { type: 'box'; half: Vec3 };
+      if (sh.children.every((c) => Math.abs(Math.hypot(c.p[0], c.p[2]) - rc) < 1e-6 * Math.max(rc, 1))) {
+        mesh = annulusMesh(rc + b0.half[0], Math.max(0, rc - b0.half[0]), b0.half[1], win, 240);
+      }
+    }
+    return mesh ? placeMesh(mesh, pose.p, (v) => rotate(pose.q, v) as Vec3) : null;
+  }
+
+  /**
+   * Before stepping: the damping of every good conductor close to a moving magnet, for the tick (the geometry barely
+   * moves in it). In scope: non-magnetic metals of at least EDDY_MIN_SIGMA (aluminium, copper, brass), where Lenz
+   * braking is strong and the free-space field is the true one. A magnet's own currents (NdFeB, 0.67 MS/m) damp it at
+   * about 2 s^-1 and are left out, as is steel, whose permeability this field does not model (M4).
+   */
+  private estimateEddies() {
+    this.eddies = [];
+    if (!this.sim.magnetism) return;
+    const magnets = [...this.bodies.values()].filter((r) => r.magnet);
+    if (!magnets.length) return;
+    const conductors = [...this.bodies.values()].filter((r) => !r.magnet && !r.material.ferromagnetic && r.material.conductivity >= EDDY_MIN_SIGMA);
+    if (!conductors.length) return;
+    const MU0 = 4e-7 * Math.PI;
+    const field = (faces: PoleFace[], mesh: EddyMesh) => {
+      const h = Math.cbrt(mesh.cells[0]!.vol);
+      return mesh.cells.map((c) => {
+        let b: Vec3 = [0, 0, 0];
+        for (const f of faces) { const x = faceField(f, c.p as MVec3, h); b = [b[0] + MU0 * x[0], b[1] + MU0 * x[1], b[2] + MU0 * x[2]]; }
+        return b;
+      });
+    };
+    for (const M of magnets) {
+      const poseM = this.poseOf(M);
+      const [vM, wM] = this.velocityOf(M);
+      const g = M.magnet!.geom;
+      const bound = Math.hypot(g.shape === 'cylinder' ? g.radius : Math.hypot(g.w, g.h) / 2, g.length / 2);
+      let facesM: PoleFace[] | null = null;
+      for (const C of conductors) {
+        if (M.frozen && C.frozen) continue;
+        const poseC = this.poseOf(C);
+        const local = rotate(quatConj(poseC.q), sub(poseM.p, poseC.p));
+        const hit = closestOnShape(C.shape, local);
+        // the dissipation density falls as r^-6, its integral beyond six sizes is under 1%
+        if (hit.d > 6 * bound) continue;
+        // at rest relative to each other nothing is induced
+        const [vC, wC] = this.velocityOf(C);
+        const slip = sub(sub(vM, vC), cross(wC, sub(poseM.p, poseC.p)));
+        if (length(slip) + length(sub(wM, wC)) * bound < EDDY_MIN_SPEED) continue;
+        // mesh the conductor out to three times its distance from the magnet (a tube: +-3 radii along its axis)
+        const mesh = this.conductorMesh(C, local, Math.max(2 * bound, 3 * (Math.max(0, hit.d) + bound)));
+        if (!mesh) continue;
+        facesM ??= this.magnetFacesOf(M, poseM);
+        this.eddies.push({ S: M, C, D: eddyDamping(mesh, C.material.conductivity, field(facesM, mesh), rigidBasis(poseM.p)) });
+      }
+    }
+  }
+
+  /** Inverse generalised mass (6 x 6) of a body about its centre, or zeros if it does not move. */
+  private inverseMass6(r: BodyRec): number[] {
+    const out = new Array<number>(36).fill(0);
+    if (r.frozen || r.grabbed === 'creative' || !r.Iloc) return out;
+    for (let i = 0; i < 3; i++) out[i * 6 + i] = 1 / r.mass;
+    const Iinv = inverse3(worldInertia(r.Iloc, this.poseOf(r).q));
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) out[(3 + i) * 6 + 3 + j] = Iinv[i * 3 + j]!;
+    return out;
+  }
+
+  /**
+   * Apply the eddy drag for a (sub)step, implicitly: q' = (I + dt Minv D)^-1 q, drag -D q' on C and its reaction on S.
+   * q is C's velocity relative to S, at S's centre; Minv maps a wrench there to that relative velocity.
+   */
+  private applyEddies(dt: number) {
+    for (const e of this.eddies) {
+      const pC = this.poseOf(e.C).p, pS = this.poseOf(e.S).p;
+      const d = sub(pS, pC); // from C's centre to the reference point
+      const [vC, wC] = this.velocityOf(e.C), [vS, wS] = this.velocityOf(e.S);
+      const q = [...sub(add(vC, cross(wC, d)), vS), ...sub(wC, wS)];
+      // C's own motion maps to q through J = [[I, -[d]x], [0, I]]
+      const J = new Array<number>(36).fill(0);
+      for (let i = 0; i < 6; i++) J[i * 6 + i] = 1;
+      const dx = [[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) J[i * 6 + 3 + j] = -dx[i]![j]!;
+      const MC = this.inverseMass6(e.C), Minv = this.inverseMass6(e.S);
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+        let s = 0;
+        for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) s += J[i * 6 + a]! * MC[a * 6 + b]! * J[j * 6 + b]!;
+        Minv[i * 6 + j] += s;
+      }
+      const A = new Array<number>(36).fill(0);
+      for (let i = 0; i < 6; i++) {
+        A[i * 6 + i] = 1;
+        for (let j = 0; j < 6; j++) for (let k = 0; k < 6; k++) A[i * 6 + j] += dt * Minv[i * 6 + k]! * e.D[k * 6 + j]!;
+      }
+      const qn = solveDense(A, q, 6);
+      const W = [0, 1, 2, 3, 4, 5].map((i) => -e.D.slice(i * 6, i * 6 + 6).reduce((s, v, j) => s + v * qn[j]!, 0));
+      const F: Vec3 = [W[0]!, W[1]!, W[2]!], T: Vec3 = [W[3]!, W[4]!, W[5]!];
+      // the wrench acts about the reference point: on C that is T + d x F about its own centre
+      this.applyForceTorque(e.C, F, add(T, cross(d, F)));
+      this.applyForceTorque(e.S, scale(F, -1), scale(T, -1));
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // magnetic latches
+  //
+  // A small magnet stuck to another is pulled into it at thousands of g: resolved as a force against a contact,
+  // every substep hands the contact solver an impulse many times the magnet's momentum, and the residual rocks and
+  // flings it. A real stuck pair is simply rigid until the load on its contact is more than the magnet can hold, so
+  // once a touching pair comes to rest it is latched: held rigidly, its magnetic wrench no longer applied but kept as
+  // what the contact must balance. Each tick the latch's reaction (what holds the pair together against everything
+  // else) minus that wrench is the force and moment the contact would carry, and the contact holds only while it
+  // presses (N > 0), friction holds (shear <= mu N, twist <= mu N r), and the pressure stays within the touching
+  // footprint (moment <= N times the footprint's reach on the side it tips towards). Otherwise the latch lets go and
+  // the pair moves under its magnetic force again: it is pulled off, slides, twists or tips over as the real one would.
+
+  /** Remember a touching contact between a magnet and a steel part or another magnet (from the contact listener). */
+  private recordMagnetTouch(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, settings: JoltNS.ContactSettings) {
+    if (!this.sim.magnetism) return;
+    const r1 = this.recOf(b1), r2 = this.recOf(b2);
+    if (!r1 || !r2 || !(r1.magnet || r2.magnet)) return;
+    if (!(r1.magnet || r1.material.ferromagnetic) || !(r2.magnet || r2.material.ferromagnetic)) return;
+    const nn = man.mWorldSpaceNormal;
+    const n: Vec3 = [nn.GetX(), nn.GetY(), nn.GetZ()];
+    const points: Vec3[] = [];
+    const count = man.mRelativeContactPointsOn1.size();
+    for (let i = 0; i < count; i++) {
+      const c1 = man.GetWorldSpaceContactPointOn1(i), c2 = man.GetWorldSpaceContactPointOn2(i);
+      const p1: Vec3 = [c1.GetX(), c1.GetY(), c1.GetZ()], p2: Vec3 = [c2.GetX(), c2.GetY(), c2.GetZ()];
+      // separation along the normal (negative when penetrating)
+      if (dot(sub(p2, p1), n) > LATCH_TOUCH) continue;
+      points.push(scale(add(p1, p2), 0.5));
+    }
+    if (!points.length) return;
+    this.touches.set(r1.id < r2.id ? `${r1.id}|${r2.id}` : `${r2.id}|${r1.id}`, { r1, n, points, friction: settings.mCombinedFriction });
+  }
+
+  /** After the step: let go of latches whose contact cannot hold, and latch pairs that have come to rest touching. */
+  private updateLatches(dt: number) {
+    if (!this.sim.magnetism || !this.opts.magnetLatch) {
+      for (const l of [...this.latches.values()]) this.unlatch(l);
+      this.settled.clear();
+      return;
+    }
+    const inv = this.lastSubsteps / dt;
+    for (const l of [...this.latches.values()]) {
+      l.over = this.latchHolds(l, inv) ? 0 : l.over + 1;
+      if (l.over >= this.opts.filterTicks) this.unlatch(l);
+    }
+    if (!this.touches.size) { this.settled.clear(); return; }
+    const settled = new Map<string, number>();
+    for (const pr of this.magnetPairs()) {
+      if (this.latches.has(pr.key) || pr.b.frozen || pr.b.grabbed === 'creative') continue;
+      const t = this.touches.get(pr.a.id < pr.b.id ? `${pr.a.id}|${pr.b.id}` : `${pr.b.id}|${pr.a.id}`);
+      if (!t) continue;
+      const n = t.r1 === pr.a ? t.n : scale(t.n, -1); // from a towards b
+      const c = scale(t.points.reduce((acc, q) => add(acc, q), [0, 0, 0] as Vec3), 1 / t.points.length);
+      const [va, wa] = this.velocityOf(pr.a), [vb, wb] = this.velocityOf(pr.b);
+      const pa = this.poseOf(pr.a).p, pb = this.poseOf(pr.b).p;
+      // the touching edge must be at rest on the face (a magnet still rocking on its rim is fine: it clacks flat)
+      const slip = sub(add(vb, cross(wb, sub(c, pb))), add(va, cross(wa, sub(c, pa))));
+      const reach = pr.feature + length(sub(c, pb));
+      if (length(slip) > LATCH_SPEED || length(sub(wb, wa)) * reach > LATCH_WOBBLE) continue;
+      const count = (this.settled.get(pr.key) ?? 0) + 1;
+      settled.set(pr.key, count);
+      if (count < LATCH_SETTLE_TICKS) continue;
+      const seat = this.seatedContact(pr, c, n, t.points);
+      // the magnetic wrench on b as seated, about the footprint's centroid
+      const w = pr.wrench(seat.dx, seat.rot);
+      const at = add(pb, seat.dx);
+      const Fm: Vec3 = [w[0]!, w[1]!, w[2]!];
+      const Tm = add([w[3]!, w[4]!, w[5]!] as Vec3, cross(sub(at, seat.c), Fm));
+      // hold only what the contact can: against the magnet's pull and b's own weight (as the latch will carry it)
+      const weight = scale(this.sim.gravity, pr.b.mass);
+      if (this.contactHolds(scale(weight, -1), cross(sub(at, seat.c), scale(weight, -1)), Fm, Tm, seat.c, seat.n, seat.points, t.friction)) continue;
+      this.latch(pr, seat, Fm, Tm, t.friction);
+      settled.delete(pr.key);
+    }
+    this.settled = settled;
+  }
+
+  /**
+   * Where a touching magnet comes to rest. A pole face within SEAT_ANGLE of flush with the face it touches (a's pole
+   * face, or the steel's surface) turns flat about its touching edge and lies on that face, as the real magnet
+   * clacks down within milliseconds; the contact is then the overlap of the two faces. Otherwise (a magnet on its
+   * side, or against an edge) it stays as it touches, over its touching points. Returns b's move to that pose
+   * (translation dx, rotation rot about its centre; q the same rotation), the contact normal (a to b), the footprint
+   * and its centroid.
+   */
+  private seatedContact(pr: MagnetPair, touch: Vec3, jn: Vec3, touching: Vec3[]) {
+    const mean = (ps: Vec3[]) => scale(ps.reduce((acc, q) => add(acc, q), [0, 0, 0] as Vec3), 1 / ps.length);
+    const none = { dx: [0, 0, 0] as Vec3, rot: [0, 0, 0] as Vec3, q: [0, 0, 0, 1] as Quat, n: jn, c: mean(touching), points: touching };
+    const geomB = pr.b.magnet?.geom;
+    if (!geomB || dot(jn, pr.face.n) < Math.cos(SEAT_ANGLE * 1.5)) return none;
+    const n = pr.face.n;
+    const poseB = this.poseOf(pr.b);
+    const axis = rotate(poseB.q, [0, 1, 0]);
+    const o = dot(axis, n) < 0 ? axis : scale(axis, -1); // b's pole face turned towards a
+    const down = scale(n, -1);
+    const theta = Math.acos(Math.max(-1, Math.min(1, dot(o, down))));
+    if (theta > SEAT_ANGLE) return none;
+    const k = cross(o, down);
+    const kl = length(k);
+    const rot: Vec3 = kl > 1e-9 ? scale(k, theta / kl) : [0, 0, 0];
+    const q = quatFromRotationVector(rot);
+    // turn about the touching edge, then lie on the face plane (no gap, no penetration)
+    let centre = add(touch, rotate(q, sub(poseB.p, touch)));
+    const faceB = add(centre, scale(down, geomB.length / 2));
+    centre = add(centre, scale(n, dot(sub(pr.face.p, faceB), n)));
+    const faceC = add(centre, scale(down, geomB.length / 2));
+    // footprint in the face plane: b's face, clipped to a's pole face when a is a magnet
+    const [e1, e2] = tangents(n);
+    const toPlane = (p: Vec3): [number, number] => [dot(sub(p, faceC), e1), dot(sub(p, faceC), e2)];
+    const outline = (q0: Quat, geom: MagnetGeometry, face: Vec3): [number, number][] => {
+      if (geom.shape === 'cylinder') {
+        const fc = toPlane(face);
+        return Array.from({ length: 16 }, (_, i) => [fc[0] + geom.radius * Math.cos((i * Math.PI) / 8), fc[1] + geom.radius * Math.sin((i * Math.PI) / 8)] as [number, number]);
+      }
+      const t1 = rotate(q0, [1, 0, 0]), t2 = rotate(q0, [0, 0, 1]);
+      return [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => toPlane(add(face, add(scale(t1, (u! * geom.w) / 2), scale(t2, (v! * geom.h) / 2)))));
+    };
+    let poly = ccw(outline(quatMul(q, poseB.q), geomB, faceC));
+    const geomA = pr.a.magnet?.geom;
+    if (geomA) poly = clipConvex(poly, ccw(outline(this.poseOf(pr.a).q, geomA, pr.face.p)));
+    const dx = sub(centre, poseB.p);
+    if (poly.length < 3) return { ...none, dx, rot, q, n };
+    const points = poly.map(([u, v]) => add(faceC, add(scale(e1, u), scale(e2, v))));
+    return { dx, rot, q, n, c: polygonCentroid(poly, faceC, e1, e2), points };
+  }
+
+  /**
+   * Can a contact carry what a latch holds? FL, TL: the latch's reaction on b (TL about the centroid c); Fm, Tm: the
+   * magnetic wrench on b (Tm about c); n from a to b; footprint points. Returns why not, or null if it holds.
+   */
+  private contactHolds(FL: Vec3, TL: Vec3, Fm: Vec3, Tm: Vec3, c: Vec3, n: Vec3, points: Vec3[], mu: number): string | null {
+    // what the contact carries: the latch holds b against everything else, and the magnet pulls it in
+    const Fc = sub(FL, Fm), Mc = sub(TL, Tm);
+    const N = dot(Fc, n);
+    if (N <= 0) return 'pulled off';
+    if (length(sub(Fc, scale(n, N))) > mu * N) return 'slid';
+    const twist = dot(Mc, n);
+    const rf = (2 / 3) * Math.max(...points.map((p) => length(sub(sub(p, c), scale(n, dot(sub(p, c), n))))));
+    if (Math.abs(twist) > mu * N * rf) return 'twisted';
+    // the pressure's resultant acts at c + d with d = n x Mt / N, which must lie within the footprint
+    const Mt = sub(Mc, scale(n, twist));
+    const m = length(Mt);
+    if (m > 1e-12) {
+      const e = cross(n, scale(Mt, 1 / m));
+      const reach = Math.max(0, ...points.map((p) => dot(sub(p, c), e)));
+      if (m > N * reach) return 'tipped';
+    }
+    return null;
+  }
+
+  /**
+   * Hold b to a at its seated pose: the constraint's frame on a is the contact frame, and its frame on b is where
+   * that frame sits on b now, so the solver turns b the last few degrees flat (a position correction, no energy).
+   * Everything the latch checks is kept in a's frame, as seated.
+   */
+  private latch(pr: MagnetPair, seat: { dx: Vec3; q: Quat; n: Vec3; c: Vec3; points: Vec3[] }, Fm: Vec3, Tm: Vec3, mu: number) {
+    const J = this.J;
+    const back = quatConj(seat.q);
+    const pb = this.poseOf(pr.b).p;
+    // the point of b, as it is now, that the seating brings to the contact centroid
+    const onB = add(pb, rotate(back, sub(seat.c, add(pb, seat.dx))));
+    const s = new J.SixDOFConstraintSettings();
+    s.mPosition1 = this.R(seat.c);
+    s.mAxisX1 = this.V([1, 0, 0]);
+    s.mAxisY1 = this.V([0, 1, 0]);
+    s.mPosition2 = this.R(onB);
+    s.mAxisX2 = this.V(rotate(back, [1, 0, 0]));
+    s.mAxisY2 = this.V(rotate(back, [0, 1, 0]));
+    for (let a = 0; a < 6; a++) s.MakeFixedAxis(a as JoltNS.SixDOFConstraintSettings_EAxis);
+    const constraint = s.Create(pr.a.body, pr.b.body);
+    J.destroy(s);
+    this.ps.AddConstraint(constraint);
+    const qa = quatConj(this.poseOf(pr.a).q), pa = this.poseOf(pr.a).p;
+    const toA = (v: Vec3) => rotate(qa, v);
+    this.latches.set(pr.key, {
+      key: pr.key, a: pr.a, b: pr.b, constraint, typed: J.castObject(constraint, J.SixDOFConstraint),
+      pairKey: this.holdPair(pr.a.subgroup, pr.b.subgroup),
+      c: toA(sub(seat.c, pa)), n: toA(seat.n), points: seat.points.map((p) => toA(sub(p, pa))), Fm: toA(Fm), Tm: toA(Tm), mu, over: 0,
+    });
+    this.bi.ActivateBody(pr.b.body.GetID());
+  }
+
+  private latchHolds(l: MagnetLatch, inv: number): boolean {
+    const pose = this.poseOf(l.a);
+    const w = (v: Vec3) => rotate(pose.q, v);
+    const c = add(pose.p, w(l.c));
+    const lp = l.typed.GetTotalLambdaPosition(), lr = l.typed.GetTotalLambdaRotation();
+    const FL: Vec3 = [lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv];
+    const TL: Vec3 = [lr.GetX() * inv, lr.GetY() * inv, lr.GetZ() * inv];
+    return this.contactHolds(FL, TL, w(l.Fm), w(l.Tm), c, w(l.n), l.points.map((p) => add(pose.p, w(p))), l.mu) === null;
+  }
+
+  private unlatch(l: MagnetLatch) {
+    this.ps.RemoveConstraint(l.constraint);
+    this.releasePair(l.pairKey);
+    this.latches.delete(l.key);
+    this.bi.ActivateBody(l.b.body.GetID());
+    if (!l.a.frozen) this.bi.ActivateBody(l.a.body.GetID());
+  }
+
+  /** Magnetic latches holding (tests, stats). */
+  magnetLatchCount() {
+    return this.latches.size;
   }
 
   private applyForceTorque(r: BodyRec, F: Vec3, T: Vec3) {
@@ -2286,6 +2836,37 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // stepping
 
+  private cachePreStepVelocities() {
+    this.preStep.clear();
+    for (const r of this.bodies.values()) {
+      if (r.frozen || !r.body.IsActive()) continue;
+      const lv = r.body.GetLinearVelocity(), av = r.body.GetAngularVelocity();
+      this.preStep.set(r.body.GetID().GetIndexAndSequenceNumber(), [[lv.GetX(), lv.GetY(), lv.GetZ()], [av.GetX(), av.GetY(), av.GetZ()]]);
+    }
+  }
+
+  /** A body's velocity at a point as the step began (before this step's forces): 0 for anything that was at rest. */
+  private preStepPointVelocity(b: JoltNS.Body, p: Vec3): Vec3 {
+    const v = this.preStep.get(b.GetID().GetIndexAndSequenceNumber());
+    if (!v) return [0, 0, 0];
+    const com = b.GetCenterOfMassPosition();
+    const wr = cross(v[1], [p[0] - com.GetX(), p[1] - com.GetY(), p[2] - com.GetZ()]);
+    return [v[0][0] + wr[0], v[0][1] + wr[1], v[0][2] + wr[2]];
+  }
+
+  /**
+   * How fast two bodies were closing at a contact before this step's forces acted, m/s (positive = closing).
+   * Restitution belongs to an impact: a body pressed onto a surface by a force (a magnet, strong gravity, a hand)
+   * picks up closing speed within the step, and treating that as an impact bounces it off before it ever touches.
+   */
+  private impactSpeed(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold): number {
+    const n = man.mWorldSpaceNormal;
+    const cp = man.GetWorldSpaceContactPointOn1(0);
+    const point: Vec3 = [cp.GetX(), cp.GetY(), cp.GetZ()];
+    const rel = sub(this.preStepPointVelocity(b2, point), this.preStepPointVelocity(b1, point));
+    return -(rel[0] * n.GetX() + rel[1] * n.GetY() + rel[2] * n.GetZ());
+  }
+
   private substepsNeeded(): number {
     let n = 1;
     for (const c of this.conns.values()) {
@@ -2305,12 +2886,22 @@ export class PhysicsWorld {
   step(): StepResult {
     const t0 = performance.now();
     const dt = TICK;
-    this.applyFields(dt);
+    // Fields act as forces over a step. Magnets close together move faster than a tick can follow, so then the
+    // tick is divided and every field recomputed for each part of it.
+    const k = this.applyMagnets(dt, true);
+    this.estimateEddies();
     const n = this.substepsNeeded();
-    this.lastSubsteps = n;
+    const per = Math.max(1, Math.ceil(n / k));
+    this.lastSubsteps = k * per;
     this.prepareClusters();
-    this.jolt.Step(dt, n);
+    this.touches.clear();
+    for (let s = 0; s < k; s++) {
+      this.applyFields(dt / k);
+      this.cachePreStepVelocities();
+      this.jolt.Step(dt / k, per);
+    }
     this.solveAssemblies(dt);
+    this.updateLatches(dt);
     this.time += dt;
     this.ticks++;
     this.evaluateConnections(dt, n);
@@ -2531,23 +3122,27 @@ export class PhysicsWorld {
     const listener = new J.ContactListenerJS();
     listener.OnContactValidate = () => J.ValidateResult_AcceptAllContactsForThisBodyPair;
     listener.OnContactPersisted = (b1p: number, b2p: number, manp: number, setp: number) => {
-      if (!this.watch.size) return;
-      this.recordContact(J.wrapPointer(b1p, J.Body), J.wrapPointer(b2p, J.Body), J.wrapPointer(manp, J.ContactManifold), J.wrapPointer(setp, J.ContactSettings));
+      const b1 = J.wrapPointer(b1p, J.Body), b2 = J.wrapPointer(b2p, J.Body);
+      const man = J.wrapPointer(manp, J.ContactManifold), settings = J.wrapPointer(setp, J.ContactSettings);
+      if (this.impactSpeed(b1, b2, man) < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
+      if (this.watch.size) this.recordContact(b1, b2, man, settings);
+      this.recordMagnetTouch(b1, b2, man, settings);
     };
     listener.OnContactRemoved = () => {};
     listener.OnContactAdded = (b1p: number, b2p: number, manp: number, setp: number) => {
       const b1 = J.wrapPointer(b1p, J.Body);
       const b2 = J.wrapPointer(b2p, J.Body);
       const man = J.wrapPointer(manp, J.ContactManifold);
-      if (this.watch.size) this.recordContact(b1, b2, man, J.wrapPointer(setp, J.ContactSettings));
+      const settings = J.wrapPointer(setp, J.ContactSettings);
+      const speed = Math.max(0, this.impactSpeed(b1, b2, man));
+      if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
+      if (this.watch.size) this.recordContact(b1, b2, man, settings);
+      this.recordMagnetTouch(b1, b2, man, settings);
       if (this.events.length > 48) return;
       const n = man.mWorldSpaceNormal;
       const normal: Vec3 = [n.GetX(), n.GetY(), n.GetZ()];
       const cp = man.GetWorldSpaceContactPointOn1(0);
       const point: Vec3 = [cp.GetX(), cp.GetY(), cp.GetZ()];
-      const v1 = bodyPointVelocity(b1, point);
-      const v2 = bodyPointVelocity(b2, point);
-      const speed = Math.abs(dot(sub(v2, v1), normal));
       if (speed < 0.25) return;
       const im1 = b1.IsStatic() || b1.IsKinematic() ? 0 : b1.GetMotionProperties().GetInverseMass();
       const im2 = b2.IsStatic() || b2.IsKinematic() ? 0 : b2.GetMotionProperties().GetInverseMass();
@@ -2627,16 +3222,6 @@ function partIdOf(entry: BodyRec | PartRec | null | undefined): string | null {
   return 'segs' in entry ? entry.id : entry.partId;
 }
 
-function bodyPointVelocity(b: JoltNS.Body, p: Vec3): Vec3 {
-  if (b.IsStatic()) return [0, 0, 0];
-  const lv = b.GetLinearVelocity();
-  const av = b.GetAngularVelocity();
-  const com = b.GetCenterOfMassPosition();
-  const r: Vec3 = [p[0] - com.GetX(), p[1] - com.GetY(), p[2] - com.GetZ()];
-  const w: Vec3 = [av.GetX(), av.GetY(), av.GetZ()];
-  const wr = cross(w, r);
-  return [lv.GetX() + wr[0], lv.GetY() + wr[1], lv.GetZ() + wr[2]];
-}
 
 /** Which DOFs a joint to an immovable support holds: point directions and rotation directions (projectors). */
 function anchorDofs(model: string, axis: Vec3): { point: number[]; rot: number[] } {
@@ -2666,4 +3251,47 @@ function fmtLoad(mode: string, n: number) {
   if (mode !== 'bending' && mode !== 'torsion') return fmtN(n);
   if (!Number.isFinite(n)) return '∞';
   return n >= 1000 ? `${(n / 1000).toFixed(2)} kN·m` : n >= 10 ? `${n.toFixed(0)} N·m` : `${n.toFixed(2)} N·m`;
+}
+
+/** Area centroid of a 2-D polygon, mapped back to 3-D from origin o along e1, e2. */
+function polygonCentroid(poly: [number, number][], o: Vec3, e1: Vec3, e2: Vec3): Vec3 {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i]!, [x1, y1] = poly[(i + 1) % poly.length]!;
+    const w = x0 * y1 - x1 * y0;
+    a += w; cx += (x0 + x1) * w; cy += (y0 + y1) * w;
+  }
+  if (Math.abs(a) < 1e-18) return o;
+  return add(o, add(scale(e1, cx / (3 * a)), scale(e2, cy / (3 * a))));
+}
+
+/** A 2-D polygon wound counter-clockwise. */
+function ccw(poly: [number, number][]): [number, number][] {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i]!, [x1, y1] = poly[(i + 1) % poly.length]!;
+    a += x0 * y1 - x1 * y0;
+  }
+  return a < 0 ? [...poly].reverse() : poly;
+}
+
+/** Intersection of two convex counter-clockwise polygons (Sutherland-Hodgman). */
+function clipConvex(subject: [number, number][], clip: [number, number][]): [number, number][] {
+  let out = subject;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const [ax, ay] = clip[i]!, [bx, by] = clip[(i + 1) % clip.length]!;
+    const side = (p: [number, number]) => (bx - ax) * (p[1] - ay) - (by - ay) * (p[0] - ax);
+    const input = out;
+    out = [];
+    for (let j = 0; j < input.length; j++) {
+      const p = input[j]!, q = input[(j + 1) % input.length]!;
+      const sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) {
+        const t = sp / (sp - sq);
+        out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+      }
+    }
+  }
+  return out;
 }

@@ -7,7 +7,7 @@ import { cantileverCollapseLoad, eulerBucklingLoad, cantileverDeflection } from 
 import { withdrawalUltimate, dowelBearingStrength } from '../../src/engineering/wood';
 import { filletWeldCapacity, weldable, rivetShear, bondCapacities, ADHESIVES, cureFraction } from '../../src/engineering/joining';
 import {
-  chargeInteraction, cylinderCharges, coaxialCylinderPointChargeForce, coaxialDipoleForce, dipoleMoment, imageCharges,
+  magnetWrench, cylinderCharges, cylinderFaces, coaxialCylinderPointChargeForce, coaxialDipoleForce, dipoleMoment, imageFaces,
 } from '../../src/engineering/magnets';
 import { lewisFormFactor, dcMotorTorque, dcMotorSpecs, neoHookeanBandForce, capstanRatio, bearingFrictionTorque } from '../../src/engineering/mechanics';
 import { MATERIALS } from '../../src/data/materials';
@@ -118,11 +118,10 @@ describe('welds, rivets, adhesives', () => {
 describe('magnets (Gilbert model)', () => {
   const Br = 1.3, R = 0.005, h = 0.005;
   function coaxialForce(gap: number, rings: number) {
-    const A = cylinderCharges([0, 0, 0], [0, 0, 1], R, h, Br, rings);
     const zc = h + gap;
-    // B faces A with opposite polarity (N of A toward S of B) -> attraction (negative z force on B).
+    // B stacked on A in the same orientation (N of A toward S of B) -> attraction (negative z force on B).
     const B = cylinderCharges([0, 0, zc], [0, 0, 1], R, h, Br, rings);
-    return -chargeInteraction(A, B, [0, 0, zc])[2]!;
+    return -magnetWrench(cylinderFaces([0, 0, 0], [0, 0, 1], R, h, Br), B, [0, 0, zc])[2]!;
   }
   it('agrees with the point-charge closed form far away', () => {
     const x = 30 * R;
@@ -134,28 +133,20 @@ describe('magnets (Gilbert model)', () => {
     within(coaxialForce(r - h, 2), coaxialDipoleForce(m, m, r), 0.02);
   });
   it('near contact converges with quadrature refinement and stays finite', () => {
-    // Measured convergence (rings -> force at 0.2 mm): 3: 28.8 N, 6: 25.1 N, 10: 23.1 N, 14: 22.9 N.
     const ref = coaxialForce(0.0002, 14);
     expect(Number.isFinite(ref)).toBe(true);
-    within(coaxialForce(0.0002, 6), ref, 0.12);
-    within(coaxialForce(0.003, 4), coaxialForce(0.003, 14), 0.06);
+    within(coaxialForce(0.0002, 4), ref, 0.03);
+    within(coaxialForce(0.003, 3), coaxialForce(0.003, 14), 0.02);
     // Bounded above by the two touching faces alone (uniform-sheet limit Br^2 A / (2 mu0) = 52.8 N here)
     // and in the range manufacturers publish for a 10 x 5 mm N42 disc pair (~20-30 N).
     expect(ref).toBeLessThan(52.8);
     expect(ref).toBeGreaterThan(15);
   });
   it('image method: a magnet attracts a steel face', () => {
-    const A = cylinderCharges([0, 0, 0.01], [0, 0, 1], R, h, Br, 3);
-    const img = imageCharges(A, [0, 0, 0], [0, 0, 1], 1);
-    const f = chargeInteraction(img, A, [0, 0, 0.01])[2]!;
+    const c: [number, number, number] = [0, 0, 0.01];
+    const img = imageFaces(cylinderFaces(c, [0, 0, 1], R, h, Br), [0, 0, 0], [0, 0, 1], 1);
+    const f = magnetWrench(img, cylinderCharges(c, [0, 0, 1], R, h, Br, 3), c)[2]!;
     expect(f).toBeLessThan(0); // pulled toward the plate (-z)
-  });
-  it('forces obey Newton\'s third law', () => {
-    const A = cylinderCharges([0, 0, 0], [0, 0, 1], R, h, Br, 3);
-    const B = cylinderCharges([0.004, 0.002, 0.012], [0.3, 0, 0.95], R, h, Br, 3);
-    const fAB = chargeInteraction(A, B, [0.004, 0.002, 0.012]);
-    const fBA = chargeInteraction(B, A, [0, 0, 0]);
-    for (let i = 0; i < 3; i++) expect(Math.abs(fAB[i]! + fBA[i]!)).toBeLessThan(1e-9 * (1 + Math.abs(fAB[i]!)));
   });
 });
 

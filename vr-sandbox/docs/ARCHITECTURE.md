@@ -73,6 +73,95 @@ these changes without the conservation tests and the full suite.
 | A8 | Saving, loading, sharing | Pass | Byte-exact round trips, share codes and links. | – | – |
 | A9 | Panels, tablet, modes | Pass | Desktop panels, tablet pages, and relax, walk and mixed modes (e2e). | – | – |
 
+## Magnets: model, derivations and contracts
+
+Written before the code it governs; each numbered contract has tests named in brackets.
+
+**M1 Field of a pole face.** A uniformly magnetised magnet is equivalent to surface charge σ = ±Br/μ0 on its pole
+faces (Gilbert model). A flat face gives, at a point p,
+
+    H(p) = σ/(4π) · [ Ω(p) o + ∮ n_edge / |p − x| dl ]
+
+The normal part is the solid angle Ω the face subtends at p (signed, positive in front). The in-plane part comes from
+the divergence theorem: ∫ ∇'(1/|p − x'|) dA' = ∮ n_edge/|p − x'| dl. Discs use closed forms in elliptic
+integrals (Paxton 1959; Carlson's algorithms), and rectangles use arctangents and inverse hyperbolic sines.
+[golden: face field against brute-force integration, 2e-5]
+
+**M2 Force.** The force on magnet B is the field of A's faces acting on samples of B's face charge,
+F = μ0 Σ q_b H_A(p_b), with torque about B's centre from the same sum. H_A = −∇φ_A exactly, so F is the gradient of
+U = μ0 Σ q_b φ_A(p_b): it is conservative and its stiffness is symmetric.
+
+Within about a patch of an edge, a sample takes A's potential at height w + soft(e, w) instead of w. Here e is its
+sideways distance from the edge, w its height over the face, and soft fades out away from edges and above the face.
+The force is the exact gradient of that smoothed potential:
+
+    F_n = H_n (1 + ∂soft/∂w),  F_∥ = H_∥ + sgn H_n ∇_∥soft
+
+That keeps it conservative. [golden: coaxial discs within 2.5% of the exact Hankel solution at every gap (20 × 10);
+the stiffness is symmetric to 0.2%; a sideways shift changes the pull smoothly; the force is continuous across
+quadrature levels]
+
+**M3 Momentum.** The world applies −F to A with torque −T − (x_B − x_A) × F, so momentum and angular momentum are
+exact. [conformance: the world applies the model force integrated along the path]
+
+**M4 Eddy currents (Lenz's law).** Take a conductor C of conductivity σ moving relative to a field source S. A
+point x of C moves at u(x) relative to S. In the quasi-static limit (magnetic Reynolds number μ0 σ u ℓ ≪ 1), the
+induced current is
+
+    J = σ (u × B − ∇φ),  ∇·J = 0 in C,  J·n = 0 on its surface
+
+so φ solves the Neumann problem ∇²φ = ∇·(u × B), with ∂φ/∂n = (u × B)·n on the surface. Charge building up on the
+surface cancels whatever part of the EMF cannot drive a closed current. That is why a disc spinning in an axial field
+carries no current: it is an open-circuit Faraday disc.
+
+For rigid relative motion q = (V, Ω) about a reference point x_r, u = V + Ω × (x − x_r) is linear in q. The dissipated
+power is P = ∫ |J|²/σ dV = qᵀ D q, with D a 6 × 6 positive semi-definite matrix. The drag wrench on C is −D q, which
+dissipates exactly P, and S gets the opposite wrench with the moment of the couple. The damping is applied implicitly,
+q' = (I + dt M⁻¹ D)⁻¹ q, so it is stable however strong it is.
+
+Discretisation: finite volumes on a regular grid of the cells inside C near the magnet. φ is solved per basis
+motion, and D is summed over cell faces. Materials carry their measured conductivity (NdFeB 0.67 MS/m, copper
+58 MS/m, sintered ferrite effectively an insulator).
+
+Limits, stated rather than hidden:
+- The currents' own field is neglected. That overstates the drag at high magnetic Reynolds number (thick copper at
+  metres per second).
+- In steel, B is taken as the magnet's free-space field. That understates the drag, because steel concentrates flux.
+
+[golden: an axisymmetric spin dissipates nothing; a point dipole in a thin tube meets
+F = 45 μ0² m² σ δ v / (1024 a⁴) (Levin et al., Am. J. Phys. 74, 815, 2006). Conformance: a magnet falls through a
+copper pipe at that terminal speed; a rocking magnet settles on steel or another magnet by itself]
+
+**M5 Contact statics of a stuck magnet.** Let n be the contact normal (A to B), and c the centroid of the footprint
+(the overlap of B's face with the face it lies on). The contact wrench on B, about c, is (F_c, M_c). It is admissible
+if all of these hold:
+
+- N = F_c·n > 0: it presses.
+- |F_c − N n| ≤ μ N: friction holds.
+- The pressure centre c + d, with d = n × M_t / N, lies within the footprint. (M_t is the tangential moment; for
+  d ⊥ n, (d × N n) = M_t gives n × M_t = N d.) The test is: |M_t| ≤ N · max over the footprint of (p − c)·ê,
+  with ê = n × M_t/|M_t|.
+- |M_c·n| ≤ μ N r̄, where r̄ is the footprint's mean distance from c (uniform pressure; 2R/3 for a disc).
+
+So a stuck magnet pulled straight off lets go at its pull P; pushed sideways it slides at μ P; and a tall one pushed at
+height h tips at P R / h. [conformance, with constant loads just below and just above each threshold]
+
+**M6 Latch.** At rest in contact, B is held to A by a rigid constraint, and the magnetic wrench W_m is no longer
+applied: the latch stands for it. This is how the contact solver carries a load of thousands of g on a gram of magnet.
+Each tick the latch's reaction W_L on B gives the contact wrench W_c = W_L − W_m. If W_c is not admissible (M5):
+
+1. The latch opens.
+2. The part it carried beyond the admissible set, ΔW = W_c − proj(W_c), is handed back to the bodies as the impulse
+   −ΔW·dt on B (and the opposite on A).
+3. The continuous physics (M2–M4) carries on from there, exactly as the real contact would have let it.
+
+A knock too small to free the magnet lifts it slightly, the pull and eddy damping bring it back, and it latches
+again. There are no timers.
+
+It latches only when at rest (slip at the footprint below 2 cm/s), lying flush (within 1°, inside the solver's own
+slop) and admissible. [conformance: every common magnet settles flush and still on steel and on another magnet;
+the pull-off, slide and tip thresholds match the unlatched simulation (large magnets, where that is stable) and M5]
+
 ## Planned fixes and their ripple effects
 
 | Fix | Touches | Ripple effects | Risk |

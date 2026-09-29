@@ -5,7 +5,7 @@ import { at, rig, within } from './helpers';
 import { axisAngle } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
-import { chargeInteraction, cylinderCharges, ringsForGap } from '../../src/engineering/magnets';
+import { cylinderCharges, cylinderFaces, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
 import { dcMotorSpecs } from '../../src/engineering/mechanics';
 import { FLUIDS, STANDARD_GRAVITY as g } from '../../src/data/materials';
 
@@ -311,21 +311,124 @@ describe('fasteners fail at their real capacities', () => {
 });
 
 describe('magnets', () => {
-  it('the world applies exactly the Gilbert-model force', async () => {
+  it('the world applies exactly the Gilbert-model force, integrated along the path within the tick', async () => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    // Gap large enough that the magnet does not reach its partner within the measured tick.
     const R = 0.01, L = 0.01, gap = 0.04;
     r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 2 * R, thickness: L } });
     const b = r.part('magnet.disc', at(0, L + gap, 0), { params: { diameter: 2 * R, thickness: L } });
-    r.run(TICK);
+    const k = r.world.step().stats.substeps;
     const m = r.world.bodyMass(b.id)!;
     const v = r.world.linearVelocity(b.id)!;
-    const rings = 8; // converged reference; the world uses fewer rings at this range
-    void ringsForGap;
-    const expected = chargeInteraction(cylinderCharges([0, 0, 0], [0, 1, 0], R, L, 1.3, rings), cylinderCharges([0, L + gap, 0], [0, 1, 0], R, L, 1.3, rings), [0, L + gap, 0])[1]!;
-    expect(expected).toBeLessThan(0); // attraction
-    within((m * v[1]) / TICK, expected, 0.03);
+    // finely sampled reference (8 rings; the world uses fewer at this range), stepped the way the world steps: the force
+    // is re-evaluated at the start of each of its k substeps as the magnet speeds up towards its partner
+    const A = cylinderFaces([0, 0, 0], [0, 1, 0], R, L, 1.3);
+    const force = (y: number) => magnetWrench(A, cylinderCharges([0, y, 0], [0, 1, 0], R, L, 1.3, 8), [0, y, 0])[1]!;
+    let y = L + gap, vy = 0;
+    for (let s = 0; s < k; s++) { vy += (force(y) / m) * (TICK / k); y += vy * (TICK / k); }
+    expect(force(L + gap)).toBeLessThan(0); // attraction
+    expect(k).toBeGreaterThan(1); // a close pair is substepped
+    within(v[1], vy, 0.03);
+    within(Math.abs(vy * m) / TICK, Math.abs(force(L + gap)), 0.1); // and the pull hardly changes within one tick
     r.done();
+  });
+
+  it('a magnet released near another snaps onto it and stays put: no hovering or chatter at contact', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const R = 0.01, L = 0.01;
+    r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 2 * R, thickness: L } });
+    const b = r.part('magnet.disc', at(0, L + 0.006, 0), { params: { diameter: 2 * R, thickness: L } });
+    r.run(1);
+    let worstV = 0, worstGap = 0;
+    for (let i = 0; i < 45; i++) {
+      r.world.step();
+      worstV = Math.max(worstV, Math.hypot(...r.world.linearVelocity(b.id)!));
+      worstGap = Math.max(worstGap, r.world.livePose(b.id)!.p[1] - L);
+    }
+    expect(worstGap).toBeLessThan(0.0005); // faces together
+    expect(worstV).toBeLessThan(0.01); // and at rest there
+    r.done();
+  });
+
+  it('small magnets snap onto steel or another magnet and lie flush and still (they used to rock and be flung off)', async () => {
+    const cases: [string, Record<string, number>, number][] = [
+      ['magnet.disc', { diameter: 0.01, thickness: 0.005 }, 0.005], ['magnet.disc', { diameter: 0.006, thickness: 0.003 }, 0.003],
+      ['magnet.disc', { diameter: 0.01, thickness: 0.002 }, 0.002], ['magnet.block', { x: 0.01, z: 0.01, y: 0.002 }, 0.002],
+    ];
+    for (const [kind, params, L] of cases) {
+      for (const steel of [false, true]) {
+        const r = await rig({ gravity: [0, -9.81, 0] }, false);
+        if (steel) r.part('plate', at(0, -0.003, 0), { frozen: true, material: 'steel.1018-cd' });
+        else r.part(kind, at(0, 0, 0), { frozen: true, params });
+        const rest = steel ? L / 2 : L; // centre height lying flush
+        // arrives a little off centre and tilted
+        const b = r.part(kind, at(0.0004, rest + 0.003, 0.0002, [0.02, 0, 0.01, 0.9997]), { params });
+        r.run(1);
+        let worst = 0;
+        for (let i = 0; i < 45; i++) {
+          r.world.step();
+          const p = r.world.livePose(b.id)!;
+          worst = Math.max(worst, Math.abs(p.p[1] - rest), Math.hypot(...r.world.angularVelocity(b.id)!) * 1e-3);
+          expect(2 * Math.asin(Math.hypot(p.q[0], p.q[2])), `${kind} ${JSON.stringify(params)} tilt`).toBeLessThan(1e-3);
+        }
+        expect(worst, `${kind} ${JSON.stringify(params)} on ${steel ? 'steel' : 'a magnet'}`).toBeLessThan(2e-5);
+        r.done();
+      }
+    }
+  });
+
+  /** A 10 x 5 mm N42 disc stuck to a 6 mm steel plate, in zero gravity, and the model's pull on it lying flush. */
+  const stuckToSteel = async (L = 0.005) => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    r.part('plate', at(0, -0.003, 0), { frozen: true, material: 'steel.1018-cd' });
+    const b = r.part('magnet.disc', at(0, L / 2 + 0.002, 0), { params: { diameter: 0.01, thickness: L } });
+    r.run(0.5);
+    expect(r.world.magnetLatchCount()).toBe(1);
+    const c: [number, number, number] = [0, L / 2, 0];
+    const factor = 0.95 * plateSaturationFactor(0.006, 1.3, Math.PI * 0.005 ** 2, 2 * Math.PI * 0.005);
+    const faces = imageFaces(cylinderFaces(c, [0, 1, 0], 0.005, L, 1.3), [0, 0, 0], [0, 1, 0], factor);
+    const pull = -magnetWrench(faces, cylinderCharges(c, [0, 1, 0], 0.005, L, 1.3, 4), c)[1]!;
+    return { r, b, pull };
+  };
+  /** Ramp a force on b (at `point` above its centre) until the latch lets go; returns the force then. */
+  const rampUntilReleased = (r: Awaited<ReturnType<typeof rig>>, id: string, dir: [number, number, number], rate: number, point: [number, number, number]) => {
+    for (let i = 1; i < 2000; i++) {
+      const F = rate * i * TICK;
+      const p = r.world.livePose(id)!.p;
+      r.world.apply({ op: 'impulse', id, point: [p[0] + point[0], p[1] + point[1], p[2] + point[2]], impulse: [dir[0] * F * TICK, dir[1] * F * TICK, dir[2] * F * TICK] });
+      r.world.step();
+      if (r.world.magnetLatchCount() === 0) return F;
+    }
+    return Infinity;
+  };
+
+  it('pulled straight off, a stuck magnet lets go at its magnetic pull, not before', async () => {
+    const { r, b, pull } = await stuckToSteel();
+    expect(pull).toBeGreaterThan(5); // a 10 x 5 mm N42 disc holds a few kilograms on steel
+    const F = rampUntilReleased(r, b.id, [0, 1, 0], pull / 1.5, [0, 0, 0]);
+    expect(F / pull).toBeGreaterThan(0.99);
+    expect(F / pull).toBeLessThan(1.04);
+    r.done();
+  });
+
+  it('pushed sideways it slides once the push beats friction on the pull (mu N), and a tall one tips over first', async () => {
+    const mu = Math.sqrt(0.5 * 0.62); // nickel-plated magnet on steel, as the contact combines them
+    {
+      const { r, b, pull } = await stuckToSteel();
+      const F = rampUntilReleased(r, b.id, [1, 0, 0], pull / 1.5, [0, 0, 0]);
+      expect(F / (mu * pull)).toBeGreaterThan(0.99);
+      expect(F / (mu * pull)).toBeLessThan(1.04);
+      r.done();
+    }
+    {
+      // 10 mm across, 20 mm tall, pushed at its top face: the push's moment about the far edge, F L, beats the
+      // pull's, P R, at F = P R / L = P / 4, well before friction (0.56 P) would let it slide
+      const L = 0.02;
+      const { r, b, pull } = await stuckToSteel(L);
+      const F = rampUntilReleased(r, b.id, [1, 0, 0], pull / 1.5, [0, L / 2, 0]);
+      expect(F / ((pull * 0.005) / L)).toBeGreaterThan(0.9);
+      expect(F / ((pull * 0.005) / L)).toBeLessThan(1.1);
+      r.done();
+    }
   });
 
   it('flipping a magnet turns attraction into repulsion', async () => {
