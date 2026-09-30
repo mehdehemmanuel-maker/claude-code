@@ -65,7 +65,8 @@ export class App {
   selection = { parts: new Set<string>(), conn: null as string | null };
   spawnKind = 'block';
   spawnMaterial: string | null = null;
-  joinKind = 'bolted';
+  /** The Join page's choice; 'auto' (Best join) lets the planner pick the process for the materials. */
+  joinKind = 'auto';
   channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0 };
   simTime = 0;
   fps = 0;

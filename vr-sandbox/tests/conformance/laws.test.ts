@@ -234,9 +234,10 @@ describe('fasteners fail at their real capacities', () => {
 
   it('failure and slip notes give the governing load and capacity in that load\'s units', async () => {
     const unitOf = (mode: string) => (mode === 'bending' || mode === 'torsion' ? /N·m/ : /\d N( |$)/);
-    // a glued cantilever root fails in bending: moments read in N·m
+    // a glued cantilever root fails in bending: moments read in N·m. A 30 mm bar spreads the moment over the whole
+    // epoxy face (sigma S = 79 N·m); 2.4 m of it hangs 200 N·m on the root.
     const r = await rig({}, false);
-    const L = 0.6;
+    const L = 2.4;
     const bar = r.part('rod.square', at(L / 2, 1, 0), { material: 'steel.a36', params: { length: L, side: 0.03, fracture: 'off' } });
     r.connect('glued', { part: bar, frame: at(-L / 2, 0, 0, axisAngle([0, 0, 1], Math.PI / 2)) }, null, { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.03 });
     const notes: { mode: string; note: string }[] = [];

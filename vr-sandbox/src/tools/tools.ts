@@ -4,13 +4,14 @@ import * as THREE from 'three';
 import type { App } from '../app/app';
 import { getMaterial, MATERIALS } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
+import { AUTO_JOIN, isPlannedKind, planJoin } from '../connectors/plan';
 import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose } from '../doc/commands';
 import { frameOnPart, partLayout } from '../app/segments';
 import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub } from '../doc/math';
-import type { Pose, Quat, Vec3 } from '../doc/types';
+import type { Part, Pose, Quat, Vec3 } from '../doc/types';
 import { effectiveParams, getPartKind, segmentBodyId } from '../parts/registry';
 import { shapeBounds, type CollisionShape } from '../parts/shapes';
-import { defaultsOf, sanitizeParams, type Params } from '../schema/params';
+import { defaultsOf, numberOf, sanitizeParams, type Params } from '../schema/params';
 import { buildVisual } from '../render/geometry';
 import { ghostMaterial } from '../render/materials';
 import type { Pick } from '../render/view';
@@ -384,11 +385,17 @@ function faceDims(app: App, partId: string, worldNormal: Vec3): [number, number]
   return [ext[0]!, ext[1]!];
 }
 
+/** Thinnest section of a part, as the joint capacities see it. */
+function thicknessOf(app: App, part: Part): number {
+  const kind = getPartKind(part.kind);
+  return kind.dims(effectiveParams(kind, part.params, app.materialOf(part))).b;
+}
+
 class JoinTool implements Tool {
   id = 'join';
   label = 'Join';
   icon = '🔩';
-  hint = 'Trigger part A, then part B (or the floor to anchor it) · choose the joint on the Join page';
+  hint = 'Trigger part A, then part B (or the floor to anchor it) · Best join picks the right process for the materials';
   private first: { part: string; point: Vec3; normal: Vec3; seg: number | null } | null = null;
   private axisMode = 0;
 
@@ -396,7 +403,8 @@ class JoinTool implements Tool {
 
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
-    const kind = getConnectorKind(this.app.joinKind);
+    const requested = this.app.joinKind;
+    let kind = getConnectorKind(requested === AUTO_JOIN ? 'bolted' : requested);
     if (!pick) return;
     if (!this.first) {
       if (pick.type !== 'part' || !pick.id) {
@@ -437,12 +445,23 @@ class JoinTool implements Tool {
     } else {
       const q = this.jointFrame(a.normal);
       const world: Pose = { p: a.point, q };
-      const params = sanitizeParams(kind.params, defaultsOf(kind.params));
+      let params = sanitizeParams(kind.params, defaultsOf(kind.params));
       if ('bondW' in params) {
         const [wa, la] = faceDims(this.app, a.part, a.normal);
         const [wb, lb] = bId ? faceDims(this.app, bId, scale(a.normal, -1)) : [wa, la];
         params['bondW'] = Math.max(0.002, Math.min(wa, wb));
         params['bondL'] = Math.max(0.002, Math.min(la, lb));
+      }
+      if (isPlannedKind(requested)) {
+        // join the way that works for these materials, sized to this stock
+        const matA = this.app.materialOf(aPart), matB = bPart ? this.app.materialOf(bPart) : null;
+        const plan = planJoin(requested, matA, matB, {
+          thicknessA: thicknessOf(this.app, aPart), thicknessB: bPart ? thicknessOf(this.app, bPart) : thicknessOf(this.app, aPart),
+          bondW: numberOf(params, 'bondW', 0.03), bondL: numberOf(params, 'bondL', 0.03),
+        });
+        kind = getConnectorKind(plan.kind);
+        params = plan.params;
+        this.app.toast(plan.substituted ? `${plan.substituted} ${plan.summary}.` : `${plan.summary}${bId ? '' : ', to the floor'}.`, plan.substituted ? 'warn' : 'ok');
       }
       conn = addConnection(this.app.store, {
         kind: kind.id,
@@ -462,7 +481,7 @@ class JoinTool implements Tool {
     } else if (kind.id === 'bolted' || kind.id === 'screwed') this.app.audio.ui('ratchet', at);
     else this.app.audio.ui('connect', at);
     this.app.haptic?.(0.5, 30);
-    if (!bId) this.app.toast(`${kind.label} anchored to the world`, 'info');
+    if (!bId && !isPlannedKind(requested)) this.app.toast(`${kind.label} anchored to the world`, 'info');
   }
 
   private jointFrame(n: Vec3): Quat {

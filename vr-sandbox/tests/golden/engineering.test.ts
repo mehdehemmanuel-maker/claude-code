@@ -5,7 +5,7 @@ import { SPRING_WIRES, springRate, surgeFrequency, wireUltimate, solidLength, be
 import { roundSection, tubeSection, rectSection, iBeamStrongAxis } from '../../src/engineering/sections';
 import { cantileverCollapseLoad, eulerBucklingLoad, cantileverDeflection } from '../../src/engineering/beams';
 import { withdrawalUltimate, dowelBearingStrength } from '../../src/engineering/wood';
-import { filletWeldCapacity, weldable, rivetShear, bondCapacities, ADHESIVES, cureFraction } from '../../src/engineering/joining';
+import { filletWeldCapacity, weldable, rivetShear, bondCapacities, bondEdgeLength, ADHESIVES, cureFraction } from '../../src/engineering/joining';
 import {
   magnetWrench, cylinderCharges, cylinderFaces, coaxialCylinderPointChargeForce, coaxialDipoleForce, dipoleMoment, imageFaces,
 } from '../../src/engineering/magnets';
@@ -102,11 +102,23 @@ describe('welds, rivets, adhesives', () => {
     expect(weldable('none', 'none')).toBe(false);
   });
   it('rivet shear', () => within(rivetShear(2, 0.004, 400e6), 2 * 240e6 * Math.PI * 4e-6, 1e-9));
-  it('adhesive bonds are far weaker in peel than shear', () => {
+  it('adhesive bonds on thin sheet are far weaker in peel than shear', () => {
     const a = ADHESIVES['cyanoacrylate']!;
-    const c = bondCapacities(0.02, 0.02, a.lapShear, a.peel);
+    // 1 mm aluminium sheet: the bending load reaches only an edge strip about a millimetre deep
+    const edge = bondEdgeLength(69e9, 0.001, a);
+    expect(edge).toBeLessThan(0.002);
+    const c = bondCapacities(0.02, 0.02, a.lapShear, a.peel, edge);
     // Moment that breaks the bond, expressed as an edge force at the bond length, is much less than the shear capacity.
     expect(c.bending / 0.02).toBeLessThan(c.shear / 10);
+  });
+  it('a bond between rigid parts carries bending over its whole face: M = 0.7 tau b d^2 / 6', () => {
+    const a = ADHESIVES['epoxy-structural']!;
+    // 100 mm of steel: stiff enough that the whole face works
+    const edge = bondEdgeLength(200e9, 0.1, a);
+    expect(edge).toBeGreaterThan(0.1 / 3);
+    within(bondCapacities(0.1, 0.05, a.lapShear, a.peel, edge).bending, (0.7 * a.lapShear * 0.1 * 0.05 ** 2) / 6, 1e-6);
+    // and never below the measured peel line load, however thin the part
+    within(bondCapacities(0.1, 0.05, a.lapShear, a.peel, 0).bending, (0.1 * 0.05 * a.peel) / 2, 1e-6);
   });
   it('cure fraction ramps to 1', () => {
     const a = ADHESIVES['epoxy-5min']!;

@@ -30,13 +30,16 @@ test('place, stack, join, undo and redo in the headset', async ({ page }) => {
   expect((await counts(page)).parts).toBe(2);
   const heights = await sb(page, (s) => Object.values(s.app.doc.parts).map((p: any) => p.pose.p[1]).sort());
   expect(heights[1]).toBeGreaterThan(0.12); // the second block sits on the first
-  // Join tool (bolted by default): the front face of the lower block, then of the upper one
+  // Join tool (Best join by default): the front face of the lower block, then of the upper one. Two wooden blocks
+  // are screwed, with screws long enough to pass the first 100 mm block and bite well into the second
   await tap(page, 'tool-join');
   await triggerAt(page, [0, 0.05, 0.05]);
   await triggerAt(page, [0, 0.15, 0.05]);
   await frames(page, 4);
   expect((await counts(page)).conns).toBe(1);
-  expect(await sb(page, (s) => (Object.values(s.app.doc.connections)[0] as any).kind)).toBe('bolted');
+  const joint = await sb(page, (s) => { const c = Object.values(s.app.doc.connections)[0] as any; return { kind: c.kind, length: c.params.length }; });
+  expect(joint.kind).toBe('screwed');
+  expect(joint.length).toBeGreaterThan(0.13);
   // undo and redo the joint from the tablet
   await tap(page, 'tab-world');
   await tap(page, 'undo');

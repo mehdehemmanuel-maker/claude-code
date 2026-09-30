@@ -5,7 +5,7 @@ import type { Material } from '../data/materials';
 import { boltedJoint, BOLT_FRICTION, permissiblePreload, tighteningTorque } from '../engineering/bolts';
 import { CLEARANCE_HOLE_MEDIUM, HEX_BEARING_DIAMETER, METRIC_COARSE, PROPERTY_CLASSES, propertyClassFor, threadFor } from '../engineering/threads';
 import {
-  ADHESIVES, blindRivet, bondCapacities, cureFraction, FILLERS, filletWeldCapacity, rivetShear, SOLDERABLE, SOLDERS,
+  ADHESIVES, blindRivet, bondCapacities, bondEdgeLength, cureFraction, FILLERS, filletWeldCapacity, fillersFor, rivetShear, SOLDERABLE, SOLDERS,
   substrateFactor, weldable,
 } from '../engineering/joining';
 import { lateralUltimate, withdrawalUltimate } from '../engineering/wood';
@@ -184,7 +184,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       const q = numberOf(params, 'quality', 0.95);
       const ok = weldable(matA.weld, matB ? matB.weld : matA.weld);
       const fillerOk = fillerMatches(filler.id, matA, matB);
-      if (!fillerOk) warnings.push(`${filler.label} is the wrong filler for these base metals.`);
+      if (ok && !fillerOk) warnings.push(`${filler.label} is the wrong filler for these base metals.`);
       const R = ok ? filletWeldCapacity(leg, L, filler.Fexx, base) * q * (fillerOk ? 1 : 0.3) : 0;
       // Weld group section modulus for a rectangle outline b x d (line weld): S_w = b d + d^2 / 3 (per unit throat).
       const throat = 0.7071 * leg;
@@ -375,12 +375,14 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       choice('adhesive', 'Adhesive', 'epoxy-structural', Object.values(ADHESIVES).map((a) => ({ value: a.id, label: a.label })), { group: 'Adhesive' }),
       ...bondParams,
     ],
-    derive: ({ params, matA, matB, cure }) => {
+    derive: ({ params, matA, matB, thicknessA, thicknessB, cure }) => {
       const a = ADHESIVES[stringOf(params, 'adhesive', 'epoxy-structural')] ?? ADHESIVES['epoxy-structural']!;
       const sub = Math.min(substrateFactor(a, matA.category), substrateFactor(a, (matB ?? matA).category));
       const cureF = cureFraction(a, cure);
       const k = sub * cureF;
-      const c = bondCapacities(numberOf(params, 'bondW'), numberOf(params, 'bondL'), a.lapShear * k, a.peel * k);
+      // the more flexible part decides how much of the face a bending load reaches
+      const edge = Math.min(bondEdgeLength(matA.E, thicknessA, a), matB ? bondEdgeLength(matB.E, thicknessB, a) : Infinity);
+      const c = bondCapacities(numberOf(params, 'bondW'), numberOf(params, 'bondL'), a.lapShear * k, a.peel * k, edge);
       const warnings: string[] = [];
       if (sub < 1) warnings.push(`${a.label} bonds poorly to ${sub <= 0.05 ? 'low-energy plastics' : 'this substrate'}.`);
       if (cureF < 0.99) warnings.push(`Curing: ${fmt(cureF * 100, 0)}% strength.`);
@@ -389,7 +391,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
         readouts: [
           { label: 'Cure', value: `${fmt(cureF * 100, 0)} %`, formula: '1 − e^(−t/τ)' },
           { label: 'Shear capacity', value: formatForce(c.shear), formula: 'τ_lap · A' },
-          { label: 'Peel-limited moment', value: `${fmt(c.bending, 2)} N·m` },
+          { label: 'Bending capacity', value: `${fmt(c.bending, 2)} N·m`, formula: 'σ · long · short · min(short/6, max(p/2σ, ℓ/2)),  σ = 0.7 τ' },
         ],
         warnings,
       };
@@ -689,12 +691,7 @@ function hazUltimate(m: Material) {
   return m.ultimate;
 }
 
-function fillerMatches(filler: string, a: Material, b: Material | null) {
-  const cats = [a.weld, (b ?? a).weld];
-  if (cats.includes('aluminum')) return filler === 'ER4043' || filler === 'ER5356';
-  if (cats.includes('stainless')) return filler === 'ER308L' || filler.startsWith('E');
-  return filler.startsWith('E');
-}
+const fillerMatches = (filler: string, a: Material, b: Material | null) => fillersFor(a.weld, (b ?? a).weld).includes(filler);
 
 const kindById = new Map(CONNECTOR_KINDS.map((k) => [k.id, k]));
 

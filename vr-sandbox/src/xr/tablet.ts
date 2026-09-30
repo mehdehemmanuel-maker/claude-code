@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { App } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
+import { AUTO_JOIN } from '../connectors/plan';
 import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
 import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
@@ -214,7 +215,9 @@ export class Tablet {
       }
       case 'join': {
         const cw = (W - 40 - 24) / 4;
-        this.grid(CONNECTOR_KINDS, 20, y0, 4, cw, 92, 8, (k, x, y) =>
+        // Best join first: the process that works for the two materials, sized to the stock
+        const kinds = [{ id: AUTO_JOIN, label: '✨ Best join', category: 'auto' }, ...CONNECTOR_KINDS];
+        this.grid(kinds, 20, y0, 4, cw, 92, 8, (k, x, y) =>
           this.btn(`join-${k.id}`, x, y, cw, 92, k.label, () => { app.joinKind = k.id; this.tools.byId('join'); }, { on: app.joinKind === k.id && this.tools.tool.id === 'join', sub: k.category }));
         break;
       }
@@ -240,7 +243,9 @@ export class Tablet {
     this.text(`${(value * d.scale).toFixed(def.integer ? 0 : d.digits)} ${d.unit}`, x + 470, y + 30, 24, '#e8ecf1', 'right', '600');
     const f = def.integer ? 1 : def.log ? 1.25 : 1.1;
     const next = (dir: number) => {
-      let v = def.integer ? value + dir : dir > 0 ? (value === 0 ? Math.max(def.min, (def.max - def.min) * 0.01) : value * f) : value / f;
+      let v = def.integer ? value + dir
+        : def.linear && def.step ? Math.round(value * d.scale / def.step + dir) * def.step / d.scale
+        : dir > 0 ? (value === 0 ? Math.max(def.min, (def.max - def.min) * 0.01) : value * f) : value / f;
       if (def.integer) v = Math.round(v);
       set(Math.min(def.max, Math.max(def.min, v)));
     };
