@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { App } from '../app/app';
 import { getMaterial, MATERIALS } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
-import { AUTO_JOIN, isPlannedKind, planJoin } from '../connectors/plan';
+import { AUTO_JOIN, isPlannedKind, planJoin, type JoinPlan } from '../connectors/plan';
 import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose } from '../doc/commands';
 import { frameOnPart, partLayout } from '../app/segments';
 import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub } from '../doc/math';
@@ -287,7 +287,7 @@ export function snapPose(pose: Pose, grid: number, angle: number): Pose {
 
 // -------------------------------------------------------------------------------------------------
 
-function rotatedMinY(shape: CollisionShape, q: Quat) {
+export function rotatedMinY(shape: CollisionShape, q: Quat) {
   const b = shapeBounds(shape);
   let minY = Infinity;
   for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) {
@@ -391,12 +391,57 @@ function thicknessOf(app: App, part: Part): number {
   return kind.dims(effectiveParams(kind, part.params, app.materialOf(part))).b;
 }
 
+/** One end of a joint: the part, the point and surface normal where it is joined, and which piece of breakable stock. */
+export interface JoinEnd {
+  part: string;
+  point: Vec3;
+  normal: Vec3;
+  seg: number | null;
+}
+
+/**
+ * A rigid joint at a face, the way the Join tool makes it: A's frame at the point, its y along `q`; the bond sized from
+ * the two touching faces; and, for Best join or a joining process, the process that holds these materials, sized to
+ * the stock (connectors/plan.ts). B null anchors A to the world.
+ */
+export function makeRigidJoin(app: App, a: JoinEnd, b: { part: string | null; seg: number | null }, requested: string, q: Quat) {
+  const aPart = app.doc.parts[a.part]!;
+  const bPart = b.part ? app.doc.parts[b.part] ?? null : null;
+  const source = (id: string) => app.livePose(id);
+  const world: Pose = { p: a.point, q };
+  let kind = getConnectorKind(requested === AUTO_JOIN ? 'bolted' : requested);
+  let params = sanitizeParams(kind.params, defaultsOf(kind.params));
+  if ('bondW' in params) {
+    const [wa, la] = faceDims(app, a.part, a.normal);
+    const [wb, lb] = bPart ? faceDims(app, bPart.id, scale(a.normal, -1)) : [wa, la];
+    params['bondW'] = Math.max(0.002, Math.min(wa, wb));
+    params['bondL'] = Math.max(0.002, Math.min(la, lb));
+  }
+  let plan: JoinPlan | null = null;
+  if (isPlannedKind(requested)) {
+    const matA = app.materialOf(aPart), matB = bPart ? app.materialOf(bPart) : null;
+    plan = planJoin(requested, matA, matB, {
+      thicknessA: thicknessOf(app, aPart), thicknessB: bPart ? thicknessOf(app, bPart) : thicknessOf(app, aPart),
+      bondW: numberOf(params, 'bondW', 0.03), bondL: numberOf(params, 'bondL', 0.03),
+    });
+    kind = getConnectorKind(plan.kind);
+    params = plan.params;
+  }
+  const conn = addConnection(app.store, {
+    kind: kind.id,
+    a: { part: a.part, frame: frameOnPart(aPart, world, a.seg, source) },
+    b: bPart ? { part: bPart.id, frame: frameOnPart(bPart, world, b.seg, source) } : null,
+    params,
+  });
+  return { conn, kind, plan };
+}
+
 class JoinTool implements Tool {
   id = 'join';
   label = 'Join';
   icon = '🔩';
   hint = 'Trigger part A, then part B (or the floor to anchor it) · Best join picks the right process for the materials';
-  private first: { part: string; point: Vec3; normal: Vec3; seg: number | null } | null = null;
+  private first: JoinEnd | null = null;
   private axisMode = 0;
 
   constructor(private app: App) {}
@@ -443,32 +488,10 @@ class JoinTool implements Tool {
         params: sanitizeParams(kind.params, defaultsOf(kind.params)),
       });
     } else {
-      const q = this.jointFrame(a.normal);
-      const world: Pose = { p: a.point, q };
-      let params = sanitizeParams(kind.params, defaultsOf(kind.params));
-      if ('bondW' in params) {
-        const [wa, la] = faceDims(this.app, a.part, a.normal);
-        const [wb, lb] = bId ? faceDims(this.app, bId, scale(a.normal, -1)) : [wa, la];
-        params['bondW'] = Math.max(0.002, Math.min(wa, wb));
-        params['bondL'] = Math.max(0.002, Math.min(la, lb));
-      }
-      if (isPlannedKind(requested)) {
-        // join the way that works for these materials, sized to this stock
-        const matA = this.app.materialOf(aPart), matB = bPart ? this.app.materialOf(bPart) : null;
-        const plan = planJoin(requested, matA, matB, {
-          thicknessA: thicknessOf(this.app, aPart), thicknessB: bPart ? thicknessOf(this.app, bPart) : thicknessOf(this.app, aPart),
-          bondW: numberOf(params, 'bondW', 0.03), bondL: numberOf(params, 'bondL', 0.03),
-        });
-        kind = getConnectorKind(plan.kind);
-        params = plan.params;
-        this.app.toast(plan.substituted ? `${plan.substituted} ${plan.summary}.` : `${plan.summary}${bId ? '' : ', to the floor'}.`, plan.substituted ? 'warn' : 'ok');
-      }
-      conn = addConnection(this.app.store, {
-        kind: kind.id,
-        a: { part: a.part, frame: onA(world) },
-        b: bId && bPart ? { part: bId, frame: onB(world) } : null,
-        params,
-      });
+      const made = makeRigidJoin(this.app, a, { part: bId, seg: pick.seg }, requested, this.jointFrame(a.normal));
+      kind = made.kind;
+      conn = made.conn;
+      if (made.plan) this.app.toast(made.plan.substituted ? `${made.plan.substituted} ${made.plan.summary}.` : `${made.plan.summary}${bId ? '' : ', to the floor'}.`, made.plan.substituted ? 'warn' : 'ok');
     }
     this.first = null;
     this.app.view.setMarkers([]);
