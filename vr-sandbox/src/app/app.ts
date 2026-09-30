@@ -19,6 +19,7 @@ import { AudioEngine } from '../audio/audio';
 import { SceneView } from '../render/view';
 import { Particles } from '../render/particles';
 import { BuildLibrary } from './library';
+import type { Ada } from '../assistant/ada';
 import { LiveState } from './live';
 
 export interface Settings {
@@ -90,6 +91,10 @@ export class App {
   private frames = 0;
   private fpsTime = 0;
   onFrame: ((dt: number, time: number) => void)[] = [];
+  /** Everything the physics reports (breaks, contacts, slips...), as it arrives, before the app acts on it. */
+  eventListeners: ((e: PhysicsEvent) => void)[] = [];
+  /** The assistant, once the headset tools exist (main.ts). */
+  ada: Ada | null = null;
   /** Called after a whole build is loaded (template, file, share code, rewind). */
   onLoad: (() => void)[] = [];
   world: WorldKind = 'workshop';
@@ -685,6 +690,7 @@ export class App {
   private handleEvents(events: PhysicsEvent[]) {
     const doc = this.store.doc;
     for (const e of events) {
+      for (const l of this.eventListeners) l(e);
       if (e.type === 'contact') {
         const pa = e.a ? doc.parts[e.a] : null;
         const pb = e.b ? doc.parts[e.b] : null;

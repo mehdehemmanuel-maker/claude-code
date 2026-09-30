@@ -3,6 +3,7 @@
 
 import { App } from './app/app';
 import { ToolManager } from './tools/tools';
+import { Ada } from './assistant/ada';
 
 async function main() {
   const params = new URLSearchParams(location.search);
@@ -14,7 +15,9 @@ async function main() {
   document.getElementById('build')!.textContent = `Version ${__BUILD__}`;
   const app = await App.create(host, params.get('physics') === 'inline' ? 'inline' : 'worker');
   const tools = new ToolManager(app);
-  const handles: Record<string, unknown> = { app, tools, xr: null };
+  // the assistant: she sees the world, learns your habits, and runs Forge
+  app.ada = new Ada(app, tools);
+  const handles: Record<string, unknown> = { app, tools, ada: app.ada, xr: null };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
   app.onFrame.push((dt) => tools.frame(dt));
   // behind the launch card, a still view into the workshop

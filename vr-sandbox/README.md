@@ -91,13 +91,15 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
   - Dust, splashes and debris, haptics, and a stress overlay.
 - **Creative loop:** undo/redo (including sim-caused failures), checkpoints and rewind, pause/step/slow motion, freeze to world, duplicate assemblies, Build mode (hold still, snap, Play).
 - **My builds:** save, open and delete your own builds on the headset. Nothing pre-made ships; the physics test scenes live only in the tests.
+- **Ada, the assistant (docs/ADA.md):** no outside AI service. She reads the whole simulation: when a joint nears failure or breaks she says why, with the numbers, and offers one-tap fixes that carry 1.5× the load. She learns your habits to suggest your next tool, and runs **Forge**, the build language (`repeat 4 { place lumber … as leg }`), typed on the tablet.
+- **Tablet:** icon tabs, a Materials page, Search (parts, materials, joints, tools, builds, actions as you type) and a 9-slot hotbar of what you used last, with isometric item icons in each part's real material colour.
 
 ## Tests
 
 ```bash
 npm run typecheck
-npm test        # 194 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, test scenes
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 16 browser tests on an emulated Quest (building, joining, My builds, movement, walk and mixed reality) and the Pages subpath
+npm test        # 209 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, Forge, Ada, test scenes
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 19 browser tests on an emulated Quest (building, joining, My builds, Ada, Forge, search, hotbar, movement, walk and mixed reality) and the Pages subpath
 ```
 
 The physics conformance suite checks laws, not builds:

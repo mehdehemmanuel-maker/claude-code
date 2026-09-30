@@ -6,10 +6,13 @@ import type { App } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
+import { drawGlyph, drawMaterial, drawPart, jointGlyph, type Item } from './icons';
+import { Hotbar, SLOTS } from './hotbar';
+import { catalogEntries, search, type Entry } from './search';
 import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
 import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
-import { MATERIALS, STANDARD_GRAVITY } from '../data/materials';
+import { getMaterial, MATERIALS, MATERIAL_GROUPS, STANDARD_GRAVITY } from '../data/materials';
 import { pullOnSteel } from '../engineering/magnets';
 
 /** What the tablet needs from the XR mode: room modes and controls, and what the left stick does. */
@@ -26,7 +29,7 @@ export interface XRControls {
   scan(): void;
 }
 
-type Page = 'tools' | 'parts' | 'join' | 'selected' | 'world' | 'builds';
+type Page = 'tools' | 'parts' | 'materials' | 'join' | 'search' | 'selected' | 'world' | 'builds' | 'ada';
 
 interface Widget {
   id: string;
@@ -38,7 +41,10 @@ interface Widget {
 }
 
 const W = 1024;
-const H = 720;
+const H = 840;
+/** The hotbar runs along the bottom; pages draw above it. */
+const HOT = 104;
+const CH = H - HOT;
 export const TABLET_SIZE = { w: 0.3, h: (0.3 * H) / W };
 
 export class Tablet {
@@ -110,7 +116,7 @@ export class Tablet {
 
   // ---------------------------------------------------------------------------------------------
 
-  private btn(id: string, x: number, y: number, w: number, h: number, label: string, onClick: () => void, opts: { on?: boolean; sub?: string; tone?: 'danger' | 'accent' } = {}) {
+  private btn(id: string, x: number, y: number, w: number, h: number, label: string, onClick: () => void, opts: { on?: boolean; sub?: string; tone?: 'danger' | 'accent'; small?: boolean } = {}) {
     const g = this.ctx;
     const hover = this.hoverId === id;
     g.fillStyle = opts.on ? 'rgba(255,179,71,0.28)' : hover ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)';
@@ -120,7 +126,7 @@ export class Tablet {
     g.lineWidth = opts.on || hover ? 3 : 2;
     g.stroke();
     g.fillStyle = '#e8ecf1';
-    g.font = `600 ${opts.sub ? 24 : 26}px system-ui, sans-serif`;
+    g.font = `600 ${opts.small ? 20 : opts.sub ? 24 : 26}px system-ui, sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText(fit(g, label, w - 16), x + w / 2, y + h / 2 - (opts.sub ? 11 : 0));
@@ -163,7 +169,7 @@ export class Tablet {
   }
 
   private grid<T>(items: T[], x0: number, y0: number, cols: number, cw: number, ch: number, gap: number, each: (it: T, x: number, y: number, i: number) => void) {
-    const rowsVisible = Math.floor((H - y0 - 20) / (ch + gap));
+    const rowsVisible = Math.floor((CH - y0 - 20) / (ch + gap));
     const perPage = rowsVisible * cols;
     const pages = Math.max(1, Math.ceil(items.length / perPage));
     this.scroll = Math.min(this.scroll, pages - 1);
@@ -174,9 +180,9 @@ export class Tablet {
       each(it, cx, cy, start + i);
     });
     if (pages > 1) {
-      this.btn('pg-prev', W - 250, H - 62, 110, 48, '◀', () => { this.scroll = Math.max(0, this.scroll - 1); });
-      this.btn('pg-next', W - 130, H - 62, 110, 48, '▶', () => { this.scroll = Math.min(pages - 1, this.scroll + 1); });
-      this.text(`${this.scroll + 1}/${pages}`, W - 270, H - 30, 22, '#9aa4af', 'right');
+      this.btn('pg-prev', W - 250, CH - 62, 110, 48, '◀', () => { this.scroll = Math.max(0, this.scroll - 1); });
+      this.btn('pg-next', W - 130, CH - 62, 110, 48, '▶', () => { this.scroll = Math.min(pages - 1, this.scroll + 1); });
+      this.text(`${this.scroll + 1}/${pages}`, W - 270, CH - 30, 22, '#9aa4af', 'right');
     }
   }
 
@@ -190,9 +196,13 @@ export class Tablet {
     g.strokeStyle = 'rgba(255,255,255,0.12)';
     g.lineWidth = 3;
     g.stroke();
-    const tabs: [Page, string][] = [['tools', 'Tools'], ['parts', 'Parts'], ['join', 'Join'], ['selected', 'Selected'], ['world', 'World'], ['builds', 'My builds']];
-    const tw = (W - 40 - 5 * 8) / 6;
-    tabs.forEach(([p, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 8), 16, tw, 58, label, () => { this.page = p; this.scroll = 0; }, { on: this.page === p }));
+    const adaNews = this.app.ada?.advice.length ?? 0;
+    const tabs: [Page, string, string][] = [
+      ['tools', '🛠', 'Tools'], ['parts', '🧱', 'Parts'], ['materials', '🎨', 'Materials'], ['join', '🔩', 'Join'], ['search', '🔍', 'Search'],
+      ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'], ['ada', '✦', adaNews ? `Ada • ${adaNews}` : 'Ada'],
+    ];
+    const tw = (W - 40 - (tabs.length - 1) * 6) / tabs.length;
+    tabs.forEach(([p, icon, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 6), 12, tw, 72, icon, () => { this.page = p; this.scroll = 0; }, { on: this.page === p, sub: label }));
     const y0 = 96;
     const app = this.app;
     switch (this.page) {
@@ -203,24 +213,33 @@ export class Tablet {
         // what the active tool can do besides its trigger action
         const acts = this.tools.actions();
         const aw = (W - 40 - 3 * 8) / 4;
-        acts.slice(0, 4).forEach((a, i) => this.btn(`act-${a.id}`, 20 + i * (aw + 8), H - 142, aw, 64, a.label, () => a.run(), { on: a.on }));
-        this.wrapped(this.tools.tool.hint, 24, H - 50, W - 48, 21, '#9aa4af', 2);
+        acts.slice(0, 4).forEach((a, i) => this.btn(`act-${a.id}`, 20 + i * (aw + 8), CH - 142, aw, 64, a.label, () => a.run(), { on: a.on }));
+        this.wrapped(this.tools.tool.hint, 24, CH - 50, W - 48, 21, '#9aa4af', 2);
         break;
       }
       case 'parts': {
-        const cw = (W - 40 - 24) / 4;
-        this.grid(PART_KINDS, 20, y0, 4, cw, 92, 8, (k, x, y) =>
-          this.btn(`part-${k.id}`, x, y, cw, 92, k.label, () => { app.spawnKind = k.id; this.tools.byId('place'); }, { on: app.spawnKind === k.id && this.tools.tool.id === 'place', sub: k.category }));
+        const cats = ['All', ...new Set(PART_KINDS.map((k) => k.category))];
+        const yg = this.chips('pcat', cats, this.partCat, (c) => { this.partCat = c; this.scroll = 0; }, y0);
+        const list = PART_KINDS.filter((k) => this.partCat === 'All' || k.category === this.partCat);
+        const sw = (W - 40 - 5 * 8) / 6;
+        this.grid(list, 20, yg, 6, sw, 150, 8, (k, x, y) =>
+          this.slot(`part-${k.id}`, x, y, sw, 150, { type: 'part', id: k.id }, k.label, () => this.pick({ type: 'part', id: k.id })));
         break;
       }
+      case 'materials':
+        this.drawMaterials(y0);
+        break;
       case 'join': {
-        const cw = (W - 40 - 24) / 4;
+        const sw = (W - 40 - 5 * 8) / 6;
         // Best join first: the process that works for the two materials, sized to the stock
-        const kinds = [{ id: AUTO_JOIN, label: '✨ Best join', category: 'auto' }, ...CONNECTOR_KINDS];
-        this.grid(kinds, 20, y0, 4, cw, 92, 8, (k, x, y) =>
-          this.btn(`join-${k.id}`, x, y, cw, 92, k.label, () => { app.joinKind = k.id; this.tools.byId('join'); }, { on: app.joinKind === k.id && this.tools.tool.id === 'join', sub: k.category }));
+        const kinds = [{ id: AUTO_JOIN, label: 'Best join' }, ...CONNECTOR_KINDS];
+        this.grid(kinds, 20, y0, 6, sw, 132, 8, (k, x, y) =>
+          this.slot(`join-${k.id}`, x, y, sw, 132, { type: 'joint', id: k.id }, k.label, () => this.pick({ type: 'joint', id: k.id })));
         break;
       }
+      case 'search':
+        this.drawSearch(y0);
+        break;
       case 'selected':
         this.drawSelected(y0);
         break;
@@ -230,7 +249,12 @@ export class Tablet {
       case 'builds':
         this.drawBuilds(y0);
         break;
+      case 'ada':
+        if (this.typing) this.drawForge(y0);
+        else this.drawAda(y0);
+        break;
     }
+    this.drawHotbar();
     this.texture.needsUpdate = true;
   }
 
@@ -268,7 +292,7 @@ export class Tablet {
       this.text(`${(u * 100).toFixed(0)}% of capacity ${l?.mode ? `(${l.mode})` : ''}   axial ${formatForce(l?.axial ?? 0)} · shear ${formatForce(l?.shear ?? 0)} · bending ${(l?.bending ?? 0).toFixed(1)} N·m`, 24, y0 + 112, 22, '#9aa4af');
       const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
       nums.forEach((p, i) => this.stepper(`cp-${p.key}`, 24, y0 + 136 + i * 56, p, Number(c.params[p.key]), (v) => setConnectionParam(app.store, c.id, p.key, v)));
-      const by = H - 76;
+      const by = CH - 76;
       if (c.state.status !== 'intact') this.btn('repair', 24, by, 300, 56, 'Repair', () => setConnectionState(app.store, c.id, { status: 'intact', note: '' }, 'Repair joint'), { tone: 'accent' });
       this.btn('cdel', W - 324, by, 300, 56, 'Delete joint', () => app.deleteSelection(), { tone: 'danger' });
       return;
@@ -310,7 +334,7 @@ export class Tablet {
       this.text(say, 24, my + 56 + 30, 24, Br > 0 ? '#4dd68c' : '#9aa4af', 'left', '600');
       if (mg.drive) this.btn('switch', 24 + 490, my + 56, 170, 46, app.switchOn ? '🧲 On' : '🧲 Off', () => app.toggleSwitch(), { on: app.switchOn });
     }
-    const by = H - 76;
+    const by = CH - 76;
     const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
     if (damaged) {
       this.text(`Damaged: ${part.damage.broken.length} fracture(s)`, W - 24, y0 + 36, 22, '#ff9b73', 'right');
@@ -319,6 +343,283 @@ export class Tablet {
     this.btn('freeze', 24, by, 230, 56, part.frozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, [part.id], !part.frozen); }, { on: part.frozen });
     this.btn('dup', 264, by, 230, 56, 'Duplicate', () => app.duplicateSelection());
     this.btn('del', W - 254, by, 230, 56, 'Delete', () => deleteParts(app.store, [part.id]), { tone: 'danger' });
+  }
+
+  // ---- inventory: slots, chips, the hotbar, search ----------------------------------------------
+
+  readonly hotbar = new Hotbar();
+  private partCat = 'All';
+  private matGroup = 'All';
+  private query = '';
+  private catalog: Entry[] | null = null;
+
+  /** An inventory slot: the item's icon, its name under it. `compact` for the hotbar. */
+  private slot(id: string, x: number, y: number, w: number, h: number, item: Item, label: string, onClick: () => void, compact = false) {
+    const g = this.ctx;
+    const hover = this.hoverId === id;
+    const on = this.isActive(item);
+    g.fillStyle = on ? 'rgba(255,179,71,0.25)' : hover ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.3)';
+    roundRect(g, x, y, w, h, 10);
+    g.fill();
+    g.strokeStyle = on ? '#ffb347' : hover ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.1)';
+    g.lineWidth = on || hover ? 3 : 2;
+    g.stroke();
+    const s = compact ? h - 28 : Math.min(w - 24, h - 48);
+    this.icon(item, x + (w - s) / 2, y + (compact ? 2 : 6), s);
+    g.fillStyle = on ? '#ffd9a0' : '#e8ecf1';
+    g.textAlign = 'center';
+    g.textBaseline = 'alphabetic';
+    if (compact) {
+      g.font = '600 15px system-ui, sans-serif';
+      g.fillText(fit(g, label, w - 8), x + w / 2, y + h - 8);
+    } else {
+      g.font = '600 17px system-ui, sans-serif';
+      const words = label.split(' ');
+      let a = '', b = '';
+      for (const wd of words) { if (!b && g.measureText(a ? `${a} ${wd}` : wd).width <= w - 12) a = a ? `${a} ${wd}` : wd; else b = b ? `${b} ${wd}` : wd; }
+      g.fillText(fit(g, a, w - 10), x + w / 2, y + h - (b ? 28 : 12));
+      if (b) g.fillText(fit(g, b, w - 10), x + w / 2, y + h - 8);
+    }
+    this.widgets.push({ id, x, y, w, h, onClick });
+  }
+
+  private icon(item: Item, x: number, y: number, s: number) {
+    const g = this.ctx;
+    switch (item.type) {
+      case 'part': drawPart(g, item.id, x, y, s, this.app.spawnKind === item.id ? this.app.spawnMaterial ?? undefined : undefined); break;
+      case 'material': drawMaterial(g, item.id, x, y, s); break;
+      case 'joint': drawGlyph(g, jointGlyph(item.id), x, y, s); break;
+      case 'tool': drawGlyph(g, this.tools.tools.find((t) => t.id === item.id)?.icon ?? '🛠', x, y, s); break;
+      case 'build': drawGlyph(g, '💾', x, y, s); break;
+      case 'action': drawGlyph(g, this.actions().find((a) => a.id === item.id)?.glyph ?? '⚙️', x, y, s); break;
+    }
+  }
+
+  private itemLabel(item: Item): string {
+    try {
+      switch (item.type) {
+        case 'part': return getPartKind(item.id).label;
+        case 'material': return getMaterial(item.id).name;
+        case 'joint': return item.id === AUTO_JOIN ? 'Best join' : getConnectorKind(item.id).label;
+        case 'tool': return this.tools.tools.find((t) => t.id === item.id)?.label ?? item.id;
+        case 'build': return this.app.library.get(item.id)?.name ?? 'Build';
+        case 'action': return this.actions().find((a) => a.id === item.id)?.label ?? item.id;
+      }
+    } catch { /* an item no longer in the catalog */ }
+    return item.id;
+  }
+
+  private isActive(item: Item): boolean {
+    const app = this.app, t = this.tools.tool.id;
+    switch (item.type) {
+      case 'tool': return t === item.id;
+      case 'part': return t === 'place' && app.spawnKind === item.id;
+      case 'material': return t === 'place' && app.spawnMaterial === item.id;
+      case 'joint': return t === 'join' && app.joinKind === item.id;
+      default: return false;
+    }
+  }
+
+  /** Pick something up, as from an inventory: the tool that uses it becomes active, and it goes in the hotbar. */
+  pick(item: Item) {
+    const app = this.app;
+    switch (item.type) {
+      case 'tool': this.tools.byId(item.id); break;
+      case 'part': app.spawnKind = item.id; this.tools.byId('place'); break;
+      case 'material': {
+        const m = getMaterial(item.id);
+        const kind = getPartKind(app.spawnKind);
+        if (kind.materialFilter && !kind.materialFilter(m)) {
+          // a part that can be made of it: a block, a plate, else the first that can
+          const k = ['block', 'plate'].map((id) => getPartKind(id)).find((x) => !x.materialFilter || x.materialFilter(m)) ?? PART_KINDS.find((x) => !x.materialFilter || x.materialFilter(m))!;
+          app.toast(`A ${kind.label.toLowerCase()} can't be ${m.name}: placing a ${k.label.toLowerCase()}`, 'info');
+          app.spawnKind = k.id;
+        }
+        app.spawnMaterial = item.id;
+        this.tools.byId('place');
+        break;
+      }
+      case 'joint': app.joinKind = item.id; this.tools.byId('join'); break;
+      case 'build': app.openBuild(item.id); return;
+      case 'action': this.actions().find((a) => a.id === item.id)?.run(); return;
+    }
+    this.hotbar.use(item);
+    app.notify();
+  }
+
+  /** Category chips: a row (or two) of labels, one chosen. Returns the y below them. */
+  private chips(prefix: string, labels: string[], current: string, set: (l: string) => void, y: number) {
+    const g = this.ctx;
+    g.font = '600 20px system-ui, sans-serif';
+    let x = 20;
+    for (const l of labels) {
+      const w = Math.min(W - 40, g.measureText(l).width + 36);
+      if (x + w > W - 20) { x = 20; y += 50; }
+      this.btn(`${prefix}-${l}`, x, y, w, 42, l, () => set(l), { on: current === l, small: true });
+      g.font = '600 20px system-ui, sans-serif';
+      x += w + 8;
+    }
+    return y + 54;
+  }
+
+  private drawHotbar() {
+    const g = this.ctx;
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    roundRect(g, 12, CH + 2, W - 24, HOT - 10, 16);
+    g.fill();
+    const n = SLOTS, sw = (W - 40 - (n - 1) * 8) / n;
+    this.hotbar.items.forEach((it, i) => {
+      this.slot(`hot-${i}`, 20 + i * (sw + 8), CH + 10, sw, HOT - 26, it, this.itemLabel(it), () => this.pick(it), true);
+      this.text(`${i + 1}`, 28 + i * (sw + 8), CH + 30, 15, '#6f7883');
+    });
+  }
+
+  private drawMaterials(y0: number) {
+    const app = this.app;
+    const groups = ['All', ...MATERIAL_GROUPS.map((gr) => gr.label)];
+    const yg = this.chips('mgrp', groups, this.matGroup, (l) => { this.matGroup = l; this.scroll = 0; }, y0);
+    const ids = this.matGroup === 'All' ? MATERIALS.map((m) => m.id) : MATERIAL_GROUPS.find((gr) => gr.label === this.matGroup)?.ids ?? [];
+    const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
+    const sw = (W - 40 - 5 * 8) / 6;
+    this.grid(ids, 20, yg + (sel.length ? 56 : 0), 6, sw, 132, 8, (id, x, y) =>
+      this.slot(`mat-${id}`, x, y, sw, 132, { type: 'material', id }, getMaterial(id).name, () => this.pick({ type: 'material', id })));
+    if (sel.length && app.spawnMaterial) {
+      const m = getMaterial(app.spawnMaterial);
+      this.btn('mat-apply', 20, yg, W - 40, 48, `Make the selected part${sel.length > 1 ? 's' : ''} ${m.name}`, () => {
+        const ok = sel.filter((id) => { const k = getPartKind(app.doc.parts[id]!.kind); return !k.materialFilter || k.materialFilter(m); });
+        if (ok.length) setPartMaterial(app.store, ok, m.id);
+        if (ok.length < sel.length) app.toast(`${sel.length - ok.length} of them can't be ${m.name}`, 'warn');
+      }, { tone: 'accent' });
+    }
+  }
+
+  /** Everything the search finds: the catalog, your tools, your builds, and world actions. */
+  private entries(): Entry[] {
+    this.catalog ??= catalogEntries();
+    const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    return [
+      ...this.catalog,
+      ...this.tools.tools.map((t) => ({ item: { type: 'tool' as const, id: t.id }, label: t.label, sub: 'Tool', words: [...words(t.label), ...words(t.hint), 'tool'] })),
+      ...this.app.library.list().map((b) => ({ item: { type: 'build' as const, id: b.id }, label: b.name, sub: 'My build', words: [...words(b.name), 'build', 'saved', 'my'] })),
+      ...this.actions().map((a) => ({ item: { type: 'action' as const, id: a.id }, label: a.label, sub: 'Action', words: [...words(a.label), ...a.words] })),
+    ];
+  }
+
+  private actions(): { id: string; label: string; glyph: string; words: string[]; run: () => void }[] {
+    const app = this.app, s = app.settings;
+    return [
+      { id: 'pause', label: s.paused ? 'Run' : 'Pause', glyph: '⏯️', words: ['pause', 'run', 'time', 'freeze'], run: () => app.togglePause() },
+      { id: 'checkpoint', label: 'Checkpoint', glyph: '⚑', words: ['checkpoint', 'save', 'point'], run: () => app.checkpoint() },
+      { id: 'rewind', label: 'Rewind', glyph: '⏪', words: ['rewind', 'back', 'restore'], run: () => app.rewind() },
+      { id: 'undo', label: 'Undo', glyph: '↶', words: ['undo', 'back'], run: () => app.undo() },
+      { id: 'redo', label: 'Redo', glyph: '↷', words: ['redo'], run: () => app.redo() },
+      { id: 'build-mode', label: 'Build mode', glyph: '🏗️', words: ['build', 'mode', 'hold', 'snap', 'still'], run: () => app.enterBuild() },
+      { id: 'play', label: 'Play', glyph: '▶️', words: ['play', 'start', 'simulate', 'go'], run: () => app.play() },
+      { id: 'save-build', label: 'Save build', glyph: '💾', words: ['save', 'build', 'keep'], run: () => app.saveBuild() },
+      { id: 'new-build', label: 'New build', glyph: '🆕', words: ['new', 'empty', 'clear', 'start'], run: () => app.newBuild() },
+      { id: 'switch', label: app.switchOn ? 'Switch off' : 'Switch on', glyph: '🧲', words: ['switch', 'magnet', 'electromagnet', 'aux', 'power'], run: () => app.toggleSwitch() },
+      { id: 'zero-g', label: 'Zero gravity', glyph: '🪐', words: ['zero', 'gravity', 'space', 'float'], run: () => setSim(app.store, { gravity: [0, 0, 0] }) },
+      { id: 'moon', label: 'Moon gravity', glyph: '🌙', words: ['moon', 'gravity', 'low'], run: () => setSim(app.store, { gravity: [0, -1.62, 0] }) },
+      { id: 'earth', label: 'Earth gravity', glyph: '🌍', words: ['earth', 'gravity', 'normal'], run: () => setSim(app.store, { gravity: [0, -STANDARD_GRAVITY, 0] }) },
+      { id: 'shrink', label: 'Shrink me', glyph: '🐭', words: ['shrink', 'small', 'tiny', 'scale', 'mouse'], run: () => { s.playerScale = Math.max(0.05, s.playerScale / 2); app.notify(); } },
+      { id: 'grow', label: 'Grow me', glyph: '🦖', words: ['grow', 'big', 'giant', 'scale', 'godzilla'], run: () => { s.playerScale = Math.min(20, s.playerScale * 2); app.notify(); } },
+      { id: 'stress', label: 'Stress view', glyph: '📈', words: ['stress', 'load', 'strain', 'view'], run: () => { app.view.setStressOverlay(!app.view.stressOverlay); app.notify(); } },
+    ];
+  }
+
+  /** Search: type, and everything that matches shows as you go. */
+  private drawSearch(y0: number) {
+    const g = this.ctx;
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(g, 20, y0, W - 40, 54, 12);
+    g.fill();
+    this.text(this.query ? `🔍 ${this.query}▏` : '🔍 Type to search parts, materials, joints, tools, builds…▏', 34, y0 + 36, 24, this.query ? '#e8ecf1' : '#7d8792');
+    const found = this.query ? search(this.entries(), this.query, 12) : [];
+    const sw = (W - 40 - 5 * 8) / 6;
+    if (this.query && !found.length) this.text(`Nothing called “${this.query}”. Try fewer letters.`, 24, y0 + 110, 22, '#9aa4af');
+    if (!this.query) this.wrapped('Try: steel, pipe, oak, weld, magnet, glue, zero gravity, save…', 24, y0 + 100, W - 48, 22, '#9aa4af', 2);
+    found.forEach((e, i) => this.slot(`found-${i}`, 20 + (i % 6) * (sw + 8), y0 + 64 + Math.floor(i / 6) * 128, sw, 120, e.item, e.label, () => this.pick(e.item)));
+    this.keyboard('skey', y0 + 64 + 2 * 128 + 4, () => this.query, (v) => { this.query = v; });
+  }
+
+  /** A keyboard: digits, letters and the symbols Forge uses, space, backspace and clear. */
+  private keyboard(prefix: string, y: number, get: () => string, set: (v: string) => void, extra?: [string, string, () => void]) {
+    const rows = ['1234567890.-', 'qwertyuiop=⌫', 'asdfghjkl()*', 'zxcvbnm{}/+%'];
+    const kw = (W - 40 - 11 * 6) / 12, kh = 52;
+    rows.forEach((r, j) => [...r].forEach((k, i) => this.btn(`${prefix}-${k}`, 20 + i * (kw + 6), y + j * (kh + 6), kw, kh, k, () => {
+      set(k === '⌫' ? get().slice(0, -1) : get() + k);
+    })));
+    const yl = y + 4 * (kh + 6);
+    const sw = (W - 40 - 3 * 6) / 4;
+    this.btn(`${prefix}-space`, 20, yl, sw * 2 + 6, kh, 'space', () => set(`${get()} `));
+    this.btn(`${prefix}-clear`, 20 + 2 * (sw + 6), yl, sw, kh, 'Clear', () => set(''));
+    if (extra) this.btn(extra[0], 20 + 3 * (sw + 6), yl, sw, kh, extra[1], extra[2]);
+  }
+
+  /** Ada's page: the command line and keyboard instead of her advice. */
+  private typing = false;
+
+  /** Ada: what she sees, what she advises (with fixes you apply in one tap), and what you'll likely want next. */
+  private drawAda(y0: number) {
+    const ada = this.app.ada;
+    if (!ada) return;
+    this.text(`● ${ada.name} · ${ada.observe()}`, 24, y0 + 30, 24, '#8fd3ff', 'left', '600');
+    this.text(ada.focus(), 24, y0 + 62, 20, '#9aa4af');
+    let y = y0 + 80;
+    const cards = ada.advice.slice(0, 3);
+    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
+    for (const a of cards) {
+      const g = this.ctx;
+      g.fillStyle = a.kind === 'break' ? 'rgba(255,91,77,0.12)' : a.kind === 'warn' ? 'rgba(255,193,77,0.12)' : 'rgba(143,211,255,0.10)';
+      roundRect(g, 20, y, W - 40, 112, 14);
+      g.fill();
+      this.wrapped(a.text, 36, y + 28, W - 140, 20, a.kind === 'break' ? '#ffb3aa' : a.kind === 'warn' ? '#ffd98a' : '#e8ecf1', 2);
+      this.btn(`adv-x-${a.id}`, W - 84, y + 8, 52, 40, '✕', () => ada.dismiss(a.id));
+      const fw = (W - 72 - 8) / 2;
+      a.fixes.slice(0, 2).forEach((f, i) => this.btn(`fix-${a.id}-${i}`, 36 + i * (fw + 8), y + 62, fw, 42, f.label, () => f.apply(), { tone: 'accent' }));
+      if (!a.fixes.length) this.text(a.kind === 'break' ? 'No stronger joint fits here: try bigger parts, or brace it.' : '', 36, y + 90, 18, '#9aa4af');
+      y += 120;
+    }
+    const next = ada.suggestions();
+    const yn = y0 + 80 + 3 * 120 + 4;
+    this.text(next.length ? 'Next, from your habits:' : 'Next: I learn your habits as you build.', 24, yn + 22, 20, '#9aa4af');
+    const nw = (W - 40 - 3 * 8) / 4;
+    next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 34, nw, 56, n.label, () => n.run()));
+    const by = CH - 76;
+    const bw = (W - 40 - 16) / 3;
+    this.btn('forge', 20, by, bw, 60, '⌨ Forge command', () => { this.typing = true; }, { tone: 'accent' });
+    this.btn('claude', 20 + bw + 8, by, bw, 60, '📋 Copy for Claude', () => this.copyForClaude(), { sub: 'transcript + share code' });
+    this.btn('adv-clear', 20 + 2 * (bw + 8), by, bw, 60, 'Clear advice', () => { ada.advice = []; this.app.notify(); });
+  }
+
+  private copyForClaude() {
+    const text = this.app.ada?.forClaude() ?? '';
+    const done = () => this.app.toast('Copied: paste it to Claude to show exactly what you built', 'ok');
+    const fail = () => this.app.toast('The browser would not copy here: the share code is on My builds via Save', 'warn');
+    try {
+      const w = navigator.clipboard?.writeText(text);
+      if (w) void w.then(done, fail); else fail();
+    } catch { fail(); }
+  }
+
+  /** Forge on the tablet: a command line, what it did, and a keyboard. */
+  private drawForge(y0: number) {
+    const ada = this.app.ada;
+    if (!ada) return;
+    const g = this.ctx;
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(g, 20, y0, W - 40 - 170, 56, 12);
+    g.fill();
+    g.font = '500 24px ui-monospace, monospace';
+    let shown = ada.command;
+    while (shown && g.measureText(`${shown}▏`).width > W - 250) shown = shown.slice(1);
+    this.text(`${shown}▏`, 34, y0 + 36, 24, '#e8ecf1');
+    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Run ⏎', () => { if (ada.command.trim()) { ada.run(ada.command); ada.command = ''; } }, { tone: 'accent' });
+    ada.output.slice(-5).forEach((l, i) => this.text(l.length > 78 ? `${l.slice(0, 77)}…` : l, 24, y0 + 90 + i * 26, 19, l.startsWith('✗') ? '#ff9b73' : l.startsWith('›') ? '#8fd3ff' : '#c7ccd1'));
+    const ex: [string, string][] = [['a rail', 'place lumber length=1.2m at 0 0.9 -1 as rail'], ['join two', 'join last this'], ['4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
+    const ew = (W - 40 - 16) / 3;
+    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, `e.g. ${label}`, () => { ada.command = code; }));
+    this.keyboard('key', y0 + 276, () => ada.command, (v) => { ada.command = v; }, ['forge-back', '← Ada', () => { this.typing = false; }]);
   }
 
   /** Delete mode on My builds: a tap deletes instead of opening. */
@@ -381,9 +682,9 @@ export class Tablet {
       });
     }
     this.drawRoom(row(5) + 10, bw);
-    this.drawHealth(H - 46);
-    this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
-    this.text(`v ${__BUILD__}`, W - 24, H - 14, 18, '#6f7883', 'right');
+    this.drawHealth(CH - 46);
+    this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, CH - 14, 22, '#9aa4af');
+    this.text(`v ${__BUILD__}`, W - 24, CH - 14, 18, '#6f7883', 'right');
   }
 
   /**

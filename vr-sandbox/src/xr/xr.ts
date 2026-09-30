@@ -464,6 +464,33 @@ export class XRMode {
     }
     this.tablet.update(time, tabletUv);
     this.hud.update(dt);
+    this.updateAda(dt, time);
+  }
+
+  /**
+   * Ada's presence: a small light that keeps at your left shoulder, a little ahead, and glows amber when she has
+   * something to tell you (her page on the tablet says what). It is light only, and never touches the build.
+   */
+  private adaOrb: THREE.Mesh | null = null;
+  private updateAda(dt: number, time: number) {
+    const ada = this.app.ada;
+    if (!ada) return;
+    if (!this.adaOrb) {
+      this.adaOrb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 24, 16), new THREE.MeshBasicMaterial({ color: 0x8fd3ff, transparent: true, opacity: 0.85 }));
+      this.adaOrb.name = 'ada';
+      this.adaOrb.renderOrder = 6;
+      this.app.view.scene.add(this.adaOrb);
+    }
+    const cam = this.app.renderer.xr.getCamera();
+    const head = cam.getWorldPosition(new THREE.Vector3());
+    const yaw = new THREE.Euler().setFromQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+    const s = this.app.settings.playerScale;
+    const want = new THREE.Vector3(-0.42 * s, -0.12 * s, -0.55 * s).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(head);
+    this.adaOrb.position.lerp(want, 1 - Math.exp(-dt * 4));
+    const news = ada.advice.length > 0;
+    const pulse = 1 + (news ? 0.18 : 0.06) * Math.sin(time / (news ? 180 : 600));
+    this.adaOrb.scale.setScalar(s * pulse);
+    (this.adaOrb.material as THREE.MeshBasicMaterial).color.setHex(news ? (ada.advice[0]!.kind === 'break' ? 0xff7a5c : 0xffc14d) : 0x8fd3ff);
   }
 
   /** Calibration and the room scan, from this frame's XR data. */

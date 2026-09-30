@@ -30,7 +30,8 @@ test('Quest emulation: tablet taps, grip grab, tool cycling', async ({ page }) =
       const mesh = xr.tablet.mesh;
       mesh.updateMatrixWorld(true);
       const V = app.view.camera.position.constructor;
-      return mesh.localToWorld(new V(((b.x + b.w / 2) / 1024 - 0.5) * 0.3, (1 - (b.y + b.h / 2) / 720 - 0.5) * ((0.3 * 720) / 1024), 0));
+      const cw = xr.tablet.canvas.width, ch = xr.tablet.canvas.height;
+      return mesh.localToWorld(new V(((b.x + b.w / 2) / cw - 0.5) * 0.3, (1 - (b.y + b.h / 2) / ch - 0.5) * ((0.3 * ch) / cw), 0));
     };
     w.press = async (side: string, button: string) => {
       w.iwer.controllers[side].updateButtonValue(button, 1);
