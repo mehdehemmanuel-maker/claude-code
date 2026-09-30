@@ -191,7 +191,11 @@ interface BodyRec {
   mass: number;
   volume: number;
   faceAreas: Vec3;
-  magnet?: { geom: MagnetGeometry; Br: number };
+  /**
+   * A magnet's field: Br this tick. An electromagnet on a switch (`drive`) has `rated` at full power, times its
+   * channel; at zero it is plain steel.
+   */
+  magnet?: { geom: MagnetGeometry; Br: number; rated: number; drive?: string };
   frozen: boolean;
   grabbed: GrabMode | null;
   inFluid: boolean;
@@ -377,6 +381,17 @@ export interface WorldOptions {
   filterTicks: number;
   /** Hold magnets at rest in contact with a latch (M6); off, their contact is simulated as forces throughout. */
   magnetLatch: boolean;
+}
+
+/** Whether a body's field is on this tick. */
+const fieldOn = (r: BodyRec) => !!r.magnet && r.magnet.Br > 0;
+
+/** A part's field: a permanent magnet's from its grade; an electromagnet's from its coil, on its switch if it has one. */
+function magnetOf(g: MagnetGeometry | undefined, material: Material, level: (ch: string) => number): BodyRec['magnet'] {
+  if (!g) return undefined;
+  const rated = g.Br ?? material.remanence ?? 0;
+  if (!(rated > 0)) return undefined;
+  return { geom: g, rated, Br: g.drive ? rated * level(g.drive) : rated, drive: g.drive };
 }
 
 export class PhysicsWorld {
@@ -849,7 +864,7 @@ export class PhysicsWorld {
         id: layout ? segmentBodyId(part.id, k) : part.id, partId: part.id, seg: layout ? k : -1, pr,
         slot, subgroup, body, kind, material, shape: shapeDesc, dims, mass, volume,
         faceAreas: [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]],
-        magnet: magGeom && material.remanence ? { geom: magGeom, Br: material.remanence } : undefined,
+        magnet: magnetOf(magGeom, material, (ch) => this.channelLevel(ch)),
         frozen: part.frozen, grabbed: null, inFluid: false, Iloc: null, prior: null,
       };
       if (!part.frozen) rec.Iloc = k > 0 && pr.segs[0]?.Iloc ? pr.segs[0].Iloc : this.localInertia(rec);
@@ -2413,9 +2428,10 @@ export class PhysicsWorld {
   private magnetPairs(): MagnetPair[] {
     const pairs: MagnetPair[] = [];
     const g = length(this.sim.gravity) || 9.81;
-    const magnets = [...this.bodies.values()].filter((r) => r.magnet);
+    const magnets = [...this.bodies.values()].filter(fieldOn);
     if (magnets.length === 0) return [];
-    const ferro = [...this.bodies.values()].filter((r) => !r.magnet && r.material.ferromagnetic);
+    // steel, and an electromagnet switched off: its core is steel
+    const ferro = [...this.bodies.values()].filter((r) => !fieldOn(r) && r.material.ferromagnetic);
     const info = magnets.map((r) => {
       const pose = this.poseOf(r);
       const geom = r.magnet!.geom;
@@ -2617,7 +2633,7 @@ export class PhysicsWorld {
   private estimateEddies() {
     this.eddies = [];
     if (!this.sim.magnetism) return;
-    const magnets = [...this.bodies.values()].filter((r) => r.magnet);
+    const magnets = [...this.bodies.values()].filter(fieldOn);
     if (!magnets.length) return;
     const conductors = [...this.bodies.values()].filter((r) => !r.magnet && !r.material.ferromagnetic && r.material.conductivity >= EDDY_MIN_SIGMA);
     if (!conductors.length) return;
@@ -3234,10 +3250,32 @@ export class PhysicsWorld {
     return Math.min(MAX_SUBSTEPS, n);
   }
 
+  /** A control channel's level for an on/off consumer, 0 to 1. */
+  private channelLevel(ch: string) {
+    return Math.max(0, Math.min(1, this.channels[ch] ?? 0));
+  }
+
+  /**
+   * Electromagnets follow their switch. A latch holds with the pull it was made at, so one made at another strength
+   * lets go; it latches again at this strength if that still holds.
+   */
+  private driveMagnets() {
+    for (const r of this.bodies.values()) {
+      const m = r.magnet;
+      if (!m?.drive) continue;
+      const Br = m.rated * this.channelLevel(m.drive);
+      if (Br === m.Br) continue;
+      m.Br = Br;
+      for (const l of [...this.latches.values()]) if (l.a === r || l.b === r) this.unlatch(l);
+      this.bi.ActivateBody(r.body.GetID());
+    }
+  }
+
   /** Advance one fixed tick. */
   step(): StepResult {
     const t0 = performance.now();
     const dt = TICK;
+    this.driveMagnets();
     // Fields act as forces over a step. Magnets close together move faster than a tick can follow, so then the
     // tick is divided and every field recomputed for each part of it.
     const km = this.applyMagnets(dt, true);

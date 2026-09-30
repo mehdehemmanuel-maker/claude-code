@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { getMaterial, MATERIALS, type Material } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { effectiveParams, getPartKind, type PartDims } from '../parts/registry';
-import { commitPoses, connectedComponent, deleteParts, duplicateParts, recordFracture, setConnectionState, setFrozen } from '../doc/commands';
+import { commitPoses, connectedComponent, deleteParts, duplicateParts, newDoc, recordFracture, setConnectionState, setFrozen } from '../doc/commands';
 import { endpointWorld, isBent, partLayout, segmentPose } from './segments';
 import { segmentBodyId, segmentOffset, segmentOfFrame } from '../parts/registry';
 import { canonicalPose, composePose, length, relativePose, sub } from '../doc/math';
@@ -18,7 +18,7 @@ import type { SimSettings } from '../doc/types';
 import { AudioEngine } from '../audio/audio';
 import { SceneView } from '../render/view';
 import { Particles } from '../render/particles';
-import { getTemplate } from '../templates/templates';
+import { BuildLibrary } from './library';
 import { LiveState } from './live';
 
 export interface Settings {
@@ -51,6 +51,13 @@ export type Toast = { text: string; kind: 'info' | 'warn' | 'break' | 'ok' };
 export type WorldKind = 'workshop' | 'mixed';
 
 const ENV_MATERIAL = getMaterial('concrete.c30');
+
+/** An empty workshop: the floor and its pool, nothing built. */
+function emptyWorkshop(): BuildDoc {
+  const d = newDoc();
+  d.sim.fluids = [poolFluid()];
+  return d;
+}
 
 export class App {
   readonly store: DocStore;
@@ -113,7 +120,7 @@ export class App {
     renderer.toneMappingExposure = 1.0;
     renderer.xr.enabled = true;
     canvasHost.appendChild(renderer.domElement);
-    const doc = getTemplate('blank').build();
+    const doc = emptyWorkshop();
     const physics = await PhysicsClient.create(doc.sim, physicsMode);
     return new App(renderer, physics, doc);
   }
@@ -517,10 +524,54 @@ export class App {
     this.checkpoint(`Loaded ${label}`, false);
   }
 
-  loadTemplate(id: string) {
-    const t = getTemplate(id);
-    this.loadDoc(t.build(), t.name);
-    this.toast(`${t.name}: ${t.tryThis[0] ?? ''}`, 'info');
+  // your builds (nothing ships pre-made: every build in the library is one you saved)
+
+  readonly library = new BuildLibrary();
+  /** The library entry the open build came from, or null for one not yet saved. */
+  libraryId: string | null = null;
+
+  /** Save the build: over the one it was opened from, or (`asNew`, or never saved) as a new entry. */
+  saveBuild(asNew = false) {
+    const entry = this.library.save(this.saveText(), asNew ? null : this.libraryId);
+    this.libraryId = entry.id;
+    this.toast(this.library.persistent ? `Saved “${entry.name}”` : `Saved “${entry.name}” for now: this browser keeps no storage, so it goes when the page closes`, this.library.persistent ? 'ok' : 'warn');
+    this.audio.ui('click');
+    this.notify();
+  }
+
+  openBuild(id: string) {
+    const entry = this.library.get(id);
+    if (!entry || !this.openText(entry.text, entry.name)) return;
+    this.libraryId = id;
+    this.toast(`Opened “${entry.name}”`, 'ok');
+  }
+
+  deleteBuild(id: string) {
+    const entry = this.library.get(id);
+    if (!entry) return;
+    this.library.remove(id);
+    if (this.libraryId === id) this.libraryId = null;
+    this.toast(`Deleted “${entry.name}”`, 'info');
+    this.notify();
+  }
+
+  /** The tablet's switch: the aux channel, for electromagnets and anything else wired to it. */
+  get switchOn() {
+    return (this.channels['aux'] ?? 0) > 0;
+  }
+
+  toggleSwitch() {
+    this.channels['aux'] = this.switchOn ? 0 : 1;
+    this.toast(this.switchOn ? 'Switch on: electromagnets on the switch are live' : 'Switch off: electromagnets on the switch let go', 'info');
+    this.audio.ui('click');
+    this.notify();
+  }
+
+  /** An empty workshop to start a new build in. */
+  newBuild() {
+    this.loadDoc(emptyWorkshop(), 'new build');
+    this.libraryId = null;
+    this.toast('New build: an empty workshop', 'ok');
   }
 
   saveText(): string {
@@ -536,6 +587,7 @@ export class App {
   openText(text: string, label = 'file') {
     try {
       this.loadDoc(decodeDocText(text), label);
+      this.libraryId = null;
       return true;
     } catch (e) {
       this.toast(e instanceof DecodeError ? e.message : `Could not open: ${String(e)}`, 'warn');
@@ -547,6 +599,7 @@ export class App {
   openShareCode(code: string) {
     try {
       this.loadDoc(fromShareCode(code), 'share code');
+      this.libraryId = null;
       return true;
     } catch (e) {
       this.toast(e instanceof DecodeError ? e.message : `Could not open: ${String(e)}`, 'warn');

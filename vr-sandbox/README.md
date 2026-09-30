@@ -80,21 +80,24 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
   - Magnets use the Gilbert charge model: magnet–magnet forces and torques, plus an image method against steel. Austenitic stainless and aluminium stay non-magnetic.
   - Buoyancy uses the real submerged volume.
   - Quadratic air drag.
-- **Catalogs:** 38 cited materials (steels, aluminium alloys, copper, titanium, woods, polymers, rubber, glass, concrete, magnets); 16 parametric part families; 18 connector kinds. Every parameter is editable in the UI.
+- **Catalogs:** 50 cited materials (steels, aluminium alloys, copper, titanium, woods, polymers, rubber, glass, concrete, stone, textiles, leather, foam, cork, composites, magnets); 17 parametric part families, including an electromagnet; 18 connector kinds. Every parameter is editable on the tablet.
+- **Joining:** **Best join** picks the real process for the two materials and sizes it to the stock: welds with the matching filler, screws that reach into the second piece, rivets, bolts or the trade's adhesive. A process that can't hold those materials is replaced by one that can, and the headset says why.
+- **Magnets:** strength by grade (Ferrite, N35, N42, N52) and size, stepped on the part page with a "holds ≈ kg on steel" readout. The electromagnet has power from 0 to 100 % and can be put on the tablet's switch.
 - **Save format:** canonical JSON with IDs and a parent/child hierarchy, and full material snapshots embedded. Saves are byte-exact. Share codes (`VRSB1.` deflate + base64url + CRC32) and `#build=` links are supported.
 - **Feel:**
   - Modal-synthesis impact audio pitched to each part's flexural frequency.
   - Creaks above 80% utilisation, motor whine, break/slip/splash sounds.
   - Sparks by real spark-test signature (aluminium doesn't spark).
   - Dust, splashes and debris, haptics, and a stress overlay.
-- **Creative loop:** undo/redo (including sim-caused failures), checkpoints and rewind, pause/step/slow motion, freeze to world, duplicate assemblies, templates.
+- **Creative loop:** undo/redo (including sim-caused failures), checkpoints and rewind, pause/step/slow motion, freeze to world, duplicate assemblies, Build mode (hold still, snap, Play).
+- **My builds:** save, open and delete your own builds on the headset. Nothing pre-made ships; the physics test scenes live only in the tests.
 
 ## Tests
 
 ```bash
 npm run typecheck
-npm test        # 118 tests: engineering golden values, codec property tests, physics laws, fracture, template behaviour
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 14 browser tests incl. emulated Quest sessions (movement, driving, walk and mixed reality) and the Pages subpath
+npm test        # 194 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, test scenes
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 16 browser tests on an emulated Quest (building, joining, My builds, movement, walk and mixed reality) and the Pages subpath
 ```
 
 The physics conformance suite checks laws, not builds:

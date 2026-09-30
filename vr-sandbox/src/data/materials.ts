@@ -264,6 +264,7 @@ export const MATERIALS: Material[] = [
   },
   // conductivity: sintered NdFeB 1.5 uOhm m (manufacturer data sheets); sintered hard ferrite is a ceramic, above
   // 1e4 Ohm m, so effectively an insulator
+  magnet('magnet.n35', 'Neodymium NdFeB N35', 1.19, 7500, 6.7e5, 0xb3b8be, 'IEC 60404-8-1 / grade tables 1.17-1.21 T'),
   magnet('magnet.n42', 'Neodymium NdFeB N42', 1.3, 7500, 6.7e5, 0xb9bec4, 'IEC 60404-8-1 / grade tables 1.28-1.32 T'),
   magnet('magnet.n52', 'Neodymium NdFeB N52', 1.455, 7500, 6.7e5, 0xc2c7cc, 'grade tables 1.43-1.48 T'),
   magnet('magnet.ferrite-c8', 'Ferrite C8', 0.39, 4900, 1e-4, 0x3a3a3c, 'MMPA 0100 ceramic 8, 0.38-0.40 T'),

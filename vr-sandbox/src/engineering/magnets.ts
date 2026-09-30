@@ -347,3 +347,41 @@ export function blendedInteraction(level: number, pair: (rings: number) => numbe
   const g = pair(lo + 1);
   return f.map((v, i) => v * (1 - a) + g[i]! * a);
 }
+
+export interface PoleGeometry {
+  shape: 'cylinder' | 'block';
+  radius: number;
+  w: number;
+  h: number;
+  length: number;
+}
+
+/**
+ * What a magnet holds lying flush on a steel plate of thickness t, N: the pull of its pole faces' images in the steel
+ * (M2), the same model the world applies. A maker's "pull force" is measured on thick steel (t >= 10 mm).
+ */
+export function pullOnSteel(g: PoleGeometry, Br: number, t = 0.02): number {
+  if (Br <= 0) return 0;
+  const c: Vec3 = [0, g.length / 2, 0];
+  const up: Vec3 = [0, 1, 0];
+  if (g.shape === 'cylinder') {
+    const f = 0.95 * plateSaturationFactor(t, Br, Math.PI * g.radius ** 2, 2 * Math.PI * g.radius);
+    return -magnetWrench(imageFaces(cylinderFaces(c, up, g.radius, g.length, Br), [0, 0, 0], up, f), cylinderCharges(c, up, g.radius, g.length, Br, 4), c)[1]!;
+  }
+  const f = 0.95 * plateSaturationFactor(t, Br, g.w * g.h, 2 * (g.w + g.h));
+  return -magnetWrench(imageFaces(blockFaces(c, up, [1, 0, 0], [0, 0, 1], g.w, g.h, g.length, Br), [0, 0, 0], up, f), blockCharges(c, up, [1, 0, 0], [0, 0, 1], g.w, g.h, g.length, Br, 7), c)[1]!;
+}
+
+/**
+ * The magnetisation that makes an electromagnet's pole hold its rated force on thick steel at full power. The field
+ * acts as a uniformly magnetised cylinder of the pole's size, so its pull on steel goes as Br^2: Br = Br1 sqrt(F / F1).
+ * Current sets it (B ~ N I below saturation, so the hold goes as the square of the power) and the soft-steel core
+ * caps it: past about 1.6 T the core saturates and more current adds almost nothing (estimated knee of low-carbon
+ * steel). How far the field reaches off the pole follows from the same equivalent magnet: estimated.
+ */
+export const CORE_SATURATION = 1.6;
+export function electromagnetBr(g: PoleGeometry, rating: number): number {
+  const F1 = pullOnSteel(g, 1);
+  if (!(F1 > 0) || !(rating > 0)) return 0;
+  return Math.min(CORE_SATURATION, Math.sqrt(rating / F1));
+}

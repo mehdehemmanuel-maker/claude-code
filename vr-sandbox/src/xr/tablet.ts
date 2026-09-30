@@ -7,10 +7,10 @@ import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
-import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartParam, setSim } from '../doc/commands';
+import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
-import { STANDARD_GRAVITY } from '../data/materials';
-import { TEMPLATES } from '../templates/templates';
+import { MATERIALS, STANDARD_GRAVITY } from '../data/materials';
+import { pullOnSteel } from '../engineering/magnets';
 
 /** What the tablet needs from the XR mode: room modes and controls, and what the left stick does. */
 export interface XRControls {
@@ -190,7 +190,7 @@ export class Tablet {
     g.strokeStyle = 'rgba(255,255,255,0.12)';
     g.lineWidth = 3;
     g.stroke();
-    const tabs: [Page, string][] = [['tools', 'Tools'], ['parts', 'Parts'], ['join', 'Join'], ['selected', 'Selected'], ['world', 'World'], ['builds', 'Builds']];
+    const tabs: [Page, string][] = [['tools', 'Tools'], ['parts', 'Parts'], ['join', 'Join'], ['selected', 'Selected'], ['world', 'World'], ['builds', 'My builds']];
     const tw = (W - 40 - 5 * 8) / 6;
     tabs.forEach(([p, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 8), 16, tw, 58, label, () => { this.page = p; this.scroll = 0; }, { on: this.page === p }));
     const y0 = 96;
@@ -227,12 +227,9 @@ export class Tablet {
       case 'world':
         this.drawWorld(y0);
         break;
-      case 'builds': {
-        const cw = (W - 40 - 16) / 3;
-        this.grid(TEMPLATES, 20, y0, 3, cw, 120, 8, (t, x, y) =>
-          this.btn(`tpl-${t.id}`, x, y, cw, 120, t.name, () => app.loadTemplate(t.id), { sub: 'template' }));
+      case 'builds':
+        this.drawBuilds(y0);
         break;
-      }
     }
     this.texture.needsUpdate = true;
   }
@@ -290,6 +287,29 @@ export class Tablet {
     this.text(`${m.name} · ${formatMass(mass)} · ${formatForce(mass * STANDARD_GRAVITY)}`, 24, y0 + 74, 22, '#9aa4af');
     const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
     nums.forEach((p, i) => this.stepper(`pp-${p.key}`, 24, y0 + 96 + i * 56, p, Number(part.params[p.key]), (v) => setPartParam(app.store, part.id, p.key, v)));
+    // the material; for a permanent magnet that is its grade, so this is its power: weaker to the left, stronger right
+    const choices = MATERIALS.filter((x) => (kind.materialFilter ? kind.materialFilter(x) : true));
+    if (choices.every((x) => x.remanence)) choices.sort((a, b) => a.remanence! - b.remanence!);
+    const my = y0 + 96 + nums.length * 56;
+    if (choices.length > 1) {
+      const at = Math.max(0, choices.findIndex((x) => x.id === m.id));
+      const magnet = m.category === 'magnet';
+      this.text(magnet ? 'Grade (power)' : 'Material', 24, my + 30, 22, '#9aa4af');
+      this.text(m.name, 24 + 470, my + 30, 22, '#e8ecf1', 'right', '600');
+      const step = (d: number) => setPartMaterial(app.store, [part.id], choices[(at + d + choices.length) % choices.length]!.id);
+      this.btn('mat-', 24 + 490, my, 80, 46, magnet ? '−' : '◀', () => step(-1));
+      this.btn('mat+', 24 + 580, my, 80, 46, magnet ? '+' : '▶', () => step(1));
+    }
+    // what a magnet holds on thick steel, from the same pull model the physics uses
+    const mg = kind.magnet?.(part.params);
+    if (mg) {
+      const on = mg.drive ? app.switchOn : true;
+      const Br = (mg.Br ?? m.remanence ?? 0) * (on ? 1 : 0);
+      const kg = pullOnSteel(mg, Br) / STANDARD_GRAVITY;
+      const say = Br > 0 ? `Holds ≈ ${kg < 10 ? kg.toFixed(1) : kg.toFixed(0)} kg on thick steel` : mg.drive ? 'Switched off: plain steel' : 'Power 0: plain steel';
+      this.text(say, 24, my + 56 + 30, 24, Br > 0 ? '#4dd68c' : '#9aa4af', 'left', '600');
+      if (mg.drive) this.btn('switch', 24 + 490, my + 56, 170, 46, app.switchOn ? '🧲 On' : '🧲 Off', () => app.toggleSwitch(), { on: app.switchOn });
+    }
     const by = H - 76;
     const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
     if (damaged) {
@@ -299,6 +319,35 @@ export class Tablet {
     this.btn('freeze', 24, by, 230, 56, part.frozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, [part.id], !part.frozen); }, { on: part.frozen });
     this.btn('dup', 264, by, 230, 56, 'Duplicate', () => app.duplicateSelection());
     this.btn('del', W - 254, by, 230, 56, 'Delete', () => deleteParts(app.store, [part.id]), { tone: 'danger' });
+  }
+
+  /** Delete mode on My builds: a tap deletes instead of opening. */
+  private deleting = false;
+
+  /** Your builds, saved on this headset. Nothing here is pre-made. */
+  private drawBuilds(y0: number) {
+    const app = this.app;
+    const lib = app.library.list();
+    const open = app.libraryId ? app.library.get(app.libraryId) : null;
+    const bw = (W - 40 - 24) / 4;
+    this.btn('save', 20, y0, bw, 84, '💾 Save', () => app.saveBuild(), { tone: 'accent', sub: open ? `over “${open.name}”` : 'as a new build' });
+    this.btn('saveas', 20 + (bw + 8), y0, bw, 84, '➕ Save as new', () => app.saveBuild(true), { sub: 'a copy' });
+    this.btn('new', 20 + 2 * (bw + 8), y0, bw, 84, '🆕 New build', () => app.newBuild(), { sub: 'empty workshop' });
+    if (this.deleting && !lib.length) this.deleting = false;
+    this.btn('delmode', 20 + 3 * (bw + 8), y0, bw, 84, this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; },
+      { on: this.deleting, tone: this.deleting ? 'danger' : undefined, sub: this.deleting ? 'tap here to stop' : undefined });
+    const y1 = y0 + 100;
+    if (!lib.length) {
+      this.wrapped('No builds yet. Build something, then 💾 Save: your builds stay on this headset, and only builds you save appear here.', 24, y1 + 40, W - 48, 26, '#9aa4af', 3);
+      return;
+    }
+    const when = (iso: string) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const cw = (W - 40 - 16) / 3;
+    this.grid(lib, 20, y1, 3, cw, 110, 8, (e, x, y) =>
+      this.btn(`build-${e.id}`, x, y, cw, 110, e.name, () => {
+        if (this.deleting) this.app.deleteBuild(e.id);
+        else this.app.openBuild(e.id);
+      }, { on: app.libraryId === e.id, tone: this.deleting ? 'danger' : undefined, sub: when(e.saved) }));
   }
 
   private drawWorld(y0: number) {
@@ -324,6 +373,7 @@ export class Tablet {
     const presets: [string, number][] = [['Earth', STANDARD_GRAVITY], ['Moon', 1.62]];
     presets.forEach(([n, v], i) => this.btn(`g-${n}`, 20 + (2 + i) * (bw + 8), row(3), bw, 76, n, () => setSim(app.store, { gravity: [0, -v, 0] }), { on: Math.abs(g - v) < 0.01, sub: `${v} m/s²` }));
     this.btn('zerog', 20, row(4), bw, 76, 'Zero-g', () => setSim(app.store, { gravity: [0, 0, 0] }), { on: g < 1e-3 });
+    this.btn('switch-w', 20 + 3 * (bw + 8), row(4), bw, 76, app.switchOn ? '🧲 Switch: on' : '🧲 Switch: off', () => app.toggleSwitch(), { on: app.switchOn, sub: 'electromagnets, aux' });
     const r = this.room;
     if (r && r.active === 'relax') {
       this.btn('stick', 20 + (bw + 8), row(4), bw * 2 + 8, 76, r.drive ? 'Left stick: Drive' : 'Left stick: Fly', () => r.setDrive(!r.drive), {
@@ -333,6 +383,7 @@ export class Tablet {
     this.drawRoom(row(5) + 10, bw);
     this.drawHealth(H - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
+    this.text(`v ${__BUILD__}`, W - 24, H - 14, 18, '#6f7883', 'right');
   }
 
   /**
