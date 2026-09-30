@@ -46,13 +46,15 @@ known violation is tracked in the audit and gets a test before it is fixed.
 
 Inside `PhysicsWorld.step`, in order:
 
-1. `applyFields` (drag, buoyancy, magnets)
+1. once a tick: the magnetic pairs' stiffness (and so the substep count, M3) and the eddy-current damping (M4)
 2. `prepareClusters`: rigid assemblies of bonded segments and rigid joints
-3. Jolt step
+3. for each substep: `applyFields` (magnets, fluids, drag, bands, motors, grabs, then eddy currents last, M4), a Jolt
+   step, and the magnetic latches' impulses summed (M6)
 4. `solveAssemblies`: sequential impulses for anchors, plastic hinges and contacts, then `placeCluster`
 5. `bridgeLoads`: exact joint and bond loads
-6. `evaluateConnections` and `evaluateBonds`: failures
-7. events
+6. the latches: let go where the contact cannot hold, latch pairs come to rest (M6)
+7. `evaluateConnections` and `evaluateBonds`: failures, from the last substep's impulses (A12)
+8. events
 
 Risk is shared consumers × how much the code changes state. The highest-risk code is the assembly solve
 (`solveAssemblies`, `placeCluster`, `bridgeLoads`), because every load reading, every failure decision and every
@@ -72,6 +74,214 @@ these changes without the conservation tests and the full suite.
 | A7 | Failure messages | **Fixed** (was fail) | Notes give the governing load and capacity in that load's units. | Joint failures printed moments in N; slip notes compared torsion against the shear grip. | `fmtN` used where `fmtLoad` belongs. Pinned by a wording test. |
 | A8 | Saving, loading, sharing | Pass | Byte-exact round trips, share codes and links. | – | – |
 | A9 | Panels, tablet, modes | Pass | Desktop panels, tablet pages, and relax, walk and mixed modes (e2e). | – | – |
+| A10 | Seams between segments | **Fixed** (was fail) | – | A magnet falling down a copper tube bounced back up (−1.74 → +0.96 m/s) as it passed the seam between two of the tube's segments. | Ghost contacts. Jolt makes a contact up to 1 cm before bodies touch (speculative), and when the closing speed along its normal beats gap/dt it applies restitution then. At a seam, the lower segment's nearest feature is its joined end edge, whose normal points up through the seam: the magnet bounced off an edge that does not exist, since joined segments are one continuous wall. A contact that lies on a segment's joined end (bond intact, or both frozen, and the neighbour's end flush at that point), with its normal leaving through that end, now gets no response; the neighbour's own contact is the real one. Test: the copper-tube drop (conformance, magnets). |
+| A11 | Inertia of small parts | **Fixed** (was fail) | – | A 10 × 5 mm magnet had 32 000 to 48 000 times its real moments of inertia (1.2e-3 kg m² instead of 2.5e-8 and 3.7e-8), and every body whose principal moments are below about 1e-6 kg m² (small magnets, bolts and nuts, small blocks) turned that much too slowly under any torque. | Jolt treats an inertia diagonal shorter than 1e-6 as a failed decomposition and falls back to the inertia of a sphere of radius 1 m (0.4 m). The world now checks each dynamic body's inertia against its shape's mass properties, scaled to its mass, and sets it itself where Jolt fell back. Test: small parts have the inertia of their shape (conformance, kinematics). |
+| A12 | Joint and bond loads with magnets near | **Fixed** (was fail) | – | When close magnets divided the tick into k substeps, every joint and bond load was read as the last substep's impulse over n/TICK (n the substeps springs alone need), i.e. k times too small: a joint could be overloaded without breaking. | `evaluateConnections` and `evaluateBonds` were given n, not the substeps actually taken. Test: a rigid joint carries m g with a magnet pair substepping the tick. |
+| A13 | Very slender bonded segments | **Fixed** (was fail) | – | A breakable steel wire 1.4 mm thick and 1.89 m long (six segments of 3.9 g, each 225 diameters long) exploded to 500 m/s and then NaN within a few ticks, on its own on the floor, and took every body it touched with it; a world holding NaN then hangs inside Jolt's step. | Single precision. A locked bond inverts the summed inverse inertia of its two segments, whose principal moments here differ by 3.3e4 (axis 9.6e-10 kg m², across 3.2e-5). Reproduced in Jolt alone, none of the sandbox's code: a chain is stable up to a ratio of 1e4 and diverges at 3.3e4, with or without contacts; the same segments unbonded are stable at any ratio. A bonded segment's smallest moment is now held to at least 1/1000 of its largest. This changes only spin about the segment's own axis, only for segments longer than about 77 radii, and for them only by the factor their ratio exceeds 1e3 (the 1.4 mm wire's axial inertia is raised 34-fold, so it rolls slower than a real one would). Unbonded bodies keep their true inertia. Test: a bonded 1.4 mm wire dropped, and one placed through a slab, stay finite and below falling speed (conformance, overlap). |
+| A14 | Spin of bonded parts in flight | **Fixed** (was fail) | – | A thin steel angle, dropped, bounced higher than it fell (2 J to 34 J while airborne) and was flung at 41 m/s. | The assembly solver took the gyroscopic term (the torque-free part of Euler's equations) as an explicit Euler step, which adds energy every tick, without bound for a fast-spinning uneven body (30 rad/s is a third of a radian per tick). It is now the implicit midpoint rule, solved by Newton's method: the midpoint rule keeps every quadratic invariant, and a free body's kinetic energy and angular momentum magnitude are both quadratic, so it neither adds nor bleeds energy at any spin rate (backward Euler, tried first, bled a quarter of a 30 rad/s tumble's energy in two seconds). Test: a fast torque-free spin of an uneven bonded part never gains energy (conformance, assemblies); the torque-free Euler reference test still holds. |
+| A15 | Contacts on bonded parts at rest | **Fixed** (was fail) | – | A bonded bar lying on the floor rocked at the tick rate for ever and slowly gained energy; so did a chain of bonded segments in Jolt alone. | Each contact had two solvers. Jolt's response, unconverged against the stiff bonds of a long chain, overshoots a resting contact; the assembly solve predicted from Jolt's result, and, able only to push, kept the overshoot; at impacts it added restitution on top of Jolt's. Now each contact has one solver: a resting or sliding contact on an assembly (closing slower than 1 m/s, the impact threshold) is solved by the assembly solve alone, with the assembly's true inertia, iterated to convergence (to 1e-5 of the largest impulse, at most 40 passes); an impact is Jolt's alone, with its restitution and continuous collision. Test: a thin bonded angle dropped on the floor comes to rest (conformance, assemblies). |
+| A16 | Watchdog counted breakable parts twice | **Fixed** (false alarm) | – | The stress web reported large energy gains when breakable stock was dropped (a 2x4: 726 J). | A breakable part's own slot is its frame, carried by segment 0; the watchdog took it for one more body, with the whole part's mass and a guessed inertia, so at impact its spin was valued with the whole part's length. The watchdog now watches bodies only (`isBody`), and values spin with each body's own inertia about its spin axis. |
+
+## Magnets: model, derivations and contracts
+
+Written before the code it governs; each numbered contract has tests named in brackets.
+
+**M1 Field of a pole face.** A uniformly magnetised magnet is equivalent to surface charge σ = ±Br/μ0 on its pole
+faces (Gilbert model). A flat face gives, at a point p,
+
+    H(p) = σ/(4π) · [ Ω(p) o + ∮ n_edge / |p − x| dl ]
+
+The normal part is the solid angle Ω the face subtends at p (signed, positive in front). The in-plane part comes from
+the divergence theorem: ∫ ∇'(1/|p − x'|) dA' = ∮ n_edge/|p − x'| dl. Discs use closed forms in elliptic
+integrals (Paxton 1959; Carlson's algorithms), and rectangles use arctangents and inverse hyperbolic sines.
+[golden: face field against brute-force integration, 2e-5]
+
+**M2 Force.** The force on magnet B is the field of A's faces acting on samples of B's face charge,
+F = μ0 Σ q_b H_A(p_b), with torque about B's centre from the same sum. H_A = −∇φ_A exactly, so F is the gradient of
+U = μ0 Σ q_b φ_A(p_b): it is conservative and its stiffness is symmetric.
+
+Within about a patch of an edge, a sample takes A's potential at height w + soft(e, w) instead of w. Here e is its
+sideways distance from the edge, w its height over the face, and soft fades out away from edges and above the face.
+The force is the exact gradient of that smoothed potential:
+
+    F_n = H_n (1 + ∂soft/∂w),  F_∥ = H_∥ + sgn H_n ∇_∥soft
+
+That keeps it conservative. [golden: coaxial discs within 2.5% of the exact Hankel solution at every gap (20 × 10);
+the stiffness is symmetric to 0.2%; a sideways shift changes the pull smoothly; the force is continuous across
+quadrature levels]
+
+Overlap. The contact solver lets bodies overlap by up to its slop (2 mm). A sample of B less than half A's depth
+behind one of A's faces is inside A, where only that overlap can put it, and takes the face's field as touching it. On
+steel, a magnet sunk into the surface would pass its own images, and the pull would reverse and fire it off (a
+10 × 10 × 2 mm block that landed 0.65 mm deep left at 7 m/s). Its field is taken as that of the magnet touching,
+lifted out along the normal. [conformance: small magnets snap onto steel and lie flush and still]
+
+**M3 Momentum and integration.** The world applies −F to A with torque −T − (x_B − x_A) × F, so momentum and angular
+momentum are exact. The wrench is evaluated afresh every substep. A stiff pair is divided into as many substeps as the
+rate of its motion needs (ω dt ≤ 0.5, up to 16 a tick), its rate measured from the stiffness (central differences,
+remeasured once B has moved 2% of its size or turned 0.02 rad relative to A). A pair is stiff when close (gap under
+four magnet radii) or when the dipoles say it can turn or close in faster than a quarter of a tick allows: a light
+magnet can wobble tens of times a second several centimetres from a strong one.
+
+The restoring modes the substeps can follow (ω dt ≤ 1) are integrated explicitly, and symplectically (Jolt's
+integrator), so a magnet wobbling near another keeps wobbling, as a real one does: its own eddy currents damp it at
+only ~1.6 s⁻¹ (M4). Only modes faster than that, beyond the 16-substep cap, are taken by backward Euler (implicit.ts),
+which is stable for any stiffness but damps them numerically.
+
+Near contact the pull changes over a fraction of a millimetre, so a magnet leaving or arriving fast can cross that in
+one substep. Where a substep carries B more than a tenth of its feature size relative to A, the wrench applied is its
+average along the substep's path (two-point Gauss), so it does the work the field does along the way. At the start of
+the substep, the force overstates the pull on a magnet leaving: knocked straight off steel, a 10 × 5 mm disc then
+needed twice its escape speed.
+
+Limit: a wobble faster than 16 substeps can follow (above about 230 Hz, e.g. a small magnet within a few millimetres of
+another) is damped numerically, within a few periods.
+
+[conformance: the world applies the model force integrated along the path; a magnet on a pivot near another wobbles
+at √(k/I) and keeps its amplitude; a stuck magnet knocked straight off escapes just above the speed at which its
+kinetic energy beats the pull's well, ½ m v² = ∫ P dz, and falls back just below]
+
+**M4 Eddy currents (Lenz's law).** Take a conductor C of conductivity σ moving relative to a field source S. A
+point x of C moves at u(x) relative to S. In the quasi-static limit (magnetic Reynolds number μ0 σ u ℓ ≪ 1), the
+induced current is
+
+    J = σ (u × B − ∇φ),  ∇·J = 0 in C,  J·n = 0 on its surface
+
+so φ solves the Neumann problem ∇²φ = ∇·(u × B), with ∂φ/∂n = (u × B)·n on the surface. Charge building up on the
+surface cancels whatever part of the EMF cannot drive a closed current. That is why a disc spinning in an axial field
+carries no current: it is an open-circuit Faraday disc.
+
+For rigid relative motion q = (V, Ω) about a reference point x_r, u = V + Ω × (x − x_r) is linear in q. The dissipated
+power is P = ∫ |J|²/σ dV = qᵀ D q, with D a 6 × 6 positive semi-definite matrix. The drag wrench on C is −D q, which
+dissipates exactly P, and S gets the opposite wrench with the moment of the couple. The drag is taken implicitly, at
+the velocity each (sub)step ends with:
+
+    q' = (I + dt M⁻¹ D)⁻¹ (q + dt a)
+
+where a is the relative acceleration that the rest of the load (weight, the other field forces) gives in the step.
+So it is stable however strong it is, and in steady motion the drag balances the load exactly: a magnet falls down a
+pipe at m g / D_yy. (Damping only the step's starting velocity, q' = (I + dt M⁻¹ D)⁻¹ q, would let it fall
+(1 + dt D/m) times faster: 6% for the pipe below.)
+
+Discretisation: finite volumes on a structured grid of the cells inside C near the magnet (Cartesian in a box, polar
+in a cylinder or tube, so currents can circulate round its wall). φ is solved per basis motion, and D is summed over
+cell faces. The grid's Laplacian is separable, so φ is solved exactly: cosine transforms along the Neumann
+directions, a Fourier transform round the tube, a tridiagonal solve along its radius (it agrees with conjugate
+gradients to 1e-12). Materials carry their measured conductivity (NdFeB 0.67 MS/m, copper 58 MS/m, sintered ferrite
+effectively an insulator).
+
+Scope: the world computes this for non-magnetic conductors of at least 10 MS/m (aluminium, copper, brass) near a
+magnet moving faster than 1 mm/s relative to them. There Lenz braking is strong and the free-space field is the true
+one. Left out: a magnet's own currents (NdFeB is 0.67 MS/m: they damp a 10 × 5 mm disc rocking on another magnet at
+only about 1.6 s⁻¹, and bouncing on it at 2.2 s⁻¹, measured with this solver on a fine mesh; see M6), and steel (see
+the limits).
+
+Limits, stated rather than hidden:
+- The currents' own field is neglected. That overstates the drag at high magnetic Reynolds number (thick copper at
+  metres per second).
+- In steel, B is taken as the magnet's free-space field. That understates the drag, because steel concentrates flux.
+- The world meshes about 240–500 cells within three magnet distances of the magnet, recomputed every tick. For a
+  4 × 4 mm magnet in a 20 mm copper pipe that gives 96% of the converged drag (a 50 000-cell mesh is within 0.5% of
+  Levin's formula), so it falls about 4% fast.
+
+[golden: an axisymmetric spin dissipates nothing; the transform solve matches conjugate gradients; a point dipole in a
+thin tube meets F = 45 μ0² m² σ δ v / (1024 a⁴) (Levin et al., Am. J. Phys. 74, 815, 2006). Conformance: a
+4 × 4 mm magnet falls down a 20 mm copper pipe at that terminal speed (within 8%), speeding up smoothly past the
+pipe's five seams]
+
+**M5 Contact statics of a stuck magnet.** Let n be the contact normal (A to B), and c the centroid of the footprint
+(the overlap of B's face with the face it lies on). The contact wrench on B, about c, is (F_c, M_c). It is admissible
+if all of these hold:
+
+- N = F_c·n > 0: it presses.
+- |F_c − N n| ≤ μ N: friction holds.
+- The pressure centre c + d, with d = n × M_t / N, lies within the footprint. (M_t is the tangential moment; for
+  d ⊥ n, (d × N n) = M_t gives n × M_t = N d.) The test is: |M_t| ≤ N · max over the footprint of (p − c)·ê,
+  with ê = n × M_t/|M_t|.
+- |M_c·n| ≤ μ N r̄, where r̄ is the footprint's mean distance from c (uniform pressure; 2R/3 for a disc).
+
+So a stuck magnet pulled straight off lets go at its pull P; pushed sideways it slides at μ P; and a tall one pushed
+sideways at height h tips at P a / h, a being the footprint's half-width in the push's direction (R for a disc), if
+that comes before μ P. [conformance, with constant loads just below and just above each threshold; golden: r̄ of a
+disc, a square and a line]
+
+**M6 Latch.** At rest in contact, B is held to A by a rigid constraint, and the magnetic wrench W_m is no longer
+applied: the latch stands for it. A stuck pair is then exactly still, and costs almost nothing while it holds. Simulated
+as forces against a contact instead (option `magnetLatch` off), a close pair needs up to 16 substeps a tick and 2–3 ms.
+Since A11 that simulation also settles every common magnet flush and holds it, and the tests below check that the two
+agree on every threshold.
+
+When: B touches A (within 0.1 mm), and moves relative to it at under 2 cm/s at the footprint and under 0.5 m/s at its
+rim. That is well inside what the world treats as inelastic anyway (restitution acts only on impacts above 1 m/s), so
+the latch stops nothing that would have bounced. It latches only if the contact can hold what the latch will carry
+through its first tick: W_m, B's weight, and the impulse that stops B's residual motion (tested with M5 as below).
+
+Holding: every substep's constraint impulses are summed over the tick, in A's frame and about the footprint's
+centroid c. That gives the tick-average reaction W_L on B, and the contact wrench W_c = W_L − W_m. On the first tick
+W_L includes the impulse that arrested B's residual motion. That arrest is an inelastic impact, and an impact's
+impulse is a contact impulse like any other: over the tick, Coulomb's law for it is the M5 test on the tick average.
+Friction can stop a slide only with at most μ times the normal impulse (the pull's and the impact's own), and a clack's
+normal impulse at the landing rim puts the pressure centre on the footprint's edge, which M5 admits. (Subtracting the
+arrest from the reaction instead would let the latch steal a sliding magnet's speed each time it latched again.)
+
+Letting go: if W_c is not admissible (M5),
+
+1. The latch opens.
+2. What it carried beyond the admissible set is handed back: ΔW = W_c − proj(W_c), with the projection taken
+   component-wise: N* = max(N, 0); the tangential force clipped to μ N*; the twist to μ N* r̄; the tangential moment
+   to N* times the footprint's reach in its direction. B gets the impulse −ΔW·TICK at c, and A gets +ΔW·TICK with
+   the moment of the couple.
+3. The continuous physics (M2–M4) carries on from there, exactly as the real contact would have let it.
+
+A steady load too small to free the magnet is carried and the latch holds; a bigger one frees it with just the impulse
+the contact could not take. There are no timers or tick counts.
+
+Knocks. An impulse applied to a latched body (the poke tool) acts at an instant, before the pull has supplied
+anything. So the latch takes it only if the contact could, as an impact: the impulse the latch needs at c must press,
+within friction and the footprint of its own normal impulse. Otherwise the latch opens before the knock lands, and the
+continuous physics plays it out: the magnet lifts or slides, and the pull brings it back or it escapes (M3).
+
+Limit: a collision from another body arrives inside the step, and the latch judges it with the tick average, like a
+steady load. A blow shorter than a tick is then treated as spread over the tick: it frees the magnet only if its
+impulse beats the contact's capacity times TICK, not as soon as its energy beats the pull's well. For a 10 × 5 mm disc
+on steel knocked straight off, that is 0.35 N s instead of 0.016 N s.
+
+Seating. The latch holds B where it is put, so it is put where the real magnet comes to rest. The contact solver
+leaves bodies overlapping by up to its slop (2 mm), and within that a magnet can lie tilted in another. A magnet can
+also be caught at rest on its rim for an instant, which the real one is not: if the torque on it turns it flat, it
+swings down and clacks flat in a few inelastic rim impacts within milliseconds. So as it latches, B is seated: turned
+flat about its lowest touching rim onto the face it touches, and the footprint is the overlap of the two faces. The
+move is the latch's own position correction (its target pose), so B gains no velocity and no energy; the swing's energy
+is what the clack dissipates. B is seated only if all of these hold:
+
+- θ ≤ SEAT_ANGLE = 20°, θ being its pole face's tilt from the face it touches. This is a bound on where the
+  pivot-on-the-rim picture is used, not a physical constant. Beyond it, B is left to the simulation to swing down, and
+  latches when it next comes to rest.
+- The torque about that rim, from the magnetic wrench and B's weight, turns B towards flush, both at the tilt it has
+  and at half of it.
+- The swing it replaces is shorter than a tick: √(2θ I_p/τ) ≤ TICK, with I_p B's moment of inertia about the rim and τ
+  the smaller of those two torques. (From 20°, measured: 1.4 ms for a 10 × 5 mm N42 disc on steel, 0.85 ms for a
+  6 × 3 mm one, 3.4 ms for a 25 × 10 mm one.)
+
+Otherwise it is held where it touches, over its touching points, only moved out of any overlap along the contact
+normal.
+
+Limit: the constraint's position correction takes a fraction of the remaining error each substep, so a large seat
+is seen to settle over a few ticks rather than in the millisecond of the real clack (the 10 × 10 × 2 mm block latched
+3° askew on its twin lay within 1° after 3 ticks and within 0.05° after 11). The latch holds it throughout; only the
+pose lags.
+
+Measured with the seat switched off: the simulation now brings every common magnet flat by itself, through rim impacts
+that are inelastic in this world below 1 m/s, as they are in reality. The magnet's own eddy currents would damp its
+rocking at only about 1.6 s⁻¹ (M4). (Before A11, the 30 000-fold inertia of these magnets had them rocking for seconds
+and flung off.) What the seat still does that the simulation does not is take out the solver's overlap and the tilt it
+allows, which the latch would otherwise hold: a 10 × 10 × 2 mm block on its twin was latched 0.55 mm inside it and 3°
+askew.
+
+[conformance: every common magnet settles flush and still on steel and on another magnet; with constant loads at 0.95
+and 1.05 times each threshold (pull-off P, slide μ P, tip P w/L with a tall block), the latched and the unlatched
+simulations agree with M5 and with each other, holding below and letting go above; so do their escape speeds when
+knocked off (M3)]
 
 ## Planned fixes and their ripple effects
 

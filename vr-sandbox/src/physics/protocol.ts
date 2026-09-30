@@ -45,7 +45,7 @@ export type PhysicsOp =
   | { op: 'controls'; channels: Record<string, number> }
   | { op: 'damage'; id: string; damage: PartDamage }
   | { op: 'room'; surfaces: RoomSurface[] }
-  | { op: 'options'; maxMagnetRings?: number; filterTicks?: number };
+  | { op: 'options'; maxMagnetRings?: number; filterTicks?: number; magnetLatch?: boolean };
 
 export type PhysicsEvent =
   | { type: 'contact'; a: string | null; b: string | null; point: Vec3; normal: Vec3; speed: number; impulse: number }
@@ -53,7 +53,9 @@ export type PhysicsEvent =
   | { type: 'slip'; conn: string; point: Vec3; note: string }
   | { type: 'splash'; part: string; point: Vec3; speed: number; size: number }
   | { type: 'fracture'; part: string; bond: number; mode: string; load: number; capacity: number; point: Vec3; note: string; segments: Pose[] }
-  | { type: 'yield'; part: string; bond: number; point: Vec3; note: string };
+  | { type: 'yield'; part: string; bond: number; point: Vec3; note: string }
+  /** A body's state stopped being a number; it was put back where it last was, at rest (fault containment). */
+  | { type: 'fault'; part: string; body: string; note: string };
 
 export interface ConnectionLoad {
   id: string;

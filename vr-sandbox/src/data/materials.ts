@@ -8,7 +8,7 @@ import type { WeldClass } from '../engineering/joining';
 export type MaterialCategory =
   | 'steel' | 'stainless' | 'cast-iron' | 'aluminum' | 'copper-alloy' | 'titanium'
   | 'wood' | 'engineered-wood' | 'polymer' | 'polyolefin' | 'ptfe' | 'elastomer'
-  | 'glass' | 'ceramic' | 'magnet';
+  | 'glass' | 'ceramic' | 'stone' | 'textile' | 'leather' | 'foam' | 'cork' | 'composite' | 'magnet';
 
 export type SoundClass = 'steel' | 'aluminum' | 'copper' | 'wood' | 'plastic' | 'rubber' | 'glass' | 'stone';
 export type SparkClass = 'low-carbon' | 'high-carbon' | 'stainless' | 'cast-iron' | 'titanium' | 'none';
@@ -206,9 +206,67 @@ export const MATERIALS: Material[] = [
     friction: 0.6, restitution: 0.25, sound: 'stone', loss: 0.01, sparks: 'none', color: 0x9a9a96, metalness: 0, roughness: 0.95,
     source: 'EN 1992-1-1 C30/37: f_ctm 2.9 MPa, E_cm 33 GPa', confidence: 'spec',
   },
-  magnet('magnet.n42', 'Neodymium NdFeB N42', 1.3, 7500, 0xb9bec4, 'IEC 60404-8-1 / grade tables 1.28-1.32 T'),
-  magnet('magnet.n52', 'Neodymium NdFeB N52', 1.455, 7500, 0xc2c7cc, 'grade tables 1.43-1.48 T'),
-  magnet('magnet.ferrite-c8', 'Ferrite C8', 0.39, 4900, 0x3a3a3c, 'MMPA 0100 ceramic 8, 0.38-0.40 T'),
+  // ---- Stone -----------------------------------------------------------------------------------
+  // brittle: yield = ultimate = modulus of rupture (flexural strength), which is what a slab fails by
+  stone('stone.slate', 'Slate (billiard grade)', 2750, 80, 0.25, 55, 0x3b4046, 0.8, 'ASTM C629: slate MOR 62 MPa min. across grain (typical 50-70); E 70-90 GPa'),
+  stone('stone.granite', 'Granite', 2650, 50, 0.25, 12, 0x8a8580, 0.55, 'ASTM C615: flexural strength 8.3 MPa min. (typical 10-20); E 40-60 GPa'),
+  stone('stone.marble', 'Marble', 2700, 55, 0.27, 10, 0xe6e3dc, 0.3, 'ASTM C503: flexural strength 7 MPa min. (typical 7-15); E 50-70 GPa'),
+  // ---- Textiles and leather (sheet goods: E is the in-plane tensile modulus of the sheet) --------------
+  {
+    id: 'textile.baize', name: 'Wool baize (billiard cloth)', category: 'textile', density: 400, E: 50 * MPa, nu: 0.3,
+    yield: 15 * MPa, ultimate: 20 * MPa, elongation: 0.3, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    // chosen so a phenolic ball (0.06) slides on it at 0.2 under the geometric-mean combine
+    friction: 0.65, restitution: 0.3, sound: 'rubber', loss: 0.2, sparks: 'none', color: 0x0f6b3a, metalness: 0, roughness: 1,
+    source: 'Marlow, The Physics of Pocket Billiards (1995): ball-cloth sliding friction about 0.2; worsted baize 0.5-0.7 mm, 350-450 kg/m3', confidence: 'estimated',
+  },
+  {
+    id: 'textile.canvas', name: 'Cotton duck canvas', category: 'textile', density: 700, E: 300 * MPa, nu: 0.3,
+    yield: 20 * MPa, ultimate: 30 * MPa, elongation: 0.15, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.6, restitution: 0.2, sound: 'rubber', loss: 0.2, sparks: 'none', color: 0xcdbf9a, metalness: 0, roughness: 1,
+    source: 'Typical No. 10 cotton duck: about 0.6 mm, 400 g/m2; breaking strength 25-35 MPa of section', confidence: 'estimated',
+  },
+  {
+    id: 'leather.veg-tan', name: 'Leather (vegetable-tanned cowhide)', category: 'leather', density: 860, E: 150 * MPa, nu: 0.35,
+    yield: 15 * MPa, ultimate: 25 * MPa, elongation: 0.4, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.6, restitution: 0.3, sound: 'rubber', loss: 0.15, sparks: 'none', color: 0x7a4b2a, metalness: 0, roughness: 0.7,
+    source: 'Leather science literature (e.g. Covington, Tanning Chemistry): tensile 20-30 MPa, elongation 30-50 %, 0.8-0.9 g/cm3', confidence: 'estimated',
+  },
+  // ---- Foam, cork, composites ---------------------------------------------------------------------
+  {
+    id: 'foam.eva', name: 'EVA foam (closed cell, 100 kg/m³)', category: 'foam', density: 100, E: 5 * MPa, nu: 0.3,
+    yield: 1 * MPa, ultimate: 1.5 * MPa, elongation: 2, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.8, restitution: 0.35, sound: 'rubber', loss: 0.25, sparks: 'none', color: 0x2f3a45, metalness: 0, roughness: 0.95,
+    source: 'Closed-cell EVA sheet datasheets, 100 kg/m3: tensile 1-2 MPa, elongation 150-250 %', confidence: 'estimated',
+  },
+  {
+    id: 'cork.agglomerated', name: 'Cork (agglomerated)', category: 'cork', density: 240, E: 20 * MPa, nu: 0.05,
+    yield: 0.8 * MPa, ultimate: 1 * MPa, elongation: 0.1, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.6, restitution: 0.4, sound: 'wood', loss: 0.1, sparks: 'none', color: 0xb08a5a, metalness: 0, roughness: 0.95,
+    source: 'Gibson and Ashby, Cellular Solids: cork E 13-50 MPa, density 120-240 kg/m3, Poisson ratio near 0', confidence: 'handbook',
+  },
+  {
+    id: 'composite.cfrp', name: 'Carbon fibre laminate (quasi-isotropic)', category: 'composite', density: 1550, E: 50 * GPa, nu: 0.3,
+    yield: 550 * MPa, ultimate: 550 * MPa, elongation: 0.012, ductile: false, ferromagnetic: false, conductivity: 1e4, weld: 'none',
+    friction: 0.3, restitution: 0.5, sound: 'plastic', loss: 0.005, sparks: 'none', color: 0x1d1f22, metalness: 0.2, roughness: 0.3,
+    source: 'CMH-17 / typical T300-epoxy quasi-isotropic laminate: E 45-55 GPa, UTS 500-600 MPa; in-plane conductivity about 1e4 S/m', confidence: 'handbook',
+  },
+  {
+    id: 'composite.gfrp', name: 'Glass fibre laminate (E-glass)', category: 'composite', density: 1800, E: 18 * GPa, nu: 0.3,
+    yield: 200 * MPa, ultimate: 200 * MPa, elongation: 0.02, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.35, restitution: 0.45, sound: 'plastic', loss: 0.01, sparks: 'none', color: 0xd8d5c4, metalness: 0, roughness: 0.5,
+    source: 'Typical woven-roving E-glass/polyester laminate: E 15-20 GPa, UTS 150-250 MPa', confidence: 'handbook',
+  },
+  {
+    id: 'polymer.phenolic', name: 'Cast phenolic resin (billiard balls)', category: 'polymer', density: 1735, E: 7 * GPa, nu: 0.35,
+    yield: 50 * MPa, ultimate: 50 * MPa, elongation: 0.01, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.06, restitution: 0.93, sound: 'glass', loss: 0.002, sparks: 'none', color: 0xf2efe6, metalness: 0, roughness: 0.08,
+    source: 'Aramith ball: 170 g, 57.2 mm (1735 kg/m3); Marlow: ball-ball restitution 0.92-0.98, friction 0.03-0.08', confidence: 'handbook',
+  },
+  // conductivity: sintered NdFeB 1.5 uOhm m (manufacturer data sheets); sintered hard ferrite is a ceramic, above
+  // 1e4 Ohm m, so effectively an insulator
+  magnet('magnet.n42', 'Neodymium NdFeB N42', 1.3, 7500, 6.7e5, 0xb9bec4, 'IEC 60404-8-1 / grade tables 1.28-1.32 T'),
+  magnet('magnet.n52', 'Neodymium NdFeB N52', 1.455, 7500, 6.7e5, 0xc2c7cc, 'grade tables 1.43-1.48 T'),
+  magnet('magnet.ferrite-c8', 'Ferrite C8', 0.39, 4900, 1e-4, 0x3a3a3c, 'MMPA 0100 ceramic 8, 0.38-0.40 T'),
 ];
 
 function wood(id: string, name: string, G: number, density: number, EGPa: number, MOR: number, color: number,
@@ -222,6 +280,14 @@ function wood(id: string, name: string, G: number, density: number, EGPa: number
   };
 }
 
+function stone(id: string, name: string, density: number, EGPa: number, nu: number, MOR: number, color: number, roughness: number, source: string): Material {
+  return {
+    id, name, category: 'stone', density, E: EGPa * GPa, nu, yield: MOR * MPa, ultimate: MOR * MPa, elongation: 0.0007,
+    ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none', friction: 0.6, restitution: 0.3, sound: 'stone',
+    loss: 0.005, sparks: 'none', color, metalness: 0, roughness, source, confidence: 'handbook',
+  };
+}
+
 function polymer(id: string, name: string, category: MaterialCategory, density: number, EGPa: number, yieldMPa: number,
   ultMPa: number, elongation: number, friction: number, color: number): Material {
   return {
@@ -232,10 +298,10 @@ function polymer(id: string, name: string, category: MaterialCategory, density: 
   };
 }
 
-function magnet(id: string, name: string, Br: number, density: number, color: number, source: string): Material {
+function magnet(id: string, name: string, Br: number, density: number, conductivity: number, color: number, source: string): Material {
   return {
     id, name, category: 'magnet', density, E: 160 * GPa, nu: 0.24, yield: 80 * MPa, ultimate: 80 * MPa, elongation: 0.001,
-    ductile: false, ferromagnetic: true, conductivity: 6.7e5, weld: 'none', friction: 0.5, restitution: 0.4, sound: 'steel',
+    ductile: false, ferromagnetic: true, conductivity, weld: 'none', friction: 0.5, restitution: 0.4, sound: 'steel',
     loss: 0.002, sparks: 'none', remanence: Br, color, metalness: 0.95, roughness: 0.2, source, confidence: 'handbook',
   };
 }
@@ -256,7 +322,9 @@ export const MATERIAL_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Copper, brass, titanium', ids: MATERIALS.filter((m) => ['copper-alloy', 'titanium'].includes(m.category)).map((m) => m.id) },
   { label: 'Wood', ids: MATERIALS.filter((m) => ['wood', 'engineered-wood'].includes(m.category)).map((m) => m.id) },
   { label: 'Plastics & rubber', ids: MATERIALS.filter((m) => ['polymer', 'polyolefin', 'ptfe', 'elastomer'].includes(m.category)).map((m) => m.id) },
-  { label: 'Glass & stone', ids: MATERIALS.filter((m) => ['glass', 'ceramic'].includes(m.category)).map((m) => m.id) },
+  { label: 'Glass, stone & concrete', ids: MATERIALS.filter((m) => ['glass', 'ceramic', 'stone'].includes(m.category)).map((m) => m.id) },
+  { label: 'Cloth, leather, foam & cork', ids: MATERIALS.filter((m) => ['textile', 'leather', 'foam', 'cork'].includes(m.category)).map((m) => m.id) },
+  { label: 'Composites', ids: MATERIALS.filter((m) => m.category === 'composite').map((m) => m.id) },
   { label: 'Magnets', ids: MATERIALS.filter((m) => m.category === 'magnet').map((m) => m.id) },
 ];
 

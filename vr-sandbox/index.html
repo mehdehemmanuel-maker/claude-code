@@ -2,26 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#16191d" />
     <title>Creative Sandbox</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%23ffb347' stroke-width='8' stroke-dasharray='9 6'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ffb347'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./src/ui/style.css" />
+    <style>
+      /* The app runs in the headset; this page is only how the Quest browser gets there. */
+      :root { color-scheme: dark; --bg: #16191d; --panel: rgba(30, 34, 40, 0.94); --ink: #e8ecf1; --muted: #9aa4af; --accent: #ffb347; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 17px/1.45 system-ui, sans-serif; overflow: hidden; }
+      #viewport { position: fixed; inset: 0; }
+      #viewport canvas { display: block; width: 100%; height: 100%; }
+      #launch { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(22, 25, 29, 0.6); }
+      #launch[hidden] { display: none; }
+      .card { box-sizing: border-box; width: 100%; max-width: 460px; background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px; padding: 26px; }
+      h1 { margin: 0 0 6px; font-size: 26px; }
+      p { margin: 0 0 18px; color: var(--muted); }
+      select, button { font: inherit; border-radius: 12px; box-sizing: border-box; width: 100%; }
+      select { padding: 12px; margin-bottom: 12px; background: #23272e; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.16); }
+      #vr { padding: 16px; font-size: 20px; font-weight: 650; background: var(--accent); color: #1b1400; border: 0; cursor: pointer; }
+      #vr:disabled { opacity: 0.45; cursor: default; }
+      #status { margin: 14px 0 0; font-size: 15px; }
+    </style>
   </head>
   <body>
-    <div id="app">
-      <div id="viewport"></div>
-      <header id="topbar"></header>
-      <aside id="palette"></aside>
-      <aside id="inspector"></aside>
-      <footer id="hotbar"></footer>
-      <div id="status"></div>
-      <div id="toasts"></div>
-      <div id="tooltip"></div>
-      <div id="crosshair"></div>
-      <div id="modal-root"></div>
-      <div id="loading"><div class="spinner"></div><div>Starting physics…</div></div>
+    <div id="viewport"></div>
+    <div id="launch">
+      <div class="card">
+        <h1>Creative Sandbox</h1>
+        <p>A physics workshop for Meta Quest. Build with real materials, joints and magnets, then watch it work.</p>
+        <select id="vrmode" disabled aria-label="How to be there">
+          <option value="relax">Relax: fly around the workshop</option>
+          <option value="walk">Walk: your real room, 1:1</option>
+          <option value="mixed" id="vrmode-mixed">Mixed reality: build in your room</option>
+        </select>
+        <button id="vr" disabled>Enter VR</button>
+        <p id="status">Starting physics…</p>
+      </div>
     </div>
+    <div id="loading" hidden></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

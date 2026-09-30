@@ -142,6 +142,12 @@ function validateReferences(file: BuildFile) {
     if (!hasConnectorKind(c.kind)) throw new DecodeError(`Unknown connector kind "${c.kind}"`);
     if (!parts.has(c.a.part) || (c.b && !parts.has(c.b.part))) throw new DecodeError(`Connection ${c.id} references a missing part`);
     if (c.b && c.b.part === c.a.part) throw new DecodeError(`Connection ${c.id} connects a part to itself`);
+    if (c.weld) {
+      if (c.kind !== 'weld') throw new DecodeError(`Connection ${c.id} is a ${c.kind} but carries weld beads`);
+      for (const b of c.weld.beads) {
+        if (!(b.leg > 0 && b.leg <= 0.05) || !(b.q >= 0 && b.q <= 1) || !(b.Q >= 0 && b.Q <= 1e8)) throw new DecodeError(`Connection ${c.id} has an impossible weld bead`);
+      }
+    }
   }
 }
 

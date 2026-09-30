@@ -63,6 +63,21 @@ export interface ConnectionState {
   note: string;
 }
 
+/**
+ * One stretch of a real weld bead, laid by the welder tool: where the pool travelled (in part A's coordinates, its
+ * straight undamaged frame), the fillet it left and how sound it is. The joint's strength comes from these.
+ */
+export interface WeldBead {
+  p0: Vec3;
+  p1: Vec3;
+  /** Equal fillet leg, m. */
+  leg: number;
+  /** Fraction of the throat that is sound, fused weld metal (heat input, voltage, torch distance, gas). */
+  q: number;
+  /** Heat input into the work, J/m: sets how hot the bead gets and how fast it cools. */
+  Q: number;
+}
+
 export interface Connection {
   id: string;
   kind: string;
@@ -71,6 +86,8 @@ export interface Connection {
   b: Endpoint | null;
   params: Params;
   state: ConnectionState;
+  /** Welds made with the welder tool: the beads actually laid. Absent for every other joint. */
+  weld?: { beads: WeldBead[] };
 }
 
 export interface FluidVolume {

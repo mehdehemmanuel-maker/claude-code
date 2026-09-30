@@ -1,11 +1,12 @@
 import { test } from '@playwright/test';
-import { boot, expect, frames, sb } from './helpers';
+import { boot, enterVR, expect, frames, sb, tap } from './helpers';
 import { BuildBuilder } from '../../src/templates/builder';
 import { encodeDocText } from '../../src/persistence/codec';
 
 test('overloaded lumber snaps; the fracture is recorded, undone and repaired', async ({ page }) => {
-  await page.setViewportSize({ width: 960, height: 540 }); // wide enough for the inspector
-  const errors = await boot(page);
+  await page.setViewportSize({ width: 800, height: 450 });
+  const errors = await boot(page, '?iwer');
+  await enterVR(page);
   // a 1.2 m Douglas-fir 2x4, laid flat and clamped to the world at one end, with 250 kg bolted to the other:
   // about 2.4 kN m at the first bond against a weak-axis capacity of 1.7 kN m (S x MOR)
   const b = new BuildBuilder('Snap test', 99);
@@ -34,10 +35,11 @@ test('overloaded lumber snaps; the fracture is recorded, undone and repaired', a
   }, id);
   expect(gap.broken).toBe(0);
   expect(Math.abs(gap.span - 1.0)).toBeLessThan(0.01);
-  // redo, then repair from the inspector
+  // redo, then repair from the tablet
   await sb(page, (s) => { s.app.redo(); s.app.select([Object.keys(s.app.doc.parts).find((k: string) => s.app.doc.parts[k].name === 'Beam')]); });
   await frames(page, 2);
-  await page.getByRole('button', { name: /Repair/ }).click();
+  await tap(page, 'tab-selected');
+  await tap(page, 'repair');
   const after = await sb(page, (s) => s.app.doc.parts[Object.keys(s.app.doc.parts).find((k: string) => s.app.doc.parts[k].name === 'Beam')!].damage);
   expect(after).toEqual({ broken: [], segments: null });
   expect(errors).toEqual([]);

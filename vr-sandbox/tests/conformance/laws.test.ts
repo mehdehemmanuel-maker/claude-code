@@ -2,12 +2,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { at, rig, within } from './helpers';
-import { axisAngle } from '../../src/doc/math';
+import { axisAngle, length, sub } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
-import { chargeInteraction, cylinderCharges, ringsForGap } from '../../src/engineering/magnets';
+import { blockCharges, blockFaces, cylinderCharges, cylinderFaces, dipoleMoment, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
+import { tubeDipoleDrag } from '../../src/engineering/eddy';
 import { dcMotorSpecs } from '../../src/engineering/mechanics';
-import { FLUIDS, STANDARD_GRAVITY as g } from '../../src/data/materials';
+import { FLUIDS, getMaterial, STANDARD_GRAVITY as g } from '../../src/data/materials';
 
 const up: [number, number, number, number] = [0, 0, 0, 1];
 const down = axisAngle([1, 0, 0], Math.PI); // frame whose +Y points down
@@ -19,6 +20,25 @@ describe('kinematics', () => {
     let t = 0;
     r.run(2, (time) => { if (!t && r.pos(ball)[1] <= 8.5) t = time; });
     within(t, Math.sqrt((2 * 1.5) / g), 0.012); // tick quantisation 1/90 s
+    r.done();
+  });
+
+  it('small parts turn with the inertia of their shape: a blow at the rim spins them at (r x J) / I (A11)', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    // a 10 x 5 mm disc (I about a diameter m (3 R^2 + L^2) / 12 = 2.5e-8 kg m^2, below Jolt's fallback threshold)
+    // and a 100 mm block (8.8e-4 kg m^2, above it)
+    const cases: [ReturnType<typeof r.part>, number, number][] = [];
+    const R = 0.005, L = 0.005;
+    const d = r.part('magnet.disc', at(0, 0, 0), { params: { diameter: 2 * R, thickness: L } });
+    cases.push([d, R, (r.world.bodyMass(d.id)! * (3 * R * R + L * L)) / 12]);
+    const b = r.part('block', at(1, 0, 0), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
+    cases.push([b, 0.05, (r.world.bodyMass(b.id)! * 0.02) / 12]);
+    for (const [p, arm, I] of cases) {
+      const c = r.world.livePose(p.id)!.p;
+      const J = 1e-4;
+      r.world.apply({ op: 'impulse', id: p.id, point: [c[0] + arm, c[1], c[2]], impulse: [0, J, 0] }); // about +z
+      within(r.world.angularVelocity(p.id)![2], (arm * J) / I, 0.002);
+    }
     r.done();
   });
 
@@ -137,16 +157,24 @@ describe('buoyancy', () => {
 
 describe('joint loads are real forces', () => {
   it('a rigid joint holding a hanging block carries m*g in tension, with and without substeps', async () => {
-    for (const stiffSpring of [false, true]) {
+    for (const substeps of ['none', 'spring', 'magnets'] as const) {
       const r = await rig({}, false);
       const block = r.part('block', at(0, 1, 0), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
       const joint = r.connect('fixed', { part: block, frame: at(0, 0.05, 0) }, null);
-      if (stiffSpring) {
-        // an unrelated stiff spring forces the world onto multiple substeps
+      if (substeps === 'spring') {
+        // an unrelated spring, stiff but soft enough to be simulated as one (160 rad/s), divides the tick
         const m = r.part('block', at(3, 1, 0), { material: 'steel.a36', params: { x: 0.02, y: 0.02, z: 0.02 } });
-        r.connect('spring', { part: m, frame: at(0, 0.01, 0) }, null, { d: 0.004, D: 0.02, Na: 3, zeta: 0.1 });
+        r.connect('spring', { part: m, frame: at(0, 0.01, 0) }, null, { d: 0.002, D: 0.02, Na: 12, zeta: 0.1 });
       }
-      r.run(1);
+      if (substeps === 'magnets') {
+        // a magnet on steel, simulated as forces, divides the tick to follow its stiff contact (A12)
+        r.world.apply({ op: 'options', magnetLatch: false });
+        r.part('plate', at(3, 0.997, 0), { frozen: true, material: 'steel.1018-cd' });
+        r.part('magnet.disc', at(3, 1.0035, 0), { params: { diameter: 0.01, thickness: 0.005 } });
+      }
+      let most = 1;
+      for (let i = 0; i < 90; i++) most = Math.max(most, r.world.step().stats.substeps);
+      if (substeps !== 'none') expect(most).toBeGreaterThan(1);
       const load = r.world.connectionLoad(joint.id)!;
       within(load.axial, 7.85 * g, 0.005);
       expect(load.shear).toBeLessThan(0.05);
@@ -206,9 +234,10 @@ describe('fasteners fail at their real capacities', () => {
 
   it('failure and slip notes give the governing load and capacity in that load\'s units', async () => {
     const unitOf = (mode: string) => (mode === 'bending' || mode === 'torsion' ? /N·m/ : /\d N( |$)/);
-    // a glued cantilever root fails in bending: moments read in N·m
+    // a glued cantilever root fails in bending: moments read in N·m. A 30 mm bar spreads the moment over the whole
+    // epoxy face (sigma S = 79 N·m); 2.4 m of it hangs 200 N·m on the root.
     const r = await rig({}, false);
-    const L = 0.6;
+    const L = 2.4;
     const bar = r.part('rod.square', at(L / 2, 1, 0), { material: 'steel.a36', params: { length: L, side: 0.03, fracture: 'off' } });
     r.connect('glued', { part: bar, frame: at(-L / 2, 0, 0, axisAngle([0, 0, 1], Math.PI / 2)) }, null, { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.03 });
     const notes: { mode: string; note: string }[] = [];
@@ -311,21 +340,195 @@ describe('fasteners fail at their real capacities', () => {
 });
 
 describe('magnets', () => {
-  it('the world applies exactly the Gilbert-model force', async () => {
+  it('the world applies exactly the Gilbert-model force, integrated along the path within the tick', async () => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    // Gap large enough that the magnet does not reach its partner within the measured tick.
     const R = 0.01, L = 0.01, gap = 0.04;
     r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 2 * R, thickness: L } });
     const b = r.part('magnet.disc', at(0, L + gap, 0), { params: { diameter: 2 * R, thickness: L } });
-    r.run(TICK);
+    const k = r.world.step().stats.substeps;
     const m = r.world.bodyMass(b.id)!;
     const v = r.world.linearVelocity(b.id)!;
-    const rings = 8; // converged reference; the world uses fewer rings at this range
-    void ringsForGap;
-    const expected = chargeInteraction(cylinderCharges([0, 0, 0], [0, 1, 0], R, L, 1.3, rings), cylinderCharges([0, L + gap, 0], [0, 1, 0], R, L, 1.3, rings), [0, L + gap, 0])[1]!;
-    expect(expected).toBeLessThan(0); // attraction
-    within((m * v[1]) / TICK, expected, 0.03);
+    // finely sampled reference (8 rings; the world uses fewer at this range), stepped the way the world steps: the force
+    // is re-evaluated at the start of each of its k substeps as the magnet speeds up towards its partner
+    const A = cylinderFaces([0, 0, 0], [0, 1, 0], R, L, 1.3);
+    const force = (y: number) => magnetWrench(A, cylinderCharges([0, y, 0], [0, 1, 0], R, L, 1.3, 8), [0, y, 0])[1]!;
+    let y = L + gap, vy = 0;
+    for (let s = 0; s < k; s++) { vy += (force(y) / m) * (TICK / k); y += vy * (TICK / k); }
+    expect(force(L + gap)).toBeLessThan(0); // attraction
+    expect(k).toBeGreaterThan(1); // a close pair is substepped
+    within(v[1], vy, 0.03);
+    within(Math.abs(vy * m) / TICK, Math.abs(force(L + gap)), 0.1); // and the pull hardly changes within one tick
     r.done();
+  });
+
+  it('a magnet released near another snaps onto it and stays put: no hovering or chatter at contact', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const R = 0.01, L = 0.01;
+    r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 2 * R, thickness: L } });
+    const b = r.part('magnet.disc', at(0, L + 0.006, 0), { params: { diameter: 2 * R, thickness: L } });
+    r.run(1);
+    let worstV = 0, worstGap = 0;
+    for (let i = 0; i < 45; i++) {
+      r.world.step();
+      worstV = Math.max(worstV, Math.hypot(...r.world.linearVelocity(b.id)!));
+      worstGap = Math.max(worstGap, r.world.livePose(b.id)!.p[1] - L);
+    }
+    expect(worstGap).toBeLessThan(0.0005); // faces together
+    expect(worstV).toBeLessThan(0.01); // and at rest there
+    r.done();
+  });
+
+  it('small magnets snap onto steel or another magnet and lie flush and still (they used to rock and be flung off)', async () => {
+    const cases: [string, Record<string, number>, number][] = [
+      ['magnet.disc', { diameter: 0.01, thickness: 0.005 }, 0.005], ['magnet.disc', { diameter: 0.006, thickness: 0.003 }, 0.003],
+      ['magnet.disc', { diameter: 0.01, thickness: 0.002 }, 0.002], ['magnet.block', { x: 0.01, z: 0.01, y: 0.002 }, 0.002],
+    ];
+    for (const [kind, params, L] of cases) {
+      for (const steel of [false, true]) {
+        const r = await rig({ gravity: [0, -9.81, 0] }, false);
+        if (steel) r.part('plate', at(0, -0.003, 0), { frozen: true, material: 'steel.1018-cd' });
+        else r.part(kind, at(0, 0, 0), { frozen: true, params });
+        const rest = steel ? L / 2 : L; // centre height lying flush
+        // arrives a little off centre and tilted
+        const b = r.part(kind, at(0.0004, rest + 0.003, 0.0002, [0.02, 0, 0.01, 0.9997]), { params });
+        r.run(1);
+        let worst = 0;
+        for (let i = 0; i < 45; i++) {
+          r.world.step();
+          const p = r.world.livePose(b.id)!;
+          worst = Math.max(worst, Math.abs(p.p[1] - rest), Math.hypot(...r.world.angularVelocity(b.id)!) * 1e-3);
+          expect(2 * Math.asin(Math.hypot(p.q[0], p.q[2])), `${kind} ${JSON.stringify(params)} tilt`).toBeLessThan(1e-3);
+        }
+        expect(worst, `${kind} ${JSON.stringify(params)} on ${steel ? 'steel' : 'a magnet'}`).toBeLessThan(2e-5);
+        r.done();
+      }
+    }
+  });
+
+  // Thresholds of a magnet stuck to a 6 mm steel plate (M5), cross-checked between the latch (M6) and the contact
+  // simulated as forces throughout (magnetLatch off; stable for these sizes). The load is a constant body force: in
+  // zero gravity the magnet snaps on and comes to rest, then gravity is turned on along the load's direction at
+  // k times the threshold divided by the magnet's mass. Weight acts at the centre, L / 2 above the contact.
+  type Stuck = { kind: 'magnet.disc' | 'magnet.block'; params: Record<string, number>; L: number };
+  const disc = (d: number, L: number): Stuck => ({ kind: 'magnet.disc', params: { diameter: d, thickness: L }, L });
+  const block = (w: number, h: number, L: number): Stuck => ({ kind: 'magnet.block', params: { x: w, z: h, y: L }, L });
+  /** The model's pull on a magnet lying flush on the plate: its faces' images in the steel (M2), N42. */
+  const pullOnSteel = (m: Stuck) => {
+    const c: [number, number, number] = [0, m.L / 2, 0];
+    if (m.kind === 'magnet.disc') {
+      const R = m.params.diameter! / 2;
+      const f = 0.95 * plateSaturationFactor(0.006, 1.3, Math.PI * R * R, 2 * Math.PI * R);
+      return -magnetWrench(imageFaces(cylinderFaces(c, [0, 1, 0], R, m.L, 1.3), [0, 0, 0], [0, 1, 0], f), cylinderCharges(c, [0, 1, 0], R, m.L, 1.3, 4), c)[1]!;
+    }
+    const w = m.params.x!, h = m.params.z!;
+    const f = 0.95 * plateSaturationFactor(0.006, 1.3, w * h, 2 * (w + h));
+    return -magnetWrench(imageFaces(blockFaces(c, [0, 1, 0], [1, 0, 0], [0, 0, 1], w, h, m.L, 1.3), [0, 0, 0], [0, 1, 0], f), blockCharges(c, [0, 1, 0], [1, 0, 0], [0, 0, 1], w, h, m.L, 1.3, 7), c)[1]!;
+  };
+  /** Does the stuck magnet hold a steady load (N, along dir) for half a second, or let go? */
+  const holds = async (m: Stuck, dir: [number, number, number], load: number, latch: boolean) => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    r.world.apply({ op: 'options', magnetLatch: latch });
+    r.part('plate', at(0, -0.003, 0), { frozen: true, material: 'steel.1018-cd' });
+    const b = r.part(m.kind, at(0, m.L / 2 + 0.001, 0), { params: m.params });
+    r.run(0.3);
+    const p0 = r.world.livePose(b.id)!.p;
+    expect(p0[1], 'lying on the plate').toBeCloseTo(m.L / 2, 4);
+    expect(r.world.magnetLatchCount()).toBe(latch ? 1 : 0);
+    const a = load / r.world.bodyMass(b.id)!;
+    r.setSim({ gravity: [dir[0] * a, dir[1] * a, dir[2] * a] });
+    let moved = 0, tilt = 0;
+    for (let i = 0; i < 45; i++) {
+      r.world.step();
+      const q = r.world.livePose(b.id)!;
+      moved = Math.max(moved, length(sub(q.p, p0)));
+      tilt = Math.max(tilt, 2 * Math.asin(Math.min(1, Math.hypot(q.q[0], q.q[2]))));
+    }
+    r.done();
+    if (moved < 1e-4 && tilt < 0.01) return 'holds';
+    if (moved > 0.01 || tilt > 0.3) return 'lets go';
+    return `moved ${(moved * 1e3).toFixed(2)} mm, tilted ${((tilt * 180) / Math.PI).toFixed(1)} deg`;
+  };
+  const both = async (m: Stuck, dir: [number, number, number], threshold: number) => {
+    for (const latch of [true, false]) {
+      expect(await holds(m, dir, 0.95 * threshold, latch), `${m.kind} ${JSON.stringify(m.params)} at 0.95x, latch ${latch}`).toBe('holds');
+      expect(await holds(m, dir, 1.05 * threshold, latch), `${m.kind} ${JSON.stringify(m.params)} at 1.05x, latch ${latch}`).toBe('lets go');
+    }
+  };
+  const common = [disc(0.01, 0.005), disc(0.025, 0.01), block(0.04, 0.02, 0.01)];
+
+  it('stuck to steel, a magnet holds a steady pull just under its magnetic pull P and lets go just over it', async () => {
+    expect(pullOnSteel(disc(0.01, 0.005))).toBeGreaterThan(20); // a 10 x 5 mm N42 disc holds a couple of kilograms
+    for (const m of common) await both(m, [0, 1, 0], pullOnSteel(m));
+  });
+
+  it('pushed sideways it holds just under friction on the pull, mu P, and slides just over it', async () => {
+    const mu = Math.sqrt(getMaterial('magnet.n42').friction * getMaterial('steel.1018-cd').friction); // as the contact combines them
+    for (const m of common) await both(m, [1, 0, 0], mu * pullOnSteel(m));
+  });
+
+  it('a tall block pushed sideways at its centre tips over its far edge at P w / L, before it would slide', async () => {
+    // 20 x 20 mm face, 60 mm tall: the load's moment F L / 2 beats the pull's P w / 2 at F = P w / L = P / 3,
+    // well under friction's 0.56 P
+    const m = block(0.02, 0.02, 0.06);
+    await both(m, [1, 0, 0], (pullOnSteel(m) * 0.02) / 0.06);
+  });
+
+  it('a magnet on a pivot near another wobbles about alignment at sqrt(k / I), and keeps wobbling (no numerical damping)', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 0.02, thickness: 0.01 } });
+    // two 20 x 10 mm discs, 40 mm between their faces: about 23 Hz, well inside what 90 ticks a second can sample
+    const R = 0.01, L = 0.01, y = 0.005 + 0.04 + L / 2;
+    const th0 = 0.1;
+    const b = r.part('magnet.disc', at(0, y, 0, axisAngle([0, 0, 1], th0)), { params: { diameter: 2 * R, thickness: L } });
+    r.connect('ball', { part: b, frame: at(0, 0, 0) }, null, { friction: 0, cone: Math.PI });
+    // the model's restoring torque stiffness about the pivot, and b's moment of inertia about a diameter
+    const A = cylinderFaces([0, 0, 0], [0, 1, 0], 0.01, 0.01, 1.3);
+    const torque = (th: number) => magnetWrench(A, cylinderCharges([0, y, 0], [-Math.sin(th), Math.cos(th), 0], R, L, 1.3, 4), [0, y, 0])[5]!;
+    const k = -(torque(1e-3) - torque(-1e-3)) / 2e-3;
+    const I = (r.world.bodyMass(b.id)! * (3 * R * R + L * L)) / 12;
+    const tilt = () => { const q = r.world.livePose(b.id)!.q; return 2 * Math.atan2(q[2], q[3]); };
+    let crossings = 0, first = -1, last = -1, prev = tilt(), late = 0;
+    for (let i = 1; i <= 180; i++) {
+      r.world.step();
+      const t = tilt();
+      if (Math.sign(t) !== Math.sign(prev)) { crossings++; if (first < 0) first = i; last = i; }
+      if (i > 90) late = Math.max(late, Math.abs(t));
+      prev = t;
+    }
+    const period = (2 * (last - first) * TICK) / (crossings - 1);
+    within(period, 2 * Math.PI * Math.sqrt(I / k), 0.03);
+    expect(late / th0).toBeGreaterThan(0.95); // still swinging as wide in its second second
+    r.done();
+  });
+
+  it('knocked straight off steel, a magnet escapes once its kinetic energy beats the pull\'s well, 1/2 m v^2 = int P dz', async () => {
+    const R = 0.005, L = 0.005;
+    const f = 0.95 * plateSaturationFactor(0.006, 1.3, Math.PI * R * R, 2 * Math.PI * R);
+    const pull = (z: number) => {
+      const c: [number, number, number] = [0, L / 2 + z, 0];
+      return -magnetWrench(imageFaces(cylinderFaces(c, [0, 1, 0], R, L, 1.3), [0, 0, 0], [0, 1, 0], f), cylinderCharges(c, [0, 1, 0], R, L, 1.3, 4), c)[1]!;
+    };
+    // the well's depth, trapezoids on a geometric grid of gaps out to 0.3 m (beyond it the pull is ~1e-8 of P)
+    let U = 0, z0 = 0, p0 = pull(0);
+    for (let z = 1e-5; z < 0.3; z *= 1.05) { const p = pull(z); U += ((p + p0) / 2) * (z - z0); z0 = z; p0 = p; }
+    const m = 7500 * Math.PI * R * R * L, vEsc = Math.sqrt((2 * U) / m);
+    expect(vEsc).toBeGreaterThan(4); // about 5.3 m/s: a flick does not free it, a hard blow does
+    for (const latch of [true, false]) {
+      for (const k of [0.9, 1.1]) {
+        const r = await rig({ gravity: [0, 0, 0] }, false);
+        r.world.apply({ op: 'options', magnetLatch: latch });
+        r.part('plate', at(0, -0.003, 0), { frozen: true, material: 'steel.1018-cd' });
+        const b = r.part('magnet.disc', at(0, L / 2 + 0.002, 0), { params: { diameter: 2 * R, thickness: L } });
+        r.run(0.5);
+        const p = r.world.livePose(b.id)!.p;
+        r.world.apply({ op: 'impulse', id: b.id, point: p, impulse: [0, r.world.bodyMass(b.id)! * k * vEsc, 0] });
+        r.run(0.3);
+        const y = r.world.livePose(b.id)!.p[1] - p[1];
+        if (k < 1) expect(Math.abs(y), `latch ${latch}: back on the steel`).toBeLessThan(1e-4);
+        else expect(y, `latch ${latch}: gone`).toBeGreaterThan(0.5);
+        r.done();
+      }
+    }
   });
 
   it('flipping a magnet turns attraction into repulsion', async () => {
@@ -334,6 +537,29 @@ describe('magnets', () => {
     const b = r.part('magnet.disc', at(0, 0.03, 0, axisAngle([1, 0, 0], Math.PI)));
     r.run(TICK * 3);
     expect(r.world.linearVelocity(b.id)![1]).toBeGreaterThan(0);
+    r.done();
+  });
+
+  it('a magnet falls down a copper pipe at the Lenz-drag terminal speed m g / c, smoothly past every seam of the pipe', async () => {
+    const r = await rig({ gravity: [0, -g, 0] }, false);
+    const od = 0.02, wall = 0.0015;
+    // a 1.2 m pipe is six bonded segments: the magnet passes five seams between them on the way down (A10)
+    r.part('tube.round', at(0, 0.6, 0), { frozen: true, material: 'copper.c110', params: { length: 1.2, od, wall } });
+    const b = r.part('magnet.disc', at(0, 1.1, 0), { params: { diameter: 0.004, thickness: 0.004 } });
+    const m = r.world.bodyMass(b.id)!;
+    // Levin et al. (2006): a point dipole in a thin pipe of mean radius a meets F = c v
+    const c = tubeDipoleDrag(dipoleMoment(1.3, Math.PI * 0.002 ** 2 * 0.004), getMaterial('copper.c110').conductivity, wall, od / 2 - wall / 2);
+    const vt = (m * g) / c;
+    let prev = 0, t = 0;
+    while (r.world.livePose(b.id)!.p[1] > 0.05) {
+      r.world.step();
+      t += TICK;
+      const vy = r.world.linearVelocity(b.id)![1];
+      expect(vy, `at ${t.toFixed(3)} s`).toBeLessThan(prev + 1e-3); // it only ever speeds up towards terminal speed
+      prev = vy;
+      if (t > 0.55) within(-vy, vt, 0.08); // three time constants m / c in
+    }
+    expect(t).toBeGreaterThan(0.6);
     r.done();
   });
 

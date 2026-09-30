@@ -361,12 +361,24 @@ export class SceneView {
         break;
       }
       case 'weld': {
+        // a fillet bead in the corner along the seam, as wide as the weld and no wider: it follows the outline of
+        // the bond for the weld's length (0 = all round), and reads as a seam, not an object
         const w = numberOf(p, 'bondW', 0.03), l = numberOf(p, 'bondL', 0.03), leg = numberOf(p, 'leg', 0.005);
-        const bead = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.5, 6, 24), tintMaterial(0x5b5046));
-        bead.rotation.x = Math.PI / 2;
-        bead.scale.set(w + leg, l + leg, leg * 2);
-        bead.userData.pick = { type: 'conn', id: c.id };
-        root.add(bead);
+        const r = 0.35 * leg;
+        const corners: [number, number][] = [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2], [-w / 2, -l / 2]];
+        let left = numberOf(p, 'length') > 0 ? numberOf(p, 'length') : 2 * (w + l);
+        const bead = tintMaterial(0x62666b);
+        for (let i = 0; i < 4 && left > 1e-4; i++) {
+          const [x0, z0] = corners[i]!, [x1, z1] = corners[i + 1]!;
+          const run = Math.min(Math.hypot(x1 - x0, z1 - z0), left);
+          if (run < 1e-4) continue;
+          const ux = (x1 - x0) / Math.hypot(x1 - x0, z1 - z0), uz = (z1 - z0) / Math.hypot(x1 - x0, z1 - z0);
+          const m = add(new THREE.CapsuleGeometry(r, run, 3, 8), bead, [x0 + (ux * run) / 2, 0, z0 + (uz * run) / 2]);
+          m.rotation.set(0, 0, 0);
+          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(ux, 0, uz));
+          m.castShadow = false;
+          left -= run;
+        }
         break;
       }
       case 'glued':

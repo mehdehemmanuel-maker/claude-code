@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { App } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
+import { AUTO_JOIN } from '../connectors/plan';
 import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
 import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
@@ -79,7 +80,7 @@ export class Tablet {
   update(time: number, hoverUv: THREE.Vector2 | null) {
     const id = hoverUv ? this.hitId(hoverUv) : null;
     if (id !== this.hoverId) { this.hoverId = id; this.dirty = true; }
-    const live = this.page === 'selected' && time - this.lastDraw > 200;
+    const live = (this.page === 'selected' || this.page === 'world') && time - this.lastDraw > 200;
     if ((this.dirty || live) && this.visible) {
       this.draw();
       this.lastDraw = time;
@@ -131,6 +132,27 @@ export class Tablet {
     this.widgets.push({ id, x, y, w, h, onClick });
   }
 
+  /** Text in at most `lines` lines of `width` pixels, `size * 1.3` apart from the baseline y down. */
+  private wrapped(s: string, x: number, y: number, width: number, size: number, color: string, lines: number) {
+    const g = this.ctx;
+    g.font = `400 ${size}px system-ui, sans-serif`;
+    const out: string[] = [];
+    let cur = '';
+    for (const word of s.split(/\s+/)) {
+      const next = cur ? `${cur} ${word}` : word;
+      if (g.measureText(next).width <= width || !cur) { cur = next; continue; }
+      out.push(cur);
+      cur = word;
+    }
+    if (cur) out.push(cur);
+    if (out.length > lines) {
+      let last = out.slice(lines - 1).join(' ');
+      while (last && g.measureText(`${last}…`).width > width) last = last.slice(0, -1);
+      out.splice(lines - 1, out.length, `${last.trimEnd()}…`);
+    }
+    out.forEach((l, i) => this.text(l, x, y + i * size * 1.3, size, color));
+  }
+
   private text(s: string, x: number, y: number, size = 24, color = '#e8ecf1', align: CanvasTextAlign = 'left', weight = '400') {
     const g = this.ctx;
     g.font = `${weight} ${size}px system-ui, sans-serif`;
@@ -175,9 +197,14 @@ export class Tablet {
     const app = this.app;
     switch (this.page) {
       case 'tools': {
-        this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 150, 8, (t, x, y, i) =>
-          this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 150, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
-        this.text(this.tools.tool.hint.split('·')[0]!.trim(), 24, H - 24, 22, '#9aa4af');
+        this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 112, 8, (t, x, y, i) =>
+          this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
+        this.drawBuildRow(y0 + 3 * 120 + 6);
+        // what the active tool can do besides its trigger action
+        const acts = this.tools.actions();
+        const aw = (W - 40 - 3 * 8) / 4;
+        acts.slice(0, 4).forEach((a, i) => this.btn(`act-${a.id}`, 20 + i * (aw + 8), H - 142, aw, 64, a.label, () => a.run(), { on: a.on }));
+        this.wrapped(this.tools.tool.hint, 24, H - 50, W - 48, 21, '#9aa4af', 2);
         break;
       }
       case 'parts': {
@@ -188,7 +215,9 @@ export class Tablet {
       }
       case 'join': {
         const cw = (W - 40 - 24) / 4;
-        this.grid(CONNECTOR_KINDS, 20, y0, 4, cw, 92, 8, (k, x, y) =>
+        // Best join first: the process that works for the two materials, sized to the stock
+        const kinds = [{ id: AUTO_JOIN, label: '✨ Best join', category: 'auto' }, ...CONNECTOR_KINDS];
+        this.grid(kinds, 20, y0, 4, cw, 92, 8, (k, x, y) =>
           this.btn(`join-${k.id}`, x, y, cw, 92, k.label, () => { app.joinKind = k.id; this.tools.byId('join'); }, { on: app.joinKind === k.id && this.tools.tool.id === 'join', sub: k.category }));
         break;
       }
@@ -214,7 +243,9 @@ export class Tablet {
     this.text(`${(value * d.scale).toFixed(def.integer ? 0 : d.digits)} ${d.unit}`, x + 470, y + 30, 24, '#e8ecf1', 'right', '600');
     const f = def.integer ? 1 : def.log ? 1.25 : 1.1;
     const next = (dir: number) => {
-      let v = def.integer ? value + dir : dir > 0 ? (value === 0 ? Math.max(def.min, (def.max - def.min) * 0.01) : value * f) : value / f;
+      let v = def.integer ? value + dir
+        : def.linear && def.step ? Math.round(value * d.scale / def.step + dir) * def.step / d.scale
+        : dir > 0 ? (value === 0 ? Math.max(def.min, (def.max - def.min) * 0.01) : value * f) : value / f;
       if (def.integer) v = Math.round(v);
       set(Math.min(def.max, Math.max(def.min, v)));
     };
@@ -300,7 +331,37 @@ export class Tablet {
       });
     }
     this.drawRoom(row(5) + 10, bw);
+    this.drawHealth(H - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, H - 14, 22, '#9aa4af');
+  }
+
+  /**
+   * Build and play (as in Besiege): in the build phase physics holds every part still and a moved part snaps to the
+   * grid and to the angle step; Play runs the build for real; Back to build returns to it as it was.
+   */
+  private drawBuildRow(y: number) {
+    const app = this.app, s = app.settings;
+    const bw = (W - 40 - 4 * 8) / 5;
+    const grids: [number, string][] = [[0, 'off'], [0.001, '1 mm'], [0.005, '5 mm'], [0.01, '1 cm'], [0.05, '5 cm'], [0.1, '10 cm']];
+    const angles = [0, 5, 15, 45, 90];
+    const next = <T,>(list: T[], cur: T) => list[(Math.max(0, list.indexOf(cur)) + 1) % list.length]!;
+    this.btn('build', 20, y, bw, 64, '■ Build', () => app.enterBuild(), { on: s.build });
+    this.btn('play', 20 + (bw + 8), y, bw, 64, '▶ Play', () => app.play(), { on: !s.build });
+    this.btn('stop', 20 + 2 * (bw + 8), y, bw, 64, '⏮ Back to build', () => app.stop(), { tone: app.canStop ? 'accent' : undefined });
+    const g = grids.find(([v]) => Math.abs(v - s.grid) < 1e-9) ?? grids[3]!;
+    this.btn('grid', 20 + 3 * (bw + 8), y, bw, 64, `Grid ${g[1]}`, () => { s.grid = next(grids.map(([v]) => v), g[0]); app.notify(); });
+    this.btn('angle', 20 + 4 * (bw + 8), y, bw, 64, `Angle ${s.angleSnap ? `${s.angleSnap}°` : 'off'}`, () => { s.angleSnap = next(angles, s.angleSnap); app.notify(); });
+  }
+
+  /** The live watchdog's verdict on this session: all clear, or how many problems and the latest one. */
+  private drawHealth(y: number) {
+    const h = this.app.live.health;
+    if (!h.length) { this.text('● Watchdog: all clear', 24, y, 22, '#4dd68c', 'left', '600'); return; }
+    const crit = h.filter((a) => a.severity === 'critical').length;
+    const last = h[h.length - 1]!;
+    const name = last.id ? (this.app.doc.parts[last.id.split('#')[0]!]?.name ?? 'a part') : 'the scene';
+    const line = `● Watchdog: ${crit ? `${crit} critical` : ''}${crit && h.length > crit ? ', ' : ''}${h.length > crit ? `${h.length - crit} warning` : ''} · ${last.kind}: ${name} ${last.detail}`;
+    this.text(line.length > 92 ? `${line.slice(0, 91)}…` : line, 24, y, 22, crit ? '#ff5b4d' : '#ffc14d', 'left', '600');
   }
 
   /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */

@@ -36,6 +36,33 @@ export function skew(r: Vec3): number[] {
 
 export const scaleMat = (m: number[], s: number) => m.map((v) => v * s);
 
+/**
+ * One tick of torque-free rotation: the angular velocity w2 at the end of the tick from w1 (the start, once the tick's
+ * impulses are in), by the implicit midpoint rule on Euler's equations, I (w2 - w1) + dt wm x (I wm) = 0 with
+ * wm = (w1 + w2) / 2 and I the inertia (world frame, at the start of the tick), solved by Newton's method. The
+ * midpoint rule keeps every quadratic invariant of the motion exactly, and a free body's kinetic energy (w.Iw / 2)
+ * and angular momentum magnitude (|Iw|) are both quadratic: it neither adds nor removes energy, at any spin rate.
+ * (Taken explicitly the gyroscopic term adds energy every tick, without bound for a fast-spinning uneven body;
+ * backward Euler never adds any but bleeds a quarter of a 30 rad/s tumble's energy in two seconds.)
+ */
+export function gyroscopicStep(I: number[], w1: Vec3, dt: number): Vec3 {
+  let w2: Vec3 = [...w1];
+  const scaleW = length(w1) + 1e-30;
+  for (let it = 0; it < 16; it++) {
+    const wm = scale(add(w1, w2), 0.5);
+    const Iwm = mat3Vec(I, wm);
+    const F = add(mat3Vec(I, sub(w2, w1)), scale(cross(wm, Iwm), dt));
+    // dF/dw2 = I + dt/2 (skew(wm) I - skew(I wm))
+    const sI = mat3Mul(skew(wm), I), sIw = skew(Iwm);
+    const J = I.map((v, k) => v + (dt / 2) * (sI[k]! - sIw[k]!));
+    const d = mat3Vec(inverse3(J), F);
+    w2 = sub(w2, d);
+    if (length(d) <= 1e-13 * scaleW) break;
+  }
+  return w2;
+}
+
+
 export function quatToMat3(q: Quat): number[] {
   const [x, y, z, w] = q;
   return [
@@ -186,6 +213,8 @@ export interface Entity {
   invMass: number;
   /** World inverse inertia about origin (3x3). */
   invI: number[];
+  /** Radius of its geometry about origin (m): how far a turn moves its farthest point (position pass). */
+  extent?: number;
 }
 
 export const pointVelocity = (e: Entity, p: Vec3): Vec3 => add(e.v, cross(e.w, sub(p, e.origin)));
@@ -221,6 +250,12 @@ export interface Row {
   key?: string;
   /** Unbounded rows sharing a group are solved together as one block (exact coupling, e.g. a 6-DOF anchor). */
   group?: string;
+  /**
+   * Position error to take out (as a velocity: error x beta), solved apart from the velocities by solvePositions.
+   * Pushed into the velocity solve instead, it would become real momentum: two overlapping bodies would leave
+   * each other faster the deeper they overlapped, with energy nothing supplied.
+   */
+  bias?: number;
 }
 
 /** Jacobian of a row on one of its entities: linear part and angular part (impulse response directions). */
@@ -321,7 +356,7 @@ function push(p: Prepared, lambda: number) {
  * accumulated impulses by row key: applying them first is what lets heavy-on-light stacks converge; it is
  * refreshed on exit. Entity velocities are updated in place.
  */
-export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>) {
+export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0) {
   const prep = rows.map(prepare);
   const byRow = new Map<Row, Prepared>();
   prep.forEach((p) => byRow.set(p.r, p));
@@ -360,6 +395,8 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
   }
   const res = new Float64Array(6);
   for (let it = 0; it < iterations; it++) {
+    // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
+    let change = 0, largest = 0;
     for (const p of prep) {
       const block = blockOf.get(p);
       if (block) {
@@ -369,7 +406,7 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
           let d = 0;
           const row = block.Kinv[i]!;
           for (let j = 0; j < n; j++) d += row[j]! * res[j]!;
-          if (d) { block.rows[i]!.r.acc += d; push(block.rows[i]!, d); }
+          if (d) { block.rows[i]!.r.acc += d; push(block.rows[i]!, d); change = Math.max(change, Math.abs(d)); }
         }
         continue;
       }
@@ -387,6 +424,11 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
       if (lambda === 0) continue;
       r.acc = next;
       push(p, lambda);
+      change = Math.max(change, Math.abs(lambda));
+    }
+    if (tolerance > 0) {
+      for (const p of prep) largest = Math.max(largest, Math.abs(p.r.acc));
+      if (change <= tolerance * largest) break;
     }
   }
   if (warm) {
@@ -395,13 +437,54 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
   }
 }
 
+/**
+ * Split impulse (Catto): the position errors of the rows (their `bias`) solved on pseudo-velocities that start at
+ * rest and move the entities' poses only. Contacts push apart but never pull, joints hold together, friction and
+ * impulse-bounded rows play no part. Returns each moving entity's pseudo-velocity; its real velocity is untouched,
+ * so taking out an overlap or a drift adds no momentum and no kinetic energy.
+ *
+ * The rows are linear in the motion, so the answer holds only for small turns: turning by theta about the origin
+ * moves a point at radius r off its linear prediction by r theta^2 / 2. Each entity's correction is therefore
+ * scaled down (direction kept) until that error is within `slop` at its extent; what is left is taken out on the
+ * following ticks. (A deep overlap resolved in one linear step would swing a long part through its neighbours.)
+ */
+export function solvePositions(rows: Row[], iterations: number, dt: number, slop: number): Map<Entity, { v: Vec3; w: Vec3 }> {
+  const pseudo = new Map<Entity, Entity>();
+  const of = (e: Entity | null): Entity | null => {
+    if (!e) return null;
+    let p = pseudo.get(e);
+    if (!p) pseudo.set(e, (p = { origin: e.origin, v: [0, 0, 0], w: [0, 0, 0], invMass: e.invMass, invI: e.invI }));
+    return p;
+  };
+  const prow: Row[] = [];
+  let any = false;
+  for (const r of rows) {
+    if (r.frictionOf) continue;
+    const contact = r.lo === 0 && r.hi === Infinity;
+    if (!contact && (r.lo !== -Infinity || r.hi !== Infinity)) continue;
+    if (r.bias) any = true;
+    prow.push({ a: of(r.a), b: of(r.b), kind: r.kind, pa: r.pa, pb: r.pb, dir: r.dir, target: r.bias ?? 0, lo: r.lo, hi: r.hi, acc: 0, group: r.group });
+  }
+  const out = new Map<Entity, { v: Vec3; w: Vec3 }>();
+  if (!any) return out;
+  solveRows(prow, iterations);
+  for (const [e, p] of pseudo) {
+    if (e.invMass === 0) continue;
+    const turn = length(p.w) * dt;
+    const most = e.extent ? Math.sqrt((2 * slop) / e.extent) : Infinity;
+    const k = turn > most ? most / turn : 1;
+    out.set(e, { v: scale(p.v, k), w: scale(p.w, k) });
+  }
+  return out;
+}
+
 /** Rows for a point held together between a and b (or to the world), in the directions P keeps (one block per key). */
 export function pointRows(a: Entity | null, b: Entity | null, pa: Vec3, pb: Vec3, P: number[], bias: Vec3, tag?: unknown, key?: string): Row[] {
-  return basisOf(P).map((axis, i) => ({ a, b, kind: 'linear' as const, pa, pb, dir: axis, target: -dot(bias, axis), lo: -Infinity, hi: Infinity, acc: 0, tag, key: key && `${key}:p${i}`, group: key }));
+  return basisOf(P).map((axis, i) => ({ a, b, kind: 'linear' as const, pa, pb, dir: axis, target: 0, bias: -dot(bias, axis), lo: -Infinity, hi: Infinity, acc: 0, tag, key: key && `${key}:p${i}`, group: key }));
 }
 
 export function angularRows(a: Entity | null, b: Entity | null, P: number[], bias: Vec3, tag?: unknown, key?: string, lo = -Infinity, hi = Infinity): Row[] {
-  return basisOf(P).map((axis, i) => ({ a, b, kind: 'angular' as const, pa: [0, 0, 0] as Vec3, pb: [0, 0, 0] as Vec3, dir: axis, target: -dot(bias, axis), lo, hi, acc: 0, tag, key: key && `${key}:r${i}`, group: key }));
+  return basisOf(P).map((axis, i) => ({ a, b, kind: 'angular' as const, pa: [0, 0, 0] as Vec3, pb: [0, 0, 0] as Vec3, dir: axis, target: 0, bias: -dot(bias, axis), lo, hi, acc: 0, tag, key: key && `${key}:r${i}`, group: key }));
 }
 
 /** Orthonormal basis of the range of a symmetric projector (identity, axis, or plane). */

@@ -65,6 +65,8 @@ export interface NumberParam extends Base {
   integer?: boolean;
   /** Slider on a log scale (spans several decades). */
   log?: boolean;
+  /** Stepped in equal steps of `step` (display units) rather than in proportion to the value (e.g. power in %). */
+  linear?: boolean;
 }
 
 export interface EnumParam extends Base {
