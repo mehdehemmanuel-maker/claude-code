@@ -56,6 +56,24 @@ export class AppHost implements ForgeHost {
     return part.id;
   }
 
+  /** Part k of n in a row a metre in front of you, across your view, each resting on the floor. */
+  placeInRow(kindId: string, material: string, k: number, n: number) {
+    const kind = getPartKind(kindId);
+    const params = defaultsOf(kind.params);
+    const q = kind.spawnRotation;
+    const shape = kind.collision(effectiveParams(kind, params, getMaterial(material)));
+    const b = shapeBounds(shape);
+    const width = Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]) + 0.05;
+    const p = this.inFront(kindId, params, material, q);
+    const cam = this.app.renderer.xr.isPresenting ? this.app.renderer.xr.getCamera() : this.app.view.camera;
+    const f = cam.getWorldDirection(new THREE.Vector3()).setY(0);
+    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
+    f.normalize();
+    const right: Vec3 = [-f.z, 0, f.x];
+    const off = (k - (n - 1) / 2) * width;
+    return this.place(kindId, {}, material, [p[0] + right[0] * off, p[1], p[2] + right[2] * off], [], undefined);
+  }
+
   /** A metre in front of you, resting on the floor. */
   private inFront(kindId: string, params: Params, material: string, q: Quat): Vec3 {
     const kind = getPartKind(kindId);

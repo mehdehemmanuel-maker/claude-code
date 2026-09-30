@@ -5,7 +5,7 @@
 import { getMaterial, type Material } from '../data/materials';
 import { getPartKind } from '../parts/registry';
 
-export type ItemType = 'tool' | 'part' | 'material' | 'joint' | 'build' | 'action';
+export type ItemType = 'tool' | 'part' | 'material' | 'joint' | 'build' | 'template' | 'action';
 export interface Item { type: ItemType; id: string }
 
 const COS = Math.cos(Math.PI / 6), SIN = 0.5;

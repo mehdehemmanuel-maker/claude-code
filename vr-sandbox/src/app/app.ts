@@ -2,12 +2,13 @@
 
 import * as THREE from 'three';
 import { getMaterial, MATERIALS, type Material } from '../data/materials';
-import { getConnectorKind } from '../connectors/registry';
-import { effectiveParams, getPartKind, type PartDims } from '../parts/registry';
-import { commitPoses, connectedComponent, deleteParts, duplicateParts, newDoc, recordFracture, setConnectionState, setFrozen } from '../doc/commands';
+import { getConnectorKind, hasConnectorKind } from '../connectors/registry';
+import { effectiveParams, getPartKind, hasPartKind, type PartDims } from '../parts/registry';
+import { shapeBounds } from '../parts/shapes';
+import { commitPoses, connectedComponent, deleteParts, duplicateParts, fragmentOf, insertFragment, newDoc, recordFracture, setConnectionState, setFrozen, type Fragment } from '../doc/commands';
 import { endpointWorld, isBent, partLayout, segmentPose } from './segments';
 import { segmentBodyId, segmentOffset, segmentOfFrame } from '../parts/registry';
-import { canonicalPose, composePose, length, relativePose, sub } from '../doc/math';
+import { canonicalPose, composePose, length, relativePose, sub, transformPoint } from '../doc/math';
 import { DocStore, touched, type Change, type ChangeSource } from '../doc/store';
 import type { BuildDoc, Connection, Part, Pose, Vec3 } from '../doc/types';
 import { decodeDocText, encodeDocText, fromShareCode, toShareCode, DecodeError } from '../persistence/codec';
@@ -29,6 +30,10 @@ export interface Settings {
   build: boolean;
   grid: number;
   angleSnap: number;
+  /** Everything you move or place snaps to the grid and the angle step, in any mode (Build mode always does). */
+  gridLock: boolean;
+  /** A part placed on another lines up with it: square to it, flush on its face, edges and centres matched. */
+  smartSnap: boolean;
   strength: number;
   pokeImpulse: number;
   timeScale: number;
@@ -67,7 +72,7 @@ export class App {
   readonly particles = new Particles();
   readonly view: SceneView;
   readonly settings: Settings = {
-    grabMode: 'physical', placeFrozen: false, build: false, grid: 0.01, angleSnap: 15, strength: 250, pokeImpulse: 6,
+    grabMode: 'physical', placeFrozen: false, build: false, grid: 0.01, angleSnap: 15, gridLock: false, smartSnap: true, strength: 250, pokeImpulse: 6,
     timeScale: 1, paused: false, volume: 0.8, particles: true, shadows: true, playerScale: 1,
   };
   selection = { parts: new Set<string>(), conn: null as string | null };
@@ -557,6 +562,78 @@ export class App {
     this.library.remove(id);
     if (this.libraryId === id) this.libraryId = null;
     this.toast(`Deleted “${entry.name}”`, 'info');
+    this.notify();
+  }
+
+  // templates: assemblies you saved to place again (nothing ships pre-made here either)
+
+  readonly templates = new BuildLibrary(globalThis.localStorage ?? null, 'vrsb.templates', 'Template');
+  /** The template the Place tool is stamping out, or null to place single parts. */
+  spawnTemplate: string | null = null;
+
+  /** World bounds of parts, from their shapes at their current poses. */
+  boundsOf(ids: string[]) {
+    const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+    for (const id of ids) {
+      const part = this.doc.parts[id];
+      if (!part) continue;
+      const pose = this.livePose(id) ?? part.pose;
+      const kind = getPartKind(part.kind);
+      const b = shapeBounds(kind.collision(effectiveParams(kind, part.params, this.materialOf(part))));
+      for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) {
+        const w = transformPoint(pose, [x, y, z]);
+        for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k]!, w[k]!); max[k] = Math.max(max[k]!, w[k]!); }
+      }
+    }
+    return { min, max };
+  }
+
+  /** Save parts (an assembly) as a template: its parts and joints, relative to the middle of its base. */
+  saveTemplate(ids: string[]) {
+    const parts = ids.filter((id) => this.doc.parts[id]);
+    if (!parts.length) return null;
+    this.commitLivePoses();
+    const b = this.boundsOf(parts);
+    const base: Pose = { p: [(b.min[0] + b.max[0]) / 2, b.min[1], (b.min[2] + b.max[2]) / 2], q: [0, 0, 0, 1] };
+    const frag = fragmentOf(this.doc, parts, (id) => this.doc.parts[id]!.pose, base);
+    const entry = this.templates.save(JSON.stringify({ v: 1, ...frag }));
+    this.toast(`Saved template “${entry.name}”: ${frag.parts.length} part${frag.parts.length === 1 ? '' : 's'}, ${frag.connections.length} joint${frag.connections.length === 1 ? '' : 's'}. Place copies from My builds › Templates`, 'ok');
+    this.audio.ui('save');
+    this.notify();
+    return entry;
+  }
+
+  /** A saved template, checked against the catalog (a kind it uses may have gone). */
+  templateFragment(id: string): Fragment | null {
+    const entry = this.templates.get(id);
+    if (!entry) return null;
+    try {
+      const f = JSON.parse(entry.text) as Fragment & { v: number };
+      if (!Array.isArray(f.parts) || !Array.isArray(f.connections)) return null;
+      if (f.parts.some((p) => !hasPartKind(p.kind)) || f.connections.some((c) => !hasConnectorKind(c.kind))) return null;
+      return { parts: f.parts, connections: f.connections };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Stamp out a template with its base at `at`. */
+  placeTemplate(id: string, at: Pose) {
+    const frag = this.templateFragment(id);
+    const name = this.templates.get(id)?.name ?? 'template';
+    if (!frag) { this.toast(`“${name}” can't be placed: it uses parts this version doesn't have`, 'warn'); return []; }
+    const map = insertFragment(this.store, frag, at, `Place ${name}`);
+    this.select(map.values());
+    this.audio.ui('place', at.p);
+    return [...map.values()];
+  }
+
+  deleteTemplate(id: string) {
+    const entry = this.templates.get(id);
+    if (!entry) return;
+    this.templates.remove(id);
+    if (this.spawnTemplate === id) this.spawnTemplate = null;
+    this.toast(`Deleted template “${entry.name}”`, 'info');
     this.notify();
   }
 

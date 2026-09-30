@@ -6,6 +6,7 @@ import type { App } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
+import { Voice } from '../assistant/voice';
 import { drawGlyph, drawMaterial, drawPart, jointGlyph, type Item } from './icons';
 import { Hotbar, SLOTS } from './hotbar';
 import { catalogEntries, search, type Entry } from './search';
@@ -210,6 +211,11 @@ export class Tablet {
         this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 112, 8, (t, x, y, i) =>
           this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
         this.drawBuildRow(y0 + 3 * 120 + 6);
+        {
+          const s = app.settings, bw = (W - 40 - 8) / 2, ys = y0 + 3 * 120 + 6 + 72;
+          this.btn('gridlock', 20, ys, bw, 52, s.gridLock ? '🔒 Grid lock: on' : '🔓 Grid lock: off', () => { s.gridLock = !s.gridLock; app.notify(); }, { on: s.gridLock, small: true });
+          this.btn('smartsnap', 20 + bw + 8, ys, bw, 52, s.smartSnap ? '🧲 Smart snap: on' : 'Smart snap: off', () => { s.smartSnap = !s.smartSnap; app.notify(); }, { on: s.smartSnap, small: true });
+        }
         // what the active tool can do besides its trigger action
         const acts = this.tools.actions();
         const aw = (W - 40 - 3 * 8) / 4;
@@ -340,9 +346,16 @@ export class Tablet {
       this.text(`Damaged: ${part.damage.broken.length} fracture(s)`, W - 24, y0 + 36, 22, '#ff9b73', 'right');
       this.btn('repair', W - 254, by - 66, 230, 56, 'Repair', () => repairPart(app.store, part.id), { tone: 'accent' });
     }
-    this.btn('freeze', 24, by, 230, 56, part.frozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, [part.id], !part.frozen); }, { on: part.frozen });
-    this.btn('dup', 264, by, 230, 56, 'Duplicate', () => app.duplicateSelection());
-    this.btn('del', W - 254, by, 230, 56, 'Delete', () => deleteParts(app.store, [part.id]), { tone: 'danger' });
+    // joined parts are one piece: these act on the whole assembly (the one part only where it says so)
+    const group = app.component(part.id);
+    const joints = Object.values(app.doc.connections).filter((c) => group.includes(c.a.part) && c.state.status !== 'broken').length;
+    if (group.length > 1) this.text(`Assembly: ${group.length} parts, ${joints} joint${joints === 1 ? '' : 's'}`, W - 24, y0 + 74, 22, '#8fd3ff', 'right', '600');
+    this.btn('tpl-save', 24, by - 66, 230, 56, '📐 Save as template', () => app.saveTemplate(group), { tone: 'accent' });
+    if (group.length > 1) this.btn('del-one', 264, by - 66, 230, 56, 'Delete just this', () => deleteParts(app.store, [part.id]));
+    const allFrozen = group.every((id) => app.doc.parts[id]?.frozen);
+    this.btn('freeze', 24, by, 230, 56, allFrozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, group, !allFrozen); }, { on: allFrozen });
+    this.btn('dup', 264, by, 230, 56, 'Duplicate', () => { app.select([part.id, ...group.filter((x) => x !== part.id)]); app.duplicateSelection(); });
+    this.btn('del', W - 254, by, 230, 56, group.length > 1 ? `Delete all ${group.length}` : 'Delete', () => deleteParts(app.store, group), { tone: 'danger' });
   }
 
   // ---- inventory: slots, chips, the hotbar, search ----------------------------------------------
@@ -391,6 +404,7 @@ export class Tablet {
       case 'joint': drawGlyph(g, jointGlyph(item.id), x, y, s); break;
       case 'tool': drawGlyph(g, this.tools.tools.find((t) => t.id === item.id)?.icon ?? '🛠', x, y, s); break;
       case 'build': drawGlyph(g, '💾', x, y, s); break;
+      case 'template': drawGlyph(g, '📐', x, y, s); break;
       case 'action': drawGlyph(g, this.actions().find((a) => a.id === item.id)?.glyph ?? '⚙️', x, y, s); break;
     }
   }
@@ -403,6 +417,7 @@ export class Tablet {
         case 'joint': return item.id === AUTO_JOIN ? 'Best join' : getConnectorKind(item.id).label;
         case 'tool': return this.tools.tools.find((t) => t.id === item.id)?.label ?? item.id;
         case 'build': return this.app.library.get(item.id)?.name ?? 'Build';
+        case 'template': return this.app.templates.get(item.id)?.name ?? 'Template';
         case 'action': return this.actions().find((a) => a.id === item.id)?.label ?? item.id;
       }
     } catch { /* an item no longer in the catalog */ }
@@ -413,8 +428,9 @@ export class Tablet {
     const app = this.app, t = this.tools.tool.id;
     switch (item.type) {
       case 'tool': return t === item.id;
-      case 'part': return t === 'place' && app.spawnKind === item.id;
-      case 'material': return t === 'place' && app.spawnMaterial === item.id;
+      case 'part': return t === 'place' && !app.spawnTemplate && app.spawnKind === item.id;
+      case 'material': return t === 'place' && !app.spawnTemplate && app.spawnMaterial === item.id;
+      case 'template': return t === 'place' && app.spawnTemplate === item.id;
       case 'joint': return t === 'join' && app.joinKind === item.id;
       default: return false;
     }
@@ -425,7 +441,13 @@ export class Tablet {
     const app = this.app;
     switch (item.type) {
       case 'tool': this.tools.byId(item.id); break;
-      case 'part': app.spawnKind = item.id; this.tools.byId('place'); break;
+      case 'part': app.spawnKind = item.id; app.spawnTemplate = null; this.tools.byId('place'); break;
+      case 'template':
+        if (!app.templates.get(item.id)) return;
+        app.spawnTemplate = item.id;
+        this.tools.byId('place');
+        app.toast(`Placing “${app.templates.get(item.id)!.name}”: trigger where it goes`, 'info');
+        break;
       case 'material': {
         const m = getMaterial(item.id);
         const kind = getPartKind(app.spawnKind);
@@ -436,6 +458,7 @@ export class Tablet {
           app.spawnKind = k.id;
         }
         app.spawnMaterial = item.id;
+        app.spawnTemplate = null;
         this.tools.byId('place');
         break;
       }
@@ -501,6 +524,7 @@ export class Tablet {
       ...this.catalog,
       ...this.tools.tools.map((t) => ({ item: { type: 'tool' as const, id: t.id }, label: t.label, sub: 'Tool', words: [...words(t.label), ...words(t.hint), 'tool'] })),
       ...this.app.library.list().map((b) => ({ item: { type: 'build' as const, id: b.id }, label: b.name, sub: 'My build', words: [...words(b.name), 'build', 'saved', 'my'] })),
+      ...this.app.templates.list().map((t) => ({ item: { type: 'template' as const, id: t.id }, label: t.name, sub: 'My template', words: [...words(t.name), 'template', 'assembly', 'my', 'prefab'] })),
       ...this.actions().map((a) => ({ item: { type: 'action' as const, id: a.id }, label: a.label, sub: 'Action', words: [...words(a.label), ...a.words] })),
     ];
   }
@@ -586,10 +610,26 @@ export class Tablet {
     const nw = (W - 40 - 3 * 8) / 4;
     next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 34, nw, 56, n.label, () => n.run()));
     const by = CH - 76;
-    const bw = (W - 40 - 16) / 3;
-    this.btn('forge', 20, by, bw, 60, '⌨ Forge command', () => { this.typing = true; }, { tone: 'accent' });
-    this.btn('claude', 20 + bw + 8, by, bw, 60, '📋 Copy for Claude', () => this.copyForClaude(), { sub: 'transcript + share code' });
-    this.btn('adv-clear', 20 + 2 * (bw + 8), by, bw, 60, 'Clear advice', () => { ada.advice = []; this.app.notify(); });
+    const bw = (W - 40 - 24) / 4;
+    this.btn('forge', 20, by, bw, 60, '⌨ Ask Ada', () => { this.typing = true; }, { tone: 'accent', sub: 'or type Forge' });
+    if (Voice.canListen) this.btn('talk', 20 + (bw + 8), by, bw, 60, this.listening ? '🎙 Listening…' : '🎙 Talk', () => this.talk(), { on: this.listening, tone: 'accent' });
+    else this.btn('voice', 20 + (bw + 8), by, bw, 60, ada.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ada.voice.enabled = !ada.voice.enabled; }, { on: ada.voice.enabled });
+    this.btn('claude', 20 + 2 * (bw + 8), by, bw, 60, '📋 For Claude', () => this.copyForClaude(), { sub: 'copy transcript' });
+    this.btn('adv-clear', 20 + 3 * (bw + 8), by, bw, 60, 'Clear advice', () => { ada.advice = []; this.app.notify(); });
+  }
+
+  private listening = false;
+  /** Speak to Ada: one request, heard by the browser's own recognition, then done as if typed. */
+  private talk() {
+    const ada = this.app.ada;
+    if (!ada || this.listening) return;
+    this.listening = true;
+    ada.voice.listen((heard) => {
+      this.listening = false;
+      if (heard) ada.ask(heard);
+      else this.app.toast('Ada didn\'t catch that: try again, or type it', 'warn');
+      this.app.notify();
+    });
   }
 
   private copyForClaude() {
@@ -614,11 +654,11 @@ export class Tablet {
     let shown = ada.command;
     while (shown && g.measureText(`${shown}▏`).width > W - 250) shown = shown.slice(1);
     this.text(`${shown}▏`, 34, y0 + 36, 24, '#e8ecf1');
-    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Run ⏎', () => { if (ada.command.trim()) { ada.run(ada.command); ada.command = ''; } }, { tone: 'accent' });
+    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Go ⏎', () => { if (ada.command.trim()) { ada.ask(ada.command); ada.command = ''; } }, { tone: 'accent' });
     ada.output.slice(-5).forEach((l, i) => this.text(l.length > 78 ? `${l.slice(0, 77)}…` : l, 24, y0 + 90 + i * 26, 19, l.startsWith('✗') ? '#ff9b73' : l.startsWith('›') ? '#8fd3ff' : '#c7ccd1'));
-    const ex: [string, string][] = [['a rail', 'place lumber length=1.2m at 0 0.9 -1 as rail'], ['join two', 'join last this'], ['4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
-    const ew = (W - 40 - 16) / 3;
-    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, `e.g. ${label}`, () => { ada.command = code; }));
+    const ex: [string, string][] = [['make it stronger', 'make it stronger'], ['weld these', 'weld these'], ['4 steel blocks', 'place 4 steel blocks'], ['Forge: 4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
+    const ew = (W - 40 - 24) / 4;
+    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, label, () => { ada.command = code; }, { small: true }));
     this.keyboard('key', y0 + 276, () => ada.command, (v) => { ada.command = v; }, ['forge-back', '← Ada', () => { this.typing = false; }]);
   }
 
@@ -626,7 +666,38 @@ export class Tablet {
   private deleting = false;
 
   /** Your builds, saved on this headset. Nothing here is pre-made. */
+  /** My builds or my templates. */
+  private shelf: 'Builds' | 'Templates' = 'Builds';
+
   private drawBuilds(y0: number) {
+    const y = this.chips('shelf', ['Builds', 'Templates'], this.shelf, (l) => { this.shelf = l as 'Builds' | 'Templates'; this.deleting = false; this.scroll = 0; }, y0);
+    if (this.shelf === 'Templates') this.drawTemplates(y);
+    else this.drawMyBuilds(y);
+  }
+
+  /** Your templates: assemblies saved to place again. Pick one and the Place tool stamps out copies. */
+  private drawTemplates(y0: number) {
+    const app = this.app;
+    const list = app.templates.list();
+    const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
+    const bw = (W - 40 - 8) / 2;
+    this.btn('tpl-save2', 20, y0, bw, 72, '📐 Save selection as template', () => app.saveTemplate(sel.length ? app.component(sel[0]!) : []), { tone: sel.length ? 'accent' : undefined, sub: sel.length ? `${app.component(sel[0]!).length} parts` : 'select a part of it first' });
+    if (this.deleting && !list.length) this.deleting = false;
+    this.btn('tpl-delmode', 20 + bw + 8, y0, bw, 72, this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; }, { on: this.deleting, tone: this.deleting ? 'danger' : undefined });
+    const y1 = y0 + 86;
+    if (!list.length) {
+      this.wrapped('No templates yet. Join parts into something, select it, then 📐 Save as template: pick it here and the Place tool stamps out copies.', 24, y1 + 40, W - 48, 24, '#9aa4af', 3);
+      return;
+    }
+    const sw = (W - 40 - 5 * 8) / 6;
+    this.grid(list, 20, y1, 6, sw, 132, 8, (e, x, y) =>
+      this.slot(`tpl-${e.id}`, x, y, sw, 132, { type: 'template', id: e.id }, e.name, () => {
+        if (this.deleting) app.deleteTemplate(e.id);
+        else this.pick({ type: 'template', id: e.id });
+      }));
+  }
+
+  private drawMyBuilds(y0: number) {
     const app = this.app;
     const lib = app.library.list();
     const open = app.libraryId ? app.library.get(app.libraryId) : null;

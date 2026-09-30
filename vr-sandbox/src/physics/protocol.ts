@@ -39,7 +39,8 @@ export type PhysicsOp =
   | { op: 'sim'; sim: SimSettings }
   | { op: 'setPose'; id: string; pose: Pose; linear?: Vec3; angular?: Vec3 }
   | { op: 'impulse'; id: string; point: Vec3; impulse: Vec3 }
-  | { op: 'grab'; hand: string; id: string; mode: GrabMode; target: Pose; strength: number }
+  /** `group`: parts joined to it, moved rigidly with it when it is moved precisely (creative, frozen, build). */
+  | { op: 'grab'; hand: string; id: string; mode: GrabMode; target: Pose; strength: number; group?: string[] }
   | { op: 'grabTarget'; hand: string; target: Pose }
   | { op: 'release'; hand: string; linear?: Vec3; angular?: Vec3 }
   | { op: 'controls'; channels: Record<string, number> }

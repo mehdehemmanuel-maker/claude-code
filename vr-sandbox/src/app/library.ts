@@ -17,9 +17,9 @@ export class BuildLibrary {
   /** False when the browser keeps no storage (a private window): builds then last only until the page closes. */
   persistent = true;
 
-  constructor(private storage: Pick<Storage, 'getItem' | 'setItem'> | null = globalThis.localStorage ?? null) {
+  constructor(private storage: Pick<Storage, 'getItem' | 'setItem'> | null = globalThis.localStorage ?? null, private key = KEY, private prefix = 'Build') {
     try {
-      const raw = this.storage?.getItem(KEY);
+      const raw = this.storage?.getItem(this.key);
       const list = raw ? (JSON.parse(raw) as unknown) : [];
       if (Array.isArray(list)) this.entries = list.filter((e): e is SavedBuild => !!e && typeof e.id === 'string' && typeof e.text === 'string' && typeof e.name === 'string');
     } catch {
@@ -36,7 +36,7 @@ export class BuildLibrary {
     return this.entries.find((e) => e.id === id) ?? null;
   }
 
-  /** Save a build: over the entry `id` when given (and still there), else as a new one named "Build n". */
+  /** Save: over the entry `id` when given (and still there), else as a new one named "Build n" (or the prefix's n). */
   save(text: string, id?: string | null, now = new Date()): SavedBuild {
     const at = now.toISOString();
     const old = id ? this.get(id) : null;
@@ -48,8 +48,8 @@ export class BuildLibrary {
     }
     const used = new Set(this.entries.map((e) => e.name));
     let n = this.entries.length + 1;
-    while (used.has(`Build ${n}`)) n++;
-    const entry: SavedBuild = { id: `b${now.getTime().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`, name: `Build ${n}`, saved: at, text };
+    while (used.has(`${this.prefix} ${n}`)) n++;
+    const entry: SavedBuild = { id: `b${now.getTime().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`, name: `${this.prefix} ${n}`, saved: at, text };
     this.entries.push(entry);
     this.write();
     return entry;
@@ -62,7 +62,7 @@ export class BuildLibrary {
 
   private write() {
     try {
-      this.storage?.setItem(KEY, JSON.stringify(this.entries));
+      this.storage?.setItem(this.key, JSON.stringify(this.entries));
       this.persistent = !!this.storage;
     } catch {
       this.persistent = false;
