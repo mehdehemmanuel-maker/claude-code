@@ -137,6 +137,10 @@ export const ADHESIVES: Record<string, Adhesive> = {
     id: 'silicone-rtv', label: 'Silicone RTV', lapShear: 1.5e6, peel: 3000, cureTau: 12 * 3600,
     modulus: 2e6, bondline: 0.001, gapFill: 0.006, poorOn: ['ptfe'], onlyOn: [], source: 'typical RTV TDS (estimated)',
   },
+  mortar: {
+    id: 'mortar', label: 'Masonry mortar (Type N)', lapShear: 0.4e6, peel: 150, cureTau: 24 * 3600,
+    modulus: 5e9, bondline: 0.01, gapFill: 0.02, poorOn: ['ptfe', 'polyolefin', 'metal'], onlyOn: ['ceramic', 'stone'], source: 'ASTM C270 Type N; bond shear 0.3-0.5 MPa typical (estimated)',
+  },
   'foam-tape': {
     id: 'foam-tape', label: 'Acrylic foam tape', lapShear: 0.5e6, peel: 3000, cureTau: 60,
     modulus: 1e6, bondline: 0.001, gapFill: 0.001, poorOn: ['ptfe', 'polyolefin'], onlyOn: [], source: 'typical acrylic foam tape TDS ~0.5 MPa (estimated)',

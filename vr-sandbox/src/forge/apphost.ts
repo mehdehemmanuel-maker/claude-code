@@ -74,6 +74,16 @@ export class AppHost implements ForgeHost {
     return this.place(kindId, {}, material, [p[0] + right[0] * off, p[1], p[2] + right[2] * off], [], undefined);
   }
 
+  /** The floor `dist` metres in front of you. */
+  frontFloor(dist = 1): Vec3 {
+    const cam = this.app.renderer.xr.isPresenting ? this.app.renderer.xr.getCamera() : this.app.view.camera;
+    const p = cam.getWorldPosition(new THREE.Vector3());
+    const f = cam.getWorldDirection(new THREE.Vector3()).setY(0);
+    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
+    f.normalize();
+    return [p.x + f.x * dist, 0, p.z + f.z * dist];
+  }
+
   /** A metre in front of you, resting on the floor. */
   private inFront(kindId: string, params: Params, material: string, q: Quat): Vec3 {
     const kind = getPartKind(kindId);
@@ -103,23 +113,41 @@ export class AppHost implements ForgeHost {
     return getConnectorKind(k.id).id;
   }
 
-  /** Where A's surface meets B: the face of A that B lies beyond, at the point nearest B, or an error if they don't touch. */
+  /**
+   * Where A and B touch: of A's six faces, the one B sits against. That is the face with the smallest gap to B, among
+   * those B overlaps across (a table top covers its leg's top end, not its side). The contact point is the middle of
+   * that overlap. An error if nothing is within the contact slop.
+   */
   private contact(a: string, b: string): { point: Vec3; normal: Vec3 } {
     const A = this.box(a), B = this.box(b);
-    const cB = inverseTransformPoint(A.pose, transformPoint(B.pose, B.centre));
-    const d = [0, 1, 2].map((k) => (cB[k]! - A.centre[k]!) / Math.max(A.half[k]!, 1e-6));
-    const k = [0, 1, 2].reduce((m, x) => (Math.abs(d[x]!) > Math.abs(d[m]!) ? x : m), 0);
-    const sgn = Math.sign(d[k]!) || 1;
-    const local: Vec3 = [0, 1, 2].map((j) => (j === k ? A.centre[j]! + sgn * A.half[j]! : Math.min(A.centre[j]! + A.half[j]!, Math.max(A.centre[j]! - A.half[j]!, cB[j]!)))) as Vec3;
-    const nLocal: Vec3 = [0, 0, 0];
-    nLocal[k] = sgn;
-    const point = transformPoint(A.pose, local);
-    const normal = normalize(rotate(A.pose.q, nLocal));
-    // B's nearest point along the normal: none of its box may sit further off A's face than the contact slop
-    let near = Infinity;
-    for (const c of B.corners) near = Math.min(near, dot([c[0] - point[0], c[1] - point[1], c[2] - point[2]], normal));
-    if (near > TOUCH) throw new Error(`${this.label(a)} and ${this.label(b)} aren't touching (${Math.round(near * 1000)} mm apart): a joint needs them in contact`);
-    return { point, normal };
+    const local = B.corners.map((c) => inverseTransformPoint(A.pose, c));
+    const lo = [0, 1, 2].map((k) => Math.min(...local.map((c) => c[k]!)));
+    const hi = [0, 1, 2].map((k) => Math.max(...local.map((c) => c[k]!)));
+    let best: { gap: number; point: Vec3; normal: Vec3 } | null = null;
+    for (const k of [0, 1, 2]) {
+      for (const sgn of [1, -1]) {
+        const face = A.centre[k]! + sgn * A.half[k]!;
+        const gap = sgn > 0 ? lo[k]! - face : face - hi[k]!;
+        if (gap < -0.01 || gap > TOUCH) continue; // not against this face (or through it)
+        const mid: Vec3 = [0, 0, 0];
+        let overlaps = true;
+        for (const j of [0, 1, 2]) {
+          if (j === k) { mid[j] = face; continue; }
+          const l = Math.max(lo[j]!, A.centre[j]! - A.half[j]!), h = Math.min(hi[j]!, A.centre[j]! + A.half[j]!);
+          if (h - l <= 1e-4) { overlaps = false; break; }
+          mid[j] = (l + h) / 2;
+        }
+        if (!overlaps || (best && Math.abs(gap) >= Math.abs(best.gap))) continue;
+        const n: Vec3 = [0, 0, 0];
+        n[k] = sgn;
+        best = { gap, point: transformPoint(A.pose, mid), normal: normalize(rotate(A.pose.q, n)) };
+      }
+    }
+    if (!best) {
+      const d = Math.max(0, ...[0, 1, 2].map((k) => Math.max(lo[k]! - (A.centre[k]! + A.half[k]!), A.centre[k]! - A.half[k]! - hi[k]!)));
+      throw new Error(`${this.label(a)} and ${this.label(b)} aren't touching (${Math.round(d * 1000)} mm apart): a joint needs them in contact`);
+    }
+    return { point: best.point, normal: best.normal };
   }
 
   private onFloor(a: string): { point: Vec3; normal: Vec3 } {

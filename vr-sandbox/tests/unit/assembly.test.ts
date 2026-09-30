@@ -5,10 +5,10 @@ import { addConnection, addPart, fragmentOf, insertFragment, newDoc } from '../.
 import { seededIds } from '../../src/doc/ids';
 import { composePose } from '../../src/doc/math';
 
-describe('plain requests to Ada', () => {
+describe('plain requests to Ego', () => {
   it('reads what you ask into what to do', () => {
     expect(interpret('make it stronger')).toEqual({ do: 'strengthen' });
-    expect(interpret('Ada, weld these together please')).toEqual({ do: 'join', joint: 'weld', floor: false });
+    expect(interpret('Ego, weld these together please')).toEqual({ do: 'join', joint: 'weld', floor: false });
     expect(interpret('bolt it to the floor')).toEqual({ do: 'join', joint: 'bolted', floor: true });
     expect(interpret('place 4 steel blocks')).toEqual({ do: 'place', count: 4, kind: 'block', material: 'steel' });
     expect(interpret('give me an oak board')).toEqual({ do: 'place', count: 1, kind: 'board', material: 'oak' });

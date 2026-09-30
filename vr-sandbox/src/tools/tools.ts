@@ -498,10 +498,18 @@ export function makeRigidJoin(app: App, a: JoinEnd, b: { part: string | null; se
   let plan: JoinPlan | null = null;
   if (isPlannedKind(requested)) {
     const matA = app.materialOf(aPart), matB = bPart ? app.materialOf(bPart) : null;
-    plan = planJoin(requested, matA, matB, {
+    const geom = {
       thicknessA: thicknessOf(app, aPart), thicknessB: bPart ? thicknessOf(app, bPart) : thicknessOf(app, aPart),
       bondW: numberOf(params, 'bondW', 0.03), bondL: numberOf(params, 'bondL', 0.03),
-    });
+    };
+    plan = planJoin(requested, matA, matB, geom);
+    if (requested === AUTO_JOIN) {
+      // your usual joint for these materials, when it holds here
+      const pref = app.joinPreference?.(matA, matB);
+      if (pref && pref !== plan.kind) { const mine = planJoin(pref, matA, matB, geom); if (!mine.substituted) plan = mine; }
+    } else {
+      app.joinChosen?.(matA, matB, requested);
+    }
     kind = getConnectorKind(plan.kind);
     params = plan.params;
   }

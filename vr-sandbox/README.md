@@ -91,15 +91,15 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
   - Dust, splashes and debris, haptics, and a stress overlay.
 - **Creative loop:** undo/redo (including sim-caused failures), checkpoints and rewind, pause/step/slow motion, freeze to world, duplicate assemblies, Build mode (hold still, snap, Play).
 - **My builds:** save, open and delete your own builds on the headset. Nothing pre-made ships; the physics test scenes live only in the tests.
-- **Ada, the assistant (docs/ADA.md):** no outside AI service. She reads the whole simulation: when a joint nears failure or breaks she says why, with the numbers, and offers one-tap fixes that carry 1.5× the load. She learns your habits to suggest your next tool, and runs **Forge**, the build language (`repeat 4 { place lumber … as leg }`), typed on the tablet.
+- **Ego, the mind of this world (docs/EGO.md), short for evolution:** she grows through six levels (sight, habits, skills she teaches herself from what you repeat, foresight before Play, initiative, memory), takes complaints while you play (fixes what she can, writes the rest up for Claude as a GitHub issue). She needs no outside AI service, because she reads the whole simulation: when a joint nears failure or breaks she says why, with the numbers, and offers one-tap fixes that carry 1.5× the load. She learns your habits to suggest your next tool, and runs **Forge**, the build language (`repeat 4 { place lumber … as leg }`), typed on the tablet.
 - **Tablet:** icon tabs, a Materials page, Search (parts, materials, joints, tools, builds, actions as you type) and a 9-slot hotbar of what you used last, with isometric item icons in each part's real material colour.
 
 ## Tests
 
 ```bash
 npm run typecheck
-npm test        # 209 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, Forge, Ada, test scenes
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 19 browser tests on an emulated Quest (building, joining, My builds, Ada, Forge, search, hotbar, movement, walk and mixed reality) and the Pages subpath
+npm test        # 209 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, Forge, Ego, test scenes
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 19 browser tests on an emulated Quest (building, joining, My builds, Ego, Forge, search, hotbar, movement, walk and mixed reality) and the Pages subpath
 ```
 
 The physics conformance suite checks laws, not builds:
@@ -123,7 +123,7 @@ The physics conformance suite checks laws, not builds:
 
 | Area | Done | Not yet |
 |---|---|---|
-| Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds; breakable stock (plastic hinges, fracture, damage in the build) | Buckling; elastic flex (springboards, bows); the rigid-assembly solve for joints to wheels and motors (Jolt handles those) |
+| Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds; breakable stock (plastic hinges, fracture, damage in the build) | Buckling; elastic flex (springboards, bows); frame action in rigid assemblies (a table top's sag does not bend its leg joints); the rigid-assembly solve for joints to wheels and motors (Jolt handles those) |
 | Transmissions | Motors, servos, bearings, eddy brakes | Gears, racks, lead screws, belts |
 | Tools | Grab, place, join (every joining method), erase, freeze, clone, poke, inspect, measure | Physical tool models (drill making holes, welder settings → bead quality, grinder cutting, hammer and nails) |
 | VR | Controllers, wrist tablet, two-hand grab, locomotion, haptics, player scale; relax, walk (room-scale, calibrated, real furniture) and mixed-reality (passthrough, the scanned room as physics) modes; IWER testing with a synthetic room | Hand tracking, measured Quest 3S performance, a device check of the room scan and passthrough |

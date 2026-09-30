@@ -21,7 +21,7 @@ import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../e
 import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
 import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Mul, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
-  gyroscopicStep, quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solvePositions, solveRows, tangents, worldInertia, type Entity, type Row,
+  gyroscopicStep, quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solvePositions, solveRows, leastSupport, tangents, worldInertia, type Entity, type Row,
 } from './rigid';
 import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
@@ -1382,6 +1382,14 @@ export class PhysicsWorld {
     }
     // iterated to convergence (a heavy load on a light bonded part needs more passes than a lone part), within a cap
     solveRows(rows, 40, this.warm, 1e-5);
+    // an assembly on several fixed supports carries the least support load that holds it, as a real one does
+    const supports = new Map<Entity, Row[]>();
+    for (const r of rows) {
+      const tag = r.tag as RowTag;
+      if (tag.kind !== 'contact' || r.b || r.frictionOf || !r.a || !works.some((w) => w.ent.e === r.a)) continue;
+      (supports.get(r.a) ?? supports.set(r.a, []).get(r.a)!).push(r);
+    }
+    for (const list of supports.values()) for (const r of leastSupport(list, rows)) if (r.key) { if (r.acc) this.warm.set(r.key, r.acc); else this.warm.delete(r.key); }
     const pseudo = solvePositions(rows, 12, dt, SLOP);
     const none = { v: [0, 0, 0] as Vec3, w: [0, 0, 0] as Vec3 };
     // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does), plus the
