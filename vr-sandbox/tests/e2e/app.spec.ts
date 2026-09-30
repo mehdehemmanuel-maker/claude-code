@@ -74,12 +74,14 @@ test('place, stack, join, undo and redo in the headset', async ({ page }) => {
   await tap(page, 'redo');
   await frames(page, 2);
   expect((await counts(page)).conns).toBe(1);
-  // select the top block with the Grab tool and delete it from the tablet: its joint goes too
+  // joined, the two blocks are one piece: selecting the top block selects both
   await tap(page, 'tab-tools');
   await tap(page, 'tool-grab');
   await triggerAt(page, [0, 0.15, 0.05]);
+  expect(await sb(page, (s) => s.app.selection.parts.size)).toBe(2);
+  // delete just the top one from the tablet: its joint goes too
   await tap(page, 'tab-selected');
-  await tap(page, 'del');
+  await tap(page, 'del-one');
   await frames(page, 2);
   expect(await counts(page)).toEqual({ parts: 1, conns: 0 });
   expect(errors).toEqual([]);

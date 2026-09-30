@@ -532,7 +532,7 @@ export class PhysicsWorld {
       case 'sim': return this.applySim(op.sim);
       case 'setPose': return this.setPose(op.id, op.pose, op.linear, op.angular);
       case 'impulse': return this.impulse(op.id, op.point, op.impulse);
-      case 'grab': return this.grab(op.hand, op.id, op.mode, op.target, op.strength);
+      case 'grab': return this.grab(op.hand, op.id, op.mode, op.target, op.strength, op.group);
       case 'grabTarget': { const g = this.grabs.get(op.hand); if (g) g.target = op.target; return; }
       case 'release': return this.release(op.hand, op.linear, op.angular);
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
@@ -1841,13 +1841,14 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // grabbing
 
-  private grab(hand: string, id: string, mode: GrabMode, target: Pose, strength: number) {
+  private grab(hand: string, id: string, mode: GrabMode, target: Pose, strength: number, group?: string[]) {
     const r = this.bodyFor(id, target.p);
     if (!r) return;
     this.release(hand);
     // Frozen parts are always moved precisely; physical grabbing applies to free parts.
     const m: GrabMode = r.frozen ? 'creative' : mode;
-    const members = this.cluster(r);
+    // moved precisely, the whole assembly comes along as one piece (held physically, its joints bring it)
+    const members = [...new Set([...this.cluster(r), ...(m === 'creative' ? (group ?? []).flatMap((pid) => this.parts.get(pid)?.segs ?? []) : [])])];
     const rp = this.poseOf(r);
     const followers = m === 'creative' ? members.filter((x) => x !== r).map((x) => ({ rec: x, rel: relativePose(rp, this.poseOf(x)) })) : [];
     for (const x of m === 'creative' ? members : [r]) {

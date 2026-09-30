@@ -15,7 +15,7 @@ import type { Change } from '../doc/store';
 import type { Connection, Part, Pose } from '../doc/types';
 import { getConnectorKind } from '../connectors/registry';
 import { composePose, relativePose } from '../doc/math';
-import { connectedComponent, setPartPoses } from '../doc/commands';
+import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
 import { effectiveParams, getPartKind } from '../parts/registry';
 import { DISPLAY, defaultsOf, formatForce, numberOf, type Params } from '../schema/params';
 import { AUTO_JOIN } from '../connectors/plan';
@@ -24,6 +24,10 @@ import { AppHost } from '../forge/apphost';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
 import { HabitGraph } from './habits';
+import { HELP, interpret, type Intent } from './intent';
+import { Voice } from './voice';
+import { resolveKind, resolveMaterial } from '../forge/catalog';
+import { getMaterial } from '../data/materials';
 
 export interface Advice {
   id: string;
@@ -41,6 +45,7 @@ export class Ada {
   readonly name = 'Ada';
   readonly habits: HabitGraph;
   readonly host: AppHost;
+  readonly voice = new Voice();
   advice: Advice[] = [];
   /** This session's build, as Forge: every placement, joint and change you or she made. */
   journal: string[] = [];
@@ -61,6 +66,119 @@ export class Ada {
   }
 
   // ---- acting -----------------------------------------------------------------------------------
+
+  /** Ask her something in plain words ("make it stronger", "weld these"); anything else is run as Forge. */
+  ask(text: string): string {
+    const intent = interpret(text);
+    if (!intent) {
+      const r = this.run(text);
+      return r.error ?? r.lines[r.lines.length - 1] ?? '';
+    }
+    let reply: string;
+    try {
+      reply = this.act(intent);
+    } catch (e) {
+      reply = e instanceof Error ? e.message : String(e);
+    }
+    this.output = [...this.output, `› ${text.slice(0, 80)}`, reply].slice(-12);
+    this.reply(reply);
+    return reply;
+  }
+
+  /** Say it: on her page, in a message, and aloud. */
+  private reply(text: string) {
+    this.app.toast(`${this.name}: ${text}`, 'info');
+    this.voice.say(text);
+    this.app.notify();
+  }
+
+  /** The selection's assembly, or what's held: what "it" and "this" mean. */
+  private it(): string[] {
+    const id = this.tools?.grab.holding ?? [...this.app.selection.parts][0];
+    if (!id || !this.app.doc.parts[id]) throw new Error('Select it first: point at it with Grab and pull the trigger.');
+    return this.app.component(id);
+  }
+
+  private act(i: Intent): string {
+    const app = this.app;
+    switch (i.do) {
+      case 'help': return HELP;
+      case 'status': {
+        const top = this.advice[0];
+        return `${this.observe()}.${top ? ` ${top.text}` : ' Everything is holding.'}`;
+      }
+      case 'why': {
+        const b = this.advice.find((a) => a.kind === 'break');
+        return b ? b.text : 'Nothing has broken.';
+      }
+      case 'strengthen': {
+        const a = this.advice.find((x) => x.fixes.length);
+        if (a) { a.fixes[0]!.apply(); return `Done: ${a.fixes[0]!.label}.`; }
+        // nothing failing: the most loaded joint in what you're pointing at gets twice its strength
+        const ids = new Set(this.it());
+        const joints = Object.values(app.doc.connections).filter((c) => ids.has(c.a.part) && c.state.status !== 'broken' && getConnectorKind(c.kind).model === 'rigid');
+        if (!joints.length) return 'It has no joints to strengthen.';
+        const c = joints.reduce((m, x) => ((app.live.loads.get(x.id)?.u ?? 0) > (app.live.loads.get(m.id)?.u ?? 0) ? x : m), joints[0]!);
+        const mode = app.live.loads.get(c.id)?.mode ?? 'bending';
+        const cap = this.capacity(c, mode) ?? 0;
+        const fixes = cap > 0 ? this.fixes(c, mode, cap) : [];
+        if (!fixes.length) return `The ${getConnectorKind(c.kind).label.toLowerCase()} is already as strong as these parts allow.`;
+        fixes[0]!.apply();
+        return `Done: ${fixes[0]!.label}.`;
+      }
+      case 'join': {
+        const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
+        const held = this.tools?.grab.holding;
+        const a = held ?? sel[0];
+        if (!a) throw new Error('Select the part to join first.');
+        const joint = i.joint === 'best' ? undefined : i.joint;
+        if (i.floor) return this.host.join(a, null, joint);
+        const mine = new Set(app.component(a));
+        // the other part: a selected one not already joined to it, else whatever it touches
+        const touching = (b: string) => { try { this.host.join(a, b, joint); return true; } catch { return false; } };
+        const candidates = [...sel.filter((b) => !mine.has(b)), ...Object.keys(app.doc.parts).filter((b) => !mine.has(b))];
+        for (const b of candidates) if (touching(b)) return `Joined ${app.doc.parts[a]!.name} and ${app.doc.parts[b]!.name}.`;
+        return 'It isn\'t touching anything to join to. Set it against the other part first.';
+      }
+      case 'place': {
+        const kind = resolveKind(i.kind);
+        const material = resolveMaterial(kind, i.material);
+        const ids: string[] = [];
+        for (let k = 0; k < i.count; k++) ids.push(this.host.placeInRow(kind, material, k, i.count));
+        app.select(ids);
+        return `Placed ${i.count} ${getPartKind(kind).label.toLowerCase()}${i.count > 1 ? 's' : ''} in ${getMaterial(material).name}.`;
+      }
+      case 'freeze': case 'unfreeze': {
+        const ids = this.it();
+        app.commitLivePoses();
+        setFrozen(app.store, ids, i.do === 'freeze');
+        return `${i.do === 'freeze' ? 'Pinned' : 'Freed'} ${ids.length} part${ids.length === 1 ? '' : 's'}.`;
+      }
+      case 'delete': {
+        const ids = this.it();
+        deleteParts(app.store, ids);
+        return `Removed ${ids.length} part${ids.length === 1 ? '' : 's'}. Undo brings ${ids.length === 1 ? 'it' : 'them'} back.`;
+      }
+      case 'duplicate': {
+        const ids = this.it();
+        app.commitLivePoses();
+        const b = app.boundsOf(ids);
+        const step = b.max[0] - b.min[0] + 0.05;
+        let all: string[] = [];
+        for (let k = 1; k <= i.count; k++) all = [...all, ...duplicateParts(app.store, ids, [step * k, 0, 0]).values()];
+        app.select(all);
+        return `Made ${i.count} cop${i.count === 1 ? 'y' : 'ies'}.`;
+      }
+      case 'template': {
+        const e = app.saveTemplate(this.it());
+        return e ? `Saved “${e.name}”. It's on My builds, Templates.` : 'Nothing to save.';
+      }
+      case 'command': {
+        if (i.command === 'pause') { app.togglePause(); return app.settings.paused ? 'Paused.' : 'Running.'; }
+        return `${this.host.command(i.command)}.`;
+      }
+    }
+  }
 
   /** Run Forge: typed on the tablet, or a suggestion. */
   run(src: string): RunResult {
@@ -149,6 +267,7 @@ export class Ada {
 
   private say(kind: Advice['kind'], text: string, fixes: Advice['fixes']) {
     this.advice = [{ id: `a${++this.seq}`, kind, text, fixes }, ...this.advice].slice(0, MAX_ADVICE);
+    this.voice.say(fixes.length ? `${text} I can fix it: ${fixes[0]!.label.replace(/\(.*\)/, '')}.` : text);
     this.app.notify();
   }
 

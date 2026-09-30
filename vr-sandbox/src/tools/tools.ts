@@ -5,9 +5,9 @@ import type { App } from '../app/app';
 import { getMaterial, MATERIALS } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN, isPlannedKind, planJoin, type JoinPlan } from '../connectors/plan';
-import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose } from '../doc/commands';
+import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose, setPartPoses } from '../doc/commands';
 import { frameOnPart, partLayout } from '../app/segments';
-import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub } from '../doc/math';
+import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub, transformPoint } from '../doc/math';
 import type { Part, Pose, Quat, Vec3 } from '../doc/types';
 import { effectiveParams, getPartKind, segmentBodyId } from '../parts/registry';
 import { shapeBounds, type CollisionShape } from '../parts/shapes';
@@ -116,7 +116,8 @@ export class ToolManager {
   /** The active tool's actions for the tablet, with the modifier where the tool has one. */
   actions(): ToolAction[] {
     const own = this.tool.actions?.() ?? [];
-    const modifier = { grab: 'Add to selection', erase: 'Whole assembly', freeze: 'Whole assembly', clone: 'Whole assembly' }[this.tool.id];
+    // joined parts are one piece: these tools act on the whole assembly unless told to take just the one part
+    const modifier = { grab: 'Add to selection', erase: 'Just this part', freeze: 'Just this part', clone: 'Just this part' }[this.tool.id];
     return modifier ? [...own, { id: 'whole', label: modifier, on: this.whole, run: () => { this.whole = !this.whole; } }] : own;
   }
 
@@ -144,6 +145,8 @@ interface Hold {
   q: Quat;
   frozen: boolean;
   relQ?: Quat;
+  /** The rest of its assembly (parts joined to it), moved with it as one piece. */
+  group?: string[];
 }
 
 /** Grabbing, per hand: the mouse, and each VR controller can hold its own part at the same time. */
@@ -180,7 +183,7 @@ export class GrabTool implements Tool {
       this.app.toggleSelect(pick.id);
       return;
     }
-    this.app.select([pick.id]);
+    this.app.select([pick.id, ...this.app.component(pick.id).filter((x) => x !== pick.id)]);
     this.begin(pick.id, v3(pick.point), pick.distance, e, e.source, pick.seg);
   }
 
@@ -195,8 +198,10 @@ export class GrabTool implements Tool {
     const relQ = e.handQuat ? qmul(qconj(e.handQuat), pose.q) : undefined;
     // in the build phase every part is held still, so moving one is a design edit, as for a frozen part
     const hold: Hold = { id, body, hand, local, dist, q: pose.q, frozen: part.frozen || this.app.settings.build, relQ };
+    // joined parts are one piece: moved precisely, the assembly moves with it
+    hold.group = this.app.component(id).filter((x) => x !== id);
     this.held.set(hand, hold);
-    this.app.physics.send({ op: 'grab', hand, id: body, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength });
+    this.app.physics.send({ op: 'grab', hand, id: body, mode: this.app.settings.grabMode, target: this.target(hold, e), strength: this.app.settings.strength, group: hold.group });
     this.app.audio.ui('grab', point);
     this.app.haptic?.(0.3, 20, hand);
   }
@@ -206,7 +211,7 @@ export class GrabTool implements Tool {
     const hit = add(v3(e.ray.origin), scale(v3(e.ray.dir), h.dist));
     const pose = { p: sub(hit, rotate(q, h.local)), q };
     const s = this.app.settings;
-    return s.build ? snapPose(pose, s.grid, s.angleSnap) : pose;
+    return s.build || s.gridLock ? snapPose(pose, s.grid, s.angleSnap) : pose;
   }
 
   /** Feed the latest pointer for a hand (mouse via move/frame, VR controllers every frame). */
@@ -231,7 +236,12 @@ export class GrabTool implements Tool {
       this.held.delete(hd);
       this.app.physics.send({ op: 'release', hand: h.hand });
       // Frozen parts moved by hand are a design edit (undoable). Free parts keep flying under physics.
-      if (h.frozen) {
+      if (h.frozen && h.group?.length) {
+        // the assembly moved as one: every part of it lands where it now is, in one undoable edit
+        const poses = new Map<string, Pose>();
+        for (const id of [h.id, ...h.group]) { const live = this.app.live.latest(id); if (live) poses.set(id, live); }
+        setPartPoses(this.app.store, poses, `Move assembly (${poses.size} parts)`);
+      } else if (h.frozen) {
         const live = this.app.live.latest(h.id);
         const part = this.app.doc.parts[h.id];
         const layout = part ? partLayout(part) : null;
@@ -318,20 +328,42 @@ class PlaceTool implements Tool {
     const { kind, params, material } = this.spec();
     const shape = kind.collision(effectiveParams(kind, params, material));
     const base = qmul(qmul(axisAngle([0, 1, 0], this.yaw), axisAngle([1, 0, 0], this.tilt)), kind.spawnRotation);
+    const s = this.app.settings;
+    if (s.smartSnap && pick.type === 'part' && pick.id && !this.app.spawnTemplate) {
+      const snapped = smartPlace(this.app, pick.id, v3(pick.point), normalize(v3(pick.normal)), shape, base, s.grid);
+      if (snapped) return snapped;
+    }
     const n = normalize(v3(pick.normal));
     const align = fromTo([0, 1, 0], n);
     const q = qmul(align, base);
-    const lift = -rotatedMinY(shape, base) + 0.0005;
+    const lift = this.app.spawnTemplate ? 0.0005 : -rotatedMinY(shape, base) + 0.0005;
     let p = add(v3(pick.point), scale(n, lift));
-    const g = this.app.settings.grid;
-    if (g > 0 && Math.abs(n[1]) > 0.9) p = [Math.round(p[0] / g) * g, p[1], Math.round(p[2] / g) * g];
-    return { p, q };
+    const g = s.grid;
+    if (g > 0 && (Math.abs(n[1]) > 0.9 || s.gridLock)) p = [Math.round(p[0] / g) * g, Math.abs(n[1]) > 0.9 ? p[1] : Math.round(p[1] / g) * g, Math.round(p[2] / g) * g];
+    // a template keeps its own shape: only the turn applies, upright
+    return this.app.spawnTemplate ? { p, q: axisAngle([0, 1, 0], this.yaw) } : { p, q };
   }
 
   frame(_dt: number, e: PointerEvt | null) {
     if (!e) return;
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
     const pose = this.posePreview(pick);
+    const tpl = this.app.spawnTemplate ? this.app.templateFragment(this.app.spawnTemplate) : null;
+    if (tpl) {
+      // the whole template as a ghost, as it will land
+      this.app.view.showGhost(`tpl:${this.app.spawnTemplate}`, () => {
+        const g = new THREE.Group();
+        for (const p of tpl.parts) {
+          const k = getPartKind(p.kind);
+          const o = buildVisual(k.visual(effectiveParams(k, p.params, getMaterial(p.material))), ghostMaterial, () => ghostMaterial);
+          o.position.set(...p.pose.p);
+          o.quaternion.set(...p.pose.q);
+          g.add(o);
+        }
+        return g;
+      }, pose);
+      return;
+    }
     const { kind, params, material } = this.spec();
     const key = `${kind.id}:${material.id}:${JSON.stringify(params)}`;
     this.app.view.showGhost(key, () => buildVisual(kind.visual(effectiveParams(kind, params, material)), ghostMaterial, () => ghostMaterial), pose);
@@ -341,6 +373,11 @@ class PlaceTool implements Tool {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
     const pose = this.posePreview(pick);
     if (!pose) return;
+    if (this.app.spawnTemplate) {
+      this.app.placeTemplate(this.app.spawnTemplate, pose);
+      this.app.haptic?.(0.3, 20);
+      return;
+    }
     const { kind, params, matId } = this.spec();
     const part = addPart(this.app.store, { kind: kind.id, pose, params, material: matId, frozen: this.app.settings.placeFrozen });
     this.app.select([part.id]);
@@ -359,6 +396,47 @@ class PlaceTool implements Tool {
   cancel() {
     this.app.view.showGhost('', null, null);
   }
+}
+
+/** How close (m) a placed part's edge or centre must come to the target's to lock onto it. */
+const SNAP_REACH = 0.03;
+
+/**
+ * Smart placement on another part: square to it (the face's normal taken as the target's nearest axis, the new part
+ * turned with it), flush on that face, and along the face locked to the target's centre or edges when within reach,
+ * else to the grid measured from the target's centre. How a builder lines things up against a square.
+ */
+export function smartPlace(app: App, targetId: string, point: Vec3, worldNormal: Vec3, shape: CollisionShape, base: Quat, grid: number): Pose | null {
+  const target = app.doc.parts[targetId];
+  const T = app.livePose(targetId) ?? target?.pose;
+  if (!target || !T) return null;
+  const tk = getPartKind(target.kind);
+  const tb = shapeBounds(tk.collision(effectiveParams(tk, target.params, app.materialOf(target))));
+  // the target's face: its local axis nearest the surface normal
+  const nL = rotate(qconj(T.q), worldNormal);
+  const k = [0, 1, 2].reduce((m, x) => (Math.abs(nL[x]!) > Math.abs(nL[m]!) ? x : m), 0);
+  const sgn = Math.sign(nL[k]!) || 1;
+  const axis: Vec3 = [0, 0, 0];
+  axis[k] = sgn;
+  const qRel = qmul(fromTo([0, 1, 0], axis), base);
+  // the new part's extent in the target's frame, about its own origin
+  const nb = shapeBounds(shape);
+  const nmin: Vec3 = [Infinity, Infinity, Infinity], nmax: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const x of [nb.min[0], nb.max[0]]) for (const y of [nb.min[1], nb.max[1]]) for (const z of [nb.min[2], nb.max[2]]) {
+    const c = rotate(qRel, [x, y, z]);
+    for (let j = 0; j < 3; j++) { nmin[j] = Math.min(nmin[j]!, c[j]!); nmax[j] = Math.max(nmax[j]!, c[j]!); }
+  }
+  const pl = inverseTransformPoint(T, point);
+  const out: Vec3 = [0, 0, 0];
+  for (let j = 0; j < 3; j++) {
+    if (j === k) { out[j] = sgn > 0 ? tb.max[j]! - nmin[j]! + 0.0005 : tb.min[j]! - nmax[j]! - 0.0005; continue; }
+    const tc = (tb.min[j]! + tb.max[j]!) / 2;
+    const want = pl[j]! - (nmin[j]! + nmax[j]!) / 2; // origin that centres the new part on the pointer
+    const lock = [tc - (nmin[j]! + nmax[j]!) / 2, tb.min[j]! - nmin[j]!, tb.max[j]! - nmax[j]!];
+    const best = lock.reduce((m, x) => (Math.abs(x - want) < Math.abs(m - want) ? x : m), lock[0]!);
+    out[j] = Math.abs(best - want) <= SNAP_REACH ? best : grid > 0 ? tc + Math.round((want - tc) / grid) * grid : want;
+  }
+  return { p: transformPoint(T, out), q: qmul(T.q, qRel) };
 }
 
 export function allowedMaterial(kindId: string, material: string) {
@@ -544,7 +622,7 @@ class EraseTool implements Tool {
   id = 'erase';
   label = 'Erase';
   icon = '✂';
-  hint = 'Trigger a part or joint to remove it · "Whole assembly" removes everything joined to it';
+  hint = 'Trigger a part to remove it with everything joined to it, or a joint to undo just that · "Just this part" takes one';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
@@ -552,7 +630,7 @@ class EraseTool implements Tool {
     if (pick.type === 'conn') {
       this.app.store.transact('Disconnect', (tx) => tx.delete('connections', pick.id!));
     } else {
-      const ids = e.shift ? this.app.component(pick.id) : [pick.id];
+      const ids = e.shift ? [pick.id] : this.app.component(pick.id);
       const m = this.app.materialOf(this.app.doc.parts[pick.id]!);
       deleteParts(this.app.store, ids);
       this.app.particles.dustFor(m, v3(pick.point), 1);
@@ -565,12 +643,12 @@ class FreezeTool implements Tool {
   id = 'freeze';
   label = 'Freeze';
   icon = '❄';
-  hint = 'Trigger a part to pin it to the world (or free it) · "Whole assembly" pins everything joined to it';
+  hint = 'Trigger a part to pin its whole assembly to the world (or free it) · "Just this part" pins one';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
     if (pick?.type !== 'part' || !pick.id) return;
-    this.app.freezeToggle(e.shift ? this.app.component(pick.id) : [pick.id]);
+    this.app.freezeToggle(e.shift ? [pick.id] : this.app.component(pick.id));
   }
 }
 
@@ -578,12 +656,12 @@ class CloneTool implements Tool {
   id = 'clone';
   label = 'Clone';
   icon = '⧉';
-  hint = 'Trigger a part to duplicate it · "Whole assembly" duplicates everything joined to it, joints and all';
+  hint = 'Trigger a part to duplicate its whole assembly, joints and all · "Just this part" copies one';
   constructor(private app: App) {}
   down(e: PointerEvt) {
     const pick = this.app.view.pick(e.ray.origin, e.ray.dir);
     if (pick?.type !== 'part' || !pick.id) return;
-    const ids = e.shift ? this.app.component(pick.id) : [pick.id];
+    const ids = e.shift ? [pick.id] : this.app.component(pick.id);
     this.app.commitLivePoses();
     const part = this.app.doc.parts[pick.id]!;
     const lift = this.app.partDims(part).a + 0.02;

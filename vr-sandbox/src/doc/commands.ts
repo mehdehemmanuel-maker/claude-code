@@ -186,6 +186,54 @@ export function duplicateParts(store: DocStore, ids: string[], offset: Vec3, idS
   return map;
 }
 
+/** Parts and the joints among them, posed relative to a base: a template, ready to be placed anywhere. */
+export interface Fragment {
+  parts: Part[];
+  connections: Connection[];
+}
+
+/** The parts `ids` (at their `poses`) and every intact joint among them, relative to `base`. */
+export function fragmentOf(doc: BuildDoc, ids: string[], poses: (id: string) => Pose, base: Pose): Fragment {
+  const set = new Set(ids);
+  const parts = ids.filter((id) => doc.parts[id]).map((id) => {
+    const p: Part = structuredClone(doc.parts[id]!);
+    const now = poses(id);
+    p.pose = canonicalPose(relativePose(base, now));
+    // damaged stock keeps its pieces where they are, relative to the part
+    if (p.damage.segments) p.damage.segments = p.damage.segments.map((sp) => canonicalPose(relativePose(base, composePose(now, relativePose(doc.parts[id]!.pose, sp)))));
+    return p;
+  });
+  const connections = connectionsOf(doc, ids).filter((c) => set.has(c.a.part) && (c.b === null || set.has(c.b.part)) && c.state.status !== 'broken').map((c) => structuredClone(c));
+  return { parts, connections };
+}
+
+/** Place a fragment at `at`: fresh ids, its parts' materials added to the build, one undoable step. */
+export function insertFragment(store: DocStore, frag: Fragment, at: Pose, label: string, idSource: IdSource = randomId): Map<string, string> {
+  const map = new Map<string, string>();
+  store.transact(label, (tx) => {
+    for (const src of frag.parts) {
+      const copy: Part = structuredClone(src);
+      copy.id = idSource('p');
+      copy.pose = canonicalPose(composePose(at, src.pose));
+      copy.features = copy.features.map((f) => ({ ...f, id: idSource('f') }));
+      if (copy.damage.segments) copy.damage.segments = copy.damage.segments.map((sp) => canonicalPose(composePose(at, sp)));
+      map.set(src.id, copy.id);
+      ensureMaterial(tx, store, copy.material);
+      tx.create('parts', copy.id, copy);
+    }
+    for (const c of frag.connections) {
+      if (!map.has(c.a.part) || (c.b && !map.has(c.b.part))) continue;
+      const copy: Connection = structuredClone(c);
+      copy.id = idSource('c');
+      copy.a.part = map.get(c.a.part)!;
+      if (copy.b) copy.b.part = map.get(c.b!.part)!;
+      copy.state = { ...copy.state, status: 'intact', note: '' };
+      tx.create('connections', copy.id, copy);
+    }
+  });
+  return map;
+}
+
 export interface ConnectionSpec {
   kind: string;
   a: Endpoint;

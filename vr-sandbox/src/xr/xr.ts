@@ -410,7 +410,8 @@ export class XRMode {
       if (sq === 1 && !h.onTablet) {
         const pick = this.app.view.pick(e.ray.origin, e.ray.dir, 4 * scale);
         if (pick?.type === 'part' && pick.id) {
-          this.app.select([pick.id]);
+          // joined parts are one piece: grabbing one selects its assembly
+          this.app.select([pick.id, ...this.app.component(pick.id).filter((x) => x !== pick.id)]);
           this.tools.grab.begin(pick.id, [pick.point.x, pick.point.y, pick.point.z], pick.distance, e, side, pick.seg);
         }
       } else if (sq === -1) this.tools.grab.release(side);
