@@ -1,10 +1,20 @@
 import { expect, type Page } from '@playwright/test';
+import { getTemplate } from '../../src/templates/templates';
+import { toShareCode } from '../../src/persistence/codec';
 
-export async function boot(page: Page, query = '', firstVisit = false) {
+/**
+ * Open one of the physics test scenes. The app ships none of them (every build in it is one you made); a test opens
+ * a scene the way a shared build opens, from its share code.
+ */
+export async function openScene(page: Page, id: string) {
+  const code = toShareCode(getTemplate(id).build());
+  await page.evaluate((c) => (window as any).sandbox.app.openShareCode(c), code);
+}
+
+export async function boot(page: Page, query = '') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  if (!firstVisit) await page.addInitScript(() => localStorage.setItem('vrsb.seenTemplates', '1'));
   await page.goto(`/${query}`);
   await page.waitForFunction(() => !document.getElementById('loading') && (window as never as { sandbox?: unknown }).sandbox, null, { timeout: 60_000 });
   return errors;

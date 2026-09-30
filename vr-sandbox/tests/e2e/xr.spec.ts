@@ -1,13 +1,13 @@
 // VR mode on Meta's WebXR emulator (IWER, virtual Quest 3), driven like a real headset.
 
 import { test } from '@playwright/test';
-import { boot, expect, sb } from './helpers';
+import { boot, expect, openScene, sb } from './helpers';
 
 test('Quest emulation: tablet taps, grip grab, tool cycling', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');
   await page.waitForFunction(() => (window as any).sandbox.xr, null, { timeout: 30_000 });
-  await sb(page, (s) => s.app.loadTemplate('catapult'));
+  await openScene(page, 'catapult');
   await page.click('#vr');
   await page.waitForFunction(() => (window as any).sandbox.app.renderer.xr.isPresenting, null, { timeout: 20_000 });
   await page.evaluate(() => {
@@ -164,8 +164,8 @@ test('relax mode: in a build with motors the left stick drives it and leaves you
     const w = window as any;
     w.sandbox.app.renderer.xr.setFramebufferScaleFactor(0.25);
     w.frames = (n: number) => new Promise<void>((res) => { let k = 0; const t = () => (++k >= n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t); });
-    w.sandbox.app.loadTemplate('go-kart');
   });
+  await openScene(page, 'go-kart');
   await page.selectOption('#vrmode', 'relax');
   await page.click('#vr');
   await page.waitForFunction(() => (window as any).sandbox.app.renderer.xr.isPresenting, null, { timeout: 20_000 });

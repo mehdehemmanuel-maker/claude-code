@@ -22,6 +22,7 @@
       #vr { padding: 16px; font-size: 20px; font-weight: 650; background: var(--accent); color: #1b1400; border: 0; cursor: pointer; }
       #vr:disabled { opacity: 0.45; cursor: default; }
       #status { margin: 14px 0 0; font-size: 15px; }
+      #build { margin: 6px 0 0; font-size: 13px; opacity: 0.7; font-variant-numeric: tabular-nums; }
     </style>
   </head>
   <body>
@@ -37,6 +38,7 @@
         </select>
         <button id="vr" disabled>Enter VR</button>
         <p id="status">Starting physics…</p>
+        <p id="build"></p>
       </div>
     </div>
     <div id="loading" hidden></div>

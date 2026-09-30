@@ -9,6 +9,7 @@ import {
   iBeamSection, iBeamStrongAxis, rectSection, rectTubeSection, roundSection, tubeSection, type Section,
 } from '../engineering/sections';
 import type { CollisionShape, ConvexShape, VisualShape } from './shapes';
+import { electromagnetBr } from '../engineering/magnets';
 
 export interface PartDims {
   /** Longest dimension, m. */
@@ -26,6 +27,10 @@ export interface MagnetGeometry {
   h: number;
   /** Length along the magnetisation axis (local +Y). */
   length: number;
+  /** Electromagnets: the magnetisation their coil gives at this power (a permanent magnet's comes from its grade). */
+  Br?: number;
+  /** Electromagnets on a switch: the control channel that turns them on and off. */
+  drive?: string;
 }
 
 /**
@@ -109,6 +114,8 @@ function symBond(sec: Section, S: number, Z: number): BondSection {
 }
 
 const isMagnet = (m: Material) => m.category === 'magnet';
+/** A soft-magnetic core: ferromagnetic, but not a permanent magnet. */
+const isSoftIron = (m: Material) => m.ferromagnetic && m.category !== 'magnet';
 const isWood = (m: Material) => m.category === 'wood' || m.category === 'engineered-wood';
 const notMagnet = (m: Material) => m.category !== 'magnet';
 
@@ -380,6 +387,42 @@ export const PART_KINDS: PartKind[] = [
     volume: (p) => n(p, 'x') * n(p, 'y') * n(p, 'z'),
     dims: (p) => sorted(n(p, 'x'), n(p, 'y'), n(p, 'z')),
     magnet: (p) => ({ shape: 'block', radius: 0, w: n(p, 'x'), h: n(p, 'z'), length: n(p, 'y') }),
+  },
+  {
+    // A lifting electromagnet: a soft-steel pole in a copper coil. Off, it is plain steel; on, it holds its rating on
+    // thick steel at full power, and the hold goes as the square of the power.
+    id: 'magnet.electro', label: 'Electromagnet', category: 'Magnets', defaultMaterial: 'steel.1018-cd', dragCd: 1.1, spawnRotation: IDENTITY,
+    materialFilter: isSoftIron,
+    params: [
+      num('power', 'Power', 1, 0, 1, '%', { group: 'Coil', step: 10, linear: true }),
+      num('rating', 'Holds at full power', 500, 5, 50000, 'N', { group: 'Coil', log: true, help: 'On thick steel, as the maker rates it' }),
+      num('diameter', 'Pole diameter', 0.05, 0.01, 0.5, 'mm', { group: 'Geometry', step: 1 }),
+      num('thickness', 'Height (axis)', 0.03, 0.01, 0.3, 'mm', { group: 'Geometry', step: 1 }),
+      choice('switch', 'Switched by', 'always', [
+        { value: 'always', label: 'Always on, at its power' },
+        { value: 'aux', label: 'The magnet switch on the tablet' },
+      ], { group: 'Coil' }),
+    ],
+    collision: (p) => ({ type: 'cylinder', radius: n(p, 'diameter') / 2, halfHeight: n(p, 'thickness') / 2 }),
+    visual: (p) => {
+      const R = n(p, 'diameter') / 2, h = n(p, 'thickness');
+      return {
+        type: 'group', children: [
+          { shape: { type: 'cylinder', radius: R, halfHeight: h / 2, segments: 40 }, p: [0, 0, 0], q: IDENTITY },
+          // the coil: copper windings round the upper part of the pole
+          { shape: { type: 'cylinder', radius: R * 1.04, halfHeight: h * 0.3, segments: 40 }, p: [0, h * 0.12, 0], q: IDENTITY, tint: 0xb87333 },
+          // the working (north) face, marked red like a magnet's
+          { shape: { type: 'cylinder', radius: R * 1.001, halfHeight: h * 0.03, segments: 40 }, p: [0, h / 2 - h * 0.03, 0], q: IDENTITY, tint: 0xc23b22 },
+        ],
+      };
+    },
+    volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'thickness'),
+    dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'thickness')),
+    magnet: (p) => {
+      const g = { shape: 'cylinder' as const, radius: n(p, 'diameter') / 2, w: 0, h: 0, length: n(p, 'thickness') };
+      const power = Math.min(1, Math.max(0, numberOf(p, 'power', 1)));
+      return { ...g, Br: electromagnetBr(g, numberOf(p, 'rating', 500)) * power, drive: stringOf(p, 'switch', 'always') === 'aux' ? 'aux' : undefined };
+    },
   },
 ];
 

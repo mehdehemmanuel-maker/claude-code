@@ -1,17 +1,43 @@
-// The app in the headset (Meta's emulated Quest 3, IWER): building with the tools and the tablet, the ready-made
-// builds, and save codes.
+// The app in the headset (Meta's emulated Quest 3, IWER): building with the tools and the tablet, your own saved
+// builds, and save codes. Physics scenes are opened the way a shared build opens (the app ships none).
 
 import { test } from '@playwright/test';
-import { boot, counts, enterVR, expect, frames, sb, tap, triggerAt } from './helpers';
+import { boot, counts, enterVR, expect, frames, openScene, sb, tap, triggerAt } from './helpers';
 
-test('first visit: the tablet opens on the ready-made builds, and one opens from it', async ({ page }) => {
+test('my builds: nothing pre-made; save, open and delete your own from the tablet', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
-  const errors = await boot(page, '?iwer', true);
+  const errors = await boot(page, '?iwer');
   await enterVR(page);
-  expect(await sb(page, (s) => s.xr.tablet.page)).toBe('builds');
-  await tap(page, 'tpl-go-kart');
+  await tap(page, 'tab-builds');
+  expect(await sb(page, (s) => s.app.library.list().length)).toBe(0);
+  // build something: one block, then save it
+  await tap(page, 'tab-tools');
+  await tap(page, 'tool-place');
+  await triggerAt(page, [0, 0, 0]);
   await frames(page, 4);
-  expect((await counts(page)).parts).toBe(8);
+  await tap(page, 'tab-builds');
+  await tap(page, 'save');
+  await frames(page, 2);
+  const saved: { id: string; name: string }[] = await sb(page, (s) => s.app.library.list().map((e: any) => ({ id: e.id, name: e.name })));
+  expect(saved.map((e) => e.name)).toEqual(['Build 1']);
+  // a new empty build, then open the saved one again
+  await tap(page, 'new');
+  await frames(page, 2);
+  expect((await counts(page)).parts).toBe(0);
+  await tap(page, `build-${saved[0]!.id}`);
+  await frames(page, 4);
+  expect((await counts(page)).parts).toBe(1);
+  // it survives a reload: the library lives on the headset
+  await page.reload();
+  await page.waitForFunction(() => !document.getElementById('loading') && (window as any).sandbox, null, { timeout: 60_000 });
+  expect(await sb(page, (s) => s.app.library.list().map((e: any) => e.name))).toEqual(['Build 1']);
+  await enterVR(page);
+  // delete mode, then the build
+  await tap(page, 'tab-builds');
+  await tap(page, 'delmode');
+  await tap(page, `build-${saved[0]!.id}`);
+  await frames(page, 2);
+  expect(await sb(page, (s) => s.app.library.list().length)).toBe(0);
   expect(errors).toEqual([]);
 });
 
@@ -133,8 +159,8 @@ test('messages show in the headset, then fade', async ({ page }) => {
 
 test('save and share codes reconstruct the build byte for byte', async ({ page }) => {
   await boot(page);
+  await openScene(page, 'magnets');
   const same = await sb(page, (s) => {
-    s.app.loadTemplate('magnets');
     const before = s.app.saveText();
     const code = s.app.shareCode();
     s.app.openShareCode(code);
@@ -146,8 +172,8 @@ test('save and share codes reconstruct the build byte for byte', async ({ page }
 test('catapult: erasing the latch wire throws the projectile', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 }); // software rendering: smaller is faster
   await boot(page);
+  await openScene(page, 'catapult');
   const start = await sb(page, (s) => {
-    s.app.loadTemplate('catapult');
     const rope = Object.values(s.app.doc.connections).find((c: any) => c.kind === 'rope') as any;
     s.app.store.transact('Erase latch', (tx: any) => tx.delete('connections', rope.id));
     const ball = Object.values(s.app.doc.parts).find((p: any) => p.name === 'Projectile') as any;
@@ -159,11 +185,11 @@ test('catapult: erasing the latch wire throws the projectile', async ({ page }) 
   }, start, { timeout: 90_000 });
 });
 
-test('every template runs without errors or spurious failures', async ({ page }) => {
+test('every physics test scene runs in the app without errors or spurious failures', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   for (const id of ['newtons-cradle', 'catapult', 'shelf', 'magnets', 'spring-launcher', 'raft', 'go-kart']) {
-    await page.evaluate((t) => { (window as any).__tpl = t; (window as any).sandbox.app.loadTemplate(t); }, id);
+    await openScene(page, id);
     await frames(page, 30);
     const broken = await sb(page, (s) => Object.values(s.app.doc.connections).filter((c: any) => c.state.status === 'broken').length);
     expect(broken, id).toBe(0);

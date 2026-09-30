@@ -4,8 +4,6 @@
 import { App } from './app/app';
 import { ToolManager } from './tools/tools';
 
-const FIRST_VISIT_KEY = 'vrsb.seenTemplates';
-
 async function main() {
   const params = new URLSearchParams(location.search);
   const host = document.getElementById('viewport')!;
@@ -13,6 +11,7 @@ async function main() {
   const status = document.getElementById('status')!;
   const button = document.getElementById('vr') as HTMLButtonElement;
   const mode = document.getElementById('vrmode') as HTMLSelectElement;
+  document.getElementById('build')!.textContent = `Version ${__BUILD__}`;
   const app = await App.create(host, params.get('physics') === 'inline' ? 'inline' : 'worker');
   const tools = new ToolManager(app);
   const handles: Record<string, unknown> = { app, tools, xr: null };
@@ -66,15 +65,6 @@ async function main() {
       app.view.camera.position.set(0, 1.7, 3.4);
       app.view.camera.rotation.set(-0.28, 0, 0);
     });
-    // on the very first visit, the tablet opens on the ready-made builds
-    try {
-      if (!localStorage.getItem(FIRST_VISIT_KEY)) {
-        localStorage.setItem(FIRST_VISIT_KEY, '1');
-        xr.tablet.page = 'builds';
-      }
-    } catch {
-      /* storage unavailable (private mode): no first-visit hint */
-    }
   } else {
     status.textContent = 'This is a Meta Quest app: open this page in the Quest browser to enter VR.';
   }

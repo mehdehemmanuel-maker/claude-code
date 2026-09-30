@@ -460,7 +460,6 @@ export class XRMode {
         if (this.tools.grab.holdingWith('right')) this.tools.grab.adjustDistance('right', Math.exp(-dead(ay) * dt * 2.5));
         else if (this.tools.grab.holdingWith('left')) this.tools.grab.adjustDistance('left', Math.exp(-dead(ay) * dt * 2.5));
         else if (free) rig.position.y = Math.max(0, rig.position.y - dead(ay) * 1.6 * scale * dt);
-        this.app.channels['aux'] = 0;
       }
     }
     this.tablet.update(time, tabletUv);

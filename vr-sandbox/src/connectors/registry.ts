@@ -111,7 +111,7 @@ const pinParams = [
 const channelOptions = [
   { value: 'throttle', label: 'Throttle (W/S · left stick Y)' },
   { value: 'steer', label: 'Steer (A/D · left stick X)' },
-  { value: 'aux', label: 'Aux (R/F · right stick Y)' },
+  { value: 'aux', label: 'Aux (the tablet switch)' },
   { value: 'always', label: 'Always on' },
 ];
 
