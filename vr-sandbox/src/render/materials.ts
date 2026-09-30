@@ -72,7 +72,7 @@ export function renderMaterial(m: Material): THREE.MeshStandardMaterial {
     if (m.category === 'wood' || m.category === 'engineered-wood') {
       params.map = grainTexture(m.color);
       params.color = 0xffffff;
-    } else if (m.category === 'cast-iron' || m.category === 'ceramic') {
+    } else if (m.category === 'cast-iron' || m.category === 'ceramic' || m.category === 'stone' || m.category === 'cork') {
       params.map = speckleTexture(m.color);
       params.color = 0xffffff;
     }
