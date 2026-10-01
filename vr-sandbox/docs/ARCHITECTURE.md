@@ -27,6 +27,28 @@ known violation is tracked in the audit and gets a test before it is fixed.
 | I7 | Every queue, history and pool has a fixed bound, and physics slows rather than spirals when it falls behind. | review, A2 |
 | I8 | A failing subsystem is contained, reported once, and reset from the document, while the rest keeps running. | **violated**, see audit A3 |
 | I9 | Every template does what its card promises, with no failure the card does not promise. | at rest: templates settle; **in use: violated**, see audit A6 |
+| I10 | Nothing works that couldn't work in real life: the rules below hold for every build there is. | rules |
+
+## Rules
+
+Each rule was found broken once (in a fixture, one of Ego's designs, or the physics itself) and is now held for
+everything, in `tests/conformance/rules.test.ts` and, live, by the world and the watchdog. When a new break is found,
+its rule is added here and there, stated for every build, not just the one that showed it.
+
+| # | Rule | Found broken by | Held by |
+|---|---|---|---|
+| R1 | A joint exists only where it touches both parts (within 6 mm), and its two ends meet. A hinge, bearing, motor or bolt can't join across a gap, and can't be an invisible rod between two anchors. Springs, ropes and bands are exempt: they are parts that span it. | the old go-kart: both rear motors 173 mm from the chassis, the servo 65 mm, the front bearings 50 mm short; a slider 150 mm from its plate; a bearing 70 mm from its post in a physics test; a weight "fixed" 0.49 m below the plate it hung from | the world refuses it with the reason (`connectors/through.ts` `unreachable`); the Join tool and Forge join where the parts actually touch (`tools/contact.ts`) or refuse; rules test: every connector kind, every fixture |
+| R2 | A screw or nail goes through the part that is thin along its path, into the other, and knows when it goes into end grain. One that can't reach the other part holds nothing, and says so. | every leg-to-top joint: rated as if the screw went sideways through the leg; the wall shelf's brackets "screwed" through 300 mm of bracket with 80 mm screws | `throughOf`, `driven` (one function for the world, the planner, Ego and the build sheet); rules test |
+| R3 | Hardware is what is sold: wood screws in stocked lengths, common nails by pennyweight, rivets in their four sizes, bolts in ISO lengths. A fix steps to the next stocked size. | 4 × 74 mm and 5 × 108 mm screws; fixes scaling diameters by 1.25 | `engineering/fasteners.ts`; build-sheet test; rules test (every fixture and design builds from what's sold) |
+| R4 | Stock is what is sold: lumber 8 to 16 ft, bar and tube in 6 m, sheet 2440 × 1220 in its real thicknesses, solid wood panels glued from boards and flattened (18 mm from 1x, 35 mm from 2x). | a 20 mm plywood bench top; 38 mm solid tops that can't be flattened from 38 mm boards | `assistant/buildsheet.ts`; designer stock lists; rules test |
+| R5 | A bolt through wood bears on it as a dowel does (NDS yield modes), not as on a steel plate. | bolts in fir rated about 2.5 times too strong | `bolted` derive |
+| R6 | An intact joint never comes apart, whatever it carries, even through a light part between heavy ones. | the rebuilt kart's hangers slid 40 mm down the axle in 7 ticks; a 30 kg weight on a 0.5 kg hanger parted from it on a swinging arm | the assembly pass re-solves the whole mechanism an assembly (or a 10:1 mass ratio) is part of, with every joint's stops, ropes and stiff springs, and closes it at position level outward from what it hangs from (`physics/world.ts`); the world reports any joint over 5 mm apart (`drift`, a critical watchdog finding Ego files); rules test for bolted, hinge, ball and slider |
+| R7 | A drive turns everything rigidly with it: a servo, return spring or brake is sized by the inertia of the whole rigid group on each side, not the one bracket it is bolted to, and kept up to date as joints change. | a servo on a 1 kg kingpin block steering a kart with half a newton-metre | `rigidGroup`, `jointAxisInertia`; rules test |
+| R8 | A stop can't be run through: a servo has end stops at its travel; a joint closing fast on a stop is substepped so it can't pass by more than 0.01 rad or 2 mm. | a servo swinging to 0.76 rad on a 0.49 rad travel; Jolt's limits catching only once passed | servo `limits`, `substepsNeeded`; rules test |
+| R9 | A joint's load is what it really carries: Jolt's impulse in world directions plus the assembly pass's correction. | a 30 kg weight's hinge "failing" at 9.81 kN·m | `evaluateConnections`; rules test (no false failures) |
+
+What isn't held yet, said plainly: flexing (joined parts are rigid clusters), creep, fatigue, moisture and
+workmanship; bolts into a hollow section's open end (needs an end cap) are not yet flagged.
 
 ## Dependency map
 

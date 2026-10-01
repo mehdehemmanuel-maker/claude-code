@@ -7,6 +7,7 @@
 import type JoltNS from 'jolt-physics';
 import type { Material } from '../data/materials';
 import { getConnectorKind, type ConnectorKind, type Derived } from '../connectors/registry';
+import { REACH, spans, throughOf, unreachable, type Through } from '../connectors/through';
 import {
   getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
   type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout,
@@ -20,7 +21,7 @@ import { neoHookeanBandForce } from '../engineering/mechanics';
 import { heatShare, TAYLOR_QUINNEY } from '../engineering/thermal';
 import { emptyEnergies, emptyHeat, emptyWork, kineticEnergy, potentialEnergy, shareHeat, springEnergy, type Energies, type HeatBook, type HeatSource, type WorkBook } from './energy';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
-import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
+import { axisAngle, composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
 import {
   ID3, ZERO3, RigidFit, angularRows, inverse3, mat3Mul, mat3Vec, normQuat, pointRows, pointVelocity, projectors, quatConj,
   gyroscopicStep, quatFromRotationVector, quatMul, quatToMat3, rotationVector, scaleMat, solvePositions, solveRows, leastSupport, tangents, worldInertia, type Entity, type Row,
@@ -161,6 +162,14 @@ export const TICK = 1 / 90;
 /** Jolt's angular damping on every body, 1/s: numerical, not a model of anything (architecture finding A5). */
 const ANGULAR_DAMPING = 0.02;
 const MAX_SUBSTEPS = 8;
+/** How far an intact joint's two sides may be apart before it is a defect (5 mm: well past any solver tolerance). */
+const JOINT_DRIFT = 0.005;
+/** A joint further apart than this is not yet holding: the solver pulls it in before the assembly pass takes it on. */
+const SEATED = 0.02;
+/** Across a joint, a mass ratio at which Jolt's iterations no longer settle it within a tick. */
+const MASS_RATIO = 10;
+/** How far a joint may run past its stop within one substep: 0.01 rad, 2 mm. */
+const STOP_TURN = 0.01, STOP_TRAVEL = 0.002;
 /** Largest omega * dt per substep at which a spring is still simulated accurately (spike: 0.11 -> 0.36% period error). */
 const SUBSTEP_OMEGA_DT = 0.12;
 const SUBGROUPS = 4096;
@@ -179,6 +188,15 @@ const BOND_VELOCITY_STEPS = 20;
 /** Thickness of the slab behind each scanned room plane (m). */
 const ROOM_SLAB = 0.04;
 const BOND_POSITION_STEPS = 4;
+/**
+ * Every joint gets the iterations bonded segments get. A joint carries the load of everything on it, often through a
+ * light part (a hanger, an axle segment) between heavy ones; with the island's default iterations it drifts apart
+ * under that, which no real joint does (tests/conformance/laws.test.ts holds every joint kind to it).
+ */
+const joinSteps = (s: { mNumVelocityStepsOverride: number; mNumPositionStepsOverride: number }) => {
+  s.mNumVelocityStepsOverride = BOND_VELOCITY_STEPS;
+  s.mNumPositionStepsOverride = BOND_POSITION_STEPS;
+};
 
 /** One Jolt body: a whole part, or one segment of a breakable part. */
 interface BodyRec {
@@ -262,6 +280,16 @@ interface ConnRec {
   b: BodyRec | null;
   frameA: Pose;
   frameB: Pose | null;
+  /** Each part's thickness along the joint's normal, worked out once. */
+  through?: Through;
+  /** The reduced inertia about its axis (jointAxisInertia), for the topology it was worked out for. */
+  axisI?: { at: number; I: number };
+  /** The topology its drive (servo, return spring) was last sized for. */
+  sizedAt?: number;
+  /** Already reported as coming apart (once is enough). */
+  driftReported?: boolean;
+  /** Its two sides have been together: from then on they must stay so. */
+  heldOnce?: boolean;
   constraint: JoltNS.Constraint | null;
   extra: JoltNS.Constraint[];
   typed: JoltNS.SixDOFConstraint | JoltNS.HingeConstraint | JoltNS.SliderConstraint | JoltNS.SwingTwistConstraint | JoltNS.DistanceConstraint | null;
@@ -349,12 +377,13 @@ interface Ent {
 }
 
 interface RowTag {
-  kind: 'anchor' | 'hinge' | 'contact';
+  kind: 'anchor' | 'hinge' | 'contact' | 'joint';
   /** Bodies on the row's a and b sides (for per-body impulse bookkeeping; null = world / immovable). */
   ma: BodyRec | null;
   mb: BodyRec | null;
   anchor?: Anchor;
   bond?: BondRec;
+  conn?: ConnRec;
 }
 
 interface RecordedContact {
@@ -789,6 +818,7 @@ export class PhysicsWorld {
   }
 
   upsertPart(part: Part, material: Material, keepLivePose: boolean) {
+    this.topology++;
     const J = this.J;
     const existing = this.parts.get(part.id);
     const kind = getPartKind(part.kind);
@@ -923,6 +953,7 @@ export class PhysicsWorld {
   }
 
   removePart(id: string) {
+    this.topology++;
     const pr = this.parts.get(id);
     if (!pr) return;
     for (const c of [...this.conns.values()]) if (c.pa === pr || c.pb === pr) this.removeConnection(c.id);
@@ -1153,6 +1184,14 @@ export class PhysicsWorld {
   /** Which assembly (index into clusters) each member body belongs to this tick. */
   private clusterOf = new Map<BodyRec, number>();
   private hinges: BondRec[] = [];
+  /** Bumped whenever what is joined to what changes (a joint built, broken, slipped or removed; a part added or removed). */
+  private topology = 0;
+  /** Joints of the mechanisms assemblies are part of, re-solved with them each tick. */
+  private mechanism: ConnRec[] = [];
+  /** Roots of mechanisms with no assembly (their heaviest part), placed first when the mechanism is closed. */
+  private mechanismRoots: BodyRec[] = [];
+  /** The joints this tick's pass put rows on (their corrections are reset next tick; Jolt's warm start is too). */
+  private solvedJoints: ConnRec[] = [];
   /** The energy ledger since the scene began (energy.ts), this tick's books, and the heat each part took this tick. */
   private ledger: Energies = emptyEnergies();
   private book = { work: emptyWork(), heat: emptyHeat(), sources: [] as (HeatSource<BodyRec> & { env?: Material })[] };
@@ -1235,6 +1274,63 @@ export class PhysicsWorld {
       r.prior = { pose: this.poseOf(r), v, w };
       this.watch.add(r);
     }
+    // the mechanism an assembly is part of: every moving body joined to it, and joined to those, through joints that
+    // hold (not springs, ropes or bands). The pass re-solves all of their joints together, so the load through a
+    // light hanger or axle segment is carried exactly, and their contacts are recorded for it too.
+    this.mechanism = [];
+    this.mechanismRoots = [];
+    const byBody = new Map<BodyRec, ConnRec[]>();
+    // a joint between parts of very different mass (a light bracket between heavy ones) is one Jolt's iterations don't
+    // settle either: its mechanism is re-solved too, rooted at its heaviest part
+    const seeds: BodyRec[] = [];
+    for (const c of this.conns.values()) {
+      if (c.status === 'broken' || !c.constraint || !c.b || spans(c.kind.model)) continue;
+      if (!free(c.a) || !free(c.b) || c.a === c.b) continue;
+      // only a joint already close to holding: a fresh or badly misaligned one (a load left where it fell when its
+      // beam is put back) is pulled in by the solver first, so nothing is ever teleported
+      if (length(sub(this.anchorWorldB(c).p, this.anchorWorld(c).p)) > SEATED) continue;
+      (byBody.get(c.a) ?? byBody.set(c.a, []).get(c.a)!).push(c);
+      (byBody.get(c.b) ?? byBody.set(c.b, []).get(c.b)!).push(c);
+      if ((c.a.body.IsActive() || c.b.body.IsActive()) && Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass)) seeds.push(c.a, c.b);
+    }
+    if (!this.clusters.length && !seeds.length) return;
+    // islands with no assembly get their heaviest part as the root the mechanism is closed out from
+    const reached = new Set<BodyRec>();
+    for (const s0 of seeds) {
+      if (reached.has(s0)) continue;
+      // the whole island the seed is in, through every holding joint (an assembly in it roots it already)
+      const island: BodyRec[] = [];
+      const stack = [s0];
+      reached.add(s0);
+      while (stack.length) {
+        const x = stack.pop()!;
+        island.push(x);
+        for (const s1 of this.clusterOf.has(x) ? this.clusters[this.clusterOf.get(x)!]!.comp : []) if (!reached.has(s1)) { reached.add(s1); stack.push(s1); }
+        for (const c of byBody.get(x) ?? []) { const o = c.a === x ? c.b! : c.a; if (!reached.has(o)) { reached.add(o); stack.push(o); } }
+      }
+      if (island.some((x) => this.clusterOf.has(x))) continue;
+      const root = island.reduce((a, b) => (b.mass > a.mass ? b : a));
+      this.mechanismRoots.push(root);
+      const [v, w] = this.velocityOf(root);
+      root.prior = { pose: this.poseOf(root), v, w };
+      this.watch.add(root);
+    }
+    const queue = [...this.clusterOf.keys(), ...this.mechanismRoots];
+    const inMech = new Set<ConnRec>();
+    while (queue.length) {
+      const r = queue.pop()!;
+      for (const c of byBody.get(r) ?? []) {
+        if (inMech.has(c)) continue;
+        inMech.add(c);
+        const other = c.a === r ? c.b! : c.a;
+        if (this.watch.has(other)) continue;
+        const [v, w] = this.velocityOf(other);
+        other.prior = { pose: this.poseOf(other), v, w };
+        this.watch.add(other);
+        queue.push(other);
+      }
+    }
+    this.mechanism = [...inMech];
   }
 
   private collectEdges(): RigidEdge[] {
@@ -1308,7 +1404,10 @@ export class PhysicsWorld {
   private solveAssemblies(dt: number) {
     const contacts = [...this.contacts.values()];
     this.contacts.clear();
-    if (!this.clusters.length && !this.hinges.length) return;
+    // last tick's corrections on mechanism joints are re-solved now (or are no longer owed)
+    for (const c of this.solvedJoints) { c.corrF = [0, 0, 0]; c.corrT = [0, 0, 0]; }
+    this.solvedJoints = [];
+    if (!this.clusters.length && !this.hinges.length && !this.mechanism.length) return;
     const anchored = this.anchoredBodies();
     const ents = new Map<BodyRec, Ent>();
     const works = this.clusters.map((c) => this.fitCluster(c, dt));
@@ -1367,6 +1466,61 @@ export class PhysicsWorld {
         rows.push(...angularRows(en.e, other, dofs.rot, scale(rotErr, -beta), tag, key));
         en.touched = true;
       }
+    }
+    // joints between an assembly and another moving body (an axle turning in its hangers, a wheel on its stub, a
+    // plate sliding on its rod): Jolt solved them against one light segment, so they are solved again here on the
+    // true inertia of both sides. Left to Jolt alone, such a joint drifts apart under the load it carries, which no
+    // real joint does (tests/conformance/laws.test.ts holds every joint kind to it).
+    for (const c of this.mechanism) {
+      if (c.status === 'broken' || !c.constraint || !c.b || !c.frameB) continue;
+      const m = c.kind.model;
+      const ea = entOf(c.a), eb = entOf(c.b);
+      // a side rigidly held to something immovable is immovable here too (its invMass is 0): the rows hold the other
+      if (ea === eb || (ea.e.invMass === 0 && eb.e.invMass === 0)) continue;
+      const ha = composePose(startPose(ea, c.a), c.frameA), hb = composePose(startPose(eb, c.b), c.frameB);
+      // a friction-grip joint that has slipped slides in its plane within the bolt clearance (Jolt's friction-limited
+      // axes): only its normal and its turning are held here
+      const ny = rotate(ha.q, [0, 1, 0]);
+      const dofs = c.status === 'slipped' ? { point: projectors(ny).along, rot: ID3 } : anchorDofs(m, ny);
+      const tag: RowTag = { kind: 'joint', ma: c.a, mb: c.b, conn: c };
+      const key = `j:${c.id}`;
+      rows.push(...pointRows(ea.e, eb.e, ha.p, hb.p, dofs.point, scale(sub(hb.p, ha.p), beta), tag, key));
+      // the turning error: for a hinge, only how far its pin axes are out of line (its free turn is no error); for
+      // what holds every rotation, the whole relative turn
+      const turn = m === 'revolute' ? cross(ny, rotate(hb.q, [0, 1, 0])) : rotationVector(quatMul(hb.q, quatConj(ha.q)));
+      rows.push(...angularRows(ea.e, eb.e, dofs.rot, scale(turn, beta), tag, key));
+      // its stops (a hinge's or servo's end stops, a slider's travel, a ball joint's cone) hold here too, one-sided
+      rows.push(...this.limitRows(c, ea.e, eb.e, ha, hb, ny, dt, beta, tag, key));
+      this.solvedJoints.push(c);
+      ea.touched = eb.touched = true;
+    }
+    // ropes, and springs stiff enough to be rigid, on anything this pass re-solves: it integrates those bodies again
+    // from the tick's start, so a tether left to Jolt alone would be undone (a latch wire letting its plate creep)
+    for (const c of this.conns.values()) {
+      if (c.status === 'broken' || !c.constraint || !c.springRigid || (c.kind.model !== 'rope' && c.kind.model !== 'spring')) continue;
+      if (!this.watch.has(c.a) && !(c.b && this.watch.has(c.b))) continue;
+      const side = (r: BodyRec | null) => (r && !r.frozen && r.grabbed !== 'creative' && r.Iloc ? entOf(r) : null);
+      const ea = side(c.a), eb = side(c.b);
+      if (ea === eb || (!ea && !eb)) continue;
+      const pa = ea ? composePose(startPose(ea, c.a), c.frameA).p : this.anchorWorld(c).p;
+      const pb = c.b ? (eb ? composePose(startPose(eb, c.b), c.frameB!).p : this.anchorWorldB(c).p) : c.worldB?.p ?? pa;
+      const d = sub(pb, pa), L = length(d);
+      if (L < 1e-6) continue;
+      const n = scale(d, 1 / L), rest = c.derived.spring!.rest;
+      const tag: RowTag = { kind: 'joint', ma: c.a, mb: c.b, conn: c };
+      const key = `t:${c.id}`;
+      if (c.kind.model === 'rope') {
+        // tension only: the ends may come together, never part beyond the rope's length (a one-sided row, as a contact)
+        const slack = rest - L;
+        const target = slack > 0 ? -slack / dt : 0;
+        const bias = slack < 0 ? Math.min(Math.max(0, -slack - SLOP) * beta, MAX_CORRECTION / dt) : 0;
+        rows.push({ a: ea?.e ?? null, b: eb?.e ?? null, kind: 'linear', pa, pb, dir: scale(n, -1), target, bias, lo: 0, hi: Infinity, acc: 0, tag, key });
+      } else {
+        rows.push({ a: ea?.e ?? null, b: eb?.e ?? null, kind: 'linear', pa, pb, dir: n, target: 0, bias: -(L - rest) * beta, lo: -Infinity, hi: Infinity, acc: 0, tag, key });
+      }
+      this.solvedJoints.push(c);
+      if (ea) ea.touched = true;
+      if (eb) eb.touched = true;
     }
     // plastic hinges: point and twist held, bending resisted by the plastic moment (minus what Jolt already applied)
     const inv = this.lastSubsteps / dt;
@@ -1458,6 +1612,10 @@ export class PhysicsWorld {
       this.v2.Set(...en.e.w);
       this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
     }
+    // the mechanism closed at position level, outward from its assemblies: each moving part is set exactly onto its
+    // joint with the part it hangs from, as that part now is (the assembly pinned to its anchors carries what is
+    // joined to it; without this the pin moves the arm and leaves the weight hung from it behind)
+    this.closeMechanism(new Set([...works.flatMap((w) => w.comp), ...this.mechanismRoots]));
     // impulses our rows put on each body (linear, and angular about the world origin)
     const ourP = new Map<BodyRec, Vec3>(), ourL = new Map<BodyRec, Vec3>();
     const put = (r: BodyRec | null, J: Vec3, L: Vec3) => {
@@ -1467,6 +1625,7 @@ export class PhysicsWorld {
     };
     const anchorAcc = new Map<Anchor, { J: Vec3; T: Vec3 }>();
     const hingeAcc = new Map<BondRec, { J: Vec3; T: Vec3 }>();
+    const jointAcc = new Map<ConnRec, { J: Vec3; T: Vec3 }>();
     for (const r of rows) {
       if (!r.acc) continue;
       const tag = r.tag as RowTag;
@@ -1486,7 +1645,16 @@ export class PhysicsWorld {
         const acc = hingeAcc.get(tag.bond!) ?? { J: [0, 0, 0], T: [0, 0, 0] };
         if (r.kind === 'linear') acc.J = add(acc.J, Jb); else acc.T = add(acc.T, Jb); // on segment k + 1 (side b)
         hingeAcc.set(tag.bond!, acc);
+      } else if (tag.kind === 'joint') {
+        const acc = jointAcc.get(tag.conn!) ?? { J: [0, 0, 0], T: [0, 0, 0] };
+        if (r.kind === 'linear') acc.J = add(acc.J, Jb); else acc.T = add(acc.T, Jb); // on B
+        jointAcc.set(tag.conn!, acc);
       }
+    }
+    // what the re-solve added to each such joint joins its load (the force on B, as the joint reports it)
+    for (const [c, acc] of jointAcc) {
+      c.corrF = scale(acc.J, 1 / dt);
+      c.corrT = scale(acc.T, 1 / dt);
     }
     for (const [r, list] of anchored) {
       const en = ents.get(r);
@@ -2043,9 +2211,17 @@ export class PhysicsWorld {
     this.resolveEnds(rec);
     rec.derived = this.derive(rec);
     this.conns.set(conn.id, rec);
-    if (rec.status !== 'broken' && rec.derived.instantFailure) {
+    // a joint can only be where the parts are: one across a gap (an axle nobody made, a pin through air) holds nothing
+    let gap = unreachable(kind.model, kind.label, pa.part, pa.material, conn.a.frame, pb?.part ?? null, pb?.material ?? null, conn.b?.frame ?? null);
+    // and a new joint's two ends meet: each on its part but apart from each other would be an invisible rod
+    if (!gap && !prev && pb && !spans(kind.model)) {
+      const apart = length(sub(this.anchorWorldB(rec).p, this.anchorWorld(rec).p));
+      if (apart > REACH) gap = `The ${kind.label.toLowerCase()}'s two ends are ${Math.round(apart * 1000)} mm apart: nothing physical joins them. Make it where the parts touch.`;
+    }
+    const instant = gap ?? rec.derived.instantFailure;
+    if (rec.status !== 'broken' && instant) {
       rec.status = 'broken';
-      this.events.push({ type: 'break', conn: rec.id, mode: 'instant', load: 0, capacity: 0, point: this.anchorWorld(rec).p, note: rec.derived.instantFailure });
+      this.events.push({ type: 'break', conn: rec.id, mode: 'instant', load: 0, capacity: 0, point: this.anchorWorld(rec).p, note: instant });
     }
     this.buildConstraint(rec);
   }
@@ -2085,12 +2261,15 @@ export class PhysicsWorld {
     const matB = c.b ? c.b.material : null;
     const wa = this.anchorWorld(c);
     const wb = this.anchorWorldB(c);
+    // the path a screw or nail takes: each part's thickness along the joint's normal (the geometry is fixed per joint)
+    c.through ??= throughOf(c.pa.part, c.pa.material, c.conn.a.frame, c.pb?.part ?? null, c.pb?.material ?? null, c.conn.b?.frame ?? null);
     return c.kind.derive({
       params: c.conn.params,
       matA: c.a.material,
       matB,
       thicknessA: c.a.dims.b,
       thicknessB: c.b ? c.b.dims.b : c.a.dims.b,
+      through: c.through,
       distance: length(sub(wb.p, wa.p)),
       cure: this.sim.cureClock <= 0 ? 1e12 : c.cure,
     });
@@ -2106,6 +2285,7 @@ export class PhysicsWorld {
   }
 
   private destroyConstraint(c: ConnRec) {
+    this.topology++;
     for (const k of [c.constraint, ...c.extra]) if (k) this.ps.RemoveConstraint(k);
     c.constraint = null;
     c.extra = [];
@@ -2130,6 +2310,7 @@ export class PhysicsWorld {
   }
 
   private buildConstraint(c: ConnRec) {
+    this.topology++;
     const J = this.J;
     this.destroyConstraint(c);
     if (c.status === 'broken') return;
@@ -2162,6 +2343,7 @@ export class PhysicsWorld {
           s.set_mMaxFriction(J.SixDOFConstraintSettings_EAxis_TranslationX, fr);
           s.set_mMaxFriction(J.SixDOFConstraintSettings_EAxis_TranslationZ, fr);
         }
+        joinSteps(s);
         constraint = s.Create(b1, b2);
         J.destroy(s);
         c.typed = J.castObject(constraint, J.SixDOFConstraint);
@@ -2185,7 +2367,7 @@ export class PhysicsWorld {
           const ms = s.mMotorSettings;
           ms.mSpringSettings.mMode = J.ESpringMode_StiffnessAndDamping;
           ms.mSpringSettings.mStiffness = rv.torsionSpring.k;
-          ms.mSpringSettings.mDamping = 2 * 0.05 * Math.sqrt(rv.torsionSpring.k * this.effInertia(c));
+          ms.mSpringSettings.mDamping = 2 * 0.05 * Math.sqrt(rv.torsionSpring.k * this.ownAxisInertia(c));
           ms.mMinTorqueLimit = -1e9;
           ms.mMaxTorqueLimit = 1e9;
         }
@@ -2202,6 +2384,7 @@ export class PhysicsWorld {
           ms.mMinTorqueLimit = -rv.servo.maxTorque;
           ms.mMaxTorqueLimit = rv.servo.maxTorque;
         }
+        joinSteps(s);
         constraint = s.Create(b1, b2);
         J.destroy(s);
         const h = J.castObject(constraint, J.HingeConstraint);
@@ -2237,6 +2420,7 @@ export class PhysicsWorld {
           s.mMotorSettings.mMinForceLimit = -1e9;
           s.mMotorSettings.mMaxForceLimit = 1e9;
         }
+        joinSteps(s);
         constraint = s.Create(b1, b2);
         J.destroy(s);
         const sl = J.castObject(constraint, J.SliderConstraint);
@@ -2261,6 +2445,7 @@ export class PhysicsWorld {
         s.mTwistMinAngle = -Math.PI;
         s.mTwistMaxAngle = Math.PI;
         s.mMaxFrictionTorque = d.spherical?.frictionTorque ?? 0;
+        joinSteps(s);
         constraint = s.Create(b1, b2);
         J.destroy(s);
         c.typed = J.castObject(constraint, J.SwingTwistConstraint);
@@ -2290,6 +2475,7 @@ export class PhysicsWorld {
           s.mLimitsSpringSettings.mStiffness = sp.k;
           s.mLimitsSpringSettings.mDamping = 2 * zetaSet * Math.sqrt(sp.k * mEff);
         }
+        joinSteps(s);
         constraint = s.Create(b1, b2);
         J.destroy(s);
         c.typed = J.castObject(constraint, J.DistanceConstraint);
@@ -2328,27 +2514,165 @@ export class PhysicsWorld {
     return (ma * mb) / (ma + mb);
   }
 
-  /** Effective moment of inertia of the two bodies about a world axis (reduced, like effMass). */
-  private axisInertia(c: ConnRec, axis: Vec3): number {
-    const invI = (r: BodyRec | null) => {
-      if (!r || r.frozen) return 0;
-      const m = this.bi.GetInverseInertia(r.body.GetID());
-      const v = m.Multiply3x3(this.V(axis));
-      return v.GetX() * axis[0] + v.GetY() * axis[1] + v.GetZ() * axis[2];
-    };
-    const total = invI(c.a) + invI(c.b);
-    return total > 0 ? 1 / total : Infinity;
+  /**
+   * The rule every joint that holds keeps: its two sides stay together (a slider along its line). One that comes
+   * apart is reported once, as a defect of the physics, not of the build (tests/conformance/rules.test.ts holds it).
+   */
+  private watchJoints() {
+    for (const c of this.conns.values()) {
+      if (c.status !== 'intact' || !c.constraint || !c.b || c.driftReported || spans(c.kind.model)) continue;
+      const pa = this.anchorWorld(c), pb = this.anchorWorldB(c).p;
+      let gap = sub(pb, pa.p);
+      if (c.kind.model === 'prismatic') { const ax = rotate(pa.q, [0, 1, 0]); gap = sub(gap, scale(ax, dot(gap, ax))); }
+      const d = length(gap);
+      // held together once, it must stay so (a joint still being pulled in, after an undo put one side back, is not
+      // drifting)
+      if (d <= JOINT_DRIFT / 2) c.heldOnce = true;
+      if (d <= JOINT_DRIFT || !c.heldOnce) continue;
+      c.driftReported = true;
+      const name = (r: BodyRec) => r.pr.part.name;
+      this.events.push({ type: 'drift', conn: c.id, gap: d, point: pa.p, note: `the ${c.kind.label.toLowerCase()} joining ${name(c.a)} and ${name(c.b)} came ${Math.round(d * 1000)} mm apart while intact` });
+    }
   }
 
   /**
-   * Reduced moment of inertia of the two sides of a joint about its axis (a line through `point`): each side is the
-   * body's still-bonded run of segments, with the parallel-axis term for every piece.
+   * Breadth-first from the assemblies through the mechanism's joints: each moving part not yet placed is moved (not
+   * sped up) so that its joint with the placed part holds exactly: a rigid joint's whole pose, a hinge's pin point and
+   * axis, a slider's line, a ball joint's centre. Parts held together by rigid joints move as one (a kingpin block
+   * bolted to the chassis goes where the chassis goes). Loops close on the first joint reached.
+   */
+  private closeMechanism(placed: Set<BodyRec>) {
+    if (!this.mechanism.length) return;
+    const by = new Map<BodyRec, ConnRec[]>();
+    const group = new Map<BodyRec, BodyRec[]>();
+    const join = (x: BodyRec, y: BodyRec) => {
+      const gx = group.get(x) ?? [x], gy = group.get(y) ?? [y];
+      if (gx === gy) return;
+      const all = [...gx, ...gy];
+      for (const r of all) group.set(r, all);
+    };
+    for (const c of this.mechanism) {
+      if (c.status === 'broken' || !c.constraint || !c.b || !c.frameB) continue;
+      (by.get(c.a) ?? by.set(c.a, []).get(c.a)!).push(c);
+      (by.get(c.b) ?? by.set(c.b, []).get(c.b)!).push(c);
+      if (c.kind.model === 'rigid' && c.status === 'intact' && !placed.has(c.a) && !placed.has(c.b)) join(c.a, c.b);
+    }
+    const queue = [...placed];
+    while (queue.length) {
+      const r = queue.shift()!;
+      for (const c of by.get(r) ?? []) {
+        const child = c.a === r ? c.b! : c.a;
+        if (placed.has(child) || child.frozen || child.grabbed === 'creative' || !child.Iloc) continue;
+        const members = group.get(child) ?? [child];
+        for (const x of members) { placed.add(x); queue.push(x); }
+        // only what hangs from one thing is set onto it: a group bridging two moving parts (a chassis between its rear
+        // axle and its steering beam) is a loop, closed by the velocity solve and its rows, not by moving it to either
+        const owners = new Set<unknown>();
+        for (const x of members) for (const j of by.get(x) ?? []) {
+          const o = j.a === x ? j.b! : j.a;
+          if (members.includes(o) || !placed.has(o)) continue;
+          owners.add(this.clusterOf.has(o) ? this.clusterOf.get(o) : group.get(o) ?? o);
+        }
+        if (owners.size > 1) continue;
+        const childFrame = c.a === r ? c.frameB! : c.frameA, parentFrame = c.a === r ? c.frameA : c.frameB!;
+        const target = composePose(this.poseOf(r), parentFrame);
+        const now = composePose(this.poseOf(child), childFrame);
+        const m = c.kind.model;
+        // the turn (about the child's anchor) and the shift that put the child on its joint
+        let turn: Quat = IDENTITY_Q;
+        if (m === 'rigid' || m === 'prismatic') turn = normQuat(quatMul(target.q, quatConj(now.q)));
+        else if (m === 'revolute') {
+          const ac = rotate(now.q, [0, 1, 0]), at = rotate(target.q, [0, 1, 0]);
+          const k = cross(ac, at), s2 = length(k);
+          if (s2 > 1e-9) turn = axisAngle(scale(k, 1 / s2), Math.atan2(s2, dot(ac, at)));
+        }
+        let shift = sub(target.p, now.p);
+        if (m === 'prismatic') { const ax = rotate(target.q, [0, 1, 0]); shift = sub(shift, scale(ax, dot(shift, ax))); }
+        if (length(shift) < 1e-7 && Math.abs(turn[3]) > 1 - 1e-12) continue;
+        for (const x of members) {
+          const pose = this.poseOf(x);
+          const p = add(add(now.p, rotate(turn, sub(pose.p, now.p))), shift);
+          this.r1.Set(...p);
+          this.q1.Set(...normQuat(quatMul(turn, pose.q)));
+          this.bi.SetPositionAndRotation(x.body.GetID(), this.r1, this.q1, this.J.EActivation_DontActivate);
+        }
+      }
+    }
+  }
+
+  /**
+   * One-sided rows for a joint's stops, as contacts are: a hinge (or servo) at an end of its travel may not turn past it,
+   * a slider may not run past its ends, a ball joint may not swing past its cone. Only stops within reach this tick.
+   */
+  private limitRows(c: ConnRec, a: Entity, b: Entity, ha: Pose, hb: Pose, axis: Vec3, dt: number, beta: number, tag: RowTag, key: string): Row[] {
+    const out: Row[] = [];
+    const stop = (dir: Vec3, gap: number, kind: 'linear' | 'angular', k: string) => {
+      // gap: how far it may still go toward the stop (negative: past it)
+      if (gap > 0.25) return;
+      const target = gap > 0 ? -gap / dt : 0;
+      const bias = gap < 0 ? Math.min(-gap * beta, MAX_CORRECTION / dt) : 0;
+      out.push({ a, b, kind, pa: kind === 'linear' ? ha.p : [0, 0, 0], pb: kind === 'linear' ? hb.p : [0, 0, 0], dir, target, bias, lo: 0, hi: Infinity, acc: 0, tag, key: `${key}:${k}` });
+    };
+    const d = c.derived;
+    if (c.kind.model === 'revolute' && d.revolute?.limits) {
+      const [lo, hi] = d.revolute.limits;
+      const angle = dot(rotationVector(quatMul(hb.q, quatConj(ha.q))), axis);
+      stop(scale(axis, -1), hi - angle, 'angular', 'hi');
+      stop(axis, angle - lo, 'angular', 'lo');
+    } else if (c.kind.model === 'prismatic' && d.prismatic?.limits) {
+      const [lo, hi] = d.prismatic.limits;
+      const at = dot(sub(hb.p, ha.p), axis);
+      stop(scale(axis, -1), hi - at, 'linear', 'hi');
+      stop(axis, at - lo, 'linear', 'lo');
+    } else if (c.kind.model === 'spherical' && d.spherical) {
+      const ta = axis, tb = rotate(hb.q, [0, 1, 0]);
+      const swing = Math.acos(Math.max(-1, Math.min(1, dot(ta, tb))));
+      const k = cross(ta, tb);
+      if (length(k) > 1e-6) stop(scale(normalize(k), -1), d.spherical.cone - swing, 'angular', 'cone');
+    }
+    return out;
+  }
+
+  /**
+   * Everything that turns with a body as one: its still-bonded segments and whatever intact rigid joints hold to them,
+   * transitively, leaving out the joint being sized (`except`). Null if that includes something immovable (a frozen
+   * part, the world). A motor, servo or brake acts on all of this, not on the one light bracket it is bolted to.
+   */
+  private rigidGroup(r: BodyRec, except: ConnRec | null): BodyRec[] | null {
+    const adj = new Map<BodyRec, (BodyRec | null)[]>();
+    for (const c of this.conns.values()) {
+      if (c === except || c.status !== 'intact' || c.kind.model !== 'rigid') continue;
+      (adj.get(c.a) ?? adj.set(c.a, []).get(c.a)!).push(c.b);
+      if (c.b) (adj.get(c.b) ?? adj.set(c.b, []).get(c.b)!).push(c.a);
+    }
+    const seen = new Set<BodyRec>();
+    const stack = [r];
+    while (stack.length) {
+      const x = stack.pop()!;
+      if (seen.has(x)) continue;
+      if (x.frozen || !x.Iloc) return null;
+      seen.add(x);
+      for (const s of this.cluster(x)) if (!seen.has(s)) stack.push(s);
+      for (const y of adj.get(x) ?? []) {
+        if (!y) return null;
+        if (!seen.has(y)) stack.push(y);
+      }
+    }
+    return [...seen];
+  }
+
+  /**
+   * Reduced moment of inertia of the two sides of a joint about its axis (a line through `point`): each side is
+   * everything rigidly with it (rigidGroup), with the parallel-axis term for every piece. Worked out once each time
+   * what is joined to what changes (it is constant while the groups stay rigid).
    */
   private jointAxisInertia(c: ConnRec, axis: Vec3, point: Vec3) {
+    if (c.axisI && c.axisI.at === this.topology) return c.axisI.I;
     const side = (r: BodyRec | null) => {
-      if (!r || r.frozen || !r.Iloc) return Infinity;
+      const group = r ? this.rigidGroup(r, c) : null;
+      if (!group) return Infinity;
       let I = 0;
-      for (const s of this.cluster(r)) {
+      for (const s of group) {
         const pose = this.poseOf(s);
         const d = sub(pose.p, point);
         const perp = sub(d, scale(axis, dot(d, axis)));
@@ -2357,20 +2681,15 @@ export class PhysicsWorld {
       return Math.max(I, 1e-9);
     };
     const ia = side(c.a), ib = side(c.b);
-    if (!Number.isFinite(ia) && !Number.isFinite(ib)) return 1;
-    if (!Number.isFinite(ia)) return ib;
-    if (!Number.isFinite(ib)) return ia;
-    return (ia * ib) / (ia + ib);
+    const I = !Number.isFinite(ia) && !Number.isFinite(ib) ? 1 : !Number.isFinite(ia) ? ib : !Number.isFinite(ib) ? ia : (ia * ib) / (ia + ib);
+    c.axisI = { at: this.topology, I };
+    return I;
   }
 
-  private effInertia(c: ConnRec) {
-    const I = (r: BodyRec) => (r.frozen ? Infinity : this.clusterInertia(r));
-    const ia = I(c.a);
-    const ib = c.b ? I(c.b) : Infinity;
-    if (!Number.isFinite(ia) && !Number.isFinite(ib)) return 1;
-    if (!Number.isFinite(ia)) return ib;
-    if (!Number.isFinite(ib)) return ia;
-    return (ia * ib) / (ia + ib);
+  /** The same about the joint's own axis, where it is now. */
+  private ownAxisInertia(c: ConnRec) {
+    const wa = this.anchorWorld(c);
+    return this.jointAxisInertia(c, rotate(wa.q, [0, 1, 0]), wa.p);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -3280,6 +3599,10 @@ export class PhysicsWorld {
         const wb = this.bi.GetAngularVelocity(c.b.body.GetID());
         wrel += dot([wb.GetX(), wb.GetY(), wb.GetZ()], axis);
       }
+      if (rv.torsionSpring && c.sizedAt !== this.topology) {
+        c.sizedAt = this.topology;
+        h.GetMotorSettings().mSpringSettings.mDamping = 2 * 0.05 * Math.sqrt(rv.torsionSpring.k * this.ownAxisInertia(c));
+      }
       if (rv.motor) {
         const m = rv.motor;
         const u = Math.max(-1, Math.min(1, this.channels[m.channel] ?? 0)) * (m.reverse ? -1 : 1);
@@ -3296,6 +3619,14 @@ export class PhysicsWorld {
           if (c.b) this.bi.ActivateBody(c.b.body.GetID());
         }
       } else if (rv.servo) {
+        if (c.sizedAt !== this.topology) {
+          // the 6 Hz loop on the inertia it really turns, re-sized whenever what is joined to what changes
+          c.sizedAt = this.topology;
+          const I = this.ownAxisInertia(c), w = 2 * Math.PI * 6;
+          const ss = h.GetMotorSettings().mSpringSettings;
+          ss.mStiffness = I * w * w;
+          ss.mDamping = 2 * I * w;
+        }
         const u = Math.max(-1, Math.min(1, this.channels[rv.servo.channel] ?? 0));
         h.SetTargetAngle(u * rv.servo.range);
         if (Math.abs(u) > 0.01) this.bi.ActivateBody(c.a.body.GetID());
@@ -3304,7 +3635,7 @@ export class PhysicsWorld {
         // momentum an exponential decay w(t) = w0 exp(-c t / I) would over this tick (stable for any c / I).
         h.SetTargetAngularVelocity(0);
         const ms = h.GetMotorSettings();
-        const I = this.axisInertia(c, axis);
+        const I = this.ownAxisInertia(c);
         const lim = Number.isFinite(I) ? ((I / TICK) * (1 - Math.exp((-rv.eddy.c * TICK) / I))) * Math.abs(wrel) : rv.eddy.c * Math.abs(wrel);
         ms.mMinTorqueLimit = -lim;
         ms.mMaxTorqueLimit = lim;
@@ -3364,6 +3695,27 @@ export class PhysicsWorld {
       if (c.kind.model !== 'band' || c.status === 'broken') continue;
       const k = (3 * (c.derived.spring?.bandG ?? 5e5) * (c.derived.spring?.bandArea ?? 1e-5)) / Math.max(c.bandRest, 1e-3);
       n = Math.max(n, Math.ceil((Math.sqrt(k / this.effMass(c)) * TICK) / SUBSTEP_OMEGA_DT));
+    }
+    // a stop is only caught once passed (Jolt's limits are not speculative): a joint closing fast on one is stepped
+    // finely enough that it can't run through it by more than a hair, as no real end stop allows
+    for (const c of this.conns.values()) {
+      if (c.status === 'broken' || !c.typed || !c.b || (!c.a.body.IsActive() && !c.b.body.IsActive())) continue;
+      const limits = c.kind.model === 'revolute' ? c.derived.revolute?.limits : c.kind.model === 'prismatic' ? c.derived.prismatic?.limits : null;
+      if (!limits) continue;
+      const axis = rotate(this.anchorWorld(c).q, [0, 1, 0]);
+      let at: number, rate: number, hair: number;
+      if (c.kind.model === 'revolute') {
+        at = (c.typed as JoltNS.HingeConstraint).GetCurrentAngle();
+        rate = dot(sub(this.velocityOf(c.b)[1], this.velocityOf(c.a)[1]), axis);
+        hair = STOP_TURN;
+      } else {
+        at = (c.typed as JoltNS.SliderConstraint).GetCurrentPosition();
+        rate = dot(sub(this.pointVelocity(c.b, this.anchorWorldB(c).p), this.pointVelocity(c.a, this.anchorWorld(c).p)), axis);
+        hair = STOP_TRAVEL;
+      }
+      const gap = rate > 0 ? limits[1] - at : at - limits[0];
+      const travel = Math.abs(rate) * TICK;
+      if (travel > hair && gap < travel + hair) n = Math.max(n, Math.ceil(travel / hair));
     }
     return Math.min(MAX_SUBSTEPS, n);
   }
@@ -3438,6 +3790,7 @@ export class PhysicsWorld {
     this.ticks++;
     // constraint impulses are those of the last substep
     this.evaluateConnections(dt, this.lastSubsteps);
+    this.watchJoints();
     this.evaluateBonds(this.lastSubsteps / dt);
     lap('joints');
     this.closeBooks(start, dt);
@@ -3720,15 +4073,23 @@ export class PhysicsWorld {
           const lp = h.GetTotalLambdaPosition();
           F = add([lp.GetX() * inv, lp.GetY() * inv, lp.GetZ() * inv], c.corrF);
           const lr = h.GetTotalLambdaRotation();
-          bending = Math.hypot(lr.GetComponent(0), lr.GetComponent(1)) * inv;
+          // Jolt's two angular impulses, as the world-space moment on B (its hinge rotation part's own axes), plus what
+          // the assembly pass added: the moment the joint really carries perpendicular to its pin
+          const a1 = y, a2 = c.b ? rotate(this.anchorWorldB(c).q, [0, 1, 0]) : y;
+          const b2 = joltPerpendicular(a2), c2 = cross(a2, b2);
+          const M = add(add(scale(cross(b2, a1), lr.GetComponent(0) * inv), scale(cross(c2, a1), lr.GetComponent(1) * inv)), c.corrT);
+          bending = length(sub(M, scale(y, dot(M, y))));
           break;
         }
         case 'prismatic': {
           const sl = c.typed as JoltNS.SliderConstraint;
           const lp = sl.GetTotalLambdaPosition();
-          shear = Math.hypot(lp.GetComponent(0), lp.GetComponent(1)) * inv;
+          // Jolt's two lateral impulses along its normals (A's frame x, and the slider axis x that), plus the pass's
+          const n1 = rotate(frame.q, [1, 0, 0]), n2 = cross(y, n1);
+          const S = add(add(scale(n1, lp.GetComponent(0) * inv), scale(n2, lp.GetComponent(1) * inv)), c.corrF);
+          shear = length(sub(S, scale(y, dot(S, y))));
           const lr = sl.GetTotalLambdaRotation();
-          bending = Math.hypot(lr.GetX(), lr.GetY(), lr.GetZ()) * inv;
+          bending = length(add([lr.GetX() * inv, lr.GetY() * inv, lr.GetZ() * inv], c.corrT));
           c.load.extent = sl.GetCurrentPosition();
           break;
         }
@@ -4026,6 +4387,16 @@ function partIdOf(entry: BodyRec | PartRec | null | undefined): string | null {
 
 
 /** Which DOFs a joint to an immovable support holds: point directions and rotation directions (projectors). */
+/** The perpendicular Jolt's hinge rotation part takes to an axis (Vec3::GetNormalizedPerpendicular). */
+function joltPerpendicular(v: Vec3): Vec3 {
+  if (Math.abs(v[0]) > Math.abs(v[1])) {
+    const l = Math.hypot(v[0], v[2]);
+    return [v[2] / l, 0, -v[0] / l];
+  }
+  const l = Math.hypot(v[1], v[2]);
+  return [0, v[2] / l, -v[1] / l];
+}
+
 function anchorDofs(model: string, axis: Vec3): { point: number[]; rot: number[] } {
   const { perp } = projectors(axis);
   if (model === 'revolute') return { point: ID3, rot: perp };

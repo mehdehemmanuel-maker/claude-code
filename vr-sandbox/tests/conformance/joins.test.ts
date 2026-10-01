@@ -8,6 +8,7 @@ import { axisAngle } from '../../src/doc/math';
 import { getMaterial, MATERIALS, type Material } from '../../src/data/materials';
 import { AUTO_JOIN, planJoin, type JoinGeometry } from '../../src/connectors/plan';
 import { getConnectorKind } from '../../src/connectors/registry';
+import { isStockScrew, SCREW_DIAMETERS, WOOD_SCREWS } from '../../src/engineering/fasteners';
 import { numberOf, stringOf } from '../../src/schema/params';
 
 const derived = (kind: string, params: Record<string, unknown>, a: Material, b: Material | null, g: JoinGeometry) =>
@@ -53,15 +54,19 @@ describe('Best join', () => {
     expect(kind('stone.slate', 'wood.douglas-fir').params['adhesive']).toBe('epoxy-structural');
   });
 
-  it('sizes a screw to reach well into the second piece: at least 6 diameters, and not through it when there is room', () => {
+  it('sizes a screw from the sizes sold: well into the second piece (6 diameters, when a stocked length gives that), never through it', () => {
     for (const g of Object.values(GEOMETRIES)) {
       const plan = planJoin('screwed', fir, fir, g);
       if (plan.kind !== 'screwed') continue;
       const d = numberOf(plan.params, 'diameter'), L = numberOf(plan.params, 'length');
+      expect(isStockScrew(d, L), `${d} x ${L}`).toBe(true);
       const pen = L - g.thicknessA;
-      expect(pen).toBeGreaterThanOrEqual(Math.min(6 * d, 0.9 * g.thicknessB) - 0.0006);
-      // the shortest screw made is 8 mm: through thin sheet it goes right through, like a sheet-metal screw
-      if (g.thicknessA + g.thicknessB > 0.008) expect(pen).toBeLessThan(g.thicknessB);
+      expect(pen).toBeGreaterThan(0);
+      expect(pen).toBeLessThan(g.thicknessB);
+      // full bite whenever some stocked screw of a size up to this one gives it without coming through
+      const least = Math.min(6 * d, 0.9 * g.thicknessB);
+      const could = SCREW_DIAMETERS.filter((D) => D <= d * 1000 + 1e-6).some((D) => WOOD_SCREWS[String(D)]!.some((x) => x / 1000 - g.thicknessA >= least && x / 1000 - g.thicknessA <= 0.95 * g.thicknessB));
+      if (could) expect(pen).toBeGreaterThanOrEqual(least - 1e-9);
     }
   });
 

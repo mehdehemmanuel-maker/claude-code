@@ -65,6 +65,29 @@ engineer would (`src/assistant/designer.ts`):
   are Best join, sized to the stock. Bricks are bedded in masonry mortar, in running bond. Then physics decides: if a
   design can't stand, it falls. Her notes say what she chose and why, and she warns of any joint near its limit.
 
+## Proving it, and how to build it
+
+Before she hands a design over she proves it, the way LEAP 71's Noyron proves an engine (`src/assistant/prove.ts`):
+
+- **Built on her bench.** A real build document with no headset, through the same Forge and Best join as your hands.
+- **Tested on the stand.** A world of its own with the same physics (`src/physics/stand.ts`): steel blocks of the
+  weight it is for on its top or shelves, and a 300 N sideways push at the top (furniture fails by racking more than
+  by crushing). If it holds with every joint under two thirds of its capacity, the **proof test** follows: 1.5× the
+  load and 1.5× the push, which every joint must survive. A test ends as soon as everything is still.
+- **Fixed as an engineer would.** Members that broke or yielded: the design re-sized for more. A table racking under
+  the push: aprons, the rails real tables have. Joints too close to their limit: the smallest fix that carries 1.5×,
+  applied to every joint made alike. A shelf strong enough but tipping in one piece: "anchor it to the wall", not a
+  stronger shelf.
+- **What she learns she keeps** (`vrsb.stand`): the margin each kind of design needed, the joint upgrades, and which
+  designs need aprons, so the next one starts closer to what works.
+
+Every proof comes with a **build sheet** (`src/assistant/buildsheet.ts`): each assembly, each part, what it is cut
+from (and, for a glued-up panel, its boards), each joint's hardware with the path each screw takes and how deep it
+bites, what to buy, a cut list packed onto real board and sheet sizes with the kerf, the order to put it together,
+how hard each joint worked on the stand, and plainly what was not checked (flex, creep, moisture, workmanship). A
+part that can't be cut from anything sold, or a fastener that isn't sold or doesn't fit its face, is a problem on
+the sheet, not something for the workshop to find.
+
 ## What comes next
 
 The bar is a Jarvis-grade partner who can see, reason, act and build in the world. Each phase stands on the one

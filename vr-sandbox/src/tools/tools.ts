@@ -2,9 +2,12 @@
 
 import * as THREE from 'three';
 import type { App } from '../app/app';
+import type { Workshop } from '../app/workshop';
 import { getMaterial, MATERIALS } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN, isPlannedKind, planJoin, type JoinPlan } from '../connectors/plan';
+import { gapTo, REACH, throughOf, unreachable } from '../connectors/through';
+import { contactBetween } from './contact';
 import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose, setPartPoses } from '../doc/commands';
 import { frameOnPart, partLayout } from '../app/segments';
 import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub, transformPoint } from '../doc/math';
@@ -16,6 +19,9 @@ import { buildVisual } from '../render/geometry';
 import { ghostMaterial } from '../render/materials';
 import type { Pick } from '../render/view';
 import { DrawTool } from './draw';
+
+/** A joint that can't be made where it was asked for (it would not touch both parts). */
+export class JoinRefused extends Error {}
 
 export interface Ray {
   origin: THREE.Vector3;
@@ -455,7 +461,7 @@ export function allowedMaterial(kindId: string, material: string) {
 // -------------------------------------------------------------------------------------------------
 
 /** Extents of a part's face (in its local frame) whose normal is closest to a world normal. */
-function faceDims(app: App, partId: string, worldNormal: Vec3): [number, number] {
+function faceDims(app: Workshop, partId: string, worldNormal: Vec3): [number, number] {
   const part = app.doc.parts[partId];
   const pose = app.livePose(partId);
   if (!part || !pose) return [0.03, 0.03];
@@ -470,7 +476,7 @@ function faceDims(app: App, partId: string, worldNormal: Vec3): [number, number]
 }
 
 /** Thinnest section of a part, as the joint capacities see it. */
-function thicknessOf(app: App, part: Part): number {
+function thicknessOf(app: Workshop, part: Part): number {
   const kind = getPartKind(part.kind);
   return kind.dims(effectiveParams(kind, part.params, app.materialOf(part))).b;
 }
@@ -488,7 +494,7 @@ export interface JoinEnd {
  * the two touching faces; and, for Best join or a joining process, the process that holds these materials, sized to
  * the stock (connectors/plan.ts). B null anchors A to the world.
  */
-export function makeRigidJoin(app: App, a: JoinEnd, b: { part: string | null; seg: number | null }, requested: string, q: Quat) {
+export function makeRigidJoin(app: Workshop, a: JoinEnd, b: { part: string | null; seg: number | null }, requested: string, q: Quat) {
   const aPart = app.doc.parts[a.part]!;
   const bPart = b.part ? app.doc.parts[b.part] ?? null : null;
   const source = (id: string) => app.livePose(id);
@@ -502,11 +508,18 @@ export function makeRigidJoin(app: App, a: JoinEnd, b: { part: string | null; se
     params['bondL'] = Math.max(0.002, Math.min(la, lb));
   }
   let plan: JoinPlan | null = null;
+  const frameA = frameOnPart(aPart, world, a.seg, source);
+  const frameB = bPart ? frameOnPart(bPart, world, b.seg, source) : null;
+  // only where it touches both: a hinge, bearing or bolt across a gap would be holding nothing
+  const gap = unreachable(kind.model, kind.label, aPart, app.materialOf(aPart), frameA, bPart, bPart ? app.materialOf(bPart) : null, frameB);
+  if (gap) throw new JoinRefused(gap);
   if (isPlannedKind(requested)) {
     const matA = app.materialOf(aPart), matB = bPart ? app.materialOf(bPart) : null;
     const geom = {
       thicknessA: thicknessOf(app, aPart), thicknessB: bPart ? thicknessOf(app, bPart) : thicknessOf(app, aPart),
       bondW: numberOf(params, 'bondW', 0.03), bondL: numberOf(params, 'bondL', 0.03),
+      // the path a screw or nail takes, as the world will rate it
+      through: throughOf(aPart, matA, frameA, bPart, matB, frameB),
     };
     plan = planJoin(requested, matA, matB, geom);
     if (requested === AUTO_JOIN) {
@@ -521,8 +534,8 @@ export function makeRigidJoin(app: App, a: JoinEnd, b: { part: string | null; se
   }
   const conn = addConnection(app.store, {
     kind: kind.id,
-    a: { part: a.part, frame: frameOnPart(aPart, world, a.seg, source) },
-    b: bPart ? { part: bPart.id, frame: frameOnPart(bPart, world, b.seg, source) } : null,
+    a: { part: a.part, frame: frameA },
+    b: bPart && frameB ? { part: bPart.id, frame: frameB } : null,
     params,
   });
   return { conn, kind, plan };
@@ -580,7 +593,24 @@ class JoinTool implements Tool {
         params: sanitizeParams(kind.params, defaultsOf(kind.params)),
       });
     } else {
-      const made = makeRigidJoin(this.app, a, { part: bId, seg: pick.seg }, requested, this.jointFrame(a.normal));
+      let made;
+      try {
+        // the joint goes where the two parts touch: where you clicked on A if B is there, else the face of A that B
+        // sits against (two blocks stacked are joined at the face between them, not at the side you clicked)
+        let at = a;
+        if (bPart && gapTo(bPart, this.app.materialOf(bPart), inverseTransformPoint(this.app.livePose(bPart.id) ?? bPart.pose, a.point)) > REACH) {
+          const c = contactBetween(this.app, a.part, bPart.id);
+          at = { ...a, point: c.point, normal: c.normal };
+        }
+        made = makeRigidJoin(this.app, at, { part: bId, seg: pick.seg }, requested, this.jointFrame(at.normal));
+      } catch (err) {
+        if (!(err instanceof JoinRefused) && !(err instanceof Error && /aren't touching/.test(err.message))) throw err;
+        this.first = null;
+        this.app.view.setMarkers([]);
+        this.app.toast(err.message, 'warn');
+        this.app.audio.ui('error');
+        return;
+      }
       kind = made.kind;
       conn = made.conn;
       if (made.plan) this.app.toast(made.plan.substituted ? `${made.plan.substituted} ${made.plan.summary}.` : `${made.plan.summary}${bId ? '' : ', to the floor'}.`, made.plan.substituted ? 'warn' : 'ok');

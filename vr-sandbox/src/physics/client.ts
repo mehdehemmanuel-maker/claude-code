@@ -14,6 +14,8 @@ export class PhysicsClient {
   private inline: import('./runner').Runner | null = null;
   private handler: ResultHandler = () => {};
   private pendingDt = 0;
+  /** Of pendingDt, what had passed when the first of the queued edits was made. */
+  private preDt = 0;
   private pendingStep = false;
   readonly mode: 'worker' | 'inline';
   lastError: string | null = null;
@@ -60,6 +62,8 @@ export class PhysicsClient {
   }
 
   send(op: PhysicsOp) {
+    // time banked while a step was in flight passed before this edit: it is simulated before it, not after
+    if (!this.ops.length) this.preDt = this.pendingDt;
     this.ops.push(op);
   }
 
@@ -70,15 +74,16 @@ export class PhysicsClient {
     if (this.inFlight) return;
     const ops = this.ops;
     this.ops = [];
-    const msg = { type: 'advance' as const, ops, dt: this.pendingDt, singleStep: this.pendingStep, maxTicks: 4 };
+    const pre = ops.length ? Math.min(this.preDt, this.pendingDt) : 0;
+    const msg = { type: 'advance' as const, pre, ops, dt: this.pendingDt - pre, singleStep: this.pendingStep, maxTicks: 4 };
     this.pendingDt = 0;
+    this.preDt = 0;
     this.pendingStep = false;
     if (this.worker) {
       this.inFlight = true;
       this.worker.postMessage(msg);
     } else if (this.inline) {
-      this.inline.apply(ops);
-      this.handler(this.inline.advance(msg.dt, msg.maxTicks, msg.singleStep));
+      this.handler(this.inline.run(msg.pre, ops, msg.dt, msg.maxTicks, msg.singleStep));
     }
   }
 

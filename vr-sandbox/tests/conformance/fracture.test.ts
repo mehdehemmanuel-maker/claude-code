@@ -288,8 +288,9 @@ describe('breakable stock: bookkeeping', () => {
     const w0 = 4;
     const Zaxis: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // frame y along world z (the bearing axis)
     const arm = r.part('lumber', at(0.4, 1, 0), { params: { size: '2x4', length: 1, fracture: '6' } });
-    const post = r.part('block', at(0, 1, -0.12), { frozen: true, params: { x: 0.1, y: 0.1, z: 0.1 } });
-    r.connect('bearing', { part: arm, frame: at(-0.4, 0, 0, Zaxis) }, { part: post, frame: at(0, 0, 0.12, Zaxis) }, { bore: 0.025, staticRating: 10000 });
+    // the post reaches the arm's back face: the bearing is where they touch (a joint across a gap holds nothing)
+    const post = r.part('block', at(0, 1, -0.0445 - 0.05), { frozen: true, params: { x: 0.1, y: 0.1, z: 0.1 } });
+    r.connect('bearing', { part: arm, frame: at(-0.4, 0, -0.0445, Zaxis) }, { part: post, frame: at(0, 0, 0.05, Zaxis) }, { bore: 0.025, staticRating: 10000 });
     const spin = (x: Vec3): Vec3 => [-w0 * (x[1] - 1), w0 * x[0], 0];
     r.world.apply({ op: 'setPose', id: arm.id, pose: at(0.4, 1, 0), linear: spin([0.4, 1, 0]), angular: [0, 0, w0] });
     const glue = { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.03 };

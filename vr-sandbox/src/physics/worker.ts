@@ -9,7 +9,7 @@ import { Runner } from './runner';
 
 export type ToWorker =
   | { type: 'init'; sim: SimSettings }
-  | { type: 'advance'; ops: PhysicsOp[]; dt: number; singleStep: boolean; maxTicks: number };
+  | { type: 'advance'; pre: number; ops: PhysicsOp[]; dt: number; singleStep: boolean; maxTicks: number };
 
 let runner: Runner | null = null;
 const queue: MessageEvent<ToWorker>[] = [];
@@ -29,8 +29,7 @@ async function handle(msg: ToWorker) {
   if (!ready || !runner) {
     return;
   }
-  runner.apply(msg.ops);
-  const r = runner.advance(msg.dt, msg.maxTicks, msg.singleStep);
+  const r = runner.run(msg.pre, msg.ops, msg.dt, msg.maxTicks, msg.singleStep);
   // The runner keeps its arrays for interpolation, so transfer copies (a few KB).
   const result = { ...r, transforms: r.transforms.slice(), prevTransforms: r.prevTransforms.slice(), velocities: r.velocities.slice() };
   post({ type: 'result', result }, [result.transforms.buffer, result.prevTransforms.buffer, result.velocities.buffer]);

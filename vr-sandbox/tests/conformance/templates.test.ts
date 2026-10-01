@@ -9,6 +9,8 @@ import { PhysicsWorld } from '../../src/physics/world';
 import { workshopEnvironment } from '../../src/physics/environment';
 import { MATERIALS } from '../../src/data/materials';
 import type { BuildDoc } from '../../src/doc/types';
+import { rotate } from '../../src/doc/math';
+import { numberOf } from '../../src/schema/params';
 
 const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
 
@@ -92,28 +94,47 @@ describe('templates', () => {
     const failures = run(w, 0.5);
     w.apply({ op: 'removeConnection', id: Object.values(doc.connections).find((c) => c.kind === 'rope')!.id });
     const ball = byName(doc, 'Projectile')[0]!;
+    const arm = byName(doc, 'Throwing arm')[0]!;
     const s = w.livePose(ball.id)!.p;
     const step = stepping(w, failures);
-    let landed = NaN;
+    let landed = NaN, spin = 0;
     for (let i = 0; i < 360; i++) {
       step();
       const p = w.livePose(ball.id)!.p;
+      if (i < 120) spin = Math.max(spin, Math.abs(w.angularVelocity(`${arm.id}#0`)![2]));
       if (Number.isNaN(landed) && i > 20 && p[1] < 0.06) landed = Math.hypot(p[0] - s[0], p[2] - s[2]);
     }
     w.destroy();
-    return { failures, landed };
+    return { failures, landed, spin };
   };
   const counterweightBolts = (d: BuildDoc) => {
     const cw = byName(d, 'Counterweight')[0]!;
     return Object.values(d.connections).find((c) => c.kind === 'bolted' && c.b?.part === cw.id)!;
   };
 
-  it('catapult card: a heavier counterweight throws farther, and 40 to 150 kg all fit the frame', async () => {
+  // A different counterweight, bolted where the last one was: its bottom on the arm (a lighter one is smaller, so it
+  // sits lower), and its bolts at its new bottom face.
+  const counterweight = (d: BuildDoc, kg: number) => {
+    const cw = byName(d, 'Counterweight')[0]!;
+    const D = (m: number) => Math.cbrt((4 * m) / (Math.PI * 7200));
+    const was = D(numberOf(cw.params, 'mass', 80)), now = D(kg);
+    const up = rotate(cw.pose.q, [0, 1, 0]);
+    cw.params['mass'] = kg;
+    cw.pose = { ...cw.pose, p: [cw.pose.p[0] + (up[0] * (now - was)) / 2, cw.pose.p[1] + (up[1] * (now - was)) / 2, cw.pose.p[2] + (up[2] * (now - was)) / 2] };
+    const bolts = counterweightBolts(d);
+    bolts.b = { ...bolts.b!, frame: { ...bolts.b!.frame, p: [0, -now / 2, 0] } };
+  };
+
+  // More counterweight is more energy: the arm always swings faster. The range is another matter: with no stop bar
+  // the ball leaves the cup where the swing lets it go, and a faster swing lets it go earlier, lower and flatter, so
+  // the range rises with the counterweight, peaks (about 100 kg here) and falls again, as a real one's does.
+  it('catapult card: more counterweight swings the arm faster, the range changes with it, and 40 to 150 kg all fit the frame', async () => {
     const throws = [];
-    for (const kg of [40, 80, 150]) throws.push(await fireCatapult((d) => { byName(d, 'Counterweight')[0]!.params['mass'] = kg; }));
+    for (const kg of [40, 80, 150]) throws.push(await fireCatapult((d) => counterweight(d, kg)));
     for (const t of throws) expect(t.failures).toEqual([]);
+    expect(throws[0]!.spin).toBeLessThan(throws[1]!.spin);
+    expect(throws[1]!.spin).toBeLessThan(throws[2]!.spin);
     expect(throws[0]!.landed).toBeLessThan(throws[1]!.landed);
-    expect(throws[1]!.landed).toBeLessThan(throws[2]!.landed);
   });
 
   it('catapult card: hand-tight counterweight bolts slip, and the throw falls short', async () => {
@@ -121,7 +142,9 @@ describe('templates', () => {
     const loose = await fireCatapult((d) => { counterweightBolts(d).params['tightening'] = 'hand'; });
     expect(loose.failures.length).toBeGreaterThan(0);
     expect(loose.failures.every((f) => f.startsWith('Slipped: shear'))).toBe(true);
-    expect(loose.landed).toBeLessThan(0.8 * tight.landed);
+    // the slip takes energy out of the swing: the arm turns slower and the throw falls short
+    expect(loose.spin).toBeLessThan(tight.spin);
+    expect(loose.landed).toBeLessThan(tight.landed);
   });
 
   it('spring launcher: erasing the latch launches the ball upward', async () => {

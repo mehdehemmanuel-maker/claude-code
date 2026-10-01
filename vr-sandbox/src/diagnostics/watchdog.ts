@@ -3,6 +3,7 @@
 // It sees the world only through what a step reports (each body's pose and velocity, and the step's timing), so it
 // runs the same way in the stress-test web (Spiderweb), in tests, and live in the app. What it flags:
 //   nonfinite  a pose or velocity that is NaN or infinite                                    critical
+//   drift      an intact joint whose two sides came apart (reported by the world)              critical
 //   fell       a body far below the floor: it fell out of the world                          critical
 //   tunnel     a body on the wrong side of a wall it must not pass                           critical
 //   flung      faster than anything in the scene could make it                               critical
@@ -15,7 +16,7 @@
 
 export type Vec3 = [number, number, number];
 
-export type AnomalyKind = 'nonfinite' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak' | 'storage';
+export type AnomalyKind = 'nonfinite' | 'drift' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak' | 'storage';
 
 export interface Anomaly {
   kind: AnomalyKind;
@@ -63,7 +64,8 @@ export interface WatchOptions {
 }
 
 const SEVERITY: Record<AnomalyKind, 'critical' | 'warning'> = {
-  nonfinite: 'critical', fell: 'critical', tunnel: 'critical', flung: 'critical', energy: 'critical', spin: 'critical',
+  nonfinite: 'critical',
+  drift: 'critical', fell: 'critical', tunnel: 'critical', flung: 'critical', energy: 'critical', spin: 'critical',
   jitter: 'warning', restless: 'warning', slow: 'warning', unsteady: 'critical', crash: 'critical', leak: 'critical', storage: 'critical',
 };
 

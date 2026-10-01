@@ -6,7 +6,10 @@
 import type { Material, MaterialCategory } from '../data/materials';
 import { ADHESIVES, FILLERS, fillersFor, weldable } from '../engineering/joining';
 import { defaultsOf, numberOf, sanitizeParams, stringOf, type Params } from '../schema/params';
+import { fastenerFit } from '../engineering/spacing';
+import { chooseNail, chooseScrew } from '../engineering/fasteners';
 import { getConnectorKind, type Derived } from './registry';
+import { driven, type Through } from './through';
 
 /** The Join page's "Best join": the planner picks the process. */
 export const AUTO_JOIN = 'auto';
@@ -18,6 +21,8 @@ export interface JoinGeometry {
   /** The bonded face, m. */
   bondW: number;
   bondL: number;
+  /** Each part's thickness along the joint's normal: the path a screw or nail takes (connectors/through.ts). */
+  through?: Through;
 }
 
 export interface JoinPlan {
@@ -111,10 +116,13 @@ function adhesiveFor(a: Material, b: Material | null): string | null {
 
 /** Fastener and process sized to the stock, as a maker would choose them. null: this process cannot join these. */
 function fit(kind: string, a: Material, b: Material | null, g: JoinGeometry): Params | null {
-  const tA = g.thicknessA;
-  // what the point of a screw or nail bites into: part B, or when anchored, the ground (taken as deep)
-  const tHold = b ? g.thicknessB : 0.1;
-  const tMin = Math.min(tA, b ? g.thicknessB : tA);
+  // a screw or nail goes through the part that is thinner along its path, into the other (or, anchored, the ground,
+  // taken as deep)
+  const way = driven(g.through, !b, g.thicknessA, g.thicknessB);
+  const tA = way.side;
+  const tHold = b ? Math.min(way.hold, 1) : 0.1;
+  // welds, bolts and rivets are sized by the thinner section
+  const tMin = Math.min(g.thicknessA, b ? g.thicknessB : g.thicknessA);
   const face = Math.min(g.bondW, g.bondL);
   const area = g.bondW * g.bondL;
   switch (kind) {
@@ -127,15 +135,19 @@ function fit(kind: string, a: Material, b: Material | null, g: JoinGeometry): Pa
     }
     case 'screwed': {
       const d = tA < 12 * mm ? 3.5 * mm : tA < 25 * mm ? 4 * mm : tA < 50 * mm ? 5 * mm : 6 * mm;
-      // into about two thirds of the holding piece, at least 6 d when it is thick enough, never through it
+      // into about two thirds of the holding piece, at least 6 d when it is thick enough, never through it: the
+      // stocked screw nearest that
       const pen = Math.max(Math.min((2 / 3) * tHold, 14 * d), Math.min(6 * d, 0.9 * tHold));
+      const screw = chooseScrew(d, tA, 0.95 * tHold, pen, Math.min(6 * d, 0.9 * tHold));
+      if (!screw) return null;
       const n = clamp(Math.round(area / (40 * mm) ** 2), 2, 12);
-      return { diameter: d, length: clamp(snap(tA + pen, mm), 8 * mm, 200 * mm), count: n };
+      return { diameter: screw.diameter, length: screw.length, count: n };
     }
     case 'nailed': {
-      const d = 3.3 * mm;
-      const pen = Math.max(Math.min((2 / 3) * tHold, 20 * d), Math.min(10 * d, 0.9 * tHold));
-      return { diameter: d, length: clamp(snap(tA + pen, mm), 20 * mm, 200 * mm), count: clamp(Math.round(area / (30 * mm) ** 2), 3, 24) };
+      const pen = Math.max(Math.min((2 / 3) * tHold, 20 * 3.3 * mm), Math.min(10 * 3.3 * mm, 0.9 * tHold));
+      const nail = chooseNail(tA, tHold, pen, Math.min(10 * 3.3 * mm, 0.9 * tHold));
+      if (!nail) return null;
+      return { diameter: nail.diameter, length: nail.length, count: clamp(Math.round(area / (30 * mm) ** 2), 3, 24) };
     }
     case 'bolted': {
       // by the thinner part, and small enough to keep 1.5 d of edge distance on the face
@@ -161,7 +173,7 @@ function fit(kind: string, a: Material, b: Material | null, g: JoinGeometry): Pa
 
 function derive(kind: string, params: Params, a: Material, b: Material | null, g: JoinGeometry): Derived {
   return getConnectorKind(kind).derive({
-    params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: b ? g.thicknessB : g.thicknessA, distance: 0, cure: 1e12,
+    params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: b ? g.thicknessB : g.thicknessA, through: g.through, distance: 0, cure: 1e12,
   });
 }
 
@@ -174,8 +186,14 @@ function holds(d: Derived) {
 /** The process fitted to the stock and what it would hold (null: it can't join these at all). */
 function build(kind: string, a: Material, b: Material | null, g: JoinGeometry): { params: Params; derived: Derived | null } {
   const k = getConnectorKind(kind);
-  const fitted = fit(kind, a, b, g);
-  const params = sanitizeParams(k.params, { ...defaultsOf(k.params), bondW: g.bondW, bondL: g.bondL, ...(fitted ?? {}) });
+  let fitted = fit(kind, a, b, g);
+  let params = sanitizeParams(k.params, { ...defaultsOf(k.params), bondW: g.bondW, bondL: g.bondL, ...(fitted ?? {}) });
+  // no more fasteners than the face has room for at their edge distances and spacing; none at all if not even one fits
+  const room = fitted ? fastenerFit(kind, params, a, b) : null;
+  if (room && !room.fits) {
+    if (room.max < 1) fitted = null;
+    else params = sanitizeParams(k.params, { ...params, count: room.max });
+  }
   return { params, derived: fitted ? derive(kind, params, a, b, g) : null };
 }
 

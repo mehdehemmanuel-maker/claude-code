@@ -14,6 +14,7 @@ import type { PhysicsEvent } from '../physics/protocol';
 import type { Change } from '../doc/store';
 import type { Connection, Part, Pose, Vec3 } from '../doc/types';
 import { getConnectorKind } from '../connectors/registry';
+import { connectionGeometry } from '../connectors/through';
 import { composePose, relativePose } from '../doc/math';
 import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
 import { effectiveParams, getPartKind } from '../parts/registry';
@@ -332,6 +333,10 @@ export class Ego {
         case 'storage':
           trouble = 'other';
           break;
+        case 'drift':
+          // a joint that came apart while intact is the physics breaking its own rule: hers to report, not to hide
+          trouble = 'other';
+          break;
         default:
           continue; // held-part findings are for the report page, not for her hands
       }
@@ -624,10 +629,10 @@ export class Ego {
   /** A joint's capacities as built (fully cured), worked out once for each joint as it is. */
   private derived(c: Connection) {
     const { a, b, g } = this.geometry(c);
-    const key = `${c.kind}|${JSON.stringify(c.params)}|${a.id}|${b?.id ?? ''}|${g.thicknessA}|${g.thicknessB}|${g.bondW}|${g.bondL}`;
+    const key = `${c.kind}|${JSON.stringify(c.params)}|${a.id}|${b?.id ?? ''}|${g.thicknessA}|${g.thicknessB}|${g.bondW}|${g.bondL}|${JSON.stringify(g.through)}`;
     const hit = this.capacities.get(key);
     if (hit) return hit;
-    const d = getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, distance: 0, cure: 1e12 });
+    const d = getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, through: g.through, distance: 0, cure: 1e12 });
     if (this.capacities.size > 4000) this.capacities.clear();
     this.capacities.set(key, d);
     return d;
@@ -737,16 +742,15 @@ export class Ego {
 
   private geometry(c: Connection) {
     const pa = this.app.doc.parts[c.a.part]!, pb = c.b ? this.app.doc.parts[c.b.part] ?? null : null;
-    const t = (p: Part) => { const k = getPartKind(p.kind); return k.dims(effectiveParams(k, p.params, this.app.materialOf(p))).b; };
     return {
       a: this.app.materialOf(pa), b: pb ? this.app.materialOf(pb) : null,
-      g: { thicknessA: t(pa), thicknessB: pb ? t(pb) : t(pa), bondW: numberOf(c.params, 'bondW', 0.03), bondL: numberOf(c.params, 'bondL', 0.03) },
+      g: connectionGeometry(this.app.doc, c, (p) => this.app.materialOf(p)),
     };
   }
 
   private capacity(c: Connection, mode: string) {
     const { a, b, g } = this.geometry(c);
-    const d = getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, distance: 0, cure: 1e12 });
+    const d = getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, through: g.through, distance: 0, cure: 1e12 });
     return (d.capacities as unknown as Record<string, number>)[mode] ?? null;
   }
 

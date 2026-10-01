@@ -57,7 +57,9 @@ export type PhysicsEvent =
   | { type: 'fracture'; part: string; bond: number; mode: string; load: number; capacity: number; point: Vec3; note: string; segments: Pose[] }
   | { type: 'yield'; part: string; bond: number; point: Vec3; note: string }
   /** A body's state stopped being a number; it was put back where it last was, at rest (fault containment). */
-  | { type: 'fault'; part: string; body: string; note: string };
+  | { type: 'fault'; part: string; body: string; note: string }
+  /** An intact joint whose two sides have come apart (no real joint does): a defect, for the watchdog. */
+  | { type: 'drift'; conn: string; gap: number; point: Vec3; note: string };
 
 export interface ConnectionLoad {
   id: string;

@@ -6,6 +6,7 @@ import { fixesFor } from '../../src/assistant/fixes';
 import { getConnectorKind } from '../../src/connectors/registry';
 import { getMaterial } from '../../src/data/materials';
 import { planJoin } from '../../src/connectors/plan';
+import { fastenerFit } from '../../src/engineering/spacing';
 
 /** A host that records what Forge asked for. */
 function recorder() {
@@ -116,7 +117,25 @@ describe('fixes', () => {
     const fixes = fixesFor({ kind: 'screwed', params: plan.params, mode: 'bending', load: cap * 1.1 }, fir, fir, g);
     expect(fixes.length).toBeGreaterThan(0);
     for (const f of fixes) expect(f.capacity).toBeGreaterThan(1.5 * cap * 1.1);
-    expect(fixes[0]!.kind).toBe('screwed'); // more screws before another process
+    // every fix can be built: its fasteners fit the 89 x 38 mm face at their edge distances and spacing (here more
+    // screws don't, so the smallest fix that holds is another process)
+    for (const f of fixes) expect(fastenerFit(f.kind, { ...f.params, bondW: g.bondW, bondL: g.bondL }, fir, fir)?.fits ?? true).toBe(true);
+    // on a face with room for them, more screws come before another process
+    const wide = { ...g, bondL: 0.089 };
+    const plan2 = planJoin('screwed', fir, fir, wide);
+    const cap2 = getConnectorKind('screwed').derive({ params: plan2.params, matA: fir, matB: fir, thicknessA: 0.1, thicknessB: 0.038, distance: 0, cure: 1e12 }).capacities.bending;
+    expect(fixesFor({ kind: 'screwed', params: plan2.params, mode: 'bending', load: cap2 * 1.1 }, fir, fir, wide)[0]!.kind).toBe('screwed');
+  });
+
+  it('fasteners need room: edge distance and spacing decide how many fit a face', () => {
+    // 5 mm screws in timber: 7.5 mm from the edges, 20 mm apart (NDS); a 38 x 38 mm leg end takes 2 x 2
+    expect(fastenerFit('screwed', { diameter: 0.005, count: 4, bondW: 0.038, bondL: 0.038 }, fir, fir)).toMatchObject({ fits: true, max: 4 });
+    expect(fastenerFit('screwed', { diameter: 0.0063, count: 4, bondW: 0.038, bondL: 0.038 }, fir, fir)).toMatchObject({ fits: false, max: 1 });
+    // M10 bolts in steel: 11 mm hole, 13.2 mm from the edges, 24.2 mm apart (EN 1993-1-8)
+    const steel = getMaterial('steel.a36');
+    expect(fastenerFit('bolted', { size: 'M10', count: 2, bondW: 0.06, bondL: 0.03 }, steel, steel)).toMatchObject({ fits: true, max: 2 });
+    expect(fastenerFit('bolted', { size: 'M10', count: 2, bondW: 0.05, bondL: 0.03 }, steel, steel)).toMatchObject({ fits: false, max: 1 }); // 2 x 13.2 + 24.2 = 50.6 mm
+    expect(fastenerFit('weld', {}, steel, steel)).toBeNull();
   });
 
   it('a joint that could never hold (a weld on wood) is fixed by one that can', () => {

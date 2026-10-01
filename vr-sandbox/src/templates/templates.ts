@@ -57,7 +57,7 @@ export const TEMPLATES: Template[] = [
     id: 'catapult',
     name: 'Counterweight catapult',
     blurb: 'An 80 kg counterweight on a 2 m Douglas-fir arm, on a steel axle in ball bearings, held by a steel latch wire.',
-    tryThis: ['Erase the latch wire to fire.', 'Change the counterweight mass (up to 150 kg fits the frame) and watch the range change.', 'Loosen the counterweight bolts to hand tight and fire again: they slip, and the throw falls short.'],
+    tryThis: ['Erase the latch wire to fire.', 'Change the counterweight mass (up to 150 kg fits the frame): the arm swings faster, and the range rises, peaks near 100 kg and falls (the ball leaves the cup earlier).', 'Loosen the counterweight bolts to hand tight and fire again: they slip, and the throw falls short.'],
     build: () => {
       const b = new BuildBuilder('Counterweight catapult', 202);
       // The arm swings freely after the throw (there is no stop bar), so every part of it must clear the floor
@@ -95,25 +95,30 @@ export const TEMPLATES: Template[] = [
   {
     id: 'shelf',
     name: 'Wall shelf load test',
-    blurb: 'Plywood shelf on 2×2 brackets screwed into a fir wall. Screw withdrawal from the Wood Handbook.',
+    blurb: 'Plywood shelf on two L brackets of 2×2 fir screwed to a fir wall. Screw withdrawal from the Wood Handbook.',
     tryThis: ['Unfreeze the weights one by one.', 'Turn on the stress overlay (T) and watch the bracket screws.', 'Use fewer or thinner screws and try again.'],
     build: () => {
       const b = new BuildBuilder('Wall shelf load test', 303);
       const wall = b.part('block', P(0, 0.8, -1), { frozen: true, material: 'wood.douglas-fir', params: { x: 1.2, y: 1.6, z: 0.2 }, name: 'Fir wall panel' });
-      const brackets = [-0.35, 0.35].map((x) => {
-        const br = b.part('lumber', P(x, 1.0, -0.9 + 0.15, Y90), { params: { size: '2x2', length: 0.3 }, name: 'Bracket' });
-        b.joint('screwed', br, wall, along([x, 1.0, -0.9], [0, 0, -1]), { diameter: 0.005, length: 0.08, count: 2, bondW: 0.038, bondL: 0.038 });
-        return br;
+      // each bracket is an L: a 2x2 post flat against the wall, screwed through its 38 mm into the wall, and a 2x2 arm
+      // out from it, screwed through the post into the arm's end grain (made up on the bench, then hung)
+      const face = -0.9, post = 0.038, armZ = face + post + 0.15;
+      const arms = [-0.35, 0.35].map((x) => {
+        const upright = b.part('lumber', P(x, 0.87, face + post / 2, Z90), { params: { size: '2x2', length: 0.3 }, name: 'Bracket post' });
+        b.joint('screwed', upright, wall, along([x, 0.87, face], [0, 0, -1]), { diameter: 0.005, length: 0.08, count: 2, bondW: 0.038, bondL: 0.3 });
+        const arm = b.part('lumber', P(x, 1.0, armZ, Y90), { params: { size: '2x2', length: 0.3 }, name: 'Bracket arm' });
+        b.joint('screwed', upright, arm, along([x, 1.0, face + post], [0, 0, 1]), { diameter: 0.005, length: 0.08, count: 2, bondW: 0.038, bondL: 0.038 });
+        return arm;
       });
-      const shelf = b.part('plate', P(0, 1.019 + 0.009, -0.75), { material: 'wood.birch-plywood', params: { length: 0.9, width: 0.3, thickness: 0.018 }, name: 'Shelf' });
-      for (const [i, br] of brackets.entries()) {
+      const shelf = b.part('plate', P(0, 1.019 + 0.009, armZ), { material: 'wood.birch-plywood', params: { length: 0.9, width: 0.3, thickness: 0.018 }, name: 'Shelf' });
+      for (const [i, arm] of arms.entries()) {
         const x = i === 0 ? -0.35 : 0.35;
-        b.joint('screwed', shelf, br, along([x, 1.019, -0.75], [0, -1, 0]), { diameter: 0.004, length: 0.04, count: 2, bondW: 0.038, bondL: 0.3 });
+        b.joint('screwed', shelf, arm, along([x, 1.019, armZ], [0, -1, 0]), { diameter: 0.004, length: 0.045, count: 2, bondW: 0.038, bondL: 0.3 });
       }
       const w = (kg: number) => Math.cbrt((4 * kg) / (Math.PI * 7200));
-      b.part('weight', P(0.2, 1.037 + w(5) / 2, -0.75), { params: { mass: 5 } });
-      b.part('weight', P(-0.2, 1.5, -0.75), { frozen: true, params: { mass: 20 }, name: '20 kg (unfreeze to drop)' });
-      b.part('weight', P(0.05, 1.9, -0.75), { frozen: true, params: { mass: 60 }, name: '60 kg (unfreeze to drop)' });
+      b.part('weight', P(0.2, 1.037 + w(5) / 2, armZ), { params: { mass: 5 } });
+      b.part('weight', P(-0.2, 1.5, armZ), { frozen: true, params: { mass: 20 }, name: '20 kg (unfreeze to drop)' });
+      b.part('weight', P(0.05, 1.9, armZ), { frozen: true, params: { mass: 60 }, name: '60 kg (unfreeze to drop)' });
       return b.doc;
     },
   },
@@ -124,7 +129,7 @@ export const TEMPLATES: Template[] = [
     tryThis: ['Drag magnets toward each other; flip one over.', 'Magnets grab the steel plate but ignore the aluminium one.', 'Compare the two swinging copper discs.'],
     build: () => {
       const b = new BuildBuilder('Magnet bench', 404);
-      b.part('plate', P(0, 0.8, 0), { frozen: true, material: 'wood.birch-plywood', params: { length: 1.4, width: 0.7, thickness: 0.02 }, name: 'Bench top' });
+      b.part('plate', P(0, 0.81 - 0.009, 0), { frozen: true, material: 'wood.birch-plywood', params: { length: 1.4, width: 0.7, thickness: 0.018 }, name: 'Bench top' });
       b.part('plate', P(-0.5, 0.813, 0.1), { material: 'steel.a36', params: { length: 0.3, width: 0.2, thickness: 0.006 }, name: 'Steel plate' });
       b.part('plate', P(0.5, 0.813, 0.1), { material: 'aluminum.6061-t6', params: { length: 0.3, width: 0.2, thickness: 0.006 }, name: 'Aluminium plate' });
       for (const x of [-0.15, 0, 0.15]) for (const z of [0, 0.2]) b.part('magnet.disc', P(x, 0.815, z), { params: { diameter: 0.02, thickness: 0.01 } });
@@ -144,13 +149,16 @@ export const TEMPLATES: Template[] = [
   {
     id: 'spring-launcher',
     name: 'Spring launcher',
-    blurb: 'A 5 mm music-wire spring compressed 50 mm under a guided plate, held by a latch wire.',
+    blurb: 'A 5 mm music-wire spring compressed 50 mm under a plate that slides on a guide rod, held by a latch wire.',
     tryThis: ['Erase the latch wire.', 'Change the wire diameter or coil count and read the new rate and surge frequency.', 'Compress it further until the spring overstresses.'],
     build: () => {
       const b = new BuildBuilder('Spring launcher', 505);
       const base = b.part('plate', P(0, 0.01, 0), { frozen: true, material: 'steel.a36', params: { length: 0.3, width: 0.3, thickness: 0.02 }, name: 'Base' });
       const plate = b.part('plate', P(0, 0.175, 0), { material: 'aluminum.6061-t6', params: { length: 0.2, width: 0.2, thickness: 0.01 }, name: 'Launch plate' });
-      b.joint('slider', plate, base, along([0, 0.02, 0], [0, 1, 0]), { limited: true, min: -0.3, max: 0.1, friction: 2 });
+      // the plate rides on a guide rod welded upright to the base, through a bushing in the plate
+      const guide = b.part('rod.round', P(-0.08, 0.02 + 0.15, -0.08), { material: 'steel.1018-cd', params: { length: 0.3, diameter: 0.016 }, name: 'Guide rod' });
+      b.joint('weld', guide, base, along([-0.08, 0.02, -0.08], [0, -1, 0]), { process: 'mig', filler: 'E70', leg: 0.004, length: 0, quality: 0.95 });
+      b.joint('slider', plate, guide, along([-0.08, 0.175, -0.08], [0, 1, 0]), { limited: true, min: -0.3, max: 0.1, friction: 2 });
       b.link('spring', base, [0, 0.02, 0], plate, [0, 0.17, 0], { wire: 'music-wire-a228', d: 0.005, D: 0.04, Na: 8, L0: 0.2, zeta: 0.02 });
       b.link('rope', base, [0.08, 0.02, 0.08], plate, [0.08, 0.17, 0.08], { grade: 'steel-wire-6x19', diameter: 0.003 });
       b.part('sphere', P(0, 0.18 + 0.041, 0), { material: 'wood.hard-maple', params: { diameter: 0.08 }, name: 'Ball' });
@@ -170,7 +178,7 @@ export const TEMPLATES: Template[] = [
         const batten = b.part('lumber', P(x, 1.0 + 0.019 + 0.019, 0, Y90), { material: 'wood.southern-pine', params: { size: '2x2', length: 0.5 }, name: 'Batten' });
         for (const [i, plank] of planks.entries()) {
           const z = [-0.18, -0.09, 0, 0.09, 0.18][i]!;
-          b.joint('screwed', batten, plank, along([x, 1.019, z], [0, -1, 0]), { diameter: 0.004, length: 0.05, count: 1, bondW: 0.038, bondL: 0.089 });
+          b.joint('screwed', batten, plank, along([x, 1.019, z], [0, -1, 0]), { diameter: 0.004, length: 0.07, count: 1, bondW: 0.038, bondL: 0.089 });
         }
       }
       b.part('block', P(cx, 1.3, 1.3), { material: 'steel.a36', params: { x: 0.15, y: 0.15, z: 0.15 }, name: 'Steel block' });
@@ -182,30 +190,46 @@ export const TEMPLATES: Template[] = [
   {
     id: 'go-kart',
     name: 'Go-kart',
-    blurb: 'Aluminium chassis, two 24 V gearmotors on the rear wheels, servo steering, rubber tyres.',
+    blurb: 'Aluminium chassis; a solid rear axle in two hangers, each with a 24 V gearmotor; servo-steered beam axle; rubber tyres.',
     tryThis: ['Drive with the arrow keys (or the left thumbstick in VR).', 'Change gear ratio or voltage and feel the torque-speed trade-off.', 'Swap the tyres to PTFE.'],
     build: () => {
       const b = new BuildBuilder('Go-kart', 707);
       const wheelQ = axisAngle([1, 0, 0], Math.PI / 2);
+      const Zq = along([0, 0, 0], [0, 0, 1]).q; // a rod's length (local y) along world z
       // 0.4 m wide: the pivoting beam axle swings the front wheels inward (z = 0.36 cos(lock)), so they need
       // ~4 cm of clearance to the chassis edge at full lock or they jam against it.
       const chassis = b.part('plate', P(0, 0.2, 0), { material: 'aluminum.6061-t6', params: { length: 1.2, width: 0.4, thickness: 0.02 }, name: 'Chassis' });
-      const motor = { V: 24, Kv: 400, R: 0.2, ratio: 12, efficiency: 0.85, channel: 'throttle', reverse: true, pin: 0.02 };
-      for (const z of [-0.36, 0.36]) {
-        const w = b.part('wheel', P(-0.5, 0.125, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Rear wheel' });
-        b.joint('motor', chassis, w, along([-0.5, 0.125, z], [0, 0, 1]), motor);
+      const under = 0.19, hub = 0.125;
+      // rear: a solid 25 mm axle turning in two pillow-block hangers bolted under the chassis; a 24 V gearmotor in
+      // each hanger drives it, and the wheels are bolted to it at their hubs
+      const axle = b.part('rod.round', { p: [-0.5, hub, 0], q: Zq }, { material: 'steel.1018-cd', params: { length: 0.78, diameter: 0.025 }, name: 'Rear axle' });
+      const motor = { V: 24, Kv: 400, R: 0.2, ratio: 12, efficiency: 0.85, channel: 'throttle', reverse: true, pin: 0.025 };
+      for (const z of [-0.15, 0.15]) {
+        const hanger = b.part('block', P(-0.5, (hub - 0.025 + under) / 2, z), { material: 'steel.a36', params: { x: 0.06, y: under - (hub - 0.025), z: 0.04 }, name: 'Axle hanger' });
+        b.joint('bolted', hanger, chassis, along([-0.5, under, z], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: 0.04, bondL: 0.06 });
+        b.joint('motor', hanger, axle, along([-0.5, hub, z], [0, 0, 1]), motor);
       }
-      const bar = b.part('rod.square', P(0.5, 0.125, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.62, side: 0.05 }, name: 'Steering beam' });
-      b.joint('servo', chassis, bar, along([0.5, 0.125, 0], [0, 1, 0]), { maxTorque: 80, range: 28 * deg, channel: 'steer', pin: 0.02 });
       for (const z of [-0.36, 0.36]) {
-        const w = b.part('wheel', P(0.5, 0.125, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Front wheel' });
-        b.joint('bearing', bar, w, along([0.5, 0.125, z], [0, 0, 1]), { bore: 0.02, staticRating: 8000 });
+        const w = b.part('wheel', P(-0.5, hub, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Rear wheel' });
+        b.joint('bolted', w, axle, along([-0.5, hub, z], [0, 0, 1]), { size: 'M6', class: '8.8', count: 4, bondW: 0.05, bondL: 0.05 });
       }
-      const seat = b.part('block', P(-0.2, 0.21 + 0.15, 0), { material: 'wood.birch-plywood', params: { x: 0.35, y: 0.3, z: 0.34 }, name: 'Seat' });
+      // front: a steering beam at hub height, turned about a vertical kingpin by the servo in a block bolted under the
+      // chassis; its ends are the stub axles the front wheels spin on
+      const kingpin = b.part('block', P(0.5, (under + hub + 0.025) / 2, 0), { material: 'steel.a36', params: { x: 0.06, y: under - (hub + 0.025), z: 0.06 }, name: 'Kingpin block' });
+      b.joint('bolted', kingpin, chassis, along([0.5, under, 0], [0, 1, 0]), { size: 'M8', class: '8.8', count: 4, bondW: 0.06, bondL: 0.06 });
+      const bar = b.part('rod.square', P(0.5, hub, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.72, side: 0.05 }, name: 'Steering beam' });
+      b.joint('servo', kingpin, bar, along([0.5, hub + 0.025, 0], [0, 1, 0]), { maxTorque: 80, range: 28 * deg, channel: 'steer', pin: 0.02 });
+      for (const z of [-0.36, 0.36]) {
+        const w = b.part('wheel', P(0.5, hub, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Front wheel' });
+        b.joint('bearing', bar, w, along([0.5, hub, z], [0, 0, 1]), { bore: 0.02, staticRating: 8000 });
+      }
+      // the seat: an 18 mm plywood board bolted through to the chassis; the ballast bolted up through it into tapped
+      // holes in the cast iron
+      const seat = b.part('plate', P(-0.2, 0.21 + 0.009, 0), { material: 'wood.birch-plywood', params: { length: 0.35, width: 0.34, thickness: 0.018 }, name: 'Seat' });
       b.joint('bolted', seat, chassis, along([-0.2, 0.21, 0], [0, -1, 0]), { size: 'M8', class: '8.8', count: 4, bondW: 0.34, bondL: 0.35 });
       const dD = Math.cbrt((4 * 50) / (Math.PI * 7200));
-      const driver = b.part('weight', P(-0.2, 0.51 + dD / 2, 0), { params: { mass: 50 }, name: 'Driver ballast (50 kg)' });
-      b.joint('bolted', driver, seat, along([-0.2, 0.51, 0], [0, -1, 0]), { size: 'M10', class: '8.8', count: 2, bondW: 0.2, bondL: 0.2 });
+      const driver = b.part('weight', P(-0.2, 0.228 + dD / 2, 0), { params: { mass: 50 }, name: 'Driver ballast (50 kg)' });
+      b.joint('bolted', driver, seat, along([-0.2, 0.228, 0], [0, -1, 0]), { size: 'M10', class: '8.8', count: 2, bondW: 0.2, bondL: 0.2 });
       return b.doc;
     },
   },

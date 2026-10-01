@@ -225,8 +225,10 @@ describe('fasteners fail at their real capacities', () => {
     // bolt axis horizontal (+Y of the frame along world +X) so the plate's weight plus a load is pure shear
     const joint = r.connect('bolted', { part: plate, frame: at(0, 0, 0, axisAngle([0, 0, 1], -Math.PI / 2)) }, null, { size: 'M8', class: '8.8', tightening: 'hand' });
     const slip = r.world.connectionDerived(joint.id)!.slip!.shear;
-    const weight = r.part('weight', at(0, 0.6, 0), { params: { mass: (1.6 * slip) / g } });
-    r.connect('fixed', { part: plate, frame: at(0, -0.005, 0, axisAngle([1, 0, 0], Math.PI)) }, { part: weight, frame: at(0, 0.6 - 0.995 + 0.3, 0) });
+    // the weight hung directly from the plate's underside, the joint where they touch
+    const mass = (1.6 * slip) / g, D = Math.cbrt((4 * mass) / (Math.PI * 7200));
+    const weight = r.part('weight', at(0, 0.995 - D / 2, 0), { params: { mass } });
+    r.connect('fixed', { part: plate, frame: at(0, -0.005, 0, axisAngle([1, 0, 0], Math.PI)) }, { part: weight, frame: at(0, D / 2, 0, axisAngle([1, 0, 0], Math.PI)) });
     r.run(1);
     expect(r.world.connectionStatus(joint.id)).toBe('slipped');
     r.done();
@@ -251,8 +253,9 @@ describe('fasteners fail at their real capacities', () => {
     const plate = s2.part('plate', at(0, 1, 0), { material: 'steel.a36', params: { length: 0.1, width: 0.1, thickness: 0.01 } });
     const joint = s2.connect('bolted', { part: plate, frame: at(0, 0, 0, axisAngle([0, 0, 1], -Math.PI / 2)) }, null, { size: 'M8', class: '8.8', tightening: 'hand' });
     const slip = s2.world.connectionDerived(joint.id)!.slip!.shear;
-    const weight = s2.part('weight', at(0, 0.6, 0), { params: { mass: (1.6 * slip) / g } });
-    s2.connect('fixed', { part: plate, frame: at(0, -0.005, 0, axisAngle([1, 0, 0], Math.PI)) }, { part: weight, frame: at(0, 0.6 - 0.995 + 0.3, 0) });
+    const mass = (1.6 * slip) / g, D = Math.cbrt((4 * mass) / (Math.PI * 7200));
+    const weight = s2.part('weight', at(0, 0.995 - D / 2, 0), { params: { mass } });
+    s2.connect('fixed', { part: plate, frame: at(0, -0.005, 0, axisAngle([1, 0, 0], Math.PI)) }, { part: weight, frame: at(0, D / 2, 0, axisAngle([1, 0, 0], Math.PI)) });
     let slipNote = '';
     for (let i = 0; i < 90 && !slipNote; i++) for (const e of s2.world.step().events) if (e.type === 'slip') slipNote = e.note;
     s2.done();
