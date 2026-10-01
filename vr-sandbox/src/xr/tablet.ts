@@ -216,8 +216,9 @@ export class Tablet {
     const app = this.app;
     switch (this.page) {
       case 'tools': {
-        this.grid(this.tools.tools, 20, y0, 3, (W - 40 - 16) / 3, 112, 8, (t, x, y, i) =>
-          this.btn(`tool-${t.id}`, x, y, (W - 40 - 16) / 3, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
+        const cols = Math.ceil(this.tools.tools.length / 3), cw = (W - 40 - (cols - 1) * 8) / cols;
+        this.grid(this.tools.tools, 20, y0, cols, cw, 112, 8, (t, x, y, i) =>
+          this.btn(`tool-${t.id}`, x, y, cw, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
         this.drawBuildRow(y0 + 3 * 120 + 6);
         {
           const s = app.settings, bw = (W - 40 - 8) / 2, ys = y0 + 3 * 120 + 6 + 72;
@@ -266,6 +267,7 @@ export class Tablet {
       case 'ego':
         if (this.typing) this.drawForge(y0);
         else if (this.reportsView) this.drawReports(y0);
+        else if (this.lifeView) this.drawLife(y0);
         else this.drawEgo(y0);
         break;
     }
@@ -679,7 +681,7 @@ export class Tablet {
     else this.btn('voice', 20 + (bw + 8), by, bw, 60, ego.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ego.voice.enabled = !ego.voice.enabled; }, { on: ego.voice.enabled });
     const unsent = ego.reports.unsent.length;
     this.btn('reports', 20 + 2 * (bw + 8), by, bw, 60, '📨 Reports', () => { this.reportsView = true; }, { sub: unsent ? `${unsent} for Claude` : 'to Claude', tone: unsent ? 'accent' : undefined });
-    this.btn('adv-clear', 20 + 3 * (bw + 8), by, bw, 60, 'Clear advice', () => { ego.advice = []; this.app.notify(); });
+    this.btn('life', 20 + 3 * (bw + 8), by, bw, 60, '📒 Life', () => { this.lifeView = true; }, { sub: 'memory · reminders · money' });
   }
 
   private listening = false;
@@ -697,6 +699,39 @@ export class Tablet {
   }
 
   private reportsView = false;
+  private lifeView = false;
+
+  /** What Ego keeps for you: what you told her, what's coming up, and the week's money. All on this headset. */
+  private drawLife(y0: number) {
+    const life = this.app.ego!.life;
+    const money = (x: number) => `$${x.toFixed(x % 1 ? 2 : 0)}`;
+    this.text('📒 What I keep for you (only on this headset)', 24, y0 + 28, 24, '#8fd3ff', 'left', '700');
+    let y = y0 + 70;
+    this.text('Remembered', 24, y, 20, '#9aa4af', 'left', '600');
+    const facts = life.facts.slice(-5).reverse();
+    if (!facts.length) this.text('Nothing yet: say "remember my locker code is 4471".', 24, y + 30, 19, '#6f7883');
+    facts.forEach((f, i) => this.text(`• ${f.said}`, 24, y + 30 + i * 28, 20, '#e8ecf1'));
+    y += 30 + Math.max(1, facts.length) * 28 + 16;
+    this.text('Coming up', 24, y, 20, '#9aa4af', 'left', '600');
+    const next = life.reminders.filter((r) => !r.done).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3);
+    if (!next.length) this.text('No reminders: say "remind me to stretch in 30 minutes".', 24, y + 30, 19, '#6f7883');
+    next.forEach((r, i) => this.text(`⏰ ${new Date(r.due).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}: ${r.what}`, 24, y + 30 + i * 28, 20, '#e8ecf1'));
+    y += 30 + Math.max(1, next.length) * 28 + 16;
+    const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - ((from.getDay() + 6) % 7));
+    const week = life.summary(from);
+    this.text(`This week: ${money(week.spent)} out, ${money(week.earned)} in`, 24, y, 20, '#9aa4af', 'left', '600');
+    const cats = Object.entries(week.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    if (!cats.length) this.text('Say what you spend: "I spent $12 on lunch".', 24, y + 30, 19, '#6f7883');
+    cats.forEach(([c, v], i) => {
+      const over = week.over.find((o) => o.category === c);
+      this.text(`${c}: ${money(v)}${over ? `  (over budget ${money(over.budget)})` : life.budgets[c] ? `  of ${money(life.budgets[c]!)}` : ''}`, 24 + (i % 2) * 480, y + 30 + Math.floor(i / 2) * 28, 20, over ? '#ffb3aa' : '#e8ecf1');
+    });
+    const by = CH - 76;
+    const bw = (W - 40 - 8) / 2;
+    if (Voice.canListen) this.btn('life-talk', 20, by, bw, 60, this.listening ? '🎙 Listening…' : '🎙 Tell her', () => this.talk(), { on: this.listening, tone: 'accent' });
+    else this.btn('life-type', 20, by, bw, 60, '⌨ Tell her', () => { this.lifeView = false; this.typing = true; });
+    this.btn('life-back', 20 + bw + 8, by, bw, 60, '← Ego', () => { this.lifeView = false; });
+  }
 
   /** What you've told Ego is wrong, and sending it to Claude. */
   private drawReports(y0: number) {

@@ -80,6 +80,9 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
   - Magnets use the Gilbert charge model: magnet–magnet forces and torques, plus an image method against steel. Austenitic stainless and aluminium stay non-magnetic.
   - Buoyancy uses the real submerged volume.
   - Quadratic air drag.
+- **The drawing wall:** draw on a wall with the controller and say what it is. Ego reads each stroke as a line,
+  circle, rectangle or triangle by least-squares fitting, makes it the part you mean at the size drawn (or said), and
+  "build it" makes it real. See [docs/EGO.md](docs/EGO.md).
 - **Energy and heat:** the world keeps books on every joule. Motion, height and stretched springs hold it; hands,
   motors, magnets and water put it in or take it out. Friction, impacts, bending past yield, air drag, induced
   currents and rubber's hysteresis turn it to heat, which goes into the parts by Blok's partition. Each part warms by

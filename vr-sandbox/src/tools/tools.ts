@@ -15,6 +15,7 @@ import { defaultsOf, numberOf, sanitizeParams, type Params } from '../schema/par
 import { buildVisual } from '../render/geometry';
 import { ghostMaterial } from '../render/materials';
 import type { Pick } from '../render/view';
+import { DrawTool } from './draw';
 
 export interface Ray {
   origin: THREE.Vector3;
@@ -66,6 +67,7 @@ export class ToolManager {
 
   constructor(readonly app: App) {
     this.grab = new GrabTool(app);
+    this.draw = new DrawTool(app);
     this.tools = [
       this.grab,
       new PlaceTool(app),
@@ -76,8 +78,12 @@ export class ToolManager {
       new PokeTool(app),
       new InspectTool(app),
       new MeasureTool(app),
+      this.draw,
     ];
   }
+
+  /** The interpretation wall's tool (draw and say what it is). */
+  readonly draw: DrawTool;
 
   get tool() {
     return this.tools[this.active]!;

@@ -132,7 +132,8 @@ export class Life {
     const spent = inRange.filter((m) => m.kind === 'spent'), earned = inRange.filter((m) => m.kind === 'earned');
     const byCategory: Record<string, number> = {};
     for (const m of spent) byCategory[m.category] = (byCategory[m.category] ?? 0) + m.amount;
-    const weeks = Math.max(1 / 7, (to.getTime() - from.getTime()) / (7 * 864e5));
+    // a week's budget is for the week, however far into it you are; longer spans count their weeks
+    const weeks = Math.max(1, Math.round((to.getTime() - from.getTime()) / (7 * 864e5)));
     const over = Object.entries(this.budgets).filter(([c, b]) => (byCategory[c] ?? 0) > b * weeks).map(([c, b]) => ({ category: c, spent: byCategory[c] ?? 0, budget: b * weeks }));
     return { spent: sum(spent), earned: sum(earned), byCategory, over };
   }
