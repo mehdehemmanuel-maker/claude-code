@@ -99,10 +99,21 @@ build:
 | A pose or speed stopped being a number | Puts the part back where you built it |
 | A part flung faster than anything could throw it | Stops it where it is |
 | A part shaking in place | Settles it |
+| The world running slow (a frame over budget, or one subsystem taking over 50 ms at once) | Names what took the time (her own foresight, the physics and which part of it, the tablet...) and writes it up |
+| A save the browser didn't keep, or storage over 70% full | Says why, plainly, and writes it up; "it won't save" makes her save again and say how it went |
 
 She tells you what she did and writes each one up for Claude with the build as it was (at most five a session: past
 that, one flaw is already written up many times over). If you complain about it afterwards, she tells you she
 already put it right.
+
+## Showing her
+
+Tap 👁 at the end of the tablet's tabs, point at something and pull the trigger, or just say "Ego, look at this".
+Her light flies over to it. She says what she sees there, from the world's own state: what it is and what it's made
+of, its mass, whether it's still or moving and how fast, what holds it and how hard each joint is working, how warm
+it is, and anything the watchdog saw on it. She keeps watching it for five seconds. Then tell her what's wrong, with
+a tap (shaking, went through, flew off, came apart, not realistic, laggy, won't save) or in your own words. The
+report carries what she saw and what it did while she watched.
 
 ## Complaints and reports
 

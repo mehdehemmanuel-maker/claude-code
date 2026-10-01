@@ -1,5 +1,6 @@
 // Messages between the app and the physics world (in a Web Worker or inline). Plain data only.
 
+import type { Energies } from './energy';
 import type { Material } from '../data/materials';
 import type { Connection, Part, PartDamage, Pose, SimSettings, Vec3 } from '../doc/types';
 
@@ -84,5 +85,13 @@ export interface StepResult {
   /** Per breakable part: utilisation of each bond between its segments (-1 = broken). */
   bonds: Record<string, number[]>;
   cure: Record<string, number>;
-  stats: { stepMs: number; bodies: number; awake: number; substeps: number; magnetPairs: number; ticks: number };
+  stats: {
+    stepMs: number; bodies: number; awake: number; substeps: number; magnetPairs: number; ticks: number;
+    /** Where the tick's time went, ms, by section. */
+    sections?: Record<string, number>;
+  };
+  /** The energy ledger since the scene began: what is held, the work put in and the heat made, by kind. */
+  energy?: Energies;
+  /** Heat each part took (J) over the ticks this result covers. */
+  heat?: Record<string, number>;
 }

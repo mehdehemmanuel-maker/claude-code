@@ -14,6 +14,7 @@ export type Intent =
   | { do: 'skill'; which: string }
   | { do: 'complain'; words: string }
   | { do: 'design'; spec: DesignSpec; material?: string }
+  | { do: 'show' }
   | { do: 'level' }
   | { do: 'command'; command: 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'pause' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero' };
 
@@ -54,6 +55,8 @@ export function interpret(line: string): Intent | null {
     [/^(earth|normal) gravity$|^gravity (earth|normal)$/, 'gravity earth'], [/^moon gravity$|^gravity moon$/, 'gravity moon'], [/^(zero|no) gravity$|^gravity (zero|off)$/, 'gravity zero'],
   ];
   for (const [re, command] of commands) if (re.test(t)) return { do: 'command', command };
+  // "look at this", "see this?", "watch this", "look here": she looks where you point
+  if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
   const d = designOf(t);
   if (d) return d;
   if ((m = /^(?:place|add|spawn|give me|put|make|build|drop)(?: me)? (?:(\w+) )?(.+?)(?: here| in front( of me)?)?$/.exec(t))) {

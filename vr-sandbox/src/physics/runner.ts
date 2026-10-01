@@ -62,7 +62,7 @@ export class Runner {
     }
     // held parts move with a hand, not on their own
     this.watchdog.opts.held = new Set(this.world.heldBodies());
-    this.watchdog.observe(bodies, r.stats.stepMs);
+    this.watchdog.observe(bodies, r.stats.stepMs, r.stats.sections, r.stats.substeps, r.stats.magnetPairs);
   }
 
   /** Advance simulated time by dt seconds (already scaled by the time-scale). At most maxTicks ticks run. */
@@ -80,10 +80,12 @@ export class Runner {
     const events: PhysicsEvent[] = this.pendingEvents;
     this.pendingEvents = [];
     let stepMs = 0;
+    const heat: Record<string, number> = {};
     for (let i = 0; i < ticks; i++) {
       if (i === ticks - 1 && this.last) prev = this.last.transforms;
       const r = this.world.step();
       stepMs += r.stats.stepMs;
+      for (const [id, q] of Object.entries(r.heat ?? {})) heat[id] = (heat[id] ?? 0) + q;
       if (r.slots) { this.slots = r.slots; this.info.clear(); }
       events.push(...r.events);
       this.last = r;
@@ -107,6 +109,7 @@ export class Runner {
       alpha: singleStep ? 1 : Math.min(1, this.acc / TICK),
       ticksRun: ticks,
       stats: { ...cur.stats, stepMs },
+      heat: ticks > 0 ? heat : {},
       watchdog: [],
     };
     // a contained fault (world.ts, F3) is still a defect: the world put the body back, the watch must still see it

@@ -15,7 +15,7 @@
 
 export type Vec3 = [number, number, number];
 
-export type AnomalyKind = 'nonfinite' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak';
+export type AnomalyKind = 'nonfinite' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak' | 'storage';
 
 export interface Anomaly {
   kind: AnomalyKind;
@@ -64,7 +64,7 @@ export interface WatchOptions {
 
 const SEVERITY: Record<AnomalyKind, 'critical' | 'warning'> = {
   nonfinite: 'critical', fell: 'critical', tunnel: 'critical', flung: 'critical', energy: 'critical', spin: 'critical',
-  jitter: 'warning', restless: 'warning', slow: 'warning', unsteady: 'critical', crash: 'critical', leak: 'critical',
+  jitter: 'warning', restless: 'warning', slow: 'warning', unsteady: 'critical', crash: 'critical', leak: 'critical', storage: 'critical',
 };
 
 const WINDOW = 30;
@@ -76,6 +76,9 @@ export class Watchdog {
   private eMax = -Infinity;
   private ticks = 0;
   private stepMs: number[] = [];
+  private sectionMs = new Map<string, number>();
+  private substepSum = 0;
+  private pairSum = 0;
   private spinTicks = new Map<string, number>();
   readonly opts: WatchOptions;
 
@@ -94,16 +97,26 @@ export class Watchdog {
   }
 
   /** One tick's output. */
-  observe(bodies: BodyState[], stepMs = 0) {
+  observe(bodies: BodyState[], stepMs = 0, sections?: Record<string, number>, substeps = 1, magnetPairs = 0) {
     this.ticks++;
     const o = this.opts;
     const g = Math.hypot(...o.gravity);
     let energy = 0;
     this.stepMs.push(stepMs);
+    for (const [k, v] of Object.entries(sections ?? {})) this.sectionMs.set(k, (this.sectionMs.get(k) ?? 0) + v);
+    this.substepSum += substeps;
+    this.pairSum += magnetPairs;
     if (this.stepMs.length >= 90) {
-      const mean = this.stepMs.reduce((s, x) => s + x, 0) / this.stepMs.length;
-      if (mean > o.budgetMs) this.flag('slow', '', mean, o.budgetMs, `ticks took ${mean.toFixed(2)} ms on average (budget ${o.budgetMs} ms)`);
+      const n = this.stepMs.length;
+      const mean = this.stepMs.reduce((s, x) => s + x, 0) / n;
+      // what took the time, so the finding says where to look (magnets, joints, the solver...)
+      const top = [...this.sectionMs].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${(v / n).toFixed(1)} ms`);
+      const why = top.length ? `: ${top.join(', ')}; ${(this.substepSum / n).toFixed(1)} substeps, ${(this.pairSum / n).toFixed(0)} magnetic pairs a tick` : '';
+      if (mean > o.budgetMs) this.flag('slow', '', mean, o.budgetMs, `ticks took ${mean.toFixed(2)} ms on average (budget ${o.budgetMs} ms)${why}`);
       this.stepMs = [];
+      this.sectionMs.clear();
+      this.substepSum = 0;
+      this.pairSum = 0;
     }
     for (const b of bodies) {
       const vals = [...b.p, ...b.v, ...b.w];

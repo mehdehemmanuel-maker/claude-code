@@ -20,6 +20,8 @@ describe('plain requests to Ego', () => {
     expect(interpret("what's wrong")).toEqual({ do: 'status' });
     expect(interpret('moon gravity')).toEqual({ do: 'command', command: 'gravity moon' });
     expect(interpret('play')).toEqual({ do: 'command', command: 'play' });
+    expect(interpret('Ego, look at this')).toEqual({ do: 'show' });
+    expect(interpret('see this?')).toEqual({ do: 'show' });
   });
 
   it('leaves Forge to Forge', () => {

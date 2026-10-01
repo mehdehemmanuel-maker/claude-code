@@ -115,7 +115,8 @@ export class XRMode {
     this.drive = app.hasStickControls();
     renderer.xr.addEventListener('sessionstart', () => this.onStart());
     renderer.xr.addEventListener('sessionend', () => this.onEnd());
-    app.onFrame.push((dt, time) => this.frame(dt, time));
+    app.everyFrame('headset and tablet', (dt, time) => this.frame(dt, time));
+    app.pointing = () => this.pointed;
   }
 
   static async passthroughSupported() {
@@ -387,6 +388,11 @@ export class XRMode {
         const pick = this.app.view.pick(e.ray.origin, e.ray.dir, 40 * scale);
         h.pointer.scale.z = (pick ? pick.distance : 3 * scale) / scale;
         (h.pointer.material as THREE.MeshBasicMaterial).opacity = pick && pick.type !== 'env' ? 0.95 : 0.45;
+        // what the right hand points at, for "Ego, look at this"
+        if (side === 'right') this.pointed = pick ? { id: pick.type === 'part' ? pick.id ?? null : null, point: [pick.point.x, pick.point.y, pick.point.z] } : null;
+        // showing Ego: the pointer turns her colour
+        if (this.app.showArmed) (h.pointer.material as THREE.MeshBasicMaterial).color.setHex(0x8fd3ff);
+        else (h.pointer.material as THREE.MeshBasicMaterial).color.setHex(0xffffff);
       }
       if (side === 'right') this.tools.last = e;
       this.tools.grab.updateHand(e);
@@ -400,7 +406,16 @@ export class XRMode {
       };
       // trigger: tablet first, then the active tool
       const tr = edge(BTN.trigger);
-      if (tr === 1) {
+      if (tr === 1 && this.app.showArmed && !h.onTablet) {
+        // showing Ego something: she looks at what this hand points at (the tool does nothing this pull)
+        this.app.showArmed = false;
+        const pick = this.app.view.pick(e.ray.origin, e.ray.dir, 40 * scale);
+        if (pick && this.app.ego) {
+          this.app.ego.reply(this.app.ego.show(pick.type === 'part' ? pick.id ?? null : null, [pick.point.x, pick.point.y, pick.point.z]));
+          this.tablet.openShown();
+        }
+        h.pressed[BTN.trigger] = true;
+      } else if (tr === 1) {
         if (h.onTablet && tabletUv) this.tablet.click(tabletUv);
         else this.tools.down(e);
       } else if (tr === -1 && !h.onTablet) this.tools.up(e);
@@ -472,6 +487,8 @@ export class XRMode {
    * Ego's presence: a small light that keeps at your left shoulder, a little ahead, and glows amber when she has
    * something to tell you (her page on the tablet says what). It is light only, and never touches the build.
    */
+  /** What the right hand pointed at this frame. */
+  private pointed: { id: string | null; point: [number, number, number] } | null = null;
   private egoOrb: THREE.Mesh | null = null;
   private updateEgo(dt: number, time: number) {
     const ego = this.app.ego;
@@ -487,6 +504,13 @@ export class XRMode {
     const yaw = new THREE.Euler().setFromQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
     const s = this.app.settings.playerScale;
     const want = new THREE.Vector3(-0.42 * s, -0.12 * s, -0.55 * s).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(head);
+    // looking at what you showed her: she goes over to it for a few seconds, a little above and in front
+    const shown = ego.shown;
+    if (shown && this.app.live.ticks - shown.at < 90 * 6) {
+      const p = shown.id ? this.app.livePose(shown.id)?.p ?? shown.point : shown.point;
+      const at = new THREE.Vector3(p[0], p[1], p[2]);
+      want.copy(at.add(head.clone().sub(at).setY(0).normalize().multiplyScalar(0.25 * s)).add(new THREE.Vector3(0, 0.18 * s, 0)));
+    }
     this.egoOrb.position.lerp(want, 1 - Math.exp(-dt * 4));
     const news = ego.advice.length > 0;
     const pulse = 1 + (news ? 0.18 : 0.06) * Math.sin(time / (news ? 180 : 600));

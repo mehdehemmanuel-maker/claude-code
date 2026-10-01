@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BuildLibrary } from '../../src/app/library';
+import { BuildLibrary, SaveError } from '../../src/app/library';
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -32,13 +32,27 @@ describe('My builds', () => {
     expect(again.save('C').name).toBe('Build 3');
   });
 
-  it('survives corrupt storage and a browser that keeps none', () => {
+  it('survives corrupt storage, and never says a build is saved when the browser did not keep it', () => {
     const bad = { getItem: () => '{not json', setItem: () => {} };
     expect(new BuildLibrary(bad).list()).toEqual([]);
-    const none = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
-    const lib = new BuildLibrary(none);
-    lib.save('A');
-    expect(lib.persistent).toBe(false);
-    expect(lib.list().length).toBe(1);
+    // storage full: the save fails out loud and the library is as it was
+    const full = { getItem: () => null, setItem: () => { throw new DOMException('full', 'QuotaExceededError'); } };
+    const lib = new BuildLibrary(full);
+    expect(() => lib.save('A')).toThrow(/storage for this app is full/);
+    expect(lib.list()).toEqual([]);
+    // a browser that silently drops what it's given is caught by reading the save back
+    expect(() => new BuildLibrary(bad).save('A')).toThrow(SaveError);
+  });
+
+  it('keeps builds compressed: a big build takes a fraction of the space, and older plain saves still open', () => {
+    const store = memory();
+    const text = Array.from({ length: 400 }, (_, i) => `part p${i} block 0.215 0.065 0.1025 ceramic.clay-brick at ${i * 0.22} 0.03 0`).join('\n');
+    new BuildLibrary(store).save(text);
+    const raw = store.getItem('vrsb.library')!;
+    expect(raw.length).toBeLessThan(text.length / 4);
+    expect(new BuildLibrary(store).list()[0]!.text).toBe(text);
+    const legacy = memory();
+    legacy.setItem('vrsb.library', JSON.stringify([{ id: 'b1', name: 'Build 1', saved: '2026-09-01T00:00:00Z', text: 'OLD' }]));
+    expect(new BuildLibrary(legacy).list()[0]!.text).toBe('OLD');
   });
 });

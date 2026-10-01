@@ -19,6 +19,13 @@ import type { SimSettings } from '../doc/types';
 import { AudioEngine } from '../audio/audio';
 import { SceneView } from '../render/view';
 import { Particles } from '../render/particles';
+import { FrameBudget } from '../diagnostics/budget';
+import { AMBIENT, thermalOf, warm } from '../engineering/thermal';
+
+/** What a browser keeps for one site in local storage, in characters (Chromium, as in the Quest browser). */
+export const STORAGE_CHARS = 5_000_000;
+/** Parts this close (m) count as resting on each other. */
+const TOUCHING = 0.005;
 import { BuildLibrary } from './library';
 import type { Ego } from '../assistant/ego';
 import { LiveState } from './live';
@@ -97,8 +104,24 @@ export class App {
   private lastChannels = '';
   private lastSlow = 0;
   private frames = 0;
+  private lastStorageCheck = -Infinity;
+  private storageWarned = false;
   private fpsTime = 0;
   onFrame: ((dt: number, time: number) => void)[] = [];
+  /** What your right hand points at now (set by the headset), for "look at this". */
+  pointing: (() => { id: string | null; point: Vec3 } | null) | null = null;
+  /** The next trigger pull shows Ego what you point at, instead of using the tool. */
+  showArmed = false;
+  /** Names for the per-frame work, for the frame budget (by position in onFrame). */
+  onFrameNames: string[] = [];
+  /** Where each frame's time goes, and the watchdog's finding when a subsystem makes it run long. */
+  readonly budget = new FrameBudget();
+
+  /** Run `fn` every frame, timed as `name` in the frame budget. */
+  everyFrame(name: string, fn: (dt: number, time: number) => void) {
+    this.onFrame.push(fn);
+    this.onFrameNames[this.onFrame.length - 1] = name;
+  }
   /** Everything the physics reports (breaks, contacts, slips...), as it arrives, before the app acts on it. */
   eventListeners: ((e: PhysicsEvent) => void)[] = [];
   /** The assistant, once the headset tools exist (main.ts). */
@@ -382,6 +405,30 @@ export class App {
     return [...connectedComponent(this.store.doc, id)];
   }
 
+  /**
+   * Everything that is together with these parts as you built it: what is joined to them, and what rests on or
+   * against them (touching within a few millimetres), and so on outwards. A part you froze in place as a base is
+   * taken only if it is joined in, not because something rests on it.
+   */
+  together(ids: string[]): string[] {
+    const doc = this.store.doc;
+    const out = new Set<string>();
+    const queue = [...ids.filter((id) => doc.parts[id])];
+    const box = new Map<string, ReturnType<App['boundsOf']>>();
+    const boundsOf = (id: string) => box.get(id) ?? box.set(id, this.boundsOf([id])).get(id)!;
+    const near = (a: ReturnType<App['boundsOf']>, b: ReturnType<App['boundsOf']>) => [0, 1, 2].every((k) => a.min[k]! <= b.max[k]! + TOUCHING && b.min[k]! <= a.max[k]! + TOUCHING);
+    const others = Object.keys(doc.parts);
+    while (queue.length) {
+      const id = queue.pop()!;
+      if (out.has(id)) continue;
+      out.add(id);
+      for (const j of connectedComponent(doc, id)) if (!out.has(j)) queue.push(j);
+      const b = boundsOf(id);
+      for (const o of others) if (!out.has(o) && !doc.parts[o]!.frozen && near(b, boundsOf(o))) queue.push(o);
+    }
+    return [...out];
+  }
+
   undo() {
     const t = this.store.undo();
     if (t) this.toast(`Undo: ${t.label}`); else this.audio.ui('error');
@@ -551,11 +598,58 @@ export class App {
 
   /** Save the build: over the one it was opened from, or (`asNew`, or never saved) as a new entry. */
   saveBuild(asNew = false) {
-    const entry = this.library.save(this.saveText(), asNew ? null : this.libraryId);
+    let entry;
+    try {
+      entry = this.library.save(this.saveText(), asNew ? null : this.libraryId);
+    } catch (e) {
+      this.saveFailed('build', e);
+      return null;
+    }
     this.libraryId = entry.id;
     this.toast(this.library.persistent ? `Saved “${entry.name}”` : `Saved “${entry.name}” for now: this browser keeps no storage, so it goes when the page closes`, this.library.persistent ? 'ok' : 'warn');
     this.audio.ui('click');
     this.notify();
+    return entry;
+  }
+
+  /**
+   * Parts warm by the heat the physics says they took (friction, impacts, bending past yield, induced currents), over
+   * their heat capacity, and cool to the room by convection and radiation (engineering/thermal.ts).
+   */
+  private warmParts(dt: number) {
+    const live = this.live;
+    const ids = new Set([...Object.keys(live.heatIn), ...live.temps.keys()]);
+    if (!ids.size) return;
+    for (const id of ids) {
+      const p = this.doc.parts[id];
+      if (!p) { live.temps.delete(id); continue; }
+      const k = getPartKind(p.kind), m = this.materialOf(p), th = thermalOf(m);
+      const eff = effectiveParams(k, p.params, m);
+      const mass = k.volume(eff, m) * m.density;
+      const d = k.dims(eff);
+      const area = 2 * (d.length * d.a + d.a * d.b + d.b * d.length);
+      const T = warm(live.temps.get(id) ?? AMBIENT, live.heatIn[id] ?? 0, mass, th.c, area, d.length, th.emissivity, dt);
+      if (Math.abs(T - AMBIENT) < 1e-4) live.temps.delete(id); else live.temps.set(id, T);
+    }
+    live.heatIn = {};
+  }
+
+  /** A save that didn't stick: said plainly, and a finding for the watchdog (so Ego writes it up). */
+  private saveFailed(what: string, e: unknown) {
+    const why = e instanceof Error ? e.message : String(e);
+    this.toast(`Not saved: ${why}`, 'warn');
+    this.audio.ui('error');
+    this.live.flag({ kind: 'storage', severity: 'critical', id: '', tick: this.live.ticks, value: this.storageUsed(), limit: STORAGE_CHARS, detail: `a ${what} save failed: ${why}` });
+    this.notify();
+  }
+
+  /** Characters this app keeps in the browser's storage (it allows about five million per site). */
+  storageUsed() {
+    let n = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i)!; n += k.length + (localStorage.getItem(k)?.length ?? 0); }
+    } catch { /* no storage */ }
+    return n;
   }
 
   openBuild(id: string) {
@@ -605,7 +699,13 @@ export class App {
     const b = this.boundsOf(parts);
     const base: Pose = { p: [(b.min[0] + b.max[0]) / 2, b.min[1], (b.min[2] + b.max[2]) / 2], q: [0, 0, 0, 1] };
     const frag = fragmentOf(this.doc, parts, (id) => this.doc.parts[id]!.pose, base);
-    const entry = this.templates.save(JSON.stringify({ v: 1, ...frag }));
+    let entry;
+    try {
+      entry = this.templates.save(JSON.stringify({ v: 1, ...frag }));
+    } catch (e) {
+      this.saveFailed('template', e);
+      return null;
+    }
     this.toast(`Saved template “${entry.name}”: ${frag.parts.length} part${frag.parts.length === 1 ? '' : 's'}, ${frag.connections.length} joint${frag.connections.length === 1 ? '' : 's'}. Place copies from My builds › Templates`, 'ok');
     this.audio.ui('save');
     this.ego?.gain('template');
@@ -713,7 +813,9 @@ export class App {
   }
 
   private frame(dt: number, time: number) {
-    for (const f of this.onFrame) f(dt, time);
+    const t0 = performance.now();
+    const B = this.budget;
+    this.onFrame.forEach((f, i) => B.measure(this.onFrameNames[i] ?? `frame ${i}`, () => f(dt, time)));
     const ch = JSON.stringify(this.channels);
     if (ch !== this.lastChannels) {
       this.physics.send({ op: 'controls', channels: this.channels });
@@ -721,23 +823,35 @@ export class App {
     }
     const simDt = this.settings.paused ? 0 : dt * this.settings.timeScale;
     this.simTime += simDt;
-    this.physics.advance(simDt, this.stepOnce);
+    B.measure('physics', () => this.physics.advance(simDt, this.stepOnce));
+    B.measure('heat', () => this.warmParts(simDt));
     this.stepOnce = false;
     const events = this.live.pendingEvents.splice(0);
-    if (events.length) this.handleEvents(events);
-    this.view.update(this.store.doc, this.live, this.overrides);
+    if (events.length) B.measure('events', () => this.handleEvents(events));
+    B.measure('scene', () => this.view.update(this.store.doc, this.live, this.overrides));
     this.particles.enabled = this.settings.particles;
-    this.particles.update(dt);
+    B.measure('particles', () => this.particles.update(dt));
     if (time - this.lastSlow > 150) {
       this.lastSlow = time;
-      this.slowUpdate();
+      B.measure('stress and sound', () => this.slowUpdate());
+    }
+    if (time - this.lastStorageCheck > 10_000) {
+      this.lastStorageCheck = time;
+      // the watchdog for saves: warn while there is still room, not when a save has already failed
+      const used = this.storageUsed();
+      if (used > 0.7 * STORAGE_CHARS && !this.storageWarned) {
+        this.storageWarned = true;
+        this.live.flag({ kind: 'storage', severity: 'warning', id: '', tick: this.live.ticks, value: used, limit: STORAGE_CHARS, detail: `the headset's storage for this app is ${Math.round((100 * used) / STORAGE_CHARS)}% full: delete builds or templates you don't need before saving more` });
+      }
     }
     const cam = this.view.camera;
     const pos = new THREE.Vector3();
     cam.getWorldPosition(pos);
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
     this.audio.updateListener([pos.x, pos.y, pos.z], [fwd.x, fwd.y, fwd.z], [0, 1, 0]);
-    this.renderer.render(this.view.scene, cam);
+    B.measure('render', () => this.renderer.render(this.view.scene, cam));
+    B.endFrame(performance.now() - t0);
+    for (const a of B.take()) this.live.flag(a);
     this.frames++;
     if (time - this.fpsTime > 500) {
       this.fps = (this.frames * 1000) / (time - this.fpsTime);
