@@ -36,6 +36,23 @@ export class Runner {
     return new Watchdog(this.info, { gravity: this.world.gravity(), floorY: 0, flungSpeed: 60, budgetMs: 11, settleTicks: 90 });
   }
 
+  /**
+   * One message's worth: the time that passed before these edits were made (it is simulated first, against the world
+   * as it was), then the edits, then the time since. Events, heat and findings from both are reported together.
+   */
+  run(pre: number, ops: PhysicsOp[], dt: number, maxTicks = 4, singleStep = false): AdvanceResult {
+    if (!(pre > 0) || !ops.length) {
+      this.apply(ops);
+      return this.advance(pre + dt, maxTicks, singleStep);
+    }
+    const before = this.advance(pre, maxTicks);
+    const events = [...before.events], watchdog = [...before.watchdog], heat = { ...before.heat };
+    this.apply(ops);
+    const after = this.advance(dt, maxTicks, singleStep);
+    for (const [id, q] of Object.entries(after.heat ?? {})) heat[id] = (heat[id] ?? 0) + q;
+    return { ...after, events: [...events, ...after.events], watchdog: [...watchdog, ...after.watchdog], heat, ticksRun: before.ticksRun + after.ticksRun, prevTransforms: after.ticksRun ? after.prevTransforms : before.prevTransforms };
+  }
+
   apply(ops: PhysicsOp[]) {
     for (const op of ops) {
       this.world.apply(op);
@@ -116,6 +133,11 @@ export class Runner {
     for (const e of events) if (e.type === 'fault' && !this.reported.has(`nonfinite|${e.body}`)) {
       this.reported.add(`nonfinite|${e.body}`);
       out.watchdog.push({ kind: 'nonfinite', severity: 'critical', id: e.body, tick: this.last.stats.ticks, value: NaN, limit: 0, detail: `contained: ${e.note}` });
+    }
+    // a joint that came apart while intact breaks a rule no real joint breaks
+    for (const e of events) if (e.type === 'drift' && !this.reported.has(`drift|${e.conn}`)) {
+      this.reported.add(`drift|${e.conn}`);
+      out.watchdog.push({ kind: 'drift', severity: 'critical', id: e.conn, tick: this.last.stats.ticks, value: e.gap, limit: 0.005, detail: e.note });
     }
     for (const a of this.watchdog.anomalies()) {
       const k = `${a.kind}|${a.id}`;

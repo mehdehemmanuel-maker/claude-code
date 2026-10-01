@@ -13,17 +13,22 @@ import { effectiveParams, getPartKind } from '../parts/registry';
 import { shapeBounds } from '../parts/shapes';
 import { defaultsOf, sanitizeParams, type Params } from '../schema/params';
 import { makeRigidJoin, rotatedMinY, type ToolManager } from '../tools/tools';
+import type { Workshop } from '../app/workshop';
+import { boxOf, contactBetween, TOUCH } from '../tools/contact';
 import { paramValue, resolveKind, resolveMaterial, resolveParam } from './catalog';
 import type { ForgeHost, SimCommand } from './forge';
 
 /** How far apart two faces may be and still count as touching for a joint (the physics' contact slop is 2 mm). */
-const TOUCH = 0.005;
 
-export class AppHost implements ForgeHost {
+/**
+ * Forge on any workshop: placing parts where it says, joining what touches, changing, removing. What needs a headset
+ * (in front of you, play, the selection, your hands) is the AppHost's.
+ */
+export class BuildHost implements ForgeHost {
   /** Parts placed, newest last (for `last`). */
-  private placed: string[] = [];
+  protected placed: string[] = [];
 
-  constructor(private app: App, private tools: ToolManager | null) {}
+  constructor(protected w: Workshop) {}
 
   kind(word: string) {
     return resolveKind(word);
@@ -50,10 +55,105 @@ export class AppHost implements ForgeHost {
     const axes: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
     let q: Quat = kind.spawnRotation;
     for (const r of rot) q = qmul(axisAngle(axes[r.axis]!, r.angle), q);
-    const pose: Pose = { p: at ?? this.inFront(kindId, params, material, q), q };
-    const part = addPart(this.app.store, { kind: kindId, pose, params, material, frozen: this.app.settings.placeFrozen, name });
+    const pose: Pose = { p: at ?? this.defaultSpot(kindId, params, material, q), q };
+    const part = addPart(this.w.store, { kind: kindId, pose, params, material, frozen: this.w.settings.placeFrozen, name });
     this.placed.push(part.id);
     return part.id;
+  }
+
+  /** Where a part goes when Forge doesn't say: on a bench there is no "in front of you". */
+  protected defaultSpot(_kindId: string, _params: Params, _material: string, _q: Quat): Vec3 {
+    throw new Error('say where it goes: at x y z');
+  }
+
+  join(a: string, b: string | null, kindWord: string | undefined) {
+    const requested = this.connector(kindWord);
+    const contact = b ? this.contact(a, b) : this.onFloor(a);
+    const made = makeRigidJoin(this.w, { part: a, point: contact.point, normal: contact.normal, seg: null }, { part: b, seg: null }, requested, fromTo([0, 1, 0], contact.normal));
+    const what = made.plan ? (made.plan.substituted ? `${made.plan.substituted} ${made.plan.summary}` : made.plan.summary) : made.kind.label;
+    return `${this.label(a)} + ${b ? this.label(b) : 'floor'}: ${what}`;
+  }
+
+  private connector(word: string | undefined) {
+    if (!word || ['best', 'auto', 'best-join'].includes(word.toLowerCase())) return AUTO_JOIN;
+    const w = word.toLowerCase();
+    const k = CONNECTOR_KINDS.find((c) => c.id === w || c.label.toLowerCase() === w || c.id.startsWith(w));
+    if (!k) throw new Error(`no joint called "${word}" (best, weld, bolted, screwed, glued, riveted, nailed, soldered)`);
+    if (k.model !== 'rigid') throw new Error(`${k.label} joints need their axis placed by hand: use the Join tool`);
+    return getConnectorKind(k.id).id;
+  }
+
+  private contact(a: string, b: string): { point: Vec3; normal: Vec3 } {
+    return contactBetween(this.w, a, b, (id) => this.label(id));
+  }
+
+  private onFloor(a: string): { point: Vec3; normal: Vec3 } {
+    const A = this.box(a);
+    const low = Math.min(...A.corners.map((c) => c[1]));
+    if (low > TOUCH) throw new Error(`${this.label(a)} isn't on the floor (${Math.round(low * 1000)} mm up): set it down first`);
+    const c = transformPoint(A.pose, A.centre);
+    return { point: [c[0], low, c[2]], normal: [0, -1, 0] };
+  }
+
+  private box(id: string) {
+    return boxOf(this.w, id);
+  }
+
+  set(id: string, given: Record<string, number | string>, material: string | undefined) {
+    const part = this.w.doc.parts[id]!;
+    if (Object.keys(given).length) {
+      const params = this.params(part.kind, given, part.params);
+      for (const [k, v] of Object.entries(params)) if (JSON.stringify(v) !== JSON.stringify(part.params[k])) setPartParam(this.w.store, id, k, v);
+    }
+    if (material) setPartMaterial(this.w.store, [id], resolveMaterial(part.kind, material));
+  }
+
+  remove(id: string) {
+    deleteParts(this.w.store, [id]);
+  }
+
+  freeze(id: string, frozen: boolean) {
+    setFrozen(this.w.store, [id], frozen);
+  }
+
+  select(_id: string) {
+    /* a bench has no selection */
+  }
+
+  command(c: SimCommand): string {
+    throw new Error(`"${c}" is for the headset, not the test bench`);
+  }
+
+  find(ref: string) {
+    const doc = this.w.doc;
+    const r = ref.toLowerCase();
+    if (r === 'last') {
+      for (let i = this.placed.length - 1; i >= 0; i--) if (doc.parts[this.placed[i]!]) return this.placed[i]!;
+      const ids = Object.keys(doc.parts);
+      return ids.length ? ids[ids.length - 1]! : null;
+    }
+    if (doc.parts[ref]) return ref;
+    return this.byName(ref);
+  }
+
+  protected byName(name: string) {
+    const n = name.toLowerCase();
+    return Object.values(this.w.doc.parts).find((p) => p.name.toLowerCase() === n)?.id ?? null;
+  }
+
+  protected label(id: string) {
+    return this.w.doc.parts[id]?.name ?? id;
+  }
+}
+
+/** Forge in the headset: everything a bench can do, plus in front of you, the selection, your hands, and play. */
+export class AppHost extends BuildHost {
+  constructor(private app: App, private tools: ToolManager | null) {
+    super(app);
+  }
+
+  protected override defaultSpot(kindId: string, params: Params, material: string, q: Quat): Vec3 {
+    return this.inFront(kindId, params, material, q);
   }
 
   /** Part k of n in a row a metre in front of you, across your view, each resting on the floor. */
@@ -96,103 +196,16 @@ export class AppHost implements ForgeHost {
     return [p.x + f.x, -rotatedMinY(shape, q) + 0.0005, p.z + f.z];
   }
 
-  join(a: string, b: string | null, kindWord: string | undefined) {
-    const requested = this.connector(kindWord);
-    const contact = b ? this.contact(a, b) : this.onFloor(a);
-    const made = makeRigidJoin(this.app, { part: a, point: contact.point, normal: contact.normal, seg: null }, { part: b, seg: null }, requested, fromTo([0, 1, 0], contact.normal));
-    const what = made.plan ? (made.plan.substituted ? `${made.plan.substituted} ${made.plan.summary}` : made.plan.summary) : made.kind.label;
-    return `${this.label(a)} + ${b ? this.label(b) : 'floor'}: ${what}`;
-  }
-
-  private connector(word: string | undefined) {
-    if (!word || ['best', 'auto', 'best-join'].includes(word.toLowerCase())) return AUTO_JOIN;
-    const w = word.toLowerCase();
-    const k = CONNECTOR_KINDS.find((c) => c.id === w || c.label.toLowerCase() === w || c.id.startsWith(w));
-    if (!k) throw new Error(`no joint called "${word}" (best, weld, bolted, screwed, glued, riveted, nailed, soldered)`);
-    if (k.model !== 'rigid') throw new Error(`${k.label} joints need their axis placed by hand: use the Join tool`);
-    return getConnectorKind(k.id).id;
-  }
-
-  /**
-   * Where A and B touch: of A's six faces, the one B sits against. That is the face with the smallest gap to B, among
-   * those B overlaps across (a table top covers its leg's top end, not its side). The contact point is the middle of
-   * that overlap. An error if nothing is within the contact slop.
-   */
-  private contact(a: string, b: string): { point: Vec3; normal: Vec3 } {
-    const A = this.box(a), B = this.box(b);
-    const local = B.corners.map((c) => inverseTransformPoint(A.pose, c));
-    const lo = [0, 1, 2].map((k) => Math.min(...local.map((c) => c[k]!)));
-    const hi = [0, 1, 2].map((k) => Math.max(...local.map((c) => c[k]!)));
-    let best: { gap: number; point: Vec3; normal: Vec3 } | null = null;
-    for (const k of [0, 1, 2]) {
-      for (const sgn of [1, -1]) {
-        const face = A.centre[k]! + sgn * A.half[k]!;
-        const gap = sgn > 0 ? lo[k]! - face : face - hi[k]!;
-        if (gap < -0.01 || gap > TOUCH) continue; // not against this face (or through it)
-        const mid: Vec3 = [0, 0, 0];
-        let overlaps = true;
-        for (const j of [0, 1, 2]) {
-          if (j === k) { mid[j] = face; continue; }
-          const l = Math.max(lo[j]!, A.centre[j]! - A.half[j]!), h = Math.min(hi[j]!, A.centre[j]! + A.half[j]!);
-          if (h - l <= 1e-4) { overlaps = false; break; }
-          mid[j] = (l + h) / 2;
-        }
-        if (!overlaps || (best && Math.abs(gap) >= Math.abs(best.gap))) continue;
-        const n: Vec3 = [0, 0, 0];
-        n[k] = sgn;
-        best = { gap, point: transformPoint(A.pose, mid), normal: normalize(rotate(A.pose.q, n)) };
-      }
-    }
-    if (!best) {
-      const d = Math.max(0, ...[0, 1, 2].map((k) => Math.max(lo[k]! - (A.centre[k]! + A.half[k]!), A.centre[k]! - A.half[k]! - hi[k]!)));
-      throw new Error(`${this.label(a)} and ${this.label(b)} aren't touching (${Math.round(d * 1000)} mm apart): a joint needs them in contact`);
-    }
-    return { point: best.point, normal: best.normal };
-  }
-
-  private onFloor(a: string): { point: Vec3; normal: Vec3 } {
-    const A = this.box(a);
-    const low = Math.min(...A.corners.map((c) => c[1]));
-    if (low > TOUCH) throw new Error(`${this.label(a)} isn't on the floor (${Math.round(low * 1000)} mm up): set it down first`);
-    const c = transformPoint(A.pose, A.centre);
-    return { point: [c[0], low, c[2]], normal: [0, -1, 0] };
-  }
-
-  private box(id: string) {
-    const part = this.app.doc.parts[id]!;
-    const pose = this.app.livePose(id) ?? part.pose;
-    const kind = getPartKind(part.kind);
-    const bounds = shapeBounds(kind.collision(effectiveParams(kind, part.params, this.app.materialOf(part))));
-    const centre: Vec3 = [0, 1, 2].map((k) => (bounds.min[k]! + bounds.max[k]!) / 2) as Vec3;
-    const half: Vec3 = [0, 1, 2].map((k) => (bounds.max[k]! - bounds.min[k]!) / 2) as Vec3;
-    const corners: Vec3[] = [];
-    for (const x of [bounds.min[0], bounds.max[0]]) for (const y of [bounds.min[1], bounds.max[1]]) for (const z of [bounds.min[2], bounds.max[2]]) corners.push(transformPoint(pose, [x, y, z]));
-    return { pose, centre, half, corners };
-  }
-
-  set(id: string, given: Record<string, number | string>, material: string | undefined) {
-    const part = this.app.doc.parts[id]!;
-    if (Object.keys(given).length) {
-      const params = this.params(part.kind, given, part.params);
-      for (const [k, v] of Object.entries(params)) if (JSON.stringify(v) !== JSON.stringify(part.params[k])) setPartParam(this.app.store, id, k, v);
-    }
-    if (material) setPartMaterial(this.app.store, [id], resolveMaterial(part.kind, material));
-  }
-
-  remove(id: string) {
-    deleteParts(this.app.store, [id]);
-  }
-
-  freeze(id: string, frozen: boolean) {
+  override freeze(id: string, frozen: boolean) {
     this.app.commitLivePoses();
-    setFrozen(this.app.store, [id], frozen);
+    super.freeze(id, frozen);
   }
 
-  select(id: string) {
+  override select(id: string) {
     this.app.select([id]);
   }
 
-  command(c: SimCommand) {
+  override command(c: SimCommand) {
     const app = this.app;
     switch (c) {
       case 'play': app.play(); return 'playing';
@@ -209,26 +222,10 @@ export class AppHost implements ForgeHost {
     }
   }
 
-  find(ref: string) {
-    const doc = this.app.doc;
+  override find(ref: string) {
     const r = ref.toLowerCase();
     if (r === 'this' || r === 'selected' || r === 'it') return [...this.app.selection.parts][0] ?? null;
     if (r === 'held') return this.tools?.grab.holding ?? null;
-    if (r === 'last') {
-      for (let i = this.placed.length - 1; i >= 0; i--) if (doc.parts[this.placed[i]!]) return this.placed[i]!;
-      const ids = Object.keys(doc.parts);
-      return ids.length ? ids[ids.length - 1]! : null;
-    }
-    if (doc.parts[ref]) return ref;
-    return this.byName(ref);
-  }
-
-  private byName(name: string) {
-    const n = name.toLowerCase();
-    return Object.values(this.app.doc.parts).find((p) => p.name.toLowerCase() === n)?.id ?? null;
-  }
-
-  private label(id: string) {
-    return this.app.doc.parts[id]?.name ?? id;
+    return super.find(ref);
   }
 }

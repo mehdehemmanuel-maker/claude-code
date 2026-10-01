@@ -14,6 +14,7 @@ import {
 } from '../engineering/springs';
 import { ROPE_GRADES, ropeBreakingLoad, BEARING_FRICTION, dcMotorSpecs, eddyDamping } from '../engineering/mechanics';
 import { roundSection } from '../engineering/sections';
+import { driven, type Through } from './through';
 import { boolOf, choice, flag, num, numberOf, stringOf, formatForce, type ParamDef, type Params } from '../schema/params';
 
 export type JointModel = 'rigid' | 'revolute' | 'prismatic' | 'spherical' | 'spring' | 'rope' | 'band';
@@ -65,6 +66,8 @@ export interface DeriveContext {
   /** Thinnest section of each part at the joint, m. */
   thicknessA: number;
   thicknessB: number;
+  /** Each part's thickness along the joint's normal at the joint: the path a screw or nail is driven along. */
+  through?: Through;
   /** Current distance between the endpoints, m (springs, ropes). */
   distance: number;
   /** Seconds of cure accumulated (already clock-scaled). */
@@ -240,9 +243,15 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       });
       const warnings: string[] = [];
       if (j.overTorqued) warnings.push(`Over-torqued: ${fmt(torque, 1)} N·m yields a ${size} ${cls} bolt (σ_red = ${fmt(j.assemblyStress / MPa, 0)} MPa).`);
-      const brittle = !matA.ductile || (matB !== null && !matB.ductile);
+      // a bolt through wood bears on the wood as any dowel does: the NDS yield modes on its dowel bearing strength
+      // (Wood Handbook ch. 8), not a steel plate's bearing, which would overstate it about 2.5 times
+      const woods = [matA, matB ?? matA].filter((m) => m.specificGravity);
+      const tMain = Math.max(thicknessA, matB ? thicknessB : thicknessA), tSide = plateThickness;
+      const bearing = woods.length
+        ? numberOf(params, 'count', 1) * numberOf(params, 'interfaces', 1) * lateralUltimate(Math.min(...woods.map((m) => m.specificGravity!)), t.d, tMain, tSide)
+        : j.bearing;
+      const brittle = [matA, matB ?? matA].some((m) => !m.ductile && !m.specificGravity);
       if (brittle) warnings.push('Clamping a brittle material: bearing capacity is limited by its low strength.');
-      const bearing = j.bearing;
       const shear = Math.min(j.boltShear, bearing);
       return {
         capacities: {
@@ -260,7 +269,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
           { label: 'Yield utilisation', value: `${fmt(j.yieldUtilisation * 100, 0)} %`, formula: 'σ_red / R_p0.2' },
           { label: 'Slip load (friction grip)', value: formatForce(j.slipShear), formula: 'μ · F_M · n · planes' },
           { label: 'Bolt shear', value: formatForce(j.boltShear), formula: '0.6 R_m · A(d₃) · n · planes' },
-          { label: 'Plate bearing', value: formatForce(bearing), formula: '2.5 d t R_m,plate · n' },
+          { label: woods.length ? 'Wood bearing' : 'Plate bearing', value: formatForce(bearing), formula: woods.length ? 'NDS yield modes Im, Is, IV × 1.6' : '2.5 d t R_m,plate · n' },
           { label: 'Tensile capacity', value: formatForce(j.tension), formula: 'A_s R_m · n' },
         ],
         warnings,
@@ -277,20 +286,24 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       flag('endGrain', 'Into end grain', false, { group: 'Fastener' }),
       ...bondParams,
     ],
-    derive: ({ params, matA, matB, thicknessA, thicknessB }) => {
+    derive: ({ params, matA, matB, thicknessA, thicknessB, through }) => {
       const D = numberOf(params, 'diameter'), L = numberOf(params, 'length'), n = numberOf(params, 'count', 1);
-      const holding = matB ?? matA; // point side goes into B (or the world anchor's material)
-      const side = matA;
+      // driven through whichever part is thinner along its path, its point into the other (or the world anchor)
+      const way = driven(through, !matB, thicknessA, thicknessB);
+      const holding = way.flip ? matA : matB ?? matA;
+      const side = way.flip ? matB! : matA;
       const warnings: string[] = [];
-      const penetration = Math.max(0, L - thicknessA);
+      // what the threads bite: past the side member, and no further than the holding member is deep
+      const penetration = Math.max(0, Math.min(L - way.side, way.hold));
+      const endGrain = boolOf(params, 'endGrain') || way.endGrain;
       let withdrawal: number, lateral: number;
       if (holding.specificGravity) {
         const Gw = holding.specificGravity;
-        withdrawal = n * withdrawalUltimate('wood-screw', Gw, D, penetration) * (boolOf(params, 'endGrain') ? 0.75 : 1);
-        lateral = n * lateralUltimate(Math.min(Gw, side.specificGravity ?? Gw), D, penetration, thicknessA);
+        withdrawal = n * withdrawalUltimate('wood-screw', Gw, D, penetration) * (endGrain ? 0.75 : 1);
+        lateral = n * lateralUltimate(Math.min(Gw, side.specificGravity ?? Gw), D, penetration, way.side);
       } else {
         // Self-tapping into sheet: thread stripping of the sheet, 0.6 sigma_u over the engaged thread cylinder (estimated).
-        const tSheet = matB ? thicknessB : thicknessA;
+        const tSheet = matB ? (way.flip ? thicknessA : thicknessB) : thicknessA;
         withdrawal = n * 0.6 * holding.ultimate * Math.PI * D * Math.min(tSheet, penetration) * 0.5;
         lateral = n * Math.min(2.5 * D * tSheet * holding.ultimate, 0.6 * 700 * MPa * (Math.PI / 4) * (D * 0.75) ** 2);
         warnings.push('Self-tapping into sheet: strength is an estimate from sheet thread stripping.');
@@ -299,8 +312,9 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       const b = numberOf(params, 'bondW'), d = numberOf(params, 'bondL');
       return {
         capacities: { tension: withdrawal, compression: INF, shear: lateral, bending: withdrawal * Math.max(b, d) / 2, torsion: lateral * Math.max(b, d) / 3 },
+        instantFailure: penetration > 0 ? undefined : `A ${fmt(L * 1000, 0)} mm screw can't reach through ${fmt(way.side * 1000, 0)} mm of ${side.name} into the other part: it holds nothing.`,
         readouts: [
-          { label: 'Penetration', value: `${fmt(penetration * 1000, 0)} mm` },
+          { label: 'Penetration', value: `${fmt(penetration * 1000, 0)} mm${endGrain ? ' (end grain)' : ''}` },
           { label: 'Withdrawal (all screws)', value: formatForce(withdrawal), formula: holding.specificGravity ? 'p = 108.25 G² D L  (N, mm)' : 'sheet thread strip (est.)' },
           { label: 'Lateral (all screws)', value: formatForce(lateral), formula: 'NDS yield modes I, IV × 1.6' },
         ],
@@ -318,17 +332,19 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       flag('endGrain', 'Into end grain', false, { group: 'Fastener' }),
       ...bondParams,
     ],
-    derive: ({ params, matA, matB, thicknessA }) => {
+    derive: ({ params, matA, matB, thicknessA, thicknessB, through }) => {
       const D = numberOf(params, 'diameter'), L = numberOf(params, 'length'), n = numberOf(params, 'count', 1);
-      const holding = matB ?? matA;
+      const way = driven(through, !matB, thicknessA, thicknessB);
+      const holding = way.flip ? matA : matB ?? matA;
+      const side = way.flip ? matB! : matA;
       const Gw = holding.specificGravity ?? 0;
-      const penetration = Math.max(0, L - thicknessA);
-      const withdrawal = Gw > 0 ? n * withdrawalUltimate('nail', Gw, D, penetration) * (boolOf(params, 'endGrain') ? 0.6 : 1) : 0;
-      const lateral = Gw > 0 ? n * lateralUltimate(Math.min(Gw, matA.specificGravity ?? Gw), D, penetration, thicknessA) : 0;
+      const penetration = Math.max(0, Math.min(L - way.side, way.hold));
+      const withdrawal = Gw > 0 ? n * withdrawalUltimate('nail', Gw, D, penetration) * (boolOf(params, 'endGrain') || way.endGrain ? 0.6 : 1) : 0;
+      const lateral = Gw > 0 ? n * lateralUltimate(Math.min(Gw, side.specificGravity ?? Gw), D, penetration, way.side) : 0;
       const b = numberOf(params, 'bondW'), d = numberOf(params, 'bondL');
       return {
         capacities: { tension: withdrawal, compression: INF, shear: lateral, bending: withdrawal * Math.max(b, d) / 2, torsion: lateral * Math.max(b, d) / 3 },
-        instantFailure: Gw > 0 ? undefined : `Nails need wood to hold in; ${holding.name} can't take a nail.`,
+        instantFailure: Gw <= 0 ? `Nails need wood to hold in; ${holding.name} can't take a nail.` : penetration > 0 ? undefined : `A ${fmt(L * 1000, 0)} mm nail can't reach through ${fmt(way.side * 1000, 0)} mm of ${side.name} into the other part: it holds nothing.`,
         readouts: [
           { label: 'Withdrawal (all nails)', value: formatForce(withdrawal), formula: 'p = 54.12 G^2.5 D L  (N, mm)' },
           { label: 'Lateral (all nails)', value: formatForce(lateral), formula: 'NDS yield modes I, IV × 1.6' },
@@ -506,7 +522,8 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
     derive: ({ params }) => ({
       capacities: pinCapacity(params, PIN_RM),
       revolute: {
-        frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: null,
+        // a servo turns only through its travel: past it is its own end stop
+        frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: [-numberOf(params, 'range'), numberOf(params, 'range')],
         servo: { maxTorque: numberOf(params, 'maxTorque'), range: numberOf(params, 'range'), channel: stringOf(params, 'channel', 'steer') },
       },
       readouts: [{ label: 'Stall torque', value: `${fmt(numberOf(params, 'maxTorque'), 2)} N·m` }],

@@ -560,6 +560,7 @@ export function runCase(J: typeof JoltNS, c: Case): WebRun {
       wd.observe(bench.states(r), r.stats.stepMs);
       // a contained fault is still a defect: the world put the body back, the web must still see it
       for (const e of r.events) if (e.type === 'fault') extra.push({ kind: 'nonfinite', severity: 'critical', id: e.body, tick: i, value: NaN, limit: 0, detail: `contained: ${e.note}` });
+      for (const e of r.events) if (e.type === 'drift') extra.push({ kind: 'drift', severity: 'critical', id: e.conn, tick: i, value: e.gap, limit: 0.005, detail: e.note });
       for (const l of r.loads) {
         if (!Number.isFinite(l.u) || ![l.axial, l.shear, l.bending, l.torsion].every(Number.isFinite)) {
           extra.push({ kind: 'nonfinite', severity: 'critical', id: l.id, tick: i, value: NaN, limit: 0, detail: 'a joint load is not a number' });

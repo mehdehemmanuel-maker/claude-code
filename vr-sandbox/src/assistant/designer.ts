@@ -19,6 +19,8 @@ export interface DesignSpec {
   /** A material id for the main parts. */
   material?: string;
   count?: number;
+  /** A table's aprons: rails between the legs under the top, which stop it racking when pushed sideways. */
+  aprons?: boolean;
 }
 
 export interface Plan {
@@ -74,12 +76,16 @@ function legFor(m: Material, L: number, P: number) {
   return { kind: 'tube.square', params: 'side=0.08 wall=0.005', side: 0.08, wide: 0.08, label: '80 mm square tube (at its limit)' };
 }
 
-const WOOD_SHEETS = [0.012, 0.018, 0.025, 0.038, 0.05];
+/** Solid wood tops and shelves as they can be made: glued from 1x or 2x boards and flattened (assistant/buildsheet.ts). */
+const WOOD_SHEETS = [0.018, 0.035, 0.054, 0.072];
 const METAL_SHEETS = [0.002, 0.003, 0.005, 0.008, 0.01, 0.015];
 const STONE_SHEETS = [0.02, 0.03, 0.04, 0.05];
 
+/** Plywood and MDF as sold. */
+const PLY_SHEETS = [0.012, 0.018, 0.025];
+
 function sheets(m: Material) {
-  return isWood(m) ? WOOD_SHEETS : isMetal(m) ? METAL_SHEETS : STONE_SHEETS;
+  return m.category === 'engineered-wood' ? PLY_SHEETS : isWood(m) ? WOOD_SHEETS : isMetal(m) ? METAL_SHEETS : STONE_SHEETS;
 }
 
 /** A design for what was asked, placed with its footprint centred on (ox, oz) on the floor. */
@@ -113,16 +119,47 @@ function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     lines.push(`place ${leg.kind} ${leg.params} length=${f(legL)} mat ${legM.id} at ${f(x)} ${f(legL / 2)} ${f(z)} rot z 90 as ${tag}leg${i}`);
     lines.push(`join ${tag}leg${i} ${tag}top`);
   });
+  // aprons: a rail between each pair of legs, on edge, tight under the top, joined to both legs and to the top.
+  // Stood up, a leg's section lies along x (its thickness) and z (its width).
+  const apron = spec.aprons ? apronFor(legM, leg) : null;
+  if (apron) {
+    const lx = leg.side / 2, lz = leg.wide / 2;
+    const yc = legL - apron.h / 2 - 0.0005;
+    const spanX = 2 * (W / 2 - inset - lx) - 0.001, spanZ = 2 * (D / 2 - inset - lz) - 0.001;
+    const rails: [string, number, number, number, string, number, number][] = [
+      // name, length, x, z, rotation, legs it runs between
+      ['apronF', spanX, ox, oz - (D / 2 - inset), 'rot x 90', 0, 1],
+      ['apronB', spanX, ox, oz + (D / 2 - inset), 'rot x 90', 3, 2],
+      ['apronL', spanZ, ox - (W / 2 - inset), oz, 'rot x 90 rot y 90', 0, 3],
+      ['apronR', spanZ, ox + (W / 2 - inset), oz, 'rot x 90 rot y 90', 1, 2],
+    ];
+    for (const [name, L, x, z, rot, a, b] of rails) {
+      lines.push(`place ${apron.kind} ${apron.params} length=${f(L)} mat ${legM.id} at ${f(x)} ${f(yc)} ${f(z)} ${rot} as ${tag}${name}`);
+      lines.push(`join ${tag}${name} ${tag}leg${a}`, `join ${tag}${name} ${tag}leg${b}`, `join ${tag}${name} ${tag}top`);
+    }
+  }
   return {
     forge: lines.join('\n'),
     notes: [
       `${bench ? 'Bench' : 'Table'} ${mm(W)} × ${mm(D)}, ${mm(H)} high, for ${load} kg.`,
       `Top: ${mm(top.t)} ${topM.name}${Number.isFinite(top.stress) ? `, stress ${(top.stress / 1e6).toFixed(1)} MPa at full load (${SAFETY}× under its strength), sag ${(top.sag * 1000).toFixed(1)} mm` : ' (the thickest standard sheet: it will be highly stressed)'}.`,
       `Legs: ${leg.label} in ${legM.name}, sized so none crushes or buckles at ${SAFETY}× its share of the load.`,
+      ...(apron ? [`Aprons: ${apron.label} rails between the legs under the top, so it doesn't rack when pushed sideways.`] : []),
       'Joints: Best join, sized to the stock.',
     ],
-    parts: 5,
+    parts: apron ? 9 : 5,
   };
+}
+
+/** Apron rails: wood tables take 1x4 on edge (2x4 for heavy legs), metal ones a flat bar of tube on edge. */
+function apronFor(m: Material, leg: ReturnType<typeof legFor>) {
+  if (leg.kind === 'lumber') {
+    const size = leg.wide >= 0.089 ? '2x4' : '1x4';
+    const [, w] = LUMBER[size]!;
+    return { kind: 'lumber', params: `size=${size}`, h: w, label: `${size} lumber` };
+  }
+  const side = Math.min(leg.side, 0.04), wall = Math.max(0.0015, side / 16);
+  return { kind: 'tube.square', params: `side=${f(side)} wall=${f(wall)}`, h: side, label: `${mm(side)} square tube` };
 }
 
 function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
