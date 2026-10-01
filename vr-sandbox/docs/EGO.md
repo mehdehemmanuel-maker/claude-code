@@ -106,6 +106,36 @@ She tells you what she did and writes each one up for Claude with the build as i
 that, one flaw is already written up many times over). If you complain about it afterwards, she tells you she
 already put it right.
 
+## The drawing wall
+
+Pick ✏️ Draw. A wall goes up in front of you (Wall here moves it). Draw on it with the trigger, and say what it is
+before, while or after you draw ("a steel pipe", "oak board 2 cm thick", "a wheel").
+
+- **She reads each stroke as the shape you drew.** Straight strokes are fitted by total least squares, round ones by
+  least-squares circle fitting, closed strokes by their corners (a triangle, a rectangle) (`src/sketch/strokes.ts`).
+- **The shape and your words make a part** (`src/sketch/interpret.ts`):
+  - a line is long stock: lumber, a rod, a tube, a beam;
+  - a circle is a disc or a wheel;
+  - a rectangle is a plate or a block;
+  - a triangle is a wedge.
+
+  It's drawn at full size (or at 1:5 or 1:10), and any size you say wins.
+- **Each part shows on the wall as a ghost at its real size**, and she says what she read. "No, it's a wheel", "make
+  it oak", "60 cm long" read the last stroke again. "Undo" and "clear" take strokes away.
+- **"Build it" makes the parts for real**, standing out from the wall as drawn, in one undoable step.
+
+## Your life
+
+Everything here stays on this headset; nothing is sent anywhere (`src/assistant/life.ts`). Her 📒 Life page shows it.
+
+- **Remembering:** "remember that my sister's birthday is March 3", then later "when is my sister's birthday?". Told
+  again, the newer one stands.
+- **Reminders:** "remind me to stretch in 20 minutes", "at 5 pm", "tomorrow at 9". They come while the app is open (a
+  web app can't wake the headset).
+- **Money:** "I spent $40 on gas", "paid 12 bucks for lunch", "I got paid $500". Each is filed by category (food,
+  transport, home, fun, shopping, health, work). Ask "how much did I spend this week / on food". Set "a budget of $80
+  a week for food" and she says when you go over. She knows only what you tell her: she can't see your bank.
+
 ## Showing her
 
 Tap 👁 at the end of the tablet's tabs, point at something and pull the trigger, or just say "Ego, look at this".

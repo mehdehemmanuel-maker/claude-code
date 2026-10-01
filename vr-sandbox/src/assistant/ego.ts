@@ -30,6 +30,7 @@ import { findRepeat, nameFor, signatureOf, SkillBook, skillProgram } from './ski
 import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
 import { design, type DesignSpec } from './designer';
+import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
@@ -97,6 +98,15 @@ export class Ego {
 
   /** Ask her something in plain words ("make it stronger", "weld these"); anything else is run as Forge. */
   ask(text: string): string {
+    // drawing on the wall: what you say is about the drawing
+    const draw = this.tools?.draw;
+    if (draw && this.tools?.tool === draw) {
+      const said = draw.hear(text);
+      if (said) { this.output = [...this.output, `› ${text.slice(0, 80)}`, said].slice(-12); this.reply(said); return said; }
+    }
+    // your life: what to remember, remind you of, and where the money goes (all kept on this headset)
+    const lifeSaid = this.life_(text);
+    if (lifeSaid) { this.output = [...this.output, `› ${text.slice(0, 80)}`, lifeSaid].slice(-12); this.gain('ask'); this.reply(lifeSaid); return lifeSaid; }
     const intent = interpret(text);
     if (!intent) {
       const r = this.run(text);
@@ -339,6 +349,55 @@ export class Ego {
         : `The watchdog caught ${a.kind === 'fell' || a.kind === 'tunnel' ? `${name} going through the floor` : a.kind === 'flung' ? `${name} flung faster than anything could throw it` : `${name} leaving the laws of physics`}`;
       this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}. ${did ? `I ${did}.` : ''}${filed ? ' Written up for Claude.' : ''}`, []);
     }
+  }
+
+  // ---- your life ------------------------------------------------------------------------------------
+
+  /** What you tell her to remember, to remind you of, and what you spend: kept on this headset only. */
+  readonly life = new Life();
+
+  /** Words about your life, if they are: what she says back (null when they're about something else). */
+  private life_(text: string): string | null {
+    const t = text.trim().replace(/^(hey |ok |okay )?ego[,:]?\s*/i, '');
+    const lower = t.toLowerCase();
+    const money = (x: number) => `$${x.toFixed(x % 1 ? 2 : 0)}`;
+    if (/^(please )?remind me\b/i.test(t)) {
+      const r = this.life.remind(t);
+      if (!r) return 'When should I remind you? Say "in 20 minutes", "at 5 pm" or "tomorrow at 9".';
+      const due = new Date(r.due);
+      return `I'll remind you to ${r.what} at ${due.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${due.toDateString() !== new Date().toDateString() ? ` on ${due.toLocaleDateString([], { weekday: 'long' })}` : ''}, while the app is open.`;
+    }
+    if (/^(please )?(remember|note|don'?t forget)\b/i.test(t)) {
+      const f = this.life.remember(t);
+      return f ? `I'll remember: ${f.said}.` : 'Tell me it as "remember (that) X is Y", and I\'ll keep it.';
+    }
+    if (/\bbudget\b/.test(lower) && /set|make|give|my/.test(lower)) {
+      const b = this.life.budget(t);
+      if (b) return `Budget set: ${money(b.amount)} a week for ${b.category}.`;
+    }
+    if (/^(i )?(spent|paid|bought|got paid|earned|made|received|sold)\b|^\$\d/.test(lower)) {
+      const m = this.life.spend(t);
+      if (m) {
+        const week = this.life.summary(startOfWeek());
+        const over = week.over.find((o) => o.category === m.category);
+        return `Noted: ${money(m.amount)} ${m.kind === 'earned' ? 'in' : `on ${m.category}`}. This week: ${money(week.spent)} out, ${money(week.earned)} in.${over ? ` That's over your ${m.category} budget (${money(over.spent)} of ${money(over.budget)}).` : ''}`;
+      }
+    }
+    let m: RegExpExecArray | null;
+    if ((m = /^how much (did i|have i) (spend|spent)(?: on (\w+))?(?: (this week|this month|today|last week))?/.exec(lower))) {
+      const span = m[4] ?? 'this week';
+      const from = span === 'today' ? startOfDay() : span === 'this month' ? startOfMonth() : span === 'last week' ? new Date(startOfWeek().getTime() - 7 * 864e5) : startOfWeek();
+      const to = span === 'last week' ? startOfWeek() : new Date();
+      const sum = this.life.summary(from, to);
+      if (m[3]) { const cat = categoryOf(m[3]) === 'other' ? m[3] : categoryOf(m[3]); return `${span[0]!.toUpperCase()}${span.slice(1)} on ${m[3]}: ${money(sum.byCategory[cat] ?? 0)}.`; }
+      const top = Object.entries(sum.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${money(v)}`).join(', ');
+      return `${span[0]!.toUpperCase()}${span.slice(1)}: ${money(sum.spent)} out${top ? ` (${top})` : ''}, ${money(sum.earned)} in.`;
+    }
+    if (/^(what'?s|what is|what was|when'?s|when is|when was|where'?s|where is|who'?s|who is|do you remember|what did i (say|tell you))\b/.test(lower)) {
+      const f = this.life.recall(t);
+      if (f) return `You told me ${f.said}.`;
+    }
+    return null;
   }
 
   // ---- shown something ------------------------------------------------------------------------------
@@ -650,6 +709,7 @@ export class Ego {
     if (this.clock < 0.5) return;
     this.clock = 0;
     this.guard();
+    for (const r of this.life.due()) { this.say('tip', `⏰ Reminder: ${r.what}.`, []); this.app.toast(`${this.name}: ⏰ ${r.what}`, 'info'); }
     for (const c of Object.values(this.app.doc.connections)) {
       const l = this.app.live.loads.get(c.id);
       if (!l || c.state.status === 'broken') continue;
@@ -809,3 +869,6 @@ function fmt(kindId: string, key: string, v: unknown): string {
   return `${+(v * u[1]).toPrecision(6)}${u[0]}`;
 }
 
+const startOfDay = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const startOfWeek = () => { const d = startOfDay(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
+const startOfMonth = () => { const d = startOfDay(); d.setDate(1); return d; };
