@@ -79,6 +79,21 @@ describe('foresight', () => {
     expect(f!.carried).toEqual(['arm']);
   });
 
+  it('stays instant however big the build: a 400-part chain and lattice in a few milliseconds', () => {
+    const P = 400;
+    const ps = Array.from({ length: P }, (_, i) => ({ id: `p${i}`, mass: 1, com: [i * 0.1, 1, 0] as [number, number, number], grounded: i === 0 }));
+    // a chain (every joint a bridge) with a cross-braced lattice hung off its end (no bridges inside it)
+    const js = Array.from({ length: P - 1 }, (_, i) => ({ id: `j${i}`, a: `p${i}`, b: `p${i + 1}`, at: [i * 0.1 + 0.05, 1, 0] as [number, number, number], shear: 1e9, bending: 1e9 }));
+    for (let i = 300; i < P - 2; i++) js.push({ id: `x${i}`, a: `p${i}`, b: `p${i + 2}`, at: [i * 0.1, 1, 0] as [number, number, number], shear: 1e9, bending: 1e9 });
+    const t = performance.now();
+    const f = foresee(ps, js, 9.81);
+    expect(performance.now() - t).toBeLessThan(50);
+    // the chain's joints up to the lattice are bridges; the first carries everything but the grounded part
+    expect(f.find((x) => x.id === 'j0')!.carried.length).toBe(P - 1);
+    expect(f.some((x) => x.id === 'j350')).toBe(false);
+    expect(f.some((x) => x.id.startsWith('x'))).toBe(false);
+  });
+
   it('leaves shared load paths to the physics', () => {
     const loop = foresee(parts, [
       { id: 'j1', a: 'post', b: 'arm', at: [0.05, 1, 0], shear: 1000, bending: 3 },
@@ -97,6 +112,8 @@ describe('complaints and reports', () => {
     expect(troubleOf('the shelf came apart')).toBe('broke');
     expect(troubleOf('so laggy')).toBe('slow');
     expect(troubleOf("that wouldn't happen in real life")).toBe('unrealistic');
+    expect(troubleOf("my build won't save")).toBe('save');
+    expect(troubleOf('I lost my template')).toBe('save');
     expect(isComplaint('this is broken')).toBe(true);
     expect(isComplaint('place 4 steel blocks')).toBe(false);
   });

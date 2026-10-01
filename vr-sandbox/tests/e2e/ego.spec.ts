@@ -2,7 +2,7 @@
 // search finds anything and puts what you pick in the hotbar.
 
 import { test } from '@playwright/test';
-import { boot, counts, enterVR, expect, frames, sb, tap } from './helpers';
+import { boot, counts, enterVR, expect, frames, sb, tap, triggerAt } from './helpers';
 
 test('Forge on the tablet: typed on the keys, run, and journalled', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
@@ -92,7 +92,8 @@ test('complaining while playing: Ego puts a sunk part back and writes it up for 
   expect(reply).toMatch(/written it up for Claude/);
   await frames(page, 30);
   expect(await sb(page, (s) => s.app.livePose(Object.keys(s.app.doc.parts)[0]).p[1])).toBeGreaterThan(0.04);
-  const rep = await sb(page, (s) => { const r = s.ego.reports.unsent[0]; return { trouble: r.trouble, code: r.shareCode.slice(0, 6), words: r.words }; });
+  // (the test browser draws in software, so the frame budget may have written up slow frames too)
+  const rep = await sb(page, (s) => { const r = s.ego.reports.unsent.find((x: any) => x.trouble === 'fell-through'); return { trouble: r.trouble, code: r.shareCode.slice(0, 6), words: r.words }; });
   expect(rep).toEqual({ trouble: 'fell-through', code: 'VRSB1.', words: 'ugh the crate fell through the floor' });
   expect(errors).toEqual([]);
 });
@@ -132,15 +133,62 @@ test('the watchdog: a part that leaves the world is put back by Ego herself, and
     // a flaw sends it through the slab and out of the world
     s.app.physics.send({ op: 'setPose', id, pose: { p: [0.5, -3, -1], q: [0, 0, 0, 1] }, linear: [0, -5, 0], angular: [0, 0, 0] });
   });
-  await page.waitForFunction(() => (window as any).sandbox.ego.advice.some((a: any) => a.text.startsWith('👁')), null, { timeout: 30_000 });
+  await page.waitForFunction(() => (window as any).sandbox.ego.advice.some((a: any) => a.text.includes('going through the floor')), null, { timeout: 30_000 });
   await frames(page, 30);
   const after = await sb(page, (s) => {
     const id = Object.keys(s.app.doc.parts)[0];
-    return { y: s.app.livePose(id).p[1] as number, text: s.ego.advice.find((a: any) => a.text.startsWith('👁')).text as string, words: s.ego.reports.unsent[0]?.words as string, fixed: s.ego.reports.unsent[0]?.fixed as string };
+    // (the test browser draws in software, so the frame budget may have written up slow frames too)
+    const r = s.ego.reports.unsent.find((x: any) => x.trouble === 'fell-through');
+    return { y: s.app.livePose(id).p[1] as number, text: s.ego.advice.find((a: any) => a.text.includes('going through the floor')).text as string, words: r?.words as string, fixed: r?.fixed as string };
   });
   expect(after.text).toMatch(/caught crate going through the floor\. I put crate back on the floor\. Written up for Claude/);
   expect(after.y).toBeGreaterThan(0.04);
   expect(after.words).toMatch(/^\(Ego saw it herself\) fell on crate/);
   expect(after.fixed).toBe('put crate back on the floor');
+  expect(errors).toEqual([]);
+});
+
+test('show Ego: point, pull the trigger, she says what she sees there; a tap tells her what is wrong', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 450 });
+  const errors = await boot(page, '?iwer');
+  await enterVR(page);
+  await sb(page, (s) => { s.ego.run('place block mat steel.a36 at 0 0.05 -1 as anvil'); });
+  await frames(page, 10);
+  await tap(page, 'show');
+  expect(await sb(page, (s) => s.app.showArmed)).toBe(true);
+  // the right hand points at the block and pulls the trigger
+  await triggerAt(page, [0, 0.05, -1]);
+  const seen = await sb(page, (s) => ({ armed: s.app.showArmed, said: s.ego.shown?.said as string, id: s.ego.shown?.id && s.app.doc.parts[s.ego.shown.id].name }));
+  expect(seen.armed).toBe(false);
+  expect(seen.id).toBe('anvil');
+  expect(seen.said).toMatch(/That's anvil: block in Structural steel ASTM A36, 7\.9 kg; on the floor, still; joined to nothing/);
+  // nothing was placed by the trigger pull
+  expect((await counts(page)).parts).toBe(1);
+  // she watches it a moment, then a tap says it was shaking: the report carries what she saw
+  await frames(page, 60);
+  await tap(page, 'shown-0');
+  const rep = await sb(page, (s) => s.ego.reports.unsent.find((x: any) => x.words === "it's shaking"));
+  expect(rep.trouble).toBe('jitter');
+  expect(rep.seen.join(' ')).toMatch(/you showed me: That's anvil/);
+  expect(rep.seen.join(' ')).toMatch(/watching anvil for/);
+  expect(errors).toEqual([]);
+});
+
+test('"it won\'t save": Ego saves again and says how it went, and a full storage is said plainly', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page);
+  await sb(page, (s) => s.ego.run('place block at 0 0.05 -1 as box'));
+  const reply = await sb(page, (s) => s.ego.ask("my build won't save"));
+  expect(reply).toMatch(/^I saved it again as “Build 1” \(a new build\), and it read back whole/);
+  expect(await sb(page, (s) => s.app.library.list().length)).toBe(1);
+  // the browser's storage full: the save fails out loud, and the watchdog has it for Ego
+  const out = await page.evaluate(() => {
+    const s = (window as any).sandbox;
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); };
+    try { return { entry: s.app.saveBuild(true), health: s.app.live.health.at(-1)?.detail as string }; } finally { Storage.prototype.setItem = set; }
+  });
+  expect(out.entry).toBeNull();
+  expect(out.health).toMatch(/a build save failed: the headset's storage for this app is full/);
   expect(errors).toEqual([]);
 });

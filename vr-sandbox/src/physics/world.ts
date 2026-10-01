@@ -17,6 +17,8 @@ import {
   blendedInteraction, transformCharges, dipoleMoment, type Charge, type PoleFace, type Vec3 as MVec3,
 } from '../engineering/magnets';
 import { neoHookeanBandForce } from '../engineering/mechanics';
+import { heatShare, TAYLOR_QUINNEY } from '../engineering/thermal';
+import { emptyEnergies, emptyHeat, emptyWork, kineticEnergy, potentialEnergy, shareHeat, springEnergy, type Energies, type HeatBook, type HeatSource, type WorkBook } from './energy';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
 import { composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
 import {
@@ -114,6 +116,10 @@ const SEAM_NORMAL = 1e-3;
 
 /** A 20 mm magnet near another evolves at ~200-1000 s^-1: sixteen substeps resolve that at 90 Hz. */
 const MAX_MAGNET_SUBSTEPS = 16;
+/** A magnetic pair moving slower than this (m/s, at its feature size) is at rest: its stiffness can't ring. */
+const MAGNET_REST_SPEED = 0.01;
+/** Ticks a magnetic pair must rest, untouched by any change, before it is stepped without dividing the tick. */
+const MAGNET_SETTLE_TICKS = 30;
 /** A substep carrying a magnet further than this fraction of its feature size relative to its partner averages the pull along the way. */
 const PATH_STEP = 0.1;
 /** A close pair's stiffness is measured again once b has moved this fraction of the feature size (or turned this many rad) relative to a. */
@@ -152,6 +158,8 @@ type J = typeof JoltNS;
 const LAYER_STATIC = 0;
 const LAYER_MOVING = 1;
 export const TICK = 1 / 90;
+/** Jolt's angular damping on every body, 1/s: numerical, not a model of anything (architecture finding A5). */
+const ANGULAR_DAMPING = 0.02;
 const MAX_SUBSTEPS = 8;
 /** Largest omega * dt per substep at which a spring is still simulated accurately (spike: 0.11 -> 0.36% period error). */
 const SUBSTEP_OMEGA_DT = 0.12;
@@ -409,6 +417,8 @@ export class PhysicsWorld {
   private pairRefs = new Map<number, number>();
   private conns = new Map<string, ConnRec>();
   private envBodies: JoltNS.Body[] = [];
+  /** What the floor and walls are made of, by Jolt body id (for where friction's heat goes). */
+  private envMaterial = new Map<number, Material>();
   private roomBodies: JoltNS.Body[] = [];
   private grabs = new Map<string, Grab>();
   private sim: SimSettings;
@@ -522,6 +532,8 @@ export class PhysicsWorld {
   // ops
 
   apply(op: PhysicsOp) {
+    // anything changed from outside (a load, a part, a hand, a switch): every magnetic pair is watched again closely
+    this.magnetRest.clear();
     switch (op.op) {
       case 'environment': return this.setEnvironment(op.boxes, op.materials);
       case 'clear': return this.clear();
@@ -563,6 +575,7 @@ export class PhysicsWorld {
       this.bi.DestroyBody(b.GetID());
     }
     this.envBodies = [];
+    this.envMaterial.clear();
     for (const box of boxes) {
       const m = materials[box.material];
       const shape = new J.BoxShape(this.V(box.half), Math.min(0.01, Math.min(...box.half) * 0.4));
@@ -574,6 +587,7 @@ export class PhysicsWorld {
       J.destroy(cs);
       this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
       this.envBodies.push(body);
+      if (m) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), m);
     }
   }
 
@@ -656,6 +670,7 @@ export class PhysicsWorld {
     for (const id of [...this.conns.keys()]) this.removeConnection(id);
     for (const id of [...this.parts.keys()]) this.removePart(id);
     this.grabs.clear();
+    this.ledger = emptyEnergies();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -837,7 +852,7 @@ export class PhysicsWorld {
       cs.mFriction = material.friction;
       cs.mRestitution = material.restitution;
       cs.mLinearDamping = 0;
-      cs.mAngularDamping = 0.02;
+      cs.mAngularDamping = ANGULAR_DAMPING;
       cs.mMaxAngularVelocity = 400;
       // Torque-free bodies conserve angular momentum (tumbling, precession), not angular velocity. Segments of
       // breakable parts get this at the level of the whole rigid assembly in the projection instead.
@@ -1138,6 +1153,25 @@ export class PhysicsWorld {
   /** Which assembly (index into clusters) each member body belongs to this tick. */
   private clusterOf = new Map<BodyRec, number>();
   private hinges: BondRec[] = [];
+  /** The energy ledger since the scene began (energy.ts), this tick's books, and the heat each part took this tick. */
+  private ledger: Energies = emptyEnergies();
+  private book = { work: emptyWork(), heat: emptyHeat(), sources: [] as (HeatSource<BodyRec> & { env?: Material })[] };
+  private heatTick = new Map<string, number>();
+  /** What the forces being applied right now are, for the books; and the length of the substep they act over. */
+  private forceBook: { kind: keyof WorkBook | 'eddy'; to?: BodyRec } | null = null;
+  private subDt = TICK;
+  /** Magnetic multirate: this substep's index, the tick's pairs (found once), and each pair's wrench as last worked
+   *  out, with how many substeps it stands for. */
+  private magnetSub = 0;
+  /** Where the last tick's time went, ms (for the watchdog's slow findings). Applying fields counts as magnets. */
+  private sections = { magnets: 0, jolt: 0, assemblies: 0, joints: 0, energy: 0 };
+  private tickPairs: MagnetPair[] | null = null;
+  private magnetHeld = new Map<string, { a: BodyRec; b: BodyRec; F: Vec3; T: Vec3; every: number }>();
+  /** Bodies in contact with anything, last tick and this one (from the contact listener). */
+  private restingOn = new Set<BodyRec>();
+  private touchingNow = new Set<BodyRec>();
+  /** Ticks each magnetic pair has rested on what it pairs with, since anything last changed. */
+  private magnetRest = new Map<string, number>();
   private watch = new Set<BodyRec>();
   private contacts = new Map<string, RecordedContact>();
   /** Accumulated impulses of last tick's assembly rows, by row key. */
@@ -1390,6 +1424,17 @@ export class PhysicsWorld {
       (supports.get(r.a) ?? supports.set(r.a, []).get(r.a)!).push(r);
     }
     for (const list of supports.values()) for (const r of leastSupport(list, rows)) if (r.key) { if (r.acc) this.warm.set(r.key, r.acc); else this.warm.delete(r.key); }
+    // heat made in the solve: friction rows sliding, hinges turning against their plastic moment (impulse x speed)
+    for (const r of rows) {
+      const tag = r.tag as RowTag;
+      if (!r.acc) continue;
+      const plastic = tag.kind === 'hinge' && r.kind === 'angular' && !!r.key && /:b[yz]$/.test(r.key);
+      if (!r.frictionOf && !plastic) continue;
+      const va = r.a ? (r.kind === 'linear' ? pointVelocity(r.a, r.pa) : r.a.w) : [0, 0, 0] as Vec3;
+      const vb = r.b ? (r.kind === 'linear' ? pointVelocity(r.b, r.pb) : r.b.w) : [0, 0, 0] as Vec3;
+      const w = Math.abs(r.acc * dot(sub(vb, va), r.dir));
+      if (w > 0) this.book.sources.push({ a: tag.ma, b: tag.mb, w, cause: plastic ? 'plastic' : 'friction' });
+    }
     const pseudo = solvePositions(rows, 12, dt, SLOP);
     const none = { v: [0, 0, 0] as Vec3, w: [0, 0, 0] as Vec3 };
     // integrate from tick start with the solved velocity (semi-implicit Euler, as Jolt itself does), plus the
@@ -1969,6 +2014,8 @@ export class PhysicsWorld {
         const d = sub(com(x), xc);
         const Fi = scale(sub(add(ac, cross(alpha, d)), grav), x.mass);
         const Ti = mat3Vec(Is.get(x)!, alpha);
+        const [vx, wx] = this.velocityOf(x);
+        this.book.work.hands += (dot(Fi, vx) + dot(Ti, wx)) * dt;
         this.v1.Set(...Fi);
         this.v2.Set(...Ti);
         this.bi.AddForceAndTorque(x.body.GetID(), this.v1, this.v2, this.J.EActivation_Activate);
@@ -2434,8 +2481,9 @@ export class PhysicsWorld {
    * act on samples of b's (b the smaller magnet, unless only a is free). Steel: a is the steel part, acting through
    * the image of b's faces in its nearest face.
    */
-  private magnetPairs(): MagnetPair[] {
+  private magnetPairs(only: Set<string> | null = null): MagnetPair[] {
     const pairs: MagnetPair[] = [];
+    if (only && !only.size) return pairs;
     const g = length(this.sim.gravity) || 9.81;
     const magnets = [...this.bodies.values()].filter(fieldOn);
     if (magnets.length === 0) return [];
@@ -2501,6 +2549,7 @@ export class PhysicsWorld {
         if (A.r.frozen && B.r.frozen) continue;
         if (A.face < B.face) [A, B] = [B, A];
         if (B.r.frozen) [A, B] = [B, A];
+        if (only && !only.has(`${A.r.id}|${B.r.id}`)) continue;
         const dist = length(sub(B.pose.p, A.pose.p));
         const light = Math.min(A.r.frozen ? Infinity : A.r.mass, B.r.frozen ? Infinity : B.r.mass);
         // Cutoff where the dipole force drops below 0.1% of the lighter magnet's weight.
@@ -2525,6 +2574,7 @@ export class PhysicsWorld {
     for (const M of info) {
       for (const S of ferro) {
         if (M.r.frozen && S.frozen) continue;
+        if (only && !only.has(`${S.id}|${M.r.id}`)) continue;
         const sp = this.poseOf(S);
         const dist = length(sub(sp.p, M.pose.p));
         const reach = Math.hypot(S.dims.length, S.dims.a) / 2 + Math.pow((3 * MU0 * M.m * M.m) / (2 * Math.PI * 0.001 * M.r.mass * g), 0.25);
@@ -2578,25 +2628,67 @@ export class PhysicsWorld {
     if (!this.sim.magnetism) return 1;
     let rate = 0;
     const measured = new Set<string>();
-    for (const pr of this.magnetPairs()) {
+    // Multirate (as r-RESPA does for molecular forces): a stiff, close pair is recomputed every substep; any other
+    // changes too little within a tick to need it, so its wrench, averaged along the tick's path, is held over the
+    // substeps. The pairs are found once a tick.
+    const s = this.magnetSub;
+    const first = estimate || s === 0;
+    // which held pairs are due again this substep: each at its own rate (a far pair not within this tick)
+    const due = !first ? new Set([...this.magnetHeld].filter(([, h]) => s % h.every === 0).map(([key]) => key)) : null;
+    const pairs = estimate ? (this.tickPairs = this.magnetPairs()) : first ? (this.tickPairs ?? this.magnetPairs()) : this.magnetPairs(due);
+    if (!estimate) this.tickPairs = null;
+    if (!estimate && first) this.magnetHeld.clear();
+    this.forceBook = { kind: 'magnets' };
+    // the pairs not due, as they were when last worked out
+    if (!estimate && !first) for (const [key, h] of this.magnetHeld) if (!due!.has(key)) this.applyPairWrench(h.a, h.b, h.F, h.T);
+    for (const pr of pairs) {
       if (this.latches.has(pr.key)) continue;
       if (estimate) {
         if (pr.close && !pr.b.frozen) {
           const k = this.pairStiffness(pr, pr.a, pr.b, pr.feature);
           measured.add(pr.key);
-          if (k) { this.magnetStiffness.set(pr.key, k); rate = Math.max(rate, k.rate); }
+          // a pair settled at rest on what it pairs with is held exactly by the implicit step whatever its stiffness;
+          // only one that is moving, or may start to, needs the tick divided to follow it
+          const still = this.pairMoving(pr) ? 0 : (this.magnetRest.get(pr.key) ?? 0) + 1;
+          this.magnetRest.set(pr.key, still);
+          if (k) { this.magnetStiffness.set(pr.key, k); if (still < MAGNET_SETTLE_TICKS) rate = Math.max(rate, k.rate); }
         }
         continue;
       }
-      const { F, T } = this.pairWrench(pr.wrench, pr.a, pr.b, this.magnetStiffness.get(pr.key), dt, pr.feature);
-      this.applyForceTorque(pr.b, F, T);
-      // the reaction on a is exactly opposite, with the moment of the couple, so momentum and angular momentum hold
-      const d = sub(this.poseOf(pr.b).p, this.poseOf(pr.a).p);
-      this.applyForceTorque(pr.a, scale(F, -1), sub(scale(T, -1), cross(d, F)));
+      const k = this.magnetStiffness.get(pr.key);
+      // how many substeps its wrench can stand for: a pair whose motion the substep resolves many times over
+      // (rate dt well under a quarter radian) needs working out only every so often; far ones once a tick
+      const every = first ? (!pr.close ? Infinity : k && k.rate * dt < 0.25 ? Math.max(1, Math.floor(0.25 / (k.rate * dt))) : 1) : this.magnetHeld.get(pr.key)?.every ?? 1;
+      const span = Number.isFinite(every) ? Math.min(every * dt, TICK) : TICK;
+      const { F, T } = this.pairWrench(pr.wrench, pr.a, pr.b, every === 1 ? k : undefined, every === 1 ? dt : span, pr.feature);
+      this.magnetHeld.set(pr.key, { a: pr.a, b: pr.b, F, T, every });
+      this.applyPairWrench(pr.a, pr.b, F, T);
       this.lastMagnetPairs++;
     }
+    this.forceBook = null;
     if (estimate) for (const key of [...this.stiffnessCache.keys()]) if (!measured.has(key)) this.stiffnessCache.delete(key);
     return estimate ? Math.max(1, Math.min(MAX_MAGNET_SUBSTEPS, Math.ceil((rate * TICK) / 0.5))) : 1;
+  }
+
+  /**
+   * Whether a magnetic pair could ring this tick: unless it rests on something that holds it (in contact last tick,
+   * and still there), its stiffness can set it moving faster than a tick follows. A magnet just let go in mid-air is
+   * still for an instant, but nothing holds it.
+   */
+  private pairMoving(pr: MagnetPair) {
+    const [vb, wb] = this.velocityOf(pr.b);
+    const [va, wa] = pr.a.frozen ? [[0, 0, 0] as Vec3, [0, 0, 0] as Vec3] : this.velocityOf(pr.a);
+    if (length(sub(vb, va)) > MAGNET_REST_SPEED || length(sub(wb, wa)) * pr.feature > MAGNET_REST_SPEED) return true;
+    // asleep, or lying on something that holds it (its partner, the floor, another part) as of last tick
+    if (!pr.b.body.IsActive()) return false;
+    return !this.restingOn.has(pr.b);
+  }
+
+  /** A magnetic wrench on b, and its exact reaction on a (with the moment of the couple, so momentum holds). */
+  private applyPairWrench(a: BodyRec, b: BodyRec, F: Vec3, T: Vec3) {
+    this.applyForceTorque(b, F, T);
+    const d = sub(this.poseOf(b).p, this.poseOf(a).p);
+    this.applyForceTorque(a, scale(F, -1), sub(scale(T, -1), cross(d, F)));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -2740,8 +2832,10 @@ export class PhysicsWorld {
       const W = [0, 1, 2, 3, 4, 5].map((i) => -e.D.slice(i * 6, i * 6 + 6).reduce((s, v, j) => s + v * qn[j]!, 0));
       const F: Vec3 = [W[0]!, W[1]!, W[2]!], T: Vec3 = [W[3]!, W[4]!, W[5]!];
       // the wrench acts about the reference point: on C that is T + d x F about its own centre
+      this.forceBook = { kind: 'eddy', to: e.C };
       this.applyForceTorque(e.C, F, add(T, cross(d, F)));
       this.applyForceTorque(e.S, scale(F, -1), scale(T, -1));
+      this.forceBook = null;
     }
   }
 
@@ -3076,6 +3170,13 @@ export class PhysicsWorld {
 
   private applyForceTorque(r: BodyRec, F: Vec3, T: Vec3) {
     if (r.frozen || r.grabbed === 'creative') return;
+    if (this.forceBook) {
+      const [v, w] = this.velocityOf(r);
+      const work = (dot(F, v) + dot(T, w)) * this.subDt;
+      const fb = this.forceBook;
+      // induced currents only ever take energy out, as heat in the conductor they flow in
+      if (fb.kind === 'eddy') { this.book.heat.eddy -= work; this.warmPart(fb.to ?? r, -work); } else this.book.work[fb.kind] += work;
+    }
     this.v1.Set(...F);
     this.v2.Set(...T);
     this.bi.AddForceAndTorque(r.body.GetID(), this.v1, this.v2, this.J.EActivation_Activate);
@@ -3124,6 +3225,8 @@ export class PhysicsWorld {
       const vl = rotate(quatConj(qq), scale(v, 1 / speed));
       const A = Math.abs(vl[0]) * r.faceAreas[0] + Math.abs(vl[1]) * r.faceAreas[1] + Math.abs(vl[2]) * r.faceAreas[2];
       const F = scale(v, -0.5 * rho * r.kind.dragCd * A * speed);
+      // drag's work is heat in the air the part pushes through
+      this.book.heat.air -= dot(F, v) * this.subDt;
       this.v1.Set(...F);
       this.bi.AddForce(r.body.GetID(), this.v1, this.J.EActivation_Activate);
     }
@@ -3146,7 +3249,10 @@ export class PhysicsWorld {
       const vb = c.b ? this.pointVelocity(c.b, wb.p) : [0, 0, 0] as Vec3;
       const dir = scale(dvec, 1 / L);
       const vrel = dot(sub(vb, va), dir);
-      F *= 1 + 0.1 * Math.tanh(vrel * 4);
+      const hysteresis = F * 0.1 * Math.tanh(vrel * 4);
+      F += hysteresis;
+      // the rubber's own loss: the extra force against stretching, and the lesser one back, do net work as heat
+      this.book.heat.damping += hysteresis * vrel * this.subDt;
       c.load.axial = F;
       const f = scale(dir, F);
       if (!c.a.frozen) { this.v1.Set(...f); this.r1.Set(...wa.p); this.bi.AddForce(c.a.body.GetID(), this.v1, this.r1, this.J.EActivation_Activate); }
@@ -3204,7 +3310,10 @@ export class PhysicsWorld {
         ms.mMaxTorqueLimit = lim;
       }
       if (rv.bearingMu > 0) {
-        h.SetMaxFrictionTorque(0.5 * rv.bearingMu * c.lastPositionLambda * rv.boreDiameter + rv.frictionTorque);
+        const tf = 0.5 * rv.bearingMu * c.lastPositionLambda * rv.boreDiameter + rv.frictionTorque;
+        h.SetMaxFrictionTorque(tf);
+        // a bearing turning against its friction warms both sides of it
+        if (wrel !== 0) this.book.sources.push({ a: c.a, b: c.b, w: tf * Math.abs(wrel) * this.subDt, cause: 'friction' });
       }
       c.load.extent = h.GetCurrentAngle();
     }
@@ -3275,6 +3384,7 @@ export class PhysicsWorld {
       const Br = m.rated * this.channelLevel(m.drive);
       if (Br === m.Br) continue;
       m.Br = Br;
+      this.magnetRest.clear();
       for (const l of [...this.latches.values()]) if (l.a === r || l.b === r) this.unlatch(l);
       this.bi.ActivateBody(r.body.GetID());
     }
@@ -3284,6 +3394,11 @@ export class PhysicsWorld {
   step(): StepResult {
     const t0 = performance.now();
     const dt = TICK;
+    [this.restingOn, this.touchingNow] = [this.touchingNow, this.restingOn];
+    this.touchingNow.clear();
+    const sec = (this.sections = { magnets: 0, jolt: 0, assemblies: 0, joints: 0, energy: 0 });
+    let tm = performance.now();
+    const lap = (k: keyof typeof sec) => { const n = performance.now(); sec[k] += n - tm; tm = n; };
     this.driveMagnets();
     // Fields act as forces over a step. Magnets close together move faster than a tick can follow, so then the
     // tick is divided and every field recomputed for each part of it.
@@ -3294,25 +3409,163 @@ export class PhysicsWorld {
     // a latch reads every impulse its constraint gives in the tick (M6): one Jolt step per substep then
     if (this.latches.size && per > 1) { k *= per; per = 1; }
     this.lastSubsteps = k * per;
+    lap('magnets');
     this.prepareClusters();
     this.touches.clear();
+    lap('assemblies');
+    const start = this.openBooks();
+    lap('energy');
     for (let s = 0; s < k; s++) {
+      this.subDt = dt / k;
+      this.magnetSub = s;
       this.applyFields(dt / k);
+      lap('magnets');
       this.cachePreStepVelocities();
       this.containFaults();
       this.jolt.Step(dt / k, per);
+      lap('jolt');
       this.accumulateLatches();
+      this.bookMotors(per);
+      lap('joints');
     }
+    this.subDt = dt;
     this.solveAssemblies(dt);
     this.containFaults();
+    lap('assemblies');
     this.updateLatches();
+    lap('magnets');
     this.time += dt;
     this.ticks++;
     // constraint impulses are those of the last substep
     this.evaluateConnections(dt, this.lastSubsteps);
     this.evaluateBonds(this.lastSubsteps / dt);
+    lap('joints');
+    this.closeBooks(start, dt);
+    lap('energy');
     const stepMs = performance.now() - t0;
     return this.collect(stepMs);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // energy: every joule held, put in and turned to heat (energy.ts)
+
+  /** What the moving world holds now: kinetic and potential energy of every free body, elastic in springs and bands. */
+  private storedNow() {
+    const g = this.sim.gravity;
+    let kinetic = 0, potential = 0, spin = 0, elastic = 0;
+    for (const r of this.bodies.values()) {
+      if (r.frozen || r.grabbed === 'creative' || !r.Iloc) continue;
+      const b = r.body;
+      // Jolt returns temporaries: read each vector before asking for the next
+      const c = b.GetCenterOfMassPosition(); const p: Vec3 = [c.GetX(), c.GetY(), c.GetZ()];
+      potential += potentialEnergy(r.mass, p, g);
+      if (!b.IsActive()) continue;
+      const lv = b.GetLinearVelocity(); const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
+      const av = b.GetAngularVelocity(); const w: Vec3 = [av.GetX(), av.GetY(), av.GetZ()];
+      const q = b.GetRotation(); const I = worldInertia(r.Iloc, [q.GetX(), q.GetY(), q.GetZ(), q.GetW()]);
+      const rot = kineticEnergy(0, v, w, I);
+      kinetic += kineticEnergy(r.mass, v, [0, 0, 0], null) + rot;
+      spin += rot;
+    }
+    for (const c of this.conns.values()) {
+      if (c.status === 'broken') continue;
+      const sp = c.derived.spring;
+      if (!sp) continue;
+      if (c.kind.model === 'band') {
+        // the neo-Hookean band's stored energy, by the trapezoid rule on its force from rest to now
+        const L = c.load.extent, L0 = Math.max(c.bandRest, 1e-4);
+        if (L > L0) elastic += 0.5 * neoHookeanBandForce(sp.bandG ?? 5e5, sp.bandArea ?? 1e-5, L / L0) * (L - L0);
+      } else if (c.kind.model === 'spring' && !c.springRigid && c.typed) {
+        const L = length(sub(this.anchorWorldB(c).p, this.anchorWorld(c).p));
+        elastic += springEnergy(sp.k, L - sp.rest);
+      }
+    }
+    return { kinetic, potential, elastic, spin };
+  }
+
+  private openBooks() {
+    this.book = { work: emptyWork(), heat: emptyHeat(), sources: [] };
+    this.heatTick.clear();
+    return this.storedNow();
+  }
+
+  /** Motors' work (and eddy brakes' heat) over a Jolt step, from the torque each applied and how fast it turned. */
+  private bookMotors(collisionSteps: number) {
+    for (const c of this.conns.values()) {
+      const rv = c.derived.revolute;
+      if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy)) continue;
+      const h = c.typed as JoltNS.HingeConstraint;
+      const axis = rotate(this.anchorWorld(c).q, [0, 1, 0]);
+      const wa = this.bi.GetAngularVelocity(c.a.body.GetID());
+      let wrel = -dot([wa.GetX(), wa.GetY(), wa.GetZ()], axis);
+      if (c.b) { const wb = this.bi.GetAngularVelocity(c.b.body.GetID()); wrel += dot([wb.GetX(), wb.GetY(), wb.GetZ()], axis); }
+      // the motor's angular impulse each collision step, times how far it turned the joint in that step
+      const work = h.GetTotalLambdaMotor() * collisionSteps * wrel * this.hingeSign(c);
+      if (rv.motor) this.book.work.motors += work;
+      else { this.book.heat.eddy -= work; this.warmPart(c.a, -work / 2); if (c.b) this.warmPart(c.b, -work / 2); }
+    }
+  }
+
+  /** Jolt's hinge acts from its body 1 on its body 2: +1 when that is a to b (the order the joint was made in). */
+  private hingeSign(c: ConnRec): number {
+    const b2 = (c.typed as JoltNS.HingeConstraint).GetBody2();
+    return c.b && b2.GetID().GetIndexAndSequenceNumber() === c.b.body.GetID().GetIndexAndSequenceNumber() ? 1 : -1;
+  }
+
+  private warmPart(r: BodyRec | null, joules: number) {
+    if (!r || !(joules > 0)) return;
+    this.heatTick.set(r.partId, (this.heatTick.get(r.partId) ?? 0) + joules);
+  }
+
+  /**
+   * Close this tick's books. What the world holds now, against what it held at the start plus the work put in, says
+   * how much went to heat; what was measured directly (air, eddy currents, rubber) is already booked; the rest was made
+   * at contacts, bearings and yielding hinges, and is shared among them by what each made. Jolt's angular damping is
+   * the integrator's (A5), not heat. A gain nothing explains is the integrator's too, unless a hand moving a part
+   * kinematically made it.
+   */
+  private closeBooks(start: ReturnType<PhysicsWorld['storedNow']>, dt: number) {
+    const now = this.storedNow();
+    const b = this.book;
+    const total = (x: { kinetic: number; potential: number; elastic: number }) => x.kinetic + x.potential + x.elastic;
+    const W = b.work.hands + b.work.motors + b.work.magnets + b.work.fluids;
+    const measured = b.heat.air + b.heat.eddy + b.heat.damping;
+    const damping = 2 * ANGULAR_DAMPING * dt * start.spin;
+    let rest = W - (total(now) - total(start)) - measured - damping;
+    let numerical = damping;
+    if (rest < 0) {
+      if ([...this.grabs.values()].some((g) => g.mode === 'creative')) b.work.hands -= rest;
+      else numerical += rest;
+      rest = 0;
+    }
+    const sources = b.sources;
+    if (rest > 0 && !sources.length) { numerical += rest; rest = 0; }
+    shareHeat(rest, sources).forEach((q, i) => {
+      if (!q) return;
+      const src = sources[i]!;
+      b.heat[src.cause] += q;
+      // into the parts, by how readily each soaks heat away (Blok's partition); bending heats the metal that bent
+      const share = src.a ? heatShare(src.a.material, src.b?.material ?? src.env ?? null) : 0;
+      const heat = src.cause === 'plastic' ? TAYLOR_QUINNEY * q : q;
+      this.warmPart(src.a, heat * share);
+      this.warmPart(src.b, heat * (1 - share));
+    });
+    const L = this.ledger;
+    L.kinetic = now.kinetic; L.potential = now.potential; L.elastic = now.elastic;
+    for (const k of Object.keys(b.heat) as (keyof HeatBook)[]) L.heat[k] += b.heat[k];
+    for (const k of Object.keys(b.work) as (keyof WorkBook)[]) L.work[k] += b.work[k];
+    L.numerical += numerical;
+  }
+
+  /** The energy ledger since the scene began, with what the world holds read now. */
+  energies(): Energies {
+    const now = this.storedNow();
+    return { ...this.ledger, kinetic: now.kinetic, potential: now.potential, elastic: now.elastic, heat: { ...this.ledger.heat }, work: { ...this.ledger.work } };
+  }
+
+  /** The ledger as the last tick closed it (no new reads). */
+  private ledgerCopy(): Energies {
+    return { ...this.ledger, heat: { ...this.ledger.heat }, work: { ...this.ledger.work } };
   }
 
   /**
@@ -3411,6 +3664,7 @@ export class PhysicsWorld {
         substeps: this.lastSubsteps,
         magnetPairs: this.lastMagnetPairs,
         ticks: this.ticks,
+        sections: { ...this.sections },
       },
     };
     if (this.slotsDirty) {
@@ -3419,6 +3673,8 @@ export class PhysicsWorld {
       result.slots = this.bySlot.map((r) => r?.id ?? null);
       this.slotsDirty = false;
     }
+    result.energy = this.ledgerCopy();
+    if (this.heatTick.size) result.heat = Object.fromEntries(this.heatTick);
     return result;
   }
 
@@ -3567,6 +3823,7 @@ export class PhysicsWorld {
       if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
       if (this.watch.size) this.recordContact(b1, b2, man, settings, speed);
       this.recordMagnetTouch(b1, b2, man, settings);
+      this.bookContact(b1, b2, man, settings, speed);
     };
     listener.OnContactRemoved = () => {};
     listener.OnContactAdded = (b1p: number, b2p: number, manp: number, setp: number) => {
@@ -3579,6 +3836,7 @@ export class PhysicsWorld {
       if (speed < MIN_IMPACT_FOR_RESTITUTION) settings.mCombinedRestitution = 0;
       if (this.watch.size) this.recordContact(b1, b2, man, settings, speed);
       this.recordMagnetTouch(b1, b2, man, settings);
+      this.bookContact(b1, b2, man, settings, speed);
       if (this.events.length > 48) return;
       const n = man.mWorldSpaceNormal;
       const normal: Vec3 = [n.GetX(), n.GetY(), n.GetZ()];
@@ -3606,6 +3864,37 @@ export class PhysicsWorld {
    * joined neighbour (bond intact, or both frozen), its normal leaving the segment through that end, touches nothing
    * real; the neighbour's own contact is the real one.
    */
+  /**
+   * A contact Jolt solves, as a source of this tick's heat: sliding (friction about mu x the pair's weight-share x the
+   * slip speed) or, closing faster than an impact, the energy a collision of its restitution loses. Only proportions
+   * matter: the books say how much heat there was.
+   */
+  private bookContact(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, settings: JoltNS.ContactSettings, closing: number) {
+    const r1 = this.recOf(b1), r2 = this.recOf(b2);
+    if (!r1 && !r2) return;
+    if (r1) this.touchingNow.add(r1);
+    if (r2) this.touchingNow.add(r2);
+    if (settings.mIsSensor) return; // the assembly solve has it, and books it there
+    const im1 = b1.IsStatic() || b1.IsKinematic() ? 0 : b1.GetMotionProperties().GetInverseMass();
+    const im2 = b2.IsStatic() || b2.IsKinematic() ? 0 : b2.GetMotionProperties().GetInverseMass();
+    if (im1 + im2 <= 0) return;
+    const m = 1 / (im1 + im2);
+    const env = !r1 ? this.envMaterial.get(b1.GetID().GetIndexAndSequenceNumber()) : !r2 ? this.envMaterial.get(b2.GetID().GetIndexAndSequenceNumber()) : undefined;
+    // the moving body first, so the environment (if any) is side b
+    const [a, b] = r1 ? [r1, r2] : [r2, null];
+    if (closing >= MIN_IMPACT_FOR_RESTITUTION) {
+      const e = settings.mCombinedRestitution;
+      this.book.sources.push({ a, b, w: 0.5 * m * closing * closing * (1 - e * e), cause: 'impact', env });
+      return;
+    }
+    const n = man.mWorldSpaceNormal; const nv: Vec3 = [n.GetX(), n.GetY(), n.GetZ()];
+    const cp = man.GetWorldSpaceContactPointOn1(0); const point: Vec3 = [cp.GetX(), cp.GetY(), cp.GetZ()];
+    const rel = sub(this.preStepPointVelocity(b2, point), this.preStepPointVelocity(b1, point));
+    const slip = length(sub(rel, scale(nv, dot(rel, nv))));
+    if (slip < 1e-4) return;
+    this.book.sources.push({ a, b, w: settings.mCombinedFriction * m * length(this.sim.gravity) * slip * this.subDt, cause: 'friction', env });
+  }
+
   private seamGhost(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold): boolean {
     const r1 = this.recOf(b1), r2 = this.recOf(b2);
     if (!(r1?.pr.layout || r2?.pr.layout)) return false;

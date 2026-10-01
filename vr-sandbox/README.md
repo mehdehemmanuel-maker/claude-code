@@ -80,7 +80,12 @@ Walk and mixed reality ask for an AR-capable session, which is what grants the r
   - Magnets use the Gilbert charge model: magnet–magnet forces and torques, plus an image method against steel. Austenitic stainless and aluminium stay non-magnetic.
   - Buoyancy uses the real submerged volume.
   - Quadratic air drag.
-- **Catalogs:** 50 cited materials (steels, aluminium alloys, copper, titanium, woods, polymers, rubber, glass, concrete, stone, textiles, leather, foam, cork, composites, magnets); 17 parametric part families, including an electromagnet; 18 connector kinds. Every parameter is editable on the tablet.
+- **Energy and heat:** the world keeps books on every joule. Motion, height and stretched springs hold it; hands,
+  motors, magnets and water put it in or take it out. Friction, impacts, bending past yield, air drag, induced
+  currents and rubber's hysteresis turn it to heat, which goes into the parts by Blok's partition. Each part warms by
+  its real specific heat and cools to the room by natural convection and radiation. What nothing explains is shown
+  as the integrator's own, never hidden. The books are on the tablet's World page.
+- **Catalogs:** 51 cited materials, each with its thermal properties (steels, aluminium alloys, copper, titanium, woods, polymers, rubber, glass, concrete, fired clay brick, stone, textiles, leather, foam, cork, composites, magnets); 17 parametric part families, including an electromagnet; 18 connector kinds. Every parameter is editable on the tablet.
 - **Joining:** **Best join** picks the real process for the two materials and sizes it to the stock: welds with the matching filler, screws that reach into the second piece, rivets, bolts or the trade's adhesive. A process that can't hold those materials is replaced by one that can, and the headset says why.
 - **Magnets:** strength by grade (Ferrite, N35, N42, N52) and size, stepped on the part page with a "holds ≈ kg on steel" readout. The electromagnet has power from 0 to 100 % and can be put on the tablet's switch.
 - **Save format:** canonical JSON with IDs and a parent/child hierarchy, and full material snapshots embedded. Saves are byte-exact. Share codes (`VRSB1.` deflate + base64url + CRC32) and `#build=` links are supported.

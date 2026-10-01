@@ -473,6 +473,25 @@ describe('magnets', () => {
     await both(m, [1, 0, 0], (pullOnSteel(m) * 0.02) / 0.06);
   });
 
+  it('magnets at rest cost what still things cost: once settled the tick is not divided, and a change divides it again', async () => {
+    // a frame of steel with magnets lying on it, unlatched (so their fields are worked out every tick)
+    const r = await rig({}, true);
+    r.world.apply({ op: 'options', magnetLatch: false });
+    r.part('plate', at(0, 0.0025, 0), { frozen: true, material: 'steel.1018-cd', params: { length: 0.6, width: 0.3, thickness: 0.005 } });
+    for (let i = 0; i < 5; i++) r.part('magnet.disc', at(-0.2 + i * 0.1, 0.0105, 0), { material: 'magnet.n52', params: { diameter: 0.02, thickness: 0.01 } });
+    let first = 0;
+    r.run(0.1, () => { first = Math.max(first, r.world.snapshot().stats.substeps); });
+    expect(first).toBeGreaterThan(1); // just put down: watched closely
+    r.run(1);
+    let settled = 0;
+    r.run(0.5, () => { settled = Math.max(settled, r.world.snapshot().stats.substeps); });
+    expect(settled).toBe(1);
+    // a change from outside (here, gravity) and they are watched closely again
+    r.setSim({ gravity: [0, -9.81, 0.5] });
+    expect(r.world.step().stats.substeps).toBeGreaterThan(1);
+    r.done();
+  });
+
   it('a magnet on a pivot near another wobbles about alignment at sqrt(k / I), and keeps wobbling (no numerical damping)', async () => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
     r.part('magnet.disc', at(0, 0, 0), { frozen: true, params: { diameter: 0.02, thickness: 0.01 } });

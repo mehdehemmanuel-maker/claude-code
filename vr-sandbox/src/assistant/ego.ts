@@ -12,7 +12,7 @@
 import type { App } from '../app/app';
 import type { PhysicsEvent } from '../physics/protocol';
 import type { Change } from '../doc/store';
-import type { Connection, Part, Pose } from '../doc/types';
+import type { Connection, Part, Pose, Vec3 } from '../doc/types';
 import { getConnectorKind } from '../connectors/registry';
 import { composePose, relativePose } from '../doc/math';
 import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
@@ -72,6 +72,12 @@ export class Ego {
   /** Watchdog findings she has already acted on (each body and kind once, as the watchdog reports them). */
   private guarded = new Set<string>();
   private guardFixes: { at: number; trouble: Trouble; did: string }[] = [];
+  /** Joints made since she last looked, and whether a look is on its way. */
+  private newJoints = new Set<string>();
+  private lookQueued = false;
+  /** While she builds a design: she checks it whole when it's done. */
+  private designing = false;
+  private capacities = new Map<string, ReturnType<ReturnType<typeof getConnectorKind>['derive']>>();
   private autoReports = 0;
   private clock = 0;
   private seq = 0;
@@ -84,7 +90,7 @@ export class Ego {
     app.joinPreference = (a, b) => (this.growth.has('memory') ? this.growth.preferred(`join:${a.category}+${b?.category ?? 'floor'}`) : null);
     app.joinChosen = (a, b, kind) => this.growth.prefer(`join:${a.category}+${b?.category ?? 'floor'}`, kind);
     app.eventListeners.push((e) => this.onEvent(e));
-    app.onFrame.push((dt) => this.tick(dt));
+    app.everyFrame('Ego', (dt) => this.tick(dt));
   }
 
   // ---- acting -----------------------------------------------------------------------------------
@@ -209,6 +215,11 @@ export class Ego {
       }
       case 'complain': return this.complain(i.words);
       case 'design': return this.designIt(i.spec, i.material);
+      case 'show': {
+        const at = this.app.pointing?.();
+        if (!at) return 'Point at it with your right hand, then tell me to look.';
+        return this.show(at.id, at.point);
+      }
       case 'level': {
         const l = this.growth.level, nx = this.growth.next;
         return `I'm level ${l.level}, with ${Math.floor(this.growth.xp)} experience.${nx ? ` At ${nx.xp} I'll be able to ${nx.learned.replace(/^I('ve| can| will|'ll)?\s*/i, '').toLowerCase()}` : ' I\'ve learned everything I can so far.'}`;
@@ -226,7 +237,9 @@ export class Ego {
     // a little further off than a single part, so the whole thing is in front of you
     const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
     const plan = design(spec, x, z, `${spec.what}${++this.seq}-`);
-    const r = run(plan.forge, this.host);
+    this.designing = true;
+    let r: RunResult;
+    try { r = run(plan.forge, this.host); } finally { queueMicrotask(() => { this.designing = false; }); }
     if (!r.ok) return `I couldn't build it: ${r.error}`;
     const made = Object.keys(app.doc.parts).filter((id) => !before.has(id));
     app.select(made);
@@ -302,8 +315,15 @@ export class Ego {
           set(pose);
           did = `settled ${name}`;
           break;
+        case 'slow':
+          // not hers to fix in the moment, but hers to name: what took the time goes to Claude
+          trouble = 'slow';
+          break;
+        case 'storage':
+          trouble = 'other';
+          break;
         default:
-          continue; // held-part and timing findings are for the report page, not for her hands
+          continue; // held-part findings are for the report page, not for her hands
       }
       const words = `(Ego saw it herself) ${a.kind} on ${name}: ${a.detail}`;
       // a report per finding while they're few; a storm of them is one flaw, already written up
@@ -312,10 +332,79 @@ export class Ego {
         this.autoReports++;
         this.reports.add({ at: new Date().toISOString(), words, trouble, seen: [`watchdog ${a.severity}: ${a.detail}`, this.focus()], fixed: did, version: __BUILD__, build: app.doc.meta.name, shareCode: app.shareCode() });
       }
-      if (did) this.guardFixes = [...this.guardFixes, { at: app.live.ticks, trouble, did }].slice(-10);
-      this.gain('fix');
-      this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${a.kind === 'jitter' ? `${name} was shaking in place` : `The watchdog caught ${a.kind === 'fell' || a.kind === 'tunnel' ? `${name} going through the floor` : a.kind === 'flung' ? `${name} flung faster than anything could throw it` : `${name} leaving the laws of physics`}`}. ${did ? `I ${did}.` : ''}${filed ? ' Written up for Claude.' : ''}`, []);
+      if (did) { this.guardFixes = [...this.guardFixes, { at: app.live.ticks, trouble, did }].slice(-10); this.gain('fix'); }
+      const what = a.kind === 'jitter' ? `${name} was shaking in place`
+        : a.kind === 'slow' ? `Things are running slow: ${a.detail}`
+        : a.kind === 'storage' ? `Saving: ${a.detail}`
+        : `The watchdog caught ${a.kind === 'fell' || a.kind === 'tunnel' ? `${name} going through the floor` : a.kind === 'flung' ? `${name} flung faster than anything could throw it` : `${name} leaving the laws of physics`}`;
+      this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}. ${did ? `I ${did}.` : ''}${filed ? ' Written up for Claude.' : ''}`, []);
     }
+  }
+
+  // ---- shown something ------------------------------------------------------------------------------
+
+  /** What you showed her last: the part (or the spot), when, and how it moved while she watched (5 s). */
+  shown: { id: string | null; point: Vec3; at: number; trail: { t: number; p: Vec3; v: number }[]; said: string } | null = null;
+
+  /**
+   * You pointed and said "look": she looks there, says what she sees, from the world's own state (what it is, how it
+   * sits and moves, what holds it and how hard), and keeps watching it a few seconds, so what you tell her next comes
+   * with what really happened.
+   */
+  show(id: string | null, point: Vec3): string {
+    const said = id && this.app.doc.parts[id] ? this.describe(id) : `I'm looking at the spot you pointed at (${point.map((x) => x.toFixed(2)).join(', ')} m), but there's no part there.`;
+    this.shown = { id: id && this.app.doc.parts[id] ? id : null, point, at: this.app.live.ticks, trail: [], said };
+    this.gain('ask');
+    return `${said} Tell me what's wrong with it, and I'll look into it.`;
+  }
+
+  /** One part as she sees it: what it is, where and how it moves, what holds it, and anything the watchdog saw. */
+  describe(id: string): string {
+    const app = this.app, p = app.doc.parts[id]!;
+    const k = getPartKind(p.kind), m = app.materialOf(p);
+    const mass = k.volume(effectiveParams(k, p.params, m), m) * m.density;
+    const b = app.boundsOf([id]);
+    const v = app.live.velocity(id)?.linear;
+    const speed = v ? Math.hypot(v[0], v[1], v[2]) : 0;
+    const bits = [`That's ${p.name}: ${k.label.toLowerCase()} in ${m.name}, ${mass < 1 ? `${Math.round(mass * 1000)} g` : `${mass.toFixed(1)} kg`}`];
+    bits.push(p.frozen ? 'frozen in place' : this.tools?.grab.holding === id ? 'in your hand' : b.min[1] < 0.003 ? `on the floor${speed > 0.02 ? `, moving at ${speed.toFixed(2)} m/s` : ', still'}` : speed > 0.02 ? `${b.min[1].toFixed(2)} m up, moving at ${speed.toFixed(2)} m/s` : `${b.min[1].toFixed(2)} m up, still`);
+    const joints = Object.values(app.doc.connections).filter((c) => (c.a.part === id || c.b?.part === id));
+    if (joints.length) {
+      const say = joints.slice(0, 3).map((c) => {
+        const l = app.live.loads.get(c.id);
+        return c.state.status === 'broken' ? `a broken ${getConnectorKind(c.kind).label.toLowerCase()}` : `${getConnectorKind(c.kind).label.toLowerCase()} at ${Math.round((l?.u ?? 0) * 100)}%${l?.mode ? ` of its ${l.mode}` : ''}`;
+      });
+      bits.push(`${joints.length} joint${joints.length === 1 ? '' : 's'}: ${say.join(', ')}`);
+    } else bits.push('joined to nothing');
+    const group = app.component(id);
+    if (group.length > 1) bits.push(`part of an assembly of ${group.length}`);
+    const T = app.live.temps.get(id);
+    if (T !== undefined && Math.abs(T - 20) >= 0.01) bits.push(`${T.toFixed(T - 20 < 1 ? 2 : 1)} °C (${(T - 20).toFixed(2)} K above the room, from the work done on it)`);
+    const seen = app.live.health.filter((a) => a.id.split('#')[0] === id).slice(-2).map((a) => `the watchdog saw it ${a.kind === 'jitter' ? 'shaking' : a.kind === 'fell' || a.kind === 'tunnel' ? 'go through the floor' : a.kind}`);
+    return `${bits.join('; ')}.${seen.length ? ` ${seen.join(', ')}.` : ''}`;
+  }
+
+  /** While she watches what you showed her: where it is and how fast, each frame for five seconds. */
+  private watchShown() {
+    const w = this.shown;
+    if (!w?.id) return;
+    const t = (this.app.live.ticks - w.at) / 90;
+    if (t > 5 || w.trail.length > 600) return;
+    const pose = this.app.livePose(w.id), v = this.app.live.velocity(w.id)?.linear;
+    if (pose) w.trail.push({ t, p: [...pose.p] as Vec3, v: v ? Math.hypot(v[0], v[1], v[2]) : 0 });
+  }
+
+  /** What she saw while watching it, in a line for the report. */
+  private watched(): string | null {
+    const w = this.shown;
+    if (!w?.id || w.trail.length < 2) return null;
+    const a = w.trail[0]!, z = w.trail[w.trail.length - 1]!;
+    const moved = Math.hypot(z.p[0] - a.p[0], z.p[1] - a.p[1], z.p[2] - a.p[2]);
+    const peak = Math.max(...w.trail.map((x) => x.v));
+    // shaking: speed up and down while getting nowhere
+    const turns = w.trail.slice(2).filter((x, i) => (x.v - w.trail[i + 1]!.v) * (w.trail[i + 1]!.v - w.trail[i]!.v) < 0 && x.v > 0.02).length;
+    const name = this.app.doc.parts[w.id]?.name ?? 'it';
+    return `watching ${name} for ${z.t.toFixed(1)} s: it moved ${(moved * 100).toFixed(1)} cm, rose ${((z.p[1] - a.p[1]) * 100).toFixed(1)} cm, peak speed ${peak.toFixed(2)} m/s${turns > 6 && moved < 0.02 ? `, speed reversing ${turns} times: shaking in place` : ''}`;
   }
 
   // ---- complaints -----------------------------------------------------------------------------------
@@ -329,15 +418,27 @@ export class Ego {
     const trouble = troubleOf(words);
     const recent = app.live.health.filter((a) => app.live.ticks - a.at < 900);
     const name = (id: string) => (id ? app.doc.parts[id.split('#')[0]!]?.name ?? 'a part' : 'the scene');
+    const shown = this.shown && app.live.ticks - this.shown.at < 90 * 60 ? this.shown : null;
     const seen = [
+      ...(shown ? [`you showed me: ${shown.said}`, ...(this.watched() ? [this.watched()!] : [])] : []),
       ...recent.slice(-6).map((a) => `watchdog ${a.severity}: ${a.kind} on ${name(a.id)}: ${a.detail}`),
       ...this.advice.filter((a) => a.kind !== 'tip').slice(0, 3).map((a) => a.text),
       this.focus(),
       `${app.fps.toFixed(0)} fps, physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms a step, ${Object.keys(app.doc.parts).length} parts, ${Object.keys(app.doc.connections).length} joints, ${app.settings.build ? 'building' : 'playing'}`,
+      // where the time goes, by subsystem and by physics section
+      ...(trouble === 'slow' ? [
+        `frame time: ${app.budget.breakdown().slice(0, 5).map(([k, v]) => `${k} ${v.toFixed(1)} ms`).join(', ') || 'not measured yet'}`,
+        `physics tick: ${Object.entries(app.live.stats?.sections ?? {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v.toFixed(1)} ms`).join(', ')}; ${app.live.stats?.substeps ?? 1} substeps, ${app.live.stats?.magnetPairs ?? 0} magnetic pairs`,
+      ] : []),
+      ...(trouble === 'save' ? [`storage: ${(app.storageUsed() / 1e6).toFixed(2)} M of about 5 M characters used; ${app.library.list().length} builds, ${app.templates.list().length} templates`] : []),
     ];
     // what she already put right on her own, if it's what you mean
     const already = this.guardFixes.filter((f) => f.trouble === trouble && app.live.ticks - f.at < 900).map((f) => f.did);
-    const fixed = this.selfFix(trouble, recent.map((a) => ({ kind: a.kind, id: a.id.split('#')[0]! }))) ?? (already.length ? `already ${already.join(' and ')}` : null);
+    // what you showed her counts as what you mean
+    const hints: { kind: string; id: string }[] = recent.map((a) => ({ kind: a.kind, id: a.id.split('#')[0]! }));
+    // (shaking: she settles the part you showed her; anything else she checks against what she saw, not moves it)
+    if (shown?.id) hints.push({ kind: trouble === 'jitter' ? 'jitter' : 'shown', id: shown.id });
+    const fixed = this.selfFix(trouble, hints) ?? (already.length ? `already ${already.join(' and ')}` : null);
     this.reports.add({ at: new Date().toISOString(), words, trouble, seen, fixed, version: __BUILD__, build: app.doc.meta.name, shareCode: app.shareCode() });
     this.gain('ask');
     const n = this.reports.unsent.length;
@@ -384,6 +485,13 @@ export class Ego {
         app.view.sun.castShadow = false;
         app.notify();
         return 'turned off shadows and particles to speed things up';
+      }
+      case 'save': {
+        // try it again, and say exactly what happened
+        const before = app.library.list().length;
+        const entry = app.saveBuild();
+        if (!entry) return null;
+        return `saved it again as “${entry.name}” (${app.library.list().length > before ? 'a new build' : 'over the one you had open'}), and it read back whole`;
       }
       case 'stuck':
         if (!this.tools?.grab.holding) return null;
@@ -440,10 +548,10 @@ export class Ego {
    * Foresight: what every joint will carry once gravity acts, from the load path to the ground. Joints that would
    * fail, or come close, are said before they do. `on` says why she's looking.
    */
-  foresee(on: 'play' | 'joint', only?: string) {
+  foresee(on: 'play' | 'joint', only?: Set<string>) {
     if (!this.growth.has(on === 'play' ? 'foresight' : 'initiative')) return [];
     const doc = this.app.doc;
-    const found = this.forecast().filter((f) => (only ? f.id === only : true) && f.u >= (on === 'play' ? 0.8 : 0.6));
+    const found = this.forecast().filter((f) => (only ? only.has(f.id) : true) && f.u >= (on === 'play' ? 0.8 : 0.6));
     for (const f of found.slice(0, 3)) {
       const c = doc.connections[f.id]!;
       const unit = f.mode === 'bending' ? 'N·m' : 'N';
@@ -454,9 +562,16 @@ export class Ego {
     return found;
   }
 
+  /** A joint's capacities as built (fully cured), worked out once for each joint as it is. */
   private derived(c: Connection) {
     const { a, b, g } = this.geometry(c);
-    return getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, distance: 0, cure: 1e12 });
+    const key = `${c.kind}|${JSON.stringify(c.params)}|${a.id}|${b?.id ?? ''}|${g.thicknessA}|${g.thicknessB}|${g.bondW}|${g.bondL}`;
+    const hit = this.capacities.get(key);
+    if (hit) return hit;
+    const d = getConnectorKind(c.kind).derive({ params: c.params, matA: a, matB: b, thicknessA: g.thicknessA, thicknessB: g.thicknessB, distance: 0, cure: 1e12 });
+    if (this.capacities.size > 4000) this.capacities.clear();
+    this.capacities.set(key, d);
+    return d;
   }
 
   /** Run Forge: typed on the tablet, or a suggestion. */
@@ -530,6 +645,7 @@ export class Ego {
 
   /** Near failure: warn once per joint, with what would carry it. */
   private tick(dt: number) {
+    this.watchShown();
     this.clock += dt;
     if (this.clock < 0.5) return;
     this.clock = 0;
@@ -635,8 +751,18 @@ export class Ego {
         const c = ch.value as unknown as Connection;
         const n = (id: string) => slug(doc.parts[id]?.name ?? id);
         this.note(`join ${n(c.a.part)} ${c.b ? n(c.b.part) : 'floor'} with ${c.kind}`, `join:${this.app.joinKind === AUTO_JOIN ? AUTO_JOIN : c.kind}`);
-        // initiative: a joint that won't hold is said as it's made, not when it breaks
-        queueMicrotask(() => this.foresee('joint', c.id));
+        // initiative: a joint that won't hold is said as it's made, not when it breaks. A burst of joints (a script,
+        // a template, a design) is looked at once, when it's done, not once per joint
+        this.newJoints.add(c.id);
+        if (!this.lookQueued) {
+          this.lookQueued = true;
+          queueMicrotask(() => {
+            this.lookQueued = false;
+            const ids = new Set(this.newJoints);
+            this.newJoints.clear();
+            if (!this.designing) this.app.budget.measure("Ego's foresight", () => this.foresee('joint', ids));
+          });
+        }
       } else if (ch.op === 'update' && ch.coll === 'parts') {
         const p = doc.parts[ch.id];
         if (!p) continue;

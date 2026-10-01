@@ -3,7 +3,7 @@
 // herself, and keeps a report for Claude: the words, what she saw, what she did, the version, and the build as it was
 // (its share code). Reports stay on the headset until sent, as a GitHub issue Claude reads, or copied.
 
-export type Trouble = 'jitter' | 'fell-through' | 'flung' | 'broke' | 'slow' | 'stuck' | 'unrealistic' | 'other';
+export type Trouble = 'jitter' | 'fell-through' | 'flung' | 'broke' | 'slow' | 'stuck' | 'save' | 'unrealistic' | 'other';
 
 const TROUBLES: [Trouble, RegExp][] = [
   ['fell-through', /(fell|fall|falls|sank|sinks|went|goes|sunk|clip\w*) (through|into|under) (the )?(floor|ground|table)|through the (floor|ground)|clipp?ing|passed through|went through/],
@@ -12,6 +12,7 @@ const TROUBLES: [Trouble, RegExp][] = [
   ['broke', /(broke|broken|snapped|fell apart|came apart|came off|fell off|won'?t hold|doesn'?t hold|not holding|let go)/],
   ['slow', /(lag\w*|slow|stutter\w*|choppy|fps|frame ?rate|freez\w* up|hitch\w*)/],
   ['stuck', /(stuck|won'?t move|can'?t (grab|move|pick)|not moving|won'?t let go)/],
+  ['save', /((won'?t|can'?t|couldn'?t|doesn'?t|didn'?t|not|isn'?t) (save|saving|keep|be saved)|save (failed|didn'?t|won'?t|is gone)|lost (my|the) (build|save|template)|(build|template) (is )?gone)/],
   ['unrealistic', /(not realistic|unrealistic|shouldn'?t|wouldn'?t (happen|work)|isn'?t real|not real|fake|impossible|makes no sense|wrong physics|physics (is|are) wrong)/],
 ];
 

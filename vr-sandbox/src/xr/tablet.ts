@@ -204,8 +204,14 @@ export class Tablet {
       ['tools', '🛠', 'Tools'], ['parts', '🧱', 'Parts'], ['materials', '🎨', 'Materials'], ['join', '🔩', 'Join'], ['search', '🔍', 'Search'],
       ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'], ['ego', '✦', egoNews ? `Ego • ${egoNews}` : 'Ego'],
     ];
-    const tw = (W - 40 - (tabs.length - 1) * 6) / tabs.length;
+    // the tabs, and at the end, always there: show Ego something
+    const tw = (W - 40 - tabs.length * 6) / (tabs.length + 1);
     tabs.forEach(([p, icon, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 6), 12, tw, 72, icon, () => { this.page = p; this.scroll = 0; }, { on: this.page === p, sub: label }));
+    this.btn('show', 20 + tabs.length * (tw + 6), 12, tw, 72, '👁', () => {
+      this.app.showArmed = !this.app.showArmed;
+      if (this.app.showArmed) this.app.toast('Point at it and pull the trigger: Ego will look', 'info');
+      this.app.notify();
+    }, { on: this.app.showArmed, tone: 'accent', sub: this.app.showArmed ? 'point…' : 'Show Ego' });
     const y0 = 96;
     const app = this.app;
     switch (this.page) {
@@ -353,7 +359,9 @@ export class Tablet {
     const group = app.component(part.id);
     const joints = Object.values(app.doc.connections).filter((c) => group.includes(c.a.part) && c.state.status !== 'broken').length;
     if (group.length > 1) this.text(`Assembly: ${group.length} parts, ${joints} joint${joints === 1 ? '' : 's'}`, W - 24, y0 + 74, 22, '#8fd3ff', 'right', '600');
-    this.btn('tpl-save', 24, by - 66, 230, 56, '📐 Save as template', () => app.saveTemplate(group), { tone: 'accent' });
+    // what you built: the assembly and whatever rests on it
+    const built = app.together([part.id]);
+    this.btn('tpl-save', 24, by - 66, 230, 56, `📐 Save template (${built.length})`, () => app.saveTemplate(app.together([part.id])), { tone: 'accent' });
     if (group.length > 1) this.btn('del-one', 264, by - 66, 230, 56, 'Delete just this', () => deleteParts(app.store, [part.id]));
     const allFrozen = group.every((id) => app.doc.parts[id]?.frozen);
     this.btn('freeze', 24, by, 230, 56, allFrozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, group, !allFrozen); }, { on: allFrozen });
@@ -587,9 +595,45 @@ export class Tablet {
   private typing = false;
 
   /** Ego: what she sees, what she advises (with fixes you apply in one tap), and what you'll likely want next. */
+  /** After you showed her something: what she sees, and what's wrong with it, in a tap or in your words. */
+  openShown() {
+    this.page = 'ego';
+    this.shownView = true;
+    this.scroll = 0;
+    this.app.notify();
+  }
+
+  private shownView = false;
+
+  private drawShown(y0: number) {
+    const ego = this.app.ego!, w = ego.shown!;
+    const g = this.ctx;
+    this.text('👁 What I see', 24, y0 + 30, 26, '#8fd3ff', 'left', '700');
+    g.fillStyle = 'rgba(143,211,255,0.10)';
+    roundRect(g, 20, y0 + 44, W - 40, 150, 14);
+    g.fill();
+    this.wrapped(w.said, 36, y0 + 74, W - 72, 21, '#e8ecf1', 6);
+    this.text("What's wrong with it?", 24, y0 + 226, 22, '#9aa4af');
+    const asks: [string, string][] = [
+      ['〰 Shaking', "it's shaking"], ['⤓ Went through', 'it went through the floor'], ['💥 Flew off', 'it flew off'], ['💔 Came apart', 'it came apart'],
+      ['🤨 Not realistic', "that wouldn't happen in real life"], ['🐢 Laggy', "it's laggy"], ["💾 Won't save", "it won't save"], ['✓ It\'s fine', ''],
+    ];
+    const bw = (W - 40 - 3 * 8) / 4;
+    asks.forEach(([label, words], i) => this.btn(`shown-${i}`, 20 + (i % 4) * (bw + 8), y0 + 240 + Math.floor(i / 4) * 76, bw, 68, label, () => {
+      this.shownView = false;
+      if (words) ego.reply(ego.ask(words));
+      this.app.notify();
+    }, { tone: words ? undefined : 'accent' }));
+    const by = CH - 76;
+    const half = (W - 40 - 8) / 2;
+    if (Voice.canListen) this.btn('shown-talk', 20, by, half, 60, this.listening ? '🎙 Listening…' : '🎙 Tell her in your words', () => { this.shownView = false; this.talk(); }, { on: this.listening, tone: 'accent' });
+    this.btn('shown-type', Voice.canListen ? 20 + half + 8 : 20, by, Voice.canListen ? half : W - 40, 60, '⌨ Type it', () => { this.shownView = false; this.typing = true; ego.command = "it's "; this.app.notify(); });
+  }
+
   private drawEgo(y0: number) {
     const ego = this.app.ego;
     if (!ego) return;
+    if (this.shownView && ego.shown) return this.drawShown(y0);
     const g = this.ctx;
     // how far she has grown: her level, and how far to the next
     const lv = ego.growth.level, nx = ego.growth.next;
@@ -739,7 +783,8 @@ export class Tablet {
     const list = app.templates.list();
     const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
     const bw = (W - 40 - 8) / 2;
-    this.btn('tpl-save2', 20, y0, bw, 72, '📐 Save selection as template', () => app.saveTemplate(sel.length ? app.component(sel[0]!) : []), { tone: sel.length ? 'accent' : undefined, sub: sel.length ? `${app.component(sel[0]!).length} parts` : 'select a part of it first' });
+    const built = sel.length ? app.together(sel) : [];
+    this.btn('tpl-save2', 20, y0, bw, 72, '📐 Save what you built as a template', () => app.saveTemplate(app.together(sel)), { tone: sel.length ? 'accent' : undefined, sub: sel.length ? `${built.length} parts: joined, and resting on it` : 'select a part of it first' });
     if (this.deleting && !list.length) this.deleting = false;
     this.btn('tpl-delmode', 20 + bw + 8, y0, bw, 72, this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; }, { on: this.deleting, tone: this.deleting ? 'danger' : undefined });
     const y1 = y0 + 86;
@@ -811,6 +856,15 @@ export class Tablet {
       });
     }
     this.drawRoom(row(5) + 10, bw);
+    // the energy books: where every joule is, what put it there, and what became heat
+    const e = app.live.energy;
+    if (e) {
+      const J = (x: number) => (Math.abs(x) >= 1000 ? `${(x / 1000).toFixed(2)} kJ` : `${x.toFixed(Math.abs(x) < 10 ? 2 : 1)} J`);
+      const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping;
+      const work = e.work.hands + e.work.motors + e.work.magnets + e.work.fluids;
+      this.text(`⚡ motion ${J(e.kinetic)} · height ${J(e.potential)} · springs ${J(e.elastic)} · put in ${J(work)} (hands ${J(e.work.hands)}, motors ${J(e.work.motors)}, magnets ${J(e.work.magnets)})`, 24, CH - 100, 18, '#c9d2dc');
+      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}) · integrator ${J(e.numerical)}`, 24, CH - 76, 18, '#c9d2dc');
+    }
     this.drawHealth(CH - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, CH - 14, 22, '#9aa4af');
     this.text(`v ${__BUILD__}`, W - 24, CH - 14, 18, '#6f7883', 'right');

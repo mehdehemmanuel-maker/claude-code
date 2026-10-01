@@ -20,7 +20,7 @@ async function main() {
   app.ego = new Ego(app, tools);
   const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
-  app.onFrame.push((dt) => tools.frame(dt));
+  app.everyFrame('tools', (dt) => tools.frame(dt));
   // behind the launch card, a still view into the workshop
   app.view.camera.position.set(0, 1.7, 3.4);
   app.view.camera.rotation.set(-0.28, 0, 0);
@@ -100,6 +100,8 @@ async function main() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (hash.startsWith('build=')) app.openShareCode(hash.slice(6));
 
+  // ask the browser to keep what you save even when the headset runs short of space
+  void navigator.storage?.persist?.().catch(() => false);
   app.start();
   document.getElementById('loading')?.remove();
 }
