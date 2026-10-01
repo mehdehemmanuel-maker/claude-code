@@ -438,6 +438,73 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
 }
 
 /**
+ * A rigid body resting on more supports than it needs (a table on four feet, a crate on its bottom edges) is
+ * statically indeterminate: every set of support impulses with the same net impulse and moment moves it the same, so
+ * which one the solver lands on is an accident of its iterations. Left alone, warm starting ratchets friction that
+ * cancels itself up to the limit of the cone (the feet pushing each other apart) and piles the weight onto one
+ * diagonal: loads no real table carries, read through its joints as moments that break them. What real supports of
+ * equal stiffness share is the least set (minimum norm) that holds the body; this replaces the solver's choice with it,
+ * or moves as far toward it as every contact's normal and friction limits allow. The body moves exactly as before.
+ *
+ * `rows` are the normal rows of one body's fixed supports (their friction rows found through `frictionOf`); returns
+ * every row whose impulse changed.
+ */
+export function leastSupport(normals: Row[], all: Row[]): Row[] {
+  if (normals.length < 2) return [];
+  const fr = new Map<Row, Row[]>();
+  for (const r of all) if (r.frictionOf && normals.includes(r.frictionOf)) (fr.get(r.frictionOf) ?? fr.set(r.frictionOf, []).get(r.frictionOf)!).push(r);
+  const pts = normals.map((n) => {
+    const rs = [n, ...(fr.get(n) ?? [])];
+    let lam: Vec3 = [0, 0, 0];
+    for (const r of rs) lam = add(lam, scale(r.dir, r.acc));
+    return { n, rs, p: n.pa, lam };
+  });
+  const k = pts.length;
+  const c = scale(pts.reduce((s, q) => add(s, q.p), [0, 0, 0] as Vec3), 1 / k);
+  let J: Vec3 = [0, 0, 0], M: Vec3 = [0, 0, 0];
+  const S = [...ZERO3];
+  let size = 0;
+  for (const q of pts) {
+    const r = sub(q.p, c);
+    J = add(J, q.lam);
+    M = add(M, cross(r, q.lam));
+    const rr = dot(r, r);
+    size = Math.max(size, rr);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) S[i * 3 + j]! += (i === j ? rr : 0) - r[i]! * r[j]!;
+  }
+  if (size < 1e-10) return []; // one point, however many rows
+  // points on a line can't make a moment about it (and don't need to): the small ridge gives the pseudo-inverse there
+  const tr = S[0]! + S[4]! + S[8]!;
+  const det = S[0]! * (S[4]! * S[8]! - S[5]! * S[7]!) - S[1]! * (S[3]! * S[8]! - S[5]! * S[6]!) + S[2]! * (S[3]! * S[7]! - S[4]! * S[6]!);
+  const y = mat3Vec(inverse3(Math.abs(det) > 1e-9 * tr ** 3 ? S : S.map((v, i) => (i % 4 === 0 ? v + 1e-9 * tr : v))), M);
+  const least = pts.map((q) => add(scale(J, 1 / k), cross(y, sub(q.p, c))));
+  // it must hold the body exactly as the solver's did
+  let Mc: Vec3 = [0, 0, 0];
+  least.forEach((l, i) => { Mc = add(Mc, cross(sub(pts[i]!.p, c), l)); });
+  if (length(sub(Mc, M)) > 1e-6 * (length(M) + length(J) * Math.sqrt(size)) + 1e-12) return [];
+  // as far toward it as every contact stays pushing (never pulling) and inside its friction limits
+  let s = 1;
+  const limit = (g0: number, g1: number) => { if (g1 < 0 && g0 >= 0) s = Math.min(s, g0 / (g0 - g1)); else if (g1 < 0) s = 0; };
+  const next = pts.map((q, i) => q.rs.map((r) => dot(least[i]!, r.dir)));
+  pts.forEach((q, i) => {
+    const n0 = q.n.acc, n1 = next[i]![0]!;
+    limit(n0, n1);
+    q.rs.slice(1).forEach((f, j) => {
+      const mu = f.mu ?? 0, t0 = f.acc, t1 = next[i]![j + 1]!;
+      limit(mu * n0 - t0, mu * n1 - t1);
+      limit(mu * n0 + t0, mu * n1 + t1);
+    });
+  });
+  if (s <= 0) return [];
+  const changed: Row[] = [];
+  pts.forEach((q, i) => q.rs.forEach((r, j) => {
+    const a = r.acc + s * (next[i]![j]! - r.acc);
+    if (a !== r.acc) { r.acc = a; changed.push(r); }
+  }));
+  return changed;
+}
+
+/**
  * Split impulse (Catto): the position errors of the rows (their `bias`) solved on pseudo-velocities that start at
  * rest and move the entities' poses only. Contacts push apart but never pull, joints hold together, friction and
  * impulse-bounded rows play no part. Returns each moving entity's pseudo-velocity; its real velocity is untouched,

@@ -20,7 +20,7 @@ import { AudioEngine } from '../audio/audio';
 import { SceneView } from '../render/view';
 import { Particles } from '../render/particles';
 import { BuildLibrary } from './library';
-import type { Ada } from '../assistant/ada';
+import type { Ego } from '../assistant/ego';
 import { LiveState } from './live';
 
 export interface Settings {
@@ -57,6 +57,9 @@ export type Toast = { text: string; kind: 'info' | 'warn' | 'break' | 'ok' };
 export type WorldKind = 'workshop' | 'mixed';
 
 const ENV_MATERIAL = getMaterial('concrete.c30');
+
+/** Where Ego's reports go: new issues here are how Claude hears them. */
+export const REPORT_REPO = 'mehdehemmanuel-maker/claude-code';
 
 /** An empty workshop: the floor and its pool, nothing built. */
 function emptyWorkshop(): BuildDoc {
@@ -99,7 +102,10 @@ export class App {
   /** Everything the physics reports (breaks, contacts, slips...), as it arrives, before the app acts on it. */
   eventListeners: ((e: PhysicsEvent) => void)[] = [];
   /** The assistant, once the headset tools exist (main.ts). */
-  ada: Ada | null = null;
+  ego: Ego | null = null;
+  /** Best join's first try for a pair, from what you usually choose (Ego's memory), and where your choices go. */
+  joinPreference: ((a: Material, b: Material | null) => string | null) | null = null;
+  joinChosen: ((a: Material, b: Material | null, kind: string) => void) | null = null;
   /** Called after a whole build is loaded (template, file, share code, rewind). */
   onLoad: (() => void)[] = [];
   world: WorldKind = 'workshop';
@@ -474,6 +480,9 @@ export class App {
   /** Run the build under real physics; Stop comes back to it as it is now. */
   play() {
     if (!this.settings.build) return;
+    // Ego looks ahead at what every joint will carry (once she can)
+    this.ego?.foresee('play');
+    this.ego?.gain('play');
     this.buildPoint = { label: 'the build', time: this.simTime, doc: structuredClone(this.store.doc), velocities: new Map() };
     this.settings.build = false;
     this.resyncParts();
@@ -599,6 +608,7 @@ export class App {
     const entry = this.templates.save(JSON.stringify({ v: 1, ...frag }));
     this.toast(`Saved template “${entry.name}”: ${frag.parts.length} part${frag.parts.length === 1 ? '' : 's'}, ${frag.connections.length} joint${frag.connections.length === 1 ? '' : 's'}. Place copies from My builds › Templates`, 'ok');
     this.audio.ui('save');
+    this.ego?.gain('template');
     this.notify();
     return entry;
   }

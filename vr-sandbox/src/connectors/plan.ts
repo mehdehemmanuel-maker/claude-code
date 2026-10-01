@@ -104,6 +104,7 @@ function adhesiveFor(a: Material, b: Material | null): string | null {
   if (has('foam')) return 'hot-melt';
   if (has('textile', 'leather', 'cork')) return 'pu-construction';
   if (cats.every((c) => WOOD.includes(c))) return 'pva-wood';
+  if (cats.every((c) => c === 'ceramic' || c === 'stone')) return 'mortar'; // masonry is laid in mortar
   if (cats.every((c) => c === 'polymer')) return 'cyanoacrylate';
   return 'epoxy-structural';
 }

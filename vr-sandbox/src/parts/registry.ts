@@ -92,7 +92,7 @@ function ringCompound(outer: number, inner: number, halfHeight: number, n = 12):
   };
 }
 
-const LUMBER: Record<string, [number, number]> = {
+export const LUMBER: Record<string, [number, number]> = {
   '1x4': [0.019, 0.089], '1x6': [0.019, 0.14], '2x2': [0.038, 0.038], '2x4': [0.038, 0.089],
   '2x6': [0.038, 0.14], '2x8': [0.038, 0.184], '4x4': [0.089, 0.089],
 };

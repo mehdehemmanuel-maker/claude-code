@@ -206,6 +206,13 @@ export const MATERIALS: Material[] = [
     friction: 0.6, restitution: 0.25, sound: 'stone', loss: 0.01, sparks: 'none', color: 0x9a9a96, metalness: 0, roughness: 0.95,
     source: 'EN 1992-1-1 C30/37: f_ctm 2.9 MPa, E_cm 33 GPa', confidence: 'spec',
   },
+  {
+    id: 'ceramic.clay-brick', name: 'Fired clay brick', category: 'ceramic', density: 1900, E: 14 * GPa, nu: 0.2,
+    // brittle: yield = ultimate = modulus of rupture
+    yield: 3.5 * MPa, ultimate: 3.5 * MPa, elongation: 0.0002, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.7, restitution: 0.2, sound: 'stone', loss: 0.01, sparks: 'none', color: 0xa0482f, metalness: 0, roughness: 0.9,
+    source: 'ASTM C62/C216 solid clay brick 1800-2000 kg/m3; modulus of rupture 2-10 MPa by ASTM C67 (typical 3.5); E 10-20 GPa', confidence: 'estimated',
+  },
   // ---- Stone -----------------------------------------------------------------------------------
   // brittle: yield = ultimate = modulus of rupture (flexural strength), which is what a slab fails by
   stone('stone.slate', 'Slate (billiard grade)', 2750, 80, 0.25, 55, 0x3b4046, 0.8, 'ASTM C629: slate MOR 62 MPa min. across grain (typical 50-70); E 70-90 GPa'),

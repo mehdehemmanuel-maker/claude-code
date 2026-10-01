@@ -23,6 +23,9 @@
       #vr:disabled { opacity: 0.45; cursor: default; }
       #status { margin: 14px 0 0; font-size: 15px; }
       #build { margin: 6px 0 0; font-size: 13px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+      #reports { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+      #reports p { margin: 0 0 10px; color: var(--ink); }
+      .secondary { padding: 12px; margin-top: 8px; background: #23272e; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.16); cursor: pointer; }
     </style>
   </head>
   <body>
@@ -38,6 +41,11 @@
         </select>
         <button id="vr" disabled>Enter VR</button>
         <p id="status">Starting physics…</p>
+        <div id="reports" hidden>
+          <p id="reports-text"></p>
+          <button id="reports-send" class="secondary">Send Ego's reports to Claude</button>
+          <button id="reports-copy" class="secondary">Copy them</button>
+        </div>
         <p id="build"></p>
       </div>
     </div>

@@ -7,6 +7,8 @@ import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { Voice } from '../assistant/voice';
+import { issueUrl, reportText } from '../assistant/reports';
+import { REPORT_REPO } from '../app/app';
 import { drawGlyph, drawMaterial, drawPart, jointGlyph, type Item } from './icons';
 import { Hotbar, SLOTS } from './hotbar';
 import { catalogEntries, search, type Entry } from './search';
@@ -30,7 +32,7 @@ export interface XRControls {
   scan(): void;
 }
 
-type Page = 'tools' | 'parts' | 'materials' | 'join' | 'search' | 'selected' | 'world' | 'builds' | 'ada';
+type Page = 'tools' | 'parts' | 'materials' | 'join' | 'search' | 'selected' | 'world' | 'builds' | 'ego';
 
 interface Widget {
   id: string;
@@ -197,10 +199,10 @@ export class Tablet {
     g.strokeStyle = 'rgba(255,255,255,0.12)';
     g.lineWidth = 3;
     g.stroke();
-    const adaNews = this.app.ada?.advice.length ?? 0;
+    const egoNews = this.app.ego?.advice.length ?? 0;
     const tabs: [Page, string, string][] = [
       ['tools', '🛠', 'Tools'], ['parts', '🧱', 'Parts'], ['materials', '🎨', 'Materials'], ['join', '🔩', 'Join'], ['search', '🔍', 'Search'],
-      ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'], ['ada', '✦', adaNews ? `Ada • ${adaNews}` : 'Ada'],
+      ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'], ['ego', '✦', egoNews ? `Ego • ${egoNews}` : 'Ego'],
     ];
     const tw = (W - 40 - (tabs.length - 1) * 6) / tabs.length;
     tabs.forEach(([p, icon, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 6), 12, tw, 72, icon, () => { this.page = p; this.scroll = 0; }, { on: this.page === p, sub: label }));
@@ -255,9 +257,10 @@ export class Tablet {
       case 'builds':
         this.drawBuilds(y0);
         break;
-      case 'ada':
+      case 'ego':
         if (this.typing) this.drawForge(y0);
-        else this.drawAda(y0);
+        else if (this.reportsView) this.drawReports(y0);
+        else this.drawEgo(y0);
         break;
     }
     this.drawHotbar();
@@ -580,60 +583,115 @@ export class Tablet {
     if (extra) this.btn(extra[0], 20 + 3 * (sw + 6), yl, sw, kh, extra[1], extra[2]);
   }
 
-  /** Ada's page: the command line and keyboard instead of her advice. */
+  /** Ego's page: the command line and keyboard instead of her advice. */
   private typing = false;
 
-  /** Ada: what she sees, what she advises (with fixes you apply in one tap), and what you'll likely want next. */
-  private drawAda(y0: number) {
-    const ada = this.app.ada;
-    if (!ada) return;
-    this.text(`● ${ada.name} · ${ada.observe()}`, 24, y0 + 30, 24, '#8fd3ff', 'left', '600');
-    this.text(ada.focus(), 24, y0 + 62, 20, '#9aa4af');
-    let y = y0 + 80;
-    const cards = ada.advice.slice(0, 3);
-    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
+  /** Ego: what she sees, what she advises (with fixes you apply in one tap), and what you'll likely want next. */
+  private drawEgo(y0: number) {
+    const ego = this.app.ego;
+    if (!ego) return;
+    const g = this.ctx;
+    // how far she has grown: her level, and how far to the next
+    const lv = ego.growth.level, nx = ego.growth.next;
+    this.text(`● ${ego.name} · level ${lv.level}`, 24, y0 + 28, 26, '#8fd3ff', 'left', '700');
+    const bx = 250, bwid = W - bx - 24;
+    g.fillStyle = 'rgba(255,255,255,0.1)';
+    roundRect(g, bx, y0 + 10, bwid, 18, 9);
+    g.fill();
+    const frac = nx ? (ego.growth.xp - lv.xp) / (nx.xp - lv.xp) : 1;
+    g.fillStyle = '#8fd3ff';
+    roundRect(g, bx, y0 + 10, Math.max(18, bwid * Math.min(1, frac)), 18, 9);
+    g.fill();
+    this.text(nx ? `next: ${nx.ability} at ${nx.xp} xp (${Math.floor(ego.growth.xp)})` : 'fully grown, for now', W - 24, y0 + 50, 17, '#9aa4af', 'right');
+    this.text(`${ego.observe()} · ${ego.focus()}`, 24, y0 + 56, 19, '#9aa4af');
+    let y = y0 + 70;
+    const cards = ego.advice.slice(0, 3);
+    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold. Everything we do together helps me grow.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
     for (const a of cards) {
-      const g = this.ctx;
       g.fillStyle = a.kind === 'break' ? 'rgba(255,91,77,0.12)' : a.kind === 'warn' ? 'rgba(255,193,77,0.12)' : 'rgba(143,211,255,0.10)';
-      roundRect(g, 20, y, W - 40, 112, 14);
+      roundRect(g, 20, y, W - 40, 104, 14);
       g.fill();
-      this.wrapped(a.text, 36, y + 28, W - 140, 20, a.kind === 'break' ? '#ffb3aa' : a.kind === 'warn' ? '#ffd98a' : '#e8ecf1', 2);
-      this.btn(`adv-x-${a.id}`, W - 84, y + 8, 52, 40, '✕', () => ada.dismiss(a.id));
+      this.wrapped(a.text, 36, y + 26, W - 140, 19, a.kind === 'break' ? '#ffb3aa' : a.kind === 'warn' ? '#ffd98a' : '#e8ecf1', 2);
+      this.btn(`adv-x-${a.id}`, W - 84, y + 8, 52, 38, '✕', () => ego.dismiss(a.id));
       const fw = (W - 72 - 8) / 2;
-      a.fixes.slice(0, 2).forEach((f, i) => this.btn(`fix-${a.id}-${i}`, 36 + i * (fw + 8), y + 62, fw, 42, f.label, () => f.apply(), { tone: 'accent' }));
-      if (!a.fixes.length) this.text(a.kind === 'break' ? 'No stronger joint fits here: try bigger parts, or brace it.' : '', 36, y + 90, 18, '#9aa4af');
-      y += 120;
+      a.fixes.slice(0, 2).forEach((f, i) => this.btn(`fix-${a.id}-${i}`, 36 + i * (fw + 8), y + 56, fw, 40, f.label, () => f.apply(), { tone: 'accent', small: true }));
+      if (!a.fixes.length && a.kind === 'break') this.text('No stronger joint fits here: try bigger parts, or brace it.', 36, y + 84, 18, '#9aa4af');
+      y += 112;
     }
-    const next = ada.suggestions();
-    const yn = y0 + 80 + 3 * 120 + 4;
-    this.text(next.length ? 'Next, from your habits:' : 'Next: I learn your habits as you build.', 24, yn + 22, 20, '#9aa4af');
+    const yn = y0 + 70 + 3 * 112;
     const nw = (W - 40 - 3 * 8) / 4;
-    next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 34, nw, 56, n.label, () => n.run()));
+    const next = ego.suggestions();
+    this.text(ego.growth.has('habits') ? (next.length ? 'Next, from your habits:' : 'Next: I\'m learning your habits.') : 'Habits: I\'ll learn them at level 2.', 24, yn + 20, 19, '#9aa4af');
+    next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 28, nw, 46, n.label, () => n.run(), { small: true }));
+    // the skills she taught herself from what you repeat
+    const ys = yn + 84;
+    const skills = ego.skills.skills.slice(0, 4);
+    this.text(ego.growth.has('skills') ? (skills.length ? 'Skills I learned from you:' : 'Skills: repeat something and I\'ll offer to learn it.') : 'Skills: I\'ll be able to learn them at level 3.', 24, ys + 20, 19, '#9aa4af');
+    skills.forEach((sk, i) => this.btn(`skill-${i}`, 20 + i * (nw + 8), ys + 28, nw, 46, `🧠 ${sk.name}`, () => ego.reply(ego.runSkill(sk.id)), { small: true }));
     const by = CH - 76;
     const bw = (W - 40 - 24) / 4;
-    this.btn('forge', 20, by, bw, 60, '⌨ Ask Ada', () => { this.typing = true; }, { tone: 'accent', sub: 'or type Forge' });
+    this.btn('forge', 20, by, bw, 60, '⌨ Ask Ego', () => { this.typing = true; }, { tone: 'accent', sub: 'or type Forge' });
     if (Voice.canListen) this.btn('talk', 20 + (bw + 8), by, bw, 60, this.listening ? '🎙 Listening…' : '🎙 Talk', () => this.talk(), { on: this.listening, tone: 'accent' });
-    else this.btn('voice', 20 + (bw + 8), by, bw, 60, ada.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ada.voice.enabled = !ada.voice.enabled; }, { on: ada.voice.enabled });
-    this.btn('claude', 20 + 2 * (bw + 8), by, bw, 60, '📋 For Claude', () => this.copyForClaude(), { sub: 'copy transcript' });
-    this.btn('adv-clear', 20 + 3 * (bw + 8), by, bw, 60, 'Clear advice', () => { ada.advice = []; this.app.notify(); });
+    else this.btn('voice', 20 + (bw + 8), by, bw, 60, ego.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ego.voice.enabled = !ego.voice.enabled; }, { on: ego.voice.enabled });
+    const unsent = ego.reports.unsent.length;
+    this.btn('reports', 20 + 2 * (bw + 8), by, bw, 60, '📨 Reports', () => { this.reportsView = true; }, { sub: unsent ? `${unsent} for Claude` : 'to Claude', tone: unsent ? 'accent' : undefined });
+    this.btn('adv-clear', 20 + 3 * (bw + 8), by, bw, 60, 'Clear advice', () => { ego.advice = []; this.app.notify(); });
   }
 
   private listening = false;
-  /** Speak to Ada: one request, heard by the browser's own recognition, then done as if typed. */
+  /** Speak to Ego: one request, heard by the browser's own recognition, then done as if typed. */
   private talk() {
-    const ada = this.app.ada;
-    if (!ada || this.listening) return;
+    const ego = this.app.ego;
+    if (!ego || this.listening) return;
     this.listening = true;
-    ada.voice.listen((heard) => {
+    ego.voice.listen((heard) => {
       this.listening = false;
-      if (heard) ada.ask(heard);
-      else this.app.toast('Ada didn\'t catch that: try again, or type it', 'warn');
+      if (heard) ego.ask(heard);
+      else this.app.toast('Ego didn\'t catch that: try again, or type it', 'warn');
       this.app.notify();
     });
   }
 
+  private reportsView = false;
+
+  /** What you've told Ego is wrong, and sending it to Claude. */
+  private drawReports(y0: number) {
+    const ego = this.app.ego;
+    if (!ego) return;
+    const list = [...ego.reports.reports].reverse();
+    this.text(`📨 Reports for Claude · ${ego.reports.unsent.length} not sent`, 24, y0 + 30, 26, '#8fd3ff', 'left', '700');
+    this.wrapped('Tell Ego what\'s wrong in your own words ("it\'s shaking", "it fell through the floor"). She fixes what she can and writes the rest up here, with what she saw and the build as it was.', 24, y0 + 64, W - 48, 19, '#9aa4af', 2);
+    let y = y0 + 112;
+    const g = this.ctx;
+    if (!list.length) this.text('No reports yet.', 24, y + 30, 22, '#9aa4af');
+    for (const r of list.slice(0, 5)) {
+      g.fillStyle = r.sent ? 'rgba(255,255,255,0.05)' : 'rgba(143,211,255,0.10)';
+      roundRect(g, 20, y, W - 40, 76, 12);
+      g.fill();
+      this.text(`${r.sent ? '✓ ' : ''}“${r.words.length > 70 ? `${r.words.slice(0, 69)}…` : r.words}”`, 36, y + 28, 20, '#e8ecf1', 'left', '600');
+      this.text(`${r.trouble}${r.fixed ? ` · Ego ${r.fixed}` : ' · for Claude'}`.slice(0, 96), 36, y + 56, 17, '#9aa4af');
+      y += 84;
+    }
+    const by = CH - 76;
+    const bw = (W - 40 - 24) / 4;
+    this.btn('rep-send', 20, by, bw, 60, '📨 Send to Claude', () => this.sendReports(), { tone: 'accent', sub: 'as a GitHub issue' });
+    this.btn('rep-copy', 20 + (bw + 8), by, bw, 60, '📋 Copy', () => this.copyForClaude(), { sub: 'reports + transcript' });
+    this.btn('rep-clear', 20 + 2 * (bw + 8), by, bw, 60, 'Clear sent', () => { ego.reports.reports = ego.reports.reports.filter((r) => !r.sent); ego.reports.markSent([]); this.app.notify(); });
+    this.btn('rep-back', 20 + 3 * (bw + 8), by, bw, 60, '← Ego', () => { this.reportsView = false; });
+  }
+
+  /** Open the reports as a new GitHub issue (Claude reads the repository's issues). */
+  private sendReports() {
+    const ego = this.app.ego;
+    const unsent = ego?.reports.unsent ?? [];
+    if (!ego || !unsent.length) { this.app.toast('No reports waiting', 'info'); return; }
+    const w = window.open(issueUrl(unsent, REPORT_REPO), '_blank');
+    if (w) { ego.reports.markSent(unsent.map((r) => r.id)); this.app.toast('Opened the report as a GitHub issue: press Submit there, and Claude will see it', 'ok'); }
+    else this.app.toast('The browser wouldn\'t open it from VR: take the headset view out of VR, and the launch page has a Send button', 'warn');
+  }
+
   private copyForClaude() {
-    const text = this.app.ada?.forClaude() ?? '';
+    const text = [reportText(this.app.ego?.reports.unsent ?? []), this.app.ego?.forClaude() ?? ''].join('\n');
     const done = () => this.app.toast('Copied: paste it to Claude to show exactly what you built', 'ok');
     const fail = () => this.app.toast('The browser would not copy here: the share code is on My builds via Save', 'warn');
     try {
@@ -644,22 +702,22 @@ export class Tablet {
 
   /** Forge on the tablet: a command line, what it did, and a keyboard. */
   private drawForge(y0: number) {
-    const ada = this.app.ada;
-    if (!ada) return;
+    const ego = this.app.ego;
+    if (!ego) return;
     const g = this.ctx;
     g.fillStyle = 'rgba(255,255,255,0.08)';
     roundRect(g, 20, y0, W - 40 - 170, 56, 12);
     g.fill();
     g.font = '500 24px ui-monospace, monospace';
-    let shown = ada.command;
+    let shown = ego.command;
     while (shown && g.measureText(`${shown}▏`).width > W - 250) shown = shown.slice(1);
     this.text(`${shown}▏`, 34, y0 + 36, 24, '#e8ecf1');
-    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Go ⏎', () => { if (ada.command.trim()) { ada.ask(ada.command); ada.command = ''; } }, { tone: 'accent' });
-    ada.output.slice(-5).forEach((l, i) => this.text(l.length > 78 ? `${l.slice(0, 77)}…` : l, 24, y0 + 90 + i * 26, 19, l.startsWith('✗') ? '#ff9b73' : l.startsWith('›') ? '#8fd3ff' : '#c7ccd1'));
+    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Go ⏎', () => { if (ego.command.trim()) { ego.ask(ego.command); ego.command = ''; } }, { tone: 'accent' });
+    ego.output.slice(-5).forEach((l, i) => this.text(l.length > 78 ? `${l.slice(0, 77)}…` : l, 24, y0 + 90 + i * 26, 19, l.startsWith('✗') ? '#ff9b73' : l.startsWith('›') ? '#8fd3ff' : '#c7ccd1'));
     const ex: [string, string][] = [['make it stronger', 'make it stronger'], ['weld these', 'weld these'], ['4 steel blocks', 'place 4 steel blocks'], ['Forge: 4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
     const ew = (W - 40 - 24) / 4;
-    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, label, () => { ada.command = code; }, { small: true }));
-    this.keyboard('key', y0 + 276, () => ada.command, (v) => { ada.command = v; }, ['forge-back', '← Ada', () => { this.typing = false; }]);
+    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, label, () => { ego.command = code; }, { small: true }));
+    this.keyboard('key', y0 + 276, () => ego.command, (v) => { ego.command = v; }, ['forge-back', '← Ego', () => { this.typing = false; }]);
   }
 
   /** Delete mode on My builds: a tap deletes instead of opening. */

@@ -1,4 +1,4 @@
-// Ada's voice, and her ears where the browser has them: the headset's own speech synthesis (on the device, no
+// Ego's voice, and her ears where the browser has them: the headset's own speech synthesis (on the device, no
 // service), and speech recognition when the Quest browser offers it. Both are optional; she types when she can't talk.
 
 export class Voice {

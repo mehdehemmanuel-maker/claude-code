@@ -1,5 +1,5 @@
 // Joined parts are one piece; an assembly saved as a template places again, joints and all; smart snap lines a part
-// up square and flush on what it sits on; Ada does what she's asked in plain words.
+// up square and flush on what it sits on; Ego does what she's asked in plain words.
 
 import { test } from '@playwright/test';
 import { boot, counts, enterVR, expect, frames, sb, tap, triggerAt } from './helpers';
@@ -9,7 +9,7 @@ test('bolted together is one piece: select, freeze and save as a template, then 
   const errors = await boot(page, '?iwer');
   await enterVR(page);
   // two blocks, one on the other, joined by Best join
-  await sb(page, (s) => { s.ada.run('place block at 0 0.05 0 as base · place block at 0 0.15 0 as top · join base top'); });
+  await sb(page, (s) => { s.ego.run('place block at 0 0.05 0 as base · place block at 0 0.15 0 as top · join base top'); });
   await frames(page, 4);
   expect(await counts(page)).toEqual({ parts: 2, conns: 1 });
   // selecting the top block selects the whole assembly
@@ -42,7 +42,7 @@ test('smart snap: a block placed off-centre on another lands square, flush and c
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');
   await enterVR(page);
-  await sb(page, (s) => { s.ada.run('place block at 0.3 0.05 -0.2 rot y 30 as base · freeze base'); });
+  await sb(page, (s) => { s.ego.run('place block at 0.3 0.05 -0.2 rot y 30 as base · freeze base'); });
   await frames(page, 4);
   await tap(page, 'tab-parts');
   await tap(page, 'part-block');
@@ -58,10 +58,10 @@ test('smart snap: a block placed off-centre on another lands square, flush and c
   expect(errors).toEqual([]);
 });
 
-test('Ada in plain words: place some, weld them, make it stronger, duplicate it', async ({ page }) => {
+test('Ego in plain words: place some, weld them, make it stronger, duplicate it', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
-  const r1 = await sb(page, (s) => s.ada.ask('place 2 steel blocks'));
+  const r1 = await sb(page, (s) => s.ego.ask('place 2 steel blocks'));
   expect(r1).toMatch(/Placed 2 blocks in Structural steel/);
   // butt them together, then ask for a weld
   await sb(page, (s) => {
@@ -70,12 +70,12 @@ test('Ada in plain words: place some, weld them, make it stronger, duplicate it'
     s.app.select([a.id]);
   });
   await frames(page, 4);
-  expect(await sb(page, (s) => s.ada.ask('weld these'))).toMatch(/Joined/);
+  expect(await sb(page, (s) => s.ego.ask('weld these'))).toMatch(/Joined/);
   expect(await sb(page, (s) => (Object.values(s.app.doc.connections)[0] as any).kind)).toBe('weld');
   const before = await sb(page, (s) => JSON.stringify((Object.values(s.app.doc.connections)[0] as any).params));
-  expect(await sb(page, (s) => s.ada.ask('make it stronger'))).toMatch(/^Done/);
+  expect(await sb(page, (s) => s.ego.ask('make it stronger'))).toMatch(/^Done/);
   expect(await sb(page, (s) => JSON.stringify((Object.values(s.app.doc.connections)[0] as any).params))).not.toBe(before);
-  expect(await sb(page, (s) => s.ada.ask('duplicate it 2 times'))).toBe('Made 2 copies.');
+  expect(await sb(page, (s) => s.ego.ask('duplicate it 2 times'))).toBe('Made 2 copies.');
   expect(await counts(page)).toEqual({ parts: 6, conns: 3 });
   expect(errors).toEqual([]);
 });
