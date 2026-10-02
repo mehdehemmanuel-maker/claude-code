@@ -52,6 +52,49 @@ A design is blocks wired port to port, each connection carrying what passes thro
 
 `designFromPowertrain` turns the drivetrain workflow's answer into such a design: the kart's holds at every connection, with one warning, that its motors take 24 A only in bursts.
 
+## Growing a machine (`grow.ts`)
+
+Biology doesn't draw a body: it carries a short genome and develops it, every tissue there because something needed it, every level checked, built in an order, the fittest of many kept. A machine is grown the same way.
+
+| Biology | Here |
+|---|---|
+| genome | what is wanted (one flow into another) and the few numbers that size it, hashed |
+| development | each block calls for the blocks it can't work without, by a principle (`DEVELOPMENT`): a motor for a current-limiting controller, a battery for a fuse, wiring and a tray, a gearhead for a torque arm, a wheel for an axle of its own, an axle for bearings and a coupling, bearings for a frame |
+| tissue | each block made real: chosen by the drivetrain workflow from the catalogue, or made from the world's stock |
+| immune system | every connection checked (`checkDesign`); every part bought from the catalogue or made by a process that works its material and shape (R11); energy from a source (R10) |
+| development order | frame first, then bearings, shafts, couplings, gearmotors, torque arms, wheels; power last, the fuse in last of all so nothing is live while it is built |
+| selection | every buildable concept grown, the fittest kept (fewest errors, then gaps, then blocks, then cost) |
+| heredity | the same genome grows the same body at once |
+| levels | material is molecule, a feature cell, a part tissue, a block organ, a system organ system, the machine the organism (`LEVELS`) |
+
+From five numbers (120 kg, 3 m/s, 0.7 m/s², 0.125 m wheels, 2 motors) the kart grows 13 blocks and 25 parts, each saying why it is there. Direct drive is grown too and loses: no catalogued motor turns the wheel slowly enough without gearing. The immune check finds what isn't real yet: the rubber wheel, which nothing here makes or sells, and the frame and battery tray, which no workflow sizes. The genome is about 40 times smaller than the body it grows, because the meaning lives in the ganglia, as DNA's does in the cell.
+
+## Hard challenges (`challenges.ts`)
+
+Easy jobs only show what already works. Ego sets herself hard ones to find where she breaks:
+
+- a computer built inside her world;
+- a symbiote;
+- a scientist;
+- a language more efficient than any;
+- a new geometry;
+- a flying machine.
+
+Each is said as the functions it needs, in plain words, and taken through everything she has: words to flows, flows to physical ways, ways to blocks, blocks grown into a body and checked. Each need reaches one of these:
+
+| Level | Meaning |
+|---|---|
+| unsayable | her language has no word for it |
+| no way | she knows no physics that does it |
+| unbuildable | she knows a way, but can't place its parts yet |
+| fails | she can grow it, but a check fails |
+| partial | it grows and holds, but some parts aren't sized or real yet |
+| works | it grows, holds and is wholly real |
+
+Each challenge also carries the physics that bounds it for anyone: Landauer's floor under a bit, Carnot's ceiling on living off waste heat, Shannon's bound on a language. What each found, and what changed because of it, is in [CHALLENGES.md](CHALLENGES.md). The tests pin where each stands, so fixing a gap moves its result.
+
+Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiote"*, *"build something that flies"*; *"grow a kart for 120 kg at 3 m/s"*; *"what's inside a motor?"*.
+
 ## Fast
 
 - **Recall** is a BM25F index built once:
@@ -64,7 +107,7 @@ A design is blocks wired port to port, each connection carrying what passes thro
 
 ## What's in it
 
-- **Laws (81)**, grouped by area (also: the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
+- **Laws (88)**, grouped by area (also: Landauer's limit, CMOS switching power, the information in a choice, Carnot, Seebeck, strain gauges, solar cells, the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
   - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
   - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
   - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
@@ -81,9 +124,9 @@ A design is blocks wired port to port, each connection carrying what passes thro
   - a one-channel brushed DC driver without current limit, and a two-channel controller with one;
   - ISO 8820-3 blade fuses, 10 to 40 A;
   - the world's motors (a Ø40 mm 150 W coreless DC motor and a Ø100 mm 250 W brushed one), its 12:1 planetary gearhead, its 12 V 7 Ah sealed lead-acid battery and its wire (10 to 18 AWG).
-- **Blocks (16)**: energy store, motor controller, conductor, rotary actuator, speed reducer, shaft coupling, chain drive, rotary support, two-force link, printing material, shaft, wheel, frame member, whole machine, fuse, guard. Each opens into its anatomy: a DC motor into its magnets, winding (the Lorentz force), commutator and brushes, back-EMF, shaft, bearings and housing; a battery into its cells, plates, electrolyte, case, valve and terminals.
-- **Principles (44, in 18 kinds)**: load path, determinacy, strength margin, stiffness, fatigue, stress concentration, stability, materials, fits and tolerances, manufacturing, assembly, service, thermal, electrical, safety, cost and mass, standard parts, motion. From Pahl & Beitz, Boothroyd & Dewhurst, Shigley, Peterson, SKF, ABYC and the NEC, ISO 12100, MIL-STD-889. Where this world showed one, it says so: the kart's broken gearhead shafts are why the gearhead takes torque, not load.
-- **Ways (22)**: rotary and hub motors, linear motors, voice coils, solenoids, piezo stacks, electrostatic actuators, resistive heating and thermal actuators, electric thrusters; gears, chains and belts; wheels, tracks, legs, propellers, paddles, winches, racks; lead screws and cranks.
+- **Blocks (17)**: energy store, motor controller, conductor, rotary actuator, speed reducer, shaft coupling, chain drive, rotary support, two-force link, printing material, shaft, wheel, frame member, whole machine, fuse, guard, and a mechanical bit (a lever with two stable states). Each opens into its anatomy: a DC motor into its magnets, winding (the Lorentz force), commutator and brushes, back-EMF, shaft, bearings and housing; a battery into its cells, plates, electrolyte, case, valve and terminals.
+- **Principles (47, in 20 kinds)**: load path, determinacy, strength margin, stiffness, fatigue, stress concentration, stability, materials, fits and tolerances, manufacturing, assembly, service, thermal, electrical, safety, cost and mass, standard parts, motion, energy (from a source; no loop keeps itself going), information (a bit needs two stable states). From Pahl & Beitz, Boothroyd & Dewhurst, Shigley, Peterson, SKF, ABYC and the NEC, ISO 12100, MIL-STD-889. Where this world showed one, it says so: the kart's broken gearhead shafts are why the gearhead takes torque, not load.
+- **Ways (36)**: rotary and hub motors, linear motors, voice coils, solenoids, piezo stacks, electrostatic actuators, resistive heating and thermal actuators, electric thrusters; batteries, solar cells, thermoelectric generators, heat engines, burning, muscle, LEDs; transistor switches, transistor, relay and mechanical logic; strain gauges, thermocouples, encoders; gears, chains and belts; wheels, tracks, legs, propellers, paddles, winches, racks; lead screws and cranks.
 - **Workflows (10)**:
   - a whole drivetrain from one sentence;
   - choosing a vehicle drive;

@@ -517,6 +517,58 @@ export const LAWS: Law[] = [
     eval: ({ T, eta, l }) => (2 * Math.PI * eta! * T!) / l!, outside: ({ eta }) => (eta! > 0.95 ? `η ${eta} is past even a ball screw's (about 0.9)` : null),
     valid: 'Acme or trapezoidal lead screws η about 0.2 to 0.5 (below about 0.5 they hold their load without a brake); ball screws about 0.9.', example: { inputs: { T: 1, eta: 0.3, l: 0.002 }, output: 942.4777960769379 }, source: SHIGLEY, tags: ['lead screw', 'ball screw', 'linear actuator', 'screw', 'jack'],
   },
+  // ---------------------------------------------------------------- information, and energy into and out of heat and light
+  {
+    id: 'landauer', name: 'Landauer\'s limit', domain: 'information',
+    statement: 'Erasing one bit of information, in anything that computes, releases at least Boltzmann\'s constant times the temperature times ln 2 as heat: the floor under every computer.',
+    formula: 'E = k T ln 2', inputs: [q('T', 'temperature', 'K')], output: q('E', 'least energy per bit erased', 'J'),
+    constants: { k: { value: 1.380649e-23, unit: 'J/K', name: 'Boltzmann constant (exact, SI 2019)' } },
+    eval: ({ T, k }) => k! * T! * Math.LN2, valid: 'Any computer that erases information (logically irreversible); reversible computing can in principle go below it per operation.',
+    example: { inputs: { T: 300 }, output: 2.870978885078724e-21 }, source: { cite: 'Landauer, Irreversibility and heat generation in the computing process, IBM J. Res. Dev. 5(3), 1961', kind: 'textbook' }, tags: ['computer', 'bit', 'information', 'energy', 'logic'],
+  },
+  {
+    id: 'cmos.dynamic', name: 'Switching power of CMOS logic', domain: 'electrical',
+    statement: 'Logic gates draw power each time they switch: the fraction switching, times the capacitance they charge, times the supply voltage squared, times the clock rate.',
+    formula: 'P = α C V² f', inputs: [q('alpha', 'fraction switching each cycle', '-'), q('C', 'switched capacitance', 'F'), q('V', 'supply voltage', 'V'), q('f', 'clock rate', 'Hz')], output: q('P', 'dynamic power', 'W'),
+    eval: ({ alpha, C, V, f }) => alpha! * C! * V! * V! * f!, valid: 'Dynamic power only; leakage adds to it, more so in small, hot chips.', example: { inputs: { alpha: 0.1, C: 1e-9, V: 1, f: 1e9 }, output: 0.10000000000000002 },
+    source: { cite: 'Weste & Harris, CMOS VLSI Design, 4th ed., Addison-Wesley 2010 (power)', kind: 'textbook' }, tags: ['computer', 'chip', 'logic', 'power', 'transistor'],
+  },
+  {
+    id: 'information.choices', name: 'Information in a choice', domain: 'information',
+    statement: 'Picking one of N equally likely things takes the base-2 logarithm of N bits: no code can say which in fewer (Shannon).',
+    formula: 'H = log₂ N', inputs: [q('N', 'number of choices', '-')], output: q('H', 'information (bits)', '-'),
+    eval: ({ N }) => Math.log2(N!), outside: ({ N }) => (N! < 1 ? 'fewer than one choice' : null), valid: 'Equally likely choices; uneven ones carry less (H = −Σ p log₂ p).', example: { inputs: { N: 1024 }, output: 10 },
+    source: { cite: 'Shannon, A Mathematical Theory of Communication, Bell System Technical Journal 27, 1948', kind: 'textbook' }, tags: ['information', 'language', 'bits', 'compression', 'entropy'],
+  },
+  {
+    id: 'carnot', name: 'Carnot efficiency', domain: 'thermal',
+    statement: 'Heat flowing from a hot place to a cold one can be turned into work at most by one minus the cold over the hot absolute temperature: the ceiling on every heat engine.',
+    formula: 'η = 1 − T_c / T_h', inputs: [q('Tc', 'cold side', 'K'), q('Th', 'hot side', 'K')], output: q('eta', 'most efficiency', '-'),
+    eval: ({ Tc, Th }) => 1 - Tc! / Th!, outside: ({ Tc, Th }) => (Tc! >= Th! ? 'no work flows from cold to hot' : null), valid: 'Reversible limit; real engines reach about half to three quarters of it.',
+    example: { inputs: { Tc: 300, Th: 600 }, output: 0.5 }, source: { cite: 'Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019', kind: 'textbook' }, tags: ['heat engine', 'efficiency', 'second law', 'thermodynamics'],
+  },
+  {
+    id: 'seebeck', name: 'Seebeck voltage (thermocouple)', domain: 'electrical',
+    statement: 'Two different metals joined at a hot and a cold end make a voltage of their Seebeck coefficient times the temperature difference: how thermocouples sense heat and thermoelectric generators make power.',
+    formula: 'V = S ΔT', inputs: [q('S', 'Seebeck coefficient', 'V/K'), q('dT', 'temperature difference', 'K')], output: q('V', 'voltage', 'V'),
+    eval: ({ S, dT }) => S! * dT!, valid: 'Small ranges (S varies with temperature); type K is about 41 µV/K.', example: { inputs: { S: 41e-6, dT: 100 }, output: 0.0041 },
+    source: { cite: 'ASTM E230 / IEC 60584 (thermocouples); Rowe (ed.), CRC Handbook of Thermoelectrics, 1995', kind: 'standard' }, tags: ['thermocouple', 'sensor', 'temperature', 'thermoelectric'],
+  },
+  {
+    id: 'strain.gauge', name: 'Strain gauge', domain: 'electrical',
+    statement: 'A foil gauge stuck to a part changes its resistance by its gauge factor times the strain times its resistance: how load cells and scales sense force.',
+    formula: 'ΔR = GF ε R', inputs: [q('GF', 'gauge factor', '-'), q('eps', 'strain', '-'), q('R', 'gauge resistance', 'ohm')], output: q('dR', 'change in resistance', 'ohm'),
+    eval: ({ GF, eps, R }) => GF! * eps! * R!, valid: 'Metal foil gauges GF about 2; read in a Wheatstone bridge.', example: { inputs: { GF: 2, eps: 1e-3, R: 350 }, output: 0.7000000000000001 },
+    source: { cite: 'Window (ed.), Strain Gauge Technology, 2nd ed., Elsevier 1992', kind: 'textbook' }, tags: ['sensor', 'load cell', 'force', 'scale', 'strain'],
+  },
+  {
+    id: 'pv.power', name: 'Solar cell power', domain: 'electrical',
+    statement: 'A solar panel gives its efficiency times the sunlight falling on it per square metre times its area.',
+    formula: 'P = η G A', inputs: [q('eta', 'efficiency', '-'), q('G', 'irradiance', 'W/m^2'), q('A', 'area', 'm^2')], output: q('P', 'electric power', 'W'),
+    eval: ({ eta, G, A }) => eta! * G! * A!, outside: ({ eta }) => (eta! > 0.47 ? `η ${eta} is past the best multi-junction cell's (about 47%)` : null),
+    valid: 'Standard test conditions G = 1000 W/m² at 25 °C; less when hot or not facing the sun. Silicon panels about 0.2.', example: { inputs: { eta: 0.2, G: 1000, A: 1.6 }, output: 320 },
+    source: { cite: 'IEC 61215 / IEC 60904 (photovoltaic modules, standard test conditions)', kind: 'standard' }, tags: ['solar', 'light', 'photovoltaic', 'panel', 'energy'],
+  },
 ];
 
 export const lawById = (id: string) => LAWS.find((l) => l.id === id);

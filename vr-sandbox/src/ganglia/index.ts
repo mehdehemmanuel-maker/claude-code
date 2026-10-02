@@ -256,6 +256,8 @@ export { MACHINES, breakdown, machineById } from './machines';
 export { ARCHETYPES, archetypeById, blocksByArchetype, checkDesign, designFromPowertrain, portsOf, type Design, type Flow, type Problem } from './blocks';
 export { PRINCIPLES, CATEGORIES, principleById, explainPrinciple } from './principles';
 export { WAYS, wayById, conceive, byMedium, asWhole, buildable, type Concept, type Way, type Medium } from './ways';
+export { grow, growConcept, develop, anatomyOf, compression, genomeKey, LEVELS, DEVELOPMENT, type Organism, type Organ, type Genome } from './grow';
+export { CHALLENGES, attempt, report, challengeById, flowOfWord, FLOW_WORDS, type Attempt, type Challenge } from './challenges';
 
 // ------------------------------------------------------------------------------------------------ remembered answers
 

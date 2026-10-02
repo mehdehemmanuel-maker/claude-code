@@ -35,6 +35,12 @@ export type Intent =
   | { do: 'blocks' }
   /** Ways to turn one flow into another (electric power into travel...): chains of building blocks. */
   | { do: 'conceive'; from: Flow; to: Flow }
+  /** Grow a whole machine for a job, the fittest of every buildable way. */
+  | { do: 'grow'; from: Flow; to: Flow; spec: Record<string, number> }
+  /** Take on a hard challenge (or all of them) and say where it breaks. */
+  | { do: 'challenge'; which?: string }
+  /** What a block is made of, piece by piece. */
+  | { do: 'inside'; what: string }
   | { do: 'depends' }
   | { do: 'level' }
   | { do: 'command'; command: 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'pause' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero' };
@@ -47,6 +53,9 @@ const JOINT_WORDS: Record<string, string> = {
 };
 
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
+
+/** Words for building blocks, whose insides are their anatomy. */
+const BLOCK_WORDS = /^(dc |electric |rotary )?(motor|battery|cell|bearing|gearhead|gearbox|reducer|coupling|chain|wheel|shaft|axle|fuse|controller|wire|cable|rod end|tie rod|bit|lever|guard|frame)s?$/;
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
 export function interpret(line: string): Intent | null {
@@ -62,6 +71,11 @@ export function interpret(line: string): Intent | null {
   if ((m = /^why (?:do|does|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if ((m = /^(?:what is|whats) the (?:reason|point|idea) (?:for|of|behind) (?:an? |the )?(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if (new RegExp(`^(make ${it} )?(stronger|sturdier|hold|stiffer)|^(fix|strengthen|reinforce) ${it}|^fix( it)?$|^make ${it} hold`).test(t)) return { do: 'strengthen' };
+  // a hard challenge, said any way: "try to build a computer", "create a symbiote", "build something that flies"
+  if (/^(challenge|try to|build|create|make|invent|design|take|run)\b/.test(t) && (m = /\b(computer|symbiote|scientist|language|geometry|new shape|fly|flies|flying|flight)\b/.exec(t)) && !/\b(table|desk|bench|wall|tower|shelf|crate)\b/.test(t)) {
+    const w = m[1]!;
+    return { do: 'challenge', which: w === 'new shape' ? 'geometry' : /^fl/.test(w) ? 'flight' : w };
+  }
   // something's wrong: she looks, fixes what she can, and writes it up for Claude
   if (isComplaint(t)) return { do: 'complain', words: line.trim() };
   if (new RegExp(`^save ${it} as (a )?template|^(make|save) (a )?template|^template ${it}`).test(t)) return { do: 'template' };
@@ -82,12 +96,20 @@ export function interpret(line: string): Intent | null {
   // "look at this", "see this?", "watch this", "look here": she looks where you point
   if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
   if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
+  // a building block opens into its anatomy; a machine breaks down into its assemblies
+  if ((m = /^(?:whats inside|what is inside|open up|anatomy of|what makes up|break ?down|whats in|what is in)\s+(?:an? |the )?(.+)$/.exec(t)) && BLOCK_WORDS.test(m[1]!) && !/fx10|printer|markforged/.test(t)) return { do: 'inside', what: m[1]!.trim() };
   if ((m = /^(?:break ?down|breakdown|tear ?down|teardown|what is inside|whats inside|whats in|what is in|what makes up|map out)\s+(?:of\s+)?(?:an? |the )?(.+)$/.exec(t))) return { do: 'breakdown', what: m[1]!.trim() };
   if (/^(show (me )?(your|the) (work|working|workings|math|maths|calculation|calculations)|how did you (get|work out) (that|it)|show your working)$/.test(t)) return { do: 'work' };
   if (/^(what does (it|that) (depend|hang) on|what matters (most)?|what (is it|is that) (most )?sensitive to)$/.test(t)) return { do: 'depends' };
   if (/^((your |the )?(design )?(principles|rules)( of design)?|what (design )?(principles|rules) do you (know|follow|use|design by)|how do you (decide|design))$/.test(t)) return { do: 'principles' };
   if ((m = /^(?:design )?(?:principles|rules) (?:of|for|about) (?:an? |the )?(.+)$/.exec(t))) return { do: 'principles', of: m[1]!.trim() };
   if (/^((your |the |what )?(building )?blocks( do you (have|know|use|build with))?|what do you build with)$/.test(t)) return { do: 'blocks' };
+  if (/^(challenge yourself|(take|run|try) (a |the |your )?challenges?|(what|which) challenges?.*|how far can you go)$/.test(t)) return { do: 'challenge' };
+  if ((m = /^(?:grow|evolve|develop) (?:me )?(?:a |an )?(?:machine|something|thing|design)? ?(?:that |to )?(?:turns?|converts?|changes?) (.+?) (?:into|to) (.+?)(?: for (.+))?$/.exec(t))) {
+    const from = flowOf(m[1]!), to = flowOf(m[2]!);
+    if (from && to && from !== to) return { do: 'grow', from, to, spec: vehicleSpec(line) };
+  }
+  if ((m = /^(?:grow|evolve|develop) (?:me )?(?:a |an )?(.*\b(?:kart|cart|car|vehicle|robot|buggy)\b.*)$/.exec(t))) return { do: 'grow', from: 'electric', to: 'travel', spec: vehicleSpec(line) };
   if ((m = /^(?:how (?:do|can|could|would|should) (?:i|you|we|one) )?(?:turn|convert|change|transform|get from) (.+?) (?:into|to) (.+)$/.exec(t))) {
     const from = flowOf(m[1]!), to = flowOf(m[2]!);
     if (from && to && from !== to) return { do: 'conceive', from, to };
@@ -109,6 +131,19 @@ export function interpret(line: string): Intent | null {
   return null;
 }
 
+/** A vehicle's numbers, however they were said: mass, speed, wheel radius, motors. */
+function vehicleSpec(line: string): Record<string, number> {
+  const spec: Record<string, number> = {};
+  for (const q of findQuantities(line)) {
+    if (sameDim(q.dim, DIMS.mass)) spec['mass'] = q.si;
+    else if (sameDim(q.dim, DIMS.speed)) spec['speed'] = q.si;
+    else if (sameDim(q.dim, DIMS.length)) spec['wheelRadius'] = q.si / 2;
+  }
+  const k = /(\d+|two|three|four) motors?/.exec(line.toLowerCase());
+  if (k) spec['motors'] = Number(k[1]) || ({ two: 2, three: 3, four: 4 } as Record<string, number>)[k[1]!]!;
+  return spec;
+}
+
 /** What flow a phrase names: "electricity" is electric power, "spin" rotation, "motion" travel... */
 function flowOf(p: string): Flow | null {
   if (/rotat|spin|turning|torque|revolv/.test(p)) return 'rotation';
@@ -116,8 +151,10 @@ function flowOf(p: string): Flow | null {
   if (/stroke|linear|translat|push|lift|press/.test(p)) return 'translation';
   if (/motion|move|moving|movement|travel|drive|driving|going|locomot/.test(p)) return 'travel';
   if (/load|weight|support|holding|hold/.test(p)) return 'load';
-  if (/signal|control|command/.test(p)) return 'signal';
   if (/heat|warm/.test(p)) return 'heat';
+  if (/light|sun|photon/.test(p)) return 'light';
+  if (/chemical|food|fuel|sugar/.test(p)) return 'chemical';
+  if (/information|bits?\b|data|logic|signal/.test(p)) return 'signal';
   if (/stock|filament|material/.test(p)) return 'stock';
   return null;
 }

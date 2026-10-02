@@ -10,7 +10,7 @@ import type { Source } from './types';
 export type PrincipleCategory =
   | 'load path' | 'determinacy' | 'strength margin' | 'stiffness' | 'fatigue' | 'stress concentration' | 'stability'
   | 'materials' | 'fits and tolerances' | 'manufacturing' | 'assembly' | 'service' | 'thermal' | 'electrical' | 'safety'
-  | 'cost and mass' | 'standard parts' | 'motion';
+  | 'cost and mass' | 'standard parts' | 'motion' | 'energy' | 'information';
 
 export interface Principle {
   id: string;
@@ -274,6 +274,24 @@ export const PRINCIPLES: Principle[] = [
     id: 'standard-parts-first', category: 'standard parts', rule: 'Use standard bought parts to a recognised designation (ISO bearing sizes, ANSI chain, metric fasteners) before making special ones.',
     why: 'They are tested, rated, cheap and replaceable anywhere; a special part needs designing, making and stocking.',
     laws: [], appliesTo: ['support.rotate', 'transmission.flexible', 'bolted'], source: DFMA,
+  },
+  // ------------------------------------------------------------------ energy
+  {
+    id: 'energy-from-a-source', category: 'energy', rule: 'Give everything that does work a store or a supply of energy, sized for the work.',
+    why: 'Energy is conserved: every joule a machine puts out, and every joule it loses as heat, comes from a battery, a fuel, light, a spring or a fall. Nothing runs on nothing.',
+    laws: ['energy.electric', 'energy.kinetic'], appliesTo: ['power.store', 'actuation.rotary', 'machine.assembly'], source: { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019 (conservation of energy)', kind: 'textbook' },
+    seen: 'Rule R10: a motor in this world draws its power from a battery\'s cells, and the battery runs flat.',
+  },
+  {
+    id: 'no-perpetual-motion', category: 'energy', rule: 'Never count on a loop of conversions to keep itself going: every loop needs energy from outside it.',
+    why: 'Every conversion loses some energy as heat, and heat can be turned back into work only in part (Carnot): around any closed loop the energy falls each time, so two machines living only on each other run down.',
+    laws: ['carnot'], appliesTo: ['machine.assembly'], source: { cite: 'Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019 (second law)', kind: 'textbook' },
+  },
+  // ------------------------------------------------------------------ information
+  {
+    id: 'two-stable-states', category: 'information', rule: 'Hold a bit in something with two states that each stay put by themselves, the barrier between them well above what noise (heat, vibration, a knock) can push it over.',
+    why: 'A bit is a choice that lasts: if a state can drift, the bit is lost. The barrier must be many times the noise energy (thermal noise is k T, about 4 × 10⁻²¹ J at room temperature), and erasing a bit costs at least k T ln 2.',
+    laws: ['landauer', 'energy.potential'], appliesTo: ['logic.bistable'], source: { cite: 'Landauer, Irreversibility and heat generation in the computing process, IBM J. Res. Dev. 5(3), 1961', kind: 'textbook' },
   },
   // ------------------------------------------------------------------ motion
   {

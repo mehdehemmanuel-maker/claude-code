@@ -76,7 +76,9 @@ export const driveSelect: Workflow<Record<string, number | string>, DriveChoice>
     const options: Option[] = [];
     for (const md of Object.values(MOTORS)) {
       const mm = motorModel(md);
-      const gears: (GearheadData | null)[] = [null, ...Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id))];
+      // geared 0: direct drive only; 1: through a gearhead only; unsaid: either
+      const geared = typeof spec['geared'] === 'number' ? spec['geared'] : -1;
+      const gears: (GearheadData | null)[] = [...(geared === 1 ? [] : [null]), ...(geared === 0 ? [] : Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id)))];
       for (const gh of gears) {
         for (const bd of Object.values(BATTERIES)) {
           const series = Math.max(1, Math.round(md.V / bd.V));

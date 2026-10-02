@@ -113,6 +113,92 @@ export const WAYS: Way[] = [
     laws: ['newton.second'], embodiedBy: [],
     range: 'Millinewtons to newtons, only in vacuum: spacecraft.', source: GOEBEL,
   },
+  // ------------------------------------------------------------ other energy into electric power, heat and motion
+  {
+    id: 'cell.electrochemical', name: 'Electrochemical cell (battery)', takes: ['chemical'], gives: ['electric'],
+    effect: 'Two electrodes in an electrolyte react, one giving electrons and the other taking them through the outside circuit: chemical energy out as current.',
+    laws: ['lead-acid.ocv', 'energy.electric'], embodiedBy: ['power.store'],
+    range: 'Milliwatt-hours to megawatt-hours; lead-acid about 35 Wh/kg, lithium-ion about 150 to 250.', source: { cite: 'Linden & Reddy, Handbook of Batteries, 4th ed., McGraw-Hill 2011', kind: 'handbook' },
+  },
+  {
+    id: 'photovoltaic', name: 'Solar cell', takes: ['light'], gives: ['electric'],
+    effect: 'Light frees electrons across a semiconductor junction, which drives them round a circuit.',
+    laws: ['pv.power'], embodiedBy: [],
+    range: 'About 200 W per square metre of panel in full sun; nothing at night.', source: { cite: 'IEC 60904 (photovoltaic devices)', kind: 'standard' },
+  },
+  {
+    id: 'thermoelectric', name: 'Thermoelectric generator', takes: ['heat'], gives: ['electric'],
+    effect: 'Heat flowing through junctions of different semiconductors drives a current (Seebeck): no moving parts, a few percent efficient.',
+    laws: ['seebeck', 'carnot'], embodiedBy: [],
+    range: 'Milliwatts to hundreds of watts: space probes, waste-heat recovery, wood-stove fans.', source: { cite: 'Rowe (ed.), CRC Handbook of Thermoelectrics, 1995', kind: 'handbook' },
+  },
+  {
+    id: 'heat.engine', name: 'Heat engine', takes: ['heat'], gives: ['rotation'],
+    effect: 'A gas heated expands and pushes, cooled shrinks: a cycle that turns part of the heat flowing through it into work, never more than Carnot allows.',
+    laws: ['carnot'], embodiedBy: [],
+    range: 'Steam and Stirling engines, turbines: watts to gigawatts.', source: { cite: 'Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019', kind: 'textbook' },
+  },
+  {
+    id: 'combustion', name: 'Burning a fuel', takes: ['chemical'], gives: ['heat'],
+    effect: 'A fuel combines with oxygen and gives its chemical energy out as heat.',
+    laws: [], embodiedBy: [],
+    range: 'Any power; about 43 MJ/kg for petrol, 16 for wood.', source: PHYSICS,
+  },
+  {
+    id: 'muscle', name: 'Muscle', takes: ['chemical'], gives: ['translation'], against: 'frame',
+    effect: 'Myosin heads pull along actin filaments, each step paid for by one ATP: a living linear motor that also grows and heals.',
+    laws: [], embodiedBy: [],
+    range: 'About 0.3 MPa of stress, 20 to 30% shortening, a quarter of its food energy as work. Living: it can\'t be made here.', source: { cite: 'Alberts et al., Molecular Biology of the Cell, 6th ed., Garland 2014 (muscle contraction)', kind: 'textbook' },
+  },
+  {
+    id: 'light.emit', name: 'Light-emitting diode', takes: ['electric'], gives: ['light'],
+    effect: 'Electrons crossing a semiconductor junction drop in energy and give it out as light of one colour.',
+    laws: ['power.electric'], embodiedBy: [],
+    range: 'Indicators to lighting, a few volts each, a third or more of the power out as light.', source: PHYSICS,
+  },
+  // ------------------------------------------------------------ information: switching, holding and sensing bits
+  {
+    id: 'switch.transistor', name: 'Transistor switch (power controlled by a signal)', takes: ['signal'], gives: ['electric'],
+    effect: 'A small voltage at a transistor\'s gate lets a large current through it or stops it: a signal controlling power, as a motor controller\'s H-bridge does.',
+    laws: ['ohm', 'joule'], embodiedBy: ['power.control'],
+    range: 'Milliamps to kiloamps, switched in nanoseconds to microseconds.', source: { cite: 'Mohan, Undeland & Robbins, Power Electronics, 3rd ed., Wiley 2003', kind: 'textbook' },
+  },
+  {
+    id: 'logic.transistor', name: 'Transistor logic', takes: ['signal', 'electric'], gives: ['signal'],
+    effect: 'Transistors wired so their outputs drive each other\'s gates make gates, and gates wired back on themselves hold bits (flip-flops): electric power spent each switch.',
+    laws: ['cmos.dynamic', 'landauer'], embodiedBy: [],
+    range: 'Billions of gates on a chip, switching at gigahertz.', source: { cite: 'Weste & Harris, CMOS VLSI Design, 4th ed., Addison-Wesley 2010', kind: 'textbook' },
+  },
+  {
+    id: 'logic.relay', name: 'Relay logic', takes: ['electric', 'signal'], gives: ['signal'],
+    effect: 'An electromagnet pulls a contact closed or open: one circuit switching another, as the first electric computers did.',
+    laws: ['magnetic.pull'], embodiedBy: [],
+    range: 'Tens of switches a second, each a few watts: slow, loud, easy to see working.', source: { cite: 'Rojas, Konrad Zuse\'s legacy: the architecture of the Z1 and Z3, IEEE Annals of the History of Computing 19(2), 1997', kind: 'textbook' },
+  },
+  {
+    id: 'logic.mechanical', name: 'Mechanical logic (levers and pins)', takes: ['signal', 'translation'], gives: ['signal'],
+    effect: 'Each bit a lever resting one way or the other; a push flips it and its flip pushes the next: gates and memory with no electricity, powered by a hand, a weight or a falling ball.',
+    laws: ['energy.potential', 'landauer'], embodiedBy: ['logic.bistable'],
+    range: 'A few operations a second, each costing millijoules: Zuse\'s Z1 (1938), marble computers.', source: { cite: 'Rojas, Konrad Zuse\'s legacy: the architecture of the Z1 and Z3, IEEE Annals of the History of Computing 19(2), 1997', kind: 'textbook' },
+  },
+  {
+    id: 'sense.strain', name: 'Strain gauge (sensing a force)', takes: ['load'], gives: ['signal'],
+    effect: 'A force strains a part, and a foil gauge on it changes its resistance with the strain.',
+    laws: ['strain.gauge', 'hooke'], embodiedBy: [],
+    range: 'Load cells from grams to hundreds of tonnes.', source: { cite: 'Window (ed.), Strain Gauge Technology, 2nd ed., Elsevier 1992', kind: 'textbook' },
+  },
+  {
+    id: 'sense.thermocouple', name: 'Thermocouple (sensing a temperature)', takes: ['heat'], gives: ['signal'],
+    effect: 'Two metals joined make a voltage that grows with the temperature at their junction.',
+    laws: ['seebeck'], embodiedBy: [],
+    range: 'About −200 to +1250 °C (type K), a few tens of microvolts a kelvin.', source: { cite: 'IEC 60584 (thermocouples)', kind: 'standard' },
+  },
+  {
+    id: 'sense.encoder', name: 'Encoder (sensing a turn)', takes: ['rotation'], gives: ['signal'],
+    effect: 'A slotted disc on the shaft interrupts a light or a magnetic field: each pulse a fraction of a turn.',
+    laws: [], embodiedBy: [],
+    range: 'Tens to millions of counts a turn.', source: PHYSICS,
+  },
   // ------------------------------------------------------------ rotation into rotation
   {
     id: 'gear.reduce', name: 'Gear reduction', takes: ['rotation'], gives: ['rotation'], against: 'frame',

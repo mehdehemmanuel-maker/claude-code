@@ -35,8 +35,15 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { ARCHETYPES, asWhole, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, conceive, explain, lawById, nameOf, PRINCIPLES, principleName, recall, sensitivity, showWork, solve, workflowById } from '../ganglia';
+import { anatomyOf, ARCHETYPES, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
+
+/** A building block by the word for it. */
+const INSIDE_OF: Record<string, string> = {
+  motor: 'actuation.rotary', battery: 'power.store', cell: 'power.store', bearing: 'support.rotate', gearhead: 'transmission.reduce', gearbox: 'transmission.reduce', reducer: 'transmission.reduce',
+  coupling: 'transmission.couple', chain: 'transmission.flexible', wheel: 'transmission.wheel', shaft: 'transmission.shaft', axle: 'transmission.shaft', fuse: 'protect.fuse', controller: 'power.control',
+  wire: 'power.conduct', cable: 'power.conduct', 'rod end': 'connection.two-force', 'tie rod': 'connection.two-force', bit: 'logic.bistable', lever: 'logic.bistable', guard: 'protect.guard', frame: 'structure.member',
+};
 
 export interface Advice {
   id: string;
@@ -297,6 +304,32 @@ export class Ego {
         const now = ways.filter((c) => c.buildable).length;
         const motor = ways.every((c) => c.transducer) ? ' Every one of them needs a transducer, a motor in the widest sense; the rest depends on what it pushes against.' : '';
         return `${ways.length} ways to turn ${say(i.from)} into ${say(i.to)}, by what they push against. ${groups.join('; ')}.${motor} ${now} I can build here now. ${asWhole(ways[0]!).says}`;
+      }
+      case 'grow': {
+        const spec = { mass: 120, wheelRadius: 0.125, speed: 3, motors: 2, ...i.spec };
+        const g = grow({ from: i.from, to: i.to, spec });
+        if (!g.best) {
+          const p = g.possible[0];
+          return p ? `I can't grow one here yet: the simplest way is ${p.concept.ways.map((w) => w.name.toLowerCase()).join(' then ')}, and I can't build ${p.missing.join(', ')} yet.` : `I know no way to turn ${i.from} into ${i.to}.`;
+        }
+        const b = g.best, f = b.fitness;
+        const said = b.findings.filter((x) => x.level !== 'warning').slice(0, 3).map((x) => x.message);
+        if (b.sized) this.lastWorked = { workflow: 'powertrain.design', result: b.sized };
+        return `Grown from ${Object.entries(spec).map(([k, v]) => `${k} ${Number(v.toPrecision(3))}`).join(', ')} by ${b.concept.ways.map((w) => w.name.toLowerCase()).join(', then ')}: ${f.organs} blocks, ${f.parts} parts. ${anatomyOf(b).join('. ')}. Built in this order: ${b.order.map((o) => o.organ).join(', ')}.${said.length ? ` Not yet real: ${said.join('; ')}.` : ' Every part is real.'}${g.others.length ? ` I grew ${g.others.length} other${g.others.length > 1 ? 's' : ''} and kept the fittest.` : ''} ${g.possible.length} more ways are possible but not buildable here yet.`;
+      }
+      case 'challenge': {
+        if (i.which) {
+          const c = challengeById(i.which);
+          return c ? report(attempt(c)) : `I don't have a challenge called ${i.which}.`;
+        }
+        const all = CHALLENGES.map((c) => attempt(c));
+        return `I set myself ${all.length} hard challenges to find where I break: ${all.map((a) => `${a.challenge.name.toLowerCase()} (as far as ${a.best}, at worst ${a.worst})`).join('; ')}. Each miss is a thing to fix. Ask me for one, like "take the computer challenge".`;
+      }
+      case 'inside': {
+        const word = i.what.toLowerCase().replace(/^(dc |electric |rotary )/, '').replace(/s$/, '');
+        const a = ARCHETYPES.find((x) => x.id === INSIDE_OF[word]) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
+        if (!a) return `I don't know what's inside ${i.what} yet.`;
+        return `A ${blockName(a)} is a system of its own. ${a.inside.map((x) => `${x.name[0]!.toUpperCase()}${x.name.slice(1)}: ${x.does}${x.law ? ` (${lawById(x.law)?.name ?? x.law})` : ''}.`).join(' ')} Source: ${a.insideSource.cite}.`;
       }
       case 'recall': {
         const hits = recall(i.about, 3);

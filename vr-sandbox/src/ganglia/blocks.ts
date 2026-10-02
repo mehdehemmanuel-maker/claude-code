@@ -38,7 +38,7 @@ export interface Port {
  * What passes between blocks (energy, material and signal flows, after Pahl & Beitz). Translation is a stroke (a
  * part moving within the machine); travel is the whole machine moving against its surroundings.
  */
-export type Flow = 'electric' | 'rotation' | 'translation' | 'travel' | 'load' | 'signal' | 'heat' | 'stock';
+export type Flow = 'electric' | 'rotation' | 'translation' | 'travel' | 'load' | 'signal' | 'heat' | 'stock' | 'chemical' | 'light';
 
 /** One piece of a block's anatomy: what it is, what it does, and the law it works by. */
 export interface Piece { name: string; does: string; law?: string; material?: string }
@@ -47,7 +47,7 @@ export interface Archetype {
   id: string;
   /** What it does, as a verb phrase. */
   does: string;
-  category: 'power' | 'actuation' | 'transmission' | 'support' | 'structure' | 'connection' | 'protection' | 'material' | 'machine';
+  category: 'power' | 'actuation' | 'transmission' | 'support' | 'structure' | 'connection' | 'protection' | 'control' | 'material' | 'machine';
   /** The flows it takes and gives. */
   takes: Flow[];
   gives: Flow[];
@@ -67,7 +67,7 @@ const n = (c: CatalogItem, k: string) => Number(c.specs[k]);
 
 export const ARCHETYPES: Archetype[] = [
   {
-    id: 'power.store', does: 'stores electrical energy and gives it as direct current', category: 'power', takes: [], gives: ['electric'], families: ['battery'],
+    id: 'power.store', does: 'stores energy chemically and gives it as direct current', category: 'power', takes: ['chemical'], gives: ['electric'], families: ['battery'],
     laws: ['lead-acid.ocv', 'energy.electric'], principles: ['fuse-at-source', 'size-wire-by-drop-and-ampacity'],
     inside: [
       { name: 'cells', does: 'each a pair of electrodes in an electrolyte, giving its chemistry\'s voltage (lead-acid about 2.1 V, so six make 12 V)', law: 'lead-acid.ocv' },
@@ -265,6 +265,20 @@ export const ARCHETYPES: Archetype[] = [
       { name: 'joints', does: 'how the blocks are held to each other: welded, bolted, clamped, pinned' },
     ],
     insideSource: { cite: 'Pahl, Beitz, Feldhusen & Grote, Engineering Design: A Systematic Approach, 3rd ed., Springer 2007 (function structures)', kind: 'textbook' },
+    ports: (): Port[] => [],
+  },
+  // control: what holds and combines information
+  {
+    id: 'logic.bistable', does: 'holds one bit as which way a lever rests, and passes it on: a push on its input flips it, and its flip pushes the next', category: 'control', takes: ['signal', 'translation'], gives: ['signal', 'translation'],
+    families: [], shapes: ['plate', 'rod.round'],
+    laws: ['energy.potential', 'landauer'], principles: ['two-stable-states', 'short-load-path'],
+    inside: [
+      { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'plate' },
+      { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it' },
+      { name: 'stops', does: 'hold it in each state, the barrier between them set by how far its weight must rise to cross over', law: 'energy.potential' },
+      { name: 'input and output pins', does: 'a push in flips it; its flip pushes the next lever: one bit switching another' },
+    ],
+    insideSource: { cite: 'Rojas, Konrad Zuse\'s legacy: the architecture of the Z1 and Z3, IEEE Annals of the History of Computing 19(2), 1997 (mechanical binary logic)', kind: 'textbook' },
     ports: (): Port[] => [],
   },
   // protection: what keeps a fault from becoming a fire or an injury
