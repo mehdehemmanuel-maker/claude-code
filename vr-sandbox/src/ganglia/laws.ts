@@ -569,6 +569,14 @@ export const LAWS: Law[] = [
     valid: 'Standard test conditions G = 1000 W/m² at 25 °C; less when hot or not facing the sun. Silicon panels about 0.2.', example: { inputs: { eta: 0.2, G: 1000, A: 1.6 }, output: 320 },
     source: { cite: 'IEC 61215 / IEC 60904 (photovoltaic modules, standard test conditions)', kind: 'standard' }, tags: ['solar', 'light', 'photovoltaic', 'panel', 'energy'],
   },
+  {
+    id: 'rayleigh.resolution', name: 'Resolution of optical lithography (Rayleigh)', domain: 'information',
+    statement: 'The smallest half-pitch a projection lens can print is a process factor k₁ times the wavelength over the numerical aperture: why lithography went to 13.5 nm light and to wider apertures.',
+    formula: 'CD = k₁ λ / NA', inputs: [q('k1', 'process factor', '-'), q('lambda', 'wavelength', 'm'), q('NA', 'numerical aperture', '-')], output: q('CD', 'smallest half-pitch', 'm'),
+    eval: ({ k1, lambda, NA }) => (k1! * lambda!) / NA!, outside: ({ k1, NA }) => (k1! < 0.25 ? `k₁ of ${k1} is under the single-exposure limit of 0.25` : NA! >= 1 ? 'a dry lens has NA below 1' : null),
+    valid: 'Single exposure; k₁ about 0.3 to 0.4 in production, 0.25 its theoretical floor. Depth of focus falls as λ/NA².', example: { inputs: { k1: 0.32, lambda: 13.5e-9, NA: 0.33 }, output: 1.3090909090909092e-8 },
+    source: { cite: 'Mack, Fundamental Principles of Optical Lithography, Wiley 2007', kind: 'textbook' }, tags: ['lithography', 'euv', 'chip', 'resolution', 'optics', 'semiconductor'],
+  },
 ];
 
 export const lawById = (id: string) => LAWS.find((l) => l.id === id);

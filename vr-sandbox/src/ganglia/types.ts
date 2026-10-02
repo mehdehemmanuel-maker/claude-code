@@ -10,7 +10,7 @@
 // processes that make it.
 
 /** How far a source can be trusted: a standard or the maker's own data first, a rule of thumb last. */
-export type SourceKind = 'standard' | 'maker' | 'textbook' | 'distributor' | 'handbook' | 'rule of thumb';
+export type SourceKind = 'standard' | 'maker' | 'textbook' | 'distributor' | 'handbook' | 'rule of thumb' | 'press' | 'patent' | 'paper';
 
 export interface Source {
   /** The book, standard or maker's document (edition, table or page where it matters). */

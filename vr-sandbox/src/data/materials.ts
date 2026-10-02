@@ -182,6 +182,13 @@ export const MATERIALS: Material[] = [
   polymer('polymer.hdpe', 'HDPE', 'polyolefin', 950, 1.0, 26, 30, 1.5, 0.2, 0xf4f4f4),
   polymer('polymer.ptfe', 'PTFE', 'ptfe', 2200, 0.5, 20, 25, 2.0, 0.012, 0xffffff),
   {
+    // printed by continuous-fibre fabrication: in-plane values; weaker between layers (print-loads-in-plane)
+    id: 'polymer.nylon-microcarbon', name: 'Printed micro carbon fibre filled nylon', category: 'polymer', density: 1200, E: 2.4 * GPa, nu: 0.38,
+    yield: 40 * MPa, ultimate: 40 * MPa, elongation: 0.25, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.45, restitution: 0.4, sound: 'plastic', loss: 0.03, sparks: 'none', color: 0x2e3033, metalness: 0, roughness: 0.7,
+    source: 'Markforged Composites Material Datasheet: tensile modulus 2.4 GPa, stress at yield 40 MPa, at break 37 MPa, 1.2 g/cm³ (printed, in-plane)', confidence: 'spec',
+  },
+  {
     id: 'polymer.pmma', name: 'Acrylic (PMMA)', category: 'polymer', density: 1180, E: 3.2 * GPa, nu: 0.37,
     yield: 70 * MPa, ultimate: 70 * MPa, elongation: 0.04, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
     friction: 0.5, restitution: 0.5, sound: 'glass', loss: 0.02, sparks: 'none', color: 0xcfe8f5, metalness: 0, roughness: 0.05,

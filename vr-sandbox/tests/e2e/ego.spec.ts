@@ -223,3 +223,29 @@ test('"it won\'t save": Ego saves again and says how it went, and a full storage
   expect(out.health).toMatch(/a build save failed: the headset's storage for this app is full/);
   expect(errors).toEqual([]);
 });
+
+test('her forms: a shape said in words and a part invented for a job are made, placed and rest on the floor; one nothing can make is refused', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page);
+  const sphere = await sb(page, (s) => s.ego.ask('make a 40 mm sphere'));
+  expect(sphere).toMatch(/Ø40 mm sphere/);
+  expect(sphere).toMatch(/It's in front of you/);
+  const bracket = await sb(page, (s) => s.ego.ask('invent a bracket that holds 500 N at 120 mm from the wall'));
+  expect(bracket).toMatch(/grew a bracket holding 500 N at 120 mm from its wall/);
+  expect(bracket).toMatch(/safety factor of 2\.5/);
+  const parts = await sb(page, (s) => Object.values(s.app.doc.parts).map((p: any) => ({ kind: p.kind, form: String(p.params.form ?? '').length })));
+  expect(parts.length).toBe(2);
+  expect(parts.every((p: { kind: string; form: number }) => p.kind === 'form' && p.form > 10)).toBe(true);
+  // nothing makes a gyroid in aluminium: she says so and places nothing
+  expect(await sb(page, (s) => s.ego.ask('make a 60 mm aluminium cube filled with a gyroid lattice of 12 mm cells'))).toMatch(/won't place it/);
+  expect(await sb(page, (s) => Object.keys(s.app.doc.parts).length)).toBe(2);
+  // played, they rest on the floor rather than falling through it
+  await sb(page, (s) => s.app.play());
+  await frames(page, 90);
+  const ys = await sb(page, (s) => Object.keys(s.app.doc.parts).map((id) => s.app.livePose(id).p[1]));
+  for (const y of ys) expect(y).toBeGreaterThan(0);
+  // and a saved build carries their genomes back
+  const back = await sb(page, (s) => { const code = s.app.shareCode(); s.app.openShareCode(code); return Object.values(s.app.doc.parts).filter((p: any) => p.kind === 'form').length; });
+  expect(back).toBe(2);
+  expect(errors).toEqual([]);
+});

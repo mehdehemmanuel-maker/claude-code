@@ -4,12 +4,14 @@
 import type { Material } from '../data/materials';
 import type { Quat, Vec3 } from '../doc/types';
 import { axisAngle } from '../doc/math';
-import { choice, num, numberOf, stringOf, type ParamDef, type Params } from '../schema/params';
+import { choice, num, numberOf, stringOf, text, type ParamDef, type Params } from '../schema/params';
 import {
   iBeamSection, iBeamStrongAxis, rectSection, rectTubeSection, roundSection, tubeSection, type Section,
 } from '../engineering/sections';
 import type { CollisionShape, ConvexShape, VisualShape } from './shapes';
 import { electromagnetBr } from '../engineering/magnets';
+import { bounds as formBounds, formKey, parseForm, type Form } from '../forms/form';
+import { boxes as formBoxes, solid as formSolid } from '../forms/mesh';
 import { GEARHEADS, MOTORS, getGearhead, getMotor } from '../data/motors';
 import { BATTERIES, getBattery } from '../data/batteries';
 
@@ -127,6 +129,19 @@ const isMagnet = (m: Material) => m.category === 'magnet';
 const isSoftIron = (m: Material) => m.ferromagnetic && m.category !== 'magnet';
 const isWood = (m: Material) => m.category === 'wood' || m.category === 'engineered-wood';
 const notMagnet = (m: Material) => m.category !== 'magnet';
+
+const parsedForms = new Map<string, Form>();
+/** A form part's form, from its genome (checked as untrusted input); a 50 mm sphere if it has none. */
+export function formOf(p: Params): Form {
+  const g = stringOf(p, 'form', '{"f":"sphere","r":0.025}');
+  let f = parsedForms.get(g);
+  if (!f) {
+    f = parseForm(g);
+    if (parsedForms.size > 128) parsedForms.clear();
+    parsedForms.set(g, f);
+  }
+  return f;
+}
 
 export const PART_KINDS: PartKind[] = [
   {
@@ -337,6 +352,25 @@ export const PART_KINDS: PartKind[] = [
     visual: (p) => ({ type: 'wheel', radius: n(p, 'diameter') / 2, halfWidth: n(p, 'width') / 2, hub: n(p, 'diameter') * 0.18 }),
     volume: (p) => (Math.PI / 4) * n(p, 'diameter') ** 2 * n(p, 'width'),
     dims: (p) => sorted(n(p, 'diameter'), n(p, 'diameter'), n(p, 'width')),
+  },
+  {
+    // A form in Ego's language of form (forms/form.ts): any shape, its genome in the `form` parameter. Its mass is its
+    // exact volume (from its mesh) times its material's density; it collides as its solid in merged boxes, holes kept.
+    id: 'form', label: 'Form (invented geometry)', category: 'Forms', defaultMaterial: 'polymer.nylon-microcarbon', dragCd: 1, spawnRotation: IDENTITY,
+    materialFilter: notMagnet,
+    params: [text('form', 'Form', '{"f":"sphere","r":0.025}', 65536)],
+    collision: (p) => {
+      const f = formOf(p);
+      const bs = formBoxes(f);
+      if (!bs.length) { const [lo, hi] = formBounds(f); return box((hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2); }
+      return { type: 'compound', children: bs.map((b) => ({ shape: box(...b.half), p: b.center, q: IDENTITY })) };
+    },
+    visual: (p) => {
+      const f = formOf(p), s = formSolid(f, 40, 300_000);
+      return { type: 'mesh', key: formKey(f), positions: Float32Array.from(s.mesh.positions), indices: s.mesh.indices };
+    },
+    volume: (p) => formSolid(formOf(p)).mass.volume,
+    dims: (p) => { const [lo, hi] = formBounds(formOf(p)); return sorted(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]); },
   },
   {
     id: 'wedge', label: 'Wedge / ramp', category: 'Solids', defaultMaterial: 'wood.birch-plywood', dragCd: 1, spawnRotation: IDENTITY,

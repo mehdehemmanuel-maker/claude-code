@@ -9,6 +9,7 @@ import { Value } from '@sinclair/typebox/value';
 import { Inflate, deflateSync } from 'fflate';
 import { hasConnectorKind } from '../connectors/registry';
 import { hasPartKind } from '../parts/registry';
+import { parseForm } from '../forms/form';
 import type { Material } from '../data/materials';
 import type { Assembly, BuildDoc, Connection, Part } from '../doc/types';
 import { canonicalStringify, utf8 } from './canonical';
@@ -136,6 +137,14 @@ function validateReferences(file: BuildFile) {
     if (!file.materials[p.material]) throw new DecodeError(`Part ${p.id} uses material "${p.material}" not embedded in the file`);
     if (p.assembly !== null && !asm.has(p.assembly)) throw new DecodeError(`Part ${p.id} references a missing assembly`);
     unique(p.features.map((f) => f.id), 'feature');
+    for (const [k, v] of Object.entries(p.params)) {
+      if (typeof v !== 'string' || v.length <= 200) continue;
+      if (k !== 'form') throw new DecodeError(`Part ${p.id}: parameter ${k} is too long`);
+      try { parseForm(v); } catch (e) { throw new DecodeError(`Part ${p.id}: its form is invalid (${(e as Error).message})`); }
+    }
+    if (p.kind === 'form') {
+      try { parseForm(String(p.params['form'] ?? '')); } catch (e) { throw new DecodeError(`Part ${p.id}: its form is invalid (${(e as Error).message})`); }
+    }
   }
   for (const [key, m] of Object.entries(file.materials)) if (m.id !== key) throw new DecodeError(`Material key ${key} does not match its id`);
   for (const c of file.connections) {

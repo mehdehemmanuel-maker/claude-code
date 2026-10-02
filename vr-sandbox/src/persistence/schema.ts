@@ -9,7 +9,8 @@ const Pose = Type.Object({ p: Vec3, q: Quat }, { additionalProperties: false });
 const Id = (prefix: string) => Type.String({ pattern: `^${prefix}_[0-9a-hjkmnp-tv-z]{12}$` });
 const Key = Type.String({ minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9_.-]+$' });
 const Text = (max: number) => Type.String({ maxLength: max });
-const ParamValue = Type.Union([Num, Text(200), Type.Boolean()]);
+// text values are short, except a form's genome (checked as a form on decode)
+const ParamValue = Type.Union([Num, Text(65536), Type.Boolean()]);
 const Params = Type.Record(Key, ParamValue);
 
 export const AssemblySchema = Type.Object({

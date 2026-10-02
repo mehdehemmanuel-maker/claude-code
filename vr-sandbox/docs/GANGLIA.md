@@ -93,6 +93,8 @@ Each is said as the functions it needs, in plain words, and taken through everyt
 
 Each challenge also carries the physics that bounds it for anyone: Landauer's floor under a bit, Carnot's ceiling on living off waste heat, Shannon's bound on a language. What each found, and what changed because of it, is in [CHALLENGES.md](CHALLENGES.md). The tests pin where each stands, so fixing a gap moves its result.
 
+Shape is in its own language, with its own doc: [FORMS.md](FORMS.md). That covers primitives, sections, lattices and blends; exact mass properties; what can make each shape; and parts invented by their loads.
+
 Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiote"*, *"build something that flies"*; *"grow a kart for 120 kg at 3 m/s"*; *"what's inside a motor?"*.
 
 ## Fast
@@ -107,7 +109,7 @@ Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiot
 
 ## What's in it
 
-- **Laws (88)**, grouped by area (also: Landauer's limit, CMOS switching power, the information in a choice, Carnot, Seebeck, strain gauges, solar cells, the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
+- **Laws (89)**, grouped by area (also: the Rayleigh resolution of lithography, Landauer's limit, CMOS switching power, the information in a choice, Carnot, Seebeck, strain gauges, solar cells, the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
   - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
   - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
   - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
@@ -115,7 +117,16 @@ Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiot
   - Thermal: convection, conduction, radiation, heat capacity, lumped time constant, thermal resistance networks.
   - Fluids: buoyancy, hydrostatic pressure.
 - **Processes (16)**: sawing, drilling, tapping, boring, split clamps, turning, milling, bending sheet, MIG welding, soldering, gluing, wood screws, crimping terminals, fitting bearings, continuous fibre fabrication (CFF) printing, metal FFF (print, wash, sinter).
-- **Machines**: an industrial continuous-fibre composite printer (figures from the Markforged FX10), broken down into frame and heated chamber, motion system, composite print engine (plastic and fibre nozzles, optical sensors), Metal Kit (swappable head, feed tubes, pre-extruders, heated bed), build plate, Vision Module and laser micrometer, material drawer, electronics and software. It also lists the materials it prints with (Onyx, continuous carbon fibre, carbon fibre FR) from Markforged's datasheet.
+- **Machines**: an extreme ultraviolet lithography scanner (figures from the ASML TWINSCAN NXE:3800E), broken down as follows. Its 13 nm resolution follows from the Rayleigh law (13.5 nm light, 0.33 NA, k₁ ≈ 0.32), and its sources are its makers' pages, a patent and a review paper, with press reports marked as such:
+  - its tin-plasma light source (a 40 kW CO₂ drive laser, 50,000 tin droplets a second, pre-pulse and main pulse, a multilayer collector, hydrogen debris control);
+  - its facet-mirror illuminator;
+  - its reflective mask and pellicle;
+  - its six-mirror 4× projection optics (each about 70% reflective, so about 12% passes);
+  - its two wafer stages (1.1 nm overlay);
+  - its vacuum;
+  - its power and installation, and its High-NA successor.
+
+  And an industrial continuous-fibre composite printer (figures from the Markforged FX10), broken down into frame and heated chamber, motion system, composite print engine (plastic and fibre nozzles, optical sensors), Metal Kit (swappable head, feed tubes, pre-extruders, heated bed), build plate, Vision Module and laser micrometer, material drawer, electronics and software. It also lists the materials it prints with (Onyx, continuous carbon fibre, carbon fibre FR) from Markforged's datasheet.
 - **Parts (bought)**, by function and standard:
   - deep groove ball bearings 608, 6004, 6005, 6202 to 6206, and a UCP205 pillow block unit;
   - ANSI 35, 40 and 41 roller chain;

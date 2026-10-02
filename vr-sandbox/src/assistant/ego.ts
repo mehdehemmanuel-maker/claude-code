@@ -37,6 +37,10 @@ import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
 import { anatomyOf, ARCHETYPES, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
+import { describe as describeForm, genome, parseForm, type Form } from '../forms/form';
+import { solid } from '../forms/mesh';
+import { makeIn, routes } from '../forms/make';
+import { formFromWords, invent, materialIn } from '../forms/say';
 
 /** A building block by the word for it. */
 const INSIDE_OF: Record<string, string> = {
@@ -149,6 +153,27 @@ export class Ego {
     const id = this.tools?.grab.holding ?? [...this.app.selection.parts][0];
     if (!id || !this.app.doc.parts[id]) throw new Error('Select it first: point at it with Grab and pull the trigger.');
     return this.app.component(id);
+  }
+
+  /**
+   * A form made real: placed in front of you in a material something can make it in, with its mass and how it is made.
+   * If nothing can make it (in the material asked for, or at all), it isn't placed (rule R11), and she says why.
+   */
+  private makeForm(f: Form, material: string | null, said: string): string {
+    const all = routes(f), can = all.filter((r) => r.can);
+    const opening = `${said[0]!.toUpperCase()}${said.slice(1)}.`;
+    if (!can.length) return `${opening} But nothing I know can make it, so I won't place it: ${all.map((r) => `${r.process}: ${r.why}`).join('; ')}.`;
+    if (material) {
+      const r = makeIn(f, material);
+      if (!r.can) return `${opening} But I can't make it in ${getMaterial(material).name.toLowerCase()}, so I won't place it: ${r.why}. ${can.map((x) => `${x.process} makes it in ${x.materials.join(' or ')}`).join('; ')}.`;
+    }
+    const pick = (cats: string[]) => cats.includes('polymer') ? 'polymer.nylon-microcarbon' : cats.includes('aluminum') ? 'aluminum.6061-t6' : cats.includes('steel') ? 'steel.1018-cd' : null;
+    const mat = material ?? pick(can[0]!.materials) ?? pick(can.flatMap((r) => r.materials))!;
+    const how = makeIn(f, mat);
+    const s = solid(f);
+    const id = this.host.place('form', { form: genome(f) }, mat, null, [], undefined);
+    this.app.select([id]);
+    return `${opening} ${(s.mass.volume * 1e6).toFixed(1)} cm³, ${(s.mass.volume * getMaterial(mat).density * 1000).toFixed(0)} g in ${getMaterial(mat).name.toLowerCase()}. Made by ${how.why}. It's in front of you.`;
   }
 
   private act(i: Intent): string {
@@ -330,6 +355,19 @@ export class Ego {
         const a = ARCHETYPES.find((x) => x.id === INSIDE_OF[word]) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
         if (!a) return `I don't know what's inside ${i.what} yet.`;
         return `A ${blockName(a)} is a system of its own. ${a.inside.map((x) => `${x.name[0]!.toUpperCase()}${x.name.slice(1)}: ${x.does}${x.law ? ` (${lawById(x.law)?.name ?? x.law})` : ''}.`).join(' ')} Source: ${a.insideSource.cite}.`;
+      }
+      case 'shape': {
+        let f: Form | null = null;
+        try { f = i.words.trim().startsWith('{') ? parseForm(i.words) : formFromWords(i.words); } catch (e) { return `That isn't a form I can read: ${(e as Error).message}.`; }
+        if (!f) return 'I couldn\'t read a shape in that. Say it with its sizes, like "a 40 mm sphere" or "a 60 mm cube filled with a gyroid lattice of 12 mm cells".';
+        return this.makeForm(f, materialIn(i.words), describeForm(f));
+      }
+      case 'invent': {
+        const inv = invent(i.words);
+        if (!inv) return 'Tell me the job with its numbers: what it holds and how far, like "a bracket that holds 500 N at 120 mm from the wall" or "a beam spanning 400 mm that carries 2 kN in the middle".';
+        const g = inv.grown, sizes = `${(inv.problem.nx * inv.problem.h * 1000).toFixed(0)} × ${(inv.problem.ny * inv.problem.h * 1000).toFixed(0)} × ${(inv.problem.t * 1000).toFixed(1)} mm`;
+        const said = `I grew ${inv.job} from its loads, as bone grows: a ${sizes} plate, ${Math.round((1 - inv.problem.volfrac) * 100)}% of it taken away where it carried nothing. In ${getMaterial(inv.material).name.toLowerCase()} it carries the load at a safety factor of ${g.safety.toFixed(1)} on yield (peak stress ${(g.stress / 1e6).toFixed(1)} MPa) and deflects ${(g.deflection * 1000).toFixed(2)} mm.${inv.caution ? ` But ${inv.caution}.` : ''}`;
+        return this.makeForm(inv.form, inv.material, said);
       }
       case 'recall': {
         const hits = recall(i.about, 3);

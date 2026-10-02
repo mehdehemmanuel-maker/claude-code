@@ -6,6 +6,7 @@ import { isComplaint } from './reports';
 import type { Design, DesignSpec } from './designer';
 import { DIMS, findQuantities, sameDim, type Dim, type Said } from '../ganglia/units';
 import type { Flow } from '../ganglia/blocks';
+import { formFromWords } from '../forms/say';
 
 export type Intent =
   | { do: 'strengthen' }
@@ -41,6 +42,10 @@ export type Intent =
   | { do: 'challenge'; which?: string }
   /** What a block is made of, piece by piece. */
   | { do: 'inside'; what: string }
+  /** A shape said in words (or as a form genome), made and placed. */
+  | { do: 'shape'; words: string; material?: string }
+  /** A part invented for a job: its shape grown by its loads. */
+  | { do: 'invent'; words: string }
   | { do: 'depends' }
   | { do: 'level' }
   | { do: 'command'; command: 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'pause' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero' };
@@ -71,6 +76,10 @@ export function interpret(line: string): Intent | null {
   if ((m = /^why (?:do|does|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if ((m = /^(?:what is|whats) the (?:reason|point|idea) (?:for|of|behind) (?:an? |the )?(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if (new RegExp(`^(make ${it} )?(stronger|sturdier|hold|stiffer)|^(fix|strengthen|reinforce) ${it}|^fix( it)?$|^make ${it} hold`).test(t)) return { do: 'strengthen' };
+  // a part for a job, its shape grown by its loads: "invent a bracket that holds 500 N at 120 mm"
+  if (/^(invent|grow|design|make|create|build|print)\b/.test(t) && /\b(bracket|beam|arm|hook|mount|holder|bridge|cantilever|joist|hanger)\b/.test(t) && findQuantities(t).some((q) => sameDim(q.dim, DIMS.force) || sameDim(q.dim, DIMS.mass))) return { do: 'invent', words: line.trim() };
+  // a shape in the form language, said as its genome
+  if (/^\s*(form|shape)\s*[:=]?\s*\{/i.test(line)) return { do: 'shape', words: line.trim().replace(/^(form|shape)\s*[:=]?\s*/i, '') };
   // a hard challenge, said any way: "try to build a computer", "create a symbiote", "build something that flies"
   if (/^(challenge|try to|build|create|make|invent|design|take|run)\b/.test(t) && (m = /\b(computer|symbiote|scientist|language|geometry|new shape|fly|flies|flying|flight)\b/.exec(t)) && !/\b(table|desk|bench|wall|tower|shelf|crate)\b/.test(t)) {
     const w = m[1]!;
@@ -119,6 +128,8 @@ export function interpret(line: string): Intent | null {
   if ((m = /^(?:what do you know about|tell me about|explain|what is|whats|what are|how (?:is|are|do (?:i|you)) (?:make|made|cut|drill|tap|bend|weld|fit|size|choose|pick)?)\s*(?:an? |the )?(.+)$/.exec(t))) return { do: 'recall', about: m[1]!.trim() };
   const d = designOf(t);
   if (d) return d;
+  // a shape with its sizes: "make a 40 mm sphere", "print a 60 mm cube filled with a gyroid lattice"
+  if (/^(make|build|print|create|place|spawn|give me|shape|form)\b/.test(t) && findQuantities(t).some((q) => sameDim(q.dim, DIMS.length)) && formFromWords(line)) return { do: 'shape', words: line.trim() };
   if ((m = /^(?:place|add|spawn|give me|put|make|build|drop)(?: me)? (?:(\w+) )?(.+?)(?: here| in front( of me)?)?$/.exec(t))) {
     const n = count(m[1]);
     const words = (n === null && m[1] ? `${m[1]} ${m[2]}` : m[2]!).split(' ').filter((w) => !['of', 'the', 'some'].includes(w));

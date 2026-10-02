@@ -45,6 +45,8 @@ const BY_ID: Record<string, ThermalProps> = {
   'polymer.nylon66': T(1670, 0.25, 0.9, 'MatWeb nylon 6/6 dry: c 1.67 J/g K, k 0.25 W/m K'),
   'polymer.pom': T(1470, 0.31, 0.9, 'MatWeb acetal homopolymer: c 1.47 J/g K, k 0.31 W/m K'),
   'polymer.pc': T(1200, 0.2, 0.9, 'MatWeb polycarbonate: c 1.2 J/g K, k 0.20 W/m K'),
+  // Markforged publishes no thermal figures for its micro carbon nylon: these are its matrix's, nylon 6 (estimated)
+  'polymer.nylon-microcarbon': T(1700, 0.25, 0.9, 'Estimated from its nylon 6 matrix (MatWeb PA6: c about 1.7 J/g K, k about 0.25 W/m K); not published for the filled grade'),
   'polymer.hdpe': T(1900, 0.48, 0.9, 'MatWeb HDPE: c 1.9 J/g K, k 0.45-0.52 W/m K'),
   'polymer.ptfe': T(1000, 0.25, 0.9, 'MatWeb PTFE: c 1.0 J/g K, k 0.25 W/m K'),
   'polymer.pmma': T(1470, 0.19, 0.9, 'MatWeb PMMA: c 1.47 J/g K, k 0.19 W/m K'),

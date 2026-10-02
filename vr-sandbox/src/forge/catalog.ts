@@ -69,6 +69,11 @@ export function paramValue(def: ParamDef, v: number | string, what: string): num
     if (typeof v !== 'number') throw new Error(`${what}: ${def.key} takes a number, not ${v}`);
     return v;
   }
+  if (def.type === 'text') {
+    const t = String(v);
+    if (t.length > def.max) throw new Error(`${what}: ${def.key} is too long`);
+    return t;
+  }
   if (def.type === 'bool') {
     if (v === 'true' || v === 'on' || v === 'yes' || v === 1) return true;
     if (v === 'false' || v === 'off' || v === 'no' || v === 0) return false;
