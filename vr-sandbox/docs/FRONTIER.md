@@ -87,12 +87,13 @@ Over everything asked, what to build next is ranked by how many wants call for i
 - **Ground** ranked first, so it was built first ([PLACES.md](PLACES.md)). Asked for a beach, she grows its sand and sea and takes you there.
 - **Lessons that check what you do** came next ([LESSONS.md](LESSONS.md)). Any design she can make becomes the steps of building it yourself, each shown by a guide and done only when done in your world.
 - **Swimmers with bodies** came next ([CREATURES.md](CREATURES.md)): real parts and rhythmic servos that swim by the water's push.
+- **Walkers that choose** came next ([CREATURES.md](CREATURES.md)): a dog and a deer on hobby servos that walk by their feet's grip and go where their wants take them. Making them walk found five flaws in the world, now fixed and held as rules.
 
 Now ranked first:
 
-1. characters with minds and creatures that walk, fly and choose;
-2. plants and seeing what is hidden;
-3. buildings.
+1. characters with minds (called for by 8 of the stored asks);
+2. plants, creatures that fly or crawl, and seeing what is hidden (6 each);
+3. buildings (4).
 
 ## Ask her
 
@@ -102,5 +103,6 @@ Now ranked first:
 - *"how would you build a geodesic dome?"*
 - *"where does kinetic energy break down?"*
 - *"I just want to chill on a beach"*
+- *"put a dog on the beach"*
 - *"spawn me in a simulation as a dog"*
 - *"teach me chess"*

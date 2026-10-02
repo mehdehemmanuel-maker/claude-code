@@ -36,12 +36,13 @@ test('teach me to build a table: each step shown by a guide, done only when done
   });
   await frames(page, 3);
   expect(await sb(page, (s) => s.ego.lesson.steps[s.ego.lesson.at].do)).toBe('test');
-  expect(await sb(page, (s) => s.ego.advice[0].text)).toMatch(/Next \(\d+ of \d+\): Play it/);
+  // what she says next (among what else she has said: on a slow machine, a render hitch is said too)
+  expect(await sb(page, (s) => s.ego.advice.slice(0, 4).map((a: { text: string }) => a.text).join('\n'))).toMatch(/Next \(\d+ of \d+\): Play it/);
   // played: three seconds standing, every joint holding
   await sb(page, (s) => s.app.play());
   for (let i = 0; i < 60 && (await sb(page, (s) => s.ego.lesson !== null)); i++) await frames(page, 10);
   expect(await sb(page, (s) => s.ego.lesson)).toBeNull();
-  expect(await sb(page, (s) => s.ego.advice[0].text)).toMatch(/You built a table, and it holds/);
+  expect(await sb(page, (s) => s.ego.advice.slice(0, 4).map((a: { text: string }) => a.text).join('\n'))).toMatch(/You built a table, and it holds/);
   expect(await sb(page, (s) => s.app.view.guideShown)).toBe('');
   expect(errors).toEqual([]);
 });

@@ -50,6 +50,8 @@ export type PhysicsOp =
   | { op: 'grabTarget'; hand: string; target: Pose }
   | { op: 'release'; hand: string; linear?: Vec3; angular?: Vec3 }
   | { op: 'controls'; channels: Record<string, number> }
+  /** A nervous system's command to its rhythms: each servo's swing, by its connection, scaled (0 holds it at its centre, 1 as built). */
+  | { op: 'gait'; amplitude: Record<string, number> }
   | { op: 'damage'; id: string; damage: PartDamage }
   | { op: 'room'; surfaces: RoomSurface[] }
   | { op: 'options'; maxMagnetRings?: number; filterTicks?: number; magnetLatch?: boolean };

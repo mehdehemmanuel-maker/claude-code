@@ -175,6 +175,13 @@ export class AppHost extends BuildHost {
     return this.place(kindId, {}, material, [x, this.groundUnder(shape, x, z) - rotatedMinY(shape, q) + 0.0005, z], [], undefined);
   }
 
+  /** Where you stand: under your head, on the floor. */
+  viewer(): Vec3 {
+    const cam = this.app.renderer.xr.isPresenting ? this.app.renderer.xr.getCamera() : this.app.view.camera;
+    const p = cam.getWorldPosition(new THREE.Vector3());
+    return [p.x, this.app.groundAt(p.x, p.z), p.z];
+  }
+
   /** The floor `dist` metres in front of you. */
   frontFloor(dist = 1): Vec3 {
     const cam = this.app.renderer.xr.isPresenting ? this.app.renderer.xr.getCamera() : this.app.view.camera;

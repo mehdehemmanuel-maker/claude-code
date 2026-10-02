@@ -56,15 +56,18 @@ describe('understanding a want', () => {
 
   it('a request to be something is to become it; a world with broken physics is given other constants, not broken ones', () => {
     expect(of('dog').kinds).toEqual(['become']);
-    expect(of('dog').toBuild).toEqual(expect.arrayContaining(['avatar', 'creatures']));
+    // a dog's body is built (a walker); wearing one is not
+    expect(of('dog').toBuild).toEqual(['avatar']);
+    expect(of('dog').acts).toEqual([]);
     expect(of('glitch-desert').says).toMatch(/other constants/);
   });
 
-  it('over everything asked, what to build next is ranked by how many wants call for it: with ground, lessons and swimmers built, life', () => {
+  it('over everything asked, what to build next is ranked by how many wants call for it: with ground, lessons, swimmers and walkers built, characters', () => {
     const next = nextToBuild(ASKS.map((a) => a.said));
-    for (const built of ['terrain', 'lessons', 'swimmers']) expect(next.map((n) => n.id)).not.toContain(built);
-    expect(next.slice(0, 2).map((n) => n.id).sort()).toEqual(['characters', 'creatures']);
-    expect(next.map((n) => n.id)).toEqual(expect.arrayContaining(['plants', 'overlay', 'buildings']));
+    for (const built of ['terrain', 'lessons', 'swimmers', 'walkers']) expect(next.map((n) => n.id)).not.toContain(built);
+    expect(next[0]!.id).toBe('characters');
+    expect(next.slice(1, 4).map((n) => n.id).sort()).toEqual(['creatures', 'overlay', 'plants']);
+    expect(next.map((n) => n.id)).toContain('buildings');
   });
 });
 
@@ -117,6 +120,23 @@ describe('swimmers', () => {
     expect(understand('put a fish in the sea').acts).toEqual([{ place: 'put a fish in the sea' }, { swimmer: 'put a fish in the sea' }]);
     expect(understand('put a fish in the sea').says).toMatch(/swimming by its own rhythm/);
     expect(understand('a deer in the forest').acts.some((a) => 'swimmer' in a)).toBe(false);
-    expect(understand('spawn me as a dog').toBuild).toContain('creatures');
+    expect(understand('spawn me as a dog').toBuild).toContain('avatar');
+  });
+});
+
+describe('walkers', () => {
+  it('a dog or a deer asked for is put on the ground near you; one you want to be is a body to wear, not a walker', async () => {
+    const { interpret } = await import('../../src/assistant/intent');
+    for (const q of ['put a dog on the beach', 'build me a robot dog', 'add a deer', 'I want a dog']) {
+      expect(interpret(q), q).toMatchObject({ do: 'want' });
+      expect(understand(q).acts.some((a) => 'walker' in a), q).toBe(true);
+    }
+    expect(understand('put a dog on the beach').acts).toEqual([{ place: 'put a dog on the beach' }, { walker: 'put a dog on the beach' }]);
+    expect(understand('add a deer').says).toMatch(/deer-shaped on the ground near you/);
+    expect(understand('spawn me in a simulation as a dog').acts).toEqual([]);
+    // sky-whales still wait on creatures that fly; the deer among them can be put there now
+    const u = understand('Populate this empty forest with friendly, glowing sky-whales and neon deer.');
+    expect(u.acts.some((a) => 'walker' in a)).toBe(true);
+    expect(u.toBuild).toContain('creatures');
   });
 });

@@ -27,8 +27,10 @@ import { advance, guideOf, lessonFrom, type Lesson } from './lesson';
 import { buildVisual } from '../render/geometry';
 import { ghostMaterial } from '../render/materials';
 import { placeFromWords } from '../world/place';
-import { buildSwimmer, swimmerFromWords } from '../world/creature';
+import { buildSwimmer, buildWalker, swimmerFromWords, WALKERS, walkerFromWords } from '../world/creature';
+import { Herd } from '../world/herd';
 import { POOL } from '../physics/environment';
+import { TICK } from '../physics/world';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
@@ -107,7 +109,19 @@ export class Ego {
     app.joinChosen = (a, b, kind) => this.growth.prefer(`join:${a.category}+${b?.category ?? 'floor'}`, kind);
     app.eventListeners.push((e) => this.onEvent(e));
     app.everyFrame('Ego', (dt) => this.tick(dt));
+    this.herd = new Herd({
+      // the world's own time: under load the physics slows rather than spirals, and a mind must slow with it
+      time: () => app.live.ticks * TICK,
+      pose: (id) => app.livePose(id),
+      exists: (id) => !!app.doc.parts[id],
+      you: () => this.host.viewer(),
+      dry: (x, z) => { const w = app.waterLevel(); return w === null || app.groundAt(x, z) > w; },
+      gait: (amplitude) => app.physics.send({ op: 'gait', amplitude }),
+    });
   }
+
+  /** The creatures she has put in the world, each with its mind. */
+  readonly herd: Herd;
 
   // ---- acting -----------------------------------------------------------------------------------
 
@@ -371,6 +385,7 @@ export class Ego {
           else if ('timeScale' in a) app.setTimeScale(a.timeScale);
           else if ('playerScale' in a) { app.settings.playerScale = a.playerScale; app.notify(); }
           else if ('swimmer' in a) this.releaseSwimmer(a.swimmer);
+          else if ('walker' in a) this.releaseWalker(a.walker);
           else { const p = a.place === null ? null : placeFromWords(a.place); if ((p?.id ?? null) !== (app.place?.id ?? null)) app.setPlace(p); }
         }
         return u.says;
@@ -453,6 +468,22 @@ export class Ego {
     const water = app.place?.water ? { level: app.waterLevel()!, at: [0, 0, app.place.ground.shore - 6] as [number, number, number], heading: Math.PI / 2 }
       : { level: POOL.water, at: [POOL.x + plan.length * plan.segments / 2, 0, POOL.z] as [number, number, number], heading: 0 };
     buildSwimmer(app.store, plan, [water.at[0], water.level - plan.thickness, water.at[2]], water.heading, `${plan.name.split(' ').pop()}${++this.seq}`);
+    if (app.settings.build) app.play();
+  }
+
+  /**
+   * A walker on the ground a metre and a half in front of you, facing you, with a mind of its own: it comes to you,
+   * goes to look at things, and rests when it is tired.
+   */
+  private releaseWalker(words: string) {
+    const app = this.app, plan = walkerFromWords(words);
+    if (!plan) return;
+    const at = this.host.frontFloor(1.5), you = this.host.viewer();
+    const heading = Math.atan2(-(you[2] - at[2]), you[0] - at[0]);
+    const kind = Object.keys(WALKERS).find((k) => WALKERS[k] === plan) ?? 'walker';
+    const tag = `${kind}${++this.seq}`;
+    const w = buildWalker(app.store, plan, [at[0], at[1] + 0.003, at[2]], heading, tag);
+    this.herd.add(`the ${kind}`, w, this.seq);
     if (app.settings.build) app.play();
   }
 
@@ -946,6 +977,7 @@ export class Ego {
 
   /** Near failure: warn once per joint, with what would carry it. */
   private tick(dt: number) {
+    this.herd.tick();
     this.teachTick();
     this.watchShown();
     this.clock += dt;

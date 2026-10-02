@@ -256,6 +256,11 @@ export interface Row {
    * each other faster the deeper they overlapped, with energy nothing supplied.
    */
   bias?: number;
+  /**
+   * Softness (a soft constraint's gamma): the row is a spring and damper, not a rule; solved as (K + soft) lambda =
+   * target - relVel - soft acc. Its target carries the spring's pull on the position error.
+   */
+  soft?: number;
 }
 
 /** Jacobian of a row on one of its entities: linear part and angular part (impulse response directions). */
@@ -419,7 +424,8 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
         lo = -lim;
         hi = lim;
       }
-      const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(p)) / r.k));
+      const soft = r.soft ?? 0;
+      const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(p) - soft * r.acc) / (r.k + soft)));
       const lambda = next - r.acc;
       if (lambda === 0) continue;
       r.acc = next;

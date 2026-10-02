@@ -1,6 +1,6 @@
 # Creatures with bodies
 
-A creature here is not an animation (`src/world/creature.ts`). It is a body of real parts, joined by real joints and moved by real actuators, in the same physics as everything else. What makes it a creature is two things:
+A creature here is not an animation (`src/world/creature.ts`; its mind, `src/world/mind.ts`). It is a body of real parts, joined by real joints and moved by real actuators, in the same physics as everything else. What makes it a creature is two things:
 
 - **its body plan:** how many segments, how big, and what they are made of;
 - **its rhythm:** each joint's servo swings on its own clock, a little behind the one before it, so a wave runs down the body. Animals do the same with the rhythm generators in their spinal cords.
@@ -30,8 +30,65 @@ Two flaws found on the way, and why the plan is as it is:
 - **A body flat from side to side rolls over.** The first swimmer was built like a fish: tall, thin plates swinging side to side. It rolled onto its side in two seconds, as a plank does, and then flapped up and down. Real fish stay upright with a swim bladder above their weight and fins that correct them. Without a keel the stable body floats level, so the swimmer swims as a whale does.
 - **It is slow.** It swims about 0.08 body lengths a second; a real fish this size swims about half a body length a second. Resistive force theory leaves out the thrust of the vortices a tail sheds; elongated body theory (Lighthill) has it, and is next if swimming is to be fast.
 
+## Walkers
+
+A walker is a plywood body on four legs (`buildWalker`). Each leg is a thigh and a shank of printed PLA bar on two hobby servos, with a rubber foot:
+
+- **the hip** swings the leg fore and aft;
+- **the knee** folds it, but only while the leg comes forward, a quarter cycle ahead of the hip. It is straight the whole time the leg bears weight. A servo's rhythm can have this shape (`wave: 'lift'`, half of each cycle only), as its controller would give it.
+
+Every servo is a 9 g micro servo: 0.18 N·m stall, 60° in 0.1 s unloaded, its plastic case screwed or bolted where it sits. The hip's sits on the body and the knee's on the thigh. The join planner picks each join for its materials: it bolts the hip servos' cases to the plywood, and glues the knee servos' cases to the PLA and the rubber feet to the shanks. The gait is which legs swing together (Hildebrand, *Symmetrical gaits of horses*, Science 150, 1965).
+
+| Plan | Body | Legs | Gait | Rhythm | Walks |
+|---|---|---|---|---|---|
+| a small dog ("dog", "cat", "fox", "pet", "robot dog") | 200 × 160 mm | 50 + 50 mm | a walk: one foot at a time, hind then fore on each side | 2.5 Hz | 2.6 to 3.3 m in 10 s, about 1.5 body lengths a second, whichever way it faces |
+| a deer ("deer", "horse", "goat") | 220 × 160 mm | 70 + 70 mm | a trot: diagonal legs together | 1.6 Hz | 1.3 to 2.1 m in 10 s |
+
+Nothing tells it to go forward. A foot lifted as it comes forward and planted as it goes back pushes the ground back, and friction pushes the body on. The conformance tests hold each of these:
+
+- **On a floor with no friction** it gets nowhere.
+- **A slow walk needs little grip:** on PTFE feet (friction about 0.09 against concrete) it still walks, as you can creep across ice.
+- **With its knees still, a trot only paddles:** two feet drag forward as two push back. A four-beat walk still shuffles forward, three feet against one, but more slowly than it walks.
+
+## Minds
+
+A walker that chooses (`src/world/mind.ts`) does only what an animal's brain does to its spinal cord. It lengthens or shortens each side's stride (the world's `gait` op scales each hip servo's swing), or stills them. The rhythms keep their own time and the legs do the walking. It turns because its strides differ side to side, as a dog's do.
+
+- **It senses** with eyes that take in a wide arc ahead, not behind it (a dog's is about 240°: Miller & Murphy, *Vision in dogs*, J. Am. Vet. Med. Assoc. 207, 1995). It remembers where it last saw you. It sees water ahead and turns from it.
+- **It wants** three things, each an urge that rises and falls:
+  - company, more the further you are;
+  - curiosity, rising while nothing is new;
+  - rest, rising as it walks (two minutes tire it) and falling as it rests (half a minute restores it).
+- **It chooses** the strongest, with a little favour to what it is already doing so it doesn't dither. Worn out, it rests whatever else it wants.
+- **It acts.** It walks to you, stopping a metre off. It goes to look at somewhere new on dry ground. It lies down. With you out of sight, it turns on the spot until it finds you. If it comes no closer to its goal for five seconds (stuck, or circling it), it gives up and goes another way. A stride a little shorter on one side hardly turns a four-legged walk, so it shortens the inside stride fully once it is 25° off. With one side still, it turns about 30° a second.
+
+The herd (`src/world/herd.ts`) runs every creature's mind ten times a second of world time against the live world: the physics' own ticks, not the app's clock. Under load the physics slows rather than spirals, and a mind on the app's clock lived several times as fast as its body. Paused, their thoughts pause too. A creature whose body is gone leaves the herd.
+
+Ask her: *"put a dog on the beach"*, *"add a deer"*, *"build me a robot dog"*. She puts it a metre and a half in front of you, facing you, and starts the world. *"Spawn me as a dog"* is different: it asks for a body to wear, which is not built yet.
+
+## What making it walk found in the world
+
+Six flaws, each fixed at its root, the first four now rules (ARCHITECTURE.md, R12 to R14) and the others held by the walker tests:
+
+- **A servo couldn't hold a leg up.** Its position loop was sized for a 6 Hz response on what it turns. On a 4 g thigh that is 0.006 N·m/rad: holding the body up would take 9 rad of error. A hobby servo is a proportional controller that saturates (Wada et al., IEEE CCA 2009). It gives its stall torque a few degrees off, and its torque falls with speed. The servo now does both (`band`, `speed`), and has a centre trim (`offset`).
+- **The stiffer servo rang** on a 1 kg bracket bolted to a 60 kg base. Jolt's motor saw only the bracket. Its loop is now solved in the assembly pass on the true inertia of both sides (a soft row), and what a servo turns is an assembly there.
+- **A chain of assemblies came apart.** The knee pins of a walker floating free came 9 mm apart. Each assembly was integrated on its own, and only 20% of the gap was taken out a tick, too slow for the arc a fast, light shank swings through. Each island is now closed outward from its heaviest or held assembly, as lone parts were. The walker's first gait, a trot, then fell over at one heading: the drifting pins had been softening its footfalls. The four-beat walk is steady at every heading.
+- **Ego stilled a walking dog's feet.** The watchdog called them "shaking in place", and she "settled" them mid-stride. Now what an actuator drives is driven, not shaking.
+- **The trot rolled over.** With a sine knee, the feet were off the ground most of each cycle. The knee now folds only on the forward half.
+- **The dog rolled onto its back about one run in ten** in the app, never in tests of the physics alone: what differs there is when its mind's commands land. Shoved sideways (0.06 N·s) while turning hard, a 100 mm wide dog rolled over one time in five. Two changes, both real:
+  - its stance is as wide as its legs are long (160 mm);
+  - a stride changes over half a second, never at once, as a nervous system ramps a stride: a leg cut short mid-swing trips the body over it.
+
+  Together, no roll-overs in twenty shoved runs; the walker tests shove it on the beach and hold it to that.
+
+Honest limits:
+
+- **The servos don't draw from a battery yet.** The walker is tethered, as lab robots often are, and a servo's work isn't booked in the energy ledger.
+- **The servo's band is an estimate.** It is the error at which it gives its stall torque, taken as 0.1 rad: hobby servo datasheets give the deadband (10 µs, about 2°) but not the full-torque error. The sag rule holds the model to it, and walking works across 0.05 to 0.2 rad.
+
 ## Not yet
 
-- walkers, runners, fliers and crawlers: legs need balance, and wings need lift from a beating surface;
-- creatures that sense and choose (to follow, flee, feed);
-- a keel or swim bladder so a body can swim side to side, as fish do.
+- runners, fliers and crawlers: running needs a flight phase and balance, and wings need lift from a beating surface;
+- characters with minds that speak, remember and have histories;
+- a keel or swim bladder so a body can swim side to side, as fish do;
+- a body to wear (you as the dog).
