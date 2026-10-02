@@ -3955,7 +3955,7 @@ export class PhysicsWorld {
     const sig = `${String(p['model'] ?? '')}|${String(p['gearhead'] ?? '')}`;
     let d = this.drives.get(c.id);
     if (d && d.sig === sig) return d;
-    const data = getMotor(String(p['model'] ?? 'maxon.re40-148867'));
+    const data = getMotor(String(p['model'] ?? 'motor.dc.coreless.d40-150w-24v'));
     const g = getGearhead(String(p['gearhead'] ?? 'none'));
     d = {
       sig, model: motorModel(data), gear: g && g.fits.includes(data.id) ? g : null,
@@ -3975,7 +3975,7 @@ export class PhysicsWorld {
     const set = Math.max(0, Math.min(1, Number(p['charge'] ?? 1)));
     let cell = this.cells.get(id);
     if (!cell || cell.sig !== sig || cell.set !== set) {
-      const pack: Pack = { data: getBattery(String(p['model'] ?? 'yuasa.np7-12')), series: Math.max(1, Math.round(Number(p['series'] ?? 2))), parallel: Math.max(1, Math.round(Number(p['parallel'] ?? 1))) };
+      const pack: Pack = { data: getBattery(String(p['model'] ?? 'battery.sla.12v-7ah')), series: Math.max(1, Math.round(Number(p['series'] ?? 2))), parallel: Math.max(1, Math.round(Number(p['parallel'] ?? 1))) };
       cell = { sig, pack, soc: set, V: 0, I: 0, flat: set <= 0, set };
       this.cells.set(id, cell);
     }

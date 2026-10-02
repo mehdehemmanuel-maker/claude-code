@@ -128,7 +128,7 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   const drivetrain = await sb(page, (s) => s.ego.ask('design the whole drivetrain for a 120 kg kart at 3 m/s'));
-  expect(drivetrain).toMatch(/maxon RE 40, 24 V, 150 W \(148867\)/);
+  expect(drivetrain).toMatch(/Coreless brushed DC motor, Ø40 mm, 150 W, 24 V winding/);
   expect(drivetrain).toMatch(/UCP205/);
   expect(drivetrain).toMatch(/Worked out by .*Rolling resistance/);
   expect(await sb(page, (s) => s.ego.lastWorked.workflow)).toBe('powertrain.design');
@@ -140,7 +140,8 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   expect(await sb(page, (s) => s.ego.ask('what does it depend on'))).toMatch(/^It hangs most on/);
   // a machine, broken down, with what its maker doesn't detail said plainly
   const fx = await sb(page, (s) => s.ego.ask('breakdown mark forged fx10'));
-  expect(fx).toMatch(/Markforged FX10/);
+  expect(fx).toMatch(/continuous-fibre composite printer/);
+  expect(fx).toMatch(/Source: Markforged/);
   expect(fx).toMatch(/Metal Kit/);
   expect(fx).toMatch(/not published/);
   expect(errors).toEqual([]);

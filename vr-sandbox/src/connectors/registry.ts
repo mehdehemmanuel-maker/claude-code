@@ -547,7 +547,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
           instantFailure: 'A motor drive is the output shaft of a motor: make it on a DC motor part (A), at its shaft, to what the shaft turns.',
         };
       }
-      const m = getMotor(stringOf(on.params, 'model', 'maxon.re40-148867'));
+      const m = getMotor(stringOf(on.params, 'model', 'motor.dc.coreless.d40-150w-24v'));
       const g = getGearhead(stringOf(on.params, 'gearhead', 'none'));
       const gear = g && g.fits.includes(m.id) ? g : null;
       const d = gear?.shaft ?? m.shaft;

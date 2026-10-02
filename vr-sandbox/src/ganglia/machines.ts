@@ -20,7 +20,8 @@ export interface AssemblyNode {
 export interface Machine {
   id: string;
   label: string;
-  maker: string;
+  /** The real machine its figures were taken from, when they were (provenance only: a machine is known by what it is). */
+  example?: string;
   /** What it does, in a line. */
   does: string;
   specs: Record<string, number | string>;
@@ -40,7 +41,8 @@ const COMPOSITES = { cite: 'Markforged Composites Material Datasheet (ASTM D638,
 
 export const MACHINES: Machine[] = [
   {
-    id: 'markforged.fx10', label: 'Markforged FX10 industrial composite (and metal) 3D printer', maker: 'Markforged',
+    id: 'printer.cff-composite', label: 'Industrial continuous-fibre composite printer (with a metal option)',
+    example: 'Markforged FX10',
     does: 'Prints nylon composite parts reinforced with continuous fibre (CFF), and with its Metal Kit, bound-metal parts that are washed and sintered to steel.',
     specs: {
       buildX: 0.375, buildY: 0.3, buildZ: 0.3, layerMin: 125e-6, layerMax: 250e-6, metalLayerAfterSinter: 127e-6, chamberMax: 333.15,
@@ -49,8 +51,8 @@ export const MACHINES: Machine[] = [
     },
     price: { amount: 99990, currency: 'USD', seen: '2026-10', note: 'list price (MatterHackers listing), composite configuration' },
     source: FX10,
-    runs: ['cff', 'metal.fff'], feeds: ['markforged.onyx', 'markforged.cf', 'markforged.cf-fr'],
-    tags: ['3d printer', 'printer', 'composite', 'carbon fiber', 'metal', 'additive', 'markforged', 'fx10'],
+    runs: ['cff', 'metal.fff'], feeds: ['filament.nylon-microcarbon', 'fibre.carbon-continuous', 'fibre.carbon-continuous-fr'],
+    tags: ['3d printer', 'printer', 'composite', 'carbon fiber', 'metal', 'additive'],
     tree: [
       {
         name: 'Frame and enclosure', is: 'The machine\'s body: a closed cabinet that holds a heated build chamber.', published: true, source: FX10,
@@ -99,7 +101,7 @@ export const MACHINES: Machine[] = [
         children: [{ name: 'Controller boards, drivers, power supplies', is: 'Not published by Markforged.', published: false }],
       },
       {
-        name: 'Software: Eiger and the Digital Forge', is: 'Slices parts, routes fibre, scales metal parts for sinter shrinkage, and manages a fleet of printers.', published: true, source: FX10,
+        name: 'Software (slicer and fleet manager)', is: 'Slices parts, routes fibre, scales metal parts for sinter shrinkage, and manages a fleet of printers.', published: true, source: FX10,
       },
     ],
   },
@@ -108,17 +110,17 @@ export const MACHINES: Machine[] = [
 /** What the FX10 prints with, from Markforged's composites datasheet (ASTM test results, SI). */
 export const PRINTING_MATERIALS: CatalogItem[] = [
   {
-    id: 'markforged.onyx', family: 'printing material', label: 'Markforged Onyx (micro carbon fibre filled nylon)', source: COMPOSITES,
+    id: 'filament.nylon-microcarbon', family: 'printing material', label: 'Micro carbon fibre filled nylon filament (matrix)', source: COMPOSITES,
     specs: { tensileModulus: 2.4e9, tensileYield: 40e6, tensileBreak: 37e6, flexStrength: 71e6, flexModulus: 3.0e9, heatDeflection: 418.15, density: 1200, izodNotched: 330 },
     tags: ['onyx', 'nylon', 'composite', 'printing', 'filament', 'matrix'],
   },
   {
-    id: 'markforged.cf', family: 'printing material', label: 'Markforged continuous carbon fibre (CFR)', source: COMPOSITES,
+    id: 'fibre.carbon-continuous', family: 'printing material', label: 'Continuous carbon fibre (for fibre-reinforced printing)', source: COMPOSITES,
     specs: { tensileStrength: 800e6, tensileModulus: 60e9, strainAtBreak: 0.015, flexStrength: 540e6, flexModulus: 51e9, density: 1400 },
     tags: ['carbon fiber', 'continuous fiber', 'composite', 'printing', 'reinforcement'],
   },
   {
-    id: 'markforged.cf-fr', family: 'printing material', label: 'Markforged continuous carbon fibre FR (flame retardant)', source: COMPOSITES,
+    id: 'fibre.carbon-continuous-fr', family: 'printing material', label: 'Continuous carbon fibre, flame retardant', source: COMPOSITES,
     specs: { tensileStrength: 760e6, tensileModulus: 57e9, strainAtBreak: 0.016, flexStrength: 540e6, flexModulus: 50e9 },
     tags: ['carbon fiber', 'flame retardant', 'continuous fiber', 'composite', 'printing'],
   },

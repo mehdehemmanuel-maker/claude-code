@@ -12,7 +12,7 @@ const near = (x: number, y: number, rel: number) => expect(Math.abs(x - y) / Mat
 
 describe('DC motors, as their datasheets give them', () => {
   it('maxon RE 40 (148867): its constants reproduce its own no-load speed and stall current', () => {
-    const m = motorModel(getMotor('maxon.re40-148867'));
+    const m = motorModel(getMotor('motor.dc.coreless.d40-150w-24v'));
     near(rpm(m.noLoadSpeed), 7580, 0.005);
     near(m.stallCurrent, 80.2, 0.005);
     near(m.stallTorque, 2.42, 0.005);
@@ -26,7 +26,7 @@ describe('DC motors, as their datasheets give them', () => {
   });
 
   it('Unite MY1016: constants derived from its rated point predict its separately published stall torque', () => {
-    const m = motorModel(getMotor('unite.my1016'));
+    const m = motorModel(getMotor('motor.dc.brushed.d100-250w-24v'));
     near(m.stallTorque, 6.82, 0.1);
     // and its rated point again: 13.7 A at 2750 rpm gives 250 W out
     const w = (2750 * 2 * Math.PI) / 60;
@@ -35,7 +35,7 @@ describe('DC motors, as their datasheets give them', () => {
   });
 
   it('copper heats: its resistance rises 0.393 %/K, and a steady loss settles at P (Rwh + Rha) above the air', () => {
-    const m = motorModel(getMotor('maxon.re40-148867'));
+    const m = motorModel(getMotor('motor.dc.coreless.d40-150w-24v'));
     near(windingR(m, 125) / windingR(m, 25), 1.393, 1e-9);
     let s = { winding: 20, housing: 20 };
     for (let t = 0; t < 20000; t++) s = heatStep(m.thermal, s, 10, 0, 1, 20);
@@ -48,7 +48,7 @@ describe('DC motors, as their datasheets give them', () => {
   });
 
   it('a gearhead multiplies torque by its ratio less its losses, and its losses always go against the power', () => {
-    const g = GEARHEADS['maxon.gp42c-203115']!;
+    const g = GEARHEADS['gearhead.planetary.d42-12to1']!;
     expect(throughGear(0.1, 100, g)).toBeCloseTo(0.1 * 12 * 0.81, 12);
     // driven backwards through it (the output turning the motor), the motor sees less than ratio x torque
     expect(Math.abs(throughGear(-0.1, 100, g))).toBeGreaterThan(0.1 * 12);
@@ -56,7 +56,7 @@ describe('DC motors, as their datasheets give them', () => {
 });
 
 describe('batteries, as their makers rate them', () => {
-  const np7 = getBattery('yuasa.np7-12');
+  const np7 = getBattery('battery.sla.12v-7ah');
   it('gives the capacity its maker tables at each rate, and lasts that long', () => {
     for (const c of np7.capacity) {
       near(blockCapacity(np7, c.Ah / c.hours), c.Ah, 1e-9);

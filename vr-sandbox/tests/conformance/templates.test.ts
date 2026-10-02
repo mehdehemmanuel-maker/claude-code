@@ -203,8 +203,8 @@ describe('templates', () => {
     // Newton's second law from the datasheets: each motor at its controller's limit gives K_t I less its friction,
     // through 12:1 at 81%, at the 125 mm wheel; it moves the kart's mass plus what spins with it (each wheel I / r^2,
     // each rotor J N^2 / r^2)
-    const m = motorModel(getMotor('maxon.re40-148867'));
-    const g = getGearhead('maxon.gp42c-203115')!;
+    const m = motorModel(getMotor('motor.dc.coreless.d40-150w-24v'));
+    const g = getGearhead('gearhead.planetary.d42-12to1')!;
     const r = 0.125, limit = 20;
     let M = 0, spin = 0;
     for (const p of Object.values(doc.parts)) {

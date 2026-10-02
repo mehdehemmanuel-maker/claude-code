@@ -1,7 +1,7 @@
-// The ganglia's index: everything Ego knows, found by what you'd call it. `recall` ranks laws, processes, parts and
-// workflows by the words of a question (names, tags, statements, formulas); `explain` says one in full, with its
-// source; `linked` follows a workflow to the laws, part families and processes it uses, and a part family back to
-// the workflows that choose from it.
+// The ganglia's index: everything Ego knows, found by what you'd call it. `recall` ranks laws, processes, parts,
+// workflows, building blocks and principles by the words of a question (names, tags, statements, formulas, reasons);
+// `explain` says one in full, with its source; `linked` follows a workflow to the laws, part families and processes it
+// uses, and a part family back to the workflows that choose from it.
 
 import { LAWS, lawById } from './laws';
 import { PROCESSES, processById } from './processes';
@@ -13,6 +13,9 @@ import { PART_KINDS, type PartKind } from '../parts/registry';
 import type { CatalogItem, Law, Process, Workflow, WorkflowResult } from './types';
 import { neighbours as neighboursOf } from './graph';
 import { MACHINES, breakdown, nodesOf, type Machine } from './machines';
+import { ARCHETYPES, blocksByArchetype, type Archetype } from './blocks';
+import { PRINCIPLES, explainPrinciple, principleById, type Principle } from './principles';
+import { WAYS, buildable, type Way } from './ways';
 
 /**
  * Everything she knows. Besides the ganglia's own laws, processes, parts and workflows, the world's materials (each
@@ -27,7 +30,13 @@ export type Knowledge =
   | { kind: 'material'; item: Material }
   | { kind: 'joint'; item: ConnectorKind }
   | { kind: 'shape'; item: PartKind }
-  | { kind: 'machine'; item: Machine };
+  | { kind: 'machine'; item: Machine }
+  /** A building block: what a thing does, whoever makes it. */
+  | { kind: 'block'; item: Archetype }
+  /** Why things are done the way they are. */
+  | { kind: 'principle'; item: Principle }
+  /** A physical way to turn one flow into another. */
+  | { kind: 'way'; item: Way };
 
 let all: Knowledge[] | null = null;
 export function everything(): Knowledge[] {
@@ -40,6 +49,9 @@ export function everything(): Knowledge[] {
     ...CONNECTOR_KINDS.map((item) => ({ kind: 'joint' as const, item })),
     ...PART_KINDS.map((item) => ({ kind: 'shape' as const, item })),
     ...MACHINES.map((item) => ({ kind: 'machine' as const, item })),
+    ...ARCHETYPES.map((item) => ({ kind: 'block' as const, item })),
+    ...PRINCIPLES.map((item) => ({ kind: 'principle' as const, item })),
+    ...WAYS.map((item) => ({ kind: 'way' as const, item })),
   ]);
 }
 
@@ -48,9 +60,22 @@ export function nameOf(k: Knowledge): string {
   switch (k.kind) {
     case 'part': case 'machine': return k.item.label;
     case 'joint': case 'shape': return k.item.label;
+    case 'block': return blockName(k.item);
+    case 'way': return k.item.name;
+    case 'principle': return principleName(k.item);
     default: return k.item.name;
   }
 }
+
+/** "support.rotate" → "rotary support"; "bearing-near-load" → "bearing near load". */
+export const blockName = (a: Archetype) => BLOCK_NAMES[a.id] ?? a.id;
+export const principleName = (p: Principle) => p.id.replace(/-/g, ' ');
+const BLOCK_NAMES: Record<string, string> = {
+  'power.store': 'energy store', 'power.control': 'motor controller', 'power.conduct': 'conductor', 'actuation.rotary': 'rotary actuator',
+  'transmission.reduce': 'speed reducer', 'transmission.couple': 'shaft coupling', 'transmission.flexible': 'chain drive', 'support.rotate': 'rotary support',
+  'connection.two-force': 'two-force link', 'material.print': 'printing material', 'transmission.shaft': 'shaft', 'transmission.wheel': 'wheel',
+  'structure.member': 'frame member', 'machine.assembly': 'whole machine', 'protect.fuse': 'fuse', 'protect.guard': 'guard',
+};
 
 const STOP = new Set(['a', 'an', 'the', 'of', 'for', 'to', 'in', 'on', 'and', 'or', 'what', 'how', 'do', 'does', 'is', 'are', 'i', 'you', 'me', 'my', 'about', 'tell', 'know', 'explain', 'with', 'it', 'that', 'this', 'whats', 'which', 'can', 'should', 'make', 'made', 'at', 'by', 'its', 'as', 'be', 'from', 'one', 'each']);
 
@@ -86,12 +111,15 @@ function text(k: Knowledge): { name: string; body: string; tags: string[] } {
   switch (k.kind) {
     case 'law': return { name: `${k.item.name} ${k.item.id}`, body: `${k.item.statement} ${k.item.formula} ${k.item.domain}`, tags: k.item.tags };
     case 'process': return { name: `${k.item.name} ${k.item.id}`, body: `${k.item.makes} ${k.item.tools.join(' ')} ${k.item.limits.join(' ')}`, tags: k.item.tags };
-    case 'part': return { name: `${k.item.label} ${k.item.id} ${k.item.family}`, body: Object.keys(k.item.specs).join(' '), tags: k.item.tags };
+    case 'part': return { name: `${k.item.label} ${k.item.id.replace(/[.-]/g, ' ')} ${k.item.family}`, body: `${Object.keys(k.item.specs).join(' ')} ${k.item.source.cite}`, tags: k.item.tags };
     case 'workflow': return { name: `${k.item.name} ${k.item.id}`, body: `${k.item.goal} ${k.item.steps.join(' ')}`, tags: k.item.tags };
     case 'material': return { name: `${k.item.name} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.category} ${k.item.source}`, tags: [k.item.category, ...(k.item.ferromagnetic ? ['magnetic'] : []), k.item.weld !== 'none' ? 'weldable' : ''] };
     case 'joint': return { name: `${k.item.label} ${k.item.id}`, body: `${k.item.blurb} ${k.item.model}`, tags: [k.item.category, 'joint', 'connect', 'join'] };
     case 'shape': return { name: `${k.item.label} ${k.item.id.replace(/\./g, ' ')}`, body: k.item.category, tags: [k.item.category, 'part'] };
-    case 'machine': return { name: `${k.item.label} ${k.item.maker} ${k.item.id.replace(/\./g, ' ')}`, body: `${k.item.does} ${nodesOf(k.item).map((n) => `${n.name} ${n.is}`).join(' ')}`, tags: [...k.item.tags, 'machine'] };
+    case 'machine': return { name: `${k.item.label} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.does} ${nodesOf(k.item).map((n) => `${n.name} ${n.is}`).join(' ')} ${k.item.example ?? ''} ${k.item.source.cite}`, tags: [...k.item.tags, 'machine'] };
+    case 'block': return { name: `${blockName(k.item)} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.does} ${k.item.families.join(' ')} ${(k.item.shapes ?? []).join(' ')}`, tags: [k.item.category, 'block', 'building block', ...k.item.takes, ...k.item.gives] };
+    case 'principle': return { name: principleName(k.item), body: `${k.item.rule} ${k.item.why} ${k.item.seen ?? ''}`, tags: [k.item.category, ...k.item.appliesTo.map((x) => x.replace(/[.-]/g, ' ')), 'principle'] };
+    case 'way': return { name: `${k.item.name} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.effect} ${k.item.range}`, tags: [...k.item.takes, ...k.item.gives, k.item.against ?? '', 'way', 'working principle'] };
   }
 }
 
@@ -186,6 +214,20 @@ export function explain(k: Knowledge): string {
     }
     case 'machine': return breakdown(k.item).join(' ');
     case 'shape': return `${k.item.label} (${k.item.category}): made with ${k.item.params.map((p) => p.label.toLowerCase()).join(', ')}${k.item.bought ? `; bought whole: ${k.item.bought.why}` : ''}.`;
+    case 'block': {
+      const a = k.item, items = blocksByArchetype()[a.id] ?? [];
+      const flows = a.takes.length || a.gives.length ? ` It takes ${a.takes.join(' and ') || 'nothing'} and gives ${a.gives.join(' and ')}.` : '';
+      const from = items.length ? ` In the catalogue: ${items.map((id) => itemById(id)?.label ?? id).join('; ')}.` : a.shapes?.length ? ` Made here from ${a.shapes.join(', ')}.` : '';
+      const laws = a.laws.map((l) => lawById(l)?.name).filter(Boolean);
+      const rules = a.principles.map((p) => principleById(p)?.rule).filter(Boolean);
+      const inside = a.inside.map((x) => `${x.name} (${x.does})`).join('; ');
+      return `A ${blockName(a)} ${a.does}.${flows}${from} Inside: ${inside}.${laws.length ? ` Rated by ${laws.join(', ')}.` : ''}${rules.length ? ` Rules: ${rules.join(' ')}` : ''}`;
+    }
+    case 'principle': return explainPrinciple(k.item, (id) => lawById(id)?.name);
+    case 'way': {
+      const w = k.item, laws = w.laws.map((l) => lawById(l)?.name).filter(Boolean);
+      return `${w.name}: turns ${w.takes.join(' or ')} into ${w.gives.join(' or ')}${w.against ? `, pushing against ${w.against === 'reaction mass' ? 'mass it throws away' : `the ${w.against}`}` : ''}. ${w.effect} ${w.range}${laws.length ? ` By ${laws.join(', ')}.` : ''} ${buildable(w) ? 'I can build it here.' : 'Physically possible, but its parts aren\'t catalogued yet, so I can\'t place it.'} Source: ${w.source.cite}.`;
+    }
   }
 }
 
@@ -204,13 +246,16 @@ export function linked(id: string): Knowledge[] {
 }
 
 /** How much she knows, by kind. */
-export const census = () => ({ laws: LAWS.length, processes: PROCESSES.length, parts: CATALOG.length, workflows: WORKFLOWS.length, materials: MATERIALS.length, joints: CONNECTOR_KINDS.length, shapes: PART_KINDS.length, machines: MACHINES.length });
+export const census = () => ({ laws: LAWS.length, processes: PROCESSES.length, parts: CATALOG.length, workflows: WORKFLOWS.length, materials: MATERIALS.length, joints: CONNECTOR_KINDS.length, shapes: PART_KINDS.length, machines: MACHINES.length, blocks: ARCHETYPES.length, principles: PRINCIPLES.length, ways: WAYS.length });
 
 export { LAWS, PROCESSES, CATALOG, WORKFLOWS, lawById, processById, itemById, workflowById };
 export { solveFor, sensitivity, uncertainty, showWork, show } from './analysis';
 export { graph, neighbours, path, dangling } from './graph';
 export { findQuantities, parseUnit, toSI, fromSI } from './units';
 export { MACHINES, breakdown, machineById } from './machines';
+export { ARCHETYPES, archetypeById, blocksByArchetype, checkDesign, designFromPowertrain, portsOf, type Design, type Flow, type Problem } from './blocks';
+export { PRINCIPLES, CATEGORIES, principleById, explainPrinciple } from './principles';
+export { WAYS, wayById, conceive, byMedium, asWhole, buildable, type Concept, type Way, type Medium } from './ways';
 
 // ------------------------------------------------------------------------------------------------ remembered answers
 

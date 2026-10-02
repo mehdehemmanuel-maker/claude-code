@@ -5,6 +5,7 @@
 import { isComplaint } from './reports';
 import type { Design, DesignSpec } from './designer';
 import { DIMS, findQuantities, sameDim, type Dim, type Said } from '../ganglia/units';
+import type { Flow } from '../ganglia/blocks';
 
 export type Intent =
   | { do: 'strengthen' }
@@ -26,6 +27,14 @@ export type Intent =
   | { do: 'work' }
   /** What something is made of, assembly by assembly. */
   | { do: 'breakdown'; what: string }
+  /** Why something is done the way it is: the principle behind it. */
+  | { do: 'reason'; about: string }
+  /** The principles she designs by, all or of one kind. */
+  | { do: 'principles'; of?: string }
+  /** The building blocks she builds with. */
+  | { do: 'blocks' }
+  /** Ways to turn one flow into another (electric power into travel...): chains of building blocks. */
+  | { do: 'conceive'; from: Flow; to: Flow }
   | { do: 'depends' }
   | { do: 'level' }
   | { do: 'command'; command: 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'pause' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero' };
@@ -48,7 +57,10 @@ export function interpret(line: string): Intent | null {
   if (/^(what level are you|your level|level|how (much )?have you grown|how smart are you)/.test(t)) return { do: 'level' };
   if ((m = /^(?:do|run|use)(?: (?:the|your|my))? skill (.+)$|^skill (.+)$|^do (?:the )?(.+?) (?:skill|thing)$/.exec(t))) return { do: 'skill', which: (m[1] ?? m[2] ?? m[3])!.trim() };
   if (/^(whats wrong|status|report|how is it|hows it (doing|going)|check (it|this|the build)|anything wrong)/.test(t)) return { do: 'status' };
-  if (/^why( did (it|that|this) (break|fail|fall))?/.test(t)) return { do: 'why' };
+  // "why did it break?" is about what just happened; any other "why" asks for the reason things are done as they are
+  if (/^why( did (it|that|this|the .+?) (break|fail|fall|snap|collapse|bend|give way)( down| over)?)?$/.test(t)) return { do: 'why' };
+  if ((m = /^why (?:do|does|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
+  if ((m = /^(?:what is|whats) the (?:reason|point|idea) (?:for|of|behind) (?:an? |the )?(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if (new RegExp(`^(make ${it} )?(stronger|sturdier|hold|stiffer)|^(fix|strengthen|reinforce) ${it}|^fix( it)?$|^make ${it} hold`).test(t)) return { do: 'strengthen' };
   // something's wrong: she looks, fixes what she can, and writes it up for Claude
   if (isComplaint(t)) return { do: 'complain', words: line.trim() };
@@ -73,6 +85,13 @@ export function interpret(line: string): Intent | null {
   if ((m = /^(?:break ?down|breakdown|tear ?down|teardown|what is inside|whats inside|whats in|what is in|what makes up|map out)\s+(?:of\s+)?(?:an? |the )?(.+)$/.exec(t))) return { do: 'breakdown', what: m[1]!.trim() };
   if (/^(show (me )?(your|the) (work|working|workings|math|maths|calculation|calculations)|how did you (get|work out) (that|it)|show your working)$/.test(t)) return { do: 'work' };
   if (/^(what does (it|that) (depend|hang) on|what matters (most)?|what (is it|is that) (most )?sensitive to)$/.test(t)) return { do: 'depends' };
+  if (/^((your |the )?(design )?(principles|rules)( of design)?|what (design )?(principles|rules) do you (know|follow|use|design by)|how do you (decide|design))$/.test(t)) return { do: 'principles' };
+  if ((m = /^(?:design )?(?:principles|rules) (?:of|for|about) (?:an? |the )?(.+)$/.exec(t))) return { do: 'principles', of: m[1]!.trim() };
+  if (/^((your |the |what )?(building )?blocks( do you (have|know|use|build with))?|what do you build with)$/.test(t)) return { do: 'blocks' };
+  if ((m = /^(?:how (?:do|can|could|would|should) (?:i|you|we|one) )?(?:turn|convert|change|transform|get from) (.+?) (?:into|to) (.+)$/.exec(t))) {
+    const from = flowOf(m[1]!), to = flowOf(m[2]!);
+    if (from && to && from !== to) return { do: 'conceive', from, to };
+  }
   const e = engineerOf(t, line);
   if (e) return e;
   if ((m = /^(?:what do you know about|tell me about|explain|what is|whats|what are|how (?:is|are|do (?:i|you)) (?:make|made|cut|drill|tap|bend|weld|fit|size|choose|pick)?)\s*(?:an? |the )?(.+)$/.exec(t))) return { do: 'recall', about: m[1]!.trim() };
@@ -87,6 +106,19 @@ export function interpret(line: string): Intent | null {
     const material = words.length > 1 ? words.slice(0, -1).join(' ') : undefined;
     return { do: 'place', count: Math.min(n ?? 1, 50), kind, material };
   }
+  return null;
+}
+
+/** What flow a phrase names: "electricity" is electric power, "spin" rotation, "motion" travel... */
+function flowOf(p: string): Flow | null {
+  if (/rotat|spin|turning|torque|revolv/.test(p)) return 'rotation';
+  if (/electric|battery|batteries|current|volt|power/.test(p)) return 'electric';
+  if (/stroke|linear|translat|push|lift|press/.test(p)) return 'translation';
+  if (/motion|move|moving|movement|travel|drive|driving|going|locomot/.test(p)) return 'travel';
+  if (/load|weight|support|holding|hold/.test(p)) return 'load';
+  if (/signal|control|command/.test(p)) return 'signal';
+  if (/heat|warm/.test(p)) return 'heat';
+  if (/stock|filament|material/.test(p)) return 'stock';
   return null;
 }
 
@@ -214,4 +246,4 @@ function count(w: string | undefined): number | null {
   return NUMBERS[w] ?? null;
 }
 
-export const HELP = 'Try: "pick a drive for a 120 kg kart at 3 m/s", "size a wire for 20 A over 2 m", "which bearing for 500 N at 600 rpm on a 25 mm shaft", "tell me about rolling resistance", "make it stronger", "weld these", "place 4 steel blocks", "build a table that holds 60 kg", "build a brick wall 2 m long", "save this as a template", "freeze it", "duplicate it 3 times", "why did it break?", "do skill 1", "what level are you?", "play". Or type Forge.';
+export const HELP = 'Try: "pick a drive for a 120 kg kart at 3 m/s", "why use a torque arm?", "how do I turn electricity into motion?", "design principles", "size a wire for 20 A over 2 m", "which bearing for 500 N at 600 rpm on a 25 mm shaft", "tell me about rolling resistance", "make it stronger", "weld these", "place 4 steel blocks", "build a table that holds 60 kg", "build a brick wall 2 m long", "save this as a template", "freeze it", "duplicate it 3 times", "why did it break?", "do skill 1", "what level are you?", "play". Or type Forge.';

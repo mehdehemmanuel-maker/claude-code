@@ -139,11 +139,11 @@ export const PROCESSES: Process[] = [
   },
   {
     id: 'cff', name: 'Continuous fibre fabrication (CFF) printing', makes: 'a printed nylon composite part with continuous fibre laid inside chosen layers', materials: ['polymer'],
-    tools: ['Markforged FX10 (or Mark Two, X7)', 'Onyx or nylon filament', 'continuous carbon (or Kevlar, glass) fibre', 'Eiger slicer'],
+    tools: ['continuous-fibre composite printer (two nozzles: matrix and fibre)', 'chopped-fibre filled nylon filament', 'continuous carbon (or aramid, glass) fibre', 'a slicer that routes fibre'],
     limits: [
       'Fibre lies only in the plane of each layer: in-plane it is strong as aluminium, across the layers it is only as strong as the plastic between them. Orient the part so its loads run along its layers.',
       'Fibre goes in whole layers of a part, wrapped round its walls (concentric) or filling them (isotropic); it needs a plastic floor, roof and walls round it.',
-      'Layer height 125 to 250 µm on the FX10; the part must fit 375 × 300 × 300 mm.',
+      'Layer height 125 to 250 µm on an industrial machine of this kind; the part must fit its build volume (375 × 300 × 300 mm on the one catalogued).',
       'Stiffness follows the rule of mixtures: along the fibre about V_f E_f + (1 − V_f) E_m, across it far less.',
     ],
     source: { cite: 'Markforged FX10 specifications and Composites Material Datasheet', url: 'https://markforged.com/3d-printers/fx10', kind: 'maker' },
@@ -151,9 +151,9 @@ export const PROCESSES: Process[] = [
   },
   {
     id: 'metal.fff', name: 'Metal FFF: print, wash, sinter', makes: 'a steel part printed from metal powder bound in plastic, then debound and sintered dense', materials: ['steel', 'stainless'],
-    tools: ['Markforged FX10 with its Metal Kit', 'Wash-1 (solvent debinding)', 'Sinter-1 or Sinter-2 furnace', '17-4 PH or 316L stainless filament'],
+    tools: ['a bound-metal FFF printer (or composite printer with a metal print head)', 'solvent debinding station', 'sintering furnace', '17-4 PH or 316L stainless bound-metal filament'],
     limits: [
-      'Printed "green" with binder, washed to remove most of it, then sintered: the part shrinks about a sixth in every direction, so Eiger prints it scaled up about 20% (1/(1 − s)).',
+      'Printed "green" with binder, washed to remove most of it, then sintered: the part shrinks about a sixth in every direction, so the slicer prints it scaled up about 20% (1/(1 − s)).',
       'Layers after sintering about 127 µm.',
       'Thick solid sections take long to wash and can distort in the furnace; supports and a ceramic release layer are printed where needed.',
     ],

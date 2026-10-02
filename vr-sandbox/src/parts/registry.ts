@@ -365,12 +365,12 @@ export const PART_KINDS: PartKind[] = [
     bought: { accepts: ['motor', 'wire', 'clamp'], why: 'its maker charts no holes in it to drill, screw or weld into: hold it in a split clamp round its body, drive from its shaft, wire it at its terminals' },
     materialFilter: (m) => m.category === 'steel',
     params: [
-      choice('model', 'Motor', 'maxon.re40-148867', Object.values(MOTORS).map((m) => ({ value: m.id, label: m.label })), { group: 'Motor' }),
-      choice('gearhead', 'Gearhead', 'maxon.gp42c-203115', [{ value: 'none', label: 'None (the motor shaft)' }, ...Object.values(GEARHEADS).map((g) => ({ value: g.id, label: g.label }))], { group: 'Motor' }),
+      choice('model', 'Motor', 'motor.dc.coreless.d40-150w-24v', Object.values(MOTORS).map((m) => ({ value: m.id, label: m.label })), { group: 'Motor' }),
+      choice('gearhead', 'Gearhead', 'gearhead.planetary.d42-12to1', [{ value: 'none', label: 'None (the motor shaft)' }, ...Object.values(GEARHEADS).map((g) => ({ value: g.id, label: g.label }))], { group: 'Motor' }),
     ],
     collision: (p) => { const e = motorEnvelope(p); return { type: 'cylinder', radius: e.radius, halfHeight: e.length / 2 }; },
     visual: (p) => {
-      const m = getMotor(stringOf(p, 'model', 'maxon.re40-148867')), g = fittedGearhead(p);
+      const m = getMotor(stringOf(p, 'model', 'motor.dc.coreless.d40-150w-24v')), g = fittedGearhead(p);
       const e = motorEnvelope(p), base = -e.length / 2;
       const children: { shape: VisualShape; p: Vec3; q: Quat; tint?: number }[] = [
         { shape: { type: 'cylinder', radius: m.diameter / 2, halfHeight: m.length / 2, segments: 40 }, p: [0, base + m.length / 2, 0], q: IDENTITY, tint: 0x2a2d31 },
@@ -381,7 +381,7 @@ export const PART_KINDS: PartKind[] = [
       return { type: 'group', children };
     },
     volume: (p) => { const e = motorEnvelope(p); return Math.PI * e.radius * e.radius * e.length; },
-    mass: (p) => getMotor(stringOf(p, 'model', 'maxon.re40-148867')).mass + (fittedGearhead(p)?.mass ?? 0),
+    mass: (p) => getMotor(stringOf(p, 'model', 'motor.dc.coreless.d40-150w-24v')).mass + (fittedGearhead(p)?.mass ?? 0),
     dims: (p) => { const e = motorEnvelope(p); return sorted(2 * e.radius, 2 * e.radius, e.length); },
   },
   {
@@ -391,7 +391,7 @@ export const PART_KINDS: PartKind[] = [
     bought: { accepts: ['wire'], why: 'a sealed lead-acid block can\'t be drilled, screwed, welded or glued (its case holds the acid): stand it in a tray or under a strap, and wire it at its terminals' },
     materialFilter: (m) => m.category === 'polymer',
     params: [
-      choice('model', 'Battery', 'yuasa.np7-12', Object.values(BATTERIES).map((b) => ({ value: b.id, label: b.label })), { group: 'Battery' }),
+      choice('model', 'Battery', 'battery.sla.12v-7ah', Object.values(BATTERIES).map((b) => ({ value: b.id, label: b.label })), { group: 'Battery' }),
       num('series', 'In series', 2, 1, 8, '', { group: 'Battery', integer: true }),
       num('parallel', 'Strings in parallel', 1, 1, 4, '', { group: 'Battery', integer: true }),
       num('charge', 'Charge', 1, 0, 1, '%', { group: 'Battery', step: 5, linear: true }),
@@ -399,7 +399,7 @@ export const PART_KINDS: PartKind[] = [
     collision: (p) => { const [x, y, z] = packSize(p); return box(x / 2, y / 2, z / 2); },
     visual: (p) => { const [x, y, z] = packSize(p); return { type: 'box', half: [x / 2, y / 2, z / 2], bevel: 0.004 }; },
     volume: (p) => { const [x, y, z] = packSize(p); return x * y * z; },
-    mass: (p) => getBattery(stringOf(p, 'model', 'yuasa.np7-12')).mass * numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1),
+    mass: (p) => getBattery(stringOf(p, 'model', 'battery.sla.12v-7ah')).mass * numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1),
     dims: (p) => { const [x, y, z] = packSize(p); return sorted(x, y, z); },
   },
   {
@@ -482,18 +482,18 @@ export const PART_KINDS: PartKind[] = [
 /** A motor's gearhead, if one is fitted and it is made for that motor. */
 export function fittedGearhead(p: Params) {
   const g = getGearhead(stringOf(p, 'gearhead', 'none'));
-  return g && g.fits.includes(stringOf(p, 'model', 'maxon.re40-148867')) ? g : null;
+  return g && g.fits.includes(getMotor(stringOf(p, 'model', 'motor.dc.coreless.d40-150w-24v')).id) ? g : null;
 }
 
 /** The motor's outline: the larger of motor and gearhead across, their lengths end to end. */
 export function motorEnvelope(p: Params) {
-  const m = getMotor(stringOf(p, 'model', 'maxon.re40-148867')), g = fittedGearhead(p);
+  const m = getMotor(stringOf(p, 'model', 'motor.dc.coreless.d40-150w-24v')), g = fittedGearhead(p);
   return { radius: Math.max(m.diameter, g?.diameter ?? 0) / 2, length: m.length + (g?.length ?? 0) };
 }
 
 /** A pack's outline: its blocks side by side along Z (series, then parallel strings), each standing as made. */
 export function packSize(p: Params): [number, number, number] {
-  const b = getBattery(stringOf(p, 'model', 'yuasa.np7-12'));
+  const b = getBattery(stringOf(p, 'model', 'battery.sla.12v-7ah'));
   const k = numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1);
   return [b.dims[0], b.dims[2], b.dims[1] * k];
 }

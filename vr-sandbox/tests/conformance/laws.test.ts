@@ -608,7 +608,7 @@ describe('powered and damped joints', () => {
   // flywheel on its shaft, on two 12 V lead-acid blocks in series through 0.5 m of 14 AWG pair.
   const bench = async (opts: { wired: boolean; held?: boolean; charge?: number; limit?: number }) => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    const motor = r.part('motor.dc', at(0, 1, 0), { frozen: true, params: { model: 'maxon.re40-148867', gearhead: 'maxon.gp42c-203115' } });
+    const motor = r.part('motor.dc', at(0, 1, 0), { frozen: true, params: { model: 'motor.dc.coreless.d40-150w-24v', gearhead: 'gearhead.planetary.d42-12to1' } });
     const face = 1 + (0.071 + 0.0555) / 2;
     const fly = r.part('disc', at(0, face + 0.01, 0), { material: 'steel.a36', params: { diameter: 0.2, thickness: 0.02 } });
     const drive = r.connect('motor', { part: motor, frame: at(0, face - 1, 0) }, { part: fly, frame: at(0, -0.01, 0) }, { channel: 'always', currentLimit: opts.limit ?? 5 });
@@ -616,14 +616,14 @@ describe('powered and damped joints', () => {
       const anchor = r.part('block', at(0, face + 0.03, 0), { frozen: true, material: 'steel.a36', params: { x: 0.1, y: 0.02, z: 0.1 } });
       r.connect('fixed', { part: fly, frame: at(0, 0.01, 0) }, { part: anchor, frame: at(0, -0.01, 0) }, {});
     }
-    const battery = r.part('battery', at(0.3, 1, 0), { params: { model: 'yuasa.np7-12', series: 2, parallel: 1, charge: opts.charge ?? 1 } });
+    const battery = r.part('battery', at(0.3, 1, 0), { params: { model: 'battery.sla.12v-7ah', series: 2, parallel: 1, charge: opts.charge ?? 1 } });
     const wire = () => r.connect('wire', { part: battery, frame: at(-0.0755, 0, 0) }, { part: motor, frame: at(0, -(0.071 + 0.0555) / 2, 0) }, { gauge: '14', length: 0.5 });
     const w = opts.wired ? wire() : null;
     const spin = () => r.world.angularVelocity(fly.id)![1];
     const step = () => r.world.step();
     return { r, motor, fly, drive, battery, wire, w, spin, step };
   };
-  const m = motorModel(getMotor('maxon.re40-148867')), g = getGearhead('maxon.gp42c-203115')!;
+  const m = motorModel(getMotor('motor.dc.coreless.d40-150w-24v')), g = getGearhead('gearhead.planetary.d42-12to1')!;
 
   it('a gearmotor turns only on a battery wired to it: unwired, flat or cut off, it gives nothing (R10)', async () => {
     const b = await bench({ wired: false });

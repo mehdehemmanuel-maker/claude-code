@@ -472,6 +472,51 @@ export const LAWS: Law[] = [
     inputs: [q('rho', 'density', 'kg/m^3'), q('h', 'depth', 'm')], output: q('p', 'gauge pressure', 'Pa'), constants: G, eval: ({ rho, h, g: gg }) => rho! * gg! * h!,
     valid: 'Incompressible, at rest.', example: { inputs: { rho: 1000, h: 2 }, output: 19613.3 }, source: PHYSICS, tags: ['water', 'tank', 'pressure'],
   },
+  // ---------------------------------------------------------------- ways of making motion (working principles)
+  {
+    id: 'lorentz.force', name: 'Lorentz force on a conductor', domain: 'magnetism',
+    statement: 'A conductor carrying current across a magnetic field is pushed sideways by the flux density times the current times the length in the field: how every motor, rotary or linear, makes force.',
+    formula: 'F = B I L', inputs: [q('B', 'flux density', 'T'), q('I', 'current', 'A'), q('L', 'conductor length in the field', 'm')], output: q('F', 'force', 'N'),
+    eval: ({ B, I, L }) => B! * I! * L!, outside: ({ B }) => (B! > 2.2 ? `${B} T is past what iron carries (it saturates near 2 T)` : null),
+    valid: 'Conductor at right angles to a uniform field; a motor sums it over every conductor in its gap (K_t = B L r × conductors).', example: { inputs: { B: 1, I: 10, L: 0.5 }, output: 5 }, source: PHYSICS, tags: ['motor', 'magnet', 'linear motor', 'voice coil', 'force'],
+  },
+  {
+    id: 'magnetic.pull', name: 'Magnetic pull across a gap (Maxwell)', domain: 'magnetism',
+    statement: 'A magnetic field crossing a gap between iron faces pulls them together by the flux density squared times the area over twice the permeability of free space: how solenoids, relays and electromagnets pull.',
+    formula: 'F = B² A / (2 μ₀)', inputs: [q('B', 'flux density in the gap', 'T'), q('A', 'pole face area', 'm^2')], output: q('F', 'pull', 'N'),
+    constants: { mu0: { value: 1.25663706212e-6, unit: 'N/A^2', name: 'permeability of free space (CODATA 2018)' } },
+    eval: ({ B, A, mu0 }) => (B! * B! * A!) / (2 * mu0!), outside: ({ B }) => (B! > 2.2 ? `${B} T is past what iron carries (it saturates near 2 T)` : null),
+    valid: 'Uniform field across a small gap between flat iron faces; the field itself falls as the gap opens, so the pull falls steeply with stroke.', example: { inputs: { B: 1, A: 1e-4 }, output: 39.788735751313816 }, source: { cite: 'Hughes, Electric Motors and Drives, 4th ed., Newnes 2013, ch. 1 (force on iron)', kind: 'textbook' }, tags: ['solenoid', 'electromagnet', 'magnet', 'relay', 'pull'],
+  },
+  {
+    id: 'electrostatic.pull', name: 'Electrostatic pull between plates', domain: 'electrical',
+    statement: 'Two plates at different voltages pull together by the permittivity times the area times the voltage squared over twice the gap squared: strong only across tiny gaps (MEMS, electroadhesion).',
+    formula: 'F = ε₀ ε_r A V² / (2 d²)', inputs: [q('er', 'relative permittivity', '-'), q('A', 'plate area', 'm^2'), q('V', 'voltage', 'V'), q('d', 'gap', 'm')], output: q('F', 'pull', 'N'),
+    constants: { eps0: { value: 8.8541878128e-12, unit: 'F/m', name: 'permittivity of free space (CODATA 2018)' } },
+    eval: ({ er, A, V, d, eps0 }) => (eps0! * er! * A! * V! * V!) / (2 * d! * d!), outside: ({ V, d }) => (V! / d! > 3e6 ? `${(V! / d! / 1e6).toFixed(1)} MV/m is past air's breakdown (about 3 MV/m): it would arc` : null),
+    valid: 'Parallel plates, gap small against their size.', example: { inputs: { er: 1, A: 0.01, V: 100, d: 1e-4 }, output: 0.04427093906400001 }, source: PHYSICS, tags: ['electrostatic', 'mems', 'capacitor', 'actuator'],
+  },
+  {
+    id: 'piezo.stroke', name: 'Piezo stack stroke', domain: 'materials',
+    statement: 'A stack of piezoelectric layers grows by the number of layers times its charge constant times the voltage on each: micrometres, with great force.',
+    formula: 'ΔL = n d₃₃ V', inputs: [q('n', 'layers', '-'), q('d33', 'piezoelectric charge constant', 'm/V'), q('V', 'voltage per layer', 'V')], output: q('dL', 'free stroke', 'm'),
+    eval: ({ n, d33, V }) => n! * d33! * V!, outside: ({ d33 }) => (d33! > 1e-9 ? `d33 of ${d33} m/V is past even soft PZT's (about 600 pm/V)` : null),
+    valid: 'Free stroke (no load); held still it pushes its blocked force instead. PZT d33 about 300 to 600 pm/V.', example: { inputs: { n: 100, d33: 5e-10, V: 100 }, output: 5e-6 }, source: { cite: 'Uchino, Piezoelectric Actuators and Ultrasonic Motors, Kluwer 1997', kind: 'textbook' }, tags: ['piezo', 'actuator', 'precision', 'micro'],
+  },
+  {
+    id: 'thrust.ideal-static', name: 'Ideal static thrust of a rotor (momentum theory)', domain: 'fluids',
+    statement: 'A propeller or rotor of disc area A, putting power P into still fluid of density ρ, can at most push (2 ρ A P²)^⅓: a bigger disc gives more thrust per watt.',
+    formula: 'T = (2 ρ A P²)^(1/3)', inputs: [q('rho', 'fluid density', 'kg/m^3'), q('A', 'disc area', 'm^2'), q('P', 'shaft power', 'W')], output: q('T', 'thrust', 'N'),
+    eval: ({ rho, A, P }) => Math.cbrt(2 * rho! * A! * P! * P!),
+    valid: 'Ideal actuator disc, hovering or static, uniform inflow: a real propeller makes about 60 to 80% of the ideal (its figure of merit), and less as it moves forward.', example: { inputs: { rho: 1.225, A: 0.07068583470577035, P: 100 }, output: 12.008796675640253 }, source: { cite: 'Leishman, Principles of Helicopter Aerodynamics, 2nd ed., Cambridge 2006, ch. 2 (momentum theory)', kind: 'textbook' }, tags: ['propeller', 'thrust', 'boat', 'drone', 'fan', 'fluid'],
+  },
+  {
+    id: 'screw.force', name: 'Force from a power screw', domain: 'machine elements',
+    statement: 'A screw turned with a torque pushes its nut along by 2π times its efficiency times the torque over its lead.',
+    formula: 'F = 2π η T / l', inputs: [q('T', 'torque', 'N m'), q('eta', 'efficiency', '-'), q('l', 'lead', 'm')], output: q('F', 'axial force', 'N'),
+    eval: ({ T, eta, l }) => (2 * Math.PI * eta! * T!) / l!, outside: ({ eta }) => (eta! > 0.95 ? `η ${eta} is past even a ball screw's (about 0.9)` : null),
+    valid: 'Acme or trapezoidal lead screws η about 0.2 to 0.5 (below about 0.5 they hold their load without a brake); ball screws about 0.9.', example: { inputs: { T: 1, eta: 0.3, l: 0.002 }, output: 942.4777960769379 }, source: SHIGLEY, tags: ['lead screw', 'ball screw', 'linear actuator', 'screw', 'jack'],
+  },
 ];
 
 export const lawById = (id: string) => LAWS.find((l) => l.id === id);

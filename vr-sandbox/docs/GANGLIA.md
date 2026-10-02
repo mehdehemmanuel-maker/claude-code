@@ -10,8 +10,14 @@ every entry says where it comes from, and every entry is tested against somethin
 | Part | A thing you can buy, as its maker publishes it, with price and date where known | agrees with itself by the laws relating its figures (`lintCatalog`) | `parts.ts`, `data/motors.ts`, `data/batteries.ts` |
 | Workflow | An engineer's procedure: what to ask, which laws in what order, which catalogue to choose from | reaches the answer worked by hand | `workflows.ts` |
 | Material, joint, shape | The world's own materials, joint kinds and stock shapes, each already sourced | the world's own tests | `data/materials.ts`, `connectors/registry.ts`, `parts/registry.ts` |
-
 | Machine | A machine broken down assembly by assembly: each node published by its maker (with where) or marked not published | every node is one or the other | `machines.ts` |
+| Block | A building block, known by what it does (an energy store, a rotary actuator, a speed reducer, a rotary support, a fuse...): the flows it takes and gives, its typed ports, its anatomy piece by piece | every catalogued part of its family has finite port ratings; every anatomy law exists | `blocks.ts` |
+| Principle | Why something is done the way it is: the rule, the physical reason, the laws behind it, what it governs, where this world showed it | every law it cites exists; every check names one | `principles.ts` |
+| Way | A physical way to turn one flow into another (a working principle): its effect, laws, what it pushes against, and the blocks that do it | every law and block it names exists | `ways.ts` |
+
+## Known by what it is, not who makes it
+
+Nothing is stored by brand. A part's id and label are its function and its standard designation: `bearing.dgbb.6205` (ISO 15 boundary dimensions), `chain.roller.ansi-40`, `motor.dc.coreless.d40-150w-24v`, `fuse.blade-ato.30a` (ISO 8820-3). Makers appear only as provenance, in the source a figure was taken from and the price where it was seen, so asking for a part by its maker's name still finds it. Old brand ids still resolve (`currentId`), so saved builds open.
 
 ## How it is kept right
 
@@ -30,6 +36,22 @@ every entry says where it comes from, and every entry is tested against somethin
   - no edge may dangle;
   - `path` says how two things relate.
 
+## Designs of blocks, checked
+
+A design is blocks wired port to port, each connection carrying what passes through it (volts, amps, torque, force), electrical ones made by a wire and protected by a fuse (`Link.via`). `checkDesign` checks every connection and names the principle each problem breaks:
+
+- the supply within what each part takes, at its charged voltage (a controller passes on what it is fed);
+- the current within each wire's rating, and within each motor's continuous rating (beyond it, a warning: bursts only);
+- a fuse at the battery, above 125% of the load and below the wire's rating;
+- a controller without a current limit on a motor whose stall current is past its peak;
+- a gearhead made to fit its motor;
+- a shaft in its bore: up to a coupling's largest bore, exactly a bearing's;
+- a coupling's torque with a 1.5 service factor;
+- no radial load on a gearhead's output bearings;
+- every static rating, and a made shaft's torque at half its yield.
+
+`designFromPowertrain` turns the drivetrain workflow's answer into such a design: the kart's holds at every connection, with one warning, that its motors take 24 A only in bursts.
+
 ## Fast
 
 - **Recall** is a BM25F index built once:
@@ -42,7 +64,7 @@ every entry says where it comes from, and every entry is tested against somethin
 
 ## What's in it
 
-- **Laws (75)**, grouped by area (also: Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
+- **Laws (81)**, grouped by area (also: the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
   - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
   - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
   - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
@@ -50,20 +72,23 @@ every entry says where it comes from, and every entry is tested against somethin
   - Thermal: convection, conduction, radiation, heat capacity, lumped time constant, thermal resistance networks.
   - Fluids: buoyancy, hydrostatic pressure.
 - **Processes (16)**: sawing, drilling, tapping, boring, split clamps, turning, milling, bending sheet, MIG welding, soldering, gluing, wood screws, crimping terminals, fitting bearings, continuous fibre fabrication (CFF) printing, metal FFF (print, wash, sinter).
-- **Machines**: the Markforged FX10, broken down into frame and heated chamber, motion system, composite print engine (plastic and fibre nozzles, optical sensors), Metal Kit (swappable head, feed tubes, pre-extruders, heated bed), build plate, Vision Module and laser micrometer, material drawer, electronics and software. It also lists the materials it prints with (Onyx, continuous carbon fibre, carbon fibre FR) from Markforged's datasheet.
-- **Parts (bought)**:
-  - SKF deep groove ball bearings 608, 6004, 6005, 6202 to 6206.
-  - UCP205 pillow block.
-  - ANSI 35, 40 and 41 roller chain.
-  - Lovejoy L050 to L100 jaw couplings.
-  - SKF SI 8 E rod end.
-  - Cytron MD30C and RoboClaw 2x30A controllers.
-  - The world's motors (maxon RE 40 148867, Unite MY1016), gearhead (maxon GP 42 C 203115), battery (Yuasa NP7-12) and wire (10 to 18 AWG).
-- **Workflows (9)**:
+- **Machines**: an industrial continuous-fibre composite printer (figures from the Markforged FX10), broken down into frame and heated chamber, motion system, composite print engine (plastic and fibre nozzles, optical sensors), Metal Kit (swappable head, feed tubes, pre-extruders, heated bed), build plate, Vision Module and laser micrometer, material drawer, electronics and software. It also lists the materials it prints with (Onyx, continuous carbon fibre, carbon fibre FR) from Markforged's datasheet.
+- **Parts (bought)**, by function and standard:
+  - deep groove ball bearings 608, 6004, 6005, 6202 to 6206, and a UCP205 pillow block unit;
+  - ANSI 35, 40 and 41 roller chain;
+  - jaw couplings from 3 to 47 N·m;
+  - an M8 rod end (ISO 12240-4);
+  - a one-channel brushed DC driver without current limit, and a two-channel controller with one;
+  - ISO 8820-3 blade fuses, 10 to 40 A;
+  - the world's motors (a Ø40 mm 150 W coreless DC motor and a Ø100 mm 250 W brushed one), its 12:1 planetary gearhead, its 12 V 7 Ah sealed lead-acid battery and its wire (10 to 18 AWG).
+- **Blocks (16)**: energy store, motor controller, conductor, rotary actuator, speed reducer, shaft coupling, chain drive, rotary support, two-force link, printing material, shaft, wheel, frame member, whole machine, fuse, guard. Each opens into its anatomy: a DC motor into its magnets, winding (the Lorentz force), commutator and brushes, back-EMF, shaft, bearings and housing; a battery into its cells, plates, electrolyte, case, valve and terminals.
+- **Principles (44, in 18 kinds)**: load path, determinacy, strength margin, stiffness, fatigue, stress concentration, stability, materials, fits and tolerances, manufacturing, assembly, service, thermal, electrical, safety, cost and mass, standard parts, motion. From Pahl & Beitz, Boothroyd & Dewhurst, Shigley, Peterson, SKF, ABYC and the NEC, ISO 12100, MIL-STD-889. Where this world showed one, it says so: the kart's broken gearhead shafts are why the gearhead takes torque, not load.
+- **Ways (22)**: rotary and hub motors, linear motors, voice coils, solenoids, piezo stacks, electrostatic actuators, resistive heating and thermal actuators, electric thrusters; gears, chains and belts; wheels, tracks, legs, propellers, paddles, winches, racks; lead screws and cranks.
+- **Workflows (10)**:
   - a whole drivetrain from one sentence;
   - choosing a vehicle drive;
   - sizing a wire, a battery pack, a shaft;
-  - choosing a bearing, a coupling, a controller;
+  - choosing a bearing, a coupling, a controller, a fuse;
   - sizing a torque arm.
 
 ## How Ego uses it
@@ -76,6 +101,9 @@ Ask in plain words, in the headset or on her page:
 - *"What do you know?"*: how much she knows, by kind.
 - *"Show your work"*: her last answer, law by law with the numbers. *"What does it depend on?"*: what it hangs on most.
 - *"Break down the Markforged FX10"*: the machine, assembly by assembly, with what its maker doesn't detail said plainly.
+- *"Why use a torque arm?"*, *"why are bearings press fit?"*, *"why fuse at the battery?"*: the principle, its reason, the laws behind it, where it comes from. *"Design principles"* lists them by kind; *"principles of fits and tolerances"* gives one kind.
+- *"How do I turn electricity into motion?"*: every way physics allows, grouped by what it pushes against (the ground, a fluid, a rail, a rope, mass it throws away), which she can build now and which are possible but not catalogued yet. The one thing they all need is a transducer, a motor in the widest sense. Seen whole, any of them is one converter: a kart is a motor for travel.
+- *"What building blocks do you have?"*: every block, and how many catalogued parts each has.
 - She reads any units: *"a drive for a 265 lb kart at 8 mph on 10 in wheels"*, *"a wire for 30 amps over 10 ft at 12 V"*, *"a bearing for 112 lbf at 600 rpm on a 1 in shaft"*.
 
 Every answer from a workflow ends with the laws it applied. What wasn't said takes the workflow's default, and she says which defaults she took. The whole trace (each law, its inputs, its output) stays on `ego.lastWorked`.

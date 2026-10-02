@@ -190,7 +190,7 @@ export const TEMPLATES: Template[] = [
   {
     id: 'go-kart',
     name: 'Go-kart',
-    blurb: 'Aluminium chassis; two maxon RE 40 motors with 12:1 planetary gearheads, each driving a half-axle in its own hanger bearing, on two 12 V 7 Ah lead-acid batteries in series; servo-steered beam axle; rubber tyres.',
+    blurb: 'Aluminium chassis; two coreless 24 V DC motors (Ø40 mm, 150 W) with 12:1 planetary gearheads, each driving a half-axle in its own hanger bearing, on two 12 V 7 Ah lead-acid batteries in series; servo-steered beam axle; rubber tyres.',
     tryThis: ['Drive with the arrow keys (or the left thumbstick in VR).', 'Hold full throttle against a wall: the motors stall at the controller\'s 20 A and their windings heat toward burnout.', 'Raise the controller current limit for more push, or drive until the batteries go flat.', 'Swap the tyres to PTFE.'],
     build: () => {
       const b = new BuildBuilder('Go-kart', 707);
@@ -211,9 +211,9 @@ export const TEMPLATES: Template[] = [
       const cross = 0.03, crossTop = under, crossBot = under - cross;
       const carrier = b.part('rod.square', P(-0.5, under - cross / 2, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.64, side: cross }, name: 'Rear cross-member' });
       for (const z of [-0.12, 0.12]) b.joint('bolted', carrier, chassis, along([-0.5, crossTop, z], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: cross, bondL: 0.06 });
-      const gearmotor = { model: 'maxon.re40-148867', gearhead: 'maxon.gp42c-203115' };
+      const gearmotor = { model: 'motor.dc.coreless.d40-150w-24v', gearhead: 'gearhead.planetary.d42-12to1' };
       const motorLen = 0.071 + 0.0555, motorR = 0.021, gap = 0.01;
-      const battery = b.part('battery', P(0.2, 0.21 + 0.0975 / 2, 0), { params: { model: 'yuasa.np7-12', series: 2, parallel: 1, charge: 1 }, name: 'Battery (2 × Yuasa NP7-12)' });
+      const battery = b.part('battery', P(0.2, 0.21 + 0.0975 / 2, 0), { params: { model: 'battery.sla.12v-7ah', series: 2, parallel: 1, charge: 1 }, name: 'Battery (2 × 12 V 7 Ah SLA)' });
       // the tray: 25 × 25 × 3 mm 6061 angle, a rail along each side and a stop at each end, 1 mm clear of the case,
       // each bolted down through its flat leg with two M5
       const angle = { leg: 0.025, t: 0.003 }, bx = 0.151 / 2 + 0.001, bz = 0.13 / 2 + 0.001;

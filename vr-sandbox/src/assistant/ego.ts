@@ -35,7 +35,7 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { breakdown, census, explain, lawById, nameOf, recall, sensitivity, showWork, solve, workflowById } from '../ganglia';
+import { ARCHETYPES, asWhole, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, conceive, explain, lawById, nameOf, PRINCIPLES, principleName, recall, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
 
 export interface Advice {
@@ -233,7 +233,7 @@ export class Ego {
       case 'design': return this.designIt(i.spec, i.material);
       case 'ganglia': {
         const c = census();
-        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock, ${c.machines} machine${c.machines === 1 ? '' : 's'} broken down and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock, ${c.machines} machine${c.machines === 1 ? '' : 's'} broken down, ${c.blocks} kinds of building block, ${c.principles} principles of why things are done as they are, and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, ask me why, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
       }
       case 'work': {
         const w = this.lastWorked;
@@ -263,6 +263,40 @@ export class Ego {
         const lines = breakdown(hit.item);
         const unknown = lines.filter((l) => l.includes('[not published]')).length;
         return `${lines.join(' ')}${unknown ? ` (${unknown} of its sub-assemblies its maker doesn't detail: I won't guess them.)` : ''} Source: ${hit.item.source.cite}.`;
+      }
+      case 'reason': {
+        const hits = recall(i.about, 3, ['principle']);
+        if (!hits.length) {
+          const any = recall(i.about, 1)[0];
+          return any ? `I don't have a principle for that, but here is what I know: ${explain(any)}` : `I don't know why yet.`;
+        }
+        return `${explain(hits[0]!)}${hits.length > 1 ? ` Related: ${hits.slice(1).map(nameOf).join('; ')}.` : ''}`;
+      }
+      case 'principles': {
+        if (i.of) {
+          const cat = CATEGORIES.find((c) => c.includes(i.of!) || i.of!.includes(c));
+          const ps = cat ? PRINCIPLES.filter((p) => p.category === cat) : recall(i.of, 4, ['principle']).map((k) => k.item as (typeof PRINCIPLES)[number]);
+          if (!ps.length) return `I don't have principles about ${i.of} yet.`;
+          return `${cat ? `On ${cat}` : `About ${i.of}`}: ${ps.map((p) => p.rule).join(' ')} Ask me why about any of them.`;
+        }
+        const by = CATEGORIES.map((c) => `${c} (${PRINCIPLES.filter((p) => p.category === c).map(principleName).join(', ')})`);
+        return `I design by ${PRINCIPLES.length} principles, each with its reason, the laws behind it and where it comes from. By kind: ${by.join('; ')}. Ask "why …" about any of them, or "principles of fits and tolerances".`;
+      }
+      case 'blocks': {
+        const have = blocksByArchetype();
+        return `I build with ${ARCHETYPES.length} kinds of block, each known by what it does: ${ARCHETYPES.map((a) => `${blockName(a)} (${have[a.id]?.length ? `${have[a.id]!.length} in the catalogue` : a.shapes?.length ? 'made from stock' : 'put together from blocks'})`).join(', ')}. Any part is one of them; ask me about any.`;
+      }
+      case 'conceive': {
+        const ways = conceive(i.from, i.to);
+        const say = (f: string) => (f === 'electric' ? 'electric power' : f);
+        if (!ways.length) return `I don't know a physical way from ${say(i.from)} to ${say(i.to)} yet.`;
+        const groups = [...byMedium(ways)].map(([m, cs]) => {
+          const best = cs[0]!;
+          return `against ${m === 'reaction mass' ? 'mass it throws away' : m === 'none' ? 'nothing' : `the ${m}`}: ${best.ways.map((w) => w.name.toLowerCase()).join(' then ')}${best.buildable ? '' : ' (possible; not buildable here yet)'}`;
+        });
+        const now = ways.filter((c) => c.buildable).length;
+        const motor = ways.every((c) => c.transducer) ? ' Every one of them needs a transducer, a motor in the widest sense; the rest depends on what it pushes against.' : '';
+        return `${ways.length} ways to turn ${say(i.from)} into ${say(i.to)}, by what they push against. ${groups.join('; ')}.${motor} ${now} I can build here now. ${asWhole(ways[0]!).says}`;
       }
       case 'recall': {
         const hits = recall(i.about, 3);

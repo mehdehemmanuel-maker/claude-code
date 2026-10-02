@@ -58,7 +58,7 @@ describe('parts', () => {
   });
 
   it('the lint catches the kinds of datasheet error that happen: the wrong winding, a typo, an impossible rating', () => {
-    const re40 = MOTORS['maxon.re40-148867']!;
+    const re40 = MOTORS['motor.dc.coreless.d40-150w-24v']!;
     // the 12 V winding's order number on the 24 V winding's data (the mistake this catalogue once made)
     expect(lintMotor({ ...re40, label: 'maxon RE 40, 12 V, 150 W (148866)' })[0]).toMatch(/label says 12 V/);
     // an older edition's resistance with the newer edition's stall current
@@ -67,10 +67,10 @@ describe('parts', () => {
     const wire = CATALOG.find((c) => c.id === 'awg.14')!;
     expect(lintItem({ ...wire, specs: { ...wire.specs, area: 3.31e-6 } })[0]).toMatch(/copper's is/);
     // a bearing whose static rating exceeds its dynamic one
-    const b: CatalogItem = { ...CATALOG.find((c) => c.id === 'skf.6205')!, specs: { bore: 0.025, od: 0.052, width: 0.015, C: 7800, C0: 14800, type: 'ball' } };
+    const b: CatalogItem = { ...CATALOG.find((c) => c.id === 'bearing.dgbb.6205')!, specs: { bore: 0.025, od: 0.052, width: 0.015, C: 7800, C0: 14800, type: 'ball' } };
     expect(lintItem(b)[0]).toMatch(/dynamic rating not above static/);
     // a "12 V" battery of five cells
-    expect(lintBattery({ ...BATTERIES['yuasa.np7-12']!, cells: 5 })[0]).toMatch(/5 lead-acid cells make 10 V/);
+    expect(lintBattery({ ...BATTERIES['battery.sla.12v-7ah']!, cells: 5 })[0]).toMatch(/5 lead-acid cells make 10 V/);
   });
 });
 
@@ -81,11 +81,11 @@ describe('workflows', () => {
     const r = run('drive.select', { mass: 120, wheelRadius: 0.125, speed: 3, accel: 0.7, motors: 2 });
     expect(r.ok).toBe(true);
     const c = r.choice as unknown as { motor: string; gearhead: string; battery: string; series: number; controller: string; currentLimit: number; topSpeed: number; cruiseCurrent: number };
-    expect(c.motor).toBe('maxon.re40-148867');
-    expect(c.gearhead).toBe('maxon.gp42c-203115');
-    expect(c.battery).toBe('yuasa.np7-12');
+    expect(c.motor).toBe('motor.dc.coreless.d40-150w-24v');
+    expect(c.gearhead).toBe('gearhead.planetary.d42-12to1');
+    expect(c.battery).toBe('battery.sla.12v-7ah');
     expect(c.series).toBe(2);
-    expect(c.controller).toBe('basicmicro.roboclaw-2x30a');
+    expect(c.controller).toBe('controller.dc.2ch-30a-34v-limit');
     // by hand: (0.015 x 120 g + 120 x 0.7) x 0.125 / 2 = 6.35 N m a wheel; / (12 x 0.81) / 0.0302 + 0.137 = 21.8 A; x 1.1
     expect(c.currentLimit).toBe(24);
     expect(c.topSpeed).toBeGreaterThan(3);
@@ -119,15 +119,15 @@ describe('workflows', () => {
   });
 
   it('a bearing for 500 N at 600 rpm on a 25 mm shaft: a 6005 bare, a UCP205 housed', () => {
-    expect((run('bearing.select', { load: 500, rpm: 600, hours: 5000, bore: 0.025 }).choice as { bearing: string }).bearing).toBe('skf.6005');
-    expect((run('bearing.select', { load: 500, rpm: 600, hours: 5000, bore: 0.025, housed: 1 }).choice as { bearing: string }).bearing).toBe('ucp205');
+    expect((run('bearing.select', { load: 500, rpm: 600, hours: 5000, bore: 0.025 }).choice as { bearing: string }).bearing).toBe('bearing.dgbb.6005');
+    expect((run('bearing.select', { load: 500, rpm: 600, hours: 5000, bore: 0.025, housed: 1 }).choice as { bearing: string }).bearing).toBe('bearing.unit.ucp205');
   });
 
   it('a coupling, a controller and a torque arm for the kart\'s gearmotor', () => {
-    expect((run('coupling.select', { torque: 5.83, bore: 0.012, sf: 1.5 }).choice as { coupling: string }).coupling).toBe('lovejoy.l075');
-    expect((run('controller.select', { voltage: 25.8, current: 22, motors: 2, limit: 1 }).choice as { controller: string; count: number })).toEqual({ controller: 'basicmicro.roboclaw-2x30a', count: 1 });
+    expect((run('coupling.select', { torque: 5.83, bore: 0.012, sf: 1.5 }).choice as { coupling: string }).coupling).toBe('coupling.jaw.10nm-22mm');
+    expect((run('controller.select', { voltage: 25.8, current: 22, motors: 2, limit: 1 }).choice as { controller: string; count: number })).toEqual({ controller: 'controller.dc.2ch-30a-34v-limit', count: 1 });
     const arm = run('torquearm.size', { torque: 5.83, radius: 0.037, length: 0.037 }).choice as { rodEnd: string; force: number };
-    expect(arm.rodEnd).toBe('skf.si8e');
+    expect(arm.rodEnd).toBe('rod-end.m8-female');
     expect(arm.force).toBeCloseTo(157.6, 0);
   });
 
@@ -138,12 +138,12 @@ describe('workflows', () => {
     // 24 A is past 16 AWG's 22 A rating: 14 AWG, as the kart is wired
     expect(c.wire.gauge).toBe('14');
     // 0.0302 x (24 - 0.137) x 12 x 0.81 = 7.0 N m at the output, x 1.5 = 10.5 N m: past the L075's 10.2, an L090
-    expect(c.coupling).toBe('lovejoy.l090');
-    expect(c.torqueArm.rodEnd).toBe('skf.si8e');
-    expect(c.bearing).toBe('ucp205');
+    expect(c.coupling).toBe('coupling.jaw.16nm-25mm');
+    expect(c.torqueArm.rodEnd).toBe('rod-end.m8-female');
+    expect(c.bearing).toBe('bearing.unit.ucp205');
     // strength needs about 10 mm; the axle is made to the pillow block's 25 mm bore
     expect(c.axle).toBe(0.025);
-    expect(c.bill).toEqual(expect.arrayContaining([{ id: 'maxon.re40-148867', count: 2 }, { id: 'yuasa.np7-12', count: 2 }, { id: 'skf.si8e', count: 4 }]));
+    expect(c.bill).toEqual(expect.arrayContaining([{ id: 'motor.dc.coreless.d40-150w-24v', count: 2 }, { id: 'battery.sla.12v-7ah', count: 2 }, { id: 'rod-end.m8-female', count: 4 }]));
     // two RE 40s at EUR 502.09 and two GP 42 Cs at EUR 234.36; two NP7-12s at USD 28.99
     expect(c.cost['EUR']).toBeCloseTo(2 * 502.09 + 2 * 234.36, 6);
     expect(c.cost['USD']).toBeCloseTo(2 * 28.99, 6);
@@ -164,7 +164,7 @@ describe('recall', () => {
     expect(recall('rolling resistance')[0]!.item.id).toBe('rolling.resistance');
     expect(recall('how do I tap a thread', 3).map((k) => k.item.id)).toContain('tap');
     expect(recall('drive for a kart', 4).map((k) => k.item.id)).toContain('drive.select');
-    expect(recall('25 mm bearing pillow block', 5).map((k) => k.item.id)).toContain('ucp205');
+    expect(recall('25 mm bearing pillow block', 5).map((k) => k.item.id)).toContain('bearing.unit.ucp205');
     expect(explain(recall('euler buckling')[0]!)).toMatch(/π² E I/);
     // the world's own knowledge too: its materials, joints and shapes
     expect(recall('6061 aluminium', 3).map((k) => k.item.id)).toContain('aluminum.6061-t6');
@@ -291,7 +291,7 @@ describe('efficiency: remembered answers and a fast index', () => {
   it('understands a builder\'s other words for things', () => {
     expect(recall('aluminium bar', 4).map((k) => k.item.id)).toContain('aluminum.6061-t6');
     // no entry says "gearbox": its synonym finds the gearhead; "cable" finds the wire gauges
-    expect(recall('gearbox', 4).map((k) => k.item.id)).toContain('maxon.gp42c-203115');
+    expect(recall('gearbox', 4).map((k) => k.item.id)).toContain('gearhead.planetary.d42-12to1');
     expect(recall('cable', 6).map((k) => k.item.id)).toEqual(expect.arrayContaining(['awg.14']));
     expect(recall('axle size', 4).map((k) => k.item.id)).toContain('shaft.size');
   });
@@ -305,8 +305,8 @@ describe('structure: one graph of everything, with no loose ends', () => {
 
   it('says how two things relate', () => {
     // a bearing to the law that rates it, directly; a battery to the drivetrain workflow that chooses it
-    expect(path('part:skf.6205', 'law:bearing.life.l10')!.map((x) => x.via)).toEqual([null, 'ratedBy']);
-    expect(path('part:yuasa.np7-12', 'workflow:powertrain.design')).not.toBeNull();
+    expect(path('part:bearing.dgbb.6205', 'law:bearing.life.l10')!.map((x) => x.via)).toEqual([null, 'ratedBy']);
+    expect(path('part:battery.sla.12v-7ah', 'workflow:powertrain.design')).not.toBeNull();
     expect(neighbours('joint:clamp', 'madeBy')).toContain('process:split-clamp');
     expect(neighbours('process:weld.mig', 'works')).toContain('material:steel.a36');
   });
@@ -330,8 +330,8 @@ describe('units: whatever units it is said in', () => {
 });
 
 describe('machines, broken down', () => {
-  it('the Markforged FX10: every assembly either published by Markforged with its source, or said not to be', () => {
-    const fx = machineById('markforged.fx10')!;
+  it('a continuous-fibre composite printer (figures from the Markforged FX10): every assembly published by its maker with its source, or said not to be', () => {
+    const fx = machineById('printer.cff-composite')!;
     const nodes = nodesOf(fx);
     expect(nodes.length).toBeGreaterThan(15);
     for (const n of nodes) {
@@ -345,7 +345,7 @@ describe('machines, broken down', () => {
   });
 
   it('what it prints with agrees with itself, and the composite laws give what a fibre-reinforced part is', () => {
-    expect(lintCatalog().filter((x) => x.id.startsWith('markforged'))).toEqual([]);
+    expect(lintCatalog().filter((x) => /^(filament|fibre)\./.test(x.id))).toEqual([]);
     // 30% carbon fibre (60 GPa) in Onyx (2.4 GPa): about 20 GPa along it, 3.4 GPa across it
     expect(use('composite.rule-of-mixtures', { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }).value).toBeCloseTo(19.68e9, -6);
     expect(use('composite.transverse', { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }).value).toBeCloseTo(3.37e9, -7);
@@ -354,11 +354,11 @@ describe('machines, broken down', () => {
   });
 
   it('joins the rest: it runs its processes and is fed its materials; Ego breaks it down when asked, however it is spelled', () => {
-    expect(neighbours('machine:markforged.fx10', 'runs')).toEqual(expect.arrayContaining(['process:cff', 'process:metal.fff']));
-    expect(neighbours('machine:markforged.fx10', 'feeds')).toContain('part:markforged.onyx');
-    expect(path('machine:markforged.fx10', 'law:composite.rule-of-mixtures')).not.toBeNull();
+    expect(neighbours('machine:printer.cff-composite', 'runs')).toEqual(expect.arrayContaining(['process:cff', 'process:metal.fff']));
+    expect(neighbours('machine:printer.cff-composite', 'feeds')).toContain('part:filament.nylon-microcarbon');
+    expect(path('machine:printer.cff-composite', 'law:composite.rule-of-mixtures')).not.toBeNull();
     expect(interpret('breakdown mark forged fx10')).toEqual({ do: 'breakdown', what: 'mark forged fx10' });
-    expect(recall('mark forged fx10', 1)[0]!.item.id).toBe('markforged.fx10');
+    expect(recall('mark forged fx10', 1)[0]!.item.id).toBe('printer.cff-composite');
     expect(MACHINES.length).toBeGreaterThan(0);
   });
 });
