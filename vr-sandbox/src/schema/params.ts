@@ -32,6 +32,8 @@ export const DISPLAY: Record<string, Display> = {
   'rpm/V': { unit: 'rpm/V', scale: 1, digits: 0 },
   'Ω': { unit: 'Ω', scale: 1, digits: 3 },
   rpm: { unit: 'rpm', scale: 60 / (2 * Math.PI), digits: 0 },
+  'rad/s': { unit: 'rad/s', scale: 1, digits: 1 },
+  Hz: { unit: 'Hz', scale: 1, digits: 2 },
   '%': { unit: '%', scale: 100, digits: 0 },
   x: { unit: '×', scale: 1, digits: 2 },
   'kg/m³': { unit: 'kg/m³', scale: 1, digits: 0 },

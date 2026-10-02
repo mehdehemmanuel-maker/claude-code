@@ -50,9 +50,11 @@ export interface Derived {
     boreDiameter: number;
     limits: [number, number] | null;
     motor?: { channel: string; reverse: boolean; currentLimit: number };
-    /** A servo follows its control channel, or, with a rhythm, swings on its own: range × sin(2π rhythm t + phase), as a
-     * spinal rhythm generator drives a swimming or walking animal's muscles. */
-    servo?: { maxTorque: number; range: number; channel: string; rhythm: number; phase: number };
+    /** A servo follows its control channel, or, with a rhythm, swings on its own: offset + range × sin(2π rhythm t +
+     * phase), as a spinal rhythm generator drives a swimming or walking animal's muscles. It pushes back in proportion
+     * to how far it is off, reaching its stall torque `band` (rad) off; its torque falls with speed as a DC motor's
+     * does, to nothing at `speed` (rad/s). */
+    servo?: { maxTorque: number; range: number; channel: string; rhythm: number; phase: number; offset: number; band: number; speed: number; wave: 'sine' | 'lift' };
     eddy?: { c: number };
     torsionSpring?: { k: number; rest: number };
   };
@@ -615,20 +617,41 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       num('maxTorque', 'Stall torque', 2, 0.01, 2000, 'N·m', { group: 'Servo', log: true }),
       num('range', 'Travel (±)', Math.PI / 3, 0.05, Math.PI, 'deg', { group: 'Servo' }),
       choice('channel', 'Control', 'steer', channelOptions, { group: 'Control' }),
+      // A hobby servo's controller is proportional and saturates: it drives its motor in proportion to how far it is
+      // off, at full voltage (stall torque) past a few degrees, and its top speed falls under load (Wada et al.,
+      // Practical Modeling and System Identification of R/C Servo Motors, IEEE CCA 2009). A 9 g micro servo turns
+      // 60° in 0.1 s unloaded (10.5 rad/s); a standard one in about 0.17 s (6 rad/s).
+      num('band', 'Full torque at (error)', 0.1, 0.005, 0.5, 'deg', { group: 'Servo' }),
+      num('speed', 'No-load speed', 6, 0.5, 60, 'rad/s', { group: 'Servo' }),
+      num('offset', 'Centre trim', 0, -Math.PI, Math.PI, 'deg', { group: 'Servo' }),
+      choice('channel', 'Control', 'steer', channelOptions, { group: 'Control' }),
       num('rhythm', 'Rhythm (0: follow the control)', 0, 0, 20, 'Hz', { group: 'Control' }),
       num('phase', 'Phase', 0, -Math.PI, Math.PI, 'deg', { group: 'Control' }),
+      // the rhythm's shape: a full swing each way, or a lift on one half of each cycle only (a knee folding as its leg
+      // comes forward, straight while it bears weight)
+      choice('wave', 'Rhythm shape', 'sine', [{ value: 'sine', label: 'Swing (both ways)' }, { value: 'lift', label: 'Lift (one half of each cycle)' }], { group: 'Control' }),
       ...pinParams,
     ],
-    derive: ({ params }) => ({
-      capacities: pinCapacity(params, PIN_RM),
-      revolute: {
-        // a servo turns only through its travel: past it is its own end stop
-        frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: [-numberOf(params, 'range'), numberOf(params, 'range')],
-        servo: { maxTorque: numberOf(params, 'maxTorque'), range: numberOf(params, 'range'), channel: stringOf(params, 'channel', 'steer'), rhythm: numberOf(params, 'rhythm'), phase: numberOf(params, 'phase') },
-      },
-      readouts: [{ label: 'Stall torque', value: `${fmt(numberOf(params, 'maxTorque'), 2)} N·m` }],
-      warnings: [],
-    }),
+    derive: ({ params }) => {
+      const range = numberOf(params, 'range'), offset = numberOf(params, 'offset');
+      return {
+        capacities: pinCapacity(params, PIN_RM),
+        revolute: {
+          // a servo turns only through its travel, about its centre: past it is its own end stop
+          frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: [Math.max(-Math.PI, offset - range), Math.min(Math.PI, offset + range)],
+          servo: {
+            maxTorque: numberOf(params, 'maxTorque'), range, channel: stringOf(params, 'channel', 'steer'), rhythm: numberOf(params, 'rhythm'), phase: numberOf(params, 'phase'),
+            offset, band: numberOf(params, 'band'), speed: numberOf(params, 'speed'), wave: stringOf(params, 'wave', 'sine') === 'lift' ? 'lift' : 'sine',
+          },
+        },
+        readouts: [
+          { label: 'Stall torque', value: `${fmt(numberOf(params, 'maxTorque'), 2)} N·m` },
+          { label: 'Stiffness', value: `${fmt(numberOf(params, 'maxTorque') / numberOf(params, 'band'), 2)} N·m/rad`, formula: 'stall torque / band' },
+          { label: '60° in', value: `${fmt(Math.PI / 3 / numberOf(params, 'speed'), 2)} s`, formula: 'unloaded' },
+        ],
+        warnings: [],
+      };
+    },
   },
   {
     id: 'eddy-brake', label: 'Magnetically resisted', category: 'Joints', model: 'revolute',

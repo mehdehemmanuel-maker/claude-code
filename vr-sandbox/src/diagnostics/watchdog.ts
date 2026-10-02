@@ -9,7 +9,7 @@
 //   flung      faster than anything in the scene could make it                               critical
 //   energy     a passive scene (gravity, contact, friction only) gaining energy               critical
 //   spin       a held body still turning after the hand has had time to steady it            critical
-//   jitter     a body shaking in place instead of coming to rest                             warning
+//   jitter     a body shaking in place instead of coming to rest (unless an actuator drives it) warning
 //   restless   a body that should have come to rest still moving                             warning
 //   slow       a tick over the time budget                                                   warning
 // Each anomaly is reported once per body and kind (with its worst value), so a report stays readable.
@@ -61,6 +61,12 @@ export interface WatchOptions {
   settleTicks: number;
   /** Bodies held by a hand whose target is still: they must stop turning after `settleTicks`. */
   held: Set<string>;
+  /**
+   * Bodies an actuator is driving (a servo keeping a rhythm or following a command, a motor drawing current): they
+   * move because something moves them, so neither shaking in place (a walker's foot swinging) nor not coming to rest
+   * is wrong for them.
+   */
+  driven: Set<string>;
   /** Half-spaces bodies must stay in: n . p >= d - margin. */
   walls: { n: Vec3; d: number; margin: number }[];
 }
@@ -89,7 +95,7 @@ export class Watchdog {
   constructor(private info: Map<string, BodyInfo>, opts: Partial<WatchOptions> = {}) {
     this.opts = {
       gravity: [0, -9.81, 0], floorY: 0, flungSpeed: 20, budgetMs: 4, passive: false, settleTicks: Infinity,
-      held: new Set(), walls: [], ...opts,
+      held: new Set(), driven: new Set(), walls: [], ...opts,
     };
   }
 
@@ -176,6 +182,8 @@ export class Watchdog {
           const n = spin > 2 ? (this.spinTicks.get(b.id) ?? 0) + 1 : 0;
           this.spinTicks.set(b.id, n);
           if (n >= 20) this.flag('spin', b.id, spin, 2, `still turning at ${spin.toFixed(1)} rad/s in a still hand`);
+        } else if (o.driven.has(b.id)) {
+          // driven: its motion has a cause
         } else if (rms > 0.01 && net < 0.002) {
           this.flag('jitter', b.id, rms, 0.01, `shaking in place at ${(rms * 1000).toFixed(0)} mm/s rms, going nowhere`);
         } else if (rim > 0.01) {

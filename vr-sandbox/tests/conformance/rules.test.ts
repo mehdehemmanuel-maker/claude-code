@@ -5,9 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { rig } from './helpers';
+import { TICK } from '../../src/physics/world';
 import { axisAngle, composePose, dot, length, relativePose, rotate, sub } from '../../src/doc/math';
 import type { Pose, Vec3 } from '../../src/doc/types';
-import { getMaterial } from '../../src/data/materials';
+import { getMaterial, MATERIALS } from '../../src/data/materials';
 import { CONNECTOR_KINDS, getConnectorKind } from '../../src/connectors/registry';
 import { REACH, spans, throughOf, unreachable } from '../../src/connectors/through';
 import { planJoin } from '../../src/connectors/plan';
@@ -173,6 +174,79 @@ describe('rules', () => {
     }
     expect(Math.abs(Math.abs(last) - range)).toBeLessThan(0.03);
     expect(peak).toBeLessThan(range + 0.02);
+    r.done();
+  });
+
+  // A servo is a proportional controller that saturates (Wada et al., IEEE CCA 2009): it pushes back in proportion to
+  // how far it is off, its stall torque `band` off, and its torque falls with speed to nothing at its no-load speed.
+  // Found when a walker's legs folded under it (a 6 Hz loop on a 4 g thigh is 0.006 N m/rad), then when a stiffer loop
+  // rang on a light bracket bolted to a heavy base (Jolt's motor saw only the bracket). Held on both: a frozen mount
+  // (Jolt alone) and a light mount bolted to a heavy free base (the re-solve, on true inertia).
+  for (const free of [false, true]) {
+    const servoArm = async (gravity: boolean, params: Record<string, number | string>) => {
+      const r = await rig(gravity ? {} : { gravity: [0, 0, 0] }, false);
+      const SIDE: Pose['q'] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+      let mount;
+      if (free) {
+        const base = r.part('block', pose([0, 0.9, 0]), { material: 'steel.a36', params: { x: 0.2, y: 0.2, z: 0.25 } });
+        mount = r.part('block', pose([0, 1.0125, 0]), { material: 'steel.a36', params: { x: 0.025, y: 0.025, z: 0.025 } });
+        const seat = pose([0, 1, 0]);
+        r.connect('bolted', { part: mount, frame: relativePose(mount.pose, seat) }, { part: base, frame: relativePose(base.pose, seat) }, { size: 'M4', count: 2, bondW: 0.025, bondL: 0.025 });
+        // held up, so only the servo is in question
+        r.connect('fixed', { part: base, frame: pose([0, -0.1, 0]) }, null, {});
+      } else mount = r.part('block', pose([0, 1.0125, 0]), { material: 'steel.a36', params: { x: 0.025, y: 0.025, z: 0.025 }, frozen: true });
+      // a 20 cm aluminium arm, 54 g, held level from its end: 0.053 N m on the servo
+      const arm = r.part('block', pose([0.1125, 1.0125, 0]), { material: 'aluminum.6061-t6', params: { x: 0.2, y: 0.01, z: 0.01 } });
+      const axis = pose([0.0125, 1.0125, 0], SIDE);
+      const servo = r.connect('servo', { part: mount, frame: relativePose(mount.pose, axis) }, { part: arm, frame: relativePose(arm.pose, axis) }, { maxTorque: 0.18, band: 0.1, speed: 10.5, ...params });
+      return { r, servo };
+    };
+    it(`a servo sags under its load by what its stiffness says, stall torque over band, and no more (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
+      const { r, servo } = await servoArm(true, { range: 0.5, channel: 'steer' });
+      let sag = 0;
+      for (let i = 0; i < 180; i++) sag = r.world.step().loads.find((l) => l.id === servo.id)!.extent;
+      // 0.054 kg x 9.81 x 0.1 m / (0.18 / 0.1 N m/rad) = 0.029 rad
+      expect(Math.abs(sag)).toBeGreaterThan(0.022);
+      expect(Math.abs(sag)).toBeLessThan(0.037);
+      r.done();
+    });
+    it(`a servo turns no faster than its no-load speed, and nearly that fast unloaded (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
+      const { r, servo } = await servoArm(false, { range: 1, channel: 'steer', speed: 3 });
+      r.world.apply({ op: 'controls', channels: { steer: 1 } });
+      let last = 0, fastest = 0;
+      for (let i = 0; i < 60; i++) {
+        const now = r.world.step().loads.find((l) => l.id === servo.id)!.extent;
+        fastest = Math.max(fastest, Math.abs(now - last) / TICK);
+        last = now;
+      }
+      expect(fastest).toBeLessThan(3 * 1.05);
+      expect(fastest).toBeGreaterThan(3 * 0.8);
+      r.done();
+    });
+  }
+
+  // A chain of assemblies (a walker's body with its servo cases, each thigh with its knee servo, each shank with its
+  // foot) joined by servos: every joint holds, however fast the light ones swing. Found when a walker's knee pins
+  // came 9 mm apart floating in zero gravity: each assembly was integrated on its own and only 20% of the gap was
+  // taken out a tick, so the arc a fast light shank swings through outran it. Each island is now closed outward
+  // from its heaviest (or held) assembly, as lone parts were.
+  it('a chain of light assemblies on servos holds together: no pin comes apart, swinging free in zero gravity', async () => {
+    const { buildWalker, WALKERS } = await import('../../src/world/creature');
+    const { DocStore } = await import('../../src/doc/store');
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const store = new DocStore(newDoc('walker'));
+    const w = buildWalker(store, WALKERS['dog']!, [0, 1, 0], 0);
+    const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
+    for (const id of w.parts) r.world.apply({ op: 'upsertPart', part: store.doc.parts[id]!, material: getMaterial(store.doc.parts[id]!.material), keepLivePose: false });
+    for (const id of w.joints) r.world.apply({ op: 'upsertConnection', conn: store.doc.connections[id]!, materials });
+    const W = r.world as unknown as { conns: Map<string, unknown>; anchorWorld(c: unknown): Pose; anchorWorldB(c: unknown): Pose };
+    let worst = 0, drifts = 0;
+    for (let k = 0; k < 270; k++) {
+      drifts += r.world.step().events.filter((e) => e.type === 'drift').length;
+      for (const id of w.joints) { const c = W.conns.get(id); worst = Math.max(worst, length(sub(W.anchorWorldB(c).p, W.anchorWorld(c).p))); }
+    }
+    expect(drifts).toBe(0);
+    expect(worst).toBeLessThan(0.001);
     r.done();
   });
 

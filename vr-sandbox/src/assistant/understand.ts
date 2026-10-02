@@ -13,7 +13,7 @@
 // So every request means something: what she does now, what it becomes when the rest is built, and what that is.
 
 import { placeFromWords } from '../world/place';
-import { swimmerFromWords } from '../world/creature';
+import { swimmerFromWords, walkerFromWords } from '../world/creature';
 
 export type Kind = 'be somewhere' | 'populate' | 'become' | 'learn' | 'make' | 'change the rules' | 'see the hidden' | 'feel';
 
@@ -29,7 +29,7 @@ export interface Capability {
 }
 
 /** Something she can do about a want at once, in this world. */
-export type Act = { command: 'gravity earth' | 'gravity moon' | 'gravity zero' } | { timeScale: number } | { playerScale: number } | { place: string | null } | { swimmer: string };
+export type Act = { command: 'gravity earth' | 'gravity moon' | 'gravity zero' } | { timeScale: number } | { playerScale: number } | { place: string | null } | { swimmer: string } | { walker: string };
 
 export const CAPABILITIES: Capability[] = [
   // ------------------------------------------------------------------------------------------------ the world itself
@@ -59,7 +59,8 @@ export const CAPABILITIES: Capability[] = [
   { id: 'weather', name: 'weather', by: null, says: 'wind, rain, snow, storms that act on things as well as look like them', words: ['weather', 'rain', 'storm', 'snow', 'snowstorm', 'tornado', 'wind', 'winter'] },
   { id: 'buildings', name: 'buildings and cities', by: null, says: 'houses, markets, temples, cities raised from their structure', words: ['city', 'village', 'market', 'bazaar', 'temple', 'temples', 'ruins', 'kingdom', 'metropolis', 'stalls', 'buildings', 'tracks', 'cities'] },
   { id: 'swimmers', name: 'swimmers with bodies', by: 'src/world/creature.ts#buildSwimmer', says: 'swimmers of real parts and rhythmic servos (a small whale, an eel) that swim by the water\'s push', words: ['fish', 'whale', 'eel', 'dolphin', 'shark', 'leviathan', 'schools of', 'swimmer'] },
-  { id: 'creatures', name: 'creatures with bodies', by: null, says: 'animals that walk, run, fly or crawl on real muscles and gaits, and sense and choose where to go', words: ['creature', 'animal', 'deer', 'jellyfish', 'ray', 'predator', 'dog', 'cat', 'bird', 'golem'] },
+  { id: 'walkers', name: 'walkers that choose', by: 'src/world/creature.ts#buildWalker', says: 'four-legged walkers of plywood, printed plastic and hobby servos (a small dog, a long-legged deer) that trot by their feet\'s grip, see with a wide arc of eyes, and go where their wants take them: to you, to look at something, to rest', words: ['dog', 'puppy', 'deer', 'cat', 'kitten', 'fox', 'pet', 'quadruped', 'walker', 'horse', 'pony', 'goat'] },
+  { id: 'creatures', name: 'creatures that fly, crawl or run', by: null, says: 'animals that fly, crawl, climb or run on real muscles and many-jointed bodies, beyond a four-legged trot', words: ['creature', 'animal', 'jellyfish', 'ray', 'predator', 'bird', 'birds', 'golem', 'sky-whale', 'insect', 'spider', 'dragon', 'airborne'] },
   { id: 'characters', name: 'characters with minds', by: null, says: 'people and beings that speak, remember, have families and histories, and act on them', words: ['merchant', 'merchants', 'citizen', 'citizens', 'people', 'villagers', 'civilization', 'civilizations', 'society', 'societies', 'family', 'families', 'personified', 'living', 'negotiate', 'friendly'] },
   { id: 'avatar', name: 'a body to wear', by: null, says: 'you as another body: its size, its senses, how it moves', words: ['be a', 'as a', 'me as', 'become', 'turn me into'] },
   { id: 'lessons', name: 'lessons that check what you do', by: 'src/assistant/lesson.ts#lessonFrom', says: 'building lessons from any design she can make, each step shown and checked in your world; not yet skills of the body, games, languages or the sciences', words: ['tutorial', 'teach', 'lesson', 'train me', 'training', 'learn', 'practice', 'course', 'guide', 'master', 'skill'] },
@@ -140,10 +141,13 @@ export function understand(asked: string): Understanding {
   }
   // a swimmer, where there is water to swim in (the place's, or the workshop's pool)
   if (swimmerFromWords(t) && /\b(sea|ocean|water|pool|lake|swim|swims|swimming|bay)\b/.test(t)) acts.push({ swimmer: t });
+  // a walker, asked to be put somewhere, made, or to fill a place (not to be one: that is a body to wear)
+  else if (walkerFromWords(t) && !kinds.includes('become') && /\b(put|add|release|spawn|drop|make|build|bring|give|get|let|want|populate|populated|filled with|full of)\b/.test(t)) acts.push({ walker: t });
   const has = needs.filter((n) => n.has), lack = needs.filter((n) => !n.has);
   const actSays = acts.map((a) => ('command' in a ? (a.command === 'gravity zero' ? 'turned gravity off' : a.command === 'gravity moon' ? 'set the Moon\'s gravity' : 'set Earth\'s gravity')
     : 'timeScale' in a ? `slowed time to ×${a.timeScale}` : 'playerScale' in a ? `made you ×${a.playerScale} your size`
       : 'swimmer' in a ? `put ${swimmerFromWords(a.swimmer)!.name} in the water, swimming by its own rhythm`
+        : 'walker' in a ? `put ${walkerFromWords(a.walker)!.name} on the ground near you, walking where its wants take it`
         : a.place === null ? 'taken you back to the workshop' : `taken you to ${placeFromWords(a.place)!.name}`));
   // a world with other rules is still a world with rules: its constants can change, its consistency can't
   const broken = /physics[^.]*\bbroken\b|\bbroken physics\b/.test(t);
