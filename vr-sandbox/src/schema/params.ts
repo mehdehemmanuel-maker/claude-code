@@ -80,7 +80,18 @@ export interface BoolParam extends Base {
   default: boolean;
 }
 
-export type ParamDef = NumberParam | EnumParam | BoolParam;
+/** Text not edited by hand (a form's genome): kept as it is, up to `max` characters. */
+export interface TextParam extends Base {
+  type: 'text';
+  default: string;
+  max: number;
+}
+
+export type ParamDef = NumberParam | EnumParam | BoolParam | TextParam;
+
+export function text(key: string, label: string, def: string, max: number): TextParam {
+  return { type: 'text', key, label, default: def, max };
+}
 
 export function num(key: string, label: string, def: number, min: number, max: number, display: keyof typeof DISPLAY,
   extra: Partial<NumberParam> = {}): NumberParam {
@@ -114,6 +125,8 @@ export function sanitizeParams(defs: ParamDef[], values: Params | undefined): Pa
       out[d.key] = x;
     } else if (d.type === 'enum') {
       out[d.key] = typeof v === 'string' && d.options.some((o) => o.value === v) ? v : d.default;
+    } else if (d.type === 'text') {
+      out[d.key] = typeof v === 'string' && v.length <= d.max ? v : d.default;
     } else {
       out[d.key] = typeof v === 'boolean' ? v : d.default;
     }

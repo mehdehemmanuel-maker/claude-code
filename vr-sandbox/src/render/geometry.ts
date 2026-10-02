@@ -75,6 +75,15 @@ export function geometryFor(s: Exclude<VisualShape, { type: 'group' } | { type: 
         const g = extrudeAlongX(sh, s.halfLength);
         return g;
       });
+    case 'mesh':
+      return cached(`mesh:${s.key}`, () => {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(s.positions, 3));
+        g.setIndex(new THREE.BufferAttribute(s.indices, 1));
+        g.computeVertexNormals();
+        g.computeBoundingSphere();
+        return g;
+      });
     case 'wedge':
       return cached(`wedge:${r4(s.length)}:${r4(s.height)}:${r4(s.width)}`, () => {
         const L = s.length / 2, H = s.height / 2, W = s.width / 2;

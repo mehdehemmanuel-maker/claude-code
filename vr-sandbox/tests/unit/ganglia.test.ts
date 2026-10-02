@@ -361,5 +361,15 @@ describe('machines, broken down', () => {
     expect(recall('mark forged fx10', 1)[0]!.item.id).toBe('printer.cff-composite');
     expect(MACHINES.length).toBeGreaterThan(0);
   });
+
+  it('an EUV lithography scanner: light from tin plasma, six mirrors, two stages; each assembly sourced or said not to be, and its resolution from Rayleigh', () => {
+    const m = machineById('lithography.euv-scanner')!;
+    for (const n of nodesOf(m)) if (n.published) expect(n.source?.cite, n.name).toBeTruthy(); else expect(n.is, n.name).toMatch(/not published/i);
+    expect(m.tree.map((n) => n.name)).toEqual(expect.arrayContaining(['Light source (laser-produced tin plasma)', 'Illuminator', 'Projection optics', 'Wafer stages', 'Vacuum system']));
+    // 13 nm at 0.33 NA and 13.5 nm light: k1 = CD NA / lambda, about 0.32
+    expect(use('rayleigh.resolution', { k1: 0.32, lambda: Number(m.specs['wavelength']), NA: Number(m.specs['NA']) }).value).toBeCloseTo(Number(m.specs['resolution']), 9);
+    expect(recall('asml euv lithography machine', 1)[0]!.item.id).toBe('lithography.euv-scanner');
+    expect(interpret('break down the ASML extreme ultraviolet lithography machine')).toMatchObject({ do: 'breakdown' });
+  });
 });
 

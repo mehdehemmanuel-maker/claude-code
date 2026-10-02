@@ -21,11 +21,15 @@ import { conceive, type Medium } from './ways';
 import { grow, compression } from './grow';
 import { lawById, use } from './laws';
 import { CATALOG } from './parts';
+import { formFromWords, invent } from '../forms/say';
+import { routes } from '../forms/make';
+import { describe as describeForm } from '../forms/form';
 
 export type Level = 'unsayable' | 'no way' | 'unbuildable' | 'fails' | 'partial' | 'works';
 export const LEVEL_ORDER: Level[] = ['unsayable', 'no way', 'unbuildable', 'fails', 'partial', 'works'];
 
-export interface Need { does: string; from: string; to: string; against?: Medium }
+/** A need: one flow into another, or a shape (made from words, or invented for a job said in words). */
+export type Need = { does: string; from: string; to: string; against?: Medium } | { does: string; form: string };
 
 export interface Challenge {
   id: string;
@@ -69,7 +73,19 @@ export function flowOfWord(w: string): Flow | null {
 
 const ids = (ways: { id: string }[]) => ways.map((w) => w.id).join('>');
 
+function meetForm(need: Extract<Need, { form: string }>): NeedResult {
+  const inv = invent(need.form);
+  const form = inv?.form ?? formFromWords(need.form);
+  if (!form) return { need, level: 'unsayable', says: `I can't read a shape in "${need.form}"`, fix: `words for the shape in "${need.form}"` };
+  const can = routes(form).filter((r) => r.can);
+  if (!can.length) return { need, level: 'unbuildable', says: `I can say it (${describeForm(form)}) but nothing I know can make it`, fix: `a process that makes ${describeForm(form)}` };
+  if (inv && inv.grown.safety < 1) return { need, level: 'fails', says: `grown for ${inv.job}, but it would yield (safety factor ${inv.grown.safety.toFixed(2)})`, fix: 'a stronger material or more of it' };
+  const what = inv ? `grown by its loads for ${inv.job}: safety factor ${inv.grown.safety.toFixed(1)}, deflecting ${(inv.grown.deflection * 1000).toFixed(2)} mm` : describeForm(form);
+  return { need, level: 'works', way: can[0]!.process, says: `${what}; made by ${can.map((r) => r.process).join(' or ')}` };
+}
+
 function meet(c: Challenge, need: Need): NeedResult {
+  if ('form' in need) return meetForm(need);
   const f = flowOfWord(need.from), t = flowOfWord(need.to);
   if (!f || !t) {
     const word = !f ? need.from : need.to;
@@ -181,7 +197,11 @@ export const CHALLENGES: Challenge[] = [
   {
     id: 'geometry', name: 'A new geometry', asked: 'Create a new geometry.',
     frame: 'A new shape needs a generator (a section swept along a path, a lattice, a shape grown by its loads, as bone is) and a process that can make what it generates (printing makes almost any shape; machining makes what a tool can reach).',
-    needs: [{ does: 'make a shape nobody has drawn', from: 'stock', to: 'geometry' }],
+    needs: [
+      { does: 'invent a shape nobody has drawn, for a job', form: 'invent a bracket that holds 500 N at 120 mm from the wall' },
+      { does: 'make a shape no stock comes in: a lattice', form: 'a 60 mm cube filled with a gyroid lattice of 12 mm cells' },
+      { does: 'make an aerofoil', form: 'a naca 2412 wing 300 mm long with a 100 mm chord' },
+    ],
   },
   {
     id: 'flight', name: 'A flying machine', asked: 'Build something that flies.',

@@ -21,7 +21,9 @@ export type VisualShape =
   | { type: 'angle'; halfLength: number; legA: number; legB: number; t: number }
   | { type: 'wedge'; length: number; height: number; width: number }
   | { type: 'wheel'; radius: number; halfWidth: number; hub: number }
-  | { type: 'group'; children: { shape: VisualShape; p: Vec3; q: Quat; tint?: number }[] };
+  | { type: 'group'; children: { shape: VisualShape; p: Vec3; q: Quat; tint?: number }[] }
+  /** A triangle mesh (an invented form): `key` names it for caching. */
+  | { type: 'mesh'; key: string; positions: Float32Array; indices: Uint32Array };
 
 /** Closest point on the surface of a convex shape (local space) and its outward normal. */
 export function closestOnShape(shape: CollisionShape, pt: Vec3): { p: Vec3; n: Vec3; d: number } {

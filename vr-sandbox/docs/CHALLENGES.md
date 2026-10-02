@@ -80,6 +80,29 @@ The world also needs parts whose shape isn't from a fixed list.
 
 **Flight: unbuildable.** A propeller is physically right, but none is catalogued. Momentum theory says a 0.3 m rotor given 100 W can at best hold up 1.2 kg.
 
+## Round 3: the form language
+
+The geometry gap was the deepest, so it was the next structural change (`docs/FORMS.md`). Ego now has a language of form:
+
+- primitives, sections (including NACA aerofoils and grown fields), operations and lattices;
+- a mesher with exact mass properties;
+- a reader of what can make each shape;
+- shapes grown by their loads (topology optimisation), checked as real parts.
+
+The geometry challenge now **works** on all three needs:
+
+| Need | Result |
+|---|---|
+| Invent a shape for a job | A bracket grown for 500 N at 120 mm: safety factor 2.5, 1.2 mm deflection, milled or printed |
+| A lattice no stock comes in | A gyroid cube, printed |
+| An aerofoil | A NACA 2412 wing, milled or printed |
+
+What it found on the way:
+
+- **A grown field read as empty.** Its distance was clipped at zero, so nothing counted as inside. The tests now check a grown shape's mesh against its densities.
+- **The world's parameter cleaner dropped any value it didn't know.** A form's genome would have been lost on every edit. Parts now have a text parameter that is kept, and the save format checks it as untrusted.
+- **A new material needs thermal data, or the thermal guard fails.** The printed nylon's thermal figures aren't published, so they are estimated from its nylon matrix and say so.
+
 ## What the challenges taught about the structure itself
 
 - **A block without a way is invisible to reasoning.** The motor controller was a transistor switch all along, but nothing said so, so "act on a signal" had no path. Every block's physics has to be written down as a way, or conceptual design can't find it.

@@ -118,8 +118,9 @@ describe('challenges: hard jobs that find where it breaks', () => {
     expect(a.notes.find((x) => x.law === 'information.choices')!.value).toBeGreaterThan(5);
   });
 
-  it('a new geometry is still past what she can say: her language has function, not form', () => {
-    expect(level('geometry', 'make a shape nobody has drawn')).toBe('unsayable');
+  it('a new geometry: she invents one grown by its loads, and makes lattices and aerofoils (round 3: the form language)', () => {
+    expect(level('geometry', 'invent a shape nobody has drawn, for a job')).toBe('works');
+    expect(level('geometry', 'make a shape no stock comes in: a lattice')).toBe('works');
     expect(level('flight', 'push on the air to fly')).toBe('unbuildable');
   });
 

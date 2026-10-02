@@ -39,6 +39,21 @@ const FX10_METAL = { cite: 'Markforged FX10 Metal Kit announcement (Metal AM; Ad
 const FX10_STORE = { cite: 'MatterHackers, Markforged FX10 listing (material drawer, list price)', url: 'https://www.matterhackers.com/store/l/markforged-fx10-industrial-metal-and-composite-3d-printer/sk/MRX7KV1M', kind: 'distributor' as const };
 const COMPOSITES = { cite: 'Markforged Composites Material Datasheet (ASTM D638, D790, D3039, D648, D256)', url: 'https://static.markforged.com/downloads/composites-data-sheet.pdf', kind: 'maker' as const };
 
+const NXE38 = { cite: 'ASML, TWINSCAN NXE:3800E product page', url: 'https://www.asml.com/en/products/euv-lithography-systems/twinscan-nxe-3800e', kind: 'maker' as const };
+const NXE34 = { cite: 'ASML, TWINSCAN NXE:3400C product page (all-reflective 4× Zeiss lens, 26 × 33 mm field)', url: 'https://www.asml.com/en/products/euv-lithography-systems/twinscan-nxe3400c', kind: 'maker' as const };
+const TRUMPF = { cite: 'TRUMPF, EUV drive laser: 40 kW pulsed CO₂ laser at 50 kHz, pulses amplified more than 10,000 times, a pre-pulse and a main pulse for each of 50,000 tin droplets a second', url: 'https://www.trumpf.com/en_US/solutions/applications/euv-lithography/euv-drive-laser/', kind: 'maker' as const };
+const CYMER = { cite: 'Cymer, CO₂/Sn LPP EUV sources for device development and HVM, SPIE Advanced Lithography 2013 (graded multilayer, temperature-controlled collector)', url: 'https://www.cymer.com/wp-content/uploads/2018/12/Cymer_SPIE_AdvancedLithography_2013.pdf', kind: 'maker' as const };
+const LFW_SOURCE = { cite: 'Laser Focus World, Photonic frontiers: EUV lithography (the pre-pulse spreads a 30 µm droplet to the main beam\'s 100 µm focus)', url: 'https://www.laserfocusworld.com/lasers-sources/article/16557008/photonic-frontiers-euv-lithography-euv-lithography-has-yet-to-find-its-way-into-the-fab', kind: 'press' as const };
+const ZEISS = { cite: 'Conradi, Kuerz et al. (Carl Zeiss SMT), Optics for EUV Production, EUVL Symposium 2011 (field and pupil facet mirrors; six-mirror projection optics)', url: 'https://euvlsymposium.lbl.gov/pdf/2011/pres/Olaf%20Conradi.pdf', kind: 'maker' as const };
+const MIRRORS = { cite: 'Laser Focus World, Multilayer mirrors enable next-generation EUV lithography (Mo/Si multilayers, about 70% reflectivity per mirror at near-normal incidence)', url: 'https://www.laserfocusworld.com/optics/article/16566714/optics-for-scanning-multilayer-mirrors-enable-next-generation-euv-lithography', kind: 'press' as const };
+const H2 = { cite: 'US patent 11,340,532, Prolonging optical element lifetime in an EUV lithography system (hydrogen slows tin debris; EUV-made hydrogen radicals turn tin deposits into volatile stannane, pumped away)', url: 'https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/11340532', kind: 'patent' as const };
+const REVIEW = { cite: 'EUV Lithography: State-of-the-Art Review (every gas absorbs 13.5 nm, so the whole optical path is reflective and in vacuum; ~7 nm Mo/Si bilayers reflect it by Bragg reflection)', url: 'https://www.researchgate.net/publication/334136595_EUV_Lithography_State-of-the-Art_Review', kind: 'paper' as const };
+const WIKI_EUV = { cite: 'Extreme ultraviolet lithography (Wikipedia, and the sources it cites): masks are reflective, as EUV is absorbed by almost every material', url: 'https://en.wikipedia.org/wiki/Extreme_ultraviolet_lithography', kind: 'press' as const };
+const PELLICLE = { cite: 'US patent 6,498,685 (EUV mask making held back by, among other things, the lack of a pellicle material)', url: 'https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/6498685', kind: 'patent' as const };
+const PRICE = { cite: 'TechPowerUp, ASML High-NA EUV Twinscan EXE machines cost USD 380 million (low-NA NXE about USD 183 million)', url: 'https://www.techpowerup.com/319071/asml-high-na-euv-twinscan-exe-machines-cost-usd-380-million-10-20-units-already-booked', kind: 'press' as const };
+const POWER = { cite: 'TSPA Semiconductor, ASML\'s EUV power strategy (about 532 kW of electrical power for 200 W of EUV)', url: 'https://tspasemiconductor.substack.com/p/asmls-euv-power-strategy-more-wafers', kind: 'press' as const };
+const HIGHNA = { cite: 'Tom\'s Hardware and TechPowerUp on the High-NA EXE:5000 (NA 0.55, 8 nm resolution against 13 nm, about 150,000 kg, 250 crates, 250 engineers and six months to install)', url: 'https://www.tomshardware.com/tech-industry/semiconductors/asml-lithograpy-roadmap-examined-from-duv-to-hyper-na', kind: 'press' as const };
+
 export const MACHINES: Machine[] = [
   {
     id: 'printer.cff-composite', label: 'Industrial continuous-fibre composite printer (with a metal option)',
@@ -102,6 +117,60 @@ export const MACHINES: Machine[] = [
       },
       {
         name: 'Software (slicer and fleet manager)', is: 'Slices parts, routes fibre, scales metal parts for sinter shrinkage, and manages a fleet of printers.', published: true, source: FX10,
+      },
+    ],
+  },
+  {
+    id: 'lithography.euv-scanner', label: 'Extreme ultraviolet (EUV) lithography scanner, 0.33 NA',
+    example: 'ASML TWINSCAN NXE:3800E',
+    does: 'Prints a chip layer\'s pattern onto a silicon wafer with 13.5 nm light: light made by blasting tin droplets with a laser, carried and shrunk four times by mirrors alone, in vacuum, from a reflective mask onto a scanning wafer.',
+    specs: {
+      wavelength: 13.5e-9, NA: 0.33, reduction: 4, fieldX: 0.026, fieldY: 0.033, resolution: 13e-9, overlay: 1.1e-9,
+      throughput: 'over 195 wafers an hour at 30 mJ/cm² (220 with an upgrade)', drivelaser: 40e3, droplets: 50000,
+      electric: 'about 532 kW for 200 W of EUV (reported)',
+    },
+    price: { amount: 183e6, currency: 'USD', seen: '2026-10', note: `reported price of a low-NA NXE system; the High-NA EXE about USD 380 million (${PRICE.cite})` },
+    source: NXE38,
+    runs: [], feeds: [],
+    tags: ['lithography', 'euv', 'scanner', 'chip', 'semiconductor', 'asml', 'wafer', 'extreme ultraviolet'],
+    tree: [
+      {
+        name: 'Light source (laser-produced tin plasma)', is: 'Makes the 13.5 nm light as the glow of a tin plasma, the only way it is made at production power in these machines.', published: true, source: TRUMPF,
+        children: [
+          { name: 'Drive laser', is: 'A pulsed CO₂ laser (10.6 µm) amplified more than 10,000 times through a chain of amplifiers: by its maker\'s account, the most powerful laser built in series production.', published: true, source: TRUMPF, specs: { power: 40e3, rate: 50e3, wavelength: 10.6e-6 } },
+          { name: 'Tin droplet generator', is: 'Shoots 50,000 molten tin droplets a second, about 30 µm across, through the laser\'s focus.', published: true, source: TRUMPF, specs: { droplets: 50000, diameter: 30e-6 } },
+          { name: 'Pre-pulse and main pulse', is: 'A first pulse flattens each droplet to about 100 µm, the main beam\'s focus; the main pulse heats it into a plasma that emits at 13.5 nm.', published: true, source: LFW_SOURCE },
+          { name: 'Collector mirror', is: 'A temperature-controlled, graded Mo/Si multilayer mirror facing the plasma, gathering its light and focusing it into the scanner.', published: true, source: CYMER },
+          { name: 'Hydrogen debris control', is: 'Hydrogen gas slows the tin flung off the plasma; hydrogen radicals the EUV makes turn tin on the collector into stannane gas, pumped away.', published: true, source: H2 },
+          { name: 'Source vessel, droplet catcher, its sensors and control', is: 'Their designs and figures are not published.', published: false },
+        ],
+      },
+      {
+        name: 'Illuminator', is: 'Mirrors that shape the light and make it even across the slit: a field facet mirror and a pupil facet mirror, together setting the angles the mask is lit from.', published: true, source: ZEISS,
+        children: [{ name: 'Facet mirror actuators and their settings', is: 'Not published in detail.', published: false }],
+      },
+      {
+        name: 'Reticle (mask) and its stage', is: 'The pattern, on a mask that reflects rather than transmits: EUV is absorbed by almost every material, so a multilayer mirror carries the pattern in an absorbing layer. Its stage scans it through the light while the wafer scans the other way, four times slower.', published: true, source: WIKI_EUV,
+        children: [
+          { name: 'Pellicle', is: 'A thin membrane over the mask keeping particles off its pattern; long held back at EUV by the lack of a material thin and clear enough to let 13.5 nm light through.', published: true, source: PELLICLE },
+          { name: 'Reticle stage motors and metrology', is: 'Not published in detail.', published: false },
+        ],
+      },
+      {
+        name: 'Projection optics', is: 'Six mirrors, M1 to M6, all reflective, that shrink the mask\'s image four times onto the wafer through a 0.33 numerical aperture over a 26 × 33 mm field. Each Mo/Si multilayer mirror reflects about 70%, so the six pass only about 12% of what reaches them (0.7⁶).', published: true, source: NXE34, specs: { mirrors: 6, NA: 0.33, reduction: 4, reflectivity: 0.7 },
+        children: [
+          { name: 'Mo/Si multilayer coatings', is: 'About 7 nm molybdenum-silicon bilayers, stacked, reflecting 13.5 nm by Bragg reflection.', published: true, source: REVIEW },
+          { name: 'Mirror substrates, mounts and actuators', is: 'Not published in detail by Zeiss.', published: false },
+        ],
+      },
+      {
+        name: 'Wafer stages', is: 'Two: one wafer is measured while the other is exposed, so the light never waits. Each layer lands on the one below within 1.1 nm.', published: true, source: NXE38, specs: { stages: 2, overlay: 1.1e-9 },
+        children: [{ name: 'Stage motors, encoders and interferometers', is: 'Not published in detail.', published: false }],
+      },
+      { name: 'Vacuum system', is: 'The whole light path is in vacuum: every gas absorbs 13.5 nm light.', published: true, source: REVIEW },
+      {
+        name: 'Power, size and installation', is: 'About 532 kW of electricity for 200 W of EUV light, by reports; the High-NA successor (0.55 NA, 8 nm) is about 150 tonnes, ships in 250 crates and takes 250 engineers six months to install.', published: true, source: POWER,
+        children: [{ name: 'High-NA (EXE) successor', is: 'An anamorphic 0.55 NA version printing 8 nm against 13 nm, at about USD 380 million.', published: true, source: HIGHNA }],
       },
     ],
   },
