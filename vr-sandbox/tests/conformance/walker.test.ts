@@ -61,9 +61,12 @@ describe('a walker', () => {
     expect(shuffle.forward).toBeLessThan(stride.forward);
   }, 120000);
 
-  it('on a floor with no friction it gets nowhere either: its feet push the ground back only as far as friction lets them', async () => {
-    const s = await walk(WALKERS['dog']!, 0, 10, FRICTIONLESS.id);
-    expect(Math.abs(s.forward)).toBeLessThan(0.3);
+  it('on a floor with no friction it gets nowhere: the floor gives no sideways impulse, so its centre of mass stays (F-1.3), and its body can only move against its own legs', async () => {
+    const plan = WALKERS['dog']!;
+    const s = await walk(plan, 0, 10, FRICTIONLESS.id);
+    // F-1.3 holds the centre of mass to millimetres (tests/conformance/momentum.test.ts); the body, most of the mass,
+    // can shift against the legs by less than a leg's reach, whatever the gait does
+    expect(Math.abs(s.forward)).toBeLessThan(plan.thigh + plan.shank);
   }, 120000);
 
   it('a slow trot needs little grip: on PTFE feet (friction about 0.09 on concrete) it still walks, as a careful walker crosses ice', async () => {

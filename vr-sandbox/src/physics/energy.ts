@@ -39,13 +39,27 @@ export interface Energies {
   heat: HeatBook;
   /** Work put in since the scene began, by source (negative where a source took energy out). */
   work: WorkBook;
-  /** What nothing above accounts for: the integrator's own loss (positive) or gain (negative). */
-  numerical: number;
+  /** What nothing above accounts for, kept apart by sign (a loss and a gain are different defects). */
+  numerical: NumericalBook;
 }
+
+/**
+ * Energy the books cannot place. Both entries are positive and are the realisation's, never a cause's: a loss is the
+ * integrator's (semi-implicit Euler in free fall, angular damping) until a heat source claims it; a gain is energy made
+ * from nothing, which F-2.1 forbids, so it is a defect to find, not a term to absorb. The books never attribute either
+ * to a hand (a hand's work is measured where it is applied, or not at all).
+ */
+export interface NumericalBook {
+  lost: number;
+  gained: number;
+  /** The part of `gained` made while a hand was moving a part kinematically, where no work is measured: an annotation of when, not an attribution of why. */
+  gainedHeld: number;
+}
+export const emptyNumerical = (): NumericalBook => ({ lost: 0, gained: 0, gainedHeld: 0 });
 
 export const emptyHeat = (): HeatBook => ({ friction: 0, impact: 0, plastic: 0, air: 0, eddy: 0, damping: 0, electric: 0 });
 export const emptyWork = (): WorkBook => ({ hands: 0, batteries: 0, magnets: 0, fluids: 0 });
-export const emptyEnergies = (): Energies => ({ kinetic: 0, potential: 0, elastic: 0, heat: emptyHeat(), work: emptyWork(), numerical: 0 });
+export const emptyEnergies = (): Energies => ({ kinetic: 0, potential: 0, elastic: 0, heat: emptyHeat(), work: emptyWork(), numerical: emptyNumerical() });
 
 /** Kinetic energy of a rigid body: translation of its centre plus rotation about it (world inertia, row-major). */
 export function kineticEnergy(mass: number, v: Vec3, w: Vec3, I: number[] | null): number {
@@ -69,9 +83,10 @@ export const workDone = (e: Energies) => sum(e.work);
 
 /**
  * The books balance when what is held now equals what was held at the start, plus the work put in, less the heat
- * made and the integrator's loss: E_start + W = E_now + Q + numerical. Returns the imbalance (0 when they close).
+ * made, less what the realisation lost, plus what it made: E_start + W = E_now + Q + lost - gained. Returns the
+ * imbalance (0 when they close).
  */
-export const imbalance = (start: number, e: Energies) => start + workDone(e) - stored(e) - heatMade(e) - e.numerical;
+export const imbalance = (start: number, e: Energies) => start + workDone(e) - stored(e) - heatMade(e) - e.numerical.lost + e.numerical.gained;
 
 /** One place a tick's heat was made: a contact, a bearing, a hinge, a spring. Weights share out what the books say. */
 export interface HeatSource<B> {

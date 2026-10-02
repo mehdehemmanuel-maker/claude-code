@@ -898,7 +898,7 @@ export class Tablet {
       const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping + e.heat.electric;
       const work = e.work.hands + e.work.batteries + e.work.magnets + e.work.fluids;
       this.text(`⚡ motion ${J(e.kinetic)} · height ${J(e.potential)} · springs ${J(e.elastic)} · put in ${J(work)} (hands ${J(e.work.hands)}, batteries ${J(e.work.batteries)}, magnets ${J(e.work.magnets)})`, 24, CH - 100, 18, '#c9d2dc');
-      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}, electric ${J(e.heat.electric)}) · integrator ${J(e.numerical)}`, 24, CH - 76, 18, '#c9d2dc');
+      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}, electric ${J(e.heat.electric)}) · integrator lost ${J(e.numerical.lost)}, made ${J(e.numerical.gained)}${e.numerical.gainedHeld > 0 ? ` (${J(e.numerical.gainedHeld)} while held)` : ''}`, 24, CH - 76, 18, '#c9d2dc');
     }
     this.drawHealth(CH - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, CH - 14, 22, '#9aa4af');

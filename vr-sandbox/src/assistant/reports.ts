@@ -39,6 +39,8 @@ export interface Report {
   /** What she did about it herself, if anything. */
   fixed: string | null;
   version: string;
+  /** The physics the run was under (vite.config.ts): evidence against an obligation is evidence about that physics only. */
+  physics?: string;
   build: string;
   shareCode: string;
   sent: boolean;

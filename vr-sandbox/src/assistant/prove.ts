@@ -26,8 +26,13 @@ export const JOINT_LIMIT = 1 / MARGIN;
 const MAX_TRIES = 4;
 const KEY = 'vrsb.stand';
 
+/** The physics this build runs (vite.config.ts): what she learns on the stand is learned under it, and only under it. */
+const PHYSICS = typeof __PHYSICS__ === 'string' ? __PHYSICS__ : 'unstamped';
+
 /** What the tests taught her, kept on the headset. */
 interface Learned {
+  /** The physics it was learned under. Learning without a stamp, or under other physics, is set aside, not used. */
+  physics?: string;
   /** Per kind of design: the extra margin on its load that its members turned out to need. */
   margin: Record<string, number>;
   /** "This joint, as Best join makes it for this design, needs to be this instead." */
@@ -38,12 +43,24 @@ interface Learned {
 }
 
 export class StandMemory {
-  data: Learned = { margin: {}, joints: {}, tests: 0 };
+  data: Learned = { physics: PHYSICS, margin: {}, joints: {}, tests: 0 };
+  /**
+   * Learning from other physics than this build's, kept but not used: a margin or a joint upgrade learned on a stand
+   * whose physics has since changed is a belief whose ancestor changed, and is not knowledge until it is derived again
+   * (docs/AUDIT-3-EGO-KNOWLEDGE.md). Nothing physical survives on memory alone.
+   */
+  quarantined: Learned | null = null;
   constructor(private storage: Pick<Storage, 'getItem' | 'setItem'> | null = globalThis.localStorage ?? null) {
-    try { const s = JSON.parse(this.storage?.getItem(KEY) ?? 'null'); if (s?.margin && s?.joints) this.data = s; } catch { /* start fresh */ }
+    try {
+      const s = JSON.parse(this.storage?.getItem(KEY) ?? 'null') as Learned | null;
+      if (s?.margin && s?.joints) {
+        if (s.physics === PHYSICS) this.data = s;
+        else { this.quarantined = s; try { this.storage?.setItem(`${KEY}.quarantine`, JSON.stringify(s)); } catch { /* kept in memory only */ } }
+      }
+    } catch { /* start fresh */ }
   }
   margin(what: string) { return this.data.margin[what] ?? 1; }
-  save() { try { this.storage?.setItem(KEY, JSON.stringify(this.data)); } catch { /* the storage watchdog says so */ } }
+  save() { this.data.physics = PHYSICS; try { this.storage?.setItem(KEY, JSON.stringify(this.data)); } catch { /* the storage watchdog says so */ } }
 }
 
 export interface Attempt { result: StandResult; changes: string[] }

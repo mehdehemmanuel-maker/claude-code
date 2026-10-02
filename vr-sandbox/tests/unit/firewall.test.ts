@@ -129,7 +129,7 @@ describe('F-1.1.1: no row between two bodies changes their momentum', () => {
   });
 });
 
-describe('F-2.6.3: the kinetic energy a solve changes is exactly the sum of its rows\' work', () => {
+describe('F-2.6.1: the kinetic energy a solve changes is exactly the sum of its rows\' work', () => {
   it('ΔK = Σ λ (w⁻ + w⁺)/2, for any rows', () => {
     for (let t = 1; t <= TRIALS; t++) {
       const s = scene(1000 + t, ['bilateral', 'contact', 'box', 'friction'], { target: true, soft: true, world: t % 3 === 0 });
@@ -143,7 +143,7 @@ describe('F-2.6.3: the kinetic energy a solve changes is exactly the sum of its 
   });
 });
 
-describe('F-2.6.1 and F-2.6.2: rows with nothing to drive them never add energy', () => {
+describe('F-2.6.2, F-2.6.3 and F-2.6.4: rows with nothing to drive them never add energy', () => {
   it('rows with no target and fixed bounds holding zero never raise kinetic energy, at any pass count, however they are warm-started', () => {
     for (let t = 1; t <= TRIALS; t++) {
       const s = scene(2000 + t, ['bilateral', 'contact', 'box'], { soft: true, world: t % 4 === 0 });
@@ -153,7 +153,7 @@ describe('F-2.6.1 and F-2.6.2: rows with nothing to drive them never add energy'
     }
   });
 
-  it('a warm start that would push apart what is separating is scaled back, so even one pass adds nothing', () => {
+  it('a warm start that would push apart what is separating adds nothing: the first pass takes it back, or the exit check does', () => {
     const r = random(5);
     const a = body(r), b = body(r);
     a.origin = [0, 0, 0]; b.origin = [1, 0, 0];
@@ -161,7 +161,7 @@ describe('F-2.6.1 and F-2.6.2: rows with nothing to drive them never add energy'
     const contact: Row = { a, b, kind: 'linear', pa: [0.5, 0, 0], pb: [0.5, 0, 0], dir: [1, 0, 0], target: 0, lo: 0, hi: Infinity, acc: 0, key: 'c' };
     const k0 = kinetic([a, b]);
     const out = solveRows([contact], 1, new Map([['c', 3]]));
-    expect(out.warmKept).toBeLessThan(1);
+    expect(out.dK).toBeLessThanOrEqual(1e-12);
     expect(kinetic([a, b])).toBeLessThanOrEqual(k0 + 1e-12);
   });
 

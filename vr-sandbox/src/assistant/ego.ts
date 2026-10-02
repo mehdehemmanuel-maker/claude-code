@@ -89,7 +89,6 @@ export class Ego {
   private warned = new Set<string>();
   /** Watchdog findings she has already acted on (each body and kind once, as the watchdog reports them). */
   private guarded = new Set<string>();
-  private guardFixes: { at: number; trouble: Trouble; did: string }[] = [];
   /** Joints made since she last looked, and whether a look is on its way. */
   private newJoints = new Set<string>();
   private lookQueued = false;
@@ -548,9 +547,10 @@ export class Ego {
   // ---- the watchdog --------------------------------------------------------------------------------
 
   /**
-   * What the watchdog catches is something no real world does: a part through the floor, a body flung from nowhere,
-   * a pose that stopped being a number, a part shaking in place. She puts it right at once, without being asked, and
-   * writes it up for Claude with the build as it was, since it is a flaw in this world's physics, not in your build.
+   * What the watchdog catches is a realisation failing an obligation of a law (docs/LAW-TREE.md): a part through the
+   * floor (F-3.5, transport), a pose that stopped being a number (A-4), a body flung from nowhere (ML-3). It is
+   * evidence, never hers to put right: Ego has no hand on any body's pose or velocity (ML-4, ML-7), so a fault is the
+   * kernel's to contain and hers to name, with the node it broke, and to write up for Claude with the build as it was.
    */
   private guard() {
     const app = this.app;
@@ -561,66 +561,33 @@ export class Ego {
       const id = a.id.split('#')[0]!;
       const part = app.doc.parts[id];
       const name = part?.name ?? 'the scene';
-      const pose = part ? app.livePose(id) : null;
-      const set = (p: Pose) => app.physics.send({ op: 'setPose', id, pose: p, linear: [0, 0, 0], angular: [0, 0, 0] });
-      let did: string | null = null;
       let trouble: Trouble = 'other';
+      let node: string;
       switch (a.kind) {
-        case 'fell': case 'tunnel': {
-          trouble = 'fell-through';
-          if (!part) break;
-          const b = app.boundsOf([id]), at = pose ?? part.pose;
-          // back where it went through, resting on the floor (or where you built it, if it has left the room)
-          const far = Math.hypot(at.p[0], at.p[2]) > 50 || !Number.isFinite(at.p[1]);
-          set(far ? part.pose : { p: [at.p[0], at.p[1] - b.min[1] + 0.002, at.p[2]], q: at.q });
-          did = `put ${name} back on the floor`;
-          break;
-        }
-        case 'nonfinite':
-          trouble = 'flung';
-          if (!part) break;
-          set(part.pose);
-          did = `put ${name} back where you built it`;
-          break;
-        case 'flung':
-          trouble = 'flung';
-          if (!part || !pose) break;
-          set(pose);
-          did = `stopped ${name}`;
-          break;
-        case 'jitter':
-          trouble = 'jitter';
-          if (!part || !pose) break;
-          set(pose);
-          did = `settled ${name}`;
-          break;
-        case 'slow':
-          // not hers to fix in the moment, but hers to name: what took the time goes to Claude
-          trouble = 'slow';
-          break;
-        case 'storage':
-          trouble = 'other';
-          break;
-        case 'drift':
-          // a joint that came apart while intact is the physics breaking its own rule: hers to report, not to hide
-          trouble = 'other';
-          break;
-        default:
-          continue; // held-part findings are for the report page, not for her hands
+        case 'fell': case 'tunnel': trouble = 'fell-through'; node = 'F-3.5 (nothing passes through a solid)'; break;
+        case 'nonfinite': trouble = 'flung'; node = 'A-4 (every number stays a number)'; break;
+        case 'flung': trouble = 'flung'; node = 'ML-3 (no energy without a source)'; break;
+        case 'jitter': trouble = 'jitter'; node = 'ML-3 (no energy without a source)'; break;
+        case 'slow': trouble = 'slow'; node = 'A-4 (the tick within its budget)'; break;
+        case 'storage': trouble = 'other'; node = 'I7 (bounded storage)'; break;
+        case 'drift': trouble = 'other'; node = 'F-3.1 (an intact joint stays closed)'; break;
+        default: continue; // held-part findings are for the report page
       }
       const words = `(Ego saw it herself) ${a.kind} on ${name}: ${a.detail}`;
       // a report per finding while they're few; a storm of them is one flaw, already written up
       const filed = this.autoReports < MAX_AUTO_REPORTS;
       if (filed) {
         this.autoReports++;
-        this.reports.add({ at: new Date().toISOString(), words, trouble, seen: [`watchdog ${a.severity}: ${a.detail}`, this.focus()], fixed: did, version: __BUILD__, build: app.doc.meta.name, shareCode: app.shareCode() });
+        this.reports.add({ at: new Date().toISOString(), words, trouble, seen: [`watchdog ${a.severity}: ${a.detail}`, `obligation ${node}`, this.focus()], fixed: null, version: __BUILD__, physics: __PHYSICS__, build: app.doc.meta.name, shareCode: app.shareCode() });
       }
-      if (did) { this.guardFixes = [...this.guardFixes, { at: app.live.ticks, trouble, did }].slice(-10); this.gain('fix'); }
-      const what = a.kind === 'jitter' ? `${name} was shaking in place`
+      const what = a.kind === 'jitter' ? `${name} is moving with no source of energy`
         : a.kind === 'slow' ? `Things are running slow: ${a.detail}`
         : a.kind === 'storage' ? `Saving: ${a.detail}`
-        : `The watchdog caught ${a.kind === 'fell' || a.kind === 'tunnel' ? `${name} going through the floor` : a.kind === 'flung' ? `${name} flung faster than anything could throw it` : `${name} leaving the laws of physics`}`;
-      this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}. ${did ? `I ${did}.` : ''}${filed ? ' Written up for Claude.' : ''}`, []);
+        : a.kind === 'drift' ? `the joint on ${name} came apart while intact`
+        : a.kind === 'fell' || a.kind === 'tunnel' ? `${name} went through the floor`
+        : a.kind === 'flung' ? `${name} was flung faster than anything could throw it`
+        : `${name} left the laws of physics`;
+      this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}: the physics broke its own obligation ${node}. Nothing from this run counts as physics until that is fixed.${filed ? ' Written up for Claude.' : ''}`, []);
     }
   }
 
@@ -764,14 +731,12 @@ export class Ego {
       ] : []),
       ...(trouble === 'save' ? [`storage: ${(app.storageUsed() / 1e6).toFixed(2)} M of about 5 M characters used; ${app.library.list().length} builds, ${app.templates.list().length} templates`] : []),
     ];
-    // what she already put right on her own, if it's what you mean
-    const already = this.guardFixes.filter((f) => f.trouble === trouble && app.live.ticks - f.at < 900).map((f) => f.did);
     // what you showed her counts as what you mean
     const hints: { kind: string; id: string }[] = recent.map((a) => ({ kind: a.kind, id: a.id.split('#')[0]! }));
     // (shaking: she settles the part you showed her; anything else she checks against what she saw, not moves it)
     if (shown?.id) hints.push({ kind: trouble === 'jitter' ? 'jitter' : 'shown', id: shown.id });
-    const fixed = this.selfFix(trouble, hints) ?? (already.length ? `already ${already.join(' and ')}` : null);
-    this.reports.add({ at: new Date().toISOString(), words, trouble, seen, fixed, version: __BUILD__, build: app.doc.meta.name, shareCode: app.shareCode() });
+    const fixed = this.selfFix(trouble, hints);
+    this.reports.add({ at: new Date().toISOString(), words, trouble, seen, fixed, version: __BUILD__, physics: __PHYSICS__, build: app.doc.meta.name, shareCode: app.shareCode() });
     this.gain('ask');
     const n = this.reports.unsent.length;
     return `${fixed ? `I ${fixed}. ` : ''}I've written it up for Claude with what I saw and the build as it was (${n} report${n === 1 ? '' : 's'} to send, on my page).`;
@@ -780,29 +745,16 @@ export class Ego {
   /** What she can do about it herself, and what she did (null when it's one for Claude). */
   private selfFix(trouble: Trouble, recent: { kind: string; id: string }[]): string | null {
     const app = this.app;
-    const still = (id: string) => {
-      const pose = app.livePose(id);
-      if (pose) app.physics.send({ op: 'setPose', id, pose, linear: [0, 0, 0], angular: [0, 0, 0] });
-    };
     switch (trouble) {
-      case 'fell-through': {
-        // anything below the floor goes back on top of it, at rest
-        const sunk = Object.keys(app.doc.parts).filter((id) => app.boundsOf([id]).min[1] < -0.02 || recent.some((a) => a.id === id && (a.kind === 'tunnel' || a.kind === 'fell')));
-        for (const id of sunk) {
-          const b = app.boundsOf([id]), pose = app.livePose(id) ?? app.doc.parts[id]!.pose;
-          app.physics.send({ op: 'setPose', id, pose: { p: [pose.p[0], pose.p[1] - b.min[1] + 0.002, pose.p[2]], q: pose.q }, linear: [0, 0, 0], angular: [0, 0, 0] });
-        }
-        return sunk.length ? `put ${sunk.length === 1 ? app.doc.parts[sunk[0]!]!.name : `${sunk.length} parts`} back on the floor` : null;
-      }
+      // a part through the floor or shaking in place is the physics failing an obligation (F-3.5, ML-3): not hers to
+      // hide by moving or stilling it (she has no hand on any pose or velocity); the kernel contains it, she reports it
+      case 'fell-through':
+      case 'jitter':
+        return null;
       case 'flung':
         if (app.canStop) { app.stop(); return 'took you back to the build as it was'; }
         if (app.checkpoints.length) { app.rewind(); return 'rewound to your last checkpoint'; }
         return null;
-      case 'jitter': {
-        const shaky = [...new Set(recent.filter((a) => a.kind === 'jitter' || a.kind === 'restless' || a.kind === 'unsteady').map((a) => a.id))].filter((id) => app.doc.parts[id]);
-        for (const id of shaky) still(id);
-        return shaky.length ? `settled ${shaky.length === 1 ? app.doc.parts[shaky[0]!]!.name : `${shaky.length} parts`}` : null;
-      }
       case 'broke': {
         const a = this.advice.find((x) => x.kind === 'break' && x.fixes.length);
         if (!a) return null;

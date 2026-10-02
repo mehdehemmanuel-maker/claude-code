@@ -503,6 +503,8 @@ export class PhysicsWorld {
   private pairRefs = new Map<number, number>();
   private conns = new Map<string, ConnRec>();
   private envBodies: JoltNS.Body[] = [];
+  /** Each environment box's geometry by Jolt body id: its half extents, pose and rounded-edge radius (for faceNormal). */
+  private envBoxes = new Map<number, { half: Vec3; p: Vec3; q: Quat; cr: number }>();
   /** What the floor and walls are made of, by Jolt body id (for where friction's heat goes). */
   private envMaterial = new Map<number, Material>();
   private roomBodies: JoltNS.Body[] = [];
@@ -675,9 +677,11 @@ export class PhysicsWorld {
     }
     this.envBodies = [];
     this.envMaterial.clear();
+    this.envBoxes.clear();
     for (const box of boxes) {
       const m = materials[box.material];
-      const shape = new J.BoxShape(this.V(box.half), Math.min(0.01, Math.min(...box.half) * 0.4));
+      const cr = Math.min(0.01, Math.min(...box.half) * 0.4);
+      const shape = new J.BoxShape(this.V(box.half), cr);
       const cs = new J.BodyCreationSettings(shape, this.R(box.pose.p), this.Q(box.pose.q), J.EMotionType_Static, LAYER_STATIC);
       cs.mFriction = m?.friction ?? 0.6;
       cs.mRestitution = m?.restitution ?? 0.3;
@@ -686,6 +690,7 @@ export class PhysicsWorld {
       J.destroy(cs);
       this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
       this.envBodies.push(body);
+      this.envBoxes.set(body.GetID().GetIndexAndSequenceNumber(), { half: box.half, p: box.pose.p, q: box.pose.q, cr });
       if (m) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), m);
     }
   }
@@ -1495,7 +1500,7 @@ export class PhysicsWorld {
     const m = (flip ? r2 : r1)!, o = flip ? r1 : r2;
     const ob = flip ? b1 : b2;
     const nn = man.mWorldSpaceNormal;
-    const n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
+    let n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
     const count = Math.min(4, man.mRelativeContactPointsOn1.size());
     // world points as the contact saw them (tick-start geometry, which is what the assembly solve uses)
     const points: { pm: Vec3; po: Vec3 }[] = [];
@@ -1504,11 +1509,49 @@ export class PhysicsWorld {
       const c2 = man.GetWorldSpaceContactPointOn2(i); const p2: Vec3 = [c2.GetX(), c2.GetY(), c2.GetZ()];
       points.push(flip ? { pm: p2, po: p1 } : { pm: p1, po: p2 });
     }
+    if (!o) {
+      const box = this.envBoxes.get(ob.GetID().GetIndexAndSequenceNumber());
+      const exact = box && this.faceNormal(box, points.map((pt) => pt.po));
+      if (exact) n = scale(exact, -1); // from the member into the box
+    }
     const key = `${m.id}|${o?.id ?? `env${ob.GetID().GetIndexAndSequenceNumber()}`}`;
     this.contacts.set(key, {
       key, m, o, oStatic: !o || o.frozen || ob.IsStatic() || ob.IsKinematic(), oBody: ob, n, points,
       friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution,
     });
+  }
+
+  /**
+   * The outward normal of the flat face of a box that every one of these points lies on, or null where they do not
+   * all lie on one flat face (an edge or corner, where the box is rounded by its edge radius and the normal really
+   * does turn). F-3.2: a contact is the geometry of the surfaces, and a flat face has one normal, exactly. Collision
+   * detection finds a normal to its tolerance (Jolt's GJK, 1e-4 m), which at a centimetre of separation is a tilt of
+   * up to a few hundredths of a radian: measured on a flat floor, 0.035 rad at most, 0.01 on average, on a quarter
+   * of the normal impulse (docs/FRONTIER.md, D-contact-normal). A tilted normal on a floor is a sideways force the
+   * floor cannot exert (F-1.3 fails on a frictionless floor; with friction it is a false bias in the friction).
+   */
+  private faceNormal(box: { half: Vec3; p: Vec3; q: Quat; cr: number }, points: Vec3[]): Vec3 | null {
+    if (!points.length) return null;
+    const inv = quatConj(box.q);
+    const inside = box.cr + SLOP; // this far from an edge the face is still flat
+    let face = -1, sign = 0;
+    for (const w of points) {
+      const l = rotate(inv, sub(w, box.p));
+      let k = -1, s = 0;
+      for (let i = 0; i < 3; i++) {
+        const h = box.half[i]!, x = l[i]!;
+        if (Math.abs(Math.abs(x) - h) > SLOP) continue;
+        const j = (i + 1) % 3, m = (i + 2) % 3;
+        if (Math.abs(l[j]!) > box.half[j]! - inside || Math.abs(l[m]!) > box.half[m]! - inside) continue;
+        k = i; s = x < 0 ? -1 : 1;
+        break;
+      }
+      if (k < 0 || (face >= 0 && (k !== face || s !== sign))) return null;
+      face = k; sign = s;
+    }
+    const axis: Vec3 = [0, 0, 0];
+    axis[face] = sign;
+    return rotate(box.q, axis);
   }
 
   private recOf(b: JoltNS.Body): BodyRec | null {
@@ -1735,7 +1778,7 @@ export class PhysicsWorld {
     // the mechanism closed at position level, outward from its assemblies: each moving part is set exactly onto its
     // joint with the part it hangs from, as that part now is (the assembly pinned to its anchors carries what is
     // joined to it; without this the pin moves the arm and leaves the weight hung from it behind)
-    this.closeMechanism(this.closureRoots(works.map((w) => w.comp), anchored), works.map((w) => w.comp));
+    this.closeMechanism(this.closureRoots(works.map((w) => w.comp), anchored), works.map((w) => w.comp), anchored);
     // impulses our rows put on each body (linear, and angular about the world origin)
     const ourP = new Map<BodyRec, Vec3>(), ourL = new Map<BodyRec, Vec3>();
     const put = (r: BodyRec | null, J: Vec3, L: Vec3) => {
@@ -2725,9 +2768,19 @@ export class PhysicsWorld {
     return placed;
   }
 
-  private closeMechanism(placed: Set<BodyRec>, comps: BodyRec[][] = []) {
+  private closeMechanism(placed: Set<BodyRec>, comps: BodyRec[][] = [], anchored: Map<BodyRec, unknown> = new Map()) {
     if (!this.mechanism.length) return;
     const by = new Map<BodyRec, ConnRec[]>();
+    // every body the closure may touch, where it was before: closure is an internal correction (F-1.1.2), so each
+    // island is put back, whole, where its mass was (the rigid motion that undoes what closure shifted and turned)
+    const before = new Map<BodyRec, { c: Vec3; q: Quat }>();
+    const island = new Map<BodyRec, BodyRec>();
+    const find = (x: BodyRec): BodyRec => { let r = x; while (island.has(r) && island.get(r) !== r) r = island.get(r)!; return r; };
+    const union = (a: BodyRec, b: BodyRec) => { const ra = find(a), rb = find(b); if (ra !== rb) island.set(ra, rb); };
+    const touch = (r: BodyRec) => { if (!before.has(r)) before.set(r, { c: this.comOf(r), q: this.poseOf(r).q }); };
+    for (const comp of comps) { for (const r of comp) { touch(r); union(r, comp[0]!); } }
+    for (const c of this.mechanism) { if (c.status === 'broken' || !c.b) continue; touch(c.a); touch(c.b); union(c.a, c.b); }
+    for (const r of placed) touch(r);
     const group = new Map<BodyRec, BodyRec[]>();
     // an assembly not yet placed moves as one
     for (const comp of comps) if (!comp.some((r) => placed.has(r))) for (const r of comp) group.set(r, comp);
@@ -2782,6 +2835,57 @@ export class PhysicsWorld {
           this.q1.Set(...normQuat(quatMul(turn, pose.q)));
           this.bi.SetPositionAndRotation(x.body.GetID(), this.r1, this.q1, this.J.EActivation_DontActivate);
         }
+      }
+    }
+    this.undoClosureDrift(before, find, anchored);
+  }
+
+  /**
+   * Closing an island is a correction between its own parts, so it may move neither the island's centre of mass nor
+   * its mass's turn about it (F-1.1.2, the position-level form of F-1): nothing outside the island pushed on it. Set
+   * whole onto the body they hang from, a walker's legs did move its centre of mass, a few hundredths of a
+   * millimetre a tick with no impulse from anything, which on a frictionless floor walked it along at 4 cm/s (and in
+   * zero gravity, 8 mm in five seconds). Each island is put back by the one rigid motion of all its parts that undoes
+   * the mass-weighted shift and the mass-weighted turn its closure made: a rigid motion keeps every closed joint
+   * closed. An island holding something immovable (frozen, held, anchored) is moved against the earth, not here.
+   */
+  private undoClosureDrift(before: Map<BodyRec, { c: Vec3; q: Quat }>, find: (r: BodyRec) => BodyRec, anchored: Map<BodyRec, unknown>) {
+    const islands = new Map<BodyRec, BodyRec[]>();
+    for (const r of before.keys()) { const k = find(r); const list = islands.get(k); if (list) list.push(r); else islands.set(k, [r]); }
+    for (const members of islands.values()) {
+      if (members.length < 2 || members.some((r) => r.frozen || r.grabbed || !r.Iloc || anchored.has(r))) continue;
+      let M = 0;
+      const c0: Vec3 = [0, 0, 0], c1: Vec3 = [0, 0, 0];
+      const now = members.map((r) => ({ r, c: this.comOf(r), q: this.poseOf(r).q }));
+      for (const { r, c } of now) {
+        const b = before.get(r)!;
+        M += r.mass;
+        for (let k = 0; k < 3; k++) { c0[k]! += r.mass * b.c[k]!; c1[k]! += r.mass * c[k]!; }
+      }
+      for (let k = 0; k < 3; k++) { c0[k]! /= M; c1[k]! /= M; }
+      const shift = sub(c1, c0);
+      // the turn: the mass's angular displacement about its centre, L = sum m r x dc + I dtheta, undone by the rigid turn
+      // dTheta = -Itot^-1 L (Itot the island's inertia about its centre)
+      let L: Vec3 = [0, 0, 0];
+      const Itot = [...ZERO3];
+      for (const { r, c, q } of now) {
+        const b = before.get(r)!;
+        const rel = sub(b.c, c0), dc = sub(sub(c, b.c), shift);
+        L = add(L, scale(cross(rel, dc), r.mass));
+        const Iw = worldInertia(r.Iloc!, b.q);
+        L = add(L, mat3Vec(Iw, rotationVector(quatMul(q, quatConj(b.q)))));
+        const rr = dot(rel, rel);
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) Itot[3 * i + j]! += Iw[3 * i + j]! + r.mass * ((i === j ? rr : 0) - rel[i]! * rel[j]!);
+      }
+      const dTheta = scale(mat3Vec(inverse3(Itot), L), -1);
+      if (length(shift) < 1e-12 && length(dTheta) < 1e-12) continue;
+      const dq = quatFromRotationVector(dTheta);
+      for (const { r, q } of now) {
+        const p = this.poseOf(r).p;
+        const p2 = add(c0, rotate(dq, sub(p, c1)));
+        this.r1.Set(...p2);
+        this.q1.Set(...normQuat(quatMul(dq, q)));
+        this.bi.SetPositionAndRotation(r.body.GetID(), this.r1, this.q1, this.J.EActivation_DontActivate);
       }
     }
   }
@@ -4359,8 +4463,8 @@ export class PhysicsWorld {
    * Close this tick's books. What the world holds now, against what it held at the start plus the work put in, says
    * how much went to heat; what was measured directly (air, eddy currents, rubber) is already booked; the rest was made
    * at contacts, bearings and yielding hinges, and is shared among them by what each made. Jolt's angular damping is
-   * the integrator's (A5), not heat. A gain nothing explains is the integrator's too, unless a hand moving a part
-   * kinematically made it.
+   * the integrator's (A5), not heat. A gain nothing explains is booked as a gain, apart from the losses: it is energy
+   * made from nothing, a defect of the realisation to find, never a hand's work (nobody measured any).
    */
   private closeBooks(start: ReturnType<PhysicsWorld['storedNow']>, dt: number) {
     const now = this.storedNow();
@@ -4370,14 +4474,16 @@ export class PhysicsWorld {
     const measured = b.heat.air + b.heat.eddy + b.heat.damping + b.heat.electric + b.inMotors;
     const damping = 2 * ANGULAR_DAMPING * dt * start.spin;
     let rest = W - (total(now) - total(start)) - measured - damping;
-    let numerical = damping;
+    let lost = damping, gained = 0, gainedHeld = 0;
     if (rest < 0) {
-      if ([...this.grabs.values()].some((g) => g.mode === 'creative')) b.work.hands -= rest;
-      else numerical += rest;
+      // energy from nothing: the realisation's defect, booked as such (F-2.1); a hand moving a part kinematically is
+      // when it tends to happen, which the books note without crediting the hand with work nobody measured
+      gained = -rest;
+      if ([...this.grabs.values()].some((g) => g.mode === 'creative')) gainedHeld = -rest;
       rest = 0;
     }
     const sources = b.sources;
-    if (rest > 0 && !sources.length) { numerical += rest; rest = 0; }
+    if (rest > 0 && !sources.length) { lost += rest; rest = 0; }
     shareHeat(rest, sources).forEach((q, i) => {
       if (!q) return;
       const src = sources[i]!;
@@ -4392,13 +4498,13 @@ export class PhysicsWorld {
     L.kinetic = now.kinetic; L.potential = now.potential; L.elastic = now.elastic;
     for (const k of Object.keys(b.heat) as (keyof HeatBook)[]) L.heat[k] += b.heat[k];
     for (const k of Object.keys(b.work) as (keyof WorkBook)[]) L.work[k] += b.work[k];
-    L.numerical += numerical;
+    L.numerical.lost += lost; L.numerical.gained += gained; L.numerical.gainedHeld += gainedHeld;
   }
 
   /** The energy ledger since the scene began, with what the world holds read now. */
   energies(): Energies {
     const now = this.storedNow();
-    return { ...this.ledger, kinetic: now.kinetic, potential: now.potential, elastic: now.elastic, heat: { ...this.ledger.heat }, work: { ...this.ledger.work } };
+    return { ...this.ledger, kinetic: now.kinetic, potential: now.potential, elastic: now.elastic, heat: { ...this.ledger.heat }, work: { ...this.ledger.work }, numerical: { ...this.ledger.numerical } };
   }
 
   /** The ledger as the last tick closed it (no new reads). */

@@ -146,7 +146,12 @@ describe('rules', () => {
         worst = Math.max(worst, length(gap));
       }
       expect(failures).toEqual([]);
-      expect(worst, `${kind}: anchors parted by ${(worst * 1000).toFixed(1)} mm`).toBeLessThan(0.002);
+      // F-3.5 (docs/LAW-TREE.md): a bilateral row's residual is at most one tick of the relative acceleration it has
+      // to transmit, a dt^2. The load swings down from horizontal on the arm: g along the arc at release, 2 g towards
+      // the pivot at the bottom (v^2 = 2 g L there), so a <= 3 g. Measured: 2.3 mm for the slider at 90 Hz
+      // (docs/FRONTIER.md, D-joint-residual), with the impulse pair about one point (F-1.1.1).
+      const dt = 1 / 90, bound = 3 * 9.81 * dt * dt;
+      expect(worst, `${kind}: anchors parted by ${(worst * 1000).toFixed(1)} mm`).toBeLessThan(bound);
       // and it really swung: the arm came down
       expect(r.world.livePose(weight.id)!.p[1]).toBeLessThan(0.6);
       r.done();

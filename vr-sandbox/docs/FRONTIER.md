@@ -1,108 +1,93 @@
 # The frontier
 
-Forty-six inventions far past what is built, asked for in plain words, are stored as challenges to everything Ego is (`src/ganglia/frontier.ts`). Each is taken to the want under its words. None ends at "impossible": each is labelled for what it takes.
+What this physics does not yet do, does not know, or does not trust. A permanent document: entries are retired by a
+repair that lands as a law node with a test (docs/LAW-TREE.md), never by deletion. Each entry has an id that code,
+tests and the tree cite. Levels: V0–V6 validity and E0–E5 evidence are those of docs/AUDIT-2-FALSE-CONFIDENCE.md;
+anomaly levels are §3's.
 
-| Label | Meaning | How many |
-|---|---|---|
-| made | someone has made it; the path is how | 13 |
-| buildable | known physics and methods, not yet made whole | 9 |
-| research | it waits on a discovery no law rules out | 6 |
-| relabelled | the words ask for something a law rules out (a 100%, a zero, a forever, a mass below nothing); she names the law and relabels the want as what meets it | 18 |
+Last reconciled: 2026-10-02, batch 1 of the audited evolution.
 
-Every item carries:
+## 1. Known defects (D-)
 
-- its bounds, computed by her own laws;
-- the nearest real thing, with its source;
-- a path, step by step;
-- what she learns next to blueprint every step herself.
+Behaviour the laws forbid and the realisation still shows. Each names the law it breaks, the measured size, where it
+is contained, and what retires it.
 
-What it does in her language of flows is grown by her real machinery. Some she sizes whole with her own workflows.
+| id | breaks | what | measured | contained by | retired by |
+|---|---|---|---|---|---|
+| D-contact-normal | F-3.2, F-1.3 | the collision detector's contact normal is found to a tolerance (Jolt's GJK/EPA, 1e-4 m, P-gjk-tolerance) and at centimetre separations leans off a flat face: a sideways force a flat surface cannot exert | 0.035 rad at most, 0.010 on average, on 24% of the normal impulse of a walking dog; a frictionless-floor centre-of-mass drift of 0.48 m in 9 s | repaired for watched assemblies: the re-solve takes the exact face normal where every manifold point lies on one flat face of an environment box (`PhysicsWorld#faceNormal`); unwatched bodies, terrain and body-on-body contacts keep the detector's normal (momentum-exact between two moving bodies, F-1.1.1; a false bias only against static ground) | exact normals for terrain triangles and part faces; or a detector tolerance set from the step (not settable in Jolt's bindings today) |
+| D-joint-residual | F-3.1, F-3.5 | a bilateral row's gap under a heavy load through a light part | 2.3 mm on a slider carrying 30 kg through a 0.5 kg hanger on a swinging arm, at 90 Hz; the bound a dt² with a ≤ 3 g gives 3.6 mm | the test cites the bound, not its last output | a test at two step rates showing the dt² order (the rig runs at one rate today, Q-step-rate); better conditioning of heavy-on-light chains (D-light-link) |
+| D-light-link | F-3.1 | the row solver fails to converge on a 22 g rod between 0.9 kg and 120 kg bodies through ball joints | open finding #54 | such designs are not placed by Ego's designer | a mass-ratio-aware ordering or a direct solve of small islands (R-1's contract) |
+| D-servo | F-2.3.1, F-3.4 | the servo has a 6 Hz bandwidth floor, no rotor, draws no current, makes no heat, and stops at its command's range instead of its hardware's travel | the dog's gait relied on the false stops (docs/AUDIT-2-FALSE-CONFIDENCE.md FC-10, FC-11, FC-18) | the law nodes are marked `violated`; a patch realising travel, swing and rotor exists (scratchpad `servo-laws.patch`) and is held back until the gait is re-derived from F-5.2 rather than tuned | queue item 8–9: motor + gear + rotor + current + thermal + hardware travel, with the gait derived |
+| D-angular-damping | F-2.1 | Jolt's angular damping on every body (P-angular-damping, 0.02/s) slows free spin with no bearing | 2% a second; booked as lost, not heat | the books carry it as the integrator's | queue item 7: removal, with rotation integrated so that it stays stable without it (Q-angular-damping) |
+| D-restitution-floor | F-4.6 | nothing bounces under a closing speed of 1 m/s (P-restitution-floor), a default without a source | all of a bounce from under 5 cm | marked provisional in the tree | a measured low-speed restitution for the material pairs in use, or an energetic restitution model |
+| D-gravity-fallback | E-g, M-3 | literal 9.81 fallbacks in magnetPairs, particles and foresight's default | none measured (Earth scenes only so far) | the environment node names them | queue item 10: read the setting everywhere |
+| D-minds-read-world | F-6, F-6.2 | creatures' minds read the world's state rather than sensor elements with latency and line of sight | FC-17 | the law node F-6.2 is marked `violated` | sensor nodes (F-6.1) realised; minds take only their readings |
+| D-driven-exemption | F-2 | the watchdog exempts driven bodies from its energy assertion | FC-? (docs/LAW-TREE.md K-3) | none | queue item 11: watchdogs become observers; the exemption removed |
+| D-unstamped-beliefs | AUDIT-3 | Ego's habit and skill stores (`vrsb.habits`, `vrsb.skills`) are unversioned | not physical knowledge (they are about the user and the UI), left as they are | the stand's learning is stamped and quarantined on a physics change (`StandMemory`); reports carry the physics stamp | any physical content found in them gets the same stamp |
 
-## How far she gets herself
+## 2. Unmodelled physics (U-)
 
-| Reach | How many | Which |
-|---|---|---|
-| blueprinted | 4 | a geodesic dome, an aerogel tent, a spinning habitat, the core of a living bridge |
-| grown | 4 | shape-shifting furniture, synthetic muscles, a translating earpiece's hearing, self-assembling drones' talk |
-| pathed | 38 | the rest: a sourced path, with what she learns next |
+What the model assumptions leave out. Not defects: the laws say so. Listed so that no claim is made where they apply.
 
-Highlights:
+- U-elastic: parts are rigid between declared hinges and seams (M-2); no elastic deflection, no vibration within a part, no stress waves. A beam's deflection is computed by the engineering layer for a design check, not simulated.
+- U-thermal-expansion, U-creep, U-fatigue: temperature changes stiffness and strength only through the material tables' limits; nothing grows, creeps or fatigues.
+- U-electrical-dynamics: circuits are solved quasi-statically (R-10); no inductance transients; motors have no electrical time constant.
+- U-fluid: water is drag on faces and buoyancy (C-9); no flow field, no wakes, no waves made by bodies.
+- U-air: air is a drag on faces at a Reynolds regime; no lift, no compressibility.
+- U-wear, U-lubrication, U-backlash: bearings have a static rating and a friction torque; no wear, no film, no play in gears.
+- U-sound: audio is an observation of the state, never a physical pressure field.
+- U-contact-compliance: contacts are rigid with a slop (P-slop); no Hertzian compliance, no contact area beyond the manifold's points.
 
-- **Geodesic dome.** A two-frequency dome 10 m across has 26 hubs, 65 struts in two lengths (chord factors 0.54653 and 0.61803) and 40 panes. Each strut is a stocked hollow section, sized against buckling for a whole hub's share of snow and glass.
-- **Aerogel tent.** It keeps 20 °C inside at −30 °C outside on a resting body's 100 W. That takes 80 mm of silica aerogel over 10.4 m², by Fourier's law.
-- **Spinning habitat.** A ring of radius 223.6 m turning at 2 rpm gives 1 g at its rim, which moves at 46.8 m/s.
-- **Furniture and muscles** grow whole and real: a motor turning a lead screw, every part catalogued.
+## 3. Anomalies (A-)
 
-## Relabelled, and why
+An unexplained disagreement between a prediction and a trusted observation is a persistent object: it is never
+deleted, only retired with its explanation. Levels (the default hypothesis is never new physics):
 
-| Asked | The law it runs into | Relabelled as |
-|---|---|---|
-| everlasting battery | conservation of energy; Arrhenius ageing never stops above 0 K | a century at a small draw (nickel-63 betavoltaic), or a store with a harvester |
-| invisibility cloak | causality and passivity bound a cloak's band | invisible in one band, or active camouflage tracked to the viewer |
-| instant medicine | blood goes round in about a minute | medicine that acts within a circulation, by a fast route |
-| filter taking 100% from a lake | the least work grows as ln(1/x) without end; rays aren't a substance | a filter train to each contaminant's safe limit |
-| zero-latency translator | causality: the deciding word may come last | a beat behind, or ahead by prediction and correction |
-| full-spectrum glasses | 1.22 λ / D: a metre of radio through 5 cm makes no image | a few more bands by sensors, shown to the eye |
-| ever-clean tableware | Young's angle; textures wear | shedding food, renewed by a rinse (liquid-infused) |
-| forcefield umbrella | only air pushes on rain | an air curtain: 446 W of air at 9 m/s a square metre |
-| radiation-proof thin suit | a 1 GeV proton runs about 3.2 m of water | a suit for solar storms, a shelter for cosmic rays |
-| Mars or Venus mask | the Armstrong limit, 6.3 kPa; Mars has 0.6 kPa | a pressure suit with an oxygen maker (three of NASA's MOXIE for one person) |
-| gravity boots | only mass makes gravity | a spinning habitat, and magnetic soles |
-| negative-mass alloy | everything weighed falls down, antimatter too | effective negative mass, within a band |
-| time-dilating container | halving time takes Earth inside 11.8 mm | a stasis box by cold: chemistry runs 7 × 10⁻²⁶ as fast at −196 °C |
-| light panels with near-infinite energy | a square metre of sun is 1000 W; a single junction turns 33.7% | absorb nearly all, convert what physics allows, use the heat |
-| sound-proof paint | the mass law: 1 mm of paint adds 0.03 dB | a wall with mass, a gap and a soft layer |
-| liquid-repelling asphalt | tyres wear textures and coatings | asphalt that drains water through itself |
-| frictionless gears | the second law: losses never zero | superlubric gears, friction a thousandth of oiled steel's |
-| scent released permanently | finite mass: life is mass over rate | years at a level you can just smell |
+- A0 numerical suspicion: seen once; may be rounding, a tolerance, a probe's own error.
+- A1 reproducible simulator anomaly: reproduces on the same realisation with the same inputs.
+- A2 independent realisation reproduces: a second, independent realisation of the same law shows it too (so it is not an implementation defect).
+- A3 the model's own obligations are met and it still disagrees with a trusted measurement.
+- A4 an independent measurement replicates the disagreement.
+- A5 the competing explanations (numerical error, defect, regime, data, hidden writes, assumptions) are rejected by hostile investigation.
+- A6 a candidate theory is required.
 
-## What the frontier found in her, and what changed
+| id | level | prediction | observation | explanation | status |
+|---|---|---|---|---|---|
+| A-closure-drift | A1 → retired | a walker in zero gravity keeps its centre of mass (F-1.3) | it drifted; 99.98% of the drift from `closeMechanism` (position-level placement from the root, F-1.1.2) | a realisation defect: the island's drift was never undone | retired by `undoClosureDrift`; held by momentum.test.ts |
+| A-floor-leak | A1 → retired | a walker on a frictionless floor keeps its horizontal centre of mass | 0.48 m in 9 s; the contact normal rows carried horizontal impulse, friction rows exactly zero | D-contact-normal: the detector's normals lean | retired for watched assemblies by `faceNormal`; held by momentum.test.ts and walker.test.ts |
+| A-slider-residual | A1 | a slider's anchors stay within the residual bound | 2.33 mm, up from under 2.0 mm when the impulse pair acted at its own anchors | the common lever point (F-1.1.1) controls the relative velocity at p*, not at the anchors, so the gap closes a little less tightly; within the a dt² bound | open as D-joint-residual; the momentum-exact pair is kept, the law requires it |
 
-| Found | Change |
-|---|---|
-| no straight-line actuator could be built here, so furniture and muscles were unbuildable | trapezoidal lead screws (ISO 2904) and the lead screw block; a screw efficiency law; an actuator workflow that sizes the screw, then the drive |
-| grown machines that weren't vehicles came out unsized ("not chosen") | the drive search is shared by vehicles and actuators; grow sizes shafts and pushes too, and frames, mounts and trays from stock |
-| a drive near its wire's limit could not be fused: the wire was sized for the current, but its fuse must be 125% of it and no bigger than the wire | the wire is sized for the fuse that protects it |
-| no word for sound: hearing was said as a push | a sound flow, microphones and loudspeakers |
-| no physics for bioluminescence, photosynthesis or cameras | ways for each |
-| the dome blueprint read a section's area under the wrong name | fixed, and the dome is pinned by a test |
-| a catalogue gap: the drives here give at most about 1 N·m continuous | named as what she learns next (gearmotors of tens of N·m) |
+## 4. Open questions (Q-)
 
-## Every law has a scale
+- Q-servo: the right realisation of F-2.3.1 is known (motor, gear, rotor, current, thermal, travel); the gait that depended on the false stops must be re-derived from Froude similarity (F-5.2) and the leg's own load feedback rather than tuned to pass.
+- Q-angular-damping: removing P-angular-damping needs the rotation integrator to stay stable on long thin bodies without it (an implicit or RATTLE-style angular step).
+- Q-step-rate: the test rig runs at 90 Hz only; the residual-order obligations (F-3.5) are tested as a bound, not as a scaling. A rig at two rates would test the order.
+- Q-gjk-tolerance: the detector's tolerance cannot be set from the bindings; whether a smaller one would remove D-contact-normal for unwatched bodies is untested.
+- Q-position-energy: the position pass's effect on the energy books is bounded (it is booked where it appears) but not derived.
+- Q-restitution: no low-speed restitution data for the material pairs in use.
+- Q-support-stiffness: least support (R-8) assumes equal stiffness; the error for unequal supports is unbounded in the contract.
 
-The user's point: everything known came from humans with limited senses, measuring at the scales they could reach. Every law is exact only in a limit, and has exceptions in time, geometry or scale. So each law now carries the number that says where it holds, the deeper law it is the limit of, and its error against it (`scales.ts`; see [GANGLIA.md](GANGLIA.md)). She can also find a law herself, from units and her own measurements (`discover.ts`). The first law she found that way, the pendulum's, exposed a flaw in her world: slow pendulums froze at the top of their swing. That is fixed, and a rule now keeps it fixed.
+## 5. Unregistered
 
-## Worlds, lessons and a life
+What the tree (`src/ganglia/tree/nodes.ts`) does not yet carry, from docs/LAW-TREE.md §K: the C-layer beyond
+materials (fasteners, springs, motors, batteries, magnets, thermal, welding, water and sand), the D-layer, R-4, R-5,
+R-6, R-10, the engineering formulas as nodes with two realisations, the creature and place tables, mind constants,
+foresight, Jolt's remaining settings, the simulation settings as run records, fitted friction values as calibration
+nodes, the estimate sentinels, and the bare constants of world.ts, rigid.ts, stand.ts and mind.ts. Each lands as it is
+touched; none is cited as knowledge until it does.
 
-What people ask of her beyond making (a sky-reef full of creatures, a cyberpunk bazaar, a chronicle village, lessons with ghost limbs and stress vision, a chess tree, a pilot sim, to chill on a beach, to be a dog) is stored in `src/assistant/asks.ts`. Each ask is read like any other request by `understand`, which takes it to:
+## 6. Beliefs invalidated in batch 1
 
-- what it is: to be somewhere, to fill it with life, to become something, to learn, to make, to change the rules, to see the hidden, to feel a mood;
-- the capabilities it takes, each backed by the code that does it (checked by the tests) or marked not built;
-- what she does about it now.
+- Everything the stand learned before the physics stamp (`vrsb.stand` without a `physics` field): quarantined under `vrsb.stand.quarantine`, not used.
+- Every report Ego filed before the stamp: evidence about an unknown physics; kept, not cited.
+- "A walker on a frictionless floor moves less than 0.3 m": replaced by the F-1.3 bound (a leg's reach).
+- "Energy unexplained while a hand held a part was the hand's work": removed; it is booked as made, with the hand's presence an annotation.
+- "The integrator's share" as one number: replaced by lost and made, kept apart.
+- Ego's own "I stilled it" and "I lifted it out": removed; a watchdog finding is evidence against an obligation node, nothing from that run counts as physics.
 
-Asked for a zero-gravity cockpit with time slowed, she turns gravity off and slows time at once. Asked for a beach, she grows its sand and sea and takes you there. A world whose physics is "broken" is given other constants instead: strange, but still a world things work in.
+## 7. Revision burden
 
-Over everything asked, what to build next is ranked by how many wants call for it, and built in that order:
-
-- **Ground** ranked first, so it was built first ([PLACES.md](PLACES.md)). Asked for a beach, she grows its sand and sea and takes you there.
-- **Lessons that check what you do** came next ([LESSONS.md](LESSONS.md)). Any design she can make becomes the steps of building it yourself, each shown by a guide and done only when done in your world.
-- **Swimmers with bodies** came next ([CREATURES.md](CREATURES.md)): real parts and rhythmic servos that swim by the water's push.
-- **Walkers that choose** came next ([CREATURES.md](CREATURES.md)): a dog and a deer on hobby servos that walk by their feet's grip and go where their wants take them. Making them walk found five flaws in the world, now fixed and held as rules.
-
-Now ranked first:
-
-1. characters with minds (called for by 8 of the stored asks);
-2. plants, creatures that fly or crawl, and seeing what is hidden (6 each);
-3. buildings (4).
-
-## Ask her
-
-- *"what's on your frontier?"*
-- *"can you make an invisibility cloak?"*
-- *"blueprint for gravity boots"*
-- *"how would you build a geodesic dome?"*
-- *"where does kinetic energy break down?"*
-- *"I just want to chill on a beach"*
-- *"put a dog on the beach"*
-- *"spawn me in a simulation as a dog"*
-- *"teach me chess"*
+A node's revision costs what its depth and its support cost: a fitted friction value is revised by a measurement; a
+law of layer 3 by evidence at A5 with every dependent claim re-run; an axiom by a demonstration that the tree built on
+it predicts worse than one built without it. No empirical node is immune; none is cheap in proportion to what rests
+on it. Ego wanting a design to work changes none of these costs.
