@@ -3,7 +3,11 @@
 // process states its limits and source, and every workflow reaches the answer an engineer would by hand.
 
 import { describe, expect, it } from 'vitest';
-import { LAWS, PROCESSES, CATALOG, WORKFLOWS, recall, explain, linked, workflowById } from '../../src/ganglia';
+import { LAWS, PROCESSES, CATALOG, WORKFLOWS, recall, explain, linked, workflowById, solve, fingerprint, solveFor, sensitivity, uncertainty, showWork, show, graph, dangling, path, neighbours, findQuantities, parseUnit, toSI } from '../../src/ganglia';
+import { withConstants, use } from '../../src/ganglia/laws';
+import { MACHINES, machineById, breakdown as breakdownOf } from '../../src/ganglia/machines';
+import { nodesOf } from '../../src/ganglia/machines';
+import { dimensionOf, type Dim } from '../../src/ganglia/units';
 import { lintCatalog, lintItem, lintMotor, lintBattery } from '../../src/ganglia/parts';
 import { tapDrill, threadEngagement, minBendRatio } from '../../src/ganglia/processes';
 import { MOTORS } from '../../src/data/motors';
@@ -17,7 +21,7 @@ describe('laws', () => {
     for (const l of LAWS) {
       expect(ids.has(l.id), `duplicate ${l.id}`).toBe(false);
       ids.add(l.id);
-      const got = l.eval(l.example.inputs);
+      const got = l.eval(withConstants(l, l.example.inputs));
       expect(Math.abs(got - l.example.output) / Math.max(Math.abs(l.example.output), 1e-30), `${l.id}: ${got} vs ${l.example.output}`).toBeLessThan(l.example.rel ?? 1e-9);
       expect(l.source.cite.length, l.id).toBeGreaterThan(5);
       expect(l.valid.length, l.id).toBeGreaterThan(5);
@@ -178,4 +182,184 @@ describe('Ego hears an engineering question', () => {
     expect(interpret('tell me about rolling resistance')).toEqual({ do: 'recall', about: 'rolling resistance' });
     expect(interpret('what do you know')).toEqual({ do: 'ganglia' });
   });
+
+  it('in whatever units it is said in', () => {
+    const d = interpret('pick a drive for a 265 lb kart at 8 mph on 10 in wheels, 2 motors') as { spec: Record<string, number> };
+    expect(d.spec['mass']).toBeCloseTo(120.2, 1);
+    expect(d.spec['speed']).toBeCloseTo(3.576, 3);
+    expect(d.spec['wheelRadius']).toBeCloseTo(0.127, 6);
+    expect(d.spec['motors']).toBe(2);
+    expect(interpret('size a wire for 30 amps over 10 ft at 12 v')).toEqual({ do: 'engineer', workflow: 'wire.size', spec: { current: 30, length: 3.048, voltage: 12 } });
+    expect(interpret('which bearing for 112 lbf at 600 rpm for 5000 hours on a 1 in shaft')).toEqual({ do: 'engineer', workflow: 'bearing.select', spec: { load: 498.200820909, rpm: 600, hours: 5000, bore: 0.0254 } });
+    expect(interpret('show your work')).toEqual({ do: 'work' });
+    expect(interpret('what does it depend on')).toEqual({ do: 'depends' });
+  });
 });
+
+describe('accuracy: every law is dimensionally sound', () => {
+  it('every unit it is written in is a unit', () => {
+    for (const l of LAWS) {
+      for (const i of [...l.inputs, l.output]) expect(() => parseUnit(i.unit), `${l.id}: ${i.unit}`).not.toThrow();
+      for (const c of Object.values(l.constants ?? {})) expect(() => parseUnit(c.unit), `${l.id}: ${c.unit}`).not.toThrow();
+    }
+  });
+
+  it('change the size of any base unit and its output rescales exactly as its dimension says (a wrong power fails this)', () => {
+    const lambda = 1.37;
+    for (const l of LAWS) {
+      const base = withConstants(l, l.example.inputs);
+      const y0 = l.eval(base);
+      for (let b = 0; b < 5; b++) {
+        const scaled: Record<string, number> = {};
+        const dimOf = (sym: string): Dim => {
+          const i = l.inputs.find((x) => x.sym === sym);
+          if (i) return dimensionOf(i.unit);
+          const c = l.constants?.[sym];
+          return c ? dimensionOf(c.unit) : [0, 0, 0, 0, 0];
+        };
+        for (const [k, v] of Object.entries(base)) scaled[k] = v * lambda ** dimOf(k)[b]!;
+        const want = y0 * lambda ** dimensionOf(l.output.unit)[b]!;
+        const got = l.eval(scaled);
+        expect(Math.abs(got - want) / Math.max(Math.abs(want), 1e-300), `${l.id}, base dimension ${b}: ${got} vs ${want}`).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('a law used beyond what it holds for says so', () => {
+    expect(use('bearing.life.l10', { C: 10000, P: 8000, p: 3 }).caution).toMatch(/half the dynamic rating/);
+    expect(use('buckling.johnson', { A: 5e-5, Sy: 370e6, E: 200e9, K: 1, L: 1, r: 0.002 }).caution).toMatch(/Euler/);
+    expect(use('spring.rate', { G: 79e9, d: 0.005, D: 0.1, n: 8 }).caution).toMatch(/spring index 20/);
+    expect(use('stress.hoop', { p: 1e6, r: 0.01, t: 0.003 }).caution).toMatch(/Lamé/);
+    expect(use('rolling.resistance', { Crr: 0.015, N: 1000 }).caution).toBeNull();
+    expect(() => use('ohm', { I: 2 })).toThrow(/needs resistance/);
+  });
+
+  it('every source says what kind it is where it is a standard, a maker or a textbook', () => {
+    const kinds = LAWS.map((l) => l.source.kind).filter(Boolean);
+    expect(kinds.length).toBeGreaterThan(LAWS.length * 0.6);
+  });
+});
+
+describe('reasoning: inverse, sensitivity, uncertainty, working', () => {
+  it('solves any law backwards for one input', () => {
+    // a 20 mm shaft at 50 N m is sheared 31.8 MPa: asked for the diameter that gives that, it finds 20 mm
+    expect(solveFor('torsion.solid', 'd', { T: 50 }, 31830988.61837906)).toBeCloseTo(0.02, 9);
+    // the dynamic rating for 3.24 billion revolutions at 1 kN is 14.8 kN
+    expect(solveFor('bearing.life.l10', 'C', { P: 1000, p: 3 }, 3241792000)).toBeCloseTo(14800, 3);
+    expect(solveFor('natural.frequency', 'k', { m: 2 }, 11.253953951963828)).toBeCloseTo(10000, 4);
+    expect(solveFor('ohm', 'R', { I: 2 }, -5)).toBeNull();
+  });
+
+  it('knows what an answer hangs on: a shaft\'s stress goes as the cube of its diameter', () => {
+    const e = sensitivity('torsion.solid', { T: 50, d: 0.02 });
+    expect(e['T']).toBeCloseTo(1, 6);
+    expect(e['d']).toBeCloseTo(-3, 6);
+    const u = uncertainty('rolling.resistance', { Crr: 0.015, N: 1000 }, { Crr: 0.3, N: 0.05 });
+    expect(u.independent).toBeCloseTo(Math.hypot(0.3, 0.05), 6);
+    expect(u.worst).toBeCloseTo(0.35, 6);
+    expect(u.dominant).toBe('Crr');
+  });
+
+  it('shows its work: each law, its formula, the numbers in with their units, what came out', () => {
+    const r = workflowById('drive.select')!.run({ mass: 120, wheelRadius: 0.125, speed: 3, accel: 0.7, motors: 2 });
+    const work = showWork(r);
+    expect(work[0]).toMatch(/^1\. Rolling resistance \(what the tyres lose rolling\): F = C_rr N with Crr 0\.015, N 1\.18 kN → 17\.7 N$/);
+    expect(show(0.0124, 'm')).toBe('12.4 mm');
+    expect(show(31830988, 'Pa')).toBe('31.8 MPa');
+  });
+});
+
+describe('efficiency: remembered answers and a fast index', () => {
+  it('the same question, in any order, is one fingerprint, and is answered once', () => {
+    expect(fingerprint('wire.size', { current: 20, length: 3 })).toBe(fingerprint('wire.size', { length: 3, current: 20 }));
+    expect(fingerprint('wire.size', { current: 20, length: 3 })).not.toBe(fingerprint('wire.size', { current: 20, length: 4 }));
+    const a = solve('powertrain.design', { mass: 120, speed: 3 });
+    const b = solve('powertrain.design', { speed: 3, mass: 120 });
+    expect(a.cached).toBe(false);
+    expect(b.cached).toBe(true);
+    expect(b.result).toBe(a.result);
+  });
+
+  it('recalls fast: a thousand questions in well under a frame budget each', () => {
+    recall('warm up the index');
+    const t0 = performance.now();
+    for (let i = 0; i < 1000; i++) recall(['bearing for a wheel', 'tap a thread in aluminium', 'rolling resistance', 'battery runtime', 'weld a steel frame'][i % 5]!);
+    const per = (performance.now() - t0) / 1000;
+    expect(per).toBeLessThan(1);
+  });
+
+  it('understands a builder\'s other words for things', () => {
+    expect(recall('aluminium bar', 4).map((k) => k.item.id)).toContain('aluminum.6061-t6');
+    // no entry says "gearbox": its synonym finds the gearhead; "cable" finds the wire gauges
+    expect(recall('gearbox', 4).map((k) => k.item.id)).toContain('maxon.gp42c-203115');
+    expect(recall('cable', 6).map((k) => k.item.id)).toEqual(expect.arrayContaining(['awg.14']));
+    expect(recall('axle size', 4).map((k) => k.item.id)).toContain('shaft.size');
+  });
+});
+
+describe('structure: one graph of everything, with no loose ends', () => {
+  it('every relation points at something that exists', () => {
+    expect(dangling()).toEqual([]);
+    expect(graph().edges.length).toBeGreaterThan(300);
+  });
+
+  it('says how two things relate', () => {
+    // a bearing to the law that rates it, directly; a battery to the drivetrain workflow that chooses it
+    expect(path('part:skf.6205', 'law:bearing.life.l10')!.map((x) => x.via)).toEqual([null, 'ratedBy']);
+    expect(path('part:yuasa.np7-12', 'workflow:powertrain.design')).not.toBeNull();
+    expect(neighbours('joint:clamp', 'madeBy')).toContain('process:split-clamp');
+    expect(neighbours('process:weld.mig', 'works')).toContain('material:steel.a36');
+  });
+});
+
+describe('units: whatever units it is said in', () => {
+  it('parses the units laws are written in', () => {
+    expect(parseUnit('W/m^2 K').dim).toEqual([1, 0, -3, 0, -1]);
+    expect(parseUnit('N m/A').dim).toEqual([1, 2, -2, -1, 0]);
+    expect(toSI(8, 'mi/h')).toBeCloseTo(3.57632, 5);
+    expect(toSI(25, 'degC')).toBeCloseTo(298.15, 9);
+  });
+
+  it('reads quantities out of what is said', () => {
+    const q = findQuantities('a 265 lb kart at 8 mph on 10 in wheels, 20 N·m, 3/4 in bolts, 5% grade');
+    expect(q.map((x) => x.unit)).toEqual(['lb', 'mi/h', 'in', 'N m', 'in', '%']);
+    expect(q[0]!.si).toBeCloseTo(120.2, 1);
+    expect(q[1]!.si).toBeCloseTo(3.576, 3);
+    expect(q[4]!.si).toBeCloseTo(0.01905, 5);
+  });
+});
+
+describe('machines, broken down', () => {
+  it('the Markforged FX10: every assembly either published by Markforged with its source, or said not to be', () => {
+    const fx = machineById('markforged.fx10')!;
+    const nodes = nodesOf(fx);
+    expect(nodes.length).toBeGreaterThan(15);
+    for (const n of nodes) {
+      if (n.published) expect(n.source?.cite.length, n.name).toBeGreaterThan(5);
+      else expect(n.is, n.name).toMatch(/not published/i);
+    }
+    // its build volume and chamber as published
+    expect([fx.specs['buildX'], fx.specs['buildY'], fx.specs['buildZ']]).toEqual([0.375, 0.3, 0.3]);
+    expect(fx.specs['chamberMax']).toBeCloseTo(273.15 + 60, 9);
+    expect(breakdownOf(fx).some((l) => /Metal Kit/.test(l))).toBe(true);
+  });
+
+  it('what it prints with agrees with itself, and the composite laws give what a fibre-reinforced part is', () => {
+    expect(lintCatalog().filter((x) => x.id.startsWith('markforged'))).toEqual([]);
+    // 30% carbon fibre (60 GPa) in Onyx (2.4 GPa): about 20 GPa along it, 3.4 GPa across it
+    expect(use('composite.rule-of-mixtures', { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }).value).toBeCloseTo(19.68e9, -6);
+    expect(use('composite.transverse', { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }).value).toBeCloseTo(3.37e9, -7);
+    // a sixth shrinkage in the furnace: printed 20% big
+    expect(use('sinter.scale', { s: 0.167 }).value).toBeCloseTo(1.2, 2);
+  });
+
+  it('joins the rest: it runs its processes and is fed its materials; Ego breaks it down when asked, however it is spelled', () => {
+    expect(neighbours('machine:markforged.fx10', 'runs')).toEqual(expect.arrayContaining(['process:cff', 'process:metal.fff']));
+    expect(neighbours('machine:markforged.fx10', 'feeds')).toContain('part:markforged.onyx');
+    expect(path('machine:markforged.fx10', 'law:composite.rule-of-mixtures')).not.toBeNull();
+    expect(interpret('breakdown mark forged fx10')).toEqual({ do: 'breakdown', what: 'mark forged fx10' });
+    expect(recall('mark forged fx10', 1)[0]!.item.id).toBe('markforged.fx10');
+    expect(MACHINES.length).toBeGreaterThan(0);
+  });
+});
+

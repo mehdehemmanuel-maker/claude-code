@@ -35,7 +35,7 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { census, explain, lawById, nameOf, recall, workflowById } from '../ganglia';
+import { breakdown, census, explain, lawById, nameOf, recall, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
 
 export interface Advice {
@@ -233,7 +233,36 @@ export class Ego {
       case 'design': return this.designIt(i.spec, i.material);
       case 'ganglia': {
         const c = census();
-        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock, ${c.machines} machine${c.machines === 1 ? '' : 's'} broken down and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+      }
+      case 'work': {
+        const w = this.lastWorked;
+        if (!w) return 'I haven\'t worked anything out yet. Ask me to size something.';
+        const lines = showWork(w.result);
+        return lines.length ? lines.join(' ') : 'That one was a choice from the catalogue, with no law to apply: its ratings decided it.';
+      }
+      case 'depends': {
+        const w = this.lastWorked;
+        if (!w || !w.result.trace.length) return 'I haven\'t worked anything out yet.';
+        const all: { e: number; text: string }[] = [];
+        for (const step of w.result.trace) {
+          const law = lawById(step.law);
+          if (!law) continue;
+          for (const [sym, e] of Object.entries(sensitivity(step.law, step.inputs))) {
+            const name = law.inputs.find((x) => x.sym === sym)?.name ?? sym;
+            all.push({ e, text: `${name} in ${law.name.toLowerCase()} (1% more is ${Math.abs(e).toFixed(e % 1 ? 2 : 0)}% ${e > 0 ? 'more' : 'less'})` });
+          }
+        }
+        all.sort((a, b) => Math.abs(b.e) - Math.abs(a.e));
+        return all.length ? `It hangs most on ${all.slice(0, 3).map((x) => x.text).join('; ')}.` : 'Nothing in it depends on a number you can change.';
+      }
+      case 'breakdown': {
+        const hit = recall(i.what, 1, ['machine'])[0] ?? recall(i.what, 1)[0];
+        if (!hit) return `I don't know what's inside ${i.what} yet.`;
+        if (hit.kind !== 'machine') return explain(hit);
+        const lines = breakdown(hit.item);
+        const unknown = lines.filter((l) => l.includes('[not published]')).length;
+        return `${lines.join(' ')}${unknown ? ` (${unknown} of its sub-assemblies its maker doesn't detail: I won't guess them.)` : ''} Source: ${hit.item.source.cite}.`;
       }
       case 'recall': {
         const hits = recall(i.about, 3);
@@ -243,8 +272,9 @@ export class Ego {
       case 'engineer': {
         const w = workflowById(i.workflow);
         if (!w) return `I don't know how to work out ${i.workflow} yet.`;
-        const r = w.run(i.spec);
+        const { result: r, cached } = solve(w.id, i.spec);
         this.lastWorked = { workflow: w.id, result: r };
+        void cached;
         const laws = [...new Set(r.trace.map((s) => lawById(s.law)?.name).filter(Boolean))];
         const assumed = w.asks.filter((a) => !(a.sym in i.spec) && a.default !== undefined).map((a) => `${a.name} ${a.default} ${a.unit}`);
         return `${r.summary}${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}${r.alternatives.length ? ` (${r.alternatives.length} other${r.alternatives.length > 1 ? 's' : ''} would do.)` : ''}${laws.length ? ` Worked out by ${laws.join(', ')}.` : ''}${assumed.length ? ` I took ${assumed.join(', ')}.` : ''}`;

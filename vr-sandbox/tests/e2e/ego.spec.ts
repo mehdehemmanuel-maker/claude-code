@@ -135,6 +135,14 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   expect(await sb(page, (s) => s.ego.ask('size a wire for 20 a over 3 m at 24 v'))).toMatch(/^12 AWG pair/);
   expect(await sb(page, (s) => s.ego.ask('tell me about rolling resistance'))).toMatch(/Source: Gillespie/);
   expect(await sb(page, (s) => s.ego.ask('what do you know'))).toMatch(/I know \d+ laws/);
+  // her working, law by law, and what the answer hangs on
+  expect(await sb(page, (s) => s.ego.ask('show your work'))).toMatch(/^1\. Wire drop|^1\. Voltage drop/);
+  expect(await sb(page, (s) => s.ego.ask('what does it depend on'))).toMatch(/^It hangs most on/);
+  // a machine, broken down, with what its maker doesn't detail said plainly
+  const fx = await sb(page, (s) => s.ego.ask('breakdown mark forged fx10'));
+  expect(fx).toMatch(/Markforged FX10/);
+  expect(fx).toMatch(/Metal Kit/);
+  expect(fx).toMatch(/not published/);
   expect(errors).toEqual([]);
 });
 

@@ -17,11 +17,13 @@ export const COPPER_RHO = 1 / 58e6;
 /** Stefan-Boltzmann constant, W/m^2 K^4 (CODATA 2018). */
 export const SIGMA_SB = 5.670374419e-8;
 
-const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015' };
-const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002' };
-const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011' };
-const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019' };
-const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html' };
+const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
+const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002', kind: 'handbook' as const };
+const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' as const };
+const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
+const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
+const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
+const G = { g: { value: g, unit: 'm/s^2', name: 'standard gravity (ISO 80000-3)' } };
 
 export const LAWS: Law[] = [
   // ---------------------------------------------------------------- mechanics
@@ -52,7 +54,7 @@ export const LAWS: Law[] = [
     id: 'rolling.resistance', name: 'Rolling resistance', domain: 'mechanics',
     statement: 'A rolling wheel is held back by a force proportional to the load on it: the rolling resistance coefficient times the normal force.',
     formula: 'F = C_rr N', inputs: [q('Crr', 'rolling resistance coefficient', '-'), q('N', 'normal force', 'N')], output: q('F', 'rolling resistance', 'N'),
-    eval: ({ Crr, N }) => Crr! * N!,
+    eval: ({ Crr, N }) => Crr! * N!, outside: ({ Crr }) => (Crr! < 0.001 || Crr! > 0.3 ? `C_rr ${Crr} is outside anything that rolls (steel on rail 0.001, a tyre in sand 0.3)` : null),
     valid: 'Steady rolling on a hard surface. C_rr: car tyres on asphalt or concrete 0.007 to 0.02 (about 0.012); soft rubber cart wheels on concrete 0.03 to 0.05.',
     example: { inputs: { Crr: 0.015, N: 120 * g }, output: 17.65197 }, source: GILLESPIE, tags: ['wheel', 'tyre', 'vehicle', 'drag', 'kart'],
   },
@@ -60,7 +62,7 @@ export const LAWS: Law[] = [
     id: 'grade.force', name: 'Grade resistance', domain: 'mechanics',
     statement: 'On a slope, the part of the weight along it pulls a vehicle back.', formula: 'F = m g sin θ',
     inputs: [q('m', 'mass', 'kg'), q('theta', 'slope angle', 'rad')], output: q('F', 'grade force', 'N'),
-    eval: ({ m, theta }) => m! * g * Math.sin(theta!), valid: 'A grade of p% is θ = atan(p/100).',
+    constants: G, eval: ({ m, theta, g: gg }) => m! * gg! * Math.sin(theta!), valid: 'A grade of p% is θ = atan(p/100).',
     example: { inputs: { m: 120, theta: Math.atan(0.05) }, output: 58.7664877443385 }, source: GILLESPIE, tags: ['slope', 'hill', 'vehicle', 'kart'],
   },
   {
@@ -91,7 +93,7 @@ export const LAWS: Law[] = [
     id: 'traction.limit', name: 'Traction limit', domain: 'mechanics',
     statement: 'Driven wheels can push no harder than the tyre\'s friction coefficient times the weight on them; past that they spin.',
     formula: 'F ≤ μ N_driven', inputs: [q('mu', 'tyre-road friction', '-'), q('N', 'load on driven wheels', 'N')], output: q('F', 'most tractive force', 'N'),
-    eval: ({ mu, N }) => mu! * N!, valid: 'Dry rubber on asphalt μ about 0.7 to 0.9; less wet or on dust.', example: { inputs: { mu: 0.8, N: 600 }, output: 480 }, source: GILLESPIE, tags: ['grip', 'wheel', 'spin', 'vehicle'],
+    eval: ({ mu, N }) => mu! * N!, outside: ({ mu }) => (mu! > 1.6 ? `μ ${mu} is above even racing slicks' (about 1.5)` : null), valid: 'Dry rubber on asphalt μ about 0.7 to 0.9; less wet or on dust.', example: { inputs: { mu: 0.8, N: 600 }, output: 480 }, source: GILLESPIE, tags: ['grip', 'wheel', 'spin', 'vehicle'],
   },
   {
     id: 'energy.kinetic', name: 'Kinetic energy', domain: 'mechanics', statement: 'A moving mass holds half its mass times its speed squared.',
@@ -102,7 +104,7 @@ export const LAWS: Law[] = [
   {
     id: 'energy.potential', name: 'Gravitational potential energy', domain: 'mechanics', statement: 'A raised mass holds its weight times its height.',
     formula: 'E = m g h', inputs: [q('m', 'mass', 'kg'), q('h', 'height', 'm')], output: q('E', 'potential energy', 'J'),
-    eval: ({ m, h }) => m! * g * h!, valid: 'Uniform gravity.', example: { inputs: { m: 10, h: 2 }, output: 196.133 }, source: PHYSICS, tags: ['energy', 'height', 'lift'],
+    constants: G, eval: ({ m, h, g: gg }) => m! * gg! * h!, valid: 'Uniform gravity.', example: { inputs: { m: 10, h: 2 }, output: 196.133 }, source: PHYSICS, tags: ['energy', 'height', 'lift'],
     implementedIn: 'physics/energy.ts potentialEnergy',
   },
   {
@@ -113,13 +115,13 @@ export const LAWS: Law[] = [
   {
     id: 'cornering.limit', name: 'Cornering speed limit', domain: 'mechanics', statement: 'Round a flat bend a vehicle slides past the speed whose centripetal need equals its grip.',
     formula: 'v = √(μ g R)', inputs: [q('mu', 'tyre friction', '-'), q('R', 'bend radius', 'm')], output: q('v', 'most speed', 'm/s'),
-    eval: ({ mu, R }) => Math.sqrt(mu! * g * R!), valid: 'Flat, unbanked bend; ignores load transfer (and rollover, which a tall vehicle meets first).',
+    constants: G, eval: ({ mu, R, g: gg }) => Math.sqrt(mu! * gg! * R!), outside: ({ mu }) => (mu! > 1.6 ? `μ ${mu} is above even racing slicks' (about 1.5)` : null), valid: 'Flat, unbanked bend; ignores load transfer (and rollover, which a tall vehicle meets first).',
     example: { inputs: { mu: 0.8, R: 5 }, output: 6.2631142413339385 }, source: GILLESPIE, tags: ['turn', 'steering', 'vehicle', 'kart'],
   },
   {
     id: 'pendulum.period', name: 'Pendulum period', domain: 'mechanics', statement: 'A simple pendulum swings with period two pi root of its length over gravity.',
     formula: 'T = 2π √(L / g)', inputs: [q('L', 'length', 'm')], output: q('T', 'period', 's'),
-    eval: ({ L }) => 2 * Math.PI * Math.sqrt(L! / g), valid: 'Small swings (under about 15°), a point mass on a light string.', example: { inputs: { L: 1 }, output: 2.0064092925890407 }, source: PHYSICS, tags: ['swing', 'oscillation', 'test'],
+    constants: G, eval: ({ L, g: gg }) => 2 * Math.PI * Math.sqrt(L! / gg!), valid: 'Small swings (under about 15°), a point mass on a light string.', example: { inputs: { L: 1 }, output: 2.0064092925890407 }, source: PHYSICS, tags: ['swing', 'oscillation', 'test'],
   },
   // ---------------------------------------------------------------- structures and materials
   {
@@ -198,7 +200,8 @@ export const LAWS: Law[] = [
     id: 'fatigue.endurance.steel', name: 'Endurance limit of steel', domain: 'materials',
     statement: 'A polished steel test bar survives endless reversed bending below about half its tensile strength (700 MPa at most).',
     formula: 'S_e\' = 0.5 S_ut (S_ut ≤ 1400 MPa)', inputs: [q('Sut', 'tensile strength', 'Pa')], output: q('Se', 'rotating-beam endurance limit', 'Pa'),
-    eval: ({ Sut }) => (Sut! <= 1400e6 ? 0.5 * Sut! : 700e6), valid: 'Steels, polished specimen: a real part takes surface, size, load and reliability factors (Marin) below it.',
+    constants: { Smax: { value: 1400e6, unit: 'Pa', name: 'tensile strength above which the limit stops rising' }, Se_max: { value: 700e6, unit: 'Pa', name: 'its ceiling' } },
+    eval: ({ Sut, Smax, Se_max }) => (Sut! <= Smax! ? 0.5 * Sut! : Se_max!), valid: 'Steels, polished specimen: a real part takes surface, size, load and reliability factors (Marin) below it.',
     example: { inputs: { Sut: 440e6 }, output: 220e6 }, source: SHIGLEY, tags: ['fatigue', 'shaft', 'vibration', 'life'],
   },
   // ---------------------------------------------------------------- machine elements
@@ -207,17 +210,18 @@ export const LAWS: Law[] = [
     statement: 'Ninety per cent of a group of identical bearings outlast (C/P)^p million revolutions: p = 3 for ball bearings, 10/3 for roller bearings.',
     formula: 'L10 = (C / P)^p × 10⁶ rev', inputs: [q('C', 'basic dynamic load rating', 'N'), q('P', 'equivalent dynamic load', 'N'), q('p', 'life exponent', '-')], output: q('L', 'rating life', 'rev'),
     eval: ({ C, P, p }) => (C! / P!) ** (p ?? 3) * 1e6, valid: 'Clean, well-lubricated bearings at normal temperature (ISO 281 basic rating life; a modified life a_ISO adjusts it).',
-    example: { inputs: { C: 14.8, P: 1, p: 3 }, output: 3241792000 }, source: { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life' }, tags: ['bearing', 'life', 'wheel', 'axle', 'pillow block'],
+    example: { inputs: { C: 14.8, P: 1, p: 3 }, output: 3241792000 }, source: ISO281,
+    outside: ({ C, P }) => (P! > 0.5 * C! ? `a load past half the dynamic rating (P/C ${(P! / C!).toFixed(2)}) is beyond where rating life is normally used: choose a bigger bearing` : null), tags: ['bearing', 'life', 'wheel', 'axle', 'pillow block'],
   },
   {
     id: 'bearing.life.hours', name: 'Bearing life in hours', domain: 'machine elements', statement: 'A rating life in revolutions, turned at n rpm, lasts L10 / (60 n) hours.',
     formula: 'L10h = L10 / (60 n)', inputs: [q('L', 'rating life', 'rev'), q('n', 'speed', 'rpm')], output: q('h', 'rating life', 'h'),
-    eval: ({ L, n }) => L! / (60 * n!), valid: 'Constant speed.', example: { inputs: { L: 3241792000, n: 600 }, output: 90049.7777777778 }, source: { cite: 'ISO 281:2007' }, tags: ['bearing', 'life', 'hours'],
+    eval: ({ L, n }) => L! / (60 * n!), valid: 'Constant speed.', example: { inputs: { L: 3241792000, n: 600 }, output: 90049.7777777778 }, source: ISO281, tags: ['bearing', 'life', 'hours'],
   },
   {
     id: 'spring.rate', name: 'Helical spring rate', domain: 'machine elements', statement: 'A coil spring\'s rate is G d^4 over 8 D^3 n: wire diameter d, coil diameter D, n active coils.',
     formula: 'k = G d⁴ / (8 D³ n)', inputs: [q('G', 'shear modulus', 'Pa'), q('d', 'wire diameter', 'm'), q('D', 'mean coil diameter', 'm'), q('n', 'active coils', '-')], output: q('k', 'rate', 'N/m'),
-    eval: ({ G, d, D, n }) => (G! * d! ** 4) / (8 * D! ** 3 * n!), valid: 'Close-coiled helical springs, spring index 4 to 12.', example: { inputs: { G: 79.3e9, d: 0.005, D: 0.04, n: 8 }, output: 12100.219726562498 }, source: SHIGLEY, tags: ['spring', 'stiffness'],
+    eval: ({ G, d, D, n }) => (G! * d! ** 4) / (8 * D! ** 3 * n!), outside: ({ d, D }) => (D! / d! < 4 || D! / d! > 12 ? `spring index ${(D! / d!).toFixed(1)} is outside 4 to 12, where it is hard to coil (low) or buckles and tangles (high)` : null), valid: 'Close-coiled helical springs, spring index 4 to 12.', example: { inputs: { G: 79.3e9, d: 0.005, D: 0.04, n: 8 }, output: 12100.219726562498 }, source: SHIGLEY, tags: ['spring', 'stiffness'],
     implementedIn: 'engineering/springs.ts springRate',
   },
   {
@@ -257,12 +261,13 @@ export const LAWS: Law[] = [
   {
     id: 'wire.resistance', name: 'Resistance of a wire', domain: 'electrical', statement: 'A wire\'s resistance is its resistivity times its length over its cross-section.', formula: 'R = ρ L / A',
     inputs: [q('rho', 'resistivity', 'ohm m'), q('L', 'length', 'm'), q('A', 'section', 'm^2')], output: q('R', 'resistance', 'ohm'), eval: ({ rho, L, A }) => (rho! * L!) / A!,
-    valid: 'DC; annealed copper 1/58 ohm mm²/m = 1.724e-8 ohm m at 20 °C (IEC 60028).', example: { inputs: { rho: 1.724e-8, L: 1, A: 2.08e-6 }, output: 0.00828846153846154 }, source: { cite: 'IEC 60028:1925 International standard of resistance for copper' }, tags: ['wire', 'cable', 'copper', 'AWG'],
+    valid: 'DC; annealed copper 1/58 ohm mm²/m = 1.724e-8 ohm m at 20 °C (IEC 60028).', example: { inputs: { rho: 1.724e-8, L: 1, A: 2.08e-6 }, output: 0.00828846153846154 }, source: { cite: 'IEC 60028:1925 International standard of resistance for copper', kind: 'standard' }, tags: ['wire', 'cable', 'copper', 'AWG'],
   },
   {
     id: 'copper.tempco', name: 'Copper\'s resistance with temperature', domain: 'electrical', statement: 'Copper grows 0.393% more resistive per kelvin.', formula: 'R(T) = R₀ (1 + α (T − T₀))',
     inputs: [q('R0', 'resistance at T0', 'ohm'), q('T', 'temperature', 'degC'), q('T0', 'reference temperature', 'degC')], output: q('R', 'resistance', 'ohm'),
-    eval: ({ R0, T, T0 }) => R0! * (1 + COPPER_ALPHA * (T! - T0!)), valid: 'About -50 to 200 °C; α = 0.00393/K at 20 °C.', example: { inputs: { R0: 0.317, T: 100, T0: 25 }, output: 0.41043575 }, source: { cite: 'IEC 60028' }, tags: ['motor', 'winding', 'heat', 'wire'],
+    constants: { alpha: { value: COPPER_ALPHA, unit: '1/K', name: 'temperature coefficient of copper' } },
+    eval: ({ R0, T, T0, alpha }) => R0! * (1 + alpha! * (T! - T0!)), outside: ({ T }) => (T! < -50 || T! > 200 ? `${T} °C is outside where copper's coefficient is near constant (-50 to 200 °C)` : null), valid: 'About -50 to 200 °C; α = 0.00393/K at 20 °C.', example: { inputs: { R0: 0.317, T: 100, T0: 25 }, output: 0.41043575 }, source: { cite: 'IEC 60028', kind: 'standard' }, tags: ['motor', 'winding', 'heat', 'wire'],
     implementedIn: 'engineering/dcmotor.ts windingR',
   },
   {
@@ -284,7 +289,7 @@ export const LAWS: Law[] = [
   {
     id: 'motor.current', name: 'DC motor current', domain: 'electrical', statement: 'A motor draws what the applied voltage less its back-EMF drives through its winding.', formula: 'I = (V − K_e ω) / R',
     inputs: [q('V', 'applied voltage', 'V'), q('Ke', 'back-EMF constant', 'V s/rad'), q('w', 'speed', 'rad/s'), q('R', 'winding resistance', 'ohm')], output: q('I', 'current', 'A'),
-    eval: ({ V, Ke, w, R }) => (V! - Ke! * w!) / R!, valid: 'Steady state (the winding\'s inductance only delays it, by L/R).', example: { inputs: { V: 24, Ke: 0.0302, w: 500, R: 0.299 }, output: 29.765886287625413 }, source: { cite: 'Hughes, Electric Motors and Drives, 4th ed.' }, tags: ['motor', 'current', 'battery'],
+    eval: ({ V, Ke, w, R }) => (V! - Ke! * w!) / R!, outside: ({ V, Ke, w }) => (Ke! * w! > V! ? 'turning faster than its no-load speed at this voltage, it generates instead of draws' : null), valid: 'Steady state (the winding\'s inductance only delays it, by L/R).', example: { inputs: { V: 24, Ke: 0.0302, w: 500, R: 0.299 }, output: 29.765886287625413 }, source: { cite: 'Hughes, Electric Motors and Drives, 4th ed.' }, tags: ['motor', 'current', 'battery'],
     implementedIn: 'physics/electric.ts loadCurrent',
   },
   {
@@ -294,7 +299,9 @@ export const LAWS: Law[] = [
   },
   {
     id: 'lead-acid.ocv', name: 'Lead-acid open-circuit voltage', domain: 'electrical', statement: 'A lead-acid cell rests at about 0.85 V plus its acid\'s specific gravity.', formula: 'V_cell ≈ 0.85 + SG',
-    inputs: [q('SG', 'specific gravity of the acid', '-')], output: q('V', 'cell voltage', 'V'), eval: ({ SG }) => 0.85 + SG!,
+    inputs: [q('SG', 'specific gravity of the acid', '-')], output: q('V', 'cell voltage', 'V'),
+    constants: { V0: { value: 0.85, unit: 'V', name: 'offset of the rule' }, kSG: { value: 1, unit: 'V', name: 'volts per unit of specific gravity' } },
+    eval: ({ SG, V0, kSG }) => V0! + kSG! * SG!, outside: ({ SG }) => (SG! < 1.05 || SG! > 1.32 ? `specific gravity ${SG} is outside a lead-acid cell's 1.05 (flat) to 1.32 (charged)` : null),
     valid: 'At rest (hours after charge or discharge), 25 °C; VRLA acid about 1.30 charged, 1.10 flat.', example: { inputs: { SG: 1.28 }, output: 2.13 }, source: { cite: 'Linden & Reddy, Handbook of Batteries, 3rd ed., ch. 23 (lead-acid)' }, tags: ['battery', 'charge', 'voltage'],
     implementedIn: 'engineering/battery.ts cellOCV (SG from charge: ' + cellOCV(1).toFixed(2) + ' V charged)',
   },
@@ -306,7 +313,7 @@ export const LAWS: Law[] = [
   // ---------------------------------------------------------------- thermal
   {
     id: 'convection', name: 'Newton\'s law of cooling', domain: 'thermal', statement: 'A surface loses heat to a fluid at its heat transfer coefficient times its area times its temperature excess.', formula: 'q = h A ΔT',
-    inputs: [q('h', 'heat transfer coefficient', 'W/m^2 K'), q('A', 'area', 'm^2'), q('dT', 'temperature excess', 'K')], output: q('q', 'heat flow', 'W'), eval: ({ h, A, dT }) => h! * A! * dT!,
+    inputs: [q('h', 'heat transfer coefficient', 'W/m^2 K'), q('A', 'area', 'm^2'), q('dT', 'temperature excess', 'K')], output: q('q', 'heat flow', 'W'), eval: ({ h, A, dT }) => h! * A! * dT!, outside: ({ h }) => (h! < 2 || h! > 20000 ? `h ${h} W/m² K is outside still air (2) to boiling water (20000)` : null),
     valid: 'h: still air 2 to 25, moving air 25 to 250, water 50 to 20000 W/m² K.', example: { inputs: { h: 10, A: 0.1, dT: 50 }, output: 50 }, source: INCROPERA, tags: ['heat', 'cooling', 'motor', 'air'],
     implementedIn: 'engineering/thermal.ts heatLoss',
   },
@@ -317,7 +324,8 @@ export const LAWS: Law[] = [
   },
   {
     id: 'radiation', name: 'Stefan-Boltzmann radiation', domain: 'thermal', statement: 'A surface radiates at its emissivity times σ times its area times the fourth powers of absolute temperature, less what it receives.', formula: 'q = ε σ A (T⁴ − T∞⁴)',
-    inputs: [q('eps', 'emissivity', '-'), q('A', 'area', 'm^2'), q('T', 'surface temperature', 'K'), q('Tinf', 'surroundings', 'K')], output: q('q', 'net heat flow', 'W'), eval: ({ eps, A, T, Tinf }) => eps! * SIGMA_SB * A! * (T! ** 4 - Tinf! ** 4),
+    inputs: [q('eps', 'emissivity', '-'), q('A', 'area', 'm^2'), q('T', 'surface temperature', 'K'), q('Tinf', 'surroundings', 'K')], output: q('q', 'net heat flow', 'W'), constants: { sigma: { value: SIGMA_SB, unit: 'W/m^2 K^4', name: 'Stefan-Boltzmann constant' } }, eval: ({ eps, A, T, Tinf, sigma }) => eps! * sigma! * A! * (T! ** 4 - Tinf! ** 4),
+    outside: ({ eps }) => (eps! < 0 || eps! > 1 ? `emissivity ${eps} is outside 0 to 1` : null),
     valid: 'Grey surface seeing large surroundings.', example: { inputs: { eps: 0.9, A: 0.1, T: 373.15, Tinf: 293.15 }, output: 61.25474056958109 }, source: INCROPERA, tags: ['heat', 'glow', 'radiation'],
     implementedIn: 'engineering/thermal.ts heatLoss',
   },
@@ -338,23 +346,158 @@ export const LAWS: Law[] = [
   },
   // ---------------------------------------------------------------- fluids
   {
+    id: 'buckling.johnson', name: 'Johnson column formula', domain: 'structures',
+    statement: 'A strut too short for Euler\'s formula (stockier than the transition slenderness) fails by yielding and bowing together: A [S_y − (S_y K L / r)² / (4π² E)].',
+    formula: 'P_cr = A [S_y − (S_y K L/r)² / (4π² E)]', inputs: [q('A', 'section area', 'm^2'), q('Sy', 'yield strength', 'Pa'), q('E', 'modulus', 'Pa'), q('K', 'effective length factor', '-'), q('L', 'length', 'm'), q('r', 'radius of gyration', 'm')], output: q('P', 'critical load', 'N'),
+    eval: ({ A, Sy, E, K, L, r }) => A! * (Sy! - (Sy! * K! * L! / r!) ** 2 / (4 * Math.PI ** 2 * E!)),
+    outside: ({ Sy, E, K, L, r }) => (K! * L! / r! >= Math.sqrt((2 * Math.PI ** 2 * E!) / Sy!) ? `slenderness ${(K! * L! / r!).toFixed(0)} is past the transition ${Math.sqrt((2 * Math.PI ** 2 * E!) / Sy!).toFixed(0)}: Euler\'s formula holds there` : null),
+    valid: 'Slenderness K L/r below the transition √(2π² E/S_y); r = d/4 for a round bar.', example: { inputs: { A: (Math.PI / 4) * 0.008 ** 2, Sy: 370e6, E: 200e9, K: 1, L: 0.15, r: 0.002 }, output: 13695.858374663472 },
+    source: SHIGLEY, tags: ['column', 'strut', 'tie rod', 'short', 'compression'],
+  },
+  {
+    id: 'slenderness.transition', name: 'Euler-Johnson transition slenderness', domain: 'structures', statement: 'Struts more slender than √(2π² E/S_y) buckle elastically (Euler); stockier ones yield first (Johnson).',
+    formula: '(K L/r)₁ = √(2π² E / S_y)', inputs: [q('E', 'modulus', 'Pa'), q('Sy', 'yield strength', 'Pa')], output: q('s', 'transition slenderness', '-'),
+    eval: ({ E, Sy }) => Math.sqrt((2 * Math.PI ** 2 * E!) / Sy!), valid: 'Pin-ended columns of ductile material.', example: { inputs: { E: 200e9, Sy: 370e6 }, output: 103.29493015522243 }, source: SHIGLEY, tags: ['column', 'buckling', 'strut'],
+  },
+  {
+    id: 'natural.frequency', name: 'Natural frequency of a mass on a spring', domain: 'mechanics', statement: 'A mass on a spring rings at one over two pi of the root of stiffness over mass.',
+    formula: 'f = (1/2π) √(k/m)', inputs: [q('k', 'stiffness', 'N/m'), q('m', 'mass', 'kg')], output: q('f', 'frequency', 'Hz'),
+    eval: ({ k, m }) => Math.sqrt(k! / m!) / (2 * Math.PI), valid: 'Undamped, single degree of freedom (damping lowers it by √(1 − ζ²)).', example: { inputs: { k: 10000, m: 2 }, output: 11.253953951963828 }, source: PHYSICS, tags: ['vibration', 'spring', 'resonance', 'suspension'],
+  },
+  {
+    id: 'centripetal', name: 'Centripetal force', domain: 'mechanics', statement: 'Moving round a circle takes a force toward its centre of mass times speed squared over radius.',
+    formula: 'F = m v² / r', inputs: [q('m', 'mass', 'kg'), q('v', 'speed', 'm/s'), q('r', 'radius', 'm')], output: q('F', 'centripetal force', 'N'),
+    eval: ({ m, v, r }) => (m! * v! * v!) / r!, valid: 'Steady circular motion.', example: { inputs: { m: 120, v: 5, r: 10 }, output: 300 }, source: PHYSICS, tags: ['turn', 'circle', 'vehicle', 'rotation'],
+  },
+  {
+    id: 'inertia.disc', name: 'Moment of inertia of a disc', domain: 'mechanics', statement: 'A solid disc or cylinder turning about its axis has half its mass times its radius squared.',
+    formula: 'I = ½ m r²', inputs: [q('m', 'mass', 'kg'), q('r', 'radius', 'm')], output: q('I', 'moment of inertia', 'kg m^2'),
+    eval: ({ m, r }) => 0.5 * m! * r! * r!, valid: 'Uniform solid disc about its own axis (a ring is m r²).', example: { inputs: { m: 3, r: 0.125 }, output: 0.0234375 }, source: PHYSICS, tags: ['inertia', 'wheel', 'flywheel', 'rotation'],
+  },
+  {
+    id: 'inertia.rod-end', name: 'Moment of inertia of a rod about its end', domain: 'mechanics', statement: 'A slender rod swung about one end has a third of its mass times its length squared.',
+    formula: 'I = m L² / 3', inputs: [q('m', 'mass', 'kg'), q('L', 'length', 'm')], output: q('I', 'moment of inertia', 'kg m^2'),
+    eval: ({ m, L }) => (m! * L! * L!) / 3, valid: 'Slender uniform rod (about its middle it is m L²/12).', example: { inputs: { m: 2, L: 1 }, output: 0.6666666666666666 }, source: PHYSICS, tags: ['inertia', 'arm', 'lever', 'catapult'],
+  },
+  {
+    id: 'parallel-axis', name: 'Parallel axis theorem', domain: 'mechanics', statement: 'About an axis a distance d from the centre of mass, the inertia is the central one plus mass times d squared.',
+    formula: 'I = I_cm + m d²', inputs: [q('Icm', 'inertia about the centre of mass', 'kg m^2'), q('m', 'mass', 'kg'), q('d', 'offset', 'm')], output: q('I', 'moment of inertia', 'kg m^2'),
+    eval: ({ Icm, m, d }) => Icm! + m! * d! * d!, valid: 'Parallel axes, rigid body.', example: { inputs: { Icm: 0.01, m: 2, d: 0.3 }, output: 0.19 }, source: PHYSICS, tags: ['inertia', 'rotation'],
+  },
+  {
+    id: 'energy.rotational', name: 'Rotational kinetic energy', domain: 'mechanics', statement: 'A spinning body holds half its moment of inertia times its angular speed squared.',
+    formula: 'E = ½ I ω²', inputs: [q('I', 'moment of inertia', 'kg m^2'), q('w', 'angular speed', 'rad/s')], output: q('E', 'energy', 'J'),
+    eval: ({ I, w }) => 0.5 * I! * w! * w!, valid: 'Rigid body about a fixed axis.', example: { inputs: { I: 0.002, w: 100 }, output: 10 }, source: PHYSICS, tags: ['energy', 'flywheel', 'rotor', 'spin'],
+  },
+  {
+    id: 'free-fall.speed', name: 'Speed after a fall', domain: 'mechanics', statement: 'Dropped from rest through a height, a body arrives at the root of twice gravity times the height.',
+    formula: 'v = √(2 g h)', inputs: [q('h', 'height', 'm')], output: q('v', 'impact speed', 'm/s'), constants: G,
+    eval: ({ h, g: gg }) => Math.sqrt(2 * gg! * h!), valid: 'No air drag (it matters past a few metres for light things).', example: { inputs: { h: 1.5 }, output: 5.424016039799293 }, source: PHYSICS, tags: ['drop', 'impact', 'fall'],
+  },
+  {
+    id: 'spring.energy', name: 'Energy in a spring', domain: 'mechanics', statement: 'A spring stretched or squeezed from rest holds half its rate times the stretch squared.',
+    formula: 'E = ½ k x²', inputs: [q('k', 'rate', 'N/m'), q('x', 'deflection', 'm')], output: q('E', 'stored energy', 'J'),
+    eval: ({ k, x }) => 0.5 * k! * x! * x!, valid: 'Linear spring, below its solid length and its yield.', example: { inputs: { k: 12100, x: 0.02 }, output: 2.42 }, source: PHYSICS, tags: ['spring', 'launcher', 'energy'], implementedIn: 'physics/energy.ts springEnergy',
+  },
+  {
+    id: 'stress.hoop', name: 'Hoop stress in a thin-walled cylinder', domain: 'structures', statement: 'Pressure inside a thin tube pulls its wall round the circumference at pressure times radius over wall thickness.',
+    formula: 'σ = p r / t', inputs: [q('p', 'internal pressure', 'Pa'), q('r', 'mean radius', 'm'), q('t', 'wall', 'm')], output: q('sigma', 'hoop stress', 'Pa'),
+    eval: ({ p, r, t }) => (p! * r!) / t!, outside: ({ r, t }) => (t! > r! / 10 ? `a wall of ${(t! / r!).toFixed(2)} of its radius is thick: use Lamé\'s equations` : null),
+    valid: 'Wall under a tenth of the radius; axial stress is half this.', example: { inputs: { p: 1e6, r: 0.05, t: 0.002 }, output: 25e6 }, source: SHIGLEY, tags: ['pressure', 'tank', 'tube', 'pipe'],
+  },
+  {
+    id: 'weld.fillet.shear', name: 'Shear in a fillet weld', domain: 'structures', statement: 'A fillet weld carries its load as shear on its throat: 0.707 of its leg times its length.',
+    formula: 'τ = F / (0.707 a L)', inputs: [q('F', 'load', 'N'), q('a', 'leg', 'm'), q('L', 'weld length', 'm')], output: q('tau', 'throat shear', 'Pa'),
+    eval: ({ F, a, L }) => F! / (0.707 * a! * L!), valid: 'Equal-leg fillet, load along or across it (the throat method).', example: { inputs: { F: 10000, a: 0.005, L: 0.1 }, output: 28288543.140028287 }, source: SHIGLEY, tags: ['weld', 'fillet', 'frame', 'steel'], implementedIn: 'engineering/joining.ts filletWeldCapacity',
+  },
+  {
+    id: 'bolt.torque.nut-factor', name: 'Bolt tightening torque (nut factor)', domain: 'machine elements', statement: 'Tightening a bolt to a preload takes about a nut factor (0.2 dry steel) times the preload times its diameter.',
+    formula: 'T = K F d', inputs: [q('K', 'nut factor', '-'), q('F', 'preload', 'N'), q('d', 'nominal diameter', 'm')], output: q('T', 'wrench torque', 'N m'),
+    eval: ({ K, F, d }) => K! * F! * d!, outside: ({ K }) => (K! < 0.1 || K! > 0.35 ? `nut factor ${K} is outside 0.1 (lubricated) to 0.3 (dry, rough)` : null),
+    valid: 'Quick estimate; the world uses VDI 2230 (thread and head friction separately).', example: { inputs: { K: 0.2, F: 10000, d: 0.008 }, output: 16 }, source: SHIGLEY, tags: ['bolt', 'torque', 'preload', 'wrench'], implementedIn: 'engineering/bolts.ts tighteningTorque (VDI 2230)',
+  },
+  {
+    id: 'power.electric', name: 'Electrical power', domain: 'electrical', statement: 'Power is voltage times current.', formula: 'P = V I',
+    inputs: [q('V', 'voltage', 'V'), q('I', 'current', 'A')], output: q('P', 'power', 'W'), eval: ({ V, I }) => V! * I!, valid: 'DC, or instantaneous.', example: { inputs: { V: 24, I: 10 }, output: 240 }, source: PHYSICS, tags: ['power', 'battery', 'motor'],
+  },
+  {
+    id: 'belt.speed', name: 'Belt or rim speed', domain: 'machine elements', statement: 'A pulley\'s rim moves at pi times its diameter times its revolutions per second.',
+    formula: 'v = π D n / 60', inputs: [q('D', 'diameter', 'm'), q('n', 'speed', 'rpm')], output: q('v', 'rim speed', 'm/s'),
+    eval: ({ D, n }) => (Math.PI * D! * n!) / 60, valid: 'No slip.', example: { inputs: { D: 0.1, n: 1500 }, output: 7.853981633974483 }, source: SHIGLEY, tags: ['belt', 'pulley', 'wheel', 'speed'],
+  },
+  {
+    id: 'reynolds', name: 'Reynolds number', domain: 'fluids', statement: 'Flow is smooth (laminar) or churning (turbulent) by the ratio of inertia to viscosity: density times speed times size over viscosity.',
+    formula: 'Re = ρ v L / μ', inputs: [q('rho', 'density', 'kg/m^3'), q('v', 'speed', 'm/s'), q('L', 'size', 'm'), q('mu', 'dynamic viscosity', 'Pa s')], output: q('Re', 'Reynolds number', '-'),
+    eval: ({ rho, v, L, mu }) => (rho! * v! * L!) / mu!, valid: 'Pipe flow laminar below about 2300, turbulent above about 4000.', example: { inputs: { rho: 1000, v: 2, L: 0.05, mu: 1.0e-3 }, output: 100000 }, source: { cite: 'White, Fluid Mechanics, 8th ed., McGraw-Hill 2016', kind: 'textbook' }, tags: ['water', 'air', 'flow', 'pipe'],
+  },
+  {
+    id: 'darcy-weisbach', name: 'Pressure drop in a pipe (Darcy-Weisbach)', domain: 'fluids', statement: 'Flow down a pipe loses pressure by its friction factor times length over diameter times the dynamic pressure.',
+    formula: 'Δp = f (L/D) ρ v² / 2', inputs: [q('f', 'Darcy friction factor', '-'), q('L', 'length', 'm'), q('D', 'bore', 'm'), q('rho', 'density', 'kg/m^3'), q('v', 'mean speed', 'm/s')], output: q('dp', 'pressure drop', 'Pa'),
+    eval: ({ f, L, D, rho, v }) => (f! * (L! / D!) * rho! * v! * v!) / 2, valid: 'Fully developed flow; f = 64/Re laminar, from the Moody chart (Colebrook) turbulent.', example: { inputs: { f: 0.02, L: 10, D: 0.05, rho: 1000, v: 2 }, output: 8000 }, source: { cite: 'White, Fluid Mechanics, 8th ed., McGraw-Hill 2016', kind: 'textbook' }, tags: ['pipe', 'water', 'pump', 'pressure'],
+  },
+  {
+    id: 'thermal.resistance.conduction', name: 'Thermal resistance of a wall', domain: 'thermal', statement: 'A wall resists heat by its thickness over its conductivity times its area.',
+    formula: 'R_th = L / (k A)', inputs: [q('L', 'thickness', 'm'), q('k', 'conductivity', 'W/m K'), q('A', 'area', 'm^2')], output: q('R', 'thermal resistance', 'K/W'),
+    eval: ({ L, k, A }) => L! / (k! * A!), valid: 'Steady, one-dimensional.', example: { inputs: { L: 0.1, k: 200, A: 0.01 }, output: 0.05 }, source: INCROPERA, tags: ['heat', 'insulation', 'heat sink'],
+  },
+  {
+    id: 'composite.rule-of-mixtures', name: 'Rule of mixtures (along the fibre)', domain: 'materials',
+    statement: 'Loaded along its fibres, a composite is as stiff as its fibre and matrix in proportion to how much of each it holds.',
+    formula: 'E₁ = V_f E_f + (1 − V_f) E_m', inputs: [q('Vf', 'fibre volume fraction', '-'), q('Ef', 'fibre modulus', 'Pa'), q('Em', 'matrix modulus', 'Pa')], output: q('E', 'longitudinal modulus', 'Pa'),
+    eval: ({ Vf, Ef, Em }) => Vf! * Ef! + (1 - Vf!) * Em!, outside: ({ Vf }) => (Vf! < 0 || Vf! > 0.7 ? `a fibre fraction of ${Vf} is outside what can be made (0 to about 0.7)` : null),
+    valid: 'Continuous, aligned, well-bonded fibre (Voigt bound); printed parts hold fibre only in some layers, so the part\'s V_f is the fibre\'s share of the whole.',
+    example: { inputs: { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }, output: 19680000000 }, source: { cite: 'Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996', kind: 'textbook' }, tags: ['composite', 'carbon fiber', 'stiffness', '3d printing'],
+  },
+  {
+    id: 'composite.transverse', name: 'Inverse rule of mixtures (across the fibre)', domain: 'materials',
+    statement: 'Loaded across its fibres, a composite is barely stiffer than its matrix: fibre and matrix act in series.',
+    formula: '1/E₂ = V_f/E_f + (1 − V_f)/E_m', inputs: [q('Vf', 'fibre volume fraction', '-'), q('Ef', 'fibre modulus (transverse)', 'Pa'), q('Em', 'matrix modulus', 'Pa')], output: q('E', 'transverse modulus', 'Pa'),
+    eval: ({ Vf, Ef, Em }) => 1 / (Vf! / Ef! + (1 - Vf!) / Em!), valid: 'A lower (Reuss) bound; carbon fibre is itself much less stiff across than along, which lowers it further.',
+    example: { inputs: { Vf: 0.3, Ef: 60e9, Em: 2.4e9 }, output: 3370786516.853933 }, source: { cite: 'Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996', kind: 'textbook' }, tags: ['composite', 'carbon fiber', 'anisotropy', '3d printing'],
+  },
+  {
+    id: 'sinter.scale', name: 'Scale-up for sintering shrinkage', domain: 'materials', statement: 'A part that shrinks by a fraction s as it sinters is printed 1/(1 − s) times its final size.',
+    formula: 'k = 1 / (1 − s)', inputs: [q('s', 'linear sintering shrinkage', '-')], output: q('k', 'print scale', '-'),
+    eval: ({ s }) => 1 / (1 - s!), outside: ({ s }) => (s! <= 0 || s! >= 0.4 ? `a shrinkage of ${s} is outside sintered metal\'s (about 0.1 to 0.25)` : null),
+    valid: 'Uniform shrinkage (gravity and friction on the setter make it slightly uneven in practice).', example: { inputs: { s: 0.167 }, output: 1.2004801920768309 },
+    source: { cite: 'German, Sintering: From Empirical Observations to Scientific Principles, Elsevier 2014', kind: 'textbook' }, tags: ['sinter', 'metal', '3d printing', 'shrinkage'],
+  },
+  {
     id: 'buoyancy', name: 'Archimedes\' principle', domain: 'fluids', statement: 'A body in a fluid is pushed up by the weight of the fluid it displaces.', formula: 'F = ρ g V',
-    inputs: [q('rho', 'fluid density', 'kg/m^3'), q('V', 'displaced volume', 'm^3')], output: q('F', 'buoyancy', 'N'), eval: ({ rho, V }) => rho! * g * V!,
+    inputs: [q('rho', 'fluid density', 'kg/m^3'), q('V', 'displaced volume', 'm^3')], output: q('F', 'buoyancy', 'N'), constants: G, eval: ({ rho, V, g: gg }) => rho! * gg! * V!,
     valid: 'Fluid at rest.', example: { inputs: { rho: 1000, V: 0.001 }, output: 9.80665 }, source: PHYSICS, tags: ['water', 'float', 'raft'], implementedIn: 'physics/world.ts applyFluids',
   },
   {
     id: 'hydrostatic', name: 'Hydrostatic pressure', domain: 'fluids', statement: 'Pressure in a still liquid rises with depth by its density times gravity times the depth.', formula: 'p = ρ g h',
-    inputs: [q('rho', 'density', 'kg/m^3'), q('h', 'depth', 'm')], output: q('p', 'gauge pressure', 'Pa'), eval: ({ rho, h }) => rho! * g * h!,
+    inputs: [q('rho', 'density', 'kg/m^3'), q('h', 'depth', 'm')], output: q('p', 'gauge pressure', 'Pa'), constants: G, eval: ({ rho, h, g: gg }) => rho! * gg! * h!,
     valid: 'Incompressible, at rest.', example: { inputs: { rho: 1000, h: 2 }, output: 19613.3 }, source: PHYSICS, tags: ['water', 'tank', 'pressure'],
   },
 ];
 
 export const lawById = (id: string) => LAWS.find((l) => l.id === id);
 
-/** Run a law by id: its output for these inputs (throws on an unknown id or a missing input, so a workflow can't silently guess). */
-export function apply(id: string, inputs: Record<string, number>): number {
+/** A law's inputs with its constants filled in. */
+export function withConstants(law: Law, inputs: Record<string, number>): Record<string, number> {
+  const c: Record<string, number> = {};
+  for (const [k, v] of Object.entries(law.constants ?? {})) c[k] = v.value;
+  return { ...c, ...inputs };
+}
+
+/** Inputs a law may be run without (they have a sensible default inside it). */
+const OPTIONAL: Record<string, string[]> = { 'buckling.euler': ['K'], 'bearing.life.l10': ['p'] };
+
+/**
+ * Run a law by id: its output, and a caution when the inputs leave the range it holds over. Throws on an unknown law or
+ * a missing input, so a workflow can't silently guess.
+ */
+export function use(id: string, inputs: Record<string, number>): { value: number; caution: string | null } {
   const law = lawById(id);
   if (!law) throw new Error(`No law ${id}`);
-  for (const i of law.inputs) if (!(i.sym in inputs) && !(law.id === 'buckling.euler' && i.sym === 'K') && !(law.id === 'bearing.life.l10' && i.sym === 'p')) throw new Error(`${law.name} needs ${i.name} (${i.sym})`);
-  return law.eval(inputs);
+  for (const i of law.inputs) if (!(i.sym in inputs) && !(OPTIONAL[id] ?? []).includes(i.sym)) throw new Error(`${law.name} needs ${i.name} (${i.sym})`);
+  for (const [k, v] of Object.entries(inputs)) if (!Number.isFinite(v)) throw new Error(`${law.name}: ${k} is not a number`);
+  const v = withConstants(law, inputs);
+  return { value: law.eval(v), caution: law.outside?.(v) ?? null };
 }
+
+/** A law's output alone. */
+export const apply = (id: string, inputs: Record<string, number>) => use(id, inputs).value;

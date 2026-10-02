@@ -8,7 +8,7 @@ import { BATTERIES, WIRE_GAUGES, type BatteryData } from '../data/batteries';
 import { motorModel, type MotorModel } from '../engineering/dcmotor';
 import { packCapacity, packOCV, type Pack } from '../engineering/battery';
 import { getMaterial, STANDARD_GRAVITY as g } from '../data/materials';
-import { apply } from './laws';
+import { apply, use } from './laws';
 import { BEARINGS, CONTROLLERS, COUPLINGS, PILLOW_BLOCKS, ROD_ENDS } from './parts';
 import type { CatalogItem, TraceStep, Workflow, WorkflowResult } from './types';
 
@@ -17,10 +17,13 @@ const r3 = (x: number) => Number(x.toPrecision(3));
 
 /** Apply a law and write it down. */
 function step(trace: TraceStep[], law: string, why: string, inputs: Record<string, number>, unit: string): number {
-  const output = apply(law, inputs);
-  trace.push({ law, for: why, inputs, output, unit });
-  return output;
+  const { value, caution } = use(law, inputs);
+  trace.push({ law, for: why, inputs, output: value, unit, ...(caution ? { caution } : {}) });
+  return value;
 }
+
+/** What a run's laws said about being used beyond what they hold for. */
+const cautions = (trace: TraceStep[]) => trace.filter((t) => t.caution).map((t) => `${t.law}: ${t.caution}`);
 
 const n = (s: Record<string, number | string>, k: string, d: number) => (typeof s[k] === 'number' && Number.isFinite(s[k] as number) ? (s[k] as number) : d);
 
@@ -123,7 +126,7 @@ export const driveSelect: Workflow<Record<string, number | string>, DriveChoice>
         : `Nothing in the catalogue moves ${m} kg at ${v} m/s with ${a} m/s² of acceleration: ${r3(Tw)} N·m a wheel and ${r3(ww)} rad/s. Fewer demands, more motors, or a bigger motor in the catalogue.`,
       choice: best?.choice ?? null,
       alternatives: options.slice(1, 4).map((o) => ({ choice: o.choice, why: o.why })),
-      trace, warnings, parts,
+      trace, warnings: [...warnings, ...cautions(trace)], parts,
     };
   },
 };
@@ -174,7 +177,7 @@ export const wireSize: Workflow<Record<string, number | string>, WireChoice> = {
       step(trace, 'joule', 'what it loses as heat', { I, R: 2 * L * w.ohmPerM }, 'W');
     }
     return {
-      ok: !!best, choice: best ?? null, trace, warnings: [], parts: best ? [`awg.${best.gauge}`] : [],
+      ok: !!best, choice: best ?? null, trace, warnings: cautions(trace), parts: best ? [`awg.${best.gauge}`] : [],
       summary: best ? `${best.gauge} AWG pair: rated ${best.ampacity} A, drops ${r3(best.drop)} V (${r3((best.drop / V) * 100)}% of ${V} V), loses ${r3(best.loss)} W.` : `No gauge in the catalogue carries ${I} A over ${L} m within ${share * 100}%: a shorter run, a higher voltage, or heavier cable.`,
       alternatives: fits.slice(1, 3).map((f) => ({ choice: f, why: `heavier: drops ${r3(f.drop)} V, loses ${r3(f.loss)} W` })),
     };
@@ -200,7 +203,7 @@ export const batterySize: Workflow<Record<string, number | string>, PackChoice> 
     const best = out[0]!;
     step(trace, 'energy.electric', 'what it gives over the runtime', { V, I, t: h * 3600 }, 'J');
     return {
-      ok: true, choice: best, trace, warnings: [], parts: [best.battery], alternatives: out.slice(1).map((c) => ({ choice: c, why: `${r3(c.mass)} kg` })),
+      ok: true, choice: best, trace, warnings: cautions(trace), parts: [best.battery], alternatives: out.slice(1).map((c) => ({ choice: c, why: `${r3(c.mass)} kg` })),
       summary: `${best.series * best.parallel} × ${BATTERIES[best.battery]!.label} (${best.series} in series × ${best.parallel} in parallel), ${r3(best.mass)} kg: at ${I} A it runs ${r3(best.hours)} h.`,
     };
   },
@@ -235,7 +238,7 @@ export const shaftSize: Workflow<Record<string, number | string>, { diameter: nu
     const Se = step(trace, 'fatigue.endurance.steel', 'if it turns while bent (rotating bending reverses the stress)', { Sut: mat.ultimate }, 'Pa');
     return {
       ok: !!d, choice: d ? { diameter: d, least, material: mat.id } : null, trace, parts: [], alternatives: [],
-      warnings: M > 0 ? [`Turning while it is bent, each point on it is stressed back and forth: check it against the endurance limit (polished bar ${r3(Se / 1e6)} MPa, less for its surface and size).`] : [],
+      warnings: [...cautions(trace), ...(M > 0 ? [`Turning while it is bent, each point on it is stressed back and forth: check it against the endurance limit (polished bar ${r3(Se / 1e6)} MPa, less for its surface and size).`] : [])],
       summary: d ? `Ø${d * 1000} mm ${mat.name} bar (it needs at least ${r3(least * 1000)} mm).` : `More than ${ROUND_BAR[ROUND_BAR.length - 1]! * 1000} mm: ${r3(least * 1000)} mm needed.`,
     };
   },
@@ -265,7 +268,7 @@ export const bearingSelect: Workflow<Record<string, number | string>, { bearing:
       step(trace, 'bearing.life.hours', `at ${rpm} rpm`, { L, n: rpm }, 'h');
     }
     return {
-      ok: !!best, choice: best ? { bearing: best.b.id, hours: best.hours } : null, trace, warnings: [], parts: best ? [best.b.id] : [],
+      ok: !!best, choice: best ? { bearing: best.b.id, hours: best.hours } : null, trace, warnings: cautions(trace), parts: best ? [best.b.id] : [],
       alternatives: fit.slice(1, 3).map((x) => ({ choice: { bearing: x.b.id, hours: x.hours }, why: `${r3(x.hours)} h` })),
       summary: best ? `${best.b.label}: ${r3(best.hours)} h rating life at ${P} N and ${rpm} rpm (asked ${want} h).` : `No catalogued ${housed ? 'pillow block' : 'bearing'}${bore ? ` for a ${bore * 1000} mm shaft` : ''} lasts ${want} h at ${P} N and ${rpm} rpm.`,
     };
@@ -316,7 +319,7 @@ export const torqueArmSize: Workflow<Record<string, number | string>, { rodEnd: 
   goal: 'A tie rod with rod ends that holds a housing against its reaction torque: rated for the push without buckling.',
   asks: [q('torque', 'reaction torque', 'N m'), q('radius', 'arm radius from the axis', 'm'), q('length', 'rod length', 'm'), q('n', 'safety factor', '-', 3)],
   steps: ['The force on the rod: the torque over its radius.', 'A rod end whose static rating covers it with the factor.', 'The thinnest stocked rod that neither yields nor buckles (pinned at both ends).'],
-  uses: { laws: ['buckling.euler', 'stress.axial'], families: ['rod end'], processes: ['saw', 'tap'] }, tags: ['torque arm', 'tie rod', 'rod end', 'motor mount'],
+  uses: { laws: ['buckling.euler', 'buckling.johnson', 'slenderness.transition'], families: ['rod end'], processes: ['saw', 'tap'] }, tags: ['torque arm', 'tie rod', 'rod end', 'motor mount'],
   run(spec) {
     const T = n(spec, 'torque', 5), rr = n(spec, 'radius', 0.04), L = n(spec, 'length', 0.05), sf = n(spec, 'n', 3);
     const trace: TraceStep[] = [];
@@ -324,14 +327,22 @@ export const torqueArmSize: Workflow<Record<string, number | string>, { rodEnd: 
     const steel = getMaterial('steel.1018-cd');
     const end = ROD_ENDS.find((e) => Number(e.specs['C0']) >= F * sf);
     let rod: number | null = null;
+    const transition = apply('slenderness.transition', { E: steel.E, Sy: steel.yield });
     for (const d of ROUND_BAR) {
-      const P = apply('buckling.euler', { E: steel.E, I: (Math.PI * d ** 4) / 64, L, K: 1 });
-      const s = apply('stress.axial', { F, A: (Math.PI / 4) * d * d });
-      if (P >= F * sf && s * sf <= steel.yield) { rod = d; step(trace, 'buckling.euler', `Ø${d * 1000} mm rod ${L * 1000} mm long`, { E: steel.E, I: (Math.PI * d ** 4) / 64, L, K: 1 }, 'N'); break; }
+      // a pinned strut buckles by Euler when slender, by Johnson (yielding as it bows) when stocky
+      const A = (Math.PI / 4) * d * d, I = (Math.PI * d ** 4) / 64, rg = d / 4;
+      const slender = L / rg >= transition;
+      const P = slender ? apply('buckling.euler', { E: steel.E, I, L, K: 1 }) : apply('buckling.johnson', { A, Sy: steel.yield, E: steel.E, K: 1, L, r: rg });
+      if (P >= F * sf) {
+        rod = d;
+        if (slender) step(trace, 'buckling.euler', `Ø${d * 1000} mm rod ${L * 1000} mm long (slenderness ${r3(L / rg)}, past ${r3(transition)})`, { E: steel.E, I, L, K: 1 }, 'N');
+        else step(trace, 'buckling.johnson', `Ø${d * 1000} mm rod ${L * 1000} mm long (slenderness ${r3(L / rg)}, below ${r3(transition)}: it yields before it buckles)`, { A, Sy: steel.yield, E: steel.E, K: 1, L, r: rg }, 'N');
+        break;
+      }
     }
     const ok = !!end && rod !== null;
     return {
-      ok, choice: ok ? { rodEnd: end!.id, rod: rod!, force: F } : null, trace, warnings: [], parts: end ? [end.id] : [], alternatives: [],
+      ok, choice: ok ? { rodEnd: end!.id, rod: rod!, force: F } : null, trace, warnings: cautions(trace), parts: end ? [end.id] : [], alternatives: [],
       summary: ok ? `${r3(F)} N on the arm: a Ø${rod! * 1000} mm steel rod with ${end!.label} at each end (static ${r3(Number(end!.specs['C0']))} N).` : `${r3(F)} N on the arm is more than the catalogued rod ends take at ${sf}×: a longer arm (less force) or a bigger rod end.`,
     };
   },

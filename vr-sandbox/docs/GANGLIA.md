@@ -11,16 +11,46 @@ every entry says where it comes from, and every entry is tested against somethin
 | Workflow | An engineer's procedure: what to ask, which laws in what order, which catalogue to choose from | reaches the answer worked by hand | `workflows.ts` |
 | Material, joint, shape | The world's own materials, joint kinds and stock shapes, each already sourced | the world's own tests | `data/materials.ts`, `connectors/registry.ts`, `parts/registry.ts` |
 
+| Machine | A machine broken down assembly by assembly: each node published by its maker (with where) or marked not published | every node is one or the other | `machines.ts` |
+
+## How it is kept right
+
+- **Dimensions**: every law is checked for dimensional consistency. Change the size of any base unit (mass, length, time, current, temperature) and its output must rescale exactly as its dimension says. A misplaced power (d² for d³) fails this. Constants a law uses (g, σ, copper's α) are declared with their units so they are checked too (`units.ts`, `Law.constants`).
+- **Validity**: a law used beyond what it holds for says so. Examples: a bearing past half its rating, a strut stocky enough for Johnson rather than Euler, a spring index outside 4 to 12, a thick-walled tube. The caution goes into the workflow's trace and its warnings (`Law.outside`).
+- **Sources** say what kind they are (`standard`, `maker`, `textbook`, `handbook`, `distributor`, `rule of thumb`).
+- **Self-consistency** of every catalogued part (`lintCatalog`). One check is that a continuous carbon fibre's strength is near its modulus times its strain at break, because it stays linear until it fails.
+
+## Reasoning beyond running a law
+
+- **Inverse** (`solveFor`): any one input from the others and the output wanted ("what diameter gives 30 MPa?"). It brackets the root on a log scale and bisects it, so no per-law algebra is needed.
+- **Sensitivity and uncertainty** (`sensitivity`, `uncertainty`): what an answer hangs on (a shaft's stress goes as d⁻³), and how ±x% inputs carry into it, independent (root sum of squares) and worst case.
+- **Show the work** (`showWork`): a workflow's trace as a derivation. Each line gives the law, its formula and the numbers that went in with their units and readable prefixes, ending in what came out.
+- **One graph** (`graph.ts`): every piece of knowledge is a node, and every relation a typed edge:
+  - `uses`, `choosesFrom`, `ratedBy`, `fittedBy`, `madeBy`, `works`, `runs`, `feeds`;
+  - no edge may dangle;
+  - `path` says how two things relate.
+
+## Fast
+
+- **Recall** is a BM25F index built once:
+  - names weigh 3, tags 2, text 1;
+  - it expands synonyms (aluminium/aluminum, cable/wire, axle/shaft, gearbox/gearhead…), stems words and matches prefixes;
+  - it joins two words said apart ("mark forged" → Markforged);
+  - a numbered id ("6205", "fx10") names its entry outright.
+  - It answers in well under a millisecond.
+- **Answers are remembered** (`solve`): a question's fingerprint is its workflow and its spec with keys sorted, hashed. Asked again, in any order of words, the same answer comes back at once.
+
 ## What's in it
 
-- **Laws (55)**, grouped by area:
+- **Laws (75)**, grouped by area (also: Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
   - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
   - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
   - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
   - Electrical: Ohm, Joule, wire resistance, copper's temperature coefficient, voltage drop, motor torque, back-EMF, current, mechanical time constant, lead-acid open-circuit voltage, electrical energy.
   - Thermal: convection, conduction, radiation, heat capacity, lumped time constant, thermal resistance networks.
   - Fluids: buoyancy, hydrostatic pressure.
-- **Processes (14)**: sawing, drilling, tapping, boring, split clamps, turning, milling, bending sheet, MIG welding, soldering, gluing, wood screws, crimping terminals, fitting bearings.
+- **Processes (16)**: sawing, drilling, tapping, boring, split clamps, turning, milling, bending sheet, MIG welding, soldering, gluing, wood screws, crimping terminals, fitting bearings, continuous fibre fabrication (CFF) printing, metal FFF (print, wash, sinter).
+- **Machines**: the Markforged FX10, broken down into frame and heated chamber, motion system, composite print engine (plastic and fibre nozzles, optical sensors), Metal Kit (swappable head, feed tubes, pre-extruders, heated bed), build plate, Vision Module and laser micrometer, material drawer, electronics and software. It also lists the materials it prints with (Onyx, continuous carbon fibre, carbon fibre FR) from Markforged's datasheet.
 - **Parts (bought)**:
   - SKF deep groove ball bearings 608, 6004, 6005, 6202 to 6206.
   - UCP205 pillow block.
@@ -44,6 +74,9 @@ Ask in plain words, in the headset or on her page:
 - *"Size a wire for 20 A over 3 m at 24 V"*, *"which bearing for 500 N at 600 rpm on a 25 mm shaft"*, *"size a shaft for 20 Nm and 30 Nm bending"*: one workflow each.
 - *"Tell me about rolling resistance"*, *"how do I tap a thread"*, *"what is 6061"*: recall, with the source.
 - *"What do you know?"*: how much she knows, by kind.
+- *"Show your work"*: her last answer, law by law with the numbers. *"What does it depend on?"*: what it hangs on most.
+- *"Break down the Markforged FX10"*: the machine, assembly by assembly, with what its maker doesn't detail said plainly.
+- She reads any units: *"a drive for a 265 lb kart at 8 mph on 10 in wheels"*, *"a wire for 30 amps over 10 ft at 12 V"*, *"a bearing for 112 lbf at 600 rpm on a 1 in shaft"*.
 
 Every answer from a workflow ends with the laws it applied. What wasn't said takes the workflow's default, and she says which defaults she took. The whole trace (each law, its inputs, its output) stays on `ego.lastWorked`.
 

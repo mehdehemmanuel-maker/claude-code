@@ -12,6 +12,7 @@ import { MOTORS, GEARHEADS, type MotorData } from '../data/motors';
 import { BATTERIES, WIRE_GAUGES, type BatteryData } from '../data/batteries';
 import { motorModel } from '../engineering/dcmotor';
 import { COPPER_RHO } from './laws';
+import { PRINTING_MATERIALS } from './machines';
 import type { CatalogItem } from './types';
 
 const inch = 0.0254, lbf = 4.448222, inlb = 0.1129848;
@@ -111,7 +112,7 @@ export function worldItems(): CatalogItem[] {
   return out;
 }
 
-export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...worldItems()];
+export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...PRINTING_MATERIALS, ...worldItems()];
 
 export const itemById = (id: string) => CATALOG.find((c) => c.id === id);
 export const family = (f: string) => CATALOG.filter((c) => c.family === f);
@@ -152,6 +153,16 @@ export function lintItem(c: CatalogItem): string[] {
       // R' A = rho for copper: a typo in either shows here
       const rho = num(c, 'ohmPerM') * num(c, 'area');
       if (Math.abs(rho - COPPER_RHO) / COPPER_RHO > 0.03) bad.push(`its resistance and area give ρ = ${rho.toExponential(3)} ohm m, copper's is ${COPPER_RHO.toExponential(3)}`);
+      break;
+    }
+    case 'printing material': {
+      // a continuous carbon fibre stays linear to failure: its strength is about its modulus times its strain at break
+      const E = num(c, 'tensileModulus'), S = num(c, 'tensileStrength'), e = num(c, 'strainAtBreak');
+      if (Number.isFinite(E) && Number.isFinite(S) && Number.isFinite(e) && Math.abs(S - E * e) / S > 0.25) bad.push(`its strength ${S / 1e6} MPa is far from modulus × strain ${((E * e) / 1e6).toFixed(0)} MPa`);
+      const yieldS = num(c, 'tensileYield'), brk = num(c, 'tensileBreak');
+      if (Number.isFinite(yieldS) && Number.isFinite(brk) && brk > yieldS * 1.5) bad.push('breaking far above its yield, which a filled nylon does not');
+      const d = num(c, 'density');
+      if (Number.isFinite(d) && (d < 900 || d > 2200)) bad.push(`${d} kg/m³ is not a polymer composite's`);
       break;
     }
     case 'motor controller':

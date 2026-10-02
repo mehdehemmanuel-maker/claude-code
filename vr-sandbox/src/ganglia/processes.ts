@@ -7,7 +7,7 @@
 import { CLEARANCE_HOLE_MEDIUM, METRIC_COARSE } from '../engineering/threads';
 import type { Process } from './types';
 
-const MACHINERY = { cite: 'Oberg et al., Machinery\'s Handbook, 31st ed., Industrial Press 2020' };
+const MACHINERY = { cite: 'Oberg et al., Machinery\'s Handbook, 31st ed., Industrial Press 2020', kind: 'handbook' as const };
 
 export const PROCESSES: Process[] = [
   {
@@ -136,6 +136,29 @@ export const PROCESSES: Process[] = [
       'Insert bearings (UC) lock on the shaft with their two set screws instead of a press fit.',
     ],
     source: { cite: 'SKF, Rolling bearings catalogue (bearing fits)' }, tags: ['bearing', 'shaft', 'fit', 'axle'], uses: { laws: ['bearing.life.l10'] },
+  },
+  {
+    id: 'cff', name: 'Continuous fibre fabrication (CFF) printing', makes: 'a printed nylon composite part with continuous fibre laid inside chosen layers', materials: ['polymer'],
+    tools: ['Markforged FX10 (or Mark Two, X7)', 'Onyx or nylon filament', 'continuous carbon (or Kevlar, glass) fibre', 'Eiger slicer'],
+    limits: [
+      'Fibre lies only in the plane of each layer: in-plane it is strong as aluminium, across the layers it is only as strong as the plastic between them. Orient the part so its loads run along its layers.',
+      'Fibre goes in whole layers of a part, wrapped round its walls (concentric) or filling them (isotropic); it needs a plastic floor, roof and walls round it.',
+      'Layer height 125 to 250 µm on the FX10; the part must fit 375 × 300 × 300 mm.',
+      'Stiffness follows the rule of mixtures: along the fibre about V_f E_f + (1 − V_f) E_m, across it far less.',
+    ],
+    source: { cite: 'Markforged FX10 specifications and Composites Material Datasheet', url: 'https://markforged.com/3d-printers/fx10', kind: 'maker' },
+    tags: ['3d printing', 'composite', 'carbon fiber', 'onyx', 'additive'], uses: { laws: ['composite.rule-of-mixtures', 'composite.transverse'] },
+  },
+  {
+    id: 'metal.fff', name: 'Metal FFF: print, wash, sinter', makes: 'a steel part printed from metal powder bound in plastic, then debound and sintered dense', materials: ['steel', 'stainless'],
+    tools: ['Markforged FX10 with its Metal Kit', 'Wash-1 (solvent debinding)', 'Sinter-1 or Sinter-2 furnace', '17-4 PH or 316L stainless filament'],
+    limits: [
+      'Printed "green" with binder, washed to remove most of it, then sintered: the part shrinks about a sixth in every direction, so Eiger prints it scaled up about 20% (1/(1 − s)).',
+      'Layers after sintering about 127 µm.',
+      'Thick solid sections take long to wash and can distort in the furnace; supports and a ceramic release layer are printed where needed.',
+    ],
+    source: { cite: 'Markforged FX10 Metal Kit announcement; Markforged FX10 specifications', url: 'https://www.metal-am.com/markforgeds-fx10-metal-kit-add-on-enables-both-metal-and-composite-additive-manufacturing/', kind: 'distributor' },
+    tags: ['3d printing', 'metal', 'sinter', 'stainless', 'additive'], uses: { laws: ['sinter.scale'] },
   },
 ];
 
