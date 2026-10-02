@@ -29,6 +29,8 @@ export interface WorkBook {
   magnets: number;
   /** Buoyancy and the water's drag, net. */
   fluids: number;
+  /** Work the servos did on what they turn: a source's work with no store behind it yet (F-2.2 open, docs/FRONTIER.md D-servo-source). */
+  servos: number;
 }
 
 export interface Energies {
@@ -58,7 +60,7 @@ export interface NumericalBook {
 export const emptyNumerical = (): NumericalBook => ({ lost: 0, gained: 0, gainedHeld: 0 });
 
 export const emptyHeat = (): HeatBook => ({ friction: 0, impact: 0, plastic: 0, air: 0, eddy: 0, damping: 0, electric: 0 });
-export const emptyWork = (): WorkBook => ({ hands: 0, batteries: 0, magnets: 0, fluids: 0 });
+export const emptyWork = (): WorkBook => ({ hands: 0, batteries: 0, magnets: 0, fluids: 0, servos: 0 });
 export const emptyEnergies = (): Energies => ({ kinetic: 0, potential: 0, elastic: 0, heat: emptyHeat(), work: emptyWork(), numerical: emptyNumerical() });
 
 /** Kinetic energy of a rigid body: translation of its centre plus rotation about it (world inertia, row-major). */

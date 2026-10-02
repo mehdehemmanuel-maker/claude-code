@@ -17,6 +17,7 @@ import type { Pose, Quat, Vec3 } from '../doc/types';
 import { add, qmul, rotate } from '../doc/math';
 import { AUTO_JOIN, planJoin } from '../connectors/plan';
 import { getMaterial } from '../data/materials';
+import { ROTOR_PER_STALL } from '../connectors/registry';
 
 export interface BodyPlan {
   name: string;
@@ -79,7 +80,7 @@ export function buildSwimmer(store: DocStore, plan: BodyPlan, at: Vec3, heading 
     const s = plan.segments > 2 ? k / (plan.segments - 2) : 1;
     const c = addConnection(store, {
       kind: 'servo', a: { part: parts[k]!, frame: frame(-plan.length / 2) }, b: { part: parts[k + 1]!, frame: frame(plan.length / 2) },
-      params: { maxTorque: plan.torque, range: plan.swingHead + (plan.swingTail - plan.swingHead) * s, rhythm: plan.rhythm, phase: -lag * k, pin: 0.004 },
+      params: { maxTorque: plan.torque, range: Math.PI / 2, swing: plan.swingHead + (plan.swingTail - plan.swingHead) * s, rhythm: plan.rhythm, phase: -lag * k, pin: 0.004 },
     });
     joints.push(c.id);
   }
@@ -113,7 +114,7 @@ export interface WalkerPlan {
   legMaterial: string;
   foot: { diameter: number; material: string };
   /** Its servos: stall torque N m, no-load speed rad/s, how far off they give it all (rad), and each case's size, m. */
-  servo: { torque: number; speed: number; band: number; size: Vec3; material: string };
+  servo: { torque: number; speed: number; band: number; travel: number; size: Vec3; material: string };
   /** Its rhythm, Hz; how far each hip swings and each knee folds, rad; its gait. */
   rhythm: number;
   swing: number;
@@ -123,9 +124,11 @@ export interface WalkerPlan {
 
 /**
  * A 9 g micro servo: 0.18 N m (1.8 kgf cm) stall, 60° in 0.1 s unloaded, 23 × 12.2 × 29 mm (a common hobby micro
- * servo's datasheet); its case is plastic with a motor and gears inside, about as dense as ABS.
+ * servo's datasheet); its case is plastic with a motor and gears inside, about as dense as ABS. It turns through
+ * about 180° between its stops (estimate: what hobby servos of the class are sold as; some stop short of it), and a
+ * walker's stride swings well inside that, so its legs never reach the stops.
  */
-const MICRO_SERVO = { torque: 0.18, speed: 10.5, band: 0.1, size: [0.023, 0.0122, 0.029] as Vec3, material: 'polymer.abs' };
+const MICRO_SERVO = { torque: 0.18, speed: 10.5, band: 0.1, travel: Math.PI / 2, size: [0.023, 0.0122, 0.029] as Vec3, material: 'polymer.abs' };
 
 /** Walkers people ask for: small robot animals of plywood, printed plastic and hobby servos, as people build. */
 export const WALKERS: Record<string, WalkerPlan> = {
@@ -185,11 +188,30 @@ export function buildWalker(store: DocStore, plan: WalkerPlan, at: Vec3, heading
   out.body = body;
   out.parts.push(body);
   const gait = GAITS[plan.gait]!;
-  const servo = (a: string, fa: Vec3, b: string, fb: Vec3, range: number, offset: number, phase: number, wave: 'sine' | 'lift' = 'sine') => {
-    const wrap = ((phase + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  // What each servo swings, as its loop sees it (world.ts servoLoop: stiffness stall torque over band, critically
+  // damped on the inertia it turns, its rotor included): the leg below the joint, as point masses at their centres,
+  // and the rotor at the horn. A critically damped loop driven at the rhythm answers late and a little short, by the
+  // second-order response at r = 2 pi f / w_n: a lag of atan2(2 r, 1 - r^2) and a gain of 1 / sqrt((1 - r^2)^2 + (2 r)^2).
+  // The rhythm generator sends each servo its command that much early and that much larger (within the travel), so the
+  // leg moves with the phasing the gait is designed for, as a rhythm generator grown onto a body is. Without it the
+  // hips and knees, on different inertias, lag by different amounts and a trot's diagonal timing drifts.
+  const density = (m: string) => getMaterial(m).density;
+  const mThigh = density(plan.legMaterial) * s * plan.thigh * s, mShank = density(plan.legMaterial) * s * plan.shank * s;
+  const mFoot = density(plan.foot.material) * (4 / 3) * Math.PI * (plan.foot.diameter / 2) ** 3;
+  const mCase = density(sv.material) * sv.size[0] * sv.size[1] * sv.size[2];
+  const rotor = ROTOR_PER_STALL * sv.torque;
+  const iHip = rotor + mThigh * (plan.thigh / 2) ** 2 + mCase * plan.thigh ** 2 + mShank * (plan.thigh + plan.shank / 2) ** 2 + mFoot * (plan.thigh + plan.shank) ** 2;
+  const iKnee = rotor + mShank * (plan.shank / 2) ** 2 + mFoot * plan.shank ** 2;
+  const response = (I: number) => {
+    const wn = Math.sqrt(sv.torque / sv.band / I), r = (2 * Math.PI * plan.rhythm) / wn;
+    return { lag: Math.atan2(2 * r, 1 - r * r), gain: 1 / Math.hypot(1 - r * r, 2 * r) };
+  };
+  const servo = (a: string, fa: Vec3, b: string, fb: Vec3, range: number, offset: number, phase: number, inertia: number, wave: 'sine' | 'lift' = 'sine') => {
+    const h = response(inertia);
+    const wrap = ((phase + h.lag + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     const c = addConnection(store, {
       kind: 'servo', a: { part: a, frame: { p: fa, q: SIDEWAYS } }, b: { part: b, frame: { p: fb, q: SIDEWAYS } },
-      params: { maxTorque: sv.torque, speed: sv.speed, band: sv.band, range, offset, rhythm: plan.rhythm, phase: wrap, wave, pin: 0.003 },
+      params: { maxTorque: sv.torque, speed: sv.speed, band: sv.band, rotor, range: sv.travel, swing: Math.min(sv.travel, range / h.gain), offset, rhythm: plan.rhythm, phase: wrap, wave, pin: 0.003 },
     });
     out.joints.push(c.id);
     out.servos.push(c.id);
@@ -211,8 +233,8 @@ export function buildWalker(store: DocStore, plan: WalkerPlan, at: Vec3, heading
     const phase = 2 * Math.PI * gait[leg];
     // the hip swings the leg; the knee folds it, by up to `lift`, only while it comes forward (a quarter cycle ahead of
     // the hip, so most at mid-swing), and is straight the whole time it bears weight
-    const hip = servo(body, [hx, -t / 2, hz], thigh, [0, plan.thigh / 2, 0], plan.swing, 0, phase);
-    servo(thigh, [0, -plan.thigh / 2, 0], shank, [0, plan.shank / 2, 0], plan.lift, 0, phase + Math.PI / 2, 'lift');
+    const hip = servo(body, [hx, -t / 2, hz], thigh, [0, plan.thigh / 2, 0], plan.swing, 0, phase, iHip);
+    servo(thigh, [0, -plan.thigh / 2, 0], shank, [0, plan.shank / 2, 0], plan.lift, 0, phase + Math.PI / 2, iKnee, 'lift');
     (side < 0 ? out.left : out.right).push(hip);
     out.joints.push(
       fasten(store, { id: body, material: plan.body.material, thin: t, at: [hx, t / 2, side * (W / 2 - cz / 2)] }, { id: hipCase, material: sv.material, thin: cy, at: [0, -cy / 2, 0] }, [cx, cz]).id,

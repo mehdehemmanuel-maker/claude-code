@@ -40,6 +40,7 @@ export const DISPLAY: Record<string, Display> = {
   'm/s²': { unit: 'm/s²', scale: 1, digits: 3 },
   'N·s/m': { unit: 'N·s/m', scale: 1, digits: 1 },
   'N·m·s/rad': { unit: 'N·m·s/rad', scale: 1, digits: 4 },
+  'g·cm²': { unit: 'g·cm²', scale: 1e7, digits: 0 },
   T: { unit: 'T', scale: 1, digits: 2 },
   '': { unit: '', scale: 1, digits: 0 },
 };

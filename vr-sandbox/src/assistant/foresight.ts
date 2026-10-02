@@ -17,7 +17,7 @@ export interface Forecast { id: string; mode: 'shear' | 'bending'; load: number;
  * it, its weight and moment summed as the search unwinds. Linear in parts and joints, so it stays instant however big
  * the build.
  */
-export function foresee(parts: FPart[], joints: FJoint[], g = 9.81): Forecast[] {
+export function foresee(parts: FPart[], joints: FJoint[], g: number): Forecast[] {
   const GROUND = parts.length;
   const index = new Map(parts.map((p, i) => [p.id, i]));
   // adjacency: [neighbour, edge id]; edges 0..J-1 are joints, the rest tie grounded parts to the ground

@@ -116,6 +116,12 @@ const SLOP = 0.002;
 const MAX_CORRECTION = 0.2;
 /** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
 const MIN_IMPACT_FOR_RESTITUTION = 1;
+/**
+ * A flat face whose normal is within this (rad) of the detector's is the face a contact is on: inside it the detector's
+ * own normal leans by its tolerance over the separation (up to 0.035 rad measured); further off, the face's normal is
+ * not the contact's (a box touching by its edge or corner), and only the other surface or the detector can say.
+ */
+const NORMAL_AGREE = 0.1;
 /** A contact point this close to a segment's joined end (m) lies on the seam; a normal this far off the end's plane leaves through it. */
 const SEAM_TOL = 1e-4;
 const SEAM_NORMAL = 1e-3;
@@ -164,8 +170,6 @@ type J = typeof JoltNS;
 const LAYER_STATIC = 0;
 const LAYER_MOVING = 1;
 export const TICK = 1 / 90;
-/** Jolt's angular damping on every body, 1/s: numerical, not a model of anything (architecture finding A5). */
-const ANGULAR_DAMPING = 0.02;
 const MAX_SUBSTEPS = 8;
 /** How far an intact joint's two sides may be apart before it is a defect (5 mm: well past any solver tolerance). */
 const JOINT_DRIFT = 0.005;
@@ -439,6 +443,8 @@ interface RecordedContact {
   oBody: JoltNS.Body;
   /** From m toward o. */
   n: Vec3;
+  /** The two surfaces' disagreement on that normal, rad, where it is theirs (surfaceNormal); null where the detector's stands. */
+  nErr: number | null;
   /** Contact points on m and on o, world, at tick start. */
   points: { pm: Vec3; po: Vec3 }[];
   friction: number;
@@ -477,14 +483,14 @@ function magnetOf(g: MagnetGeometry | undefined, material: Material, level: (ch:
 }
 
 /**
- * A servo's position loop: a hobby servo's controller drives its motor in proportion to how far it is off, reaching
- * full voltage, so its stall torque, `band` off (Wada et al., IEEE CCA 2009). So it is at least as stiff as stall torque
- * over band, whatever it turns; and at least a 6 Hz loop on the inertia it turns, so a light one still follows. Critically
- * damped on that inertia.
+ * A servo's position loop (C-11): a hobby servo's controller drives its motor in proportion to how far it is off,
+ * reaching full voltage, so its stall torque, `band` off (Wada et al., Practical Modeling and System Identification of
+ * R/C Servo Motors, IEEE CCA 2009): its stiffness is stall torque over band, whatever it turns. Its damping is its
+ * motor's back-EMF through the gears, which hobby servos do not publish: taken as critical on the inertia it turns
+ * (an estimate, docs/FRONTIER.md Q-servo-damping). Nothing else: a loop has no floor the hardware does not have.
  */
 export function servoLoop(I: number, sv: { maxTorque: number; band: number }): { k: number; c: number } {
-  const w = 2 * Math.PI * 6;
-  const k = Math.max(I * w * w, sv.maxTorque / Math.max(sv.band, 1e-3));
+  const k = sv.maxTorque / Math.max(sv.band, 1e-3);
   return { k, c: 2 * Math.sqrt(k * I) };
 }
 
@@ -503,8 +509,6 @@ export class PhysicsWorld {
   private pairRefs = new Map<number, number>();
   private conns = new Map<string, ConnRec>();
   private envBodies: JoltNS.Body[] = [];
-  /** Each environment box's geometry by Jolt body id: its half extents, pose and rounded-edge radius (for faceNormal). */
-  private envBoxes = new Map<number, { half: Vec3; p: Vec3; q: Quat; cr: number }>();
   /** What the floor and walls are made of, by Jolt body id (for where friction's heat goes). */
   private envMaterial = new Map<number, Material>();
   private roomBodies: JoltNS.Body[] = [];
@@ -677,7 +681,6 @@ export class PhysicsWorld {
     }
     this.envBodies = [];
     this.envMaterial.clear();
-    this.envBoxes.clear();
     for (const box of boxes) {
       const m = materials[box.material];
       const cr = Math.min(0.01, Math.min(...box.half) * 0.4);
@@ -690,7 +693,6 @@ export class PhysicsWorld {
       J.destroy(cs);
       this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
       this.envBodies.push(body);
-      this.envBoxes.set(body.GetID().GetIndexAndSequenceNumber(), { half: box.half, p: box.pose.p, q: box.pose.q, cr });
       if (m) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), m);
     }
   }
@@ -996,7 +998,7 @@ export class PhysicsWorld {
       cs.mFriction = material.friction;
       cs.mRestitution = material.restitution;
       cs.mLinearDamping = 0;
-      cs.mAngularDamping = ANGULAR_DAMPING;
+      cs.mAngularDamping = 0; // a free spin slows only where something slows it (F-2.1): no damping that is nobody's
       cs.mMaxAngularVelocity = 400;
       // Torque-free bodies conserve angular momentum (tumbling, precession), not angular velocity. Segments of
       // breakable parts get this at the level of the whole rigid assembly in the projection instead.
@@ -1409,8 +1411,12 @@ export class PhysicsWorld {
       if (c.status === 'broken' || !c.constraint || !c.b || spans(c.kind.model)) continue;
       if (!free(c.a) || !free(c.b) || c.a === c.b) continue;
       // only a joint already close to holding: a fresh or badly misaligned one (a load left where it fell when its
-      // beam is put back) is pulled in by the solver first, so nothing is ever teleported
-      if (length(sub(this.anchorWorldB(c).p, this.anchorWorld(c).p)) > SEATED) continue;
+      // beam is put back) is pulled in by the solver first, so nothing is ever teleported. Misaligned in what the
+      // joint constrains: a slider's load along its own axis is where it is free to be, not a gap (a joint dropped
+      // here for a tick is left to Jolt's constraint alone, which under a heavy load drifts millimetres in that tick)
+      const wa = this.anchorWorld(c);
+      const seat = mat3Vec(anchorDofs(c.kind.model, rotate(wa.q, [0, 1, 0])).point, sub(this.anchorWorldB(c).p, wa.p));
+      if (length(seat) > SEATED) continue;
       (byBody.get(c.a) ?? byBody.set(c.a, []).get(c.a)!).push(c);
       (byBody.get(c.b) ?? byBody.set(c.b, []).get(c.b)!).push(c);
       if ((c.a.body.IsActive() || c.b.body.IsActive()) && Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass)) seeds.push(c.a, c.b);
@@ -1509,49 +1515,58 @@ export class PhysicsWorld {
       const c2 = man.GetWorldSpaceContactPointOn2(i); const p2: Vec3 = [c2.GetX(), c2.GetY(), c2.GetZ()];
       points.push(flip ? { pm: p2, po: p1 } : { pm: p1, po: p2 });
     }
-    if (!o) {
-      const box = this.envBoxes.get(ob.GetID().GetIndexAndSequenceNumber());
-      const exact = box && this.faceNormal(box, points.map((pt) => pt.po));
-      if (exact) n = scale(exact, -1); // from the member into the box
-    }
+    const sn = this.surfaceNormal(b1, b2, man, count);
+    if (sn) n = flip ? scale(sn.n, -1) : sn.n;
     const key = `${m.id}|${o?.id ?? `env${ob.GetID().GetIndexAndSequenceNumber()}`}`;
     this.contacts.set(key, {
       key, m, o, oStatic: !o || o.frozen || ob.IsStatic() || ob.IsKinematic(), oBody: ob, n, points,
-      friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution,
+      friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution, nErr: sn ? sn.err : null,
     });
   }
 
+  /** Shapes whose surface normal at a point is a face's: exact wherever on the face the point is, whatever the detector's tolerance did to it. */
+  private flatness(b: JoltNS.Body): 'flat' | 'curved' | 'unknown' {
+    const J = this.J, t = b.GetShape().GetSubType();
+    if (t === J.EShapeSubType_Box || t === J.EShapeSubType_ConvexHull || t === J.EShapeSubType_Mesh || t === J.EShapeSubType_HeightField || t === J.EShapeSubType_Plane) return 'flat';
+    if (t === J.EShapeSubType_Sphere || t === J.EShapeSubType_Capsule || t === J.EShapeSubType_TaperedCapsule || t === J.EShapeSubType_Cylinder || t === J.EShapeSubType_TaperedCylinder) return 'curved';
+    return 'unknown';
+  }
+
   /**
-   * The outward normal of the flat face of a box that every one of these points lies on, or null where they do not
-   * all lie on one flat face (an edge or corner, where the box is rounded by its edge radius and the normal really
-   * does turn). F-3.2: a contact is the geometry of the surfaces, and a flat face has one normal, exactly. Collision
-   * detection finds a normal to its tolerance (Jolt's GJK, 1e-4 m), which at a centimetre of separation is a tilt of
-   * up to a few hundredths of a radian: measured on a flat floor, 0.035 rad at most, 0.01 on average, on a quarter
-   * of the normal impulse (docs/FRONTIER.md, D-contact-normal). A tilted normal on a floor is a sideways force the
-   * floor cannot exert (F-1.3 fails on a frictionless floor; with friction it is a false bias in the friction).
+   * The normal of a contact from the surfaces themselves, where they give one (F-3.2: a contact acts along the
+   * surfaces' common normal). A flat face touched anywhere inside it, by a face, an edge, a corner or a rounded foot,
+   * has the contact's normal: its own, exact, whatever the other body's shape does there. The detector finds the same
+   * direction to its tolerance (P-gjk-tolerance, 1e-4 m), a lean of up to tolerance over separation (0.035 rad
+   * measured at a centimetre, docs/FRONTIER.md D-contact-normal), which on a floor is a sideways force the floor
+   * cannot exert. So each flat surface's own normal at its contact point is read from the shape (a box's face, a
+   * hull's face, a terrain triangle's); where it is within NORMAL_AGREE of the detector's it is the face the contact
+   * is on, and of those the one the detector agrees with most is taken (a box's own normal at its edge is one of its
+   * faces', which the detector does not agree with: the other surface's wins). A curved surface's normal is off by
+   * the point's error over its radius, so it is never taken over a face's. Where no flat surface qualifies (edge on
+   * edge, a corner, a sphere on a cylinder) the detector's normal stands, with its contract. The correction applied,
+   * the angle from the detector's normal to the surface's, is kept as the contact's measured lean. Returns the normal
+   * from body 1 toward body 2.
    */
-  private faceNormal(box: { half: Vec3; p: Vec3; q: Quat; cr: number }, points: Vec3[]): Vec3 | null {
-    if (!points.length) return null;
-    const inv = quatConj(box.q);
-    const inside = box.cr + SLOP; // this far from an edge the face is still flat
-    let face = -1, sign = 0;
-    for (const w of points) {
-      const l = rotate(inv, sub(w, box.p));
-      let k = -1, s = 0;
-      for (let i = 0; i < 3; i++) {
-        const h = box.half[i]!, x = l[i]!;
-        if (Math.abs(Math.abs(x) - h) > SLOP) continue;
-        const j = (i + 1) % 3, m = (i + 2) % 3;
-        if (Math.abs(l[j]!) > box.half[j]! - inside || Math.abs(l[m]!) > box.half[m]! - inside) continue;
-        k = i; s = x < 0 ? -1 : 1;
-        break;
-      }
-      if (k < 0 || (face >= 0 && (k !== face || s !== sign))) return null;
-      face = k; sign = s;
+  private surfaceNormal(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, count: number): { n: Vec3; err: number } | null {
+    const flat1 = this.flatness(b1) === 'flat', flat2 = this.flatness(b2) === 'flat';
+    if (!count || (!flat1 && !flat2)) return null;
+    const nd = man.mWorldSpaceNormal; const det: Vec3 = [nd.GetX(), nd.GetY(), nd.GetZ()];
+    const read = (b: JoltNS.Body, id: JoltNS.SubShapeID, c: JoltNS.RVec3): Vec3 => {
+      this.r1.Set(c.GetX(), c.GetY(), c.GetZ());
+      const v = b.GetWorldSpaceSurfaceNormal(id, this.r1);
+      return normalize([v.GetX(), v.GetY(), v.GetZ()]);
+    };
+    const angle = (a: Vec3, b: Vec3) => Math.acos(Math.max(-1, Math.min(1, dot(a, b))));
+    let n: Vec3 | null = null, err = 0;
+    for (let i = 0; i < count; i++) {
+      let best: Vec3 | null = null, off = NORMAL_AGREE;
+      if (flat1) { const n1 = read(b1, man.mSubShapeID1, man.GetWorldSpaceContactPointOn1(i)); const a = angle(n1, det); if (a <= off) { best = n1; off = a; } }
+      if (flat2) { const n2 = scale(read(b2, man.mSubShapeID2, man.GetWorldSpaceContactPointOn2(i)), -1); const a = angle(n2, det); if (a <= off) { best = n2; off = a; } }
+      if (!best) return null;
+      err = Math.max(err, off);
+      n = n ? normalize(add(n, best)) : best;
     }
-    const axis: Vec3 = [0, 0, 0];
-    axis[face] = sign;
-    return rotate(box.q, axis);
+    return n ? { n, err } : null;
   }
 
   private recOf(b: JoltNS.Body): BodyRec | null {
@@ -1733,6 +1748,16 @@ export class PhysicsWorld {
     }
     // iterated to convergence (a heavy load on a light bonded part needs more passes than a lone part), within a cap
     solveRows(rows, 40, this.warm, 1e-5);
+    // a servo's work is a source's work (F-2.2 is open for it: there is no store behind it yet, docs/FRONTIER.md
+    // D-servo-source). What each drive put into each body is kept for the observers: motion with a cause is motion a
+    // drive paid for.
+    for (const r of rows) {
+      const tag = r.tag as RowTag;
+      if (tag?.kind !== 'drive' || !r.work) continue;
+      this.book.work.servos += r.work;
+      this.noteDriveWork(tag.ma, r.work / 2);
+      this.noteDriveWork(tag.mb, r.work / 2);
+    }
     // an assembly on several fixed supports carries the least support load that holds it, as a real one does
     const supports = new Map<Entity, Row[]>();
     for (const r of rows) {
@@ -2460,7 +2485,7 @@ export class PhysicsWorld {
     c.extra = [];
     c.typed = null;
     this.setPairCollision(c, true);
-    if (had && c.kind.id === 'motor' && c.b && this.bodies.get(c.b.id) === c.b) this.rotorInertia(c.b);
+    if (had && (c.kind.id === 'motor' || c.kind.id === 'servo') && c.b && this.bodies.get(c.b.id) === c.b) this.rotorInertia(c.b);
   }
 
   /** Joined parts do not collide with each other (every body of one against every body of the other). */
@@ -2670,14 +2695,18 @@ export class PhysicsWorld {
     this.setPairCollision(c, false);
     this.bi.ActivateBody(c.a.body.GetID());
     if (c.b) this.bi.ActivateBody(c.b.body.GetID());
-    if (c.kind.id === 'motor' && c.b) this.rotorInertia(c.b);
+    if ((c.kind.id === 'motor' || c.kind.id === 'servo') && c.b) this.rotorInertia(c.b);
   }
 
   /**
-   * A gearmotor's rotor turns N times as fast as its output, so what the output turns carries the rotor's inertia
-   * times N^2 about the drive's axis (planetary gearheads are coaxial, so it is that axis). It is given to the driven
-   * body, the housing taken as mounted, as a gearmotor is: exact while the housing doesn't itself spin about the axis.
-   * Worked out again from the body's own inertia whenever a drive on it is made or goes.
+   * A drive's rotor turns N times as fast as its output, so what the output turns carries the rotor's inertia times
+   * N^2 about the drive's axis (planetary gearheads are coaxial, so it is that axis; a servo's horn carries its
+   * motor's rotor through its own gears, `rotor` as given at the horn). It is given to the driven body (side b, the
+   * horn's), the housing taken as mounted, as a gearmotor or a servo case is: exact while the housing doesn't itself
+   * spin about the axis (the rotor's own inertia about the housing is J/N^2, left out). Worked out again from the
+   * body's own inertia whenever a drive on it is made or goes. A rotor realised as a row instead (a soft row toward
+   * the joint's last rate) integrated the link without it and recoupled the two inelastically each tick: a servo then
+   * sagged 50% past its stiffness and a walker's centre of mass drifted on a frictionless floor (docs/FRONTIER.md).
    */
   private rotorInertia(r: BodyRec) {
     if (r.frozen || !r.Iloc) return;
@@ -2685,10 +2714,11 @@ export class PhysicsWorld {
     const I = [...own];
     let added = false;
     for (const c of this.conns.values()) {
-      if (c.kind.id !== 'motor' || c.b !== r || !c.typed || c.status === 'broken' || c.pa.kind.id !== 'motor.dc') continue;
-      const d = this.driveOf(c);
-      const N = d.gear?.ratio ?? 1;
-      const J = d.model.rotorInertia * N * N;
+      if (c.b !== r || !c.typed || c.status === 'broken') continue;
+      let J = 0;
+      if (c.kind.id === 'motor' && c.pa.kind.id === 'motor.dc') { const d = this.driveOf(c); const N = d.gear?.ratio ?? 1; J = d.model.rotorInertia * N * N; }
+      else if (c.kind.id === 'servo') J = c.derived.revolute?.servo?.rotor ?? 0;
+      if (!(J > 0)) continue;
       // the drive's axis in the driven body's own coordinates
       const q = this.poseOf(r).q;
       const n = rotate([-q[0], -q[1], -q[2], q[3]], rotate(this.anchorWorld(c).q, [0, 1, 0]));
@@ -2701,7 +2731,14 @@ export class PhysicsWorld {
     if (!values.every((v) => v > 0)) return;
     const [e0, e1, e2raw] = vectors as [Vec3, Vec3, Vec3];
     const e2 = dot(cross(e0, e1), e2raw) < 0 ? scale(e2raw, -1) : e2raw;
-    r.body.GetMotionProperties().SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    const mp = r.body.GetMotionProperties();
+    mp.SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    // A reflected inertia is an inertia about the drive's axis only: the rotor's angular momentum is J w / N about it
+    // (it spins N times faster with 1/N^2 the inertia), not J w, so the gyroscopic torque the full tensor would give
+    // (I w x w) is N times too large and in directions the rotor never couples. The term is left out for such a body:
+    // what is lost is its own I w x w, small for a light link, and the rotor's true J w / N x w (docs/FRONTIER.md
+    // D-rotor-housing). Found when a walker with its knees still paddled 3 m on the torque this term made up.
+    r.body.SetApplyGyroscopicForce(!added && !r.pr.layout);
     // a new array: segments of one part may share their inertia
     r.Iloc = this.localInertia(r);
     if (!added) r.Iown = undefined;
@@ -2902,6 +2939,7 @@ export class PhysicsWorld {
   private servoRow(c: ConnRec, a: Entity, b: Entity, ha: Pose, hb: Pose, axis: Vec3, dt: number, key: string): Row | null {
     const sv = c.derived.revolute?.servo;
     if (!sv || c.aim === undefined || c.status === 'broken') return null;
+    // its loop on what it really turns: the links, with its own rotor geared down onto them (rotorInertia)
     const loop = servoLoop(this.ownAxisInertia(c), sv);
     const angle = dot(rotationVector(quatMul(hb.q, quatConj(ha.q))), axis);
     const rate = dot(sub(b.w, a.w), axis);
@@ -3113,7 +3151,8 @@ export class PhysicsWorld {
   private magnetPairs(only: Set<string> | null = null): MagnetPair[] {
     const pairs: MagnetPair[] = [];
     if (only && !only.size) return pairs;
-    const g = length(this.sim.gravity) || 9.81;
+    // in free fall there is no weight to measure a force against: every pair within reach matters, at the broadphase's cost
+    const g = length(this.sim.gravity);
     const magnets = [...this.bodies.values()].filter(fieldOn);
     if (magnets.length === 0) return [];
     // steel, and an electromagnet switched off: its core is steel
@@ -3182,7 +3221,7 @@ export class PhysicsWorld {
         const dist = length(sub(B.pose.p, A.pose.p));
         const light = Math.min(A.r.frozen ? Infinity : A.r.mass, B.r.frozen ? Infinity : B.r.mass);
         // Cutoff where the dipole force drops below 0.1% of the lighter magnet's weight.
-        const cutoff = Math.pow((3 * MU0 * A.m * B.m) / (2 * Math.PI * 0.001 * light * g), 0.25);
+        const cutoff = g > 0 ? Math.pow((3 * MU0 * A.m * B.m) / (2 * Math.PI * 0.001 * light * g), 0.25) : Infinity;
         if (dist > cutoff) continue;
         const gap = Math.max(0, dist - A.bound - B.bound);
         const level = ringLevel(gap, Math.min(A.size, B.size), this.opts.maxMagnetRings);
@@ -3206,7 +3245,7 @@ export class PhysicsWorld {
         if (only && !only.has(`${S.id}|${M.r.id}`)) continue;
         const sp = this.poseOf(S);
         const dist = length(sub(sp.p, M.pose.p));
-        const reach = Math.hypot(S.dims.length, S.dims.a) / 2 + Math.pow((3 * MU0 * M.m * M.m) / (2 * Math.PI * 0.001 * M.r.mass * g), 0.25);
+        const reach = Math.hypot(S.dims.length, S.dims.a) / 2 + (g > 0 ? Math.pow((3 * MU0 * M.m * M.m) / (2 * Math.PI * 0.001 * M.r.mass * g), 0.25) : Infinity);
         if (dist > reach) continue;
         const local = rotate(quatConj(sp.q), sub(M.pose.p, sp.p));
         const hit = closestOnShape(S.shape, local);
@@ -3980,7 +4019,7 @@ export class PhysicsWorld {
         const want = this.amplitude.get(c.id) ?? 1, had = this.swing.get(c.id) ?? want;
         const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
         this.swing.set(c.id, now);
-        c.aim = sv.offset + now * u * sv.range;
+        c.aim = sv.offset + now * u * sv.swing;
         h.SetTargetAngle(c.aim);
         // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing at
         // its no-load speed; it can always brake with all it has
@@ -4111,6 +4150,7 @@ export class PhysicsWorld {
     const dt = TICK;
     [this.restingOn, this.touchingNow] = [this.touchingNow, this.restingOn];
     this.touchingNow.clear();
+    this.driveWorkTick.clear();
     const sec = (this.sections = { magnets: 0, jolt: 0, assemblies: 0, joints: 0, energy: 0 });
     let tm = performance.now();
     const lap = (k: keyof typeof sec) => { const n = performance.now(); sec[k] += n - tm; tm = n; };
@@ -4347,6 +4387,8 @@ export class PhysicsWorld {
     this.book.heat.electric += copper + wire;
     this.book.heat.friction += friction + gear;
     this.book.inMotors += friction + gear;
+    this.noteDriveWork(c.a, Po * dt / 2);
+    this.noteDriveWork(c.b, Po * dt / 2);
     this.warmPart(c.a, copper + friction + gear);
     if (cell && Pin > 0) {
       const V = Math.max(cell.V, 1e-3), Ib = Pin / V, Rp = packR(cell.pack);
@@ -4462,8 +4504,8 @@ export class PhysicsWorld {
   /**
    * Close this tick's books. What the world holds now, against what it held at the start plus the work put in, says
    * how much went to heat; what was measured directly (air, eddy currents, rubber) is already booked; the rest was made
-   * at contacts, bearings and yielding hinges, and is shared among them by what each made. Jolt's angular damping is
-   * the integrator's (A5), not heat. A gain nothing explains is booked as a gain, apart from the losses: it is energy
+   * at contacts, bearings and yielding hinges, and is shared among them by what each made. A loss no source claims is
+   * the integrator's. A gain nothing explains is booked as a gain, apart from the losses: it is energy
    * made from nothing, a defect of the realisation to find, never a hand's work (nobody measured any).
    */
   private closeBooks(start: ReturnType<PhysicsWorld['storedNow']>, dt: number) {
@@ -4472,9 +4514,8 @@ export class PhysicsWorld {
     const total = (x: { kinetic: number; potential: number; elastic: number }) => x.kinetic + x.potential + x.elastic;
     const W = b.work.hands + b.work.batteries + b.work.magnets + b.work.fluids;
     const measured = b.heat.air + b.heat.eddy + b.heat.damping + b.heat.electric + b.inMotors;
-    const damping = 2 * ANGULAR_DAMPING * dt * start.spin;
-    let rest = W - (total(now) - total(start)) - measured - damping;
-    let lost = damping, gained = 0, gainedHeld = 0;
+    let rest = W - (total(now) - total(start)) - measured;
+    let lost = 0, gained = 0, gainedHeld = 0;
     if (rest < 0) {
       // energy from nothing: the realisation's defect, booked as such (F-2.1); a hand moving a part kinematically is
       // when it tends to happen, which the books note without crediting the hand with work nobody measured
@@ -4920,28 +4961,31 @@ export class PhysicsWorld {
   /** Each body's rigid group, for the topology it was worked out for. */
   private groupsAt: { at: number; of: Map<BodyRec, string[]> } | null = null;
 
+  /** This tick's work by drives (servo rows, motors), per body it acted on, J. */
+  private driveWorkTick = new Map<BodyRec, number>();
+
+  private noteDriveWork(r: BodyRec | null, joules: number) {
+    if (!r || !joules) return;
+    this.driveWorkTick.set(r, (this.driveWorkTick.get(r) ?? 0) + joules);
+  }
+
   /**
-   * Bodies an actuator is driving now, with everything rigidly joined to them: a servo keeping a rhythm (its swing not
-   * stilled) or following a command off its centre, a motor drawing current.
+   * The work drives did this tick on each body, J, spread over everything rigidly joined to the body a drive acted
+   * on by mass (a bracket bolted to a driven link moves because the link does). An observer that asks whether a
+   * body's motion has a cause compares this, over its window, with the energy the motion holds.
    */
-  drivenBodies(): string[] {
-    const out = new Set<string>();
+  driveWork(): Map<string, number> {
+    const out = new Map<string, number>();
     if (this.groupsAt?.at !== this.topology) this.groupsAt = { at: this.topology, of: new Map() };
     const groups = this.groupsAt.of;
-    const add = (r: BodyRec | null) => {
-      if (!r) return;
+    for (const [r, w] of this.driveWorkTick) {
       let g = groups.get(r);
       if (!g) groups.set(r, (g = (this.rigidGroup(r, null) ?? [r]).map((x) => x.id)));
-      for (const id of g) out.add(id);
-    };
-    for (const c of this.conns.values()) {
-      if (c.status === 'broken') continue;
-      const sv = c.derived.revolute?.servo;
-      const servoing = !!sv && ((sv.rhythm > 0 && (this.amplitude.get(c.id) ?? 1) > 0) || (sv.rhythm === 0 && (this.channels[sv.channel] ?? 0) !== 0));
-      const motoring = !!c.derived.revolute?.motor && (this.drives.get(c.id)?.I ?? 0) !== 0;
-      if (servoing || motoring) { add(c.a); add(c.b); }
+      let M = 0;
+      for (const id of g) M += this.bodies.get(id)?.mass ?? 0;
+      for (const id of g) out.set(id, (out.get(id) ?? 0) + w * ((this.bodies.get(id)?.mass ?? 0) / (M || 1)));
     }
-    return [...out];
+    return out;
   }
 
   /** World-space inertia tensor (row-major 3 x 3, about the centre of mass) of one body, or null if it does not move. */

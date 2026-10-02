@@ -31,7 +31,7 @@ class Pool {
     this.mesh.frustumCulled = false;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.ps = Array.from({ length: count }, () => ({
-      alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, size: 0.01, drag: 0, gravity: 9.81, burst: false, color: new THREE.Color(),
+      alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, size: 0.01, drag: 0, gravity: 0, burst: false, color: new THREE.Color(),
     }));
     for (let i = 0; i < count; i++) {
       this.mesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
@@ -49,7 +49,7 @@ class Pool {
     p.max = init.max ?? 0.5;
     p.size = init.size ?? 0.006;
     p.drag = init.drag ?? 0.5;
-    p.gravity = init.gravity ?? 9.81;
+    p.gravity = init.gravity ?? 0;
     p.burst = init.burst ?? false;
     p.color.copy(init.color ?? new THREE.Color(1, 1, 1));
   }
@@ -123,6 +123,9 @@ export class Particles {
   }
 
   /** Metal-on-metal impact or grinding: spark colour and structure depend on the alloy. */
+  /** The scene's gravity, m/s², read from the document each frame (E-g): sparks and dust fall under it, never under a number of their own. */
+  gravity = 0;
+
   sparksFor(m: Material, at: Vec3, normal: Vec3, intensity: number) {
     const s = SPARK[m.sparks];
     if (!s || !this.enabled) return;
@@ -133,7 +136,7 @@ export class Particles {
       this.sparks.spawn({
         x: at[0], y: at[1], z: at[2],
         vx: (normal[0] + rand(1)) * sp, vy: (normal[1] + rand(1) + 0.3) * sp, vz: (normal[2] + rand(1)) * sp,
-        max: s.life * (0.5 + Math.random() * 0.8), size: 0.004, color: c, drag: 1.2, burst: s.burst && Math.random() < 0.35,
+        max: s.life * (0.5 + Math.random() * 0.8), size: 0.004, color: c, drag: 1.2, burst: s.burst && Math.random() < 0.35, gravity: this.gravity,
       });
     }
   }
@@ -143,7 +146,7 @@ export class Particles {
     const n = Math.min(24, Math.round(3 + intensity * 6));
     const c = this.tmpColor.setHex(m.color).lerp(new THREE.Color(0xcfc6b8), 0.5);
     for (let i = 0; i < n; i++) {
-      this.dust.spawn({ x: at[0], y: at[1] + 0.005, z: at[2], vx: rand(0.6), vy: Math.random() * 0.5, vz: rand(0.6), max: 0.6 + Math.random() * 0.6, size: 0.006 + Math.random() * 0.01, color: c, drag: 3.5, gravity: 1.2 });
+      this.dust.spawn({ x: at[0], y: at[1] + 0.005, z: at[2], vx: rand(0.6), vy: Math.random() * 0.5, vz: rand(0.6), max: 0.6 + Math.random() * 0.6, size: 0.006 + Math.random() * 0.01, color: c, drag: 60, gravity: this.gravity }); // drag 60/s: fine grains settle at about 0.15 m/s on Earth (Stokes, ~50 µm; an estimate)
     }
   }
 

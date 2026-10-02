@@ -870,6 +870,7 @@ export class App {
     if (events.length) B.measure('events', () => this.handleEvents(events));
     B.measure('scene', () => this.view.update(this.store.doc, this.live, this.overrides));
     this.particles.enabled = this.settings.particles;
+    this.particles.gravity = Math.hypot(...this.doc.sim.gravity);
     B.measure('particles', () => this.particles.update(dt));
     if (time - this.lastSlow > 150) {
       this.lastSlow = time;

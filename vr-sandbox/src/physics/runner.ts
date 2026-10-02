@@ -79,8 +79,8 @@ export class Runner {
     }
     // held parts move with a hand, not on their own
     this.watchdog.opts.held = new Set(this.world.heldBodies());
-    // driven parts move because something drives them
-    this.watchdog.opts.driven = new Set(this.world.drivenBodies());
+    // what the drives put into each body this tick: motion a drive paid for has its cause
+    this.watchdog.observeDrives(this.world.driveWork());
     this.watchdog.observe(bodies, r.stats.stepMs, r.stats.sections, r.stats.substeps, r.stats.magnetPairs);
     this.watchdog.observePower(r.power);
   }

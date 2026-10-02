@@ -98,7 +98,7 @@ describe('foresight', () => {
     const loop = foresee(parts, [
       { id: 'j1', a: 'post', b: 'arm', at: [0.05, 1, 0], shear: 1000, bending: 3 },
       { id: 'j2', a: 'post', b: 'arm', at: [0.05, 1.1, 0], shear: 1000, bending: 3 },
-    ]);
+    ], 9.81);
     expect(loop).toEqual([]);
   });
 });

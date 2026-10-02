@@ -50,11 +50,12 @@ export interface Derived {
     boreDiameter: number;
     limits: [number, number] | null;
     motor?: { channel: string; reverse: boolean; currentLimit: number };
-    /** A servo follows its control channel, or, with a rhythm, swings on its own: offset + range × sin(2π rhythm t +
-     * phase), as a spinal rhythm generator drives a swimming or walking animal's muscles. It pushes back in proportion
+    /** A servo follows its control channel, or, with a rhythm, swings on its own: offset + swing × sin(2π rhythm t +
+     * phase), within its travel (± range, its end stops), as a spinal rhythm generator drives a swimming or walking animal's muscles. It pushes back in proportion
      * to how far it is off, reaching its stall torque `band` (rad) off; its torque falls with speed as a DC motor's
-     * does, to nothing at `speed` (rad/s). */
-    servo?: { maxTorque: number; range: number; channel: string; rhythm: number; phase: number; offset: number; band: number; speed: number; wave: 'sine' | 'lift' };
+     * does, to nothing at `speed` (rad/s). Its motor's rotor, geared down, weighs on what it turns as `rotor` (kg m²,
+     * at the output) does. */
+    servo?: { maxTorque: number; range: number; swing: number; rotor: number; channel: string; rhythm: number; phase: number; offset: number; band: number; speed: number; wave: 'sine' | 'lift' };
     eddy?: { c: number };
     torsionSpring?: { k: number; rest: number };
   };
@@ -153,6 +154,17 @@ function magnetFieldOnAxis(Br: number, L: number, R: number, z: number) {
 const fmt = (x: number, digits = 2) => (Number.isFinite(x) ? x.toFixed(digits) : '∞');
 
 // ------------------------------------------------------------------------------------------------
+
+/**
+ * A servo's rotor at its horn, per N m of stall torque (kg m² per N m, i.e. s²): an estimate. Its motor's rotor turns
+ * gear-ratio times faster than the horn, so the horn carries the rotor's inertia times the ratio squared. Neither is
+ * published for hobby servos; this is bounded by what is: a 9 g micro servo (0.18 N m stall) turns 60° in 0.1 s
+ * unloaded, which leaves its motor at most about 20 ms to spin up (its mechanical time constant, J w0 / T_stall), so
+ * J at the horn <= 0.02 s x 0.18 N m / 10.5 rad/s = 3.4e-4 kg m². That is what a small DC motor's rotor (0.1 to
+ * 0.3 g cm², as 10 mm motors are rated) gives through 150:1 to 180:1 gears, the reduction such servos are thought to
+ * have. Scaled with stall torque for larger servos (a 2 N m standard servo: 4e-3 kg m²).
+ */
+export const ROTOR_PER_STALL = 2e-3;
 
 export const CONNECTOR_KINDS: ConnectorKind[] = [
   {
@@ -623,24 +635,32 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       // 60° in 0.1 s unloaded (10.5 rad/s); a standard one in about 0.17 s (6 rad/s).
       num('band', 'Full torque at (error)', 0.1, 0.005, 0.5, 'deg', { group: 'Servo' }),
       num('speed', 'No-load speed', 6, 0.5, 60, 'rad/s', { group: 'Servo' }),
+      // its motor's rotor turns gear-ratio times faster than the horn, so the horn carries the rotor's inertia times the
+      // ratio squared (0: estimated from its stall torque, as below)
+      num('rotor', 'Rotor inertia at the horn (0: estimate)', 0, 0, 0.1, 'g·cm²', { group: 'Servo', log: true }),
       num('offset', 'Centre trim', 0, -Math.PI, Math.PI, 'deg', { group: 'Servo' }),
       choice('channel', 'Control', 'steer', channelOptions, { group: 'Control' }),
       num('rhythm', 'Rhythm (0: follow the control)', 0, 0, 20, 'Hz', { group: 'Control' }),
       num('phase', 'Phase', 0, -Math.PI, Math.PI, 'deg', { group: 'Control' }),
       // the rhythm's shape: a full swing each way, or a lift on one half of each cycle only (a knee folding as its leg
       // comes forward, straight while it bears weight)
+      // what it is told to swing through, inside its travel: a servo's stops are where its gears end, not where its
+      // command does (0: the whole travel)
+      num('swing', 'Swing (±; 0: its whole travel)', 0, 0, Math.PI, 'deg', { group: 'Control' }),
       choice('wave', 'Rhythm shape', 'sine', [{ value: 'sine', label: 'Swing (both ways)' }, { value: 'lift', label: 'Lift (one half of each cycle)' }], { group: 'Control' }),
       ...pinParams,
     ],
     derive: ({ params }) => {
       const range = numberOf(params, 'range'), offset = numberOf(params, 'offset');
+      const swing = Math.min(range, numberOf(params, 'swing') || range);
+      const rotor = numberOf(params, 'rotor') || ROTOR_PER_STALL * numberOf(params, 'maxTorque');
       return {
         capacities: pinCapacity(params, PIN_RM),
         revolute: {
           // a servo turns only through its travel, about its centre: past it is its own end stop
           frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: [Math.max(-Math.PI, offset - range), Math.min(Math.PI, offset + range)],
           servo: {
-            maxTorque: numberOf(params, 'maxTorque'), range, channel: stringOf(params, 'channel', 'steer'), rhythm: numberOf(params, 'rhythm'), phase: numberOf(params, 'phase'),
+            maxTorque: numberOf(params, 'maxTorque'), range, swing, rotor, channel: stringOf(params, 'channel', 'steer'), rhythm: numberOf(params, 'rhythm'), phase: numberOf(params, 'phase'),
             offset, band: numberOf(params, 'band'), speed: numberOf(params, 'speed'), wave: stringOf(params, 'wave', 'sine') === 'lift' ? 'lift' : 'sine',
           },
         },
@@ -648,6 +668,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
           { label: 'Stall torque', value: `${fmt(numberOf(params, 'maxTorque'), 2)} N·m` },
           { label: 'Stiffness', value: `${fmt(numberOf(params, 'maxTorque') / numberOf(params, 'band'), 2)} N·m/rad`, formula: 'stall torque / band' },
           { label: '60° in', value: `${fmt(Math.PI / 3 / numberOf(params, 'speed'), 2)} s`, formula: 'unloaded' },
+          { label: 'Rotor at the horn', value: `${fmt(rotor * 1e7, 0)} g·cm²`, formula: numberOf(params, 'rotor') ? 'as set' : 'estimate: 2e-3 s² × stall torque' },
         ],
         warnings: [],
       };
