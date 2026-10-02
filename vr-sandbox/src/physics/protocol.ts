@@ -100,6 +100,8 @@ export interface StepResult {
   cure: Record<string, number>;
   stats: {
     stepMs: number; bodies: number; awake: number; substeps: number; magnetPairs: number; ticks: number;
+    /** The net impulse Jolt's step put on the fitted clusters, summed by magnitude: what they took from outside, and the single-precision residue of their bonds' cancelling pairs. */
+    clusterImpulse: { P: number; L: number };
     /** Where the tick's time went, ms, by section. */
     sections?: Record<string, number>;
   };

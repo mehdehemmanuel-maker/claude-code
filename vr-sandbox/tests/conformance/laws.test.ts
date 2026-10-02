@@ -665,17 +665,16 @@ describe('powered and damped joints', () => {
     const R = windingR(m, mot.winding) + 2 * 0.5 * 0.008286;
     const w0 = (bat.V - m.I0 * R) / m.Kt / g.ratio;
     within(Math.abs(b.spin()), w0, 0.01);
-    // and the battery gives what the motor's no-load current takes, plus what holds the flywheel against the world's
-    // numerical angular damping, 0.02/s of its spin (audit A5, fix F4: stated, not hidden; a real one loses only its
-    // bearings' and the air's share)
-    const damping = (0.02 * I * w0) / (m.Kt * g.ratio * g.efficiency);
-    within(bat.I, m.I0 + damping, 0.1);
+    // and the battery gives what the motor's no-load current takes, and nothing more: a flywheel in this world loses
+    // only what its bearings and the air take from it, and neither is modelled yet (the 0.02/s numerical damping
+    // that used to stand in for them is gone, F-2.1: a free spin slows only where something slows it)
+    within(bat.I, m.I0, 0.1);
     // cut the wire and it coasts down on its own friction, reflected through the gearhead
     b.r.world.apply({ op: 'removeConnection', id: b.w!.id });
     const before = Math.abs(b.spin());
     b.r.run(1);
     const drag = (m.Tf * g.ratio) / g.efficiency;
-    within(before - Math.abs(b.spin()), drag / I + 0.02 * before, 0.1);
+    within(before - Math.abs(b.spin()), drag / I, 0.1);
     b.r.done();
   });
 

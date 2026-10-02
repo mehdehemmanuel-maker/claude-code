@@ -1797,7 +1797,8 @@ export class PhysicsWorld {
       this.r1.Set(...pose.p);
       this.q1.Set(...pose.q);
       this.v1.Set(...en.e.v);
-      this.v2.Set(...en.e.w);
+      // the spin carried through the turn as the body's own vector (as placeCluster does, F-2.1)
+      this.v2.Set(...rotate(normQuat(quatMul(pose.q, quatConj(cur.q))), en.e.w));
       this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
     }
     // the mechanism closed at position level, outward from its assemblies: each moving part is set exactly onto its
@@ -1927,14 +1928,20 @@ export class PhysicsWorld {
       // solved velocity, or every correction would slip in momentum w x d with no force behind it.
       comRef = add(comE, d.v);
     }
+    // The solved spin is the body's own, found at the tick's start (the midpoint step on Euler's equations keeps
+    // its energy and |L| exactly in that frame): carried through the tick's turn as the body-frame vector it is,
+    // w_end = R w, not as a world vector, so that the energy it holds in its new orientation is the energy it was
+    // solved with. Kept as a world vector, a 30 rad/s tumble of an uneven angle gained 1.8e-6 of its energy in two
+    // seconds (F-2.1), which the angular damping used to hide.
+    const wEnd = rotate(normQuat(quatMul(C.q, quatConj(C0.q))), ent.e.w);
     comp.forEach((r, i) => {
       const np = composePose(C, T[i]!);
-      const v = add(ent.e.v, cross(ent.e.w, sub(np.p, comRef)));
+      const v = add(ent.e.v, cross(wEnd, sub(np.p, comRef)));
       w.newV[i] = v;
       this.r1.Set(...np.p);
       this.q1.Set(...np.q);
       this.v1.Set(...v);
-      this.v2.Set(...ent.e.w);
+      this.v2.Set(...wEnd);
       this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
     });
   }
@@ -2046,6 +2053,10 @@ export class PhysicsWorld {
     const Ic = mass.angularBlock();
     const invIc = inverse3(Ic);
     const L0 = mat3Vec(Ic, u0.w);
+    // what Jolt's step did to the cluster's momentum, read off its segments: external impulses, and the single-precision
+    // residue of the bonds' cancelling pairs (an instrument: docs/FRONTIER.md D-bond-float32)
+    this.clusterImpulse.P += length(dPsum);
+    this.clusterImpulse.L += length(dLsum);
     const wPred = gyroscopicStep(Ic, mat3Vec(invIc, add(L0, dLsum)), dt);
     const vPred = add(u0.v, scale(dPsum, 1 / M));
     const extent = comp.reduce((x, r, i) => Math.max(x, this.extentAbout(r, NP0[i]!.p, com0)), 0);
@@ -4151,6 +4162,7 @@ export class PhysicsWorld {
     [this.restingOn, this.touchingNow] = [this.touchingNow, this.restingOn];
     this.touchingNow.clear();
     this.driveWorkTick.clear();
+    this.clusterImpulse = { P: 0, L: 0 };
     const sec = (this.sections = { magnets: 0, jolt: 0, assemblies: 0, joints: 0, energy: 0 });
     let tm = performance.now();
     const lap = (k: keyof typeof sec) => { const n = performance.now(); sec[k] += n - tm; tm = n; };
@@ -4648,6 +4660,7 @@ export class PhysicsWorld {
         awake: this.ps.GetNumActiveBodies(this.J.EBodyType_RigidBody),
         substeps: this.lastSubsteps,
         magnetPairs: this.lastMagnetPairs,
+        clusterImpulse: { ...this.clusterImpulse },
         ticks: this.ticks,
         sections: { ...this.sections },
       },
@@ -4960,6 +4973,9 @@ export class PhysicsWorld {
 
   /** Each body's rigid group, for the topology it was worked out for. */
   private groupsAt: { at: number; of: Map<BodyRec, string[]> } | null = null;
+
+  /** The net impulse Jolt's step put on every fitted cluster this tick, summed by magnitude (kg m/s, kg m²/s): an instrument (fitCluster). */
+  private clusterImpulse = { P: 0, L: 0 };
 
   /** This tick's work by drives (servo rows, motors), per body it acted on, J. */
   private driveWorkTick = new Map<BodyRec, number>();
