@@ -10,6 +10,8 @@ import { DocStore } from '../../src/doc/store';
 import { newDoc } from '../../src/doc/commands';
 import { getMaterial, MATERIALS } from '../../src/data/materials';
 import type { Vec3 } from '../../src/doc/types';
+import { rotate } from '../../src/doc/math';
+import { groundAt, heightfield, PLACES } from '../../src/world/place';
 
 const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
 
@@ -102,4 +104,35 @@ describe('a walker that chooses', () => {
     expect(headingOf(r.world.livePose(w.body)!.q)).toBeCloseTo(0, 1);
     r.done();
   }, 120000);
+});
+
+describe('a walker that keeps its feet', () => {
+  // Found when a dog on the beach rolled onto its back about one run in ten in the app: its stance was narrower than its
+  // legs are long, and a stride cut short mid-swing tripped it. Its stance is now as wide as its legs are long, and a
+  // stride changes over half a second. Held here against shoves while it turns this way and that.
+  it('on the beach, shoved sideways every half second (0.06 N s) while it turns hard this way and that, it never rolls over', async () => {
+    const f = heightfield({ id: 'beach', ...PLACES['beach']! });
+    for (let seed = 1; seed <= 6; seed++) {
+      const r = await rig({}, false);
+      r.world.apply({ op: 'terrain', field: { n: f.n, size: f.size, heights: f.heights }, material: getMaterial(PLACES['beach']!.ground.material) });
+      const store = new DocStore(newDoc('walk'));
+      const w = buildWalker(store, WALKERS['dog']!, [0, groundAt(f, 0, 1.9) + 0.003, 1.9], seed * 0.7);
+      for (const id of w.parts) r.world.apply({ op: 'upsertPart', part: store.doc.parts[id]!, material: getMaterial(store.doc.parts[id]!.material), keepLivePose: false });
+      for (const id of w.joints) r.world.apply({ op: 'upsertConnection', conn: store.doc.connections[id]!, materials });
+      let rnd = seed * 7919 + 13;
+      const next = () => (rnd = (rnd * 9301 + 49297) % 233280) / 233280;
+      let lowest = 1;
+      for (let k = 0; k < 20; k++) {
+        const [left, right] = [[0, 1], [1, 0], [1, 1], [1, 1]][Math.floor(next() * 4)]!;
+        r.world.apply({ op: 'gait', amplitude: strides({ left: left!, right: right!, doing: 'company', says: null }, w) });
+        r.run(0.25);
+        const pose = r.world.livePose(w.body)!, side = rotate(pose.q, [0, 0, next() < 0.5 ? 1 : -1]);
+        r.world.apply({ op: 'impulse', id: w.body, point: pose.p, impulse: [side[0] * 0.06, 0, side[2] * 0.06] });
+        r.run(0.25);
+        lowest = Math.min(lowest, upright(r, w));
+      }
+      expect(lowest, `seed ${seed}`).toBeGreaterThan(0.3);
+      r.done();
+    }
+  }, 300000);
 });

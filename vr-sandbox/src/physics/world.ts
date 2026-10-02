@@ -512,6 +512,11 @@ export class PhysicsWorld {
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
   /** Each rhythmic servo's swing as its creature's nervous system commands it (op 'gait'): 1 as built when unset. */
   private amplitude = new Map<string, number>();
+  /**
+   * The swing it has now: it follows the command over half a second, as a stride lengthens or shortens over a step,
+   * never at once (a leg cut short mid-swing trips the body over it).
+   */
+  private swing = new Map<string, number>();
   /** Motor drives' electrical state by joint, batteries' by part. */
   private drives = new Map<string, DriveRec>();
   private cells = new Map<string, CellRec>();
@@ -2373,6 +2378,7 @@ export class PhysicsWorld {
     this.destroyConstraint(c);
     this.conns.delete(id);
     this.amplitude.delete(id);
+    this.swing.delete(id);
   }
 
   private derive(c: ConnRec): Derived {
@@ -2900,7 +2906,7 @@ export class PhysicsWorld {
     this.applyFluids(dt);
     if (this.sim.airDrag) this.applyAirDrag();
     this.applyBands();
-    this.driveJoints();
+    this.driveJoints(dt);
     this.driveGrabs(dt);
     // last: the drag is taken at the velocity the step ends with, under everything else (M4)
     this.applyEddies(dt);
@@ -3814,7 +3820,7 @@ export class PhysicsWorld {
   }
 
   /** Motors, servos, eddy brakes and load-dependent bearing friction. */
-  private driveJoints() {
+  private driveJoints(dt: number) {
     this.solveCircuits();
     for (const c of this.conns.values()) {
       if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed) continue;
@@ -3867,7 +3873,10 @@ export class PhysicsWorld {
         // its own rhythm, or its control channel, about its centre
         const beat = Math.sin(2 * Math.PI * sv.rhythm * this.time + sv.phase);
         const u = sv.rhythm > 0 ? (sv.wave === 'lift' ? Math.max(0, beat) : beat) : Math.max(-1, Math.min(1, this.channels[sv.channel] ?? 0));
-        c.aim = sv.offset + (this.amplitude.get(c.id) ?? 1) * u * sv.range;
+        const want = this.amplitude.get(c.id) ?? 1, had = this.swing.get(c.id) ?? want;
+        const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
+        this.swing.set(c.id, now);
+        c.aim = sv.offset + now * u * sv.range;
         h.SetTargetAngle(c.aim);
         // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing at
         // its no-load speed; it can always brake with all it has

@@ -41,7 +41,7 @@ Every servo is a 9 g micro servo: 0.18 N·m stall, 60° in 0.1 s unloaded, its p
 
 | Plan | Body | Legs | Gait | Rhythm | Walks |
 |---|---|---|---|---|---|
-| a small dog ("dog", "cat", "fox", "pet", "robot dog") | 200 × 100 mm | 50 + 50 mm | a walk: one foot at a time, hind then fore on each side | 2.5 Hz | 2.4 to 3.1 m in 10 s, about 1.3 body lengths a second, whichever way it faces |
+| a small dog ("dog", "cat", "fox", "pet", "robot dog") | 200 × 160 mm | 50 + 50 mm | a walk: one foot at a time, hind then fore on each side | 2.5 Hz | 2.6 to 3.3 m in 10 s, about 1.5 body lengths a second, whichever way it faces |
 | a deer ("deer", "horse", "goat") | 220 × 160 mm | 70 + 70 mm | a trot: diagonal legs together | 1.6 Hz | 1.3 to 2.1 m in 10 s |
 
 Nothing tells it to go forward. A foot lifted as it comes forward and planted as it goes back pushes the ground back, and friction pushes the body on. The conformance tests hold each of these:
@@ -68,13 +68,18 @@ Ask her: *"put a dog on the beach"*, *"add a deer"*, *"build me a robot dog"*. S
 
 ## What making it walk found in the world
 
-Five flaws, each fixed at its root, each now a rule (ARCHITECTURE.md, R12 to R14):
+Six flaws, each fixed at its root, the first four now rules (ARCHITECTURE.md, R12 to R14) and the others held by the walker tests:
 
 - **A servo couldn't hold a leg up.** Its position loop was sized for a 6 Hz response on what it turns. On a 4 g thigh that is 0.006 N·m/rad: holding the body up would take 9 rad of error. A hobby servo is a proportional controller that saturates (Wada et al., IEEE CCA 2009). It gives its stall torque a few degrees off, and its torque falls with speed. The servo now does both (`band`, `speed`), and has a centre trim (`offset`).
 - **The stiffer servo rang** on a 1 kg bracket bolted to a 60 kg base. Jolt's motor saw only the bracket. Its loop is now solved in the assembly pass on the true inertia of both sides (a soft row), and what a servo turns is an assembly there.
 - **A chain of assemblies came apart.** The knee pins of a walker floating free came 9 mm apart. Each assembly was integrated on its own, and only 20% of the gap was taken out a tick, too slow for the arc a fast, light shank swings through. Each island is now closed outward from its heaviest or held assembly, as lone parts were. The walker's first gait, a trot, then fell over at one heading: the drifting pins had been softening its footfalls. The four-beat walk is steady at every heading.
 - **Ego stilled a walking dog's feet.** The watchdog called them "shaking in place", and she "settled" them mid-stride. Now what an actuator drives is driven, not shaking.
 - **The trot rolled over.** With a sine knee, the feet were off the ground most of each cycle. The knee now folds only on the forward half.
+- **The dog rolled onto its back about one run in ten** in the app, never in tests of the physics alone: what differs there is when its mind's commands land. Shoved sideways (0.06 N·s) while turning hard, a 100 mm wide dog rolled over one time in five. Two changes, both real:
+  - its stance is as wide as its legs are long (160 mm);
+  - a stride changes over half a second, never at once, as a nervous system ramps a stride: a leg cut short mid-swing trips the body over it.
+
+  Together, no roll-overs in twenty shoved runs; the walker tests shove it on the beach and hold it to that.
 
 Honest limits:
 

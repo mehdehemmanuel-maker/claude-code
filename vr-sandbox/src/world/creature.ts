@@ -130,7 +130,8 @@ const MICRO_SERVO = { torque: 0.18, speed: 10.5, band: 0.1, size: [0.023, 0.0122
 /** Walkers people ask for: small robot animals of plywood, printed plastic and hobby servos, as people build. */
 export const WALKERS: Record<string, WalkerPlan> = {
   dog: {
-    name: 'a small four-legged walker, dog-shaped', body: { length: 0.2, width: 0.1, thickness: 0.01, material: 'wood.birch-plywood' },
+    // a stance as wide as its legs are long: narrower, a shove sideways rolls it over (one in five at 0.06 N s)
+    name: 'a small four-legged walker, dog-shaped', body: { length: 0.2, width: 0.16, thickness: 0.01, material: 'wood.birch-plywood' },
     thigh: 0.05, shank: 0.05, bar: 0.008, legMaterial: 'polymer.pla', foot: { diameter: 0.012, material: 'rubber.natural' },
     servo: MICRO_SERVO, rhythm: 2.5, swing: 0.45, lift: 0.6, gait: 'walk',
   },
