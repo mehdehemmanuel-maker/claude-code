@@ -60,10 +60,9 @@ describe('understanding a want', () => {
     expect(of('glitch-desert').says).toMatch(/other constants/);
   });
 
-  it('over everything asked, what to build next is ranked by how many wants call for it: with ground and lessons built, life', () => {
+  it('over everything asked, what to build next is ranked by how many wants call for it: with ground, lessons and swimmers built, life', () => {
     const next = nextToBuild(ASKS.map((a) => a.said));
-    expect(next.map((n) => n.id)).not.toContain('terrain');
-    expect(next.map((n) => n.id)).not.toContain('lessons');
+    for (const built of ['terrain', 'lessons', 'swimmers']) expect(next.map((n) => n.id)).not.toContain(built);
     expect(next.slice(0, 2).map((n) => n.id).sort()).toEqual(['characters', 'creatures']);
     expect(next.map((n) => n.id)).toEqual(expect.arrayContaining(['plants', 'overlay', 'buildings']));
   });
@@ -107,5 +106,17 @@ describe('places', () => {
     expect(placeFromWords('a beach at night')!.sun.intensity).toBeLessThan(0.5);
     expect(placeFromWords('a table')).toBeNull();
     for (const [k, p] of Object.entries(PLACES)) expect(heightfield({ id: k, ...p }).heights.every(Number.isFinite), k).toBe(true);
+  });
+});
+
+describe('swimmers', () => {
+  it('a fish asked for in the sea is put there; one asked for on dry land is not', async () => {
+    const { interpret } = await import('../../src/assistant/intent');
+    expect(interpret('put a fish in the sea')).toMatchObject({ do: 'want' });
+    // a sea to put it in first (she takes you to one), then the swimmer into it
+    expect(understand('put a fish in the sea').acts).toEqual([{ place: 'put a fish in the sea' }, { swimmer: 'put a fish in the sea' }]);
+    expect(understand('put a fish in the sea').says).toMatch(/swimming by its own rhythm/);
+    expect(understand('a deer in the forest').acts.some((a) => 'swimmer' in a)).toBe(false);
+    expect(understand('spawn me as a dog').toBuild).toContain('creatures');
   });
 });

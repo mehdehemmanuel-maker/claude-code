@@ -50,7 +50,9 @@ export interface Derived {
     boreDiameter: number;
     limits: [number, number] | null;
     motor?: { channel: string; reverse: boolean; currentLimit: number };
-    servo?: { maxTorque: number; range: number; channel: string };
+    /** A servo follows its control channel, or, with a rhythm, swings on its own: range × sin(2π rhythm t + phase), as a
+     * spinal rhythm generator drives a swimming or walking animal's muscles. */
+    servo?: { maxTorque: number; range: number; channel: string; rhythm: number; phase: number };
     eddy?: { c: number };
     torsionSpring?: { k: number; rest: number };
   };
@@ -613,6 +615,8 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       num('maxTorque', 'Stall torque', 2, 0.01, 2000, 'N·m', { group: 'Servo', log: true }),
       num('range', 'Travel (±)', Math.PI / 3, 0.05, Math.PI, 'deg', { group: 'Servo' }),
       choice('channel', 'Control', 'steer', channelOptions, { group: 'Control' }),
+      num('rhythm', 'Rhythm (0: follow the control)', 0, 0, 20, 'Hz', { group: 'Control' }),
+      num('phase', 'Phase', 0, -Math.PI, Math.PI, 'deg', { group: 'Control' }),
       ...pinParams,
     ],
     derive: ({ params }) => ({
@@ -620,7 +624,7 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
       revolute: {
         // a servo turns only through its travel: past it is its own end stop
         frictionTorque: 0, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: [-numberOf(params, 'range'), numberOf(params, 'range')],
-        servo: { maxTorque: numberOf(params, 'maxTorque'), range: numberOf(params, 'range'), channel: stringOf(params, 'channel', 'steer') },
+        servo: { maxTorque: numberOf(params, 'maxTorque'), range: numberOf(params, 'range'), channel: stringOf(params, 'channel', 'steer'), rhythm: numberOf(params, 'rhythm'), phase: numberOf(params, 'phase') },
       },
       readouts: [{ label: 'Stall torque', value: `${fmt(numberOf(params, 'maxTorque'), 2)} N·m` }],
       warnings: [],

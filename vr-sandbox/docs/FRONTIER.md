@@ -86,12 +86,13 @@ Over everything asked, what to build next is ranked by how many wants call for i
 
 - **Ground** ranked first, so it was built first ([PLACES.md](PLACES.md)). Asked for a beach, she grows its sand and sea and takes you there.
 - **Lessons that check what you do** came next ([LESSONS.md](LESSONS.md)). Any design she can make becomes the steps of building it yourself, each shown by a guide and done only when done in your world.
+- **Swimmers with bodies** came next ([CREATURES.md](CREATURES.md)): real parts and rhythmic servos that swim by the water's push.
 
 Now ranked first:
 
-1. creatures with bodies and characters with minds (8 each);
-2. plants and seeing what is hidden (6 each);
-3. buildings (4).
+1. characters with minds and creatures that walk, fly and choose;
+2. plants and seeing what is hidden;
+3. buildings.
 
 ## Ask her
 

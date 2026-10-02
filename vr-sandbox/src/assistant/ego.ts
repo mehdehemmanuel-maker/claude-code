@@ -27,6 +27,8 @@ import { advance, guideOf, lessonFrom, type Lesson } from './lesson';
 import { buildVisual } from '../render/geometry';
 import { ghostMaterial } from '../render/materials';
 import { placeFromWords } from '../world/place';
+import { buildSwimmer, swimmerFromWords } from '../world/creature';
+import { POOL } from '../physics/environment';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
@@ -368,7 +370,8 @@ export class Ego {
           if ('command' in a) this.host.command(a.command);
           else if ('timeScale' in a) app.setTimeScale(a.timeScale);
           else if ('playerScale' in a) { app.settings.playerScale = a.playerScale; app.notify(); }
-          else app.setPlace(a.place === null ? null : placeFromWords(a.place));
+          else if ('swimmer' in a) this.releaseSwimmer(a.swimmer);
+          else { const p = a.place === null ? null : placeFromWords(a.place); if ((p?.id ?? null) !== (app.place?.id ?? null)) app.setPlace(p); }
         }
         return u.says;
       }
@@ -438,6 +441,19 @@ export class Ego {
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
     return `${plan.notes.join(' ')} ${verdict}`;
+  }
+
+  /**
+   * A swimmer into the water there is: the place's sea or lake, a few metres out and facing away from the shore, or the
+   * workshop's pool. It swims only under physics, so the world is set running.
+   */
+  private releaseSwimmer(words: string) {
+    const app = this.app, plan = swimmerFromWords(words);
+    if (!plan) return;
+    const water = app.place?.water ? { level: app.waterLevel()!, at: [0, 0, app.place.ground.shore - 6] as [number, number, number], heading: Math.PI / 2 }
+      : { level: POOL.water, at: [POOL.x + plan.length * plan.segments / 2, 0, POOL.z] as [number, number, number], heading: 0 };
+    buildSwimmer(app.store, plan, [water.at[0], water.level - plan.thickness, water.at[2]], water.heading, `${plan.name.split(' ').pop()}${++this.seq}`);
+    if (app.settings.build) app.play();
   }
 
   /** The lesson you are on, if any. */
