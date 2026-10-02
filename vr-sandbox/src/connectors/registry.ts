@@ -845,6 +845,4 @@ export function getConnectorKind(id: string): ConnectorKind {
 
 export const hasConnectorKind = (id: string) => kindById.has(id);
 
-/** Joint mechanism of a rigid connector changes if it slipped. */
-export const isFriction = (k: ConnectorKind) => k.id === 'bolted';
 

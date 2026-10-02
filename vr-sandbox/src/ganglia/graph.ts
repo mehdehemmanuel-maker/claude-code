@@ -38,10 +38,13 @@ const FAMILY_LAWS: Record<string, string[]> = {
   gearhead: ['gear.output.torque'], battery: ['lead-acid.ocv', 'energy.electric'], 'roller chain': ['chain.speed', 'chain.pull'],
   coupling: ['power.rotary'], 'rod end': ['buckling.euler', 'buckling.johnson'], 'motor controller': ['motor.current', 'power.electric'],
   'printing material': ['composite.rule-of-mixtures', 'composite.transverse'],
+  bolt: ['bolt.torque.nut-factor', 'stress.axial'], 'hollow section': ['stress.bending', 'beam.simply-supported.point', 'beam.cantilever.point'], fuse: ['joule', 'ohm'],
+  'lead screw': ['screw.force', 'screw.efficiency', 'stress.axial', 'buckling.euler'],
 };
 const FAMILY_PROCESSES: Record<string, string[]> = {
   bearing: ['bearing.fit'], 'pillow block': ['bearing.fit', 'drill'], wire: ['crimp', 'solder'], coupling: ['bore'], 'rod end': ['tap', 'saw'],
   'dc motor': ['split-clamp'], 'roller chain': [], gearhead: [], battery: [], 'motor controller': ['crimp'], 'printing material': ['cff'],
+  bolt: ['drill', 'tap'], 'hollow section': ['saw', 'drill', 'weld.mig'], fuse: [], 'lead screw': ['saw', 'turn'],
 };
 const JOINT_PROCESSES: Record<string, string[]> = {
   bolted: ['drill', 'tap'], screwed: ['screw.wood', 'drill'], nailed: [], riveted: ['drill'], weld: ['weld.mig'], glued: ['glue'], soldered: ['solder'],

@@ -37,8 +37,6 @@ export interface Way {
   source: Source;
 }
 
-const PAHL = { cite: 'Pahl, Beitz, Feldhusen & Grote, Engineering Design: A Systematic Approach, 3rd ed., Springer 2007 (working principles)', kind: 'textbook' as const };
-const ROTH = { cite: 'Roth, Konstruieren mit Konstruktionskatalogen, 3rd ed., Springer 2000 (catalogues of physical effects)', kind: 'textbook' as const };
 const HUGHES = { cite: 'Hughes, Electric Motors and Drives, 4th ed., Newnes 2013', kind: 'textbook' as const };
 const BOLDEA = { cite: 'Boldea & Nasar, Linear Electric Actuators and Generators, Cambridge 1997', kind: 'textbook' as const };
 const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
@@ -156,6 +154,36 @@ export const WAYS: Way[] = [
     laws: ['power.electric'], embodiedBy: [],
     range: 'Indicators to lighting, a few volts each, a third or more of the power out as light.', source: PHYSICS,
   },
+  {
+    id: 'bioluminescence', name: 'Bioluminescence', takes: ['chemical'], gives: ['light'],
+    effect: 'An enzyme (a luciferase) oxidises its luciferin, and the excited product gives its energy out as light: cold light from food, as fireflies, fungi and glowing plants make.',
+    laws: [], embodiedBy: [],
+    range: 'A soft glow, seen in the dark: far below room lighting today. Living: it can\'t be made here.', source: { cite: 'Shimomura, Bioluminescence: Chemical Principles and Methods, World Scientific 2006', kind: 'textbook' },
+  },
+  {
+    id: 'photosynthesis', name: 'Photosynthesis', takes: ['light'], gives: ['chemical'],
+    effect: 'Chlorophyll uses the energy of light to split water and fix carbon dioxide into sugar: food made from sunlight.',
+    laws: [], embodiedBy: [],
+    range: 'At most about 4.6% of sunlight stored as sugar in most plants, 6% in maize and sugarcane (C4). Living: it can\'t be made here.', source: { cite: 'Zhu, Long & Ort, What is the maximum efficiency with which photosynthesis can convert solar energy into biomass?, Current Opinion in Biotechnology 19, 2008', kind: 'paper' },
+  },
+  {
+    id: 'sense.light', name: 'Photodiode or camera (sensing light)', takes: ['light'], gives: ['signal'],
+    effect: 'Light frees charge in a semiconductor in proportion to how much falls on it; an array of them is a camera, and a bolometer senses heat light by the warming it causes.',
+    laws: ['diffraction.limit'], embodiedBy: [],
+    range: 'Ultraviolet to far infrared by the sensor\'s material; detail limited by its lens (1.22 λ / D).', source: { cite: 'Rogalski, Infrared Detectors, 2nd ed., CRC Press 2010', kind: 'textbook' },
+  },
+  {
+    id: 'sense.sound', name: 'Microphone (sensing sound)', takes: ['sound'], gives: ['signal'],
+    effect: 'Sound pushes a thin diaphragm back and forth; its motion is turned into a voltage by a moving coil, a changing capacitance or a piezoelectric film.',
+    laws: ['lorentz.force'], embodiedBy: [],
+    range: 'The ear\'s 20 Hz to 20 kHz and beyond; from a whisper to a jet.', source: { cite: 'Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000', kind: 'textbook' },
+  },
+  {
+    id: 'speaker', name: 'Loudspeaker', takes: ['electric'], gives: ['sound'],
+    effect: 'Current in a voice coil in a magnet\'s gap pushes a cone back and forth (Lorentz), and the cone pushes the air into sound.',
+    laws: ['lorentz.force'], embodiedBy: [],
+    range: 'About 1% of the power in as sound for a cone in a box; bigger cones for lower notes.', source: { cite: 'Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000', kind: 'textbook' },
+  },
   // ------------------------------------------------------------ information: switching, holding and sensing bits
   {
     id: 'switch.transistor', name: 'Transistor switch (power controlled by a signal)', takes: ['signal'], gives: ['electric'],
@@ -265,7 +293,7 @@ export const WAYS: Way[] = [
   {
     id: 'lead.screw', name: 'Lead screw or ball screw', takes: ['rotation'], gives: ['translation'], against: 'frame',
     effect: 'A thread turned in a nut drives the nut along by its lead each turn, with great force for little torque.',
-    laws: ['screw.force'], embodiedBy: [],
+    laws: ['screw.force', 'screw.efficiency'], embodiedBy: ['transmission.screw'],
     range: 'Precise strokes of centimetres to metres: jacks, presses, 3D-printer and machine axes.', source: SHIGLEY,
   },
   {

@@ -329,7 +329,6 @@ export function getMaterial(id: string): Material {
   return m;
 }
 
-export const hasMaterial = (id: string) => byId.has(id);
 
 export const MATERIAL_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Steel & iron', ids: MATERIALS.filter((m) => ['steel', 'stainless', 'cast-iron'].includes(m.category)).map((m) => m.id) },

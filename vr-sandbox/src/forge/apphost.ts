@@ -6,7 +6,7 @@ import type { App } from '../app/app';
 import { getConnectorKind, CONNECTOR_KINDS } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { addPart, deleteParts, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
-import { axisAngle, dot, fromTo, inverseTransformPoint, normalize, qmul, rotate, transformPoint } from '../doc/math';
+import { axisAngle, fromTo, qmul, transformPoint } from '../doc/math';
 import type { Pose, Quat, Vec3 } from '../doc/types';
 import { getMaterial, STANDARD_GRAVITY } from '../data/materials';
 import { effectiveParams, getPartKind } from '../parts/registry';

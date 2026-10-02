@@ -7,7 +7,6 @@ import type { Anomaly } from '../diagnostics/watchdog';
 import type { Energies } from '../physics/energy';
 
 export class LiveState {
-  private slots: (string | null)[] = [];
   private index = new Map<string, number>();
   private prev: Float32Array<ArrayBufferLike> = new Float32Array(0);
   private curr: Float32Array<ArrayBufferLike> = new Float32Array(0);
@@ -43,7 +42,6 @@ export class LiveState {
     if (r.energy) this.energy = r.energy;
     for (const [id, q] of Object.entries(r.heat ?? {})) this.heatIn[id] = (this.heatIn[id] ?? 0) + q;
     if (r.slots) {
-      this.slots = r.slots;
       this.index.clear();
       r.slots.forEach((id, i) => { if (id) this.index.set(id, i); });
     }

@@ -246,4 +246,3 @@ export class DrawTool implements Tool {
   }
 }
 
-export const WALL = { width: WALL_W, height: WALL_H, base: WALL_BASE, out: OUT };

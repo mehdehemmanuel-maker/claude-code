@@ -3,8 +3,10 @@
 // `implementedIn` names the module, and the law here calls the same function, so what Ego reasons with and what the
 // physics does are one thing.
 
-import { eulerBucklingLoad, cantileverDeflection } from '../engineering/beams';
-import { capstanRatio, dragForce } from '../engineering/mechanics';
+import { eulerBucklingLoad, cantileverDeflection, plasticMoment } from '../engineering/beams';
+import { capstanRatio, dragForce, lewisStress, skinDepth } from '../engineering/mechanics';
+import { torsionSpringRate } from '../engineering/springs';
+import { heatInput } from '../engineering/joining';
 import { cellOCV } from '../engineering/battery';
 import { COPPER_ALPHA } from '../engineering/dcmotor';
 import { STANDARD_GRAVITY as g } from '../data/materials';
@@ -576,6 +578,128 @@ export const LAWS: Law[] = [
     eval: ({ k1, lambda, NA }) => (k1! * lambda!) / NA!, outside: ({ k1, NA }) => (k1! < 0.25 ? `k₁ of ${k1} is under the single-exposure limit of 0.25` : NA! >= 1 ? 'a dry lens has NA below 1' : null),
     valid: 'Single exposure; k₁ about 0.3 to 0.4 in production, 0.25 its theoretical floor. Depth of focus falls as λ/NA².', example: { inputs: { k1: 0.32, lambda: 13.5e-9, NA: 0.33 }, output: 1.3090909090909092e-8 },
     source: { cite: 'Mack, Fundamental Principles of Optical Lithography, Wiley 2007', kind: 'textbook' }, tags: ['lithography', 'euv', 'chip', 'resolution', 'optics', 'semiconductor'],
+  },
+  // ---------------------------------------------------------------- the world's own engineering, as laws
+  {
+    id: 'beam.plastic-moment', name: 'Plastic moment of a section', domain: 'structures',
+    statement: 'A ductile beam bent until its whole section yields carries its plastic section modulus times its yield stress: the moment at which a plastic hinge forms and it folds.',
+    formula: 'M_p = Z σ_y', inputs: [q('Z', 'plastic section modulus', 'm^3'), q('Sy', 'yield stress', 'Pa')], output: q('Mp', 'plastic moment', 'N m'),
+    eval: ({ Z, Sy }) => plasticMoment(Z!, Sy!), valid: 'Ductile metals, compact sections that don\'t buckle locally first; Z is 1.5 S for a rectangle, about 1.7 S for a solid round, 1.1 to 1.2 S for an I-beam.',
+    example: { inputs: { Z: 1e-5, Sy: 250e6 }, output: 2500 }, source: { cite: 'AISC 360-16, Specification for Structural Steel Buildings, F2 (Mp = Fy Zx)', kind: 'standard' }, tags: ['beam', 'plastic hinge', 'collapse', 'frame'],
+    implementedIn: 'engineering/beams.ts plasticMoment',
+  },
+  {
+    id: 'gear.lewis', name: 'Gear tooth bending stress (Lewis)', domain: 'machine elements',
+    statement: 'A gear tooth, a cantilever loaded at its tip by the force between the gears, is stressed at its root by that tangential force over its face width, its module and its Lewis form factor.',
+    formula: 'σ = W_t / (b m Y)', inputs: [q('Wt', 'tangential load', 'N'), q('b', 'face width', 'm'), q('m', 'module', 'm'), q('Y', 'Lewis form factor', '-')], output: q('sigma', 'root bending stress', 'Pa'),
+    eval: ({ Wt, b, m, Y }) => lewisStress(Wt!, b!, m!, Y!), outside: ({ b, m }) => (b! / m! < 8 || b! / m! > 16 ? `a face width of ${(b! / m!).toFixed(1)} modules is outside the usual 8 to 16` : null),
+    valid: 'Root bending only, one tooth carrying the load, 20° full-depth teeth (Y from Shigley Table 14-2); AGMA adds dynamic, size and surface (pitting) factors.',
+    example: { inputs: { Wt: 1000, b: 0.02, m: 0.002, Y: 0.322 }, output: 77639751.55279502 }, source: SHIGLEY, tags: ['gear', 'tooth', 'strength', 'spur gear', 'module'],
+    implementedIn: 'engineering/mechanics.ts lewisStress',
+  },
+  {
+    id: 'skin.depth', name: 'Skin depth', domain: 'magnetism',
+    statement: 'An alternating field or current reaches into a conductor only about one skin depth, shrinking with frequency and conductivity: why an eddy-current brake works at the surface, and thick copper buys nothing at high frequency.',
+    formula: 'δ = 1 / √(π f μ₀ σ)', inputs: [q('f', 'frequency', 'Hz'), q('sigma', 'conductivity', 'S/m')], output: q('delta', 'skin depth', 'm'),
+    constants: { mu0: { value: 4e-7 * Math.PI, unit: 'N/A^2', name: 'permeability of free space' } },
+    eval: ({ f, sigma, mu0 }) => skinDepth(f!, sigma!, mu0!), valid: 'Non-magnetic conductors (μr = 1); in iron it is thinner by √μr.',
+    example: { inputs: { f: 50, sigma: 5.8e7 }, output: 0.009345900061927292 }, source: { cite: 'Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017 (skin depth)', kind: 'textbook' }, tags: ['eddy current', 'brake', 'induction', 'copper', 'magnet'],
+    implementedIn: 'engineering/mechanics.ts skinDepth',
+  },
+  {
+    id: 'spring.torsion.rate', name: 'Helical torsion spring rate', domain: 'machine elements',
+    statement: 'A helical torsion spring\'s rate is its wire diameter to the fourth times its modulus over 10.8 times its coil diameter times its turns, per turn; per radian, over 2π more.',
+    formula: "k' = d⁴ E / (10.8 D N) per turn", inputs: [q('d', 'wire diameter', 'm'), q('D', 'mean coil diameter', 'm'), q('N', 'active turns', '-'), q('E', 'modulus', 'Pa')], output: q('k', 'rate', 'N m/rad'),
+    eval: ({ d, D, N, E }) => torsionSpringRate(d!, D!, N!, E!), valid: 'Shigley eq. 10-51: 10.8 in place of the ideal 10.2 for friction between the coils.',
+    example: { inputs: { d: 0.002, D: 0.02, N: 5, E: 200e9 }, output: 0.471570201753764 }, source: SHIGLEY, tags: ['spring', 'torsion', 'hinge', 'clip'],
+    implementedIn: 'engineering/springs.ts torsionSpringRate',
+  },
+  {
+    id: 'weld.heat-input', name: 'Arc welding heat input', domain: 'thermal',
+    statement: 'An arc puts into the joint its efficiency times its volts times its amps over its travel speed, per metre of weld: too little and it doesn\'t fuse, too much and it burns through thin plate.',
+    formula: 'Q = η V I / v', inputs: [q('eta', 'arc efficiency', '-'), q('V', 'arc voltage', 'V'), q('I', 'current', 'A'), q('v', 'travel speed', 'm/s')], output: q('Q', 'heat input', 'J/m'),
+    eval: ({ eta, V, I, v }) => heatInput(eta!, V!, I!, v!), valid: 'Arc efficiency about 0.8 for MIG and stick, 0.6 for TIG (EN 1011-1).',
+    example: { inputs: { eta: 0.8, V: 20, I: 150, v: 0.005 }, output: 480000 }, source: { cite: 'EN 1011-1 (welding: heat input and thermal efficiency factors)', kind: 'standard' }, tags: ['weld', 'mig', 'heat', 'fusion', 'burn-through'],
+    implementedIn: 'engineering/joining.ts heatInput',
+  },
+  // ---------------------------------------------------------------- the frontier: laws that bound what can be made
+  {
+    id: 'time.dilation.gravity', name: 'Gravitational time dilation', domain: 'mechanics',
+    statement: 'A clock deep in a gravity well runs slow against one far away, by √(1 − 2GM/(r c²)): only near a black hole is the difference large.',
+    formula: 'τ/t = √(1 − 2 G M / (r c²))', inputs: [q('M', 'mass', 'kg'), q('r', 'distance from its centre', 'm')], output: q('k', 'clock rate against far away', '-'),
+    constants: { G: { value: 6.6743e-11, unit: 'm^3/kg s^2', name: 'gravitational constant (CODATA 2018)' }, c: { value: 299792458, unit: 'm/s', name: 'speed of light (exact)' } },
+    eval: ({ M, r, G, c }) => Math.sqrt(1 - (2 * G! * M!) / (r! * c! * c!)), outside: ({ M, r, G, c }) => ((2 * G! * M!) / (r! * c! * c!) >= 1 ? 'inside the horizon of a black hole: no clock there can be read from outside' : null),
+    valid: 'A static clock outside a non-rotating, spherical mass (Schwarzschild).', example: { inputs: { M: 5.972e24, r: 6.371e6 }, output: 0.9999999993038922 },
+    source: { cite: 'Misner, Thorne & Wheeler, Gravitation, Freeman 1973 (Schwarzschild metric)', kind: 'textbook' }, tags: ['time', 'gravity', 'relativity', 'black hole'],
+  },
+  {
+    id: 'arrhenius', name: 'Arrhenius rate', domain: 'thermal',
+    statement: 'A reaction, ageing a battery or spoiling food, runs at a rate that falls exponentially as the temperature drops but never reaches zero above absolute zero.',
+    formula: 'k = A e^(−E_a / R T)', inputs: [q('A', 'pre-exponential factor', '1/s'), q('Ea', 'activation energy', 'J/mol'), q('T', 'temperature', 'K')], output: q('k', 'rate', '1/s'),
+    constants: { R: { value: 8.314462618, unit: 'J/mol K', name: 'gas constant (exact, SI 2019)' } },
+    eval: ({ A, Ea, T, R }) => A! * Math.exp(-Ea! / (R! * T!)), valid: 'One rate-limiting step; real ageing is several in parallel, each with its own Ea.',
+    example: { inputs: { A: 1e13, Ea: 50e3, T: 298 }, output: 17217.4875757281 }, source: { cite: 'Atkins & de Paula, Physical Chemistry, 11th ed., Oxford 2018', kind: 'textbook' }, tags: ['ageing', 'battery', 'degradation', 'chemistry', 'shelf life'],
+  },
+  {
+    id: 'young.contact', name: 'Contact angle (Young)', domain: 'materials',
+    statement: 'A drop on a flat surface settles at the angle where its surface tensions balance: water beads (above 90°) only on surfaces of low energy.',
+    formula: 'cos θ = (γ_sv − γ_sl) / γ_lv', inputs: [q('gsv', 'solid-vapour surface energy', 'J/m^2'), q('gsl', 'solid-liquid surface energy', 'J/m^2'), q('glv', 'liquid surface tension', 'J/m^2')], output: q('theta', 'contact angle', 'rad'),
+    eval: ({ gsv, gsl, glv }) => Math.acos(Math.max(-1, Math.min(1, (gsv! - gsl!) / glv!))), valid: 'Ideally flat, clean, rigid surfaces; no flat surface beads water much past 120° (fluorinated): beyond that takes roughness (the lotus effect), which wears away.',
+    example: { inputs: { gsv: 0.02, gsl: 0.04, glv: 0.072 }, output: 1.8522764000257415 }, source: { cite: 'de Gennes, Brochard-Wyart & Quéré, Capillarity and Wetting Phenomena, Springer 2004', kind: 'textbook' }, tags: ['water', 'hydrophobic', 'coating', 'wetting', 'clean'],
+  },
+  {
+    id: 'carbonation.capacity', name: 'Carbon dioxide a lime can hold', domain: 'materials',
+    statement: 'Calcium oxide takes up carbon dioxide to become calcium carbonate, one molecule for one: at most the ratio of their molar masses, 0.785 kg of CO₂ per kg of lime, and then no more.',
+    formula: 'm_CO₂ = m_CaO × M_CO₂ / M_CaO', inputs: [q('m', 'calcium oxide', 'kg')], output: q('mCO2', 'CO₂ held for good', 'kg'),
+    constants: { MCO2: { value: 44.009, unit: '-', name: 'molar mass of CO₂, g/mol' }, MCaO: { value: 56.077, unit: '-', name: 'molar mass of CaO, g/mol' } },
+    eval: ({ m, MCO2, MCaO }) => (m! * MCO2!) / MCaO!, valid: 'Full carbonation; concrete carbonates only from its surface inward, over years, and holds only what its calcium allows.',
+    example: { inputs: { m: 1 }, output: 0.7847959056297591 }, source: { cite: 'CaO + CO₂ → CaCO₃ (stoichiometry; IUPAC atomic weights)', kind: 'textbook' }, tags: ['carbon capture', 'concrete', 'co2', 'brick', 'climate'],
+  },
+  {
+    id: 'absorbed.solar', name: 'Sunlight a surface absorbs', domain: 'thermal',
+    statement: 'A surface absorbs the sunlight it doesn\'t reflect: one minus its albedo, times the sunlight on it, times its area.',
+    formula: 'P = (1 − a) G A', inputs: [q('a', 'albedo (reflected share)', '-'), q('G', 'sunlight', 'W/m^2'), q('A', 'area', 'm^2')], output: q('P', 'absorbed power', 'W'),
+    eval: ({ a, G, A }) => (1 - a!) * G! * A!, outside: ({ a }) => (a! < 0 || a! > 1 ? 'an albedo is between 0 and 1' : null), valid: 'Shortwave balance only; a cover also insulates and changes the longwave balance.',
+    example: { inputs: { a: 0.9, G: 1000, A: 1 }, output: 99.99999999999997 }, source: { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed. (radiation balance)', kind: 'textbook' }, tags: ['sun', 'glacier', 'reflective', 'albedo', 'cooling'],
+  },
+  {
+    id: 'diffraction.limit', name: 'Diffraction limit of an aperture', domain: 'information',
+    statement: 'No lens or eye of diameter D can see detail finer than about 1.22 λ / D radians: long waves need huge apertures to make any image at all.',
+    formula: 'θ = 1.22 λ / D', inputs: [q('lambda', 'wavelength', 'm'), q('D', 'aperture diameter', 'm')], output: q('theta', 'smallest angle resolved', 'rad'),
+    eval: ({ lambda, D }) => (1.22 * lambda!) / D!, outside: ({ lambda, D }) => ((1.22 * lambda!) / D! > Math.PI ? 'wider than the whole sky: no image at all' : null),
+    valid: 'A circular aperture, the Rayleigh criterion.', example: { inputs: { lambda: 1, D: 0.05 }, output: 24.4 }, source: { cite: 'Hecht, Optics, 5th ed., Pearson 2017', kind: 'textbook' }, tags: ['optics', 'vision', 'radio', 'telescope', 'resolution'],
+  },
+  {
+    id: 'acoustic.mass-law', name: 'Sound insulation of a wall (mass law)', domain: 'fluids',
+    statement: 'A wall stops airborne sound mainly by its mass: about 20 log₁₀ of its mass per area times the frequency, less 47 dB. Low notes and light layers pass through.',
+    formula: 'TL ≈ 20 log₁₀(m f) − 47 dB', inputs: [q('m', 'mass per area', 'kg/m^2'), q('f', 'frequency', 'Hz')], output: q('TL', 'transmission loss', 'dB'),
+    constants: { mf0: { value: 223.872113856834, unit: 'kg/m^2 s', name: 'the reference product (47 dB)' } },
+    eval: ({ m, f, mf0 }) => 20 * Math.log10((m! * f!) / mf0!), valid: 'Field incidence, a single limp panel below its coincidence frequency; absorptive coatings reduce echo, not what passes through.',
+    example: { inputs: { m: 460, f: 100 }, output: 46.25515663363147 }, source: { cite: 'Long, Architectural Acoustics, 2nd ed., Academic Press 2014 (mass law)', kind: 'textbook' }, tags: ['sound', 'soundproof', 'acoustic', 'wall', 'noise'],
+  },
+  {
+    id: 'diffusion.time', name: 'Time to diffuse a distance', domain: 'fluids',
+    statement: 'A molecule wandering by diffusion alone covers a distance in a time that grows with its square: microns in moments, a metre in hours. Anything faster is carried by a flow.',
+    formula: 't = x² / (2 D)', inputs: [q('x', 'distance', 'm'), q('D', 'diffusion coefficient', 'm^2/s')], output: q('t', 'time', 's'),
+    eval: ({ x, D }) => (x! * x!) / (2 * D!), valid: 'One-dimensional mean square displacement (Einstein); about 1e-5 m²/s for small molecules in air, 1e-9 in water.',
+    example: { inputs: { x: 1, D: 1e-5 }, output: 50000 }, source: { cite: 'Berg, Random Walks in Biology, Princeton 1993, ch. 1', kind: 'textbook' }, tags: ['diffusion', 'scent', 'smell', 'oxygen', 'tissue', 'mixing'],
+  },
+  {
+    id: 'separation.work', name: 'Least work to take out a trace', domain: 'thermal',
+    statement: 'Taking a substance out of a mixture costs at least R T ln(1/x) a mole, where x is how much is left: each tenfold cleaner costs as much again, and taking out the very last of it would cost without end.',
+    formula: 'W = R T ln(1/x)', inputs: [q('T', 'temperature', 'K'), q('x', 'share left (mole fraction)', '-')], output: q('W', 'least work a mole', 'J/mol'),
+    constants: { R: { value: 8.314462618, unit: 'J/mol K', name: 'gas constant (exact, SI 2019)' } },
+    eval: ({ T, x, R }) => R! * T! * Math.log(1 / x!), outside: ({ x }) => (x! <= 0 ? 'nothing left at all: that would take endless work' : x! >= 1 ? 'a share left is under one' : null),
+    valid: 'An ideal dilute mixture at constant temperature; every real filter needs many times this.', example: { inputs: { T: 298, x: 1e-6 }, output: 34230.82673266793 },
+    source: { cite: 'Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019, ch. 16 (minimum separation work)', kind: 'textbook' }, tags: ['filter', 'separation', 'purify', 'water', 'clean'],
+  },
+  {
+    id: 'screw.efficiency', name: 'Efficiency of a power screw', domain: 'machine elements',
+    statement: 'A screw\'s thread is a ramp wrapped round it: the steeper the ramp against its friction, the more of the torque becomes push. Below about half, it holds its load without a brake.',
+    formula: 'η = tan λ / tan(λ + atan(μ / cos α)), tan λ = l / (π d₂)', inputs: [q('l', 'lead', 'm'), q('d2', 'pitch diameter', 'm'), q('mu', 'friction coefficient', '-'), q('alpha', 'thread half-angle', 'rad')], output: q('eta', 'efficiency', '-'),
+    eval: ({ l, d2, mu, alpha }) => { const lam = Math.atan(l! / (Math.PI * d2!)); return Math.tan(lam) / Math.tan(lam + Math.atan(mu! / Math.cos(alpha!))); },
+    valid: 'Raising the load; trapezoidal threads have α = 15°, square threads 0. Collar friction, if the screw bears on one, is extra.', example: { inputs: { l: 0.004, d2: 0.014, mu: 0.1, alpha: 0.2617993877991494 }, output: 0.46324813129085995 },
+    source: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, §8-2 (power screws)', kind: 'textbook' }, tags: ['lead screw', 'efficiency', 'self-locking', 'screw jack', 'linear actuator'],
   },
 ];
 

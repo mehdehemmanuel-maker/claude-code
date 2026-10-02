@@ -12,8 +12,6 @@ import { getGearhead, getMotor } from '../../src/data/motors';
 import { AMBIENT } from '../../src/engineering/thermal';
 import { FLUIDS, getMaterial, STANDARD_GRAVITY as g } from '../../src/data/materials';
 
-const up: [number, number, number, number] = [0, 0, 0, 1];
-const down = axisAngle([1, 0, 0], Math.PI); // frame whose +Y points down
 
 describe('kinematics', () => {
   it('free fall: t = sqrt(2h/g)', async () => {
@@ -133,6 +131,19 @@ describe('stored energy and oscillation', () => {
     const T = (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1);
     within(T, 2 * Math.PI * Math.sqrt(L / g), 0.01);
     r2.done();
+  });
+
+  it('nothing rests out of equilibrium: a slow, small swing keeps its amplitude instead of sleeping at the top of its swing', async () => {
+    // a 4° swing of 1 m in half gravity lingers at each end for longer than the engine's sleep window
+    const r = await rig({ gravity: [0, -4.9, 0] }, false);
+    const L = 1, th = (4 * Math.PI) / 180;
+    const pivot = r.part('block', at(0, 3, 0), { frozen: true, params: { x: 0.02, y: 0.02, z: 0.02 } });
+    const bob = r.part('sphere', at(L * Math.sin(th), 3 - L * Math.cos(th), 0), { params: { diameter: 0.04 } });
+    r.connect('rope', { part: pivot, frame: at(0, 0, 0) }, { part: bob, frame: at(0, 0, 0) }, { grade: 'steel-wire-6x19', diameter: 0.003 });
+    let late = 0;
+    r.run(12, (t) => { if (t > 8) late = Math.max(late, Math.abs(r.pos(bob)[0])); });
+    expect(late).toBeGreaterThan(0.95 * L * Math.sin(th));
+    r.done();
   });
 });
 

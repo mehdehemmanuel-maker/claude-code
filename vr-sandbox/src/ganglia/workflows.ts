@@ -9,7 +9,9 @@ import { motorModel, type MotorModel } from '../engineering/dcmotor';
 import { packCapacity, packOCV, type Pack } from '../engineering/battery';
 import { getMaterial, STANDARD_GRAVITY as g } from '../data/materials';
 import { apply, use } from './laws';
-import { BEARINGS, CONTROLLERS, COUPLINGS, FUSES, PILLOW_BLOCKS, ROD_ENDS } from './parts';
+import { BEARINGS, CONTROLLERS, COUPLINGS, FUSES, HOLLOW_SECTIONS, LEAD_SCREWS, PILLOW_BLOCKS, ROD_ENDS } from './parts';
+import { lewisFormFactor } from '../engineering/mechanics';
+import { MIN_TEETH, MODULES } from '../engineering/gears';
 import type { CatalogItem, TraceStep, Workflow, WorkflowResult } from './types';
 
 const q = (sym: string, name: string, unit: string, d?: number) => ({ sym, name, unit, ...(d === undefined ? {} : { default: d }) });
@@ -45,6 +47,53 @@ export interface DriveChoice {
   runtime: number;
 }
 
+/** One drive the search found: what it is, how well it fits, why, and what its priced parts cost. */
+type DriveOption = { choice: DriveChoice; score: number; why: string; cost: number };
+
+/**
+ * Every motor, gearhead, pack and controller that gives a torque at a speed within their ratings, best first. Shared
+ * by a vehicle's drive (r its wheel's radius, v its speed in m/s) and an actuator's (r = 1, v its shaft's speed in
+ * rad/s). Geared 0: direct drive only; 1: through a gearhead only; anything else: either.
+ */
+function searchDrives(Tw: number, Tc: number, v: number, r: number, k: number, geared: number, speedSays: (x: number) => string): DriveOption[] {
+  const options: DriveOption[] = [];
+  for (const md of Object.values(MOTORS)) {
+    const mm = motorModel(md);
+    const gears: (GearheadData | null)[] = [...(geared === 1 ? [] : [null]), ...(geared === 0 ? [] : Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id)))];
+    for (const gh of gears) {
+      for (const bd of Object.values(BATTERIES)) {
+        const series = Math.max(1, Math.round(md.V / bd.V));
+        const pack: Pack = { data: bd, series, parallel: 1 };
+        const V = packOCV(pack, 0.8);
+        const o = evaluateDrive(mm, gh, pack, V, Tw, Tc, r);
+        if (!o) continue;
+        for (const c of CONTROLLERS) {
+          const vmax = Number(c.specs['vMax']), cont = Number(c.specs['continuous']), ch = Number(c.specs['channels']);
+          if (packOCV(pack, 1) > vmax) continue;
+          if (o.pushCurrent > cont) continue;
+          const count = Math.ceil(k / ch);
+          const limits = c.specs['currentLimit'] === 'yes';
+          const cost = (md.price?.amount ?? 0) * k + (gh?.price?.amount ?? 0) * k + (bd.price?.amount ?? 0) * series;
+          const speedMargin = o.topSpeed / v, pushMargin = Math.min(md.maxContinuousCurrent * 3, cont) / o.pushCurrent;
+          const ok = o.topSpeed >= v && o.cruiseCurrent <= md.maxContinuousCurrent && (!gh || Tw <= gh.maxContinuousTorque * 1.5);
+          if (!ok) continue;
+          const score = Math.min(speedMargin, 3) + Math.min(pushMargin, 3) + (limits ? 1 : 0) - cost / 5000;
+          options.push({
+            cost, score,
+            why: `${speedSays(o.topSpeed)} top, ${r3(o.pushCurrent)} A a motor to push, ${r3(o.cruiseCurrent)} A cruising (rated ${md.maxContinuousCurrent} A)${limits ? '' : '; its controller has no current limit, so a stall draws the motor\'s full stall current'}`,
+            choice: {
+              motor: md.id, gearhead: gh?.id ?? null, battery: bd.id, series, controller: c.id, controllers: count,
+              currentLimit: Math.ceil(o.pushCurrent * 1.1), topSpeed: o.topSpeed, push: (o.pushTorque * k) / r, cruiseCurrent: o.cruiseCurrent,
+              runtime: runtimeHours(pack, mm, o, k),
+            },
+          });
+        }
+      }
+    }
+  }
+  return options.sort((x, y) => y.score - x.score);
+}
+
 export const driveSelect: Workflow<Record<string, number | string>, DriveChoice> = {
   id: 'drive.select', name: 'Choose a vehicle drive',
   goal: 'Motors, gearheads, battery and controller that move a vehicle at the speed and acceleration asked, up the grade asked, within every part\'s rating.',
@@ -72,45 +121,7 @@ export const driveSelect: Workflow<Record<string, number | string>, DriveChoice>
     const Tw = step(trace, 'wheel.torque', 'per motor, to accelerate up the grade', { F: (Fr + Fg + Fa) / k, r }, 'N m');
     const Tc = (Fr + Fg) * r / k;
     const ww = v / r;
-    type Option = { choice: DriveChoice; score: number; why: string; cost: number };
-    const options: Option[] = [];
-    for (const md of Object.values(MOTORS)) {
-      const mm = motorModel(md);
-      // geared 0: direct drive only; 1: through a gearhead only; unsaid: either
-      const geared = typeof spec['geared'] === 'number' ? spec['geared'] : -1;
-      const gears: (GearheadData | null)[] = [...(geared === 1 ? [] : [null]), ...(geared === 0 ? [] : Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id)))];
-      for (const gh of gears) {
-        for (const bd of Object.values(BATTERIES)) {
-          const series = Math.max(1, Math.round(md.V / bd.V));
-          const pack: Pack = { data: bd, series, parallel: 1 };
-          const V = packOCV(pack, 0.8);
-          const o = evaluateDrive(mm, gh, pack, V, Tw, Tc, r);
-          if (!o) continue;
-          for (const c of CONTROLLERS) {
-            const vmax = Number(c.specs['vMax']), cont = Number(c.specs['continuous']), ch = Number(c.specs['channels']);
-            if (packOCV(pack, 1) > vmax) continue;
-            if (o.pushCurrent > cont) continue;
-            const count = Math.ceil(k / ch);
-            const limits = c.specs['currentLimit'] === 'yes';
-            const cost = (md.price?.amount ?? 0) * k + (gh?.price?.amount ?? 0) * k + (bd.price?.amount ?? 0) * series;
-            const speedMargin = o.topSpeed / v, pushMargin = Math.min(md.maxContinuousCurrent * 3, cont) / o.pushCurrent;
-            const ok = o.topSpeed >= v && o.cruiseCurrent <= md.maxContinuousCurrent && (!gh || Tw <= gh.maxContinuousTorque * 1.5);
-            if (!ok) continue;
-            const score = Math.min(speedMargin, 3) + Math.min(pushMargin, 3) + (limits ? 1 : 0) - cost / 5000;
-            options.push({
-              cost, score,
-              why: `${r3(o.topSpeed)} m/s top, ${r3(o.pushCurrent)} A a motor to push, ${r3(o.cruiseCurrent)} A cruising (rated ${md.maxContinuousCurrent} A)${limits ? '' : '; its controller has no current limit, so a stall draws the motor\'s full stall current'}`,
-              choice: {
-                motor: md.id, gearhead: gh?.id ?? null, battery: bd.id, series, controller: c.id, controllers: count,
-                currentLimit: Math.ceil(o.pushCurrent * 1.1), topSpeed: o.topSpeed, push: (o.pushTorque * k) / r, cruiseCurrent: o.cruiseCurrent,
-                runtime: runtimeHours(pack, mm, o, k),
-              },
-            });
-          }
-        }
-      }
-    }
-    options.sort((x, y) => y.score - x.score);
+    const options = searchDrives(Tw, Tc, v, r, k, typeof spec['geared'] === 'number' ? spec['geared'] : -1, (x) => `${r3(x)} m/s`);
     const best = options[0];
     if (best) {
       // the chosen one's own numbers, in the trace
@@ -160,17 +171,18 @@ export interface WireChoice { gauge: string; drop: number; loss: number; ampacit
 export const wireSize: Workflow<Record<string, number | string>, WireChoice> = {
   id: 'wire.size', name: 'Size a power wire',
   goal: 'The thinnest copper pair that carries the current within its rating and drops no more than the allowed share of the supply.',
-  asks: [q('current', 'current', 'A'), q('length', 'run length, one way', 'm'), q('voltage', 'supply', 'V', 24), q('drop', 'allowed drop', '-', 0.03)],
-  steps: ['Each gauge from thinnest: is its chassis rating at least the current?', 'Does twice the run times its resistance per metre times the current drop less than the allowed share?', 'The first that passes both.'],
+  asks: [q('current', 'current', 'A'), q('length', 'run length, one way', 'm'), q('voltage', 'supply', 'V', 24), q('drop', 'allowed drop', '-', 0.03), q('fused', 'protected by a fuse at 125% of the current (1) or not (0)', '-', 0)],
+  steps: ['Each gauge from thinnest: is its chassis rating at least the current, or at least its fuse\'s 125% of it when fused (a fuse may be no bigger than its wire)?', 'Does twice the run times its resistance per metre times the current drop less than the allowed share?', 'The first that passes both.'],
   uses: { laws: ['wire.drop', 'joule', 'wire.resistance'], families: ['wire'], processes: ['crimp'] }, tags: ['wire', 'cable', 'battery', 'motor'],
   run(spec) {
     const I = n(spec, 'current', 10), L = n(spec, 'length', 1), V = n(spec, 'voltage', 24), share = n(spec, 'drop', 0.03);
+    const rated = n(spec, 'fused', 0) > 0 ? 1.25 * I : I;
     const trace: TraceStep[] = [];
     const gauges = Object.entries(WIRE_GAUGES).sort((a, b) => a[1].area - b[1].area);
     const fits: WireChoice[] = [];
     for (const [gauge, w] of gauges) {
       const drop = apply('wire.drop', { I, L, Rm: w.ohmPerM });
-      if (w.ampacity >= I && drop <= share * V) fits.push({ gauge, drop, loss: apply('joule', { I, R: 2 * L * w.ohmPerM }), ampacity: w.ampacity });
+      if (w.ampacity >= rated && drop <= share * V) fits.push({ gauge, drop, loss: apply('joule', { I, R: 2 * L * w.ohmPerM }), ampacity: w.ampacity });
     }
     const best = fits[0];
     if (best) {
@@ -323,6 +335,105 @@ export const fuseSelect: Workflow<Record<string, number | string>, { fuse: strin
   },
 };
 
+/**
+ * A pair of spur gears for a torque and a ratio: the smallest ISO 54 module whose pinion teeth (never fewer than a
+ * 20° full-depth tooth needs to escape undercut) carry the tangential load at their roots within the material's yield
+ * over a safety factor, by Lewis, with a face width of about ten modules.
+ */
+export const gearSize: Workflow<Record<string, number | string>, { module: number; z1: number; z2: number; d1: number; d2: number; b: number; stress: number }> = {
+  id: 'gear.size', name: 'Size a pair of spur gears',
+  goal: 'The smallest standard module whose teeth carry the pinion\'s torque within their material\'s yield over a safety factor.',
+  asks: [q('torque', 'pinion torque', 'N m'), q('ratio', 'speed ratio', '-', 3), q('sf', 'safety factor', '-', 2), q('faceModules', 'face width, in modules', '-', 10)],
+  steps: [`A pinion of at least ${MIN_TEETH} teeth, so a 20° full-depth tooth isn't undercut.`, 'For each ISO 54 module, smallest first: pitch diameter m z, tangential load 2 T / d, Lewis stress at the root.', 'The first whose stress is within the yield over the safety factor; the gear has ratio times the teeth.'],
+  uses: { laws: ['gear.lewis', 'gear.output.torque'], families: [], processes: ['mill'] }, tags: ['gear', 'spur gear', 'module', 'tooth', 'gearbox'],
+  run(spec) {
+    const T = n(spec, 'torque', 10), ratio = n(spec, 'ratio', 3), sf = n(spec, 'sf', 2), k = n(spec, 'faceModules', 10);
+    const mat = getMaterial(typeof spec['material'] === 'string' ? spec['material'] : 'steel.4140-ann');
+    const z1 = Math.max(MIN_TEETH, Math.round(n(spec, 'teeth', MIN_TEETH))), z2 = Math.round(z1 * ratio), Y = lewisFormFactor(z1);
+    const trace: TraceStep[] = [];
+    for (const m of MODULES) {
+      const d1 = m * z1, Wt = (2 * T) / d1, b = k * m;
+      const stress = apply('gear.lewis', { Wt, b, m, Y });
+      if (stress <= mat.yield / sf) {
+        step(trace, 'gear.lewis', `root stress of the ${z1}-tooth pinion at module ${m * 1000} mm`, { Wt, b, m, Y }, 'Pa');
+        return {
+          ok: true, choice: { module: m, z1, z2, d1, d2: m * z2, b, stress }, trace, warnings: cautions(trace), parts: [], alternatives: [],
+          summary: `Module ${m * 1000} mm: a ${z1}-tooth pinion (Ø${r3(d1 * 1000)} mm) and a ${z2}-tooth gear (Ø${r3(m * z2 * 1000)} mm), ${r3(b * 1000)} mm wide, in ${mat.name.toLowerCase()}: ${r3(stress / 1e6)} MPa at the root against ${r3(mat.yield / 1e6 / sf)} MPa allowed (yield over ${sf}). Centres ${r3(((d1 + m * z2) / 2) * 1000)} mm apart.`,
+        };
+      }
+    }
+    return { ok: false, choice: null, trace, warnings: [], parts: [], alternatives: [], summary: `No ISO 54 first-choice module up to ${MODULES.at(-1)! * 1000} mm carries ${T} N·m in ${mat.name.toLowerCase()}: a stronger steel or a wider face.` };
+  },
+};
+
+/**
+ * A frame member from stock: the lightest square hollow section that carries a load within its yield over a safety
+ * factor and sags no more than its span over a ratio, held at both ends with the load in the middle, or held at one
+ * end with the load at the other.
+ */
+export const memberSize: Workflow<Record<string, number | string>, { section: string; stress: number; sag: number; mass: number }> = {
+  id: 'member.size', name: 'Size a frame member',
+  goal: 'The lightest stocked hollow section that carries the load strongly and stiffly enough.',
+  asks: [q('span', 'span', 'm'), q('load', 'load', 'N'), q('cantilever', 'held at one end (1) or both (0)', '-', 0), q('sf', 'safety factor on yield', '-', 2), q('sagRatio', 'span over the sag allowed', '-', 250)],
+  steps: ['The bending moment: P L / 4 between two supports, P L held at one end.', 'Each stocked section, lightest first: its stress M / S and its sag.', 'The first within the yield over the safety factor and the sag limit.'],
+  uses: { laws: ['stress.bending', 'beam.simply-supported.point', 'beam.cantilever.point'], families: ['hollow section'], processes: ['saw', 'weld.mig'] }, tags: ['frame', 'beam', 'member', 'tube', 'chassis', 'structure'],
+  run(spec) {
+    const L = n(spec, 'span', 0.6), P = n(spec, 'load', 1000), canti = n(spec, 'cantilever', 0) > 0, sf = n(spec, 'sf', 2), ratio = n(spec, 'sagRatio', 250);
+    const M = canti ? P * L : (P * L) / 4, E = 200e9;
+    const sorted = [...HOLLOW_SECTIONS].sort((a, b2) => Number(a.specs['massPerM']) - Number(b2.specs['massPerM']));
+    const trace: TraceStep[] = [];
+    for (const c of sorted) {
+      const S = Number(c.specs['S']), I = Number(c.specs['I']), Sy = Number(c.specs['yield']);
+      const stress = apply('stress.bending', { M, S });
+      const sag = apply(canti ? 'beam.cantilever.point' : 'beam.simply-supported.point', { P, L, E, I });
+      if (stress <= Sy / sf && sag <= L / ratio) {
+        step(trace, 'stress.bending', `stress in ${c.id}`, { M, S }, 'Pa');
+        step(trace, canti ? 'beam.cantilever.point' : 'beam.simply-supported.point', `sag of ${c.id}`, { P, L, E, I }, 'm');
+        const mass = Number(c.specs['massPerM']) * L;
+        return {
+          ok: true, choice: { section: c.id, stress, sag, mass }, trace, warnings: cautions(trace), parts: [c.id], alternatives: [],
+          summary: `${c.label}, ${r3(L * 1000)} mm long (${r3(mass)} kg): ${r3(stress / 1e6)} MPa against ${r3(Sy / sf / 1e6)} MPa allowed, sagging ${r3(sag * 1000)} mm (limit ${r3((L / ratio) * 1000)} mm).`,
+        };
+      }
+    }
+    return { ok: false, choice: null, trace, warnings: [], parts: [], alternatives: [], summary: `No stocked section up to ${HOLLOW_SECTIONS.at(-1)!.label} carries ${r3(P)} N over ${r3(L * 1000)} mm: shorten the span or share the load.` };
+  },
+};
+
+/**
+ * A strut from stock: the lightest square hollow section that carries a push along its length without yielding or
+ * buckling (Euler for slender struts, Johnson's parabola for stocky ones), pinned at both ends unless told otherwise.
+ */
+export const strutSize: Workflow<Record<string, number | string>, { section: string; stress: number; buckling: number; mass: number }> = {
+  id: 'strut.size', name: 'Size a strut',
+  goal: 'The lightest stocked hollow section that carries a push along its length without yielding or buckling.',
+  asks: [q('length', 'length between its joints', 'm'), q('load', 'push along it', 'N'), q('K', 'effective length factor', '-', 1), q('sf', 'safety factor', '-', 2.5)],
+  steps: ['Each stocked section, lightest first: its stress F / A against yield.', 'Its buckling load, by Euler past its slenderness transition and Johnson below it.', 'The first that carries the push times the safety factor both ways.'],
+  uses: { laws: ['stress.axial', 'buckling.euler', 'buckling.johnson', 'slenderness.transition'], families: ['hollow section'], processes: ['saw', 'weld.mig'] }, tags: ['strut', 'column', 'dome', 'truss', 'leg', 'structure', 'compression'],
+  run(spec) {
+    const L = n(spec, 'length', 1), F = n(spec, 'load', 1000), K = n(spec, 'K', 1), sf = n(spec, 'sf', 2.5), E = 200e9;
+    const sorted = [...HOLLOW_SECTIONS].sort((a, b2) => Number(a.specs['massPerM']) - Number(b2.specs['massPerM']));
+    const trace: TraceStep[] = [];
+    for (const c of sorted) {
+      const A = Number(c.specs['area']), I = Number(c.specs['I']), Sy = Number(c.specs['yield']);
+      const stress = apply('stress.axial', { F, A });
+      const rg = Math.sqrt(I / A), slender = (K * L) / rg, transition = apply('slenderness.transition', { E, Sy });
+      const crit = slender >= transition ? apply('buckling.euler', { E, I, L, K }) : apply('buckling.johnson', { Sy, A, L, K, r: rg, E });
+      if (stress <= Sy / sf && crit >= F * sf) {
+        step(trace, 'stress.axial', `stress in ${c.id}`, { F, A }, 'Pa');
+        if (slender >= transition) step(trace, 'buckling.euler', `buckling load of ${c.id}`, { E, I, L, K }, 'N');
+        else step(trace, 'buckling.johnson', `buckling load of ${c.id}`, { Sy, A, L, K, r: rg, E }, 'N');
+        const mass = Number(c.specs['massPerM']) * L;
+        return {
+          ok: true, choice: { section: c.id, stress, buckling: crit, mass }, trace, warnings: cautions(trace), parts: [c.id], alternatives: [],
+          summary: `${c.label}, ${r3(L * 1000)} mm long (${r3(mass)} kg): ${r3(stress / 1e6)} MPa against ${r3(Sy / sf / 1e6)} MPa allowed; it buckles at ${r3(crit / 1000)} kN, ${r3(crit / F)} times the push.`,
+        };
+      }
+    }
+    return { ok: false, choice: null, trace, warnings: [], parts: [], alternatives: [], summary: `No stocked section up to ${HOLLOW_SECTIONS.at(-1)!.label} carries ${r3(F)} N over ${r3(L * 1000)} mm without buckling: brace it or share the push.` };
+  },
+};
+
 export const controllerSelect: Workflow<Record<string, number | string>, { controller: string; count: number }> = {
   id: 'controller.select', name: 'Choose a motor controller',
   goal: 'A brushed DC controller that takes the pack\'s full voltage and the motors\' current, with a current limit when one is asked for.',
@@ -394,6 +505,36 @@ export interface PowertrainChoice {
   bill: { id: string; count: number }[];
   /** What the priced items come to, by currency. */
   cost: Record<string, number>;
+  /** An actuator's lead screw, when it pushes: the screw, the torque and speed it is turned at, its efficiency, and whether it holds its load unpowered. */
+  screw?: { item: string; force: number; torque: number; rpm: number; efficiency: number; holds: boolean } | null;
+}
+
+/** What every electric drive needs after its motor: wire for its current limit, the fuse that protects it, the coupling and torque arm for the torque at its output. */
+function accessories(c: DriveChoice, run: number) {
+  const md = MOTORS[c.motor]!, mm = motorModel(md), gh = c.gearhead ? GEARHEADS[c.gearhead]! : null, bat = BATTERIES[c.battery]!;
+  const Tout = mm.Kt * (c.currentLimit - mm.I0) * (gh?.ratio ?? 1) * (gh?.efficiency ?? 1);
+  const wire = wireSize.run({ current: c.currentLimit, length: run, voltage: bat.V * c.series, fused: 1 });
+  const fuse = fuseSelect.run({ current: c.currentLimit, ampacity: wire.choice?.ampacity ?? 0, voltage: packOCV({ data: bat, series: c.series, parallel: 1 }, 1), sourceR: bat.internalR * c.series, wireR: wire.choice ? 2 * run * WIRE_GAUGES[wire.choice.gauge]!.ohmPerM : 0 });
+  const coupling = couplingSelect.run({ torque: Tout, bore: gh?.shaft ?? md.shaft, sf: 1.5 });
+  const arm = torqueArmSize.run({ torque: Tout, radius: 0.04, length: 0.04 });
+  return { Tout, wire, fuse, coupling, arm };
+}
+
+/** Each bought item of a drive and how many. */
+function billOf(c: DriveChoice, k: number, wire: WorkflowResult<WireChoice>, fuse: WorkflowResult<{ fuse: string }>, coupling: WorkflowResult<{ coupling: string }>, arm: WorkflowResult<{ rodEnd: string }>, more: { id: string; count: number }[]) {
+  return [
+    { id: c.motor, count: k }, ...(c.gearhead ? [{ id: c.gearhead, count: k }] : []), { id: c.battery, count: c.series }, { id: c.controller, count: c.controllers },
+    ...(wire.choice ? [{ id: `awg.${wire.choice.gauge}`, count: k }] : []), ...(fuse.choice ? [{ id: fuse.choice.fuse, count: k }] : []), ...(coupling.choice ? [{ id: coupling.choice.coupling, count: k }] : []),
+    ...(arm.choice ? [{ id: arm.choice.rodEnd, count: 2 * k }] : []), ...more,
+  ];
+}
+
+/** What the priced items of a bill come to, by currency. */
+function costOf(bill: { id: string; count: number }[]): Record<string, number> {
+  const cost: Record<string, number> = {};
+  const priced = [...Object.values(MOTORS), ...Object.values(GEARHEADS), ...Object.values(BATTERIES)];
+  for (const b of bill) { const p = priced.find((x) => x.id === b.id)?.price; if (p) cost[p.currency] = (cost[p.currency] ?? 0) + p.amount * b.count; }
+  return cost;
 }
 
 /**
@@ -412,15 +553,9 @@ export const powertrain: Workflow<Record<string, number | string>, PowertrainCho
   run(spec) {
     const d = driveSelect.run(spec);
     if (!d.ok || !d.choice) return { ...d, choice: null, alternatives: [] };
-    const c = d.choice, md = MOTORS[c.motor]!, mm = motorModel(md), gh = c.gearhead ? GEARHEADS[c.gearhead]! : null;
+    const c = d.choice;
     const k = Math.max(1, Math.round(n(spec, 'motors', 2))), m = n(spec, 'mass', 100), r = n(spec, 'wheelRadius', 0.125), share = n(spec, 'driven', 0.5);
-    const Tout = mm.Kt * (c.currentLimit - mm.I0) * (gh?.ratio ?? 1) * (gh?.efficiency ?? 1);
-    const shaft = gh?.shaft ?? md.shaft;
-    const wire = wireSize.run({ current: c.currentLimit, length: n(spec, 'wire', 1), voltage: BATTERIES[c.battery]!.V * c.series });
-    const bat = BATTERIES[c.battery]!;
-    const fuse = fuseSelect.run({ current: c.currentLimit, ampacity: wire.choice?.ampacity ?? 0, voltage: packOCV({ data: bat, series: c.series, parallel: 1 }, 1), sourceR: bat.internalR * c.series, wireR: wire.choice ? 2 * n(spec, 'wire', 1) * WIRE_GAUGES[wire.choice.gauge]!.ohmPerM : 0 });
-    const coupling = couplingSelect.run({ torque: Tout, bore: shaft, sf: 1.5 });
-    const arm = torqueArmSize.run({ torque: Tout, radius: 0.04, length: 0.04 });
+    const { Tout, wire, fuse, coupling, arm } = accessories(c, n(spec, 'wire', 1));
     const wheelLoad = (m * g * share) / k, rpm = (c.topSpeed / r) * (60 / (2 * Math.PI));
     // the axle as strength needs it, then the bearing it runs in (bored at least that), and the axle is made to that bore
     const strength = shaftSize.run({ T: Tout, M: wheelLoad * n(spec, 'overhang', 0.06), n: 2 });
@@ -429,14 +564,8 @@ export const powertrain: Workflow<Record<string, number | string>, PowertrainCho
     const axle: WorkflowResult<{ diameter: number; least: number; material: string }> = bore && strength.choice
       ? { ...strength, choice: { ...strength.choice, diameter: bore }, summary: `Ø${bore * 1000} mm ${getMaterial(strength.choice.material).name} bar, the bearing's bore (strength needs ${r3(strength.choice.least * 1000)} mm).` }
       : strength;
-    const bill = [
-      { id: c.motor, count: k }, ...(c.gearhead ? [{ id: c.gearhead, count: k }] : []), { id: c.battery, count: c.series }, { id: c.controller, count: c.controllers },
-      ...(wire.choice ? [{ id: `awg.${wire.choice.gauge}`, count: k }] : []), ...(fuse.choice ? [{ id: fuse.choice.fuse, count: k }] : []), ...(coupling.choice ? [{ id: coupling.choice.coupling, count: k }] : []),
-      ...(arm.choice ? [{ id: arm.choice.rodEnd, count: 2 * k }] : []), ...(bearing.choice ? [{ id: bearing.choice.bearing, count: k }] : []),
-    ];
-    const cost: Record<string, number> = {};
-    const priced = [...Object.values(MOTORS), ...Object.values(GEARHEADS), ...Object.values(BATTERIES)];
-    for (const b of bill) { const p = priced.find((x) => x.id === b.id)?.price; if (p) cost[p.currency] = (cost[p.currency] ?? 0) + p.amount * b.count; }
+    const bill = billOf(c, k, wire, fuse, coupling, arm, bearing.choice ? [{ id: bearing.choice.bearing, count: k }] : []);
+    const cost = costOf(bill);
     const all = [d, wire, fuse, coupling, arm, bearing, axle];
     const choice: PowertrainChoice = {
       drive: c, wire: wire.choice, fuse: fuse.choice?.fuse ?? null, coupling: coupling.choice?.coupling ?? null, torqueArm: arm.choice, bearing: bearing.choice?.bearing ?? null,
@@ -451,6 +580,65 @@ export const powertrain: Workflow<Record<string, number | string>, PowertrainCho
   },
 };
 
-export const WORKFLOWS: Workflow[] = [powertrain, driveSelect, wireSize, fuseSelect, batterySize, shaftSize, bearingSelect, couplingSelect, controllerSelect, torqueArmSize] as unknown as Workflow[];
+/**
+ * An electric actuator for any job, not only a vehicle's: a shaft turned at a torque and speed, or a push at a force
+ * and speed through a lead screw. The screw first, when it pushes: the smallest that carries the push in its core,
+ * doesn't buckle over the stroke and keeps its nut's bearing pressure; its efficiency and lead set the torque and
+ * speed it must be turned at. Then the same drive search a vehicle's uses, at that torque and speed, and the same
+ * wire, fuse, coupling and torque arm.
+ */
+export const actuatorDesign: Workflow<Record<string, number | string>, PowertrainChoice> = {
+  id: 'actuator.design', name: 'Design an electric actuator',
+  goal: 'Motor, gearhead, pack, controller, wiring and fuse that turn a shaft at the torque and speed asked, or push at the force and speed asked through a lead screw.',
+  asks: [q('torque', 'torque at the output shaft', 'N m', 5), q('rpm', 'output speed', 'rpm', 60), q('force', 'push wanted (through a lead screw when given)', 'N', 0), q('speed', 'push speed', 'm/s', 0.01),
+    q('stroke', 'stroke', 'm', 0.3), q('motors', 'motors', '-', 1), q('peak', 'starting over running torque', '-', 1.5), q('sf', 'safety factor on the screw', '-', 2), q('wire', 'wire run, pack to motor', 'm', 1)],
+  steps: ['Pushing: each stocked lead screw, smallest first, for its core stress, its buckling over the stroke (pinned at both ends) and its nut\'s bearing pressure.', 'Its efficiency from its lead and friction; the torque it needs (F l / 2π η) and the speed (v / l).', 'The drive search, at that torque (running and starting) and speed.', 'Wire, fuse, coupling and torque arm from the drive\'s own numbers.'],
+  uses: { laws: ['screw.efficiency', 'screw.force', 'stress.axial', 'buckling.euler', 'motor.torque', 'motor.current', 'motor.back-emf', 'wire.drop'], families: ['lead screw', 'dc motor', 'gearhead', 'battery', 'motor controller', 'wire', 'fuse', 'coupling', 'rod end'], processes: ['saw', 'turn', 'crimp', 'bore'] },
+  tags: ['actuator', 'linear actuator', 'drill', 'lift', 'jack', 'motor', 'robot', 'furniture'],
+  run(spec) {
+    const trace: TraceStep[] = [], warnings: string[] = [];
+    const F = n(spec, 'force', 0), v = n(spec, 'speed', 0.01), L = n(spec, 'stroke', 0.3), sf = n(spec, 'sf', 2), k = Math.max(1, Math.round(n(spec, 'motors', 1))), peak = n(spec, 'peak', 1.5);
+    let T = n(spec, 'torque', 5), rpm = n(spec, 'rpm', 60);
+    let screw: PowertrainChoice['screw'] = null;
+    if (F > 0) {
+      const per = F / k;
+      const fit = LEAD_SCREWS.find((c) => {
+        const d3 = Number(c.specs['d3']), d2 = Number(c.specs['d2']), P = Number(c.specs['pitch']), A = (Math.PI / 4) * d3 * d3, I = (Math.PI / 64) * d3 ** 4;
+        const bearing = per / (Math.PI * d2 * (P / 2) * (Number(c.specs['nutLength']) / P));
+        return apply('stress.axial', { F: per, A }) <= Number(c.specs['yield']) / sf && apply('buckling.euler', { E: 200e9, I, L, K: 1 }) >= per * sf && bearing <= Number(c.specs['bearing']);
+      });
+      if (!fit) return { ok: false, choice: null, trace, warnings, parts: [], alternatives: [], summary: `No stocked lead screw up to ${LEAD_SCREWS.at(-1)!.label} pushes ${r3(per)} N over a ${r3(L * 1000)} mm stroke: shorten the stroke, guide the nut, or share the push between more screws.` };
+      const d3 = Number(fit.specs['d3']), l = Number(fit.specs['lead']);
+      step(trace, 'stress.axial', `stress in ${fit.id}'s core`, { F: per, A: (Math.PI / 4) * d3 * d3 }, 'Pa');
+      step(trace, 'buckling.euler', `${fit.id} over the stroke`, { E: 200e9, I: (Math.PI / 64) * d3 ** 4, L, K: 1 }, 'N');
+      const eta = step(trace, 'screw.efficiency', `${fit.id} raising its load`, { l, d2: Number(fit.specs['d2']), mu: Number(fit.specs['mu']), alpha: (15 * Math.PI) / 180 }, '-');
+      T = (per * l) / (2 * Math.PI * eta);
+      step(trace, 'screw.force', 'the push that torque gives back', { T, eta, l }, 'N');
+      rpm = (v / l) * 60;
+      screw = { item: fit.id, force: per, torque: T, rpm, efficiency: eta, holds: eta < 0.5 };
+      if (!screw.holds) warnings.push(`${fit.label} is ${r3(eta * 100)}% efficient: it runs back under its load, so it needs a brake.`);
+    }
+    const w = (rpm * 2 * Math.PI) / 60;
+    const options = searchDrives(T * peak, T, w, 1, k, -1, (x) => `${r3((x * 60) / (2 * Math.PI))} rpm`);
+    const best = options[0];
+    if (!best) return { ok: false, choice: null, trace, warnings, parts: [], alternatives: [], summary: `Nothing in the catalogue turns ${r3(T)} N·m at ${r3(rpm)} rpm${screw ? ` (to turn ${screw.item} for ${r3(F)} N)` : ''}: a bigger motor in the catalogue, or share the job.` };
+    const c = best.choice;
+    const { wire, fuse, coupling, arm } = accessories(c, n(spec, 'wire', 1));
+    const bill = billOf(c, k, wire, fuse, coupling, arm, screw ? [{ id: screw.item, count: k }] : []);
+    const all = [wire, fuse, coupling, arm];
+    const choice: PowertrainChoice = {
+      drive: c, wire: wire.choice, fuse: fuse.choice?.fuse ?? null, coupling: coupling.choice?.coupling ?? null, torqueArm: arm.choice, bearing: null, axle: null, axleMaterial: null,
+      torque: T, wheelLoad: 0, bill, cost: costOf(bill), screw,
+    };
+    const drive = `${k} × ${MOTORS[c.motor]!.label}${c.gearhead ? ` with ${GEARHEADS[c.gearhead]!.label}` : ''}, on ${c.series} × ${BATTERIES[c.battery]!.label}, through ${CONTROLLERS.find((x) => x.id === c.controller)!.label} limited to ${c.currentLimit} A: ${best.why}.`;
+    return {
+      ok: all.every((x) => x.ok), choice, alternatives: options.slice(1, 4).map((o) => ({ choice: { ...choice, drive: o.choice }, why: o.why })), parts: bill.map((b) => b.id),
+      trace: [...trace, ...all.flatMap((x) => x.trace)], warnings: [...warnings, ...cautions(trace), ...all.flatMap((x) => x.warnings)],
+      summary: [screw ? `${LEAD_SCREWS.find((x) => x.id === screw.item)!.label}: ${r3(screw.efficiency * 100)}% efficient, turned at ${r3(T)} N·m and ${r3(rpm)} rpm to push ${r3(F / k)} N at ${r3(v * 1000)} mm/s${screw.holds ? '; it holds its load unpowered' : ''}.` : `${r3(T)} N·m at ${r3(rpm)} rpm.`, drive, wire.summary, fuse.summary, coupling.summary, arm.summary].join(' '),
+    };
+  },
+};
+
+export const WORKFLOWS: Workflow[] = [powertrain, driveSelect, wireSize, fuseSelect, batterySize, shaftSize, bearingSelect, couplingSelect, controllerSelect, torqueArmSize, gearSize, memberSize, strutSize, actuatorDesign] as unknown as Workflow[];
 export const workflowById = (id: string) => WORKFLOWS.find((w) => w.id === id);
 export type { WorkflowResult };

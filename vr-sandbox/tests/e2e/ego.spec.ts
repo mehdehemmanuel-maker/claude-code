@@ -249,3 +249,23 @@ test('her forms: a shape said in words and a part invented for a job are made, p
   expect(back).toBe(2);
   expect(errors).toEqual([]);
 });
+
+test('anything asked means something: a frontier blueprint, a law\'s scale, and a want done as far as she can now', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page);
+  const boots = await sb(page, (s) => s.ego.ask('blueprint for gravity boots'));
+  expect(boots).toMatch(/223\.6 m/);
+  expect(boots).toMatch(/relabel|runs into a law/);
+  expect(await sb(page, (s) => s.ego.ask('whats on your frontier'))).toMatch(/46 inventions/);
+  expect(await sb(page, (s) => s.ego.ask('where does kinetic energy break down'))).toMatch(/special relativity/);
+  // a zero-gravity cockpit with time slowed: done at once; what isn't built yet, said
+  const pilot = await sb(page, (s) => s.ego.ask('give me a tutorial: a deep-space pilot sim-within-a-sim that drops me into a zero-gravity cockpit, slowing down time so I can practice orbital mechanics'));
+  expect(pilot).toMatch(/turned gravity off/);
+  expect(pilot).toMatch(/Still to build/);
+  expect(await sb(page, (s) => s.app.doc.sim.gravity[1])).toBe(0);
+  expect(await sb(page, (s) => s.app.settings.timeScale)).toBe(0.25);
+  const beach = await sb(page, (s) => s.ego.ask('I just want to chill on a beach'));
+  expect(beach).toMatch(/water to swim and float in/);
+  expect(beach).toMatch(/ground of any kind/);
+  expect(errors).toEqual([]);
+});

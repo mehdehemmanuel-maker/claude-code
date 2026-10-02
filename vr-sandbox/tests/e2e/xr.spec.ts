@@ -1,7 +1,7 @@
 // VR mode on Meta's WebXR emulator (IWER, virtual Quest 3), driven like a real headset.
 
 import { test } from '@playwright/test';
-import { boot, expect, openScene, sb } from './helpers';
+import { boot, expect, openScene } from './helpers';
 
 test('Quest emulation: tablet taps, grip grab, tool cycling', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });

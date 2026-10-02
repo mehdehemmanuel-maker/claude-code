@@ -67,15 +67,9 @@ export function nameOf(k: Knowledge): string {
   }
 }
 
-/** "support.rotate" → "rotary support"; "bearing-near-load" → "bearing near load". */
-export const blockName = (a: Archetype) => BLOCK_NAMES[a.id] ?? a.id;
+/** A block by its name ("rotary support"); a principle by its id said as words ("bearing near load"). */
+export const blockName = (a: Archetype) => a.name;
 export const principleName = (p: Principle) => p.id.replace(/-/g, ' ');
-const BLOCK_NAMES: Record<string, string> = {
-  'power.store': 'energy store', 'power.control': 'motor controller', 'power.conduct': 'conductor', 'actuation.rotary': 'rotary actuator',
-  'transmission.reduce': 'speed reducer', 'transmission.couple': 'shaft coupling', 'transmission.flexible': 'chain drive', 'support.rotate': 'rotary support',
-  'connection.two-force': 'two-force link', 'material.print': 'printing material', 'transmission.shaft': 'shaft', 'transmission.wheel': 'wheel',
-  'structure.member': 'frame member', 'machine.assembly': 'whole machine', 'protect.fuse': 'fuse', 'protect.guard': 'guard',
-};
 
 const STOP = new Set(['a', 'an', 'the', 'of', 'for', 'to', 'in', 'on', 'and', 'or', 'what', 'how', 'do', 'does', 'is', 'are', 'i', 'you', 'me', 'my', 'about', 'tell', 'know', 'explain', 'with', 'it', 'that', 'this', 'whats', 'which', 'can', 'should', 'make', 'made', 'at', 'by', 'its', 'as', 'be', 'from', 'one', 'each']);
 
@@ -117,7 +111,7 @@ function text(k: Knowledge): { name: string; body: string; tags: string[] } {
     case 'joint': return { name: `${k.item.label} ${k.item.id}`, body: `${k.item.blurb} ${k.item.model}`, tags: [k.item.category, 'joint', 'connect', 'join'] };
     case 'shape': return { name: `${k.item.label} ${k.item.id.replace(/\./g, ' ')}`, body: k.item.category, tags: [k.item.category, 'part'] };
     case 'machine': return { name: `${k.item.label} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.does} ${nodesOf(k.item).map((n) => `${n.name} ${n.is}`).join(' ')} ${k.item.example ?? ''} ${k.item.source.cite}`, tags: [...k.item.tags, 'machine'] };
-    case 'block': return { name: `${blockName(k.item)} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.does} ${k.item.families.join(' ')} ${(k.item.shapes ?? []).join(' ')}`, tags: [k.item.category, 'block', 'building block', ...k.item.takes, ...k.item.gives] };
+    case 'block': return { name: `${blockName(k.item)} ${k.item.words.join(' ')} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.does} ${k.item.families.join(' ')} ${(k.item.shapes ?? []).join(' ')}`, tags: [k.item.category, 'block', 'building block', ...k.item.takes, ...k.item.gives] };
     case 'principle': return { name: principleName(k.item), body: `${k.item.rule} ${k.item.why} ${k.item.seen ?? ''}`, tags: [k.item.category, ...k.item.appliesTo.map((x) => x.replace(/[.-]/g, ' ')), 'principle'] };
     case 'way': return { name: `${k.item.name} ${k.item.id.replace(/[.-]/g, ' ')}`, body: `${k.item.effect} ${k.item.range}`, tags: [...k.item.takes, ...k.item.gives, k.item.against ?? '', 'way', 'working principle'] };
   }
@@ -253,11 +247,15 @@ export { solveFor, sensitivity, uncertainty, showWork, show } from './analysis';
 export { graph, neighbours, path, dangling } from './graph';
 export { findQuantities, parseUnit, toSI, fromSI } from './units';
 export { MACHINES, breakdown, machineById } from './machines';
-export { ARCHETYPES, archetypeById, blocksByArchetype, checkDesign, designFromPowertrain, portsOf, type Design, type Flow, type Problem } from './blocks';
+export { ARCHETYPES, archetypeById, archetypeByWord, blocksByArchetype, checkDesign, designFromPowertrain, portsOf, type Design, type Flow, type Problem } from './blocks';
 export { PRINCIPLES, CATEGORIES, principleById, explainPrinciple } from './principles';
 export { WAYS, wayById, conceive, byMedium, asWhole, buildable, type Concept, type Way, type Medium } from './ways';
 export { grow, growConcept, develop, anatomyOf, compression, genomeKey, LEVELS, DEVELOPMENT, type Organism, type Organ, type Genome } from './grow';
-export { CHALLENGES, attempt, report, challengeById, flowOfWord, FLOW_WORDS, type Attempt, type Challenge } from './challenges';
+export { CHALLENGES, attempt, report, challengeById, type Attempt, type Challenge } from './challenges';
+export { FLOW_WORDS, flowOfWord, flowOfPhrase } from './words';
+export { REGIMES, regimeOf, scaleCheck, ellipticK, type Regime, type ScaleCheck } from './scales';
+export { discover, groups as dimensionlessGroups, dropped as cantMatter, type Discovery, type Quantity as Measured } from './discover';
+export { FRONTIER, explore, frontierById, frontierFor, frontierReport, frontierCensus, geodesic, type Frontier, type Exploration, type Label } from './frontier';
 
 // ------------------------------------------------------------------------------------------------ remembered answers
 

@@ -35,4 +35,3 @@ export function seededIds(seed: number): IdSource {
   };
 }
 
-export const ID_PATTERN = /^[apcfw]_[0-9a-hjkmnp-tv-z]{12}$/;

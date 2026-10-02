@@ -60,21 +60,6 @@ export function heatInput(eta: number, volts: number, amps: number, travelSpeed:
   return (eta * volts * amps) / Math.max(travelSpeed, 1e-4);
 }
 
-/**
- * Weld quality factor from heat input vs the band suitable for the plate thickness.
- * The band (about 0.1-0.3 kJ/mm per mm of plate for steel) is a shop rule of thumb: estimated.
- * Too cold -> lack of fusion (q < 1). Too hot on thin plate -> burn-through (reported separately).
- */
-export function weldQuality(Q: number, plateThickness: number) {
-  const tmm = plateThickness * 1000;
-  const lo = 100 * tmm; // J/mm per mm
-  const hi = 300 * tmm;
-  const qJmm = Q / 1000;
-  if (qJmm < lo) return { quality: Math.max(0.05, qJmm / lo), burnThrough: false };
-  if (qJmm > hi * 2.5 && tmm < 3) return { quality: 0.3, burnThrough: true };
-  return { quality: 1, burnThrough: false };
-}
-
 /** Shear capacity of n solid rivets: n tau_u pi d^2 / 4, with tau_u ~ 0.6 sigma_u unless given. */
 export function rivetShear(n: number, d: number, rivetUltimate: number, shearUltimate?: number) {
   const tau = shearUltimate ?? 0.6 * rivetUltimate;

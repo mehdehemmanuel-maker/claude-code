@@ -18,10 +18,12 @@ import { connectionGeometry } from '../connectors/through';
 import { composePose, relativePose } from '../doc/math';
 import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
 import { effectiveParams, getPartKind, massOf } from '../parts/registry';
-import { DISPLAY, defaultsOf, formatForce, numberOf, type Params } from '../schema/params';
+import { DISPLAY, defaultsOf, formatForce, type Params } from '../schema/params';
 import { AUTO_JOIN } from '../connectors/plan';
 import { run, type RunResult } from '../forge/forge';
 import { AppHost } from '../forge/apphost';
+import { understand } from './understand';
+import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
 import { HabitGraph } from './habits';
@@ -35,19 +37,12 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { anatomyOf, ARCHETYPES, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
+import { anatomyOf, ARCHETYPES, archetypeByWord, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explore, FRONTIER, frontierById, frontierCensus, frontierReport, scaleCheck, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
 import { describe as describeForm, genome, parseForm, type Form } from '../forms/form';
 import { solid } from '../forms/mesh';
 import { makeIn, routes } from '../forms/make';
 import { formFromWords, invent, materialIn } from '../forms/say';
-
-/** A building block by the word for it. */
-const INSIDE_OF: Record<string, string> = {
-  motor: 'actuation.rotary', battery: 'power.store', cell: 'power.store', bearing: 'support.rotate', gearhead: 'transmission.reduce', gearbox: 'transmission.reduce', reducer: 'transmission.reduce',
-  coupling: 'transmission.couple', chain: 'transmission.flexible', wheel: 'transmission.wheel', shaft: 'transmission.shaft', axle: 'transmission.shaft', fuse: 'protect.fuse', controller: 'power.control',
-  wire: 'power.conduct', cable: 'power.conduct', 'rod end': 'connection.two-force', 'tie rod': 'connection.two-force', bit: 'logic.bistable', lever: 'logic.bistable', guard: 'protect.guard', frame: 'structure.member',
-};
 
 export interface Advice {
   id: string;
@@ -350,9 +345,29 @@ export class Ego {
         const all = CHALLENGES.map((c) => attempt(c));
         return `I set myself ${all.length} hard challenges to find where I break: ${all.map((a) => `${a.challenge.name.toLowerCase()} (as far as ${a.best}, at worst ${a.worst})`).join('; ')}. Each miss is a thing to fix. Ask me for one, like "take the computer challenge".`;
       }
+      case 'frontier': {
+        if (i.which) return frontierReport(explore(frontierById(i.which)!));
+        const c = frontierCensus();
+        return `I keep ${c.total} inventions past what is built as challenges: ${c.byLabel.made} have been made, ${c.byLabel.buildable} can be built from known physics, ${c.byLabel.research} wait on a discovery, and ${c.byLabel.relabelled} run into a law as said, so I relabel them to what meets the want. None ends at impossible. I can size ${c.byReach.blueprinted} whole myself and grow part of ${c.byReach.grown}; for the rest I have the path and what I learn next. Ask me for one, like "blueprint for gravity boots" (${FRONTIER.slice(0, 4).map((f) => f.name.toLowerCase()).join(', ')}...).`;
+      }
+      case 'scale': {
+        const law = lawById(i.about.replace(/\s+/g, '.')) ?? (recall(i.about, 1, ['law'])[0]?.item as ReturnType<typeof lawById>);
+        if (!law) return `I don't know a law called ${i.about}.`;
+        const given = Object.fromEntries(findQuantities(i.words).flatMap((q) => { const inp = law.inputs.find((x) => sameDim(parseUnit(x.unit).dim, q.dim)); return inp ? [[inp.sym, q.si] as [string, number]] : []; }));
+        const s = scaleCheck(law.id, { ...law.example.inputs, ...given });
+        return s ? s.says : `${law.name} holds where it was measured: ${law.valid} I haven't written down the number that bounds it, or the law it is the limit of, yet: that is a gap in me.`;
+      }
+      case 'want': {
+        const u = understand(i.words);
+        for (const a of u.acts) {
+          if ('command' in a) this.host.command(a.command);
+          else if ('timeScale' in a) app.setTimeScale(a.timeScale);
+          else { app.settings.playerScale = a.playerScale; app.notify(); }
+        }
+        return u.says;
+      }
       case 'inside': {
-        const word = i.what.toLowerCase().replace(/^(dc |electric |rotary )/, '').replace(/s$/, '');
-        const a = ARCHETYPES.find((x) => x.id === INSIDE_OF[word]) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
+        const a = archetypeByWord(i.what) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
         if (!a) return `I don't know what's inside ${i.what} yet.`;
         return `A ${blockName(a)} is a system of its own. ${a.inside.map((x) => `${x.name[0]!.toUpperCase()}${x.name.slice(1)}: ${x.does}${x.law ? ` (${lawById(x.law)?.name ?? x.law})` : ''}.`).join(' ')} Source: ${a.insideSource.cite}.`;
       }

@@ -8,7 +8,7 @@ import { getMaterial } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { effectiveParams, getPartKind, segmentBodyId, segmentOffset, type SegmentLayout } from '../parts/registry';
 import { endpointWorld, partLayout, segmentPose } from '../app/segments';
-import { composePose, length, sub } from '../doc/math';
+import { length, sub } from '../doc/math';
 import type { BuildDoc, Connection, Part, Pose } from '../doc/types';
 import { numberOf } from '../schema/params';
 import { POOL, workshopEnvironment } from '../physics/environment';

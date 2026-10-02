@@ -40,4 +40,3 @@ export function poolFluid(): FluidVolume {
   return { id: 'w_p00100000000', name: 'Test pool (fresh water)', min: [x - w / 2, 0, z - d / 2], max: [x + w / 2, water, z + d / 2], density: 998.2 };
 }
 
-export const ENVIRONMENT_MATERIALS = ['concrete.c30', 'wood.birch-plywood', 'steel.a36'];

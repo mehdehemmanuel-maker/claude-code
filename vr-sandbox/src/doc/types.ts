@@ -133,4 +133,3 @@ export type Collection = 'assemblies' | 'parts' | 'connections' | 'materials';
 export const CATALOG_VERSION = '2026.1';
 export const APP_VERSION = '0.1.0';
 
-export const IDENTITY_POSE: Pose = { p: [0, 0, 0], q: [0, 0, 0, 1] };

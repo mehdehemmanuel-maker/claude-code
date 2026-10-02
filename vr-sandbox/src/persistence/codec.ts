@@ -258,9 +258,3 @@ export function crc32(bytes: Uint8Array): number {
   for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]!) & 0xff]! ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
-
-/** SHA-256 fingerprint of the canonical bytes (shown as the build ID). */
-export async function fingerprint(doc: BuildDoc): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', encodeDoc(doc) as BufferSource);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}

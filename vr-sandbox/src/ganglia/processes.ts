@@ -4,7 +4,9 @@
 // they run (engineering/threads.ts, spacing.ts, joining.ts, welding.ts); the checks here are the ones a design is
 // tested against before anything is placed.
 
-import { CLEARANCE_HOLE_MEDIUM, METRIC_COARSE } from '../engineering/threads';
+import { GASES } from '../engineering/welding';
+import { END_GRAIN_FACTOR } from '../engineering/wood';
+import { METRIC_COARSE } from '../engineering/threads';
 import type { Process } from './types';
 
 const MACHINERY = { cite: 'Oberg et al., Machinery\'s Handbook, 31st ed., Industrial Press 2020', kind: 'handbook' as const };
@@ -90,7 +92,7 @@ export const PROCESSES: Process[] = [
   },
   {
     id: 'weld.mig', name: 'MIG (GMAW) welding', makes: 'a fused bead joining metals', materials: ['steel', 'stainless', 'aluminum'],
-    tools: ['MIG welder', 'shielding gas (Ar/CO2 for steel, Ar for aluminium, with a spool gun)'],
+    tools: ['MIG welder', ...Object.values(GASES).map((g) => `shielding gas ${g.label} (for ${Object.keys(g.shields).filter((k) => g.shields[k as keyof typeof g.shields]! >= 0.95).join(' and ')})`), 'a spool gun for aluminium'],
     limits: [
       'Only weldable pairs: steel to steel, stainless to stainless, aluminium to aluminium, each with its filler (engineering/joining.ts).',
       'A fillet\'s leg is no bigger than the thinner part; its throat is 0.707 of its leg.',
@@ -116,7 +118,7 @@ export const PROCESSES: Process[] = [
     tools: ['drill (pilot and clearance holes)', 'driver'],
     limits: [
       'Through the part that is thinner along the screw\'s path, into the other (R2); penetration into the holding part sets its withdrawal strength.',
-      'Pilot holes in hardwood stop it splitting; end grain holds about two thirds as well as side grain.',
+      `Pilot holes in hardwood stop it splitting; into end grain a screw holds about ${END_GRAIN_FACTOR['wood-screw'] * 100}% as well as into side grain, a nail about ${END_GRAIN_FACTOR.nail * 100}%.`,
       'Screws come in stocked lengths only (R3).',
     ],
     source: { cite: 'USDA Forest Products Laboratory, Wood Handbook FPL-GTR-190 (2010), ch. 8' }, tags: ['screw', 'wood', 'furniture'], uses: { laws: [] },
@@ -173,8 +175,6 @@ export function tapDrill(size: string): number | null {
   return t ? t.d - t.P : null;
 }
 
-/** The ISO 273 medium clearance hole for a bolt, m. */
-export const clearanceHole = (size: string): number | null => CLEARANCE_HOLE_MEDIUM[size] ?? null;
 
 /** Least thread engagement for a tapped hole in a material category, in bolt diameters (Machinery's Handbook practice). */
 export function threadEngagement(category: string): number | null {

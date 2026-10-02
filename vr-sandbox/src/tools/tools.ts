@@ -10,7 +10,7 @@ import { gapTo, REACH, throughOf, unreachable } from '../connectors/through';
 import { contactBetween } from './contact';
 import { addConnection, addPart, deleteParts, duplicateParts, placePart, setPartPose, setPartPoses } from '../doc/commands';
 import { frameOnPart, partLayout } from '../app/segments';
-import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, relativePose, rotate, scale, sub, transformPoint } from '../doc/math';
+import { add, axisAngle, cross, fromTo, inverseTransformPoint, length, normalize, qmul, rotate, scale, sub, transformPoint } from '../doc/math';
 import type { Part, Pose, Quat, Vec3 } from '../doc/types';
 import { effectiveParams, getPartKind, segmentBodyId } from '../parts/registry';
 import { shapeBounds, type CollisionShape } from '../parts/shapes';

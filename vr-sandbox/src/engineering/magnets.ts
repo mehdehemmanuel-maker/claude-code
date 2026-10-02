@@ -11,25 +11,6 @@ import { discFieldFast, rectField } from './magnetField';
 
 export const MU0 = 4e-7 * Math.PI;
 
-export interface MagnetGrade {
-  id: string;
-  label: string;
-  /** Remanence Br, tesla (midpoint of the grade range). */
-  Br: number;
-  density: number;
-  source: string;
-}
-
-export const MAGNET_GRADES: Record<string, MagnetGrade> = {
-  N35: { id: 'N35', label: 'NdFeB N35', Br: 1.19, density: 7500, source: 'IEC 60404-8-1 / manufacturer grade tables, 1.17-1.21 T' },
-  N42: { id: 'N42', label: 'NdFeB N42', Br: 1.3, density: 7500, source: 'IEC 60404-8-1 / manufacturer grade tables, 1.28-1.32 T' },
-  N45: { id: 'N45', label: 'NdFeB N45', Br: 1.34, density: 7500, source: 'manufacturer grade tables, 1.32-1.36 T' },
-  N52: { id: 'N52', label: 'NdFeB N52', Br: 1.455, density: 7500, source: 'manufacturer grade tables, 1.43-1.48 T' },
-  C8: { id: 'C8', label: 'Ferrite C8 (Y30BH)', Br: 0.39, density: 4900, source: 'MMPA 0100 ceramic 8, 0.38-0.40 T' },
-  SmCo: { id: 'SmCo', label: 'SmCo 2:17', Br: 1.08, density: 8400, source: 'manufacturer grade tables, 1.05-1.12 T' },
-  AlNiCo5: { id: 'AlNiCo5', label: 'AlNiCo 5', Br: 1.25, density: 7300, source: 'MMPA 0100 AlNiCo 5' },
-};
-
 export type Vec3 = [number, number, number];
 
 /**

@@ -103,6 +103,15 @@ What it found on the way:
 - **The world's parameter cleaner dropped any value it didn't know.** A form's genome would have been lost on every edit. Parts now have a text parameter that is kept, and the save format checks it as untrusted.
 - **A new material needs thermal data, or the thermal guard fails.** The printed nylon's thermal figures aren't published, so they are estimated from its nylon matrix and say so.
 
+## Round 4: the frontier, and what moved
+
+The frontier ([FRONTIER.md](FRONTIER.md)) asked for 46 inventions past what is built, and moved these challenges:
+
+- **Computer: run on electric power** moved from unbuildable to partial. An electric motor turns a lead screw that pushes the levers, as the Z1 was driven by its motor.
+- **Scientist: act on what it found** moved from no buildable path to **works**. A controller drives a motor and lead screw, and every part is real.
+- **Scientist: sense a turn** moved to partial, as a mechanical counter: a screw pushing a lever.
+- **Symbiote: feed on food to move** grows, then fails honestly. Asked to push at the kart's 3 m/s, a lead screw would turn at 90,000 rpm.
+
 ## What the challenges taught about the structure itself
 
 - **A block without a way is invisible to reasoning.** The motor controller was a transistor switch all along, but nothing said so, so "act on a signal" had no path. Every block's physics has to be written down as a way, or conceptual design can't find it.

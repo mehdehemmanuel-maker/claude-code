@@ -174,5 +174,3 @@ export function glow(t: number): { color: number; intensity: number } {
   return { color, intensity: Math.max(0.05, intensity) };
 }
 
-/** Wood darkens and chars from about 300 deg C (pyrolysis; Wood Handbook ch. 18). */
-export const CHAR = 300;

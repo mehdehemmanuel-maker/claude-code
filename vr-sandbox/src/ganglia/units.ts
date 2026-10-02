@@ -19,7 +19,7 @@ const V: Dim = [1, 2, -3, -1, 0], OHM: Dim = [1, 2, -3, -2, 0];
 
 /** Units by symbol (as the laws write them, and as people say them). */
 export const UNITS: Record<string, UnitDef> = {
-  '-': u(DIMLESS), '1': u(DIMLESS), rad: u(DIMLESS), rev: u(DIMLESS, 2 * Math.PI), deg: u(DIMLESS, Math.PI / 180), '%': u(DIMLESS, 0.01),
+  '-': u(DIMLESS), '1': u(DIMLESS), mol: u(DIMLESS), dB: u(DIMLESS), rad: u(DIMLESS), rev: u(DIMLESS, 2 * Math.PI), deg: u(DIMLESS, Math.PI / 180), '%': u(DIMLESS, 0.01),
   kg: u(M), g: u(M, 1e-3), t: u(M, 1000), lb: u(M, 0.45359237), lbs: u(M, 0.45359237), oz: u(M, 0.028349523125),
   m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
   s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600),
@@ -33,7 +33,7 @@ export const UNITS: Record<string, UnitDef> = {
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
   Ah: u([0, 0, 1, 1, 0], 3600), mAh: u([0, 0, 1, 1, 0], 3.6),
   Hz: u([0, 0, -1, 0, 0]), rpm: u([0, 0, -1, 0, 0], (2 * Math.PI) / 60),
-  T: u([1, 0, -2, -1, 0]), mT: u([1, 0, -2, -1, 0], 1e-3), F: u([-1, -2, 4, 2, 0]), C: u([0, 0, 1, 1, 0]),
+  T: u([1, 0, -2, -1, 0]), mT: u([1, 0, -2, -1, 0], 1e-3), F: u([-1, -2, 4, 2, 0]), C: u([0, 0, 1, 1, 0]), S: u([-1, -2, 3, 2, 0]),
 };
 
 const add = (a: Dim, b: Dim, k = 1): Dim => a.map((x, i) => x + k * b[i]!) as Dim;
