@@ -30,8 +30,13 @@ export interface RoomSurface {
   indices?: number[];
 }
 
+/** A place's ground: heights on a square grid, row by row along z then x, spanning −size/2 to size/2 (place.ts). */
+export interface TerrainField { n: number; size: number; heights: Float32Array }
+
 export type PhysicsOp =
   | { op: 'environment'; boxes: EnvironmentBox[]; materials: Record<string, Material> }
+  /** A place's ground, or none (null). */
+  | { op: 'terrain'; field: TerrainField | null; material: Material | null }
   | { op: 'clear' }
   | { op: 'upsertPart'; part: Part; material: Material; keepLivePose: boolean }
   | { op: 'removePart'; id: string }

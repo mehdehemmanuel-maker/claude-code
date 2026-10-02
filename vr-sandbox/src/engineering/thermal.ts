@@ -57,6 +57,8 @@ const BY_ID: Record<string, ThermalProps> = {
   'ceramic.clay-brick': T(840, 0.8, 0.9, 'EN ISO 10456 / CIBSE Guide A, solid clay brick: k 0.6-1.0 W/m K, c 840 J/kg K'),
   'stone.slate': T(760, 2.0, 0.9, 'Engineering Toolbox, slate: c 0.76 J/g K, k 1.7-2.1 W/m K'),
   'stone.granite': T(790, 2.8, 0.45, 'Engineering Toolbox, granite: c 0.79 J/g K, k 1.7-4.0 W/m K; polished 0.45'),
+  'ground.sand-dry': T(800, 0.27, 0.9, 'Incropera Table A.3, sand: c 800 J/kg K, k 0.27 W/m K'),
+  'ground.soil': T(1840, 0.52, 0.9, 'Incropera Table A.3, soil: c 1840 J/kg K, k 0.52 W/m K'),
   'stone.marble': T(880, 2.8, 0.9, 'Engineering Toolbox, marble: c 0.88 J/g K, k 2.1-2.9 W/m K'),
   'textile.baize': T(1360, 0.04, 0.9, 'Engineering Toolbox, wool: c 1.36 J/g K; felt k 0.04 W/m K'),
   'textile.canvas': T(1300, 0.06, 0.9, 'Engineering Toolbox, cotton: c 1.3 J/g K; cloth k 0.04-0.08 W/m K'),

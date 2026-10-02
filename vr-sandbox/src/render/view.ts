@@ -12,6 +12,7 @@ import { length, sub } from '../doc/math';
 import type { BuildDoc, Connection, Part, Pose } from '../doc/types';
 import { numberOf } from '../schema/params';
 import { POOL, workshopEnvironment } from '../physics/environment';
+import type { Heightfield, PlaceSpec } from '../world/place';
 import type { LiveState } from '../app/live';
 import type { RoomSurface } from '../physics/protocol';
 import { isFurniture, isWallLike } from '../xr/room';
@@ -79,6 +80,11 @@ export class SceneView {
   /** The user's real room (scene understanding), drawn to suit the XR mode. */
   private room = new THREE.Group();
   private roomPick: THREE.Mesh[] = [];
+  /** A place's ground, water and sky (world/place.ts), shown instead of the workshop. */
+  private place = new THREE.Group();
+  private placeKey = '';
+  private placeSky = new THREE.Color(0x1d2126);
+  private readonly placeFog = new THREE.Fog(0x1d2126, 100, 400);
   private roomKey = '';
 
   constructor(private renderer: THREE.WebGLRenderer) {
@@ -101,6 +107,7 @@ export class SceneView {
     this.scene.add(this.sun, this.sun.target);
     this.scene.add(this.markers);
     this.scene.add(this.room);
+    this.scene.add(this.place);
     this.buildEnvironment();
   }
 
@@ -108,15 +115,59 @@ export class SceneView {
   setWorkshopVisible(visible: boolean) {
     if (visible === this.workshopVisible) return;
     this.workshopVisible = visible;
-    for (const o of this.workshop) o.visible = visible;
-    this.scene.background = visible ? this.background : null;
-    this.scene.fog = visible ? this.fog : null;
+    this.showWorld();
     this.renderer.setClearColor(0x000000, visible ? 1 : 0);
     this.pickDirty = true;
   }
 
   get isWorkshopVisible() {
     return this.workshopVisible;
+  }
+
+  /** The virtual world as it stands: the workshop, or a place instead of it; neither in mixed reality. */
+  private showWorld() {
+    const v = this.workshopVisible, inPlace = this.placeKey !== '';
+    for (const o of this.workshop) o.visible = v && !inPlace;
+    this.place.visible = v && inPlace;
+    this.scene.background = v ? (inPlace ? this.placeSky : this.background) : null;
+    this.scene.fog = v ? (inPlace ? this.placeFog : this.fog) : null;
+  }
+
+  /**
+   * A place (world/place.ts), or none (the workshop again): its ground drawn on the very triangles physics stands
+   * on, wet below the waterline; its water to the horizon; its sky from zenith to horizon; its sun where it stands.
+   */
+  setPlace(p: PlaceSpec | null, f: Heightfield | null) {
+    const key = p && f ? p.id : '';
+    if (key === this.placeKey) return;
+    this.placeKey = key;
+    for (const c of [...this.place.children]) {
+      this.place.remove(c);
+      c.traverse((o) => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); if (m.material) (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x.dispose()); });
+    }
+    if (p && f) {
+      this.place.add(terrainMesh(p, f));
+      if (f.waterLevel !== null) {
+        const sea = new THREE.Mesh(new THREE.PlaneGeometry(f.size * 4, f.size * 4), new THREE.MeshStandardMaterial({ color: 0x1d6e96, transparent: true, opacity: 0.82, roughness: 0.12, metalness: 0.05, depthWrite: false }));
+        sea.rotation.x = -Math.PI / 2;
+        sea.position.y = f.waterLevel;
+        sea.renderOrder = 2;
+        this.place.add(sea);
+      }
+      this.place.add(skyDome(p.sky.zenith, p.sky.horizon));
+      this.placeSky.set(p.sky.horizon);
+      this.placeFog.color.set(p.sky.horizon);
+      this.placeFog.near = p.sky.visibility * 0.25;
+      this.placeFog.far = p.sky.visibility;
+      const el = (p.sun.elevation * Math.PI) / 180, az = (p.sun.azimuth * Math.PI) / 180;
+      this.sun.position.set(30 * Math.cos(el) * Math.sin(az), 30 * Math.sin(el), 30 * Math.cos(el) * Math.cos(az));
+      this.sun.intensity = p.sun.intensity;
+    } else {
+      this.sun.position.set(6, 12, 5);
+      this.sun.intensity = 2.2;
+    }
+    this.showWorld();
+    this.pickDirty = true;
   }
 
   /**
@@ -736,3 +787,51 @@ function floorTexture() {
 }
 
 export { length, sub };
+
+/** A place's ground as a mesh on the heightfield's own triangles (each cell split from (x, z) to (x + 1, z + 1), as Jolt splits it). */
+function terrainMesh(p: PlaceSpec, f: Heightfield): THREE.Mesh {
+  const n = f.n, step = f.size / (n - 1);
+  const pos = new Float32Array(n * n * 3), col = new Float32Array(n * n * 3);
+  const base = new THREE.Color(getMaterial(p.ground.material).color), wet = base.clone().multiplyScalar(0.62), c = new THREE.Color();
+  for (let iz = 0; iz < n; iz++) for (let ix = 0; ix < n; ix++) {
+    const i = iz * n + ix, h = f.heights[i]!;
+    pos.set([-f.size / 2 + ix * step, h, -f.size / 2 + iz * step], i * 3);
+    // a little variation, so the ground reads as ground; darker where the water has wet it
+    const grain = 0.92 + 0.08 * Math.sin(ix * 12.9898 + iz * 78.233) * Math.sin(ix * 3.1 - iz * 1.7);
+    const wetness = f.waterLevel === null ? 0 : Math.min(1, Math.max(0, (f.waterLevel + 0.25 - h) / 0.25));
+    c.copy(base).lerp(wet, wetness).multiplyScalar(grain);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  const idx: number[] = [];
+  for (let iz = 0; iz < n - 1; iz++) for (let ix = 0; ix < n - 1; ix++) {
+    const a = iz * n + ix, b = (iz + 1) * n + ix, cc = (iz + 1) * n + ix + 1, d = iz * n + ix + 1;
+    idx.push(a, b, cc, a, cc, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
+  m.receiveShadow = true;
+  m.userData.pick = { type: 'env', id: null };
+  return m;
+}
+
+/** A sky from its zenith colour down to its horizon's. */
+function skyDome(zenith: number, horizon: number): THREE.Mesh {
+  const g = new THREE.SphereGeometry(350, 32, 16);
+  const z = new THREE.Color(zenith), h = new THREE.Color(horizon), c = new THREE.Color();
+  const p = g.getAttribute('position');
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const t = Math.min(1, Math.max(0, p.getY(i) / 350));
+    c.copy(h).lerp(z, Math.pow(t, 0.6));
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  m.renderOrder = -10;
+  m.frustumCulled = false;
+  return m;
+}

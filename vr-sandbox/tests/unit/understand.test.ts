@@ -28,11 +28,16 @@ describe('understanding a want', () => {
     }
   });
 
-  it('a beach is sand, sea, sky and the sound of waves; she has the water, sky and sound, and builds the ground next', () => {
+  it('a beach is sand, sea, sky and the sound of waves: she grows the ground and its sea and takes you there; a mood is still to build', () => {
     const u = of('beach');
     expect(u.kinds).toContain('feel');
     expect(ids(u)).toEqual(expect.arrayContaining(['water', 'sky', 'sound', 'terrain']));
-    expect(u.toBuild).toContain('terrain');
+    expect(u.acts).toEqual([{ place: 'i just want to chill on a beach.' }]);
+    expect(u.says).toMatch(/taken you to a sandy beach/);
+    expect(u.toBuild).toEqual(['mood']);
+    // where the ground can't be grown yet she doesn't pretend: no cavern, no sea floor
+    expect(of('luminescent-forest').acts).toEqual([]);
+    expect(of('atlantis').acts).toEqual([]);
   });
 
   it('acts at once where the world can: a zero-gravity cockpit with time slowed; a magnifying glass shrinks you', () => {
@@ -55,10 +60,11 @@ describe('understanding a want', () => {
     expect(of('glitch-desert').says).toMatch(/other constants/);
   });
 
-  it('over everything asked, what to build next is ranked by how many wants call for it: the ground first', () => {
+  it('over everything asked, what to build next is ranked by how many wants call for it: now that the ground is built, life and lessons', () => {
     const next = nextToBuild(ASKS.map((a) => a.said));
-    expect(next[0]!.id).toBe('terrain');
-    expect(next.map((n) => n.id)).toEqual(expect.arrayContaining(['lessons', 'creatures', 'characters', 'plants', 'overlay']));
+    expect(next.map((n) => n.id)).not.toContain('terrain');
+    expect(next.slice(0, 3).map((n) => n.id).sort()).toEqual(['characters', 'creatures', 'lessons']);
+    expect(next.map((n) => n.id)).toEqual(expect.arrayContaining(['plants', 'overlay', 'buildings']));
   });
 });
 
@@ -72,10 +78,33 @@ describe('what she hears', () => {
     expect(interpret('I just want to chill on a beach')).toMatchObject({ do: 'want' });
     expect(interpret('spawn me in a simulation as a dog')).toMatchObject({ do: 'want' });
     expect(interpret('teach me chess')).toMatchObject({ do: 'want' });
+    expect(interpret('back to the workshop')).toMatchObject({ do: 'want' });
     // unchanged
     expect(interpret('make a 40 mm sphere')).toMatchObject({ do: 'shape' });
     expect(interpret('build something that flies')).toEqual({ do: 'challenge', which: 'flight' });
     expect(interpret('place 4 steel blocks')).toMatchObject({ do: 'place', count: 4 });
     expect(interpret('make me a battery pack')?.do).not.toBe('frontier');
+  });
+});
+
+describe('places', () => {
+  it('a place is read from its words, its ground grown the same each time, standing you at the floor\'s height with the water below', async () => {
+    const { heightfield, placeFromWords, groundAt, PLACES } = await import('../../src/world/place');
+    const beach = placeFromWords('I just want to chill on a beach')!;
+    expect(beach.id).toBe('beach');
+    const a = heightfield(beach), b = heightfield(beach);
+    expect(a.heights).toEqual(b.heights);
+    expect(Math.abs(groundAt(a, 0, 0))).toBeLessThan(1e-6);
+    expect(a.waterLevel!).toBeLessThan(0);
+    // the beach face rises about 1 in 20 inland, and is under water out to sea
+    expect(groundAt(a, 0, 20) - groundAt(a, 0, 0)).toBeGreaterThan(0.5);
+    expect(groundAt(a, 0, beach.ground.shore - 15)).toBeLessThan(a.waterLevel!);
+    // dunes: relief of metres, no water; night darkens the sky
+    const desert = heightfield(placeFromWords('a desert')!);
+    expect(desert.waterLevel).toBeNull();
+    expect(desert.max - desert.min).toBeGreaterThan(2);
+    expect(placeFromWords('a beach at night')!.sun.intensity).toBeLessThan(0.5);
+    expect(placeFromWords('a table')).toBeNull();
+    for (const [k, p] of Object.entries(PLACES)) expect(heightfield({ id: k, ...p }).heights.every(Number.isFinite), k).toBe(true);
   });
 });

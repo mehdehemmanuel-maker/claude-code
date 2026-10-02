@@ -12,6 +12,8 @@
 //
 // So every request means something: what she does now, what it becomes when the rest is built, and what that is.
 
+import { placeFromWords } from '../world/place';
+
 export type Kind = 'be somewhere' | 'populate' | 'become' | 'learn' | 'make' | 'change the rules' | 'see the hidden' | 'feel';
 
 export interface Capability {
@@ -26,7 +28,7 @@ export interface Capability {
 }
 
 /** Something she can do about a want at once, in this world. */
-export type Act = { command: 'gravity earth' | 'gravity moon' | 'gravity zero' } | { timeScale: number } | { playerScale: number };
+export type Act = { command: 'gravity earth' | 'gravity moon' | 'gravity zero' } | { timeScale: number } | { playerScale: number } | { place: string | null };
 
 export const CAPABILITIES: Capability[] = [
   // ------------------------------------------------------------------------------------------------ the world itself
@@ -51,7 +53,7 @@ export const CAPABILITIES: Capability[] = [
   { id: 'stress', name: 'what each part carries', by: 'src/forms/topopt.ts#growShape', says: 'stress and deflection in parts and members, worked out; not yet painted on what you look at', words: ['stress', 'structural', 'load', 'strength'] },
   { id: 'draw', name: 'drawing in the air', by: 'src/sketch/interpret.ts#interpret', says: 'strokes you draw read as shapes and built', words: ['draw', 'sketch', 'paint', 'canvas', 'writing'] },
   // ----------------------------------------------------------------------------------------------- not built yet
-  { id: 'terrain', name: 'ground of any kind', by: null, says: 'hills, sand, caves, islands: the ground is a flat floor for now', words: ['beach', 'desert', 'forest', 'cavern', 'cave', 'mountain', 'mountains', 'island', 'islands', 'dunes', 'wasteland', 'terrain', 'ground', 'garden', 'hollow'] },
+  { id: 'terrain', name: 'ground of any kind', by: 'src/world/place.ts#heightfield', says: 'beaches, islands, lakeshores, desert dunes, meadows and mountainsides grown as real ground, with their sea or lake and sky; not caves, cliffs or the sea floor yet', words: ['beach', 'desert', 'forest', 'cavern', 'cave', 'mountain', 'mountains', 'island', 'islands', 'dunes', 'wasteland', 'terrain', 'ground', 'garden', 'hollow', 'meadow', 'hills', 'lake'] },
   { id: 'plants', name: 'plants', by: null, says: 'trees, mushrooms, vines, cacti, grass', words: ['forest', 'mushrooms', 'vines', 'plant', 'plants', 'tree', 'trees', 'cacti', 'cactus', 'garden', 'coral', 'jungle'] },
   { id: 'weather', name: 'weather', by: null, says: 'wind, rain, snow, storms that act on things as well as look like them', words: ['weather', 'rain', 'storm', 'snow', 'snowstorm', 'tornado', 'wind', 'winter'] },
   { id: 'buildings', name: 'buildings and cities', by: null, says: 'houses, markets, temples, cities raised from their structure', words: ['city', 'village', 'market', 'bazaar', 'temple', 'temples', 'ruins', 'kingdom', 'metropolis', 'stalls', 'buildings', 'tracks', 'cities'] },
@@ -127,8 +129,17 @@ export function understand(asked: string): Understanding {
   if (/\b(slow(ing|s)? (down )?time|slow motion|time slows)\b/.test(t)) acts.push({ timeScale: 0.25 });
   if (/\b(magnifying glass|shrink me|make me (tiny|small)|me (tiny|small))\b/.test(t)) acts.push({ playerScale: 0.1 });
   else if (/\b(make me (giant|huge|big)|grow me)\b/.test(t)) acts.push({ playerScale: 10 });
+  // a place to be in, where it is ground she can grow (not under the ground, the sea or in the sky)
+  const going = kinds.includes('be somewhere') || kinds.includes('populate') || kinds.includes('feel');
+  if (/\b(back to (the )?workshop|take me home|leave this place)\b/.test(t)) acts.push({ place: null });
+  else if (going && !/\b(cavern|cave|subterranean|underground|underwater|sunken|outer space|clouds|airborne)\b/.test(t)) {
+    const p = placeFromWords(t);
+    if (p) acts.push({ place: t });
+  }
   const has = needs.filter((n) => n.has), lack = needs.filter((n) => !n.has);
-  const actSays = acts.map((a) => ('command' in a ? (a.command === 'gravity zero' ? 'turned gravity off' : a.command === 'gravity moon' ? 'set the Moon\'s gravity' : 'set Earth\'s gravity') : 'timeScale' in a ? `slowed time to ×${a.timeScale}` : `made you ×${a.playerScale} your size`));
+  const actSays = acts.map((a) => ('command' in a ? (a.command === 'gravity zero' ? 'turned gravity off' : a.command === 'gravity moon' ? 'set the Moon\'s gravity' : 'set Earth\'s gravity')
+    : 'timeScale' in a ? `slowed time to ×${a.timeScale}` : 'playerScale' in a ? `made you ×${a.playerScale} your size`
+      : a.place === null ? 'taken you back to the workshop' : `taken you to ${placeFromWords(a.place)!.name}`));
   // a world with other rules is still a world with rules: its constants can change, its consistency can't
   const broken = /physics[^.]*\bbroken\b|\bbroken physics\b/.test(t);
   const parts = [

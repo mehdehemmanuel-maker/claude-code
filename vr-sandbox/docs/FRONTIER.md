@@ -80,15 +80,13 @@ What people ask of her beyond making (a sky-reef full of creatures, a cyberpunk 
 - the capabilities it takes, each backed by the code that does it (checked by the tests) or marked not built;
 - what she does about it now.
 
-Asked for a zero-gravity cockpit with time slowed, she turns gravity off and slows time at once. Asked for a beach, she names the water, sky and sound she has and the ground she doesn't. A world whose physics is "broken" is given other constants instead: strange, but still a world things work in.
+Asked for a zero-gravity cockpit with time slowed, she turns gravity off and slows time at once. Asked for a beach, she grows its sand and sea and takes you there. A world whose physics is "broken" is given other constants instead: strange, but still a world things work in.
 
-Over everything asked, what to build next is ranked by how many wants call for it:
+Over everything asked, what to build next is ranked by how many wants call for it. Ground ranked first, so it was built next ([PLACES.md](PLACES.md)): asked for a beach, she grows its sand and sea and takes you there. Now ranked first:
 
-1. ground of any kind (12);
-2. lessons that check what you do (9);
-3. plants, creatures with bodies, and characters with minds (8 each);
-4. seeing what is hidden (6);
-5. buildings (4).
+1. creatures with bodies, characters with minds, and lessons that check what you do (8 each);
+2. plants and seeing what is hidden (6 each);
+3. buildings (4).
 
 ## Ask her
 

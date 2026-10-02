@@ -34,7 +34,7 @@ import {
 import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
-import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, PowerState, RoomSurface, StepResult } from './protocol';
+import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, PowerState, RoomSurface, StepResult, TerrainField } from './protocol';
 
 /** A magnetic interaction between two bodies at this instant (see magnetPairs). */
 interface MagnetPair {
@@ -489,6 +489,7 @@ export class PhysicsWorld {
   /** What the floor and walls are made of, by Jolt body id (for where friction's heat goes). */
   private envMaterial = new Map<number, Material>();
   private roomBodies: JoltNS.Body[] = [];
+  private terrainBody: JoltNS.Body | null = null;
   private grabs = new Map<string, Grab>();
   private sim: SimSettings;
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
@@ -608,6 +609,7 @@ export class PhysicsWorld {
     this.magnetRest.clear();
     switch (op.op) {
       case 'environment': return this.setEnvironment(op.boxes, op.materials);
+      case 'terrain': return this.setTerrain(op.field, op.material);
       case 'clear': return this.clear();
       case 'upsertPart': return this.upsertPart(op.part, op.material, op.keepLivePose);
       case 'removePart': return this.removePart(op.id);
@@ -661,6 +663,43 @@ export class PhysicsWorld {
       this.envBodies.push(body);
       if (m) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), m);
     }
+  }
+
+  /**
+   * A place's ground as a Jolt heightfield: each sample at (−size/2 + x step, height, −size/2 + z step), each cell two
+   * triangles, static, with its material's friction and restitution (and its heat, for the energy books).
+   */
+  private setTerrain(field: TerrainField | null, material: Material | null) {
+    const J = this.J;
+    if (this.terrainBody) {
+      this.envMaterial.delete(this.terrainBody.GetID().GetIndexAndSequenceNumber());
+      this.bi.RemoveBody(this.terrainBody.GetID());
+      this.bi.DestroyBody(this.terrainBody.GetID());
+      this.terrainBody = null;
+    }
+    if (!field) return;
+    const step = field.size / (field.n - 1);
+    const s = new J.HeightFieldShapeSettings();
+    s.mOffset = this.V([-field.size / 2, 0, -field.size / 2]);
+    s.mScale = this.V([step, 1, step]);
+    s.mSampleCount = field.n;
+    s.mHeightSamples.clear();
+    s.mHeightSamples.reserve(field.n * field.n);
+    for (let i = 0; i < field.n * field.n; i++) s.mHeightSamples.push_back(field.heights[i]!);
+    const res = s.Create();
+    if (!res.IsValid()) { J.destroy(s); throw new Error(`terrain: ${res.GetError().c_str()}`); }
+    const shape = res.Get();
+    const cs = new J.BodyCreationSettings(shape, this.R([0, 0, 0]), this.Q([0, 0, 0, 1]), J.EMotionType_Static, LAYER_STATIC);
+    cs.mFriction = material?.friction ?? 0.6;
+    cs.mRestitution = material?.restitution ?? 0.1;
+    cs.mUserData = 0;
+    const body = this.bi.CreateBody(cs);
+    J.destroy(cs);
+    J.destroy(s);
+    this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
+    this.terrainBody = body;
+    if (material) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), material);
+    for (const r of this.bodies.values()) if (!r.frozen) this.bi.ActivateBody(r.body.GetID());
   }
 
   /**

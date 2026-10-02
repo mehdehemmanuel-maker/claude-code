@@ -23,6 +23,7 @@ import { AUTO_JOIN } from '../connectors/plan';
 import { run, type RunResult } from '../forge/forge';
 import { AppHost } from '../forge/apphost';
 import { understand } from './understand';
+import { placeFromWords } from '../world/place';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
@@ -362,7 +363,8 @@ export class Ego {
         for (const a of u.acts) {
           if ('command' in a) this.host.command(a.command);
           else if ('timeScale' in a) app.setTimeScale(a.timeScale);
-          else { app.settings.playerScale = a.playerScale; app.notify(); }
+          else if ('playerScale' in a) { app.settings.playerScale = a.playerScale; app.notify(); }
+          else app.setPlace(a.place === null ? null : placeFromWords(a.place));
         }
         return u.says;
       }
