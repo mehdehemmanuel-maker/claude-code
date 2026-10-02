@@ -23,6 +23,9 @@ import { AUTO_JOIN } from '../connectors/plan';
 import { run, type RunResult } from '../forge/forge';
 import { AppHost } from '../forge/apphost';
 import { understand } from './understand';
+import { advance, guideOf, lessonFrom, type Lesson } from './lesson';
+import { buildVisual } from '../render/geometry';
+import { ghostMaterial } from '../render/materials';
 import { placeFromWords } from '../world/place';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
@@ -358,6 +361,7 @@ export class Ego {
         const s = scaleCheck(law.id, { ...law.example.inputs, ...given });
         return s ? s.says : `${law.name} holds where it was measured: ${law.valid} I haven't written down the number that bounds it, or the law it is the limit of, yet: that is a gap in me.`;
       }
+      case 'teach': return this.teach(i.spec, i.material);
       case 'want': {
         const u = understand(i.words);
         for (const a of u.acts) {
@@ -434,6 +438,48 @@ export class Ego {
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
     return `${plan.notes.join(' ')} ${verdict}`;
+  }
+
+  /** The lesson you are on, if any. */
+  lesson: Lesson | null = null;
+  private lessonSaid = -1;
+
+  /**
+   * A lesson in building what she can design: designed in front of you, built first on her bench, then taught step
+   * by step, each shown by a guide where the part goes and done only when it is done in your world.
+   */
+  teach(spec: DesignSpec, materialWord?: string): string {
+    if (materialWord) spec.material = resolveMaterial('block', materialWord);
+    const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
+    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`);
+    let l: Lesson;
+    try { l = lessonFrom(`a ${spec.what}`, plan.forge, this.app.doc.sim); } catch (e) { return `I couldn't make a lesson of it: ${(e as Error).message}`; }
+    this.lesson = l;
+    this.lessonSaid = 0;
+    const places = l.steps.filter((s) => s.do === 'place').length, joins = l.steps.filter((s) => s.do === 'join').length;
+    return `Let's build ${l.name} together: ${places} parts to place, ${joins} joints, then a test. ${plan.notes[0] ?? ''} First: ${l.steps[0]!.says}`;
+  }
+
+  /** Move the lesson on by what you've done, say the next step, and show its guide. */
+  private teachTick() {
+    const l = this.lesson, app = this.app;
+    if (!l) return;
+    const p = advance(app, l, !app.settings.build, app.simTime);
+    if (p.done.length && p.now && l.at !== this.lessonSaid) {
+      this.lessonSaid = l.at;
+      this.say('tip', `✓ Done. Next (${l.at + 1} of ${l.steps.length}): ${p.now.says}`, []);
+    }
+    const g = guideOf(l);
+    if (g) {
+      const kind = getPartKind(g.kind), m = app.materialOf(g);
+      app.view.showGuide(`lesson:${g.id}`, () => buildVisual(kind.visual(effectiveParams(kind, g.params, m)), ghostMaterial, () => ghostMaterial), g.pose);
+    } else app.view.showGuide('', null, null);
+    if (p.finished) {
+      this.say('tip', `You built ${l.name}, and it holds. That's the lesson done.`, []);
+      this.gain('template');
+      this.lesson = null;
+      app.view.showGuide('', null, null);
+    }
   }
 
   /** What every rigid joint will carry once gravity acts (the analysis behind foresight). */
@@ -884,6 +930,7 @@ export class Ego {
 
   /** Near failure: warn once per joint, with what would carry it. */
   private tick(dt: number) {
+    this.teachTick();
     this.watchShown();
     this.clock += dt;
     if (this.clock < 0.5) return;

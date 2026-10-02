@@ -46,6 +46,8 @@ export type Intent =
   | { do: 'frontier'; which?: string }
   /** Where a law holds, and what it is the limit of. */
   | { do: 'scale'; about: string; words: string }
+  /** A lesson: a design to build yourself, step by step, each checked in your world. */
+  | { do: 'teach'; spec: DesignSpec; material?: string }
   /** A want of any kind (a place, a life, a lesson, a body): what it is made of here, done as far as she can now. */
   | { do: 'want'; words: string }
   /** What a block is made of, piece by piece. */
@@ -98,6 +100,11 @@ export function interpret(line: string): Intent | null {
   if (/^(challenge|try to|build|create|make|invent|design|take|run)\b/.test(t) && (m = /\b(computer|symbiote|scientist|language|geometry|new shape|fly|flies|flying|flight)\b/.exec(t)) && !/\b(table|desk|bench|wall|tower|shelf|crate)\b/.test(t)) {
     const w = m[1]!;
     return { do: 'challenge', which: w === 'new shape' ? 'geometry' : /^fl/.test(w) ? 'flight' : w };
+  }
+  // a lesson in building something she can design: "teach me to build a table", "show me how to build a shelf"
+  if ((m = /^(?:teach me (?:how )?to|show me how to|train me to|give me a lesson (?:in|on)|lesson:?)\s+(?:build|make|put together)\s+(.+)$/.exec(t))) {
+    const d = designOf(`build ${m[1]}`);
+    if (d) return { do: 'teach', spec: d.spec, ...(d.material ? { material: d.material } : {}) };
   }
   // a want of any kind: a place to be, a life to fill it, a body to wear, a lesson
   if (/^(i (just )?(want|wanna|would like|d like)|take me|put me|spawn me|drop me|let me (be|live|chill|relax|explore|learn|practice)|turn me into|make me (tiny|small|smaller|giant|big|bigger|huge)|teach me|train me|show me how to (play|dance|fight|speak|cook|swim|survive)|populate|generate an?|give me an? (world|tutorial|lesson|course))\b/.test(t)

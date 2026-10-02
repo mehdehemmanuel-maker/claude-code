@@ -60,10 +60,11 @@ describe('understanding a want', () => {
     expect(of('glitch-desert').says).toMatch(/other constants/);
   });
 
-  it('over everything asked, what to build next is ranked by how many wants call for it: now that the ground is built, life and lessons', () => {
+  it('over everything asked, what to build next is ranked by how many wants call for it: with ground and lessons built, life', () => {
     const next = nextToBuild(ASKS.map((a) => a.said));
     expect(next.map((n) => n.id)).not.toContain('terrain');
-    expect(next.slice(0, 3).map((n) => n.id).sort()).toEqual(['characters', 'creatures', 'lessons']);
+    expect(next.map((n) => n.id)).not.toContain('lessons');
+    expect(next.slice(0, 2).map((n) => n.id).sort()).toEqual(['characters', 'creatures']);
     expect(next.map((n) => n.id)).toEqual(expect.arrayContaining(['plants', 'overlay', 'buildings']));
   });
 });

@@ -82,9 +82,14 @@ What people ask of her beyond making (a sky-reef full of creatures, a cyberpunk 
 
 Asked for a zero-gravity cockpit with time slowed, she turns gravity off and slows time at once. Asked for a beach, she grows its sand and sea and takes you there. A world whose physics is "broken" is given other constants instead: strange, but still a world things work in.
 
-Over everything asked, what to build next is ranked by how many wants call for it. Ground ranked first, so it was built next ([PLACES.md](PLACES.md)): asked for a beach, she grows its sand and sea and takes you there. Now ranked first:
+Over everything asked, what to build next is ranked by how many wants call for it, and built in that order:
 
-1. creatures with bodies, characters with minds, and lessons that check what you do (8 each);
+- **Ground** ranked first, so it was built first ([PLACES.md](PLACES.md)). Asked for a beach, she grows its sand and sea and takes you there.
+- **Lessons that check what you do** came next ([LESSONS.md](LESSONS.md)). Any design she can make becomes the steps of building it yourself, each shown by a guide and done only when done in your world.
+
+Now ranked first:
+
+1. creatures with bodies and characters with minds (8 each);
 2. plants and seeing what is hidden (6 each);
 3. buildings (4).
 

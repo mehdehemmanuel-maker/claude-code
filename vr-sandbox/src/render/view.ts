@@ -69,6 +69,9 @@ export class SceneView {
   private stressOn = false;
   private ghost: THREE.Object3D | null = null;
   private ghostKey = '';
+  /** A lesson's guide: where the next part goes (a ghost of its own, so placing beside it doesn't move it). */
+  private guide: THREE.Object3D | null = null;
+  private guideKey = '';
   private markers = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   readonly sun: THREE.DirectionalLight;
@@ -654,6 +657,25 @@ export class SceneView {
     this.ghost.position.set(...pose.p);
     this.ghost.quaternion.set(...pose.q);
     this.ghost.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).material = ok ? ghostMaterial : ghostBadMaterial; });
+  }
+
+  /** Show a lesson's guide for the part to place next, or none. */
+  showGuide(key: string, make: (() => THREE.Object3D) | null, pose: Pose | null) {
+    if (!make || !pose) { if (this.guide) this.guide.visible = false; this.guideKey = ''; return; }
+    if (!this.guide || this.guideKey !== key) {
+      if (this.guide) this.scene.remove(this.guide);
+      this.guide = make();
+      this.guide.traverse((o) => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).material = ghostMaterial; (o as THREE.Mesh).castShadow = false; } });
+      this.guideKey = key;
+      this.scene.add(this.guide);
+    }
+    this.guide.visible = true;
+    this.guide.position.set(...pose.p);
+    this.guide.quaternion.set(...pose.q);
+  }
+
+  get guideShown() {
+    return this.guideKey;
   }
 
   /** Small markers (connect-tool first point, measurement ends). */
