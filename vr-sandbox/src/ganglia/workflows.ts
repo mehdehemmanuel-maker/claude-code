@@ -8,8 +8,8 @@ import { BATTERIES, WIRE_GAUGES, type BatteryData } from '../data/batteries';
 import { motorModel, type MotorModel } from '../engineering/dcmotor';
 import { packCapacity, packOCV, type Pack } from '../engineering/battery';
 import { getMaterial, STANDARD_GRAVITY as g } from '../data/materials';
-import { apply } from './laws';
-import { BEARINGS, CONTROLLERS, COUPLINGS, PILLOW_BLOCKS, ROD_ENDS } from './parts';
+import { apply, use } from './laws';
+import { BEARINGS, CONTROLLERS, COUPLINGS, FUSES, PILLOW_BLOCKS, ROD_ENDS } from './parts';
 import type { CatalogItem, TraceStep, Workflow, WorkflowResult } from './types';
 
 const q = (sym: string, name: string, unit: string, d?: number) => ({ sym, name, unit, ...(d === undefined ? {} : { default: d }) });
@@ -17,10 +17,13 @@ const r3 = (x: number) => Number(x.toPrecision(3));
 
 /** Apply a law and write it down. */
 function step(trace: TraceStep[], law: string, why: string, inputs: Record<string, number>, unit: string): number {
-  const output = apply(law, inputs);
-  trace.push({ law, for: why, inputs, output, unit });
-  return output;
+  const { value, caution } = use(law, inputs);
+  trace.push({ law, for: why, inputs, output: value, unit, ...(caution ? { caution } : {}) });
+  return value;
 }
+
+/** What a run's laws said about being used beyond what they hold for. */
+const cautions = (trace: TraceStep[]) => trace.filter((t) => t.caution).map((t) => `${t.law}: ${t.caution}`);
 
 const n = (s: Record<string, number | string>, k: string, d: number) => (typeof s[k] === 'number' && Number.isFinite(s[k] as number) ? (s[k] as number) : d);
 
@@ -73,7 +76,9 @@ export const driveSelect: Workflow<Record<string, number | string>, DriveChoice>
     const options: Option[] = [];
     for (const md of Object.values(MOTORS)) {
       const mm = motorModel(md);
-      const gears: (GearheadData | null)[] = [null, ...Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id))];
+      // geared 0: direct drive only; 1: through a gearhead only; unsaid: either
+      const geared = typeof spec['geared'] === 'number' ? spec['geared'] : -1;
+      const gears: (GearheadData | null)[] = [...(geared === 1 ? [] : [null]), ...(geared === 0 ? [] : Object.values(GEARHEADS).filter((x) => x.fits.includes(md.id)))];
       for (const gh of gears) {
         for (const bd of Object.values(BATTERIES)) {
           const series = Math.max(1, Math.round(md.V / bd.V));
@@ -123,7 +128,7 @@ export const driveSelect: Workflow<Record<string, number | string>, DriveChoice>
         : `Nothing in the catalogue moves ${m} kg at ${v} m/s with ${a} m/s² of acceleration: ${r3(Tw)} N·m a wheel and ${r3(ww)} rad/s. Fewer demands, more motors, or a bigger motor in the catalogue.`,
       choice: best?.choice ?? null,
       alternatives: options.slice(1, 4).map((o) => ({ choice: o.choice, why: o.why })),
-      trace, warnings, parts,
+      trace, warnings: [...warnings, ...cautions(trace)], parts,
     };
   },
 };
@@ -174,7 +179,7 @@ export const wireSize: Workflow<Record<string, number | string>, WireChoice> = {
       step(trace, 'joule', 'what it loses as heat', { I, R: 2 * L * w.ohmPerM }, 'W');
     }
     return {
-      ok: !!best, choice: best ?? null, trace, warnings: [], parts: best ? [`awg.${best.gauge}`] : [],
+      ok: !!best, choice: best ?? null, trace, warnings: cautions(trace), parts: best ? [`awg.${best.gauge}`] : [],
       summary: best ? `${best.gauge} AWG pair: rated ${best.ampacity} A, drops ${r3(best.drop)} V (${r3((best.drop / V) * 100)}% of ${V} V), loses ${r3(best.loss)} W.` : `No gauge in the catalogue carries ${I} A over ${L} m within ${share * 100}%: a shorter run, a higher voltage, or heavier cable.`,
       alternatives: fits.slice(1, 3).map((f) => ({ choice: f, why: `heavier: drops ${r3(f.drop)} V, loses ${r3(f.loss)} W` })),
     };
@@ -200,7 +205,7 @@ export const batterySize: Workflow<Record<string, number | string>, PackChoice> 
     const best = out[0]!;
     step(trace, 'energy.electric', 'what it gives over the runtime', { V, I, t: h * 3600 }, 'J');
     return {
-      ok: true, choice: best, trace, warnings: [], parts: [best.battery], alternatives: out.slice(1).map((c) => ({ choice: c, why: `${r3(c.mass)} kg` })),
+      ok: true, choice: best, trace, warnings: cautions(trace), parts: [best.battery], alternatives: out.slice(1).map((c) => ({ choice: c, why: `${r3(c.mass)} kg` })),
       summary: `${best.series * best.parallel} × ${BATTERIES[best.battery]!.label} (${best.series} in series × ${best.parallel} in parallel), ${r3(best.mass)} kg: at ${I} A it runs ${r3(best.hours)} h.`,
     };
   },
@@ -235,7 +240,7 @@ export const shaftSize: Workflow<Record<string, number | string>, { diameter: nu
     const Se = step(trace, 'fatigue.endurance.steel', 'if it turns while bent (rotating bending reverses the stress)', { Sut: mat.ultimate }, 'Pa');
     return {
       ok: !!d, choice: d ? { diameter: d, least, material: mat.id } : null, trace, parts: [], alternatives: [],
-      warnings: M > 0 ? [`Turning while it is bent, each point on it is stressed back and forth: check it against the endurance limit (polished bar ${r3(Se / 1e6)} MPa, less for its surface and size).`] : [],
+      warnings: [...cautions(trace), ...(M > 0 ? [`Turning while it is bent, each point on it is stressed back and forth: check it against the endurance limit (polished bar ${r3(Se / 1e6)} MPa, less for its surface and size).`] : [])],
       summary: d ? `Ø${d * 1000} mm ${mat.name} bar (it needs at least ${r3(least * 1000)} mm).` : `More than ${ROUND_BAR[ROUND_BAR.length - 1]! * 1000} mm: ${r3(least * 1000)} mm needed.`,
     };
   },
@@ -265,7 +270,7 @@ export const bearingSelect: Workflow<Record<string, number | string>, { bearing:
       step(trace, 'bearing.life.hours', `at ${rpm} rpm`, { L, n: rpm }, 'h');
     }
     return {
-      ok: !!best, choice: best ? { bearing: best.b.id, hours: best.hours } : null, trace, warnings: [], parts: best ? [best.b.id] : [],
+      ok: !!best, choice: best ? { bearing: best.b.id, hours: best.hours } : null, trace, warnings: cautions(trace), parts: best ? [best.b.id] : [],
       alternatives: fit.slice(1, 3).map((x) => ({ choice: { bearing: x.b.id, hours: x.hours }, why: `${r3(x.hours)} h` })),
       summary: best ? `${best.b.label}: ${r3(best.hours)} h rating life at ${P} N and ${rpm} rpm (asked ${want} h).` : `No catalogued ${housed ? 'pillow block' : 'bearing'}${bore ? ` for a ${bore * 1000} mm shaft` : ''} lasts ${want} h at ${P} N and ${rpm} rpm.`,
     };
@@ -288,6 +293,32 @@ export const couplingSelect: Workflow<Record<string, number | string>, { couplin
       ok: !!best, choice: best ? { coupling: best.id } : null, trace: [], warnings: [], parts: best ? [best.id] : [],
       alternatives: fit.slice(1, 2).map((c) => ({ choice: { coupling: c.id }, why: `${r3(Number(c.specs['torque']))} N·m` })),
       summary: best ? `${best.label}: rated ${r3(Number(best.specs['torque']))} N·m against ${r3(T * sf)} N·m (×${sf}), bores to ${r3(Number(best.specs['maxBore']) * 1000)} mm.` : `No catalogued coupling carries ${r3(T * sf)} N·m on a ${d * 1000} mm shaft.`,
+    };
+  },
+};
+
+/**
+ * A fuse for a battery circuit: above what it carries in normal running, below what its wire can carry, rated for the
+ * circuit's voltage, and able to break the current a dead short would draw (the battery's voltage over its own
+ * resistance and the wire's, out and back).
+ */
+export const fuseSelect: Workflow<Record<string, number | string>, { fuse: string; fault: number }> = {
+  id: 'fuse.select', name: 'Choose a fuse',
+  goal: 'The smallest catalogued fuse that runs cool at the load, blows before the wire it protects burns, and can break a dead short.',
+  asks: [q('current', 'current in normal running', 'A'), q('ampacity', 'rating of the wire it protects', 'A'), q('voltage', 'highest circuit voltage (charged battery)', 'V', 26), q('sourceR', 'battery internal resistance', 'ohm', 0.05), q('wireR', 'wire resistance, out and back', 'ohm', 0.01)],
+  steps: ['At least 125% of the current it carries (continuous loads, NEC 210.20).', 'No more than the wire\'s rating, so the wire is protected (NEC 240.4; ABYC E-11).', 'Rated for the circuit\'s highest voltage.', 'Its interrupting rating above the fault current: the battery\'s voltage over its resistance and the wire\'s (Ohm).'],
+  uses: { laws: ['ohm', 'joule'], families: ['fuse', 'wire'], processes: ['crimp'] }, tags: ['fuse', 'protection', 'battery', 'wire', 'short circuit'],
+  run(spec) {
+    const I = n(spec, 'current', 10), amp = n(spec, 'ampacity', 20), V = n(spec, 'voltage', 26), R = n(spec, 'sourceR', 0.05) + n(spec, 'wireR', 0.01);
+    const fault = V / R;
+    const fit = FUSES.filter((f) => Number(f.specs['rating']) >= 1.25 * I && Number(f.specs['rating']) <= amp && Number(f.specs['voltage']) >= V && Number(f.specs['interrupt']) >= fault)
+      .sort((a, b) => Number(a.specs['rating']) - Number(b.specs['rating']));
+    const best = fit[0];
+    const why = !best ? (1.25 * I > amp ? `125% of ${r3(I)} A is past the wire's ${amp} A: use a heavier wire` : fault > 1000 ? `a short would draw ${r3(fault)} A, past a blade fuse's 1000 A: it needs a higher-interrupting fuse I don't have catalogued` : `none catalogued between ${r3(1.25 * I)} and ${amp} A at ${r3(V)} V`) : '';
+    return {
+      ok: !!best, choice: best ? { fuse: best.id, fault } : null, trace: [], warnings: [], parts: best ? [best.id] : [],
+      alternatives: fit.slice(1, 2).map((f) => ({ choice: { fuse: f.id, fault }, why: `${f.specs['rating']} A, closer to the wire's rating` })),
+      summary: best ? `${best.label}: above 125% of ${r3(I)} A, within the wire's ${amp} A, and it can break the ${r3(fault)} A of a dead short (${r3(V)} V over ${r3(R * 1000)} mΩ). Fit it at the battery's terminal.` : `No fuse: ${why}.`,
     };
   },
 };
@@ -316,7 +347,7 @@ export const torqueArmSize: Workflow<Record<string, number | string>, { rodEnd: 
   goal: 'A tie rod with rod ends that holds a housing against its reaction torque: rated for the push without buckling.',
   asks: [q('torque', 'reaction torque', 'N m'), q('radius', 'arm radius from the axis', 'm'), q('length', 'rod length', 'm'), q('n', 'safety factor', '-', 3)],
   steps: ['The force on the rod: the torque over its radius.', 'A rod end whose static rating covers it with the factor.', 'The thinnest stocked rod that neither yields nor buckles (pinned at both ends).'],
-  uses: { laws: ['buckling.euler', 'stress.axial'], families: ['rod end'], processes: ['saw', 'tap'] }, tags: ['torque arm', 'tie rod', 'rod end', 'motor mount'],
+  uses: { laws: ['buckling.euler', 'buckling.johnson', 'slenderness.transition'], families: ['rod end'], processes: ['saw', 'tap'] }, tags: ['torque arm', 'tie rod', 'rod end', 'motor mount'],
   run(spec) {
     const T = n(spec, 'torque', 5), rr = n(spec, 'radius', 0.04), L = n(spec, 'length', 0.05), sf = n(spec, 'n', 3);
     const trace: TraceStep[] = [];
@@ -324,14 +355,22 @@ export const torqueArmSize: Workflow<Record<string, number | string>, { rodEnd: 
     const steel = getMaterial('steel.1018-cd');
     const end = ROD_ENDS.find((e) => Number(e.specs['C0']) >= F * sf);
     let rod: number | null = null;
+    const transition = apply('slenderness.transition', { E: steel.E, Sy: steel.yield });
     for (const d of ROUND_BAR) {
-      const P = apply('buckling.euler', { E: steel.E, I: (Math.PI * d ** 4) / 64, L, K: 1 });
-      const s = apply('stress.axial', { F, A: (Math.PI / 4) * d * d });
-      if (P >= F * sf && s * sf <= steel.yield) { rod = d; step(trace, 'buckling.euler', `Ø${d * 1000} mm rod ${L * 1000} mm long`, { E: steel.E, I: (Math.PI * d ** 4) / 64, L, K: 1 }, 'N'); break; }
+      // a pinned strut buckles by Euler when slender, by Johnson (yielding as it bows) when stocky
+      const A = (Math.PI / 4) * d * d, I = (Math.PI * d ** 4) / 64, rg = d / 4;
+      const slender = L / rg >= transition;
+      const P = slender ? apply('buckling.euler', { E: steel.E, I, L, K: 1 }) : apply('buckling.johnson', { A, Sy: steel.yield, E: steel.E, K: 1, L, r: rg });
+      if (P >= F * sf) {
+        rod = d;
+        if (slender) step(trace, 'buckling.euler', `Ø${d * 1000} mm rod ${L * 1000} mm long (slenderness ${r3(L / rg)}, past ${r3(transition)})`, { E: steel.E, I, L, K: 1 }, 'N');
+        else step(trace, 'buckling.johnson', `Ø${d * 1000} mm rod ${L * 1000} mm long (slenderness ${r3(L / rg)}, below ${r3(transition)}: it yields before it buckles)`, { A, Sy: steel.yield, E: steel.E, K: 1, L, r: rg }, 'N');
+        break;
+      }
     }
     const ok = !!end && rod !== null;
     return {
-      ok, choice: ok ? { rodEnd: end!.id, rod: rod!, force: F } : null, trace, warnings: [], parts: end ? [end.id] : [], alternatives: [],
+      ok, choice: ok ? { rodEnd: end!.id, rod: rod!, force: F } : null, trace, warnings: cautions(trace), parts: end ? [end.id] : [], alternatives: [],
       summary: ok ? `${r3(F)} N on the arm: a Ø${rod! * 1000} mm steel rod with ${end!.label} at each end (static ${r3(Number(end!.specs['C0']))} N).` : `${r3(F)} N on the arm is more than the catalogued rod ends take at ${sf}×: a longer arm (less force) or a bigger rod end.`,
     };
   },
@@ -345,7 +384,12 @@ export interface PowertrainChoice {
   coupling: string | null;
   torqueArm: { rodEnd: string; rod: number; force: number } | null;
   bearing: string | null;
+  fuse: string | null;
   axle: number | null;
+  axleMaterial: string | null;
+  /** What each drive carries: torque at the gearhead's output at the current limit (N m), each driven wheel's load (N). */
+  torque: number;
+  wheelLoad: number;
   /** Each bought item and how many. */
   bill: { id: string; count: number }[];
   /** What the priced items come to, by currency. */
@@ -360,10 +404,10 @@ export interface PowertrainChoice {
  */
 export const powertrain: Workflow<Record<string, number | string>, PowertrainChoice> = {
   id: 'powertrain.design', name: 'Design a whole drivetrain',
-  goal: 'Every part a vehicle\'s drive needs, chosen from the catalogue and sized from one another: drive, wiring, couplings, torque arms, wheel bearings and axles.',
+  goal: 'Every part a vehicle\'s drive needs, chosen from the catalogue and sized from one another: drive, wiring, fuses, couplings, torque arms, wheel bearings and axles.',
   asks: [...driveSelect.asks, q('wire', 'wire run, pack to motor', 'm', 1), q('overhang', 'wheel centre to its bearing', 'm', 0.06), q('hours', 'bearing life wanted', 'h', 1000)],
-  steps: ['Choose the drive (drive.select).', 'Size the wire for its current limit (wire.size).', 'The gearhead\'s output torque at that limit sizes the coupling (coupling.select) and the torque arm (torquearm.size).', 'Each driven wheel\'s load and speed choose its bearing (bearing.select, housed).', 'Its torque and the wheel\'s overhang size the axle (shaft.size).', 'Count what to buy, and what the priced parts cost.'],
-  uses: { laws: [...driveSelect.uses.laws, 'wire.drop', 'bearing.life.l10', 'shaft.diameter.static', 'buckling.euler'], families: ['dc motor', 'gearhead', 'battery', 'motor controller', 'wire', 'coupling', 'rod end', 'pillow block'], processes: ['crimp', 'bore', 'split-clamp', 'bearing.fit', 'turn'] },
+  steps: ['Choose the drive (drive.select).', 'Size the wire for its current limit (wire.size), and the fuse that protects it (fuse.select).', 'The gearhead\'s output torque at that limit sizes the coupling (coupling.select) and the torque arm (torquearm.size).', 'Each driven wheel\'s load and speed choose its bearing (bearing.select, housed).', 'Its torque and the wheel\'s overhang size the axle (shaft.size).', 'Count what to buy, and what the priced parts cost.'],
+  uses: { laws: [...driveSelect.uses.laws, 'wire.drop', 'bearing.life.l10', 'shaft.diameter.static', 'buckling.euler'], families: ['dc motor', 'gearhead', 'battery', 'motor controller', 'wire', 'fuse', 'coupling', 'rod end', 'pillow block'], processes: ['crimp', 'bore', 'split-clamp', 'bearing.fit', 'turn'] },
   tags: ['vehicle', 'kart', 'drivetrain', 'powertrain', 'robot', 'drive'],
   run(spec) {
     const d = driveSelect.run(spec);
@@ -373,6 +417,8 @@ export const powertrain: Workflow<Record<string, number | string>, PowertrainCho
     const Tout = mm.Kt * (c.currentLimit - mm.I0) * (gh?.ratio ?? 1) * (gh?.efficiency ?? 1);
     const shaft = gh?.shaft ?? md.shaft;
     const wire = wireSize.run({ current: c.currentLimit, length: n(spec, 'wire', 1), voltage: BATTERIES[c.battery]!.V * c.series });
+    const bat = BATTERIES[c.battery]!;
+    const fuse = fuseSelect.run({ current: c.currentLimit, ampacity: wire.choice?.ampacity ?? 0, voltage: packOCV({ data: bat, series: c.series, parallel: 1 }, 1), sourceR: bat.internalR * c.series, wireR: wire.choice ? 2 * n(spec, 'wire', 1) * WIRE_GAUGES[wire.choice.gauge]!.ohmPerM : 0 });
     const coupling = couplingSelect.run({ torque: Tout, bore: shaft, sf: 1.5 });
     const arm = torqueArmSize.run({ torque: Tout, radius: 0.04, length: 0.04 });
     const wheelLoad = (m * g * share) / k, rpm = (c.topSpeed / r) * (60 / (2 * Math.PI));
@@ -385,26 +431,26 @@ export const powertrain: Workflow<Record<string, number | string>, PowertrainCho
       : strength;
     const bill = [
       { id: c.motor, count: k }, ...(c.gearhead ? [{ id: c.gearhead, count: k }] : []), { id: c.battery, count: c.series }, { id: c.controller, count: c.controllers },
-      ...(wire.choice ? [{ id: `awg.${wire.choice.gauge}`, count: k }] : []), ...(coupling.choice ? [{ id: coupling.choice.coupling, count: k }] : []),
+      ...(wire.choice ? [{ id: `awg.${wire.choice.gauge}`, count: k }] : []), ...(fuse.choice ? [{ id: fuse.choice.fuse, count: k }] : []), ...(coupling.choice ? [{ id: coupling.choice.coupling, count: k }] : []),
       ...(arm.choice ? [{ id: arm.choice.rodEnd, count: 2 * k }] : []), ...(bearing.choice ? [{ id: bearing.choice.bearing, count: k }] : []),
     ];
     const cost: Record<string, number> = {};
     const priced = [...Object.values(MOTORS), ...Object.values(GEARHEADS), ...Object.values(BATTERIES)];
     for (const b of bill) { const p = priced.find((x) => x.id === b.id)?.price; if (p) cost[p.currency] = (cost[p.currency] ?? 0) + p.amount * b.count; }
-    const all = [d, wire, coupling, arm, bearing, axle];
+    const all = [d, wire, fuse, coupling, arm, bearing, axle];
     const choice: PowertrainChoice = {
-      drive: c, wire: wire.choice, coupling: coupling.choice?.coupling ?? null, torqueArm: arm.choice, bearing: bearing.choice?.bearing ?? null,
-      axle: axle.choice?.diameter ?? null, bill, cost,
+      drive: c, wire: wire.choice, fuse: fuse.choice?.fuse ?? null, coupling: coupling.choice?.coupling ?? null, torqueArm: arm.choice, bearing: bearing.choice?.bearing ?? null,
+      axle: axle.choice?.diameter ?? null, axleMaterial: axle.choice?.material ?? null, torque: Tout, wheelLoad, bill, cost,
     };
     return {
       ok: all.every((x) => x.ok), choice, alternatives: [], parts: bill.map((b) => b.id),
       trace: all.flatMap((x) => x.trace), warnings: all.flatMap((x) => x.warnings),
-      summary: [d.summary, wire.summary, coupling.summary, arm.summary, bearing.summary, `Axle: ${axle.summary}`].join(' ')
+      summary: [d.summary, wire.summary, fuse.summary, coupling.summary, arm.summary, bearing.summary, `Axle: ${axle.summary}`].join(' ')
         + (Object.keys(cost).length ? ` The priced parts come to ${Object.entries(cost).map(([cur, v]) => `${cur} ${v.toFixed(2)}`).join(' + ')}.` : ''),
     };
   },
 };
 
-export const WORKFLOWS: Workflow[] = [powertrain, driveSelect, wireSize, batterySize, shaftSize, bearingSelect, couplingSelect, controllerSelect, torqueArmSize] as unknown as Workflow[];
+export const WORKFLOWS: Workflow[] = [powertrain, driveSelect, wireSize, fuseSelect, batterySize, shaftSize, bearingSelect, couplingSelect, controllerSelect, torqueArmSize] as unknown as Workflow[];
 export const workflowById = (id: string) => WORKFLOWS.find((w) => w.id === id);
 export type { WorkflowResult };

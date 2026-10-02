@@ -35,8 +35,15 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { census, explain, lawById, nameOf, recall, workflowById } from '../ganglia';
+import { anatomyOf, ARCHETYPES, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
+
+/** A building block by the word for it. */
+const INSIDE_OF: Record<string, string> = {
+  motor: 'actuation.rotary', battery: 'power.store', cell: 'power.store', bearing: 'support.rotate', gearhead: 'transmission.reduce', gearbox: 'transmission.reduce', reducer: 'transmission.reduce',
+  coupling: 'transmission.couple', chain: 'transmission.flexible', wheel: 'transmission.wheel', shaft: 'transmission.shaft', axle: 'transmission.shaft', fuse: 'protect.fuse', controller: 'power.control',
+  wire: 'power.conduct', cable: 'power.conduct', 'rod end': 'connection.two-force', 'tie rod': 'connection.two-force', bit: 'logic.bistable', lever: 'logic.bistable', guard: 'protect.guard', frame: 'structure.member',
+};
 
 export interface Advice {
   id: string;
@@ -233,7 +240,96 @@ export class Ego {
       case 'design': return this.designIt(i.spec, i.material);
       case 'ganglia': {
         const c = census();
-        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock, ${c.machines} machine${c.machines === 1 ? '' : 's'} broken down, ${c.blocks} kinds of building block, ${c.principles} principles of why things are done as they are, and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, ask me why, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+      }
+      case 'work': {
+        const w = this.lastWorked;
+        if (!w) return 'I haven\'t worked anything out yet. Ask me to size something.';
+        const lines = showWork(w.result);
+        return lines.length ? lines.join(' ') : 'That one was a choice from the catalogue, with no law to apply: its ratings decided it.';
+      }
+      case 'depends': {
+        const w = this.lastWorked;
+        if (!w || !w.result.trace.length) return 'I haven\'t worked anything out yet.';
+        const all: { e: number; text: string }[] = [];
+        for (const step of w.result.trace) {
+          const law = lawById(step.law);
+          if (!law) continue;
+          for (const [sym, e] of Object.entries(sensitivity(step.law, step.inputs))) {
+            const name = law.inputs.find((x) => x.sym === sym)?.name ?? sym;
+            all.push({ e, text: `${name} in ${law.name.toLowerCase()} (1% more is ${Math.abs(e).toFixed(e % 1 ? 2 : 0)}% ${e > 0 ? 'more' : 'less'})` });
+          }
+        }
+        all.sort((a, b) => Math.abs(b.e) - Math.abs(a.e));
+        return all.length ? `It hangs most on ${all.slice(0, 3).map((x) => x.text).join('; ')}.` : 'Nothing in it depends on a number you can change.';
+      }
+      case 'breakdown': {
+        const hit = recall(i.what, 1, ['machine'])[0] ?? recall(i.what, 1)[0];
+        if (!hit) return `I don't know what's inside ${i.what} yet.`;
+        if (hit.kind !== 'machine') return explain(hit);
+        const lines = breakdown(hit.item);
+        const unknown = lines.filter((l) => l.includes('[not published]')).length;
+        return `${lines.join(' ')}${unknown ? ` (${unknown} of its sub-assemblies its maker doesn't detail: I won't guess them.)` : ''} Source: ${hit.item.source.cite}.`;
+      }
+      case 'reason': {
+        const hits = recall(i.about, 3, ['principle']);
+        if (!hits.length) {
+          const any = recall(i.about, 1)[0];
+          return any ? `I don't have a principle for that, but here is what I know: ${explain(any)}` : `I don't know why yet.`;
+        }
+        return `${explain(hits[0]!)}${hits.length > 1 ? ` Related: ${hits.slice(1).map(nameOf).join('; ')}.` : ''}`;
+      }
+      case 'principles': {
+        if (i.of) {
+          const cat = CATEGORIES.find((c) => c.includes(i.of!) || i.of!.includes(c));
+          const ps = cat ? PRINCIPLES.filter((p) => p.category === cat) : recall(i.of, 4, ['principle']).map((k) => k.item as (typeof PRINCIPLES)[number]);
+          if (!ps.length) return `I don't have principles about ${i.of} yet.`;
+          return `${cat ? `On ${cat}` : `About ${i.of}`}: ${ps.map((p) => p.rule).join(' ')} Ask me why about any of them.`;
+        }
+        const by = CATEGORIES.map((c) => `${c} (${PRINCIPLES.filter((p) => p.category === c).map(principleName).join(', ')})`);
+        return `I design by ${PRINCIPLES.length} principles, each with its reason, the laws behind it and where it comes from. By kind: ${by.join('; ')}. Ask "why …" about any of them, or "principles of fits and tolerances".`;
+      }
+      case 'blocks': {
+        const have = blocksByArchetype();
+        return `I build with ${ARCHETYPES.length} kinds of block, each known by what it does: ${ARCHETYPES.map((a) => `${blockName(a)} (${have[a.id]?.length ? `${have[a.id]!.length} in the catalogue` : a.shapes?.length ? 'made from stock' : 'put together from blocks'})`).join(', ')}. Any part is one of them; ask me about any.`;
+      }
+      case 'conceive': {
+        const ways = conceive(i.from, i.to);
+        const say = (f: string) => (f === 'electric' ? 'electric power' : f);
+        if (!ways.length) return `I don't know a physical way from ${say(i.from)} to ${say(i.to)} yet.`;
+        const groups = [...byMedium(ways)].map(([m, cs]) => {
+          const best = cs[0]!;
+          return `against ${m === 'reaction mass' ? 'mass it throws away' : m === 'none' ? 'nothing' : `the ${m}`}: ${best.ways.map((w) => w.name.toLowerCase()).join(' then ')}${best.buildable ? '' : ' (possible; not buildable here yet)'}`;
+        });
+        const now = ways.filter((c) => c.buildable).length;
+        const motor = ways.every((c) => c.transducer) ? ' Every one of them needs a transducer, a motor in the widest sense; the rest depends on what it pushes against.' : '';
+        return `${ways.length} ways to turn ${say(i.from)} into ${say(i.to)}, by what they push against. ${groups.join('; ')}.${motor} ${now} I can build here now. ${asWhole(ways[0]!).says}`;
+      }
+      case 'grow': {
+        const spec = { mass: 120, wheelRadius: 0.125, speed: 3, motors: 2, ...i.spec };
+        const g = grow({ from: i.from, to: i.to, spec });
+        if (!g.best) {
+          const p = g.possible[0];
+          return p ? `I can't grow one here yet: the simplest way is ${p.concept.ways.map((w) => w.name.toLowerCase()).join(' then ')}, and I can't build ${p.missing.join(', ')} yet.` : `I know no way to turn ${i.from} into ${i.to}.`;
+        }
+        const b = g.best, f = b.fitness;
+        const said = b.findings.filter((x) => x.level !== 'warning').slice(0, 3).map((x) => x.message);
+        if (b.sized) this.lastWorked = { workflow: 'powertrain.design', result: b.sized };
+        return `Grown from ${Object.entries(spec).map(([k, v]) => `${k} ${Number(v.toPrecision(3))}`).join(', ')} by ${b.concept.ways.map((w) => w.name.toLowerCase()).join(', then ')}: ${f.organs} blocks, ${f.parts} parts. ${anatomyOf(b).join('. ')}. Built in this order: ${b.order.map((o) => o.organ).join(', ')}.${said.length ? ` Not yet real: ${said.join('; ')}.` : ' Every part is real.'}${g.others.length ? ` I grew ${g.others.length} other${g.others.length > 1 ? 's' : ''} and kept the fittest.` : ''} ${g.possible.length} more ways are possible but not buildable here yet.`;
+      }
+      case 'challenge': {
+        if (i.which) {
+          const c = challengeById(i.which);
+          return c ? report(attempt(c)) : `I don't have a challenge called ${i.which}.`;
+        }
+        const all = CHALLENGES.map((c) => attempt(c));
+        return `I set myself ${all.length} hard challenges to find where I break: ${all.map((a) => `${a.challenge.name.toLowerCase()} (as far as ${a.best}, at worst ${a.worst})`).join('; ')}. Each miss is a thing to fix. Ask me for one, like "take the computer challenge".`;
+      }
+      case 'inside': {
+        const word = i.what.toLowerCase().replace(/^(dc |electric |rotary )/, '').replace(/s$/, '');
+        const a = ARCHETYPES.find((x) => x.id === INSIDE_OF[word]) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
+        if (!a) return `I don't know what's inside ${i.what} yet.`;
+        return `A ${blockName(a)} is a system of its own. ${a.inside.map((x) => `${x.name[0]!.toUpperCase()}${x.name.slice(1)}: ${x.does}${x.law ? ` (${lawById(x.law)?.name ?? x.law})` : ''}.`).join(' ')} Source: ${a.insideSource.cite}.`;
       }
       case 'recall': {
         const hits = recall(i.about, 3);
@@ -243,8 +339,9 @@ export class Ego {
       case 'engineer': {
         const w = workflowById(i.workflow);
         if (!w) return `I don't know how to work out ${i.workflow} yet.`;
-        const r = w.run(i.spec);
+        const { result: r, cached } = solve(w.id, i.spec);
         this.lastWorked = { workflow: w.id, result: r };
+        void cached;
         const laws = [...new Set(r.trace.map((s) => lawById(s.law)?.name).filter(Boolean))];
         const assumed = w.asks.filter((a) => !(a.sym in i.spec) && a.default !== undefined).map((a) => `${a.name} ${a.default} ${a.unit}`);
         return `${r.summary}${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}${r.alternatives.length ? ` (${r.alternatives.length} other${r.alternatives.length > 1 ? 's' : ''} would do.)` : ''}${laws.length ? ` Worked out by ${laws.join(', ')}.` : ''}${assumed.length ? ` I took ${assumed.join(', ')}.` : ''}`;

@@ -9,10 +9,14 @@
 // Everything links to everything it uses, so Ego can follow a question from a part to the laws that rate it and the
 // processes that make it.
 
+/** How far a source can be trusted: a standard or the maker's own data first, a rule of thumb last. */
+export type SourceKind = 'standard' | 'maker' | 'textbook' | 'distributor' | 'handbook' | 'rule of thumb';
+
 export interface Source {
   /** The book, standard or maker's document (edition, table or page where it matters). */
   cite: string;
   url?: string;
+  kind?: SourceKind;
 }
 
 export interface Quantity {
@@ -22,7 +26,7 @@ export interface Quantity {
   unit: string;
 }
 
-export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials';
+export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials' | 'information';
 
 export interface Law {
   id: string;
@@ -34,8 +38,12 @@ export interface Law {
   formula: string;
   inputs: Quantity[];
   output: Quantity;
-  /** The law itself, in SI: inputs by symbol. */
+  /** Physical constants it uses (g, σ, α...), each with its unit, so it can be checked for dimensions like any input. */
+  constants?: Record<string, { value: number; unit: string; name: string }>;
+  /** The law itself, in SI: inputs (and constants) by symbol. */
   eval(v: Record<string, number>): number;
+  /** Where these inputs leave the range it holds over, in words (checked on every use): null when they don't. */
+  outside?(v: Record<string, number>): string | null;
   /** Where it holds, and what it leaves out. */
   valid: string;
   /** A worked example it must reproduce (computed independently of `eval`). */
@@ -88,6 +96,8 @@ export interface TraceStep {
   inputs: Record<string, number>;
   output: number;
   unit: string;
+  /** Where the law was used beyond what it holds for, if it was. */
+  caution?: string;
 }
 
 export interface WorkflowResult<T = unknown> {

@@ -12,14 +12,15 @@ import { MOTORS, GEARHEADS, type MotorData } from '../data/motors';
 import { BATTERIES, WIRE_GAUGES, type BatteryData } from '../data/batteries';
 import { motorModel } from '../engineering/dcmotor';
 import { COPPER_RHO } from './laws';
+import { PRINTING_MATERIALS } from './machines';
 import type { CatalogItem } from './types';
 
 const inch = 0.0254, lbf = 4.448222, inlb = 0.1129848;
 
-const SKF = (n: string) => ({ cite: `SKF, deep groove ball bearing ${n}, product data`, url: `https://www.skf.com/group/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/productid-${n}` });
+const SKF = (n: string) => ({ cite: `deep groove ball bearing ${n}, ratings from SKF product data`, url: `https://www.skf.com/group/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/productid-${n}` });
 
 const bearing = (n: string, d: number, D: number, B: number, C: number, C0: number): CatalogItem => ({
-  id: `skf.${n}`, family: 'bearing', label: `SKF ${n} deep groove ball bearing, ${d} × ${D} × ${B} mm`,
+  id: `bearing.dgbb.${n}`, family: 'bearing', label: `Deep groove ball bearing ${n}, ${d} × ${D} × ${B} mm (ISO 15 boundary dimensions)`,
   specs: { bore: d / 1000, od: D / 1000, width: B / 1000, C: C * 1000, C0: C0 * 1000, type: 'ball' },
   source: SKF(n), tags: ['bearing', 'ball', 'shaft', 'wheel', 'axle'],
 });
@@ -37,7 +38,7 @@ export const BEARINGS: CatalogItem[] = [
 
 export const PILLOW_BLOCKS: CatalogItem[] = [
   {
-    id: 'ucp205', family: 'pillow block', label: 'UCP205 pillow block, 25 mm bore (cast iron P205 housing, UC205 insert)',
+    id: 'bearing.unit.ucp205', family: 'pillow block', label: 'Pillow block bearing unit UCP205, 25 mm bore (cast iron P205 housing, UC205 set-screw insert)',
     specs: { bore: 0.025, shaftHeight: 0.0365, length: 0.14, width: 0.038, height: 0.071, boltCentres: 0.105, bolt: 'M10', C: 14022, C0: 7843, mass: 0.816, type: 'ball' },
     source: { cite: 'AST Bearings, UCP205 metric two-bolt pillow block', url: 'https://www.astbearings.com/catalog/pillow_2_bolt_metric/UCP205' },
     tags: ['bearing', 'pillow block', 'axle', 'hanger', 'shaft'],
@@ -46,42 +47,53 @@ export const PILLOW_BLOCKS: CatalogItem[] = [
 
 /** ANSI B29.1 standard roller chain: pitch, roller diameter, the standard's minimum ultimate tensile strength. */
 export const CHAINS: CatalogItem[] = [
-  { id: 'ansi.35', family: 'roller chain', label: 'ANSI 35 roller chain, 3/8 in pitch', specs: { pitch: 0.375 * inch, roller: 0.2 * inch, tensileMin: 1760 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain (via Ametric and USA Roller Chain charts)', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive'] },
-  { id: 'ansi.40', family: 'roller chain', label: 'ANSI 40 roller chain, 1/2 in pitch', specs: { pitch: 0.5 * inch, roller: 0.312 * inch, tensileMin: 3125 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive', 'kart'] },
-  { id: 'ansi.41', family: 'roller chain', label: 'ANSI 41 lightweight roller chain, 1/2 in pitch (narrow, not interchangeable with 40)', specs: { pitch: 0.5 * inch, roller: 0.306 * inch, tensileMin: 1500 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive'] },
+  { id: 'chain.roller.ansi-35', family: 'roller chain', label: 'Roller chain ANSI 35, 3/8 in pitch', specs: { pitch: 0.375 * inch, roller: 0.2 * inch, tensileMin: 1760 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain (via Ametric and USA Roller Chain charts)', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive'] },
+  { id: 'chain.roller.ansi-40', family: 'roller chain', label: 'Roller chain ANSI 40, 1/2 in pitch', specs: { pitch: 0.5 * inch, roller: 0.312 * inch, tensileMin: 3125 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive', 'kart'] },
+  { id: 'chain.roller.ansi-41', family: 'roller chain', label: 'Roller chain ANSI 41 (lightweight), 1/2 in pitch, narrow: not interchangeable with 40', specs: { pitch: 0.5 * inch, roller: 0.306 * inch, tensileMin: 1500 * lbf }, source: { cite: 'ANSI/ASME B29.1 standard roller chain', url: 'https://www.ametric.com/images/document/Chain-RollerANSI.pdf' }, tags: ['chain', 'sprocket', 'drive'] },
 ];
 
 /** Lovejoy L-type jaw couplings with an NBR (SOX) spider: nominal torque and largest bore. */
-const JAW_SOURCE = { cite: 'Lovejoy (Timken) jaw-type couplings catalogue, L-type, SOX (NBR) spider ratings', url: 'https://www.lovejoy-inc.com/products/jaw-type-couplings/l-type-standard-jaw-coupling/' };
+const JAW_SOURCE = { cite: 'jaw-type couplings, L-type sizes 050 to 100 with SOX (NBR) spiders: ratings from the Lovejoy (Timken) catalogue', url: 'https://www.lovejoy-inc.com/products/jaw-type-couplings/l-type-standard-jaw-coupling/' };
 export const COUPLINGS: CatalogItem[] = [
-  { id: 'lovejoy.l050', family: 'coupling', label: 'Lovejoy L050 jaw coupling (NBR spider)', specs: { torque: 26.3 * inlb, maxBore: 0.625 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
-  { id: 'lovejoy.l070', family: 'coupling', label: 'Lovejoy L070 jaw coupling (NBR spider)', specs: { torque: 43.2 * inlb, maxBore: 0.75 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
-  { id: 'lovejoy.l075', family: 'coupling', label: 'Lovejoy L075 jaw coupling (NBR spider)', specs: { torque: 90 * inlb, maxBore: 0.875 * inch, od: 1.75 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor', 'kart'] },
-  { id: 'lovejoy.l090', family: 'coupling', label: 'Lovejoy L090 jaw coupling (NBR spider)', specs: { torque: 144 * inlb, maxBore: 1 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
-  { id: 'lovejoy.l100', family: 'coupling', label: 'Lovejoy L100 jaw coupling (NBR spider)', specs: { torque: 417 * inlb, maxBore: 1.375 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
+  { id: 'coupling.jaw.3nm-16mm', family: 'coupling', label: 'Jaw coupling, 3 N·m, 16 mm bore max (NBR spider)', specs: { torque: 26.3 * inlb, maxBore: 0.625 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
+  { id: 'coupling.jaw.5nm-19mm', family: 'coupling', label: 'Jaw coupling, 4.9 N·m, 19 mm bore max (NBR spider)', specs: { torque: 43.2 * inlb, maxBore: 0.75 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
+  { id: 'coupling.jaw.10nm-22mm', family: 'coupling', label: 'Jaw coupling, 10.2 N·m, 22 mm bore max, Ø44 mm (NBR spider)', specs: { torque: 90 * inlb, maxBore: 0.875 * inch, od: 1.75 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor', 'kart'] },
+  { id: 'coupling.jaw.16nm-25mm', family: 'coupling', label: 'Jaw coupling, 16.3 N·m, 25 mm bore max (NBR spider)', specs: { torque: 144 * inlb, maxBore: 1 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
+  { id: 'coupling.jaw.47nm-35mm', family: 'coupling', label: 'Jaw coupling, 47 N·m, 35 mm bore max (NBR spider)', specs: { torque: 417 * inlb, maxBore: 1.375 * inch, type: 'jaw' }, source: JAW_SOURCE, tags: ['coupling', 'shaft', 'motor'] },
 ];
 
 export const ROD_ENDS: CatalogItem[] = [
   {
-    id: 'skf.si8e', family: 'rod end', label: 'SKF SI 8 E rod end, M8 female, 8 mm bore (ISO 12240-4 series E)',
+    id: 'rod-end.m8-female', family: 'rod end', label: 'Rod end, M8 female thread, 8 mm bore (ISO 12240-4 dimension series E)',
     specs: { bore: 0.008, thread: 'M8', C: 5500, C0: 12900, tilt: (15 * Math.PI) / 180 },
-    source: { cite: 'SKF SI 8 E rod end, product data', url: 'https://www.skf.com/us/products/plain-bearings/spherical-plain-bearings-rod-ends/rod-ends/productid-SI%208%20E' },
+    source: { cite: 'rod end ISO 12240-4 series E, size 8: ratings from SKF SI 8 E product data', url: 'https://www.skf.com/us/products/plain-bearings/spherical-plain-bearings-rod-ends/rod-ends/productid-SI%208%20E' },
     tags: ['rod end', 'tie rod', 'link', 'torque arm', 'steering'],
   },
 ];
 
 export const CONTROLLERS: CatalogItem[] = [
   {
-    id: 'cytron.md30c', family: 'motor controller', label: 'Cytron MD30C brushed DC motor driver (1 channel)',
+    id: 'controller.dc.1ch-30a-30v', family: 'motor controller', label: 'Brushed DC motor driver, 1 channel, 30 A continuous, 5 to 30 V, no current limit',
     specs: { channels: 1, vMin: 5, vMax: 30, continuous: 30, peak: 80, peakSeconds: 1, pwm: 20000, currentLimit: 'no', regen: 'no' },
     source: { cite: 'Cytron MD30C R2 product page and user\'s manual', url: 'http://www.cytron.com.my/p-md30c' }, tags: ['controller', 'motor', 'pwm', 'kart'],
   },
   {
-    id: 'basicmicro.roboclaw-2x30a', family: 'motor controller', label: 'Basicmicro RoboClaw 2x30A brushed DC motor controller (2 channels)',
+    id: 'controller.dc.2ch-30a-34v-limit', family: 'motor controller', label: 'Brushed DC motor controller, 2 channels, 30 A each, 6 to 34 V, settable current limit, regenerative',
     specs: { channels: 2, vMin: 6, vMax: 34, continuous: 30, peak: 60, currentLimit: 'yes', regen: 'yes' },
     source: { cite: 'Basicmicro RoboClaw 2x30A (via Pololu product 3684)', url: 'https://www.pololu.com/product/3684' }, tags: ['controller', 'motor', 'current limit', 'kart'],
   },
 ];
+
+/**
+ * Blade fuses of the ISO 8820-3 "ATO" size (the common automotive blade, 1 to 40 A): 32 V DC, 1000 A interrupting
+ * rating, -40 to +105 °C, by the maker's datasheet for the size.
+ */
+const ATO = { cite: 'Littelfuse ATO Blade Fuse Rated 32V datasheet (ISO 8820-3)', url: 'https://www.mouser.com/datasheet/2/240/Littelfuse_BladeFuse_ATO32V-46883.pdf', kind: 'maker' as const };
+export const FUSES: CatalogItem[] = [10, 15, 20, 25, 30, 35, 40].map((a) => ({
+  id: `fuse.blade-ato.${a}a`, family: 'fuse', label: `Blade fuse, ISO 8820-3 ATO size, ${a} A, 32 V DC, 1000 A interrupting`, source: ATO,
+  specs: { rating: a, voltage: 32, interrupt: 1000, tMin: 233.15, tMax: 378.15 },
+  tags: ['fuse', 'protection', 'blade fuse', 'overcurrent', 'short circuit'],
+}));
 
 /** The world's motors, gearheads, batteries and wire, as catalog items (their data stays where the world reads it). */
 export function worldItems(): CatalogItem[] {
@@ -111,7 +123,7 @@ export function worldItems(): CatalogItem[] {
   return out;
 }
 
-export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...worldItems()];
+export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...FUSES, ...PRINTING_MATERIALS, ...worldItems()];
 
 export const itemById = (id: string) => CATALOG.find((c) => c.id === id);
 export const family = (f: string) => CATALOG.filter((c) => c.family === f);
@@ -154,6 +166,20 @@ export function lintItem(c: CatalogItem): string[] {
       if (Math.abs(rho - COPPER_RHO) / COPPER_RHO > 0.03) bad.push(`its resistance and area give ρ = ${rho.toExponential(3)} ohm m, copper's is ${COPPER_RHO.toExponential(3)}`);
       break;
     }
+    case 'printing material': {
+      // a continuous carbon fibre stays linear to failure: its strength is about its modulus times its strain at break
+      const E = num(c, 'tensileModulus'), S = num(c, 'tensileStrength'), e = num(c, 'strainAtBreak');
+      if (Number.isFinite(E) && Number.isFinite(S) && Number.isFinite(e) && Math.abs(S - E * e) / S > 0.25) bad.push(`its strength ${S / 1e6} MPa is far from modulus × strain ${((E * e) / 1e6).toFixed(0)} MPa`);
+      const yieldS = num(c, 'tensileYield'), brk = num(c, 'tensileBreak');
+      if (Number.isFinite(yieldS) && Number.isFinite(brk) && brk > yieldS * 1.5) bad.push('breaking far above its yield, which a filled nylon does not');
+      const d = num(c, 'density');
+      if (Number.isFinite(d) && (d < 900 || d > 2200)) bad.push(`${d} kg/m³ is not a polymer composite's`);
+      break;
+    }
+    case 'fuse':
+      if (!(num(c, 'interrupt') > num(c, 'rating'))) bad.push('it can\'t interrupt even its own rating');
+      if (c.id.includes('ato') && !(num(c, 'rating') >= 1 && num(c, 'rating') <= 40)) bad.push('the ATO size runs 1 to 40 A');
+      break;
     case 'motor controller':
       if (!(num(c, 'peak') >= num(c, 'continuous'))) bad.push('peak below continuous');
       if (!(num(c, 'vMax') > num(c, 'vMin'))) bad.push('voltage range upside down');

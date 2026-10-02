@@ -27,8 +27,8 @@ export interface BatteryData {
 }
 
 export const BATTERIES: Record<string, BatteryData> = {
-  'yuasa.np7-12': {
-    id: 'yuasa.np7-12', label: 'Yuasa NP7-12, 12 V 7 Ah sealed lead-acid', chemistry: 'lead-acid-vrla', cells: 6, V: 12,
+  'battery.sla.12v-7ah': {
+    id: 'battery.sla.12v-7ah', label: 'Sealed lead-acid (AGM) battery, 12 V 7 Ah, F1 terminals', chemistry: 'lead-acid-vrla', cells: 6, V: 12,
     capacity: [
       { hours: 20, Ah: 7.0, endPerCell: 1.75 },
       { hours: 10, Ah: 6.4, endPerCell: 1.75 },
@@ -52,7 +52,7 @@ export const BATTERIES: Record<string, BatteryData> = {
   },
 };
 
-export const getBattery = (id: string) => BATTERIES[id] ?? BATTERIES['yuasa.np7-12']!;
+export const getBattery = (id: string) => BATTERIES[id === 'yuasa.np7-12' ? 'battery.sla.12v-7ah' : id] ?? BATTERIES['battery.sla.12v-7ah']!;
 
 /**
  * Stranded copper wire by AWG: resistance per metre of one conductor at 20 C (ohm/m), copper area (m^2), and what it

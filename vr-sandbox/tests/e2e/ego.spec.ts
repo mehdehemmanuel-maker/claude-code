@@ -128,13 +128,30 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   const drivetrain = await sb(page, (s) => s.ego.ask('design the whole drivetrain for a 120 kg kart at 3 m/s'));
-  expect(drivetrain).toMatch(/maxon RE 40, 24 V, 150 W \(148867\)/);
+  expect(drivetrain).toMatch(/Coreless brushed DC motor, Ø40 mm, 150 W, 24 V winding/);
   expect(drivetrain).toMatch(/UCP205/);
   expect(drivetrain).toMatch(/Worked out by .*Rolling resistance/);
   expect(await sb(page, (s) => s.ego.lastWorked.workflow)).toBe('powertrain.design');
   expect(await sb(page, (s) => s.ego.ask('size a wire for 20 a over 3 m at 24 v'))).toMatch(/^12 AWG pair/);
   expect(await sb(page, (s) => s.ego.ask('tell me about rolling resistance'))).toMatch(/Source: Gillespie/);
   expect(await sb(page, (s) => s.ego.ask('what do you know'))).toMatch(/I know \d+ laws/);
+  // her working, law by law, and what the answer hangs on
+  expect(await sb(page, (s) => s.ego.ask('show your work'))).toMatch(/^1\. Wire drop|^1\. Voltage drop/);
+  expect(await sb(page, (s) => s.ego.ask('what does it depend on'))).toMatch(/^It hangs most on/);
+  // a machine, broken down, with what its maker doesn't detail said plainly
+  const fx = await sb(page, (s) => s.ego.ask('breakdown mark forged fx10'));
+  expect(fx).toMatch(/continuous-fibre composite printer/);
+  expect(fx).toMatch(/Source: Markforged/);
+  expect(fx).toMatch(/Metal Kit/);
+  expect(fx).toMatch(/not published/);
+  // why things are done as they are, the many ways to do a job, a whole machine grown, and the challenges she sets herself
+  expect(await sb(page, (s) => s.ego.ask('why use a torque arm?'))).toMatch(/Why: .*reaction torque/);
+  expect(await sb(page, (s) => s.ego.ask('how do I turn electricity into motion?'))).toMatch(/against the ground.*against the fluid|against the fluid.*against the ground/);
+  const grown = await sb(page, (s) => s.ego.ask('grow a kart for 120 kg at 3 m/s'));
+  expect(grown).toMatch(/fuse-at-source/);
+  expect(grown).toMatch(/Built in this order: frame/);
+  expect(await sb(page, (s) => s.ego.ask('what\'s inside a motor?'))).toMatch(/Lorentz force/);
+  expect(await sb(page, (s) => s.ego.ask('try to build a computer'))).toMatch(/logic\.mechanical.*Landauer/);
   expect(errors).toEqual([]);
 });
 
