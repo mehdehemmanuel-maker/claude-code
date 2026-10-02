@@ -14,6 +14,7 @@ import type { BuildDoc, Connection, Part, Pose, Vec3 } from '../doc/types';
 import { decodeDocText, encodeDocText, fromShareCode, toShareCode, DecodeError } from '../persistence/codec';
 import { PhysicsClient } from '../physics/client';
 import { poolFluid, realFloor, workshopEnvironment } from '../physics/environment';
+import { groundAt, heightfield, type Heightfield, type PlaceSpec } from '../world/place';
 import type { GrabMode, PhysicsEvent, RoomSurface } from '../physics/protocol';
 import type { SimSettings } from '../doc/types';
 import { AudioEngine } from '../audio/audio';
@@ -64,6 +65,8 @@ export type Toast = { text: string; kind: 'info' | 'warn' | 'break' | 'ok' };
 export type WorldKind = 'workshop' | 'mixed';
 
 const ENV_MATERIAL = getMaterial('concrete.c30');
+/** The id of a place's sea or lake among the sim's fluids. */
+const PLACE_WATER = 'w_place0sea000';
 
 /** Where Ego's reports go: new issues here are how Claude hears them. */
 export const REPORT_REPO = 'mehdehemmanuel-maker/claude-code';
@@ -132,6 +135,9 @@ export class App {
   /** Called after a whole build is loaded (template, file, share code, rewind). */
   onLoad: (() => void)[] = [];
   world: WorldKind = 'workshop';
+  /** The place you are in, and its ground, or none (the workshop). */
+  place: PlaceSpec | null = null;
+  private ground: Heightfield | null = null;
   /** The user's real room as last scanned (world coordinates), and how it is shown. */
   room: RoomSurface[] = [];
   roomStyle: 'mixed' | 'walk' | 'none' = 'none';
@@ -168,15 +174,44 @@ export class App {
   // world: workshop or the real room
 
   private sendEnvironment() {
-    const boxes = this.world === 'workshop' ? workshopEnvironment() : realFloor();
+    const inPlace = this.world === 'workshop' && this.ground;
+    const boxes = this.world === 'workshop' ? (inPlace ? [] : workshopEnvironment()) : realFloor();
     this.physics.send({ op: 'environment', boxes, materials: Object.fromEntries(MATERIALS.map((m) => [m.id, m])) });
+    const f = inPlace ? this.ground : null;
+    this.physics.send({ op: 'terrain', field: f ? { n: f.n, size: f.size, heights: f.heights } : null, material: f && this.place ? getMaterial(this.place.ground.material) : null });
   }
 
-  /** The build's sim settings as they apply in this world (the workshop's test pool is not in a real room). */
+  /**
+   * The build's sim settings as they apply in this world: the workshop's test pool is in neither a real room nor a
+   * place, and a place with water has its sea or lake, as a volume of water up to its level over the whole ground.
+   */
   private worldSim(sim: SimSettings): SimSettings {
-    if (this.world === 'workshop') return sim;
+    if (this.world === 'workshop' && !this.ground) return sim;
     const pool = poolFluid().id;
-    return { ...sim, fluids: sim.fluids.filter((f) => f.id !== pool) };
+    const fluids = sim.fluids.filter((f) => f.id !== pool);
+    const f = this.world === 'workshop' ? this.ground : null;
+    if (f && f.waterLevel !== null && this.place?.water) {
+      fluids.push({ id: PLACE_WATER, name: this.place.water.name, min: [-f.size / 2, f.min - 1, -f.size / 2], max: [f.size / 2, f.waterLevel, f.size / 2], density: this.place.water.density });
+    }
+    return { ...sim, fluids };
+  }
+
+  /**
+   * Go to a place (world/place.ts), or back to the workshop (null): its ground grown and stood on, its water, its sky.
+   * Where you stand stays at the floor's height, so what you built stands as it did.
+   */
+  setPlace(p: PlaceSpec | null) {
+    this.place = p;
+    this.ground = p ? heightfield(p) : null;
+    this.sendEnvironment();
+    this.physics.send({ op: 'sim', sim: this.worldSim(this.doc.sim) });
+    this.view.setPlace(p, this.ground);
+    this.notify();
+  }
+
+  /** The ground's height under a point: the place's, or the workshop floor's (0). */
+  groundAt(x: number, z: number): number {
+    return this.world === 'workshop' && this.ground ? groundAt(this.ground, x, z) : 0;
   }
 
   setWorld(world: WorldKind) {

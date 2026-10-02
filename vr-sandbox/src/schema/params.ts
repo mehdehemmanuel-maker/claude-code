@@ -5,9 +5,6 @@
 export type ParamValue = number | string | boolean;
 export type Params = Record<string, ParamValue>;
 
-export type Unit =
-  | 'm' | 'kg' | 'N' | 'N/m' | 'N·m' | 'N·m/rad' | 'N·s/m' | 'N·m·s/rad' | 'rad' | 's' | 'Pa' | 'V' | 'rpm/V' | 'Ω'
-  | 'rad/s' | 'kg/m³' | 'm/s²' | 'J/m' | 'm/s' | '1' | 'T';
 
 export interface Display {
   unit: string;
@@ -148,16 +145,6 @@ export const boolOf = (p: Params, key: string, fallback = false) => {
   const v = p[key];
   return typeof v === 'boolean' ? v : fallback;
 };
-
-export function formatValue(def: NumberParam, v: number) {
-  const d = DISPLAY[def.display] ?? DISPLAY['']!;
-  return `${(v * d.scale).toFixed(def.integer ? 0 : d.digits)} ${d.unit}`.trim();
-}
-
-export function formatQuantity(v: number, display: keyof typeof DISPLAY) {
-  const d = DISPLAY[display] ?? DISPLAY['']!;
-  return `${(v * d.scale).toFixed(d.digits)} ${d.unit}`.trim();
-}
 
 /** Pick a readable force unit. */
 export function formatForce(n: number) {

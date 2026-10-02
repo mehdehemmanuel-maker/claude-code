@@ -65,11 +65,6 @@ export function stiffnessOf(modes: { lam: number; e: Vec3 }[]): number[] {
   return out;
 }
 
-/** The restoring part of a stiffness matrix dF/dx: symmetrised, keeping only its negative eigenvalues. */
-export function restoringPart(J: number[]): number[] {
-  return stiffnessOf(restoringModes(J));
-}
-
 /**
  * Effective force (or torque) to apply over the tick for a stiff pair: inertia M (3x3; the pair's reduced mass or
  * inertia), restoring stiffness K (3x3, negative semi-definite), force F at the tick start and relative velocity v.

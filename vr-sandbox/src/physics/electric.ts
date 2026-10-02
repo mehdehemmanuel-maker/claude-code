@@ -4,7 +4,7 @@
 // the motor push current back into the pack. The pack's terminal voltage is its open-circuit voltage less its internal
 // resistance times all it is giving, so motors sharing a pack load each other. A flat pack gives nothing.
 
-import { drain, flat, packOCV, packR, type Pack } from '../engineering/battery';
+import { flat, packOCV, packR, type Pack } from '../engineering/battery';
 import type { MotorModel } from '../engineering/dcmotor';
 
 export interface Load {
@@ -55,5 +55,3 @@ export function solvePack(pack: Pack, soc: number, loads: Load[]): PackSolve {
   return { V, I, currents, flat: false };
 }
 
-/** The pack's state after giving I for dt. */
-export const drawn = (pack: Pack, soc: number, I: number, dt: number) => drain(pack, soc, I, dt);

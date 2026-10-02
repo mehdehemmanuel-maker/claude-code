@@ -8,10 +8,7 @@ import { sanitizeParams, type Params, type ParamValue } from '../schema/params';
 import { randomId, type IdSource } from './ids';
 import { canonicalPose, clonePose, composePose, relativePose } from './math';
 import type { DocStore, TxBuilder } from './store';
-import {
-  APP_VERSION, CATALOG_VERSION, type BuildDoc, type Connection, type Endpoint, type FluidVolume, type Part, type Pose,
-  type SimSettings, type Vec3,
-} from './types';
+import { APP_VERSION, CATALOG_VERSION, type BuildDoc, type Connection, type Endpoint, type Part, type Pose, type SimSettings, type Vec3 } from './types';
 
 export function defaultSim(): SimSettings {
   return {
@@ -132,10 +129,6 @@ export function setFrozen(store: DocStore, ids: string[], frozen: boolean) {
   store.transact(frozen ? 'Freeze' : 'Unfreeze', (tx) => {
     for (const id of ids) if (store.doc.parts[id]) tx.update('parts', id, { frozen });
   });
-}
-
-export function renamePart(store: DocStore, id: string, name: string) {
-  store.transact('Rename', (tx) => tx.update('parts', id, { name }), { mergeKey: `name:${id}` });
 }
 
 /** Connections touching any of the given parts. */
@@ -267,10 +260,6 @@ export function setConnectionParam(store: DocStore, id: string, key: string, val
   store.transact(`Set ${key}`, (tx) => tx.update('connections', id, { params }), { mergeKey: `cparam:${id}:${key}` });
 }
 
-export function deleteConnection(store: DocStore, id: string) {
-  store.transact('Disconnect', (tx) => tx.delete('connections', id));
-}
-
 /** Mark a connection's new physical state (from the simulation). Undoable, so a test can be rolled back. */
 export function setConnectionState(store: DocStore, id: string, state: Partial<Connection['state']>, label: string) {
   const c = store.doc.connections[id];
@@ -280,10 +269,6 @@ export function setConnectionState(store: DocStore, id: string, state: Partial<C
 
 export function setSim(store: DocStore, patch: Partial<SimSettings>, mergeKey?: string) {
   store.transact('World settings', (tx) => tx.sim(patch), { mergeKey });
-}
-
-export function addFluid(store: DocStore, fluid: FluidVolume) {
-  setSim(store, { fluids: [...store.doc.sim.fluids.filter((f) => f.id !== fluid.id), fluid] });
 }
 
 /** Write live physics poses back into the design (not an undo step). Damaged parts also record each segment. */

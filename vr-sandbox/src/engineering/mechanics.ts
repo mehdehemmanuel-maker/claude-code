@@ -47,7 +47,6 @@ export function dcMotorSpecs(m: DcMotor) {
 /** Aerodynamic / hydrodynamic drag magnitude F = 0.5 rho Cd A v^2. */
 export const dragForce = (rho: number, Cd: number, A: number, v: number) => 0.5 * rho * Cd * A * v * v;
 
-export const DRAG_COEFFICIENTS = { sphere: 0.47, cube: 1.05, 'flat-plate': 1.28, cylinder: 0.82, streamlined: 0.04 } as const;
 
 /**
  * Tension-only neo-Hookean band: nominal stress P = G (lambda - lambda^-2); F = P A0 for lambda >= 1.
@@ -66,8 +65,8 @@ export function eddyDamping(sigma: number, thickness: number, B: number, poleAre
 }
 
 /** Skin depth in the conductor at frequency f: delta = 1 / sqrt(pi f mu0 sigma). */
-export function skinDepth(f: number, sigma: number) {
-  return 1 / Math.sqrt(Math.PI * Math.max(f, 1e-6) * 4e-7 * Math.PI * sigma);
+export function skinDepth(f: number, sigma: number, mu0 = 4e-7 * Math.PI) {
+  return 1 / Math.sqrt(Math.PI * Math.max(f, 1e-6) * mu0 * sigma);
 }
 
 /** Lewis form factor Y for 20 deg full-depth teeth (Shigley Table 14-2), interpolated by tooth count. */

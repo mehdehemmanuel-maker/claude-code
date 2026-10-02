@@ -593,7 +593,6 @@ export function getPartKind(id: string): PartKind {
 
 export const hasPartKind = (id: string) => kindById.has(id);
 
-export const PART_CATEGORIES = [...new Set(PART_KINDS.map((k) => k.category))];
 
 /** Parameters with runtime-derived hidden inputs (e.g. the weight's material density for sizing). */
 export function effectiveParams(kind: PartKind, params: Params, material: Material): Params {
@@ -634,11 +633,6 @@ export function segmentLayout(kind: PartKind, params: Params): SegmentLayout | n
 
 /** Body id of segment k of a part (unsegmented parts use the part id itself). */
 export const segmentBodyId = (partId: string, k: number) => `${partId}#${k}`;
-
-export function parseBodyId(bodyId: string): { part: string; seg: number | null } {
-  const i = bodyId.indexOf('#');
-  return i < 0 ? { part: bodyId, seg: null } : { part: bodyId.slice(0, i), seg: Number(bodyId.slice(i + 1)) };
-}
 
 /** Pose of segment k in part coordinates (straight, undamaged layout). */
 export function segmentOffset(layout: SegmentLayout, k: number): { p: Vec3; q: Quat } {

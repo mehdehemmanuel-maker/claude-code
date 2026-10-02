@@ -52,11 +52,14 @@ describe('grow: a genome develops into a whole machine', () => {
     expect(g.possible.some((p) => p.missing.includes('propeller'))).toBe(true);
   });
 
-  it('its immune check finds what isn\'t real yet: the rubber wheel nothing here makes or sells, the frame nobody sized', () => {
+  it('its immune check finds what isn\'t real yet (the rubber wheel nothing here makes or sells), and sizes its frame from stock, saying what it assumed', () => {
     const b = kart().best!;
     expect(b.findings.find((f) => f.organ === 'wheel')).toMatchObject({ level: 'gap', rule: 'R11' });
-    expect(b.findings.some((f) => f.organ === 'frame' && /not sized/.test(f.message))).toBe(true);
-    expect(b.findings.filter((f) => f.level === 'warning').map((f) => f.principle)).toEqual(['derate-for-heat']);
+    const frame = b.organs.find((o) => o.role === 'frame')!;
+    expect(frame.item).toMatch(/^shs\./);
+    expect(b.findings.find((f) => f.organ === 'frame')).toMatchObject({ level: 'warning' });
+    expect(b.findings.find((f) => f.organ === 'frame')!.message).toMatch(/the genome doesn't say its layout/);
+    expect(b.findings.filter((f) => f.level === 'warning' && f.principle).map((f) => f.principle)).toEqual(['derate-for-heat']);
   });
 
   it('is put together frame first and fused last, so nothing is live while it is built', () => {
@@ -79,6 +82,7 @@ describe('grow: a genome develops into a whole machine', () => {
 describe('challenges: hard jobs that find where it breaks', () => {
   const at = (id: string) => attempt(challengeById(id)!);
   const level = (id: string, does: string) => at(id).results.find((r) => r.need.does === does)!.level;
+  const way = (id: string, does: string) => at(id).results.find((r) => r.need.does === does)!.way;
 
   it('every challenge says what physics allows, and every law it is bounded by exists', () => {
     for (const c of CHALLENGES) {
@@ -93,7 +97,9 @@ describe('challenges: hard jobs that find where it breaks', () => {
     expect(level('computer', 'hold one bit')).toBe('partial');
     expect(level('computer', 'let one bit switch another (a logic gate)')).toBe('partial');
     expect(level('computer', 'take a question from a hand: a key pressed')).toBe('partial');
-    expect(level('computer', 'run on electric power')).toBe('unbuildable');
+    // an electric motor turning a lead screw that pushes the levers, as the Z1 was driven by its motor
+    expect(level('computer', 'run on electric power')).toBe('partial');
+    expect(way('computer', 'run on electric power')).toBe('motor.rotary>lead.screw>logic.mechanical');
     expect(level('computer', 'show its answer')).toBe('unbuildable');
     // the price of a mechanical bit against Landauer's floor
     const n = at('computer').notes.find((x) => x.law === 'landauer')!;
@@ -108,7 +114,12 @@ describe('challenges: hard jobs that find where it breaks', () => {
   });
 
   it('a scientist: she can predict; her senses and her own experiments are what is missing', () => {
-    for (const d of ['sense a force', 'sense a temperature', 'sense a turn']) expect(level('scientist', d)).toBe('unbuildable');
+    for (const d of ['sense a force', 'sense a temperature']) expect(level('scientist', d)).toBe('unbuildable');
+    // a turn counted by a screw pushing a lever (its levers not sized yet); its hands a controller driving a motor and
+    // a lead screw, every part real
+    expect(level('scientist', 'sense a turn')).toBe('partial');
+    expect(level('scientist', 'act on what it found')).toBe('works');
+    expect(way('scientist', 'act on what it found')).toBe('switch.transistor>motor.rotary>lead.screw');
     expect(at('scientist').toFix).toContain('Ego\'s test stand: predict, build, measure, compare, revise');
   });
 

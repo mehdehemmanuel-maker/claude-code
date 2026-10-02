@@ -60,14 +60,14 @@ Biology doesn't draw a body: it carries a short genome and develops it, every ti
 |---|---|
 | genome | what is wanted (one flow into another) and the few numbers that size it, hashed |
 | development | each block calls for the blocks it can't work without, by a principle (`DEVELOPMENT`): a motor for a current-limiting controller, a battery for a fuse, wiring and a tray, a gearhead for a torque arm, a wheel for an axle of its own, an axle for bearings and a coupling, bearings for a frame |
-| tissue | each block made real: chosen by the drivetrain workflow from the catalogue, or made from the world's stock |
+| tissue | each block made real: chosen by the drivetrain or actuator workflow from the catalogue, frames sized from stock sections, or made from the world's stock |
 | immune system | every connection checked (`checkDesign`); every part bought from the catalogue or made by a process that works its material and shape (R11); energy from a source (R10) |
 | development order | frame first, then bearings, shafts, couplings, gearmotors, torque arms, wheels; power last, the fuse in last of all so nothing is live while it is built |
 | selection | every buildable concept grown, the fittest kept (fewest errors, then gaps, then blocks, then cost) |
 | heredity | the same genome grows the same body at once |
 | levels | material is molecule, a feature cell, a part tissue, a block organ, a system organ system, the machine the organism (`LEVELS`) |
 
-From five numbers (120 kg, 3 m/s, 0.7 m/s², 0.125 m wheels, 2 motors) the kart grows 13 blocks and 25 parts, each saying why it is there. Direct drive is grown too and loses: no catalogued motor turns the wheel slowly enough without gearing. The immune check finds what isn't real yet: the rubber wheel, which nothing here makes or sells, and the frame and battery tray, which no workflow sizes. The genome is about 40 times smaller than the body it grows, because the meaning lives in the ganglia, as DNA's does in the cell.
+From five numbers (120 kg, 3 m/s, 0.7 m/s², 0.125 m wheels, 2 motors) the kart grows 13 blocks and 25 parts, each saying why it is there. Direct drive is grown too and loses: no catalogued motor turns the wheel slowly enough without gearing. The immune check finds what isn't real yet: the rubber wheel, which nothing here makes or sells. Its frame and battery tray are sized from stock hollow sections (`member.size`), each on a stated layout, since the genome doesn't say how the frame is laid out. A machine that turns a shaft or pushes through a lead screw is sized whole by the actuator workflow, as a vehicle is by the drivetrain's. The genome is about 40 times smaller than the body it grows, because the meaning lives in the ganglia, as DNA's does in the cell.
 
 ## Hard challenges (`challenges.ts`)
 
@@ -97,6 +97,26 @@ Shape is in its own language, with its own doc: [FORMS.md](FORMS.md). That cover
 
 Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiote"*, *"build something that flies"*; *"grow a kart for 120 kg at 3 m/s"*; *"what's inside a motor?"*.
 
+## Every law has a scale (`scales.ts`)
+
+The laws came from people measuring with the senses and instruments they had, at the sizes, speeds and times they could reach. Each is exact only in a limit. So each carries:
+
+- the dimensionless number that says how far inside its limit a use is (a speed against light's, a mean free path against a thickness, a drop against its capillary length, an engine's entropy against Boltzmann's constant);
+- the deeper law it is the limit of;
+- its error against that deeper law, where that can be worked.
+
+Kinetic energy, for example, is the low-speed limit of relativity: no error at walking pace, 19% low at half light speed. The small-swing pendulum reckons 18% short at 90°, against the exact elliptic integral. Fourier's law fails in pores smaller than the gas's mean free path, which is why aerogel insulates better than still air. Nothing deeper is the last word either: each has a limit of its own, so the chain is written down rather than one "true" law.
+
+Ask her: *"where does kinetic energy break down?"*.
+
+## Finding the math herself (`discover.ts`)
+
+From units alone, Buckingham's Π theorem, she knows what a law can and can't depend on: a pendulum's period only through √(L/g), and its mass not at all, since nothing else cancels its kilograms. From measurements she fits the constant and the powers. In the conformance suite she measures twelve pendulums in her own world (three lengths, two gravities, two bobs) and finds T = 2π √(L/g) herself. That test also found a flaw in her world: slow pendulums stopped dead at the top of their swing, because the physics engine let them sleep. Now nothing rests out of equilibrium.
+
+## The frontier (`frontier.ts`)
+
+Inventions far past what is built, stored as challenges: [FRONTIER.md](FRONTIER.md).
+
 ## Fast
 
 - **Recall** is a BM25F index built once:
@@ -109,7 +129,7 @@ Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiot
 
 ## What's in it
 
-- **Laws (89)**, grouped by area (also: the Rayleigh resolution of lithography, Landauer's limit, CMOS switching power, the information in a choice, Carnot, Seebeck, strain gauges, solar cells, the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
+- **Laws (104)**, grouped by area (also: the frontier's bounds (gravitational time dilation, Arrhenius rates, Young's contact angle, the carbon dioxide a lime can hold, absorbed sunlight, the diffraction limit, the acoustic mass law, diffusion time, the least work to take out a trace), a power screw's efficiency, plastic moment, Lewis gear stress, skin depth, torsion springs, weld heat input, the Rayleigh resolution of lithography, Landauer's limit, CMOS switching power, the information in a choice, Carnot, Seebeck, strain gauges, solar cells, the Lorentz force, magnetic pull across a gap, electrostatic pull, piezo stroke, the ideal thrust of a rotor, the force from a power screw, Johnson columns, natural frequency, centripetal force, inertia of discs and rods, parallel axis, rotational energy, free fall, spring energy, hoop stress, fillet weld shear, bolt torque by nut factor, belt speed, Reynolds, Darcy-Weisbach, thermal resistance, the rule of mixtures along and across fibres, sinter scale-up):
   - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
   - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
   - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
@@ -134,14 +154,18 @@ Ask her: *"challenge yourself"*, *"try to build a computer"*, *"create a symbiot
   - an M8 rod end (ISO 12240-4);
   - a one-channel brushed DC driver without current limit, and a two-channel controller with one;
   - ISO 8820-3 blade fuses, 10 to 40 A;
+  - hex head bolts M3 to M24, class 8.8 (ISO 4017, from the world's thread tables);
+  - square hollow sections 20 × 20 × 2 to 100 × 100 × 4 mm, S355 (EN 10219);
+  - trapezoidal lead screws Tr10 × 2 to Tr30 × 6 with bronze nuts (ISO 2904);
   - the world's motors (a Ø40 mm 150 W coreless DC motor and a Ø100 mm 250 W brushed one), its 12:1 planetary gearhead, its 12 V 7 Ah sealed lead-acid battery and its wire (10 to 18 AWG).
-- **Blocks (17)**: energy store, motor controller, conductor, rotary actuator, speed reducer, shaft coupling, chain drive, rotary support, two-force link, printing material, shaft, wheel, frame member, whole machine, fuse, guard, and a mechanical bit (a lever with two stable states). Each opens into its anatomy: a DC motor into its magnets, winding (the Lorentz force), commutator and brushes, back-EMF, shaft, bearings and housing; a battery into its cells, plates, electrolyte, case, valve and terminals.
+- **Blocks (19)**: energy store, motor controller, conductor, rotary actuator, speed reducer, shaft coupling, lead screw, chain drive, rotary support, two-force link, printing material, shaft, wheel, frame member, whole machine, bolt, fuse, guard, and a mechanical bit (a lever with two stable states). Each opens into its anatomy: a DC motor into its magnets, winding (the Lorentz force), commutator and brushes, back-EMF, shaft, bearings and housing; a battery into its cells, plates, electrolyte, case, valve and terminals.
 - **Principles (47, in 20 kinds)**: load path, determinacy, strength margin, stiffness, fatigue, stress concentration, stability, materials, fits and tolerances, manufacturing, assembly, service, thermal, electrical, safety, cost and mass, standard parts, motion, energy (from a source; no loop keeps itself going), information (a bit needs two stable states). From Pahl & Beitz, Boothroyd & Dewhurst, Shigley, Peterson, SKF, ABYC and the NEC, ISO 12100, MIL-STD-889. Where this world showed one, it says so: the kart's broken gearhead shafts are why the gearhead takes torque, not load.
-- **Ways (36)**: rotary and hub motors, linear motors, voice coils, solenoids, piezo stacks, electrostatic actuators, resistive heating and thermal actuators, electric thrusters; batteries, solar cells, thermoelectric generators, heat engines, burning, muscle, LEDs; transistor switches, transistor, relay and mechanical logic; strain gauges, thermocouples, encoders; gears, chains and belts; wheels, tracks, legs, propellers, paddles, winches, racks; lead screws and cranks.
-- **Workflows (10)**:
+- **Ways (41)**: rotary and hub motors, linear motors, voice coils, solenoids, piezo stacks, electrostatic actuators, resistive heating and thermal actuators, electric thrusters; batteries, solar cells, thermoelectric generators, heat engines, burning, muscle, LEDs, bioluminescence, photosynthesis, loudspeakers; transistor switches, transistor, relay and mechanical logic; strain gauges, thermocouples, encoders, photodiodes and cameras, microphones; gears, chains and belts; wheels, tracks, legs, propellers, paddles, winches, racks; lead screws and cranks.
+- **Workflows (14)**:
   - a whole drivetrain from one sentence;
   - choosing a vehicle drive;
-  - sizing a wire, a battery pack, a shaft;
+  - an electric actuator for any job: a shaft at a torque and speed, or a push through a lead screw, with the same drive search a vehicle's uses;
+  - sizing a wire (for the fuse that protects it), a battery pack, a shaft, a gear, a frame member, a strut against buckling;
   - choosing a bearing, a coupling, a controller, a fuse;
   - sizing a torque arm.
 

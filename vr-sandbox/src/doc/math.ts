@@ -2,7 +2,6 @@
 
 import type { Pose, Quat, Vec3 } from './types';
 
-export const v3 = (x = 0, y = 0, z = 0): Vec3 => [x, y, z];
 export const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 export const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 export const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];

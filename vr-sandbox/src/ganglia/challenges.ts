@@ -18,6 +18,7 @@
 
 import type { Flow } from './blocks';
 import { conceive, type Medium } from './ways';
+import { flowOfWord } from './words';
 import { grow, compression } from './grow';
 import { lawById, use } from './laws';
 import { CATALOG } from './parts';
@@ -50,26 +51,6 @@ export interface Note { says: string; law?: string; value?: number; fix?: string
 export interface NeedResult { need: Need; level: Level; says: string; flows?: [Flow, Flow]; way?: string; missing?: string[]; fix?: string }
 
 export interface Attempt { challenge: Challenge; results: NeedResult[]; notes: Note[]; toFix: string[]; worst: Level; best: Level }
-
-/** The words she knows each flow by: her language, as far as it goes. */
-export const FLOW_WORDS: Record<Flow, string[]> = {
-  electric: ['electric', 'electricity', 'current', 'battery', 'power'],
-  rotation: ['rotation', 'spin', 'turn', 'turning', 'torque'],
-  translation: ['stroke', 'push', 'linear', 'lift', 'press'],
-  travel: ['travel', 'motion', 'move', 'locomotion', 'flight', 'drive'],
-  load: ['load', 'force', 'weight', 'support'],
-  signal: ['signal', 'information', 'bit', 'bits', 'data', 'logic'],
-  heat: ['heat', 'warmth', 'temperature'],
-  stock: ['stock', 'material', 'filament'],
-  chemical: ['chemical', 'food', 'fuel', 'sugar', 'nutrient'],
-  light: ['light', 'sunlight', 'sun', 'photon'],
-};
-
-export function flowOfWord(w: string): Flow | null {
-  const t = w.toLowerCase().trim();
-  for (const [f, ws] of Object.entries(FLOW_WORDS) as [Flow, string[]][]) if (ws.includes(t)) return f;
-  return null;
-}
 
 const ids = (ways: { id: string }[]) => ways.map((w) => w.id).join('>');
 
@@ -122,7 +103,7 @@ export function attempt(c: Challenge): Attempt {
 }
 
 /** A law's value, or a note that she lacks it (itself a finding). */
-function bound(law: string, inputs: Record<string, number>, says: (v: number) => string): Note {
+export function bound(law: string, inputs: Record<string, number>, says: (v: number) => string): Note {
   if (!lawById(law)) return { says: `I have no law ${law} to bound it by`, fix: `the law ${law}` };
   const v = use(law, inputs).value;
   return { says: says(v), law, value: v };

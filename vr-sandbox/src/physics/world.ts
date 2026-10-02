@@ -34,7 +34,7 @@ import {
 import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
-import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, PowerState, RoomSurface, StepResult } from './protocol';
+import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, PowerState, RoomSurface, StepResult, TerrainField } from './protocol';
 
 /** A magnetic interaction between two bodies at this instant (see magnetPairs). */
 interface MagnetPair {
@@ -489,6 +489,7 @@ export class PhysicsWorld {
   /** What the floor and walls are made of, by Jolt body id (for where friction's heat goes). */
   private envMaterial = new Map<number, Material>();
   private roomBodies: JoltNS.Body[] = [];
+  private terrainBody: JoltNS.Body | null = null;
   private grabs = new Map<string, Grab>();
   private sim: SimSettings;
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
@@ -608,6 +609,7 @@ export class PhysicsWorld {
     this.magnetRest.clear();
     switch (op.op) {
       case 'environment': return this.setEnvironment(op.boxes, op.materials);
+      case 'terrain': return this.setTerrain(op.field, op.material);
       case 'clear': return this.clear();
       case 'upsertPart': return this.upsertPart(op.part, op.material, op.keepLivePose);
       case 'removePart': return this.removePart(op.id);
@@ -661,6 +663,43 @@ export class PhysicsWorld {
       this.envBodies.push(body);
       if (m) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), m);
     }
+  }
+
+  /**
+   * A place's ground as a Jolt heightfield: each sample at (−size/2 + x step, height, −size/2 + z step), each cell two
+   * triangles, static, with its material's friction and restitution (and its heat, for the energy books).
+   */
+  private setTerrain(field: TerrainField | null, material: Material | null) {
+    const J = this.J;
+    if (this.terrainBody) {
+      this.envMaterial.delete(this.terrainBody.GetID().GetIndexAndSequenceNumber());
+      this.bi.RemoveBody(this.terrainBody.GetID());
+      this.bi.DestroyBody(this.terrainBody.GetID());
+      this.terrainBody = null;
+    }
+    if (!field) return;
+    const step = field.size / (field.n - 1);
+    const s = new J.HeightFieldShapeSettings();
+    s.mOffset = this.V([-field.size / 2, 0, -field.size / 2]);
+    s.mScale = this.V([step, 1, step]);
+    s.mSampleCount = field.n;
+    s.mHeightSamples.clear();
+    s.mHeightSamples.reserve(field.n * field.n);
+    for (let i = 0; i < field.n * field.n; i++) s.mHeightSamples.push_back(field.heights[i]!);
+    const res = s.Create();
+    if (!res.IsValid()) { J.destroy(s); throw new Error(`terrain: ${res.GetError().c_str()}`); }
+    const shape = res.Get();
+    const cs = new J.BodyCreationSettings(shape, this.R([0, 0, 0]), this.Q([0, 0, 0, 1]), J.EMotionType_Static, LAYER_STATIC);
+    cs.mFriction = material?.friction ?? 0.6;
+    cs.mRestitution = material?.restitution ?? 0.1;
+    cs.mUserData = 0;
+    const body = this.bi.CreateBody(cs);
+    J.destroy(cs);
+    J.destroy(s);
+    this.bi.AddBody(body.GetID(), J.EActivation_DontActivate);
+    this.terrainBody = body;
+    if (material) this.envMaterial.set(body.GetID().GetIndexAndSequenceNumber(), material);
+    for (const r of this.bodies.values()) if (!r.frozen) this.bi.ActivateBody(r.body.GetID());
   }
 
   /**
@@ -1254,6 +1293,8 @@ export class PhysicsWorld {
   private magnetHeld = new Map<string, { a: BodyRec; b: BodyRec; F: Vec3; T: Vec3; every: number }>();
   /** Bodies in contact with anything, last tick and this one (from the contact listener). */
   private restingOn = new Set<BodyRec>();
+  /** Bodies kept awake because their weight has a moment about what holds them (keepUnbalancedAwake). */
+  private unbalanced = new Set<BodyRec>();
   private touchingNow = new Set<BodyRec>();
   /** Ticks each magnetic pair has rested on what it pairs with, since anything last changed. */
   private magnetRest = new Map<string, number>();
@@ -1422,7 +1463,7 @@ export class PhysicsWorld {
     // the watched body is the "member" side; the normal points from it to the other body
     const flip = !w1;
     const m = (flip ? r2 : r1)!, o = flip ? r1 : r2;
-    const mb = flip ? b2 : b1, ob = flip ? b1 : b2;
+    const ob = flip ? b1 : b2;
     const nn = man.mWorldSpaceNormal;
     const n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
     const count = Math.min(4, man.mRelativeContactPointsOn1.size());
@@ -3857,6 +3898,7 @@ export class PhysicsWorld {
     this.lastSubsteps = k * per;
     lap('magnets');
     this.prepareClusters();
+    this.keepUnbalancedAwake();
     this.touches.clear();
     lap('assemblies');
     const start = this.openBooks();
@@ -4103,6 +4145,40 @@ export class PhysicsWorld {
    * Each motor drive's books for the tick, once every assembly is rigid again: the torque it gave on average (its
    * impulse over the tick) over the speed it really turned at (the mean of the tick's start and end).
    */
+  /**
+   * Nothing rests out of equilibrium. Jolt lets a body sleep once it has barely moved for half a second, which a slow
+   * pendulum does about the top of every swing; asleep, its speed is zeroed, so it stopped dead or lost its swing. A
+   * real one swings on, because its weight still pulls it sideways. So a body hanging by one rope, spring or band and
+   * touching nothing may sleep only plumb below what holds it: more than a hundredth of a degree off, its weight has a
+   * moment about the support, and it is kept awake (woken, if it slept). (Found by Ego measuring pendulums in her own
+   * world to find their law.)
+   */
+  private keepUnbalancedAwake() {
+    const g = this.sim.gravity, gl = Math.hypot(g[0], g[1], g[2]);
+    const holds = new Map<BodyRec, ConnRec[]>();
+    if (gl > 0) for (const c of this.conns.values()) {
+      if (c.status === 'broken' || !c.constraint) continue;
+      for (const r of [c.a, c.b]) if (r) { const l = holds.get(r); if (l) l.push(c); else holds.set(r, [c]); }
+    }
+    const now = new Set<BodyRec>();
+    for (const [r, cs] of holds) {
+      if (r.frozen || cs.length !== 1 || this.restingOn.has(r)) continue;
+      const c = cs[0]!, m = c.kind.model;
+      if ((m !== 'rope' && m !== 'spring' && m !== 'band') || !c.b) continue;
+      const support = (c.a === r ? this.anchorWorldB(c) : this.anchorWorld(c)).p;
+      const cm = r.body.GetCenterOfMassPosition();
+      const d: Vec3 = [cm.GetX() - support[0], cm.GetY() - support[1], cm.GetZ() - support[2]];
+      const dl = Math.hypot(d[0], d[1], d[2]), x = cross(d, g);
+      if (dl > 1e-9 && Math.hypot(x[0], x[1], x[2]) / (dl * gl) > 1.75e-4) now.add(r);
+    }
+    for (const r of now) {
+      if (!this.unbalanced.has(r)) r.body.SetAllowSleeping(false);
+      if (!r.body.IsActive()) this.bi.ActivateBody(r.body.GetID());
+    }
+    for (const r of this.unbalanced) if (!now.has(r) && this.bodies.get(r.id) === r) r.body.SetAllowSleeping(true);
+    this.unbalanced = now;
+  }
+
   private settleDrives(dt: number) {
     for (const cell of this.cells.values()) cell.I = 0;
     for (const c of this.conns.values()) {
@@ -4698,11 +4774,6 @@ function anchorDofs(model: string, axis: Vec3): { point: number[]; rot: number[]
 function invertPose(p: Pose): Pose {
   const q = quatConj(p.q);
   return { p: scale(rotate(q, p.p), -1), q };
-}
-
-function bodyPose(b: JoltNS.Body): Pose {
-  const p = b.GetPosition(), q = b.GetRotation();
-  return { p: [p.GetX(), p.GetY(), p.GetZ()], q: [q.GetX(), q.GetY(), q.GetZ(), q.GetW()] };
 }
 
 function fmtN(n: number) {

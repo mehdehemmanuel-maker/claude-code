@@ -18,10 +18,16 @@ import { connectionGeometry } from '../connectors/through';
 import { composePose, relativePose } from '../doc/math';
 import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
 import { effectiveParams, getPartKind, massOf } from '../parts/registry';
-import { DISPLAY, defaultsOf, formatForce, numberOf, type Params } from '../schema/params';
+import { DISPLAY, defaultsOf, formatForce, type Params } from '../schema/params';
 import { AUTO_JOIN } from '../connectors/plan';
 import { run, type RunResult } from '../forge/forge';
 import { AppHost } from '../forge/apphost';
+import { understand } from './understand';
+import { advance, guideOf, lessonFrom, type Lesson } from './lesson';
+import { buildVisual } from '../render/geometry';
+import { ghostMaterial } from '../render/materials';
+import { placeFromWords } from '../world/place';
+import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
 import { HabitGraph } from './habits';
@@ -35,19 +41,12 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
-import { anatomyOf, ARCHETYPES, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
+import { anatomyOf, ARCHETYPES, archetypeByWord, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explore, FRONTIER, frontierById, frontierCensus, frontierReport, scaleCheck, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
 import { describe as describeForm, genome, parseForm, type Form } from '../forms/form';
 import { solid } from '../forms/mesh';
 import { makeIn, routes } from '../forms/make';
 import { formFromWords, invent, materialIn } from '../forms/say';
-
-/** A building block by the word for it. */
-const INSIDE_OF: Record<string, string> = {
-  motor: 'actuation.rotary', battery: 'power.store', cell: 'power.store', bearing: 'support.rotate', gearhead: 'transmission.reduce', gearbox: 'transmission.reduce', reducer: 'transmission.reduce',
-  coupling: 'transmission.couple', chain: 'transmission.flexible', wheel: 'transmission.wheel', shaft: 'transmission.shaft', axle: 'transmission.shaft', fuse: 'protect.fuse', controller: 'power.control',
-  wire: 'power.conduct', cable: 'power.conduct', 'rod end': 'connection.two-force', 'tie rod': 'connection.two-force', bit: 'logic.bistable', lever: 'logic.bistable', guard: 'protect.guard', frame: 'structure.member',
-};
 
 export interface Advice {
   id: string;
@@ -350,9 +349,31 @@ export class Ego {
         const all = CHALLENGES.map((c) => attempt(c));
         return `I set myself ${all.length} hard challenges to find where I break: ${all.map((a) => `${a.challenge.name.toLowerCase()} (as far as ${a.best}, at worst ${a.worst})`).join('; ')}. Each miss is a thing to fix. Ask me for one, like "take the computer challenge".`;
       }
+      case 'frontier': {
+        if (i.which) return frontierReport(explore(frontierById(i.which)!));
+        const c = frontierCensus();
+        return `I keep ${c.total} inventions past what is built as challenges: ${c.byLabel.made} have been made, ${c.byLabel.buildable} can be built from known physics, ${c.byLabel.research} wait on a discovery, and ${c.byLabel.relabelled} run into a law as said, so I relabel them to what meets the want. None ends at impossible. I can size ${c.byReach.blueprinted} whole myself and grow part of ${c.byReach.grown}; for the rest I have the path and what I learn next. Ask me for one, like "blueprint for gravity boots" (${FRONTIER.slice(0, 4).map((f) => f.name.toLowerCase()).join(', ')}...).`;
+      }
+      case 'scale': {
+        const law = lawById(i.about.replace(/\s+/g, '.')) ?? (recall(i.about, 1, ['law'])[0]?.item as ReturnType<typeof lawById>);
+        if (!law) return `I don't know a law called ${i.about}.`;
+        const given = Object.fromEntries(findQuantities(i.words).flatMap((q) => { const inp = law.inputs.find((x) => sameDim(parseUnit(x.unit).dim, q.dim)); return inp ? [[inp.sym, q.si] as [string, number]] : []; }));
+        const s = scaleCheck(law.id, { ...law.example.inputs, ...given });
+        return s ? s.says : `${law.name} holds where it was measured: ${law.valid} I haven't written down the number that bounds it, or the law it is the limit of, yet: that is a gap in me.`;
+      }
+      case 'teach': return this.teach(i.spec, i.material);
+      case 'want': {
+        const u = understand(i.words);
+        for (const a of u.acts) {
+          if ('command' in a) this.host.command(a.command);
+          else if ('timeScale' in a) app.setTimeScale(a.timeScale);
+          else if ('playerScale' in a) { app.settings.playerScale = a.playerScale; app.notify(); }
+          else app.setPlace(a.place === null ? null : placeFromWords(a.place));
+        }
+        return u.says;
+      }
       case 'inside': {
-        const word = i.what.toLowerCase().replace(/^(dc |electric |rotary )/, '').replace(/s$/, '');
-        const a = ARCHETYPES.find((x) => x.id === INSIDE_OF[word]) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
+        const a = archetypeByWord(i.what) ?? (recall(i.what, 1, ['block'])[0]?.item as (typeof ARCHETYPES)[number] | undefined);
         if (!a) return `I don't know what's inside ${i.what} yet.`;
         return `A ${blockName(a)} is a system of its own. ${a.inside.map((x) => `${x.name[0]!.toUpperCase()}${x.name.slice(1)}: ${x.does}${x.law ? ` (${lawById(x.law)?.name ?? x.law})` : ''}.`).join(' ')} Source: ${a.insideSource.cite}.`;
       }
@@ -417,6 +438,48 @@ export class Ego {
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
     return `${plan.notes.join(' ')} ${verdict}`;
+  }
+
+  /** The lesson you are on, if any. */
+  lesson: Lesson | null = null;
+  private lessonSaid = -1;
+
+  /**
+   * A lesson in building what she can design: designed in front of you, built first on her bench, then taught step
+   * by step, each shown by a guide where the part goes and done only when it is done in your world.
+   */
+  teach(spec: DesignSpec, materialWord?: string): string {
+    if (materialWord) spec.material = resolveMaterial('block', materialWord);
+    const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
+    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`);
+    let l: Lesson;
+    try { l = lessonFrom(`a ${spec.what}`, plan.forge, this.app.doc.sim); } catch (e) { return `I couldn't make a lesson of it: ${(e as Error).message}`; }
+    this.lesson = l;
+    this.lessonSaid = 0;
+    const places = l.steps.filter((s) => s.do === 'place').length, joins = l.steps.filter((s) => s.do === 'join').length;
+    return `Let's build ${l.name} together: ${places} parts to place, ${joins} joints, then a test. ${plan.notes[0] ?? ''} First: ${l.steps[0]!.says}`;
+  }
+
+  /** Move the lesson on by what you've done, say the next step, and show its guide. */
+  private teachTick() {
+    const l = this.lesson, app = this.app;
+    if (!l) return;
+    const p = advance(app, l, !app.settings.build, app.simTime);
+    if (p.done.length && p.now && l.at !== this.lessonSaid) {
+      this.lessonSaid = l.at;
+      this.say('tip', `✓ Done. Next (${l.at + 1} of ${l.steps.length}): ${p.now.says}`, []);
+    }
+    const g = guideOf(l);
+    if (g) {
+      const kind = getPartKind(g.kind), m = app.materialOf(g);
+      app.view.showGuide(`lesson:${g.id}`, () => buildVisual(kind.visual(effectiveParams(kind, g.params, m)), ghostMaterial, () => ghostMaterial), g.pose);
+    } else app.view.showGuide('', null, null);
+    if (p.finished) {
+      this.say('tip', `You built ${l.name}, and it holds. That's the lesson done.`, []);
+      this.gain('template');
+      this.lesson = null;
+      app.view.showGuide('', null, null);
+    }
   }
 
   /** What every rigid joint will carry once gravity acts (the analysis behind foresight). */
@@ -867,6 +930,7 @@ export class Ego {
 
   /** Near failure: warn once per joint, with what would carry it. */
   private tick(dt: number) {
+    this.teachTick();
     this.watchShown();
     this.clock += dt;
     if (this.clock < 0.5) return;

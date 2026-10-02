@@ -212,7 +212,7 @@ export const TEMPLATES: Template[] = [
       const carrier = b.part('rod.square', P(-0.5, under - cross / 2, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.64, side: cross }, name: 'Rear cross-member' });
       for (const z of [-0.12, 0.12]) b.joint('bolted', carrier, chassis, along([-0.5, crossTop, z], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: cross, bondL: 0.06 });
       const gearmotor = { model: 'motor.dc.coreless.d40-150w-24v', gearhead: 'gearhead.planetary.d42-12to1' };
-      const motorLen = 0.071 + 0.0555, motorR = 0.021, gap = 0.01;
+      const motorLen = 0.071 + 0.0555, gap = 0.01;
       const battery = b.part('battery', P(0.2, 0.21 + 0.0975 / 2, 0), { params: { model: 'battery.sla.12v-7ah', series: 2, parallel: 1, charge: 1 }, name: 'Battery (2 × 12 V 7 Ah SLA)' });
       // the tray: 25 × 25 × 3 mm 6061 angle, a rail along each side and a stop at each end, 1 mm clear of the case,
       // each bolted down through its flat leg with two M5

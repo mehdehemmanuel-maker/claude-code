@@ -13,6 +13,7 @@ import { BATTERIES, WIRE_GAUGES, type BatteryData } from '../data/batteries';
 import { motorModel } from '../engineering/dcmotor';
 import { COPPER_RHO } from './laws';
 import { PRINTING_MATERIALS } from './machines';
+import { CLEARANCE_HOLE_MEDIUM, HEX_ACROSS_FLATS, HEX_BEARING_DIAMETER, METRIC_COARSE, propertyClassFor, tensileStressArea } from '../engineering/threads';
 import type { CatalogItem } from './types';
 
 const inch = 0.0254, lbf = 4.448222, inlb = 0.1129848;
@@ -95,6 +96,54 @@ export const FUSES: CatalogItem[] = [10, 15, 20, 25, 30, 35, 40].map((a) => ({
   tags: ['fuse', 'protection', 'blade fuse', 'overcurrent', 'short circuit'],
 }));
 
+/**
+ * Hex head bolts, ISO 4017, property class 8.8, from the world's own thread tables (engineering/threads.ts): coarse
+ * pitch (ISO 261), head across flats and bearing face (ISO 4017), medium clearance hole (ISO 273), tensile stress
+ * area and strength (ISO 898-1, with 8.8's higher minimums above M16). Lengths are cut to the joint, so a bolt is
+ * catalogued by its size.
+ */
+export const BOLTS: CatalogItem[] = Object.entries(METRIC_COARSE).map(([size, t]) => {
+  const As = tensileStressArea(t), pc = propertyClassFor('8.8', t.d);
+  return {
+    id: `bolt.hex.${size.toLowerCase()}-8.8`, family: 'bolt', label: `Hex head bolt ${size}, property class 8.8 (ISO 4017)`,
+    source: { cite: 'ISO 4017 (hex head), ISO 261 (coarse pitch), ISO 273 (clearance holes), ISO 898-1 (class 8.8)', kind: 'standard' },
+    specs: { d: t.d, pitch: t.P, stressArea: As, acrossFlats: HEX_ACROSS_FLATS[size]!, bearingFace: HEX_BEARING_DIAMETER[size]!, clearance: CLEARANCE_HOLE_MEDIUM[size]!, yieldLoad: As * pc.Rp, tensileLoad: As * pc.Rm },
+    tags: ['bolt', 'screw', 'fastener', 'hex', size.toLowerCase()],
+  };
+});
+
+/**
+ * Square hollow sections, steel S355J2H to EN 10219, in the sizes stocked: side b and wall t. Their area, second
+ * moment and section modulus are worked out here for sharp corners; the standard's tables, with corner radii, are a
+ * few percent lower, which the safety factor covers.
+ */
+export const HOLLOW_SECTIONS: CatalogItem[] = ([[20, 2], [25, 2], [25, 2.5], [30, 2], [30, 3], [40, 2], [40, 3], [40, 4], [50, 3], [50, 4], [60, 3], [60, 4], [80, 4], [100, 4]] as const).map(([bm, tm]) => {
+  const bb = bm / 1000, t = tm / 1000, h = bb - 2 * t;
+  const A = bb * bb - h * h, I = (bb ** 4 - h ** 4) / 12;
+  return {
+    id: `shs.${bm}x${bm}x${tm}`, family: 'hollow section', label: `Square hollow section ${bm} × ${bm} × ${tm} mm, S355 (EN 10219)`,
+    source: { cite: 'EN 10219-1/-2 (cold-formed structural hollow sections: sizes, S355J2H); properties for sharp corners', kind: 'standard' },
+    specs: { b: bb, t, area: A, I, S: I / (bb / 2), massPerM: A * 7850, yield: 355e6 },
+    tags: ['tube', 'box section', 'hollow section', 'frame', 'square tube', 'stock'],
+  };
+});
+
+/**
+ * Trapezoidal lead screws, ISO 2904 (30° thread), rolled in C45 steel with a bronze nut 1.5 diameters long: pitch
+ * diameter d − P/2, core diameter d − 2 h3 with h3 = P/2 + ac (ac 0.25 mm for pitches 2 to 5, 0.5 mm for 6 to 12).
+ * The nut's turns bear on the thread; steel on bronze is held to 10 MPa there (Shigley's Table 8-4 runs 5.5 to 24 MPa
+ * by speed), and lubricated their friction is about 0.1.
+ */
+export const LEAD_SCREWS: CatalogItem[] = ([[10, 2], [12, 3], [16, 4], [20, 4], [24, 5], [30, 6]] as const).map(([dm, Pm]) => {
+  const d = dm / 1000, P = Pm / 1000, h3 = P / 2 + (Pm >= 6 ? 0.5e-3 : 0.25e-3);
+  return {
+    id: `leadscrew.tr${dm}x${Pm}`, family: 'lead screw', label: `Trapezoidal lead screw Tr${dm} × ${Pm}, C45 steel, bronze nut (ISO 2904)`,
+    source: { cite: 'ISO 2904 (metric trapezoidal threads: basic dimensions); EN 10083-2 (C45+N, yield at least 305 MPa); Shigley ch. 8 (power screws, Table 8-4)', kind: 'standard' },
+    specs: { d, pitch: P, lead: P, d2: d - P / 2, d3: d - 2 * h3, nutLength: 1.5 * d, yield: 305e6, bearing: 10e6, mu: 0.1 },
+    tags: ['lead screw', 'trapezoidal', 'acme', 'linear actuator', 'screw jack'],
+  };
+});
+
 /** The world's motors, gearheads, batteries and wire, as catalog items (their data stays where the world reads it). */
 export function worldItems(): CatalogItem[] {
   const out: CatalogItem[] = [];
@@ -123,10 +172,9 @@ export function worldItems(): CatalogItem[] {
   return out;
 }
 
-export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...FUSES, ...PRINTING_MATERIALS, ...worldItems()];
+export const CATALOG: CatalogItem[] = [...BEARINGS, ...PILLOW_BLOCKS, ...CHAINS, ...COUPLINGS, ...ROD_ENDS, ...CONTROLLERS, ...FUSES, ...BOLTS, ...HOLLOW_SECTIONS, ...LEAD_SCREWS, ...PRINTING_MATERIALS, ...worldItems()];
 
 export const itemById = (id: string) => CATALOG.find((c) => c.id === id);
-export const family = (f: string) => CATALOG.filter((c) => c.family === f);
 const num = (c: CatalogItem, k: string) => (typeof c.specs[k] === 'number' ? (c.specs[k] as number) : NaN);
 
 /**
@@ -176,6 +224,21 @@ export function lintItem(c: CatalogItem): string[] {
       if (Number.isFinite(d) && (d < 900 || d > 2200)) bad.push(`${d} kg/m³ is not a polymer composite's`);
       break;
     }
+    case 'bolt':
+      if (!(num(c, 'acrossFlats') > num(c, 'd') && num(c, 'clearance') > num(c, 'd'))) bad.push('its head or clearance hole is no bigger than its thread');
+      if (!(num(c, 'stressArea') < (Math.PI / 4) * num(c, 'd') ** 2)) bad.push('its stress area is not inside its nominal diameter');
+      if (!(num(c, 'yieldLoad') < num(c, 'tensileLoad'))) bad.push('it yields above its tensile strength');
+      break;
+    case 'hollow section': {
+      const A = num(c, 'area'), bb = num(c, 'b'), t = num(c, 't');
+      if (Math.abs(A - 4 * t * (bb - t)) / A > 1e-9) bad.push('its area is not 4 t (b − t)');
+      if (!(t < bb / 4)) bad.push('its wall is too thick for its side to be hollow');
+      break;
+    }
+    case 'lead screw':
+      if (!(num(c, 'd3') < num(c, 'd2') && num(c, 'd2') < num(c, 'd'))) bad.push('its core, pitch and outer diameters are out of order');
+      if (!(num(c, 'lead') > 0 && num(c, 'nutLength') >= num(c, 'd'))) bad.push('no lead, or a nut shorter than its diameter');
+      break;
     case 'fuse':
       if (!(num(c, 'interrupt') > num(c, 'rating'))) bad.push('it can\'t interrupt even its own rating');
       if (c.id.includes('ato') && !(num(c, 'rating') >= 1 && num(c, 'rating') <= 40)) bad.push('the ATO size runs 1 to 40 A');

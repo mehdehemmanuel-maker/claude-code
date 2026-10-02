@@ -14,6 +14,8 @@ export interface AssemblyNode {
   /** True when its maker publishes it (then `source` says where); false when it is known to exist but not detailed. */
   published: boolean;
   source?: Source;
+  /** Further sources, where one statement draws on several. */
+  also?: Source[];
   children?: AssemblyNode[];
 }
 
@@ -157,7 +159,7 @@ export const MACHINES: Machine[] = [
         ],
       },
       {
-        name: 'Projection optics', is: 'Six mirrors, M1 to M6, all reflective, that shrink the mask\'s image four times onto the wafer through a 0.33 numerical aperture over a 26 × 33 mm field. Each Mo/Si multilayer mirror reflects about 70%, so the six pass only about 12% of what reaches them (0.7⁶).', published: true, source: NXE34, specs: { mirrors: 6, NA: 0.33, reduction: 4, reflectivity: 0.7 },
+        name: 'Projection optics', is: 'Six mirrors, M1 to M6, all reflective, that shrink the mask\'s image four times onto the wafer through a 0.33 numerical aperture over a 26 × 33 mm field. Each Mo/Si multilayer mirror reflects about 70%, so the six pass only about 12% of what reaches them (0.7⁶).', published: true, source: NXE34, also: [ZEISS, MIRRORS], specs: { mirrors: 6, NA: 0.33, reduction: 4, reflectivity: 0.7 },
         children: [
           { name: 'Mo/Si multilayer coatings', is: 'About 7 nm molybdenum-silicon bilayers, stacked, reflecting 13.5 nm by Bragg reflection.', published: true, source: REVIEW },
           { name: 'Mirror substrates, mounts and actuators', is: 'Not published in detail by Zeiss.', published: false },

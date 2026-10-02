@@ -102,8 +102,6 @@ export function springMass(s: CoilSpring) {
   return s.wire.density * (Math.PI / 4) * s.d ** 2 * wireLength;
 }
 
-/** Stored elastic energy at deflection x: U = 1/2 k x^2. */
-export const storedEnergy = (k: number, x: number) => 0.5 * k * x * x;
 
 /** Helical torsion spring rate per radian, Shigley eq. 10-51: k' = d^4 E / (10.8 D N) per turn. */
 export function torsionSpringRate(d: number, D: number, N: number, E: number) {

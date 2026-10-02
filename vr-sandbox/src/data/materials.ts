@@ -321,7 +321,27 @@ function magnet(id: string, name: string, Br: number, density: number, conductiv
   };
 }
 
-const byId = new Map(MATERIALS.map((m) => [m.id, m]));
+/**
+ * The ground of places: not stock to build with (sand and soil are granular, with no strength in tension), so they
+ * are not among MATERIALS, but the ground a place is made of, with its friction, its dead landing and its heat.
+ */
+export const GROUND_MATERIALS: Material[] = [
+  {
+    id: 'ground.sand-dry', name: 'Dry sand', category: 'stone', density: 1515, E: 25 * MPa, nu: 0.3,
+    // cohesionless: no tensile strength at all
+    yield: 0, ultimate: 0, elongation: 0, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.5, restitution: 0.05, sound: 'stone', loss: 0.3, sparks: 'none', color: 0xd9c59b, metalness: 0, roughness: 1,
+    source: 'Incropera Table A.3: sand 1515 kg/m3; Das, Principles of Geotechnical Engineering: loose to medium sand E 10-28 MPa; Potyondy, Geotechnique 11 (1961): a solid on dry sand slides at 2/3 to all of the sand\'s friction angle (about 34°), μ 0.42 to 0.67; a landing on sand barely bounces', confidence: 'handbook',
+  },
+  {
+    id: 'ground.soil', name: 'Soil under grass', category: 'stone', density: 2050, E: 20 * MPa, nu: 0.3,
+    yield: 0, ultimate: 0, elongation: 0, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.6, restitution: 0.1, sound: 'stone', loss: 0.3, sparks: 'none', color: 0x5d7a3a, metalness: 0, roughness: 1,
+    source: 'Incropera Table A.3: soil 2050 kg/m3; Das: medium clay and silt E 5-50 MPa; friction angle of loam about 30° (μ about 0.6)', confidence: 'estimated',
+  },
+];
+
+const byId = new Map([...MATERIALS, ...GROUND_MATERIALS].map((m) => [m.id, m]));
 
 export function getMaterial(id: string): Material {
   const m = byId.get(id);
@@ -329,7 +349,6 @@ export function getMaterial(id: string): Material {
   return m;
 }
 
-export const hasMaterial = (id: string) => byId.has(id);
 
 export const MATERIAL_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Steel & iron', ids: MATERIALS.filter((m) => ['steel', 'stainless', 'cast-iron'].includes(m.category)).map((m) => m.id) },

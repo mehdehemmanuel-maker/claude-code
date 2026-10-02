@@ -70,19 +70,3 @@ export function isBent(part: Part, layout: SegmentLayout, pose: PoseSource, angl
   }
   return false;
 }
-
-/** Largest bend between neighbouring intact segments (rad), for display. */
-export function maxBend(part: Part, layout: SegmentLayout, pose: PoseSource): number {
-  let worst = 0;
-  let prev: Pose | null = null;
-  for (let k = 0; k < layout.count; k++) {
-    const p = segmentPose(part, layout, k, pose);
-    if (!p) return 0;
-    if (prev && !part.damage.broken.includes(k - 1)) {
-      const w = Math.abs(prev.q[0] * p.q[0] + prev.q[1] * p.q[1] + prev.q[2] * p.q[2] + prev.q[3] * p.q[3]);
-      worst = Math.max(worst, 2 * Math.acos(Math.min(1, w)));
-    }
-    prev = p;
-  }
-  return worst;
-}

@@ -6,7 +6,7 @@ import type { App } from '../app/app';
 import { getConnectorKind, CONNECTOR_KINDS } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { addPart, deleteParts, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
-import { axisAngle, dot, fromTo, inverseTransformPoint, normalize, qmul, rotate, transformPoint } from '../doc/math';
+import { axisAngle, fromTo, qmul, transformPoint } from '../doc/math';
 import type { Pose, Quat, Vec3 } from '../doc/types';
 import { getMaterial, STANDARD_GRAVITY } from '../data/materials';
 import { effectiveParams, getPartKind } from '../parts/registry';
@@ -171,7 +171,8 @@ export class AppHost extends BuildHost {
     f.normalize();
     const right: Vec3 = [-f.z, 0, f.x];
     const off = (k - (n - 1) / 2) * width;
-    return this.place(kindId, {}, material, [p[0] + right[0] * off, p[1], p[2] + right[2] * off], [], undefined);
+    const x = p[0] + right[0] * off, z = p[2] + right[2] * off;
+    return this.place(kindId, {}, material, [x, this.groundUnder(shape, x, z) - rotatedMinY(shape, q) + 0.0005, z], [], undefined);
   }
 
   /** The floor `dist` metres in front of you. */
@@ -181,7 +182,8 @@ export class AppHost extends BuildHost {
     const f = cam.getWorldDirection(new THREE.Vector3()).setY(0);
     if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
     f.normalize();
-    return [p.x + f.x * dist, 0, p.z + f.z * dist];
+    const x = p.x + f.x * dist, z = p.z + f.z * dist;
+    return [x, this.app.groundAt(x, z), z];
   }
 
   /** A metre in front of you, resting on the floor. */
@@ -193,7 +195,15 @@ export class AppHost extends BuildHost {
     if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
     f.normalize();
     const shape = kind.collision(effectiveParams(kind, params, getMaterial(material)));
-    return [p.x + f.x, -rotatedMinY(shape, q) + 0.0005, p.z + f.z];
+    const x = p.x + f.x, z = p.z + f.z;
+    return [x, this.groundUnder(shape, x, z) - rotatedMinY(shape, q) + 0.0005, z];
+  }
+
+  /** The highest ground under a shape's footprint at a point: on a slope it is set down on it, not into it. */
+  private groundUnder(shape: ReturnType<ReturnType<typeof getPartKind>['collision']>, x: number, z: number): number {
+    const b = shapeBounds(shape);
+    const r = Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 2;
+    return Math.max(...[[0, 0], [r, r], [r, -r], [-r, r], [-r, -r]].map(([dx, dz]) => this.app.groundAt(x + dx!, z + dz!)));
   }
 
   override freeze(id: string, frozen: boolean) {

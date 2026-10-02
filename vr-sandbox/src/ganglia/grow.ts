@@ -95,12 +95,10 @@ export const DEVELOPMENT: Rule[] = [
   { from: 'transmission.flexible', needs: 'protect.guard', role: 'chain guard', principle: 'guard-moving-parts' },
   { from: 'transmission.flexible', needs: 'support.rotate', role: 'bearings', principle: 'bearing-near-load' },
   { from: 'logic.bistable', needs: 'structure.member', role: 'frame', principle: 'short-load-path' },
+  { from: 'transmission.screw', needs: 'transmission.couple', role: 'coupling', principle: 'coupling-takes-misalignment' },
+  { from: 'transmission.screw', needs: 'structure.member', role: 'frame', principle: 'short-load-path' },
 ];
 
-const SEED_ROLE: Record<string, string> = {
-  'actuation.rotary': 'motor', 'transmission.reduce': 'gearhead', 'transmission.wheel': 'wheel', 'transmission.flexible': 'chain drive', 'transmission.shaft': 'shaft',
-  'power.store': 'energy store', 'logic.bistable': 'bit', 'support.rotate': 'bearings',
-};
 
 /** A concept's seed organs, then every organ they call for, until nothing more is needed. */
 export function develop(c: Concept): Organ[] {
@@ -115,7 +113,7 @@ export function develop(c: Concept): Organ[] {
     organs.push(organ);
     return organ;
   };
-  for (const w of c.ways) for (const b of w.embodiedBy.slice(0, 1)) add({ block: b, role: SEED_ROLE[b] ?? b, because: { seed: w.id } });
+  for (const w of c.ways) for (const b of w.embodiedBy.slice(0, 1)) add({ block: b, role: archetypeById(b)!.role, because: { seed: w.id } });
   const has = (block: string) => organs.some((o) => o.block === block);
   for (let i = 0; i < organs.length; i++) {
     const o = organs[i]!;
@@ -142,6 +140,38 @@ const DEFAULT_MADE: Record<string, { shape: string; material: string }> = {
   'logic.bistable': { shape: 'plate', material: 'aluminum.6061-t6' },
 };
 
+/**
+ * Frames, mounts and trays sized from stock. The genome says what the machine must carry, not how its frame is laid
+ * out, so each is sized on a stated layout, and says so. A vehicle's frame is a cross-member over the track with the
+ * driven weight at its middle; an actuator's frame carries its screw's push along it as a strut, or its torque arm's
+ * pull at the end of a 100 mm bracket; a motor mount holds the motor's reaction at 50 mm on a 100 mm bracket; a
+ * battery tray is a member under the battery carrying its weight at its middle.
+ */
+function sizeMembers(organs: Organ[], p: PowertrainChoice, spec: Record<string, number>, vehicle: boolean): Finding[] {
+  const out: Finding[] = [];
+  const member = workflowById('member.size')!, strut = workflowById('strut.size')!;
+  for (const o of organs) {
+    if (o.block !== 'structure.member') continue;
+    const bat = BATTERIES[p.drive.battery]!;
+    const stroke = spec['stroke'] ?? 0.3;
+    const job: { run: () => WorkflowResult<{ section: string }>; said: string } = o.role === 'battery tray'
+      ? { run: () => member.run({ span: Math.max(...bat.dims) * p.drive.series, load: bat.mass * p.drive.series * 9.80665 }) as WorkflowResult<{ section: string }>, said: `a member under the battery carrying its ${(bat.mass * p.drive.series).toFixed(1)} kg at its middle` }
+      : vehicle
+        ? { run: () => member.run({ span: spec['track'] ?? 0.6, load: (spec['mass'] ?? 100) * 9.80665 * (spec['driven'] ?? 0.5) }) as WorkflowResult<{ section: string }>, said: `a cross-member over the ${((spec['track'] ?? 0.6) * 1000).toFixed(0)} mm track with the driven weight at its middle` }
+        : o.role === 'motor mount'
+          ? { run: () => member.run({ span: 0.1, load: p.torque / 0.05, cantilever: 1 }) as WorkflowResult<{ section: string }>, said: 'a 100 mm bracket holding the motor\'s reaction at 50 mm' }
+          : p.screw
+            ? { run: () => strut.run({ length: stroke, load: p.screw!.force }) as WorkflowResult<{ section: string }>, said: `a strut along the ${(stroke * 1000).toFixed(0)} mm stroke carrying the screw's push` }
+            : { run: () => member.run({ span: 0.1, load: p.torqueArm?.force ?? p.torque / 0.04, cantilever: 1 }) as WorkflowResult<{ section: string }>, said: 'a 100 mm bracket holding the torque arm\'s pull at its end' };
+    const r = job.run();
+    if (!r.ok || !r.choice) { out.push({ level: 'error', organ: o.id, message: `${o.id}: ${r.summary}` }); continue; }
+    o.item = r.choice.section;
+    delete o.made;
+    out.push({ level: 'warning', organ: o.id, message: `${o.id}: sized as ${job.said} (the genome doesn't say its layout): ${r.summary}` });
+  }
+  return out;
+}
+
 function embody(organs: Organ[], p: PowertrainChoice | null, motors: number) {
   const k = motors;
   for (const o of organs) {
@@ -161,6 +191,7 @@ function embody(organs: Organ[], p: PowertrainChoice | null, motors: number) {
       case 'support.rotate': if (p.bearing) { o.item = p.bearing; o.count = k; } break;
       case 'transmission.shaft': if (p.axle) { o.made = { shape: 'rod.round', material: p.axleMaterial ?? 'steel.1018-cd', size: `Ø${(p.axle * 1000).toFixed(0)} mm` }; o.count = k; } break;
       case 'transmission.wheel': o.count = k; break;
+      case 'transmission.screw': if (p.screw) { o.item = p.screw.item; o.count = k; } break;
     }
   }
 }
@@ -211,6 +242,7 @@ const STAGE: [string, number, string][] = [
   ['power.conduct', 9, 'wiring'],
   ['protect.fuse', 10, 'the fuse in last: until it goes in, nothing is live (fail-safe)'],
   ['logic.bistable', 2, 'the levers onto their pivots on the frame, each set to its starting state'],
+  ['transmission.screw', 2, 'the lead screw into its end bearing, its nut onto what it moves, square to the frame'],
 ];
 
 function order(organs: Organ[]): { organ: string; why: string }[] {
@@ -233,12 +265,20 @@ const ids = (c: Concept) => c.ways.map((w) => w.id).join('>');
 /** One concept grown into a whole machine from a genome. */
 export function growConcept(g: Genome, c: Concept): Organism {
   const organs = develop(c);
-  // a vehicle driven by a rotary motor on wheels (geared or direct) is sized by the drivetrain workflow
+  // a vehicle driven by a rotary motor on wheels (geared or direct) is sized by the drivetrain workflow; a shaft
+  // turned, or a push made through a lead screw, by the actuator workflow
   const vehicle = g.to === 'travel' && /^motor\.rotary(>gear\.reduce)?>wheel$/.test(ids(c));
-  const sized = vehicle ? (workflowById('powertrain.design')!.run({ ...g.spec, geared: ids(c).includes('gear.reduce') ? 1 : 0 }) as WorkflowResult<PowertrainChoice>) : undefined;
+  // (a signal or a cell may come before the motor, and levers it pushes after the screw: an electric computer's drive)
+  const chain = c.ways.map((w) => w.id), at = chain.indexOf('motor.rotary');
+  const actuator = !vehicle && at >= 0 && chain.slice(0, at).every((w) => w === 'switch.transistor' || w === 'cell.electrochemical')
+    && chain.slice(at + 1).every((w) => w === 'gear.reduce' || w === 'lead.screw' || w === 'logic.mechanical');
+  const pushes = chain.includes('lead.screw'), levers = chain.includes('logic.mechanical');
+  const sized = vehicle ? (workflowById('powertrain.design')!.run({ ...g.spec, geared: ids(c).includes('gear.reduce') ? 1 : 0 }) as WorkflowResult<PowertrainChoice>)
+    : actuator ? (workflowById('actuator.design')!.run({ ...g.spec, force: pushes ? (g.spec['force'] ?? (levers ? 20 : 500)) : 0 }) as WorkflowResult<PowertrainChoice>) : undefined;
   const p = sized?.ok ? sized.choice : null;
-  embody(organs, p, Math.max(1, Math.round(g.spec['motors'] ?? 2)));
-  const findings = immune(organs, p ? checkDesign(designFromPowertrain(p)) : null, c);
+  embody(organs, p, Math.max(1, Math.round(g.spec['motors'] ?? (vehicle ? 2 : 1))));
+  const sizing = p ? sizeMembers(organs, p, g.spec, vehicle) : [];
+  const findings = [...immune(organs, p ? checkDesign(designFromPowertrain(p)) : null, c), ...sizing];
   if (!sized) findings.push({ level: 'gap', message: `no workflow sizes ${ids(c)} yet: its blocks are known, their sizes aren't` });
   else if (!sized.ok) findings.push({ level: 'error', message: sized.summary });
   const cost: Record<string, number> = {};
