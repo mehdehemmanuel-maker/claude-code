@@ -261,6 +261,8 @@ export interface Row {
    * target - relVel - soft acc. Its target carries the spring's pull on the position error.
    */
   soft?: number;
+  /** The work its impulse did in the last solve, J: λ (w⁻ + w⁺)/2, with w⁻ and w⁺ its relative velocity before and after (set by solveRows). */
+  work?: number;
 }
 
 /**
@@ -319,6 +321,10 @@ interface Block { rows: Prepared[]; Kinv: Float64Array; n: number }
 
 function prepareInto(J: Float64Array, o: number, r: Row): Prepared {
   const d = r.dir;
+  // Both sides of a linear row push about one point, so the pair is equal and opposite on one line and the row can't
+  // make angular momentum: λ (p_b − p_a) × d is what it would make about any point with a lever point each (F-1.1.1).
+  // Where p_b − p_a lies along d (a contact's normal, a rope) the torques are the same either way.
+  const mid: Vec3 = [(r.pa[0] + r.pb[0]) / 2, (r.pa[1] + r.pb[1]) / 2, (r.pa[2] + r.pb[2]) / 2];
   const fill = (e: Entity, at: number, s: number, p: Vec3): boolean => {
     // an immovable entity still has a velocity (a hand-held part): read it, never write it
     if (r.kind === 'angular') {
@@ -335,8 +341,8 @@ function prepareInto(J: Float64Array, o: number, r: Row): Prepared {
     J[m + 3] = I[0]! * ax + I[1]! * ay + I[2]! * az; J[m + 4] = I[3]! * ax + I[4]! * ay + I[5]! * az; J[m + 5] = I[6]! * ax + I[7]! * ay + I[8]! * az;
     return true;
   };
-  const ma = r.a ? fill(r.a, o, -1, r.pa) : false;
-  const mb = r.b ? fill(r.b, o + 6, 1, r.pb) : false;
+  const ma = r.a ? fill(r.a, o, -1, mid) : false;
+  const mb = r.b ? fill(r.b, o + 6, 1, mid) : false;
   return { r, o, ma, mb, block: null, lead: false };
 }
 
@@ -378,16 +384,43 @@ function coupling(J: Float64Array, pi: Prepared, pj: Prepared): number {
   return k;
 }
 
+/** What a solve did: its passes, the kinetic energy it changed, and how far it fell short of being passive. */
+export interface Solved {
+  passes: number;
+  /** Kinetic energy the impulses changed, J: exactly the sum of every row's work. */
+  dK: number;
+  /**
+   * The most kinetic energy the impulses could have added beyond what their targets pay for: Σ max(0, λ w⁺) over rows
+   * with no target. Zero at convergence (each such row's impulse opposes the velocity it leaves, or that velocity is
+   * zero); above zero, what stopping early let through.
+   */
+  leak: number;
+  /** 1: the warm start stood; 0: the solve ended above zero with it and was done again from nothing; −1: scaled back along its ray as well. */
+  warmKept: number;
+}
+
 /**
  * Gauss-Seidel sequential impulses with accumulated clamping (Catto). Unbounded rows sharing a group are solved
  * as one block with their exact coupling (a 6-DOF anchor converges in one pass). `warm` holds last tick's
  * accumulated impulses by row key: applying them first is what lets heavy-on-light stacks converge; it is
- * refreshed on exit. Entity velocities are updated in place. Returns the passes it took.
+ * refreshed on exit. Entity velocities are updated in place.
+ *
+ * Why it can't make energy (FOUNDATIONS.md, F-2.6): for any impulses Λ at all, however found, the kinetic energy they
+ * change is ΔK = g(Λ) − ½ΛᵀΓΛ + Λᵀt with g(Λ) = ½Λᵀ(A + Γ)Λ + Λᵀ(w⁻ − t), so a solve that ends with g ≤ 0 has added
+ * no more than its targets paid for (Λᵀt: drives, rebounds). From nothing, each update is the exact minimiser of g
+ * along its row within fixed bounds, so g only falls from 0 (theorem A). A warm start (last tick's impulses, applied
+ * first: what lets heavy-on-light stacks converge) can begin above zero, and friction's moving bounds can lift g; so g
+ * is computed exactly at the end (one pass over the rows) and, in the rare solve that ends above zero, the solve is
+ * done again from nothing; if even that ends above zero (friction), the impulses are scaled back along their own ray
+ * to where g is least, which is below zero (joints then drift a little this tick and are pulled in next tick). Every
+ * solve therefore ends with g ≤ 0: it is the one exit.
  */
-export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0): number {
-  const J = new Float64Array(rows.length * STRIDE);
-  const prep: Prepared[] = new Array(rows.length);
-  for (let i = 0; i < rows.length; i++) {
+export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0): Solved {
+  const n = rows.length;
+  const J = new Float64Array(n * STRIDE);
+  const w0 = new Float64Array(n);
+  const prep: Prepared[] = new Array(n);
+  for (let i = 0; i < n; i++) {
     const p = (prep[i] = prepareInto(J, i * STRIDE, rows[i]!));
     const r = p.r, o = p.o;
     let k = 0;
@@ -395,6 +428,9 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
     if (p.mb) for (let c = 0; c < 6; c++) k += J[o + 6 + c]! * J[o + 18 + c]!;
     r.k = k;
   }
+  // every row's relative velocity before any impulse: the solve's work is measured from it
+  for (let i = 0; i < n; i++) w0[i] = relVel(J, prep[i]!);
+  let warmKept = 1;
   if (warm) {
     // normals before their friction rows, so friction warm starts inside its cone
     for (const pass of [false, true]) for (const p of prep) {
@@ -416,61 +452,103 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
     if (g) g.push(p); else groups.set(r.group, [p]);
   }
   for (const g of groups.values()) {
-    const n = g.length;
-    if (n < 2) continue;
-    const K = new Float64Array(n * n);
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) K[i * n + j] = coupling(J, g[i]!, g[j]!);
-    const block: Block = { rows: g, Kinv: invertFlat(K, n), n };
+    const m = g.length;
+    if (m < 2) continue;
+    const K = new Float64Array(m * m);
+    for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) K[i * m + j] = coupling(J, g[i]!, g[j]!);
+    const block: Block = { rows: g, Kinv: invertFlat(K, m), n: m };
     for (const p of g) p.block = block;
     g[0]!.lead = true;
   }
   const res = new Float64Array(6);
   let passes = 0;
-  for (let it = 0; it < iterations; it++) {
-    passes = it + 1;
-    // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
-    let change = 0;
-    for (let q = 0; q < prep.length; q++) {
-      const p = prep[q]!;
-      const block = p.block;
-      if (block) {
-        if (!p.lead) continue;
-        const n = block.n, br = block.rows, Kinv = block.Kinv;
-        for (let i = 0; i < n; i++) res[i] = br[i]!.r.target - relVel(J, br[i]!);
-        for (let i = 0; i < n; i++) {
-          let d = 0;
-          for (let j = 0; j < n; j++) d += Kinv[i * n + j]! * res[j]!;
-          if (d) { br[i]!.r.acc += d; push(J, br[i]!, d); change = Math.max(change, Math.abs(d)); }
+  const sweep = () => {
+    for (let it = 0; it < iterations; it++) {
+      passes++;
+      // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
+      let change = 0;
+      for (let q = 0; q < n; q++) {
+        const p = prep[q]!;
+        const block = p.block;
+        if (block) {
+          if (!p.lead) continue;
+          const m = block.n, br = block.rows, Kinv = block.Kinv;
+          for (let i = 0; i < m; i++) res[i] = br[i]!.r.target - relVel(J, br[i]!);
+          for (let i = 0; i < m; i++) {
+            let d = 0;
+            for (let j = 0; j < m; j++) d += Kinv[i * m + j]! * res[j]!;
+            if (d) { br[i]!.r.acc += d; push(J, br[i]!, d); change = Math.max(change, Math.abs(d)); }
+          }
+          continue;
         }
-        continue;
+        const r = p.r;
+        if (!r.k || r.k <= 0) continue;
+        let lo = r.lo, hi = r.hi;
+        if (r.frictionOf) {
+          const lim = (r.mu ?? 0) * Math.max(0, r.frictionOf.acc);
+          lo = -lim;
+          hi = lim;
+        }
+        const soft = r.soft ?? 0;
+        const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(J, p) - soft * r.acc) / (r.k + soft)));
+        const lambda = next - r.acc;
+        if (lambda === 0) continue;
+        r.acc = next;
+        push(J, p, lambda);
+        change = Math.max(change, Math.abs(lambda));
       }
-      const r = p.r;
-      if (!r.k || r.k <= 0) continue;
-      let lo = r.lo, hi = r.hi;
-      if (r.frictionOf) {
-        const lim = (r.mu ?? 0) * Math.max(0, r.frictionOf.acc);
-        lo = -lim;
-        hi = lim;
+      if (tolerance > 0) {
+        let largest = 0;
+        for (let q = 0; q < n; q++) largest = Math.max(largest, Math.abs(prep[q]!.r.acc));
+        if (change <= tolerance * largest) break;
       }
-      const soft = r.soft ?? 0;
-      const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(J, p) - soft * r.acc) / (r.k + soft)));
-      const lambda = next - r.acc;
-      if (lambda === 0) continue;
-      r.acc = next;
-      push(J, p, lambda);
-      change = Math.max(change, Math.abs(lambda));
     }
-    if (tolerance > 0) {
-      let largest = 0;
-      for (let q = 0; q < prep.length; q++) largest = Math.max(largest, Math.abs(prep[q]!.r.acc));
-      if (change <= tolerance * largest) break;
+  };
+  /** g(Λ) now, and the scale of the terms it is made of (for a tolerance). */
+  const gNow = (): [number, number] => {
+    let g = 0, scale = 0, b = 0;
+    for (let i = 0; i < n; i++) {
+      const r = prep[i]!.r;
+      if (!r.acc) continue;
+      const w1 = relVel(J, prep[i]!), mean = (w0[i]! + w1) / 2;
+      g += r.acc * (mean - r.target) + 0.5 * (r.soft ?? 0) * r.acc * r.acc;
+      scale += Math.abs(r.acc) * (Math.abs(mean) + Math.abs(r.target));
+      b += r.acc * (w0[i]! - r.target);
     }
+    gRay = b;
+    return [g, scale];
+  };
+  let gRay = 0;
+  sweep();
+  let [g, scale] = gNow();
+  if (g > 1e-9 * scale) {
+    // not provably passive: again from nothing, which is (theorem A)
+    for (let i = 0; i < n; i++) { const p = prep[i]!; if (p.r.acc) { push(J, p, -p.r.acc); p.r.acc = 0; } }
+    warmKept = 0;
+    sweep();
+    [g, scale] = gNow();
+    if (g > 1e-9 * scale) {
+      // friction's moving bounds can still leave g above zero: along the ray s Λ, g(s) = a s² + b s with b = Λᵀ(w⁻ − t)
+      // and a = g(1) − b ≥ 0, least at s = −b / 2a (nothing, if b ≥ 0)
+      const b = gRay, a = g - b;
+      const sc = b < 0 && a > 0 ? Math.min(1, -b / (2 * a)) : 0;
+      for (let i = 0; i < n; i++) { const p = prep[i]!; if (p.r.acc) { push(J, p, (sc - 1) * p.r.acc); p.r.acc *= sc; } }
+      warmKept = -1;
+    }
+  }
+  // what each row did: its impulse times its mean relative velocity, exactly the kinetic energy it changed
+  let dK = 0, leak = 0;
+  for (let i = 0; i < n; i++) {
+    const r = prep[i]!.r, w1 = relVel(J, prep[i]!);
+    r.work = r.acc * (w0[i]! + w1) / 2;
+    dK += r.work;
+    if (r.target === 0 && !r.soft) leak += Math.max(0, r.acc * w1);
   }
   if (warm) {
     warm.clear();
     for (const r of rows) if (r.key && r.acc) warm.set(r.key, r.acc);
   }
-  return passes;
+  return { passes, dK, leak, warmKept };
 }
 
 /**
