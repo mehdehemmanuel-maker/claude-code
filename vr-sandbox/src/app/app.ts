@@ -209,6 +209,11 @@ export class App {
     this.notify();
   }
 
+  /** The level of the place's water, if it has any. */
+  waterLevel(): number | null {
+    return this.world === 'workshop' && this.ground ? this.ground.waterLevel : null;
+  }
+
   /** The ground's height under a point: the place's, or the workshop floor's (0). */
   groundAt(x: number, z: number): number {
     return this.world === 'workshop' && this.ground ? groundAt(this.ground, x, z) : 0;

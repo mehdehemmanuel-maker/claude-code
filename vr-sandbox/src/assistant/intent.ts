@@ -108,7 +108,8 @@ export function interpret(line: string): Intent | null {
   }
   // a want of any kind: a place to be, a life to fill it, a body to wear, a lesson
   if (/^(i (just )?(want|wanna|would like|d like)|take me|put me|spawn me|drop me|let me (be|live|chill|relax|explore|learn|practice)|turn me into|make me (tiny|small|smaller|giant|big|bigger|huge)|teach me|train me|show me how to (play|dance|fight|speak|cook|swim|survive)|populate|generate an?|give me an? (world|tutorial|lesson|course))\b/.test(t)
-    || /\b(spawner|tutorial|simulation as an?|sim-within-a-sim|ecosystem of)\b/.test(t) || /^(go|back) (to|back to) (the )?(beach|island|lake|desert|meadow|mountains?|workshop)\b|^back to (the )?workshop$/.test(t)) return { do: 'want', words: line.trim() };
+    || /\b(spawner|tutorial|simulation as an?|sim-within-a-sim|ecosystem of)\b/.test(t)
+    || /^(put|add|release|spawn|drop|make) (an?|some|\w+) (.+ )?(fish|fishes|whales?|eels?|dolphins?|sharks?|swimmers?)\b/.test(t) || /^(go|back) (to|back to) (the )?(beach|island|lake|desert|meadow|mountains?|workshop)\b|^back to (the )?workshop$/.test(t)) return { do: 'want', words: line.trim() };
   // something's wrong: she looks, fixes what she can, and writes it up for Claude
   if (isComplaint(t)) return { do: 'complain', words: line.trim() };
   if (new RegExp(`^save ${it} as (a )?template|^(make|save) (a )?template|^template ${it}`).test(t)) return { do: 'template' };

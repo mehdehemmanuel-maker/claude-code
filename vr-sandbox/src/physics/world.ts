@@ -3647,6 +3647,7 @@ export class PhysicsWorld {
         const bodyDensity = r.mass / r.volume;
         const wetNow = this.bi.ApplyBuoyancyImpulse(r.body.GetID(), this.r1, this.v1, f.density / bodyDensity, 0.5, 0.05, this.v2, g, dt);
         if (wetNow) {
+          this.waterDrag(r, f.density, Math.min(1, Math.max(0, (f.max[1] - mn.GetY()) / Math.max(1e-6, mx.GetY() - mn.GetY()))), dt);
           wet = true;
           if (!r.inFluid) {
             const vy = this.bi.GetLinearVelocity(r.body.GetID()).GetY();
@@ -3656,6 +3657,33 @@ export class PhysicsWorld {
       }
       r.inFluid = wet;
     }
+  }
+
+  /**
+   * Water presses on each face as the part moves through it, across that face: along each of the part's own axes,
+   * −½ ρ C_d A |v| v with A the face square to that axis and v the velocity along it, for the share of it under
+   * water. So a plate moving obliquely is pushed mostly square to its face, not straight back: that is what lets an
+   * undulating body swim (resistive force theory), each segment pushing the water back and the body forward as a wave
+   * runs down it. The force can at most stop the part in a step, never reverse it.
+   */
+  private waterDrag(r: BodyRec, rho: number, wetShare: number, dt: number) {
+    if (wetShare <= 0) return;
+    const lv = r.body.GetLinearVelocity();
+    const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
+    const speed = length(v);
+    if (speed < 1e-4) return;
+    const q = r.body.GetRotation();
+    const qq: Quat = [q.GetX(), q.GetY(), q.GetZ(), q.GetW()];
+    const vl = rotate(quatConj(qq), v);
+    const k = 0.5 * rho * r.kind.dragCd * wetShare;
+    const Fl: Vec3 = [0, 1, 2].map((i) => -k * r.faceAreas[i]! * Math.abs(vl[i]!) * vl[i]!) as Vec3;
+    let F = rotate(qq, Fl);
+    const cap = (0.9 * r.mass * speed) / dt, mag = length(F);
+    if (mag > cap) F = scale(F, cap / mag);
+    // its work is heat in the water (booked with the air's: the fluids' drag)
+    this.book.heat.air -= dot(F, v) * dt;
+    this.v1.Set(...F);
+    this.bi.AddForce(r.body.GetID(), this.v1, this.J.EActivation_Activate);
   }
 
   private applyAirDrag() {
@@ -3762,9 +3790,10 @@ export class PhysicsWorld {
           ss.mStiffness = I * w * w;
           ss.mDamping = 2 * I * w;
         }
-        const u = Math.max(-1, Math.min(1, this.channels[rv.servo.channel] ?? 0));
+        // its own rhythm, or its control channel
+        const u = rv.servo.rhythm > 0 ? Math.sin(2 * Math.PI * rv.servo.rhythm * this.time + rv.servo.phase) : Math.max(-1, Math.min(1, this.channels[rv.servo.channel] ?? 0));
         h.SetTargetAngle(u * rv.servo.range);
-        if (Math.abs(u) > 0.01) this.bi.ActivateBody(c.a.body.GetID());
+        if (Math.abs(u) > 0.01 || rv.servo.rhythm > 0) { this.bi.ActivateBody(c.a.body.GetID()); if (c.b) this.bi.ActivateBody(c.b.body.GetID()); }
       } else if (rv.eddy) {
         // Viscous brake realised implicitly: a velocity motor to zero whose torque budget removes exactly the
         // momentum an exponential decay w(t) = w0 exp(-c t / I) would over this tick (stable for any c / I).
