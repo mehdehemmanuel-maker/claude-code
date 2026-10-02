@@ -15,6 +15,12 @@ export type Intent =
   | { do: 'complain'; words: string }
   | { do: 'design'; spec: DesignSpec; material?: string }
   | { do: 'show' }
+  /** What she knows about something: a law, a process, a part, a way of working it out. */
+  | { do: 'recall'; about: string }
+  /** How much she knows. */
+  | { do: 'ganglia' }
+  /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
+  | { do: 'engineer'; workflow: string; spec: Record<string, number> }
   | { do: 'level' }
   | { do: 'command'; command: 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'pause' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero' };
 
@@ -57,6 +63,10 @@ export function interpret(line: string): Intent | null {
   for (const [re, command] of commands) if (re.test(t)) return { do: 'command', command };
   // "look at this", "see this?", "watch this", "look here": she looks where you point
   if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
+  if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
+  const e = engineerOf(t);
+  if (e) return e;
+  if ((m = /^(?:what do you know about|tell me about|explain|what is|whats|what are|how (?:is|are|do (?:i|you)) (?:make|made|cut|drill|tap|bend|weld|fit|size|choose|pick)?)\s*(?:an? |the )?(.+)$/.exec(t))) return { do: 'recall', about: m[1]!.trim() };
   const d = designOf(t);
   if (d) return d;
   if ((m = /^(?:place|add|spawn|give me|put|make|build|drop)(?: me)? (?:(\w+) )?(.+?)(?: here| in front( of me)?)?$/.exec(t))) {
@@ -107,10 +117,81 @@ function designOf(t: string): Extract<Intent, { do: 'design' }> | null {
   return { do: 'design', spec, material };
 }
 
+const num = (x: string | undefined) => (x === undefined ? undefined : Number(x));
+
+/**
+ * "pick a drive for a 120 kg kart at 3 m/s", "size a wire for 20 a over 2 m at 24 v", "which bearing for 500 n at 600
+ * rpm for 5000 hours on a 25 mm shaft", "size a shaft for 20 nm", "battery for 10 a for 2 hours at 24 v": a question
+ * one of her workflows answers, with the numbers that were said (what wasn't said takes the workflow's default).
+ */
+function engineerOf(t: string): Extract<Intent, { do: 'engineer' }> | null {
+  let m: RegExpExecArray | null;
+  const spec: Record<string, number> = {};
+  const put = (k: string, v: number | undefined) => { if (v !== undefined && Number.isFinite(v)) spec[k] = v; };
+  const N = '(\\d+(?:\\.\\d+)?)';
+  const len = (v: string, u: string) => Number(v) * (LENGTH[u] ?? 1);
+  if (/\b(drive|motors?|powertrain|drivetrain)\b/.test(t) && /\b\d+(?:\.\d+)? ?(kg|kilos?)\b/.test(t) && /\b(for|pick|choose|size|design|what|which)\b/.test(t)) {
+    if ((m = new RegExp(`${N} ?(?:kg|kilos?)`).exec(t))) put('mass', num(m[1]));
+    if ((m = new RegExp(`${N} ?(?:m s|mps|metres per second|meters per second)(?! ?2)`).exec(t))) put('speed', num(m[1]));
+    if ((m = new RegExp(`${N} ?(?:km h|kmh|kph)`).exec(t))) put('speed', Number(m[1]) / 3.6);
+    if ((m = new RegExp(`${N} ?(?:mph)`).exec(t))) put('speed', Number(m[1]) * 0.44704);
+    if ((m = new RegExp(`${N} ?m s ?2|accelerat\\w* (?:of |at )?${N}`).exec(t))) put('accel', num(m[1] ?? m[2]));
+    if ((m = new RegExp(`${N} ?% ?(?:grade|hill|slope|incline)?`).exec(t))) put('grade', num(m[1]));
+    if ((m = new RegExp(`${N} ?(mm|cm|m|in|inch|inches) (?:diameter )?wheels?`).exec(t))) put('wheelRadius', len(m[1]!, m[2]!) / 2);
+    if ((m = /(\d+|two|three|four|one) (?:motors|driven wheels)/.exec(t))) put('motors', count(m[1]) ?? undefined);
+    return { do: 'engineer', workflow: /powertrain|drivetrain|whole|everything|all the parts/.test(t) ? 'powertrain.design' : 'drive.select', spec };
+  }
+  if (/\b(wire|cable|gauge)\b/.test(t) && (m = new RegExp(`${N} ?(?:a|amps?)\\b`).exec(t))) {
+    put('current', num(m[1]));
+    if ((m = new RegExp(`(?:over|for|of|run of) ${N} ?(mm|cm|m|ft|feet|foot)`).exec(t))) put('length', len(m[1]!, m[2]!));
+    if ((m = new RegExp(`${N} ?(?:v|volts?)\\b`).exec(t))) put('voltage', num(m[1]));
+    if ((m = new RegExp(`${N} ?% ?drop`).exec(t))) put('drop', Number(m[1]) / 100);
+    return { do: 'engineer', workflow: 'wire.size', spec };
+  }
+  if (/\b(battery|batteries|pack)\b/.test(t) && (m = new RegExp(`${N} ?(?:a|amps?)\\b`).exec(t))) {
+    put('current', num(m[1]));
+    if ((m = new RegExp(`${N} ?(h|hours?|hrs?|min|minutes?)\\b`).exec(t))) put('hours', /^m/.test(m[2]!) ? Number(m[1]) / 60 : Number(m[1]));
+    if ((m = new RegExp(`${N} ?(?:v|volts?)\\b`).exec(t))) put('voltage', num(m[1]));
+    return { do: 'engineer', workflow: 'battery.size', spec };
+  }
+  if (/\bbearings?\b|\bpillow blocks?\b/.test(t) && (m = new RegExp(`${N} ?(?:n|newtons?)\\b`).exec(t))) {
+    put('load', num(m[1]));
+    if ((m = new RegExp(`${N} ?rpm`).exec(t))) put('rpm', num(m[1]));
+    if ((m = new RegExp(`${N} ?(?:h|hours?|hrs?)\\b`).exec(t))) put('hours', num(m[1]));
+    if ((m = new RegExp(`${N} ?(mm|cm|in) (?:shaft|axle|bore)`).exec(t))) put('bore', len(m[1]!, m[2]!));
+    if (/pillow block|housed|hanger/.test(t)) put('housed', 1);
+    return { do: 'engineer', workflow: 'bearing.select', spec };
+  }
+  if (/\b(shaft|axle)\b/.test(t) && /\b(size|for|how thick|diameter|what)\b/.test(t) && (m = new RegExp(`${N} ?(?:n ?m|nm|newton metres?|newton meters?)`).exec(t))) {
+    put('T', num(m[1]));
+    if ((m = new RegExp(`${N} ?(?:n ?m|nm) (?:of )?bending|bending (?:of )?${N}`).exec(t))) put('M', num(m[1] ?? m[2]));
+    if ((m = new RegExp(`(?:safety factor|factor of) ${N}`).exec(t))) put('n', num(m[1]));
+    return { do: 'engineer', workflow: 'shaft.size', spec };
+  }
+  if (/\bcoupling\b/.test(t) && (m = new RegExp(`${N} ?(?:n ?m|nm)`).exec(t))) {
+    put('torque', num(m[1]));
+    if ((m = new RegExp(`${N} ?(mm|in) (?:shaft|bore)`).exec(t))) put('bore', len(m[1]!, m[2]!));
+    return { do: 'engineer', workflow: 'coupling.select', spec };
+  }
+  if (/\b(controller|driver|esc)\b/.test(t) && (m = new RegExp(`${N} ?(?:a|amps?)\\b`).exec(t))) {
+    put('current', num(m[1]));
+    if ((m = new RegExp(`${N} ?(?:v|volts?)\\b`).exec(t))) put('voltage', num(m[1]));
+    if ((m = /(\d+|two|three|four|one) motors/.exec(t))) put('motors', count(m[1]) ?? undefined);
+    return { do: 'engineer', workflow: 'controller.select', spec };
+  }
+  if (/torque arm/.test(t) && (m = new RegExp(`${N} ?(?:n ?m|nm)`).exec(t))) {
+    put('torque', num(m[1]));
+    if ((m = new RegExp(`(?:at|radius|out) ${N} ?(mm|cm|m)`).exec(t))) put('radius', len(m[1]!, m[2]!));
+    if ((m = new RegExp(`${N} ?(mm|cm|m) long`).exec(t))) put('length', len(m[1]!, m[2]!));
+    return { do: 'engineer', workflow: 'torquearm.size', spec };
+  }
+  return null;
+}
+
 function count(w: string | undefined): number | null {
   if (!w) return null;
   if (/^\d+$/.test(w)) return Number(w);
   return NUMBERS[w] ?? null;
 }
 
-export const HELP = 'Try: "make it stronger", "weld these", "place 4 steel blocks", "build a table that holds 60 kg", "build a brick wall 2 m long", "save this as a template", "freeze it", "duplicate it 3 times", "why did it break?", "do skill 1", "what level are you?", "play". Or type Forge.';
+export const HELP = 'Try: "pick a drive for a 120 kg kart at 3 m/s", "size a wire for 20 A over 2 m", "which bearing for 500 N at 600 rpm on a 25 mm shaft", "tell me about rolling resistance", "make it stronger", "weld these", "place 4 steel blocks", "build a table that holds 60 kg", "build a brick wall 2 m long", "save this as a template", "freeze it", "duplicate it 3 times", "why did it break?", "do skill 1", "what level are you?", "play". Or type Forge.';

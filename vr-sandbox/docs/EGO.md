@@ -30,6 +30,14 @@ and what would work, is exact here. A camera would only show her less than she a
   habit graph counts what follows what, one and two steps back. It suggests your likely next tool on her page and
   gets better the more you build. It lives only on this headset.
 
+## Her ganglia: what she knows
+
+Laws, processes, parts and design workflows, each sourced and tested (`src/ganglia/`, [GANGLIA.md](GANGLIA.md)).
+Ask her to work something out ("design the whole drivetrain for a 120 kg kart at 3 m/s", "size a wire for 20 A over
+3 m", "which bearing for 500 N at 600 rpm on a 25 mm shaft") and she runs the workflow: real parts from the
+catalogue, each law she applied named in her answer, the defaults she took said. Ask what she knows about something
+("tell me about rolling resistance", "how do I tap a thread") and she says it with its source.
+
 ## Forge, the build language
 
 One line is one thing a builder does, in a builder's words and units:

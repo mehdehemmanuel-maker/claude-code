@@ -35,6 +35,8 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
+import { census, explain, lawById, nameOf, recall, workflowById } from '../ganglia';
+import type { WorkflowResult } from '../ganglia/types';
 
 export interface Advice {
   id: string;
@@ -96,6 +98,9 @@ export class Ego {
   }
 
   // ---- acting -----------------------------------------------------------------------------------
+
+  /** What she last worked out by a workflow, with its whole trace (for her page and a follow-up question). */
+  lastWorked: { workflow: string; result: WorkflowResult } | null = null;
 
   /** Ask her something in plain words ("make it stronger", "weld these"); anything else is run as Forge. */
   ask(text: string): string {
@@ -226,6 +231,24 @@ export class Ego {
       }
       case 'complain': return this.complain(i.words);
       case 'design': return this.designIt(i.spec, i.material);
+      case 'ganglia': {
+        const c = census();
+        return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock and ${c.workflows} ways of working a design out, each with where it comes from. Ask me about any of them, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
+      }
+      case 'recall': {
+        const hits = recall(i.about, 3);
+        if (!hits.length) return `I don't know anything about ${i.about} yet.`;
+        return `${explain(hits[0]!)}${hits.length > 1 ? ` I also know: ${hits.slice(1).map(nameOf).join('; ')}.` : ''}`;
+      }
+      case 'engineer': {
+        const w = workflowById(i.workflow);
+        if (!w) return `I don't know how to work out ${i.workflow} yet.`;
+        const r = w.run(i.spec);
+        this.lastWorked = { workflow: w.id, result: r };
+        const laws = [...new Set(r.trace.map((s) => lawById(s.law)?.name).filter(Boolean))];
+        const assumed = w.asks.filter((a) => !(a.sym in i.spec) && a.default !== undefined).map((a) => `${a.name} ${a.default} ${a.unit}`);
+        return `${r.summary}${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}${r.alternatives.length ? ` (${r.alternatives.length} other${r.alternatives.length > 1 ? 's' : ''} would do.)` : ''}${laws.length ? ` Worked out by ${laws.join(', ')}.` : ''}${assumed.length ? ` I took ${assumed.join(', ')}.` : ''}`;
+      }
       case 'show': {
         const at = this.app.pointing?.();
         if (!at) return 'Point at it with your right hand, then tell me to look.';

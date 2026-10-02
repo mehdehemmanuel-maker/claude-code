@@ -124,6 +124,20 @@ test('Ego designs: "build a table that holds 60 kg" is sized, built, joined, and
   expect(errors).toEqual([]);
 });
 
+test('her ganglia: asked to engineer, she answers from real parts and names the laws; asked what she knows, she says it with its source', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 400 });
+  const errors = await boot(page);
+  const drivetrain = await sb(page, (s) => s.ego.ask('design the whole drivetrain for a 120 kg kart at 3 m/s'));
+  expect(drivetrain).toMatch(/maxon RE 40, 24 V, 150 W \(148867\)/);
+  expect(drivetrain).toMatch(/UCP205/);
+  expect(drivetrain).toMatch(/Worked out by .*Rolling resistance/);
+  expect(await sb(page, (s) => s.ego.lastWorked.workflow)).toBe('powertrain.design');
+  expect(await sb(page, (s) => s.ego.ask('size a wire for 20 a over 3 m at 24 v'))).toMatch(/^12 AWG pair/);
+  expect(await sb(page, (s) => s.ego.ask('tell me about rolling resistance'))).toMatch(/Source: Gillespie/);
+  expect(await sb(page, (s) => s.ego.ask('what do you know'))).toMatch(/I know \d+ laws/);
+  expect(errors).toEqual([]);
+});
+
 test('the watchdog: a part that leaves the world is put back by Ego herself, and written up', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);

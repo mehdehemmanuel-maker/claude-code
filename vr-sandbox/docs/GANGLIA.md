@@ -1,0 +1,72 @@
+# Ego's ganglia
+
+What Ego knows, kept as data she can reason with (`src/ganglia/`). Nothing in it is a guess dressed as a fact:
+every entry says where it comes from, and every entry is tested against something outside itself.
+
+| Kind | What it is | Held to | Where |
+|---|---|---|---|
+| Law | An equation of the world that runs (SI in, SI out), with where it holds | reproduces a worked example computed independently | `laws.ts` |
+| Process | How a feature is made (sawn, drilled, tapped, bored, bent, welded…) and the limits of making it | its numbers are the trade's (tap drills, thread engagement, bend radii) | `processes.ts` |
+| Part | A thing you can buy, as its maker publishes it, with price and date where known | agrees with itself by the laws relating its figures (`lintCatalog`) | `parts.ts`, `data/motors.ts`, `data/batteries.ts` |
+| Workflow | An engineer's procedure: what to ask, which laws in what order, which catalogue to choose from | reaches the answer worked by hand | `workflows.ts` |
+| Material, joint, shape | The world's own materials, joint kinds and stock shapes, each already sourced | the world's own tests | `data/materials.ts`, `connectors/registry.ts`, `parts/registry.ts` |
+
+## What's in it
+
+- **Laws (55)**, grouped by area:
+  - Mechanics: Newton, weight, friction, rolling resistance, grade, drag, power, wheel torque, traction, energy, braking, cornering, pendulum.
+  - Structures and materials: axial and bending stress, Hooke, beam sag, cantilever, Euler buckling, torsion, twist, von Mises, static shaft diameter, expansion, the endurance limit of steel.
+  - Machine elements: ISO 281 bearing life in revolutions and hours, spring rate, capstan, chain speed and pull, torque through a gear train.
+  - Electrical: Ohm, Joule, wire resistance, copper's temperature coefficient, voltage drop, motor torque, back-EMF, current, mechanical time constant, lead-acid open-circuit voltage, electrical energy.
+  - Thermal: convection, conduction, radiation, heat capacity, lumped time constant, thermal resistance networks.
+  - Fluids: buoyancy, hydrostatic pressure.
+- **Processes (14)**: sawing, drilling, tapping, boring, split clamps, turning, milling, bending sheet, MIG welding, soldering, gluing, wood screws, crimping terminals, fitting bearings.
+- **Parts (bought)**:
+  - SKF deep groove ball bearings 608, 6004, 6005, 6202 to 6206.
+  - UCP205 pillow block.
+  - ANSI 35, 40 and 41 roller chain.
+  - Lovejoy L050 to L100 jaw couplings.
+  - SKF SI 8 E rod end.
+  - Cytron MD30C and RoboClaw 2x30A controllers.
+  - The world's motors (maxon RE 40 148867, Unite MY1016), gearhead (maxon GP 42 C 203115), battery (Yuasa NP7-12) and wire (10 to 18 AWG).
+- **Workflows (9)**:
+  - a whole drivetrain from one sentence;
+  - choosing a vehicle drive;
+  - sizing a wire, a battery pack, a shaft;
+  - choosing a bearing, a coupling, a controller;
+  - sizing a torque arm.
+
+## How Ego uses it
+
+Ask in plain words, in the headset or on her page:
+
+- *"Design the whole drivetrain for a 120 kg kart at 3 m/s"* gives the motors, gearheads, pack, controller and its current limit, wire gauge, couplings, torque-arm rod ends, wheel bearings and the axle diameter. Each part is sized from the others' numbers, then counted and priced.
+- *"Size a wire for 20 A over 3 m at 24 V"*, *"which bearing for 500 N at 600 rpm on a 25 mm shaft"*, *"size a shaft for 20 Nm and 30 Nm bending"*: one workflow each.
+- *"Tell me about rolling resistance"*, *"how do I tap a thread"*, *"what is 6061"*: recall, with the source.
+- *"What do you know?"*: how much she knows, by kind.
+
+Every answer from a workflow ends with the laws it applied. What wasn't said takes the workflow's default, and she says which defaults she took. The whole trace (each law, its inputs, its output) stays on `ego.lastWorked`.
+
+This is the fast path: a workflow answers in microseconds with closed-form engineering, and the test stand only
+has to prove what it chose. It is also where alternatives come from: every workflow returns the other workable
+answers and what each trades.
+
+## Adding knowledge
+
+1. **A law** goes in `LAWS` with:
+   - its inputs and output, in SI;
+   - `valid`: where it holds and what it leaves out;
+   - a source;
+   - a worked example computed outside the code (by hand, or in a separate script).
+
+   If the world already runs it, call the world's function and name it in `implementedIn`. That keeps reasoning and physics one thing.
+2. **A part** goes in its family with the maker's figures in SI, its source (URL where there is one) and, if known, its price with where and when it was seen. If its family has relations between its figures, add them to `lintItem`. That is how the 12 V winding's order number on the 24 V winding's data was caught: the label's voltage against the data's.
+3. **A process** states what it makes, from what, with what tools, and its limits as rules a design must keep. Any number a design is checked against becomes a function next to it (`tapDrill`, `threadEngagement`, `minBendRatio`).
+4. **A workflow**:
+   - asks for what it needs, giving a default where a sensible one exists;
+   - applies laws through `step` so they are traced;
+   - chooses only from catalogued parts;
+   - returns its choice, its alternatives and its warnings;
+   - has a test that reaches the hand-worked answer.
+
+`tests/unit/ganglia.test.ts` holds all of this. A law that stops reproducing its example, a part that stops agreeing with itself, or a workflow that stops reaching the hand-worked answer fails the build.
