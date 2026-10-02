@@ -10,6 +10,8 @@ import {
 } from '../engineering/sections';
 import type { CollisionShape, ConvexShape, VisualShape } from './shapes';
 import { electromagnetBr } from '../engineering/magnets';
+import { GEARHEADS, MOTORS, getGearhead, getMotor } from '../data/motors';
+import { BATTERIES, getBattery } from '../data/batteries';
 
 export interface PartDims {
   /** Longest dimension, m. */
@@ -57,6 +59,13 @@ export interface PartKind {
   visual(p: Params): VisualShape;
   /** Exact volume of the solid, m^3. */
   volume(p: Params, m: Material): number;
+  /** A bought item's mass from its datasheet, kg (a motor, a battery: not one solid material), when it has one. */
+  mass?(p: Params): number;
+  /**
+   * A bought item is made by its maker, not here: it takes only the joints its maker allows (a drive at its shaft, wires
+   * at its terminals, a clamp round its body), never a hole drilled or a bead welded into it (rule R11).
+   */
+  bought?: { accepts: string[]; why: string };
   dims(p: Params): PartDims;
   section?(p: Params): Section;
   /** Breakable stock: which parameter is the length and which local axis it runs along. */
@@ -350,6 +359,50 @@ export const PART_KINDS: PartKind[] = [
     dims: (p) => sorted(n(p, 'length'), n(p, 'height'), n(p, 'width')),
   },
   {
+    // a DC motor you can buy, with its gearhead if it has one: its size, mass and every constant from its datasheet
+    // (data/motors.ts). Its output shaft comes out of the top (+Y) face; a Motor drive joint there turns what it drives.
+    id: 'motor.dc', label: 'DC motor', category: 'Power', defaultMaterial: 'steel.1018-cd', dragCd: 0.9, spawnRotation: IDENTITY,
+    bought: { accepts: ['motor', 'wire', 'clamp'], why: 'its maker charts no holes in it to drill, screw or weld into: hold it in a split clamp round its body, drive from its shaft, wire it at its terminals' },
+    materialFilter: (m) => m.category === 'steel',
+    params: [
+      choice('model', 'Motor', 'maxon.re40-148867', Object.values(MOTORS).map((m) => ({ value: m.id, label: m.label })), { group: 'Motor' }),
+      choice('gearhead', 'Gearhead', 'maxon.gp42c-203115', [{ value: 'none', label: 'None (the motor shaft)' }, ...Object.values(GEARHEADS).map((g) => ({ value: g.id, label: g.label }))], { group: 'Motor' }),
+    ],
+    collision: (p) => { const e = motorEnvelope(p); return { type: 'cylinder', radius: e.radius, halfHeight: e.length / 2 }; },
+    visual: (p) => {
+      const m = getMotor(stringOf(p, 'model', 'maxon.re40-148867')), g = fittedGearhead(p);
+      const e = motorEnvelope(p), base = -e.length / 2;
+      const children: { shape: VisualShape; p: Vec3; q: Quat; tint?: number }[] = [
+        { shape: { type: 'cylinder', radius: m.diameter / 2, halfHeight: m.length / 2, segments: 40 }, p: [0, base + m.length / 2, 0], q: IDENTITY, tint: 0x2a2d31 },
+      ];
+      if (g) children.push({ shape: { type: 'cylinder', radius: g.diameter / 2, halfHeight: g.length / 2, segments: 40 }, p: [0, base + m.length + g.length / 2, 0], q: IDENTITY, tint: 0xa9adb3 });
+      const shaft = g ? g.shaft : m.shaft;
+      children.push({ shape: { type: 'cylinder', radius: shaft / 2, halfHeight: 0.006, segments: 20 }, p: [0, e.length / 2 + 0.006, 0], q: IDENTITY, tint: 0xd8dade });
+      return { type: 'group', children };
+    },
+    volume: (p) => { const e = motorEnvelope(p); return Math.PI * e.radius * e.radius * e.length; },
+    mass: (p) => getMotor(stringOf(p, 'model', 'maxon.re40-148867')).mass + (fittedGearhead(p)?.mass ?? 0),
+    dims: (p) => { const e = motorEnvelope(p); return sorted(2 * e.radius, 2 * e.radius, e.length); },
+  },
+  {
+    // a battery pack of blocks you can buy (data/batteries.ts), strapped side by side: in series for voltage, in
+    // parallel strings for capacity. How charged it is is part of the build, and runs down as it is used.
+    id: 'battery', label: 'Battery', category: 'Power', defaultMaterial: 'polymer.abs', dragCd: 1.05, spawnRotation: IDENTITY,
+    bought: { accepts: ['wire'], why: 'a sealed lead-acid block can\'t be drilled, screwed, welded or glued (its case holds the acid): stand it in a tray or under a strap, and wire it at its terminals' },
+    materialFilter: (m) => m.category === 'polymer',
+    params: [
+      choice('model', 'Battery', 'yuasa.np7-12', Object.values(BATTERIES).map((b) => ({ value: b.id, label: b.label })), { group: 'Battery' }),
+      num('series', 'In series', 2, 1, 8, '', { group: 'Battery', integer: true }),
+      num('parallel', 'Strings in parallel', 1, 1, 4, '', { group: 'Battery', integer: true }),
+      num('charge', 'Charge', 1, 0, 1, '%', { group: 'Battery', step: 5, linear: true }),
+    ],
+    collision: (p) => { const [x, y, z] = packSize(p); return box(x / 2, y / 2, z / 2); },
+    visual: (p) => { const [x, y, z] = packSize(p); return { type: 'box', half: [x / 2, y / 2, z / 2], bevel: 0.004 }; },
+    volume: (p) => { const [x, y, z] = packSize(p); return x * y * z; },
+    mass: (p) => getBattery(stringOf(p, 'model', 'yuasa.np7-12')).mass * numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1),
+    dims: (p) => { const [x, y, z] = packSize(p); return sorted(x, y, z); },
+  },
+  {
     id: 'weight', label: 'Test weight', category: 'Test gear', defaultMaterial: 'cast-iron.gray-30', dragCd: 0.9, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [num('mass', 'Mass', 10, 0.01, 5000, 'kg', { group: 'Load', log: true })],
@@ -425,6 +478,36 @@ export const PART_KINDS: PartKind[] = [
     },
   },
 ];
+
+/** A motor's gearhead, if one is fitted and it is made for that motor. */
+export function fittedGearhead(p: Params) {
+  const g = getGearhead(stringOf(p, 'gearhead', 'none'));
+  return g && g.fits.includes(stringOf(p, 'model', 'maxon.re40-148867')) ? g : null;
+}
+
+/** The motor's outline: the larger of motor and gearhead across, their lengths end to end. */
+export function motorEnvelope(p: Params) {
+  const m = getMotor(stringOf(p, 'model', 'maxon.re40-148867')), g = fittedGearhead(p);
+  return { radius: Math.max(m.diameter, g?.diameter ?? 0) / 2, length: m.length + (g?.length ?? 0) };
+}
+
+/** A pack's outline: its blocks side by side along Z (series, then parallel strings), each standing as made. */
+export function packSize(p: Params): [number, number, number] {
+  const b = getBattery(stringOf(p, 'model', 'yuasa.np7-12'));
+  const k = numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1);
+  return [b.dims[0], b.dims[2], b.dims[1] * k];
+}
+
+/** Why a joint of `connector` can't be made on a part of `kind`, if it can't: a bought item takes only what its maker allows. */
+export function boughtRefusal(kind: PartKind, connector: string, connectorLabel: string): string | null {
+  if (!kind.bought || kind.bought.accepts.includes(connector)) return null;
+  return `A ${connectorLabel.toLowerCase()} joint can't be made on a ${kind.label.toLowerCase()}: ${kind.bought.why}.`;
+}
+
+/** A part's mass: its datasheet's for a bought item, else its volume of its material. */
+export function massOf(kind: PartKind, params: Params, m: Material): number {
+  return kind.mass ? kind.mass(params) : kind.volume(params, m) * m.density;
+}
 
 function n(p: Params, key: string) {
   return numberOf(p, key, 0.01);

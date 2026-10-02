@@ -12,7 +12,7 @@ import { REPORT_REPO } from '../app/app';
 import { drawGlyph, drawMaterial, drawPart, jointGlyph, type Item } from './icons';
 import { Hotbar, SLOTS } from './hotbar';
 import { catalogEntries, search, type Entry } from './search';
-import { PART_KINDS, effectiveParams, getPartKind } from '../parts/registry';
+import { PART_KINDS, effectiveParams, getPartKind, massOf } from '../parts/registry';
 import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
 import { getMaterial, MATERIALS, MATERIAL_GROUPS, STANDARD_GRAVITY } from '../data/materials';
@@ -323,7 +323,7 @@ export class Tablet {
     }
     const kind = getPartKind(part.kind);
     const m = app.materialOf(part);
-    const mass = kind.volume(effectiveParams(kind, part.params, m), m) * m.density;
+    const mass = massOf(kind, effectiveParams(kind, part.params, m), m);
     this.text(part.name, 24, y0 + 36, 34, '#e8ecf1', 'left', '700');
     this.text(`${m.name} · ${formatMass(mass)} · ${formatForce(mass * STANDARD_GRAVITY)}`, 24, y0 + 74, 22, '#9aa4af');
     const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
@@ -895,10 +895,10 @@ export class Tablet {
     const e = app.live.energy;
     if (e) {
       const J = (x: number) => (Math.abs(x) >= 1000 ? `${(x / 1000).toFixed(2)} kJ` : `${x.toFixed(Math.abs(x) < 10 ? 2 : 1)} J`);
-      const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping;
-      const work = e.work.hands + e.work.motors + e.work.magnets + e.work.fluids;
-      this.text(`⚡ motion ${J(e.kinetic)} · height ${J(e.potential)} · springs ${J(e.elastic)} · put in ${J(work)} (hands ${J(e.work.hands)}, motors ${J(e.work.motors)}, magnets ${J(e.work.magnets)})`, 24, CH - 100, 18, '#c9d2dc');
-      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}) · integrator ${J(e.numerical)}`, 24, CH - 76, 18, '#c9d2dc');
+      const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping + e.heat.electric;
+      const work = e.work.hands + e.work.batteries + e.work.magnets + e.work.fluids;
+      this.text(`⚡ motion ${J(e.kinetic)} · height ${J(e.potential)} · springs ${J(e.elastic)} · put in ${J(work)} (hands ${J(e.work.hands)}, batteries ${J(e.work.batteries)}, magnets ${J(e.work.magnets)})`, 24, CH - 100, 18, '#c9d2dc');
+      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}, electric ${J(e.heat.electric)}) · integrator ${J(e.numerical)}`, 24, CH - 76, 18, '#c9d2dc');
     }
     this.drawHealth(CH - 46);
     this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, CH - 14, 22, '#9aa4af');

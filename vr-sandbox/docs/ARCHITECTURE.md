@@ -47,8 +47,19 @@ its rule is added here and there, stated for every build, not just the one that 
 | R8 | A stop can't be run through: a servo has end stops at its travel; a joint closing fast on a stop is substepped so it can't pass by more than 0.01 rad or 2 mm. | a servo swinging to 0.76 rad on a 0.49 rad travel; Jolt's limits catching only once passed | servo `limits`, `substepsNeeded`; rules test |
 | R9 | A joint's load is what it really carries: Jolt's impulse in world directions plus the assembly pass's correction. | a 30 kg weight's hinge "failing" at 9.81 kN·m | `evaluateConnections`; rules test (no false failures) |
 
+| R10 | Energy comes from a source. A motor runs on the battery wired to it (a power wire, intact) and nothing else: its torque is what its current makes at its speed, on what the pack gives (open-circuit volts from the acid's strength, less its internal resistance under all it supplies), through its controller's current limit; a flat pack, a cut wire or a burnt winding gives nothing. Every joule the pack gives is motion or heat (winding, wire, cells, brushes, gear teeth), and the books close. | the old kart: two "24 V gearmotors" typed in as numbers, running for ever on nothing; the first real one billed its battery for its housing twisting inside a Jolt step (151 J of false friction in 3 s) | `physics/electric.ts`, `solveCircuits` and `settleDrives` in the world (books kept once per tick, on the motion as the assembly pass leaves it); `motor.dc`, `battery` and `wire` from their datasheets (`data/motors.ts`, `data/batteries.ts`); the watchdog's `power` check (no current past its limit, no charge gained); rules test, laws tests (spin-up at the current limit with the rotor's J N², no-load speed, coast-down, burnout time) and the kart's acceleration against Newton's law from the datasheets (within 3%) |
+| R11 | If you can't make it you can't place it. A bought item takes only the joints its maker allows: a motor its drive at its shaft, wires at its terminals and a clamp round its body; a sealed battery only its wires (it stands in a tray or under a strap). Nothing is drilled, screwed, nailed, riveted, welded, soldered, glued or generically "fixed" into one. | the first real kart: M6 bolts through the battery's case, and a lug bolted into the side of a gearhead with no holes there | `PartKind.bought`, `boughtRefusal` (the world refuses with the reason); the `clamp` joint (a split clamp's grip from its bolts' preload); rules test over every rigid joint kind on both |
+
 What isn't held yet, said plainly: flexing (joined parts are rigid clusters), creep, fatigue, moisture and
-workmanship; bolts into a hollow section's open end (needs an end cap) are not yet flagged.
+workmanship; bolts into a hollow section's open end (needs an end cap) are not yet flagged. A rigid part held by
+more than it needs (two moment-carrying supports on one shaft) shares its load between them as the solver happens
+to, not by their stiffness: a design is made statically determinate (the kart's gearmotors hang on their shafts and
+take only a torque arm) until loads are shared by stiffness. A very light part between two ball joints (a 22 g rod
+between a 0.9 kg housing and a 120 kg kart) is not yet held steady by the solver: a two-force link is a `link` (tie
+rod) joint instead. Servos and electromagnets do not yet draw from a battery. The numerical angular damping (A5)
+costs a running motor current (the bench flywheel's no-load draw is 0.27 A, not the datasheet's 0.14 A), until F4.
+A wire's own heating against its rating, a battery's capacity at other temperatures than its maker's 20 °C, and
+PWM current ripple are not modelled; a battery's charge is not yet saved with the build.
 
 ## Dependency map
 

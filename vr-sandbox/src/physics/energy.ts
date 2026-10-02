@@ -1,5 +1,5 @@
 // The energy ledger: every joule in the world, where it is and where it went. Motion (kinetic), height (potential),
-// wound springs and stretched bands (elastic) hold it; hands, motors, magnets and water put it in or take it out;
+// wound springs and stretched bands (elastic) hold it; hands, batteries, magnets and water put it in or take it out;
 // friction, impacts, bending past yield, air, induced currents and material damping turn it to heat. What nothing
 // accounts for is the integrator's own, shown as such rather than hidden: in a passive scene it should stay near zero.
 
@@ -18,11 +18,14 @@ export interface HeatBook {
   eddy: number;
   /** Springs' and rubber's internal damping. */
   damping: number;
+  /** Current through resistance: a battery's cells, the wires, a motor's winding (Joule heating, I^2 R). */
+  electric: number;
 }
 
 export interface WorkBook {
   hands: number;
-  motors: number;
+  /** Chemical energy batteries gave up (to the motors wired to them, less nothing: their own losses are heat). */
+  batteries: number;
   magnets: number;
   /** Buoyancy and the water's drag, net. */
   fluids: number;
@@ -40,8 +43,8 @@ export interface Energies {
   numerical: number;
 }
 
-export const emptyHeat = (): HeatBook => ({ friction: 0, impact: 0, plastic: 0, air: 0, eddy: 0, damping: 0 });
-export const emptyWork = (): WorkBook => ({ hands: 0, motors: 0, magnets: 0, fluids: 0 });
+export const emptyHeat = (): HeatBook => ({ friction: 0, impact: 0, plastic: 0, air: 0, eddy: 0, damping: 0, electric: 0 });
+export const emptyWork = (): WorkBook => ({ hands: 0, batteries: 0, magnets: 0, fluids: 0 });
 export const emptyEnergies = (): Energies => ({ kinetic: 0, potential: 0, elastic: 0, heat: emptyHeat(), work: emptyWork(), numerical: 0 });
 
 /** Kinetic energy of a rigid body: translation of its centre plus rotation about it (world inertia, row-major). */

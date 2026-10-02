@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { getMaterial, MATERIALS, type Material } from '../data/materials';
 import { getConnectorKind, hasConnectorKind } from '../connectors/registry';
-import { effectiveParams, getPartKind, hasPartKind, type PartDims } from '../parts/registry';
+import { effectiveParams, fittedGearhead, getPartKind, hasPartKind, type PartDims, massOf } from '../parts/registry';
 import { shapeBounds } from '../parts/shapes';
 import { commitPoses, connectedComponent, deleteParts, duplicateParts, fragmentOf, insertFragment, newDoc, recordFracture, setConnectionState, setFrozen, type Fragment } from '../doc/commands';
 import { endpointWorld, isBent, partLayout, segmentPose } from './segments';
@@ -625,7 +625,7 @@ export class App {
       if (!p) { live.temps.delete(id); continue; }
       const k = getPartKind(p.kind), m = this.materialOf(p), th = thermalOf(m);
       const eff = effectiveParams(k, p.params, m);
-      const mass = k.volume(eff, m) * m.density;
+      const mass = massOf(k, eff, m);
       const d = k.dims(eff);
       const area = 2 * (d.length * d.a + d.a * d.b + d.b * d.length);
       const T = warm(live.temps.get(id) ?? AMBIENT, live.heatIn[id] ?? 0, mass, th.c, area, d.length, th.emissivity, dt);
@@ -879,7 +879,10 @@ export class App {
         const a = doc.parts[c.b?.part ?? c.a.part];
         const w = a ? this.live.velocity(a.id)?.angular : null;
         const speed = w ? length(w) : 0;
-        const f = (speed * Number(c.params['ratio'] ?? 1) / (2 * Math.PI)) * 4;
+        // the motor turns its gearhead's ratio times as fast as what it drives
+        const motorPart = doc.parts[c.a.part];
+        const ratio = motorPart?.kind === 'motor.dc' ? fittedGearhead(motorPart.params)?.ratio ?? 1 : 1;
+        const f = ((speed * ratio) / (2 * Math.PI)) * 4;
         if (f > motorFreq) { motorFreq = f; motorLevel = Math.abs(this.channels[String(c.params['channel'])] ?? 0) * 0.05 + (speed > 1 ? 0.02 : 0); motorPos = p; }
       }
     }
