@@ -12,7 +12,9 @@ import { fastenerFit } from '../engineering/spacing';
 import { fastenerName } from '../engineering/fasteners';
 import { METRIC_COARSE } from '../engineering/threads';
 import type { BuildDoc, Connection, Part } from '../doc/types';
-import { effectiveParams, getPartKind, LUMBER } from '../parts/registry';
+import { effectiveParams, fittedGearhead, getPartKind, LUMBER, massOf } from '../parts/registry';
+import { getMotor, type Price } from '../data/motors';
+import { getBattery, WIRE_GAUGES } from '../data/batteries';
 import { numberOf, stringOf } from '../schema/params';
 
 const mm = (x: number) => `${Math.round(x * 1000)} mm`;
@@ -120,6 +122,12 @@ export function packSheets(pieces: { label: string; w: number; h: number }[], sh
 }
 
 interface Linear { kind: 'lumber' | 'bar'; stock: string; length: number; label: string }
+
+const SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
+/** ", about €502 (maxon online shop, seen 2026-10)": what it sold for, where and when; nothing when no price is charted. */
+function priceOf(p: Price | undefined): string {
+  return p ? `, about ${SYMBOL[p.currency] ?? ''}${p.amount.toFixed(2)} each (${p.note}, seen ${p.seen})` : '';
+}
 interface Sheet { thickness: number; material: Material; w: number; h: number; label: string }
 
 /** What a part is cut from or bought as, and any reason it can't be. */
@@ -180,6 +188,17 @@ function stockOf(p: Part, m: Material, linear: Linear[], sheets: Sheet[]): { fro
       return { from: `${m.name}, cut or cast to ${size}`, sub: [], problems, size };
     }
     case 'wheel': return { from: `a wheel Ø${mm(n('diameter'))} × ${mm(n('width'))} (bought: ${m.name} tyre)`, sub: [], problems, size: `Ø${mm(n('diameter'))}` };
+    case 'motor.dc': {
+      const mo = getMotor(stringOf(e, 'model', '')), g = fittedGearhead(e);
+      return {
+        from: `a ${mo.label}${priceOf(mo.price)} (bought)`,
+        sub: g ? [`fitted with a ${g.label}${priceOf(g.price)}`] : [], problems, size: k.label,
+      };
+    }
+    case 'battery': {
+      const b = getBattery(stringOf(e, 'model', '')), count = n('series') * n('parallel');
+      return { from: `${count} × ${b.label}${priceOf(b.price)} (bought)`, sub: [`${n('series')} in series${n('parallel') > 1 ? `, ${n('parallel')} strings in parallel` : ''}`], problems, size: k.label };
+    }
     case 'magnet.disc': case 'magnet.block': case 'magnet.electro':
       return { from: p.kind === 'magnet.electro' ? `an electromagnet, ${numberOf(e, 'rating', 0).toFixed(0)} N rated (bought), with its power supply and switch` : `a ${m.name} magnet (bought)`, sub: [], problems, size: k.label };
     case 'sphere': return { from: `a ${m.name} ball Ø${mm(n('diameter'))} (bought)`, sub: [], problems, size: `Ø${mm(n('diameter'))}` };
@@ -261,6 +280,18 @@ function jointOf(doc: BuildDoc, c: Connection, materialOf: (p: Part) => Material
       if (torque) notes.push(`tighten to ${torque.value}`);
       break;
     }
+    case 'clamp': {
+      const size = stringOf(p, 'size', 'M5'), cls = stringOf(p, 'class', '8.8');
+      // the block is bored to the body, sawn through across the bore, and drawn together by bolts across the cut
+      const L = BOLT_LENGTHS.find((l) => l / 1000 >= 0.6 * g.thicknessA + 0.5 * (METRIC_COARSE[size]?.d ?? 0.005)) ?? null;
+      notes.push(`bore ${A.name} to Ø${mm(numberOf(p, 'bore', 0.042))}, saw it through across the bore, drill and tap for the clamp bolts`);
+      sub.push(`${count} × ${size} × ${L ?? 'cut-to-length'} mm socket cap screw, class ${cls}`, `${count} × ${size} washer`);
+      const derived = k.derive({ params: p, matA: mA, matB: mB, thicknessA: g.thicknessA, thicknessB: g.thicknessB, through: g.through, distance: 0, cure: 1e12 });
+      const holds = derived.readouts.find((r) => r.label === 'Holds against turning'), wrench = derived.readouts.find((r) => r.label === 'Wrench torque');
+      if (wrench) notes.push(`tighten to ${wrench.value}`);
+      if (holds) notes.push(`it then holds ${holds.value} against turning`);
+      break;
+    }
     case 'weld': {
       const leg = numberOf(p, 'leg', 0.005), L = numberOf(p, 'length', 0) || 2 * (numberOf(p, 'bondW', 0) + numberOf(p, 'bondL', 0));
       const filler = FILLERS[stringOf(p, 'filler', 'E70')];
@@ -331,7 +362,7 @@ export function buildSheet(doc: BuildDoc, materialOf: (p: Part) => Material, ids
     let mass = 0;
     for (const id of group) {
       const p = doc.parts[id]!, m = materialOf(p), k = getPartKind(p.kind);
-      const mp = k.volume(effectiveParams(k, p.params, m), m) * m.density;
+      const mp = massOf(k, effectiveParams(k, p.params, m), m);
       mass += mp;
       const s = stockOf(p, m, linear, sheets);
       for (const x of s.problems) problems.push(`${p.name}: ${x}`);
@@ -370,7 +401,18 @@ export function buildSheet(doc: BuildDoc, materialOf: (p: Part) => Material, ids
     packed.forEach((sh, i) => cuts.push(`${key} sheet #${i + 1}: ${sh.map((c) => `${c.label} ${mm(c.w)} × ${mm(c.h)}`).join(', ')}`));
   }
   const bought = new Map<string, number>();
-  for (const a of assemblies) for (const p of a.parts) if (/\(bought|^a standard brick/.test(p.from)) bought.set(p.from, (bought.get(p.from) ?? 0) + 1);
+  for (const a of assemblies) for (const p of a.parts) {
+    const P = doc.parts[p.id]!;
+    if (P.kind === 'battery') {
+      const b = getBattery(stringOf(P.params, 'model', ''));
+      const what = `${b.label}${priceOf(b.price)} (bought)`;
+      bought.set(what, (bought.get(what) ?? 0) + numberOf(P.params, 'series', 1) * numberOf(P.params, 'parallel', 1));
+      continue;
+    }
+    if (/\(bought|^a standard brick/.test(p.from)) bought.set(p.from, (bought.get(p.from) ?? 0) + 1);
+    const g = P.kind === 'motor.dc' ? fittedGearhead(P.params) : null;
+    if (g) { const what = `${g.label}${priceOf(g.price)} (bought)`; bought.set(what, (bought.get(what) ?? 0) + 1); }
+  }
   for (const [what, n] of bought) buy.push(`${n} × ${what.replace(/^an? /, '')}${what.includes('brick') ? ` (plus 5% for breakage: ${Math.ceil(n * 1.05)})` : ''}`);
   const hardware = new Map<string, number>();
   for (const a of assemblies) for (const j of a.joints) for (const s of j.sub) {
@@ -378,6 +420,32 @@ export function buildSheet(doc: BuildDoc, materialOf: (p: Part) => Material, ids
     if (m) hardware.set(m[2]!, (hardware.get(m[2]!) ?? 0) + Number(m[1]));
   }
   for (const [what, n] of hardware) buy.push(`${n} × ${what}`);
+  // what isn't a rigid joint but is still bought: each motor drive's coupling and controller, the wire, the tie rods
+  const inSheet = new Set(ids), extra = new Map<string, number>();
+  const add = (what: string, n = 1) => extra.set(what, (extra.get(what) ?? 0) + n);
+  for (const c of Object.values(doc.connections)) {
+    if (c.state.status === 'broken' || !inSheet.has(c.a.part)) continue;
+    if (c.kind === 'motor') {
+      const A = doc.parts[c.a.part]!, mo = getMotor(stringOf(A.params, 'model', '')), g = fittedGearhead(A.params);
+      add(`rigid shaft coupling, ${mm(g?.shaft ?? mo.shaft)} motor bore to the driven shaft's`);
+      add(`brushed DC motor controller for ${mo.V} V, current limit set to ${numberOf(c.params, 'currentLimit', 20)} A`);
+    } else if (c.kind === 'wire') {
+      const w = WIRE_GAUGES[stringOf(c.params, 'gauge', '14')];
+      const L = numberOf(c.params, 'length', 0) || 1;
+      add(`${stringOf(c.params, 'gauge', '14')} AWG two-core copper cable${w ? ` (${w.ampacity} A chassis rating)` : ''}, metres`, L);
+    } else if (c.kind === 'link') {
+      add(`Ø${mm(numberOf(c.params, 'diameter', 0.008))} steel tie rod with a Ø${mm(numberOf(c.params, 'stud', 0.008))} rod end at each end`);
+    }
+  }
+  for (const [what, n] of extra) buy.push(what.endsWith(', metres') ? `${n.toFixed(1)} m of ${what.slice(0, -', metres'.length)}` : `${n} × ${what}`);
+  const priced = new Map<string, number>();
+  for (const a of assemblies) for (const p of a.parts) {
+    const P = doc.parts[p.id]!;
+    const items: (Price | undefined)[] = P.kind === 'motor.dc' ? [getMotor(stringOf(P.params, 'model', '')).price, fittedGearhead(P.params)?.price]
+      : P.kind === 'battery' ? Array(numberOf(P.params, 'series', 1) * numberOf(P.params, 'parallel', 1)).fill(getBattery(stringOf(P.params, 'model', '')).price) : [];
+    for (const x of items) if (x) priced.set(x.currency, (priced.get(x.currency) ?? 0) + x.amount);
+  }
+  if (priced.size) buy.push(`Bought items charted with prices come to ${[...priced].map(([cur, v]) => `${SYMBOL[cur] ?? cur}${v.toFixed(2)}`).join(' + ')} (before tax and shipping; prices move)`);
   // the order: the biggest part first, then each part as it is joined to what's already there
   const steps: string[] = ['Cut everything to size from the cut list; mark each piece with its name.'];
   for (const a of assemblies) {

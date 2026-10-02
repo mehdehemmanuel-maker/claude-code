@@ -7,7 +7,9 @@ import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
 import { blockCharges, blockFaces, cylinderCharges, cylinderFaces, dipoleMoment, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
 import { tubeDipoleDrag } from '../../src/engineering/eddy';
-import { dcMotorSpecs } from '../../src/engineering/mechanics';
+import { heatStep, motorModel, windingR } from '../../src/engineering/dcmotor';
+import { getGearhead, getMotor } from '../../src/data/motors';
+import { AMBIENT } from '../../src/engineering/thermal';
 import { FLUIDS, getMaterial, STANDARD_GRAVITY as g } from '../../src/data/materials';
 
 const up: [number, number, number, number] = [0, 0, 0, 1];
@@ -602,16 +604,89 @@ describe('magnets', () => {
 });
 
 describe('powered and damped joints', () => {
-  it('a free DC motor spins up to its no-load speed', async () => {
+  // A gearmotor on a bench: a maxon RE 40 (148867) with its 12:1 GP 42 C, frozen in place, turning a 200 mm steel
+  // flywheel on its shaft, on two 12 V lead-acid blocks in series through 0.5 m of 14 AWG pair.
+  const bench = async (opts: { wired: boolean; held?: boolean; charge?: number; limit?: number }) => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    const disc = r.part('disc', at(0, 1, 0), { material: 'aluminum.6061-t6', params: { diameter: 0.1, thickness: 0.01 } });
-    const params = { V: 12, Kv: 800, R: 0.4, ratio: 20, efficiency: 0.8, channel: 'always' };
-    r.connect('motor', { part: disc, frame: at(0, 0, 0) }, null, params);
-    r.run(3);
-    const w = r.world.angularVelocity(disc.id)![1];
-    const w0 = dcMotorSpecs({ V: 12, Kv: 800, R: 0.4, ratio: 20, efficiency: 0.8 }).noLoadSpeed;
-    within(Math.abs(w), w0, 0.03);
-    r.done();
+    const motor = r.part('motor.dc', at(0, 1, 0), { frozen: true, params: { model: 'maxon.re40-148867', gearhead: 'maxon.gp42c-203115' } });
+    const face = 1 + (0.071 + 0.0555) / 2;
+    const fly = r.part('disc', at(0, face + 0.01, 0), { material: 'steel.a36', params: { diameter: 0.2, thickness: 0.02 } });
+    const drive = r.connect('motor', { part: motor, frame: at(0, face - 1, 0) }, { part: fly, frame: at(0, -0.01, 0) }, { channel: 'always', currentLimit: opts.limit ?? 5 });
+    if (opts.held) {
+      const anchor = r.part('block', at(0, face + 0.03, 0), { frozen: true, material: 'steel.a36', params: { x: 0.1, y: 0.02, z: 0.1 } });
+      r.connect('fixed', { part: fly, frame: at(0, 0.01, 0) }, { part: anchor, frame: at(0, -0.01, 0) }, {});
+    }
+    const battery = r.part('battery', at(0.3, 1, 0), { params: { model: 'yuasa.np7-12', series: 2, parallel: 1, charge: opts.charge ?? 1 } });
+    const wire = () => r.connect('wire', { part: battery, frame: at(-0.0755, 0, 0) }, { part: motor, frame: at(0, -(0.071 + 0.0555) / 2, 0) }, { gauge: '14', length: 0.5 });
+    const w = opts.wired ? wire() : null;
+    const spin = () => r.world.angularVelocity(fly.id)![1];
+    const step = () => r.world.step();
+    return { r, motor, fly, drive, battery, wire, w, spin, step };
+  };
+  const m = motorModel(getMotor('maxon.re40-148867')), g = getGearhead('maxon.gp42c-203115')!;
+
+  it('a gearmotor turns only on a battery wired to it: unwired, flat or cut off, it gives nothing (R10)', async () => {
+    const b = await bench({ wired: false });
+    b.r.run(1);
+    expect(Math.abs(b.spin())).toBeLessThan(1e-3);
+    b.r.done();
+    const f = await bench({ wired: true, charge: 0 });
+    const events: string[] = [];
+    for (let i = 0; i < 90; i++) for (const e of f.step().events) events.push(e.type);
+    expect(Math.abs(f.spin())).toBeLessThan(1e-3);
+    f.r.done();
+  });
+
+  it('wired, it spins its flywheel up at its current limit, carrying its rotor through the gearhead, to its no-load speed', async () => {
+    const b = await bench({ wired: true, limit: 5 });
+    // current-limited: K_t I less friction, times N at the gearhead's efficiency, turns the flywheel and the rotor
+    // (J N^2, 142 g cm^2 x 144: as much again as a 50 mm disc)
+    const I = 0.5 * b.r.world.bodyMass(b.fly.id)! * 0.1 ** 2 + m.rotorInertia * g.ratio ** 2;
+    const alpha = ((m.Kt * 5 - m.Tf) * g.ratio * g.efficiency) / I;
+    b.r.run(0.5);
+    within(Math.abs(b.spin()), alpha * 0.5, 0.03);
+    // then it runs up to where its back-EMF meets what the battery gives, less what its winding and wire drop at its
+    // no-load current
+    let last = b.step();
+    for (let i = 0; i < 6 * 90; i++) last = b.step();
+    const p = last.power!;
+    const bat = p.batteries[b.battery.id]!, mot = p.motors[b.drive.id]!;
+    const R = windingR(m, mot.winding) + 2 * 0.5 * 0.008286;
+    const w0 = (bat.V - m.I0 * R) / m.Kt / g.ratio;
+    within(Math.abs(b.spin()), w0, 0.01);
+    // and the battery gives what the motor's no-load current takes, plus what holds the flywheel against the world's
+    // numerical angular damping, 0.02/s of its spin (audit A5, fix F4: stated, not hidden; a real one loses only its
+    // bearings' and the air's share)
+    const damping = (0.02 * I * w0) / (m.Kt * g.ratio * g.efficiency);
+    within(bat.I, m.I0 + damping, 0.1);
+    // cut the wire and it coasts down on its own friction, reflected through the gearhead
+    b.r.world.apply({ op: 'removeConnection', id: b.w!.id });
+    const before = Math.abs(b.spin());
+    b.r.run(1);
+    const drag = (m.Tf * g.ratio) / g.efficiency;
+    within(before - Math.abs(b.spin()), drag / I + 0.02 * before, 0.1);
+    b.r.done();
+  });
+
+  it('held stalled, its winding heats as the thermal model on its datasheet says, and past 155 °C it burns out for good', async () => {
+    const b = await bench({ wired: true, held: true, limit: 20 });
+    // the same two-node model, integrated here on its own: 20 A through copper that grows more resistive as it heats
+    let s = { winding: AMBIENT, housing: AMBIENT }, expected = 0;
+    while (s.winding <= m.thermal.maxWinding) { s = heatStep(m.thermal, s, 400 * windingR(m, s.winding), 0, TICK, AMBIENT); expected += TICK; }
+    expect(expected).toBeGreaterThan(10);
+    expect(expected).toBeLessThan(60);
+    let t = 0, burnt = -1;
+    while (t < expected + 2 && burnt < 0) {
+      for (const e of b.step().events) if (e.type === 'burnout') burnt = t;
+      t += TICK;
+    }
+    within(burnt, expected, 0.02);
+    // and it never drives again
+    let last = b.step();
+    for (let i = 0; i < 30; i++) last = b.step();
+    expect(last.power!.motors[b.drive.id]!.I).toBe(0);
+    expect(last.power!.motors[b.drive.id]!.burnt).toBe(true);
+    b.r.done();
   });
 
   it('an eddy-current brake decays spin exponentially with tau = I / c', async () => {

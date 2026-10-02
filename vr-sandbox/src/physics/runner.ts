@@ -80,6 +80,7 @@ export class Runner {
     // held parts move with a hand, not on their own
     this.watchdog.opts.held = new Set(this.world.heldBodies());
     this.watchdog.observe(bodies, r.stats.stepMs, r.stats.sections, r.stats.substeps, r.stats.magnetPairs);
+    this.watchdog.observePower(r.power);
   }
 
   /** Advance simulated time by dt seconds (already scaled by the time-scale). At most maxTicks ticks run. */

@@ -3,7 +3,7 @@
 
 import type { Material } from '../data/materials';
 import { boltedJoint, BOLT_FRICTION, permissiblePreload, tighteningTorque } from '../engineering/bolts';
-import { CLEARANCE_HOLE_MEDIUM, HEX_BEARING_DIAMETER, METRIC_COARSE, PROPERTY_CLASSES, propertyClassFor, threadFor } from '../engineering/threads';
+import { CLEARANCE_HOLE_MEDIUM, HEX_BEARING_DIAMETER, METRIC_COARSE, PROPERTY_CLASSES, propertyClassFor, tensileStressArea, threadFor } from '../engineering/threads';
 import {
   ADHESIVES, blindRivet, bondCapacities, bondEdgeLength, cureFraction, FILLERS, filletWeldCapacity, fillersFor, rivetShear, SOLDERABLE, SOLDERS,
   substrateFactor, weldable,
@@ -12,9 +12,11 @@ import { lateralUltimate, withdrawalUltimate } from '../engineering/wood';
 import {
   SPRING_WIRES, springRate, shearStress, allowableShear, wireUltimate, surgeFrequency, solidLength, springMass, type CoilSpring,
 } from '../engineering/springs';
-import { ROPE_GRADES, ropeBreakingLoad, BEARING_FRICTION, dcMotorSpecs, eddyDamping } from '../engineering/mechanics';
+import { ROPE_GRADES, ropeBreakingLoad, BEARING_FRICTION, eddyDamping } from '../engineering/mechanics';
 import { roundSection } from '../engineering/sections';
 import { driven, type Through } from './through';
+import { WIRE_GAUGES } from '../data/batteries';
+import { getGearhead, getMotor } from '../data/motors';
 import { boolOf, choice, flag, num, numberOf, stringOf, formatForce, type ParamDef, type Params } from '../schema/params';
 
 export type JointModel = 'rigid' | 'revolute' | 'prismatic' | 'spherical' | 'spring' | 'rope' | 'band';
@@ -39,13 +41,15 @@ export interface Derived {
   slip?: { shear: number; torsion: number; clearance: number };
   /** Linear spring along the joint axis (spring, rope, band). */
   spring?: { k: number; c: number; rest: number; min: number; max: number; tensionOnly: boolean; breakStretch?: number; bandG?: number; bandArea?: number };
+  /** A power wire: its resistance (both conductors), what it carries, its length. */
+  wire?: { resistance: number; ampacity: number; length: number };
   /** Revolute details. */
   revolute?: {
     frictionTorque: number;
     bearingMu: number;
     boreDiameter: number;
     limits: [number, number] | null;
-    motor?: { V: number; Kv: number; R: number; ratio: number; efficiency: number; channel: string; reverse: boolean; stall: number; noLoad: number };
+    motor?: { channel: string; reverse: boolean; currentLimit: number };
     servo?: { maxTorque: number; range: number; channel: string };
     eddy?: { c: number };
     torsionSpring?: { k: number; rest: number };
@@ -72,6 +76,8 @@ export interface DeriveContext {
   distance: number;
   /** Seconds of cure accumulated (already clock-scaled). */
   cure: number;
+  /** The part at end A, where a joint's rating depends on what that part is (a motor drive on its motor). */
+  partA?: { kind: string; params: Params };
 }
 
 export interface ConnectorKind {
@@ -273,6 +279,52 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
           { label: 'Tensile capacity', value: formatForce(j.tension), formula: 'A_s R_m · n' },
         ],
         warnings,
+      };
+    },
+  },
+  {
+    id: 'clamp', label: 'Split clamp', category: 'Joining', model: 'rigid',
+    blurb: 'A block bored to fit a round body (a motor, a tube, a shaft) and split, its halves bolted together around it. It holds by the friction its bolts\' clamping makes, nothing drilled into what it holds, and slips past that.',
+    params: [
+      choice('size', 'Clamp bolts', 'M5', Object.keys(METRIC_COARSE).map((k) => ({ value: k, label: `${k} × ${METRIC_COARSE[k]!.P * 1000}` })), { group: 'Fastener' }),
+      choice('class', 'Property class', '8.8', Object.keys(PROPERTY_CLASSES).map((k) => ({ value: k, label: k })), { group: 'Fastener' }),
+      num('count', 'Bolts (across the split)', 2, 1, 8, '', { group: 'Fastener', integer: true }),
+      choice('surface', 'Thread condition', 'zinc-plated', Object.entries(BOLT_FRICTION).map(([k, v]) => ({ value: k, label: v.label })), { group: 'Tightening' }),
+      choice('tightening', 'Tighten to', 'spec', [{ value: 'spec', label: 'Spec torque (90% yield)' }, { value: 'custom', label: 'Custom torque' }], { group: 'Tightening' }),
+      num('torque', 'Custom torque', 2, 0, 500, 'N·m', { group: 'Tightening' }),
+      num('bore', 'Bore (what it grips)', 0.042, 0.003, 0.5, 'mm', { group: 'Clamp', step: 0.5 }),
+      num('width', 'Clamp width along the body', 0.025, 0.004, 0.3, 'mm', { group: 'Clamp' }),
+    ],
+    derive: ({ params, matA, matB }) => {
+      const size = stringOf(params, 'size', 'M5'), cls = stringOf(params, 'class', '8.8');
+      const t = threadFor(size), fr = BOLT_FRICTION[stringOf(params, 'surface', 'zinc-plated')] ?? BOLT_FRICTION['zinc-plated']!;
+      const n = numberOf(params, 'count', 2), d = numberOf(params, 'bore', 0.042), w = numberOf(params, 'width', 0.025);
+      // bolts tightened to spec (90% of yield, VDI 2230) pull the halves together with n F; the bore presses on the body
+      // with that, taken as a cosine distribution over each half (the lower bound of a split hub's grip: a uniform one
+      // gives pi/2 per half instead of 4/pi), so the normal force all round is (8/pi) n F
+      const spec = permissiblePreload(propertyClassFor(cls, t.d).Rp, 0.9, t, fr.muThread);
+      // a custom torque gives the preload the screw's own torque-tension relation does (VDI 2230), at most the spec's
+      const Dkm = ((HEX_BEARING_DIAMETER[size] ?? t.d * 1.45) + (CLEARANCE_HOLE_MEDIUM[size] ?? t.d * 1.1)) / 2;
+      const specTorque = tighteningTorque(spec, { thread: t, muThread: fr.muThread, muHead: fr.muHead, Dkm });
+      const custom = stringOf(params, 'tightening', 'spec') === 'custom';
+      const F = custom ? Math.min(spec, (spec * numberOf(params, 'torque', 2)) / specTorque) : spec;
+      const mu = Math.sqrt(matA.friction * (matB ?? matA).friction);
+      const N = (8 / Math.PI) * n * F;
+      const torque = (mu * N * d) / 2, axial = mu * N;
+      const boltsPull = n * tensileStressArea(t) * propertyClassFor(cls, t.d).Rm;
+      return {
+        // its frame's y is the body's axis: it turns about it at the slip torque, slides along it at the slip force;
+        // pulled across, its bolts take it; tilted, its width does
+        capacities: { tension: axial, compression: axial, shear: boltsPull, bending: (boltsPull * w) / 2, torsion: torque },
+        readouts: [
+          { label: 'Clamp force', value: formatForce(n * F), formula: 'n F_M (spec preload)' },
+          { label: 'Holds against turning', value: `${fmt(torque, 1)} N·m`, formula: '(4/π) μ n F d' },
+          { label: 'Holds against sliding', value: formatForce(axial), formula: '(8/π) μ n F' },
+          { label: 'Friction', value: fmt(mu, 2), formula: '√(μ_A μ_B)' },
+          { label: 'Pressure on the body', value: `${fmt(N / (Math.PI * d * w) / MPa, 1)} MPa`, formula: 'N / (π d w)' },
+          { label: 'Wrench torque', value: `${fmt(custom ? numberOf(params, 'torque', 2) : specTorque, 1)} N·m${custom ? '' : ' (spec)'}` },
+        ],
+        warnings: N / (Math.PI * d * w) > 5 * MPa ? [`It presses ${fmt(N / (Math.PI * d * w) / MPa, 1)} MPa on what it grips: a thin housing (a motor's, a gearhead's) can distort under that. Tighten it less.`] : [],
       };
     },
   },
@@ -480,33 +532,77 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
     },
   },
   {
-    id: 'motor', label: 'DC motor', category: 'Powered', model: 'revolute',
-    blurb: 'Brushed DC gearmotor on the joint axis with a real torque-speed line. Drive it from a control channel.',
+    id: 'motor', label: 'Motor drive', category: 'Powered', model: 'revolute',
+    blurb: 'Where a DC motor part (A) turns what its output shaft drives (B). It runs on what a battery wired to the motor gives it, through a controller that limits the current.',
     params: [
-      num('V', 'Supply voltage', 12, 1, 400, 'V', { group: 'Motor' }),
-      num('Kv', 'Speed constant', 800, 5, 5000, 'rpm/V', { group: 'Motor', log: true }),
-      num('R', 'Winding resistance', 0.4, 0.005, 50, 'Ω', { group: 'Motor', log: true }),
-      num('ratio', 'Gear ratio', 20, 1, 1000, 'x', { group: 'Gearbox', log: true }),
-      num('efficiency', 'Gearbox efficiency', 0.8, 0.2, 1, '%', { group: 'Gearbox' }),
       choice('channel', 'Control', 'throttle', channelOptions, { group: 'Control' }),
       flag('reverse', 'Reverse direction', false, { group: 'Control' }),
-      ...pinParams,
+      num('currentLimit', 'Controller current limit', 20, 1, 300, 'A', { group: 'Controller' }),
     ],
-    derive: ({ params }) => {
-      const m = { V: numberOf(params, 'V'), Kv: numberOf(params, 'Kv'), R: numberOf(params, 'R'), ratio: numberOf(params, 'ratio'), efficiency: numberOf(params, 'efficiency') };
-      const s = dcMotorSpecs(m);
+    derive: ({ params, partA }) => {
+      const on = partA ?? { kind: 'motor.dc', params: {} };
+      if (on.kind !== 'motor.dc') {
+        return {
+          capacities: noCap(), readouts: [], warnings: [],
+          instantFailure: 'A motor drive is the output shaft of a motor: make it on a DC motor part (A), at its shaft, to what the shaft turns.',
+        };
+      }
+      const m = getMotor(stringOf(on.params, 'model', 'maxon.re40-148867'));
+      const g = getGearhead(stringOf(on.params, 'gearhead', 'none'));
+      const gear = g && g.fits.includes(m.id) ? g : null;
+      const d = gear?.shaft ?? m.shaft;
+      // what joins motor and load is the output shaft: steel (its maker doesn't say which; taken as 1018 cold drawn,
+      // Rm 440 MPa), held in the motor's bearings and loaded where it leaves the flange
+      const rm = PIN_RM['steel.1018-cd']!, sec = roundSection(d);
+      const capacities: Capacities = {
+        tension: rm * sec.A, compression: rm * sec.A, shear: 0.6 * rm * sec.A,
+        bending: (rm * Math.PI * d ** 3) / 32, torsion: (0.6 * rm * Math.PI * d ** 3) / 16,
+      };
+      const limit = numberOf(params, 'currentLimit', 20);
+      const warnings: string[] = [];
+      if (limit > m.maxContinuousCurrent) warnings.push(`The controller lets through ${fmt(limit, 0)} A; the motor carries ${fmt(m.maxContinuousCurrent, 1)} A continuously. Held there it overheats.`);
       return {
-        capacities: pinCapacity(params, PIN_RM),
+        capacities,
         revolute: {
-          frictionTorque: 0.002 * m.ratio, bearingMu: 0.0015, boreDiameter: numberOf(params, 'pin'), limits: null,
-          motor: { ...m, channel: stringOf(params, 'channel', 'throttle'), reverse: boolOf(params, 'reverse'), stall: s.stallTorque, noLoad: s.noLoadSpeed },
+          frictionTorque: 0, bearingMu: 0.0015, boreDiameter: d, limits: null,
+          motor: { channel: stringOf(params, 'channel', 'throttle'), reverse: boolOf(params, 'reverse'), currentLimit: limit },
         },
         readouts: [
-          { label: 'Stall torque', value: `${fmt(s.stallTorque, 2)} N·m`, formula: '(V/R)·K_t·ratio·η' },
-          { label: 'No-load speed', value: `${fmt((s.noLoadSpeed * 60) / (2 * Math.PI), 0)} rpm`, formula: 'K_v·V / ratio' },
-          { label: 'Stall current', value: `${fmt(s.stallCurrent, 1)} A` },
+          { label: 'Motor', value: m.label + (gear ? ` + ${gear.label}` : '') },
+          { label: 'Output shaft', value: `Ø${fmt(d * 1000, 0)} mm` },
+          ...(gear ? [{ label: 'Gearhead carries', value: `${fmt(gear.maxContinuousTorque, 1)} N·m continuous, ${fmt(gear.maxRadial, 0)} N radial` }] : []),
+          { label: 'Controller limit', value: `${fmt(limit, 0)} A` },
+          { label: 'Power', value: 'the battery wired to the motor' },
         ],
-        warnings: s.stallCurrent > 200 ? ['Stall current is huge: a real supply would sag.'] : [],
+        warnings,
+      };
+    },
+  },
+  {
+    id: 'wire', label: 'Power wire', category: 'Powered', model: 'rope',
+    blurb: 'A pair of copper conductors from a battery to a motor. It carries the current, drops voltage by its resistance, hangs slack, and pulls taut or tears like the copper it is.',
+    params: [
+      choice('gauge', 'Gauge', '14', Object.entries(WIRE_GAUGES).map(([g, w]) => ({ value: g, label: `${g} AWG (${fmt(w.area * 1e6, 2)} mm², ${w.ampacity} A)` })), { group: 'Wire' }),
+      num('length', 'Length (0 = as placed, 20% slack)', 0, 0, 20, 'mm', { group: 'Wire' }),
+    ],
+    derive: ({ params, distance }) => {
+      const w = WIRE_GAUGES[stringOf(params, 'gauge', '14')] ?? WIRE_GAUGES['14']!;
+      const L = numberOf(params, 'length') > 0 ? numberOf(params, 'length') : Math.max(1.2 * distance, 0.05);
+      // two conductors, out and back; annealed copper, E 117 GPa and 220 MPa tensile (ASTM B3)
+      const A = 2 * w.area;
+      const k = (117e9 * A) / L;
+      const tension = 220e6 * A;
+      const resistance = 2 * L * w.ohmPerM;
+      return {
+        capacities: { tension, compression: INF, shear: INF, bending: INF, torsion: INF },
+        spring: { k, c: 0, rest: L, min: 0, max: L, tensionOnly: true },
+        wire: { resistance, ampacity: w.ampacity, length: L },
+        readouts: [
+          { label: 'Resistance', value: `${fmt(resistance * 1000, 1)} mΩ`, formula: '2 L ρ' },
+          { label: 'Carries', value: `${w.ampacity} A`, formula: 'chassis wiring' },
+          { label: 'Tears at', value: formatForce(tension), formula: '220 MPa × 2A' },
+        ],
+        warnings: [],
       };
     },
   },
@@ -669,6 +765,35 @@ export const CONNECTOR_KINDS: ConnectorKind[] = [
           { label: 'Weight', value: `${fmt(g.density * A * L * 1000, 0)} g` },
         ],
         warnings: [],
+      };
+    },
+  },
+  {
+    id: 'link', label: 'Tie rod (rod ends)', category: 'Joints', model: 'spring',
+    blurb: 'A steel rod with a ball rod end at each end: it holds the distance between two points, pulling or pushing, and lets both ends swivel. Carries only along its line; buckles if pushed too hard.',
+    params: [
+      num('diameter', 'Rod diameter', 0.008, 0.003, 0.05, 'mm', { group: 'Rod', step: 0.5 }),
+      num('stud', 'Rod-end stud diameter', 0.008, 0.003, 0.05, 'mm', { group: 'Rod ends', step: 0.5 }),
+      num('length', 'Length (0 = as placed)', 0, 0, 5, 'mm', { group: 'Rod' }),
+    ],
+    derive: ({ params, distance }) => {
+      // cold-drawn 1018 steel rod (E 205 GPa, Rm 440 MPa), studs of 4140 as a ball joint's; pinned at both ends
+      const d = numberOf(params, 'diameter', 0.008), L = numberOf(params, 'length') > 0 ? numberOf(params, 'length') : Math.max(distance, 0.005);
+      const E = 205e9, A = (Math.PI / 4) * d * d, I = (Math.PI * d ** 4) / 64;
+      const stud = roundSection(numberOf(params, 'stud', 0.008));
+      const studShear = 0.6 * 655 * MPa * stud.A;
+      const rod = 440 * MPa * A;
+      const euler = (Math.PI ** 2 * E * I) / (L * L);
+      const k = (E * A) / L;
+      return {
+        capacities: { tension: Math.min(rod, studShear), compression: Math.min(rod, studShear, euler), shear: INF, bending: INF, torsion: INF },
+        spring: { k, c: 0, rest: L, min: 0, max: L, tensionOnly: false },
+        readouts: [
+          { label: 'Pull', value: formatForce(Math.min(rod, studShear)), formula: 'min(R_m A, stud shear)' },
+          { label: 'Push (buckling)', value: formatForce(Math.min(rod, studShear, euler)), formula: 'π² E I / L²' },
+          { label: 'Weight', value: `${fmt(7870 * A * L * 1000, 0)} g` },
+        ],
+        warnings: euler < rod ? [`Pushed, it buckles at ${formatForce(euler)} before the rod yields: shorter or thicker holds more.`] : [],
       };
     },
   },

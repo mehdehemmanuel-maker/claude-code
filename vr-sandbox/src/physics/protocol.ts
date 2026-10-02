@@ -59,7 +59,11 @@ export type PhysicsEvent =
   /** A body's state stopped being a number; it was put back where it last was, at rest (fault containment). */
   | { type: 'fault'; part: string; body: string; note: string }
   /** An intact joint whose two sides have come apart (no real joint does): a defect, for the watchdog. */
-  | { type: 'drift'; conn: string; gap: number; point: Vec3; note: string };
+  | { type: 'drift'; conn: string; gap: number; point: Vec3; note: string }
+  /** A motor's winding ran past what its insulation stands: it has failed open and never runs again. */
+  | { type: 'burnout'; conn: string; part: string; temperature: number; point: Vec3; note: string }
+  /** A battery went flat under its load (its voltage fell to its maker's end voltage). */
+  | { type: 'flat'; part: string; point: Vec3; note: string };
 
 export interface ConnectionLoad {
   id: string;
@@ -96,4 +100,13 @@ export interface StepResult {
   energy?: Energies;
   /** Heat each part took (J) over the ticks this result covers. */
   heat?: Record<string, number>;
+  /** The electrical side: each battery's charge and what it gives, each motor's current and temperatures. */
+  power?: PowerState;
+}
+
+export interface PowerState {
+  /** By battery part: state of charge 0-1, terminal volts, amps given, flat. */
+  batteries: Record<string, { soc: number; V: number; I: number; flat: boolean }>;
+  /** By motor drive joint: amps (and its controller's limit), winding and housing deg C, output rpm, burnt out, its battery. */
+  motors: Record<string, { I: number; limit: number; winding: number; housing: number; rpm: number; burnt: boolean; battery: string | null }>;
 }

@@ -10,7 +10,7 @@ import { getConnectorKind, type ConnectorKind, type Derived } from '../connector
 import { REACH, spans, throughOf, unreachable, type Through } from '../connectors/through';
 import {
   getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
-  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout,
+  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf, boughtRefusal,
 } from '../parts/registry';
 import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
@@ -18,7 +18,12 @@ import {
   blendedInteraction, transformCharges, dipoleMoment, type Charge, type PoleFace, type Vec3 as MVec3,
 } from '../engineering/magnets';
 import { neoHookeanBandForce } from '../engineering/mechanics';
-import { heatShare, TAYLOR_QUINNEY } from '../engineering/thermal';
+import { AMBIENT, heatShare, TAYLOR_QUINNEY } from '../engineering/thermal';
+import { heatStep, motorModel, shaftTorque, throughGear, windingR, type MotorHeat, type MotorModel } from '../engineering/dcmotor';
+import { drain, packR, type Pack } from '../engineering/battery';
+import { getGearhead, getMotor, type GearheadData } from '../data/motors';
+import { getBattery } from '../data/batteries';
+import { solvePack, type Load } from './electric';
 import { emptyEnergies, emptyHeat, emptyWork, kineticEnergy, potentialEnergy, shareHeat, springEnergy, type Energies, type HeatBook, type HeatSource, type WorkBook } from './energy';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
 import { axisAngle, composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
@@ -29,7 +34,7 @@ import {
 import { implicitForce, restoringModes, solveDense, stiffnessOf, symmetricEigen3 } from './implicit';
 import { annulusMesh, boxMesh, eddyDamping, rigidBasis, type EddyMesh } from '../engineering/eddy';
 import type { Connection, Endpoint, Part, PartDamage, Pose, Quat, SimSettings, Vec3 } from '../doc/types';
-import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, RoomSurface, StepResult } from './protocol';
+import type { ConnectionLoad, EnvironmentBox, GrabMode, PhysicsEvent, PhysicsOp, PowerState, RoomSurface, StepResult } from './protocol';
 
 /** A magnetic interaction between two bodies at this instant (see magnetPairs). */
 interface MagnetPair {
@@ -227,6 +232,8 @@ interface BodyRec {
   inFluid: boolean;
   /** Body-space inertia tensor (row-major 3x3), read from Jolt; null for static bodies. */
   Iloc: number[] | null;
+  /** Its own inertia, before any motor rotor it turns was added to it (rotorInertia). */
+  Iown?: number[];
   /** State at the start of the current tick (for the rigid-cluster projection). */
   prior: { pose: Pose; v: Vec3; w: Vec3 } | null;
 }
@@ -311,6 +318,39 @@ interface ConnRec {
   corrT: Vec3;
   /** For a joint to the world: where in the world it holds endpoint A (fixed when the joint is built). */
   worldB: Pose | null;
+}
+
+/**
+ * A motor drive's electrical side: the motor and gearhead its part is, how hot its winding and housing run, whether it
+ * has burnt out, and what it is wired to (worked out again whenever what is joined to what changes).
+ */
+interface DriveRec {
+  sig: string;
+  model: MotorModel;
+  gear: GearheadData | null;
+  heat: MotorHeat;
+  burnt: boolean;
+  /** Battery part it runs on and the resistance of the wire to it (both conductors), for topology `at`. */
+  battery: string | null;
+  wire: number;
+  at: number;
+  /** This tick: duty applied, current, output speed rad/s (as the tick began), and the turning impulse given so far. */
+  u: number;
+  I: number;
+  w: number;
+  impulse: number;
+}
+
+/** A battery's state: the pack its part is, its charge, and what it gives now. */
+interface CellRec {
+  sig: string;
+  pack: Pack;
+  soc: number;
+  V: number;
+  I: number;
+  flat: boolean;
+  /** The charge its part was given (a new one resets it). */
+  set: number;
 }
 
 /** A rigid link inside an assembly: segment bond or rigid joint, holding v at `rest` in u's frame. */
@@ -452,6 +492,9 @@ export class PhysicsWorld {
   private grabs = new Map<string, Grab>();
   private sim: SimSettings;
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
+  /** Motor drives' electrical state by joint, batteries' by part. */
+  private drives = new Map<string, DriveRec>();
+  private cells = new Map<string, CellRec>();
   private events: PhysicsEvent[] = [];
   private slotVersion = 1;
   private slotsDirty = true;
@@ -859,7 +902,9 @@ export class PhysicsWorld {
     const segParams = layout ? layout.segParams : params;
     const shapeDesc = kind.collision(segParams);
     const volume = Math.max(kind.volume(segParams, material), 1e-9);
-    const mass = volume * material.density;
+    // a bought item (a motor, a battery) weighs what its datasheet says, spread through its outline
+    const mass = massOf(kind, segParams, material);
+    const density = mass / volume;
     const dims = kind.dims(segParams);
     const bounds = shapeBounds(shapeDesc);
     const ext = sub(bounds.max, bounds.min);
@@ -872,7 +917,7 @@ export class PhysicsWorld {
     };
     for (let k = 0; k < count; k++) {
       const pose = poses[k]!;
-      const shape = this.buildShape(shapeDesc, material.density);
+      const shape = this.buildShape(shapeDesc, density);
       const motion = part.frozen ? J.EMotionType_Static : J.EMotionType_Dynamic;
       const cs = new J.BodyCreationSettings(shape, this.R(pose.p), this.Q(pose.q), motion, LAYER_MOVING);
       shape.Release();
@@ -1194,7 +1239,8 @@ export class PhysicsWorld {
   private solvedJoints: ConnRec[] = [];
   /** The energy ledger since the scene began (energy.ts), this tick's books, and the heat each part took this tick. */
   private ledger: Energies = emptyEnergies();
-  private book = { work: emptyWork(), heat: emptyHeat(), sources: [] as (HeatSource<BodyRec> & { env?: Material })[] };
+  /** This tick's books; `inMotors` is the friction measured inside motors and gearheads (already in heat.friction). */
+  private book = { work: emptyWork(), heat: emptyHeat(), sources: [] as (HeatSource<BodyRec> & { env?: Material })[], inMotors: 0 };
   private heatTick = new Map<string, number>();
   /** What the forces being applied right now are, for the books; and the length of the substep they act over. */
   private forceBook: { kind: keyof WorkBook | 'eddy'; to?: BodyRec } | null = null;
@@ -2218,6 +2264,8 @@ export class PhysicsWorld {
       const apart = length(sub(this.anchorWorldB(rec).p, this.anchorWorld(rec).p));
       if (apart > REACH) gap = `The ${kind.label.toLowerCase()}'s two ends are ${Math.round(apart * 1000)} mm apart: nothing physical joins them. Make it where the parts touch.`;
     }
+    // and a bought item takes only the joints its maker allows (R11): nothing is drilled into a motor or a battery
+    gap ??= boughtRefusal(pa.kind, kind.id, kind.label) ?? (pb ? boughtRefusal(pb.kind, kind.id, kind.label) : null);
     const instant = gap ?? rec.derived.instantFailure;
     if (rec.status !== 'broken' && instant) {
       rec.status = 'broken';
@@ -2272,6 +2320,7 @@ export class PhysicsWorld {
       through: c.through,
       distance: length(sub(wb.p, wa.p)),
       cure: this.sim.cureClock <= 0 ? 1e12 : c.cure,
+      partA: { kind: c.pa.kind.id, params: c.pa.part.params },
     });
   }
 
@@ -2287,10 +2336,12 @@ export class PhysicsWorld {
   private destroyConstraint(c: ConnRec) {
     this.topology++;
     for (const k of [c.constraint, ...c.extra]) if (k) this.ps.RemoveConstraint(k);
+    const had = c.typed;
     c.constraint = null;
     c.extra = [];
     c.typed = null;
     this.setPairCollision(c, true);
+    if (had && c.kind.id === 'motor' && c.b && this.bodies.get(c.b.id) === c.b) this.rotorInertia(c.b);
   }
 
   /** Joined parts do not collide with each other (every body of one against every body of the other). */
@@ -2503,6 +2554,41 @@ export class PhysicsWorld {
     this.setPairCollision(c, false);
     this.bi.ActivateBody(c.a.body.GetID());
     if (c.b) this.bi.ActivateBody(c.b.body.GetID());
+    if (c.kind.id === 'motor' && c.b) this.rotorInertia(c.b);
+  }
+
+  /**
+   * A gearmotor's rotor turns N times as fast as its output, so what the output turns carries the rotor's inertia
+   * times N^2 about the drive's axis (planetary gearheads are coaxial, so it is that axis). It is given to the driven
+   * body, the housing taken as mounted, as a gearmotor is: exact while the housing doesn't itself spin about the axis.
+   * Worked out again from the body's own inertia whenever a drive on it is made or goes.
+   */
+  private rotorInertia(r: BodyRec) {
+    if (r.frozen || !r.Iloc) return;
+    const own = r.Iown ?? r.Iloc;
+    const I = [...own];
+    let added = false;
+    for (const c of this.conns.values()) {
+      if (c.kind.id !== 'motor' || c.b !== r || !c.typed || c.status === 'broken' || c.pa.kind.id !== 'motor.dc') continue;
+      const d = this.driveOf(c);
+      const N = d.gear?.ratio ?? 1;
+      const J = d.model.rotorInertia * N * N;
+      // the drive's axis in the driven body's own coordinates
+      const q = this.poseOf(r).q;
+      const n = rotate([-q[0], -q[1], -q[2], q[3]], rotate(this.anchorWorld(c).q, [0, 1, 0]));
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) I[3 * i + j]! += J * n[i]! * n[j]!;
+      added = true;
+    }
+    if (!added && !r.Iown) return;
+    r.Iown = own;
+    const { values, vectors } = symmetricEigen3(I);
+    if (!values.every((v) => v > 0)) return;
+    const [e0, e1, e2raw] = vectors as [Vec3, Vec3, Vec3];
+    const e2 = dot(cross(e0, e1), e2raw) < 0 ? scale(e2raw, -1) : e2raw;
+    r.body.GetMotionProperties().SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    // a new array: segments of one part may share their inertia
+    r.Iloc = this.localInertia(r);
+    if (!added) r.Iown = undefined;
   }
 
   private effMass(c: ConnRec) {
@@ -3587,6 +3673,7 @@ export class PhysicsWorld {
 
   /** Motors, servos, eddy brakes and load-dependent bearing friction. */
   private driveJoints() {
+    this.solveCircuits();
     for (const c of this.conns.values()) {
       if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed) continue;
       const rv = c.derived.revolute;
@@ -3604,19 +3691,26 @@ export class PhysicsWorld {
         h.GetMotorSettings().mSpringSettings.mDamping = 2 * 0.05 * Math.sqrt(rv.torsionSpring.k * this.ownAxisInertia(c));
       }
       if (rv.motor) {
-        const m = rv.motor;
-        const u = Math.max(-1, Math.min(1, this.channels[m.channel] ?? 0)) * (m.reverse ? -1 : 1);
-        // Linear torque-speed line at the applied voltage: tau = stall*u - (stall/noLoad) * w.
-        const target = m.noLoad * u;
-        const tau = Math.abs(m.stall * u - (m.stall / Math.max(m.noLoad, 1e-6)) * wrel);
-        h.SetTargetAngularVelocity(target);
-        const ms = h.GetMotorSettings();
-        const lim = Math.max(tau, 0.001 * m.stall);
-        ms.mMinTorqueLimit = -lim;
-        ms.mMaxTorqueLimit = lim;
-        if (Math.abs(u) > 0.01) {
-          this.bi.ActivateBody(c.a.body.GetID());
-          if (c.b) this.bi.ActivateBody(c.b.body.GetID());
+        // what the motor can give at this speed, on what its battery gives it (solveCircuits)
+        const d = this.drives.get(c.id);
+        const sgn = this.hingeSign(c);
+        if (!d) { h.SetTargetAngularVelocity(0); const ms = h.GetMotorSettings(); ms.mMinTorqueLimit = 0; ms.mMaxTorqueLimit = 0; }
+        else {
+          const N = d.gear?.ratio ?? 1;
+          const V = d.battery ? this.cells.get(d.battery)?.V ?? 0 : 0;
+          // driving, it runs toward its no-load speed at the voltage applied; otherwise it only drags
+          const push = d.I !== 0 && V > 0;
+          const Va = d.u * V - Math.sign(d.u) * d.model.I0 * (windingR(d.model, d.heat.winding) + d.wire);
+          const target = push && Va * d.u > 0 ? Va / d.model.Kt / N : 0;
+          const tau = this.driveTorque(d, d.w);
+          h.SetTargetAngularVelocity(sgn * target);
+          const ms = h.GetMotorSettings();
+          ms.mMinTorqueLimit = -tau;
+          ms.mMaxTorqueLimit = tau;
+          if (push) {
+            this.bi.ActivateBody(c.a.body.GetID());
+            if (c.b) this.bi.ActivateBody(c.b.body.GetID());
+          }
         }
       } else if (rv.servo) {
         if (c.sizedAt !== this.topology) {
@@ -3782,6 +3876,7 @@ export class PhysicsWorld {
     }
     this.subDt = dt;
     this.solveAssemblies(dt);
+    this.settleDrives(dt);
     this.containFaults();
     lap('assemblies');
     this.updateLatches();
@@ -3837,25 +3932,215 @@ export class PhysicsWorld {
   }
 
   private openBooks() {
-    this.book = { work: emptyWork(), heat: emptyHeat(), sources: [] };
+    this.book = { work: emptyWork(), heat: emptyHeat(), sources: [], inMotors: 0 };
     this.heatTick.clear();
     return this.storedNow();
   }
 
-  /** Motors' work (and eddy brakes' heat) over a Jolt step, from the torque each applied and how fast it turned. */
+  // ---------------------------------------------------------------------------------------------
+  // the electrical side: batteries, wires, motors
+  //
+  // A motor drive runs on the battery wired to its motor and on nothing else. Each substep, before Jolt steps, every
+  // pack and the motors on it are solved together (electric.ts): the pack's terminal voltage, each motor's current at
+  // its speed and winding temperature, through its controller's limit. That sets the torque the motor can give, which
+  // Jolt applies (as a velocity motor toward the no-load speed, limited to it). After the step, what each motor really
+  // gave decides its current again, and the books are kept from that: the pack gives the motor's back-EMF power plus
+  // its copper's and wire's losses; the motor's friction and the gearhead's losses heat the motor; the pack's own
+  // resistance heats the pack. So the chemical energy a battery gives is the work at the shaft plus every loss on the
+  // way, exactly, and the charge it loses is that current over its maker's rate-dependent capacity.
+
+  /** The motor and gearhead a drive's motor part is, made again when the part changes. */
+  private driveOf(c: ConnRec): DriveRec {
+    const p = c.pa.part.params;
+    const sig = `${String(p['model'] ?? '')}|${String(p['gearhead'] ?? '')}`;
+    let d = this.drives.get(c.id);
+    if (d && d.sig === sig) return d;
+    const data = getMotor(String(p['model'] ?? 'maxon.re40-148867'));
+    const g = getGearhead(String(p['gearhead'] ?? 'none'));
+    d = {
+      sig, model: motorModel(data), gear: g && g.fits.includes(data.id) ? g : null,
+      heat: d?.heat ?? { winding: AMBIENT, housing: AMBIENT }, burnt: d?.burnt ?? false,
+      battery: null, wire: 0, at: -1, u: 0, I: 0, w: 0, impulse: 0,
+    };
+    this.drives.set(c.id, d);
+    return d;
+  }
+
+  /** A battery part's state, from its part: a new charge set on it, or a new pack, starts it again. */
+  private cellOf(id: string): CellRec | null {
+    const pr = this.parts.get(id);
+    if (!pr || pr.kind.id !== 'battery') return null;
+    const p = pr.part.params;
+    const sig = `${String(p['model'] ?? '')}|${String(p['series'] ?? '')}|${String(p['parallel'] ?? '')}`;
+    const set = Math.max(0, Math.min(1, Number(p['charge'] ?? 1)));
+    let cell = this.cells.get(id);
+    if (!cell || cell.sig !== sig || cell.set !== set) {
+      const pack: Pack = { data: getBattery(String(p['model'] ?? 'yuasa.np7-12')), series: Math.max(1, Math.round(Number(p['series'] ?? 2))), parallel: Math.max(1, Math.round(Number(p['parallel'] ?? 1))) };
+      cell = { sig, pack, soc: set, V: 0, I: 0, flat: set <= 0, set };
+      this.cells.set(id, cell);
+    }
+    return cell;
+  }
+
+  /** Which battery a motor part is wired to (an intact power wire between them), and the wire's resistance. */
+  private wireUp(c: ConnRec, d: DriveRec) {
+    if (d.at === this.topology) return;
+    d.at = this.topology;
+    d.battery = null;
+    d.wire = 0;
+    for (const w of this.conns.values()) {
+      if (w.kind.id !== 'wire' || w.status === 'broken' || !w.pb) continue;
+      const other = w.pa === c.pa ? w.pb : w.pb === c.pa ? w.pa : null;
+      if (!other || other.kind.id !== 'battery') continue;
+      d.battery = other.id;
+      d.wire = w.derived.wire?.resistance ?? 0;
+      return;
+    }
+  }
+
+  /** Relative turning rate of a revolute joint about its axis, b against a (the sense a drive turns it). */
+  private jointRate(c: ConnRec): number {
+    const axis = rotate(this.anchorWorld(c).q, [0, 1, 0]);
+    const wa = this.bi.GetAngularVelocity(c.a.body.GetID());
+    let w = -dot([wa.GetX(), wa.GetY(), wa.GetZ()], axis);
+    if (c.b) { const wb = this.bi.GetAngularVelocity(c.b.body.GetID()); w += dot([wb.GetX(), wb.GetY(), wb.GetZ()], axis); }
+    return w;
+  }
+
+  /** Every pack with the motors on it, solved for this substep. */
+  private solveCircuits() {
+    const on = new Map<string, { d: DriveRec; load: Load }[]>();
+    for (const c of this.conns.values()) {
+      const m = c.derived.revolute?.motor;
+      if (!m || c.status === 'broken' || !c.typed || c.pa.kind.id !== 'motor.dc') { if (this.drives.has(c.id) && !m) this.drives.delete(c.id); continue; }
+      const d = this.driveOf(c);
+      this.wireUp(c, d);
+      d.u = Math.max(-1, Math.min(1, this.channels[m.channel] ?? 0)) * (m.reverse ? -1 : 1);
+      // the speed it turns at as the tick began, when every assembly is rigid again: inside a tick Jolt lets a light
+      // housing twist back in its mounts under the reaction (the assembly pass puts it right after), which no real
+      // motor's back-EMF would see
+      if (this.magnetSub === 0) { d.w = this.jointRate(c); d.impulse = 0; }
+      d.I = 0;
+      if (!d.battery) continue;
+      const N = d.gear?.ratio ?? 1;
+      const load: Load = { model: d.model, u: d.u, w: d.w * N, R: windingR(d.model, d.heat.winding) + d.wire, limit: m.currentLimit, dead: d.burnt };
+      const list = on.get(d.battery) ?? [];
+      list.push({ d, load });
+      on.set(d.battery, list);
+    }
+    for (const [id, list] of on) {
+      const cell = this.cellOf(id);
+      if (!cell) { for (const x of list) x.d.battery = null; continue; }
+      const r = solvePack(cell.pack, cell.soc, list.map((x) => x.load));
+      cell.V = r.V;
+      list.forEach((x, k) => { x.d.I = r.currents[k]!; });
+      if (r.flat && !cell.flat) {
+        const pr = this.parts.get(id)!;
+        this.events.push({ type: 'flat', part: id, point: this.poseOf(pr.segs[0]!).p, note: `The battery is flat: at ${Math.round(cell.soc * 100)}% it can't hold its voltage up under the load.` });
+      }
+      cell.flat = r.flat;
+    }
+  }
+
+  /** The most torque a drive gives at its output at output speed w: its current through its gearhead, or its drag. */
+  private driveTorque(d: DriveRec, w: number): number {
+    const N = d.gear?.ratio ?? 1;
+    const wm = w * N;
+    const T = d.I !== 0 ? shaftTorque(d.model, d.I, wm) : -d.model.Tf * Math.sign(wm || 1);
+    return Math.abs(throughGear(T, wm, d.gear));
+  }
+
+  /**
+   * After a Jolt step: what each motor drive really gave (its torque and speed), the current that took, and where every
+   * joule of it came from and went. `dt` is the step.
+   */
+  private bookDrive(c: ConnRec, T: number, w: number, dt: number) {
+    const d = this.drives.get(c.id);
+    if (!d) return;
+    const g = d.gear, N = g?.ratio ?? 1, eta = g?.efficiency ?? 1;
+    const Po = T * w;
+    // the torque at the motor's own shaft: losses in the gearhead go against the power through it
+    const Tm = Po >= 0 ? T / (N * eta) : (T * eta) / N;
+    const wm = w * N;
+    const Pm = Tm * wm;
+    // the electromagnetic torque is the shaft's plus the brushes' and bearings' friction against the motion
+    let i = (Tm + d.model.Tf * Math.sign(wm || Tm)) / d.model.Kt;
+    const cell = d.battery ? this.cells.get(d.battery) : undefined;
+    if (!cell || cell.flat || d.burnt || d.u === 0 || i * d.u <= 0) i = 0;
+    const limit = c.derived.revolute?.motor?.currentLimit ?? Infinity;
+    i = Math.max(-limit, Math.min(limit, i));
+    const Rw = windingR(d.model, d.heat.winding);
+    const copper = i * i * Rw * dt, wire = i * i * d.wire * dt;
+    const friction = Math.max(0, d.model.Kt * i * wm - Pm) * dt, gear = Math.max(0, Pm - Po) * dt;
+    const Pin = Math.max(0, d.model.Kt * i * wm + i * i * (Rw + d.wire));
+    d.I = i;
+    this.book.heat.electric += copper + wire;
+    this.book.heat.friction += friction + gear;
+    this.book.inMotors += friction + gear;
+    this.warmPart(c.a, copper + friction + gear);
+    if (cell && Pin > 0) {
+      const V = Math.max(cell.V, 1e-3), Ib = Pin / V, Rp = packR(cell.pack);
+      const cells = Ib * Ib * Rp * dt;
+      this.book.work.batteries += Pin * dt + cells;
+      this.book.heat.electric += cells;
+      const pr = this.parts.get(d.battery!);
+      if (pr) this.warmPart(pr.segs[0]!, cells);
+      cell.I += Ib;
+      cell.soc = drain(cell.pack, cell.soc, Ib, dt);
+    }
+    // the winding heats behind the housing, the housing to the air; past its insulation's limit it fails open
+    d.heat = heatStep(d.model.thermal, d.heat, copper / dt, (friction + gear) / dt, dt, AMBIENT);
+    if (!d.burnt && d.heat.winding > d.model.thermal.maxWinding) {
+      d.burnt = true;
+      this.events.push({
+        type: 'burnout', conn: c.id, part: c.pa.id, temperature: d.heat.winding, point: this.anchorWorld(c).p,
+        note: `${d.model.label}: its winding reached ${Math.round(d.heat.winding)} °C, past the ${d.model.thermal.maxWinding} °C its insulation stands, and burnt out. It carried ${Math.abs(i).toFixed(1)} A against ${d.model.maxContinuousCurrent} A continuous.`,
+      });
+    }
+  }
+
+  /**
+   * Each motor drive's books for the tick, once every assembly is rigid again: the torque it gave on average (its
+   * impulse over the tick) over the speed it really turned at (the mean of the tick's start and end).
+   */
+  private settleDrives(dt: number) {
+    for (const cell of this.cells.values()) cell.I = 0;
+    for (const c of this.conns.values()) {
+      const d = this.drives.get(c.id);
+      if (!d || !c.derived.revolute?.motor || c.status === 'broken' || !c.typed) continue;
+      const w = this.jointRate(c);
+      this.bookDrive(c, d.impulse / dt, (d.w + w) / 2, dt);
+      d.impulse = 0;
+    }
+  }
+
+  /** The electrical state for the client: batteries' charge and what they give, motors' current and heat. */
+  private powerState(): PowerState | undefined {
+    if (!this.drives.size && !this.cells.size) return undefined;
+    const out: PowerState = { batteries: {}, motors: {} };
+    for (const [id, cell] of this.cells) if (this.parts.has(id)) out.batteries[id] = { soc: cell.soc, V: cell.V, I: cell.I, flat: cell.flat };
+    for (const [id, d] of this.drives) {
+      if (!this.conns.has(id)) { this.drives.delete(id); continue; }
+      out.motors[id] = { I: d.I, limit: this.conns.get(id)!.derived.revolute?.motor?.currentLimit ?? Infinity, winding: d.heat.winding, housing: d.heat.housing, rpm: (d.w * 60) / (2 * Math.PI), burnt: d.burnt, battery: d.battery };
+    }
+    for (const id of [...this.cells.keys()]) if (!this.parts.has(id)) this.cells.delete(id);
+    return out;
+  }
+
+  /**
+   * Motor drives' turning impulse (and eddy brakes' heat) over a Jolt step of `collisionSteps` collision steps, from the
+   * torque each applied (and how fast it turned).
+   */
   private bookMotors(collisionSteps: number) {
     for (const c of this.conns.values()) {
       const rv = c.derived.revolute;
       if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy)) continue;
       const h = c.typed as JoltNS.HingeConstraint;
-      const axis = rotate(this.anchorWorld(c).q, [0, 1, 0]);
-      const wa = this.bi.GetAngularVelocity(c.a.body.GetID());
-      let wrel = -dot([wa.GetX(), wa.GetY(), wa.GetZ()], axis);
-      if (c.b) { const wb = this.bi.GetAngularVelocity(c.b.body.GetID()); wrel += dot([wb.GetX(), wb.GetY(), wb.GetZ()], axis); }
-      // the motor's angular impulse each collision step, times how far it turned the joint in that step
-      const work = h.GetTotalLambdaMotor() * collisionSteps * wrel * this.hingeSign(c);
-      if (rv.motor) this.book.work.motors += work;
-      else { this.book.heat.eddy -= work; this.warmPart(c.a, -work / 2); if (c.b) this.warmPart(c.b, -work / 2); }
+      const wrel = this.jointRate(c);
+      // the motor's angular impulse each collision step, as a torque on b about the axis
+      const T = (h.GetTotalLambdaMotor() * collisionSteps * this.hingeSign(c)) / this.subDt;
+      if (rv.motor) { const d = this.drives.get(c.id); if (d) d.impulse += T * this.subDt; }
+      else { const work = T * wrel * this.subDt; this.book.heat.eddy -= work; this.warmPart(c.a, -work / 2); if (c.b) this.warmPart(c.b, -work / 2); }
     }
   }
 
@@ -3881,8 +4166,8 @@ export class PhysicsWorld {
     const now = this.storedNow();
     const b = this.book;
     const total = (x: { kinetic: number; potential: number; elastic: number }) => x.kinetic + x.potential + x.elastic;
-    const W = b.work.hands + b.work.motors + b.work.magnets + b.work.fluids;
-    const measured = b.heat.air + b.heat.eddy + b.heat.damping;
+    const W = b.work.hands + b.work.batteries + b.work.magnets + b.work.fluids;
+    const measured = b.heat.air + b.heat.eddy + b.heat.damping + b.heat.electric + b.inMotors;
     const damping = 2 * ANGULAR_DAMPING * dt * start.spin;
     let rest = W - (total(now) - total(start)) - measured - damping;
     let numerical = damping;
@@ -4028,6 +4313,8 @@ export class PhysicsWorld {
     }
     result.energy = this.ledgerCopy();
     if (this.heatTick.size) result.heat = Object.fromEntries(this.heatTick);
+    const power = this.powerState();
+    if (power) result.power = power;
     return result;
   }
 
@@ -4102,7 +4389,10 @@ export class PhysicsWorld {
         case 'spring':
         case 'rope': {
           const dc = c.typed as JoltNS.DistanceConstraint;
-          axial = Math.abs(dc.GetTotalLambdaPosition() * inv);
+          // a rope only pulls; a spring or link pushes too, when it is held shorter than its length
+          const lam = Math.abs(dc.GetTotalLambdaPosition() * inv);
+          const short = c.kind.model === 'spring' && length(sub(this.anchorWorldB(c).p, frame.p)) < c.derived.spring!.rest;
+          axial = short ? -lam : lam;
           c.load.extent = length(sub(this.anchorWorldB(c).p, frame.p));
           break;
         }

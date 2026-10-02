@@ -11,6 +11,10 @@ import { MATERIALS } from '../../src/data/materials';
 import type { BuildDoc } from '../../src/doc/types';
 import { rotate } from '../../src/doc/math';
 import { numberOf } from '../../src/schema/params';
+import { getPartKind, massOf } from '../../src/parts/registry';
+import { motorModel } from '../../src/engineering/dcmotor';
+import { getGearhead, getMotor } from '../../src/data/motors';
+import { within } from './helpers';
 
 const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
 
@@ -190,22 +194,47 @@ describe('templates', () => {
     w.destroy();
   });
 
-  it('go-kart: throttle drives it forward and steering turns it', async () => {
+  it('go-kart: it accelerates as its motors, gearheads and battery say, and steering turns it', async () => {
     const doc = getTemplate('go-kart').build();
     const w = await load(doc);
     run(w, 0.5);
     const chassis = byName(doc, 'Chassis')[0]!;
     const start = w.livePose(chassis.id)!.p;
-    // Short straight run: the kart starts pointed at the pool, whose wall is ~6 m away.
+    // Newton's second law from the datasheets: each motor at its controller's limit gives K_t I less its friction,
+    // through 12:1 at 81%, at the 125 mm wheel; it moves the kart's mass plus what spins with it (each wheel I / r^2,
+    // each rotor J N^2 / r^2)
+    const m = motorModel(getMotor('maxon.re40-148867'));
+    const g = getGearhead('maxon.gp42c-203115')!;
+    const r = 0.125, limit = 20;
+    let M = 0, spin = 0;
+    for (const p of Object.values(doc.parts)) {
+      const k = getPartKind(p.kind), mass = massOf(k, p.params, doc.materials[p.material]!);
+      M += mass;
+      if (p.kind === 'wheel') spin += (0.5 * mass * r * r) / (r * r);
+    }
+    spin += (2 * m.rotorInertia * g.ratio ** 2) / (r * r);
+    const force = (2 * (m.Kt * limit - m.Tf) * g.ratio * g.efficiency) / r;
+    const a = force / (M + spin);
     w.apply({ op: 'controls', channels: { throttle: 1, steer: 0 } });
-    const failures = run(w, 1.2);
+    const e0 = w.energies();
+    const failures = run(w, 1.5);
+    const v = w.linearVelocity(chassis.id)![0];
+    within(v, a * 1.5, 0.03);
+    // every joule the batteries gave is in the kart's motion or is heat: in the windings, wires and cells, and in
+    // the motors' and gearheads' friction (the 19% the gearhead loses), with next to nothing left unexplained
+    const e = w.energies();
+    const gave = e.work.batteries - e0.work.batteries;
+    const motion = e.kinetic + e.potential - (e0.kinetic + e0.potential);
+    const heat = Object.values(e.heat).reduce((s, x) => s + x, 0) - Object.values(e0.heat).reduce((s, x) => s + x, 0);
+    within(motion + heat, gave, 0.01);
+    expect(e.heat.friction - e0.heat.friction).toBeLessThan(0.1 * gave);
     const mid = w.livePose(chassis.id)!.p;
-    expect(mid[0] - start[0]).toBeGreaterThan(1.5);
+    expect(mid[0] - start[0]).toBeGreaterThan(0.5 * a * 1.5 ** 2 * 0.95);
     w.apply({ op: 'controls', channels: { throttle: 0.6, steer: 1 } });
-    failures.push(...run(w, 1.5));
+    failures.push(...run(w, 2));
     expect(failures).toEqual([]);
     const end = w.livePose(chassis.id)!.p;
-    expect(Math.abs(end[2] - mid[2])).toBeGreaterThan(0.5);
+    expect(Math.abs(end[2] - mid[2])).toBeGreaterThan(0.3);
     w.destroy();
   });
 

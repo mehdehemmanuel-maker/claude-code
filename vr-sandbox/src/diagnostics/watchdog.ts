@@ -14,9 +14,11 @@
 //   slow       a tick over the time budget                                                   warning
 // Each anomaly is reported once per body and kind (with its worst value), so a report stays readable.
 
+import type { PowerState } from '../physics/protocol';
+
 export type Vec3 = [number, number, number];
 
-export type AnomalyKind = 'nonfinite' | 'drift' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak' | 'storage';
+export type AnomalyKind = 'nonfinite' | 'drift' | 'fell' | 'tunnel' | 'flung' | 'energy' | 'spin' | 'jitter' | 'restless' | 'slow' | 'unsteady' | 'crash' | 'leak' | 'storage' | 'power';
 
 export interface Anomaly {
   kind: AnomalyKind;
@@ -66,7 +68,7 @@ export interface WatchOptions {
 const SEVERITY: Record<AnomalyKind, 'critical' | 'warning'> = {
   nonfinite: 'critical',
   drift: 'critical', fell: 'critical', tunnel: 'critical', flung: 'critical', energy: 'critical', spin: 'critical',
-  jitter: 'warning', restless: 'warning', slow: 'warning', unsteady: 'critical', crash: 'critical', leak: 'critical', storage: 'critical',
+  jitter: 'warning', restless: 'warning', slow: 'warning', unsteady: 'critical', crash: 'critical', leak: 'critical', storage: 'critical', power: 'critical',
 };
 
 const WINDOW = 30;
@@ -96,6 +98,26 @@ export class Watchdog {
     const prev = this.found.get(key);
     if (!prev) this.found.set(key, { kind, severity: SEVERITY[kind], id, tick: this.ticks, value, limit, detail });
     else if (Math.abs(value) > Math.abs(prev.value)) { prev.value = value; prev.detail = detail; }
+  }
+
+  private soc = new Map<string, number>();
+
+  /**
+   * The electrical side, each tick: no motor carries more than its controller lets through, and no battery gains
+   * charge (nothing here charges one), nor holds less than none or more than full.
+   */
+  observePower(power: PowerState | undefined) {
+    if (!power) return;
+    for (const [id, m] of Object.entries(power.motors)) {
+      if (!Number.isFinite(m.I) || !Number.isFinite(m.winding)) this.flag('power', id, NaN, 0, 'a motor\'s current or winding temperature is not a number');
+      else if (Math.abs(m.I) > m.limit * 1.001) this.flag('power', id, Math.abs(m.I), m.limit, `a motor carries ${Math.abs(m.I).toFixed(1)} A past its controller's ${m.limit} A limit`);
+    }
+    for (const [id, b] of Object.entries(power.batteries)) {
+      const before = this.soc.get(id);
+      if (!(b.soc >= 0 && b.soc <= 1)) this.flag('power', id, b.soc, 1, `a battery's charge reads ${(b.soc * 100).toFixed(1)}%`);
+      else if (before !== undefined && b.soc > before + 1e-9) this.flag('power', id, b.soc - before, 0, `a battery gained ${((b.soc - before) * 100).toFixed(3)}% charge with nothing charging it`);
+      this.soc.set(id, b.soc);
+    }
   }
 
   /** One tick's output. */

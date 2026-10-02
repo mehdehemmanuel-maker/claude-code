@@ -175,5 +175,54 @@ describe('rules', () => {
     expect(peak).toBeLessThan(range + 0.02);
     r.done();
   });
+
+  it('energy comes from a source: a motor runs on a battery wired to it and on nothing else (R10)', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const motor = r.part('motor.dc', pose([0, 1, 0]), { frozen: true, params: { model: 'maxon.re40-148867', gearhead: 'maxon.gp42c-203115' } });
+    const face = (0.071 + 0.0555) / 2;
+    const fly = r.part('disc', pose([0, 1 + face + 0.01, 0]), { material: 'steel.a36', params: { diameter: 0.1, thickness: 0.02 } });
+    const drive = r.connect('motor', { part: motor, frame: pose([0, face, 0]) }, { part: fly, frame: pose([0, -0.01, 0]) }, { channel: 'always', currentLimit: 5 });
+    r.run(0.5);
+    expect(Math.abs(r.world.angularVelocity(fly.id)![1])).toBeLessThan(1e-3);
+    // a motor drive made on anything but a motor is no drive at all
+    const block = r.part('block', pose([1, 1, 0]), { frozen: true, material: 'steel.a36', params: { x: 0.05, y: 0.05, z: 0.05 } });
+    const disc2 = r.part('disc', pose([1, 1.035, 0]), { material: 'steel.a36', params: { diameter: 0.05, thickness: 0.02 } });
+    const fake = r.connect('motor', { part: block, frame: pose([0, 0.025, 0]) }, { part: disc2, frame: pose([0, -0.01, 0]) }, { channel: 'always' });
+    const notes = r.world.step().events.filter((e) => e.type === 'break' && e.conn === fake.id).map((e) => (e as { note: string }).note);
+    expect(notes[0]).toMatch(/motor drive is the output shaft of a motor/);
+    // wired, it turns
+    const battery = r.part('battery', pose([0.3, 1, 0]), { params: { model: 'yuasa.np7-12', series: 2, parallel: 1, charge: 1 } });
+    r.connect('wire', { part: battery, frame: pose([-0.0755, 0, 0]) }, { part: motor, frame: pose([0, -face, 0]) }, { gauge: '14', length: 0.5 });
+    r.run(0.5);
+    expect(Math.abs(r.world.angularVelocity(fly.id)![1])).toBeGreaterThan(5);
+    expect(drive).toBeTruthy();
+    r.done();
+  });
+
+  it('if you can\'t make it you can\'t place it: a bought motor or battery takes only the joints its maker allows (R11)', async () => {
+    const r = await rig({ gravity: [0, 0, 0] }, false);
+    const refused: string[] = [];
+    let x = 0;
+    for (const kind of ['bolted', 'screwed', 'nailed', 'riveted', 'weld', 'glued', 'soldered', 'fixed']) {
+      for (const bought of ['motor.dc', 'battery'] as const) {
+        x += 1;
+        const item = r.part(bought, pose([x, 1, 0]), { frozen: true, params: bought === 'motor.dc' ? { model: 'maxon.re40-148867' } : { model: 'yuasa.np7-12', series: 1 } });
+        // a plate laid on its top, touching
+        const top = bought === 'motor.dc' ? 0.071 / 2 : 0.0975 / 2;
+        const plate = r.part('block', pose([x, 1 + top + 0.005, 0]), { material: 'aluminum.6061-t6', params: { x: 0.03, y: 0.01, z: 0.03 } });
+        const params: Record<string, number | string> = kind === 'bolted' ? { size: 'M4', count: 1, bondW: 0.02, bondL: 0.02 } : kind === 'screwed' ? { diameter: 0.004, length: 0.016, count: 1, bondW: 0.02, bondL: 0.02 } : { bondW: 0.02, bondL: 0.02 };
+        const c = r.connect(kind, { part: plate, frame: pose([0, -0.005, 0], axisAngle([1, 0, 0], Math.PI)) }, { part: item, frame: pose([0, top, 0]) }, params);
+        for (const e of r.world.step().events) if (e.type === 'break' && e.conn === c.id && /can't be made on a/.test(e.note)) refused.push(`${kind} on ${bought}`);
+      }
+    }
+    expect(refused.length).toBe(16);
+    // what its maker allows is made: a split clamp round the motor's body holds
+    const motor = r.part('motor.dc', pose([0, 2, 0]), { frozen: true, params: { model: 'maxon.re40-148867' } });
+    const clampBlock = r.part('block', pose([0, 2, 0]), { material: 'aluminum.6061-t6', params: { x: 0.06, y: 0.025, z: 0.06 } });
+    const held = r.connect('clamp', { part: clampBlock, frame: pose([0, 0, 0]) }, { part: motor, frame: pose([0, 0, 0]) }, { size: 'M5', count: 2, bore: 0.04, width: 0.025 });
+    const broke = r.world.step().events.some((e) => e.type === 'break' && e.conn === held.id);
+    expect(broke).toBe(false);
+    r.done();
+  });
 });
 

@@ -397,7 +397,6 @@ export class SceneView {
       case 'motor': {
         const d = numberOf(p, 'pin', numberOf(p, 'bore', 0.01));
         add(new THREE.CylinderGeometry(d / 2, d / 2, Math.max(0.03, d * 5), 16), steel);
-        if (c.kind === 'motor') add(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 20), tintMaterial(0x2b5d8a), [0, -0.05, 0]);
         if (c.kind === 'servo') add(new THREE.BoxGeometry(0.04, 0.04, 0.02), tintMaterial(0x1c1f22), [0, -0.035, 0]);
         if (c.kind === 'eddy-brake') {
           const r = numberOf(p, 'radius', 0.05);
@@ -427,6 +426,20 @@ export class SceneView {
           const m = add(new THREE.CylinderGeometry(d / 2, d / 2, 1, 6), mat);
           ropeSegments.push(m);
         }
+        break;
+      }
+      case 'link': {
+        // a rod stretched end to end (the root is scaled to the distance), with a rod-end eye at each end
+        dynamic = 'spring';
+        const d = numberOf(p, 'diameter', 0.008);
+        add(new THREE.CylinderGeometry(d / 2, d / 2, 1, 12), steel, [0, 0.5, 0]);
+        break;
+      }
+      case 'wire': {
+        dynamic = 'rope';
+        const mat = tintMaterial(0xb3261e); // red insulation
+        ropeSegments = [];
+        for (let i = 0; i < 8; i++) ropeSegments.push(add(new THREE.CylinderGeometry(0.003, 0.003, 1, 6), mat));
         break;
       }
       case 'band': {

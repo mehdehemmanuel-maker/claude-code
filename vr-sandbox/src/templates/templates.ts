@@ -190,8 +190,8 @@ export const TEMPLATES: Template[] = [
   {
     id: 'go-kart',
     name: 'Go-kart',
-    blurb: 'Aluminium chassis; a solid rear axle in two hangers, each with a 24 V gearmotor; servo-steered beam axle; rubber tyres.',
-    tryThis: ['Drive with the arrow keys (or the left thumbstick in VR).', 'Change gear ratio or voltage and feel the torque-speed trade-off.', 'Swap the tyres to PTFE.'],
+    blurb: 'Aluminium chassis; two maxon RE 40 motors with 12:1 planetary gearheads, each driving a half-axle in its own hanger bearing, on two 12 V 7 Ah lead-acid batteries in series; servo-steered beam axle; rubber tyres.',
+    tryThis: ['Drive with the arrow keys (or the left thumbstick in VR).', 'Hold full throttle against a wall: the motors stall at the controller\'s 20 A and their windings heat toward burnout.', 'Raise the controller current limit for more push, or drive until the batteries go flat.', 'Swap the tyres to PTFE.'],
     build: () => {
       const b = new BuildBuilder('Go-kart', 707);
       const wheelQ = axisAngle([1, 0, 0], Math.PI / 2);
@@ -200,18 +200,56 @@ export const TEMPLATES: Template[] = [
       // ~4 cm of clearance to the chassis edge at full lock or they jam against it.
       const chassis = b.part('plate', P(0, 0.2, 0), { material: 'aluminum.6061-t6', params: { length: 1.2, width: 0.4, thickness: 0.02 }, name: 'Chassis' });
       const under = 0.19, hub = 0.125;
-      // rear: a solid 25 mm axle turning in two pillow-block hangers bolted under the chassis; a 24 V gearmotor in
-      // each hanger drives it, and the wheels are bolted to it at their hubs
-      const axle = b.part('rod.round', { p: [-0.5, hub, 0], q: Zq }, { material: 'steel.1018-cd', params: { length: 0.78, diameter: 0.025 }, name: 'Rear axle' });
-      const motor = { V: 24, Kv: 400, R: 0.2, ratio: 12, efficiency: 0.85, channel: 'throttle', reverse: true, pin: 0.025 };
-      for (const z of [-0.15, 0.15]) {
-        const hanger = b.part('block', P(-0.5, (hub - 0.025 + under) / 2, z), { material: 'steel.a36', params: { x: 0.06, y: under - (hub - 0.025), z: 0.04 }, name: 'Axle hanger' });
-        b.joint('bolted', hanger, chassis, along([-0.5, under, z], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: 0.04, bondL: 0.06 });
-        b.joint('motor', hanger, axle, along([-0.5, hub, z], [0, 0, 1]), motor);
+      // rear: a 30 mm steel cross-member bolted under the chassis carries a pillow-block hanger near each wheel; each
+      // hanger holds a 25 mm half-axle. The two gearmotors hang on the inner ends of the half-axles, back to back on
+      // the axle line, each output shaft coupled to its half-axle; a torque arm (a short steel link with a rod end at
+      // each end, from a split clamp round the gearhead up to the chassis) stops each housing turning. Everything is
+      // held just once: the hanger locates the axle, the shaft locates the motor, the arm only takes the reaction
+      // torque, so the gearhead's shaft carries the motor's weight and the arm's push (inside its 240 N rating) and
+      // nothing the wheels do. Nothing is drilled into the motor or the battery (R11): the motor is gripped, the
+      // battery stands in a tray of aluminium angle bolted to the chassis
+      const cross = 0.03, crossTop = under, crossBot = under - cross;
+      const carrier = b.part('rod.square', P(-0.5, under - cross / 2, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.64, side: cross }, name: 'Rear cross-member' });
+      for (const z of [-0.12, 0.12]) b.joint('bolted', carrier, chassis, along([-0.5, crossTop, z], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: cross, bondL: 0.06 });
+      const gearmotor = { model: 'maxon.re40-148867', gearhead: 'maxon.gp42c-203115' };
+      const motorLen = 0.071 + 0.0555, motorR = 0.021, gap = 0.01;
+      const battery = b.part('battery', P(0.2, 0.21 + 0.0975 / 2, 0), { params: { model: 'yuasa.np7-12', series: 2, parallel: 1, charge: 1 }, name: 'Battery (2 × Yuasa NP7-12)' });
+      // the tray: 25 × 25 × 3 mm 6061 angle, a rail along each side and a stop at each end, 1 mm clear of the case,
+      // each bolted down through its flat leg with two M5
+      const angle = { leg: 0.025, t: 0.003 }, bx = 0.151 / 2 + 0.001, bz = 0.13 / 2 + 0.001;
+      for (const sz of [-1, 1]) {
+        const rail = b.part('angle', { p: [0.2, 0.21, sz * bz], q: sz < 0 ? axisAngle([0, 1, 0], Math.PI) : [0, 0, 0, 1] }, { material: 'aluminum.6061-t6', params: { length: 0.151, ...angle }, name: 'Battery tray rail' });
+        b.joint('bolted', rail, chassis, along([0.2, 0.21, sz * (bz + angle.leg / 2)], [0, -1, 0]), { size: 'M5', class: '8.8', count: 2, bondW: angle.leg, bondL: 0.151 });
       }
-      for (const z of [-0.36, 0.36]) {
-        const w = b.part('wheel', P(-0.5, hub, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Rear wheel' });
-        b.joint('bolted', w, axle, along([-0.5, hub, z], [0, 0, 1]), { size: 'M6', class: '8.8', count: 4, bondW: 0.05, bondL: 0.05 });
+      for (const sx of [-1, 1]) {
+        const stop = b.part('angle', { p: [0.2 + sx * bx, 0.21, 0], q: axisAngle([0, 1, 0], sx * Math.PI / 2) }, { material: 'aluminum.6061-t6', params: { length: 0.13, ...angle }, name: 'Battery tray stop' });
+        b.joint('bolted', stop, chassis, along([0.2 + sx * (bx + angle.leg / 2), 0.21, 0], [0, -1, 0]), { size: 'M5', class: '8.8', count: 2, bondW: angle.leg, bondL: 0.13 });
+      }
+      for (const side of [-1, 1]) {
+        const zc = side * (gap / 2 + motorLen / 2), zOut = side * (gap / 2 + motorLen), zBack = side * (gap / 2);
+        const zArm = side * (gap / 2 + motorLen - 0.0555 / 2); // over the gearhead
+        // a motor's shaft (its local y) points out toward its wheel
+        const motor = b.part('motor.dc', { p: [-0.5, hub, zc], q: axisAngle([1, 0, 0], side * Math.PI / 2) }, { params: gearmotor, name: side < 0 ? 'Left gearmotor' : 'Right gearmotor' });
+        // the torque arm's clamp: a 6061 block bored to the gearhead's 42 mm and split, gripping it with two M5 done up
+        // gently (1 N·m: a thin gearhead housing is not a shaft), with the arm's rod end at its top, 37 mm off the axis
+        const cw = 0.025, cx = 0.07, cy = 0.056, cOff = 0.007;
+        const clamp = b.part('block', P(-0.5 + cOff, hub, zArm), { material: 'aluminum.6061-t6', params: { x: cx, y: cy, z: cw }, name: 'Torque-arm clamp (bored Ø42)' });
+        b.joint('clamp', clamp, motor, along([-0.5, hub, zArm], [0, 0, side]), { size: 'M5', class: '8.8', count: 2, bore: 0.042, width: cw, tightening: 'custom', torque: 1 });
+        // the arm: an 8 mm steel tie rod with a rod end at each end, vertical from the clamp's top to the chassis
+        const armX = -0.5 + cOff + cx / 2 - 0.005, armBot = hub + cy / 2;
+        b.link('link', clamp, [armX, armBot, zArm], chassis, [armX, under, zArm], { diameter: 0.008, stud: 0.008 });
+        const outer = side * 0.39;
+        const axle = b.part('rod.round', { p: [-0.5, hub, (zOut + outer) / 2], q: Zq }, { material: 'steel.1018-cd', params: { length: Math.abs(outer - zOut), diameter: 0.025 }, name: side < 0 ? 'Left half-axle' : 'Right half-axle' });
+        // mirrored motors: the right one turns the other way about its own shaft for the kart to go forward
+        b.joint('motor', motor, axle, along([-0.5, hub, zOut], [0, 0, side]), { channel: 'throttle', reverse: side > 0, currentLimit: 20 });
+        const hz = side * 0.3;
+        const hanger = b.part('block', P(-0.5, (hub - 0.025 + crossBot) / 2, hz), { material: 'steel.a36', params: { x: 0.06, y: crossBot - (hub - 0.025), z: 0.04 }, name: 'Axle hanger' });
+        b.joint('bolted', hanger, carrier, along([-0.5, crossBot, hz], [0, 1, 0]), { size: 'M6', class: '8.8', count: 2, bondW: cross, bondL: 0.04 });
+        b.joint('bearing', axle, hanger, along([-0.5, hub, hz], [0, 0, 1]), { bore: 0.025, staticRating: 8000 });
+        const w = b.part('wheel', P(-0.5, hub, side * 0.36, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Rear wheel' });
+        b.joint('bolted', w, axle, along([-0.5, hub, side * 0.36], [0, 0, 1]), { size: 'M6', class: '8.8', count: 4, bondW: 0.05, bondL: 0.05 });
+        // 1 m of 14 AWG pair from the pack to the motor's terminals at its back, routed with slack
+        b.link('wire', battery, [0.2 - 0.151 / 2, 0.21 + 0.0975 / 2, side * 0.03], motor, [-0.5, hub, zBack], { gauge: '14', length: 1.0 });
       }
       // front: a steering beam at hub height, turned about a vertical kingpin by the servo in a block bolted under the
       // chassis; its ends are the stub axles the front wheels spin on

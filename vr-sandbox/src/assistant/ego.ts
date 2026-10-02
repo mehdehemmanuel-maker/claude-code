@@ -17,7 +17,7 @@ import { getConnectorKind } from '../connectors/registry';
 import { connectionGeometry } from '../connectors/through';
 import { composePose, relativePose } from '../doc/math';
 import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPoses } from '../doc/commands';
-import { effectiveParams, getPartKind } from '../parts/registry';
+import { effectiveParams, getPartKind, massOf } from '../parts/registry';
 import { DISPLAY, defaultsOf, formatForce, numberOf, type Params } from '../schema/params';
 import { AUTO_JOIN } from '../connectors/plan';
 import { run, type RunResult } from '../forge/forge';
@@ -267,7 +267,7 @@ export class Ego {
     const parts = Object.values(doc.parts).map((p) => {
       const k = getPartKind(p.kind), m = app.materialOf(p);
       const b = app.boundsOf([p.id]);
-      return { id: p.id, mass: k.volume(effectiveParams(k, p.params, m), m) * m.density, com: [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2] as [number, number, number], grounded: p.frozen || b.min[1] <= 0.005 };
+      return { id: p.id, mass: massOf(k, effectiveParams(k, p.params, m), m), com: [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2] as [number, number, number], grounded: p.frozen || b.min[1] <= 0.005 };
     });
     const joints = Object.values(doc.connections).filter((c) => c.state.status !== 'broken' && getConnectorKind(c.kind).model === 'rigid').map((c) => {
       const d = this.derived(c);
@@ -426,7 +426,7 @@ export class Ego {
   describe(id: string): string {
     const app = this.app, p = app.doc.parts[id]!;
     const k = getPartKind(p.kind), m = app.materialOf(p);
-    const mass = k.volume(effectiveParams(k, p.params, m), m) * m.density;
+    const mass = massOf(k, effectiveParams(k, p.params, m), m);
     const b = app.boundsOf([id]);
     const v = app.live.velocity(id)?.linear;
     const speed = v ? Math.hypot(v[0], v[1], v[2]) : 0;
