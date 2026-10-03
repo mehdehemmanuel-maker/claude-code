@@ -1157,6 +1157,11 @@ describe('Ego says how she knows an influence: the epistemic vector of the arrow
   it('"how sure are you that the current causes the voltage": the law path, with the vector, the label and the law\'s source', () => {
     expect(interpret('how do you know that a lubricant prevents the failure of a bearing')).toEqual({ do: 'traverse', query: 'know', of: 'lubricant', which: 'failure of a bearing', prevent: true });
     expect(interpret('how sure are you that the current causes the voltage')).toEqual({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
+    // read before "why" and "what makes", which would otherwise take these
+    for (const t of ['why do you think the current causes the voltage', 'what makes you think the current causes the voltage', 'how confident are you that the current causes the voltage', 'are you sure that the current causes the voltage']) expect(interpret(t), t).toEqual({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
+    expect(interpret('why do you say load causes the failure of a bearing')).toEqual({ do: 'traverse', query: 'know', of: 'load', which: 'failure of a bearing' });
+    expect(interpret('why use a torque arm')).toMatchObject({ do: 'reason' });
+    expect(interpret('what makes a shaft')).toMatchObject({ do: 'traverse', query: 'producers' });
     const a = answerTraversal({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
     expect(a).toMatch(/^Electric current is needed for \(raises\) voltage \(Young & Freedman, University Physics, 15th ed\., Pearson 2019\)\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory entailed \(domain inside\); coverage 0\.\d+; uncertainty unstated; discrepancy none; consistent: entailed by a law, by derivation; partly covered by sources\. The law behind it: Ohm's law \(V = I R\), Young & Freedman.*; the sign and size taken at its worked example, not measured in my world\. In Nex: influence\(qty\.current, qty\.voltage\)\{dir:1 polarity:\+ necessity:necessary mech:ohm/);
   });

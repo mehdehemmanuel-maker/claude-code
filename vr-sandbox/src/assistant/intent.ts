@@ -90,7 +90,16 @@ function failuresOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   return m ? { do: 'traverse', query: 'failures', of: (m[1] ?? m[2] ?? m[3] ?? m[4])!.replace(/^(?:an? |the |your |my )/, '').trim() } : null;
 }
 
+/** How she knows an influence: the epistemic vector of the arrow or the law behind it (docs/NEX-DISCOVERY.md, part 2). Read before "why" and before "what makes", which would otherwise take it. */
+function knowOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
+  const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
+  const m = /^(?:how (?:do|did|would|can) you know|how sure are you|how certain are you|how confident are you|are you sure|are you certain|what is your evidence|whats your evidence|what evidence do you have|why do you (?:think|say|believe)|what makes you (?:think|say|believe)) (?:that |for )?(?:an? |the )?(.+?) (causes?|leads? to|brings? about|results? in|produces?|prevents?|stops?|enables?|allows?|raises?|lowers?) (?:an? |the )?(.+?)(?: to (?:fail|break|happen|work|run|wear))?\??$/.exec(t);
+  return m ? { do: 'traverse', query: 'know', of: strip(m[1]!), which: strip(m[3]!), ...(/^(?:prevents?|stops?|lowers?)$/.test(m[2]!) ? { prevent: true } : {}) } : null;
+}
+
 function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traverse' }> | null {
+  const known = knowOf(t);
+  if (known) return known;
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
   if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each) (?:known |possible )?ways? (?:to|of) (?:store|storing) (\w+)|^how (?:can|could) (\w+) be stored|^ways? to store (\w+)$/.exec(t))) return { do: 'traverse', query: 'ways-to-store', of: (m[1] ?? m[2] ?? m[3])! };
@@ -125,8 +134,6 @@ function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traver
   if ((m = /^(density|youngs modulus|elastic modulus|modulus(?: of elasticity)?|stiffness|yield strength|yield|tensile strength|ultimate strength|strength|thermal conductivity|electrical conductivity|conductivity|melting point|friction coefficient|coefficient of friction|friction) (?:of|for) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'property', of: strip(m[2]!), which: m[1]! };
   if ((m = /^(?:what is|whats|how (?:much|high|big|large) is) (?:the )?(density|youngs modulus|elastic modulus|modulus(?: of elasticity)?|stiffness|yield strength|yield|tensile strength|ultimate strength|strength|thermal conductivity|electrical conductivity|conductivity|melting point|friction coefficient|coefficient of friction|friction) (?:of|for) (?:an? |the )?(.+)$|^how (dense|stiff|strong|heavy|conductive) is (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'property', of: strip((m[2] ?? m[4])!), which: (m[1] ?? m[3])! };
   // cause: a chain of influences from one thing to another in Nex, or none (and a correlation is never one)
-  // how she knows an influence: the epistemic vector of the arrow or the law behind it (docs/NEX-DISCOVERY.md, part 2)
-  if ((m = /^(?:how (?:do|did|would|can) you know|how sure are you|how certain are you|what is your evidence|whats your evidence|what evidence do you have) (?:that |for )?(?:an? |the )?(.+?) (causes?|leads? to|brings? about|results? in|produces?|prevents?|stops?|enables?|allows?|raises?|lowers?) (?:an? |the )?(.+?)(?: to (?:fail|break|happen|work|run|wear))?\??$/.exec(t))) return { do: 'traverse', query: 'know', of: strip(m[1]!), which: strip(m[3]!), ...(/^(?:prevents?|stops?|lowers?)$/.test(m[2]!) ? { prevent: true } : {}) };
   if ((m = /^(?:does|do|can|could|will|would|might) (?:an? |the )?(.+?) (cause|lead to|bring about|result in|produce|prevent|stop|enable|allow) (?:an? |the )?(.+?)(?: to (?:fail|break|happen|work|run|wear))?\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!), which: strip(m[3]!), ...(/^(?:prevent|stop)$/.test(m[2]!) ? { prevent: true } : {}) };
   if ((m = /^(?:is|are) (?:an? |the )?(.+?) caused by (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[2]!), which: strip(m[1]!) };
   if ((m = /^what (?:causes|prevents|drives|brings about|leads to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!) };
@@ -215,6 +222,7 @@ export function interpret(line: string): Intent | null {
   if (/^(what (is|are) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?|herd) (doing|up to)|where (is|are) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?) (going|off to|headed)|what (did|has|have) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?) (do|done|say|said|chosen?|been doing|been up to))\b/.test(t)) return { do: 'creatures' };
   // "why did it break?" is about what just happened; any other "why" asks for the reason things are done as they are
   if (/^why( did (it|that|this|the .+?) (break|fail|fall|snap|collapse|bend|give way)( down| over)?)?$/.test(t)) return { do: 'why' };
+  { const known = knowOf(t); if (known) return known; }
   if ((m = /^why (?:does|do|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if ((m = /^(?:what is|whats) the (?:reason|point|idea) (?:for|of|behind) (?:an? |the )?(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if (new RegExp(`^(make ${it} )?(stronger|sturdier|hold|stiffer)|^(fix|strengthen|reinforce) ${it}|^fix( it)?$|^make ${it} hold`).test(t)) return { do: 'strengthen' };
