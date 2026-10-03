@@ -229,10 +229,20 @@ slowly (13.47 and 19.04 m/s, ratio still 1.4135). A body now shows the air and t
 shape: a sphere π r², a cylinder its rectangle across and its disc along, a box its faces; a hull or a compound still
 shows its box, and the code says so. The drag coefficients of the part kinds are quoted against these areas.
 
+**Cooling, at two sizes: the first scale-dependent one.** A mild-steel cube of 0.1 m and one of 0.2 m, 120 K above the
+room, left in still air. The law book: a time goes as λ^½ under Froude, but a lumped time constant m c / h A goes as
+λ with h held, so the verdict is scale-dependent by √2; and the engine's h is not even held, since free convection in
+still air sheds less per area from a bigger thing (h = 1.42 (ΔT/L)^¼, Holman, now a law of the book), so a purely
+convective cooling goes as λ^1.25, with radiation, whose coefficient does not see the size, pulling it back toward λ.
+Measured in the engine's thermal model: 3007 s and 6560 s to lose half the excess, a ratio of 2.1814; the law book's
+two laws integrated give 2.1813. Two ways to one number, between 2 and 2.38, and nowhere near 1.41: the thermal world
+is not similar to the mechanical one, as section 5 says in words and this says in seconds.
+
 **The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
 observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
 tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1,
-restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2, drag 1.4124 for √2. The
+restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2, drag 1.4124 for √2, cooling 2.1814 for the law
+book's 2.1813 (and not Froude's 1.41). The
 conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
 is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
 with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they

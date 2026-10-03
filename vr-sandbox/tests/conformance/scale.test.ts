@@ -7,6 +7,9 @@ import { MAX_SUBSTEPS, SUBSTEP_OMEGA_DT, TICK } from '../../src/physics/world';
 import { classify, exponentOfDim, observationById, similarityById } from '../../src/ganglia/scale';
 import { parseUnit } from '../../src/ganglia/units';
 import type { Claim } from '../../src/ganglia/scale';
+import { AMBIENT, thermalOf, warm } from '../../src/engineering/thermal';
+import { getMaterial } from '../../src/data/materials';
+import { lawById } from '../../src/ganglia/laws';
 
 const G = 9.80665;
 const ratio = (a: number, b: number) => a / b;
@@ -66,6 +69,26 @@ async function terminalSpeed(d: number): Promise<{ v: number; law: number }> {
   const [t0, y0] = ys.find(([t]) => t >= t1 - 0.1)!;
   const rho = 1.204, Cd = 0.47, A = (Math.PI / 4) * d * d;
   return { v: (y0 - y1) / (t1 - t0), law: Math.sqrt((2 * m * G) / (rho * Cd * A)) };
+}
+
+/**
+ * A mild-steel cube of side a, 120 K above the room, left to cool in still air by the engine's thermal model (free
+ * convection by the laminar air correlation plus radiation, lumped): the time to lose half its excess. And the same
+ * cooling integrated from the law book's own laws (convection.natural, radiation), a second way to the same number.
+ */
+function halfCoolingTime(a: number): { model: number; laws: number } {
+  const m = getMaterial('steel.a36'), th = thermalOf(m);
+  const mass = m.density * a ** 3, area = 6 * a * a, C = mass * th.c, T0 = AMBIENT + 120, half = AMBIENT + 60;
+  const dt = 0.5;
+  let T = T0, model = 0;
+  while (T > half) { const next = warm(T, 0, mass, th.c, area, a, th.emissivity, dt); if (next <= half) { model += dt * (T - half) / (T - next); T = next; break; } T = next; model += dt; }
+  const conv = lawById('convection.natural')!, rad = lawById('radiation')!;
+  const coef = conv.constants!['C']!.value, sigma = rad.constants!['sigma']!.value;
+  const loss = (temp: number) => conv.eval!({ dT: temp - AMBIENT, L: a, C: coef })! * area * (temp - AMBIENT) + rad.eval!({ eps: th.emissivity, A: area, T: temp + 273.15, Tinf: AMBIENT + 273.15, sigma })!;
+  let U = T0, laws = 0;
+  const h = 0.05;
+  while (U > half) { const k1 = -loss(U) / C, k2 = -loss(U + 0.5 * h * k1) / C, k3 = -loss(U + 0.5 * h * k2) / C, k4 = -loss(U + h * k3) / C; const next = U + (h / 6) * (k1 + 2 * k2 + 2 * k3 + k4); if (next <= half) { laws += h * (U - half) / (U - next); break; } U = next; laws += h; }
+  return { model, laws };
 }
 
 /**
@@ -312,4 +335,26 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     // the speeds themselves: v = √(2 m g / ρ C_d A) with the ball's frontal area π d² / 4, not its box
     for (const x of [small, big]) expect(Math.abs(x.v / x.law - 1), 'the terminal speed is what the drag law gives').toBeLessThan(0.02);
   }, 180000);
+
+  it('Cooling: a steel cube twice the side cools more than twice as slowly, between what h held and laminar free convection give; the thermal world is not Froude-similar', () => {
+    const lambda = 2;
+    const froude = similarityById('scale.froude')!;
+    // the law book: a lumped time constant m c / h A goes as λ with h held, not as λ^½ as Froude needs, so it is scale-dependent, by λ
+    const lumped = classify('lumped.time-constant', froude, lambda);
+    expect(lumped.verdict).toBe('scale-dependent');
+    expect(lumped.got / lumped.example).toBeCloseTo(lambda, 6); // what the law gives: m c / h A goes as λ³ / λ²
+    expect(lumped.ratio).toBeCloseTo(Math.SQRT2, 6); // off Froude's λ^½ by √2
+    // and the engine's h is not held: free convection sheds less per area from a bigger thing (h ∝ L^-¼), so a purely convective time goes as λ^1.25; radiation's share, size-free, pulls it back toward λ
+    const convective = lambda ** 1.25;
+    const small = halfCoolingTime(0.1), big = halfCoolingTime(0.2);
+    const measured = ratio(big.model, small.model), fromLaws = ratio(big.laws, small.laws);
+    console.log('OBSERVED observation.cooling-size', measured, fromLaws, small.model, big.model, small.laws, big.laws);
+    expect(measured).toBeGreaterThan(lambda);
+    expect(measured).toBeLessThan(convective);
+    // the engine's model and the law book integrated agree: two ways to one number
+    expect(Math.abs(measured / fromLaws - 1)).toBeLessThan(0.01);
+    for (const [x] of [[small], [big]] as const) expect(Math.abs(x.model / x.laws - 1)).toBeLessThan(0.01);
+    expect(Math.abs(measured / observationById('observation.cooling-size')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.01);
+    expect(Math.abs(fromLaws / observationById('observation.cooling-size')!.predicted - 1), 'the register records what the law book predicts').toBeLessThan(0.01);
+  });
 });

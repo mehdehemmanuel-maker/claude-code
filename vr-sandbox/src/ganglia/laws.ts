@@ -24,6 +24,7 @@ const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain,
 const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' as const };
 const HH = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015', kind: 'textbook' as const };
 const ANDERSON = { cite: 'Anderson, Introduction to Flight, 8th ed., McGraw-Hill 2016', kind: 'textbook' as const };
+const HOLMAN = { cite: 'Holman, Heat Transfer, 10th ed., McGraw-Hill 2010, table 7-2 (simplified equations for free convection in air)', kind: 'textbook' as const };
 const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
 const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
@@ -325,6 +326,12 @@ export const LAWS: Law[] = [
     id: 'conduction', name: 'Fourier\'s law', domain: 'thermal', statement: 'Heat conducts through a wall at its conductivity times its area times the temperature difference over its thickness.', formula: 'q = k A ΔT / L',
     inputs: [q('k', 'conductivity', 'W/m K'), q('A', 'area', 'm^2'), q('dT', 'temperature difference', 'K'), q('L', 'thickness', 'm')], output: q('q', 'heat flow', 'W'), eval: ({ k, A, dT, L }) => (k! * A! * dT!) / L!,
     valid: 'Steady, one-dimensional.', example: { inputs: { k: 200, A: 0.01, dT: 50, L: 0.1 }, output: 1000 }, source: INCROPERA, tags: ['heat', 'conduction'],
+  },
+  {
+    id: 'convection.natural', name: 'Free convection in still air', domain: 'thermal', statement: 'A surface in still air loses heat at a coefficient that rises with the fourth root of its temperature excess over its size: hotter and smaller things shed heat faster per area, so a thing twice the size cools more than twice as slowly.', formula: 'h = 1.42 (ΔT / L)^¼',
+    inputs: [q('dT', 'temperature excess', 'K'), q('L', 'size', 'm')], output: q('h', 'heat transfer coefficient', 'W/m^2 K'), constants: { C: { value: 1.42, unit: 'W/m^1.75 K^1.25', name: 'the laminar air coefficient (Holman table 7-2), with its fractional units' } }, eval: ({ dT, L, C }) => C! * Math.pow(Math.abs(dT!) / L!, 0.25),
+    valid: 'Laminar (Gr Pr below about 10^9: sizes under a metre, excesses under a few hundred kelvin), still air at atmospheric pressure; the simplified laminar correlation, within about 20 % of the full one.', example: { inputs: { dT: 50, L: 0.1 }, output: 6.7147654239225485 }, source: HOLMAN, tags: ['heat', 'cooling', 'air', 'size'],
+    implementedIn: 'engineering/thermal.ts heatLoss',
   },
   {
     id: 'radiation', name: 'Stefan-Boltzmann radiation', domain: 'thermal', statement: 'A surface radiates at its emissivity times σ times its area times the fourth powers of absolute temperature, less what it receives.', formula: 'q = ε σ A (T⁴ − T∞⁴)',

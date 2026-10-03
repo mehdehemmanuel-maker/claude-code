@@ -155,6 +155,12 @@ export const NODES: Node[] = [
     heldBy: [{ file: 'tests/conformance/scale.test.ts', test: 'Drag: a foam ball twice the diameter falls √2 faster once the air holds it, as Froude similarity predicts, and each at the speed the drag law gives' }],
     limits: ['a hull or a compound body shows its box, not its true silhouette'] },
 
+  { id: 'F-4.8', kind: 'law', epistemic: 'constitutive', name: 'cooling to the room', proof: 'tested', parents: ['F-4'],
+    statement: 'A part at one temperature loses heat to still air by free convection at h = 1.42 (ΔT/L)^¼ over its surface and by radiation at ε σ (T⁴ − T_room⁴), and warms by what it absorbs over its heat capacity; the time this takes grows faster than its size, between λ and λ^1.25, never as the mechanics\' λ^½.', form: 'C dT/dt = P − h A ΔT − ε σ A (T⁴ − T_a⁴)',
+    realisedBy: [{ module: 'engineering/thermal', symbol: 'heatLoss' }, { module: 'engineering/thermal', symbol: 'warm' }],
+    heldBy: [{ file: 'tests/conformance/scale.test.ts', test: 'Cooling: a steel cube twice the side cools more than twice as slowly, between what h held and laminar free convection give; the thermal world is not Froude-similar' }],
+    limits: ['lumped: one temperature per part, fair while the Biot number is small (metal), wrong for wood, whose surface runs hotter', 'the laminar correlation: sizes under a metre and excesses under a few hundred kelvin'] },
+
   { id: 'F-5', kind: 'law', epistemic: 'physical', name: 'covariance and similarity', proof: 'proved', parents: ['ML-2', 'FS-6'],
     statement: 'Behaviour depends on dimensionless groups; two systems with the same groups behave alike.' },
   { id: 'F-5.1', kind: 'law', epistemic: 'mathematical', name: 'the Π theorem', proof: 'proved', parents: ['F-5'],

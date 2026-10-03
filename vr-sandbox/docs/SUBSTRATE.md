@@ -188,7 +188,7 @@ the typecheck, the unit, codec and golden suites and the build, and fails on any
 | relations | 11 650 |
 | relations per entity | 4.5 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
-| laws | 174 (106 executable in `laws.ts`, 68 cited not run) |
+| laws | 175 (107 executable in `laws.ts`, 68 cited not run) |
 | materials | 272 |
 | components | 659 |
 | functions | 92 |
