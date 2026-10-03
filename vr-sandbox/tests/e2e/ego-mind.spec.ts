@@ -65,6 +65,10 @@ test('a design tested on her stand opens an investigation that survives a reload
   expect(changed).toMatch(/^Resolved: a table for 60 kg with aprons .* holds 90 kg\. Test performed: .* at 90 kg \(1.5x, the proof load\): it held/);
   expect(changed).toMatch(/went from unmeasured to true/);
   expect(changed).toMatch(/Still uncertain: this is simulation evidence only, 1 run, never measured on a real piece/);
+  // what is open: the time/scale branch's frontier, read off its structures, and her own unresolved investigations
+  const open = await sb(page, (s) => s.ego.ask('what is open'));
+  expect(open).toMatch(/^8 open in the time\/scale branch: /);
+  expect(open).toMatch(/the role of c \(UNRESOLVED, outside this world, 3 branches/);
   // a request she cannot read is kept, not run as Forge; Forge still runs as Forge
   const unknown = await sb(page, (s) => s.ego.ask('please dance for me'));
   expect(unknown).toMatch(/^Unknown request: I can't read “please dance for me”/);

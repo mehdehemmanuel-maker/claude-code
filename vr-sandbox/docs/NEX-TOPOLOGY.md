@@ -288,6 +288,15 @@ than the Ganglia as it stands, by a number, and the migration of the law book to
 rather than by this document. If (c) fails, the human tree is carrying information the structure does not, and that
 information has to be found before any migration.
 
+## The other half, run (3 October 2026, later the same day)
+
+Laws as terms (`native/terms.ts`, one operator `apply` added to the kernel): 43 laws written as expression trees, each
+reproducing its own worked example. Anti-unification over them: 15 of the 18 termed laws that had no power form join a
+shared shape; the generalisation order is three deep where the exponent probe reached two; 16 shapes with two or more
+instances, 7 maximal; 12 promoted shapes shorten the corpus from 413 to 386 nodes under the description-length
+criterion, while the hand-kept law tree names none of the 43 and compresses nothing. A corrected term reaches what
+cites it by hash alone (tests/unit/terms.test.ts). Full results and what they were used for: docs/NEX-TSC.md.
+
 ## What was changed in code for this document
 
 One native operation added, no category: `shapeOf` and `shapeKey` in src/ganglia/native/forms.ts (a law's shape

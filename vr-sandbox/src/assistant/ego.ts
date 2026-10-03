@@ -48,6 +48,7 @@ import { design, type DesignSpec } from './designer';
 import { JOINT_LIMIT, standLoads, standPushes } from './prove';
 import { fragmentOf } from '../doc/commands';
 import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature } from '../mind';
+import { sayFrontier } from '../ganglia/native/tsc';
 import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
@@ -223,6 +224,7 @@ export class Ego {
       case 'help': return HELP;
       case 'working': return this.mind ? sayWorking(this.mind.journal.commits) : 'My journal is not open yet.';
       case 'changed': return this.mind ? sayChanged(this.mind.journal.commits) : 'My journal is not open yet.';
+      case 'open': { const mine = this.mind?.unresolved() ?? []; return `${sayFrontier()}${mine.length ? ` And ${mine.length} investigation${mine.length === 1 ? '' : 's'} of mine unresolved: ${mine.join(', ')}.` : ''}`; }
       case 'status': {
         const top = this.advice[0];
         return `${this.observe()}.${top ? ` ${top.text}` : ' Everything is holding.'}`;

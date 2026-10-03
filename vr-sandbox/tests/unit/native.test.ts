@@ -436,8 +436,8 @@ describe('Nex: polysemy (section S) is split by structure, measured over the sub
     expect(c.polysemous.length).toBeGreaterThanOrEqual(30);
     expect(c.polysemous).toEqual(expect.arrayContaining(['current', 'glue', 'fuel', 'filter', 'wood', 'bone', 'solder', 'flux']));
     const silent = c.polysemous.filter((w) => findByWords(substrate, w));
-    // the four still chosen: a law of a thing against a function (axial), a tool against its machine (broach), the geometry kind against a part (disc), a law against a motor named by it (induction)
-    expect(silent).toEqual(['axial', 'broach', 'disc', 'induction']);
+    // the five still chosen: a law of a thing against a function (axial), a tool against its machine (broach), the geometry kind against a part (disc), a law against a motor named by it (induction), and since 3 October the wave-speed law against the electromagnet named by the same word
+    expect(silent).toEqual(['axial', 'broach', 'disc', 'electromagnetic', 'induction']);
     for (const w of c.polysemous) if (!silent.includes(w)) expect(findByWords(substrate, w), w).toBeUndefined();
   });
 

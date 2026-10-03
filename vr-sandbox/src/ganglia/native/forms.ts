@@ -109,12 +109,23 @@ export function shapeOf(law: Law): Shape | null {
   let residual = out;
   for (const t of terms) residual = addDim(residual, t.dim, -t.exp);
   const consts = Object.values(law.constants ?? {}).map((c) => { try { return dimensionOf(c.unit); } catch { return ZERO; } }).filter((d) => !isDimless(d));
-  // each constant takes the exponent its leading base dimension needs; what is left after all of them is the residual
-  for (const d of consts) {
-    const n = d.findIndex((x) => Math.abs(x) > 1e-9);
-    const e = n >= 0 ? residual[n]! / d[n]! : 0;
-    if (Math.abs(e) > 1e-9) terms.push({ dim: d, exp: +e.toFixed(2), held: true });
-    residual = addDim(residual, d, -e);
+  // the constants take the exponents that account for the residual, together (least squares over their dimensions:
+  // two constants may share a base dimension, as μ0 and ε0 do); what is left after all of them is the residual
+  if (consts.length) {
+    const k = consts.length;
+    const M = consts.map((a, i) => [...consts.map((b) => a.reduce((t, x, n) => t + x * b[n]!, 0)), a.reduce((t, x, n) => t + x * residual[n]!, 0), i]);
+    for (let c = 0; c < k; c++) {
+      let p = c; for (let rr = c + 1; rr < k; rr++) if (Math.abs(M[rr]![c]!) > Math.abs(M[p]![c]!)) p = rr;
+      [M[c], M[p]] = [M[p]!, M[c]!];
+      if (Math.abs(M[c]![c]!) < 1e-12) continue;
+      for (let rr = 0; rr < k; rr++) { if (rr === c) continue; const f = M[rr]![c]! / M[c]![c]!; for (let j = c; j <= k; j++) M[rr]![j]! -= f * M[c]![j]!; }
+    }
+    for (let c = 0; c < k; c++) {
+      const e = Math.abs(M[c]![c]!) < 1e-12 ? 0 : M[c]![k]! / M[c]![c]!;
+      const d = consts[c]!;
+      if (Math.abs(e) > 1e-9) terms.push({ dim: d, exp: +e.toFixed(2), held: true });
+      residual = addDim(residual, d, -e);
+    }
   }
   return { out, terms, residual: residual.map((x) => (Math.abs(x) < 1e-6 ? 0 : x)) as Dim };
 }

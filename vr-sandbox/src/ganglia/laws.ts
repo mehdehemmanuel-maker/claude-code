@@ -849,6 +849,16 @@ export const LAWS: Law[] = [
     valid: 'A band-limited signal; real converters sample a few times faster and filter first.', example: { inputs: { fmax: 20000 }, output: 40000.0 }, source: PHYSICS, tags: ['adc', 'sampling', 'aliasing', 'audio'],
   },
   {
+    id: 'sound.speed', name: 'Speed of a longitudinal wave in a bar', domain: 'mechanics', statement: 'A push travels along a thin bar at the root of its modulus over its density: about 5 km/s in steel, 40 m/s in soft rubber. Nothing in a solid knows of a push sooner.',
+    formula: 'c = √(E / ρ)', inputs: [q('E', 'modulus', 'Pa'), q('rho', 'density', 'kg/m^3')], output: q('c', 'wave speed', 'm/s'), eval: ({ E, rho }) => Math.sqrt(E! / rho!),
+    valid: 'Thin bar (lateral strain free); bulk waves in a block go faster by √((1 − ν) / ((1 + ν)(1 − 2ν))).', example: { inputs: { E: 200e9, rho: 7850 }, output: 5047.544651250688 }, source: { cite: 'Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000, ch. 3 (longitudinal waves in a bar)', kind: 'textbook' as const }, tags: ['sound', 'wave', 'propagation', 'rigid', 'impact'],
+  },
+  {
+    id: 'wave.speed.electromagnetic', name: 'Speed of an electromagnetic wave', domain: 'electrical', statement: 'An electromagnetic wave travels at the inverse root of the product of the medium\'s permeability and permittivity: in vacuum, c.',
+    formula: 'v = 1 / √(μ ε)', inputs: [q('mu', 'permeability', 'N/A^2'), q('eps', 'permittivity', 'F/m')], output: q('v', 'wave speed', 'm/s'), eval: ({ mu, eps }) => 1 / Math.sqrt(mu! * eps!),
+    valid: 'A linear, lossless medium; in a conductor the wave decays over the skin depth.', example: { inputs: { mu: 1.25663706212e-6, eps: 8.8541878128e-12 }, output: 299792458.0, rel: 1e-9 }, source: GRIFFITHS, tags: ['light', 'wave', 'propagation', 'c', 'vacuum'],
+  },
+  {
     id: 'conservation.momentum', name: 'Conservation of momentum (two bodies that stick)', domain: 'mechanics', statement: 'The momentum of a closed system is constant: two bodies that collide and stick move on together at the momentum-weighted mean of their speeds.', formula: 'v = (m₁ v₁ + m₂ v₂) / (m₁ + m₂)',
     inputs: [q('m1', 'mass', 'kg'), q('v1', 'speed', 'm/s'), q('m2', 'mass', 'kg'), q('v2', 'speed', 'm/s')], output: q('v', 'common speed after', 'm/s'), eval: ({ m1, v1, m2, v2 }) => (m1! * v1! + m2! * v2!) / (m1! + m2!),
     valid: 'No outside force during the collision; along one line.', example: { inputs: { m1: 2, v1: 3, m2: 1, v2: 0 }, output: 2.0 }, source: PHYSICS, tags: ['collision', 'rocket', 'propeller', 'impact'],

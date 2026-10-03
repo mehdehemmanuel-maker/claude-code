@@ -1,5 +1,8 @@
 // Messages between the app and the physics world (in a Web Worker or inline). Plain data only.
 
+/** The fixed step of the world, s: the one clock every realisation in it is coarse-grained by (docs/NEX-TSC.md). */
+export const TICK = 1 / 90;
+
 import type { Energies } from './energy';
 import type { Want } from '../world/mind';
 import type { Material } from '../data/materials';

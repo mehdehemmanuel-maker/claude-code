@@ -122,7 +122,10 @@ export type Op =
   // epistemic, computed never asserted
   | 'compare' | 'support' | 'contradict'
   // a map between theories with a contract
-  | 'morphism';
+  | 'morphism'
+  // an operation applied to arguments: the first argument a distinction naming the operation (op:mul, op:pow, op:ln...), the rest its operands.
+  // What a law's content is when it is a term and not a closure (terms.ts); the gap that closed on 3 October 2026 (docs/NEX-TSC.md)
+  | 'apply';
 
 /** Which operators do not care about the order of their arguments. */
 export const COMMUTATIVE: ReadonlySet<Op> = new Set<Op>(['same', 'differ', 'state', 'contradict']);

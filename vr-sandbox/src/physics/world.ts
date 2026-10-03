@@ -5,6 +5,7 @@
 // material. Nothing here knows about specific builds; behaviour comes only from geometry, materials and specs.
 
 import type JoltNS from 'jolt-physics';
+import { TICK } from './protocol';
 import type { Material } from '../data/materials';
 import { getConnectorKind, type ConnectorKind, type Derived } from '../connectors/registry';
 import { spans, throughOf, type Through } from '../connectors/through';
@@ -172,7 +173,7 @@ type J = typeof JoltNS;
 
 const LAYER_STATIC = 0;
 const LAYER_MOVING = 1;
-export const TICK = 1 / 90;
+export { TICK };
 export const MAX_SUBSTEPS = 8;
 /** How far an intact joint's two sides may be apart before it is a defect (5 mm: well past any solver tolerance). */
 const JOINT_DRIFT = 0.005;

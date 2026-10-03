@@ -20,7 +20,7 @@ import { DIMLESS, parseUnit, type Dim } from '../units';
 import { COMMUTATIVE, type C, type Coords, type E, type Op, type Q, type Structure } from './core';
 import { unitOf } from './translate';
 
-const OPS: ReadonlySet<string> = new Set<Op>(['part', 'kind', 'same', 'differ', 'embed', 'abstract', 'recurse', 'influence', 'invariant', 'constrain', 'approximate', 'quantity', 'function', 'state', 'compare', 'support', 'contradict', 'morphism']);
+const OPS: ReadonlySet<string> = new Set<Op>(['part', 'kind', 'same', 'differ', 'embed', 'abstract', 'recurse', 'influence', 'invariant', 'constrain', 'approximate', 'quantity', 'function', 'state', 'compare', 'support', 'contradict', 'morphism', 'apply']);
 const CONTEXTS: ReadonlySet<string> = new Set<C['kind']>(['world', 'assume', 'intervene', 'believe', 'branch', 'frame']);
 /** The order keys are written in: the coordinates that say what a relation is before the ones that say how it is known; then the keys inside them. */
 const KEY_ORDER = ['dir', 'polarity', 'necessity', 'strength', 'cert', 'time', 'scale', 'mech', 'dom', 'frame', 'ev', 'mode', 'under', 'against', 'margin', 'instrument',

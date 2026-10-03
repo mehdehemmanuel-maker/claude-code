@@ -10,7 +10,8 @@ export function skeleton(s: Structure): { def: Structure; args: D[] } {
   const vary = (x: Structure): Structure => {
     switch (x.k) {
       case 'D': {
-        if (x.id.startsWith('$')) return x;
+        // a variable stays a variable; an operation (op:mul, op:pow) is part of the language, not a thing to abstract over
+        if (x.id.startsWith('$') || x.id.startsWith('op:')) return x;
         if (!seen.has(x.id)) { seen.set(x.id, `$${args.length + 1}`); args.push(x); }
         return { k: 'D', id: seen.get(x.id)! };
       }

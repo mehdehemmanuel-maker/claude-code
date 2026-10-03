@@ -4,6 +4,7 @@
 // The same renderer reads its own sentences back (parse), so the round trip native → English → native can be measured.
 
 import { EVIDENCE, evidenceRank, type C, type Coords, type D, type E, type Evidence, type Mode, type Q, type R, type Structure, type T, d, q, r } from './core';
+import { sayTerm } from './terms';
 
 export type Lang = 'en' | 'es';
 export type Audience = 'child' | 'technician' | 'engineer' | 'physicist';
@@ -194,6 +195,8 @@ export function render(s: Structure, lang: Lang = 'en', audience: Audience = 'en
           // a quantity with no value is a variable: "the rating life of the bearing", with no "is"
           case 'quantity': return a.length < 3 ? [...parts.before.filter(Boolean), `${a[1] ?? ''} ${W.of} ${a[0] ?? ''}`, ...parts.after].join(' ').replace(/\s+/g, ' ').trim() : [...parts.before.filter(Boolean), `${a[1] ?? ''} ${W.of} ${a[0] ?? ''}`, hedge || W.is, a[2] ?? '', ...parts.after].join(' ').replace(/\s+/g, ' ').trim();
           case 'state': return a.join(`, ${W.and} `);
+          // a term (a law's content): said as its formula is written; every symbol in it is carried
+          case 'apply': return [...parts.before.filter(Boolean), sayTerm(x), ...parts.after].join(' ').trim();
         }
       }
     }

@@ -27,6 +27,8 @@ import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpande
 import { externalExpander } from './external';
 import { population } from './service';
 
+import { discovery as tscDiscovery } from '../native/tsc';
+
 export * from './model';
 export { Substrate, coverageFrom } from './substrate';
 export { Pack, est, param } from './dsl';
@@ -64,6 +66,9 @@ export function* buildSteps(): Iterator<string, Built, undefined> {
       yield `ingest:${p.domain}`;
     }
   }
+  // the time/scale/causal-propagation branch (native/tsc.ts): its structures, and the arrows that put existing laws under them
+  ingest(s, tscDiscovery(), seedReport);
+  yield 'tsc';
   // what the bridge named and nothing described: stubs, each a question
   s.repair();
   yield 'repair';
