@@ -296,7 +296,14 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   components without a failure are 8, from 98: all pieces and regions of building blocks. On the way a merge-order
   fault was found and fixed: a pack that named a thing before the pack that describes it left the stub's "unplaced"
   as the thing's first domain, which is the queue's lane, so the cortex, the liver and the lung were queued on no
-  lane; a description now puts its own domain first and "unplaced" goes once a real domain is known. The bridge's ways (`way.*`, how a thing is done) are refinements
+  lane; a description now puts its own domain first and "unplaced" goes once a real domain is known.
+  The constructor frontier followed from the materials: once a part says what it is made of, what works that
+  material makes it, so the things with no known maker after a whole-queue round fell from 244 to 101 without a new
+  rule. Two rules and a few sayings took it to 29: a piece is made with its whole (a bolt's thread when the bolt is,
+  at 0.5), a living part is made by development unless a nearer maker is known (0.6), the parts of a cell say
+  self-assembly or replication, a magnet sintering and magnetizing, a laser source epitaxy, a logic gate lithography,
+  a machine assembly. The 29 that remain are the Earth's cycles and climate, which nothing constructs, the observers,
+  the engine's rigid body and world, and building blocks whose pieces have no material to work. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.

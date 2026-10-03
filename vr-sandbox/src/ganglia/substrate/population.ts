@@ -192,6 +192,10 @@ export function ruleExpander(): Expander {
         const makers = s.reach(e.id, 'produced-by');
         // what makes the kind makes the member, until something more specific is known: a wood screw is made as screws are
         if (!makers.length) for (const k of s.reach(e.id, 'is-a')) for (const pr of s.reach(k.id, 'produced-by')) out.relations.push(r(e.id, 'produced-by', pr.id, `inherits from ${k.id}: what makes the kind makes the member`));
+        // a piece is made with its whole: a bolt's thread is made when the bolt is, a shaft's shoulder when the shaft is turned
+        if (!makers.length && !out.relations.length) for (const whole of s.reach(e.id, 'part-of')) for (const pr of s.reach(whole.id, 'produced-by')) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a piece of ${whole.id}, made with it by ${pr.id}`), confidence: 0.5 });
+        // living parts are made by development: one cell to a body, every organ and tissue on the way
+        if (!makers.length && !out.relations.length && e.kinds.includes('biological') && e.kinds.includes('component') && s.has('bio.development')) out.relations.push({ ...r(e.id, 'produced-by', 'bio.development', 'a living part: made by development, one cell to a body, unless a nearer maker is known'), confidence: 0.6 });
         if (!makers.length && !out.relations.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it, nor for what it is a kind of: what produces it is an open question' });
       }
       if (facet === 'failures' && !s.outOf(e.id, 'fails-by').length) {

@@ -350,6 +350,11 @@ export function common(): Pack {
   madeOf('engine', ['cast-iron.gray-30', 'aluminum.6061-t6', 'material.steel'], HILL); madeOf('rotor.main', ['composite.cfrp', 'aluminum.2024-t3'], ANDERSON); madeOf('polarizer', ['material.polymer', 'material.glass'], HECHT); madeOf('relay.solid-state', ['material.semiconductor', 'polymer.abs'], HH);
   madeOf('electrolyte', ['material.electrolyte-liquid'], HH); madeOf('electrode.anode', ['material.graphite', 'material.lead'], HH); madeOf('electrode.cathode', ['material.lithium-cobalt-oxide', 'material.lead-dioxide'], HH); madeOf('electrode.plate', ['material.lead', 'material.nickel-hydroxide'], HH);
   madeOf('chem.catalyst', ['element.iron', 'element.nickel', 'material.ceramic'], ATKINS); madeOf('bio.heart', ['bio.muscle-tissue', 'bio.connective-tissue'], CAMPBELL); madeOf('bio.photoreceptor', ['bio.nervous-tissue'], CAMPBELL);
+  // the makers no rule reaches
+  p.link('magnet', { 'produced-by': ['process.sintering', 'process.magnetizing'] }, KALPAKJIAN); p.link('rotor.magnet', { 'produced-by': ['process.sintering', 'process.magnetizing'] }, KALPAKJIAN); p.link('electrode.tungsten', { 'produced-by': ['process.sintering'] }, KALPAKJIAN);
+  p.link('heater', { 'produced-by': ['process.wire-drawing', 'process.coiling'] }, KALPAKJIAN); p.link('laser.source', { 'produced-by': ['process.epitaxy'] }, HH); p.link('capacitor.edlc', { 'produced-by': ['process.assembly'] }, HH); p.link('electrolyte', { 'produced-by': ['process.mixing'] }, HH);
+  p.link('gate.logic', { 'produced-by': ['process.lithography'] }, HH); p.link('flip-flop', { 'produced-by': ['process.lithography'] }, HH);
+  p.link('operating-system', { 'produced-by': ['compiler'] }, HENNESSY); p.link('physics.world', { 'produced-by': ['compiler'] }, HENNESSY);
   // the failures no rule reaches
   p.link('rigid-body', { 'fails-by': [['failure.instability', 'the engine\'s unit fails when the solver does: a stiff constraint, a large mass ratio, a step too long']] }, HENNESSY);
   p.link('capacitor.edlc', { 'fails-by': ['failure.esr-rise', 'failure.electrolyte-dryout'] }, HH);

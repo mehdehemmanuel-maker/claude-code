@@ -303,6 +303,33 @@ describe('population: a queue that never needs to be finished', () => {
     for (const x of makers) { expect(x.confidence).toBe(0.4); expect(x.says).toMatch(/can be made by what works it/); }
   });
 
+  it('a piece is made with its whole, and a living part by development, each at its own confidence and saying so', async () => {
+    const s2 = build().substrate;
+    // a block is made of what its pieces are made of; then what works that material makes it; then its pieces are made with it
+    const whole = s2.get('block.fasten.bolt')!, piece = s2.get('block.fasten.bolt.thread')!;
+    expect(s2.reach(whole.id, 'made-of')).toEqual([]);
+    expect(s2.outOf(piece.id, 'produced-by')).toEqual([]);
+    const organ = s2.get('bio.liver')!;
+    expect(s2.outOf(organ.id, 'produced-by')).toEqual([]);
+    const q = new Queue();
+    for (const facet of ['materials', 'manufacturing'] as const) {
+      q.push({ id: whole.id, facet, mode: 'deep', priority: 2, reason: 'test', domain: 'engineering' });
+      await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
+    }
+    expect(s2.reach(whole.id, 'made-of').length, 'the bolt is made of what its head is made of').toBeGreaterThan(0);
+    expect(s2.outOf(whole.id, 'produced-by').length, 'the bolt is made by what works its material').toBeGreaterThan(0);
+    for (const e of [piece, organ]) q.push({ id: e.id, facet: 'constructors', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
+    const byWhole = s2.outOf(piece.id, 'produced-by');
+    expect(byWhole.length).toBeGreaterThan(0);
+    for (const x of byWhole) { expect(x.confidence).toBe(0.5); expect(x.says).toMatch(/made with it by/); }
+    const byLife = s2.outOf(organ.id, 'produced-by');
+    expect(byLife.map((x) => x.to)).toEqual(['bio.development']);
+    expect(byLife[0]!.confidence).toBe(0.6);
+    expect(byLife[0]!.says).toMatch(/made by development/);
+    expect(s2.outOf('bio.chloroplast', 'produced-by').map((x) => x.to)).toContain('bio.self-assembly');
+  });
+
   it('a piece of a building block named for a kind is that kind, at half confidence, and then inherits what the kind does', async () => {
     const s2 = build().substrate;
     const q = new Queue();
