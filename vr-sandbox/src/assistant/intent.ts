@@ -79,9 +79,15 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'index' | 'census';
+export type TraversalQuery = 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
+/** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
+function failuresOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
+  const m = /^(?:how|in what ways?|in which ways?) (?:does|do|can|could|might|will|would) (?:an? |the |my )?(.+?) (?:fail|break|go wrong|wear out|die)\??$|^(?:what are |show (?:me )?|list )?(?:the |all (?:the )?|every )?(?:failure modes?|ways? of failing|failures) (?:of|for) (?:an? |the |my )?(.+)$|^(?:what|which) (?:can|could|might) go wrong (?:with|in) (?:an? |the |my )?(.+)$/.exec(t);
+  return m ? { do: 'traverse', query: 'failures', of: (m[1] ?? m[2] ?? m[3])!.replace(/^(?:an? |the |your |my )/, '').trim() } : null;
+}
+
 function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
@@ -178,6 +184,8 @@ export function interpret(line: string): Intent | null {
     || /^(put|add|release|spawn|drop|make) (an?|some|\w+) (.+ )?(fish|fishes|whales?|eels?|dolphins?|sharks?|swimmers?)\b/.test(t)
     || /^(put|add|release|spawn|drop|make|build|bring|give|get|let) (me |us )?(an?|some|\w+) (.+ )?(dogs?|pupp(y|ies)|deer|cats?|kittens?|foxe?s?|walkers?|quadrupeds?|pets?|horses?|ponies|pony|goats?)\b/.test(t) || /^(go|back) (to|back to) (the )?(beach|island|lake|desert|meadow|mountains?|workshop)\b|^back to (the )?workshop$/.test(t)) return { do: 'want', words: line.trim() };
   // something's wrong: she looks, fixes what she can, and writes it up for Claude
+  const fq = failuresOf(t);
+  if (fq) return fq;
   if (isComplaint(t)) return { do: 'complain', words: line.trim() };
   if (new RegExp(`^save ${it} as (a )?template|^(make|save) (a )?template|^template ${it}`).test(t)) return { do: 'template' };
   if (new RegExp(`^(unfreeze|unpin|free|release) ${it}`).test(t)) return { do: 'unfreeze' };

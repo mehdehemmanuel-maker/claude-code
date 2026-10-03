@@ -197,6 +197,8 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 | generative lineage of a human | `made-of`/`has-part` downward, `is-a` when a thing has no parts said | proton → carbon → amino acid → protein → cell membrane → cell → human |
 | mechanisms for a behaviour without a template | `mechanismsFor(words)`: the function by name, then implementations | "move fluid" → heart, centrifugal pump, …; "store energy" → 53 |
 | construction path for a missing component | `constructionPath`: make / acquire / gaps | brushless motor: 42 steps, 23 gaps (IGBT, gate oxide, bus capacitor, Hall sensor, …), each gap a stub on the queue |
+| how a thing fails | `fails-by` of the thing, then of its kinds (`is-a`) and its materials (`made-of`); each failure's first clause is its mechanism, its `governed-by` the law behind it | a bearing: five of its own (spalling by L10 life, brinelling by Hertz, wear by Coulomb, lubricant starvation, overheating by Joule against Fourier and Newton); a capacitor: dielectric breakdown, electrolyte dryout, ESR rise, short, cracking; asked as "how does X fail", "failure modes of X", "what could go wrong with X" (a question, never a complaint) |
+| the index of a thing | `index`: every arrow in and out, its characteristic length and time when it carries them, its analogues said (`analogous-to`) before those merely sharing a function, and its scale analogues decades away | a bearing: lives at about 3e-2 m and 1e-2 s, analogues the synovial joint and the flagellar motor; a river basin and a market answer to their words |
 
 ## Laws added to the tree
 

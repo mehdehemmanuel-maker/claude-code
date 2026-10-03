@@ -459,3 +459,27 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect(checked).toBeGreaterThan(20);
   });
 });
+
+describe('how a thing fails is said as mechanisms with laws', () => {
+  it('Ego answers how a thing fails from its own modes and the ones it inherits, each with the law behind it', () => {
+    const i = interpret('how does a bearing fail');
+    expect(i).toMatchObject({ do: 'traverse', query: 'failures', of: 'bearing' });
+    const a = answerTraversal(i as Extract<NonNullable<typeof i>, { do: 'traverse' }>);
+    expect(a).toMatch(/fails by \d+ ways of its own/);
+    expect(a).toMatch(/spalling, rolling-contact fatigue/);
+    // the law behind brinelling and pitting is Hertzian contact, never Young's wetting angle
+    expect(a).toMatch(/hertz/i);
+    expect(a).not.toMatch(/contact angle/i);
+    for (const id of ['bearing', 'gear', 'gear.tooth', 'cam']) expect(s.reach(id, 'governed-by').map((l) => l.id), id).not.toContain('young.contact');
+    expect(interpret('what could go wrong with a battery')).toMatchObject({ do: 'traverse', query: 'failures', of: 'battery' });
+    expect(answerTraversal({ do: 'traverse', query: 'failures', of: 'capacitor' })).toMatch(/dielectric breakdown, the insulator/);
+  });
+
+  it('the index of a thing says where it lives in scale and what it is like, and a structure answers to its words', () => {
+    const a = answerTraversal({ do: 'traverse', query: 'index', of: 'bearing' });
+    expect(a).toMatch(/It lives at about \d\.\de-?\d+ m/);
+    expect(a).toMatch(/Analogues: synovial joint/);
+    expect(answerTraversal({ do: 'traverse', query: 'index', of: 'river basin' })).toMatch(/raindrop|drainage/);
+    expect(answerTraversal({ do: 'traverse', query: 'index', of: 'market' })).toMatch(/price/);
+  });
+});

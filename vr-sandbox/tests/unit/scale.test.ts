@@ -296,7 +296,7 @@ describe('cross-scale dynamics are first-class middle structures', () => {
     expect(askOf(muscle, 'micro').appearsGoingUp).toContain('the force-velocity curve');
     expect(muscle.invariant.join(' ')).toMatch(/300 kPa/);
     expect(askOf(train, 'meso').transformation.join(' ')).toMatch(/constant ratio/);
-    expect(train.up.map((u) => u.law).filter(Boolean)).toEqual(expect.arrayContaining(['young.contact', 'gear.lewis', 'gear.output.torque']));
+    expect(train.up.map((u) => u.law).filter(Boolean)).toEqual(expect.arrayContaining(['hertz.contact', 'gear.lewis', 'gear.output.torque'])); // Hertz, never Young's wetting angle
     expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -311,6 +311,16 @@ describe('cross-scale dynamics are first-class middle structures', () => {
     expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(7);
     const s2 = build().substrate;
     for (const c of [nn, basin]) for (const st of c.up) if (st.law) expect(lawById(st.law) ?? s2.get(st.law)?.kinds.includes('law'), `${c.id}: ${st.law}`).toBeTruthy();
+  });
+
+  it('an ecosystem and a market are cross-scale structures asked the same questions as heat, and stay models', () => {
+    const eco = CROSS_SCALES.find((c) => c.id === 'cross.ecosystem')!, market = CROSS_SCALES.find((c) => c.id === 'cross.market')!;
+    for (const c of [eco, market]) { expect(c.status).toBe('model'); for (let i = 1; i < c.levels.length; i++) expect(c.levels[i]!.characteristicLength).toBeGreaterThan(c.levels[i - 1]!.characteristicLength); }
+    expect(askOf(eco, 'micro').appearsGoingUp).toContain('a trophic structure');
+    expect(askOf(eco, 'macro').invariant.join(' ')).toMatch(/energy/);
+    expect(askOf(market, 'micro').appearsGoingUp).toContain('a price');
+    expect(askOf(market, 'meso').breaks.join(' ')).toMatch(/lemons|monopoly|bubble/);
+    expect(askOf(market, 'meso').carriesUp).toContain('information');
   });
 
   it('the reverse path exists: a macro constraint selects microconfigurations and is realised through micro dynamics', () => {

@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
+import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
 
@@ -114,9 +114,30 @@ export function answerTraversal(i: Traverse): string {
     const make = cp.steps.filter((x) => x.need === 'make'), acquire = cp.steps.filter((x) => x.need === 'acquire');
     return `To build ${an(nameOf(e))}: make ${list(make.map((x) => `${nameOf(x.entity)}${x.by.length ? ` by ${list(x.by.map(nameOf), 3)}` : ''}`), 10)}; acquire ${list(acquire.map((x) => nameOf(x.entity)), 10)}. ${cp.gaps.length ? `Gaps, where I know no way yet: ${list(cp.gaps.map(nameOf), 10)}.` : 'No gaps.'}`;
   }
+  if (i.query === 'failures') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    type E = NonNullable<ReturnType<typeof find>>;
+    const own = s.reach(e.id, 'fails-by');
+    const seen = new Set(own.map((f) => f.id));
+    const viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'fails-by').map((f) => ({ f, via: `as ${an(nameOf(k))} does` })));
+    const viaMaterial = s.reach(e.id, 'made-of').flatMap((m) => s.reach(m.id, 'fails-by').map((f) => ({ f, via: `as ${nameOf(m)} does` })));
+    const inherited = [...viaKind, ...viaMaterial].filter((x) => !seen.has(x.f.id) && !!seen.add(x.f.id));
+    if (!own.length && !inherited.length) return `I know no failure mode of ${an(nameOf(e))} yet: that is a question on my queue.`;
+    // the mechanism is the failure's first clause; the law behind it is what it is governed by
+    const mech = (f: E) => { const laws = s.reach(f.id, 'governed-by').map(nameOf); const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); return `${nameOf(f)}, ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? ` (${list(laws, 3)})` : ''}`; };
+    return `${an(nameOf(e)).replace(/^a/, 'A')} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
+  }
   const e = find(i.of ?? '');
   if (!e) return unknown(i.of ?? '');
   const ix = indexOf(s, e.id)!;
   const cov = e.coverage;
-  return `${nameOf(e)}: ${e.says} ${ix.answers.map((a) => `${a.backwards ? `is ${a.kind} of` : a.kind}: ${list(a.entities.map(nameOf), 6)}`).join('; ')}. Known to depth ${cov.depth} at confidence ${cov.confidence.toFixed(2)} from ${cov.sourceKind}${cov.unknowns.length ? `; unknown: ${cov.unknowns.join('; ')}` : ''}.`;
+  const L = e.params?.find((p) => p.sym === 'L_c')?.low, T = e.params?.find((p) => p.sym === 'T_c')?.low;
+  const scaleLine = L !== undefined ? ` It lives at about ${sci(L)} m${T !== undefined ? ` and ${sci(T)} s` : ''}.` : '';
+  const all = analogues(s, e.id), said = all.filter((x) => !x.why.startsWith('both do'));
+  const ana = (said.length ? said : all).slice(0, 4);
+  const far = findScaleAnalogues(s, e.id, { limit: 3 })?.analogues ?? [];
+  const anaLine = ana.length ? ` Analogues: ${ana.map((x) => `${nameOf(x.entity)} (${x.why})`).join('; ')}.` : '';
+  const farLine = far.length ? ` At other scales it looks like ${far.map((x) => `${nameOf(x.entity)} (${sci(x.length)} m, ${x.decades.toFixed(0)} decades away)`).join('; ')}.` : '';
+  return `${nameOf(e)}: ${e.says}${scaleLine} ${ix.answers.map((a) => `${a.backwards ? `is ${a.kind} of` : a.kind}: ${list(a.entities.map(nameOf), 6)}`).join('; ')}.${anaLine}${farLine} Known to depth ${cov.depth} at confidence ${cov.confidence.toFixed(2)} from ${cov.sourceKind}${cov.unknowns.length ? `; unknown: ${cov.unknowns.join('; ')}` : ''}.`;
 }

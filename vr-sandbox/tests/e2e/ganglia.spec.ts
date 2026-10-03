@@ -21,6 +21,8 @@ test('Ego answers scale and traversal questions in the app from her ganglia', as
   const makers = await sb(page, (s) => s.ego.ask('what makes the machines that make an electric motor'));
   expect(makers).toMatch(/closes on itself/);
   // and her knowledge answer carries the substrate's census
+  const fails = await sb(page, (s) => s.ego.ask('how does a bearing fail'));
+  expect(fails).toMatch(/fails by \d+ ways of its own/);
   const knows = await sb(page, (s) => s.ego.ask('how much do you know'));
   expect(knows).toMatch(/substrate of \d+ things joined by \d+ arrows/);
   expect(errors).toEqual([]);

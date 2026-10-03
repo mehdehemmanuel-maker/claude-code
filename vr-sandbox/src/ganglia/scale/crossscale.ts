@@ -38,6 +38,8 @@ const ALBERTS: Source = { cite: 'Alberts et al., Molecular Biology of the Cell, 
 const KANDEL: Source = { cite: 'Kandel et al., Principles of Neural Science, 5th ed., McGraw-Hill 2013, ch. 2 and 67; Goodfellow, Bengio & Courville, Deep Learning, MIT 2016, ch. 6; Hornik, Stinchcombe & White, Neural Networks 2 (1989) 359', kind: 'textbook' };
 const HORTON: Source = { cite: 'Horton, "Erosional development of streams and their drainage basins", GSA Bulletin 56 (1945) 275; Strahler (1952); Rodríguez-Iturbe & Rinaldo, Fractal River Basins, Cambridge 1997', kind: 'paper' };
 const SHIGLEY: Source = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., ch. 13 and 14 (gears); Hertz (1882) on contact', kind: 'textbook' };
+const BEGON: Source = { cite: 'Begon, Howarth & Townsend, Essentials of Ecology, 4th ed., Wiley 2014, ch. 5, 8, 11; Lindeman, "The trophic-dynamic aspect of ecology", Ecology 23 (1942) 399; Lotka (1925), Volterra (1926)', kind: 'textbook' };
+const MANKIW: Source = { cite: 'Mankiw, Principles of Economics, 9th ed., Cengage 2021, ch. 4 to 7 and 23; Hayek, "The use of knowledge in society", AER 35 (1945) 519; Akerlof, "The market for lemons", QJE 84 (1970) 488', kind: 'textbook' };
 
 export const CROSS_SCALES: CrossScale[] = [
   { id: 'cross.neural-network', name: 'a neural network, from a synapse to a function', says: 'A function is computed by nothing that computes it: synapses weight, neurons threshold, layers compose, and a mapping emerges that no single unit holds.',
@@ -113,7 +115,7 @@ export const CROSS_SCALES: CrossScale[] = [
       { scale: 'macro', name: 'a train and its ratio', description: 'Shafts, bearings and a housing: a ratio, an efficiency of 97 to 99 % per mesh, a torque capacity, a life.', variables: ['ratio', 'torque', 'efficiency', 'inertia', 'life'], characteristicLength: 1e-1, characteristicTime: 1e-2 },
     ],
     up: [
-      { from: 'two flanks', to: 'Hertzian contact', via: 'interaction', carries: ['momentum', 'energy'], says: 'The load is carried on an elliptical patch whose pressure the curvatures set.', law: 'young.contact' },
+      { from: 'two flanks', to: 'Hertzian contact', via: 'interaction', carries: ['momentum', 'energy'], says: 'The load is carried on an elliptical patch whose pressure the curvatures set.', law: 'hertz.contact' },
       { from: 'contact through the engagement', to: 'constant ratio', via: 'collective', carries: ['causality'], says: 'The involute\'s property: the line of action is fixed, so the angular velocity ratio is constant whatever the centre distance.' },
       { from: 'teeth taking turns', to: 'bending stress and life', via: 'emergent-variable', carries: ['energy'], says: 'Each tooth is loaded once per revolution: a fatigue cycle; Lewis gives the root stress.', law: 'gear.lewis' },
       { from: 'meshes in series', to: 'the train\'s ratio and efficiency', via: 'emergent-variable', carries: ['energy', 'information'], says: 'Ratios multiply, efficiencies multiply, inertias reflect by the ratio squared.', law: 'gear.output.torque' },
@@ -128,6 +130,50 @@ export const CROSS_SCALES: CrossScale[] = [
     invariant: ['energy less the mesh loss', 'the velocity ratio through the engagement'],
     breaks: ['when the film fails: scuffing', 'when the contact pressure passes the surface fatigue limit: pitting', 'when the tooth root passes its bending fatigue limit'],
     status: 'theorem', source: SHIGLEY },
+  { id: 'cross.ecosystem', name: 'an ecosystem, from an organism to a food web', says: 'An ecosystem is energy from the sun passed along, a tenth kept at each eating, by populations that each only try to persist.',
+    levels: [
+      { scale: 'micro', name: 'an organism', description: 'A body that eats, grows, reproduces and dies, at a metabolic rate set by its mass to the three-quarter power.', variables: ['body mass', 'metabolic rate', 'fecundity', 'lifespan'], characteristicLength: 1e-1, characteristicTime: 1e8 },
+      { scale: 'meso', name: 'a population and its interactions', description: 'Many of a kind: births and deaths make a growth rate, food and predators bound it, and predator and prey numbers chase each other round a cycle.', variables: ['population size', 'growth rate', 'carrying capacity', 'predation rate'], characteristicLength: 1e3, characteristicTime: 1e8 },
+      { scale: 'macro', name: 'an ecosystem', description: 'Producers, consumers and decomposers passing energy and cycling matter: a trophic pyramid, a productivity, a succession toward a state that persists.', variables: ['primary productivity', 'trophic levels', 'biomass pyramid', 'nutrient cycle rates'], characteristicLength: 1e5, characteristicTime: 1e10 },
+    ],
+    up: [
+      { from: 'metabolism of each organism', to: 'a population growth rate', via: 'collective', carries: ['energy', 'matter'], says: 'Births minus deaths per head: a rate that the food available and the metabolism needed set.', law: 'allometry' },
+      { from: 'eating and being eaten', to: 'coupled population cycles', via: 'interaction', carries: ['energy', 'causality'], says: 'Prey feed predators, predators thin prey: two rates coupled, oscillating about a point (Lotka and Volterra).' },
+      { from: 'every organism eating', to: 'a trophic pyramid', via: 'emergent-variable', carries: ['energy'], says: 'About a tenth of the energy at one level reaches the next; the rest is respired as heat. Four or five levels and it is gone.', law: 'conservation.energy' },
+      { from: 'differential survival', to: 'adaptation of the populations', via: 'emergent-variable', carries: ['information'], says: 'What persists is what fits the web it is in; the web is itself the selector.', law: 'natural.selection' },
+    ],
+    down: [
+      { from: 'a macro constraint: this productivity, this climate', to: 'allowed populations', via: 'constraint', carries: ['energy', 'information'], says: 'The energy entering bounds the biomass at each level and so which organisms can exist there at all.' },
+      { from: 'carrying capacity', to: 'per-head rates', via: 'dynamics', carries: ['causality'], says: 'As a population nears what the place supports, each head gets less and the rates fall: the macro limit reaches the individual.' },
+      { from: 'the state the web tends to', to: 'a realisation', via: 'realisation', carries: ['matter'], says: 'Succession: pioneers change the ground, and are replaced by what the changed ground favours, until the turnover is slow.' },
+    ],
+    disappears: ['which individual lived or died', 'the fate of any one organism', 'the day-to-day'],
+    appears: ['a carrying capacity', 'a trophic structure', 'stability and resilience', 'succession'],
+    invariant: ['energy in equals energy respired plus energy stored', 'matter cycles: what is eaten is returned'],
+    breaks: ['when a population is small: chance decides, and there is no mean field', 'when an invader rewires the web faster than it adapts', 'when the climate changes faster than selection can follow'],
+    status: 'model', source: BEGON },
+  { id: 'cross.market', name: 'a market, from a transaction to an economy', says: 'A price is a number nobody set: it is made by many trades, each between two people who know only their own side.',
+    levels: [
+      { scale: 'micro', name: 'a transaction', description: 'Two parties exchange a thing for money at a price each accepts: the buyer values it above the price, the seller below.', variables: ['price', 'quantity', 'willingness to pay', 'cost'], characteristicLength: 1, characteristicTime: 1e2 },
+      { scale: 'meso', name: 'a market', description: 'Many buyers and sellers of one kind of thing: a demand curve, a supply curve, and a price where they meet; the price moves what each party does.', variables: ['supply', 'demand', 'market price', 'elasticity', 'competition'], characteristicLength: 1e4, characteristicTime: 1e6 },
+      { scale: 'macro', name: 'an economy', description: 'All the markets together: output, employment, the price level and its rate of change, and the rate at which money is lent.', variables: ['output', 'employment', 'price level', 'interest rate'], characteristicLength: 1e6, characteristicTime: 1e8 },
+    ],
+    up: [
+      { from: 'a buyer and a seller', to: 'one agreed price', via: 'interaction', carries: ['information', 'matter'], says: 'Each knows only its own valuation; they trade when the buyer\'s is above the seller\'s, at a price between.' },
+      { from: 'many transactions', to: 'supply and demand curves', via: 'collective', carries: ['information'], says: 'Each party trades up to the quantity where the next unit is not worth it; summed over parties, two curves.' },
+      { from: 'two curves', to: 'a price', via: 'emergent-variable', carries: ['information', 'causality'], says: 'The price is where offered meets wanted: it carries, in one number, what no participant knows whole (Hayek).' },
+      { from: 'all markets', to: 'the national accounts', via: 'collective', carries: ['information'], says: 'Every purchase is somebody\'s sale: output equals income equals spending, an identity, not a theory.' },
+    ],
+    down: [
+      { from: 'a macro constraint: this interest rate, this rule', to: 'allowed transactions', via: 'constraint', carries: ['information'], says: 'Credit, tax and law bound which trades can happen at all: the macro reaches each pair.' },
+      { from: 'the price', to: 'each party\'s decision', via: 'dynamics', carries: ['information', 'causality'], says: 'A higher price turns some buyers away and brings some sellers in: the emergent number drives the micro.' },
+      { from: 'prices and plans', to: 'a realisation', via: 'realisation', carries: ['matter', 'energy'], says: 'Production: materials, energy and work turned into the things traded, by the constructors the index knows.' },
+    ],
+    disappears: ['who traded with whom', 'why any one party wanted the thing'],
+    appears: ['a price', 'an elasticity', 'a cycle', 'inflation'],
+    invariant: ['every purchase is a sale: spending equals income', 'each party\'s budget: outlays bounded by income and credit'],
+    breaks: ['when one side knows what the other cannot: the market for lemons', 'when a few set the price: monopoly', 'when expectations of the price feed the price: a bubble', 'when parties copy each other instead of their own valuation: herding, no mean field'],
+    status: 'model', source: MANKIW },
   { id: 'cross.heat', name: 'heat, from molecules to a temperature field', says: 'Heat is a state (energy in molecular motion), a gradient (uneven across a body), a transport (conducted, convected, radiated), an interaction (collisions, phonons, photons) and a description at each scale.',
     levels: [
       { scale: 'micro', name: 'molecular and lattice energy states', description: 'Molecules and lattice vibrations each carry kinetic and potential energy; in a solid, quantised lattice waves (phonons) and electron states.', variables: ['velocity of each molecule', 'phonon occupation numbers', 'electron energies'], characteristicLength: 3e-10, characteristicTime: 1e-13 },

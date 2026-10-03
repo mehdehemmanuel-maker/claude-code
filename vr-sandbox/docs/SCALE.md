@@ -96,7 +96,7 @@ microconfigurations → micro dynamics → realisation), disappears, appears, in
 written: a **neural network** (a synapse weights, a neuron thresholds, a layer codes, layers compose a function no unit
 holds: Hebb, Hodgkin-Huxley, universal approximation), a **river basin** (raindrops to Horton's ratios, an empirical
 law with optimal channel networks as its model), **muscle** (myosin heads → sarcomeres → a muscle on a lever: Hill's curve emerging, 300 kPa invariant from a
-mouse to a whale), a **gear train** (Hertzian tooth contact → a mesh → a ratio and an efficiency), **heat** (molecular energy states → collisions → the Maxwell-Boltzmann distribution → temperature → heat flux →
+mouse to a whale), a **gear train** (Hertzian tooth contact → a mesh → a ratio and an efficiency), an **ecosystem** (an organism → a population and its interactions → a food web: a tenth of the energy kept at each eating, selection by the web itself; a model), a **market** (a transaction → supply and demand → an economy: a price as the number nobody set, carrying what no participant knows whole; a model, and it says where it breaks: lemons, monopoly, bubbles, herding), **heat** (molecular energy states → collisions → the Maxwell-Boltzmann distribution → temperature → heat flux →
 the temperature field; never a static object: STATE + GRADIENT + TRANSPORT + INTERACTION), the **rigid body** (atoms →
 elastic continuum → rigidity, valid while L/(c Δt) is small: the engine's own model as a projection), and **electric
 current** (electrons → drift → conductivity → resistance). `askOf(c, scale)` answers the core questions: valid at, what
@@ -210,3 +210,5 @@ The verdicts are predictions about the world; the world here is the engine, so t
 - Seven cross-scale structures are written; a market and an ecosystem are next.
 - Allometry's exponent is carried as measured (¾) with its range (0.65 to 0.78); the WBE derivation is cited as a
   model, not promoted.
+
+**Correction found while Ego learned to say failures.** The bearing, the gear tooth, the cam and the gear-train structure cited `young.contact`, which is Young's wetting angle, where they meant Hertzian contact; they now cite `hertz.contact`, and a test holds it. A law cited is a law read.

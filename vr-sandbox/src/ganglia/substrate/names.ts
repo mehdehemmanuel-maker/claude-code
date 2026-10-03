@@ -37,10 +37,10 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   const singular = w.replace(/s$/, '');
   for (const cand of [singular, singular.replace(/\s+/g, '.'), singular.replace(/\s+/g, '-')]) { const e = s.byWord(cand); if (e) return e; }
   // a role said as a phrase: "electrical conductor" is role.electrical-conductor; a function: "store energy" is store.energy
-  for (const prefix of ['role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e) return e; }
+  for (const prefix of ['role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.', 'cross.', 'view.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e) return e; }
   const parts = w.split(' ');
   if (parts.length === 2) { const e = s.get(`${parts[1]}.${parts[0]}`) ?? s.get(`${parts[0]}.${parts[1]}`); if (e) return e; }
   // the last resort: the one entity whose id ends in the word
-  const hits = [...s.entities.values()].filter((e) => e.id.endsWith(`.${singular}`) || e.id === singular);
+  const hits = [...s.entities.values()].filter((e) => e.id.endsWith(`.${singular}`) || e.id === singular || e.id.endsWith(`.${dashed}`) || e.id === dashed);
   return hits.length === 1 ? hits[0] : undefined;
 }
