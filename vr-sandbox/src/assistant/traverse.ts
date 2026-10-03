@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { chain, fromRelation, hash, render, saidOf, tune, type R } from '../ganglia/native';
+import { chain, fromRelation, hash, render, saidOf, text as nex, tune, type R } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -272,7 +272,7 @@ export function answerTraversal(i: Traverse): string {
     const whole = path.length === 1 ? path[0]! : path.slice(1).reduce((acc, x) => chain(acc, x) ?? acc, path[0]!);
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
-    return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''}`;
+    return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
   }
   if (i.query === 'native') {
     // what she holds of a thing in Nex: its structures, each rendered into English with what the rendering lost
@@ -288,7 +288,9 @@ export function answerTraversal(i: Traverse): string {
     const present = outs.reduce((n, o) => n + o.present.length, 0), dropped = outs.reduce((n, o) => n + o.dropped.length, 0);
     const kinds = [...new Set(outs.flatMap((o) => o.dropped.map((p) => p.replace(/^\$(\[\d+\]|\.[a-z]+\[\d+\])*\.?/, '').split('.')[0] ?? p)))].filter(Boolean);
     const weakest = outs.map((o) => o.rank).filter((x): x is NonNullable<typeof x> => !!x).sort()[0];
-    return `In Nex I hold ${art(e)} as ${said.length} structures, hashed and compared without a word in them; ${unique.length} of them in English: ${outs.map((o) => o.text).join(' ')} English carried ${present - dropped} of ${present} pieces of those structures${kinds.length ? ` and lost ${kinds.join(', ')}` : ''}${weakest ? `; the weakest evidence among them is ${weakest}` : ''}. Their hashes: ${unique.map((x) => `#${hash(x).slice(0, 8)}`).join(', ')}.`;
+    // each structure as Nex writes it (its compact text, read back to the same hash), then as English says it
+    const both = unique.map((x, k) => `${nex(x)} = ${outs[k]!.text}`);
+    return `In Nex I hold ${art(e)} as ${said.length} structures, hashed and compared without a word in them; ${unique.length} of them, each as Nex writes it and then in English: ${both.join(' ')} English carried ${present - dropped} of ${present} pieces of those structures${kinds.length ? ` and lost ${kinds.join(', ')}` : ''}${weakest ? `; the weakest evidence among them is ${weakest}` : ''}. Their hashes: ${unique.map((x) => `#${hash(x).slice(0, 8)}`).join(', ')}.`;
   }
   if (i.query === 'kinds') {
     const e = find(i.of ?? '');

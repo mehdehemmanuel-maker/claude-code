@@ -12,6 +12,7 @@ import {
 import { Morphemes, candidates, compress, descriptionLength, expandAll, promote, sameMeaning, size } from '../../src/ganglia/native/morpheme';
 import { evaluate, fromLaw, fromNode, fromRelation, saidOf, tune } from '../../src/ganglia/native/nexus';
 import { decompose, forAudience, parse, rankOfText, render, type Lexicon } from '../../src/ganglia/native/translate';
+import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text';
 import { LAWS, lawById } from '../../src/ganglia/laws';
 import { NODES } from '../../src/ganglia/tree/nodes';
 import { build } from '../../src/ganglia/substrate';
@@ -312,5 +313,72 @@ describe('Nex against English on the confusions English invites', () => {
     expect(en.rank).toBe('extrapolated');
     expect(e(thought, 'hypothesized', 'ego').how).toBe('hypothesized');
     expect(t(d('cold'), d('warm'), { ev: { how: 'simulated' } }).c.ev?.how).toBe('simulated');
+  });
+});
+
+describe('Nex: the compact text (section E) is a surface on the canonical form, not a second language', () => {
+  const corpus = (): Structure[] => {
+    const out: Structure[] = [loadCurrent, currentTemp, tempLife, chain(loadCurrent, currentTemp)!, chain(chain(loadCurrent, currentTemp)!, tempLife)!, contradiction(tempLife, r('influence', [temperature, life], { dir: 1, polarity: '+' }))!,
+      ctx('assume', 'still-air', ctx('believe', 'ego', r('compare', [q(400, 'K', { kind: 'interval', lo: 380, hi: 420, source: 'mixed' }), q(378, 'K')], { time: { delay: q(600, 's'), window: [400, 900] }, scale: { L: q(1, 'm') } }))),
+      t(d('cold'), d('hot'), { ev: { how: 'simulated' }, time: { dur: q(30, 's') } }, [d('powered')]), e(loadCurrent, 'measured', 'a reading', { by: 'ego', at: q(3, 's') }),
+      r('quantity', [d('ball'), d('velocity'), q(3, 'm/s')], { frame: { observer: 'ground', rest: 'table' } }),
+      r('quantity', [d('rod'), d('length'), q(3.2, 'mm')], {}), r('quantity', [d('rod'), d('temperature'), q(20, 'degC')], {}), r('quantity', [d('x'), d('efficiency'), q(85, '%')], {}), r('quantity', [d('x'), d('torque'), q(2.5, 'N m')], {}), r('quantity', [d('x'), d('n'), q(0.5, '')], {}),
+      r('kind', [d('limit:F-6.2:the servo holds, (x)'), d('b')], { mode: 'outside-domain', under: ['a b', 'c'], against: ['h1'], margin: 0.2, instrument: 'thermocouple' }),
+      r('influence', [d('3d'), d('1e3x')], { strength: q(5, 'N'), dom: [r('compare', [q(1, 'm'), q(2, 'm')], {}), d('still air')] })];
+    for (const l of LAWS) out.push(fromLaw(l));
+    for (const n of NODES) out.push(...fromNode(n));
+    for (const id of ['bearing', 'motor.dc', 'transformer', 'spring.helical', 'capacitor', 'bio.human', 'steel', 'qty.heat', 'cell.li-ion', 'wing']) out.push(...saidOf(substrate, id, laws));
+    return out;
+  };
+
+  it('every structure reads back from its text to the same hash, and the text of what was read is the same text (measured over every law, every tree node and ten things of the substrate)', () => {
+    const all = corpus();
+    expect(all.length).toBeGreaterThan(600);
+    for (const s of all) {
+      const tx = text(s);
+      expect(tx).not.toMatch(/\n/);
+      const back = read(tx);
+      expect(hash(back), tx).toBe(hash(s));
+      expect(text(back)).toBe(tx);
+    }
+    expect(readAll(texts(all.slice(0, 5))).map((s) => hash(s))).toEqual(all.slice(0, 5).map((s) => hash(s)));
+  });
+
+  it('the text is the structure and nothing else: no English alias in it, a quantity in the unit it was given, an absent coordinate absent', () => {
+    expect(text(loadCurrent)).toBe('influence(load, current){dir:1 polarity:+ necessity:contributing strength:0.8 cert:{kind:interval lo:0.9 hi:1 source:epistemic} time:{delay:0.01[s]} ev:{how:measured src:["a current reading"]}}');
+    expect(text(loadCurrent)).not.toMatch(/the load|the current/);
+    expect(text(r('quantity', [d('rod'), d('length'), q(3.2, 'mm')], {}))).toBe('quantity(rod, length, 3.2[mm])');
+    expect(text(r('quantity', [d('x'), d('torque'), q(2.5, 'N m')], {}))).toBe('quantity(x, torque, 2.5[N m])');
+    expect(text(r('kind', [d('a'), d('b')], {}))).toBe('kind(a, b)');
+    // a quantity made by composition carries no unit spelling: its dimension's SI symbol is written, and a dimension with no symbol is written as itself
+    expect(text(chain(loadCurrent, currentTemp)!)).toMatch(/time:\{delay:30.01\[s\]\}/);
+    expect(text({ k: 'Q', v: 2, dim: [1, 1, -1, 0, 0] })).toBe('2{dim:[1 1 -1 0 0]}');
+    // an id with a space or a bracket is quoted; one that would read as a number is quoted; the rest stand bare
+    expect(text(d('limit:F-6.2:the servo holds, (x)'))).toBe('"limit:F-6.2:the servo holds, (x)"');
+    expect(text(d('1e3'))).toBe('"1e3"');
+    expect(text(d('valid:friction.coulomb'))).toBe('valid:friction.coulomb');
+    // the modes, the nested models and a condition on a transformation all have a place
+    expect(text(ctx('believe', 'ego', ctx('believe', 'user', r('kind', [d('a'), d('b')], { mode: 'unmeasured', instrument: 'thermocouple' }))))).toBe('C.believe(ego, C.believe(user, kind(a, b){mode:unmeasured instrument:thermocouple}))');
+    expect(text(t(d('cold'), d('hot'), { ev: { how: 'simulated' } }, [d('powered')]))).toBe('T(cold, hot | powered){ev:{how:simulated}}');
+  });
+
+  it('malformed text is refused with where it went wrong, never read as something else', () => {
+    expect(() => read('influence(a, b')).toThrow(/Nex text/);
+    expect(() => read('cause(a, b)')).toThrow(/no operator cause/);
+    expect(() => read('C.hope(ego, kind(a, b))')).toThrow(/no context kind hope/);
+    expect(() => read('kind(a, b) kind(c, d)')).toThrow(/continues/);
+    expect(() => read('kind(a, b){mode:"true"')).toThrow(/unterminated/);
+  });
+
+  it('the blind text is the shape alone: the same for a structure and for its renaming (the hard test by eye)', () => {
+    const ren = scramble();
+    for (const s of [loadCurrent, chain(loadCurrent, currentTemp)!, e(loadCurrent, 'measured', 'a reading')]) {
+      expect(blind(s)).toBe(blind(rename(s, ren)));
+      expect(blind(s)).not.toMatch(/load|current/);
+    }
+    expect(blind(loadCurrent)).toBe('influence($1, $2){dir:1 polarity:+ necessity:contributing strength:0.8 cert:{kind:interval lo:0.9 hi:1 source:epistemic} time:{delay:0.01[s]} ev:{how:measured}}');
+    // and a blind text still reads: the shape is a structure in its own right (its sources gone with its names), and blinding it again changes nothing
+    expect(blind(read(blind(loadCurrent)))).toBe(blind(loadCurrent));
+    expect(hash(read(blind(loadCurrent)))).toBe(hash(rename({ ...loadCurrent, c: { ...loadCurrent.c, ev: { how: 'measured' } } }, (id) => (id === 'load' ? '$1' : '$2'))));
   });
 });

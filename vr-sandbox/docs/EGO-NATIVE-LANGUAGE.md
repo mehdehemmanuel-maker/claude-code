@@ -105,10 +105,29 @@ state is a temperature and a composition and whose transitions are combustion; b
 
 A structure is a kernel node with coordinate axes attached, not a line of words: `influence(a, b)` with the vector
 `[dir, polarity, necessity, strength, cert, time, scale, mech, dom, frame, ev, mode]`. The canonical machine form
-(section T) is the object; the compact text serialisation and the spoken serialisation are surfaces to be designed
-later, as the request orders (meaning first, glyphs after). A graphical rendering is the kernel at the centre with the
-coordinates as spokes, each spoke empty where the coordinate is not modelled, which shows at a glance what a thought
-does not yet know.
+(section T) is the object. Its compact text (`native/text.ts`) is a surface on that form, built after the meaning, as
+the request orders: one line per structure, the operator as a glyph, the arguments in brackets, the coordinates in
+braces in one fixed order, only the modelled ones written (an absent coordinate is not modelled, never a default):
+
+    influence(load, current){dir:1 polarity:+ necessity:contributing strength:0.8 cert:{kind:interval lo:0.9 hi:1 source:epistemic} time:{delay:0.01[s]} ev:{how:measured src:["a current reading"]}}
+    quantity(rod, length, 3.2[mm])
+    T(cold, hot | powered){time:{dur:30[s]} ev:{how:simulated}}
+    C.believe(ego, C.believe(user, kind(a, b){mode:unmeasured instrument:thermocouple}))
+    E(influence(load, current){…}){how:measured src:"a reading" by:ego at:3[s]}
+    M(loop, 2, error, command)
+
+It is lossless: the text reads back to a structure with the same hash, and the text of what was read is the same text
+(tested over every law of the book, every node of the law tree and ten things of the substrate, 950 structures). A
+quantity is written in the unit it was given, or in the SI symbol of its dimension, or as a number with its dimension
+when neither reads back exactly. No English alias enters it; the operator names and coordinate keys are glyphs that a
+reader may swap for symbols. `blind(s)` writes the same text with every distinction replaced by a numbered variable
+and every source removed: the shape alone, which is the hard test by eye (the blind text of a structure and of its
+renaming are one text). Ego shows the compact text beside the English whenever she says a thing in Nex ("say a
+bearing in your language", "does the load cause the failure").
+
+The spoken serialisation (the same text read aloud, one glyph per operator) and the graphical rendering (the kernel at
+the centre with the coordinates as spokes, each spoke empty where the coordinate is not modelled, which shows at a
+glance what a thought does not yet know) are designed, not built.
 
 ## F. The negation and unknown system
 
@@ -338,9 +357,10 @@ Built and tested today: core.ts (the representation, modes, coordinates, normal 
 fingerprints, distance, clustering, renaming, chaining, contradiction, well-formedness, the support tree),
 morpheme.ts (skeletons, candidates by description length, promotion, compression, expansion, versioning),
 translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
-candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners).
+candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners), text.ts (the compact
+text, lossless both ways, and the blind text).
 
-Designed, not yet built: the compact text and spoken serialisations and the visual notation (E); rewrite rules for
+Designed, not yet built: the spoken serialisation and the visual notation (E); rewrite rules for
 equivalences beyond the canonical form (U); a learned term in the distance (V); polysemy detection run over the whole
 substrate (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
 VR demonstration, sound and touch (M); Ego's own thinking moved onto Nex structures rather than built from them at the

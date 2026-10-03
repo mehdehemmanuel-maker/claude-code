@@ -82,7 +82,7 @@ export function fromRelation(rel: Relation, s?: Substrate): R | null {
   if (!map) return null;
   const alias = (id: string): D => { const ent = s?.get(id); return d(id, ent ? { en: spokenName(ent) } : undefined); };
   const how: Evidence = 'stub' in rel.source ? 'assumed' : 'derived' in rel.source ? 'derived' : 'estimate' in rel.source ? 'estimated' : 'cite' in rel.source ? evidenceOfSource({ cite: rel.source.cite, kind: (rel.source as { kind?: Source['kind'] }).kind ?? 'textbook' }) : 'assumed';
-  const c: Coords = { ...(map.c ?? {}), cert: { kind: 'interval', lo: Math.max(0, rel.confidence - 0.1), hi: Math.min(1, rel.confidence + 0.1), source: 'epistemic' }, ev: { how }, mode: map.c?.mode ?? 'true' };
+  const c: Coords = { ...(map.c ?? {}), cert: { kind: 'interval', lo: Math.round(Math.max(0, rel.confidence - 0.1) * 1000) / 1000, hi: Math.round(Math.min(1, rel.confidence + 0.1) * 1000) / 1000, source: 'epistemic' }, ev: { how }, mode: map.c?.mode ?? 'true' };
   return r(map.op, map.swap ? [alias(rel.to), alias(rel.from)] : [alias(rel.from), alias(rel.to)], c);
 }
 

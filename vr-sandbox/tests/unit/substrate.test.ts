@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
 import { answerTraversal } from '../../src/assistant/traverse';
+import { hash, read } from '../../src/ganglia/native';
 import {
   FACETS, KINDS, RELATIONS, RELATION_KINDS, Queue, Substrate, analogues, build, constructionPath, decompose, dualRole, implementations, index, ingest, leavesOf,
   lineage, materialsForRole, mechanismsFor, missingConstructors, populate, priority, producers, ruleExpander, seedExpander, seedQueue, variants, waysToStore,
@@ -916,7 +917,11 @@ describe('Ego says a thing in her own language', () => {
     expect(interpret('say a bearing in your language')).toMatchObject({ do: 'traverse', query: 'native', of: 'bearing' });
     expect(interpret('how do you think of a spring')).toMatchObject({ do: 'traverse', query: 'native', of: 'spring' });
     const a = answerTraversal({ do: 'traverse', query: 'native', of: 'bearing' });
-    expect(a).toMatch(/^In Nex I hold a bearing as \d+ structures, hashed and compared without a word in them; \d of them in English: /);
+    expect(a).toMatch(/^In Nex I hold a bearing as \d+ structures, hashed and compared without a word in them; \d of them, each as Nex writes it and then in English: /);
+    // the Nex text of each structure is there, and reads back to a structure of the same hash as the English beside it was rendered from
+    const first = /in English: (.+?) = /.exec(a)![1]!;
+    expect(first).toMatch(/^(part|kind|function|influence|constrain)\(bearing, /);
+    expect(hash(read(first)).slice(0, 8)).toBe(/Their hashes: #([0-9a-f]{8})/.exec(a)![1]);
     expect(a).toMatch(/English carried \d+ of \d+ pieces of those structures/);
     expect(a).toMatch(/the weakest evidence among them is (theorem|derived|measured|calibrated|simulated|estimated|extrapolated|hypothesized|assumed)/);
     expect(a).toMatch(/Their hashes: #[0-9a-f]{8}/);

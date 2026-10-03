@@ -5,3 +5,4 @@ export * from './core';
 export * from './morpheme';
 export * from './nexus';
 export * from './translate';
+export * from './text';
