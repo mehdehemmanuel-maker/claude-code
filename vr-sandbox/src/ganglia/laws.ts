@@ -76,7 +76,7 @@ export const LAWS: Law[] = [
     output: q('F', 'drag', 'N'), eval: ({ rho, Cd, A, v }) => dragForce(rho!, Cd!, A!, v!),
     valid: 'Turbulent flow (Reynolds above about 10^4); air at 20 °C is 1.204 kg/m^3.',
     example: { inputs: { rho: 1.204, Cd: 0.9, A: 0.5, v: 10 }, output: 27.09 }, source: { cite: 'Hoerner, Fluid-Dynamic Drag, 1965' }, tags: ['air', 'speed', 'vehicle'],
-    implementedIn: 'engineering/mechanics.ts dragForce',
+    implementedIn: 'physics/world.ts applyAirDrag, with the frontal area by shape (frontalAreas): a sphere π r², a cylinder its rectangle across and its disc along, a box its faces',
   },
   {
     id: 'power.linear', name: 'Power of a force', domain: 'mechanics', statement: 'A force moving its point at a speed does work at force times speed.',

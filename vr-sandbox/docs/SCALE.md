@@ -220,10 +220,19 @@ density ratio 530/998.2 is 0.531), and, pushed a tenth of a side under and let g
 The engine's water is the law book's: the displaced weight and a drag, with no added mass of the water moved, which
 real water brings and which would lengthen both periods alike.
 
+**Drag, at two sizes.** An EVA foam ball of 0.1 m and one of 0.2 m let fall from rest through still air, no floor. The
+law book: drag (½ ρ C_d A v²) and weight both go as λ³ under Froude, so the speed at which they balance goes as λ^½.
+Measured: terminal speeds of 15.20 m/s and 21.47 m/s (ratio 1.4124 for √2 = 1.4142), which are also what
+√(2 m g / ρ C_d π d²/4) gives, 15.20 and 21.50. This one found a fault the ratio alone would never have shown: the
+engine showed every body its bounding box to the air, so a ball had 4/π too much frontal area and fell √(π/4) too
+slowly (13.47 and 19.04 m/s, ratio still 1.4135). A body now shows the air and the water its own frontal area by
+shape: a sphere π r², a cylinder its rectangle across and its disc along, a box its faces; a hull or a compound still
+shows its box, and the code says so. The drag coefficients of the part kinds are quoted against these areas.
+
 **The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
 observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
 tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1,
-restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2. The
+restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2, drag 1.4124 for √2. The
 conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
 is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
 with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they

@@ -52,6 +52,23 @@ async function floating(a: number): Promise<{ fraction: number; T: number; cycle
 }
 
 /**
+ * An EVA foam ball of diameter d let fall from rest through still air (1.204 kg/m³), no floor: its speed once it has
+ * stopped gaining, from its last tenth of a second, and what the drag law gives for its terminal speed.
+ */
+async function terminalSpeed(d: number): Promise<{ v: number; law: number }> {
+  const r = await rig({ airDrag: true }, false);
+  const ball = r.part('sphere', at(0, 0, 0), { material: 'foam.eva', params: { diameter: d } });
+  const m = r.world.bodyMass(ball.id)!;
+  const ys: [number, number][] = [];
+  r.run(8, (t) => { ys.push([t, r.pos(ball)[1]]); });
+  r.done();
+  const [t1, y1] = ys[ys.length - 1]!;
+  const [t0, y0] = ys.find(([t]) => t >= t1 - 0.1)!;
+  const rho = 1.204, Cd = 0.47, A = (Math.PI / 4) * d * d;
+  return { v: (y0 - y1) / (t1 - t0), law: Math.sqrt((2 * m * G) / (rho * Cd * A)) };
+}
+
+/**
  * A steel cube of side a hung from a frozen anchor on a coil spring of wire d, coil D, Na active coils and an explicit
  * free length, under gravity g: its sag under its own weight, measured as the settled drop from the unstretched
  * position, and its period from zero crossings of its velocity after a small pull.
@@ -275,5 +292,24 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(Math.abs(measuredHeave / observationById('observation.archimedes-heave')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
     // the periods themselves: a floating block is a spring whose rate is the water-plane area times ρ g, T = 2π √(ρ_wood a / ρ_water g); the engine's water brings no added mass
     for (const [x, a] of [[small, 0.2], [big, 0.4]] as const) expect(Math.abs(x.T / (2 * Math.PI * Math.sqrt((530 / 998.2) * a / G)) - 1), 'the heave period is what Archimedes and Newton give').toBeLessThan(0.02);
+  }, 180000);
+
+  it('Drag: a foam ball twice the diameter falls √2 faster once the air holds it, as Froude similarity predicts, and each at the speed the drag law gives', async () => {
+    const lambda = 2;
+    const froude = similarityById('scale.froude')!;
+    // the law book: drag and weight both go as λ³ under Froude (a force), so the speed at which they balance goes as λ^½
+    const drag = classify('drag.aero', froude, lambda), weight = classify('weight', froude, lambda);
+    expect(drag.verdict).toBe('covariant');
+    expect(drag.expected / drag.example).toBeCloseTo(lambda ** 3, 9);
+    expect(weight.expected / weight.example).toBeCloseTo(lambda ** 3, 9);
+    const predicted = lambda ** exponentOfDim(froude, parseUnit('m/s').dim);
+    expect(predicted).toBeCloseTo(Math.SQRT2, 9);
+    const small = await terminalSpeed(0.1), big = await terminalSpeed(0.2);
+    const measured = ratio(big.v, small.v);
+    console.log('OBSERVED observation.drag-terminal', measured, small.v, small.law, big.v, big.law);
+    expect(Math.abs(measured / predicted - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measured / observationById('observation.drag-terminal')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
+    // the speeds themselves: v = √(2 m g / ρ C_d A) with the ball's frontal area π d² / 4, not its box
+    for (const x of [small, big]) expect(Math.abs(x.v / x.law - 1), 'the terminal speed is what the drag law gives').toBeLessThan(0.02);
   }, 180000);
 });
