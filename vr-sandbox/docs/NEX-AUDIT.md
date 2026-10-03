@@ -105,7 +105,10 @@ two-regime verdict with its boundary. What it cannot yet do: more than two bound
 
 The compact text round-trips hash-equal over 957 structures; the spoken forms in English and Spanish are lossless by
 construction and tested both ways; the English prose renderer loses and counts what it loses (`rankOfText`,
-translation loss), which is the honest form of a lossy tuner. Cross-tuner commutativity is tested for the two spoken
+translation loss), which is the honest form of a lossy tuner. Measured on Ego's real answers the same day: over the
+fifteen questions whose answers carry a structure, the English carries 127 of 140 pieces (loss 0.09: seven
+mechanisms, four domains, one list of assumptions, one instrument) and the compact text carries all 140 and reads
+back identically. Cross-tuner commutativity is tested for the two spoken
 languages. "Sensory tuners" do not exist as such: the only sense Ego has is the physics engine, whose measurements
 enter as evidence leaves (the scale register, now read as anomalies in docs/NEX-DISCOVERY.md). A second sense would
 be a second instrument on the same structures, and the test would be the same: hash-equal after both.
