@@ -34,9 +34,14 @@ They are four cells of its coordinates, not four words lost: cause is `polarity:
 other end (B requires A is A enables B; `dir` says which way it was said). A condition is in `dom`; a counterfactual
 is the same relation in an `intervene` context; a mechanism in `mech`. Tested: Ohm's law gives three readings
 (forward, inverse, implicit) and prevent looks for the opposite sign ("cause" in tests/unit/substrate.test.ts).
-What is under-used, not over-compressed: the traversal that answers "what causes X" sets sign and elasticity from
-the law and leaves `necessity` unset (one use in src/assistant/traverse.ts), so Ego today says *raises* and rarely
-says *is needed for*. That is a gap in the bridge, not in the operator.
+What was under-used, not over-compressed: the traversal that answered "what causes X" set sign and elasticity from
+the law and wrote `necessity:contributing` for everything, so Ego said *raises* and never *is needed for*. Fixed the
+same day: necessity is now read off the law itself (the only input of a law is enough, with its constants; an input
+whose absence zeroes the output is needed; a divisor or a term of a sum contributes), so "does the current cause the
+voltage" answers "Electric current is needed for (raises) voltage … and without it there is none", and "does the
+resistance cause the current" stays "contributes to (lowers)". The same pass found that every law with a constant
+(g, k, σ) was silently dropped from cause answers, its evaluation without the constant being NaN, and that a thing
+which is an input of its law was listed as its own cause ("current raises it"); both fixed with tests.
 
 ## 4. Is "the weaker rank wins" mathematically valid?
 

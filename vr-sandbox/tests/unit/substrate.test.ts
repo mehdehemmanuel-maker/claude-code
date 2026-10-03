@@ -1088,6 +1088,11 @@ describe('Ego on what causes a thing: its laws speak when no arrow does, and one
     // before (3 October, 16:32 UTC): "I know no mechanism that causes brush wear"; "fatigue contributes to (raises) fatigue"; "what are the kinds of motor" was a recall
     const brush = answerTraversal({ do: 'traverse', query: 'cause', of: 'brush wear' });
     expect(brush).toMatch(/^I know no arrow that causes brush wear: none of mine runs into it\. Its laws say, derived at their worked examples: by Coulomb friction \(F ≤ μ N\): friction coefficient \(mu\) raises it, normal force \(N\) raises it; by Joule heating \(P = I² R\): current \(I\) raises it, resistance \(R\) raises it\. Two things rising together/);
+    // a thing that is an input of its law is never its own cause: the law is read for it (before: "current (I) raises it, resistance (R) raises it")
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'electric current' })).toMatch(/^I know no arrow that causes electric current: none of mine runs into it\. Its laws say, derived at their worked examples: by Ohm's law \(V = I R\) read for current \(I\): voltage \(V\) raises it, resistance \(R\) lowers it with voltage held\. Two things rising together/);
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'temperature' })).toMatch(/by Heat capacity \(Q = m c ΔT\) read for temperature rise \(dT\): heat \(Q\) raises it, mass \(m\) lowers it with heat held, specific heat \(c\) lowers it with heat held\./);
+    // a law with a constant (g) is read at all (before: its evaluation without g was NaN and it was dropped without a word)
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'pressure' })).toMatch(/by Hydrostatic pressure \(p = ρ g h\): density \(rho\) raises it, depth \(h\) raises it\./);
     const fatigue = answerTraversal({ do: 'traverse', query: 'cause', of: 'fatigue' });
     expect(fatigue).toMatch(/fatigue \(the \w+\) contributes to \(raises\) fatigue \(the \w+\)/);
     expect(interpret('what are the kinds of motor')).toEqual({ do: 'traverse', query: 'kinds', of: 'motor' });

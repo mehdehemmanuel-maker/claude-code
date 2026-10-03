@@ -343,7 +343,26 @@ export function answerTraversal(i: Traverse): string {
       const kinded = (x: R): R => { const [p, q2] = x.args; if (p?.k === 'D' && q2?.k === 'D' && p.aliases?.en === q2.aliases?.en) { const kind = (id: string) => s.get(id)?.kinds[0] ?? 'thing'; return { ...x, args: [{ ...p, aliases: { ...p.aliases, en: `${p.aliases?.en} (the ${kind(p.id)})` } }, { ...q2, aliases: { ...q2.aliases, en: `${q2.aliases?.en} (the ${kind(q2.id)})` } }] }; } return x; };
       const ins = intoOf(a.id).map(kinded);
       // what its laws say: each input of a law that governs it, with the sign of the output in it at the worked example
-      const byLaw = s.outOf(a.id, 'governed-by').flatMap((rel) => { const law = LAWS.find((l) => l.id === rel.to); if (!law) return []; const ex = law.example.inputs; let y0: number; try { y0 = law.eval(ex); } catch { return []; } if (!Number.isFinite(y0) || !y0) return []; const parts = law.inputs.map((inp) => { const x0 = ex[inp.sym]; if (!x0) return ''; let y1: number; try { y1 = law.eval({ ...ex, [inp.sym]: x0 * 1.01 }); } catch { return ''; } if (!Number.isFinite(y1) || y1 === y0) return ''; return `${inp.name} (${inp.sym}) ${y1 > y0 ? 'raises' : 'lowers'} it`; }).filter(Boolean); return parts.length ? [`by ${law.name} (${law.formula}): ${parts.join(', ')}`] : []; });
+      // the thing may be the law's output (brush wear by Coulomb friction: every input moves it) or one of its
+      // inputs (electric current in V = I R: the law read for it, the output raises it and the other inputs move it
+      // with the output held); it is never its own cause
+      const aUnit = a.kinds.includes('quantity') ? a.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined;
+      const aWords = [...new Set([nameOf(a).toLowerCase(), a.id.split('.').pop()!.replace(/-/g, ' '), ...a.names.map((n) => n.toLowerCase())])].filter((w) => w.length >= 3);
+      const namesA = (name: string): boolean => { const n = name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, ''); const head = n.split(/\W+/).filter(Boolean).pop() ?? ''; return aWords.some((w) => n === w || head === w || head === w.split(' ').pop()); };
+      const sameUnit = (u1: string, u2: string): boolean => { try { return sameDim(dimensionOf(u1), dimensionOf(u2)); } catch { return false; } };
+      const byLaw = s.outOf(a.id, 'governed-by').flatMap((rel) => {
+        const law = LAWS.find((l) => l.id === rel.to); if (!law) return [];
+        const ex = law.example.inputs;
+        const slope = (sym: string): number | null => { const x0 = ex[sym]; if (!x0) return null; try { const y0 = law.eval(withConstants(law, ex)), y1 = law.eval(withConstants(law, { ...ex, [sym]: x0 * 1.01 })); return Number.isFinite(y0) && Number.isFinite(y1) && y0 !== 0 && y1 !== y0 ? (y1 - y0) / y0 / 0.01 : null; } catch { return null; } };
+        const self = aUnit ? law.inputs.find((x) => sameUnit(aUnit, x.unit) && namesA(x.name)) : undefined;
+        if (self) {
+          const sSelf = slope(self.sym); if (!sSelf) return [];
+          const parts = [`${law.output.name} (${law.output.sym}) ${sSelf > 0 ? 'raises' : 'lowers'} it`, ...law.inputs.filter((x) => x !== self).map((x) => { const sx = slope(x.sym); return sx ? `${x.name} (${x.sym}) ${-sx * sSelf > 0 ? 'raises' : 'lowers'} it with ${law.output.name} held` : ''; }).filter(Boolean)];
+          return [`by ${law.name} (${law.formula}) read for ${self.name} (${self.sym}): ${parts.join(', ')}`];
+        }
+        const parts = law.inputs.map((inp) => { const sx = slope(inp.sym); return sx ? `${inp.name} (${inp.sym}) ${sx > 0 ? 'raises' : 'lowers'} it` : ''; }).filter(Boolean);
+        return parts.length ? [`by ${law.name} (${law.formula}): ${parts.join(', ')}`] : [];
+      });
       const lawSaid = byLaw.length ? ` ${ins.length ? 'And its' : 'Its'} laws say, derived at their worked examples: ${byLaw.slice(0, 3).join('; ')}.` : '';
       if (!ins.length) return `I know no arrow that causes ${art(a)}: none of mine runs into it.${lawSaid} ${correlation}`;
       const outs = ins.slice(0, 6).map((x) => render(x, 'en', 'engineer'));
