@@ -2,10 +2,9 @@
 
 import type { SimSettings, Vec3 } from '../doc/types';
 import { PhysicsWorld, TICK } from './world';
-import type { Nerves, PhysicsEvent, PhysicsOp, StepResult, TerrainField } from './protocol';
+import type { Nerves, PhysicsEvent, PhysicsOp, StepResult } from './protocol';
 import { Watchdog, type Anomaly, type BodyInfo } from '../diagnostics/watchdog';
 import { newMind, strides, think, type Mind, type Want } from '../world/mind';
-import { groundAt } from '../world/place';
 
 /** How often a creature thinks: a tenth of a second of world time, in ticks (F-6.3). */
 export const THINK = 0.1;
@@ -44,8 +43,7 @@ export class Runner {
   private minds: Nervous[] = [];
   /** Where you stand (op 'you'), for what they see. */
   private you: Vec3 = [0, 0, 0];
-  /** The place's ground and water (op 'terrain'), for where they may go. */
-  private terrain: TerrainField | null = null;
+  /** The place's water level (op 'terrain'), for where they may go: dry ground is what stands above it. */
   private water: number | null = null;
   /** Ticks since the scene began: the minds' clock. */
   private ticks = 0;
@@ -85,7 +83,7 @@ export class Runner {
         continue;
       }
       if (op.op === 'you') { this.you = [op.at[0], op.at[1], op.at[2]]; continue; }
-      if (op.op === 'terrain') { this.terrain = op.field; this.water = op.water ?? null; }
+      if (op.op === 'terrain') this.water = op.water ?? null;
       this.world.apply(op);
       // a new scene starts a new watch, and a new clock
       if (op.op === 'clear') { this.watchdog = this.makeWatchdog(); this.reported.clear(); this.minds = []; this.ticks = 0; }
@@ -104,7 +102,7 @@ export class Runner {
     for (const m of this.minds) {
       const self = this.world.livePose(m.nerves.body);
       if (!self) continue;
-      const w = { time: this.ticks * TICK, you: this.you, dry: (x: number, z: number) => this.dry(x, z), clear: (a: Vec3, b: Vec3) => this.world.lineOfSight(a, b, m.nerves.parts) };
+      const w = { time: this.ticks * TICK, you: this.you, dry: (x: number, z: number) => this.dry(x, z, m.nerves.parts), clear: (a: Vec3, b: Vec3) => this.world.lineOfSight(a, b, m.nerves.parts) };
       const c = think(m.mind, self, w, THINK, m.walking);
       m.walking = c.left > 0 || c.right > 0;
       this.world.gait(strides(c, m.nerves));
@@ -113,9 +111,13 @@ export class Runner {
     }
   }
 
-  /** Whether the ground there is dry: above the water, when the place has any. */
-  private dry(x: number, z: number): boolean {
-    return this.water === null || !this.terrain || groundAt(this.terrain, x, z) > this.water;
+  /**
+   * Whether the ground there is dry, by looking (F-6.2): a ray straight down from high above to the water's level at
+   * that point is blocked by whatever stands above the water (the shore, a plank, the ground itself) and reaches the
+   * water where there is nothing; no water in the place, everywhere is dry. The looker's own parts do not count.
+   */
+  private dry(x: number, z: number, except: string[]): boolean {
+    return this.water === null || !this.world.lineOfSight([x, this.water + 100, z], [x, this.water, z], except);
   }
 
   private observe(r: StepResult) {

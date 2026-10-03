@@ -218,3 +218,38 @@ describe('eyes that see along straight rays (F-6.2)', () => {
     expect(await closer(false)).toBeGreaterThan(0.5);
   }, 120000);
 });
+
+describe('dry ground is seen, not read (F-6.2)', () => {
+  it('at the edge of a floor over water it turns from the water and stays on the floor; told of no water, it walks off the edge', async () => {
+    // a concrete floor that ends at x = 1 with water at -0.2 beyond it; you stand across the water, in plain sight
+    const edge = async (water: number | null) => {
+      const { r, w } = await walker(WALKERS['dog']!, 0);
+      r.world.apply({ op: 'environment', boxes: [{ half: [25.5, 0.5, 50], pose: { p: [-24.5, -0.5, 0], q: [0, 0, 0, 1] }, material: 'concrete.c30' }], materials });
+      const runner = new Runner(r.world);
+      runner.run(0, [{ op: 'terrain', field: null, material: null, water }, { op: 'mind', name: 'the dog', nerves: { body: w.body, parts: w.parts, left: w.left, right: w.right, servos: w.servos }, seed: 7 }, { op: 'you', at: [4, 1.6, 0] }], 0);
+      const h0 = headingOf(r.world.livePose(w.body)!.q);
+      let ticks = 0, furthest = -Infinity, lowest = Infinity;
+      while (ticks < 720) {
+        ticks += runner.run(0, [], 4 * TICK + 1e-9, 4).ticksRun;
+        const p = r.world.livePose(w.body)!.p;
+        furthest = Math.max(furthest, p[0]);
+        lowest = Math.min(lowest, p[1]);
+      }
+      const pose = r.world.livePose(w.body)!;
+      const out = { furthest, lowest, turned: Math.abs(headingOf(pose.q) - h0), up: upright(r, w) };
+      r.done();
+      return out;
+    };
+    // measured 2026-10-03: with the water it reaches x = 0.85 and keeps to the edge, heading 50° to 90° off you;
+    // without it, x = 1.6 at 5 s and falling
+    const sea = await edge(-0.2);
+    expect(sea.furthest).toBeGreaterThan(0.5); // it did come toward you
+    expect(sea.furthest).toBeLessThan(1); // and stopped short of the edge
+    expect(sea.lowest).toBeGreaterThan(0.05); // never over it
+    expect(sea.turned).toBeGreaterThan(Math.PI / 6);
+    expect(sea.up).toBeGreaterThan(0.9);
+    const none = await edge(null);
+    expect(none.furthest).toBeGreaterThan(1);
+    expect(none.lowest).toBeLessThan(-1);
+  }, 120000);
+});

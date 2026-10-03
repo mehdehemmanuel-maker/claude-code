@@ -78,8 +78,8 @@ export interface World {
 /** What its legs are told: each side's stride (0 still, 1 full), and what it is doing, in words. */
 export interface Command { left: number; right: number; doing: Want; says: string | null }
 
-/** How near is near enough: to you, and to a place it is going. */
-const NEAR_YOU = 1.0, ARRIVE = 0.3;
+/** How near is near enough: to you, and to a place it is going; and how far ahead it looks at the ground, m. */
+const NEAR_YOU = 1.0, ARRIVE = 0.3, LOOK = 0.8;
 
 function random(m: Mind): number {
   // mulberry32: a creature's own reproducible chance
@@ -155,8 +155,10 @@ export function think(m: Mind, self: Pose, w: World, dt: number, walking: boolea
     if (m.doing === 'curiosity') { m.urge.curiosity = 0; m.goal = null; m.closest = undefined; }
     return { left: 0, right: 0, doing: m.doing, says };
   }
-  // water ahead: turn from it as if it were behind
-  const ahead: Vec3 = [self.p[0] + 0.4 * Math.cos(headingOf(self.q)), 0, self.p[2] - 0.4 * Math.sin(headingOf(self.q))];
+  // water ahead: turn from it as if it were behind. It looks as far ahead as three seconds of walking take it, the
+  // time a one-sided turn needs to come round 90° (measured 3 October 2026 at a floor's edge over water: a look of
+  // 0.4 m turned it too late by 0.15 m and it went over; 0.8 m turns it on the floor)
+  const ahead: Vec3 = [self.p[0] + LOOK * Math.cos(headingOf(self.q)), 0, self.p[2] - LOOK * Math.sin(headingOf(self.q))];
   const turn = !w.dry(ahead[0], ahead[2]) ? Math.PI : g.turn;
   // the stride on the side it turns toward shortens, fully 25° off: a stride only a little shorter on one side
   // hardly turns a four-legged walk (one side still turns it about 30° a second)

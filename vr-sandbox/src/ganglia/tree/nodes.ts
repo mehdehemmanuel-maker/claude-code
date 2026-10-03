@@ -177,7 +177,7 @@ export const NODES: Node[] = [
     statement: 'An eye sees along straight rays and sees nothing behind what blocks them.',
     realisedBy: [{ module: 'physics/world', symbol: 'PhysicsWorld#lineOfSight' }],
     heldBy: [{ file: 'tests/conformance/walker.test.ts', test: 'a wall between you hides you' }, { file: 'tests/unit/mind.test.ts', test: 'sees along straight rays' }],
-    limits: ['a creature\'s eyes are at its body\'s centre, excused from its own parts; where the ground is dry it reads from the place\'s field, not by looking (docs/AUDIT-2-FALSE-CONFIDENCE.md FC-17)'] },
+    limits: ['a creature\'s eyes are at its body\'s centre, excused from its own parts; where the ground is dry it sees by a ray straight down ahead of it, blocked above the water or not (physics/runner Runner#dry)'] },
   { id: 'F-6.3', kind: 'law', epistemic: 'physical', name: 'a nervous system keeps world time', proof: 'tested', parents: ['F-6'],
     statement: 'A creature thinks on its body\'s clock: every 0.1 s of world time, at the same ticks whatever a frame carries, and its command reaches its servos the next tick.',
     realisedBy: [{ module: 'physics/runner', symbol: 'Runner#think' }],
