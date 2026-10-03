@@ -717,6 +717,19 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(bearing).toMatch(/^Living analogues of a bearing: /);
   });
 
+  it('Ego says how big and how fast a thing is, in the units that fit, with its neighbours at that size', () => {
+    expect(interpret('how big is a kidney')).toMatchObject({ do: 'traverse', query: 'size', of: 'kidney' });
+    expect(interpret('what size is a bearing')).toMatchObject({ do: 'traverse', query: 'size', of: 'bearing' });
+    expect(interpret('how fast is a heartbeat')).toMatchObject({ do: 'traverse', query: 'size', of: 'heartbeat' });
+    expect(interpret('what is the timescale of a neuron')).toMatchObject({ do: 'traverse', query: 'size', of: 'neuron' });
+    expect(interpret('at what scale does a bearing live')).toMatchObject({ do: 'traverse', query: 'size', of: 'bearing' });
+    const kidney = answerTraversal({ do: 'traverse', query: 'size', of: 'kidney' });
+    expect(kidney).toMatch(/^A kidney is about 10 cm across and works on a timescale of about 1 min\./);
+    expect(kidney).toMatch(/Beside it at that size: /);
+    const transistor = answerTraversal({ do: 'traverse', query: 'size', of: 'transistor' });
+    expect(transistor).toMatch(/is about \d+ (?:nm|µm) across/);
+  });
+
   it('Ego compares two things: what they share, where they part, and each in a word', () => {
     expect(interpret('what is the difference between a bolt and a screw')).toMatchObject({ do: 'traverse', query: 'compare', of: 'bolt', which: 'screw' });
     expect(interpret('compare a bearing with a bushing')).toMatchObject({ do: 'traverse', query: 'compare', of: 'bearing', which: 'bushing' });

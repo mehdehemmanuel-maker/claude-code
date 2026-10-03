@@ -3,6 +3,7 @@
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
 import { ruleExpander } from '../ganglia/substrate';
+import type { Entity } from '../ganglia/substrate/model';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
@@ -101,6 +102,21 @@ export function answerTraversal(i: Traverse): string {
     const leaves = leavesOf(d);
     const n = leaves.length;
     return `${head} has ${parts.map((c) => `${nameOf(c.entity)}${c.children.length ? ` (${list(c.children.map((x) => nameOf(x.entity)), 5)})` : ''}`).join('; ')}. Down to the leaves it is ${n} thing${n === 1 ? '' : 's'}, ending in ${list(leaves.map((l) => nameOf(l)), 10)}.${matLine ? ` ${matLine}` : ''}`;
+  }
+  if (i.query === 'size') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const L = e.params?.find((p) => p.sym === 'L_c')?.low, T = e.params?.find((p) => p.sym === 'T_c')?.low;
+    if (L === undefined && T === undefined) return `I have no size or time for ${an(nameOf(e))} yet: that is a question on my queue.`;
+    const tell = (x: number, units: [string, number][]) => { const [u, f] = [...units].reverse().find(([, f]) => x >= f) ?? units[0]!; const v = x / f; return `about ${Number(v.toPrecision(v >= 10 ? 2 : 1))} ${u}`; };
+    const LENGTHS: [string, number][] = [['pm', 1e-12], ['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['cm', 1e-2], ['m', 1], ['km', 1e3], ['Mm', 1e6]];
+    const TIMES: [string, number][] = [['ns', 1e-9], ['µs', 1e-6], ['ms', 1e-3], ['s', 1], ['min', 60], ['h', 3600], ['days', 86400], ['years', 3.156e7]];
+    const size = L !== undefined ? `${an(nameOf(e)).replace(/^a/, 'A')} is ${tell(L, LENGTHS)} across` : `${an(nameOf(e)).replace(/^a/, 'A')} has no size I know`;
+    const time = T !== undefined ? `${L !== undefined ? ' and' : ''} works on a timescale of ${tell(T, TIMES)}` : '';
+    // its neighbours on the ladder: things of about that size, within a quarter of a decade
+    const near = L !== undefined ? [...s.entities.values()].filter((x) => x.id !== e.id && !x.kinds.includes('scale') && !x.kinds.includes('observer') && !/^(view|cross|fn|role|param|law)\./.test(x.id)).map((x) => ({ x, l: x.params?.find((p) => p.sym === 'L_c')?.low })).filter((y): y is { x: Entity; l: number } => y.l !== undefined && Math.abs(Math.log10(y.l / L)) <= 0.25).sort((p, q) => Math.abs(Math.log10(p.l / L)) - Math.abs(Math.log10(q.l / L))).slice(0, 4) : [];
+    const beside = near.length ? ` Beside it at that size: ${list(near.map((y) => nameOf(y.x)), 4)}.` : '';
+    return `${size}${time}.${beside}`;
   }
   if (i.query === 'compare') {
     const a = find(i.of ?? ''), b = find(i.which ?? '');
