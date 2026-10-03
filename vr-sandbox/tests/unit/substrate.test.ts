@@ -470,6 +470,12 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect(idle).toEqual([]);
   });
 
+  it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {
+    const named = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && s.into(e.id).length >= 5);
+    const unplaced = named.filter((e) => !e.params?.some((p) => p.sym === 'L_c') || !e.params?.some((p) => p.sym === 'T_c')).map((e) => e.id);
+    expect(unplaced).toEqual([]);
+  });
+
   it('what a process requires, a machine, a tool, a mould, a gas, is described, never a stub', () => {
     const needs = s.relations.filter((r) => r.kind === 'requires' && s.get(r.from)?.kinds.includes('process'));
     expect(needs.length).toBeGreaterThan(100);

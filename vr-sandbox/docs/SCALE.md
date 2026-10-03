@@ -229,8 +229,10 @@ stay: SC-4 forbids a silent promotion.
   its form and storage and conduction do not. No one transformation keeps heat, buoyancy, magnetism and gravity at
   once: that is the content, not a gap. A surface coefficient h held by the environment is never similar (Bi grows
   with λ), and radiation never is.
-- Characteristic scales are estimates on about 130 entities; most of the substrate carries none, which the analogue
-  search reports (`unplaced`). A heart now finds the cilium four decades down; a bearing still finds nothing far away.
+- Characteristic scales are estimates on about 430 entities (placed 461 of 2596): every component named five times or more
+  carries one, held by a test, and so do the parts and living things described in the shift; the rest the analogue
+  search reports as `unplaced`. The analogue search needs a shared function or transformation as well as a distance in
+  decades, so a thing gains far analogues as its function is said.
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.
 - Nine cross-scale structures are written, an ecosystem and a market among them as models that say where they break;
   each is a set of level entities in the substrate, joined by `coarse-grains-to`.
