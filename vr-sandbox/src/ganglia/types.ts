@@ -26,7 +26,7 @@ export interface Quantity {
   unit: string;
 }
 
-export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials' | 'information';
+export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials' | 'information' | 'chemistry' | 'optics';
 
 export interface Law {
   id: string;

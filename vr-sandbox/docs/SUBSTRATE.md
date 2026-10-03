@@ -188,7 +188,7 @@ the typecheck, the unit, codec and golden suites and the build, and fails on any
 | relations | 11 650 |
 | relations per entity | 4.5 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
-| laws | 175 (107 executable in `laws.ts`, 68 cited not run) |
+| laws | 175 (122 executable in `laws.ts`, 53 cited not run) |
 | materials | 272 |
 | components | 659 |
 | functions | 92 |
@@ -354,6 +354,10 @@ a test holds both that and the heatsink's thermal one.
   `names.ts`: "DC motor" for motor.dc, "MOSFET" for transistor.mosfet, 170 of them), else the id as words without its
   prefix; the said layer is heard too, so "logic gate" finds gate.logic. A test holds that every part and material named
   five times or more is spoken by a name, never the id as words. The outside adds labels and aliases as it answers.
-- **Stub laws are cited, not executable:** they cannot be run by `solve()` until added to `laws.ts`.
+- **Cited laws are not executable** until added to `laws.ts`: 53 remain so. Fifteen of the most cited were made
+  executable in the shift (Griffith, Fick, Bernoulli, Nernst, Ampère for a solenoid, Hertz for a sphere on a flat,
+  Coulomb, Gibbs, the ideal gas, Michaelis-Menten, Hall-Petch, Planck, Shannon, Snell, Faraday), each with a sourced
+  worked example that the law tests reproduce and a dimension check that rescaling passes; the law book gained the
+  chemistry and optics domains and their views. Paris' law stays cited: its coefficient's units depend on its exponent.
 - **Persistence is per browser.** The journal lives in this browser's storage beside the builds, sharing its five
   million characters; nothing syncs it between headsets.

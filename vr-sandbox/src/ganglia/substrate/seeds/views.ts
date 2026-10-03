@@ -13,6 +13,7 @@ export const VIEW_OF_DOMAIN: Record<string, string> = {
   'machine elements': 'view.machine-elements', fluids: 'view.fluid', fluid: 'view.fluid', thermal: 'view.thermal', electrical: 'view.electrical', magnetism: 'view.magnetic', magnetic: 'view.magnetic',
   'solid state': 'view.solid-state', information: 'view.informational', informational: 'view.informational', computational: 'view.computational', control: 'view.control',
   chemical: 'view.chemical', chemistry: 'view.chemical', materials: 'view.materials', manufacturing: 'view.manufacturing', physics: 'view.physics', quantum: 'view.quantum', energetic: 'view.energetic', energy: 'view.energetic',
+  optics: 'view.physics',
 };
 export const viewOfDomain = (domain: string): string => VIEW_OF_DOMAIN[domain.trim().toLowerCase()] ?? `view.${domain.trim().toLowerCase().replace(/ /g, '-')}`;
 
