@@ -15,12 +15,17 @@ import { chemistry } from './seeds/chemistry';
 import { earth } from './seeds/earth';
 import { robotics } from './seeds/robotics';
 import type { Pack } from './dsl';
-import { Queue, buildGenerators, externalExpander, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
+import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
+import { externalExpander } from './external';
+import { population } from './service';
 
 export * from './model';
 export { Substrate, coverageFrom } from './substrate';
 export { Pack, est, param } from './dsl';
-export { Queue, populate, seedQueue, priority, ingest, ask, promoteManifolds, buildGenerators, missingConstructors, ruleExpander, seedExpander, externalExpander, type Expander, type Report, type WorkItem, type Generator } from './population';
+export { Queue, populate, seedQueue, priority, ingest, ask, promoteManifolds, buildGenerators, missingConstructors, ruleExpander, seedExpander, type Expander, type Report, type WorkItem, type Generator } from './population';
+export { externalExpander, recordToDiscovery, provenanceOf, type Connector, type ExternalRecord, type ExternalLink, type ExternalQuantity } from './external';
+export { Population, startPopulation, population, stopPopulation, type PopulationOptions, type JournalEntry, type Totals } from './service';
+export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
 export const PACKS: (() => Pack)[] = [mechanical, electrical, circuits, computing, materials, manufacturing, biology, chemistry, earth, robotics];
@@ -38,7 +43,7 @@ export function build(opts: { budget?: number } = {}): Built {
   for (const p of packs) ingest(s, { entities: p.entities, relations: p.relations, unknowns: [] }, seedReport);
   // what the bridge named and nothing described: stubs, each a question
   s.repair();
-  const expanders = [seedExpander(packs), ruleExpander(), externalExpander(false)];
+  const expanders = [seedExpander(packs), ruleExpander(), externalExpander(null)];
   const queue = new Queue();
   seedQueue(s, queue, 'both');
   promoteManifolds(s);
@@ -64,5 +69,6 @@ export async function populateMore(budget = 200, workers = 4): Promise<Report> {
 export function census() {
   const b = builtState();
   const c = b.substrate.census();
-  return { ...c, queued: b.queue.size, next: b.queue.peek(8).map((w) => `${w.id} (${w.facet}, ${w.mode}, ${w.priority.toFixed(1)}: ${w.reason})`), generators: b.generators.size, packs: b.packs.map((p) => p.domain) };
+  const p = population();
+  return { ...c, queued: b.queue.size, next: b.queue.peek(8).map((w) => `${w.id} (${w.facet}, ${w.mode}, ${w.priority.toFixed(1)}: ${w.reason})`), generators: b.generators.size, packs: b.packs.map((p) => p.domain), outside: p ? p.status() : null };
 }

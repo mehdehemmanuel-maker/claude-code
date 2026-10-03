@@ -185,14 +185,14 @@ describe('population: a queue that never needs to be finished', () => {
     const w = (id: string, p: number, facet: WorkItem['facet'] = 'components'): WorkItem => ({ id, facet, mode: 'deep', priority: p, reason: 'test', domain: 'mechanical' });
     expect(q.push(w('a', 1))).toBe(true);
     expect(q.push(w('b', 5))).toBe(true);
-    expect(q.push(w('a', 9))).toBe(false); // the same question is asked once
+    expect(q.push(w('a', 9))).toBe(false); // the same question is asked once, and asking it with more urgency raises it
     expect(q.push(w('c', 3, 'materials'))).toBe(true);
     const back = Queue.restore(q.serialize());
+    expect(back.pop()!.id).toBe('a'); // raised to 9
     expect(back.pop()!.id).toBe('b');
-    expect(back.pop()!.id).toBe('c');
     expect(back.push(w('b', 7))).toBe(false); // done is remembered across the round trip
     expect(back.pop(['electrical'])).toBeUndefined();
-    expect(back.pop(['electrical', 'mechanical'])!.id).toBe('a');
+    expect(back.pop(['electrical', 'mechanical'])!.id).toBe('c');
   });
 
   it('a stub named by many things is asked about first', () => {

@@ -44,6 +44,12 @@ export const RELATIONS = {
 export type RelationKind = keyof typeof RELATIONS;
 export type Inverse = (typeof RELATIONS)[RelationKind]['inverse'];
 export const RELATION_KINDS = Object.keys(RELATIONS) as RelationKind[];
+export type InverseKind = (typeof RELATIONS)[RelationKind]['inverse'];
+/** An arrow said backwards (`part-of`) is the forward arrow (`has-part`) with its ends swapped. */
+export const INVERSE_OF: Record<string, RelationKind> = Object.fromEntries(RELATION_KINDS.filter((k) => RELATIONS[k].inverse !== k).map((k) => [RELATIONS[k].inverse, k]));
+export function forwardOf(kind: RelationKind | InverseKind): { kind: RelationKind; flipped: boolean } {
+  return (RELATION_KINDS as string[]).includes(kind) ? { kind: kind as RelationKind, flipped: false } : { kind: INVERSE_OF[kind]!, flipped: true };
+}
 
 /** A thing nothing describes yet, named at the far end of one of these arrows, is at least of this kind: a stub law, a stub material, a stub role. */
 export const NAMED_AS: Partial<Record<RelationKind, Kind>> = { 'governed-by': 'law', 'made-of': 'material', 'standardized-by': 'standard', 'fails-by': 'failure', plays: 'role', 'in-view': 'architecture', 'varies-by': 'parameter', 'measured-by': 'thing' };
@@ -63,7 +69,7 @@ export interface Coverage {
   depth: 0 | 1 | 2 | 3;
   /** 0 to 1: how far the representation can be trusted, from its sources. */
   confidence: number;
-  sourceKind: 'standard' | 'maker' | 'textbook' | 'handbook' | 'paper' | 'derived' | 'estimate' | 'stub';
+  sourceKind: 'standard' | 'maker' | 'textbook' | 'handbook' | 'paper' | 'database' | 'derived' | 'estimate' | 'stub';
   /** Facets expanded so far. */
   expanded: Facet[];
   /** What is known to be unknown. */
@@ -83,6 +89,8 @@ export interface Entity {
   params?: Parameter[];
   source: Provenance;
   coverage: Coverage;
+  /** The same thing in outside sources, by the source's own key (`wikidata: 'Q11019'`). */
+  keys?: Record<string, string>;
 }
 
 export interface Relation {
@@ -98,10 +106,10 @@ export interface Relation {
 export interface Discovery { entities: Entity[]; relations: Relation[]; unknowns: { id: string; facet: Facet; why: string }[] }
 
 export const sourceKindOf = (p: Provenance): Coverage['sourceKind'] =>
-  'estimate' in p ? 'estimate' : 'stub' in p ? 'stub' : 'derived' in p ? 'derived' : (p.kind === 'standard' || p.kind === 'maker' || p.kind === 'textbook' || p.kind === 'handbook' || p.kind === 'paper') ? p.kind : 'textbook';
+  'estimate' in p ? 'estimate' : 'stub' in p ? 'stub' : 'derived' in p ? 'derived' : (p.kind === 'standard' || p.kind === 'maker' || p.kind === 'textbook' || p.kind === 'handbook' || p.kind === 'paper' || p.kind === 'database') ? p.kind : 'textbook';
 
 export const confidenceOf = (p: Provenance): number =>
-  'stub' in p ? 0.2 : 'estimate' in p ? 0.5 : 'derived' in p ? 0.7 : p.kind === 'standard' || p.kind === 'maker' ? 0.95 : p.kind === 'rule of thumb' ? 0.5 : 0.85;
+  'stub' in p ? 0.2 : 'estimate' in p ? 0.5 : 'derived' in p ? 0.7 : p.kind === 'standard' || p.kind === 'maker' ? 0.95 : p.kind === 'rule of thumb' ? 0.5 : p.kind === 'database' ? 0.6 : 0.85;
 
 /** Ids: lower case, words joined by dots, no spaces; the same thing named twice is one id. */
 export const normalizeId = (s: string) => s.trim().toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9.+-]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-');

@@ -11,7 +11,8 @@ test('the build boots and simulates when served from a Pages subpath', async ({ 
   const errors: string[] = [];
   const missing: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // a resource the outside did not serve (the substrate asks a public database in the background) is not an error of the app
+  page.on('console', (m) => { const at = m.location().url ?? ''; if (m.type() === 'error' && !(/wikidata\.org/.test(at) || (/^Failed to load resource/.test(m.text()) && !at))) errors.push(`${m.text()} ${at}`.trim()); });
   page.on('response', (r) => { if (r.status() >= 400) missing.push(`${r.status()} ${r.url()}`); });
   await page.goto(SITE);
   await page.waitForFunction(() => !document.getElementById('loading') && (window as any).sandbox, null, { timeout: 60_000 });

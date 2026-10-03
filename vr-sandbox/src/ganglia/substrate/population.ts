@@ -16,9 +16,15 @@ export class Queue {
   private items: WorkItem[] = [];
   private readonly keys = new Set<string>();
   readonly done = new Set<string>();
+  /** Queue a question once; asking a queued question again with more urgency raises it. False when it was known already. */
   push(w: WorkItem): boolean {
     const key = `${w.id}|${w.facet}|${w.mode}`;
-    if (this.keys.has(key) || this.done.has(key)) return false;
+    if (this.keys.has(key)) {
+      const have = this.items.find((x) => x.id === w.id && x.facet === w.facet && x.mode === w.mode);
+      if (have && w.priority > have.priority) { have.priority = w.priority; have.reason = w.reason; }
+      return false;
+    }
+    if (this.done.has(key)) return false;
     this.keys.add(key);
     this.items.push(w);
     return true;
@@ -67,8 +73,8 @@ export function priority(s: Substrate, e: Entity, facet: Facet): number {
 export interface Expander {
   name: string;
   facets: Facet[];
-  /** Null when this source has nothing on it; a discovery otherwise, with its unknowns. */
-  expand(e: Entity, facet: Facet, s: Substrate): Discovery | null;
+  /** Null when this source has nothing on it; a discovery otherwise, with its unknowns. An outside source answers later. */
+  expand(e: Entity, facet: Facet, s: Substrate): Discovery | null | Promise<Discovery | null>;
 }
 
 /** The deep knowledge a seed pack kept back, played when the queue asks for it. */
@@ -139,9 +145,6 @@ export function ruleExpander(): Expander {
 }
 
 /** An outside source (a datasheet service, a standards body, a literature search) when one is connected: here, none is, and it says so. */
-export function externalExpander(connected = false): Expander {
-  return { name: 'external', facets: [...FACETS], expand: (e, facet) => (connected ? null : { entities: [], relations: [], unknowns: [{ id: e.id, facet, why: 'no external source is connected to this session: what is here is what the packs and rules give' }] }) };
-}
 
 export interface Report {
   processed: number;
@@ -234,7 +237,7 @@ export function ask(s: Substrate, q: Queue, id: string, facet: Facet, mode: 'fas
   return q.push({ id: e.id, facet, mode, priority: 1e6, reason: 'asked for', domain: e.domains[0] ?? 'unplaced' });
 }
 
-export interface PopulateOptions { budget?: number; workers?: number; expanders: Expander[]; mode?: 'fast' | 'deep' | 'both' }
+export interface PopulateOptions { budget?: number; workers?: number; expanders: Expander[]; mode?: 'fast' | 'deep' | 'both'; /** stop early when this says so: a time slice of a frame */ until?: () => boolean; /** every discovery an expander made, for a journal */ onDiscovery?: (x: Expander, w: WorkItem, d: Discovery) => void; /** false: a slice, without the end-of-round promotion of manifolds and generators */ finish?: boolean }
 
 /** Seed the queue: every stub asks what it is (fast); every described thing asks its facets (deep). */
 export function seedQueue(s: Substrate, q: Queue, mode: 'fast' | 'deep' | 'both' = 'both'): number {
@@ -261,7 +264,7 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
   let spent = 0;
   const work = async (lane: string[]) => {
     for (;;) {
-      if (spent >= budget) return;
+      if (spent >= budget || opts.until?.()) return;
       // the best question across the lane's domains, else the best anywhere: no domain starves the others
       let w = q.pop(lane);
       if (!w) w = q.pop();
@@ -273,8 +276,9 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
       if (!e) continue;
       for (const x of opts.expanders) {
         if (!x.facets.includes(w.facet)) continue;
-        const d = x.expand(e, w.facet, s);
+        const d = await x.expand(e, w.facet, s);
         if (!d) continue;
+        opts.onDiscovery?.(x, w, d);
         const { entities, relations } = ingest(s, d, report);
         report.discoveredEntities += entities.length;
         report.discoveredRelations += relations.length;
@@ -289,9 +293,11 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
     }
   };
   await Promise.all(lanes.map(work));
-  report.promotedManifolds = promoteManifolds(s);
-  report.generators = [...buildGenerators(s).keys()];
-  report.constructionPaths = [...s.entities.values()].filter((e) => s.outOf(e.id, 'produced-by').length).length;
+  if (opts.finish !== false) {
+    report.promotedManifolds = promoteManifolds(s);
+    report.generators = [...buildGenerators(s).keys()];
+    report.constructionPaths = [...s.entities.values()].filter((e) => s.outOf(e.id, 'produced-by').length).length;
+  }
   report.converged = q.size === 0;
   return report;
 }

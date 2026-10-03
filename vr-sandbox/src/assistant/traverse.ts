@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { analogues, constructionPath, decomposeThing, dualRole, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, producers, substrate, substrateCensus, variantsOf, waysToStore, type SubstrateEntity } from '../ganglia';
+import { analogues, constructionPath, decomposeThing, dualRole, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, substrate, substrateCensus, variantsOf, waysToStore, type SubstrateEntity } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
 
@@ -32,11 +32,23 @@ function find(word: string): SubstrateEntity | undefined {
   return hits.length === 1 ? hits[0] : undefined;
 }
 
+/** What to say of a thing I do not know: asked outside when a source is connected, else a question for the packs. */
+function unknown(name: string): string {
+  const p = population();
+  if (p?.connected) {
+    p.ask(name);
+    return `I know no ${name} yet. I have asked ${p.connector!.name} about it; ask me again in a moment and I will say what it answered, with where it came from.`;
+  }
+  return `I know no ${name}.`;
+}
+
 export function answerTraversal(i: Traverse): string {
   const s = substrate();
   if (i.query === 'census') {
     const c = substrateCensus();
-    return `My substrate holds ${c.entities} things joined by ${c.relations} arrows across ${Object.keys(c.byDomain).length} domains; ${c.stubs} of them are stubs, questions I have been asked by other things and not answered yet, and ${c.queued} questions are queued. The next are ${c.next.slice(0, 3).join('; ')}.`;
+    const o = c.outside;
+    const outside = o ? (o.connector ? ` Outside, ${o.connector.name} is connected: ${o.connector.lookups} lookups so far, ${o.connector.hits} answered, ${o.connector.misses} unknown to it, ${o.connector.failures} failed; ${o.learnedOutside.records} records gave me ${o.learnedOutside.entities} things and ${o.learnedOutside.relations} arrows, kept between sessions.` : ' No outside source is connected: what I have is what the packs and the rules give.') : '';
+    return `My substrate holds ${c.entities} things joined by ${c.relations} arrows across ${Object.keys(c.byDomain).length} domains; ${c.stubs} of them are stubs, questions I have been asked by other things and not answered yet, and ${c.queued} questions are queued${o?.running ? `, worked in the background (${o.totals.processed} answered so far, ${o.totals.slices} slices)` : ''}. The next are ${c.next.slice(0, 3).join('; ')}.${outside}`;
   }
   if (i.query === 'ways-to-store') {
     const w = waysToStore(s, i.of ?? 'energy');
@@ -49,14 +61,14 @@ export function answerTraversal(i: Traverse): string {
   if (i.query === 'implementations') {
     const fnId = i.of ?? '';
     const fn = s.get(fnId) ?? find(fnId);
-    if (!fn) return `I know no function called ${i.of}.`;
+    if (!fn) return unknown(`function called ${i.of}`);
     const found = implementations(s, fn.id);
     const stocked = found.filter((f) => f.entity.domains.includes('catalogue')), bio = found.filter((f) => f.entity.domains.includes('biology')), rest = found.filter((f) => !stocked.includes(f) && !bio.includes(f));
     return `${found.length} mechanisms ${nameOf(fn)}: ${list(rest.map((f) => `${nameOf(f.entity)} (${f.how})`), 10)}. In biology: ${bio.length ? list(bio.map((f) => nameOf(f.entity))) : 'none described yet'}. In stock here: ${stocked.length ? list(stocked.map((f) => nameOf(f.entity))) : 'none'}.`;
   }
   if (i.query === 'materials-for') {
     const role = find(i.of ?? '');
-    if (!role) return `I know no role called ${i.of}.`;
+    if (!role) return unknown(i.of ?? '');
     const rows = materialsForRole(s, role.id);
     if (!rows.length) return `Nothing I know plays ${nameOf(role)} yet.`;
     const numbered = rows.filter((r) => r.conductivity !== undefined && !r.derivedFrom), families = rows.filter((r) => r.derivedFrom), bare = rows.filter((r) => r.conductivity === undefined);
@@ -65,14 +77,14 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'variants') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const v = variantsOf(s, e.id)!;
     const stds = s.reach(e.id, 'standardized-by'), fails = s.reach(e.id, 'fails-by');
     return `${an(nameOf(e))[0]!.toUpperCase()}${an(nameOf(e)).slice(1)} varies by ${v.parameters.length ? v.parameters.map((p) => `${p.name}${p.values ? ` (${list(p.values, 6)})` : p.low !== undefined && p.high !== undefined ? ` (${p.low} to ${p.high}${p.unit ? ` ${p.unit}` : ''})` : ''}`).join(', ') : 'nothing I have parameters for'}; that is the manifold, and every combination is ${an(nameOf(e))}. Its named refinements: ${v.kinds.length ? list(v.kinds.map(nameOf), 14) : 'none yet'}. Standards: ${stds.length ? list(stds.map(nameOf)) : 'none'}. It fails by ${fails.length ? list(fails.map(nameOf), 8) : 'nothing I know yet'}.`;
   }
   if (i.query === 'components') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const d = decomposeThing(s, e.id, 3)!;
     if (!d.children.length) return `I have not decomposed ${an(nameOf(e))} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
     const leaves = leavesOf(d);
@@ -80,7 +92,7 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'producers' || i.query === 'producers-of-producers') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const p = producers(s, e.id, i.query === 'producers' ? 2 : 4);
     const first = p.steps[0];
     if (!first?.by.length) return `I know nothing that makes ${an(nameOf(e))}: that is a question on my queue.`;
@@ -92,7 +104,7 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'analogues') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const a = analogues(s, e.id, 'biology');
     if (!a.length) return `I know no living analogue of ${an(nameOf(e))} yet.`;
     return `Living analogues of ${an(nameOf(e))}: ${a.map((x) => `${nameOf(x.entity)} (${x.why})`).join('; ')}.`;
@@ -103,7 +115,7 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'lineage') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const l = lineageOf(s, e.id);
     if (l.length < 2) return `I have no lineage for ${an(nameOf(e))} yet.`;
     return `${an(nameOf(e)).replace(/^a/, 'A')}, generatively: ${l.map(nameOf).join(' → ')}. ${l[0]!.id.startsWith('phys.') ? 'That reaches the physical primitives.' : `That stops at ${nameOf(l[0]!)}: what it is made of is a question on my queue.`}`;
@@ -116,13 +128,13 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'construction-path') {
     const e = find(i.of ?? '');
-    if (!e) return `I know no ${i.of}.`;
+    if (!e) return unknown(i.of ?? '');
     const cp = constructionPath(s, e.id, 3);
     const make = cp.steps.filter((x) => x.need === 'make'), acquire = cp.steps.filter((x) => x.need === 'acquire');
     return `To build ${an(nameOf(e))}: make ${list(make.map((x) => `${nameOf(x.entity)}${x.by.length ? ` by ${list(x.by.map(nameOf), 3)}` : ''}`), 10)}; acquire ${list(acquire.map((x) => nameOf(x.entity)), 10)}. ${cp.gaps.length ? `Gaps, where I know no way yet: ${list(cp.gaps.map(nameOf), 10)}.` : 'No gaps.'}`;
   }
   const e = find(i.of ?? '');
-  if (!e) return `I know no ${i.of}.`;
+  if (!e) return unknown(i.of ?? '');
   const ix = indexOf(s, e.id)!;
   const cov = e.coverage;
   return `${nameOf(e)}: ${e.says} ${ix.answers.map((a) => `${a.backwards ? `is ${a.kind} of` : a.kind}: ${list(a.entities.map(nameOf), 6)}`).join('; ')}. Known to depth ${cov.depth} at confidence ${cov.confidence.toFixed(2)} from ${cov.sourceKind}${cov.unknowns.length ? `; unknown: ${cov.unknowns.join('; ')}` : ''}.`;

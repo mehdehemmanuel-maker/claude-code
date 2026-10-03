@@ -34,6 +34,7 @@ export class Substrate {
     for (const n of [e.name, ...e.names]) { if (!have.names.includes(n)) have.names.push(n); this.byName.set(n.toLowerCase(), id); }
     for (const u of e.coverage.unknowns) if (!have.coverage.unknowns.includes(u)) have.coverage.unknowns.push(u);
     for (const f of e.coverage.expanded) if (!have.coverage.expanded.includes(f)) have.coverage.expanded.push(f);
+    if (e.keys) have.keys = { ...(have.keys ?? {}), ...e.keys };
     return have;
   }
 

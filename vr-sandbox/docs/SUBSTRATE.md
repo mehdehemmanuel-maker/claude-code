@@ -26,6 +26,9 @@ src/ganglia/substrate/
                   producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index
   index.ts        build(): bridge → ingest packs → repair → seed queue → promote → generators; substrate(), census(),
                   populateMore()
+  external.ts     Connector (an outside source), ExternalRecord, recordToDiscovery(), externalExpander()
+  connectors/wikidata.ts   the first connector: Wikidata's public API, no key, CORS from a browser; a property table
+  service.ts      Population: background slices, the outside asked when the rules run out, journal + done set persisted
 src/assistant/traverse.ts   Ego's answers to the final-test questions, by traversal, in words
 ```
 
@@ -81,10 +84,43 @@ the best question across its lane so no domain starves; a question is answered b
 and what none could answer is marked unknown on the entity. `ask()` puts one question at the front. `converged` is true
 only when the queue empties, which it is not expected to.
 
-Expanders now: the seed expander (a pack's `deep()` knowledge), the rule expander (analogues by shared function across
+Expanders: the seed expander (a pack's `deep()` knowledge), the rule expander (analogues by shared function across
 domains, failures from governing laws, manufacturing from materials' processes, functions inherited along is-a,
-materials by role), and the external expander, which is **not connected**: it records that an outside source would be
-consulted and marks the facet unknown. Connecting it is the next step.
+materials by role), and the external expander, connected to a source through a `Connector`.
+
+### The outside
+
+A connector answers a thing by its key in that source, else by **exact** match of one of its names against the source's
+labels and aliases (never a loose hit), with an `ExternalRecord`: the source's key, label, aliases, description, URL,
+the retrieval date, its statements read as the index's relations (forwards or backwards), and its quantity statements
+with their units as the source gives them. The external expander fetches a record once per thing and turns it into a
+`Discovery` through `recordToDiscovery`: the thing gains the source's key, aliases, numbers (as parameters with the
+source as provenance) and, when it was a stub, the source's description; each statement becomes a relation with the
+source, its key and the date as provenance; what the statement names and nothing here describes becomes a stub of the
+kind the statement names (a `made-of` target is a material). It all enters through `ingest`, so it is validated like
+anything else and can be refused. A thing the source lacks, and a source that cannot be reached, are recorded as
+unknowns on the facet, never as silence; a failed reach is not remembered, so it is asked again when the source is back.
+
+The first connector is **Wikidata** (`connectors/wikidata.ts`): a public structured database, no key, reachable from
+a browser with `origin=*`. Its property table reads instance of / subclass of as `is-a`, has part as `has-part`, part
+of as `part-of`, made from material as `made-of`, fabrication method as `produced-by`, product as `produces`, uses as
+`requires`, used by as `required-by`, has use as `does`, has effect as `enables`, has contributing factor as
+`requires`, physically interacts with as `interacts-with`, develops from as `comes-from`, subject has role as `plays`,
+has characteristic as `has-property`. Every quantity statement is taken with the unit the source states; the parser is
+held on the API's documented JSON shape, and a live lookup test runs when the host is reachable from where the tests
+run (a sandbox whose network policy denies the host skips it and says so). One request at a time, spaced 250 ms;
+after a failure the host is left alone for 30 s, doubling up to five minutes, so a blocked host is not asked twice a second.
+
+### Population in the background
+
+`Population` (`service.ts`) works the queue in slices: by default every 500 ms, at most 2 ms of the main thread and 40
+questions per slice, one lane over all domains (the best question anywhere), the outside awaited off the thread. The
+app starts it 2.5 s after launch so the world comes up first. What is persisted is small and sufficient: the set of
+questions already asked (the queue is a function of the substrate and of that set, so it is re-seeded without them),
+the journal of what the outside said (replayed through `ingest` next session; the rules re-derive the rest), and the
+totals; capped at 1.5 million characters, oldest dropped first, saved every 15 s and when the page hides. Ego's
+"index of X" for a thing she does not know creates a stub asked for by name at the front of the queue, so the outside
+is asked on the next slice and she can answer with where it came from when asked again.
 
 ## Census (build, before any extra population)
 
@@ -135,22 +171,25 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 - **S-2** every entity carries its provenance and its coverage (known is never complete; a stub is a typed question; nothing dangles)
 - **S-3** the substrate never needs to be finished (the queue: prioritised, asked once, lanes across domains, unknowns marked, serialisable)
 - **S-4** a question is answered by traversal (never by a list kept for the question)
+- **S-5** what comes from outside says where it came from (a connector's record enters only through ingest, every arrow and number carrying the source, its key and the date; what the source lacks is an unknown, never silence; the background keeps slices of a frame and journals what the outside said)
 
 ## Still open
 
-- **External sources are not connected.** `externalExpander(false)` records the question and marks the facet unknown.
-  Connecting a source (a handbook, a standards index, a datasheet feed) means writing an expander whose `expand()`
-  returns a `Discovery` with provenance; `ingest()` validates it like anything else.
-- **Population is a budget, not a daemon.** `populateMore(budget, workers)` runs on demand; nothing runs it in the
-  background of the app yet, and the queue is not persisted between sessions (it serialises; nothing calls it).
-- **Rule expanders discover relations, not entities.** New entities come only from packs and (when connected) from
-  outside. The 341 things with no known constructor and the 811 stubs are the frontier, in priority order.
-- **Lane fairness is by priority within a lane.** A lane of three domains serves the best question among them, so a
-  small domain in a lane with a large one waits. Fourteen domains over six lanes left physics, catalogue, earth, circuits
-  and robotics unserved in a 500-question round; more workers or a round-robin within the lane would change that.
-- **Lineage is one path.** `lineage()` follows the first unvisited constituent at each step; a human's lineage through
-  carbon is one of many (water, calcium, phosphorus). A full generative tree is `decompose()` to depth, which exists.
-- **Names.** Many seed entities have no human `names` and Ego says the id as words ("synovial joint", "casting sand").
-  Stubs have no description at all until the queue reaches them.
-- **Numbers.** Material families carry no numbers of their own; `materialsForRole` borrows the best member's and says
-  so (`derivedFrom`). Stub laws are cited, not executable: they cannot be run by `solve()` until added to `laws.ts`.
+- **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
+  `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no
+  English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded
+  as an unknown).
+- **Numbers from outside keep the source's unit** (`kilogram per cubic metre`, `gram per cubic centimetre`) and the
+  property's symbol is the source's (`P2054`), so `materialsForRole` does not read them as `rho` yet; a unit
+  conversion into the substrate's symbols, through `ganglia/units`, is the next step.
+- **Rule expanders discover relations, not entities.** New entities come from packs and from the outside. The things
+  with no known constructor and the stubs are the frontier, in priority order.
+- **Lane fairness is by priority within a lane.** A lane of several domains serves the best question among them; the
+  background service runs one lane over all domains, so it is pure priority.
+- **Lineage is one path.** `lineage()` follows the first unvisited constituent at each step; a full generative tree is
+  `decompose()` to depth, which exists.
+- **Names.** Many seed entities have no human `names` and Ego says the id as words; the outside adds labels and aliases
+  as it answers.
+- **Stub laws are cited, not executable:** they cannot be run by `solve()` until added to `laws.ts`.
+- **Persistence is per browser.** The journal lives in this browser's storage beside the builds, sharing its five
+  million characters; nothing syncs it between headsets.

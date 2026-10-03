@@ -14,7 +14,8 @@ export async function openScene(page: Page, id: string) {
 export async function boot(page: Page, query = '') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // a resource the outside did not serve (the substrate asks a public database in the background) is not an error of the app
+  page.on('console', (m) => { const at = m.location().url ?? ''; if (m.type() === 'error' && !(/wikidata\.org/.test(at) || (/^Failed to load resource/.test(m.text()) && !at))) errors.push(`${m.text()} ${at}`.trim()); });
   await page.goto(`/${query}`);
   await page.waitForFunction(() => !document.getElementById('loading') && (window as never as { sandbox?: unknown }).sandbox, null, { timeout: 60_000 });
   return errors;

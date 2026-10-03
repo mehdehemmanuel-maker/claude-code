@@ -1,5 +1,6 @@
 // App: wires the document (source of truth) to physics, rendering, audio and UI.
 
+import { startPopulation, wikidata } from '../ganglia';
 import * as THREE from 'three';
 import { getMaterial, MATERIALS, type Material } from '../data/materials';
 import { getConnectorKind, hasConnectorKind } from '../connectors/registry';
@@ -866,6 +867,14 @@ export class App {
       last = time;
       this.frame(dt, time);
     });
+    // Ego's substrate grows in the background: 2 ms slices twice a second, the outside asked when the rules run out,
+    // what was learned kept in this browser; started after launch so the world comes up first
+    setTimeout(() => {
+      try {
+        const p = startPopulation({ storage: globalThis.localStorage ?? null, connector: typeof fetch === 'function' ? wikidata() : null });
+        globalThis.addEventListener?.('pagehide', () => p.save());
+      } catch (err) { console.warn('population did not start', err); }
+    }, 2500);
   }
 
   private frame(dt: number, time: number) {
