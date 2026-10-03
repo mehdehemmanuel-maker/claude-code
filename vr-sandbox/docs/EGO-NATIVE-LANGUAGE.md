@@ -505,8 +505,22 @@ challenge.ts (a challenge's attempt as structures, with what the English report 
 grown over the substrate by description length, measured), forms.ts (the form of a law with every symbol gone, and
 the laws of one form across theories).
 
-Designed, not yet built: the visual notation (E); rewrite rules for
-equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
-VR demonstration, sound and touch (M); Ego's own thinking moved onto Nex structures rather than built from them at the
-edges (X), which is the work: her traversal answers, her designs and her hypotheses become Nex terms rendered at the
-moment of speaking, and the English-versus-Nex error count is then taken on her real questions.
+Where Ego thinks in Nex today (her answer is built as structures and rendered at the moment of speaking, with the
+Nex text beside the English): a cause ("does X cause Y", by arrows chained, or by a law read as an influence);
+a thing in her language ("say / speak X in your language"); a comparison of quantities (by dimension, a word of two
+senses settled by the other side); a symptom ("that motor is struggling": candidates, none chosen); the failures of
+a thing (the evidence behind each arrow); the form of a law and its kin across theories; a challenge's attempt (the
+levels as modes, how each is known); her grammar (the morphemes her knowledge earned). What is still English built
+from the substrate's arrows without a Nex structure in between: functions, producers, materials, analogues,
+lineage, kinds, standards, interfaces, variants, sizes, the index. Moving those is the same move eight times.
+
+Designed, not yet built: the visual notation (E); rewrite rules beyond direction (U: an influence of polarity − on X
+equal to one of polarity + on its complement); a learned term in the distance beyond rarity (V); synonymy merged
+across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations
+beyond a law's formula, diagrams, animation, VR demonstration, sound and touch (M); the morphism between theories
+with a contract beyond the form of a law (R); the rest of Ego's answers moved onto Nex structures (X), and the
+English-versus-Nex error count taken on her real questions once they are.
+
+Status at 16:30 UTC, 3 October: sections A to Z written; eleven modules under `src/ganglia/native/`; 30 tests in
+`tests/unit/native.test.ts` and 14 in `tests/unit/substrate.test.ts` holding what the document claims; the in-app
+path checked by `tests/e2e/ego.spec.ts`; every number in this document measured by a test on the day.
