@@ -136,10 +136,11 @@ finds the electric motor at 10 cm; homeostasis finds the feedback controller and
 `Epistemic = axiom | theorem | derivation | empirical-law | observation | model | hypothesis | conjecture`. `promote()`
 allows only the transitions that make sense, needs evidence of the kind the status requires, and writes the history;
 the original claim is untouched. `universalScaleStructuralEquivalence()` returns the claim with axioms, formulation
-(LAW(S_λ X) = 0 for every law and regime; equivalent patterns at λL), predictions, compatible observations (99 of 106
-laws covariant under some same-material similarity; 19 of 19 groups invariant under some similarity; model testing;
-allometry; universality; the Kolmogorov cascade), conflicting observations (the Planck scale derived; atoms have a
-size; 33 laws carry a constant that sets a scale; regime boundaries), falsification conditions (the strong form is
+(LAW(S_λ X) = 0 for every law and regime; equivalent patterns at λL), predictions, compatible observations (133 of 140
+executable laws covariant under some same-material similarity; 21 of 21 groups invariant under some similarity; model
+testing; allometry; universality; the Kolmogorov cascade; the nine measurements in the engine), conflicting
+observations (the Planck scale derived; atoms have a size; 50 laws carry a constant that sets a scale; regime
+boundaries), falsification conditions (the strong form is
 already falsified by c, ħ, G; the weak form stands as a theorem of dimensional analysis) and unresolved assumptions.
 
 ## 12 to 15. Integration
