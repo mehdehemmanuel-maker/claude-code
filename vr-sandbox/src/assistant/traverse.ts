@@ -132,6 +132,8 @@ function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typ
 
 export function answerTraversal(i: Traverse): string {
   const s = substrate();
+  // the same arrows an answer is built from, as structures (section X): the first said in Nex after the English, the rest counted
+  const nexOf = (rels: Relation[], what = ''): string => { const fs = rels.map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x); return fs.length ? ` In Nex: ${nex(fs[0]!)}${fs.length > 1 ? ` and ${fs.length - 1} more${what ? ` ${what} structure${fs.length > 2 ? 's' : ''}` : ''}` : ''}.` : ''; };
   if (i.query === 'census') {
     const c = substrateCensus();
     const o = c.outside;
@@ -196,7 +198,7 @@ export function answerTraversal(i: Traverse): string {
     const head = cap(art(e));
     const parts = d.children.filter((c) => !mats.some((x) => x.m.id === c.entity.id));
     if (!parts.length) {
-      if (matLine) return `I know no parts of ${art(e)} yet. ${matLine}`;
+      if (matLine) return `I know no parts of ${art(e)} yet. ${matLine}${nexOf(s.outOf(e.id, 'made-of'), 'part')}`;
       const kindMat = s.reach(e.id, 'is-a').map((k) => ({ k, ms: s.reach(k.id, 'made-of') })).find((x) => x.ms.length);
       if (kindMat) return `${head} is ${art(kindMat.k)}, and ${art(kindMat.k)} is typically made of ${list(kindMat.ms.map(nameOf), 6)}; its own material I have not been told.`;
       if (deriveNow(e, ['materials'])) { const now = s.reach(e.id, 'made-of'); if (now.length) return `I had not been asked that. From its kind and its parts, ${art(e)} is made of ${list(now.map(nameOf), 6)}.`; }
@@ -204,7 +206,7 @@ export function answerTraversal(i: Traverse): string {
     }
     const leaves = leavesOf(d);
     const n = leaves.length;
-    return `${head} has ${parts.map((c) => `${nameOf(c.entity)}${c.children.length ? ` (${list(c.children.map((x) => nameOf(x.entity)), 5)})` : ''}`).join('; ')}. Down to the leaves it is ${n} thing${n === 1 ? '' : 's'}, ending in ${list(leaves.map((l) => nameOf(l)), 10)}.${matLine ? ` ${matLine}` : ''}`;
+    return `${head} has ${parts.map((c) => `${nameOf(c.entity)}${c.children.length ? ` (${list(c.children.map((x) => nameOf(x.entity)), 5)})` : ''}`).join('; ')}. Down to the leaves it is ${n} thing${n === 1 ? '' : 's'}, ending in ${list(leaves.map((l) => nameOf(l)), 10)}.${matLine ? ` ${matLine}` : ''}${nexOf([...s.outOf(e.id, 'has-part'), ...s.outOf(e.id, 'made-of')], 'part')}`;
   }
   if (i.query === 'size') {
     const e = find(i.of ?? '');
@@ -302,7 +304,7 @@ export function answerTraversal(i: Traverse): string {
     const a = analogues(s, e.id, living ? 'biology' : undefined);
     if (!a.length) return `I know no ${living ? 'living ' : ''}analogue of ${art(e)} yet.`;
     const said = a.filter((x) => !x.why.startsWith('both do')), rest = a.filter((x) => x.why.startsWith('both do'));
-    return `${living ? 'Living analogues' : 'Analogues'} of ${art(e)}: ${[...said, ...rest].slice(0, 8).map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}${a.length > 8 ? `; and ${a.length - 8} more` : ''}.`;
+    return `${living ? 'Living analogues' : 'Analogues'} of ${art(e)}: ${[...said, ...rest].slice(0, 8).map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}${a.length > 8 ? `; and ${a.length - 8} more` : ''}.${nexOf([...s.outOf(e.id, 'analogous-to'), ...s.into(e.id, 'analogous-to')])}`;
   }
   if (i.query === 'dual-role') {
     const d = dualRole(s, i.of ?? 'bio.human', 'view.mechanical', 'view.anatomical');
@@ -587,14 +589,14 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const own = s.reach(e.id, 'standardized-by'), viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'standardized-by').map((st) => `${articled(nameOf(k))}: ${nameOf(st)}`));
     if (!own.length && !viaKind.length) return `I know no standard for ${art(e)} yet: that is a question on my queue.`;
-    return `${cap(art(e))} is standardized ${own.length ? `by ${list(own.map(nameOf), 8)}` : ''}${viaKind.length ? `${own.length ? ', and ' : ''}as ${list([...new Set(viaKind)], 6)}` : ''}.`;
+    return `${cap(art(e))} is standardized ${own.length ? `by ${list(own.map(nameOf), 8)}` : ''}${viaKind.length ? `${own.length ? ', and ' : ''}as ${list([...new Set(viaKind)], 6)}` : ''}.${nexOf([...s.outOf(e.id, 'standardized-by'), ...s.reach(e.id, 'is-a').flatMap((k) => s.outOf(k.id, 'standardized-by'))])}`;
   }
   if (i.query === 'interfaces') {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const to = s.reach(e.id, 'connects-to'), works = s.reach(e.id, 'interacts-with'), from = s.into(e.id, 'connects-to').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x && x.id !== e.id);
     if (!to.length && !works.length && !from.length) return `I know nothing ${art(e)} connects to yet: that is a question on my queue.`;
-    return `${cap(art(e))} connects to ${to.length ? list(to.map(nameOf), 8) : 'nothing I know'}${from.length ? `; ${list(from.map(nameOf), 6)} connect to it` : ''}${works.length ? `; it works with ${list(works.map(nameOf), 8)}` : ''}.`;
+    return `${cap(art(e))} connects to ${to.length ? list(to.map(nameOf), 8) : 'nothing I know'}${from.length ? `; ${list(from.map(nameOf), 6)} connect to it` : ''}${works.length ? `; it works with ${list(works.map(nameOf), 8)}` : ''}.${nexOf([...s.outOf(e.id, 'connects-to'), ...s.into(e.id, 'connects-to'), ...s.outOf(e.id, 'interacts-with')])}`;
   }
   if (i.query === 'construction-path') {
     const e = find(i.of ?? '');

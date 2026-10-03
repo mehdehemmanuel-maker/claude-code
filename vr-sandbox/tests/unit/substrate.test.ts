@@ -1167,6 +1167,16 @@ describe('Kinds and functions are built as Nex structures too, said beside the E
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'bearing' })).toMatch(/^A bearing does 2 things: support rotation: .* \(Budynas & Nisbett\)\. In Nex: function\(bearing, fn\.support\.rotation\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 1 more\.$/);
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'motor' })).toMatch(/ In Nex: function\(motor, fn\.move\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\}\.$/);
   });
+
+  it('standards, interfaces, analogues and components carry constrain, morphism or influence, same, and part structures from their own arrows', () => {
+    expect(answerTraversal({ do: 'traverse', query: 'standards', of: 'bearing' })).toMatch(/^A bearing is standardized by iso 281, iso 15\. In Nex: constrain\(bearing, std\.iso-281\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 1 more\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'interfaces', of: 'battery' })).toMatch(/^A battery pack connects to wire; wire connect to it; it works with .*\. In Nex: morphism\(wire, battery\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and \d+ more\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'interfaces', of: 'bearing' })).toMatch(/ In Nex: influence\(bearing, shaft\)\{dir:0 cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and \d+ more\.$/);
+    // an analogy is held as a sameness of unknown mode: a candidate, never a verdict
+    expect(answerTraversal({ do: 'traverse', query: 'analogues', of: 'bearing' })).toMatch(/ In Nex: same\(bearing, bio\.synovial-joint\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:unknown\} and \d+ more\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'components', of: 'motor' })).toMatch(/^I know no parts of a motor yet\. It is typically made of Copper C110 annealed, electrical steel, ndfeb \(Horowitz & Hill\)\. In Nex: part\(motor, copper\.c110\)\{cert:\{kind:interval lo:0\.6 hi:0\.8 source:epistemic\} ev:\{how:derived\} mode:true\} and 2 more part structures\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'components', of: 'ball bearing' })).toMatch(/ In Nex: part\(bearing\.ball, bearing\.race\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and \d+ more part structures\.$/);
+  });
 });
 
 describe('Ego finds the edge of a law along one input (Nex Space)', () => {
