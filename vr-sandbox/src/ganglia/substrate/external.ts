@@ -44,11 +44,17 @@ export const UNIT_WORDS: Record<string, string> = {
   metre: 'm', meter: 'm', millimetre: 'mm', millimeter: 'mm', centimetre: 'cm', centimeter: 'cm', kilometre: 'km', kilometer: 'km', inch: 'in', foot: 'ft',
   second: 's', millisecond: 'ms', minute: 'min', hour: 'h', hertz: 'Hz', 'revolutions per minute': 'rpm',
   kilogram: 'kg', gram: 'g', tonne: 't', newton: 'N', kilonewton: 'kN', joule: 'J', kilojoule: 'kJ', 'watt-hour': 'Wh', 'kilowatt-hour': 'kWh', watt: 'W', kilowatt: 'kW',
-  volt: 'V', ampere: 'A', ohm: 'ohm', 'metre per second': 'm/s', 'meter per second': 'm/s', 'watt per metre-kelvin': 'W/m K', 'watt per metre kelvin': 'W/m K', 'joule per kilogram-kelvin': 'J/kg K', 'joule per kilogram kelvin': 'J/kg K', 'siemens per metre': 'S/m', 'ohm metre': 'ohm m', 'square metre': 'm^2', 'cubic metre': 'm^3',
+  volt: 'V', ampere: 'A', ohm: 'ohm', 'metre per second': 'm/s', 'meter per second': 'm/s', 'kilometre per hour': 'km/h', 'kilometer per hour': 'km/h', 'kilogram per cubic decimetre': 'g/cm^3', 'degree Fahrenheit': 'degF', 'watt per metre-kelvin': 'W/m K', 'watt per metre kelvin': 'W/m K', 'joule per kilogram-kelvin': 'J/kg K', 'joule per kilogram kelvin': 'J/kg K', 'siemens per metre': 'S/m', 'ohm metre': 'ohm m', 'square metre': 'm^2', 'cubic metre': 'm^3',
 };
 
 /** A source's properties that are quantities of the substrate's own symbols, with the SI unit the symbol is kept in (Wikidata property ids). */
-export const PROPERTY_SYMBOLS: Record<string, { sym: string; unit: string }> = { P2054: { sym: 'rho', unit: 'kg/m^3' }, P2101: { sym: 'T_melt', unit: 'K' }, P2102: { sym: 'T_boil', unit: 'K' }, P2068: { sym: 'k', unit: 'W/m K' } };
+export const PROPERTY_SYMBOLS: Record<string, { sym: string; unit: string }> = {
+  P2054: { sym: 'rho', unit: 'kg/m^3' }, P2101: { sym: 'T_melt', unit: 'K' }, P2102: { sym: 'T_boil', unit: 'K' }, P2068: { sym: 'k', unit: 'W/m K' },
+  // read from the items' "main Wikidata property" statements on 2026-10-03: Young's modulus names P5480 (tensile modulus of elasticity) and P5993 (compressive)
+  P5480: { sym: 'E', unit: 'Pa' }, P5993: { sym: 'E_c', unit: 'Pa' },
+  // the dimensions and motion of a thing
+  P2067: { sym: 'm', unit: 'kg' }, P2043: { sym: 'L', unit: 'm' }, P2048: { sym: 'H', unit: 'm' }, P2049: { sym: 'W', unit: 'm' }, P2047: { sym: 'T', unit: 's' }, P2052: { sym: 'v', unit: 'm/s' },
+};
 
 /** A quantity as a parameter: in the substrate's symbol and SI unit when both the property and the unit are known, else as the source gave it. */
 export function asParameter(q: ExternalQuantity, of: Provenance): NonNullable<Entity['params']>[number] {

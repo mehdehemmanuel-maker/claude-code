@@ -262,9 +262,11 @@ a test holds both that and the heatsink's thermal one.
   English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded
   as an unknown).
 - **Numbers from outside** land in the substrate's own symbol and SI unit when both the property and the unit are in
-  the tables (`PROPERTY_SYMBOLS`: density, melting point, boiling point, thermal conductivity; `UNIT_WORDS`: about
-  sixty unit names), with the conversion in the parameter's provenance; anything else is kept as the source gave it.
-  Extending the two tables extends what feeds `materialsForRole`.
+  the tables (`PROPERTY_SYMBOLS`: density, melting and boiling points, thermal conductivity, Young's modulus in
+  tension and compression (P5480 and P5993, read from the item's own "main Wikidata property" statement), a thing's
+  mass, length, height, width, duration and speed; `UNIT_WORDS`: about seventy unit names), with the conversion in
+  the parameter's provenance; anything else is kept as the source gave it, and a test holds both. Extending the two
+  tables extends what feeds `materialsForRole`.
 - **Rules inherit along is-a** (constructors, failures, standards, interfaces, materials, functions) at confidence 0.6,
   each relation saying what it inherits from; when a kind learns a relation, its members are asked that facet again,
   so inheritance recurses. A whole is made of what its parts are made of (0.7, "through its part X"), and a part that

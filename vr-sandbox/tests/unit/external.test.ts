@@ -3,6 +3,7 @@
 // sessions. The Wikidata parser is held on the API's documented JSON shape; the live lookup runs when the host is
 // reachable from where the tests run, and is skipped (and says so) when the network policy denies it.
 import { describe, expect, it } from 'vitest';
+import { asParameter } from '../../src/ganglia/substrate/external';
 import {
   Population, Queue, RELATIONS, RELATION_KINDS, Substrate, WIKIDATA_API, WIKIDATA_PROPERTIES, externalExpander, ingest, parseItem, populate, recordToDiscovery, referencedIds, ruleExpander, seedExpander, seedQueue, substrate, builtState, wikidata,
   type Connector, type Entity, type ExternalRecord, type Report,
@@ -322,4 +323,14 @@ describe('Wikidata as a connector', () => {
   it(`says whether the live lookup ran here (${reachable ? 'it did' : 'the host was not reachable from this run'})`, () => {
     expect(typeof reachable).toBe('boolean');
   });
+  it('a number from outside lands in the substrate\'s symbol and SI unit when both the property and the unit are known: a modulus in gigapascals, a length in centimetres, a speed in km/h', () => {
+    const of = { cite: 'test' };
+    expect(asParameter({ property: 'P5480', label: 'tensile modulus of elasticity', amount: 200, unit: 'gigapascal' }, of)).toMatchObject({ sym: 'E', unit: 'Pa', low: 200e9 });
+    expect(asParameter({ property: 'P2043', label: 'length', amount: 25, unit: 'centimetre' }, of)).toMatchObject({ sym: 'L', unit: 'm', low: 0.25 });
+    expect(asParameter({ property: 'P2052', label: 'speed', amount: 36, unit: 'kilometre per hour' }, of)).toMatchObject({ sym: 'v', unit: 'm/s', low: 10 });
+    expect(asParameter({ property: 'P2067', label: 'mass', amount: 1.2, unit: 'tonne' }, of)).toMatchObject({ sym: 'm', unit: 'kg', low: 1200 });
+    // an unknown property or unit is kept as the source gave it
+    expect(asParameter({ property: 'P9999', label: 'something', amount: 3, unit: 'cubit' }, of)).toMatchObject({ sym: 'P9999', unit: 'cubit', low: 3 });
+  });
+
 });
