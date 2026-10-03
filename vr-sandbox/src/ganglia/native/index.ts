@@ -10,3 +10,4 @@ export * from './polysemy';
 export * from './challenge';
 export * from './grammar';
 export * from './spoken';
+export * from './forms';

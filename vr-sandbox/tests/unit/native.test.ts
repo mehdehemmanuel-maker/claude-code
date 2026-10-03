@@ -18,6 +18,7 @@ import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses
 import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNex } from '../../src/ganglia/native/challenge';
 import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/ganglia/native/grammar';
 import { hear, speak } from '../../src/ganglia/native/spoken';
+import { formOf, lawForms, sameForm, sayForm } from '../../src/ganglia/native/forms';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -609,5 +610,28 @@ describe('Nex: cross-domain equivalence over the whole substrate, with the dista
     const cross = groups.filter((g) => g.length >= 2 && new Set(g.map((id) => dom.get(id))).size >= 2);
     expect(cross.length).toBeGreaterThan(20);
     expect(cross.some((g) => g.includes('way.lead.screw') && g.some((id) => id.startsWith('leadscrew.')))).toBe(true);
+  });
+});
+
+describe('Nex: the form of a law, with every symbol gone (section R at the level of the laws)', () => {
+  it('five energies in three theories are one form; three powers are one; a difference, an exponential and an exponent that is an input have none', () => {
+    const spring = lawById('spring.energy')!;
+    const f = formOf(spring)!;
+    expect(f.key).toBe('J:1,2');
+    expect(sayForm(f)).toBe('an energy, one input times one input squared');
+    // the physicist's analogy, from eval alone: E = ½ k x², ½ m v², ½ I ω², ½ C V², ½ L I²
+    expect(sameForm(spring, LAWS).map((l) => l.id).sort()).toEqual(['capacitor.energy', 'energy.kinetic', 'energy.rotational', 'inductor.energy']);
+    expect(sameForm(lawById('power.linear')!, LAWS).map((l) => l.id).sort()).toEqual(['power.electric', 'power.rotary']);
+    expect(sameForm(lawById('ohm')!, LAWS).map((l) => l.id).sort()).toEqual(['motor.back-emf', 'seebeck']);
+    expect(sameForm(lawById('drag.aero')!, LAWS).map((l) => l.id)).toEqual(['lift.aero']);
+    // Carnot (1 − Tc/Th) looked like a power law at a 1 % step and is not; the rating life has its exponent as an input
+    expect(formOf(lawById('carnot')!)).toBeNull();
+    expect(formOf(lawById('bearing.life.l10')!)).toBeNull();
+    // measured 3 October: 142 laws, 84 with a form, 58 forms, 13 shared by two or more
+    const forms = lawForms(LAWS);
+    expect([...forms.values()].reduce((n, v) => n + v.length, 0)).toBeGreaterThan(70);
+    expect([...forms.values()].filter((v) => v.length > 1).length).toBeGreaterThanOrEqual(12);
+    // no word enters: a law renamed keeps its form
+    expect(formOf({ ...spring, id: 'x', name: 'y', formula: 'z' })!.key).toBe(f.key);
   });
 });

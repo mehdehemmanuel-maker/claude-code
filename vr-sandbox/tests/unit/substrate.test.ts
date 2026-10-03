@@ -1063,3 +1063,14 @@ describe('Ego decomposes a symptom into candidates, none chosen (section M in he
     expect(interpret('the kart is slow')).toEqual({ do: 'complain', words: 'the kart is slow' });
   });
 });
+
+describe('Ego says the form of a law and the laws that share it across theories', () => {
+  it('"what laws have the same form as the spring energy" is the four other quadratic stores; Carnot has no form', () => {
+    expect(interpret('what laws have the same form as the energy in a spring')).toEqual({ do: 'traverse', query: 'form', of: 'energy in a spring' });
+    expect(interpret("which laws look like ohm's law")).toEqual({ do: 'traverse', query: 'form', of: 'ohms law' });
+    const a = answerTraversal({ do: 'traverse', query: 'form', of: 'energy in a spring' });
+    expect(a).toMatch(/^Energy in a spring \(E = ½ k x²\) has the form J:1,2: an energy, one input times one input squared, read off its own evaluation with every symbol gone\. 4 laws have the same form in other theories: Kinetic energy \(E = ½ m v²\); .*Energy in a capacitor \(E = ½ C V²\); Energy in an inductor \(E = ½ L I²\): one structure said 5 ways\. In Nex: morphism\(spring\.energy, energy\.kinetic\)\{mech:"J:1,2" ev:\{how:derived/);
+    expect(answerTraversal({ do: 'traverse', query: 'form', of: 'ohms law' })).toMatch(/^Ohm's law \(V = I R\) has the form V:1,1: a voltage, 2 inputs, .* 2 laws have the same form in the same theory: Back-EMF/);
+    expect(answerTraversal({ do: 'traverse', query: 'form', of: 'carnot' })).toMatch(/^Carnot efficiency \(η = 1 − T_c \/ T_h\) has no form I can take/);
+  });
+});

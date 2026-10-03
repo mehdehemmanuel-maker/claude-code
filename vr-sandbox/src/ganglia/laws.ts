@@ -447,6 +447,16 @@ export const LAWS: Law[] = [
     eval: ({ k, x }) => 0.5 * k! * x! * x!, valid: 'Linear spring, below its solid length and its yield.', example: { inputs: { k: 12100, x: 0.02 }, output: 2.42 }, source: PHYSICS, tags: ['spring', 'launcher', 'energy'], implementedIn: 'physics/energy.ts springEnergy',
   },
   {
+    id: 'capacitor.energy', name: 'Energy in a capacitor', domain: 'electrical', statement: 'A charged capacitor holds half its capacitance times the voltage across it squared.',
+    formula: 'E = ½ C V²', inputs: [q('C', 'capacitance', 'F'), q('V', 'voltage', 'V')], output: q('E', 'stored energy', 'J'),
+    eval: ({ C, V }) => 0.5 * C! * V! * V!, valid: 'A linear dielectric below its breakdown voltage.', example: { inputs: { C: 100e-6, V: 12 }, output: 7.2e-3 }, source: PHYSICS, tags: ['energy', 'capacitor', 'store'],
+  },
+  {
+    id: 'inductor.energy', name: 'Energy in an inductor', domain: 'electrical', statement: 'A current-carrying inductor holds half its inductance times the current squared.',
+    formula: 'E = ½ L I²', inputs: [q('L', 'inductance', 'H'), q('I', 'current', 'A')], output: q('E', 'stored energy', 'J'),
+    eval: ({ L, I }) => 0.5 * L! * I! * I!, valid: 'A linear core below saturation.', example: { inputs: { L: 10e-3, I: 2 }, output: 0.02 }, source: PHYSICS, tags: ['energy', 'inductor', 'store'],
+  },
+  {
     id: 'stress.hoop', name: 'Hoop stress in a thin-walled cylinder', domain: 'structures', statement: 'Pressure inside a thin tube pulls its wall round the circumference at pressure times radius over wall thickness.',
     formula: 'σ = p r / t', inputs: [q('p', 'internal pressure', 'Pa'), q('r', 'mean radius', 'm'), q('t', 'wall', 'm')], output: q('sigma', 'hoop stress', 'Pa'),
     eval: ({ p, r, t }) => (p! * r!) / t!, outside: ({ r, t }) => (t! > r! / 10 ? `a wall of ${(t! / r!).toFixed(2)} of its radius is thick: use Lamé\'s equations` : null),

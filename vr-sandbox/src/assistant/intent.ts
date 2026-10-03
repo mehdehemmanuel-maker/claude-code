@@ -81,7 +81,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
+export type TraversalQuery = 'form' | 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -129,6 +129,8 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   if ((m = /^(?:is|are) (?:an? |the )?(.+?) caused by (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[2]!), which: strip(m[1]!) };
   if ((m = /^what (?:causes|prevents|drives|brings about|leads to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!) };
   // her own language: the structures she holds a thing in, rendered with what the rendering lost (docs/EGO-NATIVE-LANGUAGE.md)
+  // the form of a law, and the laws of the same form in other theories ("what laws have the same form as ohm's law")
+  if ((m = /^(?:what|which) laws? (?:have|has|share|shares|is of|are of) the (?:same )?(?:form|shape) (?:as|of) (?:the )?(.+?)\??$|^(?:what|which) laws? (?:look|looks|read|reads) like (?:the )?(.+?)\??$|^(?:what is |what's )?the form of (?:the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'form', of: strip((m[1] ?? m[2] ?? m[3])!) };
   // her grammar: the morphemes her own knowledge earned, by description length
   if (/^(?:(?:what|which) morphemes (?:have you|did you|do you) (?:found|find|earned|earn|have|know)|how (?:has|does) your (?:grammar|language) (?:grown|grow|evolved|evolve)|(?:show|say) (?:me )?your (?:grammar|morphemes)|your (?:grammar|morphemes))\??$/.test(t)) return { do: 'traverse', query: 'grammar' };
   // aloud: the spoken form, one word per glyph, nothing dropped

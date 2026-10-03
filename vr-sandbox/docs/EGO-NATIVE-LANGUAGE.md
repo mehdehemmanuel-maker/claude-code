@@ -39,6 +39,8 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
 - "that motor is struggling", "the bearing is noisy", "this bolt is loose": candidates from what she knows fails
   the thing (and, for a motor, from its quantities), each held as not yet measured with what would settle it, none
   chosen.
+- "what laws have the same form as the energy in a spring", "which laws look like Ohm's law": the form of a law
+  with every symbol gone, and the laws of other theories that share it (one structure said five ways).
 - "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known
   from its arrow's structure (the tally of evidence, none measured in her world) and the first arrow in Nex.
 - "try to build a computer", "take the scientist challenge": the attempt in English, then its Nex: the levels as
@@ -310,8 +312,20 @@ spring clusters with its kin (the springs, a flexure, a belleville washer), the 
 biology's elastic proteins together, and the spring-capacitor distance rises from 0.55 to 0.82: what they shared was
 the shape; what parts them is every dimension in their laws. The analogy a physicist means (E = ½kx² and E = ½CV²,
 two quadratic stores) lives at the level of the laws' *form*, which a dimension-token fingerprint cannot see; it
-needs a morphism between theories over the dimensions (the `morphism` operator with a contract), designed, not
-built. A number that flattered the thesis has been replaced by the one that was measured. The step the request describes, "are these one structure named
+needs a morphism between theories over the dimensions (the `morphism` operator with a contract). A number that
+flattered the thesis has been replaced by the one that was measured.
+
+**The morphism, built an hour later (`native/forms.ts`).** The form of a law is what it looks like with every
+symbol gone: for each input, the exponent its output follows it with, measured on the law's own evaluation at its
+worked example at three multipliers (so a curve is not mistaken for a power), and the output's dimension. Two laws of
+one form are one structure said in two theories. From eval alone, with no word of either theory: E = ½ k x² (spring),
+½ m v² (kinetic), ½ I ω² (rotational), ½ C V² (capacitor) and ½ L I² (inductor) are one form, `J:1,2`, "an energy,
+one input times one input squared", which is the analogy the physicist means and the fingerprint could not see;
+P = F v, P = T ω and P = V I are one; Ohm, the back-EMF and the Seebeck effect are one; drag and lift are one. Carnot
+(1 − T_c/T_h) looked like a power at a 1 % step and is refused at a 50 % one; the rating life, whose exponent is an
+input, has no form. Measured: of 142 laws, 84 have a form, 58 forms, 13 shared by two or more. Ego answers "what laws
+have the same form as the energy in a spring" with the four others and the morphism in Nex. Two laws were added to
+the book for it, with their sources and worked examples: the energy in a capacitor and in an inductor. The step the request describes, "are these one structure named
 several times", is: compute fingerprints under a tuner, cluster, propose a higher abstraction for a cluster, keep the
 differences as the set difference of the fingerprints. The proposal step is the morpheme algorithm applied to the
 cluster's shared sub-structures.
@@ -488,7 +502,8 @@ candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; eval
 text, lossless both ways, and the blind text), spoken.ts (the text read aloud and heard back), polysemy.ts (readings,
 senses, settling by structure, the census),
 challenge.ts (a challenge's attempt as structures, with what the English report carried), grammar.ts (the grammar
-grown over the substrate by description length, measured).
+grown over the substrate by description length, measured), forms.ts (the form of a law with every symbol gone, and
+the laws of one form across theories).
 
 Designed, not yet built: the visual notation (E); rewrite rules for
 equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,

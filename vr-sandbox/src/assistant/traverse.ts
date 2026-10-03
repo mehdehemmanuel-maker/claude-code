@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, d, decompose, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { askable, chain, d, decompose, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -369,6 +369,17 @@ export function answerTraversal(i: Traverse): string {
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
+  }
+  if (i.query === 'form') {
+    // the form of a law (section R): its output's dimension and the exponents of its inputs at its worked example, from eval alone; the laws of the same form are one structure said in several theories
+    const w = (i.of ?? '').toLowerCase().replace(/^(?:an? |the )/, '').replace(/['’]?s law$/, '').trim();
+    const law = LAWS.find((l) => l.id === w || l.name.toLowerCase() === w) ?? LAWS.find((l) => l.name.toLowerCase().includes(w) || l.id.includes(w.replace(/\s+/g, '.')));
+    if (!law) return `I know no law called ${i.of}.`;
+    const f = formOf(law);
+    if (!f) return `${law.name} (${law.formula}) has no form I can take: at its worked example its output is not a power of every input (a difference, an exponential, an exponent that is itself an input), so I cannot say which laws share it by shape alone.`;
+    const kin = sameForm(law, LAWS);
+    const pairs = kin.map((l) => r('morphism', [d(law.id, { en: law.name }), d(l.id, { en: l.name })], { mode: 'true', mech: f.key, ev: { how: 'derived', src: ['the same exponents at the worked examples'] } }));
+    return `${law.name} (${law.formula}) has the form ${f.key}: ${sayForm(f)}, read off its own evaluation with every symbol gone.${kin.length ? ` ${kin.length === 1 ? 'One law has' : `${kin.length} laws have`} the same form in ${new Set(kin.map((l) => l.domain)).size === 1 ? 'the same theory' : 'other theories'}: ${kin.map((l) => `${l.name} (${l.formula})`).join('; ')}: one structure said ${kin.length + 1} ways. In Nex: ${nex(pairs[0]!)}` : ' No other law of mine has that form.'}`;
   }
   if (i.query === 'symptom') {
     // human → native (section M): the word is decomposed into candidate structures from what she knows fails the thing, none chosen
