@@ -9,3 +9,4 @@ export * from './text';
 export * from './polysemy';
 export * from './challenge';
 export * from './grammar';
+export * from './spoken';

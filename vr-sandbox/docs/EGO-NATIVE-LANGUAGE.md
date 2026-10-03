@@ -145,9 +145,13 @@ and every source removed: the shape alone, which is the hard test by eye (the bl
 renaming are one text). Ego shows the compact text beside the English whenever she says a thing in Nex ("say a
 bearing in your language", "does the load cause the failure").
 
-The spoken serialisation (the same text read aloud, one glyph per operator) and the graphical rendering (the kernel at
-the centre with the coordinates as spokes, each spoke empty where the coordinate is not modelled, which shows at a
-glance what a thought does not yet know) are designed, not built.
+The spoken form (`native/spoken.ts`) is the same text read aloud, one word per glyph, in English or Spanish, and
+heard back to the same hash: "influence of load and current end with dir is 1 polarity is plus … so so". Seven
+words (of, and, end, with, so, is, in; list for a list) carry every bracket, and a name that is one of them is said
+in quotes. It is not a translation: nothing is dropped, which is what a translation into English cannot say of
+itself (section N counts what it drops). Ego says a thing aloud on "speak a bearing in your language". The graphical
+rendering (the kernel at the centre with the coordinates as spokes, each spoke empty where the coordinate is not
+modelled, which shows at a glance what a thought does not yet know) is designed, not built.
 
 ## F. The negation and unknown system
 
@@ -457,11 +461,12 @@ fingerprints, distance, clustering, renaming, chaining, contradiction, well-form
 morpheme.ts (skeletons, candidates by description length, promotion, compression, expansion, versioning),
 translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
 candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners), text.ts (the compact
-text, lossless both ways, and the blind text), polysemy.ts (readings, senses, settling by structure, the census),
+text, lossless both ways, and the blind text), spoken.ts (the text read aloud and heard back), polysemy.ts (readings,
+senses, settling by structure, the census),
 challenge.ts (a challenge's attempt as structures, with what the English report carried), grammar.ts (the grammar
 grown over the substrate by description length, measured).
 
-Designed, not yet built: the spoken serialisation and the visual notation (E); rewrite rules for
+Designed, not yet built: the visual notation (E); rewrite rules for
 equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
 VR demonstration, sound and touch (M); Ego's own thinking moved onto Nex structures rather than built from them at the
 edges (X), which is the work: her traversal answers, her designs and her hypotheses become Nex terms rendered at the

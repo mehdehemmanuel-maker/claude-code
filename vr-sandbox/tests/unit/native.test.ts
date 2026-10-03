@@ -16,6 +16,7 @@ import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text
 import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses, settle, unitOfQuantityWord } from '../../src/ganglia/native/polysemy';
 import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNex } from '../../src/ganglia/native/challenge';
 import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/ganglia/native/grammar';
+import { hear, speak } from '../../src/ganglia/native/spoken';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -561,5 +562,18 @@ describe('Nex: rewrite rules beyond the canonical form (section U)', () => {
     // and the hard test still holds: renaming commutes with the rewrites
     const ren = scramble();
     expect(hash(rename(backward, ren))).toBe(hash(rename(forward, ren)));
+  });
+});
+
+describe('Nex: the spoken form (section E) is the text read aloud, one word per glyph, heard back without loss', () => {
+  it('speaks in English and Spanish and hears the same hash back over the corpus; a name that is a spoken word is said in quotes', () => {
+    expect(speak(loadCurrent)).toBe('influence of load and current end with dir is 1 polarity is plus necessity is contributing strength is 0.8 cert is with kind is interval lo is 0.9 hi is 1 source is epistemic so time is with delay is 0.01 in s endin so ev is with how is measured src is list "a current reading" endlist so so');
+    expect(speak(loadCurrent, 'es')).toMatch(/^influence de load y current fin con dir es 1 polarity es más /);
+    const all: Structure[] = [loadCurrent, currentTemp, tempLife, ...LAWS.map(fromLaw), ...NODES.flatMap(fromNode), ...saidOf(substrate, 'bearing', laws), ...saidOf(substrate, 'bio.human', laws), ctx('believe', 'ego', r('kind', [d('end'), d('of')], { mode: 'unmeasured', instrument: 'so' })), r('quantity', [d('x'), d('n'), q(0.5, '-')], {}), r('influence', [d('a'), d('b')], { margin: -0.5, against: ['h1', 'h2'] }), t(d('cold'), d('hot'), { ev: { how: 'simulated' } }, [d('powered')]), e(loadCurrent, 'measured', 'a reading', { by: 'ego', at: q(3, 's') })];
+    for (const x of all) for (const lang of ['en', 'es'] as const) expect(hash(hear(speak(x, lang), lang)), speak(x, lang)).toBe(hash(x));
+    expect(speak(d('end'))).toBe('"end"');
+    // the spoken form drops nothing for any listener: English for a child drops the numbers, the intervals and the delay
+    expect(render(loadCurrent, 'en', 'child').dropped.length).toBeGreaterThan(0);
+    expect(hash(hear(speak(loadCurrent)))).toBe(hash(loadCurrent));
   });
 });
