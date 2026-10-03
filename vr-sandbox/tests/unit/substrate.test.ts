@@ -290,6 +290,18 @@ describe('population: a queue that never needs to be finished', () => {
     expect(s2.dangling()).toEqual([]);
   });
 
+  it('a part of a material can be made by what works that material, at low confidence and saying so, until its own maker is known', async () => {
+    const s2 = build().substrate;
+    const orphan = [...s2.entities.values()].find((e) => e.kinds.includes('component') && !e.id.startsWith('bio.') && s2.reach(e.id, 'made-of').some((m) => m.id === 'material.steel') && !s2.outOf(e.id, 'produced-by').length && !s2.reach(e.id, 'is-a').some((k) => s2.outOf(k.id, 'produced-by').length))!;
+    expect(orphan, 'a steel part with no known maker to test on').toBeDefined();
+    const q = new Queue();
+    q.push({ id: orphan.id, facet: 'constructors', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
+    const makers = s2.outOf(orphan.id, 'produced-by');
+    expect(makers.map((x) => x.to)).toEqual(expect.arrayContaining(['saw', 'drill', 'mill']));
+    for (const x of makers) { expect(x.confidence).toBe(0.4); expect(x.says).toMatch(/can be made by what works it/); }
+  });
+
   it('a piece of a building block named for a kind is that kind, at half confidence, and then inherits what the kind does', async () => {
     const s2 = build().substrate;
     const q = new Queue();

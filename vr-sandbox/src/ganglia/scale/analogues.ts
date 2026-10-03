@@ -43,6 +43,9 @@ export interface ScaleAnalogue { entity: Entity; length: number; decades: number
  * transformations most, roles and flows next, feedback as a match of kind. A thing without a characteristic length
  * cannot be placed on the scale axis and is left out, which is said in `unplaced`.
  */
+/** What could carry a scale at all: a thing, a living thing, a place, a material; never a law, a function or a parameter. */
+const placeable = (x: Entity): boolean => x.kinds.some((k) => k === 'component' || k === 'mechanism' || k === 'system' || k === 'subsystem' || k === 'biological' || k === 'organism' || k === 'environment' || k === 'geometry' || k === 'material');
+
 export function findScaleAnalogues(s: Substrate, id: string, opts: { minDecades?: number; minSimilarity?: number; limit?: number } = {}): { of: Entity; length?: number; analogues: ScaleAnalogue[]; unplaced: number } | null {
   const e = s.get(id);
   if (!e) return null;
@@ -54,7 +57,7 @@ export function findScaleAnalogues(s: Substrate, id: string, opts: { minDecades?
   for (const x of s.entities.values()) {
     if (x.id === e.id) continue;
     const L = characteristicLength(x);
-    if (L === undefined) { unplaced++; continue; }
+    if (L === undefined) { if (placeable(x)) unplaced++; continue; }
     if (L0 === undefined) continue;
     const decades = Math.abs(Math.log10(L / L0));
     if (decades < minDecades) continue;
