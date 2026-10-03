@@ -20,7 +20,8 @@ import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/gang
 import { hear, speak } from '../../src/ganglia/native/spoken';
 import { formOf, lawForms, sameForm, sayForm } from '../../src/ganglia/native/forms';
 import { between, family, regimes, verdictStructure } from '../../src/ganglia/native/space';
-import { alive, anomalies, anomaly, axes, boundSense, certificate, sayAxes } from '../../src/ganglia/native/discovery';
+import { alive, anomalies, anomaly, applicable, boundSense, certificate, clusterAnomalies } from '../../src/ganglia/native/discovery';
+import { epistemic, factor, labelOf, proposition, theory } from '../../src/ganglia/native/epistemic';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -732,27 +733,34 @@ describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, imposs
     const l = certificate({ quantity: 'energy per bit erased', value: 0, unit: 'J', inputs: { T: 300 } });
     expect(l.impossible && l.sense).toBe('least');
     expect(l.impossible && l.law.id).toBe('landauer');
-    // no bounding law: unknown, not impossible; a unit I cannot read: undefined
-    expect(certificate({ quantity: 'kinetic energy', value: 1e6, unit: 'J', inputs: { m: 1, v: 1 } })).toMatchObject({ impossible: false, mode: 'unknown' });
+    // an equality law computes the quantity: a claim beyond its value, at the claim's word, is contradicted too
+    const k = certificate({ quantity: 'kinetic energy', value: 1e6, unit: 'J', inputs: { m: 1, v: 1 } });
+    expect(k.impossible && k.sense).toBe('equal');
+    expect(k.impossible && k.derivation).toBe('Kinetic energy (E = ½ m v²) at these inputs gives 0.5 J; the claim is 1000000 J, beyond the claim taken at its word; so assumptions + law + claim ⇒ ⊥');
+    // inputs a law needs missing, or no law at all: unknown, not impossible; a unit I cannot read: undefined
+    expect(certificate({ quantity: 'kinetic energy', value: 1e6, unit: 'J', inputs: { m: 1 } })).toMatchObject({ impossible: false, mode: 'unknown', why: expect.stringMatching(/^Kinetic energy reaches kinetic energy but needs speed \(v\)/) });
+    expect(certificate({ quantity: 'harvest mass', value: 1, unit: 'kg', inputs: {} })).toMatchObject({ impossible: false, mode: 'unknown', why: expect.stringMatching(/^no law of mine computes or bounds harvest mass/) });
     expect(certificate({ quantity: 'efficiency', value: 0.5, unit: 'furlongs', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined' });
   });
 
-  it('the ten bound laws each certify a claim just beyond their bound and admit one at it; none of the other laws ever signs a certificate', () => {
+  it('every law signs only what it computes: the ten bound laws admit their example and certify ten per cent beyond it; every equality law entails its example and contradicts ten times it; inputs missing sign nothing', () => {
     const bound = LAWS.filter((l) => boundSense(l));
     expect(bound.map((l) => l.id).sort()).toEqual(['carnot', 'cornering.limit', 'diffraction.limit', 'friction.coulomb', 'landauer', 'rayleigh.resolution', 'separation.work', 'shaft.diameter.static', 'shannon.sampling', 'traction.limit']);
-    for (const law of bound) {
-      if (law.outside?.(law.example.inputs)) continue;
-      const at = certificate({ quantity: law.output.name, value: law.example.output, unit: law.output.unit, inputs: law.example.inputs });
-      expect(at.impossible, law.id).toBe(false);
-      const beyond = certificate({ quantity: law.output.name, value: law.example.output * (boundSense(law) === 'most' ? 1.1 : 0.9), unit: law.output.unit, inputs: law.example.inputs });
-      expect(beyond.impossible, law.id).toBe(true);
-      expect(beyond.impossible && beyond.law.id).toBe(law.id);
-    }
+    let equalities = 0, bounds = 0;
     for (const law of LAWS) {
-      if (boundSense(law)) continue;
-      const c = certificate({ quantity: law.output.name, value: law.example.output * 10, unit: law.output.unit, inputs: law.example.inputs });
-      expect(c.impossible, law.id).toBe(false);
+      if (!applicable(law, law.example.inputs) || law.outside?.(law.example.inputs) || law.example.output === 0) continue;
+      const claim = (value: number) => certificate({ quantity: law.output.name, value, unit: law.output.unit, inputs: law.example.inputs });
+      const at = claim(law.example.output);
+      expect(at.impossible, law.id).toBe(false);
+      expect(at.mode, law.id).toBe('true');
+      const sense = boundSense(law);
+      const beyond = claim(law.example.output * (sense === 'most' ? 1.1 : sense === 'least' ? 0.9 : 10));
+      expect(beyond.impossible, law.id).toBe(true);
+      expect(beyond.impossible && beyond.sense, law.id).toBe(sense ?? 'equal');
+      if (sense) bounds++; else equalities++;
     }
+    expect(bounds).toBe(10);
+    expect(equalities).toBeGreaterThan(100);
   });
 
   it('the states that are not false hash apart and never contradict a truth; only false does', () => {
@@ -762,19 +770,127 @@ describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, imposs
     expect(modes.filter((m) => contradiction({ ...base, c: { mode: 'true' } }, { ...base, c: { mode: m } }))).toEqual(['false']);
   });
 
-  it('three axes, each read from its own place: renaming every distinction moves human coverage alone, the evidence moves support alone, a law moves theory alone', () => {
+  it('the epistemic vector holds evidence, theory and coverage apart; a contradicting measurement is never erased by a supporting one', () => {
     const claim = { quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 300, Th: 400 } };
-    const known = r('quantity', [d('bearing'), d('eta'), q(0.2, '-')], { ev: { how: 'measured' } });
-    const a = axes(known, substrate, claim);
-    expect(a).toMatchObject({ support: 1, theory: 'compatible', kind: 'established' });
+    const h = r('quantity', [d('bearing'), d('eta'), q(0.2, '-')], { ev: { how: 'measured', src: ['bench A'] } });
+    const other = e(r('quantity', [d('bearing'), d('eta'), q(0.3, '-')], {}), 'measured', 'bench B');
+    const replication = e(r('quantity', [d('bearing'), d('eta'), q(0.2, '-')], {}), 'measured', 'bench C');
+    const v = epistemic(h, { substrate, corpus: [replication, r('contradict', [h, other], { mode: 'contradictory' })], claim });
+    expect(v.empirical).toEqual({ replication: 2, against: 1 });
+    expect(labelOf(v).physical).toBe('contested: measurements both ways (2 for, 1 against)');
+    // without the contradiction: two independent sources, bounded by Carnot: established, by structure, not by a decimal
+    const v2 = epistemic(h, { substrate, corpus: [replication], claim });
+    expect(v2).toMatchObject({ formal: 'none', empirical: { replication: 2, against: 0 }, simulation: 0, calibration: 0, theory: 'bounded', domain: 'inside', uncertainty: null });
+    expect(v2.discrepancy).toBeCloseTo(0.2, 9);
+    expect(labelOf(v2).physical).toBe('established: bounded by a law, replicated');
+    // one source twice is one source
+    const v3 = epistemic(h, { substrate, corpus: [e(proposition(h), 'measured', 'bench A')], claim });
+    expect(v3.empirical.replication).toBe(1);
+    expect(labelOf(v3).physical).toBe('consistent: bounded by a law, measured once');
+  });
+
+  it('evidence species are not one ladder: a theorem, a measurement and a simulation render apart, and no threshold turns one into another; renaming moves coverage and no physical label', () => {
+    const claim = { quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 300, Th: 400 } };
+    const base = r('quantity', [d('bearing'), d('eta'), q(0.2, '-')], {});
+    const by = (how: 'theorem' | 'measured' | 'simulated' | 'estimated', src: string) => epistemic({ ...base, c: { ev: { how, src: [src] } } }, { substrate, claim });
+    expect(by('theorem', 'a proof')).toMatchObject({ formal: 'theorem', empirical: { replication: 0, against: 0 }, simulation: 0 });
+    expect(by('measured', 'a bench')).toMatchObject({ formal: 'none', empirical: { replication: 1, against: 0 }, simulation: 0 });
+    expect(by('simulated', 'the engine')).toMatchObject({ formal: 'none', empirical: { replication: 0, against: 0 }, simulation: 1 });
+    expect(labelOf(by('theorem', 'a proof')).physical).toBe('consistent: bounded by a law, by theorem');
+    expect(labelOf(by('measured', 'a bench')).physical).toBe('consistent: bounded by a law, measured once');
+    expect(labelOf(by('simulated', 'the engine')).physical).toBe('consistent: bounded by a law, in simulation');
+    expect(labelOf(by('estimated', 'a handbook')).physical).toBe('consistent: bounded by a law, in a fitted model');
+    // the first law of discovery: coverage is a coordinate of its own, and the physical label never reads it
+    const named = { ...base, c: { ev: { how: 'measured' as const, src: ['a bench'] } } };
+    const a = epistemic(named, { substrate, claim }), b = epistemic(rename(named, (id) => `coined.${id}`), { substrate, claim });
     expect(a.coverage).toBeGreaterThan(0.5);
-    // the first law of discovery: a name no human has given changes coverage and nothing else
-    expect(axes(rename(known, (id) => `coined.${id}`), substrate, claim)).toEqual({ ...a, coverage: 0, kind: 'new but consistent' });
-    // the same claim beyond the bound: as a hypothesis it is radical; as a measurement it is the anomaly worth the most
-    expect(axes(r('quantity', [d('bearing'), d('eta'), q(0.5, '-')], { ev: { how: 'hypothesized' } }), substrate, { ...claim, value: 0.5 })).toMatchObject({ support: 0, theory: 'incompatible', kind: 'radical hypothesis' });
-    expect(axes(r('quantity', [d('bearing'), d('eta'), q(0.5, '-')], { ev: { how: 'measured' } }), substrate, { ...claim, value: 0.5 })).toMatchObject({ support: 1, theory: 'incompatible', kind: 'high-value anomaly' });
-    // nothing known, nothing measured, no law reached: untested, not false
-    expect(sayAxes(axes(r('quantity', [d('zorb'), d('eta'), q(0.5, '-')], {}), substrate))).toBe('human coverage 0, physical support 0, theory untested: untested');
+    expect(b).toEqual({ ...a, coverage: 0 });
+    expect(labelOf(a).physical).toBe(labelOf(b).physical);
+    expect(labelOf(b).novelty).toBe('unseen by sources');
+    expect(labelOf(a).novelty).not.toBe('unseen by sources');
+    // the same claim beyond the bound: unmeasured it is a radical hypothesis; measured once an anomaly; replicated a replicated anomaly
+    const beyond = { ...claim, value: 0.5 };
+    const hyp = r('quantity', [d('bearing'), d('eta'), q(0.5, '-')], { ev: { how: 'hypothesized' } });
+    expect(labelOf(epistemic(hyp, { substrate, claim: beyond })).physical).toBe('radical hypothesis: contradicted by a law, unmeasured');
+    const once = { ...hyp, c: { ev: { how: 'measured' as const, src: ['rig 1'] } } };
+    expect(labelOf(epistemic(once, { substrate, claim: beyond })).physical).toBe('anomaly, measured once: contradicted by a law');
+    expect(labelOf(epistemic(once, { substrate, claim: beyond, corpus: [e(proposition(once), 'measured', 'rig 2')] })).physical).toBe('replicated anomaly: measured by independent sources, contradicted by a law');
+    // nothing known, nothing measured, no claim against a law: untested, not false
+    expect(labelOf(epistemic(r('quantity', [d('zorb'), d('eta'), q(0.5, '-')], {}), { substrate })).said).toBe('untested; unseen by sources');
+  });
+
+  it('a compound claim is factored: a measured thrust supports the thrust and the device, never the mechanism it credits', () => {
+    const compound = e(r('quantity', [d('device'), d('thrust'), q(4, 'N')], { mech: 'X' }), 'measured', 'bench');
+    const parts = factor(compound);
+    expect(parts.map((p) => p.role)).toEqual(['exists', 'quantity', 'mechanism']);
+    expect(parts[0]!.support.replication).toBe(1);
+    expect(parts[1]!.support.replication).toBe(1);
+    expect(parts[2]!.support).toMatchObject({ replication: 0, formal: 'none', for: [] });
+    expect(text(parts[2]!.s)).toBe('influence(X, quantity(device, thrust, 4[N])){dir:1}');
+    // evidence placed on the mechanism in its own right reaches it
+    const onMech = e(r('influence', [d('X'), r('quantity', [d('device'), d('thrust'), q(4, 'N')], {})], { dir: 1 }), 'derived', 'a model of X');
+    expect(factor(compound, [onMech])[2]!.support.formal).toBe('derived');
+    // and the claim as a whole, crediting a mechanism the book lacks, requires an extension
+    expect(theory({ quantity: 'thrust', value: 4, unit: 'N', inputs: {}, mechanism: 'X' }).relation).toBe('requires-extension');
+  });
+
+  it('the relation to the laws is typed: entailed, bounded, contradicted, outside-domain, untested, unrelated, requires-extension, undefined', () => {
+    const rel = (c: Parameters<typeof theory>[0]) => theory(c).relation;
+    expect(rel({ quantity: 'kinetic energy', value: 290.4, unit: 'J', inputs: { m: 120, v: 2.2 } })).toBe('entailed');
+    expect(rel({ quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 300, Th: 400 } })).toBe('bounded');
+    const wrong = theory({ quantity: 'kinetic energy', value: 500, unit: 'J', inputs: { m: 120, v: 2.2 } });
+    expect(wrong.relation).toBe('contradicted');
+    expect(wrong.why).toBe('Kinetic energy (E = ½ m v²) at these inputs gives 290.4 J; the claim is 500 J, beyond the claim taken at its word; so assumptions + law + claim ⇒ ⊥');
+    // a stated uncertainty is the claim's own: 300 J at 5 % is entailed, at 1 % contradicted
+    expect(rel({ quantity: 'kinetic energy', value: 300, unit: 'J', inputs: { m: 120, v: 2.2 }, rel: 0.05 })).toBe('entailed');
+    expect(rel({ quantity: 'kinetic energy', value: 300, unit: 'J', inputs: { m: 120, v: 2.2 }, rel: 0.01 })).toBe('contradicted');
+    expect(rel({ quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 400, Th: 300 } })).toBe('outside-domain');
+    expect(theory({ quantity: 'kinetic energy', value: 300, unit: 'J', inputs: { m: 120 } })).toMatchObject({ relation: 'untested', why: expect.stringMatching(/needs speed \(v\)/) });
+    expect(rel({ quantity: 'harvest mass', value: 1, unit: 'kg', inputs: {} })).toBe('unrelated');
+    expect(rel({ quantity: 'kinetic energy', value: 290.4, unit: 'J', inputs: { m: 120, v: 2.2 }, mechanism: 'telekinesis' })).toBe('requires-extension');
+    expect(rel({ quantity: 'kinetic energy', value: 290.4, unit: 'J', inputs: { m: 120, v: 2.2 }, mechanism: 'energy.kinetic' })).toBe('entailed');
+    expect(rel({ quantity: 'efficiency', value: 0.5, unit: 'furlongs', inputs: { Tc: 300, Th: 400 } })).toBe('undefined');
+  });
+
+  it('a residual is one component or several: two near-misses at 0.8 of tolerance are one anomaly together (1.13), which no scalar sees', () => {
+    const one = anomaly('p', { value: 1.08, tolerance: 0.1, instrument: 'i', environment: 'e' }, { value: 1, lawAncestry: [], modelVersion: 'v' });
+    expect(one.residual.kind).toBe('scalar');
+    expect(one.status).toBe('within tolerance');
+    expect(one.sigma).toBeCloseTo(0.8, 9);
+    const two = anomaly('pq', { value: [1.08, 1.08], tolerance: 0.1, names: ['period', 'amplitude'], instrument: 'i', environment: 'e' }, { value: [1, 1], lawAncestry: [], modelVersion: 'v' });
+    expect(two.residual.kind).toBe('vector');
+    expect(two.sigma).toBeCloseTo(Math.hypot(0.8, 0.8), 9);
+    expect(two.status).toBe('alive');
+    expect(two.candidates[0]!.says).toBe('the residual is 1.13 times the declared tolerance over 2 components together: not noise at the tolerance declared');
+    expect(text(two.structure)).toMatch(/^contradict\(E\(state\(quantity\(pq:(?:period|amplitude):observed, 1\.08\), quantity\(pq:(?:period|amplitude):observed, 1\.08\)\)\)/);
+    expect(() => anomaly('bad', { value: [1, 2], tolerance: 0.1, instrument: 'i', environment: 'e' }, { value: 1, lawAncestry: [], modelVersion: 'v' })).toThrow(/2 observed components against 1 predicted/);
+  });
+
+  it('anomalies cluster by what they share in the graph, not by how they look: two against one law with different magnitudes and instruments belong together; one against another law stands alone', () => {
+    const l10 = (id: string, k: number, instrument: string) => anomaly(id, { value: 12.5 * k, tolerance: 0.05, instrument, environment: 'bench' }, { value: 12.5, lawAncestry: ['bearing.life.l10'], modelVersion: 'v' });
+    const a = l10('a', 2, 'rig 1'), b = l10('b', 1.5, 'rig 2'), within = l10('w', 1.01, 'rig 3');
+    const c = anomaly('c', { value: 0.5, tolerance: 0.05, instrument: 'rig 1', environment: 'bench' }, { value: 0.25, lawAncestry: ['carnot'], modelVersion: 'v' });
+    const clusters = clusterAnomalies([a, c, b, within]);
+    expect(clusters.map((x) => [...x.members].sort())).toEqual([['a', 'b'], ['c']]);
+    expect(clusters[0]).toMatchObject({ ancestry: ['bearing.life.l10'], parameters: ['C:up', 'P:down', 'p:up'] });
+    expect(clusters[0]!.why).toBe('2 anomalies descend from bearing.life.l10; each closes with C up, P down, p up');
+    expect(clusters[1]!.why).toBe('shares its ancestry with no other anomaly');
+  });
+
+  it('the skeptic derives its candidates from the law\'s graph where it can (inputs, constants, domain, ancestry), computed and marked graph; the standing checklist is marked as such', () => {
+    const a = anomaly('g', { value: 2.2, tolerance: 0.01, instrument: 'rig', environment: 'bench' }, { value: 2.0064, lawAncestry: ['pendulum.period'], modelVersion: 'v' });
+    expect(a.candidates.filter((c) => c.source === 'graph').map((c) => c.kind)).toEqual(['within uncertainty', 'model envelope', 'parameter', 'constant']);
+    // the family of a law with a constant (g) evaluates with it: the length that would close the gap, inside its range
+    const L = a.candidates.find((c) => c.kind === 'parameter')!;
+    expect(L.says).toBe('Pendulum period: the gap closes if length (L) were 1.2 m instead of 1 m, inside its range');
+    expect(family(lawById('pendulum.period')!, 'L', {}).value(1)).toBeCloseTo(2.0064, 4);
+    expect(family(lawById('pendulum.period')!, 'L', {}).sensitivity(1)).toBeCloseTo(0.5, 6);
+    const g = a.candidates.find((c) => c.kind === 'constant')!;
+    expect(g.says).toBe('Pendulum period: the gap closes if standard gravity (ISO 80000-3) (g) were 8.16 m/s^2 instead of 9.80665 m/s^2; a constant is not free, so this says the law was mis-stated, not that the constant moved');
+    expect(g).toMatchObject({ computed: true, closes: false, input: 'g', direction: 'down' });
+    expect(a.candidates.filter((c) => c.source === 'checklist').map((c) => c.kind)).toEqual(['numerical artifact', 'hidden variable', 'sensor defect', 'selection bias', 'wrong causal direction', 'bad assumption', 'conventional theory']);
+    // an ancestor that is no law of the book is named as such, never silently skipped
+    expect(anomalies().find((x) => x.id.endsWith('against-froude'))!.candidates.find((c) => c.kind === 'upstream law')?.says).toMatch(/^scale\.froude: an ancestor of the prediction that is not a law of the book/);
   });
 
   it('the register: eleven observations against the law book, none alive, one explained (a cooling time against Froude, 54 times the tolerance), the rest within tolerance; an anomaly keeps its skeptic', () => {

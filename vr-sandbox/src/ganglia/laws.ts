@@ -722,7 +722,7 @@ export const LAWS: Law[] = [
     statement: 'No lens or eye of diameter D can see detail finer than about 1.22 λ / D radians: long waves need huge apertures to make any image at all.',
     formula: 'θ = 1.22 λ / D', inputs: [q('lambda', 'wavelength', 'm'), q('D', 'aperture diameter', 'm')], output: q('theta', 'smallest angle resolved', 'rad'),
     eval: ({ lambda, D }) => (1.22 * lambda!) / D!, outside: ({ lambda, D }) => ((1.22 * lambda!) / D! > Math.PI ? 'wider than the whole sky: no image at all' : null),
-    valid: 'A circular aperture, the Rayleigh criterion.', example: { inputs: { lambda: 1, D: 0.05 }, output: 24.4 }, source: { cite: 'Hecht, Optics, 5th ed., Pearson 2017', kind: 'textbook' }, tags: ['optics', 'vision', 'radio', 'telescope', 'resolution'],
+    valid: 'A circular aperture, the Rayleigh criterion.', example: { inputs: { lambda: 550e-9, D: 5e-3 }, output: 1.342e-4 }, source: { cite: 'Hecht, Optics, 5th ed., Pearson 2017 (the eye: green light through a 5 mm pupil)', kind: 'textbook' }, tags: ['optics', 'vision', 'radio', 'telescope', 'resolution'],
   },
   {
     id: 'acoustic.mass-law', name: 'Sound insulation of a wall (mass law)', domain: 'fluids',

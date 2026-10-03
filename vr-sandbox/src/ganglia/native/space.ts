@@ -11,6 +11,7 @@
 // not answer cleanly, and the tests measure it.
 
 import type { Law } from '../types';
+import { withConstants } from '../laws';
 import { dimensionOf, sameDim } from '../units';
 import { d, q, r, type R, type Structure, type Mode } from './core';
 
@@ -44,17 +45,17 @@ export function family(law: Law, sym: string, held: Record<string, number>): Fam
     const why = law.outside?.(bound(x));
     if (why) return { ok: false, why };
     let y: number;
-    try { y = law.eval(bound(x)); } catch (e) { return { ok: false, why: (e as Error).message }; }
+    try { y = law.eval(withConstants(law, bound(x))); } catch (e) { return { ok: false, why: (e as Error).message }; }
     return Number.isFinite(y) ? { ok: true } : { ok: false, why: 'the law gives no finite value there' };
   };
-  const value = (x: number): number => (admissible(x).ok ? law.eval(bound(x)) : NaN);
+  const value = (x: number): number => (admissible(x).ok ? law.eval(withConstants(law, bound(x))) : NaN);
   return {
     law, sym, held,
     at: (x) => {
       const a = admissible(x);
       const mode: Mode = a.ok ? 'true' : 'outside-domain';
       const inputs = law.inputs.map((i) => r('quantity', [d(i.sym, { en: i.name }), q(bound(x)[i.sym] ?? NaN, i.unit)], {}));
-      const out = r('quantity', [d(law.output.sym, { en: law.output.name }), q(a.ok ? law.eval(bound(x)) : NaN, law.output.unit)], {});
+      const out = r('quantity', [d(law.output.sym, { en: law.output.name }), q(a.ok ? law.eval(withConstants(law, bound(x))) : NaN, law.output.unit)], {});
       return r('function', [d(law.id, { en: law.name, formula: law.formula }), r('state', inputs, {}), out], { dir: 1, mech: law.id, mode, ...(a.ok ? {} : { under: [a.why] }), dom: [d(`valid:${law.id}`, { en: law.valid })] });
     },
     value,

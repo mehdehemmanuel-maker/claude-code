@@ -245,3 +245,9 @@ Riemannian metric, path integrals, fields and tensors over 𝒩, a universal lat
 and memory as manifold regions. Kept as designed with a stated test: the prelinguistic benchmark (T). The rule
 that governs the rest: a continuous structure enters Nex when a law gives it coordinates and a question needs it;
 never because two things look alike.
+
+Correction (3 October, second discovery audit): `family` evaluated a law without its constants, so every law with
+a g, a k or a σ (the pendulum, Landauer, radiation…) had no family, no edge and no sensitivity: the value was NaN
+and the domain reported it as "no finite value there". Found by the skeptic's test, which asked for the pendulum
+length that would close a gap; fixed by evaluating every family point with the law's constants, tested on the
+pendulum (value 2.0064 s at 1 m, sensitivity 0.5).

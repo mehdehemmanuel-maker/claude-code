@@ -24,10 +24,12 @@ The continuous part of Nex, where a law gives coordinates and nowhere else, is d
 request to make Nex a continuous space of meaning, with what was built because it gives a capability the discrete
 form could not (families along a law's inputs, lazy and adaptive; interpolation refused without a shared coordinate;
 continuous or discrete decided by evidence) and what was rejected as decoration. docs/NEX-DISCOVERY.md is the
-audit of the request that Ego never confuse the absence of human knowledge with the absence of reality: human
-coverage, physical support and theory as three axes read from three places; impossibility only with a certificate (a
-bounding law, its assumptions, the claim beyond the bound); anomalies kept alive with a skeptic that computes the
-ordinary explanations first. docs/NEX-AUDIT.md answers ten questions put to the design, with the one bug they found
+audit of the request that Ego never confuse the absence of human knowledge with the absence of reality: a claim's
+evidence as a structure with a supporting and a contradicting ancestry in species that answer different questions;
+its relation to the laws typed; all of it in one epistemic vector, with human coverage a novelty coordinate that no
+physical label reads, and the label made only at the rendering boundary by structural conditions; impossibility
+only with a certificate (a law that bounds or computes the quantity, its assumptions, the claim beyond it);
+anomalies kept alive with a skeptic that derives the ordinary explanations from the law's own graph. docs/NEX-AUDIT.md answers ten questions put to the design, with the one bug they found
 (the certainty of a chain, now within the Fréchet bounds).
 
 ## Try it

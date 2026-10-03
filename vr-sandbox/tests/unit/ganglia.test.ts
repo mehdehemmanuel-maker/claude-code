@@ -23,6 +23,8 @@ describe('laws', () => {
       ids.add(l.id);
       const got = l.eval(withConstants(l, l.example.inputs));
       expect(Math.abs(got - l.example.output) / Math.max(Math.abs(l.example.output), 1e-30), `${l.id}: ${got} vs ${l.example.output}`).toBeLessThan(l.example.rel ?? 1e-9);
+      // a worked example is a case the law holds for: never one its own domain check refuses
+      expect(l.outside?.(withConstants(l, l.example.inputs)) ?? null, `${l.id}: its example lies outside its own domain`).toBeNull();
       expect(l.source.cite.length, l.id).toBeGreaterThan(5);
       expect(l.valid.length, l.id).toBeGreaterThan(5);
       expect(l.tags.length, l.id).toBeGreaterThan(0);
