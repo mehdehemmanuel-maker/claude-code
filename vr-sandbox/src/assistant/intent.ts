@@ -28,7 +28,7 @@ export type Intent =
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
   | { do: 'traverse'; query: TraversalQuery; of?: string }
   /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
-  | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
+  | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign' | 'limit'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
   | { do: 'engineer'; workflow: string; spec: Record<string, number> }
   /** A behaviour wanted with its numbers: engineered through the manifold language, never answered by a name. */
@@ -158,6 +158,8 @@ export function interpret(line: string): Intent | null {
     if (f) return { do: 'frontier', which: f.id };
   }
   // where a law holds: "where does kinetic energy break down", "at what scale does fouriers law fail"
+  // the design's limits of size come before a law's validity domain: "this", "it", "the design" is the thing just engineered
+  if (/^(?:at what (?:scale|size)|how (?:big|small|large|tiny)) (?:would|will|does|can|could) (?:(?:this|it|that)(?: (?:design|system|thing|machine|build))?|(?:the|my) (?:design|system|machine|build)) (?:fail|break|stop working|still work|hold)\??$|^(?:where|when) (?:does|would) (?:(?:this|it)(?: design)?|the design) (?:break|fail) (?:with|by|at) (?:size|scale)\??$|^how far (?:can|could) (?:i|we|you) (?:scale|shrink|grow) (?:this|it|the design)\??$/.test(t)) return { do: 'scaling', query: 'limit' };
   if ((m = /^(?:where|when|at what (?:scale|speed|size|temperature)) (?:does|do|is|would|will) (?:the )?(.+?) (?:hold|break(?: down)?|fail|stop working|stop holding|apply|stop applying|stay true|stop being true|work)\b/.exec(t))) return { do: 'scale', about: m[1]!.trim(), words: line.trim() };
   if ((m = /^(?:what is|whats) the (?:scale|limit|regime) of (?:the )?(.+)$/.exec(t))) return { do: 'scale', about: m[1]!.trim(), words: line.trim() };
   // a hard challenge, said any way: "try to build a computer", "create a symbiote", "build something that flies"

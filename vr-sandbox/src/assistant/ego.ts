@@ -48,7 +48,7 @@ import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
 import { engineer, engineeredReport, instantiate, type Engineered } from '../ganglia/manifold';
 import { answerTraversal } from './traverse';
-import { answerRedesign, answerScale } from './scaleTalk';
+import { answerLimit, answerRedesign, answerScale } from './scaleTalk';
 import { substrateCensus } from '../ganglia';
 import { anatomyOf, ARCHETYPES, archetypeByWord, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explore, FRONTIER, frontierById, frontierCensus, frontierReport, scaleCheck, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
@@ -291,6 +291,7 @@ export class Ego {
       }
       case 'traverse': return answerTraversal(i);
       case 'scaling': {
+        if (i.query === 'limit') return answerLimit(i, this.lastEngineered);
         if (i.query !== 'redesign') return answerScale(i);
         const r = answerRedesign(i, this.lastEngineered);
         if (r.result) this.lastEngineered = r.result; // "build it" now places the re-engineered one

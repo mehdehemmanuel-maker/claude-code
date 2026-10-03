@@ -12,11 +12,12 @@ import {
 import { build } from '../../src/ganglia/substrate';
 import { interpret } from '../../src/assistant/intent';
 import { engineer, DEFAULT_ENV } from '../../src/ganglia/manifold';
-import { redesign, scaleContract } from '../../src/ganglia/scale';
-import { answerRedesign } from '../../src/assistant/scaleTalk';
+import { redesign, scaleContract, scaleLimits } from '../../src/ganglia/scale';
+import { answerLimit, answerRedesign } from '../../src/assistant/scaleTalk';
 import { answerScale } from '../../src/assistant/scaleTalk';
 
 const froude = similarityById('scale.froude')!, same = similarityById('scale.same-material')!, reynolds = similarityById('scale.reynolds')!, cauchy = similarityById('scale.cauchy')!;
+const same_ = same;
 const EPISTEMIC = ['axiom', 'theorem', 'derivation', 'empirical-law', 'observation', 'model', 'hypothesis', 'conjecture'];
 
 describe('scale is a transformation, not a category', () => {
@@ -111,6 +112,44 @@ describe('derived similarities for heat and electromagnetism', () => {
   });
 });
 
+describe('derived similarities for buoyant flow and for circuits on the same cells', () => {
+  it('Rayleigh: temperature as 1/λ³ keeps Ra and Gr with the same fluid on the same planet, and heat storage is lost', () => {
+    const ra = similarityById('scale.rayleigh')!;
+    expect(exponentOfDim(ra, parseUnit('m^2/s').dim)).toBe(0);
+    expect(exponentOf(ra, { unit: 'm/s^2', name: 'gravity' })).toBe(0); // held by the planet
+    expect(exponentOfDim(ra, parseUnit('m/s^2').dim)).toBe(-3); // what its dimension would want: the planet refuses
+    for (const id of ['Ra', 'Gr', 'Pr', 'Re', 'Fo']) expect(groupUnder(groupById(id)!, ra).invariant, id).toBe(true);
+    // specific heat, conductivity and the expansion coefficient would all scale as λ: held by the material, so storage and conduction are not similar
+    expect(exponentOfDim(ra, parseUnit('J/kg K').dim)).toBe(1);
+    expect(exponentOfDim(ra, parseUnit('W/m K').dim)).toBe(1);
+    const hc = classify('heat.capacity', ra);
+    expect(hc.verdict).toBe('invariant'); // m λ³ against ΔT λ⁻³: the heat stored comes out the same number at every size
+    expect(hc.held.map((h) => h.sym)).toContain('c');
+    const cond = classify('conduction', ra);
+    expect(cond.verdict).toBe('scale-dependent');
+    expect(cond.ratio).toBeCloseTo(0.1, 6); // a tenth per decade against what the power's dimension says
+  });
+
+  it('electrical: the same resistivity and the same cells give current as λ and resistance as 1/λ, and magnetism does not follow', () => {
+    const el = similarityById('scale.electrical')!;
+    expect(exponentOfDim(el, parseUnit('ohm m').dim)).toBeCloseTo(0, 9);
+    expect(exponentOfDim(el, parseUnit('V').dim)).toBeCloseTo(0, 9);
+    expect(exponentOfDim(el, parseUnit('A').dim)).toBeCloseTo(1, 9);
+    expect(exponentOfDim(el, parseUnit('ohm').dim)).toBeCloseTo(-1, 9);
+    expect(exponentOfDim(el, parseUnit('W').dim)).toBeCloseTo(1, 9);
+    expect(exponentOfDim(el, parseUnit('N/A^2').dim)).toBeCloseTo(-2 / 3, 9); // μ₀'s dimension moves: held, so not similar
+    for (const id of ['ohm', 'wire.resistance', 'joule', 'power.electric']) expect(classify(id, el).verdict, id).toMatch(/covariant|invariant/);
+    const mag = classify('magnetic.pull', el);
+    expect(mag.verdict).toBe('scale-dependent');
+    expect(mag.setsScale.map((c) => c.sym)).toContain('mu0');
+  });
+
+  it('every similarity is consistent with what it says it holds: the quantities it names as consistent have exponent zero', () => {
+    const consistent: Record<string, string[]> = { 'scale.froude': ['m/s^2', 'kg/m^3'], 'scale.reynolds': ['m^2/s', 'kg/m^3', 'ohm m', 'N/A^2'], 'scale.cauchy': ['m/s', 'kg/m^3', 'Pa'], 'scale.thermal': ['m^2/s', 'J/kg K', 'W/m K'], 'scale.rayleigh': ['m^2/s'], 'scale.electrical': ['ohm m', 'V'], 'scale.natural': ['m/s', 'J s'] };
+    for (const [id, units] of Object.entries(consistent)) for (const u of units) expect(exponentOfDim(similarityById(id)!, parseUnit(u).dim), `${id} should leave ${u} unscaled`).toBeCloseTo(0, 9);
+  });
+});
+
 describe('covariance of the law book, derived from each law\'s own example', () => {
   it('every executable law is classified under every similarity, with the transformation that explains it', () => {
     const table = covarianceTable(10);
@@ -163,6 +202,20 @@ describe('covariance of the law book, derived from each law\'s own example', () 
       for (const h of c.held) expect(['sigma', 'rho']).toContain(h.sym);
       expect(c.why).toMatch(/size does not enter/);
     }
+  });
+
+  it('the first scale at which a law leaves its regime is found by sweeping λ, going smaller and going bigger', () => {
+    const limits = scaleLimits(['spring.energy', 'pendulum.period', 'electrostatic.pull', 'diffraction.limit'], froude);
+    const spring = limits.find((l) => l.law === 'spring.energy')!;
+    expect(spring).toEqual({ law: 'spring.energy', down: null, up: null, always: null }); // covariant from a thousandth to a thousand times
+    const es = limits.find((l) => l.law === 'electrostatic.pull')!;
+    expect(es.up).not.toBeNull();
+    expect(es.up!.lambda).toBeLessThanOrEqual(10); // it broke at λ = 10 in the table
+    expect(es.up!.verdict).toBe('broken outside regime');
+    expect(es.up!.why).toMatch(/leave where the law holds/);
+    const same = scaleLimits(['pendulum.period'], same_)[0]!;
+    expect(same.always?.verdict).toBe('scale-dependent');
+    expect(same.down).toBeNull();
   });
 
   it('the constants that set scales are listed from the law book, with their dimensions and the laws that carry them', () => {
@@ -382,6 +435,16 @@ describe('a want engineered again at another scale', () => {
     expect(big.contract.stores).toBeCloseTo(1e9, 0);
     expect(big.contract.massMax).toBeCloseTo(5000, 9);
     expect(big.says).toMatch(/10 times bigger/);
+  });
+
+  it('Ego says how far the last design scales: the first law to leave its regime each way, and the ones that never follow', () => {
+    expect(interpret('at what scale would this design fail')).toMatchObject({ do: 'scaling', query: 'limit' });
+    expect(interpret('how small can it still work')).toMatchObject({ do: 'scaling', query: 'limit' });
+    expect(answerLimit({ do: 'scaling', query: 'limit' }, null)).toMatch(/Nothing is engineered yet/);
+    const a = answerLimit({ do: 'scaling', query: 'limit' }, engineer(want));
+    expect(a).toMatch(/under Froude similarity/);
+    expect(a).toMatch(/leaves its regime|no law leaves its regime|none does/);
+    expect(a).toMatch(/the same design, only sized/);
   });
 
   it('Ego re-engineers the last want when asked, and refuses when there is none', () => {

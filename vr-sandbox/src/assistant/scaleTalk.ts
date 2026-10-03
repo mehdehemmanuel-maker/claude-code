@@ -6,7 +6,7 @@ import type { Intent } from './intent';
 import { LAWS, lawById } from '../ganglia/laws';
 import { TICK } from '../physics/world';
 import { substrate, type SubstrateEntity } from '../ganglia';
-import { SIMILARITIES, similarityById, scaleSystem, GROUPS, groupUnder, classify, scaleSetters, OBSERVERS, observerById, project, MECHANISMS, propagation, CROSS_SCALES, universalScaleStructuralEquivalence, findScaleAnalogues, characteristicLength, characteristicTime, redesign, type ScaleTransform } from '../ganglia/scale';
+import { SIMILARITIES, similarityById, scaleSystem, GROUPS, groupUnder, classify, scaleSetters, OBSERVERS, observerById, project, MECHANISMS, propagation, CROSS_SCALES, universalScaleStructuralEquivalence, findScaleAnalogues, characteristicLength, characteristicTime, redesign, scaleLimits, type ScaleTransform } from '../ganglia/scale';
 import { engineeredReport, type Engineered } from '../ganglia/manifold';
 
 type Scale = Extract<Intent, { do: 'scaling' }>;
@@ -55,8 +55,26 @@ export function answerRedesign(i: Scale, last: Engineered | null): { says: strin
   return { says: `${r.says} ${engineeredReport(r.after)}`, result: r.after };
 }
 
+/** Where the last design stops being the same design: the laws of its chosen member and converters swept over λ. */
+export function answerLimit(i: Scale, last: Engineered | null): string {
+  if (!last) return 'Nothing is engineered yet: give me a want first, then ask how far it scales.';
+  const c = last.chosen ?? last.candidates[0];
+  if (!c) return 'The last want had no member that met it, so there is no design to scale.';
+  const t = (i.similarity && similarityById(i.similarity)) || DEFAULT;
+  const laws = [...new Set([...c.store.laws, ...c.converters.flatMap((x) => x.manifold.laws)])].filter((id) => lawById(id));
+  if (!laws.length) return `${c.store.name} cites no executable law to sweep.`;
+  const limits = scaleLimits(laws, t);
+  const downs = limits.filter((l) => l.down).sort((a, b) => b.down!.lambda - a.down!.lambda);
+  const ups = limits.filter((l) => l.up).sort((a, b) => a.up!.lambda - b.up!.lambda);
+  const always = limits.filter((l) => l.always);
+  const fine = limits.filter((l) => !l.down && !l.up && !l.always);
+  const f = (x: number) => (x >= 1000 || x < 0.01 ? x.toExponential(1) : +x.toPrecision(2)).toString();
+  return `${c.store.name}${c.converters.length ? ` with ${c.converters.map((x) => x.manifold.name).join(' and ')}` : ''}, under ${t.name}: ${downs.length ? `made smaller, ${downs[0]!.law} leaves its regime first, at λ = ${f(downs[0]!.down!.lambda)} (${downs[0]!.down!.why})` : 'made smaller to a thousandth, no law leaves its regime'}; ${ups.length ? `made bigger, ${ups[0]!.law} leaves first, at λ = ${f(ups[0]!.up!.lambda)} (${ups[0]!.up!.why})` : 'made bigger to a thousand times, none does'}. ${always.length ? `Laws that do not follow the size at any λ: ${always.map((l) => `${l.law} (${l.always!.why})`).join('; ')}. ` : ''}${fine.length ? `Covariant throughout: ${fine.map((l) => l.law).join(', ')}.` : ''} Between those limits it is the same design, only sized.`;
+}
+
 export function answerScale(i: Scale): string {
   if (i.query === 'redesign') return answerRedesign(i, null).says;
+  if (i.query === 'limit') return answerLimit(i, null);
   if (i.query === 'transform') {
     const lambda = i.factor ?? 10;
     const t = (i.similarity && similarityById(i.similarity)) || DEFAULT;

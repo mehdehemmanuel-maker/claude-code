@@ -95,3 +95,35 @@ export function scaleSetters(): { sym: string; name: string; unit: string; value
   }
   return [...out.values()];
 }
+
+export interface ScaleLimit {
+  law: string;
+  /** Going smaller: the largest λ < 1 at which the law leaves its regime, with why; null when it never does within the range. */
+  down: { lambda: number; verdict: Verdict; why: string } | null;
+  /** Going bigger: the smallest λ > 1 at which it does. */
+  up: { lambda: number; verdict: Verdict; why: string } | null;
+  /** A verdict that does not depend on λ (scale-dependent, unknown): the law does not follow the size at all. */
+  always: { verdict: Verdict; why: string } | null;
+}
+
+/**
+ * For each law, the first scale at which it leaves its regime going smaller and going bigger, by sweeping λ over the
+ * range and running the law on its scaled example. A law that is scale-dependent at λ = 1.01 already is reported as
+ * such for every λ.
+ */
+export function scaleLimits(lawIds: string[], t: ScaleTransform, range: [number, number] = [1e-3, 1e3], perDecade = 4): ScaleLimit[] {
+  return lawIds.filter((id) => lawById(id)).map((id) => {
+    // a mismatched power law shows at λ = 2 already (at λ near 1 it hides inside "approximately invariant"); a regime break at 2 is swept for
+    const near = classify(id, t, 2);
+    if (near.verdict === 'scale-dependent' || near.verdict === 'unknown') return { law: id, down: null, up: null, always: { verdict: near.verdict, why: near.why } };
+    const sweep = (dir: 1 | -1) => {
+      for (let k = 1; ; k++) {
+        const lambda = Math.pow(10, (dir * k) / perDecade);
+        if (lambda < range[0] || lambda > range[1]) return null;
+        const c = classify(id, t, lambda);
+        if (c.verdict === 'broken outside regime' || c.verdict === 'scale-dependent' || c.verdict === 'unknown') return { lambda, verdict: c.verdict, why: c.why };
+      }
+    };
+    return { law: id, down: sweep(-1), up: sweep(1), always: null };
+  });
+}

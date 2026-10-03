@@ -31,6 +31,8 @@ The similarities, each derived from what it holds (`transform.ts`):
 | reynolds (diffusive) | [3, 1, 2] | ν, α, D fixed ⇒ T ∝ λ²; V ∝ 1/λ; gravity not preserved | theorem |
 | cauchy (elastic) | [3, 1, 1] | E, ρ fixed ⇒ c fixed ⇒ T ∝ λ; f ∝ 1/λ, σ ∝ λ⁰; g ∝ 1/λ (the centrifuge) | theorem |
 | thermal | [3, 1, 2, 0, −2] | α fixed ⇒ T ∝ λ²; c_p fixed ⇒ Θ ∝ λ⁻²; k then consistent; σT⁴ not | theorem |
+| rayleigh | [3, 1, 2, 0, −3] | ν, α fixed ⇒ T ∝ λ²; g held; Ra, Gr preserved ⇒ Θ ∝ λ⁻³; β, c_p, k then held: flow similar, storage and conduction not | theorem |
+| electrical | [3, 1, 4/3, 1, 0] | ρ_e and the cell voltage fixed ⇒ I ∝ λ, R ∝ 1/λ, P ∝ λ; μ₀ then scales as λ^(−2/3): magnetism not similar | theorem |
 | allometric | [3, 1, ¾] | P ∝ M^¾ measured (Kleiber); WBE a model | empirical-law |
 | natural | [−1, 1, 1] | c and ħ fixed; G then scales as λ²: only λ = 1 keeps all three | theorem |
 
@@ -47,7 +49,7 @@ flywheel's specific energy is invariant everywhere.
 
 ## 4. Invariants: dimensionless groups
 
-`groups.ts` holds 20 groups (Re, Fr, Ma, St, We, Bo, Bi, Fo, Pr, Pe, Sc, Nu, Kn, Ca, De, He, Da, Ro, Rm, Gr), each a product
+`groups.ts` holds 21 groups (Re, Fr, Ma, St, We, Bo, Bi, Fo, Pr, Pe, Sc, Nu, Kn, Ca, De, He, Da, Ro, Rm, Ra, Gr), each a product
 of powers of quantities with a meaning and regime boundaries. `groupUnder(group, transform)` sums the exponents:
 invariant iff zero. **Derived, never declared**: Re goes as λ^1.5 under Froude with the same fluid; Fr as λ⁻³ under
 Reynolds; no transform keeps both. With nothing held, every group is invariant (Buckingham).
@@ -150,6 +152,15 @@ already falsified by c, ħ, G; the weak form stands as a theorem of dimensional 
   valid", "how long does a signal take to cross a 10 m steel beam".
 - Law tree: SC-1 to SC-5.
 
+## How far a design scales (`scaleLimits`)
+
+`scaleLimits(laws, transform)` sweeps λ from a thousandth to a thousand times, four points per decade, running each
+law's example at every size, and reports the first λ going smaller and going bigger at which the law leaves its
+regime (its `outside` speaks), or that the law does not follow the size at any λ (a mismatched power law, read at
+λ = 2 where it cannot hide inside "approximately invariant"). Ego answers "at what scale would this design fail", "how
+small can it still work", "how far can I scale it" for the last engineered member and its converters: the first law
+to leave its regime each way, the ones that never follow, and the ones covariant throughout.
+
 ## A want at another scale (`redesign.ts`, law SC-6)
 
 "Design it ten times smaller" is not a copy at a tenth. `scaleContract` scales each quantity of the contract and the
@@ -186,9 +197,11 @@ The verdicts are predictions about the world; the world here is the engine, so t
 ## Still open
 
 - The diffusive similarity is also the electromagnetic one (μ₀ and resistivity held give current ∝ λ⁰, R ∝ 1/λ,
-  L/R ∝ λ², Rm preserved: derived in its derivation string); the thermal similarity scales temperature as 1/λ² so
-  conduction and storage keep their form. A surface coefficient h held by the environment is not similar (Bi grows
-  with λ), and radiation never is. A Rayleigh or Bénard scaling is not written.
+  L/R ∝ λ², Rm preserved); the electrical one holds the cell voltage instead and loses magnetism; the thermal one
+  scales temperature as 1/λ² so conduction and storage keep their form; the Rayleigh one as 1/λ³ so buoyant flow keeps
+  its form and storage and conduction do not. No one transformation keeps heat, buoyancy, magnetism and gravity at
+  once: that is the content, not a gap. A surface coefficient h held by the environment is never similar (Bi grows
+  with λ), and radiation never is.
 - Characteristic scales are estimates on about 130 entities; most of the substrate carries none, which the analogue
   search reports (`unplaced`). A heart now finds the cilium four decades down; a bearing still finds nothing far away.
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.
