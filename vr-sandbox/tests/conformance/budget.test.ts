@@ -65,10 +65,11 @@ it('a walking dog costs less than a set number of yardsticks a tick, and four co
 
 /**
  * Four dogs to one, by the median of pairs: 3.59, 3.69 and 4.13 with the test run alone, 4.78 with every conformance
- * file running at once (the bigger world suffers more from a busy machine: more memory, less of it in cache). A solver
- * gone quadratic in bodies would read about 16; six keeps a margin over the busiest run and still catches that.
+ * file running at once on this machine, 5.36 on the CI runner doing the same (the bigger world suffers more from a
+ * busy machine: more memory, less of it in cache). A solver gone quadratic in bodies would read about 16; eight keeps
+ * a margin over the busiest run seen and still catches that.
  */
-const LIMIT_FOUR_TO_ONE = 6;
+const LIMIT_FOUR_TO_ONE = 8;
 
 /**
  * One dog measured 1.55 to 1.61 yardsticks a tick when this was set (after the row solver stopped allocating per row:

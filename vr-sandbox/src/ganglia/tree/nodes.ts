@@ -208,7 +208,7 @@ export const NODES: Node[] = [
     realisedBy: [{ module: 'physics/world', symbol: 'PhysicsWorld#closeBooks' }, { module: 'physics/energy', symbol: 'imbalance' }],
     heldBy: [{ file: 'tests/conformance/energy.test.ts', test: 'the books close' }, { file: 'tests/conformance/energy.test.ts', test: 'a falling block trades height for speed' }] },
   { id: 'R-11', kind: 'realisation', epistemic: 'numerical', name: 'the tick budget', proof: 'tested', parents: ['A-4'],
-    statement: 'One walker costs under a set number of yardsticks a tick, and four cost about four times one, under six (a solver quadratic in bodies would read sixteen): the ratio the median of seven pairs measured turn about against a yardstick in the same moment, so that what else the machine does falls on both alike.',
+    statement: 'One walker costs under a set number of yardsticks a tick, and four cost about four times one, under eight on the busiest machine (a solver quadratic in bodies would read sixteen; 3.6 to 5.4 measured by how busy the machine was): the ratio the median of seven pairs measured turn about against a yardstick in the same moment, so that what else the machine does falls on both alike.',
     heldBy: [{ file: 'tests/conformance/budget.test.ts', test: 'a walking dog costs less than a set number of yardsticks a tick' }] },
 
   // ---- Parameters, environment and data: every number a node with its kind
