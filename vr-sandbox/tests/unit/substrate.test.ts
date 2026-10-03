@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
 import { answerTraversal } from '../../src/assistant/traverse';
-import { hash, read, text } from '../../src/ganglia/native';
+import { hash, read, render, text } from '../../src/ganglia/native';
 import {
   FACETS, KINDS, RELATIONS, RELATION_KINDS, Queue, Substrate, analogues, build, constructionPath, decompose, dualRole, implementations, index, ingest, leavesOf,
   lineage, materialsForRole, mechanismsFor, missingConstructors, populate, priority, producers, ruleExpander, seedExpander, seedQueue, variants, waysToStore,
@@ -1228,16 +1228,24 @@ describe('Every Nex structure Ego says is readable Nex', () => {
       return s.slice(0, j);
     };
     const asks = ['what are the kinds of bearing', 'what does a bearing do', 'what is a bearing made of', 'what makes a shaft', 'what standards cover a bearing', 'what does a battery connect to', 'what is like a bearing', 'does the load cause the failure of a bearing', 'does the current cause the voltage', 'how do you know that the current causes the voltage', 'what fails a bearing', 'is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K', 'how far can the load go before the rating life law stops applying', 'what laws have the same form as the energy in a spring', 'that motor is struggling'];
-    let withTail = 0;
+    let withTail = 0, present = 0, dropped = 0;
     for (const q of asks) {
       const i = interpret(q);
       expect(i?.do, q).toBe('traverse');
       const t = tail(answerTraversal(i as Parameters<typeof answerTraversal>[0]));
       expect(t, q).not.toBeNull();
       withTail++;
-      expect(text(read(t!)), q).toBe(t);
+      const back = read(t!);
+      expect(text(back), q).toBe(t);
+      // the English of the same structure counts what it fails to carry (section Y.12): Nex carries all of it
+      const en = render(back, 'en', 'engineer');
+      present += en.present.length; dropped += en.dropped.length;
+      expect(en.loss, q).toBeLessThan(1);
     }
     expect(withTail).toBe(asks.length);
+    // measured 3 October, 18:25: the English of these 15 structures carries 127 of 140 pieces (loss 0.09); the compact text carries all 140
+    console.log(`English carries ${present - dropped} of ${present} pieces of these ${withTail} structures (loss ${(dropped / present).toFixed(2)}); Nex carries all`);
+    expect(dropped / present).toBeLessThan(0.5);
   });
 });
 
