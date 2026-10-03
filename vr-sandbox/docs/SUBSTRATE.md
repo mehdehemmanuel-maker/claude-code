@@ -299,6 +299,10 @@ a test holds both that and the heatsink's thermal one.
   and ends, a shaft's seats and key seat, a coupling's elastomer spider, a bit's pivot and stops) say their own
   functions in the block's data (`Piece.fn`), kept by the bridge: after a whole-queue round 4 components are without a
   function, from 15: the generic organ, a motor's back EMF (a region, not a part), the machine assembly and its systems.
+  With the bolt's shank and thread, the shaft's seats and key seat said to be steel, and the platelet and the cytoplasm
+  said to be what they are of, 11 components are without a material after a round, from 13 (pieces of blocks that
+  have no one material: a member's section and ends, a printed part, a bit's stops; and the engine's rigid body), and
+  2 without a failure, from 8: the back EMF and the assembly's systems, neither a part.
   Materials next, the same way: 233 described components had no material after a whole-queue round. A catalogue part
   is made of what its datasheet names (a hollow section S355 steel, a bolt 8.8 steel, a bearing 52100 steel, a lead
   screw C45 steel with a bronze nut, a wire copper in PVC, a servo a nylon case with steel gears in the larger

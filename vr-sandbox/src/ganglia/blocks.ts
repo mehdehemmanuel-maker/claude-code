@@ -244,8 +244,8 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['torsion.solid', 'shaft.diameter.static', 'fatigue.endurance.steel', 'stress.bending'], principles: ['match-shaft-to-bore', 'cycling-needs-endurance', 'fillet-internal-corners', 'bearing-near-load', 'strength-margin'],
     inside: [
       { name: 'bar', does: 'round bar turned to size: its diameter cubed sets the torque it carries', law: 'torsion.solid', material: 'steel', kind: 'kind.rod.round' },
-      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending', kind: 'shoulder', fn: ['fn.locate'] },
-      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque', kind: 'keyway', fn: ['fn.transmit.torque'] },
+      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending', kind: 'shoulder', material: 'steel', fn: ['fn.locate'] },
+      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque', kind: 'keyway', material: 'steel', fn: ['fn.transmit.torque'] },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, ch. 7 (shafts)', kind: 'textbook' },
     ports: (): Port[] => [],
@@ -291,8 +291,8 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['bolt.torque.nut-factor', 'stress.axial'], principles: ['bolt-through-thinner', 'tool-access', 'weakest-link'],
     inside: [
       { name: 'head', does: 'a hex across flats a wrench fits, bearing on the part over its bearing face', law: 'bolt.torque.nut-factor', material: 'steel', fn: ['fn.clamp.axial', 'fn.spread.load'] },
-      { name: 'shank', does: 'passes through the clearance hole, stretched by the preload like a stiff spring', law: 'stress.axial', fn: ['fn.clamp.axial', 'fn.transmit.force'] },
-      { name: 'thread', does: 'its tensile stress area carries the pull: where it breaks if overloaded', law: 'stress.axial', fn: ['fn.clamp.axial', 'fn.convert.rotation.translation'] },
+      { name: 'shank', does: 'passes through the clearance hole, stretched by the preload like a stiff spring', law: 'stress.axial', material: 'steel', fn: ['fn.clamp.axial', 'fn.transmit.force'] },
+      { name: 'thread', does: 'its tensile stress area carries the pull: where it breaks if overloaded', law: 'stress.axial', material: 'steel', fn: ['fn.clamp.axial', 'fn.convert.rotation.translation'] },
     ],
     insideSource: { cite: 'ISO 4017 (hex head bolts), ISO 898-1 (property classes)', kind: 'standard' },
     ports: (c): Port[] => [{ name: 'thread', kind: 'thread', r: { d: n(c, 'd'), As: n(c, 'stressArea'), F: n(c, 'yieldLoad') } }],
