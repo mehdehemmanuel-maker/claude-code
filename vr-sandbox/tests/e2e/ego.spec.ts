@@ -30,15 +30,19 @@ test('Forge on the tablet: typed on the keys, run, and journalled', async ({ pag
 test('Ego: a joint that breaks gets the reason and a fix that holds', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
-  // a 2x4 arm on a frozen post with the old 40 mm screws: they never reach through the post, so it falls apart
+  // a 2x4 arm on a frozen post, a 20 kg load on its end, and screws that reach only 10 mm into the arm: a real joint
+  // (a screw that reaches nothing is no joint, and the gate refuses it, K-9), but far too weak for 130 N m, so it breaks
   await sb(page, (s) => {
     const { app } = s;
     const post = app.ego.host.place('block', {}, 'wood.douglas-fir', [0, 1, 0], [], 'post');
     app.store.transact('freeze', (tx: any) => tx.update('parts', post, { frozen: true }));
     app.ego.host.place('lumber', { length: 0.6 }, 'wood.douglas-fir', [0.35, 1, 0], [], 'arm');
     app.ego.run('join post arm with screwed');
+    const d = Math.cbrt((4 * (20 / 7200)) / Math.PI); // a 20 kg cast-iron test weight, d = h
+    app.ego.host.place('weight', { mass: 20 }, 'cast-iron.gray-30', [0.65 + d / 2, 1, 0], [], 'load');
+    app.ego.run('join arm load with fixed');
     const c = Object.values(app.doc.connections)[0] as any;
-    app.store.transact('old screws', (tx: any) => tx.update('connections', c.id, { params: { ...c.params, length: 0.04 } }));
+    app.store.transact('short screws', (tx: any) => tx.update('connections', c.id, { params: { ...c.params, length: 0.11 } }));
   });
   await page.waitForFunction(() => (window as any).sandbox.ego.advice.some((a: any) => a.kind === 'break'), null, { timeout: 60_000 });
   const advice = await sb(page, (s) => { const a = s.ego.advice.find((x: any) => x.kind === 'break'); return { text: a.text, fixes: a.fixes.map((f: any) => f.label) }; });
@@ -77,7 +81,7 @@ test('search finds anything as you type; what you pick goes in the hotbar', asyn
   expect(errors).toEqual([]);
 });
 
-test('complaining while playing: Ego puts a sunk part back and writes it up for Claude', async ({ page }) => {
+test('complaining while playing: a sunk part is the kernel\'s to contain and Ego\'s to name; she writes it up and moves nothing', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   await sb(page, (s) => {
@@ -88,13 +92,14 @@ test('complaining while playing: Ego puts a sunk part back and writes it up for 
   });
   await frames(page, 6);
   const reply = await sb(page, (s) => s.ego.ask('ugh the crate fell through the floor'));
-  expect(reply).toMatch(/^I put crate back on the floor/);
-  expect(reply).toMatch(/written it up for Claude/);
+  // she has no hand on any pose or velocity (ML-4, ML-7): she does not put it back, she writes it up
+  expect(reply).toMatch(/^I've written it up for Claude with what I saw and the build as it was/);
+  expect(reply).not.toMatch(/put crate back/);
   await frames(page, 30);
-  expect(await sb(page, (s) => s.app.livePose(Object.keys(s.app.doc.parts)[0]).p[1])).toBeGreaterThan(0.04);
+  expect(await sb(page, (s) => s.app.livePose(Object.keys(s.app.doc.parts)[0]).p[1])).toBeLessThan(0);
   // (the test browser draws in software, so the frame budget may have written up slow frames too)
-  const rep = await sb(page, (s) => { const r = s.ego.reports.unsent.find((x: any) => x.trouble === 'fell-through'); return { trouble: r.trouble, code: r.shareCode.slice(0, 6), words: r.words }; });
-  expect(rep).toEqual({ trouble: 'fell-through', code: 'VRSB1.', words: 'ugh the crate fell through the floor' });
+  const rep = await sb(page, (s) => { const r = s.ego.reports.unsent.find((x: any) => x.trouble === 'fell-through' && x.words === 'ugh the crate fell through the floor'); return { trouble: r.trouble, code: r.shareCode.slice(0, 6), words: r.words, fixed: r.fixed }; });
+  expect(rep).toEqual({ trouble: 'fell-through', code: 'VRSB1.', words: 'ugh the crate fell through the floor', fixed: null });
   expect(errors).toEqual([]);
 });
 
@@ -155,7 +160,7 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   expect(errors).toEqual([]);
 });
 
-test('the watchdog: a part that leaves the world is put back by Ego herself, and written up', async ({ page }) => {
+test('the watchdog: a part that leaves the world is named by Ego with the obligation it broke, and written up; she moves nothing', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   await sb(page, (s) => {
@@ -164,18 +169,18 @@ test('the watchdog: a part that leaves the world is put back by Ego herself, and
     // a flaw sends it through the slab and out of the world
     s.app.physics.send({ op: 'setPose', id, pose: { p: [0.5, -3, -1], q: [0, 0, 0, 1] }, linear: [0, -5, 0], angular: [0, 0, 0] });
   });
-  await page.waitForFunction(() => (window as any).sandbox.ego.advice.some((a: any) => a.text.includes('going through the floor')), null, { timeout: 30_000 });
+  await page.waitForFunction(() => (window as any).sandbox.ego.advice.some((a: any) => a.text.includes('went through the floor')), null, { timeout: 30_000 });
   await frames(page, 30);
   const after = await sb(page, (s) => {
     const id = Object.keys(s.app.doc.parts)[0];
     // (the test browser draws in software, so the frame budget may have written up slow frames too)
     const r = s.ego.reports.unsent.find((x: any) => x.trouble === 'fell-through');
-    return { y: s.app.livePose(id).p[1] as number, text: s.ego.advice.find((a: any) => a.text.includes('going through the floor')).text as string, words: r?.words as string, fixed: r?.fixed as string };
+    return { y: s.app.livePose(id).p[1] as number, text: s.ego.advice.find((a: any) => a.text.includes('went through the floor')).text as string, words: r?.words as string, fixed: r?.fixed as string | null };
   });
-  expect(after.text).toMatch(/caught crate going through the floor\. I put crate back on the floor\. Written up for Claude/);
-  expect(after.y).toBeGreaterThan(0.04);
+  expect(after.text).toMatch(/crate went through the floor: the physics broke its own obligation F-3\.5 \(nothing passes through a solid\)\. Nothing from this run counts as physics until that is fixed\. Written up for Claude\./);
+  expect(after.y).toBeLessThan(0);
   expect(after.words).toMatch(/^\(Ego saw it herself\) fell on crate/);
-  expect(after.fixed).toBe('put crate back on the floor');
+  expect(after.fixed).toBeNull();
   expect(errors).toEqual([]);
 });
 

@@ -7,7 +7,8 @@ import { getConnectorKind, CONNECTOR_KINDS } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { addPart, deleteParts, setFrozen, setPartMaterial, setPartParam, setSim } from '../doc/commands';
 import { axisAngle, fromTo, qmul, transformPoint } from '../doc/math';
-import type { Pose, Quat, Vec3 } from '../doc/types';
+import type { Part, Pose, Quat, Vec3 } from '../doc/types';
+import { freeSpot } from '../ganglia/tree/gate';
 import { getMaterial, STANDARD_GRAVITY } from '../data/materials';
 import { effectiveParams, getPartKind } from '../parts/registry';
 import { shapeBounds } from '../parts/shapes';
@@ -153,7 +154,17 @@ export class AppHost extends BuildHost {
   }
 
   protected override defaultSpot(kindId: string, params: Params, material: string, q: Quat): Vec3 {
-    return this.inFront(kindId, params, material, q);
+    // a metre in front of you, and beside whatever already stands there: two solids cannot share space (K-5)
+    const spot = this.inFront(kindId, params, material, q);
+    const kind = getPartKind(kindId);
+    const b = shapeBounds(kind.collision(effectiveParams(kind, params, getMaterial(material))));
+    const width = Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]) + 0.05;
+    const cam = this.app.renderer.xr.isPresenting ? this.app.renderer.xr.getCamera() : this.app.view.camera;
+    const f = cam.getWorldDirection(new THREE.Vector3()).setY(0);
+    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
+    f.normalize();
+    const candidate: Part = { id: '', kind: kindId, name: '', material, params, pose: { p: spot, q }, frozen: false, assembly: null, features: [], damage: { broken: [], segments: null } };
+    return freeSpot(candidate, Object.values(this.app.doc.parts), (id) => getMaterial(id), [-f.z, 0, f.x], width);
   }
 
   /** Part k of n in a row a metre in front of you, across your view, each resting on the floor. */

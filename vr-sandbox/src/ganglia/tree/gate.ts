@@ -104,6 +104,25 @@ export function partSeparation(a: Part, ma: Material, b: Part, mb: Material): nu
   return best;
 }
 
+/**
+ * Where a part may stand near a wanted spot: the spot itself if it shares space with nothing (K-5), else the first
+ * place along `across` (a unit vector, in steps of `step`) that does, trying each side in turn; the wanted spot when
+ * none is found within `tries`, so the gate says why. A part placed "in front of you" lands beside what is there.
+ */
+export function freeSpot(candidate: Part, others: Part[], materialOf: (id: string) => Material | undefined, across: [number, number, number], step: number, tries = 10, tolerance = CONTACT_TOLERANCE): [number, number, number] {
+  const m = materialOf(candidate.material);
+  if (!m) return candidate.pose.p;
+  const clear = (p: [number, number, number]) => {
+    const at: Part = { ...candidate, pose: { ...candidate.pose, p } };
+    for (const o of others) { if (o.id === candidate.id || o.damage.segments) continue; const mo = materialOf(o.material); if (mo && partSeparation(at, m, o, mo) < -tolerance) return false; }
+    return true;
+  };
+  const [x, y, z] = candidate.pose.p;
+  if (clear([x, y, z])) return [x, y, z];
+  for (let k = 1; k <= tries; k++) for (const side of [1, -1]) { const p: [number, number, number] = [x + across[0] * step * k * side, y, z + across[2] * step * k * side]; if (clear(p)) return p; }
+  return [x, y, z];
+}
+
 /** Joints whose template is a bore the other part runs in: a shaft in a bearing, a body in a split clamp, a rod through a slider's guide. Two solids so joined share that space by design. */
 const BORED = new Set(['bearing', 'clamp', 'slider']);
 

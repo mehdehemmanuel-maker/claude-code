@@ -2,6 +2,7 @@ import { test } from '@playwright/test';
 import { boot, enterVR, expect, frames, sb, tap } from './helpers';
 import { BuildBuilder } from '../../src/templates/builder';
 import { encodeDocText } from '../../src/persistence/codec';
+import { weightD } from '../../src/parts/registry';
 
 test('overloaded lumber snaps; the fracture is recorded, undone and repaired', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
@@ -12,7 +13,9 @@ test('overloaded lumber snaps; the fracture is recorded, undone and repaired', a
   const b = new BuildBuilder('Snap test', 99);
   const beam = b.part('lumber', { p: [0.6, 1.2, -1], q: [0, 0, 0, 1] }, { material: 'wood.douglas-fir', params: { size: '2x4', length: 1.2, fracture: '6' }, name: 'Beam' });
   b.joint('fixed', beam, null, { p: [0, 1.2, -1], q: [0, 0, 0, 1] });
-  const w = b.part('weight', { p: [1.2, 1.2, -1], q: [0, 0, 0, 1] }, { params: { mass: 250 }, name: 'Load' });
+  // the load stands just past the beam's end, touching it: two solids cannot share space (K-5), so it cannot sit inside the beam
+  const d = weightD({ mass: 250 });
+  const w = b.part('weight', { p: [1.2 + d / 2 + 0.0005, 1.2, -1], q: [0, 0, 0, 1] }, { params: { mass: 250 }, name: 'Load' });
   b.joint('fixed', beam, w, { p: [1.2, 1.2, -1], q: [0, 0, 0, 1] });
   const text = encodeDocText(b.doc);
   await page.evaluate((t) => (window as any).sandbox.app.openText(t, 'snap test'), text);
