@@ -8,6 +8,7 @@ import type { Law, Source } from '../types';
 import type { Node } from '../tree/schema';
 import type { Entity, Relation } from '../substrate/model';
 import type { Substrate } from '../substrate/substrate';
+import { spokenName } from '../substrate/names';
 import { d, e, q, r, type Coords, type D, type Evidence, type Mode, type R, type Structure } from './core';
 
 /** How a source of the law book is known, in the evidence morphology. */
@@ -66,9 +67,10 @@ export function fromNode(node: Node): Structure[] {
   return out;
 }
 
-const OP_OF_RELATION: Partial<Record<Relation['kind'], { op: R['op']; c?: Coords }>> = {
+/** The operator each arrow of the substrate is; `swap` where the arrow is written from the thing but the influence runs to it (a failure lowers the thing; a requirement is necessary for it). */
+const OP_OF_RELATION: Partial<Record<Relation['kind'], { op: R['op']; c?: Coords; swap?: boolean }>> = {
   'is-a': { op: 'kind' }, 'has-part': { op: 'part' }, 'made-of': { op: 'part' }, does: { op: 'function' }, 'governed-by': { op: 'constrain' },
-  'fails-by': { op: 'influence', c: { dir: 1, polarity: '-', necessity: 'contributing' } }, requires: { op: 'influence', c: { dir: 1, polarity: '+', necessity: 'necessary' } },
+  'fails-by': { op: 'influence', c: { dir: 1, polarity: '-', necessity: 'contributing' }, swap: true }, requires: { op: 'influence', c: { dir: 1, polarity: '+', necessity: 'necessary' }, swap: true },
   enables: { op: 'influence', c: { dir: 1, polarity: '+', necessity: 'contributing' } }, prevents: { op: 'influence', c: { dir: 1, polarity: '-', necessity: 'contributing' } },
   'analogous-to': { op: 'same', c: { mode: 'unknown' } }, 'coarse-grains-to': { op: 'abstract' }, 'invariant-under': { op: 'invariant' }, 'measured-by': { op: 'morphism' },
   'standardized-by': { op: 'constrain' }, 'connects-to': { op: 'morphism' }, 'interacts-with': { op: 'influence', c: { dir: 0 } }, 'produced-by': { op: 'morphism' }, transforms: { op: 'morphism' }, plays: { op: 'kind' },
@@ -78,10 +80,10 @@ const OP_OF_RELATION: Partial<Record<Relation['kind'], { op: R['op']; c?: Coords
 export function fromRelation(rel: Relation, s?: Substrate): R | null {
   const map = OP_OF_RELATION[rel.kind];
   if (!map) return null;
-  const alias = (id: string): D => { const ent = s?.get(id); return d(id, ent ? { en: ent.name } : undefined); };
+  const alias = (id: string): D => { const ent = s?.get(id); return d(id, ent ? { en: spokenName(ent) } : undefined); };
   const how: Evidence = 'stub' in rel.source ? 'assumed' : 'derived' in rel.source ? 'derived' : 'estimate' in rel.source ? 'estimated' : 'cite' in rel.source ? evidenceOfSource({ cite: rel.source.cite, kind: (rel.source as { kind?: Source['kind'] }).kind ?? 'textbook' }) : 'assumed';
   const c: Coords = { ...(map.c ?? {}), cert: { kind: 'interval', lo: Math.max(0, rel.confidence - 0.1), hi: Math.min(1, rel.confidence + 0.1), source: 'epistemic' }, ev: { how }, mode: map.c?.mode ?? 'true' };
-  return r(map.op, [alias(rel.from), alias(rel.to)], c);
+  return r(map.op, map.swap ? [alias(rel.to), alias(rel.from)] : [alias(rel.from), alias(rel.to)], c);
 }
 
 /**
@@ -91,14 +93,16 @@ export function fromRelation(rel: Relation, s?: Substrate): R | null {
  */
 export function saidOf(s: Substrate, id: string, laws?: Map<string, Law>): Structure[] {
   const out: Structure[] = [];
+  const ent = s.get(id);
+  const self = d(id, ent ? { en: spokenName(ent) } : undefined);
   for (const rel of s.outOf(id)) {
     const x = fromRelation(rel, s);
     if (x) out.push(x);
-    if (laws && rel.kind === 'governed-by') { const law = laws.get(rel.to); if (law) out.push(r('constrain', [d(id), fromLaw(law)], { mode: 'true', ev: { how: evidenceOfSource(law.source) } })); }
+    if (laws && rel.kind === 'governed-by') { const law = laws.get(rel.to); if (law) out.push(r('constrain', [self, fromLaw(law)], { mode: 'true', ev: { how: evidenceOfSource(law.source) } })); }
   }
   for (const rel of s.into(id)) { const x = fromRelation(rel, s); if (x) out.push(x); }
   // what governs its kinds governs it (inheritance along is-a), said as derived
-  if (laws) for (const kind of s.reach(id, 'is-a')) for (const rel of s.outOf(kind.id, 'governed-by')) { const law = laws.get(rel.to); if (law) out.push(r('constrain', [d(id), fromLaw(law)], { mode: 'true', ev: { how: 'derived', src: [`as ${kind.id}`] } })); }
+  if (laws) for (const kind of s.reach(id, 'is-a')) for (const rel of s.outOf(kind.id, 'governed-by')) { const law = laws.get(rel.to); if (law) out.push(r('constrain', [self, fromLaw(law)], { mode: 'true', ev: { how: 'derived', src: [`as ${spokenName(kind)}`] } })); }
   return out;
 }
 

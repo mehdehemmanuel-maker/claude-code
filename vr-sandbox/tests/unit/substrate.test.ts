@@ -910,3 +910,15 @@ describe('what the second probe of 3 October found (lineage, construction, mecha
     expect(answerTraversal({ do: 'traverse', query: 'mechanisms-for', of: 'measure force' })).toMatch(/load cell/);
   });
 });
+
+describe('Ego says a thing in her own language', () => {
+  it('"say a bearing in your language" is her Nex structures rendered, with what English lost and the weakest evidence named', () => {
+    expect(interpret('say a bearing in your language')).toMatchObject({ do: 'traverse', query: 'native', of: 'bearing' });
+    expect(interpret('how do you think of a spring')).toMatchObject({ do: 'traverse', query: 'native', of: 'spring' });
+    const a = answerTraversal({ do: 'traverse', query: 'native', of: 'bearing' });
+    expect(a).toMatch(/^In Nex I hold a bearing as \d+ structures, hashed and compared without a word in them; \d of them in English: /);
+    expect(a).toMatch(/English carried \d+ of \d+ pieces of those structures/);
+    expect(a).toMatch(/the weakest evidence among them is (theorem|derived|measured|calibrated|simulated|estimated|extrapolated|hypothesized|assumed)/);
+    expect(a).toMatch(/Their hashes: #[0-9a-f]{8}/);
+  });
+});

@@ -61,7 +61,8 @@ export interface Uncertainty {
 // ---- the leaves and nodes
 
 /** A quantity: a number in SI with its dimension; the only leaf that carries a number. */
-export interface Q { k: 'Q'; v: number; dim: Dim; cert?: Uncertainty; scale?: Scale }
+/** `unit` is the spelling it was given (N m rather than J for a torque): a surface detail, outside the hash. */
+export interface Q { k: 'Q'; v: number; dim: Dim; unit?: string; cert?: Uncertainty; scale?: Scale }
 
 /** Time morphology (section G): richer than tense. Every field a quantity of dimension time, or an ordering. */
 export interface Time {
@@ -142,6 +143,7 @@ export const d = (id: string, aliases?: Record<string, string>): D => (aliases ?
 export const q = (v: number, unit: string, cert?: Uncertainty, scale?: Scale): Q => {
   const u = parseUnit(unit);
   const out: Q = { k: 'Q', v: v * u.scale + (u.offset ?? 0), dim: u.dim };
+  if (unit) out.unit = unit;
   if (cert) out.cert = cert;
   if (scale) out.scale = scale;
   return out;
@@ -197,7 +199,7 @@ export function canonical(s: unknown): string {
   if (s === null || typeof s !== 'object') return JSON.stringify(s);
   if (Array.isArray(s)) return `[${s.map(canonical).join(',')}]`;
   const o = s as Record<string, unknown>;
-  const keys = Object.keys(o).filter((k) => o[k] !== undefined && k !== 'aliases').sort();
+  const keys = Object.keys(o).filter((k) => o[k] !== undefined && k !== 'aliases' && k !== 'unit').sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(',')}}`;
 }
 

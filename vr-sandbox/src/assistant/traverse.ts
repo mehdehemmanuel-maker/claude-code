@@ -2,6 +2,8 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
+import { hash, render, saidOf, tune } from '../ganglia/native';
+import { LAWS } from '../ganglia/laws';
 import { ruleExpander } from '../ganglia/substrate';
 import type { Entity } from '../ganglia/substrate/model';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
@@ -229,6 +231,22 @@ export function answerTraversal(i: Traverse): string {
     if (!m.function) return `I know no function for "${i.of}".`;
     if (!m.mechanisms.length) return `Nothing I know does ${nameOf(m.function)} yet.`;
     return `${m.mechanisms.length} mechanisms ${nameOf(m.function)}: ${list(m.mechanisms.map((f) => nameOf(f.entity)), 16)}.${object ? ` Which of them ${nameOf(m.function)} ${object} I have not been told: no arrow of mine says what a mechanism works on.` : ''}`;
+  }
+  if (i.query === 'native') {
+    // what she holds of a thing in Nex: its structures, each rendered into English with what the rendering lost
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const laws = new Map(LAWS.map((l) => [l.id, l]));
+    const said = saidOf(s, e.id, laws);
+    if (!said.length) return `In Nex I hold nothing of ${art(e)} yet: a distinction with no relation, which is a question on my queue.`;
+    // the faces first: what it does and is, what lowers it, what law binds it; then the rest, a few of each
+    const picked = [...tune(said, 'structure').slice(0, 2), ...said.filter((x) => x.k === 'R' && x.op === 'function').slice(0, 2), ...tune(said, 'failure').slice(0, 2), ...said.filter((x) => x.k === 'R' && x.op === 'constrain').slice(0, 2)];
+    const unique = [...new Map(picked.map((x) => [hash(x), x])).values()].slice(0, 6);
+    const outs = unique.map((x) => render(x, 'en', 'engineer'));
+    const present = outs.reduce((n, o) => n + o.present.length, 0), dropped = outs.reduce((n, o) => n + o.dropped.length, 0);
+    const kinds = [...new Set(outs.flatMap((o) => o.dropped.map((p) => p.replace(/^\$(\[\d+\]|\.[a-z]+\[\d+\])*\.?/, '').split('.')[0] ?? p)))].filter(Boolean);
+    const weakest = outs.map((o) => o.rank).filter((x): x is NonNullable<typeof x> => !!x).sort()[0];
+    return `In Nex I hold ${art(e)} as ${said.length} structures, hashed and compared without a word in them; ${unique.length} of them in English: ${outs.map((o) => o.text).join(' ')} English carried ${present - dropped} of ${present} pieces of those structures${kinds.length ? ` and lost ${kinds.join(', ')}` : ''}${weakest ? `; the weakest evidence among them is ${weakest}` : ''}. Their hashes: ${unique.map((x) => `#${hash(x).slice(0, 8)}`).join(', ')}.`;
   }
   if (i.query === 'kinds') {
     const e = find(i.of ?? '');

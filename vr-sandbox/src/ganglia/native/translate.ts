@@ -25,7 +25,7 @@ export interface Rendering {
 const UNIT_OF_DIM: [string, number[]][] = [
   ['m', [0, 1, 0, 0, 0]], ['kg', [1, 0, 0, 0, 0]], ['s', [0, 0, 1, 0, 0]], ['A', [0, 0, 0, 1, 0]], ['K', [0, 0, 0, 0, 1]],
   ['N', [1, 1, -2, 0, 0]], ['J', [1, 2, -2, 0, 0]], ['W', [1, 2, -3, 0, 0]], ['Pa', [1, -1, -2, 0, 0]], ['m/s', [0, 1, -1, 0, 0]], ['m/s^2', [0, 1, -2, 0, 0]],
-  ['kg/m^3', [1, -3, 0, 0, 0]], ['N m', [1, 2, -2, 0, 0]], ['V', [1, 2, -3, -1, 0]], ['Hz', [0, 0, -1, 0, 0]], ['', [0, 0, 0, 0, 0]],
+  ['kg/m^3', [1, -3, 0, 0, 0]], ['N m', [1, 2, -2, 0, 0]], ['V', [1, 2, -3, -1, 0]], ['Hz', [0, 0, -1, 0, 0]], ['T', [1, 0, -2, -1, 0]], ['N m/A', [1, 2, -2, -1, 0]], ['W/m K', [1, 1, -3, 0, -1]], ['J/kg K', [0, 2, -2, 0, -1]], ['C', [0, 0, 1, 1, 0]], ['Ω', [1, 2, -3, -2, 0]], ['', [0, 0, 0, 0, 0]],
 ];
 export const unitOf = (dim: number[]): string => UNIT_OF_DIM.find(([, dd]) => dd.every((v, i) => v === dim[i]))?.[0] ?? `[${dim.join(' ')}]`;
 
@@ -60,7 +60,9 @@ function word(x: D, lang: Lang, coined: string[]): string {
 }
 
 const num = (v: number): string => (Number.isInteger(v) ? String(v) : Number(v.toPrecision(3)).toString());
-export const sayQ = (x: Q): string => `${num(x.v)}${unitOf(x.dim) ? ` ${unitOf(x.dim)}` : ''}`;
+/** The unit a quantity was given, else the SI unit of its dimension. */
+export const unitSaid = (x: Q): string => x.unit ?? unitOf(x.dim);
+export const sayQ = (x: Q): string => `${num(x.v)}${unitSaid(x) ? ` ${unitSaid(x)}` : ''}`;
 
 function certWord(c: Coords['cert'], lang: Lang, audience: Audience): string {
   if (!c) return '';
@@ -166,7 +168,18 @@ export function render(s: Structure, lang: Lang = 'en', audience: Audience = 'en
           case 'same': return join(W.same);
           case 'approximate': return join(W.approx);
           case 'differ': return join(W.differ);
-          case 'function': return join(W.does);
+          case 'function': {
+            // a law of the book: its formula over its named quantities, not a verb
+            const law = x.args[0], ins = x.args[1], out = x.args[2];
+            if (law?.k === 'D' && law.aliases?.['formula'] && ins?.k === 'R' && ins.op === 'state') {
+              const name = (y: Structure) => (y.k === 'R' && y.op === 'quantity' && y.args[0]?.k === 'D' ? `${word(y.args[0], lang, coined)}${y.args[1]?.k === 'Q' && unitSaid(y.args[1]) ? ` (${unitSaid(y.args[1])})` : ''}` : '');
+              for (const [k, y] of ins.args.entries()) { note(`${path}[1][${k}]`, true); if (y.k === 'R') { note(`${path}[1][${k}][0]`, true); note(`${path}[1][${k}][1]`, true); } }
+              if (out?.k === 'R') { note(`${path}[2]`, true); note(`${path}[2][0]`, true); note(`${path}[2][1]`, true); }
+              note(`${path}[1]`, true);
+              return [...parts.before.filter(Boolean), `${word(law, lang, coined)}: ${law.aliases['formula']}, ${out ? name(out) : ''} ${W.of} ${ins.args.map(name).filter(Boolean).join(`, ${W.and} `)}`, ...parts.after].join(' ').replace(/\s+/g, ' ').trim();
+            }
+            return join(W.does);
+          }
           case 'constrain': return join(W.must);
           case 'invariant': return join(W.invariant);
           case 'compare': return join(W.greater);
