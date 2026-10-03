@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, d, decompose, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { askable, chain, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -376,6 +376,30 @@ export function answerTraversal(i: Traverse): string {
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
+  }
+  if (i.query === 'edge') {
+    // the edge of a law's domain along one input (docs/NEX-SPACE.md): the family the law generates along that input,
+    // walked up from the worked example until the law stops applying, then bisected to a millionth; nothing stored
+    const w = (i.of ?? '').toLowerCase().replace(/^(?:an? |the )/, '').replace(/['’]?s law$/, '').replace(/ law$/, '').trim();
+    const law = LAWS.find((l) => l.id === w || l.name.toLowerCase() === w) ?? LAWS.find((l) => l.name.toLowerCase().includes(w) || l.id.includes(w.replace(/\s+/g, '.')));
+    if (!law) return `I know no law called ${i.of}.`;
+    const want = (i.which ?? '').toLowerCase().replace(/^(?:an? |the )/, '');
+    // the input the word names is the one whose head noun it is (the equivalent dynamic load, not the load rating), as in a cause by law
+    const headOf = (name: string) => name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, '').split(/\W+/).filter(Boolean).pop() ?? '';
+    const inp = law.inputs.find((x) => x.name.toLowerCase() === want || x.sym.toLowerCase() === want) ?? law.inputs.find((x) => headOf(x.name) === want.split(' ').pop()) ?? law.inputs.find((x) => x.name.toLowerCase().includes(want));
+    if (!inp) return `${law.name} has no input called ${i.which}: its inputs are ${law.inputs.map((x) => `${x.name} (${x.sym})`).join(', ')}.`;
+    if (!law.outside) return `${law.name} (${law.formula}) declares no edge along ${inp.name}: its domain is said only in words ("${law.valid}"), so I cannot find where it stops by computing.`;
+    const held = { ...law.example.inputs }; const x0 = held[inp.sym]!; delete held[inp.sym];
+    const fam = family(law, inp.sym, held);
+    if (!fam.admissible(x0).ok) return `${law.name} is already outside its domain at its worked example along ${inp.name}; I cannot walk from there.`;
+    // walk up by doubling until the law stops, then bisect; if it never stops within 2^30 of the example, say so
+    let hi = x0, k = 0; while (fam.admissible(hi).ok && k < 30) { hi *= 2; k++; }
+    const up = fam.admissible(hi).ok ? null : fam.edge(x0, hi);
+    let lo = x0; k = 0; while (fam.admissible(lo).ok && k < 30 && lo > 0) { lo /= 2; k++; }
+    const down = fam.admissible(lo).ok ? null : fam.edge(x0, lo);
+    const say = (e: NonNullable<typeof up>, dir: string) => `${dir} at ${inp.name} (${inp.sym}) = ${Number(e.at.toPrecision(4))} ${inp.unit}: ${e.why} (found in ${e.evaluations} evaluations to a millionth, with the other inputs at the worked example)`;
+    if (!up && !down) return `${law.name} (${law.formula}) does not stop applying along ${inp.name} anywhere within a factor of 2^30 of its worked example, up or down: its edge, if any, is elsewhere.`;
+    return `${law.name} (${law.formula}) stops applying ${[up ? say(up, 'going up') : '', down ? say(down, 'going down') : ''].filter(Boolean).join('; and ')}. Between the example and that edge the law generates every value on demand; none is stored. In Nex at the edge: ${nex(fam.at(up ? up.at : down!.at)).slice(0, 220)}`;
   }
   if (i.query === 'form') {
     // the form of a law (section R): its output's dimension and the exponents of its inputs at its worked example, from eval alone; the laws of the same form are one structure said in several theories

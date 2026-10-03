@@ -20,6 +20,11 @@ The architecture:
 Ego thinks in Nex: her structures are built, compared, chained, checked and evaluated as Nex terms, and English is made
 from them only at the moment of speaking, with a count of what the sentence failed to carry.
 
+The continuous part of Nex, where a law gives coordinates and nowhere else, is docs/NEX-SPACE.md: the audit of the
+request to make Nex a continuous space of meaning, with what was built because it gives a capability the discrete
+form could not (families along a law's inputs, lazy and adaptive; interpolation refused without a shared coordinate;
+continuous or discrete decided by evidence) and what was rejected as decoration.
+
 ## Try it
 
 In the app, ask Ego (the same answers come from `answerTraversal` in the unit tests):
@@ -39,6 +44,9 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
 - "that motor is struggling", "the bearing is noisy", "this bolt is loose": candidates from what she knows fails
   the thing (and, for a motor, from its quantities), each held as not yet measured with what would settle it, none
   chosen.
+- "how far can the load go before the rating life law stops applying", "at what friction does the traction limit
+  stop applying": the edge of a law's domain along one input, found by walking the family it generates and
+  bisecting, nothing stored (docs/NEX-SPACE.md).
 - "what laws have the same form as the energy in a spring", "which laws look like Ohm's law": the form of a law
   with every symbol gone, and the laws of other theories that share it (one structure said five ways).
 - "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known

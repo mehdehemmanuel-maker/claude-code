@@ -19,6 +19,7 @@ import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNe
 import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/ganglia/native/grammar';
 import { hear, speak } from '../../src/ganglia/native/spoken';
 import { formOf, lawForms, sameForm, sayForm } from '../../src/ganglia/native/forms';
+import { between, family, regimes, verdictStructure } from '../../src/ganglia/native/space';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -633,5 +634,72 @@ describe('Nex: the form of a law, with every symbol gone (section R at the level
     expect([...forms.values()].filter((v) => v.length > 1).length).toBeGreaterThanOrEqual(12);
     // no word enters: a law renamed keeps its form
     expect(formOf({ ...spring, id: 'x', name: 'y', formula: 'z' })!.key).toBe(f.key);
+  });
+});
+
+describe('Nex Space (docs/NEX-SPACE.md): continuous exactly where a law gives coordinates, decided by evidence elsewhere', () => {
+  const l10 = () => family(lawById('bearing.life.l10')!, 'P', { C: 14.8, p: 3 });
+  let seed = 7;
+  const rnd = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
+
+  it('a family is lazy and adaptive: the law generates each point when asked, and its edge is found by bisection to a millionth in a couple of dozen evaluations', () => {
+    const f = l10();
+    expect(f.value(1)).toBeCloseTo(3.2418e9, -5);
+    expect(f.sensitivity(2)).toBeCloseTo(-3, 2);
+    expect(f.admissible(8).ok).toBe(false);
+    const e = f.edge(1, 20)!;
+    // measured 3 October: the rating-life law stops at P/C = 0.5, P = 7.4 N, in 24 evaluations
+    expect(e.at).toBeCloseTo(7.4, 4);
+    expect(e.evaluations).toBeLessThan(40);
+    expect(e.why).toMatch(/past half the dynamic rating/);
+    expect(f.edge(1, 2)).toBeNull(); // both inside: no edge between them
+    const tr = family(lawById('traction.limit')!, 'mu', { N: 600 });
+    expect(tr.edge(0.8, 3)!.at).toBeCloseTo(1.6, 4);
+    // the structure at a point is the law's structure at that point, in mode true inside and outside-domain outside, with the reason under it
+    const inside = f.at(1), outside = f.at(8);
+    expect(inside.c.mode).toBe('true');
+    expect(outside.c.mode).toBe('outside-domain');
+    expect(outside.c.under?.[0]).toMatch(/past half/);
+    expect(hash(read(text(inside)))).toBe(hash(inside));
+  });
+
+  it('interpolation is admitted only along a shared coordinate: refused between dimensions, between two distinctions, and when more than one input differs', () => {
+    const f = l10();
+    const b = between(f.at(1), f.at(2), laws);
+    expect(b.ok && b.sym).toBe('P');
+    expect(b.ok && b.law.id).toBe('bearing.life.l10');
+    expect(between(q(100, 'J'), q(300, 'K'), laws)).toMatchObject({ ok: false, mode: 'undefined' });
+    expect(between(d('motor'), d('bearing'), laws)).toMatchObject({ ok: false, mode: 'undefined' });
+    expect(between(q(1, 'm'), q(2, 'm'), laws)).toMatchObject({ ok: false, mode: 'unknown' });
+    const g = family(lawById('bearing.life.l10')!, 'P', { C: 20, p: 3 });
+    expect(between(f.at(1), g.at(2), laws)).toMatchObject({ ok: false, mode: 'unknown' });
+    expect(between(f.at(1), f.at(1), laws)).toMatchObject({ ok: false, mode: 'unknown' });
+  });
+
+  it('continuous or discrete by evidence: three human labels on one law are one continuum; two laws under one smooth curve are two regimes with their boundary; noise is never split', () => {
+    const f = l10();
+    // the hidden continuum: rating life at loads, labelled by a human cut, 2 % noise
+    const cont = Array.from({ length: 24 }, (_, i) => { const P = 0.5 + i * 0.25; return { x: P, y: f.value(P) * (1 + 0.02 * (rnd() - 0.5)), label: P < 2 ? 'light' : P < 4.5 ? 'medium' : 'heavy' }; });
+    const v1 = regimes(cont);
+    expect(v1.regimes.length).toBe(1);
+    expect(v1.regimes[0]!.exponent).toBeCloseTo(-3, 1);
+    expect(v1.labelsAreOneContinuum).toBe(true);
+    // the hidden regimes: the pipe friction factor, 64/Re laminar below 2300 and Blasius 0.316 Re^-0.25 above, one smooth-looking curve
+    const reg = Array.from({ length: 30 }, (_, i) => { const Re = 300 * 1.2 ** i; return { x: Re, y: (Re < 2300 ? 64 / Re : 0.316 * Re ** -0.25) * (1 + 0.02 * (rnd() - 0.5)) }; });
+    const v2 = regimes(reg);
+    expect(v2.regimes.length).toBe(2);
+    expect(v2.regimes[0]!.exponent).toBeCloseTo(-1, 1);
+    expect(v2.regimes[1]!.exponent).toBeCloseTo(-0.25, 1);
+    expect(v2.boundaries[0]!).toBeGreaterThan(2229);
+    expect(v2.boundaries[0]!).toBeLessThan(2675);
+    expect(v2.length.chosen).toBeLessThan(v2.length.oneRegime);
+    // the verdict is a structure: a state of approximate power laws with the boundary under it
+    const vs = verdictStructure(v2, 'f');
+    expect(vs.k === 'R' && vs.op).toBe('state');
+    expect(vs.k === 'R' && vs.c.under?.[0]).toMatch(/^boundary at 2\.4/);
+    // noise buys no boundary, and ten per cent noise changes neither verdict
+    expect(regimes(Array.from({ length: 20 }, (_, i) => ({ x: 1 + i, y: 1 + rnd() }))).regimes.length).toBe(1);
+    expect(regimes(cont.map((p) => ({ ...p, y: p.y * (1 + 0.1 * (rnd() - 0.5)) }))).regimes.length).toBe(1);
+    expect(regimes(reg.map((p) => ({ ...p, y: p.y * (1 + 0.1 * (rnd() - 0.5)) }))).regimes.length).toBe(2);
   });
 });

@@ -1094,3 +1094,13 @@ describe('Ego on what causes a thing: its laws speak when no arrow does, and one
     expect(interpret('what is the lineage of a transistor')).toMatchObject({ do: 'traverse', query: 'lineage', of: 'transistor' });
   });
 });
+
+describe('Ego finds the edge of a law along one input (Nex Space)', () => {
+  it('"how far can the load go before the rating life law stops applying" walks the family and bisects; a law with no computed domain says so', () => {
+    expect(interpret('how far can the load go before the rating life law stops applying')).toEqual({ do: 'traverse', query: 'edge', of: 'rating life law', which: 'load' });
+    const a = answerTraversal({ do: 'traverse', query: 'edge', of: 'rating life law', which: 'load' });
+    expect(a).toMatch(/^Bearing rating life \(L10\) \(L10 = \(C \/ P\)\^p × 10⁶ rev\) stops applying going up at equivalent dynamic load \(P\) = 7\.4 N: a load past half the dynamic rating \(P\/C 0\.50\) .* \(found in \d+ evaluations to a millionth, with the other inputs at the worked example\)\. Between the example and that edge the law generates every value on demand; none is stored\. In Nex at the edge: function\(bearing\.life\.l10, /);
+    expect(answerTraversal({ do: 'traverse', query: 'edge', of: 'traction limit', which: 'friction' })).toMatch(/stops applying going up at tyre-road friction \(mu\) = 1\.6/);
+    expect(answerTraversal({ do: 'traverse', query: 'edge', of: 'kinetic energy', which: 'speed' })).toMatch(/^Kinetic energy \(E = ½ m v²\) declares no edge along speed: its domain is said only in words/);
+  });
+});
