@@ -584,6 +584,13 @@ describe('what an arrow names, the index describes (S-6)', () => {
     // and the said layer is heard: the words find the thing
     expect(findByWords(s, 'DC motor')?.id).toBe('motor.dc');
     expect(findByWords(s, 'logic gate')?.id).toBe('gate.logic');
+    // words resolve to the thing itself before anything merely indexed by the word: the bearing, not a block's
+    // region called bearings; a metal's bare name is its family, never a wire or one alloy of it
+    expect(findByWords(s, 'bearings')?.id).toBe('bearing');
+    expect(findByWords(s, 'copper')?.id).toBe('material.copper-alloy');
+    expect(findByWords(s, 'steel')?.id).toBe('material.steel');
+    expect(findByWords(s, 'aluminium')?.id).toBe('material.aluminium-alloy');
+    expect(findByWords(s, 'dc motor')?.id).toBe('motor.dc');
     // a name that carries its own article keeps it: "the mains grid", never "a the mains grid"
     expect(articled('the mains grid')).toBe('the mains grid');
     expect(articled('a person')).toBe('a person');
@@ -659,7 +666,8 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(i).toMatchObject({ do: 'traverse', query: 'function', of: 'rudder' });
     const a = answerTraversal(i as Extract<NonNullable<typeof i>, { do: 'traverse' }>);
     expect(a).toMatch(/^A rudder does one thing: steer: change the direction a vehicle moves/);
-    expect(a).toMatch(/by cornering limit|by .*limit/);
+    // the laws said are the rudder's own (lift and drag), not the function word's generic ones (a car's cornering limit)
+    expect(a).toMatch(/by Aerodynamic drag|by .*(?:drag|lift|Bernoulli)/);
     expect(interpret('what is a bearing for')).toMatchObject({ do: 'traverse', query: 'function', of: 'bearing' });
     expect(interpret('what is the function of a spring')).toMatchObject({ do: 'traverse', query: 'function', of: 'spring' });
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'wood screw' })).toMatch(/is a screw, and a screw does|does/);
@@ -782,7 +790,7 @@ describe('how a thing fails is said as mechanisms with laws', () => {
 
   it('the index of a thing says where it lives in scale and what it is like, and a structure answers to its words', () => {
     const a = answerTraversal({ do: 'traverse', query: 'index', of: 'bearing' });
-    expect(a).toMatch(/It lives at about \d\.\de-?\d+ m/);
+    expect(a).toMatch(/It lives at about \d+ (?:cm|mm|m) and about \d+ (?:ms|s)/);
     expect(a).toMatch(/Analogues: synovial joint/);
     expect(answerTraversal({ do: 'traverse', query: 'index', of: 'river basin' })).toMatch(/raindrop|drainage/);
     expect(answerTraversal({ do: 'traverse', query: 'index', of: 'market' })).toMatch(/price/);
@@ -818,5 +826,30 @@ describe('the build is stepped, so no frame pays for the whole of it', () => {
     expect(slices).toBeGreaterThan(10);
     expect(done.substrate.census().entities).toBe(s.census().entities);
     expect(advanceBuild(buildSteps(), 1e9, tick)).not.toBeNull();
+  });
+});
+
+describe('what the fifty-question probe of 3 October found, each fixed at its root', () => {
+  it('bare property questions, a melting point asked as a temperature, and the process that makes a thing are understood', () => {
+    expect(interpret('density of oak')).toMatchObject({ do: 'traverse', query: 'property', of: 'oak', which: 'density' });
+    expect(interpret('youngs modulus of pla')).toMatchObject({ do: 'traverse', query: 'property', of: 'pla', which: 'youngs modulus' });
+    expect(interpret('what temperature does pla melt at')).toMatchObject({ do: 'traverse', query: 'property', of: 'pla', which: 'melting point' });
+    expect(interpret('what process makes a bolt')).toMatchObject({ do: 'traverse', query: 'producers', of: 'bolt' });
+  });
+
+  it('a metal asked bare answers for its family with the sourced range, and a plural finds the thing', () => {
+    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'copper', which: 'density' })).toMatch(/^copper alloy: density 7400 kg\/m\^3 to 8940 kg\/m\^3 \(The Engineering ToolBox/);
+    expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'bearings' })).toMatch(/A bearing is made by/);
+    expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'bearings' })).not.toMatch(/a bearings/);
+  });
+
+  it('a material is spoken without an article, sizes in human units, and what a thing does is governed by its own laws', () => {
+    expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'pla' })).toMatch(/(^|\. )PLA is made by/);
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'heart', which: 'pump' })).toMatch(/lives at about 10 cm, a pump at about 30 cm/);
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'heart', which: 'pump' })).not.toMatch(/e-1 m/);
+    const fly = answerTraversal({ do: 'traverse', query: 'function', of: 'flywheel' });
+    expect(fly).toMatch(/store energy/);
+    expect(fly).toMatch(/by Energy a flywheel can hold per kilogram|by .*flywheel/);
+    expect(fly).not.toMatch(/Electrical energy/);
   });
 });

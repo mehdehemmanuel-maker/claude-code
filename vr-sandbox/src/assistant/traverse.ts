@@ -10,7 +10,13 @@ type Traverse = Extract<Intent, { do: 'traverse' }>;
 
 // a human name where one is given; else the id said as words, without the domain prefix an id carries for uniqueness
 const nameOf = spokenName;
-const an = articled;
+/** A thing with its article, a material without: "a bearing", "steel". */
+const art = (e: Entity): string => (e.kinds.includes('material') ? nameOf(e) : articled(nameOf(e)));
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+/** A length or a time in the unit a person reads: 0.1 m is "about 10 cm", 6e-5 s "about 60 µs". */
+const human = (x: number, units: [string, number][]) => { const [u, f] = [...units].reverse().find(([, f]) => x >= f) ?? units[0]!; const v = x / f; return `about ${Number(v.toPrecision(v >= 10 ? 2 : 1))} ${u}`; };
+const LENGTHS: [string, number][] = [['pm', 1e-12], ['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['cm', 1e-2], ['m', 1], ['km', 1e3], ['Mm', 1e6]];
+const TIMES: [string, number][] = [['ns', 1e-9], ['µs', 1e-6], ['ms', 1e-3], ['s', 1], ['min', 60], ['h', 3600], ['days', 86400], ['years', 3.156e7]];
 const list = (xs: string[], max = 12) => (xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`);
 const sci = (x: number) => x.toExponential(1).replace('e+', 'e');
 const find = (word: string) => findByWords(substrate(), word);
@@ -80,7 +86,7 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const v = variantsOf(s, e.id)!;
     const stds = s.reach(e.id, 'standardized-by'), fails = s.reach(e.id, 'fails-by');
-    return `${an(nameOf(e))[0]!.toUpperCase()}${an(nameOf(e)).slice(1)} varies by ${v.parameters.length ? v.parameters.map((p) => `${p.name}${p.values ? ` (${list(p.values, 6)})` : p.low !== undefined && p.high !== undefined ? ` (${p.low} to ${p.high}${p.unit ? ` ${p.unit}` : ''})` : ''}`).join(', ') : 'nothing I have parameters for'}; that is the manifold, and every combination is ${an(nameOf(e))}. Its named refinements: ${v.kinds.length ? list(v.kinds.map(nameOf), 14) : 'none yet'}. Standards: ${stds.length ? list(stds.map(nameOf)) : 'none'}. It fails by ${fails.length ? list(fails.map(nameOf), 8) : 'nothing I know yet'}.`;
+    return `${art(e)[0]!.toUpperCase()}${art(e).slice(1)} varies by ${v.parameters.length ? v.parameters.map((p) => `${p.name}${p.values ? ` (${list(p.values, 6)})` : p.low !== undefined && p.high !== undefined ? ` (${p.low} to ${p.high}${p.unit ? ` ${p.unit}` : ''})` : ''}`).join(', ') : 'nothing I have parameters for'}; that is the manifold, and every combination is ${art(e)}. Its named refinements: ${v.kinds.length ? list(v.kinds.map(nameOf), 14) : 'none yet'}. Standards: ${stds.length ? list(stds.map(nameOf)) : 'none'}. It fails by ${fails.length ? list(fails.map(nameOf), 8) : 'nothing I know yet'}.`;
   }
   if (i.query === 'components') {
     const e = find(i.of ?? '');
@@ -90,14 +96,14 @@ export function answerTraversal(i: Traverse): string {
     const mats = s.outOf(e.id, 'made-of').map((r) => ({ r, m: s.get(r.to)! })).filter((x) => x.m);
     const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
     const matLine = mats.length ? `${mats.some((x) => /^typically/.test(x.r.says ?? '')) ? 'It is typically made of' : 'It is made of'} ${list(mats.map((x) => nameOf(x.m)), 6)}${cite(mats[0]!.r.source)}.` : '';
-    const head = an(nameOf(e)).replace(/^a/, 'A');
+    const head = cap(art(e));
     const parts = d.children.filter((c) => !mats.some((x) => x.m.id === c.entity.id));
     if (!parts.length) {
-      if (matLine) return `I know no parts of ${an(nameOf(e))} yet. ${matLine}`;
+      if (matLine) return `I know no parts of ${art(e)} yet. ${matLine}`;
       const kindMat = s.reach(e.id, 'is-a').map((k) => ({ k, ms: s.reach(k.id, 'made-of') })).find((x) => x.ms.length);
-      if (kindMat) return `${head} is ${an(nameOf(kindMat.k))}, and ${an(nameOf(kindMat.k))} is typically made of ${list(kindMat.ms.map(nameOf), 6)}; its own material I have not been told.`;
-      if (deriveNow(e, ['materials'])) { const now = s.reach(e.id, 'made-of'); if (now.length) return `I had not been asked that. From its kind and its parts, ${an(nameOf(e))} is made of ${list(now.map(nameOf), 6)}.`; }
-      return `I have not decomposed ${an(nameOf(e))} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
+      if (kindMat) return `${head} is ${art(kindMat.k)}, and ${art(kindMat.k)} is typically made of ${list(kindMat.ms.map(nameOf), 6)}; its own material I have not been told.`;
+      if (deriveNow(e, ['materials'])) { const now = s.reach(e.id, 'made-of'); if (now.length) return `I had not been asked that. From its kind and its parts, ${art(e)} is made of ${list(now.map(nameOf), 6)}.`; }
+      return `I have not decomposed ${art(e)} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
     }
     const leaves = leavesOf(d);
     const n = leaves.length;
@@ -107,12 +113,9 @@ export function answerTraversal(i: Traverse): string {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const L = e.params?.find((p) => p.sym === 'L_c')?.low, T = e.params?.find((p) => p.sym === 'T_c')?.low;
-    if (L === undefined && T === undefined) return `I have no size or time for ${an(nameOf(e))} yet: that is a question on my queue.`;
-    const tell = (x: number, units: [string, number][]) => { const [u, f] = [...units].reverse().find(([, f]) => x >= f) ?? units[0]!; const v = x / f; return `about ${Number(v.toPrecision(v >= 10 ? 2 : 1))} ${u}`; };
-    const LENGTHS: [string, number][] = [['pm', 1e-12], ['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['cm', 1e-2], ['m', 1], ['km', 1e3], ['Mm', 1e6]];
-    const TIMES: [string, number][] = [['ns', 1e-9], ['µs', 1e-6], ['ms', 1e-3], ['s', 1], ['min', 60], ['h', 3600], ['days', 86400], ['years', 3.156e7]];
-    const size = L !== undefined ? `${an(nameOf(e)).replace(/^a/, 'A')} is ${tell(L, LENGTHS)} across` : `${an(nameOf(e)).replace(/^a/, 'A')} has no size I know`;
-    const time = T !== undefined ? `${L !== undefined ? ' and' : ''} works on a timescale of ${tell(T, TIMES)}` : '';
+    if (L === undefined && T === undefined) return `I have no size or time for ${art(e)} yet: that is a question on my queue.`;
+    const size = L !== undefined ? `${cap(art(e))} is ${human(L, LENGTHS)} across` : `${cap(art(e))} has no size I know`;
+    const time = T !== undefined ? `${L !== undefined ? ' and' : ''} works on a timescale of ${human(T, TIMES)}` : '';
     // its neighbours on the ladder: things of about that size, within a quarter of a decade
     const near = L !== undefined ? [...s.entities.values()].filter((x) => x.id !== e.id && !x.kinds.includes('scale') && !x.kinds.includes('observer') && !/^(view|cross|fn|role|param|law)\./.test(x.id)).map((x) => ({ x, l: x.params?.find((p) => p.sym === 'L_c')?.low })).filter((y): y is { x: Entity; l: number } => y.l !== undefined && Math.abs(Math.log10(y.l / L)) <= 0.25).sort((p, q) => Math.abs(Math.log10(p.l / L)) - Math.abs(Math.log10(q.l / L))).slice(0, 4) : [];
     const beside = near.length ? ` Beside it at that size: ${list(near.map((y) => nameOf(y.x)), 4)}.` : '';
@@ -122,10 +125,8 @@ export function answerTraversal(i: Traverse): string {
     const a = find(i.of ?? ''), b = find(i.which ?? '');
     if (!a) return unknown(i.of ?? '');
     if (!b) return unknown(i.which ?? '');
-    if (a.id === b.id) return `${an(nameOf(a)).replace(/^a/, 'A')} and ${an(nameOf(b))} are the same thing to me: ${nameOf(a)}.`;
+    if (a.id === b.id) return `${cap(art(a))} and ${art(b)} are the same thing to me: ${nameOf(a)}.`;
     // a material is said bare ("steel"), a part with its article ("a bolt")
-    const art = (e: typeof a) => (e.kinds.includes('material') ? nameOf(e) : an(nameOf(e)));
-    const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
     // what a thing does includes what its kinds do: a bolt clamps as a screw does
     const ids = (e: typeof a, kind: 'is-a' | 'made-of' | 'fails-by') => s.reach(e.id, kind).map((x) => x.id);
     const does = (e: typeof a) => [...new Set([...s.reach(e.id, 'does'), ...s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'does'))].map((x) => x.id))];
@@ -145,7 +146,7 @@ export function answerTraversal(i: Traverse): string {
     const ma = ids(a, 'made-of'), mb = ids(b, 'made-of');
     if (ma.length && mb.length && (only(ma, mb).length || only(mb, ma).length)) parts.push(`${art(a)} is made of ${names(ma)}, ${art(b)} of ${names(mb)}`);
     const La = a.params?.find((p) => p.sym === 'L_c')?.low, Lb = b.params?.find((p) => p.sym === 'L_c')?.low;
-    if (La !== undefined && Lb !== undefined && La !== Lb) parts.push(`${art(a)} lives at about ${sci(La)} m, ${art(b)} at ${sci(Lb)} m`);
+    if (La !== undefined && Lb !== undefined && La !== Lb) parts.push(`${art(a)} lives at ${human(La, LENGTHS)}, ${art(b)} at ${human(Lb, LENGTHS)}`);
     const xa = only(ids(a, 'fails-by'), ids(b, 'fails-by')), xb = only(ids(b, 'fails-by'), ids(a, 'fails-by'));
     if (xa.length || xb.length) parts.push(`${xa.length ? `${art(a)} alone fails by ${names(xa)}` : ''}${xa.length && xb.length ? '; ' : ''}${xb.length ? `${art(b)} alone fails by ${names(xb)}` : ''}`);
     const tell = parts.length ? parts.map(cap).join('. ') + '.' : 'I know nothing they share and nothing that parts them yet.';
@@ -155,12 +156,12 @@ export function answerTraversal(i: Traverse): string {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
-    const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^(?:To [a-z -]+|[a-z -]+ \(function\)): /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const laws = s.reach(fn.id, 'governed-by').map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
+    const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^(?:To [a-z -]+|[a-z -]+ \(function\)): /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const fnLaws = s.reach(fn.id, 'governed-by'), ownLaws = s.reach(e.id, 'governed-by'), shared = fnLaws.filter((l) => ownLaws.some((o) => o.id === l.id)); const laws = (shared.length ? shared : ownLaws.length ? ownLaws.slice(0, 2) : fnLaws).map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
     const own = s.outOf(e.id, 'does').map((r) => ({ r, fn: s.get(r.to)! })).filter((x) => x.fn);
-    if (own.length) return `${an(nameOf(e)).replace(/^a/, 'A')} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.`;
+    if (own.length) return `${cap(art(e))} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.`;
     const kind = s.reach(e.id, 'is-a').map((k) => ({ k, fns: s.reach(k.id, 'does') })).find((x) => x.fns.length);
-    if (kind) return `${an(nameOf(e)).replace(/^a/, 'A')} is ${an(nameOf(kind.k))}, and ${an(nameOf(kind.k))} does ${kind.fns.map(tell).join('; ')}.`;
-    return `I know no function of ${an(nameOf(e))} yet: that is a question on my queue.`;
+    if (kind) return `${cap(art(e))} is ${art(kind.k)}, and ${art(kind.k)} does ${kind.fns.map(tell).join('; ')}.`;
+    return `I know no function of ${art(e)} yet: that is a question on my queue.`;
   }
   if (i.query === 'producers' || i.query === 'producers-of-producers') {
     const e = find(i.of ?? '');
@@ -170,12 +171,12 @@ export function answerTraversal(i: Traverse): string {
     // not asked yet: what works its material makes it, what makes its kind or its whole makes it, a living part is made by development
     const derivedNow = !first?.by.length && deriveNow(e, ['manufacturing', 'constructors']);
     if (derivedNow) { p = producers(s, e.id, i.query === 'producers' ? 2 : 4); first = p.steps[0]; }
-    if (!first?.by.length) return `I know nothing that makes ${an(nameOf(e))}: that is a question on my queue.`;
+    if (!first?.by.length) return `I know nothing that makes ${art(e)}: that is a question on my queue.`;
     const machines = p.steps.filter((x) => x.depth === 1 && x.by.length);
     const deeper = p.steps.filter((x) => x.depth >= 2 && x.by.length);
     const needs = machines.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k);
     const why = derivedNow ? ` (${list(s.outOf(e.id, 'produced-by').map((r) => spoken(r.says ?? '')).filter((x, k, a) => x && a.indexOf(x) === k), 3)})` : '';
-    const head = `${derivedNow ? 'I had not been asked that. ' : ''}${an(nameOf(e)).replace(/^a/, 'A')} is made by ${list(first.by.map(nameOf))}${why}.${needs.length ? ` Those need ${list(needs, 12)}.` : ''}`;
+    const head = `${derivedNow ? 'I had not been asked that. ' : ''}${cap(art(e))} is made by ${list(first.by.map(nameOf))}${why}.${needs.length ? ` Those need ${list(needs, 12)}.` : ''}`;
     if (i.query === 'producers') return head;
     return `${head} And those machines are made by ${list(deeper.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k), 14)}${p.cycle.length ? `, which closes on itself: ${p.cycle.map((c) => nameOf(s.get(c)!)).join(', ')} make each other, the machine that makes machines` : ''}.`;
   }
@@ -184,9 +185,9 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const living = i.which === 'living';
     const a = analogues(s, e.id, living ? 'biology' : undefined);
-    if (!a.length) return `I know no ${living ? 'living ' : ''}analogue of ${an(nameOf(e))} yet.`;
+    if (!a.length) return `I know no ${living ? 'living ' : ''}analogue of ${art(e)} yet.`;
     const said = a.filter((x) => !x.why.startsWith('both do')), rest = a.filter((x) => x.why.startsWith('both do'));
-    return `${living ? 'Living analogues' : 'Analogues'} of ${an(nameOf(e))}: ${[...said, ...rest].slice(0, 8).map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}${a.length > 8 ? `; and ${a.length - 8} more` : ''}.`;
+    return `${living ? 'Living analogues' : 'Analogues'} of ${art(e)}: ${[...said, ...rest].slice(0, 8).map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}${a.length > 8 ? `; and ${a.length - 8} more` : ''}.`;
   }
   if (i.query === 'dual-role') {
     const d = dualRole(s, i.of ?? 'bio.human', 'view.mechanical', 'view.anatomical');
@@ -196,8 +197,8 @@ export function answerTraversal(i: Traverse): string {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const l = lineageOf(s, e.id);
-    if (l.length < 2) return `I have no lineage for ${an(nameOf(e))} yet.`;
-    return `${an(nameOf(e)).replace(/^a/, 'A')}, generatively: ${l.map(nameOf).join(' → ')}. ${l[0]!.id.startsWith('phys.') ? 'That reaches the physical primitives.' : `That stops at ${nameOf(l[0]!)}: what it is made of is a question on my queue.`}`;
+    if (l.length < 2) return `I have no lineage for ${art(e)} yet.`;
+    return `${cap(art(e))}, generatively: ${l.map(nameOf).join(' → ')}. ${l[0]!.id.startsWith('phys.') ? 'That reaches the physical primitives.' : `That stops at ${nameOf(l[0]!)}: what it is made of is a question on my queue.`}`;
   }
   if (i.query === 'mechanisms-for') {
     const m = mechanismsFor(s, i.of ?? '');
@@ -210,7 +211,7 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const cp = constructionPath(s, e.id, 3);
     const make = cp.steps.filter((x) => x.need === 'make'), acquire = cp.steps.filter((x) => x.need === 'acquire');
-    return `To build ${an(nameOf(e))}: make ${list(make.map((x) => `${nameOf(x.entity)}${x.by.length ? ` by ${list(x.by.map(nameOf), 3)}` : ''}`), 10)}; acquire ${list(acquire.map((x) => nameOf(x.entity)), 10)}. ${cp.gaps.length ? `Gaps, where I know no way yet: ${list(cp.gaps.map(nameOf), 10)}.` : 'No gaps.'}`;
+    return `To build ${art(e)}: make ${list(make.map((x) => `${nameOf(x.entity)}${x.by.length ? ` by ${list(x.by.map(nameOf), 3)}` : ''}`), 10)}; acquire ${list(acquire.map((x) => nameOf(x.entity)), 10)}. ${cp.gaps.length ? `Gaps, where I know no way yet: ${list(cp.gaps.map(nameOf), 10)}.` : 'No gaps.'}`;
   }
   if (i.query === 'property') {
     const e = find(i.of ?? '');
@@ -229,8 +230,8 @@ export function answerTraversal(i: Traverse): string {
     const lines: string[] = [];
     const say = (owner: E, how: string) => { for (const p of (owner.params ?? []).filter((p) => want.syms.includes(p.sym) || want.names.test(p.name))) lines.push(`${how}${p.name} ${range(p)} (${from(p.of)})`); };
     say(e, '');
-    for (const k of s.reach(e.id, 'is-a')) say(k, `as ${an(nameOf(k))}: `);
-    if (!lines.length) return `I have no ${want.label} for ${an(nameOf(e))}: that is a question on my queue.`;
+    for (const k of s.reach(e.id, 'is-a')) say(k, `as ${articled(nameOf(k))}: `);
+    if (!lines.length) return `I have no ${want.label} for ${art(e)}: that is a question on my queue.`;
     return `${nameOf(e)}: ${lines.join('; ')}.`;
   }
   if (i.query === 'failures') {
@@ -239,29 +240,29 @@ export function answerTraversal(i: Traverse): string {
     type E = NonNullable<ReturnType<typeof find>>;
     const own = s.reach(e.id, 'fails-by');
     const seen = new Set(own.map((f) => f.id));
-    const viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'fails-by').map((f) => ({ f, via: `as ${an(nameOf(k))} does` })));
+    const viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'fails-by').map((f) => ({ f, via: `as ${art(k)} does` })));
     const viaMaterial = s.reach(e.id, 'made-of').flatMap((m) => s.reach(m.id, 'fails-by').map((f) => ({ f, via: `as ${nameOf(m)} does` })));
     let inherited = [...viaKind, ...viaMaterial].filter((x) => !seen.has(x.f.id) && !!seen.add(x.f.id));
     // not asked yet: derive it now by the same rules the queue runs (what it is made of, what it does, whether it lives), and say so
     const derivedNow = !own.length && !inherited.length && deriveNow(e, ['failures']);
     if (derivedNow) { own.push(...s.reach(e.id, 'fails-by').filter((f) => !seen.has(f.id) && !!seen.add(f.id))); inherited = []; }
-    if (!own.length && !inherited.length) return `I know no failure mode of ${an(nameOf(e))} yet: that is a question on my queue.`;
+    if (!own.length && !inherited.length) return `I know no failure mode of ${art(e)} yet: that is a question on my queue.`;
     // the mechanism is the failure's first clause; the law behind it is what it is governed by
     const mech = (f: E) => { const laws = s.reach(f.id, 'governed-by').map(nameOf); const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); return `${nameOf(f)}, ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? ` (${list(laws, 3)})` : ''}`; };
     const how = (f: E) => spoken(s.relations.find((r) => r.from === e.id && r.kind === 'fails-by' && r.to === f.id)?.says ?? '');
-    if (derivedNow) return `I had not been asked that. From what ${an(nameOf(e))} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.`;
-    return `${an(nameOf(e)).replace(/^a/, 'A')} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
+    if (derivedNow) return `I had not been asked that. From what ${art(e)} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.`;
+    return `${cap(art(e))} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
   }
   const e = find(i.of ?? '');
   if (!e) return unknown(i.of ?? '');
   const ix = indexOf(s, e.id)!;
   const cov = e.coverage;
   const L = e.params?.find((p) => p.sym === 'L_c')?.low, T = e.params?.find((p) => p.sym === 'T_c')?.low;
-  const scaleLine = L !== undefined ? ` It lives at about ${sci(L)} m${T !== undefined ? ` and ${sci(T)} s` : ''}.` : '';
+  const scaleLine = L !== undefined ? ` It lives at ${human(L, LENGTHS)}${T !== undefined ? ` and ${human(T, TIMES)}` : ''}.` : '';
   const all = analogues(s, e.id), said = all.filter((x) => !x.why.startsWith('both do'));
   const ana = (said.length ? said : all).slice(0, 4);
   const far = findScaleAnalogues(s, e.id, { limit: 3 })?.analogues ?? [];
   const anaLine = ana.length ? ` Analogues: ${ana.map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}.` : '';
-  const farLine = far.length ? ` At other scales it looks like ${far.map((x) => `${nameOf(x.entity)} (${sci(x.length)} m, ${x.decades.toFixed(0)} decades away)`).join('; ')}.` : '';
+  const farLine = far.length ? ` At other scales it looks like ${far.map((x) => `${nameOf(x.entity)} (${human(x.length, LENGTHS)}, ${x.decades.toFixed(0)} decades away)`).join('; ')}.` : '';
   return `${nameOf(e)}: ${e.says}${scaleLine} ${ix.answers.map((a) => `${a.backwards ? `is ${a.kind} of` : a.kind}: ${list(a.entities.map(nameOf), 6)}`).join('; ')}.${anaLine}${farLine} Known to depth ${cov.depth} at confidence ${cov.confidence.toFixed(2)} from ${cov.sourceKind}${cov.unknowns.length ? `; unknown: ${cov.unknowns.join('; ')}` : ''}.`;
 }
