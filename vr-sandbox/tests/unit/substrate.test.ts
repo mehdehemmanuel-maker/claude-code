@@ -941,3 +941,27 @@ describe('the quantities themselves are things, told apart by dimension (the con
     expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'torque', which: 'energy' })).toMatch(/counted in the same unit/);
   });
 });
+
+describe('Ego answers whether one thing causes another by a chain of influences in Nex, and never from a correlation', () => {
+  it('the forms are understood', () => {
+    expect(interpret('does zinc plating prevent corrosion')).toMatchObject({ do: 'traverse', query: 'cause', of: 'zinc plating', which: 'corrosion' });
+    expect(interpret('can redox cause combustion?')).toMatchObject({ do: 'traverse', query: 'cause', of: 'redox', which: 'combustion' });
+    expect(interpret('is corrosion caused by zinc plating')).toMatchObject({ do: 'traverse', query: 'cause', of: 'zinc plating', which: 'corrosion' });
+    expect(interpret('what causes corrosion')).toMatchObject({ do: 'traverse', query: 'cause', of: 'corrosion' });
+  });
+
+  it('a one-step influence, a two-step chain with its strength and evidence composed, none at all, and what influences a thing', () => {
+    const zinc = answerTraversal({ do: 'traverse', query: 'cause', of: 'process.plating.zinc', which: 'chem.corrosion' });
+    expect(zinc).toMatch(/contributes to \(lowers\) corrosion/);
+    expect(zinc).toMatch(/The weakest evidence in that is (derived|calibrated|measured|estimated)/);
+    const two = answerTraversal({ do: 'traverse', query: 'cause', of: 'chem.redox', which: 'machine.furnace' });
+    expect(two).toMatch(/^Probably/);
+    expect(two).toMatch(/By way of combustion/);
+    const none = answerTraversal({ do: 'traverse', query: 'cause', of: 'bearing', which: 'kidney' });
+    expect(none).toMatch(/^I know no mechanism by which a bearing causes a kidney/);
+    expect(none).toMatch(/a correlation, which I hold as support, never as a cause/);
+    const into = answerTraversal({ do: 'traverse', query: 'cause', of: 'chem.corrosion' });
+    expect(into).toMatch(/^\d+ influences on (a )?corrosion that I know of: /);
+    expect(into).toMatch(/lowers\) corrosion/);
+  });
+});

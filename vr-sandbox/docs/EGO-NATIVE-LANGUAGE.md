@@ -308,8 +308,18 @@ What `tests/unit/native.test.ts` holds, and will hold as the language grows:
 12. **Nex against English.** Five confusions English invites (heat / temperature, weight / mass, speed / velocity,
     energy / power, correlation / causation): a word-overlap judge calls four of the five pairs the same statement;
     Nex calls none the same, finds two ill-formed, and refuses to chain a correlation as a cause. English errors 4,
-    Nex errors 0, on this set. The set must grow with every confusion found, and the baseline must become Ego's own
-    English path, not a word judge, before the criterion is claimed met.
+    Nex errors 0, on this set.
+
+    Then Ego's own English path was asked the same five (3 October, 15:00 UTC), before and after it was given Nex's
+    rule. Before: "compare heat and temperature" answered about a *temperature sensor*; "compare weight and mass",
+    "speed and velocity", "energy and power" answered "I know no mass / speed / energy as such" and offered laws
+    whose names contain the word; "power" resolved to a battery; "does ice cream cause drowning" was not understood
+    at all: four of five wrong, one unanswered. After: the quantities themselves are things with their dimensions
+    (seeds/quantities.ts), the comparison tells two quantities apart by dimension before any word (the Nex rule that
+    a comparison across dimensions is undefined), and a cause question is answered by a chain of influences composed
+    in Nex (strength, certainty, evidence, delay), or by "no mechanism" with the note that a correlation is held as
+    support, never as a cause: five of five right. The improvement came from adopting Nex's structure in the English
+    path, which is the thesis; the set must grow with every confusion found.
 
 The main criterion, fewer reasoning errors on harder problems, is not met by this file; it is measurable by it. The
 next measurement is the challenge engine's problems (docs/CHALLENGES.md) run both ways.

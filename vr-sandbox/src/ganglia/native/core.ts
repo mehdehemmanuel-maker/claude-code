@@ -317,8 +317,9 @@ export function chain(ab: R, bc: R): R | null {
   if (ab.op !== 'influence' || bc.op !== 'influence') return null;
   const [a, b1] = ab.args, [b2, c] = bc.args;
   if (!a || !b1 || !b2 || !c || hash(b1) !== hash(b2)) return null;
-  const s1 = typeof ab.c.strength === 'number' ? ab.c.strength : 1, s2 = typeof bc.c.strength === 'number' ? bc.c.strength : 1;
-  const out: Coords = { dir: 1, strength: s1 * s2 };
+  // strengths multiply where both are known; one unknown leaves the chain's unknown (not modelled, never a default)
+  const out: Coords = { dir: 1 };
+  if (typeof ab.c.strength === 'number' && typeof bc.c.strength === 'number') out.strength = ab.c.strength * bc.c.strength;
   if (ab.c.polarity && bc.c.polarity) out.polarity = ab.c.polarity === bc.c.polarity ? '+' : '-';
   const lo = Math.min(ab.c.cert?.lo ?? 1, bc.c.cert?.lo ?? 1), hi = Math.min(ab.c.cert?.hi ?? 1, bc.c.cert?.hi ?? 1);
   if (ab.c.cert || bc.c.cert) out.cert = { kind: 'interval', lo, hi, source: 'epistemic' };

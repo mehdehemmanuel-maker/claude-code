@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { hash, render, saidOf, tune } from '../ganglia/native';
+import { chain, fromRelation, hash, render, saidOf, tune, type R } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -242,6 +242,37 @@ export function answerTraversal(i: Traverse): string {
     if (!m.function) return `I know no function for "${i.of}".`;
     if (!m.mechanisms.length) return `Nothing I know does ${nameOf(m.function)} yet.`;
     return `${m.mechanisms.length} mechanisms ${nameOf(m.function)}: ${list(m.mechanisms.map((f) => nameOf(f.entity)), 16)}.${object ? ` Which of them ${nameOf(m.function)} ${object} I have not been told: no arrow of mine says what a mechanism works on.` : ''}`;
+  }
+  if (i.query === 'cause') {
+    // the arrows that carry influence: X enables Y (+), X prevents Y (−), Y requires X (X necessary for Y), Y fails by X (X lowers Y)
+    const a = find(i.of ?? '');
+    if (!a) return unknown(i.of ?? '');
+    const influences = (id: string): R[] => [...s.outOf(id, 'enables'), ...s.outOf(id, 'prevents'), ...s.into(id, 'requires'), ...s.into(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[0]?.k === 'D' && x.args[0].id === id);
+    const intoOf = (id: string): R[] => [...s.into(id, 'enables'), ...s.into(id, 'prevents'), ...s.outOf(id, 'requires'), ...s.outOf(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[1]?.k === 'D' && x.args[1].id === id);
+    const correlation = 'Two things rising together would be a correlation, which I hold as support, never as a cause.';
+    if (!i.which) {
+      const ins = intoOf(a.id);
+      if (!ins.length) return `I know no mechanism that causes ${art(a)}: no arrow of mine runs into it. ${correlation}`;
+      const outs = ins.slice(0, 6).map((x) => render(x, 'en', 'engineer'));
+      return `${ins.length} influence${ins.length === 1 ? '' : 's'} on ${art(a)} that I know of: ${outs.map((o) => o.text).join(' ')}${ins.length > 6 ? ` And ${ins.length - 6} more.` : ''}`;
+    }
+    const b = find(i.which);
+    if (!b) return unknown(i.which);
+    // the shortest chain of influences from a to b, three steps at most
+    const prev = new Map<string, { from: string; via: R } | null>([[a.id, null]]);
+    let frontier = [a.id], found = a.id === b.id;
+    for (let depth = 0; depth < 3 && !found && frontier.length; depth++) {
+      const next: string[] = [];
+      for (const id of frontier) for (const x of influences(id)) { const to = (x.args[1] as { id: string }).id; if (prev.has(to)) continue; prev.set(to, { from: id, via: x }); next.push(to); if (to === b.id) { found = true; break; } }
+      frontier = next;
+    }
+    if (!found) return `I know no mechanism by which ${art(a)} causes ${art(b)}: no arrow of mine runs from one to the other within three steps. ${correlation}`;
+    const path: R[] = [];
+    for (let id = b.id; prev.get(id); id = prev.get(id)!.from) path.unshift(prev.get(id)!.via);
+    const whole = path.length === 1 ? path[0]! : path.slice(1).reduce((acc, x) => chain(acc, x) ?? acc, path[0]!);
+    const out = render(whole, 'en', 'engineer');
+    const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
+    return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''}`;
   }
   if (i.query === 'native') {
     // what she holds of a thing in Nex: its structures, each rendered into English with what the rendering lost
