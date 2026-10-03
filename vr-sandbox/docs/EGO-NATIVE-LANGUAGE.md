@@ -555,12 +555,12 @@ beyond a law's formula, diagrams, animation, VR demonstration, sound and touch (
 with a contract beyond the form of a law (R); the rest of Ego's answers moved onto Nex structures (X), and the
 English-versus-Nex error count taken on her real questions once they are.
 
-Status at 17:45 UTC, 3 October: sections A to Z written, with docs/NEX-SPACE.md (the continuous part, under audit),
+Status at 18:20 UTC, 3 October: sections A to Z written, with docs/NEX-SPACE.md (the continuous part, under audit),
 docs/NEX-DISCOVERY.md (evidence, not scripture: the certificate, the epistemic vector, the anomalies, a second audit
 in part 2) and docs/NEX-AUDIT.md (ten questions answered from the code); thirteen modules under
-`src/ganglia/native/`; 44 tests in `tests/unit/native.test.ts` and the Nex questions' tests in
-`tests/unit/substrate.test.ts` holding what the documents claim; five in-app asks in `tests/e2e/ego.spec.ts`; every
-number in these documents measured by a test on the day. Bugs the day's tests found in older code, each fixed with
+`src/ganglia/native/`; 44 tests in `tests/unit/native.test.ts` and 93 in `tests/unit/substrate.test.ts` (the Nex
+questions among them, and the round trip of every Nex structure Ego says) holding what the documents claim; seven
+in-app asks in `tests/e2e/ego.spec.ts`; every number in these documents measured by a test on the day. Bugs the day's tests found in older code, each fixed with
 its test: a chain's certainty interval (now the Fréchet bounds); laws with constants evaluated without them in the
 families, the forms, the cause answers and the Nex evaluation (forms 84 → 101); domain checks that read a constant
 they were never given; a law's worked example outside its own domain; a thing listed as its own cause.

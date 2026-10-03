@@ -167,11 +167,12 @@ convection plus radiation, integrated, gives 2.18 for a time, and the engine rep
 (the exponent that would make Froude exact is 1.125, not 0.5). The register holds no live anomaly; that is said,
 not hidden.
 
-## 11. Anomaly clusters — not built
+## 11. Anomaly clusters — built in part 2, by what they share
 
-The request was cut off at "anomaly clusters may be". `cluster()` in the kernel groups fingerprints by structural
-distance and could group anomaly structures the same way, but nothing was built from a sentence that was not
-finished.
+The request was cut off at "anomaly clusters may be". The second audit asked that anomalies never be clustered by the
+look of their structures alone, so `clusterAnomalies` groups them by shared law ancestry, with the parameter that
+closes every member and its direction (part 2, point 9); regime, time correlation and a latent cause are not built as
+signals, and the cluster says what it shares and nothing more.
 
 ## Ego's questions on this layer
 
