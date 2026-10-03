@@ -701,7 +701,7 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(spar).not.toMatch(/aluminum\.2024/);
     const rudder = answerTraversal({ do: 'traverse', query: 'failures', of: 'rudder' });
     expect(rudder).toMatch(/made of Aluminium 2024-T3, which fails by fatigue/);
-    expect(rudder).not.toMatch(/failure\.[a-z]/);
+    expect(rudder.split(' In Nex: ')[0]).not.toMatch(/failure\.[a-z]/); // the English names things; the Nex line after it is ids by design
     const chloroplast = answerTraversal({ do: 'traverse', query: 'producers', of: 'chloroplast' });
     expect(chloroplast).toMatch(/^A chloroplast is made by self assembly\.$/);
   });
@@ -1030,5 +1030,17 @@ describe('Ego answers a cause by a law when no arrow says it, keeps prevent apar
     expect(interpret('what fails a bearing')).toEqual({ do: 'traverse', query: 'failures', of: 'bearing' });
     // corrosion the chemistry and corrosion the failure are one thing seen twice: found, not asked
     expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'corrosion' })).toMatch(/^\d+ influences on corrosion that I know of: /);
+  });
+});
+
+describe('Ego says how she knows each failure, from the arrow\'s structure in Nex', () => {
+  it('the tally of evidence behind the failures, none measured in her world, and the first arrow as Nex writes it; a thing with no failure of its own says so', () => {
+    const bearing = answerTraversal({ do: 'traverse', query: 'failures', of: 'bearing' });
+    expect(bearing).toMatch(/^A bearing fails by 5 ways of its own: spalling, /);
+    expect(bearing).toMatch(/Each is a mechanism with a law behind it, not a label\. \d+ derived(, \d+ \w+)*; none measured in my world\. In Nex: influence\(failure\.spalling, bearing\)\{dir:1 polarity:- necessity:contributing cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\}$/);
+    // before: "A hex bolt fails by 0 ways of its own: . And 9 more it inherits"
+    const bolt = answerTraversal({ do: 'traverse', query: 'failures', of: 'bolt' });
+    expect(bolt).toMatch(/^A hex bolt fails in no way of its own that I know\. \d+ it inherits: thread stripping/);
+    expect(bolt).not.toMatch(/0 ways/);
   });
 });

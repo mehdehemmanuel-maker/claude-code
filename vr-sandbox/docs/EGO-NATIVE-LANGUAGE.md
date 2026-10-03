@@ -36,6 +36,8 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
   before any word; a word of two senses settled by the other side ("By current I take electric current, as a
   quantity").
 - "what causes current", "what does glue do": a word of two senses is asked back with its senses, kinds and units.
+- "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known
+  from its arrow's structure (the tally of evidence, none measured in her world) and the first arrow in Nex.
 - "try to build a computer", "take the scientist challenge": the attempt in English, then its Nex: the levels as
   modes, how each is known (a simulation, not a measurement), and what the English carried of it.
 - "does ice cream cause drowning": no mechanism, and a correlation held as support, never as a cause.

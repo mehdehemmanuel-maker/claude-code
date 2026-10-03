@@ -461,8 +461,14 @@ export function answerTraversal(i: Traverse): string {
     // the mechanism is the failure's first clause; the law behind it is what it is governed by
     const mech = (f: E) => { const laws = s.reach(f.id, 'governed-by').map(nameOf); const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); return `${nameOf(f)}, ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? ` (${list(laws, 3)})` : ''}`; };
     const how = (f: E) => spoken(s.relations.find((r) => r.from === e.id && r.kind === 'fails-by' && r.to === f.id)?.says ?? '');
-    if (derivedNow) return `I had not been asked that. From what ${art(e)} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.`;
-    return `${cap(art(e))} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
+    // how each failure is known, from its arrow's structure in Nex: the tally of evidence, and the first arrow as Nex writes it
+    const arrows = [...own.map((f) => s.relations.find((rel) => rel.from === e.id && rel.kind === 'fails-by' && rel.to === f.id)), ...inherited.map((x) => s.relations.find((rel) => rel.kind === 'fails-by' && rel.to === x.f.id && (s.reach(e.id, 'is-a').some((k) => k.id === rel.from) || s.reach(e.id, 'made-of').some((m) => m.id === rel.from))))].filter((x): x is NonNullable<typeof x> => !!x).map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x);
+    const tally = new Map<string, number>();
+    for (const x of arrows) { const h = x.c.ev?.how ?? 'assumed'; tally.set(h, (tally.get(h) ?? 0) + 1); }
+    const known = arrows.length ? ` ${[...tally].map(([h, n]) => `${n} ${h}`).join(', ')}; none measured in my world. In Nex: ${nex(arrows[0]!)}` : '';
+    if (derivedNow) return `I had not been asked that. From what ${art(e)} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.${known}`;
+    const ownSaid = own.length ? `${cap(art(e))} fails by ${own.length} way${own.length === 1 ? '' : 's'} of its own: ${own.map(mech).join('; ')}.` : `${cap(art(e))} fails in no way of its own that I know.`;
+    return `${ownSaid}${inherited.length ? ` ${own.length ? 'And ' : ''}${inherited.length} ${own.length ? 'more ' : ''}it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.${known}`;
   }
   const e = find(i.of ?? '');
   if (!e) return unknown(i.of ?? '');
