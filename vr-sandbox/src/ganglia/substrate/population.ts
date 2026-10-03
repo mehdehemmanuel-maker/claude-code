@@ -103,6 +103,16 @@ export function seedExpander(packs: Pack[]): Expander {
 /** The facet a new relation of a kind re-opens on the kind's members. */
 const FACET_OF_RELATION: Partial<Record<Relation['kind'], Facet>> = { 'produced-by': 'constructors', 'fails-by': 'failures', 'standardized-by': 'standards', 'connects-to': 'interfaces', 'made-of': 'materials', does: 'functions' };
 
+/** How a thing that does a function can fail: a table with its reasons, each a failure mode the index knows. */
+const FAILURE_OF_FUNCTION: Record<string, string[]> = {
+  'fn.support.load': ['failure.overload', 'failure.fatigue', 'failure.buckling'], 'fn.transmit.torque': ['failure.fatigue', 'failure.shear'], 'fn.transmit.force': ['failure.fatigue', 'failure.overload'],
+  'fn.support.rotation': ['failure.wear', 'failure.seizure'], 'fn.support.translation': ['failure.wear', 'failure.galling'], 'fn.roll': ['failure.wear', 'failure.pitting'], 'fn.guide.motion': ['failure.wear', 'failure.backlash'],
+  'fn.seal': ['failure.leak'], 'fn.contain.pressure': ['failure.leak', 'failure.burst'], 'fn.clamp.axial': ['failure.loosening', 'failure.thread-stripping'], 'fn.prevent.loosening': ['failure.loosening'],
+  'fn.conduct.current': ['failure.overheating', 'failure.open'], 'fn.actuate.electromagnetic': ['failure.overheating', 'failure.insulation-breakdown'], 'fn.switch': ['failure.contact-wear', 'failure.short'], 'fn.connect.electrical': ['failure.contact-wear', 'failure.corrosion'],
+  'fn.store.charge': ['failure.insulation-breakdown', 'failure.thermal-runaway'], 'fn.store.elastic': ['failure.fatigue', 'failure.creep'], 'fn.store.magnetic': ['failure.saturation', 'failure.overheating'],
+  'fn.move.fluid': ['failure.cavitation', 'failure.wear'], 'fn.change.speed-ratio': ['failure.wear', 'failure.tooth-breakage'], 'fn.transfer.heat': ['failure.corrosion'], 'fn.dissipate.motion': ['failure.overheating', 'failure.wear'],
+};
+
 /**
  * Derivations over what is already known: rules whose provenance is the rule. A material's roles from its numbers;
  * analogues from a shared function across domains; failures from the laws a thing is governed by; the manufacturing
@@ -143,6 +153,13 @@ export function ruleExpander(): Expander {
       if (facet === 'failures' && !s.outOf(e.id, 'fails-by').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const f of s.reach(k.id, 'fails-by')) out.relations.push(r(e.id, 'fails-by', f.id, `inherits from ${k.id}: the kind's failures are the member's`));
       }
+      if (facet === 'failures' && !e.kinds.includes('material') && !e.kinds.includes('law')) {
+        const have = new Set([...s.outOf(e.id, 'fails-by').map((x) => x.to), ...out.relations.filter((x) => x.kind === 'fails-by').map((x) => x.to)]);
+        // what a thing is made of fails as the material fails: steel fatigues, polymers creep, aluminium corrodes in contact
+        for (const m of s.reach(e.id, 'made-of')) for (const f of [...s.reach(m.id, 'fails-by'), ...s.reach(m.id, 'is-a').flatMap((fam) => s.reach(fam.id, 'fails-by'))]) if (!have.has(f.id)) { have.add(f.id); out.relations.push(r(e.id, 'fails-by', f.id, `made of ${m.id}, which fails by ${f.id}`)); }
+        // what a thing does says how it can fail: what carries load can be overloaded and fatigued, what seals can leak
+        for (const fn of s.reach(e.id, 'does')) for (const f of FAILURE_OF_FUNCTION[fn.id] ?? []) if (s.has(f) && !have.has(f)) { have.add(f); out.relations.push(r(e.id, 'fails-by', f, `it does ${fn.id}, whose failure is ${f}`)); }
+      }
       if (facet === 'standards' && !s.outOf(e.id, 'standardized-by').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const st of s.reach(k.id, 'standardized-by')) out.relations.push(r(e.id, 'standardized-by', st.id, `inherits from ${k.id}: the kind's standard covers the member`));
       }
@@ -151,6 +168,9 @@ export function ruleExpander(): Expander {
       }
       if (facet === 'materials' && !e.kinds.includes('material') && !s.outOf(e.id, 'made-of').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const m of s.reach(k.id, 'made-of')) out.relations.push(r(e.id, 'made-of', m.id, `inherits from ${k.id}: made of what the kind is made of, until its own material is known`));
+        // a whole is made of what its parts are made of: a motor is made of copper because its winding is
+        const seen = new Set(out.relations.filter((x) => x.kind === 'made-of').map((x) => x.to));
+        for (const part of s.reach(e.id, 'has-part')) for (const m of s.reach(part.id, 'made-of')) if (m.id !== e.id && !seen.has(m.id)) { seen.add(m.id); out.relations.push({ ...r(e.id, 'made-of', m.id, `through its part ${part.id}, which is made of ${m.id}`), confidence: 0.7 }); }
       }
       if (facet === 'functions' && !s.outOf(e.id, 'does').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const fn of s.reach(k.id, 'does')) out.relations.push(r(e.id, 'does', fn.id, `inherits from ${k.id}`));
@@ -307,6 +327,8 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
           // a kind that learned something: its members are asked the same facet again, so what the kind has reaches them (recursion along is-a)
           const facet = FACET_OF_RELATION[r.kind];
           if (facet) for (const m of s.reach(r.from, 'generalizes')) if (q.again({ id: m.id, facet, mode: 'deep', priority: priority(s, m, facet) + 1, reason: `${r.from}, which it is a kind of, learned ${r.kind} ${r.to}`, domain: m.domains[0] ?? 'unplaced' })) report.queued++;
+          // a part that learned its material re-opens the whole's materials (and so its failures)
+          if (r.kind === 'made-of') for (const whole of s.reach(r.from, 'part-of')) for (const f of ['materials', 'failures'] as const) if (q.again({ id: whole.id, facet: f, mode: 'deep', priority: priority(s, whole, f) + 1, reason: `its part ${r.from} learned made-of ${r.to}`, domain: whole.domains[0] ?? 'unplaced' })) report.queued++;
         }
       }
       if (!e.coverage.expanded.includes(w.facet)) e.coverage.expanded.push(w.facet);

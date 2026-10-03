@@ -185,7 +185,11 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   Extending the two tables extends what feeds `materialsForRole`.
 - **Rules inherit along is-a** (constructors, failures, standards, interfaces, materials, functions) at confidence 0.6,
   each relation saying what it inherits from; when a kind learns a relation, its members are asked that facet again,
-  so inheritance recurses. Rule expanders still discover relations, not entities: new entities come from packs and
+  so inheritance recurses. A whole is made of what its parts are made of (0.7, "through its part X"), and a part that
+  learns its material re-opens the whole's materials and failures. A thing fails as its material fails and as its
+  function fails (a table of failure modes by function, each a failure the index knows), both said as such. A
+  4000-question round before these rules derived 1003 relations and left 472 described components without a
+  function, 287 without a material and 400 without a failure; functions remain a question for packs and the outside. Rule expanders still discover relations, not entities: new entities come from packs and
   from the outside. The things with no known constructor (nor a kind with one) and the stubs are the frontier.
 - **Lane fairness is by priority within a lane.** A lane of several domains serves the best question among them; the
   background service runs one lane over all domains, so it is pure priority.

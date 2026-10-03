@@ -240,6 +240,29 @@ describe('population: a queue that never needs to be finished', () => {
     expect(s2.dangling()).toEqual([]);
   });
 
+  it('a whole is made of what its parts are made of, and a thing fails as its material and its function fail: derived, said, and re-asked when a part learns', async () => {
+    const s2 = build().substrate;
+    const q = new Queue();
+    const components = [...s2.entities.values()].filter((e) => !('stub' in e.source) && e.kinds.includes('component'));
+    const wholesBefore = components.filter((e) => !s2.outOf(e.id, 'made-of').length && s2.reach(e.id, 'has-part').some((p) => s2.outOf(p.id, 'made-of').length));
+    const doersBefore = components.filter((e) => !s2.outOf(e.id, 'fails-by').length && s2.reach(e.id, 'does').length);
+    expect(wholesBefore.length).toBeGreaterThan(5);
+    expect(doersBefore.length).toBeGreaterThan(5);
+    for (const e of components) for (const facet of ['materials', 'failures'] as const) q.push({ id: e.id, facet, mode: 'deep', priority: 1, reason: 'test', domain: e.domains[0] ?? 'unplaced' });
+    const r = await populate(s2, q, { expanders: [ruleExpander()], budget: 20000, workers: 1 });
+    expect(r.rejected).toEqual([]);
+    for (const e of wholesBefore) expect(s2.outOf(e.id, 'made-of').length, `${e.id} has parts with materials`).toBeGreaterThan(0);
+    const through = s2.relations.filter((x) => x.kind === 'made-of' && /through its part/.test(x.says ?? ''));
+    expect(through.length).toBeGreaterThanOrEqual(wholesBefore.length);
+    for (const x of through) expect(x.confidence).toBe(0.7);
+    const byFunction = s2.relations.filter((x) => x.kind === 'fails-by' && /whose failure is/.test(x.says ?? ''));
+    const byMaterial = s2.relations.filter((x) => x.kind === 'fails-by' && /which fails by/.test(x.says ?? ''));
+    expect(byFunction.length).toBeGreaterThan(20);
+    expect(byMaterial.length).toBeGreaterThan(20);
+    for (const x of [...byFunction, ...byMaterial]) expect(s2.get(x.to)!.kinds, x.to).toContain('failure');
+    expect(s2.dangling()).toEqual([]);
+  });
+
   it('ingest refuses what the index cannot mean, and stubs what it names', () => {
     const s2 = new Substrate();
     const e = (id: string, kinds: Entity['kinds']): Entity => ({ id, name: id, names: [], kinds, domains: ['test'], says: 'A thing of the test, described enough.', source: { estimate: 'test' }, coverage: { depth: 1, confidence: 0.5, sourceKind: 'estimate', expanded: [], unknowns: [] } });
