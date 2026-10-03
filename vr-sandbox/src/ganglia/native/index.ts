@@ -7,3 +7,4 @@ export * from './nexus';
 export * from './translate';
 export * from './text';
 export * from './polysemy';
+export * from './challenge';

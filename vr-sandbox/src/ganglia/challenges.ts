@@ -20,6 +20,7 @@ import type { Flow } from './blocks';
 import { conceive, type Medium } from './ways';
 import { flowOfWord } from './words';
 import { flowsCarrying, unitOfQuantityWord } from './native/polysemy';
+import { sayAttemptInNex } from './native/challenge';
 import { dimensionOf } from './units';
 import { grow, compression } from './grow';
 import { lawById, use } from './laws';
@@ -202,5 +203,6 @@ export const challengeById = (id: string) => CHALLENGES.find((c) => c.id === id)
 /** An attempt, said plainly: each need with how far it got, the physics that bounds it, and what to fix. */
 export function report(a: Attempt): string {
   const lines = a.results.map((r) => `${r.need.does}: ${r.level} — ${r.says}.`);
-  return `${a.challenge.name}. ${a.challenge.frame} ${lines.join(' ')}${a.notes.length ? ` ${a.notes.map((n) => n.says).join('. ')}.` : ''}${a.toFix.length ? ` To fix: ${a.toFix.join('; ')}.` : ''}`;
+  // then the same in Nex: the levels as modes, how each is known (nothing here was measured), what the English carried
+  return `${a.challenge.name}. ${a.challenge.frame} ${lines.join(' ')}${a.notes.length ? ` ${a.notes.map((n) => n.says).join('. ')}.` : ''}${a.toFix.length ? ` To fix: ${a.toFix.join('; ')}.` : ''} ${sayAttemptInNex(a)}`;
 }

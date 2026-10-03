@@ -370,8 +370,25 @@ What `tests/unit/native.test.ts` holds, and will hold as the language grows:
     table's choice is now said as a convention in a challenge's result, and torque is the known limit of dimension
     alone (it has the dimension of energy).
 
-The main criterion, fewer reasoning errors on harder problems, is not met by this file; it is measurable by it. The
-next measurement is the challenge engine's problems (docs/CHALLENGES.md) run both ways.
+14. **The challenge engine's problems, both ways.** Each of the six hard challenges (docs/CHALLENGES.md) is taken
+    through her machinery once; its results are then said in English (`report`) and as Nex (`native/challenge.ts`):
+    each need a transformation between flows in the mode its level is (unsayable → unmodelled *of a word*, no way →
+    unmodelled *of a transformation*, unbuildable → outside-domain with the missing ways under it, fails → false
+    against the check, partial → insufficient, works → true), known by simulation where it grew and derived where
+    it did not; each bound a quantity of the challenge by a law with the law's own evidence. What the comparison
+    found: (a) the English levels collapse two kinds of unmodelled into two words, and never say how a level is
+    known: "works" reads as a fact, and it is a simulation (grown and checked in her own machinery, not measured in
+    a world), which the report now says; (b) English carries 30 of 36 pieces of the scientist's attempt and 110 of
+    122 of the computer's: what it drops is the mechanism (the chain of ways), the domain (the medium pushed
+    against) and what an outside-domain result is outside of, every time; (c) a reasoning error of the words, not
+    of the physics: "hold one bit" and "let one bit switch another" are both `signal → signal` in her flow
+    language, which cannot tell holding from switching, so the two needs are one structure, a coarseness of the
+    flow vocabulary the structures show and the words hid. The error count of the physics itself is the same both
+    ways, because downstream of the words the engine is already structural (flows, ways, blocks, checks): the
+    errors Nex removes on these problems are at the two edges, the words in (section Y.13) and the report out.
+
+The main criterion, fewer reasoning errors on harder problems, is not met by this file; it is measurable by it, and
+sections Y.12 to Y.14 are its first three measurements.
 
 ## Z. The compression
 
@@ -388,7 +405,8 @@ fingerprints, distance, clustering, renaming, chaining, contradiction, well-form
 morpheme.ts (skeletons, candidates by description length, promotion, compression, expansion, versioning),
 translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
 candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners), text.ts (the compact
-text, lossless both ways, and the blind text), polysemy.ts (readings, senses, settling by structure, the census).
+text, lossless both ways, and the blind text), polysemy.ts (readings, senses, settling by structure, the census),
+challenge.ts (a challenge's attempt as structures, with what the English report carried).
 
 Designed, not yet built: the spoken serialisation and the visual notation (E); rewrite rules for
 equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,

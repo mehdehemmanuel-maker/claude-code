@@ -61,7 +61,7 @@ function word(x: D, lang: Lang, coined: string[]): string {
 
 const num = (v: number): string => (Number.isInteger(v) ? String(v) : Number(v.toPrecision(3)).toString());
 /** The unit a quantity was given, else the SI unit of its dimension. */
-export const unitSaid = (x: Q): string => x.unit ?? unitOf(x.dim);
+export const unitSaid = (x: Q): string => { const u = x.unit ?? unitOf(x.dim); return u === '-' || u === '1' ? '' : u; };
 export const sayQ = (x: Q): string => `${num(x.v)}${unitSaid(x) ? ` ${unitSaid(x)}` : ''}`;
 
 function certWord(c: Coords['cert'], lang: Lang, audience: Audience): string {
@@ -146,7 +146,9 @@ export function render(s: Structure, lang: Lang = 'en', audience: Audience = 'en
         const parts = { before: [] as string[], after: [] as string[], verb: W.becomes };
         coordsText(x.c, path, parts);
         const cond = x.cond?.length ? ` ${W.when} ${x.cond.map((y, i) => say(y, `${path}.cond[${i}]`)).join(` ${W.and} `)}` : '';
-        return [...parts.before.filter(Boolean), say(x.from, `${path}.from`), parts.verb, say(x.to, `${path}.to`), ...parts.after].join(' ').trim() + cond;
+        // a hedge ("is, in simulation,") qualifies the becoming; it does not replace it
+        const hedged = parts.verb === W.becomes || parts.verb === W.is ? W.becomes : `${W.becomes}${parts.verb.replace(/^[^\s,]+/, '')}`;
+        return [...parts.before.filter(Boolean), say(x.from, `${path}.from`), hedged, say(x.to, `${path}.to`), ...parts.after].join(' ').replace(/\s+/g, ' ').trim() + cond;
       }
       case 'R': {
         note(path, true);

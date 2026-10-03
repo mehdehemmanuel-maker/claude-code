@@ -14,6 +14,8 @@ import { evaluate, fromLaw, fromNode, fromRelation, saidOf, tune } from '../../s
 import { decompose, forAudience, parse, rankOfText, render, type Lexicon } from '../../src/ganglia/native/translate';
 import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text';
 import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses, settle, unitOfQuantityWord } from '../../src/ganglia/native/polysemy';
+import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNex } from '../../src/ganglia/native/challenge';
+import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
 import { dimensionOf } from '../../src/ganglia/units';
@@ -435,5 +437,59 @@ describe('Nex: polysemy (section S) is split by structure, measured over the sub
     expect(unitOfQuantityWord('power')).toBe('W');
     expect(unitOfQuantityWord('electric current')).toBe('A');
     expect(unitOfQuantityWord('music')).toBeUndefined();
+  });
+});
+
+describe('Nex: the challenge engine\'s problems both ways (section Y.14)', () => {
+  it('every level is a mode of a structure that says what it is of: a word with no flow, a transformation with no mechanism, one outside what is here, one held false, insufficient, or true; every one that grew is known by simulation, never by measurement', () => {
+    for (const level of LEVEL_ORDER) { expect(MODE_OF_LEVEL[level]).toBeDefined(); expect(EVIDENCE_OF_LEVEL[level] === null || EVIDENCE[EVIDENCE.indexOf(EVIDENCE_OF_LEVEL[level]!)]).toBeTruthy(); }
+    expect(new Set(Object.values(MODE_OF_LEVEL)).size).toBe(5); // unsayable and no way are both unmodelled, of different things
+    for (const c of CHALLENGES) {
+      const a = attempt(c);
+      const x = fromAttempt(a);
+      expect(x.needs.length).toBe(a.results.length);
+      for (const [k, s] of x.needs.entries()) {
+        const res = a.results[k]!;
+        const mode = s.k === 'T' || s.k === 'R' ? s.c.mode : undefined;
+        expect(mode, res.need.does).toBe(MODE_OF_LEVEL[res.level]);
+        // what grew is simulated; nothing in an attempt is ever measured
+        const how = s.k === 'T' || s.k === 'R' ? s.c.ev?.how : undefined;
+        expect(how === 'measured' || how === 'calibrated').toBe(false);
+        if (['works', 'partial', 'fails'].includes(res.level)) expect(how).toBe('simulated');
+        // the two kinds of unmodelled differ in shape, not in a word: the word's is a kind relation, the physics' a transformation
+        if (res.level === 'unsayable') expect(s.k === 'R' && s.op === 'kind').toBe(true);
+        if (res.level === 'no way') expect(s.k).toBe('T');
+        // the text of each need reads back to the same hash (the compact text covers the challenge engine's structures too)
+        expect(hash(read(text(s)))).toBe(hash(s));
+      }
+      // every bound of a law is a quantity with the law's own evidence, and the law as a constraint beside it
+      for (const n of a.notes.filter((n) => n.law && n.value !== undefined)) {
+        const qty = x.bounds.find((b) => b.k === 'R' && b.op === 'quantity' && b.c.mech === n.law);
+        expect(qty, `${c.id} ${n.law}`).toBeDefined();
+        expect(qty!.k === 'R' && qty!.args[2]?.k === 'Q' && qty!.args[2].v).toBeCloseTo(n.value!, 9);
+        expect(qty!.k === 'R' && qty!.c.ev?.how).not.toBe('measured');
+      }
+      // the whole is in the mode of the worst need
+      expect(x.whole.c.mode).toBe(MODE_OF_LEVEL[a.worst]);
+    }
+  });
+
+  it('the English report says the Nex of it: the modes, how each is known, what the English carried; and renders a hedged transformation grammatically', () => {
+    const a = attempt(challengeById('scientist')!);
+    const said = sayAttemptInNex(a);
+    expect(said).toMatch(/^In Nex the 4 needs are transformations between flows in the modes outside-domain ×2, insufficient ×1, true ×1; "works", "partial" and "fails" are known by simulation \(grown and checked in my own machinery, not measured in a world\)/);
+    expect(said).toMatch(/the whole is #[0-9a-f]{8}, and this English carried \d+ of \d+ pieces of it\.$/);
+    expect(report(a)).toMatch(/ In Nex the 4 needs are transformations/);
+    const works = fromNeed(a.results.find((r) => r.level === 'works')!);
+    expect(render(works, 'en', 'engineer').text).toBe('Signal becomes, in simulation, translation (grown and checked in my own machinery).');
+    const unbuildable = fromNeed(a.results.find((r) => r.level === 'unbuildable')!);
+    expect(render(unbuildable, 'en', 'engineer').text).toMatch(/^It is outside the domain to say whether load becomes signal/);
+    // the loss: the mechanism (the way ids), the domain and what it is outside of are never spoken; measured 3 October: the scientist's English carries 30 of 36 pieces
+    const x = fromAttempt(a);
+    expect(x.carried).toBeLessThan(x.present);
+    expect(x.present - x.carried).toBeGreaterThanOrEqual(4);
+    // a word her flow language lacks is a distinction with no flow behind it, said as such
+    const tissue = fromNeed(attempt(challengeById('symbiote')!).results.find((r) => r.level === 'unsayable')!);
+    expect(render(tissue, 'en', 'engineer').text).toBe('I have no model of whether "tissue" is a kind of a flow.');
   });
 });
