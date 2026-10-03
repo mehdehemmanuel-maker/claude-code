@@ -20,6 +20,7 @@ import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/gang
 import { hear, speak } from '../../src/ganglia/native/spoken';
 import { formOf, lawForms, sameForm, sayForm } from '../../src/ganglia/native/forms';
 import { between, family, regimes, verdictStructure } from '../../src/ganglia/native/space';
+import { alive, anomalies, anomaly, axes, boundSense, certificate, sayAxes } from '../../src/ganglia/native/discovery';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -56,7 +57,10 @@ describe('Nex: meaning survives the loss of every label (the hard test)', () => 
     const ab = chain(loadCurrent, currentTemp)!, ab2 = chain(scrambled[0] as R, scrambled[1] as R)!;
     expect(ab.c.strength).toBeCloseTo(0.4, 12);
     expect(ab.c.polarity).toBe('+');
-    expect(ab.c.cert).toEqual({ kind: 'interval', lo: 0.7, hi: 0.9, source: 'epistemic' });
+    // both links holding is a conjunction: its certainty lies within the Fréchet bounds, lo1 + lo2 − 1 to min(hi1, hi2), whatever their dependence
+    expect(ab.c.cert).toMatchObject({ kind: 'interval', source: 'epistemic' });
+    expect(ab.c.cert?.lo).toBeCloseTo(0.6, 12);
+    expect(ab.c.cert?.hi).toBeCloseTo(0.9, 12);
     expect(ab.c.time?.delay?.v).toBeCloseTo(30.01, 9);
     expect(ab.c.ev?.how).toBe('measured'); // the weaker of the two kinds of evidence, never the stronger
     const noMech = (x: R): R => ({ ...x, c: { ...x.c, mech: undefined } });
@@ -65,6 +69,8 @@ describe('Nex: meaning survives the loss of every label (the hard test)', () => 
     expect(abc.c.polarity).toBe('-');
     expect(abc.c.strength).toBeCloseTo(0.36, 12);
     expect(abc.c.ev?.how).toBe('extrapolated');
+    expect(abc.c.cert?.lo).toBeCloseTo(0.2, 12);
+    expect(abc.c.cert?.hi).toBeCloseTo(0.8, 12);
     // debugging: a contradiction is found by structure, not by words
     const denial = r('influence', [temperature, life], { dir: 1, polarity: '+' });
     expect(contradiction(tempLife, denial)?.c.mode).toBe('contradictory');
@@ -701,5 +707,97 @@ describe('Nex Space (docs/NEX-SPACE.md): continuous exactly where a law gives co
     expect(regimes(Array.from({ length: 20 }, (_, i) => ({ x: 1 + i, y: 1 + rnd() }))).regimes.length).toBe(1);
     expect(regimes(cont.map((p) => ({ ...p, y: p.y * (1 + 0.1 * (rnd() - 0.5)) }))).regimes.length).toBe(1);
     expect(regimes(reg.map((p) => ({ ...p, y: p.y * (1 + 0.1 * (rnd() - 0.5)) }))).regimes.length).toBe(2);
+  });
+});
+
+describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, impossibility only by certificate, anomalies kept alive', () => {
+  it('impossible only with a certificate: a bounding law inside its domain, the claim beyond the bound, the assumptions under it; else the precise weaker mode', () => {
+    const c = certificate({ quantity: 'efficiency', value: 0.5, unit: '-', inputs: { Tc: 300, Th: 400 } });
+    expect(c.impossible).toBe(true);
+    if (!c.impossible) return;
+    expect(c.law.id).toBe('carnot');
+    expect(c.bound).toBeCloseTo(0.25, 12);
+    expect(c.sense).toBe('most');
+    expect(c.assumptions[0]).toMatch(/^Carnot efficiency holds: Reversible limit/);
+    expect(c.assumptions).toContain('cold side = 300');
+    expect(c.derivation).toMatch(/gives at most 0\.25 -; the claim is 0\.5 -; so assumptions \+ law \+ claim ⇒ ⊥$/);
+    expect(c.structure.c.mode).toBe('impossible-under');
+    expect(text(c.structure)).toMatch(/^contradict\(quantity\(eta, 0\.5\[-\]\)\{ev:\{how:hypothesized\}\}, quantity\(eta, 0\.25\[-\]\)/);
+    expect(text(c.structure)).toMatch(/mode:impossible-under under:\["Carnot efficiency holds/);
+    // inside the bound: consistent, said with the ceiling
+    expect(certificate({ quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'true', bound: 0.25 });
+    // the law outside its domain: outside-domain, never impossible
+    expect(certificate({ quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 400, Th: 300 } })).toMatchObject({ impossible: false, mode: 'outside-domain' });
+    // a floor: nothing erases a bit for nothing
+    const l = certificate({ quantity: 'energy per bit erased', value: 0, unit: 'J', inputs: { T: 300 } });
+    expect(l.impossible && l.sense).toBe('least');
+    expect(l.impossible && l.law.id).toBe('landauer');
+    // no bounding law: unknown, not impossible; a unit I cannot read: undefined
+    expect(certificate({ quantity: 'kinetic energy', value: 1e6, unit: 'J', inputs: { m: 1, v: 1 } })).toMatchObject({ impossible: false, mode: 'unknown' });
+    expect(certificate({ quantity: 'efficiency', value: 0.5, unit: 'furlongs', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined' });
+  });
+
+  it('the ten bound laws each certify a claim just beyond their bound and admit one at it; none of the other laws ever signs a certificate', () => {
+    const bound = LAWS.filter((l) => boundSense(l));
+    expect(bound.map((l) => l.id).sort()).toEqual(['carnot', 'cornering.limit', 'diffraction.limit', 'friction.coulomb', 'landauer', 'rayleigh.resolution', 'separation.work', 'shaft.diameter.static', 'shannon.sampling', 'traction.limit']);
+    for (const law of bound) {
+      if (law.outside?.(law.example.inputs)) continue;
+      const at = certificate({ quantity: law.output.name, value: law.example.output, unit: law.output.unit, inputs: law.example.inputs });
+      expect(at.impossible, law.id).toBe(false);
+      const beyond = certificate({ quantity: law.output.name, value: law.example.output * (boundSense(law) === 'most' ? 1.1 : 0.9), unit: law.output.unit, inputs: law.example.inputs });
+      expect(beyond.impossible, law.id).toBe(true);
+      expect(beyond.impossible && beyond.law.id).toBe(law.id);
+    }
+    for (const law of LAWS) {
+      if (boundSense(law)) continue;
+      const c = certificate({ quantity: law.output.name, value: law.example.output * 10, unit: law.output.unit, inputs: law.example.inputs });
+      expect(c.impossible, law.id).toBe(false);
+    }
+  });
+
+  it('the states that are not false hash apart and never contradict a truth; only false does', () => {
+    const base = r('quantity', [d('a'), q(1, 'J')], {});
+    const modes = ['true', 'false', 'unknown', 'unobserved', 'unmodelled', 'unmeasured', 'insufficient', 'impossible-under', 'outside-domain'] as const;
+    expect(new Set(modes.map((m) => hash({ ...base, c: { mode: m } }))).size).toBe(modes.length);
+    expect(modes.filter((m) => contradiction({ ...base, c: { mode: 'true' } }, { ...base, c: { mode: m } }))).toEqual(['false']);
+  });
+
+  it('three axes, each read from its own place: renaming every distinction moves human coverage alone, the evidence moves support alone, a law moves theory alone', () => {
+    const claim = { quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: 300, Th: 400 } };
+    const known = r('quantity', [d('bearing'), d('eta'), q(0.2, '-')], { ev: { how: 'measured' } });
+    const a = axes(known, substrate, claim);
+    expect(a).toMatchObject({ support: 1, theory: 'compatible', kind: 'established' });
+    expect(a.coverage).toBeGreaterThan(0.5);
+    // the first law of discovery: a name no human has given changes coverage and nothing else
+    expect(axes(rename(known, (id) => `coined.${id}`), substrate, claim)).toEqual({ ...a, coverage: 0, kind: 'new but consistent' });
+    // the same claim beyond the bound: as a hypothesis it is radical; as a measurement it is the anomaly worth the most
+    expect(axes(r('quantity', [d('bearing'), d('eta'), q(0.5, '-')], { ev: { how: 'hypothesized' } }), substrate, { ...claim, value: 0.5 })).toMatchObject({ support: 0, theory: 'incompatible', kind: 'radical hypothesis' });
+    expect(axes(r('quantity', [d('bearing'), d('eta'), q(0.5, '-')], { ev: { how: 'measured' } }), substrate, { ...claim, value: 0.5 })).toMatchObject({ support: 1, theory: 'incompatible', kind: 'high-value anomaly' });
+    // nothing known, nothing measured, no law reached: untested, not false
+    expect(sayAxes(axes(r('quantity', [d('zorb'), d('eta'), q(0.5, '-')], {}), substrate))).toBe('human coverage 0, physical support 0, theory untested: untested');
+  });
+
+  it('the register: eleven observations against the law book, none alive, one explained (a cooling time against Froude, 54 times the tolerance), the rest within tolerance; an anomaly keeps its skeptic', () => {
+    const as = anomalies();
+    expect(as.length).toBe(11);
+    expect(alive(as)).toEqual([]);
+    const beyond = as.filter((a) => a.sigma > 1);
+    expect(beyond.map((a) => [a.id, a.status])).toEqual([['observation.cooling-size:against-froude', 'explained']]);
+    expect(beyond[0]!.sigma).toBeGreaterThan(50);
+    expect(beyond[0]!.candidates.find((c) => c.kind === 'parameter')?.says).toBe('the observation would be exact if the exponent were 1.125 instead of 0.5');
+    expect(beyond[0]!.structure.k === 'R' && beyond[0]!.structure.c.under?.[1]).toMatch(/^explained: the thermal world is not Froude-similar/);
+    for (const a of as.filter((x) => x.sigma <= 1)) expect(a.status).toBe('within tolerance');
+    // a synthetic anomaly: twice the rating life the law predicts, at 5 %
+    const syn = anomaly('probe.l10', { value: 25, tolerance: 0.05, instrument: 'probe', environment: 'bench' }, { value: 12.5, lawAncestry: ['bearing.life.l10'], modelVersion: 'probe' });
+    expect(syn.status).toBe('alive');
+    expect(syn.sigma).toBe(20);
+    expect(syn.candidates[0]).toMatchObject({ kind: 'within uncertainty', computed: true, closes: false });
+    const P = syn.candidates.find((c) => c.kind === 'parameter' && c.says.includes('(P)'));
+    expect(P?.says).toBe('Bearing rating life (L10): the gap closes if equivalent dynamic load (P) were 0.794 N instead of 1 N, inside its range');
+    expect(P?.closes).toBe(true);
+    expect(syn.candidates.filter((c) => !c.computed).map((c) => c.kind)).toEqual(['model envelope', 'numerical artifact', 'hidden variable', 'sensor defect', 'selection bias', 'wrong causal direction', 'bad assumption', 'conventional theory']);
+    for (const c of syn.candidates) expect(c.settledBy.length).toBeGreaterThan(0);
+    expect(text(syn.structure)).toMatch(/^contradict\(E\(quantity\(probe\.l10:observed, 25\)\)\{how:measured src:probe by:bench\}, quantity\(probe\.l10:predicted, 12\.5\)/);
+    expect(text(syn.structure)).toMatch(/mode:contradictory under:\["model probe"\] margin:20\}$/);
   });
 });

@@ -12,3 +12,4 @@ export * from './grammar';
 export * from './spoken';
 export * from './forms';
 export * from './space';
+export * from './discovery';

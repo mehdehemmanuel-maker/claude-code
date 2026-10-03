@@ -23,7 +23,12 @@ from them only at the moment of speaking, with a count of what the sentence fail
 The continuous part of Nex, where a law gives coordinates and nowhere else, is docs/NEX-SPACE.md: the audit of the
 request to make Nex a continuous space of meaning, with what was built because it gives a capability the discrete
 form could not (families along a law's inputs, lazy and adaptive; interpolation refused without a shared coordinate;
-continuous or discrete decided by evidence) and what was rejected as decoration.
+continuous or discrete decided by evidence) and what was rejected as decoration. docs/NEX-DISCOVERY.md is the
+audit of the request that Ego never confuse the absence of human knowledge with the absence of reality: human
+coverage, physical support and theory as three axes read from three places; impossibility only with a certificate (a
+bounding law, its assumptions, the claim beyond the bound); anomalies kept alive with a skeptic that computes the
+ordinary explanations first. docs/NEX-AUDIT.md answers ten questions put to the design, with the one bug they found
+(the certainty of a chain, now within the Fréchet bounds).
 
 ## Try it
 
@@ -118,7 +123,7 @@ CAUSE, PREVENT, ENABLE, CONDITION are not four words: they are one operator, `in
 coordinates: polarity + or −, necessity sufficient / necessary / contributing, a condition in `dom`. Direct, indirect,
 possible, historical, micro-scale, conditional and counterfactual cause are the same operator with `mech` set or
 chained, `cert` low, `time.at` in the past, `scale.L` small, `dom` given, or the whole held in an `intervene` context.
-`chain(ab, bc)` composes two influences: strengths multiply, certainty narrows to the weaker, delays add, polarities
+`chain(ab, bc)` composes two influences: strengths multiply, certainty narrows to the Fréchet bounds of both holding, delays add, polarities
 multiply, the evidence is the weaker of the two, and the mechanism records both (tested).
 
 ## D. Recursive grammar

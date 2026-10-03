@@ -331,7 +331,7 @@ export function rename(s: Structure, map: (id: string) => string): Structure {
 
 // ---- reasoning over structures with coordinates (section B's point: the operators compose)
 
-/** Chain two influences A→B and B→C into A→C: strengths multiply, certainty narrows to the weaker, delays add, polarity multiplies. */
+/** Chain two influences A→B and B→C into A→C: strengths multiply, certainty narrows to the Fréchet bounds of both holding, delays add, polarity multiplies. */
 export function chain(ab0: R, bc0: R): R | null {
   // either influence may have been written backwards: the normal form puts both forward
   const ab = normalize(ab0) as R, bc = normalize(bc0) as R;
@@ -342,7 +342,9 @@ export function chain(ab0: R, bc0: R): R | null {
   const out: Coords = { dir: 1 };
   if (typeof ab.c.strength === 'number' && typeof bc.c.strength === 'number') out.strength = ab.c.strength * bc.c.strength;
   if (ab.c.polarity && bc.c.polarity) out.polarity = ab.c.polarity === bc.c.polarity ? '+' : '-';
-  const lo = Math.min(ab.c.cert?.lo ?? 1, bc.c.cert?.lo ?? 1), hi = Math.min(ab.c.cert?.hi ?? 1, bc.c.cert?.hi ?? 1);
+  // the certainty of both links holding lies within the Fréchet bounds of a conjunction, whatever their dependence:
+  // at least lo1 + lo2 − 1 (never below 0), at most the smaller of the two (Fréchet 1935; Hoeffding 1940)
+  const lo = Math.max(0, (ab.c.cert?.lo ?? 1) + (bc.c.cert?.lo ?? 1) - 1), hi = Math.min(ab.c.cert?.hi ?? 1, bc.c.cert?.hi ?? 1);
   if (ab.c.cert || bc.c.cert) out.cert = { kind: 'interval', lo, hi, source: 'epistemic' };
   const d1 = ab.c.time?.delay?.v, d2 = bc.c.time?.delay?.v;
   if (d1 !== undefined || d2 !== undefined) out.time = { delay: { k: 'Q', v: (d1 ?? 0) + (d2 ?? 0), dim: [0, 0, 1, 0, 0] } };
