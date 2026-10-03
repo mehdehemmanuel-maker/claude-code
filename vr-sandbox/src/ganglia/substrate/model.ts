@@ -7,7 +7,7 @@
 // bins it is put in. docs/SUBSTRATE.md.
 import type { Source } from '../types';
 
-export const KINDS = ['thing', 'material', 'property', 'geometry', 'function', 'behavior', 'transformation', 'mechanism', 'component', 'subsystem', 'system', 'constructor', 'process', 'biological', 'organism', 'chemical', 'phenomenon', 'law', 'role', 'standard', 'failure', 'interface', 'manifold', 'generator', 'parameter', 'computation', 'signal', 'environment', 'circuit', 'architecture', 'scale', 'observer', 'hypothesis'] as const;
+export const KINDS = ['thing', 'material', 'property', 'geometry', 'function', 'behavior', 'transformation', 'mechanism', 'component', 'subsystem', 'system', 'constructor', 'process', 'biological', 'organism', 'chemical', 'phenomenon', 'law', 'role', 'standard', 'failure', 'interface', 'manifold', 'generator', 'parameter', 'computation', 'signal', 'environment', 'circuit', 'architecture', 'scale', 'quantity', 'observer', 'hypothesis'] as const;
 export type Kind = (typeof KINDS)[number];
 
 /**

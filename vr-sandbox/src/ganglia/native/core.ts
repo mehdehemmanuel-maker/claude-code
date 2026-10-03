@@ -127,7 +127,7 @@ export type Op =
 /** Which operators do not care about the order of their arguments. */
 export const COMMUTATIVE: ReadonlySet<Op> = new Set<Op>(['same', 'differ', 'state', 'contradict']);
 /** Which operators need a reference frame to mean anything (section I): without one the structure is undefined. */
-export const NEEDS_FRAME: ReadonlySet<string> = new Set(['motion', 'velocity', 'position', 'rest', 'speed']);
+export const NEEDS_FRAME: ReadonlySet<string> = new Set(['motion', 'velocity', 'position', 'rest', 'speed', 'qty.velocity', 'qty.speed', 'qty.momentum', 'qty.acceleration']);
 
 export interface D { k: 'D'; id: string; aliases?: Record<string, string> }
 export interface R { k: 'R'; op: Op; args: Structure[]; c: Coords }

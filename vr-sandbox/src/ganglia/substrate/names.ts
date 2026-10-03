@@ -61,10 +61,12 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   const one = singular(w);
   // the thing itself before anything merely indexed by its word: "bearings" is the bearing, not a block's region
   // called bearings
+  const all = [...s.entities.values()], plain = (e: Entity) => !/^(?:kind|block|view|cross|fn|role|param|law|scale|observer)\./.test(e.id);
   const exact = s.get(w) ?? s.get(dotted) ?? s.get(one);
+  // "weight" is the quantity before the law about it: a word names the thing, the law is of the thing
+  if (exact?.kinds.includes('law')) { const qty = all.find((e) => e.kinds.includes('quantity') && (e.name.toLowerCase() === w || e.names.some((n) => n.toLowerCase() === w))); if (qty) return qty; }
   if (exact) return exact;
   // a described thing whose name is the words, before the kind, block, view and function layers that borrow names
-  const all = [...s.entities.values()], plain = (e: Entity) => !/^(?:kind|block|view|cross|fn|role|param|law|scale|observer)\./.test(e.id);
   const named = all.find((e) => plain(e) && e.name.toLowerCase() === w) ?? all.find((e) => plain(e) && e.name.toLowerCase() === one);
   if (named) return named;
   // a role said as a phrase: "electrical conductor" is role.electrical-conductor; a function: "store energy" is store.energy;

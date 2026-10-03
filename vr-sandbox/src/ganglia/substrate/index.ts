@@ -21,6 +21,7 @@ import { common } from './seeds/common';
 import { parameters } from './seeds/parameters';
 import { standards } from './seeds/standards';
 import { making } from './seeds/making';
+import { quantities } from './seeds/quantities';
 import type { Pack } from './dsl';
 import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
 import { externalExpander } from './external';
@@ -37,7 +38,7 @@ export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, 
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
 /** The seed packs, in build order; a factory may give several packs, each then its own step. */
-export const PACKS: (() => Pack | Pack[])[] = [views, common, parameters, standards, mechanical, electrical, circuits, computing, materials, manufacturing, making, failures, biology, chemistry, earth, robotics, scale, scaleCovariance];
+export const PACKS: (() => Pack | Pack[])[] = [views, common, quantities, parameters, standards, mechanical, electrical, circuits, computing, materials, manufacturing, making, failures, biology, chemistry, earth, robotics, scale, scaleCovariance];
 
 export interface Built { substrate: Substrate; queue: Queue; packs: Pack[]; expanders: Expander[]; generators: Map<string, Generator>; seedReport: Report }
 

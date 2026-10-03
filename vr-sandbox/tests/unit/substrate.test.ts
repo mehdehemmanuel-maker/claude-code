@@ -922,3 +922,22 @@ describe('Ego says a thing in her own language', () => {
     expect(a).toMatch(/Their hashes: #[0-9a-f]{8}/);
   });
 });
+
+describe('the quantities themselves are things, told apart by dimension (the confusions English invites)', () => {
+  it('temperature is a quantity, not a sensor; power a quantity, not a battery; weight the quantity before the law', () => {
+    for (const [w, id] of [['temperature', 'qty.temperature'], ['power', 'qty.power'], ['force', 'qty.force'], ['mass', 'qty.mass'], ['speed', 'qty.speed'], ['velocity', 'qty.velocity'], ['energy', 'qty.energy'], ['weight', 'qty.weight'], ['heat', 'heat'], ['torque', 'qty.torque']]) expect(findByWords(s, w)?.id, w).toBe(id);
+  });
+
+  it('compared, heat and temperature, weight and mass, energy and power are different kinds of quantity; speed and velocity share a unit and are not the same thing', () => {
+    const ht = answerTraversal({ do: 'traverse', query: 'compare', of: 'heat', which: 'temperature' });
+    expect(ht).toMatch(/^Heat and temperature are different kinds of quantity: heat is counted in J, temperature in K, and neither can be more or less than the other\./);
+    expect(ht).toMatch(/two bodies at one temperature exchange none/);
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'weight', which: 'mass' })).toMatch(/^Weight and mass are different kinds of quantity: weight is counted in N, mass in kg/);
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'energy', which: 'power' })).toMatch(/^Energy and power are different kinds of quantity: energy is counted in J, power in W/);
+    const sv = answerTraversal({ do: 'traverse', query: 'compare', of: 'speed', which: 'velocity' });
+    expect(sv).toMatch(/^Speed and velocity are counted in the same unit, m\/s, and are not the same thing/);
+    expect(sv).toMatch(/with a direction/);
+    // torque and energy share a dimension, which the answer says is not the same thing
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'torque', which: 'energy' })).toMatch(/counted in the same unit/);
+  });
+});

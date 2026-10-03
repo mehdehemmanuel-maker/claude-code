@@ -4,6 +4,7 @@
 import type { Intent } from './intent';
 import { hash, render, saidOf, tune } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
+import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
 import type { Entity } from '../ganglia/substrate/model';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
@@ -13,7 +14,7 @@ type Traverse = Extract<Intent, { do: 'traverse' }>;
 // a human name where one is given; else the id said as words, without the domain prefix an id carries for uniqueness
 const nameOf = spokenName;
 /** A thing with its article, a material without: "a bearing", "steel". */
-const art = (e: Entity): string => (e.kinds.includes('material') ? nameOf(e) : articled(nameOf(e)));
+const art = (e: Entity): string => (e.kinds.includes('material') || e.kinds.includes('quantity') ? nameOf(e) : articled(nameOf(e)));
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 /** A length or a time in the unit a person reads: 0.1 m is "about 10 cm", 6e-5 s "about 60 µs". */
 const human = (x: number, units: [string, number][]) => { const [u, f] = [...units].reverse().find(([, f]) => x >= f) ?? units[0]!; const v = x / f; return `about ${Number(v.toPrecision(v >= 10 ? 2 : 1))} ${u}`; };
@@ -147,6 +148,16 @@ export function answerTraversal(i: Traverse): string {
     if (!a) return unknown(i.of ?? '');
     if (!b) return unknown(i.which ?? '');
     if (a.id === b.id) return `${cap(art(a))} and ${art(b)} are the same thing to me: ${nameOf(a)}.`;
+    // two quantities are told apart by dimension before anything else (Nex: a comparison across dimensions is undefined)
+    const unitOfQ = (e: typeof a) => (e.kinds.includes('quantity') || e.kinds.includes('property') ? e.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined);
+    const ua = unitOfQ(a), ub = unitOfQ(b);
+    if (ua && ub) {
+      const same = sameDim(dimensionOf(ua), dimensionOf(ub));
+      // what each is, as its own saying has it: the first clause, then the rest as written
+      const said = (e: typeof a) => `${cap(nameOf(e))}: ${e.says.charAt(0).toLowerCase()}${e.says.slice(1).replace(/\.$/, '')}.`;
+      if (!same) return `${cap(nameOf(a))} and ${nameOf(b)} are different kinds of quantity: ${nameOf(a)} is counted in ${ua}, ${nameOf(b)} in ${ub}, and neither can be more or less than the other. ${said(a)} ${said(b)}`;
+      return `${cap(nameOf(a))} and ${nameOf(b)} are counted in the same unit, ${ua}, and are not the same thing. ${said(a)} ${said(b)}`;
+    }
     // a material is said bare ("steel"), a part with its article ("a bolt")
     // what a thing does includes what its kinds do: a bolt clamps as a screw does
     const ids = (e: typeof a, kind: 'is-a' | 'made-of' | 'fails-by') => s.reach(e.id, kind).map((x) => x.id);
