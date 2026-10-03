@@ -287,7 +287,16 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   saying "typically" (a connecting rod 4140 steel, a spar 2024 aluminium or carbon fibre, a spoke 304 stainless, a
   gland epithelium). After a whole-queue round the components without a material are 13, from 233: ten pieces and
   regions of building blocks, the engine's rigid body, the platelet and the cytoplasm; the components without a
-  failure fell from 98 to 46 on the way, since what a thing is made of says how it fails. The bridge's ways (`way.*`, how a thing is done) are refinements
+  failure fell from 98 to 46 on the way, since what a thing is made of says how it fails.
+  Failures last: the table from function to failure grew from 20 functions to 90 (what computes suffers soft errors
+  and bugs, what senses drifts, what contains leaks and ruptures, what forms wrinkles and tears, what emits light
+  dims), every entry described and a test says so; living tissue is injured, diseased and ages, a population rule
+  before a tissue's own failures; the few that no rule reaches say theirs (a tooth chips, cardiac muscle infarcts, a
+  separator is punctured by a dendrite, the engine's rigid body goes unstable). After a whole-queue round the
+  components without a failure are 8, from 98: all pieces and regions of building blocks. On the way a merge-order
+  fault was found and fixed: a pack that named a thing before the pack that describes it left the stub's "unplaced"
+  as the thing's first domain, which is the queue's lane, so the cortex, the liver and the lung were queued on no
+  lane; a description now puts its own domain first and "unplaced" goes once a real domain is known. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.

@@ -1,5 +1,6 @@
 // The substrate: reality indexed as an alien engineer would, cross-connected, every entity carrying where it comes from
 // and how much of it is known, and a queue of what to ask next. The final test is answered by traversal, never by a list.
+import { FAILURE_OF_FUNCTION } from '../../src/ganglia/substrate/population';
 import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
@@ -497,6 +498,20 @@ describe('what an arrow names, the index describes (S-6)', () => {
     const said = s.relations.filter((x) => x.kind === 'made-of' && /^typically made of/.test(x.says ?? ''));
     expect(said.length).toBeGreaterThan(150);
     for (const x of said) expect(x.confidence).toBe(0.7);
+  });
+
+  it('every part the common pack describes can fail, and the index can say how: itself, as its kind, by its material, by its function, or as living tissue', () => {
+    const fails = (id: string) => s.outOf(id, 'fails-by').length > 0;
+    const canFail = (e: Entity): boolean => fails(e.id) || e.kinds.includes('biological') || s.reach(e.id, 'is-a').some((k) => fails(k.id)) || s.reach(e.id, 'made-of').some((m) => fails(m.id) || s.reach(m.id, 'is-a').some((fam) => fails(fam.id))) || s.reach(e.id, 'does').some((fn) => (FAILURE_OF_FUNCTION[fn.id] ?? []).length > 0);
+    const mute = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && e.domains.includes('common') && !canFail(e)).map((e) => e.id);
+    expect(mute).toEqual([]);
+    for (const [fn, fs] of Object.entries(FAILURE_OF_FUNCTION)) { expect(s.has(fn), `${fn} in the failure table is described`).toBe(true); for (const f of fs) expect(s.has(f), `${f}, named by ${fn}, is described`).toBe(true); }
+  });
+
+  it('a thing described after a pack has named it carries the describing pack\'s domain first, never unplaced', () => {
+    const cortex = s.get('bio.cortex')!;
+    expect(cortex.domains[0]).toBe('biology');
+    expect([...s.entities.values()].filter((e) => !isStub(e) && e.domains[0] === 'unplaced').map((e) => e.id)).toEqual([]);
   });
 
   it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {

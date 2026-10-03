@@ -134,13 +134,26 @@ function namedKinds(s: Substrate, e: Entity): { kind: Entity; how: string; confi
 const FACET_OF_RELATION: Partial<Record<Relation['kind'], Facet>> = { 'produced-by': 'constructors', 'fails-by': 'failures', 'standardized-by': 'standards', 'connects-to': 'interfaces', 'made-of': 'materials', does: 'functions' };
 
 /** How a thing that does a function can fail: a table with its reasons, each a failure mode the index knows. */
-const FAILURE_OF_FUNCTION: Record<string, string[]> = {
+export const FAILURE_OF_FUNCTION: Record<string, string[]> = {
   'fn.support.load': ['failure.overload', 'failure.fatigue', 'failure.buckling'], 'fn.transmit.torque': ['failure.fatigue', 'failure.shear'], 'fn.transmit.force': ['failure.fatigue', 'failure.overload'],
   'fn.support.rotation': ['failure.wear', 'failure.seizure'], 'fn.support.translation': ['failure.wear', 'failure.galling'], 'fn.roll': ['failure.wear', 'failure.pitting'], 'fn.guide.motion': ['failure.wear', 'failure.backlash'],
   'fn.seal': ['failure.leak'], 'fn.contain.pressure': ['failure.leak', 'failure.burst'], 'fn.clamp.axial': ['failure.loosening', 'failure.thread-stripping'], 'fn.prevent.loosening': ['failure.loosening'],
   'fn.conduct.current': ['failure.overheating', 'failure.open'], 'fn.actuate.electromagnetic': ['failure.overheating', 'failure.insulation-breakdown'], 'fn.switch': ['failure.contact-wear', 'failure.short'], 'fn.connect.electrical': ['failure.contact-wear', 'failure.corrosion'],
   'fn.store.charge': ['failure.insulation-breakdown', 'failure.thermal-runaway'], 'fn.store.elastic': ['failure.fatigue', 'failure.creep'], 'fn.store.magnetic': ['failure.saturation', 'failure.overheating'],
   'fn.move.fluid': ['failure.cavitation', 'failure.wear'], 'fn.change.speed-ratio': ['failure.wear', 'failure.tooth-breakage'], 'fn.transfer.heat': ['failure.corrosion'], 'fn.dissipate.motion': ['failure.overheating', 'failure.wear'],
+
+  'fn.compute': ['failure.soft-error', 'failure.bug'], 'fn.remember': ['failure.corruption', 'failure.soft-error'], 'fn.communicate': ['failure.noise', 'failure.packet-loss'], 'fn.sense': ['failure.drift', 'failure.sensor-noise', 'failure.sensor-failure'],
+  'fn.convert.analog-digital': ['failure.noise', 'failure.drift'], 'fn.convert.digital-analog': ['failure.noise', 'failure.drift'], 'fn.decide': ['failure.control-loss'], 'fn.control': ['failure.oscillation', 'failure.windup'], 'fn.learn': ['failure.overfitting', 'failure.distribution-shift'],
+  'fn.emit.light': ['failure.lumen-depreciation', 'failure.overheating'], 'fn.detect.light': ['failure.noise'], 'fn.display': ['failure.dead-pixel'], 'fn.focus': ['failure.contamination'], 'fn.polarize': ['failure.uv-degradation'],
+  'fn.contain': ['failure.leak', 'failure.rupture'], 'fn.convey': ['failure.erosion', 'failure.leak'], 'fn.control.flow': ['failure.leak', 'failure.sticking'], 'fn.prevent.backflow': ['failure.leak', 'failure.sticking'], 'fn.control.buoyancy': ['failure.leak'], 'fn.extract.fluid-energy': ['failure.erosion', 'failure.foreign-object-damage'],
+  'fn.lift': ['failure.fatigue'], 'fn.thrust': ['failure.overheating', 'failure.erosion'], 'fn.steer': ['failure.control-loss'], 'fn.move': ['failure.overload'], 'fn.grip': ['failure.slip'], 'fn.latch': ['failure.wear', 'failure.sticking'], 'fn.locate': ['failure.misalignment'], 'fn.spread.load': ['failure.overload'],
+  'fn.couple.shafts': ['failure.misalignment', 'failure.fatigue'], 'fn.program.motion': ['failure.follower-jump', 'failure.wear'], 'fn.convert.rotation.translation': ['failure.wear', 'failure.backlash'], 'fn.change.axis': ['failure.wear', 'failure.tooth-breakage'], 'fn.engage.disengage': ['failure.wear', 'failure.fade'],
+  'fn.reduce.friction': ['failure.lubricant-starvation', 'failure.wear'], 'fn.isolate.vibration': ['failure.compression-set', 'failure.resonance'], 'fn.prevent.overload': ['failure.nuisance-trip'], 'fn.measure.force': ['failure.drift'],
+  'fn.cut': ['failure.wear', 'failure.chipping'], 'fn.form': ['failure.wrinkling', 'failure.tearing'], 'fn.heat': ['failure.overheating'], 'fn.construct': ['failure.misassembly', 'failure.missing-part'], 'fn.pattern': ['failure.overlay-error'], 'fn.separate': ['failure.contamination'],
+  'fn.insulate': ['failure.insulation-breakdown'], 'fn.resist': ['failure.overheating', 'failure.drift'], 'fn.regulate.voltage': ['failure.drift', 'failure.ripple'], 'fn.filter': ['failure.drift'], 'fn.rectify': ['failure.overheating', 'failure.breakdown'], 'fn.amplify': ['failure.clipping', 'failure.oscillation'], 'fn.oscillate': ['failure.drift'],
+  'fn.protect.overcurrent': ['failure.nuisance-trip'], 'fn.protect.overvoltage': ['failure.breakdown'], 'fn.make.field': ['failure.overheating', 'failure.shorted-turn'], 'fn.limit.current': ['failure.overheating'], 'fn.transform.voltage': ['failure.saturation', 'failure.shorted-turn'], 'fn.invert': ['failure.shoot-through'], 'fn.convert.dc-dc': ['failure.ripple', 'failure.overheating'],
+  'fn.couple.ac': ['failure.esr-rise'], 'fn.decouple': ['failure.esr-rise'], 'fn.divide.voltage': ['failure.drift'], 'store.energy': ['failure.capacity-fade'],
+  'fn.digest': ['failure.disease'], 'fn.harvest.light': ['failure.disease'], 'fn.transfer.oxygen': ['failure.disease'], 'fn.reproduce': ['failure.mutation'],
 };
 
 /**
@@ -188,6 +201,8 @@ export function ruleExpander(): Expander {
         const have = new Set([...s.outOf(e.id, 'fails-by').map((x) => x.to), ...out.relations.filter((x) => x.kind === 'fails-by').map((x) => x.to)]);
         // what a thing is made of fails as the material fails: steel fatigues, polymers creep, aluminium corrodes in contact
         for (const m of s.reach(e.id, 'made-of')) for (const f of [...s.reach(m.id, 'fails-by'), ...s.reach(m.id, 'is-a').flatMap((fam) => s.reach(fam.id, 'fails-by'))]) if (!have.has(f.id)) { have.add(f.id); out.relations.push(r(e.id, 'fails-by', f.id, `made of ${m.id}, which fails by ${f.id}`)); }
+        // living tissue is injured, diseased and ages: every biological part fails these ways before its own
+        if (e.kinds.includes('biological')) for (const f of ['failure.injury', 'failure.disease', 'failure.aging']) if (s.has(f) && !have.has(f)) { have.add(f); out.relations.push(r(e.id, 'fails-by', f, 'living tissue: it is injured, diseased and ages')); }
         // what a thing does says how it can fail: what carries load can be overloaded and fatigued, what seals can leak
         for (const fn of s.reach(e.id, 'does')) for (const f of FAILURE_OF_FUNCTION[fn.id] ?? []) if (s.has(f) && !have.has(f)) { have.add(f); out.relations.push(r(e.id, 'fails-by', f, `it does ${fn.id}, whose failure is ${f}`)); }
       }

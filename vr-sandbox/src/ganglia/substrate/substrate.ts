@@ -32,7 +32,10 @@ export class Substrate {
     // a parameter with its provenance attaches to a stub as well: a characteristic scale is known of things not yet described
     if (e.params?.length) have.params = [...(have.params ?? []), ...e.params.filter((p) => !have.params?.some((q) => q.sym === p.sym))];
     for (const k of e.kinds) if (!have.kinds.includes(k)) have.kinds.push(k);
-    for (const d of e.domains) if (!have.domains.includes(d)) have.domains.push(d);
+    // the describing pack's domain comes first (it is the queue's lane); a stub's 'unplaced' goes once a real domain is known
+    if (!stub && (have.coverage.sourceKind === 'stub' || have.domains[0] === 'unplaced')) have.domains = [...e.domains, ...have.domains.filter((d) => !e.domains.includes(d))];
+    else for (const d of e.domains) if (!have.domains.includes(d)) have.domains.push(d);
+    if (have.domains.length > 1) have.domains = have.domains.filter((d) => d !== 'unplaced');
     for (const n of [e.name, ...e.names]) { if (!have.names.includes(n)) have.names.push(n); this.byName.set(n.toLowerCase(), id); }
     for (const u of e.coverage.unknowns) if (!have.coverage.unknowns.includes(u)) have.coverage.unknowns.push(u);
     for (const f of e.coverage.expanded) if (!have.coverage.expanded.includes(f)) have.coverage.expanded.push(f);

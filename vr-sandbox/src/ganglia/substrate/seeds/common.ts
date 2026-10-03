@@ -350,6 +350,10 @@ export function common(): Pack {
   madeOf('engine', ['cast-iron.gray-30', 'aluminum.6061-t6', 'material.steel'], HILL); madeOf('rotor.main', ['composite.cfrp', 'aluminum.2024-t3'], ANDERSON); madeOf('polarizer', ['material.polymer', 'material.glass'], HECHT); madeOf('relay.solid-state', ['material.semiconductor', 'polymer.abs'], HH);
   madeOf('electrolyte', ['material.electrolyte-liquid'], HH); madeOf('electrode.anode', ['material.graphite', 'material.lead'], HH); madeOf('electrode.cathode', ['material.lithium-cobalt-oxide', 'material.lead-dioxide'], HH); madeOf('electrode.plate', ['material.lead', 'material.nickel-hydroxide'], HH);
   madeOf('chem.catalyst', ['element.iron', 'element.nickel', 'material.ceramic'], ATKINS); madeOf('bio.heart', ['bio.muscle-tissue', 'bio.connective-tissue'], CAMPBELL); madeOf('bio.photoreceptor', ['bio.nervous-tissue'], CAMPBELL);
+  // the failures no rule reaches
+  p.link('rigid-body', { 'fails-by': [['failure.instability', 'the engine\'s unit fails when the solver does: a stiff constraint, a large mass ratio, a step too long']] }, HENNESSY);
+  p.link('capacitor.edlc', { 'fails-by': ['failure.esr-rise', 'failure.electrolyte-dryout'] }, HH);
+  p.link('actuator.voice-coil', { 'fails-by': ['failure.overheating'] }, HH); p.link('optocoupler', { 'fails-by': ['failure.lumen-depreciation', 'failure.aging'] }, HH); p.link('separator', { 'fails-by': ['failure.dendrite', 'failure.puncture', 'failure.internal-short'] }, HH); p.link('engine.cylinder', { 'fails-by': ['failure.wear', 'failure.overheating'] }, HILL); p.link('laser.source', { 'fails-by': ['failure.overheating', 'failure.aging'] }, HH);
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;
 }
