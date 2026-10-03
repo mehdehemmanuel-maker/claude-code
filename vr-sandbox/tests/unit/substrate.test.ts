@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
 import { answerTraversal } from '../../src/assistant/traverse';
-import { hash, read } from '../../src/ganglia/native';
+import { hash, read, text } from '../../src/ganglia/native';
 import {
   FACETS, KINDS, RELATIONS, RELATION_KINDS, Queue, Substrate, analogues, build, constructionPath, decompose, dualRole, implementations, index, ingest, leavesOf,
   lineage, materialsForRole, mechanismsFor, missingConstructors, populate, priority, producers, ruleExpander, seedExpander, seedQueue, variants, waysToStore,
@@ -1195,6 +1195,29 @@ describe('Kinds and functions are built as Nex structures too, said beside the E
     // what makes a thing is a morphism from it to the process; what it is made of, a part
     expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'shaft' })).toMatch(/^A shaft is made by Turning, grinding, Milling, heat treatment quench temper, wire drawing\. Those need .*\. In Nex: morphism\(shaft, turn\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 4 more\.$/);
     expect(answerTraversal({ do: 'traverse', query: 'materials-for', of: 'spring' })).toMatch(/^A spring is made of Music wire ASTM A228, .*\. In Nex: part\(spring, steel\.music-wire\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 6 more part structures\.$/);
+  });
+});
+
+describe('Every Nex structure Ego says is readable Nex', () => {
+  it('the "In Nex:" tail of each answer reads back and prints to the same text (section E both ways, on her real answers)', () => {
+    const tail = (a: string): string | null => {
+      const i = a.search(/ In Nex(?: at the edge)?: /); if (i < 0) return null;
+      const s = a.slice(a.indexOf(': ', i) + 2);
+      let depth = 0, j = 0;
+      for (; j < s.length; j++) { const ch = s[j]; if (ch === '(' || ch === '{' || ch === '[') depth++; else if (ch === ')' || ch === '}' || ch === ']') { depth--; if (depth === 0 && !/[({[]/.test(s[j + 1] ?? ' ')) { j++; break; } } }
+      return s.slice(0, j);
+    };
+    const asks = ['what are the kinds of bearing', 'what does a bearing do', 'what is a bearing made of', 'what makes a shaft', 'what standards cover a bearing', 'what does a battery connect to', 'what is like a bearing', 'does the load cause the failure of a bearing', 'does the current cause the voltage', 'how do you know that the current causes the voltage', 'what fails a bearing', 'is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K', 'how far can the load go before the rating life law stops applying', 'what laws have the same form as the energy in a spring', 'that motor is struggling'];
+    let withTail = 0;
+    for (const q of asks) {
+      const i = interpret(q);
+      expect(i?.do, q).toBe('traverse');
+      const t = tail(answerTraversal(i as Parameters<typeof answerTraversal>[0]));
+      expect(t, q).not.toBeNull();
+      withTail++;
+      expect(text(read(t!)), q).toBe(t);
+    }
+    expect(withTail).toBe(asks.length);
   });
 });
 
