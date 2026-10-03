@@ -62,6 +62,34 @@ export function common(): Pack {
   t('filament', ['component'], 'A fine wire or thread: a lamp\'s heated tungsten, a printer\'s plastic feedstock, a fibre.', { 'governed-by': ['joule'] });
   t('sensor.position', ['component'], 'A sensor that reads where something is: an encoder, a potentiometer, a Hall element, a resolver.', { does: ['fn.sense'], 'governed-by': ['shannon.sampling'] }, HH);
   t('capacitor.bus', ['component'], 'The capacitor bank across a DC link: it holds the rail steady against the pulses of the inverter.', { does: ['fn.decouple'], 'fails-by': ['failure.dc-link-failure'] }, HH);
+
+  // transformations between energy domains (the bridge names them for the manifolds; here each is described)
+  const tr = (id: string, from: string, to: string, says: string) => { p.e(id, 'transformation', says, { source: PAHL }); p.link(id, { transforms: [`domain.${from}`], enables: [to === 'travel' ? 'flow.travel' : `domain.${to}`] }, PAHL); };
+  tr('convert.electrical.electrical', 'electrical', 'electrical', 'Electrical to electrical: voltage, current or frequency changed while the energy stays electrical, as a transformer, a rectifier, a bridge or an inverter does.');
+  tr('convert.electrical.optical', 'electrical', 'optical', 'Electrical to optical: current across a junction or through a filament becomes light.');
+  tr('convert.electrical.translational', 'electrical', 'translational', 'Electrical to translational: a current in a field pushes straight, as a solenoid or a voice coil.');
+  tr('convert.optical.electrical', 'optical', 'electrical', 'Optical to electrical: photons freeing carriers in a junction make a current, as a photodiode or a solar cell.');
+  tr('convert.optical.chemical', 'optical', 'chemical', 'Optical to chemical: light driving a reaction uphill, as photosynthesis stores it in sugar.');
+  tr('convert.chemical.optical', 'chemical', 'optical', 'Chemical to optical: a reaction giving its energy as light, as a firefly or a glow stick.');
+  tr('convert.chemical.chemical', 'chemical', 'chemical', 'Chemical to chemical: energy moved from one bond to another, as metabolism carries it from glucose to ATP.');
+  tr('convert.chemical.thermal', 'chemical', 'thermal', 'Chemical to thermal: a reaction giving its energy as heat, as combustion does.');
+  tr('convert.chemical.rotational', 'chemical', 'rotational', 'Chemical to rotational: fuel burned to push pistons on a crank, or to spin a turbine.');
+  tr('convert.chemical.translational', 'chemical', 'translational', 'Chemical to translational: ATP pulling a muscle shorter, or propellant pushing a rocket.');
+  tr('convert.chemical.hydraulic', 'chemical', 'hydraulic', 'Chemical to hydraulic: a muscle squeezing a fluid, as the heart pumps blood.');
+  tr('convert.rotational.chemical', 'rotational', 'chemical', 'Rotational to chemical: a turning rotor driving a reaction uphill, as ATP synthase does.');
+  tr('convert.rotational.hydraulic', 'rotational', 'hydraulic', 'Rotational to hydraulic: a turning impeller or gear set raising a fluid\'s pressure, as a pump.');
+  tr('convert.hydraulic.rotational', 'hydraulic', 'rotational', 'Hydraulic to rotational: a pressured or falling fluid turning a wheel, as a turbine or a hydraulic motor.');
+  tr('convert.thermal.rotational', 'thermal', 'rotational', 'Thermal to rotational: hot gas expanding through a turbine, bounded by Carnot.');
+  tr('convert.pneumatic.translational', 'pneumatic', 'translational', 'Pneumatic to translational: compressed gas pushing a piston.');
+  tr('convert.rotational.travel', 'rotational', 'travel', 'Rotational to travel: a turning wheel, track or propeller moving the vehicle it is on, by friction or by thrust.');
+  tr('convert.translational.travel', 'translational', 'travel', 'Translational to travel: a body pushing on its medium to move itself, as a tail pushes water.');
+
+  // instruments and tests
+  t('instrument.torque-wrench', ['thing'], 'A wrench that clicks or reads at a set torque: preload by the nut-factor relation, with 25 % scatter from friction.', { 'governed-by': ['bolt.torque.nut-factor'] });
+  t('instrument.ultrasonic-bolt-gauge', ['thing'], 'A gauge reading a bolt\'s stretch from an ultrasonic pulse\'s round-trip time: preload to a few percent.', { 'governed-by': ['hooke'] });
+  t('test.tensile', ['thing'], 'A specimen pulled to fracture at a set rate while load and extension are read: modulus, yield, ultimate strength and elongation from one curve.', { 'governed-by': ['hooke', 'stress.axial'] });
+  t('ball', ['component', 'geometry'], 'A sphere: the rolling element of a bearing, the stud of a ball joint, the closer of a ball valve.', { 'governed-by': ['hertz.contact'] });
+  t('slider', ['component'], 'The block that slides along a guide in a prismatic joint: it carries the load and sets the travel.', { 'governed-by': ['friction.coulomb'] });
   t('magnet', ['component'], 'A body with a magnetic field of its own, permanent or from a current: it pulls on iron and on other magnets, by the field squared over the gap area.', { 'governed-by': ['magnetic.pull', 'ampere.law'], 'fails-by': ['failure.demagnetization'] }, HH);
   t('ground', ['environment'], 'The ground under a machine, soil, floor or road: it carries the weight and gives the reaction every push needs, with its own friction and stiffness.', { 'governed-by': ['weight', 'friction.coulomb', 'traction.limit'] });
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });

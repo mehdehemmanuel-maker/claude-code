@@ -144,27 +144,36 @@ block pieces, while `material.steel` sat described). Each is now a table or a pa
   range that holds for a subset says so in its name. The stocked materials (Callister tables) lie inside them, density
   to 2 % and modulus to 10 %: two sources agree.
 
-Stubs fell from 813 to 580 and described entities rose from 1799 to 2015 without a question asked outside.
+Then the rest of the typed stubs: `seeds/parameters.ts` (103 axes a thing varies along, each with its unit),
+`seeds/standards.ts` (21 standards, each sourced to itself and saying what it fixes), `seeds/making.ts` (69 processes
+named by `produced-by` and described by no pack, from the blast furnace to zone refining), the eighteen energy
+transformations, the three instruments, and the specific materials (barium titanate, powdered iron, mica, the cells and
+molecules of biology). The test now holds for every kind an arrow can type: at build no stub is a law, a failure, a
+function, a parameter, a standard, a transformation, a constructor, a material, a role, a view or a thing; only an arrow
+that does not say what its target is (`has-part`, `interacts-with`) may name something not yet described, and those are
+the queue's questions.
+
+Stubs fell from 813 to 323 and described entities rose from 1799 to 2265 without a question asked outside.
 
 ## Census (build, before any extra population)
 
 | | |
 |---|---|
-| entities | 2595 |
-| relations | 9959 |
-| relations per entity | 3.8 |
-| stubs (depth 0, each a queued question) | 580 |
+| entities | 2588 |
+| relations | 10183 |
+| relations per entity | 3.9 |
+| stubs (depth 0, each a queued question) | 323 (none typed: every one named only by `has-part` or `interacts-with`) |
 | laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
-| materials | 252 |
-| components | 494 |
+| materials | 246 |
+| components | 497 |
 | mechanisms | 178 |
-| constructors | 254 |
+| constructors | 251 |
 | failures | 209 |
-| biological | 174 |
+| biological | 190 |
 | manifolds / generators | 181 / 84 |
-| domains | 18 (mechanical 543, electrical 492, chemistry 303, biology 283, materials 282, manufacturing 256, engineering 242, scale 209, physics 196, failures 161, computing 98, common 91, catalogue 77, circuits 69, robotics 67, earth 52, energy 33, views 30) |
-| questions queued after seeding | 31 965 |
-| things with no known constructor | 368 |
+| domains | 21 (mechanical 477, electrical 425, materials 298, chemistry 296, biology 284, manufacturing 254, engineering 236, scale 209, physics 196, failures 160, common 117, parameters 103, computing 91, catalogue 77, making 69, robotics 67, circuits 66, earth 51, energy 33, views 30, standards 21) |
+| questions queued after seeding | 34 944 |
+| things with no known constructor | 371 |
 
 Before the views, failures and families packs, a round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
 queue at 27 853: never finished, by design.
@@ -200,9 +209,9 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 
 ## Still open
 
-- **Stubs that remain** at build, 580: 325 named by `has-part` or `interacts-with` with no kind yet (organelles, process
-  consumables, specific parts), 103 parameters named by `varies-by`, 69 constructors, 41 specific materials, 21 standards,
-  18 transformations. Each is a question for a pack or for the outside; none is a view, a failure mode or a bare word.
+- **Stubs that remain** at build, 323, every one named only by `has-part` or `interacts-with` (organelles, process
+  consumables, specific parts: a bone marrow, a cell wall, a gas shield, a photoresist). The arrow does not say what
+  they are, so a rule cannot type them; each is a question for a pack or for the outside.
 - **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no
   English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded

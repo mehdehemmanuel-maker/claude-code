@@ -18,6 +18,9 @@ import { scale } from './seeds/scale';
 import { views } from './seeds/views';
 import { failures } from './seeds/failures';
 import { common } from './seeds/common';
+import { parameters } from './seeds/parameters';
+import { standards } from './seeds/standards';
+import { making } from './seeds/making';
 import type { Pack } from './dsl';
 import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
 import { externalExpander } from './external';
@@ -33,7 +36,7 @@ export { Population, startPopulation, population, stopPopulation, type Populatio
 export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
-export const PACKS: (() => Pack)[] = [views, common, mechanical, electrical, circuits, computing, materials, manufacturing, failures, biology, chemistry, earth, robotics, scale];
+export const PACKS: (() => Pack)[] = [views, common, parameters, standards, mechanical, electrical, circuits, computing, materials, manufacturing, making, failures, biology, chemistry, earth, robotics, scale];
 
 export interface Built { substrate: Substrate; queue: Queue; packs: Pack[]; expanders: Expander[]; generators: Map<string, Generator>; seedReport: Report }
 

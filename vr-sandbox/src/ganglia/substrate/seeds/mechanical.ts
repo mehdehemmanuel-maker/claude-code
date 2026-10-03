@@ -296,7 +296,7 @@ export function mechanical(): Pack {
   p.e('belt.timing', 'component', 'A toothed belt on toothed pulleys: no slip, exact phase, the drive of 3D printers and camshafts.', { names: ['timing belt', 'synchronous belt', 'GT2 belt'] });
   p.link('belt.timing', { 'is-a': ['belt'], 'interacts-with': ['pulley.toothed', 'printer.3d', 'engine.camshaft'], 'fails-by': ['failure.tooth-skipping'] });
   p.e('pulley', 'component', 'A wheel a belt or rope runs over: grooved, flat, toothed, or an idler.');
-  p.link('pulley', { 'interacts-with': ['belt', 'rope', 'shaft', 'bearing'], does: ['fn.change.axis', 'fn.change.speed-ratio'], 'produced-by': ['turn', 'process.die-casting', 'process.injection-molding', 'process.stamping'], 'made-of': ['aluminum.6061-t6', 'cast-iron.gray-30', 'steel.1018-cd', 'polymer.nylon-microcarbon'] });
+  p.link('pulley', { 'interacts-with': ['belt', 'rope', 'shaft', 'bearing'], does: ['fn.change.axis', 'fn.change.speed-ratio'], 'produced-by': ['turn', 'process.casting.die', 'process.injection-molding', 'process.stamping'], 'made-of': ['aluminum.6061-t6', 'cast-iron.gray-30', 'steel.1018-cd', 'polymer.nylon-microcarbon'] });
   p.e('pulley.toothed', 'component', 'A pulley with teeth for a synchronous belt.', { names: ['timing pulley'] });
   p.link('pulley.toothed', { 'is-a': ['pulley'] });
   p.e('tensioner', 'component', 'A sprung idler keeping a belt or chain taut as it wears and warms.');
@@ -333,8 +333,8 @@ export function mechanical(): Pack {
   p.e('joint.kinematic', ['interface', 'manifold'], 'A connection between two bodies that leaves some degrees of freedom and takes the rest: the vocabulary of every mechanism.', { names: ['kinematic pair'] });
   p.link('joint.kinematic', { 'varies-by': ['param.degrees-of-freedom'], 'governed-by': ['grubler'], 'analogous-to': [['bio.synovial-joint', 'hinge (elbow), pivot (radioulnar), ball-and-socket (hip), saddle (thumb), condyloid (wrist), plane (carpals)']] });
   p.link('joint.revolute', { 'analogous-to': [['bio.elbow', 'a hinge joint of bone, cartilage and ligament']], 'produced-by': ['hinge'] });
-  p.link('joint.spherical', { 'analogous-to': [['bio.hip-joint', 'a ball-and-socket joint']], 'produced-by': ['ball'] });
-  p.link('joint.prismatic', { 'produced-by': ['slider'], 'has-part': ['bearing.linear'] });
+  p.link('joint.spherical', { 'analogous-to': [['bio.hip-joint', 'a ball-and-socket joint']], 'has-part': ['ball'] });
+  p.link('joint.prismatic', { 'has-part': ['slider', 'bearing.linear'] });
   p.e('hinge', ['component'], 'Two leaves on a pin: a revolute joint for doors, lids and flaps.');
   p.link('hinge', { 'is-a': ['joint.revolute'], 'produced-by': ['process.stamping', 'process.assembly'], 'made-of': ['steel.1018-cd', 'brass.c360', 'stainless.304'] });
   p.e('actuator.linear', ['component', 'mechanism'], 'A device giving a stroke on command: a motor on a lead screw, a hydraulic or pneumatic cylinder, a solenoid, a voice coil, a piezo stack, a muscle.', { names: ['linear actuator'] });
@@ -361,7 +361,7 @@ export function mechanical(): Pack {
   p.e('compressor', ['component', 'manifold'], 'A pump for gas: piston, screw, scroll, centrifugal, axial.', { names: ['air compressor'] });
   p.link('compressor', { 'is-a': ['pump'], does: ['fn.move.fluid', 'fn.contain.pressure'], transforms: ['convert.electrical.pneumatic'], 'governed-by': ['gas.isothermal-work', 'carnot'], 'fails-by': ['failure.overheating', 'failure.wear', 'failure.leak'], 'has-part': ['piston', 'valve', 'cylinder.pneumatic', 'motor.dc', 'vessel.cylindrical'] });
   p.e('fan', 'component', 'A rotor moving air at low pressure rise: axial for volume, centrifugal for pressure.', { names: ['blower'] });
-  p.link('fan', { 'is-a': ['pump'], does: ['fn.move.fluid', 'fn.cool'], 'has-part': ['impeller', 'motor.dc', 'bearing', 'housing'], 'governed-by': ['bernoulli', 'thrust.ideal-static', 'convection'], 'made-of': ['polymer.nylon-microcarbon', 'aluminum.6061-t6', 'steel.1018-cd'], 'produced-by': ['process.injection-molding', 'process.die-casting', 'process.stamping'], 'fails-by': ['failure.imbalance', 'failure.wear', 'failure.resonance'] });
+  p.link('fan', { 'is-a': ['pump'], does: ['fn.move.fluid', 'fn.cool'], 'has-part': ['impeller', 'motor.dc', 'bearing', 'housing'], 'governed-by': ['bernoulli', 'thrust.ideal-static', 'convection'], 'made-of': ['polymer.nylon-microcarbon', 'aluminum.6061-t6', 'steel.1018-cd'], 'produced-by': ['process.injection-molding', 'process.casting.die', 'process.stamping'], 'fails-by': ['failure.imbalance', 'failure.wear', 'failure.resonance'] });
   p.e('turbine', ['component', 'manifold'], 'A rotor taking work out of a moving or expanding fluid: steam, gas, water, wind.', { params: [param('type', 'type', OBERG, { values: ['steam (impulse, reaction)', 'gas', 'hydraulic (Pelton, Francis, Kaplan)', 'wind (horizontal, vertical axis)', 'tidal'] })] });
   p.link('turbine', { does: ['fn.extract.fluid-energy'], transforms: ['convert.hydraulic.rotational', 'convert.thermal.rotational'], plays: ['role.energy-converter', 'role.rotational-source'], 'governed-by': ['bernoulli', 'carnot', 'thrust.ideal-static', 'power.rotary', 'betz'], 'has-part': ['turbine.blade', 'turbine.rotor', 'shaft', 'bearing', 'housing', 'turbine.nozzle'], 'fails-by': ['failure.fatigue', 'failure.creep', 'failure.cavitation', 'failure.burst', 'failure.erosion'], 'made-of': ['material.nickel-superalloy', 'stainless.316', 'composite.gfrp', 'titanium.ti6al4v'], 'produced-by': ['process.casting.investment', 'process.forging', 'mill', 'process.lamination'], 'interacts-with': ['generator', 'compressor', 'engine.gas-turbine'] });
   p.e('impeller', 'component', 'The bladed rotor of a pump, fan or compressor that gives the fluid its energy.');

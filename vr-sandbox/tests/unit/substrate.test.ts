@@ -408,8 +408,9 @@ describe('Ego answers the final test in words, by traversal', () => {
 
 describe('what an arrow names, the index describes (S-6)', () => {
   const isStub = (e: Entity) => 'stub' in e.source;
-  it('every view, every failure mode and every function an arrow names is described', () => {
-    for (const kind of ['architecture', 'failure', 'function'] as const) expect(s.ofKind(kind).filter(isStub).map((e) => e.id), `${kind} stubs`).toEqual([]);
+  it('what an arrow says a thing is, the index describes: no typed stub at build', () => {
+    // an arrow that types its target (governed-by a law, fails-by a failure, varies-by a parameter, ...) names something a pack describes
+    for (const kind of ['architecture', 'failure', 'function', 'parameter', 'standard', 'transformation', 'constructor', 'material', 'thing', 'role', 'law'] as const) expect(s.ofKind(kind).filter(isStub).map((e) => e.id), `${kind} stubs`).toEqual([]);
     // and each says something of its own, never a generated sentence
     for (const v of s.ofKind('architecture')) expect(v.says, v.id).not.toMatch(/not yet described|decomposition of a living thing/);
     for (const f of s.ofKind('failure')) expect(f.says, f.id).not.toMatch(/^$|not yet described/);

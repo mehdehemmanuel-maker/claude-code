@@ -197,5 +197,20 @@ export function biology(): Pack {
   b('bio.genome', ['biological', 'computation'], 'All of an organism\'s DNA (or a virus\'s RNA): 4.6 million bases in E. coli, 3.2 billion in a human, 150 billion in a lily.', { 'is-a': ['bio.dna'], 'in-view': ['view.informational', 'view.developmental'], 'produced-by': ['bio.replication'], 'analogous-to': ['program', 'memory.flash'] }, ALBERTS);
   // the structures of a body that take part in both the mechanical and the anatomical decompositions, by name
   p.each(['bio.tendon', 'bio.ligament', 'bio.skeletal-muscle', 'bio.heart', 'bio.skin', 'bio.tooth', 'bio.elbow', 'bio.hip-joint', 'bio.sarcomere', 'bio.blood-vessel', 'bio.cortical-bone', 'bio.cancellous-bone', 'bio.exoskeleton', 'bio.skeleton'], { 'in-view': ['view.mechanical', 'view.anatomical'] }, GRAY);
+  // the cells and molecules other things are made of
+  const bm = (id: string, says: string, links: Parameters<Pack['link']>[1] = {}) => b(id, ['biological', 'material'], says, links);
+  bm('bio.albumin', 'The most abundant blood protein: it holds water in the vessels by osmotic pressure and carries fatty acids and hormones.', { 'is-a': ['bio.protein'] });
+  bm('bio.cholesterol', 'A lipid in the cell membrane that stiffens and orders it; the precursor of steroid hormones and bile.', { 'is-a': ['bio.lipid'] });
+  bm('bio.phospholipid', 'A lipid with a charged head and two fatty tails: it forms the double layer of every membrane.', { 'is-a': ['bio.lipid'] });
+  bm('bio.chondrocyte', 'The cell of cartilage: it makes and maintains the proteoglycan and collagen round it, fed by diffusion since cartilage has no vessels.', { 'is-a': ['bio.cell'], 'governed-by': ['fick.diffusion'] });
+  bm('bio.fibroblast', 'The cell of connective tissue: it lays down collagen and the matrix, and closes wounds.', { 'is-a': ['bio.cell'] });
+  bm('bio.osteoblast', 'The bone-building cell: it lays down collagen and mineralises it.', { 'is-a': ['bio.cell'], 'governed-by': ['wolff.law'] });
+  bm('bio.osteoclast', 'The bone-resorbing cell: it dissolves mineral and matrix, remodelling bone to its load.', { 'is-a': ['bio.cell'], 'governed-by': ['wolff.law'] });
+  bm('bio.osteocyte', 'A bone cell walled into the matrix: it senses strain and signals the builders and the resorbers.', { 'is-a': ['bio.cell'], 'governed-by': ['wolff.law'] });
+  bm('bio.metabolite', 'A small molecule of metabolism, a sugar, an acid, an amino acid, on its way through a pathway.');
+  bm('bio.nucleotide', 'A base, a sugar and a phosphate: the unit of DNA and RNA, and as ATP the cell\'s energy currency.');
+  bm('bio.peptidoglycan', 'Sugar chains cross-linked by peptides: the bacterial cell wall, which penicillin stops being built.');
+  bm('bio.proteoglycan', 'A protein with long charged sugar chains: it draws water into cartilage and resists compression.', { 'is-a': ['bio.protein'] });
+  bm('bio.tubulin', 'The protein that polymerises into microtubules: the cell\'s rails and its mitotic spindle.', { 'is-a': ['bio.protein'] });
   return p;
 }
