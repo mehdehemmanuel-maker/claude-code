@@ -141,7 +141,8 @@ block pieces, while `material.steel` sat described). Each is now a table or a pa
 - `FAMILY_OF_CATEGORY` in `seeds/materials.ts`: the one table from a category word to a family, used by the stocked
   materials, the processes and the block pieces alike; a piece that could be either of two materials says both.
 - `FAMILY_NUMBERS`: density, modulus, strength and conductivity on the metal and polymer families, each from a named
-  Engineering ToolBox page with its address and the day it was read, as ranges across the grades the page lists; a
+  Engineering ToolBox page with its address and the day it was read (densities, moduli and strengths, thermal
+  conductivities, and the melting temperatures of metals and alloys, kept in kelvin and spoken in °C), as ranges across the grades the page lists; a
   range that holds for a subset says so in its name. The stocked materials (Callister tables) lie inside them, density
   to 2 % and modulus to 10 %: two sources agree.
 

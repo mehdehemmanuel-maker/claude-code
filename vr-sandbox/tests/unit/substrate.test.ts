@@ -785,7 +785,7 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     const b = answerTraversal({ do: 'traverse', query: 'property', of: 'aluminum.6061-t6', which: 'modulus' });
     expect(b).toMatch(/Young's modulus 6\d\.?\d* GPa \(derived from src\/data\/materials\.ts\)/);
     expect(b).toMatch(/as an aluminium alloy: Young's modulus 69 GPa to 70 GPa/);
-    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'steel', which: 'melting point' })).toMatch(/I have no melting point for/);
+    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'steel', which: 'melting point' })).toMatch(/^steel: melting point, carbon steel 1425 °C to 1540 °C \(The Engineering ToolBox, Metals and Alloys - Melting Temperatures/);
   });
 
   it('the index of a thing says where it lives in scale and what it is like, and a structure answers to its words', () => {
@@ -841,6 +841,15 @@ describe('what the fifty-question probe of 3 October found, each fixed at its ro
     expect(answerTraversal({ do: 'traverse', query: 'property', of: 'copper', which: 'density' })).toMatch(/^copper alloy: density 7400 kg\/m\^3 to 8940 kg\/m\^3 \(The Engineering ToolBox/);
     expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'bearings' })).toMatch(/A bearing is made by/);
     expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'bearings' })).not.toMatch(/a bearings/);
+  });
+
+  it('a melting point is answered for a family from a sourced page, in degrees a person reads; a word that names several things asks which', () => {
+    expect(interpret('what temperature does steel melt at')).toMatchObject({ do: 'traverse', query: 'property', of: 'steel', which: 'melting point' });
+    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'steel', which: 'melting point' })).toMatch(/^steel: melting point, carbon steel 1425 °C to 1540 °C \(The Engineering ToolBox, Metals and Alloys - Melting Temperatures \(read 2026-10-03\), https:\/\/www\.engineeringtoolbox\.com\/melting-temperature-metals-d_860\.html\)/);
+    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'aluminium', which: 'melting point' })).toMatch(/463 °C to 671 °C/);
+    const oak = answerTraversal({ do: 'traverse', query: 'property', of: 'oak', which: 'density' });
+    expect(oak).toMatch(/^I know no oak as such\. I know .*Northern red oak.*: which do you mean\?$/);
+    expect(oak).toMatch(/White oak/);
   });
 
   it('a material is spoken without an article, sizes in human units, and what a thing does is governed by its own laws', () => {

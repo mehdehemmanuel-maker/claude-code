@@ -41,11 +41,15 @@ function spoken(says: string): string {
 
 function unknown(name: string): string {
   const p = population();
+  // things named with the word ("oak": Northern red oak, White oak): asked which, rather than denied
+  const w = name.toLowerCase().replace(/^(?:an? |the )/, '').replace(/[^a-z0-9 ]/g, '').trim();
+  const like = w ? [...substrate().entities.values()].filter((e) => !/^(?:kind|block|view|cross|fn|role|param|law|scale|observer)\./.test(e.id) && e.name.toLowerCase() !== w && new RegExp(`\\b${w}\\b`).test(e.name.toLowerCase())).slice(0, 4) : [];
+  const which = like.length ? ` I know ${like.map(nameOf).join(', ')}: which do you mean?` : '';
   if (p?.connected) {
     p.ask(name);
-    return `I know no ${name} yet. I have asked ${p.connector!.name} about it; ask me again in a moment and I will say what it answered, with where it came from.`;
+    return `I know no ${name} yet.${which} I have asked ${p.connector!.name} about it; ask me again in a moment and I will say what it answered, with where it came from.`;
   }
-  return `I know no ${name}.`;
+  return `I know no ${name}${which ? ' as such.' : '.'}${which}`;
 }
 
 export function answerTraversal(i: Traverse): string {
@@ -224,7 +228,7 @@ export function answerTraversal(i: Traverse): string {
       : /conduct/.test(w) ? { syms: ['k', 'sigma'], names: /conductivity/, label: 'conductivity' } : /melt/.test(w) ? { syms: ['T_melt'], names: /melting/, label: 'melting point' }
       : /friction/.test(w) ? { syms: ['mu'], names: /friction/, label: 'friction coefficient' } : { syms: [], names: new RegExp(w.replace(/[^a-z ]/g, '')), label: w };
     // a number said in the unit a person reads: pascals as GPa or MPa, the rest as given
-    const num = (x: number, unit?: string) => (unit === 'Pa' ? (x >= 1e9 ? `${+(x / 1e9).toPrecision(3)} GPa` : x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} MPa` : `${+x.toPrecision(3)} Pa`) : `${+x.toPrecision(3)}${unit ? ` ${unit}` : ''}`);
+    const num = (x: number, unit?: string) => (unit === 'Pa' ? (x >= 1e9 ? `${+(x / 1e9).toPrecision(3)} GPa` : x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} MPa` : `${+x.toPrecision(3)} Pa`) : unit === 'K' ? `${+(x - 273.15).toPrecision(4)} °C` : `${+x.toPrecision(3)}${unit ? ` ${unit}` : ''}`);
     const range = (p: P) => (p.low !== undefined && p.high !== undefined && p.low !== p.high ? `${num(p.low, p.unit)} to ${num(p.high, p.unit)}` : p.low !== undefined ? num(p.low, p.unit) : p.values ? p.values.join(', ') : 'no number');
     const from = (of: P['of']) => ('cite' in of ? `${of.cite}${of.url ? `, ${of.url}` : ''}` : 'derived' in of ? `derived from ${of.derived}` : 'estimate' in of ? `an estimate: ${of.estimate}` : 'a stub');
     const lines: string[] = [];
