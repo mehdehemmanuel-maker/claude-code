@@ -92,8 +92,10 @@ similarities because current is left unscaled by them (true: electrical similari
 
 `crossscale.ts`: `CrossScale { levels (micro, meso, macro with variables and characteristic scales), up (interaction →
 transition → collective → emergent variable, each with what it carries and by which law), down (constraint → allowed
-microconfigurations → micro dynamics → realisation), disappears, appears, invariant, breaks, status }`. Five are
-written: **muscle** (myosin heads → sarcomeres → a muscle on a lever: Hill's curve emerging, 300 kPa invariant from a
+microconfigurations → micro dynamics → realisation), disappears, appears, invariant, breaks, status }`. Seven are
+written: a **neural network** (a synapse weights, a neuron thresholds, a layer codes, layers compose a function no unit
+holds: Hebb, Hodgkin-Huxley, universal approximation), a **river basin** (raindrops to Horton's ratios, an empirical
+law with optimal channel networks as its model), **muscle** (myosin heads → sarcomeres → a muscle on a lever: Hill's curve emerging, 300 kPa invariant from a
 mouse to a whale), a **gear train** (Hertzian tooth contact → a mesh → a ratio and an efficiency), **heat** (molecular energy states → collisions → the Maxwell-Boltzmann distribution → temperature → heat flux →
 the temperature field; never a static object: STATE + GRADIENT + TRANSPORT + INTERACTION), the **rigid body** (atoms →
 elastic continuum → rigidity, valid while L/(c Δt) is small: the engine's own model as a projection), and **electric
@@ -205,6 +207,6 @@ The verdicts are predictions about the world; the world here is the engine, so t
 - Characteristic scales are estimates on about 130 entities; most of the substrate carries none, which the analogue
   search reports (`unplaced`). A heart now finds the cilium four decades down; a bearing still finds nothing far away.
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.
-- Five cross-scale structures are written; a market, a neural network and a river basin are next.
+- Seven cross-scale structures are written; a market and an ecosystem are next.
 - Allometry's exponent is carried as measured (¾) with its range (0.65 to 0.78); the WBE derivation is cited as a
   model, not promoted.

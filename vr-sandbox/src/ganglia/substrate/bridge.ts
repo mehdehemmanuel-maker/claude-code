@@ -39,6 +39,16 @@ function rolesByNumbers(m: (typeof MATERIALS)[number]): [string, string][] {
 }
 
 /** Read every structured source into the substrate. */
+/** The bridge's ways (how a thing is done) as refinements of the packs' functions (what is done), where a function names it. */
+export const WAY_FUNCTIONS: Record<string, string[]> = {
+  'motor.rotary': ['fn.actuate.electromagnetic', 'fn.transmit.torque'], 'motor.hub': ['fn.actuate.electromagnetic', 'fn.roll'], 'motor.linear': ['fn.actuate.electromagnetic', 'fn.move'], 'voice-coil': ['fn.actuate.electromagnetic', 'fn.move'], solenoid: ['fn.actuate.electromagnetic'],
+  piezo: ['fn.move'], electrostatic: ['fn.move'], 'thermal.actuator': ['fn.move'], 'ion.thruster': ['fn.move'], 'joule.heating': ['fn.heat'], combustion: ['fn.heat'], muscle: ['fn.transmit.force', 'fn.move'],
+  'light.emit': ['fn.emit.light'], bioluminescence: ['fn.emit.light'], 'sense.light': ['fn.detect.light', 'fn.sense'], 'sense.sound': ['fn.sense'], 'sense.strain': ['fn.measure.force', 'fn.sense'], 'sense.thermocouple': ['fn.sense'], 'sense.encoder': ['fn.sense'],
+  'switch.transistor': ['fn.switch'], 'logic.transistor': ['fn.compute'], 'logic.relay': ['fn.compute'], 'logic.mechanical': ['fn.compute'],
+  'gear.reduce': ['fn.change.speed-ratio', 'fn.transmit.torque'], 'chain.drive': ['fn.transmit.torque', 'fn.change.speed-ratio'], 'belt.drive': ['fn.transmit.torque', 'fn.change.speed-ratio'],
+  wheel: ['fn.roll', 'fn.support.load'], track: ['fn.roll', 'fn.spread.load'], legs: ['fn.move'], propeller: ['fn.move.fluid'], paddle: ['fn.move.fluid'], winch: ['fn.transmit.force'], 'rack.pinion': ['fn.convert.rotation.translation'], 'lead.screw': ['fn.convert.rotation.translation'],
+};
+
 export function bridge(s: Substrate): void {
   for (const l of LAWS) s.add(ent(l.id, ['law'], l.name, l.statement, ['physics'], l.source, l.inputs.map((q) => ({ sym: q.sym, name: q.name, unit: q.unit, of: l.source }))));
   // materials, with their numbers as parameters and roles by rule
@@ -79,6 +89,8 @@ export function bridge(s: Substrate): void {
     s.add(ent(`way.${w.id}`, ['transformation', 'mechanism'], w.name, `${w.effect} (${w.range})${w.against ? `; pushes against the ${w.against}` : ''}.`, ['engineering'], w.source));
     for (const l of w.laws) s.relate(rel(`way.${w.id}`, 'governed-by', l, ws));
     for (const b of w.embodiedBy) s.relate(rel(`block.${b}`, 'does', `way.${w.id}`, ws, 'embodies the way'));
+    // the way is a refinement of the packs' function where one names it: implementations of the function then see the blocks
+    for (const fn of WAY_FUNCTIONS[w.id] ?? []) s.relate(rel(`way.${w.id}`, 'is-a', fn, ws, 'the function this way is a way of'));
     for (const t of w.takes) s.relate(rel(`way.${w.id}`, 'requires', `flow.${t}`, ws));
     for (const g of w.gives) s.relate(rel(`way.${w.id}`, 'enables', `flow.${g}`, ws));
   }

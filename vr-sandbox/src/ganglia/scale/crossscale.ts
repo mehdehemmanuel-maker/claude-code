@@ -35,9 +35,55 @@ const LANDAU: Source = { cite: 'Landau & Lifshitz, Theory of Elasticity, 3rd ed.
 const ASHCROFT: Source = { cite: 'Ashcroft & Mermin, Solid State Physics, 1976, ch. 1 (Drude model) and ch. 13', kind: 'textbook' };
 
 const ALBERTS: Source = { cite: 'Alberts et al., Molecular Biology of the Cell, 6th ed., Garland 2015, ch. 16; Hill, "The heat of shortening and the dynamic constants of muscle", Proc. R. Soc. B 126 (1938) 136', kind: 'textbook' };
+const KANDEL: Source = { cite: 'Kandel et al., Principles of Neural Science, 5th ed., McGraw-Hill 2013, ch. 2 and 67; Goodfellow, Bengio & Courville, Deep Learning, MIT 2016, ch. 6; Hornik, Stinchcombe & White, Neural Networks 2 (1989) 359', kind: 'textbook' };
+const HORTON: Source = { cite: 'Horton, "Erosional development of streams and their drainage basins", GSA Bulletin 56 (1945) 275; Strahler (1952); Rodríguez-Iturbe & Rinaldo, Fractal River Basins, Cambridge 1997', kind: 'paper' };
 const SHIGLEY: Source = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., ch. 13 and 14 (gears); Hertz (1882) on contact', kind: 'textbook' };
 
 export const CROSS_SCALES: CrossScale[] = [
+  { id: 'cross.neural-network', name: 'a neural network, from a synapse to a function', says: 'A function is computed by nothing that computes it: synapses weight, neurons threshold, layers compose, and a mapping emerges that no single unit holds.',
+    levels: [
+      { scale: 'micro', name: 'a synapse and a neuron', description: 'A synapse scales an input by a weight that use changes; a neuron sums its inputs and fires past a threshold: a weighted sum against a step, a millisecond at a time.', variables: ['weights', 'membrane potential', 'threshold', 'firing rate'], characteristicLength: 1e-6, characteristicTime: 1e-3 },
+      { scale: 'meso', name: 'a layer', description: 'Many units on the same inputs make a layer: a linear map followed by a nonlinearity; a population code that no unit carries alone.', variables: ['activation vector', 'weight matrix', 'nonlinearity', 'population code'], characteristicLength: 1e-3, characteristicTime: 1e-2 },
+      { scale: 'macro', name: 'a function', description: 'Layers composed: a mapping from inputs to outputs that approximates any continuous function given width (the universal approximation theorem), learned by moving the weights down a loss.', variables: ['the mapping', 'loss', 'generalisation', 'representation'], characteristicLength: 1e-1, characteristicTime: 1e-1 },
+    ],
+    up: [
+      { from: 'an input and a weight', to: 'a weighted contribution', via: 'interaction', carries: ['information'], says: 'A synapse multiplies: the signal arrives scaled by a number that experience set.', law: 'hebb.rule' },
+      { from: 'contributions summed', to: 'a firing decision', via: 'transition', carries: ['information', 'energy'], says: 'The membrane integrates and crosses or does not cross its threshold: a nonlinearity, where the computation lives.', law: 'hodgkin-huxley' },
+      { from: 'many units', to: 'a population code', via: 'collective', carries: ['information'], says: 'Together the units span a space; a feature is a direction in it, held by no unit alone.' },
+      { from: 'layers composed', to: 'a function', via: 'emergent-variable', carries: ['information', 'causality'], says: 'Composition makes the mapping; with enough width it can approximate any continuous function on a compact set.', law: 'universal.approximation' },
+    ],
+    down: [
+      { from: 'a macro constraint: this input must map to that output', to: 'allowed microconfigurations', via: 'constraint', carries: ['information'], says: 'The loss constrains the weights to a region; countless weight settings realise the same mapping.' },
+      { from: 'the loss', to: 'micro dynamics', via: 'dynamics', carries: ['information'], says: 'Each weight moves against the gradient of the loss: learning is micro dynamics driven by a macro error.' },
+      { from: 'trained weights', to: 'a realisation', via: 'realisation', carries: ['matter', 'energy'], says: 'In a brain, synapses grown and pruned; in silicon, numbers in memory read by multipliers, watts per inference.' },
+    ],
+    disappears: ['any one weight\'s value', 'which unit fired', 'the timing of a spike'],
+    appears: ['a feature', 'a representation', 'generalisation', 'the function itself'],
+    invariant: ['the mapping under permutation of units in a layer', 'the number of parameters'],
+    breaks: ['outside the training distribution: the function is not the one wanted', 'with too little width or depth: no approximation', 'when weights saturate: no gradient, no learning'],
+    status: 'theorem', source: KANDEL },
+  { id: 'cross.river-basin', name: 'a river basin, from a raindrop to a drainage network', says: 'Water falling at random on a slope organises itself into a tree of channels whose branching obeys the same ratios from a rill to the Amazon.',
+    levels: [
+      { scale: 'micro', name: 'raindrops on a slope', description: 'Drops land, infiltrate or run off; the runoff of a square metre finds the lowest path, and a rill a centimetre wide forms where flow concentrates enough to move grains.', variables: ['rainfall rate', 'infiltration', 'slope', 'grain size', 'shear stress'], characteristicLength: 1e-2, characteristicTime: 1e2 },
+      { scale: 'meso', name: 'channels joining', description: 'Rills join into streams; each junction adds discharge; the channel widens and deepens with the flow it carries: hydraulic geometry.', variables: ['discharge', 'channel width and depth', 'stream order', 'junction angle'], characteristicLength: 1e3, characteristicTime: 1e5 },
+      { scale: 'macro', name: 'the basin and its network', description: 'A tree of channels draining an area: the number, length and area of streams of each order go in constant ratios (Horton), the basin is self-similar, and discharge at the mouth integrates the rain over the area and the time of travel.', variables: ['drainage area', 'bifurcation ratio about 4', 'length ratio about 2', 'discharge at the outlet', 'time of concentration'], characteristicLength: 1e5, characteristicTime: 1e6 },
+    ],
+    up: [
+      { from: 'a drop and the ground', to: 'runoff or infiltration', via: 'interaction', carries: ['matter', 'energy'], says: 'What does not soak in flows downhill, carrying potential energy to spend on moving sediment.', law: 'energy.potential' },
+      { from: 'runoff concentrating', to: 'a rill', via: 'transition', carries: ['matter', 'momentum'], says: 'Where the shear stress on the bed passes the grains\' threshold a channel cuts itself: a positive feedback, flow deepening what collects flow.' },
+      { from: 'rills joining', to: 'stream orders', via: 'collective', carries: ['matter'], says: 'Two streams of an order make the next: Strahler ordering, and the ratios between orders settle to the same numbers everywhere.' },
+      { from: 'the network', to: 'Horton\'s laws and the basin\'s response', via: 'emergent-variable', carries: ['information', 'matter'], says: 'Bifurcation ratio about 4, length ratio about 2, area ratio about 5: a self-similar tree, and a hydrograph that is the network\'s width function convolved with the rain.' },
+    ],
+    down: [
+      { from: 'a macro constraint: this rain on this basin', to: 'allowed microconfigurations', via: 'constraint', carries: ['information'], says: 'The outlet discharge fixes how much water moved, not which paths it took: any network of the same width function gives the same hydrograph.' },
+      { from: 'the network', to: 'micro dynamics', via: 'dynamics', carries: ['energy'], says: 'Each reach adjusts its slope and section toward the least energy spent per unit discharge (optimal channel networks).' },
+      { from: 'adjusted channels', to: 'a realisation', via: 'realisation', carries: ['matter'], says: 'The landscape itself: the basin is the record of a million years of the micro rule.' },
+    ],
+    disappears: ['where any drop fell', 'which rill formed first', 'the grain that moved'],
+    appears: ['stream order', 'Horton\'s ratios', 'the hydrograph', 'a drainage density'],
+    invariant: ['water and sediment mass', 'the branching ratios across orders (self-similarity)', 'the fractal dimension of the network near 1.8'],
+    breaks: ['on rock that fractures along joints: the network follows the joints, not the ratios', 'under ice or in karst: drainage goes underground', 'at the scale of a single rill: no statistics to be self-similar'],
+    status: 'empirical-law', source: HORTON },
   { id: 'cross.muscle', name: 'muscle, from myosin heads to a limb', says: 'A muscle is a billion molecular ratchets in series and parallel: a nanometre step at the bottom, a stroke at the top, with the force-velocity curve emerging between.',
     levels: [
       { scale: 'micro', name: 'myosin heads on actin', description: 'A myosin head binds actin, swings 5 to 10 nm on ATP hydrolysis, releases, rebinds: a stochastic ratchet.', variables: ['head state (bound, swung, released)', 'ATP concentration', 'step 5 nm', 'force per head 2 to 5 pN'], characteristicLength: 1e-8, characteristicTime: 1e-3 },

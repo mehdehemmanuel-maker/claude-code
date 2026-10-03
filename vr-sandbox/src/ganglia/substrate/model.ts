@@ -58,7 +58,7 @@ export function forwardOf(kind: RelationKind | InverseKind): { kind: RelationKin
 }
 
 /** A thing nothing describes yet, named at the far end of one of these arrows, is at least of this kind: a stub law, a stub material, a stub role. */
-export const NAMED_AS: Partial<Record<RelationKind, Kind>> = { 'governed-by': 'law', 'made-of': 'material', 'standardized-by': 'standard', 'fails-by': 'failure', plays: 'role', 'in-view': 'architecture', 'varies-by': 'parameter', 'measured-by': 'thing' };
+export const NAMED_AS: Partial<Record<RelationKind, Kind>> = { 'governed-by': 'law', 'made-of': 'material', 'standardized-by': 'standard', 'fails-by': 'failure', plays: 'role', 'in-view': 'architecture', 'varies-by': 'parameter', 'measured-by': 'thing', does: 'function', transforms: 'transformation', 'produced-by': 'constructor' };
 
 export type Provenance = Source | { estimate: string } | { stub: string } | { derived: string };
 

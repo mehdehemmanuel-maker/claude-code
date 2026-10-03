@@ -111,6 +111,19 @@ describe('the final test: every question answered by traversal', () => {
     expect(built.generators.has('screw')).toBe(true);
   });
 
+  it('the bridge\'s ways are refinements of the packs\' functions, so a building block is an implementation of the function it embodies', () => {
+    for (const fn of s.reach('way.gear.reduce', 'is-a').map((e) => e.id)) expect(s.get(fn)!.kinds, fn).toContain('function');
+    expect(s.reach('way.gear.reduce', 'is-a').map((e) => e.id)).toEqual(expect.arrayContaining(['fn.change.speed-ratio', 'fn.transmit.torque']));
+    expect(ids(implementations(s, 'fn.change.speed-ratio'))).toContain('block.transmission.reduce');
+    expect(ids(implementations(s, 'fn.actuate.electromagnetic'))).toContain('block.actuation.rotary');
+    expect(ids(implementations(s, 'fn.convert.rotation.translation'))).toContain('block.transmission.screw');
+    // every mapped function exists and is a function; every mapped way exists
+    const ways = [...s.entities.values()].filter((e) => e.id.startsWith('way.'));
+    expect(ways.length).toBeGreaterThan(30);
+    for (const w of ways) for (const fn of s.reach(w.id, 'is-a')) expect(fn.kinds, `${w.id} is-a ${fn.id}`).toContain('function');
+    expect(ways.filter((w) => s.outOf(w.id, 'is-a').length).length).toBeGreaterThan(30);
+  });
+
   it('all the ways to make a rotational actuator, and the components of an electric motor to the leaves', () => {
     expect(ids(implementations(s, 'fn.actuate.electromagnetic'))).toEqual(expect.arrayContaining(['motor.electric', 'solenoid', 'electromagnet', 'motor.stepper']));
     const d = decompose(s, 'motor.electric', 3)!;

@@ -149,6 +149,10 @@ const SCALES: [string, number, number, string][] = [
   ['earth.atmosphere', 1e4, 8.6e4, 'the atmosphere: 10 km deep, a day'],
   ['earth.core', 3.5e6, 3e10, 'the core: 3500 km, a thousand years of convection'],
   ['earth.mantle', 2.9e6, 3e15, 'the mantle: 2900 km, a hundred million years'],
+  ['neural-network', 1e-1, 1e-1, 'a neural network: a chip or a cortex, an inference in a tenth of a second'],
+  ['neuron.artificial', 1e-6, 1e-9, 'an artificial neuron: a multiplier on a chip, a nanosecond'],
+  ['bio.cortex', 1e-1, 1e-1, 'the cortex: 10 cm, a thought in a tenth of a second'],
+  ['earth.soil', 1, 3e7, 'a soil: a metre deep, a year of seasons'],
 ];
 
 export function scale(): Pack {

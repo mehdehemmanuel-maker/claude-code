@@ -300,6 +300,19 @@ describe('cross-scale dynamics are first-class middle structures', () => {
     expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(5);
   });
 
+  it('a neural network and a river basin: a function emerging from synapses, Horton\'s ratios from raindrops, each with its laws and scales', () => {
+    const nn = CROSS_SCALES.find((c) => c.id === 'cross.neural-network')!, basin = CROSS_SCALES.find((c) => c.id === 'cross.river-basin')!;
+    expect(askOf(nn, 'micro').appearsGoingUp).toContain('the function itself');
+    expect(nn.up.map((u) => u.law).filter(Boolean)).toEqual(expect.arrayContaining(['hebb.rule', 'hodgkin-huxley', 'universal.approximation']));
+    expect(nn.invariant.join(' ')).toMatch(/permutation/);
+    expect(basin.status).toBe('empirical-law'); // Horton's ratios are measured regularities with a model behind them
+    expect(askOf(basin, 'meso').invariant.join(' ')).toMatch(/self-similarity/);
+    expect(basin.levels.map((l) => l.characteristicLength)).toEqual([1e-2, 1e3, 1e5]);
+    expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(7);
+    const s2 = build().substrate;
+    for (const c of [nn, basin]) for (const st of c.up) if (st.law) expect(lawById(st.law) ?? s2.get(st.law)?.kinds.includes('law'), `${c.id}: ${st.law}`).toBeTruthy();
+  });
+
   it('the reverse path exists: a macro constraint selects microconfigurations and is realised through micro dynamics', () => {
     for (const c of CROSS_SCALES) {
       expect(c.down.map((s) => s.via)).toEqual(expect.arrayContaining(['constraint', 'realisation']));
