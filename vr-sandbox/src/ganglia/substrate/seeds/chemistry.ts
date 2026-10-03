@@ -1,6 +1,7 @@
 // Chemistry and physics: the substrate under everything. Elements, bonds, molecules, reactions; the laws that the
 // ganglia already run, and the ones they cite, each linked to the properties it sets, the phenomena it governs and
 // the engineering it makes possible.
+import { viewOfDomain } from './views';
 import { LAWS } from '../../laws';
 import type { Source } from '../../types';
 import { Pack } from '../dsl';
@@ -63,7 +64,7 @@ export function chemistry(): Pack {
   for (const [id, says] of [['chem.glucose', 'C₆H₁₂O₆: the sugar cells burn, 16 MJ/kg.'], ['chem.carbon-dioxide', 'CO₂: combustion\'s and respiration\'s product, photosynthesis\'s input.'], ['element.water', 'H₂O: the solvent of life, 4186 J/kg K, a dipole, ice that floats.'], ['chem.oxygen', 'O₂: a fifth of the air, the oxidant.'], ['chem.ethanol', 'C₂H₅OH: fuel, solvent, product of fermentation.'], ['chem.methane', 'CH₄: natural gas, 50 MJ/kg, made by archaea.'], ['chem.calcium-carbonate', 'CaCO₃: shell, limestone, marble, chalk; cement\'s source.'], ['chem.fuel', 'A substance oxidised for its energy: hydrocarbons, hydrogen, wood, glucose.'], ['chem.nutrient', 'What an organism takes in to build itself.'], ['chem.silica', 'SiO₂: sand, quartz, glass, the oxide of a chip.']] as [string, string][]) c(id, ['chemical'], says, { 'is-a': ['chem.molecule'] }, CRC);
   p.link('chem.fuel', { plays: ['role.fuel'], 'is-a': ['store.energy.chemical'] });
   // physics: laws that exist in the engine, plus the ones the seeds cite
-  for (const l of LAWS) { p.e(l.id, ['law'], l.statement, { source: l.source, names: [l.name], domains: ['physics'] }); p.link(l.id, { 'in-view': [`view.${l.domain.replace(/ /g, '-')}`] }, l.source); }
+  for (const l of LAWS) { p.e(l.id, ['law'], l.statement, { source: l.source, names: [l.name], domains: ['physics'] }); p.link(l.id, { 'in-view': [viewOfDomain(l.domain)] }, l.source); }
   const extra: [string, string, string, string[], Source][] = [
     ['faraday.induction', 'Faraday\'s law of induction', 'A changing magnetic flux through a loop induces a voltage round it equal to the rate of change: generators, transformers, inductors.', ['transformer', 'generator', 'inductor', 'motor.electric'], GRIFFITHS],
     ['ampere.law', 'Ampère\'s law', 'A current makes a magnetic field round it; N turns make N times the field: electromagnets, motors, inductors.', ['electromagnet', 'winding', 'core.magnetic'], GRIFFITHS],

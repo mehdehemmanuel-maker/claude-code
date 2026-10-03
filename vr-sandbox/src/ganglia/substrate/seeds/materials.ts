@@ -3,10 +3,35 @@
 import { MATERIALS } from '../../../data/materials';
 import type { Source } from '../../types';
 import { Pack, est, param } from '../dsl';
-import type { Provenance } from '../model';
+import type { Parameter, Provenance } from '../model';
 
 const CALLISTER: Source = { cite: 'Callister & Rethwisch, Materials Science and Engineering: An Introduction, 10th ed., Wiley 2018 (Appendix B property tables)', kind: 'textbook' };
 const IEC: Source = { cite: 'IEC 60028 International standard of resistance for copper; CRC Handbook of Chemistry and Physics, 97th ed.', kind: 'standard' };
+
+/** The family a category word names: the stocked materials' categories, the words processes and block pieces use. */
+export const FAMILY_OF_CATEGORY: Record<string, string> = {
+  steel: 'material.steel', stainless: 'material.stainless', 'cast-iron': 'material.cast-iron', aluminum: 'material.aluminium-alloy', aluminium: 'material.aluminium-alloy',
+  copper: 'material.copper-alloy', brass: 'material.copper-alloy', bronze: 'material.bronze', 'copper-alloy': 'material.copper-alloy', titanium: 'material.titanium-alloy',
+  wood: 'material.wood', 'engineered-wood': 'material.wood', polymer: 'material.polymer', plastic: 'material.polymer', abs: 'polymer.abs', rubber: 'material.elastomer', elastomer: 'material.elastomer',
+  glass: 'material.glass', concrete: 'material.concrete', ceramic: 'material.ceramic', textile: 'material.fibre', leather: 'material.natural', foam: 'material.foam', cork: 'material.natural',
+  composite: 'material.composite', ground: 'material.natural', stone: 'material.natural', magnet: 'material.magnetic', lead: 'element.lead', polyolefin: 'material.thermoplastic', ptfe: 'material.thermoplastic', thermoplastic: 'material.thermoplastic', thermoset: 'material.thermoset', fibre: 'material.fibre', fiber: 'material.fibre',
+};
+export const familyOfWord = (word: string): string | undefined => FAMILY_OF_CATEGORY[word.trim().toLowerCase()];
+
+// Numbers a family carries, each from a named page read on a date (S-6): ranges across the grades the page lists, SI.
+const ETB = (page: string, url: string): Source => ({ cite: `The Engineering ToolBox, ${page} (read 2026-10-03)`, url, kind: 'handbook' });
+const ETB_RHO = ETB('Metals and Alloys - Densities', 'https://www.engineeringtoolbox.com/metal-alloys-densities-d_50.html');
+const ETB_E = ETB('Young\'s Modulus, Tensile Strength and Yield Strength Values for common Materials', 'https://www.engineeringtoolbox.com/young-modulus-d_417.html');
+const ETB_K = ETB('Thermal Conductivity of Metals and Alloys', 'https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html');
+const n = (sym: string, name: string, unit: string, low: number, high: number, of: Source): Parameter => ({ sym, name, unit, low, high, of });
+export const FAMILY_NUMBERS: Record<string, Parameter[]> = {
+  'material.steel': [n('rho', 'density', 'kg/m^3', 7850, 7850, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 200e9, 200e9, ETB_E), n('sigma_y', 'yield strength, structural grades', 'Pa', 205e6, 690e6, ETB_E), n('sigma_u', 'ultimate strength, structural grades', 'Pa', 330e6, 760e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 36, 54, ETB_K)],
+  'material.stainless': [n('rho', 'density', 'kg/m^3', 7480, 8000, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 180e9, 180e9, ETB_E), n('sigma_y', 'yield strength, AISI 302', 'Pa', 502e6, 502e6, ETB_E), n('sigma_u', 'ultimate strength, AISI 302', 'Pa', 860e6, 860e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 14.3, 14.4, ETB_K)],
+  'material.cast-iron': [n('rho', 'density', 'kg/m^3', 6800, 7800, ETB_RHO), n('sigma_u', 'ultimate strength, ASTM A-48 4.5 % C', 'Pa', 170e6, 170e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 31, 52, ETB_K)],
+  'material.aluminium-alloy': [n('rho', 'density', 'kg/m^3', 2640, 2830, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 69e9, 70e9, ETB_E), n('k', 'thermal conductivity', 'W/m K', 150, 190, ETB_K)],
+  'material.copper-alloy': [n('rho', 'density', 'kg/m^3', 7400, 8940, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 96e9, 125e9, ETB_E), n('sigma_u', 'ultimate strength, copper to brass', 'Pa', 220e6, 250e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 26, 401, ETB_K)],
+  'material.polymer': [n('E', 'Young\'s modulus, unfilled thermoplastics', 'Pa', 0.11e9, 4.1e9, ETB_E), n('sigma_u', 'ultimate strength, unfilled thermoplastics', 'Pa', 10e6, 100e6, ETB_E)],
+};
 
 export function materials(): Pack {
   const p = new Pack('materials', CALLISTER);
@@ -29,7 +54,7 @@ export function materials(): Pack {
   p.link('prop.hardness', { 'governed-by': ['hall-petch'] });
 
   // families
-  const fam = (id: string, says: string, links: Parameters<Pack['link']>[1], src: Source = CALLISTER) => { p.e(id, ['material', 'manifold'], says, { source: src }); p.link(id, links, src); };
+  const fam = (id: string, says: string, links: Parameters<Pack['link']>[1], src: Source = CALLISTER) => { p.e(id, ['material', 'manifold'], says, { source: src, params: FAMILY_NUMBERS[id] }); p.link(id, links, src); };
   fam('material.metal', 'Crystals of atoms sharing a sea of electrons: ductile, conductive, opaque, strong, dense.', { 'has-property': ['prop.electrical-conductivity', 'prop.thermal-conductivity', 'prop.yield-strength', 'prop.elongation'], plays: ['role.structural-member', 'role.electrical-conductor', 'role.thermal-conductor'], 'produced-by': ['process.casting.sand', 'process.forging', 'process.rolling', 'process.extrusion', 'turn', 'mill', 'weld.mig'], 'governed-by': ['hall-petch', 'hooke', 'fatigue.endurance.steel'], 'fails-by': ['failure.fatigue', 'failure.corrosion', 'failure.creep', 'failure.overload'], 'in-view': ['view.materials', 'view.chemical'] });
   fam('material.alloy', 'A metal with others dissolved or dispersed in it: stronger, harder, or more resistant than the pure element.', { 'is-a': ['material.metal'], 'governed-by': ['hall-petch', 'composite.rule-of-mixtures'], 'produced-by': ['process.melting', 'process.heat-treatment.quench-temper'] });
   fam('material.steel', 'Iron with up to 2 % carbon and alloying: the strongest cheap structural material, heat-treatable over a wide range.', { 'is-a': ['material.alloy'], 'made-of': ['element.iron', 'element.carbon', 'element.manganese', 'element.chromium'], 'produced-by': ['process.blast-furnace', 'process.basic-oxygen', 'process.electric-arc-furnace', 'process.rolling', 'process.heat-treatment.quench-temper'], 'has-property': ['prop.yield-strength', 'prop.hardness', 'prop.weldability'], 'fails-by': ['failure.corrosion', 'failure.fatigue', 'failure.hydrogen-embrittlement'], 'improved-by': [['process.heat-treatment.quench-temper', 'martensite then tempering: strength and toughness traded by temperature'], ['material.stainless', 'chromium above 11 % makes a passive oxide']] });
@@ -58,9 +83,8 @@ export function materials(): Pack {
   fam('material.magnetic', 'Materials with ordered moments: soft (electrical steel, ferrite) for cores, hard (NdFeB, SmCo, alnico, hard ferrite) for magnets.', { 'has-property': ['prop.permeability', 'prop.remanence', 'prop.coercivity'], plays: ['role.magnetic-core', 'role.electromagnetic-material'], 'governed-by': ['magnetic.pull', 'ampere.law'], 'made-of': ['element.iron', 'element.neodymium', 'element.boron', 'element.cobalt', 'element.samarium'], 'produced-by': ['process.sintering', 'process.lamination', 'process.magnetizing'], 'fails-by': ['failure.demagnetization', 'failure.corrosion'] });
 
   // the stocked materials, each a realisation of a family, with roles derived from its numbers (bridge.ts adds the properties)
-  const familyOf: Record<string, string> = { steel: 'material.steel', stainless: 'material.stainless', 'cast-iron': 'material.cast-iron', aluminum: 'material.aluminium-alloy', copper: 'material.copper-alloy', brass: 'material.copper-alloy', titanium: 'material.titanium-alloy', wood: 'material.wood', polymer: 'material.polymer', rubber: 'material.elastomer', glass: 'material.glass', concrete: 'material.concrete', ceramic: 'material.ceramic', textile: 'material.fibre', leather: 'material.natural', foam: 'material.foam', cork: 'material.natural', composite: 'material.composite', ground: 'material.natural' };
   for (const m of MATERIALS) {
-    const fam = familyOf[m.id.split('.')[0]!];
+    const fam = familyOfWord(m.id.split('.')[0]!);
     if (fam) p.link(m.id, { 'is-a': [fam] }, { derived: `the stocked material's category (${m.category})` });
   }
   // named materials referred to elsewhere

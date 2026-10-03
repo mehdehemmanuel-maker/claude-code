@@ -122,27 +122,51 @@ totals; capped at 1.5 million characters, oldest dropped first, saved every 15 s
 "index of X" for a thing she does not know creates a stub asked for by name at the front of the queue, so the outside
 is asked on the next slice and she can answer with where it came from when asked again.
 
+### What an arrow names, the index describes
+
+Three classes of stub were not questions but gaps in the seeds, and the census showed them by weight: the views
+(`view.manufacturing` named 129 times and described by nothing; `view.mechanics` beside `view.mechanical` because a
+law's domain word was pasted into a view id), the failure modes (155 named by `fails-by`, none described: the richest
+knowledge in the index was labels), and the materials named by a bare word (`steel` 21 times from the processes and the
+block pieces, while `material.steel` sat described). Each is now a table or a pack, held by a build test (S-6):
+
+- `seeds/views.ts`: thirty views described, and `viewOfDomain` turning a law's domain into the one view for it.
+- `seeds/failures.ts`: every failure mode the index names, with its mechanism and the law behind it (overheating is
+  Joule against conduction and convection; brittle fracture is Griffith; a dendrite is Butler-Volmer at high rate;
+  windup is an integrator summing while the actuator sits at its limit). 155 modes: mechanical, manufacturing,
+  electrical, electrochemical, computing, biological, earth.
+- `seeds/common.ts`: the generic functions and parts many packs name and none described (a controller before the
+  robot controller, a motor before the DC motor, a fluid before the hydraulic oil).
+- `FAMILY_OF_CATEGORY` in `seeds/materials.ts`: the one table from a category word to a family, used by the stocked
+  materials, the processes and the block pieces alike; a piece that could be either of two materials says both.
+- `FAMILY_NUMBERS`: density, modulus, strength and conductivity on the metal and polymer families, each from a named
+  Engineering ToolBox page with its address and the day it was read, as ranges across the grades the page lists; a
+  range that holds for a subset says so in its name. The stocked materials (Callister tables) lie inside them, density
+  to 2 % and modulus to 10 %: two sources agree.
+
+Stubs fell from 813 to 580 and described entities rose from 1799 to 2015 without a question asked outside.
+
 ## Census (build, before any extra population)
 
 | | |
 |---|---|
-| entities | 2539 |
-| relations | 8585 |
-| relations per entity | 3.4 |
-| stubs (depth 0, each a queued question) | 811 |
-| laws | 171 (104 executable in `laws.ts`, 67 cited not run) |
-| materials | 255 |
-| components | 467 |
-| mechanisms | 174 |
-| constructors | 185 |
+| entities | 2595 |
+| relations | 9959 |
+| relations per entity | 3.8 |
+| stubs (depth 0, each a queued question) | 580 |
+| laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
+| materials | 252 |
+| components | 494 |
+| mechanisms | 178 |
+| constructors | 254 |
 | failures | 209 |
 | biological | 174 |
-| manifolds / generators | 179 / 78 |
-| domains | 14 (mechanical 580, electrical 526, biology 314, chemistry 308, materials 301, manufacturing 267, engineering 248, physics 202, computing 100, catalogue 77, circuits 74, robotics 67, earth 53, energy 33) |
-| questions queued after seeding | 28 353 |
-| things with no known constructor | 341 |
+| manifolds / generators | 181 / 84 |
+| domains | 18 (mechanical 543, electrical 492, chemistry 303, biology 283, materials 282, manufacturing 256, engineering 242, scale 209, physics 196, failures 161, computing 98, common 91, catalogue 77, circuits 69, robotics 67, earth 52, energy 33, views 30) |
+| questions queued after seeding | 31 965 |
+| things with no known constructor | 368 |
 
-A round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
+Before the views, failures and families packs, a round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
 queue at 27 853: never finished, by design.
 
 ## The final test, answered by traversal
@@ -172,9 +196,13 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 - **S-3** the substrate never needs to be finished (the queue: prioritised, asked once, lanes across domains, unknowns marked, serialisable)
 - **S-4** a question is answered by traversal (never by a list kept for the question)
 - **S-5** what comes from outside says where it came from (a connector's record enters only through ingest, every arrow and number carrying the source, its key and the date; what the source lacks is an unknown, never silence; the background keeps slices of a frame and journals what the outside said)
+- **S-6** what an arrow names, the index describes (a view, a failure mode or a function named by any arrow is described; a law's domain names one view through one table; a material is named by its family, never by a bare word; a family's numbers come from a named page with its address and the day it was read, and the stocked materials lie inside them)
 
 ## Still open
 
+- **Stubs that remain** at build, 580: 325 named by `has-part` or `interacts-with` with no kind yet (organelles, process
+  consumables, specific parts), 103 parameters named by `varies-by`, 69 constructors, 41 specific materials, 21 standards,
+  18 transformations. Each is a question for a pack or for the outside; none is a view, a failure mode or a bare word.
 - **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no
   English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded

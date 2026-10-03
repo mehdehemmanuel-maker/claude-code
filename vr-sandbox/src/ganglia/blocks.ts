@@ -41,7 +41,7 @@ export interface Port {
 export type Flow = 'electric' | 'rotation' | 'translation' | 'travel' | 'load' | 'signal' | 'heat' | 'stock' | 'chemical' | 'light' | 'sound';
 
 /** One piece of a block's anatomy: what it is, what it does, and the law it works by. */
-export interface Piece { name: string; does: string; law?: string; material?: string }
+export interface Piece { name: string; does: string; law?: string; /** one material id, or the alternatives a piece may be made of */ material?: string | string[] }
 
 export interface Archetype {
   id: string;
@@ -120,7 +120,7 @@ export const ARCHETYPES: Archetype[] = [
     id: 'actuation.rotary', name: 'rotary actuator', words: ['motor', 'dc motor', 'electric motor'], role: 'motor', does: 'turns direct current into torque on a shaft', category: 'actuation', takes: ['electric'], gives: ['rotation', 'heat'], families: ['dc motor'],
     laws: ['motor.torque', 'motor.back-emf', 'motor.current', 'thermal.network'], principles: ['current-limit-motors', 'derate-for-heat', 'gearing-match'],
     inside: [
-      { name: 'stator magnets', does: 'permanent magnets making the field the winding works in', material: 'ndfeb or ferrite' },
+      { name: 'stator magnets', does: 'permanent magnets making the field the winding works in', material: ['magnet.n42', 'magnet.ferrite-c8'] },
       { name: 'armature winding', does: 'copper coils on the rotor: current across the field pushes each conductor sideways (F = B I L), which at the rotor\'s radius is torque', law: 'lorentz.force', material: 'copper' },
       { name: 'commutator and brushes', does: 'switch which coils carry current as the rotor turns, so the torque keeps one way; they wear, and their friction is part of the no-load current', law: 'motor.torque' },
       { name: 'back-EMF', does: 'the turning winding generates a voltage against the supply, which is why current falls as speed rises', law: 'motor.back-emf' },
@@ -163,8 +163,8 @@ export const ARCHETYPES: Archetype[] = [
     id: 'transmission.couple', name: 'shaft coupling', words: ['coupling'], role: 'coupling', does: 'passes torque between two shafts in line, taking up small misalignment', category: 'transmission', takes: ['rotation'], gives: ['rotation'], families: ['coupling'],
     laws: ['power.rotary'], principles: ['coupling-takes-misalignment'],
     inside: [
-      { name: 'two hubs', does: 'one on each shaft, bored to it and held by a set screw or key', material: 'aluminium or iron' },
-      { name: 'elastomer spider', does: 'sits between the hubs\' jaws: passes the torque in compression and flexes to take up misalignment and shock', material: 'nbr rubber' },
+      { name: 'two hubs', does: 'one on each shaft, bored to it and held by a set screw or key', material: ['material.aluminium-alloy', 'material.cast-iron'] },
+      { name: 'elastomer spider', does: 'sits between the hubs\' jaws: passes the torque in compression and flexes to take up misalignment and shock', material: 'material.elastomer' },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015 (couplings)', kind: 'textbook' },
     ports: (c): Port[] => [
@@ -176,7 +176,7 @@ export const ARCHETYPES: Archetype[] = [
     id: 'transmission.screw', name: 'lead screw', words: ['lead screw', 'leadscrew', 'screw jack', 'power screw'], role: 'lead screw', does: 'turns rotation into a push along its axis: a thread driving a nut along by its lead each turn', category: 'transmission', takes: ['rotation'], gives: ['translation', 'load'], families: ['lead screw'],
     laws: ['screw.force', 'screw.efficiency', 'stress.axial', 'buckling.euler'], principles: ['slender-in-compression', 'bearing-near-load'],
     inside: [
-      { name: 'threaded rod', does: 'a trapezoidal thread rolled on steel bar: its core carries the push and must not buckle over the stroke', law: 'buckling.euler', material: 'C45 steel' },
+      { name: 'threaded rod', does: 'a trapezoidal thread rolled on steel bar: its core carries the push and must not buckle over the stroke', law: 'buckling.euler', material: 'material.steel' },
       { name: 'nut', does: 'bronze, threaded to match: the thread bears on its turns, and their sliding friction sets the efficiency', law: 'screw.efficiency', material: 'bronze' },
       { name: 'end bearing', does: 'at the driven end, takes the push into the frame so the motor doesn\'t', law: 'bearing.life.l10' },
     ],
@@ -202,8 +202,8 @@ export const ARCHETYPES: Archetype[] = [
     id: 'support.rotate', name: 'rotary support', words: ['bearing', 'pillow block'], role: 'bearings', does: 'holds a turning shaft in place, taking its loads to the frame', category: 'support', takes: ['load'], gives: ['load'], families: ['bearing', 'pillow block'],
     laws: ['bearing.life.l10', 'bearing.life.hours'], principles: ['bearing-near-load', 'interference-on-rotating-ring', 'support-once'],
     inside: [
-      { name: 'inner ring', does: 'fits on the shaft, usually the ring that turns with the load', material: 'bearing steel (52100)' },
-      { name: 'outer ring', does: 'fits in the housing', material: 'bearing steel (52100)' },
+      { name: 'inner ring', does: 'fits on the shaft, usually the ring that turns with the load', material: 'steel.52100' },
+      { name: 'outer ring', does: 'fits in the housing', material: 'steel.52100' },
       { name: 'balls', does: 'roll between the rings\' raceways, carrying the load at small contacts; their fatigue sets its life', law: 'bearing.life.l10' },
       { name: 'cage', does: 'keeps the balls spaced' },
       { name: 'seals or shields', does: 'keep the grease in and dirt out' },
@@ -303,7 +303,7 @@ export const ARCHETYPES: Archetype[] = [
     families: [], shapes: ['plate', 'rod.round'],
     laws: ['energy.potential', 'landauer'], principles: ['two-stable-states', 'short-load-path'],
     inside: [
-      { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'plate' },
+      { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'steel' },
       { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it' },
       { name: 'stops', does: 'hold it in each state, the barrier between them set by how far its weight must rise to cross over', law: 'energy.potential' },
       { name: 'input and output pins', does: 'a push in flips it; its flip pushes the next lever: one bit switching another' },
@@ -317,7 +317,7 @@ export const ARCHETYPES: Archetype[] = [
     families: ['fuse'],
     laws: ['joule', 'ohm'], principles: ['fuse-at-source', 'size-wire-by-drop-and-ampacity'],
     inside: [
-      { name: 'fusible element', does: 'a thin metal link that heats by I² R and melts past its rating, the faster the further past', law: 'joule', material: 'zinc or copper alloy' },
+      { name: 'fusible element', does: 'a thin metal link that heats by I² R and melts past its rating, the faster the further past', law: 'joule', material: ['element.zinc', 'material.copper-alloy'] },
       { name: 'body', does: 'holds the element and contains the arc as it opens' },
       { name: 'blades', does: 'plug into its holder' },
     ],

@@ -15,6 +15,9 @@ import { chemistry } from './seeds/chemistry';
 import { earth } from './seeds/earth';
 import { robotics } from './seeds/robotics';
 import { scale } from './seeds/scale';
+import { views } from './seeds/views';
+import { failures } from './seeds/failures';
+import { common } from './seeds/common';
 import type { Pack } from './dsl';
 import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
 import { externalExpander } from './external';
@@ -30,7 +33,7 @@ export { Population, startPopulation, population, stopPopulation, type Populatio
 export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
-export const PACKS: (() => Pack)[] = [mechanical, electrical, circuits, computing, materials, manufacturing, biology, chemistry, earth, robotics, scale];
+export const PACKS: (() => Pack)[] = [views, common, mechanical, electrical, circuits, computing, materials, manufacturing, failures, biology, chemistry, earth, robotics, scale];
 
 export interface Built { substrate: Substrate; queue: Queue; packs: Pack[]; expanders: Expander[]; generators: Map<string, Generator>; seedReport: Report }
 
@@ -74,3 +77,5 @@ export function census() {
   const p = population();
   return { ...c, queued: b.queue.size, next: b.queue.peek(8).map((w) => `${w.id} (${w.facet}, ${w.mode}, ${w.priority.toFixed(1)}: ${w.reason})`), generators: b.generators.size, packs: b.packs.map((p) => p.domain), outside: p ? p.status() : null };
 }
+export { VIEW_OF_DOMAIN, viewOfDomain } from './seeds/views';
+export { FAMILY_OF_CATEGORY, FAMILY_NUMBERS, familyOfWord } from './seeds/materials';

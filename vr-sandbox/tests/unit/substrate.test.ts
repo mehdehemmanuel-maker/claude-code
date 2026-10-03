@@ -7,8 +7,12 @@ import { answerTraversal } from '../../src/assistant/traverse';
 import {
   FACETS, KINDS, RELATIONS, RELATION_KINDS, Queue, Substrate, analogues, build, constructionPath, decompose, dualRole, implementations, index, ingest, leavesOf,
   lineage, materialsForRole, mechanismsFor, missingConstructors, populate, priority, producers, ruleExpander, seedExpander, seedQueue, variants, waysToStore,
+  FAMILY_NUMBERS, familyOfWord, viewOfDomain,
   type Entity, type Report, type WorkItem,
 } from '../../src/ganglia/substrate';
+import { MATERIALS } from '../../src/data/materials';
+import { PROCESSES } from '../../src/ganglia/processes';
+import { ARCHETYPES } from '../../src/ganglia/blocks';
 
 const built = build();
 const s = built.substrate;
@@ -399,5 +403,58 @@ describe('Ego answers the final test in words, by traversal', () => {
     expect(census).toMatch(/questions I have been asked by other things and not answered yet/);
     const unknown = ask('index of a warp drive').answer;
     expect(unknown).toMatch(/I know no warp drive/);
+  });
+});
+
+describe('what an arrow names, the index describes (S-6)', () => {
+  const isStub = (e: Entity) => 'stub' in e.source;
+  it('every view, every failure mode and every function an arrow names is described', () => {
+    for (const kind of ['architecture', 'failure', 'function'] as const) expect(s.ofKind(kind).filter(isStub).map((e) => e.id), `${kind} stubs`).toEqual([]);
+    // and each says something of its own, never a generated sentence
+    for (const v of s.ofKind('architecture')) expect(v.says, v.id).not.toMatch(/not yet described|decomposition of a living thing/);
+    for (const f of s.ofKind('failure')) expect(f.says, f.id).not.toMatch(/^$|not yet described/);
+  });
+
+  it('the domain of a law names one view, through one table, so no view has a twin', () => {
+    for (const l of LAWS) expect(s.reach(l.id, 'in-view').map((v) => v.id), l.id).toEqual([viewOfDomain(l.domain)]);
+    for (const twin of ['view.mechanics', 'view.fluids', 'view.structures', 'view.magnetism', 'view.information']) expect(s.has(twin), `${twin} beside its twin`).toBe(false);
+    expect(viewOfDomain('machine elements')).toBe('view.machine-elements');
+    expect(viewOfDomain('mechanics')).toBe(viewOfDomain('mechanical'));
+    expect(viewOfDomain('something new')).toBe('view.something-new');
+  });
+
+  it('a process or a block piece names a material by its family, never by a bare word', () => {
+    const words = new Set<string>([...MATERIALS.map((m) => m.category), ...PROCESSES.flatMap((p) => p.materials), ...ARCHETYPES.flatMap((a) => a.inside.flatMap((x) => (x.material ? [x.material].flat() : [])))]);
+    expect(words.size).toBeGreaterThan(10);
+    for (const w of words) {
+      const target = familyOfWord(w) ?? w;
+      if (!w.includes('.')) { expect(familyOfWord(w), `no family for the word ${w}`).toBeDefined(); const bare = s.get(w); expect(!bare || !isStub(bare), `the bare word ${w} is a stub (a word may also name a described thing: a magnet is a part and a category)`).toBe(true); }
+      const e = s.get(target);
+      expect(e && !isStub(e), `${w} -> ${target} is described`).toBe(true);
+      expect(e!.kinds.some((k) => k === 'material' || k === 'chemical'), `${target} is a material (${e!.kinds.join(',')})`).toBe(true);
+    }
+    for (const r of s.relations.filter((r) => r.kind === 'interacts-with' && r.says === 'works this material')) expect(s.get(r.to)!.kinds, `${r.from} -> ${r.to}`).toContain('material');
+  });
+
+  it('the numbers of a family come from a named page read on a date, and the stocked materials lie inside them', () => {
+    for (const [fam, params] of Object.entries(FAMILY_NUMBERS)) {
+      const e = s.get(fam)!;
+      expect(e.params?.length, fam).toBe(params.length);
+      for (const p of params) {
+        expect('url' in p.of ? p.of.url : undefined, `${fam} ${p.name} has its address`).toMatch(/^https:\/\//);
+        expect('cite' in p.of ? p.of.cite : '', `${fam} ${p.name} says the day it was read`).toMatch(/\(read \d{4}-\d{2}-\d{2}\)/);
+        expect(p.low).toBeLessThanOrEqual(p.high!);
+      }
+    }
+    // two sources agree: the stocked materials (data/materials.ts, Callister tables) lie inside the family's page ranges, density to 2 %,
+    // modulus to 10 % (grade scatter); a qualified name ('..., structural grades') is a subset and makes no family-wide claim
+    let checked = 0;
+    for (const m of MATERIALS) {
+      const fam = familyOfWord(m.category); const nums = fam ? FAMILY_NUMBERS[fam] : undefined; if (!nums) continue;
+      const rho = nums.find((p) => p.name === 'density'); const E = nums.find((p) => p.name === 'Young\'s modulus');
+      if (rho) { expect(m.density, `${m.id} density ${m.density} in [${rho.low}, ${rho.high}]`).toBeGreaterThanOrEqual(rho.low! * 0.98); expect(m.density, m.id).toBeLessThanOrEqual(rho.high! * 1.02); checked++; }
+      if (E) { expect(m.E, `${m.id} E ${m.E} in [${E.low}, ${E.high}]`).toBeGreaterThanOrEqual(E.low! * 0.9); expect(m.E, m.id).toBeLessThanOrEqual(E.high! * 1.1); checked++; }
+    }
+    expect(checked).toBeGreaterThan(20);
   });
 });
