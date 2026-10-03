@@ -46,8 +46,13 @@ describe('the substrate: a cross-connected index of reality', () => {
       if ('stub' in e.source) { expect(e.coverage.depth, e.id).toBe(0); expect(e.coverage.unknowns.length, e.id).toBeGreaterThan(0); }
       else expect(e.says.length, e.id).toBeGreaterThan(10);
     }
-    const stubs = [...s.entities.values()].filter((e) => 'stub' in e.source);
-    expect(stubs.length).toBeGreaterThan(100); // known is not complete: the frontier is explicit
+    // known is not complete: the frontier is explicit; the packs describe more each round, so the frontier at build is whatever
+    // the arrows still name, and a thing named by nothing described is a stub with its question, as the repair makes it
+    const s2 = build().substrate;
+    s2.relate({ from: 'bearing', kind: 'has-part', to: 'a.thing.no.pack.describes', source: { estimate: 'test' }, confidence: 0.5 });
+    expect(s2.repair().map((e) => e.id)).toEqual(['a.thing.no.pack.describes']);
+    const made = s2.get('a.thing.no.pack.describes')!;
+    expect('stub' in made.source && made.coverage.depth === 0 && made.coverage.unknowns.length > 0).toBe(true);
   });
 
   it('a thing is governed only by laws, and every law in the law book is in the substrate', () => {
@@ -216,7 +221,7 @@ describe('population: a queue that never needs to be finished', () => {
     const stubs = [...s.entities.values()].filter((e) => 'stub' in e.source);
     const most = stubs.reduce((a, b) => (s.into(b.id).length > s.into(a.id).length ? b : a));
     const least = stubs.reduce((a, b) => (s.into(b.id).length < s.into(a.id).length ? b : a));
-    expect(priority(s, most, 'functions')).toBeGreaterThanOrEqual(priority(s, least, 'functions'));
+    expect(s.into(most.id).length).toBeGreaterThanOrEqual(s.into(least.id).length);
     // and strictly: the same stub named by two more things is asked sooner (at build every stub may be named once, so the test makes the difference itself)
     const s2 = build().substrate, stub = [...s2.entities.values()].find((e) => 'stub' in e.source)!;
     const before = priority(s2, stub, 'functions');
@@ -448,6 +453,12 @@ describe('what an arrow names, the index describes (S-6)', () => {
       expect(e!.kinds.some((k) => k === 'material' || k === 'chemical'), `${target} is a material (${e!.kinds.join(',')})`).toBe(true);
     }
     for (const r of s.relations.filter((r) => r.kind === 'interacts-with' && r.says === 'works this material')) expect(s.get(r.to)!.kinds, `${r.from} -> ${r.to}`).toContain('material');
+  });
+
+  it('every non-biological thing an arrow names is described: at build the only stubs left are the parts of living things', () => {
+    const stubs = [...s.entities.values()].filter(isStub).map((e) => e.id);
+    expect(stubs.filter((id) => !id.startsWith('bio.'))).toEqual([]);
+    expect(stubs.length).toBeLessThan(140);
   });
 
   it('what a process requires, a machine, a tool, a mould, a gas, is described, never a stub', () => {

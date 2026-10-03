@@ -156,5 +156,8 @@ export function chemistry(): Pack {
   p.link('phys.plasma', { enables: ['weld.mig', 'process.etching', 'display'], 'governed-by': ['maxwell.equations'] }, PHYSICS);
   p.link('phys.nucleus', { 'has-part': ['phys.proton', 'phys.neutron'], enables: ['energy.nuclear'], 'governed-by': ['radioactive.decay'] }, PHYSICS);
   p.link('heat', { 'governed-by': ['second.law', 'heat.capacity'], 'is-a': ['store.energy.thermal'] }, PHYSICS);
+  c('chem.unit-cell', ['chemical', 'geometry'], 'The smallest box of a crystal that repeats: cubic, hexagonal, and the rest; its edge is the lattice constant, a few tenths of a nanometre.', { 'governed-by': ['bragg.law'] });
+  c('chem.grain-boundary', ['chemical', 'interface'], 'Where two crystals of different orientation meet in a metal: atoms out of place, which stop dislocations (strength) and let atoms diffuse (creep, corrosion).', { 'governed-by': ['hall-petch', 'fick.diffusion'] });
+  c('chem.solute', ['chemical'], 'What is dissolved: salt in water, carbon in iron, the minor part of a solution.', { 'governed-by': ['fick.diffusion', 'gibbs.energy'] });
   return p;
 }

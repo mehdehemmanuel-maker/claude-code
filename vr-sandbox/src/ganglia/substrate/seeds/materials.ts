@@ -103,6 +103,7 @@ export function materials(): Pack {
   }
   // named materials referred to elsewhere
   const named: [string, string, string, string[]][] = [
+    ['material.mycelium', 'The root network of a fungus grown through a substrate and dried: a light foam-like material for packaging and insulation, grown rather than made.', 'material.biological', ['role.insulator', 'role.cushion']],
     ['material.cork', 'The bark of the cork oak: a closed-cell natural foam, light, compressible, impermeable, slow to burn.', 'material.natural', ['role.seal', 'role.insulator']],
     ['material.bronze', 'Copper with 8 to 12 % tin: a bearing and gear material against steel, cast and wear-resistant.', 'material.copper-alloy', ['role.bearing-surface']],
     ['material.phosphor-bronze', 'Bronze with phosphorus: springs and connector contacts.', 'material.copper-alloy', ['role.connector-material', 'role.spring']],

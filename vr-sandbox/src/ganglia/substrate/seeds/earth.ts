@@ -47,5 +47,8 @@ export function earth(): Pack {
   }
   p.link('bio.honeycomb', { 'is-a': ['geometry.cellular'], 'produced-by': ['bio.self-assembly'] }, BEGON);
   p.link('bio.termite-mound', { does: ['fn.cool', 'fn.control'], 'governed-by': ['convection', 'bernoulli'], 'analogous-to': ['bio.thermoregulation'] }, BEGON);
+  e('earth.biosphere', ['environment', 'system'], 'The thin shell where life is: from a few kilometres down in rock to the top of the troposphere, every ecosystem together.', { 'has-part': ['earth.ecosystem'], 'governed-by': ['conservation.energy'] });
+  e('earth.current', ['phenomenon'], 'An ocean current: water moved by wind, by density from heat and salt, and turned by the earth\'s spin; the Gulf Stream carries a petawatt north.', { 'governed-by': ['navier-stokes', 'buoyancy'] });
+  e('earth.sediment', ['material'], 'Rock broken small and carried by water, wind or ice, then laid down: sand, silt, clay, and the rock they become.', { 'produced-by': ['earth.weathering'], 'governed-by': ['drag.aero'] });
   return p;
 }
