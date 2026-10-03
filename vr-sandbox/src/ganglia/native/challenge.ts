@@ -31,7 +31,14 @@ export function fromNeed(x: NeedResult): Structure {
   if (x.need.against) c.dom = [d(`medium.${x.need.against}`, { en: `the ${x.need.against}` })];
   if (x.level === 'unbuildable' && x.missing?.length) c.under = x.missing;
   if (x.level === 'fails' && x.fix) c.against = [x.fix];
-  return t(d(`flow.${f}`, { en: f }), d(`flow.${to}`, { en: to }), c);
+  // what the need is, as the challenge says it: a store keeps a flow over time (an invariant under time), a sense is
+  // a measurement (a morphism from the flow to a signal), an act and a convert are transformations
+  const from = d(`flow.${f}`, { en: f }), into = d(`flow.${to}`, { en: to });
+  switch (x.need.as) {
+    case 'store': return r('invariant', [from, d('time', { en: 'time' })], c);
+    case 'sense': return r('morphism', [from, into], c);
+    default: return t(from, into, c);
+  }
 }
 
 /** A challenge's bounds as structures: each a quantity of the challenge by a law of the book, with the law's own evidence; a note with no law behind it is a want held as unmodelled. */

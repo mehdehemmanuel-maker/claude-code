@@ -460,6 +460,10 @@ describe('Nex: the challenge engine\'s problems both ways (section Y.14)', () =>
         // the two kinds of unmodelled differ in shape, not in a word: the word's is a kind relation, the physics' a transformation
         if (res.level === 'unsayable') expect(s.k === 'R' && s.op === 'kind').toBe(true);
         if (res.level === 'no way') expect(s.k).toBe('T');
+        // what a need is comes from the challenge, not its words: a store is an invariant under time, a sense a morphism, the rest transformations
+        if ('as' in res.need && res.need.as === 'store') expect(s.k === 'R' && s.op === 'invariant').toBe(true);
+        if ('as' in res.need && res.need.as === 'sense') expect(s.k === 'R' && s.op === 'morphism').toBe(true);
+        if (res.flows && !('as' in res.need && (res.need.as === 'store' || res.need.as === 'sense')) && res.level !== 'unsayable') expect(s.k).toBe('T');
         // the text of each need reads back to the same hash (the compact text covers the challenge engine's structures too)
         expect(hash(read(text(s)))).toBe(hash(s));
       }
@@ -484,7 +488,13 @@ describe('Nex: the challenge engine\'s problems both ways (section Y.14)', () =>
     const works = fromNeed(a.results.find((r) => r.level === 'works')!);
     expect(render(works, 'en', 'engineer').text).toBe('Signal becomes, in simulation, translation (grown and checked in my own machinery).');
     const unbuildable = fromNeed(a.results.find((r) => r.level === 'unbuildable')!);
-    expect(render(unbuildable, 'en', 'engineer').text).toMatch(/^It is outside the domain to say whether load becomes signal/);
+    expect(render(unbuildable, 'en', 'engineer').text).toMatch(/^It is outside the domain to say whether load maps to signal/);
+    // "hold one bit" and "let one bit switch another" were one structure (signal to signal) until the challenge said what each is
+    const computer = attempt(challengeById('computer')!);
+    const hold = fromNeed(computer.results.find((r) => r.need.does === 'hold one bit')!), gate = fromNeed(computer.results.find((r) => /logic gate/.test(r.need.does))!);
+    expect(hash(hold)).not.toBe(hash(gate));
+    expect(hold.k === 'R' && hold.op).toBe('invariant');
+    expect(gate.k).toBe('T');
     // the loss: the mechanism (the way ids), the domain and what it is outside of are never spoken; measured 3 October: the scientist's English carries 30 of 36 pieces
     const x = fromAttempt(a);
     expect(x.carried).toBeLessThan(x.present);

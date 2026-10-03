@@ -427,9 +427,11 @@ What `tests/unit/native.test.ts` holds, and will hold as the language grows:
     a world), which the report now says; (b) English carries 30 of 36 pieces of the scientist's attempt and 110 of
     122 of the computer's: what it drops is the mechanism (the chain of ways), the domain (the medium pushed
     against) and what an outside-domain result is outside of, every time; (c) a reasoning error of the words, not
-    of the physics: "hold one bit" and "let one bit switch another" are both `signal → signal` in her flow
-    language, which cannot tell holding from switching, so the two needs are one structure, a coarseness of the
-    flow vocabulary the structures show and the words hid. The error count of the physics itself is the same both
+    of the physics: "hold one bit" and "let one bit switch another" were both `signal → signal` in her flow
+    language, which cannot tell holding from switching, so the two needs were one structure, a coarseness of the
+    flow vocabulary the structures showed and the words hid. Fixed by structure, not by words: a need now says what
+    it is (`as`: a store is an invariant under time, a sense a morphism from the flow to a signal, an act or a
+    convert a transformation), declared by the challenge, and the two needs hash apart. The error count of the physics itself is the same both
     ways, because downstream of the words the engine is already structural (flows, ways, blocks, checks): the
     errors Nex removes on these problems are at the two edges, the words in (section Y.13) and the report out.
 

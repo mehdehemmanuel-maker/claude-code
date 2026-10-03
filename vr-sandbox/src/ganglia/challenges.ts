@@ -33,7 +33,14 @@ export type Level = 'unsayable' | 'no way' | 'unbuildable' | 'fails' | 'partial'
 export const LEVEL_ORDER: Level[] = ['unsayable', 'no way', 'unbuildable', 'fails', 'partial', 'works'];
 
 /** A need: one flow into another, or a shape (made from words, or invented for a job said in words). */
-export type Need = { does: string; from: string; to: string; against?: Medium } | { does: string; form: string };
+/**
+ * What kind of thing a need is, said by the challenge rather than read off its words (the words "hold one bit" and
+ * "switch one bit" are both signal to signal in the flow language, which cannot tell holding from switching): a
+ * store keeps a flow over time, a sense measures one flow as a signal, an act turns a signal into a flow, a convert
+ * turns one flow into another (the default).
+ */
+export type NeedKind = 'store' | 'sense' | 'act' | 'convert';
+export type Need = { does: string; from: string; to: string; against?: Medium; as?: NeedKind } | { does: string; form: string };
 
 export interface Challenge {
   id: string;
@@ -122,11 +129,11 @@ export const CHALLENGES: Challenge[] = [
     id: 'computer', name: 'A computer, built inside the world', asked: 'Build a computer in the app.',
     frame: 'A computer is switches that hold and combine bits: anything with two stable states where one can set another will do (relays, transistors, levers, marbles, valves). Its floor is Landauer\'s: erasing a bit costs at least k T ln 2.',
     needs: [
-      { does: 'hold one bit', from: 'bit', to: 'bit' },
-      { does: 'let one bit switch another (a logic gate)', from: 'logic', to: 'logic' },
+      { does: 'hold one bit', from: 'bit', to: 'bit', as: 'store' },
+      { does: 'let one bit switch another (a logic gate)', from: 'logic', to: 'logic', as: 'convert' },
       { does: 'run on electric power', from: 'electric', to: 'bit' },
-      { does: 'take a question from a hand: a key pressed', from: 'push', to: 'bit' },
-      { does: 'show its answer', from: 'bit', to: 'light' },
+      { does: 'take a question from a hand: a key pressed', from: 'push', to: 'bit', as: 'sense' },
+      { does: 'show its answer', from: 'bit', to: 'light', as: 'act' },
     ],
     probe: () => [
       bound('landauer', { T: 300 }, (v) => `the least a bit can cost to erase at room temperature is ${v.toExponential(2)} J (Landauer); a lever flipped by a 10 g ball dropping 1 cm costs ${(0.01 * 9.80665 * 0.01).toExponential(1)} J, ${((0.01 * 9.80665 * 0.01) / v).toExponential(1)} times more: a mechanical computer works, at a heavy price per bit`),
@@ -152,10 +159,10 @@ export const CHALLENGES: Challenge[] = [
     id: 'scientist', name: 'A scientist', asked: 'Create a scientist.',
     frame: 'A scientist is a loop: predict from what is known, measure the world, compare, and change what is known when they disagree. Ego has the predicting (her laws) and a world to measure in; a scientist inside it also needs senses, and hands that act on what it found.',
     needs: [
-      { does: 'sense a force', from: 'force', to: 'signal' },
-      { does: 'sense a temperature', from: 'temperature', to: 'signal' },
-      { does: 'sense a turn', from: 'turn', to: 'signal' },
-      { does: 'act on what it found', from: 'signal', to: 'push' },
+      { does: 'sense a force', from: 'force', to: 'signal', as: 'sense' },
+      { does: 'sense a temperature', from: 'temperature', to: 'signal', as: 'sense' },
+      { does: 'sense a turn', from: 'turn', to: 'signal', as: 'sense' },
+      { does: 'act on what it found', from: 'signal', to: 'push', as: 'act' },
     ],
     probe: () => {
       const notes: Note[] = [];
