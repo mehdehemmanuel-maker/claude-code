@@ -1,6 +1,7 @@
 // The substrate: reality indexed as an alien engineer would, cross-connected, every entity carrying where it comes from
 // and how much of it is known, and a queue of what to ask next. The final test is answered by traversal, never by a list.
 import { FAILURE_OF_FUNCTION } from '../../src/ganglia/substrate/population';
+import { findByWords, spokenName } from '../../src/ganglia/substrate/names';
 import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
@@ -554,6 +555,21 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect([...s.entities.values()].filter((e) => !isStub(e) && e.domains[0] === 'unplaced').map((e) => e.id)).toEqual([]);
   });
 
+  it('every part and material named five times or more is spoken by a human name, never the id as words', () => {
+    const asWords = (e: Entity) => e.id.replace(/[.-]/g, ' ');
+    const named = [...s.entities.values()].filter((e) => !isStub(e) && (e.kinds.includes('component') || e.kinds.includes('material') || e.kinds.includes('mechanism')) && /\./.test(e.id) && !/^(bio|block|way|cross|std|failure|fn|param|view|role|scale|observer|kind|flow|element|material|process|machine|chem|phys|earth)\./.test(e.id) && s.into(e.id).length >= 5);
+    expect(named.length).toBeGreaterThan(15);
+    const idWords = named.filter((e) => spokenName(e).toLowerCase() === asWords(e)).map((e) => e.id);
+    expect(idWords).toEqual([]);
+    expect(spokenName(s.get('copper.c110')!)).toBe('Copper C110 annealed');
+    expect(spokenName(s.get('motor.electric')!)).toBe('electric motor');
+    expect(spokenName(s.get('transistor.mosfet')!)).toBe('MOSFET');
+    expect(spokenName(s.get('engine.internal-combustion')!)).toBe('internal combustion engine');
+    // and the said layer is heard: the words find the thing
+    expect(findByWords(s, 'DC motor')?.id).toBe('motor.dc');
+    expect(findByWords(s, 'logic gate')?.id).toBe('gate.logic');
+  });
+
   it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {
     const named = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && s.into(e.id).length >= 5);
     const unplaced = named.filter((e) => !e.params?.some((p) => p.sym === 'L_c') || !e.params?.some((p) => p.sym === 'T_c')).map((e) => e.id);
@@ -632,7 +648,7 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     const rod = answerTraversal({ do: 'traverse', query: 'components', of: 'connecting rod' });
     expect(rod).toMatch(/^I know no parts of a connecting rod yet\. It is typically made of Steel AISI 4140 annealed \(Budynas & Nisbett\)\./);
     const bolt = answerTraversal({ do: 'traverse', query: 'components', of: 'bolt' });
-    expect(bolt).toMatch(/is a (?:screw|fastener), and an? (?:screw|fastener) is typically made of/);
+    expect(bolt).toMatch(/is an? (?:cap screw|screw|fastener), and an? (?:cap screw|screw|fastener) is typically made of/);
     const servo = answerTraversal({ do: 'traverse', query: 'components', of: 'servo' });
     expect(servo).not.toMatch(/\b1 things\b/);
     expect(servo).toMatch(/Down to the leaves it is \d+ things/);

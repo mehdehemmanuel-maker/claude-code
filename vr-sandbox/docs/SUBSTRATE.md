@@ -338,8 +338,11 @@ a test holds both that and the heatsink's thermal one.
   background service runs one lane over all domains, so it is pure priority.
 - **Lineage is one path.** `lineage()` follows the first unvisited constituent at each step; a full generative tree is
   `decompose()` to depth, which exists.
-- **Names.** Many seed entities have no human `names` and Ego says the id as words; the outside adds labels and aliases
-  as it answers.
+- **Names.** What Ego says of a thing is its human name when it has one (a material's from its data sheet, a part's
+  from its pack), else the said layer over ids whose words come out in the wrong order or stand for a code (`SAID` in
+  `names.ts`: "DC motor" for motor.dc, "MOSFET" for transistor.mosfet, 170 of them), else the id as words without its
+  prefix; the said layer is heard too, so "logic gate" finds gate.logic. A test holds that every part and material named
+  five times or more is spoken by a name, never the id as words. The outside adds labels and aliases as it answers.
 - **Stub laws are cited, not executable:** they cannot be run by `solve()` until added to `laws.ts`.
 - **Persistence is per browser.** The journal lives in this browser's storage beside the builds, sharing its five
   million characters; nothing syncs it between headsets.
