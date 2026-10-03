@@ -106,7 +106,7 @@ export function answerTraversal(i: Traverse): string {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
-    const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^To [a-z -]+: /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const laws = s.reach(fn.id, 'governed-by').map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
+    const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^(?:To [a-z -]+|[a-z -]+ \(function\)): /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const laws = s.reach(fn.id, 'governed-by').map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
     const own = s.outOf(e.id, 'does').map((r) => ({ r, fn: s.get(r.to)! })).filter((x) => x.fn);
     if (own.length) return `${an(nameOf(e)).replace(/^a/, 'A')} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.`;
     const kind = s.reach(e.id, 'is-a').map((k) => ({ k, fns: s.reach(k.id, 'does') })).find((x) => x.fns.length);

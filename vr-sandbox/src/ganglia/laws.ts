@@ -23,6 +23,7 @@ const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering De
 const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002', kind: 'handbook' as const };
 const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' as const };
 const HH = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015', kind: 'textbook' as const };
+const ANDERSON = { cite: 'Anderson, Introduction to Flight, 8th ed., McGraw-Hill 2016', kind: 'textbook' as const };
 const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
 const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
@@ -346,6 +347,11 @@ export const LAWS: Law[] = [
     id: 'rc.time-constant', name: 'RC time constant', domain: 'electrical', statement: 'A capacitor charges or discharges through a resistance toward its final voltage with time constant R C: 63 % of the way in one, 95 % in three.', formula: 'τ = R C',
     inputs: [q('R', 'resistance', 'ohm'), q('C', 'capacitance', 'F')], output: q('tau', 'time constant', 's'), eval: ({ R, C }) => R! * C!,
     valid: 'A linear resistance and capacitance, a source that holds its voltage.', example: { inputs: { R: 10e3, C: 100e-6 }, output: 1 }, source: HH, tags: ['capacitor', 'filter', 'decoupling', 'time'],
+  },
+  {
+    id: 'lift.aero', name: 'Aerodynamic lift', domain: 'fluids', statement: 'A surface moved through a fluid is pushed across the flow by half the fluid density times its lift coefficient, planform area and speed squared; the coefficient grows with the angle of attack up to the stall.', formula: 'L = ½ ρ C_L A v²',
+    inputs: [q('rho', 'fluid density', 'kg/m^3'), q('CL', 'lift coefficient', '-'), q('A', 'planform area', 'm^2'), q('v', 'speed', 'm/s')], output: q('L', 'lift', 'N'), eval: ({ rho, CL, A, v }) => 0.5 * rho! * CL! * A! * v! * v!,
+    valid: 'Below the stall angle; C_L from the section and angle (about 0.3 to 1.5 for a wing in flight).', example: { inputs: { rho: 1.225, CL: 1, A: 10, v: 50 }, output: 15312.5 }, source: ANDERSON, tags: ['wing', 'lift', 'flight', 'rotor'],
   },
   {
     id: 'thermal.network', name: 'Temperature rise through thermal resistances', domain: 'thermal', statement: 'A steady loss flowing through resistances in series raises the temperature by the loss times their sum.', formula: 'ΔT = P Σ R_th',

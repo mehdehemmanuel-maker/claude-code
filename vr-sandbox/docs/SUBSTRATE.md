@@ -187,7 +187,7 @@ the typecheck, the unit suite and the build, and fails on any of them: the loop'
 | relations | 11 650 |
 | relations per entity | 4.5 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
-| laws | 173 (105 executable in `laws.ts`, 68 cited not run) |
+| laws | 174 (106 executable in `laws.ts`, 68 cited not run) |
 | materials | 272 |
 | components | 659 |
 | functions | 92 |
@@ -316,7 +316,12 @@ a test holds both that and the heatsink's thermal one.
   at 0.5), a living part is made by development unless a nearer maker is known (0.6), the parts of a cell say
   self-assembly or replication, a magnet sintering and magnetizing, a laser source epitaxy, a logic gate lithography,
   a machine assembly. The 29 that remain are the Earth's cycles and climate, which nothing constructs, the observers,
-  the engine's rigid body and world, and building blocks whose pieces have no material to work. The bridge's ways (`way.*`, how a thing is done) are refinements
+  the engine's rigid body and world, and building blocks whose pieces have no material to work.
+  Two refinements followed from reading Ego's answers: joining and assembly work a material too but do not make a part
+  of it (a tube is not made by glue), and a piece is made with its whole only when it is a region of it (a bolt's
+  thread), never a part made apart and assembled (an engine's flywheel). Lift has its own law now (L = ½ ρ C_L A v²,
+  Anderson) where the lift function had cited drag, and the filter function says both of its mechanisms, size through
+  pores and frequency through reactance, since the kidney and the capacitor both do it. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.

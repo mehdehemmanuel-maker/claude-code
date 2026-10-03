@@ -186,7 +186,9 @@ export function ruleExpander(): Expander {
         for (const m of s.reach(e.id, 'made-of')) {
           const fams = [m, ...s.reach(m.id, 'is-a')];
           // a part of a material can be made by what works that material: a steel bracket by what saws, drills, mills and welds steel. Weaker than a maker of its own, so 0.4 and said
-          for (const f of fams) for (const pr of s.reach(f.id, 'interacts-with').filter((x) => x.kinds.includes('process'))) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a part of ${m.id} can be made by what works it: ${pr.id}, until its own maker is known`), confidence: 0.4 });
+          // joining and assembly work a material too, but they do not make a part of it
+          const joins = (pr: Entity) => s.reach(pr.id, 'is-a').some((k) => ['process.joining', 'process.welding', 'process.assembly'].includes(k.id)) || ['process.joining', 'process.welding', 'process.assembly'].includes(pr.id);
+          for (const f of fams) for (const pr of s.reach(f.id, 'interacts-with').filter((x) => x.kinds.includes('process') && !joins(x))) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a part of ${m.id} can be made by what works it, until its own maker is known`), confidence: 0.4 });
         }
       }
       if (facet === 'constructors') {
@@ -194,7 +196,8 @@ export function ruleExpander(): Expander {
         // what makes the kind makes the member, until something more specific is known: a wood screw is made as screws are
         if (!makers.length) for (const k of s.reach(e.id, 'is-a')) for (const pr of s.reach(k.id, 'produced-by')) out.relations.push(r(e.id, 'produced-by', pr.id, `inherits from ${k.id}: what makes the kind makes the member`));
         // a piece is made with its whole: a bolt's thread is made when the bolt is, a shaft's shoulder when the shaft is turned
-        if (!makers.length && !out.relations.length) for (const whole of s.reach(e.id, 'part-of')) for (const pr of s.reach(whole.id, 'produced-by')) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a piece of ${whole.id}, made with it by ${pr.id}`), confidence: 0.5 });
+        // only a region of the whole (a block's piece, named under it), never a part that is made apart and assembled (a flywheel of an engine)
+        if (!makers.length && !out.relations.length) for (const whole of s.reach(e.id, 'part-of').filter((w) => e.id.startsWith(`${w.id}.`))) for (const pr of s.reach(whole.id, 'produced-by')) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a piece of ${whole.id}, made with it`), confidence: 0.5 });
         // living parts are made by development: one cell to a body, every organ and tissue on the way
         if (!makers.length && !out.relations.length && e.kinds.includes('biological') && e.kinds.includes('component') && s.has('bio.development')) out.relations.push({ ...r(e.id, 'produced-by', 'bio.development', 'a living part: made by development, one cell to a body, unless a nearer maker is known'), confidence: 0.6 });
         if (!makers.length && !out.relations.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it, nor for what it is a kind of: what produces it is an open question' });

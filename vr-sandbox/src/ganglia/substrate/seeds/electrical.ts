@@ -23,7 +23,7 @@ export function electrical(): Pack {
     ['fn.invert', 'Turn DC into AC.'], ['fn.protect.overcurrent', 'Break a circuit when current is too high.'], ['fn.sense', 'Turn a physical quantity into a signal.'],
     ['fn.actuate.electromagnetic', 'Turn current into force or torque through a magnetic field.'], ['fn.emit.light', 'Turn electrical energy into light.'],
     ['fn.detect.light', 'Turn light into current.'], ['fn.radiate', 'Couple a circuit to free-space electromagnetic waves.'], ['fn.compute', 'Transform information by rules.'],
-    ['fn.remember', 'Hold information for later.'], ['fn.oscillate', 'Make a periodic signal from DC.'], ['fn.filter', 'Pass some frequencies and stop others.'],
+    ['fn.remember', 'Hold information for later.'], ['fn.oscillate', 'Make a periodic signal from DC.'], ['fn.filter', 'Pass some of what comes and stop the rest: by size through pores (a sieve, a membrane, a nephron), by frequency through reactance (a capacitor, an inductor).'],
     ['fn.convert.analog-digital', 'Turn a continuous quantity into a number.'], ['fn.convert.digital-analog', 'Turn a number into a continuous quantity.'],
     ['fn.connect.electrical', 'Join conductors so current passes, and part them again.'], ['fn.display', 'Show information as light to an eye.'], ['fn.control', 'Drive a system toward a wanted state by acting on what is sensed.'],
     ['fn.transfer.heat', 'Carry heat from where it is made to where it can leave.'], ['fn.reduce.friction', 'Lower the force resisting relative motion.'], ['fn.cool', 'Take heat away from a thing.'],

@@ -38,7 +38,7 @@ export function common(): Pack {
   fn('fn.focus', 'To focus: bring rays to a point or a line by bending them at a surface, with a lens or a mirror.', { 'governed-by': ['snell.law', 'diffraction.limit'] }, HECHT);
   fn('fn.grip', 'To grip: hold a thing fast by friction or by form, with jaws, fingers or a chuck.', { 'governed-by': ['friction.coulomb', 'hertz.contact'] });
   // the functions the parts below needed and no pack had said (S-6: what an arrow names, the index describes)
-  fn('fn.lift', 'To lift: make a force across a flow from a surface moved through a fluid: a wing, a rotor blade, a sail, a fin; it grows with the square of speed and with the surface\'s area and angle, up to the stall.', { 'governed-by': ['drag.aero'] }, ANDERSON);
+  fn('fn.lift', 'To lift: make a force across a flow from a surface moved through a fluid: a wing, a rotor blade, a sail, a fin; it grows with the square of speed and with the surface\'s area and angle, up to the stall.', { 'governed-by': ['lift.aero'] }, ANDERSON);
   fn('fn.steer', 'To steer: change the direction a vehicle moves, by turning a surface in the flow or a wheel on the ground: a rudder, an aileron, an elevator, a steering linkage.', { 'governed-by': ['cornering.limit'] }, ANDERSON);
   fn('fn.thrust', 'To thrust: push a vehicle by throwing mass backward, a propeller, a jet, a rocket; the force is the mass flow times the change of its speed.', { 'governed-by': ['thrust.ideal-static', 'newton.second'] }, HILL);
   fn('fn.control.buoyancy', 'To control buoyancy: change the weight of displaced fluid against the thing\'s own weight by taking in or expelling water or gas: a ballast tank, a swim bladder.', { 'governed-by': ['buoyancy'] }, CAMPBELL);

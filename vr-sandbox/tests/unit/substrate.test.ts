@@ -322,7 +322,7 @@ describe('population: a queue that never needs to be finished', () => {
     await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
     const byWhole = s2.outOf(piece.id, 'produced-by');
     expect(byWhole.length).toBeGreaterThan(0);
-    for (const x of byWhole) { expect(x.confidence).toBe(0.5); expect(x.says).toMatch(/made with it by/); }
+    for (const x of byWhole) { expect(x.confidence).toBe(0.5); expect(x.says).toMatch(/made with it$/); }
     const byLife = s2.outOf(organ.id, 'produced-by');
     expect(byLife.map((x) => x.to)).toEqual(['bio.development']);
     expect(byLife[0]!.confidence).toBe(0.6);
@@ -655,6 +655,18 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(rudder).not.toMatch(/failure\.[a-z]/);
     const chloroplast = answerTraversal({ do: 'traverse', query: 'producers', of: 'chloroplast' });
     expect(chloroplast).toMatch(/^A chloroplast is made by self assembly\.$/);
+  });
+
+  it('what works a material makes a part of it, but joining and assembly do not; a part of an assembly is not made with it; a kidney filters by size', () => {
+    const tube = answerTraversal({ do: 'traverse', query: 'producers', of: 'tube' });
+    expect(tube).toMatch(/is made by .*saw/);
+    expect(tube).not.toMatch(/glue|solder|weld|crimp/);
+    expect(tube).toMatch(/\(a part of steel can be made by what works it, until its own maker is known\)/);
+    const flywheel = answerTraversal({ do: 'traverse', query: 'producers', of: 'flywheel' });
+    expect(flywheel).not.toMatch(/made with it/);
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'kidney' })).toMatch(/filter: pass some of what comes and stop the rest/);
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'flywheel' })).toMatch(/store energy: energy out/);
+    expect(s.reach('fn.lift', 'governed-by').map((l) => l.id)).toEqual(['lift.aero']);
   });
 
   it('what charges and discharges through a resistance cites the RC time constant, not the lumped thermal one', () => {
