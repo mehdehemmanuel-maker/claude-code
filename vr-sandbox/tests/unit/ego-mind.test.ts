@@ -152,3 +152,74 @@ describe("Ego's Mind", () => {
     expect(sayWorking(journal.commits)).toMatch(/1 request I could not read is kept open \(the last: “please dance for me”\)/);
   });
 });
+
+describe('the watchdog as an event of her Mind', () => {
+  const anomaly = (id: string, kind: 'jitter' | 'fell' = 'jitter') => ({ kind, severity: 'warning' as const, id, tick: 10, value: 0.3, limit: 0.05, detail: kind === 'jitter' ? 'shaking at 0.3 m/s with nothing moving it' : '0.3 m below the floor' });
+  const event = (inv: string, part: { id: string; name: string; material: string; longest: number } | null, kind: 'jitter' | 'fell' = 'jitter') => ({ kind: 'watchdog' as const, inv, anomaly: anomaly(part?.id ?? '', kind), part, obligation: 'ML-3 (no energy without a source)', since: performance.now() });
+
+  it('a finding is delivered to whoever listens the moment it is flagged, never polled for', async () => {
+    const { LiveState } = await import('../../src/app/live');
+    const live = new LiveState();
+    const got: { kind: string; at: number }[] = [];
+    live.onAnomaly.push((a) => got.push(a));
+    live.flag(anomaly('p1'));
+    expect(got).toHaveLength(1);
+    expect(got[0]!.at).toBe(live.ticks);
+    expect(live.health).toHaveLength(1);
+  });
+
+  it('jitter on a rubber band a metre long: the rigid model is outside its domain for it (sound crosses it in longer than a tick), derived, resolved, said', async () => {
+    const journal = new MemoryJournal();
+    const mind = new Mind(journal, { stand: fakeStand(), sim });
+    await mind.process(event('watch:jitter:p1', { id: 'p1', name: 'Band', material: 'rubber.natural', longest: 1 }));
+    const cs = of(journal.commits, 'watch:jitter:p1');
+    expect(kinds(cs)).toEqual(['observation:open', 'anomaly:open', 'hypothesis:testing', 'evidence:open', 'belief:resolved']);
+    expect(cs[0]!.validation.verdict).toBe('failed');
+    expect(cs[0]!.validation.margin).toBeCloseTo(6, 9);
+    expect(cs[1]!.data['candidates']).toEqual(['rigid-domain']);
+    expect(cs[2]!.data['lawHashes']).toHaveLength(1);
+    expect((cs[3]!.data['outcome'] as { inside: boolean; ratio: number }).inside).toBe(false);
+    expect((cs[3]!.data['outcome'] as { ratio: number }).ratio).toBeGreaterThan(2);
+    expect(cs[4]!.item.k === 'R' && cs[4]!.item.c.mode).toBe('true');
+    expect(mind.unresolved()).toEqual([]);
+    expect(mind.stands.runs).toBe(0);
+    expect(sayWorking(journal.commits)).toMatch(/looking into a watchdog finding \(jitter\) on Band/);
+    expect(sayWorking(journal.commits)).toMatch(/Resolved: the finding is the rigid model extrapolating past its domain, not physics/);
+    expect(sayChanged(journal.commits)).toMatch(/^Resolved: the rigid model is outside its domain for a 1\.00 m part in rubber\.natural/);
+    expect(text(cs[4]!.item)).toContain('part:p1');
+  });
+
+  it('jitter on a steel block inside the rigid domain: the hypothesis is rejected, no other candidate, the question stays open as an anomaly of the physics', async () => {
+    const journal = new MemoryJournal();
+    const mind = new Mind(journal, { stand: fakeStand(), sim });
+    await mind.process(event('watch:jitter:p2', { id: 'p2', name: 'Block', material: 'steel.a36', longest: 0.5 }));
+    const cs = of(journal.commits, 'watch:jitter:p2');
+    expect(kinds(cs)).toEqual(['observation:open', 'anomaly:open', 'hypothesis:testing', 'evidence:open', 'belief:open', 'question:open']);
+    expect(cs[3]!.validation.verdict).toBe('contradicted');
+    expect(cs[4]!.data['next']).toBe('retry');
+    expect(cs[5]!.data['asks']).toBe('unexplained');
+    expect(mind.unresolved()).toEqual(['watch:jitter:p2']);
+    expect(sayChanged(journal.commits)).toMatch(/^The part is inside the rigid domain; the finding stands/);
+  });
+
+  it('a part through the floor has no candidate she can test: observation, anomaly, open question; and a part admitted outside the rigid domain is noted, resolved, not an investigation', async () => {
+    const { rigidDomain } = await import('../../src/ganglia/native/tsc');
+    const { investigations } = await import('../../src/mind');
+    const journal = new MemoryJournal();
+    const mind = new Mind(journal, { stand: fakeStand(), sim });
+    await mind.process(event('watch:fell:p3', { id: 'p3', name: 'Plank', material: 'wood.mdf', longest: 2 }, 'fell'));
+    expect(kinds(of(journal.commits, 'watch:fell:p3'))).toEqual(['observation:open', 'anomaly:open', 'question:open']);
+    await mind.process({ kind: 'construct', part: { id: 'p4', name: 'Band', material: 'rubber.natural', longest: 1 }, domain: rigidDomain('rubber.natural', 1), since: performance.now() });
+    // the same part admitted again (a build loaded again) is not a second note
+    await mind.process({ kind: 'construct', part: { id: 'p4', name: 'Band', material: 'rubber.natural', longest: 1 }, domain: rigidDomain('rubber.natural', 1), since: performance.now() });
+    const note = of(journal.commits, 'construct:p4');
+    expect(kinds(note)).toEqual(['observation:resolved']);
+    expect(note[0]!.validation.verdict).toBe('contradicted');
+    expect(investigations(journal.commits)).toEqual(['watch:fell:p3']);
+    expect(mind.unresolved()).toEqual(['watch:fell:p3']);
+    // resumed from the journal, the open question is still open and nothing runs
+    const again = new Mind(new MemoryJournal(journal.commits), { stand: fakeStand(), sim }, undefined, 'later');
+    expect(await again.resume()).toEqual([]);
+    expect(again.unresolved()).toEqual(['watch:fell:p3']);
+  });
+});

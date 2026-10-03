@@ -514,10 +514,8 @@ export class XRMode {
     this.egoOrb.position.lerp(want, 1 - Math.exp(-dt * 4));
     const news = ego.advice.length > 0;
     const pulse = 1 + (news ? 0.18 : 0.06) * Math.sin(time / (news ? 180 : 600));
-    // she grows with what she learns: a little larger and brighter each level
-    const grown = 1 + 0.12 * (ego.growth.level.level - 1);
-    this.egoOrb.scale.setScalar(s * pulse * grown);
-    (this.egoOrb.material as THREE.MeshBasicMaterial).opacity = Math.min(1, 0.6 + 0.07 * ego.growth.level.level);
+    this.egoOrb.scale.setScalar(s * pulse);
+    (this.egoOrb.material as THREE.MeshBasicMaterial).opacity = 0.75;
     (this.egoOrb.material as THREE.MeshBasicMaterial).color.setHex(news ? (ego.advice[0]!.kind === 'break' ? 0xff7a5c : 0xffc14d) : 0x8fd3ff);
   }
 

@@ -12,6 +12,7 @@ import { d, hash, q, r, type Q, type R, type Structure } from './core';
 import { text } from './text';
 import { LAWS, lawById, withConstants } from '../laws';
 import type { Law } from '../types';
+import { fromLaw } from './nexus';
 
 // ---- building terms ------------------------------------------------------------------------------------------------
 
@@ -242,7 +243,8 @@ export function affected(records: Citing[], changed: string[], byHash: (id: stri
 }
 
 /** The hash of a law's term, when it has one. */
-export const lawHash = (id: string): string | undefined => (TERMS[id] ? hash(TERMS[id]!) : undefined);
+/** The hash of a law of the book: its term when it has one, else the law as a Nex structure (nexus.fromLaw). One identity per law, the one every citation uses; undefined for an id the book does not have. */
+export const lawHash = (id: string): string | undefined => (TERMS[id] ? hash(TERMS[id]!) : lawById(id) ? hash(fromLaw(lawById(id)!)) : undefined);
 
 /** A term said in infix, as a formula is written: the rendering of an apply (translate.ts uses it); never its identity. */
 export function sayTerm(s: Structure): string {

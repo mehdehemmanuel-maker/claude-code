@@ -17,20 +17,66 @@
 import { d, e, q, r, type R, type Structure } from '../ganglia/native/core';
 import { anomaly as anomalyOf, type Explanation } from '../ganglia/native/discovery';
 import { design, type DesignSpec } from '../assistant/designer';
-import { JOINT_LIMIT, PROOF, standLoads, standPushes } from '../assistant/prove';
-import { fixesFor } from '../assistant/fixes';
+import { fixesFor, MARGIN } from '../assistant/fixes';
+import { effectiveParams, getPartKind } from '../parts/registry';
+import { getMaterial } from '../data/materials';
+import { numberOf } from '../schema/params';
+import { hashesOfLaws } from '../ganglia/dependencies';
+import { rigidDomain } from '../ganglia/native/tsc';
+import type { Anomaly } from '../diagnostics/watchdog';
 import { Bench } from '../app/bench';
 import { BuildHost } from '../forge/apphost';
 import { run } from '../forge/forge';
 import { fragmentOf, type Fragment } from '../doc/commands';
-import type { SimSettings } from '../doc/types';
+import type { SimSettings, Vec3 } from '../doc/types';
 import { getConnectorKind } from '../connectors/registry';
 import { connectionGeometry } from '../connectors/through';
-import type { StandResult, StandSetup } from '../physics/stand';
+import { TILT_LIMIT, type StandLoad, type StandPush, type StandResult, type StandSetup } from '../physics/stand';
 import { last, of, type Commit, type Journal, type Kind, type Status, type Validation } from './journal';
 
 /** The physics this build runs (vite.config.ts): a commit is learned under it, and only under it. */
 export const PHYSICS = typeof __PHYSICS__ === 'string' ? __PHYSICS__ : 'unstamped';
+
+// ---- the stand's loads and pushes (from the old prove loop, which the Mind replaced) ----------------------------------
+
+/** A joint working at more than this share of its capacity on the stand is too close to its limit to hand over. */
+export const JOINT_LIMIT = 1 / MARGIN;
+/** A proof test: the design must also hold 1.5x its rated load and push (with the joints still under their limit). */
+export const PROOF = 1.5;
+/** A firm sideways shove, about what an adult leans or pushes with (N). */
+export const PUSH = 300;
+
+/** The weights a design is for, where they go: on a table's top, on every shelf; a wall or tower carries itself. */
+export function standLoads(spec: DesignSpec, frag: Fragment): StandLoad[] {
+  const kg = spec.load ?? (spec.what === 'bench' ? 150 : spec.what === 'table' ? 50 : spec.what === 'shelf' ? 20 : 0);
+  if (!kg) return [];
+  const top = (name: RegExp) => frag.parts.filter((p) => name.test(p.name));
+  const onto = (p: Fragment['parts'][number], kgEach: number): StandLoad => {
+    const k = getPartKind(p.kind);
+    const dd = k.dims(effectiveParams(k, p.params, getMaterial(p.material)));
+    const half = dd.b / 2;
+    const w = Math.min(0.3, 0.6 * numberOf(p.params, 'length', 0.3)), depth = Math.min(0.3, 0.6 * numberOf(p.params, 'width', 0.3));
+    return { kg: kgEach, at: [p.pose.p[0], p.pose.p[1] + half, p.pose.p[2]], size: [w, depth] };
+  };
+  if (spec.what === 'table' || spec.what === 'bench') return top(/top$/).map((p) => onto(p, kg));
+  if (spec.what === 'shelf') return top(/shelf\d+$/).map((p) => onto(p, kg));
+  return [];
+}
+
+/**
+ * How a design is pushed on the stand. Furniture fails sideways (racking) far more than straight down: a table's top
+ * bears on its legs, but a push at its edge bends every leg joint. So a table or bench is pushed along its length at
+ * the top's end, and a shelf unit across its width at the top shelf, half a second in, for a second and a half.
+ */
+export function standPushes(spec: DesignSpec, frag: Fragment): StandPush[] {
+  const end = (p: Fragment['parts'][number]): StandPush => ({ part: p.id, at: [p.pose.p[0] + numberOf(p.params, 'length', 0) / 2, p.pose.p[1], p.pose.p[2]], force: [-PUSH, 0, 0] as Vec3, from: 0.5, to: 2 });
+  if (spec.what === 'table' || spec.what === 'bench') return frag.parts.filter((p) => /top$/.test(p.name)).map(end);
+  if (spec.what === 'shelf') {
+    const shelves = frag.parts.filter((p) => /shelf\d+$/.test(p.name)).sort((a, b) => b.pose.p[1] - a.pose.p[1]);
+    return shelves.length ? [end(shelves[0]!)] : [];
+  }
+  return [];
+}
 
 /** The stand's own scatter on a joint's share of capacity (estimate: settling noise and contact chatter), used as the tolerance of an observation. */
 export const TOLERANCE = 0.1;
@@ -68,6 +114,9 @@ export interface Signature {
   joint: { kind: string; mode: string; load: number } | null;
   tipped: boolean;
 }
+
+/** What the Mind knows of a part for the rigid domain: its material and its longest dimension. */
+export interface PartInfo { id: string; name: string; material: string; longest: number }
 
 export function outcomeOf(res: StandResult): Outcome {
   const u = Math.max(res.worst?.u ?? 0, res.broken.length ? 1 : 0);
@@ -114,7 +163,7 @@ export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup
 // ---- candidate explanations -----------------------------------------------------------------------------------
 
 export interface Candidate {
-  id: 'racking' | 'members' | 'joints';
+  id: 'racking' | 'members' | 'joints' | 'anchor';
   /** The claim, in Nex: a cause raising an effect by a mechanism; mode unknown until tested. */
   claim: R;
   says: string;
@@ -134,6 +183,11 @@ export function candidatesOf(sig: Signature, tried: Change[]): Candidate[] {
     id: 'members', change: { margin: 1.5 },
     claim: r('influence', [d('design:member-undersized'), d('failure:member-fracture')], { polarity: '+', necessity: 'sufficient', mech: 'bending stress past strength', mode: 'unknown', ev: { how: 'hypothesized' } }),
     says: 'the members are sized for less than they carry; sizing them for 1.5x the load would hold',
+  });
+  if (sig.tipped && !sig.legBending && !sig.members && !sig.joint && !out.length) out.push({
+    id: 'anchor', change: { margin: 1 },
+    claim: r('influence', [d('design:tall-and-narrow'), d('failure:tips-in-one-piece')], { polarity: '+', necessity: 'sufficient', mech: 'overturning moment past the base', mode: 'unknown', ev: { how: 'hypothesized' } }),
+    says: 'it tipped over in one piece and nothing broke: strong enough, not stable; anchoring it to a wall (or widening its base) settles it, and that is a design question the stand cannot test',
   });
   if (sig.joint && !has((c) => 'upgrade' in c && c.upgrade.kind === sig.joint!.kind)) out.push({
     id: 'joints', change: { upgrade: sig.joint },
@@ -175,7 +229,7 @@ export function next(commits: Commit[], inv: string): Action {
 
 // ---- performing an action: each one a commit ------------------------------------------------------------------
 
-export interface Effects { stand(setup: StandSetup): Promise<StandResult>; sim: SimSettings }
+export interface Effects { stand(setup: StandSetup): Promise<StandResult>; sim: SimSettings; /** The rigid domain of a part: a derived check, no world needed. */ rigid?: (material: string, longest: number) => ReturnType<typeof rigidDomain> }
 export interface Clock { now(): number; iso(): string }
 
 /** What a stand result becomes when it answers a test (an observation when it is the first look, evidence when it tests a claim). */
@@ -206,7 +260,23 @@ export class Investigator {
   async observe(inv: string, test: TestSpec, res: StandResult, sig: Signature, predicted: Prediction, since: number): Promise<Commit> {
     const o = outcomeOf(res);
     const held = o.held && o.u <= predicted.uMax;
-    return this.commit(inv, 'observation', e(resultStructure(inv, o), 'simulated', 'test stand', { by: this.physics }), [], { test, outcome: o, signature: sig, predicted }, { by: 'test stand', verdict: held ? 'held' : 'failed' }, 'open', 'event:stand', since);
+    return this.commit(inv, 'observation', e(resultStructure(inv, o), 'simulated', 'test stand', { by: this.physics }), [], { of: 'stand', test, outcome: o, signature: sig, predicted, laws: predicted.laws, lawHashes: hashesOfLaws(predicted.laws) }, { by: 'test stand', verdict: held ? 'held' : 'failed' }, 'open', 'event:stand', since);
+  }
+
+  /** A watchdog finding on a part: the physics broke an obligation; the observation is the finding against its limit. */
+  async observeWatchdog(inv: string, a: Anomaly, part: PartInfo | null, obligation: string, since: number): Promise<Commit> {
+    const item = e(r('state', [r('quantity', [d(`${inv}:${a.kind}`), q(a.value, '')], {}), r('quantity', [d(`${inv}:limit`), q(a.limit, '')], {})], {}), 'simulated', 'watchdog', { by: this.physics });
+    const margin = a.limit ? Math.abs(a.value) / Math.abs(a.limit) : 1;
+    return this.commit(inv, 'observation', item, [], { of: 'watchdog', anomaly: { kind: a.kind, severity: a.severity, id: a.id, value: a.value, limit: a.limit, detail: a.detail }, part, obligation }, { by: 'comparison', verdict: 'failed', margin }, 'open', 'event:watchdog', since);
+  }
+
+  /** A part admitted that is outside the rigid realisation's domain: noted, resolved, said; nothing to investigate. */
+  async observeConstruct(part: PartInfo, domain: ReturnType<typeof rigidDomain>, since: number): Promise<Commit> {
+    // once per part, across sessions: a build loaded again admits the same parts again
+    const already = of(this.journal.commits, `construct:${part.id}`)[0];
+    if (already) return already;
+    const item = r('constrain', [d(`part:${part.id}`), d('outside-rigid-domain')], { mode: 'true', ev: { how: 'derived', src: ['tsc.rigid-domain'] }, margin: domain.ratio });
+    return this.commit(`construct:${part.id}`, 'observation', item, [], { of: 'construct', part, domain: { cSound: domain.cSound, crossing: domain.crossing, tick: domain.tick, ratio: domain.ratio, critical: domain.critical } }, { by: 'comparison', verdict: 'contradicted', margin: domain.ratio }, 'resolved', 'event:construct', since);
   }
 
   /** An unmatched request: kept as a structure with no model behind it yet, so the gap persists. */
@@ -220,8 +290,17 @@ export class Investigator {
     switch (a.do) {
       case 'rest': return null;
       case 'anomaly': {
+        if (a.from.data['of'] === 'watchdog') {
+          const an = a.from.data['anomaly'] as { kind: string; value: number; limit: number }, part = a.from.data['part'] as PartInfo | null, obligation = a.from.data['obligation'] as string;
+          const testable = !!part && ['jitter', 'restless', 'flung', 'energy', 'spin', 'drift'].includes(an.kind);
+          const item = r('contradict', [a.from.item, r('quantity', [d(obligation), q(an.limit, '')], {})], { mode: 'contradictory', margin: a.from.validation.margin, under: [`obligation ${obligation}`, 'model rigid-body'] });
+          return this.commit(inv, 'anomaly', item, [a.from.seq], { of: 'watchdog', candidates: testable ? ['rigid-domain'] : [], generic: [{ kind: 'numerical artifact', says: 'the solver, not the physics', settledBy: 'a smaller step' }], tried: [] }, { by: 'comparison', verdict: 'contradicted', margin: a.from.validation.margin }, 'open', 'ego', since);
+        }
         const o = a.from.data['outcome'] as Outcome, p = a.from.data['predicted'] as Prediction, sig = a.from.data['signature'] as Signature;
-        const an = anomalyOf(`${inv}:${a.from.seq}`, { value: o.u, tolerance: TOLERANCE, names: ['joint utilisation'], instrument: 'test stand', environment: this.physics }, { value: p.uMax, lawAncestry: p.laws, modelVersion: p.model });
+        // what contradicted the prediction: a joint past its share, or (strong enough, not stable) the whole thing tipping
+        const an = sig.tipped && o.u <= p.uMax
+          ? anomalyOf(`${inv}:${a.from.seq}`, { value: o.tilt, tolerance: Math.PI / 180, names: ['tilt'], instrument: 'test stand', environment: this.physics }, { value: TILT_LIMIT, lawAncestry: [...p.laws, 'statics.overturning'], modelVersion: p.model })
+          : anomalyOf(`${inv}:${a.from.seq}`, { value: o.u, tolerance: TOLERANCE, names: ['joint utilisation'], instrument: 'test stand', environment: this.physics }, { value: p.uMax, lawAncestry: p.laws, modelVersion: p.model });
         const tried = ((a.from.data['test'] as TestSpec).changes);
         const cands = candidatesOf(sig, tried);
         const generic = an.candidates.map((x: Explanation) => ({ kind: x.kind, says: x.says, settledBy: x.settledBy }));
@@ -230,10 +309,24 @@ export class Investigator {
       case 'hypothesise': {
         // the anomaly this is for: the one the belief retried from, or the one in hand
         const an = a.from.kind === 'anomaly' ? a.from : of(all, inv).filter((c) => c.kind === 'anomaly').at(-1)!;
+        if (an.data['of'] === 'watchdog') {
+          const obs = of(all, inv).find((c) => c.kind === 'observation')!;
+          const part = obs.data['part'] as PartInfo | null;
+          const tried = of(all, inv).filter((c) => c.kind === 'hypothesis').map((h) => h.data['candidate'] as string);
+          if (part && (an.data['candidates'] as string[]).includes('rigid-domain') && !tried.includes('rigid-domain')) {
+            const claim = r('constrain', [d(`part:${part.id}`), d('rigid-realisation-domain')], { mode: 'unknown', mech: 'sound crossing against the tick', ev: { how: 'hypothesized' } });
+            return this.commit(inv, 'hypothesis', claim, [an.seq, obs.seq], { candidate: 'rigid-domain', says: `${part.name} is longer than one tick of sound in its material, so the rigid body is outside its domain for it and the finding is the model's extrapolation, not physics`, test: { of: 'rigid', material: part.material, longest: part.longest }, predict: { inside: false }, laws: ['sound.speed'], lawHashes: hashesOfLaws(['sound.speed']) }, { by: 'none', verdict: 'none' }, 'testing', 'ego', since);
+          }
+          return this.commit(inv, 'question', r('state', [an.item], { mode: 'unknown', instrument: 'a smaller step, or a deformable part model' }), [an.seq], { asks: 'unexplained', says: 'nothing I can test settles it: the finding stays alive as an anomaly of the physics' }, { by: 'none', verdict: 'none' }, 'open', 'ego', since);
+        }
         const failed = of(all, inv).filter((c) => (c.kind === 'observation' || c.kind === 'evidence') && (c.validation.verdict === 'failed' || c.validation.verdict === 'contradicted')).at(-1)!;
         const sig = failed.data['signature'] as Signature;
         const tried = of(all, inv).filter((c) => c.kind === 'hypothesis').flatMap((h) => ((h.data['test'] as TestSpec).changes));
         const cand = candidatesOf(sig, tried)[0];
+        if (cand?.id === 'anchor') {
+          // a design question, not a strength one: held open, with nothing the stand can test
+          return this.commit(inv, 'hypothesis', cand.claim, [an.seq, failed.seq], { candidate: cand.id, says: cand.says, change: cand.change, test: { spec: (failed.data['test'] as TestSpec).spec, changes: (failed.data['test'] as TestSpec).changes, factor: 1 }, predict: { held: true, uMax: JOINT_LIMIT, model: 'anchored', laws: [] } }, { by: 'none', verdict: 'none' }, 'open', 'ego', since);
+        }
         if (!cand) {
           // nothing she knows settles it: the anomaly stays alive, the question stays open, and she rests
           return this.commit(inv, 'question', r('state', [an.item], { mode: 'unknown', instrument: 'test stand' }), [an.seq], { asks: 'unexplained', says: 'no change I know would settle it; it needs a different design' }, { by: 'none', verdict: 'none' }, 'open', 'ego', since);
@@ -244,6 +337,12 @@ export class Investigator {
         return this.commit(inv, 'hypothesis', cand.claim, [an.seq, failed.seq], { candidate: cand.id, says: cand.says, change: cand.change, test, predict }, { by: 'none', verdict: 'none' }, 'testing', 'ego', since);
       }
       case 'test': {
+        if ((a.of.data['test'] as { of?: string }).of === 'rigid') {
+          const t2 = a.of.data['test'] as { material: string; longest: number }, predict = a.of.data['predict'] as { inside: boolean };
+          const rd = (this.effects.rigid ?? rigidDomain)(t2.material, t2.longest);
+          const item = e(r('state', [r('quantity', [d(`${inv}:crossing`), q(rd.crossing, 's')], {}), r('quantity', [d(`${inv}:tick`), q(rd.tick, 's')], {})], {}), 'derived', 'tsc.rigid-domain');
+          return this.commit(inv, 'evidence', item, [a.of.seq], { of: 'watchdog', test: t2, outcome: { cSound: rd.cSound, crossing: rd.crossing, tick: rd.tick, ratio: rd.ratio, inside: rd.inside, critical: rd.critical }, predicted: predict, tests: a.of.kind }, { by: 'comparison', verdict: rd.inside === predict.inside ? 'supported' : 'contradicted', margin: rd.ratio }, 'open', 'ego', since);
+        }
         const test = a.of.data['test'] as TestSpec, predict = a.of.data['predict'] as Prediction;
         const { setup, frag } = buildTest(test, this.effects.sim);
         const res = await this.effects.stand(setup);
@@ -253,6 +352,11 @@ export class Investigator {
       case 'judge': {
         const tested = all.find((c) => c.seq === a.of.parents[0])!;
         const supported = a.of.validation.verdict === 'supported';
+        if (tested.data['candidate'] === 'rigid-domain') {
+          const claim = structuredClone(tested.item) as R;
+          claim.c = { ...claim.c, mode: supported ? 'true' : 'false', ev: { how: 'derived', src: ['tsc.rigid-domain', 'sound.speed'] }, margin: a.of.validation.margin };
+          return this.commit(inv, 'belief', claim, [tested.seq, a.of.seq], { hypothesis: tested.seq, transition: { from: 'unknown', to: supported ? 'true' : 'false' }, hypothesisStatus: supported ? 'confirmed' : 'rejected', outcome: a.of.data['outcome'], test: a.of.data['test'], next: supported ? 'done' : 'retry', uncertainty: { species: 'derivation', replication: 1, measured: false, physics: this.physics } }, a.of.validation, supported ? 'resolved' : 'open', 'ego', since);
+        }
         const o = a.of.data['outcome'] as Outcome, test = a.of.data['test'] as TestSpec;
         if (tested.kind === 'hypothesis') {
           const claim = structuredClone(tested.item) as R;

@@ -13,7 +13,7 @@
 import type { Structure } from '../ganglia/native/core';
 
 /** Who committed, from which kind of event. */
-export type Origin = 'event:stand' | 'event:ask' | 'event:load' | 'ego';
+export type Origin = 'event:stand' | 'event:watchdog' | 'event:construct' | 'event:ask' | 'event:load' | 'ego';
 /** The step of the loop a commit is: what she saw, what it opened, what she holds, what she measured, what she now believes, what is still open; or something she was asked and could not read. */
 export type Kind = 'observation' | 'anomaly' | 'hypothesis' | 'evidence' | 'belief' | 'question' | 'request';
 export type Status =
@@ -126,6 +126,7 @@ export async function openJournal(): Promise<Journal> {
 /** The commits of one investigation, in order. */
 export const of = (commits: Commit[], inv: string): Commit[] => commits.filter((c) => c.inv === inv);
 /** Every investigation, by first appearance. */
-export const investigations = (commits: Commit[]): string[] => [...new Set(commits.filter((c) => c.kind !== 'request').map((c) => c.inv))];
+/** Every investigation, by first appearance: what she works on (a note of a part outside a domain is not one). */
+export const investigations = (commits: Commit[]): string[] => [...new Set(commits.filter((c) => c.kind !== 'request' && !c.inv.startsWith('construct:')).map((c) => c.inv))];
 /** The last commit of an investigation. */
 export const last = (commits: Commit[], inv: string): Commit | undefined => of(commits, inv).at(-1);

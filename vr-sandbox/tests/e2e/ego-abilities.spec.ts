@@ -1,27 +1,11 @@
-// Ego grows: experience brings levels and abilities; at level 3 she notices what you repeat and learns it as a
-// skill she can do herself; at level 4 she sees ahead, warning before Play of a joint that won't hold.
+// What Ego can do from the first minute, with no level to reach: she notices what you repeat and learns it as a skill
+// she can do herself; she sees ahead, warning before Play of a joint that won't hold.
 
 import { test } from '@playwright/test';
 import { boot, counts, expect, frames, sb } from './helpers';
 
-const seed = (xp: number) => (window as any).localStorage.setItem('vrsb.ego', JSON.stringify({ v: 1, xp, prefs: {} }));
-
-test('she levels up from what you do together, and says what she learned', async ({ page }) => {
+test('she notices a repeat, learns it as a skill, and does it herself', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
-  await page.addInitScript(seed, 22); // three steps short of level 2 (25)
-  const errors = await boot(page);
-  expect(await sb(page, (s) => s.ego.growth.level.level)).toBe(1);
-  await sb(page, (s) => s.ego.run('repeat 3 { place block at (i*0.3) 0.05 -1 }'));
-  await frames(page, 2);
-  const now = await sb(page, (s) => ({ level: s.ego.growth.level.level, tip: s.ego.advice.find((a: any) => a.text.startsWith('🌱'))?.text }));
-  expect(now.level).toBe(2);
-  expect(now.tip).toMatch(/Level 2: I've started learning your habits/);
-  expect(errors).toEqual([]);
-});
-
-test('at level 3 she notices a repeat, learns it as a skill, and does it herself', async ({ page }) => {
-  await page.setViewportSize({ width: 640, height: 400 });
-  await page.addInitScript(seed, 80);
   const errors = await boot(page);
   const stack = (x: number) => `place block at ${x} 0.05 -1 as a${x * 10} · place block at ${x} 0.15 -1 as b${x * 10} · join a${x * 10} b${x * 10}`;
   await page.evaluate(([one, two]) => { const s = (window as any).sandbox; s.ego.run(one); s.ego.run(two); }, [stack(0), stack(0.4)]);
@@ -37,9 +21,8 @@ test('at level 3 she notices a repeat, learns it as a skill, and does it herself
   expect(errors).toEqual([]);
 });
 
-test('at level 4 she sees ahead: before Play, a joint that will fail is named, with a fix', async ({ page }) => {
+test('she sees ahead: before Play, a joint that will fail is named, with a fix', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 400 });
-  await page.addInitScript(seed, 160);
   const errors = await boot(page);
   // a long arm glued by a thin face to a pinned post: it can't carry its own moment
   await sb(page, (s) => {

@@ -29,12 +29,16 @@ export class LiveState {
   temps = new Map<string, number>();
   /** What the live watchdog has flagged this session, newest last (bounded). */
   health: (Anomaly & { at: number })[] = [];
+  /** Who hears a finding as it is made (Ego): delivered once each, never polled for. */
+  readonly onAnomaly: ((a: Anomaly & { at: number }) => void)[] = [];
 
   /** Something the watchdog (in the physics, or the frame budget here) found. */
   flag(a: Anomaly) {
-    this.health.push({ ...a, at: this.ticks });
+    const stamped = { ...a, at: this.ticks };
+    this.health.push(stamped);
     if (this.health.length > 50) this.health.shift();
     console.warn(`[watchdog] ${a.severity} ${a.kind}${a.id ? ` ${a.id}` : ''}: ${a.detail}`);
+    for (const l of this.onAnomaly) l(stamped);
   }
 
   ingest(r: AdvanceResult) {

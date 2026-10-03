@@ -9,10 +9,14 @@ import type { SimSettings } from '../doc/types';
 import type { StandResult, StandSetup } from '../physics/stand';
 import type { DesignSpec } from '../assistant/designer';
 import { investigations, last, openJournal, type Commit, type Journal } from './journal';
-import { Investigator, next, PHYSICS, type Action, type Clock, type Effects, type Prediction, type Signature, type TestSpec } from './investigate';
+import { Investigator, next, PHYSICS, type Action, type Clock, type Effects, type PartInfo, type Prediction, type Signature, type TestSpec } from './investigate';
+import type { Anomaly } from '../diagnostics/watchdog';
+import type { rigidDomain } from '../ganglia/native/tsc';
 
 export type MindEvent =
   | { kind: 'stand-result'; inv: string; spec: DesignSpec; result: StandResult; signature: Signature; predicted: Prediction; since: number }
+  | { kind: 'watchdog'; inv: string; anomaly: Anomaly; part: PartInfo | null; obligation: string; since: number }
+  | { kind: 'construct'; part: PartInfo; domain: ReturnType<typeof rigidDomain>; since: number }
   | { kind: 'request'; text: string; since: number };
 
 /** One step she took, with its cost. */
@@ -34,7 +38,7 @@ export class Mind {
 
   constructor(readonly journal: Journal, private effects: Effects, clock: Clock = { now: () => performance.now(), iso: () => new Date().toISOString() }, session = SESSION(), readonly physics = PHYSICS) {
     this.session = session;
-    const counted: Effects = { sim: effects.sim, stand: async (setup: StandSetup) => { const res = await effects.stand(setup); this.stands.runs++; this.stands.seconds += res.seconds; this.stands.ms += res.ms; return res; } };
+    const counted: Effects = { sim: effects.sim, rigid: effects.rigid, stand: async (setup: StandSetup) => { const res = await effects.stand(setup); this.stands.runs++; this.stands.seconds += res.seconds; this.stands.ms += res.ms; return res; } };
     this.investigator = new Investigator(journal, counted, session, clock, physics);
     this.effects = counted;
   }
@@ -45,8 +49,13 @@ export class Mind {
   }
 
   /** The investigations with a legal action left. */
+  /** Every investigation not resolved or closed: those with a legal action next, and those resting on an open question (her frontier). */
   unresolved(): string[] {
-    return investigations(this.journal.commits).filter((inv) => next(this.journal.commits, inv).do !== 'rest');
+    return investigations(this.journal.commits).filter((inv) => { const l = last(this.journal.commits, inv); return !!l && l.status !== 'resolved' && l.status !== 'closed'; });
+  }
+  /** The unresolved investigations with a legal action next: what resume drives. */
+  pending(): string[] {
+    return this.unresolved().filter((inv) => next(this.journal.commits, inv).do !== 'rest');
   }
 
   /** The last investigation touched, resolved or not. */
@@ -59,6 +68,8 @@ export class Mind {
   process(ev: MindEvent): Promise<void> {
     const job = async () => {
       if (ev.kind === 'request') { await this.investigator.request(ev.text, ev.since); return; }
+      if (ev.kind === 'construct') { await this.investigator.observeConstruct(ev.part, ev.domain, ev.since); return; }
+      if (ev.kind === 'watchdog') { await this.investigator.observeWatchdog(ev.inv, ev.anomaly, ev.part, ev.obligation, ev.since); await this.drive(ev.inv); return; }
       const test: TestSpec = { spec: ev.spec, changes: [], factor: 1 };
       await this.investigator.observe(ev.inv, test, ev.result, ev.signature, ev.predicted, ev.since);
       await this.drive(ev.inv);
@@ -69,7 +80,7 @@ export class Mind {
   /** The rule at start: every investigation that is not resolved continues from its journal. Returns what was done. */
   resume(): Promise<Step[]> {
     const before = this.steps.length;
-    const job = async () => { for (const inv of this.unresolved()) await this.drive(inv); };
+    const job = async () => { for (const inv of this.pending()) await this.drive(inv); };
     return (this.busy = this.busy.then(job, job)).then(() => this.steps.slice(before));
   }
 
@@ -99,5 +110,5 @@ export class Mind {
 }
 
 export { type Commit, type Journal, MemoryJournal, IdbJournal, openJournal, of, investigations } from './journal';
-export { next, signatureOf, outcomeOf, buildTest, candidatesOf, describeChange, PHYSICS, TOLERANCE, type Action, type Effects, type Prediction, type Signature, type TestSpec, type Outcome, type Change } from './investigate';
+export { next, signatureOf, outcomeOf, buildTest, candidatesOf, describeChange, standLoads, standPushes, JOINT_LIMIT, PROOF, PUSH, PHYSICS, TOLERANCE, type Action, type Effects, type Prediction, type Signature, type TestSpec, type Outcome, type Change, type PartInfo } from './investigate';
 export { sayWorking, sayChanged, sayBrief } from './say';

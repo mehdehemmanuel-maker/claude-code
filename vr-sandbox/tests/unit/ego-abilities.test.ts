@@ -1,31 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { Growth, LEVELS } from '../../src/assistant/growth';
+import { Preferences } from '../../src/assistant/preferences';
 import { findRepeat, generalize, SkillBook, skillProgram } from '../../src/assistant/skills';
 import { foresee } from '../../src/assistant/foresight';
 import { parse } from '../../src/forge/forge';
 
 const memory = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) }; };
 
-describe('Ego grows', () => {
-  it('starts with sight only, gains each ability at its level, and keeps it next session', () => {
+describe('what she remembers of your choices', () => {
+  it('remembers what you choose, once you have chosen it more than once, and keeps it next session (and what Ada or a levelled Ego had kept)', () => {
     const store = memory();
-    const g = new Growth(store);
-    expect(g.level.level).toBe(1);
-    expect(g.has('sight')).toBe(true);
-    expect(g.has('skills')).toBe(false);
-    const gained = g.earn(LEVELS[2]!.xp);
-    expect(gained.map((l) => l.ability)).toEqual(['habits', 'skills']);
-    expect(new Growth(store).has('skills')).toBe(true);
-    expect(new Growth(store).has('foresight')).toBe(false);
-  });
-
-  it('remembers what you choose, once you have chosen it more than once', () => {
-    const g = new Growth(memory());
+    const g = new Preferences(store);
     g.prefer('join:wood+wood', 'glued');
     expect(g.preferred('join:wood+wood')).toBeNull();
     g.prefer('join:wood+wood', 'glued');
     g.prefer('join:wood+wood', 'screwed');
     expect(g.preferred('join:wood+wood')).toBe('glued');
+    expect(new Preferences(store).preferred('join:wood+wood')).toBe('glued');
+    const old = memory();
+    old.setItem('vrsb.ego', JSON.stringify({ v: 1, xp: 120, prefs: { 'join:steel+steel': { welded: 3 } } }));
+    expect(new Preferences(old).preferred('join:steel+steel')).toBe('welded');
   });
 });
 

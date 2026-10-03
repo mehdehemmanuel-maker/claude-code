@@ -25,6 +25,8 @@ export interface DesignSpec {
 
 export interface Plan {
   forge: string;
+  /** The laws of the book its checks instantiate (a derivation record: what the design rests on, by id). */
+  laws: string[];
   /** What she decided, and why, in a few lines. */
   notes: string[];
   parts: number;
@@ -139,7 +141,7 @@ function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     }
   }
   return {
-    forge: lines.join('\n'),
+    forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl', 'stress.axial', 'buckling.euler'],
     notes: [
       `${bench ? 'Bench' : 'Table'} ${mm(W)} × ${mm(D)}, ${mm(H)} high, for ${load} kg.`,
       `Top: ${mm(top.t)} ${topM.name}${Number.isFinite(top.stress) ? `, stress ${(top.stress / 1e6).toFixed(1)} MPa at full load (${SAFETY}× under its strength), sag ${(top.sag * 1000).toFixed(1)} mm` : ' (the thickest standard sheet: it will be highly stressed)'}.`,
@@ -178,7 +180,7 @@ function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   ];
   for (const w of ['front', 'back', 'left', 'right']) lines.push(`join ${tag}${w} ${tag}bottom`);
   for (const s of ['left', 'right']) for (const e of ['front', 'back']) lines.push(`join ${tag}${s} ${tag}${e}`);
-  return { forge: lines.join('\n'), notes: [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`], parts: 5 };
+  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`], parts: 5 };
 }
 
 function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -198,7 +200,7 @@ function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     lines.push(`place plate length=${f(span)} width=${f(D)} thickness=${f(board.t)} mat ${m.id} at ${f(ox)} ${f(y)} ${f(oz)} as ${tag}shelf${k}`);
     lines.push(`join ${tag}shelf${k} ${tag}sideL`, `join ${tag}shelf${k} ${tag}sideR`);
   }
-  return { forge: lines.join('\n'), notes: [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`], parts: n + 2 };
+  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`], parts: n + 2 };
 }
 
 function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -222,7 +224,7 @@ function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     }
   }
   const n = lines.filter((l) => l.startsWith('place')).length;
-  return { forge: lines.join('\n'), notes: [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`], parts: n };
+  return { forge: lines.join('\n'), laws: [], notes: [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`], parts: n };
 }
 
 function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -234,5 +236,5 @@ function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     lines.push(`place block x=${s} y=${s} z=${s} mat ${m.id} at ${f(ox)} ${f(s / 2 + k * (s + 0.0005))} ${f(oz)} as ${tag}b${k}`);
     if (k) lines.push(`join ${tag}b${k} ${tag}b${k - 1}`);
   }
-  return { forge: lines.join('\n'), notes: [`A tower of ${n} ${m.name} blocks, each joined to the one below.`], parts: n };
+  return { forge: lines.join('\n'), laws: [], notes: [`A tower of ${n} ${m.name} blocks, each joined to the one below.`], parts: n };
 }

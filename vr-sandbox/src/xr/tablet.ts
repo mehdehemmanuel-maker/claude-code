@@ -637,22 +637,14 @@ export class Tablet {
     if (!ego) return;
     if (this.shownView && ego.shown) return this.drawShown(y0);
     const g = this.ctx;
-    // how far she has grown: her level, and how far to the next
-    const lv = ego.growth.level, nx = ego.growth.next;
-    this.text(`● ${ego.name} · level ${lv.level}`, 24, y0 + 28, 26, '#8fd3ff', 'left', '700');
-    const bx = 250, bwid = W - bx - 24;
-    g.fillStyle = 'rgba(255,255,255,0.1)';
-    roundRect(g, bx, y0 + 10, bwid, 18, 9);
-    g.fill();
-    const frac = nx ? (ego.growth.xp - lv.xp) / (nx.xp - lv.xp) : 1;
-    g.fillStyle = '#8fd3ff';
-    roundRect(g, bx, y0 + 10, Math.max(18, bwid * Math.min(1, frac)), 18, 9);
-    g.fill();
-    this.text(nx ? `next: ${nx.ability} at ${nx.xp} xp (${Math.floor(ego.growth.xp)})` : 'fully grown, for now', W - 24, y0 + 50, 17, '#9aa4af', 'right');
+    // her name, and what her Mind is on (an open investigation, or none)
+    const open = ego.mind?.unresolved() ?? [];
+    this.text(`● ${ego.name}`, 24, y0 + 28, 26, '#8fd3ff', 'left', '700');
+    this.text(open.length ? `${open.length} open: ${open.slice(0, 2).join(', ')}${open.length > 2 ? '…' : ''}` : ego.mind ? 'nothing open' : 'journal opening…', W - 24, y0 + 28, 17, '#9aa4af', 'right');
     this.text(`${ego.observe()} · ${ego.focus()}`, 24, y0 + 56, 19, '#9aa4af');
     let y = y0 + 70;
     const cards = ego.advice.slice(0, 3);
-    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold. Everything we do together helps me grow.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
+    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
     for (const a of cards) {
       g.fillStyle = a.kind === 'break' ? 'rgba(255,91,77,0.12)' : a.kind === 'warn' ? 'rgba(255,193,77,0.12)' : 'rgba(143,211,255,0.10)';
       roundRect(g, 20, y, W - 40, 104, 14);
@@ -667,12 +659,12 @@ export class Tablet {
     const yn = y0 + 70 + 3 * 112;
     const nw = (W - 40 - 3 * 8) / 4;
     const next = ego.suggestions();
-    this.text(ego.growth.has('habits') ? (next.length ? 'Next, from your habits:' : 'Next: I\'m learning your habits.') : 'Habits: I\'ll learn them at level 2.', 24, yn + 20, 19, '#9aa4af');
+    this.text(next.length ? 'Next, from your habits:' : 'Next: I\'m learning your habits.', 24, yn + 20, 19, '#9aa4af');
     next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 28, nw, 46, n.label, () => n.run(), { small: true }));
     // the skills she taught herself from what you repeat
     const ys = yn + 84;
     const skills = ego.skills.skills.slice(0, 4);
-    this.text(ego.growth.has('skills') ? (skills.length ? 'Skills I learned from you:' : 'Skills: repeat something and I\'ll offer to learn it.') : 'Skills: I\'ll be able to learn them at level 3.', 24, ys + 20, 19, '#9aa4af');
+    this.text(skills.length ? 'Skills I learned from you:' : 'Skills: repeat something and I\'ll offer to learn it.', 24, ys + 20, 19, '#9aa4af');
     skills.forEach((sk, i) => this.btn(`skill-${i}`, 20 + i * (nw + 8), ys + 28, nw, 46, `🧠 ${sk.name}`, () => ego.reply(ego.runSkill(sk.id)), { small: true }));
     const by = CH - 76;
     const bw = (W - 40 - 24) / 4;

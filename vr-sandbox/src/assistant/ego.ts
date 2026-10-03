@@ -12,7 +12,7 @@
 import { ConstructionRefused } from '../ganglia/tree/gate';
 import type { App } from '../app/app';
 import type { PhysicsEvent } from '../physics/protocol';
-import type { Change } from '../doc/store';
+import type { Change, ChangeSource } from '../doc/store';
 import type { Connection, Part, Pose, Vec3 } from '../doc/types';
 import { getConnectorKind } from '../connectors/registry';
 import { connectionGeometry } from '../connectors/through';
@@ -40,14 +40,16 @@ import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
 import { HabitGraph } from './habits';
 import { HELP, interpret, type Intent } from './intent';
-import { Growth, XP } from './growth';
+import { Preferences } from './preferences';
 import { findRepeat, nameFor, signatureOf, SkillBook, skillProgram } from './skills';
 import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
 import { design, type DesignSpec } from './designer';
-import { JOINT_LIMIT, standLoads, standPushes } from './prove';
+import { JOINT_LIMIT, standLoads, standPushes } from '../mind';
 import { fragmentOf } from '../doc/commands';
-import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature } from '../mind';
+import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature, type PartInfo } from '../mind';
+import { rigidDomain } from '../ganglia/native/tsc';
+import type { Anomaly } from '../diagnostics/watchdog';
 import { sayFrontier } from '../ganglia/native/tsc';
 import { lawGraph, sayBetween, sayCensus, sayCloseness, sayConnected, sayDeepest, sayStanding, type LawGraph } from '../ganglia/lawgraph';
 import { substrate } from '../ganglia/substrate';
@@ -86,7 +88,8 @@ export class Ego {
   readonly host: AppHost;
   readonly voice = new Voice();
   /** How far she has grown, and what she remembers of your choices. */
-  readonly growth = new Growth();
+  /** Your usual choices, remembered (the one thing that grows with use). */
+  readonly prefs = new Preferences();
   /** What she has taught herself from watching you. */
   readonly skills = new SkillBook();
   /** A run of your steps she's offered to learn, waiting for your answer. */
@@ -118,10 +121,11 @@ export class Ego {
   constructor(private app: App, private tools: ToolManager | null, habits?: HabitGraph) {
     this.habits = habits ?? new HabitGraph();
     this.host = new AppHost(app, tools);
-    app.store.subscribe((changes, source) => { if (source === 'do') this.record(changes); });
+    app.store.subscribe((changes, source) => { if (source === 'do') this.record(changes); this.admitted(changes, source); });
+    app.live.onAnomaly.push((a) => this.guardOne(a));
     // memory: Best join tries your usual joint for the pair first (it still has to hold)
-    app.joinPreference = (a, b) => (this.growth.has('memory') ? this.growth.preferred(`join:${a.category}+${b?.category ?? 'floor'}`) : null);
-    app.joinChosen = (a, b, kind) => this.growth.prefer(`join:${a.category}+${b?.category ?? 'floor'}`, kind);
+    app.joinPreference = (a, b) => this.prefs.preferred(`join:${a.category}+${b?.category ?? 'floor'}`);
+    app.joinChosen = (a, b, kind) => this.prefs.prefer(`join:${a.category}+${b?.category ?? 'floor'}`, kind);
     app.eventListeners.push((e) => this.onEvent(e));
     app.everyFrame('Ego', (dt) => this.tick(dt));
     // their minds live in the physics, on its ticks (runner.ts, F-6.3); the herd is her book of them
@@ -159,7 +163,7 @@ export class Ego {
     }
     // your life: what to remember, remind you of, and where the money goes (all kept on this headset)
     const lifeSaid = this.life_(text);
-    if (lifeSaid) { this.output = [...this.output, `› ${text.slice(0, 80)}`, lifeSaid].slice(-12); this.gain('ask'); this.reply(lifeSaid); return lifeSaid; }
+    if (lifeSaid) { this.output = [...this.output, `› ${text.slice(0, 80)}`, lifeSaid].slice(-12); this.reply(lifeSaid); return lifeSaid; }
     const intent = interpret(text);
     if (!intent) {
       // a line that is Forge runs as Forge; anything else is a request she cannot read, kept as one, never executed
@@ -176,7 +180,6 @@ export class Ego {
     let reply: string;
     try {
       reply = this.act(intent);
-      this.gain('ask');
     } catch (e) {
       reply = e instanceof Error ? e.message : String(e);
     }
@@ -509,8 +512,8 @@ export class Ego {
         return this.show(at.id, at.point);
       }
       case 'level': {
-        const l = this.growth.level, nx = this.growth.next;
-        return `I'm level ${l.level}, with ${Math.floor(this.growth.xp)} experience.${nx ? ` At ${nx.xp} I'll be able to ${nx.learned.replace(/^I('ve| can| will|'ll)?\s*/i, '').toLowerCase()}` : ' I\'ve learned everything I can so far.'}`;
+        const n = this.mind?.journal.commits.length ?? 0, open = this.mind?.unresolved().length ?? 0;
+        return `I don't have levels. I can see every part, joint and load, look ahead before Play, learn what you repeat, suggest what you usually do next and remember your choices from the first minute. What grows is my journal: ${n} commit${n === 1 ? '' : 's'}, ${open} investigation${open === 1 ? '' : 's'} open.`;
       }
     }
   }
@@ -538,7 +541,7 @@ export class Ego {
    */
   async wake(): Promise<Mind> {
     const app = this.app;
-    this.mind = await Mind.open({ stand: (setup) => app.physics.stand(setup), get sim() { return app.doc.sim; } });
+    this.mind = await Mind.open({ stand: (setup) => app.physics.stand(setup), get sim() { return app.doc.sim; }, rigid: (material, longest) => rigidDomain(material, longest) });
     const steps = await this.mind.resume();
     if (steps.length) this.say('tip', sayBrief(this.mind.journal.commits, this.mind.current()!, 'Picking up where I left off'), []);
     return this.mind;
@@ -574,7 +577,6 @@ export class Ego {
     if (!r.ok) return `I couldn't build it: ${r.error}`;
     const made = Object.keys(app.doc.parts).filter((id) => !before.has(id));
     app.select(made);
-    this.gain('template');
     const risks = this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '') && f.u >= 0.8);
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
@@ -664,7 +666,6 @@ export class Ego {
     } else app.view.showGuide('', null, null);
     if (p.finished) {
       this.say('tip', `You built ${l.name}, and it holds. That's the lesson done.`, []);
-      this.gain('template');
       this.lesson = null;
       app.view.showGuide('', null, null);
     }
@@ -694,42 +695,77 @@ export class Ego {
    * evidence, never hers to put right: Ego has no hand on any body's pose or velocity (ML-4, ML-7), so a fault is the
    * kernel's to contain and hers to name, with the node it broke, and to write up for Claude with the build as it was.
    */
-  private guard() {
+  private guardOne(a: Anomaly & { at: number }) {
     const app = this.app;
-    for (const a of app.live.health) {
-      const key = `${a.kind}:${a.id}`;
-      if (this.guarded.has(key)) continue;
-      this.guarded.add(key);
-      const id = a.id.split('#')[0]!;
-      const part = app.doc.parts[id];
-      const name = part?.name ?? 'the scene';
-      let trouble: Trouble = 'other';
-      let node: string;
-      switch (a.kind) {
-        case 'fell': case 'tunnel': trouble = 'fell-through'; node = 'F-3.5 (nothing passes through a solid)'; break;
-        case 'nonfinite': trouble = 'flung'; node = 'A-4 (every number stays a number)'; break;
-        case 'flung': trouble = 'flung'; node = 'ML-3 (no energy without a source)'; break;
-        case 'jitter': trouble = 'jitter'; node = 'ML-3 (no energy without a source)'; break;
-        case 'slow': trouble = 'slow'; node = 'A-4 (the tick within its budget)'; break;
-        case 'storage': trouble = 'other'; node = 'I7 (bounded storage)'; break;
-        case 'drift': trouble = 'other'; node = 'F-3.1 (an intact joint stays closed)'; break;
-        default: continue; // held-part findings are for the report page
-      }
-      const words = `(Ego saw it herself) ${a.kind} on ${name}: ${a.detail}`;
-      // a report per finding while they're few; a storm of them is one flaw, already written up
-      const filed = this.autoReports < MAX_AUTO_REPORTS;
-      if (filed) {
-        this.autoReports++;
-        this.reports.add({ at: new Date().toISOString(), words, trouble, seen: [`watchdog ${a.severity}: ${a.detail}`, `obligation ${node}`, this.focus()], fixed: null, version: __BUILD__, physics: __PHYSICS__, build: app.doc.meta.name, shareCode: app.shareCode() });
-      }
-      const what = a.kind === 'jitter' ? `${name} is moving with no source of energy`
-        : a.kind === 'slow' ? `Things are running slow: ${a.detail}`
-        : a.kind === 'storage' ? `Saving: ${a.detail}`
-        : a.kind === 'drift' ? `the joint on ${name} came apart while intact`
-        : a.kind === 'fell' || a.kind === 'tunnel' ? `${name} went through the floor`
-        : a.kind === 'flung' ? `${name} was flung faster than anything could throw it`
-        : `${name} left the laws of physics`;
-      this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}: the physics broke its own obligation ${node}. Nothing from this run counts as physics until that is fixed.${filed ? ' Written up for Claude.' : ''}`, []);
+    const key = `${a.kind}:${a.id}`;
+    if (this.guarded.has(key)) return;
+    this.guarded.add(key);
+    const id = a.id.split('#')[0]!;
+    const part = app.doc.parts[id];
+    const name = part?.name ?? 'the scene';
+    let trouble: Trouble = 'other';
+    let node: string;
+    switch (a.kind) {
+      case 'fell': case 'tunnel': trouble = 'fell-through'; node = 'F-3.5 (nothing passes through a solid)'; break;
+      case 'nonfinite': trouble = 'flung'; node = 'A-4 (every number stays a number)'; break;
+      case 'flung': trouble = 'flung'; node = 'ML-3 (no energy without a source)'; break;
+      case 'jitter': case 'restless': case 'energy': case 'spin': trouble = 'jitter'; node = 'ML-3 (no energy without a source)'; break;
+      case 'slow': trouble = 'slow'; node = 'A-4 (the tick within its budget)'; break;
+      case 'storage': trouble = 'other'; node = 'I7 (bounded storage)'; break;
+      case 'drift': trouble = 'other'; node = 'F-3.1 (an intact joint stays closed)'; break;
+      default: return; // held-part findings are for the report page
+    }
+    const words = `(Ego saw it herself) ${a.kind} on ${name}: ${a.detail}`;
+    // a report per finding while they're few; a storm of them is one flaw, already written up
+    const filed = this.autoReports < MAX_AUTO_REPORTS;
+    if (filed) {
+      this.autoReports++;
+      this.reports.add({ at: new Date().toISOString(), words, trouble, seen: [`watchdog ${a.severity}: ${a.detail}`, `obligation ${node}`, this.focus()], fixed: null, version: __BUILD__, physics: __PHYSICS__, build: app.doc.meta.name, shareCode: app.shareCode() });
+    }
+    const what = a.kind === 'jitter' || a.kind === 'restless' ? `${name} is moving with no source of energy`
+      : a.kind === 'energy' ? `${name} gained energy from nowhere`
+      : a.kind === 'spin' ? `${name} is spinning faster than anything spun it`
+      : a.kind === 'slow' ? `Things are running slow: ${a.detail}`
+      : a.kind === 'storage' ? `Saving: ${a.detail}`
+      : a.kind === 'drift' ? `the joint on ${name} came apart while intact`
+      : a.kind === 'fell' || a.kind === 'tunnel' ? `${name} went through the floor`
+      : a.kind === 'flung' ? `${name} was flung faster than anything could throw it`
+      : `${name} left the laws of physics`;
+    this.say(a.severity === 'critical' ? 'warn' : 'tip', `👁 ${what}: the physics broke its own obligation ${node}. Nothing from this run counts as physics until that is fixed.${filed ? ' Written up for Claude.' : ''}`, []);
+    // the finding is hers to investigate: on a part, the first candidate is the rigid model's own domain (tsc.rigidDomain)
+    if (this.mind && a.kind !== 'slow' && a.kind !== 'storage') {
+      const inv = `watch:${a.kind}:${id || 'scene'}`;
+      void this.mind.process({ kind: 'watchdog', inv, anomaly: a, part: part ? this.partInfo(part) : null, obligation: node, since: performance.now() }).then(() => {
+        if (this.mind) this.say('tip', sayBrief(this.mind.journal.commits, inv, 'Looking into it'), []);
+      });
+    }
+  }
+
+  /** What the Mind knows of a part: its material and its longest dimension (the sound crossing is along that). */
+  private partInfo(p: Part): PartInfo {
+    const k = getPartKind(p.kind), m = this.app.materialOf(p);
+    const dd = k.dims(effectiveParams(k, p.params, m));
+    return { id: p.id, name: p.name, material: p.material, longest: dd.length };
+  }
+
+  /**
+   * A part admitted to the world that the rigid body cannot stand for: longer than one tick of sound in its material
+   * (tsc.rigidDomain). Nothing stops it (the world is yours), but it is noted in her journal and said once: whatever
+   * the physics does with it past that length is the model extrapolating, not the material.
+   */
+  private admitted(changes: Change[], source: ChangeSource) {
+    if (!this.mind) return;
+    for (const ch of changes) {
+      if (ch.op !== 'create' || ch.coll !== 'parts') continue;
+      const p = ch.value as unknown as Part;
+      const info = this.partInfo(p);
+      const dom = rigidDomain(info.material, info.longest);
+      if (dom.inside) continue;
+      // noted once per part in her journal (a build loaded again is not news); said when you just made it
+      const noted = this.mind.journal.commits.some((c) => c.inv === `construct:${p.id}`);
+      void this.mind.process({ kind: 'construct', part: info, domain: dom, since: performance.now() });
+      if (noted || source !== 'do') continue;
+      this.say('tip', `${p.name} is ${info.longest.toFixed(2)} m of ${this.app.materialOf(p).name}: sound takes ${(dom.crossing * 1000).toFixed(1)} ms to cross it, longer than my ${(dom.tick * 1000).toFixed(1)} ms tick, so the rigid body is outside its domain for it (past ${dom.critical.toFixed(2)} m). What it does under load is the model, not the material. Noted.`, []);
     }
   }
 
@@ -795,7 +831,6 @@ export class Ego {
   show(id: string | null, point: Vec3): string {
     const said = id && this.app.doc.parts[id] ? this.describe(id) : `I'm looking at the spot you pointed at (${point.map((x) => x.toFixed(2)).join(', ')} m), but there's no part there.`;
     this.shown = { id: id && this.app.doc.parts[id] ? id : null, point, at: this.app.live.ticks, trail: [], said };
-    this.gain('ask');
     return `${said} Tell me what's wrong with it, and I'll look into it.`;
   }
 
@@ -879,7 +914,6 @@ export class Ego {
     if (shown?.id) hints.push({ kind: trouble === 'jitter' ? 'jitter' : 'shown', id: shown.id });
     const fixed = this.selfFix(trouble, hints);
     this.reports.add({ at: new Date().toISOString(), words, trouble, seen, fixed, version: __BUILD__, physics: __PHYSICS__, build: app.doc.meta.name, shareCode: app.shareCode() });
-    this.gain('ask');
     const n = this.reports.unsent.length;
     return `${fixed ? `I ${fixed}. ` : ''}I've written it up for Claude with what I saw and the build as it was (${n} report${n === 1 ? '' : 's'} to send, on my page).`;
   }
@@ -928,14 +962,7 @@ export class Ego {
     }
   }
 
-  // ---- growing ----------------------------------------------------------------------------------
-
-  /** Experience for something done together; a new level brings a new ability, and she says so. */
-  gain(what: keyof typeof XP) {
-    for (const l of this.growth.earn(XP[what])) {
-      this.say('tip', `🌱 Level ${l.level}: ${l.learned}`, []);
-    }
-  }
+  // ---- skills ----------------------------------------------------------------------------------
 
   /** Run a learned skill a metre in front of you. */
   runSkill(id: string): string {
@@ -946,13 +973,12 @@ export class Ego {
     const r = run(skillProgram(sk, x, z, prefix), this.host);
     if (!r.ok) return r.error ?? 'That skill didn\'t work here.';
     this.skills.used(id);
-    this.gain('skillUsed');
     return `Done: ${sk.name}.`;
   }
 
   /** You repeated something: offer to learn it (once per kind of thing). */
   private noticeRepeats() {
-    if (!this.growth.has('skills') || this.offered) return;
+    if (this.offered) return;
     const lines = findRepeat(this.journal);
     if (!lines) return;
     const sig = signatureOf(lines);
@@ -960,7 +986,7 @@ export class Ego {
     this.offered = sig;
     const name = nameFor(lines);
     this.say('tip', `I noticed you do this often: ${name}. Shall I learn it as a skill?`, [
-      { label: '🧠 Learn it', apply: () => { const sk = this.skills.learn(lines); this.offered = null; this.dismissTips(); if (sk) { this.gain('skillLearned'); this.reply(`Learned: ${sk.name}. Ask me to do it, or tap it under Skills.`); } } },
+      { label: '🧠 Learn it', apply: () => { const sk = this.skills.learn(lines); this.offered = null; this.dismissTips(); if (sk) { this.reply(`Learned: ${sk.name}. Ask me to do it, or tap it under Skills.`); } } },
       { label: 'No thanks', apply: () => { this.skills.decline(sig); this.offered = null; this.dismissTips(); } },
     ]);
   }
@@ -975,7 +1001,6 @@ export class Ego {
    * fail, or come close, are said before they do. `on` says why she's looking.
    */
   foresee(on: 'play' | 'joint', only?: Set<string>) {
-    if (!this.growth.has(on === 'play' ? 'foresight' : 'initiative')) return [];
     const doc = this.app.doc;
     const found = this.forecast().filter((f) => (only ? only.has(f.id) : true) && f.u >= (on === 'play' ? 0.8 : 0.6));
     for (const f of found.slice(0, 3)) {
@@ -1013,7 +1038,6 @@ export class Ego {
   /** What she suggests doing next, from your habits: ready-to-use tools, one tap each. */
   suggestions(): { label: string; run: () => void }[] {
     const out: { label: string; run: () => void }[] = [];
-    if (!this.growth.has('habits')) return out;
     for (const { token } of this.habits.predict(8)) {
       const [verb, what] = token.split(':');
       if (verb === 'place' && what) {
@@ -1079,7 +1103,6 @@ export class Ego {
     this.clock += dt;
     if (this.clock < 0.5) return;
     this.clock = 0;
-    this.guard();
     for (const r of this.life.due()) { this.say('tip', `⏰ Reminder: ${r.what}.`, []); this.app.toast(`${this.name}: ⏰ ${r.what}`, 'info'); }
     for (const c of Object.values(this.app.doc.connections)) {
       const l = this.app.live.loads.get(c.id);
@@ -1144,7 +1167,6 @@ export class Ego {
     });
     if (broken && !app.settings.build && c.b) this.reseat(c);
     this.advice = this.advice.filter((x) => !x.fixes.length || x.text.indexOf(this.names(c)) < 0);
-    this.gain('fix');
     app.toast(`${this.name}: ${getConnectorKind(kind).label} fitted${app.settings.build ? ' — press Play to try it' : ''}`, 'ok');
     app.notify();
   }
@@ -1210,8 +1232,7 @@ export class Ego {
   private note(line: string, token: string) {
     this.journal.push(line);
     if (this.journal.length > 500) this.journal.shift();
-    if (this.growth.has('habits')) this.habits.see(token);
-    this.gain(token.startsWith('join:') ? 'joint' : 'action');
+    this.habits.see(token);
     this.noticeRepeats();
   }
 

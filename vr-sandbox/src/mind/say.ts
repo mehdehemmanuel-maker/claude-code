@@ -27,7 +27,18 @@ function sayOutcome(o: Outcome): string {
   return why.join(', ') || 'it failed';
 }
 
+/** The subject of an investigation: a design on the stand, or a part the watchdog flagged. */
+function subjectOf(c: Commit): string {
+  if (c.data['of'] === 'watchdog') { const a = c.data['anomaly'] as { kind: string }, p = c.data['part'] as { name: string } | null; return `a watchdog finding (${a.kind}) on ${p?.name ?? 'the scene'}`; }
+  return sayDesign(c.data['test'] as TestSpec);
+}
+
 function sayTest(c: Commit): string {
+  if (c.data['of'] === 'watchdog') {
+    if (c.kind === 'observation') { const a = c.data['anomaly'] as { kind: string; value: number; limit: number; detail: string }; return `${a.kind}: ${a.detail} (${a.value.toPrecision(3)} against ${a.limit.toPrecision(3)})`; }
+    const o = c.data['outcome'] as { crossing: number; tick: number; ratio: number; inside: boolean; critical: number };
+    return `the sound crossing against the tick: ${(o.crossing * 1000).toFixed(1)} ms against ${(o.tick * 1000).toFixed(1)} ms (ratio ${o.ratio.toFixed(2)}): ${o.inside ? 'inside the rigid domain' : `outside it, past ${o.critical.toFixed(2)} m`}`;
+  }
   const t = c.data['test'] as TestSpec, o = c.data['outcome'] as Outcome;
   return `${sayDesign(t)} at ${kg(t)}${t.factor > 1 ? ` (${t.factor}x, the proof load)` : ''}: ${sayOutcome(o)}`;
 }
@@ -41,9 +52,9 @@ export function sayWorking(commits: Commit[]): string {
   const cs = of(commits, inv);
   const first = cs[0]!;
   const parts: string[] = [];
-  parts.push(`I was testing ${sayDesign(first.data['test'] as TestSpec)} (investigation ${inv}, ${cs.length} commit${cs.length === 1 ? '' : 's'} over ${new Set(cs.map((c) => c.session)).size} session${new Set(cs.map((c) => c.session)).size === 1 ? '' : 's'}).`);
+  parts.push(`I was ${first.data['of'] === 'watchdog' ? 'looking into' : 'testing'} ${subjectOf(first)} (investigation ${inv}, ${cs.length} commit${cs.length === 1 ? '' : 's'} over ${new Set(cs.map((c) => c.session)).size} session${new Set(cs.map((c) => c.session)).size === 1 ? '' : 's'}).`);
   const obs = cs.find((c) => c.kind === 'observation')!;
-  parts.push(`What happened: ${sayTest(obs)}${obs.validation.verdict === 'failed' ? `, against my prediction of no joint past ${pct((obs.data['predicted'] as Prediction).uMax)}` : ''}.`);
+  parts.push(`What happened: ${sayTest(obs)}${obs.validation.verdict === 'failed' && obs.data['of'] !== 'watchdog' ? `, against my prediction of no joint past ${pct((obs.data['predicted'] as Prediction).uMax)}` : obs.data['of'] === 'watchdog' ? `, against the obligation ${obs.data['obligation']}` : ''}.`);
   const hyps = cs.filter((c) => c.kind === 'hypothesis');
   const beliefs = cs.filter((c) => c.kind === 'belief');
   const evidence = cs.filter((c) => c.kind === 'evidence');
@@ -55,8 +66,9 @@ export function sayWorking(commits: Commit[]): string {
   if (evidence.length) parts.push(`What was tested: ${evidence.map(sayTest).join('; ')}.`);
   const lastC = cs.at(-1)!;
   const action = next(commits, inv);
-  if (lastC.status === 'resolved') parts.push(`Resolved: ${sayDesign(lastC.data['test'] as TestSpec)} is proven at ${kg(lastC.data['test'] as TestSpec)}. Nothing left to do; I am idle.`);
+  if (lastC.status === 'resolved') parts.push(first.data['of'] === 'watchdog' ? `Resolved: ${(lastC.data['transition'] as { to: string }).to === 'true' ? 'the finding is the rigid model extrapolating past its domain, not physics' : 'the finding stands'}. Nothing left to do; I am idle.` : `Resolved: ${sayDesign(lastC.data['test'] as TestSpec)} is proven at ${kg(lastC.data['test'] as TestSpec)}. Nothing left to do; I am idle.`);
   else if (lastC.kind === 'question' && lastC.status === 'open') parts.push(`Unresolved: ${lastC.data['says']}. The anomaly stays open; I have no legal action until something changes.`);
+  else if (lastC.kind === 'hypothesis' && lastC.status === 'open') parts.push(`Open: ${lastC.data['says']}. Nothing I can test; it waits on a design decision.`);
   else {
     const open = lastC.kind === 'question' ? `whether ${sayDesign((lastC.data['test'] as TestSpec))} holds ${kg(lastC.data['test'] as TestSpec)}` : lastC.kind === 'hypothesis' ? `whether ${describeChange(lastC.data['change'] as Change)} settles it` : `what to make of the last ${lastC.kind}`;
     parts.push(`Unresolved: ${open}. Next: ${sayAction(action)}.`);
@@ -91,7 +103,9 @@ export function sayChanged(commits: Commit[]): string {
   const tr = b.data['transition'] as { from: string; to: string } | undefined;
   const u = b.data['uncertainty'] as { species: string; replication: number; measured: boolean } | undefined;
   const parts: string[] = [];
-  if (b.status === 'resolved') parts.push(`Resolved: ${sayDesign(b.data['test'] as TestSpec)} holds ${kg(b.data['test'] as TestSpec)}.`);
+  const rigid = b.data['test'] as { material?: string; longest?: number } | undefined;
+  if (rigid?.material !== undefined) parts.push(b.status === 'resolved' ? `Resolved: the rigid model is outside its domain for a ${rigid.longest!.toFixed(2)} m part in ${rigid.material}; the finding is its extrapolation, not physics.` : `The part is inside the rigid domain; the finding stands.`);
+  else if (b.status === 'resolved') parts.push(`Resolved: ${sayDesign(b.data['test'] as TestSpec)} holds ${kg(b.data['test'] as TestSpec)}.`);
   else if (tested?.kind === 'hypothesis') parts.push(`Before: I hypothesised that ${tested.data['says']}.`);
   else if (tested?.kind === 'question') parts.push(`Before: it was unmeasured whether ${sayDesign(tested.data['test'] as TestSpec)} holds ${kg(tested.data['test'] as TestSpec)}.`);
   if (ev) parts.push(`Test performed: ${sayTest(ev)}.`);
@@ -111,9 +125,14 @@ export function sayBrief(commits: Commit[], inv: string, lead: string): string {
   const obs = cs.find((c) => c.kind === 'observation');
   if (!obs) return `${lead}: nothing to say yet.`;
   const lastC = cs.at(-1)!;
+  if (obs.data['of'] === 'watchdog') {
+    const b = cs.filter((c) => c.kind === 'belief').at(-1);
+    return `${lead}, ${subjectOf(obs)}: ${b ? ((b.data['transition'] as { to: string }).to === 'true' ? 'the rigid model is extrapolating past its domain for that part; the finding is not physics' : 'the part is inside the rigid domain; the finding stands as an anomaly') : lastC.kind === 'question' ? String(lastC.data['says']) : 'still open'}.`;
+  }
   const o = obs.data['outcome'] as Outcome;
   const first = `${lead}, ${sayDesign(obs.data['test'] as TestSpec)} as built ${o.held ? 'held' : `failed (${sayOutcome(o)})`}`;
   if (lastC.status === 'resolved') return `${first}; ${sayDesign(lastC.data['test'] as TestSpec)} is proven at ${kg(lastC.data['test'] as TestSpec)}. Ask me what changed.`;
   if (lastC.kind === 'question' && lastC.status === 'open') return `${first}; ${lastC.data['says']}. The anomaly stays open.`;
+  if (lastC.kind === 'hypothesis' && lastC.status === 'open') return `${first}; ${lastC.data['says']}.`;
   return `${first}; still open: ${sayAction(next(commits, inv))}.`;
 }

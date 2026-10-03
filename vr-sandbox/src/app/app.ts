@@ -578,9 +578,8 @@ export class App {
   /** Run the build under real physics; Stop comes back to it as it is now. */
   play() {
     if (!this.settings.build) return;
-    // Ego looks ahead at what every joint will carry (once she can)
+    // Ego looks ahead at what every joint will carry
     this.ego?.foresee('play');
-    this.ego?.gain('play');
     this.buildPoint = { label: 'the build', time: this.simTime, doc: structuredClone(this.store.doc), velocities: new Map() };
     this.settings.build = false;
     this.resyncParts();
@@ -765,7 +764,6 @@ export class App {
     }
     this.toast(`Saved template “${entry.name}”: ${frag.parts.length} part${frag.parts.length === 1 ? '' : 's'}, ${frag.connections.length} joint${frag.connections.length === 1 ? '' : 's'}. Place copies from My builds › Templates`, 'ok');
     this.audio.ui('save');
-    this.ego?.gain('template');
     this.notify();
     return entry;
   }

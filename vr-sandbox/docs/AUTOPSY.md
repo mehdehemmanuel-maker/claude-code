@@ -39,16 +39,16 @@ Everything here is evidence or a judgment marked as one. The codebase is evidenc
 | law objects (laws.ts) | EXTRACT: data of the first rank, representation temporary | 947 (142 laws) | 64 + 176 at load / 10 (only scale and discovery; the physics runs on none of them) |
 | law tree (tree/nodes.ts) | EXTRACT: obligation↔test links; delete the hand-kept registry | 393 (109 nodes), zero `src` importers | 3 + 8 at load / – (the app loses nothing) |
 | construction gate (tree/gate.ts) | KEEP | 247 | 17 / **155** (everything physical passes through it) |
-| test stand (prove.ts, stand.ts) | EXTRACT: the second world, the stamp, the quarantine; REWRITE the loop (done in §K) | 284 + 211, zero `src` importers before §K | 0 / 3 (it was never reachable from the app) |
-| watchdog | EXTRACT → ABSORB into the anomaly/evidence system | 211 | 2 / 3 |
+| test stand (prove.ts, stand.ts) | EXTRACT: the second world, the stamp, the quarantine; REWRITE the loop (done in §K; prove.ts deleted 3 Oct, its loads and pushes live in `mind/investigate.ts`) | 284 + 211, zero `src` importers before §K | 0 / 3 (it was never reachable from the app) |
+| watchdog | EXTRACT → ABSORB into the anomaly/evidence system (done 3 Oct: a finding is an event of the Mind, `live.onAnomaly`; the poll is gone) | 211 | 2 / 3 |
 | population service (background slices, journal) | KEEP the mechanism; REWRITE its storage | 242 | 9 / – |
-| growth / abilities (levels, XP) | DELETE | 85 | 2 / – |
+| growth / abilities (levels, XP) | DELETE (done 3 Oct: `preferences.ts` keeps the choices; every ability on from the first minute) | 85 | 2 / – |
 | life memory | KEEP as an application feature; never a foundation | 161 | 3 / – |
 | reports | ABSORB into anomalies rendered for a human | 109 | 44 / – (ego.ts imports it; every traversal test loads ego's intent path) |
 | habits | DELETE from the core; optional interface convenience | 99 | 2 / – |
 | skills | EXTRACT: the same principle as morphemes (compression by recurrence) | 147 | 3 / – |
 | frontier implementations | DELETE the authored list; ABSORB the labels into the certificate | 832 (46 authored inventions) | 19 / – |
-| asks store | DELETE | 35 (24 authored asks), zero `src` importers | 6 / – |
+| asks store | DELETE (done 3 Oct: the 24 asks are fixtures of `understand.test.ts`) | 35 (24 authored asks), zero `src` importers | 6 / – |
 | localStorage persistence (13 keys, 7 stores) | REWRITE | across 9 modules | – (the app runs without any of it) |
 | designer workflows | EXTRACT: legacy generator kept until function+constraints exists | designer 238, workflows 652 | designer 5 / 4; workflows 41 / – |
 | manifolds / engineer | EXTRACT: the only contract→configurations generator | 401 + 170 (33 families) | 13 + 176 at load / – |
