@@ -295,7 +295,7 @@ describe('population: a queue that never needs to be finished', () => {
     const orphan = [...s2.entities.values()].find((e) => e.kinds.includes('component') && !e.id.startsWith('bio.') && s2.reach(e.id, 'made-of').some((m) => m.id === 'material.steel') && !s2.outOf(e.id, 'produced-by').length && !s2.reach(e.id, 'is-a').some((k) => s2.outOf(k.id, 'produced-by').length))!;
     expect(orphan, 'a steel part with no known maker to test on').toBeDefined();
     const q = new Queue();
-    q.push({ id: orphan.id, facet: 'constructors', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    q.push({ id: orphan.id, facet: 'manufacturing', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
     await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
     const makers = s2.outOf(orphan.id, 'produced-by');
     expect(makers.map((x) => x.to)).toEqual(expect.arrayContaining(['saw', 'drill', 'mill']));

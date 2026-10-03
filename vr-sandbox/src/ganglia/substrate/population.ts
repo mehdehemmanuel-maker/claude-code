@@ -171,18 +171,14 @@ export function ruleExpander(): Expander {
       if (facet === 'manufacturing' && !s.outOf(e.id, 'produced-by').length) {
         for (const m of s.reach(e.id, 'made-of')) {
           const fams = [m, ...s.reach(m.id, 'is-a')];
-          for (const f of fams) for (const pr of s.reach(f.id, 'interacts-with').filter((x) => x.kinds.includes('process'))) out.relations.push(r(e.id, 'produced-by', pr.id, `made of ${m.id}, which ${pr.id} works`));
+          // a part of a material can be made by what works that material: a steel bracket by what saws, drills, mills and welds steel. Weaker than a maker of its own, so 0.4 and said
+          for (const f of fams) for (const pr of s.reach(f.id, 'interacts-with').filter((x) => x.kinds.includes('process'))) out.relations.push({ ...r(e.id, 'produced-by', pr.id, `a part of ${m.id} can be made by what works it: ${pr.id}, until its own maker is known`), confidence: 0.4 });
         }
       }
       if (facet === 'constructors') {
         const makers = s.reach(e.id, 'produced-by');
         // what makes the kind makes the member, until something more specific is known: a wood screw is made as screws are
         if (!makers.length) for (const k of s.reach(e.id, 'is-a')) for (const pr of s.reach(k.id, 'produced-by')) out.relations.push(r(e.id, 'produced-by', pr.id, `inherits from ${k.id}: what makes the kind makes the member`));
-        // a part of a material can be made by what works that material: a steel bracket by what saws, drills, mills and welds steel, until its own maker is known
-        if (!makers.length && !out.relations.length && e.kinds.includes('component') && !e.id.startsWith('bio.')) {
-          const seen = new Set<string>();
-          for (const m of s.reach(e.id, 'made-of')) for (const works of s.into(m.id, 'interacts-with')) if (works.says === 'works this material' && !seen.has(works.from)) { seen.add(works.from); out.relations.push({ ...r(e.id, 'produced-by', works.from, `a part of ${m.id} can be made by what works it: ${works.from}, until its own maker is known`), confidence: 0.4 }); }
-        }
         if (!makers.length && !out.relations.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it, nor for what it is a kind of: what produces it is an open question' });
       }
       if (facet === 'failures' && !s.outOf(e.id, 'fails-by').length) {

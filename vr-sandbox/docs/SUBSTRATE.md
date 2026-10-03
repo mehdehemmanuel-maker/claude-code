@@ -265,8 +265,12 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   resolves to nothing described (a planet carrier, a current sense, a lever) now says its kind in the block's own data
   (`Piece.kind`, an is-a the block asserts), so of 72 pieces 10 are without a kind and 36 without a function, from 33
   and 48; what remains is kinds that have no function yet, and the regions that are not parts (a back EMF, the ends of
-  a member). Functions of the
-  rest remain a question for packs and the outside. The bridge's ways (`way.*`, how a thing is done) are refinements
+  a member). Functions of the rest remain a question for packs and the outside. The things with no known constructor
+  are 539 at build and 244 after a whole-queue round: the manufacturing facet derives a maker from the material (a part
+  of steel can be made by what works steel, at 0.4 and saying so, until its own maker is known). A second rule for the
+  same derivation was added to the constructors facet and measured: 244 with it, 244 without, so it was removed and the
+  one rule carries the lower confidence and the wording; a commit that claimed a third fewer was wrong, and this is
+  the correction. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.
