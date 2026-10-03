@@ -173,9 +173,11 @@ export const NODES: Node[] = [
 
   { id: 'F-6', kind: 'law', epistemic: 'physical', name: 'causal information', proof: 'proved', parents: ['ML-7'],
     statement: 'What a controller acts on is a sensor\'s reading of the world, late by the sensor\'s latency.' },
-  { id: 'F-6.2', kind: 'law', epistemic: 'physical', name: 'line of sight', proof: 'violated', parents: ['F-6'],
+  { id: 'F-6.2', kind: 'law', epistemic: 'physical', name: 'line of sight', proof: 'tested', parents: ['F-6'],
     statement: 'An eye sees along straight rays and sees nothing behind what blocks them.',
-    limits: ['today: minds read the world\'s state (docs/AUDIT-2-FALSE-CONFIDENCE.md FC-17)'] },
+    realisedBy: [{ module: 'physics/world', symbol: 'PhysicsWorld#lineOfSight' }],
+    heldBy: [{ file: 'tests/conformance/walker.test.ts', test: 'a wall between you hides you' }, { file: 'tests/unit/mind.test.ts', test: 'sees along straight rays' }],
+    limits: ['a creature\'s eyes are at its body\'s centre, excused from its own parts; where the ground is dry it reads from the place\'s field, not by looking (docs/AUDIT-2-FALSE-CONFIDENCE.md FC-17)'] },
   { id: 'F-6.3', kind: 'law', epistemic: 'physical', name: 'a nervous system keeps world time', proof: 'tested', parents: ['F-6'],
     statement: 'A creature thinks on its body\'s clock: every 0.1 s of world time, at the same ticks whatever a frame carries, and its command reaches its servos the next tick.',
     realisedBy: [{ module: 'physics/runner', symbol: 'Runner#think' }],

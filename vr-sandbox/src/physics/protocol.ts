@@ -63,8 +63,8 @@ export type PhysicsOp =
   | { op: 'room'; surfaces: RoomSurface[] }
   | { op: 'options'; maxMagnetRings?: number; filterTicks?: number; magnetLatch?: boolean };
 
-/** What a mind commands: its body (where it senses from), the hip horns of each side, and every servo horn. */
-export interface Nerves { body: string; left: string[]; right: string[]; servos: string[] }
+/** What a mind commands: its body (where it senses from), all its parts (its eyes are not behind them), the hip horns of each side, and every servo horn. */
+export interface Nerves { body: string; parts: string[]; left: string[]; right: string[]; servos: string[] }
 
 export type PhysicsEvent =
   | { type: 'contact'; a: string | null; b: string | null; point: Vec3; normal: Vec3; speed: number; impulse: number }

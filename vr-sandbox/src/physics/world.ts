@@ -550,6 +550,30 @@ export class PhysicsWorld {
   gait(amplitude: Record<string, number>) {
     for (const [id, g] of Object.entries(amplitude)) this.amplitude.set(id, Math.max(0, Math.min(1, g)));
   }
+
+  /** The ray cast's fixed pieces, made once: every layer and shape is in the way of a look, only a body can be excused. */
+  private sight: { settings: JoltNS.RayCastSettings; collector: JoltNS.CastRayClosestHitCollisionCollector; bp: JoltNS.BroadPhaseLayerFilter; ol: JoltNS.ObjectLayerFilter; shape: JoltNS.ShapeFilter; ignore: JoltNS.IgnoreMultipleBodiesFilter } | null = null;
+
+  /**
+   * Whether the straight line from one point to another is clear of every body but a looker's own parts: an eye sees
+   * along straight rays and sees nothing behind what blocks them (F-6.2). The ground, the room, a wall, any part
+   * blocks; `except` names the looker's own parts, which its eyes are not behind.
+   */
+  lineOfSight(from: Vec3, to: Vec3, except: Iterable<string> = []): boolean {
+    const J = this.J;
+    if (!this.sight) this.sight = { settings: new J.RayCastSettings(), collector: new J.CastRayClosestHitCollisionCollector(), bp: new J.BroadPhaseLayerFilter(), ol: new J.ObjectLayerFilter(), shape: new J.ShapeFilter(), ignore: new J.IgnoreMultipleBodiesFilter() };
+    const s = this.sight;
+    s.ignore.Clear();
+    for (const id of except) {
+      const pr = this.parts.get(id);
+      if (pr) for (const seg of pr.segs) s.ignore.IgnoreBody(seg.body.GetID());
+    }
+    s.collector.Reset();
+    const ray = new J.RRayCast(this.R(from), this.V(sub(to, from)));
+    this.ps.GetNarrowPhaseQuery().CastRay(ray, s.settings, s.collector, s.bp, s.ol, s.ignore, s.shape);
+    J.destroy(ray);
+    return !s.collector.HadHit();
+  }
   /**
    * The swing it has now: it follows the command over half a second, as a stride lengthens or shortens over a step,
    * never at once (a leg cut short mid-swing trips the body over it).
@@ -647,6 +671,7 @@ export class PhysicsWorld {
     J.destroy(this.cg);
     J.destroy(this.contactListener);
     for (const o of [this.v1, this.v2, this.r1, this.q1, ...this.pv, ...this.pr, ...this.pq]) J.destroy(o);
+    if (this.sight) { for (const o of Object.values(this.sight)) J.destroy(o); this.sight = null; }
   }
 
   // Rotating scratch values: Jolt copies them on assignment / construction, so no WASM allocation leaks.

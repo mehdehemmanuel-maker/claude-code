@@ -8,7 +8,7 @@ import type { PhysicsOp } from '../../src/physics/protocol';
 import type { Pose, Vec3 } from '../../src/doc/types';
 
 const facing = (heading: number, p: Vec3 = [0, 0, 0]): Pose => ({ p, q: [0, Math.sin(heading / 2), 0, Math.cos(heading / 2)] });
-const world = (you: Vec3, time = 0, dry: World['dry'] = () => true): World => ({ time, you, dry });
+const world = (you: Vec3, time = 0, dry: World['dry'] = () => true, clear: World['clear'] = () => true): World => ({ time, you, dry, clear });
 
 describe('a mind', () => {
   it('knows where things are from where it stands: facing +x, −z is to its left', () => {
@@ -24,6 +24,17 @@ describe('a mind', () => {
     expect(sees(m, facing(0), [0, 0, -3])).toBe(true); // 90° off: inside a 240° arc
     expect(sees(m, facing(0), [-3, 0, 0])).toBe(false); // right behind
     expect(sees(m, facing(0), [100, 0, 0])).toBe(false);
+  });
+
+  it('sees along straight rays: what blocks the line between you hides you, and it turns to look about; the line clear, it sees you and comes (F-6.2)', () => {
+    const m = newMind();
+    const c = think(m, facing(0), world([3, 0, 0], 0, () => true, () => false), 0.1, true);
+    expect(m.sawYou).toBeNull();
+    expect(c).toMatchObject({ left: 0, right: 1, doing: 'company' });
+    const d = think(m, facing(0), world([3, 0, 0], 0.1), 0.1, true);
+    expect(m.sawYou).not.toBeNull();
+    expect(d.left).toBeGreaterThan(0);
+    expect(d.right).toBeGreaterThan(0);
   });
 
   it('far from you, it comes to you, shortening its stride on the side you are on', () => {
@@ -87,7 +98,7 @@ describe('the herd', () => {
     const herd = new Herd({ send: (op) => ops.push(op), exists: (id) => parts.has(id) });
     herd.add('the dog', { parts: ['body'], joints: [], body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'], board: 'b', pack: 'p' });
     // its nerves went to the physics, where its mind lives on the world's ticks (runner.ts); nothing walks it from here
-    expect(ops).toEqual([{ op: 'mind', name: 'the dog', nerves: { body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'] }, seed: 1 }]);
+    expect(ops).toEqual([{ op: 'mind', name: 'the dog', nerves: { body: 'body', parts: ['body'], left: ['l'], right: ['r'], servos: ['l', 'r', 'k'] }, seed: 1 }]);
     expect(herd.doing()).toEqual([{ name: 'the dog', doing: 'company' }]);
     herd.ingest({ type: 'mind', body: 'body', name: 'the dog', doing: 'curiosity', says: 'goes to look at something' });
     herd.ingest({ type: 'mind', body: 'body', name: 'the dog', doing: 'curiosity', says: null });

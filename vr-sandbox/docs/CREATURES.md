@@ -54,7 +54,7 @@ Nothing tells it to go forward. A foot lifted as it comes forward and planted as
 
 A walker that chooses (`src/world/mind.ts`) does only what an animal's brain does to its spinal cord. It lengthens or shortens each side's stride (the world's `gait` op scales each hip servo's swing), or stills them. The rhythms keep their own time and the legs do the walking. It turns because its strides differ side to side, as a dog's do.
 
-- **It senses** with eyes that take in a wide arc ahead, not behind it (a dog's is about 240°: Miller & Murphy, *Vision in dogs*, J. Am. Vet. Med. Assoc. 207, 1995). It remembers where it last saw you. It sees water ahead and turns from it.
+- **It senses** with eyes that take in a wide arc ahead, not behind it (a dog's is about 240°: Miller & Murphy, *Vision in dogs*, J. Am. Vet. Med. Assoc. 207, 1995), and along straight rays: a ray cast in the physics from its body to your eyes, and what stands between hides you (F-6.2; its own parts are excused, since its eyes are not behind them). Behind a metre-high plywood wall it gets no closer in five seconds and pivots looking for you; the wall gone, it comes 1.2 m. It remembers where it last saw you. Where the ground is dry it still reads from the place's field, not by looking. 
 - **It wants** three things, each an urge that rises and falls:
   - company, more the further you are;
   - curiosity, rising while nothing is new;

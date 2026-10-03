@@ -102,7 +102,7 @@ describe('a walker that chooses', () => {
       m.urge.curiosity = -100; // company alone, for this
       let time = 0, walking = true, closest = Infinity;
       for (let k = 0; k < 400 && closest > 1.5; k++) {
-        const c = think(m, r.world.livePose(w.body)!, { time, you, dry: () => true }, 0.1, walking);
+        const c = think(m, r.world.livePose(w.body)!, { time, you, dry: () => true, clear: () => true }, 0.1, walking);
         walking = c.left > 0 || c.right > 0;
         r.world.apply({ op: 'gait', amplitude: strides(c, w) });
         r.run(0.1);
@@ -167,7 +167,7 @@ describe('a mind that keeps world time (F-6.3)', () => {
     const path = async (ticksPerFrame: number) => {
       const { r, w } = await walker(WALKERS['dog']!, 0);
       const runner = new Runner(r.world);
-      runner.run(0, [{ op: 'mind', name: 'the dog', nerves: { body: w.body, left: w.left, right: w.right, servos: w.servos }, seed: 7 }, { op: 'you', at: [3, 0, 3] }], 0);
+      runner.run(0, [{ op: 'mind', name: 'the dog', nerves: { body: w.body, parts: w.parts, left: w.left, right: w.right, servos: w.servos }, seed: 7 }, { op: 'you', at: [3, 0, 3] }], 0);
       const poses = new Map<number, number[]>(), said: string[] = [];
       let ticks = 0;
       while (ticks < 268) {
@@ -186,5 +186,35 @@ describe('a mind that keeps world time (F-6.3)', () => {
     // and it did walk: its mind drove it toward you
     const a = one.poses.get(1)!, b = one.poses.get(one.ticks)!;
     expect(Math.hypot(b[0]! - a[0]!, b[2]! - a[2]!)).toBeGreaterThan(0.1);
+  }, 120000);
+});
+
+describe('eyes that see along straight rays (F-6.2)', () => {
+  it('a wall between you hides you: the dog behind a plywood wall gets no closer and looks about where it stands; the wall gone, it comes to you', async () => {
+    const you: Vec3 = [3, 1.6, 0];
+    const closer = async (wall: boolean) => {
+      const { r, w } = await walker(WALKERS['dog']!, 0);
+      const boxes: { half: Vec3; pose: { p: Vec3; q: [number, number, number, number] }; material: string }[] = [{ half: [50, 0.5, 50], pose: { p: [0, -0.5, 0], q: [0, 0, 0, 1] }, material: 'concrete.c30' }];
+      // a metre-high plywood wall half way to you: the ray from its deck to your eyes crosses it at 0.85 m
+      if (wall) boxes.push({ half: [0.01, 0.5, 1], pose: { p: [1.5, 0.5, 0], q: [0, 0, 0, 1] }, material: 'wood.birch-plywood' });
+      r.world.apply({ op: 'environment', boxes, materials });
+      const p0 = r.world.livePose(w.body)!.p;
+      // the world's own look: blocked by the wall; clear without it, once its own deck (between its eyes and you) is excused
+      expect(r.world.lineOfSight(p0, you, w.parts)).toBe(!wall);
+      expect(r.world.lineOfSight(p0, you)).toBe(false);
+      expect(r.world.lineOfSight([0, 1.5, 0], [0, 1.5, 3], w.parts)).toBe(true);
+      const runner = new Runner(r.world);
+      runner.run(0, [{ op: 'mind', name: 'the dog', nerves: { body: w.body, parts: w.parts, left: w.left, right: w.right, servos: w.servos }, seed: 7 }, { op: 'you', at: you }], 0);
+      const d0 = bearing(r.world.livePose(w.body)!, you).distance;
+      let ticks = 0;
+      while (ticks < 450) ticks += runner.run(0, [], 4 * TICK + 1e-9, 4).ticksRun;
+      const d1 = bearing(r.world.livePose(w.body)!, you).distance;
+      expect(upright(r, w)).toBeGreaterThan(0.9);
+      r.done();
+      return d0 - d1;
+    };
+    // measured 2026-10-03: -0.06 m behind the wall (it pivots on the spot looking for you), 1.19 m with it gone
+    expect(await closer(true)).toBeLessThan(0.2);
+    expect(await closer(false)).toBeGreaterThan(0.5);
   }, 120000);
 });

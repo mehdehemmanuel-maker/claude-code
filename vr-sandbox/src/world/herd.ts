@@ -27,7 +27,7 @@ export class Herd {
   add(name: string, walker: Walker, seed = this.members.length + 1): Member {
     const m: Member = { name, walker, doing: 'company' };
     this.members.push(m);
-    this.host.send({ op: 'mind', name, nerves: { body: walker.body, left: walker.left, right: walker.right, servos: walker.servos }, seed });
+    this.host.send({ op: 'mind', name, nerves: { body: walker.body, parts: walker.parts, left: walker.left, right: walker.right, servos: walker.servos }, seed });
     return m;
   }
 

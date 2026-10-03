@@ -101,10 +101,10 @@ export class Runner {
   private think(events: PhysicsEvent[]) {
     // a creature whose body is gone from the world is gone with it
     this.minds = this.minds.filter((m) => this.world.livePose(m.nerves.body) !== null);
-    const w = { time: this.ticks * TICK, you: this.you, dry: (x: number, z: number) => this.dry(x, z) };
     for (const m of this.minds) {
       const self = this.world.livePose(m.nerves.body);
       if (!self) continue;
+      const w = { time: this.ticks * TICK, you: this.you, dry: (x: number, z: number) => this.dry(x, z), clear: (a: Vec3, b: Vec3) => this.world.lineOfSight(a, b, m.nerves.parts) };
       const c = think(m.mind, self, w, THINK, m.walking);
       m.walking = c.left > 0 || c.right > 0;
       this.world.gait(strides(c, m.nerves));

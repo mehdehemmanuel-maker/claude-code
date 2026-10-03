@@ -4,8 +4,9 @@
 // walking; turning comes from strides of different lengths on each side, as it does for a dog.
 //
 //   sense   what it can see: you, its goal, where the water is. Its eyes take in a wide arc ahead (a dog's about 240°,
-//           Miller & Murphy, Vision in dogs, J. Am. Vet. Med. Assoc. 207, 1995), not behind it; what it no longer sees
-//           it remembers where it last saw.
+//           Miller & Murphy, Vision in dogs, J. Am. Vet. Med. Assoc. 207, 1995), not behind it, and along straight
+//           rays: what stands between you and it hides you (F-6.2, the world's ray cast); what it no longer sees it
+//           remembers where it last saw.
 //   want    urges that rise and fall: company (to be near you, more the further you are), curiosity (to go somewhere it
 //           hasn't been, rising while nothing is new) and tiredness (rising as it walks, falling as it rests).
 //   choose  the strongest urge, with a little favour to what it is already doing so it doesn't dither between two;
@@ -70,6 +71,8 @@ export interface World {
   you: Vec3;
   /** Whether ground is dry there (above the water, if any). */
   dry(x: number, z: number): boolean;
+  /** Whether a straight ray from its eyes reaches a point with nothing in the way (F-6.2). */
+  clear(from: Vec3, to: Vec3): boolean;
 }
 
 /** What its legs are told: each side's stride (0 still, 1 full), and what it is doing, in words. */
@@ -103,7 +106,8 @@ function somewhereNew(m: Mind, self: Pose, w: World): Vec3 | null {
  */
 export function think(m: Mind, self: Pose, w: World, dt: number, walking: boolean): Command {
   // sense
-  if (sees(m, self, w.you)) m.sawYou = { at: [...w.you], time: w.time };
+  // within its eyes' arc and reach, and nothing between: its eyes are at its body, which is its own to see past
+  if (sees(m, self, w.you) && w.clear(self.p, w.you)) m.sawYou = { at: [...w.you], time: w.time };
   const you = m.sawYou ? bearing(self, m.sawYou.at) : null;
   // feel: company grows with how far you are; curiosity while nothing is new; tiredness with walking (two minutes of
   // walking tire it, half a minute of rest restores it)
