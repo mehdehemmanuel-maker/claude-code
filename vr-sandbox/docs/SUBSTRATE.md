@@ -159,7 +159,13 @@ a turbopump, a photoresist, an arc chute), and the other material families given
 range named for the subset it holds for. One disagreement between sources is kept as such: the page gives rubber at small
 strain 10 to 100 MPa where the stocked natural latex is 1.5 MPa, so the elastomer range says it is the page's compounds.
 
-Stubs fell from 813 to 275 and described entities rose from 1799 to 2319 without a question asked outside.
+Then the rest, in tranches: the machines, tooling, moulds, gases and consumables processes require (held by a test:
+what a process requires is described), the engineering parts A to Z and the stock shapes, the earth and the chemistry
+of crystals and solutions, and the sixty organs, tissues, cells, molecules and processes of biology. At build nothing is
+a stub: everything an arrow names is described, held by a test, and the frontier is the queue of 38 895 questions
+and the stubs that population itself makes as rules and the outside name new things.
+
+Stubs fell from 813 to 0 and described entities rose from 1799 to 2593 without a question asked outside.
 
 ### The build is stepped
 
@@ -177,21 +183,21 @@ the typecheck, the unit suite and the build, and fails on any of them: the loop'
 
 | | |
 |---|---|
-| entities | 2594 |
-| relations | 10277 |
-| relations per entity | 4.0 |
-| stubs (depth 0, each a queued question) | 275 (none typed: every one named only by `has-part` or `interacts-with`) |
+| entities | 2593 |
+| relations | 10938 |
+| relations per entity | 4.2 |
+| stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
 | laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
-| materials | 254 |
-| components | 527 |
-| mechanisms | 183 |
-| constructors | 251 |
+| materials | 271 |
+| components | 704 |
+| mechanisms | 194 |
+| constructors | 277 |
 | failures | 209 |
-| biological | 204 |
-| manifolds / generators | 182 / 96 |
-| domains | 21 (mechanical 439, electrical 406, chemistry 295, biology 289, materials 277, manufacturing 247, engineering 236, common 218, scale 217, physics 196, failures 160, parameters 104, computing 86, catalogue 77, making 69, robotics 65, circuits 64, earth 51, energy 33, views 30, standards 21) |
-| questions queued after seeding | 35 610 |
-| things with no known constructor | 395 |
+| biological | 267 |
+| manifolds / generators | 185 / 96 |
+| domains | 21 (common 551, mechanical 322, biology 311, chemistry 294, electrical 278, manufacturing 271, materials 241, engineering 235, scale 215, physics 197, failures 159, parameters 104, catalogue 77, computing 75, making 72, robotics 54, circuits 47, earth 46, energy 33, views 30, standards 21) |
+| questions queued after seeding | 38 895 |
+| things with no known constructor | 539 |
 
 Before the views, failures and families packs, a round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
 queue at 27 853: never finished, by design.
@@ -230,8 +236,9 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 
 ## Still open
 
-- **Stubs that remain** at build, 275, every one named once, by `has-part` or `interacts-with` (an alveolus, a chain
-  pin, a gate oxide, a kernel). The arrow does not say what
+- **No stub remains at build.** The frontier is now the queue (38 895 questions after seeding) and the constructors: 539
+  described things have no known constructor nor a kind with one, up from 371 as more things were described; each is a
+  question for the manufacturing pack or the outside. The arrow does not say what
   they are, so a rule cannot type them; each is a question for a pack or for the outside.
 - **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no

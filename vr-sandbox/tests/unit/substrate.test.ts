@@ -218,16 +218,16 @@ describe('population: a queue that never needs to be finished', () => {
   });
 
   it('a stub named by many things is asked about first', () => {
-    const stubs = [...s.entities.values()].filter((e) => 'stub' in e.source);
-    const most = stubs.reduce((a, b) => (s.into(b.id).length > s.into(a.id).length ? b : a));
-    const least = stubs.reduce((a, b) => (s.into(b.id).length < s.into(a.id).length ? b : a));
-    expect(s.into(most.id).length).toBeGreaterThanOrEqual(s.into(least.id).length);
-    // and strictly: the same stub named by two more things is asked sooner (at build every stub may be named once, so the test makes the difference itself)
-    const s2 = build().substrate, stub = [...s2.entities.values()].find((e) => 'stub' in e.source)!;
-    const before = priority(s2, stub, 'functions');
-    for (const from of ['bearing', 'gear']) s2.relate({ from, kind: 'has-part', to: stub.id, source: { estimate: 'test' }, confidence: 0.5 });
-    expect(priority(s2, stub, 'functions')).toBeGreaterThan(before);
-    expect(seedQueue(s, new Queue(), 'fast')).toBeGreaterThan(stubs.length - 1);
+    // at build nothing is a stub, so the test names two things no pack describes, one of them three times
+    const s2 = build().substrate;
+    const name = (from: string, to: string) => s2.relate({ from, kind: 'has-part', to, source: { estimate: 'test' }, confidence: 0.5 });
+    name('bearing', 't.once');
+    for (const from of ['bearing', 'gear', 'shaft']) name(from, 't.thrice');
+    expect(s2.repair().map((e) => e.id).sort()).toEqual(['t.once', 't.thrice']);
+    expect(priority(s2, s2.get('t.thrice')!, 'functions')).toBeGreaterThan(priority(s2, s2.get('t.once')!, 'functions'));
+    const q = new Queue();
+    expect(seedQueue(s2, q, 'fast')).toBe(6); // three fast facets a stub: what it is, its parts, what makes it
+    expect(q.pop()!.id).toBe('t.thrice');
   });
 
   it('a round of population derives new relations by rule, marks what it could not learn, and leaves the queue non-empty', async () => {
@@ -323,9 +323,13 @@ describe('population: a queue that never needs to be finished', () => {
 
   it('a characteristic scale attaches to a thing without describing it: a stub with a scale is still a stub, and nothing described is of no kind', () => {
     for (const e of s.entities.values()) if (!('stub' in e.source)) { expect(e.kinds.length, `${e.id} is described but of no kind`).toBeGreaterThan(0); expect(e.says.trim().length, e.id).toBeGreaterThan(0); }
+    // the scale seed attaches a characteristic scale to the capillary without describing it; the biology pack describes it; both hold
     const cap = s.get('bio.capillary')!;
-    expect('stub' in cap.source).toBe(true);
-    expect(cap.params?.find((p) => p.sym === 'L_c')?.low).toBe(1e-5);
+    expect('stub' in cap.source).toBe(false);
+    expect(cap.says).toMatch(/one cell thick/);
+    const scale = cap.params?.find((p) => p.sym === 'L_c');
+    expect(scale?.low).toBe(1e-5);
+    expect('estimate' in scale!.of).toBe(true);
   });
 
   it('ingest refuses what the index cannot mean, and stubs what it names', () => {
@@ -455,10 +459,8 @@ describe('what an arrow names, the index describes (S-6)', () => {
     for (const r of s.relations.filter((r) => r.kind === 'interacts-with' && r.says === 'works this material')) expect(s.get(r.to)!.kinds, `${r.from} -> ${r.to}`).toContain('material');
   });
 
-  it('every non-biological thing an arrow names is described: at build the only stubs left are the parts of living things', () => {
-    const stubs = [...s.entities.values()].filter(isStub).map((e) => e.id);
-    expect(stubs.filter((id) => !id.startsWith('bio.'))).toEqual([]);
-    expect(stubs.length).toBeLessThan(140);
+  it('everything an arrow names is described: no stub at build; the frontier is the queue, and the stubs population makes', () => {
+    expect([...s.entities.values()].filter(isStub).map((e) => e.id)).toEqual([]);
   });
 
   it('what a process requires, a machine, a tool, a mould, a gas, is described, never a stub', () => {
