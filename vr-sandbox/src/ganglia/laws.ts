@@ -22,6 +22,7 @@ export const SIGMA_SB = 5.670374419e-8;
 const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002', kind: 'handbook' as const };
 const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' as const };
+const HH = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015', kind: 'textbook' as const };
 const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
 const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
@@ -340,6 +341,11 @@ export const LAWS: Law[] = [
     id: 'lumped.time-constant', name: 'Lumped thermal time constant', domain: 'thermal', statement: 'A small, well-conducting body cools toward its surroundings with time constant m c over h A.', formula: 'τ = m c / (h A)',
     inputs: [q('m', 'mass', 'kg'), q('c', 'specific heat', 'J/kg K'), q('h', 'heat transfer coefficient', 'W/m^2 K'), q('A', 'area', 'm^2')], output: q('tau', 'time constant', 's'), eval: ({ m, c, h, A }) => (m! * c!) / (h! * A!),
     valid: 'Biot number h L/k below 0.1.', example: { inputs: { m: 1, c: 460, h: 10, A: 0.1 }, output: 460 }, source: INCROPERA, tags: ['heat', 'cooling', 'time'],
+  },
+  {
+    id: 'rc.time-constant', name: 'RC time constant', domain: 'electrical', statement: 'A capacitor charges or discharges through a resistance toward its final voltage with time constant R C: 63 % of the way in one, 95 % in three.', formula: 'τ = R C',
+    inputs: [q('R', 'resistance', 'ohm'), q('C', 'capacitance', 'F')], output: q('tau', 'time constant', 's'), eval: ({ R, C }) => R! * C!,
+    valid: 'A linear resistance and capacitance, a source that holds its voltage.', example: { inputs: { R: 10e3, C: 100e-6 }, output: 1 }, source: HH, tags: ['capacitor', 'filter', 'decoupling', 'time'],
   },
   {
     id: 'thermal.network', name: 'Temperature rise through thermal resistances', domain: 'thermal', statement: 'A steady loss flowing through resistances in series raises the temperature by the loss times their sum.', formula: 'ΔT = P Σ R_th',

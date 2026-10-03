@@ -15,6 +15,23 @@ const sci = (x: number) => x.toExponential(1).replace('e+', 'e');
 const find = (word: string) => findByWords(substrate(), word);
 
 /** What to say of a thing I do not know: asked outside when a source is connected, else a question for the packs. */
+/** The queue's own rules, run now for one thing and the facets asked, their arrows kept: Ego asks herself before saying she does not know. */
+function deriveNow(e: NonNullable<ReturnType<typeof find>>, facets: ('failures' | 'manufacturing' | 'constructors' | 'materials' | 'functions')[]): boolean {
+  const s = substrate();
+  let kept = false;
+  for (const facet of facets) {
+    const d = ruleExpander().expand(e, facet, s);
+    if (!d || d instanceof Promise) continue;
+    for (const r of d.relations) if (r.from === e.id && r.to !== e.id && s.has(r.to) && s.relate(r)) kept = true;
+  }
+  return kept;
+}
+/** A rule's saying names things by id; said aloud, by name. */
+function spoken(says: string): string {
+  const s = substrate();
+  return says.replace(/[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+/g, (id) => (s.has(id) ? nameOf(s.get(id)!) : id));
+}
+
 function unknown(name: string): string {
   const p = population();
   if (p?.connected) {
@@ -75,9 +92,10 @@ export function answerTraversal(i: Traverse): string {
     const head = an(nameOf(e)).replace(/^a/, 'A');
     const parts = d.children.filter((c) => !mats.some((x) => x.m.id === c.entity.id));
     if (!parts.length) {
-      if (matLine) return `${head} is one piece. ${matLine}`;
+      if (matLine) return `I know no parts of ${an(nameOf(e))} yet. ${matLine}`;
       const kindMat = s.reach(e.id, 'is-a').map((k) => ({ k, ms: s.reach(k.id, 'made-of') })).find((x) => x.ms.length);
       if (kindMat) return `${head} is ${an(nameOf(kindMat.k))}, and ${an(nameOf(kindMat.k))} is typically made of ${list(kindMat.ms.map(nameOf), 6)}; its own material I have not been told.`;
+      if (deriveNow(e, ['materials'])) { const now = s.reach(e.id, 'made-of'); if (now.length) return `I had not been asked that. From its kind and its parts, ${an(nameOf(e))} is made of ${list(now.map(nameOf), 6)}.`; }
       return `I have not decomposed ${an(nameOf(e))} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
     }
     const leaves = leavesOf(d);
@@ -98,12 +116,17 @@ export function answerTraversal(i: Traverse): string {
   if (i.query === 'producers' || i.query === 'producers-of-producers') {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
-    const p = producers(s, e.id, i.query === 'producers' ? 2 : 4);
-    const first = p.steps[0];
+    let p = producers(s, e.id, i.query === 'producers' ? 2 : 4);
+    let first = p.steps[0];
+    // not asked yet: what works its material makes it, what makes its kind or its whole makes it, a living part is made by development
+    const derivedNow = !first?.by.length && deriveNow(e, ['manufacturing', 'constructors']);
+    if (derivedNow) { p = producers(s, e.id, i.query === 'producers' ? 2 : 4); first = p.steps[0]; }
     if (!first?.by.length) return `I know nothing that makes ${an(nameOf(e))}: that is a question on my queue.`;
     const machines = p.steps.filter((x) => x.depth === 1 && x.by.length);
     const deeper = p.steps.filter((x) => x.depth >= 2 && x.by.length);
-    const head = `${an(nameOf(e)).replace(/^a/, 'A')} is made by ${list(first.by.map(nameOf))}. Those need ${list(machines.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k), 12)}.`;
+    const needs = machines.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k);
+    const why = derivedNow ? ` (${list(s.outOf(e.id, 'produced-by').map((r) => spoken(r.says ?? '')).filter((x, k, a) => x && a.indexOf(x) === k), 3)})` : '';
+    const head = `${derivedNow ? 'I had not been asked that. ' : ''}${an(nameOf(e)).replace(/^a/, 'A')} is made by ${list(first.by.map(nameOf))}${why}.${needs.length ? ` Those need ${list(needs, 12)}.` : ''}`;
     if (i.query === 'producers') return head;
     return `${head} And those machines are made by ${list(deeper.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k), 14)}${p.cycle.length ? `, which closes on itself: ${p.cycle.map((c) => nameOf(s.get(c)!)).join(', ')} make each other, the machine that makes machines` : ''}.`;
   }
@@ -169,16 +192,12 @@ export function answerTraversal(i: Traverse): string {
     const viaMaterial = s.reach(e.id, 'made-of').flatMap((m) => s.reach(m.id, 'fails-by').map((f) => ({ f, via: `as ${nameOf(m)} does` })));
     let inherited = [...viaKind, ...viaMaterial].filter((x) => !seen.has(x.f.id) && !!seen.add(x.f.id));
     // not asked yet: derive it now by the same rules the queue runs (what it is made of, what it does, whether it lives), and say so
-    let derivedNow = false;
-    if (!own.length && !inherited.length) {
-      const d = ruleExpander().expand(e, 'failures', s);
-      if (d && !(d instanceof Promise)) for (const r of d.relations) if (r.kind === 'fails-by' && r.from === e.id && r.to !== e.id && s.has(r.to)) { if (s.relate(r)) derivedNow = true; }
-      if (derivedNow) { own.push(...s.reach(e.id, 'fails-by').filter((f) => !seen.has(f.id) && !!seen.add(f.id))); inherited = []; }
-    }
+    const derivedNow = !own.length && !inherited.length && deriveNow(e, ['failures']);
+    if (derivedNow) { own.push(...s.reach(e.id, 'fails-by').filter((f) => !seen.has(f.id) && !!seen.add(f.id))); inherited = []; }
     if (!own.length && !inherited.length) return `I know no failure mode of ${an(nameOf(e))} yet: that is a question on my queue.`;
     // the mechanism is the failure's first clause; the law behind it is what it is governed by
     const mech = (f: E) => { const laws = s.reach(f.id, 'governed-by').map(nameOf); const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); return `${nameOf(f)}, ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? ` (${list(laws, 3)})` : ''}`; };
-    const how = (f: E) => s.relations.find((r) => r.from === e.id && r.kind === 'fails-by' && r.to === f.id)?.says ?? '';
+    const how = (f: E) => spoken(s.relations.find((r) => r.from === e.id && r.kind === 'fails-by' && r.to === f.id)?.says ?? '');
     if (derivedNow) return `I had not been asked that. From what ${an(nameOf(e))} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.`;
     return `${an(nameOf(e)).replace(/^a/, 'A')} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
   }

@@ -627,7 +627,7 @@ describe('how a thing fails is said as mechanisms with laws', () => {
 
   it('Ego says what a thing is made of with the arrow\'s own saying, and a kind\'s material when the thing has none', () => {
     const rod = answerTraversal({ do: 'traverse', query: 'components', of: 'connecting rod' });
-    expect(rod).toMatch(/^A connecting rod is one piece\. It is typically made of Steel AISI 4140 annealed \(Budynas & Nisbett\)\./);
+    expect(rod).toMatch(/^I know no parts of a connecting rod yet\. It is typically made of Steel AISI 4140 annealed \(Budynas & Nisbett\)\./);
     const bolt = answerTraversal({ do: 'traverse', query: 'components', of: 'bolt' });
     expect(bolt).toMatch(/is a (?:screw|fastener), and an? (?:screw|fastener) is typically made of/);
     const servo = answerTraversal({ do: 'traverse', query: 'components', of: 'servo' });
@@ -642,6 +642,29 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(first).toMatch(/living tissue: it is injured, diseased and ages/);
     const again = answerTraversal({ do: 'traverse', query: 'failures', of: 'liver' });
     expect(again).toMatch(/^A liver fails by \d+ ways of its own/);
+  });
+
+  it('Ego derives what makes a thing on demand, says why, names things by name in a rule\'s saying, and never says "Those need ." of a maker that needs nothing', () => {
+    const liver = answerTraversal({ do: 'traverse', query: 'producers', of: 'liver' });
+    expect(liver).toMatch(/^I had not been asked that\. A liver is made by development \(a living part: made by development/);
+    const spar = answerTraversal({ do: 'traverse', query: 'producers', of: 'spar' });
+    expect(spar).toMatch(/^I had not been asked that\. A spar is made by .*\(a part of Aluminium 2024-T3 can be made by what works it/);
+    expect(spar).not.toMatch(/aluminum\.2024/);
+    const rudder = answerTraversal({ do: 'traverse', query: 'failures', of: 'rudder' });
+    expect(rudder).toMatch(/made of Aluminium 2024-T3, which fails by fatigue/);
+    expect(rudder).not.toMatch(/failure\.[a-z]/);
+    const chloroplast = answerTraversal({ do: 'traverse', query: 'producers', of: 'chloroplast' });
+    expect(chloroplast).toMatch(/^A chloroplast is made by self assembly\.$/);
+  });
+
+  it('what charges and discharges through a resistance cites the RC time constant, not the lumped thermal one', () => {
+    for (const id of ['fn.couple.ac', 'fn.decouple', 'capacitor.bootstrap', 'interconnect.metal', 'failure.ripple', 'failure.inrush', 'failure.parasitic-capacitance']) {
+      const laws = s.reach(id, 'governed-by').map((l) => l.id);
+      expect(laws, id).toContain('rc.time-constant');
+      expect(laws, id).not.toContain('lumped.time-constant');
+    }
+    expect(s.reach('heatsink', 'governed-by').map((l) => l.id)).toContain('lumped.time-constant');
+    expect(s.get('rc.time-constant')!.kinds).toContain('law');
   });
 
   it('Ego answers a property of a material with the number, its unit and where it came from, and the family\'s range as well', () => {

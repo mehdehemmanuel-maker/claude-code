@@ -187,7 +187,7 @@ the typecheck, the unit suite and the build, and fails on any of them: the loop'
 | relations | 11 650 |
 | relations per entity | 4.5 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
-| laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
+| laws | 173 (105 executable in `laws.ts`, 68 cited not run) |
 | materials | 272 |
 | components | 659 |
 | functions | 92 |
@@ -241,6 +241,11 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 - **S-4** a question is answered by traversal (never by a list kept for the question)
 - **S-5** what comes from outside says where it came from (a connector's record enters only through ingest, every arrow and number carrying the source, its key and the date; what the source lacks is an unknown, never silence; the background keeps slices of a frame and journals what the outside said)
 - **S-6** what an arrow names, the index describes (a view, a failure mode or a function named by any arrow is described; a law's domain names one view through one table; a material is named by its family, never by a bare word; a family's numbers come from a named page with its address and the day it was read, and the stocked materials lie inside them)
+
+**Correction found while Ego learned to say functions.** AC coupling, decoupling, the bootstrap capacitor, a chip's
+interconnect, ripple, inrush and parasitic capacitance cited the lumped thermal time constant (m c / h A) where they
+meant the RC time constant; the book had no RC law, so one is in it now (τ = R C, Horowitz & Hill), they cite it, and
+a test holds both that and the heatsink's thermal one.
 
 ## Still open
 

@@ -29,8 +29,8 @@ export function common(): Pack {
   fn('fn.divide.voltage', 'To divide a voltage: give a fraction of it from a ratio of resistances or impedances.', { 'governed-by': ['ohm', 'kirchhoff.voltage'] }, HH);
   fn('fn.protect.overvoltage', 'To protect against overvoltage: clamp or divert a voltage above a rating before it reaches what it would break.', { 'governed-by': ['shockley.diode'] }, HH);
   fn('fn.reproduce', 'To reproduce: make a copy of the thing from the thing, with variation.', { 'governed-by': ['natural.selection'] }, CAMPBELL);
-  fn('fn.couple.ac', 'To couple AC: pass the changing part of a signal and block the steady part, through a capacitor.', { 'governed-by': ['lumped.time-constant'] }, HH);
-  fn('fn.decouple', 'To decouple: hold a supply rail steady against the current pulses of what it feeds, with charge stored next to the load.', { 'governed-by': ['lumped.time-constant'] }, HH);
+  fn('fn.couple.ac', 'To couple AC: pass the changing part of a signal and block the steady part, through a capacitor.', { 'governed-by': ['rc.time-constant'] }, HH);
+  fn('fn.decouple', 'To decouple: hold a supply rail steady against the current pulses of what it feeds, with charge stored next to the load.', { 'governed-by': ['rc.time-constant'] }, HH);
   fn('fn.transfer.oxygen', 'To transfer oxygen: move it across a membrane down its partial-pressure gradient, lung to blood, blood to cell.', { 'governed-by': ['fick.diffusion'] }, CAMPBELL);
   fn('fn.separate', 'To separate: divide a mixture by a difference between its parts: size, density, boiling point, charge.', { 'governed-by': ['separation.work'] });
   fn('fn.construct', 'To construct: make a thing from parts and stock by processes, in an order.');
@@ -160,7 +160,7 @@ export function common(): Pack {
   t('brake.caliper', ['component'], 'The clamp astride the disc: hydraulic pistons push the pads in, and the body carries the reaction to the hub.', { 'has-part': ['piston', 'seal'], 'governed-by': ['hydrostatic'] });
   t('cam.profile', ['geometry'], 'The shape of a cam\'s edge: its radius against angle is the motion it programs, and its curvature sets the follower\'s contact stress.', { 'governed-by': ['hertz.contact'] });
   t('cam.follower', ['component'], 'What rides the cam, a roller or a flat face, held on by a spring: it turns the profile into the motion.', { 'governed-by': ['hertz.contact', 'spring.rate'], 'fails-by': ['failure.follower-jump', 'failure.wear'] });
-  t('capacitor.bootstrap', ['component'], 'A small capacitor that charges while the low switch is on and then floats up with the high switch to drive its gate above the rail.', { 'is-a': ['capacitor'], 'governed-by': ['lumped.time-constant'] }, HH);
+  t('capacitor.bootstrap', ['component'], 'A small capacitor that charges while the low switch is on and then floats up with the high switch to drive its gate above the rail.', { 'is-a': ['capacitor'], 'governed-by': ['rc.time-constant'] }, HH);
   t('case', ['component'], 'The shell round a thing: it holds the parts in place, keeps dirt and fingers out, and carries the mounting.', { does: ['fn.isolate'] });
   t('cell.case', ['component'], 'The can or pouch round an electrochemical cell: it holds the electrolyte, vents when it must, and often is one terminal.', { 'is-a': ['case'], 'fails-by': ['failure.leak'] }, HH);
   t('catapult', ['mechanism'], 'Energy stored slowly in a spring, a twisted rope or a raised weight and released at once into a projectile: power amplified by storing.', { does: ['fn.store.elastic'], 'governed-by': ['spring.energy', 'energy.kinetic'] });
@@ -205,7 +205,7 @@ export function common(): Pack {
   t('hull.pressure', ['component'], 'A submarine\'s inner hull: a stiffened cylinder that holds the sea\'s pressure out, deeper by the thickness.', { 'is-a': ['hull'], 'governed-by': ['stress.hoop', 'hydrostatic'], 'fails-by': ['failure.buckling'] });
   t('idler', ['component'], 'A wheel or a pulley that carries a belt, a chain or a track but drives nothing: it guides and tensions.', { 'has-part': ['bearing'], 'governed-by': ['friction.coulomb'] });
   t('insulation.refractory', ['material'], 'Firebrick and ceramic fibre lining a furnace: it stands the heat and keeps it in.', { 'is-a': ['material.ceramic'], 'governed-by': ['conduction'] }, KALPAKJIAN);
-  t('interconnect.metal', ['component'], 'The copper or aluminium wiring layers of a chip, nanometres wide, joining its transistors.', { 'governed-by': ['wire.resistance', 'lumped.time-constant'], 'fails-by': ['failure.electromigration'] }, HH);
+  t('interconnect.metal', ['component'], 'The copper or aluminium wiring layers of a chip, nanometres wide, joining its transistors.', { 'governed-by': ['wire.resistance', 'rc.time-constant'], 'fails-by': ['failure.electromigration'] }, HH);
   t('kernel', ['computation'], 'The core of an operating system: it owns the processor, the memory and the devices, and lends them to programs.', { does: ['fn.control'], 'governed-by': ['computability'] }, HENNESSY);
   t('layer', ['computation'], 'One row of units in a neural network: a linear map and a nonlinearity, stacked to make depth.', { 'has-part': ['neuron.artificial'], 'governed-by': ['universal.approximation'] }, HENNESSY);
   t('link', ['component'], 'One rigid member of a linkage, joined to the next at a pin.', { 'governed-by': ['grubler'] });
