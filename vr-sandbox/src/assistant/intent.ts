@@ -151,7 +151,10 @@ function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traver
     const raw = line.replace(/[’']/g, '').replace(/\\s+/g, ' ').trim().replace(/^(?:ego|hey ego|please|can you|could you|would you)\\s+/i, '').replace(/\\s*\\?$/, '');
     const a = new RegExp(`^(?:is|would|could) (?:an? |the )?(.+?) of ${NUM}\\s*${UNIT}\\s*${KEY}${GIVEN}`, 'i').exec(raw);
     const b = a ? null : new RegExp(`^can (?:an? |the )?(.+?) (?:be|reach|get to|hit|make) ${NUM}\\s*${UNIT}${GIVEN}`, 'i').exec(raw);
-    const c = a || b ? null : new RegExp(`^(?:is|would|could) ${NUM}\\s*${UNIT}\\s*of (?:an? |the )?(.+?) ${KEY}${GIVEN}`, 'i').exec(raw);
+    const c = a || b ? null : new RegExp(`^(?:is|would|could) ${NUM}\\s*${UNIT}\\s*(?:of )?(?:an? |the )?(.+?) ${KEY}${GIVEN}`, 'i').exec(raw);
+    // "is it possible to get 500 J of kinetic energy with …", "can I get 1000 N of tractive force with …"
+    const e = a || b || c ? null : new RegExp(`^(?:is it possible to|can (?:i|we|one|you)|could (?:i|we|one|you)) (?:get|reach|have|make|achieve|hit) ${NUM}\\s*${UNIT}\\s*(?:of )?(?:an? |the )?(.+?)${GIVEN}`, 'i').exec(raw);
+    if (e) return { do: 'traverse', query: 'possible', of: strip(e[3]!.toLowerCase()), claim: { value: Number(e[1]), unit: e[2] ?? '', given: (e[4] ?? '').trim() } };
     // "can a heat engine be 60% efficient between 300 K and 400 K": an efficiency in per cent
     const pc = a || b || c ? null : new RegExp(`^(?:can|could|would|is|are) (?:an? |the )?(.+?) (?:be )?${NUM}\\s*%\\s*efficient${GIVEN}`, 'i').exec(raw);
     if (pc) return { do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: Number(pc[2]), unit: '%', given: (pc[3] ?? '').trim() } };
