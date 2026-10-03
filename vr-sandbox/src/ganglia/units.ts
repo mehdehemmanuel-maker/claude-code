@@ -24,7 +24,7 @@ export const UNITS: Record<string, UnitDef> = {
   m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
   s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600),
   A: u(I), mA: u(I, 1e-3),
-  K: u(K), degC: u(K, 1, 273.15),
+  K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
   N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   Pa: u(PA), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
@@ -92,7 +92,7 @@ const SPOKEN: [RegExp, string][] = [
   [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
   [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],
-  [/^(°c|degc|celsius|degrees? c)$/i, 'degC'], [/^(deg|degrees?|°)$/i, 'deg'],
+  [/^(°c|degc|celsius|degrees? c)$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? f)$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
 
 export interface Said { value: number; unit: string; si: number; dim: Dim; at: number; text: string }

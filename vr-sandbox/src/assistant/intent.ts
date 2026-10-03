@@ -145,7 +145,7 @@ function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traver
   {
     const KEY = '(?:possible|achievable|reachable|allowed|permitted|feasible|attainable)';
     const NUM = '(-?\\d+(?:\\.\\d+)?(?:e-?\\d+)?)';
-    const UNIT = `((?!${KEY}\\b|with\\b|at\\b|given\\b|for\\b|between\\b)[A-Za-zµμΩ°%][A-Za-z0-9/·^²³°%-]*)?`;
+    const UNIT = `((?!${KEY}\\b|with\\b|at\\b|given\\b|for\\b|between\\b|of\\b)[A-Za-zµμΩ°%][A-Za-z0-9/·^²³°%-]*)?`;
     const GIVEN = '(?: (?:with|at|given|for|between) (.+?))?\\??$';
     // read from the line as said, not from t: units keep their case and their slashes (K, kJ, m/s)
     const raw = line.replace(/[’']/g, '').replace(/\\s+/g, ' ').trim().replace(/^(?:ego|hey ego|please|can you|could you|would you)\\s+/i, '').replace(/\\s*\\?$/, '');
