@@ -212,10 +212,18 @@ similarity holds, so the first bounce reaches λ times the height for λ times t
 drop. Measured: 3.90 for 4 (2.5 % under, the contact model's velocity dependence, within the 10 % the test holds for a
 contact) and 1.000 for 1; the bounce keeps 0.51 of the drop.
 
+**Archimedes, at two sizes.** A Douglas-fir cube of 0.2 m and one of 0.4 m afloat in fresh water. The law book:
+buoyancy (ρ g V) and weight (m g) both go as λ³ under Froude, so the fraction of the cube under water, their quotient,
+goes as λ⁰, and a period goes as λ^½. Measured: 0.5318 of the height under at both sizes (ratio 0.99998 for 1; the
+density ratio 530/998.2 is 0.531), and, pushed a tenth of a side under and let go, heave periods of 0.6530 s and
+0.9239 s (ratio 1.4149 for √2 = 1.4142), which are also what 2π√(ρ_wood a / ρ_water g) gives, 0.6539 s and 0.9247 s.
+The engine's water is the law book's: the displaced weight and a drag, with no added mass of the water moved, which
+real water brings and which would lengthen both periods alike.
+
 **The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
 observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
 tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1,
-restitution 3.90 for 4. The
+restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2. The
 conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
 is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
 with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they

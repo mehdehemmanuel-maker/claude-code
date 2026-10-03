@@ -26,6 +26,32 @@ async function pendulumPeriod(L: number, d: number): Promise<number> {
 }
 
 /**
+ * A Douglas-fir cube of side a afloat in fresh water: the fraction of its height under the surface once it has settled,
+ * and its heave period from a small push down, from the upward crossings of its settled height.
+ */
+async function floating(a: number): Promise<{ fraction: number; T: number; cycles: number }> {
+  const level = 1;
+  const fluids = [{ id: 'water', name: 'fresh water', min: [-20, -4, -20] as [number, number, number], max: [20, level, 20] as [number, number, number], density: 998.2 }];
+  const settle = async (offset: number) => {
+    const r = await rig({ fluids }, false);
+    // placed near where it will float (a fir cube rides about half under), offset metres lower for the push
+    const block = r.part('block', at(0, level + a / 2 - 0.53 * a - offset, 0), { material: 'wood.douglas-fir', params: { x: a, y: a, z: a } });
+    return { r, block };
+  };
+  const still = await settle(0);
+  still.r.run(Math.max(8, 20 * 2 * Math.PI * Math.sqrt(a / G)));
+  const yEq = still.r.pos(still.block)[1];
+  const fraction = (level - (yEq - a / 2)) / a;
+  still.r.done();
+  const pushed = await settle(0.1 * a);
+  const crossings: number[] = [];
+  let prev = -1;
+  pushed.r.run(Math.max(6, 10 * 2 * Math.PI * Math.sqrt(a / G)), (t) => { const y = pushed.r.pos(pushed.block)[1] - yEq; if (prev < 0 && y >= 0) crossings.push(t); prev = y; });
+  pushed.r.done();
+  return { fraction, T: crossings.length >= 2 ? (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1) : NaN, cycles: crossings.length - 1 };
+}
+
+/**
  * A steel cube of side a hung from a frozen anchor on a coil spring of wire d, coil D, Na active coils and an explicit
  * free length, under gravity g: its sag under its own weight, measured as the settled drop from the unstretched
  * position, and its period from zero crossings of its velocity after a small pull.
@@ -218,5 +244,36 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     // under Froude the same spring would be scale-dependent: its rate is held by the material's modulus, not scaled by its dimension
     expect(classify('spring.rate', similarityById('scale.froude')!, lambda).verdict).toBe('scale-dependent');
     expect(classify('spring.rate', similarityById('scale.cauchy')!, lambda).verdict).toBe('covariant');
+  }, 180000);
+
+  it('Archimedes: a fir cube twice the side floats with the same fraction of its height under water, and heaves √2 slower, as Froude similarity predicts', async () => {
+    const lambda = 2;
+    const froude = similarityById('scale.froude')!;
+    // the law book: buoyancy and weight both go as λ³ under Froude, so the fraction submerged, their quotient, goes as λ⁰
+    const lift = classify('buoyancy', froude, lambda), weight = classify('weight', froude, lambda);
+    expect(lift.verdict).toBe('covariant');
+    expect(weight.verdict).toBe('covariant');
+    expect(lift.expected / lift.example).toBeCloseTo(lambda ** 3, 9);
+    expect(weight.expected / weight.example).toBeCloseTo(lambda ** 3, 9);
+    const predictedFraction = (lift.expected / lift.example) / (weight.expected / weight.example);
+    expect(predictedFraction).toBeCloseTo(1, 9);
+    // time goes as λ^½ under Froude, so a heave period does
+    const predictedHeave = lambda ** exponentOfDim(froude, parseUnit('s').dim);
+    expect(predictedHeave).toBeCloseTo(Math.SQRT2, 9);
+    const small = await floating(0.2), big = await floating(0.2 * lambda);
+    // the fraction itself is the density ratio, fir over water: 530 / 998.2
+    expect(Math.abs(small.fraction / (530 / 998.2) - 1), 'a fir cube rides with 53 % of its height under').toBeLessThan(0.03);
+    const measuredFraction = ratio(big.fraction, small.fraction);
+    console.log('OBSERVED observation.archimedes-fraction', measuredFraction, small.fraction, big.fraction);
+    expect(Math.abs(measuredFraction / predictedFraction - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measuredFraction / observationById('observation.archimedes-fraction')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
+    expect(small.cycles).toBeGreaterThanOrEqual(2);
+    expect(big.cycles).toBeGreaterThanOrEqual(2);
+    const measuredHeave = ratio(big.T, small.T);
+    console.log('OBSERVED observation.archimedes-heave', measuredHeave, small.T, big.T, small.cycles, big.cycles);
+    expect(Math.abs(measuredHeave / predictedHeave - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measuredHeave / observationById('observation.archimedes-heave')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
+    // the periods themselves: a floating block is a spring whose rate is the water-plane area times ρ g, T = 2π √(ρ_wood a / ρ_water g); the engine's water brings no added mass
+    for (const [x, a] of [[small, 0.2], [big, 0.4]] as const) expect(Math.abs(x.T / (2 * Math.PI * Math.sqrt((530 / 998.2) * a / G)) - 1), 'the heave period is what Archimedes and Newton give').toBeLessThan(0.02);
   }, 180000);
 });
