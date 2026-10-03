@@ -138,7 +138,7 @@ allows only the transitions that make sense, needs evidence of the kind the stat
 the original claim is untouched. `universalScaleStructuralEquivalence()` returns the claim with axioms, formulation
 (LAW(S_λ X) = 0 for every law and regime; equivalent patterns at λL), predictions, compatible observations (133 of 140
 executable laws covariant under some same-material similarity; 21 of 21 groups invariant under some similarity; model
-testing; allometry; universality; the Kolmogorov cascade; the nine measurements in the engine), conflicting
+testing; allometry; universality; the Kolmogorov cascade; the ten measurements in the engine), conflicting
 observations (the Planck scale derived; atoms have a size; 50 laws carry a constant that sets a scale; regime
 boundaries), falsification conditions (the strong form is
 already falsified by c, ħ, G; the weak form stands as a theorem of dimensional analysis) and unresolved assumptions.
@@ -240,11 +240,22 @@ Measured in the engine's thermal model: 3007 s and 6560 s to lose half the exces
 two laws integrated give 2.1813. Two ways to one number, between 2 and 2.38, and nowhere near 1.41: the thermal world
 is not similar to the mechanical one, as section 5 says in words and this says in seconds.
 
+**Square-cube, at two sizes.** A soda-lime glass square bar of 0.01 m side and 0.4 m length clamped at one end, and one
+of 0.02 m and 0.8 m: the tip load that snaps each, found in the engine by bisection (a weight hung under the tip, a
+second of settling, the fracture event or none) to 0.3 %. The law book: under Cauchy similarity the bending stress at
+the clamp (`stress.bending`) is invariant, the same at both sizes, so the moment a section carries grows as λ³ (s³/6
+times the strength) and the tip load at λ times the arm as λ² = 4, less the share the bar's own weight already takes,
+1.65 % at the small size and 3.31 % at the large: 3.9327. Measured: 21.82 N and 85.81 N, a ratio of 3.9327, each 0.16 %
+under what the strength and the statics give. And under Froude similarity, where loads are weights, the moment demanded
+grows as λ⁴ against the λ³ carried (`beam.plastic-moment` is scale-dependent by λ): a bar twice the size is twice as
+near breaking under its own weight, which is Galileo's argument in *Two New Sciences* (1638) for why there are no
+giants, now a number in this world.
+
 **The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
 observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
 tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1,
 restitution 3.90 for 4, Archimedes 0.99998 for 1 and 1.4149 for √2, drag 1.4124 for √2, cooling 2.1814 for the law
-book's 2.1813 (and not Froude's 1.41). The
+book's 2.1813 (and not Froude's 1.41), the square-cube bar 3.9327 for 3.9327. The
 conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
 is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
 with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they

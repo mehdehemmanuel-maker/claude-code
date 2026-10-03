@@ -10,6 +10,8 @@ import type { Claim } from '../../src/ganglia/scale';
 import { AMBIENT, thermalOf, warm } from '../../src/engineering/thermal';
 import { getMaterial } from '../../src/data/materials';
 import { lawById } from '../../src/ganglia/laws';
+import { makePart } from '../../src/doc/commands';
+import { weightD } from '../../src/parts/registry';
 
 const G = 9.80665;
 const ratio = (a: number, b: number) => a / b;
@@ -126,6 +128,41 @@ async function springPeriod(a: number, d: number, D: number, Na: number, pull: n
   const n = peaks.length;
   const decayPerCycle = n >= 2 && peaks[0]! > 0 ? 1 - Math.pow(peaks[n - 1]! / peaks[0]!, 1 / (n - 1)) : NaN;
   return { T: (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1), m: swing.m, k, sag, decayPerCycle, cycles: crossings.length - 1 };
+}
+
+/**
+ * The tip load that snaps a soda-lime glass square bar of side s and length L clamped at one end: found in the engine
+ * by bisection (a weight hung under its tip, a second of settling, the fracture event or none), and given by the law
+ * book: at the first bond from the clamp the moment is the section modulus times the strength (stress.bending read
+ * backwards, S = s³/6 for a square), less the bar's own weight's moment, over the tip's arm.
+ */
+async function breakingTipLoad(s: number, L: number): Promise<{ engine: number; law: number; selfShare: number }> {
+  const m = getMaterial('glass.soda-lime');
+  const n = 4, d = L - L / n;
+  const S = s ** 3 / 6, Me = m.ultimate * S;
+  expect(lawById('stress.bending')!.eval({ M: Me, S })).toBeCloseTo(m.ultimate, 3);
+  const selfM = ((m.density * s * s * L * (n - 1)) / n) * G * (d / 2);
+  const law = (Me - selfM) / d;
+  const probe = makePart({ kind: 'rod.square', pose: at(0, 0, 0), material: m.id, params: { length: L, side: s, fracture: String(n) } });
+  const breaks = async (W: number): Promise<boolean> => {
+    const r = await rig({}, false);
+    const bar = r.part('rod.square', at(L / 2, 1, 0), { material: m.id, params: probe.params });
+    expect(r.world.segmentCount(bar.id)).toBe(n);
+    // the weight hangs under the tip (a weight cannot be where the bar is): its weight still acts at x = L
+    const dw = weightD({ mass: W / G });
+    const weight = r.part('weight', at(L, 1 - s / 2 - dw / 2 - 0.001, 0), { params: { mass: W / G } });
+    r.connect('fixed', { part: bar, frame: at(-L / 2, 0, 0) }, null);
+    r.connect('fixed', { part: bar, frame: at(L / 2, -s / 2, 0) }, { part: weight, frame: at(0, dw / 2 + 0.001, 0) });
+    let broke = false;
+    for (let i = 0; i < 90; i++) if (r.world.step().events.some((e) => e.type === 'fracture')) broke = true;
+    r.done();
+    return broke;
+  };
+  let lo = 0.8 * law, hi = 1.2 * law;
+  expect(await breaks(lo)).toBe(false);
+  expect(await breaks(hi)).toBe(true);
+  for (let i = 0; i < 7; i++) { const mid = (lo + hi) / 2; if (await breaks(mid)) hi = mid; else lo = mid; }
+  return { engine: (lo + hi) / 2, law, selfShare: selfM / Me };
 }
 
 describe('scale hypotheses, predicted by the law book and measured in the world', () => {
@@ -334,6 +371,30 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(Math.abs(measured / observationById('observation.drag-terminal')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
     // the speeds themselves: v = √(2 m g / ρ C_d A) with the ball's frontal area π d² / 4, not its box
     for (const x of [small, big]) expect(Math.abs(x.v / x.law - 1), 'the terminal speed is what the drag law gives').toBeLessThan(0.02);
+  }, 180000);
+
+  it('Square-cube: a glass bar twice the size snaps under four times the tip load, less the share its own weight takes, as Cauchy similarity predicts; under its own weight it is nearer breaking by λ', async () => {
+    const lambda = 2;
+    const cauchy = similarityById('scale.cauchy')!, froude = similarityById('scale.froude')!;
+    // the law book: under Cauchy similarity (same material, the same stress) the bending stress is invariant, the
+    // same at both sizes, the moment a section carries grows as λ³ and the tip load at λ times the arm as λ²; under
+    // Froude similarity (loads that are weights, λ³ at λ times the arm) the moment demanded grows as λ⁴ against the
+    // λ³ carried: a bar twice the size is twice as near breaking under its own weight (Galileo, Two New Sciences)
+    expect(classify('stress.bending', cauchy, lambda).verdict).toBe('invariant');
+    expect(classify('stress.bending', cauchy, lambda).got / classify('stress.bending', cauchy, lambda).example).toBeCloseTo(1, 9);
+    const own = classify('beam.plastic-moment', froude, lambda);
+    expect(own.verdict).toBe('scale-dependent');
+    expect(own.ratio).toBeCloseTo(1 / lambda, 9);
+    const small = await breakingTipLoad(0.01, 0.4), big = await breakingTipLoad(0.02, 0.8);
+    const predicted = big.law / small.law; // λ² less the self-weight share, which itself doubles with the size
+    expect(predicted).toBeLessThan(lambda ** 2);
+    expect(predicted).toBeCloseTo((lambda ** 2 * (1 - big.selfShare)) / (1 - small.selfShare), 9);
+    const measured = ratio(big.engine, small.engine);
+    console.log('OBSERVED observation.square-cube-bar', measured, predicted, small.engine, small.law, big.engine, big.law, small.selfShare, big.selfShare);
+    expect(Math.abs(measured / predicted - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measured / observationById('observation.square-cube-bar')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
+    // and each breaking load is what the law book gives (bisection to 0.3 %)
+    for (const x of [small, big]) expect(Math.abs(x.engine / x.law - 1), 'the bar snaps at the load the strength and the statics give').toBeLessThan(0.02);
   }, 180000);
 
   it('Cooling: a steel cube twice the side cools more than twice as slowly, between what h held and laminar free convection give; the thermal world is not Froude-similar', () => {
