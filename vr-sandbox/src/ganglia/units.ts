@@ -27,7 +27,7 @@ export const UNITS: Record<string, UnitDef> = {
   K: u(K), degC: u(K, 1, 273.15),
   N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   Pa: u(PA), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
-  J: u(J), kJ: u(J, 1e3), Wh: u(J, 3600), kWh: u(J, 3.6e6),
+  J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   W: u(W), kW: u(W, 1e3), hp: u(W, 745.69987158227),
   V: u(V), kV: u(V, 1e3), mV: u(V, 1e-3),
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
@@ -90,7 +90,8 @@ const SPOKEN: [RegExp, string][] = [
   [/^(s|sec|secs|seconds?)$/i, 's'], [/^(min|mins|minutes?)$/i, 'min'], [/^(h|hr|hrs|hours?)$/i, 'h'],
   [/^(a|amps?|amperes?)$/i, 'A'], [/^(ma|milliamps?)$/i, 'mA'], [/^(v|volts?)$/i, 'V'], [/^(w|watts?)$/i, 'W'], [/^(kw|kilowatts?)$/i, 'kW'], [/^(hp|horsepower)$/i, 'hp'],
   [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
-  [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(%|percent)$/i, '%'],
+  [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
+  [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'],
   [/^(°c|degc|celsius|degrees? c)$/i, 'degC'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
 
@@ -102,23 +103,25 @@ export interface Said { value: number; unit: string; si: number; dim: Dim; at: n
  */
 export function findQuantities(text: string): Said[] {
   const out: Said[] = [];
-  const re = /(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)\s*(°c|%|"|'|[a-zµΩ°][a-z²^0-9·./ -]{0,24})/gi;
+  const re = /(?:(?<![\w.])(-|minus\s+|−))?(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)\s*(°c|%|"|'|[a-zµΩ°][a-z²^0-9·./ -]{0,24})/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    const raw = m[1]!.replace(/\s+/g, '');
-    const value = raw.includes('/') ? Number(raw.split('/')[0]) / Number(raw.split('/')[1]) : Number(raw);
+    const raw = m[2]!.replace(/\s+/g, '');
+    const sign = m[1] ? -1 : 1;
+    const value = sign * (raw.includes('/') ? Number(raw.split('/')[0]) / Number(raw.split('/')[1]) : Number(raw));
     // the longest run of words after the number that is a unit people say
-    const words = m[2]!.trim().split(/\s+/);
+    const words = m[3]!.trim().split(/\s+/);
     let unit: string | null = null, used = 0;
     for (let k = Math.min(words.length, 4); k >= 1 && !unit; k--) {
       const cand = words.slice(0, k).join(' ').replace(/[.,;:]+$/, '');
       for (const [pat, sym] of SPOKEN) if (pat.test(cand)) { unit = sym; used = k; break; }
     }
     // no unit after it: look again just past this number (the next number may have one)
-    if (!unit) { re.lastIndex = m.index + m[1]!.length; continue; }
+    const head = (m[1] ?? '').length + m[2]!.length;
+    if (!unit) { re.lastIndex = m.index + head; continue; }
     const p = parseUnit(unit);
-    out.push({ value, unit, si: value * p.scale + (p.offset ?? 0), dim: p.dim, at: m.index, text: `${m[1]} ${words.slice(0, used).join(' ')}` });
-    re.lastIndex = m.index + m[1]!.length + 1 + words.slice(0, used).join(' ').length;
+    out.push({ value, unit, si: value * p.scale + (p.offset ?? 0), dim: p.dim, at: m.index, text: `${m[1] ?? ''}${m[2]} ${words.slice(0, used).join(' ')}` });
+    re.lastIndex = m.index + head + 1 + words.slice(0, used).join(' ').length;
   }
   return out;
 }

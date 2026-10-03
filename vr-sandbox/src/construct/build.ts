@@ -17,7 +17,8 @@ import { composePose, length, qconj, qmul, qnormalize, relativePose, sub } from 
 import { AUTO_JOIN, planJoin } from '../connectors/plan';
 import { getMaterial } from '../data/materials';
 import { getServo, shaftOf, type ServoData } from '../data/servos';
-import { packSize } from '../parts/registry';
+import { motorEnvelope, packSize } from '../parts/registry';
+import { getMotor } from '../data/motors';
 import type { Params } from '../schema/params';
 
 const IDENTITY: Quat = [0, 0, 0, 1];
@@ -86,6 +87,26 @@ export class Servo extends Powered {
   }
 }
 
+/** A DC motor: its terminals at its back, its shaft out of its front face (the one place a drive is made). */
+export class Motor extends Powered {
+  /** Its terminals are at the middle of its back face (−y). */
+  get lead(): Vec3 { return [0, -motorEnvelope(this.params).length / 2, 0]; }
+  /** Its output shaft's face, in its own coordinates: the shaft runs out along +y. */
+  get shaft(): Pose { return { p: [0, motorEnvelope(this.params).length / 2, 0], q: IDENTITY }; }
+  /** The rated continuous current of its datasheet, A. */
+  get ratedCurrent(): number { return getMotor(String(this.params['model'])).maxContinuousCurrent; }
+  /**
+   * A drive from its shaft to a part, at `frame` on that part: the frame is the shaft's own place in the world, to
+   * the pose canonicalisation's rounding, which is checked before the gate sees it.
+   */
+  drive(load: Solid, frame: Pose = load.frameAt(this.worldOf(this.shaft)), params: { channel: string; currentLimit: number; reverse?: boolean }): string {
+    const wa = this.worldOf(this.shaft), wb = load.worldOf(frame);
+    const apart = length(sub(wb.p, wa.p));
+    if (apart > 2e-5) throw new Error(`${this.build.tag}: a drive's two frames are not one place (${(apart * 1e6).toFixed(0)} µm apart)`);
+    return this.build.connect('motor', { part: this.id, frame: this.shaft }, { part: load.id, frame }, { channel: params.channel, currentLimit: params.currentLimit, reverse: params.reverse ?? false });
+  }
+}
+
 /** A battery pack: its terminals are on its +x end face. */
 export class Pack extends Solid {
   get terminals(): Vec3 { return [packSize(this.params)[0] / 2, 0, 0]; }
@@ -137,6 +158,7 @@ export class Build {
   /** A part at `local` in the build's frame, turned by `localQ` there: a handle typed by what its kind can do. */
   place(kind: 'servo', local: Vec3, localQ: Quat, params: { model: string }, name: string, opts?: PlaceOpts): Servo;
   place(kind: 'battery', local: Vec3, localQ: Quat, params: { model: string; series: number; parallel: number; charge: number }, name: string, opts?: PlaceOpts): Pack;
+  place(kind: 'motor.dc', local: Vec3, localQ: Quat, params: { model: string; gearhead: string }, name: string, opts?: PlaceOpts): Motor;
   place(kind: 'controller', local: Vec3, localQ: Quat, params: { rhythm: number }, name: string, opts?: PlaceOpts): Controller;
   place(kind: 'receiver', local: Vec3, localQ: Quat, params: Record<string, never>, name: string, opts?: PlaceOpts): Receiver;
   place(kind: string, local: Vec3, localQ: Quat, params: Params, name: string, opts?: PlaceOpts): Solid;
@@ -147,6 +169,7 @@ export class Build {
     switch (kind) {
       case 'servo': return new Servo(this, p.id, p.material, p.params);
       case 'battery': return new Pack(this, p.id, kind, p.material, p.params);
+      case 'motor.dc': return new Motor(this, p.id, kind, p.material, p.params);
       case 'controller': return new Controller(this, p.id, kind, p.material, p.params);
       case 'receiver': return new Receiver(this, p.id, kind, p.material, p.params);
       default: return new Solid(this, p.id, kind, p.material, p.params);

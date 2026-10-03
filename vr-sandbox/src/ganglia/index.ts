@@ -255,6 +255,7 @@ export { CHALLENGES, attempt, report, challengeById, type Attempt, type Challeng
 export { FLOW_WORDS, flowOfWord, flowOfPhrase } from './words';
 export { REGIMES, regimeOf, scaleCheck, ellipticK, type Regime, type ScaleCheck } from './scales';
 export { discover, groups as dimensionlessGroups, dropped as cantMatter, type Discovery, type Quantity as Measured } from './discover';
+export { MANIFOLDS, manifoldById, manifoldByName, childrenOf, descendantsOf, lineage, transformations, Construction, ActionRefused, engineer, engineeredReport, DEFAULT_ENV, BEHAVIORS, QUANTITIES, DOMAINS, MECHANISMS, LEVELS as REFINEMENT_LEVELS, type Manifold, type Contract, type Member, type Candidate, type Engineered, type Step } from './manifold';
 export { FRONTIER, explore, frontierById, frontierFor, frontierReport, frontierCensus, geodesic, type Frontier, type Exploration, type Label } from './frontier';
 
 // ------------------------------------------------------------------------------------------------ remembered answers

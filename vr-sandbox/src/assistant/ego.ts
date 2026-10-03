@@ -46,6 +46,7 @@ import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
+import { engineer, engineeredReport, instantiate, type Engineered } from '../ganglia/manifold';
 import { anatomyOf, ARCHETYPES, archetypeByWord, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explore, FRONTIER, frontierById, frontierCensus, frontierReport, scaleCheck, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
 import { describe as describeForm, genome, parseForm, type Form } from '../forms/form';
@@ -127,6 +128,8 @@ export class Ego {
 
   /** What she last worked out by a workflow, with its whole trace (for her page and a follow-up question). */
   lastWorked: { workflow: string; result: WorkflowResult } | null = null;
+  /** The last contract engineered through the manifold language: what "build it" places. */
+  lastEngineered: Engineered | null = null;
 
   /** Ask her something in plain words ("make it stronger", "weld these"); anything else is run as Forge. */
   ask(text: string): string {
@@ -364,6 +367,23 @@ export class Ego {
         }
         const all = CHALLENGES.map((c) => attempt(c));
         return `I set myself ${all.length} hard challenges to find where I break: ${all.map((a) => `${a.challenge.name.toLowerCase()} (as far as ${a.best}, at worst ${a.worst})`).join('; ')}. Each miss is a thing to fix. Ask me for one, like "take the computer challenge".`;
+      }
+      case 'contract': {
+        const r = engineer(i.contract);
+        this.lastEngineered = r;
+        const canPlace = r.candidates.find((k) => k.instantiable);
+        return `${engineeredReport(r)}${canPlace ? ` Say "build it" and I place the lightest one I can make here (${canPlace.store.name}), or "build the ${canPlace.store.mechanism} one".` : ''}`;
+      }
+      case 'realize': {
+        const r = this.lastEngineered;
+        if (!r) return 'Nothing is engineered yet: tell me what to store, give out, work between, weigh under.';
+        const pick = i.which ? r.candidates.find((k) => k.store.mechanism === i.which || k.store.names?.some((n) => n.toLowerCase().includes(i.which!)) || k.store.name.includes(i.which!)) : r.candidates.find((k) => k.instantiable) ?? r.chosen;
+        if (!pick) return `I engineered no ${i.which ?? ''} way for that contract.`;
+        const at = this.host.frontFloor(1.2);
+        const out = instantiate(pick, this.app.store, [at[0], at[1], at[2]], [0, 0, 0, 1], `store${++this.seq}`);
+        if ('refused' in out) return `${pick.store.name}: ${out.refused}.`;
+        this.app.select(out.parts);
+        return `${out.says}. Its path into the world: ${[...pick.steps, ...out.steps].map((x) => x.verb.toLowerCase().replace('_', ' ')).join(', ')}.`;
       }
       case 'frontier': {
         if (i.which) return frontierReport(explore(frontierById(i.which)!));

@@ -6,6 +6,7 @@ import { isComplaint } from './reports';
 import type { Design, DesignSpec } from './designer';
 import { DIMS, findQuantities, sameDim, type Dim, type Said } from '../ganglia/units';
 import { archetypeByWord, type Flow } from '../ganglia/blocks';
+import type { Contract } from '../ganglia/manifold';
 import { flowOfPhrase } from '../ganglia/words';
 import { formFromWords } from '../forms/say';
 import { frontierFor } from '../ganglia/frontier';
@@ -26,6 +27,10 @@ export type Intent =
   | { do: 'ganglia' }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
   | { do: 'engineer'; workflow: string; spec: Record<string, number> }
+  /** A behaviour wanted with its numbers: engineered through the manifold language, never answered by a name. */
+  | { do: 'contract'; contract: Contract }
+  /** Place the last engineered candidate (or the one of a named mechanism) in the world. */
+  | { do: 'realize'; which?: string }
   /** How she got her last answer, law by law with the numbers; and what it hangs on most. */
   | { do: 'work' }
   /** What something is made of, assembly by assembly. */
@@ -149,6 +154,9 @@ export function interpret(line: string): Intent | null {
     const from = flowOfPhrase(m[1]!), to = flowOfPhrase(m[2]!);
     if (from && to && from !== to) return { do: 'conceive', from, to };
   }
+  const k = contractOf(t, line);
+  if (k) return k;
+  if (/^(build|make|place|realise|realize|put) (it|that|the (\w+) one|one)( here| there| in front of me)?[.!]?$/.test(t)) { const m = /the (\w+) one/.exec(t); return { do: 'realize', ...(m ? { which: m[1]! } : {}) }; }
   const e = engineerOf(t, line);
   if (e) return e;
   if ((m = /^(?:what do you know about|tell me about|explain|what is|whats|what are|how (?:is|are|do (?:i|you)) (?:make|made|cut|drill|tap|bend|weld|fit|size|choose|pick)?)\s*(?:an? |the )?(.+)$/.exec(t))) return { do: 'recall', about: m[1]!.trim() };
@@ -225,6 +233,27 @@ function designOf(t: string): Extract<Intent, { do: 'design' }> | null {
  * mph, a length in mm, in or ft), so it is understood whatever units it comes in; what wasn't said takes the
  * workflow's default.
  */
+/**
+ * A contract: "I need a system that stores 100 kJ, releases 500 W, works between -10 and 40 °C, weighs under 5 kg and
+ * must be rechargeable." Its numbers are read with their units; its constraints from its words.
+ */
+function contractOf(t: string, line: string): Extract<Intent, { do: 'contract' }> | null {
+  const qs = findQuantities(line);
+  const of = (d: Dim) => qs.filter((x) => sameDim(x.dim, d));
+  const energy = of(DIMS.energy)[0];
+  if (!energy || !/\b(stores?|storing|storage|holds?|keep|bank)\b/.test(t)) return null;
+  const contract: Contract = { stores: energy.si };
+  const power = of(DIMS.power)[0];
+  if (power) contract.releases = power.si;
+  const mass = of(DIMS.mass)[0];
+  if (mass) contract.massMax = mass.si;
+  const temps = of(DIMS.temperature).map((x) => x.si).sort((a, b) => a - b);
+  if (temps.length >= 2) contract.window = [temps[0]!, temps[temps.length - 1]!];
+  if (/\b(rechargeable|recharge|refill|reusable|again and again|many times)\b/.test(t)) contract.rechargeable = true;
+  if (/\b(heat|thermal|warm)\b.*\b(out|gives?|release)/.test(t) || /\bgives? (out )?heat\b/.test(t)) contract.out = 'thermal';
+  return { do: 'contract', contract };
+}
+
 function engineerOf(t: string, line: string): Extract<Intent, { do: 'engineer' }> | null {
   const qs = findQuantities(line);
   const spec: Record<string, number> = {};
