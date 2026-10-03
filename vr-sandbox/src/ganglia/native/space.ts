@@ -42,7 +42,7 @@ export function family(law: Law, sym: string, held: Record<string, number>): Fam
   const bound = (x: number) => ({ ...held, [sym]: x });
   const admissible = (x: number): { ok: true } | { ok: false; why: string } => {
     if (!Number.isFinite(x)) return { ok: false, why: 'not a number' };
-    const why = law.outside?.(bound(x));
+    const why = law.outside?.(withConstants(law, bound(x)));
     if (why) return { ok: false, why };
     let y: number;
     try { y = law.eval(withConstants(law, bound(x))); } catch (e) { return { ok: false, why: (e as Error).message }; }

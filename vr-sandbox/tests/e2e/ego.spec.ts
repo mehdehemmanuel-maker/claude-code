@@ -163,6 +163,9 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   expect(nex).toMatch(/Their hashes: #[0-9a-f]{8}/);
   expect(await sb(page, (s) => s.ego.ask('compare current and voltage'))).toMatch(/^By current I take electric current, as a quantity\. Electric current and voltage are different kinds of quantity/);
   expect(await sb(page, (s) => s.ego.ask('what causes current'))).toMatch(/^Current names 3 things to me: .*Which do you mean\?$/);
+  // impossible only with a certificate, in the app: the law, the bound, the assumptions; and her register of anomalies
+  expect(await sb(page, (s) => s.ego.ask('is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K'))).toMatch(/^No, not under those assumptions: Carnot efficiency \(η = 1 − T_c \/ T_h\) at these inputs gives at most 0\.25 -; the claim is 0\.5 -; so assumptions \+ law \+ claim ⇒ ⊥\. Assumptions: Carnot efficiency holds: .*Drop one and it is unknown again, not impossible\. In Nex: contradict\(/);
+  expect(await sb(page, (s) => s.ego.ask('what anomalies do you hold'))).toMatch(/^I hold 11 observations against the law book: 0 alive, 1 explained, 10 within tolerance\./);
   expect(errors).toEqual([]);
 });
 

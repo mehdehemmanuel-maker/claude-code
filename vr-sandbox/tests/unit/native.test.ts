@@ -749,6 +749,12 @@ describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, imposs
     // inputs a law needs missing, or no law at all: unknown, not impossible; a unit I cannot read: undefined
     expect(certificate({ quantity: 'kinetic energy', value: 1e6, unit: 'J', inputs: { m: 1 } })).toMatchObject({ impossible: false, mode: 'unknown', why: expect.stringMatching(/^Kinetic energy reaches kinetic energy but needs speed \(v\)/) });
     expect(certificate({ quantity: 'harvest mass', value: 1, unit: 'kg', inputs: {} })).toMatchObject({ impossible: false, mode: 'unknown', why: expect.stringMatching(/^no law of mine computes or bounds harvest mass/) });
+    // a domain check that reads the law's constants (G and c in gravitational time dilation) is given them: a solar
+    // mass inside 1 km is past its horizon, outside-domain, never a verdict; before, G and c were undefined there and
+    // the check passed in silence
+    expect(certificate({ quantity: 'clock rate against far away', value: 0.5, unit: '-', inputs: { M: 2e30, r: 1000 } })).toMatchObject({ impossible: false, mode: 'outside-domain' });
+    expect(family(lawById('time.dilation.gravity')!, 'r', { M: 2e30 }).admissible(1000).ok).toBe(false);
+    expect(family(lawById('time.dilation.gravity')!, 'r', { M: 2e30 }).admissible(1e7).ok).toBe(true);
     expect(certificate({ quantity: 'efficiency', value: 0.5, unit: 'furlongs', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined' });
   });
 

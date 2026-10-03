@@ -22,7 +22,7 @@
 // boundary, from the vector.
 
 import type { Law } from '../types';
-import { LAWS, use } from '../laws';
+import { LAWS, use, withConstants } from '../laws';
 import { dimensionOf, parseUnit, sameDim, type Dim } from '../units';
 import { OBSERVATIONS, type Observation } from '../scale/observations';
 import { d, e, q, r, type E, type Mode, type R, type Structure } from './core';
@@ -99,7 +99,7 @@ export function certificate(c: Claim): Certificate {
   const claimed = q(c.value, c.unit).v;
   let entailed: Certificate | null = null, contradicted: Certificate | null = null, bounded: Certificate | null = null, outside: Certificate | null = null;
   for (const law of ready) {
-    const out = law.outside?.(c.inputs);
+    const out = law.outside?.(withConstants(law, c.inputs));
     if (out) { outside ??= { impossible: false, mode: 'outside-domain', why: `${law.name} does not hold at these inputs: ${out}`, law }; continue; }
     // the law gives its value in its own unit; the claim was read into SI: compare in SI, say both in the law's unit
     const { value: own } = use(law.id, c.inputs);

@@ -531,9 +531,12 @@ Nex text beside the English): a cause ("does X cause Y", by arrows chained, or b
 a thing in her language ("say / speak X in your language"); a comparison of quantities (by dimension, a word of two
 senses settled by the other side); a symptom ("that motor is struggling": candidates, none chosen); the failures of
 a thing (the evidence behind each arrow); the form of a law and its kin across theories; a challenge's attempt (the
-levels as modes, how each is known); her grammar (the morphemes her knowledge earned). What is still English built
-from the substrate's arrows without a Nex structure in between: functions, producers, materials, analogues,
-lineage, kinds, standards, interfaces, variants, sizes, the index. Moving those is the same move eight times.
+levels as modes, how each is known); her grammar (the morphemes her knowledge earned); the edge of a law along one
+input and whether two things lie on one continuum (docs/NEX-SPACE.md); whether a claimed value is possible, which
+she says only with a certificate, and the anomalies she holds against her own law book (docs/NEX-DISCOVERY.md).
+What is still English built from the substrate's arrows without a Nex structure in between: functions, producers,
+materials, analogues, lineage, kinds, standards, interfaces, variants, sizes, the index. Moving those is the same
+move eight times.
 
 Designed, not yet built: the visual notation (E); rewrite rules beyond direction (U: an influence of polarity − on X
 equal to one of polarity + on its complement); a learned term in the distance beyond rarity (V); synonymy merged
@@ -542,6 +545,12 @@ beyond a law's formula, diagrams, animation, VR demonstration, sound and touch (
 with a contract beyond the form of a law (R); the rest of Ego's answers moved onto Nex structures (X), and the
 English-versus-Nex error count taken on her real questions once they are.
 
-Status at 16:30 UTC, 3 October: sections A to Z written; eleven modules under `src/ganglia/native/`; 30 tests in
-`tests/unit/native.test.ts` and 14 in `tests/unit/substrate.test.ts` holding what the document claims; the in-app
-path checked by `tests/e2e/ego.spec.ts`; every number in this document measured by a test on the day.
+Status at 17:45 UTC, 3 October: sections A to Z written, with docs/NEX-SPACE.md (the continuous part, under audit),
+docs/NEX-DISCOVERY.md (evidence, not scripture: the certificate, the epistemic vector, the anomalies, a second audit
+in part 2) and docs/NEX-AUDIT.md (ten questions answered from the code); thirteen modules under
+`src/ganglia/native/`; 44 tests in `tests/unit/native.test.ts` and the Nex questions' tests in
+`tests/unit/substrate.test.ts` holding what the documents claim; five in-app asks in `tests/e2e/ego.spec.ts`; every
+number in these documents measured by a test on the day. Bugs the day's tests found in older code, each fixed with
+its test: a chain's certainty interval (now the Fréchet bounds); laws with constants evaluated without them in the
+families, the forms, the cause answers and the Nex evaluation (forms 84 → 101); domain checks that read a constant
+they were never given; a law's worked example outside its own domain; a thing listed as its own cause.

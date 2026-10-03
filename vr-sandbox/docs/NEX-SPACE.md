@@ -253,3 +253,6 @@ length that would close a gap; fixed by evaluating every family point with the l
 pendulum (value 2.0064 s at 1 m, sensitivity 0.5). The same omission was in the law forms (docs/EGO-NATIVE-LANGUAGE.md
 section R: 84 laws with a form became 101), in the cause-by-law answers (a law with g was dropped without a word) and
 in the Nex evaluation of a law structure; every evaluation of a law now goes through the book's own `withConstants`.
+So does every domain check: a law's `outside` may read a constant (gravitational time dilation reads G and c), and
+without them the check compared NaN and passed in silence; a solar mass inside 1 km is now outside-domain at the
+certificate, in the family and in the Nex evaluation alike (tested).

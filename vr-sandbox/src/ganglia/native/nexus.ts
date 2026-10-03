@@ -49,7 +49,7 @@ export function evaluate(s: R, laws: Map<string, Law>, bound: Record<string, num
   const id = s.c.mech;
   const law = id ? laws.get(id) : undefined;
   if (!law) return { value: NaN, dim: [0, 0, 0, 0, 0], mode: 'unmodelled', why: 'no law stands behind this structure' };
-  const outside = law.outside?.(bound);
+  const outside = law.outside?.(withConstants(law, bound));
   if (outside) return { value: NaN, dim: dimensionOf(law.output.unit), mode: 'outside-domain', why: outside };
   const missing = law.inputs.filter((x) => bound[x.sym] === undefined).map((x) => x.sym);
   if (missing.length) return { value: NaN, dim: dimensionOf(law.output.unit), mode: 'unknown', why: `unbound: ${missing.join(', ')}` };
