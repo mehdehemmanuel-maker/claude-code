@@ -14,6 +14,7 @@ import { biology } from './seeds/biology';
 import { chemistry } from './seeds/chemistry';
 import { earth } from './seeds/earth';
 import { robotics } from './seeds/robotics';
+import { scale } from './seeds/scale';
 import type { Pack } from './dsl';
 import { Queue, buildGenerators, ingest, populate, promoteManifolds, ruleExpander, seedExpander, seedQueue, type Expander, type Generator, type Report } from './population';
 import { externalExpander } from './external';
@@ -28,7 +29,7 @@ export { Population, startPopulation, population, stopPopulation, type Populatio
 export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
-export const PACKS: (() => Pack)[] = [mechanical, electrical, circuits, computing, materials, manufacturing, biology, chemistry, earth, robotics];
+export const PACKS: (() => Pack)[] = [mechanical, electrical, circuits, computing, materials, manufacturing, biology, chemistry, earth, robotics, scale];
 
 export interface Built { substrate: Substrate; queue: Queue; packs: Pack[]; expanders: Expander[]; generators: Map<string, Generator>; seedReport: Report }
 

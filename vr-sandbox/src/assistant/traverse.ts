@@ -7,7 +7,8 @@ import { analogues, constructionPath, decomposeThing, dualRole, implementations,
 type Traverse = Extract<Intent, { do: 'traverse' }>;
 
 // a human name where one is given; else the id said as words, without the domain prefix an id carries for uniqueness
-const nameOf = (e: SubstrateEntity) => e.names[0] ?? e.name.replace(/^(bio|material|process|machine|chem|phys|element|std|failure|role|fn|param|view|circuit|robot|vehicle|earth|energy|tool|block|kind|way|flow|domain) /, '');
+const PREFIX = /^(bio|material|process|machine|chem|phys|element|std|failure|role|fn|param|view|circuit|robot|vehicle|earth|energy|tool|block|kind|way|flow|domain|cross|group|scale|observer) /;
+const nameOf = (e: SubstrateEntity) => (e.names.find((n) => !PREFIX.test(n) && n !== e.name) ?? e.name).replace(PREFIX, '');
 const an = (name: string) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 const list = (xs: string[], max = 12) => (xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`);
 const sci = (x: number) => x.toExponential(1).replace('e+', 'e');

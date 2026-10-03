@@ -27,6 +27,8 @@ export type Intent =
   | { do: 'ganglia' }
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
   | { do: 'traverse'; query: TraversalQuery; of?: string }
+  /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
+  | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
   | { do: 'engineer'; workflow: string; spec: Record<string, number> }
   /** A behaviour wanted with its numbers: engineered through the manifold language, never answered by a name. */
@@ -100,6 +102,33 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   return null;
 }
 
+const NUMBER_WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, ten: 10, twenty: 20, fifty: 50, hundred: 100, 'a hundred': 100, thousand: 1000, 'a thousand': 1000, half: 0.5, double: 2, twice: 2 };
+const factorOf = (w: string) => NUMBER_WORDS[w] ?? Number(w);
+
+/** Questions of scale: each answered by a transformation, a classification, a projection or a search in ganglia/scale. */
+function scaleOf(t: string): Extract<Intent, { do: 'scaling' }> | null {
+  let m: RegExpExecArray | null;
+  const strip = (x: string) => x.replace(/^(?:an? |the |my |this |that )/, '').trim();
+  if ((m = /^(?:what (?:changes|happens|stays the same|would change)|how (?:does|would) (?:it|things?) change) (?:if|when) (?:i |we |you )?(?:make|made|scale|scaled|build|built|shrink|shrank|grow|grew) (it|this|that|(?:an? |the )?.+?) (\d+(?:\.\d+)?|two|three|four|five|ten|twenty|fifty|a hundred|hundred|a thousand|thousand|half|twice) times (bigger|larger|smaller|tinier|faster|slower)$/.exec(t))) {
+    const f = factorOf(m[2]!), down = /smaller|tinier|slower/.test(m[3]!);
+    return { do: 'scaling', query: 'transform', factor: down ? 1 / f : f, ...(/^(it|this|that)$/.test(m[1]!) ? {} : { of: strip(m[1]!) }) };
+  }
+  if ((m = /^scale (it|this|that|(?:an? |the )?.+?) (up|down)(?: by| to)? (\d+(?:\.\d+)?|two|three|ten|a hundred|hundred|a thousand|thousand)(?: times)?$/.exec(t))) return { do: 'scaling', query: 'transform', factor: m[2] === 'down' ? 1 / factorOf(m[3]!) : factorOf(m[3]!), ...(/^(it|this|that)$/.test(m[1]!) ? {} : { of: strip(m[1]!) }) };
+  if ((m = /^(?:make|build) (it|this|that|(?:an? |the )?.+?) (\d+(?:\.\d+)?|two|three|ten|a hundred|hundred|a thousand|thousand|half) times (bigger|larger|smaller)$/.exec(t))) return { do: 'scaling', query: 'transform', factor: /smaller/.test(m[3]!) ? 1 / factorOf(m[2]!) : factorOf(m[2]!), ...(/^(it|this|that)$/.test(m[1]!) ? {} : { of: strip(m[1]!) }) };
+  if ((m = /^(?:is|are) (?:the )?(.+?) (?:scale[- ]invariant|invariant under scale|scale[- ]dependent|the same at (?:every|any|all) (?:scale|size)s?|size[- ]independent)\??$/.exec(t)) && !/reality|the world|physics|nature|everything/.test(m[1]!)) return { do: 'scaling', query: 'law', of: strip(m[1]!) };
+  if ((m = /^how (?:does|would|do) (?:an? |the )?(.+?) (?:see|perceive|experience|get|sense|watch) (?:an? |the |my )?(.+)$/.exec(t))) return { do: 'scaling', query: 'observe', observer: strip(m[1]!), of: strip(m[2]!) };
+  if ((m = /^what (?:does|would) (?:an? |the )?(.+?) see (?:of|in) (?:an? |the |my )?(.+)$/.exec(t))) return { do: 'scaling', query: 'observe', observer: strip(m[1]!), of: strip(m[2]!) };
+  if ((m = /^(?:scale |cross[- ]scale |self[- ]similar )?analogues? of (?:an? |the )?(.+)$|^what (?:is|works|looks) like (?:an? |the )?(.+?) at (?:another|a different|other|every) scales?$/.exec(t))) return { do: 'scaling', query: 'analogues', of: strip((m[1] ?? m[2])!) };
+  if (/^(?:is|are) (?:reality|the world|physics|nature|everything|the universe) (?:the same|structurally (?:the same|equivalent)|self[- ]similar|alike|equivalent) (?:at|across|on) (?:every|all|any|different) scales?\??$|^does (?:reality|nature|the world) repeat (?:itself )?(?:at|across) (?:every|all|different) scales?\??$/.test(t)) return { do: 'scaling', query: 'hypothesis' };
+  if ((m = /^(?:at what scale|at which scales?|where|when) (?:is|does|do) (?:an? |the )?(.+?) (?:valid|hold|break|stop holding|apply|work|fail)\??$/.exec(t))) return { do: 'scaling', query: 'regime', of: strip(m[1]!) };
+  if ((m = /^how (?:long|fast) does (?:a |the |an )?(?:signal|information|force|sound|wave|impulse|heat)(?: take)? (?:to )?(?:cross|travel|propagate|get|go) (?:across |through |along |over |down )?(?:an? |the )?(.+)$/.exec(t))) {
+    const q = /(\d+(?:\.\d+)?) ?(m|mm|cm|km|metre|meter|metres|meters)\b/.exec(m[1]!);
+    const scale: Record<string, number> = { mm: 1e-3, cm: 1e-2, km: 1e3 };
+    return { do: 'scaling', query: 'propagate', of: m[1]!.trim(), ...(q ? { distance: Number(q[1]) * (scale[q[2]!] ?? 1) } : {}), carrier: m[1]! };
+  }
+  return null;
+}
+
 export function interpret(line: string): Intent | null {
   const t = line.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9%. ]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(ego|hey ego|please|can you|could you|would you)\s+/g, '').replace(/\s+please$/, '');
   if (!t) return null;
@@ -163,6 +192,8 @@ export function interpret(line: string): Intent | null {
   if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
   const tr = traversalOf(t);
   if (tr) return tr;
+  const sc = scaleOf(t);
+  if (sc) return sc;
   // a building block opens into its anatomy; a machine breaks down into its assemblies
   if ((m = /^(?:whats inside|what is inside|open up|anatomy of|what makes up|break ?down|whats in|what is in)\s+(?:an? |the )?(.+)$/.exec(t)) && !!archetypeByWord(m[1]!) && !/fx10|printer|markforged/.test(t)) return { do: 'inside', what: m[1]!.trim() };
   if ((m = /^(?:break ?down|breakdown|tear ?down|teardown|what is inside|whats inside|whats in|what is in|what makes up|map out)\s+(?:of\s+)?(?:an? |the )?(.+)$/.exec(t))) return { do: 'breakdown', what: m[1]!.trim() };

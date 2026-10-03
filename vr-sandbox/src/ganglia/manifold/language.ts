@@ -107,6 +107,8 @@ export interface Manifold {
   source: Source;
   /** A member of this manifold for a contract, parameterised by its scaling laws, or why none. */
   member?(c: Contract, env: Environment): Member | { refused: string; law?: string };
+  /** Its characteristic scales and the dimensionless groups that bound it, when known (see ganglia/scale). */
+  characteristic?: { length?: number; time?: number; energy?: number; frequency?: number; informationRate?: number; propagationTime?: number; groups?: string[]; regimes?: string[] };
 }
 
 export const WH = 3600;

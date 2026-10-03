@@ -48,6 +48,7 @@ import { resolveKind, resolveMaterial } from '../forge/catalog';
 import { getMaterial } from '../data/materials';
 import { engineer, engineeredReport, instantiate, type Engineered } from '../ganglia/manifold';
 import { answerTraversal } from './traverse';
+import { answerScale } from './scaleTalk';
 import { substrateCensus } from '../ganglia';
 import { anatomyOf, ARCHETYPES, archetypeByWord, asWhole, attempt, blockName, blocksByArchetype, breakdown, byMedium, CATEGORIES, census, challengeById, CHALLENGES, conceive, explore, FRONTIER, frontierById, frontierCensus, frontierReport, scaleCheck, explain, grow, lawById, nameOf, PRINCIPLES, principleName, recall, report, sensitivity, showWork, solve, workflowById } from '../ganglia';
 import type { WorkflowResult } from '../ganglia/types';
@@ -289,6 +290,7 @@ export class Ego {
         return `I know ${c.laws} laws, ${c.processes} ways of making things, ${c.parts} parts you can buy, ${c.materials} materials, ${c.joints} kinds of joint, ${c.shapes} shapes of stock, ${c.machines} machine${c.machines === 1 ? '' : 's'} broken down, ${c.blocks} kinds of building block, ${c.principles} principles of why things are done as they are, and ${c.workflows} ways of working a design out, each with where it comes from. Under all of it is a substrate of ${sc.entities} things joined by ${sc.relations} arrows, ${sc.stubs} of them questions I have not answered yet. Ask me about any of them, ask me why, ask me every way to store energy or what makes the machines that make a motor, or ask me to size something: a drive, a wire, a battery, a shaft, a bearing.`;
       }
       case 'traverse': return answerTraversal(i);
+      case 'scaling': return answerScale(i);
       case 'work': {
         const w = this.lastWorked;
         if (!w) return 'I haven\'t worked anything out yet. Ask me to size something.';

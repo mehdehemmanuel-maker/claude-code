@@ -7,7 +7,7 @@
 // bins it is put in. docs/SUBSTRATE.md.
 import type { Source } from '../types';
 
-export const KINDS = ['thing', 'material', 'property', 'geometry', 'function', 'behavior', 'transformation', 'mechanism', 'component', 'subsystem', 'system', 'constructor', 'process', 'biological', 'organism', 'chemical', 'phenomenon', 'law', 'role', 'standard', 'failure', 'interface', 'manifold', 'generator', 'parameter', 'computation', 'signal', 'environment', 'circuit', 'architecture'] as const;
+export const KINDS = ['thing', 'material', 'property', 'geometry', 'function', 'behavior', 'transformation', 'mechanism', 'component', 'subsystem', 'system', 'constructor', 'process', 'biological', 'organism', 'chemical', 'phenomenon', 'law', 'role', 'standard', 'failure', 'interface', 'manifold', 'generator', 'parameter', 'computation', 'signal', 'environment', 'circuit', 'architecture', 'scale', 'observer', 'hypothesis'] as const;
 export type Kind = (typeof KINDS)[number];
 
 /**
@@ -40,6 +40,12 @@ export const RELATIONS = {
   'in-view': { asks: 'in which decomposition does it take part', inverse: 'views' },
   'measured-by': { asks: 'what observable shows it', inverse: 'measures' },
   'state': { asks: 'what state does it hold', inverse: 'state-of' },
+  /** A description at one scale becomes the next by averaging over what is faster and smaller; the reverse is refinement. */
+  'coarse-grains-to': { inverse: 'refines-to', asks: 'what does it become under coarse-graining?' },
+  /** A quantity, law or pattern that keeps its form under a scale transformation. */
+  'invariant-under': { inverse: 'preserves', asks: 'what transformation leaves it the same?' },
+  /** The observer whose projection this description is. */
+  'observed-by': { inverse: 'observes', asks: 'which observer gets this picture?' },
 } as const;
 export type RelationKind = keyof typeof RELATIONS;
 export type Inverse = (typeof RELATIONS)[RelationKind]['inverse'];

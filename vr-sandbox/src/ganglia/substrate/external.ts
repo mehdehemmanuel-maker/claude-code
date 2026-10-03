@@ -72,8 +72,9 @@ export function recordToDiscovery(c: Connector, e: Entity, r: ExternalRecord, s:
       const kinds = !flipped && NAMED_AS[kind] ? [NAMED_AS[kind]!] : (Object.entries(KIND_BY_VIA).find(([w]) => l.via.includes(w))?.[1] ?? (kind === 'is-a' ? [...e.kinds] : []));
       target = { id, name: l.label, names: [l.label], kinds: kinds as Kind[], domains: [e.domains[0] ?? 'unplaced'], says: l.description ? `${l.description[0]!.toUpperCase()}${l.description.slice(1)}. (${c.name})` : `Named by ${e.id} (${l.kind}, ${c.name} ${l.via}); not yet described.`, source: l.description ? src : { stub: `named by ${e.id} through ${c.name}` }, coverage: { depth: l.description ? 1 : 0, confidence: l.description ? confidenceOf(prov) : 0.2, sourceKind: l.description ? sourceKindOf(prov) : 'stub', expanded: [], unknowns: l.description ? [] : ['not yet described'] }, keys: { [c.name.toLowerCase()]: l.key } };
       entities.push(target);
-    } else if (!target.keys?.[c.name.toLowerCase()]) entities.push({ ...target, keys: { ...(target.keys ?? {}), [c.name.toLowerCase()]: l.key } });
-    if (target.id === e.id) continue;
+    }
+    if (target.id === e.id) continue; // the source names the thing itself (an alias): no arrow, no second key
+    if (!entities.includes(target) && !target.keys?.[c.name.toLowerCase()]) entities.push({ ...target, keys: { ...(target.keys ?? {}), [c.name.toLowerCase()]: l.key } });
     relations.push(flipped ? { from: target.id, kind, to: e.id, says: `${c.name}: ${l.via}`, source: prov, confidence: confidenceOf(prov) } : { from: e.id, kind, to: target.id, says: `${c.name}: ${l.via}`, source: prov, confidence: confidenceOf(prov) });
   }
   if (!r.links.length && !r.quantities.length) unknowns.push({ id: e.id, facet: 'components', why: `${c.name} knows ${r.key} but states nothing the index reads` });
