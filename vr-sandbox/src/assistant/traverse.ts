@@ -456,8 +456,21 @@ export function answerTraversal(i: Traverse): string {
     if (!laws.length) return `No law of mine computes or bounds ${quantity}${c.unit ? ` in ${c.unit}` : ''}, so I cannot call it impossible: unknown. Impossible needs a certificate, and I have none.`;
     const headOf = (name: string) => name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, '').split(/\W+/).filter(Boolean).pop() ?? '';
     const inputs: Record<string, number> = {};
-    const unread: string[] = [], wrongUnit: string[] = [];
-    for (const part of c.given.split(/,|\band\b/).map((x) => x.trim()).filter(Boolean)) {
+    const unread: string[] = [], wrongUnit: string[] = [], placed: string[] = [];
+    const parts = c.given.split(/,|\band\b/).map((x) => x.trim()).filter(Boolean);
+    // givens said without a name ("between 300 K and 400 K"): placed on a law's inputs of that dimension, in the law's own order, when the counts match; said back so the placing can be corrected
+    const bare = parts.map((part) => /^(-?\d+(?:\.\d+)?(?:e-?\d+)?)\s*(\S+)$/.exec(part)).filter((m): m is RegExpExecArray => !!m);
+    if (bare.length && bare.length === parts.length) {
+      for (const law of laws) {
+        const dims = bare.map((m) => { try { return parseUnit(m[2]!); } catch { return null; } });
+        if (dims.some((x) => !x)) break;
+        const slots = law.inputs.filter((x) => { try { return sameDim(parseUnit(x.unit).dim as never, dims[0]!.dim as never); } catch { return false; } });
+        if (slots.length !== bare.length || !dims.every((x) => sameDim(x!.dim as never, dims[0]!.dim as never))) continue;
+        slots.forEach((inp, k) => { const said = dims[k]!, own = parseUnit(inp.unit); inputs[inp.sym] = (Number(bare[k]![1]) * said.scale + (said.offset ?? 0) - (own.offset ?? 0)) / own.scale; placed.push(`${bare[k]![1]} ${bare[k]![2]} as the ${inp.name}`); });
+        break;
+      }
+    }
+    for (const part of placed.length ? [] : parts) {
       const m = /^(?:an? |the )?(.+?)(?: of| at| =|:)? (-?\d+(?:\.\d+)?(?:e-?\d+)?)\s*(\S*)$/.exec(part);
       if (!m) { unread.push(part); continue; }
       const name = m[1]!.toLowerCase(), v = Number(m[2]), u = m[3] ?? '';
@@ -475,7 +488,7 @@ export function answerTraversal(i: Traverse): string {
       }
       if (!hit) unread.push(part);
     }
-    const notes = [...(unread.length ? [`I could not place ${unread.join('; ')} on any input of ${laws.map((l) => l.name).join(', ')}`] : []), ...(wrongUnit.length ? [`a unit does not fit: ${wrongUnit.join('; ')}`] : [])];
+    const notes = [...(placed.length ? [`I took ${placed.join(' and ')}`] : []), ...(unread.length ? [`I could not place ${unread.join('; ')} on any input of ${laws.map((l) => l.name).join(', ')}`] : []), ...(wrongUnit.length ? [`a unit does not fit: ${wrongUnit.join('; ')}`] : [])];
     const claim: Claim = { quantity, value: c.value, unit, inputs };
     const th = theory(claim);
     const note = notes.length ? ` (${notes.join('; ')})` : '';

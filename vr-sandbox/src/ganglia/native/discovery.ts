@@ -22,7 +22,7 @@
 // boundary, from the vector.
 
 import type { Law } from '../types';
-import { LAWS, use, withConstants } from '../laws';
+import { LAWS, isOptional, use, withConstants } from '../laws';
 import { dimensionOf, parseUnit, sameDim, type Dim } from '../units';
 import { OBSERVATIONS, type Observation } from '../scale/observations';
 import { d, e, q, r, type E, type Mode, type R, type Structure } from './core';
@@ -73,8 +73,8 @@ export function reaching(c: Claim): { laws: Law[]; dim: Dim | null } {
   return { laws, dim };
 }
 
-/** Whether every input a law needs is given. */
-export const applicable = (law: Law, inputs: Record<string, number>): boolean => law.inputs.every((x) => inputs[x.sym] !== undefined);
+/** Whether every input a law needs is given (an input the law fills itself when absent is not needed). */
+export const applicable = (law: Law, inputs: Record<string, number>): boolean => law.inputs.every((x) => inputs[x.sym] !== undefined || isOptional(law.id, x.sym));
 
 const quantityOf = (law: Law, value: number, en: string): R => r('quantity', [d(law.output.sym, { en }), q(value, law.output.unit)], {});
 
@@ -93,7 +93,7 @@ export function certificate(c: Claim): Certificate {
   if (!laws.length) return { impossible: false, mode: 'unknown', why: `no law of mine computes or bounds ${c.quantity}; no certificate, so not impossible: unknown` };
   const ready = laws.filter((l) => applicable(l, c.inputs));
   if (!ready.length) {
-    const missing = [...new Set(laws.flatMap((l) => l.inputs.filter((x) => c.inputs[x.sym] === undefined).map((x) => `${x.name} (${x.sym})`)))];
+    const missing = [...new Set(laws.flatMap((l) => l.inputs.filter((x) => c.inputs[x.sym] === undefined && !isOptional(l.id, x.sym)).map((x) => `${x.name} (${x.sym})`)))];
     return { impossible: false, mode: 'unknown', why: `${laws.map((l) => l.name).join(', ')} reach${laws.length === 1 ? 'es' : ''} ${c.quantity} but need${laws.length === 1 ? 's' : ''} ${missing.join(', ')}; no certificate, so not impossible: unknown` };
   }
   const claimed = q(c.value, c.unit).v;

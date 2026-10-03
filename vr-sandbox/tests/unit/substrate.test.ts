@@ -1133,6 +1133,16 @@ describe('Ego says impossible only with a certificate, and holds her anomalies (
     expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'harvest mass', claim: { value: 5, unit: 'kg', given: '' } })).toBe('No law of mine computes or bounds harvest mass in kg, so I cannot call it impossible: unknown. Impossible needs a certificate, and I have none.');
   });
 
+  it('an efficiency in per cent, givens without names placed by dimension in the law\'s order and said back, kilohertz, and an input the law fills itself', () => {
+    expect(interpret('can a heat engine be 60% efficient between 300 K and 400 K')).toEqual({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 60, unit: '%', given: '300 K and 400 K' } });
+    const pc = answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 60, unit: '%', given: '300 K and 400 K' } });
+    expect(pc).toMatch(/^No, not under those assumptions: Carnot efficiency \(η = 1 − T_c \/ T_h\) at these inputs gives at most 0\.25 -; the claim is 0\.6 -; .*\(I took 300 K as the cold side and 400 K as the hot side\) In Nex: contradict\(/);
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 20, unit: '%', given: '400 K and 300 K' } })).toBe('Carnot efficiency does not hold at these inputs: no work flows from cold to hot: the law does not hold there, so I cannot say impossible: outside its domain. (I took 400 K as the cold side and 300 K as the hot side)');
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'sampling rate', claim: { value: 10, unit: 'kHz', given: 'a highest frequency of 8 kHz' } })).toMatch(/^No, not under those assumptions: Nyquist-Shannon sampling theorem \(f_s ≥ 2 f_max\) at these inputs gives at least 16000 Hz; the claim is 10000 Hz; so assumptions \+ law \+ claim ⇒ ⊥\. Assumptions: .*highest frequency in the signal = 8000\./);
+    // the life exponent is the law's own default when not given: entailed, not "needs p"
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'rating life', claim: { value: 1e9, unit: 'rev', given: 'a dynamic load rating of 20 kN and an equivalent dynamic load of 2 kN' } })).toBe('Yes: Bearing rating life (L10) gives 1000000000 rev at these inputs and the claim is 1000000000 rev, within the claim taken at its word.');
+  });
+
   it('"what anomalies do you hold" is the register: counts by status, the explained one kept with its explanation and the skeptic\'s computed candidate', () => {
     expect(interpret('what anomalies do you hold')).toEqual({ do: 'traverse', query: 'anomalies' });
     expect(interpret('is anything unexplained')).toEqual({ do: 'traverse', query: 'anomalies' });

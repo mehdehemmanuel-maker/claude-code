@@ -32,7 +32,7 @@ export const UNITS: Record<string, UnitDef> = {
   V: u(V), kV: u(V, 1e3), mV: u(V, 1e-3),
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
   Ah: u([0, 0, 1, 1, 0], 3600), mAh: u([0, 0, 1, 1, 0], 3.6),
-  Hz: u([0, 0, -1, 0, 0]), rpm: u([0, 0, -1, 0, 0], (2 * Math.PI) / 60),
+  Hz: u([0, 0, -1, 0, 0]), kHz: u([0, 0, -1, 0, 0], 1e3), MHz: u([0, 0, -1, 0, 0], 1e6), GHz: u([0, 0, -1, 0, 0], 1e9), rpm: u([0, 0, -1, 0, 0], (2 * Math.PI) / 60),
   T: u([1, 0, -2, -1, 0]), mT: u([1, 0, -2, -1, 0], 1e-3), F: u([-1, -2, 4, 2, 0]), uF: u([-1, -2, 4, 2, 0], 1e-6), C: u([0, 0, 1, 1, 0]), S: u([-1, -2, 3, 2, 0]), H: u([1, 2, -2, -2, 0]), mH: u([1, 2, -2, -2, 0], 1e-3),
 };
 
@@ -91,7 +91,7 @@ const SPOKEN: [RegExp, string][] = [
   [/^(a|amps?|amperes?)$/i, 'A'], [/^(ma|milliamps?)$/i, 'mA'], [/^(v|volts?)$/i, 'V'], [/^(w|watts?)$/i, 'W'], [/^(kw|kilowatts?)$/i, 'kW'], [/^(hp|horsepower)$/i, 'hp'],
   [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
-  [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'],
+  [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],
   [/^(°c|degc|celsius|degrees? c)$/i, 'degC'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
 

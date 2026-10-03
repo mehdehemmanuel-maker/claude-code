@@ -143,6 +143,9 @@ function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traver
     const a = new RegExp(`^(?:is|would|could) (?:an? |the )?(.+?) of ${NUM}\\s*${UNIT}\\s*${KEY}${GIVEN}`, 'i').exec(raw);
     const b = a ? null : new RegExp(`^can (?:an? |the )?(.+?) (?:be|reach|get to|hit|make) ${NUM}\\s*${UNIT}${GIVEN}`, 'i').exec(raw);
     const c = a || b ? null : new RegExp(`^(?:is|would|could) ${NUM}\\s*${UNIT}\\s*of (?:an? |the )?(.+?) ${KEY}${GIVEN}`, 'i').exec(raw);
+    // "can a heat engine be 60% efficient between 300 K and 400 K": an efficiency in per cent
+    const pc = a || b || c ? null : new RegExp(`^(?:can|could|would|is|are) (?:an? |the )?(.+?) (?:be )?${NUM}\\s*%\\s*efficient${GIVEN}`, 'i').exec(raw);
+    if (pc) return { do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: Number(pc[2]), unit: '%', given: (pc[3] ?? '').trim() } };
     const m2 = a ?? b;
     if (m2) return { do: 'traverse', query: 'possible', of: strip(m2[1]!.toLowerCase()), claim: { value: Number(m2[2]), unit: m2[3] ?? '', given: (m2[4] ?? '').trim() } };
     if (c) return { do: 'traverse', query: 'possible', of: strip(c[3]!.toLowerCase()), claim: { value: Number(c[1]), unit: c[2] ?? '', given: (c[4] ?? '').trim() } };

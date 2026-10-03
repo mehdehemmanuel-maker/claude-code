@@ -927,6 +927,8 @@ export function withConstants(law: Law, inputs: Record<string, number>): Record<
 
 /** Inputs a law may be run without (they have a sensible default inside it). */
 const OPTIONAL: Record<string, string[]> = { 'buckling.euler': ['K'], 'bearing.life.l10': ['p'] };
+/** Whether a law fills an input itself when it is not given (the life exponent of a ball bearing, the end factor of a column). */
+export const isOptional = (lawId: string, sym: string): boolean => (OPTIONAL[lawId] ?? []).includes(sym);
 
 /**
  * Run a law by id: its output, and a caution when the inputs leave the range it holds over. Throws on an unknown law or
