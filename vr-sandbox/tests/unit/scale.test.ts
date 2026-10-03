@@ -83,6 +83,31 @@ describe('dimensionless groups', () => {
   });
 });
 
+describe('derived similarities for heat and electromagnetism', () => {
+  it('a thermal similarity with temperature scaled as 1/λ² keeps every conduction and storage law and loses radiation', () => {
+    const th = similarityById('scale.thermal')!;
+    expect(exponentOfDim(th, parseUnit('W/m K').dim)).toBe(0); // conductivity consistent
+    expect(exponentOfDim(th, parseUnit('J/kg K').dim)).toBe(0); // specific heat consistent
+    expect(exponentOfDim(th, parseUnit('m^2/s').dim)).toBe(0); // diffusivity consistent
+    for (const id of ['conduction', 'heat.capacity', 'thermal.resistance.conduction', 'diffusion.time']) expect(classify(id, th).verdict, id).toMatch(/covariant|invariant/);
+    expect(classify('lumped.time-constant', th).held.map((h) => h.sym)).toContain('h'); // a surface coefficient held by the environment: the lumped time constant does not follow
+    expect(classify('radiation', th).verdict).toBe('scale-dependent');
+    expect(classify('radiation', th).setsScale.map((c) => c.sym)).toEqual(['sigma']);
+    for (const id of th.preserves) expect(groupUnder(groupById(id)!, th).invariant, id).toBe(true);
+  });
+
+  it('the diffusive similarity is also the electromagnetic one: μ₀ and resistivity held, current unscaled, L/R as λ²', () => {
+    const r = similarityById('scale.reynolds')!;
+    expect(exponentOfDim(r, parseUnit('N/A^2').dim)).toBe(0); // μ₀ consistent
+    expect(exponentOfDim(r, parseUnit('ohm m').dim)).toBe(0); // resistivity consistent
+    expect(exponentOfDim(r, parseUnit('ohm').dim)).toBe(-1); // R ∝ 1/λ
+    expect(exponentOfDim(r, parseUnit('A').dim)).toBe(0);
+    expect(groupUnder(groupById('Rm')!, r).invariant).toBe(true);
+    expect(classify('wire.resistance', r).verdict).toMatch(/covariant|invariant/);
+    expect(classify('skin.depth', r).verdict).toMatch(/covariant|invariant/);
+  });
+});
+
 describe('covariance of the law book, derived from each law\'s own example', () => {
   it('every executable law is classified under every similarity, with the transformation that explains it', () => {
     const table = covarianceTable(10);

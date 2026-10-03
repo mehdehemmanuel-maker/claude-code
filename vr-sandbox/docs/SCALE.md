@@ -30,6 +30,7 @@ The similarities, each derived from what it holds (`transform.ts`):
 | froude | [3, 1, ½] | g = L T⁻² fixed ⇒ T ∝ √λ; V ∝ √λ, F ∝ λ³, σ ∝ λ; Re not preserved | theorem |
 | reynolds (diffusive) | [3, 1, 2] | ν, α, D fixed ⇒ T ∝ λ²; V ∝ 1/λ; gravity not preserved | theorem |
 | cauchy (elastic) | [3, 1, 1] | E, ρ fixed ⇒ c fixed ⇒ T ∝ λ; f ∝ 1/λ, σ ∝ λ⁰; g ∝ 1/λ (the centrifuge) | theorem |
+| thermal | [3, 1, 2, 0, −2] | α fixed ⇒ T ∝ λ²; c_p fixed ⇒ Θ ∝ λ⁻²; k then consistent; σT⁴ not | theorem |
 | allometric | [3, 1, ¾] | P ∝ M^¾ measured (Kleiber); WBE a model | empirical-law |
 | natural | [−1, 1, 1] | c and ħ fixed; G then scales as λ²: only λ = 1 keeps all three | theorem |
 
@@ -46,7 +47,7 @@ flywheel's specific energy is invariant everywhere.
 
 ## 4. Invariants: dimensionless groups
 
-`groups.ts` holds 19 groups (Re, Fr, Ma, St, We, Bo, Bi, Fo, Pr, Pe, Sc, Nu, Kn, Ca, De, He, Da, Ro, Gr), each a product
+`groups.ts` holds 20 groups (Re, Fr, Ma, St, We, Bo, Bi, Fo, Pr, Pe, Sc, Nu, Kn, Ca, De, He, Da, Ro, Rm, Gr), each a product
 of powers of quantities with a meaning and regime boundaries. `groupUnder(group, transform)` sums the exponents:
 invariant iff zero. **Derived, never declared**: Re goes as λ^1.5 under Froude with the same fluid; Fr as λ⁻³ under
 Reynolds; no transform keeps both. With nothing held, every group is invariant (Buckingham).
@@ -150,8 +151,10 @@ already falsified by c, ħ, G; the weak form stands as a theorem of dimensional 
 
 ## Still open
 
-- Current and temperature have exponent 0 in every similarity here: electrical and thermal similarity (and a Rayleigh
-  or Bénard scaling) need their own transformations, derived the same way.
+- The diffusive similarity is also the electromagnetic one (μ₀ and resistivity held give current ∝ λ⁰, R ∝ 1/λ,
+  L/R ∝ λ², Rm preserved: derived in its derivation string); the thermal similarity scales temperature as 1/λ² so
+  conduction and storage keep their form. A surface coefficient h held by the environment is not similar (Bi grows
+  with λ), and radiation never is. A Rayleigh or Bénard scaling is not written.
 - Characteristic scales are estimates on 60 entities; most of the substrate carries none, which the analogue search
   reports (`unplaced`).
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.

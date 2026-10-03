@@ -6,6 +6,7 @@ import { FACETS, NAMED_AS, confidenceOf, forwardOf, normalizeId, sourceKindOf, t
 import type { Substrate } from './substrate';
 import type { Expander } from './population';
 import type { Source } from '../types';
+import { toSI } from '../units';
 
 /** One statement an outside record makes about the thing: an arrow of the index to another thing of that source. */
 export interface ExternalLink { kind: RelationKind | InverseKind; key: string; label: string; description?: string; /** what the source calls the statement (its property) */ via: string }
@@ -36,6 +37,32 @@ export interface Connector {
 /** What a thing at the far end of an outside statement is, when nothing here describes it yet. */
 const KIND_BY_VIA: Record<string, Kind[]> = { material: ['material'], 'fabrication method': ['process', 'constructor'], 'has use': ['function'], role: ['role'], characteristic: ['property'], part: ['component'] };
 
+/** Units as a source spells them, to the symbols units.ts parses. Only what is listed converts; anything else is kept verbatim. */
+export const UNIT_WORDS: Record<string, string> = {
+  'kilogram per cubic metre': 'kg/m^3', 'kilogram per cubic meter': 'kg/m^3', 'gram per cubic centimetre': 'g/cm^3', 'gram per cubic centimeter': 'g/cm^3',
+  pascal: 'Pa', kilopascal: 'kPa', megapascal: 'MPa', gigapascal: 'GPa', bar: 'bar', kelvin: 'K', 'degree Celsius': 'degC',
+  metre: 'm', meter: 'm', millimetre: 'mm', millimeter: 'mm', centimetre: 'cm', centimeter: 'cm', kilometre: 'km', kilometer: 'km', inch: 'in', foot: 'ft',
+  second: 's', millisecond: 'ms', minute: 'min', hour: 'h', hertz: 'Hz', 'revolutions per minute': 'rpm',
+  kilogram: 'kg', gram: 'g', tonne: 't', newton: 'N', kilonewton: 'kN', joule: 'J', kilojoule: 'kJ', 'watt-hour': 'Wh', 'kilowatt-hour': 'kWh', watt: 'W', kilowatt: 'kW',
+  volt: 'V', ampere: 'A', ohm: 'ohm', 'metre per second': 'm/s', 'meter per second': 'm/s', 'watt per metre-kelvin': 'W/m K', 'watt per metre kelvin': 'W/m K', 'joule per kilogram-kelvin': 'J/kg K', 'joule per kilogram kelvin': 'J/kg K', 'siemens per metre': 'S/m', 'ohm metre': 'ohm m', 'square metre': 'm^2', 'cubic metre': 'm^3',
+};
+
+/** A source's properties that are quantities of the substrate's own symbols, with the SI unit the symbol is kept in (Wikidata property ids). */
+export const PROPERTY_SYMBOLS: Record<string, { sym: string; unit: string }> = { P2054: { sym: 'rho', unit: 'kg/m^3' }, P2101: { sym: 'T_melt', unit: 'K' }, P2102: { sym: 'T_boil', unit: 'K' }, P2068: { sym: 'k', unit: 'W/m K' } };
+
+/** A quantity as a parameter: in the substrate's symbol and SI unit when both the property and the unit are known, else as the source gave it. */
+export function asParameter(q: ExternalQuantity, of: Provenance): NonNullable<Entity['params']>[number] {
+  const unit = q.unit ? UNIT_WORDS[q.unit] ?? UNIT_WORDS[q.unit.toLowerCase()] : undefined;
+  const known = PROPERTY_SYMBOLS[q.property];
+  if (known && unit) {
+    try {
+      const low = toSI(q.amount, unit), high = q.high !== undefined ? toSI(q.high, unit) : undefined;
+      return { sym: known.sym, name: q.label, unit: known.unit, low, high, of: { derived: `${q.amount} ${q.unit} converted to ${known.unit}; ${'cite' in of ? of.cite : 'outside'}` } };
+    } catch { /* an unknown unit stays as the source gave it */ }
+  }
+  return { sym: q.property, name: q.label, unit: q.unit, low: q.amount, high: q.high, of };
+}
+
 export function provenanceOf(c: Connector, r: ExternalRecord): Source {
   return { cite: `${c.name} ${r.key} "${r.label}", retrieved ${r.retrieved}`, url: r.url, kind: 'database' };
 }
@@ -56,7 +83,7 @@ export function recordToDiscovery(c: Connector, e: Entity, r: ExternalRecord, s:
     coverage: { depth: e.coverage.depth < 1 ? 1 : e.coverage.depth, confidence: Math.max(e.coverage.confidence, confidenceOf(prov)), sourceKind: e.coverage.sourceKind === 'stub' ? sourceKindOf(prov) : e.coverage.sourceKind, expanded: [...e.coverage.expanded], unknowns: e.coverage.unknowns.filter((u) => u !== 'not yet described') },
     keys: { ...(e.keys ?? {}), [keyOf(c.name.toLowerCase())]: r.key },
   };
-  if (r.quantities.length) own.params = [...(e.params ?? []), ...r.quantities.filter((q) => !e.params?.some((p) => p.sym === q.property)).map((q) => ({ sym: q.property, name: q.label, unit: q.unit, low: q.amount, high: q.high, of: prov }))];
+  if (r.quantities.length) own.params = [...(e.params ?? []), ...r.quantities.map((q) => asParameter(q, prov)).filter((q) => !e.params?.some((p) => p.sym === q.sym))];
   const entities: Entity[] = [own];
   const relations: Discovery['relations'] = [];
   const unknowns: Discovery['unknowns'] = [];

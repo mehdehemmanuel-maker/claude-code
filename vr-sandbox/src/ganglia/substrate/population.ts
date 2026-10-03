@@ -41,6 +41,8 @@ export class Queue {
     this.done.add(key);
     return w;
   }
+  /** Ask a question again although it was asked before: something it depends on has changed. */
+  again(w: WorkItem): boolean { this.done.delete(`${w.id}|${w.facet}|${w.mode}`); return this.push(w); }
   get size(): number { return this.items.length; }
   domains(): string[] { return [...new Set(this.items.map((w) => w.domain))]; }
   peek(n = 10): WorkItem[] { return [...this.items].sort((a, b) => b.priority - a.priority).slice(0, n); }
@@ -98,6 +100,9 @@ export function seedExpander(packs: Pack[]): Expander {
   };
 }
 
+/** The facet a new relation of a kind re-opens on the kind's members. */
+const FACET_OF_RELATION: Partial<Record<Relation['kind'], Facet>> = { 'produced-by': 'constructors', 'fails-by': 'failures', 'standardized-by': 'standards', 'connects-to': 'interfaces', 'made-of': 'materials', does: 'functions' };
+
 /**
  * Derivations over what is already known: rules whose provenance is the rule. A material's roles from its numbers;
  * analogues from a shared function across domains; failures from the laws a thing is governed by; the manufacturing
@@ -108,7 +113,7 @@ export function ruleExpander(): Expander {
   const r = (from: string, kind: Relation['kind'], to: string, why: string): Relation => ({ from, kind, to, source: rule(why), confidence: 0.6, says: why });
   return {
     name: 'rules',
-    facets: ['analogues', 'failures', 'manufacturing', 'constructors', 'functions', 'materials'],
+    facets: ['analogues', 'failures', 'manufacturing', 'constructors', 'functions', 'materials', 'standards', 'interfaces'],
     expand(e, facet, s) {
       const out: Discovery = { entities: [], relations: [], unknowns: [] };
       if (facet === 'analogues') {
@@ -131,7 +136,21 @@ export function ruleExpander(): Expander {
       }
       if (facet === 'constructors') {
         const makers = s.reach(e.id, 'produced-by');
-        if (!makers.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it: what produces it is an open question' });
+        // what makes the kind makes the member, until something more specific is known: a wood screw is made as screws are
+        if (!makers.length) for (const k of s.reach(e.id, 'is-a')) for (const pr of s.reach(k.id, 'produced-by')) out.relations.push(r(e.id, 'produced-by', pr.id, `inherits from ${k.id}: what makes the kind makes the member`));
+        if (!makers.length && !out.relations.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it, nor for what it is a kind of: what produces it is an open question' });
+      }
+      if (facet === 'failures' && !s.outOf(e.id, 'fails-by').length) {
+        for (const k of s.reach(e.id, 'is-a')) for (const f of s.reach(k.id, 'fails-by')) out.relations.push(r(e.id, 'fails-by', f.id, `inherits from ${k.id}: the kind's failures are the member's`));
+      }
+      if (facet === 'standards' && !s.outOf(e.id, 'standardized-by').length) {
+        for (const k of s.reach(e.id, 'is-a')) for (const st of s.reach(k.id, 'standardized-by')) out.relations.push(r(e.id, 'standardized-by', st.id, `inherits from ${k.id}: the kind's standard covers the member`));
+      }
+      if (facet === 'interfaces' && !s.outOf(e.id, 'connects-to').length) {
+        for (const k of s.reach(e.id, 'is-a')) for (const c of s.reach(k.id, 'connects-to')) if (c.id !== e.id) out.relations.push(r(e.id, 'connects-to', c.id, `inherits from ${k.id}: what the kind connects to, the member connects to`));
+      }
+      if (facet === 'materials' && !e.kinds.includes('material') && !s.outOf(e.id, 'made-of').length) {
+        for (const k of s.reach(e.id, 'is-a')) for (const m of s.reach(k.id, 'made-of')) out.relations.push(r(e.id, 'made-of', m.id, `inherits from ${k.id}: made of what the kind is made of, until its own material is known`));
       }
       if (facet === 'functions' && !s.outOf(e.id, 'does').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const fn of s.reach(k.id, 'does')) out.relations.push(r(e.id, 'does', fn.id, `inherits from ${k.id}`));
@@ -283,7 +302,12 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
         report.discoveredEntities += entities.length;
         report.discoveredRelations += relations.length;
         for (const n of entities) { const f: Facet[] = n.coverage.depth === 0 ? ['functions', 'components'] : ['components', 'materials', 'constructors']; for (const facet of f) if (q.push({ id: n.id, facet, mode: n.coverage.depth === 0 ? 'fast' : 'deep', priority: priority(s, n, facet), reason: `discovered by ${x.name} expanding ${w.id} (${w.facet})`, domain: n.domains[0] ?? 'unplaced' })) report.queued++; }
-        for (const r of relations) for (const end of [r.from, r.to]) { const n = s.get(end)!; if (n.coverage.depth === 0 && q.push({ id: n.id, facet: 'functions', mode: 'fast', priority: priority(s, n, 'functions'), reason: `named by a new relation from ${w.id}`, domain: n.domains[0] ?? 'unplaced' })) report.queued++; }
+        for (const r of relations) {
+          for (const end of [r.from, r.to]) { const n = s.get(end)!; if (n.coverage.depth === 0 && q.push({ id: n.id, facet: 'functions', mode: 'fast', priority: priority(s, n, 'functions'), reason: `named by a new relation from ${w.id}`, domain: n.domains[0] ?? 'unplaced' })) report.queued++; }
+          // a kind that learned something: its members are asked the same facet again, so what the kind has reaches them (recursion along is-a)
+          const facet = FACET_OF_RELATION[r.kind];
+          if (facet) for (const m of s.reach(r.from, 'generalizes')) if (q.again({ id: m.id, facet, mode: 'deep', priority: priority(s, m, facet) + 1, reason: `${r.from}, which it is a kind of, learned ${r.kind} ${r.to}`, domain: m.domains[0] ?? 'unplaced' })) report.queued++;
+        }
       }
       if (!e.coverage.expanded.includes(w.facet)) e.coverage.expanded.push(w.facet);
       e.coverage.lastExpanded = spent;

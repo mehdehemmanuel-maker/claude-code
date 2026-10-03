@@ -179,11 +179,14 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no
   English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded
   as an unknown).
-- **Numbers from outside keep the source's unit** (`kilogram per cubic metre`, `gram per cubic centimetre`) and the
-  property's symbol is the source's (`P2054`), so `materialsForRole` does not read them as `rho` yet; a unit
-  conversion into the substrate's symbols, through `ganglia/units`, is the next step.
-- **Rule expanders discover relations, not entities.** New entities come from packs and from the outside. The things
-  with no known constructor and the stubs are the frontier, in priority order.
+- **Numbers from outside** land in the substrate's own symbol and SI unit when both the property and the unit are in
+  the tables (`PROPERTY_SYMBOLS`: density, melting point, boiling point, thermal conductivity; `UNIT_WORDS`: about
+  sixty unit names), with the conversion in the parameter's provenance; anything else is kept as the source gave it.
+  Extending the two tables extends what feeds `materialsForRole`.
+- **Rules inherit along is-a** (constructors, failures, standards, interfaces, materials, functions) at confidence 0.6,
+  each relation saying what it inherits from; when a kind learns a relation, its members are asked that facet again,
+  so inheritance recurses. Rule expanders still discover relations, not entities: new entities come from packs and
+  from the outside. The things with no known constructor (nor a kind with one) and the stubs are the frontier.
 - **Lane fairness is by priority within a lane.** A lane of several domains serves the best question among them; the
   background service runs one lane over all domains, so it is pure priority.
 - **Lineage is one path.** `lineage()` follows the first unvisited constituent at each step; a full generative tree is

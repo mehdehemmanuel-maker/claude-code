@@ -64,7 +64,8 @@ describe('what comes from outside says where it came from', () => {
     expect(own.id).toBe('bearing.ball');
     expect(own.keys).toEqual({ memory: 'M1' });
     expect(own.names).toContain('ball-bearing');
-    expect(own.params?.[0]).toMatchObject({ sym: 'P2054', name: 'density', low: 7850, unit: 'kilogram per cubic metre', of: { cite: 'Memory M1 "ball bearing", retrieved 2026-10-03', url: 'memory://M1', kind: 'database' } });
+    expect(own.params?.[0]).toMatchObject({ sym: 'rho', name: 'density', unit: 'kg/m^3', of: { derived: '7850 kilogram per cubic metre converted to kg/m^3; Memory M1 "ball bearing", retrieved 2026-10-03' } });
+    expect(own.params?.[0]?.low).toBeCloseTo(7850, 6);
     expect(own.says).toBe('A ball bearing, described enough for the test.'); // a described thing keeps its own sentence
     // every arrow carries the source, its key and the date; a backwards statement is the forward arrow with its ends swapped
     for (const r of d.relations) expect(r.source).toEqual({ cite: 'Memory M1 "ball bearing", retrieved 2026-10-03', url: 'memory://M1', kind: 'database' });
@@ -87,6 +88,29 @@ describe('what comes from outside says where it came from', () => {
     expect(s.dangling()).toEqual([]);
     expect(s.reach('bearing.ball', 'made-of').map((e) => e.id)).toEqual(['bearing-steel']);
     expect(s.reach('bearing.ball', 'part-of').map((e) => e.id)).toEqual(['wheel-hub']);
+  });
+
+  it('a known property in a known unit lands in the substrate\'s own symbol and SI unit, with the conversion in its provenance; the rest stays as the source gave it', () => {
+    const s = new Substrate();
+    s.add(described('material.x', 'x', ['material'], ['x']));
+    const c = memory({});
+    const rec: ExternalRecord = { ...BEARING, key: 'M20', label: 'x', links: [], quantities: [
+      { property: 'P2054', label: 'density', amount: 7.85, unit: 'gram per cubic centimetre' },
+      { property: 'P2101', label: 'melting point', amount: 1500, unit: 'degree Celsius' },
+      { property: 'P2068', label: 'thermal conductivity', amount: 50, unit: 'watt per metre-kelvin' },
+      { property: 'P9999', label: 'something else', amount: 3, unit: 'furlong' },
+      { property: 'P2054', label: 'density', amount: 1, unit: 'slug per cubic furlong' },
+    ] };
+    const d = recordToDiscovery(c, s.get('material.x')!, rec, s);
+    const ps = d.entities[0]!.params!;
+    expect(ps.find((p) => p.sym === 'rho')).toMatchObject({ unit: 'kg/m^3', of: { derived: expect.stringContaining('7.85 gram per cubic centimetre converted to kg/m^3') } });
+    expect(ps.find((p) => p.sym === 'rho')!.low).toBeCloseTo(7850, 6);
+    expect(ps.find((p) => p.sym === 'T_melt')!.unit).toBe('K');
+    expect(ps.find((p) => p.sym === 'T_melt')!.low).toBeCloseTo(1773.15, 6);
+    expect(ps.find((p) => p.sym === 'k')).toMatchObject({ unit: 'W/m K', low: 50 });
+    expect(ps.find((p) => p.sym === 'P9999')).toMatchObject({ unit: 'furlong', low: 3 });
+    expect(ps.filter((p) => p.sym === 'rho').length).toBe(1); // the unconvertible density is kept under its property id, not as a second rho
+    expect(ps.find((p) => p.sym === 'P2054')).toMatchObject({ unit: 'slug per cubic furlong' });
   });
 
   it('refuses from outside what it refuses from anywhere: a thing governed by a non-law, a thing made of a non-substance', () => {
@@ -137,7 +161,7 @@ describe('what comes from outside says where it came from', () => {
     expect(p.journal.length).toBeGreaterThanOrEqual(1);
     expect(p.journal[0]).toMatchObject({ by: 'external:Memory', id: 'bearing.ball' });
     expect(p.substrate.get('bearing.ball')!.keys).toEqual({ memory: 'M1' });
-    expect(p.substrate.get('bearing.ball')!.params?.some((q) => q.sym === 'P2054')).toBe(true);
+    expect(p.substrate.get('bearing.ball')!.params?.some((q) => q.sym === 'rho')).toBe(true);
     // the budget binds when the clock does not
     clock = 0;
     const p2 = new Population({ storage: null, connector: null, sliceMs: 1e9, budget: 5, now: () => clock, schedule: () => undefined });
@@ -241,7 +265,7 @@ describe('Wikidata as a connector', () => {
     const e = s.add(described('bearing.ball', 'ball bearing', ['component'], ['ball bearing']));
     const d = recordToDiscovery(wikidata({ fetch: undefined }), e, r, s);
     expect(d.entities[0]!.keys).toEqual({ wikidata: 'Q0' });
-    expect(d.entities[0]!.params?.[0]?.of).toEqual({ cite: 'Wikidata Q0 "ball bearing", retrieved 2026-10-03', url: 'https://www.wikidata.org/wiki/Q0', kind: 'database' });
+    expect(d.entities[0]!.params?.[0]).toMatchObject({ sym: 'rho', unit: 'kg/m^3', low: 7850, high: 7900, of: { derived: '7850 kilogram per cubic metre converted to kg/m^3; Wikidata Q0 "ball bearing", retrieved 2026-10-03' } });
   });
 
   it('asks the API one request at a time with CORS allowed, finds by exact label or alias only, and counts what happened', async () => {

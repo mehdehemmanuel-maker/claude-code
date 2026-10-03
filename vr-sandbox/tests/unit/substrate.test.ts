@@ -224,6 +224,22 @@ describe('population: a queue that never needs to be finished', () => {
     for (const e of expanded) expect(e.coverage.lastExpanded, e.id).toBeGreaterThan(0);
   });
 
+  it('what a kind has, its members inherit by rule at lower confidence, said as such: coverage rises and the unknowns fall', async () => {
+    const s2 = build().substrate;
+    const before = { relations: s2.relations.length, unknownConstructors: [...s2.entities.values()].filter((e) => e.kinds.includes('component') && !s2.outOf(e.id, 'produced-by').length && s2.reach(e.id, 'is-a').some((k) => s2.outOf(k.id, 'produced-by').length)).length };
+    expect(before.unknownConstructors).toBeGreaterThan(10);
+    const q = new Queue();
+    for (const e of s2.entities.values()) if (e.kinds.includes('component') && !s2.outOf(e.id, 'produced-by').length) q.push({ id: e.id, facet: 'constructors', mode: 'deep', priority: 1, reason: 'test', domain: e.domains[0] ?? 'unplaced' });
+    const r = await populate(s2, q, { expanders: [ruleExpander()], budget: 5000, workers: 1 });
+    expect(r.discoveredRelations).toBeGreaterThan(before.unknownConstructors / 2);
+    const after = [...s2.entities.values()].filter((e) => e.kinds.includes('component') && !s2.outOf(e.id, 'produced-by').length && s2.reach(e.id, 'is-a').some((k) => s2.outOf(k.id, 'produced-by').length)).length;
+    expect(after).toBe(0);
+    const inherited = s2.relations.filter((x) => x.kind === 'produced-by' && 'derived' in x.source && /inherits from/.test(x.says ?? ''));
+    expect(inherited.length).toBeGreaterThan(0);
+    for (const x of inherited) expect(x.confidence).toBeLessThan(0.7);
+    expect(s2.dangling()).toEqual([]);
+  });
+
   it('ingest refuses what the index cannot mean, and stubs what it names', () => {
     const s2 = new Substrate();
     const e = (id: string, kinds: Entity['kinds']): Entity => ({ id, name: id, names: [], kinds, domains: ['test'], says: 'A thing of the test, described enough.', source: { estimate: 'test' }, coverage: { depth: 1, confidence: 0.5, sourceKind: 'estimate', expanded: [], unknowns: [] } });
