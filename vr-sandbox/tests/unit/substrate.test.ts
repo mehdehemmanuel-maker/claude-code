@@ -1074,3 +1074,16 @@ describe('Ego says the form of a law and the laws that share it across theories'
     expect(answerTraversal({ do: 'traverse', query: 'form', of: 'carnot' })).toMatch(/^Carnot efficiency \(η = 1 − T_c \/ T_h\) has no form I can take/);
   });
 });
+
+describe('Ego on what causes a thing: its laws speak when no arrow does, and one word for two things is told apart by kind', () => {
+  it('"what causes brush wear" is answered from the laws that govern it; "what causes fatigue" tells the phenomenon from the failure; "what are the kinds of motor" parses', () => {
+    // before (3 October, 16:32 UTC): "I know no mechanism that causes brush wear"; "fatigue contributes to (raises) fatigue"; "what are the kinds of motor" was a recall
+    const brush = answerTraversal({ do: 'traverse', query: 'cause', of: 'brush wear' });
+    expect(brush).toMatch(/^I know no arrow that causes brush wear: none of mine runs into it\. Its laws say, derived at their worked examples: by Coulomb friction \(F ≤ μ N\): friction coefficient \(mu\) raises it, normal force \(N\) raises it; by Joule heating \(P = I² R\): current \(I\) raises it, resistance \(R\) raises it\. Two things rising together/);
+    const fatigue = answerTraversal({ do: 'traverse', query: 'cause', of: 'fatigue' });
+    expect(fatigue).toMatch(/fatigue \(the \w+\) contributes to \(raises\) fatigue \(the \w+\)/);
+    expect(interpret('what are the kinds of motor')).toEqual({ do: 'traverse', query: 'kinds', of: 'motor' });
+    expect(interpret('what are the standards for a bearing')).toMatchObject({ do: 'traverse', query: 'standards', of: 'bearing' });
+    expect(interpret('what is the lineage of a transistor')).toMatchObject({ do: 'traverse', query: 'lineage', of: 'transistor' });
+  });
+});

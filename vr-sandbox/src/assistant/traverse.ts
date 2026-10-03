@@ -327,10 +327,15 @@ export function answerTraversal(i: Traverse): string {
     const influences = (id: string): R[] => [...s.outOf(id, 'enables'), ...s.outOf(id, 'prevents'), ...s.into(id, 'requires'), ...s.into(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[0]?.k === 'D' && x.args[0].id === id);
     const intoOf = (id: string): R[] => [...s.into(id, 'enables'), ...s.into(id, 'prevents'), ...s.outOf(id, 'requires'), ...s.outOf(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[1]?.k === 'D' && x.args[1].id === id);
     if (!i.which) {
-      const ins = intoOf(a.id);
-      if (!ins.length) return `I know no mechanism that causes ${art(a)}: no arrow of mine runs into it. ${correlation}`;
+      // two things said by one word (fatigue the phenomenon, fatigue the failure) are told apart by their kinds when one influences the other
+      const kinded = (x: R): R => { const [p, q2] = x.args; if (p?.k === 'D' && q2?.k === 'D' && p.aliases?.en === q2.aliases?.en) { const kind = (id: string) => s.get(id)?.kinds[0] ?? 'thing'; return { ...x, args: [{ ...p, aliases: { ...p.aliases, en: `${p.aliases?.en} (the ${kind(p.id)})` } }, { ...q2, aliases: { ...q2.aliases, en: `${q2.aliases?.en} (the ${kind(q2.id)})` } }] }; } return x; };
+      const ins = intoOf(a.id).map(kinded);
+      // what its laws say: each input of a law that governs it, with the sign of the output in it at the worked example
+      const byLaw = s.outOf(a.id, 'governed-by').flatMap((rel) => { const law = LAWS.find((l) => l.id === rel.to); if (!law) return []; const ex = law.example.inputs; let y0: number; try { y0 = law.eval(ex); } catch { return []; } if (!Number.isFinite(y0) || !y0) return []; const parts = law.inputs.map((inp) => { const x0 = ex[inp.sym]; if (!x0) return ''; let y1: number; try { y1 = law.eval({ ...ex, [inp.sym]: x0 * 1.01 }); } catch { return ''; } if (!Number.isFinite(y1) || y1 === y0) return ''; return `${inp.name} (${inp.sym}) ${y1 > y0 ? 'raises' : 'lowers'} it`; }).filter(Boolean); return parts.length ? [`by ${law.name} (${law.formula}): ${parts.join(', ')}`] : []; });
+      const lawSaid = byLaw.length ? ` ${ins.length ? 'And its' : 'Its'} laws say, derived at their worked examples: ${byLaw.slice(0, 3).join('; ')}.` : '';
+      if (!ins.length) return `I know no arrow that causes ${art(a)}: none of mine runs into it.${lawSaid} ${correlation}`;
       const outs = ins.slice(0, 6).map((x) => render(x, 'en', 'engineer'));
-      return `${ins.length} influence${ins.length === 1 ? '' : 's'} on ${art(a)} that I know of: ${outs.map((o) => o.text).join(' ')}${ins.length > 6 ? ` And ${ins.length - 6} more.` : ''}`;
+      return `${ins.length} influence${ins.length === 1 ? '' : 's'} on ${art(a)} that I know of: ${outs.map((o) => o.text).join(' ')}${ins.length > 6 ? ` And ${ins.length - 6} more.` : ''}${lawSaid}`;
     }
     // "the failure of a bearing": the targets are the bearing's failure modes, and the bearing itself when the chain lowers it
     const failureOf = failureOfWhich;
