@@ -3,7 +3,7 @@
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
 import { alive, anomalies, askable, between, chain, clusterAnomalies, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, reaching, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
-import { LAWS } from '../ganglia/laws';
+import { LAWS, withConstants } from '../ganglia/laws';
 import { dimensionOf, parseUnit, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
 import type { Entity } from '../ganglia/substrate/model';
@@ -71,11 +71,11 @@ let grammar: { for: unknown; g: Grammar; said: string } | null = null;
  * and implicitly when both are inputs (the output held: the sign of db/da is minus the ratio of the two
  * sensitivities, as the book's inverse solve has it).
  */
-function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string }[] {
+function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string; necessity: 'sufficient' | 'necessary' | 'contributing' }[] {
   const s = substrate();
   const words = [...new Set([nameOf(a).toLowerCase(), a.id.split('.').pop()!.replace(/-/g, ' '), ...a.names.map((n) => n.toLowerCase())])].filter((w) => w.length >= 3);
   const names = (name: string): boolean => { const n = name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, ''); const head = n.split(/\W+/).filter(Boolean).pop() ?? ''; return words.some((w) => n === w || head === w || head === w.split(' ').pop()); };
-  type Out = { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string };
+  type Out = { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string; necessity: 'sufficient' | 'necessary' | 'contributing' };
   const out: Out[] = [];
   const bUnit = b.kinds.includes('quantity') ? b.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined;
   const same = (u1: string, u2: string): boolean => { try { return sameDim(dimensionOf(u1), dimensionOf(u2)); } catch { return false; } };
@@ -89,9 +89,18 @@ function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typ
         const x0 = ex[sym];
         if (!x0) return null;
         let y0: number, y1: number;
-        try { y0 = law.eval(ex); y1 = law.eval({ ...ex, [sym]: x0 * 1.01 }); } catch { return null; }
+        try { y0 = law.eval(withConstants(law, ex)); y1 = law.eval(withConstants(law, { ...ex, [sym]: x0 * 1.01 })); } catch { return null; }
         if (!Number.isFinite(y0) || !Number.isFinite(y1) || y0 === y1 || y0 === 0) return null;
         return { sign: y1 > y0 ? 1 : -1, rel: Math.abs((y1 - y0) / y0) / 0.01 };
+      };
+      // what the law itself says of an input's necessity: the only input is enough (with the constants); an input
+      // whose absence zeroes the output is needed; any other contributes (a term of a sum, a divisor)
+      const necessityOf = (sym: string): 'sufficient' | 'necessary' | 'contributing' => {
+        if (law.inputs.length === 1) return 'sufficient';
+        try {
+          const y0 = law.eval(withConstants(law, ex)), y = law.eval(withConstants(law, { ...ex, [sym]: 0 }));
+          return Number.isFinite(y) && Number.isFinite(y0) && y0 !== 0 && Math.abs(y) <= 1e-12 * Math.abs(y0) ? 'necessary' : 'contributing';
+        } catch { return 'contributing'; }
       };
       const cause = law.inputs.find((x) => names(x.name));
       const causeIsOutput = names(law.output.name);
@@ -99,21 +108,22 @@ function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typ
       const bAsOutput = !!bUnit && same(bUnit, law.output.unit);
       const bAsInput = bUnit ? law.inputs.find((x) => x !== cause && same(x.unit, bUnit)) : undefined;
       const of = id === b.id ? nameOf(b) : `${nameOf(b)} (${nameOf(s.get(id)!)})`;
-      const push = (sign: 1 | -1, elasticity: number, sym: string, input: string, effect: string, target: Structure, mech: string) => out.push({ s: r('influence', [d(a.id, { en: nameOf(a) }), target], { dir: 1, polarity: sign > 0 ? '+' : '-', necessity: 'contributing', mech, ev: { how: 'derived', src: [law.source.cite] }, dom: [d(`valid:${law.id}`, { en: law.valid })], mode: 'true' }), law, sym, input, effect, sign: sign > 0 ? '+' : '-', elasticity, of });
+      const push = (sign: 1 | -1, elasticity: number, sym: string, input: string, effect: string, target: Structure, mech: string, necessity: 'sufficient' | 'necessary' | 'contributing') => out.push({ s: r('influence', [d(a.id, { en: nameOf(a) }), target], { dir: 1, polarity: sign > 0 ? '+' : '-', necessity, mech, ev: { how: 'derived', src: [law.source.cite] }, dom: [d(`valid:${law.id}`, { en: law.valid })], mode: 'true' }), law, sym, input, effect, sign: sign > 0 ? '+' : '-', elasticity, of, necessity });
       if (cause && bUnit && bAsInput) {
         // both inputs: the output held, db/da = -(dy/da)/(dy/db)
         const sa = sens(cause.sym), sb = sens(bAsInput.sym);
-        if (sa && sb) push((-sa.sign * sb.sign) as 1 | -1, sa.rel / sb.rel, cause.sym, cause.name, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}/${bAsInput.sym}`);
+        if (sa && sb) push((-sa.sign * sb.sign) as 1 | -1, sa.rel / sb.rel, cause.sym, cause.name, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}/${bAsInput.sym}`, 'contributing');
       } else if (cause && bUnit && bAsOutput) {
         const sa = sens(cause.sym);
-        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} (${law.output.sym})`, d(b.id, { en: nameOf(b) }), law.id);
+        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} (${law.output.sym})`, d(b.id, { en: nameOf(b) }), law.id, necessityOf(cause.sym));
       } else if (cause && !bUnit) {
         const sa = sens(cause.sym);
-        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} of ${of}`, r('quantity', [d(id, { en: of }), d(`${law.id}:${law.output.sym}`, { en: `${law.output.name} (${law.output.unit})` })], {}), law.id);
+        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} of ${of}`, r('quantity', [d(id, { en: of }), d(`${law.id}:${law.output.sym}`, { en: `${law.output.name} (${law.output.unit})` })], {}), law.id, necessityOf(cause.sym));
       } else if (causeIsOutput && bUnit && bAsInput) {
         // the law read the other way: the inverse has the forward sign
         const sb = sens(bAsInput.sym);
-        if (sb) push(sb.sign, 1 / sb.rel, law.output.sym, `${law.output.name}, the law read the other way`, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}^-1`);
+        // a product's zero runs both ways: the output is needed for an input exactly when that input is needed for the output
+        if (sb) push(sb.sign, 1 / sb.rel, law.output.sym, `${law.output.name}, the law read the other way`, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}^-1`, necessityOf(bAsInput.sym));
       }
     }
   }
@@ -365,7 +375,7 @@ export function answerTraversal(i: Traverse): string {
       // gives the sign of its output in that input at the law's own worked example: derived, never a guess
       const byLaw = lawInfluences(a, b, modes);
       if (byLaw.length) {
-        const outs = byLaw.slice(0, 3).map((x) => `${render(x.s, 'en', 'engineer').text} That is ${x.law.name} (${x.law.formula}): ${x.input} (${x.sym}) ${x.sign === '-' ? 'lowers' : 'raises'} ${x.effect} by ${x.elasticity.toFixed(1)} % a percent at its worked example; derived, not measured here.`);
+        const outs = byLaw.slice(0, 3).map((x) => `${render(x.s, 'en', 'engineer').text} That is ${x.law.name} (${x.law.formula}): ${x.input} (${x.sym}) ${x.sign === '-' ? 'lowers' : 'raises'} ${x.effect} by ${x.elasticity.toFixed(1)} % a percent at its worked example${x.necessity === 'necessary' ? ', and without it there is none' : x.necessity === 'sufficient' ? ', and it alone sets it (with the constants)' : ''}; derived, not measured here.`);
         return `No arrow of mine runs from ${art(a)} to ${said}, but a law does: ${outs.join(' ')} In Nex: ${nex(byLaw[0]!.s)}`;
       }
       return `I know no mechanism by which ${art(a)} ${verb} ${said}: no arrow of mine runs from one to the other within three steps, and no law governing it has ${art(a)} as an input. ${correlation}`;
