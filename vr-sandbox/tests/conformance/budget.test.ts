@@ -40,23 +40,27 @@ async function dogs(n: number) {
 }
 
 it('a walking dog costs less than a set number of yardsticks a tick, and four cost about four times one, not more', async () => {
-  const ratios: number[] = [];
-  for (const n of [1, 4]) {
-    const r = await dogs(n);
-    const out: number[] = [];
-    for (let rep = 0; rep < 5; rep++) {
+  // both worlds alive at once and measured turn about, so whatever else the machine is doing falls on both alike, and
+  // the ratio is the median of the pairs measured in the same moment (on one CI run, 2026-10-03, the medians of two
+  // runs made one after the other read four dogs at 5.11 times one while the test files ran in parallel: a
+  // measurement of the runner, not of the solver; the least of the runs was tried and swings with one lucky rep of
+  // the small world, 7.25x then 2.73x, where the paired median read 3.31x then 3.73x)
+  const worlds = [await dogs(1), await dogs(4)];
+  const costs: number[][] = [[], []];
+  for (let rep = 0; rep < 7; rep++) {
+    for (const [k, r] of worlds.entries()) {
       const y = yardstick();
       const t = performance.now();
       for (let i = 0; i < 60; i++) r.world.step();
-      out.push((performance.now() - t) / 60 / y);
+      costs[k]!.push((performance.now() - t) / 60 / y);
     }
-    r.done();
-    ratios.push(median(out));
   }
-  const [one, four] = ratios as [number, number];
-  console.log(`tick budget: one dog ${one.toFixed(2)} yardsticks, four dogs ${four.toFixed(2)} (${(four / one).toFixed(2)}x one)`);
+  for (const r of worlds) r.done();
+  const one = median(costs[0]!), four = median(costs[1]!);
+  const paired = median(costs[1]!.map((c, i) => c / costs[0]![i]!));
+  console.log(`tick budget: one dog ${one.toFixed(2)} yardsticks, four dogs ${four.toFixed(2)}; four to one ${paired.toFixed(2)}x by the median of pairs (${(four / one).toFixed(2)}x by the medians)`);
   expect(one).toBeLessThan(LIMIT_ONE);
-  expect(four / one).toBeLessThan(5);
+  expect(paired).toBeLessThan(5);
 }, 300000);
 
 /**
