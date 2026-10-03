@@ -1160,6 +1160,9 @@ describe('Ego says how she knows an influence: the epistemic vector of the arrow
     // read before "why" and "what makes", which would otherwise take these
     for (const t of ['why do you think the current causes the voltage', 'what makes you think the current causes the voltage', 'how confident are you that the current causes the voltage', 'are you sure that the current causes the voltage']) expect(interpret(t), t).toEqual({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
     expect(interpret('why do you say load causes the failure of a bearing')).toEqual({ do: 'traverse', query: 'know', of: 'load', which: 'failure of a bearing' });
+    // the process is named as people name it ("zinc plating"), so the Try-it question finds it
+    expect(interpret('why do you think zinc plating prevents corrosion')).toEqual({ do: 'traverse', query: 'know', of: 'zinc plating', which: 'corrosion', prevent: true });
+    expect(answerTraversal({ do: 'traverse', query: 'know', of: 'zinc plating', which: 'corrosion', prevent: true })).toMatch(/^Probably \(0\.75 to 0\.95\) zinc plating contributes to \(lowers\) corrosion\. How I know it: .*source: Bard & Faulkner/);
     expect(interpret('why use a torque arm')).toMatchObject({ do: 'reason' });
     expect(interpret('what makes a shaft')).toMatchObject({ do: 'traverse', query: 'producers' });
     const a = answerTraversal({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
@@ -1168,7 +1171,7 @@ describe('Ego says how she knows an influence: the epistemic vector of the arrow
 
   it('an arrow of hers: the vector of the arrow within everything said of its two ends, its source named; a chain says each link and that its certainty is within the Fréchet bounds', () => {
     const zinc = answerTraversal({ do: 'traverse', query: 'know', of: 'process.plating.zinc', which: 'chem.corrosion', prevent: true });
-    expect(zinc).toMatch(/^Probably \(0\.75 to 0\.95\) plating zinc contributes to \(lowers\) corrosion\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory untested \(domain unknown\); coverage 0\.\d+; uncertainty unstated; discrepancy none; by derivation, untested by any law; partly covered by sources; source: Bard & Faulkner, Electrochemical Methods, 2nd ed\., Wiley 2001\. In Nex: influence\(process\.plating\.zinc, chem\.corrosion\)/);
+    expect(zinc).toMatch(/^Probably \(0\.75 to 0\.95\) zinc plating contributes to \(lowers\) corrosion\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory untested \(domain unknown\); coverage 0\.\d+; uncertainty unstated; discrepancy none; by derivation, untested by any law; partly covered by sources; source: Bard & Faulkner, Electrochemical Methods, 2nd ed\., Wiley 2001\. In Nex: influence\(process\.plating\.zinc, chem\.corrosion\)/);
     const chain = answerTraversal({ do: 'traverse', query: 'know', of: 'chem.redox', which: 'machine.furnace' });
     expect(chain).toMatch(/^Probably \(0\.75 to 0\.95\) redox contributes to \(raises\) combustion\. How I know it: .*source: Bard & Faulkner.*\. Probably \(0\.75 to 0\.95\) combustion contributes to \(raises\) furnace\. How I know it: .*source: Atkins, de Paula & Keeler.*\. The chain's certainty is within the Fréchet bounds of its 2 links\. In Nex: influence\(chem\.redox, machine\.furnace\)\{dir:1 polarity:\+ necessity:contributing cert:\{kind:interval lo:0\.5 hi:0\.95 source:epistemic\}/);
     // no mechanism known: the same honest refusal as a cause

@@ -10,11 +10,11 @@ const GIBSON: Source = { cite: 'Gibson, Rosen, Stucker & Khorasani, Additive Man
 
 export function manufacturing(): Pack {
   const p = new Pack('manufacturing', KALPAKJIAN);
-  const proc = (id: string, says: string, ra: [number, number] | null, it: [number, number] | null, links: Parameters<Pack['link']>[1], src: Source = KALPAKJIAN) => {
+  const proc = (id: string, says: string, ra: [number, number] | null, it: [number, number] | null, links: Parameters<Pack['link']>[1], src: Source = KALPAKJIAN, names?: string[]) => {
     const params = [];
     if (ra) params.push(param('Ra', 'surface roughness', src, { unit: 'um', low: ra[0], high: ra[1] }));
     if (it) params.push(param('IT', 'ISO tolerance grade', src, { low: it[0], high: it[1] }));
-    p.e(id, ['process', 'constructor'], says, { source: src, params });
+    p.e(id, ['process', 'constructor'], says, { source: src, params, ...(names ? { names } : {}) });
     p.link(id, { 'in-view': ['view.manufacturing'], ...links }, src);
   };
   // machining
@@ -82,7 +82,7 @@ export function manufacturing(): Pack {
   proc('process.heat-treatment.age-hardening', 'A solution-treated alloy held warm so precipitates form: 6061-T6, 7075-T6, beryllium copper.', null, null, { 'is-a': ['process.heat-treatment'], 'interacts-with': ['material.aluminium-alloy', 'material.beryllium-copper'], 'governed-by': ['arrhenius', 'fick.diffusion'] });
   proc('process.heat-treatment', 'Heating and cooling on a schedule to change a material\'s structure, not its shape.', null, null, { requires: ['machine.furnace'], 'governed-by': ['arrhenius'], plays: ['role.constructor'] });
   proc('process.sintering', 'Powder pressed and heated below melting until the particles bond: magnets, bearings, ceramics, gears, metal prints.', [1.6, 6.3], [9, 12], { requires: ['machine.furnace', 'machine.press', 'powder.metal'], produces: ['magnet.permanent', 'bearing.plain', 'material.ceramic', 'gear', 'material.ferrite'], 'governed-by': ['sinter.scale', 'fick.diffusion', 'arrhenius'], 'fails-by': ['failure.porosity', 'failure.shrinkage'] });
-  proc('process.plating.zinc', 'Zinc deposited from a bath by current: sacrificial protection for steel.', null, null, { 'is-a': ['process.plating'], produces: ['screw', 'bolt'], 'governed-by': ['faraday.electrolysis'], 'fails-by': ['failure.hydrogen-embrittlement'] });
+  proc('process.plating.zinc', 'Zinc deposited from a bath by current: sacrificial protection for steel.', null, null, { 'is-a': ['process.plating'], produces: ['screw', 'bolt'], 'governed-by': ['faraday.electrolysis'], 'fails-by': ['failure.hydrogen-embrittlement'] }, KALPAKJIAN, ['zinc plating', 'electrogalvanizing']);
   proc('process.plating', 'A metal deposited on a surface from a solution by current (electroplating) or chemistry (electroless).', null, null, { 'is-a': ['process.surface-treatment'], requires: ['bath.plating', 'power.supply'], 'governed-by': ['faraday.electrolysis', 'nernst'] });
   proc('process.plating.copper', 'Copper deposited into drilled holes and onto traces: a board\'s vias.', null, null, { 'is-a': ['process.plating'], produces: ['via', 'trace', 'pcb'] });
   proc('process.plating.gold', 'A micrometre of gold over nickel on a contact.', null, null, { 'is-a': ['process.plating'], produces: ['connector'] });
