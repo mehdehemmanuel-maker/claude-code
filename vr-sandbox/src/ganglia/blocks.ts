@@ -41,7 +41,7 @@ export interface Port {
 export type Flow = 'electric' | 'rotation' | 'translation' | 'travel' | 'load' | 'signal' | 'heat' | 'stock' | 'chemical' | 'light' | 'sound';
 
 /** One piece of a block's anatomy: what it is, what it does, and the law it works by. */
-export interface Piece { name: string; does: string; law?: string; /** one material id, or the alternatives a piece may be made of */ material?: string | string[] }
+export interface Piece { name: string; does: string; law?: string; /** one material id, or the alternatives a piece may be made of */ material?: string | string[]; /** the kind of thing the piece is, by id in the substrate, when its name alone would not say */ kind?: string }
 
 export interface Archetype {
   id: string;
@@ -77,7 +77,7 @@ export const ARCHETYPES: Archetype[] = [
       { name: 'cells', does: 'each a pair of electrodes in an electrolyte, giving its chemistry\'s voltage (lead-acid about 2.1 V, so six make 12 V)', law: 'lead-acid.ocv' },
       { name: 'positive and negative plates', does: 'lead dioxide and spongy lead on lead-alloy grids: they react with the acid to give and take charge', material: 'lead' },
       { name: 'electrolyte and separator', does: 'dilute sulphuric acid held in an absorbent glass mat between the plates (AGM): ions pass, electrons can\'t' },
-      { name: 'case and lid', does: 'holds the cells apart and the acid in (polypropylene or ABS)', material: 'abs' },
+      { name: 'case and lid', does: 'holds the cells apart and the acid in (polypropylene or ABS)', material: 'abs', kind: 'housing' },
       { name: 'valve', does: 'lets gas out if it is overcharged, and keeps air out (valve-regulated)' },
       { name: 'terminals', does: 'where current leaves and returns; their resistance and the cells\' are its internal resistance', law: 'ohm' },
     ],
@@ -94,7 +94,7 @@ export const ARCHETYPES: Archetype[] = [
       { name: 'H-bridge', does: 'four transistors (MOSFETs) that connect the motor to the supply either way round, or short it to brake', law: 'ohm' },
       { name: 'gate drivers', does: 'switch the transistors fully on and off, fast, so they waste little', law: 'joule' },
       { name: 'PWM controller', does: 'switches thousands of times a second, setting the motor\'s average voltage by the fraction of time on' },
-      { name: 'current sense', does: 'a shunt or sensor measuring motor current, so the controller can limit it', law: 'ohm' },
+      { name: 'current sense', does: 'a shunt or sensor measuring motor current, so the controller can limit it', law: 'ohm', kind: 'sensor' },
       { name: 'bus capacitors', does: 'smooth the supply against the switching' },
       { name: 'heat sink', does: 'carries the transistors\' losses to the air', law: 'convection' },
     ],
@@ -109,7 +109,7 @@ export const ARCHETYPES: Archetype[] = [
     id: 'power.conduct', name: 'conductor', words: ['wire', 'cable', 'wiring'], role: 'wiring', does: 'carries current from one place to another', category: 'power', takes: ['electric'], gives: ['electric'], families: ['wire'],
     laws: ['wire.resistance', 'wire.drop', 'joule'], principles: ['size-wire-by-drop-and-ampacity', 'fuse-at-source'],
     inside: [
-      { name: 'conductor', does: 'stranded annealed copper: carries the current, dropping I R volts and heating by I² R', law: 'wire.resistance', material: 'copper' },
+      { name: 'conductor', does: 'stranded annealed copper: carries the current, dropping I R volts and heating by I² R', law: 'wire.resistance', material: 'copper', kind: 'wire' },
       { name: 'insulation', does: 'keeps the current in; its temperature limit sets the wire\'s current rating', law: 'joule' },
       { name: 'terminals', does: 'crimped lugs or connectors at each end, joining it to what it feeds' },
     ],
@@ -145,7 +145,7 @@ export const ARCHETYPES: Archetype[] = [
       { name: 'sun gear', does: 'on the input shaft, drives the planets', law: 'gear.output.torque', material: 'steel' },
       { name: 'planet gears', does: 'share the load between them, rolling between the sun and the ring', material: 'steel' },
       { name: 'ring gear', does: 'the internal gear the planets roll in, fixed to the housing' },
-      { name: 'planet carrier', does: 'holds the planets and turns slower, with the torque multiplied: the output (stages in series multiply their ratios)' },
+      { name: 'planet carrier', does: 'holds the planets and turns slower, with the torque multiplied: the output (stages in series multiply their ratios)', kind: 'gear.carrier' },
       { name: 'output shaft and bearings', does: 'carry the torque out; the bearings take only small radial and axial loads', law: 'bearing.life.l10' },
       { name: 'housing', does: 'holds it all in line and carries the reaction torque to its mount' },
     ],
@@ -176,7 +176,7 @@ export const ARCHETYPES: Archetype[] = [
     id: 'transmission.screw', name: 'lead screw', words: ['lead screw', 'leadscrew', 'screw jack', 'power screw'], role: 'lead screw', does: 'turns rotation into a push along its axis: a thread driving a nut along by its lead each turn', category: 'transmission', takes: ['rotation'], gives: ['translation', 'load'], families: ['lead screw'],
     laws: ['screw.force', 'screw.efficiency', 'stress.axial', 'buckling.euler'], principles: ['slender-in-compression', 'bearing-near-load'],
     inside: [
-      { name: 'threaded rod', does: 'a trapezoidal thread rolled on steel bar: its core carries the push and must not buckle over the stroke', law: 'buckling.euler', material: 'material.steel' },
+      { name: 'threaded rod', does: 'a trapezoidal thread rolled on steel bar: its core carries the push and must not buckle over the stroke', law: 'buckling.euler', material: 'material.steel', kind: 'screw.lead' },
       { name: 'nut', does: 'bronze, threaded to match: the thread bears on its turns, and their sliding friction sets the efficiency', law: 'screw.efficiency', material: 'bronze' },
       { name: 'end bearing', does: 'at the driven end, takes the push into the frame so the motor doesn\'t', law: 'bearing.life.l10' },
     ],
@@ -192,7 +192,7 @@ export const ARCHETYPES: Archetype[] = [
     inside: [
       { name: 'inner and outer plates', does: 'carry the chain\'s pull from pin to pin', law: 'chain.pull', material: 'steel' },
       { name: 'pins and bushings', does: 'the joints the chain bends at; they wear and the chain stretches', material: 'steel' },
-      { name: 'rollers', does: 'roll onto the sprocket teeth instead of sliding' },
+      { name: 'rollers', does: 'roll onto the sprocket teeth instead of sliding', kind: 'chain.roller' },
       { name: 'sprockets', does: 'one on each shaft: the tooth counts set the ratio', law: 'chain.speed' },
     ],
     insideSource: { cite: 'ANSI/ASME B29.1 (precision power transmission roller chains)', kind: 'standard' },
@@ -202,12 +202,12 @@ export const ARCHETYPES: Archetype[] = [
     id: 'support.rotate', name: 'rotary support', words: ['bearing', 'pillow block'], role: 'bearings', does: 'holds a turning shaft in place, taking its loads to the frame', category: 'support', takes: ['load'], gives: ['load'], families: ['bearing', 'pillow block'],
     laws: ['bearing.life.l10', 'bearing.life.hours'], principles: ['bearing-near-load', 'interference-on-rotating-ring', 'support-once'],
     inside: [
-      { name: 'inner ring', does: 'fits on the shaft, usually the ring that turns with the load', material: 'steel.52100' },
-      { name: 'outer ring', does: 'fits in the housing', material: 'steel.52100' },
+      { name: 'inner ring', does: 'fits on the shaft, usually the ring that turns with the load', material: 'steel.52100', kind: 'bearing.race' },
+      { name: 'outer ring', does: 'fits in the housing', material: 'steel.52100', kind: 'bearing.race' },
       { name: 'balls', does: 'roll between the rings\' raceways, carrying the load at small contacts; their fatigue sets its life', law: 'bearing.life.l10' },
-      { name: 'cage', does: 'keeps the balls spaced' },
-      { name: 'seals or shields', does: 'keep the grease in and dirt out' },
-      { name: 'housing (pillow block)', does: 'bolts to the frame and holds the bearing; a set screw locks its inner ring to the shaft' },
+      { name: 'cage', does: 'keeps the balls spaced', kind: 'bearing.cage' },
+      { name: 'seals or shields', does: 'keep the grease in and dirt out', kind: 'seal' },
+      { name: 'housing (pillow block)', does: 'bolts to the frame and holds the bearing; a set screw locks its inner ring to the shaft', kind: 'housing' },
     ],
     insideSource: { cite: 'SKF, Rolling bearings catalogue (design of bearing arrangements)', kind: 'maker' },
     ports: (c): Port[] => [
@@ -221,8 +221,8 @@ export const ARCHETYPES: Archetype[] = [
     inside: [
       { name: 'eye (housing)', does: 'holds the ball, with a threaded shank to join the rod', material: 'steel' },
       { name: 'ball', does: 'swivels in the eye so no bending passes: the link takes only pull and push', law: 'stress.axial' },
-      { name: 'liner', does: 'the sliding surface between ball and eye' },
-      { name: 'rod', does: 'between two rod ends: in tension it can carry its whole section; in compression it can buckle', law: 'buckling.euler' },
+      { name: 'liner', does: 'the sliding surface between ball and eye', kind: 'bearing.plain' },
+      { name: 'rod', does: 'between two rod ends: in tension it can carry its whole section; in compression it can buckle', law: 'buckling.euler', kind: 'kind.rod.round' },
     ],
     insideSource: { cite: 'ISO 12240-4 (rod ends, dimensions)', kind: 'standard' },
     ports: (c): Port[] => [{ name: 'eye', kind: 'bore', r: { d: n(c, 'bore'), C0: n(c, 'C0') } }, { name: 'shank', kind: 'thread', r: {} }],
@@ -243,9 +243,9 @@ export const ARCHETYPES: Archetype[] = [
     families: [], shapes: ['rod.round'],
     laws: ['torsion.solid', 'shaft.diameter.static', 'fatigue.endurance.steel', 'stress.bending'], principles: ['match-shaft-to-bore', 'cycling-needs-endurance', 'fillet-internal-corners', 'bearing-near-load', 'strength-margin'],
     inside: [
-      { name: 'bar', does: 'round bar turned to size: its diameter cubed sets the torque it carries', law: 'torsion.solid', material: 'steel' },
-      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending' },
-      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque' },
+      { name: 'bar', does: 'round bar turned to size: its diameter cubed sets the torque it carries', law: 'torsion.solid', material: 'steel', kind: 'kind.rod.round' },
+      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending', kind: 'shoulder' },
+      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque', kind: 'keyway' },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, ch. 7 (shafts)', kind: 'textbook' },
     ports: (): Port[] => [],
@@ -303,8 +303,8 @@ export const ARCHETYPES: Archetype[] = [
     families: [], shapes: ['plate', 'rod.round'],
     laws: ['energy.potential', 'landauer'], principles: ['two-stable-states', 'short-load-path'],
     inside: [
-      { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'steel' },
-      { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it' },
+      { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'steel', kind: 'lever' },
+      { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it', kind: 'joint.revolute' },
       { name: 'stops', does: 'hold it in each state, the barrier between them set by how far its weight must rise to cross over', law: 'energy.potential' },
       { name: 'input and output pins', does: 'a push in flips it; its flip pushes the next lever: one bit switching another' },
     ],
@@ -317,9 +317,9 @@ export const ARCHETYPES: Archetype[] = [
     families: ['fuse'],
     laws: ['joule', 'ohm'], principles: ['fuse-at-source', 'size-wire-by-drop-and-ampacity'],
     inside: [
-      { name: 'fusible element', does: 'a thin metal link that heats by I² R and melts past its rating, the faster the further past', law: 'joule', material: ['element.zinc', 'material.copper-alloy'] },
-      { name: 'body', does: 'holds the element and contains the arc as it opens' },
-      { name: 'blades', does: 'plug into its holder' },
+      { name: 'fusible element', does: 'a thin metal link that heats by I² R and melts past its rating, the faster the further past', law: 'joule', material: ['element.zinc', 'material.copper-alloy'], kind: 'wire' },
+      { name: 'body', does: 'holds the element and contains the arc as it opens', kind: 'housing' },
+      { name: 'blades', does: 'plug into its holder', kind: 'contact' },
     ],
     insideSource: { cite: 'ISO 8820-1/-3 (road vehicles: fuse-links)', kind: 'standard' },
     ports: (c): Port[] => [{ name: 'link', kind: 'conduct', r: { I: n(c, 'rating'), Vmax: n(c, 'voltage'), interrupt: n(c, 'interrupt'), fuse: 1 } }],
@@ -329,8 +329,8 @@ export const ARCHETYPES: Archetype[] = [
     families: [], shapes: ['plate'],
     laws: [], principles: ['guard-moving-parts'],
     inside: [
-      { name: 'cover', does: 'sheet or mesh round the moving part, far enough off that a finger can\'t reach through (ISO 13857 safety distances)' },
-      { name: 'fixings', does: 'need a tool to undo, so it isn\'t left off' },
+      { name: 'cover', does: 'sheet or mesh round the moving part, far enough off that a finger can\'t reach through (ISO 13857 safety distances)', kind: 'housing' },
+      { name: 'fixings', does: 'need a tool to undo, so it isn\'t left off', kind: 'screw' },
     ],
     insideSource: { cite: 'ISO 14120 (guards); ISO 13857 (safety distances)', kind: 'standard' },
     ports: (): Port[] => [],

@@ -289,7 +289,7 @@ describe('population: a queue that never needs to be finished', () => {
     const s2 = build().substrate;
     const q = new Queue();
     const pieces = [...s2.entities.values()].filter((e) => e.id.startsWith('block.') && s2.reach(e.id, 'part-of').length && !s2.outOf(e.id, 'is-a').length);
-    expect(pieces.length).toBeGreaterThan(50);
+    expect(pieces.length).toBeGreaterThan(20); // the pieces whose block does not say their kind: enough to test the readings on
     for (const e of pieces) q.push({ id: e.id, facet: 'functions', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
     await populate(s2, q, { expanders: [ruleExpander()], budget: 2000, workers: 1 });
     const named = s2.relations.filter((x) => x.kind === 'is-a' && /named for it:/.test(x.says ?? ''));
@@ -448,6 +448,18 @@ describe('what an arrow names, the index describes (S-6)', () => {
       expect(e!.kinds.some((k) => k === 'material' || k === 'chemical'), `${target} is a material (${e!.kinds.join(',')})`).toBe(true);
     }
     for (const r of s.relations.filter((r) => r.kind === 'interacts-with' && r.says === 'works this material')) expect(s.get(r.to)!.kinds, `${r.from} -> ${r.to}`).toContain('material');
+  });
+
+  it('a piece whose block says what kind of thing it is, is that kind, and every kind said is described', () => {
+    let said = 0;
+    for (const a of ARCHETYPES) for (const x of a.inside) if (x.kind) {
+      said++;
+      const k = s.get(x.kind);
+      expect(k && !isStub(k), `${a.id} / ${x.name} is a ${x.kind}`).toBe(true);
+      const pid = `block.${a.id}.${x.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+      expect(s.outOf(pid, 'is-a').some((r) => r.to === x.kind && /the block says/.test(r.says ?? '')), pid).toBe(true);
+    }
+    expect(said).toBeGreaterThan(20);
   });
 
   it('the numbers of a family come from a named page read on a date, and the stocked materials lie inside them', () => {

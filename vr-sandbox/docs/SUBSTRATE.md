@@ -253,10 +253,12 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   "and" ("commutator and brushes" is both), else its head noun at 0.4 ("sun gear" is a kind of gear, "stator magnets"
   magnets), each arrow saying which reading it is, and never a law, another block or a living thing's part (a battery's
   "cells" are not biological cells); a thing that learns its kind re-opens every facet it can inherit. A whole-queue
-  round (35 000 questions, 16 s) now derives 27 163 relations, marks 412 unknowns, converges, and leaves 219 of 533
-  described components without a function, 154 without a material and 106 without a failure: nearly all pieces whose
-  names resolve to nothing described (a planet carrier, a current sense, a back EMF) or to a kind that has no function
-  yet. Functions of the
+  round (35 000 questions, 16 s) now derives 27 163 relations, marks 412 unknowns, converges, and leaves 227 of 568
+  described components without a function, 170 without a material and 112 without a failure. A piece whose name
+  resolves to nothing described (a planet carrier, a current sense, a lever) now says its kind in the block's own data
+  (`Piece.kind`, an is-a the block asserts), so of 72 pieces 10 are without a kind and 36 without a function, from 33
+  and 48; what remains is kinds that have no function yet, and the regions that are not parts (a back EMF, the ends of
+  a member). Functions of the
   rest remain a question for packs and the outside. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed

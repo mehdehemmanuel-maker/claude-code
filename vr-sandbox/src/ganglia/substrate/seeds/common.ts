@@ -127,6 +127,12 @@ export function common(): Pack {
   t('gas.shielding', ['material'], 'Argon, helium or carbon dioxide flowed over a weld pool to keep the air off it: no oxygen, no nitrogen, no porosity.', { 'governed-by': ['buoyancy'] }, KALPAKJIAN);
   t('powder.metal', ['material'], 'Metal as particles of tens of micrometres, gas-atomised from a melt: the feedstock of sintering and of powder-bed printing.', { 'produced-by': ['process.ball-milling'] }, KALPAKJIAN);
   t('bath.plating', ['material'], 'The electrolyte of an electroplating cell: the metal\'s salt in solution with acids and brighteners.', { 'governed-by': ['faraday.electrolysis'] }, KALPAKJIAN);
+  t('lever', ['component', 'mechanism'], 'A rigid bar turning on a pivot: force times arm in equals force times arm out, less the pivot\'s friction.', { does: ['fn.transmit.force'], 'governed-by': ['power.linear', 'friction.coulomb'] });
+  t('gear.carrier', ['component'], 'The arm of a planetary set that holds the planet gears\' axles: it turns at the output speed with the torque multiplied.', { 'governed-by': ['gear.output.torque'] });
+  t('chain.link', ['component'], 'One unit of a roller chain: two plates, a pin, a bushing and a roller, pitch by pitch.', { 'has-part': ['chain.pin', 'chain.bushing', 'chain.roller'], 'governed-by': ['chain.pull'] });
+  t('chain.pin', ['component'], 'The hardened pin through a chain\'s plates: it carries the pull in shear and wears as the chain articulates.', { 'governed-by': ['stress.von-mises', 'friction.coulomb'], 'fails-by': ['failure.wear'] });
+  t('chain.bushing', ['component'], 'The tube round a chain\'s pin that the roller turns on: the bearing surface of the joint.', { 'governed-by': ['friction.coulomb'], 'fails-by': ['failure.wear'] });
+  t('chain.roller', ['component'], 'The ring that rolls onto the sprocket tooth instead of sliding: less wear and noise.', { 'governed-by': ['hertz.contact'], 'fails-by': ['failure.wear'] });
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;
 }
