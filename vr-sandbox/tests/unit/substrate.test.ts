@@ -1095,6 +1095,42 @@ describe('Ego on what causes a thing: its laws speak when no arrow does, and one
   });
 });
 
+describe('Ego says impossible only with a certificate, and holds her anomalies (docs/NEX-DISCOVERY.md)', () => {
+  it('"is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K" is a certificate: the law, the bound, the assumptions, and what dropping one does', () => {
+    expect(interpret('is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K')).toEqual({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 0.5, unit: '', given: 'a cold side of 300 K and a hot side of 400 K' } });
+    const no = answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 0.5, unit: '', given: 'a cold side of 300 K and a hot side of 400 K' } });
+    expect(no).toMatch(/^No, not under those assumptions: Carnot efficiency \(η = 1 − T_c \/ T_h\) at these inputs gives at most 0\.25 -; the claim is 0\.5 -; so assumptions \+ law \+ claim ⇒ ⊥\. Assumptions: Carnot efficiency holds: Reversible limit; real engines reach about half to three quarters of it\.; cold side = 300; hot side = 400\. Drop one and it is unknown again, not impossible\. In Nex: contradict\(quantity\(eta, 0\.5\[-\]\)\{ev:\{how:hypothesized\}\}, quantity\(eta, 0\.25\[-\]\)/);
+    expect(no).toMatch(/mode:impossible-under under:\["Carnot efficiency holds/);
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 0.2, unit: '', given: 'a cold side of 300 K and a hot side of 400 K' } })).toBe('Yes, within the law: Carnot efficiency allows it: the ceiling is 0.25 - and the claim is 0.2 -.');
+    // the law outside its domain is not a certificate
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 0.2, unit: '', given: 'a cold side of 400 K and a hot side of 300 K' } })).toBe('Carnot efficiency does not hold at these inputs: no work flows from cold to hot: the law does not hold there, so I cannot say impossible: outside its domain.');
+    // the givens are read in the unit said and carried into the law's: 27 °C and 127 °C
+    expect(interpret('Is an efficiency of 0.2 possible with a cold side of 27 degC and a hot side of 127 degC?')?.do).toBe('traverse');
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'efficiency', claim: { value: 0.2, unit: '', given: 'a cold side of 27 degC and a hot side of 127 degC' } })).toBe('Yes, within the law: Carnot efficiency allows it: the ceiling is 0.2499 - and the claim is 0.2 -.');
+  });
+
+  it('an equality law entails or contradicts a value; units are carried (0.5 kJ); a missing input or a wrong unit is said, and no law means unknown, never impossible', () => {
+    expect(interpret('can the kinetic energy reach 500 J with a mass of 120 kg and a speed of 2.2 m/s')).toEqual({ do: 'traverse', query: 'possible', of: 'kinetic energy', claim: { value: 500, unit: 'J', given: 'a mass of 120 kg and a speed of 2.2 m/s' } });
+    const no = answerTraversal({ do: 'traverse', query: 'possible', of: 'kinetic energy', claim: { value: 0.5, unit: 'kJ', given: 'a mass of 120 kg and a speed of 2.2 m/s' } });
+    expect(no).toMatch(/^No, not under those assumptions: Kinetic energy \(E = ½ m v²\) at these inputs gives 290\.4 J; the claim is 500 J, beyond the claim taken at its word; so assumptions \+ law \+ claim ⇒ ⊥\. Assumptions: Kinetic energy holds: Translation only; a spinning body adds ½ I ω²\.; mass = 120; speed = 2\.2\. Drop one and it is unknown again, not impossible\. In Nex: contradict\(quantity\(E, 500\[J\]\)/);
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'kinetic energy', claim: { value: 290.4, unit: 'J', given: 'a mass of 120 kg and a speed of 2.2 m/s' } })).toBe('Yes: Kinetic energy gives 290.4 J at these inputs and the claim is 290.4 J, within the claim taken at its word.');
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'kinetic energy', claim: { value: 500, unit: 'J', given: 'a mass of 120 kg' } })).toBe('Kinetic energy reaches kinetic energy but needs speed (v); no certificate, so not impossible: unknown.');
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'kinetic energy', claim: { value: 500, unit: 'J', given: 'a mass of 120 s and a speed of 2.2 m/s' } })).toBe('Kinetic energy reaches kinetic energy but needs mass (m); no certificate, so not impossible: unknown. (a unit does not fit: s for mass, which is in kg)');
+    expect(interpret('is 1000 N of tractive force possible with a tyre-road friction of 0.8 and a load on driven wheels of 600 N')).toEqual({ do: 'traverse', query: 'possible', of: 'tractive force', claim: { value: 1000, unit: 'N', given: 'a tyre-road friction of 0.8 and a load on driven wheels of 600 N' } });
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'tractive force', claim: { value: 1000, unit: 'N', given: 'a tyre-road friction of 0.8 and a load on driven wheels of 600 N' } })).toMatch(/^No, not under those assumptions: Traction limit \(F ≤ μ N_driven\) at these inputs gives at most 480 N; the claim is 1000 N/);
+    expect(answerTraversal({ do: 'traverse', query: 'possible', of: 'harvest mass', claim: { value: 5, unit: 'kg', given: '' } })).toBe('No law of mine computes or bounds harvest mass in kg, so I cannot call it impossible: unknown. Impossible needs a certificate, and I have none.');
+  });
+
+  it('"what anomalies do you hold" is the register: counts by status, the explained one kept with its explanation and the skeptic\'s computed candidate', () => {
+    expect(interpret('what anomalies do you hold')).toEqual({ do: 'traverse', query: 'anomalies' });
+    expect(interpret('is anything unexplained')).toEqual({ do: 'traverse', query: 'anomalies' });
+    const a = answerTraversal({ do: 'traverse', query: 'anomalies' });
+    expect(a).toMatch(/^I hold 11 observations against the law book: 0 alive, 1 explained, 10 within tolerance\. Nothing is alive: every observation beyond tolerance has its explanation kept under it\. Explained and kept: observation\.cooling-size:against-froude: observed 2\.181 against predicted 1\.414, 54\.2 times the tolerance \(/);
+    expect(a).toMatch(/; explained: the thermal world is not Froude-similar: free convection/);
+    expect(a).toMatch(/the skeptic computes: the observation would be exact if the exponent were 1\.125 instead of 0\.5\. No two anomalies share a law ancestry\.$/);
+  });
+});
+
 describe('Ego finds the edge of a law along one input (Nex Space)', () => {
   it('"how far can the load go before the rating life law stops applying" walks the family and bisects; a law with no computed domain says so', () => {
     expect(interpret('how far can the load go before the rating life law stops applying')).toEqual({ do: 'traverse', query: 'edge', of: 'rating life law', which: 'load' });

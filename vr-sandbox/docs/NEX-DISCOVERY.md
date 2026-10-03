@@ -173,6 +173,20 @@ The request was cut off at "anomaly clusters may be". `cluster()` in the kernel 
 distance and could group anomaly structures the same way, but nothing was built from a sentence that was not
 finished.
 
+## Ego's questions on this layer
+
+- "is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K": "No, not under those
+  assumptions: Carnot efficiency (η = 1 − T_c / T_h) at these inputs gives at most 0.25; the claim is 0.5; so
+  assumptions + law + claim ⇒ ⊥. Assumptions: Carnot efficiency holds: …; cold side = 300; hot side = 400. Drop one
+  and it is unknown again, not impossible. In Nex: contradict(…){mode:impossible-under under:[…]}". With 0.2: "Yes,
+  within the law: the ceiling is 0.25". With the temperatures reversed: "the law does not hold there, so I cannot say
+  impossible: outside its domain". With the speed missing from a kinetic energy: "needs speed (v); no certificate, so
+  not impossible: unknown". With no law at all: "No law of mine computes or bounds harvest mass in kg, so I cannot
+  call it impossible: unknown." The givens are read by the law's own input names, in the unit said and carried into
+  the law's (27 °C and 127 °C give a ceiling of 0.2499; a mass in seconds is refused by dimension).
+- "what anomalies do you hold": the register by status, the explained one kept with its explanation and the
+  skeptic's computed candidate, and whether any two share a law ancestry.
+
 ## What this gives Ego
 
 - She can say *impossible* only when she can show the law, the bound and the assumptions; otherwise she says exactly

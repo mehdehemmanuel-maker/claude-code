@@ -2,9 +2,9 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, between, chain, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { alive, anomalies, askable, between, chain, clusterAnomalies, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, reaching, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
-import { dimensionOf, sameDim } from '../ganglia/units';
+import { dimensionOf, parseUnit, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
 import type { Entity } from '../ganglia/substrate/model';
 import type { Structure } from '../ganglia/native';
@@ -391,6 +391,57 @@ export function answerTraversal(i: Traverse): string {
       return `${cap(nameOf(a))} and ${nameOf(b)} are both counted in ${ua}: numbers of one dimension lie on a line, and a law makes the line a family. ${shared.length ? `${shared.length} law${shared.length === 1 ? '' : 's'} of mine take both: ${list(shared.slice(0, 4).map((l) => `${l.name} (${l.formula})`), 4)}; along one of those, with the other inputs held, every point between is generated on demand.` : 'No law of mine takes both, so I have the line and no family on it.'}`;
     }
     return `${cap(art(a))} and ${art(b)} are two distinctions: they share no coordinate, so there is nothing between them but what a law would say, and none is given. I can compare them (what each is, does, is made of and fails by), which is a different question.`;
+  }
+  if (i.query === 'possible') {
+    // impossible only with a certificate (docs/NEX-DISCOVERY.md): a law that reaches the quantity, every input it
+    // needs read from the givens by the input's own name, the law inside its domain, the claim beyond what it gives
+    const c = i.claim;
+    if (!c) return 'Say the value and the givens: "is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K".';
+    const quantity = (i.of ?? '').toLowerCase().replace(/^(?:an? |the )/, '').trim();
+    const unit = c.unit || '-';
+    const { laws, dim } = reaching({ quantity, value: c.value, unit, inputs: {} });
+    if (!dim) return `I cannot read ${c.unit} as a unit.`;
+    if (!laws.length) return `No law of mine computes or bounds ${quantity}${c.unit ? ` in ${c.unit}` : ''}, so I cannot call it impossible: unknown. Impossible needs a certificate, and I have none.`;
+    const headOf = (name: string) => name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, '').split(/\W+/).filter(Boolean).pop() ?? '';
+    const inputs: Record<string, number> = {};
+    const unread: string[] = [], wrongUnit: string[] = [];
+    for (const part of c.given.split(/,|\band\b/).map((x) => x.trim()).filter(Boolean)) {
+      const m = /^(?:an? |the )?(.+?)(?: of| at| =|:)? (-?\d+(?:\.\d+)?(?:e-?\d+)?)\s*(\S*)$/.exec(part);
+      if (!m) { unread.push(part); continue; }
+      const name = m[1]!.toLowerCase(), v = Number(m[2]), u = m[3] ?? '';
+      let hit = false;
+      for (const law of laws) {
+        const inp = law.inputs.find((x) => x.name.toLowerCase() === name || x.sym.toLowerCase() === name) ?? law.inputs.find((x) => headOf(x.name) === name.split(' ').pop()) ?? law.inputs.find((x) => x.name.toLowerCase().includes(name));
+        if (!inp) continue;
+        hit = true;
+        if (!u) { inputs[inp.sym] = v; continue; }
+        // the number in the unit said, carried into the unit the law takes its input in
+        let said: { dim: number[]; scale: number; offset?: number }, own: { dim: number[]; scale: number; offset?: number };
+        try { said = parseUnit(u); own = parseUnit(inp.unit); } catch { wrongUnit.push(`${u} (for ${inp.name})`); continue; }
+        if (!sameDim(said.dim as never, own.dim as never)) { wrongUnit.push(`${u} for ${inp.name}, which is in ${inp.unit}`); continue; }
+        inputs[inp.sym] = (v * said.scale + (said.offset ?? 0) - (own.offset ?? 0)) / own.scale;
+      }
+      if (!hit) unread.push(part);
+    }
+    const notes = [...(unread.length ? [`I could not place ${unread.join('; ')} on any input of ${laws.map((l) => l.name).join(', ')}`] : []), ...(wrongUnit.length ? [`a unit does not fit: ${wrongUnit.join('; ')}`] : [])];
+    const claim: Claim = { quantity, value: c.value, unit, inputs };
+    const th = theory(claim);
+    const note = notes.length ? ` (${notes.join('; ')})` : '';
+    if (th.relation === 'contradicted' && th.certificate?.impossible) return `No, not under those assumptions: ${th.why}. Assumptions: ${th.certificate.assumptions.join('; ')}. Drop one and it is unknown again, not impossible.${note} In Nex: ${nex(th.certificate.structure)}`;
+    if (th.relation === 'entailed') return `Yes: ${th.why}.${note}`;
+    if (th.relation === 'bounded') return `Yes, within the law: ${th.why}.${note}`;
+    if (th.relation === 'outside-domain') return `${th.why}: the law does not hold there, so I cannot say impossible: outside its domain.${note}`;
+    if (th.relation === 'untested') return `${th.why}.${note}`;
+    return `${th.why}: no certificate, so not impossible.${note}`;
+  }
+  if (i.query === 'anomalies') {
+    // the register of observations against the law book (docs/NEX-DISCOVERY.md): alive, explained (kept), within tolerance
+    const as = anomalies();
+    const live = alive(as), explained = as.filter((a) => a.status === 'explained'), within = as.filter((a) => a.status === 'within tolerance');
+    const num = (x: number | number[]) => (Array.isArray(x) ? x : [x]).map((v) => Number(v.toPrecision(4))).join(', ');
+    const sayOne = (a: (typeof as)[number]) => `${a.id}: observed ${num(a.observation.value)} against predicted ${num(a.prediction.value)}, ${a.sigma.toFixed(1)} times the tolerance (${a.observation.instrument}; ${a.replication})${a.explanation ? `; explained: ${a.explanation}` : ''}; the skeptic computes: ${a.candidates.filter((x) => x.computed && x.kind !== 'within uncertainty').map((x) => x.says).join('; ') || 'nothing more'}`;
+    const shared = clusterAnomalies(as).filter((k) => k.members.length > 1);
+    return `I hold ${as.length} observations against the law book: ${live.length} alive, ${explained.length} explained, ${within.length} within tolerance. ${live.length ? `Alive: ${live.map(sayOne).join('. ')}.` : 'Nothing is alive: every observation beyond tolerance has its explanation kept under it.'}${explained.length ? ` Explained and kept: ${explained.map(sayOne).join('. ')}.` : ''} ${shared.length ? `Shared ancestry: ${shared.map((k) => k.why).join('; ')}.` : 'No two anomalies share a law ancestry.'}`;
   }
   if (i.query === 'edge') {
     // the edge of a law's domain along one input (docs/NEX-SPACE.md): the family the law generates along that input,

@@ -28,7 +28,7 @@ export type Intent =
   /** How much she knows. */
   | { do: 'ganglia' }
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
-  | { do: 'traverse'; query: TraversalQuery; of?: string; which?: string; prevent?: boolean }
+  | { do: 'traverse'; query: TraversalQuery; of?: string; which?: string; prevent?: boolean; /** A claimed value with its unit and the givens as said ("a cold side of 300 K and a hot side of 400 K"). */ claim?: { value: number; unit: string; given: string } }
   /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
   | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign' | 'limit'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
@@ -81,7 +81,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'between' | 'edge' | 'form' | 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
+export type TraversalQuery = 'possible' | 'anomalies' | 'between' | 'edge' | 'form' | 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -90,7 +90,7 @@ function failuresOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   return m ? { do: 'traverse', query: 'failures', of: (m[1] ?? m[2] ?? m[3] ?? m[4])!.replace(/^(?:an? |the |your |my )/, '').trim() } : null;
 }
 
-function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
+function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traverse' }> | null {
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
   if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each) (?:known |possible )?ways? (?:to|of) (?:store|storing) (\w+)|^how (?:can|could) (\w+) be stored|^ways? to store (\w+)$/.exec(t))) return { do: 'traverse', query: 'ways-to-store', of: (m[1] ?? m[2] ?? m[3])! };
@@ -129,6 +129,24 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   if ((m = /^(?:is|are) (?:an? |the )?(.+?) caused by (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[2]!), which: strip(m[1]!) };
   if ((m = /^what (?:causes|prevents|drives|brings about|leads to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!) };
   // her own language: the structures she holds a thing in, rendered with what the rendering lost (docs/EGO-NATIVE-LANGUAGE.md)
+  // whether a claimed value is possible: impossible only with a certificate (docs/NEX-DISCOVERY.md)
+  // "is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K", "can the kinetic energy reach 500 J with a mass of 120 kg and a speed of 2.2 m/s", "is 1000 N of tractive force possible with …"
+  {
+    const KEY = '(?:possible|achievable|reachable|allowed|permitted|feasible|attainable)';
+    const NUM = '(-?\\d+(?:\\.\\d+)?(?:e-?\\d+)?)';
+    const UNIT = `((?!${KEY}\\b|with\\b|at\\b|given\\b|for\\b|between\\b)[A-Za-zµμΩ°%][A-Za-z0-9/·^²³°%-]*)?`;
+    const GIVEN = '(?: (?:with|at|given|for|between) (.+?))?\\??$';
+    // read from the line as said, not from t: units keep their case and their slashes (K, kJ, m/s)
+    const raw = line.replace(/[’']/g, '').replace(/\\s+/g, ' ').trim().replace(/^(?:ego|hey ego|please|can you|could you|would you)\\s+/i, '').replace(/\\s*\\?$/, '');
+    const a = new RegExp(`^(?:is|would|could) (?:an? |the )?(.+?) of ${NUM}\\s*${UNIT}\\s*${KEY}${GIVEN}`, 'i').exec(raw);
+    const b = a ? null : new RegExp(`^can (?:an? |the )?(.+?) (?:be|reach|get to|hit|make) ${NUM}\\s*${UNIT}${GIVEN}`, 'i').exec(raw);
+    const c = a || b ? null : new RegExp(`^(?:is|would|could) ${NUM}\\s*${UNIT}\\s*of (?:an? |the )?(.+?) ${KEY}${GIVEN}`, 'i').exec(raw);
+    const m2 = a ?? b;
+    if (m2) return { do: 'traverse', query: 'possible', of: strip(m2[1]!.toLowerCase()), claim: { value: Number(m2[2]), unit: m2[3] ?? '', given: (m2[4] ?? '').trim() } };
+    if (c) return { do: 'traverse', query: 'possible', of: strip(c[3]!.toLowerCase()), claim: { value: Number(c[1]), unit: c[2] ?? '', given: (c[4] ?? '').trim() } };
+  }
+  // her anomalies: observations against the law book beyond tolerance, alive or explained, kept either way
+  if (/^(?:what|which) anomalies (?:do you (?:hold|have|keep|know)|are there|have you (?:found|seen|got|kept))\??$|^(?:do you (?:hold|have|keep) |any )anomalies\??$|^what (?:observations?|measurements?) (?:break|breaks|contradict|contradicts|defy|defies) (?:your |the )?(?:predictions?|laws?|law book)\??$|^is anything (?:unexplained|anomalous)\??$/.test(t)) return { do: 'traverse', query: 'anomalies' };
   // whether two things lie on one continuum ("is there a continuum between heat and temperature")
   if ((m = /^(?:is there|is it|are there) (?:a |any )?(?:continuum|continuity|scale|line|space|path|interpolation) (?:between|from) (?:an? |the )?(.+?) (?:and|to) (?:an? |the )?(.+?)\??$|^can (?:you|i|one|we) interpolate (?:between|from) (?:an? |the )?(.+?) (?:and|to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'between', of: strip((m[1] ?? m[3])!), which: strip((m[2] ?? m[4])!) };
   // the edge of a law's domain along one input ("how far can the load go before the rating life law stops applying")
@@ -249,7 +267,7 @@ export function interpret(line: string): Intent | null {
   // "look at this", "see this?", "watch this", "look here": she looks where you point
   if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
   if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
-  const tr = traversalOf(t);
+  const tr = traversalOf(t, line);
   if (tr) return tr;
   const sc = scaleOf(t);
   if (sc) return sc;

@@ -54,6 +54,12 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
 - "how far can the load go before the rating life law stops applying", "at what friction does the traction limit
   stop applying": the edge of a law's domain along one input, found by walking the family it generates and
   bisecting, nothing stored (docs/NEX-SPACE.md).
+- "is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K", "can the kinetic energy
+  reach 0.5 kJ with a mass of 120 kg and a speed of 2.2 m/s": impossible only with a certificate (the law, the bound
+  or the computed value, the assumptions, and what dropping one does); within the law, yes; the law outside its
+  domain, or an input missing, or no law at all: not impossible, and exactly how not (docs/NEX-DISCOVERY.md).
+- "what anomalies do you hold", "is anything unexplained": her register of observations against the law book, by
+  status, the explained ones kept with their explanation and what the skeptic computed.
 - "what laws have the same form as the energy in a spring", "which laws look like Ohm's law": the form of a law
   with every symbol gone, and the laws of other theories that share it (one structure said five ways).
 - "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known
