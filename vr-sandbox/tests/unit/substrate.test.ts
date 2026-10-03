@@ -508,7 +508,7 @@ describe('what an arrow names, the index describes (S-6)', () => {
     for (const [fn, fs] of Object.entries(FAILURE_OF_FUNCTION)) { expect(s.has(fn), `${fn} in the failure table is described`).toBe(true); for (const f of fs) expect(s.has(f), `${f}, named by ${fn}, is described`).toBe(true); }
   });
 
-  it('a thing described after a pack has named it carries the describing pack\'s domain first, never unplaced', () => {
+  it('a thing described after a pack has named it carries the domain of the pack that describes it first, never unplaced', () => {
     const cortex = s.get('bio.cortex')!;
     expect(cortex.domains[0]).toBe('biology');
     expect([...s.entities.values()].filter((e) => !isStub(e) && e.domains[0] === 'unplaced').map((e) => e.id)).toEqual([]);
