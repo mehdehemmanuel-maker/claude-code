@@ -184,9 +184,9 @@ the typecheck, the unit, codec and golden suites and the build, and fails on any
 
 | | |
 |---|---|
-| entities | 2609 |
-| relations | 11 650 |
-| relations per entity | 4.5 |
+| entities | 2612 |
+| relations | 11 949 |
+| relations per entity | 4.6 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
 | laws | 175 (140 executable in `laws.ts`, 35 cited not run) |
 | materials | 272 |
@@ -197,8 +197,8 @@ the typecheck, the unit, codec and golden suites and the build, and fails on any
 | failures | 209 |
 | biological | 267 |
 | manifolds / generators | 186 / 96 |
-| domains (by the first, the queue's lane) | 20 (common 670, engineering 257, mechanical 247, biology 200, electrical 187, manufacturing 185, materials 158, physics 106, parameters 104, scale 79, catalogue 77, chemistry 77, computing 68, earth 40, failures 34, circuits 31, views 30, robotics 30, standards 21, making 8) |
-| questions queued after seeding | 39 135 |
+| domains (by the first, the queue's lane) | 20 (biology 298, manufacturing 261, common 258, engineering 235, mechanical 227, materials 194, physics 173, failures 155, electrical 135, chemistry 114, parameters 104, scale 79, catalogue 77, making 69, robotics 54, computing 52, earth 46, views 30, circuits 30, standards 21) |
+| questions queued after seeding | 39 180 |
 | things with no known constructor | 456 at build, 29 after a whole-queue round |
 
 A whole-queue round (41 694 questions in 20 s, four workers) derives 43 024 relations by rule (12 769 inherited along
