@@ -3,6 +3,7 @@
 // measured. A prediction that the engine does not reproduce would be a finding against one of them, and said.
 import { describe, expect, it } from 'vitest';
 import { at, rig } from './helpers';
+import { MAX_SUBSTEPS, SUBSTEP_OMEGA_DT, TICK } from '../../src/physics/world';
 import { classify, exponentOfDim, similarityById } from '../../src/ganglia/scale';
 import { parseUnit } from '../../src/ganglia/units';
 import type { Claim } from '../../src/ganglia/scale';
@@ -106,7 +107,13 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     const finding: Claim = { id: 'observation.undamped-spring-decay-in-the-engine', status: 'observation', statement: `An undamped coil spring in the engine loses ${(small.decayPerCycle * 100).toFixed(0)} % of its amplitude per cycle at ${(small.T * 90).toFixed(0)} steps per period (${small.cycles} cycles before it slept) and ${(big.decayPerCycle * 100).toFixed(0)} % at ${(big.T * 90).toFixed(0)} (${big.cycles} cycles).`, axioms: [], formulation: 'peak ratio over three cycles', predictions: [], compatible: [], conflicting: ['an undamped spring conserves its amplitude'], falsification: [], unresolved: ['where the energy goes: the ledger should show it'], history: [], source: { cite: 'this test, Jolt Physics in the conformance harness', kind: 'maker' } };
     expect(Number.isFinite(small.decayPerCycle) && Number.isFinite(big.decayPerCycle), finding.statement).toBe(true);
     expect(finding.conflicting.length).toBe(1);
-    expect(small.decayPerCycle, finding.statement).toBeGreaterThan(0); // the finding stands until the ledger says where the energy goes
+    // the engine states its model of this loss: implicit integration damps a spring by zeta_num = omega dt_sub / 2, with dt_sub set by the
+    // stiffness-regime rule; the measured decay is that model's prediction, 1 − exp(−2π zeta_num), at both sizes (N-5)
+    const zetaNum = (m: number, k: number) => { const omega = Math.sqrt(k / m); const sub = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil((omega * TICK) / SUBSTEP_OMEGA_DT))); return (omega * TICK) / sub / 2; };
+    for (const x of [small, big]) {
+      const predictedDecay = 1 - Math.exp(-2 * Math.PI * zetaNum(x.m, x.k));
+      expect(Math.abs(x.decayPerCycle / predictedDecay - 1), `${finding.statement}; model predicts ${(predictedDecay * 100).toFixed(1)} %`).toBeLessThan(0.1);
+    }
     console.info(`FINDING ${finding.statement}`);
     // under Froude the same spring would be scale-dependent: its rate is held by the material's modulus, not scaled by its dimension
     expect(classify('spring.rate', similarityById('scale.froude')!, lambda).verdict).toBe('scale-dependent');

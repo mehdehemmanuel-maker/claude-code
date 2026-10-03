@@ -173,7 +173,7 @@ type J = typeof JoltNS;
 const LAYER_STATIC = 0;
 const LAYER_MOVING = 1;
 export const TICK = 1 / 90;
-const MAX_SUBSTEPS = 8;
+export const MAX_SUBSTEPS = 8;
 /** How far an intact joint's two sides may be apart before it is a defect (5 mm: well past any solver tolerance). */
 const JOINT_DRIFT = 0.005;
 /** A joint further apart than this is not yet holding: the solver pulls it in before the assembly pass takes it on. */
@@ -183,7 +183,7 @@ const MASS_RATIO = 10;
 /** How far a joint may run past its stop within one substep: 0.01 rad, 2 mm. */
 const STOP_TURN = 0.01, STOP_TRAVEL = 0.002;
 /** Largest omega * dt per substep at which a spring is still simulated accurately (spike: 0.11 -> 0.36% period error). */
-const SUBSTEP_OMEGA_DT = 0.12;
+export const SUBSTEP_OMEGA_DT = 0.12;
 const SUBGROUPS = 4096;
 /** A fractured bond whose faces are still this well aligned (rad) lets its two pieces collide with each other. */
 const CLEAN_BREAK_ANGLE = 0.15;
@@ -2765,8 +2765,10 @@ export class PhysicsWorld {
         s.mMinDistance = c.kind.model === 'rope' ? 0 : sp.rest;
         s.mMaxDistance = sp.rest;
         if (!c.springRigid) {
-          // Jolt's implicit spring integration dissipates roughly zeta_num = omega * dt_sub / 2 by itself;
-          // subtract it so the total damping matches the material's real damping ratio.
+          // Jolt's implicit spring integration dissipates zeta_num = omega * dt_sub / 2 by itself (measured: 27 % of amplitude
+          // per cycle at omega dt_sub 0.1, at two sizes; tests/conformance/scale.test.ts); subtract it so the total damping
+          // matches the material's real damping ratio. Below zeta_num the surplus cannot be removed and lands in the
+          // ledger's numerical.lost: a declared bound of the model (N-5), not a hidden one.
           const sub = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil((omega * TICK) / SUBSTEP_OMEGA_DT)));
           const zetaSet = Math.max(0, zeta - (omega * TICK) / sub / 2);
           s.mLimitsSpringSettings.mMode = J.ESpringMode_StiffnessAndDamping;

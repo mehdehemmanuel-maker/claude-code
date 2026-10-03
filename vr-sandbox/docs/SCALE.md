@@ -160,11 +160,13 @@ The verdicts are predictions about the world; the world here is the engine, so t
   rings at 0.4985 of the frequency against the predicted λ⁻¹ = 0.5. The derivation says gravity must go as 1/λ under
   Cauchy: run at g/2 the sag scales with the length (×2.0); run at g the sag goes as λ² (×4.0), the static deflection
   not following the structure, which is the scale-dependent verdict on `spring.rate` under Froude made visible.
-- **Finding, not tuned.** The engine's coil spring with zero damping loses 27 % of its amplitude per cycle, at 16 and
-  at 32 steps per period alike, so it is the constraint's own dissipation and not the integrator's step; the heavier
-  cube slept after 2 cycles. Recorded as an observation claim in the test (`observation.undamped-spring-decay-in-the-
-  engine`), conflicting with "an undamped spring conserves its amplitude", unresolved until the energy ledger says
-  where it goes. This belongs to the open task on energy conservation in joints.
+- **Finding, explained by the engine's own model.** The engine's coil spring with zero damping loses 27 % of its
+  amplitude per cycle, at 16 and at 32 steps per period alike. The world states why: Jolt's implicit spring
+  integration damps by zeta_num = omega dt_sub / 2, and the stiffness-regime rule keeps omega dt_sub near 0.1 whatever
+  the size, so zeta_num is about 0.05 and 1 - exp(-2 pi 0.05) = 27 %. The test asserts the measured decay against that
+  prediction at both sizes (within 10 %), and the law tree carries it as N-5, a declared numerical bound: the surplus
+  damping below zeta_num lands in the ledger's numerical loss. Removing it would need omega dt_sub near 0.003, forty
+  times the substeps; that is the open task on energy conservation in joints, now with a number on it.
 - **Two experimental mistakes the engine caught.** A spring placed at zero distance gets a 5 mm free length (the
   connector's floor), which showed as a constant 5 mm in every sag; and a swing that reaches the spring's length floor
   is clipped and reads 5 % fast. Both are now avoided by hanging the spring from a frozen anchor with an explicit free
