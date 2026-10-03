@@ -23,6 +23,10 @@ test('Ego answers scale and traversal questions in the app from her ganglia', as
   // and her knowledge answer carries the substrate's census
   const fails = await sb(page, (s) => s.ego.ask('how does a bearing fail'));
   expect(fails).toMatch(/fails by \d+ ways of its own/);
+  const does = await sb(page, (s) => s.ego.ask('what does a rudder do'));
+  expect(does).toMatch(/^A rudder does one thing: steer/);
+  const madeOf = await sb(page, (s) => s.ego.ask('what is a connecting rod made of'));
+  expect(madeOf).toMatch(/typically made of Steel AISI 4140/);
   const dense = await sb(page, (s) => s.ego.ask('what is the density of steel'));
   expect(dense).toMatch(/7850 kg\/m\^3/);
   const knows = await sb(page, (s) => s.ego.ask('how much do you know'));

@@ -2,6 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
+import { ruleExpander } from '../ganglia/substrate';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
@@ -67,9 +68,32 @@ export function answerTraversal(i: Traverse): string {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
     const d = decomposeThing(s, e.id, 3)!;
-    if (!d.children.length) return `I have not decomposed ${an(nameOf(e))} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
+    // what it is made of, with the arrow's own saying when it has one ("typically made of"), and where that came from
+    const mats = s.outOf(e.id, 'made-of').map((r) => ({ r, m: s.get(r.to)! })).filter((x) => x.m);
+    const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
+    const matLine = mats.length ? `${mats.some((x) => /^typically/.test(x.r.says ?? '')) ? 'It is typically made of' : 'It is made of'} ${list(mats.map((x) => nameOf(x.m)), 6)}${cite(mats[0]!.r.source)}.` : '';
+    const head = an(nameOf(e)).replace(/^a/, 'A');
+    const parts = d.children.filter((c) => !mats.some((x) => x.m.id === c.entity.id));
+    if (!parts.length) {
+      if (matLine) return `${head} is one piece. ${matLine}`;
+      const kindMat = s.reach(e.id, 'is-a').map((k) => ({ k, ms: s.reach(k.id, 'made-of') })).find((x) => x.ms.length);
+      if (kindMat) return `${head} is ${an(nameOf(kindMat.k))}, and ${an(nameOf(kindMat.k))} is typically made of ${list(kindMat.ms.map(nameOf), 6)}; its own material I have not been told.`;
+      return `I have not decomposed ${an(nameOf(e))} yet: ${s.get(e.id)!.coverage.unknowns.join('; ') || 'it is a question for my queue'}.`;
+    }
     const leaves = leavesOf(d);
-    return `${an(nameOf(e)).replace(/^a/, 'A')} has ${d.children.map((c) => `${nameOf(c.entity)}${c.children.length ? ` (${list(c.children.map((x) => nameOf(x.entity)), 5)})` : ''}`).join('; ')}. Down to the leaves it is ${leaves.length} things, ending in ${list([...new Set(leaves.map(nameOf))], 10)}.`;
+    const n = leaves.length;
+    return `${head} has ${parts.map((c) => `${nameOf(c.entity)}${c.children.length ? ` (${list(c.children.map((x) => nameOf(x.entity)), 5)})` : ''}`).join('; ')}. Down to the leaves it is ${n} thing${n === 1 ? '' : 's'}, ending in ${list(leaves.map((l) => nameOf(l)), 10)}.${matLine ? ` ${matLine}` : ''}`;
+  }
+  if (i.query === 'function') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
+    const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^To [a-z -]+: /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const laws = s.reach(fn.id, 'governed-by').map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
+    const own = s.outOf(e.id, 'does').map((r) => ({ r, fn: s.get(r.to)! })).filter((x) => x.fn);
+    if (own.length) return `${an(nameOf(e)).replace(/^a/, 'A')} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.`;
+    const kind = s.reach(e.id, 'is-a').map((k) => ({ k, fns: s.reach(k.id, 'does') })).find((x) => x.fns.length);
+    if (kind) return `${an(nameOf(e)).replace(/^a/, 'A')} is ${an(nameOf(kind.k))}, and ${an(nameOf(kind.k))} does ${kind.fns.map(tell).join('; ')}.`;
+    return `I know no function of ${an(nameOf(e))} yet: that is a question on my queue.`;
   }
   if (i.query === 'producers' || i.query === 'producers-of-producers') {
     const e = find(i.of ?? '');
@@ -143,10 +167,19 @@ export function answerTraversal(i: Traverse): string {
     const seen = new Set(own.map((f) => f.id));
     const viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'fails-by').map((f) => ({ f, via: `as ${an(nameOf(k))} does` })));
     const viaMaterial = s.reach(e.id, 'made-of').flatMap((m) => s.reach(m.id, 'fails-by').map((f) => ({ f, via: `as ${nameOf(m)} does` })));
-    const inherited = [...viaKind, ...viaMaterial].filter((x) => !seen.has(x.f.id) && !!seen.add(x.f.id));
+    let inherited = [...viaKind, ...viaMaterial].filter((x) => !seen.has(x.f.id) && !!seen.add(x.f.id));
+    // not asked yet: derive it now by the same rules the queue runs (what it is made of, what it does, whether it lives), and say so
+    let derivedNow = false;
+    if (!own.length && !inherited.length) {
+      const d = ruleExpander().expand(e, 'failures', s);
+      if (d && !(d instanceof Promise)) for (const r of d.relations) if (r.kind === 'fails-by' && r.from === e.id && r.to !== e.id && s.has(r.to)) { if (s.relate(r)) derivedNow = true; }
+      if (derivedNow) { own.push(...s.reach(e.id, 'fails-by').filter((f) => !seen.has(f.id) && !!seen.add(f.id))); inherited = []; }
+    }
     if (!own.length && !inherited.length) return `I know no failure mode of ${an(nameOf(e))} yet: that is a question on my queue.`;
     // the mechanism is the failure's first clause; the law behind it is what it is governed by
     const mech = (f: E) => { const laws = s.reach(f.id, 'governed-by').map(nameOf); const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); return `${nameOf(f)}, ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? ` (${list(laws, 3)})` : ''}`; };
+    const how = (f: E) => s.relations.find((r) => r.from === e.id && r.kind === 'fails-by' && r.to === f.id)?.says ?? '';
+    if (derivedNow) return `I had not been asked that. From what ${an(nameOf(e))} is made of, what it does and whether it lives, it fails ${own.length} way${own.length === 1 ? '' : 's'}: ${own.map((f) => `${mech(f)} (${how(f)})`).join('; ')}. Each is a mechanism with a law behind it, not a label.`;
     return `${an(nameOf(e)).replace(/^a/, 'A')} fails by ${own.length} ways of its own: ${own.map(mech).join('; ')}.${inherited.length ? ` And ${inherited.length} more it inherits: ${inherited.map((x) => `${mech(x.f)}, ${x.via}`).join('; ')}.` : ''} Each is a mechanism with a law behind it, not a label.`;
   }
   const e = find(i.of ?? '');

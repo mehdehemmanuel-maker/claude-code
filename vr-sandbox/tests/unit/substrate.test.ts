@@ -614,6 +614,36 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(answerTraversal({ do: 'traverse', query: 'failures', of: 'capacitor' })).toMatch(/dielectric breakdown, the insulator/);
   });
 
+  it('Ego answers what a thing does from its function, with the law behind it, or from its kind', () => {
+    const i = interpret('what does a rudder do');
+    expect(i).toMatchObject({ do: 'traverse', query: 'function', of: 'rudder' });
+    const a = answerTraversal(i as Extract<NonNullable<typeof i>, { do: 'traverse' }>);
+    expect(a).toMatch(/^A rudder does one thing: steer: change the direction a vehicle moves/);
+    expect(a).toMatch(/by cornering limit|by .*limit/);
+    expect(interpret('what is a bearing for')).toMatchObject({ do: 'traverse', query: 'function', of: 'bearing' });
+    expect(interpret('what is the function of a spring')).toMatchObject({ do: 'traverse', query: 'function', of: 'spring' });
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'wood screw' })).toMatch(/is a screw, and a screw does|does/);
+  });
+
+  it('Ego says what a thing is made of with the arrow\'s own saying, and a kind\'s material when the thing has none', () => {
+    const rod = answerTraversal({ do: 'traverse', query: 'components', of: 'connecting rod' });
+    expect(rod).toMatch(/^A connecting rod is one piece\. It is typically made of Steel AISI 4140 annealed \(Budynas & Nisbett\)\./);
+    const bolt = answerTraversal({ do: 'traverse', query: 'components', of: 'bolt' });
+    expect(bolt).toMatch(/is a (?:screw|fastener), and an? (?:screw|fastener) is typically made of/);
+    const servo = answerTraversal({ do: 'traverse', query: 'components', of: 'servo' });
+    expect(servo).not.toMatch(/\b1 things\b/);
+    expect(servo).toMatch(/Down to the leaves it is \d+ things/);
+  });
+
+  it('Ego derives how a thing fails on demand when the queue has not reached it, says so, and keeps it', () => {
+    const first = answerTraversal({ do: 'traverse', query: 'failures', of: 'liver' });
+    expect(first).toMatch(/^I had not been asked that\. From what a liver is made of, what it does and whether it lives, it fails \d+ ways: /);
+    expect(first).toMatch(/injury|disease|aging/);
+    expect(first).toMatch(/living tissue: it is injured, diseased and ages/);
+    const again = answerTraversal({ do: 'traverse', query: 'failures', of: 'liver' });
+    expect(again).toMatch(/^A liver fails by \d+ ways of its own/);
+  });
+
   it('Ego answers a property of a material with the number, its unit and where it came from, and the family\'s range as well', () => {
     expect(interpret('what is the density of steel')).toMatchObject({ do: 'traverse', query: 'property', which: 'density', of: 'steel' });
     expect(interpret('how stiff is aluminium alloy')).toMatchObject({ do: 'traverse', query: 'property', which: 'stiff', of: 'aluminium alloy' });
