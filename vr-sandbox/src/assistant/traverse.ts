@@ -172,7 +172,7 @@ export function answerTraversal(i: Traverse): string {
       if (!mats.length && !roles.length) return `I know no material for ${art(role)} yet: that is a question on my queue.`;
       const made = mats.length ? `${cap(art(role))} is made of ${list(mats.map(nameOf), 8)}.` : '';
       const plays = roles.length ? `${mats.length ? ' It' : cap(art(role))} plays ${list(roles.map((x) => `${nameOf(x.r)} (also ${list(x.rows.map((y) => nameOf(y.entity)), 5)})`), 4)}.` : '';
-      return `${made}${plays}`;
+      return `${made}${plays}${nexOf(s.outOf(role.id, 'made-of'), 'part')}`;
     }
     const rows = materialsForRole(s, role.id);
     if (!rows.length) return `Nothing I know plays ${nameOf(role)} yet.`;
@@ -293,7 +293,7 @@ export function answerTraversal(i: Traverse): string {
     const deeper = p.steps.filter((x) => x.depth >= 2 && x.by.length);
     const needs = machines.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k);
     const why = derivedNow ? ` (${list(s.outOf(e.id, 'produced-by').map((r) => spoken(r.says ?? '')).filter((x, k, a) => x && a.indexOf(x) === k), 3)})` : '';
-    const head = `${derivedNow ? 'I had not been asked that. ' : ''}${cap(art(e))} is made by ${list(first.by.map(nameOf))}${why}.${needs.length ? ` Those need ${list(needs, 12)}.` : ''}`;
+    const head = `${derivedNow ? 'I had not been asked that. ' : ''}${cap(art(e))} is made by ${list(first.by.map(nameOf))}${why}.${needs.length ? ` Those need ${list(needs, 12)}.` : ''}${nexOf(s.outOf(e.id, 'produced-by'))}`;
     if (i.query === 'producers') return head;
     return `${head} And those machines are made by ${list(deeper.flatMap((x) => x.by.map(nameOf)).filter((x, k, a) => a.indexOf(x) === k), 14)}${p.cycle.length ? `, which closes on itself: ${p.cycle.map((c) => nameOf(s.get(c)!)).join(', ')} make each other, the machine that makes machines` : ''}.`;
   }

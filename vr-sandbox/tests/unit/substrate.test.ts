@@ -703,7 +703,8 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(rudder).toMatch(/made of Aluminium 2024-T3, which fails by fatigue/);
     expect(rudder.split(' In Nex: ')[0]).not.toMatch(/failure\.[a-z]/); // the English names things; the Nex line after it is ids by design
     const chloroplast = answerTraversal({ do: 'traverse', query: 'producers', of: 'chloroplast' });
-    expect(chloroplast).toMatch(/^A chloroplast is made by self assembly\.$/);
+    expect(chloroplast.split(' In Nex: ')[0]).toMatch(/^A chloroplast is made by self assembly\.$/);
+    expect(chloroplast).toMatch(/ In Nex: morphism\(bio\.chloroplast, bio\.self-assembly\)/);
   });
 
   it('what works a material makes a part of it, but joining and assembly do not; a part of an assembly is not made with it; a kidney filters by size', () => {
@@ -1176,6 +1177,9 @@ describe('Kinds and functions are built as Nex structures too, said beside the E
     expect(answerTraversal({ do: 'traverse', query: 'analogues', of: 'bearing' })).toMatch(/ In Nex: same\(bearing, bio\.synovial-joint\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:unknown\} and \d+ more\.$/);
     expect(answerTraversal({ do: 'traverse', query: 'components', of: 'motor' })).toMatch(/^I know no parts of a motor yet\. It is typically made of Copper C110 annealed, electrical steel, ndfeb \(Horowitz & Hill\)\. In Nex: part\(motor, copper\.c110\)\{cert:\{kind:interval lo:0\.6 hi:0\.8 source:epistemic\} ev:\{how:derived\} mode:true\} and 2 more part structures\.$/);
     expect(answerTraversal({ do: 'traverse', query: 'components', of: 'ball bearing' })).toMatch(/ In Nex: part\(bearing\.ball, bearing\.race\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and \d+ more part structures\.$/);
+    // what makes a thing is a morphism from it to the process; what it is made of, a part
+    expect(answerTraversal({ do: 'traverse', query: 'producers', of: 'shaft' })).toMatch(/^A shaft is made by Turning, grinding, Milling, heat treatment quench temper, wire drawing\. Those need .*\. In Nex: morphism\(shaft, turn\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 4 more\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'materials-for', of: 'spring' })).toMatch(/^A spring is made of Music wire ASTM A228, .*\. In Nex: part\(spring, steel\.music-wire\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 6 more part structures\.$/);
   });
 });
 
