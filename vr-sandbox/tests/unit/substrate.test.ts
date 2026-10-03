@@ -1160,6 +1160,15 @@ describe('Ego says how she knows an influence: the epistemic vector of the arrow
   });
 });
 
+describe('Kinds and functions are built as Nex structures too, said beside the English', () => {
+  it('"what are the kinds of bearing" and "what does a bearing do" carry kind(x, y) and function(x, f) from the same arrows, hashed, the first said in Nex', () => {
+    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'lever' })).toMatch(/^I have no kind above a lever\. Kinds of lever: lever\. In Nex: kind\(block\.logic\.bistable\.lever, lever\)\{cert:\{kind:interval lo:0\.8 hi:1 source:epistemic\} ev:\{how:derived\} mode:true\}\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'bearing' })).toMatch(/ In Nex: kind\([a-z.-]+, bearing\)\{cert:\{kind:interval lo:0\.\d+ hi:1 source:epistemic\} ev:\{how:\w+\} mode:true\} and \d+ more kind structures\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'bearing' })).toMatch(/^A bearing does 2 things: support rotation: .* \(Budynas & Nisbett\)\. In Nex: function\(bearing, fn\.support\.rotation\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\} and 1 more\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'motor' })).toMatch(/ In Nex: function\(motor, fn\.move\)\{cert:\{kind:interval lo:0\.75 hi:0\.95 source:epistemic\} ev:\{how:derived\} mode:true\}\.$/);
+  });
+});
+
 describe('Ego finds the edge of a law along one input (Nex Space)', () => {
   it('"how far can the load go before the rating life law stops applying" walks the family and bisects; a law with no computed domain says so', () => {
     expect(interpret('how far can the load go before the rating life law stops applying')).toEqual({ do: 'traverse', query: 'edge', of: 'rating life law', which: 'load' });

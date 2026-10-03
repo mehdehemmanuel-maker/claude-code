@@ -271,9 +271,11 @@ export function answerTraversal(i: Traverse): string {
     const cite = (src: unknown) => { const c = (src as { cite?: string })?.cite; return c ? ` (${c.split(',')[0]})` : ''; };
     const tell = (fn: ReturnType<typeof find> & object) => { const says = fn.says.replace(/^(?:To [a-z -]+|[a-z -]+ \(function\)): /i, ''); const first = says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, ''); const fnLaws = s.reach(fn.id, 'governed-by'), ownLaws = s.reach(e.id, 'governed-by'), shared = fnLaws.filter((l) => ownLaws.some((o) => o.id === l.id)); const laws = (shared.length ? shared : ownLaws.length ? ownLaws.slice(0, 2) : fnLaws).map(nameOf); return `${nameOf(fn).replace(/^fn /, '')}: ${first.charAt(0).toLowerCase()}${first.slice(1)}${laws.length ? `, by ${list(laws, 3)}` : ''}`; };
     const own = s.outOf(e.id, 'does').map((r) => ({ r, fn: s.get(r.to)! })).filter((x) => x.fn);
-    if (own.length) return `${cap(art(e))} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.`;
+    // the same arrows as structures: function(x, f), the first said in Nex
+    const inNex = (rels: Relation[]): string => { const fs = rels.map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x); return fs.length ? ` In Nex: ${nex(fs[0]!)}${fs.length > 1 ? ` and ${fs.length - 1} more` : ''}.` : ''; };
+    if (own.length) return `${cap(art(e))} does ${own.length === 1 ? 'one thing' : `${own.length} things`}: ${own.map((x) => tell(x.fn)).join('; ')}${cite(own[0]!.r.source)}.${inNex(own.map((x) => x.r))}`;
     const kind = s.reach(e.id, 'is-a').map((k) => ({ k, fns: s.reach(k.id, 'does') })).find((x) => x.fns.length);
-    if (kind) return `${cap(art(e))} is ${art(kind.k)}, and ${art(kind.k)} does ${kind.fns.map(tell).join('; ')}.`;
+    if (kind) return `${cap(art(e))} is ${art(kind.k)}, and ${art(kind.k)} does ${kind.fns.map(tell).join('; ')}.${inNex(s.outOf(kind.k.id, 'does'))}`;
     return `I know no function of ${art(e)} yet: that is a question on my queue.`;
   }
   if (i.query === 'producers' || i.query === 'producers-of-producers') {
@@ -576,7 +578,9 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const up = s.reach(e.id, 'is-a'), down = s.into(e.id, 'is-a').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x);
     if (!up.length && !down.length) return `I know no kind ${art(e)} is, nor any kind of it: that is a question on my queue.`;
-    return `${up.length ? `${cap(art(e))} is a kind of ${list(up.map(nameOf), 6)}.` : `I have no kind above ${art(e)}.`}${down.length ? ` Kinds of ${nameOf(e)}: ${list(down.map(nameOf), 10)}.` : ''}`;
+    // the same arrows as structures: kind(x, y), hashed and compared without a word in them; the first said in Nex
+    const kinds = [...s.outOf(e.id, 'is-a'), ...s.into(e.id, 'is-a')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x);
+    return `${up.length ? `${cap(art(e))} is a kind of ${list(up.map(nameOf), 6)}.` : `I have no kind above ${art(e)}.`}${down.length ? ` Kinds of ${nameOf(e)}: ${list(down.map(nameOf), 10)}.` : ''}${kinds.length ? ` In Nex: ${nex(kinds[0]!)}${kinds.length > 1 ? ` and ${kinds.length - 1} more kind structure${kinds.length > 2 ? 's' : ''}` : ''}.` : ''}`;
   }
   if (i.query === 'standards') {
     const e = find(i.of ?? '');

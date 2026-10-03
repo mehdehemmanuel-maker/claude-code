@@ -538,9 +538,10 @@ a thing (the evidence behind each arrow); the form of a law and its kin across t
 levels as modes, how each is known); her grammar (the morphemes her knowledge earned); the edge of a law along one
 input and whether two things lie on one continuum (docs/NEX-SPACE.md); whether a claimed value is possible, which
 she says only with a certificate, and the anomalies she holds against her own law book (docs/NEX-DISCOVERY.md).
-What is still English built from the substrate's arrows without a Nex structure in between: functions, producers,
-materials, analogues, lineage, kinds, standards, interfaces, variants, sizes, the index. Moving those is the same
-move eight times.
+Kinds and functions are built from the same arrows as structures (kind(x, y), function(x, f)) and said beside the
+English. What is still English built from the substrate's arrows without a Nex structure in between: producers,
+materials, analogues, lineage, standards, interfaces, variants, sizes, the index. Moving those is the same move
+each time.
 
 Designed, not yet built: the visual notation (E); rewrite rules beyond direction (U: an influence of polarity − on X
 equal to one of polarity + on its complement); a learned term in the distance beyond rarity (V); synonymy merged
