@@ -101,7 +101,7 @@ function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traver
   const known = knowOf(t);
   if (known) return known;
   // how well she knows a thing: everything she holds of it as structures, tallied by operator, by how each is known, by mode (docs/NEX-DISCOVERY.md, part 2)
-  { const m = /^(?:how well|how much) do you (?:really )?know (?:about )?(?:an? |the )?(.+?)\??$|^how (?:sure|certain|confident) are you about (?:an? |the )?(.+?)\??$/.exec(t); if (m) return { do: 'traverse', query: 'knowledge', of: (m[1] ?? m[2])!.replace(/^(?:an? |the |your |my )/, '').trim() }; }
+  { const m = /^(?:how well|how much) do you (?:really )?know (?:about )?(?!(?:me|myself|us|you|yourself|him|her|them)\??$)(?:an? |the )?(.+?)\??$|^how (?:sure|certain|confident) are you about (?!(?:me|myself|us|you|yourself|him|her|them)\??$)(?:an? |the )?(.+?)\??$/.exec(t); if (m) return { do: 'traverse', query: 'knowledge', of: (m[1] ?? m[2])!.replace(/^(?:an? |the |your |my )/, '').trim() }; }
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
   if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each) (?:known |possible )?ways? (?:to|of) (?:store|storing) (\w+)|^how (?:can|could) (\w+) be stored|^ways? to store (\w+)$/.exec(t))) return { do: 'traverse', query: 'ways-to-store', of: (m[1] ?? m[2] ?? m[3])! };
@@ -285,6 +285,9 @@ export function interpret(line: string): Intent | null {
   // "look at this", "see this?", "watch this", "look here": she looks where you point
   if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
   if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
+  // the same words about a person are the life layer's, and about herself her own knowledge
+  if (/^(?:how well|how much) do you (?:really )?know (?:about )?(?:me|myself|us)\??$|^how (?:sure|certain|confident) are you about (?:me|us)\??$/.test(t)) return { do: 'recall', about: 'me' };
+  if (/^(?:how well|how much) do you (?:really )?know (?:about )?(?:you|yourself)\??$|^how (?:sure|certain|confident) are you about (?:you|yourself)\??$/.test(t)) return { do: 'ganglia' };
   const tr = traversalOf(t, line);
   if (tr) return tr;
   const sc = scaleOf(t);
