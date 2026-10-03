@@ -149,6 +149,27 @@ already falsified by c, ħ, G; the weak form stands as a theorem of dimensional 
   valid", "how long does a signal take to cross a 10 m steel beam".
 - Law tree: SC-1 to SC-5.
 
+## Experiments in the engine (`tests/conformance/scale.test.ts`)
+
+The verdicts are predictions about the world; the world here is the engine, so they are measured in it.
+
+- **Froude, pendulum.** A pendulum 4 times longer with a bob 4 times wider (same material: mass ×64) swings 2.000
+  times slower in the engine; the covariant verdict predicts λ^½ = 2 from the output's dimension. The same-material
+  verdict's ratio (√λ with an unscaled clock) is the same number read the other way.
+- **Cauchy, spring-mass.** A steel cube of twice the side on a spring of twice the wire and coil (mass ×8, rate ×2)
+  rings at 0.4985 of the frequency against the predicted λ⁻¹ = 0.5. The derivation says gravity must go as 1/λ under
+  Cauchy: run at g/2 the sag scales with the length (×2.0); run at g the sag goes as λ² (×4.0), the static deflection
+  not following the structure, which is the scale-dependent verdict on `spring.rate` under Froude made visible.
+- **Finding, not tuned.** The engine's coil spring with zero damping loses 27 % of its amplitude per cycle, at 16 and
+  at 32 steps per period alike, so it is the constraint's own dissipation and not the integrator's step; the heavier
+  cube slept after 2 cycles. Recorded as an observation claim in the test (`observation.undamped-spring-decay-in-the-
+  engine`), conflicting with "an undamped spring conserves its amplitude", unresolved until the energy ledger says
+  where it goes. This belongs to the open task on energy conservation in joints.
+- **Two experimental mistakes the engine caught.** A spring placed at zero distance gets a 5 mm free length (the
+  connector's floor), which showed as a constant 5 mm in every sag; and a swing that reaches the spring's length floor
+  is clipped and reads 5 % fast. Both are now avoided by hanging the spring from a frozen anchor with an explicit free
+  length and a small pull.
+
 ## Still open
 
 - The diffusive similarity is also the electromagnetic one (μ₀ and resistivity held give current ∝ λ⁰, R ∝ 1/λ,
