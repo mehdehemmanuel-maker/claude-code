@@ -18,6 +18,11 @@ describe('plain requests to Ego', () => {
     expect(interpret('freeze it')).toEqual({ do: 'freeze' });
     expect(interpret('why did it break?')).toEqual({ do: 'why' });
     expect(interpret("what's wrong")).toEqual({ do: 'status' });
+    // her creatures, from her book of them
+    expect(interpret('what is the dog doing?')).toEqual({ do: 'creatures' });
+    expect(interpret('where is the deer going')).toEqual({ do: 'creatures' });
+    expect(interpret('what has the dog been up to')).toEqual({ do: 'creatures' });
+    expect(interpret('what is the dog made of')).not.toEqual({ do: 'creatures' });
     expect(interpret('moon gravity')).toEqual({ do: 'command', command: 'gravity moon' });
     expect(interpret('play')).toEqual({ do: 'command', command: 'play' });
     expect(interpret('Ego, look at this')).toEqual({ do: 'show' });

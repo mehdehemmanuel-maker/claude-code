@@ -41,5 +41,7 @@ test('put a dog on the beach: a walker of plywood, printed plastic and eight hob
   // leans by up to about 25°; fallen, it would be on its side or its back)
   expect(Math.hypot(b.p[0] - a.p[0], b.p[2] - a.p[2])).toBeGreaterThan(0.25);
   expect(b.up).toBeGreaterThan(0.5);
+  // asked what it is doing, she reads her book of it: what its mind in the physics chose
+  expect(await sb(page, (s) => s.ego.ask('what is the dog doing?'))).toMatch(/^The dog is (keeping you company|off to look at something|lying down to rest)/);
   expect(errors).toEqual([]);
 });

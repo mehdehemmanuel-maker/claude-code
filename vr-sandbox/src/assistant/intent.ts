@@ -13,6 +13,8 @@ import { frontierFor } from '../ganglia/frontier';
 
 export type Intent =
   | { do: 'strengthen' }
+  /** What her creatures are doing, from her book of them (the herd). */
+  | { do: 'creatures' }
   | { do: 'join'; joint: string; floor: boolean }
   | { do: 'place'; count: number; kind: string; material?: string }
   | { do: 'freeze' | 'unfreeze' | 'delete' | 'template' | 'status' | 'why' | 'help' }
@@ -165,6 +167,8 @@ export function interpret(line: string): Intent | null {
   if (/^(what level are you|your level|level|how (much )?have you grown|how smart are you)/.test(t)) return { do: 'level' };
   if ((m = /^(?:do|run|use)(?: (?:the|your|my))? skill (.+)$|^skill (.+)$|^do (?:the )?(.+?) (?:skill|thing)$/.exec(t))) return { do: 'skill', which: (m[1] ?? m[2] ?? m[3])!.trim() };
   if (/^(whats wrong|status|report|how is it|hows it (doing|going)|check (it|this|the build)|anything wrong)/.test(t)) return { do: 'status' };
+  // her creatures: what each is doing and what they chose lately (herd.ts, from their minds in the physics)
+  if (/^(what (is|are) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?|herd) (doing|up to)|where (is|are) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?) (going|off to|headed)|what (did|has|have) (the |my |your )?(dogs?|deer|cats?|creatures?|walkers?|animals?|pets?) (do|done|say|said|chosen?|been doing|been up to))\b/.test(t)) return { do: 'creatures' };
   // "why did it break?" is about what just happened; any other "why" asks for the reason things are done as they are
   if (/^why( did (it|that|this|the .+?) (break|fail|fall|snap|collapse|bend|give way)( down| over)?)?$/.test(t)) return { do: 'why' };
   if ((m = /^why (?:do|does|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };

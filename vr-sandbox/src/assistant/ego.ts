@@ -30,6 +30,10 @@ import { ghostMaterial } from '../render/materials';
 import { placeFromWords } from '../world/place';
 import { buildSwimmer, buildWalker, swimmerFromWords, WALKERS, walkerFromWords } from '../world/creature';
 import { Herd } from '../world/herd';
+import type { Want } from '../world/mind';
+
+/** A creature's want, said: what the herd's book has it doing (mind.ts). */
+const WANT_SAID: Record<Want, string> = { company: 'keeping you company: coming to you, or staying near', curiosity: 'off to look at something', rest: 'lying down to rest' };
 import { POOL } from '../physics/environment';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
@@ -207,6 +211,14 @@ export class Ego {
       case 'status': {
         const top = this.advice[0];
         return `${this.observe()}.${top ? ` ${top.text}` : ' Everything is holding.'}`;
+      }
+      case 'creatures': {
+        // her book of them (herd.ts), kept from their minds' events in the physics: what each is doing now, and lately
+        const doing = this.herd.doing();
+        if (!doing.length) return 'There is no creature in the world. Ask me to put a dog on the beach.';
+        const now = doing.map((d) => `${d.name} is ${WANT_SAID[d.doing]}`).join('; ');
+        const lately = this.herd.said.slice(-3);
+        return `${now[0]!.toUpperCase()}${now.slice(1)}.${lately.length ? ` Lately: ${lately.join('; ')}.` : ' It has not changed its mind since I put it there.'}`;
       }
       case 'why': {
         const b = this.advice.find((a) => a.kind === 'break');
