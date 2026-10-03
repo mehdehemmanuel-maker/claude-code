@@ -49,6 +49,8 @@ import { JOINT_LIMIT, standLoads, standPushes } from './prove';
 import { fragmentOf } from '../doc/commands';
 import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature } from '../mind';
 import { sayFrontier } from '../ganglia/native/tsc';
+import { lawGraph, sayBetween, sayCensus, sayCloseness, sayConnected, sayDeepest, sayStanding, type LawGraph } from '../ganglia/lawgraph';
+import { substrate } from '../ganglia/substrate';
 import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
@@ -224,6 +226,18 @@ export class Ego {
       case 'help': return HELP;
       case 'working': return this.mind ? sayWorking(this.mind.journal.commits) : 'My journal is not open yet.';
       case 'changed': return this.mind ? sayChanged(this.mind.journal.commits) : 'My journal is not open yet.';
+      case 'lawgraph': {
+        const g = this.lawGraph();
+        const find = (words: string | undefined) => { if (!words) return null; const w = words.replace(/^(?:the |a )/, '').replace(/s law$/, '').trim(); return lawById(w) ?? lawById(w.replace(/\s+/g, '.')) ?? (recall(w, 1, ['law'])[0]?.item as { id: string } | undefined) ?? null; };
+        if (i.query === 'deepest') return sayDeepest(g);
+        if (i.query === 'census') return sayCensus(g);
+        const a = find(i.a);
+        if (!a) return `I hold no law called ${i.a}.`;
+        if (i.query === 'cone' || i.query === 'ancestry') return sayStanding(g, a.id);
+        const b = find(i.b);
+        if (!b) return `I hold no law called ${i.b}.`;
+        return i.query === 'connected' ? sayConnected(g, a.id, b.id) : i.query === 'between' ? sayBetween(g, a.id, b.id) : sayCloseness(g, a.id, b.id);
+      }
       case 'open': { const mine = this.mind?.unresolved() ?? []; return `${sayFrontier()}${mine.length ? ` And ${mine.length} investigation${mine.length === 1 ? '' : 's'} of mine unresolved: ${mine.join(', ')}.` : ''}`; }
       case 'status': {
         const top = this.advice[0];
@@ -504,6 +518,15 @@ export class Ego {
   // ---- designing ------------------------------------------------------------------------------------
 
   /** Design what was asked, build it in front of you, and check it will hold. */
+  private graphCache: LawGraph | null = null;
+  /** The structure between the laws, with the arrows the substrate holds above them (the research branches' results). */
+  private lawGraph(): LawGraph {
+    if (this.graphCache) return this.graphCache;
+    const s = substrate();
+    this.graphCache = lawGraph({ above: (id) => s.outOf(id, 'is-a').map((r) => ({ to: r.to, name: s.get(r.to)?.name, says: r.says })) });
+    return this.graphCache;
+  }
+
   /** A line is Forge when Forge reads it (forge.ts parse); an English sentence is not, whatever word it starts with. */
   private isForge(text: string): boolean {
     try { return parseForge(text).length > 0; } catch { return false; }
