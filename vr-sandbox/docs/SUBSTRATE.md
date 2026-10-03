@@ -161,6 +161,18 @@ strain 10 to 100 MPa where the stocked natural latex is 1.5 MPa, so the elastome
 
 Stubs fell from 813 to 275 and described entities rose from 1799 to 2319 without a question asked outside.
 
+### The build is stepped
+
+The whole build took 210 ms in Node and would have stalled the headset's frame when the background service first built
+it. It is now a generator of steps, `buildSteps`: the bridge, each pack made and then ingested (a factory may give
+several packs, so the covariance derivations are one pack a similarity), the repair, the queue seeded in chunks of five
+hundred entities, the manifolds. `advanceBuild` runs it for a budget of this thread, checked between steps; the
+background service advances it 2 ms every frame before it asks its first question (about 1.5 s on the headset), and
+`build()` runs the rest at once only for a caller that needs the substrate now. Seeding the queue computed each
+entity's priority once a facet; it is now once an entity, with the facet's weight added. Measured in Node: 65 steps,
+171 ms in all, the largest 13 ms (a chunk of the queue), the scale derivations 10 ms a similarity. `npm run gate` runs
+the typecheck, the unit suite and the build, and fails on any of them: the loop's own discipline.
+
 ## Census (build, before any extra population)
 
 | | |

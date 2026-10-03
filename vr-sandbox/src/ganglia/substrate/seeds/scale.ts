@@ -166,10 +166,7 @@ export function scale(): Pack {
     p.e(`group.${g.id}`, ['parameter', 'property'], `${g.name}: ${g.formula}; ${g.meaning}. ${g.boundaries.map((b) => `At ${b.at}: ${b.says}`).join(' ')}`, { names: [g.name, g.id], source: g.source });
     for (const t of SIMILARITIES) { const v = groupUnder(g, t); if (v.invariant) p.link(`group.${g.id}`, { 'invariant-under': [[t.id, v.says]] }, { derived: 'ganglia/scale/groups groupUnder' }); }
   }
-  // laws under the similarities: derived from each law's own example (ganglia/scale/covariance)
-  for (const t of SIMILARITIES) for (const c of classifyAll(t, 10)) {
-    if (c.verdict === 'invariant' || c.verdict === 'covariant') p.link(c.law, { 'invariant-under': [[t.id, `${c.verdict}: ${c.why}`]] }, { derived: 'ganglia/scale/covariance classify' }, c.verdict === 'invariant' ? 0.95 : 0.9);
-  }
+  // the laws under each similarity are derived in scaleCovariance, one pack a similarity, so the build takes them a step at a time
   // observers: what gets which picture
   for (const o of OBSERVERS) p.e(o.id, ['observer', 'system'], `${o.says} Resolves ${o.spatialResolution} m and ${o.temporalResolution} s, samples at ${o.samplingRate} Hz, lags ${o.latency} s, holds ${o.memory} s.`, { names: [o.name], source: o.source, params: [param('dx', 'spatial resolution', o.source, { unit: 'm', low: o.spatialResolution, high: o.spatialResolution }), param('dt', 'temporal resolution', o.source, { unit: 's', low: o.temporalResolution, high: o.temporalResolution }), param('fs', 'sampling rate', o.source, { unit: 'Hz', low: o.samplingRate, high: o.samplingRate }), param('lat', 'latency', o.source, { unit: 's', low: o.latency, high: o.latency })] });
   p.e('observer', ['observer', 'manifold'], 'An observer: resolutions in space and time, a sampling rate, a latency, a processing time, a dynamic range, a memory and a model. What it records is reality projected through these; a difference between observers is not a difference in the thing.', { names: ['observer manifold'] });
@@ -210,4 +207,15 @@ export function scale(): Pack {
   p.link('bio.capillary', { 'analogous-to': [['earth.river', 'a branching transport network: Murray\'s law in vessels, Horton\'s in rivers']] }, MCMAHON);
   p.link('bio.pacemaker-cells', { 'analogous-to': [['circuit.oscillator', 'a relaxation oscillator: charge to a threshold, discharge, repeat']] }, MCMAHON);
   return p;
+}
+
+/** Laws under the similarities, derived from each law's own example (ganglia/scale/covariance): one pack a similarity, each a step of the build. */
+export function scaleCovariance(): Pack[] {
+  return SIMILARITIES.map((t) => {
+    const p = new Pack('scale', BARENBLATT);
+    for (const c of classifyAll(t, 10)) {
+    if (c.verdict === 'invariant' || c.verdict === 'covariant') p.link(c.law, { 'invariant-under': [[t.id, `${c.verdict}: ${c.why}`]] }, { derived: 'ganglia/scale/covariance classify' }, c.verdict === 'invariant' ? 0.95 : 0.9);
+    }
+    return p;
+  });
 }

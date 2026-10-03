@@ -62,15 +62,21 @@ export class Queue {
  * that are constructors, materials or functions, that are well connected, that are little known, and that engineering
  * leans on. Stubs named by many things come first: they are the frontier.
  */
-export function priority(s: Substrate, e: Entity, facet: Facet): number {
+/** What a facet is worth asking, over the entity's own priority. */
+const FACET_WEIGHT: Record<Facet, number> = { constructors: 3, components: 2.5, materials: 2, mechanisms: 2, functions: 2, manufacturing: 2, laws: 1.5, failures: 1.5, interfaces: 1.5, variants: 1, standards: 1, analogues: 1, manifolds: 1, transformations: 1.5, properties: 1 };
+
+/** The entity's part of a question's priority: how connected, how much it unlocks, its leverage, how uncertain, whether engineering. */
+export function priorityBase(s: Substrate, e: Entity): number {
   const inbound = s.into(e.id).length, outbound = s.outOf(e.id).length;
   const unlock = s.into(e.id, 'requires').length + s.into(e.id, 'produced-by').length + s.into(e.id, 'has-part').length + s.into(e.id, 'made-of').length;
   const leverage = (e.kinds.includes('constructor') || e.kinds.includes('process') ? 3 : 0) + (e.kinds.includes('material') ? 2 : 0) + (e.kinds.includes('function') ? 2 : 0) + (e.kinds.includes('manifold') ? 2 : 0) + (e.kinds.includes('law') ? 1 : 0);
   const uncertainty = (3 - e.coverage.depth) * 2 + (1 - e.coverage.confidence) * 3;
   const engineering = e.domains.some((d) => ['mechanical', 'electrical', 'manufacturing', 'materials', 'robotics', 'circuits'].includes(d)) ? 2 : 0;
-  const facetWeight: Record<Facet, number> = { constructors: 3, components: 2.5, materials: 2, mechanisms: 2, functions: 2, manufacturing: 2, laws: 1.5, failures: 1.5, interfaces: 1.5, variants: 1, standards: 1, analogues: 1, manifolds: 1, transformations: 1.5, properties: 1 };
-  return Math.log2(1 + inbound + outbound) + 2 * Math.log2(1 + unlock) + leverage + uncertainty + engineering + facetWeight[facet];
+  return Math.log2(1 + inbound + outbound) + 2 * Math.log2(1 + unlock) + leverage + uncertainty + engineering;
 }
+
+/** A question's priority: what asking this facet of this entity unlocks. */
+export function priority(s: Substrate, e: Entity, facet: Facet): number { return priorityBase(s, e) + FACET_WEIGHT[facet]; }
 
 /** A source that can answer a question about an entity along a facet. */
 export interface Expander {
@@ -305,12 +311,13 @@ export function ask(s: Substrate, q: Queue, id: string, facet: Facet, mode: 'fas
 export interface PopulateOptions { budget?: number; workers?: number; expanders: Expander[]; mode?: 'fast' | 'deep' | 'both'; /** stop early when this says so: a time slice of a frame */ until?: () => boolean; /** every discovery an expander made, for a journal */ onDiscovery?: (x: Expander, w: WorkItem, d: Discovery) => void; /** false: a slice, without the end-of-round promotion of manifolds and generators */ finish?: boolean }
 
 /** Seed the queue: every stub asks what it is (fast); every described thing asks its facets (deep). */
-export function seedQueue(s: Substrate, q: Queue, mode: 'fast' | 'deep' | 'both' = 'both'): number {
+export function seedQueue(s: Substrate, q: Queue, mode: 'fast' | 'deep' | 'both' = 'both', only?: Iterable<Entity>): number {
   let n = 0;
-  for (const e of s.entities.values()) {
+  for (const e of only ?? s.entities.values()) {
     const domain = e.domains[0] ?? 'unplaced';
-    if (e.coverage.depth === 0 && mode !== 'deep') { for (const f of ['functions', 'components', 'constructors'] as Facet[]) if (q.push({ id: e.id, facet: f, mode: 'fast', priority: priority(s, e, f), reason: 'a stub: named by something, not yet described', domain })) n++; }
-    else if (mode !== 'fast') for (const f of FACETS) if (!e.coverage.expanded.includes(f) && q.push({ id: e.id, facet: f, mode: 'deep', priority: priority(s, e, f), reason: `${f} of a described thing`, domain })) n++;
+    const base = priorityBase(s, e);
+    if (e.coverage.depth === 0 && mode !== 'deep') { for (const f of ['functions', 'components', 'constructors'] as Facet[]) if (q.push({ id: e.id, facet: f, mode: 'fast', priority: base + FACET_WEIGHT[f], reason: 'a stub: named by something, not yet described', domain })) n++; }
+    else if (mode !== 'fast') for (const f of FACETS) if (!e.coverage.expanded.includes(f) && q.push({ id: e.id, facet: f, mode: 'deep', priority: base + FACET_WEIGHT[f], reason: `${f} of a described thing`, domain })) n++;
   }
   return n;
 }

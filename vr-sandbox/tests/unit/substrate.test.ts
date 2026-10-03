@@ -7,7 +7,7 @@ import { answerTraversal } from '../../src/assistant/traverse';
 import {
   FACETS, KINDS, RELATIONS, RELATION_KINDS, Queue, Substrate, analogues, build, constructionPath, decompose, dualRole, implementations, index, ingest, leavesOf,
   lineage, materialsForRole, mechanismsFor, missingConstructors, populate, priority, producers, ruleExpander, seedExpander, seedQueue, variants, waysToStore,
-  FAMILY_NUMBERS, familyOfWord, viewOfDomain,
+  FAMILY_NUMBERS, familyOfWord, viewOfDomain, advanceBuild, buildSteps,
   type Entity, type Report, type WorkItem,
 } from '../../src/ganglia/substrate';
 import { MATERIALS } from '../../src/data/materials';
@@ -506,5 +506,37 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(a).toMatch(/Analogues: synovial joint/);
     expect(answerTraversal({ do: 'traverse', query: 'index', of: 'river basin' })).toMatch(/raindrop|drainage/);
     expect(answerTraversal({ do: 'traverse', query: 'index', of: 'market' })).toMatch(/price/);
+  });
+});
+
+describe('the build is stepped, so no frame pays for the whole of it', () => {
+  it('the steps are the bridge, each pack made and ingested, the repair, the queue, the manifolds; stepped and at once give the same substrate', () => {
+    const steps: string[] = [];
+    const g = buildSteps();
+    let r = g.next();
+    while (!r.done) { steps.push(r.value); r = g.next(); }
+    expect(steps[0]).toBe('bridge');
+    expect(steps).toEqual(expect.arrayContaining(['pack:scale', 'ingest:scale', 'pack:failures', 'repair', 'queue', 'manifolds']));
+    expect(steps.at(-1)).toBe('manifolds');
+    expect(steps.indexOf('repair')).toBeLessThan(steps.indexOf('queue'));
+    expect(steps.filter((x) => x === 'queue').length).toBeGreaterThan(3); // the queue is seeded in chunks, each a step
+    expect(steps.length).toBeGreaterThan(40);
+    const stepped = r.value.substrate.census(), once = s.census();
+    expect(stepped.entities).toBe(once.entities);
+    expect(stepped.relations).toBe(once.relations);
+    expect(stepped.stubs).toBe(once.stubs);
+    expect(r.value.queue.size).toBe(built.queue.size);
+  });
+
+  it('advanceBuild keeps to its budget between steps and returns the built state only when done', () => {
+    let clock = 0;
+    const tick = () => (clock += 0.7);
+    const g = buildSteps();
+    let slices = 0, done = advanceBuild(g, 1, tick);
+    while (!done) { slices++; expect(slices).toBeLessThan(200); done = advanceBuild(g, 1, tick); }
+    // 1 ms of a clock that moves 0.7 ms a step: two steps a slice, so about half as many slices as steps
+    expect(slices).toBeGreaterThan(10);
+    expect(done.substrate.census().entities).toBe(s.census().entities);
+    expect(advanceBuild(buildSteps(), 1e9, tick)).not.toBeNull();
   });
 });

@@ -14,7 +14,7 @@ import { biology } from './seeds/biology';
 import { chemistry } from './seeds/chemistry';
 import { earth } from './seeds/earth';
 import { robotics } from './seeds/robotics';
-import { scale } from './seeds/scale';
+import { scale, scaleCovariance } from './seeds/scale';
 import { views } from './seeds/views';
 import { failures } from './seeds/failures';
 import { common } from './seeds/common';
@@ -36,30 +36,67 @@ export { Population, startPopulation, population, stopPopulation, type Populatio
 export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';
 export { implementations, waysToStore, materialsForRole, variants, decompose, leavesOf, producers, analogues, dualRole, lineage, mechanismsFor, constructionPath, index, family, type Found, type Tree, type MaterialRow, type ProducerStep, type PathStep } from './queries';
 
-export const PACKS: (() => Pack)[] = [views, common, parameters, standards, mechanical, electrical, circuits, computing, materials, manufacturing, making, failures, biology, chemistry, earth, robotics, scale];
+/** The seed packs, in build order; a factory may give several packs, each then its own step. */
+export const PACKS: (() => Pack | Pack[])[] = [views, common, parameters, standards, mechanical, electrical, circuits, computing, materials, manufacturing, making, failures, biology, chemistry, earth, robotics, scale, scaleCovariance];
 
 export interface Built { substrate: Substrate; queue: Queue; packs: Pack[]; expanders: Expander[]; generators: Map<string, Generator>; seedReport: Report }
 
 let built: Built | null = null;
 
-/** Build the substrate from the bridge and the packs, seed the queue, and run the first round of derivations. */
-export function build(opts: { budget?: number } = {}): Built {
+/**
+ * The build as steps, each a few milliseconds of this thread: the bridge, each pack made and ingested, the repair, the
+ * queue, the manifolds, the generators. A frame never pays for the whole: the background service advances it a slice
+ * at a time (advanceBuild), and a caller that needs the substrate now (build) runs the rest at once.
+ */
+export function* buildSteps(): Iterator<string, Built, undefined> {
   const s = new Substrate();
   bridge(s);
-  const packs = PACKS.map((f) => f());
+  yield 'bridge';
+  const packs: Pack[] = [];
   const seedReport: Report = { processed: 0, discoveredEntities: 0, discoveredRelations: 0, rejected: [], promotedManifolds: [], generators: [], constructionPaths: 0, unknowns: 0, converged: false, queued: 0, byDomain: {} };
-  for (const p of packs) ingest(s, { entities: p.entities, relations: p.relations, unknowns: [] }, seedReport);
+  for (const f of PACKS) {
+    const made = f();
+    for (const p of Array.isArray(made) ? made : [made]) {
+      yield `pack:${p.domain}`;
+      ingest(s, { entities: p.entities, relations: p.relations, unknowns: [] }, seedReport);
+      packs.push(p);
+      yield `ingest:${p.domain}`;
+    }
+  }
   // what the bridge named and nothing described: stubs, each a question
   s.repair();
+  yield 'repair';
   const expanders = [seedExpander(packs), ruleExpander(), externalExpander(null)];
   const queue = new Queue();
-  seedQueue(s, queue, 'both');
+  const all = [...s.entities.values()];
+  for (let i = 0; i < all.length; i += 500) { seedQueue(s, queue, 'both', all.slice(i, i + 500)); yield 'queue'; }
   promoteManifolds(s);
+  yield 'manifolds';
   const generators = buildGenerators(s);
   built = { substrate: s, queue, packs, expanders, generators, seedReport };
-  void opts;
   return built;
 }
+
+/** Build the substrate from the bridge and the packs, seed the queue, and run the first round of derivations, at once. */
+export function build(opts: { budget?: number } = {}): Built {
+  void opts;
+  const g = buildSteps();
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+/** Advance a stepped build for at most `budgetMs` of this thread, checked between steps: the Built once done, else null. */
+export function advanceBuild(g: Iterator<string, Built, undefined>, budgetMs: number, now: () => number = () => performance.now()): Built | null {
+  const t0 = now();
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+    if (now() - t0 >= budgetMs) return null;
+  }
+}
+
+export function isBuilt(): boolean { return built !== null; }
 
 /** The one substrate, built on first use. */
 export function substrate(): Substrate { return (built ?? build()).substrate; }

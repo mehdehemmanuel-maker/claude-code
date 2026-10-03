@@ -6,9 +6,12 @@
 import { type Discovery, type Entity, type Facet, normalizeId } from './model';
 import { Queue, ingest, populate, promoteManifolds, buildGenerators, ruleExpander, seedExpander, seedQueue, type Expander, type Report, type WorkItem } from './population';
 import { externalExpander, type Connector } from './external';
-import { builtState, type Built } from './index';
+import { advanceBuild, buildSteps, builtState, isBuilt, type Built } from './index';
 
 export interface PopulationOptions {
+  /** How much of this thread one build slice may take, ms (the slice budget by default), and how often, ms (a frame). */
+  buildSliceMs?: number;
+  buildEveryMs?: number;
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
   connector?: Connector | null;
   /** The storage key. */
@@ -27,13 +30,13 @@ export interface PopulationOptions {
 }
 
 export interface JournalEntry { at: string; by: string; id: string; facet: Facet; discovery: Discovery }
-export interface Totals { sessions: number; slices: number; processed: number; discoveredEntities: number; discoveredRelations: number; unknowns: number; rejected: number; journalDropped: number }
+export interface Totals { sessions: number; buildSlices: number; slices: number; processed: number; discoveredEntities: number; discoveredRelations: number; unknowns: number; rejected: number; journalDropped: number }
 interface Saved { v: 1; saved: string; done: string[]; journal: JournalEntry[]; totals: Totals }
 
 export class Population {
   readonly key: string;
   readonly journal: JournalEntry[] = [];
-  readonly totals: Totals = { sessions: 0, slices: 0, processed: 0, discoveredEntities: 0, discoveredRelations: 0, unknowns: 0, rejected: 0, journalDropped: 0 };
+  readonly totals: Totals = { sessions: 0, buildSlices: 0, slices: 0, processed: 0, discoveredEntities: 0, discoveredRelations: 0, unknowns: 0, rejected: 0, journalDropped: 0 };
   readonly connector: Connector | null;
   readonly expanders: Expander[];
   private readonly external: ReturnType<typeof externalExpander>;
@@ -45,6 +48,9 @@ export class Population {
   private readonly storage: PopulationOptions['storage'];
   private readonly sliceMs: number;
   private readonly everyMs: number;
+  private readonly buildSliceMs: number;
+  private readonly buildEveryMs: number;
+  private builder: Iterator<string, Built, undefined> | null = null;
   private readonly budget: number;
   private readonly saveEveryMs: number;
   private readonly journalCap: number;
@@ -58,6 +64,8 @@ export class Population {
     this.connector = opts.connector ?? null;
     this.storage = opts.storage ?? null;
     this.sliceMs = opts.sliceMs ?? 2;
+    this.buildSliceMs = opts.buildSliceMs ?? this.sliceMs;
+    this.buildEveryMs = opts.buildEveryMs ?? 16;
     this.everyMs = opts.everyMs ?? 500;
     this.budget = opts.budget ?? 40;
     this.saveEveryMs = opts.saveEveryMs ?? 15000;
@@ -69,6 +77,7 @@ export class Population {
   }
 
   get connected(): boolean { return this.connector !== null; }
+  get isBuilt(): boolean { return this.b !== null && this.b !== undefined; }
   get built(): Built { return this.b ?? this.build(); }
   get substrate() { return this.built.substrate; }
   get queue(): Queue { return this.built.queue; }
@@ -136,12 +145,21 @@ export class Population {
     while (size > this.journalCap && this.journal.length) { const [gone] = this.journal.splice(0, 1); size -= JSON.stringify(gone).length; this.totals.journalDropped++; }
   }
 
-  /** Begin working the queue in the background. */
+  /** Begin working in the background: first the build, a slice of a frame at a time, then the queue. */
   start(): this {
     if (this.running) return this;
     this.running = true;
     const tick = () => {
       if (!this.running) return;
+      if (!this.b) {
+        if (!isBuilt()) {
+          this.builder ??= buildSteps();
+          this.totals.buildSlices++;
+          if (!advanceBuild(this.builder, this.buildSliceMs, this.now)) { this.schedule(tick, this.buildEveryMs); return; }
+          this.builder = null;
+        }
+        this.build();
+      }
       void this.slice().finally(() => { if (this.running) this.schedule(tick, this.everyMs); });
     };
     this.schedule(tick, this.everyMs);
