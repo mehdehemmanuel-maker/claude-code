@@ -206,9 +206,16 @@ observation.
 book: a disc's inertia under Froude similarity is covariant and grows as λ⁵, the mass as λ³ and r² as λ², so I / m r² is
 the same ½ at both sizes and the acceleration ⅔ g sin θ does not know the size; measured ratio 0.997.
 
+**Restitution, at two sizes.** A rubber ball of 0.05 m dropped from 0.5 m, one of 0.2 m from 2 m, and the big one from
+0.5 m. The law book: potential energy under Froude similarity is covariant, λ⁴, and the restitution is a property the
+similarity holds, so the first bounce reaches λ times the height for λ times the drop and the same height for the same
+drop. Measured: 3.90 for 4 (2.5 % under, the contact model's velocity dependence, within the 10 % the test holds for a
+contact) and 1.000 for 1; the bounce keeps 0.51 of the drop.
+
 **The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
 observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
-tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1. The
+tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1,
+restitution 3.90 for 4. The
 conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
 is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
 with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they

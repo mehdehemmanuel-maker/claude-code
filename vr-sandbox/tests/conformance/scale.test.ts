@@ -131,6 +131,36 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(Math.abs(s1 / (0.2 * a * 0.6 + 0.5 * a * 0.36) - 1)).toBeLessThan(0.05);
   }, 180000);
 
+  it('Restitution: a rubber ball four times the diameter dropped from four times the height bounces four times as high, and from the same height as high, as Froude similarity predicts with the restitution held', async () => {
+    const lambda = 4;
+    // the law book: potential energy under Froude similarity is covariant (λ⁴: mass λ³, height λ); the bounce keeps the fraction e² of the drop height, e a
+    // property of the materials that every engineering similarity holds, so the apex scales with the drop height: λ for λ times the height, 1 for the same height
+    const v = classify('energy.potential', similarityById('scale.froude')!, lambda);
+    expect(v.verdict).toBe('covariant');
+    expect(v.expected / v.example).toBeCloseTo(lambda ** 4, 6);
+    /** The apex of the first bounce of a rubber sphere of diameter d dropped from a height h (of its underside) onto the floor. */
+    const bounce = async (d: number, h: number) => {
+      const r = await rig();
+      const ball = r.part('sphere', at(0, h + d / 2, 0), { material: 'rubber.natural', params: { diameter: d } });
+      let prev = Infinity, state: 'fall' | 'rise' | 'done' = 'fall', apex = 0;
+      r.run(2 * Math.sqrt((2 * h) / G) + 1, () => {
+        const y = r.pos(ball)[1] - d / 2;
+        if (state === 'fall' && y > prev + 1e-6) state = 'rise';
+        if (state === 'rise') { apex = Math.max(apex, y); if (y < prev - 1e-6) state = 'done'; }
+        prev = y;
+      });
+      r.done();
+      expect(state, `the ball of ${d} m bounced and came down again`).toBe('done');
+      return apex;
+    };
+    const small = await bounce(0.05, 0.5), big = await bounce(0.05 * lambda, 0.5 * lambda), same = await bounce(0.05 * lambda, 0.5);
+    console.log('OBSERVED observation.restitution-froude', big / small, 'same-height', same / small, 'fraction', small / 0.5);
+    const o = observationById('observation.restitution-froude')!;
+    expect(Math.abs(big / small / lambda - 1)).toBeLessThan(o.tolerance);
+    expect(Math.abs(same / small - 1)).toBeLessThan(o.tolerance);
+    expect(Math.abs(big / small / o.measured - 1), 'the register records what the engine gives').toBeLessThan(o.tolerance);
+  }, 240000);
+
   it('Froude: a pendulum four times longer with a bob of the same material swings twice as slowly, as the covariant verdict predicts', async () => {
     const lambda = 4;
     const verdict = classify('pendulum.period', similarityById('scale.froude')!, lambda);
