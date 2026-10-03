@@ -90,6 +90,10 @@ const quantityOf = (law: Law, value: number, en: string): R => r('quantity', [d(
 export function certificate(c: Claim): Certificate {
   const { laws, dim } = reaching(c);
   if (!dim) return { impossible: false, mode: 'undefined', why: `${c.unit} is not a unit I can read` };
+  // a claim or a given that is not a number means nothing: undefined, never a verdict and never a crash
+  if (!Number.isFinite(c.value)) return { impossible: false, mode: 'undefined', why: `${c.value} is not a number` };
+  const bad = Object.entries(c.inputs).find(([, v]) => !Number.isFinite(v));
+  if (bad) return { impossible: false, mode: 'undefined', why: `${bad[0]} = ${bad[1]} is not a number` };
   if (!laws.length) return { impossible: false, mode: 'unknown', why: `no law of mine computes or bounds ${c.quantity}; no certificate, so not impossible: unknown` };
   const ready = laws.filter((l) => applicable(l, c.inputs));
   if (!ready.length) {
@@ -127,6 +131,8 @@ export function certificate(c: Claim): Certificate {
     const structure = r('contradict', [claimS, boundS], { mode: 'impossible-under', under: assumptions, mech: law.id, ev: { how: 'derived', src: [law.source.cite] } });
     contradicted ??= { impossible: true, mode: 'impossible-under', law, bound: value, sense, assumptions, derivation, structure };
   }
+  // one word, two laws: an entailment by one law is said with the law that disagrees, never over it
+  if (entailed && contradicted && contradicted.impossible && contradicted.law !== entailed.law) entailed = { ...entailed, why: `${entailed.why} (${contradicted.law.name} also reaches ${c.quantity} with these inputs and gives ${Number(((contradicted.bound - (parseUnit(contradicted.law.output.unit).offset ?? 0)) / parseUnit(contradicted.law.output.unit).scale).toPrecision(4))} ${contradicted.law.output.unit}: the word names two quantities here)` };
   return entailed ?? contradicted ?? bounded ?? outside ?? { impossible: false, mode: 'unknown', why: 'no law reached a verdict' };
 }
 

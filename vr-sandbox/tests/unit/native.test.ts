@@ -756,6 +756,13 @@ describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, imposs
     expect(family(lawById('time.dilation.gravity')!, 'r', { M: 2e30 }).admissible(1000).ok).toBe(false);
     expect(family(lawById('time.dilation.gravity')!, 'r', { M: 2e30 }).admissible(1e7).ok).toBe(true);
     expect(certificate({ quantity: 'efficiency', value: 0.5, unit: 'furlongs', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined' });
+    // a given that is not a number is undefined, never a verdict and never a crash
+    expect(certificate({ quantity: 'efficiency', value: 0.2, unit: '-', inputs: { Tc: NaN, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined', why: 'Tc = NaN is not a number' });
+    expect(certificate({ quantity: 'efficiency', value: NaN, unit: '-', inputs: { Tc: 300, Th: 400 } })).toMatchObject({ impossible: false, mode: 'undefined' });
+    // one word, two laws: "energy" with a mass, a speed and a height is entailed by the kinetic law and said with the potential law that disagrees
+    const two = certificate({ quantity: 'energy', value: 290.4, unit: 'J', inputs: { m: 120, v: 2.2, h: 1 } });
+    expect(two).toMatchObject({ impossible: false, mode: 'true' });
+    expect(two.impossible ? '' : two.why).toBe('Kinetic energy gives 290.4 J at these inputs and the claim is 290.4 J, within the claim taken at its word (Gravitational potential energy also reaches energy with these inputs and gives 1177 J: the word names two quantities here)');
   });
 
   it('every law signs only what it computes: the ten bound laws admit their example and certify ten per cent beyond it; every equality law entails its example and contradicts ten times it; inputs missing sign nothing', () => {
