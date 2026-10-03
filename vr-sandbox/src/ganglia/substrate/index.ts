@@ -24,6 +24,7 @@ export * from './model';
 export { Substrate, coverageFrom } from './substrate';
 export { Pack, est, param } from './dsl';
 export { Queue, populate, seedQueue, priority, ingest, ask, promoteManifolds, buildGenerators, missingConstructors, ruleExpander, seedExpander, type Expander, type Report, type WorkItem, type Generator } from './population';
+export { spokenName, articled, capitalised, findByWords, SPOKEN } from './names';
 export { externalExpander, recordToDiscovery, provenanceOf, type Connector, type ExternalRecord, type ExternalLink, type ExternalQuantity } from './external';
 export { Population, startPopulation, population, stopPopulation, type PopulationOptions, type JournalEntry, type Totals } from './service';
 export { wikidata, parseItem, referencedIds, PROPERTIES as WIKIDATA_PROPERTIES, WIKIDATA_API, type WikidataOptions } from './connectors/wikidata';

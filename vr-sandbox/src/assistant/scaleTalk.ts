@@ -5,14 +5,13 @@
 import type { Intent } from './intent';
 import { LAWS, lawById } from '../ganglia/laws';
 import { TICK } from '../physics/world';
-import { substrate, type SubstrateEntity } from '../ganglia';
+import { findByWords, spokenName, substrate } from '../ganglia';
 import { SIMILARITIES, similarityById, scaleSystem, GROUPS, groupUnder, classify, scaleSetters, OBSERVERS, observerById, project, MECHANISMS, propagation, CROSS_SCALES, universalScaleStructuralEquivalence, findScaleAnalogues, characteristicLength, characteristicTime, redesign, scaleLimits, type ScaleTransform } from '../ganglia/scale';
 import { engineeredReport, type Engineered } from '../ganglia/manifold';
 
 type Scale = Extract<Intent, { do: 'scaling' }>;
 
-const PREFIX = /^(bio|material|process|machine|chem|phys|element|circuit|robot|vehicle|earth|energy|cross|group|scale|observer|std|failure|role|fn|param|view|tool|block|kind|way|flow|domain) /;
-const nameOf = (e: SubstrateEntity) => (e.names.find((n) => !PREFIX.test(n) && n !== e.name) ?? e.name).replace(PREFIX, '');
+const nameOf = spokenName;
 const k = (x: number) => (Math.abs(x) >= 1000 || Math.abs(x) < 0.001 ? x.toExponential(2) : +x.toPrecision(3)).toString();
 
 /** A law by its words: id, name, or the words of its name. */
@@ -22,15 +21,8 @@ function findLaw(words: string) {
   return lawById(w) ?? LAWS.find((l) => norm(l.name) === w) ?? LAWS.find((l) => l.id.replace(/[.-]/g, ' ') === w) ?? LAWS.find((l) => norm(l.name).startsWith(w) || norm(l.name).includes(w)) ?? LAWS.find((l) => w.split(' ').every((x) => norm(l.name).includes(x) || l.id.includes(x))) ?? LAWS.find((l) => l.tags.includes(w));
 }
 
-/** A thing of the substrate by its words, preferring one that carries a characteristic scale. */
-function findThing(words: string): SubstrateEntity | undefined {
-  const s = substrate();
-  const w = words.toLowerCase().trim();
-  const aliases: Record<string, string> = { heartbeat: 'bio.heart', 'heart beat': 'bio.heart', wingbeat: 'bio.insect-wing-hinge', 'wing beat': 'bio.insect-wing-hinge', stride: 'bio.human', step: 'bio.human', 'atp synthase': 'bio.atp-synthase', 'flagellar motor': 'bio.bacterial-flagellar-motor', kart: 'vehicle.car', car: 'vehicle.car', motor: 'motor.electric', 'electric motor': 'motor.electric', heart: 'bio.heart', cell: 'bio.cell', neuron: 'bio.neuron', atom: 'chem.atom', proton: 'phys.proton', bearing: 'bearing', pump: 'pump.centrifugal', turbine: 'turbine', 'the earth': 'earth', earth: 'earth', climate: 'earth.climate', weather: 'earth.weather', river: 'earth.river', ocean: 'earth.ocean', tide: 'earth.tide', homeostasis: 'bio.homeostasis', transistor: 'transistor', cpu: 'cpu', chip: 'ic', drone: 'vehicle.drone', ship: 'vehicle.ship', aircraft: 'vehicle.aircraft', plane: 'vehicle.aircraft', lathe: 'machine.lathe', spring: 'spring.helical', flywheel: 'flywheel.disc', servo: 'servo', gear: 'gear.spur', frame: 'frame', muscle: 'bio.skeletal-muscle', virus: 'bio.virus', bacterium: 'bio.bacteria', bacteria: 'bio.bacteria', ribosome: 'bio.ribosome', protein: 'bio.protein', molecule: 'chem.molecule', human: 'bio.human', person: 'bio.human', me: 'bio.human' };
-  const id = aliases[w];
-  if (id && s.get(id)) return s.get(id);
-  return s.get(w) ?? s.byWord(w) ?? s.get(w.replace(/\s+/g, '.')) ?? s.get(`bio.${w.replace(/\s+/g, '-')}`) ?? s.get(`vehicle.${w}`) ?? s.get(`earth.${w}`);
-}
+/** A thing of the substrate by its words: the shared resolution, with the spoken layer. */
+const findThing = (words: string) => findByWords(substrate(), words);
 
 function findObserver(words: string) {
   const w = words.toLowerCase().trim();

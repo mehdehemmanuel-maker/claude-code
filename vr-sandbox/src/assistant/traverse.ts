@@ -2,36 +2,16 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { analogues, constructionPath, decomposeThing, dualRole, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, substrate, substrateCensus, variantsOf, waysToStore, type SubstrateEntity } from '../ganglia';
+import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
 
 // a human name where one is given; else the id said as words, without the domain prefix an id carries for uniqueness
-const PREFIX = /^(bio|material|process|machine|chem|phys|element|std|failure|role|fn|param|view|circuit|robot|vehicle|earth|energy|tool|block|kind|way|flow|domain|cross|group|scale|observer) /;
-const nameOf = (e: SubstrateEntity) => (e.names.find((n) => !PREFIX.test(n) && n !== e.name) ?? e.name).replace(PREFIX, '');
-const an = (name: string) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+const nameOf = spokenName;
+const an = articled;
 const list = (xs: string[], max = 12) => (xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`);
 const sci = (x: number) => x.toExponential(1).replace('e+', 'e');
-
-/** Find the thing a word names: by a human name, by id, by the id with a usual prefix, or by the word in an id. */
-function find(word: string): SubstrateEntity | undefined {
-  const s = substrate();
-  const w = word.trim().toLowerCase().replace(/\s+/g, ' ');
-  // an id is identity; a human name is a name over it: the exact id wins over whatever borrowed the word as a name
-  const id = w.replace(/\s+/g, '.');
-  const direct = s.get(w) ?? s.get(id) ?? s.byWord(w);
-  if (direct) return direct;
-  for (const cand of [id, w.replace(/\s+/g, '-'), `motor.${w.replace(/^(electric|electrical) motor$/, 'electric')}`, w.replace(/^(an? |the )/, '')]) { const e = s.byWord(cand); if (e) return e; }
-  const singular = w.replace(/s$/, '');
-  for (const cand of [singular, singular.replace(/\s+/g, '.')]) { const e = s.byWord(cand); if (e) return e; }
-  // a role said as a phrase: "electrical conductor" is role.electrical-conductor; a function: "store energy" is store.energy
-  for (const prefix of ['role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.']) { const e = s.get(prefix + w.replace(/\s+/g, '-')) ?? s.get(prefix + w.replace(/\s+/g, '.')); if (e) return e; }
-  const words = w.split(' ');
-  if (words.length === 2) { const e = s.get(`${words[1]}.${words[0]}`) ?? s.get(`${words[0]}.${words[1]}`); if (e) return e; }
-  // the last resort: the one entity whose id ends in the word
-  const hits = [...s.entities.values()].filter((e) => e.id.endsWith(`.${singular}`) || e.id === singular);
-  return hits.length === 1 ? hits[0] : undefined;
-}
+const find = (word: string) => findByWords(substrate(), word);
 
 /** What to say of a thing I do not know: asked outside when a source is connected, else a question for the packs. */
 function unknown(name: string): string {
