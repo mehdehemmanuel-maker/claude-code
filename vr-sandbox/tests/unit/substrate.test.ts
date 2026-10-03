@@ -904,7 +904,8 @@ describe('what the second probe of 3 October found (lineage, construction, mecha
     expect(cut).toMatch(/^\d+ mechanisms cut: /);
     expect(cut).toMatch(/Which of them cut steel I have not been told/);
     expect(answerTraversal({ do: 'traverse', query: 'ways-to-store', of: 'heat' })).toMatch(/^Heat is stored as thermal storage: \d+ things do it/);
-    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'lever' })).toMatch(/^A lever is a kind of /);
+    // the lever has no kind above it in the seeds: said so, not "a kind of nothing I know" (which a test once pinned as if it were an answer)
+    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'lever' })).toMatch(/^I have no kind above a lever\. Kinds of lever: /);
     expect(answerTraversal({ do: 'traverse', query: 'standards', of: 'bolt' })).toMatch(/is standardized/);
     expect(answerTraversal({ do: 'traverse', query: 'interfaces', of: 'servo' })).toMatch(/^A hobby servo connects to /);
     // a wing lifts and a load cell measures force (Anderson; Horowitz & Hill)
@@ -1051,8 +1052,9 @@ describe('Ego decomposes a symptom into candidates, none chosen (section M in he
     expect(interpret('that motor is struggling')).toEqual({ do: 'traverse', query: 'symptom', of: 'motor', which: 'struggling' });
     expect(interpret('the bearing is noisy')).toEqual({ do: 'traverse', query: 'symptom', of: 'bearing', which: 'noisy' });
     const motor = answerTraversal({ do: 'traverse', query: 'symptom', of: 'motor', which: 'struggling' });
-    expect(motor).toMatch(/^"Struggling" of a motor could be 5 things to me, none chosen: the torque asked of it is near what it can give \(settled by a torque reading against the stall torque\); its speed has fallen under its load/);
-    expect(motor).toMatch(/certain between 0 and 0\.4 until it is; the word is where my certainty is lowest\. In Nex: influence\(load, quantity\(motor, "torque demanded"\)\)\{dir:1 polarity:\+ cert:\{kind:interval lo:0 hi:0\.4 source:epistemic\} ev:\{how:hypothesized src:\["said: \\"struggling\\""\]\} mode:unmeasured instrument:/);
+    // the electric motor's failures that carry the word (overheating, brush wear, a bearing past its life), then the five readings of a motor's quantities
+    expect(motor).toMatch(/^"Struggling" of a motor could be [6-9] things to me, none chosen: .*the torque asked of it is near what it can give \(settled by a torque reading against the stall torque\); its speed has fallen under its load/);
+    expect(motor).toMatch(/the word is where my certainty is lowest\. In Nex: influence\(failure\.[a-z-]+, motor\)\{dir:1 polarity:- necessity:contributing cert:\{kind:interval lo:0 hi:[0-9.]+ source:epistemic\} ev:\{how:hypothesized src:\["said: \\"struggling\\""\]\} mode:unmeasured instrument:/);
     const bearing = answerTraversal({ do: 'traverse', query: 'symptom', of: 'bearing', which: 'noisy' });
     expect(bearing).toMatch(/^"Noisy" of a bearing could be 4 things to me, none chosen: spalling: .*; brinelling: .*; wear: .*; lubricant starvation: /);
     expect(bearing).toMatch(/In Nex: influence\(failure\.spalling, bearing\)\{dir:1 polarity:- necessity:contributing cert:\{kind:interval lo:0 hi:0\.5 source:epistemic\} ev:\{how:hypothesized src:\["said: \\"noisy\\""\]\} mode:unmeasured instrument:"measuring /);
@@ -1083,6 +1085,11 @@ describe('Ego on what causes a thing: its laws speak when no arrow does, and one
     const fatigue = answerTraversal({ do: 'traverse', query: 'cause', of: 'fatigue' });
     expect(fatigue).toMatch(/fatigue \(the \w+\) contributes to \(raises\) fatigue \(the \w+\)/);
     expect(interpret('what are the kinds of motor')).toEqual({ do: 'traverse', query: 'kinds', of: 'motor' });
+    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'bearing' })).toMatch(/^I have no kind above a bearing\. Kinds of bearing: /);
+    // "current" beside overheating is the current Joule heating takes, not the ocean current
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'current', which: 'overheating' })).toMatch(/^No arrow of mine runs from electric current to overheating, but a law does: Electric current contributes to \(raises\) heat \(W\) of overheating .*Joule heating \(P = I² R\): current \(I\) raises/);
+    // a generic motor sparks as its kinds' kinds do: the brushed motor's brush wear
+    expect(answerTraversal({ do: 'traverse', query: 'symptom', of: 'motor', which: 'sparking' })).toMatch(/^"Sparking" of a motor could be .*brush wear: /);
     expect(interpret('what are the standards for a bearing')).toMatchObject({ do: 'traverse', query: 'standards', of: 'bearing' });
     expect(interpret('what is the lineage of a transistor')).toMatchObject({ do: 'traverse', query: 'lineage', of: 'transistor' });
   });

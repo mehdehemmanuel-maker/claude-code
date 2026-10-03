@@ -8,7 +8,7 @@ import type { Law, Source } from '../types';
 import type { Node } from '../tree/schema';
 import type { Entity, Relation } from '../substrate/model';
 import type { Substrate } from '../substrate/substrate';
-import { spokenName } from '../substrate/names';
+import { SPOKEN, spokenName } from '../substrate/names';
 import { d, e, q, r, type Coords, type D, type Evidence, type Mode, type R, type Structure } from './core';
 
 /** How a source of the law book is known, in the evidence morphology. */
@@ -161,9 +161,13 @@ export function symptoms(s: Substrate, thing: Entity, word: string, laws?: Map<s
   for (const f of s.reach(thing.id, 'fails-by')) modes.set(f.id, f);
   for (const k of s.reach(thing.id, 'is-a')) for (const f of s.reach(k.id, 'fails-by')) modes.set(f.id, f);
   for (const m of s.reach(thing.id, 'made-of')) for (const f of s.reach(m.id, 'fails-by')) modes.set(f.id, f);
-  // a generic thing with no failure of its own ("a motor") fails as its kinds do (a brushed DC motor, a brushless one)
-  if (!modes.size) for (const rel of s.into(thing.id, 'is-a')) for (const f of s.reach(rel.from, 'fails-by')) modes.set(f.id, f);
-  const hits = [...modes.values()].filter((f) => { const hay = `${f.id} ${f.name} ${f.says}`.toLowerCase(); return stems.some((st) => hay.includes(st)); });
+  const gather = (id: string) => { for (const f of s.reach(id, 'fails-by')) modes.set(f.id, f); const members = s.into(id, 'is-a').map((rel) => rel.from); for (const m of [...members, ...members.flatMap((m) => s.into(m, 'is-a').map((rel) => rel.from))]) for (const f of s.reach(m, 'fails-by')) modes.set(f.id, f); };
+  const collect = () => [...modes.values()].filter((f) => { const hay = `${f.id} ${f.name} ${f.says}`.toLowerCase(); return stems.some((st) => hay.includes(st)); });
+  let hits = collect();
+  // nothing of its own carries the word: its kinds' failures, then the thing the spoken layer means by the bare word
+  // ("motor" is the electric motor), whose kinds carry the failures
+  if (!hits.length) { gather(thing.id); hits = collect(); }
+  if (!hits.length) { const alt = SPOKEN[thing.name.toLowerCase()] ?? SPOKEN[thing.id]; if (alt && alt !== thing.id && s.get(alt)) { gather(alt); hits = collect(); } }
   if (!hits.length) return [];
   const share = 1 / hits.length;
   const self = d(thing.id, { en: spokenName(thing) });

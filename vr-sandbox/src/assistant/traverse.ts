@@ -320,7 +320,9 @@ export function answerTraversal(i: Traverse): string {
     // a word of two senses beside a quantity is the quantity ("current" beside heat); otherwise it is asked
     const failureOfWhich = /^(?:the )?(?:failure|failing|breaking|death|wear) of (?:an? |the )?(.+)$/.exec(i.which ?? '')?.[1];
     const other = i.which ? find(failureOfWhich ?? i.which) : undefined;
-    const asQuantity = (word: string, beside: Entity | undefined): Entity | undefined => (beside?.kinds.includes('quantity') ? settle(readings(s, word), { kinds: ['quantity'] }).chosen?.entity : undefined);
+    // ... or a quantity that a law governing the other thing (or a failure of it) takes as an input: "current" beside overheating is the current of Joule heating
+    const lawTakes = (word: string, beside: Entity): boolean => { const w = word.toLowerCase(); return [beside.id, ...s.reach(beside.id, 'fails-by').map((f) => f.id)].some((id) => s.outOf(id, 'governed-by').some((rel) => LAWS.find((l) => l.id === rel.to)?.inputs.some((x) => { const n = x.name.toLowerCase(); return n === w || n.split(/\W+/).pop() === w; }))); };
+    const asQuantity = (word: string, beside: Entity | undefined): Entity | undefined => (beside && (beside.kinds.includes('quantity') || lawTakes(word, beside)) ? settle(readings(s, word), { kinds: ['quantity'] }).chosen?.entity : undefined);
     const a = find(i.of ?? '') ?? asQuantity(i.of ?? '', other);
     // a thing she does not know can be no cause she knows: said with the rule that no correlation would make it one
     if (!a) return `${unknown(i.of ?? '')} ${i.which ? `So I know no mechanism by which it ${i.prevent ? 'prevents' : 'causes'} ${i.which}. ${correlation}` : ''}`.trim();
@@ -436,7 +438,7 @@ export function answerTraversal(i: Traverse): string {
     if (!e) return unknown(i.of ?? '');
     const up = s.reach(e.id, 'is-a'), down = s.into(e.id, 'is-a').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x);
     if (!up.length && !down.length) return `I know no kind ${art(e)} is, nor any kind of it: that is a question on my queue.`;
-    return `${up.length ? `${cap(art(e))} is a kind of ${list(up.map(nameOf), 6)}.` : `${cap(art(e))} is a kind of nothing I know.`}${down.length ? ` Kinds of ${nameOf(e)}: ${list(down.map(nameOf), 10)}.` : ''}`;
+    return `${up.length ? `${cap(art(e))} is a kind of ${list(up.map(nameOf), 6)}.` : `I have no kind above ${art(e)}.`}${down.length ? ` Kinds of ${nameOf(e)}: ${list(down.map(nameOf), 10)}.` : ''}`;
   }
   if (i.query === 'standards') {
     const e = find(i.of ?? '');
