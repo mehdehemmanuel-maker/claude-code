@@ -25,6 +25,8 @@ export type Intent =
   | { do: 'recall'; about: string }
   /** How much she knows. */
   | { do: 'ganglia' }
+  /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
+  | { do: 'traverse'; query: TraversalQuery; of?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
   | { do: 'engineer'; workflow: string; spec: Record<string, number> }
   /** A behaviour wanted with its numbers: engineered through the manifold language, never answered by a name. */
@@ -75,6 +77,29 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
+export type TraversalQuery = 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'index' | 'census';
+
+/** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
+function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
+  let m: RegExpExecArray | null;
+  const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
+  if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each) (?:known |possible )?ways? (?:to|of) (?:store|storing) (\w+)|^how (?:can|could) (\w+) be stored|^ways? to store (\w+)$/.exec(t))) return { do: 'traverse', query: 'ways-to-store', of: (m[1] ?? m[2] ?? m[3])! };
+  if (/^(?:show (?:me )?)?(?:every|all(?: the)?|each|which) mechanisms? (?:that )?(?:converts?|turns?|changes?) electrical (?:energy |power )?(?:into|to) (?:mechanical )?(?:motion|rotation|movement|work)|^(?:every|all(?: the)?|which) (?:ways?|mechanisms?) to make an? rotational actuator|^how (?:can|could|do) (?:i|you|we) make an? rotational actuator|^(?:all |every )?(?:the )?ways? (?:of making|to make) an? rotational actuator/.test(t)) return { do: 'traverse', query: 'implementations', of: 'convert.electrical.rotational' };
+  if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|which|what) materials? (?:for|that (?:can )?(?:make|be|work as)) (?:an? )?(.+?)(?: with (?:their |the )?tradeoffs?)?$|^what (?:can|could) (?:i|you|we) make an? (.+?) (?:out of|from)$/.exec(t))) return { do: 'traverse', query: 'materials-for', of: strip((m[1] ?? m[2])!) };
+  if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each|what) (?:types?|kinds?|sorts?|variants?) of (\w+?)s?(?: (?:there are|exist|are there))?$|^what (\w+?)s? (?:are there|exist)$/.exec(t))) return { do: 'traverse', query: 'variants', of: (m[1] ?? m[2])! };
+  if ((m = /^(?:the |all (?:the )?)?(?:components|parts) of (?:an? |the )?(.+)$|^what (?:are the )?(?:components|parts) (?:of|in) (?:an? |the )?(.+)$|^what is (?:an? |the )?(.+) made (?:of|from)$/.exec(t))) return { do: 'traverse', query: 'components', of: strip((m[1] ?? m[2] ?? m[3])!) };
+  if ((m = /^what (?:makes|manufactures|produces|builds) the machines? that (?:makes?|manufactures?|produces?|builds?) (?:an? |the )?(.+)$|^what (?:makes|manufactures|produces) (?:the )?(?:machines?|tools?) (?:that|which) (?:makes?|manufactures?) (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'producers-of-producers', of: strip((m[1] ?? m[2])!) };
+  if ((m = /^what (?:can )?(?:manufactures?|produces?|machines? makes?|makes) (?:an? |the )?(.+?)(?: (?:and|then) what (?:makes|manufactures) (?:those|them|that))?$|^how (?:is|are) (?:an? |the )?(.+?) (?:made|manufactured|produced)$|^(?:who|what) makes (?:an? |the )?(.+)$/.exec(t)) && !/^what makes up/.test(t)) return { do: 'traverse', query: /what (?:makes|manufactures) (?:those|them|that)$/.test(t) ? 'producers-of-producers' : 'producers', of: strip((m[1] ?? m[2] ?? m[3])!) };
+  if ((m = /^(?:show (?:me )?)?(?:the |all (?:the )?|every )?(?:biological|biology|living|natural) (?:mechanisms?|analogues?|analogs?|equivalents?|versions?) (?:analogous |similar |equivalent )?(?:to|of|for) (?:an? |the )?(.+)$|^what in (?:biology|nature|living things) (?:is like|works like|does what) (?:an? |the )?(.+?)(?: does)?$|^(?:bio|biological) analogues? of (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'analogues', of: strip((m[1] ?? m[2] ?? m[3])!) };
+  if (/^(?:show (?:me )?)?(?:the |all (?:the )?|which |what )?(?:structures?|parts?) (?:in|of) (?:an? |the )?human(?: body)? (?:that (?:are|serve|have|work)|serving|with) both (?:a )?mechanical and (?:a )?biological|^what in (?:an? |the )?human(?: body)? is both mechanical and biological/.test(t)) return { do: 'traverse', query: 'dual-role', of: 'bio.human' };
+  if ((m = /^(?:show (?:me )?)?(?:the )?(?:generative |full )?lineage of (?:an? |the )?(.+)$|^how (?:is|was|does) (?:an? |the )?(.+?) (?:built|made|generated|assembled) (?:from|out of) (?:atoms|physics|physical primitives|the ground up|first principles)$|^what (?:is|was) (?:an? |the )?(.+?) (?:built|made|generated) from(?:, all the way down)?$/.exec(t))) return { do: 'traverse', query: 'lineage', of: strip((m[1] ?? m[2] ?? m[3])!) };
+  if ((m = /^what do (?:i|we|you) need to (?:build|make|construct) (?:an? |the )?(.+)$|^(?:the )?construction path (?:for|to|of) (?:an? |the )?(.+)$|^how (?:would|do|could|can) (?:i|we|you) (?:build|make|construct) (?:an? |the )?(.+?) from scratch$/.exec(t))) return { do: 'traverse', query: 'construction-path', of: strip((m[1] ?? m[2] ?? m[3])!) };
+  if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|which|what) mechanisms? (?:that |which )?(?:can |could )?(.+)$|^what (?:can|could) (.+?)(?: for me)?$/.exec(t)) && !/^what (?:can|could) (?:i|you|we) /.test(t)) return { do: 'traverse', query: 'mechanisms-for', of: (m[1] ?? m[2])! };
+  if ((m = /^(?:index(?: of)?|everything about|everything you know about|all about) (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'index', of: strip(m[1]!) };
+  if (/^(?:how (?:big|large|deep) is (?:your|the) (?:substrate|index|graph)|(?:substrate|index) (?:census|size)|what (?:does|do) (?:your|the) (?:substrate|index) (?:hold|know|contain)|how much (?:of )?(?:reality|the world) do you (?:know|index))$/.test(t)) return { do: 'traverse', query: 'census' };
+  return null;
+}
+
 export function interpret(line: string): Intent | null {
   const t = line.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9%. ]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(ego|hey ego|please|can you|could you|would you)\s+/g, '').replace(/\s+please$/, '');
   if (!t) return null;
@@ -136,6 +161,8 @@ export function interpret(line: string): Intent | null {
   // "look at this", "see this?", "watch this", "look here": she looks where you point
   if (/^(look|see|watch|check)( at)? (this|that|here|it)\b|^(look|see|watch) here\b|^(do you see|can you see) (this|that)/.test(t)) return { do: 'show' };
   if (/^(how much do you know|what do you know|your (ganglia|knowledge)|what have you learned)$/.test(t)) return { do: 'ganglia' };
+  const tr = traversalOf(t);
+  if (tr) return tr;
   // a building block opens into its anatomy; a machine breaks down into its assemblies
   if ((m = /^(?:whats inside|what is inside|open up|anatomy of|what makes up|break ?down|whats in|what is in)\s+(?:an? |the )?(.+)$/.exec(t)) && !!archetypeByWord(m[1]!) && !/fx10|printer|markforged/.test(t)) return { do: 'inside', what: m[1]!.trim() };
   if ((m = /^(?:break ?down|breakdown|tear ?down|teardown|what is inside|whats inside|whats in|what is in|what makes up|map out)\s+(?:of\s+)?(?:an? |the )?(.+)$/.exec(t))) return { do: 'breakdown', what: m[1]!.trim() };

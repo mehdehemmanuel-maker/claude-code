@@ -1,0 +1,297 @@
+// The population process: a persistent, prioritised queue of questions (an entity and a facet), workers partitioned by
+// domain, expanders that answer a question from a source (a seed pack's deep knowledge, a derivation rule over what
+// is already known, an external source when one is connected), and a pipeline for every answer: discover, extract,
+// normalise, decompose, classify, relate, cross-link, deduplicate, validate, assign provenance, build manifolds, build
+// generators, build construction paths, queue deeper. Every discovery can make more questions; the queue converges
+// when no question yields anything new or the budget is spent. Known is never complete: coverage says how far.
+import { FACETS, KINDS, NAMED_AS, RELATION_KINDS, normalizeId, type Discovery, type Entity, type Facet, type Relation } from './model';
+import { Substrate } from './substrate';
+import type { Pack } from './dsl';
+import { LAWS } from '../laws';
+
+export interface WorkItem { id: string; facet: Facet; mode: 'fast' | 'deep'; priority: number; reason: string; domain: string }
+
+/** A priority queue of questions, deduplicated, serialisable so population can be resumed. */
+export class Queue {
+  private items: WorkItem[] = [];
+  private readonly keys = new Set<string>();
+  readonly done = new Set<string>();
+  push(w: WorkItem): boolean {
+    const key = `${w.id}|${w.facet}|${w.mode}`;
+    if (this.keys.has(key) || this.done.has(key)) return false;
+    this.keys.add(key);
+    this.items.push(w);
+    return true;
+  }
+  /** The most valuable question, in one domain, in a set of domains (a worker's lane), or anywhere. */
+  pop(domain?: string | string[]): WorkItem | undefined {
+    const inLane = (d: string) => !domain || (typeof domain === 'string' ? d === domain : domain.includes(d));
+    let best = -1;
+    for (let i = 0; i < this.items.length; i++) if (inLane(this.items[i]!.domain) && (best < 0 || this.items[i]!.priority > this.items[best]!.priority)) best = i;
+    if (best < 0) return undefined;
+    const [w] = this.items.splice(best, 1);
+    const key = `${w!.id}|${w!.facet}|${w!.mode}`;
+    this.keys.delete(key);
+    this.done.add(key);
+    return w;
+  }
+  get size(): number { return this.items.length; }
+  domains(): string[] { return [...new Set(this.items.map((w) => w.domain))]; }
+  peek(n = 10): WorkItem[] { return [...this.items].sort((a, b) => b.priority - a.priority).slice(0, n); }
+  serialize(): string { return JSON.stringify({ items: this.items, done: [...this.done] }); }
+  static restore(text: string): Queue {
+    const q = new Queue();
+    const { items, done } = JSON.parse(text) as { items: WorkItem[]; done: string[] };
+    for (const d of done) q.done.add(d);
+    for (const w of items) q.push(w);
+    return q;
+  }
+}
+
+/**
+ * How much a question is worth asking now: entities that unlock others (many things require or are made by them),
+ * that are constructors, materials or functions, that are well connected, that are little known, and that engineering
+ * leans on. Stubs named by many things come first: they are the frontier.
+ */
+export function priority(s: Substrate, e: Entity, facet: Facet): number {
+  const inbound = s.into(e.id).length, outbound = s.outOf(e.id).length;
+  const unlock = s.into(e.id, 'requires').length + s.into(e.id, 'produced-by').length + s.into(e.id, 'has-part').length + s.into(e.id, 'made-of').length;
+  const leverage = (e.kinds.includes('constructor') || e.kinds.includes('process') ? 3 : 0) + (e.kinds.includes('material') ? 2 : 0) + (e.kinds.includes('function') ? 2 : 0) + (e.kinds.includes('manifold') ? 2 : 0) + (e.kinds.includes('law') ? 1 : 0);
+  const uncertainty = (3 - e.coverage.depth) * 2 + (1 - e.coverage.confidence) * 3;
+  const engineering = e.domains.some((d) => ['mechanical', 'electrical', 'manufacturing', 'materials', 'robotics', 'circuits'].includes(d)) ? 2 : 0;
+  const facetWeight: Record<Facet, number> = { constructors: 3, components: 2.5, materials: 2, mechanisms: 2, functions: 2, manufacturing: 2, laws: 1.5, failures: 1.5, interfaces: 1.5, variants: 1, standards: 1, analogues: 1, manifolds: 1, transformations: 1.5, properties: 1 };
+  return Math.log2(1 + inbound + outbound) + 2 * Math.log2(1 + unlock) + leverage + uncertainty + engineering + facetWeight[facet];
+}
+
+/** A source that can answer a question about an entity along a facet. */
+export interface Expander {
+  name: string;
+  facets: Facet[];
+  /** Null when this source has nothing on it; a discovery otherwise, with its unknowns. */
+  expand(e: Entity, facet: Facet, s: Substrate): Discovery | null;
+}
+
+/** The deep knowledge a seed pack kept back, played when the queue asks for it. */
+export function seedExpander(packs: Pack[]): Expander {
+  const deeps = packs.flatMap((p) => p.deeps.map((d) => ({ ...d, pack: p })));
+  return {
+    name: 'seeds',
+    facets: [...FACETS],
+    expand(e, facet) {
+      const hits = deeps.filter((d) => d.id === e.id && d.facet === facet);
+      if (!hits.length) return null;
+      const out: Discovery = { entities: [], relations: [], unknowns: [] };
+      for (const h of hits) {
+        const scratch = new (h.pack.constructor as new (domain: string, source: Pack['source']) => Pack)(h.pack.domain, h.pack.source);
+        h.fn(scratch);
+        out.entities.push(...scratch.entities);
+        out.relations.push(...scratch.relations);
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * Derivations over what is already known: rules whose provenance is the rule. A material's roles from its numbers;
+ * analogues from a shared function across domains; failures from the laws a thing is governed by; the manufacturing
+ * of a thing from the processes that work its material; the constructors a thing lacks named as a known unknown.
+ */
+export function ruleExpander(): Expander {
+  const rule = (why: string) => ({ derived: `population.ts rule: ${why}` });
+  const r = (from: string, kind: Relation['kind'], to: string, why: string): Relation => ({ from, kind, to, source: rule(why), confidence: 0.6, says: why });
+  return {
+    name: 'rules',
+    facets: ['analogues', 'failures', 'manufacturing', 'constructors', 'functions', 'materials'],
+    expand(e, facet, s) {
+      const out: Discovery = { entities: [], relations: [], unknowns: [] };
+      if (facet === 'analogues') {
+        const mine = new Set(e.domains);
+        for (const fn of s.reach(e.id, 'does')) for (const other of s.reach(fn.id, 'done-by')) {
+          if (other.id === e.id || other.domains.some((d) => mine.has(d))) continue;
+          if (s.outOf(e.id, 'analogous-to').some((x) => x.to === other.id) || s.into(e.id, 'analogous-to').some((x) => x.from === other.id)) continue;
+          out.relations.push(r(e.id, 'analogous-to', other.id, `both do ${fn.id}, in different domains (${e.domains[0]} and ${other.domains[0]})`));
+        }
+      }
+      if (facet === 'failures') {
+        const byLaw: Record<string, string> = { 'fatigue.endurance.steel': 'failure.fatigue', 'buckling.euler': 'failure.buckling', 'stress.hoop': 'failure.burst', 'friction.coulomb': 'failure.wear', 'joule': 'failure.overheating', 'nernst': 'failure.corrosion', 'arrhenius': 'failure.creep', 'natural.frequency': 'failure.resonance', 'bearing.life.l10': 'failure.spalling', 'hydrostatic': 'failure.leak' };
+        for (const law of s.reach(e.id, 'governed-by')) { const f = byLaw[law.id]; if (f && s.has(f) && !s.outOf(e.id, 'fails-by').some((x) => x.to === f)) out.relations.push(r(e.id, 'fails-by', f, `governed by ${law.id}, whose limit is ${f}`)); }
+      }
+      if (facet === 'manufacturing' && !s.outOf(e.id, 'produced-by').length) {
+        for (const m of s.reach(e.id, 'made-of')) {
+          const fams = [m, ...s.reach(m.id, 'is-a')];
+          for (const f of fams) for (const pr of s.reach(f.id, 'interacts-with').filter((x) => x.kinds.includes('process'))) out.relations.push(r(e.id, 'produced-by', pr.id, `made of ${m.id}, which ${pr.id} works`));
+        }
+      }
+      if (facet === 'constructors') {
+        const makers = s.reach(e.id, 'produced-by');
+        if (!makers.length && (e.kinds.includes('component') || e.kinds.includes('system') || e.kinds.includes('material'))) out.unknowns.push({ id: e.id, facet, why: 'no constructor is known for it: what produces it is an open question' });
+      }
+      if (facet === 'functions' && !s.outOf(e.id, 'does').length) {
+        for (const k of s.reach(e.id, 'is-a')) for (const fn of s.reach(k.id, 'does')) out.relations.push(r(e.id, 'does', fn.id, `inherits from ${k.id}`));
+      }
+      if (facet === 'materials' && e.kinds.includes('material')) {
+        for (const role of s.reach(e.id, 'plays')) for (const thing of s.reach(role.id, 'played-by')) if (thing.id !== e.id && !thing.kinds.includes('material') && !thing.kinds.includes('role')) out.relations.push(r(thing.id, 'made-of', e.id, `it plays ${role.id}, which ${e.id} can fill`));
+      }
+      return out.entities.length || out.relations.length || out.unknowns.length ? out : null;
+    },
+  };
+}
+
+/** An outside source (a datasheet service, a standards body, a literature search) when one is connected: here, none is, and it says so. */
+export function externalExpander(connected = false): Expander {
+  return { name: 'external', facets: [...FACETS], expand: (e, facet) => (connected ? null : { entities: [], relations: [], unknowns: [{ id: e.id, facet, why: 'no external source is connected to this session: what is here is what the packs and rules give' }] }) };
+}
+
+export interface Report {
+  processed: number;
+  discoveredEntities: number;
+  discoveredRelations: number;
+  rejected: { relation: Relation; why: string }[];
+  promotedManifolds: string[];
+  generators: string[];
+  constructionPaths: number;
+  unknowns: number;
+  converged: boolean;
+  queued: number;
+  byDomain: Record<string, number>;
+}
+
+const SUBSTANCE_KINDS = new Set(['material', 'chemical']);
+
+/** The pipeline for one answer: normalise, classify, deduplicate, validate, keep provenance; what survives is merged. */
+export function ingest(s: Substrate, d: Discovery, report: Report): { entities: Entity[]; relations: Relation[] } {
+  const added: Entity[] = [], kept: Relation[] = [];
+  for (const e of d.entities) {
+    const id = normalizeId(e.id);
+    const kinds = e.kinds.filter((k) => (KINDS as readonly string[]).includes(k));
+    const had = s.has(id);
+    const made = s.add({ ...e, id, kinds });
+    if (!had) added.push(made);
+  }
+  for (const r of d.relations) {
+    const from = normalizeId(r.from), to = normalizeId(r.to);
+    if (!(RELATION_KINDS as string[]).includes(r.kind)) { report.rejected.push({ relation: r, why: `no relation ${r.kind}` }); continue; }
+    // a thing may reproduce itself (a machine tool, a ribosome, a printer): no other relation may be reflexive
+    if (from === to && r.kind !== 'reproduced-by') { report.rejected.push({ relation: r, why: 'a thing related to itself' }); continue; }
+    for (const end of [from, to]) if (!s.has(end)) { const namer = s.get(from === end ? to : from); const named = end === to ? NAMED_AS[r.kind] : undefined; s.add({ id: end, name: end.replace(/[.-]/g, ' '), names: [], kinds: named ? [named] : [], domains: [namer?.domains[0] ?? 'unplaced'], says: `Named by ${from === end ? to : from} (${r.kind}); not yet described.`, source: { stub: `named by ${from === end ? to : from}` }, coverage: { depth: 0, confidence: 0.2, sourceKind: 'stub', expanded: [], unknowns: ['not yet described'] } }); }
+    // validation: a law is cited only if it exists as a law; a substance is made of substances
+    if (r.kind === 'governed-by') { const law = s.get(to)!; if (!law.kinds.includes('law') && !LAWS.some((l) => l.id === to)) { report.rejected.push({ relation: r, why: `${to} is not a law` }); continue; } }
+    if (r.kind === 'made-of') { const sub = s.get(to)!; if (sub.kinds.length && !sub.kinds.some((k) => SUBSTANCE_KINDS.has(k)) && !sub.kinds.includes('biological')) { report.rejected.push({ relation: r, why: `${to} is not a substance` }); continue; } }
+    if (s.relate({ ...r, from, to })) kept.push({ ...r, from, to });
+  }
+  report.unknowns += d.unknowns.length;
+  for (const u of d.unknowns) { const e = s.get(u.id); if (e && !e.coverage.unknowns.includes(u.why)) e.coverage.unknowns.push(u.why); }
+  return { entities: added, relations: kept };
+}
+
+/** What a thing varies by, promoted: siblings under one parent sharing functions make their parent a manifold. */
+export function promoteManifolds(s: Substrate): string[] {
+  const promoted: string[] = [];
+  for (const parent of s.entities.values()) {
+    const kids = s.reach(parent.id, 'generalizes');
+    if (kids.length < 3 || parent.kinds.includes('manifold')) continue;
+    const fns = kids.map((k) => new Set(s.reach(k.id, 'does').map((f) => f.id)));
+    const shared = [...(fns[0] ?? new Set<string>())].filter((f) => fns.every((set) => set.has(f)));
+    const own = new Set(s.reach(parent.id, 'does').map((f) => f.id));
+    if (shared.length >= 1 || (own.size && kids.every((k) => s.reach(k.id, 'is-a').some((x) => x.id === parent.id)))) {
+      parent.kinds.push('manifold');
+      promoted.push(parent.id);
+      for (const k of kids) for (const p of k.params ?? []) if (!parent.params?.some((q) => q.sym === p.sym)) (parent.params ??= []).push({ ...p, of: { derived: `promoted from ${k.id}` } });
+      for (const f of shared) s.relate({ from: parent.id, kind: 'does', to: f, source: { derived: `every refinement of ${parent.id} does it` }, confidence: 0.7 });
+    }
+  }
+  return promoted;
+}
+
+/** A generator: a manifold whose parameters have values or ranges can enumerate members. */
+export type Generator = (spec?: Record<string, number | string>) => { id: string; says: string; parameters: Record<string, number | string> }[];
+export function buildGenerators(s: Substrate): Map<string, Generator> {
+  const out = new Map<string, Generator>();
+  for (const e of s.entities.values()) {
+    if (!e.kinds.includes('manifold') || !e.params?.length) continue;
+    const enumerable = e.params.filter((p) => p.values?.length || (p.low !== undefined && p.high !== undefined && p.high > p.low));
+    if (!enumerable.length) continue;
+    out.set(e.id, (spec = {}) => {
+      const first = enumerable[0]!;
+      const choices = first.values ?? Array.from({ length: 5 }, (_, i) => first.low! + ((first.high! - first.low!) * i) / 4);
+      return choices.slice(0, 12).map((v) => ({ id: `${e.id}#${first.sym}=${v}`, says: `a ${e.name} with ${first.name} ${v}${first.unit ? ` ${first.unit}` : ''}`, parameters: { ...spec, [first.sym]: v } }));
+    });
+    e.kinds.includes('generator') || e.kinds.push('generator');
+  }
+  return out;
+}
+
+/** Things that no constructor is known for: the frontier of the manufacturing graph. */
+export function missingConstructors(s: Substrate): Entity[] {
+  return [...s.entities.values()].filter((e) => (e.kinds.includes('component') || e.kinds.includes('system')) && !('stub' in e.source) && !s.outOf(e.id, 'produced-by').length && !s.reach(e.id, 'is-a').some((k) => s.outOf(k.id, 'produced-by').length));
+}
+
+/** Ask one question first: it goes to the front of the queue. */
+export function ask(s: Substrate, q: Queue, id: string, facet: Facet, mode: 'fast' | 'deep' = 'deep'): boolean {
+  const e = s.get(id);
+  if (!e) return false;
+  return q.push({ id: e.id, facet, mode, priority: 1e6, reason: 'asked for', domain: e.domains[0] ?? 'unplaced' });
+}
+
+export interface PopulateOptions { budget?: number; workers?: number; expanders: Expander[]; mode?: 'fast' | 'deep' | 'both' }
+
+/** Seed the queue: every stub asks what it is (fast); every described thing asks its facets (deep). */
+export function seedQueue(s: Substrate, q: Queue, mode: 'fast' | 'deep' | 'both' = 'both'): number {
+  let n = 0;
+  for (const e of s.entities.values()) {
+    const domain = e.domains[0] ?? 'unplaced';
+    if (e.coverage.depth === 0 && mode !== 'deep') { for (const f of ['functions', 'components', 'constructors'] as Facet[]) if (q.push({ id: e.id, facet: f, mode: 'fast', priority: priority(s, e, f), reason: 'a stub: named by something, not yet described', domain })) n++; }
+    else if (mode !== 'fast') for (const f of FACETS) if (!e.coverage.expanded.includes(f) && q.push({ id: e.id, facet: f, mode: 'deep', priority: priority(s, e, f), reason: `${f} of a described thing`, domain })) n++;
+  }
+  return n;
+}
+
+/**
+ * Run the queue: workers take questions from their domains in priority order, expanders answer, the pipeline ingests,
+ * new things queue their own questions. Returns what happened; the queue keeps what is left.
+ */
+export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): Promise<Report> {
+  const report: Report = { processed: 0, discoveredEntities: 0, discoveredRelations: 0, rejected: [], promotedManifolds: [], generators: [], constructionPaths: 0, unknowns: 0, converged: false, queued: 0, byDomain: {} };
+  const budget = opts.budget ?? 500;
+  const domains = q.domains();
+  const workers = Math.max(1, Math.min(opts.workers ?? 4, domains.length || 1));
+  const lanes: string[][] = Array.from({ length: workers }, () => []);
+  domains.forEach((d, i) => lanes[i % workers]!.push(d));
+  let spent = 0;
+  const work = async (lane: string[]) => {
+    for (;;) {
+      if (spent >= budget) return;
+      // the best question across the lane's domains, else the best anywhere: no domain starves the others
+      let w = q.pop(lane);
+      if (!w) w = q.pop();
+      if (!w) return;
+      spent++;
+      report.processed++;
+      report.byDomain[w.domain] = (report.byDomain[w.domain] ?? 0) + 1;
+      const e = s.get(w.id);
+      if (!e) continue;
+      for (const x of opts.expanders) {
+        if (!x.facets.includes(w.facet)) continue;
+        const d = x.expand(e, w.facet, s);
+        if (!d) continue;
+        const { entities, relations } = ingest(s, d, report);
+        report.discoveredEntities += entities.length;
+        report.discoveredRelations += relations.length;
+        for (const n of entities) { const f: Facet[] = n.coverage.depth === 0 ? ['functions', 'components'] : ['components', 'materials', 'constructors']; for (const facet of f) if (q.push({ id: n.id, facet, mode: n.coverage.depth === 0 ? 'fast' : 'deep', priority: priority(s, n, facet), reason: `discovered by ${x.name} expanding ${w.id} (${w.facet})`, domain: n.domains[0] ?? 'unplaced' })) report.queued++; }
+        for (const r of relations) for (const end of [r.from, r.to]) { const n = s.get(end)!; if (n.coverage.depth === 0 && q.push({ id: n.id, facet: 'functions', mode: 'fast', priority: priority(s, n, 'functions'), reason: `named by a new relation from ${w.id}`, domain: n.domains[0] ?? 'unplaced' })) report.queued++; }
+      }
+      if (!e.coverage.expanded.includes(w.facet)) e.coverage.expanded.push(w.facet);
+      e.coverage.lastExpanded = spent;
+      if (e.coverage.depth < 3 && e.coverage.expanded.length >= 4) e.coverage.depth = 3;
+      else if (e.coverage.depth < 2 && e.coverage.expanded.length >= 1 && !('stub' in e.source)) e.coverage.depth = 2;
+      await Promise.resolve();
+    }
+  };
+  await Promise.all(lanes.map(work));
+  report.promotedManifolds = promoteManifolds(s);
+  report.generators = [...buildGenerators(s).keys()];
+  report.constructionPaths = [...s.entities.values()].filter((e) => s.outOf(e.id, 'produced-by').length).length;
+  report.converged = q.size === 0;
+  return report;
+}

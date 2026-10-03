@@ -290,3 +290,6 @@ export function solve(workflow: string, spec: Record<string, number | string>): 
   if (answered.size > MEMO) answered.delete(answered.keys().next().value!);
   return { key, result, cached: false };
 }
+// the substrate: reality indexed as an alien engineer would, cross-connected, every entity with its provenance and coverage,
+// every question answered by traversal, and a queue of what to ask next
+export { build as buildSubstrate, substrate, builtState as substrateState, census as substrateCensus, populateMore, ask as askSubstrate, waysToStore, implementations, materialsForRole, variants as variantsOf, decompose as decomposeThing, leavesOf, producers, analogues, dualRole, lineage as lineageOf, mechanismsFor, constructionPath, index as indexOf, missingConstructors, Substrate, KINDS as SUBSTRATE_KINDS, RELATIONS as SUBSTRATE_RELATIONS, FACETS as SUBSTRATE_FACETS, type Entity as SubstrateEntity, type Relation as SubstrateRelation, type Found, type MaterialRow, type ProducerStep, type PathStep } from './substrate';
