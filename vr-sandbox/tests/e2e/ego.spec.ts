@@ -166,6 +166,9 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   // impossible only with a certificate, in the app: the law, the bound, the assumptions; and her register of anomalies
   expect(await sb(page, (s) => s.ego.ask('is an efficiency of 0.5 possible with a cold side of 300 K and a hot side of 400 K'))).toMatch(/^No, not under those assumptions: Carnot efficiency \(η = 1 − T_c \/ T_h\) at these inputs gives at most 0\.25 -; the claim is 0\.5 -; so assumptions \+ law \+ claim ⇒ ⊥\. Assumptions: Carnot efficiency holds: .*Drop one and it is unknown again, not impossible\. In Nex: contradict\(/);
   expect(await sb(page, (s) => s.ego.ask('what anomalies do you hold'))).toMatch(/^I hold 11 observations against the law book: 0 alive, 1 explained, 10 within tolerance\./);
+  // how she knows an influence (the epistemic vector of the law behind it) and how well she knows a thing
+  expect(await sb(page, (s) => s.ego.ask('how do you know that the current causes the voltage'))).toMatch(/^Electric current is needed for \(raises\) voltage .*How I know it: formal derived; empirical 0 for, 0 against; .*theory entailed \(domain inside\); .*The law behind it: Ohm's law \(V = I R\)/);
+  expect(await sb(page, (s) => s.ego.ask('how well do you know a bearing'))).toMatch(/^I hold \d+ structures about a bearing: \d+ parts, .*none measured in my world; none contradicted\. By mode: /);
   expect(errors).toEqual([]);
 });
 
