@@ -559,7 +559,8 @@ analogues, causes, how-she-knows, failures, possibility, the edge of a law, form
 of those fifteen structures carries 127 of their 140 pieces (loss 0.09: seven mechanisms, four domains, one list of assumptions, one instrument), the
 compact Nex text carries all 140 and reads back identically (tested, 3 October).
 
-Status at 18:20 UTC, 3 October: sections A to Z written, with docs/NEX-SPACE.md (the continuous part, under audit),
+Status at 19:20 UTC, 3 October (110 commits on the day, CI green on every push): sections A to Z written, with
+docs/NEX-SPACE.md (the continuous part, under audit),
 docs/NEX-DISCOVERY.md (evidence, not scripture: the certificate, the epistemic vector, the anomalies, a second audit
 in part 2) and docs/NEX-AUDIT.md (ten questions answered from the code); thirteen modules under
 `src/ganglia/native/`; 44 tests in `tests/unit/native.test.ts` and 93 in `tests/unit/substrate.test.ts` (the Nex
