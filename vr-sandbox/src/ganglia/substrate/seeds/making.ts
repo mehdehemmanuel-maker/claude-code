@@ -84,6 +84,9 @@ export function making(): Pack {
   m('process.electrolyte-filling', 'A sealed cell filled with its electrolyte under vacuum, so it wets every pore of the electrodes.', {}, NEWMAN);
   m('process.formation', 'A new cell\'s first slow charge cycles: the electrode interface layer forms, and its capacity is set.', { 'governed-by': ['butler-volmer'] }, NEWMAN);
 
+  m('process.surface-prep', 'A surface made ready for glue or paint: cleaned, abraded, degreased, sometimes primed, so the adhesive wets and bonds.', { 'governed-by': ['young.contact'] });
+  m('process.mining', 'Ore taken from the ground, open-cut or underground: drilled, blasted, hauled, crushed.', { 'governed-by': ['energy.kinetic'] }, MARSHAK);
+  m('process.haber', 'Nitrogen and hydrogen over an iron catalyst at 450 °C and 200 bar: ammonia, half the nitrogen in every human.', { 'governed-by': ['le-chatelier', 'arrhenius', 'gibbs.energy'] }, CALLISTER, ['process', 'constructor']);
   // living and geological makers
   m('bio.glycolysis', 'Glucose split to pyruvate in ten steps in the cytoplasm: two ATP net, no oxygen needed.', { 'governed-by': ['michaelis-menten', 'gibbs.energy'] }, CAMPBELL, ['process', 'biological', 'constructor']);
   m('bio.replication', 'DNA copied before a cell divides: each strand a template, one error in a billion after proofreading.', { 'governed-by': ['michaelis-menten'] }, CAMPBELL, ['process', 'biological', 'constructor']);

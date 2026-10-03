@@ -137,7 +137,8 @@ export function chemistry(): Pack {
   }
   // physics phenomena and the chain law → property → relation → state → transformation → observable → consequence
   for (const [id, says, law, prop, cons] of [
-    ['phys.friction', 'Resistance to sliding between surfaces from asperities and adhesion.', 'friction.coulomb', 'prop.friction-coefficient', 'bearing'], ['phys.elasticity', 'Reversible deformation under stress.', 'hooke', 'prop.youngs-modulus', 'spring'],
+    ['phys.friction', 'Resistance to sliding between surfaces from asperities and adhesion.', 'friction.coulomb', 'prop.friction-coefficient', 'bearing'],
+    ['phys.heat', 'Energy in the random motion of molecules, flowing from hot to cold by conduction, convection and radiation.', 'conduction', 'prop.thermal-conductivity', 'heatsink'], ['phys.elasticity', 'Reversible deformation under stress.', 'hooke', 'prop.youngs-modulus', 'spring'],
     ['phys.plasticity', 'Permanent deformation by dislocation motion.', 'hall-petch', 'prop.yield-strength', 'process.forging'], ['phys.fatigue', 'Cracks from repeated stress below yield.', 'paris.law', 'prop.fatigue-strength', 'failure.fatigue'],
     ['phys.heat-conduction', 'Heat carried through matter by phonons and electrons.', 'fourier.law', 'prop.thermal-conductivity', 'heatsink'], ['phys.convection', 'Heat carried by a moving fluid.', 'convection', 'prop.heat-transfer-coefficient', 'fan'],
     ['phys.thermal-radiation', 'Heat emitted as electromagnetic waves by anything above absolute zero.', 'radiation', 'prop.emissivity', 'machine.furnace'], ['phys.electromagnetic-induction', 'A changing field making a voltage.', 'faraday.induction', 'prop.permeability', 'generator'],

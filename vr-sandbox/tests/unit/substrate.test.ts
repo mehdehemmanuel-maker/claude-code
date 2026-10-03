@@ -450,6 +450,13 @@ describe('what an arrow names, the index describes (S-6)', () => {
     for (const r of s.relations.filter((r) => r.kind === 'interacts-with' && r.says === 'works this material')) expect(s.get(r.to)!.kinds, `${r.from} -> ${r.to}`).toContain('material');
   });
 
+  it('what a process requires, a machine, a tool, a mould, a gas, is described, never a stub', () => {
+    const needs = s.relations.filter((r) => r.kind === 'requires' && s.get(r.from)?.kinds.includes('process'));
+    expect(needs.length).toBeGreaterThan(100);
+    const stubs = needs.filter((r) => isStub(s.get(r.to)!)).map((r) => `${r.from} requires ${r.to}`);
+    expect(stubs).toEqual([]);
+  });
+
   it('a piece whose block says what kind of thing it is, is that kind, and every kind said is described', () => {
     let said = 0;
     for (const a of ARCHETYPES) for (const x of a.inside) if (x.kind) {

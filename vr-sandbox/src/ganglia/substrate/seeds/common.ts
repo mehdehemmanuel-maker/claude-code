@@ -133,6 +133,8 @@ export function common(): Pack {
   t('chain.pin', ['component'], 'The hardened pin through a chain\'s plates: it carries the pull in shear and wears as the chain articulates.', { 'governed-by': ['stress.von-mises', 'friction.coulomb'], 'fails-by': ['failure.wear'] });
   t('chain.bushing', ['component'], 'The tube round a chain\'s pin that the roller turns on: the bearing surface of the joint.', { 'governed-by': ['friction.coulomb'], 'fails-by': ['failure.wear'] });
   t('chain.roller', ['component'], 'The ring that rolls onto the sprocket tooth instead of sliding: less wear and noise.', { 'governed-by': ['hertz.contact'], 'fails-by': ['failure.wear'] });
+  t('nail', ['component'], 'A pointed shank driven into wood: it holds by the friction of the fibres it pushed aside, in shear well, in withdrawal poorly.', { does: ['fn.transmit.force'], 'governed-by': ['friction.coulomb', 'screw.withdrawal'] });
+  t('physics.world', ['computation', 'system'], 'The engine\'s world: rigid bodies, joints and contacts stepped at a fixed tick by a solver; what every part in this world is to the physics.', { 'governed-by': ['newton.second', 'conservation.momentum'] });
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;
 }

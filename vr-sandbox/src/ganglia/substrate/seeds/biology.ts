@@ -226,6 +226,9 @@ export function biology(): Pack {
   bc('bio.gamete', 'A sex cell with half the chromosomes, egg or sperm: two fuse to start a new organism.', { 'is-a': ['bio.cell'] });
   bc('bio.mrna', 'Messenger RNA: a copy of a gene carried from the nucleus to the ribosome and read three bases at a time; minutes to hours before it is degraded.', { 'produced-by': ['bio.transcription'] }, ['biological', 'chemical']);
   bc('bio.trna', 'Transfer RNA: an adaptor that carries one amino acid and matches one codon, so the ribosome can read the message into protein.', { 'governed-by': ['michaelis-menten'] }, ['biological', 'chemical']);
+  bc('bio.rna-polymerase', 'The enzyme that reads a gene and writes its message: it unwinds the DNA and strings RNA bases along one strand, tens of bases a second.', { 'is-a': ['bio.protein'], 'governed-by': ['michaelis-menten'] }, ['biological', 'mechanism']);
+  bc('bio.zygote', 'The one cell an egg and a sperm make: everything an organism becomes starts here, by division and differentiation.', { 'is-a': ['bio.cell'] });
+  bc('bio.chloroplast', 'The organelle of photosynthesis: stacked membranes holding chlorophyll, where light is caught and sugar is made, 20 % of a leaf cell.', { transforms: ['convert.optical.chemical'], 'governed-by': ['planck.energy', 'gibbs.energy'] });
   bc('bio.dna-polymerase', 'The enzyme that copies DNA, a thousand bases a second with proofreading: one error in ten million, then repair to one in a billion.', { 'is-a': ['bio.protein'], 'governed-by': ['michaelis-menten'] }, ['biological', 'mechanism']);
   bc('bio.electron-transport-chain', 'Four protein complexes in the mitochondrial membrane passing electrons from food to oxygen and pumping protons as they go: the proton gradient drives ATP synthase.', { 'governed-by': ['nernst', 'gibbs.energy'], transforms: ['convert.chemical.chemical'] }, ['biological', 'mechanism']);
   return p;

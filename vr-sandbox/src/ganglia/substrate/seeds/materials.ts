@@ -55,7 +55,7 @@ export function materials(): Pack {
     ['prop.electrical-conductivity', 'Current per field, S/m.', 'S/m'], ['prop.permeability', 'How much a field magnetises it.', '-'], ['prop.refractive-index', 'How much it slows light.', '-'], ['prop.transparency', 'How much light passes.', '-'],
     ['prop.corrosion-resistance', 'How slowly its surroundings consume it.', '-'], ['prop.melting-point', 'Where it becomes liquid, K.', 'K'], ['prop.glass-transition', 'Where a polymer softens, K.', 'K'], ['prop.thermal-expansion', 'Strain per kelvin.', '1/K'],
     ['prop.specific-heat', 'Heat per mass per kelvin.', 'J/kg K'], ['prop.machinability', 'How easily it is cut.', '-'], ['prop.weldability', 'How readily it fuses to itself.', '-'], ['prop.castability', 'How well it fills a mould.', '-'], ['prop.formability', 'How far it bends or draws without cracking.', '-'],
-    ['prop.recyclability', 'How well it can be remelted or reprocessed.', '-'], ['prop.biocompatibility', 'How the body tolerates it.', '-'], ['prop.cost', 'Price per kilogram.', 'USD/kg'],
+    ['prop.recyclability', 'How well it can be remelted or reprocessed.', '-'], ['prop.coercivity', 'The field that demagnetises a magnet, A/m.', 'A/m'], ['prop.remanence', 'The flux density a magnet keeps with no field applied, T.', 'T'], ['prop.biocompatibility', 'How the body tolerates it.', '-'], ['prop.cost', 'Price per kilogram.', 'USD/kg'],
   ];
   for (const [id, says, unit] of props) p.e(id, 'property', says, { params: [param('unit', 'unit', CALLISTER, { values: [unit] })] });
   p.link('prop.yield-strength', { 'governed-by': ['stress.axial', 'hooke'], 'measured-by': ['test.tensile'] });
@@ -92,6 +92,7 @@ export function materials(): Pack {
   fam('material.concrete', 'Aggregate in a cement paste that hardens by hydration: strong in compression, weak in tension (so steel reinforces it), cast in place.', { 'has-part': ['material.cement', 'material.aggregate', 'element.water', 'material.rebar'], 'has-property': ['prop.yield-strength', 'prop.density', 'prop.cost'], plays: ['role.structural-member', 'role.foundation'], 'produced-by': ['process.mixing', 'process.casting.formwork', 'process.curing'], 'fails-by': ['failure.cracking', 'failure.carbonation', 'failure.freeze-thaw', 'failure.creep'], 'governed-by': ['carbonation.capacity', 'stress.axial'] });
   fam('material.natural', 'What is used as grown or dug: wood, stone, leather, wool, cotton, cork, bone, horn.', { 'has-part': ['material.wood', 'material.stone', 'material.leather', 'material.cork', 'material.bone'], 'produced-by': ['bio.growth', 'process.quarrying', 'process.tanning'] });
   fam('material.biomaterial', 'A material made to work in or with a body: titanium, cobalt-chrome, UHMWPE, hydroxyapatite, PLA, silicone, collagen.', { 'has-property': ['prop.biocompatibility', 'prop.corrosion-resistance'], plays: ['role.implant', 'role.scaffold'], 'interacts-with': ['bio.bone', 'bio.tissue', 'bio.immune-system'], 'fails-by': ['failure.rejection', 'failure.wear', 'failure.corrosion'] });
+  fam('material.biological', 'What a living thing grew: wood, bone, shell, silk, leather, horn; composites of cellulose, collagen, chitin or mineral, built cell by cell.', { 'produced-by': ['bio.growth'], 'has-property': ['prop.toughness', 'prop.density'], 'fails-by': ['failure.rot', 'failure.creep'] });
   fam('material.nanomaterial', 'Matter structured below 100 nm, where surface and quantum effects set its properties: nanotubes, graphene, quantum dots, nanoparticles.', { 'has-property': ['prop.electrical-conductivity', 'prop.tensile-strength'], 'produced-by': ['process.cvd', 'process.sol-gel', 'process.ball-milling', 'process.lithography'], 'governed-by': ['planck.energy', 'diffusion.time'], 'in-view': ['view.materials', 'view.chemical', 'view.quantum'] });
   fam('material.magnetic', 'Materials with ordered moments: soft (electrical steel, ferrite) for cores, hard (NdFeB, SmCo, alnico, hard ferrite) for magnets.', { 'has-property': ['prop.permeability', 'prop.remanence', 'prop.coercivity'], plays: ['role.magnetic-core', 'role.electromagnetic-material'], 'governed-by': ['magnetic.pull', 'ampere.law'], 'made-of': ['element.iron', 'element.neodymium', 'element.boron', 'element.cobalt', 'element.samarium'], 'produced-by': ['process.sintering', 'process.lamination', 'process.magnetizing'], 'fails-by': ['failure.demagnetization', 'failure.corrosion'] });
 
@@ -102,6 +103,7 @@ export function materials(): Pack {
   }
   // named materials referred to elsewhere
   const named: [string, string, string, string[]][] = [
+    ['material.cork', 'The bark of the cork oak: a closed-cell natural foam, light, compressible, impermeable, slow to burn.', 'material.natural', ['role.seal', 'role.insulator']],
     ['material.bronze', 'Copper with 8 to 12 % tin: a bearing and gear material against steel, cast and wear-resistant.', 'material.copper-alloy', ['role.bearing-surface']],
     ['material.phosphor-bronze', 'Bronze with phosphorus: springs and connector contacts.', 'material.copper-alloy', ['role.connector-material', 'role.spring']],
     ['material.beryllium-copper', 'Copper age-hardened by beryllium: the strongest copper, non-sparking tools, spring contacts.', 'material.copper-alloy', ['role.spring', 'role.connector-material']],
@@ -186,6 +188,8 @@ export function materials(): Pack {
     ['material.tin-alloy', 'Tin with silver, copper or lead: solders and fuse elements, melting between 180 and 230 °C.', 'material.alloy', []],
     ['material.tin-plating', 'A thin tin layer on copper: solderable and corrosion-resisting; whiskers are its failure.', 'material.metal', ['role.connector-material']],
   ];
+  p.e('material.matrix', 'material', 'The continuous phase of a composite that holds the fibres and spreads the load between them: epoxy, polyester, aluminium, ceramic.');
+  p.link('material.matrix', { 'part-of': ['material.composite'], 'governed-by': ['composite.rule-of-mixtures'] });
   for (const [id, says, fam, roles] of named) { p.e(id, 'material', says); p.link(id, { 'is-a': [fam], plays: roles }); }
   // conductors with their numbers, for the tradeoff query (IEC 60028, CRC)
   const cond: [string, number, number, Provenance][] = [['material.silver', 6.30e7, 10490, IEC], ['copper.c110', 5.80e7, 8960, IEC], ['material.gold-plating', 4.10e7, 19300, IEC], ['aluminum.6061-t6', 2.5e7, 2700, IEC], ['brass.c360', 1.5e7, 8500, IEC], ['material.graphite', 1e5, 2200, { estimate: 'in-plane graphite, order of magnitude' }], ['steel.1018-cd', 5.8e6, 7870, IEC]];
