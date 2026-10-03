@@ -90,7 +90,7 @@ the edge of the rating-life law in the load found in 24 evaluations; of the trac
 Three tests say yes within their scope: the hard test (every label renamed, every inference the same); clustering by
 structure with rarity weights, which puts a spring and a capacitor together across domains with no shared word
 (section R); and law forms, which find that five energies (spring, kinetic, rotational, capacitor, inductor) are one
-form `J:1,2` with every symbol gone (58 forms over 84 laws, 13 shared). A scored prelinguistic benchmark with many
+form `J:1,2` with every symbol gone (72 forms over 101 laws, 15 shared, once the forms were taken with the laws' constants merged; 58 over 84 before that fix). A scored prelinguistic benchmark with many
 concepts and a pass rate is not built; these three are its first items.
 
 ## 9. Can it discover continuous, discrete or hybrid structure instead of assuming one?

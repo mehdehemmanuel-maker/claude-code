@@ -250,4 +250,6 @@ Correction (3 October, second discovery audit): `family` evaluated a law without
 a g, a k or a σ (the pendulum, Landauer, radiation…) had no family, no edge and no sensitivity: the value was NaN
 and the domain reported it as "no finite value there". Found by the skeptic's test, which asked for the pendulum
 length that would close a gap; fixed by evaluating every family point with the law's constants, tested on the
-pendulum (value 2.0064 s at 1 m, sensitivity 0.5).
+pendulum (value 2.0064 s at 1 m, sensitivity 0.5). The same omission was in the law forms (docs/EGO-NATIVE-LANGUAGE.md
+section R: 84 laws with a form became 101), in the cause-by-law answers (a law with g was dropped without a word) and
+in the Nex evaluation of a law structure; every evaluation of a law now goes through the book's own `withConstants`.

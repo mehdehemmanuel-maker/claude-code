@@ -4,6 +4,7 @@
 // thing's structures: the same motor seen through energy, heat, control, failure or making.
 
 import { dimensionOf } from '../units';
+import { withConstants } from '../laws';
 import type { Law, Source } from '../types';
 import type { Node } from '../tree/schema';
 import type { Entity, Relation } from '../substrate/model';
@@ -52,7 +53,7 @@ export function evaluate(s: R, laws: Map<string, Law>, bound: Record<string, num
   if (outside) return { value: NaN, dim: dimensionOf(law.output.unit), mode: 'outside-domain', why: outside };
   const missing = law.inputs.filter((x) => bound[x.sym] === undefined).map((x) => x.sym);
   if (missing.length) return { value: NaN, dim: dimensionOf(law.output.unit), mode: 'unknown', why: `unbound: ${missing.join(', ')}` };
-  return { value: law.eval(bound), dim: dimensionOf(law.output.unit), mode: 'true' };
+  return { value: law.eval(withConstants(law, bound)), dim: dimensionOf(law.output.unit), mode: 'true' };
 }
 
 /** A node of the law tree as a structure: what it specialises (kind), how it is held (evidence of its proof), where it stops (its limits as domain). */

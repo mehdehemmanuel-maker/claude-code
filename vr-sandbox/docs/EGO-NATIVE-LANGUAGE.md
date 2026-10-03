@@ -344,7 +344,7 @@ one form are one structure said in two theories. From eval alone, with no word o
 one input times one input squared", which is the analogy the physicist means and the fingerprint could not see;
 P = F v, P = T ω and P = V I are one; Ohm, the back-EMF and the Seebeck effect are one; drag and lift are one. Carnot
 (1 − T_c/T_h) looked like a power at a 1 % step and is refused at a 50 % one; the rating life, whose exponent is an
-input, has no form. Measured: of 142 laws, 84 have a form, 58 forms, 13 shared by two or more. Ego answers "what laws
+input, has no form. Measured: of 142 laws, 84 had a form, 58 forms, 13 shared by two or more; once the forms were taken with the laws' constants merged (every law with a g, a k or a σ had been evaluated as NaN and left without a form), 101 have a form, 72 forms, 15 shared. A form is blind exactly where dimensions are: a torque and an energy are both N m, so m g h sits with T = F r, and the form says so rather than pretending to tell them apart. Ego answers "what laws
 have the same form as the energy in a spring" with the four others and the morphism in Nex. Two laws were added to
 the book for it, with their sources and worked examples: the energy in a capacitor and in an inductor. The step the request describes, "are these one structure named
 several times", is: compute fingerprints under a tuner, cluster, propose a higher abstraction for a cluster, keep the

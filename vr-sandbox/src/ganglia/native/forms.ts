@@ -8,6 +8,7 @@
 // and says so.
 
 import type { Law } from '../types';
+import { withConstants } from '../laws';
 import { dimensionOf } from '../units';
 import { unitOf } from './translate';
 
@@ -17,7 +18,8 @@ const MULTIPLIERS = [1.01, 1.02, 1.5];
 
 /** The exponent of the output in one input at the example, or null where the law is not a power of it there. */
 function exponent(law: Law, sym: string, y0: number): number | null {
-  const ex = law.example.inputs;
+  // the example with the law's constants merged (g, k, σ): a law is evaluated as the book evaluates it
+  const ex = withConstants(law, law.example.inputs);
   const x0 = ex[sym];
   if (!x0) return null;
   const slopes: number[] = [];
@@ -30,13 +32,15 @@ function exponent(law: Law, sym: string, y0: number): number | null {
   const p = slopes[0]!;
   if (!Number.isFinite(p) || slopes.some((q) => Math.abs(q - p) > 0.02)) return null;
   const rounded = Math.round(p * 4) / 4;
+  // an output that does not move with the input at the example (a slope at zero) is no power of it: no form
+  if (rounded === 0) return null;
   return Math.abs(rounded - p) <= 0.02 ? rounded : null;
 }
 
 /** The form of a law, or null where it is not a power law of every input at its worked example. */
 export function formOf(law: Law): Form | null {
   let y0: number;
-  try { y0 = law.eval(law.example.inputs); } catch { return null; }
+  try { y0 = law.eval(withConstants(law, law.example.inputs)); } catch { return null; }
   if (!Number.isFinite(y0) || y0 === 0) return null;
   const exponents: number[] = [];
   for (const inp of law.inputs) { const p = exponent(law, inp.sym, y0); if (p === null) return null; exponents.push(p); }

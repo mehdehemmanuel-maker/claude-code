@@ -635,10 +635,19 @@ describe('Nex: the form of a law, with every symbol gone (section R at the level
     // Carnot (1 − Tc/Th) looked like a power law at a 1 % step and is not; the rating life has its exponent as an input
     expect(formOf(lawById('carnot')!)).toBeNull();
     expect(formOf(lawById('bearing.life.l10')!)).toBeNull();
-    // measured 3 October: 142 laws, 84 with a form, 58 forms, 13 shared by two or more
+    // measured 3 October: 142 laws, 84 with a form, 58 forms, 13 shared; the same day, evaluated with the laws'
+    // constants (every law with a g, a k or a σ had been evaluated as NaN and left without a form): 101, 72, 15
     const forms = lawForms(LAWS);
-    expect([...forms.values()].reduce((n, v) => n + v.length, 0)).toBeGreaterThan(70);
-    expect([...forms.values()].filter((v) => v.length > 1).length).toBeGreaterThanOrEqual(12);
+    expect([...forms.values()].reduce((n, v) => n + v.length, 0)).toBeGreaterThanOrEqual(100);
+    expect([...forms.values()].filter((v) => v.length > 1).length).toBeGreaterThanOrEqual(15);
+    // laws with constants have forms: the pendulum is a time under a root of its one input; Landauer an energy in one input
+    expect(formOf(lawById('pendulum.period')!)?.key).toBe('s:0.5');
+    expect(formOf(lawById('landauer')!)?.key).toBe('J:1');
+    expect(sameForm(lawById('weight')!, LAWS).map((l) => l.id).sort()).toEqual(['buoyancy', 'friction.coulomb', 'grade.force', 'newton.second', 'rolling.resistance', 'traction.limit']);
+    // a form is blind exactly where dimensions are: a torque and an energy are both N m, so m g h sits with T = F r
+    expect(sameForm(lawById('energy.potential')!, LAWS).map((l) => l.id).sort()).toEqual(['beam.plastic-moment', 'motor.torque', 'wheel.torque']);
+    // an output that does not move with an input at the example is no power of it: no form (gravitational time dilation at the example is 1 to within a billionth)
+    expect(formOf(lawById('time.dilation.gravity')!)).toBeNull();
     // no word enters: a law renamed keeps its form
     expect(formOf({ ...spring, id: 'x', name: 'y', formula: 'z' })!.key).toBe(f.key);
   });
