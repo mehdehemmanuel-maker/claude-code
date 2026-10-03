@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, d, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sayGrammar, saySenses, senses, settle, speak, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { askable, chain, d, decompose, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -369,6 +369,25 @@ export function answerTraversal(i: Traverse): string {
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
+  }
+  if (i.query === 'symptom') {
+    // human → native (section M): the word is decomposed into candidate structures from what she knows fails the thing, none chosen
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const word = i.which ?? '';
+    const laws = new Map(LAWS.map((l) => [l.id, l]));
+    // from what fails it; and, for a motor or a servo, from what the word may mean of a motor's quantities (torque near
+    // stall, speed fallen, current near its limit, ...): those readings are a motor's, never a heart's
+    const self = d(e.id, { en: nameOf(e) });
+    const motorish = /^(?:motor|servo|actuat)/.test(e.id) || s.reach(e.id, 'is-a').some((k) => /^(?:motor|servo|actuat)/.test(k.id));
+    const cands = [...symptoms(s, e, word, laws), ...(motorish ? decompose(word, self) : [])];
+    if (!cands.length) {
+      const modes = [...new Set([...s.reach(e.id, 'fails-by'), ...s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'fails-by'))].map(nameOf))];
+      return `"${word}" names no failure I know of ${art(e)}.${modes.length ? ` What I know fails it: ${list(modes, 8)}; none of them carries that word, so I cannot say which you mean.` : ' I know no failure of it yet.'}`;
+    }
+    const lines = cands.map((c) => `${c.says} (settled by ${c.settledBy})`);
+    const hi = Math.max(...cands.map((c) => c.cert.hi ?? 1));
+    return `"${cap(word)}" of ${art(e)} could be ${cands.length === 1 ? 'one thing' : `${cands.length} things`} to me, none chosen: ${lines.join('; ')}. Each is held as not yet measured, certain between 0 and ${Number(hi.toPrecision(2))} until it is; the word is where my certainty is lowest. In Nex: ${nex(cands[0]!.structure)}`;
   }
   if (i.query === 'grammar') {
     // grown once per substrate build: the corpus is everything she holds, and it changes as the queue works

@@ -292,8 +292,12 @@ const PHRASES: Record<string, { what: string; polarity: '+' | '-'; of: string; i
 };
 
 /** Decompose "that motor is struggling" into candidate native structures, none chosen, each with its uncertainty and what would settle it. */
+/** Words that say one of the phrases another way: the human side of the lexicon. */
+const PHRASE_WORDS: Record<string, string> = { hot: 'overheating', warm: 'overheating', smoking: 'overheating', weak: 'struggling', straining: 'struggling', labouring: 'struggling', laboring: 'struggling', jammed: 'stuck', seized: 'stuck', slips: 'slipping', slipped: 'slipping' };
+
 export function decompose(phrase: string, thing: D): CandidateReading[] {
-  const key = Object.keys(PHRASES).find((k) => phrase.toLowerCase().includes(k));
+  const low = phrase.toLowerCase();
+  const key = Object.keys(PHRASES).find((k) => low.includes(k)) ?? Object.entries(PHRASE_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(low))?.[1];
   if (!key) return [];
   const list = PHRASES[key]!;
   const share = 1 / list.length;

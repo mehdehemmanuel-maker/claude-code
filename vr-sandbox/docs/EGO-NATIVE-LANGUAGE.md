@@ -36,6 +36,9 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
   before any word; a word of two senses settled by the other side ("By current I take electric current, as a
   quantity").
 - "what causes current", "what does glue do": a word of two senses is asked back with its senses, kinds and units.
+- "that motor is struggling", "the bearing is noisy", "this bolt is loose": candidates from what she knows fails
+  the thing (and, for a motor, from its quantities), each held as not yet measured with what would settle it, none
+  chosen.
 - "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known
   from its arrow's structure (the tally of evidence, none measured in her world) and the first arrow in Nex.
 - "try to build a computer", "take the scientist challenge": the attempt in English, then its Nex: the levels as
@@ -229,6 +232,13 @@ near stall, speed fallen, current near limit, temperature rising, controller sat
 interval whose upper bound is below 1, each in mode `unmeasured` with the instrument that would settle it; nothing is
 chosen. The lexicon is a map from a language's words to distinctions; a distinction with no word gets a coined term
 ("the thing #p7f3a"), flagged in `coined`, so the lack of an English word never limits the thought.
+
+In Ego's own path (built 3 October): "that motor is struggling", "the bearing is noisy", "this bolt is loose" are
+decomposed by `symptoms` (nexus.ts) from what she knows fails the thing: every failure mode of it, of its kinds and
+of its materials whose name or saying carries a stem of the word, each a candidate influence held as `unmeasured`
+with an uncertainty no higher than twice its share, and what would settle it (a sensor the thing is measured by,
+else measuring the law's own inputs); a motor or a servo also gets the five readings of a motor's quantities above,
+and a heart does not. A word no failure carries is said so, with what she knows fails the thing; nothing is chosen.
 
 ## N. Translation-loss measurement
 

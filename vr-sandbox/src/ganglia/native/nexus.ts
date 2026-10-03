@@ -128,3 +128,52 @@ export function tune(said: Structure[], tuner: Tuner): Structure[] {
 }
 
 export const entityAlias = (ent: Entity): D => d(ent.id, { en: ent.name });
+
+// ---- human → native (section M), from what the substrate knows of a thing
+
+/** The stems a complaint word points at in what a failure says of itself: the human side of the lexicon, never a structure. */
+const SYMPTOM_STEMS: Record<string, string[]> = {
+  noisy: ['noise', 'vibrat', 'rattl', 'wear', 'spall', 'brinell', 'imbalance', 'loose'], loud: ['noise', 'vibrat', 'imbalance'], rough: ['wear', 'spall', 'brinell', 'pit', 'scor', 'galling'],
+  hot: ['heat', 'temperature', 'overheat', 'thermal', 'joule', 'friction'], warm: ['heat', 'temperature', 'overheat'], smoking: ['overheat', 'insulation', 'burn'], smelly: ['overheat', 'insulation', 'burn'],
+  slow: ['speed', 'stall', 'drag', 'friction', 'wear', 'resistance'], weak: ['torque', 'stall', 'demagnet', 'wear', 'fatigue', 'voltage'], struggling: ['stall', 'torque', 'overheat', 'current', 'wear', 'friction'],
+  stuck: ['stall', 'jam', 'seiz', 'galling', 'lubricant', 'corrosion'], seized: ['seiz', 'galling', 'lubricant', 'corrosion', 'overheat'], jammed: ['jam', 'seiz', 'obstruct'],
+  slipping: ['slip', 'friction', 'wear', 'loosen'], loose: ['loosen', 'wear', 'fatigue', 'creep', 'backlash'], wobbly: ['imbalance', 'loosen', 'bearing', 'wear', 'misalign'], vibrating: ['imbalance', 'resonan', 'loosen', 'misalign'],
+  leaking: ['leak', 'seal', 'crack', 'corrosion'], cracked: ['crack', 'fatigue', 'overload', 'brittle'], bent: ['yield', 'overload', 'buckl'], broken: ['fracture', 'overload', 'fatigue', 'shear'],
+  sparking: ['brush', 'arc', 'insulation', 'commutat'], dead: ['open', 'insulation', 'fuse', 'burn', 'demagnet', 'voltage'], flickering: ['loose', 'contact', 'voltage', 'brush'],
+};
+
+/** The stems of a complaint word: its table entry, plus the word and its root (noisy: nois; slipping: slip). */
+export function symptomStems(word: string): string[] {
+  const w = word.toLowerCase();
+  const root = w.replace(/(?:ing|ed|ies|y|s)$/, '');
+  return [...new Set([...(SYMPTOM_STEMS[w] ?? []), w, ...(root.length >= 3 ? [root] : [])])];
+}
+
+/**
+ * What "that bearing is noisy" may mean, from the bearing's own failure modes (its own, its kinds', its materials'):
+ * every mode whose name or saying carries a stem of the word, each a candidate held as not yet measured, with an
+ * uncertainty no higher than its share, and what would settle it (a sensor the thing or its quantities are measured
+ * by, else a reading of the law's own inputs). Nothing is chosen.
+ */
+export function symptoms(s: Substrate, thing: Entity, word: string, laws?: Map<string, Law>): { structure: R; cert: NonNullable<Coords['cert']>; settledBy: string; says: string; failure: Entity }[] {
+  const stems = symptomStems(word);
+  const modes = new Map<string, Entity>();
+  for (const f of s.reach(thing.id, 'fails-by')) modes.set(f.id, f);
+  for (const k of s.reach(thing.id, 'is-a')) for (const f of s.reach(k.id, 'fails-by')) modes.set(f.id, f);
+  for (const m of s.reach(thing.id, 'made-of')) for (const f of s.reach(m.id, 'fails-by')) modes.set(f.id, f);
+  // a generic thing with no failure of its own ("a motor") fails as its kinds do (a brushed DC motor, a brushless one)
+  if (!modes.size) for (const rel of s.into(thing.id, 'is-a')) for (const f of s.reach(rel.from, 'fails-by')) modes.set(f.id, f);
+  const hits = [...modes.values()].filter((f) => { const hay = `${f.id} ${f.name} ${f.says}`.toLowerCase(); return stems.some((st) => hay.includes(st)); });
+  if (!hits.length) return [];
+  const share = 1 / hits.length;
+  const self = d(thing.id, { en: spokenName(thing) });
+  return hits.map((f) => {
+    const sensors = [...s.reach(f.id, 'measured-by'), ...s.reach(thing.id, 'measured-by')].map(spokenName);
+    const inputs = laws ? s.reach(f.id, 'governed-by').flatMap((l) => laws.get(l.id)?.inputs.map((x) => x.name) ?? []) : [];
+    const settledBy = sensors.length ? `a ${sensors[0]}` : inputs.length ? `measuring ${[...new Set(inputs)].slice(0, 2).join(' and ')}` : 'inspection';
+    const cert: NonNullable<Coords['cert']> = { kind: 'interval', lo: 0, hi: Math.min(1, share * 2), source: 'epistemic' };
+    const structure = r('influence', [d(f.id, { en: spokenName(f) }), self], { dir: 1, polarity: '-', necessity: 'contributing', cert, mode: 'unmeasured', instrument: settledBy, ev: { how: 'hypothesized', src: [`said: "${word}"`] } });
+    const first = f.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, '');
+    return { structure, cert, settledBy, says: `${spokenName(f)}: ${first.charAt(0).toLowerCase()}${first.slice(1)}`, failure: f };
+  });
+}

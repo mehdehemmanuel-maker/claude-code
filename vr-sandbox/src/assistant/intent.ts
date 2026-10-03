@@ -81,7 +81,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
+export type TraversalQuery = 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -223,6 +223,8 @@ export function interpret(line: string): Intent | null {
   const fq = failuresOf(t);
   if (fq) return fq;
   if (isComplaint(t)) return { do: 'complain', words: line.trim() };
+  // a symptom said of a thing ("that motor is struggling", "the bearing is noisy"): candidates from what she knows fails it, none chosen
+  if ((m = /^(?:that|the|my|this|our|your) (.+?) (?:is|seems|sounds|looks|feels|runs|gets|got|keeps|has been|is getting|is being) (?:a bit |a little |very |too |really |kind of |sort of |getting )?([a-z]+)[.!?]*$/.exec(t))) return { do: 'traverse', query: 'symptom', of: m[1]!.trim(), which: m[2]! };
   if (new RegExp(`^save ${it} as (a )?template|^(make|save) (a )?template|^template ${it}`).test(t)) return { do: 'template' };
   if (new RegExp(`^(unfreeze|unpin|free|release) ${it}`).test(t)) return { do: 'unfreeze' };
   if (new RegExp(`^(freeze|pin|anchor) ${it}`).test(t)) return { do: 'freeze' };

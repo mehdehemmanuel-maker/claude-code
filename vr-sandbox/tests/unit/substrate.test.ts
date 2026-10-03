@@ -1044,3 +1044,22 @@ describe('Ego says how she knows each failure, from the arrow\'s structure in Ne
     expect(bolt).not.toMatch(/0 ways/);
   });
 });
+
+describe('Ego decomposes a symptom into candidates, none chosen (section M in her own path)', () => {
+  it('"that motor is struggling" is five readings of a motor with what would settle each; "the bearing is noisy" is the failure modes that carry the word; a word no failure carries is said so', () => {
+    // before (3 October, 16:16 UTC): none of these was understood at all
+    expect(interpret('that motor is struggling')).toEqual({ do: 'traverse', query: 'symptom', of: 'motor', which: 'struggling' });
+    expect(interpret('the bearing is noisy')).toEqual({ do: 'traverse', query: 'symptom', of: 'bearing', which: 'noisy' });
+    const motor = answerTraversal({ do: 'traverse', query: 'symptom', of: 'motor', which: 'struggling' });
+    expect(motor).toMatch(/^"Struggling" of a motor could be 5 things to me, none chosen: the torque asked of it is near what it can give \(settled by a torque reading against the stall torque\); its speed has fallen under its load/);
+    expect(motor).toMatch(/certain between 0 and 0\.4 until it is; the word is where my certainty is lowest\. In Nex: influence\(load, quantity\(motor, "torque demanded"\)\)\{dir:1 polarity:\+ cert:\{kind:interval lo:0 hi:0\.4 source:epistemic\} ev:\{how:hypothesized src:\["said: \\"struggling\\""\]\} mode:unmeasured instrument:/);
+    const bearing = answerTraversal({ do: 'traverse', query: 'symptom', of: 'bearing', which: 'noisy' });
+    expect(bearing).toMatch(/^"Noisy" of a bearing could be 4 things to me, none chosen: spalling: .*; brinelling: .*; wear: .*; lubricant starvation: /);
+    expect(bearing).toMatch(/In Nex: influence\(failure\.spalling, bearing\)\{dir:1 polarity:- necessity:contributing cert:\{kind:interval lo:0 hi:0\.5 source:epistemic\} ev:\{how:hypothesized src:\["said: \\"noisy\\""\]\} mode:unmeasured instrument:"measuring /);
+    // a motor's readings are a motor's: a weak heart gets only what fails a heart, and none of those carries the word
+    expect(answerTraversal({ do: 'traverse', query: 'symptom', of: 'heart', which: 'weak' })).toBe('"weak" names no failure I know of a heart. What I know fails it: infarction, arrhythmia, valve stenosis; none of them carries that word, so I cannot say which you mean.');
+    expect(answerTraversal({ do: 'traverse', query: 'symptom', of: 'bearing', which: 'purple' })).toMatch(/^"purple" names no failure I know of a bearing\. What I know fails it: spalling/);
+    // a complaint about a build in the world stays a complaint
+    expect(interpret('the kart is slow')).toEqual({ do: 'complain', words: 'the kart is slow' });
+  });
+});
