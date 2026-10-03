@@ -237,7 +237,7 @@ stay: SC-4 forbids a silent promotion.
   its form and storage and conduction do not. No one transformation keeps heat, buoyancy, magnetism and gravity at
   once: that is the content, not a gap. A surface coefficient h held by the environment is never similar (Bi grows
   with λ), and radiation never is.
-- Characteristic scales are estimates on 461 of 2596 entities: every component named five times or more
+- Characteristic scales are estimates on 461 of 2611 entities: every component named five times or more
   carries one, held by a test, and so do the parts and living things described in the shift; the rest the analogue
   search reports as `unplaced`. The analogue search needs a shared function or transformation as well as a distance in
   decades, so a thing gains far analogues as its function is said.

@@ -23,6 +23,9 @@ test('Ego answers scale and traversal questions in the app from her ganglia', as
   // and her knowledge answer carries the substrate's census
   const fails = await sb(page, (s) => s.ego.ask('how does a bearing fail'));
   expect(fails).toMatch(/fails by \d+ ways of its own/);
+  // what she remembers answers first (a law, a principle); when nothing is remembered by that name, her index answers instead of "I don't know anything about"
+  const about = await sb(page, (s) => s.ego.ask('tell me about a nephron'));
+  expect(about).toMatch(/^nephron: /);
   const does = await sb(page, (s) => s.ego.ask('what does a rudder do'));
   expect(does).toMatch(/^A rudder does one thing: steer/);
   const madeOf = await sb(page, (s) => s.ego.ask('what is a connecting rod made of'));
