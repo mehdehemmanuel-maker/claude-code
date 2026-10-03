@@ -320,6 +320,9 @@ describe('units: whatever units it is said in', () => {
     expect(parseUnit('N m/A').dim).toEqual([1, 2, -2, -1, 0]);
     expect(toSI(8, 'mi/h')).toBeCloseTo(3.57632, 5);
     expect(toSI(25, 'degC')).toBeCloseTo(298.15, 9);
+    expect(toSI(32, 'degF')).toBeCloseTo(273.15, 9);
+    expect(toSI(212, 'degF')).toBeCloseTo(373.15, 9);
+    expect(toSI(1, 'kHz')).toBe(1000);
   });
 
   it('reads quantities out of what is said', () => {
