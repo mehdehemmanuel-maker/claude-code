@@ -711,8 +711,14 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(bolt).toMatch(/is a kind of (?:cap screw|screw)/);
     expect(bolt).toMatch(/In a word: an? .+ is .+; an? .+ is /);
     const kidney = answerTraversal({ do: 'traverse', query: 'compare', of: 'kidney', which: 'capacitor' });
-    expect(kidney).toMatch(/[Bb]oth filter/);
-    expect(kidney).toMatch(/what only a capacitor does: store charge/);
+    expect(kidney).toMatch(/^Both filter\./);
+    expect(kidney).toMatch(/What only a capacitor does: store charge/);
+    const steel = answerTraversal({ do: 'traverse', query: 'compare', of: 'steel', which: 'aluminium' });
+    expect(steel).toMatch(/In a word: steel is iron with/);
+    expect(steel).not.toMatch(/\ba steel\b/);
+    const motors = answerTraversal({ do: 'traverse', query: 'compare', of: 'dc motor', which: 'stepper motor' });
+    expect(motors).toMatch(/^Both are a kind of electric motor\./);
+    expect(motors).not.toMatch(/a brushed DC motor is a brushed DC motor/);
     expect(kidney).not.toMatch(/fn\./);
     const same = answerTraversal({ do: 'traverse', query: 'compare', of: 'bolt', which: 'hex bolt' });
     expect(same).toMatch(/are the same thing to me/);

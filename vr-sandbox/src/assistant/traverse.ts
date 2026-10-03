@@ -107,27 +107,33 @@ export function answerTraversal(i: Traverse): string {
     if (!a) return unknown(i.of ?? '');
     if (!b) return unknown(i.which ?? '');
     if (a.id === b.id) return `${an(nameOf(a)).replace(/^a/, 'A')} and ${an(nameOf(b))} are the same thing to me: ${nameOf(a)}.`;
-    const ids = (e: typeof a, kind: 'is-a' | 'does' | 'made-of' | 'fails-by') => s.reach(e.id, kind).map((x) => x.id);
+    // a material is said bare ("steel"), a part with its article ("a bolt")
+    const art = (e: typeof a) => (e.kinds.includes('material') ? nameOf(e) : an(nameOf(e)));
+    const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+    // what a thing does includes what its kinds do: a bolt clamps as a screw does
+    const ids = (e: typeof a, kind: 'is-a' | 'made-of' | 'fails-by') => s.reach(e.id, kind).map((x) => x.id);
+    const does = (e: typeof a) => [...new Set([...s.reach(e.id, 'does'), ...s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'does'))].map((x) => x.id))];
     const names = (xs: string[]) => list(xs.map((id) => nameOf(s.get(id)!).replace(/^fn /, '')), 4);
     const both = <T,>(xs: T[], ys: T[]) => xs.filter((x) => ys.includes(x)), only = <T,>(xs: T[], ys: T[]) => xs.filter((x) => !ys.includes(x));
-    const kinds = both(ids(a, 'is-a'), ids(b, 'is-a')), fns = both(ids(a, 'does'), ids(b, 'does'));
+    const kinds = both(ids(a, 'is-a'), ids(b, 'is-a')), fns = both(does(a), does(b));
     const aIsB = ids(a, 'is-a').includes(b.id), bIsA = ids(b, 'is-a').includes(a.id);
-    const first = (e: typeof a) => e.says.split(/(?<=[a-z0-9%°)])[:;.] /)[0]!.replace(/\.$/, '');
+    // the first clause of what a thing is, or the second when the first is only its name
+    const first = (e: typeof a) => { const cs = e.says.split(/(?<=[a-z0-9%°)])[:;.] /).map((c) => c.replace(/\.$/, '')); const bare = (x: string) => x.toLowerCase().replace(/^(?:an? |the )/, ''); const c = cs.find((x) => bare(x) !== bare(nameOf(e)) && bare(x) !== bare(e.name)) ?? cs[0]!; return `${c.charAt(0).toLowerCase()}${c.slice(1)}`; };
     const parts: string[] = [];
-    if (aIsB) parts.push(`${an(nameOf(a)).replace(/^a/, 'A')} is a kind of ${nameOf(b)}`);
-    else if (bIsA) parts.push(`${an(nameOf(b)).replace(/^a/, 'A')} is a kind of ${nameOf(a)}`);
-    else if (kinds.length) parts.push(`Both are ${list(kinds.map((id) => an(nameOf(s.get(id)!))), 3)}`);
+    if (aIsB) parts.push(`${art(a)} is a kind of ${nameOf(b)}`);
+    else if (bIsA) parts.push(`${art(b)} is a kind of ${nameOf(a)}`);
+    else if (kinds.length) parts.push(`both are a kind of ${list(kinds.map((id) => nameOf(s.get(id)!)), 3)}`);
     if (fns.length) parts.push(`both ${names(fns)}`);
-    const fa = only(ids(a, 'does'), ids(b, 'does')), fb = only(ids(b, 'does'), ids(a, 'does'));
-    if (fa.length || fb.length) parts.push(`${fa.length ? `what only ${an(nameOf(a))} does: ${names(fa)}` : ''}${fa.length && fb.length ? '; ' : ''}${fb.length ? `what only ${an(nameOf(b))} does: ${names(fb)}` : ''}`);
+    const fa = only(does(a), does(b)), fb = only(does(b), does(a));
+    if (fa.length || fb.length) parts.push(`${fa.length ? `what only ${art(a)} does: ${names(fa)}` : ''}${fa.length && fb.length ? '; ' : ''}${fb.length ? `what only ${art(b)} does: ${names(fb)}` : ''}`);
     const ma = ids(a, 'made-of'), mb = ids(b, 'made-of');
-    if (ma.length && mb.length && (only(ma, mb).length || only(mb, ma).length)) parts.push(`${an(nameOf(a))} is made of ${names(ma)}, ${an(nameOf(b))} of ${names(mb)}`);
+    if (ma.length && mb.length && (only(ma, mb).length || only(mb, ma).length)) parts.push(`${art(a)} is made of ${names(ma)}, ${art(b)} of ${names(mb)}`);
     const La = a.params?.find((p) => p.sym === 'L_c')?.low, Lb = b.params?.find((p) => p.sym === 'L_c')?.low;
-    if (La !== undefined && Lb !== undefined && La !== Lb) parts.push(`${an(nameOf(a))} lives at about ${sci(La)} m, ${an(nameOf(b))} at ${sci(Lb)} m`);
+    if (La !== undefined && Lb !== undefined && La !== Lb) parts.push(`${art(a)} lives at about ${sci(La)} m, ${art(b)} at ${sci(Lb)} m`);
     const xa = only(ids(a, 'fails-by'), ids(b, 'fails-by')), xb = only(ids(b, 'fails-by'), ids(a, 'fails-by'));
-    if (xa.length || xb.length) parts.push(`${xa.length ? `${an(nameOf(a))} alone fails by ${names(xa)}` : ''}${xa.length && xb.length ? '; ' : ''}${xb.length ? `${an(nameOf(b))} alone fails by ${names(xb)}` : ''}`);
-    const tell = parts.length ? parts.map((x, k) => (k === 0 ? x.charAt(0).toUpperCase() + x.slice(1) : x)).join('. ') + '.' : `I know nothing they share and nothing that parts them yet.`;
-    return `${tell} In a word: ${an(nameOf(a))} is ${first(a).charAt(0).toLowerCase()}${first(a).slice(1)}; ${an(nameOf(b))} is ${first(b).charAt(0).toLowerCase()}${first(b).slice(1)}.`;
+    if (xa.length || xb.length) parts.push(`${xa.length ? `${art(a)} alone fails by ${names(xa)}` : ''}${xa.length && xb.length ? '; ' : ''}${xb.length ? `${art(b)} alone fails by ${names(xb)}` : ''}`);
+    const tell = parts.length ? parts.map(cap).join('. ') + '.' : 'I know nothing they share and nothing that parts them yet.';
+    return `${tell} In a word: ${art(a)} is ${first(a)}; ${art(b)} is ${first(b)}.`;
   }
   if (i.query === 'function') {
     const e = find(i.of ?? '');
