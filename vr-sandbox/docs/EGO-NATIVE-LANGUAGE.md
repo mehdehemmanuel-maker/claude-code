@@ -297,9 +297,21 @@ identical before and after every name in the world is replaced by a random token
 ## R. Cross-domain equivalence detection
 
 `distance(fp_a, fp_b)` is a weighted Jaccard distance over fingerprints; `cluster(fps, eps)` groups concepts. Measured
-on the substrate: a spring and a capacitor are 0.90 apart on everything said of them and 0.59 under the energy tuner;
+on the substrate: a spring and a capacitor are 0.90 apart on everything said of them and 0.55 under the energy tuner;
 a spring, a capacitor, a flywheel and a lithium cell cluster as one under the energy tuner at 0.7, with and without
-their names; a blade has no energy view at all. The step the request describes, "are these one structure named
+their names; a blade has no energy view at all.
+
+**Correction, run at scale (3 October, 16:20 UTC).** Clustering all 593 things with an energy view, unweighted,
+gives clusters of shape, not content: a seat, a photoresist and an elastic store cluster because each has a kind, a
+constraint and a derived function at the packs' default confidence, which is the shape every textbook fact shares
+(the first morpheme of section O). Weighting each token by how rare it is across the corpus (`rarity`, section V's
+learned term in its plainest form: log N/df, zero for a token every fingerprint carries) changes the picture: the
+spring clusters with its kin (the springs, a flexure, a belleville washer), the lead screws with the lead-screw way,
+biology's elastic proteins together, and the spring-capacitor distance rises from 0.55 to 0.82: what they shared was
+the shape; what parts them is every dimension in their laws. The analogy a physicist means (E = ½kx² and E = ½CV²,
+two quadratic stores) lives at the level of the laws' *form*, which a dimension-token fingerprint cannot see; it
+needs a morphism between theories over the dimensions (the `morphism` operator with a contract), designed, not
+built. A number that flattered the thesis has been replaced by the one that was measured. The step the request describes, "are these one structure named
 several times", is: compute fingerprints under a tuner, cluster, propose a higher abstraction for a cluster, keep the
 differences as the set difference of the fingerprints. The proposal step is the morpheme algorithm applied to the
 cluster's shared sub-structures.

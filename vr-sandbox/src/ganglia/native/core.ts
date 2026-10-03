@@ -263,11 +263,26 @@ export function fingerprint(self: string, said: Structure[]): Map<string, number
   return fp;
 }
 
-/** Weighted Jaccard distance between two token multisets: 0 the same shape, 1 nothing shared. */
-export function distance(a: Map<string, number>, b: Map<string, number>): number {
+/**
+ * Weighted Jaccard distance between two token multisets: 0 the same shape, 1 nothing shared. With `weights` (section
+ * V's learned term, here the plainest one: how rare a token is across a corpus, `rarity`), a token every structure
+ * carries (a derived relation at the packs' default confidence) counts for almost nothing, and what tells things
+ * apart counts for most.
+ */
+export function distance(a: Map<string, number>, b: Map<string, number>, weights?: Map<string, number>): number {
   let inter = 0, union = 0;
-  for (const k of new Set([...a.keys(), ...b.keys()])) { const x = a.get(k) ?? 0, y = b.get(k) ?? 0; inter += Math.min(x, y); union += Math.max(x, y); }
+  for (const k of new Set([...a.keys(), ...b.keys()])) { const w = weights?.get(k) ?? 1; const x = a.get(k) ?? 0, y = b.get(k) ?? 0; inter += w * Math.min(x, y); union += w * Math.max(x, y); }
   return union === 0 ? 0 : 1 - inter / union;
+}
+
+/** How rare each token is across a corpus of fingerprints: log(N / df), zero for a token every fingerprint carries. */
+export function rarity(fps: Iterable<Map<string, number>>): Map<string, number> {
+  const df = new Map<string, number>();
+  let n = 0;
+  for (const fp of fps) { n++; for (const k of fp.keys()) df.set(k, (df.get(k) ?? 0) + 1); }
+  const out = new Map<string, number>();
+  for (const [k, d] of df) out.set(k, Math.log(n / d));
+  return out;
 }
 
 /** Distance between two structures: their shapes, then how far the coordinates both carry are apart. */
@@ -289,10 +304,10 @@ export function structureDistance(a: Structure, b: Structure, expand?: Expand): 
 }
 
 /** Group concepts whose fingerprints lie within `eps` of a cluster's first member. */
-export function cluster(fps: Map<string, Map<string, number>>, eps: number): string[][] {
+export function cluster(fps: Map<string, Map<string, number>>, eps: number, weights?: Map<string, number>): string[][] {
   const groups: { seed: Map<string, number>; ids: string[] }[] = [];
   for (const [id, fp] of fps) {
-    const g = groups.find((x) => distance(x.seed, fp) <= eps);
+    const g = groups.find((x) => distance(x.seed, fp, weights) <= eps);
     if (g) g.ids.push(id); else groups.push({ seed: fp, ids: [id] });
   }
   return groups.map((g) => g.ids);

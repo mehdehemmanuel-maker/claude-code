@@ -13,6 +13,7 @@ import { Morphemes, candidates, compress, descriptionLength, expandAll, promote,
 import { evaluate, fromLaw, fromNode, fromRelation, saidOf, tune } from '../../src/ganglia/native/nexus';
 import { decompose, forAudience, parse, rankOfText, render, type Lexicon } from '../../src/ganglia/native/translate';
 import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text';
+import { rarity } from '../../src/ganglia/native/core';
 import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses, settle, unitOfQuantityWord } from '../../src/ganglia/native/polysemy';
 import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNex } from '../../src/ganglia/native/challenge';
 import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/ganglia/native/grammar';
@@ -575,5 +576,38 @@ describe('Nex: the spoken form (section E) is the text read aloud, one word per 
     // the spoken form drops nothing for any listener: English for a child drops the numbers, the intervals and the delay
     expect(render(loadCurrent, 'en', 'child').dropped.length).toBeGreaterThan(0);
     expect(hash(hear(speak(loadCurrent)))).toBe(hash(loadCurrent));
+  });
+});
+
+describe('Nex: cross-domain equivalence over the whole substrate, with the distance weighted by how rare a token is (sections R and V)', () => {
+  it('unweighted, things cluster by the shape every textbook fact shares; weighted by rarity, a spring clusters with its kin and the spring-capacitor likeness is shown to have been shape, not content', () => {
+    const fps = new Map<string, Map<string, number>>();
+    const dom = new Map<string, string>();
+    for (const e of substrate.entities.values()) {
+      if (/^(?:kind|block|view|cross|param|scale)\./.test(e.id)) continue;
+      const said = tune(saidOf(substrate, e.id, laws), 'energy');
+      if (said.length < 2) continue;
+      fps.set(e.id, fingerprint(e.id, said)); dom.set(e.id, e.domains[0] ?? '?');
+    }
+    expect(fps.size).toBeGreaterThan(400);
+    const w = rarity(fps.values());
+    // a token every fingerprint carries weighs nothing; a rare one weighs most
+    expect(w.get('SELF')).toBe(0);
+    expect(Math.max(...w.values())).toBeGreaterThan(3);
+    const spring = fps.get('spring.helical')!, capacitor = fps.get('capacitor')!, seat = fps.get('seat') ?? fps.get('tool.blade') ?? fps.get('resist.photo')!;
+    // measured 3 October: spring-capacitor 0.55 unweighted, 0.82 weighted; the unweighted nearness was the shape every derived relation shares
+    expect(distance(spring, capacitor)).toBeLessThan(0.6);
+    expect(distance(spring, capacitor, w)).toBeGreaterThan(0.75);
+    expect(distance(spring, seat, w)).toBeGreaterThan(distance(spring, capacitor, w));
+    // weighted, at 0.5, the spring's cluster is its kin (springs, a flexure, a belleville washer), never a seat or a photoresist
+    const groups = cluster(fps, 0.5, w);
+    const mine = groups.find((g) => g.includes('spring.helical'))!;
+    expect(mine.filter((id) => /spring|flexure|belleville/.test(id)).length).toBeGreaterThanOrEqual(4);
+    expect(mine).not.toContain('seat');
+    expect(mine).not.toContain('resist.photo');
+    // the cross-domain clusters that remain are content: biology's elastic proteins together, the lead screws with the lead-screw way
+    const cross = groups.filter((g) => g.length >= 2 && new Set(g.map((id) => dom.get(id))).size >= 2);
+    expect(cross.length).toBeGreaterThan(20);
+    expect(cross.some((g) => g.includes('way.lead.screw') && g.some((id) => id.startsWith('leadscrew.')))).toBe(true);
   });
 });
