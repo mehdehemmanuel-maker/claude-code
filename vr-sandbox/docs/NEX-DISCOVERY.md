@@ -186,7 +186,14 @@ finished.
   the law's (27 °C and 127 °C give a ceiling of 0.2499; a mass in seconds is refused by dimension).
 - "what anomalies do you hold": the register by status, the explained one kept with its explanation and the
   skeptic's computed candidate, and whether any two share a law ancestry.
-- "how do you know that the current causes the voltage": the epistemic vector of what stands behind the influence.
+- "how well do you know a bearing": "I hold 74 structures about a bearing: 26 parts, 18 influences, 13 kinds, 12
+  constraints, 3 likenesses of unknown mode, 2 functions (5 of the constraints are laws of the book). How they are
+  known: 72 by derivation from sources, 2 by calibration; none measured in my world; none contradicted. By mode: 71
+  true, 3 unknown. My sources cover a bearing at 0.85 (partly covered)." Measured on 3 October before any question
+  made her derive more; after "what makes a bearing" the same answer holds 96 structures with 22 morphisms, since
+  the substrate grows as she is asked.
+- "how do you know that the current causes the voltage" (also "why do you think", "what makes you think", "are you
+  sure", "how confident are you"): the epistemic vector of what stands behind the influence.
   For a law: "formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory entailed (domain
   inside); coverage 0.85; uncertainty unstated; discrepancy none; consistent: entailed by a law, by derivation; partly
   covered by sources. The law behind it: Ohm's law (V = I R), Young & Freedman…; the sign and size taken at its worked

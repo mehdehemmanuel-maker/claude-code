@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { alive, anomalies, askable, between, chain, clusterAnomalies, d, decompose, epistemic, family, formOf, fromRelation, grow as growGrammar, hash, labelOf, polysemous, r, readings, reaching, render, saidOf, sameForm, sayEpistemic, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { alive, anomalies, askable, between, chain, clusterAnomalies, coverage, d, decompose, epistemic, evidenceOf, family, formOf, fromRelation, grow as growGrammar, hash, labelOf, leavesOf as evidenceLeavesOf, polysemous, r, readings, reaching, render, saidOf, sameForm, sayEpistemic, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS, withConstants } from '../ganglia/laws';
 import { dimensionOf, parseUnit, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -443,6 +443,26 @@ export function answerTraversal(i: Traverse): string {
       return `${cap(nameOf(a))} and ${nameOf(b)} are both counted in ${ua}: numbers of one dimension lie on a line, and a law makes the line a family. ${shared.length ? `${shared.length} law${shared.length === 1 ? '' : 's'} of mine take both: ${list(shared.slice(0, 4).map((l) => `${l.name} (${l.formula})`), 4)}; along one of those, with the other inputs held, every point between is generated on demand.` : 'No law of mine takes both, so I have the line and no family on it.'}`;
     }
     return `${cap(art(a))} and ${art(b)} are two distinctions: they share no coordinate, so there is nothing between them but what a law would say, and none is given. I can compare them (what each is, does, is made of and fails by), which is a different question.`;
+  }
+  if (i.query === 'knowledge') {
+    // how well she knows a thing: everything the substrate and the law book say of it, as structures, tallied by
+    // operator, by the kind of evidence on each, by mode, with what stands against any of it and her sources' coverage
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const laws = new Map(LAWS.map((l) => [l.id, l]));
+    const said = saidOf(s, e.id, laws);
+    if (!said.length) return `I hold no structure about ${art(e)} yet: that is a question on my queue.`;
+    const count = <K extends string>(keys: K[]): [K, number][] => { const m = new Map<K, number>(); for (const k of keys) m.set(k, (m.get(k) ?? 0) + 1); return [...m].sort((a, b) => b[1] - a[1]); };
+    const OP_WORDS: Record<string, [string, string]> = { part: ['part', 'parts'], kind: ['kind', 'kinds'], function: ['function', 'functions'], constrain: ['constraint', 'constraints'], influence: ['influence', 'influences'], same: ['likeness of unknown mode', 'likenesses of unknown mode'], morphism: ['morphism', 'morphisms'], invariant: ['invariant', 'invariants'], abstract: ['abstraction', 'abstractions'] };
+    const ops = count(said.map((x) => (x.k === 'R' ? x.op : x.k))).map(([op, n]) => `${n} ${(OP_WORDS[op] ?? [op, `${op}s`])[n === 1 ? 0 : 1]}`);
+    const HOW_WORDS: Record<string, string> = { theorem: 'by theorem', derived: 'by derivation from sources', measured: 'measured', calibrated: 'by calibration', simulated: 'in simulation', estimated: 'by estimate', extrapolated: 'by extrapolation', hypothesized: 'hypothesized', assumed: 'assumed (stubs)', fictional: 'fictional' };
+    const hows = count(said.map((x) => evidenceLeavesOf(x)[0]?.how ?? 'assumed')).map(([h, n]) => `${n} ${HOW_WORDS[h] ?? h}`);
+    const measured = said.filter((x) => evidenceLeavesOf(x).some((l) => l.how === 'measured')).length;
+    const modes = count(said.map((x) => (x.k === 'R' ? x.c.mode ?? 'unknown' : 'true'))).map(([m, n]) => `${n} ${m}`);
+    const against = said.filter((x) => evidenceOf(x, said).against.length).length;
+    const nLaws = s.outOf(e.id, 'governed-by').filter((rel) => laws.has(rel.to)).length;
+    const cov = coverage({ k: 'D', id: e.id }, s);
+    return `I hold ${said.length} structures about ${art(e)}: ${ops.join(', ')}${nLaws ? ` (${nLaws} of the constraints ${nLaws === 1 ? 'is a law' : 'are laws'} of the book)` : ''}. How they are known: ${hows.join(', ')}; ${measured ? `${measured} measured in my world` : 'none measured in my world'}; ${against ? `${against} with a measurement against them` : 'none contradicted'}. By mode: ${modes.join(', ')}. My sources cover ${art(e)} at ${cov} (${cov === 0 ? 'unseen by sources' : cov < 1 ? 'partly covered' : 'covered'}). In Nex the first is ${nex(said[0]!)}`;
   }
   if (i.query === 'possible') {
     // impossible only with a certificate (docs/NEX-DISCOVERY.md): a law that reaches the quantity, every input it

@@ -81,7 +81,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'know' | 'possible' | 'anomalies' | 'between' | 'edge' | 'form' | 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
+export type TraversalQuery = 'know' | 'knowledge' | 'possible' | 'anomalies' | 'between' | 'edge' | 'form' | 'symptom' | 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -100,6 +100,8 @@ function knowOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
 function traversalOf(t: string, line: string = t): Extract<Intent, { do: 'traverse' }> | null {
   const known = knowOf(t);
   if (known) return known;
+  // how well she knows a thing: everything she holds of it as structures, tallied by operator, by how each is known, by mode (docs/NEX-DISCOVERY.md, part 2)
+  { const m = /^(?:how well|how much) do you (?:really )?know (?:about )?(?:an? |the )?(.+?)\??$|^how (?:sure|certain|confident) are you about (?:an? |the )?(.+?)\??$/.exec(t); if (m) return { do: 'traverse', query: 'knowledge', of: (m[1] ?? m[2])!.replace(/^(?:an? |the |your |my )/, '').trim() }; }
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |your |my )/, '').trim();
   if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|each) (?:known |possible )?ways? (?:to|of) (?:store|storing) (\w+)|^how (?:can|could) (\w+) be stored|^ways? to store (\w+)$/.exec(t))) return { do: 'traverse', query: 'ways-to-store', of: (m[1] ?? m[2] ?? m[3])! };

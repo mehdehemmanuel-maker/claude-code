@@ -1198,6 +1198,17 @@ describe('Kinds and functions are built as Nex structures too, said beside the E
   });
 });
 
+describe('Ego says how well she knows a thing: everything she holds of it, tallied by operator, evidence and mode', () => {
+  it('"how well do you know a bearing" counts the structures, how each is known, what is measured or contradicted, the modes and the coverage', () => {
+    for (const t of ['how well do you know a bearing', 'how much do you know about bearings', 'how sure are you about a bearing']) expect(interpret(t), t).toMatchObject({ do: 'traverse', query: 'knowledge' });
+    const a = answerTraversal({ do: 'traverse', query: 'knowledge', of: 'bearing' });
+    // the morphisms appear once an earlier question has made her derive the bearing's producers: the shared substrate grows as she is asked
+    expect(a).toMatch(/^I hold \d+ structures about a bearing: \d+ parts, (?:\d+ morphisms, )?\d+ influences, \d+ kinds, \d+ constraints, \d+ likenesses of unknown mode, \d+ functions \(\d+ of the constraints are laws of the book\)\. How they are known: \d+ by derivation from sources, \d+ by calibration; none measured in my world; none contradicted\. By mode: \d+ true, \d+ unknown\. My sources cover a bearing at 0\.\d+ \(partly covered\)\. In Nex the first is part\(bearing, steel\.52100\)\{cert:\{kind:interval lo:0\.6 hi:0\.8 source:epistemic\} ev:\{how:derived\} mode:true\}$/);
+    expect(answerTraversal({ do: 'traverse', query: 'knowledge', of: 'motor' })).toMatch(/^I hold \d+ structures about a motor: .* \(1 of the constraints is a law of the book\)\. How they are known: \d+ by derivation from sources; none measured in my world; none contradicted\. By mode: \d+ true\./);
+    expect(answerTraversal({ do: 'traverse', query: 'knowledge', of: 'zorb' })).toBe('I know no zorb.');
+  });
+});
+
 describe('Every Nex structure Ego says is readable Nex', () => {
   it('the "In Nex:" tail of each answer reads back and prints to the same text (section E both ways, on her real answers)', () => {
     const tail = (a: string): string | null => {
