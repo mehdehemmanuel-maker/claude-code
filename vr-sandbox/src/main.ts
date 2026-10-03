@@ -19,8 +19,10 @@ async function main() {
   const tools = new ToolManager(app);
   // the assistant: she sees the world, learns your habits, and runs Forge
   app.ego = new Ego(app, tools);
-  const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null, templates: TEMPLATES };
+  const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null, templates: TEMPLATES, mind: null };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
+  // her Mind: the journal this browser keeps, and whatever was left unresolved resumed from it (src/mind)
+  void app.ego.wake().then((m) => { handles['mind'] = m; }, (e) => console.warn('her Mind did not open', e));
   app.everyFrame('tools', (dt) => tools.frame(dt));
   // behind the launch card, a still view into the workshop
   app.view.camera.position.set(0, 1.7, 3.4);

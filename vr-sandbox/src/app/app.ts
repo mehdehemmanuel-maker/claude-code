@@ -871,7 +871,9 @@ export class App {
     // what was learned kept in this browser; started after launch so the world comes up first
     setTimeout(() => {
       try {
-        const p = startPopulation({ storage: globalThis.localStorage ?? null, connector: typeof fetch === 'function' ? wikidata() : null });
+        // the outside is a plug, off unless asked for (?external=wikidata): the rules and the seed packs are enough to work the queue
+        const external = typeof location !== 'undefined' && new URLSearchParams(location.search).get('external') === 'wikidata' && typeof fetch === 'function';
+        const p = startPopulation({ storage: globalThis.localStorage ?? null, connector: external ? wikidata() : null });
         globalThis.addEventListener?.('pagehide', () => p.save());
       } catch (err) { console.warn('population did not start', err); }
     }, 2500);

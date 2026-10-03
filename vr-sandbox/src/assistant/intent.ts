@@ -13,6 +13,8 @@ import { frontierFor } from '../ganglia/frontier';
 
 export type Intent =
   | { do: 'strengthen' }
+  /** Her own work, read off her journal (src/mind): what she was working on, and what changed in what she believes. */
+  | { do: 'working' | 'changed' }
   /** What her creatures are doing, from her book of them (the herd). */
   | { do: 'creatures' }
   | { do: 'join'; joint: string; floor: boolean }
@@ -220,6 +222,9 @@ export function interpret(line: string): Intent | null {
   if (!t) return null;
   let m: RegExpExecArray | null;
   if (/^(help|what can you do|commands)$/.test(t)) return { do: 'help' };
+  // her own work (src/mind): read before every other "what" question
+  if (/^(what (were|are) you (working on|doing|up to|investigating)|what have you been (working on|doing)|what (was|is) your (work|investigation)|where (were|are) you( at)?|whats open|what is open|what are you on)\??$/.test(t)) return { do: 'working' };
+  if (/^(what changed|what has changed|what did you (learn|find|find out|conclude)|what have you learned|whats new|what is new|what do you believe now|what did the (test|stand) show)\??$/.test(t)) return { do: 'changed' };
   if (/^(what level are you|your level|level|how (much )?have you grown|how smart are you)/.test(t)) return { do: 'level' };
   if ((m = /^(?:do|run|use)(?: (?:the|your|my))? skill (.+)$|^skill (.+)$|^do (?:the )?(.+?) (?:skill|thing)$/.exec(t))) return { do: 'skill', which: (m[1] ?? m[2] ?? m[3])!.trim() };
   if (/^(whats wrong|status|report|how is it|hows it (doing|going)|check (it|this|the build)|anything wrong)/.test(t)) return { do: 'status' };

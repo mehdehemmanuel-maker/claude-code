@@ -1,5 +1,9 @@
 # Omni audit: what Ego is, what persists, and the smallest architecture that would wake her
 
+> Superseded in part by docs/AUTOPSY.md (3 October 2026): the verdicts on what should survive, the amputation
+> evidence, and the first awakening slice built on the surviving substrate. Sections 1–3 below (Mind, Gate, Wake,
+> Frontier, Invalidation) were tested against that slice; two of the five proved to be primitives (AUTOPSY §J).
+
 Date: 3 October 2026, 19:30–20:30 UTC, on branch `claude/upbeat-heisenberg-4l8unp` at 19e8538. Every statement below
 was read from the code or measured by a command on the day; where something is a judgment it says so. The order is
 the one asked for: A to Z, then the three questions.

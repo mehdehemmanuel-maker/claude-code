@@ -21,7 +21,7 @@ import { connectedComponent, deleteParts, duplicateParts, setFrozen, setPartPose
 import { effectiveParams, getPartKind, massOf } from '../parts/registry';
 import { DISPLAY, defaultsOf, formatForce, type Params } from '../schema/params';
 import { AUTO_JOIN } from '../connectors/plan';
-import { run, type RunResult } from '../forge/forge';
+import { parse as parseForge, run, type RunResult } from '../forge/forge';
 import { AppHost } from '../forge/apphost';
 import { understand } from './understand';
 import { advance, guideOf, lessonFrom, type Lesson } from './lesson';
@@ -45,6 +45,9 @@ import { findRepeat, nameFor, signatureOf, SkillBook, skillProgram } from './ski
 import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
 import { design, type DesignSpec } from './designer';
+import { JOINT_LIMIT, standLoads, standPushes } from './prove';
+import { fragmentOf } from '../doc/commands';
+import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature } from '../mind';
 import { categoryOf, Life } from './life';
 import { Voice } from './voice';
 import { resolveKind, resolveMaterial } from '../forge/catalog';
@@ -87,6 +90,8 @@ export class Ego {
   private offered: string | null = null;
   /** What you've told her is wrong, kept for Claude. */
   readonly reports = new ReportBook();
+  /** Her own persistent state and the loop that moves it (src/mind): open at wake, null until then. */
+  mind: Mind | null = null;
   advice: Advice[] = [];
   /** This session's build, as Forge: every placement, joint and change you or she made. */
   journal: string[] = [];
@@ -154,8 +159,16 @@ export class Ego {
     if (lifeSaid) { this.output = [...this.output, `› ${text.slice(0, 80)}`, lifeSaid].slice(-12); this.gain('ask'); this.reply(lifeSaid); return lifeSaid; }
     const intent = interpret(text);
     if (!intent) {
-      const r = this.run(text);
-      return r.error ?? r.lines[r.lines.length - 1] ?? '';
+      // a line that is Forge runs as Forge; anything else is a request she cannot read, kept as one, never executed
+      if (this.isForge(text)) {
+        const r = this.run(text);
+        return r.error ?? r.lines[r.lines.length - 1] ?? '';
+      }
+      const unknown = `Unknown request: I can't read “${text.slice(0, 60)}” as anything I know how to do, and it isn't Forge. I've kept it. ${HELP}`;
+      void this.mind?.process({ kind: 'request', text, since: performance.now() });
+      this.output = [...this.output, `› ${text.slice(0, 80)}`, unknown].slice(-12);
+      this.reply(unknown);
+      return unknown;
     }
     let reply: string;
     try {
@@ -208,6 +221,8 @@ export class Ego {
     const app = this.app;
     switch (i.do) {
       case 'help': return HELP;
+      case 'working': return this.mind ? sayWorking(this.mind.journal.commits) : 'My journal is not open yet.';
+      case 'changed': return this.mind ? sayChanged(this.mind.journal.commits) : 'My journal is not open yet.';
       case 'status': {
         const top = this.advice[0];
         return `${this.observe()}.${top ? ` ${top.text}` : ' Everything is holding.'}`;
@@ -487,6 +502,40 @@ export class Ego {
   // ---- designing ------------------------------------------------------------------------------------
 
   /** Design what was asked, build it in front of you, and check it will hold. */
+  /** A line is Forge when Forge reads it (forge.ts parse); an English sentence is not, whatever word it starts with. */
+  private isForge(text: string): boolean {
+    try { return parseForge(text).length > 0; } catch { return false; }
+  }
+
+  /**
+   * Wake her Mind: open the journal this browser keeps and resume whatever was left unresolved (the one rule at
+   * start, src/mind). The stand is the physics' own, beside the live world.
+   */
+  async wake(): Promise<Mind> {
+    const app = this.app;
+    this.mind = await Mind.open({ stand: (setup) => app.physics.stand(setup), get sim() { return app.doc.sim; } });
+    const steps = await this.mind.resume();
+    if (steps.length) this.say('tip', sayBrief(this.mind.journal.commits, this.mind.current()!, 'Picking up where I left off'), []);
+    return this.mind;
+  }
+
+  /**
+   * A design she just built goes on her stand (a world of its own, the same physics): the result is the event her
+   * Mind investigates, against what she predicted for it. Nothing here waits on it; she says what she found when the
+   * loop rests.
+   */
+  private async investigate(spec: DesignSpec, made: string[], predictedU: number) {
+    const app = this.app, mind = this.mind;
+    if (!mind) return;
+    const since = performance.now();
+    const frag = fragmentOf(app.doc, made, (id) => app.doc.parts[id]!.pose, { p: [0, 0, 0], q: [0, 0, 0, 1] });
+    const setup = { parts: frag.parts, connections: frag.connections, materials: app.doc.materials, sim: app.doc.sim, loads: standLoads(spec, frag), pushes: standPushes(spec, frag), seconds: 3 };
+    const inv = `${spec.what}-${Date.now().toString(36)}`;
+    const result = await app.physics.stand(setup);
+    await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag), predicted: { held: true, uMax: Math.max(predictedU, JOINT_LIMIT), model: 'foresight: static load paths under the rated load, no sideways push', laws: ['statics.load-path', 'joint.capacity'] }, since });
+    this.say('tip', sayBrief(mind.journal.commits, inv, 'On my stand'), []);
+  }
+
   designIt(spec: DesignSpec, materialWord?: string): string {
     const app = this.app;
     if (materialWord) spec.material = resolveMaterial('block', materialWord);
@@ -504,7 +553,10 @@ export class Ego {
     const risks = this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '') && f.u >= 0.8);
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
-    return `${plan.notes.join(' ')} ${verdict}`;
+    const predictedU = Math.max(0, ...this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '')).map((f) => f.u));
+    const testing = this.mind ? " I'm testing it on my stand now." : '';
+    void this.investigate({ ...spec }, made, predictedU).catch((e) => console.warn('the stand did not run', e));
+    return `${plan.notes.join(' ')} ${verdict}${testing}`;
   }
 
   /**

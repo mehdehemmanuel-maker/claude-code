@@ -4,6 +4,7 @@
 import type { SimSettings } from '../doc/types';
 import type { PhysicsOp } from './protocol';
 import type { AdvanceResult } from './runner';
+import type { StandResult, StandSetup } from './stand';
 
 export type ResultHandler = (r: AdvanceResult) => void;
 
@@ -19,6 +20,11 @@ export class PhysicsClient {
   private pendingStep = false;
   readonly mode: 'worker' | 'inline';
   lastError: string | null = null;
+  /** Stand runs asked of the worker, waiting for their result, by id. */
+  private stands = new Map<number, { resolve: (r: StandResult) => void; reject: (e: Error) => void }>();
+  private standSeq = 0;
+  /** The Jolt module, kept in inline mode so a stand can run a world of its own here. */
+  private jolt: unknown = null;
 
   private constructor(mode: 'worker' | 'inline') {
     this.mode = mode;
@@ -33,12 +39,18 @@ export class PhysicsClient {
         worker.onmessage = (e) => {
           const m = e.data;
           if (m.type === 'ready') resolve();
-          else if (m.type === 'result') {
+          else if (m.type === 'stand') {
+            const p = c.stands.get(m.id);
+            c.stands.delete(m.id);
+            p?.resolve(m.result as StandResult);
+          } else if (m.type === 'result') {
             c.inFlight = false;
             c.handler(m.result);
           } else if (m.type === 'error') {
             c.lastError = m.message;
             console.error('[physics worker]', m.message);
+            for (const p of c.stands.values()) p.reject(new Error(m.message));
+            c.stands.clear();
             reject(new Error(m.message));
           }
         };
@@ -52,6 +64,7 @@ export class PhysicsClient {
         import('./runner'),
       ]);
       const J = await initJolt({ locateFile: () => wasmUrl } as never);
+      c.jolt = J;
       c.inline = Runner.create(J, sim);
     }
     return c;
@@ -85,6 +98,21 @@ export class PhysicsClient {
     } else if (this.inline) {
       this.handler(this.inline.run(msg.pre, ops, msg.dt, msg.maxTicks, msg.singleStep));
     }
+  }
+
+  /**
+   * A test on the stand (stand.ts): a world of its own with the same physics, in the worker beside the live world (the
+   * frame never waits on it), or here in inline mode. The result comes back once, whole.
+   */
+  async stand(setup: StandSetup): Promise<StandResult> {
+    if (this.worker) {
+      const id = ++this.standSeq;
+      const worker = this.worker;
+      return new Promise<StandResult>((resolve, reject) => { this.stands.set(id, { resolve, reject }); worker.postMessage({ type: 'stand', id, setup }); });
+    }
+    const [{ PhysicsWorld }, { runStand }] = await Promise.all([import('./world'), import('./stand')]);
+    const world = new PhysicsWorld(this.jolt as ConstructorParameters<typeof PhysicsWorld>[0], setup.sim);
+    try { return runStand(world, setup); } finally { world.destroy(); }
   }
 
   dispose() {
