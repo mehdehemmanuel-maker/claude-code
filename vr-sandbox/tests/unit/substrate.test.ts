@@ -1,7 +1,7 @@
 // The substrate: reality indexed as an alien engineer would, cross-connected, every entity carrying where it comes from
 // and how much of it is known, and a queue of what to ask next. The final test is answered by traversal, never by a list.
 import { FAILURE_OF_FUNCTION } from '../../src/ganglia/substrate/population';
-import { findByWords, spokenName } from '../../src/ganglia/substrate/names';
+import { articled, findByWords, spokenName } from '../../src/ganglia/substrate/names';
 import { describe, expect, it } from 'vitest';
 import { LAWS } from '../../src/ganglia/laws';
 import { interpret } from '../../src/assistant/intent';
@@ -584,6 +584,11 @@ describe('what an arrow names, the index describes (S-6)', () => {
     // and the said layer is heard: the words find the thing
     expect(findByWords(s, 'DC motor')?.id).toBe('motor.dc');
     expect(findByWords(s, 'logic gate')?.id).toBe('gate.logic');
+    // a name that carries its own article keeps it: "the mains grid", never "a the mains grid"
+    expect(articled('the mains grid')).toBe('the mains grid');
+    expect(articled('a person')).toBe('a person');
+    expect(articled('engine')).toBe('an engine');
+    expect(articled('bolt')).toBe('a bolt');
   });
 
   it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {

@@ -35,7 +35,7 @@ export const spokenName = (e: Entity): string => {
 };
 
 /** "a bearing", "an encoder". */
-export const articled = (name: string): string => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+export const articled = (name: string): string => (/^(?:the|a|an) /i.test(name) ? name : `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`);
 export const capitalised = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Words people use for things the index calls otherwise: a spoken layer over the ids, never the ids themselves. */

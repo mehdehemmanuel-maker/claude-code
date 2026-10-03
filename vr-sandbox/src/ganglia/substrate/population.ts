@@ -315,7 +315,7 @@ export function buildGenerators(s: Substrate): Map<string, Generator> {
     out.set(e.id, (spec = {}) => {
       const first = enumerable[0]!;
       const choices = first.values ?? Array.from({ length: 5 }, (_, i) => first.low! + ((first.high! - first.low!) * i) / 4);
-      return choices.slice(0, 12).map((v) => ({ id: `${e.id}#${first.sym}=${v}`, says: `a ${e.name} with ${first.name} ${v}${first.unit ? ` ${first.unit}` : ''}`, parameters: { ...spec, [first.sym]: v } }));
+      return choices.slice(0, 12).map((v) => ({ id: `${e.id}#${first.sym}=${v}`, says: `${articled(e.name)} with ${first.name} ${v}${first.unit ? ` ${first.unit}` : ''}`, parameters: { ...spec, [first.sym]: v } }));
     });
     e.kinds.includes('generator') || e.kinds.push('generator');
   }
