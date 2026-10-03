@@ -257,12 +257,31 @@ cluster's shared sub-structures.
 
 ## S. Human-language concept splitting and merging
 
-Polysemy: one alias pointing at distinctions whose fingerprints lie far apart is a word to split (the data to run this
-on is the substrate's `names` and aliases; the detector is `distance` over the fingerprints of all entities sharing a
-word; not yet run as a batch). Synonymy across disciplines: distinctions from different domains within `eps` under a
-tuner are one structure to merge under a higher abstraction, with the differences preserved (section R). Physics,
-chemistry, biology and engineering are not nodes of Nex: `domain` is a tag on where a structure came from, used by
-the morpheme algorithm to refuse single-domain jargon, never as ontology.
+Polysemy is built (`native/polysemy.ts`). A human word is not a thing: it reaches *readings*, each a distinction with
+its kind and, for a quantity, its dimension, and each a structure (`quantity(qty.current, 0[A])`,
+`kind(earth.current, phenomenon)`). Readings are grouped into *senses*; the faces of one thing are one sense
+(`substrate/faces.ts`, from section D: a flow and a quantity it carries, a law and the quantity it is of, a way and
+the part that embodies it, a joint as an interface and as a part, an element and its material, a part and the
+manifold of its variants). A word whose strongest readings are of more than one sense is polysemous, and which is
+meant is settled by structure or asked, never chosen in silence:
+
+- `settle(readings, {dim})`: the dimension the question carries ("compare current and voltage": voltage is a
+  quantity, so current is the quantity in amperes);
+- `settle(readings, {kinds})`: the kind of thing the question is about;
+- `settle(readings, {flow})`: a design request wants flows;
+- otherwise the open senses are said back: "Current names 3 things to me: electric current (a quantity, in A);
+  current, of earth (a phenomenon); current, of electrical (a thing). Which do you mean?"
+
+A catalogue's one-word search tokens ("drive", "motor" on every variant) and the tails of ids are too weak to be
+chosen by context or offered. The word lookup itself (`substrate/names.ts`) now returns nothing for a word of two
+senses: an id that is also another thing's name ("glue": the process and the adhesive), two described things with
+one name ("broach": the tool and the machine), a word in several namespaces ("current"), an alias another thing of a
+different sense carries ("induction": Faraday's law and the motor). The flow table's commitment of a quantity word
+to one flow ("power" to electric) is said as a convention in a challenge's result when the quantity rides on several
+flows (`flowsCarrying`).
+
+Synonymy across disciplines remains as designed: distinctions from different domains within `eps` under a tuner,
+with the morphemes of their shared structure as the merged concept (section R), not yet run as a batch.
 
 ## T. Canonical machine representation
 
@@ -340,6 +359,17 @@ What `tests/unit/native.test.ts` holds, and will hold as the language grows:
     support, never as a cause: five of five right. The improvement came from adopting Nex's structure in the English
     path, which is the thesis; the set must grow with every confusion found.
 
+13. **Polysemy, measured.** The census over the substrate's words (names, aliases, the last word of every id, the
+    flow table): 4002 words, of which 42 reach things of more than one sense. Before (3 October, 15:32 UTC) the word
+    lookup resolved all 42 to one thing in silence: "compare current and voltage" compared the *ocean* current with
+    voltage; "what causes current" answered of the ocean current; "drive" was one motor variant, "music" music wire,
+    "material" copper alloy. After: 38 of 42 return nothing and Ego asks which, naming the senses with their kinds and
+    units; a comparison settles the word by the other side's kind ("By current I take electric current, as a
+    quantity"); the four still chosen are named in the test as open (axial, broach, disc, induction). Of the flow
+    table's words, five name a quantity that more than one flow carries (power, torque, force, weight, heat): the
+    table's choice is now said as a convention in a challenge's result, and torque is the known limit of dimension
+    alone (it has the dimension of energy).
+
 The main criterion, fewer reasoning errors on harder problems, is not met by this file; it is measurable by it. The
 next measurement is the challenge engine's problems (docs/CHALLENGES.md) run both ways.
 
@@ -358,11 +388,10 @@ fingerprints, distance, clustering, renaming, chaining, contradiction, well-form
 morpheme.ts (skeletons, candidates by description length, promotion, compression, expansion, versioning),
 translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
 candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners), text.ts (the compact
-text, lossless both ways, and the blind text).
+text, lossless both ways, and the blind text), polysemy.ts (readings, senses, settling by structure, the census).
 
 Designed, not yet built: the spoken serialisation and the visual notation (E); rewrite rules for
-equivalences beyond the canonical form (U); a learned term in the distance (V); polysemy detection run over the whole
-substrate (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
+equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
 VR demonstration, sound and touch (M); Ego's own thinking moved onto Nex structures rather than built from them at the
 edges (X), which is the work: her traversal answers, her designs and her hypotheses become Nex terms rendered at the
 moment of speaking, and the English-versus-Nex error count is then taken on her real questions.

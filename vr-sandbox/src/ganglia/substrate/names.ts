@@ -4,6 +4,7 @@
 // name, then the usual spellings, then a few words people use for a thing that the index calls otherwise.
 import type { Substrate } from './substrate';
 import type { Entity } from './model';
+import { facesOfOne } from './faces';
 
 const PREFIX = /^(bio|material|process|machine|chem|phys|element|std|failure|role|fn|param|view|circuit|robot|vehicle|earth|energy|tool|block|kind|way|flow|domain|cross|group|scale|observer|sensor|joint) /;
 
@@ -65,27 +66,43 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   const exact = s.get(w) ?? s.get(dotted) ?? s.get(one);
   // "weight" is the quantity before the law about it: a word names the thing, the law is of the thing
   if (exact?.kinds.includes('law')) { const qty = all.find((e) => e.kinds.includes('quantity') && (e.name.toLowerCase() === w || e.names.some((n) => n.toLowerCase() === w))); if (qty) return qty; }
+  // an id that is also the name of a thing of another sense ("glue": the process and the adhesive) is a word with two
+  // meanings, not an identity: nothing is returned, and Ego asks which (native/polysemy.ts)
+  if (exact && all.some((e) => e !== exact && plain(e) && (e.name.toLowerCase() === w || e.name.toLowerCase() === one) && !facesOfOne(e.kinds[0] ?? 'thing', exact.kinds[0] ?? 'thing'))) return undefined;
   if (exact) return exact;
   // a described thing whose name is the words, before the kind, block, view and function layers that borrow names
   const named = all.find((e) => plain(e) && e.name.toLowerCase() === w) ?? all.find((e) => plain(e) && e.name.toLowerCase() === one);
+  // two described things of different senses with the one name ("broach": the tool and the machine) are asked, not chosen
+  if (named && all.some((e) => e !== named && plain(e) && (e.name.toLowerCase() === w || e.name.toLowerCase() === one) && !facesOfOne(e.kinds[0] ?? 'thing', named.kinds[0] ?? 'thing'))) return undefined;
   if (named) return named;
   // a role said as a phrase: "electrical conductor" is role.electrical-conductor; a function: "store energy" is store.energy;
   // a metal's bare name is its family (material.steel, material.copper-alloy), not one alloy of it
-  for (const prefix of ['role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.', 'cross.', 'view.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e) return e; }
+  // a word in several namespaces names several things ("current": the quantity, the ocean current, the sensor): no
+  // namespace outranks another, so when they are things of different kinds the word is ambiguous and nothing is returned;
+  // Ego then asks which (readings in native/polysemy.ts), rather than choosing in silence
+  const spaced: Entity[] = [];
+  for (const prefix of ['qty.', 'role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.', 'failure.', 'phys.', 'cross.', 'view.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e && !spaced.includes(e)) spaced.push(e); }
+  if (spaced.length === 1) return spaced[0];
+  if (spaced.length > 1) return new Set(spaced.map((e) => e.kinds[0])).size === 1 ? spaced[0] : undefined;
   const family = s.get(`material.${dashed}-alloy`) ?? s.get(`material.${singular(dashed)}-alloy`);
   if (family) return family;
-  // "copper" with no family of its own: the material whose name starts with the word, never a wire of it
-  const material = all.find((e) => e.kinds.includes('material') && e.name.toLowerCase().startsWith(`${w} `));
+  // "copper" with no family of its own: the material whose id is the word or begins with it, never a wire of it nor a
+  // material whose name merely starts with the word (music is not music wire)
+  const material = all.find((e) => e.kinds.includes('material') && (e.id === `material.${dashed}` || e.id.startsWith(`material.${dashed}-`) || e.id.startsWith(`material.${dashed}.`)));
   if (material) return material;
+  // a one-word alias that a whole catalogue shares ("drive", "motor" on every variant) is a search token, not a name;
+  // an alias that another thing of a different sense also carries ("induction": the law and the motor) is a second meaning
   const direct = s.byWord(w);
-  if (direct) return direct;
+  const sharers = direct ? all.filter((e) => e !== direct && [e.name, ...e.names].some((n) => n.toLowerCase() === w)) : [];
+  const token = !!direct && direct.name.toLowerCase() !== w && (sharers.length > 1 || sharers.some((e) => !facesOfOne(e.kinds[0] ?? 'thing', direct.kinds[0] ?? 'thing')));
+  if (direct && !token) return direct;
   const spoken = SPOKEN[w];
   if (spoken && s.get(spoken)) return s.get(spoken);
-  for (const cand of [dotted, dashed, `motor.${w.replace(/^(electric|electrical) motor$/, 'electric')}`]) { const e = s.byWord(cand); if (e) return e; }
-  for (const cand of [one, one.replace(/\s+/g, '.'), one.replace(/\s+/g, '-')]) { const e = s.byWord(cand); if (e) return e; }
+  for (const cand of [dotted, dashed, `motor.${w.replace(/^(electric|electrical) motor$/, 'electric')}`]) { if (token && cand === w) continue; const e = s.byWord(cand); if (e) return e; }
+  for (const cand of [one, one.replace(/\s+/g, '.'), one.replace(/\s+/g, '-')]) { if (token && (cand === w || cand === one)) continue; const e = s.byWord(cand); if (e) return e; }
   const parts = w.split(' ');
   if (parts.length === 2) { const e = s.get(`${parts[1]}.${parts[0]}`) ?? s.get(`${parts[0]}.${parts[1]}`); if (e) return e; }
   // the last resort: the one entity whose id ends in the word
-  const hits = all.filter((e) => e.id.endsWith(`.${one}`) || e.id === one || e.id.endsWith(`.${dashed}`) || e.id === dashed);
+  const hits = all.filter((e) => plain(e) && !/^(?:kind|block|view|cross|param|scale)\./.test(e.id) && (e.id.endsWith(`.${one}`) || e.id === one || e.id.endsWith(`.${dashed}`) || e.id === dashed));
   return hits.length === 1 ? hits[0] : undefined;
 }

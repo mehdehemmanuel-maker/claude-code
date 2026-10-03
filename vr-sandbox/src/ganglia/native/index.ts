@@ -6,3 +6,4 @@ export * from './morpheme';
 export * from './nexus';
 export * from './translate';
 export * from './text';
+export * from './polysemy';

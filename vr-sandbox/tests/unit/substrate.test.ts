@@ -707,10 +707,11 @@ describe('how a thing fails is said as mechanisms with laws', () => {
   });
 
   it('what works a material makes a part of it, but joining and assembly do not; a part of an assembly is not made with it; a kidney filters by size', () => {
-    const tube = answerTraversal({ do: 'traverse', query: 'producers', of: 'tube' });
+    // "tube" alone is a search token on every section in the catalogue and names no one thing; the square tube is a thing
+    const tube = answerTraversal({ do: 'traverse', query: 'producers', of: 'square tube' });
     expect(tube).toMatch(/is made by .*saw/);
     expect(tube).not.toMatch(/glue|solder|weld|crimp/);
-    expect(tube).toMatch(/\(a part of steel can be made by what works it, until its own maker is known\)/);
+    expect(tube).toMatch(/\(a part of .*steel.* can be made by what works it, until its own maker is known\)/i);
     const flywheel = answerTraversal({ do: 'traverse', query: 'producers', of: 'flywheel' });
     expect(flywheel).not.toMatch(/made with it/);
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'kidney' })).toMatch(/filter: pass some of what comes and stop the rest/);
@@ -968,5 +969,27 @@ describe('Ego answers whether one thing causes another by a chain of influences 
     const into = answerTraversal({ do: 'traverse', query: 'cause', of: 'chem.corrosion' });
     expect(into).toMatch(/^\d+ influences on (a )?corrosion that I know of: /);
     expect(into).toMatch(/lowers\) corrosion/);
+  });
+});
+
+describe('Ego asks when a word has more than one sense, and settles it by structure where the question lets her', () => {
+  it('"compare current and voltage" takes the electric current beside a quantity and says so; "what causes current" asks which current; a search token or a borrowed name is no longer a silent choice', () => {
+    // before (3 October, 15:32 UTC): "compare current and voltage" answered of the ocean current ("a current is an ocean current; voltage is electric potential difference");
+    // "what causes current" answered of the ocean current; "drive" was one motor variant, "music" was music wire, "material" was copper alloy
+    const a = answerTraversal({ do: 'traverse', query: 'compare', of: 'current', which: 'voltage' });
+    expect(a).toMatch(/^By current I take electric current, as a quantity\. Electric current and voltage are different kinds of quantity: electric current is counted in A, voltage in V/);
+    const c = answerTraversal({ do: 'traverse', query: 'cause', of: 'current' });
+    expect(c).toMatch(/^Current names 3 things to me: electric current \(a quantity, in A\); current, of earth \(a phenomenon\); .*\. Which do you mean\?$/);
+    const s = built.substrate;
+    expect(findByWords(s, 'drive')).toBeUndefined();
+    expect(findByWords(s, 'music')).toBeUndefined();
+    expect(findByWords(s, 'material')).toBeUndefined();
+    expect(findByWords(s, 'glue')).toBeUndefined();
+    expect(answerTraversal({ do: 'traverse', query: 'compare', of: 'drive', which: 'motor' })).toMatch(/^I know no drive as such\. I know .*: which do you mean\?/);
+    expect(answerTraversal({ do: 'traverse', query: 'function', of: 'glue' })).toMatch(/^Glue names \d things to me: .*\. Which do you mean\?$/);
+    // what has one sense is found as before
+    expect(findByWords(s, 'copper')?.id).toBe('material.copper-alloy');
+    expect(findByWords(s, 'bearing')?.id).toBe('bearing');
+    expect(findByWords(s, 'heat')?.id).toBe('heat');
   });
 });

@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { chain, fromRelation, hash, render, saidOf, text as nex, tune, type R } from '../ganglia/native';
+import { askable, chain, fromRelation, hash, polysemous, readings, render, saidOf, saySenses, senses, settle, text as nex, tune, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -44,8 +44,12 @@ function spoken(says: string): string {
 
 function unknown(name: string): string {
   const p = population();
-  // things named with the word ("oak": Northern red oak, White oak): asked which, rather than denied
   const w = name.toLowerCase().replace(/^(?:an? |the )/, '').replace(/[^a-z0-9 ]/g, '').trim();
+  // a word that names things of more than one sense ("current": the quantity, the ocean current, the sensor) is asked which, never chosen in silence (Nex, section S)
+  const rs = w ? readings(substrate(), w) : [];
+  const ask = polysemous(rs) ? askable(senses(rs)) : [];
+  if (ask.length > 1) return `${cap(w)} names ${ask.length} things to me: ${saySenses(ask)}. Which do you mean?`;
+  // things named with the word ("oak": Northern red oak, White oak): asked which, rather than denied
   const like = w ? [...substrate().entities.values()].filter((e) => !/^(?:kind|block|view|cross|fn|role|param|law|scale|observer)\./.test(e.id) && e.name.toLowerCase() !== w && new RegExp(`\\b${w}\\b`).test(e.name.toLowerCase())).slice(0, 4) : [];
   const which = like.length ? ` I know ${like.map(nameOf).join(', ')}: which do you mean?` : '';
   if (p?.connected) {
@@ -144,10 +148,16 @@ export function answerTraversal(i: Traverse): string {
     return `${size}${time}.${beside}`;
   }
   if (i.query === 'compare') {
-    const a = find(i.of ?? ''), b = find(i.which ?? '');
+    // a word with several senses is settled by the other side: "current" beside a quantity is the quantity (Nex: a comparison is of two things of one kind)
+    let a = find(i.of ?? ''), b = find(i.which ?? '');
+    let settled = '';
+    const by = (word: string, other: typeof a): typeof a => { if (!other) return undefined; const ctx: SettleContext = other.kinds.includes('quantity') || other.kinds.includes('property') ? { kinds: ['quantity', 'property'] } : { kinds: [other.kinds[0]!] }; const got = settle(readings(s, word), ctx); if (got.chosen?.entity) settled += `By ${word} I take ${got.chosen.says}, ${got.why}. `; return got.chosen?.entity; };
+    if (!a) a = by(i.of ?? '', b);
+    if (!b) b = by(i.which ?? '', a);
     if (!a) return unknown(i.of ?? '');
     if (!b) return unknown(i.which ?? '');
-    if (a.id === b.id) return `${cap(art(a))} and ${art(b)} are the same thing to me: ${nameOf(a)}.`;
+    const tellCompare = (text: string) => `${settled}${text}`;
+    if (a.id === b.id) return tellCompare(`${cap(art(a))} and ${art(b)} are the same thing to me: ${nameOf(a)}.`);
     // two quantities are told apart by dimension before anything else (Nex: a comparison across dimensions is undefined)
     const unitOfQ = (e: typeof a) => (e.kinds.includes('quantity') || e.kinds.includes('property') ? e.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined);
     const ua = unitOfQ(a), ub = unitOfQ(b);
@@ -155,8 +165,8 @@ export function answerTraversal(i: Traverse): string {
       const same = sameDim(dimensionOf(ua), dimensionOf(ub));
       // what each is, as its own saying has it: the first clause, then the rest as written
       const said = (e: typeof a) => `${cap(nameOf(e))}: ${e.says.charAt(0).toLowerCase()}${e.says.slice(1).replace(/\.$/, '')}.`;
-      if (!same) return `${cap(nameOf(a))} and ${nameOf(b)} are different kinds of quantity: ${nameOf(a)} is counted in ${ua}, ${nameOf(b)} in ${ub}, and neither can be more or less than the other. ${said(a)} ${said(b)}`;
-      return `${cap(nameOf(a))} and ${nameOf(b)} are counted in the same unit, ${ua}, and are not the same thing. ${said(a)} ${said(b)}`;
+      if (!same) return tellCompare(`${cap(nameOf(a))} and ${nameOf(b)} are different kinds of quantity: ${nameOf(a)} is counted in ${ua}, ${nameOf(b)} in ${ub}, and neither can be more or less than the other. ${said(a)} ${said(b)}`);
+      return tellCompare(`${cap(nameOf(a))} and ${nameOf(b)} are counted in the same unit, ${ua}, and are not the same thing. ${said(a)} ${said(b)}`);
     }
     // a material is said bare ("steel"), a part with its article ("a bolt")
     // what a thing does includes what its kinds do: a bolt clamps as a screw does
@@ -182,7 +192,7 @@ export function answerTraversal(i: Traverse): string {
     const xa = only(ids(a, 'fails-by'), ids(b, 'fails-by')), xb = only(ids(b, 'fails-by'), ids(a, 'fails-by'));
     if (xa.length || xb.length) parts.push(`${xa.length ? `${art(a)} alone fails by ${names(xa)}` : ''}${xa.length && xb.length ? '; ' : ''}${xb.length ? `${art(b)} alone fails by ${names(xb)}` : ''}`);
     const tell = parts.length ? parts.map(cap).join('. ') + '.' : 'I know nothing they share and nothing that parts them yet.';
-    return `${tell} In a word: ${art(a)} is ${first(a)}; ${art(b)} is ${first(b)}.`;
+    return tellCompare(`${tell} In a word: ${art(a)} is ${first(a)}; ${art(b)} is ${first(b)}.`);
   }
   if (i.query === 'function') {
     const e = find(i.of ?? '');

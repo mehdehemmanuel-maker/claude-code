@@ -8,12 +8,24 @@ import { Pack, param } from '../dsl';
 const YF: Source = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' };
 const SI: Source = { cite: 'BIPM, The International System of Units (SI Brochure), 9th ed., 2019', kind: 'standard' };
 
+type Links = Parameters<Pack['link']>[1];
+export interface QuantityRow { id: string; name: string; unit: string; says: string; links: Links; source: Source }
+
+/** The rows, kept apart from the pack so that the word of a quantity and its unit are known without building the substrate (native/polysemy.ts). */
+export const QUANTITY_ROWS: QuantityRow[] = [];
+const q = (id: string, name: string, unit: string, says: string, links: Links = {}, src: Source = YF) => { QUANTITY_ROWS.push({ id, name, unit, says, links, source: src }); };
+
 export function quantities(): Pack {
   const p = new Pack('physics', YF);
-  const q = (id: string, name: string, unit: string, says: string, links: Parameters<Pack['link']>[1] = {}, src: Source = YF) => {
-    p.e(id, 'quantity', says, { names: [name], params: [param('unit', 'SI unit', SI, { values: [unit] })], source: src });
-    p.link(id, links, src);
-  };
+  for (const row of QUANTITY_ROWS) {
+    p.e(row.id, 'quantity', row.says, { names: [row.name], params: [param('unit', 'SI unit', SI, { values: [row.unit] })], source: row.source });
+    p.link(row.id, row.links, row.source);
+  }
+  return p;
+}
+
+// the rows (pushed once at load)
+void (() => {
   // base quantities
   q('qty.length', 'length', 'm', 'How far: a base quantity, the metre.', {}, SI);
   q('qty.mass', 'mass', 'kg', 'How much matter: what resists acceleration and what gravity pulls on; a base quantity, the kilogram, the same on the Moon as here.', { 'governed-by': ['conservation.momentum'] });
@@ -41,5 +53,4 @@ export function quantities(): Pack {
   q('qty.voltage', 'voltage', 'V', 'Electric potential difference: energy per unit charge, the volt.', { 'governed-by': ['ohm', 'power.electric'] });
   q('qty.charge', 'electric charge', 'C', 'What the field acts on: the coulomb, an ampere for a second.', { 'governed-by': ['coulomb.law'] });
   q('qty.resistance', 'resistance', 'ohm', 'Voltage per current in a conductor: the ohm.', { 'governed-by': ['ohm', 'joule'] });
-  return p;
-}
+})();

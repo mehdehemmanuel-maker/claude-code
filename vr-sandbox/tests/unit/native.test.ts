@@ -13,6 +13,10 @@ import { Morphemes, candidates, compress, descriptionLength, expandAll, promote,
 import { evaluate, fromLaw, fromNode, fromRelation, saidOf, tune } from '../../src/ganglia/native/nexus';
 import { decompose, forAudience, parse, rankOfText, render, type Lexicon } from '../../src/ganglia/native/translate';
 import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text';
+import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses, settle, unitOfQuantityWord } from '../../src/ganglia/native/polysemy';
+import { findByWords } from '../../src/ganglia/substrate/names';
+import { facesOfOne } from '../../src/ganglia/substrate/faces';
+import { dimensionOf } from '../../src/ganglia/units';
 import { LAWS, lawById } from '../../src/ganglia/laws';
 import { NODES } from '../../src/ganglia/tree/nodes';
 import { build } from '../../src/ganglia/substrate';
@@ -380,5 +384,56 @@ describe('Nex: the compact text (section E) is a surface on the canonical form, 
     // and a blind text still reads: the shape is a structure in its own right (its sources gone with its names), and blinding it again changes nothing
     expect(blind(read(blind(loadCurrent)))).toBe(blind(loadCurrent));
     expect(hash(read(blind(loadCurrent)))).toBe(hash(rename({ ...loadCurrent, c: { ...loadCurrent.c, ev: { how: 'measured' } } }, (id) => (id === 'load' ? '$1' : '$2'))));
+  });
+});
+
+describe('Nex: polysemy (section S) is split by structure, measured over the substrate (section Y.13)', () => {
+  it('a word reaches readings, each a structure with its kind and dimension; the faces of one thing are one sense; what the word alone cannot settle is asked', () => {
+    const rs = readings(substrate, 'current');
+    // the electric current (a quantity, amperes), the ocean current (a phenomenon), the current sensor: three senses at the same reach
+    expect(rs.map((x) => x.id)).toEqual(expect.arrayContaining(['qty.current', 'earth.current', 'sensor.current']));
+    expect(polysemous(rs)).toBe(true);
+    expect(askable(senses(rs)).length).toBe(3);
+    expect(saySenses(askable(senses(rs)))).toMatch(/electric current \(a quantity, in A\); current, of earth \(a phenomenon\)/);
+    // a quantity reading is a quantity structure (its dimension in the structure, not in a word); a thing is a kind structure
+    const qty = rs.find((x) => x.id === 'qty.current')!;
+    expect(qty.structure.k === 'R' && qty.structure.op).toBe('quantity');
+    expect(qty.dim).toEqual([0, 0, 0, 1, 0]);
+    // settled by the dimension the question carries, or by the kind of thing it is about; chosen only when one sense survives
+    expect(settle(rs, { dim: dimensionOf('A') }).chosen?.id).toBe('qty.current');
+    expect(settle(rs, { kinds: ['quantity'] }).chosen?.id).toBe('qty.current');
+    expect(settle(rs, { flow: true }).chosen?.id).toBe('flow.electric');
+    expect(settle(rs, {}).chosen).toBeUndefined();
+    expect(settle(rs, {}).open.length).toBeGreaterThan(1);
+    // heat the flow and heat the quantity are one sense: a flow and a quantity it carries are faces of one thing
+    expect(facesOfOne('signal', 'quantity')).toBe(true);
+    expect(facesOfOne('law', 'quantity')).toBe(true);
+    expect(facesOfOne('phenomenon', 'quantity')).toBe(false);
+    expect(senses(readings(substrate, 'heat').filter((x) => ['flow.heat', 'heat'].includes(x.id))).length).toBe(1);
+    // a catalogue's search token is not a reading to choose by context: "drive" on every motor and chain settles to nothing
+    expect(settle(readings(substrate, 'drive'), { kinds: ['component'] }).chosen).toBeUndefined();
+  });
+
+  it('the census: every word that reaches things of more than one sense; the word lookup chooses none of them in silence but four, named here as open', () => {
+    const c = census(substrate);
+    // measured 3 October 2026: 4002 words (names, aliases, id tails and the flow table), 42 reach more than one sense; before this change the lookup resolved every one of them to a single thing without a word about the others
+    expect(c.words).toBeGreaterThan(3000);
+    expect(c.polysemous.length).toBeGreaterThanOrEqual(30);
+    expect(c.polysemous).toEqual(expect.arrayContaining(['current', 'glue', 'fuel', 'filter', 'wood', 'bone', 'solder', 'flux']));
+    const silent = c.polysemous.filter((w) => findByWords(substrate, w));
+    // the four still chosen: a law of a thing against a function (axial), a tool against its machine (broach), the geometry kind against a part (disc), a law against a motor named by it (induction)
+    expect(silent).toEqual(['axial', 'broach', 'disc', 'induction']);
+    for (const w of c.polysemous) if (!silent.includes(w)) expect(findByWords(substrate, w), w).toBeUndefined();
+  });
+
+  it('the flow table commits a quantity word to one flow where the quantity rides on several: said as a convention, never silent', () => {
+    const c = census(substrate);
+    expect(c.flowWordsThatAreQuantities.map((x) => x.word)).toEqual(expect.arrayContaining(['power', 'force', 'weight']));
+    // power (W) is carried by every flow that carries energy in time; voltage (V) by the electric flow alone
+    expect(flowsCarrying(dimensionOf('W'))).toEqual(expect.arrayContaining(['electric', 'rotation', 'translation', 'heat', 'light']));
+    expect(flowsCarrying(dimensionOf('V'))).toEqual(['electric']);
+    expect(unitOfQuantityWord('power')).toBe('W');
+    expect(unitOfQuantityWord('electric current')).toBe('A');
+    expect(unitOfQuantityWord('music')).toBeUndefined();
   });
 });

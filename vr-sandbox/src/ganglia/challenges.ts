@@ -19,6 +19,8 @@
 import type { Flow } from './blocks';
 import { conceive, type Medium } from './ways';
 import { flowOfWord } from './words';
+import { flowsCarrying, unitOfQuantityWord } from './native/polysemy';
+import { dimensionOf } from './units';
 import { grow, compression } from './grow';
 import { lawById, use } from './laws';
 import { CATALOG } from './parts';
@@ -68,26 +70,29 @@ function meetForm(need: Extract<Need, { form: string }>): NeedResult {
 function meet(c: Challenge, need: Need): NeedResult {
   if ('form' in need) return meetForm(need);
   const f = flowOfWord(need.from), t = flowOfWord(need.to);
+  // a word that names a quantity more than one flow carries ("power") is read as one flow by convention: said, not silent
+  const convention = [need.from, need.to].map((w) => { const unit = unitOfQuantityWord(w); const carried = unit ? flowsCarrying(dimensionOf(unit)) : []; return carried.length > 1 ? `"${w}" is a quantity any of ${carried.join(', ')} carries; I read it as ${flowOfWord(w)} by convention` : ''; }).filter(Boolean).join('; ');
+  const noted = (x: NeedResult): NeedResult => (convention ? { ...x, says: `${x.says} (${convention})` } : x);
   if (!f || !t) {
     const word = !f ? need.from : need.to;
-    return { need, level: 'unsayable', says: `my language has no flow for "${word}"`, fix: `a flow for "${word}" (and the physics that makes and uses it)` };
+    return noted({ need, level: 'unsayable', says: `my language has no flow for "${word}"`, fix: `a flow for "${word}" (and the physics that makes and uses it)` });
   }
   const all = conceive(f, t).filter((x) => !need.against || x.against === need.against);
-  if (!all.length) return { need, level: 'no way', flows: [f, t], says: `I know no physical way from ${f} to ${t}${need.against ? ` against the ${need.against}` : ''}`, fix: `the physics from ${f} to ${t}` };
+  if (!all.length) return noted({ need, level: 'no way', flows: [f, t], says: `I know no physical way from ${f} to ${t}${need.against ? ` against the ${need.against}` : ''}`, fix: `the physics from ${f} to ${t}` });
   const can = all.filter((x) => x.buildable);
   if (!can.length) {
     const simplest = all[0]!;
-    return { need, level: 'unbuildable', flows: [f, t], way: ids(simplest.ways), missing: simplest.missing.map((w) => w.id), says: `possible by ${ids(simplest.ways)}, but I can't build ${simplest.missing.map((w) => w.name.toLowerCase()).join(', ')} here yet`, fix: `catalogue or make: ${simplest.missing.map((w) => w.name.toLowerCase()).join(', ')}` };
+    return noted({ need, level: 'unbuildable', flows: [f, t], way: ids(simplest.ways), missing: simplest.missing.map((w) => w.id), says: `possible by ${ids(simplest.ways)}, but I can't build ${simplest.missing.map((w) => w.name.toLowerCase()).join(', ')} here yet`, fix: `catalogue or make: ${simplest.missing.map((w) => w.name.toLowerCase()).join(', ')}` });
   }
   // buildable: grow it whole and see whether it holds
   const g = grow({ from: f, to: t, spec: c.spec ?? {} });
   const body = g.best;
-  if (!body) return { need, level: 'partial', flows: [f, t], way: ids(can[0]!.ways), says: `buildable by ${ids(can[0]!.ways)}, but I couldn't grow it whole` };
+  if (!body) return noted({ need, level: 'partial', flows: [f, t], way: ids(can[0]!.ways), says: `buildable by ${ids(can[0]!.ways)}, but I couldn't grow it whole` });
   const way = ids(body.concept.ways);
   const errors = body.findings.filter((x) => x.level === 'error'), gaps = body.findings.filter((x) => x.level === 'gap');
-  if (errors.length) return { need, level: 'fails', flows: [f, t], way, says: `grown by ${way}, but: ${errors[0]!.message}`, fix: errors[0]!.message };
-  if (gaps.length) return { need, level: 'partial', flows: [f, t], way, says: `grown by ${way} (${body.fitness.organs} blocks) and it holds, but ${gaps.length} part${gaps.length > 1 ? 's' : ''} ${gaps.length > 1 ? 'aren\'t' : 'isn\'t'} real yet: ${gaps[0]!.message}`, fix: gaps.map((x) => x.message).join('; ') };
-  return { need, level: 'works', flows: [f, t], way, says: `grown by ${way}, ${body.fitness.organs} blocks, every one real and every connection holding` };
+  if (errors.length) return noted({ need, level: 'fails', flows: [f, t], way, says: `grown by ${way}, but: ${errors[0]!.message}`, fix: errors[0]!.message });
+  if (gaps.length) return noted({ need, level: 'partial', flows: [f, t], way, says: `grown by ${way} (${body.fitness.organs} blocks) and it holds, but ${gaps.length} part${gaps.length > 1 ? 's' : ''} ${gaps.length > 1 ? 'aren\'t' : 'isn\'t'} real yet: ${gaps[0]!.message}`, fix: gaps.map((x) => x.message).join('; ') });
+  return noted({ need, level: 'works', flows: [f, t], way, says: `grown by ${way}, ${body.fitness.organs} blocks, every one real and every connection holding` });
 }
 
 /** Take a challenge through everything she has, and say where it breaks. */
