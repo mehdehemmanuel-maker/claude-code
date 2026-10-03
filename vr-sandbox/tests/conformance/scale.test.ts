@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { at, rig } from './helpers';
 import { MAX_SUBSTEPS, SUBSTEP_OMEGA_DT, TICK } from '../../src/physics/world';
-import { classify, exponentOfDim, similarityById } from '../../src/ganglia/scale';
+import { classify, exponentOfDim, observationById, similarityById } from '../../src/ganglia/scale';
 import { parseUnit } from '../../src/ganglia/units';
 import type { Claim } from '../../src/ganglia/scale';
 
@@ -91,11 +91,44 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(await slide(0.1, 18)).toBeLessThan(0.002);
     expect(await slide(0.1 * lambda, 18)).toBeLessThan(0.002);
     const d1 = await slide(0.1, 35), d4 = await slide(0.1 * lambda, 35);
-    expect(Math.abs(d4 / d1 - accelRatio)).toBeLessThan(0.05);
+    console.log('OBSERVED observation.coulomb-ramp', d4 / d1);
+    const o = observationById('observation.coulomb-ramp')!;
+    expect(Math.abs(d4 / d1 - accelRatio)).toBeLessThan(o.tolerance);
+    expect(Math.abs(d4 / d1 - o.measured), 'the register records what the engine gives').toBeLessThan(o.tolerance);
     const th = (35 * Math.PI) / 180, a = G * (Math.sin(th) - mu * Math.cos(th));
     expect(Math.abs(d1 / (0.3 * a * 0.5 + 0.5 * a * 0.25) - 1)).toBeLessThan(0.05);
-    const observation: Claim = { id: 'observation.coulomb-ramp-in-the-engine', status: 'observation', statement: `In the engine a cube ${lambda} times the side holds on the same 18° ramp and slides the same distance on a 35° ramp (ratio ${(d4 / d1).toFixed(3)}); Coulomb under Froude similarity predicts 1.`, axioms: [], formulation: 'd₄/d₁ measured against 1', predictions: [], compatible: ['scale.froude covariance of friction.coulomb'], conflicting: [], falsification: ['a block of one size holding where the other slides, or a distance ratio off 1 by more than the solver\'s contact error'], unresolved: [], history: [], source: { cite: 'this test, Jolt Physics in the conformance harness', kind: 'maker' } };
-    expect(observation.status).toBe('observation');
+  }, 180000);
+
+  it('Rolling: a cylinder four times the radius rolls down the same ramp with the same acceleration, as the inertia of a disc under Froude similarity predicts', async () => {
+    const lambda = 4;
+    // the law book: a disc's inertia under Froude similarity grows as λ⁵ (covariant), the mass as λ³ and r² as λ², so I / m r² is the same ½ and so is the acceleration
+    const v = classify('inertia.disc', similarityById('scale.froude')!, lambda);
+    expect(v.verdict).toBe('covariant');
+    expect(v.expected / v.example).toBeCloseTo(lambda ** 5, 6);
+    const predicted = v.expected / v.example / (lambda ** 3 * lambda ** 2);
+    expect(predicted).toBeCloseTo(1, 9);
+    const axisAngle = (axis: [number, number, number], th: number): [number, number, number, number] => { const sn = Math.sin(th / 2); return [axis[0] * sn, axis[1] * sn, axis[2] * sn, Math.cos(th / 2)]; };
+    const roll = async (rad: number) => {
+      const r = await rig();
+      const th = (12 * Math.PI) / 180, q = axisAngle([0, 0, 1], -th);
+      r.part('plate', at(0, 1, 0, q), { frozen: true, material: 'rubber.natural', params: { length: 8, width: 2, thickness: 0.05 } });
+      const along = [Math.cos(th), -Math.sin(th)], nrm = [Math.sin(th), Math.cos(th)];
+      const cyl = r.part('rod.round', at(-2 * along[0]! + nrm[0]! * (0.025 + rad + 0.001), 1 - 2 * along[1]! + nrm[1]! * (0.025 + rad + 0.001), 0, axisAngle([1, 0, 0], Math.PI / 2)), { material: 'rubber.natural', params: { diameter: 2 * rad, length: 4 * rad } });
+      r.run(0.2);
+      const p0 = r.pos(cyl);
+      r.run(0.6);
+      const p1 = r.pos(cyl);
+      r.done();
+      return Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    };
+    const s1 = await roll(0.05), s4 = await roll(0.05 * lambda);
+    const measured = s4 / s1;
+    console.log('OBSERVED observation.rolling-cylinder', measured);
+    const o = observationById('observation.rolling-cylinder')!;
+    expect(Math.abs(measured - predicted)).toBeLessThan(o.tolerance);
+    expect(Math.abs(measured - o.measured), 'the register records what the engine gives').toBeLessThan(o.tolerance);
+    const th = (12 * Math.PI) / 180, a = (2 / 3) * G * Math.sin(th);
+    expect(Math.abs(s1 / (0.2 * a * 0.6 + 0.5 * a * 0.36) - 1)).toBeLessThan(0.05);
   }, 180000);
 
   it('Froude: a pendulum four times longer with a bob of the same material swings twice as slowly, as the covariant verdict predicts', async () => {
@@ -106,13 +139,13 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(predicted).toBeCloseTo(2, 9);
     const small = await pendulumPeriod(0.5, 0.04), big = await pendulumPeriod(0.5 * lambda, 0.04 * lambda);
     const measured = ratio(big, small);
+    console.log('OBSERVED observation.froude-pendulum', measured);
     expect(Math.abs(measured / predicted - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measured / observationById('observation.froude-pendulum')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
     // the same with a clock that is not scaled is the verdict the same-material similarity gives: scale-dependent, by the same √λ
     const same = classify('pendulum.period', similarityById('scale.same-material')!, lambda);
     expect(same.verdict).toBe('scale-dependent');
     expect(same.ratio).toBeCloseTo(measured, 1);
-    const observation: Claim = { id: 'observation.froude-pendulum-in-the-engine', status: 'observation', statement: `In the engine a pendulum ${lambda} times longer with a bob ${lambda} times wider swings ${measured.toFixed(3)} times slower; Froude predicts ${predicted}.`, axioms: [], formulation: 'T₂/T₁ measured against λ^½', predictions: [], compatible: ['scale.froude covariance of pendulum.period'], conflicting: [], falsification: ['a measured ratio off λ^½ by more than the solver\'s period error'], unresolved: [], history: [], source: { cite: 'this test, Jolt Physics in the conformance harness', kind: 'maker' } };
-    expect(observation.status).toBe('observation');
   }, 180000);
 
   it('Cauchy: a steel cube twice the side on a coil spring of twice the wire and coil rings at half the frequency, as the covariant verdict predicts; gravity scaled as 1/λ keeps the sag similar, gravity unscaled makes it grow as λ²', async () => {
@@ -129,7 +162,9 @@ describe('scale hypotheses, predicted by the law book and measured in the world'
     expect(ratio(big.m, small.m)).toBeCloseTo(8, 1);
     expect(ratio(big.k, small.k)).toBeCloseTo(2, 9);
     const measured = ratio(1 / big.T, 1 / small.T);
+    console.log('OBSERVED observation.cauchy-spring', measured);
     expect(Math.abs(measured / predicted - 1)).toBeLessThan(0.02);
+    expect(Math.abs(measured / observationById('observation.cauchy-spring')!.measured - 1), 'the register records what the engine gives').toBeLessThan(0.02);
     // with gravity scaled as 1/λ the sag scales with the length, as everything else does
     expect(ratio(big.sag, small.sag)).toBeCloseTo(lambda, 1);
     // with gravity left as it is, the sag goes as λ³/λ = λ²: measured. The frequency still halves (a linear spring does not care where it hangs),

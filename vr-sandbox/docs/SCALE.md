@@ -202,6 +202,18 @@ similarity (same material, the same g) `friction.coulomb` is covariant with the 
 λ³, so the acceleration, force over mass, is unchanged; the engine agrees to within 5 %, and the observation is kept as an
 observation.
 
+**Rolling, at two sizes.** A rubber cylinder of 0.05 m radius and one of 0.2 m roll down the same 12° ramp. The law
+book: a disc's inertia under Froude similarity is covariant and grows as λ⁵, the mass as λ³ and r² as λ², so I / m r² is
+the same ½ at both sizes and the acceleration ⅔ g sin θ does not know the size; measured ratio 0.997.
+
+**The register of observations** (`src/ganglia/scale/observations.ts`). What the engine measured is kept as
+observations, each with the size ratio built, the ratio the law book predicted, the ratio the engine gave and the
+tolerance the test holds: Froude 2.003 for 2, Cauchy 0.4993 for 0.5, Coulomb 1.0000 for 1, rolling 0.997 for 1. The
+conformance tests measure them again on every run and refuse a drift from what is recorded, a unit test checks each
+is within its tolerance and is measured by a test that exists by name, and the hypothesis cites them among what agrees
+with it, so Ego's answer to "is reality the same at all scales" says what she measured in this world. Observations they
+stay: SC-4 forbids a silent promotion.
+
 ## Still open
 
 - The diffusive similarity is also the electromagnetic one (μ₀ and resistivity held give current ∝ λ⁰, R ∝ 1/λ,
@@ -213,7 +225,8 @@ observation.
 - Characteristic scales are estimates on about 130 entities; most of the substrate carries none, which the analogue
   search reports (`unplaced`). A heart now finds the cilium four decades down; a bearing still finds nothing far away.
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.
-- Seven cross-scale structures are written; a market and an ecosystem are next.
+- Nine cross-scale structures are written, an ecosystem and a market among them as models that say where they break;
+  each is a set of level entities in the substrate, joined by `coarse-grains-to`.
 - Allometry's exponent is carried as measured (¾) with its range (0.65 to 0.78); the WBE derivation is cited as a
   model, not promoted.
 

@@ -9,6 +9,7 @@ export { OBSERVERS, observerById, project, projections, type Observer, type Proc
 export { MECHANISMS, mechanismById, propagation, C_LIGHT, type Mechanism, type Chain } from './propagation';
 export { CROSS_SCALES, crossScaleById, askOf, type CrossScale, type Level, type Step, type Carries } from './crossscale';
 export { universalScaleStructuralEquivalence, promote, StatusRefused, NEEDS, type Claim } from './hypothesis';
+export { OBSERVATIONS, observationById, type Observation } from './observations';
 export { findScaleAnalogues, findPattern, signatureOf, characteristicLength, characteristicTime, type ScaleAnalogue, type Signature } from './analogues';
 export { scaleManifold, scaleParameters, manifoldScaleTable, type ScaledManifold, type ScaledParameter, type Characteristic } from './manifold';
 export { redesign, scaleContract, type Redesign } from './redesign';

@@ -230,8 +230,8 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 
 ## Still open
 
-- **Stubs that remain** at build, 323, every one named only by `has-part` or `interacts-with` (organelles, process
-  consumables, specific parts: a bone marrow, a cell wall, a gas shield, a photoresist). The arrow does not say what
+- **Stubs that remain** at build, 275, every one named once, by `has-part` or `interacts-with` (an alveolus, a chain
+  pin, a gate oxide, a kernel). The arrow does not say what
   they are, so a rule cannot type them; each is a question for a pack or for the outside.
 - **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no

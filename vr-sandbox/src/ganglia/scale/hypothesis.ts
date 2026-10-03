@@ -4,6 +4,7 @@
 // a formal hypothesis, with its axioms, its formulation, what it predicts, what agrees, what conflicts (derived from
 // the law book: the constants that set absolute scales), what would falsify it, and what is unresolved.
 import { LAWS } from '../laws';
+import { OBSERVATIONS } from './observations';
 import type { Source } from '../types';
 import { GROUPS, groupUnder } from './groups';
 import { classifyAll, scaleSetters } from './covariance';
@@ -98,6 +99,7 @@ export function universalScaleStructuralEquivalence(lambda = 10): Claim & { deri
       'Allometry: metabolic rate goes as M^¾ across 20 orders of magnitude in mass (Kleiber); a scaling regularity, with a proposed generative structure (fractal supply networks).',
       'Critical phenomena: near a phase transition the same exponents govern magnets, fluids and alloys (universality under the renormalisation group): structural equivalence across scale, proved for that regime.',
       'Fully developed turbulence: the Kolmogorov cascade is self-similar over the inertial range.',
+      ...OBSERVATIONS.map((o) => `Measured in the engine: ${o.statement}`),
     ],
     conflicting: [
       `${absolute.says}: Planck length ${planck.length.toExponential(2)} m, time ${planck.time.toExponential(2)} s, mass ${planck.mass.toExponential(2)} kg. No scale transformation but the identity keeps c, ħ and G: the universe is not scale-free.`,

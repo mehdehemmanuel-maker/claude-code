@@ -2,12 +2,13 @@
 // observation is a projection, a status never changes silently, and the hypothesis of structural equivalence across
 // scale is held as a hypothesis with what agrees and what conflicts.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'fs';
 import { LAWS, lawById } from '../../src/ganglia/laws';
 import { TICK } from '../../src/physics/world';
 import { parseUnit } from '../../src/ganglia/units';
 import {
   SIMILARITIES, similarityById, exponentOf, exponentOfDim, scaleSystem, absoluteScale, planckUnits, GROUPS, groupById, groupUnder, classify, covarianceTable, scaleSetters,
-  OBSERVERS, observerById, project, projections, MECHANISMS, mechanismById, propagation, CROSS_SCALES, askOf, universalScaleStructuralEquivalence, promote, StatusRefused, findScaleAnalogues, findPattern, scaleManifold, manifoldScaleTable,
+  OBSERVERS, observerById, project, projections, MECHANISMS, mechanismById, propagation, CROSS_SCALES, askOf, universalScaleStructuralEquivalence, OBSERVATIONS, promote, StatusRefused, findScaleAnalogues, findPattern, scaleManifold, manifoldScaleTable,
 } from '../../src/ganglia/scale';
 import { build } from '../../src/ganglia/substrate';
 import { interpret } from '../../src/assistant/intent';
@@ -311,6 +312,19 @@ describe('cross-scale dynamics are first-class middle structures', () => {
     expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(7);
     const s2 = build().substrate;
     for (const c of [nn, basin]) for (const st of c.up) if (st.law) expect(lawById(st.law) ?? s2.get(st.law)?.kinds.includes('law'), `${c.id}: ${st.law}`).toBeTruthy();
+  });
+
+  it('what the engine measured is a register of observations, each within its tolerance of the prediction, each measured by a named test, and each evidence the hypothesis cites', () => {
+    const file = readFileSync('tests/conformance/scale.test.ts', 'utf8');
+    expect(OBSERVATIONS.length).toBeGreaterThanOrEqual(4);
+    for (const o of OBSERVATIONS) {
+      expect(o.status).toBe('observation');
+      expect(Math.abs(o.measured - o.predicted) / o.predicted, o.id).toBeLessThanOrEqual(o.tolerance);
+      expect(file.includes(`it('${o.test.replace(/'/g, "\\'")}'`), `${o.id} is measured by a test that exists: ${o.test}`).toBe(true);
+      expect(o.source.cite).toMatch(/conformance/);
+    }
+    const h = universalScaleStructuralEquivalence();
+    for (const o of OBSERVATIONS) expect(h.compatible.some((c) => c.includes(o.statement)), o.id).toBe(true);
   });
 
   it('an ecosystem and a market are cross-scale structures asked the same questions as heat, and stay models', () => {

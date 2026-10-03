@@ -121,7 +121,8 @@ export function answerScale(i: Scale): string {
   }
   if (i.query === 'hypothesis') {
     const h = universalScaleStructuralEquivalence(10);
-    return `That reality is structurally equivalent across all scales is a ${h.status} here, not a premise. For it: ${h.compatible[0]} Against it: ${h.conflicting[0]} ${h.conflicting[1]} So the strong form is falsified by the constants, and the weak form, equivalence within regimes bounded by them, is a theorem of dimensional analysis: ${h.predictions[1]} Still open: ${h.unresolved[0]}`;
+    const measured = h.compatible.filter((c) => c.startsWith('Measured in the engine'));
+    return `That reality is structurally equivalent across all scales is a ${h.status} here, not a premise. For it: ${h.compatible[0]} Against it: ${h.conflicting[0]} ${h.conflicting[1]} So the strong form is falsified by the constants, and the weak form, equivalence within regimes bounded by them, is a theorem of dimensional analysis: ${h.predictions[1]} ${measured.length} things I measured in this world agree: ${measured.map((c) => c.replace('Measured in the engine: ', '')).join(' ')} Still open: ${h.unresolved[0]}`;
   }
   if (i.query === 'regime') {
     const law = findLaw(i.of ?? '');
