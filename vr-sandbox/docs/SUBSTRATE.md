@@ -177,7 +177,8 @@ background service advances it 2 ms every frame before it asks its first questio
 `build()` runs the rest at once only for a caller that needs the substrate now. Seeding the queue computed each
 entity's priority once a facet; it is now once an entity, with the facet's weight added. Measured in Node: 65 steps,
 171 ms in all, the largest 13 ms (a chunk of the queue), the scale derivations 10 ms a similarity. `npm run gate` runs
-the typecheck, the unit suite and the build, and fails on any of them: the loop's own discipline.
+the typecheck, the unit, codec and golden suites and the build, and fails on any of them: the loop's own discipline
+(the codec suite joined it the day CI was found red on a property test the unit gate never ran).
 
 ## Census (build, before any extra population)
 
