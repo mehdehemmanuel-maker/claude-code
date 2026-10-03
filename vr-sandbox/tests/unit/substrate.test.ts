@@ -1151,6 +1151,7 @@ describe('Ego says impossible only with a certificate, and holds her anomalies (
   it('"what anomalies do you hold" is the register: counts by status, the explained one kept with its explanation and the skeptic\'s computed candidate', () => {
     expect(interpret('what anomalies do you hold')).toEqual({ do: 'traverse', query: 'anomalies' });
     expect(interpret('is anything unexplained')).toEqual({ do: 'traverse', query: 'anomalies' });
+    for (const t of ['do you have any anomalies', "what can't you explain", 'is there anything you cannot explain']) expect(interpret(t), t).toEqual({ do: 'traverse', query: 'anomalies' });
     const a = answerTraversal({ do: 'traverse', query: 'anomalies' });
     expect(a).toMatch(/^I hold 11 observations against the law book: 0 alive, 1 explained, 10 within tolerance\. Nothing is alive: every observation beyond tolerance has its explanation kept under it\. Explained and kept: observation\.cooling-size:against-froude: observed 2\.181 against predicted 1\.414, 54\.2 times the tolerance \(/);
     expect(a).toMatch(/; explained: the thermal world is not Froude-similar: free convection/);
