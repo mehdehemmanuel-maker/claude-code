@@ -191,7 +191,8 @@ export function render(s: Structure, lang: Lang = 'en', audience: Audience = 'en
           case 'embed': return join(W.embeds);
           case 'abstract': return join(W.abstracts);
           case 'recurse': return join(W.recurs);
-          case 'quantity': return [...parts.before.filter(Boolean), `${a[1] ?? ''} ${W.of} ${a[0] ?? ''}`, hedge || W.is, a[2] ?? '', ...parts.after].join(' ').replace(/\s+/g, ' ').trim();
+          // a quantity with no value is a variable: "the rating life of the bearing", with no "is"
+          case 'quantity': return a.length < 3 ? [...parts.before.filter(Boolean), `${a[1] ?? ''} ${W.of} ${a[0] ?? ''}`, ...parts.after].join(' ').replace(/\s+/g, ' ').trim() : [...parts.before.filter(Boolean), `${a[1] ?? ''} ${W.of} ${a[0] ?? ''}`, hedge || W.is, a[2] ?? '', ...parts.after].join(' ').replace(/\s+/g, ' ').trim();
           case 'state': return a.join(`, ${W.and} `);
         }
       }

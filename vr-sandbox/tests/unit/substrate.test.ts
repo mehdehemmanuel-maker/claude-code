@@ -1004,3 +1004,31 @@ describe('Ego says how her grammar has grown', () => {
     expect(a).toMatch(/μ1 = part\(\$1, \$2\)/);
   });
 });
+
+describe('Ego answers a cause by a law when no arrow says it, keeps prevent apart from cause, and reads "the failure of X"', () => {
+  it('"does the load cause the failure of a bearing": by the rating-life law, the equivalent load lowers the rating life; derived, with the sign taken at the law\'s worked example', () => {
+    // before (3 October, 15:55 UTC): "I know no failure of a bearing" (the phrase was looked up as a thing)
+    expect(interpret('does the load cause the failure of a bearing')).toEqual({ do: 'traverse', query: 'cause', of: 'load', which: 'failure of a bearing' });
+    const a = answerTraversal({ do: 'traverse', query: 'cause', of: 'load', which: 'failure of a bearing' });
+    expect(a).toMatch(/^No arrow of mine runs from a load to the failure of a bearing, but a law does: Load contributes to \(lowers\) rating life \(rev\) of bearing \(ISO 281/);
+    expect(a).toMatch(/equivalent dynamic load \(P\) lowers rating life of bearing by \d\.\d % a percent at its worked example; derived, not measured here\./);
+    // the rating C is a property of the bearing, not the load: never matched as the load
+    expect(a).not.toMatch(/\(C\) raises/);
+    expect(a).toMatch(/In Nex: influence\(flow\.load, quantity\(bearing, bearing\.life\.l10:L\)\)\{dir:1 polarity:- necessity:contributing mech:bearing\.life\.l10/);
+    // a law read the other way (the cause names its output): voltage raises current by Ohm's law; and implicitly (both inputs, the output held): resistance lowers current
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'voltage', which: 'current' })).toMatch(/^No arrow of mine runs from voltage to electric current, but a law does: Voltage contributes to \(raises\) electric current .*Ohm's law \(V = I R\): voltage, the law read the other way \(V\) raises current \(I\) by 1\.0 % a percent.*In Nex: influence\(qty\.voltage, qty\.current\)\{dir:1 polarity:\+ necessity:contributing mech:ohm\^-1/);
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'resistance', which: 'current' })).toMatch(/Resistance contributes to \(lowers\) electric current .*resistance \(R\) lowers current \(I\) by 1\.0 % a percent.*mech:ohm\/I/);
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'mass', which: 'weight' })).toMatch(/Mass contributes to \(raises\) weight .*mass \(m\) raises weight \(W\) by 1\.0 % a percent/);
+    // prevent is not cause: the same words with "prevent" look for the opposite sign, and say prevent
+    expect(interpret('does a lubricant prevent the failure of a bearing')).toMatchObject({ do: 'traverse', query: 'cause', of: 'lubricant', which: 'failure of a bearing', prevent: true });
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'lubricant', which: 'failure of a bearing', prevent: true })).toMatch(/^I know no mechanism by which oil prevents the failure of a bearing/);
+    // a thing she does not know is no cause, and no correlation would make it one
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'ice cream', which: 'drowning' })).toBe('I know no ice cream. So I know no mechanism by which it causes drowning. Two things rising together would be a correlation, which I hold as support, never as a cause.');
+    // a word of two senses beside a quantity is the quantity
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'current', which: 'heat' })).toMatch(/^I know no mechanism by which electric current causes heat/);
+    // "what fails a bearing" is its failure modes
+    expect(interpret('what fails a bearing')).toEqual({ do: 'traverse', query: 'failures', of: 'bearing' });
+    // corrosion the chemistry and corrosion the failure are one thing seen twice: found, not asked
+    expect(answerTraversal({ do: 'traverse', query: 'cause', of: 'corrosion' })).toMatch(/^\d+ influences on corrosion that I know of: /);
+  });
+});

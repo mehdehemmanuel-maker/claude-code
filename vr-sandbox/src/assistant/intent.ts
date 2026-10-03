@@ -28,7 +28,7 @@ export type Intent =
   /** How much she knows. */
   | { do: 'ganglia' }
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
-  | { do: 'traverse'; query: TraversalQuery; of?: string; which?: string }
+  | { do: 'traverse'; query: TraversalQuery; of?: string; which?: string; prevent?: boolean }
   /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
   | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign' | 'limit'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
@@ -86,8 +86,8 @@ export type TraversalQuery = 'grammar' | 'cause' | 'native' | 'kinds' | 'standar
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
 function failuresOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
-  const m = /^(?:how|in what ways?|in which ways?) (?:does|do|can|could|might|will|would) (?:an? |the |my )?(.+?) (?:fail|break|go wrong|wear out|die)\??$|^(?:what are |show (?:me )?|list )?(?:the |all (?:the )?|every )?(?:failure modes?|ways? of failing|failures) (?:of|for) (?:an? |the |my )?(.+)$|^(?:what|which) (?:can|could|might) go wrong (?:with|in) (?:an? |the |my )?(.+)$/.exec(t);
-  return m ? { do: 'traverse', query: 'failures', of: (m[1] ?? m[2] ?? m[3])!.replace(/^(?:an? |the |your |my )/, '').trim() } : null;
+  const m = /^(?:how|in what ways?|in which ways?) (?:does|do|can|could|might|will|would) (?:an? |the |my )?(.+?) (?:fail|break|go wrong|wear out|die)\??$|^(?:what are |show (?:me )?|list )?(?:the |all (?:the )?|every )?(?:failure modes?|ways? of failing|failures) (?:of|for) (?:an? |the |my )?(.+)$|^(?:what|which) (?:can|could|might) go wrong (?:with|in) (?:an? |the |my )?(.+)$|^what (?:fails|breaks|kills|wears out) (?:an? |the |my )?(.+?)\??$/.exec(t);
+  return m ? { do: 'traverse', query: 'failures', of: (m[1] ?? m[2] ?? m[3] ?? m[4])!.replace(/^(?:an? |the |your |my )/, '').trim() } : null;
 }
 
 function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
@@ -125,7 +125,7 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   if ((m = /^(density|youngs modulus|elastic modulus|modulus(?: of elasticity)?|stiffness|yield strength|yield|tensile strength|ultimate strength|strength|thermal conductivity|electrical conductivity|conductivity|melting point|friction coefficient|coefficient of friction|friction) (?:of|for) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'property', of: strip(m[2]!), which: m[1]! };
   if ((m = /^(?:what is|whats|how (?:much|high|big|large) is) (?:the )?(density|youngs modulus|elastic modulus|modulus(?: of elasticity)?|stiffness|yield strength|yield|tensile strength|ultimate strength|strength|thermal conductivity|electrical conductivity|conductivity|melting point|friction coefficient|coefficient of friction|friction) (?:of|for) (?:an? |the )?(.+)$|^how (dense|stiff|strong|heavy|conductive) is (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'property', of: strip((m[2] ?? m[4])!), which: (m[1] ?? m[3])! };
   // cause: a chain of influences from one thing to another in Nex, or none (and a correlation is never one)
-  if ((m = /^(?:does|do|can|could|will|would|might) (?:an? |the )?(.+?) (?:cause|lead to|bring about|result in|produce|prevent|stop|enable|allow) (?:an? |the )?(.+?)(?: to (?:fail|break|happen|work|run|wear))?\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!), which: strip(m[2]!) };
+  if ((m = /^(?:does|do|can|could|will|would|might) (?:an? |the )?(.+?) (cause|lead to|bring about|result in|produce|prevent|stop|enable|allow) (?:an? |the )?(.+?)(?: to (?:fail|break|happen|work|run|wear))?\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!), which: strip(m[3]!), ...(/^(?:prevent|stop)$/.test(m[2]!) ? { prevent: true } : {}) };
   if ((m = /^(?:is|are) (?:an? |the )?(.+?) caused by (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[2]!), which: strip(m[1]!) };
   if ((m = /^what (?:causes|prevents|drives|brings about|leads to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!) };
   // her own language: the structures she holds a thing in, rendered with what the rendering lost (docs/EGO-NATIVE-LANGUAGE.md)

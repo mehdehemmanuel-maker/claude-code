@@ -27,8 +27,11 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
 - "say a bearing in your language" / "how do you think of a spring": her structures of the thing, each as Nex
   writes it (`part(bearing, steel.52100){cert:{kind:interval lo:0.6 hi:0.8 …} ev:{how:derived} mode:true}`) and then
   in English, with what English carried and lost, the weakest evidence among them, and their hashes.
-- "does the load cause the failure of a bearing", "what causes corrosion": a chain of influences composed in Nex
-  (strength, certainty, delay, polarity, the weakest evidence), rendered, and then the chain itself in Nex.
+- "does the load cause the failure of a bearing", "what causes corrosion", "does a lubricant prevent the failure
+  of a bearing": a chain of influences composed in Nex (strength, certainty, delay, polarity, the weakest evidence),
+  rendered, then the chain itself in Nex; where no arrow runs, a law governing the thing or its failure with the cause
+  as an input gives the sign of its output at the law's own worked example ("equivalent dynamic load (P) lowers
+  rating life of bearing by 2.9 % a percent; derived, not measured here"); prevent looks for the opposite sign.
 - "compare heat and temperature", "compare weight and mass", "compare current and voltage": told apart by dimension
   before any word; a word of two senses settled by the other side ("By current I take electric current, as a
   quantity").
@@ -354,6 +357,19 @@ confidence as `cert` and its source as `ev`. `saidOf(substrate, id, laws)` is ev
 the laws of its kinds, as structures: the input to fingerprints and tuners. A judgment, a hyperedge, an evidence
 leaf, a constraint, a causal relation, a derivation of docs/NEXUS.md each have a form here: R, R of R, E, R with mode
 true that must hold, `influence`, `why` (the support tree as hashes and evidence kinds, with no label in it).
+
+### X.1 Laws as influences
+
+Where no arrow of the substrate runs from a cause to an effect, a law of the book that governs the effect (or a
+failure of it) and has the cause as an input is read as an influence: the sign of the output in that input by finite
+difference at the law's own worked example, with the law as mechanism and the source as evidence, derived. The
+subject decides the reading: a thing or a failure takes the law's output of it ("the load lowers the rating life of
+the bearing", by L10 = (C/P)^p); a quantity that is the law's output takes it forward ("mass raises weight"); a
+quantity that is an input while the cause names the output takes the inverse, which has the forward sign ("voltage
+raises current" by V = I R, `mech:ohm^-1`); two inputs take the implicit reading with the output held, the sign of
+db/da being minus the ratio of the two sensitivities ("resistance lowers current", `mech:ohm/I`), as the book's
+inverse solve has it. An input the cause merely mentions is never matched (a load *rating* is a property of the
+bearing, not the load): the cause must be the input's head noun. Prevent asks for the opposite sign.
 
 ## Y. Testing methodology
 

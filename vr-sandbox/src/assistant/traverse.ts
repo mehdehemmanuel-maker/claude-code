@@ -2,11 +2,12 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, fromRelation, grow as growGrammar, hash, polysemous, readings, render, saidOf, sayGrammar, saySenses, senses, settle, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { askable, chain, d, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sayGrammar, saySenses, senses, settle, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
 import type { Entity } from '../ganglia/substrate/model';
+import type { Structure } from '../ganglia/native';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
 type Traverse = Extract<Intent, { do: 'traverse' }>;
@@ -14,7 +15,8 @@ type Traverse = Extract<Intent, { do: 'traverse' }>;
 // a human name where one is given; else the id said as words, without the domain prefix an id carries for uniqueness
 const nameOf = spokenName;
 /** A thing with its article, a material without: "a bearing", "steel". */
-const art = (e: Entity): string => (e.kinds.includes('material') || e.kinds.includes('quantity') ? nameOf(e) : articled(nameOf(e)));
+// a material, a quantity and a failure are said bare ("steel", "heat", "wear"); a part with its article ("a bolt")
+const art = (e: Entity): string => (e.kinds.includes('material') || e.kinds.includes('quantity') || e.kinds.includes('failure') || e.kinds.includes('law') ? nameOf(e) : articled(nameOf(e)));
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 /** A length or a time in the unit a person reads: 0.1 m is "about 10 cm", 6e-5 s "about 60 µs". */
 const human = (x: number, units: [string, number][]) => { const [u, f] = [...units].reverse().find(([, f]) => x >= f) ?? units[0]!; const v = x / f; return `about ${Number(v.toPrecision(v >= 10 ? 2 : 1))} ${u}`; };
@@ -60,6 +62,63 @@ function unknown(name: string): string {
 }
 
 let grammar: { for: unknown; g: Grammar; said: string } | null = null;
+
+/**
+ * Influences a law carries where no arrow does. For a thing b (or one of its failure modes), every law that governs
+ * it whose input the cause a names gives the sign of the law's output in that input, by finite difference at the
+ * law's own worked example: derived, never a guess. When b is itself a quantity of the law, the effect is b: read
+ * forward when b is the output, inverted when a names the output and b an input (the inverse has the forward sign),
+ * and implicitly when both are inputs (the output held: the sign of db/da is minus the ratio of the two
+ * sensitivities, as the book's inverse solve has it).
+ */
+function lawInfluences(a: Entity, b: Entity, modes: string[]): { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string }[] {
+  const s = substrate();
+  const words = [...new Set([nameOf(a).toLowerCase(), a.id.split('.').pop()!.replace(/-/g, ' '), ...a.names.map((n) => n.toLowerCase())])].filter((w) => w.length >= 3);
+  const names = (name: string): boolean => { const n = name.toLowerCase().replace(/ (?:difference|rise|drop|change|gradient)$/, ''); const head = n.split(/\W+/).filter(Boolean).pop() ?? ''; return words.some((w) => n === w || head === w || head === w.split(' ').pop()); };
+  type Out = { s: R; law: (typeof LAWS)[number]; sym: string; input: string; effect: string; sign: '+' | '-'; elasticity: number; of: string };
+  const out: Out[] = [];
+  const bUnit = b.kinds.includes('quantity') ? b.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined;
+  const same = (u1: string, u2: string): boolean => { try { return sameDim(dimensionOf(u1), dimensionOf(u2)); } catch { return false; } };
+  for (const id of [b.id, ...modes]) {
+    for (const rel of s.outOf(id, 'governed-by')) {
+      const law = LAWS.find((l) => l.id === rel.to);
+      if (!law) continue;
+      const ex = law.example.inputs;
+      // relative sensitivity of the output to one input at the worked example, with its sign; null where it cannot be taken
+      const sens = (sym: string): { sign: 1 | -1; rel: number } | null => {
+        const x0 = ex[sym];
+        if (!x0) return null;
+        let y0: number, y1: number;
+        try { y0 = law.eval(ex); y1 = law.eval({ ...ex, [sym]: x0 * 1.01 }); } catch { return null; }
+        if (!Number.isFinite(y0) || !Number.isFinite(y1) || y0 === y1 || y0 === 0) return null;
+        return { sign: y1 > y0 ? 1 : -1, rel: Math.abs((y1 - y0) / y0) / 0.01 };
+      };
+      const cause = law.inputs.find((x) => names(x.name));
+      const causeIsOutput = names(law.output.name);
+      // the quantity of b the law reaches: b itself when b is the output or an input of it; else the law's output of the thing
+      const bAsOutput = !!bUnit && same(bUnit, law.output.unit);
+      const bAsInput = bUnit ? law.inputs.find((x) => x !== cause && same(x.unit, bUnit)) : undefined;
+      const of = id === b.id ? nameOf(b) : `${nameOf(b)} (${nameOf(s.get(id)!)})`;
+      const push = (sign: 1 | -1, elasticity: number, sym: string, input: string, effect: string, target: Structure, mech: string) => out.push({ s: r('influence', [d(a.id, { en: nameOf(a) }), target], { dir: 1, polarity: sign > 0 ? '+' : '-', necessity: 'contributing', mech, ev: { how: 'derived', src: [law.source.cite] }, dom: [d(`valid:${law.id}`, { en: law.valid })], mode: 'true' }), law, sym, input, effect, sign: sign > 0 ? '+' : '-', elasticity, of });
+      if (cause && bUnit && bAsInput) {
+        // both inputs: the output held, db/da = -(dy/da)/(dy/db)
+        const sa = sens(cause.sym), sb = sens(bAsInput.sym);
+        if (sa && sb) push((-sa.sign * sb.sign) as 1 | -1, sa.rel / sb.rel, cause.sym, cause.name, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}/${bAsInput.sym}`);
+      } else if (cause && bUnit && bAsOutput) {
+        const sa = sens(cause.sym);
+        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} (${law.output.sym})`, d(b.id, { en: nameOf(b) }), law.id);
+      } else if (cause && !bUnit) {
+        const sa = sens(cause.sym);
+        if (sa) push(sa.sign, sa.rel, cause.sym, cause.name, `${law.output.name} of ${of}`, r('quantity', [d(id, { en: of }), d(`${law.id}:${law.output.sym}`, { en: `${law.output.name} (${law.output.unit})` })], {}), law.id);
+      } else if (causeIsOutput && bUnit && bAsInput) {
+        // the law read the other way: the inverse has the forward sign
+        const sb = sens(bAsInput.sym);
+        if (sb) push(sb.sign, 1 / sb.rel, law.output.sym, `${law.output.name}, the law read the other way`, `${bAsInput.name} (${bAsInput.sym})`, d(b.id, { en: nameOf(b) }), `${law.id}^-1`);
+      }
+    }
+  }
+  return out;
+}
 
 export function answerTraversal(i: Traverse): string {
   const s = substrate();
@@ -257,30 +316,55 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'cause') {
     // the arrows that carry influence: X enables Y (+), X prevents Y (−), Y requires X (X necessary for Y), Y fails by X (X lowers Y)
-    const a = find(i.of ?? '');
-    if (!a) return unknown(i.of ?? '');
+    const correlation = 'Two things rising together would be a correlation, which I hold as support, never as a cause.';
+    // a word of two senses beside a quantity is the quantity ("current" beside heat); otherwise it is asked
+    const failureOfWhich = /^(?:the )?(?:failure|failing|breaking|death|wear) of (?:an? |the )?(.+)$/.exec(i.which ?? '')?.[1];
+    const other = i.which ? find(failureOfWhich ?? i.which) : undefined;
+    const asQuantity = (word: string, beside: Entity | undefined): Entity | undefined => (beside?.kinds.includes('quantity') ? settle(readings(s, word), { kinds: ['quantity'] }).chosen?.entity : undefined);
+    const a = find(i.of ?? '') ?? asQuantity(i.of ?? '', other);
+    // a thing she does not know can be no cause she knows: said with the rule that no correlation would make it one
+    if (!a) return `${unknown(i.of ?? '')} ${i.which ? `So I know no mechanism by which it ${i.prevent ? 'prevents' : 'causes'} ${i.which}. ${correlation}` : ''}`.trim();
     const influences = (id: string): R[] => [...s.outOf(id, 'enables'), ...s.outOf(id, 'prevents'), ...s.into(id, 'requires'), ...s.into(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[0]?.k === 'D' && x.args[0].id === id);
     const intoOf = (id: string): R[] => [...s.into(id, 'enables'), ...s.into(id, 'prevents'), ...s.outOf(id, 'requires'), ...s.outOf(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[1]?.k === 'D' && x.args[1].id === id);
-    const correlation = 'Two things rising together would be a correlation, which I hold as support, never as a cause.';
     if (!i.which) {
       const ins = intoOf(a.id);
       if (!ins.length) return `I know no mechanism that causes ${art(a)}: no arrow of mine runs into it. ${correlation}`;
       const outs = ins.slice(0, 6).map((x) => render(x, 'en', 'engineer'));
       return `${ins.length} influence${ins.length === 1 ? '' : 's'} on ${art(a)} that I know of: ${outs.map((o) => o.text).join(' ')}${ins.length > 6 ? ` And ${ins.length - 6} more.` : ''}`;
     }
-    const b = find(i.which);
-    if (!b) return unknown(i.which);
-    // the shortest chain of influences from a to b, three steps at most
+    // "the failure of a bearing": the targets are the bearing's failure modes, and the bearing itself when the chain lowers it
+    const failureOf = failureOfWhich;
+    const b = find(failureOf ?? i.which) ?? asQuantity(failureOf ?? i.which, a);
+    if (!b) return `${unknown(i.which)} ${correlation}`;
+    const modes = failureOf ? s.reach(b.id, 'fails-by').map((f) => f.id) : [];
+    if (failureOf && !modes.length) return `I know no failure of ${art(b)} yet: that is a question on my queue, and until it is answered I know no mechanism by which ${art(a)} ${i.prevent ? 'prevents' : 'causes'} one. ${correlation}`;
+    const verb = i.prevent ? 'prevents' : 'causes', said = failureOf ? `the failure of ${art(b)}` : art(b);
+    // the shortest chain of influences from a to a target, three steps at most. The sign the question wants: to cause a
+    // failure is to raise a failure mode or lower the thing; to prevent it the reverse; to prevent a thing is to lower it
     const prev = new Map<string, { from: string; via: R } | null>([[a.id, null]]);
-    let frontier = [a.id], found = a.id === b.id;
+    const sign = (id: string): number => { let pol = 1; for (let k = id; prev.get(k); k = prev.get(k)!.from) if (prev.get(k)!.via.c.polarity === '-') pol = -pol; return pol; };
+    const wanted = (to: string): boolean => {
+      if (failureOf) return modes.includes(to) ? sign(to) === (i.prevent ? -1 : 1) : to === b.id && sign(to) === (i.prevent ? 1 : -1);
+      return to === b.id && (!i.prevent || sign(to) === -1);
+    };
+    let frontier = [a.id], found: string | null = null;
     for (let depth = 0; depth < 3 && !found && frontier.length; depth++) {
       const next: string[] = [];
-      for (const id of frontier) for (const x of influences(id)) { const to = (x.args[1] as { id: string }).id; if (prev.has(to)) continue; prev.set(to, { from: id, via: x }); next.push(to); if (to === b.id) { found = true; break; } }
+      for (const id of frontier) for (const x of influences(id)) { const to = (x.args[1] as { id: string }).id; if (prev.has(to)) continue; prev.set(to, { from: id, via: x }); next.push(to); if (wanted(to)) { found = to; break; } }
       frontier = next;
     }
-    if (!found) return `I know no mechanism by which ${art(a)} causes ${art(b)}: no arrow of mine runs from one to the other within three steps. ${correlation}`;
+    if (!found) {
+      // no arrow: a law may still say it. A law governing the thing (or a failure of it) with an input the cause names
+      // gives the sign of its output in that input at the law's own worked example: derived, never a guess
+      const byLaw = lawInfluences(a, b, modes);
+      if (byLaw.length) {
+        const outs = byLaw.slice(0, 3).map((x) => `${render(x.s, 'en', 'engineer').text} That is ${x.law.name} (${x.law.formula}): ${x.input} (${x.sym}) ${x.sign === '-' ? 'lowers' : 'raises'} ${x.effect} by ${x.elasticity.toFixed(1)} % a percent at its worked example; derived, not measured here.`);
+        return `No arrow of mine runs from ${art(a)} to ${said}, but a law does: ${outs.join(' ')} In Nex: ${nex(byLaw[0]!.s)}`;
+      }
+      return `I know no mechanism by which ${art(a)} ${verb} ${said}: no arrow of mine runs from one to the other within three steps, and no law governing it has ${art(a)} as an input. ${correlation}`;
+    }
     const path: R[] = [];
-    for (let id = b.id; prev.get(id); id = prev.get(id)!.from) path.unshift(prev.get(id)!.via);
+    for (let id = found; prev.get(id); id = prev.get(id)!.from) path.unshift(prev.get(id)!.via);
     const whole = path.length === 1 ? path[0]! : path.slice(1).reduce((acc, x) => chain(acc, x) ?? acc, path[0]!);
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';

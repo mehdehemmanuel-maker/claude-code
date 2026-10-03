@@ -83,7 +83,7 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   const spaced: Entity[] = [];
   for (const prefix of ['qty.', 'role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.', 'failure.', 'phys.', 'cross.', 'view.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e && !spaced.includes(e)) spaced.push(e); }
   if (spaced.length === 1) return spaced[0];
-  if (spaced.length > 1) return new Set(spaced.map((e) => e.kinds[0])).size === 1 ? spaced[0] : undefined;
+  if (spaced.length > 1) return spaced.every((e) => facesOfOne(e.kinds[0] ?? 'thing', spaced[0]!.kinds[0] ?? 'thing')) ? spaced[0] : undefined;
   const family = s.get(`material.${dashed}-alloy`) ?? s.get(`material.${singular(dashed)}-alloy`);
   if (family) return family;
   // "copper" with no family of its own: the material whose id is the word or begins with it, never a wire of it nor a
