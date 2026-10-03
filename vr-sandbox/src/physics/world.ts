@@ -12,7 +12,7 @@ import {
   getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
   type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf,
 } from '../parts/registry';
-import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
+import { closestOnShape, frontalAreas, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
   magnetWrench, cylinderCharges, blockCharges, cylinderFaces, blockFaces, imageFaces, transformFaces, plateSaturationFactor, ringLevel, faceField,
   blendedInteraction, transformCharges, dipoleMoment, type Charge, type PoleFace, type Vec3 as MVec3,
@@ -519,19 +519,6 @@ function magnetOf(g: MagnetGeometry | undefined, material: Material, level: (ch:
 export function servoLoop(I: number, sv: { maxTorque: number; band: number }): { k: number; c: number } {
   const k = sv.maxTorque / Math.max(sv.band, 1e-3);
   return { k, c: 2 * Math.sqrt(k * I) };
-}
-
-/**
- * The area a body shows the air or the water along each of its own axes, for the drag ½ ρ C_d A v²: a sphere shows
- * π r² whichever way it moves, a cylinder its rectangle across and its disc along, a box its faces. A hull or a
- * compound shows its bounding box's faces: an estimate, over by up to 4/π for a round one. The drag coefficients of
- * the part kinds are quoted against these frontal areas (a sphere's 0.47 against π r², not against its box, which
- * had made every falling ball 4/π too draggy and its terminal speed √(π/4) too low).
- */
-export function frontalAreas(shape: CollisionShape, ext: Vec3): Vec3 {
-  if (shape.type === 'sphere') { const a = Math.PI * shape.radius * shape.radius; return [a, a, a]; }
-  if (shape.type === 'cylinder') { const across = 2 * shape.radius * 2 * shape.halfHeight; return [across, Math.PI * shape.radius * shape.radius, across]; }
-  return [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]];
 }
 
 export class PhysicsWorld {
@@ -1066,8 +1053,6 @@ export class PhysicsWorld {
     const mass = massOf(kind, segParams, material);
     const density = mass / volume;
     const dims = kind.dims(segParams);
-    const bounds = shapeBounds(shapeDesc);
-    const ext = sub(bounds.max, bounds.min);
     const magGeom = kind.magnet?.(params);
     const pr: PartRec = {
       id: part.id, part, kind, material, layout, segs: [], bonds: [],
@@ -1113,7 +1098,7 @@ export class PhysicsWorld {
       const rec: BodyRec = {
         id: layout ? segmentBodyId(part.id, k) : part.id, partId: part.id, seg: layout ? k : -1, pr,
         slot, subgroup, body, kind, material, shape: shapeDesc, dims, mass, volume,
-        faceAreas: frontalAreas(shapeDesc, ext),
+        faceAreas: frontalAreas(shapeDesc),
         magnet: magnetOf(magGeom, material, (ch) => this.channelLevel(ch)),
         frozen: part.frozen, grabbed: null, inFluid: false, Iloc: null, prior: null,
       };

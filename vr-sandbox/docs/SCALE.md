@@ -226,8 +226,9 @@ Measured: terminal speeds of 15.20 m/s and 21.47 m/s (ratio 1.4124 for √2 = 1.
 √(2 m g / ρ C_d π d²/4) gives, 15.20 and 21.50. This one found a fault the ratio alone would never have shown: the
 engine showed every body its bounding box to the air, so a ball had 4/π too much frontal area and fell √(π/4) too
 slowly (13.47 and 19.04 m/s, ratio still 1.4135). A body now shows the air and the water its own frontal area by
-shape: a sphere π r², a cylinder its rectangle across and its disc along, a box its faces; a hull or a compound still
-shows its box, and the code says so. The drag coefficients of the part kinds are quoted against these areas.
+shape: a sphere π r², a cylinder its rectangle across and its disc along, a box its faces, a hull the silhouette of its
+points, a compound the convex outline of its children together. The drag coefficients of the part kinds are quoted
+against these areas.
 
 **Cooling, at two sizes: the first scale-dependent one.** A mild-steel cube of 0.1 m and one of 0.2 m, 120 K above the
 room, left in still air. The law book: a time goes as λ^½ under Froude, but a lumped time constant m c / h A goes as

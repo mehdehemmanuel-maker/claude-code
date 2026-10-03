@@ -150,10 +150,10 @@ export const NODES: Node[] = [
     limits: ['the floor of 1 m/s is a numerical parameter without a source (P-restitution-floor)'] },
 
   { id: 'F-4.7', kind: 'law', epistemic: 'constitutive', name: 'quadratic drag on the frontal area', proof: 'tested', parents: ['F-4'],
-    statement: 'A body moving through a fluid is pushed back by ½ ρ C_d A v², with A the area it shows the flow along its own axes, by its shape (a sphere π r², a cylinder its rectangle across and its disc along, a box its faces) and C_d the coefficient quoted against that area; a hull or a compound shows its bounding box, an estimate over by up to 4/π for a round one, and says so.', form: 'F = ½ ρ C_d A v²',
-    realisedBy: [{ module: 'physics/world', symbol: 'frontalAreas' }, { module: 'physics/world', symbol: 'PhysicsWorld#applyAirDrag' }],
+    statement: 'A body moving through a fluid is pushed back by ½ ρ C_d A v², with A the area it shows the flow along its own axes, by its shape (a sphere π r², a cylinder its rectangle across and its disc along, a box its faces, a hull the silhouette of its points, a compound the convex outline of its children together) and C_d the coefficient quoted against that area.', form: 'F = ½ ρ C_d A v²',
+    realisedBy: [{ module: 'parts/shapes', symbol: 'frontalAreas' }, { module: 'physics/world', symbol: 'PhysicsWorld#applyAirDrag' }],
     heldBy: [{ file: 'tests/conformance/scale.test.ts', test: 'Drag: a foam ball twice the diameter falls √2 faster once the air holds it, as Froude similarity predicts, and each at the speed the drag law gives' }],
-    limits: ['a hull or a compound body shows its box, not its true silhouette'] },
+    limits: ['a concave compound shows the convex outline of its union, a little over its true silhouette'] },
 
   { id: 'F-4.8', kind: 'law', epistemic: 'constitutive', name: 'cooling to the room', proof: 'tested', parents: ['F-4'],
     statement: 'A part at one temperature loses heat to still air by free convection at h = 1.42 (ΔT/L)^¼ over its surface and by radiation at ε σ (T⁴ − T_room⁴), and warms by what it absorbs over its heat capacity; the time this takes grows faster than its size, between λ and λ^1.25, never as the mechanics\' λ^½.', form: 'C dT/dt = P − h A ΔT − ε σ A (T⁴ − T_a⁴)',
