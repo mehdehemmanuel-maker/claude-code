@@ -177,9 +177,13 @@ export function normalize(s: Structure, expand?: Expand): Structure {
     case 'C': return { ...s, body: normalize(s.body, expand) };
     case 'T': { const out: T = { k: 'T', from: normalize(s.from, expand), to: normalize(s.to, expand), c: cleanCoords(s.c, expand) }; if (s.cond) out.cond = s.cond.map((x) => normalize(x, expand)); return out; }
     case 'R': {
-      const args = s.args.map((x) => normalize(x, expand));
-      if (COMMUTATIVE.has(s.op)) args.sort((a, b) => canonical(a).localeCompare(canonical(b)));
-      return { k: 'R', op: s.op, args, c: cleanCoords(s.c, expand) };
+      let args = s.args.map((x) => normalize(x, expand));
+      let c = cleanCoords(s.c, expand);
+      // rewrite rules (section U): a relation written backwards (dir −1) is the forward one with its arguments swapped;
+      // an undirected one (dir 0) does not care about their order; so the same thing said either way has one hash
+      if (c.dir === -1 && args.length === 2) { args = [args[1]!, args[0]!]; c = { ...c, dir: 1 }; }
+      if (COMMUTATIVE.has(s.op) || c.dir === 0) args.sort((a, b) => canonical(a).localeCompare(canonical(b)));
+      return { k: 'R', op: s.op, args, c };
     }
   }
 }
@@ -313,7 +317,9 @@ export function rename(s: Structure, map: (id: string) => string): Structure {
 // ---- reasoning over structures with coordinates (section B's point: the operators compose)
 
 /** Chain two influences A→B and B→C into A→C: strengths multiply, certainty narrows to the weaker, delays add, polarity multiplies. */
-export function chain(ab: R, bc: R): R | null {
+export function chain(ab0: R, bc0: R): R | null {
+  // either influence may have been written backwards: the normal form puts both forward
+  const ab = normalize(ab0) as R, bc = normalize(bc0) as R;
   if (ab.op !== 'influence' || bc.op !== 'influence') return null;
   const [a, b1] = ab.args, [b2, c] = bc.args;
   if (!a || !b1 || !b2 || !c || hash(b1) !== hash(b2)) return null;
@@ -336,7 +342,8 @@ export function chain(ab: R, bc: R): R | null {
 }
 
 /** Two structures that say opposite things of the same arguments: a contradiction held, not resolved (section R of the request). */
-export function contradiction(a: R, b: R): R | null {
+export function contradiction(a0: R, b0: R): R | null {
+  const a = normalize(a0) as R, b = normalize(b0) as R;
   if (a.op !== b.op || a.args.length !== b.args.length) return null;
   if (!a.args.every((x, i) => hash(x) === hash(b.args[i]!))) return null;
   const opposite = (a.c.polarity && b.c.polarity && a.c.polarity !== b.c.polarity) || (a.c.mode === 'true' && b.c.mode === 'false') || (a.c.mode === 'false' && b.c.mode === 'true');

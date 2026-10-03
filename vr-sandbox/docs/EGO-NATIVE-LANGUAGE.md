@@ -326,10 +326,14 @@ text. `hash` is a 64-bit content hash of it.
 ## U. Semantic equivalence system
 
 `equivalent(a, b)` is equality of hashes of the normal forms, under the expansion of morphemes. It is syntactic
-equality of the canonical form, which is the honest first version: it recognises reordering, renaming of nothing
-(names are meaning-free but are identity), abbreviation and the dropping of empty coordinates, and does not yet
-recognise equalities that need a rewrite theory (an influence of polarity − on X equal to an influence of polarity +
-on the complement of X). Those enter as kernel rewrite rules of tier 0 (NEXUS §F) when the first is needed.
+equality of the canonical form plus the rewrite rules the normal form applies: reordering of commutative arguments,
+abbreviation, the dropping of empty coordinates, and two rules of direction (built 3 October): a relation written
+backwards (`dir: -1`) is the forward one with its arguments swapped, and an undirected one (`dir: 0`, a correlation)
+does not care about their order; so the same thing said either way has one hash, a chain composes whichever way its
+links were written, and a contradiction is found whichever way the denial was written (tested, and the renaming test
+holds through the rewrites). Names are meaning-free but are identity: renaming is never an equivalence. Not yet
+recognised: equalities that need more theory (an influence of polarity − on X equal to an influence of polarity + on
+the complement of X); those enter as kernel rewrite rules of tier 0 (NEXUS §F) when the first is needed.
 
 ## V. Semantic distance
 

@@ -539,3 +539,27 @@ describe('Nex: the grammar grows over everything the substrate says (sections O 
     expect(said).toMatch(/μ1 = part\(\$1, \$2\)\{cert:\{kind:interval lo:0.75 hi:0.95 source:epistemic\} ev:\{how:derived\} mode:true\} \(a part-of at 0.75 to 0.95, derived; \d+ times in \d+ domains; e.g. /);
   });
 });
+
+describe('Nex: rewrite rules beyond the canonical form (section U)', () => {
+  it('a relation written backwards is the forward one with its arguments swapped; an undirected one does not care about their order; chains and contradictions see through both', () => {
+    const forward = r('influence', [load, current], { dir: 1, polarity: '+', strength: 0.8 });
+    const backward = r('influence', [current, load], { dir: -1, polarity: '+', strength: 0.8 });
+    expect(equivalent(forward, backward)).toBe(true);
+    expect(hash(forward)).toBe(hash(backward));
+    expect(text(normalize(backward))).toBe('influence(load, current){dir:1 polarity:+ strength:0.8}');
+    // not the same as the reverse influence, which is another claim
+    expect(equivalent(forward, r('influence', [current, load], { dir: 1, polarity: '+', strength: 0.8 }))).toBe(false);
+    // undirected: a correlation either way round is one structure
+    expect(equivalent(r('support', [d('icecream'), d('drowning')], { dir: 0 }), r('support', [d('drowning'), d('icecream')], { dir: 0 }))).toBe(true);
+    expect(equivalent(r('support', [d('a'), d('b')], { dir: 1 }), r('support', [d('b'), d('a')], { dir: 1 }))).toBe(false);
+    // a chain written with its second link backwards composes the same
+    const bcBack = r('influence', [temperature, current], { dir: -1, polarity: '+', strength: 0.5 });
+    expect(hash(chain(forward, bcBack)!)).toBe(hash(chain(forward, r('influence', [current, temperature], { dir: 1, polarity: '+', strength: 0.5 }))!));
+    // a contradiction is found whichever way the denial was written
+    const denial = r('influence', [current, load], { dir: -1, polarity: '-' });
+    expect(contradiction(forward, denial)?.c.mode).toBe('contradictory');
+    // and the hard test still holds: renaming commutes with the rewrites
+    const ren = scramble();
+    expect(hash(rename(backward, ren))).toBe(hash(rename(forward, ren)));
+  });
+});
