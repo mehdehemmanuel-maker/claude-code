@@ -176,8 +176,10 @@ export function lineage(s: Substrate, id: string, maxDepth = 12): Entity[] {
 
 /** Mechanisms for a behaviour said in words, found through the function it names: nothing retrieved from a stored machine. */
 export function mechanismsFor(s: Substrate, words: string): { function: Entity | null; mechanisms: Found[] } {
-  const w = words.toLowerCase();
-  const fns = s.ofKind('function').filter((f) => f.says.toLowerCase().includes(w) || f.name.toLowerCase().includes(w) || f.id.includes(w.replace(/\s+/g, '.')));
+  const w = words.toLowerCase().trim();
+  // the function the words name (fn.cut, "store energy") before any whose saying merely mentions them
+  const exact = s.get(`fn.${w.replace(/\s+/g, '.')}`) ?? s.get(`fn.${w.replace(/\s+/g, '-')}`) ?? s.get(w.replace(/\s+/g, '.')) ?? s.ofKind('function').find((f) => f.name.toLowerCase() === w || f.name.toLowerCase() === `fn ${w}` || f.id === `fn.${w.replace(/\s+/g, '.')}`);
+  const fns = exact ? [exact] : s.ofKind('function').filter((f) => f.says.toLowerCase().includes(w) || f.name.toLowerCase().includes(w) || f.id.includes(w.replace(/\s+/g, '.')));
   const fn = fns[0] ?? null;
   return { function: fn, mechanisms: fn ? implementations(s, fn.id) : [] };
 }

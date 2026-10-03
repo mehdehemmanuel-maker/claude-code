@@ -62,7 +62,14 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'ways-to-store') {
     const w = waysToStore(s, i.of ?? 'energy');
-    if (!w.mechanisms.length) return `I know no way to store ${i.of}: that is a question for my queue.`;
+    if (!w.mechanisms.length) {
+      // heat is energy stored as heat: the way of storing energy the word names, and what does it
+      const AS: Record<string, string> = { heat: 'thermal', cold: 'thermal', electricity: 'electrochemical', charge: 'electrostatic', motion: 'inertial', momentum: 'inertial', height: 'gravitational', air: 'compressed-gas', gas: 'compressed-gas', fuel: 'chemical' };
+      const way = AS[i.of ?? ''] ? s.get(`store.energy.${AS[i.of ?? '']}`) : undefined;
+      const doers = way ? [...new Set([...implementations(s, way.id).map((f) => f.entity), ...s.into(way.id, 'is-a').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x)])] : [];
+      if (way && doers.length) return `${cap(i.of ?? '')} is stored as ${nameOf(way)}: ${doers.length} things do it that I know of: ${list(doers.map(nameOf), 10)}.`;
+      return `I know no way to store ${i.of}: that is a question for my queue.`;
+    }
     const mech = w.mechanisms.filter((m) => m.id.startsWith('store.'));
     const byDomain = new Map<string, string[]>();
     for (const f of w.implementations) { const d = f.entity.domains[0] ?? 'unplaced'; (byDomain.get(d) ?? byDomain.set(d, []).get(d)!).push(nameOf(f.entity)); }
@@ -79,6 +86,14 @@ export function answerTraversal(i: Traverse): string {
   if (i.query === 'materials-for') {
     const role = find(i.of ?? '');
     if (!role) return unknown(i.of ?? '');
+    if (!role.kinds.includes('role')) {
+      // a thing, not a role: what it is made of, then what plays the roles it plays
+      const mats = s.reach(role.id, 'made-of'), roles = s.reach(role.id, 'plays').map((r) => ({ r, rows: materialsForRole(s, r.id) })).filter((x) => x.rows.length);
+      if (!mats.length && !roles.length) return `I know no material for ${art(role)} yet: that is a question on my queue.`;
+      const made = mats.length ? `${cap(art(role))} is made of ${list(mats.map(nameOf), 8)}.` : '';
+      const plays = roles.length ? `${mats.length ? ' It' : cap(art(role))} plays ${list(roles.map((x) => `${nameOf(x.r)} (also ${list(x.rows.map((y) => nameOf(y.entity)), 5)})`), 4)}.` : '';
+      return `${made}${plays}`;
+    }
     const rows = materialsForRole(s, role.id);
     if (!rows.length) return `Nothing I know plays ${nameOf(role)} yet.`;
     const numbered = rows.filter((r) => r.conductivity !== undefined && !r.derivedFrom), families = rows.filter((r) => r.derivedFrom), bare = rows.filter((r) => r.conductivity === undefined);
@@ -205,10 +220,36 @@ export function answerTraversal(i: Traverse): string {
     return `${cap(art(e))}, generatively: ${l.map(nameOf).join(' → ')}. ${l[0]!.id.startsWith('phys.') ? 'That reaches the physical primitives.' : `That stops at ${nameOf(l[0]!)}: what it is made of is a question on my queue.`}`;
   }
   if (i.query === 'mechanisms-for') {
-    const m = mechanismsFor(s, i.of ?? '');
+    let m = mechanismsFor(s, i.of ?? ''), object = '';
+    if (!m.function) {
+      // "cut steel": the function is the verb; what it is done to is said back, since no arrow carries it
+      const words = (i.of ?? '').split(' ');
+      for (let k = words.length - 1; k >= 1 && !m.function; k--) { m = mechanismsFor(s, words.slice(0, k).join(' ')); if (m.function) object = words.slice(k).join(' '); }
+    }
     if (!m.function) return `I know no function for "${i.of}".`;
     if (!m.mechanisms.length) return `Nothing I know does ${nameOf(m.function)} yet.`;
-    return `${m.mechanisms.length} mechanisms ${nameOf(m.function)}: ${list(m.mechanisms.map((f) => nameOf(f.entity)), 16)}.`;
+    return `${m.mechanisms.length} mechanisms ${nameOf(m.function)}: ${list(m.mechanisms.map((f) => nameOf(f.entity)), 16)}.${object ? ` Which of them ${nameOf(m.function)} ${object} I have not been told: no arrow of mine says what a mechanism works on.` : ''}`;
+  }
+  if (i.query === 'kinds') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const up = s.reach(e.id, 'is-a'), down = s.into(e.id, 'is-a').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (!up.length && !down.length) return `I know no kind ${art(e)} is, nor any kind of it: that is a question on my queue.`;
+    return `${up.length ? `${cap(art(e))} is a kind of ${list(up.map(nameOf), 6)}.` : `${cap(art(e))} is a kind of nothing I know.`}${down.length ? ` Kinds of ${nameOf(e)}: ${list(down.map(nameOf), 10)}.` : ''}`;
+  }
+  if (i.query === 'standards') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const own = s.reach(e.id, 'standardized-by'), viaKind = s.reach(e.id, 'is-a').flatMap((k) => s.reach(k.id, 'standardized-by').map((st) => `${articled(nameOf(k))}: ${nameOf(st)}`));
+    if (!own.length && !viaKind.length) return `I know no standard for ${art(e)} yet: that is a question on my queue.`;
+    return `${cap(art(e))} is standardized ${own.length ? `by ${list(own.map(nameOf), 8)}` : ''}${viaKind.length ? `${own.length ? ', and ' : ''}as ${list([...new Set(viaKind)], 6)}` : ''}.`;
+  }
+  if (i.query === 'interfaces') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    const to = s.reach(e.id, 'connects-to'), works = s.reach(e.id, 'interacts-with'), from = s.into(e.id, 'connects-to').map((r) => s.get(r.from)).filter((x): x is NonNullable<typeof x> => !!x && x.id !== e.id);
+    if (!to.length && !works.length && !from.length) return `I know nothing ${art(e)} connects to yet: that is a question on my queue.`;
+    return `${cap(art(e))} connects to ${to.length ? list(to.map(nameOf), 8) : 'nothing I know'}${from.length ? `; ${list(from.map(nameOf), 6)} connect to it` : ''}${works.length ? `; it works with ${list(works.map(nameOf), 8)}` : ''}.`;
   }
   if (i.query === 'construction-path') {
     const e = find(i.of ?? '');

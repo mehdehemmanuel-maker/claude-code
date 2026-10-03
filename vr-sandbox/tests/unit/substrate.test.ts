@@ -881,3 +881,32 @@ describe('the queue keeps its book', () => {
     expect(r.done.has('bearing|materials|deep')).toBe(true);
   });
 });
+
+describe('what the second probe of 3 October found (lineage, construction, mechanisms, variants, materials, kinds, standards, interfaces)', () => {
+  it('the phrasings are understood', () => {
+    expect(interpret('what was a bicycle made from, all the way down')).toMatchObject({ do: 'traverse', query: 'lineage', of: 'bicycle' });
+    expect(interpret('variants of a bolt')).toMatchObject({ do: 'traverse', query: 'variants', of: 'bolt' });
+    expect(interpret('what sizes does a hex bolt come in')).toMatchObject({ do: 'traverse', query: 'variants', of: 'hex bolt' });
+    expect(interpret('what material should a spring be')).toMatchObject({ do: 'traverse', query: 'materials-for', of: 'spring' });
+    expect(interpret('what could a gear be made of')).toMatchObject({ do: 'traverse', query: 'materials-for', of: 'gear' });
+    expect(interpret('what things store charge')).toMatchObject({ do: 'traverse', query: 'mechanisms-for', of: 'store charge' });
+    expect(interpret('why does a bearing need lubrication')).toMatchObject({ do: 'reason', about: 'bearing need lubrication' });
+    expect(interpret('what is a lever a kind of')).toMatchObject({ do: 'traverse', query: 'kinds', of: 'lever' });
+    expect(interpret('what standards apply to a bolt')).toMatchObject({ do: 'traverse', query: 'standards', of: 'bolt' });
+    expect(interpret('what does a servo connect to')).toMatchObject({ do: 'traverse', query: 'interfaces', of: 'servo' });
+  });
+
+  it('the answers come from the arrows: a thing asked for materials, a verb with an object, heat as a way of storing energy, kinds, standards, interfaces', () => {
+    expect(answerTraversal({ do: 'traverse', query: 'materials-for', of: 'bearing' })).toMatch(/^A bearing is made of .*Chrome steel 52100/);
+    const cut = answerTraversal({ do: 'traverse', query: 'mechanisms-for', of: 'cut steel' });
+    expect(cut).toMatch(/^\d+ mechanisms cut: /);
+    expect(cut).toMatch(/Which of them cut steel I have not been told/);
+    expect(answerTraversal({ do: 'traverse', query: 'ways-to-store', of: 'heat' })).toMatch(/^Heat is stored as thermal storage: \d+ things do it/);
+    expect(answerTraversal({ do: 'traverse', query: 'kinds', of: 'lever' })).toMatch(/^A lever is a kind of /);
+    expect(answerTraversal({ do: 'traverse', query: 'standards', of: 'bolt' })).toMatch(/is standardized/);
+    expect(answerTraversal({ do: 'traverse', query: 'interfaces', of: 'servo' })).toMatch(/^A hobby servo connects to /);
+    // a wing lifts and a load cell measures force (Anderson; Horowitz & Hill)
+    expect(answerTraversal({ do: 'traverse', query: 'mechanisms-for', of: 'lift' })).toMatch(/wing/);
+    expect(answerTraversal({ do: 'traverse', query: 'mechanisms-for', of: 'measure force' })).toMatch(/load cell/);
+  });
+});

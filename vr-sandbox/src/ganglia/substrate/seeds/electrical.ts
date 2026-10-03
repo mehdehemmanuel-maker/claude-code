@@ -194,6 +194,7 @@ export function electrical(): Pack {
   ] as [string, string, string, string][]) {
     p.e(id, 'component', says);
     p.link(id, { 'is-a': ['sensor'], 'governed-by': [law], 'analogous-to': [bio] });
+    if (id === 'sensor.load-cell' || id === 'sensor.strain-gauge') p.link(id, { does: ['fn.measure.force'] });
   }
   p.e('antenna', 'component', 'A conductor shaped so that currents in it radiate, and waves induce currents in it: a dipole, a patch, a loop, a horn, a dish.');
   p.link('antenna', { does: ['fn.radiate', 'fn.sense'], 'governed-by': ['maxwell.equations', 'skin.depth', 'rayleigh.resolution'], 'made-of': ['copper.c110', 'aluminum.6061-t6'], 'produced-by': ['process.pcb.etching', 'process.stamping', 'bend'], 'varies-by': ['param.frequency', 'param.gain', 'param.polarization'], 'interacts-with': ['receiver', 'circuit.transmitter'] });
