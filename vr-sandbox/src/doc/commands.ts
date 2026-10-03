@@ -4,7 +4,8 @@ import { getMaterial } from '../data/materials';
 import { STANDARD_GRAVITY } from '../data/materials';
 import { getConnectorKind } from '../connectors/registry';
 import { getPartKind } from '../parts/registry';
-import { sanitizeParams, type Params, type ParamValue } from '../schema/params';
+import { paramProblems, sanitizeParams, type Params, type ParamValue } from '../schema/params';
+import { ConstructionRefused } from '../ganglia/tree/gate';
 import { randomId, type IdSource } from './ids';
 import { canonicalPose, clonePose, composePose, relativePose } from './math';
 import type { DocStore, TxBuilder } from './store';
@@ -45,9 +46,11 @@ export interface PartSpec {
   assembly?: string | null;
 }
 
-/** Build a part record (pure). */
+/** Build a part record (pure). A value its template does not offer is refused here, never replaced by a default (K-2). */
 export function makePart(spec: PartSpec, ids: IdSource = randomId): Part {
   const kind = getPartKind(spec.kind);
+  const problems = paramProblems(kind.params, spec.params);
+  if (problems.length) throw new ConstructionRefused({ law: 'K-2', what: 'part', id: '', name: spec.name ?? kind.label, reason: `its template takes only what it offers: ${problems.join('; ')}` });
   const material = spec.material ?? kind.defaultMaterial;
   return {
     id: ids('p'),
@@ -69,10 +72,14 @@ function ensureMaterial(tx: TxBuilder, store: DocStore, id: string) {
 
 export function addPart(store: DocStore, spec: PartSpec, ids: IdSource = randomId): Part {
   const part = makePart(spec, ids);
-  store.transact(`Place ${part.name}`, (tx) => {
-    ensureMaterial(tx, store, part.material);
-    tx.create('parts', part.id, part);
-  });
+  store.transact(`Place ${part.name}`, (tx) => createPart(tx, store, part));
+  return part;
+}
+
+/** Place a made part inside a transaction of several (a whole machine goes in as one, or not at all). */
+export function createPart(tx: TxBuilder, store: DocStore, part: Part): Part {
+  ensureMaterial(tx, store, part.material);
+  tx.create('parts', part.id, part);
   return part;
 }
 
@@ -132,6 +139,16 @@ export function setFrozen(store: DocStore, ids: string[], frozen: boolean) {
 }
 
 /** Connections touching any of the given parts. */
+/**
+ * The physics refused something the document holds (its intake runs the same gate against the world as it stands,
+ * live): it leaves the document too, so that nothing is drawn or saved that the world does not contain.
+ */
+export function refuse(store: DocStore, what: 'part' | 'connection', id: string, note: string) {
+  if (what === 'part') { if (store.doc.parts[id]) deleteParts(store, [id]); return; }
+  if (!store.doc.connections[id]) return;
+  store.transact(`Refused: ${note}`, (tx) => tx.delete('connections', id), { undoable: false });
+}
+
 export function connectionsOf(doc: BuildDoc, partIds: Iterable<string>): Connection[] {
   const set = new Set(partIds);
   return Object.values(doc.connections).filter((c) => set.has(c.a.part) || (c.b !== null && set.has(c.b.part)));
@@ -236,6 +253,8 @@ export interface ConnectionSpec {
 
 export function makeConnection(spec: ConnectionSpec, ids: IdSource = randomId): Connection {
   const kind = getConnectorKind(spec.kind);
+  const problems = paramProblems(kind.params, spec.params);
+  if (problems.length) throw new ConstructionRefused({ law: 'K-2', what: 'connection', id: '', name: kind.label, reason: `its template takes only what it offers: ${problems.join('; ')}` });
   return {
     id: ids('c'),
     kind: kind.id,
@@ -248,7 +267,13 @@ export function makeConnection(spec: ConnectionSpec, ids: IdSource = randomId): 
 
 export function addConnection(store: DocStore, spec: ConnectionSpec, ids: IdSource = randomId): Connection {
   const conn = makeConnection(spec, ids);
-  store.transact(`Connect: ${getConnectorKind(conn.kind).label}`, (tx) => tx.create('connections', conn.id, conn));
+  store.transact(`Connect: ${getConnectorKind(conn.kind).label}`, (tx) => createConnection(tx, conn));
+  return conn;
+}
+
+/** Make a made connection inside a transaction of several. */
+export function createConnection(tx: TxBuilder, conn: Connection): Connection {
+  tx.create('connections', conn.id, conn);
   return conn;
 }
 

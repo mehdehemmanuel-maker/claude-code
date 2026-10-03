@@ -7,10 +7,10 @@
 import type JoltNS from 'jolt-physics';
 import type { Material } from '../data/materials';
 import { getConnectorKind, type ConnectorKind, type Derived } from '../connectors/registry';
-import { REACH, spans, throughOf, unreachable, type Through } from '../connectors/through';
+import { spans, throughOf, type Through } from '../connectors/through';
 import {
   getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
-  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf, boughtRefusal,
+  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf,
 } from '../parts/registry';
 import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
@@ -24,6 +24,9 @@ import { drain, packR, type Pack } from '../engineering/battery';
 import { getGearhead, getMotor, type GearheadData } from '../data/motors';
 import { getBattery } from '../data/batteries';
 import { solvePack, type Load } from './electric';
+import { CONTACT_TOLERANCE, judgeConnection, judgePart, type Refusal, type Standing } from '../ganglia/tree/gate';
+import { CONTROLLER_BOARD, RECEIVER_BOARD } from '../data/servos';
+import { getMaterial } from '../data/materials';
 import { emptyEnergies, emptyHeat, emptyWork, kineticEnergy, potentialEnergy, shareHeat, springEnergy, type Energies, type HeatBook, type HeatSource, type WorkBook } from './energy';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
 import { axisAngle, composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
@@ -110,8 +113,8 @@ interface MagnetStiffness {
   rate: number;
 }
 
-/** Penetration the contacts leave alone (Jolt's mPenetrationSlop, as set below). */
-const SLOP = 0.002;
+/** Penetration the contacts leave alone (Jolt's mPenetrationSlop, as set below): the construction gate's own tolerance. */
+const SLOP = CONTACT_TOLERANCE;
 /** Most overlap taken out in one tick, as Jolt does (its mMaxPenetrationDistance default). */
 const MAX_CORRECTION = 0.2;
 /** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
@@ -297,9 +300,16 @@ interface ConnRec {
   axisI?: { at: number; I: number };
   /** The topology its drive (servo, return spring) was last sized for. */
   sizedAt?: number;
-  /** A servo's aim this tick (rad, as Jolt measures its angle), and the tick the re-solve last drove it on true inertia. */
+  /** A servo's aim this tick (rad, as Jolt measures its angle): undefined when nothing commands it or nothing powers it. */
   aim?: number;
+  /** The tick the re-solve last drove it on true inertia. */
   servoRowAt?: number;
+  /** A servo's torque this tick as its impulse (N m s) and the work it did (J), gathered from whichever drove it; its stall and speed as its volts scale them. */
+  servoImpulse: number;
+  servoWork: number;
+  servoTorque: number;
+  servoScale: number;
+  loopScale?: number;
   /** Jolt's own motor is off: the re-solve drives it. */
   motorOff?: boolean;
   /** Already reported as coming apart (once is enough). */
@@ -348,6 +358,23 @@ interface DriveRec {
   I: number;
   w: number;
   impulse: number;
+}
+
+/** What feeds a servo or a board: the battery part a wire reaches it from, the wire's resistance, the volts at its terminals and the current it drew last tick. */
+interface Supply {
+  battery: string | null;
+  wire: number;
+  at: number;
+  V: number;
+  I: number;
+}
+
+/** A command a board put on a lead for one tick: nothing else makes a servo's aim. */
+interface Command {
+  tick: number;
+  board: string;
+  lead: string;
+  aim: number;
 }
 
 /** A battery's state: the pack its part is, its charge, and what it gives now. */
@@ -526,6 +553,11 @@ export class PhysicsWorld {
   /** Motor drives' electrical state by joint, batteries' by part. */
   private drives = new Map<string, DriveRec>();
   private cells = new Map<string, CellRec>();
+  /** What feeds each servo and board, by part; the command on each servo (by its part) for the tick to come; each board's power and its own clock. */
+  private supply = new Map<string, Supply>();
+  private commands = new Map<string, Command>();
+  private boardsOn = new Map<string, boolean>();
+  private clocks = new Map<string, number>();
   private events: PhysicsEvent[] = [];
   private slotVersion = 1;
   private slotsDirty = true;
@@ -634,13 +666,14 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // ops
 
-  apply(op: PhysicsOp) {
+  apply(op: PhysicsOp): Refusal | void {
     // anything changed from outside (a load, a part, a hand, a switch): every magnetic pair is watched again closely
     this.magnetRest.clear();
     switch (op.op) {
       case 'environment': return this.setEnvironment(op.boxes, op.materials);
       case 'terrain': return this.setTerrain(op.field, op.material);
       case 'clear': return this.clear();
+      case 'construct': return this.construct(op.parts, op.conns);
       case 'upsertPart': return this.upsertPart(op.part, op.material, op.keepLivePose);
       case 'removePart': return this.removePart(op.id);
       case 'upsertConnection': return this.upsertConnection(op.conn, op.materials);
@@ -931,10 +964,53 @@ export class PhysicsWorld {
     return [[lv.GetX(), lv.GetY(), lv.GetZ()], [av.GetX(), av.GetY(), av.GetZ()]];
   }
 
-  upsertPart(part: Part, material: Material, keepLivePose: boolean) {
+  /**
+   * A construction as one: its parts and joints enter together and are judged whole, overlaps last, with the bores
+   * its joints declare known (a shaft in a bearing, a body in a clamp). Refused, nothing of it stays.
+   */
+  private constructing = false;
+
+  construct(parts: { part: Part; material: Material }[], conns: { conn: Connection; materials: Record<string, Material> }[]): Refusal | void {
+    const added: string[] = [], joined: string[] = [];
+    this.constructing = true;
+    try { return this.constructAll(parts, conns, added, joined); } finally { this.constructing = false; }
+  }
+
+  private constructAll(parts: { part: Part; material: Material }[], conns: { conn: Connection; materials: Record<string, Material> }[], added: string[], joined: string[]): Refusal | void {
+    const undo = (r: Refusal) => {
+      for (const id of joined) this.removeConnection(id);
+      for (const id of added) this.removePart(id);
+      this.events.push({ type: 'refused', what: r.what, id: r.id, law: r.law, note: r.reason });
+      return r;
+    };
+    for (const { part, material } of parts) {
+      const fresh = !this.parts.has(part.id);
+      const r = this.upsertPart(part, material, false, false);
+      if (r) return undo(r);
+      if (fresh) added.push(part.id);
+    }
+    for (const { conn, materials } of conns) {
+      const fresh = !this.conns.has(conn.id);
+      const r = this.upsertConnection(conn, materials);
+      if (r) return undo(r);
+      if (fresh) joined.push(conn.id);
+    }
+    for (const id of added) {
+      const pr = this.parts.get(id)!;
+      const r = judgePart(this.standing(), { ...pr.part, pose: this.virtualPose(pr) });
+      if (r) return undo(r);
+    }
+  }
+
+  upsertPart(part: Part, material: Material, keepLivePose: boolean, overlaps = true): Refusal | void {
+    const existing = this.parts.get(part.id);
+    // the intake: a part this world does not hold passes the construction gate against what stands here, live
+    if (!existing) {
+      const r = judgePart(this.standing(material), part, undefined, { overlaps });
+      if (r) { if (overlaps) this.events.push({ type: 'refused', what: 'part', id: part.id, law: r.law, note: r.reason }); return r; }
+    }
     this.topology++;
     const J = this.J;
-    const existing = this.parts.get(part.id);
     const kind = getPartKind(part.kind);
     const params = effectiveParams(kind, part.params, material);
     const layout = segmentLayout(kind, params);
@@ -1078,6 +1154,10 @@ export class PhysicsWorld {
     this.destroyPartBodies(pr);
     for (const s of slots) this.freeSlot(s);
     this.parts.delete(id);
+    this.supply.delete(id);
+    this.commands.delete(id);
+    this.boardsOn.delete(id);
+    this.clocks.delete(id);
   }
 
   private poseOf(r: BodyRec): Pose {
@@ -1419,7 +1499,9 @@ export class PhysicsWorld {
       if (length(seat) > SEATED) continue;
       (byBody.get(c.a) ?? byBody.set(c.a, []).get(c.a)!).push(c);
       (byBody.get(c.b) ?? byBody.set(c.b, []).get(c.b)!).push(c);
-      if ((c.a.body.IsActive() || c.b.body.IsActive()) && Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass)) seeds.push(c.a, c.b);
+      // a servo's joint is always re-solved here (its loop on the true inertia of both sides, servoRow): Jolt's own
+      // motor, on a 9 g case screwed to the bench against a 54 g arm, ran the arm away to its stop
+      if ((c.a.body.IsActive() || c.b.body.IsActive()) && (c.derived.revolute?.servo || Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass))) seeds.push(c.a, c.b);
     }
     if (!this.clusters.length && !seeds.length) return;
     // islands with no assembly get their heaviest part as the root the mechanism is closed out from
@@ -1748,13 +1830,14 @@ export class PhysicsWorld {
     }
     // iterated to convergence (a heavy load on a light bonded part needs more passes than a lone part), within a cap
     solveRows(rows, 40, this.warm, 1e-5);
-    // a servo's work is a source's work (F-2.2 is open for it: there is no store behind it yet, docs/FRONTIER.md
-    // D-servo-source). What each drive put into each body is kept for the observers: motion with a cause is motion a
+    // what each servo's drive gave (its impulse, its work) is gathered on the joint: the pack it is wired to pays for it
+    // (settleDrives). What each drive put into each body is kept for the observers: motion with a cause is motion a
     // drive paid for.
     for (const r of rows) {
       const tag = r.tag as RowTag;
-      if (tag?.kind !== 'drive' || !r.work) continue;
-      this.book.work.servos += r.work;
+      if (tag?.kind !== 'drive') continue;
+      if (tag.conn) { tag.conn.servoImpulse += Math.abs(r.acc); tag.conn.servoWork += r.work ?? 0; }
+      if (!r.work) continue;
       this.noteDriveWork(tag.ma, r.work / 2);
       this.noteDriveWork(tag.mb, r.work / 2);
     }
@@ -2393,11 +2476,16 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // connections
 
-  upsertConnection(conn: Connection, materials: Record<string, Material>) {
+  upsertConnection(conn: Connection, materials: Record<string, Material>): Refusal | void {
     const pa = this.parts.get(conn.a.part);
     const pb = conn.b ? this.parts.get(conn.b.part) ?? null : null;
     if (!pa || (conn.b && !pb)) return;
     const prev = this.conns.get(conn.id);
+    // the intake: a connection this world does not hold passes the construction gate against what stands here, live
+    if (!prev) {
+      const r = judgeConnection(this.standing(), conn);
+      if (r) { if (!this.constructing) this.events.push({ type: 'refused', what: 'connection', id: conn.id, law: r.law, note: r.reason }); return r; }
+    }
     if (prev) this.destroyConstraint(prev);
     const kind = getConnectorKind(conn.kind);
     const rec: ConnRec = {
@@ -2406,25 +2494,31 @@ export class PhysicsWorld {
       status: conn.state.status, over: 0, slipTicks: 0, cure: prev?.cure ?? conn.state.cure, lastDerive: this.time,
       load: { id: conn.id, u: 0, mode: '', axial: 0, shear: 0, bending: 0, torsion: 0, extent: 0 },
       springRigid: false, omega: 0, bandRest: 0, materials, lastPositionLambda: 0, pairKeys: [], corrF: [0, 0, 0], corrT: [0, 0, 0], worldB: null,
+      servoImpulse: prev?.servoImpulse ?? 0, servoWork: prev?.servoWork ?? 0, servoTorque: prev?.servoTorque ?? 0, servoScale: prev?.servoScale ?? 0,
     };
     this.resolveEnds(rec);
     rec.derived = this.derive(rec);
     this.conns.set(conn.id, rec);
-    // a joint can only be where the parts are: one across a gap (an axle nobody made, a pin through air) holds nothing
-    let gap = unreachable(kind.model, kind.label, pa.part, pa.material, conn.a.frame, pb?.part ?? null, pb?.material ?? null, conn.b?.frame ?? null);
-    // and a new joint's two ends meet: each on its part but apart from each other would be an invisible rod
-    if (!gap && !prev && pb && !spans(kind.model)) {
-      const apart = length(sub(this.anchorWorldB(rec).p, this.anchorWorld(rec).p));
-      if (apart > REACH) gap = `The ${kind.label.toLowerCase()}'s two ends are ${Math.round(apart * 1000)} mm apart: nothing physical joins them. Make it where the parts touch.`;
-    }
-    // and a bought item takes only the joints its maker allows (R11): nothing is drilled into a motor or a battery
-    gap ??= boughtRefusal(pa.kind, kind.id, kind.label) ?? (pb ? boughtRefusal(pb.kind, kind.id, kind.label) : null);
-    const instant = gap ?? rec.derived.instantFailure;
+    // what was admitted can still come to fail as its parts change under it (a re-derivation of one already here)
+    const instant = rec.derived.instantFailure;
     if (rec.status !== 'broken' && instant) {
       rec.status = 'broken';
       this.events.push({ type: 'break', conn: rec.id, mode: 'instant', load: 0, capacity: 0, point: this.anchorWorld(rec).p, note: instant });
     }
     this.buildConstraint(rec);
+  }
+
+  /** What stands in this world as the construction gate sees it: every part where it is now, every connection, the materials in use. */
+  private standing(extra?: Material): Standing {
+    return {
+      parts: () => [...this.parts.values()].map((pr) => ({ ...pr.part, pose: this.virtualPose(pr) })),
+      connections: () => [...this.conns.values()].map((c) => c.conn),
+      material: (id) => {
+        if (extra && extra.id === id) return extra;
+        for (const pr of this.parts.values()) if (pr.segs[0]!.material.id === id) return pr.segs[0]!.material;
+        try { return getMaterial(id); } catch { return undefined; }
+      },
+    };
   }
 
   /** Attach each endpoint to the body (segment) under it, with the frame in that body's coordinates. */
@@ -2476,6 +2570,7 @@ export class PhysicsWorld {
       distance: length(sub(wb.p, wa.p)),
       cure: this.sim.cureClock <= 0 ? 1e12 : c.cure,
       partA: { kind: c.pa.kind.id, params: c.pa.part.params },
+      partB: c.pb ? { kind: c.pb.kind.id, params: c.pb.part.params } : undefined,
     });
   }
 
@@ -2948,8 +3043,10 @@ export class PhysicsWorld {
    * less ahead the faster it turns. The angle is measured as limitRows measures it, from the tick's start.
    */
   private servoRow(c: ConnRec, a: Entity, b: Entity, ha: Pose, hb: Pose, axis: Vec3, dt: number, key: string): Row | null {
-    const sv = c.derived.revolute?.servo;
-    if (!sv || c.aim === undefined || c.status === 'broken') return null;
+    const sv0 = c.derived.revolute?.servo;
+    if (!sv0 || c.aim === undefined || c.status === 'broken' || !(c.servoScale > 0)) return null;
+    // its stall and its speed at the volts its pack gives it (a DC motor's both scale with voltage)
+    const sv = { ...sv0, maxTorque: sv0.maxTorque * c.servoScale, speed: sv0.speed * c.servoScale };
     // its loop on what it really turns: the links, with its own rotor geared down onto them (rotorInertia)
     const loop = servoLoop(this.ownAxisInertia(c), sv);
     const angle = dot(rotationVector(quatMul(hb.q, quatConj(ha.q))), axis);
@@ -2959,7 +3056,7 @@ export class PhysicsWorld {
     c.servoRowAt = this.ticks;
     return {
       a, b, kind: 'angular', pa: [0, 0, 0], pb: [0, 0, 0], dir: axis, target: -(bias / dt) * (angle - c.aim), soft: gamma,
-      lo: rate < 0 ? -ahead : -all, hi: rate > 0 ? ahead : all, acc: 0, tag: { kind: 'drive', ma: c.a, mb: c.b } satisfies RowTag, key: `${key}:servo`,
+      lo: rate < 0 ? -ahead : -all, hi: rate > 0 ? ahead : all, acc: 0, tag: { kind: 'drive', ma: c.a, mb: c.b, conn: c } satisfies RowTag, key: `${key}:servo`,
     };
   }
 
@@ -3878,9 +3975,15 @@ export class PhysicsWorld {
         this.r1.Set(cx, f.max[1], cz);
         this.v1.Set(0, 1, 0);
         const bodyDensity = r.mass / r.volume;
+        // the drag is of the motion the body had, read before the buoyancy impulse: that impulse is a step's worth
+        // of lift put on the velocity at once, which a light part joined to a heavy one never keeps (the joint
+        // shares it out within the step), and drag taken from it ate the lift. Found when a foam plate screwed to
+        // a steel rail sank though together they were lighter than the water they displaced.
+        const lv = this.bi.GetLinearVelocity(r.body.GetID());
+        const had: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
         const wetNow = this.bi.ApplyBuoyancyImpulse(r.body.GetID(), this.r1, this.v1, f.density / bodyDensity, 0.5, 0.05, this.v2, g, dt);
         if (wetNow) {
-          this.waterDrag(r, f.density, Math.min(1, Math.max(0, (f.max[1] - mn.GetY()) / Math.max(1e-6, mx.GetY() - mn.GetY()))), dt);
+          this.waterDrag(r, f.density, Math.min(1, Math.max(0, (f.max[1] - mn.GetY()) / Math.max(1e-6, mx.GetY() - mn.GetY()))), dt, had);
           wet = true;
           if (!r.inFluid) {
             const vy = this.bi.GetLinearVelocity(r.body.GetID()).GetY();
@@ -3899,10 +4002,8 @@ export class PhysicsWorld {
    * undulating body swim (resistive force theory), each segment pushing the water back and the body forward as a wave
    * runs down it. The force can at most stop the part in a step, never reverse it.
    */
-  private waterDrag(r: BodyRec, rho: number, wetShare: number, dt: number) {
+  private waterDrag(r: BodyRec, rho: number, wetShare: number, dt: number, v: Vec3) {
     if (wetShare <= 0) return;
-    const lv = r.body.GetLinearVelocity();
-    const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
     const speed = length(v);
     if (speed < 1e-4) return;
     const q = r.body.GetRotation();
@@ -4015,34 +4116,47 @@ export class PhysicsWorld {
           }
         }
       } else if (rv.servo) {
-        const sv = rv.servo;
-        if (c.sizedAt !== this.topology) {
-          // the loop on the inertia it really turns, re-sized whenever what is joined to what changes
-          c.sizedAt = this.topology;
-          const loop = servoLoop(this.ownAxisInertia(c), sv);
-          const ss = h.GetMotorSettings().mSpringSettings;
-          ss.mStiffness = loop.k;
-          ss.mDamping = loop.c;
-        }
-        // its own rhythm, or its control channel, about its centre
-        const beat = Math.sin(2 * Math.PI * sv.rhythm * this.time + sv.phase);
-        const u = sv.rhythm > 0 ? (sv.wave === 'lift' ? Math.max(0, beat) : beat) : Math.max(-1, Math.min(1, this.channels[sv.channel] ?? 0));
-        const want = this.amplitude.get(c.id) ?? 1, had = this.swing.get(c.id) ?? want;
-        const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
-        this.swing.set(c.id, now);
-        c.aim = sv.offset + now * u * sv.swing;
-        h.SetTargetAngle(c.aim);
-        // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing at
-        // its no-load speed; it can always brake with all it has
+        const sv0 = rv.servo;
+        // what its pack gives it (solveCircuits: the volts at its terminals, through the wire from a battery that holds
+        // charge), as a fraction of its rated volts: none, and the servo is a gear train with nothing behind it
+        const sup = this.supply.get(c.pa.id);
+        const scale = sup && sup.battery && sup.V > 0 ? Math.min(1.25, sup.V / sv0.volts) : 0;
+        // the command on its lead, made by a powered board at the end of last tick for this one, and by nothing else
+        const cmd = this.commands.get(c.pa.id);
+        const commanded = !!cmd && this.commandValid(cmd, c);
+        c.servoScale = scale;
         const ms = h.GetMotorSettings();
-        const ahead = sv.maxTorque * Math.max(0, 1 - Math.abs(wrel) / sv.speed);
-        ms.mMaxTorqueLimit = wrel > 0 ? ahead : sv.maxTorque;
-        ms.mMinTorqueLimit = wrel < 0 ? -ahead : -sv.maxTorque;
-        // where the re-solve drove it last tick on the true inertia of both sides, it drives it again: Jolt's own motor,
-        // which sees only the one light body the joint touches (a bracket bolted to a heavy base), stays off
-        const off = c.servoRowAt === this.ticks - 1;
-        if (off !== !!c.motorOff) { h.SetMotorState(off ? this.J.EMotorState_Off : this.J.EMotorState_Position); c.motorOff = off; }
-        if (Math.abs(u) > 0.01 || sv.rhythm > 0 || sv.offset !== 0) { this.bi.ActivateBody(c.a.body.GetID()); if (c.b) this.bi.ActivateBody(c.b.body.GetID()); }
+        if (scale <= 0 || !commanded) {
+          c.aim = undefined;
+          if (c.motorOff !== true) { h.SetMotorState(this.J.EMotorState_Off); c.motorOff = true; }
+          ms.mMinTorqueLimit = 0;
+          ms.mMaxTorqueLimit = 0;
+        } else {
+          const sv = { ...sv0, maxTorque: sv0.maxTorque * scale, speed: sv0.speed * scale };
+          if (c.sizedAt !== this.topology || Math.abs(scale - (c.loopScale ?? -1)) > 0.02) {
+            // the loop on the inertia it really turns, re-sized whenever what is joined to what changes, or its volts do
+            c.sizedAt = this.topology;
+            c.loopScale = scale;
+            const loop = servoLoop(this.ownAxisInertia(c), sv);
+            const ss = ms.mSpringSettings;
+            ss.mStiffness = loop.k;
+            ss.mDamping = loop.c;
+          }
+          const lim = rv.limits ?? [-Math.PI, Math.PI];
+          c.aim = Math.max(lim[0], Math.min(lim[1], sv.offset + cmd!.aim));
+          h.SetTargetAngle(c.aim);
+          // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing
+          // at its no-load speed; it can always brake with all it has
+          const ahead = sv.maxTorque * Math.max(0, 1 - Math.abs(wrel) / sv.speed);
+          ms.mMaxTorqueLimit = wrel > 0 ? ahead : sv.maxTorque;
+          ms.mMinTorqueLimit = wrel < 0 ? -ahead : -sv.maxTorque;
+          // where the re-solve drove it last tick on the true inertia of both sides, it drives it again: Jolt's own
+          // motor, which sees only the one light body the joint touches (a bracket bolted to a heavy base), stays off
+          const off = c.servoRowAt === this.ticks - 1;
+          if (off !== !!c.motorOff) { h.SetMotorState(off ? this.J.EMotorState_Off : this.J.EMotorState_Position); c.motorOff = off; }
+          this.bi.ActivateBody(c.a.body.GetID());
+          if (c.b) this.bi.ActivateBody(c.b.body.GetID());
+        }
       } else if (rv.eddy) {
         // Viscous brake realised implicitly: a velocity motor to zero whose torque budget removes exactly the
         // momentum an exponential decay w(t) = w0 exp(-c t / I) would over this tick (stable for any c / I).
@@ -4205,6 +4319,8 @@ export class PhysicsWorld {
     lap('magnets');
     this.time += dt;
     this.ticks++;
+    // the boards' programs for the tick to come, on what this tick left them (one tick of latency)
+    this.runBoards(dt);
     // constraint impulses are those of the last substep
     this.evaluateConnections(dt, this.lastSubsteps);
     this.watchJoints();
@@ -4329,9 +4445,45 @@ export class PhysicsWorld {
     return w;
   }
 
-  /** Every pack with the motors on it, solved for this substep. */
+  /** What feeds a servo or a board: the battery an intact power wire reaches it from, worked out again whenever what is joined to what changes. */
+  private supplyOf(pr: PartRec): Supply {
+    let sup = this.supply.get(pr.part.id);
+    if (!sup) { sup = { battery: null, wire: 0, at: -1, V: 0, I: 0 }; this.supply.set(pr.part.id, sup); }
+    if (sup.at === this.topology) return sup;
+    sup.at = this.topology;
+    sup.battery = null;
+    sup.wire = 0;
+    for (const w of this.conns.values()) {
+      if (w.kind.id !== 'wire' || w.status === 'broken' || !w.pb) continue;
+      const other = w.pa === pr ? w.pb : w.pb === pr ? w.pa : null;
+      if (!other || other.kind.id !== 'battery') continue;
+      sup.battery = other.id;
+      sup.wire = w.derived.wire?.resistance ?? 0;
+      break;
+    }
+    return sup;
+  }
+
+  /**
+   * A command stands only if it was made for this tick by a board that is here and powered, down an intact lead from
+   * that board to this servo: a command from anywhere else, or for any other tick, is nothing.
+   */
+  private commandValid(cmd: Command, c: ConnRec): boolean {
+    if (cmd.tick !== this.ticks) return false;
+    const board = this.parts.get(cmd.board);
+    if (!board || !this.boardsOn.get(cmd.board)) return false;
+    const lead = this.conns.get(cmd.lead);
+    return !!lead && lead.kind.id === 'signal' && lead.status === 'intact' && lead.pa === board && lead.pb === c.pa;
+  }
+
+  /** Every pack with what is wired to it (motors on their controllers, servos, boards), solved for this substep. */
   private solveCircuits() {
-    const on = new Map<string, { d: DriveRec; load: Load }[]>();
+    const on = new Map<string, { load: Load; take: (I: number, V: number) => void }[]>();
+    const put = (battery: string, entry: { load: Load; take: (I: number, V: number) => void }) => {
+      const list = on.get(battery) ?? [];
+      list.push(entry);
+      on.set(battery, list);
+    };
     for (const c of this.conns.values()) {
       const m = c.derived.revolute?.motor;
       if (!m || c.status === 'broken' || !c.typed || c.pa.kind.id !== 'motor.dc') { if (this.drives.has(c.id) && !m) this.drives.delete(c.id); continue; }
@@ -4346,22 +4498,32 @@ export class PhysicsWorld {
       if (!d.battery) continue;
       const N = d.gear?.ratio ?? 1;
       const load: Load = { model: d.model, u: d.u, w: d.w * N, R: windingR(d.model, d.heat.winding) + d.wire, limit: m.currentLimit, dead: d.burnt };
-      const list = on.get(d.battery) ?? [];
-      list.push({ d, load });
-      on.set(d.battery, list);
+      put(d.battery, { load, take: (I) => { d.I = I; } });
+    }
+    // servos and boards draw their own current: a servo what its torque last tick took, a board its idle draw
+    for (const pr of this.parts.values()) {
+      const k = pr.kind.id;
+      if (k !== 'servo' && k !== 'controller' && k !== 'receiver') continue;
+      const sup = this.supplyOf(pr);
+      if (!sup.battery) { sup.V = 0; sup.I = 0; continue; }
+      const spec = k === 'controller' ? CONTROLLER_BOARD : k === 'receiver' ? RECEIVER_BOARD : null;
+      const load: Load = spec ? { fixed: spec.idleCurrent, minVolts: spec.minVolts } : { fixed: sup.I, minVolts: 0 };
+      put(sup.battery, { load, take: (I, V) => { sup.V = Math.max(0, V - I * sup.wire); if (spec) sup.I = I; } });
     }
     for (const [id, list] of on) {
       const cell = this.cellOf(id);
-      if (!cell) { for (const x of list) x.d.battery = null; continue; }
+      if (!cell) { for (const x of list) x.take(0, 0); continue; }
       const r = solvePack(cell.pack, cell.soc, list.map((x) => x.load));
       cell.V = r.V;
-      list.forEach((x, k) => { x.d.I = r.currents[k]!; });
+      list.forEach((x, k) => x.take(r.currents[k]!, r.V));
       if (r.flat && !cell.flat) {
         const pr = this.parts.get(id)!;
         this.events.push({ type: 'flat', part: id, point: this.poseOf(pr.segs[0]!).p, note: `The battery is flat: at ${Math.round(cell.soc * 100)}% it can't hold its voltage up under the load.` });
       }
       cell.flat = r.flat;
     }
+    // a supply whose battery part is gone feeds nothing
+    for (const sup of this.supply.values()) if (sup.battery && !this.parts.has(sup.battery)) { sup.battery = null; sup.V = 0; sup.I = 0; }
   }
 
   /** The most torque a drive gives at its output at output speed w: its current through its gearhead, or its drag. */
@@ -4470,12 +4632,86 @@ export class PhysicsWorld {
       this.bookDrive(c, d.impulse / dt, (d.w + w) / 2, dt);
       d.impulse = 0;
     }
+    // each servo: the torque it gave over the tick took a current from its pack (its motor's, through its gears: idle
+    // to stall in proportion), and what of that did not turn its horn warmed its case
+    for (const c of this.conns.values()) {
+      const sv = c.derived.revolute?.servo;
+      if (!sv || c.status === 'broken' || !c.typed || c.pa.kind.id !== 'servo') continue;
+      const tau = c.servoImpulse / dt, work = c.servoWork;
+      c.servoImpulse = 0;
+      c.servoWork = 0;
+      c.servoTorque = tau;
+      const sup = this.supply.get(c.pa.id);
+      const cell = sup?.battery ? this.cells.get(sup.battery) : undefined;
+      let I = 0;
+      if (sup && cell && !cell.flat && sup.V > 0) {
+        const stall = sv.maxTorque * c.servoScale;
+        I = c.aim === undefined ? sv.idleCurrent : sv.idleCurrent + (sv.stallCurrent - sv.idleCurrent) * Math.min(1, stall > 0 ? tau / stall : 0);
+      }
+      if (sup) sup.I = I;
+      if (!(I > 0) || !sup || !cell) continue;
+      const Pin = sup.V * I;
+      const wire = I * I * sup.wire * dt;
+      const heat = Math.max(0, Pin * dt - work);
+      const cells = I * I * packR(cell.pack) * dt;
+      this.book.heat.electric += heat + wire + cells;
+      this.book.work.batteries += Pin * dt + wire + cells;
+      this.warmPart(c.pa.segs[0]!, heat);
+      const bp = this.parts.get(sup.battery!);
+      if (bp) this.warmPart(bp.segs[0]!, cells);
+      cell.I += I;
+      cell.soc = drain(cell.pack, cell.soc, I, dt);
+    }
+  }
+
+  /**
+   * Each board's program, run once at the end of the tick for the tick to come: one tick of latency, as a 50 Hz servo
+   * loop has at least. A controller board keeps its own clock while it has power (its program starts over when power
+   * comes back, as a rebooted board's does) and puts on each of its leads what its program says for that servo; a
+   * receiver puts your stick on each of its leads. A board with no power runs nothing; nothing else makes a command.
+   */
+  private runBoards(dt: number) {
+    this.commands.clear();
+    for (const pr of this.parts.values()) {
+      const kind = pr.kind.id;
+      if (kind !== 'controller' && kind !== 'receiver') continue;
+      const id = pr.part.id;
+      const sup = this.supply.get(id);
+      const spec = kind === 'controller' ? CONTROLLER_BOARD : RECEIVER_BOARD;
+      const on = !!sup && !!sup.battery && sup.V >= spec.minVolts;
+      this.boardsOn.set(id, on);
+      if (!on) { this.clocks.set(id, 0); continue; }
+      const clock = (this.clocks.get(id) ?? 0) + dt;
+      this.clocks.set(id, clock);
+      const rhythm = kind === 'controller' ? Math.max(0, Number(pr.part.params['rhythm'] ?? 0)) : 0;
+      for (const lead of this.conns.values()) {
+        if (lead.kind.id !== 'signal' || lead.status !== 'intact' || lead.pa !== pr || !lead.pb) continue;
+        const sg = lead.derived.signal;
+        if (!sg) continue;
+        let u: number;
+        if (kind === 'receiver') u = Math.max(-1, Math.min(1, this.channels[sg.channel] ?? 0));
+        else { const beat = Math.sin(2 * Math.PI * rhythm * clock + sg.phase); u = sg.wave === 'lift' ? Math.max(0, beat) : beat; }
+        // the program's amplitude for this servo (a mind's stride command, op 'gait', keyed by the horn), followed over
+        // half a second: a stride lengthens or shortens over a step, never at once
+        let key = lead.id;
+        for (const h of this.conns.values()) if (h.kind.id === 'servo' && h.pa === lead.pb) { key = h.id; break; }
+        const want = this.amplitude.get(key) ?? 1, had = this.swing.get(key) ?? want;
+        const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
+        this.swing.set(key, now);
+        this.commands.set(lead.pb.id, { tick: this.ticks, board: id, lead: lead.id, aim: now * u * sg.swing });
+      }
+    }
   }
 
   /** The electrical state for the client: batteries' charge and what they give, motors' current and heat. */
   private powerState(): PowerState | undefined {
-    if (!this.drives.size && !this.cells.size) return undefined;
-    const out: PowerState = { batteries: {}, motors: {} };
+    if (!this.drives.size && !this.cells.size && !this.supply.size) return undefined;
+    const out: PowerState = { batteries: {}, motors: {}, servos: {} };
+    for (const c of this.conns.values()) {
+      if (c.kind.id !== 'servo' || c.pa.kind.id !== 'servo') continue;
+      const sup = this.supply.get(c.pa.id);
+      out.servos![c.id] = { I: sup?.I ?? 0, V: sup?.V ?? 0, torque: c.servoTorque, battery: sup?.battery ?? null, commanded: c.aim !== undefined };
+    }
     for (const [id, cell] of this.cells) if (this.parts.has(id)) out.batteries[id] = { soc: cell.soc, V: cell.V, I: cell.I, flat: cell.flat };
     for (const [id, d] of this.drives) {
       if (!this.conns.has(id)) { this.drives.delete(id); continue; }
@@ -4492,12 +4728,13 @@ export class PhysicsWorld {
   private bookMotors(collisionSteps: number) {
     for (const c of this.conns.values()) {
       const rv = c.derived.revolute;
-      if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy)) continue;
+      if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy || rv.servo)) continue;
       const h = c.typed as JoltNS.HingeConstraint;
       const wrel = this.jointRate(c);
       // the motor's angular impulse each collision step, as a torque on b about the axis
       const T = (h.GetTotalLambdaMotor() * collisionSteps * this.hingeSign(c)) / this.subDt;
       if (rv.motor) { const d = this.drives.get(c.id); if (d) d.impulse += T * this.subDt; }
+      else if (rv.servo) { c.servoImpulse += Math.abs(T) * this.subDt; c.servoWork += T * wrel * this.subDt; }
       else { const work = T * wrel * this.subDt; this.book.heat.eddy -= work; this.warmPart(c.a, -work / 2); if (c.b) this.warmPart(c.b, -work / 2); }
     }
   }

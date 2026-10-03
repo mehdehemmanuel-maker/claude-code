@@ -3,6 +3,7 @@
 // through a 100 mm block never reached the second piece, so the joint fell apart under its own weight.
 
 import { describe, expect, it } from 'vitest';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
 import { at, rig } from './helpers';
 import { axisAngle } from '../../src/doc/math';
 import { getMaterial, MATERIALS, type Material } from '../../src/data/materials';
@@ -97,7 +98,8 @@ describe('joined parts stay joined', () => {
     const p = r.part('block', at(0, 1, 0), { frozen: true, material: post, params: { x: 0.1, y: 0.1, z: 0.1 } });
     const b = r.part(arm.kind, at(0.35, 1, 0), { material: arm.material, params: { ...arm.params, length: 0.6 } });
     const j = join(g);
-    const c = r.connect(j.kind, { part: p, frame: at(0.05, 0, 0, toX) }, { part: b, frame: at(-0.3, 0, 0, toX) }, j.params as never);
+    let c;
+    try { c = r.connect(j.kind, { part: p, frame: at(0.05, 0, 0, toX) }, { part: b, frame: at(-0.3, 0, 0, toX) }, j.params as never); } catch (e) { r.done(); throw e; }
     r.run(3);
     const status = r.world.connectionStatus(c.id);
     const droop = 1 - r.pos(b)[1];
@@ -118,9 +120,11 @@ describe('joined parts stay joined', () => {
     expect(res.status).toBe('intact');
   });
 
-  it('a 40 mm screw through a 100 mm post never reaches the arm: that joint falls apart, as it would', async () => {
-    const res = await cantilever(beam, 'wood.douglas-fir', () => ({ kind: 'screwed', params: { bondW: 0.089, bondL: 0.038 } }), beamOnPost);
-    expect(res.status).toBe('broken');
+  it('a 40 mm screw through a 100 mm post never reaches the arm: that joint is not made (K-9)', async () => {
+    let no: ConstructionRefused | null = null;
+    try { await cantilever(beam, 'wood.douglas-fir', () => ({ kind: 'screwed', params: { bondW: 0.089, bondL: 0.038 } }), beamOnPost); } catch (e) { if (e instanceof ConstructionRefused) no = e; else throw e; }
+    expect(no?.refusal.law).toBe('K-9');
+    expect(no?.refusal.reason).toMatch(/A 40 mm screw can't reach through 100 mm/);
   });
 
   it('a steel plate welded to a steel post holds', async () => {

@@ -1,5 +1,6 @@
 // Tools: the hands of the sandbox. Each tool reacts to rays (mouse or VR controller) the same way.
 
+import { ConstructionRefused } from '../ganglia/tree/gate';
 import * as THREE from 'three';
 import type { App } from '../app/app';
 import type { Workshop } from '../app/workshop';
@@ -391,7 +392,15 @@ class PlaceTool implements Tool {
       return;
     }
     const { kind, params, matId } = this.spec();
-    const part = addPart(this.app.store, { kind: kind.id, pose, params, material: matId, frozen: this.app.settings.placeFrozen });
+    let part;
+    try {
+      part = addPart(this.app.store, { kind: kind.id, pose, params, material: matId, frozen: this.app.settings.placeFrozen });
+    } catch (err) {
+      if (!(err instanceof ConstructionRefused)) throw err;
+      this.app.toast(`Can't be placed: ${err.refusal.reason}`, 'warn');
+      this.app.audio.ui('error');
+      return;
+    }
     this.app.select([part.id]);
     this.app.audio.ui('place', pose.p);
     this.app.haptic?.(0.2, 15);
@@ -604,7 +613,7 @@ class JoinTool implements Tool {
         }
         made = makeRigidJoin(this.app, at, { part: bId, seg: pick.seg }, requested, this.jointFrame(at.normal));
       } catch (err) {
-        if (!(err instanceof JoinRefused) && !(err instanceof Error && /aren't touching/.test(err.message))) throw err;
+        if (!(err instanceof JoinRefused) && !(err instanceof ConstructionRefused) && !(err instanceof Error && /aren't touching/.test(err.message))) throw err;
         this.first = null;
         this.app.view.setMarkers([]);
         this.app.toast(err.message, 'warn');

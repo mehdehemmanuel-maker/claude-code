@@ -132,7 +132,7 @@ describe('walkers', () => {
       expect(understand(q).acts.some((a) => 'walker' in a), q).toBe(true);
     }
     expect(understand('put a dog on the beach').acts).toEqual([{ place: 'put a dog on the beach' }, { walker: 'put a dog on the beach' }]);
-    expect(understand('add a deer').says).toMatch(/deer-shaped on the ground near you/);
+    expect(understand('add a deer').says).toMatch(/long-legged .* robot walker .* on the ground near you/);
     expect(understand('spawn me in a simulation as a dog').acts).toEqual([]);
     // sky-whales still wait on creatures that fly; the deer among them can be put there now
     const u = understand('Populate this empty forest with friendly, glowing sky-whales and neon deer.');

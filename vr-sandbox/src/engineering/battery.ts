@@ -14,10 +14,17 @@ export interface Pack {
   parallel: number;
 }
 
-/** Open-circuit volts of one cell at state of charge `soc` (0 flat, 1 charged). */
-export const cellOCV = (soc: number) => 0.85 + 1.1 + 0.2 * Math.max(0, Math.min(1, soc));
+/**
+ * Open-circuit volts of one cell at state of charge `soc` (0 flat, 1 charged), by its chemistry: a lead-acid cell
+ * 1.95 to 2.15 V (its acid's strength sets it), a nickel-metal-hydride cell about 1.25 V over most of its charge,
+ * rising to 1.40 V full (the curve's shape an estimate: the plateau is what the chemistry gives).
+ */
+export const cellOCV = (chemistry: BatteryData['chemistry'], soc: number) => {
+  const x = Math.max(0, Math.min(1, soc));
+  return chemistry === 'nimh' ? 1.25 + 0.15 * x * x : 0.85 + 1.1 + 0.2 * x;
+};
 
-export const packOCV = (p: Pack, soc: number) => p.series * p.data.cells * cellOCV(soc);
+export const packOCV = (p: Pack, soc: number) => p.series * p.data.cells * cellOCV(p.data.chemistry, soc);
 export const packR = (p: Pack) => (p.series * p.data.internalR) / p.parallel;
 
 /** Points of the maker's table as (current A, capacity Ah, end volts per cell), fastest first. */

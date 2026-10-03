@@ -1,6 +1,7 @@
 // Entry point. The app runs in a Meta Quest headset; this page boots physics and the scene, then offers to enter VR
 // (a WebXR session can only start from a button press). Everything else happens in the headset.
 
+import { TEMPLATES } from './templates/templates';
 import { App, REPORT_REPO } from './app/app';
 import { ToolManager } from './tools/tools';
 import { Ego } from './assistant/ego';
@@ -18,7 +19,7 @@ async function main() {
   const tools = new ToolManager(app);
   // the assistant: she sees the world, learns your habits, and runs Forge
   app.ego = new Ego(app, tools);
-  const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null };
+  const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null, templates: TEMPLATES };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
   app.everyFrame('tools', (dt) => tools.frame(dt));
   // behind the launch card, a still view into the workshop

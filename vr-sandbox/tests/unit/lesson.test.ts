@@ -29,9 +29,10 @@ describe('a lesson from a design', () => {
     const l = lessonFrom('a table', plan.forge, sim);
     const you = new Bench(sim);
     const host = new BuildHost(you);
-    // the first part, but half a metre off its guide
+    // the first part, but two metres off its guide (and clear of where the table goes: a part left in the way would
+    // stop the build, as two solids cannot share space)
     const first = (l.steps[0] as any).target;
-    host.place(first.kind, first.params, first.material, [first.pose.p[0] + 0.5, first.pose.p[1], first.pose.p[2]], [], undefined);
+    host.place(first.kind, first.params, first.material, [first.pose.p[0] + 2, first.pose.p[1], first.pose.p[2]], [], undefined);
     expect(advance(you, l, false, 0).done.length).toBe(0);
     // now built as the design says (by the same Forge, into your world)
     const r = run(plan.forge, host);

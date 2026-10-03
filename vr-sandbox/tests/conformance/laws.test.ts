@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { at, rig, within } from './helpers';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
 import { axisAngle, length, sub } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
@@ -330,13 +331,15 @@ describe('fasteners fail at their real capacities', () => {
     r.done();
   });
 
-  it('aluminium cannot be fusion welded to steel', async () => {
+  it('aluminium cannot be fusion welded to steel: the weld is not made (K-9)', async () => {
     const r = await rig({}, false);
     const a = r.part('plate', at(0, 1, 0), { material: 'aluminum.6061-t6' });
     const s = r.part('plate', at(0, 1.006, 0), { material: 'steel.a36' });
-    const weld = r.connect('weld', { part: a, frame: at(0, 0.003, 0) }, { part: s, frame: at(0, -0.003, 0) });
-    r.run(0.1);
-    expect(r.world.connectionStatus(weld.id)).toBe('broken');
+    let no: ConstructionRefused | null = null;
+    try { r.connect('weld', { part: a, frame: at(0, 0.003, 0) }, { part: s, frame: at(0, -0.003, 0) }); } catch (e) { if (e instanceof ConstructionRefused) no = e; else throw e; }
+    expect(no?.refusal.law).toBe('K-9');
+    expect(no?.refusal.reason).toMatch(/cannot be fusion welded/);
+    expect(r.world.connectionStatus('nothing')).toBeUndefined();
     r.done();
   });
 

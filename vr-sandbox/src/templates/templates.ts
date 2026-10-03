@@ -5,6 +5,8 @@ import { newDoc } from '../doc/commands';
 import type { BuildDoc } from '../doc/types';
 import { poolFluid, POOL } from '../physics/environment';
 import { BuildBuilder, P, along, axisAngle, rotateAbout } from './builder';
+import { getServo, shaftOf } from '../data/servos';
+import { rotate } from '../doc/math';
 
 export interface Template {
   id: string;
@@ -238,7 +240,8 @@ export const TEMPLATES: Template[] = [
         // the arm: an 8 mm steel tie rod with a rod end at each end, vertical from the clamp's top to the chassis
         const armX = -0.5 + cOff + cx / 2 - 0.005, armBot = hub + cy / 2;
         b.link('link', clamp, [armX, armBot, zArm], chassis, [armX, under, zArm], { diameter: 0.008, stud: 0.008 });
-        const outer = side * 0.39;
+        // the half-axle ends at the wheel's inner face, where the wheel is bolted to its flange
+        const outer = side * 0.33;
         const axle = b.part('rod.round', { p: [-0.5, hub, (zOut + outer) / 2], q: Zq }, { material: 'steel.1018-cd', params: { length: Math.abs(outer - zOut), diameter: 0.025 }, name: side < 0 ? 'Left half-axle' : 'Right half-axle' });
         // mirrored motors: the right one turns the other way about its own shaft for the kart to go forward
         b.joint('motor', motor, axle, along([-0.5, hub, zOut], [0, 0, side]), { channel: 'throttle', reverse: side > 0, currentLimit: 20 });
@@ -247,7 +250,7 @@ export const TEMPLATES: Template[] = [
         b.joint('bolted', hanger, carrier, along([-0.5, crossBot, hz], [0, 1, 0]), { size: 'M6', class: '8.8', count: 2, bondW: cross, bondL: 0.04 });
         b.joint('bearing', axle, hanger, along([-0.5, hub, hz], [0, 0, 1]), { bore: 0.025, staticRating: 8000 });
         const w = b.part('wheel', P(-0.5, hub, side * 0.36, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Rear wheel' });
-        b.joint('bolted', w, axle, along([-0.5, hub, side * 0.36], [0, 0, 1]), { size: 'M6', class: '8.8', count: 4, bondW: 0.05, bondL: 0.05 });
+        b.joint('bolted', w, axle, along([-0.5, hub, side * 0.33], [0, 0, 1]), { size: 'M6', class: '8.8', count: 4, bondW: 0.05, bondL: 0.05 });
         // 1 m of 14 AWG pair from the pack to the motor's terminals at its back, routed with slack
         b.link('wire', battery, [0.2 - 0.151 / 2, 0.21 + 0.0975 / 2, side * 0.03], motor, [-0.5, hub, zBack], { gauge: '14', length: 1.0 });
       }
@@ -256,7 +259,34 @@ export const TEMPLATES: Template[] = [
       const kingpin = b.part('block', P(0.5, (under + hub + 0.025) / 2, 0), { material: 'steel.a36', params: { x: 0.06, y: under - (hub + 0.025), z: 0.06 }, name: 'Kingpin block' });
       b.joint('bolted', kingpin, chassis, along([0.5, under, 0], [0, 1, 0]), { size: 'M8', class: '8.8', count: 4, bondW: 0.06, bondL: 0.06 });
       const bar = b.part('rod.square', P(0.5, hub, 0, Y90), { material: 'steel.1018-cd', params: { length: 0.72, side: 0.05 }, name: 'Steering beam' });
-      b.joint('servo', kingpin, bar, along([0.5, hub + 0.025, 0], [0, 1, 0]), { maxTorque: 80, range: 28 * deg, channel: 'steer', pin: 0.02 });
+      // the beam turns on a 20 mm kingpin in a bearing in the block
+      b.joint('bearing', kingpin, bar, along([0.5, hub + 0.025, 0], [0, 1, 0]), { bore: 0.02, staticRating: 8000 });
+      // steered by a giant (150 kgf cm) servo under the beam, shaft face up, its horn on the beam's underside on the
+      // kingpin's line: with 300 N on the front tyres the beam takes about 7 N m to pivot on the spot (each tyre's
+      // contact twisting against its friction), which a 60 kg servo cannot do (it stalls at 6 N m, FRONTIER
+      // D-tyre-pivot). The large servo
+      // line; the servo is bolted by its far end to a steel post down from the chassis (3 mm of spacer for its
+      // lead), and runs on its own 6-cell pack through a radio receiver, both glued on the chassis: your stick
+      // reaches it down the receiver's lead and nothing else does
+      const sv = getServo('servo.giant-150kg'), [sl, sw, sh] = sv.dims;
+      const UPQ = axisAngle([1, 0, 0], -Math.PI / 2);
+      const hornAt: [number, number, number] = [0.5, hub - 0.025 - sv.horn, 0];
+      const shaftOff = rotate(UPQ, shaftOf(sv).p);
+      const servoAt: [number, number, number] = [hornAt[0] - shaftOff[0], hornAt[1] - shaftOff[1], hornAt[2] - shaftOff[2]];
+      const servo = b.part('servo', { p: servoAt, q: UPQ }, { params: { model: sv.id }, name: 'Steering servo' });
+      b.joint('servo', servo, bar, along(hornAt, [0, 1, 0]), { offset: 0 });
+      const postX = servoAt[0] - sl / 2 - 0.003 - 0.015, postBot = servoAt[1] - sh / 2;
+      const post = b.part('block', P(postX, (postBot + under) / 2, 0), { material: 'steel.a36', params: { x: 0.03, y: under - postBot, z: 0.06 }, name: 'Servo post' });
+      b.joint('bolted', post, chassis, along([postX, under, 0], [0, 1, 0]), { size: 'M8', class: '8.8', count: 2, bondW: 0.03, bondL: 0.06 });
+      b.joint('bolted', servo, post, along([servoAt[0] - sl / 2 - 0.0015, servoAt[1], 0], [-1, 0, 0]), { size: 'M4', class: '8.8', count: 4, bondW: sw, bondL: sh });
+      const spack = b.part('battery', P(0.35, 0.21 + 0.00725, 0.12), { params: { model: 'battery.nimh.aa', series: 6, parallel: 1, charge: 1 }, name: 'Servo pack (6 × AA NiMH)' });
+      b.joint('glued', spack, chassis, along([0.35, 0.21, 0.12], [0, -1, 0]), { adhesive: 'epoxy-structural', bondW: 0.0505, bondL: 0.087 });
+      const rx = b.part('receiver', P(0.35, 0.21 + 0.0025, -0.12), { name: 'Radio receiver' });
+      b.joint('glued', rx, chassis, along([0.35, 0.21, -0.12], [0, -1, 0]), { adhesive: 'epoxy-structural', bondW: 0.03, bondL: 0.02 });
+      const servoLead: [number, number, number] = [servoAt[0] - sl / 2, servoAt[1], servoAt[2]];
+      b.link('wire', spack, [0.35 + 0.02525, 0.21 + 0.00725, 0.12], servo, servoLead, { gauge: '18', length: 0.6 });
+      b.link('wire', spack, [0.35 + 0.02525, 0.21 + 0.00725, 0.12], rx, [0.33, 0.21 + 0.0025, -0.12], { gauge: '18', length: 0.5 });
+      b.link('signal', rx, [0.37, 0.21 + 0.0025, -0.12], servo, servoLead, { swing: 28 * deg, phase: 0, wave: 'sine', channel: 'steer', length: 0.6 });
       for (const z of [-0.36, 0.36]) {
         const w = b.part('wheel', P(0.5, hub, z, wheelQ), { params: { diameter: 0.25, width: 0.06 }, name: 'Front wheel' });
         b.joint('bearing', bar, w, along([0.5, hub, z], [0, 0, 1]), { bore: 0.02, staticRating: 8000 });

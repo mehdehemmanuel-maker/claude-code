@@ -85,7 +85,7 @@ describe('the herd', () => {
     const gaits: Record<string, number>[] = [];
     const parts = new Set(['body']);
     const herd = new Herd({ time: () => time, pose: () => facing(0), exists: (id) => parts.has(id), you: () => [5, 0, 0], dry: () => true, gait: (a) => gaits.push(a) });
-    herd.add('the dog', { parts: ['body'], joints: [], body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'] });
+    herd.add('the dog', { parts: ['body'], joints: [], body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'], board: 'b', pack: 'p' });
     herd.tick();
     herd.tick(); // no time has passed
     expect(gaits.length).toBe(1);

@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Material } from '../data/materials';
 import { getMaterial } from '../data/materials';
-import { getConnectorKind } from '../connectors/registry';
 import { effectiveParams, getPartKind, segmentBodyId, segmentOffset, type SegmentLayout } from '../parts/registry';
 import { endpointWorld, partLayout, segmentPose } from '../app/segments';
 import { length, sub } from '../doc/math';
@@ -17,6 +16,7 @@ import type { LiveState } from '../app/live';
 import type { RoomSurface } from '../physics/protocol';
 import { isFurniture, isWallLike } from '../xr/room';
 import { buildVisual, helixGeometry } from './geometry';
+import { hardwareOf } from './hardware';
 import { ghostBadMaterial, ghostMaterial, highlighted, renderMaterial, stressMaterial, tintMaterial } from './materials';
 
 export interface Pick {
@@ -75,6 +75,8 @@ export class SceneView {
   private markers = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   readonly sun: THREE.DirectionalLight;
+  /** Where the sun is from the player: its shadow box (28 m across) is carried along with the rig each frame (update), or whatever stands away from the origin casts none and seems to float. */
+  private readonly sunDir = new THREE.Vector3();
   /** Everything that makes up the virtual workshop (hidden in mixed reality, where the real room is the world). */
   private workshop: THREE.Object3D[] = [];
   private workshopVisible = true;
@@ -101,6 +103,7 @@ export class SceneView {
     this.scene.environmentIntensity = 0.55;
     this.scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x3a3228, 0.9));
     this.sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
+    this.sunDir.set(6, 12, 5);
     this.sun.position.set(6, 12, 5);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -163,12 +166,13 @@ export class SceneView {
       this.placeFog.near = p.sky.visibility * 0.25;
       this.placeFog.far = p.sky.visibility;
       const el = (p.sun.elevation * Math.PI) / 180, az = (p.sun.azimuth * Math.PI) / 180;
-      this.sun.position.set(30 * Math.cos(el) * Math.sin(az), 30 * Math.sin(el), 30 * Math.cos(el) * Math.cos(az));
+      this.sunDir.set(30 * Math.cos(el) * Math.sin(az), 30 * Math.sin(el), 30 * Math.cos(el) * Math.cos(az));
       this.sun.intensity = p.sun.intensity;
     } else {
-      this.sun.position.set(6, 12, 5);
+      this.sunDir.set(6, 12, 5);
       this.sun.intensity = 2.2;
     }
+    this.sun.position.copy(this.sun.target.position).add(this.sunDir);
     this.showWorld();
     this.pickDirty = true;
   }
@@ -374,7 +378,6 @@ export class SceneView {
   }
 
   private buildGlyph(c: Connection, key: string): ConnView {
-    const kind = getConnectorKind(c.kind);
     const root = new THREE.Group();
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, pos?: [number, number, number], rotX?: number) => {
       const m = new THREE.Mesh(geo, mat);
@@ -385,126 +388,33 @@ export class SceneView {
       root.add(m);
       return m;
     };
-    const steel = tintMaterial(0xb8bec4);
-    const dark = tintMaterial(0x33383d);
-    const p = c.params;
-    let dynamic: ConnView['dynamic'] = 'none';
+    // the joint's hardware is what its template declares (render/hardware), drawn as declared and not otherwise
+    const hw = hardwareOf(c);
+    const dynamic: ConnView['dynamic'] = hw.dynamic;
     let ropeSegments: THREE.Mesh[] | undefined;
-    switch (c.kind) {
-      case 'bolted': {
-        const d = sizeD(String(p['size'] ?? 'M8'));
-        const n = Math.max(1, numberOf(p, 'count', 1));
-        const w = numberOf(p, 'bondW', 0.03), l = numberOf(p, 'bondL', 0.03);
-        for (let i = 0; i < n; i++) {
-          const [x, z] = spread(i, n, w, l);
-          add(new THREE.CylinderGeometry(d * 0.85, d * 0.85, d * 0.65, 6), steel, [x, -d * 0.33, z]);
-          add(new THREE.CylinderGeometry(d * 1.05, d * 1.05, d * 0.18, 16), steel, [x, -d * 0.05, z]);
-        }
-        break;
-      }
-      case 'screwed':
-      case 'nailed':
-      case 'riveted': {
-        const d = numberOf(p, 'diameter', 0.004);
-        const n = Math.max(1, Math.min(24, numberOf(p, 'count', 1)));
-        const w = numberOf(p, 'bondW', 0.03), l = numberOf(p, 'bondL', 0.03);
-        for (let i = 0; i < n; i++) {
-          const [x, z] = spread(i, n, w, l);
-          add(new THREE.SphereGeometry(d * 1.1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), c.kind === 'riveted' ? tintMaterial(0xc6c9cc) : steel, [x, -d * 0.2, z], Math.PI);
-        }
-        break;
-      }
-      case 'weld': {
-        // a fillet bead in the corner along the seam, as wide as the weld and no wider: it follows the outline of
-        // the bond for the weld's length (0 = all round), and reads as a seam, not an object
-        const w = numberOf(p, 'bondW', 0.03), l = numberOf(p, 'bondL', 0.03), leg = numberOf(p, 'leg', 0.005);
-        const r = 0.35 * leg;
-        const corners: [number, number][] = [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2], [-w / 2, -l / 2]];
-        let left = numberOf(p, 'length') > 0 ? numberOf(p, 'length') : 2 * (w + l);
-        const bead = tintMaterial(0x62666b);
-        for (let i = 0; i < 4 && left > 1e-4; i++) {
-          const [x0, z0] = corners[i]!, [x1, z1] = corners[i + 1]!;
-          const run = Math.min(Math.hypot(x1 - x0, z1 - z0), left);
-          if (run < 1e-4) continue;
-          const ux = (x1 - x0) / Math.hypot(x1 - x0, z1 - z0), uz = (z1 - z0) / Math.hypot(x1 - x0, z1 - z0);
-          const m = add(new THREE.CapsuleGeometry(r, run, 3, 8), bead, [x0 + (ux * run) / 2, 0, z0 + (uz * run) / 2]);
+    for (const g of hw.prims) {
+      const mat = g.shape === 'box' && g.opacity !== undefined ? new THREE.MeshStandardMaterial({ color: g.tint, transparent: true, opacity: g.opacity, roughness: 0.2 }) : tintMaterial(g.tint);
+      switch (g.shape) {
+        case 'box': add(new THREE.BoxGeometry(...g.size), mat, g.at); break;
+        case 'cylinder': add(new THREE.CylinderGeometry(g.radius, g.radius, g.height, g.segments ?? 16), mat, g.at); break;
+        case 'dome': add(new THREE.SphereGeometry(g.radius, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat, g.at, Math.PI); break;
+        case 'sphere': add(new THREE.SphereGeometry(g.radius, 16, 12), mat, g.at); break;
+        case 'torus': add(new THREE.TorusGeometry(g.radius, g.tube, 8, 20), mat, g.at, Math.PI / 2); break;
+        case 'helix': add(helixGeometry(g.turns, g.radius, g.wire), mat); break;
+        case 'capsule': {
+          const m = add(new THREE.CapsuleGeometry(g.radius, g.length, 3, 8), mat, g.at);
           m.rotation.set(0, 0, 0);
-          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(ux, 0, uz));
+          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...g.dir));
           m.castShadow = false;
-          left -= run;
+          break;
         }
-        break;
       }
-      case 'glued':
-      case 'soldered': {
-        const w = numberOf(p, 'bondW', 0.03), l = numberOf(p, 'bondL', 0.03);
-        add(new THREE.BoxGeometry(w, 0.0015, l), new THREE.MeshStandardMaterial({ color: c.kind === 'glued' ? 0xe8c04a : 0xc7ccd1, transparent: true, opacity: 0.6, roughness: 0.2 }));
-        break;
-      }
-      case 'fixed':
-        add(new THREE.BoxGeometry(0.012, 0.012, 0.012), tintMaterial(0xd23fd6));
-        break;
-      case 'hinge':
-      case 'bearing':
-      case 'servo':
-      case 'eddy-brake':
-      case 'motor': {
-        const d = numberOf(p, 'pin', numberOf(p, 'bore', 0.01));
-        add(new THREE.CylinderGeometry(d / 2, d / 2, Math.max(0.03, d * 5), 16), steel);
-        if (c.kind === 'servo') add(new THREE.BoxGeometry(0.04, 0.04, 0.02), tintMaterial(0x1c1f22), [0, -0.035, 0]);
-        if (c.kind === 'eddy-brake') {
-          const r = numberOf(p, 'radius', 0.05);
-          for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.02, 0.012, 0.02), tintMaterial(0xc23b22), [r, s * 0.01, 0]);
-        }
-        if (c.kind === 'bearing') add(new THREE.TorusGeometry(d * 0.9, d * 0.35, 8, 20), dark, [0, 0, 0], Math.PI / 2);
-        break;
-      }
-      case 'slider':
-        add(new THREE.BoxGeometry(0.012, Math.max(0.1, numberOf(p, 'max', 0.2) - numberOf(p, 'min', -0.2)), 0.012), steel, [0, (numberOf(p, 'max', 0.2) + numberOf(p, 'min', -0.2)) / 2, 0]);
-        break;
-      case 'ball':
-        add(new THREE.SphereGeometry(numberOf(p, 'stud', 0.012) * 0.8, 16, 12), steel);
-        break;
-      case 'spring': {
-        dynamic = 'spring';
-        const D = numberOf(p, 'D', 0.02), d = numberOf(p, 'd', 0.002), Na = numberOf(p, 'Na', 10);
-        add(helixGeometry(Math.round(Na + 2), D / 2, Math.max(d, 0.0008)), tintMaterial(0x9ea6ad));
-        break;
-      }
-      case 'rope': {
-        dynamic = 'rope';
-        const d = Math.max(0.005, numberOf(p, 'diameter', 0.006)); // thin wire stays visible
-        const mat = tintMaterial(String(p['grade']).includes('steel') ? 0x8f969c : String(p['grade']).includes('chain') ? 0x6d7277 : 0xd9c08a);
-        ropeSegments = [];
-        for (let i = 0; i < 8; i++) {
-          const m = add(new THREE.CylinderGeometry(d / 2, d / 2, 1, 6), mat);
-          ropeSegments.push(m);
-        }
-        break;
-      }
-      case 'link': {
-        // a rod stretched end to end (the root is scaled to the distance), with a rod-end eye at each end
-        dynamic = 'spring';
-        const d = numberOf(p, 'diameter', 0.008);
-        add(new THREE.CylinderGeometry(d / 2, d / 2, 1, 12), steel, [0, 0.5, 0]);
-        break;
-      }
-      case 'wire': {
-        dynamic = 'rope';
-        const mat = tintMaterial(0xb3261e); // red insulation
-        ropeSegments = [];
-        for (let i = 0; i < 8; i++) ropeSegments.push(add(new THREE.CylinderGeometry(0.003, 0.003, 1, 6), mat));
-        break;
-      }
-      case 'band': {
-        dynamic = 'band';
-        add(new THREE.BoxGeometry(numberOf(p, 'width', 0.02), 1, numberOf(p, 'thickness', 0.0015) * 2), tintMaterial(0xd35b2a), [0, 0.5, 0]);
-        break;
-      }
-      default:
-        add(new THREE.SphereGeometry(0.01), tintMaterial(0xffffff));
     }
-    void kind;
+    if (hw.rope) {
+      ropeSegments = [];
+      const mat = tintMaterial(hw.rope.tint);
+      for (let i = 0; i < 8; i++) ropeSegments.push(add(new THREE.CylinderGeometry(hw.rope.radius, hw.rope.radius, 1, 6), mat));
+    }
     const meshes: THREE.Mesh[] = [];
     root.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     return { root, key, dynamic, meshes, base: meshes.map((m) => m.material as THREE.Material), ropeSegments };
@@ -514,6 +424,12 @@ export class SceneView {
   // per frame
 
   update(doc: BuildDoc, live: LiveState, overrides: Map<string, Pose>) {
+    // the shadow box rides with the player
+    const rp = this.rig.position;
+    if (Math.abs(rp.x - this.sun.target.position.x) > 2 || Math.abs(rp.z - this.sun.target.position.z) > 2) {
+      this.sun.target.position.set(rp.x, 0, rp.z);
+      this.sun.position.copy(this.sun.target.position).add(this.sunDir);
+    }
     const source = (id: string) => overrides.get(id) ?? live.pose(id);
     for (const [id, v] of this.parts) {
       const o = overrides.get(id);
@@ -762,18 +678,7 @@ function relativePoseOf(parent: Pose, world: Pose): Pose {
   return { p: [d.x, d.y, d.z], q: [q.x, q.y, q.z, q.w] };
 }
 
-function sizeD(size: string) {
-  const m = /M(\d+)/.exec(size);
-  return m ? Number(m[1]) / 1000 : 0.008;
-}
 
-function spread(i: number, n: number, w: number, l: number): [number, number] {
-  if (n === 1) return [0, 0];
-  const cols = Math.ceil(Math.sqrt(n));
-  const rows = Math.ceil(n / cols);
-  const cx = i % cols, cz = Math.floor(i / cols);
-  return [((cx + 0.5) / cols - 0.5) * w * 0.8, ((cz + 0.5) / rows - 0.5) * l * 0.8];
-}
 
 let floorTex: THREE.CanvasTexture | null = null;
 function floorTexture() {

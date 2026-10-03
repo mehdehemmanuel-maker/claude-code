@@ -266,15 +266,21 @@ export function lintMotor(m: MotorData): string[] {
   return bad;
 }
 
-/** A lead-acid battery's datasheet against itself: cells and voltage, capacity with rate, energy per kilogram. */
+/** What each chemistry's cell makes and holds (Linden & Reddy, Handbook of Batteries, 4th ed.): nominal V per cell, Wh/kg. */
+const CHEMISTRY: Record<BatteryData['chemistry'], { name: string; cellV: number; whkg: [number, number] }> = {
+  'lead-acid-vrla': { name: 'lead-acid', cellV: 2, whkg: [20, 50] },
+  nimh: { name: 'NiMH', cellV: 1.2, whkg: [50, 130] },
+};
+
+/** A battery's datasheet against itself: cells and voltage, capacity with rate, energy per kilogram, each by its chemistry. */
 export function lintBattery(b: BatteryData): string[] {
   const bad: string[] = [];
-  if (Math.abs(b.V - 2 * b.cells) > 0.5) bad.push(`${b.cells} lead-acid cells make ${2 * b.cells} V, not ${b.V}`);
+  const ch = CHEMISTRY[b.chemistry];
+  if (Math.abs(b.V - ch.cellV * b.cells) > 0.25 * b.cells) bad.push(`${b.cells} ${ch.name} cells make ${ch.cellV * b.cells} V, not ${b.V}`);
   const caps = [...b.capacity].sort((x, y) => x.hours - y.hours);
   for (let i = 1; i < caps.length; i++) if (!(caps[i]!.Ah >= caps[i - 1]!.Ah)) bad.push('capacity rising as it is drawn faster');
-  // lead-acid holds 25 to 45 Wh/kg (Linden & Reddy)
   const whkg = (b.V * (caps[caps.length - 1]?.Ah ?? 0)) / b.mass;
-  if (whkg < 20 || whkg > 50) bad.push(`${whkg.toFixed(0)} Wh/kg is not lead-acid's 25 to 45`);
+  if (whkg < ch.whkg[0] || whkg > ch.whkg[1]) bad.push(`${whkg.toFixed(0)} Wh/kg is not ${ch.name}'s ${ch.whkg[0]} to ${ch.whkg[1]}`);
   return bad;
 }
 

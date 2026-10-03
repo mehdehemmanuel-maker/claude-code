@@ -38,6 +38,8 @@ export type PhysicsOp =
   /** A place's ground, or none (null). */
   | { op: 'terrain'; field: TerrainField | null; material: Material | null }
   | { op: 'clear' }
+  /** A construction as one: its parts and joints enter together, judged whole (overlaps with its bores known), or not at all. */
+  | { op: 'construct'; parts: { part: Part; material: Material }[]; conns: { conn: Connection; materials: Record<string, Material> }[] }
   | { op: 'upsertPart'; part: Part; material: Material; keepLivePose: boolean }
   | { op: 'removePart'; id: string }
   | { op: 'upsertConnection'; conn: Connection; materials: Record<string, Material> }
@@ -70,7 +72,9 @@ export type PhysicsEvent =
   /** A motor's winding ran past what its insulation stands: it has failed open and never runs again. */
   | { type: 'burnout'; conn: string; part: string; temperature: number; point: Vec3; note: string }
   /** A battery went flat under its load (its voltage fell to its maker's end voltage). */
-  | { type: 'flat'; part: string; point: Vec3; note: string };
+  | { type: 'flat'; part: string; point: Vec3; note: string }
+  /** A part or connection the physics' intake refused (the construction gate, src/ganglia/tree/gate.ts): it was never made. */
+  | { type: 'refused'; what: 'part' | 'connection'; id: string; law: string; note: string };
 
 export interface ConnectionLoad {
   id: string;
@@ -118,4 +122,6 @@ export interface PowerState {
   batteries: Record<string, { soc: number; V: number; I: number; flat: boolean }>;
   /** By motor drive joint: amps (and its controller's limit), winding and housing deg C, output rpm, burnt out, its battery. */
   motors: Record<string, { I: number; limit: number; winding: number; housing: number; rpm: number; burnt: boolean; battery: string | null }>;
+  /** By servo horn joint: amps, the volts at its servo, the torque it gave (N m), its battery, and whether a board commanded it this tick. */
+  servos?: Record<string, { I: number; V: number; torque: number; battery: string | null; commanded: boolean }>;
 }

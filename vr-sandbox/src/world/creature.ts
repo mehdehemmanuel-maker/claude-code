@@ -1,23 +1,26 @@
-// Creatures with bodies. A creature here is not an animation: it is a body of real parts, joined by real joints,
-// moved by real actuators, in the same physics as everything else. What makes it a creature is its body plan (how
-// many segments, how big, what of) and its rhythm: like the rhythm generators in an animal's spinal cord, each joint's
-// servo swings on its own clock, a little behind the one before it, so a wave runs down the body.
+// Creatures with bodies. A creature here is not an animation: it is a machine of real parts, joined by real joints,
+// moved by real servos that run on a real pack and do what a real controller board tells them down real leads, in the
+// same physics as everything else, built through the same construction gate as everything else (one transaction: it
+// is all made, or none of it is). What makes it a creature is its body plan (how many segments, how big, what of) and
+// the program on its board: like the rhythm generators in an animal's spinal cord, each servo swings on the board's
+// clock, a little behind the one before it, so a wave runs down the body.
 //
-// A swimmer is a chain of flat segments joined by servos on side-to-side axes, so its wave runs up and down, as a
-// whale's or a dolphin's does. (A body flat from side to side, as most fish are, rolls onto its side in the water
-// unless something keeps it upright: a swim bladder above its weight, fins that correct it. Without a keel a flat
-// body floating level is the stable one.) The wave runs from head to tail, swinging the tail most; each segment,
-// pushed back by the water hardest across its face (resistive force theory, the water drag in the physics world),
-// pushes the water back and the body forward. Nothing tells it to go forward: if the water didn't push back more
-// across a face than along it, it would only wriggle in place.
+// A swimmer is a chain of flat segments, each hinged to the next by a servo on a side-to-side axis, so its wave runs
+// up and down, as a whale's or a dolphin's does. (A body flat from side to side, as most fish are, rolls onto its side
+// in the water unless something keeps it upright: a swim bladder above its weight, fins that correct it. Without a
+// keel a flat body floating level is the stable one.) The wave runs from head to tail, swinging the tail most; each
+// segment, pushed back by the water hardest across its face (resistive force theory, the water drag in the physics
+// world), pushes the water back and the body forward. Nothing tells it to go forward: if the water didn't push back
+// more across a face than along it, it would only wriggle in place.
 
-import { addConnection, addPart } from '../doc/commands';
 import type { DocStore } from '../doc/store';
-import type { Pose, Quat, Vec3 } from '../doc/types';
-import { add, qmul, rotate } from '../doc/math';
-import { AUTO_JOIN, planJoin } from '../connectors/plan';
+import type { Quat, Vec3 } from '../doc/types';
+import { add, axisAngle, qmul, rotate, sub } from '../doc/math';
 import { getMaterial } from '../data/materials';
-import { ROTOR_PER_STALL } from '../connectors/registry';
+import { getServo, shaftOf, SHAFT_Q, type ServoData } from '../data/servos';
+import { getBattery } from '../data/batteries';
+import { packSize } from '../parts/registry';
+import { construct, type Solid } from '../construct/build';
 
 export interface BodyPlan {
   name: string;
@@ -27,24 +30,29 @@ export interface BodyPlan {
   span: number;
   thickness: number;
   material: string;
-  /** Its rhythm, Hz, and how many waves fit along it at once. */
+  /** The board's program: its rhythm, Hz, and how many waves fit along the body at once. */
   rhythm: number;
   waves: number;
   /** How far each joint swings, rad: from the neck to the tail. */
   swingHead: number;
   swingTail: number;
-  /** Each servo's stall torque, N m. */
-  torque: number;
+  /** Its servos (a datasheet id) and its pack (a cell and how many in series). */
+  servo: string;
+  cell: string;
+  cells: number;
 }
 
 /**
- * Swimmers people ask for, as body plans. Polyethylene (950 kg/m³) floats in seawater (1025) with most of it under,
- * as a fish rides near the surface; real fish beat their tails at a few hertz with about one wave along the body
- * (Lighthill, Mathematics of Biofluiddynamics, SIAM 1975; Videler, Fish Swimming, Chapman & Hall 1993).
+ * Swimmers people ask for, as body plans. The body is closed-cell foam (100 kg/m³), as robotic fish are built; the
+ * servos, the pack and the board hang under it as a keel, so its weight is below its buoyancy and it rights itself
+ * (on top they rolled it over: a flat foam body's metacentre is millimetres above its centre), and it rides awash,
+ * about half under. Polyethylene (950 kg/m³, 7% lighter than seawater) cannot carry the electronics at all. Real fish
+ * beat their tails at a few hertz with about one wave along the body (Lighthill, Mathematics of Biofluiddynamics,
+ * SIAM 1975; Videler, Fish Swimming, Chapman & Hall 1993).
  */
 export const SWIMMERS: Record<string, BodyPlan> = {
-  whale: { name: 'a swimmer shaped like a small whale', segments: 5, length: 0.1, span: 0.08, thickness: 0.02, material: 'polymer.hdpe', rhythm: 1.5, waves: 1, swingHead: 0.12, swingTail: 0.5, torque: 0.5 },
-  eel: { name: 'an eel-like swimmer', segments: 8, length: 0.08, span: 0.04, thickness: 0.02, material: 'polymer.hdpe', rhythm: 1.2, waves: 1.5, swingHead: 0.25, swingTail: 0.45, torque: 0.3 },
+  whale: { name: 'a swimmer shaped like a small whale', segments: 5, length: 0.1, span: 0.08, thickness: 0.02, material: 'foam.eva', rhythm: 1.5, waves: 1, swingHead: 0.12, swingTail: 0.6, servo: 'servo.standard-20kg', cell: 'battery.nimh.aa', cells: 4 },
+  eel: { name: 'an eel-like swimmer', segments: 8, length: 0.08, span: 0.04, thickness: 0.02, material: 'foam.eva', rhythm: 1.2, waves: 1.5, swingHead: 0.25, swingTail: 0.45, servo: 'servo.micro-9g', cell: 'battery.nimh.aaa', cells: 3 },
 };
 
 /** The swimmer a request names, or null. */
@@ -55,43 +63,126 @@ export function swimmerFromWords(text: string): BodyPlan | null {
   return null;
 }
 
-/** A quarter turn about x: carries a frame's y (a hinge's axis) onto z, side to side. */
-const SIDEWAYS: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+const IDENTITY: Quat = [0, 0, 0, 1];
 const yaw = (a: number): Quat => [0, Math.sin(a / 2), 0, Math.cos(a / 2)];
-const conj = (q: Quat): Quat => [-q[0], -q[1], -q[2], q[3]];
+/** Half turns about each axis. */
+const FLIP_X: Quat = axisAngle([1, 0, 0], Math.PI);
+const FLIP_Y: Quat = axisAngle([0, 1, 0], Math.PI);
+const FLIP_Z: Quat = axisAngle([0, 0, 1], Math.PI);
+/** A servo horn's thickness between the shaft face and what it carries, m (estimate: the common nylon horn). */
+const HORN = 0.003;
+/** The glue line or strap between a servo case and what it is mounted on, m (estimate). */
+const STRAP = 0.001;
+const mm = (m: number) => `${Math.round(m * 1000)} mm`;
+
+/**
+ * A servo loop driven at a rhythm answers late and a little short, by the second-order response at r = 2 pi f / w_n
+ * on the inertia it turns (servoLoop: stiffness stall torque over band, critically damped): a lag of atan2(2 r, 1 - r²)
+ * and a gain of 1 / sqrt((1 - r²)² + (2 r)²). A board's program sends each servo its command that much early and that
+ * much larger (within the travel), so the body moves with the phasing the design is for, as a rhythm generator grown
+ * onto a body is. Without it joints on different inertias lag by different amounts and a gait's timing drifts.
+ */
+function response(sv: ServoData, inertia: number, rhythm: number) {
+  const wn = Math.sqrt(sv.stallTorque / sv.band / inertia), r = (2 * Math.PI * rhythm) / wn;
+  return { lag: Math.atan2(2 * r, 1 - r * r), gain: 1 / Math.hypot(1 - r * r, 2 * r) };
+}
+
+export interface Swimmer {
+  parts: string[];
+  joints: string[];
+  head: string;
+  servos: string[];
+  board: string;
+  pack: string;
+}
 
 /**
  * Build a swimmer into a document: its head at `at`, facing `heading` (rad about up, 0 facing +x). Its segments are
- * flat plates; each joint a servo on a side-to-side axis with its own rhythm, its phase lagging down the body.
+ * flat foam plates with a servo in each gap between two of them, in the body's own plane: the case is screwed by its
+ * end to the plate ahead, lying along the body with its shaft on its side face pointing sideways near the plate
+ * behind, which reaches the horn by a short bracket screwed to its front. So each joint turns about a side-to-side
+ * axis through the body's middle, as a whale's spine does. The pack and the board hang under the first plates, and
+ * steel rails under both edges ballast it to ride nine tenths under, its weight below its buoyancy. Every servo is
+ * wired to the pack and led from the board.
  */
-export function buildSwimmer(store: DocStore, plan: BodyPlan, at: Vec3, heading = 0, tag = 'fish'): { parts: string[]; joints: string[] } {
-  const face = yaw(heading), q = face;
-  const back = rotate(face, [-1, 0, 0]);
-  const parts: string[] = [], joints: string[] = [];
-  for (let k = 0; k < plan.segments; k++) {
-    const c: Vec3 = [at[0] + back[0] * plan.length * (k + 0.5), at[1], at[2] + back[2] * plan.length * (k + 0.5)];
-    const p = addPart(store, { kind: 'plate', pose: { p: c, q }, material: plan.material, params: { length: plan.length, width: plan.span, thickness: plan.thickness }, name: `${tag}-${k === 0 ? 'head' : k === plan.segments - 1 ? 'tail' : `body${k}`}` });
-    parts.push(p.id);
-  }
-  // each joint's hinge (its frame's y) runs side to side
-  const frame = (x: number): Pose => ({ p: [x, 0, 0], q: qmul(conj(q), qmul(face, SIDEWAYS)) });
-  const lag = (2 * Math.PI * plan.waves) / Math.max(1, plan.segments - 1);
-  for (let k = 0; k + 1 < plan.segments; k++) {
-    const s = plan.segments > 2 ? k / (plan.segments - 2) : 1;
-    const c = addConnection(store, {
-      kind: 'servo', a: { part: parts[k]!, frame: frame(-plan.length / 2) }, b: { part: parts[k + 1]!, frame: frame(plan.length / 2) },
-      params: { maxTorque: plan.torque, range: Math.PI / 2, swing: plan.swingHead + (plan.swingTail - plan.swingHead) * s, rhythm: plan.rhythm, phase: -lag * k, pin: 0.004 },
-    });
-    joints.push(c.id);
-  }
-  return { parts, joints };
+export function buildSwimmer(store: DocStore, plan: BodyPlan, at: Vec3, heading = 0, tag = 'fish'): Swimmer {
+  const sv = getServo(plan.servo), [l, w, h] = sv.dims;
+  const { length: L, span, thickness: t } = plan;
+  const s = 0.008, CLEAR = 0.001, GAP = l + 2 * CLEAR + s;
+  const bar = 'polymer.pla';
+  const packSpec = { model: plan.cell, series: plan.cells, parallel: 1, charge: 1 };
+  // ballast: steel rails along both edges under each segment, sized so the body rides nine tenths under (the water
+  // it displaces at that depth, less what the foam, the servos, the brackets, the pack and the board weigh)
+  const bracket = 1250 * s * t * (sv.shaftFromEnd + CLEAR + s / 2 + span);
+  const carried = 0.9 * plan.segments * L * span * t * 1025 + (plan.segments - 1) * l * w * h * 1025;
+  const weighs = plan.segments * L * span * t * getMaterial(plan.material).density + (plan.segments - 1) * (sv.mass + bracket) + getBattery(plan.cell).mass * plan.cells + 0.008;
+  // the rails go under every plate but the two carrying the pack and the board
+  const railed = Math.max(0, plan.segments - 2);
+  const RAIL = 0.005, railZ = railed ? Math.min(0.2 * span, Math.max(0, carried - weighs) / (2 * railed * L * RAIL * 7850)) : 0;
+  return construct(store, `Build ${plan.name}`, at, yaw(heading), tag, (b) => {
+    const plates: Solid[] = [], servos: string[] = [];
+    const x = (k: number) => -(k + 0.5) * L - k * GAP;
+    for (let k = 0; k < plan.segments; k++) {
+      const plate = b.place('plate', [x(k), 0, 0], IDENTITY, { length: L, width: span, thickness: t }, k === 0 ? 'head' : k === plan.segments - 1 ? 'tail' : `body${k}`, { material: plan.material });
+      plates.push(plate);
+      if (railZ < 0.005 || k < 2) continue;
+      for (const side of [-1, 1]) {
+        const rail = b.place('block', [x(k), -t / 2 - RAIL / 2, side * (span / 2 - railZ / 2)], IDENTITY, { x: L, y: RAIL, z: railZ }, `rail${k}${side < 0 ? 'l' : 'r'}`, { material: 'steel.a36' });
+        plate.fasten({ thin: t, at: [0, -t / 2, side * (span / 2 - railZ / 2)] }, rail, { thin: RAIL, at: [0, RAIL / 2, 0] }, [L, railZ]);
+      }
+    }
+    // the pack under the head plate, the board under the one behind it, each screwed up into the foam
+    const packParams = packSpec;
+    const ps = packSize(packParams);
+    const packAt: Vec3 = [x(0), -t / 2 - ps[1] / 2, 0];
+    const pack = b.place('battery', packAt, IDENTITY, packParams, 'pack');
+    plates[0]!.fasten({ thin: t, at: [0, -t / 2, 0] }, pack, { thin: ps[1], at: [0, ps[1] / 2, 0] }, [ps[0], ps[2]]);
+    const kb = Math.min(1, plan.segments - 1);
+    const boardAt: Vec3 = [x(kb), -t / 2 - 0.003, 0];
+    const board = b.place('controller', boardAt, IDENTITY, { rhythm: plan.rhythm }, 'board');
+    plates[kb]!.fasten({ thin: t, at: [0, -t / 2, 0] }, board, { thin: 0.006, at: [0, 0.003, 0] }, [0.04, 0.025]);
+    pack.wire(board);
+    const lag = (2 * Math.PI * plan.waves) / Math.max(1, plan.segments - 1);
+    for (let k = 0; k + 1 < plan.segments; k++) {
+      // the servo in the gap behind plate k, turned half round: its end against the plate's rear face, its shaft
+      // near the plate behind, its shaft face to −z
+      const e = x(k) - L / 2;
+      const q = FLIP_Y;
+      const caseAt: Vec3 = [e - CLEAR - l / 2, 0, 0];
+      const servo = b.place('servo', caseAt, q, { model: sv.id }, `servo${k}`);
+      servos.push(servo.id);
+      plates[k]!.fasten({ thin: t, at: [-L / 2, 0, 0] }, servo, { thin: l, at: [-l / 2, 0, 0] }, [w, h]);
+      const shaft = add(caseAt, rotate(q, servo.shaft.p));
+      // the bracket: a strip glued across the whole front face of plate k+1 (an 8 mm patch of glue on foam tore off
+      // under the servo), and an arm from the strip's side forward along the shaft face to the horn
+      const front = x(k + 1) + L / 2;
+      const strip = b.place('block', [front + s / 2, 0, 0], IDENTITY, { x: s, y: t, z: span }, `strip${k}`, { material: bar });
+      plates[k + 1]!.fasten({ thin: t, at: [L / 2, 0, 0] }, strip, { thin: s, at: [-s / 2, 0, 0] }, [t, span]);
+      const barL = shaft[0] - (front + s) + s / 2;
+      const barAt: Vec3 = [front + s + 0.0001 + barL / 2, 0, shaft[2] - sv.horn - s / 2];
+      // (the arm is the plate's full thickness tall: an 8 mm bar glued by its end snapped at the glue line)
+      const arm = b.place('block', barAt, IDENTITY, { x: barL, y: t, z: s }, `bracket${k}`, { material: bar });
+      strip.fasten({ thin: s, at: [s / 2, 0, barAt[2]] }, arm, { thin: barL, at: [-barL / 2, 0, 0] }, [s, t]);
+      // the horn: on the shaft, and on the bracket where the shaft is
+      servo.horn(arm);
+      pack.wire(servo);
+      // the program for this joint: a swing growing toward the tail, lagging down the body (the loop's lag in water
+      // is the water's, not the inertia's, and is not corrected for). The hinge axis is −z here (the case is turned
+      // round), so the sign is kept for the wave's direction.
+      const frac = plan.segments > 2 ? k / (plan.segments - 2) : 1;
+      const swing = plan.swingHead + (plan.swingTail - plan.swingHead) * frac;
+      board.lead_(servo, { swing: -Math.min(sv.travel, swing), phase: -lag * k, wave: 'sine' });
+    }
+    return { parts: b.parts, joints: b.joints, head: plates[0]!.id, servos, board: board.id, pack: pack.id };
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Walkers. A walker is a body on four legs, each a thigh and a shank of printed plastic on two servos (a hip that swings
-// it fore and aft, a knee that folds it), with a rubber foot. Each servo keeps its own rhythm; the hip swings the leg,
-// the knee folds it a quarter cycle ahead, most at mid-swing and straight at mid-stance, so the foot is lifted as it
-// comes forward and planted as it goes back. The gait is which legs swing together. Nothing tells it to go forward:
+// Walkers. A walker is a deck on four legs, each a thigh and a shank of printed plastic on two servos (a hip under the
+// deck's edge that swings the leg, a knee strapped to the thigh that folds it), with a rubber foot; a pack and a
+// controller board ride on the deck, every servo wired to the pack and led from the board. The board's program
+// swings each hip in its gait's phase and folds each knee a quarter cycle ahead, most at mid-swing and straight at
+// mid-stance, so the foot is lifted as it comes forward and planted as it goes back. Nothing tells it to go forward:
 // a foot planted and pushed back, held by friction, pushes the body on; without friction, or with the knees still, it
 // paddles in place.
 
@@ -105,7 +196,7 @@ export const GAITS: Record<string, { name: string; LF: number; RF: number; LH: n
 
 export interface WalkerPlan {
   name: string;
-  /** Its body: a plate, m, and what of. */
+  /** Its deck: a plate, m, and what of. */
   body: { length: number; width: number; thickness: number; material: string };
   /** Each leg: thigh and shank lengths, the square bar they are of, and what of; its foot. */
   thigh: number;
@@ -113,38 +204,42 @@ export interface WalkerPlan {
   bar: number;
   legMaterial: string;
   foot: { diameter: number; material: string };
-  /** Its servos: stall torque N m, no-load speed rad/s, how far off they give it all (rad), and each case's size, m. */
-  servo: { torque: number; speed: number; band: number; travel: number; size: Vec3; material: string };
-  /** Its rhythm, Hz; how far each hip swings and each knee folds, rad; its gait. */
+  /** Its servos (a datasheet id) and its pack (a cell and how many in series). */
+  servo: string;
+  cell: string;
+  cells: number;
+  /** The board's program: its rhythm, Hz; how far each hip swings and each knee folds, rad; its gait. */
   rhythm: number;
   swing: number;
   lift: number;
   gait: keyof typeof GAITS;
 }
 
-/**
- * A 9 g micro servo: 0.18 N m (1.8 kgf cm) stall, 60° in 0.1 s unloaded, 23 × 12.2 × 29 mm (a common hobby micro
- * servo's datasheet); its case is plastic with a motor and gears inside, about as dense as ABS. It turns through
- * about 180° between its stops (estimate: what hobby servos of the class are sold as; some stop short of it), and a
- * walker's stride swings well inside that, so its legs never reach the stops.
- */
-const MICRO_SERVO = { torque: 0.18, speed: 10.5, band: 0.1, travel: Math.PI / 2, size: [0.023, 0.0122, 0.029] as Vec3, material: 'polymer.abs' };
+/** What a walker is, from its plan: its bill of materials, not a word for what it resembles. */
+export function describeWalker(plan: WalkerPlan): string {
+  const sv = getServo(plan.servo), cell = getBattery(plan.cell);
+  const legs = plan.thigh + plan.shank > 0.12 ? 'long-legged' : 'small';
+  const [svKind, svClass] = sv.label.split(' (')[0]!.toLowerCase().split(', ');
+  return `a ${legs} four-legged robot walker of a ${mm(plan.body.length)} × ${mm(plan.body.width)} ${getMaterial(plan.body.material).name.toLowerCase()} deck, eight ${svKind}s (${svClass}), a controller board and a ${plan.cells}-cell ${cell.label.split(',')[0]!.toLowerCase()} pack, ${getMaterial(plan.legMaterial).name.toLowerCase()} bar legs on ${getMaterial(plan.foot.material).name.toLowerCase().split(' /')[0]} feet`;
+}
 
 /** Walkers people ask for: small robot animals of plywood, printed plastic and hobby servos, as people build. */
 export const WALKERS: Record<string, WalkerPlan> = {
   dog: {
-    // a stance as wide as its legs are long: narrower, a shove sideways rolls it over (one in five at 0.06 N s)
-    name: 'a small four-legged walker, dog-shaped', body: { length: 0.2, width: 0.16, thickness: 0.01, material: 'wood.birch-plywood' },
+    // a stance as wide as its legs are long: narrower, a shove sideways rolls it over (one in five at 0.06 N s); a
+    // 48 g pack of AAA cells: with 120 g of AA cells its 9 g servos could not hold a trot and it fell on its back
+    name: '', body: { length: 0.2, width: 0.16, thickness: 0.01, material: 'wood.birch-plywood' },
     thigh: 0.05, shank: 0.05, bar: 0.008, legMaterial: 'polymer.pla', foot: { diameter: 0.012, material: 'rubber.natural' },
-    servo: MICRO_SERVO, rhythm: 2.5, swing: 0.45, lift: 0.6, gait: 'walk',
+    servo: 'servo.micro-9g', cell: 'battery.nimh.aaa', cells: 4, rhythm: 2.5, swing: 0.45, lift: 0.6, gait: 'walk',
   },
   deer: {
     // long legs carry its body higher over the same feet: it needs a wider stance not to roll over in a trot
-    name: 'a long-legged four-legged walker, deer-shaped', body: { length: 0.22, width: 0.16, thickness: 0.01, material: 'wood.birch-plywood' },
+    name: '', body: { length: 0.22, width: 0.16, thickness: 0.01, material: 'wood.birch-plywood' },
     thigh: 0.07, shank: 0.07, bar: 0.008, legMaterial: 'polymer.pla', foot: { diameter: 0.012, material: 'rubber.natural' },
-    servo: MICRO_SERVO, rhythm: 1.6, swing: 0.4, lift: 0.55, gait: 'trot',
+    servo: 'servo.micro-9g', cell: 'battery.nimh.aaa', cells: 4, rhythm: 1.6, swing: 0.4, lift: 0.55, gait: 'trot',
   },
 };
+for (const plan of Object.values(WALKERS)) plan.name = describeWalker(plan);
 
 /** The walker a request names, or null. */
 export function walkerFromWords(text: string): WalkerPlan | null {
@@ -157,90 +252,88 @@ export function walkerFromWords(text: string): WalkerPlan | null {
 export interface Walker {
   parts: string[];
   joints: string[];
-  /** Its body, and the hips on each side (what steering shortens). */
+  /** Its deck, and the hip horns on each side (what steering shortens). */
   body: string;
   left: string[];
   right: string[];
-  /** Every servo, hips and knees. */
+  /** Every servo horn, hips and knees. */
   servos: string[];
-}
-
-/** A rigid join between two parts, as the join planner chooses for their materials and the face between them. */
-function fasten(store: DocStore, a: { id: string; material: string; thin: number; at: Vec3 }, b: { id: string; material: string; thin: number; at: Vec3 }, face: [number, number]) {
-  const plan = planJoin(AUTO_JOIN, getMaterial(a.material), getMaterial(b.material), { thicknessA: a.thin, thicknessB: b.thin, bondW: face[0], bondL: face[1] });
-  return addConnection(store, { kind: plan.kind, a: { part: a.id, frame: { p: a.at, q: [0, 0, 0, 1] } }, b: { part: b.id, frame: { p: b.at, q: [0, 0, 0, 1] } }, params: { ...plan.params, bondW: face[0], bondL: face[1] } });
+  board: string;
+  pack: string;
 }
 
 /**
  * Build a walker into a document, its feet on the ground at `at` (the ground's height there), facing `heading` (rad
- * about up, 0 facing +x). Facing +x, its left is −z.
+ * about up, 0 facing +x). Facing +x, its left is −z. Each hip servo lies under the deck's edge, its shaft face flush
+ * with the edge and pointing outward; the thigh hangs from its horn. Each knee servo is strapped to the thigh's outer
+ * face, lying along it, shaft face outward near the thigh's lower end; the shank hangs from that horn. So every joint
+ * is on the servo that drives it, the leg steps outward at each stage as a real stacked leg does, and the rubber foot
+ * sits on the shank's end. The pack and the board are screwed to the deck's top; nine wires and eight leads run from them.
  */
 export function buildWalker(store: DocStore, plan: WalkerPlan, at: Vec3, heading = 0, tag = 'dog'): Walker {
-  const q = yaw(heading);
+  const sv = getServo(plan.servo), [l, w, h] = sv.dims;
   const { length: L, width: W, thickness: t } = plan.body;
-  const s = plan.bar, r = plan.foot.diameter / 2, sv = plan.servo;
-  const y0 = r + plan.shank + plan.thigh + t / 2 + 0.002;
-  const world = (v: Vec3): Vec3 => add(at, rotate(q, v));
-  const part = (kind: string, local: Vec3, material: string, params: Record<string, number>, name: string) =>
-    addPart(store, { kind, pose: { p: world(local), q }, material, params, name }).id;
-  const out: Walker = { parts: [], joints: [], body: '', left: [], right: [], servos: [] };
-  const body = part('plate', [0, y0, 0], plan.body.material, { length: L, width: W, thickness: t }, `${tag}-body`);
-  out.body = body;
-  out.parts.push(body);
+  const s = plan.bar, r = plan.foot.diameter / 2;
+  const y0 = 2 * r + plan.shank + plan.thigh + w / 2 + STRAP + t / 2 + 0.002;
   const gait = GAITS[plan.gait]!;
-  // What each servo swings, as its loop sees it (world.ts servoLoop: stiffness stall torque over band, critically
-  // damped on the inertia it turns, its rotor included): the leg below the joint, as point masses at their centres,
-  // and the rotor at the horn. A critically damped loop driven at the rhythm answers late and a little short, by the
-  // second-order response at r = 2 pi f / w_n: a lag of atan2(2 r, 1 - r^2) and a gain of 1 / sqrt((1 - r^2)^2 + (2 r)^2).
-  // The rhythm generator sends each servo its command that much early and that much larger (within the travel), so the
-  // leg moves with the phasing the gait is designed for, as a rhythm generator grown onto a body is. Without it the
-  // hips and knees, on different inertias, lag by different amounts and a trot's diagonal timing drifts.
   const density = (m: string) => getMaterial(m).density;
   const mThigh = density(plan.legMaterial) * s * plan.thigh * s, mShank = density(plan.legMaterial) * s * plan.shank * s;
-  const mFoot = density(plan.foot.material) * (4 / 3) * Math.PI * (plan.foot.diameter / 2) ** 3;
-  const mCase = density(sv.material) * sv.size[0] * sv.size[1] * sv.size[2];
-  const rotor = ROTOR_PER_STALL * sv.torque;
-  const iHip = rotor + mThigh * (plan.thigh / 2) ** 2 + mCase * plan.thigh ** 2 + mShank * (plan.thigh + plan.shank / 2) ** 2 + mFoot * (plan.thigh + plan.shank) ** 2;
-  const iKnee = rotor + mShank * (plan.shank / 2) ** 2 + mFoot * plan.shank ** 2;
-  const response = (I: number) => {
-    const wn = Math.sqrt(sv.torque / sv.band / I), r = (2 * Math.PI * plan.rhythm) / wn;
-    return { lag: Math.atan2(2 * r, 1 - r * r), gain: 1 / Math.hypot(1 - r * r, 2 * r) };
-  };
-  const servo = (a: string, fa: Vec3, b: string, fb: Vec3, range: number, offset: number, phase: number, inertia: number, wave: 'sine' | 'lift' = 'sine') => {
-    const h = response(inertia);
-    const wrap = ((phase + h.lag + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    const c = addConnection(store, {
-      kind: 'servo', a: { part: a, frame: { p: fa, q: SIDEWAYS } }, b: { part: b, frame: { p: fb, q: SIDEWAYS } },
-      params: { maxTorque: sv.torque, speed: sv.speed, band: sv.band, rotor, range: sv.travel, swing: Math.min(sv.travel, range / h.gain), offset, rhythm: plan.rhythm, phase: wrap, wave, pin: 0.003 },
-    });
-    out.joints.push(c.id);
-    out.servos.push(c.id);
-    return c.id;
-  };
-  const legs: ['LF' | 'RF' | 'LH' | 'RH', number, number][] = [['LF', 1, -1], ['RF', 1, 1], ['LH', -1, -1], ['RH', -1, 1]];
-  for (const [leg, fx, side] of legs) {
-    const hx = fx * L * 0.4, hz = side * (W / 2 + s / 2 + 0.002);
-    const hipY = y0 - t / 2, kneeY = hipY - plan.thigh;
-    const name = `${tag}-${String(leg).toLowerCase()}`;
-    const thigh = part('block', [hx, hipY - plan.thigh / 2, hz], plan.legMaterial, { x: s, y: plan.thigh, z: s }, `${name}-thigh`);
-    const shank = part('block', [hx, kneeY - plan.shank / 2, hz], plan.legMaterial, { x: s, y: plan.shank, z: s }, `${name}-shank`);
-    const foot = part('sphere', [hx, kneeY - plan.shank, hz], plan.foot.material, { diameter: plan.foot.diameter }, `${name}-foot`);
-    // the servos' cases: the hip's on the body above its leg, the knee's on the thigh's outer side
-    const [cx, cy, cz] = sv.size;
-    const hipCase = part('block', [hx, y0 + t / 2 + cy / 2, side * (W / 2 - cz / 2)], sv.material, { x: cx, y: cy, z: cz }, `${name}-hip-servo`);
-    const kneeCase = part('block', [hx, kneeY + cz / 2, hz + side * (s / 2 + cy / 2 + 0.001)], sv.material, { x: cx, y: cz, z: cy }, `${name}-knee-servo`);
-    out.parts.push(thigh, shank, foot, hipCase, kneeCase);
-    const phase = 2 * Math.PI * gait[leg];
-    // the hip swings the leg; the knee folds it, by up to `lift`, only while it comes forward (a quarter cycle ahead of
-    // the hip, so most at mid-swing), and is straight the whole time it bears weight
-    const hip = servo(body, [hx, -t / 2, hz], thigh, [0, plan.thigh / 2, 0], plan.swing, 0, phase, iHip);
-    servo(thigh, [0, -plan.thigh / 2, 0], shank, [0, plan.shank / 2, 0], plan.lift, 0, phase + Math.PI / 2, iKnee, 'lift');
-    (side < 0 ? out.left : out.right).push(hip);
-    out.joints.push(
-      fasten(store, { id: body, material: plan.body.material, thin: t, at: [hx, t / 2, side * (W / 2 - cz / 2)] }, { id: hipCase, material: sv.material, thin: cy, at: [0, -cy / 2, 0] }, [cx, cz]).id,
-      fasten(store, { id: thigh, material: plan.legMaterial, thin: s, at: [0, -plan.thigh / 2 + cz / 2, side * s / 2] }, { id: kneeCase, material: sv.material, thin: cy, at: [0, 0, -side * (cy / 2 + 0.001)] }, [s, cz]).id,
-      fasten(store, { id: shank, material: plan.legMaterial, thin: s, at: [0, -plan.shank / 2, 0] }, { id: foot, material: plan.foot.material, thin: plan.foot.diameter, at: [0, 0, 0] }, [s, s]).id,
-    );
-  }
-  return out;
+  const mFoot = density(plan.foot.material) * (4 / 3) * Math.PI * r ** 3;
+  const iHip = sv.rotor + mThigh * (plan.thigh / 2) ** 2 + sv.mass * plan.thigh ** 2 + mShank * (plan.thigh + plan.shank / 2) ** 2 + mFoot * (plan.thigh + plan.shank) ** 2;
+  const iKnee = sv.rotor + mShank * (plan.shank / 2) ** 2 + mFoot * plan.shank ** 2;
+  return construct(store, `Build ${plan.name}`, at, yaw(heading), tag, (b) => {
+    const body = b.place('plate', [0, y0, 0], IDENTITY, { length: L, width: W, thickness: t }, 'body', { material: plan.body.material });
+    const left: string[] = [], right: string[] = [], servos: string[] = [];
+    // the pack and the board hang under the deck between the hips, where their weight keeps it low: a walker that
+    // carried them on top rolled over when shoved (its centre of mass 3 cm higher)
+    const packParams = { model: plan.cell, series: plan.cells, parallel: 1, charge: 1 };
+    const ps = packSize(packParams);
+    const packAt: Vec3 = [-0.004 - ps[0] / 2, y0 - t / 2 - ps[1] / 2, 0];
+    const pack = b.place('battery', packAt, IDENTITY, packParams, 'pack');
+    body.fasten({ thin: t, at: [packAt[0], -t / 2, 0] }, pack, { thin: ps[1], at: [0, ps[1] / 2, 0] }, [ps[0], ps[2]], 'screwed');
+    const boardAt: Vec3 = [0.004 + 0.02, y0 - t / 2 - 0.003, 0];
+    const board = b.place('controller', boardAt, IDENTITY, { rhythm: plan.rhythm }, 'board');
+    body.fasten({ thin: t, at: [boardAt[0], -t / 2, 0] }, board, { thin: 0.006, at: [0, 0.003, 0] }, [0.04, 0.025], 'screwed');
+    pack.wire(board);
+    const legs: ['LF' | 'RF' | 'LH' | 'RH', number, number][] = [['LF', 1, -1], ['RF', 1, 1], ['LH', -1, -1], ['RH', -1, 1]];
+    const conj = (q: Quat): Quat => [-q[0], -q[1], -q[2], q[3]];
+    for (const [leg, fx, side] of legs) {
+      const hx = fx * L * 0.4, name = leg.toLowerCase();
+      // the hip case: shaft face outward (±z), shaft toward the leg's own end of the deck, width (its 12 mm) vertical
+      const qHip: Quat = side > 0 ? (fx > 0 ? IDENTITY : FLIP_Z) : (fx > 0 ? FLIP_X : FLIP_Y);
+      const hipShaft: Vec3 = [hx, y0 - t / 2 - STRAP - w / 2, side * W / 2];
+      const hipAt = sub(hipShaft, rotate(qHip, shaftOf(sv).p));
+      const hip = b.place('servo', hipAt, qHip, { model: sv.id }, `${name}-hip-servo`);
+      body.fasten({ thin: t, at: [hipAt[0], -t / 2, hipAt[2]] }, hip, { thin: w, at: rotate(conj(qHip), [0, w / 2, 0]) }, [l, h], 'screwed');
+      // the thigh hangs from the hip horn, a horn's thickness off the shaft face
+      const thighZ = side * (W / 2 + HORN + s / 2);
+      const thighAt: Vec3 = [hx, hipShaft[1] - plan.thigh / 2, thighZ];
+      const thigh = b.place('block', thighAt, IDENTITY, { x: s, y: plan.thigh, z: s }, `${name}-thigh`, { material: plan.legMaterial });
+      const hipHorn = hip.horn(thigh, { p: sub(hipShaft, thighAt), q: qmul(qHip, SHAFT_Q) });
+      // the knee case lies along the thigh's outer face, shaft face outward, shaft at the thigh's lower end
+      const qKnee: Quat = side > 0 ? axisAngle([0, 0, 1], -Math.PI / 2) : qmul(FLIP_Y, axisAngle([0, 0, 1], -Math.PI / 2));
+      const kneeShaft: Vec3 = [hx, hipShaft[1] - plan.thigh, thighZ + side * (s / 2 + STRAP + h)];
+      const kneeAt = sub(kneeShaft, rotate(qKnee, shaftOf(sv).p));
+      const knee = b.place('servo', kneeAt, qKnee, { model: sv.id }, `${name}-knee-servo`);
+      thigh.fasten({ thin: s, at: [0, kneeAt[1] - thighAt[1], side * s / 2] }, knee, { thin: w, at: rotate(conj(qKnee), [0, 0, -side * h / 2]) }, [w, l], 'screwed');
+      const shankZ = kneeShaft[2] + side * (HORN + s / 2);
+      const shankAt: Vec3 = [hx, kneeShaft[1] - plan.shank / 2, shankZ];
+      const shank = b.place('block', shankAt, IDENTITY, { x: s, y: plan.shank, z: s }, `${name}-shank`, { material: plan.legMaterial });
+      const kneeHorn = knee.horn(shank, { p: sub(kneeShaft, shankAt), q: qmul(qKnee, SHAFT_Q) });
+      const foot = b.place('sphere', [hx, kneeShaft[1] - plan.shank - r, shankZ], IDENTITY, { diameter: plan.foot.diameter }, `${name}-foot`, { material: plan.foot.material });
+      shank.fasten({ thin: s, at: [0, -plan.shank / 2, 0] }, foot, { thin: plan.foot.diameter, at: [0, r, 0] }, [s, s]);
+      // power to both servos, and the program to both: the hip swings the leg in its gait's phase; the knee folds it,
+      // by up to `lift`, only while it comes forward (a quarter cycle ahead, so most at mid-swing), and is straight
+      // the whole time it bears weight. Each hinge's axis is ±z by side, so the swing's sign follows the side.
+      pack.wire(hip);
+      pack.wire(knee);
+      const phase = 2 * Math.PI * gait[leg];
+      const rh = response(sv, iHip, plan.rhythm), rk = response(sv, iKnee, plan.rhythm);
+      board.lead_(hip, { swing: side * Math.min(sv.travel, plan.swing / rh.gain), phase: phase + rh.lag, wave: 'sine' });
+      board.lead_(knee, { swing: side * Math.min(sv.travel, plan.lift / rk.gain), phase: phase + Math.PI / 2 + rk.lag, wave: 'lift' });
+      servos.push(hipHorn, kneeHorn);
+      (side < 0 ? left : right).push(hipHorn);
+    }
+    return { parts: b.parts, joints: b.joints, body: body.id, left, right, servos, board: board.id, pack: pack.id };
+  });
 }

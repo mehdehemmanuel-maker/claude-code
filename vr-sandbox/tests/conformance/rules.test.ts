@@ -4,13 +4,20 @@
 // everything, not the one build that showed it.
 
 import { describe, expect, it } from 'vitest';
-import { rig } from './helpers';
+import { machine, rig } from './helpers';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
+import { shapeBounds } from '../../src/parts/shapes';
+import { effectiveParams, getPartKind } from '../../src/parts/registry';
+import { getServo, SHAFT_Q } from '../../src/data/servos';
+import { qmul } from '../../src/doc/math';
+import type { Quat } from '../../src/doc/types';
+import type { Solid } from '../../src/construct/build';
 import { TICK } from '../../src/physics/world';
 import { axisAngle, composePose, dot, length, relativePose, rotate, sub } from '../../src/doc/math';
 import type { Pose, Vec3 } from '../../src/doc/types';
 import { getMaterial, MATERIALS } from '../../src/data/materials';
 import { CONNECTOR_KINDS, getConnectorKind } from '../../src/connectors/registry';
-import { REACH, spans, throughOf, unreachable } from '../../src/connectors/through';
+import { spans, throughOf, unreachable } from '../../src/connectors/through';
 import { planJoin } from '../../src/connectors/plan';
 import { isStockScrew } from '../../src/engineering/fasteners';
 import { makePart, newDoc } from '../../src/doc/commands';
@@ -20,7 +27,6 @@ import { design, type DesignSpec } from '../../src/assistant/designer';
 import { Bench } from '../../src/app/bench';
 import { BuildHost } from '../../src/forge/apphost';
 import { run } from '../../src/forge/forge';
-import { JoinRefused, makeRigidJoin } from '../../src/tools/tools';
 import { numberOf } from '../../src/schema/params';
 
 const Y_TO_X = axisAngle([0, 0, 1], -Math.PI / 2);
@@ -28,37 +34,29 @@ const pose = (p: Vec3, q: Pose['q'] = [0, 0, 0, 1]): Pose => ({ p, q });
 
 describe('rules', () => {
   it('a joint is only where it touches both parts: across a gap the world refuses it and says why', async () => {
-    const holding = CONNECTOR_KINDS.filter((k) => !spans(k.model));
+    const holding = CONNECTOR_KINDS.filter((k) => !spans(k.model) && k.category !== 'Powered');
     expect(holding.length).toBeGreaterThan(10);
+    const r = await rig({ gravity: [0, 0, 0] }, false);
     for (const k of holding) {
-      const r = await rig({ gravity: [0, 0, 0] }, false);
       const a = r.part('block', pose([0, 1, 0]), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
       const b = r.part('block', pose([0, 1.15, 0]), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
-      // the anchor on A's top face, 50 mm short of B's bottom face
-      const conn = r.connect(k.id, { part: a, frame: pose([0, 0.05, 0]) }, { part: b, frame: pose([0, -0.1, 0]) }, {});
-      const events = r.world.step().events.filter((e) => e.type === 'break' && e.conn === conn.id);
-      expect(events.length, k.id).toBe(1);
-      expect((events[0] as { note: string }).note, k.id).toMatch(/50 mm from .*nothing physical joins them there/);
-      r.done();
+      // the construction gate refuses it (K-8): nothing enters, and the reason names the gap
+      let refusal: ConstructionRefused | null = null;
+      try { r.connect(k.id, { part: a, frame: pose([0, 0.05, 0]) }, { part: b, frame: pose([0, -0.1, 0]) }, {}); } catch (e) { if (e instanceof ConstructionRefused) refusal = e; else throw e; }
+      expect(refusal?.refusal.law, k.id).toBe('K-8');
+      expect(refusal?.refusal.reason, k.id).toMatch(/50 mm from .*nothing physical joins them there/);
+      r.world.apply({ op: 'removePart', id: a.id });
+      r.world.apply({ op: 'removePart', id: b.id });
     }
-    // each end on its own part but the two ends apart is an invisible rod: refused too
+    // and two ends each on its part but apart from each other would be an invisible rod
     {
-      const r = await rig({ gravity: [0, 0, 0] }, false);
       const a = r.part('block', pose([0, 1, 0]), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
       const b = r.part('block', pose([0, 1.1, 0]), { material: 'steel.a36', params: { x: 0.1, y: 0.1, z: 0.1 } });
-      const conn = r.connect('bolted', { part: a, frame: pose([0.05, 0.05, 0]) }, { part: b, frame: pose([-0.05, -0.05, 0]) }, {});
-      const notes = r.world.step().events.filter((e) => e.type === 'break' && e.conn === conn.id).map((e) => (e as { note: string }).note);
-      expect(notes[0]).toMatch(/two ends are 100 mm apart/);
-      r.done();
+      let refusal: ConstructionRefused | null = null;
+      try { r.connect('bolted', { part: a, frame: pose([0.05, 0.05, 0]) }, { part: b, frame: pose([-0.05, -0.05, 0]) }, {}); } catch (e) { if (e instanceof ConstructionRefused) refusal = e; else throw e; }
+      expect(refusal?.refusal.reason).toMatch(/two ends are 100 mm apart/);
     }
-    // and the tools won't make one: the Join tool's joint across a gap is refused before it exists
-    const bench = new Bench();
-    const host = new BuildHost(bench);
-    run('place block x=0.1 y=0.1 z=0.1 mat steel.a36 at 0 0.05 0 as a\nplace block x=0.1 y=0.1 z=0.1 mat steel.a36 at 0 0.2 0 as b', host);
-    const [ida, idb] = ['a', 'b'].map((n) => Object.values(bench.doc.parts).find((p) => p.name === n)!.id);
-    expect(() => makeRigidJoin(bench, { part: ida!, point: [0, 0.1, 0], normal: [0, 1, 0], seg: null }, { part: idb!, seg: null }, 'hinge', [0, 0, 0, 1])).toThrow(JoinRefused);
-    expect(Object.keys(bench.doc.connections)).toHaveLength(0);
-    expect(REACH).toBeLessThan(0.01);
+    r.done();
   });
 
   it('every fixture and every design can be built from what is sold: joints touch, hardware exists, fits and reaches', () => {
@@ -158,23 +156,40 @@ describe('rules', () => {
     });
   }
 
+  const I: Quat = [0, 0, 0, 1];
+  /** A servo standing on its narrow face, shaft face up: its horn turns about a vertical axis. */
+  const UP: Quat = axisAngle([1, 0, 0], -Math.PI / 2);
+  /** A horn's thickness between the shaft face and what it carries (the common nylon horn, an estimate). */
+  const HORN = 0.003;
+
   for (const solid of [false, true]) it(`a servo turns everything bolted to it, and only through its travel (it has end stops): ${solid ? 'a solid' : 'a breakable'} arm`, async () => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    // a light 1 kg servo mount bolted to a heavy 60 kg free base, an arm on the servo: the servo is sized by all of
-    // it, not by the mount alone, so it gets the arm to where it is told
-    const base = r.part('block', pose([0, 1, 0]), { material: 'steel.a36', params: { x: 0.2, y: 0.2, z: 0.25 } });
-    const mount = r.part('block', pose([0, 1.125, 0]), { material: 'steel.a36', params: { x: 0.05, y: 0.05, z: 0.05 } });
-    const seat = pose([0, 1.1, 0]);
-    r.connect('bolted', { part: mount, frame: relativePose(mount.pose, seat) }, { part: base, frame: relativePose(base.pose, seat) }, { size: 'M6', count: 4, bondW: 0.05, bondL: 0.05 });
-    const arm = r.part('lumber', pose([0.25, 1.15 + 0.019, 0]), { params: { size: '2x4', length: 0.6, ...(solid ? { fracture: 'off' } : {}) } });
-    const axis = pose([0, 1.15, 0]);
+    // a light 1 kg servo mount bolted to a heavy 60 kg free base, a large servo screwed to the mount, an arm on its
+    // horn: the servo is sized by all of it, not by the mount alone, so it gets the arm to where it is told. Its
+    // pack and the receiver your stick reaches it through stand on the bench beside it.
     const range = 0.4;
-    const servo = r.connect('servo', { part: mount, frame: relativePose(mount.pose, axis) }, { part: arm, frame: relativePose(arm.pose, axis) }, { maxTorque: 40, range, channel: 'steer' });
+    const sv = getServo('servo.large-60kg'), [l, w, h] = sv.dims;
+    const { out: horn } = machine(r, (b) => {
+      const base = b.place('block', [0, 1, 0], I, { x: 0.2, y: 0.2, z: 0.25 }, 'base', { material: 'steel.a36' });
+      const mount = b.place('block', [0, 1.125, 0], I, { x: 0.05, y: 0.05, z: 0.05 }, 'mount', { material: 'steel.a36' });
+      mount.fasten({ thin: 0.05, at: [0, -0.025, 0] }, base, { thin: 0.2, at: [0, 0.1, 0] }, [0.05, 0.05], 'bolted');
+      const servo = b.place('servo', [0, 1.15 + h / 2, 0], UP, { model: sv.id }, 'servo');
+      servo.fasten({ thin: h, at: [0, 0, -h / 2] }, mount, { thin: 0.05, at: [0, 0.025, 0] }, [l, w], 'screwed');
+      const shaft = servo.worldOf(servo.shaft).p;
+      const arm = b.place('lumber', [shaft[0] + 0.3, shaft[1] + HORN + 0.019, 0], I, { size: '2x4', length: 0.6, ...(solid ? { fracture: 'off' } : {}) }, 'arm');
+      const horn = servo.horn(arm, { p: [-0.3, -0.019 - HORN, 0], q: qmul(UP, SHAFT_Q) });
+      const pack = b.place('battery', [-0.3, 1, 0], I, { model: 'battery.nimh.aa', series: 6, parallel: 1, charge: 1 }, 'pack', { frozen: true });
+      const rx = b.place('receiver', [-0.3, 1.1, 0], I, {}, 'receiver', { frozen: true });
+      pack.wire(servo);
+      pack.wire(rx);
+      rx.stick(servo, 'steer', range);
+      return horn;
+    });
     r.world.apply({ op: 'controls', channels: { steer: 1 } });
     let peak = 0, last = 0;
     for (let i = 0; i < 135; i++) {
       const res = r.world.step();
-      last = res.loads.find((l) => l.id === servo.id)!.extent;
+      last = res.loads.find((l) => l.id === horn)!.extent;
       peak = Math.max(peak, Math.abs(last));
     }
     expect(Math.abs(Math.abs(last) - range)).toBeLessThan(0.03);
@@ -183,49 +198,67 @@ describe('rules', () => {
   });
 
   // A servo is a proportional controller that saturates (Wada et al., IEEE CCA 2009): it pushes back in proportion to
-  // how far it is off, its stall torque `band` off, and its torque falls with speed to nothing at its no-load speed.
-  // Found when a walker's legs folded under it (a 6 Hz loop on a 4 g thigh is 0.006 N m/rad), then when a stiffer loop
-  // rang on a light bracket bolted to a heavy base (Jolt's motor saw only the bracket). Held on both: a frozen mount
-  // (Jolt alone) and a light mount bolted to a heavy free base (the re-solve, on true inertia).
+  // how far it is off, its stall torque `band` off, and its torque falls with speed to nothing at its no-load speed,
+  // both at the volts its pack gives it. Found when a walker's legs folded under it (a 6 Hz loop on a 4 g thigh is
+  // 0.006 N m/rad), then when a stiffer loop rang on a light bracket bolted to a heavy base (Jolt's motor saw only the
+  // bracket). Held on both: a frozen mount (Jolt alone) and a light mount bolted to a heavy free base (the re-solve,
+  // on true inertia). The servo lies on the mount with its shaft face sideways, so the arm hangs level and its weight
+  // bears on the horn.
+  const sv0 = getServo('servo.micro-9g');
   for (const free of [false, true]) {
-    const servoArm = async (gravity: boolean, params: Record<string, number | string>) => {
+    const servoArm = async (gravity: boolean, swing: number) => {
       const r = await rig(gravity ? {} : { gravity: [0, 0, 0] }, false);
-      const SIDE: Pose['q'] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
-      let mount;
-      if (free) {
-        const base = r.part('block', pose([0, 0.9, 0]), { material: 'steel.a36', params: { x: 0.2, y: 0.2, z: 0.25 } });
-        mount = r.part('block', pose([0, 1.0125, 0]), { material: 'steel.a36', params: { x: 0.025, y: 0.025, z: 0.025 } });
-        const seat = pose([0, 1, 0]);
-        r.connect('bolted', { part: mount, frame: relativePose(mount.pose, seat) }, { part: base, frame: relativePose(base.pose, seat) }, { size: 'M4', count: 2, bondW: 0.025, bondL: 0.025 });
-        // held up, so only the servo is in question
-        r.connect('fixed', { part: base, frame: pose([0, -0.1, 0]) }, null, {});
-      } else mount = r.part('block', pose([0, 1.0125, 0]), { material: 'steel.a36', params: { x: 0.025, y: 0.025, z: 0.025 }, frozen: true });
-      // a 20 cm aluminium arm, 54 g, held level from its end: 0.053 N m on the servo
-      const arm = r.part('block', pose([0.1125, 1.0125, 0]), { material: 'aluminum.6061-t6', params: { x: 0.2, y: 0.01, z: 0.01 } });
-      const axis = pose([0.0125, 1.0125, 0], SIDE);
-      const servo = r.connect('servo', { part: mount, frame: relativePose(mount.pose, axis) }, { part: arm, frame: relativePose(arm.pose, axis) }, { maxTorque: 0.18, band: 0.1, speed: 10.5, ...params });
-      return { r, servo };
+      const sv = getServo('servo.micro-9g'), [l, w, h] = sv.dims;
+      const { out, store } = machine(r, (b) => {
+        let mount: Solid, base: Solid | null = null;
+        if (free) {
+          base = b.place('block', [0, 0.9, 0], I, { x: 0.2, y: 0.2, z: 0.25 }, 'base', { material: 'steel.a36' });
+          mount = b.place('block', [0, 1.0125, 0], I, { x: 0.025, y: 0.025, z: 0.025 }, 'mount', { material: 'steel.a36' });
+          mount.fasten({ thin: 0.025, at: [0, -0.0125, 0] }, base, { thin: 0.2, at: [0, 0.1, 0] }, [0.025, 0.025], 'bolted');
+        } else mount = b.place('block', [0, 1.0125, 0], I, { x: 0.025, y: 0.025, z: 0.025 }, 'mount', { material: 'steel.a36', frozen: true });
+        const servo = b.place('servo', [0, 1.025 + w / 2, 0], I, { model: sv.id }, 'servo');
+        servo.fasten({ thin: w, at: [0, -w / 2, 0] }, mount, { thin: 0.025, at: [0, 0.0125, 0] }, [l, h], 'screwed');
+        const shaft = servo.worldOf(servo.shaft).p;
+        // a 20 cm aluminium arm, 54 g, held level from its end: 0.053 N m on the horn
+        const arm = b.place('block', [shaft[0] + 0.1, shaft[1], shaft[2] + HORN + 0.005], I, { x: 0.2, y: 0.01, z: 0.01 }, 'arm', { material: 'aluminum.6061-t6' });
+        const horn = servo.horn(arm, { p: [-0.1, 0, -0.005 - HORN], q: SHAFT_Q });
+        const pack = b.place('battery', [-0.2, 1, 0], I, { model: 'battery.nimh.aa', series: 4, parallel: 1, charge: 1 }, 'pack', { frozen: true });
+        const rx = b.place('receiver', [-0.2, 1.1, 0], I, {}, 'receiver', { frozen: true });
+        pack.wire(servo);
+        pack.wire(rx);
+        rx.stick(servo, 'steer', swing);
+        return { horn, base };
+      });
+      // held up by the bench, so only the servo is in question
+      if (out.base) r.connect('fixed', { part: store.doc.parts[out.base.id]!, frame: pose([0, -0.1, 0]) }, null, {});
+      return { r, horn: out.horn, sv };
     };
-    it(`a servo sags under its load by what its stiffness says, stall torque over band, and no more (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
-      const { r, servo } = await servoArm(true, { range: 0.5, channel: 'steer' });
-      let sag = 0;
-      for (let i = 0; i < 180; i++) sag = r.world.step().loads.find((l) => l.id === servo.id)!.extent;
-      // 0.054 kg x 9.81 x 0.1 m / (0.18 / 0.1 N m/rad) = 0.029 rad
-      expect(Math.abs(sag)).toBeGreaterThan(0.022);
-      expect(Math.abs(sag)).toBeLessThan(0.037);
+    it(`a servo sags under its load by what its stiffness says, stall torque over band at its volts, and no more (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
+      const { r, horn, sv } = await servoArm(true, 0.5);
+      let sag = 0, V = 0;
+      for (let i = 0; i < 180; i++) { const res = r.world.step(); sag = res.loads.find((l) => l.id === horn)!.extent; V = res.power?.servos?.[horn]?.V ?? 0; }
+      // 0.054 kg x 9.81 x 0.1 m / (0.176 (V / 4.8) / 0.1 N m/rad): 0.029 rad at 4.8 V, less at the pack's higher volts
+      const expected = (0.054 * 9.81 * 0.1) / ((sv.stallTorque * (V / sv.V)) / sv.band);
+      expect(V).toBeGreaterThan(4.8);
+      expect(Math.abs(sag)).toBeGreaterThan(expected * 0.75);
+      expect(Math.abs(sag)).toBeLessThan(expected * 1.3);
       r.done();
     });
-    it(`a servo turns no faster than its no-load speed, and nearly that fast unloaded (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
-      const { r, servo } = await servoArm(false, { range: 1, channel: 'steer', speed: 3 });
+    it(`a servo turns no faster than its no-load speed at its volts, and nearly that fast unloaded (${free ? 'on a light mount bolted to a heavy base' : 'on a frozen mount'})`, async () => {
+      // a swing to its travel (90°): a short move never reaches the no-load speed before the loop slows it
+      const { r, horn, sv } = await servoArm(false, sv0.travel);
       r.world.apply({ op: 'controls', channels: { steer: 1 } });
-      let last = 0, fastest = 0;
-      for (let i = 0; i < 60; i++) {
-        const now = r.world.step().loads.find((l) => l.id === servo.id)!.extent;
+      let last = 0, fastest = 0, V = 0;
+      for (let i = 0; i < 90; i++) {
+        const res = r.world.step();
+        const now = res.loads.find((l) => l.id === horn)!.extent;
         fastest = Math.max(fastest, Math.abs(now - last) / TICK);
         last = now;
+        V = Math.max(V, res.power?.servos?.[horn]?.V ?? 0);
       }
-      expect(fastest).toBeLessThan(3 * 1.05);
-      expect(fastest).toBeGreaterThan(3 * 0.8);
+      const speed = sv.noLoadSpeed * (V / sv.V);
+      expect(fastest).toBeLessThan(speed * 1.05);
+      expect(fastest).toBeGreaterThan(speed * 0.8);
       r.done();
     });
   }
@@ -248,7 +281,7 @@ describe('rules', () => {
     let worst = 0, drifts = 0;
     for (let k = 0; k < 270; k++) {
       drifts += r.world.step().events.filter((e) => e.type === 'drift').length;
-      for (const id of w.joints) { const c = W.conns.get(id); worst = Math.max(worst, length(sub(W.anchorWorldB(c).p, W.anchorWorld(c).p))); }
+      for (const id of w.joints) { if (spans(getConnectorKind(store.doc.connections[id]!.kind).model)) continue; const c = W.conns.get(id); worst = Math.max(worst, length(sub(W.anchorWorldB(c).p, W.anchorWorld(c).p))); }
     }
     expect(drifts).toBe(0);
     expect(worst).toBeLessThan(0.001);
@@ -266,9 +299,10 @@ describe('rules', () => {
     // a motor drive made on anything but a motor is no drive at all
     const block = r.part('block', pose([1, 1, 0]), { frozen: true, material: 'steel.a36', params: { x: 0.05, y: 0.05, z: 0.05 } });
     const disc2 = r.part('disc', pose([1, 1.035, 0]), { material: 'steel.a36', params: { diameter: 0.05, thickness: 0.02 } });
-    const fake = r.connect('motor', { part: block, frame: pose([0, 0.025, 0]) }, { part: disc2, frame: pose([0, -0.01, 0]) }, { channel: 'always' });
-    const notes = r.world.step().events.filter((e) => e.type === 'break' && e.conn === fake.id).map((e) => (e as { note: string }).note);
-    expect(notes[0]).toMatch(/motor drive is the output shaft of a motor/);
+    let fake: ConstructionRefused | null = null;
+    try { r.connect('motor', { part: block, frame: pose([0, 0.025, 0]) }, { part: disc2, frame: pose([0, -0.01, 0]) }, { channel: 'always' }); } catch (e) { if (e instanceof ConstructionRefused) fake = e; else throw e; }
+    expect(fake?.refusal.law).toBe('K-9');
+    expect(fake?.refusal.reason).toMatch(/motor drive is the output shaft of a motor/);
     // wired, it turns
     const battery = r.part('battery', pose([0.3, 1, 0]), { params: { model: 'battery.sla.12v-7ah', series: 2, parallel: 1, charge: 1 } });
     r.connect('wire', { part: battery, frame: pose([-0.0755, 0, 0]) }, { part: motor, frame: pose([0, -face, 0]) }, { gauge: '14', length: 0.5 });
@@ -280,26 +314,37 @@ describe('rules', () => {
 
   it('if you can\'t make it you can\'t place it: a bought motor or battery takes only the joints its maker allows (R11)', async () => {
     const r = await rig({ gravity: [0, 0, 0] }, false);
-    const refused: string[] = [];
+    const refused: string[] = [], made: string[] = [];
     let x = 0;
     for (const kind of ['bolted', 'screwed', 'nailed', 'riveted', 'weld', 'glued', 'soldered', 'fixed']) {
       for (const bought of ['motor.dc', 'battery'] as const) {
         x += 1;
         const item = r.part(bought, pose([x, 1, 0]), { frozen: true, params: bought === 'motor.dc' ? { model: 'motor.dc.coreless.d40-150w-24v' } : { model: 'battery.sla.12v-7ah', series: 1 } });
         // a plate laid on its top, touching
-        const top = bought === 'motor.dc' ? 0.071 / 2 : 0.0975 / 2;
+        const topOf = (p: { kind: string; params: Record<string, number | string | boolean>; material: string }) => { const k = getPartKind(p.kind); return shapeBounds(k.collision(effectiveParams(k, p.params, getMaterial(p.material)))).max[1]; };
+        const top = topOf(item);
         const plate = r.part('block', pose([x, 1 + top + 0.005, 0]), { material: 'aluminum.6061-t6', params: { x: 0.03, y: 0.01, z: 0.03 } });
-        const params: Record<string, number | string> = kind === 'bolted' ? { size: 'M4', count: 1, bondW: 0.02, bondL: 0.02 } : kind === 'screwed' ? { diameter: 0.004, length: 0.016, count: 1, bondW: 0.02, bondL: 0.02 } : { bondW: 0.02, bondL: 0.02 };
-        const c = r.connect(kind, { part: plate, frame: pose([0, -0.005, 0], axisAngle([1, 0, 0], Math.PI)) }, { part: item, frame: pose([0, top, 0]) }, params);
-        for (const e of r.world.step().events) if (e.type === 'break' && e.conn === c.id && /can't be made on a/.test(e.note)) refused.push(`${kind} on ${bought}`);
+        const params: Record<string, number | string> = kind === 'bolted' ? { size: 'M4', count: 1, bondW: 0.02, bondL: 0.02 } : kind === 'screwed' ? { diameter: 0.004, length: 0.016, count: 1, bondW: 0.02, bondL: 0.02 } : kind === 'fixed' ? {} : { bondW: 0.02, bondL: 0.02 };
+        let c = null;
+        try { c = r.connect(kind, { part: plate, frame: pose([0, -0.005, 0], axisAngle([1, 0, 0], Math.PI)) }, { part: item, frame: pose([0, top, 0]) }, params); }
+        catch (e) { if (e instanceof ConstructionRefused && e.refusal.law === 'K-7' && /can't be made on a/.test(e.refusal.reason)) refused.push(`${kind} on ${bought}`); else throw e; }
+        if (c) made.push(`${kind} on ${bought}`);
       }
     }
-    expect(refused.length).toBe(16);
+    // what is refused and what is made is exactly what each maker's datasheet says: nothing else decides it
+    const allowed = (bought: string, kind: string) => getPartKind(bought).bought!.accepts.includes(kind);
+    for (const kind of ['bolted', 'screwed', 'nailed', 'riveted', 'weld', 'glued', 'soldered', 'fixed']) for (const bought of ['motor.dc', 'battery']) {
+      expect(refused.includes(`${kind} on ${bought}`)).toBe(!allowed(bought, kind));
+      expect(made.includes(`${kind} on ${bought}`)).toBe(allowed(bought, kind));
+    }
+    expect(refused.length + made.length).toBe(16);
+    expect(refused.length).toBeGreaterThanOrEqual(12);
     // what its maker allows is made: a split clamp round the motor's body holds
-    const motor = r.part('motor.dc', pose([0, 2, 0]), { frozen: true, params: { model: 'motor.dc.coreless.d40-150w-24v' } });
-    const clampBlock = r.part('block', pose([0, 2, 0]), { material: 'aluminum.6061-t6', params: { x: 0.06, y: 0.025, z: 0.06 } });
-    const held = r.connect('clamp', { part: clampBlock, frame: pose([0, 0, 0]) }, { part: motor, frame: pose([0, 0, 0]) }, { size: 'M5', count: 2, bore: 0.04, width: 0.025 });
-    const broke = r.world.step().events.some((e) => e.type === 'break' && e.conn === held.id);
+    const { conns: [held] } = r.construct([
+      { kind: 'motor.dc', pose: pose([0, 2, 0]), frozen: true, params: { model: 'motor.dc.coreless.d40-150w-24v' } },
+      { kind: 'block', pose: pose([0, 2, 0]), material: 'aluminum.6061-t6', params: { x: 0.06, y: 0.025, z: 0.06 } },
+    ], [{ kind: 'clamp', a: { part: 1, frame: pose([0, 0, 0]) }, b: { part: 0, frame: pose([0, 0, 0]) }, params: { size: 'M5', count: 2, bore: 0.04, width: 0.025 } }]);
+    const broke = r.world.step().events.some((e) => (e.type === 'break' || e.type === 'refused') && ('conn' in e ? e.conn === held!.id : e.id === held!.id));
     expect(broke).toBe(false);
     r.done();
   });

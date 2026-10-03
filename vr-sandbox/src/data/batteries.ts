@@ -7,7 +7,7 @@ import type { Price } from './motors';
 export interface BatteryData {
   id: string;
   label: string;
-  chemistry: 'lead-acid-vrla';
+  chemistry: 'lead-acid-vrla' | 'nimh';
   /** Cells in series in one block, and the block's nominal voltage. */
   cells: number;
   V: number;
@@ -27,6 +27,42 @@ export interface BatteryData {
 }
 
 export const BATTERIES: Record<string, BatteryData> = {
+  'battery.nimh.aa': {
+    id: 'battery.nimh.aa', label: 'NiMH AA cell, 1.2 V 2000 mAh (in a holder)', chemistry: 'nimh', cells: 1, V: 1.2,
+    capacity: [
+      { hours: 5, Ah: 2.0, endPerCell: 1.0 },
+      { hours: 1, Ah: 1.9, endPerCell: 1.0 },
+      { hours: 0.33, Ah: 1.7, endPerCell: 0.9 },
+    ],
+    internalR: 0.025, mass: 0.03, dims: [0.0505, 0.0145, 0.0145],
+    construction: [
+      { part: 'Positive electrode', is: 'nickel oxyhydroxide (NiOOH) on a sintered or foam nickel substrate' },
+      { part: 'Negative electrode', is: 'a hydrogen-absorbing alloy (AB5, a mischmetal-nickel alloy) holding hydrogen as a metal hydride' },
+      { part: 'Separator', is: 'a polyolefin non-woven, holding the electrolyte' },
+      { part: 'Electrolyte', is: 'potassium hydroxide (KOH) solution, about 30%' },
+      { part: 'Case', is: 'a nickel-plated steel can, 14.5 mm by 50.5 mm, with a resealing vent; in a plastic holder with spring contacts' },
+    ],
+    reaction: 'NiOOH + MH → Ni(OH)2 + M on discharge (reversed on charge): hydrogen moves from the alloy to the nickel electrode',
+    source: 'the common 2000 mAh AA NiMH cell class datasheet: 1.2 V nominal, about 2.0 Ah at 0.2 C to 1.0 V, 1.9 Ah at 1 C, 1.7 Ah at 3 C, about 25 mΩ, 30 g, 14.5 × 50.5 mm; the open-circuit curve (1.25 V flat, rising to 1.40 V full) is an estimate of its shape',
+  },
+  'battery.nimh.aaa': {
+    id: 'battery.nimh.aaa', label: 'NiMH AAA cell, 1.2 V 800 mAh (in a holder)', chemistry: 'nimh', cells: 1, V: 1.2,
+    capacity: [
+      { hours: 5, Ah: 0.8, endPerCell: 1.0 },
+      { hours: 1, Ah: 0.75, endPerCell: 1.0 },
+      { hours: 0.33, Ah: 0.65, endPerCell: 0.9 },
+    ],
+    internalR: 0.04, mass: 0.012, dims: [0.0445, 0.0105, 0.0105],
+    construction: [
+      { part: 'Positive electrode', is: 'nickel oxyhydroxide (NiOOH) on a sintered or foam nickel substrate' },
+      { part: 'Negative electrode', is: 'a hydrogen-absorbing alloy (AB5, a mischmetal-nickel alloy) holding hydrogen as a metal hydride' },
+      { part: 'Separator', is: 'a polyolefin non-woven, holding the electrolyte' },
+      { part: 'Electrolyte', is: 'potassium hydroxide (KOH) solution, about 30%' },
+      { part: 'Case', is: 'a nickel-plated steel can, 14.5 mm by 50.5 mm, with a resealing vent; in a plastic holder with spring contacts' },
+    ],
+    reaction: 'NiOOH + MH → Ni(OH)2 + M on discharge (reversed on charge): hydrogen moves from the alloy to the nickel electrode',
+    source: 'the common 800 mAh AAA NiMH cell class datasheet: 1.2 V nominal, about 0.8 Ah at 0.2 C to 1.0 V, 0.75 Ah at 1 C, 0.65 Ah at 3 C, about 40 mΩ, 12 g, 10.5 × 44.5 mm; the open-circuit curve is the AA cell\'s, an estimate of its shape',
+  },
   'battery.sla.12v-7ah': {
     id: 'battery.sla.12v-7ah', label: 'Sealed lead-acid (AGM) battery, 12 V 7 Ah, F1 terminals', chemistry: 'lead-acid-vrla', cells: 6, V: 12,
     capacity: [

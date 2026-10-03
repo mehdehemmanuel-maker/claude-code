@@ -64,6 +64,9 @@ function searchDrives(Tw: number, Tc: number, v: number, r: number, k: number, g
       for (const bd of Object.values(BATTERIES)) {
         const series = Math.max(1, Math.round(md.V / bd.V));
         const pack: Pack = { data: bd, series, parallel: 1 };
+        // a fresh pack must not exceed what the motor takes (the blocks' match-voltage rule): twenty NiMH cells
+        // charged are 28 V, more than a 24 V motor's 26.4
+        if (packOCV(pack, 1) > md.V * 1.1) continue;
         const V = packOCV(pack, 0.8);
         const o = evaluateDrive(mm, gh, pack, V, Tw, Tc, r);
         if (!o) continue;
@@ -205,16 +208,21 @@ export interface PackChoice { battery: string; series: number; parallel: number;
 export const batterySize: Workflow<Record<string, number | string>, PackChoice> = {
   id: 'battery.size', name: 'Size a battery pack',
   goal: 'Blocks in series for the voltage and strings in parallel for the runtime, from the maker\'s capacity at that rate.',
-  asks: [q('voltage', 'nominal voltage', 'V', 24), q('current', 'average current', 'A'), q('hours', 'runtime wanted', 'h')],
-  steps: ['Series blocks to make the voltage.', 'The capacity a string gives at that current (the maker\'s table: faster drawn, less given).', 'Strings in parallel until the runtime is met.'],
+  asks: [q('voltage', 'nominal voltage', 'V', 24), q('current', 'average current', 'A'), q('hours', 'runtime wanted', 'h'), q('maxVoltage', 'the most the load takes, fresh off charge', 'V', 0)],
+  steps: ['Series blocks to make the voltage; a chemistry whose fresh pack would exceed what the load takes is out.', 'The capacity a string gives at that current (the maker\'s table: faster drawn, less given).', 'Strings in parallel until the runtime is met; the lightest pack wins.'],
   uses: { laws: ['energy.electric', 'lead-acid.ocv'], families: ['battery'], processes: [] }, tags: ['battery', 'runtime', 'power'],
   run(spec) {
-    const V = n(spec, 'voltage', 24), I = n(spec, 'current', 5), h = n(spec, 'hours', 1);
+    const V = n(spec, 'voltage', 24), I = n(spec, 'current', 5), h = n(spec, 'hours', 1), vMax = n(spec, 'maxVoltage', 0);
     const trace: TraceStep[] = [];
     const out: PackChoice[] = [];
-    for (const b of Object.values(BATTERIES)) out.push(sizePack(b, V, I, h));
+    for (const b of Object.values(BATTERIES)) {
+      const c = sizePack(b, V, I, h);
+      if (vMax > 0 && packOCV({ data: b, series: c.series, parallel: 1 }, 1) > vMax) continue;
+      out.push(c);
+    }
     out.sort((a, b) => a.mass - b.mass);
-    const best = out[0]!;
+    const best = out[0];
+    if (!best) return { ok: false, choice: null, trace, warnings: [`no stocked chemistry makes ${V} V under ${vMax} V fresh`], parts: [], alternatives: [], summary: `No pack: none in stock makes ${V} V without exceeding ${vMax} V fresh off charge.` };
     step(trace, 'energy.electric', 'what it gives over the runtime', { V, I, t: h * 3600 }, 'J');
     return {
       ok: true, choice: best, trace, warnings: cautions(trace), parts: [best.battery], alternatives: out.slice(1).map((c) => ({ choice: c, why: `${r3(c.mass)} kg` })),

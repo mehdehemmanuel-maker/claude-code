@@ -105,8 +105,8 @@ describe('workflows', () => {
     expect((run('wire.size', { current: 20, length: 3, voltage: 24 }).choice as { gauge: string }).gauge).toBe('12');
   });
 
-  it('a battery: 24 V at 5 A for an hour takes two strings, because a lead-acid block drawn fast gives less', () => {
-    const c = run('battery.size', { voltage: 24, current: 5, hours: 1 }).choice as { series: number; parallel: number; hours: number };
+  it('a battery: 24 V at 5 A for an hour for a 24 V motor takes two lead-acid strings, because a block drawn fast gives less (and twenty NiMH cells fresh are 28 V, more than the motor takes)', () => {
+    const c = run('battery.size', { voltage: 24, current: 5, hours: 1, maxVoltage: 26.4 }).choice as { series: number; parallel: number; hours: number };
     expect(c.series).toBe(2);
     expect(c.parallel).toBe(2);
     expect(c.hours).toBeGreaterThan(1);

@@ -5,7 +5,8 @@ import { getMaterial, MATERIALS, type Material } from '../data/materials';
 import { getConnectorKind, hasConnectorKind } from '../connectors/registry';
 import { effectiveParams, fittedGearhead, getPartKind, hasPartKind, type PartDims, massOf } from '../parts/registry';
 import { shapeBounds } from '../parts/shapes';
-import { commitPoses, connectedComponent, deleteParts, duplicateParts, fragmentOf, insertFragment, newDoc, recordFracture, setConnectionState, setFrozen, type Fragment } from '../doc/commands';
+import { commitPoses, connectedComponent, deleteParts, duplicateParts, fragmentOf, insertFragment, newDoc, recordFracture, refuse, setConnectionState, setFrozen, type Fragment } from '../doc/commands';
+import { ConstructionRefused } from '../ganglia/tree/gate';
 import { endpointWorld, isBent, partLayout, segmentPose } from './segments';
 import { segmentBodyId, segmentOffset, segmentOfFrame } from '../parts/registry';
 import { canonicalPose, composePose, length, relativePose, sub, transformPoint } from '../doc/math';
@@ -289,14 +290,10 @@ export class App {
       this.physics.send({ op: 'sim', sim: this.worldSim(doc.sim) });
       this.mirrorParts.clear();
       this.mirrorConns.clear();
-      for (const p of Object.values(doc.parts)) {
-        this.physics.send({ op: 'upsertPart', part: this.physicsPart(p), material: this.materialOf(p), keepLivePose: false });
-        this.mirrorParts.set(p.id, structuredClone(p));
-      }
-      for (const c of Object.values(doc.connections)) {
-        this.physics.send({ op: 'upsertConnection', conn: c, materials: doc.materials });
-        this.mirrorConns.set(c.id, structuredClone(c));
-      }
+      // the whole document enters the world as one construction: judged whole, its joints' bores known
+      const parts = Object.values(doc.parts).map((p) => { this.mirrorParts.set(p.id, structuredClone(p)); return { part: this.physicsPart(p), material: this.materialOf(p) }; });
+      const conns = Object.values(doc.connections).map((c) => { this.mirrorConns.set(c.id, structuredClone(c)); return { conn: c, materials: doc.materials }; });
+      this.physics.send({ op: 'construct', parts, conns });
       this.view.syncParts(doc, 'all');
       this.view.syncConnections(doc, 'all');
       for (const p of Object.values(doc.parts)) {
@@ -311,9 +308,21 @@ export class App {
     }
     const t = touched(changes);
     if (t.materials.size > 0) for (const p of Object.values(doc.parts)) if (t.materials.has(p.material)) t.parts.add(p.id);
+    // what this transaction made enters the world as one construction (judged whole, its joints' bores known)
+    const made = { parts: [] as { part: Part; material: Material }[], conns: [] as { conn: Connection; materials: Record<string, Material> }[] };
+    for (const id of t.parts) {
+      const part = doc.parts[id];
+      if (part && !this.mirrorParts.has(id)) { made.parts.push({ part: this.physicsPart(part), material: this.materialOf(part) }); this.mirrorParts.set(id, structuredClone(part)); }
+    }
+    for (const id of t.connections) {
+      const c = doc.connections[id];
+      if (c && !this.mirrorConns.has(id) && (made.parts.length || (doc.parts[c.a.part] && this.mirrorParts.has(c.a.part)))) { made.conns.push({ conn: c, materials: doc.materials }); this.mirrorConns.set(id, structuredClone(c)); }
+    }
+    if (made.parts.length || made.conns.length) this.physics.send({ op: 'construct', parts: made.parts, conns: made.conns });
     for (const id of t.parts) {
       const part = doc.parts[id];
       const prev = this.mirrorParts.get(id);
+      if (part && prev && made.parts.some((m) => m.part.id === id)) continue;
       if (!part) {
         this.physics.send({ op: 'removePart', id });
         this.mirrorParts.delete(id);
@@ -339,6 +348,7 @@ export class App {
     for (const id of t.connections) {
       const c = doc.connections[id];
       const prev = this.mirrorConns.get(id);
+      if (c && prev && made.conns.some((m) => m.conn.id === id)) continue;
       if (!c) {
         this.physics.send({ op: 'removeConnection', id });
         this.mirrorConns.delete(id);
@@ -624,7 +634,13 @@ export class App {
   // files
 
   loadDoc(doc: BuildDoc, label: string) {
-    this.store.replace(doc);
+    try {
+      this.store.replace(doc);
+    } catch (e) {
+      if (!(e instanceof ConstructionRefused)) throw e;
+      this.toast(`“${label}” can't be opened: ${e.refusal.name}: ${e.refusal.reason}`, 'warn');
+      return;
+    }
     this.checkpoints = [];
     // a silent checkpoint, so rewind always has the build as loaded to return to
     this.checkpoint(`Loaded ${label}`, false);
@@ -991,6 +1007,13 @@ export class App {
       } else if (e.type === 'fault') {
         console.error(`[physics fault] ${e.body}: ${e.note}`);
         this.toast(`${doc.parts[e.part]?.name ?? 'A part'}: ${e.note}`, 'warn');
+      } else if (e.type === 'refused') {
+        // the world's intake refused it (the construction gate, against the world as it stands): it is not an
+        // object with a defect, it is a failed construction, and it leaves the document
+        const name = e.what === 'part' ? doc.parts[e.id]?.name : getConnectorKind(doc.connections[e.id]?.kind ?? 'fixed').label;
+        refuse(this.store, e.what, e.id, e.note);
+        this.toast(`Can't be made: ${name ?? e.what}: ${e.note}`, 'warn');
+        this.audio.ui('error');
       }
     }
   }

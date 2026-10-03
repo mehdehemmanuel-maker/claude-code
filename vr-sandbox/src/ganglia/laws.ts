@@ -305,7 +305,7 @@ export const LAWS: Law[] = [
     constants: { V0: { value: 0.85, unit: 'V', name: 'offset of the rule' }, kSG: { value: 1, unit: 'V', name: 'volts per unit of specific gravity' } },
     eval: ({ SG, V0, kSG }) => V0! + kSG! * SG!, outside: ({ SG }) => (SG! < 1.05 || SG! > 1.32 ? `specific gravity ${SG} is outside a lead-acid cell's 1.05 (flat) to 1.32 (charged)` : null),
     valid: 'At rest (hours after charge or discharge), 25 °C; VRLA acid about 1.30 charged, 1.10 flat.', example: { inputs: { SG: 1.28 }, output: 2.13 }, source: { cite: 'Linden & Reddy, Handbook of Batteries, 3rd ed., ch. 23 (lead-acid)' }, tags: ['battery', 'charge', 'voltage'],
-    implementedIn: 'engineering/battery.ts cellOCV (SG from charge: ' + cellOCV(1).toFixed(2) + ' V charged)',
+    implementedIn: 'engineering/battery.ts cellOCV (SG from charge: ' + cellOCV('lead-acid-vrla', 1).toFixed(2) + ' V charged)',
   },
   {
     id: 'energy.electric', name: 'Electrical energy', domain: 'electrical', statement: 'Energy delivered is voltage times current times time.', formula: 'E = V I t',

@@ -22,8 +22,9 @@ async function load(doc: BuildDoc) {
   const J = await jolt();
   const w = new PhysicsWorld(J, doc.sim);
   w.apply({ op: 'environment', boxes: workshopEnvironment(), materials });
-  for (const p of Object.values(doc.parts)) w.apply({ op: 'upsertPart', part: p, material: doc.materials[p.material]!, keepLivePose: false });
-  for (const c of Object.values(doc.connections)) w.apply({ op: 'upsertConnection', conn: c, materials: doc.materials });
+  // the whole build enters as one construction (judged whole, its joints' bores known); a refusal is thrown here
+  const refused = w.apply({ op: 'construct', parts: Object.values(doc.parts).map((p) => ({ part: p, material: doc.materials[p.material]! })), conns: Object.values(doc.connections).map((c) => ({ conn: c, materials: doc.materials })) });
+  if (refused) throw new Error(`${refused.name}: ${refused.reason} [${refused.law}]`);
   return w;
 }
 

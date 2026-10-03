@@ -9,6 +9,7 @@
 //
 // See docs/EGO.md for what comes next (her body, the robot arm, the printer, an on-device language model).
 
+import { ConstructionRefused } from '../ganglia/tree/gate';
 import type { App } from '../app/app';
 import type { PhysicsEvent } from '../physics/protocol';
 import type { Change } from '../doc/store';
@@ -466,7 +467,13 @@ export class Ego {
     if (!plan) return;
     const water = app.place?.water ? { level: app.waterLevel()!, at: [0, 0, app.place.ground.shore - 6] as [number, number, number], heading: Math.PI / 2 }
       : { level: POOL.water, at: [POOL.x + plan.length * plan.segments / 2, 0, POOL.z] as [number, number, number], heading: 0 };
-    buildSwimmer(app.store, plan, [water.at[0], water.level - plan.thickness, water.at[2]], water.heading, `${plan.name.split(' ').pop()}${++this.seq}`);
+    try {
+      buildSwimmer(app.store, plan, [water.at[0], water.level - plan.thickness, water.at[2]], water.heading, `${plan.name.split(' ').pop()}${++this.seq}`);
+    } catch (e) {
+      if (!(e instanceof ConstructionRefused)) throw e;
+      this.say('warn', `I can't make ${plan.name}: ${e.refusal.name}: ${e.refusal.reason} (${e.refusal.law}).`, []);
+      return;
+    }
     if (app.settings.build) app.play();
   }
 
@@ -481,7 +488,14 @@ export class Ego {
     const heading = Math.atan2(-(you[2] - at[2]), you[0] - at[0]);
     const kind = Object.keys(WALKERS).find((k) => WALKERS[k] === plan) ?? 'walker';
     const tag = `${kind}${++this.seq}`;
-    const w = buildWalker(app.store, plan, [at[0], at[1] + 0.003, at[2]], heading, tag);
+    let w;
+    try {
+      w = buildWalker(app.store, plan, [at[0], at[1] + 0.003, at[2]], heading, tag);
+    } catch (e) {
+      if (!(e instanceof ConstructionRefused)) throw e;
+      this.say('warn', `I can't make ${plan.name}: ${e.refusal.name}: ${e.refusal.reason} (${e.refusal.law}).`, []);
+      return;
+    }
     this.herd.add(`the ${kind}`, w, this.seq);
     if (app.settings.build) app.play();
   }

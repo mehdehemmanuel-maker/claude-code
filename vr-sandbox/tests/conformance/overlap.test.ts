@@ -1,69 +1,77 @@
-// Overlap: two solids cannot share space, and pushing them apart is not a source of energy. A part placed (or
-// knocked) into another is moved out at position level; nothing may leave the overlap with speed it did not have.
-// In zero gravity with nothing else acting, the scene's kinetic energy must stay what it was: zero.
+// Overlap: two solids cannot share space. A part placed where another is never enters the world (K-5), so there is
+// no overlap for the solver to push out of and no energy to be made doing it. What does stand apart, with nothing but
+// gravity acting on it, moves no faster than a fall allows.
 
 import { describe, expect, it } from 'vitest';
 import { at, rig, type Rig } from './helpers';
-import type { StepResult } from '../../src/physics/protocol';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
+import { axisAngle } from '../../src/doc/math';
 
-function kinetic(r: Rig, s: StepResult, slots: (string | null)[]) {
-  let e = 0;
-  slots.forEach((id, i) => {
-    if (!id) return;
-    const m = r.world.bodyMass(id);
-    const I = r.world.bodyInertia(id);
-    if (m === undefined || !I) return;
-    const v = s.velocities;
-    const lv = [v[i * 6]!, v[i * 6 + 1]!, v[i * 6 + 2]!], w = [v[i * 6 + 3]!, v[i * 6 + 4]!, v[i * 6 + 5]!];
-    const Iw = [0, 1, 2].map((k) => I[k * 3]! * w[0]! + I[k * 3 + 1]! * w[1]! + I[k * 3 + 2]! * w[2]!);
-    e += 0.5 * m * (lv[0]! ** 2 + lv[1]! ** 2 + lv[2]! ** 2) + 0.5 * (w[0]! * Iw[0]! + w[1]! * Iw[1]! + w[2]! * Iw[2]!);
-  });
-  return e;
+/** Places the parts in a zero-g scene; a refusal to construct is returned, not thrown, and the scene released. */
+async function placing(parts: (r: Rig) => void): Promise<ConstructionRefused | null> {
+  const r = await rig({ gravity: [0, 0, 0] }, false);
+  try { parts(r); return null; } catch (e) { if (e instanceof ConstructionRefused) return e; throw e; } finally { r.done(); }
 }
 
-/** Runs a zero-g scene for a second; returns the most kinetic energy it ever had. */
-function peakEnergy(r: Rig) {
-  let slots: (string | null)[] = [];
-  let peak = 0;
-  for (let t = 0; t < 90; t++) {
-    const s = r.world.step();
-    if (s.slots) slots = s.slots;
-    peak = Math.max(peak, kinetic(r, s, slots));
-  }
-  return peak;
-}
-
-// Solver round-off only: 1 uJ is a 1 kg body at 1.4 mm/s.
-const NOTHING = 1e-6;
-
-describe('overlap adds no energy', () => {
+// Two solids cannot share space: an overlap is not a state the world moves out of, it is a construction that never
+// happens (K-5). Each of these was once placed and relied on the solver to push the parts apart without adding
+// energy; now none of them exists to be pushed.
+describe('two solids cannot share space: a part placed where another is never enters the world', () => {
   it('a breakable rod through a block', async () => {
-    const r = await rig({ gravity: [0, 0, 0] }, false);
-    // the block is fixed, so how far the rod was moved out reads straight off its height
-    r.part('block', at(0, 1, 0), { material: 'steel.a36', frozen: true, params: { x: 0.2, y: 0.2, z: 0.2 } });
-    const rod = r.part('rod.round', at(0, 1.07, 0, [0, 0, Math.SQRT1_2, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: 1, diameter: 0.02, fracture: 'auto' } });
-    expect(peakEnergy(r)).toBeLessThan(NOTHING);
-    // and it was moved out: the rod's axis now clears the block's face by its radius (less the contact slop)
-    expect(Math.abs(r.pos(rod)[1] - 1)).toBeGreaterThan(0.1 + 0.01 - 0.003);
-    r.done();
+    const no = await placing((r) => {
+      r.part('block', at(0, 1, 0), { material: 'steel.a36', frozen: true, params: { x: 0.2, y: 0.2, z: 0.2 } });
+      r.part('rod.round', at(0, 1.07, 0, [0, 0, Math.SQRT1_2, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: 1, diameter: 0.02, fracture: 'auto' } });
+    });
+    expect(no?.refusal.law).toBe('K-5');
+    expect(no?.refusal.reason).toMatch(/would be where Block is, by 4[0-9]\.\d mm/);
   });
 
   it('a breakable I-beam through a block', async () => {
-    const r = await rig({ gravity: [0, 0, 0] }, false);
-    r.part('block', at(0, 1, 0), { material: 'steel.a36', params: { x: 0.2, y: 0.2, z: 0.2 } });
-    r.part('beam.i', at(0.05, 1.05, 0), { material: 'steel.a36', params: { length: 2, fracture: 'auto' } });
-    expect(peakEnergy(r)).toBeLessThan(NOTHING);
-    r.done();
+    const no = await placing((r) => {
+      r.part('block', at(0, 1, 0), { material: 'steel.a36', params: { x: 0.2, y: 0.2, z: 0.2 } });
+      r.part('beam.i', at(0.05, 1.05, 0), { material: 'steel.a36', params: { length: 2, fracture: 'auto' } });
+    });
+    expect(no?.refusal.law).toBe('K-5');
+    expect(no?.refusal.name).toBe('I-beam');
   });
 
   it('a light breakable rod inside a body a million times heavier', async () => {
-    const r = await rig({ gravity: [0, 0, 0] }, false);
-    r.part('sphere', at(0, 2, 0), { material: 'rubber.natural', params: { diameter: 3 } });
-    r.part('rod.round', at(0.9, 2, 0.3, [0, 0, Math.SQRT1_2, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: 1.9, diameter: 0.0015, fracture: 'auto' } });
-    expect(peakEnergy(r)).toBeLessThan(NOTHING);
-    r.done();
+    const no = await placing((r) => {
+      r.part('sphere', at(0, 2, 0), { material: 'rubber.natural', params: { diameter: 3 } });
+      r.part('rod.round', at(0.9, 2, 0.3, [0, 0, Math.SQRT1_2, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: 1.9, diameter: 0.0015, fracture: 'auto' } });
+    });
+    expect(no?.refusal.law).toBe('K-5');
+    expect(no?.refusal.name).toBe('Round rod');
   });
 
+  it('a very slender bonded wire placed through a slab', async () => {
+    const no = await placing((r) => {
+      r.part('block', at(0, 0.3, 0), { material: 'wood.douglas-fir', frozen: true, params: { x: 17, y: 0.05, z: 2 } });
+      r.part('rod.round', at(0, 0.3, 0.3, [0.3, 0.2, 0.5, 0.787]), { material: 'steel.1018-cd', params: { length: 1.89, diameter: 0.0014, fracture: 'auto' } });
+    });
+    expect(no?.refusal.law).toBe('K-5');
+  });
+
+  it('two breakable plates crossing', async () => {
+    const no = await placing((r) => {
+      r.part('plate', at(0, 1, 0), { material: 'aluminum.6061-t6', params: { length: 0.3, width: 0.2, thickness: 0.006, fracture: 'auto' } });
+      r.part('plate', at(0.02, 1.001, 0, [Math.SQRT1_2, 0, 0, Math.SQRT1_2]), { material: 'steel.a36', params: { length: 0.3, width: 0.2, thickness: 0.006, fracture: 'auto' } });
+    });
+    expect(no?.refusal.law).toBe('K-5');
+  });
+
+  it('a cylinder lying on a tilted face is apart by its clearance, not refused for its bounding box', async () => {
+    const no = await placing((r) => {
+      const th = (12 * Math.PI) / 180;
+      r.part('plate', at(0, 1, 0, axisAngle([0, 0, 1], -th)), { frozen: true, material: 'rubber.natural', params: { length: 6, width: 1, thickness: 0.05 } });
+      const nrm = [Math.sin(th), Math.cos(th)];
+      r.part('rod.round', at(nrm[0]! * 0.076, 1 + nrm[1]! * 0.076, 0, axisAngle([1, 0, 0], Math.PI / 2)), { material: 'rubber.natural', params: { diameter: 0.1, length: 0.2 } });
+    });
+    expect(no).toBeNull();
+  });
+});
+
+describe('what stands apart adds no energy', () => {
   // A13: a bonded wire whose segments are far longer than thick. With nothing but gravity acting on it (the slab
   // is fixed), no point of it can move faster than a fall from its highest point allows.
   const wire = { length: 1.89, diameter: 0.0014, fracture: 'auto' } as const;
@@ -91,22 +99,7 @@ describe('overlap adds no energy', () => {
     r.done();
   });
 
-  it('a very slender bonded wire placed through a slab', async () => {
-    const r = await rig({ gravity: [0, -9.81, 0] });
-    r.part('block', at(0, 0.3, 0), { material: 'wood.douglas-fir', frozen: true, params: { x: 17, y: 0.05, z: 2 } });
-    r.part('rod.round', at(0, 0.3, 0.3, [0.3, 0.2, 0.5, 0.787]), { material: 'steel.1018-cd', params: wire });
-    const { vmax, fall } = fastest(r);
-    expect(vmax).toBeLessThan(fall);
-    r.done();
-  });
 
-  it('two breakable plates crossing', async () => {
-    const r = await rig({ gravity: [0, 0, 0] }, false);
-    r.part('plate', at(0, 1, 0), { material: 'aluminum.6061-t6', params: { length: 0.3, width: 0.2, thickness: 0.006, fracture: 'auto' } });
-    r.part('plate', at(0.02, 1.001, 0, [Math.SQRT1_2, 0, 0, Math.SQRT1_2]), { material: 'steel.a36', params: { length: 0.3, width: 0.2, thickness: 0.006, fracture: 'auto' } });
-    expect(peakEnergy(r)).toBeLessThan(NOTHING);
-    r.done();
-  });
 });
 
 // F3: whatever produces it, a body's state that is not a number must not reach Jolt (whose step does not return
