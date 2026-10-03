@@ -149,6 +149,12 @@ export const NODES: Node[] = [
     statement: 'Below a closing speed at which restitution is measurable a contact does not bounce; above it, it returns e of the approach speed.',
     limits: ['the floor of 1 m/s is a numerical parameter without a source (P-restitution-floor)'] },
 
+  { id: 'F-4.7', kind: 'law', epistemic: 'constitutive', name: 'quadratic drag on the frontal area', proof: 'tested', parents: ['F-4'],
+    statement: 'A body moving through a fluid is pushed back by ½ ρ C_d A v², with A the area it shows the flow along its own axes, by its shape (a sphere π r², a cylinder its rectangle across and its disc along, a box its faces) and C_d the coefficient quoted against that area; a hull or a compound shows its bounding box, an estimate over by up to 4/π for a round one, and says so.', form: 'F = ½ ρ C_d A v²',
+    realisedBy: [{ module: 'physics/world', symbol: 'frontalAreas' }, { module: 'physics/world', symbol: 'PhysicsWorld#applyAirDrag' }],
+    heldBy: [{ file: 'tests/conformance/scale.test.ts', test: 'Drag: a foam ball twice the diameter falls √2 faster once the air holds it, as Froude similarity predicts, and each at the speed the drag law gives' }],
+    limits: ['a hull or a compound body shows its box, not its true silhouette'] },
+
   { id: 'F-5', kind: 'law', epistemic: 'physical', name: 'covariance and similarity', proof: 'proved', parents: ['ML-2', 'FS-6'],
     statement: 'Behaviour depends on dimensionless groups; two systems with the same groups behave alike.' },
   { id: 'F-5.1', kind: 'law', epistemic: 'mathematical', name: 'the Π theorem', proof: 'proved', parents: ['F-5'],
