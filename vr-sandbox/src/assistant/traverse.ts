@@ -29,7 +29,7 @@ function deriveNow(e: NonNullable<ReturnType<typeof find>>, facets: ('failures' 
 /** A rule's saying names things by id; said aloud, by name. */
 function spoken(says: string): string {
   const s = substrate();
-  return says.replace(/[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+/g, (id) => (s.has(id) ? nameOf(s.get(id)!) : id));
+  return says.replace(/[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+/g, (id) => (s.has(id) ? nameOf(s.get(id)!).replace(/^fn /, '') : id));
 }
 
 function unknown(name: string): string {
@@ -133,9 +133,11 @@ export function answerTraversal(i: Traverse): string {
   if (i.query === 'analogues') {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');
-    const a = analogues(s, e.id, 'biology');
-    if (!a.length) return `I know no living analogue of ${an(nameOf(e))} yet.`;
-    return `Living analogues of ${an(nameOf(e))}: ${a.map((x) => `${nameOf(x.entity)} (${x.why})`).join('; ')}.`;
+    const living = i.which === 'living';
+    const a = analogues(s, e.id, living ? 'biology' : undefined);
+    if (!a.length) return `I know no ${living ? 'living ' : ''}analogue of ${an(nameOf(e))} yet.`;
+    const said = a.filter((x) => !x.why.startsWith('both do')), rest = a.filter((x) => x.why.startsWith('both do'));
+    return `${living ? 'Living analogues' : 'Analogues'} of ${an(nameOf(e))}: ${[...said, ...rest].slice(0, 8).map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}${a.length > 8 ? `; and ${a.length - 8} more` : ''}.`;
   }
   if (i.query === 'dual-role') {
     const d = dualRole(s, i.of ?? 'bio.human', 'view.mechanical', 'view.anatomical');
@@ -210,7 +212,7 @@ export function answerTraversal(i: Traverse): string {
   const all = analogues(s, e.id), said = all.filter((x) => !x.why.startsWith('both do'));
   const ana = (said.length ? said : all).slice(0, 4);
   const far = findScaleAnalogues(s, e.id, { limit: 3 })?.analogues ?? [];
-  const anaLine = ana.length ? ` Analogues: ${ana.map((x) => `${nameOf(x.entity)} (${x.why})`).join('; ')}.` : '';
+  const anaLine = ana.length ? ` Analogues: ${ana.map((x) => `${nameOf(x.entity)} (${spoken(x.why)})`).join('; ')}.` : '';
   const farLine = far.length ? ` At other scales it looks like ${far.map((x) => `${nameOf(x.entity)} (${sci(x.length)} m, ${x.decades.toFixed(0)} decades away)`).join('; ')}.` : '';
   return `${nameOf(e)}: ${e.says}${scaleLine} ${ix.answers.map((a) => `${a.backwards ? `is ${a.kind} of` : a.kind}: ${list(a.entities.map(nameOf), 6)}`).join('; ')}.${anaLine}${farLine} Known to depth ${cov.depth} at confidence ${cov.confidence.toFixed(2)} from ${cov.sourceKind}${cov.unknowns.length ? `; unknown: ${cov.unknowns.join('; ')}` : ''}.`;
 }

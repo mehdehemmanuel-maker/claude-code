@@ -442,6 +442,8 @@ export class Ego {
       }
       case 'recall': {
         const hits = recall(i.about, 3);
+        // nothing remembered by that name: the substrate may still index it
+        if (!hits.length) { const indexed = answerTraversal({ do: 'traverse', query: 'index', of: i.about.replace(/^(?:an? |the )/, '') }); if (!/^I know no /.test(indexed)) return indexed; }
         if (!hits.length) return `I don't know anything about ${i.about} yet.`;
         return `${explain(hits[0]!)}${hits.length > 1 ? ` I also know: ${hits.slice(1).map(nameOf).join('; ')}.` : ''}`;
       }

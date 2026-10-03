@@ -230,6 +230,7 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 | what a thing does | `function`: `does` of the thing, else of its kinds (`is-a`); each function's first clause and the laws it is governed by; the source of the arrow | a rudder: does one thing, steer: change the direction a vehicle moves, by cornering limit (Anderson); a wood screw: is a screw, and a screw does fasten |
 | what a thing is made of | `components`: its parts to depth 3, and its `made-of` arrows with their own saying ("typically made of", at 0.7) and source; a thing of one piece says its material alone; a thing with none says its kind's | a connecting rod: one piece, typically made of 4140 steel (Budynas & Nisbett); a bolt: is a screw, and a screw is typically made of steel |
 | how a thing fails, not yet asked | `failures` with nothing known: the queue's own rules run now for that one thing (its material's failures, its function's, living tissue's), the arrows kept, and the answer says it was derived now | a liver: "I had not been asked that. From what a liver is made of, what it does and whether it lives, it fails 3 ways: injury, disease, aging (living tissue: it is injured, diseased and ages)" |
+| what is like a thing | `analogues`: said analogues (`analogous-to`) first, then what shares a function (`does`) or a kind, each with its why by name; "living", "in biology" or "in nature" keeps to the living | a kidney: membrane filter, capacitor, inductor (both do filter); a bearing, living: a joint (said), ... |
 | the index of a thing | `index`: every arrow in and out, its characteristic length and time when it carries them, its analogues said (`analogous-to`) before those merely sharing a function, and its scale analogues decades away | a bearing: lives at about 3e-2 m and 1e-2 s, analogues the synovial joint and the flagellar motor; a river basin and a market answer to their words |
 | a number of a material | `property`: the parameter by symbol or name on the thing, then on each kind it is-a, each with its unit and where it came from (a page and the day read, a data file, an estimate) | "what is the density of steel": 7850 kg/m³ (The Engineering ToolBox, read 2026-10-03, the address); "how stiff is aluminium 6061": 69 GPa from the data file, and as an aluminium alloy 69 to 70 GPa from the page; what is not known is said as a question on the queue |
 
@@ -310,6 +311,11 @@ a test holds both that and the heatsink's thermal one.
   fault was found and fixed: a pack that named a thing before the pack that describes it left the stub's "unplaced"
   as the thing's first domain, which is the queue's lane, so the cortex, the liver and the lung were queued on no
   lane; a description now puts its own domain first and "unplaced" goes once a real domain is known.
+  The same fault, a second face: a cited law named first by the failures pack (Wolff's law) or a network (Little's
+  law) carried that pack's domain, and the merge could not see the stub because its kind had already been overwritten
+  by the time the domains were merged; the merge now remembers what it was before it changes anything, and the cited
+  laws are described by a physics pack of their own, so physics is their lane whoever names them first. "Tell me about
+  X" and "what do you know about X" fall through to the index when nothing is remembered by that name.
   The constructor frontier followed from the materials: once a part says what it is made of, what works that
   material makes it, so the things with no known maker after a whole-queue round fell from 244 to 101 without a new
   rule. Two rules and a few sayings took it to 29: a piece is made with its whole (a bolt's thread when the bolt is,

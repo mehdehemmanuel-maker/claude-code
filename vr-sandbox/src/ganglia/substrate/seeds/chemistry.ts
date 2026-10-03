@@ -15,7 +15,7 @@ const GRIFFITHS: Source = { cite: 'Griffiths, Introduction to Electrodynamics, 4
 const KITTEL: Source = { cite: 'Kittel, Introduction to Solid State Physics, 8th ed., Wiley 2005', kind: 'textbook' };
 const INCROPERA: Source = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' };
 
-export function chemistry(): Pack {
+export function chemistry(): Pack[] {
   const p = new Pack('chemistry', ATKINS);
   const c = (id: string, kinds: Parameters<Pack['e']>[1], says: string, links: Parameters<Pack['link']>[1], src: Source = ATKINS) => { p.e(id, kinds, says, { source: src }); p.link(id, links, src); };
   // elements that engineering turns on
@@ -131,9 +131,11 @@ export function chemistry(): Pack {
     ['hertz.contact', 'Hertzian contact', 'Two curved elastic bodies pressed together touch over a small area with a peak pressure that rises as the cube root of the load.', ['bearing.ball', 'gear.tooth'], PHYSICS],
     ['tsiolkovsky', 'Rocket equation', 'Velocity gained is exhaust speed times the log of initial over final mass.', ['vehicle.rocket', 'engine.rocket'], PHYSICS],
   ];
+  // the cited laws are physics, whichever pack names them first: their own pack, so physics is their lane
+  const laws = new Pack('physics', PHYSICS);
   for (const [id, name, says, governs, src] of extra) {
-    if (!LAWS.some((l) => l.id === id)) p.e(id, ['law'], says, { source: src, names: [name], domains: ['physics'], unknowns: ['not yet an executable law in laws.ts: cited, not run'] });
-    p.link(id, { governs }, src);
+    if (!LAWS.some((l) => l.id === id)) laws.e(id, ['law'], says, { source: src, names: [name], unknowns: ['not yet an executable law in laws.ts: cited, not run'] });
+    laws.link(id, { governs }, src);
   }
   // physics phenomena and the chain law → property → relation → state → transformation → observable → consequence
   for (const [id, says, law, prop, cons] of [
@@ -159,5 +161,5 @@ export function chemistry(): Pack {
   c('chem.unit-cell', ['chemical', 'geometry'], 'The smallest box of a crystal that repeats: cubic, hexagonal, and the rest; its edge is the lattice constant, a few tenths of a nanometre.', { 'governed-by': ['bragg.law'] });
   c('chem.grain-boundary', ['chemical', 'interface'], 'Where two crystals of different orientation meet in a metal: atoms out of place, which stop dislocations (strength) and let atoms diffuse (creep, corrosion).', { 'governed-by': ['hall-petch', 'fick.diffusion'] });
   c('chem.solute', ['chemical'], 'What is dissolved: salt in water, carbon in iron, the minor part of a solution.', { 'governed-by': ['fick.diffusion', 'gibbs.energy'] });
-  return p;
+  return [laws, p];
 }

@@ -548,6 +548,9 @@ describe('what an arrow names, the index describes (S-6)', () => {
   it('a thing described after a pack has named it carries the domain of the pack that describes it first, never unplaced', () => {
     const cortex = s.get('bio.cortex')!;
     expect(cortex.domains[0]).toBe('biology');
+    // a cited law is physics whichever pack named it first: Wolff's law, named by the failures pack, Little's law by a network
+    for (const e of [...s.entities.values()].filter((e) => e.kinds.includes('law') && e.coverage.unknowns.some((u) => /cited, not run/.test(u)))) expect(['physics', 'mechanical', 'scale'], e.id).toContain(e.domains[0]);
+    expect(s.get('wolff.law')!.domains[0]).toBe('physics');
     expect([...s.entities.values()].filter((e) => !isStub(e) && e.domains[0] === 'unplaced').map((e) => e.id)).toEqual([]);
   });
 
@@ -667,6 +670,19 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'kidney' })).toMatch(/filter: pass some of what comes and stop the rest/);
     expect(answerTraversal({ do: 'traverse', query: 'function', of: 'flywheel' })).toMatch(/store energy: energy out/);
     expect(s.reach('fn.lift', 'governed-by').map((l) => l.id)).toEqual(['lift.aero']);
+  });
+
+  it('Ego answers what is like a thing: said analogues first, then what shares a function, by name; living ones when asked', () => {
+    expect(interpret('what is like a kidney')).toMatchObject({ do: 'traverse', query: 'analogues', of: 'kidney' });
+    expect(interpret('what is the living analogue of a bearing')).toMatchObject({ do: 'traverse', query: 'analogues', of: 'bearing', which: 'living' });
+    expect(interpret('what is a capacitor like in biology')).toMatchObject({ do: 'traverse', query: 'analogues', of: 'capacitor', which: 'living' });
+    expect(interpret('analogues of a pump')).toMatchObject({ do: 'traverse', query: 'analogues', of: 'pump' });
+    const kidney = answerTraversal({ do: 'traverse', query: 'analogues', of: 'kidney' });
+    expect(kidney).toMatch(/^Analogues of a kidney: /);
+    expect(kidney).toMatch(/\(both do filter\)/);
+    expect(kidney).not.toMatch(/fn\./);
+    const bearing = answerTraversal({ do: 'traverse', query: 'analogues', of: 'bearing', which: 'living' });
+    expect(bearing).toMatch(/^Living analogues of a bearing: /);
   });
 
   it('what charges and discharges through a resistance cites the RC time constant, not the lumped thermal one', () => {

@@ -22,6 +22,7 @@ export class Substrate {
     }
     // a stub never overwrites a description, and neither does an entity with nothing to say (a parameter alone, a characteristic scale)
     const stub = 'stub' in e.source || !e.says.trim();
+    const wasStub = 'stub' in have.source || have.coverage.sourceKind === 'stub';
     if (!stub) {
       if ('stub' in have.source) { have.source = e.source; have.says = e.says; have.name = e.name; }
       else if (e.says.length > have.says.length) have.says = e.says;
@@ -33,7 +34,7 @@ export class Substrate {
     if (e.params?.length) have.params = [...(have.params ?? []), ...e.params.filter((p) => !have.params?.some((q) => q.sym === p.sym))];
     for (const k of e.kinds) if (!have.kinds.includes(k)) have.kinds.push(k);
     // the describing pack's domain comes first (it is the queue's lane); a stub's 'unplaced' goes once a real domain is known
-    if (!stub && (have.coverage.sourceKind === 'stub' || have.domains[0] === 'unplaced')) have.domains = [...e.domains, ...have.domains.filter((d) => !e.domains.includes(d))];
+    if (!stub && (wasStub || have.domains[0] === 'unplaced')) have.domains = [...e.domains, ...have.domains.filter((d) => !e.domains.includes(d))];
     else for (const d of e.domains) if (!have.domains.includes(d)) have.domains.push(d);
     if (have.domains.length > 1) have.domains = have.domains.filter((d) => d !== 'unplaced');
     for (const n of [e.name, ...e.names]) { if (!have.names.includes(n)) have.names.push(n); this.byName.set(n.toLowerCase(), id); }
