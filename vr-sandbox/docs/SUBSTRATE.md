@@ -183,24 +183,29 @@ the typecheck, the unit suite and the build, and fails on any of them: the loop'
 
 | | |
 |---|---|
-| entities | 2593 |
-| relations | 10938 |
-| relations per entity | 4.2 |
+| entities | 2609 |
+| relations | 11 650 |
+| relations per entity | 4.5 |
 | stubs (depth 0, each a queued question) | 0 at build: everything an arrow names is described; the stubs are the ones population makes |
 | laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
-| materials | 271 |
-| components | 704 |
+| materials | 272 |
+| components | 659 |
+| functions | 92 |
+| processes / constructors | 197 / 277 |
 | mechanisms | 194 |
-| constructors | 277 |
 | failures | 209 |
 | biological | 267 |
-| manifolds / generators | 185 / 96 |
-| domains | 21 (common 551, mechanical 322, biology 311, chemistry 294, electrical 278, manufacturing 271, materials 241, engineering 235, scale 215, physics 197, failures 159, parameters 104, catalogue 77, computing 75, making 72, robotics 54, circuits 47, earth 46, energy 33, views 30, standards 21) |
-| questions queued after seeding | 38 895 |
-| things with no known constructor | 539 |
+| manifolds / generators | 186 / 96 |
+| domains (by the first, the queue's lane) | 20 (common 670, engineering 257, mechanical 247, biology 200, electrical 187, manufacturing 185, materials 158, physics 106, parameters 104, scale 79, catalogue 77, chemistry 77, computing 68, earth 40, failures 34, circuits 31, views 30, robotics 30, standards 21, making 8) |
+| questions queued after seeding | 39 135 |
+| things with no known constructor | 456 at build, 29 after a whole-queue round |
 
-Before the views, failures and families packs, a round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
-queue at 27 853: never finished, by design.
+A whole-queue round (41 694 questions in 20 s, four workers) derives 43 024 relations by rule (12 769 inherited along
+is-a, 2980 through a part, 44 by naming a piece), finds 44 entities, marks 204 unknowns, promotes 2 manifolds, rejects
+nothing, and converges with 2559 questions re-opened for the next round: never finished, by design. It leaves 15 of
+694 described components without a function, 13 without a material and 8 without a failure, all but three of them
+pieces and regions of building blocks. The last ten rejections it used to make (a failure mode governed into failing
+by itself: wear fails by wear) are gone, since a failure mode and a law are not things that fail.
 
 ## The final test, answered by traversal
 
@@ -236,10 +241,10 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
 
 ## Still open
 
-- **No stub remains at build.** The frontier is now the queue (38 895 questions after seeding) and the constructors: 539
-  described things have no known constructor nor a kind with one, up from 371 as more things were described; each is a
-  question for the manufacturing pack or the outside. The arrow does not say what
-  they are, so a rule cannot type them; each is a question for a pack or for the outside.
+- **No stub remains at build.** The frontier is the queue (39 135 questions after seeding, a whole round in 20 s) and
+  the constructors: 456 described things have no known constructor at build and 29 after a round, the Earth's cycles,
+  the observers, the engine's own units and building blocks whose pieces have no material to work; each is a question
+  for a pack or for the outside.
 - **One connector.** Wikidata is connected; a handbook, a standards index or a datasheet feed would each be another
   `Connector` returning the same record shape. Wikidata's statements are broad and uneven: a thing may have no
   English label, a property may be absent, and the exact-name rule leaves many things unmatched (a miss is recorded

@@ -177,7 +177,8 @@ export function ruleExpander(): Expander {
           out.relations.push(r(e.id, 'analogous-to', other.id, `both do ${fn.id}, in different domains (${e.domains[0]} and ${other.domains[0]})`));
         }
       }
-      if (facet === 'failures') {
+      // a failure mode and a law are governed by laws too, but neither fails: the failures facet is for things
+      if (facet === 'failures' && !e.kinds.includes('failure') && !e.kinds.includes('law')) {
         const byLaw: Record<string, string> = { 'fatigue.endurance.steel': 'failure.fatigue', 'buckling.euler': 'failure.buckling', 'stress.hoop': 'failure.burst', 'friction.coulomb': 'failure.wear', 'joule': 'failure.overheating', 'nernst': 'failure.corrosion', 'arrhenius': 'failure.creep', 'natural.frequency': 'failure.resonance', 'bearing.life.l10': 'failure.spalling', 'hydrostatic': 'failure.leak' };
         for (const law of s.reach(e.id, 'governed-by')) { const f = byLaw[law.id]; if (f && s.has(f) && !s.outOf(e.id, 'fails-by').some((x) => x.to === f)) out.relations.push(r(e.id, 'fails-by', f, `governed by ${law.id}, whose limit is ${f}`)); }
       }
@@ -201,7 +202,7 @@ export function ruleExpander(): Expander {
       if (facet === 'failures' && !s.outOf(e.id, 'fails-by').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const f of s.reach(k.id, 'fails-by')) out.relations.push(r(e.id, 'fails-by', f.id, `inherits from ${k.id}: the kind's failures are the member's`));
       }
-      if (facet === 'failures' && !e.kinds.includes('material') && !e.kinds.includes('law')) {
+      if (facet === 'failures' && !e.kinds.includes('material') && !e.kinds.includes('law') && !e.kinds.includes('failure')) {
         const have = new Set([...s.outOf(e.id, 'fails-by').map((x) => x.to), ...out.relations.filter((x) => x.kind === 'fails-by').map((x) => x.to)]);
         // what a thing is made of fails as the material fails: steel fatigues, polymers creep, aluminium corrodes in contact
         for (const m of s.reach(e.id, 'made-of')) for (const f of [...s.reach(m.id, 'fails-by'), ...s.reach(m.id, 'is-a').flatMap((fam) => s.reach(fam.id, 'fails-by'))]) if (!have.has(f.id)) { have.add(f.id); out.relations.push(r(e.id, 'fails-by', f.id, `made of ${m.id}, which fails by ${f.id}`)); }

@@ -330,6 +330,16 @@ describe('population: a queue that never needs to be finished', () => {
     expect(s2.outOf('bio.chloroplast', 'produced-by').map((x) => x.to)).toContain('bio.self-assembly');
   });
 
+  it('a failure mode does not fail by itself: the failures facet derives nothing for a failure or a law, and a whole round rejects nothing', async () => {
+    const s2 = build().substrate;
+    const q = new Queue();
+    for (const id of ['failure.wear', 'failure.fatigue', 'friction.coulomb']) q.push({ id, facet: 'failures', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    const r = await populate(s2, q, { expanders: [ruleExpander()], budget: 50, workers: 1 });
+    expect(r.rejected).toEqual([]);
+    expect(s2.outOf('failure.wear', 'fails-by')).toEqual([]);
+    expect(s2.outOf('friction.coulomb', 'fails-by')).toEqual([]);
+  });
+
   it('a piece of a building block named for a kind is that kind, at half confidence, and then inherits what the kind does', async () => {
     const s2 = build().substrate;
     const q = new Queue();
