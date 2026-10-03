@@ -330,7 +330,7 @@ export const LAWS: Law[] = [
   {
     id: 'convection.natural', name: 'Free convection in still air', domain: 'thermal', statement: 'A surface in still air loses heat at a coefficient that rises with the fourth root of its temperature excess over its size: hotter and smaller things shed heat faster per area, so a thing twice the size cools more than twice as slowly.', formula: 'h = 1.42 (ΔT / L)^¼',
     inputs: [q('dT', 'temperature excess', 'K'), q('L', 'size', 'm')], output: q('h', 'heat transfer coefficient', 'W/m^2 K'), constants: { C: { value: 1.42, unit: 'W/m^1.75 K^1.25', name: 'the laminar air coefficient (Holman table 7-2), with its fractional units' } }, eval: ({ dT, L, C }) => C! * Math.pow(Math.abs(dT!) / L!, 0.25),
-    valid: 'Laminar (Gr Pr below about 10^9: sizes under a metre, excesses under a few hundred kelvin), still air at atmospheric pressure; the simplified laminar correlation, within about 20 % of the full one.', example: { inputs: { dT: 50, L: 0.1 }, output: 6.7147654239225485 }, source: HOLMAN, tags: ['heat', 'cooling', 'air', 'size'],
+    valid: 'Laminar (Gr Pr below about 10^9: sizes under a metre, excesses under a few hundred kelvin), still air at atmospheric pressure; the simplified laminar correlation, within about 20 % of the full one. The engine holds L at no less than 10 mm.', example: { inputs: { dT: 50, L: 0.1 }, output: 6.7147654239225485 }, source: HOLMAN, tags: ['heat', 'cooling', 'air', 'size'],
     implementedIn: 'engineering/thermal.ts heatLoss',
   },
   {

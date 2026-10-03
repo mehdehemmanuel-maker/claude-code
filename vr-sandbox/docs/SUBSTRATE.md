@@ -295,6 +295,10 @@ a test holds both that and the heatsink's thermal one.
   pieces and regions of building blocks (a back EMF, the ends of a member, the systems of an assembly) and the
   generic organ, whose function is its members'. The invariant: every part the common pack describes, every tool and
   every organ, organelle and tissue does something, itself or as its kind.
+  Then the pieces of building blocks that no kind can speak for (a bolt's head, shank and thread, a member's section
+  and ends, a shaft's seats and key seat, a coupling's elastomer spider, a bit's pivot and stops) say their own
+  functions in the block's data (`Piece.fn`), kept by the bridge: after a whole-queue round 4 components are without a
+  function, from 15: the generic organ, a motor's back EMF (a region, not a part), the machine assembly and its systems.
   Materials next, the same way: 233 described components had no material after a whole-queue round. A catalogue part
   is made of what its datasheet names (a hollow section S355 steel, a bolt 8.8 steel, a bearing 52100 steel, a lead
   screw C45 steel with a bronze nut, a wire copper in PVC, a servo a nylon case with steel gears in the larger

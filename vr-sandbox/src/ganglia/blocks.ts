@@ -41,7 +41,7 @@ export interface Port {
 export type Flow = 'electric' | 'rotation' | 'translation' | 'travel' | 'load' | 'signal' | 'heat' | 'stock' | 'chemical' | 'light' | 'sound';
 
 /** One piece of a block's anatomy: what it is, what it does, and the law it works by. */
-export interface Piece { name: string; does: string; law?: string; /** one material id, or the alternatives a piece may be made of */ material?: string | string[]; /** the kind of thing the piece is, by id in the substrate, when its name alone would not say */ kind?: string }
+export interface Piece { name: string; does: string; law?: string; /** the functions (fn.*) the piece does, when its name resolves to no kind that says them */ fn?: string[]; /** one material id, or the alternatives a piece may be made of */ material?: string | string[]; /** the kind of thing the piece is, by id in the substrate, when its name alone would not say */ kind?: string }
 
 export interface Archetype {
   id: string;
@@ -110,7 +110,7 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['wire.resistance', 'wire.drop', 'joule'], principles: ['size-wire-by-drop-and-ampacity', 'fuse-at-source'],
     inside: [
       { name: 'conductor', does: 'stranded annealed copper: carries the current, dropping I R volts and heating by I² R', law: 'wire.resistance', material: 'copper', kind: 'wire' },
-      { name: 'insulation', does: 'keeps the current in; its temperature limit sets the wire\'s current rating', law: 'joule' },
+      { name: 'insulation', does: 'keeps the current in; its temperature limit sets the wire\'s current rating', law: 'joule', fn: ['fn.insulate'] },
       { name: 'terminals', does: 'crimped lugs or connectors at each end, joining it to what it feeds' },
     ],
     insideSource: { cite: 'ASTM B258 (AWG sizes); ABYC E-11 (DC wiring)', kind: 'standard' },
@@ -164,7 +164,7 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['power.rotary'], principles: ['coupling-takes-misalignment'],
     inside: [
       { name: 'two hubs', does: 'one on each shaft, bored to it and held by a set screw or key', material: ['material.aluminium-alloy', 'material.cast-iron'] },
-      { name: 'elastomer spider', does: 'sits between the hubs\' jaws: passes the torque in compression and flexes to take up misalignment and shock', material: 'material.elastomer' },
+      { name: 'elastomer spider', does: 'sits between the hubs\' jaws: passes the torque in compression and flexes to take up misalignment and shock', material: 'material.elastomer', fn: ['fn.transmit.torque', 'fn.isolate.vibration'] },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015 (couplings)', kind: 'textbook' },
     ports: (c): Port[] => [
@@ -221,7 +221,7 @@ export const ARCHETYPES: Archetype[] = [
     inside: [
       { name: 'eye (housing)', does: 'holds the ball, with a threaded shank to join the rod', material: 'steel' },
       { name: 'ball', does: 'swivels in the eye so no bending passes: the link takes only pull and push', law: 'stress.axial' },
-      { name: 'liner', does: 'the sliding surface between ball and eye', kind: 'bearing.plain' },
+      { name: 'liner', does: 'the sliding surface between ball and eye', kind: 'bearing.plain', fn: ['fn.reduce.friction', 'fn.support.load'] },
       { name: 'rod', does: 'between two rod ends: in tension it can carry its whole section; in compression it can buckle', law: 'buckling.euler', kind: 'kind.rod.round' },
     ],
     insideSource: { cite: 'ISO 12240-4 (rod ends, dimensions)', kind: 'standard' },
@@ -231,8 +231,8 @@ export const ARCHETYPES: Archetype[] = [
     id: 'material.print', name: 'printing material', words: ['filament', 'fibre'], role: 'printing material', does: 'is fed to a printer to make parts', category: 'material', takes: [], gives: ['stock'], families: ['printing material'],
     laws: ['composite.rule-of-mixtures', 'composite.transverse'], principles: ['load-composites-along-fibres', 'print-loads-in-plane'],
     inside: [
-      { name: 'matrix', does: 'the plastic laid layer by layer, holding everything together' , law: 'composite.transverse' },
-      { name: 'reinforcement', does: 'continuous fibre laid in chosen layers, carrying the load along its length', law: 'composite.rule-of-mixtures' },
+      { name: 'matrix', does: 'the plastic laid layer by layer, holding everything together', law: 'composite.transverse', fn: ['fn.transmit.force'] },
+      { name: 'reinforcement', does: 'continuous fibre laid in chosen layers, carrying the load along its length', law: 'composite.rule-of-mixtures', fn: ['fn.support.load'] },
     ],
     insideSource: { cite: 'Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996', kind: 'textbook' },
     ports: (): Port[] => [],
@@ -244,8 +244,8 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['torsion.solid', 'shaft.diameter.static', 'fatigue.endurance.steel', 'stress.bending'], principles: ['match-shaft-to-bore', 'cycling-needs-endurance', 'fillet-internal-corners', 'bearing-near-load', 'strength-margin'],
     inside: [
       { name: 'bar', does: 'round bar turned to size: its diameter cubed sets the torque it carries', law: 'torsion.solid', material: 'steel', kind: 'kind.rod.round' },
-      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending', kind: 'shoulder' },
-      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque', kind: 'keyway' },
+      { name: 'seats and shoulders', does: 'turned to each bearing\'s and hub\'s fit, with fillets so stress doesn\'t crowd at the step', law: 'stress.bending', kind: 'shoulder', fn: ['fn.locate'] },
+      { name: 'key seat or flat', does: 'where a hub\'s key or set screw grips it to pass torque', kind: 'keyway', fn: ['fn.transmit.torque'] },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, ch. 7 (shafts)', kind: 'textbook' },
     ports: (): Port[] => [],
@@ -268,8 +268,8 @@ export const ARCHETYPES: Archetype[] = [
     families: ['hollow section'], shapes: ['plate', 'rod.round', 'rod.square', 'tube.round', 'tube.square', 'angle'],
     laws: ['stress.axial', 'stress.bending', 'beam.simply-supported.udl', 'buckling.euler', 'torsion.twist'], principles: ['short-load-path', 'stiffness-by-depth', 'closed-sections-for-torsion', 'slender-in-compression', 'use-stock-sizes', 'weakest-link'],
     inside: [
-      { name: 'section', does: 'its shape (tube, box, angle, plate) sets how stiff and strong it is: depth against bending, a closed wall against twist', law: 'stress.bending' },
-      { name: 'ends', does: 'cut to length, drilled, welded or bolted: where its load passes to the next part, and where it is weakest', law: 'weld.fillet.shear' },
+      { name: 'section', does: 'its shape (tube, box, angle, plate) sets how stiff and strong it is: depth against bending, a closed wall against twist', law: 'stress.bending', fn: ['fn.support.load'] },
+      { name: 'ends', does: 'cut to length, drilled, welded or bolted: where its load passes to the next part, and where it is weakest', law: 'weld.fillet.shear', fn: ['fn.transmit.force'] },
     ],
     insideSource: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, ch. 3-4', kind: 'textbook' },
     ports: (c): Port[] => [{ name: 'section', kind: 'mount', r: { S: n(c, 'S'), I: n(c, 'I'), yield: n(c, 'yield') } }],
@@ -290,9 +290,9 @@ export const ARCHETYPES: Archetype[] = [
     families: ['bolt'],
     laws: ['bolt.torque.nut-factor', 'stress.axial'], principles: ['bolt-through-thinner', 'tool-access', 'weakest-link'],
     inside: [
-      { name: 'head', does: 'a hex across flats a wrench fits, bearing on the part over its bearing face', law: 'bolt.torque.nut-factor', material: 'steel' },
-      { name: 'shank', does: 'passes through the clearance hole, stretched by the preload like a stiff spring', law: 'stress.axial' },
-      { name: 'thread', does: 'its tensile stress area carries the pull: where it breaks if overloaded', law: 'stress.axial' },
+      { name: 'head', does: 'a hex across flats a wrench fits, bearing on the part over its bearing face', law: 'bolt.torque.nut-factor', material: 'steel', fn: ['fn.clamp.axial', 'fn.spread.load'] },
+      { name: 'shank', does: 'passes through the clearance hole, stretched by the preload like a stiff spring', law: 'stress.axial', fn: ['fn.clamp.axial', 'fn.transmit.force'] },
+      { name: 'thread', does: 'its tensile stress area carries the pull: where it breaks if overloaded', law: 'stress.axial', fn: ['fn.clamp.axial', 'fn.convert.rotation.translation'] },
     ],
     insideSource: { cite: 'ISO 4017 (hex head bolts), ISO 898-1 (property classes)', kind: 'standard' },
     ports: (c): Port[] => [{ name: 'thread', kind: 'thread', r: { d: n(c, 'd'), As: n(c, 'stressArea'), F: n(c, 'yieldLoad') } }],
@@ -304,8 +304,8 @@ export const ARCHETYPES: Archetype[] = [
     laws: ['energy.potential', 'landauer'], principles: ['two-stable-states', 'short-load-path'],
     inside: [
       { name: 'lever', does: 'rests against one stop or the other: its two stable states are 0 and 1', law: 'energy.potential', material: 'steel', kind: 'lever' },
-      { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it', kind: 'joint.revolute' },
-      { name: 'stops', does: 'hold it in each state, the barrier between them set by how far its weight must rise to cross over', law: 'energy.potential' },
+      { name: 'pivot', does: 'a hinge the lever turns on, low in friction so a light push flips it', kind: 'joint.revolute', fn: ['fn.support.rotation'] },
+      { name: 'stops', does: 'hold it in each state, the barrier between them set by how far its weight must rise to cross over', law: 'energy.potential', fn: ['fn.locate', 'fn.remember'] },
       { name: 'input and output pins', does: 'a push in flips it; its flip pushes the next lever: one bit switching another' },
     ],
     insideSource: { cite: 'Rojas, Konrad Zuse\'s legacy: the architecture of the Z1 and Z3, IEEE Annals of the History of Computing 19(2), 1997 (mechanical binary logic)', kind: 'textbook' },

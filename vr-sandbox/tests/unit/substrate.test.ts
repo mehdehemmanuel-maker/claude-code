@@ -521,6 +521,22 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect(idle).toEqual([]);
   });
 
+  it('a piece of a building block that no kind can speak for says its own functions, and the bridge keeps them', async () => {
+    const said = s.relations.filter((x) => x.kind === 'does' && x.says === 'the block says what its piece does');
+    expect(said.length).toBeGreaterThanOrEqual(11);
+    for (const x of said) { expect(x.from).toMatch(/^block\./); expect(s.get(x.to)!.kinds).toContain('function'); }
+    expect(s.outOf('block.fasten.bolt.shank', 'does').map((x) => x.to)).toEqual(['fn.clamp.axial', 'fn.transmit.force']);
+    // the other pieces learn their kind by name when the queue asks (the naming rule), and then do what the kind does
+    const s2 = build().substrate;
+    const q = new Queue();
+    const pieces = [...s2.entities.values()].filter((e) => /^block\.[a-z.-]+\.[a-z-]+$/.test(e.id) && e.kinds.includes('component') && s2.reach(e.id, 'part-of').length);
+    for (const e of pieces) q.push({ id: e.id, facet: 'functions', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    await populate(s2, q, { expanders: [ruleExpander()], budget: 2000, workers: 1 });
+    const idle = pieces.filter((e) => !s2.outOf(e.id, 'does').length && !s2.reach(e.id, 'is-a').some((k) => s2.outOf(k.id, 'does').length)).map((e) => e.id);
+    // what remains is a region that is not a part and the assembly's systems: said here so a new idle piece is noticed
+    expect(idle.sort()).toEqual(['block.actuation.rotary.back-emf', 'block.machine.assembly.systems']);
+  });
+
   it('every part the common pack describes, every tool, and every organ does something, itself or as its kind', () => {
     const idle = (pick: (e: Entity) => boolean) => [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && pick(e)).filter((e) => !s.outOf(e.id, 'does').length && !s.reach(e.id, 'is-a').some((k) => s.outOf(k.id, 'does').length)).map((e) => e.id);
     expect(idle((e) => e.domains.includes('common'))).toEqual([]);
