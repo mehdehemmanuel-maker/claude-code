@@ -44,6 +44,14 @@ function rolesByNumbers(m: (typeof MATERIALS)[number]): [string, string][] {
 /** What the blocks no way embodies do, by the packs' functions: a conductor conducts, a coupling couples, a bolt clamps. */
 export const BLOCK_FUNCTIONS: Record<string, string[]> = { 'power.conduct': ['fn.conduct.current'], 'transmission.couple': ['fn.couple.shafts', 'fn.transmit.torque'], 'support.rotate': ['fn.support.rotation', 'fn.support.load'], 'structure.member': ['fn.support.load'], 'fasten.bolt': ['fn.clamp.axial', 'fn.transmit.force'], 'protect.fuse': ['fn.protect.overcurrent'], 'connection.two-force': ['fn.transmit.force'], 'transmission.shaft': ['fn.transmit.torque', 'fn.support.load'], 'material.print': ['fn.support.load'], 'protect.guard': ['fn.isolate'] };
 
+/** What a datasheet says a catalogue part is made of, by family: the label names the grade, this names the material. */
+export const CATALOG_MATERIALS: Record<string, string[]> = {
+  'hollow section': ['material.steel'], bolt: ['material.steel'], 'roller chain': ['material.steel'], bearing: ['steel.52100'], 'pillow block': ['cast-iron.gray-30', 'steel.52100'],
+  'rod end': ['material.steel'], 'lead screw': ['material.steel', 'material.bronze'], coupling: ['material.aluminium-alloy', 'material.steel'], gearhead: ['material.steel'],
+  wire: ['copper.c110', 'material.pvc'], fuse: ['element.zinc', 'polymer.nylon66'], 'motor controller': ['material.semiconductor', 'substrate.fr4'], 'dc motor': ['steel.electrical', 'copper.c110', 'material.ferrite-hard'],
+};
+export const CATALOG_MATERIAL_BY_ID: Record<string, string[]> = { 'filament.nylon-microcarbon': ['polymer.nylon-microcarbon'], 'fibre.carbon-continuous': ['material.carbon'], 'fibre.carbon-continuous-fr': ['material.carbon'] };
+
 export const WAY_FUNCTIONS: Record<string, string[]> = {
   'motor.rotary': ['fn.actuate.electromagnetic', 'fn.transmit.torque'], 'motor.hub': ['fn.actuate.electromagnetic', 'fn.roll'], 'motor.linear': ['fn.actuate.electromagnetic', 'fn.move'], 'voice-coil': ['fn.actuate.electromagnetic', 'fn.move'], solenoid: ['fn.actuate.electromagnetic'],
   piezo: ['fn.move'], electrostatic: ['fn.move'], 'thermal.actuator': ['fn.move'], 'ion.thruster': ['fn.move'], 'joule.heating': ['fn.heat'], combustion: ['fn.heat'], muscle: ['fn.transmit.force', 'fn.move'],
@@ -87,6 +95,7 @@ export function bridge(s: Substrate): void {
   const cs = D('ganglia/parts.ts');
   for (const c of CATALOG) s.add(ent(c.id, ['component'], c.label, `${c.label} (${c.family}): ${Object.entries(c.specs).slice(0, 6).map(([k, v]) => `${k} ${v}`).join(', ')}.`, ['catalogue'], c.source, Object.entries(c.specs).filter(([, v]) => typeof v === 'number').map(([k, v]) => ({ sym: k, name: k, low: v as number, high: v as number, of: c.source })), c.tags));
   for (const c of CATALOG) s.relate(rel(c.id, 'standardized-by', 'std.maker-datasheet', cs, 'its maker\'s published data'));
+  for (const c of CATALOG) for (const m of CATALOG_MATERIAL_BY_ID[c.id] ?? CATALOG_MATERIALS[c.family] ?? []) s.relate(rel(c.id, 'made-of', m, c.source, 'what its datasheet says it is made of'));
   s.add(ent('std.maker-datasheet', ['standard'], 'maker\'s datasheet', 'What a maker publishes of a part: the only numbers a bought part has.', ['catalogue'], cs));
   // ways: transformations with the laws they run by and the blocks that embody them
   const ws = D('ganglia/ways.ts');
@@ -141,6 +150,7 @@ export function bridge(s: Substrate): void {
   // datasheets: servos, motors, gearheads, batteries
   const ss = D('data/servos.ts');
   for (const sv of Object.values(SERVOS)) { s.add(ent(sv.id, ['component'], sv.label, sv.source, ['catalogue'], { cite: sv.source, kind: 'maker' }, [{ sym: 'T', name: 'stall torque', unit: 'N m', low: sv.stallTorque, high: sv.stallTorque, of: ss }, { sym: 'V', name: 'rated voltage', unit: 'V', low: sv.V, high: sv.V, of: ss }, { sym: 'm', name: 'mass', unit: 'kg', low: sv.mass, high: sv.mass, of: ss }])); s.relate(rel(sv.id, 'is-a', 'servo', ss)); }
+  for (const sv of Object.values(SERVOS)) for (const m of (/metal gears|steel gears/.test(sv.label) ? ['material.steel', 'polymer.nylon66', 'copper.c110'] : ['polymer.nylon66', 'copper.c110'])) s.relate(rel(sv.id, 'made-of', m, ss, 'what its datasheet says it is made of: a plastic case and gear train, steel gears in the larger classes, a copper-wound motor'));
   const mos = D('data/motors.ts');
   for (const md of Object.values(MOTORS)) { s.add(ent(md.id, ['component'], md.label, md.source, ['catalogue'], { cite: md.source, kind: 'maker' }, [{ sym: 'V', name: 'nominal voltage', unit: 'V', low: md.V, high: md.V, of: mos }, { sym: 'm', name: 'mass', unit: 'kg', low: md.mass, high: md.mass, of: mos }])); s.relate(rel(md.id, 'is-a', 'motor.dc', mos)); s.relate(rel(md.id, 'is-a', 'convert.electrical.rotational', mos, 'a stocked realisation')); }
   for (const g of Object.values(GEARHEADS)) { s.add(ent(g.id, ['component'], g.label, `${g.label}: ratio ${g.ratio}, efficiency ${g.efficiency}.`, ['catalogue'], { cite: g.source, kind: 'maker' })); s.relate(rel(g.id, 'is-a', 'gearhead', mos)); for (const f of g.fits) s.relate(rel(g.id, 'connects-to', f, mos, 'made to fit')); }

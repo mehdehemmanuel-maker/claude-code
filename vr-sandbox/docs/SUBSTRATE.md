@@ -278,7 +278,16 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   where one is in the book. After a whole-queue round the components without a function are 15, from 139: the 14 are
   pieces and regions of building blocks (a back EMF, the ends of a member, the systems of an assembly) and the
   generic organ, whose function is its members'. The invariant: every part the common pack describes, every tool and
-  every organ, organelle and tissue does something, itself or as its kind. The bridge's ways (`way.*`, how a thing is done) are refinements
+  every organ, organelle and tissue does something, itself or as its kind.
+  Materials next, the same way: 233 described components had no material after a whole-queue round. A catalogue part
+  is made of what its datasheet names (a hollow section S355 steel, a bolt 8.8 steel, a bearing 52100 steel, a lead
+  screw C45 steel with a bronze nut, a wire copper in PVC, a servo a nylon case with steel gears in the larger
+  classes), by a family table in the bridge; what is a kind of a material is made of it (cardiac muscle is muscle
+  tissue), a population rule; and the parts the common pack describes say their usual material, sourced, at 0.7 and
+  saying "typically" (a connecting rod 4140 steel, a spar 2024 aluminium or carbon fibre, a spoke 304 stainless, a
+  gland epithelium). After a whole-queue round the components without a material are 13, from 233: ten pieces and
+  regions of building blocks, the engine's rigid body, the platelet and the cytoplasm; the components without a
+  failure fell from 98 to 46 on the way, since what a thing is made of says how it fails. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.

@@ -199,6 +199,8 @@ export function ruleExpander(): Expander {
       }
       if (facet === 'materials' && !e.kinds.includes('material') && !s.outOf(e.id, 'made-of').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const m of s.reach(k.id, 'made-of')) out.relations.push(r(e.id, 'made-of', m.id, `inherits from ${k.id}: made of what the kind is made of, until its own material is known`));
+        // what is a kind of a material is made of it: cardiac muscle is muscle tissue, so it is made of muscle tissue
+        for (const k of s.reach(e.id, 'is-a')) if (k.kinds.includes('material')) out.relations.push(r(e.id, 'made-of', k.id, `it is a kind of ${k.id}, a material, so it is made of it`));
         // a whole is made of what its parts are made of: a motor is made of copper because its winding is
         const seen = new Set(out.relations.filter((x) => x.kind === 'made-of').map((x) => x.to));
         for (const part of s.reach(e.id, 'has-part')) for (const m of s.reach(part.id, 'made-of')) if (m.id !== e.id && !seen.has(m.id)) { seen.add(m.id); out.relations.push({ ...r(e.id, 'made-of', m.id, `through its part ${part.id}, which is made of ${m.id}`), confidence: 0.7 }); }

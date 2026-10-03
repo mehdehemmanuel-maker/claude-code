@@ -489,6 +489,16 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect(idle((e) => e.id.startsWith('bio.') && e.kinds.includes('biological') && !['bio.organ', 'bio.tissue'].includes(e.id))).toEqual([]);
   });
 
+  it('every part the common pack describes and every catalogue part is made of something: itself, as its kind, or through its parts', () => {
+    const hasMaterial = (e: Entity): boolean => s.reach(e.id, 'made-of').length > 0 || s.reach(e.id, 'is-a').some((k) => k.kinds.includes('material') || s.reach(k.id, 'made-of').length > 0) || s.reach(e.id, 'has-part').some((part) => s.reach(part.id, 'made-of').length > 0);
+    const bare = (pick: (e: Entity) => boolean) => [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && !e.kinds.includes('computation') && pick(e) && !hasMaterial(e)).map((e) => e.id);
+    expect(bare((e) => e.domains.includes('common'))).toEqual([]);
+    expect(bare((e) => e.domains.includes('catalogue'))).toEqual([]);
+    const said = s.relations.filter((x) => x.kind === 'made-of' && /^typically made of/.test(x.says ?? ''));
+    expect(said.length).toBeGreaterThan(150);
+    for (const x of said) expect(x.confidence).toBe(0.7);
+  });
+
   it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {
     const named = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && s.into(e.id).length >= 5);
     const unplaced = named.filter((e) => !e.params?.some((p) => p.sym === 'L_c') || !e.params?.some((p) => p.sym === 'T_c')).map((e) => e.id);
