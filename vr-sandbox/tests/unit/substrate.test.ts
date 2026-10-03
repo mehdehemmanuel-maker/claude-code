@@ -1142,6 +1142,24 @@ describe('Ego says impossible only with a certificate, and holds her anomalies (
   });
 });
 
+describe('Ego says how she knows an influence: the epistemic vector of the arrow or the law behind it', () => {
+  it('"how sure are you that the current causes the voltage": the law path, with the vector, the label and the law\'s source', () => {
+    expect(interpret('how do you know that a lubricant prevents the failure of a bearing')).toEqual({ do: 'traverse', query: 'know', of: 'lubricant', which: 'failure of a bearing', prevent: true });
+    expect(interpret('how sure are you that the current causes the voltage')).toEqual({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
+    const a = answerTraversal({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
+    expect(a).toMatch(/^Electric current is needed for \(raises\) voltage \(Young & Freedman, University Physics, 15th ed\., Pearson 2019\)\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory entailed \(domain inside\); coverage 0\.\d+; uncertainty unstated; discrepancy none; consistent: entailed by a law, by derivation; partly covered by sources\. The law behind it: Ohm's law \(V = I R\), Young & Freedman.*; the sign and size taken at its worked example, not measured in my world\. In Nex: influence\(qty\.current, qty\.voltage\)\{dir:1 polarity:\+ necessity:necessary mech:ohm/);
+  });
+
+  it('an arrow of hers: the vector of the arrow within everything said of its two ends, its source named; a chain says each link and that its certainty is within the Fréchet bounds', () => {
+    const zinc = answerTraversal({ do: 'traverse', query: 'know', of: 'process.plating.zinc', which: 'chem.corrosion', prevent: true });
+    expect(zinc).toMatch(/^Probably \(0\.75 to 0\.95\) plating zinc contributes to \(lowers\) corrosion\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory untested \(domain unknown\); coverage 0\.\d+; uncertainty unstated; discrepancy none; by derivation, untested by any law; partly covered by sources; source: Bard & Faulkner, Electrochemical Methods, 2nd ed\., Wiley 2001\. In Nex: influence\(process\.plating\.zinc, chem\.corrosion\)/);
+    const chain = answerTraversal({ do: 'traverse', query: 'know', of: 'chem.redox', which: 'machine.furnace' });
+    expect(chain).toMatch(/^Probably \(0\.75 to 0\.95\) redox contributes to \(raises\) combustion\. How I know it: .*source: Bard & Faulkner.*\. Probably \(0\.75 to 0\.95\) combustion contributes to \(raises\) furnace\. How I know it: .*source: Atkins, de Paula & Keeler.*\. The chain's certainty is within the Fréchet bounds of its 2 links\. In Nex: influence\(chem\.redox, machine\.furnace\)\{dir:1 polarity:\+ necessity:contributing cert:\{kind:interval lo:0\.5 hi:0\.95 source:epistemic\}/);
+    // no mechanism known: the same honest refusal as a cause
+    expect(answerTraversal({ do: 'traverse', query: 'know', of: 'bearing', which: 'kidney' })).toMatch(/^I know no mechanism by which a bearing causes a kidney: no arrow of mine runs from one to the other within three steps, and no law governing it has a bearing as an input\./);
+  });
+});
+
 describe('Ego finds the edge of a law along one input (Nex Space)', () => {
   it('"how far can the load go before the rating life law stops applying" walks the family and bisects; a law with no computed domain says so', () => {
     expect(interpret('how far can the load go before the rating life law stops applying')).toEqual({ do: 'traverse', query: 'edge', of: 'rating life law', which: 'load' });

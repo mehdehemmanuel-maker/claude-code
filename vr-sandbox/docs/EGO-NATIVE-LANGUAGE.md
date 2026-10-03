@@ -60,6 +60,10 @@ In the app, ask Ego (the same answers come from `answerTraversal` in the unit te
   domain, or an input missing, or no law at all: not impossible, and exactly how not (docs/NEX-DISCOVERY.md).
 - "what anomalies do you hold", "is anything unexplained": her register of observations against the law book, by
   status, the explained ones kept with their explanation and what the skeptic computed.
+- "how do you know that the current causes the voltage", "how sure are you that zinc plating prevents corrosion":
+  the epistemic vector of the arrow or the law behind the influence (formal status, measurements for and against,
+  simulation, calibration, relation to the laws, coverage), its label made from the vector, and its source; a chain
+  says each link and that its certainty is within the Fréchet bounds.
 - "what laws have the same form as the energy in a spring", "which laws look like Ohm's law": the form of a law
   with every symbol gone, and the laws of other theories that share it (one structure said five ways).
 - "what fails a bearing", "how does a motor fail": its failure modes as mechanisms with laws, then how each is known

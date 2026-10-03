@@ -183,7 +183,9 @@ export function coverage(s: Structure, substrate: Substrate | null | undefined):
 /** The epistemic vector of a claim: its evidence structure, its relation to the laws, its coverage, its uncertainty, held apart. */
 export function epistemic(h: Structure, opts: { substrate?: Substrate | null; corpus?: Structure[]; claim?: Claim } = {}): Epistemic {
   const sup = evidenceOf(h, opts.corpus ?? []);
-  const th: Theory = opts.claim ? theory(opts.claim, opts.substrate) : h.k === 'R' && (h.c.mode === 'impossible-under' || h.c.mode === 'contradictory') ? { relation: 'contradicted', why: 'the structure carries the verdict' } : h.k === 'R' && h.c.mode === 'outside-domain' ? { relation: 'outside-domain', why: 'the structure carries the verdict' } : { relation: 'untested', why: 'no claim against the laws was made' };
+  // without a claim, the structure's own verdict: a contradiction or an exclusion it carries, or a law it was derived from (its mechanism a law of the book)
+  const lawBehind = h.k === 'R' && h.c.mode === 'true' && !!h.c.mech && LAWS.some((l) => h.c.mech === l.id || h.c.mech!.startsWith(`${l.id}/`) || h.c.mech === `${l.id}^-1`);
+  const th: Theory = opts.claim ? theory(opts.claim, opts.substrate) : h.k === 'R' && (h.c.mode === 'impossible-under' || h.c.mode === 'contradictory') ? { relation: 'contradicted', why: 'the structure carries the verdict' } : h.k === 'R' && h.c.mode === 'outside-domain' ? { relation: 'outside-domain', why: 'the structure carries the verdict' } : lawBehind ? { relation: 'entailed', why: `derived from ${h.k === 'R' ? h.c.mech : ''}, a law of the book` } : { relation: 'untested', why: 'no claim against the laws was made' };
   const domain: Epistemic['domain'] = th.relation === 'entailed' || th.relation === 'bounded' || th.relation === 'contradicted' ? 'inside' : th.relation === 'outside-domain' ? 'outside' : 'unknown';
   const claimed = opts.claim ? q(opts.claim.value, opts.claim.unit).v : null;
   const discrepancy = th.value !== undefined && claimed !== null && th.value !== 0 ? Math.abs(claimed - th.value) / Math.abs(th.value) : null;

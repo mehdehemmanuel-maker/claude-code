@@ -186,6 +186,13 @@ finished.
   the law's (27 °C and 127 °C give a ceiling of 0.2499; a mass in seconds is refused by dimension).
 - "what anomalies do you hold": the register by status, the explained one kept with its explanation and the
   skeptic's computed candidate, and whether any two share a law ancestry.
+- "how do you know that the current causes the voltage": the epistemic vector of what stands behind the influence.
+  For a law: "formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory entailed (domain
+  inside); coverage 0.85; uncertainty unstated; discrepancy none; consistent: entailed by a law, by derivation; partly
+  covered by sources. The law behind it: Ohm's law (V = I R), Young & Freedman…; the sign and size taken at its worked
+  example, not measured in my world." For an arrow of hers: the same vector within everything said of its two ends,
+  "theory untested" where no law stands behind it, and the source named. A chain gives each link and says its
+  certainty is within the Fréchet bounds of the links.
 
 ## What this gives Ego
 

@@ -2,11 +2,11 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { alive, anomalies, askable, between, chain, clusterAnomalies, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, reaching, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { alive, anomalies, askable, between, chain, clusterAnomalies, d, decompose, epistemic, family, formOf, fromRelation, grow as growGrammar, hash, labelOf, polysemous, r, readings, reaching, render, saidOf, sameForm, sayEpistemic, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, theory, tune, type Claim, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS, withConstants } from '../ganglia/laws';
 import { dimensionOf, parseUnit, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
-import type { Entity } from '../ganglia/substrate/model';
+import type { Entity, Relation } from '../ganglia/substrate/model';
 import type { Structure } from '../ganglia/native';
 import { analogues, articled, constructionPath, decomposeThing, dualRole, findByWords, findScaleAnalogues, implementations, indexOf, leavesOf, lineageOf, materialsForRole, mechanismsFor, population, producers, spokenName, substrate, substrateCensus, variantsOf, waysToStore } from '../ganglia';
 
@@ -324,7 +324,11 @@ export function answerTraversal(i: Traverse): string {
     if (!m.mechanisms.length) return `Nothing I know does ${nameOf(m.function)} yet.`;
     return `${m.mechanisms.length} mechanisms ${nameOf(m.function)}: ${list(m.mechanisms.map((f) => nameOf(f.entity)), 16)}.${object ? ` Which of them ${nameOf(m.function)} ${object} I have not been told: no arrow of mine says what a mechanism works on.` : ''}`;
   }
-  if (i.query === 'cause') {
+  if (i.query === 'cause' || i.query === 'know') {
+    // "how do you know X causes Y" walks the same arrows and laws and answers with the epistemic vector of what it finds
+    const asking = i.query === 'know';
+    const relOf = new Map<string, Relation>();
+    const cite = (rel: Relation | undefined): string => !rel ? 'no relation of mine' : 'cite' in rel.source ? rel.source.cite : 'stub' in rel.source ? 'a stub of mine, unsourced' : 'derived' in rel.source ? 'derived by me from what I hold' : 'an estimate of mine';
     // the arrows that carry influence: X enables Y (+), X prevents Y (−), Y requires X (X necessary for Y), Y fails by X (X lowers Y)
     const correlation = 'Two things rising together would be a correlation, which I hold as support, never as a cause.';
     // a word of two senses beside a quantity is the quantity ("current" beside heat); otherwise it is asked
@@ -336,8 +340,9 @@ export function answerTraversal(i: Traverse): string {
     const a = find(i.of ?? '') ?? asQuantity(i.of ?? '', other);
     // a thing she does not know can be no cause she knows: said with the rule that no correlation would make it one
     if (!a) return `${unknown(i.of ?? '')} ${i.which ? `So I know no mechanism by which it ${i.prevent ? 'prevents' : 'causes'} ${i.which}. ${correlation}` : ''}`.trim();
-    const influences = (id: string): R[] => [...s.outOf(id, 'enables'), ...s.outOf(id, 'prevents'), ...s.into(id, 'requires'), ...s.into(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[0]?.k === 'D' && x.args[0].id === id);
+    const influences = (id: string): R[] => [...s.outOf(id, 'enables'), ...s.outOf(id, 'prevents'), ...s.into(id, 'requires'), ...s.into(id, 'fails-by')].map((rel) => { const x = fromRelation(rel, s); if (x) relOf.set(hash(x), rel); return x; }).filter((x): x is R => !!x && x.args[0]?.k === 'D' && x.args[0].id === id);
     const intoOf = (id: string): R[] => [...s.into(id, 'enables'), ...s.into(id, 'prevents'), ...s.outOf(id, 'requires'), ...s.outOf(id, 'fails-by')].map((rel) => fromRelation(rel, s)).filter((x): x is R => !!x && x.args[1]?.k === 'D' && x.args[1].id === id);
+    if (asking && !i.which) return 'Say what causes what: "how do you know that a lubricant prevents the failure of a bearing".';
     if (!i.which) {
       // two things said by one word (fatigue the phenomenon, fatigue the failure) are told apart by their kinds when one influences the other
       const kinded = (x: R): R => { const [p, q2] = x.args; if (p?.k === 'D' && q2?.k === 'D' && p.aliases?.en === q2.aliases?.en) { const kind = (id: string) => s.get(id)?.kinds[0] ?? 'thing'; return { ...x, args: [{ ...p, aliases: { ...p.aliases, en: `${p.aliases?.en} (the ${kind(p.id)})` } }, { ...q2, aliases: { ...q2.aliases, en: `${q2.aliases?.en} (the ${kind(q2.id)})` } }] }; } return x; };
@@ -393,6 +398,11 @@ export function answerTraversal(i: Traverse): string {
       // no arrow: a law may still say it. A law governing the thing (or a failure of it) with an input the cause names
       // gives the sign of its output in that input at the law's own worked example: derived, never a guess
       const byLaw = lawInfluences(a, b, modes);
+      if (byLaw.length && asking) {
+        const x = byLaw[0]!;
+        const v = epistemic(x.s, { substrate: s });
+        return `${render(x.s, 'en', 'engineer').text} How I know it: ${sayEpistemic(v)}; ${labelOf(v).said}. The law behind it: ${x.law.name} (${x.law.formula}), ${x.law.source.cite}; the sign and size taken at its worked example, not measured in my world. In Nex: ${nex(x.s)}`;
+      }
       if (byLaw.length) {
         const outs = byLaw.slice(0, 3).map((x) => `${render(x.s, 'en', 'engineer').text} That is ${x.law.name} (${x.law.formula}): ${x.input} (${x.sym}) ${x.sign === '-' ? 'lowers' : 'raises'} ${x.effect} by ${x.elasticity.toFixed(1)} % a percent at its worked example${x.necessity === 'necessary' ? ', and without it there is none' : x.necessity === 'sufficient' ? ', and it alone sets it (with the constants)' : ''}; derived, not measured here.`);
         return `No arrow of mine runs from ${art(a)} to ${said}, but a law does: ${outs.join(' ')} In Nex: ${nex(byLaw[0]!.s)}`;
@@ -402,6 +412,15 @@ export function answerTraversal(i: Traverse): string {
     const path: R[] = [];
     for (let id = found; prev.get(id); id = prev.get(id)!.from) path.unshift(prev.get(id)!.via);
     const whole = path.length === 1 ? path[0]! : path.slice(1).reduce((acc, x) => chain(acc, x) ?? acc, path[0]!);
+    if (asking) {
+      // each arrow of the chain with its evidence structure within everything said of its two ends, its source named
+      const hops = path.map((via) => {
+        const from = (via.args[0] as { id: string }).id, to = (via.args[1] as { id: string }).id;
+        const v = epistemic(via, { substrate: s, corpus: [...saidOf(s, from), ...saidOf(s, to)] });
+        return `${render(via, 'en', 'engineer').text} How I know it: ${sayEpistemic(v)}; ${labelOf(v).said}; source: ${cite(relOf.get(hash(via)))}.`;
+      });
+      return `${hops.join(' ')}${path.length > 1 ? ` The chain's certainty is within the Fréchet bounds of its ${path.length} links.` : ''} In Nex: ${nex(whole)}`;
+    }
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
