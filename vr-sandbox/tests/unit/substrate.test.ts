@@ -287,7 +287,7 @@ describe('population: a queue that never needs to be finished', () => {
     expect(pieces.length).toBeGreaterThan(50);
     for (const e of pieces) q.push({ id: e.id, facet: 'functions', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
     await populate(s2, q, { expanders: [ruleExpander()], budget: 2000, workers: 1 });
-    const named = s2.relations.filter((x) => x.kind === 'is-a' && /named for it/.test(x.says ?? ''));
+    const named = s2.relations.filter((x) => x.kind === 'is-a' && /named for it:/.test(x.says ?? ''));
     expect(named.length).toBeGreaterThan(10);
     for (const x of named) {
       expect(x.confidence).toBe(0.5);
@@ -298,6 +298,14 @@ describe('population: a queue that never needs to be finished', () => {
     }
     expect(s2.reach('block.actuation.rotary.bearings', 'is-a').map((e) => e.id)).toContain('bearing');
     expect(s2.reach('block.transmission.screw.nut', 'is-a').map((e) => e.id)).toContain('nut');
+    // both sides of an "and", and the head noun when the phrase names nothing, at lower confidence and saying so
+    expect(s2.reach('block.actuation.rotary.commutator-and-brushes', 'is-a').map((e) => e.id)).toEqual(expect.arrayContaining(['commutator', 'brush']));
+    const sun = s2.outOf('block.transmission.reduce.sun-gear', 'is-a');
+    expect(sun.map((x) => x.to)).toContain('gear');
+    expect(sun.find((x) => x.to === 'gear')!.confidence).toBe(0.4);
+    expect(sun.find((x) => x.to === 'gear')!.says).toMatch(/head noun/);
+    // never a living thing's part for a piece of a machine: a battery's "cells" are not biological cells
+    for (const x of s2.relations.filter((x) => x.kind === 'is-a' && /named for/.test(x.says ?? ''))) expect(s2.get(x.to)!.id.startsWith('bio.') || s2.get(x.to)!.kinds.includes('biological'), `${x.from} → ${x.to}`).toBe(false);
     // the kind's functions reach the piece on the next round
     const withFn = pieces.filter((e) => s2.outOf(e.id, 'does').length).length;
     expect(withFn).toBeGreaterThan(5);

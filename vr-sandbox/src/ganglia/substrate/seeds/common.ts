@@ -90,7 +90,7 @@ export function common(): Pack {
   t('test.tensile', ['thing'], 'A specimen pulled to fracture at a set rate while load and extension are read: modulus, yield, ultimate strength and elongation from one curve.', { 'governed-by': ['hooke', 'stress.axial'] });
   t('ball', ['component', 'geometry'], 'A sphere: the rolling element of a bearing, the stud of a ball joint, the closer of a ball valve.', { 'governed-by': ['hertz.contact'] });
   t('slider', ['component'], 'The block that slides along a guide in a prismatic joint: it carries the load and sets the travel.', { 'governed-by': ['friction.coulomb'] });
-  t('magnet', ['component'], 'A body with a magnetic field of its own, permanent or from a current: it pulls on iron and on other magnets, by the field squared over the gap area.', { 'governed-by': ['magnetic.pull', 'ampere.law'], 'fails-by': ['failure.demagnetization'] }, HH);
+  t('magnet', ['component'], 'A body with a magnetic field of its own, permanent or from a current: it pulls on iron and on other magnets, by the field squared over the gap area.', { does: ['fn.make.field', 'fn.store.magnetic'], 'governed-by': ['magnetic.pull', 'ampere.law'], 'fails-by': ['failure.demagnetization'] }, HH);
   t('ground', ['environment'], 'The ground under a machine, soil, floor or road: it carries the weight and gives the reaction every push needs, with its own friction and stiffness.', { 'governed-by': ['weight', 'friction.coulomb', 'traction.limit'] });
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;

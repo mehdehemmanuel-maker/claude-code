@@ -121,8 +121,8 @@ export function electrical(): Pack {
   p.e('brush', 'component', 'A carbon block sprung against the commutator or slip ring: current into a turning part, wearing as it goes.');
   p.link('stator', { 'has-part': ['winding', 'core.magnetic', 'magnet.permanent'], 'produced-by': ['process.stamping', 'process.lamination', 'process.winding', 'process.varnish-impregnation'] });
   p.link('rotor', { 'has-part': ['winding', 'core.magnetic', 'magnet.permanent', 'shaft', 'commutator'], 'produced-by': ['process.stamping', 'process.lamination', 'process.winding', 'turn', 'process.balancing'], 'fails-by': ['failure.imbalance'] });
-  p.link('commutator', { 'made-of': ['copper.c110', 'material.mica'], 'fails-by': ['failure.wear', 'failure.arcing'], 'interacts-with': ['brush'] });
-  p.link('brush', { 'made-of': ['material.carbon-brush', 'copper.c110'], plays: ['role.wear-part', 'role.consumable'], 'fails-by': ['failure.wear', 'failure.arcing'] });
+  p.link('commutator', { does: ['fn.switch', 'fn.conduct.current'], 'made-of': ['copper.c110', 'material.mica'], 'fails-by': ['failure.wear', 'failure.arcing'], 'interacts-with': ['brush'] });
+  p.link('brush', { does: ['fn.conduct.current'], 'made-of': ['material.carbon-brush', 'copper.c110'], plays: ['role.wear-part', 'role.consumable'], 'fails-by': ['failure.wear', 'failure.arcing'] });
 
   // batteries and power
   p.e('battery', ['component', 'subsystem', 'manifold'], 'Cells in series and parallel in a case with terminals: an electrochemical energy store at a voltage.', { names: ['battery pack', 'pack'], source: LINDEN });

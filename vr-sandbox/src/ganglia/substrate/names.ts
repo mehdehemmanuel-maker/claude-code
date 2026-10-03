@@ -25,6 +25,9 @@ export const SPOKEN: Record<string, string> = {
 };
 
 /** The thing some words name, or undefined: the exact id, a human name, the usual spellings, the spoken layer, a prefixed id, the one id ending in the word. */
+/** The singular of an English plural: bearings, brushes, bodies, gases. */
+export const singular = (w: string): string => w.replace(/(sh|ch|x|ss|z)es$/, '$1').replace(/ies$/, 'y').replace(/([^su])s$/, '$1');
+
 export function findByWords(s: Substrate, words: string): Entity | undefined {
   const w = words.trim().toLowerCase().replace(/\s+/g, ' ').replace(/^(an? |the )/, '');
   if (!w) return undefined;
@@ -34,13 +37,13 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   const spoken = SPOKEN[w];
   if (spoken && s.get(spoken)) return s.get(spoken);
   for (const cand of [dotted, dashed, `motor.${w.replace(/^(electric|electrical) motor$/, 'electric')}`]) { const e = s.byWord(cand); if (e) return e; }
-  const singular = w.replace(/s$/, '');
-  for (const cand of [singular, singular.replace(/\s+/g, '.'), singular.replace(/\s+/g, '-')]) { const e = s.byWord(cand); if (e) return e; }
+  const one = singular(w);
+  for (const cand of [one, one.replace(/\s+/g, '.'), one.replace(/\s+/g, '-')]) { const e = s.byWord(cand); if (e) return e; }
   // a role said as a phrase: "electrical conductor" is role.electrical-conductor; a function: "store energy" is store.energy
   for (const prefix of ['role.', 'fn.', 'bio.', 'material.', 'process.', 'machine.', 'vehicle.', 'robot.', 'chem.', 'circuit.', 'earth.', 'sensor.', 'cross.', 'view.']) { const e = s.get(prefix + dashed) ?? s.get(prefix + dotted); if (e) return e; }
   const parts = w.split(' ');
   if (parts.length === 2) { const e = s.get(`${parts[1]}.${parts[0]}`) ?? s.get(`${parts[0]}.${parts[1]}`); if (e) return e; }
   // the last resort: the one entity whose id ends in the word
-  const hits = [...s.entities.values()].filter((e) => e.id.endsWith(`.${singular}`) || e.id === singular || e.id.endsWith(`.${dashed}`) || e.id === dashed);
+  const hits = [...s.entities.values()].filter((e) => e.id.endsWith(`.${one}`) || e.id === one || e.id.endsWith(`.${dashed}`) || e.id === dashed);
   return hits.length === 1 ? hits[0] : undefined;
 }

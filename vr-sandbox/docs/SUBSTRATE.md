@@ -229,9 +229,15 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   function fails (a table of failure modes by function, each a failure the index knows), both said as such. A
   4000-question round before these rules derived 1003 relations and left 472 described components without a
   function, 287 without a material and 400 without a failure. A second tally showed the largest group without a
-  function to be the pieces of the bridge's building blocks (91), so a piece named for a kind of thing is now that kind
-  at half confidence ("bearings" are bearings, "nut" is a nut), when the name resolves to a described component and
-  never to a law or another block; a thing that learns its kind re-opens every facet it can inherit. Functions of the
+  function to be the pieces of the bridge's building blocks (91), so a piece named for a kind of thing is now that kind:
+  the whole phrase at half confidence ("bearings" are bearings, "bus capacitors" the bus capacitor), each side of an
+  "and" ("commutator and brushes" is both), else its head noun at 0.4 ("sun gear" is a kind of gear, "stator magnets"
+  magnets), each arrow saying which reading it is, and never a law, another block or a living thing's part (a battery's
+  "cells" are not biological cells); a thing that learns its kind re-opens every facet it can inherit. A whole-queue
+  round (35 000 questions, 16 s) now derives 27 163 relations, marks 412 unknowns, converges, and leaves 219 of 533
+  described components without a function, 154 without a material and 106 without a failure: nearly all pieces whose
+  names resolve to nothing described (a planet carrier, a current sense, a back EMF) or to a kind that has no function
+  yet. Functions of the
   rest remain a question for packs and the outside. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed

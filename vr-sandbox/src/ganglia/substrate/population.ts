@@ -8,6 +8,7 @@ import { FACETS, KINDS, NAMED_AS, RELATION_KINDS, normalizeId, type Discovery, t
 import { Substrate } from './substrate';
 import type { Pack } from './dsl';
 import { LAWS } from '../laws';
+import { articled, findByWords, singular } from './names';
 
 export interface WorkItem { id: string; facet: Facet; mode: 'fast' | 'deep'; priority: number; reason: string; domain: string }
 
@@ -100,8 +101,28 @@ export function seedExpander(packs: Pack[]): Expander {
   };
 }
 
-/** Readings of a piece's name as the name of a kind: as is, singular, the part before or after "and", dots for dashes. */
-const NAMED_KIND_OF: ((seg: string) => string)[] = [(x) => x, (x) => x.replace(/s$/, ''), (x) => x.replace(/-and-.*$/, ''), (x) => x.replace(/^.*-and-/, '').replace(/s$/, ''), (x) => x.replace(/-/g, '.'), (x) => x.replace(/s$/, '').replace(/-/g, '.')];
+/**
+ * The kinds a piece's name names: the whole phrase as a thing ("bearings" are bearings, "bus capacitors" the bus capacitor),
+ * each side of an "and" ("commutator and brushes" is both), or, when the phrase names nothing, its head noun ("sun gear"
+ * is a kind of gear, "stator magnets" magnets) at lower confidence. Only a described component, mechanism, material or
+ * circuit of this world, never a law, another block, or a living thing's part.
+ */
+function namedKinds(s: Substrate, e: Entity): { kind: Entity; how: string; confidence: number }[] {
+  const seg = e.id.split('.').pop()!;
+  const ok = (x: Entity | undefined): x is Entity => !!x && x.id !== e.id && !('stub' in x.source) && !x.id.startsWith('block.') && !x.id.startsWith('bio.') && !x.kinds.includes('biological') && !x.kinds.includes('organism') && x.kinds.some((k) => k === 'component' || k === 'mechanism' || k === 'material' || k === 'circuit') && !x.kinds.includes('law');
+  const out: { kind: Entity; how: string; confidence: number }[] = [];
+  for (const ph of seg.includes('-and-') ? seg.split('-and-') : [seg]) {
+    const words = ph.replace(/-/g, ' ');
+    // the piece's own name is a name of the piece, so each reading is tried past it
+    const readings = [words, singular(words), ph.replace(/-/g, ''), singular(ph.replace(/-/g, ''))];
+    const whole = readings.flatMap((w) => [findByWords(s, w), s.byWord(w)]).find(ok);
+    if (whole) { out.push({ kind: whole, how: `named for it: a piece called "${words}" is ${articled(whole.name)}`, confidence: 0.5 }); continue; }
+    const head = singular(ph.split('-').pop()!);
+    const byHead = ph.includes('-') ? [findByWords(s, head), s.byWord(head)].find(ok) : undefined;
+    if (byHead) out.push({ kind: byHead, how: `named for its head noun: a piece called "${words}" is a kind of ${byHead.name}`, confidence: 0.4 });
+  }
+  return out.filter((x, i, a) => a.findIndex((y) => y.kind.id === x.kind.id) === i);
+}
 
 /** The facet a new relation of a kind re-opens on the kind's members. */
 const FACET_OF_RELATION: Partial<Record<Relation['kind'], Facet>> = { 'produced-by': 'constructors', 'fails-by': 'failures', 'standardized-by': 'standards', 'connects-to': 'interfaces', 'made-of': 'materials', does: 'functions' };
@@ -177,12 +198,8 @@ export function ruleExpander(): Expander {
       }
       if (facet === 'functions' && !s.outOf(e.id, 'does').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const fn of s.reach(k.id, 'does')) out.relations.push(r(e.id, 'does', fn.id, `inherits from ${k.id}`));
-        // a piece of a building block named for a kind of thing is that kind of thing: "bearings" are bearings, "nut" is a nut
-        if (!s.outOf(e.id, 'is-a').length && e.id.startsWith('block.') && s.reach(e.id, 'part-of').length) {
-          const seg = e.id.split('.').pop()!;
-          const named = NAMED_KIND_OF.map((f) => f(seg)).map((w) => s.byWord(w)).find((x) => x && x.id !== e.id && !('stub' in x.source) && !x.id.startsWith('block.') && x.kinds.some((k) => k === 'component' || k === 'mechanism' || k === 'material' || k === 'circuit') && !x.kinds.includes('law'));
-          if (named) out.relations.push({ ...r(e.id, 'is-a', named.id, `named for it: a piece called "${seg.replace(/-/g, ' ')}" is a ${named.name}`), confidence: 0.5 });
-        }
+        // a piece of a building block named for a kind of thing is that kind of thing: "bearings" are bearings, "commutator and brushes" both, "sun gear" a gear by its head noun
+        if (!s.outOf(e.id, 'is-a').length && e.id.startsWith('block.') && s.reach(e.id, 'part-of').length) for (const n of namedKinds(s, e)) out.relations.push({ ...r(e.id, 'is-a', n.kind.id, n.how), confidence: n.confidence });
       }
       if (facet === 'materials' && e.kinds.includes('material')) {
         for (const role of s.reach(e.id, 'plays')) for (const thing of s.reach(role.id, 'played-by')) if (thing.id !== e.id && !thing.kinds.includes('material') && !thing.kinds.includes('role')) out.relations.push(r(thing.id, 'made-of', e.id, `it plays ${role.id}, which ${e.id} can fill`));
