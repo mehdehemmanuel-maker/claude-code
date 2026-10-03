@@ -1176,6 +1176,8 @@ describe('Ego says how she knows an influence: the epistemic vector of the arrow
     expect(answerTraversal({ do: 'traverse', query: 'know', of: 'zinc plating', which: 'corrosion', prevent: true })).toMatch(/^Probably \(0\.75 to 0\.95\) zinc plating contributes to \(lowers\) corrosion\. How I know it: .*source: Bard & Faulkner/);
     expect(interpret('why use a torque arm')).toMatchObject({ do: 'reason' });
     expect(interpret('what makes a shaft')).toMatchObject({ do: 'traverse', query: 'producers' });
+    // "what makes you think that" is no question about manufacture
+    expect(interpret('what makes you think that')).not.toMatchObject({ do: 'traverse', query: 'producers' });
     const a = answerTraversal({ do: 'traverse', query: 'know', of: 'current', which: 'voltage' });
     expect(a).toMatch(/^Electric current is needed for \(raises\) voltage \(Young & Freedman, University Physics, 15th ed\., Pearson 2019\)\. How I know it: formal derived; empirical 0 for, 0 against; simulation 0; calibration 0; theory entailed \(domain inside\); coverage 0\.\d+; uncertainty unstated; discrepancy none; consistent: entailed by a law, by derivation; partly covered by sources\. The law behind it: Ohm's law \(V = I R\), Young & Freedman.*; the sign and size taken at its worked example, not measured in my world\. In Nex: influence\(qty\.current, qty\.voltage\)\{dir:1 polarity:\+ necessity:necessary mech:ohm/);
   });
