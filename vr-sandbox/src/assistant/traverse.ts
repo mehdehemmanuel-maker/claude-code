@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
+import { askable, between, chain, d, decompose, family, formOf, fromRelation, grow as growGrammar, hash, polysemous, r, readings, render, saidOf, sameForm, sayForm, sayGrammar, saySenses, senses, settle, speak, symptoms, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -377,6 +377,21 @@ export function answerTraversal(i: Traverse): string {
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
   }
+  if (i.query === 'between') {
+    // whether two things lie on one continuum (docs/NEX-SPACE.md): two quantities of one dimension lie on a line that a law would make a family; of different dimensions, there is no space between them
+    const a = find(i.of ?? ''), b = find(i.which ?? '');
+    if (!a) return unknown(i.of ?? '');
+    if (!b) return unknown(i.which ?? '');
+    const unitOfE = (e: Entity) => (e.kinds.includes('quantity') || e.kinds.includes('property') ? e.params?.find((p) => p.sym === 'unit')?.values?.[0] : undefined);
+    const ua = unitOfE(a), ub = unitOfE(b);
+    if (ua && ub) {
+      const verdict = between({ k: 'Q', v: 0, dim: dimensionOf(ua) }, { k: 'Q', v: 0, dim: dimensionOf(ub) }, new Map(LAWS.map((l) => [l.id, l])));
+      if (!verdict.ok && verdict.mode === 'undefined') return `No: ${nameOf(a)} (${ua}) and ${nameOf(b)} (${ub}) have different dimensions, so there is no space between them to interpolate in; what looks like a scale from one to the other is a word, not a coordinate.`;
+      const shared = LAWS.filter((l) => l.inputs.some((x) => { try { return sameDim(dimensionOf(x.unit), dimensionOf(ua)); } catch { return false; } }) && l.inputs.some((x) => { try { return sameDim(dimensionOf(x.unit), dimensionOf(ub)); } catch { return false; } }));
+      return `${cap(nameOf(a))} and ${nameOf(b)} are both counted in ${ua}: numbers of one dimension lie on a line, and a law makes the line a family. ${shared.length ? `${shared.length} law${shared.length === 1 ? '' : 's'} of mine take both: ${list(shared.slice(0, 4).map((l) => `${l.name} (${l.formula})`), 4)}; along one of those, with the other inputs held, every point between is generated on demand.` : 'No law of mine takes both, so I have the line and no family on it.'}`;
+    }
+    return `${cap(art(a))} and ${art(b)} are two distinctions: they share no coordinate, so there is nothing between them but what a law would say, and none is given. I can compare them (what each is, does, is made of and fails by), which is a different question.`;
+  }
   if (i.query === 'edge') {
     // the edge of a law's domain along one input (docs/NEX-SPACE.md): the family the law generates along that input,
     // walked up from the worked example until the law stops applying, then bisected to a millionth; nothing stored
@@ -403,7 +418,7 @@ export function answerTraversal(i: Traverse): string {
   }
   if (i.query === 'form') {
     // the form of a law (section R): its output's dimension and the exponents of its inputs at its worked example, from eval alone; the laws of the same form are one structure said in several theories
-    const w = (i.of ?? '').toLowerCase().replace(/^(?:an? |the )/, '').replace(/['’]?s law$/, '').trim();
+    const w = (i.of ?? '').toLowerCase().replace(/^(?:an? |the )/, '').replace(/['’]?s law$/, '').replace(/ law$/, '').trim();
     const law = LAWS.find((l) => l.id === w || l.name.toLowerCase() === w) ?? LAWS.find((l) => l.name.toLowerCase().includes(w) || l.id.includes(w.replace(/\s+/g, '.')));
     if (!law) return `I know no law called ${i.of}.`;
     const f = formOf(law);

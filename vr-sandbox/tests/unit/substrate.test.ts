@@ -1104,3 +1104,14 @@ describe('Ego finds the edge of a law along one input (Nex Space)', () => {
     expect(answerTraversal({ do: 'traverse', query: 'edge', of: 'kinetic energy', which: 'speed' })).toMatch(/^Kinetic energy \(E = ½ m v²\) declares no edge along speed: its domain is said only in words/);
   });
 });
+
+describe('Ego on whether two things lie on one continuum (Nex Space)', () => {
+  it('heat and temperature have no space between them; torque and energy lie on one line that laws make a family; a motor and a bearing share no coordinate', () => {
+    expect(interpret('is there a continuum between heat and temperature')).toEqual({ do: 'traverse', query: 'between', of: 'heat', which: 'temperature' });
+    expect(answerTraversal({ do: 'traverse', query: 'between', of: 'heat', which: 'temperature' })).toMatch(/^No: heat \(J\) and temperature \(K\) have different dimensions, so there is no space between them to interpolate in; what looks like a scale from one to the other is a word, not a coordinate\.$/);
+    expect(answerTraversal({ do: 'traverse', query: 'between', of: 'torque', which: 'energy' })).toMatch(/^Torque and energy are both counted in N m: numbers of one dimension lie on a line, and a law makes the line a family\. \d+ laws? of mine take both/);
+    expect(answerTraversal({ do: 'traverse', query: 'between', of: 'motor', which: 'bearing' })).toMatch(/^A motor and a bearing are two distinctions: they share no coordinate/);
+    // "the weight law" finds the law named Weight
+    expect(answerTraversal({ do: 'traverse', query: 'form', of: 'weight law' })).toMatch(/^Weight \(W = m g\) has the form N:1,1/);
+  });
+});
