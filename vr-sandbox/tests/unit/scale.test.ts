@@ -11,6 +11,9 @@ import {
 } from '../../src/ganglia/scale';
 import { build } from '../../src/ganglia/substrate';
 import { interpret } from '../../src/assistant/intent';
+import { engineer, DEFAULT_ENV } from '../../src/ganglia/manifold';
+import { redesign, scaleContract } from '../../src/ganglia/scale';
+import { answerRedesign } from '../../src/assistant/scaleTalk';
 import { answerScale } from '../../src/assistant/scaleTalk';
 
 const froude = similarityById('scale.froude')!, same = similarityById('scale.same-material')!, reynolds = similarityById('scale.reynolds')!, cauchy = similarityById('scale.cauchy')!;
@@ -235,6 +238,15 @@ describe('cross-scale dynamics are first-class middle structures', () => {
     for (const c of CROSS_SCALES) for (const st of c.up) if (st.law) expect(lawById(st.law) ?? s.get(st.law)?.kinds.includes('law'), `${c.id}: ${st.law} is not a law`).toBeTruthy();
   });
 
+  it('a muscle and a gear train are cross-scale structures too: molecular ratchets to a limb, tooth contact to a ratio', () => {
+    const muscle = CROSS_SCALES.find((c) => c.id === 'cross.muscle')!, train = CROSS_SCALES.find((c) => c.id === 'cross.gear-train')!;
+    expect(askOf(muscle, 'micro').appearsGoingUp).toContain('the force-velocity curve');
+    expect(muscle.invariant.join(' ')).toMatch(/300 kPa/);
+    expect(askOf(train, 'meso').transformation.join(' ')).toMatch(/constant ratio/);
+    expect(train.up.map((u) => u.law).filter(Boolean)).toEqual(expect.arrayContaining(['young.contact', 'gear.lewis', 'gear.output.torque']));
+    expect(CROSS_SCALES.length).toBeGreaterThanOrEqual(5);
+  });
+
   it('the reverse path exists: a macro constraint selects microconfigurations and is realised through micro dynamics', () => {
     for (const c of CROSS_SCALES) {
       expect(c.down.map((s) => s.via)).toEqual(expect.arrayContaining(['constraint', 'realisation']));
@@ -305,6 +317,17 @@ describe('self-similarity across decades, in the substrate', () => {
     expect(r.unplaced).toBeGreaterThan(100); // most things carry no characteristic length yet: said, not hidden
   });
 
+  it('a heart at ten centimetres finds the cilium at ten microns: both move fluid, four decades apart', () => {
+    const r = findScaleAnalogues(s, 'bio.heart', { minDecades: 2, minSimilarity: 0.15 })!;
+    expect(r.analogues.map((a) => a.entity.id)).toContain('bio.cilia');
+    const cilia = r.analogues.find((a) => a.entity.id === 'bio.cilia')!;
+    expect(cilia.decades).toBeCloseTo(4, 0);
+    expect(cilia.shared.does).toContain('fn.move.fluid');
+    // characteristic scales now cover the common parts of the index
+    const placed = [...s.entities.values()].filter((e) => e.params?.some((p) => p.sym === 'L_c')).length;
+    expect(placed).toBeGreaterThan(120);
+  });
+
   it('a feedback loop recurs from a body to a planet', () => {
     const r = findScaleAnalogues(s, 'bio.homeostasis', { minDecades: 2, minSimilarity: 0.1 })!;
     const ids = r.analogues.map((a) => a.entity.id);
@@ -326,6 +349,50 @@ describe('scale-aware manifolds', () => {
     const table = manifoldScaleTable(froude, 10);
     expect(table.length).toBeGreaterThan(5);
     for (const row of table) expect(row.laws.every((c) => c.why.length > 0)).toBe(true);
+  });
+});
+
+describe('a want engineered again at another scale', () => {
+  const want = { stores: 100e3, releases: 500, window: [263.15, 313.15] as [number, number], massMax: 5, rechargeable: true };
+
+  it('scales each quantity of the contract by its own exponent, never alike', () => {
+    const { contract, env, moved } = scaleContract(want, DEFAULT_ENV, froude, 0.1);
+    expect(moved.map((m) => [m.name, +m.exponent.toFixed(3)])).toEqual([['energy stored', 4], ['power released', 3.5], ['mass limit', 3], ['height', 1], ['radius', 1]]);
+    expect(contract.stores).toBeCloseTo(10, 9); // 100 kJ at a tenth: λ⁴
+    expect(contract.releases).toBeCloseTo(500 * Math.pow(0.1, 3.5), 9);
+    expect(contract.massMax).toBeCloseTo(0.005, 12);
+    expect(contract.window).toEqual([263.15, 313.15]); // the environment's, not the thing's
+    expect(env.radiusMax).toBeCloseTo(0.025, 12);
+  });
+
+  it('engineers the scaled want again and says what changed: the winner, the mass against λ³, what was lost and gained', () => {
+    const before = engineer(want);
+    expect(before.candidates.length).toBeGreaterThan(0);
+    const r = redesign(before, froude, 0.1);
+    expect(r.contract.stores).toBeCloseTo(10, 9);
+    expect(r.after.candidates.length + r.after.refused.length).toBeGreaterThan(0);
+    expect(typeof r.chosen.same).toBe('boolean');
+    expect(r.mass.cube).toBeCloseTo(1e-3, 12);
+    if (r.mass.ratio !== null) expect(r.mass.ratio).toBeGreaterThan(0);
+    for (const l of r.lost) { expect(l.mechanism.length).toBeGreaterThan(0); expect(l.why.length).toBeGreaterThan(5); }
+    expect(r.says).toMatch(/10 times smaller under Froude similarity/);
+    expect(r.says).toMatch(/energy stored 1\.00e\+5 → 10 J \(λ\^4\)/);
+    // and the other way: ten times bigger wants a thousand times the mass budget and ten thousand times the energy
+    const big = redesign(before, froude, 10);
+    expect(big.contract.stores).toBeCloseTo(1e9, 0);
+    expect(big.contract.massMax).toBeCloseTo(5000, 9);
+    expect(big.says).toMatch(/10 times bigger/);
+  });
+
+  it('Ego re-engineers the last want when asked, and refuses when there is none', () => {
+    expect(interpret('design it ten times smaller')).toMatchObject({ do: 'scaling', query: 'redesign', factor: 0.1 });
+    expect(interpret('engineer it at a hundredth the size')).toMatchObject({ do: 'scaling', query: 'redesign', factor: 0.01 });
+    expect(interpret('redesign the same thing 3 times bigger')).toMatchObject({ do: 'scaling', query: 'redesign', factor: 3 });
+    expect(answerRedesign({ do: 'scaling', query: 'redesign', factor: 0.1 }, null).says).toMatch(/Nothing is engineered yet/);
+    const a = answerRedesign({ do: 'scaling', query: 'redesign', factor: 0.1 }, engineer(want));
+    expect(a.result).not.toBeNull();
+    expect(a.says).toMatch(/10 times smaller/);
+    expect(a.result!.contract.stores).toBeCloseTo(10, 9);
   });
 });
 

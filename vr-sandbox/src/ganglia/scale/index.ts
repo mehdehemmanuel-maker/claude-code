@@ -11,3 +11,4 @@ export { CROSS_SCALES, crossScaleById, askOf, type CrossScale, type Level, type 
 export { universalScaleStructuralEquivalence, promote, StatusRefused, NEEDS, type Claim } from './hypothesis';
 export { findScaleAnalogues, findPattern, signatureOf, characteristicLength, characteristicTime, type ScaleAnalogue, type Signature } from './analogues';
 export { scaleManifold, scaleParameters, manifoldScaleTable, type ScaledManifold, type ScaledParameter, type Characteristic } from './manifold';
+export { redesign, scaleContract, type Redesign } from './redesign';

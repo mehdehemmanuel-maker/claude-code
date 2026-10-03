@@ -90,8 +90,9 @@ similarities because current is left unscaled by them (true: electrical similari
 
 `crossscale.ts`: `CrossScale { levels (micro, meso, macro with variables and characteristic scales), up (interaction →
 transition → collective → emergent variable, each with what it carries and by which law), down (constraint → allowed
-microconfigurations → micro dynamics → realisation), disappears, appears, invariant, breaks, status }`. Three are
-written: **heat** (molecular energy states → collisions → the Maxwell-Boltzmann distribution → temperature → heat flux →
+microconfigurations → micro dynamics → realisation), disappears, appears, invariant, breaks, status }`. Five are
+written: **muscle** (myosin heads → sarcomeres → a muscle on a lever: Hill's curve emerging, 300 kPa invariant from a
+mouse to a whale), a **gear train** (Hertzian tooth contact → a mesh → a ratio and an efficiency), **heat** (molecular energy states → collisions → the Maxwell-Boltzmann distribution → temperature → heat flux →
 the temperature field; never a static object: STATE + GRADIENT + TRANSPORT + INTERACTION), the **rigid body** (atoms →
 elastic continuum → rigidity, valid while L/(c Δt) is small: the engine's own model as a projection), and **electric
 current** (electrons → drift → conductivity → resistance). `askOf(c, scale)` answers the core questions: valid at, what
@@ -118,7 +119,7 @@ rod is lumped at the physics step (He 0.015); 100 m is distributed: the rigid bo
 
 Scale is an axis of the substrate, not a tree: `coarse-grains-to / refines-to` joins descriptions; `invariant-under /
 preserves` joins laws and groups to transformations (658 derived links); `observed-by / observes` joins descriptions
-to observers. Entities carry `L_c` and `T_c` as estimates across 60 things from the proton to the planet.
+to observers. Entities carry `L_c` and `T_c` as estimates across about 130 things from the proton to the planet's core.
 
 ## 10. Self-similarity search
 
@@ -149,6 +150,16 @@ already falsified by c, ħ, G; the weak form stands as a theorem of dimensional 
   valid", "how long does a signal take to cross a 10 m steel beam".
 - Law tree: SC-1 to SC-5.
 
+## A want at another scale (`redesign.ts`, law SC-6)
+
+"Design it ten times smaller" is not a copy at a tenth. `scaleContract` scales each quantity of the contract and the
+environment by its own exponent under the similarity (under Froude: energy stored λ⁴, power released λ^3.5, a mass limit
+λ³, height and radius λ, a temperature window λ⁰ because it is the environment's), and `redesign` engineers the scaled
+want again through the manifold language. The answer compares the winner before and after, the chosen member's mass
+against λ³ (a stocked part does not shrink with the want), and the mechanisms lost or gained with the refusal that
+says why. Ego: "design it ten times smaller", "engineer it at a hundredth the size", "redesign the same thing 3 times
+bigger"; "build it" then places the re-engineered one.
+
 ## Experiments in the engine (`tests/conformance/scale.test.ts`)
 
 The verdicts are predictions about the world; the world here is the engine, so they are measured in it.
@@ -178,10 +189,9 @@ The verdicts are predictions about the world; the world here is the engine, so t
   L/R ∝ λ², Rm preserved: derived in its derivation string); the thermal similarity scales temperature as 1/λ² so
   conduction and storage keep their form. A surface coefficient h held by the environment is not similar (Bi grows
   with λ), and radiation never is. A Rayleigh or Bénard scaling is not written.
-- Characteristic scales are estimates on 60 entities; most of the substrate carries none, which the analogue search
-  reports (`unplaced`).
+- Characteristic scales are estimates on about 130 entities; most of the substrate carries none, which the analogue
+  search reports (`unplaced`). A heart now finds the cilium four decades down; a bearing still finds nothing far away.
 - The analogue search's similarity measure is a stated choice, listed among the hypothesis's unresolved assumptions.
-- Only three cross-scale structures are written; muscle (sarcomere → fibre → muscle), a gear train and a market are
-  next.
+- Five cross-scale structures are written; a market, a neural network and a river basin are next.
 - Allometry's exponent is carried as measured (¾) with its range (0.65 to 0.78); the WBE derivation is cited as a
   model, not promoted.

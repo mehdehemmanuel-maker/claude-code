@@ -34,7 +34,54 @@ const REIF: Source = { cite: 'Reif, Fundamentals of Statistical and Thermal Phys
 const LANDAU: Source = { cite: 'Landau & Lifshitz, Theory of Elasticity, 3rd ed., 1986, §1 and §22; Goldstein, Classical Mechanics, 3rd ed., ch. 5 (rigid bodies)', kind: 'textbook' };
 const ASHCROFT: Source = { cite: 'Ashcroft & Mermin, Solid State Physics, 1976, ch. 1 (Drude model) and ch. 13', kind: 'textbook' };
 
+const ALBERTS: Source = { cite: 'Alberts et al., Molecular Biology of the Cell, 6th ed., Garland 2015, ch. 16; Hill, "The heat of shortening and the dynamic constants of muscle", Proc. R. Soc. B 126 (1938) 136', kind: 'textbook' };
+const SHIGLEY: Source = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., ch. 13 and 14 (gears); Hertz (1882) on contact', kind: 'textbook' };
+
 export const CROSS_SCALES: CrossScale[] = [
+  { id: 'cross.muscle', name: 'muscle, from myosin heads to a limb', says: 'A muscle is a billion molecular ratchets in series and parallel: a nanometre step at the bottom, a stroke at the top, with the force-velocity curve emerging between.',
+    levels: [
+      { scale: 'micro', name: 'myosin heads on actin', description: 'A myosin head binds actin, swings 5 to 10 nm on ATP hydrolysis, releases, rebinds: a stochastic ratchet.', variables: ['head state (bound, swung, released)', 'ATP concentration', 'step 5 nm', 'force per head 2 to 5 pN'], characteristicLength: 1e-8, characteristicTime: 1e-3 },
+      { scale: 'meso', name: 'sarcomeres in a fibre', description: 'Thousands of sarcomeres in series shorten together; many heads in parallel sum their forces; calcium gates the cycle.', variables: ['sarcomere length 2 µm', 'overlap', 'calcium', 'fibre tension'], characteristicLength: 2e-6, characteristicTime: 1e-2 },
+      { scale: 'macro', name: 'a muscle on a lever', description: 'Bundles of fibres pulling a tendon on a bone: a stroke of centimetres, a force of hundreds of newtons, a force-velocity curve (Hill), 20 to 25 % efficient.', variables: ['force', 'shortening velocity', 'stroke', 'power', 'heat'], characteristicLength: 1e-1, characteristicTime: 1e-1 },
+    ],
+    up: [
+      { from: 'a myosin head and ATP', to: 'a power stroke', via: 'interaction', carries: ['energy', 'momentum'], says: 'Chemical energy of one ATP becomes a few piconewton-nanometres of work.' },
+      { from: 'many heads, asynchronous', to: 'a steady sliding force', via: 'collective', carries: ['momentum', 'information'], says: 'Stochastic strokes sum to a smooth force proportional to the overlap and the fraction bound.' },
+      { from: 'force against sliding speed', to: 'the force-velocity curve', via: 'emergent-variable', carries: ['energy'], says: 'Faster sliding leaves fewer heads bound: force falls with speed as Hill\'s hyperbola, with its optimum power at a third of the maximum speed.', law: 'hill.muscle' },
+      { from: 'sarcomeres in series and fibres in parallel', to: 'stroke and force of the whole', via: 'collective', carries: ['energy'], says: 'Stroke adds along the series, force across the parallel: the architecture sets the lever the muscle is.' },
+    ],
+    down: [
+      { from: 'a macro constraint: lift this load at this speed', to: 'allowed microconfigurations', via: 'constraint', carries: ['information'], says: 'The nervous system recruits enough fibres and fires fast enough: which heads bind is not chosen, how many are.' },
+      { from: 'recruitment', to: 'micro dynamics', via: 'dynamics', carries: ['energy'], says: 'Calcium released, ATP consumed, heat made at the rate the stroke demands.' },
+      { from: 'repeated demand', to: 'a realisation', via: 'realisation', carries: ['matter'], says: 'Use grows the muscle: more sarcomeres in parallel, a constructor at the macro level answering the micro one.' },
+    ],
+    disappears: ['which head is bound', 'the timing of any stroke', 'the step of 5 nm'],
+    appears: ['a smooth force', 'the force-velocity curve', 'efficiency', 'fatigue'],
+    invariant: ['energy', 'the force per cross-section (about 300 kPa, the same from a mouse to a whale)', 'the step per ATP'],
+    breaks: ['at a single head: no smooth force, a stochastic one', 'past the overlap: no force at all', 'at speeds above the unloaded shortening speed'],
+    status: 'theorem', source: ALBERTS },
+  { id: 'cross.gear-train', name: 'a gear train, from tooth contact to a ratio', says: 'A ratio is a number; it is made by steel touching steel under Hertzian pressure a thousand times a second.',
+    levels: [
+      { scale: 'micro', name: 'tooth contact', description: 'Two involute flanks touch along a line under a Hertzian pressure of hundreds of megapascals, rolling and sliding through a film of oil microns thick.', variables: ['contact pressure', 'film thickness', 'sliding speed', 'surface roughness'], characteristicLength: 1e-4, characteristicTime: 1e-4 },
+      { scale: 'meso', name: 'a mesh', description: 'Pairs of teeth share the load in turn; the involute keeps the ratio constant through the engagement; the tooth root bends as a cantilever.', variables: ['contact ratio', 'tooth bending stress (Lewis)', 'transmission error', 'backlash'], characteristicLength: 1e-2, characteristicTime: 1e-3 },
+      { scale: 'macro', name: 'a train and its ratio', description: 'Shafts, bearings and a housing: a ratio, an efficiency of 97 to 99 % per mesh, a torque capacity, a life.', variables: ['ratio', 'torque', 'efficiency', 'inertia', 'life'], characteristicLength: 1e-1, characteristicTime: 1e-2 },
+    ],
+    up: [
+      { from: 'two flanks', to: 'Hertzian contact', via: 'interaction', carries: ['momentum', 'energy'], says: 'The load is carried on an elliptical patch whose pressure the curvatures set.', law: 'young.contact' },
+      { from: 'contact through the engagement', to: 'constant ratio', via: 'collective', carries: ['causality'], says: 'The involute\'s property: the line of action is fixed, so the angular velocity ratio is constant whatever the centre distance.' },
+      { from: 'teeth taking turns', to: 'bending stress and life', via: 'emergent-variable', carries: ['energy'], says: 'Each tooth is loaded once per revolution: a fatigue cycle; Lewis gives the root stress.', law: 'gear.lewis' },
+      { from: 'meshes in series', to: 'the train\'s ratio and efficiency', via: 'emergent-variable', carries: ['energy', 'information'], says: 'Ratios multiply, efficiencies multiply, inertias reflect by the ratio squared.', law: 'gear.output.torque' },
+    ],
+    down: [
+      { from: 'a macro constraint: this ratio at this torque', to: 'allowed microconfigurations', via: 'constraint', carries: ['information'], says: 'Module and face width are chosen so the root stress and the contact pressure stay below their limits: the micro is sized from the macro.' },
+      { from: 'module and width', to: 'micro dynamics', via: 'dynamics', carries: ['energy'], says: 'The contact pressure and sliding set the oil film and the wear.' },
+      { from: 'the sized teeth', to: 'a realisation', via: 'realisation', carries: ['matter'], says: 'Hobbed, hardened and ground: the constructor chain of a gear.' },
+    ],
+    disappears: ['the contact patch', 'the film', 'which tooth carries the load'],
+    appears: ['a ratio', 'an efficiency', 'backlash', 'a life'],
+    invariant: ['energy less the mesh loss', 'the velocity ratio through the engagement'],
+    breaks: ['when the film fails: scuffing', 'when the contact pressure passes the surface fatigue limit: pitting', 'when the tooth root passes its bending fatigue limit'],
+    status: 'theorem', source: SHIGLEY },
   { id: 'cross.heat', name: 'heat, from molecules to a temperature field', says: 'Heat is a state (energy in molecular motion), a gradient (uneven across a body), a transport (conducted, convected, radiated), an interaction (collisions, phonons, photons) and a description at each scale.',
     levels: [
       { scale: 'micro', name: 'molecular and lattice energy states', description: 'Molecules and lattice vibrations each carry kinetic and potential energy; in a solid, quantised lattice waves (phonons) and electron states.', variables: ['velocity of each molecule', 'phonon occupation numbers', 'electron energies'], characteristicLength: 3e-10, characteristicTime: 1e-13 },

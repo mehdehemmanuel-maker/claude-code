@@ -28,7 +28,7 @@ export type Intent =
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
   | { do: 'traverse'; query: TraversalQuery; of?: string }
   /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
-  | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
+  | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
   | { do: 'engineer'; workflow: string; spec: Record<string, number> }
   /** A behaviour wanted with its numbers: engineered through the manifold language, never answered by a name. */
@@ -109,6 +109,11 @@ const factorOf = (w: string) => NUMBER_WORDS[w] ?? Number(w);
 function scaleOf(t: string): Extract<Intent, { do: 'scaling' }> | null {
   let m: RegExpExecArray | null;
   const strip = (x: string) => x.replace(/^(?:an? |the |my |this |that )/, '').trim();
+  if ((m = /^(?:design|engineer|redesign|re-engineer|size|re-size|resize) (?:it|that|the same(?: thing)?|the design|the system) (?:again )?(?:(\d+(?:\.\d+)?|two|three|four|five|ten|twenty|fifty|a hundred|hundred|a thousand|thousand|half|twice) times (bigger|larger|smaller|tinier)|at (?:a )?(tenth|hundredth|thousandth|half|double|ten times|a hundred times) (?:the |of the )?(?:size|scale))$/.exec(t))) {
+    const down = m[2] ? /smaller|tinier/.test(m[2]) : /tenth|hundredth|thousandth|half/.test(m[3]!);
+    const f = m[1] ? factorOf(m[1]) : ({ tenth: 10, hundredth: 100, thousandth: 1000, half: 2, double: 2, 'ten times': 10, 'a hundred times': 100 } as Record<string, number>)[m[3]!]!;
+    return { do: 'scaling', query: 'redesign', factor: down ? 1 / f : f };
+  }
   if ((m = /^(?:what (?:changes|happens|stays the same|would change)|how (?:does|would) (?:it|things?) change) (?:if|when) (?:i |we |you )?(?:make|made|scale|scaled|build|built|shrink|shrank|grow|grew) (it|this|that|(?:an? |the )?.+?) (\d+(?:\.\d+)?|two|three|four|five|ten|twenty|fifty|a hundred|hundred|a thousand|thousand|half|twice) times (bigger|larger|smaller|tinier|faster|slower)$/.exec(t))) {
     const f = factorOf(m[2]!), down = /smaller|tinier|slower/.test(m[3]!);
     return { do: 'scaling', query: 'transform', factor: down ? 1 / f : f, ...(/^(it|this|that)$/.test(m[1]!) ? {} : { of: strip(m[1]!) }) };

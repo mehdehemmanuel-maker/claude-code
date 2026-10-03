@@ -6,7 +6,8 @@ import type { Intent } from './intent';
 import { LAWS, lawById } from '../ganglia/laws';
 import { TICK } from '../physics/world';
 import { substrate, type SubstrateEntity } from '../ganglia';
-import { SIMILARITIES, similarityById, scaleSystem, GROUPS, groupUnder, classify, scaleSetters, OBSERVERS, observerById, project, MECHANISMS, propagation, CROSS_SCALES, universalScaleStructuralEquivalence, findScaleAnalogues, characteristicLength, characteristicTime, type ScaleTransform } from '../ganglia/scale';
+import { SIMILARITIES, similarityById, scaleSystem, GROUPS, groupUnder, classify, scaleSetters, OBSERVERS, observerById, project, MECHANISMS, propagation, CROSS_SCALES, universalScaleStructuralEquivalence, findScaleAnalogues, characteristicLength, characteristicTime, redesign, type ScaleTransform } from '../ganglia/scale';
+import { engineeredReport, type Engineered } from '../ganglia/manifold';
 
 type Scale = Extract<Intent, { do: 'scaling' }>;
 
@@ -45,7 +46,17 @@ function findCarrier(words: string | undefined) {
 
 const DEFAULT: ScaleTransform = similarityById('scale.froude')!;
 
+/** The last want, engineered again λ times larger or smaller: same material, same planet (Froude) unless another similarity is named. */
+export function answerRedesign(i: Scale, last: Engineered | null): { says: string; result: Engineered | null } {
+  if (!last) return { says: 'Nothing is engineered yet: tell me what to store, give out, work between and weigh under, then ask for it at another size.', result: null };
+  const lambda = i.factor ?? 0.1;
+  const t = (i.similarity && similarityById(i.similarity)) || DEFAULT;
+  const r = redesign(last, t, lambda);
+  return { says: `${r.says} ${engineeredReport(r.after)}`, result: r.after };
+}
+
 export function answerScale(i: Scale): string {
+  if (i.query === 'redesign') return answerRedesign(i, null).says;
   if (i.query === 'transform') {
     const lambda = i.factor ?? 10;
     const t = (i.similarity && similarityById(i.similarity)) || DEFAULT;
