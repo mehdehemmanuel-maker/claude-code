@@ -81,7 +81,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
+export type TraversalQuery = 'grammar' | 'cause' | 'native' | 'kinds' | 'standards' | 'interfaces' | 'size' | 'compare' | 'function' | 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -129,6 +129,8 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   if ((m = /^(?:is|are) (?:an? |the )?(.+?) caused by (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[2]!), which: strip(m[1]!) };
   if ((m = /^what (?:causes|prevents|drives|brings about|leads to) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'cause', of: strip(m[1]!) };
   // her own language: the structures she holds a thing in, rendered with what the rendering lost (docs/EGO-NATIVE-LANGUAGE.md)
+  // her grammar: the morphemes her own knowledge earned, by description length
+  if (/^(?:(?:what|which) morphemes (?:have you|did you|do you) (?:found|find|earned|earn|have|know)|how (?:has|does) your (?:grammar|language) (?:grown|grow|evolved|evolve)|(?:show|say) (?:me )?your (?:grammar|morphemes)|your (?:grammar|morphemes))\??$/.test(t)) return { do: 'traverse', query: 'grammar' };
   if ((m = /^(?:say|think|put|show) (?:about |of |me )?(?:an? |the )?(.+?) in (?:your (?:own )?|nex )?(?:language|words|tongue|terms|nex)\??$|^how do you (?:think (?:of|about)|hold|see) (?:an? |the )?(.+?)(?: inside| in your head| natively)?\??$|^(?:nex|native|the native form) (?:of|for) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'native', of: strip((m[1] ?? m[2] ?? m[3])!) };
   if ((m = /^what (?:is|are) (?:an? |the )?(.+?) (?:a )?kinds? of\??$|^what kind of thing is (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'kinds', of: strip((m[1] ?? m[2])!) };
   if ((m = /^(?:what|which) standards? (?:apply|applies) to (?:an? |the )?(.+?)\??$|^(?:what|which) standards? (?:for|govern|governs|cover|covers) (?:an? |the )?(.+?)\??$|^(?:is|are) (?:an? |the )?(.+?) standardi[sz]ed\??$|^standards? (?:for|of) (?:an? |the )?(.+?)\??$/.exec(t))) return { do: 'traverse', query: 'standards', of: strip((m[1] ?? m[2] ?? m[3] ?? m[4])!) };

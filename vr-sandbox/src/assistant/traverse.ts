@@ -2,7 +2,7 @@
 // makes a thing and what makes those, its analogues, its lineage, what to build it from. Nothing here is a list kept for
 // the question; each answer is the traversal, said in words, with what is still unknown said too.
 import type { Intent } from './intent';
-import { askable, chain, fromRelation, hash, polysemous, readings, render, saidOf, saySenses, senses, settle, text as nex, tune, type R, type SettleContext } from '../ganglia/native';
+import { askable, chain, fromRelation, grow as growGrammar, hash, polysemous, readings, render, saidOf, sayGrammar, saySenses, senses, settle, text as nex, tune, type Grammar, type R, type SettleContext } from '../ganglia/native';
 import { LAWS } from '../ganglia/laws';
 import { dimensionOf, sameDim } from '../ganglia/units';
 import { ruleExpander } from '../ganglia/substrate';
@@ -58,6 +58,8 @@ function unknown(name: string): string {
   }
   return `I know no ${name}${which ? ' as such.' : '.'}${which}`;
 }
+
+let grammar: { for: unknown; g: Grammar; said: string } | null = null;
 
 export function answerTraversal(i: Traverse): string {
   const s = substrate();
@@ -283,6 +285,12 @@ export function answerTraversal(i: Traverse): string {
     const out = render(whole, 'en', 'engineer');
     const steps = path.length > 1 ? ` By way of ${list(path.slice(0, -1).map((x) => nameOf(s.get((x.args[1] as { id: string }).id)!)), 4)}: ${path.map((x) => render(x, 'en', 'engineer').text).join(' ')}` : '';
     return `${out.text}${steps}${out.rank ? ` The weakest evidence in that is ${out.rank}.` : ''} In Nex: ${nex(whole)}`;
+  }
+  if (i.query === 'grammar') {
+    // grown once per substrate build: the corpus is everything she holds, and it changes as the queue works
+    const laws = new Map(LAWS.map((l) => [l.id, l]));
+    if (!grammar || grammar.for !== s) { const g = growGrammar(s, laws); grammar = { for: s, g, said: sayGrammar(s, g) }; }
+    return grammar.said;
   }
   if (i.query === 'native') {
     // what she holds of a thing in Nex: its structures, each rendered into English with what the rendering lost

@@ -993,3 +993,14 @@ describe('Ego asks when a word has more than one sense, and settles it by struct
     expect(findByWords(s, 'heat')?.id).toBe('heat');
   });
 });
+
+describe('Ego says how her grammar has grown', () => {
+  it('"what morphemes have you found" is the morphemes her own knowledge earned, by description length, each as Nex writes it with an example', () => {
+    expect(interpret('what morphemes have you found')).toEqual({ do: 'traverse', query: 'grammar' });
+    expect(interpret('how has your grammar grown?')).toEqual({ do: 'traverse', query: 'grammar' });
+    const a = answerTraversal({ do: 'traverse', query: 'grammar' });
+    expect(a).toMatch(/^My grammar grows by description length: over the \d+ structures I hold, \d+ shapes recur across domains and would each shorten the whole; I promoted 8, which shortened it by \d+%/);
+    expect(a).toMatch(/The first is what you would call a textbook fact: a relation at my packs' usual confidence, derived, held true\./);
+    expect(a).toMatch(/μ1 = part\(\$1, \$2\)/);
+  });
+});

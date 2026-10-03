@@ -15,6 +15,7 @@ import { decompose, forAudience, parse, rankOfText, render, type Lexicon } from 
 import { blind, read, readAll, text, texts } from '../../src/ganglia/native/text';
 import { askable, census, flowsCarrying, polysemous, readings, saySenses, senses, settle, unitOfQuantityWord } from '../../src/ganglia/native/polysemy';
 import { EVIDENCE_OF_LEVEL, MODE_OF_LEVEL, fromAttempt, fromNeed, sayAttemptInNex } from '../../src/ganglia/native/challenge';
+import { corpusOf, grow as growGrammar, label, sayGrammar } from '../../src/ganglia/native/grammar';
 import { attempt, challengeById, CHALLENGES, LEVEL_ORDER, report } from '../../src/ganglia/challenges';
 import { findByWords } from '../../src/ganglia/substrate/names';
 import { facesOfOne } from '../../src/ganglia/substrate/faces';
@@ -491,5 +492,40 @@ describe('Nex: the challenge engine\'s problems both ways (section Y.14)', () =>
     // a word her flow language lacks is a distinction with no flow behind it, said as such
     const tissue = fromNeed(attempt(challengeById('symbiote')!).results.find((r) => r.level === 'unsayable')!);
     expect(render(tissue, 'en', 'engineer').text).toBe('I have no model of whether "tissue" is a kind of a flow.');
+  });
+});
+
+describe('Nex: the grammar grows over everything the substrate says (sections O and P at scale)', () => {
+  it('morphemes earned by description length shorten the corpus, expand back exactly, recur across domains, and the first is a textbook fact', () => {
+    const g = growGrammar(substrate, laws);
+    // measured 3 October 2026: 13785 structures, 497 recurring shapes, 8 promoted, 17 % shorter
+    expect(g.corpus.length).toBeGreaterThan(5000);
+    expect(g.candidates.length).toBeGreaterThan(50);
+    expect(g.promoted.length).toBe(8);
+    expect(g.ratio).toBeLessThan(0.9);
+    expect(g.after).toBe(descriptionLength(g.corpus.map((x) => x.s), g.registry));
+    expect(g.shortened).toBeGreaterThan(g.corpus.length / 4);
+    for (const m of g.promoted) {
+      expect(m.evidence.domains.length).toBeGreaterThanOrEqual(2);
+      expect(m.evidence.occurrences).toBeGreaterThanOrEqual(3);
+      expect(m.evidence.saved).toBeGreaterThan(0);
+      expect(m.label).toBeTruthy();
+      // a label is read off the shape, never the other way round
+      expect(label(m.def)).toBe(m.label);
+    }
+    // compression is exact on the whole corpus: every structure comes back with its hash
+    for (const x of g.corpus) expect(hash(expandAll(compress(x.s, g.registry), g.registry))).toBe(hash(x.s));
+    // the first morpheme: a relation at the packs' default confidence, derived, held true (what human languages call a textbook fact)
+    const first = g.promoted[0]!.def;
+    expect(first.k === 'R' && first.c.ev?.how).toBe('derived');
+    expect(first.k === 'R' && first.c.cert?.lo).toBe(0.75);
+    expect(first.k === 'R' && first.c.mode).toBe('true');
+    expect(g.promoted[0]!.label).toMatch(/at 0.75 to 0.95, derived$/);
+    // the corpus is each structure once, in the domain of the thing it was said of
+    expect(new Set(corpusOf(substrate, laws).map((x) => JSON.stringify(x.s))).size).toBe(g.corpus.length);
+    const said = sayGrammar(substrate, g);
+    expect(said).toMatch(/^My grammar grows by description length: over the \d+ structures I hold, \d+ shapes recur across domains/);
+    expect(said).toMatch(/I promoted 8, which shortened it by 1\d% \(\d+ to \d+ nodes\)/);
+    expect(said).toMatch(/μ1 = part\(\$1, \$2\)\{cert:\{kind:interval lo:0.75 hi:0.95 source:epistemic\} ev:\{how:derived\} mode:true\} \(a part-of at 0.75 to 0.95, derived; \d+ times in \d+ domains; e.g. /);
   });
 });

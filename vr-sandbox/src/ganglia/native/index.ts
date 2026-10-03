@@ -8,3 +8,4 @@ export * from './translate';
 export * from './text';
 export * from './polysemy';
 export * from './challenge';
+export * from './grammar';

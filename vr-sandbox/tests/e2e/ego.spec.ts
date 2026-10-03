@@ -156,7 +156,13 @@ test('her ganglia: asked to engineer, she answers from real parts and names the 
   expect(grown).toMatch(/fuse-at-source/);
   expect(grown).toMatch(/Built in this order: frame/);
   expect(await sb(page, (s) => s.ego.ask('what\'s inside a motor?'))).toMatch(/Lorentz force/);
-  expect(await sb(page, (s) => s.ego.ask('try to build a computer'))).toMatch(/logic\.mechanical.*Landauer/);
+  expect(await sb(page, (s) => s.ego.ask('try to build a computer'))).toMatch(/logic\.mechanical.*Landauer.*In Nex the 5 needs are transformations/s);
+  // her own language, in the app: a thing as Nex writes it beside the English, and a word of two senses settled by the other side
+  const nex = await sb(page, (s) => s.ego.ask('say a bearing in your language'));
+  expect(nex).toMatch(/^In Nex I hold a bearing as \d+ structures, hashed and compared without a word in them; \d of them, each as Nex writes it and then in English: (part|kind|function|influence|constrain)\(bearing, /);
+  expect(nex).toMatch(/Their hashes: #[0-9a-f]{8}/);
+  expect(await sb(page, (s) => s.ego.ask('compare current and voltage'))).toMatch(/^By current I take electric current, as a quantity\. Electric current and voltage are different kinds of quantity/);
+  expect(await sb(page, (s) => s.ego.ask('what causes current'))).toMatch(/^Current names 3 things to me: .*Which do you mean\?$/);
   expect(errors).toEqual([]);
 });
 

@@ -20,6 +20,23 @@ The architecture:
 Ego thinks in Nex: her structures are built, compared, chained, checked and evaluated as Nex terms, and English is made
 from them only at the moment of speaking, with a count of what the sentence failed to carry.
 
+## Try it
+
+In the app, ask Ego (the same answers come from `answerTraversal` in the unit tests):
+
+- "say a bearing in your language" / "how do you think of a spring": her structures of the thing, each as Nex
+  writes it (`part(bearing, steel.52100){cert:{kind:interval lo:0.6 hi:0.8 …} ev:{how:derived} mode:true}`) and then
+  in English, with what English carried and lost, the weakest evidence among them, and their hashes.
+- "does the load cause the failure of a bearing", "what causes corrosion": a chain of influences composed in Nex
+  (strength, certainty, delay, polarity, the weakest evidence), rendered, and then the chain itself in Nex.
+- "compare heat and temperature", "compare weight and mass", "compare current and voltage": told apart by dimension
+  before any word; a word of two senses settled by the other side ("By current I take electric current, as a
+  quantity").
+- "what causes current", "what does glue do": a word of two senses is asked back with its senses, kinds and units.
+- "try to build a computer", "take the scientist challenge": the attempt in English, then its Nex: the levels as
+  modes, how each is known (a simulation, not a measurement), and what the English carried of it.
+- "does ice cream cause drowning": no mechanism, and a correlation held as support, never as a cause.
+
 ## A. Name
 
 **Nex**: the native form of the Nexus, and Latin *nexus*, a binding. One syllable, no brand, pronounceable in every
@@ -230,13 +247,26 @@ text mean the same. Tested: a negative-feedback loop (X raises Y, Y lowers X) re
 and biology becomes a morpheme and shortens the corpus; four bolts on one engine block, recurring in one domain, do
 not (jargon refused).
 
+Run at scale (`native/grammar.ts`, 3 October 2026): the corpus is everything the substrate says, each structure
+once in the domain of the thing it was said of: 13785 structures from 2634 things, 141587 nodes. 497 shapes recur
+across domains and would each shorten the whole; the eight promoted shorten it by 17 % (to 117029 nodes) and 6664
+structures with them, every one expanding back to its hash. The first morpheme is what a human language calls a
+textbook fact: `part($1, $2){cert:{kind:interval lo:0.75 hi:0.95 source:epistemic} ev:{how:derived} mode:true}`,
+a relation at the packs' default confidence, derived, held true, 1691 times in 13 domains; then the same bundle on
+`constrain`, a contributing lowering (the failure arrow), `kind`, `morphism` and `function`; and two laws over
+their quantities (Arrhenius, Coulomb friction), which recur because every member of a kind inherits its kind's
+laws. The labels are read off the shapes after the fact, never the other way round. Ego answers "what morphemes
+have you found" with this, each morpheme as Nex writes it with an example filled in.
+
 ## P. Grammar evolution process
 
 A grammar (causal, spatial, mathematical, temporal, social) is an operator subset with a tuner and rendering
 templates over the one substrate; none is frozen as universal. New operators and new coordinates enter as a schema
 version; a structure records the version it was written in through the morphemes and operators it uses, and old
-structures stay interpretable because nothing is deleted and every change is a new version (section W). Not built
-beyond the versioning: the first grammar is the one here, which is causal, quantitative and epistemic at once.
+structures stay interpretable because nothing is deleted and every change is a new version (section W). The
+evolution that is built is the morphemic one: the grammar grows by description length over the substrate (section O,
+measured), re-grown whenever the substrate has changed. Not built: new operators and coordinates entering as schema
+versions; the first grammar is the one here, which is causal, quantitative and epistemic at once.
 
 ## Q. Structural concept fingerprints
 
@@ -406,7 +436,8 @@ morpheme.ts (skeletons, candidates by description length, promotion, compression
 translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
 candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners), text.ts (the compact
 text, lossless both ways, and the blind text), polysemy.ts (readings, senses, settling by structure, the census),
-challenge.ts (a challenge's attempt as structures, with what the English report carried).
+challenge.ts (a challenge's attempt as structures, with what the English report carried), grammar.ts (the grammar
+grown over the substrate by description length, measured).
 
 Designed, not yet built: the spoken serialisation and the visual notation (E); rewrite rules for
 equivalences beyond the canonical form (U); a learned term in the distance (V); synonymy merged across disciplines as a batch (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
