@@ -79,7 +79,8 @@ A `WorkItem` is an entity, a facet (components, materials, mechanisms, functions
 manufacturing, interfaces, failures, analogues, constructors, manifolds, laws, properties), a mode (fast or deep), a
 priority and a reason. `priority()` ranks what unlocks the most: stubs named by many things, constructors, materials,
 functions, well-connected and little-known things. Each question is asked once (dedupe on id|facet|mode, `done`
-remembered across serialize/restore). `populate()` runs `workers` lanes, each over a partition of domains, each popping
+remembered across serialize/restore; `again()` re-asks a done question when something it depends on changed, and
+counts it in `reasked`, so the totals add up: processed = done + reasked). `populate()` runs `workers` lanes, each over a partition of domains, each popping
 the best question across its lane so no domain starves; a question is answered by the expanders that cover its facet,
 and what none could answer is marked unknown on the entity. `ask()` puts one question at the front. `converged` is true
 only when the queue empties, which it is not expected to.

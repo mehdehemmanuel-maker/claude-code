@@ -853,3 +853,22 @@ describe('what the fifty-question probe of 3 October found, each fixed at its ro
     expect(fly).not.toMatch(/Electrical energy/);
   });
 });
+
+describe('the queue keeps its book', () => {
+  it('a question asked again after it was done is counted, so processed equals done plus reasked, across serialize and restore', () => {
+    const q = new Queue();
+    const w = { id: 'bearing', facet: 'materials' as const, mode: 'deep' as const, priority: 1, reason: 'test', domain: 'engineering' };
+    expect(q.push(w)).toBe(true);
+    expect(q.pop()?.id).toBe('bearing');
+    expect(q.push(w)).toBe(false); // done: not asked twice by itself
+    expect(q.again(w)).toBe(true); // asked again on purpose
+    expect(q.reasked).toBe(1);
+    expect(q.pop()?.id).toBe('bearing');
+    expect(q.done.size).toBe(1);
+    expect(q.again({ ...w, id: 'gear' })).toBe(true); // never done before: queued, not a re-ask
+    expect(q.reasked).toBe(1);
+    const r = Queue.restore(q.serialize());
+    expect(r.reasked).toBe(1);
+    expect(r.done.has('bearing|materials|deep')).toBe(true);
+  });
+});

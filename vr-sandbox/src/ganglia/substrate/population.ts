@@ -17,6 +17,8 @@ export class Queue {
   private items: WorkItem[] = [];
   private readonly keys = new Set<string>();
   readonly done = new Set<string>();
+  /** How many questions were asked again after being done (`again`): processed = done + reasked, since `done` holds each once. */
+  reasked = 0;
   /** Queue a question once; asking a queued question again with more urgency raises it. False when it was known already. */
   push(w: WorkItem): boolean {
     const key = `${w.id}|${w.facet}|${w.mode}`;
@@ -43,14 +45,21 @@ export class Queue {
     return w;
   }
   /** Ask a question again although it was asked before: something it depends on has changed. */
-  again(w: WorkItem): boolean { this.done.delete(`${w.id}|${w.facet}|${w.mode}`); return this.push(w); }
+  again(w: WorkItem): boolean {
+    const key = `${w.id}|${w.facet}|${w.mode}`;
+    const wasDone = this.done.delete(key);
+    const queued = this.push(w);
+    if (queued && wasDone) this.reasked++;
+    return queued;
+  }
   get size(): number { return this.items.length; }
   domains(): string[] { return [...new Set(this.items.map((w) => w.domain))]; }
   peek(n = 10): WorkItem[] { return [...this.items].sort((a, b) => b.priority - a.priority).slice(0, n); }
-  serialize(): string { return JSON.stringify({ items: this.items, done: [...this.done] }); }
+  serialize(): string { return JSON.stringify({ items: this.items, done: [...this.done], reasked: this.reasked }); }
   static restore(text: string): Queue {
     const q = new Queue();
-    const { items, done } = JSON.parse(text) as { items: WorkItem[]; done: string[] };
+    const { items, done, reasked } = JSON.parse(text) as { items: WorkItem[]; done: string[]; reasked?: number };
+    q.reasked = reasked ?? 0;
     for (const d of done) q.done.add(d);
     for (const w of items) q.push(w);
     return q;

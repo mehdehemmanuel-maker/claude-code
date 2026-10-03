@@ -12,10 +12,12 @@ test('the substrate is worked in the background and kept when the page hides', a
     const saved = JSON.parse(text) as { done: string[]; totals: { processed: number; slices: number } };
     return saved.done.length > 20 && saved.totals.slices > 2;
   }, null, { timeout: 60_000, polling: 1000 });
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ganglia.substrate')!) as { v: number; done: string[]; journal: unknown[]; totals: { processed: number; slices: number; sessions: number } });
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ganglia.substrate')!) as { v: number; done: string[]; journal: unknown[]; totals: { processed: number; reasked: number; slices: number; sessions: number } });
   expect(saved.v).toBe(1);
   expect(saved.totals.sessions).toBe(1);
-  expect(saved.totals.processed).toBe(saved.done.length);
+  // every question answered is in `done` once; a question asked again after a kind learned something is counted in
+  // `reasked` (on one CI run 3 of the first 24 were, and an equality that forgot them went red)
+  expect(saved.totals.processed).toBe(saved.done.length + saved.totals.reasked);
   expect(saved.done.length).toBeGreaterThan(20);
   // a reload restores it: the second session carries the first's questions and asks new ones
   await page.reload();

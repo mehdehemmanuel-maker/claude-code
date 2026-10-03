@@ -30,13 +30,14 @@ export interface PopulationOptions {
 }
 
 export interface JournalEntry { at: string; by: string; id: string; facet: Facet; discovery: Discovery }
-export interface Totals { sessions: number; buildSlices: number; slices: number; processed: number; discoveredEntities: number; discoveredRelations: number; unknowns: number; rejected: number; journalDropped: number }
+/** `processed` counts every question answered, `reasked` those answered again after a kind learned something: processed = done + reasked. */
+export interface Totals { sessions: number; buildSlices: number; slices: number; processed: number; reasked: number; discoveredEntities: number; discoveredRelations: number; unknowns: number; rejected: number; journalDropped: number }
 interface Saved { v: 1; saved: string; done: string[]; journal: JournalEntry[]; totals: Totals }
 
 export class Population {
   readonly key: string;
   readonly journal: JournalEntry[] = [];
-  readonly totals: Totals = { sessions: 0, buildSlices: 0, slices: 0, processed: 0, discoveredEntities: 0, discoveredRelations: 0, unknowns: 0, rejected: 0, journalDropped: 0 };
+  readonly totals: Totals = { sessions: 0, buildSlices: 0, slices: 0, processed: 0, reasked: 0, discoveredEntities: 0, discoveredRelations: 0, unknowns: 0, rejected: 0, journalDropped: 0 };
   readonly connector: Connector | null;
   readonly expanders: Expander[];
   private readonly external: ReturnType<typeof externalExpander>;
@@ -93,6 +94,7 @@ export class Population {
       const report: Report = { processed: 0, discoveredEntities: 0, discoveredRelations: 0, rejected: [], promotedManifolds: [], generators: [], constructionPaths: 0, unknowns: 0, converged: false, queued: 0, byDomain: {} };
       for (const j of saved.journal) { ingest(b.substrate, j.discovery, report); this.journal.push(j); this.external.looked.set(j.id, null); }
       Object.assign(this.totals, saved.totals);
+      this.totals.reasked ??= 0; // saved before the count existed
       // the queue: everything the substrate asks, minus what was asked already
       const q = Queue.restore(JSON.stringify({ items: [], done: saved.done }));
       b.queue = q;
@@ -175,6 +177,7 @@ export class Population {
     try {
       const b = this.built;
       const t0 = this.now();
+      const reaskedBefore = b.queue.reasked;
       const r = await populate(b.substrate, b.queue, {
         expanders: this.expanders, budget: this.budget, workers: 1, finish: false,
         until: () => this.now() - t0 > this.sliceMs,
@@ -183,6 +186,7 @@ export class Population {
       this.lastReport = r;
       this.totals.slices++;
       this.totals.processed += r.processed;
+      this.totals.reasked += b.queue.reasked - reaskedBefore;
       this.totals.discoveredEntities += r.discoveredEntities;
       this.totals.discoveredRelations += r.discoveredRelations;
       this.totals.unknowns += r.unknowns;
