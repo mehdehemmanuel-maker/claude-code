@@ -263,6 +263,36 @@ describe('population: a queue that never needs to be finished', () => {
     expect(s2.dangling()).toEqual([]);
   });
 
+  it('a piece of a building block named for a kind is that kind, at half confidence, and then inherits what the kind does', async () => {
+    const s2 = build().substrate;
+    const q = new Queue();
+    const pieces = [...s2.entities.values()].filter((e) => e.id.startsWith('block.') && s2.reach(e.id, 'part-of').length && !s2.outOf(e.id, 'is-a').length);
+    expect(pieces.length).toBeGreaterThan(50);
+    for (const e of pieces) q.push({ id: e.id, facet: 'functions', mode: 'deep', priority: 1, reason: 'test', domain: 'engineering' });
+    await populate(s2, q, { expanders: [ruleExpander()], budget: 2000, workers: 1 });
+    const named = s2.relations.filter((x) => x.kind === 'is-a' && /named for it/.test(x.says ?? ''));
+    expect(named.length).toBeGreaterThan(10);
+    for (const x of named) {
+      expect(x.confidence).toBe(0.5);
+      const k = s2.get(x.to)!;
+      expect(k.kinds, `${x.from} → ${x.to}`).not.toContain('law');
+      expect(k.id.startsWith('block.'), `${x.from} → ${x.to}`).toBe(false);
+      expect('stub' in k.source).toBe(false);
+    }
+    expect(s2.reach('block.actuation.rotary.bearings', 'is-a').map((e) => e.id)).toContain('bearing');
+    expect(s2.reach('block.transmission.screw.nut', 'is-a').map((e) => e.id)).toContain('nut');
+    // the kind's functions reach the piece on the next round
+    const withFn = pieces.filter((e) => s2.outOf(e.id, 'does').length).length;
+    expect(withFn).toBeGreaterThan(5);
+  });
+
+  it('a characteristic scale attaches to a thing without describing it: a stub with a scale is still a stub, and nothing described is of no kind', () => {
+    for (const e of s.entities.values()) if (!('stub' in e.source)) { expect(e.kinds.length, `${e.id} is described but of no kind`).toBeGreaterThan(0); expect(e.says.trim().length, e.id).toBeGreaterThan(0); }
+    const cap = s.get('bio.capillary')!;
+    expect('stub' in cap.source).toBe(true);
+    expect(cap.params?.find((p) => p.sym === 'L_c')?.low).toBe(1e-5);
+  });
+
   it('ingest refuses what the index cannot mean, and stubs what it names', () => {
     const s2 = new Substrate();
     const e = (id: string, kinds: Entity['kinds']): Entity => ({ id, name: id, names: [], kinds, domains: ['test'], says: 'A thing of the test, described enough.', source: { estimate: 'test' }, coverage: { depth: 1, confidence: 0.5, sourceKind: 'estimate', expanded: [], unknowns: [] } });

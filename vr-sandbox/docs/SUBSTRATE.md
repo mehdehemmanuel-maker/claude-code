@@ -189,7 +189,14 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   learns its material re-opens the whole's materials and failures. A thing fails as its material fails and as its
   function fails (a table of failure modes by function, each a failure the index knows), both said as such. A
   4000-question round before these rules derived 1003 relations and left 472 described components without a
-  function, 287 without a material and 400 without a failure; functions remain a question for packs and the outside. Rule expanders still discover relations, not entities: new entities come from packs and
+  function, 287 without a material and 400 without a failure. A second tally showed the largest group without a
+  function to be the pieces of the bridge's building blocks (91), so a piece named for a kind of thing is now that kind
+  at half confidence ("bearings" are bearings, "nut" is a nut), when the name resolves to a described component and
+  never to a law or another block; a thing that learns its kind re-opens every facet it can inherit. Functions of the
+  rest remain a question for packs and the outside. Two function vocabularies coexist: `fn.*` from the packs and
+  `way.*` from the bridge's ways; `implementations` reads the first.
+- **A parameter attaches to a stub** (a characteristic scale is known of things not yet described), and an entity with
+  nothing to say never describes: it merges its parameters only. Rule expanders still discover relations, not entities: new entities come from packs and
   from the outside. The things with no known constructor (nor a kind with one) and the stubs are the frontier.
 - **Lane fairness is by priority within a lane.** A lane of several domains serves the best question among them; the
   background service runs one lane over all domains, so it is pure priority.

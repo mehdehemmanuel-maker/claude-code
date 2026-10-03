@@ -81,7 +81,6 @@ const SCALES: [string, number, number, string][] = [
   ['earth.plate-tectonics', 1e7, 3e15, 'plate tectonics: the planet, a hundred million years'],
   ['earth', 1.3e7, 8.6e4, 'the Earth: 13 000 km, a day'],
   ['bio.cilia', 1e-5, 2e-2, 'a cilium: 10 µm, beating 50 times a second'],
-  ['bio.flagellum', 1e-5, 1e-2, 'a flagellum: 10 µm, a turn in 10 ms'],
   ['bio.myosin', 2e-8, 1e-3, 'a myosin head: 20 nm, a stroke in a millisecond'],
   ['bio.kinesin', 1e-8, 1e-2, 'kinesin: 10 nm, 100 steps a second'],
   ['bio.tendon', 1e-1, 1e-1, 'a tendon: 10 cm, loaded each stride'],
@@ -91,7 +90,7 @@ const SCALES: [string, number, number, string][] = [
   ['bio.blood', 1e-5, 1, 'a red cell: 8 µm, a circuit in a minute'],
   ['bio.axon', 1, 1e-2, 'an axon: a metre, an impulse along it in 10 ms'],
   ['bio.synapse', 1e-6, 1e-3, 'a synapse: a micron, a millisecond'],
-  ['bio.insect', 1e-2, 1e-2, 'an insect: a centimetre, a wingbeat in 10 ms'],
+  ['bio.arthropod', 1e-2, 1e-2, 'an arthropod: a centimetre, a wingbeat in 10 ms'],
   ['bio.mammal', 1, 1, 'a mammal: a metre, a stride a second'],
   ['screw', 1e-2, 1, 'a screw: a centimetre, tightened in a second'],
   ['bolt', 2e-2, 1, 'a bolt: 2 cm, tightened in a second'],
@@ -128,10 +127,10 @@ const SCALES: [string, number, number, string][] = [
   ['pcb', 1e-1, 1e-9, 'a circuit board: 10 cm, a nanosecond'],
   ['microcontroller', 1e-2, 1e-8, 'a microcontroller: a centimetre, an instruction in tens of nanoseconds'],
   ['sensor', 1e-2, 1e-3, 'a sensor: a centimetre, a reading in a millisecond'],
-  ['encoder', 3e-2, 1e-4, 'an encoder: 3 cm, a count in a tenth of a millisecond'],
+  ['sensor.encoder', 3e-2, 1e-4, 'an encoder: 3 cm, a count in a tenth of a millisecond'],
   ['heatsink', 5e-2, 1e2, 'a heatsink: 5 cm, a time constant of minutes'],
   ['antenna', 1e-1, 1e-9, 'an antenna: 10 cm, a gigahertz'],
-  ['engine.ic', 5e-1, 2e-2, 'an engine: half a metre, a revolution in 20 ms'],
+  ['engine.internal-combustion', 5e-1, 2e-2, 'an engine: half a metre, a revolution in 20 ms'],
   ['vehicle.motorcycle', 2, 1, 'a motorcycle: 2 m, a second'],
   ['vehicle.bicycle', 1.8, 1, 'a bicycle: 1.8 m, a pedal stroke a second'],
   ['vehicle.train', 2e2, 1e1, 'a train: 200 m, ten seconds'],
@@ -199,7 +198,8 @@ export function scale(): Pack {
   p.e('planck.scale', ['phenomenon', 'scale'], `The absolute scale set by c, ħ and G: a length of ${h.derived.planck.length.toExponential(2)} m, a time of ${h.derived.planck.time.toExponential(2)} s, a mass of ${h.derived.planck.mass.toExponential(2)} kg. ${h.derived.absolute.says}.`, { names: ['Planck scale'], source: h.derived.planck.source });
   p.link('planck.scale', { 'governed-by': ['planck.energy', 'newton.gravitation'] }, h.derived.planck.source);
   // characteristic scales across the index, as estimates
-  for (const [id, L, T, says] of SCALES) p.e(id, [], `Characteristic scale: ${says}.`, { params: [param('L_c', 'characteristic length', est(says), { unit: 'm', low: L, high: L }), param('T_c', 'characteristic time', est(says), { unit: 's', low: T, high: T })], source: { estimate: `orders of magnitude: ${says} (${MCMAHON.cite})` } });
+  // the scale attaches to the thing without describing it: an entity with nothing to say merges its parameters only
+  for (const [id, L, T, says] of SCALES) p.e(id, [], '', { params: [param('L_c', 'characteristic length', est(says), { unit: 'm', low: L, high: L }), param('T_c', 'characteristic time', est(says), { unit: 's', low: T, high: T })], source: { estimate: `orders of magnitude: ${says} (${MCMAHON.cite})` } });
   // self-similar patterns across decades, by structure: said where the index knows them
   p.link('bio.atp-synthase', { 'analogous-to': [['turbine', 'a rotary machine driven by a flow (protons, steam) a billion times smaller']] }, MCMAHON);
   p.link('bio.homeostasis', { 'analogous-to': [['earth.climate', 'negative feedback holding a set point: sweating and ice-albedo are the same loop seven decades apart']] }, MCMAHON);

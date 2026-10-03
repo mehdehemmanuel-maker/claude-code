@@ -20,15 +20,17 @@ export class Substrate {
       for (const n of made.names) this.byName.set(n.toLowerCase(), id);
       return made;
     }
-    const stub = 'stub' in e.source;
+    // a stub never overwrites a description, and neither does an entity with nothing to say (a parameter alone, a characteristic scale)
+    const stub = 'stub' in e.source || !e.says.trim();
     if (!stub) {
       if ('stub' in have.source) { have.source = e.source; have.says = e.says; have.name = e.name; }
       else if (e.says.length > have.says.length) have.says = e.says;
       if (e.coverage.depth > have.coverage.depth) have.coverage.depth = e.coverage.depth;
       have.coverage.confidence = Math.max(have.coverage.confidence, e.coverage.confidence);
       if (have.coverage.sourceKind === 'stub') have.coverage.sourceKind = e.coverage.sourceKind;
-      if (e.params?.length) have.params = [...(have.params ?? []), ...e.params.filter((p) => !have.params?.some((q) => q.sym === p.sym))];
     }
+    // a parameter with its provenance attaches to a stub as well: a characteristic scale is known of things not yet described
+    if (e.params?.length) have.params = [...(have.params ?? []), ...e.params.filter((p) => !have.params?.some((q) => q.sym === p.sym))];
     for (const k of e.kinds) if (!have.kinds.includes(k)) have.kinds.push(k);
     for (const d of e.domains) if (!have.domains.includes(d)) have.domains.push(d);
     for (const n of [e.name, ...e.names]) { if (!have.names.includes(n)) have.names.push(n); this.byName.set(n.toLowerCase(), id); }

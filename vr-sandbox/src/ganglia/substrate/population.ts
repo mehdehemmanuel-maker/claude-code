@@ -100,6 +100,9 @@ export function seedExpander(packs: Pack[]): Expander {
   };
 }
 
+/** Readings of a piece's name as the name of a kind: as is, singular, the part before or after "and", dots for dashes. */
+const NAMED_KIND_OF: ((seg: string) => string)[] = [(x) => x, (x) => x.replace(/s$/, ''), (x) => x.replace(/-and-.*$/, ''), (x) => x.replace(/^.*-and-/, '').replace(/s$/, ''), (x) => x.replace(/-/g, '.'), (x) => x.replace(/s$/, '').replace(/-/g, '.')];
+
 /** The facet a new relation of a kind re-opens on the kind's members. */
 const FACET_OF_RELATION: Partial<Record<Relation['kind'], Facet>> = { 'produced-by': 'constructors', 'fails-by': 'failures', 'standardized-by': 'standards', 'connects-to': 'interfaces', 'made-of': 'materials', does: 'functions' };
 
@@ -174,6 +177,12 @@ export function ruleExpander(): Expander {
       }
       if (facet === 'functions' && !s.outOf(e.id, 'does').length) {
         for (const k of s.reach(e.id, 'is-a')) for (const fn of s.reach(k.id, 'does')) out.relations.push(r(e.id, 'does', fn.id, `inherits from ${k.id}`));
+        // a piece of a building block named for a kind of thing is that kind of thing: "bearings" are bearings, "nut" is a nut
+        if (!s.outOf(e.id, 'is-a').length && e.id.startsWith('block.') && s.reach(e.id, 'part-of').length) {
+          const seg = e.id.split('.').pop()!;
+          const named = NAMED_KIND_OF.map((f) => f(seg)).map((w) => s.byWord(w)).find((x) => x && x.id !== e.id && !('stub' in x.source) && !x.id.startsWith('block.') && x.kinds.some((k) => k === 'component' || k === 'mechanism' || k === 'material' || k === 'circuit') && !x.kinds.includes('law'));
+          if (named) out.relations.push({ ...r(e.id, 'is-a', named.id, `named for it: a piece called "${seg.replace(/-/g, ' ')}" is a ${named.name}`), confidence: 0.5 });
+        }
       }
       if (facet === 'materials' && e.kinds.includes('material')) {
         for (const role of s.reach(e.id, 'plays')) for (const thing of s.reach(role.id, 'played-by')) if (thing.id !== e.id && !thing.kinds.includes('material') && !thing.kinds.includes('role')) out.relations.push(r(thing.id, 'made-of', e.id, `it plays ${role.id}, which ${e.id} can fill`));
@@ -327,6 +336,8 @@ export async function populate(s: Substrate, q: Queue, opts: PopulateOptions): P
           // a kind that learned something: its members are asked the same facet again, so what the kind has reaches them (recursion along is-a)
           const facet = FACET_OF_RELATION[r.kind];
           if (facet) for (const m of s.reach(r.from, 'generalizes')) if (q.again({ id: m.id, facet, mode: 'deep', priority: priority(s, m, facet) + 1, reason: `${r.from}, which it is a kind of, learned ${r.kind} ${r.to}`, domain: m.domains[0] ?? 'unplaced' })) report.queued++;
+          // a thing that learned what it is a kind of re-opens everything it can now inherit
+          if (r.kind === 'is-a') for (const f of ['functions', 'failures', 'materials', 'constructors', 'standards', 'interfaces'] as const) { const x = s.get(r.from)!; if (q.again({ id: x.id, facet: f, mode: 'deep', priority: priority(s, x, f) + 1, reason: `it learned it is a kind of ${r.to}`, domain: x.domains[0] ?? 'unplaced' })) report.queued++; }
           // a part that learned its material re-opens the whole's materials (and so its failures)
           if (r.kind === 'made-of') for (const whole of s.reach(r.from, 'part-of')) for (const f of ['materials', 'failures'] as const) if (q.again({ id: whole.id, facet: f, mode: 'deep', priority: priority(s, whole, f) + 1, reason: `its part ${r.from} learned made-of ${r.to}`, domain: whole.domains[0] ?? 'unplaced' })) report.queued++;
         }
