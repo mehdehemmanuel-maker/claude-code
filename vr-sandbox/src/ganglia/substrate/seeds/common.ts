@@ -10,6 +10,9 @@ const HH: Source = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Ca
 const HECHT: Source = { cite: 'Hecht, Optics, 5th ed., Pearson 2017', kind: 'textbook' };
 const INCROPERA: Source = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 8th ed., Wiley 2017', kind: 'textbook' };
 const CAMPBELL: Source = { cite: 'Urry, Cain, Wasserman, Minorsky & Orr, Campbell Biology, 12th ed., Pearson 2020', kind: 'textbook' };
+const HENNESSY: Source = { cite: 'Hennessy & Patterson, Computer Architecture: A Quantitative Approach, 6th ed., Morgan Kaufmann 2017', kind: 'textbook' };
+const KALPAKJIAN: Source = { cite: 'Kalpakjian & Schmid, Manufacturing Engineering and Technology, 8th ed., Pearson 2020', kind: 'textbook' };
+const HILL: Source = { cite: 'Hill & Peterson, Mechanics and Thermodynamics of Propulsion, 2nd ed., Addison-Wesley 1992', kind: 'textbook' };
 
 export function common(): Pack {
   const p = new Pack('common', PAHL);
@@ -92,6 +95,38 @@ export function common(): Pack {
   t('slider', ['component'], 'The block that slides along a guide in a prismatic joint: it carries the load and sets the travel.', { 'governed-by': ['friction.coulomb'] });
   t('magnet', ['component'], 'A body with a magnetic field of its own, permanent or from a current: it pulls on iron and on other magnets, by the field squared over the gap area.', { does: ['fn.make.field', 'fn.store.magnetic'], 'governed-by': ['magnetic.pull', 'ampere.law'], 'fails-by': ['failure.demagnetization'] }, HH);
   t('ground', ['environment'], 'The ground under a machine, soil, floor or road: it carries the weight and gives the reaction every push needs, with its own friction and stiffness.', { 'governed-by': ['weight', 'friction.coulomb', 'traction.limit'] });
+  // the parts, consumables and signals many packs name
+  t('cache', ['component', 'computation'], 'A small fast memory holding what the processor used last: a hit in nanoseconds, a miss in hundreds; locality makes it pay.', { does: ['fn.remember'], 'governed-by': ['amdahl'] }, HENNESSY);
+  t('assembler', ['computation'], 'A program that turns mnemonic instructions into the bits a processor executes, one to one.', { 'governed-by': ['computability'] }, HENNESSY);
+  t('neuron.artificial', ['computation'], 'A weighted sum of inputs passed through a nonlinearity: the unit of a neural network, a caricature of the real one.', { 'governed-by': ['universal.approximation'] }, HENNESSY);
+  t('combustor', ['component'], 'The chamber where fuel burns in a steady flow: air in, the flame held by a recirculation, hot gas out to the turbine or the nozzle.', { 'governed-by': ['arrhenius', 'first.law'], 'fails-by': ['failure.overheating'] }, HILL);
+  t('fuel-injector', ['component', 'mechanism'], 'A valve that meters fuel into air as a fine spray, opened by a solenoid or a piezo for a millisecond at a time.', { 'governed-by': ['bernoulli'], 'has-part': ['solenoid', 'nozzle'] }, HILL);
+  t('turbopump', ['component', 'mechanism'], 'A pump driven by its own small turbine: in a rocket it feeds propellant at hundreds of bar, tens of megawatts in a box the size of a bucket.', { 'has-part': ['pump', 'turbine'], 'governed-by': ['bernoulli', 'power.rotary'] }, HILL);
+  t('aileron', ['component'], 'A hinged flap at the wing\'s trailing edge: one deflected up and the other down, they roll the aircraft.', { 'governed-by': ['drag.aero'] }, HILL);
+  t('ballast-tank', ['component'], 'A tank a submarine floods to sink and blows with air to rise: its buoyancy set by what it holds.', { 'governed-by': ['buoyancy'] });
+  t('cylinder.barrel', ['component'], 'The honed tube a piston runs in: its bore and finish set the seal\'s life and the leakage.', { 'governed-by': ['stress.hoop'], 'made-of': ['material.steel'] });
+  t('pipe', ['component', 'geometry'], 'A tube carrying a fluid: its diameter and roughness set the pressure lost per metre, by Darcy and Weisbach.', { does: ['fn.contain.pressure'], 'governed-by': ['darcy-weisbach', 'stress.hoop'] });
+  t('gear.ring', ['component'], 'The internal gear of a planetary set: its teeth point inward, and the planets roll inside it.', { 'is-a': ['gear'] });
+  t('beam.i', ['component', 'geometry'], 'An I-section beam: flanges far from the axis carry the bending, a thin web the shear; the stiffest use of metal for its weight.', { 'is-a': ['kind.beam.i'], 'governed-by': ['stress.bending'] });
+  t('bearing.angular-contact', ['component'], 'A ball bearing whose races are offset so the balls carry thrust as well as radial load; paired to take both directions and to preload a spindle.', { 'is-a': ['bearing'] });
+  t('bimetal', ['component'], 'Two metals bonded as a strip: they expand differently, so it bends with temperature; the breaker\'s and the thermostat\'s sensor.', { does: ['fn.sense'], 'governed-by': ['thermal.expansion'] }, HH);
+  t('arc-chute', ['component'], 'Stacked steel plates in a breaker that split and cool the arc as the contacts open, until it cannot restrike.', { 'governed-by': ['joule'] }, HH);
+  t('armature', ['component'], 'The moving iron of a relay, or the wound rotor of a motor: what the field pulls on.', { 'governed-by': ['magnetic.pull'] }, HH);
+  t('rotor.magnet', ['component'], 'The rotor of a brushless motor: permanent magnets on or in a steel core that the stator\'s rotating field drags round.', { 'has-part': ['magnet'], 'governed-by': ['lorentz.force'] }, HH);
+  t('actuator.voice-coil', ['component', 'mechanism'], 'A coil in a magnet\'s gap, pushed by its current: the disk head\'s arm, the loudspeaker cone; fast and direct.', { 'is-a': ['actuator'], 'governed-by': ['lorentz.force'] }, HH);
+  t('backlight', ['component'], 'LEDs along a display\'s edge and a light guide spreading them evenly behind the panel.', { does: ['fn.emit.light'] }, HH);
+  t('sensor.temperature', ['component'], 'A thermistor, a thermocouple, an RTD or a silicon diode: a resistance, a voltage or a junction drop that reads temperature.', { does: ['fn.sense'], 'governed-by': ['seebeck', 'copper.tempco'] }, HH);
+  t('insulation', ['material'], 'What keeps charge where it belongs or heat from leaving: PVC, enamel, mica, glass wool; rated by breakdown field and by conductivity.', { 'governed-by': ['conduction', 'coulomb.law'], 'fails-by': ['failure.insulation-breakdown'] }, HH);
+  t('signal.pwm', ['signal'], 'Pulse-width modulation: a fixed-frequency square wave whose on-fraction carries the value; a servo reads the pulse width, a motor the average.', { 'governed-by': ['shannon.sampling'] }, HH);
+  t('substrate.fr4', ['material'], 'Glass-fibre cloth in flame-retardant epoxy: the board most circuits are built on, 1.6 mm thick, copper on both faces.', { 'is-a': ['material.composite'] }, HH);
+  t('laser.source', ['component'], 'A gain medium between mirrors pumped above threshold, fibre, diode or CO₂: kilowatts in a spot a tenth of a millimetre wide.', { 'governed-by': ['planck.energy', 'diffraction.limit'] }, KALPAKJIAN);
+  t('membrane.filter', ['component'], 'A sheet with pores of a set size: what is smaller passes, what is larger stays; pressure drives it.', { does: ['fn.filter', 'fn.separate'], 'governed-by': ['darcy-weisbach'] });
+  t('etchant', ['material'], 'A liquid that dissolves what the mask does not cover: ferric chloride on copper, hydrofluoric acid on silica.', { 'governed-by': ['nernst'] }, KALPAKJIAN);
+  t('resist.photo', ['material'], 'A polymer that changes solubility where light strikes it: the mask is printed in it, developed, and the pattern etched through.', { 'governed-by': ['planck.energy'] }, KALPAKJIAN);
+  t('flux', ['material'], 'A chemical that cleans oxide off metal as it is heated so that solder or braze can wet it: rosin, acids, borax.', { 'governed-by': ['young.contact'] }, KALPAKJIAN);
+  t('gas.shielding', ['material'], 'Argon, helium or carbon dioxide flowed over a weld pool to keep the air off it: no oxygen, no nitrogen, no porosity.', { 'governed-by': ['buoyancy'] }, KALPAKJIAN);
+  t('powder.metal', ['material'], 'Metal as particles of tens of micrometres, gas-atomised from a melt: the feedstock of sintering and of powder-bed printing.', { 'produced-by': ['process.ball-milling'] }, KALPAKJIAN);
+  t('bath.plating', ['material'], 'The electrolyte of an electroplating cell: the metal\'s salt in solution with acids and brighteners.', { 'governed-by': ['faraday.electrolysis'] }, KALPAKJIAN);
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;
 }

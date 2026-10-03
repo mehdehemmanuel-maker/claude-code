@@ -23,6 +23,7 @@ const ETB = (page: string, url: string): Source => ({ cite: `The Engineering Too
 const ETB_RHO = ETB('Metals and Alloys - Densities', 'https://www.engineeringtoolbox.com/metal-alloys-densities-d_50.html');
 const ETB_E = ETB('Young\'s Modulus, Tensile Strength and Yield Strength Values for common Materials', 'https://www.engineeringtoolbox.com/young-modulus-d_417.html');
 const ETB_K = ETB('Thermal Conductivity of Metals and Alloys', 'https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html');
+const ETB_K2 = ETB('Thermal Conductivity of Common Materials - Solids, Liquids and Gases', 'https://www.engineeringtoolbox.com/thermal-conductivity-d_429.html');
 const n = (sym: string, name: string, unit: string, low: number, high: number, of: Source): Parameter => ({ sym, name, unit, low, high, of });
 export const FAMILY_NUMBERS: Record<string, Parameter[]> = {
   'material.steel': [n('rho', 'density', 'kg/m^3', 7850, 7850, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 200e9, 200e9, ETB_E), n('sigma_y', 'yield strength, structural grades', 'Pa', 205e6, 690e6, ETB_E), n('sigma_u', 'ultimate strength, structural grades', 'Pa', 330e6, 760e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 36, 54, ETB_K)],
@@ -30,7 +31,19 @@ export const FAMILY_NUMBERS: Record<string, Parameter[]> = {
   'material.cast-iron': [n('rho', 'density', 'kg/m^3', 6800, 7800, ETB_RHO), n('sigma_u', 'ultimate strength, ASTM A-48 4.5 % C', 'Pa', 170e6, 170e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 31, 52, ETB_K)],
   'material.aluminium-alloy': [n('rho', 'density', 'kg/m^3', 2640, 2830, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 69e9, 70e9, ETB_E), n('k', 'thermal conductivity', 'W/m K', 150, 190, ETB_K)],
   'material.copper-alloy': [n('rho', 'density', 'kg/m^3', 7400, 8940, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 96e9, 125e9, ETB_E), n('sigma_u', 'ultimate strength, copper to brass', 'Pa', 220e6, 250e6, ETB_E), n('k', 'thermal conductivity', 'W/m K', 26, 401, ETB_K)],
-  'material.polymer': [n('E', 'Young\'s modulus, unfilled thermoplastics', 'Pa', 0.11e9, 4.1e9, ETB_E), n('sigma_u', 'ultimate strength, unfilled thermoplastics', 'Pa', 10e6, 100e6, ETB_E)],
+  'material.polymer': [n('E', 'Young\'s modulus, unfilled thermoplastics', 'Pa', 0.11e9, 4.1e9, ETB_E), n('sigma_u', 'ultimate strength, unfilled thermoplastics', 'Pa', 10e6, 100e6, ETB_E), n('k', 'thermal conductivity, unfilled thermoplastics', 'W/m K', 0.1, 0.51, ETB_K2)],
+  'material.titanium-alloy': [n('rho', 'density', 'kg/m^3', 4500, 4500, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 105e9, 120e9, ETB_E), n('sigma_y', 'yield strength, titanium alloy', 'Pa', 730e6, 730e6, ETB_E), n('sigma_u', 'ultimate strength, titanium alloy', 'Pa', 900e6, 900e6, ETB_E), n('k', 'thermal conductivity, pure titanium', 'W/m K', 22.4, 22.4, ETB_K)],
+  'material.nickel-superalloy': [n('rho', 'density', 'kg/m^3', 8027, 8940, ETB_RHO), n('E', 'Young\'s modulus', 'Pa', 214e9, 214e9, ETB_E), n('k', 'thermal conductivity', 'W/m K', 12, 15, ETB_K)],
+  'material.glass': [n('E', 'Young\'s modulus', 'Pa', 50e9, 90e9, ETB_E), n('k', 'thermal conductivity', 'W/m K', 0.96, 1.05, ETB_K2)],
+  'material.concrete': [n('E', 'Young\'s modulus', 'Pa', 17e9, 30e9, ETB_E), n('sigma_u', 'compressive strength, high-strength concrete', 'Pa', 40e6, 40e6, ETB_E), n('k', 'thermal conductivity, lightweight to dense', 'W/m K', 0.1, 1.8, ETB_K2)],
+  'material.wood': [n('E', 'Young\'s modulus, pine to fir along the grain', 'Pa', 9e9, 13e9, ETB_E), n('k', 'thermal conductivity, balsa to oak', 'W/m K', 0.048, 0.17, ETB_K2)],
+  'material.ceramic': [n('E', 'Young\'s modulus, sapphire and carbides', 'Pa', 435e9, 650e9, ETB_E), n('k', 'thermal conductivity, porcelain to silicon carbide', 'W/m K', 1.5, 120, ETB_K2)],
+  'material.elastomer': [n('E', 'Young\'s modulus, rubber compounds at small strain (the page; gum rubber is lower)', 'Pa', 0.01e9, 0.1e9, ETB_E), n('k', 'thermal conductivity, natural to hard rubber', 'W/m K', 0.13, 0.16, ETB_K2)],
+  'material.composite': [n('E', 'Young\'s modulus', 'Pa', 17e9, 150e9, ETB_E)],
+  'material.carbon': [n('E', 'Young\'s modulus, diamond and graphene', 'Pa', 1000e9, 1220e9, ETB_E), n('k', 'thermal conductivity, amorphous carbon to graphite', 'W/m K', 1.7, 168, ETB_K2)],
+  'material.foam': [n('k', 'thermal conductivity, foamed plastics and cellular rubber', 'W/m K', 0.03, 0.045, ETB_K2)],
+  'material.natural': [n('k', 'thermal conductivity, cork to granite', 'W/m K', 0.07, 4.0, ETB_K2)],
+  'material.semiconductor': [n('E', 'Young\'s modulus, silicon', 'Pa', 130e9, 185e9, ETB_E), n('k', 'thermal conductivity, germanium to silicon at 0 °C', 'W/m K', 66.7, 168, ETB_K)],
 };
 
 export function materials(): Pack {

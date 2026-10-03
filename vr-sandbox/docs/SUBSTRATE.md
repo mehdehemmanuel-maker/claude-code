@@ -153,27 +153,33 @@ function, a parameter, a standard, a transformation, a constructor, a material, 
 that does not say what its target is (`has-part`, `interacts-with`) may name something not yet described, and those are
 the queue's questions.
 
-Stubs fell from 813 to 323 and described entities rose from 1799 to 2265 without a question asked outside.
+Then the most-named of the kindless stubs, described in their packs (bone marrow, the spinal cord, messenger RNA; a combustor,
+a turbopump, a photoresist, an arc chute), and the other material families given their numbers from the same pages
+(titanium, nickel superalloys, glass, concrete, wood, ceramics, elastomers, composites, carbon, foams, semiconductors), each
+range named for the subset it holds for. One disagreement between sources is kept as such: the page gives rubber at small
+strain 10 to 100 MPa where the stocked natural latex is 1.5 MPa, so the elastomer range says it is the page's compounds.
+
+Stubs fell from 813 to 275 and described entities rose from 1799 to 2319 without a question asked outside.
 
 ## Census (build, before any extra population)
 
 | | |
 |---|---|
-| entities | 2588 |
-| relations | 10183 |
-| relations per entity | 3.9 |
-| stubs (depth 0, each a queued question) | 323 (none typed: every one named only by `has-part` or `interacts-with`) |
+| entities | 2594 |
+| relations | 10277 |
+| relations per entity | 4.0 |
+| stubs (depth 0, each a queued question) | 275 (none typed: every one named only by `has-part` or `interacts-with`) |
 | laws | 172 (104 executable in `laws.ts`, 68 cited not run) |
-| materials | 246 |
-| components | 497 |
-| mechanisms | 178 |
+| materials | 254 |
+| components | 527 |
+| mechanisms | 183 |
 | constructors | 251 |
 | failures | 209 |
-| biological | 190 |
-| manifolds / generators | 181 / 84 |
-| domains | 21 (mechanical 477, electrical 425, materials 298, chemistry 296, biology 284, manufacturing 254, engineering 236, scale 209, physics 196, failures 160, common 117, parameters 103, computing 91, catalogue 77, making 69, robotics 67, circuits 66, earth 51, energy 33, views 30, standards 21) |
-| questions queued after seeding | 34 944 |
-| things with no known constructor | 371 |
+| biological | 204 |
+| manifolds / generators | 182 / 96 |
+| domains | 21 (mechanical 439, electrical 406, chemistry 295, biology 289, materials 277, manufacturing 247, engineering 236, common 218, scale 217, physics 196, failures 160, parameters 104, computing 86, catalogue 77, making 69, robotics 65, circuits 64, earth 51, energy 33, views 30, standards 21) |
+| questions queued after seeding | 35 610 |
+| things with no known constructor | 395 |
 
 Before the views, failures and families packs, a round of `populateMore(500, 6)` derived 67 new relations by rule, marked 528 unknowns, rejected nothing, and left the
 queue at 27 853: never finished, by design.

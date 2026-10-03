@@ -212,5 +212,21 @@ export function biology(): Pack {
   bm('bio.peptidoglycan', 'Sugar chains cross-linked by peptides: the bacterial cell wall, which penicillin stops being built.');
   bm('bio.proteoglycan', 'A protein with long charged sugar chains: it draws water into cartilage and resists compression.', { 'is-a': ['bio.protein'] });
   bm('bio.tubulin', 'The protein that polymerises into microtubules: the cell\'s rails and its mitotic spindle.', { 'is-a': ['bio.protein'] });
+  // organs, tissues and molecules other things name
+  const bc = (id: string, says: string, links: Parameters<Pack['link']>[1] = {}, kinds: Parameters<Pack['e']>[1] = ['biological', 'component']) => b(id, kinds, says, links);
+  bc('bio.bone-marrow', 'The soft tissue inside bone: red marrow makes blood cells, two million red cells a second; yellow marrow stores fat.', { 'is-a': ['bio.tissue'], produces: ['bio.red-blood-cell'] });
+  bc('bio.blood-vessel', 'A tube of endothelium, muscle and elastin carrying blood: arteries under pressure, veins returning, capillaries one cell thick where the exchange happens.', { 'governed-by': ['bernoulli', 'darcy-weisbach', 'stress.hoop'] });
+  bc('bio.cell-wall', 'A rigid layer outside the membrane: cellulose in plants, chitin in fungi, peptidoglycan in bacteria; it holds the turgor pressure that keeps the cell firm.', { 'made-of': ['bio.cellulose', 'bio.peptidoglycan'], 'governed-by': ['hydrostatic'] });
+  bc('bio.glia', 'The nervous system\'s other cells, as many as the neurons: they insulate axons with myelin, feed neurons, clear waste and shape synapses.', { 'is-a': ['bio.cell'], does: ['fn.insulate'] });
+  bc('bio.hair', 'A keratin fibre grown from a follicle: insulation, sensing, display; 50 to 100 µm thick, growing 0.3 mm a day.', { does: ['fn.insulate', 'fn.sense'], 'governed-by': ['conduction'] });
+  bc('bio.lung', 'Two spongy organs of 300 million alveoli, 70 m² of surface a few micrometres from the blood: oxygen in, carbon dioxide out, by diffusion.', { does: ['fn.transfer.oxygen'], 'governed-by': ['fick.diffusion'] });
+  bc('bio.pancreas', 'A gland behind the stomach with two jobs: enzymes into the gut to digest, and insulin and glucagon into the blood to set the sugar level.', { 'governed-by': ['michaelis-menten'] });
+  bc('bio.spinal-cord', 'The nerve trunk inside the spine: motor commands down, senses up, and reflexes closed within it without the brain.', { does: ['fn.communicate', 'fn.control'], 'governed-by': ['hodgkin-huxley', 'cable.equation'] });
+  bc('bio.sweat-gland', 'A coiled tube in the dermis that pumps salt water to the surface: evaporation takes 2.4 MJ per litre, the body\'s main way to shed heat.', { does: ['fn.cool'], 'governed-by': ['clausius-clapeyron'] });
+  bc('bio.gamete', 'A sex cell with half the chromosomes, egg or sperm: two fuse to start a new organism.', { 'is-a': ['bio.cell'] });
+  bc('bio.mrna', 'Messenger RNA: a copy of a gene carried from the nucleus to the ribosome and read three bases at a time; minutes to hours before it is degraded.', { 'produced-by': ['bio.transcription'] }, ['biological', 'chemical']);
+  bc('bio.trna', 'Transfer RNA: an adaptor that carries one amino acid and matches one codon, so the ribosome can read the message into protein.', { 'governed-by': ['michaelis-menten'] }, ['biological', 'chemical']);
+  bc('bio.dna-polymerase', 'The enzyme that copies DNA, a thousand bases a second with proofreading: one error in ten million, then repair to one in a billion.', { 'is-a': ['bio.protein'], 'governed-by': ['michaelis-menten'] }, ['biological', 'mechanism']);
+  bc('bio.electron-transport-chain', 'Four protein complexes in the mitochondrial membrane passing electrons from food to oxygen and pumping protons as they go: the proton gradient drives ATP synthase.', { 'governed-by': ['nernst', 'gibbs.energy'], transforms: ['convert.chemical.chemical'] }, ['biological', 'mechanism']);
   return p;
 }

@@ -33,7 +33,7 @@ describe('the substrate: a cross-connected index of reality', () => {
   });
 
   it('every arrow joins two things that exist: nothing dangles after the bridge is repaired', () => {
-    expect(s.dangling()).toEqual([]);
+    expect(s.dangling(), s.dangling().map((r) => `${r.from} -${r.kind}-> ${r.to}`).join('; ')).toEqual([]);
     expect(built.seedReport.rejected.map((r) => `${r.relation.from} ${r.relation.kind} ${r.relation.to}: ${r.why}`)).toEqual([]);
   });
 
@@ -216,7 +216,12 @@ describe('population: a queue that never needs to be finished', () => {
     const stubs = [...s.entities.values()].filter((e) => 'stub' in e.source);
     const most = stubs.reduce((a, b) => (s.into(b.id).length > s.into(a.id).length ? b : a));
     const least = stubs.reduce((a, b) => (s.into(b.id).length < s.into(a.id).length ? b : a));
-    expect(priority(s, most, 'functions')).toBeGreaterThan(priority(s, least, 'functions'));
+    expect(priority(s, most, 'functions')).toBeGreaterThanOrEqual(priority(s, least, 'functions'));
+    // and strictly: the same stub named by two more things is asked sooner (at build every stub may be named once, so the test makes the difference itself)
+    const s2 = build().substrate, stub = [...s2.entities.values()].find((e) => 'stub' in e.source)!;
+    const before = priority(s2, stub, 'functions');
+    for (const from of ['bearing', 'gear']) s2.relate({ from, kind: 'has-part', to: stub.id, source: { estimate: 'test' }, confidence: 0.5 });
+    expect(priority(s2, stub, 'functions')).toBeGreaterThan(before);
     expect(seedQueue(s, new Queue(), 'fast')).toBeGreaterThan(stubs.length - 1);
   });
 

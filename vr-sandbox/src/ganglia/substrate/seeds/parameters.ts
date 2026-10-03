@@ -34,6 +34,7 @@ export function parameters(): Pack {
   pr('param.surface-finish', 'The roughness of a surface, Ra in m: it sets friction, fatigue and seal life.', 'm', SHIGLEY);
   pr('param.width', 'How wide a thing is, m; for a neural network, the units in a layer.', 'm');
   pr('param.mass', 'How much matter a thing has, kg.', 'kg');
+  pr('param.speed', 'How fast a thing moves or turns, m/s or rad/s: a bearing\'s limit, a motor\'s rating, a fuse\'s time to open.', 'rad/s');
   pr('param.power', 'The rate a thing delivers or dissipates energy, W.', 'W');
   pr('param.range', 'The span a sensor reads, or how far a vehicle goes on a full tank or charge.');
   pr('param.medium', 'What a vehicle moves through or on: road, rail, water, air, space.');
