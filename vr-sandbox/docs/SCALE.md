@@ -196,6 +196,12 @@ The verdicts are predictions about the world; the world here is the engine, so t
   is clipped and reads 5 % fast. Both are now avoided by hanging the spring from a frozen anchor with an explicit free
   length and a small pull.
 
+**Coulomb, at two sizes.** A birch-plywood cube of 0.1 m and one of 0.4 m on a plywood ramp: both hold at 18° (below
+atan 0.45 = 24°) and both slide the same distance in the same time at 35°. The law book says it first: under Froude
+similarity (same material, the same g) `friction.coulomb` is covariant with the friction force growing as the weight,
+λ³, so the acceleration, force over mass, is unchanged; the engine agrees to within 5 %, and the observation is kept as an
+observation.
+
 ## Still open
 
 - The diffusive similarity is also the electromagnetic one (μ₀ and resistivity held give current ∝ λ⁰, R ∝ 1/λ,

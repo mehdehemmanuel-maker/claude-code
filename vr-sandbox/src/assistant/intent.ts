@@ -26,7 +26,7 @@ export type Intent =
   /** How much she knows. */
   | { do: 'ganglia' }
   /** A question answered by walking the substrate: every way, every mechanism, every material, what makes it, its lineage. */
-  | { do: 'traverse'; query: TraversalQuery; of?: string }
+  | { do: 'traverse'; query: TraversalQuery; of?: string; which?: string }
   /** Scale: what changes with size, whether a law knows the size, what an observer gets, analogues decades away, the hypothesis, a regime, a signal's time. */
   | { do: 'scaling'; query: 'transform' | 'law' | 'observe' | 'analogues' | 'hypothesis' | 'regime' | 'propagate' | 'redesign' | 'limit'; of?: string; factor?: number; similarity?: string; observer?: string; distance?: number; carrier?: string }
   /** Work a design out by one of her workflows (ganglia/workflows.ts), with what was said. */
@@ -79,7 +79,7 @@ const JOINT_WORDS: Record<string, string> = {
 const it = '(?:it|this|that|these|them|those|the (?:selection|assembly|thing))';
 
 /** What a line asks for, or null if it isn't a request Ego knows (then it may be Forge). */
-export type TraversalQuery = 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'index' | 'census';
+export type TraversalQuery = 'ways-to-store' | 'implementations' | 'materials-for' | 'variants' | 'components' | 'producers' | 'producers-of-producers' | 'analogues' | 'dual-role' | 'lineage' | 'mechanisms-for' | 'construction-path' | 'failures' | 'property' | 'index' | 'census';
 
 /** The final test's questions, each answered by traversal of the substrate, never by a list kept for it. */
 /** How a thing fails: asked before the complaint check, since "what could go wrong with a bearing" is a question, not a report. */
@@ -103,6 +103,8 @@ function traversalOf(t: string): Extract<Intent, { do: 'traverse' }> | null {
   if ((m = /^(?:show (?:me )?)?(?:the )?(?:generative |full )?lineage of (?:an? |the )?(.+)$|^how (?:is|was|does) (?:an? |the )?(.+?) (?:built|made|generated|assembled) (?:from|out of) (?:atoms|physics|physical primitives|the ground up|first principles)$|^what (?:is|was) (?:an? |the )?(.+?) (?:built|made|generated) from(?:, all the way down)?$/.exec(t))) return { do: 'traverse', query: 'lineage', of: strip((m[1] ?? m[2] ?? m[3])!) };
   if ((m = /^what do (?:i|we|you) need to (?:build|make|construct) (?:an? |the )?(.+)$|^(?:the )?construction path (?:for|to|of) (?:an? |the )?(.+)$|^how (?:would|do|could|can) (?:i|we|you) (?:build|make|construct) (?:an? |the )?(.+?) from scratch$/.exec(t))) return { do: 'traverse', query: 'construction-path', of: strip((m[1] ?? m[2] ?? m[3])!) };
   if ((m = /^(?:show (?:me )?)?(?:every|all(?: the)?|which|what) mechanisms? (?:that |which )?(?:can |could )?(.+)$|^what (?:can|could) (.+?)(?: for me)?$/.exec(t)) && !/^what (?:can|could) (?:i|you|we) /.test(t)) return { do: 'traverse', query: 'mechanisms-for', of: (m[1] ?? m[2])! };
+  // a number of a thing, with where it came from: "what is the density of steel", "how stiff is aluminium alloy"
+  if ((m = /^(?:what is|whats|how (?:much|high|big|large) is) (?:the )?(density|youngs modulus|elastic modulus|modulus(?: of elasticity)?|stiffness|yield strength|yield|tensile strength|ultimate strength|strength|thermal conductivity|electrical conductivity|conductivity|melting point|friction coefficient|coefficient of friction|friction) (?:of|for) (?:an? |the )?(.+)$|^how (dense|stiff|strong|heavy|conductive) is (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'property', of: strip((m[2] ?? m[4])!), which: (m[1] ?? m[3])! };
   if ((m = /^(?:index(?: of)?|everything about|everything you know about|all about) (?:an? |the )?(.+)$/.exec(t))) return { do: 'traverse', query: 'index', of: strip(m[1]!) };
   if (/^(?:how (?:big|large|deep) is (?:your|the) (?:substrate|index|graph)|(?:substrate|index) (?:census|size)|what (?:does|do) (?:your|the) (?:substrate|index) (?:hold|know|contain)|how much (?:of )?(?:reality|the world) do you (?:know|index))$/.test(t)) return { do: 'traverse', query: 'census' };
   return null;

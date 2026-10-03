@@ -114,6 +114,27 @@ export function answerTraversal(i: Traverse): string {
     const make = cp.steps.filter((x) => x.need === 'make'), acquire = cp.steps.filter((x) => x.need === 'acquire');
     return `To build ${an(nameOf(e))}: make ${list(make.map((x) => `${nameOf(x.entity)}${x.by.length ? ` by ${list(x.by.map(nameOf), 3)}` : ''}`), 10)}; acquire ${list(acquire.map((x) => nameOf(x.entity)), 10)}. ${cp.gaps.length ? `Gaps, where I know no way yet: ${list(cp.gaps.map(nameOf), 10)}.` : 'No gaps.'}`;
   }
+  if (i.query === 'property') {
+    const e = find(i.of ?? '');
+    if (!e) return unknown(i.of ?? '');
+    type E = NonNullable<ReturnType<typeof find>>;
+    type P = NonNullable<E['params']>[number];
+    const w = (i.which ?? '').toLowerCase();
+    const want = /dens|heavy/.test(w) ? { syms: ['rho'], names: /density/, label: 'density' } : /modul|stiff/.test(w) ? { syms: ['E'], names: /modulus/, label: 'modulus' }
+      : /yield/.test(w) ? { syms: ['sigma_y'], names: /yield/, label: 'yield strength' } : /strength|strong/.test(w) ? { syms: ['sigma_u', 'sigma_y'], names: /strength/, label: 'strength' }
+      : /conduct/.test(w) ? { syms: ['k', 'sigma'], names: /conductivity/, label: 'conductivity' } : /melt/.test(w) ? { syms: ['T_melt'], names: /melting/, label: 'melting point' }
+      : /friction/.test(w) ? { syms: ['mu'], names: /friction/, label: 'friction coefficient' } : { syms: [], names: new RegExp(w.replace(/[^a-z ]/g, '')), label: w };
+    // a number said in the unit a person reads: pascals as GPa or MPa, the rest as given
+    const num = (x: number, unit?: string) => (unit === 'Pa' ? (x >= 1e9 ? `${+(x / 1e9).toPrecision(3)} GPa` : x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} MPa` : `${+x.toPrecision(3)} Pa`) : `${+x.toPrecision(3)}${unit ? ` ${unit}` : ''}`);
+    const range = (p: P) => (p.low !== undefined && p.high !== undefined && p.low !== p.high ? `${num(p.low, p.unit)} to ${num(p.high, p.unit)}` : p.low !== undefined ? num(p.low, p.unit) : p.values ? p.values.join(', ') : 'no number');
+    const from = (of: P['of']) => ('cite' in of ? `${of.cite}${of.url ? `, ${of.url}` : ''}` : 'derived' in of ? `derived from ${of.derived}` : 'estimate' in of ? `an estimate: ${of.estimate}` : 'a stub');
+    const lines: string[] = [];
+    const say = (owner: E, how: string) => { for (const p of (owner.params ?? []).filter((p) => want.syms.includes(p.sym) || want.names.test(p.name))) lines.push(`${how}${p.name} ${range(p)} (${from(p.of)})`); };
+    say(e, '');
+    for (const k of s.reach(e.id, 'is-a')) say(k, `as ${an(nameOf(k))}: `);
+    if (!lines.length) return `I have no ${want.label} for ${an(nameOf(e))}: that is a question on my queue.`;
+    return `${nameOf(e)}: ${lines.join('; ')}.`;
+  }
   if (i.query === 'failures') {
     const e = find(i.of ?? '');
     if (!e) return unknown(i.of ?? '');

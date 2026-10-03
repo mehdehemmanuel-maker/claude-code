@@ -63,6 +63,41 @@ async function springPeriod(a: number, d: number, D: number, Na: number, pull: n
 }
 
 describe('scale hypotheses, predicted by the law book and measured in the world', () => {
+  it('Coulomb: a block four times the side holds at the same ramp angle and slides with the same acceleration, as the law book predicts under Froude similarity', async () => {
+    const lambda = 4, mu = 0.45; // birch plywood on birch plywood
+    // the law book: under Froude similarity (same material, the same g) the friction force grows as the weight, λ³, so the acceleration, force over mass, does not change
+    const v = classify('friction.coulomb', similarityById('scale.froude')!, lambda);
+    expect(v.verdict).toBe('covariant');
+    const forceRatio = v.expected / v.example;
+    expect(forceRatio).toBeCloseTo(lambda ** 3, 6);
+    const accelRatio = forceRatio / lambda ** 3;
+    expect(accelRatio).toBeCloseTo(1, 9);
+    const axisAngle = (axis: [number, number, number], th: number): [number, number, number, number] => { const sn = Math.sin(th / 2); return [axis[0] * sn, axis[1] * sn, axis[2] * sn, Math.cos(th / 2)]; };
+    /** The distance a cube of side `size` slides along a plywood ramp at `deg` in the 0.5 s after 0.3 s of settling or sliding. */
+    const slide = async (size: number, deg: number) => {
+      const r = await rig();
+      const th = (deg * Math.PI) / 180, q = axisAngle([0, 0, 1], th);
+      r.part('plate', at(0, 1, 0, q), { frozen: true, material: 'wood.birch-plywood', params: { length: 6, width: 2, thickness: 0.04 } });
+      const n = [-Math.sin(th), Math.cos(th)], h = 0.02 + size / 2;
+      const block = r.part('block', at(n[0]! * h + 0.5 * Math.cos(th), 1 + n[1]! * h + 0.5 * Math.sin(th), 0, q), { material: 'wood.birch-plywood', params: { x: size, y: size, z: size } });
+      r.run(0.3);
+      const p0 = r.pos(block);
+      r.run(0.5);
+      const p1 = r.pos(block);
+      r.done();
+      return Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    };
+    // below atan(mu) = 24° both hold; above, both slide the same distance in the same time
+    expect(await slide(0.1, 18)).toBeLessThan(0.002);
+    expect(await slide(0.1 * lambda, 18)).toBeLessThan(0.002);
+    const d1 = await slide(0.1, 35), d4 = await slide(0.1 * lambda, 35);
+    expect(Math.abs(d4 / d1 - accelRatio)).toBeLessThan(0.05);
+    const th = (35 * Math.PI) / 180, a = G * (Math.sin(th) - mu * Math.cos(th));
+    expect(Math.abs(d1 / (0.3 * a * 0.5 + 0.5 * a * 0.25) - 1)).toBeLessThan(0.05);
+    const observation: Claim = { id: 'observation.coulomb-ramp-in-the-engine', status: 'observation', statement: `In the engine a cube ${lambda} times the side holds on the same 18° ramp and slides the same distance on a 35° ramp (ratio ${(d4 / d1).toFixed(3)}); Coulomb under Froude similarity predicts 1.`, axioms: [], formulation: 'd₄/d₁ measured against 1', predictions: [], compatible: ['scale.froude covariance of friction.coulomb'], conflicting: [], falsification: ['a block of one size holding where the other slides, or a distance ratio off 1 by more than the solver\'s contact error'], unresolved: [], history: [], source: { cite: 'this test, Jolt Physics in the conformance harness', kind: 'maker' } };
+    expect(observation.status).toBe('observation');
+  }, 180000);
+
   it('Froude: a pendulum four times longer with a bob of the same material swings twice as slowly, as the covariant verdict predicts', async () => {
     const lambda = 4;
     const verdict = classify('pendulum.period', similarityById('scale.froude')!, lambda);

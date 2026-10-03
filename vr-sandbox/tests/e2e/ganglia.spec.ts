@@ -23,6 +23,8 @@ test('Ego answers scale and traversal questions in the app from her ganglia', as
   // and her knowledge answer carries the substrate's census
   const fails = await sb(page, (s) => s.ego.ask('how does a bearing fail'));
   expect(fails).toMatch(/fails by \d+ ways of its own/);
+  const dense = await sb(page, (s) => s.ego.ask('what is the density of steel'));
+  expect(dense).toMatch(/7850 kg\/m\^3/);
   const knows = await sb(page, (s) => s.ego.ask('how much do you know'));
   expect(knows).toMatch(/substrate of \d+ things joined by \d+ arrows/);
   expect(errors).toEqual([]);

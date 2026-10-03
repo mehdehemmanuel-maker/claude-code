@@ -488,6 +488,18 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(answerTraversal({ do: 'traverse', query: 'failures', of: 'capacitor' })).toMatch(/dielectric breakdown, the insulator/);
   });
 
+  it('Ego answers a property of a material with the number, its unit and where it came from, and the family\'s range as well', () => {
+    expect(interpret('what is the density of steel')).toMatchObject({ do: 'traverse', query: 'property', which: 'density', of: 'steel' });
+    expect(interpret('how stiff is aluminium alloy')).toMatchObject({ do: 'traverse', query: 'property', which: 'stiff', of: 'aluminium alloy' });
+    const a = answerTraversal({ do: 'traverse', query: 'property', of: 'steel', which: 'density' });
+    expect(a).toMatch(/density 7850 kg\/m\^3/);
+    expect(a).toMatch(/Engineering ToolBox.*read 2026-10-03.*engineeringtoolbox\.com/);
+    const b = answerTraversal({ do: 'traverse', query: 'property', of: 'aluminum.6061-t6', which: 'modulus' });
+    expect(b).toMatch(/Young's modulus 6\d\.?\d* GPa \(derived from src\/data\/materials\.ts\)/);
+    expect(b).toMatch(/as an aluminium alloy: Young's modulus 69 GPa to 70 GPa/);
+    expect(answerTraversal({ do: 'traverse', query: 'property', of: 'steel', which: 'melting point' })).toMatch(/I have no melting point for/);
+  });
+
   it('the index of a thing says where it lives in scale and what it is like, and a structure answers to its words', () => {
     const a = answerTraversal({ do: 'traverse', query: 'index', of: 'bearing' });
     expect(a).toMatch(/It lives at about \d\.\de-?\d+ m/);

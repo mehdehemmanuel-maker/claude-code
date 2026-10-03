@@ -71,7 +71,7 @@ export function bridge(s: Substrate): void {
   // archetypes: component manifolds with ports, laws and principles
   const bs = D('ganglia/blocks.ts');
   for (const a of ARCHETYPES) {
-    s.add(ent(`block.${a.id}`, ['component', 'manifold'], a.name, `${a.does} (${a.category}; takes ${a.takes.join(', ')}, gives ${a.gives.join(', ')}).`, ['engineering'], a.insideSource, undefined, a.words));
+    s.add(ent(`block.${a.id}`, ['component', 'manifold'], a.name, `${a.does} (${a.category}; takes ${a.takes.join(', ')}, gives ${a.gives.join(', ')}).`, ['engineering'], a.insideSource, undefined));
     for (const l of a.laws) s.relate(rel(`block.${a.id}`, 'governed-by', l, bs));
     for (const f of a.families) for (const c of CATALOG.filter((x) => x.family === f)) s.relate(rel(c.id, 'is-a', `block.${a.id}`, bs, `catalogue family ${f}`));
     for (const piece of a.inside) { const pid = `block.${a.id}.${piece.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; s.add(ent(pid, ['component'], piece.name, piece.does, ['engineering'], a.insideSource)); s.relate(rel(`block.${a.id}`, 'has-part', pid, bs)); if (piece.law) s.relate(rel(pid, 'governed-by', piece.law, bs)); for (const m of piece.material ? [piece.material].flat() : []) s.relate(rel(pid, 'made-of', familyOfWord(m) ?? m, bs, Array.isArray(piece.material) ? 'one of the materials it may be' : undefined)); }
@@ -98,7 +98,8 @@ export function bridge(s: Substrate): void {
   // processes
   const ps = D('ganglia/processes.ts');
   for (const pr of PROCESSES) {
-    s.add(ent(pr.id, ['process', 'constructor'], pr.name, `${pr.makes}. Limits: ${pr.limits.join('; ')}.`, ['manufacturing'], pr.source, undefined, pr.tags));
+    // a process's tags are search words, never its names: 'steel' on MIG welding must not make steel a weld
+    s.add(ent(pr.id, ['process', 'constructor'], pr.name, `${pr.makes}. Limits: ${pr.limits.join('; ')}.`, ['manufacturing'], pr.source));
     for (const m of pr.materials) s.relate(rel(pr.id, 'interacts-with', familyOfWord(m) ?? m, ps, 'works this material'));
     for (const t of pr.tools) { const tid = `tool.${t.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; s.add(ent(tid, ['constructor', 'component'], t, `A tool: ${t}.`, ['manufacturing'], pr.source)); s.relate(rel(pr.id, 'requires', tid, ps)); }
     for (const l of pr.uses?.laws ?? []) s.relate(rel(pr.id, 'governed-by', l, ps));
