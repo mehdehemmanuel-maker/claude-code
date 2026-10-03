@@ -42,7 +42,7 @@ function rolesByNumbers(m: (typeof MATERIALS)[number]): [string, string][] {
 /** Read every structured source into the substrate. */
 /** The bridge's ways (how a thing is done) as refinements of the packs' functions (what is done), where a function names it. */
 /** What the blocks no way embodies do, by the packs' functions: a conductor conducts, a coupling couples, a bolt clamps. */
-export const BLOCK_FUNCTIONS: Record<string, string[]> = { 'power.conduct': ['fn.conduct.current'], 'transmission.couple': ['fn.couple.shafts', 'fn.transmit.torque'], 'support.rotate': ['fn.support.rotation', 'fn.support.load'], 'structure.member': ['fn.support.load'], 'fasten.bolt': ['fn.clamp.axial', 'fn.transmit.force'], 'protect.fuse': ['fn.protect.overcurrent'] };
+export const BLOCK_FUNCTIONS: Record<string, string[]> = { 'power.conduct': ['fn.conduct.current'], 'transmission.couple': ['fn.couple.shafts', 'fn.transmit.torque'], 'support.rotate': ['fn.support.rotation', 'fn.support.load'], 'structure.member': ['fn.support.load'], 'fasten.bolt': ['fn.clamp.axial', 'fn.transmit.force'], 'protect.fuse': ['fn.protect.overcurrent'], 'connection.two-force': ['fn.transmit.force'], 'transmission.shaft': ['fn.transmit.torque', 'fn.support.load'], 'material.print': ['fn.support.load'], 'protect.guard': ['fn.isolate'] };
 
 export const WAY_FUNCTIONS: Record<string, string[]> = {
   'motor.rotary': ['fn.actuate.electromagnetic', 'fn.transmit.torque'], 'motor.hub': ['fn.actuate.electromagnetic', 'fn.roll'], 'motor.linear': ['fn.actuate.electromagnetic', 'fn.move'], 'voice-coil': ['fn.actuate.electromagnetic', 'fn.move'], solenoid: ['fn.actuate.electromagnetic'],

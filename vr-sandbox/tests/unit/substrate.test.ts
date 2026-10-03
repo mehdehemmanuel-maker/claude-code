@@ -482,6 +482,13 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect(idle).toEqual([]);
   });
 
+  it('every part the common pack describes, every tool, and every organ does something, itself or as its kind', () => {
+    const idle = (pick: (e: Entity) => boolean) => [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && pick(e)).filter((e) => !s.outOf(e.id, 'does').length && !s.reach(e.id, 'is-a').some((k) => s.outOf(k.id, 'does').length)).map((e) => e.id);
+    expect(idle((e) => e.domains.includes('common'))).toEqual([]);
+    expect(idle((e) => e.domains.includes('manufacturing') && /^tool\./.test(e.id))).toEqual([]);
+    expect(idle((e) => e.id.startsWith('bio.') && e.kinds.includes('biological') && !['bio.organ', 'bio.tissue'].includes(e.id))).toEqual([]);
+  });
+
   it('every part named five times or more carries a characteristic length and time, so the scale axis can place it', () => {
     const named = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && s.into(e.id).length >= 5);
     const unplaced = named.filter((e) => !e.params?.some((p) => p.sym === 'L_c') || !e.params?.some((p) => p.sym === 'T_c')).map((e) => e.id);

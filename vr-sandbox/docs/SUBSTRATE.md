@@ -270,7 +270,15 @@ Each is a query in `queries.ts`, a test in `tests/unit/substrate.test.ts`, and a
   of steel can be made by what works steel, at 0.4 and saying so, until its own maker is known). A second rule for the
   same derivation was added to the constructors facet and measured: 244 with it, 244 without, so it was removed and the
   one rule carries the lower confidence and the wording; a commit that claimed a third fewer was wrong, and this is
-  the correction. The bridge's ways (`way.*`, how a thing is done) are refinements
+  the correction.
+  Then the parts a whole-queue round left without a function were read one by one: 117 described parts (stock
+  shapes, wing and tail surfaces, machine regions, semiconductor regions, tools, organs and organelles) and 14 of
+  them needed a function word no pack had said, so thirteen were added (lift, steer, thrust, control buoyancy,
+  ignite, pattern, form, contain, latch, polarize, convey, digest, harvest light), each sourced and governed by a law
+  where one is in the book. After a whole-queue round the components without a function are 15, from 139: the 14 are
+  pieces and regions of building blocks (a back EMF, the ends of a member, the systems of an assembly) and the
+  generic organ, whose function is its members'. The invariant: every part the common pack describes, every tool and
+  every organ, organelle and tissue does something, itself or as its kind. The bridge's ways (`way.*`, how a thing is done) are refinements
   of the packs' functions (`fn.*`, what is done) through an explicit table in the bridge, so a building block that
   embodies a way is an implementation of the function. A stub named by `does`, `transforms` or `produced-by` is typed
   as a function, a transformation or a constructor.
