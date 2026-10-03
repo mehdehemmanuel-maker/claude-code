@@ -701,6 +701,23 @@ describe('how a thing fails is said as mechanisms with laws', () => {
     expect(bearing).toMatch(/^Living analogues of a bearing: /);
   });
 
+  it('Ego compares two things: what they share, where they part, and each in a word', () => {
+    expect(interpret('what is the difference between a bolt and a screw')).toMatchObject({ do: 'traverse', query: 'compare', of: 'bolt', which: 'screw' });
+    expect(interpret('compare a bearing with a bushing')).toMatchObject({ do: 'traverse', query: 'compare', of: 'bearing', which: 'bushing' });
+    expect(interpret('bolt versus screw')).toMatchObject({ do: 'traverse', query: 'compare', of: 'bolt', which: 'screw' });
+    expect(interpret('how is a ball screw different from a lead screw')).toMatchObject({ do: 'traverse', query: 'compare', of: 'ball screw', which: 'lead screw' });
+    expect(interpret('what do a kidney and a capacitor have in common')).toMatchObject({ do: 'traverse', query: 'compare', of: 'kidney', which: 'capacitor' });
+    const bolt = answerTraversal({ do: 'traverse', query: 'compare', of: 'bolt', which: 'screw' });
+    expect(bolt).toMatch(/is a kind of (?:cap screw|screw)/);
+    expect(bolt).toMatch(/In a word: an? .+ is .+; an? .+ is /);
+    const kidney = answerTraversal({ do: 'traverse', query: 'compare', of: 'kidney', which: 'capacitor' });
+    expect(kidney).toMatch(/[Bb]oth filter/);
+    expect(kidney).toMatch(/what only a capacitor does: store charge/);
+    expect(kidney).not.toMatch(/fn\./);
+    const same = answerTraversal({ do: 'traverse', query: 'compare', of: 'bolt', which: 'hex bolt' });
+    expect(same).toMatch(/are the same thing to me/);
+  });
+
   it('what charges and discharges through a resistance cites the RC time constant, not the lumped thermal one', () => {
     for (const id of ['fn.couple.ac', 'fn.decouple', 'capacitor.bootstrap', 'interconnect.metal', 'failure.ripple', 'failure.inrush', 'failure.parasitic-capacitance']) {
       const laws = s.reach(id, 'governed-by').map((l) => l.id);
