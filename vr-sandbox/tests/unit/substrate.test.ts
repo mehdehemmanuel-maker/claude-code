@@ -1243,7 +1243,7 @@ describe('Every Nex structure Ego says is readable Nex', () => {
       expect(en.loss, q).toBeLessThan(1);
     }
     expect(withTail).toBe(asks.length);
-    // measured 3 October, 18:25: the English of these 15 structures carries 127 of 140 pieces (loss 0.09); the compact text carries all 140
+    // measured 3 October, 18:25: the English of these 15 structures carries 127 of 140 pieces (loss 0.09: seven mechanisms, four domains, one list of assumptions, one instrument); the compact text carries all 140
     console.log(`English carries ${present - dropped} of ${present} pieces of these ${withTail} structures (loss ${(dropped / present).toFixed(2)}); Nex carries all`);
     expect(dropped / present).toBeLessThan(0.5);
   });

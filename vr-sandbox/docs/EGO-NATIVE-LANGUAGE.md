@@ -556,7 +556,7 @@ with a contract beyond the form of a law (R); the rest of Ego's answers moved on
 English-versus-Nex loss count taken on her real questions once they are: a first count exists now, over the
 fifteen questions whose answers carry a structure (kinds, functions, materials, producers, standards, interfaces,
 analogues, causes, how-she-knows, failures, possibility, the edge of a law, forms, symptoms): the English rendering
-of those fifteen structures carries 127 of their 140 pieces (loss 0.09, mostly certainty intervals and domains), the
+of those fifteen structures carries 127 of their 140 pieces (loss 0.09: seven mechanisms, four domains, one list of assumptions, one instrument), the
 compact Nex text carries all 140 and reads back identically (tested, 3 October).
 
 Status at 18:20 UTC, 3 October: sections A to Z written, with docs/NEX-SPACE.md (the continuous part, under audit),
