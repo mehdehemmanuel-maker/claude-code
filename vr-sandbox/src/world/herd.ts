@@ -1,64 +1,55 @@
-// The creatures that live in the world, each with its mind. Ten times a second of world time each one senses where it
-// is (its body's live pose), where you are and where the water is, thinks (mind.ts), and tells its legs what stride to
-// take (the physics 'gait' op). Paused, the world's time stands still and so do their thoughts; a creature whose body
-// is gone from the world is gone from the herd.
+// The creatures that live in the world, each with its mind. A mind lives in the physics (runner.ts): ten times a second
+// of world time it senses where its body is, where you are and where the water is, thinks (mind.ts), and tells its
+// legs what stride to take (the world's 'gait'), on the world's own ticks whatever a frame carries (F-6.3). Paused, the
+// world's time stands still and so do their thoughts; a creature whose body is gone from the world is gone from the
+// herd. This is the herd's book: who is in it, what each is doing, and what they said, from the minds' events.
 
-import type { Pose, Vec3 } from '../doc/types';
+import type { PhysicsEvent, PhysicsOp } from '../physics/protocol';
 import type { Walker } from './creature';
-import { newMind, strides, think, type Mind, type Want } from './mind';
+import type { Want } from './mind';
 
 export interface HerdHost {
-  /** World seconds. */
-  time(): number;
-  pose(id: string): Pose | null;
+  /** Into the physics, where the minds live. */
+  send(op: PhysicsOp): void;
   exists(id: string): boolean;
-  /** You, where you stand. */
-  you(): Vec3;
-  dry(x: number, z: number): boolean;
-  gait(amplitude: Record<string, number>): void;
 }
 
-export interface Member { name: string; walker: Walker; mind: Mind; walking: boolean }
-
-/** How often they think, s of world time. */
-const THINK = 0.1;
+export interface Member { name: string; walker: Walker; doing: Want }
 
 export class Herd {
   members: Member[] = [];
-  private last = -Infinity;
   /** What they chose lately, newest last: "the dog goes to look at something". */
   readonly said: string[] = [];
 
   constructor(private host: HerdHost) {}
 
+  /** A creature joins: its nerves go to the physics with its own seed (where curiosity takes it). */
   add(name: string, walker: Walker, seed = this.members.length + 1): Member {
-    const m: Member = { name, walker, mind: newMind(seed), walking: true };
+    const m: Member = { name, walker, doing: 'company' };
     this.members.push(m);
+    this.host.send({ op: 'mind', name, nerves: { body: walker.body, left: walker.left, right: walker.right, servos: walker.servos }, seed });
     return m;
   }
 
   /** What each is doing now. */
   doing(): { name: string; doing: Want }[] {
-    return this.members.map((m) => ({ name: m.name, doing: m.mind.doing }));
+    this.prune();
+    return this.members.map((m) => ({ name: m.name, doing: m.doing }));
   }
 
-  tick() {
-    const now = this.host.time();
-    if (now < this.last) this.last = now - THINK; // the world was rewound
-    if (now - this.last < THINK) return;
-    const dt = Math.min(1, now - this.last);
-    this.last = now;
-    this.members = this.members.filter((m) => this.host.exists(m.walker.body));
-    for (const m of this.members) {
-      const self = this.host.pose(m.walker.body);
-      if (!self) continue;
-      const c = think(m.mind, self, { time: now, you: this.host.you(), dry: (x, z) => this.host.dry(x, z) }, dt, m.walking);
-      m.walking = c.left > 0 || c.right > 0;
-      this.host.gait(strides(c, m.walker));
-      if (c.says) {
-        this.said.push(`${m.name} ${c.says}`);
-        if (this.said.length > 20) this.said.shift();
-      }
+  /** A mind's choice, as the physics reported it. */
+  ingest(e: PhysicsEvent) {
+    if (e.type !== 'mind') return;
+    const m = this.members.find((x) => x.walker.body === e.body);
+    if (m) m.doing = e.doing;
+    if (e.says) {
+      this.said.push(`${e.name} ${e.says}`);
+      if (this.said.length > 20) this.said.shift();
     }
+  }
+
+  /** A creature whose body is gone is gone. */
+  prune() {
+    this.members = this.members.filter((m) => this.host.exists(m.walker.body));
   }
 }

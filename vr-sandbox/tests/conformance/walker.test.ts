@@ -12,6 +12,8 @@ import { getMaterial, MATERIALS } from '../../src/data/materials';
 import type { Vec3 } from '../../src/doc/types';
 import { rotate } from '../../src/doc/math';
 import { groundAt, heightfield, PLACES } from '../../src/world/place';
+import { Runner } from '../../src/physics/runner';
+import { TICK } from '../../src/physics/world';
 
 const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
 
@@ -155,4 +157,34 @@ describe('a walker that keeps its feet', () => {
       r.done();
     }
   }, 300000);
+});
+
+describe('a mind that keeps world time (F-6.3)', () => {
+  it('thinks at the same ticks whether a frame carries one tick or four: the same dog walks the same path and says the same things', async () => {
+    // the dog's mind lives in the runner, on the world's ticks: a frame that carries four ticks (a slow headset, a
+    // loaded CI runner) changes nothing it does. Before this it thought once a frame, 9 to 12 ticks apart by the
+    // frame rate, and on one CI run (2026-10-03) the dog on the beach ended on its back.
+    const path = async (ticksPerFrame: number) => {
+      const { r, w } = await walker(WALKERS['dog']!, 0);
+      const runner = new Runner(r.world);
+      runner.run(0, [{ op: 'mind', name: 'the dog', nerves: { body: w.body, left: w.left, right: w.right, servos: w.servos }, seed: 7 }, { op: 'you', at: [3, 0, 3] }], 0);
+      const poses = new Map<number, number[]>(), said: string[] = [];
+      let ticks = 0;
+      while (ticks < 268) {
+        const res = runner.run(0, [], ticksPerFrame * TICK + 1e-9, 4);
+        ticks += res.ticksRun;
+        for (const e of res.events) if (e.type === 'mind') said.push(`${ticks}: ${e.doing} ${e.says ?? ''}`);
+        poses.set(ticks, [...r.world.livePose(w.body)!.p, ...r.world.livePose(w.body)!.q]);
+      }
+      r.done();
+      return { poses, said, ticks };
+    };
+    const one = await path(1), four = await path(4);
+    expect(four.ticks).toBe(one.ticks);
+    for (const [tick, pose] of four.poses) expect(one.poses.get(tick), `at tick ${tick}`).toEqual(pose);
+    expect(four.said).toEqual(one.said);
+    // and it did walk: its mind drove it toward you
+    const a = one.poses.get(1)!, b = one.poses.get(one.ticks)!;
+    expect(Math.hypot(b[0]! - a[0]!, b[2]! - a[2]!)).toBeGreaterThan(0.1);
+  }, 120000);
 });

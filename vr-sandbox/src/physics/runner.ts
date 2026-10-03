@@ -1,9 +1,18 @@
 // Fixed-timestep driver around PhysicsWorld, shared by the worker and the inline (main-thread) mode.
 
-import type { SimSettings } from '../doc/types';
+import type { SimSettings, Vec3 } from '../doc/types';
 import { PhysicsWorld, TICK } from './world';
-import type { PhysicsEvent, PhysicsOp, StepResult } from './protocol';
+import type { Nerves, PhysicsEvent, PhysicsOp, StepResult, TerrainField } from './protocol';
 import { Watchdog, type Anomaly, type BodyInfo } from '../diagnostics/watchdog';
+import { newMind, strides, think, type Mind, type Want } from '../world/mind';
+import { groundAt } from '../world/place';
+
+/** How often a creature thinks: a tenth of a second of world time, in ticks (F-6.3). */
+export const THINK = 0.1;
+export const THINK_TICKS = Math.round(THINK / TICK);
+
+/** A creature's nervous system as the runner keeps it: its mind, what its legs were last told, what it is doing. */
+interface Nervous { name: string; nerves: Nerves; mind: Mind; walking: boolean; doing: Want }
 
 export interface AdvanceResult extends StepResult {
   /** Transforms before the last tick, for interpolation. */
@@ -27,6 +36,19 @@ export class Runner {
   private watchdog: Watchdog;
   private info = new Map<string, BodyInfo>();
   private reported = new Set<string>();
+  /**
+   * The creatures' nervous systems. Each thinks every THINK_TICKS ticks of world time on its body's live pose, inside
+   * the step, so a creature thinks at the same ticks whether a frame carries one tick or four (F-6.3); its command
+   * reaches its servos the next tick. Paused, no tick, no thought.
+   */
+  private minds: Nervous[] = [];
+  /** Where you stand (op 'you'), for what they see. */
+  private you: Vec3 = [0, 0, 0];
+  /** The place's ground and water (op 'terrain'), for where they may go. */
+  private terrain: TerrainField | null = null;
+  private water: number | null = null;
+  /** Ticks since the scene began: the minds' clock. */
+  private ticks = 0;
 
   constructor(readonly world: PhysicsWorld) {
     this.watchdog = this.makeWatchdog();
@@ -55,10 +77,45 @@ export class Runner {
 
   apply(ops: PhysicsOp[]) {
     for (const op of ops) {
+      // the creatures' nerves and your whereabouts live here, with the ticks they think on
+      if (op.op === 'mind') {
+        this.minds = this.minds.filter((m) => m.nerves.body !== op.nerves.body);
+        const mind = newMind(op.seed);
+        this.minds.push({ name: op.name, nerves: op.nerves, mind, walking: true, doing: mind.doing });
+        continue;
+      }
+      if (op.op === 'you') { this.you = [op.at[0], op.at[1], op.at[2]]; continue; }
+      if (op.op === 'terrain') { this.terrain = op.field; this.water = op.water ?? null; }
       this.world.apply(op);
-      // a new scene starts a new watch
-      if (op.op === 'clear') { this.watchdog = this.makeWatchdog(); this.reported.clear(); }
+      // a new scene starts a new watch, and a new clock
+      if (op.op === 'clear') { this.watchdog = this.makeWatchdog(); this.reported.clear(); this.minds = []; this.ticks = 0; }
     }
+  }
+
+  /** The creatures in the world, with what each is doing. */
+  creatures(): { name: string; body: string; doing: Want }[] {
+    return this.minds.map((m) => ({ name: m.name, body: m.nerves.body, doing: m.doing }));
+  }
+
+  /** One moment of every creature's thought, on this tick; what they chose goes out as 'mind' events. */
+  private think(events: PhysicsEvent[]) {
+    // a creature whose body is gone from the world is gone with it
+    this.minds = this.minds.filter((m) => this.world.livePose(m.nerves.body) !== null);
+    const w = { time: this.ticks * TICK, you: this.you, dry: (x: number, z: number) => this.dry(x, z) };
+    for (const m of this.minds) {
+      const self = this.world.livePose(m.nerves.body);
+      if (!self) continue;
+      const c = think(m.mind, self, w, THINK, m.walking);
+      m.walking = c.left > 0 || c.right > 0;
+      this.world.gait(strides(c, m.nerves));
+      if (c.says !== null || c.doing !== m.doing) events.push({ type: 'mind', body: m.nerves.body, name: m.name, doing: c.doing, says: c.says });
+      m.doing = c.doing;
+    }
+  }
+
+  /** Whether the ground there is dry: above the water, when the place has any. */
+  private dry(x: number, z: number): boolean {
+    return this.water === null || !this.terrain || groundAt(this.terrain, x, z) > this.water;
   }
 
   private observe(r: StepResult) {
@@ -110,6 +167,8 @@ export class Runner {
       events.push(...r.events);
       this.last = r;
       this.observe(r);
+      this.ticks++;
+      if (this.minds.length && this.ticks % THINK_TICKS === 0) this.think(events);
     }
     // nothing stepped (paused, or too little time): still report the world as the ops just left it
     if (!this.last) this.last = this.world.step();

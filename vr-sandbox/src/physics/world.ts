@@ -545,6 +545,11 @@ export class PhysicsWorld {
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
   /** Each rhythmic servo's swing as its creature's nervous system commands it (op 'gait'): 1 as built when unset. */
   private amplitude = new Map<string, number>();
+
+  /** A nervous system's command to its rhythms, from a mind inside the step (runner.ts) or the 'gait' op. */
+  gait(amplitude: Record<string, number>) {
+    for (const [id, g] of Object.entries(amplitude)) this.amplitude.set(id, Math.max(0, Math.min(1, g)));
+  }
   /**
    * The swing it has now: it follows the command over half a second, as a stride lengthens or shortens over a step,
    * never at once (a leg cut short mid-swing trips the body over it).
@@ -667,6 +672,8 @@ export class PhysicsWorld {
   // ops
 
   apply(op: PhysicsOp): Refusal | void {
+    // a creature's nerves and your whereabouts are the runner's (runner.ts), no change to the world
+    if (op.op === 'mind' || op.op === 'you') return;
     // anything changed from outside (a load, a part, a hand, a switch): every magnetic pair is watched again closely
     this.magnetRest.clear();
     switch (op.op) {
@@ -685,7 +692,7 @@ export class PhysicsWorld {
       case 'grabTarget': { const g = this.grabs.get(op.hand); if (g) g.target = op.target; return; }
       case 'release': return this.release(op.hand, op.linear, op.angular);
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
-      case 'gait': for (const [id, g] of Object.entries(op.amplitude)) this.amplitude.set(id, Math.max(0, Math.min(1, g))); return;
+      case 'gait': return this.gait(op.amplitude);
       case 'damage': return this.setDamage(op.id, op.damage);
       case 'room': return this.setRoom(op.surfaces);
       case 'options':

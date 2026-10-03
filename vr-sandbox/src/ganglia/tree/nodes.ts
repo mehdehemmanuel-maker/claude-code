@@ -176,6 +176,10 @@ export const NODES: Node[] = [
   { id: 'F-6.2', kind: 'law', epistemic: 'physical', name: 'line of sight', proof: 'violated', parents: ['F-6'],
     statement: 'An eye sees along straight rays and sees nothing behind what blocks them.',
     limits: ['today: minds read the world\'s state (docs/AUDIT-2-FALSE-CONFIDENCE.md FC-17)'] },
+  { id: 'F-6.3', kind: 'law', epistemic: 'physical', name: 'a nervous system keeps world time', proof: 'tested', parents: ['F-6'],
+    statement: 'A creature thinks on its body\'s clock: every 0.1 s of world time, at the same ticks whatever a frame carries, and its command reaches its servos the next tick.',
+    realisedBy: [{ module: 'physics/runner', symbol: 'Runner#think' }],
+    heldBy: [{ file: 'tests/conformance/walker.test.ts', test: 'thinks at the same ticks whether a frame carries one tick or four' }, { file: 'tests/unit/mind.test.ts', test: 'keeps the book of the creatures' }] },
 
   // ---- Layer 6: numerical realisations (each a node of its own, with its contract)
   { id: 'R-1', kind: 'realisation', epistemic: 'numerical', name: 'the row solver', proof: 'tested', parents: ['F-1.1.1', 'F-2.6', 'F-3'],

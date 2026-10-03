@@ -165,7 +165,7 @@ export function heightfield(p: PlaceSpec, n = 128, size = 160): Heightfield {
  * The ground's height at a point, on the same triangles the physics world stands on: each cell split along its
  * diagonal from (x, z) to (x + 1, z + 1), as Jolt splits a heightfield's cells (and the renderer draws them).
  */
-export function groundAt(f: Heightfield, x: number, z: number): number {
+export function groundAt(f: Pick<Heightfield, 'n' | 'size' | 'heights'>, x: number, z: number): number {
   const step = f.size / (f.n - 1);
   const gx = Math.min(f.n - 1.000001, Math.max(0, (x + f.size / 2) / step)), gz = Math.min(f.n - 1.000001, Math.max(0, (z + f.size / 2) / step));
   const ix = Math.floor(gx), iz = Math.floor(gz), u = gx - ix, v = gz - iz;

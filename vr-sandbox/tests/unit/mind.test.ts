@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { bearing, headingOf, newMind, sees, strides, think, type World } from '../../src/world/mind';
 import { Herd } from '../../src/world/herd';
+import type { PhysicsOp } from '../../src/physics/protocol';
 import type { Pose, Vec3 } from '../../src/doc/types';
 
 const facing = (heading: number, p: Vec3 = [0, 0, 0]): Pose => ({ p, q: [0, Math.sin(heading / 2), 0, Math.cos(heading / 2)] });
@@ -80,22 +81,21 @@ describe('a mind', () => {
 });
 
 describe('the herd', () => {
-  it('thinks ten times a second of world time, not while the world is paused, and forgets a creature whose body is gone', () => {
-    let time = 0;
-    const gaits: Record<string, number>[] = [];
+  it('keeps the book of the creatures: a mind sent to the physics, what each is doing and said from its events, and a creature whose body is gone forgotten', () => {
+    const ops: PhysicsOp[] = [];
     const parts = new Set(['body']);
-    const herd = new Herd({ time: () => time, pose: () => facing(0), exists: (id) => parts.has(id), you: () => [5, 0, 0], dry: () => true, gait: (a) => gaits.push(a) });
+    const herd = new Herd({ send: (op) => ops.push(op), exists: (id) => parts.has(id) });
     herd.add('the dog', { parts: ['body'], joints: [], body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'], board: 'b', pack: 'p' });
-    herd.tick();
-    herd.tick(); // no time has passed
-    expect(gaits.length).toBe(1);
-    time = 0.05; herd.tick();
-    expect(gaits.length).toBe(1);
-    time = 0.1; herd.tick();
-    expect(gaits.length).toBe(2);
+    // its nerves went to the physics, where its mind lives on the world's ticks (runner.ts); nothing walks it from here
+    expect(ops).toEqual([{ op: 'mind', name: 'the dog', nerves: { body: 'body', left: ['l'], right: ['r'], servos: ['l', 'r', 'k'] }, seed: 1 }]);
     expect(herd.doing()).toEqual([{ name: 'the dog', doing: 'company' }]);
+    herd.ingest({ type: 'mind', body: 'body', name: 'the dog', doing: 'curiosity', says: 'goes to look at something' });
+    herd.ingest({ type: 'mind', body: 'body', name: 'the dog', doing: 'curiosity', says: null });
+    herd.ingest({ type: 'mind', body: 'other', name: 'the cat', doing: 'rest', says: 'lies down to rest' });
+    expect(herd.doing()).toEqual([{ name: 'the dog', doing: 'curiosity' }]);
+    expect(herd.said).toEqual(['the dog goes to look at something', 'the cat lies down to rest']);
     parts.clear();
-    time = 0.3; herd.tick();
+    herd.prune();
     expect(herd.members).toEqual([]);
   });
 });

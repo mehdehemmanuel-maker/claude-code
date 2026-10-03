@@ -31,7 +31,6 @@ import { placeFromWords } from '../world/place';
 import { buildSwimmer, buildWalker, swimmerFromWords, WALKERS, walkerFromWords } from '../world/creature';
 import { Herd } from '../world/herd';
 import { POOL } from '../physics/environment';
-import { TICK } from '../physics/world';
 import { findQuantities, parseUnit, sameDim } from '../ganglia/units';
 import type { ToolManager } from '../tools/tools';
 import { fixesFor, MARGIN } from './fixes';
@@ -113,19 +112,23 @@ export class Ego {
     app.joinChosen = (a, b, kind) => this.growth.prefer(`join:${a.category}+${b?.category ?? 'floor'}`, kind);
     app.eventListeners.push((e) => this.onEvent(e));
     app.everyFrame('Ego', (dt) => this.tick(dt));
-    this.herd = new Herd({
-      // the world's own time: under load the physics slows rather than spirals, and a mind must slow with it
-      time: () => app.live.ticks * TICK,
-      pose: (id) => app.livePose(id),
-      exists: (id) => !!app.doc.parts[id],
-      you: () => this.host.viewer(),
-      dry: (x, z) => { const w = app.waterLevel(); return w === null || app.groundAt(x, z) > w; },
-      gait: (amplitude) => app.physics.send({ op: 'gait', amplitude }),
-    });
+    // their minds live in the physics, on its ticks (runner.ts, F-6.3); the herd is her book of them
+    this.herd = new Herd({ send: (op) => app.physics.send(op), exists: (id) => !!app.doc.parts[id] });
   }
 
   /** The creatures she has put in the world, each with its mind. */
   readonly herd: Herd;
+  /** Where you stood when the creatures were last told. */
+  private youAt: Vec3 | null = null;
+
+  /** Where you stand, for what the creatures see: told to the physics when you have moved a centimetre. */
+  private tellWhereYouAre() {
+    if (!this.herd.members.length) return;
+    const at = this.host.viewer();
+    if (this.youAt && Math.hypot(at[0] - this.youAt[0], at[1] - this.youAt[1], at[2] - this.youAt[2]) < 0.01) return;
+    this.youAt = [at[0], at[1], at[2]];
+    this.app.physics.send({ op: 'you', at: this.youAt });
+  }
 
   // ---- acting -----------------------------------------------------------------------------------
 
@@ -531,6 +534,8 @@ export class Ego {
       return;
     }
     this.herd.add(`the ${kind}`, w, this.seq);
+    this.youAt = null;
+    this.tellWhereYouAre();
     if (app.settings.build) app.play();
   }
 
@@ -965,6 +970,7 @@ export class Ego {
   }
 
   private onEvent(e: PhysicsEvent) {
+    if (e.type === 'mind') { this.herd.ingest(e); return; }
     if (e.type !== 'break') return;
     const c = this.app.doc.connections[e.conn];
     if (!c) return;
@@ -977,7 +983,8 @@ export class Ego {
 
   /** Near failure: warn once per joint, with what would carry it. */
   private tick(dt: number) {
-    this.herd.tick();
+    this.herd.prune();
+    this.tellWhereYouAre();
     this.teachTick();
     this.watchShown();
     this.clock += dt;

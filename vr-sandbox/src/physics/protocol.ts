@@ -1,6 +1,7 @@
 // Messages between the app and the physics world (in a Web Worker or inline). Plain data only.
 
 import type { Energies } from './energy';
+import type { Want } from '../world/mind';
 import type { Material } from '../data/materials';
 import type { Connection, Part, PartDamage, Pose, SimSettings, Vec3 } from '../doc/types';
 
@@ -36,7 +37,7 @@ export interface TerrainField { n: number; size: number; heights: Float32Array }
 export type PhysicsOp =
   | { op: 'environment'; boxes: EnvironmentBox[]; materials: Record<string, Material> }
   /** A place's ground, or none (null). */
-  | { op: 'terrain'; field: TerrainField | null; material: Material | null }
+  | { op: 'terrain'; field: TerrainField | null; material: Material | null; water?: number | null }
   | { op: 'clear' }
   /** A construction as one: its parts and joints enter together, judged whole (overlaps with its bores known), or not at all. */
   | { op: 'construct'; parts: { part: Part; material: Material }[]; conns: { conn: Connection; materials: Record<string, Material> }[] }
@@ -54,9 +55,16 @@ export type PhysicsOp =
   | { op: 'controls'; channels: Record<string, number> }
   /** A nervous system's command to its rhythms: each servo's swing, by its connection, scaled (0 holds it at its centre, 1 as built). */
   | { op: 'gait'; amplitude: Record<string, number> }
+  /** A creature's nervous system joins the world: its mind thinks on the world's own ticks (runner.ts), never the frame's. */
+  | { op: 'mind'; name: string; nerves: Nerves; seed: number }
+  /** Where you stand, for what the creatures see. */
+  | { op: 'you'; at: Vec3 }
   | { op: 'damage'; id: string; damage: PartDamage }
   | { op: 'room'; surfaces: RoomSurface[] }
   | { op: 'options'; maxMagnetRings?: number; filterTicks?: number; magnetLatch?: boolean };
+
+/** What a mind commands: its body (where it senses from), the hip horns of each side, and every servo horn. */
+export interface Nerves { body: string; left: string[]; right: string[]; servos: string[] }
 
 export type PhysicsEvent =
   | { type: 'contact'; a: string | null; b: string | null; point: Vec3; normal: Vec3; speed: number; impulse: number }
@@ -74,7 +82,9 @@ export type PhysicsEvent =
   /** A battery went flat under its load (its voltage fell to its maker's end voltage). */
   | { type: 'flat'; part: string; point: Vec3; note: string }
   /** A part or connection the physics' intake refused (the construction gate, src/ganglia/tree/gate.ts): it was never made. */
-  | { type: 'refused'; what: 'part' | 'connection'; id: string; law: string; note: string };
+  | { type: 'refused'; what: 'part' | 'connection'; id: string; law: string; note: string }
+  /** A creature's mind chose: what it is doing now, and what it said of it (null when it only carried on). */
+  | { type: 'mind'; body: string; name: string; doing: Want; says: string | null };
 
 export interface ConnectionLoad {
   id: string;

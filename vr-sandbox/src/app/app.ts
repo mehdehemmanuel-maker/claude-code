@@ -180,7 +180,7 @@ export class App {
     const boxes = this.world === 'workshop' ? (inPlace ? [] : workshopEnvironment()) : realFloor();
     this.physics.send({ op: 'environment', boxes, materials: Object.fromEntries(MATERIALS.map((m) => [m.id, m])) });
     const f = inPlace ? this.ground : null;
-    this.physics.send({ op: 'terrain', field: f ? { n: f.n, size: f.size, heights: f.heights } : null, material: f && this.place ? getMaterial(this.place.ground.material) : null });
+    this.physics.send({ op: 'terrain', field: f ? { n: f.n, size: f.size, heights: f.heights } : null, material: f && this.place ? getMaterial(this.place.ground.material) : null, water: f?.waterLevel ?? null });
   }
 
   /**
