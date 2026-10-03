@@ -5,6 +5,7 @@
 // through English words.
 
 import { describe, expect, it } from 'vitest';
+import { shapeOf, shapeKey, isDimless, type Shape } from '../../src/ganglia/native/forms';
 import {
   chain, cluster, contradiction, ctx, d, distance, e, equivalent, fingerprint, hash, normalize, q, r, rename, structureDistance, t, tokens, wellFormed, why,
   evidenceRank, EVIDENCE, type R, type Structure,
@@ -937,5 +938,37 @@ describe('Discovery (docs/NEX-DISCOVERY.md): human knowledge as evidence, imposs
     for (const c of syn.candidates) expect(c.settledBy.length).toBeGreaterThan(0);
     expect(text(syn.structure)).toMatch(/^contradict\(E\(quantity\(probe\.l10:observed, 25\)\)\{how:measured src:probe by:bench\}, quantity\(probe\.l10:predicted, 12\.5\)/);
     expect(text(syn.structure)).toMatch(/mode:contradictory under:\["model probe"\] margin:20\}$/);
+  });
+});
+
+describe('the shape of a law without its names (docs/NEX-TOPOLOGY.md)', () => {
+  it('every law with a power form is dimensionally homogeneous once its constants are counted: no hidden dimensional number in any law', () => {
+    const shaped = LAWS.map((l) => [l, shapeOf(l)] as const).filter((x): x is readonly [(typeof LAWS)[number], Shape] => !!x[1]);
+    expect(shaped.length).toBeGreaterThan(90);
+    const broken = shaped.filter(([, s]) => !isDimless(s.residual)).map(([l, s]) => `${l.id} ${s.residual.join(',')}`);
+    expect(broken).toEqual([]);
+  });
+  it('weight and Newton\'s second law are one shape, and a constant is an input the theory holds fixed: Landauer\'s limit (k T ln 2) joins the bilinear laws one level up', () => {
+    const w = shapeOf(lawById('weight')!)!, n = shapeOf(lawById('newton.second')!)!;
+    expect(shapeKey(w, 0)).toBe(shapeKey(n, 0));
+    const landauer = shapeOf(lawById('landauer')!)!;
+    expect(landauer.terms.filter((t) => t.held)).toHaveLength(1);
+    expect(isDimless(landauer.residual)).toBe(true);
+    const peers = LAWS.filter((l) => { const s = shapeOf(l); return s && shapeKey(s, 1) === shapeKey(landauer, 1) && l.id !== 'landauer'; }).map((l) => l.id);
+    expect(peers.length).toBeGreaterThan(0);
+    expect(peers.every((id) => !shapeOf(lawById(id)!)!.terms.some((t) => t.held))).toBe(true);
+  });
+  it('forgetting is the generalisation: at the finest level no shared shape crosses a human domain, one level up several do', () => {
+    const at = (level: 0 | 1 | 2) => { const m = new Map<string, (typeof LAWS)[number][]>(); for (const l of LAWS) { const s = shapeOf(l); if (s) m.set(shapeKey(s, level), [...(m.get(shapeKey(s, level)) ?? []), l]); } return [...m.values()].filter((v) => v.length > 1); };
+    const crossing = (shared: (typeof LAWS)[number][][]) => shared.filter((v) => new Set(v.map((l) => l.domain)).size > 1);
+    const l0 = at(0), l1 = at(1), l2 = at(2);
+    // measured 3 October 2026: level 0: 95 classes over 101 laws, 5 shared, 0 crossing; level 1: 72 classes, 15 shared, 8 crossing; level 2: 30 classes, 15 shared, 14 crossing
+    console.log(`shared shapes: level 0 ${l0.length} (crossing ${crossing(l0).length}), level 1 ${l1.length} (crossing ${crossing(l1).length}), level 2 ${l2.length} (crossing ${crossing(l2).length})`);
+    expect(crossing(l0).length).toBe(0);
+    expect(crossing(l1).length).toBeGreaterThan(0);
+    expect(crossing(l2).length).toBeGreaterThanOrEqual(crossing(l1).length);
+    // the energies of five theories are one shape one level up, and nothing of their names was used
+    const energies = l1.find((v) => v.some((l) => l.id === 'energy.kinetic'))!.map((l) => l.id).sort();
+    expect(energies).toEqual(['capacitor.energy', 'energy.kinetic', 'energy.rotational', 'inductor.energy', 'spring.energy']);
   });
 });

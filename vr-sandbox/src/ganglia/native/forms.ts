@@ -9,7 +9,7 @@
 
 import type { Law } from '../types';
 import { withConstants } from '../laws';
-import { dimensionOf } from '../units';
+import { dimensionOf, type Dim } from '../units';
 import { unitOf } from './translate';
 
 export interface Form { key: string; unit: string; exponents: number[] }
@@ -35,6 +35,14 @@ function exponent(law: Law, sym: string, y0: number): number | null {
   // an output that does not move with the input at the example (a slope at zero) is no power of it: no form
   if (rounded === 0) return null;
   return Math.abs(rounded - p) <= 0.02 ? rounded : null;
+}
+
+/** The exponent of the output in each input at the example, by symbol (null where the law is no power of that input there). */
+export function exponentsOf(law: Law): Record<string, number | null> {
+  let y0: number;
+  try { y0 = law.eval(withConstants(law, law.example.inputs)); } catch { return Object.fromEntries(law.inputs.map((i) => [i.sym, null])); }
+  if (!Number.isFinite(y0) || y0 === 0) return Object.fromEntries(law.inputs.map((i) => [i.sym, null]));
+  return Object.fromEntries(law.inputs.map((i) => [i.sym, exponent(law, i.sym, y0)]));
 }
 
 /** The form of a law, or null where it is not a power law of every input at its worked example. */
@@ -73,4 +81,48 @@ export function sayForm(f: Form): string {
   const pos = [...counts].filter(([p]) => p > 0).sort((a, b) => a[0] - b[0]).map(([p, n]) => part(p, n));
   const neg = [...counts].filter(([p]) => p < 0).sort((a, b) => b[0] - a[0]).map(([p, n]) => part(p, n));
   return `${what}, ${[...pos, ...neg].join(' times ')}`;
+}
+
+/** One term of a law's shape: a dimension raised to the exponent the output follows it with; `held` when it is a constant the theory keeps fixed (g, k, σ), its exponent the one dimensional homogeneity demands. */
+export interface Term { dim: Dim; exp: number; held: boolean }
+/** The shape of a law with its constants counted as inputs: nothing of the law's names enters, only dimensions and exponents. */
+export interface Shape { out: Dim; terms: Term[]; /** The dimension left over once every term is accounted for: zero for a homogeneous law. */ residual: Dim }
+
+const addDim = (a: Dim, b: Dim, f: number): Dim => a.map((x, i) => x + f * b[i]!) as Dim;
+const ZERO: Dim = [0, 0, 0, 0, 0];
+export const isDimless = (d: Dim): boolean => d.every((x) => Math.abs(x) < 1e-6);
+
+/**
+ * The shape of a law (section R, carried past the symbols' dimensions): the output's dimension, each input's dimension
+ * with its exponent, and each constant with the exponent that makes the law dimensionally homogeneous. A constant is
+ * an input the theory holds fixed, so W = m g and F = m a are one shape; what no exponent of the constants can
+ * account for is left in `residual`, and a law with a non-zero residual has a constant with the wrong unit or a hidden
+ * dimensional number in its code. Null where the law is no power of its inputs at its example (a sum, an
+ * exponential, a logarithm, a minimum: outside this abstraction, and said so).
+ */
+export function shapeOf(law: Law): Shape | null {
+  const exps = exponentsOf(law);
+  if (Object.values(exps).some((e) => e === null)) return null;
+  let out: Dim;
+  const terms: Term[] = [];
+  try { out = dimensionOf(law.output.unit); for (const i of law.inputs) terms.push({ dim: dimensionOf(i.unit), exp: exps[i.sym]!, held: false }); } catch { return null; }
+  let residual = out;
+  for (const t of terms) residual = addDim(residual, t.dim, -t.exp);
+  const consts = Object.values(law.constants ?? {}).map((c) => { try { return dimensionOf(c.unit); } catch { return ZERO; } }).filter((d) => !isDimless(d));
+  // each constant takes the exponent its leading base dimension needs; what is left after all of them is the residual
+  for (const d of consts) {
+    const n = d.findIndex((x) => Math.abs(x) > 1e-9);
+    const e = n >= 0 ? residual[n]! / d[n]! : 0;
+    if (Math.abs(e) > 1e-9) terms.push({ dim: d, exp: +e.toFixed(2), held: true });
+    residual = addDim(residual, d, -e);
+  }
+  return { out, terms, residual: residual.map((x) => (Math.abs(x) < 1e-6 ? 0 : x)) as Dim };
+}
+
+/** A shape's key at a level of forgetting: 0 keeps every term's dimension, 1 forgets the inputs' dimensions, 2 forgets the output's too. Each step is a generalisation; what two laws share at a level they share as structure. */
+export function shapeKey(s: Shape, level: 0 | 1 | 2): string {
+  const exps = s.terms.map((t) => t.exp).sort((a, b) => a - b).join(',');
+  if (level === 2) return exps;
+  if (level === 1) return `${s.out.join(',')}<=${exps}`;
+  return `${s.out.join(',')}<=${s.terms.map((t) => `${t.dim.join(',')}^${t.exp}`).sort().join('|')}`;
 }
