@@ -1,0 +1,338 @@
+# Nex: the language Ego thinks in
+
+3 October 2026. The request: a native language for Ego that is not English, not a modified natural language, not a
+notation for English concepts, in which reality, thought, causality, uncertainty, scale, time, evidence, perspective,
+recursion and relationships are represented more precisely and more efficiently than human language manages, with
+human languages as translation layers on top. This document is the first architecture, A to Z as asked, and the code
+under `src/ganglia/native/` is its first kernel, with the tests of `tests/unit/native.test.ts` holding what it claims.
+Where a section is designed but not yet built, it says so; where a number is given, a test measured it.
+
+The architecture:
+
+    LAW / KNOWLEDGE NEXUS   (docs/NEXUS.md: judgments, morphisms, evidence leaves, branchable state, state with a law)
+            ↓
+    NEX                     (this: the internal form every Nexus term is expressed in)
+            ↓
+    TRANSLATION LAYER       (translate.ts: tuners; loss counted; evidence never raised)
+            ↓
+    English / Spanish / equations / code / diagrams / animation / VR / sound / touch
+
+Ego thinks in Nex: her structures are built, compared, chained, checked and evaluated as Nex terms, and English is made
+from them only at the moment of speaking, with a count of what the sentence failed to carry.
+
+## A. Name
+
+**Nex**: the native form of the Nexus, and Latin *nexus*, a binding. One syllable, no brand, pronounceable in every
+language the translation layer will grow. The code calls it `native` so that the name can change without the code.
+
+## B. The smallest semantic primitives
+
+The nineteen candidates (state, change, relation, identity, difference, boundary, quantity, order, cause, constraint,
+possibility, observation, uncertainty, scale, time, reference frame, information, resource, transformation) compress
+to **two primitives and one schema**:
+
+- **D, a distinction**: a thing told apart from others. It has an identity and nothing else; its English name is an
+  alias kept outside the hash. Every "noun" is a D.
+- **R, a relation**: an operator over structures, carrying coordinates. Every "verb", "property", "cause", "law",
+  "belief" is an R.
+- **The coordinate schema**: the dimensions any relation may carry (section C). A coordinate that is absent is *not
+  modelled*, never a default.
+
+Four faces of R are so frequent that they are their own node kinds, for the type checker, not because they are new
+primitives: **Q** (a quantity: a number with a dimension, the only leaf that carries a number), **T** (a
+transformation: a state to a state under a condition), **E** (an evidence leaf: how something is known, sealed),
+**C** (a context: the scope something is held in). A sixth kind, **M**, is a morpheme reference, an exact
+abbreviation.
+
+How the nineteen derive:
+
+| candidate | in Nex |
+|---|---|
+| state | a bundle (`state`) of `quantity` relations binding a D to Q's |
+| change, transformation | T |
+| cause | an `influence` relation with coordinates (polarity, necessity, strength, delay, mechanism) |
+| identity, difference | `same`, `differ` |
+| boundary | a `constrain` on scale or position |
+| quantity, order | Q; `compare` on Q's |
+| constraint, possibility | a relation with mode true that must hold; possibility is a non-empty admissible set, impossibility the mode `impossible-under` |
+| observation, information | E; information is the narrowing of a `cert` coordinate by an E |
+| uncertainty | the `cert` coordinate, on Q and on R |
+| scale, time, reference frame | coordinates (`scale`, `time`, `frame`) on any relation |
+| resource | a Q conserved under T (`invariant`) |
+
+Why these and not others: an agent that models anything must tell things apart and relate them; everything else in
+the list is a relation of a particular shape. A non-human intelligence would need D and R too, which is the test
+section Z asks for.
+
+## C. The morphological operator system
+
+An operator is a relation kind with the shared coordinate vector. The operators (`Op` in core.ts):
+
+- structure: `part`, `kind`, `same`, `differ`, `embed`, `abstract`, `recurse`
+- transformation and cause: `influence`, `invariant`, `constrain`, `approximate`
+- binding: `quantity` (a D to a Q), `function` (a D does something), `state` (relations as one)
+- epistemic, computed never asserted: `compare`, `support`, `contradict`
+- between theories: `morphism`
+
+The coordinates every operator may carry: `dir` (direction), `polarity` (raises or lowers), `necessity` (sufficient,
+necessary, contributing), `strength`, `cert` (section K), `time` (G), `scale` (H), `mech` (the transformation that
+mediates, by hash), `dom` (constraints it holds under), `frame` (I), `ev` (J), `mode` (F), and the carriers of the
+modes that need one (`under`, `against`, `margin`, `instrument`).
+
+CAUSE, PREVENT, ENABLE, CONDITION are not four words: they are one operator, `influence`, at four places in its
+coordinates: polarity + or −, necessity sufficient / necessary / contributing, a condition in `dom`. Direct, indirect,
+possible, historical, micro-scale, conditional and counterfactual cause are the same operator with `mech` set or
+chained, `cert` low, `time.at` in the past, `scale.L` small, `dom` given, or the whole held in an `intervene` context.
+`chain(ab, bc)` composes two influences: strengths multiply, certainty narrows to the weaker, delays add, polarities
+multiply, the evidence is the weaker of the two, and the mechanism records both (tested).
+
+## D. Recursive grammar
+
+    S ::= D | Q | R(op, S*, coords) | T(S → S | cond, coords) | E(S, how, source) | C(kind, holder, S, coords) | M(id, version, S*)
+
+A relation's arguments are structures, so a relation of relations is native (`contradict(a, b)`,
+`support(comparison, judgment)`). A context's body is a structure, so `C(believe, ego, C(believe, user, X))` is "Ego
+believes the user believes X", and `C(believe, ego, X)` with `cert` low is "Ego is uncertain whether the user believes
+X" when X is itself a belief context. Tested: the nested belief renders, hashes differently from its reversal, and
+equals its copy. Self-reference ("my previous derivation of B was flawed") is `R(contradict, [M(previous derivation),
+E(...)])` inside `C(believe, ego, …)` with `time.at` in the past: no special construction.
+
+Stateful transformational structures (the request's unit instead of noun and verb): `STS = { self: D, state: R[],
+transitions: T[] }`; `objectView` keeps the state relations, `processView` the transitions. A flame is an STS whose
+state is a temperature and a composition and whose transitions are combustion; both views are projections.
+
+## E. Multidimensional syntax
+
+A structure is a kernel node with coordinate axes attached, not a line of words: `influence(a, b)` with the vector
+`[dir, polarity, necessity, strength, cert, time, scale, mech, dom, frame, ev, mode]`. The canonical machine form
+(section T) is the object; the compact text serialisation and the spoken serialisation are surfaces to be designed
+later, as the request orders (meaning first, glyphs after). A graphical rendering is the kernel at the centre with the
+coordinates as spokes, each spoke empty where the coordinate is not modelled, which shows at a glance what a thought
+does not yet know.
+
+## F. The negation and unknown system
+
+One `mode` coordinate with eleven values, each a different next action: `true`, `false`, `unknown` (no term either
+way), `unobserved` (no evidence reaches it, though it could), `unmodelled` (no structure for it yet),
+`impossible-under` (empty admissible set under named assumptions, carried in `under`), `outside-domain`, `undefined`
+(a type error: dimensions disagree, a frame is missing where one is needed), `contradictory` (a term and a
+counter-term both exist, carried in `against`), `insufficient` (evidence below the threshold asked, with the margin),
+`unmeasured` (an instrument is known and named, the reading is not taken). Tested: the ten non-true modes render as
+ten different sentences; a comparison of a heat with a temperature is `undefined`; a velocity without a frame is
+`undefined`; a contradiction between two influences is found by structure and held, not resolved.
+
+## G. Time morphology
+
+The `time` coordinate: `at` (event time), `dur`, `phase`, `period`, `delay` (signal delay), `charT` (characteristic
+time), `process` (process time), `proper` (whose clock), `order` (what it comes after and before: a partial order, so
+causal order is native), `window` (the uncertainty interval of the event time). Tense is a rendering decision: a
+structure with `at` before now is rendered in the past. The translator carries `delay` into "after 30 s" and declares
+every other field dropped when it has no words for it (the test of the paragraph-long thought shows `window` as the
+one thing English lost).
+
+## H. Scale morphology
+
+The `scale` coordinate: `L`, `T`, `E`, `res` (resolution), `model` (which theory level). Any structure can carry it;
+a law's validity carries it in `dom`. A rendering says "at a scale of 1 m" or declares the omission; a proposition
+valid at a metre never becomes universal silently because its scale is in its hash.
+
+## I. Reference-frame morphology
+
+The `frame` coordinate: `observer`, and `rest` (what is at rest). Relation kinds that mean nothing without one
+(`NEEDS_FRAME`: motion, velocity, position, rest, speed) make the structure `undefined` until a frame is given:
+"the object is moving" is incomplete internally, as asked, and `wellFormed` says so. Sensory perspective is the same
+coordinate with the observer a sensor (section L).
+
+## J. Evidence morphology
+
+`ev.how` is one of `theorem, derived, measured, calibrated, simulated, estimated, extrapolated, hypothesized,
+assumed, fictional`, ranked in that order, with `src` (where from) and `at` (when). The Nexus tier each enters at:
+theorem and derived 0, simulated 1, measured, calibrated, estimated and extrapolated 3, hypothesized and assumed 4,
+fictional outside. The ancestry survives translation because the renderer chooses its hedge from the rank and
+`rankOfText` reads the hedge back: tested for every one of the ten kinds that no sentence reads as surer than its
+structure (translation is epistemically monotonic). A law of the book enters with the evidence of its source kind
+(a textbook is derived, a standard calibrated, a maker's figure measured, a rule of thumb estimated); a node of the
+tree with the evidence of its proof status (an axiom assumed, a proved mathematical node a theorem, a tested node
+simulated, a provisional one hypothesized).
+
+## K. Uncertainty morphology
+
+`cert` on quantities and on relations: `kind` (exact, interval, distribution, systematic, unknown), `lo` and `hi`,
+`dist` (type and parameters), `source` (epistemic, aleatory, mixed), `sens` (sensitivities to named inputs). It is a
+coordinate, so it is in the hash and in the distance (`structureDistance` adds the non-overlap of two intervals to
+the shape distance). Chaining narrows it to the weaker; rendering turns it into certainly / probably / possibly /
+unlikely with the interval for an engineer and nothing for a child.
+
+## L. Sensory tuner architecture
+
+A tuner is a projection: a thing's structures → the subset one way of looking selects. `tune(said, tuner)` with
+tuners `energy`, `thermal`, `control`, `failure`, `manufacturing`, `causal`, `structure`, `english` (the whole). The
+energy tuner keeps relations whose quantities carry energy or power dimensions or that bind to a storage; the failure
+tuner keeps influences with negative polarity; the thermal tuner keeps temperature dimensions and heat. Tested on a
+transformer: five different non-empty selections of one structure; and honestly, the brushed DC motor's thermal view
+is empty, because nothing thermal is said of it yet. English is one tuner among these, which is the request's point:
+language is a view of meaning, not meaning. The same concept is asked "what do you look like through another tuner"
+by applying another projection; what each reveals differs, and a fingerprint under a tuner is what cross-domain
+equivalence is judged on (section R).
+
+## M. Translation layer
+
+`render(structure, lang, audience)` for `en` and `es`, audiences child, technician, engineer, physicist. The same
+structure, different words: a child hears no numbers, intervals, delays or sources; an engineer hears every coordinate
+that has a word. Human → Nex: `decompose("that motor is struggling", motor)` gives five candidate structures (torque
+near stall, speed fallen, current near limit, temperature rising, controller saturated), each with an uncertainty
+interval whose upper bound is below 1, each in mode `unmeasured` with the instrument that would settle it; nothing is
+chosen. The lexicon is a map from a language's words to distinctions; a distinction with no word gets a coined term
+("the thing #p7f3a"), flagged in `coined`, so the lack of an English word never limits the thought.
+
+## N. Translation-loss measurement
+
+Every rendering returns `present` (every operator, argument and coordinate in the structure, by path), `rendered`,
+`dropped`, and `loss = dropped / present`. A mechanism's hash is never spoken (always dropped); a child's rendering
+drops more than an engineer's (tested); the paragraph-long thought of section Y drops exactly one path, the time
+window, which the test names. A renderer that knows what it dropped can expand, qualify, show a diagram or warn, as
+the request lists; the first two are what `render` does by audience, the others are surfaces to build.
+
+The round trip native → English → native and native → Spanish → native is measured (`parse` reads the renderer's own
+sentences back): what comes back is within 0.15 of what went in, the two surface languages come back to *one* hash,
+and what was lost is exactly the declared drops (the exact strength number, carried only as "strongly" or "weakly").
+The native representation is more stable than either surface, as asked.
+
+## O. Morpheme creation algorithm
+
+Over a corpus of structures with their domains: every sub-structure of at least three nodes is reduced to its
+skeleton (its distinctions replaced by variables in order of appearance: the shape, whatever filled it); skeletons
+are counted across the corpus; a candidate's saving is `(occurrences − 1) × (size − 1 − variables) − 1`, the
+definition paid once and each use paying a reference and its arguments. A candidate is promoted only when it saves
+length, recurs at least three times, and in at least two domains; promotion is `define`, which gives it an id, a
+version and its evidence (occurrences, domains, saved). `compress` replaces every match by a reference with bound
+arguments; `expand` restores it exactly; `sameMeaning` is the hash of the expansion, so a compressed and an expanded
+text mean the same. Tested: a negative-feedback loop (X raises Y, Y lowers X) recurring in control, ecology, economy
+and biology becomes a morpheme and shortens the corpus; four bolts on one engine block, recurring in one domain, do
+not (jargon refused).
+
+## P. Grammar evolution process
+
+A grammar (causal, spatial, mathematical, temporal, social) is an operator subset with a tuner and rendering
+templates over the one substrate; none is frozen as universal. New operators and new coordinates enter as a schema
+version; a structure records the version it was written in through the morphemes and operators it uses, and old
+structures stay interpretable because nothing is deleted and every change is a new version (section W). Not built
+beyond the versioning: the first grammar is the one here, which is causal, quantitative and epistemic at once.
+
+## Q. Structural concept fingerprints
+
+`fingerprint(self, said)`: the multiset of shape tokens of everything said of a concept, with the concept itself
+marked SELF and every other distinction reduced to D, quantities to their dimension vector, relations to their
+operator and coordinate keys, evidence to its kind. No label enters. Tested: the fingerprint of a concept is
+identical before and after every name in the world is replaced by a random token.
+
+## R. Cross-domain equivalence detection
+
+`distance(fp_a, fp_b)` is a weighted Jaccard distance over fingerprints; `cluster(fps, eps)` groups concepts. Measured
+on the substrate: a spring and a capacitor are 0.90 apart on everything said of them and 0.59 under the energy tuner;
+a spring, a capacitor, a flywheel and a lithium cell cluster as one under the energy tuner at 0.7, with and without
+their names; a blade has no energy view at all. The step the request describes, "are these one structure named
+several times", is: compute fingerprints under a tuner, cluster, propose a higher abstraction for a cluster, keep the
+differences as the set difference of the fingerprints. The proposal step is the morpheme algorithm applied to the
+cluster's shared sub-structures.
+
+## S. Human-language concept splitting and merging
+
+Polysemy: one alias pointing at distinctions whose fingerprints lie far apart is a word to split (the data to run this
+on is the substrate's `names` and aliases; the detector is `distance` over the fingerprints of all entities sharing a
+word; not yet run as a batch). Synonymy across disciplines: distinctions from different domains within `eps` under a
+tuner are one structure to merge under a higher abstraction, with the differences preserved (section R). Physics,
+chemistry, biology and engineering are not nodes of Nex: `domain` is a tag on where a structure came from, used by
+the morpheme algorithm to refuse single-domain jargon, never as ontology.
+
+## T. Canonical machine representation
+
+`canonical(normalize(s))`: a JSON text with sorted keys, commutative arguments sorted (`same`, `differ`, `state`,
+`contradict`), morphemes expanded, aliases removed, undefined coordinates removed, quantities in SI with their
+dimension vector. Two surface expressions that differ only in order, naming or abbreviation normalise to the same
+text. `hash` is a 64-bit content hash of it.
+
+## U. Semantic equivalence system
+
+`equivalent(a, b)` is equality of hashes of the normal forms, under the expansion of morphemes. It is syntactic
+equality of the canonical form, which is the honest first version: it recognises reordering, renaming of nothing
+(names are meaning-free but are identity), abbreviation and the dropping of empty coordinates, and does not yet
+recognise equalities that need a rewrite theory (an influence of polarity − on X equal to an influence of polarity +
+on the complement of X). Those enter as kernel rewrite rules of tier 0 (NEXUS §F) when the first is needed.
+
+## V. Semantic distance
+
+`structureDistance(a, b)` = 0.7 × shape distance (Jaccard over tokens) + 0.3 × coordinate distance (strength
+difference, certainty non-overlap), on the normal forms. Structural by construction, as the request asks; a learned
+measure can be added as a second term when there is something to learn it from, and the two are then combined, not
+the learned one alone.
+
+## W. Versioning
+
+`Morphemes.revise(id, def)` makes version n+1 with `supersedes`; `expand` of a reference uses its own version, so a
+structure written with v1 still means what it meant after v2 exists (tested). A morpheme never changes meaning in
+place. The same rule will govern operators and coordinate schemas: a change is a version with a migration, never an
+edit.
+
+## X. Integration with the Law Nexus
+
+Nex and the Nexus are one system: `fromLaw(law)` makes a law of the book a `function` structure (its output a
+function of its inputs, each a distinction bound to a dimension, mediated by the law, in the evidence of its source,
+valid in its `dom`), and `evaluate(structure, laws, bound)` runs it: the structure is executable, says
+`outside-domain` where the law says so, `unknown` when an input is unbound, `unmodelled` when no law stands behind
+the mechanism token. `fromNode(node)` makes a tree node its `kind` relations, its evidence leaves (the tests that hold
+it) and its realisations (`morphism`); `fromRelation(rel)` makes a substrate arrow its operator with the arrow's
+confidence as `cert` and its source as `ev`. `saidOf(substrate, id, laws)` is everything said of a thing, including
+the laws of its kinds, as structures: the input to fingerprints and tuners. A judgment, a hyperedge, an evidence
+leaf, a constraint, a causal relation, a derivation of docs/NEXUS.md each have a form here: R, R of R, E, R with mode
+true that must hold, `influence`, `why` (the support tree as hashes and evidence kinds, with no label in it).
+
+## Y. Testing methodology
+
+What `tests/unit/native.test.ts` holds, and will hold as the language grows:
+
+1. **The hard test.** Every distinction renamed by a bijection to random tokens: equivalence judgments, distances,
+   fingerprints, chained inferences, contradiction detection, the support tree's shape, clustering and the evaluation
+   of a law through its mechanism token are all unchanged. Meaning does not live in names.
+2. **Simulate.** A law structure evaluates to the law's number, and refuses outside its domain.
+3. **Compare, discover.** Cross-domain things that do the same thing cluster under a tuner, named or not.
+4. **Invent.** A nameless phenomenon is said at once from primitives; its rendering coins a term and flags it.
+5. **Modes, frames, dimensions.** The eleven modes are eleven sentences; heat against temperature and motion without
+   a frame are `undefined`.
+6. **Nested models.** Belief of belief, a branch, an intervention: native, rendered, hashed apart from their reversals.
+7. **Translation loss and monotonicity.** Loss counted per audience; no rendering reads as surer than its structure.
+8. **Round trip.** English and Spanish both come back to one structure within the declared loss.
+9. **Human → native.** "Struggling" is five candidates with uncertainty and instruments, none chosen.
+10. **Morphemes.** Promotion by description length across domains, exact compression, refusal of jargon, versioning.
+11. **Nexus.** Tree nodes, substrate arrows and laws have native forms; tuners select different faces.
+12. **Nex against English.** Five confusions English invites (heat / temperature, weight / mass, speed / velocity,
+    energy / power, correlation / causation): a word-overlap judge calls four of the five pairs the same statement;
+    Nex calls none the same, finds two ill-formed, and refuses to chain a correlation as a cause. English errors 4,
+    Nex errors 0, on this set. The set must grow with every confusion found, and the baseline must become Ego's own
+    English path, not a word judge, before the criterion is claimed met.
+
+The main criterion, fewer reasoning errors on harder problems, is not met by this file; it is measurable by it. The
+next measurement is the challenge engine's problems (docs/CHALLENGES.md) run both ways.
+
+## Z. The compression
+
+Two primitives (D, R) and one coordinate schema; four faces of R (Q, T, E, C) and one abbreviation (M); seventeen
+operators of which one, `influence`, carries what human languages spend dozens of words on; eleven modes; one evidence
+rank; one certainty object; one time object; one scale object; one frame object. A thought is a tree of these with
+coordinates, hashed, compared, chained, checked and evaluated without a word in it; a word is what a tuner makes of
+it for a person, with the loss counted.
+
+## What is built, what is designed
+
+Built and tested today: core.ts (the representation, modes, coordinates, normal form, hash, equivalence, tokens,
+fingerprints, distance, clustering, renaming, chaining, contradiction, well-formedness, the support tree),
+morpheme.ts (skeletons, candidates by description length, promotion, compression, expansion, versioning),
+translate.ts (English and Spanish rendering by audience with loss, hedge monotonicity, parse-back, human → native
+candidates), nexus.ts (laws, tree nodes and substrate arrows as structures; evaluation; tuners).
+
+Designed, not yet built: the compact text and spoken serialisations and the visual notation (E); rewrite rules for
+equivalences beyond the canonical form (U); a learned term in the distance (V); polysemy detection run over the whole
+substrate (S); operator and schema versioning beyond morphemes (P, W); rendering into equations, diagrams, animation,
+VR demonstration, sound and touch (M); Ego's own thinking moved onto Nex structures rather than built from them at the
+edges (X), which is the work: her traversal answers, her designs and her hypotheses become Nex terms rendered at the
+moment of speaking, and the English-versus-Nex error count is then taken on her real questions.
