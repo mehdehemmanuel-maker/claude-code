@@ -32,6 +32,9 @@ export function common(): Pack {
   fn('fn.transfer.oxygen', 'To transfer oxygen: move it across a membrane down its partial-pressure gradient, lung to blood, blood to cell.', { 'governed-by': ['fick.diffusion'] }, CAMPBELL);
   fn('fn.separate', 'To separate: divide a mixture by a difference between its parts: size, density, boiling point, charge.', { 'governed-by': ['separation.work'] });
   fn('fn.construct', 'To construct: make a thing from parts and stock by processes, in an order.');
+  fn('fn.cut', 'To cut: part a solid along a line by concentrating force on an edge until the material fails there; teeth, blades, inserts and abrasive grains do it.', { 'governed-by': ['stress.von-mises', 'griffith'] });
+  fn('fn.focus', 'To focus: bring rays to a point or a line by bending them at a surface, with a lens or a mirror.', { 'governed-by': ['snell.law', 'diffraction.limit'] }, HECHT);
+  fn('fn.grip', 'To grip: hold a thing fast by friction or by form, with jaws, fingers or a chuck.', { 'governed-by': ['friction.coulomb', 'hertz.contact'] });
 
   // generic parts and substances
   t('controller', ['component', 'computation'], 'The part that computes commands from measurements and a goal: a microcontroller with its loop, a PLC, a motion controller.', { does: ['fn.control', 'fn.compute'], 'governed-by': ['nyquist.stability'] }, HH);
@@ -272,6 +275,21 @@ export function common(): Pack {
   t('tube.round', ['component', 'geometry'], 'Round tube: the stiffest section for its weight in bending and torsion, the shape a long bone takes.', { 'is-a': ['kind.tube.round'], 'governed-by': ['stress.bending', 'torsion.solid'] });
   t('tube.square', ['component', 'geometry'], 'Square tube: a closed section easy to weld flat to flat; frames are made of it.', { 'is-a': ['kind.tube.square'], 'governed-by': ['stress.bending'] });
   t('lumber', ['component', 'geometry'], 'Sawn wood in standard sections: stiff along the grain, cheap, nailed and screwed.', { 'is-a': ['kind.lumber'], 'made-of': ['material.wood'], 'governed-by': ['beam.simply-supported.udl'] });
+  // what the most-named parts do, said where their packs did not (the test below holds it for every part named five times or more)
+  const does = (id: string, fns: string[], src: Source = SHIGLEY) => p.link(id, { does: fns }, src);
+  does('bio.tooth', ['fn.cut'], CAMPBELL); does('bio.bone', ['fn.support.load'], CAMPBELL); does('bio.blood-vessel', ['fn.contain.pressure', 'fn.move.fluid'], CAMPBELL); does('bio.cell-wall', ['fn.contain.pressure'], CAMPBELL);
+  does('bio.cardiac-muscle', ['fn.move'], CAMPBELL); does('bio.smooth-muscle', ['fn.move'], CAMPBELL); does('bio.artery', ['fn.contain.pressure'], CAMPBELL); does('bio.gonad', ['fn.reproduce'], CAMPBELL); does('bio.adrenal', ['fn.communicate'], CAMPBELL); does('bio.thyroid', ['fn.communicate'], CAMPBELL);
+  does('bio.intervertebral-disc', ['fn.isolate.vibration', 'fn.support.load'], CAMPBELL); does('bio.bone-marrow', ['fn.construct'], CAMPBELL); does('bio.pancreas', ['fn.control'], CAMPBELL);
+  does('ic', ['fn.compute'], HH); does('winding', ['fn.make.field'], HH); does('cell.electrochemical', ['store.energy'], HH); does('contact', ['fn.conduct.current'], HH); does('core.magnetic', ['fn.store.magnetic'], HH);
+  does('package', ['fn.isolate', 'fn.transfer.heat'], HH); does('leadframe', ['fn.conduct.current'], HH); does('bond-wire', ['fn.conduct.current'], HH); does('oscillator.crystal', ['fn.oscillate'], HH); does('stator.wound', ['fn.make.field'], HH);
+  does('electrolyte', ['fn.conduct.current'], HH); does('separator', ['fn.isolate'], HH); does('electrode.anode', ['fn.conduct.current'], HH); does('electrode.cathode', ['fn.conduct.current'], HH); does('current-collector', ['fn.conduct.current'], HH);
+  does('rotor.magnet', ['fn.make.field'], HH); does('laser.source', ['fn.emit.light'], HH); does('filament', ['fn.conduct.current'], HH); does('bobbin', ['fn.insulate'], HH);
+  does('plate', ['fn.support.load']); does('nozzle', ['fn.control.flow']); does('hub', ['fn.transmit.torque']); does('robot.joint', ['fn.support.rotation']); does('hinge', ['fn.support.rotation']); does('sprocket', ['fn.transmit.torque']);
+  does('die', ['fn.construct']); does('mold', ['fn.construct'], KALPAKJIAN); does('pattern', ['fn.construct'], KALPAKJIAN); does('tool.cutting', ['fn.cut'], KALPAKJIAN); does('tool.insert', ['fn.cut'], KALPAKJIAN); does('tool.end-mill', ['fn.cut'], KALPAKJIAN); does('tool.grinding-wheel', ['fn.cut'], KALPAKJIAN); does('tool.driver', ['fn.transmit.torque'], KALPAKJIAN);
+  does('ball', ['fn.reduce.friction']); does('bearing.race', ['fn.support.load']); does('bearing.ball-element', ['fn.reduce.friction']); does('bearing.cage', ['fn.guide.motion']); does('chain.roller', ['fn.reduce.friction']); does('chain.pin', ['fn.transmit.force']); does('chain.bushing', ['fn.reduce.friction']);
+  does('connecting-rod', ['fn.transmit.force']); does('piston.rod', ['fn.transmit.force']); does('engine.camshaft', ['fn.program.motion']); does('cylinder.barrel', ['fn.guide.motion']); does('impeller', ['fn.move.fluid']); does('turbopump', ['fn.move.fluid']); does('combustor', ['fn.heat']); does('fuel-injector', ['fn.control.flow']);
+  does('engine.internal-combustion', ['fn.move']); does('gear.carrier', ['fn.transmit.torque']); does('hull', ['fn.support.load']); does('link', ['fn.transmit.force']); does('roll', ['fn.transmit.force'], KALPAKJIAN); does('swashplate', ['fn.program.motion']); does('turbine.blade', ['fn.extract.fluid-energy']);
+  does('tensioner', ['fn.transmit.force']); does('rim', ['fn.support.load']); does('lens', ['fn.focus'], HECHT); does('mirror', ['fn.focus'], HECHT); does('robot.gripper', ['fn.grip']); does('robot.end-effector', ['fn.grip']); does('vise', ['fn.grip'], KALPAKJIAN); does('chem.catalyst', ['fn.control'], CAMPBELL);
   t('model.cad', ['signal', 'computation'], 'A CAD model: the geometry of a part as data, from which drawings, toolpaths and simulations are made.', { 'governed-by': ['information.choices'] });
   return p;
 }

@@ -463,6 +463,13 @@ describe('what an arrow names, the index describes (S-6)', () => {
     expect([...s.entities.values()].filter(isStub).map((e) => e.id)).toEqual([]);
   });
 
+  it('every part named five times or more does something, itself or as its kind', () => {
+    const named = [...s.entities.values()].filter((e) => !isStub(e) && e.kinds.includes('component') && s.into(e.id).length >= 5);
+    expect(named.length).toBeGreaterThan(60);
+    const idle = named.filter((e) => !s.outOf(e.id, 'does').length && !s.reach(e.id, 'is-a').some((k) => s.outOf(k.id, 'does').length)).map((e) => e.id);
+    expect(idle).toEqual([]);
+  });
+
   it('what a process requires, a machine, a tool, a mould, a gas, is described, never a stub', () => {
     const needs = s.relations.filter((r) => r.kind === 'requires' && s.get(r.from)?.kinds.includes('process'));
     expect(needs.length).toBeGreaterThan(100);

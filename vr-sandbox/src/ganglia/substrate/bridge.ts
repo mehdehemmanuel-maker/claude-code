@@ -41,6 +41,9 @@ function rolesByNumbers(m: (typeof MATERIALS)[number]): [string, string][] {
 
 /** Read every structured source into the substrate. */
 /** The bridge's ways (how a thing is done) as refinements of the packs' functions (what is done), where a function names it. */
+/** What the blocks no way embodies do, by the packs' functions: a conductor conducts, a coupling couples, a bolt clamps. */
+export const BLOCK_FUNCTIONS: Record<string, string[]> = { 'power.conduct': ['fn.conduct.current'], 'transmission.couple': ['fn.couple.shafts', 'fn.transmit.torque'], 'support.rotate': ['fn.support.rotation', 'fn.support.load'], 'structure.member': ['fn.support.load'], 'fasten.bolt': ['fn.clamp.axial', 'fn.transmit.force'], 'protect.fuse': ['fn.protect.overcurrent'] };
+
 export const WAY_FUNCTIONS: Record<string, string[]> = {
   'motor.rotary': ['fn.actuate.electromagnetic', 'fn.transmit.torque'], 'motor.hub': ['fn.actuate.electromagnetic', 'fn.roll'], 'motor.linear': ['fn.actuate.electromagnetic', 'fn.move'], 'voice-coil': ['fn.actuate.electromagnetic', 'fn.move'], solenoid: ['fn.actuate.electromagnetic'],
   piezo: ['fn.move'], electrostatic: ['fn.move'], 'thermal.actuator': ['fn.move'], 'ion.thruster': ['fn.move'], 'joule.heating': ['fn.heat'], combustion: ['fn.heat'], muscle: ['fn.transmit.force', 'fn.move'],
@@ -73,6 +76,7 @@ export function bridge(s: Substrate): void {
   for (const a of ARCHETYPES) {
     s.add(ent(`block.${a.id}`, ['component', 'manifold'], a.name, `${a.does} (${a.category}; takes ${a.takes.join(', ')}, gives ${a.gives.join(', ')}).`, ['engineering'], a.insideSource, undefined));
     for (const l of a.laws) s.relate(rel(`block.${a.id}`, 'governed-by', l, bs));
+    for (const fn of BLOCK_FUNCTIONS[a.id] ?? []) s.relate(rel(`block.${a.id}`, 'does', fn, bs, 'the block\'s function, said by the bridge'));
     for (const f of a.families) for (const c of CATALOG.filter((x) => x.family === f)) s.relate(rel(c.id, 'is-a', `block.${a.id}`, bs, `catalogue family ${f}`));
     for (const piece of a.inside) { const pid = `block.${a.id}.${piece.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; s.add(ent(pid, ['component'], piece.name, piece.does, ['engineering'], a.insideSource)); s.relate(rel(`block.${a.id}`, 'has-part', pid, bs)); if (piece.law) s.relate(rel(pid, 'governed-by', piece.law, bs)); for (const m of piece.material ? [piece.material].flat() : []) s.relate(rel(pid, 'made-of', familyOfWord(m) ?? m, bs, Array.isArray(piece.material) ? 'one of the materials it may be' : undefined)); if (piece.kind) s.relate(rel(pid, 'is-a', piece.kind, bs, 'the block says what kind of thing its piece is')); }
     for (const flow of a.takes) s.relate(rel(`block.${a.id}`, 'requires', `flow.${flow}`, bs));
@@ -101,7 +105,7 @@ export function bridge(s: Substrate): void {
     // a process's tags are search words, never its names: 'steel' on MIG welding must not make steel a weld
     s.add(ent(pr.id, ['process', 'constructor'], pr.name, `${pr.makes}. Limits: ${pr.limits.join('; ')}.`, ['manufacturing'], pr.source));
     for (const m of pr.materials) s.relate(rel(pr.id, 'interacts-with', familyOfWord(m) ?? m, ps, 'works this material'));
-    for (const t of pr.tools) { const tid = `tool.${t.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; s.add(ent(tid, ['constructor', 'component'], t, `A tool: ${t}.`, ['manufacturing'], pr.source)); s.relate(rel(pr.id, 'requires', tid, ps)); }
+    for (const t of pr.tools) { const tid = `tool.${t.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; s.add(ent(tid, ['constructor', 'thing'], t, `A tool: ${t}.`, ['manufacturing'], pr.source)); s.relate(rel(pr.id, 'requires', tid, ps)); }
     for (const l of pr.uses?.laws ?? []) s.relate(rel(pr.id, 'governed-by', l, ps));
     s.relate(rel(pr.id, 'plays', 'role.constructor', ps));
     s.relate(rel(pr.id, 'in-view', 'view.available-here', ps, 'a process this world can run'));
