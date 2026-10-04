@@ -16,4 +16,6 @@ export interface Workshop {
   joinPreference?: ((a: Material, b: Material | null) => string | null) | null;
   /** A joint you chose by hand, for her to remember. */
   joinChosen?: ((a: Material, b: Material | null, kind: string) => void) | null;
+  /** The ground under a point, m (the floor at 0 where there is no terrain). */
+  groundAt?(x: number, z: number): number;
 }

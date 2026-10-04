@@ -7,7 +7,7 @@ import { jolt } from './helpers';
 import { PhysicsWorld } from '../../src/physics/world';
 import { runStand, type StandSetup } from '../../src/physics/stand';
 import { newDoc } from '../../src/doc/commands';
-import { buildTest, MemoryJournal, Mind, of, sayChanged, sayWorking, signatureOf } from '../../src/mind';
+import { buildTest, MemoryJournal, Mind, of, overturning, PUSH, sayChanged, sayWorking, signatureOf } from '../../src/mind';
 
 const sim = { ...newDoc().sim, airDrag: false };
 
@@ -41,29 +41,34 @@ describe("Ego's Mind on the stand", () => {
     expect(cut.commits.slice(3).every((c) => c.session === 'later')).toBe(true);
   }, 120000);
 
-  it('a tall shelf for 20 kg: strong enough, not stable; pushed, it tips in one piece, and the only hypothesis is anchoring, a design question held open with nothing the stand can test', async () => {
+  it('a shelf unit for 20 kg a shelf, free-standing: strong enough, not stable; pushed from the front at the top it tips in one piece at the first test, as the overturning law says, and the only hypothesis is anchoring, a design question held open with nothing the stand can test', async () => {
     const J = await jolt();
     const stand = async (s: StandSetup) => { const w = new PhysicsWorld(J, s.sim); try { return runStand(w, s); } finally { w.destroy(); } };
     const { setup, frag } = buildTest({ spec: { what: 'shelf', load: 20 }, changes: [], factor: 1 }, sim);
+    // the least favourable push (mechanical.overturning): across the depth, the shortest span of the footprint, at the top shelf; the unit stands at
+    // reach height (scale.person) on a base one shelf deep, so with its shelves loaded the push it holds (W b/2 ÷ h) is a fraction of a person's
+    const push = setup.pushes![0]!;
+    expect(push.force).toEqual([0, 0, -PUSH]);
+    const tip = overturning(frag, setup.loads, push, Math.hypot(...sim.gravity));
+    expect(tip.ratio).toBeGreaterThan(1);
+    expect(tip.takes).toBeLessThan(PUSH / 2);
     const result = await stand(setup);
     const journal = new MemoryJournal();
     const mind = new Mind(journal, { stand, sim });
     await mind.process({ kind: 'stand-result', inv: 'shelf-real', spec: { what: 'shelf', load: 20 }, result, signature: signatureOf(result, frag), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() });
     const cs = of(journal.commits, 'shelf-real');
-    // as built it holds its rated 20 kg and the push; at the proof load (30 kg, 450 N) it tips in one piece: the anomaly is the tilt, not a joint
-    expect(cs.map((c) => `${c.kind}:${c.status}`)).toEqual(['observation:open', 'question:testing', 'evidence:open', 'belief:open', 'anomaly:open', 'hypothesis:open']);
-    expect(result.held).toBe(true);
-    const proof = cs[2]!.data['outcome'] as { held: boolean; broken: number; tilt: number; u: number };
-    expect(cs[2]!.validation.verdict).toBe('contradicted');
-    expect(proof.held).toBe(false);
-    expect(proof.broken).toBe(0);
-    expect(proof.tilt).toBeGreaterThan((5 * Math.PI) / 180);
-    expect(proof.u).toBeLessThanOrEqual(2 / 3);
-    expect(cs[3]!.data['next']).toBe('anomaly');
-    expect(cs[4]!.data['candidates']).toEqual(['anchor']);
-    expect(cs[5]!.data['candidate']).toBe('anchor');
+    // the first look fails as the law said it would: the anomaly against a static prediction is the tilt, not a joint, and no test can settle anchoring
+    expect(cs.map((c) => `${c.kind}:${c.status}`)).toEqual(['observation:open', 'anomaly:open', 'hypothesis:open']);
+    expect(result.held).toBe(false);
+    const o = cs[0]!.data['outcome'] as { held: boolean; broken: number; tilt: number; u: number };
+    expect(cs[0]!.validation.verdict).toBe('failed');
+    expect(o.broken).toBe(0);
+    expect(o.tilt).toBeGreaterThan((5 * Math.PI) / 180);
+    expect(o.u).toBeLessThanOrEqual(2 / 3);
+    expect(cs[1]!.data['candidates']).toEqual(['anchor']);
+    expect(cs[2]!.data['candidate']).toBe('anchor');
     expect(mind.unresolved()).toEqual(['shelf-real']);
-    expect(mind.stands.runs).toBe(1);
+    expect(mind.stands.runs).toBe(0);
     expect(sayWorking(journal.commits)).toMatch(/Open: it tipped over in one piece and nothing broke/);
   }, 120000);
 });

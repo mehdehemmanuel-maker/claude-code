@@ -52,7 +52,7 @@ import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
 import { DEFAULTS, design, sizeOf, type DesignSpec } from './designer';
 import type { Revision } from './intent';
-import { JOINT_LIMIT, standLoads, standPushes } from '../mind';
+import { JOINT_LIMIT, overturning, PUSH, standLoads, standPushes } from '../mind';
 import { fragmentOf } from '../doc/commands';
 import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature, type PartInfo } from '../mind';
 import { rigidDomain } from '../ganglia/native/tsc';
@@ -562,15 +562,20 @@ export class Ego {
    * Mind investigates, against what she predicted for it. Nothing here waits on it; she says what she found when the
    * loop rests.
    */
-  private async investigate(spec: DesignSpec, made: string[], predictedU: number) {
+  private async investigate(spec: DesignSpec, made: string[], predictedU: number, roles: Record<string, string>) {
     const app = this.app, mind = this.mind;
     if (!mind) return;
     const since = performance.now();
     const frag = fragmentOf(app.doc, made, (id) => app.doc.parts[id]!.pose, { p: [0, 0, 0], q: [0, 0, 0, 1] });
-    const setup = { parts: frag.parts, connections: frag.connections, materials: app.doc.materials, sim: app.doc.sim, loads: standLoads(spec, frag), pushes: standPushes(spec, frag), seconds: 3 };
+    const setup = { parts: frag.parts, connections: frag.connections, materials: app.doc.materials, sim: app.doc.sim, loads: standLoads(spec, frag, roles), pushes: standPushes(spec, frag, roles), seconds: 3 };
     const inv = `${spec.what}-${Date.now().toString(36)}`;
+    // the push is foreseen by the overturning law before the stand runs: free-standing, does its base hold the moment?
+    const push = setup.pushes[0];
+    const tip = push ? overturning(frag, setup.loads, push, Math.hypot(...app.doc.sim.gravity)) : null;
+    const tips = !!tip && tip.ratio > 1;
+    if (tip && tips) this.say('warn', `Free-standing, it tips under a firm push at the top from the ${push!.force[2] ? 'front' : 'side'}: ${Math.round(tip.takes)} N tips it and a person pushes ${PUSH} N. Anchor it to a wall, or widen its base.`, []);
     const result = await app.physics.stand(setup);
-    await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag), predicted: { held: true, uMax: Math.max(predictedU, JOINT_LIMIT), model: 'foresight: static load paths under the rated load, no sideways push', laws: ['statics.load-path', 'joint.capacity'] }, since });
+    await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag), predicted: { held: !tips, uMax: Math.max(predictedU, JOINT_LIMIT), model: tips ? 'foresight: static load paths under the rated load; the push overturns it, its moment about the toe past the weight\'s' : 'foresight: static load paths under the rated load; the push is within what the base resists', laws: ['statics.load-path', 'joint.capacity', 'construction.mechanical.overturning'] }, since });
     this.say('tip', sayBrief(mind.journal.commits, inv, 'On my stand'), []);
   }
 
@@ -605,7 +610,7 @@ export class Ego {
     const before = new Set(Object.keys(app.doc.parts));
     // a little further off than a single part, so the whole thing is in front of you
     const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
-    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`);
+    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`, { groundAt: (px, pz) => this.app.groundAt(px, pz) });
     this.designing = true;
     let r: RunResult;
     try { r = run(plan.forge, this.host); } finally { queueMicrotask(() => { this.designing = false; }); }
@@ -618,7 +623,7 @@ export class Ego {
     for (const f of risks.slice(0, 2)) { const c = app.doc.connections[f.id]!; this.say('warn', `In my design, the ${getConnectorKind(c.kind).label.toLowerCase()} joining ${this.names(c)} will carry ${Math.round(f.u * 100)}% of its ${f.mode} capacity.`, this.fixes(c, f.mode, f.load)); }
     const predictedU = Math.max(0, ...this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '')).map((f) => f.u));
     const testing = this.mind ? " I'm testing it on my stand now." : '';
-    void this.investigate({ ...spec }, made, predictedU).catch((e) => console.warn('the stand did not run', e));
+    void this.investigate({ ...spec }, made, predictedU, plan.roles).catch((e) => console.warn('the stand did not run', e));
     return `${plan.notes.join(' ')} ${verdict}${testing}`;
   }
 
@@ -677,7 +682,7 @@ export class Ego {
   teach(spec: DesignSpec, materialWord?: string): string {
     if (materialWord) spec.material = resolveMaterial('block', materialWord);
     const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
-    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`);
+    const plan = design(spec, x, z, `${spec.what}${++this.seq}-`, { groundAt: (px, pz) => this.app.groundAt(px, pz) });
     let l: Lesson;
     try { l = lessonFrom(`a ${spec.what}`, plan.forge, this.app.doc.sim); } catch (e) { return `I couldn't make a lesson of it: ${(e as Error).message}`; }
     this.lesson = l;

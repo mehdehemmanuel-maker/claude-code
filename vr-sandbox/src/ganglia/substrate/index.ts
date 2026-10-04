@@ -28,6 +28,7 @@ import { externalExpander } from './external';
 import { population } from './service';
 
 import { discovery as tscDiscovery } from '../native/tsc';
+import { discovery as constructionDiscovery } from '../../construct/laws';
 
 export * from './model';
 export { Substrate, coverageFrom } from './substrate';
@@ -69,6 +70,9 @@ export function* buildSteps(): Iterator<string, Built, undefined> {
   // the time/scale/causal-propagation branch (native/tsc.ts): its structures, and the arrows that put existing laws under them
   ingest(s, tscDiscovery(), seedReport);
   yield 'tsc';
+  // the construction laws (construct/laws.ts): the families, each law under its family and over the book laws it rests on, the spacing laws read from the book, the person's measures
+  ingest(s, constructionDiscovery(), seedReport);
+  yield 'construction';
   // what the bridge named and nothing described: stubs, each a question
   s.repair();
   yield 'repair';

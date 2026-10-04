@@ -109,7 +109,7 @@ test('Ego designs: "build a table that holds 60 kg" is sized, built, joined, and
   await page.setViewportSize({ width: 640, height: 400 });
   const errors = await boot(page);
   const reply = await sb(page, (s) => s.ego.ask('build a table that holds 60 kg'));
-  expect(reply).toMatch(/Table 1200 mm × 700 mm, 750 mm high, for 60 kg/);
+  expect(reply).toMatch(/Table 1200 mm × 750 mm, 700 mm high, for 60 kg/); // sizes from the person (construct/laws.ts scale.person)
   expect(reply).toMatch(/Every joint will carry its load with margin/);
   const made = await counts(page);
   expect(made.parts).toBe(5);

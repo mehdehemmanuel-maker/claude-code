@@ -9,7 +9,7 @@ import { interpret } from '../../src/assistant/intent';
 import { parse, run, type ForgeHost } from '../../src/forge/forge';
 import { resolveKind, resolveMaterial } from '../../src/forge/catalog';
 import { getMaterial } from '../../src/data/materials';
-import { buildTest, standLoads, standPushes } from '../../src/mind';
+import { buildTest, footprint, PUSH, standLoads, standPushes } from '../../src/mind';
 import { newDoc } from '../../src/doc/commands';
 
 function recorder() {
@@ -107,12 +107,28 @@ describe('structures from function and constraints', () => {
       const { setup, frag } = buildTest({ spec: { what }, changes: [], factor: 1 }, sim);
       expect(setup.loads.length, `${what} loads`).toBeGreaterThan(0);
       expect((setup.pushes ?? []).length, `${what} pushes`).toBeGreaterThan(0);
-      expect(standLoads({ what }, frag).reduce((s, l) => s + l.kg, 0)).toBe(DEFAULTS[what].load);
-      const push = standPushes({ what }, frag)[0]!;
+      const roles = design({ what }, 0, 2, 'm-').roles;
+      expect(standLoads({ what }, frag, roles).reduce((s, l) => s + l.kg, 0)).toBe(DEFAULTS[what].load);
+      const push = standPushes({ what }, frag, roles)[0]!;
       expect(frag.parts.some((p) => p.id === push.part)).toBe(true);
+      // in the least favourable direction (mechanical.overturning): across the shortest span of the footprint, at the top
+      const fp = footprint(frag);
+      const k = fp.max[0] - fp.min[0] <= fp.max[2] - fp.min[2] ? 0 : 2;
+      expect(push.force[k], `${what} pushed across its shortest span`).toBe(-PUSH);
+      expect(push.force[k === 0 ? 2 : 0]).toBe(0);
+      expect(push.at[1], `${what} pushed high`).toBeGreaterThan((fp.min[1] + fp.max[1]) / 2);
     }
+    // a carrying surface is the carrying members at one level: a bare frame's four rails share the rated load, a shelf unit's shelves each take it
+    const frame = buildTest({ spec: { what: 'frame' }, changes: [], factor: 1 }, sim);
+    const frameLoads = standLoads({ what: 'frame' }, frame.frag, design({ what: 'frame' }, 0, 2, 'm-').roles);
+    expect(frameLoads).toHaveLength(4);
+    expect(frameLoads.map((l) => l.kg)).toEqual(Array(4).fill(DEFAULTS.frame.load / 4));
+    const shelf = buildTest({ spec: { what: 'shelf' }, changes: [], factor: 1 }, sim);
+    const shelfLoads = standLoads({ what: 'shelf' }, shelf.frag, design({ what: 'shelf' }, 0, 2, 'm-').roles);
+    expect(shelfLoads).toHaveLength(4);
+    expect(shelfLoads.every((l) => l.kg === DEFAULTS.shelf.load)).toBe(true);
     const { frag } = buildTest({ spec: { what: 'ladder', height: 1.8 }, changes: [], factor: 1 }, sim);
-    const [load] = standLoads({ what: 'ladder', height: 1.8 }, frag);
+    const [load] = standLoads({ what: 'ladder', height: 1.8 }, frag, design({ what: 'ladder', height: 1.8 }, 0, 2, 'm-').roles);
     expect(load!.at[1]).toBeGreaterThan(0.6);
     expect(load!.at[1]).toBeLessThan(1.2);
   });

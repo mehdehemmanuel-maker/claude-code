@@ -6,6 +6,8 @@
 import { getMaterial, STANDARD_GRAVITY as g, type Material } from '../data/materials';
 import { LUMBER } from '../parts/registry';
 import { structure } from './grammar';
+import { defaultOf, type Env } from '../construct/laws';
+import { toForge, rolesOf, type Role } from '../construct/assembly';
 
 /** What she designs: the five originals, and the structures the grammar composes from function and constraints (grammar.ts). */
 export type Design = 'table' | 'crate' | 'shelf' | 'wall' | 'tower' | 'bench' | 'bridge' | 'frame' | 'stand' | 'ramp' | 'ladder' | 'chair';
@@ -25,14 +27,28 @@ export interface DesignSpec {
   aprons?: boolean;
 }
 
-/** The sizes and load a design takes when they are not said, m and kg: one table, so a revision can scale a size that was never said. */
+/**
+ * The sizes and load a design takes when they are not said, m and kg: derived from the person it is for by the
+ * construction law scale.person (construct/laws.ts), and from what it carries, so a revision can scale a size that was
+ * never said and no generator holds a number of its own. What is not a person's measure is an estimate, and says so.
+ */
+const person = { kinds: ['artefact'], roles: [], flows: [], materials: [], forPerson: true };
+const P = (key: string) => defaultOf(person, key)!;
+/** Estimates of what things carry, kg: things on a table, books on a shelf (labelled estimates). */
+const ESTIMATE = { onATable: 50, perShelf: 20, onAStand: 30, onAFrame: 50 };
 export const DEFAULTS: Record<Design, { width: number; depth: number; height: number; load: number }> = {
-  table: { width: 1.2, depth: 0.7, height: 0.75, load: 50 }, bench: { width: 1.2, depth: 0.35, height: 0.45, load: 150 },
-  crate: { width: 0.5, depth: 0.4, height: 0.35, load: 0 }, shelf: { width: 0.8, depth: 0.3, height: 1.2, load: 20 },
-  wall: { width: 1, depth: 0.1025, height: 0.5, load: 0 }, tower: { width: 0.1, depth: 0.1, height: 0.6, load: 0 },
-  bridge: { width: 2, depth: 0.6, height: 0.5, load: 100 }, frame: { width: 1, depth: 0.6, height: 0.8, load: 50 },
-  stand: { width: 0.5, depth: 0.5, height: 1, load: 30 }, ramp: { width: 2, depth: 0.8, height: 0.4, load: 100 },
-  ladder: { width: 0.45, depth: 0.45, height: 1.8, load: 100 }, chair: { width: 0.42, depth: 0.42, height: 0.45, load: 100 },
+  table: { width: 2 * P('place at a table'), depth: P('work surface depth'), height: P('work surface height'), load: ESTIMATE.onATable },
+  bench: { width: 2 * P('place at a table'), depth: P('seat depth'), height: P('seat height'), load: 2 * P('person') },
+  crate: { width: 0.5, depth: 0.4, height: 0.35, load: 0 },
+  shelf: { width: 0.8, depth: 0.3, height: P('reach height'), load: ESTIMATE.perShelf },
+  wall: { width: 1, depth: 0.1025, height: 0.5, load: 0 },
+  tower: { width: 0.1, depth: 0.1, height: 0.6, load: 0 },
+  bridge: { width: 2, depth: P('passage width'), height: 0.5, load: P('person') },
+  frame: { width: 1, depth: 0.6, height: 0.8, load: ESTIMATE.onAFrame },
+  stand: { width: 0.5, depth: 0.5, height: P('standing surface height'), load: ESTIMATE.onAStand },
+  ramp: { width: 2, depth: P('passage width') + 0.2, height: 0.4, load: P('person') },
+  ladder: { width: P('seat width'), depth: P('seat width'), height: 1.8, load: P('person') },
+  chair: { width: P('seat width'), depth: P('seat depth'), height: P('seat height'), load: P('person') },
 };
 /** A design's size along one axis: as said, or its default. */
 export const sizeOf = (spec: DesignSpec, dim: 'width' | 'depth' | 'height'): number => spec[dim] ?? DEFAULTS[spec.what][dim];
@@ -44,6 +60,8 @@ export interface Plan {
   /** What she decided, and why, in a few lines. */
   notes: string[];
   parts: number;
+  /** Every member's role, by its part name: what the stand loads and pushes by (construct/laws.ts mechanical.load-case). */
+  roles: Record<string, Role>;
 }
 
 /** Safety factor on every check, as for furniture and light structures. */
@@ -72,8 +90,8 @@ export function sheetFor(m: Material, L: number, b: number, w: number, options: 
 }
 
 /** Legs: the smallest standard section that neither crushes nor buckles under P (N) over length L, free to sway at the top. */
-export function legFor(m: Material, L: number, P: number) {
-  const K = 2; // a leg fixed at the top and free to sway there buckles as a cantilever
+export function legFor(m: Material, L: number, P: number, K = 2) {
+  // K: the buckling length factor (construct/laws.ts mechanical.end-fixity): 2 free to sway at the top, 1 braced
   if (isWood(m)) {
     for (const size of ['2x2', '2x4', '4x4']) {
       const [a, b] = LUMBER[size]!;
@@ -104,16 +122,26 @@ export function sheets(m: Material) {
   return m.category === 'engineered-wood' ? PLY_SHEETS : isWood(m) ? WOOD_SHEETS : isMetal(m) ? METAL_SHEETS : STONE_SHEETS;
 }
 
-/** A design for what was asked, placed with its footprint centred on (ox, oz) on the floor. */
-export function design(spec: DesignSpec, ox: number, oz: number, tag = 'd'): Plan {
+/** A design for what was asked, placed with its footprint centred on (ox, oz) on the ground there (env.groundAt; the floor when unsaid). */
+export function design(spec: DesignSpec, ox: number, oz: number, tag = 'd', env: Env = {}): Plan {
   switch (spec.what) {
     case 'table': case 'bench': return table(spec, ox, oz, tag);
     case 'crate': return crate(spec, ox, oz, tag);
     case 'shelf': return shelf(spec, ox, oz, tag);
     case 'wall': return wall(spec, ox, oz, tag);
     case 'tower': return tower(spec, ox, oz, tag);
-    default: return structure(spec, ox, oz, tag);
+    default: {
+      const { assembly, laws, notes } = structure(spec, ox, oz, tag);
+      return { forge: toForge(assembly, env), laws, notes, parts: assembly.members.length, roles: rolesOf(assembly) };
+    }
   }
+}
+
+/** Roles for the five designs still written as coordinates, by name pattern (their members' roles are no different). */
+function rolesByName(forge: string, tag: string, rule: (name: string) => Role): Record<string, Role> {
+  const out: Record<string, Role> = {};
+  for (const m of forge.matchAll(/ as (\S+)$/gm)) out[m[1]!] = rule(m[1]!.slice(tag.length));
+  return out;
 }
 
 function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -165,6 +193,7 @@ function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
       'Joints: Best join, sized to the stock.',
     ],
     parts: apron ? 9 : 5,
+    roles: rolesByName(lines.join('\n'), tag, (n) => (n === 'top' ? 'carries' : /^leg/.test(n) ? 'support' : 'spans')),
   };
 }
 
@@ -195,7 +224,7 @@ function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   ];
   for (const w of ['front', 'back', 'left', 'right']) lines.push(`join ${tag}${w} ${tag}bottom`);
   for (const s of ['left', 'right']) for (const e of ['front', 'back']) lines.push(`join ${tag}${s} ${tag}${e}`);
-  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`], parts: 5 };
+  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`], parts: 5, roles: rolesByName(lines.join('\n'), tag, () => 'encloses') };
 }
 
 function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -215,7 +244,7 @@ function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     lines.push(`place plate length=${f(span)} width=${f(D)} thickness=${f(board.t)} mat ${m.id} at ${f(ox)} ${f(y)} ${f(oz)} as ${tag}shelf${k}`);
     lines.push(`join ${tag}shelf${k} ${tag}sideL`, `join ${tag}shelf${k} ${tag}sideR`);
   }
-  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`], parts: n + 2 };
+  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`], parts: n + 2, roles: rolesByName(lines.join('\n'), tag, (nm) => (/^shelf/.test(nm) ? 'carries' : 'support')) };
 }
 
 function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -239,7 +268,7 @@ function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     }
   }
   const n = lines.filter((l) => l.startsWith('place')).length;
-  return { forge: lines.join('\n'), laws: [], notes: [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`], parts: n };
+  return { forge: lines.join('\n'), laws: [], notes: [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`], parts: n, roles: rolesByName(lines.join('\n'), tag, () => 'stacks') };
 }
 
 function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
@@ -251,5 +280,5 @@ function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
     lines.push(`place block x=${s} y=${s} z=${s} mat ${m.id} at ${f(ox)} ${f(s / 2 + k * (s + 0.0005))} ${f(oz)} as ${tag}b${k}`);
     if (k) lines.push(`join ${tag}b${k} ${tag}b${k - 1}`);
   }
-  return { forge: lines.join('\n'), laws: [], notes: [`A tower of ${n} ${m.name} blocks, each joined to the one below.`], parts: n };
+  return { forge: lines.join('\n'), laws: [], notes: [`A tower of ${n} ${m.name} blocks, each joined to the one below.`], parts: n, roles: rolesByName(lines.join('\n'), tag, () => 'stacks') };
 }

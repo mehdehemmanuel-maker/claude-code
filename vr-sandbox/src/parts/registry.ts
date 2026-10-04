@@ -52,6 +52,8 @@ export interface BondSection {
 }
 
 export interface PartKind {
+  /** The material categories this is sold as stock in (the manufacturing law of stock, construct/laws.ts): absent, it is not stock. */
+  stock?: string[];
   id: string;
   label: string;
   category: string;
@@ -160,6 +162,7 @@ export const PART_KINDS: PartKind[] = [
     section: (p) => rectSection(n(p, 'y'), n(p, 'z')),
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer', 'wood', 'engineered-wood', 'stone', 'glass'],
     id: 'plate', label: 'Plate / sheet', category: 'Stock', defaultMaterial: 'aluminum.6061-t6', dragCd: 1.28, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -177,6 +180,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => rectBond(n(p, 'thickness'), n(p, 'width')),
   },
   {
+    stock: ['wood'],
     id: 'lumber', label: 'Lumber', category: 'Stock', defaultMaterial: 'wood.douglas-fir', dragCd: 1.1, spawnRotation: IDENTITY,
     materialFilter: isWood,
     params: [
@@ -193,6 +197,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const [t, w] = lumberDims(p); return rectBond(t, w); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer'],
     id: 'rod.round', label: 'Round rod', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 0.82, spawnRotation: Y_TO_X,
     materialFilter: notMagnet,
     params: [
@@ -209,6 +214,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = roundSection(n(p, 'diameter')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy'],
     id: 'rod.square', label: 'Square bar', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 1.05, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -225,6 +231,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => rectBond(n(p, 'side'), n(p, 'side')),
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer'],
     id: 'tube.round', label: 'Round tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 0.82, spawnRotation: Y_TO_X,
     materialFilter: notMagnet,
     params: [
@@ -242,6 +249,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = tubeSection(n(p, 'od'), wallOf(p, 'od')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy'],
     id: 'tube.square', label: 'Square tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.05, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -269,6 +277,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = rectTubeSection(n(p, 'side'), n(p, 'side'), wallOf(p, 'side')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum'],
     id: 'beam.i', label: 'I-beam', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.6, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -297,6 +306,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const { h, b, tf, tw } = ibeam(p); const weak = iBeamSection(b, h, tf, tw); const strong = iBeamStrongAxis(b, h, tf, tw); return { A: weak.A, J: weak.J, r: Math.max(tf, tw), S: [weak.S, strong.S], Z: [weak.Z, strong.Z] }; },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum'],
     id: 'angle', label: 'Angle (L)', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.4, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [

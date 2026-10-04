@@ -18,7 +18,11 @@ import { d, e, q, r, type R, type Structure } from '../ganglia/native/core';
 import { anomaly as anomalyOf, type Explanation } from '../ganglia/native/discovery';
 import { design, type DesignSpec } from '../assistant/designer';
 import { fixesFor, MARGIN } from '../assistant/fixes';
-import { effectiveParams, getPartKind } from '../parts/registry';
+import { DEFAULTS } from '../assistant/designer';
+import { transformPoint } from '../doc/math';
+import { effectiveParams, getPartKind, massOf } from '../parts/registry';
+import { shapeBounds } from '../parts/shapes';
+import { PERSON } from '../data/people';
 import { getMaterial } from '../data/materials';
 import { numberOf } from '../schema/params';
 import { hashesOfLaws } from '../ganglia/dependencies';
@@ -43,60 +47,106 @@ export const PHYSICS = typeof __PHYSICS__ === 'string' ? __PHYSICS__ : 'unstampe
 export const JOINT_LIMIT = 1 / MARGIN;
 /** A proof test: the design must also hold 1.5x its rated load and push (with the joints still under their limit). */
 export const PROOF = 1.5;
-/** A firm sideways shove, about what an adult leans or pushes with (N). */
-export const PUSH = 300;
+/** A firm two-handed shove, the person's (data/people.ts: push, an estimate from the pushing tables), N. */
+export const PUSH = PERSON.push.value;
+
+/** A part's box in the world, axis-aligned, from its real collision shape turned and placed as it is. */
+export function worldBox(p: Fragment['parts'][number]): { min: Vec3; max: Vec3 } {
+  const k = getPartKind(p.kind);
+  const b = shapeBounds(k.collision(effectiveParams(k, p.params, getMaterial(p.material))));
+  const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) {
+    const c = transformPoint(p.pose, [x!, y!, z!]);
+    for (let i = 0; i < 3; i++) { min[i] = Math.min(min[i]!, c[i]!); max[i] = Math.max(max[i]!, c[i]!); }
+  }
+  return { min, max };
+}
+
+/** The box round a whole structure: its footprint and its height. */
+export function footprint(frag: Fragment): { min: Vec3; max: Vec3 } {
+  const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const p of frag.parts) { const b = worldBox(p); for (let i = 0; i < 3; i++) { min[i] = Math.min(min[i]!, b.min[i]!); max[i] = Math.max(max[i]!, b.max[i]!); } }
+  return { min, max };
+}
+
+/**
+ * Whether a free-standing structure tips under a push (construct/laws.ts mechanical.overturning: moment balance about
+ * the toe): the push's moment about the edge it drives the structure toward, against the weight's about the same
+ * edge, what it carries weighing on it too. Over 1 it tips; `takes` is the push it would hold.
+ */
+export function overturning(frag: Fragment, loads: StandLoad[], push: StandPush, gravity: number): { ratio: number; takes: number; base: number; height: number; weight: number } {
+  const fp = footprint(frag);
+  const k: 0 | 2 = Math.abs(push.force[0]) >= Math.abs(push.force[2]) ? 0 : 2;
+  let m = 0, mx = 0;
+  for (const p of frag.parts) { const kind = getPartKind(p.kind), mat = getMaterial(p.material); const pm = massOf(kind, effectiveParams(kind, p.params, mat), mat); m += pm; mx += pm * p.pose.p[k]; }
+  for (const l of loads) { m += l.kg; mx += l.kg * l.at[k]; }
+  const weight = m * gravity;
+  const toe = push.force[k] < 0 ? fp.min[k] : fp.max[k];
+  const lever = Math.abs(mx / m - toe);
+  const height = push.at[1] - fp.min[1];
+  const F = Math.abs(push.force[k]);
+  return { ratio: (F * height) / (weight * lever), takes: (weight * lever) / height, base: fp.max[k] - fp.min[k], height, weight };
+}
 
 /** The weights a design is for, where they go: on a table's top, on every shelf; a wall or tower carries itself. */
-export function standLoads(spec: DesignSpec, frag: Fragment): StandLoad[] {
-  const defaults: Partial<Record<DesignSpec['what'], number>> = { bench: 150, table: 50, shelf: 20, bridge: 100, stand: 30, frame: 50, ramp: 100, chair: 100, ladder: 100 };
-  const kg = spec.load ?? defaults[spec.what] ?? 0;
+/**
+ * The weights a design is for, where they go (construct/laws.ts mechanical.load-case): what carries takes the rated
+ * load spread over it (each shelf its own), a seat or a rung takes a person on it (a rung half way up), a bare frame's
+ * carrying rails share it. Nothing here is a kind of design: a member's role says what loads it.
+ */
+export function standLoads(spec: DesignSpec, frag: Fragment, roles: Record<string, string>): StandLoad[] {
+  const kg = spec.load ?? DEFAULTS[spec.what].load;
   if (!kg) return [];
-  const top = (name: RegExp) => frag.parts.filter((p) => name.test(p.name));
+  const role = (p: Fragment['parts'][number]) => roles[p.name] ?? '';
   const onto = (p: Fragment['parts'][number], kgEach: number): StandLoad => {
     const k = getPartKind(p.kind);
     const dd = k.dims(effectiveParams(k, p.params, getMaterial(p.material)));
     const half = dd.b / 2;
     const w = Math.min(0.3, 0.6 * numberOf(p.params, 'length', 0.3)), depth = Math.min(0.3, 0.6 * numberOf(p.params, 'width', 0.3));
-    return { kg: kgEach, at: [p.pose.p[0], p.pose.p[1] + half, p.pose.p[2]], size: [w, depth] };
+    // a sloped deck takes its load a little above its middle, where it rests
+    const lift = Math.abs(p.pose.q[2]) > 1e-3 ? numberOf(p.params, 'length', 1) * Math.sin(Math.abs(p.pose.q[2]) * 2) / 2 + 0.05 : 0;
+    return { kg: kgEach, at: [p.pose.p[0], p.pose.p[1] + half + lift, p.pose.p[2]], size: [w, depth] };
   };
-  switch (spec.what) {
-    case 'table': case 'bench': return top(/top$/).map((p) => onto(p, kg));
-    case 'shelf': return top(/shelf\d+$/).map((p) => onto(p, kg));
-    case 'bridge': case 'stand': return top(/deck$/).map((p) => onto(p, kg));
-    case 'frame': return top(/rail[FB]$/).map((p) => onto(p, kg / 2));
-    case 'ramp': return top(/deck$/).map((p) => ({ ...onto(p, kg), at: [p.pose.p[0], p.pose.p[1] + numberOf(p.params, 'length', 1) * Math.sin(Math.abs(p.pose.q[2]) * 2) / 2 + 0.05, p.pose.p[2]] as Vec3 }));
-    case 'chair': return top(/seat$/).map((p) => onto(p, kg));
-    case 'ladder': {
-      // a person on a rung half way up one side
-      const rungs = top(/rungA\d+$/).sort((a, b) => a.pose.p[1] - b.pose.p[1]);
-      const mid = rungs[Math.floor(rungs.length / 2)];
-      return mid ? [{ kg, at: [mid.pose.p[0], mid.pose.p[1] + 0.03, mid.pose.p[2]], size: [0.1, 0.25] }] : [];
-    }
-    default: return [];
+  const carries = frag.parts.filter((p) => role(p) === 'carries');
+  if (carries.length) {
+    // a carrying surface is the carrying members at one level (two rails side by side are one surface; shelves one
+    // above another are each a surface): the rated load goes on every surface, shared across it
+    const levels: Fragment['parts'][number][][] = [];
+    for (const p of carries) { const b = worldBox(p); const l = levels.find((g) => g.some((o) => { const ob = worldBox(o); return ob.min[1] <= b.max[1] && b.min[1] <= ob.max[1]; })); if (l) l.push(p); else levels.push([p]); }
+    return levels.flatMap((l) => l.map((p) => onto(p, kg / l.length)));
   }
+  const seat = frag.parts.find((p) => role(p) === 'seat');
+  if (seat) return [onto(seat, kg)];
+  const rungs = frag.parts.filter((p) => role(p) === 'stood-on').sort((a, b) => a.pose.p[1] - b.pose.p[1]);
+  // one side's rungs (the lower-named side), the middle one takes the person
+  const side = rungs.filter((p) => /A\d+$/.test(p.name));
+  const mid = (side.length ? side : rungs)[Math.floor((side.length ? side : rungs).length / 2)];
+  return mid ? [{ kg, at: [mid.pose.p[0], mid.pose.p[1] + 0.03, mid.pose.p[2]], size: [0.1, 0.25] }] : [];
 }
 
 /**
- * How a design is pushed on the stand. Furniture fails sideways (racking) far more than straight down: a table's top
- * bears on its legs, but a push at its edge bends every leg joint. So a table or bench is pushed along its length at
- * the top's end, a shelf unit across its width at the top shelf, a bridge, stand, frame or ramp along its length at the
- * deck's end, a chair at the top of its back, a ladder at its apex; half a second in, for a second and a half.
+ * How a design is pushed on the stand: furniture fails sideways (racking, tipping) far more than straight down, so
+ * the push is a person's firm shove (scale.person) at the top of the highest thing they would push on, what carries,
+ * a back, a handhold, the top rung; in the least favourable direction (mechanical.overturning): across the shortest
+ * span of the footprint, where the base resists the moment least; half a second in, for a second and a half. Nothing
+ * here is a kind of design.
  */
-export function standPushes(spec: DesignSpec, frag: Fragment): StandPush[] {
-  const end = (p: Fragment['parts'][number], along: 'x' | 'z' = 'x'): StandPush => ({ part: p.id, at: [p.pose.p[0] + (along === 'x' ? numberOf(p.params, 'length', 0) / 2 : 0), p.pose.p[1], p.pose.p[2] + (along === 'z' ? numberOf(p.params, 'length', 0) / 2 : 0)], force: (along === 'x' ? [-PUSH, 0, 0] : [0, 0, -PUSH]) as Vec3, from: 0.5, to: 2 });
-  const one = (name: RegExp, along: 'x' | 'z' = 'x') => frag.parts.filter((p) => name.test(p.name)).slice(0, 1).map((p) => end(p, along));
-  switch (spec.what) {
-    case 'table': case 'bench': return frag.parts.filter((p) => /top$/.test(p.name)).map((p) => end(p));
-    case 'shelf': {
-      const shelves = frag.parts.filter((p) => /shelf\d+$/.test(p.name)).sort((a, b) => b.pose.p[1] - a.pose.p[1]);
-      return shelves.length ? [end(shelves[0]!)] : [];
-    }
-    case 'bridge': case 'stand': case 'ramp': return one(/deck$/);
-    case 'frame': return one(/railF$/);
-    case 'chair': { const back = frag.parts.find((p) => /back$/.test(p.name)); return back ? [{ part: back.id, at: [back.pose.p[0], back.pose.p[1] + numberOf(back.params, 'width', 0.2) / 2, back.pose.p[2]], force: [0, 0, -PUSH] as Vec3, from: 0.5, to: 2 }] : []; }
-    case 'ladder': { const stile = frag.parts.find((p) => /stileA0$/.test(p.name)); return stile ? [{ part: stile.id, at: [stile.pose.p[0], stile.pose.p[1] + numberOf(stile.params, 'length', 1) / 2 * 0.9, stile.pose.p[2]], force: [0, 0, -PUSH] as Vec3, from: 0.5, to: 2 }] : []; }
-    default: return [];
-  }
+export function standPushes(spec: DesignSpec, frag: Fragment, roles: Record<string, string>): StandPush[] {
+  void spec;
+  const role = (p: Fragment['parts'][number]) => roles[p.name] ?? '';
+  const candidates = frag.parts.filter((p) => ['carries', 'back', 'handhold', 'stood-on', 'seat'].includes(role(p)));
+  if (!candidates.length) return [];
+  const boxes = new Map(candidates.map((p) => [p.id, worldBox(p)]));
+  const target = candidates.reduce((m, p) => (boxes.get(p.id)!.max[1] > boxes.get(m.id)!.max[1] ? p : m), candidates[0]!);
+  const fp = footprint(frag);
+  const k: 0 | 2 = fp.max[0] - fp.min[0] <= fp.max[2] - fp.min[2] ? 0 : 2;
+  const box = boxes.get(target.id)!;
+  // at the top of the target's far face, pushed back across the structure
+  const at: Vec3 = [target.pose.p[0], box.max[1], target.pose.p[2]];
+  at[k] = box.max[k];
+  const force: Vec3 = [0, 0, 0];
+  force[k] = -PUSH;
+  return [{ part: target.id, at, force, from: 0.5, to: 2 }];
 }
 
 /** The stand's own scatter on a joint's share of capacity (estimate: settling noise and contact chatter), used as the tolerance of an observation. */
@@ -163,6 +213,7 @@ export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup
   const margin = test.changes.reduce((f, c) => ('margin' in c ? f * c.margin : f), 1);
   const spec: DesignSpec = { ...test.spec, aprons: test.spec.aprons || test.changes.some((c) => 'aprons' in c), load: test.spec.load !== undefined ? test.spec.load * margin : undefined };
   const plan = design(spec, 0, 2, 'm-');
+  const roles = plan.roles;
   const bench = new Bench(sim);
   const built = run(plan.forge, new BuildHost(bench));
   if (!built.ok) throw new Error(`the design did not build: ${built.error}`);
@@ -176,8 +227,8 @@ export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup
     }
   }
   const frag = fragmentOf(bench.doc, Object.keys(bench.doc.parts), (id) => bench.doc.parts[id]!.pose, { p: [0, 0, 0], q: [0, 0, 0, 1] });
-  const loads = standLoads(test.spec, frag).map((l) => ({ ...l, kg: l.kg * test.factor }));
-  const pushes = standPushes(test.spec, frag).map((p) => ({ ...p, force: p.force.map((f) => f * test.factor) as [number, number, number] }));
+  const loads = standLoads(test.spec, frag, roles).map((l) => ({ ...l, kg: l.kg * test.factor }));
+  const pushes = standPushes(test.spec, frag, roles).map((p) => ({ ...p, force: p.force.map((f) => f * test.factor) as [number, number, number] }));
   return { setup: { parts: frag.parts, connections: frag.connections, materials: bench.doc.materials, sim, loads, pushes, seconds: 3 }, frag };
 }
 

@@ -54,12 +54,15 @@ export function readings(s: Substrate, word: string): Reading[] {
   const out = new Map<string, Reading>();
   const add = (e: Entity | undefined, reach: Reach) => { if (e && !LAYER.test(e.id) && !out.has(e.id)) out.set(e.id, reading(e, reach)); };
   const all = [...s.entities.values()].filter((e) => !LAYER.test(e.id));
-  const named = (e: Entity, x: string) => e.name.toLowerCase() === x;
-  const aliased = (e: Entity, x: string) => !named(e, x) && e.names.some((n) => n.toLowerCase() === x);
-  for (const e of all) if (named(e, w) || named(e, one)) add(e, 'name');
+  // the word as said, its singular, and as a name is written with dashes or dots ("coarse graining" is the alias
+  // "coarse-graining"): the forms the lookup (substrate/names.ts) reads, so the census and the lookup see one word
+  const forms = [w, one, dashed, dotted];
+  const named = (e: Entity) => forms.includes(e.name.toLowerCase());
+  const aliased = (e: Entity) => !named(e) && e.names.some((n) => forms.includes(n.toLowerCase()));
+  for (const e of all) if (named(e)) add(e, 'name');
   add(s.get(w) ?? s.get(dotted) ?? s.get(one), 'name');
   // a one-word alias shared by a whole catalogue is a search token, not a name ("drive" on every motor and chain)
-  const byAlias = all.filter((e) => aliased(e, w) || aliased(e, one));
+  const byAlias = all.filter((e) => aliased(e));
   const token = byAlias.length > 1 && !byAlias.some((e) => e.names.length <= 2);
   for (const e of byAlias) add(e, token ? 'token' : 'alias');
   for (const p of PREFIXES) add(s.get(p + dashed) ?? s.get(p + dotted), 'prefixed');

@@ -102,7 +102,11 @@ export function findByWords(s: Substrate, words: string): Entity | undefined {
   for (const cand of [one, one.replace(/\s+/g, '.'), one.replace(/\s+/g, '-')]) { if (token && (cand === w || cand === one)) continue; const e = s.byWord(cand); if (e) return e; }
   const parts = w.split(' ');
   if (parts.length === 2) { const e = s.get(`${parts[1]}.${parts[0]}`) ?? s.get(`${parts[0]}.${parts[1]}`); if (e) return e; }
-  // the last resort: the one entity whose id ends in the word
-  const hits = all.filter((e) => plain(e) && !/^(?:kind|block|view|cross|param|scale)\./.test(e.id) && (e.id.endsWith(`.${one}`) || e.id === one || e.id.endsWith(`.${dashed}`) || e.id === dashed));
-  return hits.length === 1 ? hits[0] : undefined;
+  // the last resort: the one thing whose id ends in the word; when a thing of another sense shares that tail (the
+  // function "control flow" and the construction law "fluid flow") the word has two meanings and is asked, not chosen:
+  // the same senses the census counts (native/polysemy.ts readings), so the lookup is never silent where it is ambiguous
+  const tails = all.filter((e) => !/^(?:kind|block|view|cross|param|scale)\./.test(e.id) && (e.id.endsWith(`.${one}`) || e.id === one || e.id.endsWith(`.${dashed}`) || e.id === dashed));
+  const hits = tails.filter(plain);
+  if (hits.length !== 1) return undefined;
+  return tails.every((e) => facesOfOne(e.kinds[0] ?? 'thing', hits[0]!.kinds[0] ?? 'thing')) ? hits[0] : undefined;
 }

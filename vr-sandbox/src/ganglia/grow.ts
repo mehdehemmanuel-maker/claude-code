@@ -128,11 +128,7 @@ export function develop(c: Concept): Organ[] {
 
 // ------------------------------------------------------------------------------------------------ embodiment
 
-/** The processes that make each of the world's stock shapes into a part. */
-const SHAPE_PROCESSES: Record<string, string[]> = {
-  'rod.round': ['saw', 'turn'], 'rod.square': ['saw', 'mill'], 'tube.round': ['saw', 'drill', 'weld.mig'], 'tube.square': ['saw', 'drill', 'weld.mig'],
-  angle: ['saw', 'drill', 'weld.mig'], plate: ['saw', 'drill', 'bend'], wheel: [],
-};
+import { SHAPE_PROCESSES } from '../construct/laws';
 
 const DEFAULT_MADE: Record<string, { shape: string; material: string }> = {
   'structure.member': { shape: 'tube.square', material: 'steel.a36' }, 'transmission.shaft': { shape: 'rod.round', material: 'steel.1018-cd' },

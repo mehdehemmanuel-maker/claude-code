@@ -110,5 +110,5 @@ export class Mind {
 }
 
 export { type Commit, type Journal, MemoryJournal, IdbJournal, openJournal, of, investigations } from './journal';
-export { next, signatureOf, outcomeOf, buildTest, candidatesOf, describeChange, standLoads, standPushes, JOINT_LIMIT, PROOF, PUSH, PHYSICS, TOLERANCE, type Action, type Effects, type Prediction, type Signature, type TestSpec, type Outcome, type Change, type PartInfo } from './investigate';
+export { next, signatureOf, outcomeOf, buildTest, candidatesOf, describeChange, standLoads, standPushes, overturning, footprint, worldBox, JOINT_LIMIT, PROOF, PUSH, PHYSICS, TOLERANCE, type Action, type Effects, type Prediction, type Signature, type TestSpec, type Outcome, type Change, type PartInfo } from './investigate';
 export { sayWorking, sayChanged, sayBrief } from './say';

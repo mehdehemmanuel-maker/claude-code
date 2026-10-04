@@ -118,7 +118,9 @@ export class BuildHost implements ForgeHost {
         const e = ext(q, params);
         const cs = where.ids.filter((id): id is string => id !== null).map(centre);
         const cx = cs.length ? cs.reduce((s, c) => s + c[0], 0) / cs.length : 0, cz = cs.length ? cs.reduce((s, c) => s + c[2], 0) / cs.length : 0;
-        const y = where.how === 'on' ? Math.max(...ys(where.ids)) + CLEAR + e.half[1] - e.off[1] : Math.min(...ys(where.ids)) - CLEAR - e.half[1] - e.off[1];
+        const floor = this.w.groundAt?.(cx + where.offset[0], cz + where.offset[1]) ?? 0;
+        const tops = where.ids.flatMap((id) => (id === null ? [floor] : box(id).corners.map((c) => c[1])));
+        const y = where.how === 'on' ? Math.max(...tops) + CLEAR + e.half[1] - e.off[1] : Math.min(...tops) - CLEAR - e.half[1] - e.off[1];
         return { p: [cx + where.offset[0] - e.off[0], y, cz + where.offset[1] - e.off[2]], q, params };
       }
       case 'between': {

@@ -436,9 +436,22 @@ describe('Nex: polysemy (section S) is split by structure, measured over the sub
     expect(c.polysemous.length).toBeGreaterThanOrEqual(30);
     expect(c.polysemous).toEqual(expect.arrayContaining(['current', 'glue', 'fuel', 'filter', 'wood', 'bone', 'solder', 'flux']));
     const silent = c.polysemous.filter((w) => findByWords(substrate, w));
-    // the five still chosen: a law of a thing against a function (axial), a tool against its machine (broach), the geometry kind against a part (disc), a law against a motor named by it (induction), and since 3 October the wave-speed law against the electromagnet named by the same word
-    expect(silent).toEqual(['axial', 'broach', 'disc', 'electromagnetic', 'induction']);
+    // the three still chosen: a tool against its machine (broach), the geometry kind against a part (disc), a law against a motor named by it (induction);
+    // two more were chosen until 4 October 2026 by the id-tail rule across a function and a law (axial) and across the wave-speed law and an electromagnet
+    // (electromagnetic): the last resort now sees the senses the census sees, and asks
+    expect(silent).toEqual(['broach', 'disc', 'induction']);
     for (const w of c.polysemous) if (!silent.includes(w)) expect(findByWords(substrate, w), w).toBeUndefined();
+  });
+
+  it('the lookup and the census read one word: an alias written with a dash is the alias ("coarse graining" is the observation operator, one sense), and a tail two things of different kinds share ("flow": a function and a construction law) is asked, not chosen', () => {
+    expect(polysemous(readings(substrate, 'coarse graining'))).toBe(false);
+    expect(findByWords(substrate, 'coarse graining')?.id).toBe('tsc.coarse-graining');
+    for (const w of ['flow', 'vibration']) {
+      const rs = readings(substrate, w);
+      expect(rs.map((x) => x.reach), w).toEqual(['tail', 'tail']);
+      expect(polysemous(rs), w).toBe(true);
+      expect(findByWords(substrate, w), w).toBeUndefined();
+    }
   });
 
   it('the flow table commits a quantity word to one flow where the quantity rides on several: said as a convention, never silent', () => {
