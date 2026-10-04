@@ -56,7 +56,14 @@ nothing of its architecture is extended again.
   measured on itself, which also confirms the derived patch-load laws independently. The environment test of Part XX runs: the same intent on a flat
   field, a slope and a field with a hole; the ground is a field over x and z, the supports are posts cut to their own
   ground, the design is identical by hash on all three, and every record that differs between the fields rests on the
-  ground field or on a kernel measurement. The first growth of the language came from the
+  ground field or on a kernel measurement. The second growth came from the joint: the derivation bounds a bolted joint by the group's bending capacity
+  only, the kernel also breaks one in shear; ten brackets with the load and the bolt group varied, the arm section
+  fixed as the experiment's configuration, gave two anomalies among the nine the language predicted to hold (the
+  residual rule: what it already predicts to fail is explained and does not enter the abduction); over the joint's
+  quantities (root moment, root shear, bolt diameter, bolts, their strength, the lever) the unique simplest group
+  separating the two from the seven is the shear over the bolts' section strength, with its bound bracketing the
+  kernel's own capacity; without the small-post observation it ties with a lever group and the next observation is
+  named. The first growth of the language came from the
   kernel: a tall load that the static derivation said rests never settled; eight realizations of the same intent
   with the load's footprint varied gave the observations; over the rest coupling's quantities (centre of mass above
   the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group

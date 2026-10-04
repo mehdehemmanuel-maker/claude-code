@@ -65,7 +65,7 @@ export function leastSteel(by: string): Law {
   });
 }
 
-export function bracketSystem(intent: BracketIntent, mat: MaterialLeaves, g: Derivation): System {
+export function bracketSystem(intent: BracketIntent, mat: MaterialLeaves, g: Derivation, jointConstraint = true): System {
   const vars = [
     ['m', 'kg', 'mass carried'], ['g', 'm/s^2', 'gravity'], ['P', 'N', 'load'], ['ell', 'm', 'arm length'], ['a', 'm', 'reach'], ['w', 'm', 'patch width'],
     ['rho', 'kg/m^3', 'density'], ['E', 'Pa', 'modulus'], ['MOR', 'Pa', 'strength'], ['b', 'm', 'breadth'], ['h', 'm', 'depth'],
@@ -100,7 +100,7 @@ export function bracketSystem(intent: BracketIntent, mat: MaterialLeaves, g: Der
       { kind: 'term', sym: 'Mneed', term: mul(v['M']!, v['f']!), name: 'root moment at the factor', grounds: 'the root moment times the declared factor' },
       { kind: 'constrain', holds: le(v['sigma']!, v['sigmaAllow']!), says: 'strength: the bending stress is within the strength at the declared factor', role: 'design', source: 'the intent' },
       { kind: 'constrain', holds: le(v['delta']!, v['deltaLim']!), says: 'stiffness: the tip sag is within the declared limit', role: 'design', source: 'the intent' },
-      { kind: 'constrain', holds: le(v['Mneed']!, v['Mcap']!), says: 'the joint: the bolt group carries the root moment at the declared factor', role: 'design', source: 'the intent' },
+      ...(jointConstraint ? [{ kind: 'constrain' as const, holds: le(v['Mneed']!, v['Mcap']!), says: 'the joint: the bolt group carries the root moment at the declared factor', role: 'design' as const, source: 'the intent' }] : []),
       { kind: 'constrain', holds: le(div(v['h']!, v['b']!), ratioLimit), says: 'lateral stability of an unbraced sawn beam: d/b ≤ 2 needs no lateral support', role: 'validity', source: NDS.cite },
     ],
     bindings: {
@@ -186,14 +186,14 @@ export interface BracketSlice {
   journal: Journal;
 }
 
-export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt): BracketSlice {
+export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, opts: { jointConstraint?: boolean } = {}): BracketSlice {
   const journal = new Journal();
   const frame = declareFrame(intent.by, 'x along the arm, y opposite gravity, z across; origin on the ground at the post\'s centre');
   const obs = observer('rigid-body kernel');
   const contract = rigidContract();
   const g = gravity();
   const ground = flatGround(frame, intent.by, 'a level floor');
-  const system = bracketSystem(intent, material, g);
+  const system = bracketSystem(intent, material, g, opts.jointConstraint ?? true);
   for (const d of Object.values(system.bindings)) journal.append({ kind: 'record', record: d });
   const open = solve(system);
   for (const f of open.free) journal.append({ kind: 'note', text: `free: ${f.name} (${f.sym})` });
@@ -227,17 +227,17 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
 }
 
 /** A bracket as a person asks for it. */
-export function bracketIntent(by = 'the person', over: Partial<Record<'mass' | 'reach' | 'armLength', number>> = {}): BracketIntent {
+export function bracketIntent(by = 'the person', over: Partial<Record<'mass' | 'reach' | 'armLength' | 'patch' | 'across' | 'postSide', number>> = {}): BracketIntent {
   const given = (name: string, v: number, unit: string, grounds?: string) => leaf(name, v, unit, { class: 'given', by, ...(grounds ? { grounds } : {}) });
   return {
     by,
     mass: given('mass to carry', over.mass ?? 20, 'kg'),
     reach: given('reach of the load from the post\'s face', over.reach ?? 0.5, 'm'),
     armLength: given('length of the arm', over.armLength ?? 1.0, 'm'),
-    patch: given('length of the thing carried, along the arm', 0.1, 'm'),
-    across: given('width of the thing carried, across the arm', 0.1, 'm'),
+    patch: given('length of the thing carried, along the arm', over.patch ?? 0.1, 'm'),
+    across: given('width of the thing carried, across the arm', over.across ?? 0.1, 'm'),
     postHeight: given('height of the post', 1, 'm', 'the post the person has'),
-    postSide: given('side of the square post', 0.1, 'm', 'the post the person has'),
+    postSide: given('side of the square post', over.postSide ?? 0.1, 'm', 'the post the person has'),
     sagRatio: leaf('sag ratio', 180, '1', { class: 'assumed', by, grounds: 'span/180 is the customary serviceability limit for a cantilever, twice a span\'s L/360 (building codes; a declared limit, not a law)' }),
     factor: leaf('factor on strength', 3, '1', { class: 'assumed', by, grounds: 'clear-wood strength is a mean and a bolt group\'s prying model is crude; a factor of three covers both for a single member' }),
   };

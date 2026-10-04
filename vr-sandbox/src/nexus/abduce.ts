@@ -5,7 +5,7 @@
 // instance; its generality is the count of systems it changes; it is validated on held-out observations and
 // promoted with provenance "abduced from observations h1…hn". Nothing here holds a vocabulary of hypotheses.
 
-import { dimText, isDimless, piGroups, type Dim } from './dimension';
+import { dimText, isDimless, type Dim } from './dimension';
 import { evaluate, ofLeaf, unresolved, type Derivation } from './evaluate';
 import { hashOf } from './identity';
 import { app, k, leaf, variable, type Term } from './term';
@@ -24,26 +24,29 @@ export interface Observation {
 /** A dimensionless group over named quantities: integer exponents. */
 export interface Group { exponents: Record<string, number>; term: Term; text: string; hash: string }
 
-/** Every dimensionless group with small exponents over the quantity types, found from their dimensions alone. */
-export function groups(quantities: Record<string, Dim>, maxExponent = 1): Group[] {
+/**
+ * Every dimensionless group with small integer exponents over the quantity types, found from their dimensions
+ * alone: every exponent vector with entries in [−maxExponent, maxExponent] whose dimensions cancel, a group and its
+ * inverse counted once. Basis-free, so nothing depends on which null-space basis an elimination happened to pick.
+ */
+export function groups(quantities: Record<string, Dim>, maxExponent = 2): Group[] {
   const names = Object.keys(quantities);
-  const basis = piGroups(names.map((n) => quantities[n]!));
+  const dims = names.map((n) => quantities[n]!);
   const out = new Map<string, Group>();
-  // integer combinations of the basis with coefficients in [-maxExponent, maxExponent]
-  const coeffs = Array.from({ length: 2 * maxExponent + 1 }, (_, i) => i - maxExponent);
-  const combos: number[][] = [[]];
-  for (let b = 0; b < basis.length; b++) { const next: number[][] = []; for (const c of combos) for (const x of coeffs) next.push([...c, x]); combos.splice(0, combos.length, ...next); }
-  for (const c of combos) {
-    if (c.every((x) => x === 0)) continue;
-    const e = names.map((_, i) => c.reduce((s, x, b) => s + x * basis[b]![i]!, 0));
+  const e = new Array<number>(names.length).fill(-maxExponent);
+  const total = (2 * maxExponent + 1) ** names.length;
+  for (let i = 0; i < total; i++) {
+    let v = i;
+    for (let j = 0; j < names.length; j++) { e[j] = (v % (2 * maxExponent + 1)) - maxExponent; v = Math.floor(v / (2 * maxExponent + 1)); }
     if (e.every((x) => x === 0)) continue;
-    // orientation: the first nonzero exponent positive, so a group and its inverse are one
     const first = e.find((x) => x !== 0)!;
-    const oriented = first < 0 ? e.map((x) => -x) : e;
-    if (oriented.some((x) => Math.abs(x) > 2)) continue;
-    const exponents = Object.fromEntries(names.map((n, i) => [n, oriented[i]!]).filter(([, x]) => x !== 0)) as Record<string, number>;
+    if (first < 0) continue; // the inverse is the same group
+    let dimless = true;
+    for (let r = 0; r < 5 && dimless; r++) { let sum = 0; for (let j = 0; j < names.length; j++) sum += e[j]! * dims[j]![r]!; if (Math.abs(sum) > 1e-9) dimless = false; }
+    if (!dimless) continue;
+    const exponents = Object.fromEntries(names.map((n, j) => [n, e[j]!]).filter(([, x]) => x !== 0)) as Record<string, number>;
     let term: Term | null = null;
-    for (const [n, x] of Object.entries(exponents)) { const v = variable(n, dimUnit(quantities[n]!), n); const f = x === 1 ? v : app('pow', [v], x); term = term ? app('mul', [term, f]) : f; }
+    for (const [n, x] of Object.entries(exponents)) { const vv = variable(n, dimUnit(quantities[n]!), n); const f = x === 1 ? vv : app('pow', [vv], x); term = term ? app('mul', [term, f]) : f; }
     if (!term || !isDimless(term.dim)) continue;
     const text = Object.entries(exponents).map(([n, x]) => (x === 1 ? n : `${n}^${x}`)).join(' · ');
     const g: Group = { exponents, term, text, hash: hashOf({ group: exponents }) };
