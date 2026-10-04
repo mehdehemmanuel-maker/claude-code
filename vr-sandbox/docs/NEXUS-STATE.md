@@ -17,13 +17,21 @@ the first derived section rocked, the language grew over nine observations, the 
 couplings and fields a system has is still written by hand per slice; for an intent stated as wants, the carriers'
 balances now generate the structure (regions, boundaries, paths, stores, conversions, observers, modulations), each
 element with its lineage, and the complex inventions are the instruments that measure what the language lacks
-(docs/NEXUS-PROBES.md).
+(docs/NEXUS-PROBES.md). Since round 5 the instrument is a family, not an invention. The vehicle want-space has 147
+points over medium, source, gravity, mass, speed and scale. Every point is lawful, and every one that fails is a
+refusal of physics with its reason. Rolling, displacing, planing, floating, flying, rockets, sails and swimmers at
+low Reynolds number are regions of that space, reached by the state of what is touched. None is named.
+
+Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
+names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
+the generated laws are checked against, not the limit of what the language can state.
 
 ## 2. What is proven
 
 | Claim | Test |
 |---|---|
-| Dimensional nonsense is not a term; every kept law (144) and slice law checks | tests/nexus/book.test.ts |
+| Dimensional nonsense is not a term; every kept law and slice law checks | tests/nexus/book.test.ts |
+| The book is evidence, not a ceiling: laws are stated for any matter an intent names that no one wrote | tests/nexus/book.test.ts |
 | A derivation never claims more than its weakest input; unknown stays unknown | tests/nexus/evaluate.test.ts |
 | The kernel's errors are measured, and observation is within them | tests/conformance/*, tests/nexus/beam.test.ts |
 | A missing distinction is found from dimensions alone and promoted with provenance | tests/nexus/abduce.test.ts, joint-study, swing-study |
@@ -41,25 +49,34 @@ element with its lineage, and the complex inventions are the instruments that me
 | The balances and shapes generate 50 of the 64 aspects the request names, without naming a part | tests/nexus/probe.test.ts |
 | A free plan is chosen in the space under a declared preference: the least boundary is square | tests/nexus/probe.test.ts |
 | A matter's threshold makes a held region, its limit a protection, its expansion a calibration: 53 of 64 aspects | tests/nexus/probe.test.ts |
+| A flow of matter carries every carrier it holds, and a liquid's potential includes its height: 56 of 64 aspects | tests/nexus/probe.test.ts |
+| The rocket equation, Archimedes and a bar's wave speed are instances of the reaction family | tests/nexus/family.test.ts |
+| Every point of a 147-point vehicle want-space is lawful; every failure is physics' refusal, with its reason | tests/nexus/family.test.ts |
+| How a region is held up and pushed follows from the state of what it touches, with no class named | tests/nexus/family.test.ts |
+| Which law holds follows from a ratio of how momentum crosses: Reynolds, Mach, a wave its own length | tests/nexus/family.test.ts |
 
 ## 3. What is missing
 
 - A learned relation's evidence domain: the span of its observations. With a kernel the exploration loop supplies
   evidence where the derivation goes; without one (heat, fluids, current) a derivation that relies on a relation
   outside its observations must be a hypothesis, and nothing marks it so yet.
-- A generator of structure from requirements: nothing derives which bodies, couplings and fields a slice needs.
+- A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
+  but nothing yet derives which bodies, couplings and fields a realized slice needs.
+- Systems from elements: a generated element's bounds make a space that sizes it (a member, a store, a grip).
+- Shape to resistance where a fluid carries momentum: a field over the shape, needing a fluid realization or
+  observations to abduce from.
+- A matter's state as a region of temperature and pressure, with liquid and gas apart.
+- Gravity as a field with a centre, and two media paired.
 - Conservation across a boundary as a construction constraint (what was called flows), and what generates it.
 - Sum and derivative rules for the binder.
 - A test over the canonical form: which content is identity.
 
 ## 4. Next
 
-Round 4 of the probes: advection and gravity in a matter's potential, which are one principle. A flow of matter
-carries the content of every other carrier the matter holds (its heat, its species, its momentum), and a matter's
-potential is its mechanical energy per volume, pressure and height in gravity together. It reaches the house's
-drainage, siding against driven rain and the machinery that moves air, and the printer's hot region, which must heat
-the PLA that flows through it. Then systems from elements: every generated element with bounds makes a system whose
-space sizes it.
+The state of matter as a region of temperature and pressure, with three states. Liquid and gas differ by whether the
+matter boils at the pressure it is at. This reaches cavitation under water at speed, boiling, and the lighter gas a
+balloon holds. Then a second family over another carrier and its scales: keeping a region at a temperature (a room,
+a cold store, an oven, an incubator, a cell). Then systems from elements, which bridge the generator to the space.
 
 ## 5. Why each primitive exists
 
@@ -99,3 +116,14 @@ space sizes it.
 | Matter: properties per carrier and role, with thresholds | what a region is made of, and where its properties change | round 2's ranking |
 | A threshold makes a held region | a matter that flows only above a potential must be held above it where it flows | the printer had no thermal system |
 | A knowledge gap is not a language gap | a role the language reads that no matter states is missing data | the kept data has no thermal properties |
+| Families as want-spaces | one invention proves little about its kind; a class is a region of a space | round 4's car |
+| The state of what is touched | being at rest is not bearing a contact: a solid bears, a fluid is pushed | the weight sent into the air |
+| Site gravity | gravity is a quantity of a site, not of the generator | the moon and no gravity |
+| Power is a difference of potential; a carrier states whether it reaches its zero | a potential alone offers nothing; heat needs a colder reservoir (the third law) | air at its own pressure offered as a store |
+| A contact's push is friction times what presses it | with no weight, a contact pushes only where it is gripped | wheels pushing in no gravity |
+| Support is paid over the trip | what holds a region up works for as long as it is up | hovering by ejection over the moon |
+| What crosses a boundary carries momentum, light too | a vacuum offers nothing to push; what leaves or arrives does | a vacuum with only charge |
+| A regime ratio chooses the law | each law of pushing a fluid holds where momentum is carried, or where it is conducted | a picogram given the lift of a wing |
+| Heat leaves by touch, moving matter or light | in a vacuum light is the only way | heat with nowhere to go |
+| One fact, either saying | density as a property or as a matter's content density | the car's drag vanished |
+| The book is evidence, not a ceiling | laws are generated without limit; the kept ones check them | a test pinned 144 as if laws were a list |

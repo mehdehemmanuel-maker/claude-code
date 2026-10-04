@@ -227,10 +227,84 @@ Coverage: 0, 44, 50, 53, now 56 of 64. The house reaches 26 of 29; what it lacks
 compatibility of matters in contact, how it is built) is the same in the car and the printer: what happens to a
 thing over its life and how it is made.
 
-## The next instrument: families, not inventions
+## Round 5: a family, not an invention
 
-One car proves little about vehicles. The next rounds explore families as want-spaces: the intent becomes a point
-in a space whose axes are what a person and a site vary (the medium the payload moves through, its mass over scales,
-range, speed, the sources of power, gravity), the language generates every point of a lattice over it, and coverage
-is mapped over the subspaces. Where the language stops, the missing distinction is generalized and the whole family
-regenerates. Recognizable classes are regions of the space, named only by the evaluator.
+One car proves little about vehicles. The intent became a point in a want-space (tests/nexus/families.ts) whose axes
+are what a person and a site vary: seven media stated only by their matter and its state (a road, rails, ice, water,
+under water, air, a vacuum), five sources of power, three gravities, mass and speed swept, and scale and speed swept
+together down to a picogram moving a tenth of a millimetre a second. The language generates all 147 points. The
+evaluator reads what physics requires of any vehicle (nothing impossible generated, the weight carried, the motion
+pushed, the power from somewhere) and names no class.
+
+**Round 5a**, the language of round 4 unchanged: 19 of 133 points lawful. On a road, rails and ice the weight was sent
+into the air; on water and in the air a rolling contact was generated on the fluid; in a vacuum nothing pushed. One
+missing distinction lay under all of them: what is touched, and in what state. Being at rest had been taken for
+bearing a contact. And gravity was a constant of the generator, not a quantity of the site.
+
+**Round 5b**, the distinction generalized, and then each new reading of the evidence generalized in turn:
+
+| Missing distinction | Generalized as | What it reaches |
+|---|---|---|
+| the state of what is touched | a solid or a fluid by its temperature against its matter's thresholds, or a stated friction | contact on a solid; the displaced weight, a stream pushed down or turned, in a fluid; in a vacuum, what leaves |
+| gravity was the generator's | the site states its gravity; standard gravity only as a named assumption | the moon, and no gravity at all |
+| air at its own pressure was offered as a store of power | power is a difference of potential; a carrier states whether it reaches its zero (temperature does not: the third law) | one rule replaces the special cases for charge and fuel |
+| a contact pushed with no weight on it | a contact's push is friction times what presses it | a grip, where there is no gravity |
+| hovering cost the same for a second as for the trip | what holds a region up is paid over the trip: its duration is the distance over the speed | gravity loss: on the moon a mass ratio of 9.5, on the earth 8 × 10⁵ |
+| a vacuum offered nothing to push | anything that crosses a boundary carries momentum, light too: emitted, it pushes by P/c; met, by G/c per area | a photon drive and a light sail; wind and sunlight become one rule |
+| the regime was computed and ignored | which law holds is a ratio of how momentum crosses | Reynolds, Mach, and the speed of a wave its own length |
+| heat in a vacuum had nowhere to go | heat leaves by touch, by matter that moves, or as light | a radiating surface |
+| the car's air states its density as a matter's content | one fact, either saying | the car keeps its drag |
+
+The reaction family grew from six laws to ten. Seven come from momentum and energy conservation for what crosses a
+boundary: the push and the power of a stream, the least power to hover and to turn a stream, ejection by the binder,
+buoyancy, and light. Three are sourced: Stokes (1851), Newton–Laplace and Airy waves. The rocket equation and
+Archimedes reproduce on the book's own examples, and the bar's wave speed is the same law with the matter's stiffness.
+
+| Subspace | Points | Lawful | Held up | Pushed | Powered |
+|---|---|---|---|---|---|
+| a road, rails, ice | 21 each | 21 | 21 | 21 | 21 |
+| water, air | 21 each | 21 | 21 | 21 | 21 |
+| under water | 21 | 21 | 21 | 21 | 18 |
+| a vacuum | 21 | 21 | 19 | 18 | 18 |
+
+Every point that fails is a refusal of physics, with its reason. Wind is air that moves, so there is none in a vacuum
+or under water. Stopping at 2 m/s² is refused on rails, where friction times gravity is 1.96 m/s², and on ice, on the
+moon and with no gravity.
+
+What emerged, with no class named anywhere:
+
+| Region of the space | Emergent | Number |
+|---|---|---|
+| on a solid | rolling contact; ice is water below what it holds its shape below, so it is a contact too | |
+| on water, slow | parts the water: the speed is under that of a wave its own length | 0.6 of it at 1 m/s |
+| on water, fast | climbs its own wave, held up only by turning the stream down | 18 times it at 30 m/s |
+| in water | floats as it is: its mean density against water's 1000 kg/m³ | 159 kg/m³, 0.4 m³ displaced |
+| in air | a displaced volume of matter lighter than air, or a stream pushed down, or a stream turned while moving | 333 m³, 100 kW, 139 kW |
+| in air, fast | its density changes as it moves aside | Mach 0.73 at 250 m/s |
+| a vacuum, with fuel | ejection, paid over the trip against gravity | mass ratio 9.5 on the moon |
+| a vacuum, with light | a sail, or light emitted | 3.3 µPa; 1 / c newtons per watt |
+| a picogram in water | its momentum is conducted: no stream holds it up, and only a stroke that is not its own reverse moves it | Reynolds number 0.002, sinks at 70 µm/s |
+
+Ranked across the family, what the language still lacks:
+
+1. **How hard a fluid pushes back on a shape where momentum is carried.** Six of the seven media hit this. Shape to
+   resistance is a field over the shape that the language cannot derive in closed form. It needs a realization of
+   the fluid, or observations to abduce from, as the beam's rest relation was learned.
+2. **Systems from elements.** Every subspace hits this: a member's section, a store's size, a grip's press. Each is a
+   configuration of a space the element's bounds make, so it bridges the generator to space.ts.
+3. **Two media paired.** Crossing a moving medium needs a push across from a second medium, such as a keel or a skate.
+4. **Gravity from a centre.** A uniform gravity cannot say whether moving across fast enough falls around the mass
+   that makes it.
+5. **Knowledge, not language.** The hottest a matter may run, and how cold what a radiating surface sees.
+6. **Found by reading, not yet in the code.** A fluid's state has two values read from temperature alone. Liquid and
+   gas, and the pressure axis, are missing. Under water at 250 m/s the pressure falls by ½ρv², about 31 MPa, so the
+   water boils around the payload. A balloon's lighter matter is a gas at the air's pressure.
+
+The house, the car and the printer regenerate from the same generator with their coverage unchanged at 56 of 64.
+
+## The next instrument
+
+The vehicle family is the momentum carrier's want-space. The next family explores another carrier across its scales:
+keeping a region at a temperature (a room, a cold store, an oven, an incubator, a cell). Before that comes the state
+of matter as a region of temperature and pressure with three states, since cavitation, boiling and lifting gases all
+wait on it.

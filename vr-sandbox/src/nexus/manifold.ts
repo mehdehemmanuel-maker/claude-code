@@ -26,8 +26,10 @@
 // lacks; and every quantity the intent states that no rule used is reported, because it is information the
 // language cannot read.
 
-import { carrierById, coupling, family, roleOf, type Carrier, type Role } from './carrier';
+import { carrierById, coupling, family, reaction, roleOf, type Carrier, type Role } from './carrier';
 import { gravity } from './field';
+import { CONST } from './book/constants';
+import { dimOf } from './dimension';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
 import type { Leaf } from './term';
@@ -71,7 +73,10 @@ export function generate(intent: Intent): Structure {
   const elements: Element[] = [];
   const gaps: Gap[] = [];
   const used = new Set<string>();
-  const g = gravity().value!;
+  const siteGravity = intent.regions.find((r) => r.gravity);
+  if (siteGravity) used.add(`${siteGravity.id}.${siteGravity.gravity}`);
+  const g = siteGravity ? siteGravity.quantities[siteGravity.gravity!]!.value! : gravity().value!;
+  const gravityName = siteGravity ? siteGravity.quantities[siteGravity.gravity!]!.name : 'standard gravity (the site does not state its own)';
 
   /** A region the language generates is immersed in a region of the intent: what touches it is what touches that. */
   const hosts = new Map<string, string>();
@@ -87,6 +92,7 @@ export function generate(intent: Intent): Structure {
     elements.push(el);
     return el;
   };
+  const cite = (e: Element, ...ids: string[]) => { e.why.laws = [...new Set([...e.why.laws, ...ids])]; };
   const put = (e: Element | undefined | null, v: Element['values'][number]) => { if (e && !e.values.some((x) => x.name === v.name)) e.values.push(v); };
   const gap = (want: string | null, element: string | null, carrier: string | null, lacks: string) => { if (!gaps.some((x) => x.want === want && x.element === element && x.lacks === lacks)) gaps.push({ want, element, carrier, lacks }); };
   const lawIds = (c: Carrier, ...names: string[]) => family(c).filter((l) => names.some((n) => l.id.endsWith(`.${n}`))).map((l) => l.id);
@@ -124,6 +130,19 @@ export function generate(intent: Intent): Structure {
   };
   const movingOf = (region: string) => elements.find((e) => e.id === `moving:${region}`) ?? null;
   /** Where power comes from for a region: the stores its moving region carries, or environment reservoirs of a conjugate carrier above a sink of it. */
+  /**
+   * Power is a difference of potential, never a potential alone. A held potential offers power toward the lowest the
+   * carrier always is anywhere else, or, where nothing else holds it, toward the zero it is stated against when the
+   * carrier reaches that zero after use (a voltage's return, a fuel's products, the surrounding pressure). Temperature's
+   * zero is never reached (the third law), so heat offers work only toward a colder reservoir.
+   */
+  const offers = (r: Region, cid: string): boolean => {
+    const st = stateOf(r, cid);
+    if (!st) return false;
+    const others = reservoirs(cid).filter((x) => x.region !== r.id);
+    const sink = others.length ? Math.min(...others.map((x) => x.hi)) : carrierById(cid).zero.reached ? 0 : null;
+    return sink !== null && st.lo > sink;
+  };
   const powerSources = (target: string): { region: string; carrier: Carrier; store: boolean }[] => {
     const m = movingOf(target);
     if (m) return elements.filter((e) => e.kind === 'store' && e.regions[0] === m.id && carrierById(e.carrier).conjugate).map((e) => ({ region: m.id, carrier: carrierById(e.carrier), store: true }));
@@ -134,9 +153,7 @@ export function generate(intent: Intent): Structure {
         if (!cid || cid === 'momentum') continue;
         const c = carrierById(cid);
         if (!c.conjugate) continue;
-        const st = stateOf(r, cid)!;
-        const below = cid === 'charge' || cid.startsWith('mass of') || reservoirs(cid).some((x) => x.region !== r.id && x.hi < st.lo);
-        if (below && !out.some((x) => x.carrier.id === cid)) out.push({ region: r.id, carrier: c, store: false });
+        if (offers(r, cid) && !out.some((x) => x.carrier.id === cid)) out.push({ region: r.id, carrier: c, store: false });
       }
       return out;
     });
@@ -165,7 +182,11 @@ export function generate(intent: Intent): Structure {
     const sink = reservoirs('energy').filter((s) => s.region === place || (s.region !== place && intent.regions.some((r) => r.id === place) && touches(intent, s.region, place))).sort((a, b) => a.hi - b.hi)[0];
     const at = intent.regions.some((r) => r.id === place) ? place : null;
     if (sink && at) add({ id: `shed:${element.id}`, kind: 'boundary', carrier: 'energy', says: `the heat ${element.says.split(':')[0]} makes leaves to ${sink.region}`, regions: [element.id, sink.region], values: [], why: { want, rule: 'what is lost is heat, which its region must shed', laws: lawIds(carrierById('energy'), 'conductance'), parent: element.id } });
-    else gap(want, element.id, 'energy', 'its heat has nowhere the language can see to go');
+    else {
+      // heat leaves by touch, by matter that moves, or as light: with nothing touching to take it, only as light, from its surface to whatever that surface sees
+      const out = add({ id: `radiate:${element.id}`, kind: 'boundary', carrier: 'light', says: `nothing touching takes the heat ${element.says.split(':')[0]} makes: it leaves as light from its surface to whatever that surface sees`, regions: [element.id], values: [{ name: 'the most a surface radiates per area, over the fourth power of its temperature (a black body)', value: CONST.sigmaSB.value!, unit: 'W/m^2 K^4', from: CONST.sigmaSB.name }], why: { want, rule: 'heat leaves a region by touch, by matter that moves, or as light; with nothing to touch and nothing moving, only as light', laws: ['radiation'], parent: element.id } });
+      gap(want, out.id, 'energy', 'how cold what the surface sees is not said: the area it needs to give its heat away as light cannot be sized');
+    }
     gap(want, element.id, 'energy', 'the hottest it may run is a property of what it is made of: no material is chosen');
   };
 
@@ -256,12 +277,56 @@ export function generate(intent: Intent): Structure {
     return out;
   };
 
+  /** What a region's matter does at its temperature: holds its shape (bears contact), flows (bears by its pressure, can be pushed), or the language cannot say. */
+  const phaseOf = (r: Region): 'solid' | 'fluid' | null => {
+    const T = stateOf(r, 'energy');
+    const flows = Object.entries(r.properties ?? {}).find(([, p]) => p.role === 'flows above');
+    const holds = Object.entries(r.properties ?? {}).find(([, p]) => p.role === 'holds its shape below');
+    if (flows && T) { use(r, flows[0]); if (T.lo > r.quantities[flows[0]]!.value!) return 'fluid'; }
+    if (holds && T) { use(r, holds[0]); if (T.hi < r.quantities[holds[0]]!.value!) return 'solid'; }
+    if ((r.limits ?? []).some((sym) => r.carriers?.[sym] === 'momentum')) return 'solid';
+    return null;
+  };
+  const momentumProperty = (r: Region, role: string): Leaf | null => { const d = Object.entries(r.properties ?? {}).find(([, p]) => p.role === role && p.of === 'momentum'); if (!d) return null; use(r, d[0]); return r.quantities[d[0]]!; };
+  /** How much a region's matter weighs per volume: said as a property of its momentum, or as the content density of the matter it holds. One fact, either saying. */
+  const densityIn = (r: Region): Leaf | null => momentumProperty(r, 'density') ?? (() => { const sym = Object.keys(r.quantities).find((x) => (r.carriers?.[x] ?? '').startsWith('mass of') && roleOf(carrierById(r.carriers![x]!), r.quantities[x]!.unit) === 'content density'); if (!sym) return null; use(r, sym); return r.quantities[sym]!; })();
+  const reactionLaws = (...names: string[]) => reaction().filter((l) => names.some((n) => l.id === `reaction.${n}`)).map((l) => l.id);
+  /** A store whose matter can be ejected: a mass of a matter that carries energy, and the fastest it can leave, all its energy turned to motion. */
+  const ejectable = () => intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).filter((sym) => (r.carriers?.[sym] ?? '').startsWith('mass of')).map((sym) => { use(r, sym); return { region: r.id, carrier: carrierById(r.carriers![sym]!), ve: Math.sqrt(2 * r.quantities[sym]!.value!), e: r.quantities[sym]! }; }));
+  const c0 = CONST.c.value!;
+  const dimOfSpeed = dimOf('m/s').join();
+
   const momentumWant = (w: Want, c: Carrier, role: Role | null, R: Region) => {
     const lo = w.lo?.value ?? null, hi = w.hi?.value ?? null;
     const atRest = (r: Region) => { const st = stateOf(r, 'momentum'); return !!st && st.lo === 0 && st.hi === 0; };
+    const speedWanted = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'momentum' && roleOf(c, x.quantity.unit) === 'potential' && x.lo)?.lo ?? null;
+    const far = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'momentum' && roleOf(c, x.quantity.unit) === 'position' && x.when === 'by the end' && x.lo)?.lo ?? null;
+    /** How long the trip lasts: the distance over the speed. What holds the region up over it is paid for over it. */
+    const trip = far && speedWanted ? { t: far.value! / speedWanted.value!, from: `${far.name} over ${speedWanted.name}` } : null;
+    const sh = shape(R.id);
+    /**
+     * How momentum crosses into a fluid at the wanted motion: carried by the fluid's matter or conducted by its
+     * viscosity, their ratio the Reynolds number. Each law of pushing a fluid holds in one regime: turning a stream
+     * (lift, hover, thrust) where momentum is carried; the conductance of a body (Stokes) where it is conducted.
+     */
+    const regimeOf = (f: Region) => {
+      const rho = densityIn(f), mu = momentumProperty(f, 'conductivity');
+      if (!rho || !mu || !speedWanted || !sh) return null;
+      const L = Math.max(sh.x.value!, sh.z.value!);
+      const Re = rho.value! * speedWanted.value! * L / mu.value!;
+      // the boundaries are conventions, about one and about a thousand
+      return { Re, L, rho, mu, r: Math.min(sh.x.value!, sh.y.value!, sh.z.value!) / 2, conducted: Re < 1, carried: Re > 1000 };
+    };
+    /** What offers the power to move: a store filled from a source with a potential above its zero, what the region itself makes, a flux it intercepts. */
+    const near = (r: Region, ref: Region | null) => r.environment && (touches(intent, r.id, R.id) || (!!ref && touches(intent, r.id, ref.id)));
+    const offered = (ref: Region | null) => ({
+      stores: intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).map((sym) => ({ r, sym, cid: r.carriers?.[sym] })).filter((x) => x.cid && x.cid !== 'momentum' && carrierById(x.cid).conjugate && offers(x.r, x.cid))).map((x) => ({ region: x.r.id, carrier: carrierById(x.cid!) })).filter((x, i, a) => a.findIndex((y) => y.carrier.id === x.carrier.id) === i),
+      aboard: [...said(R, 'momentum', 'power')],
+      light: intent.regions.filter((r) => near(r, ref)).flatMap((r) => said(r, 'light', 'flux density').map((q) => ({ region: r.id, q }))),
+      wind: intent.regions.filter((r) => near(r, ref)).flatMap((r) => said(r, 'momentum', 'potential').filter((q) => !(r.holds ?? []).includes(q.sym)).map((q) => ({ region: r.id, q }))),
+    });
     if (!w.relativeTo && (role === 'position' || role === null) && w.when === 'always') {
       const loads = intent.regions.filter((r) => r.id !== R.id).flatMap((r) => said(r, 'momentum', 'flux density').map((q) => ({ region: r.id, q, dir: r.directions?.[q.sym] ?? null }))).filter((x) => route(x.region, R.id));
-      const sh = shape(R.id);
       let down = 0, across = 0;
       for (const l of loads) {
         const faces = l.dir ? facesCrossed(l.dir) : null;
@@ -269,53 +334,86 @@ export function generate(intent: Intent): Structure {
         const F = area !== null ? l.q.leaf.value! * area : null;
         if (F !== null) { if (l.dir === 'across') across += F; else down += F; }
         const ld = add({ id: `load:${l.region}->${R.id}`, kind: 'path', carrier: 'momentum', says: `the momentum ${l.region} brings (${l.q.leaf.name}) reaches ${R.id}${faces ? ` on its ${faces.join(' and ')} face${faces.length > 1 ? 's' : ''}` : ''}`, regions: route(l.region, R.id)!, values: [{ name: l.q.leaf.name, value: l.q.leaf.value!, unit: 'Pa', from: l.region }, ...(F !== null ? [{ name: 'force', value: F, unit: 'N', from: `${l.q.leaf.name} times the area it acts on` }] : [])], why: { want: w.id, rule: 'what the environment brings per area is a momentum flux into the faces it crosses', laws: [], parent: null } });
-        // what reaches a face is carried across it by members spanning it, to the face that meets the region at rest
         if (sh && faces) for (const f of faces) {
           const span = f === 'side' ? sh.y.value! : Math.min(sh.x.value!, sh.z.value!);
           add({ id: `members:${R.id}:${f}`, kind: 'path', carrier: 'momentum', says: `members spanning the ${f === 'side' ? 'sides' : `${f}-facing face`} of ${R.id} carry what reaches it to the face that meets the ground`, regions: [R.id], values: [{ name: 'span', value: span, unit: 'm', from: f === 'side' ? `${sh.y.name}` : 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: ld.id } });
         }
       }
-      const masses = intent.regions.filter((r) => r.id === R.id || touches(intent, r.id, R.id)).flatMap((r) => said(r, 'momentum', 'capacitance').map((q) => ({ region: r.id, q })));
-      for (const m of masses) down += m.q.leaf.value! * g;
+      const masses = intent.regions.filter((r) => r.id === R.id || (touches(intent, r.id, R.id) && !r.environment)).flatMap((r) => said(r, 'momentum', 'capacitance').map((q) => ({ region: r.id, q })));
+      const weight = masses.reduce((s_, m) => s_ + m.q.leaf.value! * g, 0);
+      down += weight;
+      if (g === 0) { add({ id: `free:${R.id}`, kind: 'bound', carrier: 'momentum', says: `the site's gravity is zero: what ${R.id} holds has no weight to carry`, regions: [R.id], values: [{ name: 'gravity', value: 0, unit: 'm/s^2', from: gravityName }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass: none, where the site has none', laws: [], parent: null } }); if (!loads.length) return; }
       if (sh && masses.length) add({ id: `members:${R.id}:down`, kind: 'path', carrier: 'momentum', says: `members spanning the down-facing face of ${R.id} carry what rests on it`, regions: [R.id], values: [{ name: 'span', value: Math.min(sh.x.value!, sh.z.value!), unit: 'm', from: 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: null } });
-      for (const m of masses) add({ id: `weight:${m.region}`, kind: 'path', carrier: 'momentum', says: `gravity makes momentum in ${m.q.leaf.name}: ${(m.q.leaf.value! * g).toFixed(0)} N reaches ${R.id}`, regions: [m.region, R.id], values: [{ name: 'weight', value: m.q.leaf.value! * g, unit: 'N', from: `${m.q.leaf.name} times standard gravity` }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass', laws: [], parent: null } });
-      const rest = intent.regions.filter((r) => r.id !== R.id && atRest(r));
-      if (!rest.length) { gap(w.id, null, 'momentum', 'nothing at rest receives the momentum'); return; }
-      for (const gr of rest) {
-        const p = path(c, R.id, gr.id, w.id, 'a region held in place sends all the momentum it receives to a region at rest', null);
+      for (const m of masses) if (g > 0) add({ id: `weight:${m.region}`, kind: 'path', carrier: 'momentum', says: `gravity makes momentum in ${m.q.leaf.name}: ${(m.q.leaf.value! * g).toFixed(0)} N reaches ${R.id}`, regions: [m.region, R.id], values: [{ name: 'weight', value: m.q.leaf.value! * g, unit: 'N', from: `${m.q.leaf.name} times ${gravityName}` }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass', laws: [], parent: null } });
+      // what can take the weight depends on what the touched matter does: a solid bears it by contact, a fluid by its pressure, and nothing bears it in a vacuum
+      const solids = intent.regions.filter((r) => r.id !== R.id && atRest(r) && phaseOf(r) === 'solid');
+      const fluids = intent.regions.filter((r) => r.id !== R.id && touches(intent, r.id, R.id) && atRest(r) && phaseOf(r) === 'fluid');
+      for (const gr of solids) {
+        const p = path(c, R.id, gr.id, w.id, 'a region held in place sends all the momentum it receives to a solid at rest, which bears it by contact', null);
         if (!p) continue;
         p.why.laws = [...new Set([...p.why.laws, ...lawIds(c, 'flux-stored-energy')])];
-        if (hi !== null) p.values.push({ name: role === null ? 'most displacement over span' : 'most displacement', value: hi, unit: role === null ? '1' : 'm', from: w.hi!.name });
-        if (down > 0) p.values.push({ name: 'force down, without the structure\'s own weight', value: down, unit: 'N', from: 'the loads on the faces and the weights' });
-        if (across > 0) p.values.push({ name: 'force across', value: across, unit: 'N', from: 'what pushes on the largest side' });
+        if (hi !== null) put(p, { name: role === null ? 'most displacement over span' : 'most displacement', value: hi, unit: role === null ? '1' : 'm', from: w.hi!.name });
+        if (down > 0) put(p, { name: 'force down, without the structure\'s own weight', value: down, unit: 'N', from: 'the loads on the faces and the weights' });
+        if (across > 0) put(p, { name: 'force across', value: across, unit: 'N', from: 'what pushes on the largest side' });
         for (const lim of said(gr, 'momentum', 'flux density', true)) add({ id: `bound:momentum:${R.id}|${gr.id}`, kind: 'bound', carrier: 'momentum', says: `where the path meets ${gr.id}, the momentum per area stays below ${lim.leaf.name}: the meeting area is at least the flux over it`, regions: [R.id, gr.id], values: [{ name: lim.leaf.name, value: lim.leaf.value!, unit: 'Pa', from: gr.id }, ...(down > 0 ? [{ name: 'least meeting area, without the structure\'s own weight', value: down / lim.leaf.value!, unit: 'm^2', from: 'the force down over the bearing it allows' }] : [])], why: { want: w.id, rule: 'a boundary carries flux up to the flux density its weaker side allows', laws: [], parent: p.id } });
       }
+      if (!solids.length && weight > 0) {
+        const mass = weight / g;
+        const own = sh ? sh.x.value! * sh.y.value! * sh.z.value! : null;
+        const over = (P: number) => (trip ? [{ name: 'energy over the trip: the power times its duration', value: P * trip.t, unit: 'J', from: trip.from }] : []);
+        for (const f of fluids) {
+          const rho = densityIn(f);
+          if (!rho) { gap(w.id, null, 'momentum', `what ${f.id} weighs per volume is not said: whether it can bear ${R.id} cannot be read`); continue; }
+          add({ id: `buoyancy:${R.id}|${f.id}`, kind: 'bound', carrier: 'momentum', says: `${f.id}, at rest, pushes up on ${R.id} by its pressure, which grows with depth: by the weight of ${f.id} it displaces, so it is held if what displaces, with all it encloses, is on the whole lighter than ${f.id}`, regions: [R.id, f.id], oneOf: `support of ${R.id}`,
+            values: [{ name: 'least volume displaced: the mass over the fluid\'s density', value: mass / rho.value!, unit: 'm^3', from: `${rho.name}` }, ...(own !== null ? [{ name: `volume ${R.id} itself takes`, value: own, unit: 'm^3', from: 'its extent' }, { name: `its mean density as it is, against ${f.id}'s ${rho.value} kg/m³`, value: mass / own, unit: 'kg/m^3', from: 'its mass over its extent' }] : [])],
+            why: { want: w.id, rule: 'a fluid at rest bears what is in it by the pressure its weight makes: the weight of the fluid displaced', laws: reactionLaws('buoyancy'), parent: null } });
+          const reg = regimeOf(f);
+          if (reg?.conducted) {
+            // where momentum is conducted, nothing is held up by turning a stream: what is heavier sinks slowly, at the speed its weight drives through the fluid's conductance, and holds its place by swimming up as fast
+            const vs = weight / (6 * Math.PI * reg.mu.value! * reg.r);
+            add({ id: `hover:${R.id}|${f.id}`, kind: 'conversion', carrier: 'momentum', says: `or ${R.id} swims up as fast as it sinks: in ${f.id} its momentum is conducted, not carried, so it sinks at its weight over its momentum conductance and holds its place by a stroke that pushes ${f.id} down`, regions: [R.id, f.id], oneOf: `support of ${R.id}`,
+              values: [{ name: 'speed it sinks at: its weight over six pi times the viscosity and its radius', value: vs, unit: 'm/s', from: 'reaction.conducted' }, { name: 'least power to hold its place: its weight times that speed', value: weight * vs, unit: 'W', from: 'the work against the conducted resistance' }, ...over(weight * vs)],
+              why: { want: w.id, rule: 'where a fluid conducts momentum, a body\'s resistance is its conductance times its speed', laws: reactionLaws('conducted'), parent: null } });
+            continue;
+          }
+          const plan = sh ? sh.area.up.value! : null;
+          if (plan) { const P = weight ** 1.5 / Math.sqrt(2 * rho.value! * plan); add({ id: `hover:${R.id}|${f.id}`, kind: 'conversion', carrier: 'momentum', says: `or ${R.id} pushes ${f.id} down through an area at least its plan, and is held up by the push back`, regions: [R.id, f.id], oneOf: `support of ${R.id}`, values: [{ name: 'least power over its plan: the weight to the three halves over the root of twice the density times the area', value: P, unit: 'W', from: 'reaction.hover' }, ...over(P)], why: { want: w.id, rule: 'a region gains momentum by giving it to the fluid\'s matter it pushes, where that momentum is carried', laws: reactionLaws('hover', 'push', 'power'), parent: null } }); }
+          if (speedWanted && sh) { const P = weight ** 2 / (2 * rho.value! * speedWanted.value! * Math.PI * sh.x.value! ** 2 / 4); add({ id: `lift:${R.id}|${f.id}`, kind: 'conversion', carrier: 'momentum', says: `or, moving through ${f.id}, ${R.id} turns a stream of it down across a width at least its own, and is held up by the push back`, regions: [R.id, f.id], oneOf: `support of ${R.id}`, values: [{ name: 'least power at the wanted speed over a stream as wide as it: the weight squared over twice the density, the speed and the area', value: P, unit: 'W', from: 'reaction.turning' }, ...over(P)], why: { want: w.id, rule: 'moving through a fluid, a stream turned across the motion pushes back across it, where momentum is carried', laws: reactionLaws('turning', 'push'), parent: null } }); }
+        }
+        if (!fluids.length) {
+          // nothing to bear the weight: what leaves the region must carry the momentum away, matter it ejects or light it emits
+          const ej = ejectable();
+          const power = offered(null);
+          for (const e of ej) add({ id: `hover:${R.id}|ejected`, kind: 'conversion', carrier: 'momentum', says: `nothing touches ${R.id}: it is held up only by ejecting the ${e.carrier.id.slice('mass of '.length)} it carries downward`, regions: [R.id], oneOf: `support of ${R.id}`, values: [{ name: 'fastest the ejected matter leaves: the root of twice its energy per mass', value: e.ve, unit: 'm/s', from: e.e.name }, { name: 'least mass ejected per second: the weight over that speed', value: weight / e.ve, unit: 'kg/s', from: 'reaction.push' }, ...(trip ? [{ name: 'mass it must start with over the mass it ends with, to stay up over the trip: e to the gravity times the duration over the speed of what leaves', value: Math.exp(g * trip.t / e.ve), unit: '1', from: `reaction.ejection over ${trip.from}` }] : [])], why: { want: w.id, rule: 'with nothing to push against, a region pushes against the matter it ejects', laws: reactionLaws('push', 'ejection'), parent: null } });
+          if (power.stores.length || power.aboard.length || power.light.length) add({ id: `hover:${R.id}|light`, kind: 'conversion', carrier: 'momentum', says: `or ${R.id} emits light downward and is pushed up by its momentum: no matter is spent, but the power is the weight times the speed of light`, regions: [R.id], oneOf: `support of ${R.id}`, values: [{ name: 'least power of light emitted: the weight times the speed of light', value: weight * c0, unit: 'W', from: 'reaction.light' }, ...over(weight * c0)], why: { want: w.id, rule: 'light carries momentum: what emits it is pushed back', laws: reactionLaws('light'), parent: null } });
+          if (!ej.length && !(power.stores.length || power.aboard.length || power.light.length)) gap(w.id, null, 'momentum', `nothing ${R.id} touches can bear its weight, and nothing it carries or makes can leave it to push against`);
+          gap(w.id, null, 'momentum', `the site's gravity is uniform, with no mass it comes from: whether moving across fast enough to fall around that mass would hold ${R.id} up cannot be read`);
+        }
+      }
       if (loads.length && !sh) gap(w.id, null, 'momentum', 'the loads per area need the areas they act on: no geometry');
-      if (loads.length) gap(w.id, null, 'momentum', 'the structure\'s own weight is what it is made of times its size: no material is chosen');
+      if (loads.length || solids.length && masses.length && sh) gap(w.id, null, 'momentum', 'the structure\'s own weight is what it is made of times its size: no material is chosen');
       return;
     }
     // moved: relative to a reference
     const ref = w.relativeTo ? regionOf(intent, w.relativeTo) : intent.regions.find((r) => r.environment && touches(intent, r.id, R.id) && atRest(r)) ?? null;
-    if (!ref) { gap(w.id, null, 'momentum', `nothing at rest touches ${R.id} to push against`); return; }
-    if (!atRest(ref)) {
+    if (ref && !atRest(ref)) {
       // content placed relative to a shape: it arrives at a point that moves over it
       const dep = add({ id: `deposit:${R.id}`, kind: 'region', carrier: 'momentum', says: `a point where content enters ${R.id}, moving over ${ref.id}`, regions: [R.id], values: hi !== null ? [{ name: 'most position error', value: hi, unit: 'm', from: w.hi!.name }] : [], why: { want: w.id, rule: `content placed relative to ${ref.id} arrives at a point that moves over it`, laws: [], parent: null } });
       const rest = intent.regions.find((r) => r.environment && atRest(r));
       if (!rest) { gap(w.id, dep.id, 'momentum', 'nothing at rest to hold the point against'); return; }
       const frame = path(c, R.id, rest.id, w.id, `the point and ${R.id} are held to each other through ${rest.id}, stiff enough that the motion's forces displace them less than the tolerance`, dep.id);
-      if (frame) { frame.why.laws = [...new Set([...frame.why.laws, ...lawIds(c, 'flux-stored-energy')])]; if (hi !== null) frame.values.push({ name: 'most displacement', value: hi, unit: 'm', from: w.hi!.name }); }
-      const sh = shape(R.id);
+      if (frame) { frame.why.laws = [...new Set([...frame.why.laws, ...lawIds(c, 'flux-stored-energy')])]; if (hi !== null) put(frame, { name: 'most displacement', value: hi, unit: 'm', from: w.hi!.name }); }
       const axes: ('x' | 'y' | 'z' | null)[] = sh ? ['x', 'y', 'z'] : [null];
       if (sh && frame) put(frame, { name: 'span it holds the point over, along each axis', value: Math.max(sh.x.value!, sh.y.value!, sh.z.value!), unit: 'm', from: `the extent of ${R.id}` });
-      for (const s of powerSources(R.id)) {
+      for (const s_ of powerSources(R.id)) {
         let conv: Element | null = null;
-        for (const a of axes) {
-          conv = add({ id: `conversion:${s.carrier.id}->momentum:${dep.id}${a ? `:${a}` : ''}`, kind: 'conversion', carrier: 'momentum', says: `${s.carrier.id} becomes the momentum that moves the point${a ? ` along ${a}, over ${sh![a].value} m` : ''}`, regions: [dep.id], values: a ? [{ name: 'travel', value: sh![a].value!, unit: 'm', from: `the extent of ${R.id} along ${a}` }] : [], why: { want: w.id, rule: a ? 'a point moved over an extent moves along each of its axes: momentum has a direction' : 'a point moved over a shape: power converted to momentum', laws: coupling(s.carrier, carrierById('angular momentum')).map((l) => l.id), parent: dep.id } });
-          if (a) shed(conv, R.id, w.id);
-          if (a) add({ id: `observer:position:${dep.id}:${a}`, kind: 'observer', carrier: 'momentum', says: `an observer of where the point is along ${a}, resolving finer than the tolerance`, regions: [dep.id], values: hi !== null ? [{ name: 'resolution needed', value: hi / 2, unit: 'm', from: 'half the tolerance' }] : [], why: { want: w.id, rule: 'a position held to a tolerance is observed finer than it, along each axis it moves', laws: [], parent: conv.id } });
+        for (const a_ of axes) {
+          conv = add({ id: `conversion:${s_.carrier.id}->momentum:${dep.id}${a_ ? `:${a_}` : ''}`, kind: 'conversion', carrier: 'momentum', says: `${s_.carrier.id} becomes the momentum that moves the point${a_ ? ` along ${a_}, over ${sh![a_].value} m` : ''}`, regions: [dep.id], values: a_ ? [{ name: 'travel', value: sh![a_].value!, unit: 'm', from: `the extent of ${R.id} along ${a_}` }] : [], why: { want: w.id, rule: a_ ? 'a point moved over an extent moves along each of its axes: momentum has a direction' : 'a point moved over a shape: power converted to momentum', laws: coupling(s_.carrier, carrierById('angular momentum')).map((l) => l.id), parent: dep.id } });
+          if (a_) shed(conv, R.id, w.id);
+          if (a_) add({ id: `observer:position:${dep.id}:${a_}`, kind: 'observer', carrier: 'momentum', says: `an observer of where the point is along ${a_}, resolving finer than the tolerance`, regions: [dep.id], values: hi !== null ? [{ name: 'resolution needed', value: hi / 2, unit: 'm', from: 'half the tolerance' }] : [], why: { want: w.id, rule: 'a position held to a tolerance is observed finer than it, along each axis it moves', laws: [], parent: conv.id } });
         }
-        path(s.carrier, s.region, R.id, w.id, `the motion draws ${s.carrier.id} from ${s.region}`, conv!.id);
-        if (s.carrier.id === 'charge') add({ id: `return:charge:${R.id}->${s.region}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${R.id} to ${s.region}: charge is neither made nor destroyed`, regions: [R.id, s.region], values: [], why: { want: w.id, rule: 'charge drawn returns', laws: lawIds(s.carrier, 'conductance'), parent: conv!.id } });
+        path(s_.carrier, s_.region, R.id, w.id, `the motion draws ${s_.carrier.id} from ${s_.region}`, conv!.id);
+        if (s_.carrier.id === 'charge') add({ id: `return:charge:${R.id}->${s_.region}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${R.id} to ${s_.region}: charge is neither made nor destroyed`, regions: [R.id, s_.region], values: [], why: { want: w.id, rule: 'charge drawn returns', laws: lawIds(s_.carrier, 'conductance'), parent: conv!.id } });
         if (!sh) shed(conv!, R.id, w.id);
       }
       add({ id: `observer:position:${dep.id}`, kind: 'observer', carrier: 'momentum', says: `an observer of where the point is against ${ref.id}, resolving finer than the tolerance`, regions: [dep.id], values: hi !== null ? [{ name: 'resolution needed', value: hi / 2, unit: 'm', from: 'half the tolerance' }] : [], why: { want: w.id, rule: 'a position held to a tolerance is observed finer than the tolerance', laws: [], parent: dep.id } });
@@ -323,25 +421,50 @@ export function generate(intent: Intent): Structure {
       return;
     }
     const masses = said(R, 'momentum', 'capacitance');
-    const moving = add({ id: `moving:${R.id}`, kind: 'region', carrier: 'momentum', says: `a region moving with ${R.id}: what must move together shares momentum through paths`, regions: [R.id], values: masses.map((m) => ({ name: `mass it moves, at least (${m.leaf.name})`, value: m.leaf.value!, unit: 'kg', from: R.id })), why: { want: w.id, rule: `${R.id} moves relative to ${ref.id}`, laws: lawIds(c, 'storage'), parent: null } });
-    const mu = said(ref, 'momentum', 'content', true).concat(Object.entries(ref.quantities).filter(([sym, l]) => (ref.limits ?? []).includes(sym) && ref.carriers?.[sym] === 'momentum' && l.dim.every((x) => x === 0)).map(([sym, leaf]) => { use(ref, sym); return { sym, leaf }; }))[0];
-    const contact = add({ id: `contact:${R.id}|${ref.id}`, kind: 'contact', carrier: 'momentum', says: `the moving region meets ${ref.id}: momentum crosses there up to the most tangential flux over normal flux${mu ? ` (${mu.leaf.name})` : ''}; a contact that rolls has no relative speed and makes no heat, one that slides dissipates the flux times the speed`, regions: [moving.id, ref.id], values: mu ? [{ name: 'most acceleration the contact carries', value: mu.leaf.value! * g, unit: 'm/s^2', from: `${mu.leaf.name} times standard gravity` }] : [], why: { want: w.id, rule: 'a moving region\'s momentum crosses where it meets a region at rest', laws: [...lawIds(c, 'dissipation'), ...coupling(carrierById('angular momentum'), c).map((l) => l.id)], parent: moving.id } });
-    if (role === 'acceleration' && w.when === 'on demand' && lo !== null) {
-      if (mu && mu.leaf.value! * g < lo) gap(w.id, contact.id, 'momentum', `the want asks ${lo} m/s² and the contact carries at most ${(mu.leaf.value! * g).toFixed(2)} m/s² with the site's friction`);
+    const moving = add({ id: `moving:${R.id}`, kind: 'region', carrier: 'momentum', says: `a region moving with ${R.id}: what must move together shares momentum through paths`, regions: [R.id], values: masses.map((m) => ({ name: `mass it moves, at least (${m.leaf.name})`, value: m.leaf.value!, unit: 'kg', from: R.id })), why: { want: w.id, rule: `${R.id} moves${ref ? ` relative to ${ref.id}` : ''}`, laws: lawIds(c, 'storage'), parent: null } });
+    const phase = ref ? phaseOf(ref) : null;
+    const power = offered(ref);
+    const reg = ref && phase === 'fluid' ? regimeOf(ref) : null;
+    // how momentum crosses to what is touched: a solid by a contact that rolls; a fluid by pushing its matter, or by a stroke where its momentum is conducted; nothing, by what the region ejects or emits
+    let pusher: Element | null = null;
+    let mu: { sym: string; leaf: Leaf } | undefined;
+    if (ref && phase === 'solid') {
+      mu = said(ref, 'momentum', 'content', true).concat(Object.entries(ref.quantities).filter(([sym, l]) => (ref.limits ?? []).includes(sym) && ref.carriers?.[sym] === 'momentum' && l.dim.every((x) => x === 0)).map(([sym, leaf]) => { use(ref, sym); return { sym, leaf }; }))[0];
+      pusher = add({ id: `contact:${R.id}|${ref.id}`, kind: 'contact', carrier: 'momentum', says: `the moving region meets ${ref.id}, a solid: momentum crosses there up to the most tangential flux over normal flux${mu ? ` (${mu.leaf.name})` : ''}; a contact that rolls has no relative speed and makes no heat, one that slides dissipates the flux times the speed`, regions: [moving.id, ref.id], values: mu ? [{ name: 'most acceleration the contact carries', value: mu.leaf.value! * g, unit: 'm/s^2', from: `${mu.leaf.name} times ${gravityName}` }] : [], why: { want: w.id, rule: 'a moving region\'s momentum crosses where it meets a solid at rest', laws: [...lawIds(c, 'dissipation'), ...coupling(carrierById('angular momentum'), c).map((l) => l.id)], parent: moving.id } });
+      if (g === 0) {
+        // the contact's tangential flux is bounded by the normal flux: with no weight, something else must press it
+        const grip = add({ id: `grip:${R.id}|${ref.id}`, kind: 'contact', carrier: 'momentum', says: `with no weight to press it, the contact carries momentum only where something else presses it to ${ref.id}: a grip from both sides, its push then bounded by the friction times the press`, regions: [moving.id, ref.id], values: [], why: { want: w.id, rule: 'a contact carries tangential momentum up to the friction times the normal flux: with no weight, the normal flux is made', laws: lawIds(c, 'dissipation'), parent: pusher.id } });
+        gap(w.id, grip.id, 'momentum', 'how hard the grip presses is a choice the language does not yet make: the push of the contact cannot be bounded');
+      }
+    } else if (ref && phase === 'fluid') {
+      pusher = reg?.conducted
+        ? add({ id: `thrust:${R.id}|${ref.id}`, kind: 'conversion', carrier: 'momentum', says: `in ${ref.id} the moving region's momentum is conducted, not carried: it is pushed by the resistance of a stroke against ${ref.id}, and a stroke that retraces itself pushes it back as far as forward, so the stroke must not be its own reverse (it turns, or travels along it as a wave); when it stops pushing, it stops at once`, regions: [moving.id, ref.id], values: [{ name: 'momentum it carries over momentum it conducts (the Reynolds number)', value: reg.Re, unit: '1', from: `${ref.id}'s density and viscosity` }], why: { want: w.id, rule: 'where a fluid conducts momentum, the resistance follows the motion\'s shape and not its rate: only a stroke that is not its own reverse moves (Purcell, Life at low Reynolds number, Am. J. Phys. 45, 1977)', laws: reactionLaws('conducted'), parent: moving.id } })
+        : add({ id: `thrust:${R.id}|${ref.id}`, kind: 'conversion', carrier: 'momentum', says: `the moving region pushes ${ref.id}'s matter back and is pushed forward: a fluid bears no contact, so momentum crosses only by the matter pushed; much of it changed little costs less power than little changed much`, regions: [moving.id, ref.id], values: [], why: { want: w.id, rule: 'a region gains momentum by giving it to the fluid\'s matter it pushes, where that momentum is carried', laws: reactionLaws('push', 'power'), parent: moving.id } });
+    } else if (!ref || phase === null) {
+      const ej = ejectable();
+      for (const e of ej) {
+        pusher = add({ id: `thrust:${R.id}|ejected`, kind: 'conversion', carrier: 'momentum', says: `nothing touches the moving region: it pushes against the ${e.carrier.id.slice('mass of '.length)} it carries and ejects`, regions: [moving.id], values: [{ name: 'fastest the ejected matter leaves: the root of twice its energy per mass', value: e.ve, unit: 'm/s', from: e.e.name }, ...(speedWanted ? [{ name: 'mass it must start with over the mass it ends with, to reach the speed and stop: e to the twice the speed over that', value: Math.exp(2 * speedWanted.value! / e.ve), unit: '1', from: 'reaction.ejection' }] : [])], why: { want: w.id, rule: 'with nothing to push against, a region pushes against the matter it ejects', laws: reactionLaws('push', 'ejection'), parent: moving.id } });
+      }
+      if (power.stores.length || power.aboard.length || power.light.length) {
+        const e = add({ ...(ej.length ? { oneOf: `push of ${moving.id}` } : {}), id: `thrust:${R.id}|light`, kind: 'conversion', carrier: 'momentum', says: 'or the moving region emits light behind it and is pushed by its momentum: nothing is spent but power, and each watt pushes by one over the speed of light', regions: [moving.id], values: [{ name: 'push for each watt of light emitted', value: 1 / c0, unit: 'N/W', from: 'reaction.light' }, ...(speedWanted && masses[0] ? [{ name: 'light energy to reach the speed and stop: twice the momentum times the speed of light', value: 2 * masses[0].leaf.value! * speedWanted.value! * c0, unit: 'J', from: 'reaction.light' }] : [])], why: { want: w.id, rule: 'light carries momentum: what emits it is pushed back', laws: reactionLaws('light'), parent: moving.id } });
+        pusher = pusher ?? e;
+      }
+      if (!pusher && !power.light.length) gap(w.id, moving.id, 'momentum', `nothing ${R.id} touches can be pushed, and nothing it carries or makes can leave it`);
     }
+    if (role === 'acceleration' && w.when === 'on demand' && lo !== null && mu && mu.leaf.value! * g < lo) gap(w.id, pusher?.id ?? moving.id, 'momentum', `the want asks ${lo} m/s² and the contact carries at most ${(mu.leaf.value! * g).toFixed(2)} m/s² with the site's friction`);
     if (role === 'acceleration' && w.when === 'on demand' && /decel/.test(w.quantity.name)) {
-      const brake = add({ id: `conversion:momentum:${R.id}:removal`, kind: 'conversion', carrier: 'momentum', says: 'on demand the moving region\'s momentum is taken out at the contact: its energy becomes heat, or returns to the store', regions: [moving.id], values: [], why: { want: w.id, rule: 'momentum removed from a moving region: its stored energy goes to heat or back to the store', laws: lawIds(c, 'dissipation', 'stored-energy'), parent: contact.id } });
+      const brake = add({ id: `conversion:momentum:${R.id}:removal`, kind: 'conversion', carrier: 'momentum', says: phase === 'solid' ? 'on demand the moving region\'s momentum is taken out at the contact: its energy becomes heat, or returns to the store' : 'on demand the moving region\'s momentum is taken out by pushing the other way, or left to what resists it', regions: [moving.id], values: [], why: { want: w.id, rule: 'momentum removed from a moving region: its stored energy goes to heat or back to the store', laws: lawIds(c, 'dissipation', 'stored-energy'), parent: pusher?.id ?? moving.id } });
       add({ id: `modulation:momentum:${R.id}:removal`, kind: 'modulation', carrier: 'momentum', says: 'the person asks for the momentum to be taken out', regions: [moving.id], values: [], why: { want: w.id, rule: 'on demand: the person modulates', laws: [], parent: brake.id } });
       shed(brake, R.id, w.id);
     }
-    if (role === 'acceleration' && w.when === 'always' && hi !== null) {
+    if (role === 'acceleration' && w.when === 'always' && hi !== null && ref) {
       const dir = w.quantity.direction;
       const varies = Object.keys(ref.quantities).filter((sym) => ref.carriers?.[sym] === 'momentum' && !(ref.holds ?? []).includes(sym) && !(ref.limits ?? []).includes(sym) && (!dir || ref.directions?.[sym] === dir));
       for (const sym of varies) use(ref, sym);
-      if (!varies.length) gap(w.id, contact.id, 'momentum', 'nothing the language sees varies at the contact');
+      if (!varies.length) gap(w.id, pusher?.id ?? null, 'momentum', 'nothing the language sees varies at the contact');
       else {
-        add({ id: `filter:momentum:${R.id}`, kind: 'path', carrier: 'momentum', says: `between the contact and ${R.id}, a path that stores and dissipates momentum, so what varies at the contact (${varies.map((s) => ref.quantities[s]!.name).join(', ')}) reaches ${R.id} below the bound`, regions: [contact.id, R.id], values: [{ name: 'most acceleration', value: hi, unit: 'm/s^2', from: w.hi!.name }], why: { want: w.id, rule: 'a bounded rate under a varying neighbour: a store and a dissipation between them', laws: lawIds(c, 'storage', 'dissipation', 'flux-stored-energy'), parent: contact.id } });
-        observeAndModulate(c, R.id, w.id, contact.id, null);
+        add({ id: `filter:momentum:${R.id}`, kind: 'path', carrier: 'momentum', says: `between the contact and ${R.id}, a path that stores and dissipates momentum, so what varies at the contact (${varies.map((s_) => ref.quantities[s_]!.name).join(', ')}) reaches ${R.id} below the bound`, regions: [pusher?.id ?? moving.id, R.id], values: [{ name: 'most acceleration', value: hi, unit: 'm/s^2', from: w.hi!.name }], why: { want: w.id, rule: 'a bounded rate under a varying neighbour: a store and a dissipation between them', laws: lawIds(c, 'storage', 'dissipation', 'flux-stored-energy'), parent: pusher?.id ?? moving.id } });
+        observeAndModulate(c, R.id, w.id, pusher?.id ?? null, null);
       }
     }
     if (role === 'acceleration' && w.when === 'on demand' && hi !== null) {
@@ -349,33 +472,69 @@ export function generate(intent: Intent): Structure {
       const stroke = add({ id: `stroke:momentum:${R.id}`, kind: 'path', carrier: 'momentum', says: `in the event the momentum of ${R.id} leaves through a path that stores and dissipates it over a stroke long enough to keep the flux below ${hi} m/s² times the mass`, regions: [R.id, moving.id], values: [{ name: 'most acceleration', value: hi, unit: 'm/s^2', from: w.hi!.name }, ...(v ? [{ name: 'least stroke: v² / 2a', value: (v.leaf.value! ** 2) / (2 * hi), unit: 'm', from: `${v.leaf.name} and the bound` }] : [])], why: { want: w.id, rule: 'a bounded flux in an event: the content leaves over a stroke', laws: lawIds(c, 'stored-energy', 'dissipation'), parent: moving.id } });
       if (!v) gap(w.id, stroke.id, 'momentum', 'the event\'s speed is not a quantity: the stroke cannot be derived');
     }
-    if (role === 'position' && w.when === 'always') {
-      // following a path is momentum across the travel: its curvature asks v² / r of the contact, which carries at most the friction times gravity
+    if (role === 'position' && w.when === 'always' && ref) {
       const r = said(ref, 'momentum', 'position')[0];
-      add({ id: `modulation:momentum:${R.id}:direction`, kind: 'modulation', carrier: 'momentum', says: 'the person modulates which way the contact pushes, across the travel', regions: [moving.id], values: [], why: { want: w.id, rule: 'a position kept relative to a path: the push across the travel is modulated by who observes the path', laws: [], parent: contact.id } });
-      if (r && mu) put(contact, { name: 'most speed on the tightest curve: the root of friction times gravity times its radius', value: Math.sqrt(mu.leaf.value! * g * r.leaf.value!), unit: 'm/s', from: `${mu.leaf.name} and ${r.leaf.name}` });
-      else gap(w.id, moving.id, 'momentum', 'how sharply the path turns is not said');
+      add({ id: `modulation:momentum:${R.id}:direction`, kind: 'modulation', carrier: 'momentum', says: 'the person modulates which way the moving region is pushed, across the travel', regions: [moving.id], values: [], why: { want: w.id, rule: 'a position kept relative to a path: the push across the travel is modulated by who observes the path', laws: [], parent: pusher?.id ?? moving.id } });
+      if (r && mu && pusher) put(pusher, { name: 'most speed on the tightest curve: the root of friction times gravity times its radius', value: Math.sqrt(mu.leaf.value! * g * r.leaf.value!), unit: 'm/s', from: `${mu.leaf.name} and ${r.leaf.name}` });
+      else if (!r) gap(w.id, moving.id, 'momentum', 'how sharply the path turns is not said');
     }
     if ((role === 'position' && w.when === 'by the end') || role === 'potential') {
-      const sources = intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).map((sym) => ({ r, sym, cid: r.carriers?.[sym] })).filter((x) => x.cid && x.cid !== 'momentum' && carrierById(x.cid).conjugate)).map((x) => { use(x.r, x.sym); return { region: x.r.id, carrier: carrierById(x.cid!) }; }).filter((x, i, a) => a.findIndex((y) => y.carrier.id === x.carrier.id) === i);
-      if (!sources.length) { gap(w.id, moving.id, 'momentum', 'nothing offers the power to move'); return; }
-      for (const f of sources) {
-        const alt = sources.length > 1 ? `store of ${moving.id}` : undefined;
-        const store = add({ ...(alt ? { oneOf: alt } : {}), id: `store:${f.carrier.id}:${moving.id}`, kind: 'store', carrier: f.carrier.id, says: `a store of ${f.carrier.id} the moving region carries: it moves away from ${f.region}, so no path to it lasts`, regions: [moving.id], values: role === 'position' && lo !== null ? [{ name: 'distance the store must last', value: lo, unit: 'm', from: w.lo!.name }] : [], why: { want: w.id, rule: 'a moving region carries its store: a path to a fixed source would have to stretch', laws: lawIds(f.carrier, 'storage', 'stored-energy'), parent: moving.id } });
+      // the power to move: a store carried from a source whose potential stands above its zero, what the moving region itself makes, or a flux it meets on the way (light it converts, light or a moving medium whose momentum it takes)
+      const { stores, aboard, light, wind } = power;
+      if (!stores.length && !aboard.length && !light.length && !wind.length) { gap(w.id, moving.id, 'momentum', 'nothing offers the power to move'); return; }
+      const n = stores.length + aboard.length + 2 * light.length + wind.length;
+      const alt = n > 1 ? { oneOf: `power of ${moving.id}` } : {};
+      for (const f of stores) {
+        const store = add({ ...alt, id: `store:${f.carrier.id}:${moving.id}`, kind: 'store', carrier: f.carrier.id, says: `a store of ${f.carrier.id} the moving region carries: it moves away from ${f.region}, so no path to it lasts`, regions: [moving.id], values: role === 'position' && lo !== null ? [{ name: 'distance the store must last', value: lo, unit: 'm', from: w.lo!.name }] : [], why: { want: w.id, rule: 'a moving region carries its store: a path to a fixed source would have to stretch', laws: lawIds(f.carrier, 'storage', 'stored-energy'), parent: moving.id } });
         add({ id: `refill:${f.carrier.id}:${moving.id}`, kind: 'path', carrier: f.carrier.id, says: `the store is filled from ${f.region} when the moving region is there`, regions: [f.region, moving.id], values: [], why: { want: w.id, rule: 'a store is replenished from its source', laws: lawIds(f.carrier, 'conductance'), parent: store.id } });
-        const conv = add({ ...(alt ? { oneOf: `conversion of ${moving.id}` } : {}), id: `conversion:${f.carrier.id}->momentum:${moving.id}`, kind: 'conversion', carrier: 'momentum', says: f.carrier.id === 'charge' ? 'charge from the store becomes angular momentum, which the rolling contact couples to momentum' : `${f.carrier.id} from the store becomes heat, then work bounded by Carnot, then angular momentum at the rolling contact`, regions: [moving.id], values: [], why: { want: w.id, rule: 'the store\'s carrier is converted to momentum at the contact', laws: [...coupling(f.carrier, carrierById('angular momentum')).map((l) => l.id), ...coupling(carrierById('angular momentum'), c).map((l) => l.id)], parent: store.id } });
+        const into = phase === 'solid' ? 'angular momentum, which the rolling contact couples to momentum' : phase === 'fluid' ? `the push on ${ref!.id}'s matter` : 'the push of what leaves it';
+        const conv = add({ ...(n > 1 ? { oneOf: `conversion of ${moving.id}` } : {}), id: `conversion:${f.carrier.id}->momentum:${moving.id}`, kind: 'conversion', carrier: 'momentum', says: f.carrier.id === 'charge' ? `charge from the store becomes ${into}` : `${f.carrier.id} from the store becomes heat, then work bounded by Carnot, then ${into}`, regions: [moving.id], values: [], why: { want: w.id, rule: 'the store\'s carrier is converted to the momentum the moving region gives what it pushes', laws: [...coupling(f.carrier, carrierById('angular momentum')).map((l) => l.id), ...(phase === 'solid' ? coupling(carrierById('angular momentum'), c).map((l) => l.id) : reactionLaws('push', 'power'))], parent: store.id } });
         add({ id: `modulation:${f.carrier.id}:${moving.id}:person`, kind: 'modulation', carrier: 'momentum', says: 'the person chooses how much of the store is converted', regions: [moving.id], values: [], why: { want: w.id, rule: 'on demand: the person modulates the conversion', laws: [], parent: conv.id } });
         shed(conv, R.id, w.id);
       }
-      for (const d of intent.regions.filter((r) => r.environment && touches(intent, r.id, R.id) && Object.keys(r.quantities).some((sym) => (r.carriers?.[sym] ?? '').startsWith('mass of') && roleOf(carrierById(r.carriers![sym]!), r.quantities[sym]!.unit) === 'content density'))) {
-        for (const sym of Object.keys(d.quantities).filter((s) => (d.carriers?.[s] ?? '').startsWith('mass of'))) use(d, sym);
-        add({ id: `drag:${moving.id}|${d.id}`, kind: 'boundary', carrier: 'momentum', says: `the moving region gives momentum to ${d.id}, a fluid at rest it pushes through`, regions: [moving.id, d.id], values: [], why: { want: w.id, rule: 'a region moving through a fluid at rest loses momentum to it', laws: lawIds(c, 'conductance', 'dissipation'), parent: moving.id } });
+      for (const a_ of aboard) add({ ...alt, id: `aboard:${R.id}`, kind: 'conversion', carrier: 'momentum', says: `${a_.leaf.name} becomes the momentum the moving region gives what it pushes: what is carried makes its own power, and no store is carried for it`, regions: [moving.id], values: [{ name: a_.leaf.name, value: a_.leaf.value!, unit: 'W', from: R.id }], why: { want: w.id, rule: 'a region that makes power in a carrier is its own source', laws: lawIds(c, 'power'), parent: moving.id } });
+      for (const l of light) add({ ...alt, id: `intercept:${R.id}|${l.region}`, kind: 'conversion', carrier: 'light', says: `the moving region intercepts ${l.region}'s light on the way and converts it: no store need last the trip, the area must give the power`, regions: [moving.id, l.region], values: [{ name: 'least area for each watt, if all the light were converted', value: 1 / l.q.leaf.value!, unit: 'm^2/W', from: l.q.leaf.name }], why: { want: w.id, rule: 'a moving region can take power from a flux it passes through', laws: [], parent: moving.id } });
+      // a flux that carries momentum pushes the face it crosses: light by its energy flux over the speed of light, a moving medium by its matter's momentum flux; twice that if the face turns it back
+      const fluidNear = intent.regions.find((r) => near(r, ref) && phaseOf(r) === 'fluid' && densityIn(r));
+      const intercepted = [
+        ...light.map((l) => ({ region: l.region, q: l.q, pressure: l.q.leaf.value! / c0, from: `${l.q.leaf.name} over the speed of light`, laws: reactionLaws('light') })),
+        ...wind.map((x) => { const rho = fluidNear ? densityIn(fluidNear) : null; return { region: x.region, q: x.q, pressure: rho ? rho.value! * x.q.leaf.value! ** 2 : null, from: rho ? `${rho.name} times ${x.q.leaf.name} squared` : '', laws: reactionLaws('push') }; }),
+      ];
+      for (const x of intercepted) {
+        const sail = add({ ...alt, id: `thrust:${R.id}|${x.region}`, kind: 'conversion', carrier: 'momentum', says: `a face across ${x.region}'s flux takes its momentum and is pushed: no store is needed`, regions: [moving.id, x.region], values: x.pressure !== null ? [{ name: 'push per area of a face that stops the flux, twice it if the face turns it back', value: x.pressure, unit: 'Pa', from: x.from }, { name: 'least area for each newton', value: 1 / (2 * x.pressure), unit: 'm^2/N', from: 'turning the flux back' }] : [], why: { want: w.id, rule: 'a flux that carries momentum gives it to what it meets', laws: x.laws, parent: moving.id } });
+        if (x.q.leaf.dim.join() === dimOfSpeed && ref) gap(w.id, sail.id, 'momentum', 'moving across a moving medium needs a push across from a second medium (a keel in water, a contact on ice): the language does not yet pair two media');
       }
-      const grade = Object.entries(ref.quantities).find(([sym, l]) => ref.carriers?.[sym] === 'momentum' && !(ref.limits ?? []).includes(sym) && l.dim.every((x) => x === 0));
-      if (grade) { use(ref, grade[0]); put(moving, { name: 'steepest grade it climbs: gravity along the path is that fraction of the weight', value: grade[1].value!, unit: '1', from: grade[1].name }); }
-      const sh = shape(R.id);
-      if (sh) { const drag = elements.find((e) => e.id.startsWith(`drag:${moving.id}`)); put(drag, { name: 'area facing the travel, at least: what the moving region must hold across and up', value: sh.x.value! * sh.y.value!, unit: 'm^2', from: `${sh.x.name} times ${sh.y.name}` }); }
-      gap(w.id, moving.id, 'momentum', sh ? 'how hard the fluid pushes back on a shape (its drag coefficient) is not generated: the store and the power cannot be sized' : 'how much the store holds needs the resistance to motion, which needs the moving region\'s size and shape: no geometry');
+      // what the moving region pushes through resists it, by the regime the motion makes in each fluid it touches
+      // a region the moving region passes through, with matter in it, flows: where its state is not said, that is taken and said
+      const touched = intent.regions.filter((r) => r.environment && touches(intent, r.id, R.id) && phaseOf(r) !== 'solid' && densityIn(r));
+      let unsized = false;
+      for (const d of touched) {
+        const drag = add({ id: `drag:${moving.id}|${d.id}`, kind: 'boundary', carrier: 'momentum', says: `the moving region gives momentum to ${d.id}, a fluid at rest it pushes through`, regions: [moving.id, d.id], values: [], why: { want: w.id, rule: 'a region moving through a fluid at rest loses momentum to it', laws: lawIds(c, 'conductance', 'dissipation'), parent: moving.id } });
+        if (phaseOf(d) === null) gap(w.id, drag.id, 'momentum', `whether ${d.id} flows is not said (its temperature against what its matter flows above): it is taken to, as the moving region passes through it`);
+        const rg = regimeOf(d);
+        if (rg) {
+          put(drag, { name: 'momentum it carries over momentum it conducts: density times speed times length over viscosity (the Reynolds number)', value: rg.Re, unit: '1', from: `${d.id}'s density and viscosity` });
+          cite(drag, 'reynolds');
+          if (rg.conducted) {
+            const F = 6 * Math.PI * rg.mu.value! * rg.r * speedWanted!.value!;
+            put(drag, { name: 'the resistance is conducted momentum, its conductance times the speed', value: F, unit: 'N', from: 'reaction.conducted' });
+            put(drag, { name: 'power to keep the speed: the resistance times the speed', value: F * speedWanted!.value!, unit: 'W', from: 'reaction.conducted' });
+            if (trip) put(drag, { name: 'energy over the trip', value: F * speedWanted!.value! * trip.t, unit: 'J', from: trip.from });
+            cite(drag, ...reactionLaws('conducted'));
+          } else { put(drag, { name: rg.carried ? 'the resistance is carried momentum: it grows with the square of the speed' : 'between conducted and carried momentum', value: rg.carried ? 2 : 1.5, unit: '1', from: 'the exponent of the speed' }); unsized = true; }
+        } else unsized = true;
+        // whether the speed nears how fast a push travels through the fluid: past it, the fluid ahead cannot know to move aside
+        const K = momentumProperty(d, 'stiffness');
+        if (K && speedWanted) { const a = Math.sqrt(K.value! / densityIn(d)!.value!); const Ma = speedWanted.value! / a; put(drag, { name: `how fast a push travels through ${d.id}: the root of its stiffness over its density`, value: a, unit: 'm/s', from: 'reaction.sound' }); put(drag, { name: `the speed over that (the Mach number): ${Ma < 0.3 ? 'below about 0.3 its density barely changes' : Ma < 0.8 ? 'its density changes as it moves aside' : Ma < 1.2 ? 'near one, the fluid ahead cannot move aside in time and a shock forms' : 'past one, a shock stands ahead of it'}`, value: Ma, unit: '1', from: `${speedWanted.name}` }); cite(drag, ...reactionLaws('sound')); }
+        else if (speedWanted) gap(w.id, drag.id, 'momentum', `how stiff ${d.id} is under quick compression is not said: how near the speed is to the speed a push travels through it cannot be read`);
+        // on the boundary between a liquid and a lighter fluid, under gravity, the moving region makes waves its own length
+        const lighter = touched.find((x) => x.id !== d.id && densityIn(x)!.value! < densityIn(d)!.value!);
+        if (lighter && g > 0 && sh && speedWanted) { const L = Math.max(sh.x.value!, sh.z.value!); const cw = Math.sqrt(g * L / (2 * Math.PI)); put(drag, { name: `speed of a wave on ${d.id} as long as the moving region: the root of gravity times its length over two pi`, value: cw, unit: 'm/s', from: 'reaction.surface-wave' }); put(drag, { name: `the speed over that: ${speedWanted.value! / cw < 1 ? 'below one it parts the liquid it displaces' : 'past one it climbs the wave it makes, and is held up only by turning the stream down'}`, value: speedWanted.value! / cw, unit: '1', from: speedWanted.name }); cite(drag, ...reactionLaws('surface-wave')); }
+      }
+      if (sh) put(elements.find((e) => e.id.startsWith(`drag:${moving.id}`)), { name: 'area facing the travel, at least: what the moving region must hold across and up', value: sh.x.value! * sh.y.value!, unit: 'm^2', from: `${sh.x.name} times ${sh.y.name}` });
+      const grade = ref ? Object.entries(ref.quantities).find(([sym, l]) => ref.carriers?.[sym] === 'momentum' && !(ref.limits ?? []).includes(sym) && l.dim.every((x) => x === 0)) : undefined;
+      if (grade && ref) { use(ref, grade[0]); put(moving, { name: 'steepest grade it climbs: gravity along the path is that fraction of the weight', value: grade[1].value!, unit: '1', from: grade[1].name }); }
+      if (touched.length && unsized) gap(w.id, moving.id, 'momentum', sh ? 'how hard the fluid pushes back on a shape where its momentum is carried (its drag coefficient) is not generated: the store and the power cannot be sized' : 'how much the store holds needs the resistance to motion, which needs the moving region\'s size and shape: no geometry');
     }
   };
 
@@ -549,8 +708,12 @@ export function generate(intent: Intent): Structure {
     const tc = carrierById(r.carriers?.[sym] ?? 'energy');
     const most = Object.entries(r.properties ?? {}).find(([, q]) => q.of === tc.id && q.role === 'most potential');
     if (most) use(r, most[0]);
+    // only a matter that starts below the threshold must be brought above it: one already above it flows as it is
+    const startsAt = stateOf(r, tc.id) ?? intent.regions.filter((x) => x.id !== r.id && touches(intent, x.id, r.id)).map((x) => stateOf(x, tc.id)).find((x) => x) ?? null;
+    if (startsAt && startsAt.lo >= threshold.value!) continue;
     for (const pth of along) {
       const end = pth.regions[pth.regions.length - 1]!;
+      if (!intent.regions.some((x) => x.id === end)) continue;
       const host = intent.regions.filter((x) => x.environment && touches(intent, x.id, end) && stateOf(x, tc.id)).map((x) => x.id)[0];
       if (!host) { gap(pth.why.want, pth.id, tc.id, `nothing around ${end} holds ${tc.id}`); continue; }
       const id = `flows:${p.of}:${end}`;

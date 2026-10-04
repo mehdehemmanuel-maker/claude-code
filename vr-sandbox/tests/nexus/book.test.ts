@@ -9,6 +9,7 @@ import { LAWS } from '../../src/ganglia/laws';
 import { parseUnit } from '../../src/ganglia/units';
 import { leaf, mul, variable } from '../../src/nexus/term';
 import { leavesUnder } from '../../src/nexus/why';
+import { carrierById, coupling, family } from '../../src/nexus/carrier';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const env = (l: { inputs: readonly { sym: string; unit: string; name: string }[] }, values: Record<string, number>): Record<string, Derivation> =>
@@ -132,7 +133,16 @@ describe('the kept book as terms: every law, by its own example', () => {
     expect(() => law({ ...WEIGHT, output: { sym: 'W', unit: 'kg', name: 'weight' } })).toThrow(/dimension|kg/);
   });
 
-  it('the book is the kept 144 and the slice\'s derived laws', () => {
-    expect(BOOK.length).toBe(144 + SLICE.length);
+  it('the book is evidence, not a ceiling: it holds every kept law, and the language states laws for any matter it is told of that no one wrote', () => {
+    // the kept laws are the sourced instances generated laws are checked against (carrier.test.ts reproduces 22 of them); their number is the kept data's, not the language's
+    expect(BOOK.length).toBe(Object.values(KEPT).flat().length + SLICE.length);
+    const told = ['volume of honey', 'amount of carbon dioxide', 'mass of hydrogen', 'volume of lava', 'amount of a species not yet named'];
+    const power = told.filter((id) => carrierById(id).conjugate);
+    const generated = told.flatMap((id) => [...family(carrierById(id)), ...power.filter((x) => x !== id && power.includes(id)).flatMap((x) => coupling(carrierById(id), carrierById(x)))]);
+    // a concentration times a molar flux is not power: no lossless coupling to it is stated, and asking for one is refused
+    expect(() => coupling(carrierById('amount of carbon dioxide'), carrierById('volume of honey'))).toThrow(/power/);
+    expect(generated.length).toBeGreaterThan(told.length * family(carrierById('charge')).length);
+    expect(new Set(generated.map((l) => l.id)).size).toBe(generated.length);
+    for (const l of generated) { expect(BOOK.some((b) => b.id === l.id)).toBe(false); expect(l.source.kind).toBe('derivation'); }
   });
 });

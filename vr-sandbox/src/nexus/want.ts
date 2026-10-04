@@ -51,6 +51,8 @@ export interface Region {
   matter?: string;
   /** Its height in the site's frame, by the symbol of the quantity that states it (the floor of what the person names is at zero). */
   at?: string;
+  /** The site's gravity, by the symbol of the quantity that states it: a property of where the site is, not a constant. */
+  gravity?: string;
   /** For a quantity the region brings: which way it travels in the frame (rain and snow fall, wind blows across, sunlight comes from above). */
   directions?: Record<string, 'down' | 'across' | 'from above' | 'vertical' | 'along'>;
 }
