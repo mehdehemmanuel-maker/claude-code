@@ -9,7 +9,7 @@ import { getMaterial } from '../data/materials';
 import { LUMBER } from '../parts/registry';
 import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
 import { coarse, coverage, domain, field, type Field } from './domain';
-import { coordinate, ledger, postTo, restOn, restStability, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
+import { coordinate, ledger, postTo, restOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Ground, type Observer, type RigidDomain } from './field';
 import { apply, law, type Law } from './law';
@@ -18,7 +18,7 @@ import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidCon
 import { elasticContract, realizeElastic, type ElasticRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
 import { Language, type Judgement } from './abduce';
-import { abs, add, div, ge, k, le, leaf, mul, neg, variable, type Leaf } from './term';
+import { abs, add, div, ge, k, le, leaf, min, mul, neg, variable, type Leaf } from './term';
 
 export interface BeamIntent {
   by: string;
@@ -70,10 +70,18 @@ export function leastMaterial(by: string): Law {
   });
 }
 
-export interface BeamSemantics { system: System; station: Derivation }
+/**
+ * The beam's semantics: the system, the station, and for each coupling the system variables that are its
+ * quantities (by the names the language's relations use), so a learned relation can judge a coupling anywhere the
+ * system is evaluated, in the space before anything is built as well as after.
+ */
+export interface BeamSemantics { system: System; station: Derivation; couplings: Record<string, Record<string, string>> }
+
+/** The load is steel: the slice's choice (the intent names a mass and a footprint, not a material). */
+export const LOAD_MATERIAL = 'steel.a36';
 
 /** The variables and relations of a beam on two supports: what every value is, before any is known. */
-export function beamSystem(intent: BeamIntent, mat: MaterialLeaves, g: Derivation, contract: RigidContract): BeamSemantics {
+export function beamSystem(intent: BeamIntent, mat: MaterialLeaves, g: Derivation, contract: RigidContract, obs: Observer): BeamSemantics {
   const vars = [
     ['m', 'kg', 'mass carried'], ['g', 'm/s^2', 'gravity'], ['P', 'N', 'load'], ['L', 'm', 'span'], ['w', 'm', 'patch width'], ['s', 'm', 'knife-edge width'],
     ['Lt', 'm', 'beam length'], ['rho', 'kg/m^3', 'density'], ['E', 'Pa', 'modulus'], ['MOR', 'Pa', 'strength'], ['b', 'm', 'breadth'], ['h', 'm', 'depth'],
@@ -82,6 +90,10 @@ export function beamSystem(intent: BeamIntent, mat: MaterialLeaves, g: Derivatio
     ['A', 'm^2', 'section area'], ['S', 'm^3', 'section modulus'], ['I', 'm^4', 'second moment'], ['sigma', 'Pa', 'bending stress'],
     ['f', '1', 'factor'], ['sigmaAllow', 'Pa', 'allowable stress'], ['dload', 'm', 'sag from the load'], ['dself', 'm', 'sag from self weight'], ['delta', 'm', 'sag'],
     ['n', '1', 'sag ratio'], ['deltaLim', 'm', 'sag limit'],
+    // the rest couplings: the load on the beam, the beam on each support (the same by symmetry)
+    ['rhoL', 'kg/m^3', 'density of the load'], ['acr', 'm', 'width of the load across'], ['D', 'm', 'depth of the supports across'], ['pat', 's', 'the observer\'s patience'],
+    ['hl', 'm', 'height of the load'], ['hcmL', 'm', 'centre of mass of the load above its base'], ['hxL', 'm', 'half the contact of the load on the beam along x'], ['hzL', 'm', 'half the contact of the load on the beam along z'],
+    ['hcmB', 'm', 'centre of mass of the beam above its base'], ['hxB', 'm', 'half the contact of the beam on a support along x'], ['hzB', 'm', 'half the contact of the beam on a support along z'],
   ].map(([sym, unit, name]) => ({ sym: sym!, unit: unit!, name: name! }));
   const v = Object.fromEntries(vars.map((x) => [x.sym, variable(x.sym, x.unit, x.name)]));
   const station = ofLeaf(leaf('mid-span', 0, 'm', { class: 'given', by: intent.by, grounds: 'the load is carried at the middle of the span' }));
@@ -110,13 +122,22 @@ export function beamSystem(intent: BeamIntent, mat: MaterialLeaves, g: Derivatio
       { kind: 'constrain', holds: le(v['sigma']!, v['sigmaAllow']!), says: 'strength: the bending stress is within the strength at the declared factor', role: 'design', source: 'the intent' },
       { kind: 'constrain', holds: le(v['delta']!, v['deltaLim']!), says: 'stiffness: the sag is within the declared limit', role: 'design', source: 'the intent' },
       { kind: 'constrain', holds: le(div(v['h']!, v['b']!), ratioLimit), says: 'lateral stability of an unbraced sawn beam: d/b ≤ 2 needs no lateral support', role: 'validity', source: NDS.cite },
+      { kind: 'law', sym: 'hl', law: EXTENT_FROM_MASS, args: { m: 'm', rho: 'rhoL', x: 'w', z: 'acr' } },
+      { kind: 'term', sym: 'hcmL', term: div(v['hl']!, k(2)), name: 'centre of mass of the load above its base', grounds: 'a uniform prism\'s centre of mass lies at half its height' },
+      { kind: 'term', sym: 'hxL', term: div(min(v['w']!, v['Lt']!), k(2)), name: 'half the contact of the load on the beam along x', grounds: 'the contact is the lesser of the two extents on the axis' },
+      { kind: 'term', sym: 'hzL', term: div(min(v['acr']!, v['b']!), k(2)), name: 'half the contact of the load on the beam along z', grounds: 'the contact is the lesser of the two extents on the axis' },
+      { kind: 'term', sym: 'hcmB', term: div(v['h']!, k(2)), name: 'centre of mass of the beam above its base', grounds: 'a uniform prism\'s centre of mass lies at half its height' },
+      { kind: 'term', sym: 'hxB', term: div(min(v['Lt']!, v['s']!), k(2)), name: 'half the contact of the beam on a support along x', grounds: 'the contact is the lesser of the two extents on the axis' },
+      { kind: 'term', sym: 'hzB', term: div(min(v['b']!, v['D']!), k(2)), name: 'half the contact of the beam on a support along z', grounds: 'the contact is the lesser of the two extents on the axis' },
     ],
     bindings: {
       m: ofLeaf(intent.mass), g, L: ofLeaf(intent.span), w: ofLeaf(intent.patch), s: contract.supportWidth,
       rho: mat.density, E: mat.E, MOR: mat.strength, f: ofLeaf(intent.factor), n: ofLeaf(intent.sagRatio), a0: station,
+      rhoL: materialLeaves(LOAD_MATERIAL).density, acr: ofLeaf(intent.across), D: ofLeaf(intent.supportDepth), pat: obs.patience,
     },
   };
-  return { system, station };
+  const rest = (hcm: string, hx: string, hz: string) => ({ hcm, halfX: hx, halfZ: hz, g: 'g', patience: 'pat', mass: 'm' });
+  return { system, station, couplings: { 'the load on the beam': rest('hcmL', 'hxL', 'hzL'), 'the beam on the left support': rest('hcmB', 'hxB', 'hzB'), 'the beam on the right support': rest('hcmB', 'hxB', 'hzB') } };
 }
 
 export interface BeamConfiguration {
@@ -137,7 +158,7 @@ export interface BeamConfiguration {
 /** Construction: the bodies and every coordinate as a coupling solution in the declared frame. */
 export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record<string, Derivation>, contract: RigidContract, frame: Frame, ground: Ground, obs: Observer): BeamConfiguration {
   const need = (sym: string) => { const d = bound[sym]; if (!d) throw new Error(`${sym} is not bound: nothing is built from a free variable`); return d; };
-  const steel = materialLeaves('steel.a36');
+  const steel = materialLeaves(LOAD_MATERIAL);
   const zero = coordinate('across: the frame\'s centre line', frame, 'z', neg(variable('o', 'm')), {});
   const zeroX = coordinate('along: mid-span', frame, 'x', neg(variable('o', 'm')), {});
   const L = need('L'), Lt = need('Lt'), b = need('b'), h = need('h'), w = need('w');
@@ -157,8 +178,8 @@ export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record
   const c1 = restOn(beam, supports[0], tops[0]!, contract.clearance, zeroX, zero);
   const c2: RestCoupling = { ...restOn({ ...beam }, supports[1], tops[1]!, contract.clearance, zeroX, zero), above: beam.name };
   couplings.push(c1, c2);
-  const across = ofLeaf(intent.across);
-  const hl = apply(EXTENT_FROM_MASS, { m: need('m'), rho: steel.density, x: w, z: across }, 'height of the load');
+  const across = need('acr');
+  const hl = need('hl');
   const load: Prism = { name: 'the load', extents: { x: w, y: hl, z: across }, material: steel.id, density: steel.density };
   couplings.push(restOn(load, beam, topOf(beam), contract.clearance, zeroX, zero));
   const R = need('R');
@@ -166,7 +187,9 @@ export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record
   const balance = ledger('the supports carry the load and the beam', [R, R], evaluate('all the weight', add(variable('P', 'N'), variable('W', 'N')), { P: need('P'), W: need('Wself') }, { unit: 'N', law: 'the load and the beam\'s own weight' }));
   const rigid = rigidDomain(mat.E, mat.density, Lt, obs);
   const rests = evaluate('rests: the boundaries carry the weight, so the configuration is in static equilibrium', le(variable('r', 'N', 'residual'), variable('tol', 'N', 'tolerance')), { r: balance.residual, tol: evaluate('a tolerance of nothing', mul(k(1e-9), variable('W', 'N')), { W: need('P') }, { unit: 'N', law: 'rounding' }) }, { unit: '1', law: 'statics: a balanced ledger is equilibrium' });
-  const stability = { 'the load on the beam': restStability(load, beam), 'the beam on the left support': restStability(beam, supports[0]), 'the beam on the right support': restStability(beam, supports[1]) };
+  // the couplings' quantities are the system's: solved with everything else, not recomputed from the bodies
+  const st = (hcm: string, hx: string, hz: string): RestStability => ({ hcm: need(hcm), halfX: need(hx), halfZ: need(hz) });
+  const stability = { 'the load on the beam': st('hcmL', 'hxL', 'hzL'), 'the beam on the left support': st('hcmB', 'hxB', 'hzB'), 'the beam on the right support': st('hcmB', 'hxB', 'hzB') };
   return { frame, ground, bodies: { beam, supports, load }, couplings, reactions: [R, R], balance, rests, stability, totalLength: Lt, rigid };
 }
 
@@ -233,7 +256,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
   const contract = rigidContract();
   const g = gravity();
   const ground = groundOf(frame, intent.by);
-  const semantics = beamSystem(intent, material, g, contract);
+  const semantics = beamSystem(intent, material, g, contract, obs);
   for (const d of Object.values(semantics.system.bindings)) journal.append({ kind: 'record', record: d });
   const open = solve(semantics.system);
   for (const f of open.free) journal.append({ kind: 'note', text: `free: ${f.name} (${f.sym}); would be bound by ${f.wouldBind.map((w) => `${w.by} waiting on ${w.waitingOn.join(', ')}`).join('; ') || 'nothing in the system'}` });

@@ -167,7 +167,7 @@ export function promote(c: Candidate, name: string): Relation {
   const bound = ofLeaf(leaf(`${name}: bound, between the classes' nearest values ${lo} and ${hi}`, (lo + hi) / 2, '1', { class: 'measured', source: provenance }, (hi - lo) / 2));
   const b = variable('bound', '1', 'bound');
   const holds = above === 1 ? app('gt', [c.group.term, b]) : app('le', [c.group.term, b]);
-  return { name, group: c.group, bound, above, holds, provenance, observations, generality: c.generality, hash: hashOf({ relation: c.group.hash, bound: bound.hash, above }) };
+  return { name, group: c.group, bound, above, holds, provenance, observations, generality: c.generality, hash: hashOf({ relation: c.group.hash, bound: bound.hash, above, observations }) };
 }
 
 /** A judgement of one coupling by one relation. */
@@ -176,9 +176,21 @@ export interface Judgement { relation: Relation; holds: Derivation }
 /** The language: promoted relations, append-only; its hash is the content of what it holds, so every judgement made under it can be found stale when it grows. */
 export class Language {
   private readonly relations: Relation[] = [];
+  /** Supersessions, appended: a relation an observation contradicted, and the relation abduced over all observations that replaces it. */
+  private readonly supersessions: { old: string; by: string; because: string }[] = [];
   add(r: Relation): Relation { if (this.relations.some((x) => x.hash === r.hash)) return r; this.relations.push(r); return r; }
-  all(): readonly Relation[] { return this.relations; }
-  get hash(): string { return hashOf({ language: this.relations.map((r) => r.hash) }); }
+  /** The relations in force: every one added and not superseded. */
+  all(): readonly Relation[] { const gone = new Set(this.supersessions.map((s) => s.old)); return this.relations.filter((r) => !gone.has(r.hash)); }
+  /** Everything ever added, in order, and every supersession: nothing is removed. */
+  history(): { relations: readonly Relation[]; supersessions: readonly { old: string; by: string; because: string }[] } { return { relations: this.relations, supersessions: this.supersessions }; }
+  /** `old` was contradicted by an observation; `by`, abduced over every observation including that one, replaces it. */
+  supersede(old: Relation, by: Relation, because: string): Relation {
+    if (!this.relations.some((x) => x.hash === old.hash)) throw new Error(`supersede: ${old.name} is not in the language`);
+    this.add(by);
+    if (old.hash !== by.hash) this.supersessions.push({ old: old.hash, by: by.hash, because });
+    return by;
+  }
+  get hash(): string { return hashOf({ language: this.relations.map((r) => r.hash), supersessions: this.supersessions }); }
   /**
    * Whether the quantities of a coupling satisfy every promoted relation: each a record, 1 when the outcome is
    * expected, 0 when not, unresolved when the group lies inside the bound's uncertainty.

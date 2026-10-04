@@ -4,7 +4,7 @@
 // here that gives a free variable a value. A search over declared options (a catalogue) with a declared preference
 // is the only way a free variable is filled, and it is reported as that choice.
 
-import { contradiction, evaluate, type Derivation } from './evaluate';
+import { contradiction, evaluate, isDerivation, type Derivation } from './evaluate';
 import { apply, type Law } from './law';
 import { ofLeaf } from './evaluate';
 import { substitute, variable, varsOf, type Leaf, type Term } from './term';
@@ -121,7 +121,8 @@ const unknownLeaf = (v: Variable): Leaf => ({ kind: 'leaf', name: v.name, value:
 // ---- search: declared options, a declared preference, the choice reported --------------------------------------
 
 /** One way to fill some free variables: leaves from a catalogue or a configuration, with their source. */
-export interface Option { label: string; leaves: Record<string, Leaf> }
+/** An option binds variables to leaves (a catalogue's entries) or to records (an address derived from a space). */
+export interface Option { label: string; leaves: Record<string, Leaf | Derivation> }
 
 export interface Candidate {
   option: Option;
@@ -156,7 +157,7 @@ export function search(s: System, options: Option[], preference: Law | Law[]): C
   const prefs = Array.isArray(preference) ? preference : [preference];
   const candidates: Candidate[] = options.map((option) => {
     const bindings = { ...s.bindings };
-    for (const [sym, l] of Object.entries(option.leaves)) { varOf(s, sym); bindings[sym] = ofLeaf(l); }
+    for (const [sym, l] of Object.entries(option.leaves)) { varOf(s, sym); bindings[sym] = isDerivation(l) ? l : ofLeaf(l as Leaf); }
     const solution = solve({ ...s, bindings });
     const refused = solution.constraints.filter((c) => c.role === 'validity' && c.holds === false).map((c) => c.says);
     const unsatisfied = solution.constraints.filter((c) => c.role === 'design' && c.holds === false).map((c) => c.says);

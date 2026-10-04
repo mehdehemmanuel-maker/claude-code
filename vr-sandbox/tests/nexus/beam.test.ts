@@ -22,7 +22,8 @@ const everyRecord = (s: Slice): Derivation[] => s.journal.records();
 describe('the beam slice: semantics and the solver', () => {
   it('with the section free, the solver binds the load and the limit and reports breadth and depth free, nothing filled', async () => {
     const s = await slice();
-    expect(s.open.free.map((f) => f.sym)).toEqual(['b', 'h', 'q', 'Wself', 'R', 'Mself', 'M', 'A', 'S', 'I', 'sigma', 'dload', 'dself', 'delta']);
+    // the couplings' quantities that depend on the section wait on it too: the load's contact across, the beam's centre of mass and contact
+    expect(s.open.free.map((f) => f.sym)).toEqual(['b', 'h', 'q', 'Wself', 'R', 'Mself', 'M', 'A', 'S', 'I', 'sigma', 'dload', 'dself', 'delta', 'hzL', 'hcmB', 'hzB']);
     expect(s.open.bound['P']!.value).toBeCloseTo(60 * 9.80665, 9);
     expect(s.open.bound['deltaLim']!.value).toBeCloseTo(1.2 / 300, 12);
     expect(s.open.bound['Mload']!.value).toBeCloseTo(60 * 9.80665 * (0.3 - 0.1 / 8), 9);

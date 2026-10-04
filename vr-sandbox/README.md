@@ -31,7 +31,15 @@ nothing of its architecture is extended again.
   validity as predicate terms, every constant a sourced leaf, and the kept worked example reproduced; plus the
   slice's derived laws),
   `solve` (propagation, free variables reported, contradictions kept, search over declared options under a declared
-  preference), `field` (declared frame, sourced gravity, ground as a field query, the observer's window and the rigid
+  preference), `space` (a system's configuration space: every bound variable a field over the free variables by
+  symbolic propagation, the region the constraints, the applied laws' validity domains and the learned language
+  over the couplings' quantities; a catalogue is an availability set inside it and selecting within it reproduces
+  the search; a derivation visits a lattice and refines around the least admissible address, keeping every address
+  visited), `explore` (a derivation at the edge of the language is an experiment: realized, observed, and when the
+  kernel contradicts the language the observation joins the evidence, the distinction is abduced again, the old
+  relation is superseded and the space is derived again: the beam's first derived section rocked, the language grew
+  to hcm · halfX / halfZ² over nine observations, and the next section rested with less material than the
+  catalogue's pick), `field` (declared frame, sourced gravity, ground as a field query, the observer's window and the rigid
   domain), `domain` (regions of x, y, z, t in a frame with the scale bands their description holds in; fields as
   laws composed over coordinates, sampled as records that cite the laws; the observer's resolution, with the window
   as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
