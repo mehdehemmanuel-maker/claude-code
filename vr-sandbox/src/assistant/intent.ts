@@ -4,6 +4,9 @@
 
 import { isComplaint } from './reports';
 import type { Design, DesignSpec } from './designer';
+
+/** A change to a design: each size as a factor or a shift (m), the load as a value or a factor, a material, bracing. */
+export interface Revision { height?: { factor?: number; delta?: number }; width?: { factor?: number; delta?: number }; depth?: { factor?: number; delta?: number }; all?: { factor?: number; delta?: number }; load?: { value?: number; factor?: number }; material?: string; aprons?: boolean }
 import { DIMS, findQuantities, sameDim, type Dim, type Said } from '../ganglia/units';
 import { archetypeByWord, type Flow } from '../ganglia/blocks';
 import type { Contract } from '../ganglia/manifold';
@@ -13,6 +16,8 @@ import { frontierFor } from '../ganglia/frontier';
 
 export type Intent =
   | { do: 'strengthen' }
+  /** The last design rebuilt with a change: a size scaled or shifted, a load, a material, bracing. */
+  | { do: 'revise'; change: Revision }
   /** Her own work, read off her journal (src/mind): what she was working on, and what changed in what she believes. */
   | { do: 'working' | 'changed' | 'open' }
   /** The structure between the laws (src/ganglia/lawgraph.ts): how two are connected, what lies between, how close, what rests on one, what is deepest. */
@@ -246,9 +251,11 @@ export function interpret(line: string): Intent | null {
   { const known = knowOf(t); if (known) return known; }
   if ((m = /^why (?:does|do|did|is|are|should|would|must|use|have|put|make)?\s*(?:you |we |i |it |they |one |people |engineers |an? |the )*(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
   if ((m = /^(?:what is|whats) the (?:reason|point|idea) (?:for|of|behind) (?:an? |the )?(.+)$/.exec(t))) return { do: 'reason', about: m[1]!.trim() };
+  const rev = reviseOf(t);
+  if (rev) return rev;
   if (new RegExp(`^(make ${it} )?(stronger|sturdier|hold|stiffer)|^(fix|strengthen|reinforce) ${it}|^fix( it)?$|^make ${it} hold`).test(t)) return { do: 'strengthen' };
   // a part for a job, its shape grown by its loads: "invent a bracket that holds 500 N at 120 mm"
-  if (/^(invent|grow|design|make|create|build|print)\b/.test(t) && /\b(bracket|beam|arm|hook|mount|holder|bridge|cantilever|joist|hanger)\b/.test(t) && findQuantities(t).some((q) => sameDim(q.dim, DIMS.force) || sameDim(q.dim, DIMS.mass))) return { do: 'invent', words: line.trim() };
+  if (/^(invent|grow|design|make|create|build|print)\b/.test(t) && /\b(bracket|beam|arm|hook|mount|holder|bridge|cantilever|joist|hanger)\b/.test(t) && findQuantities(t).some((q) => sameDim(q.dim, DIMS.force) || (sameDim(q.dim, DIMS.mass) && !DESIGNS.some(([re]) => re.test(t))))) return { do: 'invent', words: line.trim() };
   // a shape in the form language, said as its genome
   if (/^\s*(form|shape)\s*[:=]?\s*\{/i.test(line)) return { do: 'shape', words: line.trim().replace(/^(form|shape)\s*[:=]?\s*/i, '') };
   // the frontier: "what's on your frontier", "can you make an invisibility cloak", "blueprint for gravity boots"
@@ -373,8 +380,36 @@ function singular(w: string) {
 const DESIGNS: [RegExp, Design][] = [
   [/\b(table|desk|workbench)\b/, 'table'], [/\bbench\b/, 'bench'], [/\b(crate|box|chest)\b/, 'crate'],
   [/\b(shelf|shelves|shelving|bookshelf|bookcase)\b/, 'shelf'], [/\b(brick wall|wall)\b/, 'wall'], [/\b(tower|stack|column|pillar)\b/, 'tower'],
+  [/\b(bridge|footbridge|walkway)\b/, 'bridge'], [/\b(ladder|stepladder|step ladder|steps)\b/, 'ladder'], [/\b(ramp|incline|slope)\b/, 'ramp'],
+  [/\b(chair|stool|seat)\b/, 'chair'], [/\b(frame|rack|scaffold)\b/, 'frame'], [/\b(stand|pedestal|plinth|podium|platform)\b/, 'stand'],
 ];
+const DESIGN_NOUN = 'table|desk|workbench|bench|crate|box|chest|shelf|bookshelf|bookcase|wall|tower|stack|bridge|footbridge|walkway|ladder|stepladder|ramp|incline|slope|chair|stool|seat|frame|rack|scaffold|stand|pedestal|plinth|podium|platform';
 const LENGTH: Record<string, number> = { mm: 0.001, cm: 0.01, m: 1, meter: 1, meters: 1, metre: 1, metres: 1, in: 0.0254, inch: 0.0254, inches: 0.0254, ft: 0.3048, foot: 0.3048, feet: 0.3048 };
+
+/**
+ * A change to the last design: "make it taller", "make it 20 cm wider", "make it hold 200 kg", "make it out of oak",
+ * "make it longer by 50%". What she built last is rebuilt from its spec with the change, and tested again.
+ */
+function reviseOf(t: string): Extract<Intent, { do: 'revise' }> | null {
+  if (!/^(?:make|build|rebuild|do) (?:it|that|this|the (?:same|last|design|[a-z]+)) /.test(t)) return null;
+  let m: RegExpExecArray | null;
+  // "by 20%", "20 cm wider", "taller by 10 cm"
+  const by = /(\d+(?:\.\d+)?) ?%|(\d+(?:\.\d+)?)\s*(mm|cm|m|meters?|metres?|in|inch(?:es)?|ft|foot|feet)\b/.exec(t);
+  const amount = by ? (by[1] ? { factor: 1 + Number(by[1]) / 100 } : { delta: Number(by[2]) * (LENGTH[by[3]!] ?? 1) }) : null;
+  if ((m = /\b(taller|higher|shorter|lower|longer|wider|narrower|deeper|shallower|bigger|larger|smaller|lighter)\b/.exec(t))) {
+    const w = m[1]!;
+    const dim = /taller|higher|shorter|lower/.test(w) ? 'height' : /longer|wider|narrower/.test(w) ? 'width' : /deeper|shallower/.test(w) ? 'depth' : 'all';
+    const grow = !/shorter|lower|narrower|shallower|smaller|lighter/.test(w);
+    if (w === 'lighter') return { do: 'revise', change: { load: { factor: 1 / 1.5 } } };
+    const f = amount?.factor ?? (amount?.delta ? undefined : 1.25);
+    const size = amount?.delta !== undefined ? { delta: grow ? amount.delta : -amount.delta } : { factor: grow ? f! : 1 / f! };
+    return { do: 'revise', change: { [dim]: size } };
+  }
+  if ((m = /\b(?:holds?|carry|carries|take|takes|support|supports|for) (\d+(?:\.\d+)?)\s*(kg|kilos?|kilograms?|lbs?|pounds?)\b/.exec(t))) return { do: 'revise', change: { load: { value: Number(m[1]) * (/^(lb|pound)/.test(m[2]!) ? 0.4536 : 1) } } };
+  if ((m = /\b(?:out of|made of|made from|from|in|of) ([a-z][a-z-]*(?: [a-z][a-z-]*)?)$/.exec(t)) && !/^(?:it|that|this)$/.test(m[1]!)) return { do: 'revise', change: { material: m[1]! } };
+  if (/\b(?:with|and) (?:aprons|braces|bracing|diagonals|rails)\b/.test(t)) return { do: 'revise', change: { aprons: true } };
+  return null;
+}
 
 /** "build a table that holds 80 kg, 90 cm tall, out of oak": what to design, how big, for what, in what. */
 function designOf(t: string): Extract<Intent, { do: 'design' }> | null {
@@ -394,7 +429,7 @@ function designOf(t: string): Extract<Intent, { do: 'design' }> | null {
   if ((m = /(\d+|two|three|four|five|six|seven|eight|ten|twelve|twenty)\s*(shelves|courses|rows|blocks|bricks|levels|high|tall)/.exec(t))) spec.count = count(m[1]) ?? undefined;
   let material: string | undefined;
   if ((m = /\b(?:out of|made of|made from|from|in)\s+([a-z][a-z-]*(?: [a-z][a-z-]*)?)/.exec(t))) material = m[1]!.replace(/\s+(that|which|with|for|and)\b.*$/, '').trim();
-  else if ((m = /\b(?:a|an)\s+([a-z-]+)\s+(?:table|desk|workbench|bench|crate|box|chest|shelf|bookshelf|bookcase|wall|tower|stack)\b/.exec(t)) && !/^(big|small|little|large|tall|short|long|wide|strong|sturdy|simple|nice|good|new)$/.test(m[1]!)) material = m[1];
+  else if ((m = new RegExp(`\\b(?:a|an)\\s+([a-z-]+)\\s+(?:${DESIGN_NOUN})\\b`).exec(t)) && !/^(big|small|little|large|tall|short|long|wide|strong|sturdy|simple|nice|good|new|step)$/.test(m[1]!)) material = m[1];
   return { do: 'design', spec, material };
 }
 

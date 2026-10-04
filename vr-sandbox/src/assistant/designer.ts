@@ -5,8 +5,10 @@
 
 import { getMaterial, STANDARD_GRAVITY as g, type Material } from '../data/materials';
 import { LUMBER } from '../parts/registry';
+import { structure } from './grammar';
 
-export type Design = 'table' | 'crate' | 'shelf' | 'wall' | 'tower' | 'bench';
+/** What she designs: the five originals, and the structures the grammar composes from function and constraints (grammar.ts). */
+export type Design = 'table' | 'crate' | 'shelf' | 'wall' | 'tower' | 'bench' | 'bridge' | 'frame' | 'stand' | 'ramp' | 'ladder' | 'chair';
 
 export interface DesignSpec {
   what: Design;
@@ -23,6 +25,18 @@ export interface DesignSpec {
   aprons?: boolean;
 }
 
+/** The sizes and load a design takes when they are not said, m and kg: one table, so a revision can scale a size that was never said. */
+export const DEFAULTS: Record<Design, { width: number; depth: number; height: number; load: number }> = {
+  table: { width: 1.2, depth: 0.7, height: 0.75, load: 50 }, bench: { width: 1.2, depth: 0.35, height: 0.45, load: 150 },
+  crate: { width: 0.5, depth: 0.4, height: 0.35, load: 0 }, shelf: { width: 0.8, depth: 0.3, height: 1.2, load: 20 },
+  wall: { width: 1, depth: 0.1025, height: 0.5, load: 0 }, tower: { width: 0.1, depth: 0.1, height: 0.6, load: 0 },
+  bridge: { width: 2, depth: 0.6, height: 0.5, load: 100 }, frame: { width: 1, depth: 0.6, height: 0.8, load: 50 },
+  stand: { width: 0.5, depth: 0.5, height: 1, load: 30 }, ramp: { width: 2, depth: 0.8, height: 0.4, load: 100 },
+  ladder: { width: 0.45, depth: 0.45, height: 1.8, load: 100 }, chair: { width: 0.42, depth: 0.42, height: 0.45, load: 100 },
+};
+/** A design's size along one axis: as said, or its default. */
+export const sizeOf = (spec: DesignSpec, dim: 'width' | 'depth' | 'height'): number => spec[dim] ?? DEFAULTS[spec.what][dim];
+
 export interface Plan {
   forge: string;
   /** The laws of the book its checks instantiate (a derivation record: what the design rests on, by id). */
@@ -33,19 +47,19 @@ export interface Plan {
 }
 
 /** Safety factor on every check, as for furniture and light structures. */
-const SAFETY = 3;
-const SAG = 1 / 300;
+export const SAFETY = 3;
+export const SAG = 1 / 300;
 
-const isWood = (m: Material) => m.category === 'wood' || m.category === 'engineered-wood';
-const isMetal = (m: Material) => ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'cast-iron'].includes(m.category);
-const f = (x: number) => String(+x.toFixed(4));
-const mm = (x: number) => `${Math.round(x * 1000)} mm`;
+export const isWood = (m: Material) => m.category === 'wood' || m.category === 'engineered-wood';
+export const isMetal = (m: Material) => ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'cast-iron'].includes(m.category);
+export const f = (x: number) => String(+x.toFixed(4));
+export const mm = (x: number) => `${Math.round(x * 1000)} mm`;
 
 /** Wood crushes along the grain at about half its bending strength (estimated); metals at yield. */
 const crushing = (m: Material) => (isWood(m) ? 0.5 * m.ultimate : m.yield);
 
 /** The thinnest standard sheet that carries `w` N spread over a span `L` (m) of width `b` without breaking or sagging. */
-function sheetFor(m: Material, L: number, b: number, w: number, options: number[]) {
+export function sheetFor(m: Material, L: number, b: number, w: number, options: number[]) {
   for (const t of options) {
     const self = m.density * g * L * b * t;
     const M = ((w + self) * L) / 8;
@@ -58,7 +72,7 @@ function sheetFor(m: Material, L: number, b: number, w: number, options: number[
 }
 
 /** Legs: the smallest standard section that neither crushes nor buckles under P (N) over length L, free to sway at the top. */
-function legFor(m: Material, L: number, P: number) {
+export function legFor(m: Material, L: number, P: number) {
   const K = 2; // a leg fixed at the top and free to sway there buckles as a cantilever
   if (isWood(m)) {
     for (const size of ['2x2', '2x4', '4x4']) {
@@ -86,7 +100,7 @@ const STONE_SHEETS = [0.02, 0.03, 0.04, 0.05];
 /** Plywood and MDF as sold. */
 const PLY_SHEETS = [0.012, 0.018, 0.025];
 
-function sheets(m: Material) {
+export function sheets(m: Material) {
   return m.category === 'engineered-wood' ? PLY_SHEETS : isWood(m) ? WOOD_SHEETS : isMetal(m) ? METAL_SHEETS : STONE_SHEETS;
 }
 
@@ -98,13 +112,14 @@ export function design(spec: DesignSpec, ox: number, oz: number, tag = 'd'): Pla
     case 'shelf': return shelf(spec, ox, oz, tag);
     case 'wall': return wall(spec, ox, oz, tag);
     case 'tower': return tower(spec, ox, oz, tag);
+    default: return structure(spec, ox, oz, tag);
   }
 }
 
 function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   const bench = spec.what === 'bench';
-  const W = spec.width ?? (bench ? 1.2 : 1.2), D = spec.depth ?? (bench ? 0.35 : 0.7), H = spec.height ?? (bench ? 0.45 : 0.75);
-  const load = spec.load ?? (bench ? 150 : 50);
+  const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
+  const load = spec.load ?? DEFAULTS[spec.what].load;
   const topM = getMaterial(spec.material ?? 'wood.douglas-fir');
   const legM = isWood(topM) || isMetal(topM) ? topM : getMaterial('steel.a36');
   const top = sheetFor(topM, W, D, load * g, sheets(topM));
@@ -165,7 +180,7 @@ function apronFor(m: Material, leg: ReturnType<typeof legFor>) {
 }
 
 function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
-  const W = spec.width ?? 0.5, D = spec.depth ?? 0.4, H = spec.height ?? 0.35;
+  const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
   const m = getMaterial(spec.material ?? 'wood.birch-plywood');
   const t = isWood(m) ? 0.012 : isMetal(m) ? 0.002 : 0.02;
   const wallH = H - t;
@@ -184,9 +199,9 @@ function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
 }
 
 function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
-  const W = spec.width ?? 0.8, D = spec.depth ?? 0.3, H = spec.height ?? 1.2;
+  const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
   const n = Math.max(2, Math.min(8, spec.count ?? 4));
-  const load = spec.load ?? 20;
+  const load = spec.load ?? DEFAULTS.shelf.load;
   const m = getMaterial(spec.material ?? 'wood.birch-plywood');
   const side = isWood(m) ? 0.018 : isMetal(m) ? 0.003 : 0.02;
   const span = W - 2 * side;
@@ -206,7 +221,7 @@ function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
 function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   const m = getMaterial(spec.material ?? 'ceramic.clay-brick');
   const [bx, by, bz] = [0.215, 0.065, 0.1025];
-  const L = spec.width ?? 1.0, H = spec.height ?? 0.5;
+  const L = sizeOf(spec, 'width'), H = sizeOf(spec, 'height');
   const cols = Math.max(1, Math.round(L / bx)), rows = Math.max(1, Math.min(20, Math.round(H / by)));
   const lines: string[] = [];
   const at = (r: number, c: number) => `${tag}r${r}c${c}`;

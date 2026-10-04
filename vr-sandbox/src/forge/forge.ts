@@ -17,12 +17,37 @@ export type Value = { num: number } | { word: string } | { expr: string };
 export type Ref = string; // a name, a part id, or: this (selected), held, last, floor
 
 export type Stmt =
-  | { op: 'place'; line: number; kind: string; params: Record<string, Value>; material?: string; at?: [Value, Value, Value]; rot: { axis: 'x' | 'y' | 'z'; angle: Value }[]; name?: string }
+  | { op: 'place'; line: number; kind: string; params: Record<string, Value>; material?: string; at?: [Value, Value, Value]; where?: WhereStmt; rot: { axis: 'x' | 'y' | 'z'; angle: Value }[]; name?: string }
   | { op: 'join'; line: number; a: Ref; b: Ref; with?: string }
   | { op: 'set'; line: number; ref: Ref; params: Record<string, Value>; material?: string }
   | { op: 'delete' | 'freeze' | 'unfreeze' | 'select'; line: number; ref: Ref }
   | { op: 'repeat'; line: number; count: Value; body: Stmt[] }
   | { op: 'do'; line: number; command: SimCommand };
+
+/**
+ * Where a part goes, said by relation to parts already there instead of by coordinates. The host resolves each from
+ * the real parts' boxes, so a member between two posts gets the length of the gap and sits where it touches both:
+ *   on A B…            rests on top of them (or the floor), centred over them (offset dx dz shifts it)
+ *   under A B…         hangs under them, its top against their undersides
+ *   between A B        spans the gap between their facing faces, aimed along the line between them; its height:
+ *                      under C (top against C's underside), flush C (top level with C's top), height y (centre), or
+ *                      the mean of A's and B's centres
+ *   across A B side s  a diagonal laid flat on the faces of A and B on side s (-z, z, -x, x), low on A to high on B
+ *   from x y z to x y z  a member from one point to the other: its length, its direction
+ */
+export type WhereStmt =
+  | { how: 'on' | 'under'; refs: Ref[]; offset?: [Value, Value] }
+  | { how: 'between'; a: Ref; b: Ref; under?: Ref; flush?: Ref; height?: Value }
+  | { how: 'across'; a: Ref; b: Ref; side: 'x' | '-x' | 'z' | '-z' }
+  | { how: 'from'; from: [Value, Value, Value]; to: [Value, Value, Value] };
+
+/** The same, resolved for a host: parts by id (null for the floor), numbers for values. */
+export type Where =
+  | { how: 'at'; at: [number, number, number] }
+  | { how: 'on' | 'under'; ids: (string | null)[]; offset: [number, number] }
+  | { how: 'between'; a: string; b: string; under?: string; flush?: string; height?: number }
+  | { how: 'across'; a: string; b: string; side: 'x' | '-x' | 'z' | '-z' }
+  | { how: 'from'; from: [number, number, number]; to: [number, number, number] };
 
 export type SimCommand = 'play' | 'build' | 'undo' | 'redo' | 'save' | 'new' | 'switch on' | 'switch off' | 'gravity earth' | 'gravity moon' | 'gravity zero';
 
@@ -173,20 +198,38 @@ export function parse(src: string): Stmt[] {
     switch (verb) {
       case 'place': case 'add': {
         const s: Extract<Stmt, { op: 'place' }> = { op: 'place', line, kind: word('a part kind'), params: {}, rot: [] };
+        const KEY = /^(mat|material|of|at|rot|turn|as|named|on|under|between|across|side|from|to|flush|height|offset)$/i;
+        const refs = (what: string): Ref[] => { const out: Ref[] = []; while (!endOfStmt() && !KEY.test(peek()!.t) && !/=/.test(peek()!.t)) out.push(word(what)); if (!out.length) throw new ForgeError(`expected ${what}`, line); return out; };
+        const point = (): [Value, Value, Value] => [toValue(word('x'), line), toValue(word('y'), line), toValue(word('z'), line)];
         while (!endOfStmt()) {
           const u = next()!;
           const w = u.t.toLowerCase();
           if (params(s.params, u)) continue;
           if (w === 'mat' || w === 'material' || w === 'of') s.material = word('a material');
-          else if (w === 'at') s.at = [toValue(word('x'), line), toValue(word('y'), line), toValue(word('z'), line)];
+          else if (w === 'at') s.at = point();
           else if (w === 'rot' || w === 'turn') {
             const axis = word('an axis (x, y or z)').toLowerCase();
             if (axis !== 'x' && axis !== 'y' && axis !== 'z') throw new ForgeError(`rotate about x, y or z, not ${axis}`, line);
             const a = word('an angle');
             s.rot.push({ axis, angle: toValue(/^-?[\d.]+$/.test(a) ? `${a}deg` : a, line) });
           } else if (w === 'as' || w === 'named') s.name = word('a name');
-          else throw new ForgeError(`don't know "${u.t}" in place (try key=value, mat, at, rot, as)`, u.line);
+          else if (w === 'on') s.where = { how: 'on', refs: refs('what it rests on') };
+          else if (w === 'under') {
+            if (s.where?.how === 'between') s.where.under = word('what it sits under');
+            else s.where = { how: 'under', refs: refs('what it hangs under') };
+          } else if (w === 'between') s.where = { how: 'between', a: word('the first part'), b: word('the second part') };
+          else if (w === 'across') s.where = { how: 'across', a: word('the first part'), b: word('the second part'), side: '-z' };
+          else if (w === 'side') {
+            const sd = word('a side (-z, z, -x, x)').toLowerCase();
+            if (s.where?.how !== 'across' || !['x', '-x', 'z', '-z'].includes(sd)) throw new ForgeError('side goes with across: side -z, z, -x or x', line);
+            s.where.side = sd as 'x' | '-x' | 'z' | '-z';
+          } else if (w === 'flush') { if (s.where?.how !== 'between') throw new ForgeError('flush goes with between', line); s.where.flush = word('what to be level with'); }
+          else if (w === 'height') { if (s.where?.how !== 'between') throw new ForgeError('height goes with between', line); s.where.height = toValue(word('a height'), line); }
+          else if (w === 'offset') { if (!s.where || (s.where.how !== 'on' && s.where.how !== 'under')) throw new ForgeError('offset goes with on or under', line); s.where.offset = [toValue(word('dx'), line), toValue(word('dz'), line)]; }
+          else if (w === 'from') { const from = point(); if (word('to').toLowerCase() !== 'to') throw new ForgeError('from x y z to x y z', line); s.where = { how: 'from', from, to: point() }; }
+          else throw new ForgeError(`don't know "${u.t}" in place (try key=value, mat, at, on, under, between, across, from…to, rot, as)`, u.line);
         }
+        if (s.at && s.where) throw new ForgeError('say at x y z or where it goes by relation, not both', line);
         return s;
       }
       case 'join': case 'connect': case 'attach': {
@@ -245,7 +288,7 @@ export interface ForgeHost {
   /** Resolve a word to a part kind id, and a material for it (null: the kind's default), or throw with a reason. */
   kind(word: string): string;
   material(kind: string, word: string | undefined): string;
-  place(kind: string, params: Record<string, number | string>, material: string, at: [number, number, number] | null, rot: { axis: 'x' | 'y' | 'z'; angle: number }[], name: string | undefined): string;
+  place(kind: string, params: Record<string, number | string>, material: string, where: Where | null, rot: { axis: 'x' | 'y' | 'z'; angle: number }[], name: string | undefined): string;
   /** Join two parts (b null: the floor) where they touch. */
   join(a: string, b: string | null, kind: string | undefined): string;
   set(id: string, params: Record<string, number | string>, material: string | undefined): void;
@@ -290,8 +333,16 @@ export function run(src: string, host: ForgeHost): RunResult {
           case 'place': {
             if (++parts > MAX_PARTS) throw new ForgeError(`stopped after ${MAX_PARTS} parts`, s.line);
             const kind = host.kind(s.kind);
-            const id = host.place(kind, vals(s.params), host.material(kind, s.material), s.at ? [num(s.at[0]), num(s.at[1]), num(s.at[2])] : null,
-              s.rot.map((r) => ({ axis: r.axis, angle: num(r.angle) })), s.name ? `${s.name}${suffix}` : undefined);
+            const floorOr = (ref: Ref) => (/^(floor|ground)$/i.test(ref) ? null : part(ref));
+            const w = s.where;
+            let where: Where | null = s.at ? { how: 'at', at: [num(s.at[0]), num(s.at[1]), num(s.at[2])] } : null;
+            if (w) switch (w.how) {
+              case 'on': case 'under': where = { how: w.how, ids: w.refs.map(floorOr), offset: w.offset ? [num(w.offset[0]), num(w.offset[1])] : [0, 0] }; break;
+              case 'between': where = { how: 'between', a: part(w.a), b: part(w.b), under: w.under ? part(w.under) : undefined, flush: w.flush ? part(w.flush) : undefined, height: w.height !== undefined ? num(w.height) : undefined }; break;
+              case 'across': where = { how: 'across', a: part(w.a), b: part(w.b), side: w.side }; break;
+              case 'from': where = { how: 'from', from: [num(w.from[0]), num(w.from[1]), num(w.from[2])], to: [num(w.to[0]), num(w.to[1]), num(w.to[2])] }; break;
+            }
+            const id = host.place(kind, vals(s.params), host.material(kind, s.material), where, s.rot.map((r) => ({ axis: r.axis, angle: num(r.angle) })), s.name ? `${s.name}${suffix}` : undefined);
             lines.push(`placed ${s.name ? `${s.name}${suffix}` : kind} (${id})`);
             break;
           }

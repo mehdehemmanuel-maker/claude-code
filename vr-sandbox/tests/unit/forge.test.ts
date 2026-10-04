@@ -15,7 +15,7 @@ function recorder() {
   const host: ForgeHost = {
     kind: (w) => resolveKind(w),
     material: (k, w) => resolveMaterial(k, w),
-    place: (kind, params, material, at, _rot, name) => { const id = `p${parts.length}`; parts.push({ id, kind, params, material, at, name }); return id; },
+    place: (kind, params, material, where, _rot, name) => { const at = where && where.how === 'at' ? where.at : null; const id = `p${parts.length}`; parts.push({ id, kind, params, material, at, name }); return id; },
     join: (a, b, k) => { joins.push([a, b, k]); return 'joined'; },
     set: () => {}, remove: () => {}, freeze: () => {}, select: () => {},
     command: (c) => c,
@@ -142,5 +142,51 @@ describe('fixes', () => {
     const fixes = fixesFor({ kind: 'weld', params: {}, mode: 'instant', load: 0 }, fir, fir, g);
     expect(fixes.length).toBeGreaterThan(0);
     expect(fixes.every((f) => f.kind !== 'weld')).toBe(true);
+  });
+});
+
+describe('placing by relation', () => {
+  it('parses on, under, between with under/flush/height, across with a side, and from…to', async () => {
+    const { parse } = await import('../../src/forge/forge');
+    const p = (line: string) => parse(line)[0] as { where?: unknown; at?: unknown };
+    expect(p('place plate length=1 on a b c as top').where).toEqual({ how: 'on', refs: ['a', 'b', 'c'] });
+    expect(p('place plate length=1 on a offset 0 0.2 as top').where).toMatchObject({ how: 'on', refs: ['a'] });
+    expect(p('place lumber size=1x4 between a b under top rot x 90 as rail').where).toMatchObject({ how: 'between', a: 'a', b: 'b', under: 'top' });
+    expect(p('place lumber size=1x4 between a b flush a as rail').where).toMatchObject({ how: 'between', flush: 'a' });
+    expect(p('place lumber size=1x4 between a b height 0.3 as rung').where).toMatchObject({ how: 'between', height: { num: 0.3 } });
+    expect(p('place lumber size=1x4 across a b side -z as brace').where).toMatchObject({ how: 'across', a: 'a', b: 'b', side: '-z' });
+    expect(p('place lumber size=2x2 from 0 0 0 to 0.5 1 0 as stile').where).toMatchObject({ how: 'from' });
+    expect(() => parse('place block at 0 0 0 on a')).toThrow(/not both/);
+    expect(() => parse('place block flush a')).toThrow(/flush goes with between/);
+  });
+
+  it('on the bench, a rail between two posts under a top takes the gap for its length and touches both; a member from a point to a point takes its direction; a brace across lies on their faces', async () => {
+    const { Bench } = await import('../../src/app/bench');
+    const { BuildHost } = await import('../../src/forge/apphost');
+    const { newDoc } = await import('../../src/doc/commands');
+    const bench = new Bench({ ...newDoc().sim, airDrag: false });
+    const host = new BuildHost(bench);
+    const r = run([
+      'place lumber size=2x2 length=0.7 mat wood.douglas-fir at -0.5 0.35 0 rot z 90 as a',
+      'place lumber size=2x2 length=0.7 mat wood.douglas-fir at 0.5 0.35 0 rot z 90 as b',
+      'place plate length=1.1 width=0.3 thickness=0.018 mat wood.douglas-fir on a b as top',
+      'place lumber size=1x4 mat wood.douglas-fir between a b under top rot x 90 as rail',
+      'join rail a', 'join rail b', 'join rail top', 'join top a', 'join top b',
+      'place lumber size=1x4 mat wood.douglas-fir across a b side -z rot x 90 as brace',
+      'join brace a', 'join brace b',
+      'place lumber size=2x2 mat wood.douglas-fir from 1 0 0.5 to 1.5 0.8 0.5 as leaning',
+    ].join('\n'), host);
+    expect(r.ok, r.error).toBe(true);
+    const by = (name: string) => Object.values(bench.doc.parts).find((p) => p.name === name)!;
+    const rail = by('rail'), top = by('top'), brace = by('brace'), leaning = by('leaning');
+    // the gap between the posts' inner faces: 1.0 - 0.038, less the clearances
+    expect(Number(rail.params['length'])).toBeCloseTo(1 - 0.038 - 0.001, 3);
+    expect(rail.pose.p[1] + 0.089 / 2).toBeLessThanOrEqual(top.pose.p[1] - 0.009);
+    expect(Number(leaning.params['length'])).toBeCloseTo(Math.hypot(0.5, 0.8), 3);
+    expect(leaning.pose.p).toEqual([1.25, 0.4, 0.5]);
+    expect(Object.values(bench.doc.connections)).toHaveLength(7);
+    // the brace is on the -z side of the posts, flat (its 89 mm face in the x-y plane), and runs upward from a to b
+    expect(brace.pose.p[2]).toBeLessThan(-0.019);
+    expect(Number(brace.params['length'])).toBeGreaterThan(1);
   });
 });

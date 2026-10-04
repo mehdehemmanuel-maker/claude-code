@@ -48,7 +48,8 @@ export const PUSH = 300;
 
 /** The weights a design is for, where they go: on a table's top, on every shelf; a wall or tower carries itself. */
 export function standLoads(spec: DesignSpec, frag: Fragment): StandLoad[] {
-  const kg = spec.load ?? (spec.what === 'bench' ? 150 : spec.what === 'table' ? 50 : spec.what === 'shelf' ? 20 : 0);
+  const defaults: Partial<Record<DesignSpec['what'], number>> = { bench: 150, table: 50, shelf: 20, bridge: 100, stand: 30, frame: 50, ramp: 100, chair: 100, ladder: 100 };
+  const kg = spec.load ?? defaults[spec.what] ?? 0;
   if (!kg) return [];
   const top = (name: RegExp) => frag.parts.filter((p) => name.test(p.name));
   const onto = (p: Fragment['parts'][number], kgEach: number): StandLoad => {
@@ -58,24 +59,44 @@ export function standLoads(spec: DesignSpec, frag: Fragment): StandLoad[] {
     const w = Math.min(0.3, 0.6 * numberOf(p.params, 'length', 0.3)), depth = Math.min(0.3, 0.6 * numberOf(p.params, 'width', 0.3));
     return { kg: kgEach, at: [p.pose.p[0], p.pose.p[1] + half, p.pose.p[2]], size: [w, depth] };
   };
-  if (spec.what === 'table' || spec.what === 'bench') return top(/top$/).map((p) => onto(p, kg));
-  if (spec.what === 'shelf') return top(/shelf\d+$/).map((p) => onto(p, kg));
-  return [];
+  switch (spec.what) {
+    case 'table': case 'bench': return top(/top$/).map((p) => onto(p, kg));
+    case 'shelf': return top(/shelf\d+$/).map((p) => onto(p, kg));
+    case 'bridge': case 'stand': return top(/deck$/).map((p) => onto(p, kg));
+    case 'frame': return top(/rail[FB]$/).map((p) => onto(p, kg / 2));
+    case 'ramp': return top(/deck$/).map((p) => ({ ...onto(p, kg), at: [p.pose.p[0], p.pose.p[1] + numberOf(p.params, 'length', 1) * Math.sin(Math.abs(p.pose.q[2]) * 2) / 2 + 0.05, p.pose.p[2]] as Vec3 }));
+    case 'chair': return top(/seat$/).map((p) => onto(p, kg));
+    case 'ladder': {
+      // a person on a rung half way up one side
+      const rungs = top(/rungA\d+$/).sort((a, b) => a.pose.p[1] - b.pose.p[1]);
+      const mid = rungs[Math.floor(rungs.length / 2)];
+      return mid ? [{ kg, at: [mid.pose.p[0], mid.pose.p[1] + 0.03, mid.pose.p[2]], size: [0.1, 0.25] }] : [];
+    }
+    default: return [];
+  }
 }
 
 /**
  * How a design is pushed on the stand. Furniture fails sideways (racking) far more than straight down: a table's top
  * bears on its legs, but a push at its edge bends every leg joint. So a table or bench is pushed along its length at
- * the top's end, and a shelf unit across its width at the top shelf, half a second in, for a second and a half.
+ * the top's end, a shelf unit across its width at the top shelf, a bridge, stand, frame or ramp along its length at the
+ * deck's end, a chair at the top of its back, a ladder at its apex; half a second in, for a second and a half.
  */
 export function standPushes(spec: DesignSpec, frag: Fragment): StandPush[] {
-  const end = (p: Fragment['parts'][number]): StandPush => ({ part: p.id, at: [p.pose.p[0] + numberOf(p.params, 'length', 0) / 2, p.pose.p[1], p.pose.p[2]], force: [-PUSH, 0, 0] as Vec3, from: 0.5, to: 2 });
-  if (spec.what === 'table' || spec.what === 'bench') return frag.parts.filter((p) => /top$/.test(p.name)).map(end);
-  if (spec.what === 'shelf') {
-    const shelves = frag.parts.filter((p) => /shelf\d+$/.test(p.name)).sort((a, b) => b.pose.p[1] - a.pose.p[1]);
-    return shelves.length ? [end(shelves[0]!)] : [];
+  const end = (p: Fragment['parts'][number], along: 'x' | 'z' = 'x'): StandPush => ({ part: p.id, at: [p.pose.p[0] + (along === 'x' ? numberOf(p.params, 'length', 0) / 2 : 0), p.pose.p[1], p.pose.p[2] + (along === 'z' ? numberOf(p.params, 'length', 0) / 2 : 0)], force: (along === 'x' ? [-PUSH, 0, 0] : [0, 0, -PUSH]) as Vec3, from: 0.5, to: 2 });
+  const one = (name: RegExp, along: 'x' | 'z' = 'x') => frag.parts.filter((p) => name.test(p.name)).slice(0, 1).map((p) => end(p, along));
+  switch (spec.what) {
+    case 'table': case 'bench': return frag.parts.filter((p) => /top$/.test(p.name)).map((p) => end(p));
+    case 'shelf': {
+      const shelves = frag.parts.filter((p) => /shelf\d+$/.test(p.name)).sort((a, b) => b.pose.p[1] - a.pose.p[1]);
+      return shelves.length ? [end(shelves[0]!)] : [];
+    }
+    case 'bridge': case 'stand': case 'ramp': return one(/deck$/);
+    case 'frame': return one(/railF$/);
+    case 'chair': { const back = frag.parts.find((p) => /back$/.test(p.name)); return back ? [{ part: back.id, at: [back.pose.p[0], back.pose.p[1] + numberOf(back.params, 'width', 0.2) / 2, back.pose.p[2]], force: [0, 0, -PUSH] as Vec3, from: 0.5, to: 2 }] : []; }
+    case 'ladder': { const stile = frag.parts.find((p) => /stileA0$/.test(p.name)); return stile ? [{ part: stile.id, at: [stile.pose.p[0], stile.pose.p[1] + numberOf(stile.params, 'length', 1) / 2 * 0.9, stile.pose.p[2]], force: [0, 0, -PUSH] as Vec3, from: 0.5, to: 2 }] : []; }
+    default: return [];
   }
-  return [];
 }
 
 /** The stand's own scatter on a joint's share of capacity (estimate: settling noise and contact chatter), used as the tolerance of an observation. */

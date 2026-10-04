@@ -32,6 +32,12 @@ import { buildSwimmer, buildWalker, swimmerFromWords, WALKERS, walkerFromWords }
 import { Herd } from '../world/herd';
 import type { Want } from '../world/mind';
 
+/** A revision in words: "height ×1.25, load 200 kg, in oak". */
+function describeRevision(c: Revision): string {
+  const size = (k: 'height' | 'width' | 'depth' | 'all') => { const v = c[k]; return v ? `${k === 'all' ? 'every size' : k} ${v.delta !== undefined ? `${v.delta > 0 ? '+' : ''}${Math.round(v.delta * 1000)} mm` : `×${(+v.factor!.toFixed(2))}`}` : null; };
+  return [size('height'), size('width'), size('depth'), size('all'), c.load ? (c.load.value !== undefined ? `for ${c.load.value} kg` : `load ×${+c.load.factor!.toFixed(2)}`) : null, c.material ? `in ${c.material}` : null, c.aprons ? 'with bracing' : null].filter(Boolean).join(', ') || 'nothing';
+}
+
 /** A creature's want, said: what the herd's book has it doing (mind.ts). */
 const WANT_SAID: Record<Want, string> = { company: 'keeping you company: coming to you, or staying near', curiosity: 'off to look at something', rest: 'lying down to rest' };
 import { POOL } from '../physics/environment';
@@ -44,7 +50,8 @@ import { Preferences } from './preferences';
 import { findRepeat, nameFor, signatureOf, SkillBook, skillProgram } from './skills';
 import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
-import { design, type DesignSpec } from './designer';
+import { DEFAULTS, design, sizeOf, type DesignSpec } from './designer';
+import type { Revision } from './intent';
 import { JOINT_LIMIT, standLoads, standPushes } from '../mind';
 import { fragmentOf } from '../doc/commands';
 import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature, type PartInfo } from '../mind';
@@ -259,6 +266,8 @@ export class Ego {
         return b ? b.text : 'Nothing has broken.';
       }
       case 'strengthen': {
+        // a design of hers still standing: stronger means built again for half as much more load, and tested again
+        if (this.lastDesign?.made.some((id) => this.app.doc.parts[id])) return this.revise({ load: { factor: 1.5 } });
         const a = this.advice.find((x) => x.fixes.length);
         if (a) { a.fixes[0]!.apply(); return `Done: ${a.fixes[0]!.label}.`; }
         // nothing failing: the most loaded joint in what you're pointing at gets twice its strength
@@ -333,6 +342,7 @@ export class Ego {
       }
       case 'complain': return this.complain(i.words);
       case 'design': return this.designIt(i.spec, i.material);
+      case 'revise': return this.revise(i.change);
       case 'ganglia': {
         const c = census();
         const sc = substrateCensus();
@@ -564,6 +574,31 @@ export class Ego {
     this.say('tip', sayBrief(mind.journal.commits, inv, 'On my stand'), []);
   }
 
+  /** What she built last, to change it: its spec and the parts it is. */
+  private lastDesign: { spec: DesignSpec; made: string[] } | null = null;
+
+  /**
+   * The last design, changed and built again in its place: a size scaled or shifted, a load, a material, bracing. The
+   * parts it was are taken out, the spec rebuilt through the same sizing, and the result goes to her stand again.
+   */
+  revise(change: Revision): string {
+    const app = this.app, last = this.lastDesign;
+    if (!last || !last.made.some((id) => app.doc.parts[id])) return 'Nothing of mine to change: ask me to build something first (a table, a bridge, a chair, a ladder…), then say how it should differ.';
+    const spec: DesignSpec = { ...last.spec };
+    for (const d of ['height', 'width', 'depth'] as const) {
+      const c = change[d] ?? change.all;
+      if (!c) continue;
+      const v = sizeOf(spec, d);
+      spec[d] = c.delta !== undefined ? Math.max(0.05, v + c.delta) : v * (c.factor ?? 1);
+    }
+    if (change.load) spec.load = change.load.value ?? Math.round((spec.load ?? DEFAULTS[spec.what].load) * (change.load.factor ?? 1));
+    if (change.aprons) spec.aprons = true;
+    const materialWord = change.material;
+    deleteParts(app.store, last.made.filter((id) => app.doc.parts[id]));
+    const said = this.designIt(spec, materialWord);
+    return `Changed: ${describeRevision(change)}. ${said}`;
+  }
+
   designIt(spec: DesignSpec, materialWord?: string): string {
     const app = this.app;
     if (materialWord) spec.material = resolveMaterial('block', materialWord);
@@ -576,6 +611,7 @@ export class Ego {
     try { r = run(plan.forge, this.host); } finally { queueMicrotask(() => { this.designing = false; }); }
     if (!r.ok) return `I couldn't build it: ${r.error}`;
     const made = Object.keys(app.doc.parts).filter((id) => !before.has(id));
+    this.lastDesign = { spec: { ...spec }, made };
     app.select(made);
     const risks = this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '') && f.u >= 0.8);
     const verdict = risks.length ? `But ${risks.length} joint${risks.length === 1 ? '' : 's'} will be near the limit: see my page.` : 'Every joint will carry its load with margin.';
