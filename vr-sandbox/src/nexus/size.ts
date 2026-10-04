@@ -11,7 +11,7 @@
 import { law, type Law } from './law';
 import { search, type Choice, type Option, type System } from './solve';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { add, div, ge, k, le, leaf, ln, mul, pow, PI, variable, type Leaf } from './term';
+import { add, div, ge, k, le, leaf, ln, min, mul, pow, PI, variable, type Leaf } from './term';
 import type { Element } from './manifold';
 import { PVC, SECTIONS_MM2, SECTIONS_SOURCE, STILL_AIR_SURFACE } from '../data/conductors';
 
@@ -117,7 +117,14 @@ export interface MemberLoads {
   P?: Derivation;
   /** A wanted most sag over the span, beside the code's. */
   sag?: Derivation;
+  /** What bears on the members' ends along the run, per length: each member is pressed along its length by it over its spacing. */
+  along?: Derivation;
 }
+
+/** Rows of blocking between the members, each bracing their thin axis where it crosses them: tried where the members are pressed along their length. */
+export const BRACE_ROWS = [0, 1, 2];
+/** The buckling load of a member pressed along its length, ends free to turn (Euler; effective length factor 1, the pinned case). */
+export const EULER = 'Euler: a member pressed along its length, its ends free to turn, buckles at π² E I / l² (effective length factor 1)';
 
 /**
  * The system the members across a face make. A face of a span and a width under a load per area is carried by members
@@ -134,6 +141,7 @@ export function memberSystem(span: Derivation, width: Derivation, load: Derivati
     ['a', 'm', 'bay'], ['w', 'N/m', 'load per length'], ['M', 'N m', 'moment'], ['S', 'm^3', 'section modulus'], ['sig', 'Pa', 'bending stress'], ['I', 'm^4', 'second moment'],
     ['del', 'm', 'deflection'], ['r', '1', 'deflection allowed over the bay'], ['lim', 'm', 'deflection allowed'], ['V', 'm^3', 'timber'], ['m', 'kg', 'mass of the members'], ['f', 'Pa', 'strength allowed'],
     ...(loads.sag ? [['rw', '1', 'most sag over span wanted'], ['limw', 'm', 'sag wanted']] : []),
+    ...(loads.along ? [['p', 'N/m', 'load per length on the members\' ends'], ['j', '1', 'rows bracing the thin axis'], ['N', 'N', 'force along each member'], ['Iw', 'm^4', 'second moment about the thin axis'], ['lw', 'm', 'length between braces'], ['Pw', 'N', 'buckling load between braces'], ['Pb', 'N', 'buckling load in the plane it bends in'], ['sa', 'Pa', 'stress pressed and bent']] : []),
   ].map(([sym, unit, name]) => ({ sym: sym!, unit: unit!, name: name! }));
   const v = Object.fromEntries(vars.map((x) => [x.sym, variable(x.sym, x.unit, x.name)]));
   return {
@@ -149,16 +157,27 @@ export function memberSystem(span: Derivation, width: Derivation, load: Derivati
       { kind: 'term', sym: 'del', term: add(div(mul(k(5), v['w']!, pow(v['a']!, 4)), mul(k(384), v['E']!, v['I']!)), div(mul(v['P']!, pow(v['a']!, 3)), mul(k(48), v['E']!, v['I']!))), name: 'deflection', grounds: 'a simply supported bay under a uniform load and a weight at mid-bay: 5 w a⁴ / (384 E I) + P a³ / (48 E I)' },
       { kind: 'term', sym: 'lim', term: mul(v['a']!, v['r']!), name: 'deflection allowed', grounds: 'the bay times the deflection allowed over it' },
       { kind: 'term', sym: 'f', term: div(v['fu']!, v['phi']!), name: 'strength allowed', grounds: 'the clear-wood strength over the declared factor' },
-      { kind: 'term', sym: 'V', term: mul(v['n']!, v['b']!, v['h']!, v['L']!), name: 'timber', grounds: 'every member across the whole span' },
+      { kind: 'term', sym: 'V', term: loads.along ? add(mul(v['n']!, v['b']!, v['h']!, v['L']!), mul(v['j']!, v['W']!, v['b']!, v['h']!)) : mul(v['n']!, v['b']!, v['h']!, v['L']!), name: 'timber', grounds: loads.along ? 'every member across the whole span, and each row of blocking along the width' : 'every member across the whole span' },
       { kind: 'term', sym: 'm', term: mul(v['rho']!, v['V']!), name: 'mass of the members', grounds: 'the timber times its density' },
       { kind: 'constrain', holds: le(v['sig']!, v['f']!), says: 'each member\'s bending stress is within the strength allowed', role: 'design', source: 'the matter\'s strength over the declared factor' },
       { kind: 'constrain', holds: le(v['del']!, v['lim']!), says: 'each member deflects no more than its bay over 360', role: 'design', source: 'IBC Table 1604.3, its strictest limit for roof members' },
+      ...(loads.along ? [
+        { kind: 'term' as const, sym: 'N', term: mul(v['p']!, v['s']!), name: 'force along each member', grounds: 'what bears on the ends per length, over the spacing' },
+        { kind: 'term' as const, sym: 'Iw', term: div(min(mul(v['b']!, pow(v['h']!, 3)), mul(v['h']!, pow(v['b']!, 3))), k(12)), name: 'second moment about the thin axis', grounds: 'a rectangle about its thinner axis' },
+        { kind: 'term' as const, sym: 'lw', term: div(v['a']!, add(v['j']!, k(1))), name: 'length between braces', grounds: 'the bay divided by the rows that brace it' },
+        { kind: 'term' as const, sym: 'Pw', term: div(mul(pow(PI(), 2), v['E']!, v['Iw']!), pow(v['lw']!, 2)), name: 'buckling load between braces', grounds: EULER },
+        { kind: 'term' as const, sym: 'Pb', term: div(mul(pow(PI(), 2), v['E']!, v['I']!), pow(v['a']!, 2)), name: 'buckling load in the plane it bends in', grounds: `${EULER}; the rows brace only the thin axis` },
+        { kind: 'term' as const, sym: 'sa', term: add(div(v['N']!, mul(v['b']!, v['h']!)), v['sig']!), name: 'stress pressed and bent', grounds: 'the force along it over its section, and its bending stress at the same fibre' },
+        { kind: 'constrain' as const, holds: le(mul(v['N']!, v['phi']!), v['Pw']!), says: 'each member pressed along its length stays below its buckling load between braces, over the declared factor', role: 'design' as const, source: EULER },
+        { kind: 'constrain' as const, holds: le(mul(v['N']!, v['phi']!), v['Pb']!), says: 'each member pressed along its length stays below its buckling load in the plane it bends in, over the declared factor', role: 'design' as const, source: EULER },
+        { kind: 'constrain' as const, holds: le(v['sa']!, v['f']!), says: 'each member, pressed and bent, stays within the strength allowed', role: 'design' as const, source: 'the matter\'s strength over the declared factor' },
+      ] : []),
       ...(loads.sag ? [
         { kind: 'term' as const, sym: 'limw', term: mul(v['a']!, v['rw']!), name: 'sag wanted', grounds: 'the bay times the most sag over span wanted' },
         { kind: 'constrain' as const, holds: le(v['del']!, v['limw']!), says: 'each member sags no more than is wanted', role: 'design' as const, source: loads.sag.name },
       ] : []),
     ],
-    bindings: { L: span, W: width, q: load, P: loads.P ?? ofLeaf(NO_WEIGHT_AT_A_PLACE), rho: matter.density, E: matter.E, fu: matter.strength, phi: ofLeaf(STRENGTH_FACTOR), r: ofLeaf(DEFLECTION_LIMIT), g, ...(loads.sag ? { rw: loads.sag } : {}) },
+    bindings: { L: span, W: width, q: load, P: loads.P ?? ofLeaf(NO_WEIGHT_AT_A_PLACE), rho: matter.density, E: matter.E, fu: matter.strength, phi: ofLeaf(STRENGTH_FACTOR), r: ofLeaf(DEFLECTION_LIMIT), g, ...(loads.sag ? { rw: loads.sag } : {}), ...(loads.along ? { p: loads.along } : {}) },
   };
 }
 
@@ -169,17 +188,17 @@ export const membersAlong = (length: number, s: number) => Math.ceil(length / s 
  * Every section, every spacing, up to `most` support lines, and every matter offered; each with its count of members.
  * The width is one run, or several separate runs (the walls of a room, each with its own end members).
  */
-export function memberOptions(width: number | number[], sections: Option[], most = 4, matters: { name: string; leaves: MemberMatter }[] = []): Option[] {
+export function memberOptions(width: number | number[], sections: Option[], most = 4, matters: { name: string; leaves: MemberMatter }[] = [], braces: number[] | null = null): Option[] {
   const runs = Array.isArray(width) ? width : [width];
   const out: Option[] = [];
   const each = matters.length ? matters : [null];
-  for (const mat of each) for (const sec of sections) for (const sp of SPACINGS) for (let k = 0; k <= most; k++) {
+  for (const mat of each) for (const sec of sections) for (const sp of SPACINGS) for (let k = 0; k <= most; k++) for (const j of braces ?? [null]) {
     const n = runs.reduce((t, len) => t + membersAlong(len, sp.s), 0);
     const c = (name: string, x: number, unit: string, source: string) => leaf(name, x, unit, { class: 'configuration', source });
     const counted = runs.length > 1 ? `${runs.length} runs of ${runs.map((x) => x.toFixed(2)).join(', ')} m at ${sp.label}, each its length over the spacing, rounded up, plus one` : `the width over the spacing, rounded up, plus one (${runs[0]!.toFixed(2)} m at ${sp.label})`;
     out.push({
-      label: `${mat ? `${mat.name} ` : ''}${sec.label} at ${sp.label}, ${k} support line${k === 1 ? '' : 's'}`,
-      leaves: { ...sec.leaves, ...(mat ? { rho: mat.leaves.density, E: mat.leaves.E, fu: mat.leaves.strength } : {}), s: c(`spacing ${sp.label}`, sp.s, 'm', SPACINGS_SOURCE), k: c(`${k} support lines`, k, '1', 'the arrangement tried'), n: c(`${n} members`, n, '1', `a count: ${counted}`) },
+      label: `${mat ? `${mat.name} ` : ''}${sec.label} at ${sp.label}, ${k} support line${k === 1 ? '' : 's'}${j ? `, ${j} row${j === 1 ? '' : 's'} of blocking` : ''}`,
+      leaves: { ...sec.leaves, ...(mat ? { rho: mat.leaves.density, E: mat.leaves.E, fu: mat.leaves.strength } : {}), s: c(`spacing ${sp.label}`, sp.s, 'm', SPACINGS_SOURCE), k: c(`${k} support lines`, k, '1', 'the arrangement tried'), n: c(`${n} members`, n, '1', `a count: ${counted}`), ...(j !== null ? { j: c(`${j} rows of blocking`, j, '1', 'the arrangement tried') } : {}) },
     });
   }
   return out;
@@ -202,7 +221,7 @@ export interface MemberSizing {
 export function sizeMembers(span: Derivation, width: Derivation, load: Derivation, matter: MemberMatter, g: Derivation, sections: Option[], o: MemberSizing = {}) {
   const by = o.by ?? 'the generator';
   const system = memberSystem(span, width, load, matter, g, o.loads);
-  const options = memberOptions(o.runs ?? width.value!, sections, 4, o.matters);
+  const options = memberOptions(o.runs ?? width.value!, sections, 4, o.matters, o.loads?.along ? BRACE_ROWS : null);
   const tried: Choice['candidates'] = [];
   let choice: Choice | null = null;
   for (const lines of [...new Set(options.map((x) => (x.leaves['k'] as Leaf).value!))].sort((a, b) => a - b)) {

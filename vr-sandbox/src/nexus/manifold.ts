@@ -33,7 +33,7 @@ import { phaseAt, vapourPressure } from './phase';
 import { dimOf } from './dimension';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
-import { sizeMembers } from './size';
+import { EULER, sizeMembers } from './size';
 import { dressedMatters, lumberCatalogue } from './stock';
 import { ofLeaf } from './evaluate';
 import { leaf, type Leaf } from './term';
@@ -825,38 +825,53 @@ export function generate(intent: Intent): Structure {
     // each member element is a system the space sizes, over the kept sections and the matters dressed to them
     const stock = dressedMatters();
     const gD = siteGravity ? ofLeaf(siteGravity.quantities[siteGravity.gravity!]!) : gravity();
-    const sizedUp = new Map<string, { perLength: number }>();
+    const bearsOnSides = new Map<string, number>(); // what the up face bears on the top of the sides, per length
+    /** Size one element's members and put the configuration on it: its pick, or null with the gap said. */
+    const sizeOn = (e: Element, R: Region, sh: Shape, face: string, span: number, runs: number[], loads: { q?: { value: number; from: string }; P?: { value: number; from: string }; along?: { value: number; from: string } }) => {
+      const conf = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'configuration', source: `the generator: ${e.id}` }));
+      const sag = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'momentum' && x.hi && x.hi.unit === '1');
+      const r = sizeMembers(conf(`span of ${face}`, span, 'm'), conf(`width of ${face}`, runs.reduce((x, y) => x + y, 0), 'm'), conf(loads.q ? loads.q.from : 'no load per area on it', loads.q?.value ?? 0, 'Pa'), stock.matters[0]!.leaves, gD, lumberCatalogue(), {
+        loads: { ...(loads.P && loads.P.value > 0 ? { P: conf(`${loads.P.from}, at the worst place`, loads.P.value, 'N') } : {}), ...(sag ? { sag: ofLeaf(sag.hi!) } : {}), ...(loads.along ? { along: conf(loads.along.from, loads.along.value, 'N/m') } : {}) },
+        runs, matters: stock.matters,
+      });
+      const pick = r.choice.pick;
+      if (!pick) { gap(e.why.want, e.id, 'momentum', `no kept section of a matter dressed to it carries ${face} with up to four support lines: ${[...new Set(r.choice.candidates.flatMap((c) => c.unsatisfied))].join('; ')}`); return null; }
+      const bd = pick.solution.bound, at = (sym: string) => bd[sym]!.value!;
+      put(e, { name: `sized: ${pick.option.label}, the fewest support lines and then the least mass of the kept sections and the matters dressed to them`, value: at('m'), unit: 'kg', from: `the members across a face; ${stock.source}` });
+      for (const [name, sym, unit] of [['members', 'n', '1'], ['spacing', 's', 'm'], ['support lines across the span', 'k', '1'], ['bay', 'a', 'm'], ['breadth', 'b', 'm'], ['depth', 'h', 'm'], ['density of what they are made of', 'rho', 'kg/m^3'], ['modulus of what they are made of', 'E', 'Pa'], ...(loads.along ? [['rows of blocking', 'j', '1'], ['force along each member', 'N', 'N']] as const : [])] as const) put(e, { name, value: at(sym), unit, from: 'the members across a face' });
+      put(e, { name: 'deflection over what is allowed', value: at('del') / Math.min(at('lim'), bd['limw']?.value ?? Infinity), unit: '1', from: 'the members across a face' });
+      put(e, { name: 'bending stress over what is allowed', value: at('sig') / at('f'), unit: '1', from: 'the members across a face' });
+      if (loads.along) put(e, { name: 'force along each member, with the declared factor, over its least buckling load', value: at('N') * at('phi') / Math.min(at('Pw'), at('Pb')), unit: '1', from: EULER });
+      if (!e.oneOf) ownWeight.set(R.id, (ownWeight.get(R.id) ?? 0) + at('m') * g);
+      return { at, sh };
+    };
     // the up face first: what it bears on the sides is read when the sides are sized
     const order = (e: Element) => ['up', 'down', 'side'].indexOf(e.id.slice(e.id.lastIndexOf(':') + 1));
-    for (const e of [...members].sort((a, b) => order(a) - order(b))) {
+    for (const e of [...members].sort((x, y) => order(x) - order(y))) {
       const R = intent.regions.find((r) => r.id === e.regions[0]);
       const sh = R ? shapeOf(R) : null;
       if (!R || !sh) continue;
       const face = e.id.slice(e.id.lastIndexOf(':') + 1) as Face;
-      const conf = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'configuration', source: `the generator: ${e.id}` }));
-      const span = e.values.find((v) => v.name === 'span')!;
       const q = e.values.find((v) => v.name === 'load per area it carries');
       const P = e.values.find((v) => v.name === 'weight resting on it at a place not stated');
-      const sag = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'momentum' && x.hi && x.hi.unit === '1');
+      const along = face === 'side' && bearsOnSides.has(R.id) ? { value: bearsOnSides.get(R.id)!, from: `what the up face of ${R.id} bears on the top of the sides, per length` } : undefined;
+      if (along) put(e, { name: 'load per length along the top of the walls the up face bears on', value: along.value, unit: 'N/m', from: 'each up member\'s half-bay over its spacing' });
       const runs = face === 'side' ? [sh.x.value!, sh.z.value!, sh.x.value!, sh.z.value!] : [Math.max(sh.x.value!, sh.z.value!)];
-      const r = sizeMembers(conf(`span of the ${face} face`, span.value, 'm'), conf(`width of the ${face} face`, runs.reduce((a, b) => a + b, 0), 'm'), conf(q ? q.from : 'no load per area on the face', q?.value ?? 0, 'Pa'), stock.matters[0]!.leaves, gD, lumberCatalogue(),
-        { loads: { ...(P && P.value > 0 ? { P: conf(`${P.from}, at the worst place`, P.value, 'N') } : {}), ...(sag ? { sag: ofLeaf(sag.hi!) } : {}) }, runs, matters: stock.matters });
-      const pick = r.choice.pick;
-      if (!pick) { gap(e.why.want, e.id, 'momentum', `no kept section of a matter dressed to it carries the ${face} face with up to four support lines: ${[...new Set(r.choice.candidates.flatMap((c) => c.unsatisfied))].join('; ')}`); continue; }
-      const b = pick.solution.bound, at = (sym: string) => b[sym]!.value!;
-      put(e, { name: `sized: ${pick.option.label}, the fewest support lines and then the least mass of the kept sections and the matters dressed to them`, value: at('m'), unit: 'kg', from: `the members across a face; ${stock.source}` });
-      for (const [name, sym, unit] of [['members', 'n', '1'], ['spacing', 's', 'm'], ['support lines across the span', 'k', '1'], ['bay', 'a', 'm'], ['breadth', 'b', 'm'], ['depth', 'h', 'm'], ['density of what they are made of', 'rho', 'kg/m^3']] as const) put(e, { name, value: at(sym), unit, from: 'the members across a face' });
-      put(e, { name: 'deflection over what is allowed', value: at('del') / Math.min(at('lim'), b['limw']?.value ?? Infinity), unit: '1', from: 'the members across a face' });
-      put(e, { name: 'bending stress over what is allowed', value: at('sig') / at('f'), unit: '1', from: 'the members across a face' });
-      if (!e.oneOf) ownWeight.set(R.id, (ownWeight.get(R.id) ?? 0) + at('m') * g);
-      if (face === 'up') sizedUp.set(R.id, { perLength: at('w') * at('a') / (2 * at('s')) });
+      const done = sizeOn(e, R, sh, `the ${face} face`, e.values.find((v) => v.name === 'span')!.value, runs, { ...(q ? { q } : {}), ...(P ? { P } : {}), ...(along ? { along } : {}) });
+      if (!done) continue;
+      const at = done.at;
+      if (face === 'up') bearsOnSides.set(R.id, at('w') * at('a') / (2 * at('s')));
       if (at('k') > 0) {
-        const sp = add({ ...(e.oneOf ? { oneOf: e.oneOf } : {}), id: `supports:${R.id}:${face}`, kind: 'path', carrier: 'momentum', says: `${at('k')} line${at('k') === 1 ? '' : 's'} across the ${face === 'side' ? 'sides' : `${face}-facing face`} of ${R.id} carry its members' bays to the ground`, regions: [R.id], values: [{ name: 'support lines', value: at('k'), unit: '1', from: e.id }, { name: 'load per length each line carries', value: at('w') * at('a') / at('s'), unit: 'N/m', from: 'each member\'s two half-bays over the spacing' }, { name: 'length of each line', value: Math.max(sh.x.value!, sh.z.value!), unit: 'm', from: 'the longer extent of the plan' }], why: { want: e.why.want, rule: 'a span no member carries is divided by lines that carry its bays', laws: [], parent: e.id } });
-        gap(e.why.want, sp.id, 'momentum', 'a support line is a member of its own, carrying its bays\' load along its length to the ground: it is not yet sized, and its own weight is not counted');
-      }
-      if (face === 'side' && sizedUp.has(R.id)) {
-        put(e, { name: 'load per length along the top of the walls the up face bears on', value: sizedUp.get(R.id)!.perLength, unit: 'N/m', from: 'each up member\'s half-bay over its spacing' });
-        gap(e.why.want, e.id, 'momentum', 'the members along the sides carry what the up face bears on them to the ground along their length: pressing a member along its length (its buckling) is not in the member system');
+        const line = { value: at('w') * at('a') / at('s'), from: 'each member\'s two half-bays over the spacing' };
+        const sp = add({ ...(e.oneOf ? { oneOf: e.oneOf } : {}), id: `supports:${R.id}:${face}`, kind: 'path', carrier: 'momentum', says: `${at('k')} line${at('k') === 1 ? '' : 's'} across the ${face === 'side' ? 'sides' : `${face}-facing face`} of ${R.id} carry its members' bays to the ground`, regions: [R.id], values: [{ name: 'support lines', value: at('k'), unit: '1', from: e.id }, { name: 'load per length each line carries', value: line.value, unit: 'N/m', from: line.from }, { name: 'length of each line', value: Math.max(sh.x.value!, sh.z.value!), unit: 'm', from: 'the longer extent of the plan' }], why: { want: e.why.want, rule: 'a span no member carries is divided by lines that carry its bays', laws: [], parent: e.id } });
+        if (face === 'up') {
+          // a line under the up face stands on the down face, held up along its length by members as the sides are
+          const done2 = sizeOn(sp, R, sh, `the lines under the up face`, sh.y.value!, Array.from({ length: at('k') }, () => Math.max(sh.x.value!, sh.z.value!)), { along: { value: line.value, from: 'what each line under the up face carries, per length' } });
+          if (done2) {
+            const dn = elements.find((x) => x.id === `members:${R.id}:down`);
+            if (dn) gap(dn.why.want, dn.id, 'momentum', 'the lines under the up face stand on the down face: the members spanning it were not sized for what they bring');
+          }
+        } else gap(e.why.want, sp.id, 'momentum', `a support line is a member of its own, carrying its bays' load along its length to the ground: it is not yet sized, since how far the ${face} face is held above what bears it is not stated`);
       }
     }
   }

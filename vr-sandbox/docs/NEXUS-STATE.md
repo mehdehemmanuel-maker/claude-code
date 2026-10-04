@@ -103,6 +103,7 @@ the generated laws are checked against, not the limit of what the language can s
 | A generated element becomes a system the space sizes: the house's wire is 16 mm², bound by its heat, not its stated drop | tests/nexus/size.test.ts |
 | The roof's members are counts the space sizes: two support lines, 19 members of 2x8 at 24 in; no clear span deflects within ten times its limit | tests/nexus/size.test.ts |
 | The generator sizes the members it generates, the matter chosen among those dressed to the kept sections; their weight reaches the ground; a face on the ground may rest on it | tests/nexus/size.test.ts |
+| A member pressed along its length is sized against buckling: the wind's 1x6 unbraced is refused, one row of blocking holds it; the lines under the roof are walls of their own, their matter chosen for them | tests/nexus/size.test.ts |
 
 ## 3. What is missing
 
@@ -118,7 +119,7 @@ the generated laws are checked against, not the limit of what the language can s
 - Life across scale: begun with holding a temperature (round 12); Kleiber's exponent itself is used, not explained, and the smallest mammals' residual says the production law departs at small size.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
-- Systems from elements: begun with the wire (round 13) and the members (rounds 14 and 15, now inside the generator). Members need buckling under what bears on them along their length, and support lines need sizing. Stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity; members need graded lumber's design values beside clear wood's, and the walls' members under wind.
+- Systems from elements: begun with the wire (round 13) and the members (rounds 14 and 15, now inside the generator). Buckling is begun (round 16); the floor's lines need the height the floor is held at, and what one element does to another (a sheathing bracing members, a wall loading a floor, a fastener) is not stated. Stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity; members need graded lumber's design values beside clear wood's, and the walls' members under wind.
 - Shape to resistance where a fluid carries momentum: a field over the shape, needing a fluid realization or
   observations to abduce from.
 - A matter's state as a region of temperature and pressure, with liquid and gas apart.
@@ -129,9 +130,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Pressing along a length: a member's buckling about its weaker axis, so the walls' members and the support lines' posts are
-sized under what the faces above bear on them. Then stores from the resistance to motion through them, and the second
-family over the generator itself.
+What one generated element does to another: a sheathing bracing the members it is fastened to, a wall loading the floor
+it stands on, a fastener carrying a load between members. Then stores from the resistance to motion through them, and
+the second family over the generator itself.
 
 ## 5. Why each primitive exists
 
@@ -217,3 +218,4 @@ family over the generator itself.
 | A count is a quantity of a configuration | how many members, and how many lines support them, follow from the width, the spacing and the span | the roof's 10.95 m had no members |
 | What the generator can size, it sizes where it generates | a bound left for later is stale downstream: what an element weighs is part of what reaches the ground | the members' weight was a gap after the language could size them |
 | A weight at a place not stated is carried at the worst place | a mass that can be anywhere loads every place it can reach | a floor spread under its people's mean weight |
+| A member pressed along its length buckles about its thinner axis between braces | a bound on one axis is not a bound on the other; bracing is timber that counts | the walls' members chosen by the wind alone |

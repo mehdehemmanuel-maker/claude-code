@@ -95,7 +95,7 @@ describe('the generator sizes the members it generates, and what they weigh reac
     const p = el('path:momentum:inside->the ground');
     const without = p.values.find((v) => v.name === 'force down, without the structure\'s own weight')!.value;
     const withIt = p.values.find((v) => v.name === 'force down, with the sized members\' own weight')!.value;
-    const counted = (val('members:inside:up', 'sized: ').value + val('members:inside:side', 'sized: ').value) * gravity().value!;
+    const counted = ['members:inside:up', 'members:inside:side', 'supports:inside:up'].reduce((t, id) => t + val(id, 'sized: ').value, 0) * gravity().value!;
     expect(withIt - without).toBeCloseTo(counted, 6);
     expect(s.gaps.some((g) => /structure's own weight/.test(g.lacks))).toBe(false);
   });
@@ -107,13 +107,34 @@ describe('the generator sizes the members it generates, and what they weigh reac
     expect(val('members:inside:down', 'weight resting on it at a place not stated').value).toBeCloseTo(300 * gravity().value!, 6);
   });
 
-  it('what is not yet sized is named: the support lines, and the walls\' members, chosen by the wind alone, carry the roof along their length near the load at which a thin section buckles', () => {
-    expect(s.gaps.some((g) => g.element === 'supports:inside:up' && /not yet sized/.test(g.lacks))).toBe(true);
-    expect(s.gaps.some((g) => g.element === 'members:inside:side' && /buckling/.test(g.lacks))).toBe(true);
-    // the evidence: what each wall member carries from the roof against Euler's load about its weaker axis
-    const E = MATERIALS.find((m) => m.id === 'wood.douglas-fir')!.E, b = val('members:inside:side', 'breadth').value, h = val('members:inside:side', 'depth').value, L = val('members:inside:side', 'span').value;
-    const euler = Math.PI ** 2 * E * (Math.max(b, h) * Math.min(b, h) ** 3 / 12) / L ** 2;
-    const carried = val('members:inside:side', 'load per length along the top of the walls').value * val('members:inside:side', 'spacing').value;
-    expect(carried / euler).toBeGreaterThan(0.5);
+  it('what is not yet sized is named: the floor\'s support lines, for want of how far the floor is held above the ground, and the floor\'s members, for the lines that stand on them', () => {
+    expect(s.gaps.some((g) => g.element === 'supports:inside:down' && /not yet sized, since how far the down face is held above what bears it is not stated/.test(g.lacks))).toBe(true);
+    expect(s.gaps.some((g) => g.element === 'members:inside:down' && /the lines under the up face stand on the down face/.test(g.lacks))).toBe(true);
+    expect(s.gaps.some((g) => g.element === 'supports:inside:up' || /buckling\) is not in the member system/.test(g.lacks))).toBe(false);
+  });
+});
+
+describe('pressing along a length: the walls and the lines under the roof are sized against buckling', () => {
+  const el = (id: string) => s.elements.find((x) => x.id === id)!;
+  const val = (id: string, name: string) => el(id).values.find((v) => v.name === name || v.name.startsWith(name))!;
+  const conf = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'configuration', source: 'the generator' }));
+  const fir = materialLeaves('wood.douglas-fir');
+
+  it('the walls\' members carry what the roof bears on them along their length; the 1x6 the wind alone chose is refused unbraced, and one row of blocking makes it hold', () => {
+    const along = val('members:inside:side', 'load per length along the top of the walls').value;
+    expect(val('members:inside:side', 'sized: ').name).toMatch(/^sized: Douglas-fir \(coast\) 1x6 on edge at 24 in, 0 support lines, 1 row of blocking/);
+    expect(val('members:inside:side', 'force along each member').value).toBeCloseTo(along * 0.61, 6);
+    expect(val('members:inside:side', 'force along each member, with the declared factor, over its least buckling load').value).toBeLessThanOrEqual(1);
+    const walls = sizeMembers(conf('height', 2.5, 'm'), conf('perimeter', 4 * sh.x.value!, 'm'), conf('wind', 1000, 'Pa'), fir, gravity(), lumberCatalogue(), { loads: { along: conf('from the roof', along, 'N/m') }, runs: [sh.x.value!, sh.z.value!, sh.x.value!, sh.z.value!] });
+    const unbraced = walls.choice.candidates.find((c) => c.option.label === '1x6 on edge at 24 in, 0 support lines')!;
+    expect(unbraced.unsatisfied).toEqual(['each member pressed along its length stays below its buckling load between braces, over the declared factor']);
+  });
+
+  it('each line under the roof is a wall of its own, standing on the floor: its matter is chosen for it, white pine 1x4 at 16 inches with two rows of blocking, lighter than the fir would be', () => {
+    expect(val('supports:inside:up', 'sized: ').name).toMatch(/^sized: Eastern white pine 1x4 on edge at 16 in, 0 support lines, 2 rows of blocking/);
+    expect(val('supports:inside:up', 'force along each member').value).toBeCloseTo(val('supports:inside:up', 'load per length each line carries').value * 0.406, 6);
+    const line = val('supports:inside:up', 'load per length each line carries').value, len = val('supports:inside:up', 'length of each line').value;
+    const firOnly = sizeMembers(conf('height', 2.5, 'm'), conf('lines', 2 * len, 'm'), conf('none', 0, 'Pa'), fir, gravity(), lumberCatalogue(), { loads: { along: conf('the line', line, 'N/m') }, runs: [len, len] }).choice.pick!;
+    expect(firOnly.solution.bound['m']!.value!).toBeGreaterThan(val('supports:inside:up', 'sized: ').value);
   });
 });

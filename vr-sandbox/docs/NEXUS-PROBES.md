@@ -679,9 +679,44 @@ What is generated now shows what is missing next:
   length, 0.96 of Euler's load about its thin axis, so with the declared factor of two it does not hold. Pressing a
   member along its length is not in the member system.
 
+## Round 16: pressing along a length
+
+Round 15 left the walls' members chosen by the wind alone. Each 1x6 carried 0.96 of its Euler load from the roof, and
+the roof's support lines were elements with a load and no members. The member system now holds what bears on a
+member's ends along the run. Each member is pressed along its length by that load per length over its spacing. Three
+new bounds apply, each over the declared factor:
+
+- **Between braces.** The member stays below its Euler load about its thin axis, π² E I / l², with ends free to turn.
+  Rows of blocking brace that axis; there may be none, one or two.
+- **In the plane it bends in.** It stays below its Euler load about the axis it bends on, over its whole bay.
+- **Pressed and bent.** The fibre's stress, N / (b h) plus the bending stress, stays within the strength allowed.
+
+Blocking is timber, and it counts toward the mass. In the generator, the roof's reaction on the top of the walls
+presses the walls' members. Each line under the roof becomes a wall of its own, standing on the floor, sized the same
+way.
+
+| Element | Pressed along its length | Sized |
+|---|---|---|
+| the walls (wind 1000 Pa) | 1.6 kN each, from 2.67 kN per metre | Douglas-fir 1x6 at 24 in, one row of blocking; 0.48 of its least buckling load |
+| each line under the roof | 2.2 kN each, from 5.33 kN per metre | Eastern white pine 1x4 at 16 in, two rows of blocking; 0.70 |
+
+Unbraced, the 1x6 is refused by buckling alone, and the generator adds the row that makes it hold. The lines under the
+roof take a different matter from the roof: white pine, lighter for what they carry than the fir would be. The matter
+is chosen for each element, never for the house. With the lines' 124 kg, 12.1 kN of members now reaches the ground.
+
+What this exposes:
+
+- **The floor's lines.** They are not sized, because how far the floor is held above the ground is not stated.
+- **The floor's members.** In the alternative where members span the floor, they were not sized for the walls that now
+  stand on it. Where the floor rests on the ground, the ground bears those walls.
+- **Fastening.** The sections chosen are thin (19 mm), and how members are fastened and what a sheathing does to brace
+  them are not in the language. Compression parallel to the grain is bounded by the modulus of rupture over the factor
+  (42.5 MPa for the fir). That stays below the fir's crushing strength, which the USDA Wood Handbook gives as about 50 MPa
+  for clear coast Douglas-fir at 12 % moisture. That strength is not in the kept data.
+
 ## The next instrument
 
-Pressing along a length. A member carrying a load along its length buckles at π² E I / (K L)² about its weaker axis
-unless something braces it. The member system gains an axial load and that bound; the walls' members and the support
-lines' posts are then sized under what the faces above bear on them. Then stores from the resistance to motion through
-them, and the second family over the generator itself.
+What one element does to another. A sheathing fastened to members braces them; a wall standing on a floor loads its
+members; a fastener carries a load between two members. These are couplings between generated elements, and the
+generator does not yet state them. Then stores from the resistance to motion through them, and the second family over
+the generator itself.
