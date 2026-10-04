@@ -26,6 +26,8 @@ export type Contribution =
   | { kind: 'relation'; id: string; out: Address; name: string; unit: string; term: Term; ports: Record<string, Address>; law: string; domain?: { says: string; holds: Term }[] }
   /** A predicate over addresses that must hold, and whose it is: a law's validity, a person's want. */
   | { kind: 'constraint'; id: string; says: string; by: string; holds: Term; ports: Record<string, Address> }
+  /** A place in the domain: a box, its centre, its turn and its half-extents, every number a leaf. */
+  | { kind: 'place'; id: string; centre: [Leaf, Leaf, Leaf]; turn: [Leaf, Leaf, Leaf, Leaf]; half: [Leaf, Leaf, Leaf] }
   /** A relation or a constraint withdrawn, with why. */
   | { kind: 'withdraw'; id: string; why: string };
 
@@ -99,5 +101,6 @@ function rebuild(c: any, i: number): Contribution {
   if (c.kind === 'leaf') return { ...c, leaf: rebuildTerm(c.leaf, where) as Leaf };
   if (c.kind === 'relation') return { ...c, term: rebuildTerm(c.term, where), ...(c.domain ? { domain: c.domain.map((d: any) => ({ says: d.says, holds: rebuildTerm(d.holds, where) })) } : {}) };
   if (c.kind === 'constraint') return { ...c, holds: rebuildTerm(c.holds, where) };
+  if (c.kind === 'place') return { ...c, centre: c.centre.map((l: any) => rebuildTerm(l, where)), turn: c.turn.map((l: any) => rebuildTerm(l, where)), half: c.half.map((l: any) => rebuildTerm(l, where)) };
   return c as Contribution;
 }

@@ -18,7 +18,7 @@ lines.on('line', (line) => {
   if (!line.trim()) return;
   try {
     const m = read(line);
-    const out = 'contribution' in m ? project(rt, rt.admit(m.contribution)) : answer(rt, m);
+    const out = 'contribution' in m ? project(rt, rt.admit(m.contribution)) : 'contributions' in m ? m.contributions.flatMap((c) => project(rt, rt.admit(c))) : answer(rt, m);
     process.stdout.write(`${out.join('\n')}\n`);
   } catch (err) {
     process.stdout.write(`refused: ${(err as Error).message}\n`);

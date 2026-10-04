@@ -440,6 +440,12 @@ These compute real results from real inputs, within tests:
   against its identity. It admits contributions (given or measured leaves, kept laws put to work at addresses, wants
   as bounds, withdrawals) from the text channel. It evaluates again only what reads what changed, and reports every
   gap as a structured term at an address.
+- **Places in the domain** (src/nexus/place.ts). A place is a box: its centre, its turn and its half-extents, every
+  number a leaf, in a domain whose gravity is a measured vector. For every place alike, the runtime generates its
+  volume, its extent along gravity, its mass and weight once its matter's density is known, and the section across
+  each of its axes with that section's second moment and modulus about the line gravity bends it around. On edge, a
+  38 by 184 board's section has exactly what the kept rectangle laws give; turned flat, its modulus falls by 184 over
+  38. Nothing names a breadth or a depth. A member along gravity is refused bending, with the reason.
 - **Stopped and started again, it is the same state.** Every binding has the same identity, and only the dependents
   of a later change are evaluated (tests/nexus/runtime.test.ts, and run by hand twice on one journal file).
 
@@ -525,3 +531,32 @@ found three things no test had shown.
    names the law, its formula and its source.
 
 Step 2 starts from point 1.
+
+---
+
+## 17. Step 2, executed: what running it found
+
+A board was placed under measured gravity, given its matter's density, and later turned flat, in two runs of the
+process on one journal.
+
+1. **One change re-evaluated its dependents more than once.** Turning the board changed two of its turn's numbers,
+   and every relation reading the turn was evaluated once for each. The loop now settles in order of distance from
+   the leaves, each reached relation once per change: turning the board evaluates exactly the seven relations that
+   read its turn.
+2. **A contribution whose origin changed re-derives everything under it, even where the values are equal.** The
+   board turned flat was given with new grounds, so every number of it has a new identity, and all thirteen relations
+   over it were evaluated again. That is right: what it rests on changed. It is noted because a channel that restates
+   unchanged numbers with new grounds costs evaluation.
+3. **Nothing says where the board rests.** The board has a volume, a weight and a stiffness for every section, but no
+   coupling to anything. So nothing can tell which section carries the load, what the reactions are, what bending
+   moment the weight makes, or whether it holds. This is Q1, couplings, absent from the runtime.
+
+   **Rederived.** Couplings must be generated from geometry, as the places' own quantities are. Where two places touch
+   (a face of one against a face of the other within a tolerance), a contact forms: a shared face with its area and
+   normal. Momentum crosses it: a place's weight goes down its contacts to what bears it, and what bears it is a place
+   too (the floor, measured by the headset; a support; another board). The reactions, the moment along a place
+   between its contacts and the stress in its section then follow by kept laws, with no beam template. The order of
+   section 14 changes accordingly: couplings come before the constraint store's dissolution of `Intent`, because
+   running the system shows them to be the next thing that stops it.
+
+Step 3 is couplings between places.

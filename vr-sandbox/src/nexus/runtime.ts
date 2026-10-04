@@ -12,6 +12,7 @@ import { contradiction, evaluate, ofLeaf, type Derivation, type Env } from './ev
 import { Journal, type Address, type Contribution, type Sink } from './journal';
 import { ge, le, variable, type Leaf } from './term';
 import { hashOf } from './identity';
+import { placeLeaves, placeRelations } from './place';
 import type { Law } from './law';
 import { why, type WhyNode } from './why';
 
@@ -50,6 +51,8 @@ export class Runtime {
   private readonly leaves = new Map<Address, Leaf>();
   private readonly relations = new Map<string, RelationC>();
   private readonly constraints = new Map<string, ConstraintC>();
+  /** The places whose geometry has generated its relations. */
+  private readonly places = new Set<string>();
   /** Relations held out because they would close a loop. */
   private readonly cyclic = new Set<string>();
   private readonly bindings = new Map<Address, Derivation>();
@@ -145,13 +148,14 @@ export class Runtime {
 
   private apply(c: Contribution): Address[] {
     if (c.kind === 'leaf') { this.leaves.set(c.at, c.leaf); return this.settle([c.at]); }
-    if (c.kind === 'relation') {
-      if (this.closesLoop(c)) { this.relations.set(c.id, c); this.cyclic.add(c.id); return []; }
-      this.relations.set(c.id, c);
-      for (const p of new Set(Object.values(c.ports))) this.read(p, c.id);
-      this.producers.set(c.out, [...(this.producers.get(c.out) ?? []), c.id]);
-      this.refresh(c.id);
-      return this.settle([c.out]);
+    if (c.kind === 'relation') { const out = this.addRelation(c); return out ? this.settle([out]) : []; }
+    if (c.kind === 'place') {
+      // the place's numbers are leaves; what its geometry implies is generated from it, once, for every place alike
+      const leaves = placeLeaves(c);
+      for (const l of leaves) this.leaves.set((l as { at: Address }).at, (l as { leaf: Leaf }).leaf);
+      const outs: Address[] = [];
+      if (!this.places.has(c.id)) { this.places.add(c.id); for (const g of placeRelations(c.id)) { const o = this.addRelation(g as RelationC); if (o) outs.push(o); } }
+      return this.settle([...leaves.map((l) => (l as { at: Address }).at), ...outs]);
     }
     if (c.kind === 'constraint') {
       this.constraints.set(c.id, c);
@@ -171,6 +175,16 @@ export class Runtime {
     this.constraints.delete(c.id); this.checks.delete(c.id);
     for (const p of Object.values(k.ports)) this.readers.get(p)?.delete(c.id);
     return [];
+  }
+
+  /** Put a relation in the store and evaluate it: its output's address, or none when it is held out as a loop. */
+  private addRelation(c: RelationC): Address | null {
+    if (this.closesLoop(c)) { this.relations.set(c.id, c); this.cyclic.add(c.id); return null; }
+    this.relations.set(c.id, c);
+    for (const p of new Set(Object.values(c.ports))) this.read(p, c.id);
+    this.producers.set(c.out, [...(this.producers.get(c.out) ?? []), c.id]);
+    this.refresh(c.id);
+    return c.out;
   }
 
   private read(a: Address, id: string) { if (!this.readers.has(a)) this.readers.set(a, new Set()); this.readers.get(a)!.add(id); }
@@ -223,25 +237,47 @@ export class Runtime {
     return undefined;
   }
 
-  /** Bring the addresses up to date, and everything that reads them, transitively: only what changed is evaluated again. */
+  /** How far a relation is from the leaves: one more than the farthest relation that binds one of its ports. */
+  private depth(id: string, memo: Map<string, number>, path = new Set<string>()): number {
+    const known = memo.get(id);
+    if (known !== undefined) return known;
+    if (path.has(id)) return 0;
+    path.add(id);
+    let d = 0;
+    for (const p of Object.values(this.relations.get(id)!.ports)) for (const up of this.producers.get(p) ?? []) if (!this.cyclic.has(up)) d = Math.max(d, 1 + this.depth(up, memo, path));
+    path.delete(id);
+    memo.set(id, d);
+    return d;
+  }
+
+  /**
+   * Bring the addresses up to date, and everything that reads them, transitively. The relations a change reaches are
+   * evaluated in order of their distance from the leaves, each once: a relation is evaluated only after every
+   * relation upstream of it that the change reached.
+   */
   private settle(start: Address[]): Address[] {
     const changed: Address[] = [];
-    const queue = [...start];
-    let guard = 0;
-    while (queue.length) {
-      if (++guard > 1_000_000) throw new Error('settle: propagation did not settle');
-      const a = queue.shift()!;
+    const memo = new Map<string, number>();
+    const pending = new Map<string, number>(); // relation id → depth, waiting to be evaluated
+    const update = (a: Address) => {
       const next = this.bindingOf(a), had = this.bindings.get(a);
-      if (next?.hash === had?.hash) continue;
+      if (next?.hash === had?.hash) return;
       if (next) this.bindings.set(a, next); else this.bindings.delete(a);
       changed.push(a);
       for (const id of this.readers.get(a) ?? []) {
-        if (this.relations.has(id)) {
-          if (this.cyclic.has(id)) continue;
-          this.refresh(id);
-          queue.push(this.relations.get(id)!.out);
-        } else if (this.constraints.has(id)) this.evaluateConstraint(id);
+        if (this.relations.has(id)) { if (!this.cyclic.has(id)) pending.set(id, this.depth(id, memo)); }
+        else if (this.constraints.has(id)) this.evaluateConstraint(id);
       }
+    };
+    for (const a of start) update(a);
+    let guard = 0;
+    while (pending.size) {
+      if (++guard > 1_000_000) throw new Error('settle: propagation did not settle');
+      let next = '', least = Infinity;
+      for (const [id, d] of pending) if (d < least) { least = d; next = id; }
+      pending.delete(next);
+      this.refresh(next);
+      update(this.relations.get(next)!.out);
     }
     return changed;
   }

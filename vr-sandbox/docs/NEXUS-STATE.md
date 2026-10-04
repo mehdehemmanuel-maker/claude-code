@@ -110,6 +110,7 @@ the generated laws are checked against, not the limit of what the language can s
 | A change carried through moving matter takes its own time: a round stream's heated length is Fo Q ρ c / (π k), whatever its diameter; the printer now sees its bar | tests/nexus/high-bar.test.ts |
 | Information is a carrier tied by the second law (k T ln 2 per bit erased), the barrier rate (about 50 k T to hold a bit ten years) and light's speed (a microsecond's lag bounds a place to 300 m) | tests/nexus/high-bar.test.ts |
 | Nexus runs as a process on a journal: stopped and restarted it is the same state; only what reads a change is evaluated again; every gap is a term at an address | tests/nexus/runtime.test.ts, `npm run nexus` |
+| A place's geometry generates its volume, weight and sections' stiffness about the line gravity bends it around: on edge the kept rectangle laws exactly, flat 184/38 less; no breadth or depth named | tests/nexus/place.test.ts |
 
 ## 3. What is missing
 
