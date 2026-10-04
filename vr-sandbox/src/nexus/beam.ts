@@ -7,7 +7,8 @@
 
 import { getMaterial } from '../data/materials';
 import { LUMBER } from '../parts/registry';
-import { BENDING_STRESS, EXTENT_FROM_MASS, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
+import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
+import { coarse, coverage, domain, field, type Field } from './domain';
 import { coordinate, ledger, restOn, standOn, topOf, type Prism, type RestCoupling } from './coupling';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Observer, type RigidDomain } from './field';
@@ -15,7 +16,7 @@ import { apply, law, type Law } from './law';
 import { compare, Journal, type Comparison } from './observe';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
-import { add, div, k, le, leaf, mul, neg, variable, type Leaf } from './term';
+import { abs, add, div, ge, k, le, leaf, mul, neg, variable, type Leaf } from './term';
 
 export interface BeamIntent {
   by: string;
@@ -170,8 +171,29 @@ export interface Slice {
   choice: Choice;
   configuration: BeamConfiguration | null;
   realization: Realization | null;
+  /** The bending moment as a field over the span, with its quasi-static scale band. */
+  moment: Field | null;
   comparisons: Comparison[];
+  /** The share of the span the kernel observes: zero, for seams are points. */
+  observed: Derivation | null;
   journal: Journal;
+}
+
+/** The bound on loading time over the first period below which a static derivation does not hold: an assumption with grounds. */
+export const QUASI_STATIC = leaf('quasi-static bound', 10, '1', { class: 'assumed', by: 'the restart', grounds: 'a load that settles over ten periods of the first mode excites it little: the static derivation holds at that window; faster, the beam rings and the moment is not the static one' });
+
+/**
+ * The bending moment as a field over the span: the load's and the beam's own moments composed over the coordinate
+ * x, in the domain between the reaction lines, holding at windows slower than the beam's first period.
+ */
+export function momentField(frame: Frame, bound: Record<string, Derivation>, spanRealized: Derivation, T1: Derivation): Field {
+  const x = variable('x', 'm', 'coordinate x');
+  const L2 = variable('L', 'm', 'span');
+  const lo = evaluate('left reaction line', neg(div(L2, k(2))), { L: spanRealized }, { unit: 'm', law: 'the span is centred on the frame origin' });
+  const hi = evaluate('right reaction line', div(L2, k(2)), { L: spanRealized }, { unit: 'm', law: 'the span is centred on the frame origin' });
+  const over = domain(frame, { x: { lo, hi } }, [{ says: 'quasi-static: the sample\'s time support covers at least the declared number of first periods', holds: ge(variable('dt', 's', 'time support'), mul(QUASI_STATIC, variable('T1', 's', 'first period'))), env: { T1 } }]);
+  return field('bending moment along the span', 'N m', over, { x }, { P: bound['P']!, L: spanRealized, w: bound['w']!, q: bound['q']!, Lt: bound['Lt']! },
+    [{ law: PATCH_MOMENT, bind: { a: abs(x) } }, { law: SELF_MOMENT, bind: { a: abs(x) } }], ([load, self]) => add(load!, self!));
 }
 
 /** The slice end to end. Without a kernel instance it stops after construction. */
@@ -189,7 +211,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
   const choice = search(semantics.system, catalogue, leastMaterial(intent.by));
   for (const c of choice.candidates) if (!c.admissible) journal.append({ kind: 'refusal', what: c.option.label, domain: [...c.refused, ...c.unsatisfied, ...c.undecided].join('; ') });
   if (choice.pick) journal.append({ kind: 'choice', why: choice.why!, among: choice.manifold.length, label: choice.pick.option.label });
-  let configuration: BeamConfiguration | null = null, realization: Realization | null = null;
+  let configuration: BeamConfiguration | null = null, realization: Realization | null = null, moment: Field | null = null, observed: Derivation | null = null;
   const comparisons: Comparison[] = [];
   if (choice.pick) {
     const bound = choice.pick.solution.bound;
@@ -200,16 +222,20 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
     journal.append({ kind: 'record', record: configuration.rigid.holds });
     if (J && configuration.rigid.rigid) {
       realization = realizeRigid(J, contract, { ...configuration.bodies, totalLength: configuration.totalLength, patch: bound['w']!, gravity: g, ground: ground.height(frame.origin.x, frame.origin.z) }, obs);
+      // the moment as a field over the span, with the span as the realization holds it (reaction lines within the knife edges)
+      const Lr = evaluate('span as realized', add(variable('L', 'm'), variable('o', 'm')), { L: bound['L']!, o: contract.reactionOffset }, { unit: 'm', law: 'the span between reaction lines: the centre distance plus the knife-edge offset' });
+      const T1 = apply(FIRST_PERIOD, { L: bound['L']!, E: bound['E']!, I: bound['I']!, rho: bound['rho']!, A: bound['A']!, h: bound['h']! });
+      moment = momentField(frame, bound, Lr, T1);
+      journal.append({ kind: 'record', record: T1 });
       for (const sm of realization.moments) {
-        // the derivation at that station, with the span as the realization holds it (reaction lines within the knife edges)
-        const Lr = evaluate('span as realized', add(variable('L', 'm'), variable('o', 'm')), { L: bound['L']!, o: contract.reactionOffset }, { unit: 'm', law: 'the span between reaction lines: the centre distance plus the knife-edge offset' });
-        const mLoad = apply(PATCH_MOMENT, { P: bound['P']!, L: Lr, w: bound['w']!, a: sm.station }, `moment from the load at bond ${sm.bond}`);
-        const mSelf = apply(SELF_MOMENT, { q: bound['q']!, L: Lr, Lt: bound['Lt']!, a: sm.station }, `moment from self weight at bond ${sm.bond}`);
-        const derived = evaluate(`bending moment at bond ${sm.bond}, derived`, add(variable('a', 'N m'), variable('b', 'N m')), { a: mLoad, b: mSelf }, { unit: 'N m', law: 'superposition' });
+        // the field as the kernel resolves it: a point in x, the quiet time in t; refused if that window is not quasi-static
+        const derived = coarse(moment, realization.resolution, { x: sm.station }, `bending moment at bond ${sm.bond}, derived`);
         const cmp = compare(`moment at bond ${sm.bond}`, derived, sm.moment, { name: contract.name, relative: contract.momentError });
         comparisons.push(cmp);
         journal.append({ kind: 'comparison', comparison: cmp });
       }
+      observed = coverage(moment.over, realization.resolution, realization.moments.map((sm) => ({ x: sm.station })), 'x');
+      journal.append({ kind: 'record', record: observed });
       const sagCmp = compare('mid-span sag', bound['delta']!, realization.sag, { name: contract.name, relative: contract.momentError });
       comparisons.push(sagCmp);
       journal.append({ kind: 'comparison', comparison: sagCmp });
@@ -217,7 +243,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
       journal.append({ kind: 'record', record: realization.drop });
     }
   }
-  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, comparisons, journal };
+  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, moment, comparisons, observed, journal };
 }
 
 /** The intent of Part XXV, as the person gives it. */

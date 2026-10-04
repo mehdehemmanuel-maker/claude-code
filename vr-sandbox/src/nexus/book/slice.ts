@@ -2,7 +2,7 @@
 // each with the domain it holds in and an example checked at the book's own limits (tests/nexus/book.test.ts).
 
 import { law, type Law } from '../law';
-import { add, and, div, ge, gt, k, le, leaf, max, mul, pow, sub, variable, zero } from '../term';
+import { PI, add, and, div, ge, gt, k, le, leaf, max, mul, pow, sqrt, sub, variable, zero } from '../term';
 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };
@@ -16,7 +16,7 @@ const P = variable('P', 'N', 'load'), W = variable('W', 'N', 'self weight'), R =
 const L = variable('L', 'm', 'span'), Lt = variable('Lt', 'm', 'total length'), w = variable('w', 'm', 'patch width'), a = variable('a', 'm', 'station from mid-span');
 const q = variable('q', 'N/m', 'weight per length'), rho = variable('rho', 'kg/m^3', 'density');
 const b = variable('b', 'm', 'breadth'), h = variable('h', 'm', 'depth'), x = variable('x', 'm', 'extent x'), y = variable('y', 'm', 'extent y'), z = variable('z', 'm', 'extent z');
-const E = variable('E', 'Pa', 'modulus'), I = variable('I', 'm^4', 'second moment');
+const E = variable('E', 'Pa', 'modulus'), I = variable('I', 'm^4', 'second moment'), A = variable('A', 'm^2', 'section area');
 void R;
 
 /** The slenderness below which shear deflection is left out of a beam's sag: an assumption with its grounds. */
@@ -98,5 +98,13 @@ export const SELF_SAG = law({
   example: { inputs: { q: 1000, L: 2, Lt: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.009765625, from: 'ganglia/laws.ts beam.simply-supported.udl (no overhang)' },
 });
 
+export const FIRST_PERIOD = law({
+  id: 'beam.simply-supported.first-period', name: 'Period of the first mode of a simply supported beam', statement: 'A simply supported uniform beam vibrates in its first mode at ω₁ = (π/L)² √(E I / (ρ A)); its period is 2π over that.', formula: 'T₁ = 2 L² √(ρ A / (E I)) / π',
+  inputs: [{ sym: 'L', unit: 'm', name: 'span' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'rho', unit: 'kg/m^3', name: 'density' }, { sym: 'A', unit: 'm^2', name: 'section area' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'T1', unit: 's', name: 'first period' },
+  term: div(mul(k(2), pow(L, 2), sqrt(div(mul(rho, A), mul(E, I)))), PI()),
+  domain: [slender], source: { cite: 'Blevins, Formulas for Natural Frequency and Mode Shape, Krieger 2001, table 8-1 (pinned–pinned beam, first mode)', kind: 'handbook' },
+  example: { inputs: { L: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, rho: 7850, A: 0.0008, h: 0.04 }, output: (2 * Math.PI) / ((Math.PI / 2) ** 2 * Math.sqrt((200e9 * ((0.02 * 0.04 ** 3) / 12)) / (7850 * 0.0008))), from: 'ω₁ = (π/L)² √(EI/ρA), computed independently' },
+});
+
 /** The derived laws of the slice. */
-export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG];
+export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD];

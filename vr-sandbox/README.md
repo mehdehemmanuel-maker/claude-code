@@ -25,14 +25,18 @@ nothing of its architecture is extended again.
   slice's derived laws),
   `solve` (propagation, free variables reported, contradictions kept, search over declared options under a declared
   preference), `field` (declared frame, sourced gravity, ground as a field query, the observer's window and the rigid
-  domain), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
+  domain), `domain` (regions of x, y, z, t in a frame with the scale bands their description holds in; fields as
+  laws composed over coordinates, sampled as records that cite the laws; the observer's resolution, with the window
+  as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
+  across it, refused outside a scale band with the band named; coverage of a lattice of point samples is zero), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
   morphism under a contract whose numbers are its own conformance measurements), `observe` (comparison within the
   contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness), and
   `beam`: the vertical slice of Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
   catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
-  measures the bending moment at four stations within 1 % of the derivation, and the sag is unobserved, because the
-  rigid realization says it cannot see it, not unknown.
+  measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
+  1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved,
+  because the rigid realization says it cannot see it, not unknown.
 
 ## The gate
 

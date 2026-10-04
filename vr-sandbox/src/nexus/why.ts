@@ -51,6 +51,7 @@ export function closure(d: Derivation, out = new Set<string>()): Set<string> {
   if (out.has(d.hash)) return out;
   out.add(d.hash);
   if (d.law) out.add(d.law);
+  for (const c of d.cites ?? []) out.add(c);
   for (const l of leavesOf(d.term)) out.add(l.hash);
   for (const i of Object.values(d.inputs)) closure(i, out);
   return out;

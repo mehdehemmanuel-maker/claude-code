@@ -29,6 +29,8 @@ export interface Derivation {
   readonly uncertainty?: number;
   /** The hash of the law whose term this is, when it is one. */
   readonly law?: string;
+  /** Further hashes the record rests on (the laws a field is composed of). */
+  readonly cites?: readonly string[];
   /** The domain the inputs left, when the evaluation was refused. */
   readonly refusal?: { domain: string; law: string };
   /** For a measurement or an unobserved variable: the observer's window and its word. */
@@ -83,7 +85,7 @@ const numeric = (t: Term, env: Env): number | null => {
  * error of the caller, not an unknown: an unknown is a record of status unknown). The result's status is the
  * weakest of the inputs', and never stronger than derived.
  */
-export function evaluate(name: string, term: Term, env: Env, cite?: { law: string; domain?: DomainCheck[]; unit?: string }): Derivation {
+export function evaluate(name: string, term: Term, env: Env, cite?: { law: string; also?: string[]; domain?: DomainCheck[]; unit?: string }): Derivation {
   const inputs: Record<string, Derivation> = {};
   const collect = (t: Term) => {
     if (t.kind === 'var') { const d = env[t.sym]; if (!d) throw new Error(`${name}: ${t.sym} is not bound`); if (!isDerivation(d)) throw new Error(`${name}: ${t.sym} is bound to something that is not a derivation`); inputs[t.sym] = d; }
@@ -94,8 +96,8 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
   const statuses = Object.values(inputs).map((d) => d.status);
   let status = weakest('derived', ...statuses);
   const unit = cite?.unit ?? dimText(term.dim);
-  const base = { name, term, inputs, dim: term.dim, unit, ...(cite ? { law: cite.law } : {}) };
-  const hash = hashOf({ record: 'eval', term: term.hash, law: cite?.law ?? null, inputs: Object.fromEntries(Object.entries(inputs).map(([s, d]) => [s, d.hash])) });
+  const base = { name, term, inputs, dim: term.dim, unit, ...(cite ? { law: cite.law } : {}), ...(cite?.also?.length ? { cites: [...cite.also] } : {}) };
+  const hash = hashOf({ record: 'eval', term: term.hash, law: cite?.law ?? null, cites: cite?.also ?? [], inputs: Object.fromEntries(Object.entries(inputs).map(([s, d]) => [s, d.hash])) });
   if (!carriesValue(status)) return brand({ ...base, value: null, status, hash });
   // validity: each domain predicate must hold; one that cannot be decided leaves the result unknown
   for (const dc of cite?.domain ?? []) {
@@ -120,7 +122,13 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
 }
 
 /** Re-evaluate a record from its own term and inputs: the value must come back (the derivation test). */
-export const recompute = (d: Derivation): Derivation => (d.term.kind === 'leaf' ? ofLeaf(d.term) : evaluate(d.name, d.term, d.inputs, d.law ? { law: d.law, unit: d.unit } : undefined));
+export const recompute = (d: Derivation): Derivation => (d.term.kind === 'leaf' ? ofLeaf(d.term) : evaluate(d.name, d.term, d.inputs, d.law ? { law: d.law, unit: d.unit, ...(d.cites ? { also: [...d.cites] } : {}) } : undefined));
+
+/** The same record with a wider uncertainty and the reason: an observer's resolution, never a smaller one. */
+export function withUncertainty(d: Derivation, uncertainty: number, because: string): Derivation {
+  if (uncertainty < (d.uncertainty ?? 0)) throw new Error(`${d.name}: an uncertainty is never narrowed by hand`);
+  return brand({ ...d, uncertainty, because: d.because ? `${d.because}; ${because}` : because });
+}
 
 /** Two evidences for one variable that disagree past tolerance: both kept, the variable unusable. */
 export function contradiction(name: string, a: Derivation, b: Derivation): Derivation {

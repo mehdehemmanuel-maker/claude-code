@@ -103,8 +103,13 @@ describe('the beam slice: realization and observation', () => {
     for (const c of moments) {
       expect(c.verdict.kind, `${c.name}: ${JSON.stringify(c.verdict)} derived ${c.derived.value} measured ${c.measured.value}`).toBe('within');
       expect(c.measured.status).toBe('measured');
-      expect(c.measured.window?.seconds).toBeGreaterThan(0.3);
+      expect(c.measured.window?.seconds).toBeCloseTo(0.3, 2);
+      expect(c.measured.uncertainty).toBeDefined();
+      expect(c.derived.cites).toContain(PATCH_MOMENT.hash);
     }
+    // the kernel observes the span at seams only: a set of measure zero; the field between is derived
+    expect(s.observed!.value).toBe(0);
+    expect(s.moment!.over.scale[0]!.says).toMatch(/quasi-static/);
     expect(moments.map((c) => c.derived.value!).sort((a, b) => a - b)[0]!).toBeGreaterThan(50);
   });
 
