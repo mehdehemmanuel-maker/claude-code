@@ -33,6 +33,15 @@ export interface Region {
   carriers?: Record<string, string>;
   /** Quantities that are bounds, not things brought: what the region takes or gives at most (a bearing pressure, a service's power). */
   limits?: string[];
+  /**
+   * Where the region is: its extent along the frame's axes (y opposite gravity), each a quantity the region states
+   * or free for the language to choose, with what its faces touch. A region with an extent has faces: up, down and
+   * the sides, each with an area and an outward normal. A quantity the region states can tie free extents together
+   * (a floor area is x times z).
+   */
+  extent?: { x: string | null; y: string | null; z: string | null; plan?: string; faces: Partial<Record<'up' | 'down' | 'side', string>> };
+  /** For a quantity the region brings: which way it travels in the frame (rain and snow fall, wind blows across, sunlight comes from above). */
+  directions?: Record<string, 'down' | 'across' | 'from above' | 'vertical' | 'along'>;
 }
 
 export interface Want {
@@ -42,7 +51,7 @@ export interface Want {
   /** The region the want is about. */
   region: string;
   /** The quantity, with its unit, and the carrier it is about when the unit does not say it. */
-  quantity: { sym: string; unit: string; name: string; carrier?: string };
+  quantity: { sym: string; unit: string; name: string; carrier?: string; direction?: 'vertical' | 'across' | 'along' };
   /** For a position: what it is measured from (the road's path, the drawn shape). */
   relativeTo?: string;
   /** The conditions the want holds under, as quantities (a crash from 50 km/h), by symbol and carrier. */

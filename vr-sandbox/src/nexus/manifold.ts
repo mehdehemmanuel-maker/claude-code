@@ -28,6 +28,7 @@
 
 import { carrierById, coupling, family, roleOf, type Carrier, type Role } from './carrier';
 import { gravity } from './field';
+import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import type { Leaf } from './term';
 import { regionOf, touches, type Intent, type Region, type Want } from './want';
 
@@ -82,6 +83,7 @@ export function generate(intent: Intent): Structure {
     elements.push(el);
     return el;
   };
+  const put = (e: Element | undefined | null, v: Element['values'][number]) => { if (e && !e.values.some((x) => x.name === v.name)) e.values.push(v); };
   const gap = (want: string | null, element: string | null, carrier: string | null, lacks: string) => { if (!gaps.some((x) => x.want === want && x.element === element && x.lacks === lacks)) gaps.push({ want, element, carrier, lacks }); };
   const lawIds = (c: Carrier, ...names: string[]) => family(c).filter((l) => names.some((n) => l.id.endsWith(`.${n}`))).map((l) => l.id);
   const use = (r: Region, sym: string) => used.add(`${r.id}.${sym}`);
@@ -215,14 +217,44 @@ export function generate(intent: Intent): Structure {
   };
 
   const flux: { region: string; carrier: string; J: number; from: string }[] = [];
+  const shapes = new Map<string, Shape | null>();
+  const shape = (id: string): Shape | null => {
+    if (!shapes.has(id)) { const r = intent.regions.find((x) => x.id === id); shapes.set(id, r ? shapeOf(r) : null); if (r?.extent) for (const sym of [r.extent.x, r.extent.y, r.extent.z, r.extent.plan]) if (sym) use(r, sym); }
+    return shapes.get(id)!;
+  };
+  /** The faces of a region that touch another, each a boundary element under the aggregate one, with its area. */
+  const faceElements = (parent: Element, c: string, R: string, N: string, only?: Face[]): Element[] => {
+    const sh = shape(R);
+    if (!sh) return [];
+    const out: Element[] = [];
+    for (const f of (['up', 'side', 'down'] as Face[]).filter((f) => sh.touches[f] === N && (!only || only.includes(f)))) {
+      out.push(add({ id: `${parent.id}:${f}`, kind: 'boundary', carrier: c, says: `the ${f === 'side' ? 'sides' : `${f}-facing face`} of ${R}, where it meets ${N}`, regions: [R, N], values: [{ name: 'area', value: sh.area[f].value!, unit: 'm^2', from: sh.area[f].name }, ...parent.values.filter((v) => v.name === 'conductance')], why: { want: parent.why.want, rule: `the boundary to ${N} is the faces of ${R} that touch it`, laws: parent.why.laws, parent: parent.id } }));
+    }
+    return out;
+  };
 
   const momentumWant = (w: Want, c: Carrier, role: Role | null, R: Region) => {
     const lo = w.lo?.value ?? null, hi = w.hi?.value ?? null;
     const atRest = (r: Region) => { const st = stateOf(r, 'momentum'); return !!st && st.lo === 0 && st.hi === 0; };
     if (!w.relativeTo && (role === 'position' || role === null) && w.when === 'always') {
-      const loads = intent.regions.filter((r) => r.id !== R.id).flatMap((r) => said(r, 'momentum', 'flux density').map((q) => ({ region: r.id, q }))).filter((x) => route(x.region, R.id));
-      for (const l of loads) add({ id: `load:${l.region}->${R.id}`, kind: 'path', carrier: 'momentum', says: `the momentum ${l.region} brings (${l.q.leaf.name}) reaches ${R.id}`, regions: route(l.region, R.id)!, values: [{ name: l.q.leaf.name, value: l.q.leaf.value!, unit: 'Pa', from: l.region }], why: { want: w.id, rule: 'what the environment brings per area is a momentum flux into what it touches', laws: [], parent: null } });
+      const loads = intent.regions.filter((r) => r.id !== R.id).flatMap((r) => said(r, 'momentum', 'flux density').map((q) => ({ region: r.id, q, dir: r.directions?.[q.sym] ?? null }))).filter((x) => route(x.region, R.id));
+      const sh = shape(R.id);
+      let down = 0, across = 0;
+      for (const l of loads) {
+        const faces = l.dir ? facesCrossed(l.dir) : null;
+        const area = sh && faces ? (l.dir === 'across' ? sh.largestSide.value! : faces.reduce((a, f) => a + sh.area[f].value!, 0)) : null;
+        const F = area !== null ? l.q.leaf.value! * area : null;
+        if (F !== null) { if (l.dir === 'across') across += F; else down += F; }
+        const ld = add({ id: `load:${l.region}->${R.id}`, kind: 'path', carrier: 'momentum', says: `the momentum ${l.region} brings (${l.q.leaf.name}) reaches ${R.id}${faces ? ` on its ${faces.join(' and ')} face${faces.length > 1 ? 's' : ''}` : ''}`, regions: route(l.region, R.id)!, values: [{ name: l.q.leaf.name, value: l.q.leaf.value!, unit: 'Pa', from: l.region }, ...(F !== null ? [{ name: 'force', value: F, unit: 'N', from: `${l.q.leaf.name} times the area it acts on` }] : [])], why: { want: w.id, rule: 'what the environment brings per area is a momentum flux into the faces it crosses', laws: [], parent: null } });
+        // what reaches a face is carried across it by members spanning it, to the face that meets the region at rest
+        if (sh && faces) for (const f of faces) {
+          const span = f === 'side' ? sh.y.value! : Math.min(sh.x.value!, sh.z.value!);
+          add({ id: `members:${R.id}:${f}`, kind: 'path', carrier: 'momentum', says: `members spanning the ${f === 'side' ? 'sides' : `${f}-facing face`} of ${R.id} carry what reaches it to the face that meets the ground`, regions: [R.id], values: [{ name: 'span', value: span, unit: 'm', from: f === 'side' ? `${sh.y.name}` : 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: ld.id } });
+        }
+      }
       const masses = intent.regions.filter((r) => r.id === R.id || touches(intent, r.id, R.id)).flatMap((r) => said(r, 'momentum', 'capacitance').map((q) => ({ region: r.id, q })));
+      for (const m of masses) down += m.q.leaf.value! * g;
+      if (sh && masses.length) add({ id: `members:${R.id}:down`, kind: 'path', carrier: 'momentum', says: `members spanning the down-facing face of ${R.id} carry what rests on it`, regions: [R.id], values: [{ name: 'span', value: Math.min(sh.x.value!, sh.z.value!), unit: 'm', from: 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: null } });
       for (const m of masses) add({ id: `weight:${m.region}`, kind: 'path', carrier: 'momentum', says: `gravity makes momentum in ${m.q.leaf.name}: ${(m.q.leaf.value! * g).toFixed(0)} N reaches ${R.id}`, regions: [m.region, R.id], values: [{ name: 'weight', value: m.q.leaf.value! * g, unit: 'N', from: `${m.q.leaf.name} times standard gravity` }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass', laws: [], parent: null } });
       const rest = intent.regions.filter((r) => r.id !== R.id && atRest(r));
       if (!rest.length) { gap(w.id, null, 'momentum', 'nothing at rest receives the momentum'); return; }
@@ -231,9 +263,12 @@ export function generate(intent: Intent): Structure {
         if (!p) continue;
         p.why.laws = [...new Set([...p.why.laws, ...lawIds(c, 'flux-stored-energy')])];
         if (hi !== null) p.values.push({ name: role === null ? 'most displacement over span' : 'most displacement', value: hi, unit: role === null ? '1' : 'm', from: w.hi!.name });
-        for (const lim of said(gr, 'momentum', 'flux density', true)) add({ id: `bound:momentum:${R.id}|${gr.id}`, kind: 'bound', carrier: 'momentum', says: `where the path meets ${gr.id}, the momentum per area stays below ${lim.leaf.name}: the meeting area is at least the flux over it`, regions: [R.id, gr.id], values: [{ name: lim.leaf.name, value: lim.leaf.value!, unit: 'Pa', from: gr.id }], why: { want: w.id, rule: 'a boundary carries flux up to the flux density its weaker side allows', laws: [], parent: p.id } });
+        if (down > 0) p.values.push({ name: 'force down, without the structure\'s own weight', value: down, unit: 'N', from: 'the loads on the faces and the weights' });
+        if (across > 0) p.values.push({ name: 'force across', value: across, unit: 'N', from: 'what pushes on the largest side' });
+        for (const lim of said(gr, 'momentum', 'flux density', true)) add({ id: `bound:momentum:${R.id}|${gr.id}`, kind: 'bound', carrier: 'momentum', says: `where the path meets ${gr.id}, the momentum per area stays below ${lim.leaf.name}: the meeting area is at least the flux over it`, regions: [R.id, gr.id], values: [{ name: lim.leaf.name, value: lim.leaf.value!, unit: 'Pa', from: gr.id }, ...(down > 0 ? [{ name: 'least meeting area, without the structure\'s own weight', value: down / lim.leaf.value!, unit: 'm^2', from: 'the force down over the bearing it allows' }] : [])], why: { want: w.id, rule: 'a boundary carries flux up to the flux density its weaker side allows', laws: [], parent: p.id } });
       }
-      if (loads.length) gap(w.id, null, 'momentum', 'the loads per area need the areas they act on, and the structure\'s own weight its size: no geometry');
+      if (loads.length && !sh) gap(w.id, null, 'momentum', 'the loads per area need the areas they act on: no geometry');
+      if (loads.length) gap(w.id, null, 'momentum', 'the structure\'s own weight is what it is made of times its size: no material is chosen');
       return;
     }
     // moved: relative to a reference
@@ -246,11 +281,19 @@ export function generate(intent: Intent): Structure {
       if (!rest) { gap(w.id, dep.id, 'momentum', 'nothing at rest to hold the point against'); return; }
       const frame = path(c, R.id, rest.id, w.id, `the point and ${R.id} are held to each other through ${rest.id}, stiff enough that the motion's forces displace them less than the tolerance`, dep.id);
       if (frame) { frame.why.laws = [...new Set([...frame.why.laws, ...lawIds(c, 'flux-stored-energy')])]; if (hi !== null) frame.values.push({ name: 'most displacement', value: hi, unit: 'm', from: w.hi!.name }); }
+      const sh = shape(R.id);
+      const axes: ('x' | 'y' | 'z' | null)[] = sh ? ['x', 'y', 'z'] : [null];
+      if (sh && frame) put(frame, { name: 'span it holds the point over, along each axis', value: Math.max(sh.x.value!, sh.y.value!, sh.z.value!), unit: 'm', from: `the extent of ${R.id}` });
       for (const s of powerSources(R.id)) {
-        const conv = add({ id: `conversion:${s.carrier.id}->momentum:${dep.id}`, kind: 'conversion', carrier: 'momentum', says: `${s.carrier.id} becomes the momentum that moves the point`, regions: [dep.id], values: [], why: { want: w.id, rule: 'a point moved over a shape: power converted to momentum', laws: coupling(s.carrier, carrierById('angular momentum')).map((l) => l.id), parent: dep.id } });
-        path(s.carrier, s.region, R.id, w.id, `the motion draws ${s.carrier.id} from ${s.region}`, conv.id);
-        if (s.carrier.id === 'charge') add({ id: `return:charge:${R.id}->${s.region}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${R.id} to ${s.region}: charge is neither made nor destroyed`, regions: [R.id, s.region], values: [], why: { want: w.id, rule: 'charge drawn returns', laws: lawIds(s.carrier, 'conductance'), parent: conv.id } });
-        shed(conv, R.id, w.id);
+        let conv: Element | null = null;
+        for (const a of axes) {
+          conv = add({ id: `conversion:${s.carrier.id}->momentum:${dep.id}${a ? `:${a}` : ''}`, kind: 'conversion', carrier: 'momentum', says: `${s.carrier.id} becomes the momentum that moves the point${a ? ` along ${a}, over ${sh![a].value} m` : ''}`, regions: [dep.id], values: a ? [{ name: 'travel', value: sh![a].value!, unit: 'm', from: `the extent of ${R.id} along ${a}` }] : [], why: { want: w.id, rule: a ? 'a point moved over an extent moves along each of its axes: momentum has a direction' : 'a point moved over a shape: power converted to momentum', laws: coupling(s.carrier, carrierById('angular momentum')).map((l) => l.id), parent: dep.id } });
+          if (a) shed(conv, R.id, w.id);
+          if (a) add({ id: `observer:position:${dep.id}:${a}`, kind: 'observer', carrier: 'momentum', says: `an observer of where the point is along ${a}, resolving finer than the tolerance`, regions: [dep.id], values: hi !== null ? [{ name: 'resolution needed', value: hi / 2, unit: 'm', from: 'half the tolerance' }] : [], why: { want: w.id, rule: 'a position held to a tolerance is observed finer than it, along each axis it moves', laws: [], parent: conv.id } });
+        }
+        path(s.carrier, s.region, R.id, w.id, `the motion draws ${s.carrier.id} from ${s.region}`, conv!.id);
+        if (s.carrier.id === 'charge') add({ id: `return:charge:${R.id}->${s.region}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${R.id} to ${s.region}: charge is neither made nor destroyed`, regions: [R.id, s.region], values: [], why: { want: w.id, rule: 'charge drawn returns', laws: lawIds(s.carrier, 'conductance'), parent: conv!.id } });
+        if (!sh) shed(conv!, R.id, w.id);
       }
       add({ id: `observer:position:${dep.id}`, kind: 'observer', carrier: 'momentum', says: `an observer of where the point is against ${ref.id}, resolving finer than the tolerance`, regions: [dep.id], values: hi !== null ? [{ name: 'resolution needed', value: hi / 2, unit: 'm', from: 'half the tolerance' }] : [], why: { want: w.id, rule: 'a position held to a tolerance is observed finer than the tolerance', laws: [], parent: dep.id } });
       add({ id: `modulation:momentum:${dep.id}:observed`, kind: 'modulation', carrier: 'momentum', says: 'the motion follows the observation of the point against the shape', regions: [dep.id], values: [], why: { want: w.id, rule: 'a position held to a tolerance: the motion follows what is observed', laws: [], parent: `observer:position:${dep.id}` } });
@@ -269,7 +312,8 @@ export function generate(intent: Intent): Structure {
       shed(brake, R.id, w.id);
     }
     if (role === 'acceleration' && w.when === 'always' && hi !== null) {
-      const varies = Object.keys(ref.quantities).filter((sym) => ref.carriers?.[sym] === 'momentum' && !(ref.holds ?? []).includes(sym) && !(ref.limits ?? []).includes(sym));
+      const dir = w.quantity.direction;
+      const varies = Object.keys(ref.quantities).filter((sym) => ref.carriers?.[sym] === 'momentum' && !(ref.holds ?? []).includes(sym) && !(ref.limits ?? []).includes(sym) && (!dir || ref.directions?.[sym] === dir));
       for (const sym of varies) use(ref, sym);
       if (!varies.length) gap(w.id, contact.id, 'momentum', 'nothing the language sees varies at the contact');
       else {
@@ -283,8 +327,11 @@ export function generate(intent: Intent): Structure {
       if (!v) gap(w.id, stroke.id, 'momentum', 'the event\'s speed is not a quantity: the stroke cannot be derived');
     }
     if (role === 'position' && w.when === 'always') {
-      add({ id: `modulation:momentum:${R.id}:direction`, kind: 'modulation', carrier: 'momentum', says: 'the person modulates which way the contact pushes', regions: [moving.id], values: [], why: { want: w.id, rule: 'a position kept relative to a path: the push across the travel is modulated by who observes the path', laws: [], parent: contact.id } });
-      gap(w.id, moving.id, 'momentum', 'following a path needs momentum across the direction of travel: momentum has a direction, and the carrier has none');
+      // following a path is momentum across the travel: its curvature asks v² / r of the contact, which carries at most the friction times gravity
+      const r = said(ref, 'momentum', 'position')[0];
+      add({ id: `modulation:momentum:${R.id}:direction`, kind: 'modulation', carrier: 'momentum', says: 'the person modulates which way the contact pushes, across the travel', regions: [moving.id], values: [], why: { want: w.id, rule: 'a position kept relative to a path: the push across the travel is modulated by who observes the path', laws: [], parent: contact.id } });
+      if (r && mu) put(contact, { name: 'most speed on the tightest curve: the root of friction times gravity times its radius', value: Math.sqrt(mu.leaf.value! * g * r.leaf.value!), unit: 'm/s', from: `${mu.leaf.name} and ${r.leaf.name}` });
+      else gap(w.id, moving.id, 'momentum', 'how sharply the path turns is not said');
     }
     if ((role === 'position' && w.when === 'by the end') || role === 'potential') {
       const sources = intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).map((sym) => ({ r, sym, cid: r.carriers?.[sym] })).filter((x) => x.cid && x.cid !== 'momentum' && carrierById(x.cid).conjugate)).map((x) => { use(x.r, x.sym); return { region: x.r.id, carrier: carrierById(x.cid!) }; }).filter((x, i, a) => a.findIndex((y) => y.carrier.id === x.carrier.id) === i);
@@ -301,12 +348,59 @@ export function generate(intent: Intent): Structure {
         for (const sym of Object.keys(d.quantities).filter((s) => (d.carriers?.[s] ?? '').startsWith('mass of'))) use(d, sym);
         add({ id: `drag:${moving.id}|${d.id}`, kind: 'boundary', carrier: 'momentum', says: `the moving region gives momentum to ${d.id}, a fluid at rest it pushes through`, regions: [moving.id, d.id], values: [], why: { want: w.id, rule: 'a region moving through a fluid at rest loses momentum to it', laws: lawIds(c, 'conductance', 'dissipation'), parent: moving.id } });
       }
-      gap(w.id, moving.id, 'momentum', 'how much the store holds and how much power the conversion gives need the resistance to motion, which needs the moving region\'s size and shape: no geometry');
+      const grade = Object.entries(ref.quantities).find(([sym, l]) => ref.carriers?.[sym] === 'momentum' && !(ref.limits ?? []).includes(sym) && l.dim.every((x) => x === 0));
+      if (grade) { use(ref, grade[0]); put(moving, { name: 'steepest grade it climbs: gravity along the path is that fraction of the weight', value: grade[1].value!, unit: '1', from: grade[1].name }); }
+      const sh = shape(R.id);
+      if (sh) { const drag = elements.find((e) => e.id.startsWith(`drag:${moving.id}`)); put(drag, { name: 'area facing the travel, at least: what the moving region must hold across and up', value: sh.x.value! * sh.y.value!, unit: 'm^2', from: `${sh.x.name} times ${sh.y.name}` }); }
+      gap(w.id, moving.id, 'momentum', sh ? 'how hard the fluid pushes back on a shape (its drag coefficient) is not generated: the store and the power cannot be sized' : 'how much the store holds needs the resistance to motion, which needs the moving region\'s size and shape: no geometry');
     }
+  };
+
+  /**
+   * How long a change takes: the content change over the flux that makes it (the balance integrated over time). A
+   * want that bounds the time bounds the flux from below; for a region that must cross out of another, the content
+   * is the distance and the flux its speed; for a modulation, the time is how fast it responds.
+   */
+  const duration = (w: Want, c: Carrier): boolean => {
+    if (w.quantity.unit !== 's' || w.hi === undefined) return false;
+    const R = regionOf(intent, w.region);
+    const t = w.hi.value!;
+    if (c.id === 'momentum' && w.relativeTo) {
+      const X = shape(w.relativeTo);
+      const speed = said(R, 'momentum', 'potential')[0];
+      if (!X) { gap(w.id, null, 'momentum', `how far ${R.id} must go to leave ${w.relativeTo} needs its shape: no geometry`); return true; }
+      const out = X.touches.side;
+      const d = Math.hypot(X.x.value!, X.z.value!) / 2;
+      const pass = add({ id: `passage:${R.id}|${w.relativeTo}`, kind: 'boundary', carrier: 'momentum', says: `${R.id} cross the sides of ${w.relativeTo} to ${out ?? 'outside it'}: a part of the boundary they can pass`, regions: [w.relativeTo, out ?? w.relativeTo], values: [{ name: 'farthest distance to the sides', value: d, unit: 'm', from: 'half the diagonal of the plan' }, ...(speed ? [{ name: 'time to leave at the speed they move', value: d / speed.leaf.value!, unit: 's', from: `the distance over ${speed.leaf.name}` }] : [])], why: { want: w.id, rule: 'a region that must leave another crosses its boundary: the time is the distance over the speed', laws: [], parent: null } });
+      if (speed && d / speed.leaf.value! > t) gap(w.id, pass.id, 'momentum', `the people need ${(d / speed.leaf.value!).toFixed(0)} s and the want allows ${t} s`);
+      if (!speed) gap(w.id, pass.id, 'momentum', `how fast ${R.id} move is not said`);
+      // what passes there opens the boundary to every other carrier it keeps: so the passage opens only when crossed
+      add({ id: `modulation:passage:${R.id}|${w.relativeTo}`, kind: 'modulation', carrier: 'momentum', says: `${R.id} open the passage to cross and close it after, so the other carriers the boundary keeps stay kept`, regions: [w.relativeTo], values: [], why: { want: w.id, rule: 'an opening in a boundary that keeps carriers is modulated by who passes', laws: [], parent: pass.id } });
+      return true;
+    }
+    if (c.id === 'momentum' || (c.id === 'charge' && !shape(R.id))) {
+      // how fast a modulation responds: every modulation the person makes of this carrier, or of the region's motion
+      const mods = elements.filter((e) => e.kind === 'modulation' && /person/.test(e.says) && (e.carrier === c.id || e.regions.some((r) => r.startsWith('moving:'))));
+      if (!mods.length) {
+        const src = elements.find((e) => e.kind === 'path' && e.carrier === c.id && intent.regions.some((r) => r.id === e.regions[0] && r.environment));
+        if (!src) { gap(w.id, null, c.id, `nothing the person modulates in ${c.id}`); return true; }
+        mods.push(add({ id: `modulation:${c.id}:${src.id}:person`, kind: 'modulation', carrier: c.id, says: `the person opens and closes ${src.says.replace(/^a path/, 'the path')}`, regions: src.regions, values: [], why: { want: w.id, rule: 'what the person starts and stops is a modulation of what it draws', laws: [], parent: src.id } }));
+      }
+      for (const m of mods) put(m, { name: 'most response time', value: t, unit: 's', from: w.hi.name });
+      return true;
+    }
+    // the region's content of the carrier must reach what it can hold within the time: a least flux
+    const sh = shape(R.id);
+    if (!sh) { gap(w.id, null, c.id, `how much ${R.id} must take in needs its size: no geometry`); return true; }
+    const V = sh.x.value! * sh.y.value! * sh.z.value!;
+    const u = add({ id: `use:${c.id}:${R.id}`, kind: 'region', carrier: c.id, says: `a point of use of ${c.id} in ${R.id}`, regions: [R.id], values: [], why: { want: w.id, rule: 'a flux delivered into a region arrives at a point of use', laws: lawIds(c, 'conductance'), parent: null } });
+    put(u, { name: 'least flux to fill it in time: its volume over the time', value: V / t, unit: c.flux, from: `the volume of ${R.id} and ${w.hi.name}` });
+    return true;
   };
 
   for (const w of intent.wants) {
     const cid = w.quantity.carrier;
+    if (cid && duration(w, carrierById(cid))) continue;
     if (!cid) { gap(w.id, null, null, `${w.quantity.name} (${w.quantity.unit}) is about no carrier: ${w.quantity.unit === 's' ? 'a want on how long a process takes, and the language has no process' : 'the language has no rule for it'}`); continue; }
     const c = carrierById(cid);
     const role = roleOf(c, w.quantity.unit);
@@ -317,7 +411,7 @@ export function generate(intent: Intent): Structure {
 
     if (role === 'potential' && (w.when === 'always' || w.when === 'by the end')) {
       const nbrs = intent.regions.filter((n) => n.id !== R.id && touches(intent, n.id, R.id)).map((n) => stateOf(n, c.id)).filter((x): x is State => !!x);
-      for (const n of nbrs) add({ id: `boundary:${c.id}:${R.id}|${n.region}`, kind: 'boundary', carrier: c.id, says: `${R.id} exchanges ${c.id} with ${n.region} through a boundary whose conductance is free`, regions: [R.id, n.region], values: [], why: { want: w.id, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent: null } });
+      for (const n of nbrs) faceElements(add({ id: `boundary:${c.id}:${R.id}|${n.region}`, kind: 'boundary', carrier: c.id, says: `${R.id} exchanges ${c.id} with ${n.region} through a boundary whose conductance is free`, regions: [R.id, n.region], values: [], why: { want: w.id, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent: null } }), c.id, R.id, n.region);
       const made = madeInto(c.id, R.id).reduce((s, m) => s + m.leaf.value!, 0);
       if (!nbrs.length && !made) gap(w.id, null, c.id, `nothing touching ${R.id} holds ${c.id} or makes it: the want's balance has no terms`);
       if (lo !== null && nbrs.some((n) => n.lo < lo)) supply(c, R.id, { above: lo }, w.id, null);
@@ -385,7 +479,16 @@ export function generate(intent: Intent): Structure {
         const via = route(b.id, R.id);
         const next = via && via.length > 1 ? via[via.length - 2]! : b.id;
         const bnd = add({ id: `boundary:${c.id}:${R.id}|${next}:closed`, kind: 'boundary', carrier: c.id, says: `no ${c.id} crosses from ${next} into ${R.id}: a boundary that does not conduct it`, regions: [R.id, next], values: [{ name: 'conductance', value: 0, unit: `${c.flux} per ${c.potential}`, from: w.hi!.name }], why: { want: w.id, rule: `a bounded content: the ${c.id} ${b.id} brings is kept out`, laws: lawIds(c, 'conductance'), parent: null } });
+        const brought = [...said(b, c.id, 'flux density')];
+        const dirs = brought.map((q) => b.directions?.[q.sym]).filter((d): d is NonNullable<typeof d> => !!d);
+        const crossed = dirs.length ? [...new Set(dirs.flatMap(facesCrossed))] : undefined;
+        const faces = faceElements(bnd, c.id, R.id, next, crossed);
+        const sh = shape(R.id);
+        let carried: number | null = null;
+        if (sh && crossed && brought.length) carried = brought.reduce((s, q) => s + q.leaf.value! * crossed.reduce((a, f) => a + sh.area[f].value!, 0), 0);
+        if (faces.length && carried !== null) put(bnd, { name: `what the ${crossed!.join(' and ')} face${crossed!.length > 1 ? 's' : ''} intercept`, value: carried, unit: c.flux, from: `${brought.map((q) => q.leaf.name).join(' + ')} times the area` });
         drain(c, next, ambient, w.id, bnd.id);
+        if (carried !== null) { const d = elements.find((e) => e.why.parent === bnd.id && e.kind === 'path'); put(d, { name: 'what it carries', value: carried, unit: c.flux, from: 'what the faces intercept' }); }
       }
       for (const m of madeInto(c.id, R.id).filter((x) => x.region !== R.id)) {
         const at = add({ id: `collect:${c.id}:${m.region}`, kind: 'region', carrier: c.id, says: `where ${m.leaf.name} is made, it is collected before it reaches ${R.id}`, regions: [m.region, R.id], values: [{ name: m.leaf.name, value: m.leaf.value!, unit: m.leaf.unit, from: m.region }], why: { want: w.id, rule: 'a bounded content: what is made into it is collected where it is made', laws: [], parent: null } });
@@ -411,9 +514,10 @@ export function generate(intent: Intent): Structure {
   }
 
   // a flow of a medium carries what the medium holds: a species' boundary conducts a volume of the medium per time
-  for (const b of elements.filter((e) => e.kind === 'boundary' && e.carrier.startsWith('amount of'))) {
-    const others = elements.filter((e) => e.kind === 'boundary' && e.id !== b.id && e.carrier !== b.carrier && e.regions[0] === b.regions[0] && e.regions[1] === b.regions[1]);
-    if (others.length) gap(b.why.want, b.id, b.carrier, `its conductance is a volume of ${b.regions[1]} per time, and the same flow carries ${others.map((o) => o.carrier).join(' and ')} across the same boundary: the language counts them as separate boundaries, it has no advection`);
+  const aggregate = (e: Element) => e.kind === 'boundary' && !elements.some((p) => p.id === e.why.parent && p.kind === 'boundary');
+  for (const b of elements.filter((e) => aggregate(e) && e.carrier.startsWith('amount of'))) {
+    const others = [...new Set(elements.filter((e) => aggregate(e) && e.id !== b.id && e.carrier !== b.carrier && e.regions[0] === b.regions[0] && e.regions[1] === b.regions[1]).map((o) => o.carrier))];
+    if (others.length) gap(b.why.want, b.id, b.carrier, `its conductance is a volume of ${b.regions[1]} per time, and the same flow carries ${others.join(' and ')} across the same boundary: the language counts them as separate boundaries, it has no advection`);
   }
 
   // a want that is not about a carrier's balance reads nothing; what the intent says and no rule read is information the language cannot use

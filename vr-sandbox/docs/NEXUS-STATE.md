@@ -38,7 +38,8 @@ element with its lineage, and the complex inventions are the instruments that me
 | At the language's edge the kernel contradicts it; the relation is superseded and the next derivation agrees | tests/nexus/space.test.ts |
 | A library of 166 laws closes no structure for a house, a car or a printer: five distinctions, the same for all three | tests/nexus/probe.test.ts |
 | Twenty-two of the book's laws are instances of one carrier family and one coupling | tests/nexus/carrier.test.ts |
-| The balances generate 44 of the 64 aspects the request names, without naming a part | tests/nexus/probe.test.ts |
+| The balances and shapes generate 50 of the 64 aspects the request names, without naming a part | tests/nexus/probe.test.ts |
+| A free plan is chosen in the space under a declared preference: the least boundary is square | tests/nexus/probe.test.ts |
 
 ## 3. What is missing
 
@@ -52,10 +53,10 @@ element with its lineage, and the complex inventions are the instruments that me
 
 ## 4. Next
 
-Round 2 of the probes: the three distinctions that block all three inventions. A process's duration is a content
-over a flux (the family's time constant, generalized); what a region is made of and its shape are one thing for the
-balance, because conductance is conductivity times section over length and capacitance is a property times volume,
-so material and geometry are the parameters of the family, chosen in the configuration space.
+Round 3 of the probes: what a region is made of, the one distinction that blocks all three inventions. A matter
+has a property for each carrier and role (a conductivity, a capacitance per volume, a stiffness, the most flux
+density and the highest potential it bears, and the potentials at which its properties change), so material and
+shape together are the family's parameters, chosen in the configuration space from what is available.
 
 ## 5. Why each primitive exists
 
@@ -89,3 +90,6 @@ so material and geometry are the parameters of the family, chosen in the configu
 | A capacity is not a load | what a region allows bounds a boundary; it does not cross it | the ground's bearing read as a load |
 | Unread quantities are reported | what the language cannot read becomes visible | the printer's material properties |
 | The ranking of distinctions across inventions | discover a principle once, from all its failures | round 1 |
+| Shape: a region as a domain with faces, areas and normals | a balance is a surface integral; geometry and direction are one primitive | round 1's ranking |
+| A flux travels a way; a want has a direction | which faces a flux crosses, which variation a want feels | rain on a roof, bumps under a ride |
+| A duration is a content change over a flux | the balance integrated over time | the timed wants of all three |

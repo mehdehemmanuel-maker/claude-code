@@ -56,7 +56,7 @@ const round1 = () => { const intents = [house(), car(), printer()]; return { int
 const el = (s: Structure, id: string) => s.elements.find((e) => e.id === id)!;
 const value = (s: Structure, id: string, name: string) => el(s, id).values.find((v) => v.name.startsWith(name))!.value;
 
-describe('round 1: the carrier and the balance generate structure', () => {
+describe('the language now: carriers, balances and shapes generate structure', () => {
   it('a structure is a pure function of its intent: generated twice it is the same, and nothing a round made is kept', () => {
     const a = generate(house());
     a.elements.splice(0, 5);
@@ -89,7 +89,7 @@ describe('round 1: the carrier and the balance generate structure', () => {
     expect(carrierById('energy').id).toBe('energy');
   });
 
-  it('what emerges, with the numbers the balances give: nothing told the generator about ventilation, wiring, a crash or a tolerance', () => {
+  it('what the balances give: nothing told the generator about ventilation, wiring, a crash or a tolerance', () => {
     const [h, c, p] = round1().structures as [Structure, Structure, Structure];
     // four people's breath at 1000 ppm against outside air: 38.6 L/s of exchange (ASHRAE 62.2's rule for this house gives about 36 L/s)
     expect(value(h, 'boundary:amount of carbon dioxide:inside|outside air', 'least conductance')).toBeCloseTo(0.0386, 4);
@@ -109,18 +109,44 @@ describe('round 1: the carrier and the balance generate structure', () => {
     expect(el(p, 'conversion:volume of PLA:the part:supply').says).toMatch(/raises volume of PLA from a spool of filament/);
   });
 
-  it('coverage against the aspects the request names: none in round 0, 44 of 64 in round 1, and what is not covered is named', () => {
+  it('what the shapes give: a square plan chosen in the space, loads on the faces they cross, spans, a passage, a curve\'s speed, a part\'s three axes', () => {
     const [h, c, p] = round1().structures as [Structure, Structure, Structure];
-    expect([covered('house', h).length, covered('car', c).length, covered('printer', p).length]).toEqual([19, 14, 11]);
-    const missing = (k: 'house' | 'car' | 'printer', s: Structure) => ASPECTS[k].filter((a) => !covered(k, s).includes(a));
-    expect(missing('house', h)).toEqual(['framing', 'walls', 'doors', 'siding', 'roofing', 'drainage', 'mechanical systems', 'maintenance/access', 'material compatibility', 'manufacturing/construction constraints']);
-    expect(missing('car', c)).toEqual(['transmission', 'steering', 'mechanical interfaces', 'manufacturing', 'maintenance']);
-    expect(missing('printer', p)).toEqual(['thermal systems', 'calibration', 'geometry', 'manufacturing constraints', 'failure modes']);
+    // the plan with the least boundary for 120 m² is square: the space derives it under the declared preference
+    expect(value(h, 'boundary:energy:inside|outside air:up', 'area')).toBeCloseTo(120, 6);
+    expect(value(h, 'boundary:energy:inside|outside air:side', 'area')).toBeCloseTo(4 * Math.sqrt(120) * 2.5, 1);
+    // snow on the up face, wind on the largest side, carried by members spanning each face to the ground
+    expect(value(h, 'load:the sky->inside', 'force')).toBeCloseTo(168000, 6);
+    expect(value(h, 'load:outside air->inside', 'force')).toBeCloseTo(1000 * Math.sqrt(120) * 2.5, 0);
+    expect(value(h, 'members:inside:up', 'span')).toBeCloseTo(Math.sqrt(120), 1);
+    expect(value(h, 'members:inside:side', 'span')).toBe(2.5);
+    expect(value(h, 'bound:momentum:inside|the ground', 'least meeting area')).toBeCloseTo((168000 + 300 * 9.80665) / 72000, 4);
+    // rain falls on the up face: it is closed to water there, and what it intercepts is what the drain carries
+    expect(value(h, 'boundary:volume of water:inside|outside air:closed', 'what the up face intercept')).toBeCloseTo(2.08e-5 * 120, 9);
+    // the people leave across the sides in seconds, through a passage they open and close
+    expect(value(h, 'passage:the people|inside', 'time to leave')).toBeCloseTo(Math.hypot(Math.sqrt(120), Math.sqrt(120)) / 2 / 1.2, 3);
+    // the car: momentum across the travel on the tightest curve allows √(μ g r); what it must hold faces the travel
+    expect(value(c, 'contact:the people|the road', 'most speed on the tightest curve')).toBeCloseTo(Math.sqrt(0.7 * 9.80665 * 50), 9);
+    expect(value(c, 'drag:moving:the people|outside air', 'area facing the travel')).toBeCloseTo(1.4, 12);
+    expect(c.elements.find((e) => e.id === 'filter:momentum:the people')!.says).toMatch(/\(height of the road's bumps\)/);
+    // the printer: a point moved over a 0.2 m extent moves along three axes; the largest part within a day asks 33 times the stated rate
+    expect(['x', 'y', 'z'].map((a) => value(p, `conversion:charge->momentum:deposit:the part:${a}`, 'travel'))).toEqual([0.2, 0.2, 0.2]);
+    expect(value(p, 'use:volume of PLA:the part', 'least flux to fill it in time')).toBeCloseTo(0.008 / 86400, 15);
+    expect(value(p, 'use:volume of PLA:the part', 'least flux to fill it in time') / value(p, 'use:volume of PLA:the part', 'least flux')).toBeGreaterThan(33);
   });
 
-  it('the failures rank the next upgrade: three distinctions block all three inventions', () => {
+  it('coverage against the aspects the request names: none in round 0, 44 of 64 in round 1, 50 of 64 now, and what is not covered is named', () => {
+    const [h, c, p] = round1().structures as [Structure, Structure, Structure];
+    expect([covered('house', h).length, covered('car', c).length, covered('printer', p).length]).toEqual([23, 15, 12]);
+    const missing = (k: 'house' | 'car' | 'printer', s: Structure) => ASPECTS[k].filter((a) => !covered(k, s).includes(a));
+    expect(missing('house', h)).toEqual(['siding', 'drainage', 'mechanical systems', 'maintenance/access', 'material compatibility', 'manufacturing/construction constraints']);
+    expect(missing('car', c)).toEqual(['transmission', 'mechanical interfaces', 'manufacturing', 'maintenance']);
+    expect(missing('printer', p)).toEqual(['thermal systems', 'calibration', 'manufacturing constraints', 'failure modes']);
+  });
+
+  it('the failures rank the next upgrade: one distinction blocks all three inventions now, what a region is made of', () => {
     const { intents, structures } = round1();
-    const top = lacking(intents, structures).filter((l) => l.inventions.length === 3).map((l) => l.distinction);
-    expect(top).toEqual(['what a region is made of', 'geometry: the sizes, areas and shapes of regions', 'a process: how long a change takes']);
+    const ranked = lacking(intents, structures);
+    expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['what a region is made of']);
+    expect(ranked.find((l) => l.distinction.startsWith('direction'))).toBeUndefined();
   });
 });

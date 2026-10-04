@@ -124,3 +124,49 @@ The failures rank the next upgrade (`lacking`): three distinctions block all thr
 | Direction: momentum is a vector | 1 (car) | 1 | 0 |
 
 One lawful refusal is not a gap: the site's estimated friction does not allow the car's stopping want.
+
+## Round 2: shape, direction and process are one upgrade
+
+Round 1 ranked three distinctions blocking all three inventions. Looking under them for one principle: a balance
+over a region is a surface integral, what crosses each face is the flux density through it times its area, so a
+region must be a domain in the frame (y opposite gravity) with faces, areas and outward normals, and a flux must
+travel some way. Geometry, orientation and direction are that one primitive. A process's duration is the balance
+integrated over time: a content change over the flux that makes it.
+
+The language already had the geometric primitive (`domain.ts`); the generator had not used it. `src/nexus/shape.ts`
+gives a region with an extent its faces; a free extent is chosen in the configuration space under a declared
+preference, never assumed: the inside's 120 m² plan with the least boundary is derived square (the isoperimetric
+principle). The want language gains extents, what each face touches, which way a flux travels, and a want's
+direction; the intents say them in the person's and the site's terms.
+
+What emerges, regenerated from scratch:
+
+| Invention | Emergent | Number |
+|---|---|---|
+| House | the plan with the least boundary | square, 10.95 m |
+| House | the up-facing face: closed to rain, carrying snow | 2.5 L/s intercepted (the drain's flow), 168 kN |
+| House | the sides: wind on the largest | 27.4 kN |
+| House | members spanning the up, side and down faces | 10.95 m, 2.5 m, 10.95 m |
+| House | where the structure meets the ground | at least 2.37 m² before its own weight |
+| House | a passage across the sides the people open and close | 6.5 s to leave, 180 allowed |
+| Car | momentum across the travel on the tightest curve | at most 18.5 m/s there |
+| Car | what the moving region must hold, facing the travel | at least 1.4 m² |
+| Car | every modulation the person makes | responds within 0.3 s |
+| Printer | the point moves along x, y and z over the part's extent | 0.2 m each, each observed |
+| Printer | the largest part within a day | at least 333 cm³/h: 33 times the stated rate |
+
+Implementation errors found on inspection and fixed in the generator: values pushed twice; the advection gap
+repeated on every face; the grade and the curve read as vibrations for a vertical want (a want needs a direction);
+only the last axis shedding its heat.
+
+| Invention | Round 0 | Round 1 | Round 2 | Not covered |
+|---|---|---|---|---|
+| House | 0 of 29 | 19 | 23 | siding, drainage, mechanical systems, access, compatibility, construction |
+| Car | 0 of 19 | 14 | 15 | transmission, mechanical interfaces, manufacturing, maintenance |
+| Printer | 0 of 16 | 11 | 12 | thermal systems, calibration, manufacturing constraints, failure modes |
+
+Direction and process no longer appear in the ranking. One distinction blocks all three inventions now, with 18
+gaps and 7 unread quantities: what a region is made of. The printer's missing thermal systems are in it (the
+temperature PLA flows at is a property of PLA), and so are every "hottest it may run" and the structure's own weight.
+Advection (siding against wind-driven rain, the machinery that moves air) and gravity in a liquid's potential
+(drainage) block the house alone.
