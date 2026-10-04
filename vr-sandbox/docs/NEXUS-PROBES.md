@@ -37,3 +37,33 @@ The 31 wants reduce to five distinctions, and the same five stop all three inven
 
 None of the 64 aspects the request names (29 for the house, 19 for the car, 16 for the printer) is made, because
 the closure makes nothing. A library of laws is not a generative manifold: this round is the measurement of that.
+
+## Round 1a: the deeper primitive
+
+The five distinctions are one. A flow is not primitive: what generates it is a quantity that is conserved, counted
+over regions. Its content in a region changes only by what crosses the region's boundary and what is made inside
+it. Physics names the conserved quantities from its symmetries: energy, momentum, angular momentum and charge, and
+the amount of each matter that does not react. So the carrier is the primitive (`src/nexus/carrier.ts`):
+
+- a **balance** is the carrier's content over a region;
+- a **flow** is its flux across a boundary, driven by the difference of its **potential**;
+- a quantity's **kind** is its role in its carrier (content, potential, flux, their densities, power), so a pressure
+  of water and a pressure on a roof are no longer the same thing;
+- a **boundary** is where two regions' content of a carrier meets;
+- **structure** is the regions, boundaries and paths a balance needs.
+
+One mechanism read for each carrier generates its laws: conductance, path conductance, storage, time constant,
+and, where potential times flux is power (computed from the units), power, dissipation, and the energy stored in
+content and in flux by the binder. One more law couples two carriers without loss. Each carrier's path conductivity
+comes out as the material constant physics names for it, without being listed: thermal conductivity for energy,
+electrical conductivity for charge, dynamic viscosity for momentum, diffusivity for a species. The capacitance of
+momentum is mass; of angular momentum, the moment of inertia.
+
+Twenty-two of the book's hand-written laws are instances, each reproduced on its own worked example
+(`tests/nexus/carrier.test.ts`): Ohm, wire resistance, the wire pair's drop (its factor of two is the returning
+current, charge conservation), conduction, a wall's thermal resistance, convection, heat capacity, the lumped and
+RC time constants, electric, linear and rotary power, Joule heating, the energy in a capacitor, an inductor, a
+spring, a moving and a spinning mass, Fick's diffusion, a motor's torque and back-EMF, and a gear train's torque.
+The motor, the gear and the wheel are one coupling. Not instances, and named as the family's edge: turbulent pipe
+friction (a conductance that depends on its own flux), hydrostatic pressure (gravity's part of a liquid's potential)
+and series networks (a composition, not a law).
