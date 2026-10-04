@@ -800,3 +800,61 @@ the kernel, and the measurement's where it came from a person or the headset: an
 number.
 
 Step 6 is contacts of any feature against a face, with vector forces and the full balance of a place.
+
+---
+
+## 21. Step 6, executed: what running it found
+
+**What was built.**
+- **Contacts of any feature.** A contact is where the surfaces of two places meet, whatever touches (src/nexus/contact.ts):
+  - the separating face is the one of the twelve along whose normal the two are farthest apart;
+  - they touch when that distance is within what the two places' origins resolve;
+  - the other place's corners within that distance of the face are the feature that touches (one, two or four), clipped to the face.
+
+  The clipping structure (which corners stay, which edges cross which sides) is decided from the values. The clipped points, the centroid, the normal and the area are terms of both places' numbers.
+- **Level places.** A place on level contacts under loads along gravity keeps the model it had, with no friction, and every earlier number comes out unchanged.
+- **Sloped places.** Forces through a contact are a push along its normal and a friction along its surface:
+  - **one contact:** both are determined;
+  - **two contacts in one upright plane:** balance gives three conditions on four forces, so one force is free. Whether the place can stay is still decided exactly: some value of the free force must push at both contacts and keep each friction within its coefficient times its push.
+
+**The scene, as run.** The kernel's leaning board is now read back by the state:
+- it is borne by an edge of block B, with its normal tilted 38°, and by an edge on the floor;
+- whether it can stay waits on the two coefficients of friction, the data the state lacks, at the contacts that lack it;
+- with the friction the kernel's contract assumed (0.48), statics agrees that it can stay;
+- with a tenth of that, no sharing holds it.
+
+**What the mathematics found.** These are kept as results: every later run must reproduce them.
+
+1. **Staying, under a balance that leaves one force free, is decidable exactly.** Each condition is linear in the free
+   force s: a + b s ≥ 0. The set is satisfiable exactly when every bound from below lies under every bound from above,
+   and every condition free of s holds (Fourier–Motzkin elimination: for b_j > 0 > b_k, a_j(−b_k) + a_k b_j ≥ 0). That
+   is a finite conjunction of predicates over the contacts' numbers, so it is a term, with WHY to the leaves. The
+   forces themselves stay undetermined, and that is located as its own gap: the split depends on the contacts'
+   stiffness.
+2. **A contact is a convex clipping, and its structure is a decision on values.** The separating face plus
+   Sutherland–Hodgman clipping of the touching feature gives the contact polygon, segment or point. Each clipped point
+   is a corner of the feature or an edge's crossing of a side, a term whose shape is fixed by the decision. For aligned
+   faces it is exactly the overlap rectangle of the earlier model.
+3. **A term is a graph, and every operation on it must cost the graph, not the tree.** Hashing, evaluation and
+   collecting variables walked terms as trees. The friction condition reads the load vector dozens of times, and one
+   scene took 41 s. Identity is now the hash of a node's operator and its children's identities, over the canonical
+   order (commutative arguments by content, variables numbered by first appearance). Evaluation and variable
+   collection are memoized per node, and FNV-1a is computed in 16-bit limbs (the same 64-bit value, checked on 2,005
+   strings and the published vector). The scene now runs in 6 s.
+4. **Tests on unturned places cannot see a turned bug.** The rewrite read each place's axes transposed. Every test
+   passed, because every place in them was unturned. Only the kernel's turned board exposed it. Places in tests must be
+   turned.
+
+**What it still lacks.**
+- **Whether what bears a sloped place is at rest.** Block B, which the board leans on, takes a load that depends on
+  the board's undetermined split. Its rest is undecided, so the board's rest, which needs B's, is undecided too, even
+  with the friction given. The free force's feasible range is an interval: carried down, it gives B's loads as
+  intervals, and B is at rest if it holds over the whole interval.
+- **Contacts edge on edge** (no face separates the places) and **contacts whose normal lies across gravity** (a place
+  against a wall) are not generated.
+- **Bending on sloped contacts** is a located gap.
+
+**How the next rounds run.** Not from a hand-written scene or a template intent. Each round generates its targets
+internally and at random, from the manifold's own quantities, with the bar set high: advanced builds and generation
+at biological level. The round runs from an empty journal, so everything it needs is derived again. What breaks is
+classified, the general distinction is promoted, and the findings above, with every earlier one, are checked again.

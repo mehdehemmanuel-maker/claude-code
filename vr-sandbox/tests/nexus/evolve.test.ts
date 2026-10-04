@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { contactAt } from '../../src/nexus/contact';
-import { evolve, notAtRest } from '../../src/nexus/evolve';
+import { evolve, evolverContract, notAtRest } from '../../src/nexus/evolve';
 import { MemorySink } from '../../src/nexus/journal';
 import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/place';
 import { Runtime } from '../../src/nexus/runtime';
@@ -61,9 +61,19 @@ describe('the evolver: statics says what cannot stay, the kernel says where it g
     // a rigid body keeps its extents: the same leaves, the same volume
     expect(rt.why(placeAt.half('a board', 0))!.origin!.class).toBe('given');
     expect(rt.binding(contactAt.force('a board', 'block A'))).toBeUndefined();
-    // it leans on an edge of block B and a corner on the floor: contacts other than face on face are not generated, so
-    // what bears it is a gap, not a guess
-    expect(rt.gaps().some((g) => g.kind === 'undecided' && g.says === 'a board is borne')).toBe(true);
+    // it leans on an edge of block B and an edge on the floor: borne by both, one of them on a slope
+    expect(rt.binding(contactAt.normal('a board', 'block B', 1))!.value!).toBeLessThan(0.9);
+    expect(rt.binding(contactAt.normal('a board', 'the floor', 1))!.value!).toBeCloseTo(1, 9);
+    // whether it can stay there waits on what the state does not hold: the friction at each contact
+    const stays = () => rt.gaps().find((g) => (g.kind === 'unmet' || g.kind === 'undecided') && g.says === 'a board can stay on its two contacts');
+    expect(stays()?.kind).toBe('undecided');
+    const mu = (v: number) => { for (const l of ['the floor', 'block B']) rt.admit({ kind: 'leaf', at: contactAt.coefficient('a board', l), leaf: given('coefficient of friction', v, '1') }); };
+    // the kernel held it with the surface its contract assumes; statics with that same friction agrees that it can stay
+    mu(evolverContract().surface.friction.value!);
+    expect(stays()).toBeUndefined();
+    // on a surface a tenth as rough, no sharing of its load holds it
+    mu(evolverContract().surface.friction.value! / 10);
+    expect(stays()?.kind).toBe('unmet');
   });
 
   it('a place whose matter is unknown is not realized: the evolution is refused, and says why', async () => {

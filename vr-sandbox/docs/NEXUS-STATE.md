@@ -116,6 +116,7 @@ the generated laws are checked against, not the limit of what the language can s
 | One rule bends a place under every force on it, each spread over its interval: alone the kept own-weight law, with a block resting mid-span the kept patch law plus it, to nine places | tests/nexus/contact.test.ts |
 | A place is at rest only while what bears it is, down to what is held: on a tipped board, the block on it is not at rest and its bending is refused; a decision a known part settles waits on nothing else | tests/nexus/contact.test.ts |
 | What statics says cannot stay, the rigid-body kernel evolves from the state's places until still, and where it came to rest returns as a measured place: a tipped board comes to rest lower; at rest, nothing moves past the kernel's resolution; read back, the same state without the kernel | tests/nexus/evolve.test.ts, `npm run nexus` |
+| Contacts of any feature against a face, from the separating face and the clipped feature; a place on two sloped contacts can stay exactly when some value of the one free force pushes at both and keeps each friction within its coefficient (Fourier–Motzkin): the kernel's leaning board stays at the kernel's friction and not at a tenth of it | tests/nexus/evolve.test.ts, tests/nexus/contact.test.ts |
 
 ## 3. What is missing
 
@@ -144,11 +145,12 @@ the generated laws are checked against, not the limit of what the language can s
 
 docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
 from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
-every piece of Nexus into the seven structures. Sections 16 to 20 record each step executed, as a running process,
-with what running it found. Steps 1 to 5 run: the runtime on a journal, places in a measured domain, couplings between
-them, one rule for bending under every force, and an evolver that moves what cannot stay. Step 6 is contacts of any
-feature against a face, with vector forces and the full balance of a place, so the state can read back where the
-kernel left things.
+every piece of Nexus into the seven structures. Sections 16 to 21 record each step executed, as a running process,
+with what running it found. Steps 1 to 6 run: the runtime on a journal, places in a measured domain, couplings of any
+feature against a face, one rule for bending under every force, an evolver that moves what cannot stay, and exact
+staying on sloped contacts. The next rounds generate their own targets at random from the manifold's quantities, with
+the bar high (advanced builds, generation at biological level), from an empty journal each time; every finding kept
+in sections 16 to 21 is checked again on every round.
 
 ## 5. Why each primitive exists
 

@@ -13,7 +13,7 @@ import { dimText } from './dimension';
 import { Journal, type Address, type Contribution, type Sink } from './journal';
 import { ge, le, leaf, variable, type Leaf, type Term } from './term';
 import { hashOf } from './identity';
-import { placeLeaves, placeRelations } from './place';
+import { placeAt, placeLeaves, placeRelations } from './place';
 import { contactAt, contactStructure } from './contact';
 import type { Law } from './law';
 import { why, type WhyNode } from './why';
@@ -218,7 +218,7 @@ export class Runtime {
    */
   private restructure(start: Address[], fresh: string[]): Address[] {
     const changed: Address[] = [];
-    const view = { value: (a: Address) => { const l = this.leaves.get(a); return l ? l.value : this.bindings.get(a)?.value ?? null; }, places: () => [...this.places], held: (p: string) => this.held.has(p) };
+    const view = { value: (a: Address) => { const l = this.leaves.get(a); return l ? l.value : this.bindings.get(a)?.value ?? null; }, places: () => [...this.places], held: (p: string) => this.held.has(p), resolution: (p: string) => Math.max(0, ...[0, 1, 2].map((j) => this.leaves.get(placeAt.centre(p, j))?.uncertainty ?? 0)) };
     const content = (g: RelationC | ConstraintC) => (g.kind === 'relation' ? hashOf({ out: g.out, term: g.term.hash, ports: g.ports }) : hashOf({ holds: g.holds.hash, ports: g.ports }));
     for (let round = 0; round < 16; round++) {
       const want = new Map(contactStructure(view, this.built).filter((g): g is RelationC | ConstraintC => g.kind === 'relation' || g.kind === 'constraint').map((g) => [g.id, g]));

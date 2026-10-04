@@ -81,11 +81,19 @@ type Values = Record<string, { readonly value: number | null }>;
  * over its panels (`halve`: over half as many, to measure the discretization error); an integrand that is not
  * finite at a node makes the integral not finite.
  */
-const numeric = (t: Term, env: Values, halve = false): number | null => {
+const numeric = (t: Term, env: Values, halve = false, seen = new Map<Term, number | null>()): number | null => {
+  // a part shared many times is evaluated once at these values: the cost is the term's graph, not its tree
+  const hit = seen.get(t);
+  if (hit !== undefined || seen.has(t)) return hit ?? null;
+  const v = numericOnce(t, env, halve, seen);
+  seen.set(t, v);
+  return v;
+};
+const numericOnce = (t: Term, env: Values, halve: boolean, seen: Map<Term, number | null>): number | null => {
   if (t.kind === 'leaf') return t.value;
   if (t.kind === 'var') { const d = env[t.sym]; if (!d) throw new Error(`${t.sym} is not bound`); return d.value; }
   if (t.kind === 'bind') {
-    const lo = numeric(t.lo, env, halve), hi = numeric(t.hi, env, halve), panels = t.cells.value;
+    const lo = numeric(t.lo, env, halve, seen), hi = numeric(t.hi, env, halve, seen), panels = t.cells.value;
     if (lo === null || hi === null || panels === null) return null;
     const n = halve ? Math.max(1, Math.floor(panels / 2)) : panels;
     const h = (hi - lo) / (2 * n);
@@ -98,7 +106,7 @@ const numeric = (t: Term, env: Values, halve = false): number | null => {
     }
     return (s * h) / 3;
   }
-  const args = t.args.map((a) => numeric(a, env, halve));
+  const args = t.args.map((a) => numeric(a, env, halve, seen));
   // a predicate one known part decides is decided, whatever the unknown parts are: false and anything is false, true
   // or anything is true
   if (t.op === 'and' && args.some((a) => a === 0)) return 0;
@@ -114,7 +122,9 @@ const numeric = (t: Term, env: Values, halve = false): number | null => {
  */
 export function evaluate(name: string, term: Term, env: Env, cite?: { law: string; also?: string[]; domain?: DomainCheck[]; unit?: string }): Derivation {
   const inputs: Record<string, Derivation> = {};
+  const visited = new Set<Term>();
   const collect = (t: Term, bound: readonly string[] = []) => {
+    if (!bound.length) { if (visited.has(t)) return; visited.add(t); }
     if (t.kind === 'var') { if (bound.includes(t.sym)) return; const d = env[t.sym]; if (!d) throw new Error(`${name}: ${t.sym} is not bound`); if (!isDerivation(d)) throw new Error(`${name}: ${t.sym} is bound to something that is not a derivation`); inputs[t.sym] = d; }
     else if (t.kind === 'app') t.args.forEach((a) => collect(a, bound));
     else if (t.kind === 'bind') { collect(t.lo, bound); collect(t.hi, bound); collect(t.body, [...bound, t.over.sym]); }

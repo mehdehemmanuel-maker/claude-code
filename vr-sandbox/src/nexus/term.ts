@@ -184,13 +184,14 @@ export function app(id: OpId, args: Term[], kk?: number): App {
   if (args.length !== o.arity) throw new Error(`${id} takes ${o.arity} arguments, got ${args.length}`);
   if (id === 'pow' && (kk === undefined || !Number.isFinite(kk))) throw new Error('pow needs its exponent');
   const dim = o.dim(args.map((a) => a.dim), kk);
-  const bound = new Set(args.flatMap((a) => boundSyms(a)));
-  for (const a of args) for (const v of varsOf(a)) if (bound.has(v.sym)) throw new Error(`${id}: ${v.sym} is bound in one argument and free in another`);
+  // a term's free and bound variables are fixed when it is made, so each is found once per term, not once per use
+  const bound = new Set(args.flatMap((a) => boundOnce(a)));
+  if (bound.size) for (const a of args) for (const v of freeOnce(a)) if (bound.has(v.sym)) throw new Error(`${id}: ${v.sym} is bound in one argument and free in another`);
   // its identity is its canonical form's hash, computed when first read: a term built inside a larger one is never
   // hashed on its own, so building a term costs its size, not its size times its depth
   const t = { kind: 'app', op: id, args, ...(kk === undefined ? {} : { k: kk }), dim } as Omit<App, 'hash'>;
   let h: string | undefined;
-  Object.defineProperty(t, 'hash', { enumerable: true, get: () => (h ??= hashOf(canonicalForm(t as App))) });
+  Object.defineProperty(t, 'hash', { enumerable: true, get: () => (h ??= termHash(t as App)) });
   return t as App;
 }
 
@@ -240,10 +241,30 @@ export function integral(over: Var, lo: Term, hi: Term, body: Term, resolution: 
   if (boundSyms(body).includes(over.sym)) throw new Error(`∫ d${over.sym}: the body binds ${over.sym} again`);
   if (!isDimless(resolution.dim) || resolution.value === null || !Number.isInteger(resolution.value) || resolution.value < 2) throw new Error(`∫ d${over.sym}: the resolution is a whole number of at least two panels`);
   const t: Omit<Bind, 'hash'> = { kind: 'bind', rule: 'integral', over, lo, hi, body, cells: resolution, dim: mulDim(body.dim, over.dim) };
-  return { ...t, hash: hashOf(canonicalForm(t as Bind)) };
+  return { ...t, hash: termHash(t as Bind) };
 }
 
 /** The symbols a term binds. */
+const freeMemo = new WeakMap<Term, Var[]>(), boundMemo = new WeakMap<Term, string[]>();
+/** A term's free variables, found once per term: a term shared by many is walked once. */
+export const freeVars = (t: Term): Var[] => {
+  let v = freeMemo.get(t);
+  if (!v) {
+    if (t.kind === 'var') v = [t];
+    else if (t.kind === 'leaf') v = [];
+    else if (t.kind === 'bind') { const seen = new Set<string>(); v = []; for (const x of [...freeVars(t.lo), ...freeVars(t.hi), ...freeVars(t.body).filter((w) => w.sym !== t.over.sym)]) if (!seen.has(x.sym)) { seen.add(x.sym); v.push(x); } }
+    else { const seen = new Set<string>(); v = []; for (const a of t.args) for (const x of freeVars(a)) if (!seen.has(x.sym)) { seen.add(x.sym); v.push(x); } }
+    freeMemo.set(t, v);
+  }
+  return v;
+};
+const freeOnce = freeVars;
+const boundOnce = (t: Term): string[] => {
+  let v = boundMemo.get(t);
+  if (!v) { v = t.kind === 'bind' ? [t.over.sym, ...boundOnce(t.lo), ...boundOnce(t.hi), ...boundOnce(t.body)] : t.kind === 'app' ? [...new Set(t.args.flatMap(boundOnce))] : []; boundMemo.set(t, v); }
+  return v;
+};
+
 export function boundSyms(t: Term, out: string[] = []): string[] {
   if (t.kind === 'bind') { out.push(t.over.sym); boundSyms(t.lo, out); boundSyms(t.hi, out); boundSyms(t.body, out); }
   else if (t.kind === 'app') for (const a of t.args) boundSyms(a, out);
@@ -289,6 +310,52 @@ function shapeKey(t: Term): string {
 export const leafHashOf = (l: Omit<Leaf, 'hash'>): string => hashOf(leafContent(l));
 const leafContent = (l: Omit<Leaf, 'hash'>) => ({ leaf: true, class: l.origin.class, source: l.origin.source ?? null, grounds: l.origin.grounds ?? null, by: l.origin.by ?? null, window: l.origin.window ?? null, value: l.value, dim: l.dim, uncertainty: l.uncertainty ?? null });
 
+const sortedArgs = new WeakMap<Term, readonly Term[]>(), orders = new WeakMap<Term, readonly string[]>();
+/** An operator's arguments in canonical order: commutative ones by their shape, others as written. */
+function canonArgs(x: App): readonly Term[] {
+  let a = sortedArgs.get(x);
+  if (!a) {
+    a = OPERATORS[x.op].commutative ? x.args.map((t) => ({ t, key: shapeKey(t) })).sort((p, q) => (p.key < q.key ? -1 : p.key > q.key ? 1 : 0)).map((p) => p.t) : x.args;
+    sortedArgs.set(x, a);
+  }
+  return a;
+}
+/** A term's variables in the order they first appear in its canonical form. */
+function orderOf(t: Term): readonly string[] {
+  let o = orders.get(t);
+  if (!o) {
+    const parts = t.kind === 'var' ? [[t.sym]] : t.kind === 'bind' ? [[t.over.sym], orderOf(t.lo), orderOf(t.hi), orderOf(t.body)] : t.kind === 'app' ? canonArgs(t).map(orderOf) : [];
+    const seen = new Set<string>(), list: string[] = [];
+    for (const part of parts) for (const sym of part) if (!seen.has(sym)) { seen.add(sym); list.push(sym); }
+    o = list;
+    orders.set(t, o);
+  }
+  return o;
+}
+
+/**
+ * A term's identity: the hash of its canonical form (commutative arguments in content order, variables numbered by
+ * first appearance in that order), taken over the term's graph. Each node's identity is the hash of its operator and
+ * its children's identities, so a part shared many times is hashed once, and the cost is the graph's size, not the
+ * tree's it would unfold into. Equal content has equal identity, whatever its variables are called.
+ */
+export function termHash(t: Term): string {
+  const index = new Map(orderOf(t).map((sym, i) => [sym, i]));
+  const memo = new Map<Term, string>();
+  const h = (x: Term): string => {
+    const hit = memo.get(x);
+    if (hit !== undefined) return hit;
+    let r: string;
+    if (x.kind === 'leaf') r = x.hash;
+    else if (x.kind === 'var') r = hashOf({ v: index.get(x.sym), dim: x.dim });
+    else if (x.kind === 'bind') r = hashOf({ bind: x.rule, over: h(x.over), lo: h(x.lo), hi: h(x.hi), body: h(x.body), cells: x.cells.hash });
+    else r = hashOf({ op: OPERATORS[x.op].hash, ...(x.k === undefined ? {} : { k: x.k }), args: canonArgs(x).map(h) });
+    memo.set(x, r);
+    return r;
+  };
+  return h(t);
+}
+
 /** Commutative arguments in content order, variables numbered by first appearance in that order. */
 export function canonicalForm(t: Term): Canon {
   const order = new Map<string, number>();
@@ -322,10 +389,12 @@ export function varsOf(t: Term, out: Var[] = []): Var[] {
 }
 
 /** The leaves of a term. */
-export function leavesOf(t: Term, out: Leaf[] = []): Leaf[] {
+export function leavesOf(t: Term, out: Leaf[] = [], seen = new Set<Term>()): Leaf[] {
+  if (seen.has(t)) return out;
+  seen.add(t);
   if (t.kind === 'leaf') { if (!out.some((l) => l.hash === t.hash)) out.push(t); }
-  else if (t.kind === 'app') for (const a of t.args) leavesOf(a, out);
-  else if (t.kind === 'bind') { leavesOf(t.lo, out); leavesOf(t.hi, out); leavesOf(t.body, out); leavesOf(t.cells, out); }
+  else if (t.kind === 'app') for (const a of t.args) leavesOf(a, out, seen);
+  else if (t.kind === 'bind') { leavesOf(t.lo, out, seen); leavesOf(t.hi, out, seen); leavesOf(t.body, out, seen); leavesOf(t.cells, out, seen); }
   return out;
 }
 
