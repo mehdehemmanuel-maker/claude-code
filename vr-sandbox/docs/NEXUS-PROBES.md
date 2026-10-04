@@ -595,8 +595,33 @@ A body's own time, its capacity over its conductance, grows as its size squared.
 any difference with the water around it in 0.23 ms, so on any longer window it is at its surroundings' temperature.
 That is why holding a temperature is a property of bodies, not of cells.
 
+## Round 13: systems from elements
+
+A generated element states bounds and stops. Now the element becomes a configuration space (src/nexus/size.ts). The
+quantities that would realize it are its variables, its carrier's laws are its relations, and its bounds and its
+matter's limits are its constraints. What can be had is the catalogue, and a declared preference picks. The existing
+search derives the configuration, with every record citing the element it came from.
+
+The first element sized is the house's supply wire. From the element come at least 13.89 S of conductance and 500 W of
+heat at that limit, which imply 83.3 A, the same as 10 kW at 120 V. From the room it serves comes a route across its
+plan of 15.5 m, and its air held below 24 °C. From the matter it named comes copper's conductivity. The insulation adds
+PVC's limit of 70 °C (IEC 60364-5-52), with its conductivity and thickness as estimates. The catalogue is the IEC 60228
+standard sections.
+
+| Section | At least 13.89 S | Conductor temperature | Admissible |
+|---|---|---|---|
+| 4 mm² | yes | 266 °C | no: hotter than its insulation allows |
+| 10 mm² | yes | 97 °C | no |
+| 16 mm² | yes | 63 °C | yes, the least that is |
+
+The drop the element stated would choose 4 mm², and that wire would run hotter than its insulation allows. The bound
+that binds is the conductor's heat against its insulation, which the generator did not state, and the system from the
+element found it. Installation rules also derate for grouping and enclosure, which this system does not hold; no claim
+is made against their tables.
+
 ## The next instrument
 
-Systems from elements, deferred since round 1. Every generated element with bounds (a member under a load, a wire with
-a least conductance, a store that must last a trip, a boundary that must hold a difference) makes a configuration
-space that sizes it, and the generator should hand those to the space rather than stop at the bound.
+Members from the loads on the faces they span. The generator states the snow on the roof (168 kN over a 10.95 m span)
+and the wind on the walls. A member system has the number of members and their spacing, the section, the matter's
+stiffness and strength, the span and the deflection bound. That needs counts, which the language has lacked since round
+1.

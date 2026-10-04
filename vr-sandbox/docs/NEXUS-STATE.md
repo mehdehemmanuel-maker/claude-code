@@ -100,6 +100,7 @@ the generated laws are checked against, not the limit of what the language can s
 | One clock at the slowest step runs away; the tuner refines only the region whose step changes the result | tests/nexus/clock.test.ts |
 | The least body that holds its temperature by its own heat: about 8 g in air, 15 kg in water, their ratio (k_w / k_a)^2.4 | tests/nexus/hold.test.ts |
 | A cell forgets a temperature difference in under a millisecond | tests/nexus/hold.test.ts |
+| A generated element becomes a system the space sizes: the house's wire is 16 mm², bound by its heat, not its stated drop | tests/nexus/size.test.ts |
 
 ## 3. What is missing
 
@@ -115,7 +116,7 @@ the generated laws are checked against, not the limit of what the language can s
 - Life across scale: begun with holding a temperature (round 12); Kleiber's exponent itself is used, not explained, and the smallest mammals' residual says the production law departs at small size.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
-- Systems from elements: a generated element's bounds make a space that sizes it (a member, a store, a grip).
+- Systems from elements: begun with the wire (round 13). Members need counts and spacing; stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity.
 - Shape to resistance where a fluid carries momentum: a field over the shape, needing a fluid realization or
   observations to abduce from.
 - A matter's state as a region of temperature and pressure, with liquid and gas apart.
@@ -126,8 +127,8 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Systems from elements: every generated element with bounds makes a configuration space that sizes it, and the
-generator hands it to the space. Then the second family over the generator itself.
+Members from the loads on the faces they span: counts and spacing, section, the matter's stiffness and strength, the
+span and the deflection bound, as one system the space sizes. Then the second family over the generator itself.
 
 ## 5. Why each primitive exists
 
@@ -209,3 +210,4 @@ generator hands it to the space. Then the second family over the generator itsel
 | Local clocks: each region at its own time, the finer side owning the flux | one world on one clock is unstable at the slow step and wasteful at the fast | a heat network spanning four decades of time |
 | Refine where the result changes, not where the region is fastest | errors accumulate where a region integrates over many of its own times | the sensor would have been refined |
 | The least conductance a body has to a still medium | holding a difference costs a power that grows with size more slowly than what a body makes | the smallest endotherms in air and in water |
+| An element is a system the space sizes | a bound is not a design; the configuration that meets every bound is derived | the wire stopped at its least conductance |
