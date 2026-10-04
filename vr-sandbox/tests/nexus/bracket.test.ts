@@ -76,6 +76,17 @@ describe('the bracket in the kernel', () => {
     expect(r.utilisation.value).toBeLessThan(0.2);
   }, 120000);
 
+  it('the tip sag is observed by the elastic line and unobserved by the kernel; the elastic root loads agree with the statics to the error it measured', async () => {
+    const s = await slice();
+    const by = Object.fromEntries(s.comparisons.map((c) => [c.name, c]));
+    expect(by['tip sag']!.verdict.kind).toBe('unobserved');
+    expect(by['tip sag (elastic)']!.verdict.kind, JSON.stringify(by['tip sag (elastic)']!.verdict)).toBe('within');
+    expect(by['tip sag (elastic)']!.measured.value).toBeCloseTo(s.choice.pick!.solution.bound['delta']!.value!, 6);
+    for (const name of ['root moment (elastic)', 'root shear (elastic)']) expect(by[name]!.verdict.kind, name).toBe('within');
+    expect(s.elastic!.error.value!).toBeLessThan(1e-6);
+    expect(s.elastic!.tipSag.uncertainty).toBe(s.elastic!.error.value);
+  }, 120000);
+
   it('WHY on the measured moment is a measurement; on the derived one it reaches the given mass, the sourced wood and the bolt standard', async () => {
     const s = await slice();
     const by = Object.fromEntries(s.comparisons.map((c) => [c.name, c]));

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/beam';
-import { elasticContract, realizeElastic } from '../../src/nexus/elastic';
+import { elasticContract, realizeCantilever, realizeElastic } from '../../src/nexus/elastic';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { declareFrame } from '../../src/nexus/field';
 import { leaf } from '../../src/nexus/term';
@@ -48,6 +48,25 @@ describe('the elastic realization', () => {
     // Roark: an end moment M0 lifts mid-span by M0 L² / (8 E I); the overhang's hogging moment is q c² / 2
     const lift = ((1000 * 0.2 ** 2) / 2) * L ** 2 / (8 * E * I);
     expect(Math.abs((flat - over) / lift - 1)).toBeLessThan(1e-3);
+  });
+});
+
+describe('the elastic cantilever', () => {
+  const I = 1.0666666666666668e-7, E = 200e9;
+  const inp = (P: number, a: number, w: number, q: number, ell: number) => ({ frame, P: given('P', P, 'N'), a: given('a', a, 'm'), w: given('w', w, 'm'), q: given('q', q, 'N/m'), ell: given('ell', ell, 'm'), E: given('E', E, 'Pa'), I: given('I', I, 'm^4') });
+  it('reproduces the book at its limits: a load at the tip, and a load spread along the arm', () => {
+    const tip = realizeCantilever(cells(240), inp(1000, 1 - 1 / 960, 1 / 480, 0, 1));
+    expect(Math.abs(tip.tipSag.value! / 0.015625 - 1)).toBeLessThan(2e-3);
+    expect(tip.rootMoment.value).toBeCloseTo(1000 * (1 - 1 / 960), 3);
+    expect(tip.rootShear.value).toBeCloseTo(1000, 6);
+    const spread = realizeCantilever(cells(240), inp(0, 0.5, 0.1, 1000, 1));
+    expect(Math.abs(spread.tipSag.value! / (1000 / (8 * E * I)) - 1)).toBeLessThan(1e-4);
+    expect(spread.rootMoment.value).toBeCloseTo(500, 6);
+  });
+  it('a load at a reach short of the tip: P a² (3ℓ − a) / (6 E I) at the tip', () => {
+    const r = realizeCantilever(cells(240), inp(1000, 0.5, 1 / 480, 0, 1));
+    expect(Math.abs(r.tipSag.value! / ((1000 * 0.25 * 2.5) / (6 * E * I)) - 1)).toBeLessThan(2e-3);
+    expect(r.error.status).toBe('measured');
   });
 });
 

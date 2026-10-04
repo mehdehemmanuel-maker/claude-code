@@ -124,13 +124,14 @@ export const CANTILEVER_SHEAR = law({
   term: add(P, mul(q, ell)), domain: [], source: PHYSICS, example: { inputs: { P: 100, q: 10, ell: 0.6 }, output: 106, from: 'arithmetic' },
 });
 
+const x1 = sub(reach, div(w, k(2))), x2 = add(reach, div(w, k(2)));
 export const CANTILEVER_TIP_SAG = law({
-  id: 'cantilever.tip-sag', name: 'Tip deflection of a cantilever under a load at reach a and its own weight', statement: 'A load P at reach a bends the tip by P a² (3ℓ − a) / (6 E I); the arm\'s own weight adds q ℓ⁴ / (8 E I).', formula: 'δ = P a² (3ℓ − a) / (6 E I) + q ℓ⁴ / (8 E I)',
-  inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'a', unit: 'm', name: 'reach of the load from the root' }, { sym: 'ell', unit: 'm', name: 'length of the arm' }, { sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'tip sag' },
-  term: add(div(mul(P, pow(reach, 2), sub(mul(k(3), ell), reach)), mul(k(6), E, I)), div(mul(q, pow(ell, 4)), mul(k(8), E, I))),
-  domain: [{ says: 'the load is on the arm: a ≤ ℓ', holds: le(reach, ell) }, { says: 'slender: ℓ/h ≥ 20, so shear deflection is left out (Euler–Bernoulli)', holds: ge(div(ell, h), SLENDER) }],
-  source: { cite: `${ROARK.cite}, cases 1a (point load) and 2a (uniform load) on a cantilever`, kind: 'handbook' },
-  example: { inputs: { P: 1000, a: 1, ell: 1, q: 0, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.015625, from: 'ganglia/laws.ts beam.cantilever.point (the load at the tip)' },
+  id: 'cantilever.tip-sag', name: 'Tip deflection of a cantilever under a patch load at reach a and its own weight', statement: 'A load P spread over a patch of width w centred at reach a bends the tip by P (ℓ (x₂³ − x₁³) − (x₂⁴ − x₁⁴)/4) / (6 E I w), x₁ and x₂ the patch\'s ends: P a² (3ℓ − a) / (6 E I) as the patch narrows; the arm\'s own weight adds q ℓ⁴ / (8 E I).', formula: 'δ = P (ℓ (x₂³ − x₁³) − (x₂⁴ − x₁⁴)/4) / (6 E I w) + q ℓ⁴ / (8 E I)',
+  inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'a', unit: 'm', name: 'reach of the load from the root' }, { sym: 'w', unit: 'm', name: 'patch width' }, { sym: 'ell', unit: 'm', name: 'length of the arm' }, { sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'tip sag' },
+  term: add(div(mul(P, sub(mul(ell, sub(pow(x2, 3), pow(x1, 3))), div(sub(pow(x2, 4), pow(x1, 4)), k(4)))), mul(k(6), E, I, w)), div(mul(q, pow(ell, 4)), mul(k(8), E, I))),
+  domain: [{ says: 'the patch lies on the arm and has width: 0 < w, 0 ≤ a − w/2, a + w/2 ≤ ℓ', holds: and(and(gt(w, zero('m')), ge(x1, zero('m'))), le(x2, ell)) }, { says: 'slender: ℓ/h ≥ 20, so shear deflection is left out (Euler–Bernoulli)', holds: ge(div(ell, h), SLENDER) }],
+  source: { cite: `${ROARK.cite}, case 1a (point load) integrated over the patch, and case 2a (uniform load), on a cantilever`, kind: 'derivation' },
+  example: { inputs: { P: 1000, a: 0.5, w: 0.2, ell: 1, q: 0, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: (1000 / (6 * 200e9 * ((0.02 * 0.04 ** 3) / 12) * 0.2)) * (1 * (0.6 ** 3 - 0.4 ** 3) - (0.6 ** 4 - 0.4 ** 4) / 4), from: 'the integral of the point-load influence over the patch, computed independently' },
 });
 
 export const STRESS_AREA = law({

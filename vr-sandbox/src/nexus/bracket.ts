@@ -15,6 +15,7 @@ import { apply, law, type Law } from './law';
 import { compare, Journal, type Comparison } from './observe';
 import { realizeBracket, type JointRealization, type JointSpec } from './realize-joint';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
+import { elasticContract, realizeCantilever, type CantileverRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
 import { add, div, k, le, leaf, max, min, mul, neg, sub, variable, type Leaf } from './term';
 
@@ -91,7 +92,7 @@ export function bracketSystem(intent: BracketIntent, mat: MaterialLeaves, g: Der
       { kind: 'law', sym: 'I', law: RECT_I, args: { b: 'b', h: 'h' } },
       { kind: 'law', sym: 'sigma', law: BENDING_STRESS, args: { M: 'M', S: 'S' } },
       { kind: 'term', sym: 'sigmaAllow', term: div(v['MOR']!, v['f']!), name: 'allowable stress', grounds: 'the strength over the declared factor' },
-      { kind: 'law', sym: 'delta', law: CANTILEVER_TIP_SAG, args: { P: 'P', a: 'a', ell: 'ell', q: 'q', E: 'E', I: 'I', h: 'h' } },
+      { kind: 'law', sym: 'delta', law: CANTILEVER_TIP_SAG, args: { P: 'P', a: 'a', w: 'w', ell: 'ell', q: 'q', E: 'E', I: 'I', h: 'h' } },
       { kind: 'term', sym: 'deltaLim', term: div(v['ell']!, v['n']!), name: 'sag limit', grounds: 'the arm over the declared ratio' },
       { kind: 'law', sym: 'As', law: STRESS_AREA, args: { d: 'd', p: 'p' } },
       { kind: 'law', sym: 'Ft', law: GROUP_TENSION, args: { n: 'nb', As: 'As', Rm: 'Rm' } },
@@ -183,6 +184,8 @@ export interface BracketSlice {
   choice: Choice;
   configuration: BracketConfiguration | null;
   realization: JointRealization | null;
+  /** The second realization: the arm's elastic line from a fixed root, which observes the tip sag. */
+  elastic: CantileverRealization | null;
   comparisons: Comparison[];
   admission: { coupling: string; judgement: Judgement }[];
   refusedBy: string[];
@@ -210,7 +213,7 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
   const choice = search(system, catalogue, [leastMaterial(intent.by), leastSteel(intent.by)]);
   for (const c of choice.candidates) if (!c.admissible) journal.append({ kind: 'refusal', what: c.option.label, domain: [...c.refused, ...c.unsatisfied, ...c.undecided].join('; ') });
   if (choice.pick) journal.append({ kind: 'choice', why: choice.why!, among: choice.manifold.length, label: choice.pick.option.label });
-  let configuration: BracketConfiguration | null = null, realization: JointRealization | null = null;
+  let configuration: BracketConfiguration | null = null, realization: JointRealization | null = null, elastic: CantileverRealization | null = null;
   let admission: BracketSlice['admission'] = [], refusedBy: string[] = [];
   const comparisons: Comparison[] = [];
   if (choice.pick) {
@@ -222,6 +225,14 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
     ({ admission, refusedBy } = admitBy(opts.language ?? new Language(), bracketQuantities(configuration, bound, g, obs)));
     for (const a of admission) journal.append({ kind: 'record', record: a.judgement.holds });
     for (const r of refusedBy) journal.append({ kind: 'refusal', what: 'the configuration', domain: r });
+    // the elastic realization: the arm's line from a fixed root, pinned by nothing else; it sees the sag the kernel cannot
+    elastic = realizeCantilever(elasticContract(), { frame, P: bound['P']!, a: bound['a']!, w: bound['w']!, q: bound['q']!, ell: bound['ell']!, E: bound['E']!, I: bound['I']! });
+    const exact = ofLeaf(leaf('no error beyond what the realization measured on itself', 0, '1', { class: 'configuration', source: elastic.contract.name }));
+    for (const [name, derived, measured] of [['tip sag (elastic)', bound['delta']!, elastic.tipSag], ['root moment (elastic)', bound['M']!, elastic.rootMoment], ['root shear (elastic)', bound['V']!, elastic.rootShear]] as const) {
+      const c = compare(name, derived, measured, { name: elastic.contract.name, relative: exact });
+      comparisons.push(c);
+      journal.append({ kind: 'comparison', comparison: c });
+    }
     if (J && !refusedBy.length) {
       realization = realizeBracket(J, contract, { ...configuration.bodies, joint: configuration.joint, gravity: g, ground }, obs);
       const binary = ofLeaf(leaf('no tolerance on a yes or no', 0, '1', { class: 'configuration', source: 'a binary outcome either agrees or does not' }));
@@ -237,7 +248,7 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
       for (const d of [realization.stood, realization.settled, realization.axial]) journal.append({ kind: 'record', record: d });
     }
   }
-  return { intent, frame, observer: obs, contract, system, open, choice, configuration, realization, comparisons, admission, refusedBy, journal };
+  return { intent, frame, observer: obs, contract, system, open, choice, configuration, realization, elastic, comparisons, admission, refusedBy, journal };
 }
 
 /** A bracket as a person asks for it. */

@@ -2,7 +2,7 @@
 // cases at their limits; a law inverts from the same term; every hash is content.
 
 import { describe, expect, it } from 'vitest';
-import { BOOK, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, WEIGHT, lawById } from '../../src/nexus/book';
+import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, WEIGHT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply, invert, law } from '../../src/nexus/law';
 import { LAWS } from '../../src/ganglia/laws';
@@ -98,6 +98,14 @@ describe('the kept book as terms: every law, by its own example', () => {
     expect(at(0.1, 0.5)).toBeCloseTo(500 * 0.5, 9);
     expect(at(0.1, 0.05)).toBeCloseTo(500 * 0.95, 9);
     expect(apply(PATCH_MOMENT, env(PATCH_MOMENT, { P: 1000, L: 2, w: 0.1, a: 1.5 })).status).toBe('outside-validity');
+  });
+
+  it('the cantilever tip sag under a patch narrows to the book\'s point load, and the elastic line agrees with the patch form', () => {
+    const at = (w: number) => apply(CANTILEVER_TIP_SAG, env(CANTILEVER_TIP_SAG, { P: 1000, a: 0.5, w, ell: 1, q: 0, E: 200e9, I: 1.0666666666666668e-7, h: 0.04 })).value!;
+    expect(at(1e-6)).toBeCloseTo((1000 * 0.25 * 2.5) / (6 * 200e9 * 1.0666666666666668e-7), 9);
+    // the influence of a load grows faster than linearly with its reach, so spreading it raises the tip sag
+    expect(at(0.2)).toBeGreaterThan(at(1e-6));
+    expect(apply(CANTILEVER_TIP_SAG, env(CANTILEVER_TIP_SAG, { P: 1000, a: 0.95, w: 0.2, ell: 1, q: 0, E: 200e9, I: 1e-7, h: 0.04 })).status).toBe('outside-validity');
   });
 
   it('the self-weight moment with overhangs: the overhang relieves mid-span', () => {

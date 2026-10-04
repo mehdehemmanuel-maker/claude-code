@@ -30,8 +30,9 @@ nothing of its architecture is extended again.
   as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
   across it, refused outside a scale band with the band named; coverage of a lattice of point samples is zero), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
   morphism under a contract whose numbers are its own conformance measurements), `elastic` (a second realization:
-  the elastic line integrated on a grid, independent of the closed-form laws, every observable's error measured by
-  halving the cell, stationary in time; it observes the sag the rigid kernel cannot), `observe` (comparison within the
+  the elastic line integrated on a grid, for a span on two supports and for a cantilever from a fixed root,
+  independent of the closed-form laws, every observable's error measured by halving the cell, stationary in time;
+  it observes the sag the rigid kernel cannot, and it caught the bracket's tip-sag law treating a patch as a point), `observe` (comparison within the
   contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness),
   `failure` (the four representational failures as terms: anomaly, contradiction, a variable free that the intent
   did not leave free, a measurement no variable can hold), `abduce` (the missing distinction searched for over the

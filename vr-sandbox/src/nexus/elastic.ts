@@ -115,3 +115,59 @@ export function realizeElastic(c: ElasticContract, inp: ElasticInputs, instrumen
   return { contract: c, resolution: res, window, moments, sag, reactions, error, momentAt, sagAt };
 }
 
+
+// ---- a cantilever: fixed at the root, free at the tip ---------------------------------------------------------------
+
+export interface CantileverInputs {
+  frame: Frame;
+  /** Load P over a patch of width w centred at reach a from the root; self weight q per length over the arm's length ℓ. */
+  P: Derivation; a: Derivation; w: Derivation; q: Derivation; ell: Derivation; E: Derivation; I: Derivation;
+}
+
+export interface CantileverRealization {
+  contract: ElasticContract;
+  resolution: Resolution;
+  window: Window;
+  rootMoment: Derivation;
+  rootShear: Derivation;
+  tipSag: Derivation;
+  error: Derivation;
+  sagAt(x: number): number;
+  momentAt(x: number): number;
+}
+
+/** Statics from the tip inward (shear and moment by integration of the load), then the elastic line from the root outward. */
+function integrateCantilever(N: number, P: number, a: number, w: number, q: number, ell: number, EI: number) {
+  const h = ell / N;
+  const x = Array.from({ length: N + 1 }, (_, i) => i * h);
+  // the load on each cell, exactly: self weight and the patch's overlap with the cell
+  const cellLoad = (i: number) => { const lo = Math.max(x[i]!, a - w / 2), hi = Math.min(x[i + 1]!, a + w / 2); return q * h + (P / w) * Math.max(0, hi - lo); };
+  // V(x) = load beyond x (exact for piecewise-constant load); M(x) = ∫_x^ℓ V (hogging, taken positive), V linear on a cell so the trapezoid is exact there
+  const V = new Array<number>(N + 1).fill(0), M = new Array<number>(N + 1).fill(0);
+  for (let i = N - 1; i >= 0; i--) { V[i] = V[i + 1]! + cellLoad(i); M[i] = M[i + 1]! + ((V[i]! + V[i + 1]!) / 2) * h; }
+  // u'' = M / EI with u(0) = u'(0) = 0, downward positive, by the trapezoid from the root
+  const s = new Array<number>(N + 1).fill(0), u = new Array<number>(N + 1).fill(0);
+  for (let i = 1; i <= N; i++) { s[i] = s[i - 1]! + ((M[i - 1]! + M[i]!) / (2 * EI)) * h; u[i] = u[i - 1]! + ((s[i - 1]! + s[i]!) / 2) * h; }
+  const interp = (ys: number[], xx: number) => { const i = Math.min(N - 1, Math.max(0, Math.floor(xx / h))); const t = (xx - x[i]!) / h; return ys[i]! * (1 - t) + ys[i + 1]! * t; };
+  return { x, V, M, u, h, sagAt: (xx: number) => interp(u, xx), momentAt: (xx: number) => interp(M, xx) };
+}
+
+export function realizeCantilever(c: ElasticContract, inp: CantileverInputs, instrument = `${c.name}, cantilever`): CantileverRealization {
+  const P = val(inp.P, 'P'), a = val(inp.a, 'a'), w = val(inp.w, 'w'), q = val(inp.q, 'q'), ell = val(inp.ell, 'ell'), EI = val(inp.E, 'E') * val(inp.I, 'I');
+  const N = Math.round(val(c.cells, 'cells'));
+  const fine = integrateCantilever(2 * N, P, a, w, q, ell, EI), coarseRun = integrateCantilever(N, P, a, w, q, ell, EI);
+  const err = Math.abs(fine.u[2 * N]! - coarseRun.u[N]!);
+  const errM = Math.abs(fine.M[0]! - coarseRun.M[0]!), errV = Math.abs(fine.V[0]! - coarseRun.V[0]!);
+  const window: Window = { tick: 0, seconds: 0, instrument };
+  const mk = (name: string, value: number, unit: string, origin: Leaf['origin'], u?: number) => leaf(name, value, unit, origin, u);
+  const cell = evaluate('cell of the grid', div(variable('L', 'm'), variable('n', '1')), { L: inp.ell, n: c.cells }, { unit: 'm', law: 'the arm over the number of cells' });
+  const res = resolution(instrument, { x: cell }, { x: cell }, ['t']);
+  return {
+    contract: c, resolution: res, window,
+    rootMoment: measurement('root moment', fine.M[0]!, 'N m', { instrument: `${instrument}: the moment at the root, error by halving the cell`, window, uncertainty: errM }, mk),
+    rootShear: measurement('root shear', fine.V[0]!, 'N', { instrument: `${instrument}: the shear at the root, error by halving the cell`, window, uncertainty: errV }, mk),
+    tipSag: measurement('tip sag', fine.u[2 * N]!, 'm', { instrument: `${instrument}: the elastic line at the tip on ${2 * N} cells`, window, uncertainty: err }, mk),
+    error: ofLeaf(leaf('discretization error of the tip sag, measured by halving the cell', err, 'm', { class: 'measured', source: `${instrument}: |δ(2N) − δ(N)| at N = ${N}` })),
+    sagAt: fine.sagAt, momentAt: fine.momentAt,
+  };
+}
