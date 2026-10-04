@@ -38,7 +38,7 @@ Since round 8 matter has a first deeper layer. A species is counted by the ident
 the level of energy available. A transformation is a balance found by the same null-space algebra as dimensionless
 groups, and the blocking identity names a missing species. A molecule's enthalpy comes from its atoms and bonds, and a
 phase is the least Gibbs energy at a temperature and pressure. Boiling points, vapour pressures, a decay's energy and the
-neutrino's quantum numbers come out of it. A solid's continuum quantities are still stated, not derived.
+neutrino's quantum numbers come out of it. Since round 9 a crystal's density comes from its atoms and lattice, and its stiffness is measured against its binding over its room; both residuals name what is missing (temperature, the electrons' arrangement), and the deeper layer finds the kernel's steel and copper stiffness pairs inconsistent with their metals.
 
 Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
 names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
@@ -91,6 +91,9 @@ the generated laws are checked against, not the limit of what the language can s
 | Atoms less bonds give small molecules' enthalpies; benzene's residual names delocalization, a liquid's names binding between molecules | tests/nexus/matter.test.ts |
 | Boiling points and vapour pressures come from phases' Gibbs energies, none an input, within 1.2 % | tests/nexus/matter.test.ts |
 | A liquid in the vehicle family boils by its cavitation number, from its own vapour pressure | tests/nexus/family.test.ts |
+| A crystal's density from its atoms and lattice, within 1 % where the lattice was measured warm | tests/nexus/solid.test.ts |
+| The cold-measured lattices' residual names temperature; the stiffness residual names the electrons' arrangement | tests/nexus/solid.test.ts |
+| The kernel's steel and copper stiffness pairs disagree with their metals' measured compressibility | tests/nexus/solid.test.ts |
 
 ## 3. What is missing
 
@@ -98,7 +101,7 @@ the generated laws are checked against, not the limit of what the language can s
   contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
   but a relation used beyond the span of its own observations is still not marked as a hypothesis.
 - Matter as constituents bound by interactions: identities, binding and the Gibbs state are begun (round 8). Still
-  missing: a solid's continuum quantities from its constituents, a solid phase in the Gibbs picture, rates across
+  missing: a solid's stiffness beyond its binding scale (the electrons' arrangement), thermal expansion, a solid phase in the Gibbs picture, rates across
   barriers (what happens during a change, beyond ionization's continuous fraction), and a heat capacity that changes
   with temperature (named by the vapour residual).
 - Local clocks: a realization advances everywhere at one step; the tuner refines the whole manifold, not a region.
@@ -117,9 +120,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-A solid's continuum quantities from its constituents: density from atomic mass and spacing, stiffness from cohesive
-energy over atomic volume, tested across metals for a ratio that stays near one. Then rates across barriers, local
-clocks, the second family and systems from elements.
+Rates across barriers: a change over a barrier is attempted at kT / h and succeeds with its Boltzmann factor (Eyring).
+A liquid's viscosity then gives the molecular time of its change, tested against the spectroscopic time, and its
+temperature dependence against measured viscosities. Then local clocks, the second family and systems from elements.
 
 ## 5. Why each primitive exists
 
@@ -194,3 +197,6 @@ clocks, the second family and systems from elements.
 | A molecule from its atoms and its bonds | a material quantity derived from the level below, with its residual | formation enthalpies stated as data |
 | A phase is the least Gibbs energy | a state is binding against room at a temperature, not a threshold | water boiling only by a stated 100 °C |
 | A liquid boils by its cavitation number | the state of what is touched depends on the motion through it | round 5's under-water motion at 250 m/s |
+| A cell's atoms counted from its geometry | the arrangement of constituents is structure, not a stated number | densities as data |
+| Stiffness against binding over room | the only pressure an atom's binding and room make | 33 materials' moduli as data |
+| A lattice states the temperature it was measured at | a quantity's state is part of it | three alkali crystals too dense |

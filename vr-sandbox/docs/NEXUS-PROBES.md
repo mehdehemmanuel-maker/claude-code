@@ -493,9 +493,36 @@ around any shape).
 **Faults found on the way.** The null space of an empty set of constraints was returned empty, when it is the whole
 space. And the smallest balance was missed by combining scaled basis vectors.
 
+## Round 9: a solid from its constituents
+
+A crystal is atoms at the sites of a lattice (src/nexus/solid.ts). The atoms a cell holds are counted from the cell's
+geometry: a corner is shared by eight cells, a face by two, a site inside by none. That gives four for a face-centred
+cube and two for a body-centred one. Density is an atom's mass over the room the lattice gives it. Stiffness is a
+pressure, and the only pressure an atom's binding and its room make is the cohesive energy over the volume per atom.
+The crystals' lattice constants, cohesive energies and bulk moduli come from Kittel's tables (src/data/species.ts).
+
+| Derived | Result |
+|---|---|
+| density, eight metals measured at room temperature | within 0.6 % of measured, the largest tungsten's 0.5 % |
+| density, lithium, sodium, potassium | 1.5 to 5.3 % too dense |
+| measured bulk modulus over the binding pressure | 0.94 to 4.82 across eleven metals |
+| the kernel's steel, aluminium and copper, in density | iron's, aluminium's and copper's crystals within 1.5 % |
+
+Both residuals have structure.
+
+- **The three too-dense crystals** are exactly the ones whose lattice constant was measured cold (lithium at 78 K, sodium
+  and potassium at 5 K), so the residual names temperature through thermal expansion.
+- **The stiffness ratio**: every metal bound by one s electron is softer for its binding than every other metal. The
+  energy and the room do not say how the binding is shaped, and the electrons' arrangement is the layer that does.
+
+**The deeper layer checks the kept data.** The bulk modulus the kernel's own Young's modulus and Poisson's ratio imply
+is 67.5 GPa for aluminium, against 72.2 GPa measured. Steel's pair implies 139 GPa against iron's 168 GPa, and copper's
+101 GPa against copper's 137 GPa. Their stated pairs disagree with the metals' compressibility; the kept data is
+unchanged and the finding is recorded.
+
 ## The next instrument
 
-The materials the kernel builds with are still stated numbers: 33 materials' densities, stiffnesses and strengths. The
-next round tests whether a solid's continuum quantities come from its constituents: its density from its atoms' mass
-and spacing, its stiffness from its cohesive energy over its atomic volume. Any ratio that stays near one across
-metals is an invariant the language can use, and a residual's structure names the bonding that differs.
+What happens during a change: rates across barriers. A change over an energy barrier is attempted at the thermal rate
+kT / h and succeeds with the Boltzmann factor of the barrier (Eyring). The rate a continuum quantity shows, a liquid's
+viscosity, then gives the molecular time of the change. That time is tested against the spectroscopic one, and the
+viscosity's change with temperature against measured values.

@@ -84,3 +84,26 @@ export const BOILING_AT_ONE_ATMOSPHERE: Record<string, { T: number; source: stri
 export const WATER_SATURATION: { T: number; p: number }[] = [
   { T: 298.15, p: 3169.9 }, { T: 323.15, p: 12352 }, { T: 343.15, p: 31201 }, { T: 393.15, p: 198670 },
 ];
+
+/**
+ * Crystals of the elements: the lattice they take, its constant at room temperature, the energy that binds an atom in
+ * it (the cohesive energy, against the free atom), and the measured density and bulk modulus the derivation is
+ * checked against, never fed. Kittel, Introduction to Solid State Physics, 8th ed., tables 1.4, 3.1 and 3.3 (the lattice
+ * constants at room temperature, except lithium's at 78 K and sodium's and potassium's at 5 K); densities
+ * from the CRC Handbook; atomic masses from IUPAC.
+ */
+export interface Crystal { element: string; lattice: 'fcc' | 'bcc'; a: number; /** the temperature the lattice constant was measured at, K */ at: number; cohesive: number; mass: number; valence: string; measured: { density: number; bulk: number } }
+const eV = 1.602176634e-19, u = 1.66053906660e-27;
+export const CRYSTALS: Crystal[] = [
+  { element: 'Li', lattice: 'bcc', a: 3.49e-10, at: 78, cohesive: 1.63 * eV, mass: 6.94 * u, valence: 'one s electron', measured: { density: 534, bulk: 0.116e11 } },
+  { element: 'Na', lattice: 'bcc', a: 4.23e-10, at: 5, cohesive: 1.113 * eV, mass: 22.990 * u, valence: 'one s electron', measured: { density: 968, bulk: 0.068e11 } },
+  { element: 'K', lattice: 'bcc', a: 5.23e-10, at: 5, cohesive: 0.934 * eV, mass: 39.098 * u, valence: 'one s electron', measured: { density: 862, bulk: 0.032e11 } },
+  { element: 'Al', lattice: 'fcc', a: 4.05e-10, at: 298, cohesive: 3.39 * eV, mass: 26.982 * u, valence: 's and p electrons', measured: { density: 2699, bulk: 0.722e11 } },
+  { element: 'Fe', lattice: 'bcc', a: 2.87e-10, at: 298, cohesive: 4.28 * eV, mass: 55.845 * u, valence: 'd electrons', measured: { density: 7874, bulk: 1.683e11 } },
+  { element: 'Ni', lattice: 'fcc', a: 3.52e-10, at: 298, cohesive: 4.44 * eV, mass: 58.693 * u, valence: 'd electrons', measured: { density: 8908, bulk: 1.86e11 } },
+  { element: 'Cu', lattice: 'fcc', a: 3.61e-10, at: 298, cohesive: 3.49 * eV, mass: 63.546 * u, valence: 'd electrons', measured: { density: 8960, bulk: 1.37e11 } },
+  { element: 'Ag', lattice: 'fcc', a: 4.09e-10, at: 298, cohesive: 2.95 * eV, mass: 107.87 * u, valence: 'd electrons', measured: { density: 10490, bulk: 1.007e11 } },
+  { element: 'W', lattice: 'bcc', a: 3.16e-10, at: 298, cohesive: 8.90 * eV, mass: 183.84 * u, valence: 'd electrons', measured: { density: 19250, bulk: 3.232e11 } },
+  { element: 'Au', lattice: 'fcc', a: 4.08e-10, at: 298, cohesive: 3.81 * eV, mass: 196.97 * u, valence: 'd electrons', measured: { density: 19300, bulk: 1.732e11 } },
+  { element: 'Pb', lattice: 'fcc', a: 4.95e-10, at: 298, cohesive: 2.03 * eV, mass: 207.2 * u, valence: 's and p electrons over filled d shells', measured: { density: 11340, bulk: 0.430e11 } },
+];
