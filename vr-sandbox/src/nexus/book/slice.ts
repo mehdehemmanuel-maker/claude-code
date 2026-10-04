@@ -1,23 +1,22 @@
-// The book, as terms: each law a term over its inputs, with the domain it holds in and the example it must
-// reproduce. The examples come from the kept law data (src/ganglia/laws.ts) where that data has one, or are
-// computed independently in tests/nexus/book.test.ts.
+// The laws the beam slice rests on that are not in the kept book: definitions and derivations by superposition,
+// each with the domain it holds in and an example checked at the book's own limits (tests/nexus/book.test.ts).
 
-import { law, type Law } from './law';
-import { add, and, div, ge, gt, k, le, leaf, max, mul, pow, sqrt, sub, variable, zero } from './term';
+import { law, type Law } from '../law';
+import { add, and, div, ge, gt, k, le, leaf, max, mul, pow, sub, variable, zero } from '../term';
 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };
 export const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
-export const KINSLER = { cite: 'Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000', kind: 'textbook' as const };
 export const NDS = { cite: 'AWC, National Design Specification for Wood Construction, 2018, §4.4.1.2 (beam stability: sawn lumber, d/b ≤ 2 needs no lateral support)', kind: 'standard' as const };
 export const SUPERPOSITION = { cite: 'Derived by superposition of the point-load influence line of a simply supported beam (Roark table 8.1 case 1e) over a central patch; the two limits (a point, the whole span) are the book\'s own cases', kind: 'derivation' as const };
 
 const m = variable('m', 'kg', 'mass'), g = variable('g', 'm/s^2', 'gravity');
+void m; void g;
 const P = variable('P', 'N', 'load'), W = variable('W', 'N', 'self weight'), R = variable('R', 'N', 'reaction');
 const L = variable('L', 'm', 'span'), Lt = variable('Lt', 'm', 'total length'), w = variable('w', 'm', 'patch width'), a = variable('a', 'm', 'station from mid-span');
 const q = variable('q', 'N/m', 'weight per length'), rho = variable('rho', 'kg/m^3', 'density');
 const b = variable('b', 'm', 'breadth'), h = variable('h', 'm', 'depth'), x = variable('x', 'm', 'extent x'), y = variable('y', 'm', 'extent y'), z = variable('z', 'm', 'extent z');
-const M = variable('M', 'N m', 'bending moment'), S = variable('S', 'm^3', 'section modulus'), E = variable('E', 'Pa', 'modulus'), I = variable('I', 'm^4', 'second moment');
+const E = variable('E', 'Pa', 'modulus'), I = variable('I', 'm^4', 'second moment');
 void R;
 
 /** The slenderness below which shear deflection is left out of a beam's sag: an assumption with its grounds. */
@@ -25,12 +24,6 @@ export const SLENDER = leaf('slender bound', 20, '1', { class: 'assumed', by: 't
 const slender = { says: 'slender: L/h ≥ 20, so shear deflection is left out (Euler–Bernoulli)', holds: ge(div(L, h), SLENDER) };
 const inSpan = { says: 'the station lies within the span: a ≤ L/2', holds: le(a, div(L, k(2))) };
 const patchInSpan = { says: 'the patch lies within the span and has width: 0 < w ≤ L', holds: and(gt(w, zero('m')), le(w, L)) };
-
-export const WEIGHT = law({
-  id: 'weight', name: 'Weight', statement: 'A mass weighs its mass times the local acceleration of gravity.', formula: 'W = m g',
-  inputs: [{ sym: 'm', unit: 'kg', name: 'mass' }, { sym: 'g', unit: 'm/s^2', name: 'gravity' }], output: { sym: 'W', unit: 'N', name: 'weight' },
-  term: mul(m, g), domain: [], source: PHYSICS, example: { inputs: { m: 10, g: 9.80665 }, output: 98.0665, from: 'ganglia/laws.ts weight' },
-});
 
 export const PRISM_MASS = law({
   id: 'mass.prism', name: 'Mass of a rectangular prism', statement: 'A prism of uniform density has the mass of its density times its volume.', formula: 'm = ρ x y z',
@@ -89,12 +82,6 @@ export const RECT_I = law({
   term: div(mul(b, pow(h, 3)), k(12)), domain: [], source: { ...SHIGLEY, cite: `${SHIGLEY.cite}, table A-18` }, example: { inputs: { b: 0.02, h: 0.04 }, output: (0.02 * 0.04 ** 3) / 12, from: 'ganglia/laws.ts beam examples' },
 });
 
-export const BENDING_STRESS = law({
-  id: 'stress.bending', name: 'Bending stress', statement: 'A beam bent by a moment is stressed most at its outer fibre: the moment over its section modulus.', formula: 'σ = M / S',
-  inputs: [{ sym: 'M', unit: 'N m', name: 'bending moment' }, { sym: 'S', unit: 'm^3', name: 'section modulus' }], output: { sym: 'sigma', unit: 'Pa', name: 'bending stress' },
-  term: div(M, S), domain: [], source: SHIGLEY, example: { inputs: { M: 100, S: (0.02 * 0.04 ** 2) / 6 }, output: 18750000, from: 'ganglia/laws.ts stress.bending' },
-});
-
 export const PATCH_SAG = law({
   id: 'beam.simply-supported.central-patch.sag', name: 'Mid-span sag under a central patch load', statement: 'A load P spread over a central patch of width w sags a simply supported span L at mid-span by P (L³ − L w²/2 + w³/8) / (48 E I): the point load\'s sag at w → 0, the spread load\'s at w → L.', formula: 'δ = P (L³ − L w²/2 + w³/8) / (48 E I)',
   inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'L', unit: 'm', name: 'span' }, { sym: 'w', unit: 'm', name: 'patch width' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'mid-span sag' },
@@ -111,11 +98,5 @@ export const SELF_SAG = law({
   example: { inputs: { q: 1000, L: 2, Lt: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.009765625, from: 'ganglia/laws.ts beam.simply-supported.udl (no overhang)' },
 });
 
-export const BAR_WAVE_SPEED = law({
-  id: 'sound.speed', name: 'Speed of a longitudinal wave in a bar', statement: 'A push travels along a thin bar at the root of its modulus over its density.', formula: 'c = √(E / ρ)',
-  inputs: [{ sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'rho', unit: 'kg/m^3', name: 'density' }], output: { sym: 'c', unit: 'm/s', name: 'wave speed' },
-  term: sqrt(div(E, rho)), domain: [], source: KINSLER, example: { inputs: { E: 200e9, rho: 7850 }, output: 5047.544651250688, from: 'ganglia/laws.ts sound.speed' },
-});
-
-/** The book of this core, so far: what the beam slice rests on. The kept data holds 144; the rest are not yet terms. */
-export const BOOK: Law[] = [WEIGHT, PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, BENDING_STRESS, PATCH_SAG, SELF_SAG, BAR_WAVE_SPEED];
+/** The derived laws of the slice. */
+export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG];

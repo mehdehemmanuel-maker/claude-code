@@ -2,18 +2,23 @@
 // cases at their limits; a law inverts from the same term; every hash is content.
 
 import { describe, expect, it } from 'vitest';
-import { BOOK, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, WEIGHT } from '../../src/nexus/book';
+import { BOOK, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, WEIGHT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply, invert, law } from '../../src/nexus/law';
 import { LAWS } from '../../src/ganglia/laws';
+import { parseUnit } from '../../src/ganglia/units';
 import { leaf, mul, variable } from '../../src/nexus/term';
+import { leavesUnder } from '../../src/nexus/why';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const env = (l: { inputs: readonly { sym: string; unit: string; name: string }[] }, values: Record<string, number>): Record<string, Derivation> =>
   Object.fromEntries(l.inputs.map((p) => [p.sym, given(p.name, values[p.sym]!, p.unit)]));
 
-describe('the book as terms', () => {
-  for (const l of BOOK) {
+/** A worked example's output in SI: the kept data writes it in the output port's unit. */
+const inSI = (value: number, unit: string) => { const u = parseUnit(unit); return value * u.scale + (u.offset ?? 0); };
+
+describe('the derived laws of the slice', () => {
+  for (const l of SLICE) {
     it(`${l.id} reproduces its example (${l.example?.from})`, () => {
       const d = apply(l, env(l, l.example!.inputs));
       expect(d.status).not.toBe('outside-validity');
@@ -22,6 +27,57 @@ describe('the book as terms', () => {
       expect(Math.abs(d.value! - l.example!.output)).toBeLessThanOrEqual(rel * Math.max(1, Math.abs(l.example!.output)));
     });
   }
+});
+
+describe('the kept book as terms: every law, by its own example', () => {
+  const kept = Object.fromEntries(LAWS.map((l) => [l.id, l]));
+  it('holds every kept law once, with the kept ports in the kept order, and nothing twice', () => {
+    expect(LAWS.length).toBe(144);
+    const ids = Object.values(KEPT).flat().map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(LAWS.map((l) => l.id).sort());
+    for (const id of ids) {
+      const t = lawById(id), k = kept[id]!;
+      expect(t.inputs.map((p) => [p.sym, p.unit]), id).toEqual(k.inputs.map((p) => [p.sym, p.unit]));
+      expect([t.output.sym, t.output.unit], id).toEqual([k.output.sym, k.output.unit]);
+      expect(t.statement).toBe(k.statement);
+      expect(t.source.cite).toBe(k.source.cite);
+    }
+  });
+  for (const k of LAWS) {
+    it(`${k.id}: the term reproduces the kept example in SI${k.outside ? ', and the domain is a predicate' : ''}`, () => {
+      const t = lawById(k.id);
+      const d = apply(t, env(t, k.example.inputs));
+      const expected = inSI(k.example.output, k.output.unit);
+      expect(d.status, `${k.id}: ${d.refusal?.domain ?? d.because ?? ''}`).not.toBe('outside-validity');
+      expect(d.value).not.toBeNull();
+      const rel = Math.max(k.example.rel ?? 0, 1e-9);
+      expect(Math.abs(d.value! - expected), `${k.id}: ${d.value} vs ${expected}`).toBeLessThanOrEqual(rel * Math.max(Math.abs(expected), 1e-300));
+      // the kept validity function and the term's domain predicates agree on the example
+      expect(t.domain.length > 0).toBe(!!k.outside);
+      if (k.outside) {
+        expect(k.outside(k.example.inputs)).toBeNull();
+        for (const dc of t.domain) expect(dc.says.length).toBeGreaterThan(8);
+      }
+      // every constant the term holds is a leaf with its source
+      for (const l of leavesUnder(d)) expect(l.origin.source ?? l.origin.grounds ?? l.origin.by, `${k.id}: ${l.name}`).toBeTruthy();
+    });
+  }
+  it('refuses outside a predicate domain, with the domain named, for a law that had a validity function', () => {
+    const t = lawById('carnot');
+    const d = apply(t, env(t, { Tc: 600, Th: 300 }));
+    expect(d.status).toBe('outside-validity');
+    expect(d.refusal?.domain).toMatch(/colder/);
+    const c = lawById('copper.tempco');
+    expect(apply(c, env(c, { R0: 0.317, T: 250, T0: 25 })).status).toBe('outside-validity');
+    expect(apply(c, env(c, { R0: 0.317, T: 100, T0: 25 })).value).toBeCloseTo(0.41043575, 9);
+  });
+  it('unit conventions live at the ports: rpm, rev and hours are converted, the term is SI', () => {
+    const h = lawById('bearing.life.hours');
+    const d = apply(h, env(h, { L: 3241792000, n: 600 }));
+    expect(d.value).toBeCloseTo(90049.7777777778 * 3600, 3);
+    expect(d.unit).toBe('h');
+  });
 
   it('the examples taken from the kept law data are that data\'s own', () => {
     const kept = Object.fromEntries(LAWS.map((l) => [l.id, l]));
@@ -68,11 +124,7 @@ describe('the book as terms', () => {
     expect(() => law({ ...WEIGHT, output: { sym: 'W', unit: 'kg', name: 'weight' } })).toThrow(/dimension|kg/);
   });
 
-  it('counts what of the kept book is a term', () => {
-    const asTerms = new Set(BOOK.map((l) => l.id));
-    const keptIds = LAWS.map((l) => l.id);
-    const covered = keptIds.filter((id) => asTerms.has(id));
-    expect(covered.sort()).toEqual(['sound.speed', 'stress.bending', 'weight']);
-    expect(LAWS.length).toBe(144);
+  it('the book is the kept 144 and the slice\'s derived laws', () => {
+    expect(BOOK.length).toBe(144 + SLICE.length);
   });
 });

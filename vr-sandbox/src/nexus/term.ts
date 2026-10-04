@@ -3,7 +3,8 @@
 // the canonical form: variables renamed by order of appearance, commutative arguments ordered by content, names
 // nowhere in it.
 
-import { DIMLESS, DimensionError, dimOf, dimText, divDim, isDimless, mulDim, powDim, sameDim, scaleOf, type Dim } from './dimension';
+import { parseUnit } from '../ganglia/units';
+import { DIMLESS, DimensionError, dimOf, dimText, divDim, isDimless, mulDim, powDim, sameDim, type Dim } from './dimension';
 import { hashOf } from './identity';
 
 export type OriginClass =
@@ -64,7 +65,7 @@ export type Term = Leaf | Var | App;
 
 // ---- operators: each with an identity of its own ------------------------------------------------------------------
 
-export type OpId = 'add' | 'sub' | 'mul' | 'div' | 'pow' | 'neg' | 'abs' | 'min' | 'max' | 'le' | 'ge' | 'lt' | 'gt' | 'and';
+export type OpId = 'add' | 'sub' | 'mul' | 'div' | 'pow' | 'neg' | 'abs' | 'min' | 'max' | 'le' | 'ge' | 'lt' | 'gt' | 'and' | 'or' | 'exp' | 'ln' | 'log2' | 'log10' | 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan';
 
 export interface Operator {
   id: OpId;
@@ -80,6 +81,11 @@ export interface Operator {
 const same = (id: string, a: Dim, b: Dim) => {
   if (!sameDim(a, b)) throw new DimensionError(`${id}: ${dimText(a)} and ${dimText(b)} are not the same dimension`);
   return a;
+};
+/** A transcendental function takes and returns a pure number: a dimensioned argument is nonsense. */
+const pure = (id: string, a: Dim) => {
+  if (!isDimless(a)) throw new DimensionError(`${id}: its argument must be dimensionless, not ${dimText(a)}`);
+  return DIMLESS;
 };
 const op = (o: Omit<Operator, 'hash'>): Operator => ({ ...o, hash: hashOf({ id: o.id, arity: o.arity, meaning: o.meaning }) });
 const bool = (x: boolean) => (x ? 1 : 0);
@@ -99,6 +105,17 @@ export const OPERATORS: Record<OpId, Operator> = {
   lt: op({ id: 'lt', arity: 2, commutative: false, meaning: 'whether the first is below the second (one dimension); 1 or 0', dim: ([a, b]) => (same('lt', a!, b!), DIMLESS), eval: ([a, b]) => bool(a! < b!) }),
   gt: op({ id: 'gt', arity: 2, commutative: false, meaning: 'whether the first is above the second (one dimension); 1 or 0', dim: ([a, b]) => (same('gt', a!, b!), DIMLESS), eval: ([a, b]) => bool(a! > b!) }),
   and: op({ id: 'and', arity: 2, commutative: true, meaning: 'both predicates hold; 1 or 0', dim: ([a, b]) => { if (!isDimless(a!) || !isDimless(b!)) throw new DimensionError('and: predicates only'); return DIMLESS; }, eval: ([a, b]) => bool(a! !== 0 && b! !== 0) }),
+  or: op({ id: 'or', arity: 2, commutative: true, meaning: 'either predicate holds; 1 or 0', dim: ([a, b]) => { if (!isDimless(a!) || !isDimless(b!)) throw new DimensionError('or: predicates only'); return DIMLESS; }, eval: ([a, b]) => bool(a! !== 0 || b! !== 0) }),
+  exp: op({ id: 'exp', arity: 1, commutative: false, meaning: 'e to a dimensionless power', dim: ([a]) => pure('exp', a!), eval: ([a]) => Math.exp(a!) }),
+  ln: op({ id: 'ln', arity: 1, commutative: false, meaning: 'the natural logarithm of a dimensionless ratio', dim: ([a]) => pure('ln', a!), eval: ([a]) => Math.log(a!) }),
+  log2: op({ id: 'log2', arity: 1, commutative: false, meaning: 'the logarithm to base 2 of a dimensionless ratio', dim: ([a]) => pure('log2', a!), eval: ([a]) => Math.log2(a!) }),
+  log10: op({ id: 'log10', arity: 1, commutative: false, meaning: 'the logarithm to base 10 of a dimensionless ratio', dim: ([a]) => pure('log10', a!), eval: ([a]) => Math.log10(a!) }),
+  sin: op({ id: 'sin', arity: 1, commutative: false, meaning: 'the sine of an angle (dimensionless, radians)', dim: ([a]) => pure('sin', a!), eval: ([a]) => Math.sin(a!) }),
+  cos: op({ id: 'cos', arity: 1, commutative: false, meaning: 'the cosine of an angle', dim: ([a]) => pure('cos', a!), eval: ([a]) => Math.cos(a!) }),
+  tan: op({ id: 'tan', arity: 1, commutative: false, meaning: 'the tangent of an angle', dim: ([a]) => pure('tan', a!), eval: ([a]) => Math.tan(a!) }),
+  asin: op({ id: 'asin', arity: 1, commutative: false, meaning: 'the angle whose sine is a dimensionless value', dim: ([a]) => pure('asin', a!), eval: ([a]) => Math.asin(a!) }),
+  acos: op({ id: 'acos', arity: 1, commutative: false, meaning: 'the angle whose cosine is a dimensionless value', dim: ([a]) => pure('acos', a!), eval: ([a]) => Math.acos(a!) }),
+  atan: op({ id: 'atan', arity: 1, commutative: false, meaning: 'the angle whose tangent is a dimensionless value', dim: ([a]) => pure('atan', a!), eval: ([a]) => Math.atan(a!) }),
 };
 
 // ---- construction ------------------------------------------------------------------------------------------------
@@ -113,9 +130,8 @@ export function leaf(name: string, value: number | null, unit: string, origin: O
   for (const need of ORIGIN_NEEDS[origin.class]) if (!origin[need]) throw new Error(`a ${origin.class} leaf needs its ${need}: ${name}`);
   if (origin.class === 'unknown' && value !== null) throw new Error(`an unknown leaf has no value: ${name}`);
   if (origin.class !== 'unknown' && (value === null || !Number.isFinite(value))) throw new Error(`a ${origin.class} leaf needs a finite value: ${name}`);
-  const { dim } = (() => ({ dim: dimOf(unit) }))();
-  const scale = scaleOf(unit);
-  const v = value === null ? null : value * scale;
+  const { dim, scale, offset } = parseUnit(unit);
+  const v = value === null ? null : value * scale + (offset ?? 0);
   const u = uncertainty === undefined ? undefined : uncertainty * scale;
   const content = { leaf: true, class: origin.class, source: origin.source ?? null, grounds: origin.grounds ?? null, by: origin.by ?? null, value: v, dim, uncertainty: u ?? null };
   return { kind: 'leaf', name, value: v, dim, unit, origin, ...(u === undefined ? {} : { uncertainty: u }), hash: hashOf(content) };
@@ -159,6 +175,20 @@ export const ge = (a: Term, b: Term) => app('ge', [a, b]);
 export const lt = (a: Term, b: Term) => app('lt', [a, b]);
 export const gt = (a: Term, b: Term) => app('gt', [a, b]);
 export const and = (a: Term, b: Term) => app('and', [a, b]);
+export const or = (a: Term, b: Term) => app('or', [a, b]);
+export const exp = (a: Term) => app('exp', [a]);
+export const ln = (a: Term) => app('ln', [a]);
+export const log2 = (a: Term) => app('log2', [a]);
+export const log10 = (a: Term) => app('log10', [a]);
+export const sin = (a: Term) => app('sin', [a]);
+export const cos = (a: Term) => app('cos', [a]);
+export const tan = (a: Term) => app('tan', [a]);
+export const asin = (a: Term) => app('asin', [a]);
+export const acos = (a: Term) => app('acos', [a]);
+export const atan = (a: Term) => app('atan', [a]);
+export const cbrt = (a: Term) => app('pow', [a], 1 / 3);
+/** π, exact in the derivation it belongs to. */
+export const PI = (): Leaf => leaf('π', Math.PI, '1', { class: 'fundamental', source: 'mathematics: π' });
 
 // ---- canonical form ----------------------------------------------------------------------------------------------
 
@@ -239,6 +269,7 @@ export function show(t: Term): string {
     case 'lt': return `${a[0]} < ${a[1]}`;
     case 'gt': return `${a[0]} > ${a[1]}`;
     case 'and': return `${a[0]} and ${a[1]}`;
+    case 'or': return `${a[0]} or ${a[1]}`;
     default: return `${t.op}(${a.join(', ')})`;
   }
 }

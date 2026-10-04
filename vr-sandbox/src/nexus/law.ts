@@ -7,7 +7,8 @@ import { evaluate, type Derivation, type DomainCheck, type Env } from './evaluat
 import { hashOf } from './identity';
 import { varsOf, type Term } from './term';
 
-export interface Source { cite: string; kind: 'standard' | 'textbook' | 'handbook' | 'derivation' | 'measurement' | 'declaration' }
+export type SourceKind = 'standard' | 'textbook' | 'handbook' | 'derivation' | 'measurement' | 'declaration' | 'maker' | 'distributor' | 'rule of thumb' | 'press' | 'patent' | 'paper' | 'database';
+export interface Source { cite: string; kind: SourceKind; url?: string }
 export interface Port { sym: string; unit: string; name: string }
 
 export interface Law {
@@ -19,6 +20,8 @@ export interface Law {
   readonly output: Port;
   readonly term: Term;
   readonly domain: readonly DomainCheck[];
+  /** Where it holds and what it leaves out, in words (the domain predicates are the checked part). */
+  readonly valid?: string;
   readonly source: Source;
   /** A worked example, computed independently of the term (the compiler's test). */
   readonly example?: { inputs: Record<string, number>; output: number; rel?: number; from: string };

@@ -20,7 +20,9 @@ nothing of its architecture is extended again.
   term, mode, origin, identity. `dimension` (the algebra, Buckingham groups), `status` (the lattice, no default),
   `identity` (content hashes), `term` (leaves with origin classes, operators with identity, canonical form),
   `evaluate` (every evaluation a derivation record; unknown stays unknown; validity refused with the domain named),
-  `law` and `book` (laws as terms with domain, source and example; 14 so far, 3 of them the kept data's own),
+  `law` and `book` (every one of the kept 144 laws as a term, SI inside and unit conventions at the ports, with its
+  validity as predicate terms, every constant a sourced leaf, and the kept worked example reproduced; plus the
+  slice's derived laws),
   `solve` (propagation, free variables reported, contradictions kept, search over declared options under a declared
   preference), `field` (declared frame, sourced gravity, ground as a field query, the observer's window and the rigid
   domain), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
