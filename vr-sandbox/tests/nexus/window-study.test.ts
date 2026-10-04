@@ -8,7 +8,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import type { Jolt } from '../../src/nexus/realize';
 import { barOnHinge, swingIntent, swingMaterial } from '../../src/nexus/swing';
-import { windowStudy, type WindowStudy } from '../../src/nexus/study-swing';
+import { tuneSwing, windowStudy, type WindowStudy } from '../../src/nexus/study-swing';
+import { Language } from '../../src/nexus/abduce';
+import { boundOn, stale } from '../../src/nexus/tune';
 
 let J: Jolt;
 let study: WindowStudy;
@@ -23,14 +25,15 @@ const slopeOf = (xs: number[], ys: number[]) => {
   const sxx = lx.reduce((a, x) => a + (x - mx) ** 2, 0), sxy = lx.reduce((a, x, i) => a + (x - mx) * (ly[i]! - my), 0), syy = ly.reduce((a, y) => a + (y - my) ** 2, 0);
   return { slope: sxy / sxx, r2: (sxy * sxy) / (sxx * syy) };
 };
-const at = (release: number) => study.rows.filter((r) => Math.abs(r.release - release * Math.PI / 180) < 1e-9).sort((a, b) => a.tickOverPeriod - b.tickOverPeriod);
+const swept = () => study.rows.filter((r) => r.substeps === 1);
+const at = (release: number) => swept().filter((r) => Math.abs(r.release - release * Math.PI / 180) < 1e-9).sort((a, b) => a.tickOverPeriod - b.tickOverPeriod);
 
 describe('the kernel\'s contract was a law of its window', () => {
   it('the contract holds on the bar it was measured on and fails only where the window is coarse against the swing', () => {
-    expect(study.rows.length).toBe(12);
-    const failed = study.rows.filter((r) => !r.within).map((r) => `${r.barLength} m at ${Math.round(r.release * 180 / Math.PI)}°`).sort();
+    expect(swept().length).toBe(12);
+    const failed = swept().filter((r) => !r.within).map((r) => `${r.barLength} m at ${Math.round(r.release * 180 / Math.PI)}°`).sort();
     expect(failed).toEqual(['0.15 m at 30°', '0.25 m at 30°']);
-    expect(study.rows.find((r) => r.barLength === 1 && Math.abs(r.release - Math.PI / 6) < 1e-9)!.within).toBe(true);
+    expect(swept().find((r) => r.barLength === 1 && Math.abs(r.release - Math.PI / 6) < 1e-9)!.within).toBe(true);
   });
 
   it('the residual has structure: at 30° the energy lost per period is a power of the tick over the period; at 10° the kernel gains energy instead, also as a power of it', () => {
@@ -48,15 +51,25 @@ describe('the kernel\'s contract was a law of its window', () => {
     expect(periodFit.slope).toBeGreaterThan(gainFit.slope + 0.5);
   });
 
-  it('the abduction finds the observer: the simplest group that separates the outcomes is the tick over the period, times the release', () => {
-    expect(study.chosen).not.toBeNull();
-    expect(study.chosen!.group.exponents).toEqual({ tick: 1, T: -1, theta0: 1 });
+  it('the first abduction cannot tell the step the kernel integrates at from the tick the observer reads at, and names them as what to vary', () => {
+    expect(study.rounds[0]!.chosen).toBeNull();
+    expect(study.rounds[0]!.ambiguous.sort()).toEqual(['step · T^-1 · theta0', 'tick · T^-1 · theta0']);
+    expect(study.rounds[0]!.vary.sort()).toEqual(['step', 'tick']);
+  });
+
+  it('the study runs that experiment itself: the cases outside the contract again at a finer step, read at the same tick; the loss halves with the step, so the fault was the realization\'s time, not the observation\'s', () => {
+    for (const L of [0.15, 0.25]) {
+      const rows = study.rows.filter((r) => r.barLength === L && Math.abs(r.release - Math.PI / 6) < 1e-9).sort((a, b) => a.substeps - b.substeps);
+      expect(rows.map((r) => r.substeps)).toEqual([1, 2, 4]);
+      for (let i = 1; i < rows.length; i++) { expect(rows[i]!.lossPerPeriod / rows[i - 1]!.lossPerPeriod).toBeGreaterThan(0.4); expect(rows[i]!.lossPerPeriod / rows[i - 1]!.lossPerPeriod).toBeLessThan(0.6); expect(rows[i]!.tickOverPeriod).toBe(rows[0]!.tickOverPeriod); }
+      expect(rows.slice(1).every((r) => r.within)).toBe(true);
+    }
+    expect(study.rounds[1]!.chosen).toBe('step · T^-1 · theta0');
+    expect(study.chosen!.group.exponents).toEqual({ step: 1, T: -1, theta0: 1 });
     expect(study.relation).not.toBeNull();
     // the conformance bar sits inside the bound: the contract was measured where it holds
-    const bar = study.rows.find((r) => r.barLength === 1 && Math.abs(r.release - Math.PI / 6) < 1e-9)!;
-    const conformance = bar.tickOverPeriod * bar.release;
-    expect(conformance).toBeLessThanOrEqual(study.chosen!.threshold!.lo);
-    expect(conformance).toBeGreaterThan(0.003);
+    const bar = swept().find((r) => r.barLength === 1 && Math.abs(r.release - Math.PI / 6) < 1e-9)!;
+    expect(bar.stepOverPeriod * bar.release).toBeLessThanOrEqual(study.chosen!.threshold!.lo);
   });
 });
 
@@ -75,5 +88,55 @@ describe('what the language learned acts before the kernel runs', () => {
     expect(s.solution.satisfied).toBe(false);
     expect(s.solution.constraints.find((c) => c.holds === false)!.says).toMatch(/clears the floor/);
     expect(s.configuration).toBeNull();
+  });
+});
+
+describe('the tuner: detect the regime, change the representation, regenerate', () => {
+  it('a relation that speaks of the representation is solved for it: the coarsest step that keeps the group at the edge of what was observed to hold', () => {
+    const s = barOnHinge(swingIntent('the test', { barLength: 0.1, release: 45, pivotHeight: 1.1 }), swingMaterial(), J, study.language);
+    const b = boundOn(study.relation!, 'step', s.judgedOn) as { below: number };
+    const T = s.judgedOn['T']!.value!, th = s.judgedOn['theta0']!.value!;
+    expect(b.below).toBeCloseTo(study.chosen!.threshold!.lo * T / th, 12);
+  });
+
+  it('a short bar released wide: refused at the tick, solved, regenerated at a quarter of it, and kept; the step one coarser would not be admitted', () => {
+    const t = tuneSwing(J, swingIntent('the test', { barLength: 0.1, release: 45, pivotHeight: 1.1 }), study.language);
+    expect(t.path.map((p) => p.value.value)).toEqual([1 / 90, 1 / 360]);
+    expect(t.path[0]!.refusedBy).toEqual([study.relation!.name]);
+    expect(t.path[0]!.manifold.realization).toBeNull();
+    expect(t.chosen!.kept).toBe(true);
+    const b = boundOn(study.relation!, 'step', t.chosen!.manifold.judgedOn) as { below: number };
+    expect(1 / 270).toBeGreaterThan(b.below);
+    // nothing of the refused representation reaches the regenerated slice: every measurement it holds was integrated at the step chosen
+    const r = t.chosen!.manifold.realization!;
+    for (const d of [r.period, r.swingEnergyStart, r.swingEnergyEnd, ...r.samples.map((x) => x.angle)]) expect(d.window!.step).toBeCloseTo(1 / 360, 12);
+  });
+
+  it('the bar the contract was measured on stays at the tick: nothing is computed finer than the phenomenon needs', () => {
+    const t = tuneSwing(J, swingIntent('the test', { barLength: 1, release: 30 }), study.language);
+    expect(t.path.length).toBe(1);
+    expect(t.chosen!.value.value).toBe(1 / 90);
+    expect(t.chosen!.kept).toBe(true);
+  });
+
+  it('a budget below what the phenomenon needs is refused with its reason, not run coarse', () => {
+    const t = tuneSwing(J, swingIntent('the test', { barLength: 0.1, release: 45, pivotHeight: 1.1 }), study.language, 2);
+    expect(t.chosen).toBeNull();
+    expect(t.refused).toMatch(/needs step at most 0\.003\d+, and the finest available is 0\.005556/);
+  });
+
+  it('with no relation to say why, a broken contract is an experiment along the representation: finer, and kept, so the fault was there', () => {
+    const t = tuneSwing(J, swingIntent('the test', { barLength: 0.15, release: 30, pivotHeight: 1.15 }), new Language());
+    expect(t.path.map((p) => p.kept)).toEqual([false, true]);
+    expect(t.chosen!.value.value).toBeCloseTo(1 / 180, 12);
+  });
+
+  it('a slice judged under a language that has since grown is stale, and regenerated under the grown one it is judged again', () => {
+    const before = barOnHinge(swingIntent('the test', { barLength: 0.1, release: 45, pivotHeight: 1.1 }), swingMaterial(), J, new Language());
+    expect(stale(before.language, study.language)).toBe(true);
+    expect(before.realization).not.toBeNull();
+    const after = barOnHinge(swingIntent('the test', { barLength: 0.1, release: 45, pivotHeight: 1.1 }), swingMaterial(), J, study.language);
+    expect(stale(after.language, study.language)).toBe(false);
+    expect(after.refusedBy.length).toBe(1);
   });
 });

@@ -145,6 +145,10 @@ describe('the configuration space', () => {
     expect(s.language.history().supersessions.length).toBe(1);
     expect(s.language.history().relations.map((r) => r.hash)).toContain(s.relation!.hash);
     expect(s.language.all().map((r) => r.hash)).not.toContain(s.relation!.hash);
+    // only the relations in force judge: the superseded one is silent, its replacement speaks
+    const q = s.observations[0]!.quantities;
+    expect(s.language.judge(q).map((j) => j.relation.hash)).not.toContain(s.relation!.hash);
+    expect(s.language.judge(q).map((j) => j.relation.hash)).toContain(first!.superseded!.by.hash);
     expect(s.language.hash).not.toBe(before);
     // the second rests in place, observed, with less material than the catalogue's pick
     expect(second!.agreed).toBe(true);

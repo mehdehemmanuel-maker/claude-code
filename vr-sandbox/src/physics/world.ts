@@ -4244,8 +4244,18 @@ export class PhysicsWorld {
     return -(rel[0] * n.GetX() + rel[1] * n.GetY() + rel[2] * n.GetZ());
   }
 
+  /**
+   * The largest integration step a caller's generator asks for, s: the world is still read once a tick, but no
+   * substep of it is longer than this. Unset, only the world's own stiff couplings decide its substeps.
+   */
+  private requestedStep = Infinity;
+  /** Ask that no integration step exceed `step` seconds (Infinity to withdraw the request). */
+  resolveTime(step: number) { if (!(step > 0)) throw new Error('an integration step must be positive'); this.requestedStep = step; }
+  /** The integration step the world takes: its tick over its substeps. */
+  get integrationStep() { return TICK / Math.max(1, this.lastSubsteps); }
+
   private substepsNeeded(): number {
-    let n = 1;
+    let n = Number.isFinite(this.requestedStep) ? Math.max(1, Math.ceil(TICK / this.requestedStep - 1e-9)) : 1;
     for (const c of this.conns.values()) {
       if (c.status === 'broken' || c.springRigid || c.omega <= 0) continue;
       if (!c.a.body.IsActive() && !(c.b && c.b.body.IsActive())) continue;

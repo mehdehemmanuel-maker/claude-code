@@ -380,9 +380,72 @@ The same sweep found a missing invariant. No constraint said the bar must clear 
 pivot height reached the kernel and crashed. The swing system now states that constraint, and a slice is realized only
 where its constraints hold.
 
+## Round 7: the tuner, and observation as a projection
+
+The tuner is a part of the generative loop, not a reporter (src/nexus/tune.ts). A manifold is generated in a
+representation the generator may choose, judged by the language and by what it realizes, and when the judgement says
+the representation does not hold the phenomenon, the pathway changes and everything is generated again from it. The
+first representation axis it works on is time: the step a realization integrates at.
+
+**The kernel can be asked for time resolution.** It already divided its tick for stiff joints, bands and end stops,
+from their own frequencies. A free pendulum's time never entered that, so a short bar's swing was integrated at the
+full 1/90 s. The world now takes a requested largest integration step, still read once a tick
+(src/physics/world.ts). It has a ceiling of eight substeps, which is a property of the realization the tuner must read.
+
+**Self-correction found the right quantity.** The window study of round 6 had abduced "tick", but in every observation
+the kernel's integration step and the observer's reading tick were the same 1/90 s. With both among the observation's
+quantities, the first abduction is ambiguous between them and names exactly those two as what to vary. The study then
+runs that experiment itself, the failing swings again at a half and a quarter of the step, read at the same tick. The
+loss halves with the step, and the second abduction chooses the step over the period times the release. The fault was
+the realization's time resolution, not the observation's.
+
+| Integration step, 0.15 m bar at 30° | Lost per period | Readings |
+|---|---|---|
+| 1/90 s | 2.69 % | 303 |
+| 1/180 s | 1.38 % | 303 |
+| 1/360 s | 0.71 % | 303 |
+| 1/720 s | 0.36 % | 303 |
+
+**The tuner on the swing.** It generates the coarsest representation first and stops there when the language admits
+it, so the contract's own bar stays at the tick. A relation that refuses and speaks of the axis is solved for it: a
+short bar released wide is refused at the tick, solved to a quarter of it, regenerated and kept. A budget too small is
+refused with the step the phenomenon needs. With no relation to say why, a broken contract is an experiment along the
+axis: finer, and if then kept, the fault was there. Nothing of a refused representation reaches the regenerated slice,
+and a slice judged under a language that has since grown is stale.
+
+**Two faults found on the way.** The language's judge used every relation ever added, so a superseded relation still
+refused constructions; only relations in force judge now, and the beam's exploration test shows it. And the swing had
+no constraint that the bar clears the floor (round 6).
+
+**Observation is a physical projection** (src/nexus/perceive.ts). An observer is a configuration of senses: a carrier,
+a band, the least and most it registers, a window, a resolution and a latency. A person (sight, hearing, touch,
+balance, smell, taste, and the time to act) and fourteen instruments are values of those fields (src/data/observers.ts).
+Diffraction and the electron's wavelength generate the microscopes' and telescopes' resolutions. The medium between
+decides how fast each carrier crosses, so location enters the computation. No observer is handed the manifold:
+
+| Observer | Of the kernel's 1 m swing | Of water at 25 °C |
+|---|---|---|
+| a person at 3 m | late by 3 / c + 0.1 s, averaged over 1/60 s, blurred to a minute of arc | does not see its glow (7 × 10⁻²¹ W/m² sr) |
+| a person at 10 km | cannot tell it from stillness | |
+| a telescope at 10 km | resolves it | |
+| a high-speed camera | refused: the manifold is read once a tick and the bar is rigid only to windows its sound crossing is short against, so it must be generated elastic and finer | |
+| a thermal camera | | sees it bright (53 W/m² sr) |
+| an infrared spectrometer | | sees the O–H stretch as a line, though no moment of it |
+
+A frequency inside a sense's band and faster than its window is a line, the way an ear hears a pitch and an eye a
+colour. A room's carbon dioxide at a thousand parts per million reaches nothing a person has, and a sensor registers it.
+The observer is in the manifold. A rangefinder's 1 mW pushes a swinging bar by nothing it would notice, but gives a
+micrometre bead in water a thousand times its momentum in a millisecond. At that scale the observer is part of the
+dynamics.
+
+**A missing distinction, reported, not tuned.** The generated onset of visible glow is 495 K. Solids are seen to glow at
+the Draper point, 798 K. A sense's band is flat, but the eye is nearly blind at the red end, where a glowing body first
+radiates. A response across the band is missing.
+
 ## The next instrument
 
-Life across scale, by the same generator. Allometric data say that the rates of organisms scale with their mass, with
-the exponents still debated. The test is whether the levels and crossings that an organism's matter and size generate
-reproduce those exponents, or leave a residual whose structure names what is missing. Before that, the state of matter
-as a region of temperature and pressure with three states remains open from round 5.
+The deepest gap is in what matter is (docs/NEXUS-ALIGNMENT-2.md). A material is still a list of stated properties,
+not constituents bound by interactions from which those properties are coarse-grained. The next round makes the
+constituents' identities carriers (elements, charge), so that reactions, ionization and decomposition become balances
+the carrier machinery already generates. States and their changes come from the competition of binding energy with
+thermal, mechanical and field energy.

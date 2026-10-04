@@ -197,7 +197,8 @@ export class Language {
    */
   judge(quantities: Record<string, Derivation>): Judgement[] {
     const language = this.hash;
-    return this.relations.filter((r) => Object.keys(r.group.exponents).every((n) => quantities[n])).map((r) => {
+    // only the relations in force judge: a superseded one was contradicted, and its replacement speaks instead
+    return this.all().filter((r) => Object.keys(r.group.exponents).every((n) => quantities[n])).map((r) => {
       const env = Object.fromEntries(Object.keys(r.group.exponents).map((n) => [n, quantities[n]!]));
       const g = evaluate(`${r.group.text}`, r.group.term, env, { unit: '1', law: `group ${r.group.hash}` });
       const b = r.bound.value!, u = r.bound.uncertainty ?? 0;

@@ -27,6 +27,13 @@ they cross, what no scale alters, the regime numbers, the levels and what an obs
 is inside the observation: the kernel's own contract was found to be a law of its window, by an abduction that was
 given the observer's tick among the quantities.
 
+Since round 7 the tuner is a part of the generative loop. It generates the coarsest representation first, solves a
+refusing relation for the representation it needs, regenerates, and treats a broken contract with no relation to
+explain it as an experiment along the axis. Observation is a physical projection of the generated manifold: an
+observer is a configuration of senses, and none is handed the manifold. What the manifold does not yet represent is
+what matter is. A material is still a list of stated properties, not constituents bound by interactions
+(docs/NEXUS-ALIGNMENT-2.md).
+
 Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
 names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
 the generated laws are checked against, not the limit of what the language can state.
@@ -66,12 +73,24 @@ the generated laws are checked against, not the limit of what the language can s
 | The finite chart s = λ / (1 + λ) is the logistic of ln λ; only ln λ keeps the mechanisms straight | tests/nexus/scale.test.ts |
 | The kernel's contract is a law of its window; the abduction names the window itself | tests/nexus/window-study.test.ts |
 | A learned relation over the observer's window refuses a swing before the kernel runs it | tests/nexus/window-study.test.ts |
+| Given both, the abduction tells the realization's step from the observer's tick by an experiment it runs itself | tests/nexus/window-study.test.ts |
+| The tuner generates the coarsest admitted representation, solves a refusing relation for it, regenerates, and refuses a short budget | tests/nexus/window-study.test.ts |
+| Only relations in force judge: a superseded one is silent | tests/nexus/space.test.ts |
+| An observer receives a physical projection: late, averaged, blurred, in band, above its least; never the manifold | tests/nexus/perceive.test.ts |
+| An observer finer than the representation holds is told what the manifold must be generated as, not given it | tests/nexus/perceive.test.ts |
+| Water's glow is invisible to the eye and bright to a thermal camera; a fast vibration is a line to a spectrometer | tests/nexus/perceive.test.ts |
+| An observer's own light is outside a bar's dynamics and inside a micrometre bead's | tests/nexus/perceive.test.ts |
 
 ## 3. What is missing
 
 - A learned relation's evidence domain: the span of its observations. Round 6 showed why it matters, since a measured
   contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
   but a relation used beyond the span of its own observations is still not marked as a hypothesis.
+- Matter as constituents bound by interactions: identities as carriers, binding as energy and length, state as a
+  position in an energy landscape with rates across it, and each level coarse-grained from the one below
+  (docs/NEXUS-ALIGNMENT-2.md).
+- Local clocks: a realization advances everywhere at one step; the tuner refines the whole manifold, not a region.
+- A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
 - Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
@@ -86,10 +105,10 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Life across scale, by the scale generator: an organism's matter and size generate its mechanisms, and the allometric
-data test whether their levels and crossings reproduce how rates scale with mass. Then the state of matter as a region of
-temperature and pressure with three states, the second family (keeping a region at a temperature), and systems from
-elements.
+Matter as constituents bound by interactions (docs/NEXUS-ALIGNMENT-2.md). The constituents' identities become carriers,
+so a reaction is a balance. Binding becomes energy and length, so the 33 stated materials' densities, stiffnesses and
+sound speeds are tested as coarse-grainings of fewer quantities. A state becomes a position in an energy landscape,
+with rates across it. Then local clocks, life across scale, the second family and systems from elements.
 
 ## 5. Why each primitive exists
 
@@ -148,3 +167,12 @@ elements.
 | An observer: support, window, watch, information speed | what is averaged is a constant of its laws; what is slower than its watch is a condition | incompressibility, inviscidness, an inertial frame |
 | The observer's tick is a quantity of every observation it makes | a contract measured at one window is a law of that window | the kernel's 2 % per period, measured on one bar |
 | A slice is realized only where its constraints hold | a configuration that fails a constraint is refused, not run | bars that reached the floor crashed the kernel |
+| The tuner: the coarsest admitted representation, solved, regenerated | nothing computed finer than the phenomenon needs, and nothing patched | a short bar's swing integrated at the full tick |
+| A requested integration step, read once a tick | the realization's time resolution is the generator's, not a constant | the pendulum's own time never set the kernel's step |
+| The realization's step and the observer's tick are distinct quantities | two times always equal look like one, until varied apart | the abduced "tick" was the integration step |
+| Only relations in force judge | a superseded relation was contradicted | a superseded relation still refused constructions |
+| A sense: carrier, band, least and most, window, resolution, latency | an observer is a configuration, never a category | observers as named kinds |
+| The medium decides a carrier's speed | location enters the computation; the sense does not carry its own speed | sound through air and through water |
+| A series states the windows its representation holds for | an observer finer than that is told what to generate, not given invented detail | a high-speed camera on a rigid realization |
+| A line, where a sense answers a frequency faster than its window | pitch, colour and a spectrum's band are one way of receiving | the O–H stretch to a spectrometer |
+| An observer's light pushes what it lights | the observer is in the manifold | a bead in a rangefinder's beam |

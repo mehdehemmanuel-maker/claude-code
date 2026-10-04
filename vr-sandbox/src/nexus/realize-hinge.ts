@@ -46,12 +46,16 @@ export interface SwingRealization {
   swingEnergyEnd: Derivation;
   crossings: number;
   events: string[];
+  /** The step the kernel integrated at: its tick, or finer where the generator asked. */
+  integration: Derivation;
 }
 
 const val = (d: Derivation, what: string) => { if (d.value === null) throw new Error(`${what}: ${d.name} has no value (${d.status}); nothing is realized from an unknown`); return d.value; };
 
-export function realizeSwing(J: Jolt, c: RigidContract, b: SwingBodies, obs: Observer): SwingRealization {
+export function realizeSwing(J: Jolt, c: RigidContract, b: SwingBodies, obs: Observer, step?: Derivation): SwingRealization {
   const { world, ids } = openWorld(J, c, b.gravity, b.ground);
+  // the integration step is the generator's to choose: the world is still read once a tick
+  if (step) world.resolveTime(val(step, 'integration step'));
   const bindings: BodyBinding[] = [];
   const pe = extentsOf(b.pivot);
   const pivot = placePrism(world, ids, b.pivot, { kind: c.words.blockKind, material: b.pivot.material, name: b.pivot.name, frozen: true, params: { x: pe.x, y: pe.y, z: pe.z } });
@@ -73,15 +77,17 @@ export function realizeSwing(J: Jolt, c: RigidContract, b: SwingBodies, obs: Obs
   const tick = val(obs.tick, 'tick'), ticks = Math.round(val(b.watch, 'watch') / tick);
   const I = val(b.inertia, 'inertia'), m = val(b.mass, 'mass'), g = val(b.gravity, 'gravity');
   const angles: number[] = [], energies: number[] = [], events: string[] = [];
+  let stepTaken = Infinity;
   for (let i = 0; i < ticks; i++) {
     const r = world.step();
+    stepTaken = Math.min(stepTaken, world.integrationStep);
     for (const e of r.events) if (e.type === 'break' || e.type === 'fracture') events.push(`${e.type}: ${e.note}`);
     const pose = world.livePose(bar.id)!, d = rotate(pose.q, [1, 0, 0]), w = world.angularVelocity(bar.id)!;
     angles.push(Math.atan2(d[0], -d[1]));
     energies.push(0.5 * I * w[2] * w[2] + m * g * pose.p[1]);
   }
   world.destroy();
-  const window: Window = { tick, seconds: ticks * tick, instrument: c.name };
+  const window: Window = { tick, seconds: ticks * tick, instrument: c.name, ...(stepTaken < tick ? { step: stepTaken } : {}) };
   const mk = (name: string, value: number, unit: string, origin: Leaf['origin'], u?: number) => leaf(name, value, unit, origin, u);
   // the kernel resolves time to its tick and no finer: a sample is the state somewhere within its step
   const res = resolution(c.name, { t: obs.tick }, { t: obs.tick });
@@ -102,7 +108,8 @@ export function realizeSwing(J: Jolt, c: RigidContract, b: SwingBodies, obs: Obs
   const first = energies[0]! - Emin, last = Math.max(...energies.slice(-Math.round(T / tick))) - Emin;
   const swingEnergyStart = measurement('swing energy at the start', first, 'J', { instrument: `${c.name}: the energy above rest at the first tick`, window }, mk);
   const swingEnergyEnd = measurement('swing energy at the end', last, 'J', { instrument: `${c.name}: the greatest energy above rest in the last period`, window }, mk);
-  return { contract: c, bodies: bindings, window, resolution: res, samples, period, lastAmplitude, swingEnergyStart, swingEnergyEnd, crossings: n, events };
+  const integration = measurement('integration step', stepTaken, 's', { instrument: `${c.name}: its tick over the substeps it took`, window }, mk);
+  return { contract: c, bodies: bindings, window, resolution: res, samples, period, lastAmplitude, swingEnergyStart, swingEnergyEnd, crossings: n, events, integration };
 }
 
 export const hingeLeaf = (name: string, v: number, unit: string, source: string) => ofLeaf(leaf(name, v, unit, { class: 'configuration', source }));

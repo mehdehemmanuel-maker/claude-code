@@ -14,6 +14,8 @@ export interface Window {
   seconds: number;
   /** What the observer was. */
   instrument: string;
+  /** The step the realization integrated at, s, where it is finer than the tick it is read at. */
+  step?: number;
 }
 
 export interface Derivation {
@@ -60,7 +62,7 @@ export function ofLeaf(l: Leaf): Derivation {
 
 /** A measurement: a leaf of status measured, with the window it was taken in. */
 export function measurement(name: string, value: number, unit: string, m: { instrument: string; window: Window; uncertainty?: number }, leafOf: (name: string, value: number, unit: string, origin: Leaf['origin'], uncertainty?: number) => Leaf): Derivation {
-  const l = leafOf(name, value, unit, { class: 'measured', source: m.instrument, window: `${m.window.seconds} s at ${m.window.tick} s ticks` }, m.uncertainty);
+  const l = leafOf(name, value, unit, { class: 'measured', source: m.instrument, window: `${m.window.seconds} s at ${m.window.tick} s ticks${m.window.step !== undefined && m.window.step < m.window.tick ? `, integrated at ${m.window.step} s` : ''}` }, m.uncertainty);
   const d = ofLeaf(l);
   return brand({ ...d, window: m.window });
 }

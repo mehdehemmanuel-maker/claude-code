@@ -9,7 +9,8 @@ import { admitBy, materialLeaves, type MaterialLeaves } from './beam';
 import { coordinate, type Prism } from './coupling';
 import { coarse, domain, field, type Field } from './domain';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Ground, type Observer, type RigidDomain } from './field';
+import { declareFrame, flatGround, gravity, observer, rigidDomain, RIGID_BOUND, type Frame, type Ground, type Observer, type RigidDomain } from './field';
+import type { Series } from './perceive';
 import { apply } from './law';
 import { compare, Journal, type Comparison } from './observe';
 import { realizeSwing, type HingeSpec, type SwingRealization } from './realize-hinge';
@@ -124,10 +125,19 @@ export interface SwingSlice {
   admission: { coupling: string; judgement: Judgement }[];
   /** The relations of the language that refused the configuration before it was realized. */
   refusedBy: string[];
+  /** The quantities the language judged it on, the observer's among them. */
+  judgedOn: Record<string, Derivation>;
+  /** The representation it was generated in. */
+  representation: Representation;
+  /** The language it was judged under, by hash: when the language grows, the slice is stale. */
+  language: string;
   journal: Journal;
 }
 
-export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jolt, language = new Language()): SwingSlice {
+/** How a slice is represented where the generator may choose: the step the realization integrates at. */
+export interface Representation { step?: Derivation }
+
+export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jolt, language = new Language(), representation: Representation = {}): SwingSlice {
   const journal = new Journal();
   const frame = declareFrame(intent.by, 'x along the swing, y opposite gravity, z along the pin; origin on the ground under the pivot');
   const obs = observer('rigid-body kernel');
@@ -142,16 +152,19 @@ export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jo
   let configuration: SwingConfiguration | null = null, realization: SwingRealization | null = null;
   let admission: SwingSlice['admission'] = [];
   let refusedBy: string[] = [];
+  let judgedOn: Record<string, Derivation> = {};
   // a configuration is constructed only where the system's constraints hold: what fails one is refused, not realized
   if (solution.free.length === 0 && Object.values(solution.bound).every((d) => d.value !== null) && solution.satisfied !== false) {
     const bound = solution.bound;
     configuration = constructSwing(intent, material, bound, contract, frame, ground, obs);
     for (const d of [...Object.values(configuration.bodies.bar.centre!), configuration.hinge.tilt, ...Object.values(configuration.hinge.onPivot), ...Object.values(configuration.hinge.onBar), configuration.restHeight, configuration.rigid.holds]) journal.append({ kind: 'record', record: d });
     // the observer is in what is judged: a relation learned over the kernel's window speaks of its tick and the period it watches
-    const watched = { tick: obs.tick, T: bound['T']!, theta0: bound['theta0']!, E0: bound['E']!, m: bound['m']!, g: bound['g']!, d: bound['d']! };
+    // what the realization will integrate at: the step the representation asks, or the tick the observer reads at
+    const watched = { tick: obs.tick, step: representation.step ?? obs.tick, T: bound['T']!, theta0: bound['theta0']!, E0: bound['E']!, m: bound['m']!, g: bound['g']!, d: bound['d']! };
+    judgedOn = watched;
     ({ admission, refusedBy } = admitBy(language, { 'the bar on the pin, watched at the kernel\'s tick': watched }));
     if (J && configuration.rigid.rigid && !refusedBy.length) {
-      realization = realizeSwing(J, contract, { ...configuration.bodies, hinge: configuration.hinge, gravity: g, ground, watch: bound['watch']!, inertia: bound['I']!, mass: bound['m']!, restHeight: configuration.restHeight }, obs);
+      realization = realizeSwing(J, contract, { ...configuration.bodies, hinge: configuration.hinge, gravity: g, ground, watch: bound['watch']!, inertia: bound['I']!, mass: bound['m']!, restHeight: configuration.restHeight }, obs, representation.step);
       const r = realization;
       const periodCmp = compare('period', bound['T']!, r.period, { name: contract.name, relative: contract.periodError });
       comparisons.push(periodCmp);
@@ -172,7 +185,7 @@ export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jo
       for (const c of comparisons) journal.append({ kind: 'comparison', comparison: c });
     }
   }
-  return { intent, frame, observer: obs, contract, system, solution, configuration, realization, comparisons, admission, refusedBy, journal };
+  return { intent, frame, observer: obs, contract, system, solution, configuration, realization, comparisons, admission, refusedBy, judgedOn, journal, representation, language: language.hash };
 }
 
 /** A bar on a free hinge, as the person asks for it. */
@@ -193,3 +206,21 @@ export function swingIntent(by = 'the person', over: Partial<Record<'release' | 
 }
 
 export const swingMaterial = (id = 'wood.douglas-fir') => materialLeaves(id);
+
+/**
+ * The swing as the manifold holds it: the bar's tip across the line of sight over time, with the windows the
+ * representation holds for. The kernel is read once a tick, so it holds nothing between ticks; the bar is realized
+ * rigid, which holds only for windows the sound crossing it is short against.
+ */
+export function tipSeries(s: SwingSlice): Series | null {
+  if (!s.realization || !s.configuration) return null;
+  const L = s.intent.barLength.value!, r = s.realization, rigid = s.configuration.rigid;
+  return {
+    carrier: 'light', unit: 'm', kind: 'position',
+    t: r.samples.map((x) => x.t.value!), v: r.samples.map((x) => L * Math.sin(x.angle.value!)),
+    holds: [
+      { finest: r.window.tick, because: `the kernel is read once a tick (${r.window.tick} s): nothing between ticks is held` },
+      { finest: rigid.crossing.value! / RIGID_BOUND.value!, because: `the bar is realized rigid, which holds only for windows its sound crossing (${rigid.crossing.value!.toExponential(2)} s) is a tenth of or less: finer, it is elastic` },
+    ],
+  };
+}
