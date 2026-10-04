@@ -619,9 +619,32 @@ that binds is the conductor's heat against its insulation, which the generator d
 element found it. Installation rules also derate for grouping and enclosure, which this system does not hold; no claim
 is made against their tables.
 
+## Round 14: members from the loads on the faces they span
+
+The generator states the snow on the house's roof: 1400 Pa, 168 kN over the up face, whose members span 10.95 m. The
+element becomes a system of counts (src/nexus/size.ts). The number of members across the width, the spacing, the support
+lines across the span, the section, and the matter's density, stiffness and strength are its variables. Each bay takes
+the load on its strip and the member's own weight, simply supported, which is conservative for a member continuous over
+its supports. Its bending stress is held within the clear-wood strength over a declared factor of two, and its
+deflection within its bay over 360, the strictest of IBC Table 1604.3's limits for roof members. The catalogue is the
+kept lumber up to 2x8, at 12, 16 or 24 inches, with up to four support lines. The count of members is a quantity of the
+option, not a label: the width over the spacing, rounded up, plus one. Two preferences are declared in order: the fewest
+support lines, then the least timber.
+
+| Support lines | Admissible | The least timber among them |
+|---|---|---|
+| 0 | none: the stiffest kept section deflects 10.8 times what is allowed | — |
+| 1 | none | — |
+| 2 | 4 | 2x8 on edge at 24 in: 19 members, 1.46 m³ |
+| 3 | 10 | 1x6 at 16 in |
+
+At the pick the deflection is 7.80 mm against the 10.14 mm allowed, and the bending stress is 6.9 MPa against the 42.5
+MPa allowed. Stiffness binds, not strength. With no support line the roof cannot be framed in kept lumber at all: the
+span is the distinction, and the system says how many lines the span needs before any section is chosen. Graded lumber
+is given design values well below clear wood's, for its defects and the load's duration; no claim is made against those
+tables.
+
 ## The next instrument
 
-Members from the loads on the faces they span. The generator states the snow on the roof (168 kN over a 10.95 m span)
-and the wind on the walls. A member system has the number of members and their spacing, the section, the matter's
-stiffness and strength, the span and the deflection bound. That needs counts, which the language has lacked since round
-1.
+Stores from the resistance to motion through them. The generator states a store's flow; a system needs the drag
+coefficient of what moves through it, which no kept matter states. Then the second family over the generator itself.

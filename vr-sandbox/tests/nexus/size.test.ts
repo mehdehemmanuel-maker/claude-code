@@ -7,7 +7,9 @@ import { MATERIALS } from '../../src/data/materials';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { generate } from '../../src/nexus/manifold';
 import { shapeOf } from '../../src/nexus/shape';
-import { routeAcross, sizeByDropAlone, sizeConductor } from '../../src/nexus/size';
+import { routeAcross, sizeByDropAlone, sizeConductor, sizeMembers } from '../../src/nexus/size';
+import { lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
+import { gravity } from '../../src/nexus/field';
 import { leaf } from '../../src/nexus/term';
 import { house } from './inventions';
 
@@ -45,5 +47,32 @@ describe('a path for charge, sized as a system', () => {
   it('every admissible section is at least the pick: the least conductor is the least that satisfies both bounds', () => {
     const admissible = sized.choice.manifold.map((c) => c.solution.bound['A']!.value!);
     expect(Math.min(...admissible)).toBeCloseTo(16e-6, 12);
+  });
+});
+
+describe('the members across a face, sized as a system: counts, spacing, section and the support lines between', () => {
+  const members = s.elements.find((x) => x.id === 'members:inside:up')!;
+  const snow = s.elements.find((x) => x.id === 'load:the sky->inside')!;
+  const span = ofLeaf(leaf('span of the up face', members.values.find((v) => v.name === 'span')!.value, 'm', { class: 'configuration', source: 'the generator: members:inside:up' }));
+  const load = ofLeaf(leaf('snow on the up face', snow.values.find((v) => v.unit === 'Pa')!.value, 'Pa', { class: 'configuration', source: 'the generator: load:the sky->inside' }));
+  const r = sizeMembers(span, sh.x, load, materialLeaves('wood.douglas-fir'), gravity(), lumberCatalogue());
+  const at = (k: number) => r.choice.candidates.filter((c) => c.option.leaves['k']!.value === k);
+
+  it('no kept lumber spans the 10.95 m roof under its snow, nor with one support line: the stiffest clear span deflects ten times what is allowed', () => {
+    expect(at(0).some((c) => c.admissible)).toBe(false);
+    expect(at(1).some((c) => c.admissible)).toBe(false);
+    expect(Math.min(...at(0).map((c) => c.solution.bound['del']!.value! / c.solution.bound['lim']!.value!))).toBeGreaterThan(10);
+  });
+
+  it('two support lines are the fewest that frame it, and of those the least timber is 2x8 on edge at 24 inches: 19 members, deflection binding, stress far within strength', () => {
+    expect(r.choice.pick!.option.label).toBe('2x8 on edge at 24 in, 2 support lines');
+    const b = r.choice.pick!.solution.bound;
+    expect(b['n']!.value).toBe(19);
+    expect(b['del']!.value! / b['lim']!.value!).toBeGreaterThan(0.7);
+    expect(b['sig']!.value! / b['f']!.value!).toBeLessThan(0.2);
+  });
+
+  it('the count of members follows from the width and the spacing: the width over the spacing, rounded up, plus one', () => {
+    for (const c of r.choice.candidates.slice(0, 6)) expect(c.option.leaves['n']!.value).toBe(Math.ceil(sh.x.value! / c.option.leaves['s']!.value! - 1e-9) + 1);
   });
 });

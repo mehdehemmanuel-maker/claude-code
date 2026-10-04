@@ -101,6 +101,7 @@ the generated laws are checked against, not the limit of what the language can s
 | The least body that holds its temperature by its own heat: about 8 g in air, 15 kg in water, their ratio (k_w / k_a)^2.4 | tests/nexus/hold.test.ts |
 | A cell forgets a temperature difference in under a millisecond | tests/nexus/hold.test.ts |
 | A generated element becomes a system the space sizes: the house's wire is 16 mm², bound by its heat, not its stated drop | tests/nexus/size.test.ts |
+| The roof's members are counts the space sizes: two support lines, 19 members of 2x8 at 24 in; no clear span deflects within ten times its limit | tests/nexus/size.test.ts |
 
 ## 3. What is missing
 
@@ -116,7 +117,7 @@ the generated laws are checked against, not the limit of what the language can s
 - Life across scale: begun with holding a temperature (round 12); Kleiber's exponent itself is used, not explained, and the smallest mammals' residual says the production law departs at small size.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
-- Systems from elements: begun with the wire (round 13). Members need counts and spacing; stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity.
+- Systems from elements: begun with the wire (round 13) and the roof's members (round 14). Stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity; members need graded lumber's design values beside clear wood's, and the walls' members under wind.
 - Shape to resistance where a fluid carries momentum: a field over the shape, needing a fluid realization or
   observations to abduce from.
 - A matter's state as a region of temperature and pressure, with liquid and gas apart.
@@ -127,8 +128,8 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Members from the loads on the faces they span: counts and spacing, section, the matter's stiffness and strength, the
-span and the deflection bound, as one system the space sizes. Then the second family over the generator itself.
+Stores from the resistance to motion through them, and the walls' members under the wind the generator states. Then the
+second family over the generator itself.
 
 ## 5. Why each primitive exists
 
@@ -211,3 +212,4 @@ span and the deflection bound, as one system the space sizes. Then the second fa
 | Refine where the result changes, not where the region is fastest | errors accumulate where a region integrates over many of its own times | the sensor would have been refined |
 | The least conductance a body has to a still medium | holding a difference costs a power that grows with size more slowly than what a body makes | the smallest endotherms in air and in water |
 | An element is a system the space sizes | a bound is not a design; the configuration that meets every bound is derived | the wire stopped at its least conductance |
+| A count is a quantity of a configuration | how many members, and how many lines support them, follow from the width, the spacing and the span | the roof's 10.95 m had no members |
