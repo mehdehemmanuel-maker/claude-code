@@ -107,3 +107,14 @@ export const CRYSTALS: Crystal[] = [
   { element: 'Au', lattice: 'fcc', a: 4.08e-10, at: 298, cohesive: 3.81 * eV, mass: 196.97 * u, valence: 'd electrons', measured: { density: 19300, bulk: 1.732e11 } },
   { element: 'Pb', lattice: 'fcc', a: 4.95e-10, at: 298, cohesive: 2.03 * eV, mass: 207.2 * u, valence: 's and p electrons over filled d shells', measured: { density: 11340, bulk: 0.430e11 } },
 ];
+
+/** Liquid water's viscosity and density over temperature, the checks for a barrier: CRC Handbook of Chemistry and Physics. */
+export const WATER_VISCOSITY: { T: number; eta: number; rho: number }[] = [
+  { T: 273.15, eta: 1.792e-3, rho: 999.84 }, { T: 283.15, eta: 1.3059e-3, rho: 999.70 }, { T: 293.15, eta: 1.0016e-3, rho: 998.21 },
+  { T: 298.15, eta: 0.8900e-3, rho: 997.05 }, { T: 303.15, eta: 0.7972e-3, rho: 995.65 }, { T: 313.15, eta: 0.6527e-3, rho: 992.22 },
+  { T: 323.15, eta: 0.5465e-3, rho: 988.03 }, { T: 333.15, eta: 0.4660e-3, rho: 983.20 }, { T: 343.15, eta: 0.4035e-3, rho: 977.76 },
+  { T: 353.15, eta: 0.3540e-3, rho: 971.79 }, { T: 363.15, eta: 0.3142e-3, rho: 965.31 }, { T: 373.15, eta: 0.2816e-3, rho: 958.35 },
+];
+/** Water's molar mass, kg/mol (IUPAC), and its dielectric (Debye) relaxation time at 25 °C: Kaatze, J. Chem. Eng. Data 34, 371 (1989). */
+export const WATER_MOLAR_MASS = 0.018015;
+export const WATER_DEBYE_TIME = 8.27e-12;

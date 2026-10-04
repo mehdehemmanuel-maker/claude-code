@@ -94,6 +94,8 @@ the generated laws are checked against, not the limit of what the language can s
 | A crystal's density from its atoms and lattice, within 1 % where the lattice was measured warm | tests/nexus/solid.test.ts |
 | The cold-measured lattices' residual names temperature; the stiffness residual names the electrons' arrangement | tests/nexus/solid.test.ts |
 | The kernel's steel and copper stiffness pairs disagree with their metals' measured compressibility | tests/nexus/solid.test.ts |
+| A liquid's viscosity gives the time of one molecular change, the scale generator's time at the molecule's size, near the measured relaxation | tests/nexus/rate.test.ts |
+| A barrier fitted at two temperatures misses at both ends; its local value falls across the series | tests/nexus/rate.test.ts |
 
 ## 3. What is missing
 
@@ -101,9 +103,9 @@ the generated laws are checked against, not the limit of what the language can s
   contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
   but a relation used beyond the span of its own observations is still not marked as a hypothesis.
 - Matter as constituents bound by interactions: identities, binding and the Gibbs state are begun (round 8). Still
-  missing: a solid's stiffness beyond its binding scale (the electrons' arrangement), thermal expansion, a solid phase in the Gibbs picture, rates across
-  barriers (what happens during a change, beyond ionization's continuous fraction), and a heat capacity that changes
-  with temperature (named by the vapour residual).
+  missing: a solid's stiffness beyond its binding scale (the electrons' arrangement), thermal expansion, a solid phase in the Gibbs picture, a barrier that changes with temperature (named by
+  the viscosity residual; rates across barriers are begun in round 10), and a heat capacity that changes with
+  temperature (named by the vapour residual).
 - Local clocks: a realization advances everywhere at one step; the tuner refines the whole manifold, not a region.
 - A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
 - Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
@@ -120,9 +122,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Rates across barriers: a change over a barrier is attempted at kT / h and succeeds with its Boltzmann factor (Eyring).
-A liquid's viscosity then gives the molecular time of its change, tested against the spectroscopic time, and its
-temperature dependence against measured viscosities. Then local clocks, the second family and systems from elements.
+Local clocks: partition a manifold by what can cross between its parts within a step, give each part the step its own
+mechanisms need, and keep the parts consistent where something crosses. Then the second family and systems from
+elements.
 
 ## 5. Why each primitive exists
 
@@ -200,3 +202,4 @@ temperature dependence against measured viscosities. Then local clocks, the seco
 | A cell's atoms counted from its geometry | the arrangement of constituents is structure, not a stated number | densities as data |
 | Stiffness against binding over room | the only pressure an atom's binding and room make | 33 materials' moduli as data |
 | A lattice states the temperature it was measured at | a quantity's state is part of it | three alkali crystals too dense |
+| A change over a barrier: attempted at kT / h, succeeding by the barrier's Boltzmann factor | what happens during a change has a rate, not only a before and an after | phases and reactions with no time |

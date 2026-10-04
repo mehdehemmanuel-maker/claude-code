@@ -520,9 +520,29 @@ is 67.5 GPa for aluminium, against 72.2 GPa measured. Steel's pair implies 139 G
 101 GPa against copper's 137 GPa. Their stated pairs disagree with the metals' compressibility; the kept data is
 unchanged and the finding is recorded.
 
+## Round 10: what happens during a change
+
+A change that must pass over a barrier is attempted at the thermal rate kT / h and succeeds with the Boltzmann factor of
+the barrier's Gibbs energy (src/nexus/rate.ts, after Eyring). A liquid flows because its molecules change places over
+such a barrier, so its viscosity is that rate seen from the continuum. The time of one change is then the viscosity
+times one molecule's volume over kT, with Planck's constant gone. The scale generator of round 6 had already made that
+time without the theory: thermal energy over viscosity, evaluated at the molecule's size. The two agree.
+
+| Derived | Value | Measured |
+|---|---|---|
+| attempts at 25 °C | 6.2 × 10¹² per second | |
+| water's barrier, from its viscosity | 9.16 kJ/mol | |
+| one molecular change | 6.5 ps | the dielectric relaxation, 8.27 ps |
+| viscosity at 0 °C, from a barrier fitted at 25 and 50 °C | 1.57 mPa s | 1.79 mPa s |
+| at 100 °C | 0.247 mPa s | 0.282 mPa s |
+
+The fitted barrier underestimates the viscosity at both ends. Across the whole series the local activation enthalpy falls
+steadily, from 20.3 kJ/mol between 0 and 10 °C to 11.5 kJ/mol between 90 and 100 °C. The residual says the barrier itself
+changes with temperature: the network of bonds a molecule must break to move is looser in warm water.
+
 ## The next instrument
 
-What happens during a change: rates across barriers. A change over an energy barrier is attempted at the thermal rate
-kT / h and succeeds with the Boltzmann factor of the barrier (Eyring). The rate a continuum quantity shows, a liquid's
-viscosity, then gives the molecular time of the change. That time is tested against the spectroscopic one, and the
-viscosity's change with temperature against measured values.
+Local clocks. A realization still advances everywhere at one step, and the tuner refines a whole manifold. Regions that
+cannot exchange anything within a step need not share a clock. The next round partitions a manifold by what can cross
+between its parts within a step, gives each part the step its own mechanisms need, and keeps the parts consistent
+where something crosses.
