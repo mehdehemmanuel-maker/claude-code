@@ -30,7 +30,7 @@ import { ghostMaterial } from '../render/materials';
 import { placeFromWords } from '../world/place';
 import { buildSwimmer, buildWalker, swimmerFromWords, WALKERS, walkerFromWords } from '../world/creature';
 import { Herd } from '../world/herd';
-import type { Want } from '../world/mind';
+import { releaseDistance, type Want } from '../world/mind';
 
 /** A revision in words: "height ×1.25, load 200 kg, in oak". */
 function describeRevision(c: Revision): string {
@@ -657,14 +657,19 @@ export class Ego {
   private releaseWalker(words: string) {
     const app = this.app, plan = walkerFromWords(words);
     if (!plan) return;
-    // released beyond your reach by its own length, so it can turn and walk without meeting you
-    const at = this.host.frontFloor(REACH + plan.body.length), you = this.host.viewer();
+    // released where its first want is you (world/mind.ts releaseDistance): past the distance at which company outweighs curiosity, by its own length
+    const at = this.host.frontFloor(releaseDistance(plan.body.length)), you = this.host.viewer();
     const heading = Math.atan2(-(you[2] - at[2]), you[0] - at[0]);
     const kind = Object.keys(WALKERS).find((k) => WALKERS[k] === plan) ?? 'walker';
     const tag = `${kind}${++this.seq}`;
+    // it stands on the highest ground under its footprint (environmental.terrain, as every assembly does): a foot set
+    // into a rise of the sand would be thrown out of it, and the walker over
+    const r = Math.hypot(plan.body.length, plan.body.width) / 2 + plan.foot.diameter;
+    let plane = at[1];
+    for (let i = 0; i < 8; i++) plane = Math.max(plane, app.groundAt(at[0] + r * Math.cos((i * Math.PI) / 4), at[2] + r * Math.sin((i * Math.PI) / 4)));
     let w;
     try {
-      w = buildWalker(app.store, plan, [at[0], at[1] + 0.003, at[2]], heading, tag);
+      w = buildWalker(app.store, plan, [at[0], plane + 0.003, at[2]], heading, tag);
     } catch (e) {
       if (!(e instanceof ConstructionRefused)) throw e;
       this.say('warn', `I can't make ${plan.name}: ${e.refusal.name}: ${e.refusal.reason} (${e.refusal.law}).`, []);

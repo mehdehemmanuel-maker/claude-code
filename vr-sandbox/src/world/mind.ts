@@ -40,6 +40,13 @@ export interface Mind {
   closest?: { d: number; time: number };
 }
 
+/**
+ * Where a walker is released so that its first want is you: the distance at which its company urge, which grows with
+ * how far you are, first outweighs a fresh mind's curiosity by itself (it would otherwise set off to look at something
+ * and turn hard on the spot), plus its own length to walk toward you.
+ */
+export const releaseDistance = (bodyLength: number, m: Mind = newMind()): number => NEAR_YOU + 2 * m.urge.curiosity + bodyLength;
+
 export function newMind(seed = 1): Mind {
   return { fov: (240 * Math.PI) / 180, sight: 30, urge: { company: 0.5, curiosity: 0.2, rest: 0 }, doing: 'company', since: 0, goal: null, sawYou: null, said: [], seed: seed >>> 0 || 1 };
 }

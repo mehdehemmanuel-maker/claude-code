@@ -2,7 +2,7 @@
 // shortening the stride on the side it turns toward. And the herd that runs minds in the world.
 
 import { describe, expect, it } from 'vitest';
-import { bearing, headingOf, newMind, sees, strides, think, type World } from '../../src/world/mind';
+import { bearing, headingOf, newMind, releaseDistance, sees, strides, think, type World } from '../../src/world/mind';
 import { Herd } from '../../src/world/herd';
 import type { PhysicsOp } from '../../src/physics/protocol';
 import type { Pose, Vec3 } from '../../src/doc/types';
@@ -121,5 +121,16 @@ describe('a mind that gets nowhere', () => {
     expect(said).toBe('gives up and goes another way');
     expect(m.doing).toBe('curiosity');
     expect(m.goal).not.toBeNull();
+  });
+
+  it('a walker is released where its first want is you: past the distance at which company outweighs a fresh mind\'s curiosity, by its own length; nearer, it would set off to look at something', () => {
+    const m = newMind();
+    const L = 0.2;
+    const d = releaseDistance(L, m);
+    expect(d).toBeGreaterThan(1);
+    expect(releaseDistance(L, m) - releaseDistance(0, m)).toBeCloseTo(L, 9);
+    // the urge as the mind feels it (think: company = (distance - near) / 2): at the release distance less the body length it equals a fresh curiosity
+    const curious = newMind(); curious.urge.curiosity = 0.5;
+    expect(releaseDistance(L, curious) - releaseDistance(L, m)).toBeCloseTo(2 * (0.5 - m.urge.curiosity), 9);
   });
 });
