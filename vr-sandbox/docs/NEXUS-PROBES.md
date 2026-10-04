@@ -67,3 +67,60 @@ spring, a moving and a spinning mass, Fick's diffusion, a motor's torque and bac
 The motor, the gear and the wheel are one coupling. Not instances, and named as the family's edge: turbulent pipe
 friction (a conductance that depends on its own flux), hydrostatic pressure (gravity's part of a liquid's potential)
 and series networks (a composition, not a law).
+
+## Round 1b: the balance generates structure
+
+`src/nexus/manifold.ts` generates structure from wants by the carriers' balances. Every rule is about carriers,
+never about a kind of thing: a held potential exchanges its carrier with every neighbour at another potential; a
+supply comes from a reservoir always above, or from a conversion of a carrier the environment offers power in, and a
+conserved carrier is raised from a reservoir, never made; a delivered charge returns; delivered matter leaves when a
+want bounds what a region may keep; a region held in place sends all its momentum to a region at rest; a moving
+region carries its store; what is held against a varying neighbour is observed and modulated or smoothed by a
+store; a path that carries a flux within a drop has a least conductance, dissipates, sheds its heat and is opened
+above its limit. Every element carries the lineage of every want that needs it; every law it rests on is generated.
+No element names a part (a test strips the intent's own words and scans for wall, wire, motor, wheel, pump and the
+rest): recognition is the evaluator's, by strict predicates in the tests.
+
+Inspection of the first generation separated two kinds of failure. Implementation errors (fixed in the generator,
+never in a build): sinks chosen without a potential condition, so waste water drained into the water main; the
+momentum rules reached after the generic ones; the car's travel rule firing for the printer's shape; PLA delivered
+with nothing driving it; a moving region drawing from a fixed source; heat shed by where a rule was written rather
+than where the element is; alternatives shown as requirements. Missing distinctions, by inspection: one region has
+one potential at a time, so two held values are its range over time (summer air had heated the house in winter); a
+capacity is not a load (the ground's bearing pressure had been read as a load); a want holds under conditions (the
+crash speed was only in words). And a mechanical detector turns the unknown into the visible: every quantity the
+intent states that no rule read is reported.
+
+What emerges, with the numbers the balances give:
+
+| Invention | Emergent element | Number |
+|---|---|---|
+| House | air exchange for four people's breath at 1000 ppm | at least 38.6 L/s (ASHRAE 62.2's rule gives about 36) |
+| House | the charge path for 10 kW at 120 V within 6 V | at least 13.9 S, shedding 500 W, opened above it |
+| House | heat: no reservoir is always above the band | a conversion from the grid's charge |
+| House | cooling: the ground at 10 °C is always below it | a path to the ground, no power |
+| House | the momentum path to the ground | meets it over an area the 72 kPa bearing allows |
+| Car | the contact with the road | carries 6.87 m/s²; stopping at 8 m/s² is refused |
+| Car | a 50 km/h crash under 40 g | a stroke of at least 0.24 m |
+| Printer | the point that moves over the drawn shape | observed finer than 0.05 mm, held to the table |
+
+Coverage of the aspects the request names, by the evaluator's checks:
+
+| Invention | Round 0 | Round 1 | Not covered |
+|---|---|---|---|
+| House | 0 of 29 | 19 | framing, walls, doors, siding, roofing, drainage, mechanical systems, access, compatibility, construction |
+| Car | 0 of 19 | 14 | transmission, steering, mechanical interfaces, manufacturing, maintenance |
+| Printer | 0 of 16 | 11 | thermal systems, calibration, geometry, manufacturing constraints, failure modes |
+
+The failures rank the next upgrade (`lacking`): three distinctions block all three inventions.
+
+| Distinction | Inventions | Gaps | Unread quantities |
+|---|---|---|---|
+| What a region is made of | 3 | 14 | 7 |
+| Geometry: sizes, areas and shapes | 3 | 4 | 7 |
+| A process: how long a change takes | 3 | 5 | 0 |
+| Gravity in a matter's potential | 1 (house) | 5 | 0 |
+| Advection: a flow of matter carries what it holds | 1 (house) | 2 | 0 |
+| Direction: momentum is a vector | 1 (car) | 1 | 0 |
+
+One lawful refusal is not a gap: the site's estimated friction does not allow the car's stopping want.

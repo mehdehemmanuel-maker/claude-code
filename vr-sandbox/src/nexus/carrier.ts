@@ -53,7 +53,7 @@ export function matter(id: string): Carrier {
 
 export const carrierById = (id: string): Carrier => UNIVERSAL.find((c) => c.id === id) ?? matter(id);
 
-export type Role = 'content' | 'potential' | 'flux' | 'flux density' | 'content density' | 'position' | 'acceleration' | 'power';
+export type Role = 'content' | 'potential' | 'flux' | 'flux density' | 'content density' | 'capacitance' | 'conductance' | 'position' | 'acceleration' | 'power';
 
 /** The role a quantity plays in its carrier, from its unit; null when the unit is none of the carrier's. */
 export function roleOf(c: Carrier, unit: string): Role | null {
@@ -66,6 +66,8 @@ export function roleOf(c: Carrier, unit: string): Role | null {
   if (is(c.content)) return 'content';
   if (sameDim(d, perArea(c.flux))) return 'flux density';
   if (sameDim(d, perVolume(c.content))) return 'content density';
+  if (c.potential !== null && sameDim(d, divDim(dimOf(c.content), dimOf(c.potential)))) return 'capacitance';
+  if (c.potential !== null && sameDim(d, divDim(dimOf(c.flux), dimOf(c.potential)))) return 'conductance';
   if (c.id === 'momentum' && is('m')) return 'position';
   if (c.id === 'momentum' && is('m/s^2')) return 'acceleration';
   if (c.conjugate && is('W')) return 'power';

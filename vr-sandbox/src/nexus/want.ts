@@ -25,6 +25,14 @@ export interface Region {
   holds?: string[];
   /** What it produces, as rates: people make heat, carbon dioxide, vapour and waste water. */
   produces?: Record<string, Leaf>;
+  /**
+   * What each quantity is about: the carrier it belongs to, by symbol (the air's temperature is about energy, rain is
+   * water, the grid's voltage is about charge). The unit alone cannot say it: a pressure of water and a load on a
+   * roof have one dimension.
+   */
+  carriers?: Record<string, string>;
+  /** Quantities that are bounds, not things brought: what the region takes or gives at most (a bearing pressure, a service's power). */
+  limits?: string[];
 }
 
 export interface Want {
@@ -33,8 +41,12 @@ export interface Want {
   says: string;
   /** The region the want is about. */
   region: string;
-  /** The quantity, with its unit. */
-  quantity: { sym: string; unit: string; name: string };
+  /** The quantity, with its unit, and the carrier it is about when the unit does not say it. */
+  quantity: { sym: string; unit: string; name: string; carrier?: string };
+  /** For a position: what it is measured from (the road's path, the drawn shape). */
+  relativeTo?: string;
+  /** The conditions the want holds under, as quantities (a crash from 50 km/h), by symbol and carrier. */
+  condition?: Record<string, { leaf: Leaf; carrier: string }>;
   /** The band or bound: at least lo, at most hi. */
   lo?: Leaf;
   hi?: Leaf;
