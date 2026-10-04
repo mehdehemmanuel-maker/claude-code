@@ -3,7 +3,7 @@
 // is derived from the bar's inertia and measured from the kernel's lattice of ticks; the swing energy is the
 // coupling's ledger over time, and the kernel's dissipation is its contract, fixed by its own conformance test.
 
-import { AMPLITUDE_FACTOR, PHYSICAL_PENDULUM, PRISM_INERTIA, PRISM_MASS, lawById } from './book';
+import { PERIOD_FACTOR, PHYSICAL_PENDULUM, PRISM_INERTIA, PRISM_MASS, lawById } from './book';
 import { Language, type Judgement } from './abduce';
 import { admitBy, materialLeaves, type MaterialLeaves } from './beam';
 import { coordinate, type Prism } from './coupling';
@@ -51,7 +51,7 @@ export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivat
       { kind: 'term', sym: 'd', term: sub(div(v['ell']!, k(2)), v['p']!), name: 'pivot to centre of mass', grounds: 'the centre of a uniform bar is at its middle; the pin is p from the end' },
       { kind: 'law', sym: 'I', law: lawById('parallel-axis'), args: { Icm: 'Icm', m: 'm', d: 'd' } },
       { kind: 'law', sym: 'T0', law: PHYSICAL_PENDULUM, args: { I: 'I', m: 'm', g: 'g', d: 'd' } },
-      { kind: 'law', sym: 'f', law: AMPLITUDE_FACTOR, args: { theta0: 'theta0' } },
+      { kind: 'law', sym: 'f', law: PERIOD_FACTOR, args: { theta0: 'theta0' } },
       { kind: 'term', sym: 'T', term: mul(v['T0']!, v['f']!), name: 'period', grounds: 'the small-swing period lengthened by the swing' },
       { kind: 'term', sym: 'omega', term: div(mul(k(2), PI()), v['T']!), name: 'angular frequency', grounds: '2π over the period' },
       { kind: 'term', sym: 'E', term: mul(v['m']!, v['g']!, v['d']!, sub(k(1), cos(v['theta0']!))), name: 'swing energy', grounds: 'the centre of mass raised by d (1 − cos θ₀) at release, all of it potential' },

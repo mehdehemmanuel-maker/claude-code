@@ -2,7 +2,7 @@
 // each with the domain it holds in and an example checked at the book's own limits (tests/nexus/book.test.ts).
 
 import { law, type Law } from '../law';
-import { PI, add, and, div, ge, gt, k, le, leaf, max, mul, pow, sqrt, sub, variable, zero } from '../term';
+import { PI, add, and, cells, div, ge, gt, integral, k, le, leaf, lt, max, mul, pow, sin, sqrt, sub, variable, zero } from '../term';
 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };
@@ -173,8 +173,22 @@ export const PHYSICAL_PENDULUM = law({
   example: { inputs: { I: 2 / 3, m: 2, g: 9.80665, d: 0.5 }, output: 2 * Math.PI * Math.sqrt((2 / 3) / (2 * 9.80665 * 0.5)), from: 'a uniform 1 m bar of 2 kg: the simple pendulum of length 2L/3, computed independently' },
 });
 
+/** The integration angle of the pendulum's period: bound in the law, not an input. */
+const phi = variable('phi', 'rad', 'the integration angle');
+
+export const PERIOD_FACTOR = law({
+  id: 'pendulum.period-factor', name: 'Lengthening of the period with the swing, from energy conservation',
+  statement: 'A pendulum released from θ₀ swings slower than the small-swing period by (2/π) K(sin(θ₀/2)), the complete elliptic integral of the first kind: energy conservation integrated over a quarter swing, no truncation. The series 1 + θ₀²/16 + 11 θ₀⁴/3072 is its expansion.',
+  formula: 'T/T₀ = (2/π) ∫₀^{π/2} dφ / √(1 − sin²(θ₀/2) sin²φ)',
+  inputs: [{ sym: 'theta0', unit: 'rad', name: 'release angle' }], output: { sym: 'f', unit: '1', name: 'period factor' },
+  term: mul(div(k(2), PI()), integral(phi, zero('rad'), div(PI(), k(2)), div(k(1), sqrt(sub(k(1), mul(pow(sin(div(theta0, k(2))), 2), pow(sin(phi), 2))))), cells(32, 'the evaluation: 32 Simpson panels over the quarter swing; the integrand is smooth below the inverted position, and the error is measured by halving'))),
+  domain: [{ says: 'released below the inverted position: θ₀ < π, where the integral is finite', holds: lt(theta0, PI()) }],
+  source: { cite: `${PHYSICS.cite}; Landau & Lifshitz, Mechanics, §11 (the exact period of a pendulum)`, kind: 'textbook' },
+  example: { inputs: { theta0: Math.PI / 2 }, output: 1.1803406, rel: 1e-6, from: 'K(sin 45°) = 1.8540747 (Abramowitz & Stegun, table 17.1), times 2/π' },
+});
+
 export const AMPLITUDE_FACTOR = law({
-  id: 'pendulum.amplitude-factor', name: 'Lengthening of the period with the swing', statement: 'A pendulum released from θ₀ swings slower than the small-swing period by 1 + θ₀²/16 + 11 θ₀⁴/3072, the first terms of the complete elliptic integral; the next term is under 1e-4 up to 45°.', formula: 'T/T₀ = 1 + θ₀²/16 + 11 θ₀⁴/3072',
+  id: 'pendulum.amplitude-factor', name: 'Lengthening of the period with the swing (the series)', statement: 'A pendulum released from θ₀ swings slower than the small-swing period by 1 + θ₀²/16 + 11 θ₀⁴/3072, the first terms of the expansion of pendulum.period-factor; the next term is under 1e-4 up to 45°.', formula: 'T/T₀ = 1 + θ₀²/16 + 11 θ₀⁴/3072',
   inputs: [{ sym: 'theta0', unit: 'rad', name: 'release angle' }], output: { sym: 'f', unit: '1', name: 'period factor' },
   term: add(add(k(1), div(pow(theta0, 2), k(16))), div(mul(k(11), pow(theta0, 4)), k(3072))),
   domain: [{ says: 'a swing of at most 45°: the series\' next term, 173 θ₀⁶/737280, is under 1e-4 there', holds: le(theta0, leaf('45 degrees', 45, 'deg', { class: 'configuration', source: 'the truncation of the series: 173 θ⁶/737280 at 45° is 5.6e-5' })) }],
@@ -183,4 +197,4 @@ export const AMPLITUDE_FACTOR = law({
 });
 
 /** The derived laws of the slice. */
-export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, STRESS_AREA, GROUP_TENSION, GROUP_BENDING, PRISM_INERTIA, PHYSICAL_PENDULUM, AMPLITUDE_FACTOR];
+export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, STRESS_AREA, GROUP_TENSION, GROUP_BENDING, PRISM_INERTIA, PHYSICAL_PENDULUM, PERIOD_FACTOR, AMPLITUDE_FACTOR];

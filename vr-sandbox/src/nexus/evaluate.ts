@@ -5,7 +5,7 @@
 import { dimText, type Dim } from './dimension';
 import { hashOf } from './identity';
 import { carriesValue, weakest, type Status } from './status';
-import { OPERATORS, show, type Leaf, type Term } from './term';
+import { OPERATORS, bindsOf, show, type Leaf, type Term } from './term';
 
 export interface Window {
   /** The tick the observer resolves time at, s. */
@@ -72,10 +72,31 @@ export function unobserved(name: string, unit: string, because: string, window: 
 
 export interface DomainCheck { says: string; holds: Term }
 
-const numeric = (t: Term, env: Env): number | null => {
+type Values = Record<string, { readonly value: number | null }>;
+
+/**
+ * The number a term is at `env`; null when an input is unknown. A binder is integrated by composite Simpson's rule
+ * over its panels (`halve`: over half as many, to measure the discretization error); an integrand that is not
+ * finite at a node makes the integral not finite.
+ */
+const numeric = (t: Term, env: Values, halve = false): number | null => {
   if (t.kind === 'leaf') return t.value;
   if (t.kind === 'var') { const d = env[t.sym]; if (!d) throw new Error(`${t.sym} is not bound`); return d.value; }
-  const args = t.args.map((a) => numeric(a, env));
+  if (t.kind === 'bind') {
+    const lo = numeric(t.lo, env, halve), hi = numeric(t.hi, env, halve), panels = t.cells.value;
+    if (lo === null || hi === null || panels === null) return null;
+    const n = halve ? Math.max(1, Math.floor(panels / 2)) : panels;
+    const h = (hi - lo) / (2 * n);
+    let s = 0;
+    for (let i = 0; i <= 2 * n; i++) {
+      const f = numeric(t.body, { ...env, [t.over.sym]: { value: lo + i * h } }, halve);
+      if (f === null) return null;
+      if (!Number.isFinite(f)) return NaN;
+      s += (i === 0 || i === 2 * n ? 1 : i % 2 ? 4 : 2) * f;
+    }
+    return (s * h) / 3;
+  }
+  const args = t.args.map((a) => numeric(a, env, halve));
   if (args.some((a) => a === null)) return null;
   return OPERATORS[t.op].eval(args as number[], t.k);
 };
@@ -87,9 +108,10 @@ const numeric = (t: Term, env: Env): number | null => {
  */
 export function evaluate(name: string, term: Term, env: Env, cite?: { law: string; also?: string[]; domain?: DomainCheck[]; unit?: string }): Derivation {
   const inputs: Record<string, Derivation> = {};
-  const collect = (t: Term) => {
-    if (t.kind === 'var') { const d = env[t.sym]; if (!d) throw new Error(`${name}: ${t.sym} is not bound`); if (!isDerivation(d)) throw new Error(`${name}: ${t.sym} is bound to something that is not a derivation`); inputs[t.sym] = d; }
-    else if (t.kind === 'app') t.args.forEach(collect);
+  const collect = (t: Term, bound: readonly string[] = []) => {
+    if (t.kind === 'var') { if (bound.includes(t.sym)) return; const d = env[t.sym]; if (!d) throw new Error(`${name}: ${t.sym} is not bound`); if (!isDerivation(d)) throw new Error(`${name}: ${t.sym} is bound to something that is not a derivation`); inputs[t.sym] = d; }
+    else if (t.kind === 'app') t.args.forEach((a) => collect(a, bound));
+    else if (t.kind === 'bind') { collect(t.lo, bound); collect(t.hi, bound); collect(t.body, [...bound, t.over.sym]); }
   };
   collect(term);
   for (const dc of cite?.domain ?? []) collect(dc.holds);
@@ -116,6 +138,11 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
     const hi = bump(h), lo = bump(-h);
     if (hi === null || lo === null) continue;
     u2 += (((hi - lo) / (2 * h)) * d.uncertainty) ** 2;
+  }
+  // a binder's discretization error: the change when every binder's panels are halved (Simpson's error falls 16-fold, so this bounds it)
+  if (bindsOf(term).length) {
+    const coarser = numeric(term, env, true);
+    if (coarser !== null && Number.isFinite(coarser)) u2 += (value - coarser) ** 2;
   }
   if (statuses.length === 0) status = 'derived';
   return brand({ ...base, value, status, ...(u2 > 0 ? { uncertainty: Math.sqrt(u2) } : {}), hash });

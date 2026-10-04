@@ -7,7 +7,7 @@
 import { contradiction, evaluate, type Derivation } from './evaluate';
 import { apply, type Law } from './law';
 import { ofLeaf } from './evaluate';
-import { substitute, variable, type Leaf, type Term } from './term';
+import { substitute, variable, varsOf, type Leaf, type Term } from './term';
 
 export interface Variable { sym: string; unit: string; name: string }
 
@@ -114,11 +114,7 @@ export function solve(s: System): Solution {
   return { bound, free, contradictions, constraints, satisfied };
 }
 
-const termVarsOf = (t: Term, out: string[] = []): string[] => {
-  if (t.kind === 'var') out.push(t.sym);
-  else if (t.kind === 'app') for (const a of t.args) termVarsOf(a, out);
-  return out;
-};
+const termVarsOf = (t: Term, out: string[] = []): string[] => { for (const v of varsOf(t)) out.push(v.sym); return out; };
 
 const unknownLeaf = (v: Variable): Leaf => ({ kind: 'leaf', name: v.name, value: null, dim: variable(v.sym, v.unit).dim, unit: v.unit, origin: { class: 'unknown' }, hash: `unknown:${v.sym}` });
 

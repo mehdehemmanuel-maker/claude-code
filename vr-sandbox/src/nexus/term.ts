@@ -61,7 +61,25 @@ export interface App {
   readonly hash: string;
 }
 
-export type Term = Leaf | Var | App;
+/**
+ * A binder: a coordinate bound over an interval under a rule. The one way a term says "over": an integral of the
+ * body along `over` from `lo` to `hi`. The bound variable is not free in the term; `lo` and `hi` may hold free
+ * variables; the rule's resolution (`cells`, Simpson panels) is a leaf in the term, so the method and its setting
+ * are in the term's identity and in its closure, and the discretization error is measured by halving it.
+ */
+export interface Bind {
+  readonly kind: 'bind';
+  readonly rule: 'integral';
+  readonly over: Var;
+  readonly lo: Term;
+  readonly hi: Term;
+  readonly body: Term;
+  readonly cells: Leaf;
+  readonly dim: Dim;
+  readonly hash: string;
+}
+
+export type Term = Leaf | Var | App | Bind;
 
 // ---- operators: each with an identity of its own ------------------------------------------------------------------
 
@@ -133,8 +151,8 @@ export function leaf(name: string, value: number | null, unit: string, origin: O
   const { dim, scale, offset } = parseUnit(unit);
   const v = value === null ? null : value * scale + (offset ?? 0);
   const u = uncertainty === undefined ? undefined : uncertainty * scale;
-  const content = { leaf: true, class: origin.class, source: origin.source ?? null, grounds: origin.grounds ?? null, by: origin.by ?? null, window: origin.window ?? null, value: v, dim, uncertainty: u ?? null };
-  return { kind: 'leaf', name, value: v, dim, unit, origin, ...(u === undefined ? {} : { uncertainty: u }), hash: hashOf(content) };
+  const l: Omit<Leaf, 'hash'> = { kind: 'leaf', name, value: v, dim, unit, origin, ...(u === undefined ? {} : { uncertainty: u }) };
+  return { ...l, hash: hashOf(leafContent(l)) };
 }
 
 /**
@@ -166,6 +184,8 @@ export function app(id: OpId, args: Term[], kk?: number): App {
   if (args.length !== o.arity) throw new Error(`${id} takes ${o.arity} arguments, got ${args.length}`);
   if (id === 'pow' && (kk === undefined || !Number.isFinite(kk))) throw new Error('pow needs its exponent');
   const dim = o.dim(args.map((a) => a.dim), kk);
+  const bound = new Set(args.flatMap((a) => boundSyms(a)));
+  for (const a of args) for (const v of varsOf(a)) if (bound.has(v.sym)) throw new Error(`${id}: ${v.sym} is bound in one argument and free in another`);
   const t: Omit<App, 'hash'> = { kind: 'app', op: id, args, ...(kk === undefined ? {} : { k: kk }), dim };
   return { ...t, hash: hashOf(canonicalForm(t as App)) };
 }
@@ -200,6 +220,39 @@ export const cbrt = (a: Term) => app('pow', [a], 1 / 3);
 /** π, exact in the derivation it belongs to. */
 export const PI = (): Leaf => leaf('π', Math.PI, '1', { class: 'fundamental', source: 'mathematics: π' });
 
+/** The resolution of a binder's rule: Simpson panels, a configuration of the evaluation with its source. */
+export const cells = (n: number, source: string): Leaf => leaf(`${n} Simpson panels`, n, '1', { class: 'configuration', source });
+
+/**
+ * ∫ body d(over) from lo to hi. The dimension is the body's times the coordinate's. The ends have the coordinate's
+ * dimension and may not mention it; the body may not bind it again; the resolution is a dimensionless integer
+ * leaf of at least two panels (halving it measures the error).
+ */
+export function integral(over: Var, lo: Term, hi: Term, body: Term, resolution: Leaf): Bind {
+  for (const end of [lo, hi]) {
+    if (!sameDim(end.dim, over.dim)) throw new DimensionError(`∫ d${over.sym}: an end is ${dimText(end.dim)}, the coordinate ${dimText(over.dim)}`);
+    if (varsOf(end).some((v) => v.sym === over.sym)) throw new Error(`∫ d${over.sym}: an end mentions the bound coordinate`);
+  }
+  if (boundSyms(body).includes(over.sym)) throw new Error(`∫ d${over.sym}: the body binds ${over.sym} again`);
+  if (!isDimless(resolution.dim) || resolution.value === null || !Number.isInteger(resolution.value) || resolution.value < 2) throw new Error(`∫ d${over.sym}: the resolution is a whole number of at least two panels`);
+  const t: Omit<Bind, 'hash'> = { kind: 'bind', rule: 'integral', over, lo, hi, body, cells: resolution, dim: mulDim(body.dim, over.dim) };
+  return { ...t, hash: hashOf(canonicalForm(t as Bind)) };
+}
+
+/** The symbols a term binds. */
+export function boundSyms(t: Term, out: string[] = []): string[] {
+  if (t.kind === 'bind') { out.push(t.over.sym); boundSyms(t.lo, out); boundSyms(t.hi, out); boundSyms(t.body, out); }
+  else if (t.kind === 'app') for (const a of t.args) boundSyms(a, out);
+  return out;
+}
+
+/** The binders of a term, outermost first. */
+export function bindsOf(t: Term, out: Bind[] = []): Bind[] {
+  if (t.kind === 'bind') { out.push(t); bindsOf(t.lo, out); bindsOf(t.hi, out); bindsOf(t.body, out); }
+  else if (t.kind === 'app') for (const a of t.args) bindsOf(a, out);
+  return out;
+}
+
 // ---- canonical form ----------------------------------------------------------------------------------------------
 
 type Canon = unknown;
@@ -208,12 +261,14 @@ type Canon = unknown;
 function shape(t: Term): Canon {
   if (t.kind === 'leaf') return leafContent(t);
   if (t.kind === 'var') return { v: t.dim };
+  if (t.kind === 'bind') return { bind: t.rule, over: t.over.dim, lo: shape(t.lo), hi: shape(t.hi), body: shape(t.body), cells: leafContent(t.cells) };
   const args = t.args.map(shape);
   if (OPERATORS[t.op].commutative) args.sort((a, b) => (hashOf(a) < hashOf(b) ? -1 : 1));
   return { op: OPERATORS[t.op].hash, ...(t.k === undefined ? {} : { k: t.k }), args };
 }
 
-const leafContent = (l: Leaf) => ({ leaf: true, class: l.origin.class, source: l.origin.source ?? null, grounds: l.origin.grounds ?? null, by: l.origin.by ?? null, value: l.value, dim: l.dim, uncertainty: l.uncertainty ?? null });
+/** What a leaf is, for identity: its origin (class, source, grounds, by, window), value, dimension, uncertainty. Not its name. */
+const leafContent = (l: Omit<Leaf, 'hash'>) => ({ leaf: true, class: l.origin.class, source: l.origin.source ?? null, grounds: l.origin.grounds ?? null, by: l.origin.by ?? null, window: l.origin.window ?? null, value: l.value, dim: l.dim, uncertainty: l.uncertainty ?? null });
 
 /** Commutative arguments in content order, variables numbered by first appearance in that order. */
 export function canonicalForm(t: Term): Canon {
@@ -224,6 +279,7 @@ export function canonicalForm(t: Term): Canon {
       if (!order.has(x.sym)) order.set(x.sym, order.size);
       return { v: order.get(x.sym), dim: x.dim };
     }
+    if (x.kind === 'bind') return { bind: x.rule, over: walk(x.over), lo: walk(x.lo), hi: walk(x.hi), body: walk(x.body), cells: leafContent(x.cells) };
     let args = [...x.args];
     if (OPERATORS[x.op].commutative) {
       const keyed = args.map((a) => ({ a, key: hashOf(shape(a)) }));
@@ -239,6 +295,10 @@ export function canonicalForm(t: Term): Canon {
 export function varsOf(t: Term, out: Var[] = []): Var[] {
   if (t.kind === 'var') { if (!out.some((v) => v.sym === t.sym)) out.push(t); }
   else if (t.kind === 'app') for (const a of t.args) varsOf(a, out);
+  else if (t.kind === 'bind') {
+    varsOf(t.lo, out); varsOf(t.hi, out);
+    for (const v of varsOf(t.body)) if (v.sym !== t.over.sym && !out.some((w) => w.sym === v.sym)) out.push(v);
+  }
   return out;
 }
 
@@ -246,6 +306,7 @@ export function varsOf(t: Term, out: Var[] = []): Var[] {
 export function leavesOf(t: Term, out: Leaf[] = []): Leaf[] {
   if (t.kind === 'leaf') { if (!out.some((l) => l.hash === t.hash)) out.push(t); }
   else if (t.kind === 'app') for (const a of t.args) leavesOf(a, out);
+  else if (t.kind === 'bind') { leavesOf(t.lo, out); leavesOf(t.hi, out); leavesOf(t.body, out); leavesOf(t.cells, out); }
   return out;
 }
 
@@ -258,6 +319,11 @@ export function substitute(t: Term, by: Record<string, Term>): Term {
     if (!sameDim(r.dim, t.dim)) throw new DimensionError(`${t.sym} is ${dimText(t.dim)}, not ${dimText(r.dim)}`);
     return r;
   }
+  if (t.kind === 'bind') {
+    const inner = Object.fromEntries(Object.entries(by).filter(([s]) => s !== t.over.sym));
+    for (const r of Object.values(inner)) if (varsOf(r).some((v) => v.sym === t.over.sym)) throw new Error(`∫ d${t.over.sym}: a replacement would be captured by the binder`);
+    return integral(t.over, substitute(t.lo, by), substitute(t.hi, by), substitute(t.body, inner), t.cells);
+  }
   return app(t.op, t.args.map((a) => substitute(a, by)), t.k);
 }
 
@@ -265,6 +331,7 @@ export function substitute(t: Term, by: Record<string, Term>): Term {
 export function show(t: Term): string {
   if (t.kind === 'leaf') return t.name;
   if (t.kind === 'var') return t.sym;
+  if (t.kind === 'bind') return `∫[${show(t.lo)}, ${show(t.hi)}] ${show(t.body)} d${t.over.sym}`;
   const a = t.args.map(show);
   switch (t.op) {
     case 'add': return `(${a[0]} + ${a[1]})`;

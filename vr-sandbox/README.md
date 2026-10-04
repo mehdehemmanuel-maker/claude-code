@@ -1,7 +1,9 @@
 # Nexus: the restart
 
 On 4 October 2026 the application that lived here was deleted down to its kernel and its data, on purpose and with
-no sunk cost counted (the reasoning, measured, is in [docs/NEXUS-RESTART.md](docs/NEXUS-RESTART.md)). The last commit
+no sunk cost counted (the reasoning, measured, is in [docs/NEXUS-RESTART.md](docs/NEXUS-RESTART.md); the mid-restart
+alignment check against the code as written, with what is solid, at risk and missing, is
+[docs/NEXUS-ALIGNMENT-1.md](docs/NEXUS-ALIGNMENT-1.md)). The last commit
 of the whole application is `792c328`: a VR creative sandbox for the Quest 3S with an in-app engineer, a knowledge
 tree, a construction grammar, creatures and places. Everything it learned survives here as documents, data and tests;
 nothing of its architecture is extended again.
@@ -18,7 +20,12 @@ nothing of its architecture is extended again.
 - `docs`: every audit, autopsy, design and observation, including the failures that showed the way.
 - `src/nexus`: the new core, built in the order of docs/NEXUS-RESTART.md Part XXIV, on five primitives: quantity,
   term, mode, origin, identity. `dimension` (the algebra, Buckingham groups), `status` (the lattice, no default),
-  `identity` (content hashes), `term` (leaves with origin classes, operators with identity, canonical form),
+  `identity` (content hashes), `term` (leaves with origin classes, operators with identity, canonical form, and the
+  binder: ∫ body d(coordinate) between two ends, the one way a term says "over"; the bound coordinate is not free,
+  the rule's resolution is a leaf in the term so the method is in the identity and the closure, the discretization
+  error is measured by halving it; with it the pendulum's period factor is generated from energy conservation as
+  the elliptic integral instead of written as a series, the series becomes its expansion with a measured truncation,
+  and the prism's mass, section moments and inertia are one mechanism, integrals of the shape),
   `evaluate` (every evaluation a derivation record; unknown stays unknown; validity refused with the domain named),
   `law` and `book` (every one of the kept 144 laws as a term, SI inside and unit conventions at the ports, with its
   validity as predicate terms, every constant a sourced leaf, and the kept worked example reproduced; plus the
