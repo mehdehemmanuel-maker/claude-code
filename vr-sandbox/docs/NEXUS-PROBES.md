@@ -540,9 +540,40 @@ The fitted barrier underestimates the viscosity at both ends. Across the whole s
 steadily, from 20.3 kJ/mol between 0 and 10 °C to 11.5 kJ/mol between 90 and 100 °C. The residual says the barrier itself
 changes with temperature: the network of bonds a molecule must break to move is looser in warm water.
 
+## Round 11: local clocks
+
+A manifold no longer advances on one step (src/nexus/clock.ts). Each region advances at the time its own mechanisms
+need: for a stored carrier conducted across its boundaries, its capacity over all that conducts to and from it (the
+carrier family's time constant). The steps are powers of two of the finest, so the clocks meet. Across each boundary
+the side with the finer clock computes the flux and the coarser side receives exactly the content that crossed, so
+nothing is made or lost between clocks. Regions with no path between them share no clock.
+
+The probe is a room's air, its masonry walls and a sensor in the air, heated for a day (tests/nexus/clock.test.ts).
+Their own times are 10 s for the sensor, 235 s for the air and 8.1 hours for the walls.
+
+| One day | Result |
+|---|---|
+| one clock at the walls' step | the air and the sensor run away |
+| one clock at the sensor's step | every region stepped at the sensor's pace: 259,200 region-steps |
+| local clocks | energy kept to a part in 10¹⁴ across clocks |
+
+**Refining where it matters is not refining the fastest region.** The tuner starts every region at a coarse fraction
+of its own time and halves, one at a time, the step whose halving changes the result most. It refined the walls alone
+and left the sensor coarse:
+
+| Tolerance | Error against one fine clock | Region-steps |
+|---|---|---|
+| 0.05 K | 0.054 K | 22,993 |
+| 0.02 K | 0.027 K | 23,035 |
+| 0.01 K | 0.014 K | 23,119 |
+
+The fast regions follow their surroundings, so their step errors do not accumulate. The walls integrate over three of
+their own times in a day, so theirs do. The error halves with the tolerance, at under a tenth of what one clock at the
+sensor's pace takes. The realization kernel still integrates one world on one step. Its parts that exchange nothing
+could be separate worlds on separate steps, which is what this round does for a carrier's regions.
+
 ## The next instrument
 
-Local clocks. A realization still advances everywhere at one step, and the tuner refines a whole manifold. Regions that
-cannot exchange anything within a step need not share a clock. The next round partitions a manifold by what can cross
-between its parts within a step, gives each part the step its own mechanisms need, and keeps the parts consistent
-where something crosses.
+The second family: keeping a region at a temperature, across its scales and its means (a room, a cold store, an oven, an
+incubator, a cell). It exercises together what rounds 6 to 11 built: the regions' own times and clocks, the phases a
+working fluid passes through, rates, and the sensor that observes the temperature being held.

@@ -96,6 +96,8 @@ the generated laws are checked against, not the limit of what the language can s
 | The kernel's steel and copper stiffness pairs disagree with their metals' measured compressibility | tests/nexus/solid.test.ts |
 | A liquid's viscosity gives the time of one molecular change, the scale generator's time at the molecule's size, near the measured relaxation | tests/nexus/rate.test.ts |
 | A barrier fitted at two temperatures misses at both ends; its local value falls across the series | tests/nexus/rate.test.ts |
+| Each region steps at its own time; across clocks nothing is made or lost; regions with no path share no clock | tests/nexus/clock.test.ts |
+| One clock at the slowest step runs away; the tuner refines only the region whose step changes the result | tests/nexus/clock.test.ts |
 
 ## 3. What is missing
 
@@ -106,7 +108,7 @@ the generated laws are checked against, not the limit of what the language can s
   missing: a solid's stiffness beyond its binding scale (the electrons' arrangement), thermal expansion, a solid phase in the Gibbs picture, a barrier that changes with temperature (named by
   the viscosity residual; rates across barriers are begun in round 10), and a heat capacity that changes with
   temperature (named by the vapour residual).
-- Local clocks: a realization advances everywhere at one step; the tuner refines the whole manifold, not a region.
+- Local clocks in the realization kernel: a carrier's regions now step on their own clocks (round 11), but the rigid-body kernel still integrates one world on one step.
 - A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
 - Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
@@ -122,9 +124,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Local clocks: partition a manifold by what can cross between its parts within a step, give each part the step its own
-mechanisms need, and keep the parts consistent where something crosses. Then the second family and systems from
-elements.
+The second family: keeping a region at a temperature, across scales and means (a room, a cold store, an oven, an
+incubator, a cell), generated from the carriers and run on local clocks, with the working fluid's phases, rates and
+the sensor that observes what is held. Then systems from elements.
 
 ## 5. Why each primitive exists
 
@@ -203,3 +205,5 @@ elements.
 | Stiffness against binding over room | the only pressure an atom's binding and room make | 33 materials' moduli as data |
 | A lattice states the temperature it was measured at | a quantity's state is part of it | three alkali crystals too dense |
 | A change over a barrier: attempted at kT / h, succeeding by the barrier's Boltzmann factor | what happens during a change has a rate, not only a before and an after | phases and reactions with no time |
+| Local clocks: each region at its own time, the finer side owning the flux | one world on one clock is unstable at the slow step and wasteful at the fast | a heat network spanning four decades of time |
+| Refine where the result changes, not where the region is fastest | errors accumulate where a region integrates over many of its own times | the sensor would have been refined |
