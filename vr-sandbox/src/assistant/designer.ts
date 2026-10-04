@@ -25,6 +25,8 @@ export interface DesignSpec {
   count?: number;
   /** A table's aprons: rails between the legs under the top, which stop it racking when pushed sideways. */
   aprons?: boolean;
+  /** Members sized for this multiple of the load: a lesson of the stand (construct/lessons.ts), where they broke before. */
+  margin?: number;
 }
 
 /**
@@ -129,7 +131,9 @@ export function design(spec: DesignSpec, ox: number, oz: number, tag = 'd', env:
 }
 
 /** Every design as an assembly: members with roles, placed by relation (construct/assembly.ts). */
-export function structured(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
+export function structured(given: DesignSpec, ox: number, oz: number, tag: string): Structured {
+  // sized for more than it is rated for where a lesson says so; what it carries on the stand is still its rating
+  const spec: DesignSpec = given.margin && given.margin !== 1 ? { ...given, load: (given.load ?? DEFAULTS[given.what].load) * given.margin } : given;
   switch (spec.what) {
     case 'table': case 'bench': return table(spec, ox, oz, tag);
     case 'crate': return crate(spec, ox, oz, tag);

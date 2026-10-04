@@ -13,6 +13,7 @@ import { branch as tscBranch } from './native/tsc';
 import { lawGraph, type LawGraph } from './lawgraph';
 import type { Commit } from '../mind/journal';
 import { constructionCitations, constructionHash, lawOf } from '../construct/laws';
+import { lessonCitations } from '../construct/lessons';
 
 /**
  * The hash of a law: its content, the term when it has one (the same hash the research records cite, terms.lawHash),
@@ -27,7 +28,7 @@ export const lawHashes = (laws: Law[] = LAWS): Map<string, string> => new Map(la
 /** The hashes of the laws a commit cites, from the ids it carries. */
 export const hashesOfLaws = (ids: string[]): string[] => ids.map((id) => { const l = lawById(id); if (l) return hashOfLaw(l); const c = lawOf(id.replace(/^construction\./, '')); return c ? constructionHash(c) : null; }).filter((h): h is string => !!h);
 
-export interface Citation { id: string; kind: 'record' | 'derivation' | 'commit' | 'construction'; hash: string; cites: string[] }
+export interface Citation { id: string; kind: 'record' | 'derivation' | 'commit' | 'construction' | 'lesson'; hash: string; cites: string[] }
 
 /** Everything that cites something, from every source that does: the research branch's records, the law graph's derivations, the Mind's commits. */
 export function citations(opts: { commits?: Commit[]; graph?: LawGraph } = {}): Citation[] {
@@ -37,6 +38,7 @@ export function citations(opts: { commits?: Commit[]; graph?: LawGraph } = {}): 
   const g = opts.graph ?? lawGraph();
   for (const dv of g.derivations) { const outer = lawById(dv.outer), inner = lawById(dv.inner); if (outer && inner) out.push({ id: `derivation:${dv.result}`, kind: 'derivation', hash: hash(r('state', [d(dv.result), d(dv.outer), d(dv.inner)], {})), cites: [hashOfLaw(outer), hashOfLaw(inner)] }); }
   for (const c of constructionCitations()) out.push({ ...c, kind: 'construction' });
+  for (const c of lessonCitations(opts.commits ?? [])) out.push({ ...c, kind: 'lesson' });
   const commitHash = new Map<number, string>();
   for (const c of opts.commits ?? []) { const h = hash(c.item); commitHash.set(c.seq, h); out.push({ id: `commit:${c.seq}`, kind: 'commit', hash: h, cites: [...((c.data['lawHashes'] as string[] | undefined) ?? []), ...c.parents.map((p) => commitHash.get(p)).filter((x): x is string => !!x)] }); }
   return out;

@@ -9,6 +9,7 @@ import type { SimSettings } from '../doc/types';
 import type { StandResult, StandSetup } from '../physics/stand';
 import type { DesignSpec } from '../assistant/designer';
 import { investigations, last, openJournal, type Commit, type Journal } from './journal';
+import { gapsOf, lessonsOf, type Gap, type Lesson } from '../construct/lessons';
 import { Investigator, next, PHYSICS, type Action, type Clock, type Effects, type PartInfo, type Prediction, type Signature, type TestSpec } from './investigate';
 import type { Anomaly } from '../diagnostics/watchdog';
 import type { rigidDomain } from '../ganglia/native/tsc';
@@ -49,6 +50,11 @@ export class Mind {
   }
 
   /** The investigations with a legal action left. */
+  /** What failure has taught (construct/lessons.ts): every hypothesis of a construction law the stand settled. */
+  lessons(): Lesson[] { return lessonsOf(this.journal.commits); }
+  /** Every failure no law explains: a facet named in the family, not yet derived. */
+  gaps(): Gap[] { return gapsOf(this.journal.commits); }
+
   /** Every investigation not resolved or closed: those with a legal action next, and those resting on an open question (her frontier). */
   unresolved(): string[] {
     return investigations(this.journal.commits).filter((inv) => { const l = last(this.journal.commits, inv); return !!l && l.status !== 'resolved' && l.status !== 'closed'; });
@@ -112,3 +118,4 @@ export class Mind {
 export { type Commit, type Journal, MemoryJournal, IdbJournal, openJournal, of, investigations } from './journal';
 export { next, signatureOf, outcomeOf, buildTest, candidatesOf, describeChange, standLoads, standPushes, overturning, footprint, worldBox, JOINT_LIMIT, PROOF, PUSH, PHYSICS, TOLERANCE, type Action, type Effects, type Prediction, type Signature, type TestSpec, type Outcome, type Change, type PartInfo } from './investigate';
 export { sayWorking, sayChanged, sayBrief } from './say';
+export { lessonsOf, gapsOf, withLessons, lessonDiscovery, lessonCitations, sayLesson, lessonId, gapId, type Lesson, type Gap } from '../construct/lessons';

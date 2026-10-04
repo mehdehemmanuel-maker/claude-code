@@ -56,6 +56,10 @@ describe('Ego designs', () => {
     const size = (p: string) => /size=(\w+)/.exec(p)![1];
     expect(['2x2', '2x4', '4x4'].indexOf(size(heavy.forge)!)).toBeGreaterThanOrEqual(['2x2', '2x4', '4x4'].indexOf(size(light.forge)!));
     expect(light.notes.join(' ')).toContain('20 kg');
+    // a margin a lesson taught (construct/lessons.ts) sizes it for more than it is rated for
+    const taught = design({ what: 'table', load: 60, margin: 1.5 }, 0, 0);
+    expect(taught.notes.join(' ')).toContain('for 90 kg');
+    expect(thickness(taught.forge)).toBeGreaterThanOrEqual(thickness(design({ what: 'table', load: 60 }, 0, 0).forge));
   });
 
   it('a steel table stands on square tube, a wall is laid in running bond', () => {

@@ -52,7 +52,8 @@ import { foresee } from './foresight';
 import { ReportBook, troubleOf, type Trouble } from './reports';
 import { DEFAULTS, design, sizeOf, type DesignSpec } from './designer';
 import type { Revision } from './intent';
-import { JOINT_LIMIT, overturning, PUSH, standLoads, standPushes } from '../mind';
+import { JOINT_LIMIT, lessonDiscovery, overturning, PUSH, sayLesson, standLoads, standPushes, withLessons } from '../mind';
+import { ingest, isBuilt, type Report } from '../ganglia/substrate';
 import { defaultOf } from '../construct/laws';
 
 /** Where a thing made for you stands: its near face within your reach (construct/laws.ts scale.person). */
@@ -557,6 +558,7 @@ export class Ego {
     const app = this.app;
     this.mind = await Mind.open({ stand: (setup) => app.physics.stand(setup), get sim() { return app.doc.sim; }, rigid: (material, longest) => rigidDomain(material, longest) });
     const steps = await this.mind.resume();
+    this.learn();
     if (steps.length) this.say('tip', sayBrief(this.mind.journal.commits, this.mind.current()!, 'Picking up where I left off'), []);
     return this.mind;
   }
@@ -580,6 +582,7 @@ export class Ego {
     if (tip && tips) this.say('warn', `Free-standing, it tips under a firm push at the top from the ${push!.force[2] ? 'front' : 'side'}: ${Math.round(tip.takes)} N tips it and a person pushes ${PUSH} N. Anchor it to a wall, or widen its base.`, []);
     const result = await app.physics.stand(setup);
     await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag, roles), predicted: { held: !tips, uMax: Math.max(predictedU, JOINT_LIMIT), model: tips ? 'foresight: static load paths under the rated load; the push overturns it, its moment about the toe past the weight\'s' : 'foresight: static load paths under the rated load; the push is within what the base resists', laws: ['statics.load-path', 'joint.capacity', 'construction.mechanical.overturning'] }, since });
+    this.learn();
     this.say('tip', sayBrief(mind.journal.commits, inv, 'On my stand'), []);
   }
 
@@ -608,9 +611,12 @@ export class Ego {
     return `Changed: ${describeRevision(change)}. ${said}`;
   }
 
-  designIt(spec: DesignSpec, materialWord?: string): string {
+  designIt(given: DesignSpec, materialWord?: string): string {
     const app = this.app;
-    if (materialWord) spec.material = resolveMaterial('block', materialWord);
+    if (materialWord) given.material = resolveMaterial('block', materialWord);
+    // what the stand taught about this class of design goes in before it is built (construct/lessons.ts)
+    const { spec, applied } = withLessons(given, this.mind?.lessons() ?? []);
+    const learned = applied.map((l) => `${sayLesson(l)} `).join('');
     const before = new Set(Object.keys(app.doc.parts));
     // a little further off than a single part, so the whole thing is in front of you
     const [x, , z] = this.host.frontFloor(REACH + (spec.depth ?? 0.5) / 2);
@@ -628,7 +634,16 @@ export class Ego {
     const predictedU = Math.max(0, ...this.forecast().filter((f) => made.includes(app.doc.connections[f.id]?.a.part ?? '')).map((f) => f.u));
     const testing = this.mind ? " I'm testing it on my stand now." : '';
     void this.investigate({ ...spec }, made, predictedU, plan.roles).catch((e) => console.warn('the stand did not run', e));
-    return `${plan.notes.join(' ')} ${verdict}${testing}`;
+    return `${learned}${plan.notes.join(' ')} ${verdict}${testing}`;
+  }
+
+  /** What the journal has taught, in her knowledge: each lesson under the law it tested, each gap a named facet (idempotent; the substrate keeps what it has). */
+  private learn() {
+    if (!this.mind || !isBuilt()) return;
+    const d = lessonDiscovery(this.mind.journal.commits);
+    if (!d.entities.length) return;
+    const report: Report = { processed: 0, discoveredEntities: 0, discoveredRelations: 0, rejected: [], promotedManifolds: [], generators: [], constructionPaths: 0, unknowns: 0, converged: false, queued: 0, byDomain: {} };
+    ingest(substrate(), d, report);
   }
 
   /**

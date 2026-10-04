@@ -7,7 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { newDoc } from '../../src/doc/commands';
 import type { StandResult, StandSetup } from '../../src/physics/stand';
-import { MemoryJournal, Mind, next, of, sayChanged, sayWorking, type Commit } from '../../src/mind';
+import { gapsOf, lessonDiscovery, lessonId, gapId, lessonsOf, MemoryJournal, Mind, next, of, sayChanged, sayLesson, sayWorking, withLessons, type Commit } from '../../src/mind';
+import { citations, stale } from '../../src/ganglia/dependencies';
+import { constructionHash, lawOf } from '../../src/construct/laws';
+import { ingest, substrate } from '../../src/ganglia/substrate';
+import type { Report } from '../../src/ganglia/substrate';
 import { text } from '../../src/ganglia/native/text';
 
 const sim = { ...newDoc().sim, airDrag: false };
@@ -227,5 +231,60 @@ describe('the watchdog as an event of her Mind', () => {
     const again = new Mind(new MemoryJournal(journal.commits), { stand: fakeStand(), sim }, undefined, 'later');
     expect(await again.resume()).toEqual([]);
     expect(again.unresolved()).toEqual(['watch:fell:p3']);
+  });
+});
+
+describe('what failure teaches is language, not a patch (construct/lessons.ts)', () => {
+  it('a confirmed hypothesis is a lesson: read off the journal, under the law it tested in the substrate, cited by hash and stale when the law changes, and applied to the next design of that class before it is built', async () => {
+    const journal = new MemoryJournal();
+    const mind = new Mind(journal, { stand: fakeStand(), sim });
+    await mind.process(await firstEvent(fakeStand()));
+    const lessons = lessonsOf(journal.commits);
+    expect(lessons).toHaveLength(1);
+    const l = lessons[0]!;
+    expect(l).toMatchObject({ law: 'mechanical.triangulation', what: 'racking', of: 'table', change: { aprons: true }, verdict: 'confirmed' });
+    expect(mind.lessons()).toEqual(lessons);
+    // the next table takes aprons before it is built, and says why; a bench is another class, and learns nothing from it
+    const table = withLessons({ what: 'table', load: 60 }, lessons);
+    expect(table.spec).toEqual({ what: 'table', load: 60, aprons: true });
+    expect(table.applied).toEqual([l]);
+    expect(sayLesson(l)).toBe('A table like this racked on my stand before, and aprons (rails between the legs under the top) held it; this one has them from the start.');
+    expect(withLessons({ what: 'bench' }, lessons)).toEqual({ spec: { what: 'bench' }, applied: [] });
+    expect(withLessons({ what: 'table', aprons: true }, lessons).applied).toEqual([]);
+    // in the substrate: the lesson under the law it tested, with the stand as its source
+    const d = lessonDiscovery(journal.commits);
+    expect(d.entities.map((e) => e.id)).toEqual([lessonId(l)]);
+    expect(d.relations).toEqual([expect.objectContaining({ from: lessonId(l), kind: 'governed-by', to: 'construction.mechanical.triangulation' })]);
+    const sub = substrate();
+    const report: Report = { processed: 0, discoveredEntities: 0, discoveredRelations: 0, rejected: [], promotedManifolds: [], generators: [], constructionPaths: 0, unknowns: 0, converged: false, queued: 0, byDomain: {} };
+    ingest(sub, d, report);
+    const e = sub.get(lessonId(l))!;
+    expect(e.domains).toContain('lesson');
+    expect(e.says).toMatch(/on a table, racking was explained by mechanical.triangulation: aprons .* held on the stand/);
+    expect(sub.outOf(lessonId(l), 'governed-by').map((x) => x.to)).toEqual(['construction.mechanical.triangulation']);
+    // cited by hash: the lesson rests on the law's hash; the law gone or changed, the lesson is stale
+    const cits = citations({ commits: journal.commits });
+    const lesson = cits.find((c) => c.kind === 'lesson')!;
+    const triangulation = constructionHash(lawOf('mechanical.triangulation')!);
+    expect(lesson).toMatchObject({ id: `lesson:${l.seq}`, cites: [triangulation] });
+    const here = new Set(cits.map((c) => c.hash).filter((h) => h !== triangulation));
+    expect(stale(cits, here).map((c) => c.id)).toContain(`lesson:${l.seq}`);
+  });
+
+  it('a failure no law explains is a gap: named in the family it would belong to, not yet derived', async () => {
+    const journal = new MemoryJournal();
+    const mind = new Mind(journal, { stand: fakeStand(), sim });
+    const fell = { kind: 'watchdog' as const, inv: 'watch:fell:p3', anomaly: { kind: 'fell' as const, severity: 'warning' as const, id: 'p3', tick: 10, value: 0.3, limit: 0.05, detail: '0.3 m below the floor' }, part: { id: 'p3', name: 'Plank', material: 'wood.mdf', longest: 2 }, obligation: 'ML-3 (no energy without a source)', since: performance.now() };
+    await mind.process(fell);
+    const gaps = gapsOf(journal.commits);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({ inv: 'watch:fell:p3', family: 'existence' });
+    expect(gaps[0]!.what).toMatch(/^Plank \(wood\.mdf\) fell: /);
+    expect(mind.gaps()).toEqual(gaps);
+    const d = lessonDiscovery(journal.commits);
+    expect(d.entities.map((e) => e.id)).toEqual([gapId(gaps[0]!)]);
+    expect(d.entities[0]!.coverage.depth).toBe(0);
+    expect(d.relations).toEqual([expect.objectContaining({ from: gapId(gaps[0]!), kind: 'is-a', to: 'construction.existence-family' })]);
+    expect(lessonsOf(journal.commits)).toEqual([]);
   });
 });

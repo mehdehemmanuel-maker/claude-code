@@ -49,8 +49,14 @@ law. Coulomb's law gives an inverse-square spacing (1 % at ten times the distanc
 
 - Machines (grow.ts) are sized but not assembled by the solver: the ports in `blocks.ts` need frames before
   `interface.coincidence` can place a motor against its coupling and its mount against the frame.
-- Failure does not yet add a law by itself: a refusal from the gate names its law (K-5, K-8) and the Mind records the
-  anomaly, but no `ConstructionLesson` is promoted into the family from it. That is the next mechanism.
+- Failure now adds language (`construct/lessons.ts`): a belief that settled a construction law's hypothesis on a
+  class of design is a lesson, read off the journal, held in the substrate under the law it tested
+  (`construction.lesson.<law>.<class>.<seq>`, source the stand), cited by hash so a change to the law makes it stale,
+  and applied to the next design of that class before it is built (a table that racked gets aprons; members that
+  broke are sized for more), and said. A failure no law explains is a gap: `construction.gap.<investigation>.<seq>`,
+  a facet named in the family it would belong to, depth 0, so the missing law persists as a name. Not yet: a gap
+  does not write its own derivation; a refusal from the gate (K-5, K-8) is said with its law but not kept as a
+  lesson.
 - The named facets without a derivation are the measured gap, listed by `executable().named`.
 - A design the overturning law says will tip free-standing is still tested free-standing, and the Mind records the
   tilt as an anomaly against a static prediction. The stand has no wall to anchor to; when it has one, an anchored

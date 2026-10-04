@@ -65,6 +65,12 @@ test('a design tested on her stand opens an investigation that survives a reload
   expect(changed).toMatch(/^Resolved: a table for 60 kg with aprons .* holds 90 kg\. Test performed: .* at 90 kg \(1.5x, the proof load\): it held/);
   expect(changed).toMatch(/went from unmeasured to true/);
   expect(changed).toMatch(/Still uncertain: this is simulation evidence only, 1 run, never measured on a real piece/);
+  // what the stand taught goes into the next design of that class before it is built, and is said (construct/lessons.ts)
+  const again = await sb(page, (s) => s.ego.ask('build a table that holds 60 kg'));
+  expect(again).toMatch(/^A table like this racked on my stand before, and aprons \(rails between the legs under the top\) held it; this one has them from the start\. Table/);
+  expect(again).toMatch(/Aprons: .* rails between the legs under the top/);
+  await page.waitForFunction(() => { const m = (window as any).sandbox.mind; return !m.active && m.unresolved().length === 0; }, null, { timeout: 90_000 });
+  expect(await sb(page, (s) => s.mind.lessons().map((l: any) => [l.of, l.what, l.verdict]))).toEqual([['table', 'racking', 'confirmed']]);
   // what is open: the time/scale branch's frontier, read off its structures, and her own unresolved investigations
   const open = await sb(page, (s) => s.ego.ask('what is open'));
   expect(open).toMatch(/^8 open in the time\/scale branch: /);
