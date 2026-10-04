@@ -53,12 +53,17 @@ describe('a place\'s geometry generates what it implies, for every place alike',
     expect(rt.binding(placeAt.sectionS('a board', 0))!.value).toBeCloseTo(apply(RECT_MODULUS, { b: ofLeaf(given('b', 0.184, 'm')), h: ofLeaf(given('h', 0.038, 'm')) }).value!, 15);
     expect(edge / rt.binding(placeAt.sectionS('a board', 0))!.value!).toBeCloseTo(0.184 / 0.038, 9);
     expect(rt.binding(placeAt.alongGravity('a board'))!.value).toBeCloseTo(0.038, 12);
-    // what reads the turn: its extent along gravity, and each axis's second moment and modulus
-    expect(c.evaluated).toBe(7);
+    // what reads the turn: its extent along gravity and the section across its length; the turn puts gravity along
+    // its third axis, so the section across its second is generated and the one across its third taken out, never
+    // evaluated through the turn that removed it
+    expect(c.evaluated).toBe(5);
+    // the new section is a metre wide and 38 mm along gravity
+    expect(rt.binding(placeAt.sectionS('a board', 1))!.value).toBeCloseTo(apply(RECT_MODULUS, { b: ofLeaf(given('b', 1, 'm')), h: ofLeaf(given('h', 0.038, 'm')) }).value!, 15);
+    expect(rt.binding(placeAt.sectionS('a board', 2))).toBeUndefined();
     expect(rt.binding(placeAt.volume('a board'))!.hash).toBe(volume);
   });
 
-  it('its matter gives it a mass and, by the kept law, a weight; a board standing along gravity is not bent across its length, and the refusal says why', () => {
+  it('its matter gives it a mass and, by the kept law, a weight; a board standing along gravity is not bent across its length: no such section is generated, so there is nothing to refuse', () => {
     const rt = Runtime.open();
     room(rt);
     rt.admit(board([0, 0, S45, S45]));
@@ -69,7 +74,11 @@ describe('a place\'s geometry generates what it implies, for every place alike',
     expect(rt.binding(placeAt.weight('a board'))!.law).toBe(lawById('weight').hash);
     // turned a quarter about z, its length points along gravity
     expect(rt.binding(placeAt.alongGravity('a board'))!.value).toBeCloseTo(1, 12);
-    expect(rt.gaps().filter((g) => g.kind === 'refused').map((g) => (g as { at: string }).at)).toEqual([placeAt.sectionI('a board', 0), placeAt.sectionS('a board', 0)]);
+    expect(rt.binding(placeAt.sectionI('a board', 0))).toBeUndefined();
+    // across its breadth it is still a section gravity crosses: 38 mm wide and a metre along gravity
+    expect(rt.binding(placeAt.sectionS('a board', 1))!.value).toBeCloseTo(apply(RECT_MODULUS, { b: ofLeaf(given('b', 0.038, 'm')), h: ofLeaf(given('h', 1, 'm')) }).value!, 15);
+    // nothing refused; what the state lacks is only what is true of a board in the air: nothing bears it
+    expect(rt.gaps().map((g) => [g.kind, (g as { says?: string }).says])).toEqual([['undecided', 'a board is borne']]);
   });
 
   it('with no gravity measured, what depends on it waits on the domain\'s gravity; the rest is generated', () => {

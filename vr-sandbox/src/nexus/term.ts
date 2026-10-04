@@ -257,14 +257,27 @@ export function bindsOf(t: Term, out: Bind[] = []): Bind[] {
 
 type Canon = unknown;
 
-/** The structure with every variable as its dimension only (to order commutative arguments without names). */
-function shape(t: Term): Canon {
-  if (t.kind === 'leaf') return leafContent(t);
-  if (t.kind === 'var') return { v: t.dim };
-  if (t.kind === 'bind') return { bind: t.rule, over: t.over.dim, lo: shape(t.lo), hi: shape(t.hi), body: shape(t.body), cells: leafContent(t.cells) };
-  const args = t.args.map(shape);
-  if (OPERATORS[t.op].commutative) args.sort((a, b) => (hashOf(a) < hashOf(b) ? -1 : 1));
-  return { op: OPERATORS[t.op].hash, ...(t.k === undefined ? {} : { k: t.k }), args };
+/**
+ * The structure with every variable as its dimension only, as a key: what orders commutative arguments without their
+ * names. Terms are immutable, so each subterm's key is computed once and kept; a subterm's key is made of its
+ * arguments' keys, so building a term costs in proportion to its size, not to its size cubed.
+ */
+const shapeKeys = new WeakMap<Term, string>();
+function shapeKey(t: Term): string {
+  const hit = shapeKeys.get(t);
+  if (hit !== undefined) return hit;
+  let c: Canon;
+  if (t.kind === 'leaf') c = leafContent(t);
+  else if (t.kind === 'var') c = { v: t.dim };
+  else if (t.kind === 'bind') c = { bind: t.rule, over: t.over.dim, lo: shapeKey(t.lo), hi: shapeKey(t.hi), body: shapeKey(t.body), cells: leafContent(t.cells) };
+  else {
+    const args = t.args.map(shapeKey);
+    if (OPERATORS[t.op].commutative) args.sort();
+    c = { op: OPERATORS[t.op].hash, ...(t.k === undefined ? {} : { k: t.k }), args };
+  }
+  const key = hashOf(c);
+  shapeKeys.set(t, key);
+  return key;
 }
 
 /** What a leaf is, for identity: its origin (class, source, grounds, by, window), value, dimension, uncertainty. Not its name. */
@@ -284,7 +297,7 @@ export function canonicalForm(t: Term): Canon {
     if (x.kind === 'bind') return { bind: x.rule, over: walk(x.over), lo: walk(x.lo), hi: walk(x.hi), body: walk(x.body), cells: leafContent(x.cells) };
     let args = [...x.args];
     if (OPERATORS[x.op].commutative) {
-      const keyed = args.map((a) => ({ a, key: hashOf(shape(a)) }));
+      const keyed = args.map((a) => ({ a, key: shapeKey(a) }));
       keyed.sort((p, q) => (p.key < q.key ? -1 : p.key > q.key ? 1 : 0));
       args = keyed.map((p) => p.a);
     }

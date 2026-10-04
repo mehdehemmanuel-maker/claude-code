@@ -10,9 +10,10 @@
 
 import { contradiction, evaluate, ofLeaf, type Derivation, type Env } from './evaluate';
 import { Journal, type Address, type Contribution, type Sink } from './journal';
-import { ge, le, variable, type Leaf } from './term';
+import { ge, le, variable, type Leaf, type Term } from './term';
 import { hashOf } from './identity';
 import { placeLeaves, placeRelations } from './place';
+import { contactStructure } from './contact';
 import type { Law } from './law';
 import { why, type WhyNode } from './why';
 
@@ -51,6 +52,12 @@ export class Runtime {
   private readonly leaves = new Map<Address, Leaf>();
   private readonly relations = new Map<string, RelationC>();
   private readonly constraints = new Map<string, ConstraintC>();
+  /** The structure generated from present values (couplings), by id, so it can be compared with what the rules want next. */
+  private readonly structure = new Map<string, RelationC | ConstraintC>();
+  /** Coupling terms already built, by the structural decision that made them. */
+  private readonly built = new Map<string, Contribution[]>();
+  /** Places held at rest by what lies outside the domain. */
+  private readonly held = new Set<string>();
   /** The places whose geometry has generated its relations. */
   private readonly places = new Set<string>();
   /** Relations held out because they would close a loop. */
@@ -139,6 +146,45 @@ export class Runtime {
     return out;
   }
 
+  /**
+   * What a gap bears on: the constraints whose decision rests on where it is, found by following what reads that
+   * address down to the constraints that read it. A constraint's own gap bears on itself. A gap that bears on no
+   * constraint is still a lack in the state, but nothing anyone wants or the domain requires waits on it.
+   */
+  bearing(g: Gap): { constraint: string; says: string; by: string }[] {
+    const found = new Set<string>();
+    if (g.kind === 'unmet' || g.kind === 'undecided') found.add(g.constraint);
+    else {
+      const seen = new Set<Address>([g.at]), stack = [g.at];
+      while (stack.length) {
+        for (const id of this.readers.get(stack.pop()!) ?? []) {
+          if (this.constraints.has(id)) { found.add(id); continue; }
+          const r = this.relations.get(id);
+          if (r && !seen.has(r.out)) { seen.add(r.out); stack.push(r.out); }
+        }
+      }
+    }
+    return [...found].map((id) => { const c = this.constraints.get(id)!; return { constraint: id, says: c.says, by: c.by }; });
+  }
+
+  /** Whether anything in the state can bind an address: a leaf there, or a relation that derives it. */
+  derives(a: Address): boolean { return this.leaves.has(a) || (this.producers.get(a) ?? []).some((id) => !this.cyclic.has(id)); }
+
+  /** Whether a relation or a constraint was generated from the present values, rather than contributed. */
+  generated(id: string): boolean { return this.structure.has(id); }
+
+  /** The unit a relation or a constraint reads at an address it waits on, from the variable at that port. */
+  unitRead(id: string, a: Address): string | undefined {
+    const g = this.relations.get(id) ?? this.constraints.get(id);
+    if (!g) return undefined;
+    const term = g.kind === 'relation' ? g.term : g.holds;
+    const sym = Object.entries(g.ports).find(([, p]) => p === a)?.[0];
+    let unit: string | undefined;
+    const walk = (t: Term) => { if (t.kind === 'var' && t.sym === sym) unit = t.unit; else if (t.kind === 'app') t.args.forEach(walk); };
+    walk(term);
+    return unit;
+  }
+
   // ---- applying a contribution ------------------------------------------------------------------------------------
 
   private check(c: Contribution) {
@@ -147,44 +193,89 @@ export class Runtime {
   }
 
   private apply(c: Contribution): Address[] {
-    if (c.kind === 'leaf') { this.leaves.set(c.at, c.leaf); return this.settle([c.at]); }
-    if (c.kind === 'relation') { const out = this.addRelation(c); return out ? this.settle([out]) : []; }
+    const { start, fresh } = this.applyOne(c);
+    return [...new Set(this.restructure(start, fresh))];
+  }
+
+  /**
+   * Bring the structure that depends on values up to date, then settle: the couplings and sections the places'
+   * present geometry makes. What the rules want is decided first, from the leaves as they now stand, so nothing is
+   * evaluated through structure the change has already taken out; what is gone is taken out, what is new is put in,
+   * and everything the change reaches is evaluated once, in depth order. Deciding again after settling catches
+   * structure that depends on derived values; it is repeated until nothing changes.
+   */
+  private restructure(start: Address[], fresh: string[]): Address[] {
+    const changed: Address[] = [];
+    const view = { value: (a: Address) => { const l = this.leaves.get(a); return l ? l.value : this.bindings.get(a)?.value ?? null; }, places: () => [...this.places], held: (p: string) => this.held.has(p) };
+    const content = (g: RelationC | ConstraintC) => (g.kind === 'relation' ? hashOf({ out: g.out, term: g.term.hash, ports: g.ports }) : hashOf({ holds: g.holds.hash, ports: g.ports }));
+    for (let round = 0; round < 16; round++) {
+      const want = new Map(contactStructure(view, this.built).filter((g): g is RelationC | ConstraintC => g.kind === 'relation' || g.kind === 'constraint').map((g) => [g.id, g]));
+      const gone = [...this.structure.keys()].filter((id) => !want.has(id) || content(want.get(id)!) !== content(this.structure.get(id)!));
+      const added = [...want.keys()].filter((id) => !this.structure.has(id) || gone.includes(id));
+      const checks: string[] = [];
+      for (const id of gone) {
+        const g = this.structure.get(id)!;
+        this.structure.delete(id);
+        if (g.kind === 'relation') { start.push(g.out); this.dropRelation(id); fresh = fresh.filter((x) => x !== id); }
+        else { this.constraints.delete(id); this.checks.delete(id); for (const p of Object.values(g.ports)) this.readers.get(p)?.delete(id); }
+      }
+      for (const id of added) {
+        const g = want.get(id)!;
+        this.structure.set(id, g);
+        if (g.kind === 'relation') { if (this.addRelation(g)) fresh.push(id); }
+        else { this.constraints.set(id, g); for (const p of new Set(Object.values(g.ports))) this.read(p, id); checks.push(id); }
+      }
+      if (!start.length && !fresh.length && !checks.length) return changed;
+      changed.push(...this.settle(start, fresh));
+      for (const id of checks) this.evaluateConstraint(id);
+      start = []; fresh = [];
+    }
+    throw new Error('restructure: the couplings did not settle');
+  }
+
+  private dropRelation(id: string) {
+    const r = this.relations.get(id)!;
+    this.relations.delete(id); this.cyclic.delete(id); this.outputs.delete(id); this.failures.delete(id);
+    for (const p of Object.values(r.ports)) this.readers.get(p)?.delete(id);
+    this.producers.set(r.out, (this.producers.get(r.out) ?? []).filter((x) => x !== id));
+  }
+
+  /** What a contribution changes directly: the addresses it sets and the relations it puts in, none yet evaluated. */
+  private applyOne(c: Contribution): { start: Address[]; fresh: string[] } {
+    const none = { start: [] as Address[], fresh: [] as string[] };
+    if (c.kind === 'held') { this.held.add(c.place); return none; }
+    if (c.kind === 'leaf') { this.leaves.set(c.at, c.leaf); return { start: [c.at], fresh: [] }; }
+    if (c.kind === 'relation') return { start: [], fresh: this.addRelation(c) ? [c.id] : [] };
     if (c.kind === 'place') {
       // the place's numbers are leaves; what its geometry implies is generated from it, once, for every place alike
       const leaves = placeLeaves(c);
       for (const l of leaves) this.leaves.set((l as { at: Address }).at, (l as { leaf: Leaf }).leaf);
-      const outs: Address[] = [];
-      if (!this.places.has(c.id)) { this.places.add(c.id); for (const g of placeRelations(c.id)) { const o = this.addRelation(g as RelationC); if (o) outs.push(o); } }
-      return this.settle([...leaves.map((l) => (l as { at: Address }).at), ...outs]);
+      const fresh: string[] = [];
+      if (!this.places.has(c.id)) { this.places.add(c.id); for (const g of placeRelations(c.id) as RelationC[]) if (this.addRelation(g)) fresh.push(g.id); }
+      return { start: leaves.map((l) => (l as { at: Address }).at), fresh };
     }
     if (c.kind === 'constraint') {
       this.constraints.set(c.id, c);
       for (const p of new Set(Object.values(c.ports))) this.read(p, c.id);
       this.evaluateConstraint(c.id);
-      return [];
+      return none;
     }
     // a withdrawal
     const r = this.relations.get(c.id);
-    if (r) {
-      this.relations.delete(c.id); this.cyclic.delete(c.id); this.outputs.delete(c.id); this.failures.delete(c.id);
-      for (const p of Object.values(r.ports)) this.readers.get(p)?.delete(c.id);
-      this.producers.set(r.out, (this.producers.get(r.out) ?? []).filter((x) => x !== c.id));
-      return this.settle([r.out]);
-    }
+    if (r) { this.dropRelation(c.id); return { start: [r.out], fresh: [] }; }
     const k = this.constraints.get(c.id)!;
     this.constraints.delete(c.id); this.checks.delete(c.id);
     for (const p of Object.values(k.ports)) this.readers.get(p)?.delete(c.id);
-    return [];
+    return none;
   }
 
-  /** Put a relation in the store and evaluate it: its output's address, or none when it is held out as a loop. */
-  private addRelation(c: RelationC): Address | null {
-    if (this.closesLoop(c)) { this.relations.set(c.id, c); this.cyclic.add(c.id); return null; }
+  /** Put a relation in the store, to be evaluated when the change settles; false when it is held out as a loop. */
+  private addRelation(c: RelationC): boolean {
+    if (this.closesLoop(c)) { this.relations.set(c.id, c); this.cyclic.add(c.id); return false; }
     this.relations.set(c.id, c);
     for (const p of new Set(Object.values(c.ports))) this.read(p, c.id);
     this.producers.set(c.out, [...(this.producers.get(c.out) ?? []), c.id]);
-    this.refresh(c.id);
-    return c.out;
+    return true;
   }
 
   private read(a: Address, id: string) { if (!this.readers.has(a)) this.readers.set(a, new Set()); this.readers.get(a)!.add(id); }
@@ -253,9 +344,9 @@ export class Runtime {
   /**
    * Bring the addresses up to date, and everything that reads them, transitively. The relations a change reaches are
    * evaluated in order of their distance from the leaves, each once: a relation is evaluated only after every
-   * relation upstream of it that the change reached.
+   * relation upstream of it that the change reached. Relations just put in are evaluated with them.
    */
-  private settle(start: Address[]): Address[] {
+  private settle(start: Address[], fresh: string[] = []): Address[] {
     const changed: Address[] = [];
     const memo = new Map<string, number>();
     const pending = new Map<string, number>(); // relation id → depth, waiting to be evaluated
@@ -270,6 +361,7 @@ export class Runtime {
       }
     };
     for (const a of start) update(a);
+    for (const id of fresh) if (this.relations.has(id) && !this.cyclic.has(id)) pending.set(id, this.depth(id, memo));
     let guard = 0;
     while (pending.size) {
       if (++guard > 1_000_000) throw new Error('settle: propagation did not settle');

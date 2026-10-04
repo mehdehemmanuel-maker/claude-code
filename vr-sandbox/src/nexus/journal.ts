@@ -28,6 +28,8 @@ export type Contribution =
   | { kind: 'constraint'; id: string; says: string; by: string; holds: Term; ports: Record<string, Address> }
   /** A place in the domain: a box, its centre, its turn and its half-extents, every number a leaf. */
   | { kind: 'place'; id: string; centre: [Leaf, Leaf, Leaf]; turn: [Leaf, Leaf, Leaf, Leaf]; half: [Leaf, Leaf, Leaf] }
+  /** A place held at rest by what lies outside the domain (the ground under a measured floor), and who says so. */
+  | { kind: 'held'; place: string; by: string }
   /** A relation or a constraint withdrawn, with why. */
   | { kind: 'withdraw'; id: string; why: string };
 

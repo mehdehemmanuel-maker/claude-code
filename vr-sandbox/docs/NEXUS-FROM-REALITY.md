@@ -442,10 +442,24 @@ These compute real results from real inputs, within tests:
   gap as a structured term at an address.
 - **Places in the domain** (src/nexus/place.ts). A place is a box: its centre, its turn and its half-extents, every
   number a leaf, in a domain whose gravity is a measured vector. For every place alike, the runtime generates its
-  volume, its extent along gravity, its mass and weight once its matter's density is known, and the section across
-  each of its axes with that section's second moment and modulus about the line gravity bends it around. On edge, a
-  38 by 184 board's section has exactly what the kept rectangle laws give; turned flat, its modulus falls by 184 over
-  38. Nothing names a breadth or a depth. A member along gravity is refused bending, with the reason.
+  volume, its extent along gravity, its mass and weight once its matter's density is known, and the area of the
+  section across each of its axes. Where gravity has a part across a section, and only there, it also generates that
+  section's second moment and modulus about the line gravity bends it around. On edge, a 38 by 184 board's section
+  has exactly what the kept rectangle laws give; turned flat, its modulus falls by 184 over 38. Nothing names a
+  breadth or a depth.
+- **Couplings between places** (src/nexus/contact.ts, since step 3). Contacts form where faces touch. A place's weight
+  and what rests on it go down its contacts to what is held:
+  - on one contact, the place stays only if its load falls within the patch;
+  - on two, they share by moments, and neither may pull;
+  - on more, the split is a located gap (stiffness);
+  - on none, the place is not borne.
+
+  A place on two contacts bends under its own weight, and its stress follows by the kept law. Whatever takes a place
+  to be at rest is refused when it is not. The structure is re-decided from the values on every change, before
+  anything is settled.
+- **Gaps that say what they bear on** (since step 3). Each gap reaches the constraints that read its address. The
+  text channel shows first those that bear on a want or on the domain's requirements, and says when a want names an
+  address nothing holds or derives. WHY is shown as the graph a derivation is.
 - **Stopped and started again, it is the same state.** Every binding has the same identity, and only the dependents
   of a later change are evaluated (tests/nexus/runtime.test.ts, and run by hand twice on one journal file).
 
@@ -477,12 +491,16 @@ These compute a number about something that nothing runs:
 
 These are in this document and nowhere in code:
 
-- **The seven structures as structures:** one state binding with staleness; one constraint store with wants as
-  constraints; the domain with a resolution field; evolvers chosen against observers' deadlines; measurement and
-  projection channels.
-- **The one loop**, and the persistent append-only journal.
+- **The rest of the seven structures:**
+  - the domain's resolution field;
+  - evolvers chosen against observers' deadlines;
+  - measurement channels from instruments;
+  - projection channels other than text.
+
+  The state's bindings, the one loop, the persistent journal, gaps as located terms, and wants and the domain's
+  requirements as constraints in one store all run since steps 1 to 3. `Intent`, `Want` and `Region` still exist
+  beside the store.
 - **Generation of trajectories** (paths of making).
-- **Gaps as located terms.**
 - **The person in reality, and interaction.**
 
 ### Completely absent
@@ -490,7 +508,7 @@ These are in this document and nowhere in code:
 - **Continuous time in the running process.** The runtime propagates; nothing in it evolves yet.
 - **Measurement from reality:** no sensor. The text channel takes what a person types, as given or measured leaves
   with their origins.
-- **Projection:** no image, sound or text output from a running system (the workbench page was removed).
+- **Projection** other than text lines: no image or sound from a running system (the workbench page was removed).
 - **The Quest runtime.** It has been absent since the restart.
 - **Generated structure realized in physics.**
 - **Growth, containment** (one region inside another), and **the cost per bit of a realization.**
@@ -560,3 +578,89 @@ process on one journal.
    running the system shows them to be the next thing that stops it.
 
 Step 3 is couplings between places.
+
+---
+
+## 18. Step 3, executed: what running it found
+
+**What was built.** Couplings between places are generated from geometry in the running state
+(src/nexus/contact.ts):
+
+- **Contacts.** Where a face of one place faces a face of another, with their planes within the contact tolerance (an
+  assumed 1 mm leaf), their in-plane axes aligned, and an overlap greater than zero, a contact forms. It has an area
+  and a point.
+- **The load path.** A place's weight, with everything borne on it, goes down its contacts to what is held at rest
+  from outside the domain. How it is shared follows from how many contacts there are:
+  - **One contact** bears all of it, and the place stays only if its load falls within the patch.
+  - **Two contacts** share it by moments. Neither may pull.
+  - **More than two** is a located gap: the split needs stiffness, which is not generated.
+  - **None** is a located gap: the place is not borne.
+- **Bending.** A place on two contacts bends under its own weight. The largest moment is at zero shear or over a
+  contact. Its stress follows by the kept `stress.bending`, over the section that spans between the contacts.
+
+All of this is re-decided from the values whenever they change. No beam, support, floor or shelf is named anywhere.
+
+**The scene, as run.** The scene ran in the process through the text channel, on one journal across two runs:
+- the floor held by what the headset measured;
+- two fir blocks on it;
+- a 1 m board, 38 by 184, on edge across them, with 0.8 m between the contacts.
+
+| Quantity | Value | Check |
+|---|---|---|
+| Share each block bears | 18.17 N | — |
+| Moment in the board | 2.726 N·m | the kept `SELF_MOMENT` for L 0.8, Lt 1, a 0 |
+| Stress in the board | 12.7 kPa | a want of at most 42.5 MPa is met |
+
+When block B was moved to −0.2 m:
+- B's share rises to 72.7 N;
+- A's share becomes −36.3 N;
+- "a board presses on block A, never pulls" is unmet, located at that contact.
+
+**What running it found.** Six things that no test had shown.
+
+1. **Vacuous refusals.** Every place generated a bending section across each of its axes, and refused the ones along
+   gravity. So every place in the room carried refusals that meant nothing. A generic rule must be instanced only
+   where it applies, decided from the present values, as contacts are. Sections are now generated only where gravity
+   has a part across them, and a turn re-decides which.
+2. **Gaps without weight.** The floor's unknown density was listed beside the board's, though nothing anyone wants
+   and nothing the domain requires waits on it. A gap now has what it bears on: the constraints reached by following
+   what reads its address (`Runtime.bearing`). The channel orders gaps as follows:
+   1. constraints unmet;
+   2. constraints undecided;
+   3. disagreements with the evidence;
+   4. each lack that bears on a constraint, with what it bears on.
+
+   The rest are counted by place, and listed only when all are asked for.
+3. **Structure decided after propagation.** Turning the board evaluated the two sections the turn was removing,
+   before removing them: 7 evaluations, 2 of them through structure that no longer existed. Structure is now decided
+   first, from the leaves as they stand, and then everything the change reaches is settled once: 5 evaluations.
+4. **An address nothing could ever bind.** A want typed at an address no relation derives waited forever, and looked
+   exactly like a want waiting on a value still on its way. The state now knows whether anything holds or derives an
+   address (`Runtime.derives`). The channel says so, and shows what that place does hold in the unit the want reads.
+   Where a relation waits on such an address, it needs a reading or a given value.
+5. **A configuration that cannot be at rest was derived as if it were.** With the board tipping off block A, its
+   moment (8.9 N·m) and stress (41.5 kPa) were still derived. A person's want on that stress read as met. Block A's
+   load (46.8 N) was its weight less a pull. Statics derives values only of a place at rest. So every derivation that
+   takes a place to be at rest now carries rest as its domain:
+   - the load a place bears down holds only where what rests on it presses on it;
+   - a place's bending holds only where its weight falls between its contacts.
+
+   Tipped, these are refused with the reason, and the person's want is undecided, never met. The share itself stays
+   unconditioned, so the check that fails is located at the contact where it fails.
+6. **WHY printed as a tree.** About 60 lines for one stress, with every shared leaf repeated under each contact point.
+   A derivation is a graph. WHY now shows each shared part once, then refers back to it.
+
+**What it still lacks.** These are in the order running shows they stop it:
+
+- **Bending from what rests on a place** is a located gap. The moment is derived only for a place's own weight between
+  two contacts. That is a special case of one rule: the moment along a place under every force on it. Those forces
+  are its weight spread along its extent, the point loads of what rests on it at their contacts, and the reactions.
+  The largest moment is where the shear crosses zero, or over a contact. That rule replaces the own-weight case
+  rather than adding a second one.
+- **What happens to a place that cannot stay** is unanswered. Statics now says that the tipped board cannot stay, but
+  not where it goes. That needs time: an evolver realizing the generated structure, which the measured state lists as
+  absent.
+- **More than two contacts** need stiffness, which nothing generates yet.
+
+Step 4 is the general moment, replacing the own-weight special case. An evolver over generated structure follows it,
+for what statics refuses.

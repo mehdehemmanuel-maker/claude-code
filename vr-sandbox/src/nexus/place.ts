@@ -4,15 +4,17 @@
 // measured gravity, a vector leaf of the domain.
 //
 // What a place's geometry implies is generated from it by rules that hold for every place, never for a kind of
-// place. These are its volume; its extent along gravity; its mass and weight once its matter's density is known; and,
-// for each of its axes, the section across that axis, with the section's second moment and modulus about the line
-// gravity bends it around. Each is an integral of the shape relative to a direction, written as a term. A board on
+// place. These are its volume; its extent along gravity; its mass and weight once its matter's density is known; the
+// area of the section across each of its axes; and, for each section gravity has a part across, its second moment and
+// modulus about the line gravity bends it around, generated with the couplings (contact.ts) since which sections
+// those are is decided from the present values. Each is an integral of the shape relative to a direction, written as
+// a term. A board on
 // edge and a board flat differ only by how they are turned: which length is a breadth and which a depth is a
 // consequence of the direction of the load, never a name.
 
 import { WEIGHT } from './book';
 import { address, type Address, type Contribution } from './journal';
-import { abs, add, div, gt, k, mul, pow, sub, variable, type Leaf, type Term } from './term';
+import { abs, add, div, k, mul, pow, sub, variable, type Leaf, type Term } from './term';
 import { hashOf } from './identity';
 
 /** The domain's own quantities: gravity's magnitude and its direction, a unit vector in the domain's coordinates. */
@@ -50,7 +52,7 @@ export function placeLeaves(p: PlaceSpec): Contribution[] {
 const one = k(1), two = k(2);
 const sq = (t: Term) => pow(t, 2);
 /** Column i of the rotation a unit quaternion (x, y, z, w) makes: the place's axis i in the domain's coordinates. */
-function axis(q: Term[], i: number): Term[] {
+export function axis(q: Term[], i: number): Term[] {
   const [x, y, z, w] = q as [Term, Term, Term, Term];
   const R: Term[][] = [
     [sub(one, mul(two, add(sq(y), sq(z)))), mul(two, sub(mul(x, y), mul(z, w))), mul(two, add(mul(x, z), mul(y, w)))],
@@ -59,7 +61,7 @@ function axis(q: Term[], i: number): Term[] {
   ];
   return [R[0]![i]!, R[1]![i]!, R[2]![i]!];
 }
-const dot = (a: Term[], b: Term[]) => a.slice(1).reduce((s, x, j) => add(s, mul(x, b[j + 1]!)), mul(a[0]!, b[0]!));
+export const dot = (a: Term[], b: Term[]) => a.slice(1).reduce((s, x, j) => add(s, mul(x, b[j + 1]!)), mul(a[0]!, b[0]!));
 
 /**
  * The relations every place carries, generated from its geometry and the domain's gravity. They are recomputed from
@@ -85,20 +87,39 @@ export function placeRelations(id: string): Contribution[] {
   out.push(rel('mass', placeAt.mass(id), 'mass', 'kg', mul(rho, V), { rho: placeAt.density(id), V: placeAt.volume(id) }));
   const mPort = WEIGHT.inputs.find((p) => p.unit === 'kg')!.sym, gPort = WEIGHT.inputs.find((p) => p.unit === 'm/s^2')!.sym;
   out.push({ kind: 'relation', id: hashOf({ place: id, rule: 'weight' }), out: placeAt.weight(id), name: WEIGHT.output.name, unit: WEIGHT.output.unit, term: WEIGHT.term, ports: { [mPort]: placeAt.mass(id), [gPort]: GRAVITY }, law: WEIGHT.hash });
-  // across each axis, the section and its stiffness about the line gravity bends it around
+  // across each axis, the section's area; its stiffness about the line gravity bends it around is generated only
+  // where gravity has a part across it (sectionRelations), decided from the present values
   for (let i = 0; i < 3; i++) {
     const [j, kk] = [0, 1, 2].filter((x) => x !== i) as [number, number];
-    const ports = { ...hp, ...qp, ...dp };
-    const area = mul(k(4), h[j]!, h[kk]!);
-    out.push(rel(`section area ${i}`, placeAt.sectionArea(id, i), `area of the section across axis ${i + 1}`, 'm^2', area, hp));
-    const cj = along[j]!, ck = along[kk]!, across = add(sq(cj), sq(ck));
-    const why = { says: 'gravity has a part across the section: a member along gravity is pressed, not bent', holds: gt(across, k(1e-12)) };
-    // I about the line across the section perpendicular to gravity's part in it: A/3 (hj² ej² + hk² ek²), e the unit part
-    const I = div(mul(div(area, k(3)), add(mul(sq(h[j]!), sq(cj)), mul(sq(h[kk]!), sq(ck)))), across);
-    out.push(rel(`section second moment ${i}`, placeAt.sectionI(id, i), `second moment of the section across axis ${i + 1}`, 'm^4', I, ports, [why]));
-    // the outermost fibre along gravity's part: hj |ej| + hk |ek|
-    const c = div(add(mul(h[j]!, abs(cj)), mul(h[kk]!, abs(ck))), pow(across, 0.5));
-    out.push(rel(`section modulus ${i}`, placeAt.sectionS(id, i), `modulus of the section across axis ${i + 1}`, 'm^3', div(I, c), ports, [why]));
+    out.push(rel(`section area ${i}`, placeAt.sectionArea(id, i), `area of the section across axis ${i + 1}`, 'm^2', mul(k(4), h[j]!, h[kk]!), hp));
   }
   return out;
+}
+
+/**
+ * The section across a place's axis i, its second moment and modulus about the line gravity bends it around. It
+ * applies only where gravity has a part across the section, so it is generated only there: a place standing along
+ * gravity is pressed along that axis, not bent across it, and no such section is generated for it.
+ */
+export function sectionRelations(id: string, i: number): Contribution[] {
+  const q = [0, 1, 2, 3].map((j) => variable(`q${j}`, '1', `turn ${'xyzw'[j]}`));
+  const h = [0, 1, 2].map((n) => variable(`h${n}`, 'm', `half-extent along axis ${n + 1}`));
+  const d = [0, 1, 2].map((j) => variable(`d${j}`, '1', `direction of gravity ${'xyz'[j]}`));
+  const ports = { ...Object.fromEntries(q.map((v, j) => [v.sym, placeAt.turn(id, j)])), ...Object.fromEntries(h.map((v, n) => [v.sym, placeAt.half(id, n)])), ...Object.fromEntries(d.map((v, j) => [v.sym, gravityAxis(j)])) };
+  const [j, kk] = [0, 1, 2].filter((x) => x !== i) as [number, number];
+  const cj = dot(axis(q, j), d), ck = dot(axis(q, kk), d), across = add(sq(cj), sq(ck));
+  const area = mul(k(4), h[j]!, h[kk]!);
+  const rel = (rule: string, out: Address, name: string, unit: string, term: Term): Contribution => ({ kind: 'relation', id: hashOf({ place: id, rule }), out, name, unit, term, ports: pick(term, ports), law: `the geometry of a place: ${rule}` });
+  // I about the line across the section perpendicular to gravity's part in it: A/3 (hj² ej² + hk² ek²), e the unit part
+  const I = div(mul(div(area, k(3)), add(mul(sq(h[j]!), sq(cj)), mul(sq(h[kk]!), sq(ck)))), across);
+  // the outermost fibre along gravity's part: hj |ej| + hk |ek|
+  const c = div(add(mul(h[j]!, abs(cj)), mul(h[kk]!, abs(ck))), pow(across, 0.5));
+  return [rel(`section second moment ${i}`, placeAt.sectionI(id, i), `second moment of the section across axis ${i + 1}`, 'm^4', I), rel(`section modulus ${i}`, placeAt.sectionS(id, i), `modulus of the section across axis ${i + 1}`, 'm^3', div(I, c))];
+}
+
+function pick(t: Term, ports: Record<string, Address>): Record<string, Address> {
+  const syms = new Set<string>();
+  const walk = (x: Term) => { if (x.kind === 'var') syms.add(x.sym); else if (x.kind === 'app') x.args.forEach(walk); };
+  walk(t);
+  return Object.fromEntries([...syms].map((s) => [s, ports[s]!]));
 }

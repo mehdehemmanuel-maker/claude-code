@@ -110,7 +110,9 @@ the generated laws are checked against, not the limit of what the language can s
 | A change carried through moving matter takes its own time: a round stream's heated length is Fo Q ρ c / (π k), whatever its diameter; the printer now sees its bar | tests/nexus/high-bar.test.ts |
 | Information is a carrier tied by the second law (k T ln 2 per bit erased), the barrier rate (about 50 k T to hold a bit ten years) and light's speed (a microsecond's lag bounds a place to 300 m) | tests/nexus/high-bar.test.ts |
 | Nexus runs as a process on a journal: stopped and restarted it is the same state; only what reads a change is evaluated again; every gap is a term at an address | tests/nexus/runtime.test.ts, `npm run nexus` |
-| A place's geometry generates its volume, weight and sections' stiffness about the line gravity bends it around: on edge the kept rectangle laws exactly, flat 184/38 less; no breadth or depth named | tests/nexus/place.test.ts |
+| A place's geometry generates its volume, weight and sections' stiffness about the line gravity bends it around, only for the sections gravity crosses: on edge the kept rectangle laws exactly, flat 184/38 less; no breadth or depth named | tests/nexus/place.test.ts |
+| Couplings form from geometry in the running state: contacts where faces touch, weight down them to what is held, shares by moments, own-weight bending by the kept law; what takes a place to be at rest is refused when it tips, and a want on it is undecided, never met | tests/nexus/contact.test.ts, `npm run nexus` |
+| A gap says what it bears on, and the text channel shows first what a want or the domain's requirements wait on; a want at an address nothing holds or derives says so; WHY is shown as a graph | tests/nexus/contact.test.ts, tests/nexus/channel-text.test.ts |
 
 ## 3. What is missing
 
@@ -137,13 +139,12 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Nothing is built until docs/NEXUS-FROM-REALITY.md is agreed. It derives what must exist for Nexus to generate,
-interact with, observe and express reality, from reality forward, with the deleted application's failures as
-constraints. It finds that the current generator has regrown three of them inside Nexus. Structure is decided by
-TypeScript branches; gaps are sentences classified by regex; intents are authored objects. Those must change before
-anything is built on top. The first closed loop it names runs through the measured room, a person's own body as the
-want, generic generation, the kernel, projection at full scale and a measured push, with no kind, preset, menu or
-tool.
+docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
+from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
+every piece of Nexus into the seven structures. Sections 16 to 18 record each step executed, as a running process,
+with what running it found. Steps 1 to 3 run: the runtime on a journal, places in a measured domain, and couplings
+between them. Step 4 is the moment along a place under every force on it, replacing the own-weight case. An evolver
+over generated structure follows, for what statics refuses.
 
 ## 5. Why each primitive exists
 

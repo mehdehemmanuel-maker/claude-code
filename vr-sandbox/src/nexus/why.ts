@@ -66,12 +66,24 @@ export const impact = (hash: string, records: Derivation[]) => records.filter((d
 /** The records that `changed` hashes make stale: exactly those that cite one of them. */
 export const stale = (records: Derivation[], changed: string[]) => records.filter((d) => { const c = closure(d); return changed.some((h) => c.has(h)); });
 
-/** WHY as text, one line per node. */
-export function explain(n: WhyNode, indent = ''): string {
+/**
+ * WHY as text, one line per node. A derivation is a graph, not a tree: a record or a leaf several inputs rest on is
+ * shown in full where it is first reached; where it is reached again, a derived record is named as shown above and
+ * the leaves are named together on one line.
+ */
+export function explain(n: WhyNode, indent = '', seen = new Set<string>()): string {
   const v = n.value === null ? `(${n.status}${n.because ? `: ${n.because}` : ''}${n.refusal ? `: outside "${n.refusal.domain}"` : ''})` : `${fmt(n.value)} ${n.unit} [${n.status}]`;
   const by = n.origin ? ` ← ${n.origin.class}${n.origin.source ? `: ${n.origin.source}` : ''}${n.origin.grounds ? ` (${n.origin.grounds})` : ''}${n.origin.by ? ` by ${n.origin.by}` : ''}` : n.law ? ` ← ${n.law.length === 16 ? `law ${n.law}` : n.law}` : '';
   const lines = [`${indent}${n.name} = ${v}${by}`];
-  for (const [s, c] of Object.entries(n.inputs)) lines.push(explain(c, `${indent}  ${s}: `));
+  const derived = Object.keys(n.inputs).length > 0;
+  if (derived && seen.has(n.hash)) return `${lines[0]} (shown above)`;
+  seen.add(n.hash);
+  const again: string[] = [];
+  for (const [s, c] of Object.entries(n.inputs)) {
+    if (!Object.keys(c.inputs).length && seen.has(c.hash)) { again.push(`${s}: ${c.name}`); continue; }
+    lines.push(explain(c, `${indent}  ${s}: `, seen));
+  }
+  if (again.length) lines.push(`${indent}  and, shown above: ${again.join('; ')}`);
   return lines.join('\n');
 }
 
