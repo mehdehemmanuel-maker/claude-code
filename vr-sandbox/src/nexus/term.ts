@@ -268,6 +268,8 @@ function shape(t: Term): Canon {
 }
 
 /** What a leaf is, for identity: its origin (class, source, grounds, by, window), value, dimension, uncertainty. Not its name. */
+/** A leaf's identity from its content: what a reloaded leaf is checked against. */
+export const leafHashOf = (l: Omit<Leaf, 'hash'>): string => hashOf(leafContent(l));
 const leafContent = (l: Omit<Leaf, 'hash'>) => ({ leaf: true, class: l.origin.class, source: l.origin.source ?? null, grounds: l.origin.grounds ?? null, by: l.origin.by ?? null, window: l.origin.window ?? null, value: l.value, dim: l.dim, uncertainty: l.uncertainty ?? null });
 
 /** Commutative arguments in content order, variables numbered by first appearance in that order. */

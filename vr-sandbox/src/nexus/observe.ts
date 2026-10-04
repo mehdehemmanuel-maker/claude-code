@@ -1,7 +1,6 @@
-// Observation, comparison and the journal. A comparison sets a derived record against a measured one with the
-// tolerance the realization's contract and the window allow: within, an anomaly naming the contract, or
-// unobserved when the realization declares it cannot see the variable. The journal is append-only and has one
-// rule: nothing is ever removed; a change is a new entry.
+// Observation and comparison. A comparison sets a derived record against a measured one with the tolerance the
+// realization's contract and the window allow: within, an anomaly naming the contract, or unobserved when the
+// realization declares it cannot see the variable.
 
 import { evaluate, type Derivation } from './evaluate';
 import { hashOf } from './identity';
@@ -48,25 +47,5 @@ export function compare(name: string, derived: Derivation, measured: Derivation,
   return { ...base, difference, tolerance, verdict, hash };
 }
 
-export type Entry =
-  | { kind: 'record'; at: number; record: Derivation }
-  | { kind: 'comparison'; at: number; comparison: Comparison }
-  | { kind: 'choice'; at: number; why: Derivation; among: number; label: string }
-  | { kind: 'refusal'; at: number; what: string; domain: string }
-  | { kind: 'note'; at: number; text: string };
-
-type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-
-/** Append-only. The one rule: an entry, once written, is never changed or removed. */
-export class Journal {
-  private readonly entries: Entry[] = [];
-  private seq = 0;
-  append(e: Without<Entry, 'at'>): Entry {
-    const entry = Object.freeze({ ...e, at: this.seq++ }) as Entry;
-    this.entries.push(entry);
-    return entry;
-  }
-  all(): readonly Entry[] { return this.entries; }
-  records(): Derivation[] { return this.entries.flatMap((e) => (e.kind === 'record' ? [e.record] : e.kind === 'comparison' ? [e.comparison.derived, e.comparison.measured] : e.kind === 'choice' ? [e.why] : [])); }
-  comparisons(): Comparison[] { return this.entries.flatMap((e) => (e.kind === 'comparison' ? [e.comparison] : [])); }
-}
+// The journal these comparisons are written into is src/nexus/journal.ts: one append-only record for the runtime and
+// the studies alike.

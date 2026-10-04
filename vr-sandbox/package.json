@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gate": "tsc --noEmit -p . && vitest run"
+    "gate": "tsc --noEmit -p . && vitest run",
+    "nexus:build": "vite build --config vite.nexus.config.ts",
+    "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

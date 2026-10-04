@@ -6,7 +6,8 @@ representation. Each structure is kept only if a step cannot happen without it. 
 application (last whole at `792c328`), its UI, its intents, its workflows or its categories. Their failures are used
 as constraints on what must never be built again.
 
-Nothing is built from this document yet. It replaces "the next instrument" in docs/NEXUS-STATE.md until it is agreed.
+The derivation constrains the code as it is built, and is changed by what the code finds when it runs. Section 15 is the
+measured state; it is kept true at every step.
 
 ---
 
@@ -398,3 +399,129 @@ new coexists past its step.
 
 If a step finds that one of the seven structures is wrong, that structure is deleted and derived again before the next
 step, however much is built on it.
+
+---
+
+## 15. The measured state
+
+The question was what has been implemented, as opposed to written down. A capability counts as implemented only
+when a runtime can execute it.
+
+**How it was measured.** The whole suite was run under V8 coverage (`vitest --coverage.provider=v8` over `src/`).
+
+**The finding.** 1,421 of Nexus's 1,460 functions execute. But all of them execute only when a test calls them, with
+inputs the test writes, starting from nothing and ending when the test ends. Nexus has no entry point (`index.ts` only
+re-exports), no process that runs, no state that persists, and no input from anything outside a test. It has no output
+to any person.
+
+So the code is real and it executes, but the system the derivation describes does not yet exist anywhere. The state
+of each part, by what can actually run:
+
+### Executes, as library code exercised by the suite
+
+These compute real results from real inputs, within tests:
+
+- **Values and laws:** quantities with dimensions, terms with origins and identity, evaluation as derivation records,
+  unknown kept unknown, validity refused with its domain; the kept laws as terms with their examples reproduced.
+- **Matter and change:** carriers and the law families they generate; balances of identities, blocking identities,
+  bond enthalpies, phases by Gibbs energy, crystal density and stiffness; rates over barriers; the transport law.
+- **Search and arrangement:** constraint systems solved by propagation, free variables and contradictions reported,
+  search over options under preferences; configuration spaces derived over a lattice; the counting of an arrangement
+  (mechanisms, self-stresses, whether bars carry a load) and the plane frame solve.
+- **Scale and time:** the scale generator (mechanisms, crossings, levels); local clocks advancing heat networks, with
+  refinement where the result changes.
+- **The rule-based generator** (manifold.ts) over authored intents. This is the part the derivation says must be
+  replaced.
+
+### Runs as a process (since step 1)
+
+- **The runtime** (src/nexus/runtime.ts, journal.ts, sink-file.ts, main.ts). `npm run nexus -- <journal.jsonl>`
+  starts a Node process. It opens on a journal file and rebuilds the state from it, checking each term read back
+  against its identity. It admits contributions (given or measured leaves, kept laws put to work at addresses, wants
+  as bounds, withdrawals) from the text channel. It evaluates again only what reads what changed, and reports every
+  gap as a structured term at an address.
+- **Stopped and started again, it is the same state.** Every binding has the same identity, and only the dependents
+  of a later change are evaluated (tests/nexus/runtime.test.ts, and run by hand twice on one journal file).
+
+### Partial runtime capability
+
+These run a realization over time, but only for configurations a test builds by hand:
+
+- **The rigid-body kernel (Jolt).** It realizes hand-built slices (a beam on two supports, a swinging bar, a bolted
+  bracket, a cantilever) with measured contracts. Its observations are compared with derivations.
+- **Learning.** Abduction promotes and supersedes relations from those observations, in an in-memory journal that
+  lives for one test.
+- **The tuner.** It chooses the swing's representation and refuses a short budget.
+- **Lineage.** WHY and IMPACT walk any derivation to its leaves; staleness by hash is computed, but nothing acts on it.
+
+### Exists only mathematically
+
+These compute a number about something that nothing runs:
+
+- **The information ties.** No bits are erased, held or sent anywhere.
+- **The printer's heated length.** No stream is heated.
+- **The least warm body.** No body is held.
+- **What a sense receives.** No sense receives anything.
+- **The house.** Its members are sized, its walls counted as a mechanism, its bracing found, but none of it is ever
+  realized in the kernel or anywhere else.
+- **The scale levels and observer windows.** Computed for matters, never applied to a running representation except
+  the swing.
+
+### Exists only as architecture
+
+These are in this document and nowhere in code:
+
+- **The seven structures as structures:** one state binding with staleness; one constraint store with wants as
+  constraints; the domain with a resolution field; evolvers chosen against observers' deadlines; measurement and
+  projection channels.
+- **The one loop**, and the persistent append-only journal.
+- **Generation of trajectories** (paths of making).
+- **Gaps as located terms.**
+- **The person in reality, and interaction.**
+
+### Completely absent
+
+- **Continuous time in the running process.** The runtime propagates; nothing in it evolves yet.
+- **Measurement from reality:** no sensor. The text channel takes what a person types, as given or measured leaves
+  with their origins.
+- **Projection:** no image, sound or text output from a running system (the workbench page was removed).
+- **The Quest runtime.** It has been absent since the restart.
+- **Generated structure realized in physics.**
+- **Growth, containment** (one region inside another), and **the cost per bit of a realization.**
+
+### What follows from it
+
+The implementation has to become the system, not more library code:
+
+1. A runtime that executes outside tests.
+2. State that persists.
+3. A journal it resumes from.
+4. A loop that regenerates by dependency.
+
+That is step 1 of section 14, and it starts now. Each later step is counted done only when the runtime executes it.
+
+---
+
+## 16. Step 1, executed: what running it found
+
+The runtime was run as a process: contributions in, stopped, started again on the same journal, changed. Running it
+found three things no test had shown.
+
+1. **Every relation had to be wired by hand.** To get a shelf's weight, the person had to say which kept law applies,
+   at which address, and which address is the breadth and which the depth. An address is an opaque string, so the
+   state holds nothing that could say which law applies where: the meaning of a quantity was in the wiring, outside
+   the state. This is the derivation's R1 and S1 failing in practice. Without a domain, a quantity has no place and no
+   direction, and generation (G1) cannot even begin.
+
+   **Rederived for step 2.** An address must be a place in the domain together with the quantity's geometric
+   relation to it: an extent along a direction, a potential at a point, a flux across a face, a content within a
+   subdomain. Directions are known against the measured gravity and the domain's own coordinates. A law's ports must
+   state what relation they need (this length is an extent along the load; that one across it), so that the generator
+   instances a law wherever the state makes its ports bindable, and nowhere else. Breadth and depth are then
+   different because their directions differ, never because of their names.
+2. **A derived value was shown with the class of its weakest input** (a weight shown as "given"), which hid that a law
+   derived it. The projection now says "derived by `weight.per-length`, resting on given".
+3. **WHY cited a law by its hash**, because nothing indexed the kept laws by identity. `lawByHash` now does, and WHY
+   names the law, its formula and its source.
+
+Step 2 starts from point 1.

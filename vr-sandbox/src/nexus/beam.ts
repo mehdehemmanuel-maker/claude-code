@@ -12,7 +12,8 @@ import { coordinate, ledger, postTo, restOn, topOf, type Prism, type RestCouplin
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Ground, type Observer, type RigidDomain } from './field';
 import { apply, law, type Law } from './law';
-import { compare, Journal, type Comparison } from './observe';
+import { compare, type Comparison } from './observe';
+import { Journal } from './journal';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
 import { elasticContract, realizeElastic, type ElasticRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';

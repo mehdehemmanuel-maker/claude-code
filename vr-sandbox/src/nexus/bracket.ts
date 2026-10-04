@@ -12,7 +12,8 @@ import { coordinate, ledger, restOn, restStability, standOn, topOf, type Prism, 
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, type Frame, type Ground, type Observer } from './field';
 import { apply, law, type Law } from './law';
-import { compare, Journal, type Comparison } from './observe';
+import { compare, type Comparison } from './observe';
+import { Journal } from './journal';
 import { realizeBracket, type JointRealization, type JointSpec } from './realize-joint';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { elasticContract, realizeCantilever, type CantileverRealization } from './elastic';

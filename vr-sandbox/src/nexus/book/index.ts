@@ -28,6 +28,9 @@ export const BOOK: Law[] = [...Object.values(KEPT).flat(), ...SLICE];
 const byId = new Map(BOOK.map((l) => [l.id, l]));
 for (const l of BOOK) if (BOOK.filter((x) => x.id === l.id).length > 1) throw new Error(`the book holds ${l.id} twice`);
 export const lawById = (id: string): Law => { const l = byId.get(id); if (!l) throw new Error(`no law ${id} in the book`); return l; };
+const byHash = new Map(BOOK.map((l) => [l.hash, l]));
+/** A kept law by its identity, when a record cites it: the way a derivation names the law it rests on. */
+export const lawByHash = (hash: string): Law | undefined => byHash.get(hash);
 
 export const WEIGHT = lawById('weight');
 export const BENDING_STRESS = lawById('stress.bending');
