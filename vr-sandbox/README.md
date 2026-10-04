@@ -41,8 +41,13 @@ nothing of its architecture is extended again.
   the quantities the next observation must vary; a judgement inside the bound's uncertainty is unresolved, not
   decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
   journal), `project` (a scene is a pure function of bound records: a box for every placed body and nothing else,
-  every number naming its record; a renderer consumes it and decides nothing), and `beam`: the vertical slice of
-  Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
+  every number naming its record; a renderer consumes it and decides nothing), `beam`: the vertical slice of
+  Part XXV, and `bracket`: the second slice, an arm bolted to a post, where a joint is a coupling whose shared
+  boundary variables (the root moment and shear) are read from the solution, bounded by the bolt group's capacity
+  at the declared factor, and measured by the kernel under a contract its own conformance test fixes at 1 %; the
+  catalogue of sections and bolt groups is searched under two preferences in order (least section, then least bolt
+  steel), and a 0.6 m arm was refused honestly because a 38 mm section is not slender enough for the sag law's
+  domain. A 60 kg mass across 1.2 m: the solver reports the section free, the
   catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
   measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within

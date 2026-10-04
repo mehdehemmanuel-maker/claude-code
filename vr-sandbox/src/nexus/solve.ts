@@ -130,8 +130,10 @@ export interface Option { label: string; leaves: Record<string, Leaf> }
 export interface Candidate {
   option: Option;
   solution: Solution;
-  /** The preference evaluated on this candidate, when its inputs are bound. */
+  /** The first preference evaluated on this candidate, when its inputs are bound. */
   preference: Derivation | null;
+  /** Every preference, in order: the least first one wins, the next breaks its ties. */
+  preferences: Derivation[];
   /** Every constraint holds. */
   admissible: boolean;
   refused: string[];
@@ -150,8 +152,12 @@ export interface Choice {
   why: Derivation | null;
 }
 
-/** `preference`: a law-shaped declaration (its source says who prefers it and why); its term is over system variables; the least value wins. */
-export function search(s: System, options: Option[], preference: Law): Choice {
+/**
+ * `preference`: law-shaped declarations (each source says who prefers it and why), terms over system variables; the
+ * least value of the first wins, the next breaks its ties, and what no preference separates is a tie, reported.
+ */
+export function search(s: System, options: Option[], preference: Law | Law[]): Choice {
+  const prefs = Array.isArray(preference) ? preference : [preference];
   const candidates: Candidate[] = options.map((option) => {
     const bindings = { ...s.bindings };
     for (const [sym, l] of Object.entries(option.leaves)) { varOf(s, sym); bindings[sym] = ofLeaf(l); }
@@ -160,21 +166,27 @@ export function search(s: System, options: Option[], preference: Law): Choice {
     const unsatisfied = solution.constraints.filter((c) => c.role === 'design' && c.holds === false).map((c) => c.says);
     const undecided = solution.constraints.filter((c) => c.holds === null).map((c) => c.says);
     const outside = Array.from(new Set(Object.values(solution.bound).filter((d) => d.refusal).map((d) => d.refusal!.domain)));
-    const env: Record<string, Derivation> = {};
+    const preferences: Derivation[] = [];
     let ok = true;
-    for (const p of preference.inputs) { const d = solution.bound[p.sym]; if (!d || d.value === null) ok = false; else env[p.sym] = d; }
-    const pref = ok ? apply(preference, env, preference.output.name) : null;
-    return { option, solution, preference: pref, admissible: solution.satisfied === true && outside.length === 0 && pref !== null, refused: [...refused, ...outside], unsatisfied, undecided };
+    for (const pr of prefs) {
+      const env: Record<string, Derivation> = {};
+      for (const p of pr.inputs) { const d = solution.bound[p.sym]; if (!d || d.value === null) ok = false; else env[p.sym] = d; }
+      if (ok) preferences.push(apply(pr, env, pr.output.name));
+    }
+    const pref = ok ? preferences[0]! : null;
+    return { option, solution, preference: pref, preferences: ok ? preferences : [], admissible: solution.satisfied === true && outside.length === 0 && pref !== null, refused: [...refused, ...outside], unsatisfied, undecided };
   });
   const manifold = candidates.filter((c) => c.admissible);
   let pick: Candidate | null = null;
   const tie: Candidate[] = [];
   if (manifold.length) {
-    const sorted = [...manifold].sort((p, q) => p.preference!.value! - q.preference!.value!);
-    const best = sorted[0]!;
-    const tol = 1e-9 * Math.max(1, Math.abs(best.preference!.value!));
-    const ties = sorted.filter((c) => Math.abs(c.preference!.value! - best.preference!.value!) <= tol);
-    if (ties.length === 1) pick = best; else tie.push(...ties);
+    const near = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+    let ties = [...manifold];
+    for (let i = 0; i < prefs.length && ties.length > 1; i++) {
+      const least = Math.min(...ties.map((c) => c.preferences[i]!.value!));
+      ties = ties.filter((c) => near(c.preferences[i]!.value!, least));
+    }
+    if (ties.length === 1) pick = ties[0]!; else tie.push(...ties);
   }
   return { candidates, manifold, pick, tie, why: pick?.preference ?? null };
 }

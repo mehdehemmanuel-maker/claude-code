@@ -106,5 +106,52 @@ export const FIRST_PERIOD = law({
   example: { inputs: { L: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, rho: 7850, A: 0.0008, h: 0.04 }, output: (2 * Math.PI) / ((Math.PI / 2) ** 2 * Math.sqrt((200e9 * ((0.02 * 0.04 ** 3) / 12)) / (7850 * 0.0008))), from: 'ω₁ = (π/L)² √(EI/ρA), computed independently' },
 });
 
+// ---- a cantilever arm from a post, and the bolt group that holds it --------------------------------------------
+
+const reach = variable('a', 'm', 'reach of the load from the root'), ell = variable('ell', 'm', 'length of the arm');
+const d = variable('d', 'm', 'nominal diameter'), pitch = variable('p', 'm', 'thread pitch'), nb = variable('n', '1', 'bolts'), Rm = variable('Rm', 'Pa', 'tensile strength of the bolt'), As = variable('As', 'm^2', 'tensile stress area'), Ft = variable('Ft', 'N', 'tensile capacity of the group'), lever = variable('lever', 'm', 'lever of the group');
+const ISO898 = { cite: 'ISO 898-1:2013, mechanical properties of fasteners; ISO 724 basic dimensions of metric threads', kind: 'standard' as const };
+
+export const CANTILEVER_MOMENT = law({
+  id: 'cantilever.root-moment', name: 'Moment at the root of a cantilever', statement: 'A load P at reach a and the arm\'s own weight q over its length ℓ bend the root by P a + q ℓ² / 2.', formula: 'M = P a + q ℓ² / 2',
+  inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'a', unit: 'm', name: 'reach of the load from the root' }, { sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'ell', unit: 'm', name: 'length of the arm' }], output: { sym: 'M', unit: 'N m', name: 'root moment' },
+  term: add(mul(P, reach), div(mul(q, pow(ell, 2)), k(2))), domain: [{ says: 'the load is on the arm: a ≤ ℓ', holds: le(reach, ell) }], source: PHYSICS, example: { inputs: { P: 100, a: 0.5, q: 10, ell: 0.6 }, output: 51.8, from: 'arithmetic' },
+});
+
+export const CANTILEVER_SHEAR = law({
+  id: 'cantilever.root-shear', name: 'Shear at the root of a cantilever', statement: 'The root carries the load and the arm\'s weight.', formula: 'V = P + q ℓ',
+  inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'ell', unit: 'm', name: 'length of the arm' }], output: { sym: 'V', unit: 'N', name: 'root shear' },
+  term: add(P, mul(q, ell)), domain: [], source: PHYSICS, example: { inputs: { P: 100, q: 10, ell: 0.6 }, output: 106, from: 'arithmetic' },
+});
+
+export const CANTILEVER_TIP_SAG = law({
+  id: 'cantilever.tip-sag', name: 'Tip deflection of a cantilever under a load at reach a and its own weight', statement: 'A load P at reach a bends the tip by P a² (3ℓ − a) / (6 E I); the arm\'s own weight adds q ℓ⁴ / (8 E I).', formula: 'δ = P a² (3ℓ − a) / (6 E I) + q ℓ⁴ / (8 E I)',
+  inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'a', unit: 'm', name: 'reach of the load from the root' }, { sym: 'ell', unit: 'm', name: 'length of the arm' }, { sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'tip sag' },
+  term: add(div(mul(P, pow(reach, 2), sub(mul(k(3), ell), reach)), mul(k(6), E, I)), div(mul(q, pow(ell, 4)), mul(k(8), E, I))),
+  domain: [{ says: 'the load is on the arm: a ≤ ℓ', holds: le(reach, ell) }, { says: 'slender: ℓ/h ≥ 20, so shear deflection is left out (Euler–Bernoulli)', holds: ge(div(ell, h), SLENDER) }],
+  source: { cite: `${ROARK.cite}, cases 1a (point load) and 2a (uniform load) on a cantilever`, kind: 'handbook' },
+  example: { inputs: { P: 1000, a: 1, ell: 1, q: 0, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.015625, from: 'ganglia/laws.ts beam.cantilever.point (the load at the tip)' },
+});
+
+export const STRESS_AREA = law({
+  id: 'bolt.tensile-stress-area', name: 'Tensile stress area of a metric thread', statement: 'The area that carries a bolt\'s tension is a circle of diameter (d₂ + d₃)/2, with d₂ = d − 0.6495 p and d₃ = d − 1.2269 p.', formula: 'A_s = (π/4) ((d − 0.9382 p)/1)²',
+  inputs: [{ sym: 'd', unit: 'm', name: 'nominal diameter' }, { sym: 'p', unit: 'm', name: 'thread pitch' }], output: { sym: 'As', unit: 'm^2', name: 'tensile stress area' },
+  term: mul(div(PI(), k(4)), pow(sub(d, mul(k(0.9381940, '(0.649519 + 1.226869)/2'), pitch)), 2)), domain: [], source: ISO898,
+  example: { inputs: { d: 0.008, p: 0.00125 }, output: (Math.PI / 4) * ((0.008 - 0.649519 * 0.00125 + 0.008 - 1.226869 * 0.00125) / 2) ** 2, from: 'ISO 898-1 A_s for M8: 36.6 mm²' },
+});
+
+export const GROUP_TENSION = law({
+  id: 'bolt-group.tension', name: 'Tensile capacity of a bolt group', statement: 'n bolts carry n times the stress area times the tensile strength.', formula: 'F_t = n A_s R_m',
+  inputs: [{ sym: 'n', unit: '1', name: 'bolts' }, { sym: 'As', unit: 'm^2', name: 'tensile stress area' }, { sym: 'Rm', unit: 'Pa', name: 'tensile strength of the bolt' }], output: { sym: 'Ft', unit: 'N', name: 'tensile capacity of the group' },
+  term: mul(nb, As, Rm), domain: [], source: ISO898, example: { inputs: { n: 2, As: 36.6e-6, Rm: 800e6 }, output: 58560, from: 'arithmetic' },
+});
+
+export const GROUP_BENDING = law({
+  id: 'bolt-group.bending', name: 'Bending capacity of a bolt group prying about the footprint edge', statement: 'The group\'s tension acting at the lever of the footprint: its moment capacity is F_t times the lever, half the larger extent of the bonded face.', formula: 'M_cap = F_t · lever',
+  inputs: [{ sym: 'Ft', unit: 'N', name: 'tensile capacity of the group' }, { sym: 'lever', unit: 'm', name: 'lever of the group' }], output: { sym: 'Mcap', unit: 'N m', name: 'bending capacity' },
+  term: mul(Ft, lever), domain: [], source: { cite: 'the kept kernel\'s joint model (connectors/registry.ts, engineering/bolts.ts): prying about the footprint edge, the group\'s tensile capacity acting at the arm', kind: 'derivation' },
+  example: { inputs: { Ft: 58560, lever: 0.0445 }, output: 2605.92, from: 'arithmetic' },
+});
+
 /** The derived laws of the slice. */
-export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD];
+export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, STRESS_AREA, GROUP_TENSION, GROUP_BENDING];
