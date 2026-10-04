@@ -41,7 +41,7 @@ export interface Ground {
 export function groundField(frame: Frame, by: string, grounds: string, make: (x: Var, z: Var, y0: Var) => Term, env: Record<string, Derivation> = {}): Ground {
   const x = variable('x', 'm', 'coordinate x'), z = variable('z', 'm', 'coordinate z'), y0 = variable('y0', 'm', 'frame origin y');
   const term = make(x, z, y0);
-  const f = field(`ground height (${grounds}, by ${by})`, 'm', domain(frame, {}), { x, z }, { ...env, y0: frame.origin.y }, [], () => term);
+  const f = field(`ground height (${grounds}, by ${by})`, 'm', domain(frame, { x, z }), { ...env, y0: frame.origin.y }, [], () => term);
   return { field: f, height: (xx, zz) => sample(f, { x: xx, z: zz }, 'ground height') };
 }
 

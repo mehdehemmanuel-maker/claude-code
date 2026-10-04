@@ -103,9 +103,9 @@ export function constructSwing(intent: SwingIntent, mat: MaterialLeaves, bound: 
   const T = need('T'), omega = need('omega');
   const t = variable('t', 's', 'coordinate t');
   const fsNeeded = apply(lawById('shannon.sampling'), { fmax: evaluate('frequency of the swing', div(k(1), variable('T', 's')), { T }, { unit: 'Hz', law: 'one over the period' }) }, 'sampling rate the swing needs');
-  const over = domain(frame, { t: { lo: evaluate('start of the watch', neg(variable('o', 's')), { o: ofLeaf(leaf('zero time', 0, 's', { class: 'configuration', source: 'the release' })) }, { unit: 's', law: 'the watch starts at the release' }), hi: need('watch') } },
+  const over = domain(frame, { t }, { t: { lo: evaluate('start of the watch', neg(variable('o', 's')), { o: ofLeaf(leaf('zero time', 0, 's', { class: 'configuration', source: 'the release' })) }, { unit: 's', law: 'the watch starts at the release' }), hi: need('watch') } },
     [{ says: 'sampled: the lattice on t resolves the swing, at least two samples a period (Shannon)', holds: ge(div(k(1), variable('lt', 's', 'lattice on t')), variable('fs', 'Hz')), env: { fs: fsNeeded } }]);
-  const angle = field('angle over time', 'rad', over, { t }, { theta0, omega }, [], () => mul(variable('theta0', 'rad'), cos(mul(variable('omega', 'rad/s'), t))));
+  const angle = field('angle over time', 'rad', over, { theta0, omega }, [], () => mul(variable('theta0', 'rad'), cos(mul(variable('omega', 'rad/s'), t))));
   return { frame, ground, bodies: { pivot, bar }, hinge, restHeight, rigid, angle };
 }
 

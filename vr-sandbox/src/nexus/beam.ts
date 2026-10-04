@@ -216,12 +216,12 @@ export const QUASI_STATIC = leaf('quasi-static bound', 10, '1', { class: 'assume
  * x, in the domain between the reaction lines, holding at windows slower than the beam's first period.
  */
 export function momentField(frame: Frame, bound: Record<string, Derivation>, spanRealized: Derivation, T1: Derivation): Field {
-  const x = variable('x', 'm', 'coordinate x');
+  const x = variable('x', 'm', 'coordinate x'), t = variable('t', 's', 'coordinate t');
   const L2 = variable('L', 'm', 'span');
   const lo = evaluate('left reaction line', neg(div(L2, k(2))), { L: spanRealized }, { unit: 'm', law: 'the span is centred on the frame origin' });
   const hi = evaluate('right reaction line', div(L2, k(2)), { L: spanRealized }, { unit: 'm', law: 'the span is centred on the frame origin' });
-  const over = domain(frame, { x: { lo, hi } }, [{ says: 'quasi-static: the sample\'s time support covers at least the declared number of first periods', holds: ge(variable('dt', 's', 'time support'), mul(QUASI_STATIC, variable('T1', 's', 'first period'))), env: { T1 } }]);
-  return field('bending moment along the span', 'N m', over, { x }, { P: bound['P']!, L: spanRealized, w: bound['w']!, q: bound['q']!, Lt: bound['Lt']! },
+  const over = domain(frame, { x, t }, { x: { lo, hi } }, [{ says: 'quasi-static: the sample\'s time support covers at least the declared number of first periods', holds: ge(variable('dt', 's', 'time support'), mul(QUASI_STATIC, variable('T1', 's', 'first period'))), env: { T1 } }]);
+  return field('bending moment along the span', 'N m', over, { P: bound['P']!, L: spanRealized, w: bound['w']!, q: bound['q']!, Lt: bound['Lt']! },
     [{ law: PATCH_MOMENT, bind: { a: abs(x) } }, { law: SELF_MOMENT, bind: { a: abs(x) } }], ([load, self]) => add(load!, self!));
 }
 

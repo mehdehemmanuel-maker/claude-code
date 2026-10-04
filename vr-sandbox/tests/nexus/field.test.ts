@@ -8,7 +8,7 @@ import { ofLeaf } from '../../src/nexus/evaluate';
 import { declareFrame, flatGround, gravity, observer, RIGID_BOUND, rigidDomain } from '../../src/nexus/field';
 import { abs, div, ge, k, leaf, mul, neg, variable } from '../../src/nexus/term';
 import { cites, leavesUnder, why } from '../../src/nexus/why';
-import { coarse, coverage, domain, field, resolution, resolves, sample } from '../../src/nexus/domain';
+import { coarse, coverage, domain, field, fieldOf, lattice, resolution, resolves, sample } from '../../src/nexus/domain';
 import { PATCH_MOMENT } from '../../src/nexus/book';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
@@ -75,7 +75,7 @@ describe('domains, fields and the resolution (x, y, z, t and scale)', () => {
 
   it('a field is laws composed over coordinates; a sample cites the laws and is refused outside the domain, with the domain named', () => {
     const x = variable('x', 'm', 'coordinate x');
-    const f = field('moment', 'N m', domain(frame, span(-1, 1)), { x }, { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
+    const f = field('moment', 'N m', domain(frame, { x }, span(-1, 1)), { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
     const mid = sample(f, { x: given('x', 0, 'm') });
     expect(mid.value).toBeCloseTo(500 - 1000 * 0.1 / 8, 9);
     expect(mid.cites).toContain(PATCH_MOMENT.hash);
@@ -88,7 +88,7 @@ describe('domains, fields and the resolution (x, y, z, t and scale)', () => {
 
   it('the window is the coarse-graining operator: a point sample is the field; a support averages it and widens the uncertainty by half its range', () => {
     const x = variable('x', 'm', 'coordinate x');
-    const f = field('moment', 'N m', domain(frame, span(-1, 1)), { x }, { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
+    const f = field('moment', 'N m', domain(frame, { x }, span(-1, 1)), { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
     const point = resolution('a seam', { t: given('quiet', 0.3, 's') }, { x: given('spacing', 0.2, 'm') });
     const at = given('x', 0.5, 'm');
     const p = coarse(f, point, { x: at });
@@ -106,10 +106,10 @@ describe('domains, fields and the resolution (x, y, z, t and scale)', () => {
   });
 
   it('recomposition: the same field at two time scales differs only across its scale band, and the band is named', () => {
-    const x = variable('x', 'm', 'coordinate x');
+    const x = variable('x', 'm', 'coordinate x'), t = variable('t', 's', 'coordinate t');
     const T1 = given('first period', 0.02, 's');
-    const over = domain(frame, span(-1, 1), [{ says: 'quasi-static: dt ≥ 10 T1', holds: ge(variable('dt', 's'), mul(k(10), variable('T1', 's'))), env: { T1 } }]);
-    const f = field('moment', 'N m', over, { x }, { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
+    const over = domain(frame, { x, t }, span(-1, 1), [{ says: 'quasi-static: dt ≥ 10 T1', holds: ge(variable('dt', 's'), mul(k(10), variable('T1', 's'))), env: { T1 } }]);
+    const f = field('moment', 'N m', over, { P: given('P', 1000, 'N'), L: given('L', 2, 'm'), w: given('w', 0.1, 'm') }, [{ law: PATCH_MOMENT, bind: { a: abs(x) } }], ([m]) => m!);
     const slow = coarse(f, resolution('slow', { t: given('quiet', 0.3, 's') }), { x: given('x', 0.5, 'm') });
     const fast = coarse(f, resolution('fast', { t: given('quiet', 0.001, 's') }), { x: given('x', 0.5, 'm') });
     expect(slow.value).toBeCloseTo(250, 9);
@@ -119,11 +119,48 @@ describe('domains, fields and the resolution (x, y, z, t and scale)', () => {
   });
 
   it('coverage: point samples observe a set of measure zero; the field between them is derived', () => {
-    const d = domain(frame, span(-1, 1));
+    const x = variable('x', 'm', 'coordinate x');
+    const d = domain(frame, { x }, span(-1, 1));
     const r = resolution('seams', { t: given('quiet', 0.3, 's') }, { x: given('spacing', 0.2, 'm') });
     const c = coverage(d, r, [{ x: given('x', -0.5, 'm') }, { x: given('x', 0.5, 'm') }], 'x');
     expect(c.value).toBe(0);
     const g = resolution('gauges', { x: given('gauge length', 0.2, 'm') });
     expect(coverage(d, g, [{ x: given('x', -0.5, 'm') }, { x: given('x', 0.5, 'm') }], 'x').value).toBeCloseTo(0.2, 12);
+  });
+});
+
+describe('declared coordinates', () => {
+  it('a domain declares its coordinates: a configuration space over design variables has no frame, and its extent must be in each coordinate\'s dimension', () => {
+    const b = variable('b', 'm', 'breadth'), h = variable('h', 'm', 'depth');
+    const space = domain(null, { b, h }, { b: { lo: given('least breadth', 0.019, 'm'), hi: given('most breadth', 0.3, 'm') } });
+    expect(space.frame).toBeNull();
+    expect(Object.keys(space.coords)).toEqual(['b', 'h']);
+    expect(() => domain(null, { b }, { h: { lo: given('lo', 0, 'm'), hi: given('hi', 1, 'm') } })).toThrow(/bounded but not a coordinate/);
+    expect(() => domain(null, { b }, { b: { lo: given('lo', 0, 's'), hi: given('hi', 1, 's') } })).toThrow(/not in its dimension/);
+    expect(() => domain(null, { c: b })).toThrow(/the coordinate c is the variable b/);
+    // the area over the design space is a field: nothing enumerates it, an address selects a state
+    const area = fieldOf('section area', 'm^2', space, mul(b, h), {}, []);
+    expect(sample(area, { b: given('b', 0.089, 'm'), h: given('h', 0.038, 'm') }).value).toBeCloseTo(0.003382, 9);
+    expect(sample(area, { b: given('b', 0.5, 'm'), h: given('h', 0.038, 'm') }).status).toBe('outside-validity');
+    expect(sample(area, { b: given('b', 0.089, 'm') }).status).toBe('unknown');
+  });
+
+  it('the lattice of a domain: every address a record from the extent and the spacing; an unbounded coordinate has no lattice', () => {
+    const b = variable('b', 'm', 'breadth'), h = variable('h', 'm', 'depth');
+    const space = domain(null, { b, h }, { b: { lo: given('lo', 0.02, 'm'), hi: given('hi', 0.1, 'm') }, h: { lo: given('lo', 0.02, 'm'), hi: given('hi', 0.06, 'm') } });
+    const points = lattice(space, { b: given('spacing', 0.02, 'm'), h: given('spacing', 0.02, 'm') });
+    expect(points.length).toBe(5 * 3);
+    expect(points[points.length - 1]!['b']!.value).toBeCloseTo(0.1, 12);
+    expect(points[points.length - 1]!['h']!.value).toBeCloseTo(0.06, 12);
+    expect(points[0]!['b']!.inputs['lo']!.name).toBe('lo');
+    expect(() => lattice(domain(null, { b }), { b: given('spacing', 0.02, 'm') })).toThrow(/unbounded/);
+  });
+
+  it('a field constant along a coordinate is coarse-grained there exactly, without samples along it', () => {
+    const x = variable('x', 'm'), t = variable('t', 's');
+    const f = fieldOf('a level', 'm', domain(null, { x, t }), mul(k(2), x), {}, []);
+    const r = resolution('slow', { t: given('quiet', 10, 's'), x: given('gauge', 0.2, 'm') });
+    const c = coarse(f, r, { x: given('x', 1, 'm') });
+    expect(c.value).toBeCloseTo(2, 12);
   });
 });
