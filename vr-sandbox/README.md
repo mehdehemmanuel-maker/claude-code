@@ -40,7 +40,9 @@ nothing of its architecture is extended again.
   promoted with provenance "abduced from observations h1…hn" only when it changes more than one system; a tie names
   the quantities the next observation must vary; a judgement inside the bound's uncertainty is unresolved, not
   decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
-  journal), and `beam`: the vertical slice of Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
+  journal), `project` (a scene is a pure function of bound records: a box for every placed body and nothing else,
+  every number naming its record; a renderer consumes it and decides nothing), and `beam`: the vertical slice of
+  Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
   catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
   measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
