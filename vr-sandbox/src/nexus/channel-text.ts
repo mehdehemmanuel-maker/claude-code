@@ -12,6 +12,11 @@
 //   {"withdraw":{"id": "...", "why": "..."}}
 //   {"evolve": true}   the places not at rest, and all they can strike, stepped in the rigid-body kernel until still
 //   {"scale": {"at": 1e-10, "T": 300}}   the regime at a size (metres) and a temperature (kelvin), as the tuner derives it
+//   {"depth": {"heat" | "volts" | "speed": 1e5, "at": 1e-3, "T": 300, "for": 1, "tolerance": 0.01, "of": "water", "n": 1e25, "p": 1e5}}
+//            how far down a process must be followed: what it takes apart, what it leaves whole, how long each level
+//            lasts under it ("of": a matter in the kept species, whose own levels come first)
+//   {"explain": {"value": 7850, "unit": "kg/m^3", "name": "...", "T": 300, "of": "Fe"}}   the level whose scale explains a quantity
+//   {"copy": {"at": 1, "by": 1e-20, "T": 300}}   what a copy of the world at another scale would need of the constants
 //   {"why": "place/quantity"}        {"gaps": true} (or "all")        {"state": true}
 
 import { lawByHash, lawById } from './book';
@@ -21,13 +26,14 @@ import { bound, instance, type Change, type Gap, type Runtime } from './runtime'
 import { leaf } from './term';
 import { GRAVITY, gravityAxis } from './place';
 import { explain } from './why';
-import type { Regime } from './tuner';
+import { copyAt, regimeAt, type Regime } from './tuner';
+import { descend, explain as explainByDepth, heat, motion, potential, type Descent, type Explanation } from './depth';
 import { dimOf, sameDim } from './dimension';
 
 const fmt = (v: number | null) => (v === null ? '–' : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(4) : String(Number(v.toPrecision(6))));
 
 /** One line in: a contribution, or a question of the state. */
-export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { evolve: true } | { scale: { L: number; T: number | null } } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
+export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { evolve: true } | { tune: Tune } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
   const m = JSON.parse(line) as Record<string, any>;
   if (m['give']) { const g = m['give']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'given', by: g.by ?? 'the person', grounds: g.grounds ?? 'given on the text channel' }) } }; }
   if (m['measure']) { const g = m['measure']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'measured', source: g.by, window: g.window ?? 'one reading' }, g.uncertainty) } }; }
@@ -47,7 +53,10 @@ export function read(line: string): { contribution: Contribution } | { contribut
   if (m['held']) return { contribution: { kind: 'held', place: m['held'].place, by: m['held'].by ?? 'the person' } };
   if (m['withdraw']) return { contribution: { kind: 'withdraw', id: m['withdraw'].id, why: m['withdraw'].why } };
   if (m['evolve']) return { evolve: true };
-  if (m['scale']) return { scale: { L: m['scale'].at, T: m['scale'].T ?? null } };
+  if (m['scale']) return { tune: { scale: { L: m['scale'].at, T: m['scale'].T ?? null } } };
+  if (m['depth']) return { tune: { depth: m['depth'] } };
+  if (m['explain']) return { tune: { explain: m['explain'] } };
+  if (m['copy']) return { tune: { copy: m['copy'] } };
   if (m['why']) return { ask: 'why', at: m['why'] };
   if (m['gaps']) return { ask: 'gaps', all: m['gaps'] === 'all' };
   if (m['state']) return { ask: 'state' };
@@ -132,5 +141,57 @@ export function showRegime(r: Regime): string[] {
     `  near: ${r.near.length ? r.near.map((c) => `${c.boundary} at ${f(c.L.value!)} m`).join(', ') : 'no boundary within a decade'}`,
     `  structures: ${r.structures.length ? r.structures.map((x) => `settled at ${f(x.size.value!)} m, bound by ${f(x.binding.value! / eV)} eV`).join('; ') : 'none: nothing holds together at this temperature'}`,
     `  to resolve it: light of ${f(r.observer.byLight / eV)} eV or electrons of ${f(r.observer.byElectron / eV)} eV, ${r.observer.weakestBinding === null ? 'with no structure there to break' : `which ${r.observer.disturbs ? 'break' : 'leave whole'} the most fragile structure (${f(r.observer.weakestBinding / eV)} eV)`}`,
+  ];
+}
+
+/** What the tuner is asked on the channel: a regime, a descent, an explanation by depth, a copy at another scale. */
+export type Tune =
+  | { scale: { L: number; T: number | null } }
+  | { depth: { heat?: number; volts?: number; speed?: number; at?: number; T?: number; for?: number; tolerance?: number; of?: string; n?: number; p?: number } }
+  | { explain: { value: number; unit: string; name?: string; T?: number; of?: string } }
+  | { copy: { at?: number; by: number; T?: number } };
+
+/** The tuner's answer to a line, as lines. */
+export function tune(t: Tune): string[] {
+  if ('scale' in t) return showRegime(regimeAt(t.scale.L, t.scale.T));
+  if ('depth' in t) {
+    const q = t.depth, time = q.for ?? null, at = q.at ?? null;
+    const p = q.heat !== undefined ? heat(q.heat, time) : q.volts !== undefined ? potential(q.volts, time, at) : q.speed !== undefined ? motion(q.speed, time) : null;
+    if (!p) return ['a descent needs a process: "heat" (kelvin), "volts" or "speed" (metres a second)'];
+    const of = { ...(q.of ? { matter: q.of } : {}), ...(q.n !== undefined ? { n: q.n } : {}), ...(q.p !== undefined ? { p: q.p } : {}) };
+    return showDescent(descend(p, { L: at, T: q.T ?? null, of, ...(q.tolerance !== undefined ? { tolerance: q.tolerance } : {}) }));
+  }
+  if ('explain' in t) return showExplanation(explainByDepth({ name: t.explain.name ?? `${t.explain.value} ${t.explain.unit}`, value: t.explain.value, unit: t.explain.unit }, t.explain.T ?? null, t.explain.of ? { matter: t.explain.of } : {}));
+  const c = copyAt(t.copy.at ?? 1, t.copy.by, t.copy.T);
+  const f = (x: number) => Number(x.toPrecision(3)).toExponential(2);
+  return [
+    `a copy of the world at ${f(t.copy.by)} times the size${c.possible ? '' : ': no assignment of the constants makes one'}`,
+    ...(c.possible ? [`  it needs: ${c.needs.map((n) => (n.exponent === 0 ? `${n.key} as it is` : `${n.key} × ${f(n.factor)} (by^${n.exponent})`)).join(', ')}; ħ and light's speed held, as what length is measured in`,
+      `  its clocks run at ${f(c.clocks)} times ours: everything in it lasts that much of what it lasts here`] : []),
+    `  with the constants as measured, the world at that size is not a copy: it lies past ${c.passed.length} boundar${c.passed.length === 1 ? 'y' : 'ies'}${c.passed.length ? `: ${c.passed.slice(0, 8).map((x) => `${x.boundary} at ${f(x.L.value!)} m`).join(', ')}${c.passed.length > 8 ? ', …' : ''}` : ''}`,
+  ];
+}
+
+/** A descent as lines: each level the process meets, what it does to it, and where it stops. */
+export function showDescent(d: Descent): string[] {
+  const eV = 1.602176634e-19, f = (x: number) => Number(x.toPrecision(3)).toExponential(2);
+  const out = [`${d.says}, followed down (tolerance ${d.tolerance}):`];
+  for (const s of d.steps) {
+    const life = s.lifetimeDecades === null ? '' : `; heat takes one unit apart every 10^${s.lifetimeDecades.toFixed(1)} s and it re-forms, so a share ${s.changed.toPrecision(2)} is apart at once`;
+    out.push(`  ${s.level.what}: bound by ${f(s.level.binding / eV)} eV, its own clock ${f(s.level.clock)} s; given ${f(s.E / eV)} eV a unit${life}: ${s.verdict === 'whole' ? 'left whole' : s.verdict === 'resolved' ? 'resolved inside: faster than its clock' : Number.isNaN(s.changed) ? 'undecided' : `taken apart (${s.changed >= 0.999 ? 'all' : `a share ${s.changed.toPrecision(2)}`})`}`);
+  }
+  out.push(d.stop === 'sufficient' ? `  sufficient: ${d.at!.what} stays whole, so it enters as a unit, and nothing below it changes the outcome by more than the tolerance` : d.stop === 'refused' ? '  refused: no unit moves at or past light\'s speed' : `  gap (${d.gap!.kind}): ${d.gap!.says}`);
+  if (d.up.length) out.push(`  above: ${d.up.map((c) => `${c.boundary} at ${f(c.L.value!)} m`).join(', ')}`);
+  return out;
+}
+
+/** An explanation by depth as lines: the scale each level sets for the quantity, and where it stops. */
+export function showExplanation(e: Explanation): string[] {
+  const f = (x: number) => Number(x.toPrecision(3)).toExponential(2);
+  const pw = Object.entries(e.powers).filter(([, x]) => x !== 0).map(([k, x]) => `${k}^${x}`).join(' ');
+  return [
+    `${e.ask.name} = ${e.ask.value} ${e.ask.unit}: the scale a level sets for it is ${pw}`,
+    ...e.tried.map((t) => `  ${t.level.what}: ${f(t.predicted)}, the datum ${Math.abs(t.decades).toFixed(2)} decades ${t.decades < 0 ? 'below' : 'above'}`),
+    e.stop === 'explained' ? `  explained at ${e.level!.what}, to the factor the dimensions cannot see` : `  gap (${e.gap!.kind}): ${e.gap!.says}`,
   ];
 }

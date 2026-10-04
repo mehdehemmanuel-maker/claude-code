@@ -32,6 +32,7 @@ import { CONST } from './book/constants';
 import { phaseAt, vapourPressure } from './phase';
 import { dimOf, sameDim } from './dimension';
 import { regimeAt, type Regime } from './tuner';
+import { descend, heat, motion, potential, DEFAULT_TOLERANCE, type Descent, type GapKind, type Process } from './depth';
 import { toSI } from '../ganglia/units';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
@@ -71,11 +72,20 @@ export interface Element {
   oneOf?: string;
 }
 
-export interface Gap { want: string | null; element: string | null; lacks: string; carrier: string | null }
+export interface Gap {
+  want: string | null; element: string | null; lacks: string; carrier: string | null;
+  /** What the gap is a gap in, where the rule that found it can say (a datum, a relation, a state variable, a law, ...). */
+  kind?: GapKind;
+  /** The distinction it ranks under, where the rule that found it states one rather than leaving it to be read from its words. */
+  distinction?: string;
+}
+type GapFn = (want: string | null, element: string | null, carrier: string | null, lacks: string, meta?: { kind: GapKind; distinction: string }) => void;
 
 /** The regime the intent's sizes lie in, as the tuner derives it: what the rules may assume there, and what they may not. */
 export interface IntentRegime { L: number; T: number | null; from: string; state: Regime['state']; near: string[] }
-export interface Structure { intent: string; elements: Element[]; gaps: Gap[]; unused: { region: string; sym: string; name: string }[]; regimes: IntentRegime[] }
+/** How deep a potential the intent holds or wants must be followed: the levels it takes apart, and the one it leaves whole. */
+export interface IntentDepth { from: string; want: string | null; descent: Descent }
+export interface Structure { intent: string; elements: Element[]; gaps: Gap[]; unused: { region: string; sym: string; name: string }[]; regimes: IntentRegime[]; depths: IntentDepth[] }
 
 /** A region's potential of one carrier over time: one value, or the range of the values it holds. */
 interface State { region: string; lo: number; hi: number; leaves: Leaf[] }
@@ -105,7 +115,7 @@ export function generate(intent: Intent): Structure {
   };
   const cite = (e: Element, ...ids: string[]) => { e.why.laws = [...new Set([...e.why.laws, ...ids])]; };
   const put = (e: Element | undefined | null, v: Element['values'][number]) => { if (e && !e.values.some((x) => x.name === v.name)) e.values.push(v); };
-  const gap = (want: string | null, element: string | null, carrier: string | null, lacks: string) => { if (!gaps.some((x) => x.want === want && x.element === element && x.lacks === lacks)) gaps.push({ want, element, carrier, lacks }); };
+  const gap: GapFn = (want, element, carrier, lacks, meta) => { if (!gaps.some((x) => x.want === want && x.element === element && x.lacks === lacks)) gaps.push({ want, element, carrier, lacks, ...(meta ?? {}) }); };
   const lawIds = (c: Carrier, ...names: string[]) => family(c).filter((l) => names.some((n) => l.id.endsWith(`.${n}`))).map((l) => l.id);
   const use = (r: Region, sym: string) => used.add(`${r.id}.${sym}`);
 
@@ -1101,8 +1111,9 @@ export function generate(intent: Intent): Structure {
   }
   const unused = intent.regions.flatMap((r) => [...Object.entries(r.quantities), ...Object.entries(r.produces ?? {})].filter(([sym]) => !used.has(`${r.id}.${sym}`)).map(([sym, l]) => ({ region: r.id, sym, name: l.name })));
   const regimes = regimesOf(intent, gap, (r, sym) => used.add(`${r}.${sym}`));
+  const depths = depthsOf(intent, gap, (r, sym) => used.add(`${r}.${sym}`));
   const unread = unused.filter((u) => !used.has(`${u.region}.${u.sym}`));
-  return { intent: intent.name, elements, gaps, unused: unread, regimes };
+  return { intent: intent.name, elements, gaps, unused: unread, regimes, depths };
 }
 
 /** The structure as it reads: each element with its rule and the wants it serves, then the gaps and what went unread. */
@@ -1112,7 +1123,7 @@ export function generate(intent: Intent): Structure {
  * by its averaged properties and move it by classical balances; where the derived state says those do not hold, the
  * lack is a regime gap: the relations must be generated at that regime, not read from the kept ones.
  */
-function regimesOf(intent: Intent, gap: (want: string | null, element: string | null, carrier: string | null, lacks: string) => void, read: (region: string, sym: string) => void): IntentRegime[] {
+function regimesOf(intent: Intent, gap: GapFn, read: (region: string, sym: string) => void): IntentRegime[] {
   const sizes: { L: number; from: string }[] = [];
   const length = (unit: string) => { try { const d = dimOf(unit); return d[1] === 1 && d.every((x, i) => i === 1 || x === 0); } catch { return false; } };
   for (const r of intent.regions) for (const [sym, l] of Object.entries(r.quantities)) if (l.value && length(l.unit)) { sizes.push({ L: Math.abs(toSI(l.value, l.unit)), from: `${l.name} [${r.id}]` }); read(r.id, sym); }
@@ -1127,12 +1138,60 @@ function regimesOf(intent: Intent, gap: (want: string | null, element: string | 
     out.push({ L, T, from, state: r.state, near: r.near.map((c) => `${c.boundary} at ${Number(c.L.value!.toPrecision(3))} m`) });
     const at = `at ${Number(L.toPrecision(3))} m (${from})`;
     // below the length the constants set by themselves, no kept law holds, so nothing else said about the regime does
-    if (r.state.lawless) { gap(null, null, null, `the regime ${at}: below the length the constants set by themselves, where a confined energy's own gravity is as large as it; no kept law describes that, so nothing derived there holds`); continue; }
-    if (!r.structures.length) gap(null, null, null, `the regime ${at}: at ${T ?? 'the universe\'s floor of'} K nothing settles, so there is no matter that holds together, and the kept matters the rules read are matter that does`);
-    if (r.state.relativistic) gap(null, null, null, `the regime ${at}: confining a particle costs more than its rest energy, so particles are made and unmade; no rule generates that regime`);
-    else if (r.state.quantum) gap(null, null, null, `the regime ${at}: the lightest particle's confinement exceeds the heat, so its states are discrete; the averaged properties the rules read are not what holds there`);
-    if (r.state.crushed) gap(null, null, null, `the regime ${at}: a unit's gravity in a body this large exceeds the unit's own binding, so its matter does not bear it, and the rules read its strength as if it did`);
-    if (r.state.collapses) gap(null, null, null, `the regime ${at}: a body this large of the matter found is within its own gravitational radius`);
+    if (r.state.lawless) { gap(null, null, null, `the regime ${at}: below the length the constants set by themselves, where a confined energy's own gravity is as large as it; no kept law describes that, so nothing derived there holds`, { kind: 'law', distinction: 'scale (law): below the length the constants set by themselves' }); continue; }
+    if (!r.structures.length) gap(null, null, null, `the regime ${at}: at ${T ?? 'the universe\'s floor of'} K nothing settles, so there is no matter that holds together, and the kept matters the rules read are matter that does`, { kind: 'data', distinction: 'scale (data): the kept matters are of matter that holds together, and nothing does here' });
+    if (r.state.relativistic) gap(null, null, null, `the regime ${at}: confining a particle costs more than its rest energy, so particles are made and unmade; no rule generates that regime`, { kind: 'law', distinction: 'scale (law): particles are made and unmade at this size' });
+    else if (r.state.quantum) gap(null, null, null, `the regime ${at}: the lightest particle's confinement exceeds the heat, so its states are discrete; the averaged properties the rules read are not what holds there`, { kind: 'variable', distinction: 'scale (variable): discrete states, where the rules read averages' });
+    if (r.state.crushed) gap(null, null, null, `the regime ${at}: a unit's gravity in a body this large exceeds the unit's own binding, so its matter does not bear it, and the rules read its strength as if it did`, { kind: 'relationship', distinction: 'scale (relationship): gravity crushes the matter the rules read as bearing' });
+    if (r.state.collapses) gap(null, null, null, `the regime ${at}: a body this large of the matter found is within its own gravitational radius`, { kind: 'law', distinction: 'scale (law): a body within its own gravitational radius' });
+  }
+  return out;
+}
+
+/**
+ * The depth each potential of an intent needs (src/nexus/depth.ts): every temperature, potential and speed a
+ * reservoir holds or a want asks for is a process on whatever is there, lasting the intent's duration, at the
+ * smallest size the intent states. Where it takes apart a level the rules read as whole, the state needs a variable
+ * the rules do not carry; where it reaches past every level, the gap is in the laws. A want's own band is the
+ * tolerance; elsewhere, the tuner's.
+ */
+function depthsOf(intent: Intent, gap: GapFn, read: (region: string, sym: string) => void): IntentDepth[] {
+  const isDim = (unit: string, of: string) => { try { return dimOf(unit).join() === dimOf(of).join(); } catch { return false; } };
+  const length = (unit: string) => isDim(unit, 'm');
+  const sizes = intent.regions.flatMap((r) => Object.values(r.quantities)).filter((l) => l.value && length(l.unit)).map((l) => Math.abs(toSI(l.value!, l.unit)));
+  const L = sizes.length ? Math.min(...sizes) : null;
+  const processOf = (v: number, unit: string, D: number | null): Process | null => {
+    const x = toSI(v, unit);
+    return isDim(unit, 'K') ? (x > 0 ? heat(x, D) : null) : isDim(unit, 'V') ? (x !== 0 ? potential(x, D, L) : null) : isDim(unit, 'm/s') ? (x !== 0 ? motion(Math.abs(x), D) : null) : null;
+  };
+
+  const temps = intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).filter((sym) => r.carriers?.[sym] === 'energy').map((sym) => r.quantities[sym]!)).filter((l) => l.value !== null).map((l) => toSI(l.value!, l.unit));
+  const T = temps.length ? Math.min(...temps) : null;
+  const D = intent.duration.value !== null ? toSI(intent.duration.value, intent.duration.unit) : null;
+  const probes: { p: Process; from: string; want: string | null; carrier: string | null; tolerance: number }[] = [];
+  for (const r of intent.regions.filter((x) => x.environment)) for (const sym of r.holds ?? []) {
+    const l = r.quantities[sym];
+    const p = l?.value != null ? processOf(l.value, l.unit, D) : null;
+    if (p) { probes.push({ p, from: `${l!.name} [${r.id}]`, want: null, carrier: r.carriers?.[sym] ?? null, tolerance: DEFAULT_TOLERANCE }); read(r.id, sym); }
+  }
+  for (const w of intent.wants) {
+    const v = w.hi?.value ?? w.lo?.value, unit = w.hi?.unit ?? w.lo?.unit;
+    if (v == null || !unit) continue;
+    const p = processOf(v, unit, D);
+    if (!p) continue;
+    const band = w.lo?.value != null && w.hi?.value != null ? Math.abs(w.hi.value - w.lo.value) / Math.abs(w.hi.value + w.lo.value) : null;
+    probes.push({ p, from: `${w.id}: ${w.quantity.name}`, want: w.id, carrier: w.quantity.carrier ?? null, tolerance: band && band > 0 ? band : DEFAULT_TOLERANCE });
+  }
+  const out: IntentDepth[] = [];
+  for (const { p, from, want, carrier, tolerance } of probes) {
+    const d = descend(p, { L, T, tolerance });
+    out.push({ from, want, descent: d });
+    const said = `the depth of ${from}`;
+    if (d.stop === 'refused') { gap(want, null, carrier, `${said}: ${p.says} is at or past light's speed, which no unit reaches`, { kind: 'law', distinction: 'a lawful refusal: nothing moves at light\'s speed' }); continue; }
+    if (d.gap) { gap(want, null, carrier, `${said}: ${d.gap.says}`, { kind: d.gap.kind, distinction: `depth (${d.gap.kind}): ${({ law: 'a process reaches past every level the ladder holds', primitive: 'inside the particles the ladder starts from', data: 'how far a charge moves freely before it strikes something' } as Record<string, string>)[d.gap.kind] ?? d.gap.kind}` }); continue; }
+    const apart = d.steps.filter((s) => s.verdict === 'changes'), inside = d.steps.filter((s) => s.verdict === 'resolved');
+    if (apart.length) gap(want, null, carrier, `${said}: ${p.says} over ${D === null ? 'its course' : `${Number(D.toPrecision(3))} s`} takes apart ${apart.map((s) => `${s.level.what} (${s.changed >= 0.999 ? 'all of it' : `a share ${s.changed.toPrecision(2)}`})`).join(', ')}, beyond the tolerance ${Number(tolerance.toPrecision(2))}; the rules read matter as whole units, so the state needs what they do not carry, the share of each taken apart, followed down to ${d.at!.what}, which stays whole`, { kind: 'variable', distinction: 'depth (variable): a process takes apart a level the rules read as whole' });
+    if (inside.length) gap(want, null, carrier, `${said}: lasting ${Number(D!.toPrecision(3))} s, it is faster than the own clock of ${inside.map((s) => `${s.level.what} (${s.level.clock.toExponential(2)} s)`).join(', ')}, so it resolves the inside the rules average over`, { kind: 'resolution', distinction: 'depth (resolution): an intent faster than a level\'s own clock' });
   }
   return out;
 }
@@ -1188,7 +1247,7 @@ export function lacking(intents: Intent[], structures: Structure[]): Lack[] {
   const get = (d: string) => { if (!by.has(d)) by.set(d, { distinction: d, inventions: [], gaps: 0, unread: 0 }); return by.get(d)!; };
   structures.forEach((s, k) => {
     for (const g of s.gaps) {
-      const d = SIGNATURES.find(([re]) => re.test(g.lacks))?.[1] ?? `other: ${g.lacks}`;
+      const d = g.distinction ?? SIGNATURES.find(([re]) => re.test(g.lacks))?.[1] ?? `other: ${g.lacks}`;
       const l = get(d); l.gaps++; if (!l.inventions.includes(s.intent)) l.inventions.push(s.intent);
     }
     for (const u of s.unused) {

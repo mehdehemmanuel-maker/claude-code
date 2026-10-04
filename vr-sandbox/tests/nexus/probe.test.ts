@@ -182,10 +182,13 @@ describe('the language now: carriers, balances and shapes generate structure', (
     expect(missing('printer', p)).toEqual(['manufacturing constraints']);
   });
 
-  it('the failures rank the next upgrade: what blocks all three inventions now is knowledge the data lacks, not the language', () => {
+  it('the failures rank the next upgrade: what blocks all three inventions now is data, not the language', () => {
     const { intents, structures } = round1();
     const ranked = lacking(intents, structures);
-    expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['knowledge: the kept data does not state it']);
+    // what the kept data does not state, and, since the depth of each potential is followed (src/nexus/depth.ts), how
+    // far a charge moves freely in their matter: each holds a potential past what binds the settled level, and whether
+    // that takes it apart lies between the field across one unit and the whole drop
+    expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['knowledge: the kept data does not state it', 'depth (data): how far a charge moves freely before it strikes something']);
     expect(ranked.find((l) => l.distinction.startsWith('direction'))).toBeUndefined();
     expect(ranked.find((l) => l.distinction.startsWith('advection'))).toBeUndefined();
     expect(ranked.find((l) => l.distinction.startsWith('gravity'))).toBeUndefined();

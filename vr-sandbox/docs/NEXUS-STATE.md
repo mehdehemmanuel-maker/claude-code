@@ -118,6 +118,10 @@ the generated laws are checked against, not the limit of what the language can s
 | What statics says cannot stay, the rigid-body kernel evolves from the state's places until still, and where it came to rest returns as a measured place: a tipped board comes to rest lower; at rest, nothing moves past the kernel's resolution; read back, the same state without the kernel | tests/nexus/evolve.test.ts, `npm run nexus` |
 | Contacts of any feature against a face, from the separating face and the clipped feature; a place on two sloped contacts can stay exactly when some value of the one free force pushes at both and keeps each friction within its coefficient (Fourier–Motzkin): the kernel's leaning board stays at the kernel's friction and not at a tenth of it | tests/nexus/evolve.test.ts, tests/nexus/contact.test.ts |
 | Rounds draw their own intents from the manifold's carriers, roles and want forms, magnitudes from what the kept laws cover pushed past it, seeded; a content reached by the end is brought in at (Q − Q₀)/T or, for a matter that makes more of itself, doubles at least every T / log₂(Q/Q₀) | tests/nexus/round.test.ts, `npm run nexus:round` |
+| The scale tuner derives regimes from the constants alone: no free axis once gravitation joins (Planck's units); α, the Bohr radius, the Hartree, the Compton length, the classical radius and the Bjerrum length; where gravity crushes matter, holds a body and collapses it; temperature moves only the thermal clocks; a boundary only between energies of one unit; the ladder closes by itself | tests/nexus/tuner.test.ts, `{"scale": …}` on the channel |
+| A copy of the world at s times the size needs G × s², masses × s⁻¹, heat × s⁻¹, and its clocks run at s; with the constants as measured, the world at another size lies past the boundaries between | tests/nexus/depth.test.ts, `{"copy": …}` |
+| Depth: a process goes down through every level it takes apart or resolves and stops where it leaves one whole within the tolerance asked; heat's share is its law's (Gibbs, Saha, or Boltzmann) and no more than its duration's Eyring lifetimes; a quantity is explained at the level that sets its scale (iron's density and stiffness at its crystal) or the gap is located with its kind | tests/nexus/depth.test.ts, `{"depth": …}`, `{"explain": …}` |
+| Gaps carry their kind (data, resolution, relationship, variable, operator, law, primitive) where the rule that found them states it, and rank by it | tests/nexus/probe.test.ts, `npm run nexus:round` |
 
 ## 3. What is missing
 
@@ -140,6 +144,12 @@ the generated laws are checked against, not the limit of what the language can s
 - Gravity as a field with a centre, and two media paired.
 - Conservation across a boundary as a construction constraint (what was called flows), and what generates it.
 - Sum and derivative rules for the binder.
+- In the tuner: forms with fractional powers (degeneracy, so a metal's stiffness from its electrons), the strong
+  interaction (nuclei), a plasma's density, and the eigenvalue problem that fixes the order-one factors which enter
+  exponents (the settled binding is the Hartree, twice hydrogen's ionization energy).
+- In depth: a molecule's size, the room freed parts gain where no density is given, and a motion's share from the
+  sound speed that decides a shock. Gap kinds are stated by the regime and depth rules only; the other rules still
+  rank by their words.
 - A test over the canonical form: which content is identity.
 
 ## 4. Next
@@ -151,7 +161,7 @@ with what running it found. Steps 1 to 6 run: the runtime on a journal, places i
 feature against a face, one rule for bending under every force, an evolver that moves what cannot stay, and exact
 staying on sloped contacts. The next rounds generate their own targets at random from the manifold's quantities, with
 the bar high (advanced builds, generation at biological level), from an empty journal each time; every finding kept
-in sections 16 to 21 is checked again on every round.
+in sections 16 to 21 is checked again on every round. Section 23 makes scale a regime the generator derives, and section 24 makes depth a property of every descent: a process followed down as far as it changes things, a quantity explained at the level that sets its scale, every stop explained, sufficient, or a gap of a stated kind.
 
 ## 5. Why each primitive exists
 

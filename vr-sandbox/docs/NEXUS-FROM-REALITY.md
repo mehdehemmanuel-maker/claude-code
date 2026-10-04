@@ -915,3 +915,143 @@ failure section 10 named. It has to become structured.
 - **Where a region is, so how far apart its parts are, is not said:** 70. A drawn region has no extent, and the
   generator does not choose one.
 - **How cold the sky is, for heat given away as light:** 38.
+
+## 23. The scale tuner: regimes derived, not listed
+
+Scale is a change of generative regime, not a change of magnification. `src/nexus/tuner.ts` derives what a world must
+be at a size and a temperature from the constants alone (G, the electric coupling k_C e², ħ, c, the electron's and the
+nucleon's masses, and k_B T where a temperature is given). It works in five steps, each a derivation with its record.
+
+1. **Axes.** The rank of the constants' dimension matrix says how many scale directions they leave free. With ħ, c
+   and k_B, length, time, energy, frequency, temperature and mass are one axis: time is one face of it, not a
+   coordinate of its own. With G as well, none is free, and the units the constants set by themselves are Planck's
+   (CODATA 2018 to four figures).
+2. **Energies a size has.** An agent combined with what its dimension needs gives E(L) = M/L^n. The agents are a
+   coupling, the action, the heat, light's speed, and a binding found below. Each energy is of one particle, of one
+   unit in a body, or of a whole body, and energies are compared only when they are of the same thing.
+3. **Where they meet.** Two energies with one dependence on size have a ratio that no change of scale alters: a
+   coupling strength. Two with different dependences cross at a size, and what wins on each side says what that size
+   is. It is where things settle, where an attraction holds things within, where confinement exceeds rest energy, or
+   where gravity exceeds binding. A crossing counts as a boundary only where both energies are of one unit at that
+   size. ħc/L is a unit's motion only within its Compton length, and ħ²/(mL²) only outside it. Without that filter
+   the ladder listed false analogies, such as an atom's gravity in a body "beating" the energy of light at 294 m.
+4. **Recursion.** What settles is a structure. Its size, binding, mass and density become new quantities, and the
+   ladder derives again with them. It stops by itself at the first level that settles nothing new (`closed`); no
+   depth is given.
+5. **A copy at another scale** (`copyAt`). With ħ and c held, since they are what length is measured in, each energy
+   form M/L^n of a world scaled by s needs M × s^(n−1). That is a linear system in the exponents of the constants'
+   factors.
+
+**What it reproduces, never given:**
+- α = 7.2974 × 10⁻³; the Bohr radius, 5.29177 × 10⁻¹¹ m; the Hartree, 27.211 eV; the reduced Compton length,
+  3.8616 × 10⁻¹³ m; the classical electron radius, 2.8179 × 10⁻¹⁵ m; the vacuum Bjerrum length at 300 K, 5.57 × 10⁻⁸ m.
+- Only one structure settles from the constants and survives the cosmic background's heat.
+- The size where gravity crushes that matter, 5.92 × 10⁷ m (Jupiter's radius is 7.15 × 10⁷ m).
+- The size where such a body holds itself together at 300 K, 1.83 × 10⁶ m (the Moon's is 1.74 × 10⁶ m).
+- Collapse within its own gravitational radius at 3.47 × 10¹¹ m.
+- The free-fall time 1/√(Gρ), the same at every size.
+
+**What temperature does to time.** Temperature moves only the thermal clocks: ħ/kT goes as T⁻¹, and a thermal
+crossing as T^−½. Every other clock has exponent 0. Above E_b/k (3.16 × 10⁵ K), what changes is the regime, since
+structures dissolve, not the clocks. Nothing here hard-codes "colder is slower" or "smaller is faster": each clock's
+exponent is measured by deriving again at 2T.
+
+**As above, so below.** `copyAt` answers exactly what a copy of the world at s times the size needs. It needs
+gravitation × s², every mass × s⁻¹ and the heat × s⁻¹, with the electric coupling as it is. Every clock in the copy
+then runs at s times ours, so a copy at 10⁻⁴⁰ of the size lives its whole history in 10⁻⁴⁰ of the time. That is the
+true form of the intuition: the dimensionless numbers (α, G m²/ħc, the mass ratios) are what a copy must share, so a
+copy is a rescaling of everything together, never of one thing. With the constants as measured, the world at another
+size is not a copy. It lies past every boundary between the two sizes, and `copyAt` lists them: 8 between 10⁻¹⁴ m and
+10²⁶ m. The constants do not guarantee self-similarity. They are what breaks it, and they fix the sizes where the
+regimes change.
+
+**In the generator.**
+- The regime at an intent's smallest and largest sizes is derived. A gap is left, with its kind, where the regime its
+  rules assume does not hold: no structure settles (data), particles are made (law), states are discrete (variable),
+  gravity crushes the matter (relationship), or the body collapses (law). Below the length the constants set by
+  themselves, no kept law holds (law).
+- The draw now draws a size over everything the tuner reaches.
+- The channel takes `{"scale": {"at": m, "T": K}}` and prints the state, what acts, the clocks with their temperature
+  exponents, the nearby boundaries, the structures, and what resolving the size costs an observer. Light that
+  resolves an atom's size breaks it.
+
+**Located lacks.**
+- Degeneracy: confinement among neighbours goes as n^(2/3), and integer powers cannot form it (an operator).
+- The strong interaction, so no nucleus.
+- A plasma's density, so above about 3 × 10⁵ K there are no bodies.
+- The order-one factors the dimensions cannot see. The settled binding is the Hartree, where hydrogen's ionization
+  energy is half of it. Where an energy enters an exponent (Boltzmann, Saha), that factor matters by e^(ΔE/kT). Fixing
+  it needs the eigenvalue problem, an operator the language lacks.
+
+## 24. Depth: as far down as the question goes
+
+Water showed the requirement (sections 9 and 10, rounds 8 to 12): its boiling, its viscosity and its density each
+needed a different depth. `src/nexus/depth.ts` makes depth a property of every descent, for any phenomenon. It is not
+a list of layers and not a count of them. A level is whatever is there:
+- what the tuner's ladder settles;
+- each particle, held together by its rest energy;
+- the floor, the length the constants set by themselves;
+- where a matter is named, its own levels from the kept species, by the laws that read them: a crystal's cohesion and
+  lattice (`solid.ts`), a liquid's crossing to its vapour (`phase.ts`), and a molecule's weakest bond (`compose.ts`).
+
+**A process** (heat, a potential across a size, a motion, over a duration) goes down through every level it takes
+apart or resolves. It stops at the first level it leaves whole to within the tolerance asked, which is a want's own
+band where there is one. That level enters as a unit, and nothing below it can change the outcome by more than the
+tolerance. So sufficiency is shown, not assumed.
+
+**Time decides as much as energy.**
+- Under heat, a level's unit lasts τ = (h/kT) e^(E_b/kT). It is attempted at the thermal rate and succeeds by the
+  Boltzmann factor (Eyring, `rate.ts`).
+- A process takes apart no more than the share of lifetimes its duration covers, 1 − e^(−D/τ).
+- A process faster than a level's own clock ħ/E_b resolves its inside even where it breaks none of it.
+- The settled level lasts 10^−3.0 s at 12 000 K and re-forms. At 300 K it lasts 10^444 s. Water's molecule
+  lasts 10^47.5 s at 400 K, and 10^−10.1 s at 6000 K.
+
+**Each share is its law's.**
+- A liquid's arrangement is apart where its vapour has the lesser Gibbs energy. Water at one bar is whole at 300 K, and
+  at 400 K it is followed down to its molecule, which stays whole.
+- A pair among units at a known density is apart by Saha's balance, so the thinner the matter, the more of it at one
+  heat.
+- A potential across a size gives a charge between the field across one unit and the whole drop. Where the binding
+  lies between the two, how far a charge moves freely decides it. That is a datum of the matter's state, and the gap
+  says so (data).
+- A motion at or past light's speed is refused.
+- Past every level, the gap is in the laws. Inside the smallest unit, it is in the primitives: the particles' masses
+  are measured, never derived.
+
+**A quantity** is explained at the level whose size, mass and binding set its scale. That is the one product of their
+powers, with e and k_B where the dimension needs them, that has the quantity's dimension. Within a decade (a stated
+assumption: the factors the dimensions cannot see), it is explained there with that level's lineage. Off at every
+level, the gap is located between the level that comes closest and the phenomenon, with how many decades and in which
+direction.
+
+| Ask | Where the descent stops |
+|---|---|
+| Iron's density | explained at its crystal (0.00 decades) |
+| Steel's modulus | explained at the iron crystal (0.54) |
+| Steel's yield strength | 2.4 decades below what the crystal's binding sets, so something above the crystal and below the body sets it |
+| A dense solid's density, its matter unnamed | explained at the settled level |
+| A wood's or a cork's density | 1.2 to 1.7 decades below the settled level: how much of the space it fills, a level the ladder does not hold |
+| Every kept material's strength | 4 to 7.6 decades below the settled level |
+| Water's boiling point | 1.2 decades below E_vap/k: the room the vapour gains, which `phase.ts` derives and the scale alone cannot see |
+
+**In the generator.** Every temperature, potential and speed an intent's reservoirs hold or its wants ask for is
+followed down, lasting the intent's duration, at its smallest size. Each gap carries its kind (data, resolution,
+relationship, variable, operator, law, primitive), and the ranking reads that kind rather than regular expressions.
+This is the start of the structured gaps section 22 asked for.
+
+Round 3 (seed 2001, 300 intents, 6.1 s) ranks what depth finds:
+- **Inside the particles the ladder starts from** (primitive): 37 intents.
+- **How far a charge moves freely** (data): 52 intents. This includes the house, the car and the printer, each of
+  which holds a potential past what binds the settled level.
+- **A process reaches past every level** (law).
+- **A process takes apart a level the rules read as whole** (variable).
+
+The channel takes `{"depth": …}`, `{"explain": …}` and `{"copy": …}`.
+
+**Located lacks.**
+- A molecule's own size is not in the species, so no scale that needs it is set there.
+- The share heat takes apart is the Boltzmann factor where no law states it. That ignores the room the freed parts gain
+  (Saha's balance needs a density), so water's molecules at 6000 K come out mostly whole.
+- What a motion gives a unit is for a stop at contact. A body moving through nothing changes nothing, and the sound
+  speed that decides a shock is not yet read.

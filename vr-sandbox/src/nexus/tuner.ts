@@ -195,6 +195,7 @@ export function meet(fs: Form[]): { invariants: Invariant[]; crossings: Crossing
     if (L.value === null || !Number.isFinite(L.value)) continue;
     const Lv = variable('L', 'm', 'the size');
     const E = evaluate(`energy where ${a.text} meets ${b.text}`, div(A, pow(Lv, a.n)), { A: a.M, L }, { unit: 'J', law: 'the energy there' });
+    if (!sameUnit(a, b, L.value)) continue;
     const below = a.n > b.n ? a : b, above = below === a ? b : a;
     const boundary: Boundary =
       above.kind === 'interaction' && below.kind === 'motion' && above.n > 0 ? 'settles'
@@ -208,22 +209,52 @@ export function meet(fs: Form[]): { invariants: Invariant[]; crossings: Crossing
   return { invariants, crossings };
 }
 
+/**
+ * Whether two energies that meet at a size are energies of one unit there, so that their meeting is a boundary and not
+ * a false analogy. Each form is the energy of the units its masses, densities and bindings are of. Two forms of named
+ * units must share one. A form of no unit belongs to whichever unit it can act on: the thermal energy to any; the
+ * electric coupling alone to a charged one; the quantum of action with light's speed (ħc/L) to a unit only where the
+ * size is within its Compton length, where its motion is that. And a unit's own quantum motion ħ²/(m L²) is its motion
+ * only outside that length.
+ */
+function sameUnit(a: Form, b: Form, L: number): boolean {
+  const hbar = CONST.h.value! / (2 * Math.PI), c = CONST.c.value!;
+  // the Compton length, with the boundary itself on both sides of it: the two motions meet there
+  const compton = (m: number) => hbar / (m * c), inside = (m: number) => L < compton(m) * (1 - 1e-9), within = (m: number) => L <= compton(m) * (1 + 1e-9);
+  const units = (f: Form) => new Set(f.factors.filter((x) => x.q.role === 'mass' || x.q.role === 'density' || x.q.role === 'binding').map((x) => x.q.of));
+  const masses = (f: Form) => f.factors.filter((x) => x.q.role === 'mass').map((x) => x.q);
+  const lightMotion = (f: Form) => f.kind === 'motion' && f.factors[0]!.q.role === 'action' && f.factors.some((x) => x.q.role === 'speed') && !masses(f).length;
+  const heavyMotion = (f: Form) => f.kind === 'motion' && f.factors[0]!.q.role === 'action' && masses(f).length > 0;
+  const bareElectric = (f: Form) => f.factors.length === 1 && f.factors[0]!.q.key === 'q2';
+  for (const f of [a, b]) if (heavyMotion(f) && masses(f).some((m) => inside(m.d.value!))) return false;
+  const [ua, ub] = [units(a), units(b)];
+  if (ua.size && ub.size) return [...ua].some((x) => ub.has(x));
+  const free = ua.size ? b : a, named = free === a ? b : a;
+  if (free.kind === 'motion' && free.factors[0]!.q.role === 'thermal') return true;
+  if (lightMotion(free)) { const ms = masses(named); return !ms.length || within(Math.min(...ms.map((m) => m.d.value!))); }
+  if (bareElectric(free)) return masses(named).every((m) => !!m.charge);
+  return true;
+}
+
 // ---- 4. recursion: what settles below is the environment above --------------------------------------------------
 
-export interface Structure { key: string; at: Crossing; size: Derivation; binding: Derivation; mass: Derivation; density: Derivation; level: number; charge: number }
+export interface Structure { key: string; at: Crossing; size: Derivation; binding: Derivation; mass: Derivation; density: Derivation; level: number; charge: number; parts: Q[] }
 
 /**
  * Structures and the ladder they make. A size where an attraction wins above and a motion below is where things
  * settle: a structure. Its mass is its constituents', the masses the quantity set holds (a declared assumption: the
  * attraction joins the lightest particle to the heaviest, as opposite charges must be carried by something). Its
- * density and its binding are new quantities, and the energies and crossings are derived again with them, to `depth`
- * levels.
+ * density and its binding are new quantities, and the energies and crossings are derived again with them. How many
+ * levels there are is the derivation's to find: it stops at the level that settles nothing new. `depth` only caps it
+ * where a caller wants fewer, and `closed` says whether the ladder stopped by itself.
  */
-export function ladder(base: Q[], depth = 2): { levels: { qs: Q[]; forms: Form[]; invariants: Invariant[]; crossings: Crossing[]; structures: Structure[] }[] } {
+export function ladder(base: Q[], depth = Infinity): { levels: { qs: Q[]; forms: Form[]; invariants: Invariant[]; crossings: Crossing[]; structures: Structure[] }[]; closed: boolean } {
   const levels: ReturnType<typeof ladder>['levels'] = [];
-  let qs = base;
+  let qs = base, closed = false;
   const seen = new Set<string>();
-  for (let level = 0; level <= depth; level++) {
+  // a guard, not a depth: a ladder that has not closed after this many levels is reported open, never cut silently
+  const guard = Math.min(depth, 64);
+  for (let level = 0; level <= guard; level++) {
     const fs = forms(qs), { invariants, crossings } = meet(fs);
     const structures: Structure[] = [];
     // heat takes apart what binds weaker than the thermal energy around it; with no temperature given, nothing in
@@ -251,10 +282,10 @@ export function ladder(base: Q[], depth = 2): { levels: { qs: Q[]; forms: Form[]
       const mass = evaluate(`mass of what settles at ${c.L.name}`, app('add', [mvars.m1, mvars.m2]), { m1: parts[0]!.d, m2: parts[1]!.d }, { unit: 'kg', law: 'a structure\'s mass is its constituents\'' });
       const Lv = variable('L', 'm', 'its size'), mv = variable('m', 'kg', 'its mass');
       const density = evaluate(`density of what settles at ${c.L.name}`, div(mv, pow(Lv, 3)), { m: mass, L: c.L }, { unit: 'kg/m^3', law: 'its mass over its size cubed' });
-      structures.push({ key, at: c, size: c.L, binding: c.E, mass, density, level, charge: (parts[0]!.charge ?? 0) + (parts[1]!.charge ?? 0) });
+      structures.push({ key, at: c, size: c.L, binding: c.E, mass, density, level, charge: (parts[0]!.charge ?? 0) + (parts[1]!.charge ?? 0), parts });
     }
     levels.push({ qs, forms: fs, invariants, crossings, structures });
-    if (!structures.length) break;
+    if (!structures.length) { closed = true; break; }
     qs = [...qs, ...structures.flatMap((s, i) => {
       const of = `what settles at ${Number(s.size.value!.toPrecision(3))} m`;
       return [
@@ -264,7 +295,7 @@ export function ladder(base: Q[], depth = 2): { levels: { qs: Q[]; forms: Form[]
       ];
     })];
   }
-  return { levels };
+  return { levels, closed };
 }
 
 // ---- the regime at a size -------------------------------------------------------------------------------------------
@@ -312,7 +343,7 @@ export interface Regime {
  * the largest boundary the ladder derives; past it nothing new is found, which is not the same as nothing new being
  * there.
  */
-export function reach(depth = 2): { least: number; most: number } {
+export function reach(depth = Infinity): { least: number; most: number } {
   const [G, , hbar, c] = universe();
   const kB: Q = { key: 'kB', d: ofLeaf(CONST.kB), role: 'thermal', of: 'the Boltzmann constant' };
   const least = axes([hbar!, c!, G!, kB]).units.find((u) => u.of === 'length')!.value;
@@ -320,14 +351,22 @@ export function reach(depth = 2): { least: number; most: number } {
   return { least, most };
 }
 let reached: { least: number; most: number } | null = null;
+/** The sizes the derivation reaches, derived once. */
+export const reached0 = () => (reached ??= reach());
 
 /** A ladder is a pure function of its temperature and depth: derived once for each. */
 const ladders = new Map<string, ReturnType<typeof ladder>>();
+/** The ladder at a temperature (none: the universe's background), derived once and kept. */
+export function ladderAt(T: number | null, depth = Infinity): ReturnType<typeof ladder> {
+  const key = `${T}|${depth}`;
+  let l = ladders.get(key);
+  if (!l) { l = ladder(universe(T === null ? undefined : ofLeaf(leaf('temperature', T, 'K', { class: 'given', by: 'the tuner', grounds: 'the temperature the regime is derived at' }))), depth); ladders.set(key, l); }
+  return l;
+}
 
 /** The regime at size L (and temperature T): everything derived from the energies at that size. */
-export function regimeAt(L: number, T: number | null, gap = 100, depth = 2): Regime {
-  const temp = (Tx: number) => ofLeaf(leaf('temperature', Tx, 'K', { class: 'given', by: 'the tuner', grounds: 'the temperature the regime is derived at' }));
-  const build = (Tx: number | null) => { const key = `${Tx}|${depth}`; let l = ladders.get(key); if (!l) { l = ladder(universe(Tx === null ? undefined : temp(Tx)), depth); ladders.set(key, l); } return l; };
+export function regimeAt(L: number, T: number | null, gap = 100, depth = Infinity): Regime {
+  const build = (Tx: number | null) => ladderAt(Tx, depth);
   const lad = build(T), top = lad.levels.at(-1)!;
   const at = (fs: Form[]) => fs.map((f) => ({ f, E: energyAt(f, L) })).sort((a, b) => b.E - a.E);
   const energies = at(top.forms.filter((f) => f.of !== 'body')), bodies = at(top.forms.filter((f) => f.of === 'body'));
@@ -352,7 +391,7 @@ export function regimeAt(L: number, T: number | null, gap = 100, depth = 2): Reg
     crushed: unitGravity && binding ? energyAt(unitGravity, L) > energyAt(binding, L) : null,
     selfHeld: unitGravity && kT !== null ? energyAt(unitGravity, L) > kT : null,
     collapses: bodyGravity && bodyRest ? energyAt(bodyGravity, L) > energyAt(bodyRest, L) : null,
-    lawless: L < (reached ??= reach()).least,
+    lawless: L < reached0().least,
   };
   // times of one unit: each energy's quantum time ħ/E; the time each energy moves the mass it acts on across L (the
   // mass in its form, or each particle's where the form holds none); light's crossing
@@ -378,4 +417,67 @@ export function regimeAt(L: number, T: number | null, gap = 100, depth = 2): Reg
   const h = CONST.h.value!;
   const byLight = (h * c) / L, byElectron = h ** 2 / (2 * CONST.me.value! * L ** 2);
   return { L, T, energies, strongest, bodies, negligible, state, times, near, observer: { byLight, byElectron, weakestBinding, disturbs: weakestBinding !== null && Math.min(byLight, byElectron) > weakestBinding }, structures };
+}
+
+// ---- 5. a copy at another scale: what "as above, so below" would need ------------------------------------------------
+
+/** What a world scaled by `by` in size would need of the constants, for every ratio of its energies to be the same. */
+export interface Copy {
+  by: number;
+  /** Each constant's factor as a power of `by`: the copy needs it times by^exponent. Zero: it may stay. */
+  needs: { key: string; of: string; exponent: number; factor: number }[];
+  /** Whether any assignment of the constants makes the copy: false when the energies' own dependences forbid it. */
+  possible: boolean;
+  /** How its clocks scale: every time in it is this factor times ours. */
+  clocks: number;
+  /** The boundaries a world of the measured constants passes between the size and the scaled size: why, with the constants as measured, the world at the other size is not a copy but another regime. */
+  passed: Crossing[];
+}
+
+/**
+ * A copy of the world at `by` times the size. The quantum of action and light's speed are held, since they are what
+ * length is measured in (L = ħc/E): a copy then has every energy at its sizes 1/by of ours at ours, and so every
+ * energy form M / L^n needs M times by^(n−1). That is one linear equation per form in the exponents of the constants'
+ * factors, solved here; a consistent solution is the copy's constants, an inconsistent one says no copy exists. With
+ * the constants as measured, none of the factors is there, and the world at the other size lies on the far side of
+ * every boundary between the two sizes: the ladder lists them.
+ */
+export function copyAt(L: number, by: number, T?: number): Copy {
+  const temp = T === undefined ? undefined : ofLeaf(leaf('temperature', T, 'K', { class: 'given', by: 'the tuner', grounds: 'the temperature the copy is derived at' }));
+  const base = universe(temp), held = new Set(['hbar', 'c']);
+  const unknown = base.filter((q) => !held.has(q.key));
+  const rows: number[][] = [];
+  for (const f of forms(base)) {
+    const row = unknown.map((q) => f.factors.filter((x) => x.q === q).reduce((a, x) => a + x.p, 0));
+    rows.push([...row, f.n - 1]);
+  }
+  const x = solve(rows, unknown.length);
+  const lo = Math.min(L, L * by), hi = Math.max(L, L * by);
+  const once = new Set<string>();
+  const passed = ladder(base).levels.flatMap((l) => l.crossings).filter((c) => c.boundary !== 'crosses' && c.L.value! > lo && c.L.value! < hi).sort((a, b) => a.L.value! - b.L.value!).filter((c) => { const key = `${c.boundary}@${c.L.value!.toPrecision(3)}`; if (once.has(key)) return false; once.add(key); return true; });
+  return {
+    by, possible: x !== null, clocks: by, passed,
+    needs: x === null ? [] : unknown.map((q, i) => ({ key: q.key, of: q.of, exponent: x[i]!, factor: by ** x[i]! })),
+  };
+}
+
+/** Exact solution of a consistent linear system [A | b] (Gauss-Jordan), with free unknowns set to zero; null if inconsistent. */
+function solve(rows: number[][], n: number): number[] | null {
+  const m = rows.map((r) => [...r]);
+  const pivots: number[] = [];
+  let r = 0;
+  for (let col = 0; col < n && r < m.length; col++) {
+    let best = r;
+    for (let i = r + 1; i < m.length; i++) if (Math.abs(m[i]![col]!) > Math.abs(m[best]![col]!)) best = i;
+    if (Math.abs(m[best]![col]!) < 1e-12) continue;
+    [m[r], m[best]] = [m[best]!, m[r]!];
+    const pv = m[r]![col]!;
+    m[r] = m[r]!.map((x) => x / pv);
+    for (let i = 0; i < m.length; i++) if (i !== r && Math.abs(m[i]![col]!) > 0) { const f = m[i]![col]!; m[i] = m[i]!.map((x, j) => x - f * m[r]![j]!); }
+    pivots.push(col); r++;
+  }
+  for (let i = r; i < m.length; i++) if (Math.abs(m[i]![n]!) > 1e-9) return null;
+  const x = new Array<number>(n).fill(0);
+  pivots.forEach((col, i) => { x[col] = m[i]![n]!; });
+  return x;
 }

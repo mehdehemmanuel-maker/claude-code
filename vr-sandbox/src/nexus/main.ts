@@ -4,8 +4,7 @@
 //   npm run nexus -- path/to/journal.jsonl < lines.jsonl
 
 import { createInterface } from 'node:readline';
-import { answer, project, read, showRegime } from './channel-text';
-import { regimeAt } from './tuner';
+import { answer, project, read, tune } from './channel-text';
 import { evolve, notAtRest } from './evolve';
 import type { Jolt } from './realize';
 import { Runtime } from './runtime';
@@ -27,7 +26,7 @@ async function handle(line: string): Promise<string[]> {
   const m = read(line);
   if ('contribution' in m) return project(rt, rt.admit(m.contribution));
   if ('contributions' in m) return m.contributions.flatMap((c) => project(rt, rt.admit(c)));
-  if ('scale' in m) return showRegime(regimeAt(m.scale.L, m.scale.T));
+  if ('tune' in m) return tune(m.tune);
   if ('evolve' in m) {
     const moving = notAtRest(rt);
     const e = evolve(await jolt(), rt);
