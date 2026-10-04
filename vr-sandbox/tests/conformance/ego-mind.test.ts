@@ -15,11 +15,11 @@ describe("Ego's Mind on the stand", () => {
   it('a table for 60 kg: fails as built, the racking hypothesis is tested and confirmed, the proof load holds, the investigation resolves; cut after the hypothesis, it resumes to the same end', async () => {
     const J = await jolt();
     const stand = async (s: StandSetup) => { const w = new PhysicsWorld(J, s.sim); try { return runStand(w, s); } finally { w.destroy(); } };
-    const { setup, frag } = buildTest({ spec: { what: 'table', load: 60 }, changes: [], factor: 1 }, sim);
+    const { setup, frag, roles } = buildTest({ spec: { what: 'table', load: 60 }, changes: [], factor: 1 }, sim);
     const result = await stand(setup);
     const journal = new MemoryJournal();
     const mind = new Mind(journal, { stand, sim });
-    await mind.process({ kind: 'stand-result', inv: 'table-real', spec: { what: 'table', load: 60 }, result, signature: signatureOf(result, frag), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() });
+    await mind.process({ kind: 'stand-result', inv: 'table-real', spec: { what: 'table', load: 60 }, result, signature: signatureOf(result, frag, roles), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() });
     const cs = of(journal.commits, 'table-real');
     expect(cs.map((c) => `${c.kind}:${c.status}`)).toEqual(['observation:open', 'anomaly:open', 'hypothesis:testing', 'evidence:open', 'belief:open', 'question:testing', 'evidence:open', 'belief:resolved']);
     // as built it stood, but a leg joint worked past the 67% she allows: that is the failure, as the old loop found it
@@ -44,7 +44,7 @@ describe("Ego's Mind on the stand", () => {
   it('a shelf unit for 20 kg a shelf, free-standing: strong enough, not stable; pushed from the front at the top it tips in one piece at the first test, as the overturning law says, and the only hypothesis is anchoring, a design question held open with nothing the stand can test', async () => {
     const J = await jolt();
     const stand = async (s: StandSetup) => { const w = new PhysicsWorld(J, s.sim); try { return runStand(w, s); } finally { w.destroy(); } };
-    const { setup, frag } = buildTest({ spec: { what: 'shelf', load: 20 }, changes: [], factor: 1 }, sim);
+    const { setup, frag, roles } = buildTest({ spec: { what: 'shelf', load: 20 }, changes: [], factor: 1 }, sim);
     // the least favourable push (mechanical.overturning): across the depth, the shortest span of the footprint, at the top shelf; the unit stands at
     // reach height (scale.person) on a base one shelf deep, so with its shelves loaded the push it holds (W b/2 ÷ h) is a fraction of a person's
     const push = setup.pushes![0]!;
@@ -55,7 +55,7 @@ describe("Ego's Mind on the stand", () => {
     const result = await stand(setup);
     const journal = new MemoryJournal();
     const mind = new Mind(journal, { stand, sim });
-    await mind.process({ kind: 'stand-result', inv: 'shelf-real', spec: { what: 'shelf', load: 20 }, result, signature: signatureOf(result, frag), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() });
+    await mind.process({ kind: 'stand-result', inv: 'shelf-real', spec: { what: 'shelf', load: 20 }, result, signature: signatureOf(result, frag, roles), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() });
     const cs = of(journal.commits, 'shelf-real');
     // the first look fails as the law said it would: the anomaly against a static prediction is the tilt, not a joint, and no test can settle anchoring
     expect(cs.map((c) => `${c.kind}:${c.status}`)).toEqual(['observation:open', 'anomaly:open', 'hypothesis:open']);

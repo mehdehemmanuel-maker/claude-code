@@ -53,6 +53,10 @@ import { ReportBook, troubleOf, type Trouble } from './reports';
 import { DEFAULTS, design, sizeOf, type DesignSpec } from './designer';
 import type { Revision } from './intent';
 import { JOINT_LIMIT, overturning, PUSH, standLoads, standPushes } from '../mind';
+import { defaultOf } from '../construct/laws';
+
+/** Where a thing made for you stands: its near face within your reach (construct/laws.ts scale.person). */
+const REACH = defaultOf({ kinds: ['artefact'], roles: [], flows: [], materials: [], forPerson: true }, 'reach') ?? 0.75;
 import { fragmentOf } from '../doc/commands';
 import { Mind, sayBrief, sayChanged, sayWorking, signatureOf as standSignature, type PartInfo } from '../mind';
 import { rigidDomain } from '../ganglia/native/tsc';
@@ -450,7 +454,7 @@ export class Ego {
         if (!r) return 'Nothing is engineered yet: tell me what to store, give out, work between, weigh under.';
         const pick = i.which ? r.candidates.find((k) => k.store.mechanism === i.which || k.store.names?.some((n) => n.toLowerCase().includes(i.which!)) || k.store.name.includes(i.which!)) : r.candidates.find((k) => k.instantiable) ?? r.chosen;
         if (!pick) return `I engineered no ${i.which ?? ''} way for that contract.`;
-        const at = this.host.frontFloor(1.2);
+        const at = this.host.frontFloor(REACH);
         const out = instantiate(pick, this.app.store, [at[0], at[1], at[2]], [0, 0, 0, 1], `store${++this.seq}`);
         if ('refused' in out) return `${pick.store.name}: ${out.refused}.`;
         this.app.select(out.parts);
@@ -575,7 +579,7 @@ export class Ego {
     const tips = !!tip && tip.ratio > 1;
     if (tip && tips) this.say('warn', `Free-standing, it tips under a firm push at the top from the ${push!.force[2] ? 'front' : 'side'}: ${Math.round(tip.takes)} N tips it and a person pushes ${PUSH} N. Anchor it to a wall, or widen its base.`, []);
     const result = await app.physics.stand(setup);
-    await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag), predicted: { held: !tips, uMax: Math.max(predictedU, JOINT_LIMIT), model: tips ? 'foresight: static load paths under the rated load; the push overturns it, its moment about the toe past the weight\'s' : 'foresight: static load paths under the rated load; the push is within what the base resists', laws: ['statics.load-path', 'joint.capacity', 'construction.mechanical.overturning'] }, since });
+    await mind.process({ kind: 'stand-result', inv, spec, result, signature: standSignature(result, frag, roles), predicted: { held: !tips, uMax: Math.max(predictedU, JOINT_LIMIT), model: tips ? 'foresight: static load paths under the rated load; the push overturns it, its moment about the toe past the weight\'s' : 'foresight: static load paths under the rated load; the push is within what the base resists', laws: ['statics.load-path', 'joint.capacity', 'construction.mechanical.overturning'] }, since });
     this.say('tip', sayBrief(mind.journal.commits, inv, 'On my stand'), []);
   }
 
@@ -609,7 +613,7 @@ export class Ego {
     if (materialWord) spec.material = resolveMaterial('block', materialWord);
     const before = new Set(Object.keys(app.doc.parts));
     // a little further off than a single part, so the whole thing is in front of you
-    const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
+    const [x, , z] = this.host.frontFloor(REACH + (spec.depth ?? 0.5) / 2);
     const plan = design(spec, x, z, `${spec.what}${++this.seq}-`, { groundAt: (px, pz) => this.app.groundAt(px, pz) });
     this.designing = true;
     let r: RunResult;
@@ -653,7 +657,8 @@ export class Ego {
   private releaseWalker(words: string) {
     const app = this.app, plan = walkerFromWords(words);
     if (!plan) return;
-    const at = this.host.frontFloor(1.5), you = this.host.viewer();
+    // released beyond your reach by its own length, so it can turn and walk without meeting you
+    const at = this.host.frontFloor(REACH + plan.body.length), you = this.host.viewer();
     const heading = Math.atan2(-(you[2] - at[2]), you[0] - at[0]);
     const kind = Object.keys(WALKERS).find((k) => WALKERS[k] === plan) ?? 'walker';
     const tag = `${kind}${++this.seq}`;
@@ -681,7 +686,7 @@ export class Ego {
    */
   teach(spec: DesignSpec, materialWord?: string): string {
     if (materialWord) spec.material = resolveMaterial('block', materialWord);
-    const [x, , z] = this.host.frontFloor(1.2 + (spec.depth ?? 0.5) / 2);
+    const [x, , z] = this.host.frontFloor(REACH + (spec.depth ?? 0.5) / 2);
     const plan = design(spec, x, z, `${spec.what}${++this.seq}-`, { groundAt: (px, pz) => this.app.groundAt(px, pz) });
     let l: Lesson;
     try { l = lessonFrom(`a ${spec.what}`, plan.forge, this.app.doc.sim); } catch (e) { return `I couldn't make a lesson of it: ${(e as Error).message}`; }

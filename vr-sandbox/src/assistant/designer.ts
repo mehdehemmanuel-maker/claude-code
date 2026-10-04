@@ -7,7 +7,7 @@ import { getMaterial, STANDARD_GRAVITY as g, type Material } from '../data/mater
 import { LUMBER } from '../parts/registry';
 import { structure } from './grammar';
 import { defaultOf, type Env } from '../construct/laws';
-import { toForge, rolesOf, type Role } from '../construct/assembly';
+import { Builder, FLOOR, toForge, rolesOf, type Role, type Structured } from '../construct/assembly';
 
 /** What she designs: the five originals, and the structures the grammar composes from function and constraints (grammar.ts). */
 export type Design = 'table' | 'crate' | 'shelf' | 'wall' | 'tower' | 'bench' | 'bridge' | 'frame' | 'stand' | 'ramp' | 'ladder' | 'chair';
@@ -124,27 +124,24 @@ export function sheets(m: Material) {
 
 /** A design for what was asked, placed with its footprint centred on (ox, oz) on the ground there (env.groundAt; the floor when unsaid). */
 export function design(spec: DesignSpec, ox: number, oz: number, tag = 'd', env: Env = {}): Plan {
+  const { assembly, laws, notes } = structured(spec, ox, oz, tag);
+  return { forge: toForge(assembly, env), laws, notes, parts: assembly.members.length, roles: rolesOf(assembly) };
+}
+
+/** Every design as an assembly: members with roles, placed by relation (construct/assembly.ts). */
+export function structured(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   switch (spec.what) {
     case 'table': case 'bench': return table(spec, ox, oz, tag);
     case 'crate': return crate(spec, ox, oz, tag);
     case 'shelf': return shelf(spec, ox, oz, tag);
     case 'wall': return wall(spec, ox, oz, tag);
     case 'tower': return tower(spec, ox, oz, tag);
-    default: {
-      const { assembly, laws, notes } = structure(spec, ox, oz, tag);
-      return { forge: toForge(assembly, env), laws, notes, parts: assembly.members.length, roles: rolesOf(assembly) };
-    }
+    default: return structure(spec, ox, oz, tag);
   }
 }
 
-/** Roles for the five designs still written as coordinates, by name pattern (their members' roles are no different). */
-function rolesByName(forge: string, tag: string, rule: (name: string) => Role): Record<string, Role> {
-  const out: Record<string, Role> = {};
-  for (const m of forge.matchAll(/ as (\S+)$/gm)) out[m[1]!] = rule(m[1]!.slice(tag.length));
-  return out;
-}
 
-function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
+function table(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   const bench = spec.what === 'bench';
   const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
   const load = spec.load ?? DEFAULTS[spec.what].load;
@@ -155,46 +152,25 @@ function table(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   const legL = H - top.t;
   const leg = legFor(legM, legL, ((load + topMass) * g) / 4);
   const inset = leg.wide / 2 + 0.01;
-  const lines = [
-    `place plate length=${f(W)} width=${f(D)} thickness=${f(top.t)} mat ${topM.id} at ${f(ox)} ${f(H - top.t / 2 + 0.0005)} ${f(oz)} as ${tag}top`,
-  ];
+  const a = new Builder(tag);
+  // four legs stand at the corners, each on its own ground; the top rests on them; aprons span between each pair under it
   const corners: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-  corners.forEach(([sx, sz], i) => {
-    const x = ox + sx * (W / 2 - inset), z = oz + sz * (D / 2 - inset);
-    lines.push(`place ${leg.kind} ${leg.params} length=${f(legL)} mat ${legM.id} at ${f(x)} ${f(legL / 2)} ${f(z)} rot z 90 as ${tag}leg${i}`);
-    lines.push(`join ${tag}leg${i} ${tag}top`);
-  });
-  // aprons: a rail between each pair of legs, on edge, tight under the top, joined to both legs and to the top.
-  // Stood up, a leg's section lies along x (its thickness) and z (its width).
+  const legs = corners.map(([sx, sz], i) => a.post(`leg${i}`, leg, legM, ox + sx * (W / 2 - inset), oz + sz * (D / 2 - inset), legL));
+  const t = a.on('top', 'plate', `length=${f(W)} width=${f(D)} thickness=${f(top.t)}`, topM, legs, 'carries');
+  a.join(t, ...legs);
   const apron = spec.aprons ? apronFor(legM, leg) : null;
   if (apron) {
-    const lx = leg.side / 2, lz = leg.wide / 2;
-    const yc = legL - apron.h / 2 - 0.0005;
-    const spanX = 2 * (W / 2 - inset - lx) - 0.001, spanZ = 2 * (D / 2 - inset - lz) - 0.001;
-    const rails: [string, number, number, number, string, number, number][] = [
-      // name, length, x, z, rotation, legs it runs between
-      ['apronF', spanX, ox, oz - (D / 2 - inset), 'rot x 90', 0, 1],
-      ['apronB', spanX, ox, oz + (D / 2 - inset), 'rot x 90', 3, 2],
-      ['apronL', spanZ, ox - (W / 2 - inset), oz, 'rot x 90 rot y 90', 0, 3],
-      ['apronR', spanZ, ox + (W / 2 - inset), oz, 'rot x 90 rot y 90', 1, 2],
-    ];
-    for (const [name, L, x, z, rot, a, b] of rails) {
-      lines.push(`place ${apron.kind} ${apron.params} length=${f(L)} mat ${legM.id} at ${f(x)} ${f(yc)} ${f(z)} ${rot} as ${tag}${name}`);
-      lines.push(`join ${tag}${name} ${tag}leg${a}`, `join ${tag}${name} ${tag}leg${b}`, `join ${tag}${name} ${tag}top`);
+    for (const [name, i, j] of [['apronF', 0, 1], ['apronB', 3, 2], ['apronL', 0, 3], ['apronR', 1, 2]] as const) {
+      a.join(a.rail(name, apron, legM, legs[i]!, legs[j]!, { under: t }), legs[i]!, legs[j]!, t);
     }
   }
-  return {
-    forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl', 'stress.axial', 'buckling.euler'],
-    notes: [
-      `${bench ? 'Bench' : 'Table'} ${mm(W)} × ${mm(D)}, ${mm(H)} high, for ${load} kg.`,
-      `Top: ${mm(top.t)} ${topM.name}${Number.isFinite(top.stress) ? `, stress ${(top.stress / 1e6).toFixed(1)} MPa at full load (${SAFETY}× under its strength), sag ${(top.sag * 1000).toFixed(1)} mm` : ' (the thickest standard sheet: it will be highly stressed)'}.`,
-      `Legs: ${leg.label} in ${legM.name}, sized so none crushes or buckles at ${SAFETY}× its share of the load.`,
-      ...(apron ? [`Aprons: ${apron.label} rails between the legs under the top, so it doesn't rack when pushed sideways.`] : []),
-      'Joints: Best join, sized to the stock.',
-    ],
-    parts: apron ? 9 : 5,
-    roles: rolesByName(lines.join('\n'), tag, (n) => (n === 'top' ? 'carries' : /^leg/.test(n) ? 'support' : 'spans')),
-  };
+  return a.done(['stress.bending', 'beam.simply-supported.udl', 'stress.axial', 'buckling.euler'], [
+    `${bench ? 'Bench' : 'Table'} ${mm(W)} × ${mm(D)}, ${mm(H)} high, for ${load} kg.`,
+    `Top: ${mm(top.t)} ${topM.name}${Number.isFinite(top.stress) ? `, stress ${(top.stress / 1e6).toFixed(1)} MPa at full load (${SAFETY}× under its strength), sag ${(top.sag * 1000).toFixed(1)} mm` : ' (the thickest standard sheet: it will be highly stressed)'}.`,
+    `Legs: ${leg.label} in ${legM.name}, sized so none crushes or buckles at ${SAFETY}× its share of the load.`,
+    ...(apron ? [`Aprons: ${apron.label} rails between the legs under the top, so it doesn't rack when pushed sideways.`] : []),
+    'Joints: Best join, sized to the stock.',
+  ]);
 }
 
 /** Apron rails: wood tables take 1x4 on edge (2x4 for heavy legs), metal ones a flat bar of tube on edge. */
@@ -208,26 +184,24 @@ function apronFor(m: Material, leg: ReturnType<typeof legFor>) {
   return { kind: 'tube.square', params: `side=${f(side)} wall=${f(wall)}`, h: side, label: `${mm(side)} square tube` };
 }
 
-function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
+function crate(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
   const m = getMaterial(spec.material ?? 'wood.birch-plywood');
   const t = isWood(m) ? 0.012 : isMetal(m) ? 0.002 : 0.02;
   const wallH = H - t;
-  const lines = [
-    `place plate length=${f(W)} width=${f(D)} thickness=${f(t)} mat ${m.id} at ${f(ox)} ${f(t / 2)} ${f(oz)} as ${tag}bottom`,
-    // front and back: full width, standing on the bottom
-    `place plate length=${f(W)} width=${f(wallH)} thickness=${f(t)} mat ${m.id} at ${f(ox)} ${f(t + wallH / 2 + 0.0005)} ${f(oz - D / 2 + t / 2)} rot x 90 as ${tag}front`,
-    `place plate length=${f(W)} width=${f(wallH)} thickness=${f(t)} mat ${m.id} at ${f(ox)} ${f(t + wallH / 2 + 0.0005)} ${f(oz + D / 2 - t / 2)} rot x 90 as ${tag}back`,
-    // the sides fit between them
-    `place plate length=${f(wallH)} width=${f(D - 2 * t)} thickness=${f(t)} mat ${m.id} at ${f(ox - W / 2 + t / 2)} ${f(t + wallH / 2 + 0.0005)} ${f(oz)} rot z 90 as ${tag}left`,
-    `place plate length=${f(wallH)} width=${f(D - 2 * t)} thickness=${f(t)} mat ${m.id} at ${f(ox + W / 2 - t / 2)} ${f(t + wallH / 2 + 0.0005)} ${f(oz)} rot z 90 as ${tag}right`,
-  ];
-  for (const w of ['front', 'back', 'left', 'right']) lines.push(`join ${tag}${w} ${tag}bottom`);
-  for (const s of ['left', 'right']) for (const e of ['front', 'back']) lines.push(`join ${tag}${s} ${tag}${e}`);
-  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`], parts: 5, roles: rolesByName(lines.join('\n'), tag, () => 'encloses') };
+  const a = new Builder(tag);
+  // a bottom on the floor; the front and back stand on it at its edges; the sides stand on it between them
+  const bottom = a.on('bottom', 'plate', `length=${f(W)} width=${f(D)} thickness=${f(t)}`, m, [FLOOR], 'encloses', { offset: [ox, oz] });
+  const front = a.on('front', 'plate', `length=${f(W)} width=${f(wallH)} thickness=${f(t)}`, m, [bottom], 'encloses', { offset: [0, -(D / 2 - t / 2)], rot: 'rot x 90' });
+  const back = a.on('back', 'plate', `length=${f(W)} width=${f(wallH)} thickness=${f(t)}`, m, [bottom], 'encloses', { offset: [0, D / 2 - t / 2], rot: 'rot x 90' });
+  const left = a.on('left', 'plate', `length=${f(wallH)} width=${f(D - 2 * t)} thickness=${f(t)}`, m, [bottom], 'encloses', { offset: [-(W / 2 - t / 2), 0], rot: 'rot z 90' });
+  const right = a.on('right', 'plate', `length=${f(wallH)} width=${f(D - 2 * t)} thickness=${f(t)}`, m, [bottom], 'encloses', { offset: [W / 2 - t / 2, 0], rot: 'rot z 90' });
+  for (const w of [front, back, left, right]) a.join(w, bottom);
+  for (const side of [left, right]) a.join(side, front, back);
+  return a.done(['stress.bending', 'beam.simply-supported.udl'], [`Crate ${mm(W)} × ${mm(D)} × ${mm(H)} in ${mm(t)} ${m.name}: a bottom, four walls, every edge joined.`]);
 }
 
-function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
+function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   const W = sizeOf(spec, 'width'), D = sizeOf(spec, 'depth'), H = sizeOf(spec, 'height');
   const n = Math.max(2, Math.min(8, spec.count ?? 4));
   const load = spec.load ?? DEFAULTS.shelf.load;
@@ -235,50 +209,45 @@ function shelf(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
   const side = isWood(m) ? 0.018 : isMetal(m) ? 0.003 : 0.02;
   const span = W - 2 * side;
   const board = sheetFor(m, span, D, load * g, sheets(m));
-  const lines = [
-    `place plate length=${f(H)} width=${f(D)} thickness=${f(side)} mat ${m.id} at ${f(ox - W / 2 + side / 2)} ${f(H / 2)} ${f(oz)} rot z 90 as ${tag}sideL`,
-    `place plate length=${f(H)} width=${f(D)} thickness=${f(side)} mat ${m.id} at ${f(ox + W / 2 - side / 2)} ${f(H / 2)} ${f(oz)} rot z 90 as ${tag}sideR`,
-  ];
+  const a = new Builder(tag);
+  // two sides stand on edge; the shelves span between them, the lowest on the ground, the highest flush with their tops
+  const sides = ([['sideL', -1], ['sideR', 1]] as const).map(([name, sx]) => a.post(name, { kind: 'plate', params: `width=${f(D)} thickness=${f(side)}` }, m, ox + sx * (W / 2 - side / 2), oz, H));
   for (let k = 0; k < n; k++) {
-    const y = board.t / 2 + (k * (H - board.t)) / (n - 1);
-    lines.push(`place plate length=${f(span)} width=${f(D)} thickness=${f(board.t)} mat ${m.id} at ${f(ox)} ${f(y)} ${f(oz)} as ${tag}shelf${k}`);
-    lines.push(`join ${tag}shelf${k} ${tag}sideL`, `join ${tag}shelf${k} ${tag}sideR`);
+    const at = k === n - 1 ? { flush: sides[0]! } : { height: board.t / 2 + (k * (H - board.t)) / (n - 1) };
+    a.join(a.between(`shelf${k}`, 'plate', `width=${f(D)} thickness=${f(board.t)}`, m, sides[0]!, sides[1]!, at, 'carries'), ...sides);
   }
-  return { forge: lines.join('\n'), laws: ['stress.bending', 'beam.simply-supported.udl'], notes: [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`], parts: n + 2, roles: rolesByName(lines.join('\n'), tag, (nm) => (/^shelf/.test(nm) ? 'carries' : 'support')) };
+  return a.done(['stress.bending', 'beam.simply-supported.udl'], [`Shelf unit ${mm(W)} wide, ${mm(H)} high, ${n} shelves of ${mm(board.t)} ${m.name}, each for ${load} kg (${SAFETY}× margin, sag under ${mm(span * SAG)}).`]);
 }
 
-function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
+function wall(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   const m = getMaterial(spec.material ?? 'ceramic.clay-brick');
+  // a standard brick (BS EN 771-1 / BS 3921 work size): 215 × 102.5 × 65 mm
   const [bx, by, bz] = [0.215, 0.065, 0.1025];
   const L = sizeOf(spec, 'width'), H = sizeOf(spec, 'height');
   const cols = Math.max(1, Math.round(L / bx)), rows = Math.max(1, Math.min(20, Math.round(H / by)));
-  const lines: string[] = [];
+  const a = new Builder(tag);
   const at = (r: number, c: number) => `${tag}r${r}c${c}`;
   const count = (r: number) => (r % 2 ? cols - 1 : cols);
-  for (let r = 0; r < rows; r++) {
-    // running bond: every other course set over by half a brick
-    const off = r % 2 ? bx / 2 : 0;
-    for (let c = 0; c < count(r); c++) {
-      const x = ox - (cols * bx) / 2 + bx / 2 + off + c * bx;
-      lines.push(`place block x=${f(bx)} y=${f(by)} z=${f(bz)} mat ${m.id} at ${f(x)} ${f(by / 2 + r * by + r * 0.0005)} ${f(oz)} as ${at(r, c)}`);
-      if (r === 0) continue;
-      // bedded on the one or two bricks under it
-      const below = r % 2 ? [c, c + 1] : [c - 1, c];
-      for (const b of below) if (b >= 0 && b < count(r - 1)) lines.push(`join ${at(r, c)} ${at(r - 1, b)}`);
-    }
+  const xOf = (r: number, c: number) => ox - (cols * bx) / 2 + bx / 2 + (r % 2 ? bx / 2 : 0) + c * bx;
+  const brick = `x=${f(bx)} y=${f(by)} z=${f(bz)}`;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < count(r); c++) {
+    if (r === 0) { a.on(`r0c${c}`, 'block', brick, m, [FLOOR], 'stacks', { offset: [xOf(0, c), oz] }); continue; }
+    // running bond: every other course set over by half a brick, each brick bedded on the one or two under it
+    const below = (r % 2 ? [c, c + 1] : [c - 1, c]).filter((b) => b >= 0 && b < count(r - 1));
+    const under = below.map((b) => at(r - 1, b));
+    const mean = below.reduce((sum, b) => sum + xOf(r - 1, b), 0) / below.length;
+    a.join(a.on(`r${r}c${c}`, 'block', brick, m, under, 'stacks', { offset: [xOf(r, c) - mean, 0] }), ...under);
   }
-  const n = lines.filter((l) => l.startsWith('place')).length;
-  return { forge: lines.join('\n'), laws: [], notes: [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`], parts: n, roles: rolesByName(lines.join('\n'), tag, () => 'stacks') };
+  const n = a.members.length;
+  return a.done([], [`Wall ${cols} bricks long and ${rows} courses high (${n} bricks) in running bond, each bedded in mortar on the course below.`]);
 }
 
-function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Plan {
+function tower(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   const n = Math.max(2, Math.min(30, spec.count ?? 6));
   const m = getMaterial(spec.material ?? 'wood.douglas-fir');
   const s = 0.1;
-  const lines: string[] = [];
-  for (let k = 0; k < n; k++) {
-    lines.push(`place block x=${s} y=${s} z=${s} mat ${m.id} at ${f(ox)} ${f(s / 2 + k * (s + 0.0005))} ${f(oz)} as ${tag}b${k}`);
-    if (k) lines.push(`join ${tag}b${k} ${tag}b${k - 1}`);
-  }
-  return { forge: lines.join('\n'), laws: [], notes: [`A tower of ${n} ${m.name} blocks, each joined to the one below.`], parts: n, roles: rolesByName(lines.join('\n'), tag, () => 'stacks') };
+  const a = new Builder(tag);
+  let below = a.on('b0', 'block', `x=${s} y=${s} z=${s}`, m, [FLOOR], 'stacks', { offset: [ox, oz] });
+  for (let k = 1; k < n; k++) { const b = a.on(`b${k}`, 'block', `x=${s} y=${s} z=${s}`, m, [below], 'stacks'); a.join(b, below); below = b; }
+  return a.done([], [`A tower of ${n} ${m.name} blocks, each joined to the one below.`]);
 }

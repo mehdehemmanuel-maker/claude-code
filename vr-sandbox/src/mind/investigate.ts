@@ -23,6 +23,7 @@ import { transformPoint } from '../doc/math';
 import { effectiveParams, getPartKind, massOf } from '../parts/registry';
 import { shapeBounds } from '../parts/shapes';
 import { PERSON } from '../data/people';
+import { derive, type Subject } from '../construct/laws';
 import { getMaterial } from '../data/materials';
 import { numberOf } from '../schema/params';
 import { hashesOfLaws } from '../ganglia/dependencies';
@@ -198,18 +199,21 @@ export function outcomeOf(res: StandResult): Outcome {
   };
 }
 
-export function signatureOf(res: StandResult, frag: Fragment, limit = JOINT_LIMIT): Signature {
+export function signatureOf(res: StandResult, frag: Fragment, roles: Record<string, string>, limit = JOINT_LIMIT): Signature {
   const conns = new Map(frag.connections.map((c) => [c.id, c]));
   const parts = new Map(frag.parts.map((p) => [p.id, p]));
+  const role = (id: string | undefined) => roles[parts.get(id ?? '')?.name ?? ''] ?? '';
+  // racking: a support's joint to what it holds up (a top, a cap, a seat, a rail) worked in bending (mechanical.triangulation)
+  const racks = (conn: string) => { const c = conns.get(conn); if (!c) return false; const ends = [c.a.part, c.b?.part]; return ends.some((p) => role(p) === 'support') && ends.some((p) => ['carries', 'cap', 'seat', 'spans'].includes(role(p))); };
   const sick = [...res.broken.map((b) => ({ conn: b.conn, mode: b.mode, load: b.load })), ...Object.entries(res.peak).filter(([, p]) => p.u > limit && p.mode).map(([conn, p]) => ({ conn, mode: p.mode, load: p.load }))];
-  const legBending = sick.some((x) => x.mode === 'bending' && /leg\d+$/.test(parts.get(conns.get(x.conn)?.a.part ?? '')?.name ?? ''));
+  const legBending = sick.some((x) => x.mode === 'bending' && racks(x.conn));
   const hardest = sick.sort((a, b) => b.load - a.load)[0];
   const kind = hardest ? conns.get(hardest.conn)?.kind : undefined;
   return { legBending, members: res.fractures.length > 0 || res.yielded.length > 0, joint: hardest && kind && getConnectorKind(kind).model === 'rigid' ? { kind, mode: hardest.mode, load: hardest.load } : null, tipped: res.tilt >= (5 * Math.PI) / 180 && !res.broken.length };
 }
 
 /** The design a test asks for, built on a bench, with its loads and pushes: the stand's setup, and the fragment it is. */
-export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup; frag: Fragment } {
+export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup; frag: Fragment; roles: Record<string, string> } {
   const margin = test.changes.reduce((f, c) => ('margin' in c ? f * c.margin : f), 1);
   const spec: DesignSpec = { ...test.spec, aprons: test.spec.aprons || test.changes.some((c) => 'aprons' in c), load: test.spec.load !== undefined ? test.spec.load * margin : undefined };
   const plan = design(spec, 0, 2, 'm-');
@@ -229,7 +233,7 @@ export function buildTest(test: TestSpec, sim: SimSettings): { setup: StandSetup
   const frag = fragmentOf(bench.doc, Object.keys(bench.doc.parts), (id) => bench.doc.parts[id]!.pose, { p: [0, 0, 0], q: [0, 0, 0, 1] });
   const loads = standLoads(test.spec, frag, roles).map((l) => ({ ...l, kg: l.kg * test.factor }));
   const pushes = standPushes(test.spec, frag, roles).map((p) => ({ ...p, force: p.force.map((f) => f * test.factor) as [number, number, number] }));
-  return { setup: { parts: frag.parts, connections: frag.connections, materials: bench.doc.materials, sim, loads, pushes, seconds: 3 }, frag };
+  return { setup: { parts: frag.parts, connections: frag.connections, materials: bench.doc.materials, sim, loads, pushes, seconds: 3 }, frag, roles };
 }
 
 // ---- candidate explanations -----------------------------------------------------------------------------------
@@ -245,27 +249,20 @@ export interface Candidate {
 /** The candidates a failure signature admits, not yet tried, in the order an engineer tries them (the design before the fastener). */
 export function candidatesOf(sig: Signature, tried: Change[]): Candidate[] {
   const has = (p: (c: Change) => boolean) => tried.some(p);
+  // the failure, as the laws read it (construct/laws.ts: Subject.failed); what to try is theirs to say
+  const failed = [...(sig.legBending ? ['racking'] : []), ...(sig.members ? ['member'] : []), ...(sig.joint ? ['joint'] : []), ...(sig.tipped ? ['tipping'] : [])];
+  const subject: Subject = { kinds: ['structure'], roles: ['support', 'carries', 'spans'], flows: ['load'], materials: [], failed };
   const out: Candidate[] = [];
-  if (sig.legBending && !has((c) => 'aprons' in c)) out.push({
-    id: 'racking', change: { aprons: true },
-    claim: r('influence', [d('design:table-without-aprons'), d('failure:leg-joint-bending')], { polarity: '+', necessity: 'sufficient', mech: 'racking', mode: 'unknown', ev: { how: 'hypothesized' } }),
-    says: 'a sideways push bends the leg joints because nothing but those joints resists it (racking); aprons, rails between the legs under the top, would take it',
-  });
-  if (sig.members && !has((c) => 'margin' in c)) out.push({
-    id: 'members', change: { margin: 1.5 },
-    claim: r('influence', [d('design:member-undersized'), d('failure:member-fracture')], { polarity: '+', necessity: 'sufficient', mech: 'bending stress past strength', mode: 'unknown', ev: { how: 'hypothesized' } }),
-    says: 'the members are sized for less than they carry; sizing them for 1.5x the load would hold',
-  });
-  if (sig.tipped && !sig.legBending && !sig.members && !sig.joint && !out.length) out.push({
-    id: 'anchor', change: { margin: 1 },
-    claim: r('influence', [d('design:tall-and-narrow'), d('failure:tips-in-one-piece')], { polarity: '+', necessity: 'sufficient', mech: 'overturning moment past the base', mode: 'unknown', ev: { how: 'hypothesized' } }),
-    says: 'it tipped over in one piece and nothing broke: strong enough, not stable; anchoring it to a wall (or widening its base) settles it, and that is a design question the stand cannot test',
-  });
-  if (sig.joint && !has((c) => 'upgrade' in c && c.upgrade.kind === sig.joint!.kind)) out.push({
-    id: 'joints', change: { upgrade: sig.joint },
-    claim: r('influence', [d(`joint:${sig.joint.kind}:undersized`), d(`failure:joint-${sig.joint.mode}`)], { polarity: '+', necessity: 'sufficient', mech: 'load past capacity', mode: 'unknown', ev: { how: 'hypothesized' } }),
-    says: `the ${getConnectorKind(sig.joint.kind).label.toLowerCase()} joints carry more ${sig.joint.mode} than they can; the smallest stronger joint would hold`,
-  });
+  for (const { law, out: h } of derive(subject)) {
+    if (h.kind !== 'hypothesis') continue;
+    const change: Change | null = 'aprons' in h.change ? { aprons: true } : 'margin' in h.change ? { margin: Number(h.change['margin']) } : 'anchor' in h.change ? { margin: 1 } : 'upgrade' in h.change && sig.joint ? { upgrade: sig.joint } : null;
+    if (!change) continue;
+    const done = 'aprons' in change ? has((c) => 'aprons' in c) : 'upgrade' in change ? has((c) => 'upgrade' in c && c.upgrade.kind === sig.joint!.kind) : h.what === 'tipping' ? false : has((c) => 'margin' in c);
+    if (done) continue;
+    const id: Candidate['id'] = h.what === 'racking' ? 'racking' : h.what === 'members' ? 'members' : h.what === 'tipping' ? 'anchor' : 'joints';
+    const says = sig.joint ? h.says.replace('{joint}', getConnectorKind(sig.joint.kind).label.toLowerCase()).replace('{mode}', sig.joint.mode) : h.says;
+    out.push({ id, change, says, claim: r('influence', [d(`law:construction.${law}`), d(`failure:${h.what}`)], { polarity: '+', necessity: 'sufficient', mech: h.why, mode: 'unknown', ev: { how: 'hypothesized', src: [`construction.${law}`] } }) });
+  }
   return out;
 }
 
@@ -416,9 +413,9 @@ export class Investigator {
           return this.commit(inv, 'evidence', item, [a.of.seq], { of: 'watchdog', test: t2, outcome: { cSound: rd.cSound, crossing: rd.crossing, tick: rd.tick, ratio: rd.ratio, inside: rd.inside, critical: rd.critical }, predicted: predict, tests: a.of.kind }, { by: 'comparison', verdict: rd.inside === predict.inside ? 'supported' : 'contradicted', margin: rd.ratio }, 'open', 'ego', since);
         }
         const test = a.of.data['test'] as TestSpec, predict = a.of.data['predict'] as Prediction;
-        const { setup, frag } = buildTest(test, this.effects.sim);
+        const { setup, frag, roles } = buildTest(test, this.effects.sim);
         const res = await this.effects.stand(setup);
-        const o = outcomeOf(res), sig = signatureOf(res, frag);
+        const o = outcomeOf(res), sig = signatureOf(res, frag, roles);
         return this.commit(inv, 'evidence', e(resultStructure(inv, o), 'simulated', 'test stand', { by: this.physics }), [a.of.seq], { test, outcome: o, signature: sig, predicted: predict, tests: a.of.kind }, verdictOf(o, predict), 'open', 'event:stand', since);
       }
       case 'judge': {

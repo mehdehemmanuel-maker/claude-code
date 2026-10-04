@@ -47,6 +47,8 @@ export interface Subject {
   length?: number;
   /** Who it is for: a person uses it (sizes come from the person). */
   forPerson?: boolean;
+  /** What failed on the stand, when a failure is in question: racking, member, joint, tipping. The laws say what to try. */
+  failed?: string[];
 }
 
 /** What a law derives, typed. */
@@ -57,7 +59,7 @@ export type Derived =
   | { kind: 'order'; before: string; after: string; why: string }
   | { kind: 'stock'; kinds: string[]; why: string }
   | { kind: 'factor'; what: string; value: number; why: string }
-  | { kind: 'hypothesis'; what: string; change: Record<string, number | boolean>; why: string };
+  | { kind: 'hypothesis'; what: string; change: Record<string, number | boolean>; why: string; says: string };
 
 export interface ConstructionLaw {
   id: string;
@@ -189,14 +191,21 @@ const DERIVED: ConstructionLaw[] = [
   {
     id: 'mechanical.triangulation', family: 'mechanical', facet: 'stability', structure: r('influence', [d('diagonal-across-bay'), d('bay-of-posts-and-rails:racks')], { polarity: '-', necessity: 'sufficient', mech: 'four pin-jointed bars are a mechanism; a fifth across the diagonal makes two triangles', mode: 'true', ev: derived(['statics.load-path']) }), says: 'a bay of posts and rails with joints that bend is a mechanism under a sideways push until a diagonal triangulates it; the taller the bay for its width, the sooner it racks',
     bears: (s) => has(s.roles, 'support', 'spans'),
-    derive: (s) => [{ kind: 'hypothesis', what: 'racking', change: { aprons: true }, why: `a diagonal (or a rail set) turns the bay into a truss${s.length !== undefined ? '' : ''}` }],
+    derive: (s) => (has(s.failed ?? [], 'racking') ? [{ kind: 'hypothesis', what: 'racking', change: { aprons: true }, why: 'a diagonal (or a rail set) turns the bay into a truss', says: 'a sideways push bends the leg joints because nothing but those joints resists it (racking); aprons, rails between the legs under the top, would take it' }] : []),
     source: 'statics: four pin-jointed bars are a mechanism; a fifth across the diagonal makes two triangles', rests: ['statics.load-path'],
   },
   {
     id: 'mechanical.overturning', family: 'mechanical', facet: 'stability', structure: r('constrain', [d('structure:stands'), r('compare', [mul(d('push'), d('push:height')), mul(d('weight'), mul(q(0.5, ''), d('base:width')))], { dir: -1 })], { mode: 'true', mech: 'moment balance about the toe', ev: derived(['statics.overturning']) }), says: 'a structure tips when a push at its top makes a moment about the far edge of its base greater than its weight makes about the same edge: wider base, lower push, or anchor',
     bears: (s) => has(s.roles, 'support'),
-    derive: () => [{ kind: 'hypothesis', what: 'tipping', change: { anchor: true }, why: 'F h > m g b/2: anchor it, widen the base, or lower what is pushed' }],
+    // tipping is the explanation only when nothing broke: strong enough, not stable
+    derive: (s) => (has(s.failed ?? [], 'tipping') && (s.failed ?? []).length === 1 ? [{ kind: 'hypothesis', what: 'tipping', change: { anchor: true }, why: 'F h > m g b/2: anchor it, widen the base, or lower what is pushed', says: 'it tipped over in one piece and nothing broke: strong enough, not stable; anchoring it to a wall (or widening its base) settles it, and that is a design question the stand cannot test' }] : []),
     source: 'statics: moment balance about the toe', rests: ['statics.overturning'],
+  },
+  {
+    id: 'mechanical.member-sizing', family: 'mechanical', facet: 'stress', structure: r('influence', [d('member:sized-under-its-load'), d('member:fracture-or-yield')], { polarity: '+', necessity: 'sufficient', mech: 'bending stress past strength', mode: 'true', ev: derived(['stress.bending']) }), says: 'a member sized for less than it carries breaks or yields; sized for more, it holds',
+    bears: (s) => has(s.roles, 'support', 'carries', 'spans', 'stood-on', 'seat'),
+    derive: (s) => (has(s.failed ?? [], 'member') ? [{ kind: 'hypothesis', what: 'members', change: { margin: 1.5 }, why: 'the members are sized for less than they carry', says: 'the members are sized for less than they carry; sizing them for 1.5x the load would hold' }] : []),
+    source: 'bending stress against strength (any mechanics of materials text)', rests: ['stress.bending'],
   },
   {
     id: 'mechanical.end-fixity', family: 'mechanical', facet: 'stress', structure: r('state', [r('quantity', [d('column:free-to-sway:K'), q(2, '')], {}), r('quantity', [d('column:braced:K'), q(1, '')], {}), r('quantity', [d('column:fixed-both:K'), q(0.7, '')], {})], { mode: 'true', ev: derived(['buckling.euler']) }), says: 'a column\'s buckling length depends on how its ends are held: free to sway at the top it buckles as a cantilever (K = 2); held square at both ends and braced, as half its length (K = 0.7); pinned both ends, as itself (K = 1)',
@@ -224,7 +233,7 @@ const DERIVED: ConstructionLaw[] = [
     source: 'grow.ts STAGE, generalised: the order is the dependency order of the relations', rests: [],
   },
   {
-    id: 'scale.person', family: 'scale', facet: 'characteristic length', structure: r('state', [r('quantity', [d('seat-height'), add(P('popliteal-height'), P('shoe'))], {}), r('quantity', [d('work-surface-height'), add(P('popliteal-height'), P('shoe'), P('elbow-rest-height'))], {}), r('quantity', [d('standing-surface-height'), sub(P('elbow-height'), q(0.05, 'm'))], {}), r('quantity', [d('passage-width'), add(P('shoulder-breadth'), mul(q(2, ''), P('clearance')))], {}), r('quantity', [d('place-at-a-table'), add(P('shoulder-breadth'), P('elbow-room'))], {}), r('quantity', [d('seat-width'), add(P('hip-breadth'), q(0.05, 'm'))], {}), r('quantity', [d('seat-depth'), sub(P('buttock-popliteal'), q(0.05, 'm'))], {}), r('quantity', [d('rung-pitch'), P('rung-pitch')], {}), r('quantity', [d('reach-height'), P('shoulder-height')], {})], { mode: 'true', ev: { how: 'measured', src: [PERSON.stature.source] } }), says: 'an artefact for a person takes its sizes from the person: a seat is popliteal height and a shoe, a work surface the seat and the elbow above it, a standing surface just under the elbow, a passage the shoulders and clearance, a rung pitch a step, a reach the arm',
+    id: 'scale.person', family: 'scale', facet: 'characteristic length', structure: r('state', [r('quantity', [d('seat-height'), add(P('popliteal-height'), P('shoe'))], {}), r('quantity', [d('work-surface-height'), add(P('popliteal-height'), P('shoe'), P('elbow-rest-height'))], {}), r('quantity', [d('standing-surface-height'), sub(P('elbow-height'), q(0.05, 'm'))], {}), r('quantity', [d('passage-width'), add(P('shoulder-breadth'), mul(q(2, ''), P('clearance')))], {}), r('quantity', [d('place-at-a-table'), add(P('shoulder-breadth'), P('elbow-room'))], {}), r('quantity', [d('seat-width'), add(P('hip-breadth'), q(0.05, 'm'))], {}), r('quantity', [d('seat-depth'), sub(P('buttock-popliteal'), q(0.05, 'm'))], {}), r('quantity', [d('rung-pitch'), P('rung-pitch')], {}), r('quantity', [d('reach-height'), P('shoulder-height')], {}), r('quantity', [d('work-surface-depth'), P('forward-reach')], {}), r('quantity', [d('reach'), P('forward-reach')], {})], { mode: 'true', ev: { how: 'measured', src: [PERSON.stature.source] } }), says: 'an artefact for a person takes its sizes from the person: a seat is popliteal height and a shoe, a work surface the seat and the elbow above it, a standing surface just under the elbow, a passage the shoulders and clearance, a rung pitch a step, a reach the arm',
     bears: (s) => !!s.forPerson,
     derive: () => {
       const seat = PERSON.poplitealHeight.value + PERSON.shoe.value;
@@ -239,6 +248,7 @@ const DERIVED: ConstructionLaw[] = [
         { kind: 'default', key: 'passage width', value: round5(PERSON.shoulderBreadth.value + 2 * PERSON.clearance.value), why: `${PERSON.shoulderBreadth.name} + clearance each side` },
         { kind: 'default', key: 'rung pitch', value: PERSON.rungPitch.value, why: PERSON.rungPitch.source },
         { kind: 'default', key: 'reach height', value: round5(PERSON.shoulderHeight.value), why: `${PERSON.shoulderHeight.name}: a shelf's top reached without stretching` },
+        { kind: 'default', key: 'reach', value: round5(PERSON.forwardReach.value), why: `${PERSON.forwardReach.name}: a thing you use stands with its near face within your reach` },
         { kind: 'default', key: 'person', value: PERSON.designMass.value, why: PERSON.designMass.source },
       ];
     },
@@ -249,6 +259,12 @@ const DERIVED: ConstructionLaw[] = [
     bears: (s) => has(s.flows, 'rotation', 'electric', 'signal'),
     derive: () => [{ kind: 'spacing', min: 0, why: 'a joint is made where the parts are (connectors/through.ts REACH 6 mm)', law: 'interface.coincidence' }],
     source: 'construct/build.ts horn and drive: frames checked to 20 µm', rests: [],
+  },
+  {
+    id: 'interface.joint-capacity', family: 'interface', facet: 'mechanical interface', structure: r('constrain', [d('joint:load-in-a-mode'), d('joint:capacity-in-that-mode')], { mode: 'true', mech: 'a joint carries each mode up to its capacity; past it, it fails in that mode', ev: { how: 'measured', src: ['connectors: capacities by kind and mode'] } }), says: 'a joint carrying more in a mode (shear, bending, tension) than its capacity fails in that mode; the smallest stronger joint holds',
+    bears: (s) => s.roles.length > 0,
+    derive: (s) => (has(s.failed ?? [], 'joint') ? [{ kind: 'hypothesis', what: 'joints', change: { upgrade: true }, why: 'load in a mode past the joint\'s capacity in it', says: 'the {joint} joints carry more {mode} than they can; the smallest stronger joint would hold' }] : []),
+    source: 'the connector catalogue: capacities by kind and mode (connectors/*.ts)', rests: [],
   },
 ];
 

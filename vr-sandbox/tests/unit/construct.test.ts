@@ -13,7 +13,7 @@ import { d, r } from '../../src/ganglia/native/core';
 import { substrate } from '../../src/ganglia/substrate';
 import { citations, lawChanged } from '../../src/ganglia/dependencies';
 import { DEFAULTS, design } from '../../src/assistant/designer';
-import { buildTest, overturning, PUSH } from '../../src/mind';
+import { buildTest, candidatesOf, overturning, PUSH } from '../../src/mind';
 import { getMaterial } from '../../src/data/materials';
 import { Bench } from '../../src/app/bench';
 import { BuildHost } from '../../src/forge/apphost';
@@ -138,6 +138,53 @@ describe('mechanical.overturning, as the stand and the foresight read it', () =>
     const t = overturning(table.frag, table.setup.loads, table.setup.pushes![0]!, g);
     expect(t.base).toBeCloseTo(DEFAULTS.table.depth, 2);
     expect(t.ratio).toBeLessThan(1);
+  });
+});
+
+describe('what to try comes from the laws, not a list', () => {
+  const sim = { ...newDoc().sim, airDrag: false };
+  const sig = (p: Partial<{ legBending: boolean; members: boolean; joint: { kind: string; mode: string; load: number } | null; tipped: boolean }>) => ({ legBending: false, members: false, joint: null, tipped: false, ...p });
+  it('a racking failure is the triangulation law\'s hypothesis, a fracture the member-sizing law\'s, a joint the joint-capacity law\'s with the connector named, tipping alone the overturning law\'s; each claim cites its law by id', () => {
+    const table = buildTest({ spec: { what: 'table' }, changes: [], factor: 1 }, sim);
+    const kind = table.frag.connections[0]!.kind;
+    const racking = candidatesOf(sig({ legBending: true, joint: { kind, mode: 'bending', load: 100 } }), []);
+    expect(racking.map((c) => c.id)).toEqual(['racking', 'joints']);
+    expect(text(racking[0]!.claim)).toMatch(/construction\.mechanical\.triangulation/);
+    expect(text(racking[1]!.claim)).toMatch(/construction\.interface\.joint-capacity/);
+    expect(racking[1]!.says).toContain('bending');
+    expect(racking[1]!.says).not.toContain('{joint}');
+    expect(candidatesOf(sig({ members: true }), []).map((c) => [c.id, JSON.stringify(c.change)])).toEqual([['members', '{"margin":1.5}']]);
+    const tipping = candidatesOf(sig({ tipped: true }), []);
+    expect(tipping.map((c) => c.id)).toEqual(['anchor']);
+    expect(text(tipping[0]!.claim)).toMatch(/construction\.mechanical\.overturning/);
+    // strong enough, not stable: tipping explains nothing when something also broke
+    expect(candidatesOf(sig({ tipped: true, members: true }), []).map((c) => c.id)).toEqual(['members']);
+    // what was tried is not tried again
+    expect(candidatesOf(sig({ legBending: true }), [{ aprons: true }])).toEqual([]);
+  });
+});
+
+describe('the five designs once written as coordinates are assemblies', () => {
+  const sim = { ...newDoc().sim, airDrag: false };
+  it('a table on uneven ground has legs cut to their own ground under a level top; the highest shelf is flush with its sides; a wall\'s bricks rest on the course below, a crate\'s walls on its bottom, a tower\'s blocks on each other; every one builds on the bench', () => {
+    const forge = design({ what: 'table' }, 0, 0, 't-', { groundAt: (x) => (x < 0 ? 0 : 0.1) }).forge;
+    const legs = [...forge.matchAll(/length=([\d.]+) at ([-\d.]+) ([\d.]+) [-\d.]+ rot z 90 as t-leg\d/g)].map((m) => ({ L: Number(m[1]), x: Number(m[2]), y: Number(m[3]) }));
+    expect(legs).toHaveLength(4);
+    expect(legs.find((l) => l.x < 0)!.L - legs.find((l) => l.x > 0)!.L).toBeCloseTo(0.1, 6);
+    expect(new Set(legs.map((l) => (l.y + l.L / 2).toFixed(6))).size).toBe(1);
+    expect(forge).toMatch(/^place plate .* on t-leg0 t-leg1 t-leg2 t-leg3 as t-top$/m);
+    expect(design({ what: 'table', aprons: true }, 0, 0, 't-').forge).toMatch(/between t-leg0 t-leg1 under t-top rot x 90 as t-apronF/);
+    expect(design({ what: 'shelf' }, 0, 0, 's-').forge).toMatch(/between s-sideL s-sideR flush s-sideL as s-shelf3/);
+    expect(design({ what: 'wall', width: 0.86, height: 0.13 }, 0, 0, 'w-').forge).toMatch(/on w-r0c0 w-r0c1 offset 0 0 as w-r1c0/);
+    expect(design({ what: 'crate' }, 0, 0, 'c-').forge).toMatch(/on c-bottom offset 0 -0\.\d+ rot x 90 as c-front/);
+    expect(design({ what: 'tower', count: 3 }, 0, 0, 'k-').forge).toMatch(/on k-b1 as k-b2/);
+    for (const what of ['table', 'bench', 'crate', 'shelf', 'wall', 'tower'] as const) {
+      const bench = new Bench(sim);
+      const plan = design({ what }, 0, 2, 'b-');
+      const r = run(plan.forge, new BuildHost(bench));
+      expect(r.ok, `${what}: ${r.ok ? '' : r.error}`).toBe(true);
+      expect(Object.keys(bench.doc.parts), what).toHaveLength(plan.parts);
+    }
   });
 });
 

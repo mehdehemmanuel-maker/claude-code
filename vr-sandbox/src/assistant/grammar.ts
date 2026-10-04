@@ -18,7 +18,7 @@
 import { getMaterial, STANDARD_GRAVITY as g, type Material } from '../data/materials';
 import { LUMBER } from '../parts/registry';
 import { DEFAULTS, f, isMetal, isWood, legFor, mm, SAFETY, SAG, sheetFor, sheets, sizeOf, type DesignSpec } from './designer';
-import type { Assembly, Member, Relation, Role } from '../construct/assembly';
+import { Builder, type Structured } from '../construct/assembly';
 import { defaultOf, derive, stockFor } from '../construct/laws';
 
 const PERSON_SUBJECT = { kinds: ['artefact'], roles: [], flows: [], materials: [], forPerson: true };
@@ -63,42 +63,6 @@ const deg = (rad: number) => +((rad * 180) / Math.PI).toFixed(3);
 /** Posts and rails in the deck's material where its stock can be worked into members (manufacturing.stock); else steel. */
 const frameMaterial = (deckM: Material) => (stockFor(deckM).some((k) => k === 'lumber' || k === 'tube.square') && (isWood(deckM) || isMetal(deckM)) ? deckM : getMaterial('steel.a36'));
 
-/** What is said: the assembly, the laws it rests on, and the notes. */
-export interface Structured { assembly: Assembly; laws: string[]; notes: string[] }
-
-/** A small builder for an assembly: members by role, relations in the order they are said. */
-class Plan_ {
-  members: Member[] = [];
-  relations: Relation[] = [];
-  constructor(readonly tag: string) {}
-  member(name: string, kind: string, params: string, material: string, role: Role): string { this.members.push({ name: `${this.tag}${name}`, kind, params, material, role }); return `${this.tag}${name}`; }
-  /** A post standing on the ground at (x, z), its top `top` above the reference plane. */
-  post(name: string, p: ReturnType<typeof legFor>, m: Material, x: number, z: number, top: number, role: Role = 'support'): string {
-    const n = this.member(name, p.kind, p.params, m.id, role);
-    this.relations.push({ how: 'stands', member: n, at: [x, z], top });
-    return n;
-  }
-  /** A rail on edge between two posts: under a deck, flush with the posts' tops, or at a height. */
-  rail(name: string, r: { kind: string; params: string }, m: Material, a: string, b: string, at: { under: string } | { flush: string } | { height: number }, role: Role = 'spans'): string {
-    const n = this.member(name, r.kind, r.params, m.id, role);
-    this.relations.push({ how: 'between', member: n, a, b, ...('under' in at ? { under: at.under } : 'flush' in at ? { flush: at.flush } : { height: at.height }), rot: 'rot x 90' });
-    return n;
-  }
-  /** A brace flat on the faces of two posts, on one side, low on the first to high on the second. */
-  brace(name: string, b: { kind: string; params: string }, m: Material, a: string, c: string, side: 'x' | '-x' | 'z' | '-z'): string {
-    const n = this.member(name, b.kind, b.params, m.id, 'braces');
-    this.relations.push({ how: 'across', member: n, a, b: c, side, rot: 'rot x 90' });
-    return n;
-  }
-  on(name: string, kind: string, params: string, m: Material, onto: string[], role: Role, opts: { offset?: [number, number]; rot?: string } = {}): string {
-    const n = this.member(name, kind, params, m.id, role);
-    this.relations.push({ how: 'on', member: n, onto, ...opts });
-    return n;
-  }
-  join(a: string, ...bs: string[]) { for (const b of bs) this.relations.push({ how: 'join', a, b }); }
-  done(laws: string[], notes: string[]): Structured { return { assembly: { members: this.members, relations: this.relations }, laws, notes }; }
-}
-
 /** A structure for what was asked, its footprint centred on (ox, oz). */
 export function structure(spec: DesignSpec, ox: number, oz: number, tag: string): Structured {
   switch (spec.what as Structure) {
@@ -121,7 +85,7 @@ function bridge(spec: DesignSpec, ox: number, oz: number, tag: string): Structur
   const postH = H - deck.t - cap.h;
   const p = legFor(fm, postH, ((load + deckMass) * g) / 4);
   const inset = p.wide / 2 + 0.01;
-  const a = new Plan_(tag);
+  const a = new Builder(tag);
   let legs = 0;
   const caps: string[] = [];
   for (const [pier, sx] of [['A', -1], ['B', 1]] as const) {
@@ -160,7 +124,7 @@ function frame(spec: DesignSpec, ox: number, oz: number, tag: string): Structure
   const bracedFrame = !!spec.aprons || H / Math.min(W, D) > 1.5;
   const p = legFor(fm, postH, ((load + deckMass) * g) / 4, fixity(bracedFrame));
   const inset = p.wide / 2 + 0.01;
-  const a = new Plan_(tag);
+  const a = new Builder(tag);
   const corners: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   const legs = corners.map(([sx, sz], i) => a.post(`leg${i}`, p, fm, ox + sx * (W / 2 - inset), oz + sz * (D / 2 - inset), postH));
   let top: string | null = null;
@@ -195,7 +159,7 @@ function ramp(spec: DesignSpec, ox: number, oz: number, tag: string): Structured
   const cap = railFor(fm, W, ((load + deckMass) * g) / (bays + 1));
   const p = legFor(fm, H, ((load + deckMass) * g) / (2 * (bays + 1)));
   const inset = p.wide / 2 + 0.01;
-  const a = new Plan_(tag);
+  const a = new Builder(tag);
   // the root: the deck on its slope, its centre half the rise up plus half its thickness (its underside runs through H/2 at the middle)
   const d = a.member('deck', 'plate', `length=${f(S)} width=${f(W)} thickness=${f(deck.t)}`, deckM.id, 'carries');
   a.relations.push({ how: 'laid', member: d, at: [ox, H / 2 + (deck.t / 2) / Math.cos(ang) + 0.0005, oz], rot: `rot z ${deg(ang)}` });
@@ -226,7 +190,7 @@ function ladder(spec: DesignSpec, ox: number, oz: number, tag: string): Structur
   const rung = railFor(fm, W, load * g);
   const pitch = defaultOf(PERSON_SUBJECT, 'rung pitch') ?? 0.3;
   const n = Math.max(2, Math.floor(H / pitch));
-  const a = new Plan_(tag);
+  const a = new Builder(tag);
   for (const [side, sx] of [['A', 1], ['B', -1]] as const) {
     // the front side's stiles W apart outside to outside; the back side's just outside them, so the two meet face to face at the top
     const half = side === 'A' ? W / 2 - stile.side / 2 : W / 2 + stile.side / 2 + 0.0005;
@@ -255,7 +219,7 @@ function chair(spec: DesignSpec, ox: number, oz: number, tag: string): Structure
   const back = 0.4, backT = isWood(seatM) ? 0.012 : 0.003;
   const inset = leg.wide / 2 + 0.01;
   const zRear = oz + D / 2 + leg.wide / 2 + 0.0005;
-  const a = new Plan_(tag);
+  const a = new Builder(tag);
   const legs = ([[-1, -1, false], [1, -1, false], [1, 1, true], [-1, 1, true]] as const).map(([sx, sz, rear], i) =>
     a.post(`leg${i}`, leg, fm, ox + sx * (W / 2 - inset), rear ? zRear : oz + sz * (D / 2 - inset), rear ? H + back : legL));
   // the seat on the front legs' tops, centred on its own footprint (the rear legs stand behind it, taller)

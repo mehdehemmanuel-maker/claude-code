@@ -18,7 +18,7 @@ function fakeStand(log: StandSetup[] = []) {
     log.push(setup);
     const aprons = setup.parts.some((p) => /apron/.test(p.name));
     const kg = setup.loads.reduce((s, l) => s + l.kg, 0);
-    const legJoint = setup.connections.find((c) => /leg\d+$/.test(setup.parts.find((p) => p.id === c.a.part)?.name ?? ''))!;
+    const legJoint = setup.connections.find((c) => [c.a.part, c.b?.part].some((id) => /leg\d+$/.test(setup.parts.find((p) => p.id === id)?.name ?? '')))!;
     const base = { fractures: [], yielded: [], memberPeak: { part: setup.parts[0]!.id, u: 0.2 }, drop: 0.001, tilt: 0.002, seconds: 1.2, ms: 7 };
     if (!aprons) {
       const peak = Object.fromEntries(setup.connections.map((c) => [c.id, { u: c.id === legJoint.id ? 1.25 : 0.5, mode: 'bending', load: c.id === legJoint.id ? 60 : 24 }]));
@@ -36,9 +36,9 @@ const EXPECTED = ['observation:open', 'anomaly:open', 'hypothesis:testing', 'evi
 /** The first event: a table for 60 kg built and put on the stand, with what she predicted for it. */
 async function firstEvent(stand = fakeStand()) {
   const { buildTest, signatureOf } = await import('../../src/mind');
-  const { setup, frag } = buildTest({ spec: { what: 'table', load: 60 }, changes: [], factor: 1 }, sim);
+  const { setup, frag, roles } = buildTest({ spec: { what: 'table', load: 60 }, changes: [], factor: 1 }, sim);
   const result = await stand(setup);
-  return { kind: 'stand-result' as const, inv: 'table-1', spec: { what: 'table' as const, load: 60 }, result, signature: signatureOf(result, frag), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() };
+  return { kind: 'stand-result' as const, inv: 'table-1', spec: { what: 'table' as const, load: 60 }, result, signature: signatureOf(result, frag, roles), predicted: { held: true, uMax: 2 / 3, model: 'foresight: static', laws: ['statics.load-path', 'joint.capacity'] }, since: performance.now() };
 }
 
 describe("Ego's Mind", () => {
@@ -58,7 +58,9 @@ describe("Ego's Mind", () => {
     expect(anomaly.data['candidates']).toEqual(['racking', 'joints']);
     // the hypothesis is a structure in Nex with its mode unknown; the belief is the same structure held true by simulation
     expect(hyp.item.k === 'R' && hyp.item.c.mode).toBe('unknown');
-    expect(text(hyp.item)).toMatch(/design:table-without-aprons/);
+    // the hypothesis is a construction law's, cited by id: the racking one
+    expect(text(hyp.item)).toMatch(/construction\.mechanical\.triangulation/);
+    expect(text(hyp.item)).toMatch(/failure:racking/);
     expect(hyp.data['change']).toEqual({ aprons: true });
     expect(ev1.validation.verdict).toBe('supported');
     expect(belief.item.k === 'R' && belief.item.c.mode).toBe('true');
