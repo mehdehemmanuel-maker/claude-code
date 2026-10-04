@@ -15,7 +15,7 @@ import { compare, Journal, type Comparison } from './observe';
 import { realizeSwing, type HingeSpec, type SwingRealization } from './realize-hinge';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { solve, type Solution, type System } from './solve';
-import { add, cos, div, ge, intentLeaf, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from './term';
+import { add, cos, div, ge, gt, intentLeaf, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from './term';
 
 export interface SwingIntent {
   by: string;
@@ -39,7 +39,7 @@ export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivat
     ['ell', 'm', 'bar length'], ['deep', 'm', 'extent along the swing'], ['thin', 'm', 'extent across the swing'], ['rho', 'kg/m^3', 'density'], ['g', 'm/s^2', 'gravity'],
     ['m', 'kg', 'mass'], ['Icm', 'kg m^2', 'inertia about the centre'], ['p', 'm', 'pin from the end'], ['d', 'm', 'pivot to centre of mass'], ['I', 'kg m^2', 'inertia about the pivot'],
     ['T0', 's', 'small-swing period'], ['theta0', 'rad', 'release angle'], ['f', '1', 'period factor'], ['T', 's', 'period'], ['omega', 'rad/s', 'angular frequency'],
-    ['E', 'J', 'swing energy'], ['n', '1', 'periods watched'], ['watch', 's', 'watch'],
+    ['E', 'J', 'swing energy'], ['n', '1', 'periods watched'], ['watch', 's', 'watch'], ['H', 'm', 'height of the pivot'],
   ].map(([sym, unit, name]) => ({ sym: sym!, unit: unit!, name: name! }));
   const v = Object.fromEntries(vars.map((x) => [x.sym, variable(x.sym, x.unit, x.name)]));
   return {
@@ -56,8 +56,10 @@ export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivat
       { kind: 'term', sym: 'omega', term: div(mul(k(2), PI()), v['T']!), name: 'angular frequency', grounds: '2π over the period' },
       { kind: 'term', sym: 'E', term: mul(v['m']!, v['g']!, v['d']!, sub(k(1), cos(v['theta0']!))), name: 'swing energy', grounds: 'the centre of mass raised by d (1 − cos θ₀) at release, all of it potential' },
       { kind: 'term', sym: 'watch', term: mul(v['n']!, v['T']!), name: 'watch', grounds: 'the observer watches the declared number of periods' },
+      // the floor is a body too: a bar that reaches it swings against it, and no free swing is what is realized
+      { kind: 'constrain', holds: gt(v['H']!, sub(v['ell']!, v['p']!)), says: 'the bar clears the floor: the pivot stands higher than the bar reaches below it', role: 'design', source: 'the floor is a body: a bar that reaches it swings against it' },
     ],
-    bindings: { ell: ofLeaf(intent.barLength), deep: ofLeaf(intent.deep), thin: ofLeaf(intent.thin), rho: mat.density, g, theta0: ofLeaf(intent.release), n: ofLeaf(intent.periods), p: ofLeaf(intent.pivotFromEnd) },
+    bindings: { ell: ofLeaf(intent.barLength), deep: ofLeaf(intent.deep), thin: ofLeaf(intent.thin), rho: mat.density, g, theta0: ofLeaf(intent.release), n: ofLeaf(intent.periods), p: ofLeaf(intent.pivotFromEnd), H: ofLeaf(intent.pivotHeight) },
   };
 }
 
@@ -120,6 +122,8 @@ export interface SwingSlice {
   realization: SwingRealization | null;
   comparisons: Comparison[];
   admission: { coupling: string; judgement: Judgement }[];
+  /** The relations of the language that refused the configuration before it was realized. */
+  refusedBy: string[];
   journal: Journal;
 }
 
@@ -137,12 +141,16 @@ export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jo
   const comparisons: Comparison[] = [];
   let configuration: SwingConfiguration | null = null, realization: SwingRealization | null = null;
   let admission: SwingSlice['admission'] = [];
-  if (solution.free.length === 0 && Object.values(solution.bound).every((d) => d.value !== null)) {
+  let refusedBy: string[] = [];
+  // a configuration is constructed only where the system's constraints hold: what fails one is refused, not realized
+  if (solution.free.length === 0 && Object.values(solution.bound).every((d) => d.value !== null) && solution.satisfied !== false) {
     const bound = solution.bound;
     configuration = constructSwing(intent, material, bound, contract, frame, ground, obs);
     for (const d of [...Object.values(configuration.bodies.bar.centre!), configuration.hinge.tilt, ...Object.values(configuration.hinge.onPivot), ...Object.values(configuration.hinge.onBar), configuration.restHeight, configuration.rigid.holds]) journal.append({ kind: 'record', record: d });
-    ({ admission } = admitBy(language, {}));
-    if (J && configuration.rigid.rigid) {
+    // the observer is in what is judged: a relation learned over the kernel's window speaks of its tick and the period it watches
+    const watched = { tick: obs.tick, T: bound['T']!, theta0: bound['theta0']!, E0: bound['E']!, m: bound['m']!, g: bound['g']!, d: bound['d']! };
+    ({ admission, refusedBy } = admitBy(language, { 'the bar on the pin, watched at the kernel\'s tick': watched }));
+    if (J && configuration.rigid.rigid && !refusedBy.length) {
       realization = realizeSwing(J, contract, { ...configuration.bodies, hinge: configuration.hinge, gravity: g, ground, watch: bound['watch']!, inertia: bound['I']!, mass: bound['m']!, restHeight: configuration.restHeight }, obs);
       const r = realization;
       const periodCmp = compare('period', bound['T']!, r.period, { name: contract.name, relative: contract.periodError });
@@ -164,11 +172,11 @@ export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jo
       for (const c of comparisons) journal.append({ kind: 'comparison', comparison: c });
     }
   }
-  return { intent, frame, observer: obs, contract, system, solution, configuration, realization, comparisons, admission, journal };
+  return { intent, frame, observer: obs, contract, system, solution, configuration, realization, comparisons, admission, refusedBy, journal };
 }
 
 /** A bar on a free hinge, as the person asks for it. */
-export function swingIntent(by = 'the person', over: Partial<Record<'release' | 'barLength' | 'friction' | 'periods' | 'pivotFromEnd', number>> = {}): SwingIntent {
+export function swingIntent(by = 'the person', over: Partial<Record<'release' | 'barLength' | 'friction' | 'periods' | 'pivotFromEnd' | 'pivotHeight', number>> = {}): SwingIntent {
   const given = (name: string, v: number | undefined, fallback: number, unit: string, grounds: string) => intentLeaf(by, name, v, fallback, unit, grounds);
   return {
     by,
@@ -176,7 +184,7 @@ export function swingIntent(by = 'the person', over: Partial<Record<'release' | 
     deep: given('extent of the bar along the swing', undefined, 0.089, 'm', 'a 2x4 swung on its wide face'),
     thin: given('extent of the bar across the swing', undefined, 0.038, 'm', 'a 2x4 swung on its wide face'),
     release: given('release angle', over.release, 30, 'deg', 'a modest swing, inside the amplitude law\'s domain'),
-    pivotHeight: given('height of the pivot', undefined, 2, 'm', 'a pivot the bar clears the ground from'),
+    pivotHeight: given('height of the pivot', over.pivotHeight, 2, 'm', 'a pivot the bar clears the ground from'),
     pivotSide: given('side of the pivot block', undefined, 0.02, 'm', 'a small block to pin to'),
     friction: given('friction torque of the hinge', over.friction, 0, 'N m', 'a free hinge'),
     pivotFromEnd: given('the pin from the bar\'s end', over.pivotFromEnd, 0, 'm', 'pinned at the end'),

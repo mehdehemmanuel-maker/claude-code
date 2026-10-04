@@ -22,6 +22,11 @@ points over medium, source, gravity, mass, speed and scale. Every point is lawfu
 refusal of physics with its reason. Rolling, displacing, planing, floating, flying, rockets, sails and swimmers at
 low Reynolds number are regions of that space, reached by the state of what is touched. None is named.
 
+Since round 6, scale is generated too. A matter's measured quantities make its mechanisms by their dimensions; where
+they cross, what no scale alters, the regime numbers, the levels and what an observer can see all follow. The observer
+is inside the observation: the kernel's own contract was found to be a law of its window, by an abduction that was
+given the observer's tick among the quantities.
+
 Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
 names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
 the generated laws are checked against, not the limit of what the language can state.
@@ -54,12 +59,20 @@ the generated laws are checked against, not the limit of what the language can s
 | Every point of a 147-point vehicle want-space is lawful; every failure is physics' refusal, with its reason | tests/nexus/family.test.ts |
 | How a region is held up and pushed follows from the state of what it touches, with no class named | tests/nexus/family.test.ts |
 | Which law holds follows from a ratio of how momentum crosses: Reynolds, Mach, a wave its own length | tests/nexus/family.test.ts |
+| A matter's mechanisms come from its quantities by dimensions alone; water gives twenty, each with a meaning | tests/nexus/scale.test.ts |
+| The capillary, visco-capillary and continuum lengths, and the Prandtl, Schmidt and Lewis numbers, emerge unnamed | tests/nexus/scale.test.ts |
+| Levels are gaps in the spectrum of times: water's molecules and flow separate between 1.5 and 150 nm | tests/nexus/scale.test.ts |
+| An observer's window makes laws: the kernel sees water incompressible, inviscid and in an inertial frame | tests/nexus/scale.test.ts |
+| The finite chart s = λ / (1 + λ) is the logistic of ln λ; only ln λ keeps the mechanisms straight | tests/nexus/scale.test.ts |
+| The kernel's contract is a law of its window; the abduction names the window itself | tests/nexus/window-study.test.ts |
+| A learned relation over the observer's window refuses a swing before the kernel runs it | tests/nexus/window-study.test.ts |
 
 ## 3. What is missing
 
-- A learned relation's evidence domain: the span of its observations. With a kernel the exploration loop supplies
-  evidence where the derivation goes; without one (heat, fluids, current) a derivation that relies on a relation
-  outside its observations must be a hypothesis, and nothing marks it so yet.
+- A learned relation's evidence domain: the span of its observations. Round 6 showed why it matters, since a measured
+  contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
+  but a relation used beyond the span of its own observations is still not marked as a hypothesis.
+- Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
 - Systems from elements: a generated element's bounds make a space that sizes it (a member, a store, a grip).
@@ -73,10 +86,10 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-The state of matter as a region of temperature and pressure, with three states. Liquid and gas differ by whether the
-matter boils at the pressure it is at. This reaches cavitation under water at speed, boiling, and the lighter gas a
-balloon holds. Then a second family over another carrier and its scales: keeping a region at a temperature (a room,
-a cold store, an oven, an incubator, a cell). Then systems from elements, which bridge the generator to the space.
+Life across scale, by the scale generator: an organism's matter and size generate its mechanisms, and the allometric
+data test whether their levels and crossings reproduce how rates scale with mass. Then the state of matter as a region of
+temperature and pressure with three states, the second family (keeping a region at a temperature), and systems from
+elements.
 
 ## 5. Why each primitive exists
 
@@ -127,3 +140,11 @@ a cold store, an oven, an incubator, a cell). Then systems from elements, which 
 | Heat leaves by touch, moving matter or light | in a vacuum light is the only way | heat with nowhere to go |
 | One fact, either saying | density as a property or as a matter's content density | the car's drag vanished |
 | The book is evidence, not a ceiling | laws are generated without limit; the kept ones check them | a test pinned 144 as if laws were a list |
+| A mechanism from dimensions: a quantity holding a time, or two that hold none alone | scale is a relation of distance, crossing speed and the system's time | ε = L / (c τ): whether what crosses arrives before the system changes |
+| A combination of two mechanisms is a crossing, not a mechanism | a length the matter makes, never a new process | gravity over rotation read as a speed |
+| One molecule's quantities live at the molecule's size | what one molecule does is not stretched to the region | a molecule's relaxation extrapolated to a kilometre |
+| Crossings beneath the molecule or beyond the site are outside | the averaged and uniform quantities that made them do not hold there | sub-picometre lengths among water's |
+| Levels are gaps in the spectrum of times | a level of organization is a band far from the next; the gap is declared | molecules and flow in one band at a nanometre |
+| An observer: support, window, watch, information speed | what is averaged is a constant of its laws; what is slower than its watch is a condition | incompressibility, inviscidness, an inertial frame |
+| The observer's tick is a quantity of every observation it makes | a contract measured at one window is a law of that window | the kernel's 2 % per period, measured on one bar |
+| A slice is realized only where its constraints hold | a configuration that fails a constraint is refused, not run | bars that reached the floor crashed the kernel |

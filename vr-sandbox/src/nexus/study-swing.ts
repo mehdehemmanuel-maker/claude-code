@@ -54,3 +54,40 @@ export function swingStudy(J: Jolt, cases: SwingCase[], language = new Language(
 }
 
 export const swingQuantities = (s: SwingSlice): Record<string, Derivation> | null => observeSwing(s)?.quantities ?? null;
+
+// ---- the observer inside the observation ---------------------------------------------------------------------
+//
+// The kernel is an observer with its own time, its tick. Its contract for a free hinge (under 2 % of the swing's
+// energy lost per period, the period within 0.5 %) was measured on one bar at one release: one value of the tick over
+// the period. A study over bars of other lengths asks whether the contract is the kernel's, or the kernel's at that
+// window. The observations carry the observer's tick and the period it watches among their quantities, so the
+// abduction can find the window if the window is what is missing.
+
+export interface WindowCase { barLength: number; release: number }
+export interface WindowRow { barLength: number; release: number; tickOverPeriod: number; lossPerPeriod: number; periodError: number; within: boolean }
+
+export interface WindowStudy extends SwingStudy { rows: WindowRow[] }
+
+/** A free swing observed with the observer in it: the tick and the derived period are quantities of the observation. */
+export function observeWindow(s: SwingSlice): Observation | null {
+  const o = observeSwing(s);
+  if (!o || !s.realization) return null;
+  const b = s.solution.bound;
+  return observation({ system: `${s.intent.barLength.hash}:${s.intent.release.hash}`, coupling: 'the bar on the pin, watched at the kernel\'s tick', quantities: { tick: s.observer.tick, T: b['T']!, theta0: b['theta0']!, E0: b['E']!, m: b['m']!, g: b['g']!, d: b['d']! }, observed: o.observed, derived: o.derived });
+}
+
+export function windowStudy(J: Jolt, cases: WindowCase[], language = new Language()): WindowStudy {
+  // each pivot a metre above the bar's reach, so the floor is never touched
+  const slices = cases.map((c) => barOnHinge(swingIntent('the window study', { barLength: c.barLength, release: c.release, friction: 0, pivotHeight: c.barLength + 1 }), swingMaterial(), J));
+  const observations = slices.map(observeWindow).filter((o): o is Observation => !!o);
+  const failures = slices.flatMap((s) => s.comparisons.filter((c) => c.name === 'swing energy at the end of the watch').map(anomalyOf).filter((f): f is Failure => !!f));
+  const rows: WindowRow[] = slices.filter((s) => s.realization).map((s) => {
+    const r = s.realization!, b = s.solution.bound, T = b['T']!.value!, n = b['n']!.value!;
+    return { barLength: s.intent.barLength.value!, release: s.intent.release.value!, tickOverPeriod: s.observer.tick.value! / T, lossPerPeriod: 1 - (r.swingEnergyEnd.value! / r.swingEnergyStart.value!) ** (1 / n), periodError: (r.period.value! - T) / T, within: s.comparisons.find((c) => c.name === 'swing energy at the end of the watch')!.verdict.kind === 'within' };
+  });
+  const cs = candidates(observations);
+  const { chosen, ambiguous } = choose(cs);
+  let relation: Relation | null = null;
+  if (chosen && failures.length && validate(chosen).holds && chosen.generality >= 2) relation = language.add(promote(chosen, `the kernel keeps a free swing within its contract`));
+  return { slices, observations, failures, candidates: cs, chosen, ambiguous, relation, language, rows };
+}

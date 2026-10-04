@@ -302,9 +302,87 @@ Ranked across the family, what the language still lacks:
 
 The house, the car and the printer regenerate from the same generator with their coverage unchanged at 56 of 64.
 
+## Round 6: scale, and the observer inside the observation
+
+The question changed from "what happens at a small scale" to "what becomes invisible when the observation's scale
+changes". Scale is not a size. It is a relation between a distance, how fast something crosses it, and the system's own
+time, and nothing that carries information crosses a distance L sooner than L / c.
+
+**The generator** (src/nexus/scale.ts) makes mechanisms from a matter's measured quantities by their dimensions alone.
+A quantity whose dimension already holds a time is a mechanism by itself: a speed, a diffusivity, an acceleration or a
+rate. Two quantities that hold no time alone make one by their ratio or product. Each mechanism's time grows with the
+size as a power, τ = (L^a / P)^(1/b). A combination of two mechanisms is never a third: it is where they cross. One
+molecule's quantities describe a body of the molecule's size, so their mechanisms are evaluated there.
+
+**Water** (tests/nexus/water.ts) is stated only by measured quantities at 25 °C, its site's gravity and rotation, and the
+bound c. It generates twenty mechanisms, each with a meaning that nothing named:
+
+| Kind | Generated |
+|---|---|
+| spread | momentum as L² over viscosity over density; heat as L² over its diffusivity; the molecules themselves |
+| waves and restoring | sound, light in water, capillarity as L^(3/2), gravity as L^(1/2) |
+| relaxation | stiffness over viscosity, a fraction of a picosecond: how fast the liquid forgets a strain |
+| fluctuation | a body of size L wandering by its thermal energy, as L³ |
+| one molecule | its thermal speed across its own size, its velocity forgotten in the viscosity, its bonds, its stretch |
+
+What emerged from those twenty. Every value is checked against a closed form computed independently from the same
+inputs:
+
+| Found | Value | What it is |
+|---|---|---|
+| ratios no change of scale alters | 6.14, 388, 63 | the Prandtl, Schmidt and Lewis numbers; 6.1 is water's at 25 °C |
+| where capillarity and gravity cross | 2.71 mm | the capillary length |
+| where capillarity and momentum spread cross, by three pairs that agree | 11 nm | the visco-capillary length |
+| where sound and momentum spread cross, by three pairs that agree | 0.60 nm | within a factor of two of the molecule's own 0.31 nm |
+| where light in vacuum crosses within one O–H stretch | 2.94 µm | the band's own wavelength, where ε = 1 for the vibration |
+| with a motion | | the Reynolds, Péclet, Weber, Froude and Rossby numbers are the size over a crossing length; Mach and the capillary number are scale-free |
+
+Crossings below the molecule, or beyond the largest size the site holds, are marked as outside, because the quantities
+that made them do not hold there. Light in vacuum is the fastest crossing at every size until free fall overtakes it at
+c² / g, which is beyond the planet.
+
+**Levels** are gaps in the spectrum of times. The gap is a declared judgment of two decades. At a nanometre the
+molecules and the flow share one band, and at a micrometre and above they are apart. The sound crossing equals a
+hydrogen bond's lifetime at 1.5 nm and is two decades slower at 150 nm. That is where the continuum separates from the
+molecules, and where the averaged quantities it is written in become meaningful.
+
+**What an observer cannot see** follows from its support, its window, how long it watches and how fast what it learns
+from travels. The rigid-body kernel watching a centimetre of water averages sound away, so it sees an incompressible
+liquid. It never sees momentum spread, so it sees an inviscid one. It never sees the earth turn, so its frame is
+inertial. Three familiar laws are what that window makes of water. An ultrafast pulse sees the bonds and the liquid's
+forgetting, and every flow is fixed for it.
+
+**The scale coordinate was tested, not declared.** The finite chart s = λ / (1 + λ) carries the same information as
+ln λ: it is its logistic, and ln λ = logit(s) exactly. But every mechanism is a straight line in ln λ, with its exponent
+as its slope, whatever the reference and the range. In s none is straight, and a slope fitted there changes with the
+reference and the range, so it belongs to the chart and not to the mechanism. The distance between two crossings in
+ln λ does not depend on the reference; in s it does. So scale is the plane of ln L and ln τ. Mechanisms are lines in
+it, crossings are where lines meet, and the causal line τ = L / c bounds what can be one state.
+
+**The observer inside the observation.** The kernel's contract for a free hinge was measured on one bar at one release,
+which is one value of its tick over the swing's period. The same free swing over six lengths and two releases found
+this:
+
+| Bar | Tick over period | Lost per period at 30° | At 10° |
+|---|---|---|---|
+| 0.15 m | 0.0165 | 2.7 % | gains 0.69 % |
+| 1 m, the contract's bar | 0.0067 | 1.3 % | gains 0.25 % |
+| 4 m | 0.0033 | 0.67 % | gains 0.12 % |
+
+The residual has structure, and its sign depends on the amplitude. Each column is a power of the tick over the period,
+and the period's error is of higher order than the energy's. Given the observer's tick and the period it watches among
+the quantities, the abduction found the hidden variable itself. The simplest group that separates the swings kept
+within the contract from the ones lost is the tick over the period times the release. It was promoted, and it now
+refuses a short bar released wide before the kernel runs it. The contract was a law of the kernel's window, validated
+in one regime. The friction relation learned in an earlier round was learned inside that regime, so it stands.
+
+The same sweep found a missing invariant. No constraint said the bar must clear the floor, so bars longer than the
+pivot height reached the kernel and crashed. The swing system now states that constraint, and a slice is realized only
+where its constraints hold.
+
 ## The next instrument
 
-The vehicle family is the momentum carrier's want-space. The next family explores another carrier across its scales:
-keeping a region at a temperature (a room, a cold store, an oven, an incubator, a cell). Before that comes the state
-of matter as a region of temperature and pressure with three states, since cavitation, boiling and lifting gases all
-wait on it.
+Life across scale, by the same generator. Allometric data say that the rates of organisms scale with their mass, with
+the exponents still debated. The test is whether the levels and crossings that an organism's matter and size generate
+reproduce those exponents, or leave a residual whose structure names what is missing. Before that, the state of matter
+as a region of temperature and pressure with three states remains open from round 5.
