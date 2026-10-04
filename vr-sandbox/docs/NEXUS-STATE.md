@@ -115,6 +115,7 @@ the generated laws are checked against, not the limit of what the language can s
 | A gap says what it bears on, and the text channel shows first what a want or the domain's requirements wait on; a want at an address nothing holds or derives says so; WHY is shown as a graph | tests/nexus/contact.test.ts, tests/nexus/channel-text.test.ts |
 | One rule bends a place under every force on it, each spread over its interval: alone the kept own-weight law, with a block resting mid-span the kept patch law plus it, to nine places | tests/nexus/contact.test.ts |
 | A place is at rest only while what bears it is, down to what is held: on a tipped board, the block on it is not at rest and its bending is refused; a decision a known part settles waits on nothing else | tests/nexus/contact.test.ts |
+| What statics says cannot stay, the rigid-body kernel evolves from the state's places until still, and where it came to rest returns as a measured place: a tipped board comes to rest lower; at rest, nothing moves past the kernel's resolution; read back, the same state without the kernel | tests/nexus/evolve.test.ts, `npm run nexus` |
 
 ## 3. What is missing
 
@@ -143,10 +144,11 @@ the generated laws are checked against, not the limit of what the language can s
 
 docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
 from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
-every piece of Nexus into the seven structures. Sections 16 to 19 record each step executed, as a running process,
-with what running it found. Steps 1 to 4 run: the runtime on a journal, places in a measured domain, couplings between
-them, and one rule for bending under every force. Step 5 is an evolver over generated structure, starting with the
-places the state says are not at rest.
+every piece of Nexus into the seven structures. Sections 16 to 20 record each step executed, as a running process,
+with what running it found. Steps 1 to 5 run: the runtime on a journal, places in a measured domain, couplings between
+them, one rule for bending under every force, and an evolver that moves what cannot stay. Step 6 is contacts of any
+feature against a face, with vector forces and the full balance of a place, so the state can read back where the
+kernel left things.
 
 ## 5. Why each primitive exists
 

@@ -10,6 +10,7 @@
 //   {"gravity": {"value": 9.80665, "direction": [0, -1, 0], "by": "an instrument"}}
 //   {"held":    {"place": "...", "by": "who says the ground holds it"}}
 //   {"withdraw":{"id": "...", "why": "..."}}
+//   {"evolve": true}   the places not at rest, and all they can strike, stepped in the rigid-body kernel until still
 //   {"why": "place/quantity"}        {"gaps": true} (or "all")        {"state": true}
 
 import { lawByHash, lawById } from './book';
@@ -24,7 +25,7 @@ import { dimOf, sameDim } from './dimension';
 const fmt = (v: number | null) => (v === null ? '–' : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(4) : String(Number(v.toPrecision(6))));
 
 /** One line in: a contribution, or a question of the state. */
-export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
+export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { evolve: true } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
   const m = JSON.parse(line) as Record<string, any>;
   if (m['give']) { const g = m['give']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'given', by: g.by ?? 'the person', grounds: g.grounds ?? 'given on the text channel' }) } }; }
   if (m['measure']) { const g = m['measure']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'measured', source: g.by, window: g.window ?? 'one reading' }, g.uncertainty) } }; }
@@ -43,6 +44,7 @@ export function read(line: string): { contribution: Contribution } | { contribut
   }
   if (m['held']) return { contribution: { kind: 'held', place: m['held'].place, by: m['held'].by ?? 'the person' } };
   if (m['withdraw']) return { contribution: { kind: 'withdraw', id: m['withdraw'].id, why: m['withdraw'].why } };
+  if (m['evolve']) return { evolve: true };
   if (m['why']) return { ask: 'why', at: m['why'] };
   if (m['gaps']) return { ask: 'gaps', all: m['gaps'] === 'all' };
   if (m['state']) return { ask: 'state' };

@@ -507,12 +507,14 @@ These are in this document and nowhere in code:
 
 ### Completely absent
 
-- **Continuous time in the running process.** The runtime propagates; nothing in it evolves yet.
+- **Continuous time in the state.** The evolver (since step 5) runs the kernel from the state's places until still
+  and returns where they came to rest; the state holds configurations at rest, not the path between them.
 - **Measurement from reality:** no sensor. The text channel takes what a person types, as given or measured leaves
   with their origins.
 - **Projection** other than text lines: no image or sound from a running system (the workbench page was removed).
 - **The Quest runtime.** It has been absent since the restart.
-- **Generated structure realized in physics.**
+- **Generated structure realized in physics** beyond places as boxes: the evolver realizes boxes and their matter, not
+  joints, fasteners or anything that bends.
 - **Growth, containment** (one region inside another), and **the cost per bit of a realization.**
 
 ### What follows from it
@@ -738,3 +740,63 @@ When tipped, the person's want on the board's stress is undecided, and the block
 - **Pressure under a patch** is taken as even. A stiff block on a flexible board presses harder at its edges.
 
 Step 5 is an evolver over generated structure, starting with the places the state says are not at rest.
+
+---
+
+## 20. Step 5, executed: what running it found
+
+**What was built.** An evolver over the state's generated structure (src/nexus/evolve.ts), on the kept rigid-body
+kernel and its measured contract:
+- every place not held is given to the kernel as the state has it: its box, its turn, and the mass its matter's
+  density gives;
+- what is held becomes the kernel's environment;
+- the kernel steps them until still for the observer's quiet time, within its patience;
+- where each place came to rest is returned to the state as a place **measured** by the kernel, with the run's window
+  and the kernel's position resolution;
+- a place still where the state has it, within that resolution, is not returned;
+- a rigid place keeps its extents: the same leaves, so nothing that reads only them is evaluated again.
+
+The kernel needs a surface between places (how they slide and bounce), which the state does not hold. The evolver's
+contract declares the one it assumes for every pair, and says whose assumption it is. A place whose matter is unknown
+is not realized: the evolution is refused, with the reason.
+
+The text channel takes `{"evolve": true}`. The process loads the kernel the first time something is evolved, and
+handles lines strictly in order. What the kernel returned is in the journal, so reopening it gives the same state
+without the kernel.
+
+**The scene, as run.**
+
+| Configuration | What happened in the kernel |
+|---|---|
+| At rest | 0.42 s to still; nothing moved beyond 2 mm, and nothing was returned |
+| Block B moved so the board pulls on block A | statics named the board, and only the board, as not at rest |
+| Then evolved | 1.22 s to still; the board moved 113 mm and turned 38° |
+
+The tipped board came to rest lower, as a released body must; the test checks that potential energy fell. It leans
+with one end on the floor and its underside on an edge of block B. The whole run takes 1.6 s in the process.
+
+**What running it found.**
+
+1. **The state cannot hold what the kernel found.** The board's measured place is in the state, but what bears it is
+   a gap: the board touches block B along an edge and the floor at a corner. The contact generator knows only faces
+   lying flat on faces, turned alike. So the loop is open at exactly the point the derivation predicts. The kernel can
+   move what statics refuses, but statics cannot read back what it moved to.
+2. **Contacts on a slope need more than vertical shares.** Where the board leans, the contacts push across its face,
+   not straight up. Holding it there takes friction at one contact at least. Shares along gravity alone cannot express
+   that: the forces through a contact have a normal part and a part along the surface, and a place's balance has
+   three force and three moment components. A place leaning on two contacts has more unknown forces than balance
+   gives (the ladder's indeterminacy), unless friction at one of them is at its limit or the stiffnesses are known.
+3. **The kernel's alignment and the generator's differ.** The generator demands faces turned alike within one part in
+   a million, a bare number. The kernel comes to rest only within its own resolution, so even a place that lands flat
+   is tilted by more than that.
+
+**Rederived.** A contact is where the surfaces of two places meet, whatever touches: a face against a face, an edge
+against a face, or a corner against a face. The contact set is a point, a segment, or a polygon: the touching
+feature of one place, clipped to the face of the other, with that face's normal. The forces through it are a normal
+push of at least zero and a friction within the friction cone. A place's balance is the full six components. Where
+that leaves the forces undetermined, the gap is located and says what would settle it: friction at its limit, or the
+contacts' stiffness. The tolerance for "touching" and "aligned" is the kernel's resolution where the place came from
+the kernel, and the measurement's where it came from a person or the headset: an origin's resolution, never a bare
+number.
+
+Step 6 is contacts of any feature against a face, with vector forces and the full balance of a place.

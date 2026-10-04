@@ -173,6 +173,12 @@ export class Runtime {
     return [...found].map((id) => { const c = this.constraints.get(id)!; return { constraint: id, says: c.says, by: c.by }; });
   }
 
+  /** The places in the domain, and whether each is held at rest from outside it. */
+  placeIds(): string[] { return [...this.places]; }
+  isHeld(p: string): boolean { return this.held.has(p); }
+  /** The leaf held at an address, when one is. */
+  leafAt(a: Address): Leaf | undefined { return this.leaves.get(a); }
+
   /** Whether anything in the state can bind an address: a leaf there, or a relation that derives it. */
   derives(a: Address): boolean { return this.leaves.has(a) || (this.producers.get(a) ?? []).some((id) => !this.cyclic.has(id)); }
 
