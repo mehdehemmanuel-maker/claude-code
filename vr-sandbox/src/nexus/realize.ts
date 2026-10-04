@@ -31,6 +31,9 @@ export interface RigidContract {
   momentError: Derivation;
   /** The kernel's measured error on a joint's reported loads against statics. */
   jointLoadError: Derivation;
+  /** The kernel's measured error on the period of a bar on a free hinge, and the swing energy it loses per period. */
+  periodError: Derivation;
+  hingeDissipation: Derivation;
   /** Below this the kernel's positions say nothing (its penetration slop). */
   positionResolution: Derivation;
   /** Segments a breakable member is cut into: stations at Lt / n. */
@@ -58,6 +61,8 @@ export function rigidContract(): RigidContract {
     reactionOffset: ofLeaf(leaf('reaction line offset over both supports', 0, 'm', { class: 'configuration', source: 'each reaction lies within its knife edge, so the span between reactions is within ± the knife-edge width of the centre distance' }, supportWidth.value!)),
     momentError: ofLeaf(leaf('bond moment error', 0.05, '1', { class: 'measured', source: 'tests/conformance/fracture.test.ts: bond bending moments on a plank over two supports hold within 5 % of statics' })),
     jointLoadError: ofLeaf(leaf('joint load error', 0.01, '1', { class: 'measured', source: 'tests/conformance/joins.test.ts: a bolted cantilever arm reports the root moment and shear of statics within 1 %' })),
+    periodError: ofLeaf(leaf('period error of a free hinge', 0.005, '1', { class: 'measured', source: 'tests/conformance/laws.test.ts: a bar on a free hinge swings at the physical pendulum\'s period within 0.5 % at 30°' })),
+    hingeDissipation: ofLeaf(leaf('swing energy lost per period at a free hinge', 0.02, '1', { class: 'measured', source: 'tests/conformance/laws.test.ts: a bar on a free hinge loses under 2 % of its swing energy per period at 30°' })),
     positionResolution: c('position resolution', CONTACT_TOLERANCE, 'm', 'ganglia/tree/gate.ts CONTACT_TOLERANCE: the kernel\'s penetration slop'),
     segments: c('segments of a breakable member', 6, '1', 'six segments: stations at Lt/6; the station under the load patch is not observed (how a resting mass shares itself between two segments at a seam is indeterminate)'),
     terrainSpan: c('terrain span', 8, 'm', 'the kernel\'s height grid covers eight metres square around the origin: more than the slice reaches'),

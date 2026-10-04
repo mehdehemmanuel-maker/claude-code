@@ -154,5 +154,33 @@ export const GROUP_BENDING = law({
   example: { inputs: { Ft: 58560, lever: 0.0445 }, output: 2605.92, from: 'arithmetic' },
 });
 
+// ---- a bar swinging on a hinge --------------------------------------------------------------------------------------
+
+const Ip = variable('I', 'kg m^2', 'moment of inertia about the pivot'), dcm = variable('d', 'm', 'distance from the pivot to the centre of mass'), theta0 = variable('theta0', 'rad', 'release angle');
+
+const ea = variable('a', 'm', 'extent along the swing'), eb = variable('b', 'm', 'extent across the swing, in its plane');
+export const PRISM_INERTIA = law({
+  id: 'inertia.prism.centre', name: 'Moment of inertia of a rectangular prism about its centre', statement: 'About an axis through its centre, a uniform rectangular prism has moment of inertia m (a² + b²) / 12, a and b its extents in the plane of rotation.', formula: 'I = m (a² + b²) / 12',
+  inputs: [{ sym: 'm', unit: 'kg', name: 'mass' }, { sym: 'a', unit: 'm', name: 'extent along the swing' }, { sym: 'b', unit: 'm', name: 'extent across the swing, in its plane' }], output: { sym: 'I', unit: 'kg m^2', name: 'moment of inertia about the centre' },
+  term: div(mul(m, add(pow(ea, 2), pow(eb, 2))), k(12)), domain: [], source: PHYSICS,
+  example: { inputs: { m: 2, a: 1, b: 0.1 }, output: (2 * (1 + 0.01)) / 12, from: 'arithmetic' },
+});
+
+export const PHYSICAL_PENDULUM = law({
+  id: 'pendulum.physical.period', name: 'Period of a physical pendulum, small swings', statement: 'A rigid body swinging about a pivot has, for small swings, the period 2π √(I / (m g d)): its moment of inertia about the pivot over its weight times the distance from the pivot to its centre of mass.', formula: 'T₀ = 2π √(I / (m g d))',
+  inputs: [{ sym: 'I', unit: 'kg m^2', name: 'moment of inertia about the pivot' }, { sym: 'm', unit: 'kg', name: 'mass' }, { sym: 'g', unit: 'm/s^2', name: 'gravity' }, { sym: 'd', unit: 'm', name: 'distance from the pivot to the centre of mass' }], output: { sym: 'T0', unit: 's', name: 'small-swing period' },
+  term: mul(k(2), PI(), sqrt(div(Ip, mul(m, g, dcm)))), domain: [], source: PHYSICS,
+  example: { inputs: { I: 2 / 3, m: 2, g: 9.80665, d: 0.5 }, output: 2 * Math.PI * Math.sqrt((2 / 3) / (2 * 9.80665 * 0.5)), from: 'a uniform 1 m bar of 2 kg: the simple pendulum of length 2L/3, computed independently' },
+});
+
+export const AMPLITUDE_FACTOR = law({
+  id: 'pendulum.amplitude-factor', name: 'Lengthening of the period with the swing', statement: 'A pendulum released from θ₀ swings slower than the small-swing period by 1 + θ₀²/16 + 11 θ₀⁴/3072, the first terms of the complete elliptic integral; the next term is under 1e-4 up to 45°.', formula: 'T/T₀ = 1 + θ₀²/16 + 11 θ₀⁴/3072',
+  inputs: [{ sym: 'theta0', unit: 'rad', name: 'release angle' }], output: { sym: 'f', unit: '1', name: 'period factor' },
+  term: add(add(k(1), div(pow(theta0, 2), k(16))), div(mul(k(11), pow(theta0, 4)), k(3072))),
+  domain: [{ says: 'a swing of at most 45°: the series\' next term, 173 θ₀⁶/737280, is under 1e-4 there', holds: le(theta0, leaf('45 degrees', 45, 'deg', { class: 'configuration', source: 'the truncation of the series: 173 θ⁶/737280 at 45° is 5.6e-5' })) }],
+  source: { cite: `${PHYSICS.cite}; the series of 4 K(sin(θ₀/2)) / (2π) (Landau & Lifshitz, Mechanics, §11)`, kind: 'textbook' },
+  example: { inputs: { theta0: Math.PI / 6 }, output: 1 + (Math.PI / 6) ** 2 / 16 + (11 * (Math.PI / 6) ** 4) / 3072, from: 'the series at 30°, computed independently' },
+});
+
 /** The derived laws of the slice. */
-export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, STRESS_AREA, GROUP_TENSION, GROUP_BENDING];
+export const SLICE: Law[] = [PRISM_MASS, EXTENT_FROM_MASS, LINE_WEIGHT, TWO_SUPPORTS, PATCH_MOMENT, SELF_MOMENT, RECT_AREA, RECT_MODULUS, RECT_I, PATCH_SAG, SELF_SAG, FIRST_PERIOD, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, STRESS_AREA, GROUP_TENSION, GROUP_BENDING, PRISM_INERTIA, PHYSICAL_PENDULUM, AMPLITUDE_FACTOR];

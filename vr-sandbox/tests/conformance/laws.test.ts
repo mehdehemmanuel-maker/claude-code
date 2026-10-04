@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { at, rig, within } from './helpers';
 import { ConstructionRefused } from '../../src/ganglia/tree/gate';
-import { axisAngle, length, sub } from '../../src/doc/math';
+import { axisAngle, length, rotate, sub } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
 import { blockCharges, blockFaces, cylinderCharges, cylinderFaces, dipoleMoment, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
@@ -132,6 +132,32 @@ describe('stored energy and oscillation', () => {
     const T = (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1);
     within(T, 2 * Math.PI * Math.sqrt(L / g), 0.01);
     r2.done();
+  });
+
+  it('a bar on a free hinge: the physical pendulum\'s period within 0.5 %, and under 2 % of the swing energy lost per period at 30°', async () => {
+    const r = await rig({}, false);
+    const L = 1.0, th0 = Math.PI / 6, zoff = 0.01 + 0.019 + 0.0005, zp = 0.01 + 0.00025;
+    const pivot = r.part('block', at(0, 2, 0), { frozen: true, params: { x: 0.02, y: 0.02, z: 0.02 } });
+    const bar = r.part('plate', at((L / 2) * Math.sin(th0), 2 - (L / 2) * Math.cos(th0), zoff, axisAngle([0, 0, 1], th0 - Math.PI / 2)), { material: 'wood.douglas-fir', params: { length: L, thickness: 0.089, width: 0.038, fracture: 'off' } });
+    const yToZ = axisAngle([1, 0, 0], Math.PI / 2);
+    r.connect('hinge', { part: pivot, frame: at(0, 0, zp, yToZ) }, { part: bar, frame: at(-L / 2, 0, zp - zoff, yToZ) }, { pin: 0.008, friction: 0 });
+    const m = getMaterial('wood.douglas-fir').density * 0.038 * 0.089 * L, I = (m * (L * L + 0.089 ** 2)) / 12 + m * (L / 2) ** 2;
+    const angles: number[] = [], E: number[] = [];
+    r.run(8, () => {
+      const pose = r.world.livePose(bar.id)!, d = rotate(pose.q, [1, 0, 0]), w = r.world.angularVelocity(bar.id)!;
+      angles.push(Math.atan2(d[0], -d[1]));
+      E.push(0.5 * I * w[2] * w[2] + m * g * pose.p[1]);
+    });
+    const crossings: number[] = [];
+    for (let i = 1; i < angles.length; i++) if ((angles[i - 1]! > 0) !== (angles[i]! > 0)) { const a0 = angles[i - 1]!, a1 = angles[i]!; crossings.push((i - 1) * TICK + TICK * (a0 / (a0 - a1))); }
+    const T = (2 * (crossings.at(-1)! - crossings[0]!)) / (crossings.length - 1);
+    const T0 = 2 * Math.PI * Math.sqrt(I / (m * g * (L / 2))), f = 1 + th0 ** 2 / 16 + (11 * th0 ** 4) / 3072;
+    within(T, T0 * f, 0.005);
+    const Emin = m * g * (2 - L / 2), periods = 8 / (T0 * f);
+    const lost = (E[0]! - Math.max(...E.slice(-150))) / (E[0]! - Emin);
+    expect(lost / periods).toBeLessThan(0.02);
+    expect(lost).toBeGreaterThan(-0.005);
+    r.done();
   });
 
   it('nothing rests out of equilibrium: a slow, small swing keeps its amplitude instead of sleeping at the top of its swing', async () => {

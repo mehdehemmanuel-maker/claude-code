@@ -116,11 +116,18 @@ export function sample(f: Field, at: Point, name = `${f.name} at a point`): Deri
 export function resolves(d: Domain, r: Resolution): { says: string; holds: Derivation }[] {
   return d.scale.map((band) => {
     const env: Record<string, Derivation> = { ...band.env };
-    const used = AXES.filter((axis) => varsOf(band.holds).some((v) => v.sym === `d${axis}`));
-    // an observer stationary on an axis averages over all of it: any bound on its support there is met in the limit
-    const stationary = used.filter((axis) => r.stationary.includes(axis));
-    if (stationary.length) return { says: band.says, holds: evaluate(band.says, k(1), {}, { unit: '1', law: `resolution ${r.hash}: stationary on ${stationary.join(', ')}; the band's bound on its support is met in the static limit` }) };
+    const syms = varsOf(band.holds).map((v) => v.sym);
+    const used = AXES.filter((axis) => syms.includes(`d${axis}`));
+    const sampled = AXES.filter((axis) => syms.includes(`l${axis}`));
+    // an observer stationary on an axis averages over all of it: any bound on its support or lattice there is met in the limit
+    const stationary = [...used, ...sampled].filter((axis) => r.stationary.includes(axis));
+    if (stationary.length) return { says: band.says, holds: evaluate(band.says, k(1), {}, { unit: '1', law: `resolution ${r.hash}: stationary on ${stationary.join(', ')}; the band's bound there is met in the static limit` }) };
     for (const axis of used) env[`d${axis}`] = r.support[axis] ?? evaluate(`support on ${axis}: a point`, k(0), {}, { unit: AXIS_UNIT[axis], law: `resolution ${r.hash}: no support declared on ${axis}` });
+    for (const axis of sampled) {
+      const l = r.lattice[axis];
+      if (!l) return { says: band.says, holds: evaluate(band.says, k(0), {}, { unit: '1', law: `resolution ${r.hash}: no lattice declared on ${axis}, so the band on the sampling there cannot hold` }) };
+      env[`l${axis}`] = l;
+    }
     return { says: band.says, holds: evaluate(band.says, band.holds, env, { unit: '1', law: `scale band of domain ${d.hash}` }) };
   });
 }

@@ -43,7 +43,12 @@ nothing of its architecture is extended again.
   decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
   journal), `project` (a scene is a pure function of bound records: a box for every placed body and nothing else,
   every number naming its record; a renderer consumes it and decides nothing), `beam`: the vertical slice of
-  Part XXV, and `bracket`: the second slice, an arm bolted to a post, where a joint is a coupling whose shared
+  Part XXV, `swing`: the third slice, where time is the coordinate (a bar on a free hinge released from an angle:
+  the period derived from the prism's inertia and the amplitude series, the angle a field over t whose scale band
+  is the sampling law, the kernel's samples a lattice at its tick with the tick as their support, the period read
+  from the zero crossings with the tick as its resolution, the swing energy the hinge coupling's ledger over time,
+  and the kernel's dissipation and period error its contract, fixed by a new conformance test), and `bracket`: the
+  second slice, an arm bolted to a post, where a joint is a coupling whose shared
   boundary variables (the root moment and shear) are read from the solution, bounded by the bolt group's capacity
   at the declared factor, and measured by the kernel under a contract its own conformance test fixes at 1 %; the
   catalogue of sections and bolt groups is searched under two preferences in order (least section, then least bolt
