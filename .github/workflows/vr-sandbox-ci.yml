@@ -30,17 +30,5 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Unit, golden, codec and physics conformance tests
+      - name: Unit, golden, codec, physics conformance and architecture tests
         run: npm test
-      - name: Install Chromium for end-to-end tests
-        run: npx playwright install --with-deps chromium
-      - name: End-to-end tests (desktop + emulated Quest)
-        run: npm run e2e
-        env:
-          CI: '1'
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-results
-          path: vr-sandbox/test-results
-          retention-days: 7

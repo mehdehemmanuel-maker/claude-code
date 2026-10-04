@@ -39,7 +39,7 @@ export default defineConfig({
   },
   worker: { format: 'es' },
   test: {
-    include: ['tests/{unit,golden,conformance,codec}/**/*.test.ts'],
+    include: ['tests/{unit,golden,conformance,codec,nexus}/**/*.test.ts'],
     testTimeout: 60_000,
   },
 });

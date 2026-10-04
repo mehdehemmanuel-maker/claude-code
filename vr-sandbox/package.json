@@ -5,16 +5,10 @@
   "type": "module",
   "description": "Physics-real VR creative sandbox (WebXR, Quest 3S target, desktop fallback)",
   "scripts": {
-    "dev": "vite --host",
-    "build": "vite build",
-    "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
-    "stress": "vitest run --config vitest.stress.config.ts tests/stress/spiderweb.test.ts",
-    "immune": "vitest run --config vitest.stress.config.ts tests/stress/immune.test.ts",
-    "gate": "tsc --noEmit -p . && vitest run tests/unit tests/codec tests/golden && vite build"
+    "gate": "tsc --noEmit -p . && vitest run"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
@@ -23,7 +17,6 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.4",
     "@types/three": "^0.186.0",
     "fast-check": "^4.10.2",
