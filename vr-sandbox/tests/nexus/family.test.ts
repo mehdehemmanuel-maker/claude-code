@@ -10,6 +10,7 @@ import { carrierById, coupling, family, reaction, UNIVERSAL } from '../../src/ne
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { apply, type Law } from '../../src/nexus/law';
 import { generate, type Structure } from '../../src/nexus/manifold';
+import { vapourPressure } from '../../src/nexus/phase';
 import { leaf } from '../../src/nexus/term';
 import { base, lattice, read, vehicle, type VehiclePoint } from './families';
 
@@ -118,6 +119,19 @@ describe('the vehicle family: every point generated, read by what physics requir
     const cw = Math.sqrt(9.80665 * 1.8 / (2 * Math.PI));
     expect(val(at({ medium: 'water' }), 'drag:moving:the payload|the water', 'the speed over that: past one it climbs')).toBeCloseTo(30 / cw, 9);
     expect(val(at({ medium: 'water', speed: 1 }), 'drag:moving:the payload|the water', 'the speed over that: below one it parts')).toBeCloseTo(1 / cw, 9);
+  });
+
+  it('a liquid boils where the flow around the moving region drops its pressure below the vapour pressure its own phases give: under water, never at 1 m/s, by its shape at 30 m/s, around any shape at 250 m/s', () => {
+    const pv = vapourPressure('water', 288.15);
+    expect(Math.abs(pv - 1705.6) / 1705.6).toBeLessThan(0.002); // IAPWS-95: 1.7056 kPa at 15 °C
+    const sigma = (v: number) => val(at({ medium: 'under water', speed: v }), 'drag:moving:the payload|the water', 'the pressure above boiling over half the density times the speed squared');
+    for (const v of [1, 30, 250]) expect(sigma(v)).toBeCloseTo((101325 - pv) / (0.5 * 1000 * v * v), 9);
+    const says = (v: number) => el(at({ medium: 'under water', speed: v }), 'drag:moving:the payload|the water')!.values.find((x) => x.name.startsWith('the pressure above boiling'))!.name;
+    expect(says(1)).toMatch(/nowhere around it can boil/);
+    expect(says(30)).toMatch(/its shape's/);
+    expect(says(250)).toMatch(/boils around any shape/);
+    // air is a gas whose phases the language holds no data for: nothing is said of its boiling
+    expect(el(at({ medium: 'air', speed: 250 }), 'drag:moving:the payload|the air')!.values.some((x) => /boil/.test(x.name))).toBe(false);
   });
 
   it('light carries momentum, and heat in a vacuum leaves only as light: a sail, an emitter, a radiating surface', () => {

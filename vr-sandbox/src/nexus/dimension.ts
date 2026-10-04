@@ -42,20 +42,29 @@ const fdiv = (a: Frac, b: Frac) => frac(a.n * b.d, a.d * b.n);
  * it is the one vector (1, 1, 1, -1): the Reynolds number, found without being told its name.
  */
 export function piGroups(dims: Dim[]): number[][] {
-  const n = dims.length;
   // rows: base dimensions; columns: quantities
-  const M: Frac[][] = [];
-  for (let r = 0; r < 5; r++) M.push(dims.map((d) => frac(Math.round(d[r]! * 1e6), 1e6)));
+  return integerNullSpace([0, 1, 2, 3, 4].map((r) => dims.map((d) => d[r]!)));
+}
+
+/**
+ * The integer vectors k with Σ_j M[r][j] k_j = 0 for every row r: the null space of a matrix over the rationals, each
+ * basis vector scaled to integers with its first nonzero entry positive. One algebra, two readings: over dimensions it
+ * gives the dimensionless groups; over what a transformation conserves it gives the balanced transformations.
+ */
+function reduce(rows: number[][], columns?: number) {
+  // with no rows, nothing is constrained: every vector is in the null space
+  const n = rows[0]?.length ?? columns ?? 0, R = rows.length;
+  const M: Frac[][] = rows.map((row) => row.map((x) => frac(Math.round(x * 1e6), 1e6)));
   const pivots: number[] = [];
   let row = 0;
-  for (let col = 0; col < n && row < 5; col++) {
+  for (let col = 0; col < n && row < R; col++) {
     let p = -1;
-    for (let r = row; r < 5; r++) if (M[r]![col]!.n !== 0) { p = r; break; }
+    for (let r = row; r < R; r++) if (M[r]![col]!.n !== 0) { p = r; break; }
     if (p < 0) continue;
     [M[row], M[p]] = [M[p]!, M[row]!];
     const pv = M[row]![col]!;
     M[row] = M[row]!.map((x) => fdiv(x, pv));
-    for (let r = 0; r < 5; r++) {
+    for (let r = 0; r < R; r++) {
       if (r === row || M[r]![col]!.n === 0) continue;
       const f = M[r]![col]!;
       M[r] = M[r]!.map((x, c) => fsub(x, fmul(f, M[row]![c]!)));
@@ -63,16 +72,49 @@ export function piGroups(dims: Dim[]): number[][] {
     pivots.push(col);
     row++;
   }
-  const free = [...Array(n).keys()].filter((c) => !pivots.includes(c));
-  const groups: number[][] = [];
-  for (const f of free) {
-    const k: Frac[] = Array.from({ length: n }, () => frac(0));
-    k[f] = frac(1);
-    pivots.forEach((pc, r) => { k[pc] = frac(-M[r]![f]!.n, M[r]![f]!.d); });
-    const lcm = k.reduce((l, x) => (l * x.d) / gcd(l, x.d), 1);
-    const ints = k.map((x) => (x.n * lcm) / x.d).map((x) => (x === 0 ? 0 : x));
-    const first = ints.find((x) => x !== 0) ?? 1;
-    groups.push(first < 0 ? ints.map((x) => (x === 0 ? 0 : -x)) : ints);
+  return { n, M, pivots, free: [...Array(n).keys()].filter((c) => !pivots.includes(c)) };
+}
+
+/** The null vector with the free variables set as given, scaled to the smallest integers with its first nonzero entry positive. */
+function vectorAt(r: ReturnType<typeof reduce>, values: Map<number, number>): number[] | null {
+  const k: Frac[] = Array.from({ length: r.n }, () => frac(0));
+  for (const [f, x] of values) k[f] = frac(x);
+  r.pivots.forEach((pc, row) => { let acc = frac(0); for (const [f, x] of values) acc = fsub(acc, fmul(r.M[row]![f]!, frac(x))); k[pc] = acc; });
+  const lcm = k.reduce((l, x) => (l * x.d) / gcd(l, x.d), 1);
+  let ints = k.map((x) => (x.n * lcm) / x.d);
+  const g = ints.reduce((acc, x) => gcd(acc, Math.abs(x)), 0);
+  if (!g) return null;
+  ints = ints.map((x) => x / g || 0);
+  const first = ints.find((x) => x !== 0)!;
+  return first < 0 ? ints.map((x) => -x || 0) : ints;
+}
+
+/**
+ * The integer vectors k with Σ_j M[r][j] k_j = 0 for every row r: the null space of a matrix over the rationals, each
+ * basis vector scaled to integers with its first nonzero entry positive. One algebra, two readings: over dimensions it
+ * gives the dimensionless groups; over what a transformation conserves it gives the balanced transformations.
+ */
+export function integerNullSpace(rows: number[][], columns?: number): number[][] {
+  const r = reduce(rows, columns);
+  return r.free.map((f) => vectorAt(r, new Map([[f, 1]]))!);
+}
+
+/**
+ * Every integer null vector whose free variables lie within ±range, smallest first by the sum of their magnitudes:
+ * every vector of the null space is some assignment of its free variables, so the smallest ones are found by
+ * enumerating them, not by combining an arbitrarily scaled basis.
+ */
+export function integerNullVectors(rows: number[][], columns: number, range: number): number[][] {
+  const r = reduce(rows, columns);
+  const out = new Map<string, number[]>();
+  const vals = new Array<number>(r.free.length).fill(-range);
+  const total = (2 * range + 1) ** r.free.length;
+  for (let i = 0; i < total; i++) {
+    let v = i;
+    for (let j = 0; j < r.free.length; j++) { vals[j] = (v % (2 * range + 1)) - range; v = Math.floor(v / (2 * range + 1)); }
+    if (vals.every((x) => x === 0)) continue;
+    const k = vectorAt(r, new Map(r.free.map((f, j) => [f, vals[j]!])));
+    if (k) out.set(k.join(','), k);
   }
-  return groups;
+  return [...out.values()].sort((a, b) => a.reduce((s, x) => s + Math.abs(x), 0) - b.reduce((s, x) => s + Math.abs(x), 0));
 }

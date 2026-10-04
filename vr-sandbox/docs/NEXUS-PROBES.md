@@ -442,10 +442,60 @@ dynamics.
 the Draper point, 798 K. A sense's band is flat, but the eye is nearly blind at the red end, where a glowing body first
 radiates. A response across the band is missing.
 
+## Round 8: what matter is
+
+A matter is no longer only a name with numbers. A species is counted by the identities a transformation conserves
+(src/data/species.ts). Which identities are kept depends on the energy available against how strongly each one is
+bound. Chemistry has electronvolts and keeps each element's atoms and the charge. Below a nucleus's millions of
+electronvolts, only charge, baryon number and lepton number are kept. A transformation is a balance, so the balanced
+transformations of a set of species are the integer null space of what they count. That is the same algebra that finds
+dimensionless groups, now shared (src/nexus/dimension.ts). Every balance is an assignment of the null space's free
+variables, so the smallest one is found by enumerating them.
+
+| Asked | Generated (src/nexus/compose.ts) | Measured |
+|---|---|---|
+| methane with oxygen | CH₄ + 2 O₂ → CO₂ + 2 H₂O, −802.3 kJ/mol | the lower heating value, −802.3 kJ/mol |
+| lead to gold, keeping atoms | refused: lead and gold atoms are each kept | |
+| lead to gold, keeping only nucleons, charge and leptons | Pb → Au + 3 p + 8 n + 3 e | |
+| a neutron to a proton and an electron | refused by lepton number; the missing product is neutral, has no baryon number and lepton number −1, and is lighter than the 0.7823 MeV the decay releases | the antineutrino, Pauli's 1930 inference; 0.782 MeV |
+| a free proton to a neutron and a positron | refused by lepton number, a neutrino missing; with it, energy forbids the decay (−1.8 MeV) | the free proton is stable |
+
+**Binding.** A molecule's enthalpy of formation is its free atoms' enthalpies less its bonds' (mean bond enthalpies).
+Small gas molecules come within 21 kJ/mol. Benzene, whose bonds alternate around a ring, is 161 kJ/mol more stable
+than its bonds say: more than seven times any other residual, the delocalized bonding the bond list lacks. A liquid is
+more stable than its gas by a binding no bond in the molecule holds, between molecules: exactly the enthalpy its boiling
+takes in, 44.0 kJ/mol for water.
+
+**State.** Each phase has a Gibbs energy at a temperature and pressure (src/nexus/phase.ts), and a species takes the
+phase of least Gibbs energy. Where two phases' Gibbs energies meet is the vapour curve, generated from the phases'
+standard enthalpy, entropy and heat capacity, none of them a boiling point:
+
+| Derived | Generated | Measured |
+|---|---|---|
+| water boils at 1 atm | 373.58 K | 373.12 K |
+| methanol | 338.96 K | 337.8 K |
+| benzene | 357.36 K | 353.2 K |
+| water's vapour pressure at 25 °C | 3166.8 Pa | 3169.9 Pa |
+| at 15 °C | 1705 Pa | 1705.6 Pa |
+| at 120 °C | 193.7 kPa | 198.7 kPa |
+| water boils at a third of an atmosphere | 72.0 °C | about 71.8 °C |
+
+The vapour residual grows with the distance from 298 K. That is the heat capacity held constant: the next variable,
+named by the residual. Hydrogen's ionization (Saha) is a continuous fraction across a band of temperature. At half
+ionization the binding over kT is the logarithm of the free electron's room over the volume per nucleus, so it happens
+at a sixth to a seventeenth of the binding over k, later where it is denser.
+
+**Round 5's gap closes.** A fluid in the vehicle family is a liquid or a gas by its matter's Gibbs energies at its
+temperature and absolute pressure. Where a moving region pushes through a liquid, the cavitation number follows. Under
+water it is 199 at 1 m/s (nowhere can boil), 0.22 at 30 m/s (the shape decides, a gap), and 0.003 at 250 m/s (it boils
+around any shape).
+
+**Faults found on the way.** The null space of an empty set of constraints was returned empty, when it is the whole
+space. And the smallest balance was missed by combining scaled basis vectors.
+
 ## The next instrument
 
-The deepest gap is in what matter is (docs/NEXUS-ALIGNMENT-2.md). A material is still a list of stated properties,
-not constituents bound by interactions from which those properties are coarse-grained. The next round makes the
-constituents' identities carriers (elements, charge), so that reactions, ionization and decomposition become balances
-the carrier machinery already generates. States and their changes come from the competition of binding energy with
-thermal, mechanical and field energy.
+The materials the kernel builds with are still stated numbers: 33 materials' densities, stiffnesses and strengths. The
+next round tests whether a solid's continuum quantities come from its constituents: its density from its atoms' mass
+and spacing, its stiffness from its cohesive energy over its atomic volume. Any ratio that stays near one across
+metals is an invariant the language can use, and a residual's structure names the bonding that differs.

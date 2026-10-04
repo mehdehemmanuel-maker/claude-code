@@ -34,6 +34,12 @@ observer is a configuration of senses, and none is handed the manifold. What the
 what matter is. A material is still a list of stated properties, not constituents bound by interactions
 (docs/NEXUS-ALIGNMENT-2.md).
 
+Since round 8 matter has a first deeper layer. A species is counted by the identities a transformation conserves, at
+the level of energy available. A transformation is a balance found by the same null-space algebra as dimensionless
+groups, and the blocking identity names a missing species. A molecule's enthalpy comes from its atoms and bonds, and a
+phase is the least Gibbs energy at a temperature and pressure. Boiling points, vapour pressures, a decay's energy and the
+neutrino's quantum numbers come out of it. A solid's continuum quantities are still stated, not derived.
+
 Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
 names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
 the generated laws are checked against, not the limit of what the language can state.
@@ -80,15 +86,21 @@ the generated laws are checked against, not the limit of what the language can s
 | An observer finer than the representation holds is told what the manifold must be generated as, not given it | tests/nexus/perceive.test.ts |
 | Water's glow is invisible to the eye and bright to a thermal camera; a fast vibration is a line to a spectrometer | tests/nexus/perceive.test.ts |
 | An observer's own light is outside a bar's dynamics and inside a micrometre bead's | tests/nexus/perceive.test.ts |
+| A transformation is a balance of the identities its energy keeps; the smallest balance is found exactly | tests/nexus/matter.test.ts |
+| A blocked decay names its blocking identity and the quantum numbers of what is missing (the antineutrino) | tests/nexus/matter.test.ts |
+| Atoms less bonds give small molecules' enthalpies; benzene's residual names delocalization, a liquid's names binding between molecules | tests/nexus/matter.test.ts |
+| Boiling points and vapour pressures come from phases' Gibbs energies, none an input, within 1.2 % | tests/nexus/matter.test.ts |
+| A liquid in the vehicle family boils by its cavitation number, from its own vapour pressure | tests/nexus/family.test.ts |
 
 ## 3. What is missing
 
 - A learned relation's evidence domain: the span of its observations. Round 6 showed why it matters, since a measured
   contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
   but a relation used beyond the span of its own observations is still not marked as a hypothesis.
-- Matter as constituents bound by interactions: identities as carriers, binding as energy and length, state as a
-  position in an energy landscape with rates across it, and each level coarse-grained from the one below
-  (docs/NEXUS-ALIGNMENT-2.md).
+- Matter as constituents bound by interactions: identities, binding and the Gibbs state are begun (round 8). Still
+  missing: a solid's continuum quantities from its constituents, a solid phase in the Gibbs picture, rates across
+  barriers (what happens during a change, beyond ionization's continuous fraction), and a heat capacity that changes
+  with temperature (named by the vapour residual).
 - Local clocks: a realization advances everywhere at one step; the tuner refines the whole manifold, not a region.
 - A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
 - Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
@@ -105,10 +117,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-Matter as constituents bound by interactions (docs/NEXUS-ALIGNMENT-2.md). The constituents' identities become carriers,
-so a reaction is a balance. Binding becomes energy and length, so the 33 stated materials' densities, stiffnesses and
-sound speeds are tested as coarse-grainings of fewer quantities. A state becomes a position in an energy landscape,
-with rates across it. Then local clocks, life across scale, the second family and systems from elements.
+A solid's continuum quantities from its constituents: density from atomic mass and spacing, stiffness from cohesive
+energy over atomic volume, tested across metals for a ratio that stays near one. Then rates across barriers, local
+clocks, the second family and systems from elements.
 
 ## 5. Why each primitive exists
 
@@ -176,3 +187,10 @@ with rates across it. Then local clocks, life across scale, the second family an
 | A series states the windows its representation holds for | an observer finer than that is told what to generate, not given invented detail | a high-speed camera on a rigid realization |
 | A line, where a sense answers a frequency faster than its window | pitch, colour and a spectrum's band are one way of receiving | the O–H stretch to a spectrometer |
 | An observer's light pushes what it lights | the observer is in the manifold | a bead in a rangefinder's beam |
+| Identities counted at a level of energy | what a transformation keeps is what its energy cannot break | lead into gold, a neutron's decay |
+| One null-space algebra for groups and balances | dimensionless groups and balanced transformations are the same linear algebra | two copies of one elimination |
+| The smallest balance by its free variables | every balance is an assignment of them; scaled bases miss the smallest | 20 Pb → 19 Au + 139 p … |
+| A blocking identity names what is missing | a balance that fails by one identity says what a missing species must carry | the neutron's decay without the antineutrino |
+| A molecule from its atoms and its bonds | a material quantity derived from the level below, with its residual | formation enthalpies stated as data |
+| A phase is the least Gibbs energy | a state is binding against room at a temperature, not a threshold | water boiling only by a stated 100 °C |
+| A liquid boils by its cavitation number | the state of what is touched depends on the motion through it | round 5's under-water motion at 250 m/s |

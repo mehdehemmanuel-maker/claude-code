@@ -29,6 +29,7 @@
 import { carrierById, coupling, family, reaction, roleOf, type Carrier, type Role } from './carrier';
 import { gravity } from './field';
 import { CONST } from './book/constants';
+import { phaseAt, vapourPressure } from './phase';
 import { dimOf } from './dimension';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
@@ -287,6 +288,17 @@ export function generate(intent: Intent): Structure {
     if ((r.limits ?? []).some((sym) => r.carriers?.[sym] === 'momentum')) return 'solid';
     return null;
   };
+  /**
+   * Whether what flows is a liquid or a gas: the phase of least Gibbs energy of its matter, at its temperature and its
+   * absolute pressure, where its matter's phases are known (src/nexus/phase.ts); otherwise the language cannot say.
+   */
+  const fluidState = (r: Region): 'liquid' | 'gas' | null => {
+    const T = stateOf(r, 'energy'), pabs = Object.entries(r.properties ?? {}).find(([, p]) => p.role === 'absolute pressure');
+    if (!r.matter || !T || !pabs) return null;
+    use(r, pabs[0]);
+    const ph = phaseAt(r.matter, T.lo, r.quantities[pabs[0]]!.value!);
+    return ph === 'liquid' || ph === 'gas' ? ph : null;
+  };
   const momentumProperty = (r: Region, role: string): Leaf | null => { const d = Object.entries(r.properties ?? {}).find(([, p]) => p.role === role && p.of === 'momentum'); if (!d) return null; use(r, d[0]); return r.quantities[d[0]]!; };
   /** How much a region's matter weighs per volume: said as a property of its momentum, or as the content density of the matter it holds. One fact, either saying. */
   const densityIn = (r: Region): Leaf | null => momentumProperty(r, 'density') ?? (() => { const sym = Object.keys(r.quantities).find((x) => (r.carriers?.[x] ?? '').startsWith('mass of') && roleOf(carrierById(r.carriers![x]!), r.quantities[x]!.unit) === 'content density'); if (!sym) return null; use(r, sym); return r.quantities[sym]!; })();
@@ -527,6 +539,15 @@ export function generate(intent: Intent): Structure {
         const K = momentumProperty(d, 'stiffness');
         if (K && speedWanted) { const a = Math.sqrt(K.value! / densityIn(d)!.value!); const Ma = speedWanted.value! / a; put(drag, { name: `how fast a push travels through ${d.id}: the root of its stiffness over its density`, value: a, unit: 'm/s', from: 'reaction.sound' }); put(drag, { name: `the speed over that (the Mach number): ${Ma < 0.3 ? 'below about 0.3 its density barely changes' : Ma < 0.8 ? 'its density changes as it moves aside' : Ma < 1.2 ? 'near one, the fluid ahead cannot move aside in time and a shock forms' : 'past one, a shock stands ahead of it'}`, value: Ma, unit: '1', from: `${speedWanted.name}` }); cite(drag, ...reactionLaws('sound')); }
         else if (speedWanted) gap(w.id, drag.id, 'momentum', `how stiff ${d.id} is under quick compression is not said: how near the speed is to the speed a push travels through it cannot be read`);
+        // in a liquid the pressure falls where it flows fast around the moving region: by up to about half its density times the speed squared (its least pressure coefficient is of order one, and of the shape); where that falls below the vapour pressure, the liquid boils there
+        if (fluidState(d) === 'liquid' && speedWanted) {
+          const pabs = Object.entries(d.properties ?? {}).find(([, p]) => p.role === 'absolute pressure')!;
+          const pv = vapourPressure(d.matter!, stateOf(d, 'energy')!.lo);
+          const sigma = (d.quantities[pabs[0]]!.value! - pv) / (0.5 * densityIn(d)!.value! * speedWanted.value! ** 2);
+          put(drag, { name: `vapour pressure of ${d.matter} at its temperature, from its phases' Gibbs energies`, value: pv, unit: 'Pa', from: 'src/nexus/phase.ts' });
+          put(drag, { name: `the pressure above boiling over half the density times the speed squared (the cavitation number): ${sigma < 0.1 ? 'far below one, it boils around any shape' : sigma > 10 ? 'far above one, nowhere around it can boil' : 'near one, whether it boils is its shape\'s'}`, value: sigma, unit: '1', from: `${pabs[1].of}'s absolute pressure and ${speedWanted.name}` });
+          if (sigma >= 0.1 && sigma <= 10) gap(w.id, drag.id, 'momentum', `whether ${d.id} boils around the moving region is its shape's least pressure coefficient: not generated`);
+        }
         // on the boundary between a liquid and a lighter fluid, under gravity, the moving region makes waves its own length
         const lighter = touched.find((x) => x.id !== d.id && densityIn(x)!.value! < densityIn(d)!.value!);
         if (lighter && g > 0 && sh && speedWanted) { const L = Math.max(sh.x.value!, sh.z.value!); const cw = Math.sqrt(g * L / (2 * Math.PI)); put(drag, { name: `speed of a wave on ${d.id} as long as the moving region: the root of gravity times its length over two pi`, value: cw, unit: 'm/s', from: 'reaction.surface-wave' }); put(drag, { name: `the speed over that: ${speedWanted.value! / cw < 1 ? 'below one it parts the liquid it displaces' : 'past one it climbs the wave it makes, and is held up only by turning the stream down'}`, value: speedWanted.value! / cw, unit: '1', from: speedWanted.name }); cite(drag, ...reactionLaws('surface-wave')); }

@@ -68,3 +68,10 @@ Biology, organisms and ecosystems need the same move one level up: structures wh
 compositions, held by interactions that are flows of energy and matter rather than bonds. The subatomic needs quantum
 states, which the language does not express: a state there is an amplitude over possibilities, not a position in a
 landscape. Both are named here so they are not mistaken for done when the material level is.
+
+## Since this check
+
+Round 8 began the missing layer (docs/NEXUS-PROBES.md). Identities are counted at a level of energy, transformations
+are balances, a molecule's enthalpy comes from its atoms and bonds, and a phase is the least Gibbs energy. Boiling
+points, vapour pressures and a decay's missing particle follow from it. A solid's continuum quantities, rates across
+barriers and local clocks remain.

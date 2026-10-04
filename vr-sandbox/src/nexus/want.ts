@@ -57,7 +57,7 @@ export interface Region {
   directions?: Record<string, 'down' | 'across' | 'from above' | 'vertical' | 'along'>;
 }
 
-export type MatterRole = 'density' | 'stiffness' | 'most flux density' | 'conductivity' | 'capacity per mass' | 'most potential' | 'flows above' | 'holds its shape below' | 'expansion';
+export type MatterRole = 'density' | 'stiffness' | 'most flux density' | 'conductivity' | 'capacity per mass' | 'most potential' | 'flows above' | 'holds its shape below' | 'expansion' | 'absolute pressure';
 
 export interface Want {
   id: string;
