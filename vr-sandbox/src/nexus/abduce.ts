@@ -162,22 +162,27 @@ export function promote(c: Candidate, name: string): Relation {
   return { name, group: c.group, bound, above, holds, provenance, observations, generality: c.generality, hash: hashOf({ relation: c.group.hash, bound: bound.hash, above }) };
 }
 
-/** The language: promoted relations, append-only. */
+/** A judgement of one coupling by one relation. */
+export interface Judgement { relation: Relation; holds: Derivation }
+
+/** The language: promoted relations, append-only; its hash is the content of what it holds, so every judgement made under it can be found stale when it grows. */
 export class Language {
   private readonly relations: Relation[] = [];
   add(r: Relation): Relation { if (this.relations.some((x) => x.hash === r.hash)) return r; this.relations.push(r); return r; }
   all(): readonly Relation[] { return this.relations; }
+  get hash(): string { return hashOf({ language: this.relations.map((r) => r.hash) }); }
   /**
    * Whether the quantities of a coupling satisfy every promoted relation: each a record, 1 when the outcome is
    * expected, 0 when not, unresolved when the group lies inside the bound's uncertainty.
    */
-  judge(quantities: Record<string, Derivation>): { relation: Relation; holds: Derivation }[] {
+  judge(quantities: Record<string, Derivation>): Judgement[] {
+    const language = this.hash;
     return this.relations.filter((r) => Object.keys(r.group.exponents).every((n) => quantities[n])).map((r) => {
       const env = Object.fromEntries(Object.keys(r.group.exponents).map((n) => [n, quantities[n]!]));
       const g = evaluate(`${r.group.text}`, r.group.term, env, { unit: '1', law: `group ${r.group.hash}` });
       const b = r.bound.value!, u = r.bound.uncertainty ?? 0;
       if (g.value !== null && g.value > b - u && g.value < b + u) return { relation: r, holds: unresolved(r.name, r.holds, { ...env, bound: r.bound }, `${r.group.text} = ${g.value} lies inside the bound's uncertainty ${b} ± ${u}: the observations do not decide it`) };
-      return { relation: r, holds: evaluate(r.name, r.holds, { ...env, bound: r.bound }, { unit: '1', law: r.hash }) };
+      return { relation: r, holds: evaluate(r.name, r.holds, { ...env, bound: r.bound }, { unit: '1', law: r.hash, also: [language] }) };
     });
   }
 }

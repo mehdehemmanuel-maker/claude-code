@@ -6,7 +6,8 @@
 import { getMaterial } from '../data/materials';
 import { PROPERTY_CLASSES } from '../engineering/threads';
 import { BENDING_STRESS, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG, EXTENT_FROM_MASS, GROUP_BENDING, GROUP_TENSION, LINE_WEIGHT, NDS, RECT_AREA, RECT_I, RECT_MODULUS, STRESS_AREA, WEIGHT } from './book';
-import { leastMaterial, lumberCatalogue, materialLeaves, type MaterialLeaves } from './beam';
+import { admitBy, leastMaterial, lumberCatalogue, materialLeaves, type MaterialLeaves } from './beam';
+import { Language, type Judgement } from './abduce';
 import { coordinate, ledger, restOn, restStability, standOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, type Frame, type Ground, type Observer } from './field';
@@ -183,10 +184,19 @@ export interface BracketSlice {
   configuration: BracketConfiguration | null;
   realization: JointRealization | null;
   comparisons: Comparison[];
+  admission: { coupling: string; judgement: Judgement }[];
+  refusedBy: string[];
   journal: Journal;
 }
 
-export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, opts: { jointConstraint?: boolean } = {}): BracketSlice {
+/** The bracket's couplings' quantities as the language's relations name them: the joint, and the load's rest on the arm. */
+export function bracketQuantities(c: BracketConfiguration, bound: Record<string, Derivation>, g: Derivation, obs: Observer): Record<string, Record<string, Derivation>> {
+  const out: Record<string, Record<string, Derivation>> = { 'the arm on the post': { M: bound['M']!, V: bound['V']!, d: bound['d']!, nb: bound['nb']!, Rm: bound['Rm']!, lever: bound['lever']! } };
+  for (const [name, st] of Object.entries(c.stability)) out[name] = { hcm: st.hcm, halfX: st.halfX, halfZ: st.halfZ, g, patience: obs.patience, mass: bound['m']! };
+  return out;
+}
+
+export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, opts: { jointConstraint?: boolean; language?: Language } = {}): BracketSlice {
   const journal = new Journal();
   const frame = declareFrame(intent.by, 'x along the arm, y opposite gravity, z across; origin on the ground at the post\'s centre');
   const obs = observer('rigid-body kernel');
@@ -201,6 +211,7 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
   for (const c of choice.candidates) if (!c.admissible) journal.append({ kind: 'refusal', what: c.option.label, domain: [...c.refused, ...c.unsatisfied, ...c.undecided].join('; ') });
   if (choice.pick) journal.append({ kind: 'choice', why: choice.why!, among: choice.manifold.length, label: choice.pick.option.label });
   let configuration: BracketConfiguration | null = null, realization: JointRealization | null = null;
+  let admission: BracketSlice['admission'] = [], refusedBy: string[] = [];
   const comparisons: Comparison[] = [];
   if (choice.pick) {
     const bound = choice.pick.solution.bound;
@@ -208,7 +219,10 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
     configuration = constructBracket(intent, material, bound, contract, frame, ground);
     for (const body of Object.values(configuration.bodies)) for (const d of Object.values(body.centre!)) journal.append({ kind: 'record', record: d });
     for (const d of [...Object.values(configuration.joint.onPost), ...Object.values(configuration.joint.onArm), configuration.balance.residual, configuration.rests, configuration.jointHolds]) journal.append({ kind: 'record', record: d });
-    if (J) {
+    ({ admission, refusedBy } = admitBy(opts.language ?? new Language(), bracketQuantities(configuration, bound, g, obs)));
+    for (const a of admission) journal.append({ kind: 'record', record: a.judgement.holds });
+    for (const r of refusedBy) journal.append({ kind: 'refusal', what: 'the configuration', domain: r });
+    if (J && !refusedBy.length) {
       realization = realizeBracket(J, contract, { ...configuration.bodies, joint: configuration.joint, gravity: g, ground }, obs);
       const binary = ofLeaf(leaf('no tolerance on a yes or no', 0, '1', { class: 'configuration', source: 'a binary outcome either agrees or does not' }));
       const pairs: [string, Derivation, Derivation, Derivation][] = [
@@ -223,7 +237,7 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
       for (const d of [realization.stood, realization.settled, realization.axial]) journal.append({ kind: 'record', record: d });
     }
   }
-  return { intent, frame, observer: obs, contract, system, open, choice, configuration, realization, comparisons, journal };
+  return { intent, frame, observer: obs, contract, system, open, choice, configuration, realization, comparisons, admission, refusedBy, journal };
 }
 
 /** A bracket as a person asks for it. */

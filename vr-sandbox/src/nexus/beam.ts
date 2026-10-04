@@ -17,6 +17,7 @@ import { compare, Journal, type Comparison } from './observe';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
 import { elasticContract, realizeElastic, type ElasticRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
+import { Language, type Judgement } from './abduce';
 import { abs, add, div, ge, k, le, leaf, mul, neg, variable, type Leaf } from './term';
 
 export interface BeamIntent {
@@ -187,7 +188,24 @@ export interface Slice {
   comparisons: Comparison[];
   /** The share of the span the kernel observes: zero, for seams are points. */
   observed: Derivation | null;
+  /** What the language says of every coupling before anything is realized; a 0 refuses the realization. */
+  admission: { coupling: string; judgement: Judgement }[];
+  refusedBy: string[];
   journal: Journal;
+}
+
+/** The couplings' quantities as the language's relations name them. */
+export function couplingQuantities(c: BeamConfiguration, bound: Record<string, Derivation>, g: Derivation, obs: Observer): Record<string, Record<string, Derivation>> {
+  const out: Record<string, Record<string, Derivation>> = {};
+  for (const [name, st] of Object.entries(c.stability)) out[name] = { hcm: st.hcm, halfX: st.halfX, halfZ: st.halfZ, g, patience: obs.patience, mass: bound['m']! };
+  return out;
+}
+
+/** Judge every coupling by the language; a relation that says 0 refuses the configuration, with its name. */
+export function admitBy(language: Language, quantities: Record<string, Record<string, Derivation>>): { admission: { coupling: string; judgement: Judgement }[]; refusedBy: string[] } {
+  const admission: { coupling: string; judgement: Judgement }[] = [];
+  for (const [coupling, q] of Object.entries(quantities)) for (const judgement of language.judge(q)) admission.push({ coupling, judgement });
+  return { admission, refusedBy: admission.filter((a) => a.judgement.holds.value === 0).map((a) => `${a.coupling}: ${a.judgement.relation.name}`) };
 }
 
 /** The bound on loading time over the first period below which a static derivation does not hold: an assumption with grounds. */
@@ -208,7 +226,7 @@ export function momentField(frame: Frame, bound: Record<string, Derivation>, spa
 }
 
 /** The slice end to end. Without a kernel instance it stops after construction. */
-export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, groundOf: (frame: Frame, by: string) => Ground = (frame, by) => flatGround(frame, by, 'a level floor')): Slice {
+export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, groundOf: (frame: Frame, by: string) => Ground = (frame, by) => flatGround(frame, by, 'a level floor'), language = new Language()): Slice {
   const journal = new Journal();
   const frame = declareFrame(intent.by, 'x along the span, y opposite gravity, z across; origin on the ground midway between the supports');
   const obs = observer('rigid-body kernel');
@@ -223,6 +241,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
   for (const c of choice.candidates) if (!c.admissible) journal.append({ kind: 'refusal', what: c.option.label, domain: [...c.refused, ...c.unsatisfied, ...c.undecided].join('; ') });
   if (choice.pick) journal.append({ kind: 'choice', why: choice.why!, among: choice.manifold.length, label: choice.pick.option.label });
   let configuration: BeamConfiguration | null = null, realization: Realization | null = null, elastic: ElasticRealization | null = null, moment: Field | null = null, observed: Derivation | null = null;
+  let admission: Slice['admission'] = [], refusedBy: string[] = [];
   const comparisons: Comparison[] = [];
   if (choice.pick) {
     const bound = choice.pick.solution.bound;
@@ -231,6 +250,10 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
     for (const body of [configuration.bodies.beam, ...configuration.bodies.supports, configuration.bodies.load]) for (const d of Object.values(body.centre!)) journal.append({ kind: 'record', record: d });
     journal.append({ kind: 'record', record: configuration.balance.residual });
     journal.append({ kind: 'record', record: configuration.rigid.holds });
+    // what the language already knows of these couplings, before anything is realized
+    ({ admission, refusedBy } = admitBy(language, couplingQuantities(configuration, bound, g, obs)));
+    for (const a of admission) journal.append({ kind: 'record', record: a.judgement.holds });
+    for (const r of refusedBy) journal.append({ kind: 'refusal', what: 'the configuration', domain: r });
     // the elastic realization: the same configuration, pinned at the reaction lines, integrated on a grid
     const T1e = apply(FIRST_PERIOD, { L: bound['L']!, E: bound['E']!, I: bound['I']!, rho: bound['rho']!, A: bound['A']!, h: bound['h']! });
     elastic = realizeElastic(elasticContract(), { frame, P: bound['P']!, w: bound['w']!, q: bound['q']!, L: bound['L']!, Lt: bound['Lt']!, E: bound['E']!, I: bound['I']! });
@@ -247,7 +270,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
       comparisons.push(c);
       journal.append({ kind: 'comparison', comparison: c });
     }
-    if (J && configuration.rigid.rigid) {
+    if (J && configuration.rigid.rigid && !refusedBy.length) {
       realization = realizeRigid(J, contract, { ...configuration.bodies, totalLength: configuration.totalLength, patch: bound['w']!, gravity: g, ground }, obs);
       // the moment as a field over the span, with the span as the realization holds it (reaction lines within the knife edges)
       const Lr = evaluate('span as realized', add(variable('L', 'm'), variable('o', 'm')), { L: bound['L']!, o: contract.reactionOffset }, { unit: 'm', law: 'the span between reaction lines: the centre distance plus the knife-edge offset' });
@@ -274,7 +297,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
       journal.append({ kind: 'comparison', comparison: settledCmp });
     }
   }
-  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, elastic, moment, comparisons, observed, journal };
+  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, elastic, moment, comparisons, observed, admission, refusedBy, journal };
 }
 
 /** The intent of Part XXV, as the person gives it. */

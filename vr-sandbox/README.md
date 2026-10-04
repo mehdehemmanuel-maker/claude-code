@@ -78,6 +78,11 @@ npm ci
 npm run gate      # typecheck, then every test: kernel conformance, golden, codec, and the architecture tests
 ```
 
+Promoted relations enter construction: before anything is realized, a slice judges every coupling by the language
+and refuses with the relation named, or says it cannot decide a case inside a bound's uncertainty; every judgement
+cites the language's hash, so a promotion makes exactly the judgements stale, and regenerating them under the grown
+language changes them and nothing else.
+
 The architecture tests (`tests/nexus`) are the gate that matters: a bare value is unconstructable, an unknown never
 becomes a default, WHY is total, every coordinate is a solution, every runtime effect is a derivation record, and a
 change to a law reaches exactly what rests on it.
