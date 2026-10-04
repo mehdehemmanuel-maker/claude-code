@@ -36,6 +36,7 @@ import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
 import { EULER, runNetwork, sizeMembers } from './size';
 import { barForces, carries, count, loadOn } from './network';
 import { solveFrame } from './frame';
+import { leastHeatedLength } from './transport';
 import { dressedMatters, lumberCatalogue } from './stock';
 import { ofLeaf } from './evaluate';
 import { leaf, type Leaf } from './term';
@@ -643,8 +644,64 @@ export function generate(intent: Intent): Structure {
   };
   const boundsOn: { want: Want; carrier: Carrier; around: string }[] = [];
 
+  /**
+   * A want on information: what is told apart, held, or heard. Its ties to the rest are the second law (each bit erased
+   * sends at least k T ln 2 of heat out), the rate a barrier is crossed at (a bit held for a time sits behind a barrier
+   * that is crossed less than once in that time), and the speed of light (what is heard is no nearer than its speed
+   * times the lag).
+   */
+  const informationWant = (w: Want, R: Region) => {
+    const kB = CONST.kB.value!, h = CONST.h.value!, c0 = CONST.c.value!;
+    const lo = w.lo?.value ?? null, hi = w.hi?.value ?? null;
+    const sinks = reservoirs('energy').filter((x) => x.region !== R.id);
+    const coldest = sinks.length ? sinks.reduce((a, b) => (b.hi < a.hi ? b : a)) : null;
+    if (w.quantity.unit === '1/s' && lo !== null) {
+      if (!coldest) { gap(w.id, null, 'information', `nothing ${R.id} can send its heat to holds a temperature: the least power to erase cannot be read`); return; }
+      const P = lo * kB * coldest.hi * Math.LN2;
+      const conv = add({ id: `conversion:information:${R.id}`, kind: 'conversion', carrier: 'information', says: `${R.id} tells states apart and erases them: each bit erased sends at least k T ln 2 of heat out, at the coldest it can go`, regions: [R.id], values: [
+        { name: 'bits erased per second', value: lo, unit: '1/s', from: w.lo!.name },
+        { name: 'least power: the bits erased per second times k T ln 2, at the coldest the heat can go', value: P, unit: 'W', from: `the second law (Landauer); ${coldest.leaves[0]!.name}` },
+      ], why: { want: w.id, rule: 'erasing information is the second law\'s: what is told apart and forgotten leaves as heat', laws: [], parent: null } });
+      for (const sct of powerSources(R.id)) {
+        const pp = path(sct.carrier, sct.region, R.id, w.id, `${R.id} draws ${sct.carrier.id} from ${sct.region} to erase`, conv.id);
+        for (const lim of said(regionOf(intent, sct.region), sct.carrier.id, 'power', true)) put(pp, { name: `within what ${sct.region} gives: ${lim.leaf.name}`, value: lim.leaf.value!, unit: lim.leaf.unit, from: lim.leaf.name });
+      }
+      shed(conv, R.id, w.id, true);
+      gap(w.id, conv.id, 'information', 'what a realization spends per bit it erases is not derived: the least is k T ln 2, and nothing generated says how near to it a realization comes');
+      return;
+    }
+    if (w.quantity.unit === '1' && lo !== null) {
+      const held = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'energy' && x.hi);
+      const T = held ? held.hi!.value! : coldest?.hi ?? null;
+      const t = intent.duration?.value ?? null;
+      if (T === null || t === null) { gap(w.id, null, 'information', 'how hot it is held, or for how long, is not said: the barrier each bit needs cannot be read'); return; }
+      const Eb = kB * T * Math.log(t * kB * T / h);
+      add({ id: `bound:information:${R.id}:held`, kind: 'bound', carrier: 'information', says: `each bit ${R.id} holds sits behind a barrier crossed less than once over the time it is held: at least k T times the log of that time times the rate a barrier is tried at, k T / h`, regions: [R.id], values: [
+        { name: 'bits held', value: lo, unit: '1', from: w.lo!.name },
+        { name: 'least barrier per bit', value: Eb, unit: 'J', from: `the rate a barrier is crossed at (src/nexus/rate.ts); ${held ? held.hi!.name : coldest!.leaves[0]!.name}; ${intent.duration!.name}` },
+        { name: 'least barrier per bit, over k T', value: Eb / (kB * T), unit: '1', from: 'the same' },
+      ], why: { want: w.id, rule: 'a state held is a state whose barrier is crossed less than once in the time it is held', laws: [], parent: null } });
+      return;
+    }
+    if (w.quantity.unit === 's' && hi !== null) {
+      const most = c0 * hi;
+      const host = intent.regions.find((x) => x.id !== R.id && touches(intent, x.id, R.id) && x.extent);
+      const sh = host ? shape(host.id) : null;
+      const across = sh ? Math.hypot(sh.x.value!, sh.y.value!, sh.z.value!) : null;
+      const b = add({ id: `bound:information:${R.id}:lag`, kind: 'bound', carrier: 'information', says: `what ${R.id} hears is no nearer in time than its distance over the speed of light: its parts lie within the speed of light times the lag of each other`, regions: [R.id, ...(host ? [host.id] : [])], values: [
+        { name: 'most distance between its parts: the speed of light times the lag', value: most, unit: 'm', from: `${CONST.c.name}; ${w.hi!.name}` },
+        ...(across !== null ? [{ name: `largest distance within ${host!.id}`, value: across, unit: 'm', from: 'the diagonal of its extent' }] : []),
+      ], why: { want: w.id, rule: 'nothing told travels faster than light: a lag bounds the size of what must act as one', laws: [], parent: null } });
+      if (across !== null && across > most) gap(w.id, b.id, 'information', `${host!.id} is larger across than the lag lets ${R.id}'s parts be apart`);
+      if (!host) gap(w.id, b.id, 'information', `where ${R.id} is, and so how far apart its parts are, is not said`);
+      return;
+    }
+    gap(w.id, null, 'information', `${w.quantity.name} (${w.quantity.unit}) is about information, and no rule reads it`);
+  };
+
   for (const w of intent.wants) {
     const cid = w.quantity.carrier;
+    if (cid === 'information') { informationWant(w, regionOf(intent, w.region)); continue; }
     if (cid && duration(w, carrierById(cid))) continue;
     if (!cid) { gap(w.id, null, null, `${w.quantity.name} (${w.quantity.unit}) is about no carrier: ${w.quantity.unit === 's' ? 'a want on how long a process takes, and the language has no process' : 'the language has no rule for it'}`); continue; }
     const c = carrierById(cid);
@@ -763,6 +820,20 @@ export function generate(intent: Intent): Structure {
       if (rho && cp && Q && before) {
         use(r, rho[0]); use(r, cp[0]);
         put(elements.find((e) => e.id === `conversion:${tc.id}:${id}:supply`), { name: 'least power to bring what flows to the threshold: density times specific heat times flow times the difference', value: r.quantities[rho[0]]!.value! * r.quantities[cp[0]]!.value! * Q * (threshold.value! - before.hi), unit: 'W', from: `${r.quantities[rho[0]]!.name}, ${r.quantities[cp[0]]!.name}, the largest flow wanted` });
+      }
+      // the change is carried through the matter itself, from its surface: it takes the matter's own time, and the matter
+      // moves while it changes, so the place it changes in is at least as long as the speed times that time
+      const kk = Object.entries(r.properties ?? {}).find(([, q]) => q.role === 'conductivity' && q.of === tc.id);
+      if (rho && cp && Q && before && most) {
+        if (!kk) gap(pth.why.want, id, tc.id, `how fast ${tc.id} crosses what flows is not said: how long it must stay in ${id} cannot be read`);
+        else {
+          use(r, kk[0]);
+          const hl = leastHeatedLength(Q, r.quantities[rho[0]]!.value!, r.quantities[cp[0]]!.value!, r.quantities[kk[0]]!.value!, before.hi, threshold.value!, r.quantities[most[0]]!.value!);
+          const region = elements.find((e) => e.id === id)!;
+          put(region, { name: 'least length a round stream is held in it, whatever its diameter: the Fourier number its centre needs times the flow, density and heat capacity, over π times the conductivity', value: hl.length, unit: 'm', from: `${r.quantities[kk[0]]!.name}; the heat equation in a cylinder, its surface at ${r.quantities[most[0]]!.name}` });
+          put(region, { name: 'Fourier number the stream\'s centre needs to reach the threshold', value: hl.Fo, unit: '1', from: `the share of the step left at the centre, ${hl.share.toFixed(3)}` });
+          gap(pth.why.want, id, tc.id, 'shortening it means splitting the flow into streams side by side, or bringing the change into the matter otherwise than through its surface (mixing it, heating it within): neither is generated');
+        }
       }
       if (most) add({ id: `protection:${id}`, kind: 'modulation', carrier: tc.id, says: `what supplies the region ${id} is cut when the observation passes ${r.quantities[most[0]]!.name}`, regions: [id], values: [], why: { want: pth.why.want, rule: 'a supply that can pass what the held matter bears is cut there', laws: [], parent: id } });
     }
@@ -980,6 +1051,8 @@ export interface Lack { distinction: string; inventions: string[]; gaps: number;
 const SIGNATURES: [RegExp, string][] = [
   [/no available matter states/, 'knowledge: the kept data does not state it'],
   [/no system is generated from an element/, 'a system from an element: sizing what is generated'],
+  [/is about information|per bit it erases/, 'information: what a realization spends to tell apart and erase'],
+  [/splitting the flow|otherwise than through its surface/, 'a change carried through matter: its own time against the time it is there'],
   [/not yet sized/, 'a system from an element: sizing what is generated'],
   [/buckling/, 'pressing along a length: a member\'s buckling'],
   [/no material is chosen/, 'what a region is made of'],

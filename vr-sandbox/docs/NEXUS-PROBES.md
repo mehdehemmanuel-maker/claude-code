@@ -758,8 +758,54 @@ stretching, the largest at 56 kN. Bending cannot stand in for them: were every j
 0.29 m, more than a tenth of its height. The bars are not yet sized, and a sheet fastened to the members, which would
 carry the force by its shear, is not in the language.
 
+## Round 18: higher bars
+
+Three intents with demanding wants (tests/nexus/high-bar.ts):
+
+- **A printer at speed and precision:** a kilogram of PLA an hour, twenty micrometres, the largest part in half a day.
+- **A hall that computes:** 10¹⁸ operations a second, a hundred petabytes held, any computer hearing any other within a
+  microsecond.
+- **A vessel that grows cells:** a hundred kilograms a day.
+
+Like the house, the car and the printer, they are wants on regions; none names a technology.
+
+**The generator did not see the bar.** The printer, its rate raised eighty times and its precision five, produced the
+same seven gaps as before. The hall produced no element at all, because computing was about no carrier. The vessel
+asked for a reservoir of cells to supply its growth. What the three lacked in common was what a change takes, makes and
+sheds, and how fast it can go. Two general rules come from that; the third is named.
+
+**A change carried through matter takes the matter's own time, and the matter must stay that long where it changes**
+(src/nexus/transport.ts). This is the heat equation in a cylinder, solved by its Bessel series and checked against a
+direct solve. The centre of a round stream reaches the threshold at a Fourier number, here 0.41, set by where it starts,
+the threshold, and the hottest its surface may be. Its own time goes as its radius squared, and its speed as one over
+its radius squared, so the length it must be held over is Fo Q ρ c / (π k), whatever its diameter. A thinner stream
+moves faster by exactly what it heats faster.
+
+The printer now sees its bar. The least heated length is 0.21 m for the old intent's own part-a-day want (92.6 mm³/s)
+and 0.50 m at a kilogram an hour. Only splitting the flow into streams side by side, or bringing the heat into the
+matter otherwise than through its surface, shortens it; neither is generated, and both are named. The same rule holds
+for any matter changed through its surface as it moves: a liquid heated in a pipe, a gas in a duct, a melt, a dough.
+For comparison, an estimate: at the roughly 10 mm³/s that ordinary hotends are reported to reach, the length is about
+2 cm.
+
+**Information: told apart, held and heard.** Information is a carrier that is not conserved. It ties to the rest by
+three laws already in the language:
+
+- **The second law.** Each bit erased sends at least k T ln 2 of heat to where its heat goes. The hall's 10¹⁸ bits a
+  second need at least 2.9 mW at the coldest its heat can reach, far within its 30 MW supply. What a realization spends
+  per bit is marked as not derived.
+- **The rate a barrier is crossed at** (round 10). A bit held ten years at 85 °C sits behind at least k T ln(t k T / h),
+  49 k T. The barrier law that sets how fast a liquid's molecules change sets how long a bit stays.
+- **The speed of light.** To hear each other within a microsecond, the computers lie within 300 m of each other. The
+  hall's 100 m across fits.
+
+**Named, not built: a matter that makes more of itself.** The vessel's cells grow from what they take, in ratios a
+balance gives. Their stated yield of cells per oxygen is unread, and their heat goes unsaid. Matter-to-matter balances
+are begun (round 8); growth that feeds on what it has made is not. The hall's computers are in the hall, but "in" is not
+said, only "touches", so their heat has no way out yet.
+
 ## The next instrument
 
-Higher bars. Intents whose wants are demanding (a printer at speed and precision, a place that computes, a vessel
-that grows cells) to find what the generator lacks in common: information as a carrier, time scales that compete,
-throughput limited by a transport.
+A matter that makes more of itself, from what it takes, in the ratios a balance gives: growth, whose rate grows with
+what has grown, bounded by what crosses into it. Cells in a broth, and with the same algebra, combustion in an engine
+and a cement's curing. Then one region inside another, so that what the hall's computers shed reaches the air.

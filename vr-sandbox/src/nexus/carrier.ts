@@ -59,7 +59,14 @@ export function matter(id: string): Carrier {
   throw new Error(`${id}: a matter carrier is a volume of, an amount of or a mass of a matter`);
 }
 
-export const carrierById = (id: string): Carrier => UNIVERSAL.find((c) => c.id === id) ?? matter(id);
+/**
+ * Information: states told apart. It is not conserved: it is made where states are distinguished and lost where they
+ * are erased. Its tie to the conserved carriers is the second law: erasing a bit sends at least k T ln 2 of heat to
+ * where its heat goes (Landauer). It has no potential of its own; it crosses at most at the speed of what carries it.
+ */
+export const INFORMATION: Carrier = carrier('information', '1', null, '1/s', 'not conserved: made where states are told apart, lost where they are erased; each bit erased sends at least k T ln 2 of heat to where its heat goes (Landauer, from the second law)', { is: 'nothing told apart', reached: true });
+
+export const carrierById = (id: string): Carrier => (id === 'information' ? INFORMATION : UNIVERSAL.find((c) => c.id === id) ?? matter(id));
 
 export type Role = 'content' | 'potential' | 'flux' | 'flux density' | 'content density' | 'capacitance' | 'conductance' | 'position' | 'acceleration' | 'power';
 

@@ -137,7 +137,9 @@ describe('the language now: carriers, balances and shapes generate structure', (
     const [h, , p] = round1().structures as [Structure, Structure, Structure];
     // PLA flows only above 190 °C: the place it must flow is a region held between that and what it bears, supplied, observed, cut above 220 °C
     const flow = 'flows:volume of PLA:the part';
-    expect(el(p, flow).values.map((v) => v.value)).toEqual([190 + 273.15, 220 + 273.15]);
+    expect(el(p, flow).values.slice(0, 2).map((v) => v.value)).toEqual([190 + 273.15, 220 + 273.15]);
+    // and the stream must stay in it its own time: the length that takes (tests/nexus/high-bar.test.ts)
+    expect(value(p, flow, 'least length a round stream is held in it')).toBeGreaterThan(0);
     expect(el(p, `conversion:energy:${flow}:supply`).why.rule).toMatch(/no reservoir drives/);
     expect(value(p, `observer:energy:${flow}`, 'resolution needed')).toBeCloseTo(15, 9);
     expect(p.elements.some((e) => e.id === `protection:${flow}`)).toBe(true);
