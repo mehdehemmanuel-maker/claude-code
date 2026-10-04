@@ -29,7 +29,9 @@ nothing of its architecture is extended again.
   laws composed over coordinates, sampled as records that cite the laws; the observer's resolution, with the window
   as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
   across it, refused outside a scale band with the band named; coverage of a lattice of point samples is zero), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
-  morphism under a contract whose numbers are its own conformance measurements), `observe` (comparison within the
+  morphism under a contract whose numbers are its own conformance measurements), `elastic` (a second realization:
+  the elastic line integrated on a grid, independent of the closed-form laws, every observable's error measured by
+  halving the cell, stationary in time; it observes the sag the rigid kernel cannot), `observe` (comparison within the
   contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness),
   `failure` (the four representational failures as terms: anomaly, contradiction, a variable free that the intent
   did not leave free, a measurement no variable can hold), `abduce` (the missing distinction searched for over the
@@ -42,8 +44,9 @@ nothing of its architecture is extended again.
   catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
   measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
-  1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved,
-  because the rigid realization says it cannot see it, not unknown. The environment test of Part XX runs: the same intent on a flat
+  1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved
+  by the rigid realization, which says it cannot see it, and observed by the elastic one within the error it
+  measured on itself, which also confirms the derived patch-load laws independently. The environment test of Part XX runs: the same intent on a flat
   field, a slope and a field with a hole; the ground is a field over x and z, the supports are posts cut to their own
   ground, the design is identical by hash on all three, and every record that differs between the fields rests on the
   ground field or on a kernel measurement. The first growth of the language came from the

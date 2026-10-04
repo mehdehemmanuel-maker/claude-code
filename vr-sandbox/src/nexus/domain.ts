@@ -40,11 +40,13 @@ export interface Resolution {
   instrument: string;
   support: Partial<Record<Axis, Derivation>>;
   lattice: Partial<Record<Axis, Derivation>>;
+  /** Axes the observer does not resolve at all but averages over entirely: a static realization is stationary on t. */
+  stationary: Axis[];
   hash: string;
 }
 
-export function resolution(instrument: string, support: Partial<Record<Axis, Derivation>>, lattice: Partial<Record<Axis, Derivation>> = {}): Resolution {
-  return { instrument, support, lattice, hash: hashOf({ resolution: true, instrument, support: Object.fromEntries(Object.entries(support).map(([a, d]) => [a, d!.hash])), lattice: Object.fromEntries(Object.entries(lattice).map(([a, d]) => [a, d!.hash])) }) };
+export function resolution(instrument: string, support: Partial<Record<Axis, Derivation>>, lattice: Partial<Record<Axis, Derivation>> = {}, stationary: Axis[] = []): Resolution {
+  return { instrument, support, lattice, stationary, hash: hashOf({ resolution: true, instrument, support: Object.fromEntries(Object.entries(support).map(([a, d]) => [a, d!.hash])), lattice: Object.fromEntries(Object.entries(lattice).map(([a, d]) => [a, d!.hash])), stationary }) };
 }
 
 export interface Field {
@@ -114,10 +116,11 @@ export function sample(f: Field, at: Point, name = `${f.name} at a point`): Deri
 export function resolves(d: Domain, r: Resolution): { says: string; holds: Derivation }[] {
   return d.scale.map((band) => {
     const env: Record<string, Derivation> = { ...band.env };
-    for (const axis of AXES) {
-      const sym = `d${axis}`;
-      if (varsOf(band.holds).some((v) => v.sym === sym)) env[sym] = r.support[axis] ?? evaluate(`support on ${axis}: a point`, k(0), {}, { unit: AXIS_UNIT[axis], law: `resolution ${r.hash}: no support declared on ${axis}` });
-    }
+    const used = AXES.filter((axis) => varsOf(band.holds).some((v) => v.sym === `d${axis}`));
+    // an observer stationary on an axis averages over all of it: any bound on its support there is met in the limit
+    const stationary = used.filter((axis) => r.stationary.includes(axis));
+    if (stationary.length) return { says: band.says, holds: evaluate(band.says, k(1), {}, { unit: '1', law: `resolution ${r.hash}: stationary on ${stationary.join(', ')}; the band's bound on its support is met in the static limit` }) };
+    for (const axis of used) env[`d${axis}`] = r.support[axis] ?? evaluate(`support on ${axis}: a point`, k(0), {}, { unit: AXIS_UNIT[axis], law: `resolution ${r.hash}: no support declared on ${axis}` });
     return { says: band.says, holds: evaluate(band.says, band.holds, env, { unit: '1', law: `scale band of domain ${d.hash}` }) };
   });
 }

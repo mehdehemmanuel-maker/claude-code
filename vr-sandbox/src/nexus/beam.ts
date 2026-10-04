@@ -15,6 +15,7 @@ import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, t
 import { apply, law, type Law } from './law';
 import { compare, Journal, type Comparison } from './observe';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
+import { elasticContract, realizeElastic, type ElasticRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
 import { abs, add, div, ge, k, le, leaf, mul, neg, variable, type Leaf } from './term';
 
@@ -179,6 +180,8 @@ export interface Slice {
   choice: Choice;
   configuration: BeamConfiguration | null;
   realization: Realization | null;
+  /** The second realization: the elastic line integrated on a grid, which observes the sag. */
+  elastic: ElasticRealization | null;
   /** The bending moment as a field over the span, with its quasi-static scale band. */
   moment: Field | null;
   comparisons: Comparison[];
@@ -219,7 +222,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
   const choice = search(semantics.system, catalogue, leastMaterial(intent.by));
   for (const c of choice.candidates) if (!c.admissible) journal.append({ kind: 'refusal', what: c.option.label, domain: [...c.refused, ...c.unsatisfied, ...c.undecided].join('; ') });
   if (choice.pick) journal.append({ kind: 'choice', why: choice.why!, among: choice.manifold.length, label: choice.pick.option.label });
-  let configuration: BeamConfiguration | null = null, realization: Realization | null = null, moment: Field | null = null, observed: Derivation | null = null;
+  let configuration: BeamConfiguration | null = null, realization: Realization | null = null, elastic: ElasticRealization | null = null, moment: Field | null = null, observed: Derivation | null = null;
   const comparisons: Comparison[] = [];
   if (choice.pick) {
     const bound = choice.pick.solution.bound;
@@ -228,6 +231,22 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
     for (const body of [configuration.bodies.beam, ...configuration.bodies.supports, configuration.bodies.load]) for (const d of Object.values(body.centre!)) journal.append({ kind: 'record', record: d });
     journal.append({ kind: 'record', record: configuration.balance.residual });
     journal.append({ kind: 'record', record: configuration.rigid.holds });
+    // the elastic realization: the same configuration, pinned at the reaction lines, integrated on a grid
+    const T1e = apply(FIRST_PERIOD, { L: bound['L']!, E: bound['E']!, I: bound['I']!, rho: bound['rho']!, A: bound['A']!, h: bound['h']! });
+    elastic = realizeElastic(elasticContract(), { frame, P: bound['P']!, w: bound['w']!, q: bound['q']!, L: bound['L']!, Lt: bound['Lt']!, E: bound['E']!, I: bound['I']! });
+    const exact = ofLeaf(leaf('no error beyond what the realization measured on itself', 0, '1', { class: 'configuration', source: elastic.contract.name }));
+    const fieldForElastic = momentField(frame, bound, bound['L']!, T1e);
+    for (const d of [elastic.sag, elastic.error, ...elastic.reactions]) journal.append({ kind: 'record', record: d });
+    const sagElastic = compare('mid-span sag (elastic)', bound['delta']!, elastic.sag, { name: elastic.contract.name, relative: exact });
+    comparisons.push(sagElastic);
+    journal.append({ kind: 'comparison', comparison: sagElastic });
+    for (const r of elastic.reactions) { const c = compare(`${r.name} (elastic)`, bound['R']!, r, { name: elastic.contract.name, relative: exact }); comparisons.push(c); journal.append({ kind: 'comparison', comparison: c }); }
+    for (const m of elastic.moments) {
+      const derived = coarse(fieldForElastic, elastic.resolution, { x: m.station }, `${m.moment.name}, derived`);
+      const c = compare(`${m.moment.name} (elastic)`, derived, m.moment, { name: elastic.contract.name, relative: exact });
+      comparisons.push(c);
+      journal.append({ kind: 'comparison', comparison: c });
+    }
     if (J && configuration.rigid.rigid) {
       realization = realizeRigid(J, contract, { ...configuration.bodies, totalLength: configuration.totalLength, patch: bound['w']!, gravity: g, ground }, obs);
       // the moment as a field over the span, with the span as the realization holds it (reaction lines within the knife edges)
@@ -255,7 +274,7 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
       journal.append({ kind: 'comparison', comparison: settledCmp });
     }
   }
-  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, moment, comparisons, observed, journal };
+  return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, elastic, moment, comparisons, observed, journal };
 }
 
 /** The intent of Part XXV, as the person gives it. */
