@@ -135,9 +135,13 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-A matter that makes more of itself from what it takes, in ratios a balance gives (cells in a broth; with the same algebra,
-an engine's combustion and a cement's curing); one region inside another; then what one element does to another (a sheet
-bracing members, a wall loading a floor), and the second family over the generator itself.
+Nothing is built until docs/NEXUS-FROM-REALITY.md is agreed. It derives what must exist for Nexus to generate,
+interact with, observe and express reality, from reality forward, with the deleted application's failures as
+constraints. It finds that the current generator has regrown three of them inside Nexus. Structure is decided by
+TypeScript branches; gaps are sentences classified by regex; intents are authored objects. Those must change before
+anything is built on top. The first closed loop it names runs through the measured room, a person's own body as the
+want, generic generation, the kernel, projection at full scale and a measured push, with no kind, preset, menu or
+tool.
 
 ## 5. Why each primitive exists
 

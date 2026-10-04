@@ -8,8 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gate": "tsc --noEmit -p . && vitest run",
-    "workbench": "node tools/workbench/build.mjs"
+    "gate": "tsc --noEmit -p . && vitest run"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
