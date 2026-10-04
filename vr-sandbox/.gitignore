@@ -4,3 +4,4 @@ dist-pages/
 test-results/
 playwright-report/
 reports/
+dist-workbench/

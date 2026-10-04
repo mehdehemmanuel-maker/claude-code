@@ -1081,6 +1081,9 @@ function unreadClass(i: Intent, u: { region: string; sym: string }): string {
   return 'unclassified';
 }
 
+/** The missing distinction a gap names, by what it says. */
+export const distinctionOf = (lacks: string): string => SIGNATURES.find(([re]) => re.test(lacks))?.[1] ?? `other: ${lacks}`;
+
 /** The missing distinctions across inventions, most inventions first, then most failures. */
 export function lacking(intents: Intent[], structures: Structure[]): Lack[] {
   const by = new Map<string, Lack>();

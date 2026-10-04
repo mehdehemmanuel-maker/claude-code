@@ -23,8 +23,10 @@ export function besselJ(n: number, x: number): number {
   return s;
 }
 
-/** The first zeros of J0, by bisection between sign changes. */
+const zeros: number[] = [];
+/** The first zeros of J0, by bisection between sign changes; found once and kept. */
 export function besselZeros(count: number): number[] {
+  if (zeros.length >= count) return zeros.slice(0, count);
   const out: number[] = [];
   let a = 0.1, fa = besselJ(0, a);
   for (let x = 0.2; out.length < count; x += 0.1) {
@@ -36,6 +38,7 @@ export function besselZeros(count: number): number[] {
     }
     a = x; fa = fx;
   }
+  zeros.splice(0, zeros.length, ...out);
   return out;
 }
 

@@ -21,7 +21,12 @@ export function fastPrinter(): Intent {
     rate: given('rate', 2.24e-7, 'm^3/s', 'a kilogram of PLA an hour, at 1240 kg/m³'),
     'in time': given('half a day', 43200, 's', 'half a day'),
   };
-  return { ...p, name: 'a fast, precise 3D printer', wants: p.wants.map((w) => (raise[w.id] ? { ...w, ...(w.lo ? { lo: raise[w.id] } : { hi: raise[w.id] }) } : w)) };
+  const says: Record<string, string> = {
+    shape: 'the part has the shape I drew, within twenty micrometres',
+    rate: 'it makes a kilogram of parts an hour',
+    'in time': 'the biggest part within half a day',
+  };
+  return { ...p, name: 'a fast, precise 3D printer', wants: p.wants.map((w) => (raise[w.id] ? { ...w, says: says[w.id]!, ...(w.lo ? { lo: raise[w.id] } : { hi: raise[w.id] }) } : w)) };
 }
 
 /** What a person who wants a great deal of computing wants of the place it is done in. */
