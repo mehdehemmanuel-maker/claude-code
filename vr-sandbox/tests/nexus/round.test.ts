@@ -7,6 +7,8 @@ import { drawIntent, knownSpans } from '../../src/nexus/draw';
 import { parseUnit } from '../../src/ganglia/units';
 import { dimText } from '../../src/nexus/dimension';
 import { runRound } from '../../src/nexus/round';
+import { generate } from '../../src/nexus/manifold';
+import { scaleOf } from '../../src/nexus/dimension';
 import { reach } from '../../src/nexus/tuner';
 
 describe('a round draws its own intents', () => {
@@ -70,9 +72,18 @@ describe('what a round must reproduce', () => {
       const path = d.structure!.elements.find((e) => e.why.want === f.want && e.kind === 'path' && e.why.parent === store?.id);
       if (!store || !path) continue;
       const Q = store.values.find((v) => v.name === 'content held by the end')!.value;
-      expect(path.values.find((v) => v.name.startsWith('least mean flux'))!.value).toBeCloseTo(Q / d.drawn.intent.duration.value!, 9);
+      const needs = path.values.find((v) => v.name.startsWith('least mean flux'))!.value;
+      expect(needs).toBeCloseTo(Q / d.drawn.intent.duration.value!, 9);
       brought++;
-      if (d.structure!.gaps.some((g) => g.want === f.want && /gives at most/.test(g.lacks))) refused++;
+      // the same intent, with what its reservoir gives set below what the path needs: the reservoir refuses it. Whether
+      // a draw happens to hold such a reservoir is the draw's; that one refuses it is the law's
+      const reservoir = d.drawn.intent.regions.find((r) => r.environment && r.carriers?.F === f.carrier && (r.limits ?? []).includes('F'));
+      if (!reservoir || refused >= 5) continue;
+      const scarce = structuredClone(d.drawn.intent);
+      const r = scarce.regions.find((x) => x.id === reservoir.id)!;
+      r.quantities.F = { ...r.quantities.F!, value: (needs / 10) / scaleOf(r.quantities.F!.unit) };
+      expect(generate(scarce).gaps.some((g) => g.want === f.want && /gives at most/.test(g.lacks))).toBe(true);
+      refused++;
     }
     expect(brought).toBeGreaterThan(10);
     expect(refused).toBeGreaterThan(0);

@@ -177,7 +177,7 @@ export function showDescent(d: Descent): string[] {
   const eV = 1.602176634e-19, f = (x: number) => Number(x.toPrecision(3)).toExponential(2);
   const out = [`${d.says}, followed down (tolerance ${d.tolerance}):`];
   for (const s of d.steps) {
-    const life = s.lifetimeDecades === null ? '' : `; heat takes one unit apart every 10^${s.lifetimeDecades.toFixed(1)} s and it re-forms, so a share ${s.changed.toPrecision(2)} is apart at once`;
+    const life = s.lifetimeDecades === null ? '' : s.changed >= 0.999 ? `; heat takes one unit apart every 10^${s.lifetimeDecades.toFixed(1)} s` : `; heat takes one unit apart every 10^${s.lifetimeDecades.toFixed(1)} s and it re-forms, so a share ${s.changed.toPrecision(2)} is apart at once`;
     out.push(`  ${s.level.what}: bound by ${f(s.level.binding / eV)} eV, its own clock ${f(s.level.clock)} s; given ${f(s.E / eV)} eV a unit${life}: ${s.verdict === 'whole' ? 'left whole' : s.verdict === 'resolved' ? 'resolved inside: faster than its clock' : Number.isNaN(s.changed) ? 'undecided' : `taken apart (${s.changed >= 0.999 ? 'all' : `a share ${s.changed.toPrecision(2)}`})`}`);
   }
   out.push(d.stop === 'sufficient' ? `  sufficient: ${d.at!.what} stays whole, so it enters as a unit, and nothing below it changes the outcome by more than the tolerance` : d.stop === 'refused' ? '  refused: no unit moves at or past light\'s speed' : `  gap (${d.gap!.kind}): ${d.gap!.says}`);

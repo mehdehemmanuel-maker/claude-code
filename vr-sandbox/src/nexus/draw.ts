@@ -15,6 +15,7 @@ import { dimText } from './dimension';
 import { keptMatters } from './matter';
 import { leaf, leavesOf, type Leaf } from './term';
 import { reach } from './tuner';
+import { CRYSTALS, MOLECULES } from '../data/species';
 import type { Intent, Region, Want } from './want';
 
 /** A seeded stream of numbers in [0, 1) (mulberry32): the same seed, the same stream. */
@@ -33,6 +34,8 @@ export function stream(seed: number): () => number {
 export interface Span { dim: string; unit: string; lo: number; hi: number; seen: number }
 
 const SI: Record<string, string> = {};
+/** What a region can be named as made of: every molecule with bonds, and every element's crystal, the kept species hold. */
+const CONSTITUENTS = [...new Set([...MOLECULES.filter((m) => m.bonds).map((m) => m.name), ...CRYSTALS.map((c) => c.element)])];
 /** The sizes the scale tuner reaches, derived once. */
 const ladderReach = reach();
 /** What the kept laws cover, by dimension: every worked example's inputs and output, and every domain bound. */
@@ -112,6 +115,9 @@ export function drawIntent(seed: number, bar = 2, spans = knownSpans()): Drawn {
   const matter = pick(keptMatters());
   const m = `mass of ${matter.id}`;
   for (const id of people) regions.push({ id, by: who, environment: false, adjoins: [...people.filter((x) => x !== id), ...reservoirs.map((x) => x.id)], quantities: {} });
+  // what the first region is made of, sometimes named: a molecule or an element the kept species hold, drawn by name
+  // only; what its levels are is the descent's to find
+  if (r() < 0.5) regions.find((x) => x.id === people[0])!.constituent = pick(CONSTITUENTS);
   // a size for the first region, drawn over all the tuner reaches, from the length the constants set by themselves to
   // its largest boundary, widened by the bar: the regime at that size is the generator's to find, not the draw's
   if (r() < 0.5) {

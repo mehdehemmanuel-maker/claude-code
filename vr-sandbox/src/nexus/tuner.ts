@@ -32,6 +32,7 @@ import { CONST } from './book/constants';
 import { dimText, integerNullSpace, type Dim } from './dimension';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { app, div, k, leaf, mul, pow, variable, type Term } from './term';
+import { boundState } from './eigen';
 
 /** What a quantity does in an energy relation: the role is declared once per quantity, never per size or per regime. */
 export type Role = 'coupling' | 'action' | 'thermal' | 'speed' | 'mass' | 'density' | 'binding';
@@ -236,6 +237,27 @@ function sameUnit(a: Form, b: Form, L: number): boolean {
   return true;
 }
 
+/**
+ * The ground state of two parts held by an attraction M / L^n: reduced mass μ = m₁m₂/(m₁+m₂), the operator's own length
+ * a = (ħ²/(μM))^(1/(2−n)) and energy ε = ħ²/(μa²), and the pure numbers the eigenvalue problem gives for that power.
+ * Its binding is −e·ε and its size the radius where it is most likely found, peak·a.
+ */
+function boundOf(attraction: Form, p1: Q, p2: Q, hbarD: Derivation): { binding: Derivation; size: Derivation } | null {
+  const st = boundState(attraction.n);
+  if (!st) return null;
+  const m1 = v('m1', p1.d), m2 = v('m2', p2.d), M = variable('M', attraction.M.unit, attraction.text), hb = v('hbar', hbarD);
+  const env = { m1: p1.d, m2: p2.d, M: attraction.M, hbar: hbarD };
+  const mu = evaluate(`reduced mass of ${p1.key} and ${p2.key}`, div(mul(m1, m2), app('add', [m1, m2])), { m1: p1.d, m2: p2.d }, { unit: 'kg', law: 'μ = m₁m₂/(m₁+m₂): the two move about their common centre' });
+  const muV = variable('mu', 'kg', 'the reduced mass');
+  const a = evaluate(`the operator's length for ${attraction.text}`, pow(div(pow(hb, 2), mul(muV, M)), 1 / (2 - attraction.n)), { ...env, mu }, { unit: 'm', law: 'a = (ħ²/(μM))^(1/(2−n)): where the motion ħ²/(μa²) equals the attraction M/aⁿ' });
+  const aV = variable('a', 'm', 'the operator\'s length');
+  const eps = evaluate(`the operator's energy for ${attraction.text}`, div(pow(hb, 2), mul(muV, pow(aV, 2))), { hbar: hbarD, mu, a }, { unit: 'J', law: 'ε = ħ²/(μa²)' });
+  const epsV = variable('eps', 'J', 'the operator\'s energy');
+  const binding = evaluate(`binding of the ground state of ${attraction.text}`, mul(k(-st.e, `the lowest eigenvalue of −½∇² − 1/x^${attraction.n}`), epsV), { eps }, { unit: 'J', law: 'a stationary state is an eigenfunction of −(ħ²/2μ)∇² − M/rⁿ: its energy is the eigenvalue (src/nexus/eigen.ts)' });
+  const size = evaluate(`size of the ground state of ${attraction.text}`, mul(k(st.peak, 'where its state is most likely found, in the operator\'s length'), aV), { a }, { unit: 'm', law: 'the radius of the most likely place, from the eigenfunction' });
+  return { binding, size };
+}
+
 // ---- 4. recursion: what settles below is the environment above --------------------------------------------------
 
 export interface Structure { key: string; at: Crossing; size: Derivation; binding: Derivation; mass: Derivation; density: Derivation; level: number; charge: number; parts: Q[] }
@@ -276,13 +298,18 @@ export function ladder(base: Q[], depth = Infinity): { levels: { qs: Q[]; forms:
       const lighter = crossings.filter((x) => x.boundary === 'settles' && x.above === c.above).filter((x) => { const mv = x.below.factors.find((f) => f.q.role === 'mass')?.q; return mv === moving || mv === partner; }).sort((x, y) => y.L.value! - x.L.value!)[0]!;
       if (lighter !== c) continue;
       seen.add(key);
-      if (c.E.value! <= thermal) continue;
       const parts = partner === moving ? [moving, moving] : [moving, partner];
+      // the crossing says where it settles to within the factors dimensions cannot see; the operator says exactly:
+      // its ground state's energy and size (src/nexus/eigen.ts), in the units the pair's reduced mass and the
+      // attraction's strength and power set
+      const bound = boundOf(c.above, parts[0]!, parts[1]!, qs.find((q) => q.key === 'hbar')!.d);
+      if (!bound) continue;
+      if (bound.binding.value! <= thermal) continue;
       const mvars = { m1: v('m1', parts[0]!.d), m2: v('m2', parts[1]!.d) };
       const mass = evaluate(`mass of what settles at ${c.L.name}`, app('add', [mvars.m1, mvars.m2]), { m1: parts[0]!.d, m2: parts[1]!.d }, { unit: 'kg', law: 'a structure\'s mass is its constituents\'' });
       const Lv = variable('L', 'm', 'its size'), mv = variable('m', 'kg', 'its mass');
-      const density = evaluate(`density of what settles at ${c.L.name}`, div(mv, pow(Lv, 3)), { m: mass, L: c.L }, { unit: 'kg/m^3', law: 'its mass over its size cubed' });
-      structures.push({ key, at: c, size: c.L, binding: c.E, mass, density, level, charge: (parts[0]!.charge ?? 0) + (parts[1]!.charge ?? 0), parts });
+      const density = evaluate(`density of what settles at ${c.L.name}`, div(mv, pow(Lv, 3)), { m: mass, L: bound.size }, { unit: 'kg/m^3', law: 'its mass over its size cubed' });
+      structures.push({ key, at: c, size: bound.size, binding: bound.binding, mass, density, level, charge: (parts[0]!.charge ?? 0) + (parts[1]!.charge ?? 0), parts });
     }
     levels.push({ qs, forms: fs, invariants, crossings, structures });
     if (!structures.length) { closed = true; break; }

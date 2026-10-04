@@ -17,6 +17,8 @@ export interface Region {
   environment: boolean;
   /** What is said of it, by quantity symbol. */
   quantities: Record<string, Leaf>;
+  /** What it is made of, where that is named: a molecule or an element in the kept species, whose own levels a descent reads. */
+  constituent?: string;
   /** Quantities that vary over the region's own coordinates: a climate over t, a road's height over x. */
   fields?: Record<string, Field>;
   /** The regions it touches, by id: where a boundary between them can be. */

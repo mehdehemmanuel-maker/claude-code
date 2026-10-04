@@ -47,7 +47,9 @@ import { ofLeaf, type Derivation } from './evaluate';
 import { leaf } from './term';
 import { BONDS, BONDS_SOURCE, CRYSTALS, ELEMENTS, MOLECULES } from '../data/species';
 import { atomicVolume } from './solid';
-import { P0, T0, phaseAt, vaporizationEnthalpy } from './phase';
+import { conductionDensity, fermiEnergy, thermalShare } from './fermi';
+import { meltingPoint } from './melt';
+import { P0, T0, boilingPoint, phaseAt, phasesOf, vaporizationEnthalpy } from './phase';
 
 /** What a gap is a gap in: a measurement, a resolution, a relation between known things, a state variable, an operation the language lacks, a law, or a primitive nothing derives. */
 export type GapKind = 'data' | 'resolution' | 'relationship' | 'variable' | 'operator' | 'law' | 'primitive';
@@ -74,6 +76,38 @@ const hbarOf = (qs: Q[]) => qs.find((q) => q.key === 'hbar')!.d.value!;
  * Every level the ladder derives at a temperature, from the weakest bound to the strongest: the structures, then the
  * particles, then the floor. With no temperature, the floor of the universe's own background.
  */
+/**
+ * Saha's balance for a pair that parts into two (Saha, Phil. Mag. 40, 472, 1920): the share x apart satisfies
+ * x²/(1 − x) = (1/n) (2π μ kT/h²)^(3/2) e^(−E_b/kT). The room the freed parts gain, their thermal wavelength cubed against
+ * the volume each unit has, stands against the binding: the thinner the matter, the more of it is apart at one heat.
+ * The parts' inner states (spins, rotations, vibrations) are not counted, which a statistical weight would add.
+ */
+export function sahaShare(mu: number, Eb: number, n: number, T: number): number {
+  const k = CONST.kB.value!, h = CONST.h.value!;
+  const r = (1 / n) * ((2 * Math.PI * mu * k * T) / (h * h)) ** 1.5 * Math.exp(-Eb / (k * T));
+  if (!Number.isFinite(r)) return 1;
+  // x² + r x − r = 0, written so it keeps its precision when r is small
+  return r > 1e-8 ? (-r + Math.sqrt(r * r + 4 * r)) / 2 : Math.sqrt(r);
+}
+
+/**
+ * Whether a named matter is a gas at a heat and a pressure. Its phase is the one of least Gibbs energy, but the kept
+ * phases are extrapolated from 298 K with their heat capacities held, and far above, a liquid's larger heat capacity
+ * makes its entropy pass its vapour's, which no matter does: the vapour always has more room. So once its vapour wins
+ * on heating at a pressure, it stays won: the matter is a gas at and above its boiling point.
+ */
+const boils = new Map<string, number>();
+export function isGas(name: string, T: number, p: number): boolean {
+  const ps = phasesOf(name);
+  if (!ps.length) return false;
+  if (ps.some((s) => s.phase === 'gas') && ps.some((s) => s.phase === 'liquid')) {
+    const key = `${name}|${p}`;
+    if (!boils.has(key)) boils.set(key, boilingPoint(name, p));
+    return T >= boils.get(key)!;
+  }
+  return phaseAt(name, T, p) === 'gas';
+}
+
 /** What a descent is of: a named matter (a molecule's name or an element's symbol in the kept species), the number density of its units, its pressure. */
 export interface Of { matter?: string; n?: number; p?: number }
 
@@ -87,10 +121,12 @@ export function levelsAt(T: number | null, of: Of = {}): Level[] {
   const out: Level[] = [];
   for (const s of lad.levels.flatMap((l) => l.structures)) {
     const charged = s.parts.filter((p) => p.charge).sort((a, b) => a.d.value! - b.d.value!)[0];
-    // a pair held by attraction, among units at a known density, is apart by Saha's balance: x²/(1 − x) is the room a
-    // freed constituent has (its thermal wavelength cubed against the volume per unit) times e^(−E_b/kT)
-    const mover = s.parts.map((q) => q.d.value!).sort((a, b) => a - b)[0]!, Eb = s.binding.value!;
-    const saha = of.n !== undefined && s.parts.length === 2 ? (Tx: number) => { const k = CONST.kB.value!, h = CONST.h.value!; const r = (1 / of.n!) * ((2 * Math.PI * mover * k * Tx) / (h * h)) ** 1.5 * Math.exp(-Eb / (k * Tx)); return Number.isFinite(r) ? (-r + Math.sqrt(r * r + 4 * r)) / 2 : 1; } : undefined;
+    // a pair held by attraction, among units at a known density, is apart by Saha's balance
+    const [p1, p2] = s.parts.map((q) => q.d.value!), Eb = s.binding.value!;
+    // at a stated density, or, in a named matter that is a gas at the heat and pressure, at the gas's own p/kT
+    const gasAt = (Tx: number) => of.matter !== undefined && isGas(of.matter, Tx, of.p ?? P0);
+    const nAt = (Tx: number) => of.n ?? (gasAt(Tx) ? (of.p ?? P0) / (CONST.kB.value! * Tx) : null);
+    const saha = s.parts.length === 2 && (of.n !== undefined || of.matter !== undefined) ? (Tx: number) => { const n = nAt(Tx); return n === null ? Math.exp(-Eb / (CONST.kB.value! * Tx)) : sahaShare((p1! * p2!) / (p1! + p2!), Eb, n, Tx); } : undefined;
     out.push({ what: `what settles at ${Number(s.size.value!.toPrecision(3))} m`, kind: 'structure', size: s.size.value!, binding: Eb, mass: s.mass.value!, clock: hbar / Eb, carrier: charged ? charged.d.value! : null, record: [s.size, s.binding, s.mass], ...(saha ? { apart: saha } : {}) });
   }
   // a particle is held together by its rest energy: below it, it is a unit; above it, particles are made. Its size is
@@ -123,7 +159,17 @@ function matterLevels(name: string, p: number, hbar: number): Level[] {
   const crystal = CRYSTALS.find((c) => c.element === name || c.element === single);
   if (crystal) {
     const size = atomicVolume(crystal) ** (1 / 3);
-    out.push({ what: `the crystal of ${crystal.element}`, kind: 'arrangement', size, binding: crystal.cohesive, mass: crystal.mass, clock: hbar / crystal.cohesive, carrier: me, record: [src(`cohesive energy of ${crystal.element}`, crystal.cohesive, 'J', 'src/data/species.ts CRYSTALS: Kittel table 3.1'), src(`lattice constant of ${crystal.element}`, crystal.a, 'm', 'src/data/species.ts CRYSTALS: Kittel table 1.4')] });
+    // it keeps its shape until it melts (src/nexus/melt.ts); past that its arrangement is apart, though its atoms stay
+    // together, and below it heat takes atoms off it only by the Boltzmann factor of their cohesion
+    const melt = meltingPoint(crystal).T;
+    out.push({ what: `the crystal of ${crystal.element}`, kind: 'arrangement', size, binding: crystal.cohesive, mass: crystal.mass, clock: hbar / crystal.cohesive, carrier: me, record: [src(`cohesive energy of ${crystal.element}`, crystal.cohesive, 'J', 'src/data/species.ts CRYSTALS: Kittel table 3.1'), src(`lattice constant of ${crystal.element}`, crystal.a, 'm', 'src/data/species.ts CRYSTALS: Kittel table 1.4')], apart: (Tx) => (Tx >= melt ? 1 : Math.exp(-crystal.cohesive / (CONST.kB.value! * Tx))) });
+    // its conduction electrons, where their count is stated: a gas that cannot share states (src/nexus/fermi.ts),
+    // held at the energy of the last one in, its spacing the density's, and heat moving only a share kT/E_F of it
+    const n = conductionDensity(crystal);
+    if (n !== null) {
+      const EF = fermiEnergy(n);
+      out.push({ what: `the conduction electrons of ${crystal.element}`, kind: 'arrangement', size: n ** (-1 / 3), binding: EF, mass: me, clock: hbar / EF, carrier: me, record: [src(`conduction electrons per atom of ${crystal.element}`, crystal.free!, '1', 'src/data/species.ts CRYSTALS: Kittel table 6.1')], apart: (Tx) => thermalShare(n, Tx) });
+    }
   }
   const gas = species.find((s) => s.phase === 'gas'), liquid = species.find((s) => s.phase === 'liquid');
   const molecular = gas ?? liquid;
@@ -131,10 +177,18 @@ function matterLevels(name: string, p: number, hbar: number): Level[] {
     const mass = Object.entries(molecular.counts).reduce((m, [el, k]) => m + k * (ELEMENTS[el]?.A ?? NaN) * u, 0);
     if (gas && liquid) {
       const Ev = vaporizationEnthalpy(name, T0) / NA;
-      out.push({ what: `the liquid of ${name}`, kind: 'arrangement', size: NaN, binding: Ev, mass, clock: hbar / Ev, carrier: null, record: [src(`enthalpy of vaporization of ${name}`, Ev * NA, 'J/mol', `src/data/species.ts: ${gas.source}; ${liquid.source}`)], apart: (Tx) => (phaseAt(name, Tx, p) === 'gas' ? 1 : 0) });
+      out.push({ what: `the liquid of ${name}`, kind: 'arrangement', size: NaN, binding: Ev, mass, clock: hbar / Ev, carrier: null, record: [src(`enthalpy of vaporization of ${name}`, Ev * NA, 'J/mol', `src/data/species.ts: ${gas.source}; ${liquid.source}`)], apart: (Tx) => (isGas(name, Tx, p) ? 1 : 0) });
     }
-    const weakest = Math.min(...Object.keys(molecular.bonds!).map((b) => BONDS[b] ?? Infinity)) / NA;
-    if (Number.isFinite(weakest)) out.push({ what: `the molecule of ${name}`, kind: 'molecule', size: NaN, binding: weakest, mass, clock: hbar / weakest, carrier: null, record: [src(`weakest bond of ${name}`, weakest * NA, 'J/mol', BONDS_SOURCE)] });
+    const bond = Object.keys(molecular.bonds!).filter((b) => BONDS[b] !== undefined).sort((a, b) => BONDS[a]! - BONDS[b]!)[0];
+    if (bond) {
+      const weakest = BONDS[bond]! / NA;
+      // where the matter is a gas at the heat and the pressure, its molecules are p/kT to a volume, and the weakest bond
+      // parts by Saha's balance into the bond's two sides, taken here as its two atoms' masses (a stated approximation)
+      const [x, y] = bond.split(/[–=≡]/).map((el) => (ELEMENTS[el]?.A ?? NaN) * u);
+      const muBond = (x! * y!) / (x! + y!);
+      const apart = (Tx: number) => (isGas(name, Tx, p) && Number.isFinite(muBond) ? sahaShare(muBond, weakest, p / (CONST.kB.value! * Tx), Tx) : Math.exp(-weakest / (CONST.kB.value! * Tx)));
+      out.push({ what: `the molecule of ${name}`, kind: 'molecule', size: NaN, binding: weakest, mass, clock: hbar / weakest, carrier: null, record: [src(`weakest bond of ${name} (${bond})`, weakest * NA, 'J/mol', BONDS_SOURCE)], apart });
+    }
   }
   return out;
 }
@@ -300,4 +354,24 @@ export function explain(ask: Ask, T: number | null = null, of: Of = {}): Explana
     ask, tried, stop: 'gap', level: null, powers: pw,
     gap: { kind: 'relationship', says: `${ask.name} lies ${Math.abs(best.decades).toFixed(1)} decades ${dir} the scale ${best.level.what} sets, the closest of every level: something between that level (${Number.isNaN(best.level.size) ? 'whose size the species do not state' : `${best.level.size.toExponential(2)} m`}) and the phenomenon, which no level holds, sets it` },
   };
+}
+
+// ---- the hottest a matter bears -------------------------------------------------------------------------------------
+
+/**
+ * The hottest a named matter bears: the lowest heat at which the level that makes it that matter (its crystal, or its
+ * molecule) comes apart past the tolerance, by that level's own law, found by bisection over temperature. A crystal
+ * by its melting; a molecule by its weakest bond parting, by Saha's balance where it is a gas at the pressure. Null
+ * where the kept species do not hold the matter, or hold no level of it.
+ */
+export function hottestOf(matter: string, o: { p?: number; tolerance?: number } = {}): { T: number; level: Level } | null {
+  const tolerance = o.tolerance ?? DEFAULT_TOLERANCE, of: Of = { matter, ...(o.p !== undefined ? { p: o.p } : {}) };
+  const own = levelsAt(null, of).filter((lv) => (lv.kind === 'arrangement' && lv.what.startsWith('the crystal')) || lv.kind === 'molecule');
+  const level = own[0];
+  if (!level) return null;
+  const share = (T: number) => (level.apart ? level.apart(T) : Math.exp(-level.binding / (CONST.kB.value! * T)));
+  let lo = 1, hi = 1e6;
+  if (share(hi) <= tolerance) return null;
+  for (let i = 0; i < 100; i++) { const mid = Math.sqrt(lo * hi); if (share(mid) > tolerance) hi = mid; else lo = mid; }
+  return { T: hi, level };
 }

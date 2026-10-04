@@ -32,7 +32,7 @@ import { CONST } from './book/constants';
 import { phaseAt, vapourPressure } from './phase';
 import { dimOf, sameDim } from './dimension';
 import { regimeAt, type Regime } from './tuner';
-import { descend, heat, motion, potential, DEFAULT_TOLERANCE, type Descent, type GapKind, type Process } from './depth';
+import { descend, heat, hottestOf, motion, potential, DEFAULT_TOLERANCE, type Descent, type GapKind, type Process } from './depth';
 import { toSI } from '../ganglia/units';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
@@ -1044,8 +1044,18 @@ export function generate(intent: Intent): Structure {
   }
   // what bears the heat: no available matter states the highest temperature it bears, unless the intent does
   for (const g of gaps.filter((x) => /the hottest it may run/.test(x.lacks))) {
+    // where what it runs in is named, the hottest follows from its constitution (src/nexus/depth.ts): the heat at
+    // which the level that makes it that matter comes apart
+    const el = elements.find((e) => e.id === g.element);
+    const named = el?.regions.map((rid) => intent.regions.find((r) => r.id === rid)?.constituent).find((c) => !!c);
+    const hot = named ? hottestOf(named) : null;
+    if (el && named && hot) {
+      put(el, { name: `the hottest ${named} bears: where ${hot.level.what} comes apart`, value: hot.T, unit: 'K', from: `${hot.level.what} (${hot.level.record.map((r) => r.name).join('; ')})` });
+      gaps.splice(gaps.indexOf(g), 1);
+      continue;
+    }
     const m = chooseMatter(kept, 'energy', 'most potential', 'most');
-    if (!m.pick) g.lacks = `the hottest it may run is a property of what it is made of: ${m.lacks}`;
+    if (!m.pick) g.lacks = `the hottest it may run is a property of what it is made of: ${named ? `the kept species hold no level of ${named}` : m.lacks}`;
   }
   for (const g_ of gaps.filter((x) => /structure's own weight/.test(x.lacks))) g_.lacks = 'the structure\'s own weight is its members\' matter times their size: no system is generated from an element';
   if (ownWeight.size) for (let i = gaps.length - 1; i >= 0; i--) if (/structure's own weight is its members/.test(gaps[i]!.lacks)) gaps.splice(i, 1);
@@ -1183,8 +1193,9 @@ function depthsOf(intent: Intent, gap: GapFn, read: (region: string, sym: string
     probes.push({ p, from: `${w.id}: ${w.quantity.name}`, want: w.id, carrier: w.quantity.carrier ?? null, tolerance: band && band > 0 ? band : DEFAULT_TOLERANCE });
   }
   const out: IntentDepth[] = [];
+  const named = intent.regions.find((r) => r.constituent)?.constituent;
   for (const { p, from, want, carrier, tolerance } of probes) {
-    const d = descend(p, { L, T, tolerance });
+    const d = descend(p, { L, T, tolerance, ...(named ? { of: { matter: named } } : {}) });
     out.push({ from, want, descent: d });
     const said = `the depth of ${from}`;
     if (d.stop === 'refused') { gap(want, null, carrier, `${said}: ${p.says} is at or past light's speed, which no unit reaches`, { kind: 'law', distinction: 'a lawful refusal: nothing moves at light\'s speed' }); continue; }
@@ -1227,12 +1238,16 @@ const SIGNATURES: [RegExp, string][] = [
 ];
 
 /** What an unread quantity is: classified by its dimension and the carrier it is about. */
-function unreadClass(i: Intent, u: { region: string; sym: string }): string {
+/** What an unread quantity no rule needed is classed as: not a lack, and kept out of the ranking. */
+export const UNNEEDED = 'not needed: nothing generated draws on it';
+function unreadClass(i: Intent, u: { region: string; sym: string }, s: Structure): string {
   const r = regionOf(i, u.region);
   const l = r.quantities[u.sym] ?? r.produces?.[u.sym];
   if (!l) return 'unclassified';
   const d = l.dim;
   const carrier = r.carriers?.[u.sym];
+  // a reservoir's limit or potential that no generated path draws from: no want needed it, so nothing is missing
+  if (r.environment && carrier && !s.elements.some((e) => e.kind === 'path' && e.carrier === carrier && e.regions[0] === r.id)) return UNNEEDED;
   if ((r.limits ?? []).includes(u.sym)) return 'a limit no rule checked';
   if (!carrier && d[0] === 0 && d[2] === 0 && d[3] === 0 && d[4] === 0 && d[1] > 0) return 'geometry: the sizes, areas and shapes of regions';
   if (r.produces?.[u.sym]) return 'a production no want balances';
@@ -1251,7 +1266,8 @@ export function lacking(intents: Intent[], structures: Structure[]): Lack[] {
       const l = get(d); l.gaps++; if (!l.inventions.includes(s.intent)) l.inventions.push(s.intent);
     }
     for (const u of s.unused) {
-      const d = unreadClass(intents[k]!, u);
+      const d = unreadClass(intents[k]!, u, s);
+      if (d === UNNEEDED) continue;
       const l = get(d); l.unread++; if (!l.inventions.includes(s.intent)) l.inventions.push(s.intent);
     }
   });

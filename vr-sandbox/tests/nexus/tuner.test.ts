@@ -58,7 +58,13 @@ describe('the energies a size has, and where they meet', () => {
   });
 
   it('only one structure settles from the constants: the electron and the positive charge; two particles bound by gravity are taken apart by any heat the universe allows', () => {
-    expect(ladder(universe(), 0).levels[0]!.structures.map((s) => s.size.value!)).toEqual([expect.closeTo(5.29177210903e-11, 18)]);
+    const [s, ...more] = ladder(universe(), 0).levels[0]!.structures;
+    expect(more).toEqual([]);
+    // its ground state, from the eigenvalue problem with the reduced mass: the Bohr radius times (1 + m_e/m), and
+    // hydrogen's ionization energy (NIST: 13.598434 eV for the proton; the ladder's positive charge has the atomic mass
+    // constant's mass, which moves the fifth figure)
+    expect(s!.size.value! / (5.29177210903e-11 * (1 + CONST.me.value! / CONST.mu.value!))).toBeCloseTo(1, 6);
+    expect(s!.binding.value! / eV / 13.598434).toBeCloseTo(1, 4);
   });
 });
 
@@ -96,7 +102,8 @@ describe('the regime at a size and a temperature', () => {
   });
 
   it('above the temperature the settled structure\'s binding sets, nothing settles: the regime changes, not the clocks', () => {
-    const Tb = 27.211386245988 * eV / CONST.kB.value!;
+    // the settled ground state's binding, hydrogen's ionization energy (NIST), sets the temperature
+    const Tb = 13.598434 * eV / CONST.kB.value!;
     expect(regimeAt(1e-9, Tb * 0.9).structures.length).toBe(1);
     expect(regimeAt(1e-9, Tb * 1.1).structures.length).toBe(0);
   });
@@ -104,7 +111,7 @@ describe('the regime at a size and a temperature', () => {
   it('the free-fall time of a body emerges from a unit\'s gravity moving its own mass, and is the same at every size', () => {
     const ff = (L: number) => regimeAt(L, 300).times.find((t) => /^L √\(m00 \/ \(G m00 rho00\)\)$/.test(t.of))!.t;
     expect(ff(1e7)).toBeCloseTo(ff(1e8), 6);
-    const rho = 1.66053906660e-27 * (1 + CONST.me.value! / 1.66053906660e-27) / 5.29177210903e-11 ** 3;
+    const rho = 1.66053906660e-27 * (1 + CONST.me.value! / 1.66053906660e-27) / (5.29177210903e-11 * (1 + CONST.me.value! / 1.66053906660e-27)) ** 3;
     expect(ff(1e7) * Math.sqrt(CONST.G.value! * rho)).toBeCloseTo(1, 5);
   });
 

@@ -18,7 +18,7 @@ describe('the levels are what the ladder finds, as many as it finds', () => {
   it('from the weakest bound to the strongest: what settles, then each particle (its rest energy), then the floor', () => {
     const ls = levelsAt(300);
     expect(ls.map((l) => l.kind)).toEqual(['structure', 'particle', 'particle', 'floor']);
-    expect(ls[0]!.binding / eV).toBeCloseTo(27.211386, 4);
+    expect(ls[0]!.binding / eV / 13.598434).toBeCloseTo(1, 4); // hydrogen's ionization energy (NIST)
     expect(ls[1]!.binding / eV / 510998.95).toBeCloseTo(1, 6);
     expect(ls[3]!.size / 1.616255e-35).toBeCloseTo(1, 4);
   });
@@ -33,7 +33,7 @@ describe('a process goes down as far as it changes things, and stops where it le
 
   it('heat whose share of broken units exceeds the tolerance takes the level apart and goes on down', () => {
     // the share e^(−E_b/kT) passes a part in a hundred where kT = E_b / ln 100
-    const Tc = 27.211386 * eV / Math.log(100) / CONST.kB.value!;
+    const Tc = levelsAt(null)[0]!.binding / Math.log(100) / CONST.kB.value!;
     expect(descend(heat(Tc * 0.95)).at!.kind).toBe('structure');
     expect(descend(heat(Tc * 1.05)).at!.kind).toBe('particle');
     // the tolerance asked is the depth asked: a want held to a part in a million must go deeper at a lower heat
@@ -54,7 +54,7 @@ describe('a process goes down as far as it changes things, and stops where it le
   });
 
   it('a motion gives each level (γ − 1) m c² a unit: fast enough to take what settles apart, it leaves the electron whole', () => {
-    const v = Math.sqrt(2 * 27.211386 * eV / levelsAt(null)[0]!.mass);
+    const v = Math.sqrt(2 * levelsAt(null)[0]!.binding / levelsAt(null)[0]!.mass);
     expect(descend(motion(v * 0.9)).at!.kind).toBe('structure');
     expect(descend(motion(v * 1.1)).at!.what).toBe('the electron');
     expect(descend(motion(CONST.c.value!)).stop).toBe('refused');

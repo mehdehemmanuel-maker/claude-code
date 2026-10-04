@@ -1055,3 +1055,52 @@ The channel takes `{"depth": …}`, `{"explain": …}` and `{"copy": …}`.
   (Saha's balance needs a density), so water's molecules at 6000 K come out mostly whole.
 - What a motion gives a unit is for a stop at contact. A body moving through nothing changes nothing, and the sound
   speed that decides a shock is not yet read.
+
+## 25. Gaps closed with equations
+
+Each item is a gap a round located, closed by an equation turned into code and checked against measured values.
+
+- **Bound states as eigenvalues** (`eigen.ts`). The radial operator −½u″ + (l(l+1)/2x² − 1/x^k)u = e u is solved by
+  Sturm bisection with Richardson extrapolation. It gives the Coulomb spectrum −1/(2n²) and the exact radii. Every
+  settled structure's binding and size now come from it, with the reduced mass. The derived atom is bound by 13.598 eV
+  (NIST: 13.598434 eV for hydrogen), which closes the factor of two that entered every exponent.
+- **Electrons that cannot share a state** (`fermi.ts`). Counting states gives k_F = (3π²n)^(1/3). Then
+  E_F = ħ²k_F²/2m, P = (2/5)nE_F and B = (2/3)nE_F. The Fermi energies match Kittel's table. The stiffness is right for
+  potassium (0.99× measured) and sodium (1.34×). The residual names what the free gas leaves out: s–p metals come out 3×
+  too stiff, because the ions pull the gas in; filled-d metals 0.2–0.5× too soft, because their d shells bear part of
+  the load.
+- **Saha's balance for molecules in a gas**, at the gas's own density p/kT. Water at one bar has 27% of its O–H bonds
+  apart at 3000 K and essentially all of them at 6000 K.
+- **A vapour keeps its room once boiled.** The extrapolated liquid's entropy never returns above its vapour's, so a
+  matter is a gas at and above its boiling point.
+- **The hottest a crystal bears** (`melt.ts`). Of two candidate relations, the evidence chose cohesion's,
+  kT_m = 0.0304 E_coh, with a spread of ±28%. Lindemann's spreads ±112%. Predicted with each metal left out of the
+  evidence, every kept metal's melting point lands within 0.82 to 1.31 of the measured (CRC).
+- **The hottest a named matter bears** (`depth.ts`, `hottestOf`). A crystal bears heat to its melting point; a
+  molecule to where its weakest bond parts. It closes 44 of the 431 knowledge gaps in round 4, wherever a region's
+  constituent is named.
+- **Cold bodies** (`compact.ts`). Hydrostatic balance with Chandrasekhar's exact pressure of filling reproduces three
+  checks:
+  - the Lane–Emden constants;
+  - Chandrasekhar's mass, 1.456 M☉ for μ_e = 2;
+  - Sirius B's radius at its mass.
+
+  The largest cold body of the settled matter is 9.9 × 10⁷ m (Jupiter is 7.15 × 10⁷ m).
+
+The ranking now keeps out every unread quantity that no generated path draws on. A reservoir's limit is unneeded when
+nothing takes from it.
+
+## 26. The Nexus room: what is generated, in the headset
+
+`src/nexus/scene.ts` runs Nexus from nothing and writes `view/public/world.json` (`npm run nexus:scene`). It holds:
+- the ladder;
+- descents of water, iron and hydrogen;
+- the cold bodies' branches;
+- places evolved by the rigid-body kernel;
+- one drawn intent, generated, as a graph.
+
+`view/` is a three.js WebXR page that only places those numbers in a room (`npm run nexus:view`). With `?xr=quest3`
+it runs an emulated Quest 3 session (iwer), which is how stereo screenshots are taken.
+
+What it is not, yet, is a generated environment. Only the places are geometry, and they were placed by hand. The
+generator's elements and regions have no shape, so nothing it generates is a body in the room. That is the next step.

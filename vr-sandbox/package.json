@@ -11,7 +11,9 @@
     "gate": "tsc --noEmit -p . && vitest run",
     "nexus:build": "vite build --config vite.nexus.config.ts",
     "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs",
-    "nexus:round": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/round.mjs"
+    "nexus:round": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/round.mjs",
+    "nexus:scene": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/scene.mjs",
+    "nexus:view": "npm run nexus:scene && vite build --config vite.view.config.ts --logLevel error"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
