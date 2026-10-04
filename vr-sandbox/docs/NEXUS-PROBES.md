@@ -572,8 +572,31 @@ their own times in a day, so theirs do. The error halves with the tolerance, at 
 sensor's pace takes. The realization kernel still integrates one world on one step. Its parts that exchange nothing
 could be separate worlds on separate steps, which is what this round does for a carrier's regions.
 
+## Round 12: holding a temperature across scale
+
+A region held above its surroundings loses energy at its conductance times the difference (src/nexus/hold.ts). For a
+body in a still medium the least conductance is conduction alone: 4π k r for a sphere of radius r in a medium of
+conductivity k (Carslaw and Jaeger). That grows with the size, while what a body makes grows with its mass. Kleiber's
+measured law for mammals is 70 kcal a day times the mass to the three quarters (src/data/life.ts). So the difference a
+body holds by its own heat grows with its size, and there is a least size that holds it at all.
+
+| Holding 37 °C in 15 °C, conduction alone, at Kleiber's rate | Least mass | Observed smallest mammal (estimates) |
+|---|---|---|
+| in still air | 7.8 g | about 1.8 g, the Etruscan shrew |
+| in still water | 14.7 kg | from about 14 kg, the sea otter |
+
+Water raises the least size by the ratio of the media's conductivities to the power 3 / (3b − 1). That is 2.4 for
+Kleiber's three quarters: exactly 1883. The observed ratio of the smallest sea and land mammals is about 7800, within an
+order of magnitude. The smallest land mammal lies below even the conduction-only size. Convection only raises the
+conductance, so it must make heat faster than Kleiber's line, and the residual names where the production law departs
+at small size.
+
+A body's own time, its capacity over its conductance, grows as its size squared. A cell ten micrometres across forgets
+any difference with the water around it in 0.23 ms, so on any longer window it is at its surroundings' temperature.
+That is why holding a temperature is a property of bodies, not of cells.
+
 ## The next instrument
 
-The second family: keeping a region at a temperature, across its scales and its means (a room, a cold store, an oven, an
-incubator, a cell). It exercises together what rounds 6 to 11 built: the regions' own times and clocks, the phases a
-working fluid passes through, rates, and the sensor that observes the temperature being held.
+Systems from elements, deferred since round 1. Every generated element with bounds (a member under a load, a wire with
+a least conductance, a store that must last a trip, a boundary that must hold a difference) makes a configuration
+space that sizes it, and the generator should hand those to the space rather than stop at the bound.

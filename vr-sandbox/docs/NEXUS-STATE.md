@@ -98,6 +98,8 @@ the generated laws are checked against, not the limit of what the language can s
 | A barrier fitted at two temperatures misses at both ends; its local value falls across the series | tests/nexus/rate.test.ts |
 | Each region steps at its own time; across clocks nothing is made or lost; regions with no path share no clock | tests/nexus/clock.test.ts |
 | One clock at the slowest step runs away; the tuner refines only the region whose step changes the result | tests/nexus/clock.test.ts |
+| The least body that holds its temperature by its own heat: about 8 g in air, 15 kg in water, their ratio (k_w / k_a)^2.4 | tests/nexus/hold.test.ts |
+| A cell forgets a temperature difference in under a millisecond | tests/nexus/hold.test.ts |
 
 ## 3. What is missing
 
@@ -110,7 +112,7 @@ the generated laws are checked against, not the limit of what the language can s
   temperature (named by the vapour residual).
 - Local clocks in the realization kernel: a carrier's regions now step on their own clocks (round 11), but the rigid-body kernel still integrates one world on one step.
 - A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
-- Life across scale: whether an organism's mechanisms reproduce the allometric exponents, or leave a structured residual.
+- Life across scale: begun with holding a temperature (round 12); Kleiber's exponent itself is used, not explained, and the smallest mammals' residual says the production law departs at small size.
 - A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
   but nothing yet derives which bodies, couplings and fields a realized slice needs.
 - Systems from elements: a generated element's bounds make a space that sizes it (a member, a store, a grip).
@@ -124,9 +126,8 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-The second family: keeping a region at a temperature, across scales and means (a room, a cold store, an oven, an
-incubator, a cell), generated from the carriers and run on local clocks, with the working fluid's phases, rates and
-the sensor that observes what is held. Then systems from elements.
+Systems from elements: every generated element with bounds makes a configuration space that sizes it, and the
+generator hands it to the space. Then the second family over the generator itself.
 
 ## 5. Why each primitive exists
 
@@ -207,3 +208,4 @@ the sensor that observes what is held. Then systems from elements.
 | A change over a barrier: attempted at kT / h, succeeding by the barrier's Boltzmann factor | what happens during a change has a rate, not only a before and an after | phases and reactions with no time |
 | Local clocks: each region at its own time, the finer side owning the flux | one world on one clock is unstable at the slow step and wasteful at the fast | a heat network spanning four decades of time |
 | Refine where the result changes, not where the region is fastest | errors accumulate where a region integrates over many of its own times | the sensor would have been refined |
+| The least conductance a body has to a still medium | holding a difference costs a power that grows with size more slowly than what a body makes | the smallest endotherms in air and in water |
