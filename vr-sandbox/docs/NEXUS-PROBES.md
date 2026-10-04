@@ -1,0 +1,39 @@
+# Nexus: the inventions as probes
+
+A house, a car and a 3D printer are instruments for interrogating the language, never products. Each is stated as
+what people want of regions under an environment (`tests/nexus/inventions.ts`): no part, no mechanism, no
+catalogue of how it works. The core never sees an invention. Every round regenerates all three from their intents
+with the language as it is; nothing a round produced is kept or edited. The source of truth is the generative
+system, so a failure changes the language and every invention is generated again.
+
+The loop: manifold, generate, observe, fail, find the missing distinction, generalize, upgrade the language,
+regenerate. Failures are grouped by what stopped them, so many failures that share a cause become one distinction
+and one upgrade.
+
+## Round 0: the substrate as it was
+
+The substrate built no system from a want. The attempt (`src/nexus/attempt.ts`) added the one generic move the
+language allowed: a closure over the book's 166 laws, from each wanted quantity to the laws with its dimension and
+from their inputs to what the intent gives. Every outcome is classified mechanically.
+
+| Invention | Wants | No law produces it | Produced from what nothing gives | Several chains | One chain | Across untouching regions |
+|---|---|---|---|---|---|---|
+| House | 13 | 4 | 1 | 7 | 1 | 0 |
+| Car | 10 | 4 | 1 | 5 | 0 | 0 |
+| Printer | 8 | 1 | 2 | 0 | 2 | 3 |
+
+What closed reads as nonsense, because dimension was the only check: the time for the people to leave the house
+was the pendulum period of the room height, the voltage at the outlets a lead-acid open-circuit voltage with the
+number of people as its specific gravity, the sag of a floor gravitational time dilation. A held temperature is an
+input of 17 laws and the output of one, whose thermal resistance nothing gives.
+
+The 31 wants reduce to five distinctions, and the same five stop all three inventions:
+
+1. **A balance**: what holds a state is what crosses the region's boundary and what is made inside it.
+2. **A flow driven across a boundary**, and where it comes from.
+3. **The kind of a quantity**: what is conserved, what drives it, what flows.
+4. **A boundary**: the place where quantities of two regions meet.
+5. **Structure**: regions, boundaries and paths made by the language.
+
+None of the 64 aspects the request names (29 for the house, 19 for the car, 16 for the printer) is made, because
+the closure makes nothing. A library of laws is not a generative manifold: this round is the measurement of that.
