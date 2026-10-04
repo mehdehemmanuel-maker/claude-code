@@ -30,7 +30,8 @@ import { carrierById, coupling, family, reaction, roleOf, type Carrier, type Rol
 import { gravity } from './field';
 import { CONST } from './book/constants';
 import { phaseAt, vapourPressure } from './phase';
-import { dimOf } from './dimension';
+import { dimOf, sameDim } from './dimension';
+import { toSI } from '../ganglia/units';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
 import { EULER, runNetwork, sizeMembers } from './size';
@@ -195,7 +196,9 @@ export function generate(intent: Intent): Structure {
     else {
       // heat leaves by touch, by matter that moves, or as light: with nothing touching to take it, only as light, from its surface to whatever that surface sees
       const out = add({ id: `radiate:${element.id}`, kind: 'boundary', carrier: 'light', says: `nothing touching takes the heat ${element.says.split(':')[0]} makes: it leaves as light from its surface to whatever that surface sees`, regions: [element.id], values: [{ name: 'the most a surface radiates per area, over the fourth power of its temperature (a black body)', value: CONST.sigmaSB.value!, unit: 'W/m^2 K^4', from: CONST.sigmaSB.name }], why: { want, rule: 'heat leaves a region by touch, by matter that moves, or as light; with nothing to touch and nothing moving, only as light', laws: ['radiation'], parent: element.id } });
-      gap(want, out.id, 'energy', 'how cold what the surface sees is not said: the area it needs to give its heat away as light cannot be sized');
+      // what the surface sees is not said, but nothing it can see is colder than the cosmic background: the least area,
+      // at whatever temperature the surface may run, is sized against that, and a warmer sink only needs more
+      put(out, { name: 'the coldest anything the surface can see is', value: CONST.Tcmb.value!, unit: 'K', from: CONST.Tcmb.name });
     }
     gap(want, element.id, 'energy', 'the hottest it may run is a property of what it is made of: no material is chosen');
   };
@@ -696,7 +699,7 @@ export function generate(intent: Intent): Structure {
         ...(across !== null ? [{ name: `largest distance within ${host!.id}`, value: across, unit: 'm', from: 'the diagonal of its extent' }] : []),
       ], why: { want: w.id, rule: 'nothing told travels faster than light: a lag bounds the size of what must act as one', laws: [], parent: null } });
       if (across !== null && across > most) gap(w.id, b.id, 'information', `${host!.id} is larger across than the lag lets ${R.id}'s parts be apart`);
-      if (!host) gap(w.id, b.id, 'information', `where ${R.id} is, and so how far apart its parts are, is not said`);
+      // where nothing says how large it is, its size is the design's to choose: the bound is what the choice must meet
       return;
     }
     gap(w.id, null, 'information', `${w.quantity.name} (${w.quantity.unit}) is about information, and no rule reads it`);
@@ -1071,6 +1074,28 @@ export function generate(intent: Intent): Structure {
 
   // a want that is not about a carrier's balance reads nothing; what the intent says and no rule read is information the language cannot use
   for (const w of intent.wants) { const R = intent.regions.find((r) => r.id === w.region); if (R && w.quantity.sym in R.quantities) use(R, w.quantity.sym); }
+  // every path that draws a carrier from a region stating a limit on it is checked against that limit: within it, the
+  // limit is recorded on the path; beyond it, the want is refused lawfully; where nothing derives what the path
+  // carries, that is the gap, never a limit left unread. A limit nothing draws on stays unread: no rule needed it
+  for (const r of intent.regions) for (const sym of r.limits ?? []) {
+    const cid = r.carriers?.[sym], lim = r.quantities[sym];
+    if (!cid || !lim || lim.value === null) continue;
+    const paths = elements.filter((e) => e.kind === 'path' && e.carrier === cid && e.regions[0] === r.id);
+    if (!paths.length) continue;
+    use(r, sym);
+    // a value whose unit cannot be read cannot be compared with the limit, so it is not counted as carried
+    const dimOrNull = (u: string) => { try { return dimOf(u); } catch { return null; } };
+    const dim = dimOrNull(lim.unit);
+    if (!dim) continue;
+    const most = toSI(lim.value, lim.unit);
+    for (const pe of paths) {
+      const carried = pe.values.filter((v) => { const vd = dimOrNull(v.unit); return !!vd && sameDim(vd, dim) && !v.name.startsWith('within what'); });
+      if (!carried.length) { gap(pe.why.want, pe.id, cid, `what ${pe.id} carries from ${r.id} is not derived, so what ${r.id} gives at most (${lim.name}) cannot be checked`); continue; }
+      const needs = Math.max(...carried.map((v) => toSI(v.value, v.unit)));
+      if (needs > most) gap(pe.why.want, pe.id, cid, `the path needs ${needs} ${lim.unit} and ${r.id} gives at most ${lim.value} (${lim.name})`);
+      else put(pe, { name: `within what ${r.id} gives`, value: lim.value, unit: lim.unit, from: lim.name });
+    }
+  }
   const unused = intent.regions.flatMap((r) => [...Object.entries(r.quantities), ...Object.entries(r.produces ?? {})].filter(([sym]) => !used.has(`${r.id}.${sym}`)).map(([sym, l]) => ({ region: r.id, sym, name: l.name })));
   return { intent: intent.name, elements, gaps, unused };
 }

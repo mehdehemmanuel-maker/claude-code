@@ -28,6 +28,7 @@ export const CONST = {
   MCO2: measured('molar mass of CO₂', 44.009, 'g/mol', 'IUPAC atomic weights'),
   MCaO: measured('molar mass of CaO', 56.077, 'g/mol', 'IUPAC atomic weights'),
   REV: fundamental('one revolution', 1, 'rev', 'mathematics: 2π rad'),
+  Tcmb: measured('temperature of the cosmic microwave background: the coldest anything sees', 2.72548, 'K', 'Fixsen 2009, ApJ 707, 916 (COBE/FIRAS): 2.72548 ± 0.00057 K', 0.00057),
 };
 
 /** A bound of a law's domain: a rough physical limit, declared with its grounds. */
