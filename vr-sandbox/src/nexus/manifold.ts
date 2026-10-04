@@ -31,6 +31,7 @@ import { gravity } from './field';
 import { CONST } from './book/constants';
 import { phaseAt, vapourPressure } from './phase';
 import { dimOf, sameDim } from './dimension';
+import { regimeAt, type Regime } from './tuner';
 import { toSI } from '../ganglia/units';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
@@ -72,7 +73,9 @@ export interface Element {
 
 export interface Gap { want: string | null; element: string | null; lacks: string; carrier: string | null }
 
-export interface Structure { intent: string; elements: Element[]; gaps: Gap[]; unused: { region: string; sym: string; name: string }[] }
+/** The regime the intent's sizes lie in, as the tuner derives it: what the rules may assume there, and what they may not. */
+export interface IntentRegime { L: number; T: number | null; from: string; state: Regime['state']; near: string[] }
+export interface Structure { intent: string; elements: Element[]; gaps: Gap[]; unused: { region: string; sym: string; name: string }[]; regimes: IntentRegime[] }
 
 /** A region's potential of one carrier over time: one value, or the range of the values it holds. */
 interface State { region: string; lo: number; hi: number; leaves: Leaf[] }
@@ -1097,10 +1100,43 @@ export function generate(intent: Intent): Structure {
     }
   }
   const unused = intent.regions.flatMap((r) => [...Object.entries(r.quantities), ...Object.entries(r.produces ?? {})].filter(([sym]) => !used.has(`${r.id}.${sym}`)).map(([sym, l]) => ({ region: r.id, sym, name: l.name })));
-  return { intent: intent.name, elements, gaps, unused };
+  const regimes = regimesOf(intent, gap, (r, sym) => used.add(`${r}.${sym}`));
+  const unread = unused.filter((u) => !used.has(`${u.region}.${u.sym}`));
+  return { intent: intent.name, elements, gaps, unused: unread, regimes };
 }
 
 /** The structure as it reads: each element with its rule and the wants it serves, then the gaps and what went unread. */
+/**
+ * The regime of an intent, derived by the tuner at the smallest and the largest size the intent states, at the
+ * temperature its site holds (the coldest energy reservoir; none stated, the universe's floor). The rules read matter
+ * by its averaged properties and move it by classical balances; where the derived state says those do not hold, the
+ * lack is a regime gap: the relations must be generated at that regime, not read from the kept ones.
+ */
+function regimesOf(intent: Intent, gap: (want: string | null, element: string | null, carrier: string | null, lacks: string) => void, read: (region: string, sym: string) => void): IntentRegime[] {
+  const sizes: { L: number; from: string }[] = [];
+  const length = (unit: string) => { try { const d = dimOf(unit); return d[1] === 1 && d.every((x, i) => i === 1 || x === 0); } catch { return false; } };
+  for (const r of intent.regions) for (const [sym, l] of Object.entries(r.quantities)) if (l.value && length(l.unit)) { sizes.push({ L: Math.abs(toSI(l.value, l.unit)), from: `${l.name} [${r.id}]` }); read(r.id, sym); }
+  for (const w of intent.wants) for (const b of [w.lo, w.hi]) if (b?.value && length(b.unit)) sizes.push({ L: Math.abs(toSI(b.value, b.unit)), from: `${w.id}: ${b.name}` });
+  if (!sizes.length) return [];
+  const temps = intent.regions.filter((r) => r.environment).flatMap((r) => (r.holds ?? []).filter((sym) => r.carriers?.[sym] === 'energy').map((sym) => r.quantities[sym]!)).filter((l) => l.value !== null).map((l) => toSI(l.value!, l.unit));
+  const T = temps.length ? Math.min(...temps) : null;
+  const ends = [sizes.reduce((a, b) => (b.L < a.L ? b : a)), sizes.reduce((a, b) => (b.L > a.L ? b : a))].filter((x, i, a) => a.findIndex((y) => y.L === x.L) === i);
+  const out: IntentRegime[] = [];
+  for (const { L, from } of ends) {
+    const r = regimeAt(L, T);
+    out.push({ L, T, from, state: r.state, near: r.near.map((c) => `${c.boundary} at ${Number(c.L.value!.toPrecision(3))} m`) });
+    const at = `at ${Number(L.toPrecision(3))} m (${from})`;
+    // below the length the constants set by themselves, no kept law holds, so nothing else said about the regime does
+    if (r.state.lawless) { gap(null, null, null, `the regime ${at}: below the length the constants set by themselves, where a confined energy's own gravity is as large as it; no kept law describes that, so nothing derived there holds`); continue; }
+    if (!r.structures.length) gap(null, null, null, `the regime ${at}: at ${T ?? 'the universe\'s floor of'} K nothing settles, so there is no matter that holds together, and the kept matters the rules read are matter that does`);
+    if (r.state.relativistic) gap(null, null, null, `the regime ${at}: confining a particle costs more than its rest energy, so particles are made and unmade; no rule generates that regime`);
+    else if (r.state.quantum) gap(null, null, null, `the regime ${at}: the lightest particle's confinement exceeds the heat, so its states are discrete; the averaged properties the rules read are not what holds there`);
+    if (r.state.crushed) gap(null, null, null, `the regime ${at}: a unit's gravity in a body this large exceeds the unit's own binding, so its matter does not bear it, and the rules read its strength as if it did`);
+    if (r.state.collapses) gap(null, null, null, `the regime ${at}: a body this large of the matter found is within its own gravitational radius`);
+  }
+  return out;
+}
+
 export function describe(s: Structure): string {
   const lines = [`${s.intent}: ${s.elements.length} elements, ${s.gaps.length} gaps, ${s.unused.length} quantities unread`];
   for (const e of s.elements) lines.push(`  [${e.kind}] ${e.says}${e.values.length ? ` {${e.values.map((v) => `${v.name} = ${Number(v.value.toPrecision(4))} ${v.unit}`).join('; ')}}` : ''}  <- ${e.why.rule} (${[e.why, ...e.also].map((l) => l.want ?? '-').filter((x, i, a) => a.indexOf(x) === i).join(', ')})`);
@@ -1128,6 +1164,7 @@ const SIGNATURES: [RegExp, string][] = [
   [/about no carrier: the language has no rule/, 'a want about no carrier'],
   [/with the site's friction|gives at most/, 'a lawful refusal: the want exceeds what the site allows'],
   [/nothing in the site receives/, 'the site does not say where it goes'],
+  [/^the regime /, 'scale: the regime the rules assume does not hold at the intent\'s sizes'],
 ];
 
 /** What an unread quantity is: classified by its dimension and the carrier it is about. */

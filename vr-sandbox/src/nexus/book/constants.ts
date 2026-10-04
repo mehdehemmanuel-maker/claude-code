@@ -28,6 +28,8 @@ export const CONST = {
   MCO2: measured('molar mass of CO₂', 44.009, 'g/mol', 'IUPAC atomic weights'),
   MCaO: measured('molar mass of CaO', 56.077, 'g/mol', 'IUPAC atomic weights'),
   REV: fundamental('one revolution', 1, 'rev', 'mathematics: 2π rad'),
+  me: measured('mass of the electron', 9.1093837015e-31, 'kg', 'CODATA 2018: 9.1093837015(28)e-31 kg', 2.8e-40),
+  mu: measured('atomic mass constant: a twelfth of a carbon-12 atom, about one nucleon', 1.66053906660e-27, 'kg', 'CODATA 2018: 1.66053906660(50)e-27 kg', 5.0e-37),
   Tcmb: measured('temperature of the cosmic microwave background: the coldest anything sees', 2.72548, 'K', 'Fixsen 2009, ApJ 707, 916 (COBE/FIRAS): 2.72548 ± 0.00057 K', 0.00057),
 };
 

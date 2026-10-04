@@ -14,6 +14,7 @@ import { BOOK } from './book';
 import { dimText } from './dimension';
 import { keptMatters } from './matter';
 import { leaf, leavesOf, type Leaf } from './term';
+import { reach } from './tuner';
 import type { Intent, Region, Want } from './want';
 
 /** A seeded stream of numbers in [0, 1) (mulberry32): the same seed, the same stream. */
@@ -32,6 +33,8 @@ export function stream(seed: number): () => number {
 export interface Span { dim: string; unit: string; lo: number; hi: number; seen: number }
 
 const SI: Record<string, string> = {};
+/** The sizes the scale tuner reaches, derived once. */
+const ladderReach = reach();
 /** What the kept laws cover, by dimension: every worked example's inputs and output, and every domain bound. */
 export function knownSpans(): Map<string, Span> {
   const spans = new Map<string, Span>();
@@ -109,6 +112,12 @@ export function drawIntent(seed: number, bar = 2, spans = knownSpans()): Drawn {
   const matter = pick(keptMatters());
   const m = `mass of ${matter.id}`;
   for (const id of people) regions.push({ id, by: who, environment: false, adjoins: [...people.filter((x) => x !== id), ...reservoirs.map((x) => x.id)], quantities: {} });
+  // a size for the first region, drawn over all the tuner reaches, from the length the constants set by themselves to
+  // its largest boundary, widened by the bar: the regime at that size is the generator's to find, not the draw's
+  if (r() < 0.5) {
+    const lo = Math.log10(ladderReach.least) - bar, hi = Math.log10(ladderReach.most) + bar;
+    regions.find((x) => x.id === people[0])!.quantities.size = drawnLeaf(`size of ${people[0]}`, 10 ** (lo + r() * (hi - lo)), 'm', 'a size anywhere the tuner reaches');
+  }
   const n = 2 + Math.floor(r() * 4);
   for (let w = 0; w < n; w++) {
     const form = pick(FORMS), region = pick(people), wid = `want ${w + 1}`;

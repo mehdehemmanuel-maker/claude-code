@@ -7,6 +7,7 @@ import { drawIntent, knownSpans } from '../../src/nexus/draw';
 import { parseUnit } from '../../src/ganglia/units';
 import { dimText } from '../../src/nexus/dimension';
 import { runRound } from '../../src/nexus/round';
+import { reach } from '../../src/nexus/tuner';
 
 describe('a round draws its own intents', () => {
   it('the same seed draws the same intent, another seed another: a round can be run again exactly', () => {
@@ -21,6 +22,13 @@ describe('a round draws its own intents', () => {
       const leaves = [intent.duration, ...intent.regions.flatMap((r) => Object.values(r.quantities)), ...intent.wants.flatMap((w) => [w.lo, w.hi].filter((x) => !!x))];
       for (const l of leaves) {
         if (!l!.value) continue;
+        // a size is drawn over what the scale tuner reaches, not over what the book's examples cover
+        if (l!.name.startsWith('size of ')) {
+          const { least, most } = reach();
+          expect(Math.log10(l!.value)).toBeGreaterThanOrEqual(Math.log10(least) - bar);
+          expect(Math.log10(l!.value)).toBeLessThanOrEqual(Math.log10(most) + bar);
+          continue;
+        }
         const p = parseUnit(l!.unit), sp = spans.get(dimText(p.dim))!;
         const v = Math.abs(l!.value * p.scale);
         // a growth target is its start times up to a million; a band's ends sit within a tenth of the drawn value

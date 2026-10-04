@@ -11,6 +11,7 @@
 //   {"held":    {"place": "...", "by": "who says the ground holds it"}}
 //   {"withdraw":{"id": "...", "why": "..."}}
 //   {"evolve": true}   the places not at rest, and all they can strike, stepped in the rigid-body kernel until still
+//   {"scale": {"at": 1e-10, "T": 300}}   the regime at a size (metres) and a temperature (kelvin), as the tuner derives it
 //   {"why": "place/quantity"}        {"gaps": true} (or "all")        {"state": true}
 
 import { lawByHash, lawById } from './book';
@@ -20,12 +21,13 @@ import { bound, instance, type Change, type Gap, type Runtime } from './runtime'
 import { leaf } from './term';
 import { GRAVITY, gravityAxis } from './place';
 import { explain } from './why';
+import type { Regime } from './tuner';
 import { dimOf, sameDim } from './dimension';
 
 const fmt = (v: number | null) => (v === null ? '–' : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(4) : String(Number(v.toPrecision(6))));
 
 /** One line in: a contribution, or a question of the state. */
-export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { evolve: true } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
+export function read(line: string): { contribution: Contribution } | { contributions: Contribution[] } | { evolve: true } | { scale: { L: number; T: number | null } } | { ask: 'why'; at: string } | { ask: 'gaps'; all: boolean } | { ask: 'state' } {
   const m = JSON.parse(line) as Record<string, any>;
   if (m['give']) { const g = m['give']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'given', by: g.by ?? 'the person', grounds: g.grounds ?? 'given on the text channel' }) } }; }
   if (m['measure']) { const g = m['measure']; return { contribution: { kind: 'leaf', at: g.at, leaf: leaf(g.name, g.value, g.unit, { class: 'measured', source: g.by, window: g.window ?? 'one reading' }, g.uncertainty) } }; }
@@ -45,6 +47,7 @@ export function read(line: string): { contribution: Contribution } | { contribut
   if (m['held']) return { contribution: { kind: 'held', place: m['held'].place, by: m['held'].by ?? 'the person' } };
   if (m['withdraw']) return { contribution: { kind: 'withdraw', id: m['withdraw'].id, why: m['withdraw'].why } };
   if (m['evolve']) return { evolve: true };
+  if (m['scale']) return { scale: { L: m['scale'].at, T: m['scale'].T ?? null } };
   if (m['why']) return { ask: 'why', at: m['why'] };
   if (m['gaps']) return { ask: 'gaps', all: m['gaps'] === 'all' };
   if (m['state']) return { ask: 'state' };
@@ -111,4 +114,23 @@ export function answer(rt: Runtime, q: { ask: 'why'; at: string } | { ask: 'gaps
   if (q.ask === 'why') { const n = rt.why(q.at); return n ? explain(n).split('\n').map((l) => l.replace(/law ([0-9a-f]{16})/g, (m, h: string) => { const law = lawByHash(h); return law ? `${law.id}: ${law.formula} (${law.source.cite})` : m; })) : [`nothing binds ${q.at}`]; }
   if (q.ask === 'gaps') { const gs = rt.gaps(); return gs.length ? showGaps(rt, gs, q.all) : ['no gaps']; }
   return rt.addresses().sort().map((a) => { const d = rt.binding(a)!; return `${a} = ${fmt(d.value)} ${d.unit} [${how(d)}]`; });
+}
+
+/** A regime as lines: what the state at that size must say, what dominates, its clocks, what changes near it, what observing it costs. */
+export function showRegime(r: Regime): string[] {
+  const eV = 1.602176634e-19, f = (x: number) => Number(x.toPrecision(3)).toExponential(2);
+  const s = r.state, yes = (b: boolean | null, t: string, n: string) => (b === null ? `${t}: undecided` : b ? t : n);
+  const acting = r.energies.filter((e) => e.f.kind !== 'rest').slice(0, 4);
+  const thermal = r.times.filter((t) => t.tempExponent !== 0);
+  return [
+    `regime at ${f(r.L)} m${r.T === null ? '' : `, ${r.T} K`}${s.lawless ? ': below the length the constants set by themselves; no kept law holds there, and what follows is only what the laws would say if they did' : ''}`,
+    `  state: ${[yes(s.bound, 'bound', 'free'), yes(s.quantum, 'quantum', 'classical'), s.relativistic ? 'particles are made and unmade' : 'particles are kept', yes(s.selfHeld, 'a body holds itself together', 'no body holds itself'), yes(s.crushed, 'gravity crushes its matter', 'its matter bears its gravity'), yes(s.collapses, 'it collapses within its own gravity', 'it stands outside its gravitational radius')].join('; ')}`,
+    `  acting: ${acting.map((e) => `${e.f.text} = ${f(e.E / eV)} eV`).join(', ')}`,
+    `  negligible: ${r.negligible.length} energies more than a hundredfold below the largest`,
+    `  clocks: fastest ${r.times[0]!.of} = ${f(r.times[0]!.t)} s; slowest ${r.times.at(-1)!.of} = ${f(r.times.at(-1)!.t)} s; light crosses it in ${f(r.L / 299792458)} s`,
+    `  with temperature: ${thermal.length ? thermal.slice(0, 3).map((t) => `${t.of} as T^${t.tempExponent.toFixed(2)}`).join(', ') : 'no clock moves'}; every other clock does not move`,
+    `  near: ${r.near.length ? r.near.map((c) => `${c.boundary} at ${f(c.L.value!)} m`).join(', ') : 'no boundary within a decade'}`,
+    `  structures: ${r.structures.length ? r.structures.map((x) => `settled at ${f(x.size.value!)} m, bound by ${f(x.binding.value! / eV)} eV`).join('; ') : 'none: nothing holds together at this temperature'}`,
+    `  to resolve it: light of ${f(r.observer.byLight / eV)} eV or electrons of ${f(r.observer.byElectron / eV)} eV, ${r.observer.weakestBinding === null ? 'with no structure there to break' : `which ${r.observer.disturbs ? 'break' : 'leave whole'} the most fragile structure (${f(r.observer.weakestBinding / eV)} eV)`}`,
+  ];
 }

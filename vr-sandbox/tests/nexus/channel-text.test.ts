@@ -17,7 +17,7 @@ const lines = [
   ...['block A', 'block B', 'a board'].map((p) => `{"measure": {"at": "${p}/density of its matter", "name": "density of Douglas-fir", "value": 530, "unit": "kg/m^3", "by": "USDA Wood Handbook"}}`),
 ];
 function feed(rt: Runtime, ls: string[]): string[] {
-  return ls.flatMap((l) => { const m = read(l); return 'contribution' in m ? project(rt, rt.admit(m.contribution)) : 'contributions' in m ? m.contributions.flatMap((c) => project(rt, rt.admit(c))) : 'evolve' in m ? [] : answer(rt, m); });
+  return ls.flatMap((l) => { const m = read(l); return 'contribution' in m ? project(rt, rt.admit(m.contribution)) : 'contributions' in m ? m.contributions.flatMap((c) => project(rt, rt.admit(c))) : 'evolve' in m || 'scale' in m ? [] : answer(rt, m); });
 }
 
 describe('the text channel shows what the state holds, what it lacks and what that lack bears on', () => {
