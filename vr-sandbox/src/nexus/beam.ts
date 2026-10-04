@@ -9,9 +9,9 @@ import { getMaterial } from '../data/materials';
 import { LUMBER } from '../parts/registry';
 import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
 import { coarse, coverage, domain, field, type Field } from './domain';
-import { coordinate, ledger, restOn, restStability, standOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
+import { coordinate, ledger, postTo, restOn, restStability, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Observer, type RigidDomain } from './field';
+import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Ground, type Observer, type RigidDomain } from './field';
 import { apply, law, type Law } from './law';
 import { compare, Journal, type Comparison } from './observe';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
@@ -27,8 +27,8 @@ export interface BeamIntent {
   /** The thing carried is this long along the beam, and this wide across it. */
   patch: Leaf;
   across: Leaf;
-  /** The supports the person has. */
-  supportHeight: Leaf;
+  /** Where the beam's underside is to be, above the frame origin; the supports are posts cut to reach it from their own ground. */
+  underside: Leaf;
   supportDepth: Leaf;
   /** Sag under span / this. */
   sagRatio: Leaf;
@@ -119,6 +119,7 @@ export function beamSystem(intent: BeamIntent, mat: MaterialLeaves, g: Derivatio
 
 export interface BeamConfiguration {
   frame: Frame;
+  ground: Ground;
   bodies: { beam: Prism; supports: [Prism, Prism]; load: Prism };
   couplings: RestCoupling[];
   reactions: [Derivation, Derivation];
@@ -132,21 +133,22 @@ export interface BeamConfiguration {
 }
 
 /** Construction: the bodies and every coordinate as a coupling solution in the declared frame. */
-export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record<string, Derivation>, contract: RigidContract, frame: Frame, groundAt: (x: Derivation, z: Derivation) => Derivation, obs: Observer): BeamConfiguration {
+export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record<string, Derivation>, contract: RigidContract, frame: Frame, ground: Ground, obs: Observer): BeamConfiguration {
   const need = (sym: string) => { const d = bound[sym]; if (!d) throw new Error(`${sym} is not bound: nothing is built from a free variable`); return d; };
   const steel = materialLeaves('steel.a36');
   const zero = coordinate('across: the frame\'s centre line', frame, 'z', neg(variable('o', 'm')), {});
   const zeroX = coordinate('along: mid-span', frame, 'x', neg(variable('o', 'm')), {});
   const L = need('L'), Lt = need('Lt'), b = need('b'), h = need('h'), w = need('w');
   const beam: Prism = { name: 'the beam', extents: { x: Lt, y: h, z: b }, material: mat.id, density: mat.density };
-  const H = ofLeaf(intent.supportHeight), D = ofLeaf(intent.supportDepth);
+  const underside = coordinate('the beam\'s underside above the frame origin', frame, 'y', variable('u', 'm', 'underside'), { u: ofLeaf(intent.underside) });
+  const D = ofLeaf(intent.supportDepth);
   const supports: [Prism, Prism] = [
-    { name: 'the left support', extents: { x: contract.supportWidth, y: H, z: D }, material: contract.words.supportMaterial, density: materialLeaves(contract.words.supportMaterial).density },
-    { name: 'the right support', extents: { x: contract.supportWidth, y: H, z: D }, material: contract.words.supportMaterial, density: materialLeaves(contract.words.supportMaterial).density },
+    { name: 'the left support', extents: { x: contract.supportWidth, y: underside, z: D }, material: contract.words.supportMaterial, density: materialLeaves(contract.words.supportMaterial).density },
+    { name: 'the right support', extents: { x: contract.supportWidth, y: underside, z: D }, material: contract.words.supportMaterial, density: materialLeaves(contract.words.supportMaterial).density },
   ];
   const Lv = variable('L', 'm', 'span');
   const xs = [coordinate('x of the left support: half a span before mid-span', frame, 'x', neg(div(Lv, k(2))), { L }), coordinate('x of the right support: half a span past mid-span', frame, 'x', div(Lv, k(2)), { L })];
-  supports.forEach((s, i) => standOn(s, groundAt(xs[i]!, zero), xs[i]!, zero));
+  supports.forEach((s, i) => postTo(s, ground.height(xs[i]!, zero), underside, xs[i]!, zero));
   const couplings: RestCoupling[] = [];
   const tops = supports.map(topOf);
   // the beam rests on both: one coupling each, the same boundary height by symmetry (checked by the ledger below)
@@ -163,7 +165,7 @@ export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record
   const rigid = rigidDomain(mat.E, mat.density, Lt, obs);
   const rests = evaluate('rests: the boundaries carry the weight, so the configuration is in static equilibrium', le(variable('r', 'N', 'residual'), variable('tol', 'N', 'tolerance')), { r: balance.residual, tol: evaluate('a tolerance of nothing', mul(k(1e-9), variable('W', 'N')), { W: need('P') }, { unit: 'N', law: 'rounding' }) }, { unit: '1', law: 'statics: a balanced ledger is equilibrium' });
   const stability = { 'the load on the beam': restStability(load, beam), 'the beam on the left support': restStability(beam, supports[0]), 'the beam on the right support': restStability(beam, supports[1]) };
-  return { frame, bodies: { beam, supports, load }, couplings, reactions: [R, R], balance, rests, stability, totalLength: Lt, rigid };
+  return { frame, ground, bodies: { beam, supports, load }, couplings, reactions: [R, R], balance, rests, stability, totalLength: Lt, rigid };
 }
 
 export interface Slice {
@@ -203,13 +205,13 @@ export function momentField(frame: Frame, bound: Record<string, Derivation>, spa
 }
 
 /** The slice end to end. Without a kernel instance it stops after construction. */
-export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt): Slice {
+export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, catalogue: Option[], J?: Jolt, groundOf: (frame: Frame, by: string) => Ground = (frame, by) => flatGround(frame, by, 'a level floor')): Slice {
   const journal = new Journal();
   const frame = declareFrame(intent.by, 'x along the span, y opposite gravity, z across; origin on the ground midway between the supports');
   const obs = observer('rigid-body kernel');
   const contract = rigidContract();
   const g = gravity();
-  const ground = flatGround(frame, intent.by, 'the supports stand on a level floor');
+  const ground = groundOf(frame, intent.by);
   const semantics = beamSystem(intent, material, g, contract);
   for (const d of Object.values(semantics.system.bindings)) journal.append({ kind: 'record', record: d });
   const open = solve(semantics.system);
@@ -222,12 +224,12 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
   if (choice.pick) {
     const bound = choice.pick.solution.bound;
     for (const d of Object.values(bound)) journal.append({ kind: 'record', record: d });
-    configuration = construct(intent, material, bound, contract, frame, ground.height, obs);
+    configuration = construct(intent, material, bound, contract, frame, ground, obs);
     for (const body of [configuration.bodies.beam, ...configuration.bodies.supports, configuration.bodies.load]) for (const d of Object.values(body.centre!)) journal.append({ kind: 'record', record: d });
     journal.append({ kind: 'record', record: configuration.balance.residual });
     journal.append({ kind: 'record', record: configuration.rigid.holds });
     if (J && configuration.rigid.rigid) {
-      realization = realizeRigid(J, contract, { ...configuration.bodies, totalLength: configuration.totalLength, patch: bound['w']!, gravity: g, ground: ground.height(frame.origin.x, frame.origin.z) }, obs);
+      realization = realizeRigid(J, contract, { ...configuration.bodies, totalLength: configuration.totalLength, patch: bound['w']!, gravity: g, ground }, obs);
       // the moment as a field over the span, with the span as the realization holds it (reaction lines within the knife edges)
       const Lr = evaluate('span as realized', add(variable('L', 'm'), variable('o', 'm')), { L: bound['L']!, o: contract.reactionOffset }, { unit: 'm', law: 'the span between reaction lines: the centre distance plus the knife-edge offset' });
       const T1 = apply(FIRST_PERIOD, { L: bound['L']!, E: bound['E']!, I: bound['I']!, rho: bound['rho']!, A: bound['A']!, h: bound['h']! });
@@ -265,8 +267,8 @@ export function partXXV(by = 'the person'): BeamIntent {
     span: given('span between the supports', 1.2, 'm'),
     patch: given('length of the thing carried, along the beam', 0.1, 'm'),
     across: given('width of the thing carried, across the beam', 0.3, 'm'),
-    supportHeight: given('height of the supports', 0.5, 'm', 'the supports the person has'),
-    supportDepth: given('depth of the supports across the beam', 0.2, 'm', 'the supports the person has'),
+    underside: given('height of the beam\'s underside above the frame origin', 0.5, 'm', 'where the person wants the beam'),
+    supportDepth: given('depth of the supports across the beam', 0.2, 'm', 'the posts the person cuts'),
     sagRatio: leaf('sag ratio', 300, '1', { class: 'assumed', by, grounds: 'span/300 is the customary serviceability limit for perceptible sag in floors (building codes; a declared limit, not a law)' }),
     factor: leaf('factor on strength', 3, '1', { class: 'assumed', by, grounds: 'clear-wood strength is a mean; a factor of three covers grade, moisture and duration of load for a single member (the NDS adjustment factors compound to about that for sawn lumber)' }),
   };

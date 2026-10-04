@@ -75,6 +75,8 @@ describe('the beam slice: construction', () => {
     expect(c.bodies.supports[0].centre!.x.value).toBeCloseTo(-0.6, 12);
     expect(c.bodies.supports[1].centre!.x.value).toBeCloseTo(0.6, 12);
     expect(c.bodies.beam.centre!.y.value).toBeCloseTo(0.5 + 0.0005 + 0.019, 12);
+    expect(c.bodies.supports[0].extents.y.value).toBeCloseTo(0.5, 12);
+    expect(c.bodies.supports[0].extents.y.law).toMatch(/a post reaches from the ground/);
     expect(c.bodies.load.centre!.y.value).toBeCloseTo(0.5 + 0.0005 + 0.038 + 0.0005 + 60 / (7850 * 0.1 * 0.3) / 2, 9);
     expect(c.bodies.beam.extents.x.value).toBeCloseTo(1.206, 12);
   });

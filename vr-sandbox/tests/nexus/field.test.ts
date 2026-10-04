@@ -22,7 +22,10 @@ describe('fields and the observer', () => {
     const ground = flatGround(frame, 'test', 'a level floor');
     const h = ground.height(given('x', 0.3, 'm'), given('z', 0, 'm'));
     expect(h.value).toBe(0);
-    expect(leavesUnder(h).map((l) => l.origin.class)).toEqual(['configuration']);
+    const classes = leavesUnder(h).map((l) => l.origin.class);
+    expect(classes).toContain('configuration');
+    expect(classes.every((c) => c === 'configuration' || c === 'fundamental')).toBe(true);
+    expect(cites(h, ground.field.hash)).toBe(true);
   });
 
   it('the rigid domain is computed from the window: a timber beam is rigid at 90 Hz, a kilometre of it is not', () => {

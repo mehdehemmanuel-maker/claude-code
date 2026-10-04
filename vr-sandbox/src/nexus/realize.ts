@@ -12,7 +12,7 @@ import { CONTACT_TOLERANCE } from '../ganglia/tree/gate';
 import { PhysicsWorld } from '../physics/world';
 import type { Prism } from './coupling';
 import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from './evaluate';
-import type { Observer } from './field';
+import type { Ground, Observer } from './field';
 import { add, and, div, k, leaf, mul, sub, variable, type Leaf } from './term';
 import { resolution, type Resolution } from './domain';
 
@@ -33,6 +33,9 @@ export interface RigidContract {
   positionResolution: Derivation;
   /** Segments a breakable member is cut into: stations at Lt / n. */
   segments: Derivation;
+  /** The ground field is sampled onto the kernel's height grid: this far across, at this cell. */
+  terrainSpan: Derivation;
+  terrainCell: Derivation;
   /** Still: slower than this, linear and angular, for the observer's quiet time (the stand's rule). */
   stillSpeed: Derivation;
   stillTurn: Derivation;
@@ -54,6 +57,8 @@ export function rigidContract(): RigidContract {
     momentError: ofLeaf(leaf('bond moment error', 0.05, '1', { class: 'measured', source: 'tests/conformance/fracture.test.ts: bond bending moments on a plank over two supports hold within 5 % of statics' })),
     positionResolution: c('position resolution', CONTACT_TOLERANCE, 'm', 'ganglia/tree/gate.ts CONTACT_TOLERANCE: the kernel\'s penetration slop'),
     segments: c('segments of a breakable member', 6, '1', 'six segments: stations at Lt/6; the station under the load patch is not observed (how a resting mass shares itself between two segments at a seam is indeterminate)'),
+    terrainSpan: c('terrain span', 8, 'm', 'the kernel\'s height grid covers eight metres square around the origin: more than the slice reaches'),
+    terrainCell: c('terrain cell', 0.1, 'm', 'the kernel\'s height grid samples the ground field every 0.1 m; between samples the terrain is linear'),
     stillSpeed: c('still: linear speed under', 0.001, 'm/s', 'the stand\'s rule (kept physics/stand.ts): still is under 1 mm/s'),
     stillTurn: c('still: angular speed under', 0.01, 'rad/s', 'the stand\'s rule (kept physics/stand.ts): still is under 0.01 rad/s'),
     unrealized: [
@@ -62,7 +67,7 @@ export function rigidContract(): RigidContract {
     ],
     words: { supportMaterial: 'polymer.ptfe', beamKind: 'plate', blockKind: 'block' },
   };
-  return { ...contract, hash: [contract.clearance, contract.supportWidth, contract.momentError, contract.positionResolution, contract.segments].map((d) => d.hash).join('.') };
+  return { ...contract, hash: [contract.clearance, contract.supportWidth, contract.momentError, contract.positionResolution, contract.segments, contract.terrainCell].map((d) => d.hash).join('.') };
 }
 
 export interface BodyBinding { name: string; kernelId: string; role: 'beam' | 'support' | 'load' }
@@ -90,7 +95,7 @@ export interface Realization {
   events: string[];
 }
 
-export interface BeamBodies { beam: Prism; supports: [Prism, Prism]; load: Prism; totalLength: Derivation; patch: Derivation; gravity: Derivation; ground: Derivation }
+export interface BeamBodies { beam: Prism; supports: [Prism, Prism]; load: Prism; totalLength: Derivation; patch: Derivation; gravity: Derivation; ground: Ground }
 
 const val = (d: Derivation, what: string) => { if (d.value === null) throw new Error(`${what}: ${d.name} has no value (${d.status}); nothing is realized from an unknown`); return d.value; };
 
@@ -100,8 +105,18 @@ export function realizeRigid(J: Jolt, c: RigidContract, bodies: BeamBodies, obs:
   const g = val(bodies.gravity, 'gravity');
   const world = new PhysicsWorld(J, { ...doc.sim, gravity: [0, -g, 0], airDrag: false });
   const materials = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
-  const groundY = val(bodies.ground, 'ground');
-  world.apply({ op: 'environment', boxes: [{ half: [50, 0.5, 50], pose: { p: [0, groundY - 0.5, 0], q: [0, 0, 0, 1] }, material: 'concrete.c30' }], materials });
+  // the ground field projected onto the kernel: flat within the position resolution, a floor slab; else its height grid
+  const span = val(c.terrainSpan, 'terrain span'), cell = val(c.terrainCell, 'terrain cell');
+  const nCells = Math.round(span / cell) + 1;
+  const heights = new Float32Array(nCells * nCells);
+  const at = (v: number, name: string) => ofLeaf(leaf(name, v, 'm', { class: 'configuration', source: `${c.name}: a node of its height grid` }));
+  let lo = Infinity, hi = -Infinity;
+  for (let zi = 0; zi < nCells; zi++) for (let xi = 0; xi < nCells; xi++) {
+    const h = val(bodies.ground.height(at(-span / 2 + xi * cell, 'grid x'), at(-span / 2 + zi * cell, 'grid z')), 'ground');
+    heights[zi * nCells + xi] = h; lo = Math.min(lo, h); hi = Math.max(hi, h);
+  }
+  if (hi - lo < val(c.positionResolution, 'resolution')) world.apply({ op: 'environment', boxes: [{ half: [50, 0.5, 50], pose: { p: [0, lo - 0.5, 0], q: [0, 0, 0, 1] }, material: 'concrete.c30' }], materials });
+  else world.apply({ op: 'terrain', field: { n: nCells, size: span, heights }, material: getMaterial('concrete.c30') });
   const ids = seededIds(1);
   const n = val(c.segments, 'segments');
   const place = (p: Prism, part: Omit<Parameters<typeof makePart>[0], 'pose'>): Part => {

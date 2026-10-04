@@ -54,6 +54,17 @@ export function restStability(above: Prism, below: Prism): RestStability {
   return { hcm, halfX: half('x'), halfZ: half('z') };
 }
 
+/**
+ * A post cut to its own ground: standing at (x, z), it reaches from the ground there up to `top`, so its height is
+ * a coupling solution of the ground field and the height it must reach.
+ */
+export function postTo(post: Prism, groundAt: Derivation, top: Derivation, x: Derivation, z: Derivation): { extent: Derivation; centreY: Derivation } {
+  const extent = evaluate(`height of ${post.name}: from its ground to the top it reaches`, sub(variable('top', 'm'), variable('g', 'm', 'ground')), { top, g: groundAt }, { unit: 'm', law: 'coupling: a post reaches from the ground under it to the boundary it carries' });
+  post.extents = { ...post.extents, y: extent };
+  const centreY = standOn(post, groundAt, x, z);
+  return { extent, centreY };
+}
+
 /** Place a body standing on the ground at (x, z). */
 export function standOn(body: Prism, ground: Derivation, x: Derivation, z: Derivation): Derivation {
   const centreY = evaluate(`height of ${body.name} standing on the ground`, add(Y, div(H, k(2))), { y: ground, h: body.extents.y }, { unit: 'm', law: 'coupling: stand = ground + half the height' });

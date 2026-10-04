@@ -43,7 +43,10 @@ nothing of its architecture is extended again.
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
   measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
   1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved,
-  because the rigid realization says it cannot see it, not unknown. The first growth of the language came from the
+  because the rigid realization says it cannot see it, not unknown. The environment test of Part XX runs: the same intent on a flat
+  field, a slope and a field with a hole; the ground is a field over x and z, the supports are posts cut to their own
+  ground, the design is identical by hash on all three, and every record that differs between the fields rests on the
+  ground field or on a kernel measurement. The first growth of the language came from the
   kernel: a tall load that the static derivation said rests never settled; eight realizations of the same intent
   with the load's footprint varied gave the observations; over the rest coupling's quantities (centre of mass above
   the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group

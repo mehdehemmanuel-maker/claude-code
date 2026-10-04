@@ -8,7 +8,8 @@ import { STANDARD_GRAVITY } from '../data/materials';
 import { BAR_WAVE_SPEED } from './book';
 import { evaluate, ofLeaf, type Derivation, type Window } from './evaluate';
 import { apply } from './law';
-import { div, le, leaf, variable, type Leaf } from './term';
+import { div, le, leaf, variable, type Term, type Var } from './term';
+import { domain, field, sample, type Field } from './domain';
 
 export interface Frame {
   /** Who declared it and how its axes are laid. */
@@ -30,20 +31,22 @@ export function declareFrame(by: string, declaration: string): Frame {
 export const gravity = (): Derivation => ofLeaf(leaf('standard gravity', STANDARD_GRAVITY, 'm/s^2', { class: 'fundamental', source: 'ISO 80000-3: standard acceleration of free fall, 9.80665 m/s² (a defined conventional value)' }));
 
 export interface Ground {
-  /** The ground's height in the frame at (x, z): a field query, each answer a record. */
+  /** The ground as a field over x and z in the frame. */
+  field: Field;
+  /** The ground's height at (x, z): a field query, each answer a record citing the field. */
   height(x: Derivation, z: Derivation): Derivation;
-  declaration: Leaf;
 }
 
-/** A flat ground at the frame's y origin: declared, with who says so. */
-export function flatGround(frame: Frame, by: string, grounds: string): Ground {
-  const declaration = leaf('ground height above the frame origin', 0, 'm', { class: 'given', by, grounds });
-  const term = variable('y0', 'm', 'frame origin y');
-  return {
-    declaration,
-    height: (x, z) => { void x; void z; return evaluate('ground height', term, { y0: frame.origin.y }, { law: declaration.hash, unit: 'm' }); },
-  };
+/** A ground declared as a term over the frame's x and z (its leaves given by whoever declares it), with who says so. */
+export function groundField(frame: Frame, by: string, grounds: string, make: (x: Var, z: Var, y0: Var) => Term, env: Record<string, Derivation> = {}): Ground {
+  const x = variable('x', 'm', 'coordinate x'), z = variable('z', 'm', 'coordinate z'), y0 = variable('y0', 'm', 'frame origin y');
+  const term = make(x, z, y0);
+  const f = field(`ground height (${grounds}, by ${by})`, 'm', domain(frame, {}), { x, z }, { ...env, y0: frame.origin.y }, [], () => term);
+  return { field: f, height: (xx, zz) => sample(f, { x: xx, z: zz }, 'ground height') };
 }
+
+/** A flat ground at the frame's y origin. */
+export const flatGround = (frame: Frame, by: string, grounds: string): Ground => groundField(frame, by, grounds, (_x, _z, y0) => y0);
 
 export interface Observer {
   window: Window;
