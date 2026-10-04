@@ -104,6 +104,9 @@ the generated laws are checked against, not the limit of what the language can s
 | The roof's members are counts the space sizes: two support lines, 19 members of 2x8 at 24 in; no clear span deflects within ten times its limit | tests/nexus/size.test.ts |
 | The generator sizes the members it generates, the matter chosen among those dressed to the kept sections; their weight reaches the ground; a face on the ground may rest on it | tests/nexus/size.test.ts |
 | A member pressed along its length is sized against buckling: the wind's 1x6 unbraced is refused, one row of blocking holds it; the lines under the roof are walls of their own, their matter chosen for them | tests/nexus/size.test.ts |
+| Whether bars carry a load by stretching is counted; the stiffness exponent follows the count (1 where carried, 3 where members bend) | tests/nexus/arrangement.test.ts |
+| Wood is one solid in two arrangements: along the grain exponent 0.93 and the wall's own stiffness recovered; across it 2.1 and 1.8, below uniform hexagons, a missing level named | tests/nexus/arrangement.test.ts |
+| The generated walls are a mechanism under the wind: two sways counted, two bars leave none; bending alone would drift a tenth of the height | tests/nexus/arrangement.test.ts |
 
 ## 3. What is missing
 
@@ -130,9 +133,9 @@ the generated laws are checked against, not the limit of what the language can s
 
 ## 4. Next
 
-What one generated element does to another: a sheathing bracing the members it is fastened to, a wall loading the floor
-it stands on, a fastener carrying a load between members. Then stores from the resistance to motion through them, and
-the second family over the generator itself.
+Higher bars: intents whose wants are demanding, to find what the generator lacks in common across them (information as a
+carrier, competing time scales, throughput bound by a transport). Then what one element does to another (a sheet bracing
+members, a wall loading a floor), and the second family over the generator itself.
 
 ## 5. Why each primitive exists
 
@@ -219,3 +222,4 @@ the second family over the generator itself.
 | What the generator can size, it sizes where it generates | a bound left for later is stale downstream: what an element weighs is part of what reaches the ground | the members' weight was a gap after the language could size them |
 | A weight at a place not stated is carried at the worst place | a mass that can be anywhere loads every place it can reach | a floor spread under its people's mean weight |
 | A member pressed along its length buckles about its thinner axis between braces | a bound on one axis is not a bound on the other; bracing is timber that counts | the walls' members chosen by the wind alone |
+| How an arrangement carries a load is counted: the load in the span of the bars' equilibrium, or not | stretching or bending is an arrangement's, not a material's or a structure's; one count across micrometres and metres | human formulas taken as the relations; one cross-grain ratio for every wood |

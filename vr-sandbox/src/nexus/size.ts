@@ -13,6 +13,7 @@ import { search, type Choice, type Option, type System } from './solve';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { add, div, ge, k, le, leaf, ln, min, mul, pow, PI, variable, type Leaf } from './term';
 import type { Element } from './manifold';
+import type { Network } from './network';
 import { PVC, SECTIONS_MM2, SECTIONS_SOURCE, STILL_AIR_SURFACE } from '../data/conductors';
 
 const value = (e: Element, startsWith: string) => { const v = e.values.find((x) => x.name.startsWith(startsWith)); if (!v) throw new Error(`${e.id}: no value ${startsWith}`); return v; };
@@ -230,4 +231,26 @@ export function sizeMembers(span: Derivation, width: Derivation, load: Derivatio
     if (choice.manifold.length) break;
   }
   return { system, choice: { ...choice!, candidates: tried } };
+}
+
+// ---- the arrangement of the members along a run ---------------------------------------------------------------------
+
+/**
+ * Members along a run as the network they make: each member standing across the run's height, joined at its ends to
+ * what runs along the top and the bottom, and at each row of blocking to the next member. The bottom is held. Joints
+ * that are nailed hold no turning: the network's bars are all that resist, by stretching.
+ */
+export function runNetwork(length: number, height: number, spacing: number, rows: number, diagonals = 0): { net: Network; top: number[]; tiers: number } {
+  const xs: number[] = [];
+  for (let x = 0; x < length - 1e-9; x += spacing) xs.push(x);
+  xs.push(length);
+  const tiers = rows + 1;
+  const nodes: number[][] = [], at = (i: number, k: number) => i * (tiers + 1) + k;
+  xs.forEach((x) => { for (let k = 0; k <= tiers; k++) nodes.push([x, (height * k) / tiers]); });
+  const bars: [number, number][] = [];
+  xs.forEach((_, i) => { for (let k = 0; k < tiers; k++) bars.push([at(i, k), at(i, k + 1)]); });
+  for (let i = 0; i + 1 < xs.length; i++) for (let k = 1; k <= tiers; k++) bars.push([at(i, k), at(i + 1, k)]);
+  // a diagonal across the first panel of each tier, from its bottom to its top, as many tiers as asked
+  for (let k = 0; k < Math.min(diagonals, tiers); k++) bars.push([at(0, k), at(1, k + 1)]);
+  return { net: { dim: 2, nodes, bars, held: xs.map((_, i) => at(i, 0)) }, top: xs.map((_, i) => at(i, tiers)), tiers };
 }

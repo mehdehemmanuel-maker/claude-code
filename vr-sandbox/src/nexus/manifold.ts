@@ -33,7 +33,9 @@ import { phaseAt, vapourPressure } from './phase';
 import { dimOf } from './dimension';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
-import { EULER, sizeMembers } from './size';
+import { EULER, runNetwork, sizeMembers } from './size';
+import { barForces, carries, count, loadOn } from './network';
+import { solveFrame } from './frame';
 import { dressedMatters, lumberCatalogue } from './stock';
 import { ofLeaf } from './evaluate';
 import { leaf, type Leaf } from './term';
@@ -845,6 +847,34 @@ export function generate(intent: Intent): Structure {
       if (!e.oneOf) ownWeight.set(R.id, (ownWeight.get(R.id) ?? 0) + at('m') * g);
       return { at, sh };
     };
+    /**
+     * How the sides carry the force across them along their own plane: counted on the network their members make. The
+     * joints are nailed and hold no turning, so the members' bars are all that resist by stretching; a mechanism the force
+     * meets is carried only by bending, or not at all.
+     */
+    const rackingOf = (e: Element, R: Region, sh: Shape, at: (sym: string) => number) => {
+      const across = elements.find((x) => x.kind === 'path' && x.carrier === 'momentum' && x.regions[0] === R.id && x.values.some((v) => v.name === 'force across'))?.values.find((v) => v.name === 'force across');
+      if (!across) return;
+      const length = Math.max(sh.x.value!, sh.z.value!), height = at('a'), V = across.value / 2;
+      const bare = runNetwork(length, height, at('s'), at('j'));
+      const along = (r: typeof bare) => loadOn(r.net, (i, d) => (r.top.includes(i) && d === 0 ? V / r.top.length : 0));
+      const c0 = count(bare.net);
+      if (carries(bare.net, along(bare))) return;
+      // the least bars that leave no mechanism the force meets: one across each tier, counted again with them
+      const braced = runNetwork(length, height, at('s'), at('j'), c0.mechanisms);
+      const forces = barForces(braced.net, along(braced));
+      // what bending alone would do, were every joint to hold its turning: the members bend about their thin axis in the side's plane
+      const fr = { nodes: bare.net.nodes.map((q) => [q[0]!, q[1]!] as [number, number]), members: bare.net.bars.map(([a, b]) => ({ a, b, E: at('E'), A: at('b') * at('h'), I: at('h') * at('b') ** 3 / 12 })) };
+      const drift = solveFrame(fr, bare.net.held.flatMap((node) => [0, 1, 2].map((dof) => ({ node, dof: dof as 0 | 1 | 2 }))), bare.top.map((node) => ({ node, dof: 0 as const, value: V / bare.top.length }))).u[bare.top[0]! * 3]!;
+      const br = add({ id: `bracing:${R.id}:side`, kind: 'path', carrier: 'momentum', says: `the members of each side, joined where they meet by joints that hold no turning, are a mechanism under the force across: they carry it by stretching only once a bar crosses each tier that sways`, regions: [R.id], values: [
+        { name: 'force across each side carries', value: V, unit: 'N', from: `${across.from}, shared by the two sides along it` },
+        { name: 'mechanisms of each side the force meets', value: c0.mechanisms, unit: '1', from: 'counted: the freedoms of its joints less the rank of what its bars resist' },
+        { name: 'least bars across it that leave none', value: c0.mechanisms, unit: '1', from: forces ? 'counted again with them: no mechanism, and the force carried by stretching' : 'counted' },
+        ...(forces ? [{ name: 'largest force in a bar, braced', value: Math.max(...forces.map(Math.abs)), unit: 'N', from: 'the bars\' forces under the force across, braced' }] : []),
+        { name: 'drift of its top were every joint to hold its turning, the members bending', value: Math.abs(drift), unit: 'm', from: 'a frame of its members, joints held rigid' },
+      ], why: { want: e.why.want, rule: 'an arrangement carries a load by stretching only where the load lies in the span of what its bars resist', laws: [], parent: e.id } });
+      gap(e.why.want, br.id, 'momentum', 'the bars across the tiers are not yet sized, and a sheet fastened to the members, which would carry the force across by its shear and brace them, is not in the language');
+    };
     // the up face first: what it bears on the sides is read when the sides are sized
     const order = (e: Element) => ['up', 'down', 'side'].indexOf(e.id.slice(e.id.lastIndexOf(':') + 1));
     for (const e of [...members].sort((x, y) => order(x) - order(y))) {
@@ -861,6 +891,7 @@ export function generate(intent: Intent): Structure {
       if (!done) continue;
       const at = done.at;
       if (face === 'up') bearsOnSides.set(R.id, at('w') * at('a') / (2 * at('s')));
+      if (face === 'side') rackingOf(e, R, sh, at);
       if (at('k') > 0) {
         const line = { value: at('w') * at('a') / at('s'), from: 'each member\'s two half-bays over the spacing' };
         const sp = add({ ...(e.oneOf ? { oneOf: e.oneOf } : {}), id: `supports:${R.id}:${face}`, kind: 'path', carrier: 'momentum', says: `${at('k')} line${at('k') === 1 ? '' : 's'} across the ${face === 'side' ? 'sides' : `${face}-facing face`} of ${R.id} carry its members' bays to the ground`, regions: [R.id], values: [{ name: 'support lines', value: at('k'), unit: '1', from: e.id }, { name: 'load per length each line carries', value: line.value, unit: 'N/m', from: line.from }, { name: 'length of each line', value: Math.max(sh.x.value!, sh.z.value!), unit: 'm', from: 'the longer extent of the plan' }], why: { want: e.why.want, rule: 'a span no member carries is divided by lines that carry its bays', laws: [], parent: e.id } });

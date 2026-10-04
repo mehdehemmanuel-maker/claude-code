@@ -714,9 +714,52 @@ What this exposes:
   (42.5 MPa for the fir). That stays below the fir's crushing strength, which the USDA Wood Handbook gives as about 50 MPa
   for clear coast Douglas-fir at 12 % moisture. That strength is not in the kept data.
 
+## Round 17: how an arrangement carries a load
+
+Rounds 14 to 16 took human models as the relations themselves: the beam formulas, Euler, the code's L/360, a lumber
+standard, and Douglas-fir as a row of properties. The kept data even states one ratio of across-grain to along-grain
+strength for every wood. Those are evidence with domains, not the skeleton.
+
+This round looks for what lies under several of them at once, and finds it in linear algebra
+(src/nexus/network.ts). A network of bars carries a load at its joints by stretching only if the load lies in the
+span of its equilibrium matrix. What the bars cannot reach is a mechanism, and a load that meets a mechanism is
+carried only by the members bending where they meet, or not at all. A plane frame of members that bend as well as
+stretch (src/nexus/frame.ts) measures what the count predicts. Nothing in either names a material or a structure.
+
+| Arrangement | Bars carry the load? | Stiffness grows as the solid's share to the power |
+|---|---|---|
+| triangles | yes, no mechanism | 1.00 |
+| squares, loaded along their bars | yes, though it has mechanisms | 1.00 |
+| squares turned 45° | no | 3.0 |
+| hexagons | no | 3.0, falling to 2.7 as the walls thicken |
+
+Having mechanisms does not decide; whether the load meets them does. The arrangement's stiffness exists only many
+cells across: two cells across differ by a quarter from three, while six differ from eight by under 1 %. That is the
+domain of a continuum description, which emerges from the arrangement rather than being assumed.
+
+**Wood, as a test of the counting** (evidence: USDA Wood Handbook Table 5-1; the cell wall's density, 1500 kg/m³).
+One solid, the cell wall, is arranged two ways at once.
+
+- **Along the grain**, the walls run with the load. Across the seven kept woods, E_L goes as the solid's share to the
+  power 0.93, and the wall stiffness it implies, 33 GPa, is within 15 % of the 35 GPa measured on the wall itself.
+- **Across the grain**, the walls must bend. The measured exponents, 2.1 tangential and 1.8 radial, lie well above
+  one but well below what uniform hexagons give at the same densities. A second level of arrangement is missing; it
+  is marked, not invented. Candidates are a density that varies within the wood (bands laid down at different times)
+  and cells that run across the stem.
+- **So no one across-to-along ratio holds for wood.** The measured ratio spans 0.015 to 0.082, more than five times,
+  and grows with the solid's share as the two exponents part. The kept single ratio hides a regime. The residual
+  along the grain is ±22 % and falls roughly by botanical group: balsa, a hardwood, sits between the two groups. The
+  botanical category is not the regime.
+
+**The house's walls, as a test of the same counting at metres.** The generator now counts the network its sized
+side members make, with nailed joints that hold no turning. Each side is a mechanism under the wind's force across,
+with two sways, one for each tier its blocking makes. Two bars across leave no mechanism and carry the force by
+stretching, the largest at 56 kN. Bending cannot stand in for them: were every joint rigid, the top would drift
+0.29 m, more than a tenth of its height. The bars are not yet sized, and a sheet fastened to the members, which would
+carry the force by its shear, is not in the language.
+
 ## The next instrument
 
-What one element does to another. A sheathing fastened to members braces them; a wall standing on a floor loads its
-members; a fastener carries a load between two members. These are couplings between generated elements, and the
-generator does not yet state them. Then stores from the resistance to motion through them, and the second family over
-the generator itself.
+Higher bars. Intents whose wants are demanding (a printer at speed and precision, a place that computes, a vessel
+that grows cells) to find what the generator lacks in common: information as a carrier, time scales that compete,
+throughput limited by a transport.
