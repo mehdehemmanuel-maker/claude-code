@@ -13,7 +13,7 @@ import { PhysicsWorld } from '../physics/world';
 import type { Prism } from './coupling';
 import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from './evaluate';
 import type { Observer } from './field';
-import { add, div, k, leaf, mul, sub, variable, type Leaf } from './term';
+import { add, and, div, k, leaf, mul, sub, variable, type Leaf } from './term';
 import { resolution, type Resolution } from './domain';
 
 export type Jolt = Awaited<ReturnType<typeof initJolt>>;
@@ -80,6 +80,10 @@ export interface Realization {
   moments: StationMoment[];
   /** 1 when nothing fractured or yielded and nothing sank past the resolution. */
   stood: Derivation;
+  /** 1 when the world was still for the observer's quiet time within its patience. */
+  settled: Derivation;
+  /** 1 when it settled and stood: at rest where it was configured, not fallen. */
+  inPlace: Derivation;
   allowance: Derivation;
   drop: Derivation;
   sag: Derivation;
@@ -138,6 +142,7 @@ export function realizeRigid(J: Jolt, c: RigidContract, bodies: BeamBodies, obs:
     still = moving ? 0 : still + 1;
     if (still >= quietTicks) break;
   }
+  const wasStill = still >= quietTicks;
   const quietSeconds = Math.min(ran, quietTicks) * tick;
   const window: Window = { tick, seconds: quietSeconds, instrument: c.name };
   const mk = (name: string, value: number, unit: string, origin: Leaf['origin'], u?: number) => leaf(name, value, unit, origin, u);
@@ -164,7 +169,9 @@ export function realizeRigid(J: Jolt, c: RigidContract, bodies: BeamBodies, obs:
   const drop = measurement('drop of the load', y0 - y1, 'm', { instrument: `${c.name}: position of the load`, window }, mk);
   const allowance = evaluate('settling allowance of the load', mul(k(2, 'two rest couplings under the load'), add(variable('c', 'm', 'clearance'), variable('s', 'm', 'slop'))), { c: c.clearance, s: c.positionResolution }, { unit: 'm', law: 'each rest coupling settles by at most its clearance above and the kernel\'s penetration slop below the semantic boundary' });
   const stood = measurement('stood', events.length === 0 && y0 - y1 < allowance.value! ? 1 : 0, '1', { instrument: `${c.name}: no fracture, yield or break; the load sank less than its settling allowance (${allowance.value} m)`, window }, mk);
+  const settled = measurement('settled', wasStill ? 1 : 0, '1', { instrument: `${c.name}: still (under ${stillSpeed} m/s and ${stillTurn} rad/s) for the quiet time within the patience of ${val(obs.patience, 'patience')} s`, window }, mk);
+  const inPlace = evaluate('rests in place', and(variable('settled', '1'), variable('stood', '1')), { settled, stood }, { unit: '1', law: 'at rest where it was configured: still within the patience, and not fallen or broken' });
   const sag = unobserved('mid-span sag', 'm', `${c.name} does not realize ${c.unrealized[0]!.what}: ${c.unrealized[0]!.because}`, window, sub(variable('y', 'm'), variable('y0', 'm')));
   world.destroy();
-  return { contract: c, bodies: bindings, window, resolution: res, moments, stood, allowance, drop, sag, events };
+  return { contract: c, bodies: bindings, window, resolution: res, moments, stood, settled, inPlace, allowance, drop, sag, events };
 }

@@ -130,6 +130,11 @@ export function withUncertainty(d: Derivation, uncertainty: number, because: str
   return brand({ ...d, uncertainty, because: d.because ? `${d.because}; ${because}` : because });
 }
 
+/** A judgement the evidence cannot decide: inside a bound's uncertainty. Not unknown: what is known is said. */
+export function unresolved(name: string, term: Term, inputs: Record<string, Derivation>, because: string, unit = '1'): Derivation {
+  return brand({ name, term, inputs, value: null, dim: term.dim, unit, status: 'unresolved', because, hash: hashOf({ record: 'unresolved', term: term.hash, inputs: Object.fromEntries(Object.entries(inputs).map(([s, d]) => [s, d.hash])), because }) });
+}
+
 /** Two evidences for one variable that disagree past tolerance: both kept, the variable unusable. */
 export function contradiction(name: string, a: Derivation, b: Derivation): Derivation {
   return brand({ name, term: a.term, inputs: { a, b }, value: null, dim: a.dim, unit: a.unit, status: 'contradicted', because: `${a.name} = ${a.value} and ${b.name} = ${b.value} disagree past tolerance`, hash: hashOf({ record: 'contradiction', a: a.hash, b: b.hash }) });

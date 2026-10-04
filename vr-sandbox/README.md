@@ -30,13 +30,26 @@ nothing of its architecture is extended again.
   as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
   across it, refused outside a scale band with the band named; coverage of a lattice of point samples is zero), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
   morphism under a contract whose numbers are its own conformance measurements), `observe` (comparison within the
-  contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness), and
-  `beam`: the vertical slice of Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
+  contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness),
+  `failure` (the four representational failures as terms: anomaly, contradiction, a variable free that the intent
+  did not leave free, a measurement no variable can hold), `abduce` (the missing distinction searched for over the
+  dimensionless groups of the failing coupling's quantity types, found from their dimensions alone; a candidate that
+  separates every observation, validated on held-out observations where it predicts and silent where it does not,
+  promoted with provenance "abduced from observations h1…hn" only when it changes more than one system; a tie names
+  the quantities the next observation must vary; a judgement inside the bound's uncertainty is unresolved, not
+  decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
+  journal), and `beam`: the vertical slice of Part XXV. A 60 kg mass across 1.2 m: the solver reports the section free, the
   catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
   domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
   measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
   1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved,
-  because the rigid realization says it cannot see it, not unknown.
+  because the rigid realization says it cannot see it, not unknown. The first growth of the language came from the
+  kernel: a tall load that the static derivation said rests never settled; eight realizations of the same intent
+  with the load's footprint varied gave the observations; over the rest coupling's quantities (centre of mass above
+  the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group
+  that separates rest from rocking or toppling is the centre of mass over half the contact across the beam, with the
+  bound between 4.3 and 5.7 fixed by the observations; the language now refuses the column, admits the slab and
+  says it cannot decide a case inside the gap.
 
 ## The gate
 

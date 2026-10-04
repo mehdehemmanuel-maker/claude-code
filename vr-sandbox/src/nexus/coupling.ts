@@ -4,7 +4,7 @@
 
 import { evaluate, type Derivation } from './evaluate';
 import type { Frame } from './field';
-import { add, div, k, sub, variable, type Term } from './term';
+import { add, div, k, min, sub, variable, type Term } from './term';
 
 /** A rectangular body in the semantics: its extents and its material leaves; its centre once placed. */
 export interface Prism {
@@ -41,6 +41,17 @@ export function restOn(above: Prism, below: Prism, boundary: Derivation, clearan
   const centreY = evaluate(`height of ${above.name} resting on ${below.name}`, add(add(Y, C), div(H, k(2))), { y: boundary, c: clearance, h: above.extents.y }, { unit: 'm', law: 'coupling: rest = boundary + clearance + half the height' });
   above.centre = { x, y: centreY, z };
   return { kind: 'rest', above: above.name, below: below.name, clearance, boundary, centreY };
+}
+
+/** The quantities a rest coupling carries for its stability: the resting body's centre of mass above the boundary and the half-extents of the contact. */
+export interface RestStability { hcm: Derivation; halfX: Derivation; halfZ: Derivation }
+
+/** A uniform prism's centre of mass is at half its height; the contact is the lesser of the two bodies' extents on each axis. */
+export function restStability(above: Prism, below: Prism): RestStability {
+  const hcm = evaluate(`centre of mass of ${above.name} above its base`, div(H, k(2)), { h: above.extents.y }, { unit: 'm', law: 'a uniform prism\'s centre of mass lies at half its height' });
+  const A = variable('a', 'm', 'extent above'), B = variable('b', 'm', 'extent below');
+  const half = (axis: 'x' | 'z') => evaluate(`half the contact of ${above.name} on ${below.name} along ${axis}`, div(min(A, B), k(2)), { a: above.extents[axis], b: below.extents[axis] }, { unit: 'm', law: 'the contact is the lesser of the two extents on the axis' });
+  return { hcm, halfX: half('x'), halfZ: half('z') };
 }
 
 /** Place a body standing on the ground at (x, z). */

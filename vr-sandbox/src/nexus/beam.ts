@@ -9,7 +9,7 @@ import { getMaterial } from '../data/materials';
 import { LUMBER } from '../parts/registry';
 import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
 import { coarse, coverage, domain, field, type Field } from './domain';
-import { coordinate, ledger, restOn, standOn, topOf, type Prism, type RestCoupling } from './coupling';
+import { coordinate, ledger, restOn, restStability, standOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Observer, type RigidDomain } from './field';
 import { apply, law, type Law } from './law';
@@ -123,6 +123,10 @@ export interface BeamConfiguration {
   couplings: RestCoupling[];
   reactions: [Derivation, Derivation];
   balance: ReturnType<typeof ledger>;
+  /** The static derivation: with the ledger balanced, the configuration rests (1). */
+  rests: Derivation;
+  /** The rest couplings' stability quantities: the load on the beam, the beam on each support. */
+  stability: Record<string, RestStability>;
   totalLength: Derivation;
   rigid: RigidDomain;
 }
@@ -157,7 +161,9 @@ export function construct(intent: BeamIntent, mat: MaterialLeaves, bound: Record
   c1.reaction = R; c2.reaction = R;
   const balance = ledger('the supports carry the load and the beam', [R, R], evaluate('all the weight', add(variable('P', 'N'), variable('W', 'N')), { P: need('P'), W: need('Wself') }, { unit: 'N', law: 'the load and the beam\'s own weight' }));
   const rigid = rigidDomain(mat.E, mat.density, Lt, obs);
-  return { frame, bodies: { beam, supports, load }, couplings, reactions: [R, R], balance, totalLength: Lt, rigid };
+  const rests = evaluate('rests: the boundaries carry the weight, so the configuration is in static equilibrium', le(variable('r', 'N', 'residual'), variable('tol', 'N', 'tolerance')), { r: balance.residual, tol: evaluate('a tolerance of nothing', mul(k(1e-9), variable('W', 'N')), { W: need('P') }, { unit: 'N', law: 'rounding' }) }, { unit: '1', law: 'statics: a balanced ledger is equilibrium' });
+  const stability = { 'the load on the beam': restStability(load, beam), 'the beam on the left support': restStability(beam, supports[0]), 'the beam on the right support': restStability(beam, supports[1]) };
+  return { frame, bodies: { beam, supports, load }, couplings, reactions: [R, R], balance, rests, stability, totalLength: Lt, rigid };
 }
 
 export interface Slice {
@@ -241,6 +247,10 @@ export function beamOnTwoSupports(intent: BeamIntent, material: MaterialLeaves, 
       journal.append({ kind: 'comparison', comparison: sagCmp });
       journal.append({ kind: 'record', record: realization.stood });
       journal.append({ kind: 'record', record: realization.drop });
+      // the static derivation says it rests; the kernel says whether it settled: a disagreement is a failure term
+      const settledCmp = compare('rests', configuration.rests, realization.inPlace, { name: contract.name, relative: ofLeaf(leaf('no tolerance on a yes or no', 0, '1', { class: 'configuration', source: 'a binary outcome either agrees or does not' })) });
+      comparisons.push(settledCmp);
+      journal.append({ kind: 'comparison', comparison: settledCmp });
     }
   }
   return { intent, frame, observer: obs, contract, semantics, open, choice, configuration, realization, moment, comparisons, observed, journal };
