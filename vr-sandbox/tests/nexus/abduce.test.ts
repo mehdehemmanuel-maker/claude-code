@@ -12,7 +12,7 @@ import { ofLeaf } from '../../src/nexus/evaluate';
 import { anomalyOf, failuresOf } from '../../src/nexus/failure';
 import { compare } from '../../src/nexus/observe';
 import { solve, type System } from '../../src/nexus/solve';
-import { admit, choose, noTolerance, restIntent, restStudy, type Study } from '../../src/nexus/study';
+import { admit, choose, noTolerance, restIntent, restStudy, toppleStudy, type Study } from '../../src/nexus/study';
 import { leaf, varsOf } from '../../src/nexus/term';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
 import { stale } from '../../src/nexus/why';
@@ -129,6 +129,28 @@ describe('the rest study on the kernel: the tall column that never settled', () 
     expect(stale(records, [r.hash]).length).toBe(records.length);
     expect(stale(s.slices[0]!.journal.records(), [r.hash]).length).toBe(0);
   }, 120000);
+
+  it('the second distinction: among what did not rest in place, the drop separates rocking from falling by the same group, further out', async () => {
+    const s = await run();
+    const more = restStudy(await jolt(), [{ patch: 0.1, across: 0.08 }, { patch: 0.2, across: 0.05 }, { patch: 0.1, across: 0.0255 }, { patch: 0.2, across: 0.03 }], s.language);
+    const slices = [...s.slices, ...more.slices];
+    const t = toppleStudy(slices, s.language);
+    const outcomes = t.observations.map((o) => o.observed.value);
+    expect(outcomes.filter((x) => x === 1).length).toBeGreaterThanOrEqual(4);
+    expect(outcomes.filter((x) => x === 0).length).toBeGreaterThanOrEqual(3);
+    expect(t.chosen).not.toBeNull();
+    expect(t.chosen!.group.text).toBe('hcm · halfZ^-1');
+    expect(t.chosen!.threshold!.above).toBe(0);
+    expect(t.chosen!.threshold!.lo).toBeGreaterThan(s.chosen!.threshold!.hi);
+    expect(t.relation).not.toBeNull();
+    expect(s.language.all().length).toBe(2);
+    // a column that rocks is refused by the first relation and admitted by the second; a slab on edge by neither
+    const g = s.slices[0]!.choice.pick!.solution.bound['g']!, m = s.slices[0]!.choice.pick!.solution.bound['m']!;
+    const column = admit(s.language, s.slices[0]!, g, m).filter((j) => j.coupling === 'the load on the beam');
+    expect(column.map((j) => j.holds.value)).toEqual([0, 1]);
+    const onEdge = admit(s.language, s.slices[7]!, g, m).filter((j) => j.coupling === 'the load on the beam');
+    expect(onEdge.map((j) => j.holds.value)).toEqual([0, 0]);
+  }, 180000);
 
   it('with the five observations that share one footprint along the beam, two candidates tie and the next observation is named', async () => {
     const s = await run();

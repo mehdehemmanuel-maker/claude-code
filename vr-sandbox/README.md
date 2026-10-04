@@ -70,7 +70,9 @@ nothing of its architecture is extended again.
   the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group
   that separates rest from rocking or toppling is the centre of mass over half the contact across the beam, with the
   bound between 4.3 and 5.7 fixed by the observations; the language now refuses the column, admits the slab and
-  says it cannot decide a case inside the gap.
+  says it cannot decide a case inside the gap. Among what did not rest in place, the drop separates rocking from
+  falling by the same group further out, a second relation: a column that rocks is refused by the first and admitted
+  by the second, a slab on edge by neither.
 
 ## The gate
 

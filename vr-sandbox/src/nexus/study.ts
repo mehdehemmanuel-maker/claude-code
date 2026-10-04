@@ -70,6 +70,30 @@ export function restStudy(J: Jolt, cases: RestCase[], language = new Language())
   return { slices, observations, failures, candidates: cs, separating, chosen, ambiguous, vary, relation, language };
 }
 
+/**
+ * The second rest distinction: among the configurations that did not rest in place, the ones that stood (rocking
+ * without falling) against the ones that fell. The same quantities, a different outcome: the drop.
+ */
+export interface ToppleStudy {
+  observations: Observation[];
+  candidates: Candidate[];
+  chosen: Candidate | null;
+  ambiguous: Candidate[];
+  relation: Relation | null;
+}
+
+export function toppleStudy(slices: Slice[], language = new Language()): ToppleStudy {
+  const observations = slices.map(observe).filter((o): o is Observation => !!o).filter((o) => o.observed.value === 0).map((o) => {
+    const s = slices.find((x) => observe(x)?.observed.hash === o.observed.hash)!;
+    return { ...o, observed: s.realization!.stood, derived: s.configuration!.rests };
+  });
+  const cs = candidates(observations);
+  const { chosen, ambiguous } = choose(cs);
+  let relation: Relation | null = null;
+  if (chosen && validate(chosen).holds && chosen.generality >= 2) relation = language.add(promote(chosen, `rests upright (rocks rather than falls) in ${slices[0]!.contract.name}`));
+  return { observations, candidates: cs, chosen, ambiguous, relation };
+}
+
 /** Whether a configuration's rest couplings satisfy the language's promoted relations: each a record, 1 when admitted. */
 export function admit(language: Language, s: Slice, g: Derivation, mass: Derivation): { coupling: string; relation: Relation; holds: Derivation }[] {
   if (!s.configuration) return [];
