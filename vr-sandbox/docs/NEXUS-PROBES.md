@@ -170,3 +170,38 @@ gaps and 7 unread quantities: what a region is made of. The printer's missing th
 temperature PLA flows at is a property of PLA), and so are every "hottest it may run" and the structure's own weight.
 Advection (siding against wind-driven rain, the machinery that moves air) and gravity in a liquid's potential
 (drainage) block the house alone.
+
+## Round 3: what a region is made of
+
+A matter has, for each carrier, properties in roles: a conductivity, a capacity per mass, a density, a stiffness,
+the most flux density and the highest potential it bears, an expansion per degree, and thresholds, the potentials of
+one carrier at which its other properties change (above which it flows, below which it holds its shape). Matters
+come from what the intent states of a region and from the kept material data, an availability set with sources
+(`src/nexus/matter.ts`). A threshold is generative: a matter that flows only above a temperature makes the place it
+must flow a region held above it. And a role the language can read that no matter states is a gap in the knowledge,
+not in the language; the ranking now says which.
+
+What emerges, regenerated from scratch, from PLA's stated properties alone:
+
+| Emergent | From | Number |
+|---|---|---|
+| the place PLA must flow: a region held between 190 and 220 °C | PLA flows above 190 °C, bears up to 220 °C | held band, observed to 15 K |
+| a conversion that heats it, supplied from the grid, following the observation | no reservoir is always above 190 °C | |
+| the supply cut above 220 °C | a supply that can pass what the matter bears | the failure mode it guards against |
+| a guard keeping the hot region's outer face below 60 °C | the person may touch nothing hotter | |
+| the point follows the drawn shape scaled by the shrink | PLA sets at 60 °C and ends at 20 °C, 68 µm/m K | 0.27 %, 0.54 mm over 0.2 m |
+| the observation referred to the scaled shape | uncompensated, the part misses the tolerance | 5.4 times |
+| the house's charge path made of the matter that conducts charge best | the kept data | copper, least section over length 2.4e-7 m |
+
+| Invention | Round 0 | 1 | 2 | 3 | Not covered |
+|---|---|---|---|---|---|
+| House | 0 of 29 | 19 | 23 | 23 | siding, drainage, mechanical systems, access, compatibility, construction |
+| Car | 0 of 19 | 14 | 15 | 15 | transmission, mechanical interfaces, manufacturing, maintenance |
+| Printer | 0 of 16 | 11 | 12 | 15 | manufacturing constraints |
+
+The ranking changed character. What blocks all three inventions now is knowledge, not language: the kept material
+data states no temperature limit, no thermal conductivity and no water permeability for any matter (21 gaps). No
+language distinction blocks all three. Of the language's, advection reaches two inventions now: the PLA's density
+and specific heat stay unread because the flow of PLA carries energy into the hot region, which is the same
+distinction as the house's air exchange carrying heat; gravity in a liquid's potential (drainage) and generating a
+system from an element (sizing the house's members, and with them its own weight) block the house.

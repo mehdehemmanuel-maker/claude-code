@@ -29,6 +29,7 @@
 import { carrierById, coupling, family, roleOf, type Carrier, type Role } from './carrier';
 import { gravity } from './field';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
+import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
 import type { Leaf } from './term';
 import { regionOf, touches, type Intent, type Region, type Want } from './want';
 
@@ -72,6 +73,9 @@ export function generate(intent: Intent): Structure {
   const used = new Set<string>();
   const g = gravity().value!;
 
+  /** A region the language generates is immersed in a region of the intent: what touches it is what touches that. */
+  const hosts = new Map<string, string>();
+  const placeOf = (id: string) => hosts.get(id) ?? id;
   const add = (e: Omit<Element, 'also'> & { oneOf?: string }): Element => {
     const found = elements.find((x) => x.id === e.id);
     if (found) {
@@ -157,8 +161,9 @@ export function generate(intent: Intent): Structure {
       gap(want, element.id, 'energy', 'the hottest it may run is a property of what it is made of: no material is chosen');
       return;
     }
-    const sink = reservoirs('energy').filter((s) => s.region !== near && (touches(intent, s.region, near) || s.region === near)).sort((a, b) => a.hi - b.hi)[0];
-    const at = intent.regions.some((r) => r.id === near) ? near : null;
+    const place = placeOf(near);
+    const sink = reservoirs('energy').filter((s) => s.region === place || (s.region !== place && intent.regions.some((r) => r.id === place) && touches(intent, s.region, place))).sort((a, b) => a.hi - b.hi)[0];
+    const at = intent.regions.some((r) => r.id === place) ? place : null;
     if (sink && at) add({ id: `shed:${element.id}`, kind: 'boundary', carrier: 'energy', says: `the heat ${element.says.split(':')[0]} makes leaves to ${sink.region}`, regions: [element.id, sink.region], values: [], why: { want, rule: 'what is lost is heat, which its region must shed', laws: lawIds(carrierById('energy'), 'conductance'), parent: element.id } });
     else gap(want, element.id, 'energy', 'its heat has nowhere the language can see to go');
     gap(want, element.id, 'energy', 'the hottest it may run is a property of what it is made of: no material is chosen');
@@ -192,7 +197,7 @@ export function generate(intent: Intent): Structure {
       if (s.carrier.id === 'charge' && !s.store) add({ id: `return:charge:${into}->${s.region}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${into} to ${s.region}: charge is neither made nor destroyed`, regions: [into, s.region], values: [], why: { want, rule: 'charge drawn returns: its balance where it is used is zero', laws: lawIds(s.carrier, 'conductance'), parent: conv.id } });
     }
     if (removing) {
-      const up = reservoirs(c.id).filter((s) => s.region !== into && touches(intent, s.region, into)).sort((a, b) => b.hi - a.hi)[0];
+      const up = reservoirs(c.id).filter((s) => s.region !== into && (s.region === placeOf(into) || touches(intent, s.region, placeOf(into)))).sort((a, b) => b.hi - a.hi)[0];
       if (up) path(c, into, up.region, want, `what the conversion takes out is delivered up its potential to ${up.region}`, conv.id);
     }
     // a conversion whose product is heat in the region loses nothing to shed; its own limit remains
@@ -398,6 +403,34 @@ export function generate(intent: Intent): Structure {
     return true;
   };
 
+  /**
+   * A held potential: the region exchanges its carrier with every neighbour at another potential (a generated region
+   * with the region it is immersed in); its balance needs a supply when a neighbour can pull it below the band and a
+   * removal when one can push it above or what is made inside must leave; a band against a varying neighbour is
+   * observed and modulated.
+   */
+  const holdPotential = (Rid: string, c: Carrier, lo: number | null, hi: number | null, want: string | null, parent: string | null) => {
+    const host = hosts.get(Rid);
+    const nbrs = (host ? [stateOf(regionOf(intent, host), c.id)] : intent.regions.filter((n) => n.id !== Rid && touches(intent, n.id, Rid)).map((n) => stateOf(n, c.id))).filter((x): x is State => !!x);
+    for (const n of nbrs) {
+      const b = add({ id: `boundary:${c.id}:${Rid}|${n.region}`, kind: 'boundary', carrier: c.id, says: `${Rid} exchanges ${c.id} with ${n.region} through a boundary whose conductance is free`, regions: [Rid, n.region], values: [], why: { want, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent } });
+      if (!host) faceElements(b, c.id, Rid, n.region);
+    }
+    const made = host ? 0 : madeInto(c.id, Rid).reduce((s, m) => s + m.leaf.value!, 0);
+    if (!nbrs.length && !made) gap(want, parent, c.id, `nothing touching ${Rid} holds ${c.id} or makes it: the balance has no terms`);
+    if (lo !== null && nbrs.some((n) => n.lo < lo)) supply(c, Rid, { above: lo }, want, parent);
+    if (hi !== null && (nbrs.some((n) => n.hi > hi) || made > 0)) {
+      const steady = nbrs.filter((n) => n.hi < hi);
+      if (made > 0 && steady.length && !nbrs.some((n) => n.hi > hi)) {
+        const s = steady.sort((a, b) => a.hi - b.hi)[0]!;
+        const b = add({ id: `boundary:${c.id}:${Rid}|${s.region}`, kind: 'boundary', carrier: c.id, says: `${Rid} exchanges ${c.id} with ${s.region} through a boundary whose conductance is free`, regions: [Rid, s.region], values: [], why: { want, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent } });
+        put(b, { name: 'least conductance: what is made inside over the difference the band allows', value: made / (hi - s.hi), unit: `${c.flux} per ${c.potential}`, from: madeInto(c.id, Rid).map((m) => m.leaf.name).join(' + ') });
+      } else supply(c, Rid, { below: hi }, want, parent);
+    }
+    if (lo !== null && hi !== null && nbrs.some((n) => n.lo < lo || n.hi > hi || n.lo !== n.hi)) observeAndModulate(c, Rid, want, parent, hi - lo);
+  };
+  const boundsOn: { want: Want; carrier: Carrier; around: string }[] = [];
+
   for (const w of intent.wants) {
     const cid = w.quantity.carrier;
     if (cid && duration(w, carrierById(cid))) continue;
@@ -409,22 +442,9 @@ export function generate(intent: Intent): Structure {
 
     if (c.id === 'momentum') { momentumWant(w, c, role, R); continue; }
 
+    if (role === 'potential' && w.relativeTo) { boundsOn.push({ want: w, carrier: c, around: w.relativeTo }); continue; }
     if (role === 'potential' && (w.when === 'always' || w.when === 'by the end')) {
-      const nbrs = intent.regions.filter((n) => n.id !== R.id && touches(intent, n.id, R.id)).map((n) => stateOf(n, c.id)).filter((x): x is State => !!x);
-      for (const n of nbrs) faceElements(add({ id: `boundary:${c.id}:${R.id}|${n.region}`, kind: 'boundary', carrier: c.id, says: `${R.id} exchanges ${c.id} with ${n.region} through a boundary whose conductance is free`, regions: [R.id, n.region], values: [], why: { want: w.id, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent: null } }), c.id, R.id, n.region);
-      const made = madeInto(c.id, R.id).reduce((s, m) => s + m.leaf.value!, 0);
-      if (!nbrs.length && !made) gap(w.id, null, c.id, `nothing touching ${R.id} holds ${c.id} or makes it: the want's balance has no terms`);
-      if (lo !== null && nbrs.some((n) => n.lo < lo)) supply(c, R.id, { above: lo }, w.id, null);
-      if (hi !== null && (nbrs.some((n) => n.hi > hi) || made > 0)) {
-        const steady = nbrs.filter((n) => n.hi < hi);
-        if (made > 0 && steady.length && !nbrs.some((n) => n.hi > hi)) {
-          // what is made inside leaves only by exchange: the boundary to the neighbour below the band has a least conductance
-          const s = steady.sort((a, b) => a.hi - b.hi)[0]!;
-          const b = add({ id: `boundary:${c.id}:${R.id}|${s.region}`, kind: 'boundary', carrier: c.id, says: `${R.id} exchanges ${c.id} with ${s.region} through a boundary whose conductance is free`, regions: [R.id, s.region], values: [], why: { want: w.id, rule: 'a held potential exchanges its carrier with every neighbour at another potential', laws: lawIds(c, 'conductance'), parent: null } });
-          b.values.push({ name: 'least conductance: what is made inside over the difference the band allows', value: made / (hi - s.hi), unit: `${c.flux} per ${c.potential}`, from: madeInto(c.id, R.id).map((m) => m.leaf.name).join(' + ') });
-        } else supply(c, R.id, { below: hi }, w.id, null);
-      }
-      if (lo !== null && hi !== null && nbrs.some((n) => n.lo < lo || n.hi > hi || n.lo !== n.hi)) observeAndModulate(c, R.id, w.id, null, hi - lo);
+      holdPotential(R.id, c, lo, hi, w.id, null);
       continue;
     }
 
@@ -501,6 +521,53 @@ export function generate(intent: Intent): Structure {
     gap(w.id, null, c.id, `${w.quantity.name} (${w.quantity.unit}) has the role ${role ?? 'none'} in ${c.id}${w.when === 'on demand' ? ' on demand' : ''}: no rule reads it`);
   }
 
+  // a matter that flows only above a potential of another carrier: the place it must flow is a region held above it, protected at what the matter bears
+  for (const r of intent.regions) for (const [sym, p] of Object.entries(r.properties ?? {}).filter(([, p]) => p.role === 'flows above')) {
+    use(r, sym);
+    const threshold = r.quantities[sym]!;
+    const along = elements.filter((e) => e.kind === 'path' && e.carrier === p.of && e.regions[0] === r.id);
+    const tc = carrierById(r.carriers?.[sym] ?? 'energy');
+    const most = Object.entries(r.properties ?? {}).find(([, q]) => q.of === tc.id && q.role === 'most potential');
+    if (most) use(r, most[0]);
+    for (const pth of along) {
+      const end = pth.regions[pth.regions.length - 1]!;
+      const host = intent.regions.filter((x) => x.environment && touches(intent, x.id, end) && stateOf(x, tc.id)).map((x) => x.id)[0];
+      if (!host) { gap(pth.why.want, pth.id, tc.id, `nothing around ${end} holds ${tc.id}`); continue; }
+      const id = `flows:${p.of}:${end}`;
+      hosts.set(id, host);
+      add({ id, kind: 'region', carrier: tc.id, says: `where ${p.of} must flow on its way into ${end}: held above ${threshold.name}`, regions: [end], values: [{ name: threshold.name, value: threshold.value!, unit: 'K', from: r.id }, ...(most ? [{ name: r.quantities[most[0]]!.name, value: r.quantities[most[0]]!.value!, unit: 'K', from: r.id }] : [])], why: { want: pth.why.want, rule: `${p.of} flows only above ${threshold.name}: the place it must flow is a region held above it`, laws: lawIds(tc, 'conductance'), parent: pth.id } });
+      holdPotential(id, tc, threshold.value!, most ? r.quantities[most[0]]!.value! : null, pth.why.want, id);
+      if (most) add({ id: `protection:${id}`, kind: 'modulation', carrier: tc.id, says: `what supplies the region ${id} is cut when the observation passes ${r.quantities[most[0]]!.name}`, regions: [id], values: [], why: { want: pth.why.want, rule: 'a supply that can pass what the held matter bears is cut there', laws: [], parent: id } });
+    }
+  }
+
+  // a bound on the potential of whatever touches a region: every generated region there held above the bound keeps its outer face below it
+  for (const b of boundsOn) {
+    const hot = [...hosts.entries()].filter(([, h]) => h === b.around).map(([id]) => id).filter((id) => elements.some((e) => e.id === id) && (elements.find((e) => e.id === id)!.values[0]?.value ?? -Infinity) > b.want.hi!.value!);
+    for (const id of hot) add({ id: `guard:${id}`, kind: 'boundary', carrier: b.carrier.id, says: `the outer face of the region ${id} where it meets ${b.around} is kept below ${b.want.hi!.name}: a boundary between them that lets out less than the difference over the bound`, regions: [id, b.around], values: [{ name: b.want.hi!.name, value: b.want.hi!.value!, unit: 'K', from: b.want.id }], why: { want: b.want.id, rule: `a bound on whatever touches ${b.around}: what is hotter keeps its outer face below it`, laws: lawIds(b.carrier, 'conductance'), parent: id } });
+    if (!hot.length) gap(b.want.id, null, b.carrier.id, `nothing the language generated in ${b.around} is above the bound`);
+  }
+
+  // matter placed against a shape sets at one potential and ends at another: it grows or shrinks by its expansion over the difference
+  for (const dep of elements.filter((e) => e.id.startsWith('deposit:'))) {
+    const R = dep.regions[0]!;
+    const tol = dep.values.find((v) => v.name === 'most position error')?.value;
+    const feed = elements.find((e) => e.kind === 'path' && e.carrier.startsWith('volume of') && e.regions[e.regions.length - 1] === R);
+    const src = feed ? intent.regions.find((x) => x.id === feed.regions[0]) : undefined;
+    if (!src || tol === undefined) continue;
+    const sets = Object.entries(src.properties ?? {}).find(([, p]) => p.role === 'holds its shape below');
+    const grows = Object.entries(src.properties ?? {}).find(([, p]) => p.role === 'expansion');
+    const ends = intent.regions.filter((x) => x.environment && touches(intent, x.id, R)).map((x) => stateOf(x, 'energy')).find((s) => s);
+    const sh = shape(R);
+    if (!sets || !grows || !ends || !sh) { gap(dep.why.want, dep.id, 'momentum', 'how the placed matter changes size between where it sets and where it ends is not said'); continue; }
+    use(src, sets[0]); use(src, grows[0]);
+    const strain = src.quantities[grows[0]]!.value! * (src.quantities[sets[0]]!.value! - ends.hi);
+    const size = Math.max(sh.x.value!, sh.y.value!, sh.z.value!);
+    const change = strain * size;
+    const comp = add({ id: `compensation:${R}`, kind: 'modulation', carrier: 'momentum', says: `the point follows the drawn shape scaled by one over one less the shrink: what is placed sets at ${src.quantities[sets[0]]!.name} and shrinks to ${ends.region}'s temperature`, regions: [dep.id], values: [{ name: 'shrink between setting and the end', value: strain, unit: '1', from: `${src.quantities[grows[0]]!.name} times the difference` }, { name: 'change over the largest extent', value: change, unit: 'm', from: 'the shrink times the extent' }, { name: 'scale the shape is drawn at', value: 1 / (1 - strain), unit: '1', from: 'one over one less the shrink' }], why: { want: dep.why.want, rule: 'matter placed against a shape changes size by its expansion between where it sets and where it ends', laws: [], parent: dep.id } });
+    if (change > tol) add({ id: `calibration:${R}`, kind: 'observer', carrier: 'momentum', says: `the observation of the point is referred to the scaled shape: uncompensated, the part would miss the tolerance by ${(change / tol).toFixed(1)} times`, regions: [dep.id], values: [{ name: 'change over the tolerance', value: change / tol, unit: '1', from: 'the change over the most position error' }], why: { want: dep.why.want, rule: 'what the observer refers the point to must carry the shrink when it exceeds the tolerance', laws: [], parent: comp.id } });
+  }
+
   // a path that must carry a flux within a potential drop: its least conductance, what it dissipates, its own heat balance and its protection
   for (const p of elements.filter((e) => e.kind === 'path' && e.values.some((v) => v.name === 'largest drop the path may have'))) {
     const to = p.regions[p.regions.length - 1]!;
@@ -512,6 +579,31 @@ export function generate(intent: Intent): Structure {
     shed(p, to, p.why.want, true);
     add({ id: `protection:${p.id}`, kind: 'modulation', carrier: p.carrier, says: `the path is opened when its flux exceeds what its heat balance allows`, regions: p.regions, values: [], why: { want: p.why.want, rule: 'a path whose dissipation has a limit is opened above the flux that reaches it', laws: lawIds(carrierById(p.carrier), 'dissipation'), parent: p.id } });
   }
+
+  // what each generated element is made of, from what is available: a missing value is a gap in the knowledge, not in the language
+  const kept = keptMatters();
+  for (const p of elements.filter((e) => e.kind === 'path' && e.carrier === 'charge' && e.values.some((v) => v.name.startsWith('least conductance')))) {
+    const m = chooseMatter(kept, 'charge', 'conductivity', 'most');
+    if (!m.pick) { gap(p.why.want, p.id, 'charge', m.lacks!); continue; }
+    const G = p.values.find((v) => v.name.startsWith('least conductance'))!.value;
+    put(p, { name: `made of ${m.pick.name}: the available matter that conducts charge best`, value: m.value!.value!, unit: 'S/m', from: m.value!.name });
+    put(p, { name: 'least section over length: the conductance over the conductivity', value: G / m.value!.value!, unit: 'm', from: `${p.carrier}.path-conductance` });
+  }
+  const energyBoundaries = elements.filter((e) => e.kind === 'boundary' && e.carrier === 'energy' && !e.id.startsWith('shed:') && intent.regions.some((r) => r.id === e.regions[0]));
+  if (energyBoundaries.length) { const m = chooseMatter([...kept, ...intent.regions.map((r) => ({ id: r.id, name: r.id, properties: statedOf(r) }))], 'energy', 'conductivity', 'least'); if (!m.pick) for (const b of energyBoundaries.slice(0, 1)) gap(b.why.want, b.id, 'energy', `what the boundary is made of: ${m.lacks}`); }
+  for (const b of elements.filter((e) => e.kind === 'boundary' && e.carrier.startsWith('volume of') && e.id.endsWith(':closed'))) { const m = chooseMatter(kept, b.carrier, 'conductivity', 'least'); if (!m.pick) gap(b.why.want, b.id, b.carrier, `what the boundary is made of: ${m.lacks}`); }
+  const members = elements.filter((e) => e.id.startsWith('members:'));
+  if (members.length) {
+    const m = chooseMatter(kept, 'momentum', 'stiffness', 'most');
+    for (const e of members) put(e, { name: 'matters available that state a stiffness and a strength', value: m.candidates.filter((x) => propertyOf(x.properties, 'momentum', 'most flux density')).length, unit: '1', from: 'src/data/materials.ts' });
+    gap(members[0]!.why.want, members[0]!.id, 'momentum', 'a member\'s section is a configuration of the space its span, its load and its bounds make: no system is generated from an element');
+  }
+  // what bears the heat: no available matter states the highest temperature it bears, unless the intent does
+  for (const g of gaps.filter((x) => /the hottest it may run/.test(x.lacks))) {
+    const m = chooseMatter(kept, 'energy', 'most potential', 'most');
+    if (!m.pick) g.lacks = `the hottest it may run is a property of what it is made of: ${m.lacks}`;
+  }
+  for (const g of gaps.filter((x) => /structure's own weight/.test(x.lacks))) g.lacks = 'the structure\'s own weight is its members\' matter times their size: no system is generated from an element';
 
   // a flow of a medium carries what the medium holds: a species' boundary conducts a volume of the medium per time
   const aggregate = (e: Element) => e.kind === 'boundary' && !elements.some((p) => p.id === e.why.parent && p.kind === 'boundary');
@@ -539,6 +631,8 @@ export function describe(s: Structure): string {
 export interface Lack { distinction: string; inventions: string[]; gaps: number; unread: number }
 
 const SIGNATURES: [RegExp, string][] = [
+  [/no available matter states/, 'knowledge: the kept data does not state it'],
+  [/no system is generated from an element/, 'a system from an element: sizing what is generated'],
   [/no material is chosen/, 'what a region is made of'],
   [/no geometry/, 'geometry: the sizes, areas and shapes of regions'],
   [/no process/, 'a process: how long a change takes'],

@@ -134,19 +134,40 @@ describe('the language now: carriers, balances and shapes generate structure', (
     expect(value(p, 'use:volume of PLA:the part', 'least flux to fill it in time') / value(p, 'use:volume of PLA:the part', 'least flux')).toBeGreaterThan(33);
   });
 
-  it('coverage against the aspects the request names: none in round 0, 44 of 64 in round 1, 50 of 64 now, and what is not covered is named', () => {
+  it('what the matter gives: a threshold makes a held region, a limit makes a protection, a bound makes a guard, a shrink makes a calibration', () => {
+    const [h, , p] = round1().structures as [Structure, Structure, Structure];
+    // PLA flows only above 190 °C: the place it must flow is a region held between that and what it bears, supplied, observed, cut above 220 °C
+    const flow = 'flows:volume of PLA:the part';
+    expect(el(p, flow).values.map((v) => v.value)).toEqual([190 + 273.15, 220 + 273.15]);
+    expect(el(p, `conversion:energy:${flow}:supply`).why.rule).toMatch(/no reservoir drives/);
+    expect(value(p, `observer:energy:${flow}`, 'resolution needed')).toBeCloseTo(15, 9);
+    expect(p.elements.some((e) => e.id === `protection:${flow}`)).toBe(true);
+    // the person may touch nothing above 60 °C: the hot region keeps its outer face below it where it meets the room
+    expect(el(p, `guard:${flow}`).regions).toEqual([flow, 'room air']);
+    // PLA sets at its glass transition and shrinks to the room's temperature: 0.27 %, 0.54 mm over 0.2 m, 5.4 times the tolerance
+    expect(value(p, 'compensation:the part', 'shrink')).toBeCloseTo(6.8e-5 * 40, 12);
+    expect(value(p, 'compensation:the part', 'change over the largest extent')).toBeCloseTo(6.8e-5 * 40 * 0.2, 12);
+    expect(value(p, 'calibration:the part', 'change over the tolerance')).toBeCloseTo(6.8e-5 * 40 * 0.2 / 1e-4, 9);
+    // the charge path is made of the available matter that conducts charge best, which fixes its least section over length
+    const path = 'path:charge:the grid->inside';
+    expect(el(h, path).values.find((v) => v.name.startsWith('made of'))!.name).toMatch(/^made of Copper C110/);
+    expect(value(h, path, 'least section over length')).toBeCloseTo(value(h, path, 'least conductance') / value(h, path, 'made of'), 15);
+  });
+
+  it('coverage against the aspects the request names: none in round 0, 44 of 64 in round 1, 50 in round 2, 53 now, and what is not covered is named', () => {
     const [h, c, p] = round1().structures as [Structure, Structure, Structure];
-    expect([covered('house', h).length, covered('car', c).length, covered('printer', p).length]).toEqual([23, 15, 12]);
+    expect([covered('house', h).length, covered('car', c).length, covered('printer', p).length]).toEqual([23, 15, 15]);
     const missing = (k: 'house' | 'car' | 'printer', s: Structure) => ASPECTS[k].filter((a) => !covered(k, s).includes(a));
     expect(missing('house', h)).toEqual(['siding', 'drainage', 'mechanical systems', 'maintenance/access', 'material compatibility', 'manufacturing/construction constraints']);
     expect(missing('car', c)).toEqual(['transmission', 'mechanical interfaces', 'manufacturing', 'maintenance']);
-    expect(missing('printer', p)).toEqual(['thermal systems', 'calibration', 'manufacturing constraints', 'failure modes']);
+    expect(missing('printer', p)).toEqual(['manufacturing constraints']);
   });
 
-  it('the failures rank the next upgrade: one distinction blocks all three inventions now, what a region is made of', () => {
+  it('the failures rank the next upgrade: what blocks all three inventions now is knowledge the data lacks, not the language', () => {
     const { intents, structures } = round1();
     const ranked = lacking(intents, structures);
-    expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['what a region is made of']);
+    expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['knowledge: the kept data does not state it']);
     expect(ranked.find((l) => l.distinction.startsWith('direction'))).toBeUndefined();
+    expect(ranked.find((l) => l.distinction === 'what a region is made of')!.inventions).toEqual(['a 3D printer']);
   });
 });

@@ -40,6 +40,7 @@ element with its lineage, and the complex inventions are the instruments that me
 | Twenty-two of the book's laws are instances of one carrier family and one coupling | tests/nexus/carrier.test.ts |
 | The balances and shapes generate 50 of the 64 aspects the request names, without naming a part | tests/nexus/probe.test.ts |
 | A free plan is chosen in the space under a declared preference: the least boundary is square | tests/nexus/probe.test.ts |
+| A matter's threshold makes a held region, its limit a protection, its expansion a calibration: 53 of 64 aspects | tests/nexus/probe.test.ts |
 
 ## 3. What is missing
 
@@ -53,10 +54,12 @@ element with its lineage, and the complex inventions are the instruments that me
 
 ## 4. Next
 
-Round 3 of the probes: what a region is made of, the one distinction that blocks all three inventions. A matter
-has a property for each carrier and role (a conductivity, a capacitance per volume, a stiffness, the most flux
-density and the highest potential it bears, and the potentials at which its properties change), so material and
-shape together are the family's parameters, chosen in the configuration space from what is available.
+Round 4 of the probes: advection and gravity in a matter's potential, which are one principle. A flow of matter
+carries the content of every other carrier the matter holds (its heat, its species, its momentum), and a matter's
+potential is its mechanical energy per volume, pressure and height in gravity together. It reaches the house's
+drainage, siding against driven rain and the machinery that moves air, and the printer's hot region, which must heat
+the PLA that flows through it. Then systems from elements: every generated element with bounds makes a system whose
+space sizes it.
 
 ## 5. Why each primitive exists
 
@@ -93,3 +96,6 @@ shape together are the family's parameters, chosen in the configuration space fr
 | Shape: a region as a domain with faces, areas and normals | a balance is a surface integral; geometry and direction are one primitive | round 1's ranking |
 | A flux travels a way; a want has a direction | which faces a flux crosses, which variation a want feels | rain on a roof, bumps under a ride |
 | A duration is a content change over a flux | the balance integrated over time | the timed wants of all three |
+| Matter: properties per carrier and role, with thresholds | what a region is made of, and where its properties change | round 2's ranking |
+| A threshold makes a held region | a matter that flows only above a potential must be held above it where it flows | the printer had no thermal system |
+| A knowledge gap is not a language gap | a role the language reads that no matter states is missing data | the kept data has no thermal properties |

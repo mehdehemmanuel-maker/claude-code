@@ -40,9 +40,18 @@ export interface Region {
    * (a floor area is x times z).
    */
   extent?: { x: string | null; y: string | null; z: string | null; plan?: string; faces: Partial<Record<'up' | 'down' | 'side', string>> };
+  /**
+   * Quantities that are properties of the matter the region holds or is made of, each about a carrier and a role: a
+   * conductivity, a capacity per mass, a density, a stiffness, the most flux density or the highest potential it
+   * bears, how much it expands per degree, and the potentials at which it changes: above which it flows, below which
+   * it holds its shape.
+   */
+  properties?: Record<string, { of: string; role: MatterRole }>;
   /** For a quantity the region brings: which way it travels in the frame (rain and snow fall, wind blows across, sunlight comes from above). */
   directions?: Record<string, 'down' | 'across' | 'from above' | 'vertical' | 'along'>;
 }
+
+export type MatterRole = 'density' | 'stiffness' | 'most flux density' | 'conductivity' | 'capacity per mass' | 'most potential' | 'flows above' | 'holds its shape below' | 'expansion';
 
 export interface Want {
   id: string;
@@ -52,7 +61,7 @@ export interface Want {
   region: string;
   /** The quantity, with its unit, and the carrier it is about when the unit does not say it. */
   quantity: { sym: string; unit: string; name: string; carrier?: string; direction?: 'vertical' | 'across' | 'along' };
-  /** For a position: what it is measured from (the road's path, the drawn shape). */
+  /** For a position: what it is measured from (the road's path, the drawn shape); for a potential, the region whose every neighbour the bound is on (anything that touches the room's air). */
   relativeTo?: string;
   /** The conditions the want holds under, as quantities (a crash from 50 km/h), by symbol and carrier. */
   condition?: Record<string, { leaf: Leaf; carrier: string }>;

@@ -108,11 +108,12 @@ export function printer(): Intent {
   const regions: Region[] = [
     { id: 'the part', by: person, environment: false, adjoins: ['room air', 'the drawn shape'], extent: { x: 'size', y: 'size', z: 'size', faces: { up: 'room air', side: 'room air' } }, quantities: { size: given('largest part', 0.2, 'm', 'a part that fits a 200 mm cube') } },
     { id: 'the drawn shape', by: person, environment: false, adjoins: ['the part'], quantities: {} },
-    { id: 'a spool of filament', by: person, environment: false, adjoins: ['room air'], carriers: { V: 'volume of PLA', p: 'volume of PLA', cp: 'energy', k: 'energy', Tmelt: 'energy', Tg: 'energy' }, holds: ['p'], quantities: {
+    { id: 'a spool of filament', by: person, environment: false, adjoins: ['room air'], carriers: { V: 'volume of PLA', p: 'volume of PLA', cp: 'energy', k: 'energy', Tmelt: 'energy', Tmax: 'energy', Tg: 'energy' }, holds: ['p'],
+      properties: { Tmelt: { of: 'volume of PLA', role: 'flows above' }, Tmax: { of: 'energy', role: 'most potential' }, Tg: { of: 'momentum', role: 'holds its shape below' }, cp: { of: 'energy', role: 'capacity per mass' }, k: { of: 'energy', role: 'conductivity' }, alpha: { of: 'momentum', role: 'expansion' }, rho: { of: 'momentum', role: 'density' } }, quantities: {
       d: given('diameter of the filament', 0.00175, 'm', 'the filament the person buys'), m: given('mass on the spool', 1, 'kg', 'a spool'),
       V: given('volume of filament on the spool', 8.06e-4, 'm^3', 'a kilogram at 1240 kg/m³'), p: site('pressure on the spool', 0, 'Pa', 'open to the room'),
       rho: leaf('density of PLA', 1240, 'kg/m^3', { class: 'measured', source: 'src/data/materials.ts polymer.pla (MatWeb typical unfilled grade)' }),
-      Tmelt: est('lowest temperature PLA flows to print', 190, 'degC', 'makers\' printing window 190 to 220 °C'), Tg: est('glass transition of PLA', 60, 'degC', 'about 55 to 65 °C'),
+      Tmelt: est('lowest temperature PLA flows to print', 190, 'degC', 'makers\' printing window 190 to 220 °C'), Tmax: est('highest temperature PLA bears in printing', 220, 'degC', 'makers\' printing window 190 to 220 °C; it degrades above'), Tg: est('glass transition of PLA', 60, 'degC', 'about 55 to 65 °C'),
       cp: est('specific heat of PLA', 1800, 'J/kg K', 'about 1.8 kJ/kg K'), k: est('conductivity of PLA', 0.13, 'W/m K', 'about 0.13 W/m K'), alpha: est('thermal expansion of PLA', 6.8e-5, '1/K', 'about 68 µm/m K'),
     } },
     { id: 'room air', by: 'the site', environment: true, adjoins: ['the part', 'a spool of filament', 'a table', 'the grid', 'the person'], holds: ['T'], carriers: { T: 'energy' }, quantities: { T: site('room temperature', 20, 'degC', 'a room') } },
@@ -126,7 +127,7 @@ export function printer(): Intent {
     want('whole', 'the part is strong, not a pile of layers', 'the part', 'bond', '1', 'strength between layers over the material\'s strength', 'by the end', { lo: given('fused', 0.5, '1', 'half the bulk strength') }),
     want('rate', 'it makes parts at a useful rate', 'the part', 'Qv', 'm^3/s', 'volume added to the part per time', 'on demand', { carrier: 'volume of PLA', lo: given('rate', 2.78e-9, 'm^3/s', '10 cm³ an hour') }),
     want('in time', 'a big part within a day', 'the part', 'tmake', 's', 'time to make the largest part', 'by the end', { carrier: 'volume of PLA', hi: given('a day', 86400, 's', 'a day') }),
-    want('safe', 'I cannot burn myself on it', 'the person', 'Ttouch', 'degC', 'temperature of anything the person can touch', 'always', { carrier: 'energy', hi: given('safe to touch', 60, 'degC', 'brief contact (ISO 13732-1 order of magnitude)') }),
+    want('safe', 'I cannot burn myself on it', 'the person', 'Ttouch', 'degC', 'temperature of anything the person can touch', 'always', { carrier: 'energy', relativeTo: 'room air', hi: given('safe to touch', 60, 'degC', 'brief contact (ISO 13732-1 order of magnitude)') }),
     want('start', 'I start and stop it when I want', 'the person', 'delay', 's', 'delay between the person\'s choice and the machine\'s response', 'on demand', { carrier: 'charge', hi: given('prompt', 1, 's', 'a second') }),
     want('take out', 'I can take the part out', 'the person', 'tout', 's', 'time to take the part out', 'on demand', { hi: given('a minute', 60, 's', 'a minute') }),
   ];
@@ -210,17 +211,17 @@ export const CHECKS: Record<'house' | 'car' | 'printer', Record<string, Check>> 
     'motion generation': (s) => has(s, (e) => e.kind === 'conversion' && e.id.includes('->momentum:deposit')),
     'positioning': (s) => has(s, (e) => e.kind === 'observer' && e.values.some((v) => v.name === 'resolution needed' && v.unit === 'm')),
     'structural rigidity': (s) => has(s, (e) => e.kind === 'path' && e.carrier === 'momentum' && e.values.some((v) => v.name === 'most displacement')),
-    'thermal systems': (s) => has(s, (e) => e.kind === 'conversion' && e.carrier === 'energy'),
+    'thermal systems': (s) => has(s, (e) => e.kind === 'conversion' && e.carrier === 'energy' && e.regions.some((r) => r.startsWith('flows:'))) && has(s, (e) => e.kind === 'observer' && e.regions.some((r) => r.startsWith('flows:'))),
     'sensing': (s) => has(s, (e) => e.kind === 'observer'),
     'control': (s) => has(s, (e) => e.kind === 'modulation'),
     'extrusion/deposition': (s) => has(s, (e) => e.kind === 'conversion' && e.carrier === 'volume of PLA') && has(s, (e) => e.id.startsWith('deposit:')),
-    'calibration': none,
+    'calibration': (s) => has(s, (e) => e.id.startsWith('calibration:') && e.kind === 'observer') && has(s, (e) => e.id.startsWith('compensation:')),
     'power distribution': (s) => has(s, (e) => e.kind === 'path' && e.carrier === 'charge'),
     'geometry': (s) => ['x', 'y', 'z'].every((a) => has(s, (e) => e.id.endsWith(`deposit:the part:${a}`) && e.values.some((v) => v.name === 'travel'))) && has(s, (e) => e.values.some((v) => v.name.startsWith('span it holds'))),
     'tolerances': (s) => has(s, (e) => e.values.some((v) => v.name === 'most position error' || v.name === 'most displacement')),
     'feedback': (s) => has(s, (e) => e.kind === 'modulation' && /observation/.test(e.says)),
     'manufacturing constraints': none,
-    'failure modes': (s) => has(s, (e) => e.id.startsWith('protection:')),
+    'failure modes': (s) => has(s, (e) => e.id.startsWith('protection:')) && has(s, (e) => e.id.startsWith('guard:')),
   },
 };
 
