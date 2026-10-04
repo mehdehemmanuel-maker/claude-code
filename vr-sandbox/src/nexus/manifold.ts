@@ -212,13 +212,31 @@ export function generate(intent: Intent): Structure {
   };
 
   const contentBound = (region: string, c: string) => intent.wants.some((w) => w.region === region && w.quantity.carrier === c && roleOf(carrierById(c), w.quantity.unit) === 'content' && w.hi);
-  /** Matter that must leave: to the lowest reservoir of it, if it is below where the matter is. */
-  const drain = (c: Carrier, from: string, at: number, want: string | null, parent: string | null) => {
+  /** The density of the matter a carrier is a volume of, from a region that holds that matter and states it. */
+  const densityOf = (c: Carrier): Leaf | null => {
+    if (!c.id.startsWith('volume of ')) return null;
+    const name = c.id.slice('volume of '.length);
+    for (const r of intent.regions.filter((x) => x.matter === name)) for (const [sym, p] of Object.entries(r.properties ?? {})) if (p.role === 'density') { use(r, sym); return r.quantities[sym]!; }
+    return null;
+  };
+  const heightOf = (region: string): number | null => { const r = intent.regions.find((x) => x.id === region); if (!r) return null; if (!r.at) return r.environment ? null : 0; use(r, r.at); return r.quantities[r.at]!.value!; };
+  /**
+   * Matter that must leave goes to the lowest reservoir of it. A liquid's potential is its pressure and its height in
+   * gravity together (its mechanical energy per volume), so it is driven when the pressure where it is, plus its
+   * density times gravity times its height, is above the sink's.
+   */
+  const drain = (c: Carrier, from: string, at: number, want: string | null, parent: string | null, zFrom: number | null = null) => {
     const sinks = reservoirs(c.id).filter((s) => s.region !== from).sort((a, b) => a.hi - b.hi);
     if (!sinks.length) { gap(want, parent, c.id, `nothing in the site receives ${c.id}`); return; }
     const s = sinks[0]!;
     const out = path(c, from, s.region, want, `${c.id} leaves to the lowest reservoir of it, ${s.region}`, parent);
-    if (out && !(s.hi < at)) gap(want, out.id, c.id, `nothing drives ${c.id} from ${from} to ${s.region}: both are at ${at} ${c.potential}, and the height of a liquid in gravity is not part of its potential`);
+    if (!out) return;
+    const rho = densityOf(c), zs = heightOf(s.region), zf = zFrom ?? heightOf(from) ?? 0;
+    if (s.hi < at) return;
+    if (!rho || zs === null) { gap(want, out.id, c.id, `nothing drives ${c.id} from ${from} to ${s.region}: both are at ${at} ${c.potential}, and ${!rho ? `what the matter weighs (its density)` : `the height of ${s.region}`} is not said`); return; }
+    const drive = (at + rho.value! * g * zf) - (s.hi + rho.value! * g * zs);
+    put(out, { name: 'what drives it: its density times gravity times the fall', value: drive, unit: c.potential ?? 'Pa', from: `${rho.name}, the heights ${zf} m and ${zs} m` });
+    if (drive <= 0) gap(want, out.id, c.id, `${s.region} is not below ${from}: nothing drives ${c.id} there, and it must be raised`);
   };
 
   const flux: { region: string; carrier: string; J: number; from: string }[] = [];
@@ -501,13 +519,15 @@ export function generate(intent: Intent): Structure {
         const bnd = add({ id: `boundary:${c.id}:${R.id}|${next}:closed`, kind: 'boundary', carrier: c.id, says: `no ${c.id} crosses from ${next} into ${R.id}: a boundary that does not conduct it`, regions: [R.id, next], values: [{ name: 'conductance', value: 0, unit: `${c.flux} per ${c.potential}`, from: w.hi!.name }], why: { want: w.id, rule: `a bounded content: the ${c.id} ${b.id} brings is kept out`, laws: lawIds(c, 'conductance'), parent: null } });
         const brought = [...said(b, c.id, 'flux density')];
         const dirs = brought.map((q) => b.directions?.[q.sym]).filter((d): d is NonNullable<typeof d> => !!d);
-        const crossed = dirs.length ? [...new Set(dirs.flatMap(facesCrossed))] : undefined;
+        const windy = via ? via.some((x) => { const vr = intent.regions.find((y) => y.id === x); return !!vr && Object.entries(vr.directions ?? {}).some(([sym, d]) => d === 'across' && vr.carriers?.[sym] === 'momentum'); }) : false;
+        const crossed = dirs.length ? [...new Set([...dirs.flatMap(facesCrossed), ...(windy ? ['side' as Face] : [])])] : undefined;
         const faces = faceElements(bnd, c.id, R.id, next, crossed);
         const sh = shape(R.id);
         let carried: number | null = null;
         if (sh && crossed && brought.length) carried = brought.reduce((s, q) => s + q.leaf.value! * crossed.reduce((a, f) => a + sh.area[f].value!, 0), 0);
         if (faces.length && carried !== null) put(bnd, { name: `what the ${crossed!.join(' and ')} face${crossed!.length > 1 ? 's' : ''} intercept`, value: carried, unit: c.flux, from: `${brought.map((q) => q.leaf.name).join(' + ')} times the area` });
-        drain(c, next, ambient, w.id, bnd.id);
+        if (windy) put(bnd, { name: 'the sides take what the wind carries across', value: 1, unit: '1', from: 'the region it falls through is pushed across' });
+        drain(c, next, ambient, w.id, bnd.id, sh ? sh.y.value! : null);
         if (carried !== null) { const d = elements.find((e) => e.why.parent === bnd.id && e.kind === 'path'); put(d, { name: 'what it carries', value: carried, unit: c.flux, from: 'what the faces intercept' }); }
       }
       for (const m of madeInto(c.id, R.id).filter((x) => x.region !== R.id)) {
@@ -537,6 +557,15 @@ export function generate(intent: Intent): Structure {
       hosts.set(id, host);
       add({ id, kind: 'region', carrier: tc.id, says: `where ${p.of} must flow on its way into ${end}: held above ${threshold.name}`, regions: [end], values: [{ name: threshold.name, value: threshold.value!, unit: 'K', from: r.id }, ...(most ? [{ name: r.quantities[most[0]]!.name, value: r.quantities[most[0]]!.value!, unit: 'K', from: r.id }] : [])], why: { want: pth.why.want, rule: `${p.of} flows only above ${threshold.name}: the place it must flow is a region held above it`, laws: lawIds(tc, 'conductance'), parent: pth.id } });
       holdPotential(id, tc, threshold.value!, most ? r.quantities[most[0]]!.value! : null, pth.why.want, id);
+      // what flows in arrives at the potential it had, and must be brought to the threshold: density times specific heat times flow times the difference
+      const rho = Object.entries(r.properties ?? {}).find(([, q]) => q.role === 'density'), cp = Object.entries(r.properties ?? {}).find(([, q]) => q.role === 'capacity per mass' && q.of === tc.id);
+      const use_ = elements.find((e) => e.id === `use:${p.of}:${end}`);
+      const Q = use_ ? Math.max(...use_.values.filter((v) => v.unit === carrierById(p.of).flux).map((v) => v.value)) : null;
+      const before = intent.regions.filter((x) => touches(intent, x.id, r.id)).map((x) => stateOf(x, tc.id)).find((x) => x);
+      if (rho && cp && Q && before) {
+        use(r, rho[0]); use(r, cp[0]);
+        put(elements.find((e) => e.id === `conversion:${tc.id}:${id}:supply`), { name: 'least power to bring what flows to the threshold: density times specific heat times flow times the difference', value: r.quantities[rho[0]]!.value! * r.quantities[cp[0]]!.value! * Q * (threshold.value! - before.hi), unit: 'W', from: `${r.quantities[rho[0]]!.name}, ${r.quantities[cp[0]]!.name}, the largest flow wanted` });
+      }
       if (most) add({ id: `protection:${id}`, kind: 'modulation', carrier: tc.id, says: `what supplies the region ${id} is cut when the observation passes ${r.quantities[most[0]]!.name}`, regions: [id], values: [], why: { want: pth.why.want, rule: 'a supply that can pass what the held matter bears is cut there', laws: [], parent: id } });
     }
   }
@@ -607,9 +636,37 @@ export function generate(intent: Intent): Structure {
 
   // a flow of a medium carries what the medium holds: a species' boundary conducts a volume of the medium per time
   const aggregate = (e: Element) => e.kind === 'boundary' && !elements.some((p) => p.id === e.why.parent && p.kind === 'boundary');
-  for (const b of elements.filter((e) => aggregate(e) && e.carrier.startsWith('amount of'))) {
-    const others = [...new Set(elements.filter((e) => aggregate(e) && e.id !== b.id && e.carrier !== b.carrier && e.regions[0] === b.regions[0] && e.regions[1] === b.regions[1]).map((o) => o.carrier))];
-    if (others.length) gap(b.why.want, b.id, b.carrier, `its conductance is a volume of ${b.regions[1]} per time, and the same flow carries ${others.join(' and ')} across the same boundary: the language counts them as separate boundaries, it has no advection`);
+  const species = elements.filter((e) => aggregate(e) && e.carrier.startsWith('amount of'));
+  for (const [R, N] of [...new Set(species.map((b) => `${b.regions[0]}|${b.regions[1]}`))].map((k) => k.split('|') as [string, string])) {
+    const here = species.filter((b) => b.regions[0] === R && b.regions[1] === N);
+    const medium = intent.regions.find((x) => x.id === N);
+    if (!medium?.matter) { for (const b of here) gap(b.why.want, b.id, b.carrier, `its conductance is a volume of ${N} per time, and the same flow carries what ${N} holds: the matter ${N} is made of is not said`); continue; }
+    // the species' conductances are volumes of the medium per time: one flow, at least the largest of them, carries all of it
+    const Q = Math.max(...here.map((b) => b.values.find((v) => v.name.startsWith('least conductance'))?.value ?? 0));
+    const air = carrierById(`volume of ${medium.matter}`);
+    const others = [...new Set(elements.filter((e) => aggregate(e) && e.carrier !== air.id && !e.carrier.startsWith('amount of') && e.regions[0] === R && e.regions[1] === N).map((o) => o.carrier))];
+    const ex = add({ id: `exchange:${R}|${N}`, kind: 'path', carrier: air.id, says: `one flow of ${medium.matter} between ${R} and ${N} carries ${[...here.map((b) => b.carrier), ...others.filter((o) => o === 'energy')].join(', ')} together: a flow of matter carries what the matter holds`, regions: [R, N], values: [{ name: 'least flow: the largest the species need', value: Q, unit: air.flux, from: here.map((b) => b.why.want).join(', ') }], why: { want: here[0]!.why.want, rule: 'advection: a flow of matter carries the content of every carrier the matter holds', laws: [...lawIds(air, 'conductance'), ...here.flatMap((b) => b.why.laws)], parent: null } });
+    for (const b of here.slice(1)) ex.also.push(b.why);
+    // the heat it carries at the coldest, which the supply of heat must also give
+    const rho = Object.entries(medium.properties ?? {}).find(([, p]) => p.role === 'density'), cp = Object.entries(medium.properties ?? {}).find(([, p]) => p.role === 'capacity per mass' && p.of === 'energy');
+    const hold = intent.wants.find((w) => w.region === R && w.quantity.carrier === 'energy' && w.lo);
+    const outside = stateOf(medium, 'energy');
+    if (rho && cp && hold && outside) {
+      use(medium, rho[0]); use(medium, cp[0]);
+      const P = medium.quantities[rho[0]]!.value! * medium.quantities[cp[0]]!.value! * Q * (hold.lo!.value! - outside.lo);
+      put(ex, { name: 'heat it carries out at the coldest: density times specific heat times flow times the difference', value: P, unit: 'W', from: `${medium.quantities[rho[0]]!.name}, ${medium.quantities[cp[0]]!.name}` });
+      put(elements.find((e) => e.id === `conversion:energy:${R}:supply`), { name: 'least it supplies for the exchanged air at the coldest', value: P, unit: 'W', from: ex.id });
+      add({ id: `recovery:${R}|${N}`, kind: 'boundary', carrier: 'energy', says: `or the heat the outgoing ${medium.matter} carries crosses to the incoming ${medium.matter} through a boundary between the two flows, so less must be supplied`, regions: [ex.id], values: [], oneOf: `heat of ${ex.id}`, why: { want: hold.id, rule: 'two flows at different potentials can exchange across a boundary between them', laws: lawIds(carrierById('energy'), 'conductance'), parent: ex.id } });
+    }
+    // what drives the flow: the medium's potential is the same on both sides, so it is raised by a conversion, or pushed by the wind when it blows
+    const p0 = stateOf(medium, air.id);
+    if (p0) {
+      const conv = add({ id: `conversion:${air.id}:${R}|${N}`, kind: 'conversion', carrier: air.id, says: `a conversion that raises ${air.id} from ${N} through ${R} up its potential, with power from another carrier: nothing else drives the flow`, regions: [R], values: [], oneOf: `drive of ${ex.id}`, why: { want: here[0]!.why.want, rule: `${R} and ${N} hold ${medium.matter} at one potential: a flow between them needs a conversion, never made, always raised`, laws: [], parent: ex.id } });
+      for (const s of powerSources(R)) { conv.why.laws = [...new Set([...conv.why.laws, ...(s.carrier.conjugate ? coupling(s.carrier, air).map((l) => l.id) : [])])]; path(s.carrier, s.region, R, here[0]!.why.want, `the conversion draws ${s.carrier.id} from ${s.region}`, conv.id); }
+      shed(conv, R, here[0]!.why.want, true);
+      const wind = Object.entries(medium.directions ?? {}).find(([sym, d]) => d === 'across' && medium.carriers?.[sym] === 'momentum');
+      if (wind) add({ id: `wind:${ex.id}`, kind: 'modulation', carrier: air.id, says: `or the wind's push on the sides drives the flow when it blows: it varies, so the openings are modulated to the flow the species need`, regions: [R, N], values: [], oneOf: `drive of ${ex.id}`, why: { want: here[0]!.why.want, rule: 'a varying potential difference drives a flow that is modulated to what is needed', laws: lawIds(air, 'conductance'), parent: ex.id } });
+    }
   }
 
   // a want that is not about a carrier's balance reads nothing; what the intent says and no rule read is information the language cannot use

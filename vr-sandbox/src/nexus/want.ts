@@ -47,6 +47,10 @@ export interface Region {
    * it holds its shape.
    */
   properties?: Record<string, { of: string; role: MatterRole }>;
+  /** The matter the region holds, when it is a medium that can flow (the air, the water): a flow of it is a volume of it. */
+  matter?: string;
+  /** Its height in the site's frame, by the symbol of the quantity that states it (the floor of what the person names is at zero). */
+  at?: string;
   /** For a quantity the region brings: which way it travels in the frame (rain and snow fall, wind blows across, sunlight comes from above). */
   directions?: Record<string, 'down' | 'across' | 'from above' | 'vertical' | 'along'>;
 }

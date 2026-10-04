@@ -205,3 +205,32 @@ language distinction blocks all three. Of the language's, advection reaches two 
 and specific heat stay unread because the flow of PLA carries energy into the hot region, which is the same
 distinction as the house's air exchange carrying heat; gravity in a liquid's potential (drainage) and generating a
 system from an element (sizing the house's members, and with them its own weight) block the house.
+
+## Round 4: what a flow of matter carries
+
+Advection and gravity in a liquid's potential are one principle: a flow of matter carries the content of every
+carrier the matter holds, and a matter's potential is its mechanical energy per volume, pressure and height in
+gravity together. Regions can say what matter they hold (outside air is air, the main's water is water) and how high
+they are.
+
+| Emergent | Number |
+|---|---|
+| one flow of air between inside and outside carries the carbon dioxide, the vapour and the heat | at least 38.6 L/s |
+| the heat it carries out at the coldest, which the heat supply must also give | 1.86 kW |
+| or the outgoing air's heat crosses to the incoming air (an alternative) | |
+| a conversion raises the air, since inside and outside hold it at one potential, or the wind pushes it through modulated openings | |
+| rain falls through air the wind pushes across: the sides are closed to it too | 4.8 L/s intercepted |
+| drainage driven by height: from the roof, from the floor | 39 kPa, 14.7 kPa |
+| the heat the flowing PLA takes in to reach 190 °C at the largest wanted rate | 35 W |
+
+Coverage: 0, 44, 50, 53, now 56 of 64. The house reaches 26 of 29; what it lacks (access over fifty years,
+compatibility of matters in contact, how it is built) is the same in the car and the printer: what happens to a
+thing over its life and how it is made.
+
+## The next instrument: families, not inventions
+
+One car proves little about vehicles. The next rounds explore families as want-spaces: the intent becomes a point
+in a space whose axes are what a person and a site vary (the medium the payload moves through, its mass over scales,
+range, speed, the sources of power, gravity), the language generates every point of a lattice over it, and coverage
+is mapped over the subspaces. Where the language stops, the missing distinction is generalized and the whole family
+regenerates. Recognizable classes are regions of the space, named only by the evaluator.

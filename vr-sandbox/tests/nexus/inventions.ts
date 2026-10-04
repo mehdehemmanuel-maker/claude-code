@@ -28,7 +28,9 @@ export function house(): Intent {
       vapour: est('water vapour the people give off', 2.44e-3, 'mol/s', 'about 40 g/h a person at rest, 18 g/mol'),
       waste: est('waste water the people make', 9.3e-6, 'm^3/s', 'about 800 L a day for a family indoors (EPA WaterSense: 300 gal a day, 70 % indoors)'),
     } },
-    { id: 'outside air', by: 'the site', environment: true, adjoins: ['inside', 'the ground', 'the sky', 'the people', 'the grid'], holds: ['Tlo', 'Thi', 'c', 'cv'], carriers: { Tlo: 'energy', Thi: 'energy', c: 'amount of carbon dioxide', cv: 'amount of water vapour', qw: 'momentum', rho: 'mass of air' }, directions: { qw: 'across' }, quantities: {
+    { id: 'outside air', by: 'the site', environment: true, adjoins: ['inside', 'the ground', 'the sky', 'the people', 'the grid'], holds: ['Tlo', 'Thi', 'c', 'cv', 'pa'], matter: 'air', carriers: { Tlo: 'energy', Thi: 'energy', c: 'amount of carbon dioxide', cv: 'amount of water vapour', qw: 'momentum', rho: 'mass of air', pa: 'volume of air', cpa: 'energy' }, directions: { qw: 'across' },
+      properties: { rho: { of: 'momentum', role: 'density' }, cpa: { of: 'energy', role: 'capacity per mass' } }, quantities: {
+      pa: site('pressure of the outside air', 0, 'Pa', 'the atmosphere, as the reference'), cpa: est('specific heat of air', 1005, 'J/kg K', 'about 1.005 kJ/kg K at constant pressure'),
       Tlo: site('coldest outside air', -20, 'degC', 'the site\'s winter design temperature'), Thi: site('hottest outside air', 33, 'degC', 'the site\'s summer design temperature'),
       c: site('carbon dioxide in outside air', 0.0172, 'mol/m^3', 'about 420 ppm'), cv: site('water vapour in outside air', 0.5, 'mol/m^3', 'humid summer air'),
       rho: site('density of air', 1.2, 'kg/m^3', 'air near sea level'), qw: site('wind pressure', 1000, 'Pa', 'the site\'s design wind, about 40 m/s'),
@@ -45,11 +47,12 @@ export function house(): Intent {
     { id: 'the grid', by: 'the site', environment: true, adjoins: ['outside air', 'the ground'], holds: ['V'], limits: ['Pmax'], carriers: { V: 'charge', Pmax: 'charge' }, quantities: {
       V: site('voltage of the grid', 120, 'V', 'the site\'s service'), Pmax: site('most power the service gives', 24000, 'W', '200 A at 120 V'),
     } },
-    { id: 'the water main', by: 'the site', environment: true, adjoins: ['the ground'], holds: ['p'], carriers: { p: 'volume of water' }, quantities: {
-      p: site('pressure in the water main', 350000, 'Pa', 'the utility\'s pressure'),
+    { id: 'the water main', by: 'the site', environment: true, adjoins: ['the ground'], holds: ['p'], matter: 'water', at: 'z', carriers: { p: 'volume of water', rhow: 'momentum' }, properties: { rhow: { of: 'momentum', role: 'density' } }, quantities: {
+      p: site('pressure in the water main', 350000, 'Pa', 'the utility\'s pressure'), z: site('height of the water main', -1.2, 'm', 'buried below the frost'),
+      rhow: leaf('density of water', 1000, 'kg/m^3', { class: 'measured', source: 'water near 4 °C: 999.97 kg/m³ (CRC Handbook of Chemistry and Physics)' }),
     } },
-    { id: 'the sewer', by: 'the site', environment: true, adjoins: ['the ground'], holds: ['p'], carriers: { p: 'volume of water' }, quantities: {
-      p: site('pressure in the sewer', 0, 'Pa', 'open to the air'), z: site('depth of the sewer below the floor', 1.5, 'm', 'the site\'s sewer'),
+    { id: 'the sewer', by: 'the site', environment: true, adjoins: ['the ground'], holds: ['p'], at: 'z', carriers: { p: 'volume of water' }, quantities: {
+      p: site('pressure in the sewer', 0, 'Pa', 'open to the air'), z: site('height of the sewer', -1.5, 'm', 'the site\'s sewer, below the floor'),
     } },
   ];
   const wants: Want[] = [
