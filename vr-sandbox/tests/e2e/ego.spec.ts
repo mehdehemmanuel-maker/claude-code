@@ -65,8 +65,9 @@ test('search finds anything as you type; what you pick goes in the hotbar', asyn
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');
   await enterVR(page);
-  await tap(page, 'tab-search');
-  for (const k of ['o', 'a', 'k']) await tap(page, `skey-${k}`);
+  await tap(page, 'tab-make');
+  await tap(page, 'search');
+  for (const k of ['o', 'a', 'k']) await tap(page, `key-${k}`);
   await frames(page, 2);
   await tap(page, 'found-0');
   const picked = await sb(page, (s) => ({ mat: s.app.spawnMaterial, tool: s.tools.tool.id, hot: s.xr.tablet.hotbar.items[0] }));
@@ -74,7 +75,8 @@ test('search finds anything as you type; what you pick goes in the hotbar', asyn
   expect(picked.tool).toBe('place');
   expect(picked.hot).toEqual({ type: 'material', id: picked.mat });
   // a hotbar slot picks it up again
-  await tap(page, 'tab-tools');
+  await tap(page, 'search-done');
+  await tap(page, 'search-clear');
   await tap(page, 'tool-grab');
   await tap(page, 'hot-0');
   expect(await sb(page, (s) => s.tools.tool.id)).toBe('place');

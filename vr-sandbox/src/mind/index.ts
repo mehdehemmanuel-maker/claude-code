@@ -60,7 +60,7 @@ export class Mind {
 
   /** The last investigation touched, resolved or not. */
   current(): string | null {
-    const c = this.journal.commits.filter((x) => x.kind !== 'request').at(-1);
+    const c = this.journal.commits.filter((x) => x.kind !== 'request' && !x.inv.startsWith('construct:')).at(-1);
     return c?.inv ?? null;
   }
 

@@ -125,6 +125,10 @@ export function sayBrief(commits: Commit[], inv: string, lead: string): string {
   const obs = cs.find((c) => c.kind === 'observation');
   if (!obs) return `${lead}: nothing to say yet.`;
   const lastC = cs.at(-1)!;
+  if (obs.data['of'] === 'construct') {
+    const part = obs.data['part'] as { name: string; material: string; longest: number }, dom = obs.data['domain'] as { crossing: number; tick: number };
+    return `${lead}, a note: ${part.name} (${part.longest.toFixed(2)} m of ${part.material}) is outside the rigid model's domain; sound crosses it in ${(dom.crossing * 1000).toFixed(1)} ms against a ${(dom.tick * 1000).toFixed(1)} ms tick.`;
+  }
   if (obs.data['of'] === 'watchdog') {
     const b = cs.filter((c) => c.kind === 'belief').at(-1);
     return `${lead}, ${subjectOf(obs)}: ${b ? ((b.data['transition'] as { to: string }).to === 'true' ? 'the rigid model is extrapolating past its domain for that part; the finding is not physics' : 'the part is inside the rigid domain; the finding stands as an anomaly') : lastC.kind === 'question' ? String(lastC.data['says']) : 'still open'}.`;

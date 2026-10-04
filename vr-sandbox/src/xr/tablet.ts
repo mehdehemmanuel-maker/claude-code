@@ -1,14 +1,21 @@
-// Wrist tablet: the VR menu, drawn to a canvas texture on a plane held in the left hand and operated
-// with the right controller's ray. Redrawn only when something changes (or at 5 Hz for live readouts).
+// The wrist tablet: the VR menu, a canvas on a plane above the left controller, tapped with the right controller's
+// ray. Every page is a function of the app's state to a tree of nodes (ui.ts); the engine lays it out and keeps the
+// hit boxes. The canvas is redrawn only when something changed (and at 5 Hz where it shows live readouts); hovering
+// moves a translucent overlay over the widget and never redraws.
+//
+// Five pages: Ego (her advice, her Mind, your habits and skills, talk or type), Make (one search over everything, and
+// the shelves: tools, parts, materials, joints), Selected (the part or joint in hand, its loads, its numbers), World
+// (time, gravity, view, the room, the energy books, the watchdog), Builds (yours, and your templates). The build/play
+// strip is on every page; the hotbar runs along the bottom.
 
 import * as THREE from 'three';
 import type { App } from '../app/app';
+import { REPORT_REPO } from '../app/app';
 import type { ToolManager } from '../tools/tools';
 import { CONNECTOR_KINDS, getConnectorKind } from '../connectors/registry';
 import { AUTO_JOIN } from '../connectors/plan';
 import { Voice } from '../assistant/voice';
 import { issueUrl, reportText } from '../assistant/reports';
-import { REPORT_REPO } from '../app/app';
 import { drawGlyph, drawMaterial, drawPart, jointGlyph, type Item } from './icons';
 import { Hotbar, SLOTS } from './hotbar';
 import { catalogEntries, search, type Entry } from './search';
@@ -17,6 +24,8 @@ import { deleteParts, repairPart, setConnectionParam, setConnectionState, setFro
 import { DISPLAY, formatForce, formatMass, type NumberParam } from '../schema/params';
 import { getMaterial, MATERIALS, MATERIAL_GROUPS, STANDARD_GRAVITY } from '../data/materials';
 import { pullOnSteel } from '../engineering/magnets';
+import { sayBrief } from '../mind';
+import { T, bar, box, btn, chips, col, font, grid, render, roundRect, row, slot, text, type Node, type Paint, type Widget } from './ui';
 
 /** What the tablet needs from the XR mode: room modes and controls, and what the left stick does. */
 export interface XRControls {
@@ -32,37 +41,52 @@ export interface XRControls {
   scan(): void;
 }
 
-type Page = 'tools' | 'parts' | 'materials' | 'join' | 'search' | 'selected' | 'world' | 'builds' | 'ego';
-
-interface Widget {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  onClick: () => void;
-}
+export type Page = 'ego' | 'make' | 'selected' | 'world' | 'builds';
+type Shelf = 'Tools' | 'Parts' | 'Materials' | 'Joints';
 
 const W = 1024;
 const H = 840;
 /** The hotbar runs along the bottom; pages draw above it. */
 const HOT = 104;
 const CH = H - HOT;
+/** The page margin. */
+const M = 20;
 export const TABLET_SIZE = { w: 0.3, h: (0.3 * H) / W };
+
+/** A page: its body, laid out from the top, and a foot pinned above the hotbar. */
+interface View { body: Node; foot?: Node }
 
 export class Tablet {
   readonly mesh: THREE.Mesh;
-  private canvas = document.createElement('canvas');
+  readonly canvas = document.createElement('canvas');
   private ctx: CanvasRenderingContext2D;
   private texture: THREE.CanvasTexture;
-  page: Page = 'tools';
+  private hoverMesh: THREE.Mesh;
+  page: Page = 'make';
   widgets: Widget[] = [];
   private hoverId: string | null = null;
   private dirty = true;
   private lastDraw = 0;
-  private scroll = 0;
+  /** Each grid's page, by its id. */
+  private pages: Record<string, number> = {};
   visible = true;
   room: XRControls | null = null;
+
+  // page state
+  private shelf: Shelf = 'Tools';
+  private partCat = 'All';
+  private matGroup = 'All';
+  private query = '';
+  private searching = false;
+  private typing = false;
+  private shownView = false;
+  private reportsView = false;
+  private lifeView = false;
+  private deleting = false;
+  private buildShelf: 'Builds' | 'Templates' = 'Builds';
+  private listening = false;
+  readonly hotbar = new Hotbar();
+  private catalog: Entry[] | null = null;
 
   constructor(private app: App, private tools: ToolManager) {
     this.canvas.width = W;
@@ -77,6 +101,10 @@ export class Tablet {
     );
     this.mesh.name = 'tablet';
     this.mesh.renderOrder = 5;
+    this.hoverMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.14, depthTest: false, depthWrite: false, toneMapped: false }));
+    this.hoverMesh.renderOrder = 6;
+    this.hoverMesh.visible = false;
+    this.mesh.add(this.hoverMesh);
     app.subscribe(() => { this.dirty = true; });
   }
 
@@ -88,8 +116,8 @@ export class Tablet {
   /** Update hover from a ray hit (uv) and redraw if needed. */
   update(time: number, hoverUv: THREE.Vector2 | null) {
     const id = hoverUv ? this.hitId(hoverUv) : null;
-    if (id !== this.hoverId) { this.hoverId = id; this.dirty = true; }
-    const live = (this.page === 'selected' || this.page === 'world') && time - this.lastDraw > 200;
+    if (id !== this.hoverId) { this.hoverId = id; this.placeHover(); if (id) this.app.haptic?.(0.08, 8, 'right'); }
+    const live = (this.page === 'selected' || this.page === 'world' || this.page === 'ego') && time - this.lastDraw > 200;
     if ((this.dirty || live) && this.visible) {
       this.draw();
       this.lastDraw = time;
@@ -117,168 +145,370 @@ export class Tablet {
     return null;
   }
 
-  // ---------------------------------------------------------------------------------------------
-
-  private btn(id: string, x: number, y: number, w: number, h: number, label: string, onClick: () => void, opts: { on?: boolean; sub?: string; tone?: 'danger' | 'accent'; small?: boolean } = {}) {
-    const g = this.ctx;
-    const hover = this.hoverId === id;
-    g.fillStyle = opts.on ? 'rgba(255,179,71,0.28)' : hover ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)';
-    roundRect(g, x, y, w, h, 12);
-    g.fill();
-    g.strokeStyle = opts.on ? '#ffb347' : opts.tone === 'danger' ? 'rgba(255,91,77,0.7)' : opts.tone === 'accent' ? '#66b3ff' : 'rgba(255,255,255,0.12)';
-    g.lineWidth = opts.on || hover ? 3 : 2;
-    g.stroke();
-    g.fillStyle = '#e8ecf1';
-    g.font = `600 ${opts.small ? 20 : opts.sub ? 24 : 26}px system-ui, sans-serif`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(fit(g, label, w - 16), x + w / 2, y + h / 2 - (opts.sub ? 11 : 0));
-    if (opts.sub) {
-      g.font = '19px system-ui, sans-serif';
-      g.fillStyle = '#9aa4af';
-      g.fillText(fit(g, opts.sub, w - 16), x + w / 2, y + h / 2 + 17);
-    }
-    this.widgets.push({ id, x, y, w, h, onClick });
+  /** The hover overlay over the hovered widget: a quad on the tablet, moved, never a redraw of the canvas. */
+  private placeHover() {
+    const w = this.widgets.find((x) => x.id === this.hoverId);
+    if (!w) { this.hoverMesh.visible = false; return; }
+    this.hoverMesh.position.set(((w.x + w.w / 2) / W - 0.5) * TABLET_SIZE.w, (0.5 - (w.y + w.h / 2) / H) * TABLET_SIZE.h, 0.0005);
+    this.hoverMesh.scale.set((w.w / W) * TABLET_SIZE.w, (w.h / H) * TABLET_SIZE.h, 1);
+    this.hoverMesh.visible = true;
   }
 
-  /** Text in at most `lines` lines of `width` pixels, `size * 1.3` apart from the baseline y down. */
-  private wrapped(s: string, x: number, y: number, width: number, size: number, color: string, lines: number) {
-    const g = this.ctx;
-    g.font = `400 ${size}px system-ui, sans-serif`;
-    const out: string[] = [];
-    let cur = '';
-    for (const word of s.split(/\s+/)) {
-      const next = cur ? `${cur} ${word}` : word;
-      if (g.measureText(next).width <= width || !cur) { cur = next; continue; }
-      out.push(cur);
-      cur = word;
-    }
-    if (cur) out.push(cur);
-    if (out.length > lines) {
-      let last = out.slice(lines - 1).join(' ');
-      while (last && g.measureText(`${last}…`).width > width) last = last.slice(0, -1);
-      out.splice(lines - 1, out.length, `${last.trimEnd()}…`);
-    }
-    out.forEach((l, i) => this.text(l, x, y + i * size * 1.3, size, color));
+  /** After you showed her something: what she sees, and what's wrong with it, in a tap or in your words. */
+  openShown() {
+    this.page = 'ego';
+    this.shownView = true;
+    this.app.notify();
   }
 
-  private text(s: string, x: number, y: number, size = 24, color = '#e8ecf1', align: CanvasTextAlign = 'left', weight = '400') {
-    const g = this.ctx;
-    g.font = `${weight} ${size}px system-ui, sans-serif`;
-    g.fillStyle = color;
-    g.textAlign = align;
-    g.textBaseline = 'alphabetic';
-    g.fillText(s, x, y);
-  }
-
-  private grid<T>(items: T[], x0: number, y0: number, cols: number, cw: number, ch: number, gap: number, each: (it: T, x: number, y: number, i: number) => void) {
-    const rowsVisible = Math.floor((CH - y0 - 20) / (ch + gap));
-    const perPage = rowsVisible * cols;
-    const pages = Math.max(1, Math.ceil(items.length / perPage));
-    this.scroll = Math.min(this.scroll, pages - 1);
-    const start = this.scroll * perPage;
-    items.slice(start, start + perPage).forEach((it, i) => {
-      const cx = x0 + (i % cols) * (cw + gap);
-      const cy = y0 + Math.floor(i / cols) * (ch + gap);
-      each(it, cx, cy, start + i);
-    });
-    if (pages > 1) {
-      this.btn('pg-prev', W - 250, CH - 62, 110, 48, '◀', () => { this.scroll = Math.max(0, this.scroll - 1); });
-      this.btn('pg-next', W - 130, CH - 62, 110, 48, '▶', () => { this.scroll = Math.min(pages - 1, this.scroll + 1); });
-      this.text(`${this.scroll + 1}/${pages}`, W - 270, CH - 30, 22, '#9aa4af', 'right');
-    }
-  }
+  // ---- drawing ------------------------------------------------------------------------------------------
 
   draw() {
     const g = this.ctx;
     this.widgets = [];
     g.clearRect(0, 0, W, H);
-    g.fillStyle = 'rgba(22,25,30,0.94)';
+    g.fillStyle = T.bg;
     roundRect(g, 0, 0, W, H, 28);
     g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.12)';
+    g.strokeStyle = T.edge;
     g.lineWidth = 3;
     g.stroke();
-    const egoNews = this.app.ego?.advice.length ?? 0;
-    const tabs: [Page, string, string][] = [
-      ['tools', '🛠', 'Tools'], ['parts', '🧱', 'Parts'], ['materials', '🎨', 'Materials'], ['join', '🔩', 'Join'], ['search', '🔍', 'Search'],
-      ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'], ['ego', '✦', egoNews ? `Ego • ${egoNews}` : 'Ego'],
-    ];
-    // the tabs, and at the end, always there: show Ego something
-    const tw = (W - 40 - tabs.length * 6) / (tabs.length + 1);
-    tabs.forEach(([p, icon, label], i) => this.btn(`tab-${p}`, 20 + i * (tw + 6), 12, tw, 72, icon, () => { this.page = p; this.scroll = 0; }, { on: this.page === p, sub: label }));
-    this.btn('show', 20 + tabs.length * (tw + 6), 12, tw, 72, '👁', () => {
-      this.app.showArmed = !this.app.showArmed;
-      if (this.app.showArmed) this.app.toast('Point at it and pull the trigger: Ego will look', 'info');
-      this.app.notify();
-    }, { on: this.app.showArmed, tone: 'accent', sub: this.app.showArmed ? 'point…' : 'Show Ego' });
-    const y0 = 96;
-    const app = this.app;
-    switch (this.page) {
-      case 'tools': {
-        const cols = Math.ceil(this.tools.tools.length / 3), cw = (W - 40 - (cols - 1) * 8) / cols;
-        this.grid(this.tools.tools, 20, y0, cols, cw, 112, 8, (t, x, y, i) =>
-          this.btn(`tool-${t.id}`, x, y, cw, 112, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` }));
-        this.drawBuildRow(y0 + 3 * 120 + 6);
-        {
-          const s = app.settings, bw = (W - 40 - 8) / 2, ys = y0 + 3 * 120 + 6 + 72;
-          this.btn('gridlock', 20, ys, bw, 52, s.gridLock ? '🔒 Grid lock: on' : '🔓 Grid lock: off', () => { s.gridLock = !s.gridLock; app.notify(); }, { on: s.gridLock, small: true });
-          this.btn('smartsnap', 20 + bw + 8, ys, bw, 52, s.smartSnap ? '🧲 Smart snap: on' : 'Smart snap: off', () => { s.smartSnap = !s.smartSnap; app.notify(); }, { on: s.smartSnap, small: true });
-        }
-        // what the active tool can do besides its trigger action
-        const acts = this.tools.actions();
-        const aw = (W - 40 - 3 * 8) / 4;
-        acts.slice(0, 4).forEach((a, i) => this.btn(`act-${a.id}`, 20 + i * (aw + 8), CH - 142, aw, 64, a.label, () => a.run(), { on: a.on }));
-        this.wrapped(this.tools.tool.hint, 24, CH - 50, W - 48, 21, '#9aa4af', 2);
-        break;
-      }
-      case 'parts': {
-        const cats = ['All', ...new Set(PART_KINDS.map((k) => k.category))];
-        const yg = this.chips('pcat', cats, this.partCat, (c) => { this.partCat = c; this.scroll = 0; }, y0);
-        const list = PART_KINDS.filter((k) => this.partCat === 'All' || k.category === this.partCat);
-        const sw = (W - 40 - 5 * 8) / 6;
-        this.grid(list, 20, yg, 6, sw, 150, 8, (k, x, y) =>
-          this.slot(`part-${k.id}`, x, y, sw, 150, { type: 'part', id: k.id }, k.label, () => this.pick({ type: 'part', id: k.id })));
-        break;
-      }
-      case 'materials':
-        this.drawMaterials(y0);
-        break;
-      case 'join': {
-        const sw = (W - 40 - 5 * 8) / 6;
-        // Best join first: the process that works for the two materials, sized to the stock
-        const kinds = [{ id: AUTO_JOIN, label: 'Best join' }, ...CONNECTOR_KINDS];
-        this.grid(kinds, 20, y0, 6, sw, 132, 8, (k, x, y) =>
-          this.slot(`join-${k.id}`, x, y, sw, 132, { type: 'joint', id: k.id }, k.label, () => this.pick({ type: 'joint', id: k.id })));
-        break;
-      }
-      case 'search':
-        this.drawSearch(y0);
-        break;
-      case 'selected':
-        this.drawSelected(y0);
-        break;
-      case 'world':
-        this.drawWorld(y0);
-        break;
-      case 'builds':
-        this.drawBuilds(y0);
-        break;
-      case 'ego':
-        if (this.typing) this.drawForge(y0);
-        else if (this.reportsView) this.drawReports(y0);
-        else if (this.lifeView) this.drawLife(y0);
-        else this.drawEgo(y0);
-        break;
-    }
-    this.drawHotbar();
+    const p: Paint = { g, icon: (gg, item, x, y, s) => this.icon(gg, item, x, y, s) };
+    const w = W - 2 * M;
+    let y = 12 + render(p, this.header(), M, 12, w, CH, this.widgets) + 8;
+    const view = this.view();
+    const footH = view.foot ? measureFoot(p, view.foot, w) : 0;
+    const bottom = CH - 8 - (view.foot ? footH + 8 : 0);
+    g.save();
+    g.beginPath();
+    g.rect(0, y, W, Math.max(0, bottom - y));
+    g.clip();
+    render(p, view.body, M, y, w, bottom, this.widgets);
+    g.restore();
+    if (view.foot) render(p, view.foot, M, CH - 8 - footH, w, CH - 8, this.widgets);
+    this.drawHotbar(p);
+    this.placeHover();
     this.texture.needsUpdate = true;
   }
 
-  private stepper(id: string, x: number, y: number, def: NumberParam, value: number, set: (v: number) => void) {
+  /** The tabs, Show Ego, and the build/play strip: on every page. */
+  private header(): Node {
+    const app = this.app, s = app.settings;
+    const news = app.ego?.advice.length ?? 0;
+    const open = app.ego?.mind?.unresolved().length ?? 0;
+    const tabs: [Page, string, string][] = [
+      ['ego', '✦', news ? `Ego · ${news}` : open ? `Ego · ${open} open` : 'Ego'], ['make', '🧱', 'Make'], ['selected', '👆', 'Selected'], ['world', '🌍', 'World'], ['builds', '💾', 'Builds'],
+    ];
+    const grids: [number, string][] = [[0, 'off'], [0.001, '1 mm'], [0.005, '5 mm'], [0.01, '1 cm'], [0.05, '5 cm'], [0.1, '10 cm']];
+    const angles = [0, 5, 15, 45, 90];
+    const next = <X,>(list: X[], cur: X) => list[(Math.max(0, list.indexOf(cur)) + 1) % list.length]!;
+    const gr = grids.find(([v]) => Math.abs(v - s.grid) < 1e-9) ?? grids[3]!;
+    return col([
+      row([
+        ...tabs.map(([pg, icon, label]) => btn(`tab-${pg}`, icon, () => { this.page = pg; this.pages = {}; }, { on: this.page === pg, sub: label, tone: pg === 'ego' && news ? 'ego' : undefined })),
+        btn('show', '👁', () => {
+          app.showArmed = !app.showArmed;
+          if (app.showArmed) app.toast('Point at it and pull the trigger: Ego will look', 'info');
+          app.notify();
+        }, { on: app.showArmed, tone: 'accent', sub: app.showArmed ? 'point…' : 'Show Ego' }),
+      ], { h: 68, gap: 6 }),
+      row([
+        btn('build', '■ Build', () => app.enterBuild(), { on: s.build, small: true }),
+        btn('play', '▶ Play', () => app.play(), { on: !s.build, small: true }),
+        btn('stop', '⏮ Back to build', () => app.stop(), { tone: app.canStop ? 'accent' : 'quiet', small: true }),
+        btn('grid', `Grid ${gr[1]}`, () => { s.grid = next(grids.map(([v]) => v), gr[0]); app.notify(); }, { small: true }),
+        btn('angle', `Angle ${s.angleSnap ? `${s.angleSnap}°` : 'off'}`, () => { s.angleSnap = next(angles, s.angleSnap); app.notify(); }, { small: true }),
+      ], { h: 44, gap: 6 }),
+    ], { gap: 8 });
+  }
+
+  private view(): View {
+    switch (this.page) {
+      case 'ego': return this.egoView();
+      case 'make': return this.makeView();
+      case 'selected': return this.selectedView();
+      case 'world': return this.worldView();
+      case 'builds': return this.buildsView();
+    }
+  }
+
+  // ---- Ego ------------------------------------------------------------------------------------------------
+
+  private egoView(): View {
+    const ego = this.app.ego;
+    if (!ego) return { body: text('Ego is not awake yet.', { color: T.muted }) };
+    if (this.shownView && ego.shown) return this.shownV();
+    if (this.reportsView) return this.reportsV();
+    if (this.lifeView) return this.lifeV();
+    if (this.typing) return this.forgeV();
+    const mind = ego.mind;
+    const open = mind?.unresolved() ?? [];
+    const cur = mind?.current() ?? null;
+    const cards = ego.advice.slice(0, 2);
+    const next = ego.suggestions().slice(0, 4);
+    const skills = ego.skills.skills.slice(0, 4);
+    const body = col([
+      row([
+        text(`● ${ego.name}`, { size: 26, color: T.ego, weight: '700' }),
+        text(open.length ? `${open.length} open: ${open.slice(0, 2).join(', ')}${open.length > 2 ? '…' : ''}` : mind ? `${mind.journal.commits.length} commits in my journal, nothing open` : 'opening my journal…', { align: 'right', color: T.muted, size: 17 }),
+      ], { h: 30 }),
+      text(`${ego.observe()} · ${ego.focus()}`, { size: 19, color: T.muted }),
+      ...(cards.length ? cards.map((a) => box([
+        row([
+          text(a.text, { size: 19, lines: 2, color: a.kind === 'break' ? '#ffb3aa' : a.kind === 'warn' ? '#ffd98a' : T.ink }),
+          btn(`adv-x-${a.id}`, '✕', () => ego.dismiss(a.id), { w: 52, h: 38, small: true }),
+        ], { h: 50 }),
+        ...(a.fixes.length ? [row(a.fixes.slice(0, 2).map((f, i) => btn(`fix-${a.id}-${i}`, f.label, () => f.apply(), { tone: 'accent', small: true })), { h: 40 })]
+          : a.kind === 'break' ? [text('No stronger joint fits here: try bigger parts, or brace it.', { size: 18, color: T.muted })] : []),
+      ], { fill: a.kind === 'break' ? T.breakFill : a.kind === 'warn' ? T.warnFill : T.egoFill, pad: 12, gap: 6 }))
+        : [text('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold.', { size: 19, color: T.muted, lines: 2 })]),
+      box([
+        text(cur && mind ? sayBrief(mind.journal.commits, cur, 'My Mind') : 'My Mind: nothing on the stand yet. Ask me to build a table that holds 60 kg and I will test it before you do.', { size: 18, lines: 2 }),
+        row([
+          btn('mind-working', 'What are you working on?', () => ego.reply(ego.ask('what are you working on')), { small: true }),
+          btn('mind-changed', 'What changed?', () => ego.reply(ego.ask('what changed')), { small: true }),
+          btn('mind-open', 'What is open?', () => ego.reply(ego.ask('what is open')), { small: true }),
+        ], { h: 42 }),
+      ], { fill: T.egoFill, pad: 12, gap: 8 }),
+      text(next.length ? 'Next, from your habits' : 'Next: I\'m learning your habits.', { size: 18, color: T.muted }),
+      ...(next.length ? [row(next.map((n, i) => btn(`next-${i}`, n.label, () => n.run(), { small: true })), { h: 42 })] : []),
+      text(skills.length ? 'Skills I learned from you' : 'Skills: repeat something and I\'ll offer to learn it.', { size: 18, color: T.muted }),
+      ...(skills.length ? [row(skills.map((sk, i) => btn(`skill-${i}`, `🧠 ${sk.name}`, () => ego.reply(ego.runSkill(sk.id)), { small: true })), { h: 42 })] : []),
+    ], { gap: 8 });
+    const unsent = ego.reports.unsent.length;
+    const foot = row([
+      btn('forge', '⌨ Ask Ego', () => { this.typing = true; }, { tone: 'accent', sub: 'or type Forge' }),
+      Voice.canListen
+        ? btn('talk', this.listening ? '🎙 Listening…' : '🎙 Talk', () => this.talk(), { on: this.listening, tone: 'accent', sub: 'in your words' })
+        : btn('voice', ego.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ego.voice.enabled = !ego.voice.enabled; }, { on: ego.voice.enabled, sub: 'she speaks' }),
+      btn('reports', '📨 Reports', () => { this.reportsView = true; }, { sub: unsent ? `${unsent} for Claude` : 'to Claude', tone: unsent ? 'accent' : undefined }),
+      btn('life', '📒 Life', () => { this.lifeView = true; }, { sub: 'memory · reminders · money' }),
+    ], { h: 64 });
+    return { body, foot };
+  }
+
+  private shownV(): View {
+    const ego = this.app.ego!, w = ego.shown!;
+    const asks: [string, string][] = [
+      ['〰 Shaking', "it's shaking"], ['⤓ Went through', 'it went through the floor'], ['💥 Flew off', 'it flew off'], ['💔 Came apart', 'it came apart'],
+      ['🤨 Not realistic', "that wouldn't happen in real life"], ['🐢 Laggy', "it's laggy"], ["💾 Won't save", "it won't save"], ['✓ It\'s fine', ''],
+    ];
+    const ask = ([label, words]: [string, string], i: number) => btn(`shown-${i}`, label, () => { this.shownView = false; if (words) ego.reply(ego.ask(words)); this.app.notify(); }, { tone: words ? undefined : 'accent', h: 64 });
+    const body = col([
+      text('👁 What I see', { size: 26, color: T.ego, weight: '700' }),
+      box([text(w.said, { size: 21, lines: 6 })], { fill: T.egoFill }),
+      text("What's wrong with it?", { size: 22, color: T.muted }),
+      row(asks.slice(0, 4).map(ask), { h: 64 }),
+      row(asks.slice(4).map((a, i) => ask(a, i + 4)), { h: 64 }),
+    ], { gap: 10 });
+    const foot = row([
+      ...(Voice.canListen ? [btn('shown-talk', this.listening ? '🎙 Listening…' : '🎙 Tell her in your words', () => { this.shownView = false; this.talk(); }, { on: this.listening, tone: 'accent' })] : []),
+      btn('shown-type', '⌨ Type it', () => { this.shownView = false; this.typing = true; ego.command = "it's "; this.app.notify(); }),
+    ], { h: 60 });
+    return { body, foot };
+  }
+
+  private forgeV(): View {
+    const ego = this.app.ego!;
+    const g = this.ctx;
+    font(g, 24, '500', true);
+    let shown = ego.command;
+    while (shown && g.measureText(`${shown}▏`).width > W - 2 * M - 200) shown = shown.slice(1);
+    const ex: [string, string][] = [['make it stronger', 'make it stronger'], ['weld these', 'weld these'], ['4 steel blocks', 'place 4 steel blocks'], ['Forge: 4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
+    const body = col([
+      row([
+        box([text(`${shown}▏`, { size: 24, mono: true })], { pad: 12, radius: 12 }),
+        btn('forge-run', 'Go ⏎', () => { if (ego.command.trim()) { ego.ask(ego.command); ego.command = ''; } }, { tone: 'accent', w: 160 }),
+      ], { h: 56 }),
+      ...ego.output.slice(-5).map((l) => text(l, { size: 19, color: l.startsWith('✗') ? T.orange : l.startsWith('›') ? T.ego : '#c7ccd1' })),
+      row(ex.map(([label, code], i) => btn(`ex-${i}`, label, () => { ego.command = code; }, { small: true })), { h: 44 }),
+    ], { gap: 8 });
+    return { body, foot: this.keyboard(() => ego.command, (v) => { ego.command = v; }, ['forge-back', '← Ego', () => { this.typing = false; }]) };
+  }
+
+  /** What Ego keeps for you: what you told her, what's coming up, and the week's money. All on this headset. */
+  private lifeV(): View {
+    const life = this.app.ego!.life;
+    const money = (x: number) => `$${x.toFixed(x % 1 ? 2 : 0)}`;
+    const facts = life.facts.slice(-4).reverse();
+    const next = life.reminders.filter((r) => !r.done).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3);
+    const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - ((from.getDay() + 6) % 7));
+    const week = life.summary(from);
+    const cats = Object.entries(week.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const body = col([
+      text('📒 What I keep for you (only on this headset)', { size: 24, color: T.ego, weight: '700' }),
+      text('Remembered', { size: 20, color: T.muted, weight: '600' }),
+      ...(facts.length ? facts.map((f) => text(`• ${f.said}`, { size: 20 })) : [text('Nothing yet: say "remember my locker code is 4471".', { size: 19, color: T.dim })]),
+      text('Coming up', { size: 20, color: T.muted, weight: '600' }),
+      ...(next.length ? next.map((r) => text(`⏰ ${new Date(r.due).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}: ${r.what}`, { size: 20 })) : [text('No reminders: say "remind me to stretch in 30 minutes".', { size: 19, color: T.dim })]),
+      text(`This week: ${money(week.spent)} out, ${money(week.earned)} in`, { size: 20, color: T.muted, weight: '600' }),
+      ...(cats.length ? [row([col(cats.filter((_, i) => i % 2 === 0).map(([c, v]) => this.moneyLine(c, v, week.over, life.budgets, money)), { gap: 6 }), col(cats.filter((_, i) => i % 2 === 1).map(([c, v]) => this.moneyLine(c, v, week.over, life.budgets, money)), { gap: 6 })])]
+        : [text('Say what you spend: "I spent $12 on lunch".', { size: 19, color: T.dim })]),
+    ], { gap: 8 });
+    const foot = row([
+      Voice.canListen ? btn('life-talk', this.listening ? '🎙 Listening…' : '🎙 Tell her', () => this.talk(), { on: this.listening, tone: 'accent' }) : btn('life-type', '⌨ Tell her', () => { this.lifeView = false; this.typing = true; }),
+      btn('life-back', '← Ego', () => { this.lifeView = false; }),
+    ], { h: 60 });
+    return { body, foot };
+  }
+
+  private moneyLine(c: string, v: number, over: { category: string; budget: number }[], budgets: Record<string, number>, money: (x: number) => string): Node {
+    const o = over.find((x) => x.category === c);
+    return text(`${c}: ${money(v)}${o ? `  (over budget ${money(o.budget)})` : budgets[c] ? `  of ${money(budgets[c]!)}` : ''}`, { size: 20, color: o ? '#ffb3aa' : T.ink });
+  }
+
+  /** What you've told Ego is wrong, and sending it to Claude. */
+  private reportsV(): View {
+    const ego = this.app.ego!;
+    const list = [...ego.reports.reports].reverse().slice(0, 4);
+    const body = col([
+      text(`📨 Reports for Claude · ${ego.reports.unsent.length} not sent`, { size: 26, color: T.ego, weight: '700' }),
+      text('Tell Ego what\'s wrong in your own words ("it\'s shaking", "it fell through the floor"). She fixes what she can and writes the rest up here, with what she saw and the build as it was.', { size: 19, color: T.muted, lines: 2 }),
+      ...(list.length ? list.map((r) => box([
+        text(`${r.sent ? '✓ ' : ''}“${r.words}”`, { size: 20, weight: '600' }),
+        text(`${r.trouble}${r.fixed ? ` · Ego ${r.fixed}` : ' · for Claude'}`, { size: 17, color: T.muted }),
+      ], { fill: r.sent ? 'rgba(255,255,255,0.05)' : T.egoFill, pad: 10, gap: 4, radius: 12 })) : [text('No reports yet.', { size: 22, color: T.muted })]),
+    ], { gap: 8 });
+    const foot = row([
+      btn('rep-send', '📨 Send to Claude', () => this.sendReports(), { tone: 'accent', sub: 'as a GitHub issue' }),
+      btn('rep-copy', '📋 Copy', () => this.copyForClaude(), { sub: 'reports + transcript' }),
+      btn('rep-clear', 'Clear sent', () => { ego.reports.reports = ego.reports.reports.filter((r) => !r.sent); ego.reports.markSent([]); this.app.notify(); }, { sub: 'keep the rest' }),
+      btn('rep-back', '← Ego', () => { this.reportsView = false; }, { sub: 'back' }),
+    ], { h: 64 });
+    return { body, foot };
+  }
+
+  /** Open the reports as a new GitHub issue (Claude reads the repository's issues). */
+  private sendReports() {
+    const ego = this.app.ego;
+    const unsent = ego?.reports.unsent ?? [];
+    if (!ego || !unsent.length) { this.app.toast('No reports waiting', 'info'); return; }
+    const w = window.open(issueUrl(unsent, REPORT_REPO), '_blank');
+    if (w) { ego.reports.markSent(unsent.map((r) => r.id)); this.app.toast('Opened the report as a GitHub issue: press Submit there, and Claude will see it', 'ok'); }
+    else this.app.toast('The browser wouldn\'t open it from VR: take the headset view out of VR, and the launch page has a Send button', 'warn');
+  }
+
+  private copyForClaude() {
+    const text = [reportText(this.app.ego?.reports.unsent ?? []), this.app.ego?.forClaude() ?? ''].join('\n');
+    const done = () => this.app.toast('Copied: paste it to Claude to show exactly what you built', 'ok');
+    const fail = () => this.app.toast('The browser would not copy here: the share code is on My builds via Save', 'warn');
+    try {
+      const w = navigator.clipboard?.writeText(text);
+      if (w) void w.then(done, fail); else fail();
+    } catch { fail(); }
+  }
+
+  /** Speak to Ego: one request, heard by the browser's own recognition, then done as if typed. */
+  private talk() {
+    const ego = this.app.ego;
+    if (!ego || this.listening) return;
+    this.listening = true;
+    ego.voice.listen((heard) => {
+      this.listening = false;
+      if (heard) ego.ask(heard);
+      else this.app.toast('Ego didn\'t catch that: try again, or type it', 'warn');
+      this.app.notify();
+    });
+  }
+
+  /** A keyboard: digits, letters and the symbols Forge uses, space, backspace and clear. */
+  private keyboard(get: () => string, set: (v: string) => void, extra?: [string, string, () => void]): Node {
+    const rows = ['1234567890.-', 'qwertyuiop=⌫', 'asdfghjkl()*', 'zxcvbnm{}/+%'];
+    return col([
+      ...rows.map((r) => row([...r].map((k) => btn(`key-${k}`, k, () => set(k === '⌫' ? get().slice(0, -1) : get() + k), { h: 50 })), { gap: 6, h: 50 })),
+      row([
+        btn('key-space', 'space', () => set(`${get()} `), { grow: 2, h: 50 }),
+        btn('key-clear', 'Clear', () => set(''), { h: 50 }),
+        ...(extra ? [btn(extra[0], extra[1], extra[2], { h: 50 })] : []),
+      ], { gap: 6, h: 50 }),
+    ], { gap: 6 });
+  }
+
+  // ---- Make: one search, and the shelves -------------------------------------------------------------------
+
+  private makeView(): View {
+    const field = row([
+      btn('search', this.query ? `🔍 ${this.query}▏` : '🔍 Search parts, materials, joints, tools, builds, actions…', () => { this.searching = !this.searching; }, { on: this.searching, h: 52, small: true }),
+      ...(this.query ? [btn('search-clear', '✕', () => { this.query = ''; }, { w: 64, h: 52 })] : []),
+    ], { h: 52 });
+    // with the keyboard up there is room for the field and what it finds, not for a shelf as well
+    const body = col([field, this.query ? this.results() : this.searching ? text('Type to search: steel, pipe, oak, weld, magnet, glue, zero gravity, save…', { size: 20, color: T.muted, lines: 2 }) : this.shelfV()], { gap: 8 });
+    return { body, foot: this.searching ? this.keyboard(() => this.query, (v) => { this.query = v; this.pages = {}; }, ['search-done', 'Done', () => { this.searching = false; }]) : undefined };
+  }
+
+  private results(): Node {
+    const found = search(this.entries(), this.query, 12);
+    if (!found.length) return text(`Nothing called “${this.query}”. Try fewer letters.`, { size: 22, color: T.muted });
+    return this.gridOf('found', found.map((e, i) => slot(`found-${i}`, e.item, e.label, () => this.pick(e.item), { on: this.isActive(e.item) })), 6, 120);
+  }
+
+  private shelfV(): Node {
+    const app = this.app;
+    const shelves = chips('make', ['Tools', 'Parts', 'Materials', 'Joints'], this.shelf, (l) => { this.shelf = l as Shelf; this.pages = {}; });
+    switch (this.shelf) {
+      case 'Tools': {
+        const tools = this.tools.tools;
+        const acts = this.tools.actions().slice(0, 4);
+        const s = app.settings;
+        return col([
+          shelves,
+          this.gridOf('tools', tools.map((t, i) => btn(`tool-${t.id}`, `${t.icon} ${t.label}`, () => this.tools.setActive(i), { on: this.tools.active === i, sub: `${i + 1}` })), Math.ceil(tools.length / 3), 92),
+          ...(acts.length ? [row(acts.map((a) => btn(`act-${a.id}`, a.label, () => a.run(), { on: a.on, small: true })), { h: 48 })] : []),
+          text(this.tools.tool.hint, { size: 19, color: T.muted, lines: 2 }),
+          row([
+            btn('gridlock', s.gridLock ? '🔒 Grid lock: on' : '🔓 Grid lock: off', () => { s.gridLock = !s.gridLock; app.notify(); }, { on: s.gridLock, small: true }),
+            btn('smartsnap', s.smartSnap ? '🧲 Smart snap: on' : 'Smart snap: off', () => { s.smartSnap = !s.smartSnap; app.notify(); }, { on: s.smartSnap, small: true }),
+          ], { h: 48 }),
+        ], { gap: 8 });
+      }
+      case 'Parts': {
+        const cats = ['All', ...new Set(PART_KINDS.map((k) => k.category))];
+        const list = PART_KINDS.filter((k) => this.partCat === 'All' || k.category === this.partCat);
+        return col([
+          shelves,
+          chips('pcat', cats, this.partCat, (c) => { this.partCat = c; this.pages = {}; }),
+          this.gridOf('parts', list.map((k) => slot(`part-${k.id}`, { type: 'part', id: k.id }, k.label, () => this.pick({ type: 'part', id: k.id }), { on: this.isActive({ type: 'part', id: k.id }) })), 6, 150),
+        ], { gap: 8 });
+      }
+      case 'Materials': {
+        const groups = ['All', ...MATERIAL_GROUPS.map((gr) => gr.label)];
+        const ids = this.matGroup === 'All' ? MATERIALS.map((m) => m.id) : MATERIAL_GROUPS.find((gr) => gr.label === this.matGroup)?.ids ?? [];
+        const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
+        const apply: Node[] = [];
+        if (sel.length && app.spawnMaterial) {
+          const m = getMaterial(app.spawnMaterial);
+          apply.push(btn('mat-apply', `Make the selected part${sel.length > 1 ? 's' : ''} ${m.name}`, () => {
+            const ok = sel.filter((id) => { const k = getPartKind(app.doc.parts[id]!.kind); return !k.materialFilter || k.materialFilter(m); });
+            if (ok.length) setPartMaterial(app.store, ok, m.id);
+            if (ok.length < sel.length) app.toast(`${sel.length - ok.length} of them can't be ${m.name}`, 'warn');
+          }, { tone: 'accent', h: 48, small: true }));
+        }
+        return col([
+          shelves,
+          chips('mgrp', groups, this.matGroup, (l) => { this.matGroup = l; this.pages = {}; }),
+          ...apply,
+          this.gridOf('mats', ids.map((id) => slot(`mat-${id}`, { type: 'material', id }, getMaterial(id).name, () => this.pick({ type: 'material', id }), { on: this.isActive({ type: 'material', id }) })), 6, 132),
+        ], { gap: 8 });
+      }
+      case 'Joints': {
+        const kinds = [{ id: AUTO_JOIN, label: 'Best join' }, ...CONNECTOR_KINDS];
+        return col([
+          shelves,
+          text('Best join picks the process that works for the two materials and sizes it to the stock.', { size: 19, color: T.muted }),
+          this.gridOf('joins', kinds.map((k) => slot(`join-${k.id}`, { type: 'joint', id: k.id }, k.label, () => this.pick({ type: 'joint', id: k.id }), { on: this.isActive({ type: 'joint', id: k.id }) })), 6, 132),
+        ], { gap: 8 });
+      }
+    }
+  }
+
+  private gridOf(id: string, items: Node[], cols: number, rowH: number): Node {
+    return grid(id, items, { cols, rowH, page: this.pages[id] ?? 0, setPage: (p) => { this.pages[id] = p; } });
+  }
+
+  // ---- Selected ------------------------------------------------------------------------------------------
+
+  private stepper(id: string, def: NumberParam, value: number, set: (v: number) => void): Node {
     const d = DISPLAY[def.display] ?? DISPLAY['']!;
-    this.text(def.label, x, y + 30, 22, '#9aa4af');
-    this.text(`${(value * d.scale).toFixed(def.integer ? 0 : d.digits)} ${d.unit}`, x + 470, y + 30, 24, '#e8ecf1', 'right', '600');
     const f = def.integer ? 1 : def.log ? 1.25 : 1.1;
     const next = (dir: number) => {
       let v = def.integer ? value + dir
@@ -287,59 +517,74 @@ export class Tablet {
       if (def.integer) v = Math.round(v);
       set(Math.min(def.max, Math.max(def.min, v)));
     };
-    this.btn(`${id}-`, x + 490, y, 80, 46, '−', () => next(-1));
-    this.btn(`${id}+`, x + 580, y, 80, 46, '+', () => next(1));
+    return row([
+      text(def.label, { size: 21, color: T.muted }),
+      text(`${(value * d.scale).toFixed(def.integer ? 0 : d.digits)} ${d.unit}`, { size: 23, weight: '600', align: 'right', w: 220 }),
+      btn(`${id}-`, '−', () => next(-1), { w: 80, h: 44 }),
+      btn(`${id}+`, '+', () => next(1), { w: 80, h: 44 }),
+    ], { h: 44 });
   }
 
-  private drawSelected(y0: number) {
+  private selectedView(): View {
     const app = this.app;
     const sel = app.selection;
     if (sel.conn && app.doc.connections[sel.conn]) {
       const c = app.doc.connections[sel.conn]!;
       const kind = getConnectorKind(c.kind);
       const l = app.live.loads.get(c.id);
-      this.text(kind.label, 24, y0 + 36, 34, '#e8ecf1', 'left', '700');
-      this.text(c.state.status.toUpperCase(), W - 24, y0 + 36, 24, c.state.status === 'intact' ? '#4dd68c' : '#ff5b4d', 'right', '700');
       const u = l?.u ?? 0;
-      const g = this.ctx;
-      g.fillStyle = 'rgba(255,255,255,0.08)';
-      roundRect(g, 24, y0 + 58, W - 48, 22, 11); g.fill();
-      g.fillStyle = u > 0.9 ? '#ff5b4d' : u > 0.7 ? '#ffc14d' : '#4dd68c';
-      roundRect(g, 24, y0 + 58, Math.max(22, (W - 48) * Math.min(1, u)), 22, 11); g.fill();
-      this.text(`${(u * 100).toFixed(0)}% of capacity ${l?.mode ? `(${l.mode})` : ''}   axial ${formatForce(l?.axial ?? 0)} · shear ${formatForce(l?.shear ?? 0)} · bending ${(l?.bending ?? 0).toFixed(1)} N·m`, 24, y0 + 112, 22, '#9aa4af');
       const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
-      nums.forEach((p, i) => this.stepper(`cp-${p.key}`, 24, y0 + 136 + i * 56, p, Number(c.params[p.key]), (v) => setConnectionParam(app.store, c.id, p.key, v)));
-      const by = CH - 76;
-      if (c.state.status !== 'intact') this.btn('repair', 24, by, 300, 56, 'Repair', () => setConnectionState(app.store, c.id, { status: 'intact', note: '' }, 'Repair joint'), { tone: 'accent' });
-      this.btn('cdel', W - 324, by, 300, 56, 'Delete joint', () => app.deleteSelection(), { tone: 'danger' });
-      return;
+      const body = col([
+        row([text(kind.label, { size: 32, weight: '700' }), text(c.state.status.toUpperCase(), { size: 22, weight: '700', align: 'right', color: c.state.status === 'intact' ? T.green : T.red })], { h: 40 }),
+        bar(u, u > 0.9 ? T.red : u > 0.7 ? T.amber : T.green, { h: 24, label: `${(u * 100).toFixed(0)}% of capacity${l?.mode ? ` (${l.mode})` : ''}` }),
+        text(`axial ${formatForce(l?.axial ?? 0)} · shear ${formatForce(l?.shear ?? 0)} · bending ${(l?.bending ?? 0).toFixed(1)} N·m`, { size: 20, color: T.muted }),
+        ...(c.state.note ? [text(c.state.note, { size: 18, color: T.orange, lines: 2 })] : []),
+        ...nums.map((p) => this.stepper(`cp-${p.key}`, p, Number(c.params[p.key]), (v) => setConnectionParam(app.store, c.id, p.key, v))),
+      ], { gap: 10 });
+      const foot = row([
+        ...(c.state.status !== 'intact' ? [btn('repair', 'Repair', () => setConnectionState(app.store, c.id, { status: 'intact', note: '' }, 'Repair joint'), { tone: 'accent' })] : []),
+        btn('cdel', 'Delete joint', () => app.deleteSelection(), { tone: 'danger' }),
+      ], { h: 56 });
+      return { body, foot };
     }
     const id = [...sel.parts][0];
     const part = id ? app.doc.parts[id] : null;
     if (!part) {
-      this.text('Nothing selected', 24, y0 + 40, 30, '#9aa4af');
-      this.text('Point at a part and pull the trigger (Grab or Inspect tool) to select it.', 24, y0 + 84, 22, '#9aa4af');
-      return;
+      return { body: col([
+        text('Nothing selected', { size: 30, color: T.muted }),
+        text('Point at a part and pull the trigger (Grab or Inspect tool) to select it. Joined parts select as one piece.', { size: 21, color: T.muted, lines: 2 }),
+      ], { gap: 10 }) };
     }
     const kind = getPartKind(part.kind);
     const m = app.materialOf(part);
     const mass = massOf(kind, effectiveParams(kind, part.params, m), m);
-    this.text(part.name, 24, y0 + 36, 34, '#e8ecf1', 'left', '700');
-    this.text(`${m.name} · ${formatMass(mass)} · ${formatForce(mass * STANDARD_GRAVITY)}`, 24, y0 + 74, 22, '#9aa4af');
-    const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 5);
-    nums.forEach((p, i) => this.stepper(`pp-${p.key}`, 24, y0 + 96 + i * 56, p, Number(part.params[p.key]), (v) => setPartParam(app.store, part.id, p.key, v)));
+    const nums = kind.params.filter((p): p is NumberParam => p.type === 'number').slice(0, 4);
+    const group = app.component(part.id);
+    const joints = Object.values(app.doc.connections).filter((c) => group.includes(c.a.part) && c.state.status !== 'broken').length;
+    const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
+    const built = app.together([part.id]);
+    // the Mind's note on this part: outside the rigid model's domain (longer than one tick of sound in its material)
+    const note = app.ego?.mind?.journal.commits.find((x) => x.inv === `construct:${part.id}`);
+    const dom = note?.data['domain'] as { crossing: number; tick: number; critical: number } | undefined;
+    const rows: Node[] = [
+      row([text(part.name, { size: 32, weight: '700' }), text(damaged ? `Damaged: ${part.damage.broken.length} fracture(s)` : group.length > 1 ? `Assembly: ${group.length} parts, ${joints} joint${joints === 1 ? '' : 's'}` : '', { size: 21, align: 'right', color: damaged ? T.orange : T.ego, weight: '600' })], { h: 40 }),
+      text(`${m.name} · ${formatMass(mass)} · ${formatForce(mass * STANDARD_GRAVITY)}`, { size: 21, color: T.muted }),
+      ...(dom ? [text(`Outside the rigid model's domain: sound crosses it in ${(dom.crossing * 1000).toFixed(1)} ms, longer than the ${(dom.tick * 1000).toFixed(1)} ms tick (past ${dom.critical.toFixed(2)} m). What it does under load is the model, not the material.`, { size: 18, color: T.orange, lines: 2 })] : []),
+      ...nums.map((p) => this.stepper(`pp-${p.key}`, p, Number(part.params[p.key]), (v) => setPartParam(app.store, part.id, p.key, v))),
+    ];
     // the material; for a permanent magnet that is its grade, so this is its power: weaker to the left, stronger right
     const choices = MATERIALS.filter((x) => (kind.materialFilter ? kind.materialFilter(x) : true));
     if (choices.every((x) => x.remanence)) choices.sort((a, b) => a.remanence! - b.remanence!);
-    const my = y0 + 96 + nums.length * 56;
     if (choices.length > 1) {
       const at = Math.max(0, choices.findIndex((x) => x.id === m.id));
       const magnet = m.category === 'magnet';
-      this.text(magnet ? 'Grade (power)' : 'Material', 24, my + 30, 22, '#9aa4af');
-      this.text(m.name, 24 + 470, my + 30, 22, '#e8ecf1', 'right', '600');
       const step = (d: number) => setPartMaterial(app.store, [part.id], choices[(at + d + choices.length) % choices.length]!.id);
-      this.btn('mat-', 24 + 490, my, 80, 46, magnet ? '−' : '◀', () => step(-1));
-      this.btn('mat+', 24 + 580, my, 80, 46, magnet ? '+' : '▶', () => step(1));
+      rows.push(row([
+        text(magnet ? 'Grade (power)' : 'Material', { size: 21, color: T.muted }),
+        text(m.name, { size: 21, weight: '600', align: 'right', w: 320 }),
+        btn('mat-', magnet ? '−' : '◀', () => step(-1), { w: 80, h: 44 }),
+        btn('mat+', magnet ? '+' : '▶', () => step(1), { w: 80, h: 44 }),
+      ], { h: 44 }));
     }
     // what a magnet holds on thick steel, from the same pull model the physics uses
     const mg = kind.magnet?.(part.params);
@@ -348,69 +593,169 @@ export class Tablet {
       const Br = (mg.Br ?? m.remanence ?? 0) * (on ? 1 : 0);
       const kg = pullOnSteel(mg, Br) / STANDARD_GRAVITY;
       const say = Br > 0 ? `Holds ≈ ${kg < 10 ? kg.toFixed(1) : kg.toFixed(0)} kg on thick steel` : mg.drive ? 'Switched off: plain steel' : 'Power 0: plain steel';
-      this.text(say, 24, my + 56 + 30, 24, Br > 0 ? '#4dd68c' : '#9aa4af', 'left', '600');
-      if (mg.drive) this.btn('switch', 24 + 490, my + 56, 170, 46, app.switchOn ? '🧲 On' : '🧲 Off', () => app.toggleSwitch(), { on: app.switchOn });
+      rows.push(row([
+        text(say, { size: 23, weight: '600', color: Br > 0 ? T.green : T.muted }),
+        ...(mg.drive ? [btn('switch', app.switchOn ? '🧲 On' : '🧲 Off', () => app.toggleSwitch(), { on: app.switchOn, w: 170, h: 44 })] : []),
+      ], { h: 44 }));
     }
-    const by = CH - 76;
-    const damaged = part.damage.broken.length > 0 || part.damage.segments !== null;
-    if (damaged) {
-      this.text(`Damaged: ${part.damage.broken.length} fracture(s)`, W - 24, y0 + 36, 22, '#ff9b73', 'right');
-      this.btn('repair', W - 254, by - 66, 230, 56, 'Repair', () => repairPart(app.store, part.id), { tone: 'accent' });
-    }
-    // joined parts are one piece: these act on the whole assembly (the one part only where it says so)
-    const group = app.component(part.id);
-    const joints = Object.values(app.doc.connections).filter((c) => group.includes(c.a.part) && c.state.status !== 'broken').length;
-    if (group.length > 1) this.text(`Assembly: ${group.length} parts, ${joints} joint${joints === 1 ? '' : 's'}`, W - 24, y0 + 74, 22, '#8fd3ff', 'right', '600');
-    // what you built: the assembly and whatever rests on it
-    const built = app.together([part.id]);
-    this.btn('tpl-save', 24, by - 66, 230, 56, `📐 Save template (${built.length})`, () => app.saveTemplate(app.together([part.id])), { tone: 'accent' });
-    if (group.length > 1) this.btn('del-one', 264, by - 66, 230, 56, 'Delete just this', () => deleteParts(app.store, [part.id]));
-    const allFrozen = group.every((id) => app.doc.parts[id]?.frozen);
-    this.btn('freeze', 24, by, 230, 56, allFrozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, group, !allFrozen); }, { on: allFrozen });
-    this.btn('dup', 264, by, 230, 56, 'Duplicate', () => { app.select([part.id, ...group.filter((x) => x !== part.id)]); app.duplicateSelection(); });
-    this.btn('del', W - 254, by, 230, 56, group.length > 1 ? `Delete all ${group.length}` : 'Delete', () => deleteParts(app.store, group), { tone: 'danger' });
+    const allFrozen = group.every((x) => app.doc.parts[x]?.frozen);
+    const foot = col([
+      row([
+        btn('tpl-save', `📐 Save template (${built.length})`, () => app.saveTemplate(app.together([part.id])), { tone: 'accent' }),
+        ...(group.length > 1 ? [btn('del-one', 'Delete just this', () => deleteParts(app.store, [part.id]))] : []),
+        ...(damaged ? [btn('repair', 'Repair', () => repairPart(app.store, part.id), { tone: 'accent' })] : []),
+      ], { h: 52 }),
+      row([
+        btn('freeze', allFrozen ? 'Unfreeze' : 'Freeze', () => { app.commitLivePoses(); setFrozen(app.store, group, !allFrozen); }, { on: allFrozen }),
+        btn('dup', 'Duplicate', () => { app.select([part.id, ...group.filter((x) => x !== part.id)]); app.duplicateSelection(); }),
+        btn('del', group.length > 1 ? `Delete all ${group.length}` : 'Delete', () => deleteParts(app.store, group), { tone: 'danger' }),
+      ], { h: 52 }),
+    ], { gap: 8 });
+    return { body: col(rows, { gap: 10 }), foot };
   }
 
-  // ---- inventory: slots, chips, the hotbar, search ----------------------------------------------
+  // ---- World ------------------------------------------------------------------------------------------------
 
-  readonly hotbar = new Hotbar();
-  private partCat = 'All';
-  private matGroup = 'All';
-  private query = '';
-  private catalog: Entry[] | null = null;
+  private worldView(): View {
+    const app = this.app, s = app.settings;
+    const g = Math.hypot(...app.doc.sim.gravity);
+    const r = this.room;
+    const h = 46;
+    const body = col([
+      row([
+        btn('pause', s.paused ? '▶ Run' : '⏸ Pause', () => app.togglePause(), { on: s.paused, small: true }),
+        btn('step', '⏭ Step', () => app.step(), { small: true }),
+        btn('slower', `Slower (×${s.timeScale})`, () => app.setTimeScale(Math.max(0.05, s.timeScale / 2)), { small: true }),
+        btn('faster', 'Faster', () => app.setTimeScale(Math.min(2, s.timeScale * 2)), { small: true }),
+      ], { h }),
+      row([
+        btn('ckpt', '⚑ Checkpoint', () => app.checkpoint(), { small: true }),
+        btn('rewind', '⟲ Rewind', () => app.rewind(), { small: true }),
+        btn('undo', '↶ Undo', () => app.undo(), { small: true }),
+        btn('redo', '↷ Redo', () => app.redo(), { small: true }),
+      ], { h }),
+      row([
+        btn('stress', 'Stress view', () => { app.view.setStressOverlay(!app.view.stressOverlay); app.notify(); }, { on: app.view.stressOverlay, small: true }),
+        btn('grabmode', s.grabMode === 'physical' ? 'Grab: physical' : 'Grab: creative', () => { s.grabMode = s.grabMode === 'physical' ? 'creative' : 'physical'; app.notify(); }, { on: s.grabMode === 'creative', small: true }),
+        btn('frozen', 'Place frozen', () => { s.placeFrozen = !s.placeFrozen; app.notify(); }, { on: s.placeFrozen, small: true }),
+        btn('shadows', 'Shadows', () => { s.shadows = !s.shadows; app.view.sun.castShadow = s.shadows; app.notify(); }, { on: s.shadows, small: true }),
+      ], { h }),
+      row([
+        btn('small', `Shrink me (×${s.playerScale})`, () => { s.playerScale = Math.max(0.05, s.playerScale / 2); app.notify(); }, { small: true }),
+        btn('big', 'Grow me', () => { s.playerScale = Math.min(20, s.playerScale * 2); app.notify(); }, { small: true }),
+        btn('g-Earth', `Earth ${STANDARD_GRAVITY} m/s²`, () => setSim(app.store, { gravity: [0, -STANDARD_GRAVITY, 0] }), { on: Math.abs(g - STANDARD_GRAVITY) < 0.01, small: true }),
+        btn('g-Moon', 'Moon 1.62 m/s²', () => setSim(app.store, { gravity: [0, -1.62, 0] }), { on: Math.abs(g - 1.62) < 0.01, small: true }),
+      ], { h }),
+      row([
+        btn('zerog', 'Zero-g', () => setSim(app.store, { gravity: [0, 0, 0] }), { on: g < 1e-3, small: true }),
+        ...(r && r.active === 'relax' ? [btn('stick', r.drive ? 'Left stick: Drive (motors, steering)' : 'Left stick: Fly where you look', () => r.setDrive(!r.drive), { on: r.drive, small: true, grow: 2 })] : [text('', { grow: 2 })]),
+        btn('switch-w', app.switchOn ? '🧲 Switch: on' : '🧲 Switch: off', () => app.toggleSwitch(), { on: app.switchOn, small: true }),
+      ], { h }),
+      this.roomRow(h),
+      this.energyBox(),
+    ], { gap: 8 });
+    const foot = col([this.healthLine(), row([
+      text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, { size: 20, color: T.muted }),
+      text(`v ${__BUILD__}`, { size: 17, color: T.dim, align: 'right', w: 200 }),
+    ], { h: 26 })], { gap: 4 });
+    return { body, foot };
+  }
 
-  /** An inventory slot: the item's icon, its name under it. `compact` for the hotbar. */
-  private slot(id: string, x: number, y: number, w: number, h: number, item: Item, label: string, onClick: () => void, compact = false) {
-    const g = this.ctx;
-    const hover = this.hoverId === id;
-    const on = this.isActive(item);
-    g.fillStyle = on ? 'rgba(255,179,71,0.25)' : hover ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.3)';
-    roundRect(g, x, y, w, h, 10);
+  /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */
+  private roomRow(h: number): Node {
+    const r = this.room, app = this.app;
+    if (!r) return text('', { size: 1 });
+    const modes: ['relax' | 'walk' | 'mixed', string, string][] = [['relax', 'Relax', 'fly'], ['walk', 'Walk', '1:1 room'], ['mixed', 'Mixed', r.passthrough ? 'passthrough' : 'needs AR']];
+    const extra: Node[] = r.active === 'walk'
+      ? [btn('recal', 'Recalibrate', () => r.recalibrate(), { sub: r.calibrated ? 'stand + face, then press' : 'waiting…', small: true }), btn('solid', 'Room solid', () => { app.roomSolid = !app.roomSolid; app.applyRoom(); }, { on: app.roomSolid, sub: `${app.room.length} surfaces`, small: true })]
+      : r.active === 'mixed'
+        ? [btn('scan', 'Scan room', () => r.scan(), { sub: r.canScan ? 'Space Setup' : 'not on this device', small: true }), btn('showscan', 'Show scan', () => { app.showScan = !app.showScan; app.applyRoom(); }, { on: app.showScan, sub: `${app.room.length} surfaces`, small: true })]
+        : [text('Walk: your real room, 1:1 in the workshop. Mixed: build in your room (passthrough).', { size: 18, color: T.muted, lines: 2, grow: 2 })];
+    return row([...modes.map(([m, label, sub]) => btn(`mode-${m}`, label, () => r.setStyle(m), { on: r.active === m, sub, small: true })), ...extra], { h: h + 8 });
+  }
+
+  /** The energy books as bars: where every joule is, what put it there, and what became heat. */
+  private energyBox(): Node {
+    const e = this.app.live.energy;
+    if (!e) return text('Energy: nothing moving yet.', { size: 19, color: T.muted });
+    const J = (x: number) => (Math.abs(x) >= 1000 ? `${(x / 1000).toFixed(2)} kJ` : `${x.toFixed(Math.abs(x) < 10 ? 2 : 1)} J`);
+    const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping + e.heat.electric;
+    const work = e.work.hands + e.work.batteries + e.work.magnets + e.work.fluids;
+    const rows: [string, number, string][] = [['motion', e.kinetic, T.blue], ['height', e.potential, T.ego], ['springs', e.elastic, T.green], ['heat', heat, T.orange], ['put in', work, T.accent]];
+    const max = Math.max(1e-9, ...rows.map(([, v]) => Math.abs(v)));
+    return box([
+      ...rows.map(([label, v, color]) => bar(Math.abs(v) / max, color, { h: 20, label: `${label} ${J(v)}` })),
+      text(`heat: friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}, electric ${J(e.heat.electric)} · put in: hands ${J(e.work.hands)}, batteries ${J(e.work.batteries)}, magnets ${J(e.work.magnets)} · integrator lost ${J(e.numerical.lost)}, made ${J(e.numerical.gained)}${e.numerical.gainedHeld > 0 ? ` (${J(e.numerical.gainedHeld)} while held)` : ''}`, { size: 15, color: T.muted, lines: 2 }),
+    ], { pad: 10, gap: 4, fill: 'rgba(255,255,255,0.04)' });
+  }
+
+  /** The live watchdog's verdict on this session: all clear, or how many problems and the latest one. */
+  private healthLine(): Node {
+    const h = this.app.live.health;
+    if (!h.length) return text('● Watchdog: all clear', { size: 20, color: T.green, weight: '600' });
+    const crit = h.filter((a) => a.severity === 'critical').length;
+    const last = h[h.length - 1]!;
+    const name = last.id ? (this.app.doc.parts[last.id.split('#')[0]!]?.name ?? 'a part') : 'the scene';
+    return text(`● Watchdog: ${crit ? `${crit} critical` : ''}${crit && h.length > crit ? ', ' : ''}${h.length > crit ? `${h.length - crit} warning` : ''} · ${last.kind}: ${name} ${last.detail}`, { size: 20, color: crit ? T.red : T.amber, weight: '600' });
+  }
+
+  // ---- Builds ------------------------------------------------------------------------------------------------
+
+  private buildsView(): View {
+    const app = this.app;
+    const shelves = chips('shelf', ['Builds', 'Templates'], this.buildShelf, (l) => { this.buildShelf = l as 'Builds' | 'Templates'; this.deleting = false; this.pages = {}; });
+    if (this.buildShelf === 'Templates') {
+      const list = app.templates.list();
+      const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
+      const built = sel.length ? app.together(sel) : [];
+      if (this.deleting && !list.length) this.deleting = false;
+      return { body: col([
+        shelves,
+        row([
+          btn('tpl-save2', '📐 Save what you built as a template', () => app.saveTemplate(app.together(sel)), { tone: sel.length ? 'accent' : undefined, sub: sel.length ? `${built.length} parts: joined, and resting on it` : 'select a part of it first' }),
+          btn('tpl-delmode', this.deleting ? '🗑 Tap a template to delete it' : '🗑 Delete…', () => { this.deleting = !this.deleting; }, { on: this.deleting, tone: this.deleting ? 'danger' : undefined, sub: this.deleting ? 'tap here to stop' : 'one at a time' }),
+        ], { h: 68 }),
+        list.length
+          ? this.gridOf('tpls', list.map((e) => slot(`tpl-${e.id}`, { type: 'template', id: e.id }, e.name, () => { if (this.deleting) app.deleteTemplate(e.id); else this.pick({ type: 'template', id: e.id }); }, { on: this.isActive({ type: 'template', id: e.id }) })), 6, 132)
+          : text('No templates yet. Join parts into something, select it, then 📐 Save as template: pick it here and the Place tool stamps out copies.', { size: 23, color: T.muted, lines: 3 }),
+      ], { gap: 8 }) };
+    }
+    const lib = app.library.list();
+    const open = app.libraryId ? app.library.get(app.libraryId) : null;
+    if (this.deleting && !lib.length) this.deleting = false;
+    const when = (iso: string) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return { body: col([
+      shelves,
+      row([
+        btn('save', '💾 Save', () => app.saveBuild(), { tone: 'accent', sub: open ? `over “${open.name}”` : 'as a new build' }),
+        btn('saveas', '➕ Save as new', () => app.saveBuild(true), { sub: 'a copy' }),
+        btn('new', '🆕 New build', () => app.newBuild(), { sub: 'empty workshop' }),
+        btn('delmode', this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; }, { on: this.deleting, tone: this.deleting ? 'danger' : undefined, sub: this.deleting ? 'tap here to stop' : 'one at a time' }),
+      ], { h: 76 }),
+      lib.length
+        ? this.gridOf('lib', lib.map((e) => btn(`build-${e.id}`, e.name, () => { if (this.deleting) app.deleteBuild(e.id); else app.openBuild(e.id); }, { on: app.libraryId === e.id, tone: this.deleting ? 'danger' : undefined, sub: when(e.saved) })), 3, 96)
+        : text('No builds yet. Build something, then 💾 Save: your builds stay on this headset, and only builds you save appear here.', { size: 24, color: T.muted, lines: 3 }),
+    ], { gap: 8 }) };
+  }
+
+  // ---- inventory: icons, the hotbar, search, picking --------------------------------------------------------
+
+  private drawHotbar(p: Paint) {
+    const g = p.g;
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    roundRect(g, 12, CH + 2, W - 24, HOT - 10, 16);
     g.fill();
-    g.strokeStyle = on ? '#ffb347' : hover ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.1)';
-    g.lineWidth = on || hover ? 3 : 2;
-    g.stroke();
-    const s = compact ? h - 28 : Math.min(w - 24, h - 48);
-    this.icon(item, x + (w - s) / 2, y + (compact ? 2 : 6), s);
-    g.fillStyle = on ? '#ffd9a0' : '#e8ecf1';
-    g.textAlign = 'center';
+    const items = this.hotbar.items.slice(0, SLOTS);
+    render(p, row(items.map((it, i) => slot(`hot-${i}`, it, this.itemLabel(it), () => this.pick(it), { compact: true, on: this.isActive(it) })), { h: HOT - 26 }), M, CH + 10, W - 2 * M, H, this.widgets);
+    font(g, 15);
+    g.fillStyle = T.dim;
+    g.textAlign = 'left';
     g.textBaseline = 'alphabetic';
-    if (compact) {
-      g.font = '600 15px system-ui, sans-serif';
-      g.fillText(fit(g, label, w - 8), x + w / 2, y + h - 8);
-    } else {
-      g.font = '600 17px system-ui, sans-serif';
-      const words = label.split(' ');
-      let a = '', b = '';
-      for (const wd of words) { if (!b && g.measureText(a ? `${a} ${wd}` : wd).width <= w - 12) a = a ? `${a} ${wd}` : wd; else b = b ? `${b} ${wd}` : wd; }
-      g.fillText(fit(g, a, w - 10), x + w / 2, y + h - (b ? 28 : 12));
-      if (b) g.fillText(fit(g, b, w - 10), x + w / 2, y + h - 8);
-    }
-    this.widgets.push({ id, x, y, w, h, onClick });
+    const sw = (W - 2 * M - (SLOTS - 1) * 8) / SLOTS;
+    items.forEach((_, i) => g.fillText(`${i + 1}`, M + 8 + i * (sw + 8), CH + 30));
   }
 
-  private icon(item: Item, x: number, y: number, s: number) {
-    const g = this.ctx;
+  private icon(g: CanvasRenderingContext2D, item: Item, x: number, y: number, s: number) {
     switch (item.type) {
       case 'part': drawPart(g, item.id, x, y, s, this.app.spawnKind === item.id ? this.app.spawnMaterial ?? undefined : undefined); break;
       case 'material': drawMaterial(g, item.id, x, y, s); break;
@@ -483,52 +828,6 @@ export class Tablet {
     app.notify();
   }
 
-  /** Category chips: a row (or two) of labels, one chosen. Returns the y below them. */
-  private chips(prefix: string, labels: string[], current: string, set: (l: string) => void, y: number) {
-    const g = this.ctx;
-    g.font = '600 20px system-ui, sans-serif';
-    let x = 20;
-    for (const l of labels) {
-      const w = Math.min(W - 40, g.measureText(l).width + 36);
-      if (x + w > W - 20) { x = 20; y += 50; }
-      this.btn(`${prefix}-${l}`, x, y, w, 42, l, () => set(l), { on: current === l, small: true });
-      g.font = '600 20px system-ui, sans-serif';
-      x += w + 8;
-    }
-    return y + 54;
-  }
-
-  private drawHotbar() {
-    const g = this.ctx;
-    g.fillStyle = 'rgba(0,0,0,0.28)';
-    roundRect(g, 12, CH + 2, W - 24, HOT - 10, 16);
-    g.fill();
-    const n = SLOTS, sw = (W - 40 - (n - 1) * 8) / n;
-    this.hotbar.items.forEach((it, i) => {
-      this.slot(`hot-${i}`, 20 + i * (sw + 8), CH + 10, sw, HOT - 26, it, this.itemLabel(it), () => this.pick(it), true);
-      this.text(`${i + 1}`, 28 + i * (sw + 8), CH + 30, 15, '#6f7883');
-    });
-  }
-
-  private drawMaterials(y0: number) {
-    const app = this.app;
-    const groups = ['All', ...MATERIAL_GROUPS.map((gr) => gr.label)];
-    const yg = this.chips('mgrp', groups, this.matGroup, (l) => { this.matGroup = l; this.scroll = 0; }, y0);
-    const ids = this.matGroup === 'All' ? MATERIALS.map((m) => m.id) : MATERIAL_GROUPS.find((gr) => gr.label === this.matGroup)?.ids ?? [];
-    const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
-    const sw = (W - 40 - 5 * 8) / 6;
-    this.grid(ids, 20, yg + (sel.length ? 56 : 0), 6, sw, 132, 8, (id, x, y) =>
-      this.slot(`mat-${id}`, x, y, sw, 132, { type: 'material', id }, getMaterial(id).name, () => this.pick({ type: 'material', id })));
-    if (sel.length && app.spawnMaterial) {
-      const m = getMaterial(app.spawnMaterial);
-      this.btn('mat-apply', 20, yg, W - 40, 48, `Make the selected part${sel.length > 1 ? 's' : ''} ${m.name}`, () => {
-        const ok = sel.filter((id) => { const k = getPartKind(app.doc.parts[id]!.kind); return !k.materialFilter || k.materialFilter(m); });
-        if (ok.length) setPartMaterial(app.store, ok, m.id);
-        if (ok.length < sel.length) app.toast(`${sel.length - ok.length} of them can't be ${m.name}`, 'warn');
-      }, { tone: 'accent' });
-    }
-  }
-
   /** Everything the search finds: the catalog, your tools, your builds, and world actions. */
   private entries(): Entry[] {
     this.catalog ??= catalogEntries();
@@ -561,410 +860,18 @@ export class Tablet {
       { id: 'shrink', label: 'Shrink me', glyph: '🐭', words: ['shrink', 'small', 'tiny', 'scale', 'mouse'], run: () => { s.playerScale = Math.max(0.05, s.playerScale / 2); app.notify(); } },
       { id: 'grow', label: 'Grow me', glyph: '🦖', words: ['grow', 'big', 'giant', 'scale', 'godzilla'], run: () => { s.playerScale = Math.min(20, s.playerScale * 2); app.notify(); } },
       { id: 'stress', label: 'Stress view', glyph: '📈', words: ['stress', 'load', 'strain', 'view'], run: () => { app.view.setStressOverlay(!app.view.stressOverlay); app.notify(); } },
+      { id: 'ask-working', label: 'What is Ego working on?', glyph: '✦', words: ['ego', 'working', 'mind', 'journal', 'investigation'], run: () => { const e = app.ego; if (e) e.reply(e.ask('what are you working on')); } },
+      { id: 'ask-open', label: 'What is open?', glyph: '✦', words: ['ego', 'open', 'unresolved', 'questions', 'frontier'], run: () => { const e = app.ego; if (e) e.reply(e.ask('what is open')); } },
     ];
-  }
-
-  /** Search: type, and everything that matches shows as you go. */
-  private drawSearch(y0: number) {
-    const g = this.ctx;
-    g.fillStyle = 'rgba(255,255,255,0.08)';
-    roundRect(g, 20, y0, W - 40, 54, 12);
-    g.fill();
-    this.text(this.query ? `🔍 ${this.query}▏` : '🔍 Type to search parts, materials, joints, tools, builds…▏', 34, y0 + 36, 24, this.query ? '#e8ecf1' : '#7d8792');
-    const found = this.query ? search(this.entries(), this.query, 12) : [];
-    const sw = (W - 40 - 5 * 8) / 6;
-    if (this.query && !found.length) this.text(`Nothing called “${this.query}”. Try fewer letters.`, 24, y0 + 110, 22, '#9aa4af');
-    if (!this.query) this.wrapped('Try: steel, pipe, oak, weld, magnet, glue, zero gravity, save…', 24, y0 + 100, W - 48, 22, '#9aa4af', 2);
-    found.forEach((e, i) => this.slot(`found-${i}`, 20 + (i % 6) * (sw + 8), y0 + 64 + Math.floor(i / 6) * 128, sw, 120, e.item, e.label, () => this.pick(e.item)));
-    this.keyboard('skey', y0 + 64 + 2 * 128 + 4, () => this.query, (v) => { this.query = v; });
-  }
-
-  /** A keyboard: digits, letters and the symbols Forge uses, space, backspace and clear. */
-  private keyboard(prefix: string, y: number, get: () => string, set: (v: string) => void, extra?: [string, string, () => void]) {
-    const rows = ['1234567890.-', 'qwertyuiop=⌫', 'asdfghjkl()*', 'zxcvbnm{}/+%'];
-    const kw = (W - 40 - 11 * 6) / 12, kh = 52;
-    rows.forEach((r, j) => [...r].forEach((k, i) => this.btn(`${prefix}-${k}`, 20 + i * (kw + 6), y + j * (kh + 6), kw, kh, k, () => {
-      set(k === '⌫' ? get().slice(0, -1) : get() + k);
-    })));
-    const yl = y + 4 * (kh + 6);
-    const sw = (W - 40 - 3 * 6) / 4;
-    this.btn(`${prefix}-space`, 20, yl, sw * 2 + 6, kh, 'space', () => set(`${get()} `));
-    this.btn(`${prefix}-clear`, 20 + 2 * (sw + 6), yl, sw, kh, 'Clear', () => set(''));
-    if (extra) this.btn(extra[0], 20 + 3 * (sw + 6), yl, sw, kh, extra[1], extra[2]);
-  }
-
-  /** Ego's page: the command line and keyboard instead of her advice. */
-  private typing = false;
-
-  /** Ego: what she sees, what she advises (with fixes you apply in one tap), and what you'll likely want next. */
-  /** After you showed her something: what she sees, and what's wrong with it, in a tap or in your words. */
-  openShown() {
-    this.page = 'ego';
-    this.shownView = true;
-    this.scroll = 0;
-    this.app.notify();
-  }
-
-  private shownView = false;
-
-  private drawShown(y0: number) {
-    const ego = this.app.ego!, w = ego.shown!;
-    const g = this.ctx;
-    this.text('👁 What I see', 24, y0 + 30, 26, '#8fd3ff', 'left', '700');
-    g.fillStyle = 'rgba(143,211,255,0.10)';
-    roundRect(g, 20, y0 + 44, W - 40, 150, 14);
-    g.fill();
-    this.wrapped(w.said, 36, y0 + 74, W - 72, 21, '#e8ecf1', 6);
-    this.text("What's wrong with it?", 24, y0 + 226, 22, '#9aa4af');
-    const asks: [string, string][] = [
-      ['〰 Shaking', "it's shaking"], ['⤓ Went through', 'it went through the floor'], ['💥 Flew off', 'it flew off'], ['💔 Came apart', 'it came apart'],
-      ['🤨 Not realistic', "that wouldn't happen in real life"], ['🐢 Laggy', "it's laggy"], ["💾 Won't save", "it won't save"], ['✓ It\'s fine', ''],
-    ];
-    const bw = (W - 40 - 3 * 8) / 4;
-    asks.forEach(([label, words], i) => this.btn(`shown-${i}`, 20 + (i % 4) * (bw + 8), y0 + 240 + Math.floor(i / 4) * 76, bw, 68, label, () => {
-      this.shownView = false;
-      if (words) ego.reply(ego.ask(words));
-      this.app.notify();
-    }, { tone: words ? undefined : 'accent' }));
-    const by = CH - 76;
-    const half = (W - 40 - 8) / 2;
-    if (Voice.canListen) this.btn('shown-talk', 20, by, half, 60, this.listening ? '🎙 Listening…' : '🎙 Tell her in your words', () => { this.shownView = false; this.talk(); }, { on: this.listening, tone: 'accent' });
-    this.btn('shown-type', Voice.canListen ? 20 + half + 8 : 20, by, Voice.canListen ? half : W - 40, 60, '⌨ Type it', () => { this.shownView = false; this.typing = true; ego.command = "it's "; this.app.notify(); });
-  }
-
-  private drawEgo(y0: number) {
-    const ego = this.app.ego;
-    if (!ego) return;
-    if (this.shownView && ego.shown) return this.drawShown(y0);
-    const g = this.ctx;
-    // her name, and what her Mind is on (an open investigation, or none)
-    const open = ego.mind?.unresolved() ?? [];
-    this.text(`● ${ego.name}`, 24, y0 + 28, 26, '#8fd3ff', 'left', '700');
-    this.text(open.length ? `${open.length} open: ${open.slice(0, 2).join(', ')}${open.length > 2 ? '…' : ''}` : ego.mind ? 'nothing open' : 'journal opening…', W - 24, y0 + 28, 17, '#9aa4af', 'right');
-    this.text(`${ego.observe()} · ${ego.focus()}`, 24, y0 + 56, 19, '#9aa4af');
-    let y = y0 + 70;
-    const cards = ego.advice.slice(0, 3);
-    if (!cards.length) this.wrapped('All good. When something is close to failing, or breaks, I\'ll say why and how to make it hold.', 24, y + 36, W - 48, 22, '#9aa4af', 2);
-    for (const a of cards) {
-      g.fillStyle = a.kind === 'break' ? 'rgba(255,91,77,0.12)' : a.kind === 'warn' ? 'rgba(255,193,77,0.12)' : 'rgba(143,211,255,0.10)';
-      roundRect(g, 20, y, W - 40, 104, 14);
-      g.fill();
-      this.wrapped(a.text, 36, y + 26, W - 140, 19, a.kind === 'break' ? '#ffb3aa' : a.kind === 'warn' ? '#ffd98a' : '#e8ecf1', 2);
-      this.btn(`adv-x-${a.id}`, W - 84, y + 8, 52, 38, '✕', () => ego.dismiss(a.id));
-      const fw = (W - 72 - 8) / 2;
-      a.fixes.slice(0, 2).forEach((f, i) => this.btn(`fix-${a.id}-${i}`, 36 + i * (fw + 8), y + 56, fw, 40, f.label, () => f.apply(), { tone: 'accent', small: true }));
-      if (!a.fixes.length && a.kind === 'break') this.text('No stronger joint fits here: try bigger parts, or brace it.', 36, y + 84, 18, '#9aa4af');
-      y += 112;
-    }
-    const yn = y0 + 70 + 3 * 112;
-    const nw = (W - 40 - 3 * 8) / 4;
-    const next = ego.suggestions();
-    this.text(next.length ? 'Next, from your habits:' : 'Next: I\'m learning your habits.', 24, yn + 20, 19, '#9aa4af');
-    next.forEach((n, i) => this.btn(`next-${i}`, 20 + i * (nw + 8), yn + 28, nw, 46, n.label, () => n.run(), { small: true }));
-    // the skills she taught herself from what you repeat
-    const ys = yn + 84;
-    const skills = ego.skills.skills.slice(0, 4);
-    this.text(skills.length ? 'Skills I learned from you:' : 'Skills: repeat something and I\'ll offer to learn it.', 24, ys + 20, 19, '#9aa4af');
-    skills.forEach((sk, i) => this.btn(`skill-${i}`, 20 + i * (nw + 8), ys + 28, nw, 46, `🧠 ${sk.name}`, () => ego.reply(ego.runSkill(sk.id)), { small: true }));
-    const by = CH - 76;
-    const bw = (W - 40 - 24) / 4;
-    this.btn('forge', 20, by, bw, 60, '⌨ Ask Ego', () => { this.typing = true; }, { tone: 'accent', sub: 'or type Forge' });
-    if (Voice.canListen) this.btn('talk', 20 + (bw + 8), by, bw, 60, this.listening ? '🎙 Listening…' : '🎙 Talk', () => this.talk(), { on: this.listening, tone: 'accent' });
-    else this.btn('voice', 20 + (bw + 8), by, bw, 60, ego.voice.enabled ? '🔊 Voice on' : '🔈 Voice off', () => { ego.voice.enabled = !ego.voice.enabled; }, { on: ego.voice.enabled });
-    const unsent = ego.reports.unsent.length;
-    this.btn('reports', 20 + 2 * (bw + 8), by, bw, 60, '📨 Reports', () => { this.reportsView = true; }, { sub: unsent ? `${unsent} for Claude` : 'to Claude', tone: unsent ? 'accent' : undefined });
-    this.btn('life', 20 + 3 * (bw + 8), by, bw, 60, '📒 Life', () => { this.lifeView = true; }, { sub: 'memory · reminders · money' });
-  }
-
-  private listening = false;
-  /** Speak to Ego: one request, heard by the browser's own recognition, then done as if typed. */
-  private talk() {
-    const ego = this.app.ego;
-    if (!ego || this.listening) return;
-    this.listening = true;
-    ego.voice.listen((heard) => {
-      this.listening = false;
-      if (heard) ego.ask(heard);
-      else this.app.toast('Ego didn\'t catch that: try again, or type it', 'warn');
-      this.app.notify();
-    });
-  }
-
-  private reportsView = false;
-  private lifeView = false;
-
-  /** What Ego keeps for you: what you told her, what's coming up, and the week's money. All on this headset. */
-  private drawLife(y0: number) {
-    const life = this.app.ego!.life;
-    const money = (x: number) => `$${x.toFixed(x % 1 ? 2 : 0)}`;
-    this.text('📒 What I keep for you (only on this headset)', 24, y0 + 28, 24, '#8fd3ff', 'left', '700');
-    let y = y0 + 70;
-    this.text('Remembered', 24, y, 20, '#9aa4af', 'left', '600');
-    const facts = life.facts.slice(-5).reverse();
-    if (!facts.length) this.text('Nothing yet: say "remember my locker code is 4471".', 24, y + 30, 19, '#6f7883');
-    facts.forEach((f, i) => this.text(`• ${f.said}`, 24, y + 30 + i * 28, 20, '#e8ecf1'));
-    y += 30 + Math.max(1, facts.length) * 28 + 16;
-    this.text('Coming up', 24, y, 20, '#9aa4af', 'left', '600');
-    const next = life.reminders.filter((r) => !r.done).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3);
-    if (!next.length) this.text('No reminders: say "remind me to stretch in 30 minutes".', 24, y + 30, 19, '#6f7883');
-    next.forEach((r, i) => this.text(`⏰ ${new Date(r.due).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}: ${r.what}`, 24, y + 30 + i * 28, 20, '#e8ecf1'));
-    y += 30 + Math.max(1, next.length) * 28 + 16;
-    const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - ((from.getDay() + 6) % 7));
-    const week = life.summary(from);
-    this.text(`This week: ${money(week.spent)} out, ${money(week.earned)} in`, 24, y, 20, '#9aa4af', 'left', '600');
-    const cats = Object.entries(week.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    if (!cats.length) this.text('Say what you spend: "I spent $12 on lunch".', 24, y + 30, 19, '#6f7883');
-    cats.forEach(([c, v], i) => {
-      const over = week.over.find((o) => o.category === c);
-      this.text(`${c}: ${money(v)}${over ? `  (over budget ${money(over.budget)})` : life.budgets[c] ? `  of ${money(life.budgets[c]!)}` : ''}`, 24 + (i % 2) * 480, y + 30 + Math.floor(i / 2) * 28, 20, over ? '#ffb3aa' : '#e8ecf1');
-    });
-    const by = CH - 76;
-    const bw = (W - 40 - 8) / 2;
-    if (Voice.canListen) this.btn('life-talk', 20, by, bw, 60, this.listening ? '🎙 Listening…' : '🎙 Tell her', () => this.talk(), { on: this.listening, tone: 'accent' });
-    else this.btn('life-type', 20, by, bw, 60, '⌨ Tell her', () => { this.lifeView = false; this.typing = true; });
-    this.btn('life-back', 20 + bw + 8, by, bw, 60, '← Ego', () => { this.lifeView = false; });
-  }
-
-  /** What you've told Ego is wrong, and sending it to Claude. */
-  private drawReports(y0: number) {
-    const ego = this.app.ego;
-    if (!ego) return;
-    const list = [...ego.reports.reports].reverse();
-    this.text(`📨 Reports for Claude · ${ego.reports.unsent.length} not sent`, 24, y0 + 30, 26, '#8fd3ff', 'left', '700');
-    this.wrapped('Tell Ego what\'s wrong in your own words ("it\'s shaking", "it fell through the floor"). She fixes what she can and writes the rest up here, with what she saw and the build as it was.', 24, y0 + 64, W - 48, 19, '#9aa4af', 2);
-    let y = y0 + 112;
-    const g = this.ctx;
-    if (!list.length) this.text('No reports yet.', 24, y + 30, 22, '#9aa4af');
-    for (const r of list.slice(0, 5)) {
-      g.fillStyle = r.sent ? 'rgba(255,255,255,0.05)' : 'rgba(143,211,255,0.10)';
-      roundRect(g, 20, y, W - 40, 76, 12);
-      g.fill();
-      this.text(`${r.sent ? '✓ ' : ''}“${r.words.length > 70 ? `${r.words.slice(0, 69)}…` : r.words}”`, 36, y + 28, 20, '#e8ecf1', 'left', '600');
-      this.text(`${r.trouble}${r.fixed ? ` · Ego ${r.fixed}` : ' · for Claude'}`.slice(0, 96), 36, y + 56, 17, '#9aa4af');
-      y += 84;
-    }
-    const by = CH - 76;
-    const bw = (W - 40 - 24) / 4;
-    this.btn('rep-send', 20, by, bw, 60, '📨 Send to Claude', () => this.sendReports(), { tone: 'accent', sub: 'as a GitHub issue' });
-    this.btn('rep-copy', 20 + (bw + 8), by, bw, 60, '📋 Copy', () => this.copyForClaude(), { sub: 'reports + transcript' });
-    this.btn('rep-clear', 20 + 2 * (bw + 8), by, bw, 60, 'Clear sent', () => { ego.reports.reports = ego.reports.reports.filter((r) => !r.sent); ego.reports.markSent([]); this.app.notify(); });
-    this.btn('rep-back', 20 + 3 * (bw + 8), by, bw, 60, '← Ego', () => { this.reportsView = false; });
-  }
-
-  /** Open the reports as a new GitHub issue (Claude reads the repository's issues). */
-  private sendReports() {
-    const ego = this.app.ego;
-    const unsent = ego?.reports.unsent ?? [];
-    if (!ego || !unsent.length) { this.app.toast('No reports waiting', 'info'); return; }
-    const w = window.open(issueUrl(unsent, REPORT_REPO), '_blank');
-    if (w) { ego.reports.markSent(unsent.map((r) => r.id)); this.app.toast('Opened the report as a GitHub issue: press Submit there, and Claude will see it', 'ok'); }
-    else this.app.toast('The browser wouldn\'t open it from VR: take the headset view out of VR, and the launch page has a Send button', 'warn');
-  }
-
-  private copyForClaude() {
-    const text = [reportText(this.app.ego?.reports.unsent ?? []), this.app.ego?.forClaude() ?? ''].join('\n');
-    const done = () => this.app.toast('Copied: paste it to Claude to show exactly what you built', 'ok');
-    const fail = () => this.app.toast('The browser would not copy here: the share code is on My builds via Save', 'warn');
-    try {
-      const w = navigator.clipboard?.writeText(text);
-      if (w) void w.then(done, fail); else fail();
-    } catch { fail(); }
-  }
-
-  /** Forge on the tablet: a command line, what it did, and a keyboard. */
-  private drawForge(y0: number) {
-    const ego = this.app.ego;
-    if (!ego) return;
-    const g = this.ctx;
-    g.fillStyle = 'rgba(255,255,255,0.08)';
-    roundRect(g, 20, y0, W - 40 - 170, 56, 12);
-    g.fill();
-    g.font = '500 24px ui-monospace, monospace';
-    let shown = ego.command;
-    while (shown && g.measureText(`${shown}▏`).width > W - 250) shown = shown.slice(1);
-    this.text(`${shown}▏`, 34, y0 + 36, 24, '#e8ecf1');
-    this.btn('forge-run', W - 20 - 160, y0, 160, 56, 'Go ⏎', () => { if (ego.command.trim()) { ego.ask(ego.command); ego.command = ''; } }, { tone: 'accent' });
-    ego.output.slice(-5).forEach((l, i) => this.text(l.length > 78 ? `${l.slice(0, 77)}…` : l, 24, y0 + 90 + i * 26, 19, l.startsWith('✗') ? '#ff9b73' : l.startsWith('›') ? '#8fd3ff' : '#c7ccd1'));
-    const ex: [string, string][] = [['make it stronger', 'make it stronger'], ['weld these', 'weld these'], ['4 steel blocks', 'place 4 steel blocks'], ['Forge: 4 legs', 'repeat 4 { place lumber size=2x2 length=0.7m at (i*0.4) 0.35 -1 rot z 90 as leg }']];
-    const ew = (W - 40 - 24) / 4;
-    ex.forEach(([label, code], i) => this.btn(`ex-${i}`, 20 + i * (ew + 8), y0 + 222, ew, 44, label, () => { ego.command = code; }, { small: true }));
-    this.keyboard('key', y0 + 276, () => ego.command, (v) => { ego.command = v; }, ['forge-back', '← Ego', () => { this.typing = false; }]);
-  }
-
-  /** Delete mode on My builds: a tap deletes instead of opening. */
-  private deleting = false;
-
-  /** Your builds, saved on this headset. Nothing here is pre-made. */
-  /** My builds or my templates. */
-  private shelf: 'Builds' | 'Templates' = 'Builds';
-
-  private drawBuilds(y0: number) {
-    const y = this.chips('shelf', ['Builds', 'Templates'], this.shelf, (l) => { this.shelf = l as 'Builds' | 'Templates'; this.deleting = false; this.scroll = 0; }, y0);
-    if (this.shelf === 'Templates') this.drawTemplates(y);
-    else this.drawMyBuilds(y);
-  }
-
-  /** Your templates: assemblies saved to place again. Pick one and the Place tool stamps out copies. */
-  private drawTemplates(y0: number) {
-    const app = this.app;
-    const list = app.templates.list();
-    const sel = [...app.selection.parts].filter((id) => app.doc.parts[id]);
-    const bw = (W - 40 - 8) / 2;
-    const built = sel.length ? app.together(sel) : [];
-    this.btn('tpl-save2', 20, y0, bw, 72, '📐 Save what you built as a template', () => app.saveTemplate(app.together(sel)), { tone: sel.length ? 'accent' : undefined, sub: sel.length ? `${built.length} parts: joined, and resting on it` : 'select a part of it first' });
-    if (this.deleting && !list.length) this.deleting = false;
-    this.btn('tpl-delmode', 20 + bw + 8, y0, bw, 72, this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; }, { on: this.deleting, tone: this.deleting ? 'danger' : undefined });
-    const y1 = y0 + 86;
-    if (!list.length) {
-      this.wrapped('No templates yet. Join parts into something, select it, then 📐 Save as template: pick it here and the Place tool stamps out copies.', 24, y1 + 40, W - 48, 24, '#9aa4af', 3);
-      return;
-    }
-    const sw = (W - 40 - 5 * 8) / 6;
-    this.grid(list, 20, y1, 6, sw, 132, 8, (e, x, y) =>
-      this.slot(`tpl-${e.id}`, x, y, sw, 132, { type: 'template', id: e.id }, e.name, () => {
-        if (this.deleting) app.deleteTemplate(e.id);
-        else this.pick({ type: 'template', id: e.id });
-      }));
-  }
-
-  private drawMyBuilds(y0: number) {
-    const app = this.app;
-    const lib = app.library.list();
-    const open = app.libraryId ? app.library.get(app.libraryId) : null;
-    const bw = (W - 40 - 24) / 4;
-    this.btn('save', 20, y0, bw, 84, '💾 Save', () => app.saveBuild(), { tone: 'accent', sub: open ? `over “${open.name}”` : 'as a new build' });
-    this.btn('saveas', 20 + (bw + 8), y0, bw, 84, '➕ Save as new', () => app.saveBuild(true), { sub: 'a copy' });
-    this.btn('new', 20 + 2 * (bw + 8), y0, bw, 84, '🆕 New build', () => app.newBuild(), { sub: 'empty workshop' });
-    if (this.deleting && !lib.length) this.deleting = false;
-    this.btn('delmode', 20 + 3 * (bw + 8), y0, bw, 84, this.deleting ? '🗑 Tap to delete' : '🗑 Delete…', () => { this.deleting = !this.deleting; },
-      { on: this.deleting, tone: this.deleting ? 'danger' : undefined, sub: this.deleting ? 'tap here to stop' : undefined });
-    const y1 = y0 + 100;
-    if (!lib.length) {
-      this.wrapped('No builds yet. Build something, then 💾 Save: your builds stay on this headset, and only builds you save appear here.', 24, y1 + 40, W - 48, 26, '#9aa4af', 3);
-      return;
-    }
-    const when = (iso: string) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const cw = (W - 40 - 16) / 3;
-    this.grid(lib, 20, y1, 3, cw, 110, 8, (e, x, y) =>
-      this.btn(`build-${e.id}`, x, y, cw, 110, e.name, () => {
-        if (this.deleting) this.app.deleteBuild(e.id);
-        else this.app.openBuild(e.id);
-      }, { on: app.libraryId === e.id, tone: this.deleting ? 'danger' : undefined, sub: when(e.saved) }));
-  }
-
-  private drawWorld(y0: number) {
-    const app = this.app;
-    const s = app.settings;
-    const bw = (W - 40 - 24) / 4;
-    const row = (i: number) => y0 + i * 88;
-    this.btn('pause', 20, row(0), bw, 76, s.paused ? '▶ Run' : '⏸ Pause', () => app.togglePause(), { on: s.paused });
-    this.btn('step', 20 + (bw + 8), row(0), bw, 76, '⏭ Step', () => app.step());
-    this.btn('slower', 20 + 2 * (bw + 8), row(0), bw, 76, 'Slower', () => app.setTimeScale(Math.max(0.05, s.timeScale / 2)), { sub: `×${s.timeScale}` });
-    this.btn('faster', 20 + 3 * (bw + 8), row(0), bw, 76, 'Faster', () => app.setTimeScale(Math.min(2, s.timeScale * 2)));
-    this.btn('ckpt', 20, row(1), bw, 76, '⚑ Checkpoint', () => app.checkpoint());
-    this.btn('rewind', 20 + (bw + 8), row(1), bw, 76, '⟲ Rewind', () => app.rewind());
-    this.btn('undo', 20 + 2 * (bw + 8), row(1), bw, 76, '↶ Undo', () => app.undo());
-    this.btn('redo', 20 + 3 * (bw + 8), row(1), bw, 76, '↷ Redo', () => app.redo());
-    this.btn('stress', 20, row(2), bw, 76, 'Stress view', () => { app.view.setStressOverlay(!app.view.stressOverlay); app.notify(); }, { on: app.view.stressOverlay });
-    this.btn('grabmode', 20 + (bw + 8), row(2), bw, 76, s.grabMode === 'physical' ? 'Grab: physical' : 'Grab: creative', () => { s.grabMode = s.grabMode === 'physical' ? 'creative' : 'physical'; app.notify(); }, { on: s.grabMode === 'creative' });
-    this.btn('frozen', 20 + 2 * (bw + 8), row(2), bw, 76, 'Place frozen', () => { s.placeFrozen = !s.placeFrozen; app.notify(); }, { on: s.placeFrozen });
-    this.btn('shadows', 20 + 3 * (bw + 8), row(2), bw, 76, 'Shadows', () => { s.shadows = !s.shadows; app.view.sun.castShadow = s.shadows; app.notify(); }, { on: s.shadows });
-    this.btn('small', 20, row(3), bw, 76, 'Shrink me', () => { s.playerScale = Math.max(0.05, s.playerScale / 2); app.notify(); }, { sub: `scale ×${s.playerScale}` });
-    this.btn('big', 20 + (bw + 8), row(3), bw, 76, 'Grow me', () => { s.playerScale = Math.min(20, s.playerScale * 2); app.notify(); });
-    const g = Math.hypot(...app.doc.sim.gravity);
-    const presets: [string, number][] = [['Earth', STANDARD_GRAVITY], ['Moon', 1.62]];
-    presets.forEach(([n, v], i) => this.btn(`g-${n}`, 20 + (2 + i) * (bw + 8), row(3), bw, 76, n, () => setSim(app.store, { gravity: [0, -v, 0] }), { on: Math.abs(g - v) < 0.01, sub: `${v} m/s²` }));
-    this.btn('zerog', 20, row(4), bw, 76, 'Zero-g', () => setSim(app.store, { gravity: [0, 0, 0] }), { on: g < 1e-3 });
-    this.btn('switch-w', 20 + 3 * (bw + 8), row(4), bw, 76, app.switchOn ? '🧲 Switch: on' : '🧲 Switch: off', () => app.toggleSwitch(), { on: app.switchOn, sub: 'electromagnets, aux' });
-    const r = this.room;
-    if (r && r.active === 'relax') {
-      this.btn('stick', 20 + (bw + 8), row(4), bw * 2 + 8, 76, r.drive ? 'Left stick: Drive' : 'Left stick: Fly', () => r.setDrive(!r.drive), {
-        on: r.drive, sub: r.drive ? 'motors and steering (menu hidden)' : 'fly where you look',
-      });
-    }
-    this.drawRoom(row(5) + 10, bw);
-    // the energy books: where every joule is, what put it there, and what became heat
-    const e = app.live.energy;
-    if (e) {
-      const J = (x: number) => (Math.abs(x) >= 1000 ? `${(x / 1000).toFixed(2)} kJ` : `${x.toFixed(Math.abs(x) < 10 ? 2 : 1)} J`);
-      const heat = e.heat.friction + e.heat.impact + e.heat.plastic + e.heat.air + e.heat.eddy + e.heat.damping + e.heat.electric;
-      const work = e.work.hands + e.work.batteries + e.work.magnets + e.work.fluids;
-      this.text(`⚡ motion ${J(e.kinetic)} · height ${J(e.potential)} · springs ${J(e.elastic)} · put in ${J(work)} (hands ${J(e.work.hands)}, batteries ${J(e.work.batteries)}, magnets ${J(e.work.magnets)})`, 24, CH - 100, 18, '#c9d2dc');
-      this.text(`🔥 heat ${J(heat)} (friction ${J(e.heat.friction)}, impacts ${J(e.heat.impact)}, bending ${J(e.heat.plastic)}, air ${J(e.heat.air)}, eddy ${J(e.heat.eddy)}, electric ${J(e.heat.electric)}) · integrator lost ${J(e.numerical.lost)}, made ${J(e.numerical.gained)}${e.numerical.gainedHeld > 0 ? ` (${J(e.numerical.gainedHeld)} while held)` : ''}`, 24, CH - 76, 18, '#c9d2dc');
-    }
-    this.drawHealth(CH - 46);
-    this.text(`${app.fps.toFixed(0)} fps · physics ${(app.live.stats?.stepMs ?? 0).toFixed(1)} ms · ${app.live.stats?.awake ?? 0}/${app.live.stats?.bodies ?? 0} awake`, 24, CH - 14, 22, '#9aa4af');
-    this.text(`v ${__BUILD__}`, W - 24, CH - 14, 18, '#6f7883', 'right');
-  }
-
-  /**
-   * Build and play (as in Besiege): in the build phase physics holds every part still and a moved part snaps to the
-   * grid and to the angle step; Play runs the build for real; Back to build returns to it as it was.
-   */
-  private drawBuildRow(y: number) {
-    const app = this.app, s = app.settings;
-    const bw = (W - 40 - 4 * 8) / 5;
-    const grids: [number, string][] = [[0, 'off'], [0.001, '1 mm'], [0.005, '5 mm'], [0.01, '1 cm'], [0.05, '5 cm'], [0.1, '10 cm']];
-    const angles = [0, 5, 15, 45, 90];
-    const next = <T,>(list: T[], cur: T) => list[(Math.max(0, list.indexOf(cur)) + 1) % list.length]!;
-    this.btn('build', 20, y, bw, 64, '■ Build', () => app.enterBuild(), { on: s.build });
-    this.btn('play', 20 + (bw + 8), y, bw, 64, '▶ Play', () => app.play(), { on: !s.build });
-    this.btn('stop', 20 + 2 * (bw + 8), y, bw, 64, '⏮ Back to build', () => app.stop(), { tone: app.canStop ? 'accent' : undefined });
-    const g = grids.find(([v]) => Math.abs(v - s.grid) < 1e-9) ?? grids[3]!;
-    this.btn('grid', 20 + 3 * (bw + 8), y, bw, 64, `Grid ${g[1]}`, () => { s.grid = next(grids.map(([v]) => v), g[0]); app.notify(); });
-    this.btn('angle', 20 + 4 * (bw + 8), y, bw, 64, `Angle ${s.angleSnap ? `${s.angleSnap}°` : 'off'}`, () => { s.angleSnap = next(angles, s.angleSnap); app.notify(); });
-  }
-
-  /** The live watchdog's verdict on this session: all clear, or how many problems and the latest one. */
-  private drawHealth(y: number) {
-    const h = this.app.live.health;
-    if (!h.length) { this.text('● Watchdog: all clear', 24, y, 22, '#4dd68c', 'left', '600'); return; }
-    const crit = h.filter((a) => a.severity === 'critical').length;
-    const last = h[h.length - 1]!;
-    const name = last.id ? (this.app.doc.parts[last.id.split('#')[0]!]?.name ?? 'a part') : 'the scene';
-    const line = `● Watchdog: ${crit ? `${crit} critical` : ''}${crit && h.length > crit ? ', ' : ''}${h.length > crit ? `${h.length - crit} warning` : ''} · ${last.kind}: ${name} ${last.detail}`;
-    this.text(line.length > 92 ? `${line.slice(0, 91)}…` : line, 24, y, 22, crit ? '#ff5b4d' : '#ffc14d', 'left', '600');
-  }
-
-  /** Mode row: relax / walk / mixed, and what each needs (calibrate, scan, what the room does). */
-  private drawRoom(y: number, bw: number) {
-    const r = this.room;
-    if (!r) return;
-    const app = this.app;
-    const sw = (bw * 2 + 8 - 16) / 3;
-    const modes: ['relax' | 'walk' | 'mixed', string][] = [['relax', 'Relax'], ['walk', 'Walk'], ['mixed', 'Mixed']];
-    modes.forEach(([m, label], i) =>
-      this.btn(`mode-${m}`, 20 + i * (sw + 8), y, sw, 76, label, () => r.setStyle(m), {
-        on: r.active === m,
-        sub: m === 'relax' ? 'fly' : m === 'walk' ? '1:1 room' : r.passthrough ? 'passthrough' : 'needs AR',
-      }));
-    const x2 = 20 + 2 * (bw + 8);
-    if (r.active === 'walk') {
-      this.btn('recal', x2, y, bw, 76, 'Recalibrate', () => r.recalibrate(), { sub: r.calibrated ? 'stand + face, then press' : 'waiting…' });
-      this.btn('solid', x2 + bw + 8, y, bw, 76, 'Room solid', () => { app.roomSolid = !app.roomSolid; app.applyRoom(); }, { on: app.roomSolid, sub: `${app.room.length} surfaces` });
-    } else if (r.active === 'mixed') {
-      this.btn('scan', x2, y, bw, 76, 'Scan room', () => r.scan(), { sub: r.canScan ? 'Space Setup' : 'not on this device' });
-      this.btn('showscan', x2 + bw + 8, y, bw, 76, 'Show scan', () => { app.showScan = !app.showScan; app.applyRoom(); }, { on: app.showScan, sub: `${app.room.length} surfaces` });
-    } else {
-      this.text('Walk: your real room, 1:1 in the workshop.', x2, y + 32, 21, '#9aa4af');
-      this.text('Mixed: build in your room (passthrough).', x2, y + 62, 21, '#9aa4af');
-    }
   }
 }
 
-function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  g.beginPath();
-  g.moveTo(x + r, y);
-  g.arcTo(x + w, y, x + w, y + h, r);
-  g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r);
-  g.arcTo(x, y, x + w, y, r);
-  g.closePath();
-}
-
-function fit(g: CanvasRenderingContext2D, s: string, w: number) {
-  if (g.measureText(s).width <= w) return s;
-  let t = s;
-  while (t.length > 1 && g.measureText(`${t}…`).width > w) t = t.slice(0, -1);
-  return `${t}…`;
+/** The height of a foot node at the page width (a foot never pages, so the bottom is far away). */
+function measureFoot(p: Paint, n: Node, w: number): number {
+  const probe: Widget[] = [];
+  p.g.save();
+  p.g.globalAlpha = 0;
+  const h = render(p, n, -10_000, 0, w, 10_000, probe);
+  p.g.restore();
+  return h;
 }

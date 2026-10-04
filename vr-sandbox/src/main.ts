@@ -21,8 +21,7 @@ async function main() {
   app.ego = new Ego(app, tools);
   const handles: Record<string, unknown> = { app, tools, ego: app.ego, xr: null, templates: TEMPLATES, mind: null };
   (window as unknown as { sandbox: unknown }).sandbox = handles;
-  // her Mind: the journal this browser keeps, and whatever was left unresolved resumed from it (src/mind)
-  void app.ego.wake().then((m) => { handles['mind'] = m; }, (e) => console.warn('her Mind did not open', e));
+  // her Mind: the journal this browser keeps, and whatever was left unresolved resumed from it (src/mind), opened below with the headset's facts
   app.everyFrame('tools', (dt) => tools.frame(dt));
   // behind the launch card, a still view into the workshop
   app.view.camera.position.set(0, 1.7, 3.4);
@@ -70,12 +69,39 @@ async function main() {
     app.renderer.xr.addEventListener('sessionend', () => {
       launch.hidden = false;
       showReports();
+      showFacts();
       app.view.camera.position.set(0, 1.7, 3.4);
       app.view.camera.rotation.set(-0.28, 0, 0);
     });
   } else {
     status.textContent = 'This is a Meta Quest app: open this page in the Quest browser to enter VR.';
   }
+
+  // what this headset holds: your builds and templates, Ego's journal, and how much of the browser's storage is used
+  const facts = document.getElementById('headset')!;
+  const showFacts = () => {
+    const mind = handles['mind'] as { journal: { commits: unknown[] }; unresolved(): string[] } | null;
+    const used = app.storageUsed();
+    const rows: [string, string, boolean?][] = [
+      ['Builds', `${app.library.list().length} saved · ${app.templates.list().length} template${app.templates.list().length === 1 ? '' : 's'}`],
+      ['Ego', mind ? `${mind.journal.commits.length} commit${mind.journal.commits.length === 1 ? '' : 's'} in her journal · ${mind.unresolved().length} open` : 'opening her journal…', true],
+      ['Storage', `${used >= 1e6 ? `${(used / 1e6).toFixed(1)} M` : `${Math.round(used / 1e3)} k`} of about 5 M characters`],
+    ];
+    facts.replaceChildren(...rows.flatMap(([k, v, ego]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; if (ego) dd.className = 'ego'; return [dt, dd]; }));
+    facts.hidden = false;
+  };
+  showFacts();
+  void app.ego.wake().then((m) => { handles['mind'] = m; showFacts(); }, (e) => console.warn('her Mind did not open', e));
+
+  // a shared build: its code pasted here, or a link with #build=
+  const shareCode = document.getElementById('share-code') as HTMLTextAreaElement;
+  document.getElementById('share-open')!.addEventListener('click', () => {
+    const raw = shareCode.value.trim();
+    const code = raw.includes('#build=') ? decodeURIComponent(raw.slice(raw.indexOf('#build=') + 7)) : raw;
+    if (!code) { status.textContent = 'Paste a share code first.'; return; }
+    if (app.openShareCode(code)) { status.textContent = `Opened: ${Object.keys(app.doc.parts).length} parts. Press Enter VR.`; shareCode.value = ''; }
+    else status.textContent = 'That is not a share code this version can open.';
+  });
 
   // what you told Ego is wrong, waiting to go to Claude: sending opens a GitHub issue, which Claude reads
   const reportsBox = document.getElementById('reports')!;

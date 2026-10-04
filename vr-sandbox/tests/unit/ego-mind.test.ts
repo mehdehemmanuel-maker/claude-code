@@ -217,6 +217,10 @@ describe('the watchdog as an event of her Mind', () => {
     expect(note[0]!.validation.verdict).toBe('contradicted');
     expect(investigations(journal.commits)).toEqual(['watch:fell:p3']);
     expect(mind.unresolved()).toEqual(['watch:fell:p3']);
+    // the note is not what she is on; and said as a note, not as a test
+    expect(mind.current()).toBe('watch:fell:p3');
+    const { sayBrief } = await import('../../src/mind');
+    expect(sayBrief(journal.commits, 'construct:p4', 'Noted')).toMatch(/^Noted, a note: Band \(1\.00 m of rubber\.natural\) is outside the rigid model's domain/);
     // resumed from the journal, the open question is still open and nothing runs
     const again = new Mind(new MemoryJournal(journal.commits), { stand: fakeStand(), sim }, undefined, 'later');
     expect(await again.resume()).toEqual([]);

@@ -11,7 +11,7 @@ test('my builds: nothing pre-made; save, open and delete your own from the table
   await tap(page, 'tab-builds');
   expect(await sb(page, (s) => s.app.library.list().length)).toBe(0);
   // build something: one block, then save it
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-place');
   await triggerAt(page, [0, 0, 0]);
   await frames(page, 4);
@@ -46,7 +46,7 @@ test('place, stack, join, undo and redo in the headset', async ({ page }) => {
   const errors = await boot(page, '?iwer');
   await enterVR(page);
   // Place tool: the trigger on the floor, then on top of the first block
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-place');
   await triggerAt(page, [0, 0, 0]);
   await frames(page, 4);
@@ -75,7 +75,7 @@ test('place, stack, join, undo and redo in the headset', async ({ page }) => {
   await frames(page, 2);
   expect((await counts(page)).conns).toBe(1);
   // joined, the two blocks are one piece: selecting the top block selects both
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-grab');
   await triggerAt(page, [0, 0.15, 0.05]);
   expect(await sb(page, (s) => s.app.selection.parts.size)).toBe(2);
@@ -91,7 +91,7 @@ test('a parameter stepped on the tablet changes the part', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');
   await enterVR(page);
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-place');
   await triggerAt(page, [0, 0, 0]);
   await frames(page, 3);
@@ -109,7 +109,7 @@ test('build mode: a part lifted by hand snaps to the grid and stays; Play drops 
   await page.setViewportSize({ width: 800, height: 450 });
   const errors = await boot(page, '?iwer');
   await enterVR(page);
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-place');
   await triggerAt(page, [0, 0, 0]);
   await frames(page, 4);

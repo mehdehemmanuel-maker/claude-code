@@ -3,13 +3,16 @@
 
 import * as THREE from 'three';
 import type { App, Toast } from '../app/app';
+import { T, wrapText } from './ui';
 
 const W = 1024;
 const H = 200;
 /** Seconds a message stays, and the last of them it spends fading. */
 const LIFE = 5;
 const FADE = 1;
-const COLOURS: Record<Toast['kind'], string> = { info: '#e8ecf1', ok: '#4dd68c', warn: '#ffc14d', break: '#ff5b4d' };
+const COLOURS: Record<Toast['kind'], string> = { info: T.ink, ok: T.green, warn: T.amber, break: T.red };
+/** The rule down a message's left edge: its kind at a glance (Ego's own words in her colour). */
+const RULES: Record<Toast['kind'], string> = { info: T.ego, ok: T.green, warn: T.amber, break: T.red };
 
 export class Hud {
   readonly mesh: THREE.Mesh;
@@ -59,40 +62,23 @@ export class Hud {
     let bottom = H - 6;
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const m = this.messages[i]!;
-      const lines = this.wrap(m.text, W - 64, 2);
+      const lines = wrapText(g, m.text, W - 70, 2);
       const h = lines.length * 34 + 18;
       if (bottom - h < 0) break;
       g.globalAlpha = Math.min(1, (LIFE - m.age) / FADE);
-      g.fillStyle = 'rgba(22,25,30,0.85)';
+      g.fillStyle = T.bg;
       g.beginPath();
       g.roundRect(8, bottom - h, W - 16, h, 14);
       g.fill();
+      g.fillStyle = RULES[m.kind];
+      g.beginPath();
+      g.roundRect(8, bottom - h, 8, h, 4);
+      g.fill();
       g.fillStyle = COLOURS[m.kind];
-      lines.forEach((l, k) => g.fillText(l, 28, bottom - h + 9 + 17 + k * 34));
+      lines.forEach((l, k) => g.fillText(l, 34, bottom - h + 9 + 17 + k * 34));
       bottom -= h + 6;
     }
     g.globalAlpha = 1;
     this.texture.needsUpdate = true;
-  }
-
-  /** Words into at most `max` lines of `width` pixels; the last one ends in an ellipsis if the text runs on. */
-  private wrap(text: string, width: number, max: number): string[] {
-    const g = this.ctx;
-    const lines: string[] = [];
-    let cur = '';
-    for (const word of text.split(/\s+/)) {
-      const next = cur ? `${cur} ${word}` : word;
-      if (g.measureText(next).width <= width) { cur = next; continue; }
-      if (cur) lines.push(cur);
-      cur = word;
-      if (lines.length === max) break;
-    }
-    if (lines.length < max && cur) lines.push(cur);
-    else if (lines.length === max && cur) {
-      let last = lines[max - 1]!;
-      while (last && g.measureText(`${last}…`).width > width) last = last.slice(0, -1);
-      lines[max - 1] = `${last}…`;
-    }
-    return lines.slice(0, max);
   }
 }

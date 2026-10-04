@@ -13,7 +13,7 @@ test('bolted together is one piece: select, freeze and save as a template, then 
   await frames(page, 4);
   expect(await counts(page)).toEqual({ parts: 2, conns: 1 });
   // selecting the top block selects the whole assembly
-  await tap(page, 'tab-tools');
+  await tap(page, 'tab-make');
   await tap(page, 'tool-grab');
   await triggerAt(page, [0, 0.15, 0.05]);
   expect(await sb(page, (s) => s.app.selection.parts.size)).toBe(2);
@@ -44,7 +44,8 @@ test('smart snap: a block placed off-centre on another lands square, flush and c
   await enterVR(page);
   await sb(page, (s) => { s.ego.run('place block at 0.3 0.05 -0.2 rot y 30 as base · freeze base'); });
   await frames(page, 4);
-  await tap(page, 'tab-parts');
+  await tap(page, 'tab-make');
+  await tap(page, 'make-Parts');
   await tap(page, 'part-block');
   // aim 1.5 cm off the top face's centre
   const top = await sb(page, (s) => { const p = Object.values(s.app.doc.parts)[0] as any; return [p.pose.p[0] + 0.015, 0.1, p.pose.p[2] + 0.01]; });
