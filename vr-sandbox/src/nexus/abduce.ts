@@ -19,6 +19,14 @@ export interface Observation {
   /** The observed binary outcome (the realization's measurement) and the derivation it disagreed with. */
   observed: Derivation;
   derived: Derivation;
+  /** The observation's identity: the system, the coupling, the quantities' records, the observed and the derived. Two observations of one outcome in two systems are two observations. */
+  hash: string;
+}
+
+/** An observation with its identity. */
+export function observation(o: Omit<Observation, 'hash'>): Observation {
+  const quantities = Object.fromEntries(Object.entries(o.quantities).map(([s, d]) => [s, d.hash]));
+  return { ...o, hash: hashOf({ observation: true, system: o.system, coupling: o.coupling, quantities, observed: o.observed.hash, derived: o.derived.hash }) };
 }
 
 /** A dimensionless group over named quantities: integer exponents. */
@@ -97,7 +105,7 @@ export function candidates(observations: Observation[]): Candidate[] {
       else if (Math.max(...zeros) < Math.min(...ones)) { separates = true; threshold = { lo: Math.max(...zeros), hi: Math.min(...ones), above: 1 }; }
     }
     const generality = new Set(observations.map((o) => o.system)).size;
-    out.push({ group: g, values, separates, threshold, generality, level: 'coupling and window', hash: hashOf({ candidate: g.hash, observations: observations.map((o) => o.observed.hash) }) });
+    out.push({ group: g, values, separates, threshold, generality, level: 'coupling and window', hash: hashOf({ candidate: g.hash, observations: observations.map((o) => o.hash) }) });
   }
   return out;
 }
@@ -154,7 +162,7 @@ export function promote(c: Candidate, name: string): Relation {
   const v = validate(c);
   if (!v.holds) throw new Error(`${name}: the candidate ${v.predicted ? `fails on held-out observations: ${v.failed.map((o) => o.coupling).join(', ')}` : 'predicts no held-out observation'}`);
   const { lo, hi, above } = c.threshold;
-  const observations = c.values.map((x) => x.observation.observed.hash);
+  const observations = c.values.map((x) => x.observation.hash);
   const provenance = `abduced from observations ${observations.join(', ')}`;
   const bound = ofLeaf(leaf(`${name}: bound, between the classes' nearest values ${lo} and ${hi}`, (lo + hi) / 2, '1', { class: 'measured', source: provenance }, (hi - lo) / 2));
   const b = variable('bound', '1', 'bound');

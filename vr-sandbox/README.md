@@ -38,7 +38,8 @@ nothing of its architecture is extended again.
   did not leave free, a measurement no variable can hold), `abduce` (the missing distinction searched for over the
   dimensionless groups of the failing coupling's quantity types, found from their dimensions alone; a candidate that
   separates every observation, validated on held-out observations where it predicts and silent where it does not,
-  promoted with provenance "abduced from observations h1…hn" only when it changes more than one system; a tie names
+  promoted with provenance "abduced from observations h1…hn" (each an observation's own identity: its system, its
+  coupling, its quantities' records, the observed and the derived) only when it changes more than one system; a tie names
   the quantities the next observation must vary; a judgement inside the bound's uncertainty is unresolved, not
   decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
   journal), `project` (a scene is a pure function of bound records: a box for every placed body and nothing else,
@@ -69,7 +70,14 @@ nothing of its architecture is extended again.
   quantities (root moment, root shear, bolt diameter, bolts, their strength, the lever) the unique simplest group
   separating the two from the seven is the shear over the bolts' section strength, with its bound bracketing the
   kernel's own capacity; without the small-post observation it ties with a lever group and the next observation is
-  named. The first growth of the language came from the
+  named. The third growth came from time: the derivation conserves the swing energy and the kernel's contract allows
+  its own dissipation over the watch; nine bars on a pin with the hinge's friction torque, the release angle and the
+  pin's place varied gave four anomalies; over the hinge's quantities (the friction torque, the swing energy, the
+  release angle, the mass, gravity, the pivot distance) the unique simplest separating group is the friction's work
+  over a swing against the swing energy, τ θ₀ / E₀, Coulomb's, its bound bracketing the contract's two per cent a
+  period (4 τ θ₀ a period is 0.005 of E₀ at that allowance); the torque over the weight's lever alone, τ / (m g d),
+  does not separate, and the group through the small-angle identity, τ / (m g d θ₀), separates with half the bound.
+  The first growth of the language came from the
   kernel: a tall load that the static derivation said rests never settled; eight realizations of the same intent
   with the load's footprint varied gave the observations; over the rest coupling's quantities (centre of mass above
   the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group

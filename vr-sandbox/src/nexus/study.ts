@@ -3,7 +3,7 @@
 // abduced over the coupling's quantity types. What comes out is a relation over types with the bound the
 // observations fix, or the statement of which quantities the next observation must vary.
 
-import { candidates, discriminates, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
+import { candidates, discriminates, observation, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type BeamIntent, type Slice } from './beam';
 import { ofLeaf, type Derivation } from './evaluate';
 import { anomalyOf, type Failure } from './failure';
@@ -28,9 +28,9 @@ export interface Study {
 }
 
 /** The intent of Part XXV with the carried thing's footprint varied. */
-export function restIntent(c: RestCase, by = 'the person'): BeamIntent {
-  const base = partXXV(by);
-  return { ...base, patch: leaf('length of the thing carried, along the beam', c.patch, 'm', { class: 'given', by }), across: leaf('width of the thing carried, across the beam', c.across, 'm', { class: 'given', by }) };
+export function restIntent(c: RestCase, by = 'the study'): BeamIntent {
+  const base = partXXV();
+  return { ...base, patch: leaf('length of the thing carried, along the beam', c.patch, 'm', { class: 'given', by, grounds: 'a case of the study' }), across: leaf('width of the thing carried, across the beam', c.across, 'm', { class: 'given', by, grounds: 'a case of the study' }) };
 }
 
 /** The observation a slice yields of its load's rest coupling: the quantities it carries, and whether the kernel settled. */
@@ -38,13 +38,13 @@ export function observe(s: Slice): Observation | null {
   if (!s.configuration || !s.realization) return null;
   const st = s.configuration.stability['the load on the beam']!;
   const bound = s.choice.pick!.solution.bound;
-  return {
+  return observation({
     system: s.journal.records()[0]!.hash + ':' + s.intent.patch.hash + ':' + s.intent.across.hash,
     coupling: 'the load on the beam',
     quantities: { hcm: st.hcm, halfX: st.halfX, halfZ: st.halfZ, g: bound['g']!, patience: s.observer.patience, mass: bound['m']! },
     observed: s.realization.inPlace,
     derived: s.configuration.rests,
-  };
+  });
 }
 
 /** The unique simplest separating candidate, or the tie. */
@@ -83,10 +83,8 @@ export interface ToppleStudy {
 }
 
 export function toppleStudy(slices: Slice[], language = new Language()): ToppleStudy {
-  const observations = slices.map(observe).filter((o): o is Observation => !!o).filter((o) => o.observed.value === 0).map((o) => {
-    const s = slices.find((x) => observe(x)?.observed.hash === o.observed.hash)!;
-    return { ...o, observed: s.realization!.stood, derived: s.configuration!.rests };
-  });
+  const observations = slices.map((s) => ({ s, o: observe(s) })).filter((x): x is { s: Slice; o: Observation } => !!x.o && x.o.observed.value === 0)
+    .map(({ s, o }) => observation({ ...o, observed: s.realization!.stood, derived: s.configuration!.rests }));
   const cs = candidates(observations);
   const { chosen, ambiguous } = choose(cs);
   let relation: Relation | null = null;

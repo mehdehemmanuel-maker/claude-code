@@ -15,7 +15,7 @@ import { compare, Journal, type Comparison } from './observe';
 import { realizeSwing, type HingeSpec, type SwingRealization } from './realize-hinge';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { solve, type Solution, type System } from './solve';
-import { add, cos, div, ge, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from './term';
+import { add, cos, div, ge, intentLeaf, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from './term';
 
 export interface SwingIntent {
   by: string;
@@ -28,6 +28,8 @@ export interface SwingIntent {
   pivotSide: Leaf;
   /** The hinge's friction torque: a free hinge is zero. */
   friction: Leaf;
+  /** Where the pin goes through the bar, from its end. */
+  pivotFromEnd: Leaf;
   /** How many periods the observer watches. */
   periods: Leaf;
 }
@@ -35,7 +37,7 @@ export interface SwingIntent {
 export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivation): System {
   const vars = [
     ['ell', 'm', 'bar length'], ['deep', 'm', 'extent along the swing'], ['thin', 'm', 'extent across the swing'], ['rho', 'kg/m^3', 'density'], ['g', 'm/s^2', 'gravity'],
-    ['m', 'kg', 'mass'], ['Icm', 'kg m^2', 'inertia about the centre'], ['d', 'm', 'pivot to centre of mass'], ['I', 'kg m^2', 'inertia about the pivot'],
+    ['m', 'kg', 'mass'], ['Icm', 'kg m^2', 'inertia about the centre'], ['p', 'm', 'pin from the end'], ['d', 'm', 'pivot to centre of mass'], ['I', 'kg m^2', 'inertia about the pivot'],
     ['T0', 's', 'small-swing period'], ['theta0', 'rad', 'release angle'], ['f', '1', 'period factor'], ['T', 's', 'period'], ['omega', 'rad/s', 'angular frequency'],
     ['E', 'J', 'swing energy'], ['n', '1', 'periods watched'], ['watch', 's', 'watch'],
   ].map(([sym, unit, name]) => ({ sym: sym!, unit: unit!, name: name! }));
@@ -46,7 +48,7 @@ export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivat
     relations: [
       { kind: 'law', sym: 'm', law: PRISM_MASS, args: { rho: 'rho', x: 'ell', y: 'deep', z: 'thin' } },
       { kind: 'law', sym: 'Icm', law: PRISM_INERTIA, args: { m: 'm', a: 'ell', b: 'deep' } },
-      { kind: 'term', sym: 'd', term: div(v['ell']!, k(2)), name: 'pivot to centre of mass', grounds: 'the pivot at one end of a uniform bar' },
+      { kind: 'term', sym: 'd', term: sub(div(v['ell']!, k(2)), v['p']!), name: 'pivot to centre of mass', grounds: 'the centre of a uniform bar is at its middle; the pin is p from the end' },
       { kind: 'law', sym: 'I', law: lawById('parallel-axis'), args: { Icm: 'Icm', m: 'm', d: 'd' } },
       { kind: 'law', sym: 'T0', law: PHYSICAL_PENDULUM, args: { I: 'I', m: 'm', g: 'g', d: 'd' } },
       { kind: 'law', sym: 'f', law: AMPLITUDE_FACTOR, args: { theta0: 'theta0' } },
@@ -55,7 +57,7 @@ export function swingSystem(intent: SwingIntent, mat: MaterialLeaves, g: Derivat
       { kind: 'term', sym: 'E', term: mul(v['m']!, v['g']!, v['d']!, sub(k(1), cos(v['theta0']!))), name: 'swing energy', grounds: 'the centre of mass raised by d (1 − cos θ₀) at release, all of it potential' },
       { kind: 'term', sym: 'watch', term: mul(v['n']!, v['T']!), name: 'watch', grounds: 'the observer watches the declared number of periods' },
     ],
-    bindings: { ell: ofLeaf(intent.barLength), deep: ofLeaf(intent.deep), thin: ofLeaf(intent.thin), rho: mat.density, g, theta0: ofLeaf(intent.release), n: ofLeaf(intent.periods) },
+    bindings: { ell: ofLeaf(intent.barLength), deep: ofLeaf(intent.deep), thin: ofLeaf(intent.thin), rho: mat.density, g, theta0: ofLeaf(intent.release), n: ofLeaf(intent.periods), p: ofLeaf(intent.pivotFromEnd) },
   };
 }
 
@@ -166,17 +168,18 @@ export function barOnHinge(intent: SwingIntent, material: MaterialLeaves, J?: Jo
 }
 
 /** A bar on a free hinge, as the person asks for it. */
-export function swingIntent(by = 'the person', over: Partial<Record<'release' | 'barLength' | 'friction' | 'periods', number>> = {}): SwingIntent {
-  const given = (name: string, v: number, unit: string, grounds?: string) => leaf(name, v, unit, { class: 'given', by, ...(grounds ? { grounds } : {}) });
+export function swingIntent(by = 'the person', over: Partial<Record<'release' | 'barLength' | 'friction' | 'periods' | 'pivotFromEnd', number>> = {}): SwingIntent {
+  const given = (name: string, v: number | undefined, fallback: number, unit: string, grounds: string) => intentLeaf(by, name, v, fallback, unit, grounds);
   return {
     by,
-    barLength: given('length of the bar', over.barLength ?? 1, 'm'),
-    deep: given('extent of the bar along the swing', 0.089, 'm', 'a 2x4 swung on its wide face'),
-    thin: given('extent of the bar across the swing', 0.038, 'm', 'a 2x4 swung on its wide face'),
-    release: given('release angle', over.release ?? 30, 'deg'),
-    pivotHeight: given('height of the pivot', 2, 'm', 'the bracket the person has'),
-    pivotSide: given('side of the pivot block', 0.02, 'm', 'the bracket the person has'),
-    friction: given('friction torque of the hinge', over.friction ?? 0, 'N m', 'a free hinge'),
+    barLength: given('length of the bar', over.barLength, 1, 'm', 'a bar of one metre'),
+    deep: given('extent of the bar along the swing', undefined, 0.089, 'm', 'a 2x4 swung on its wide face'),
+    thin: given('extent of the bar across the swing', undefined, 0.038, 'm', 'a 2x4 swung on its wide face'),
+    release: given('release angle', over.release, 30, 'deg', 'a modest swing, inside the amplitude law\'s domain'),
+    pivotHeight: given('height of the pivot', undefined, 2, 'm', 'a pivot the bar clears the ground from'),
+    pivotSide: given('side of the pivot block', undefined, 0.02, 'm', 'a small block to pin to'),
+    friction: given('friction torque of the hinge', over.friction, 0, 'N m', 'a free hinge'),
+    pivotFromEnd: given('the pin from the bar\'s end', over.pivotFromEnd, 0, 'm', 'pinned at the end'),
     periods: leaf('periods watched', over.periods ?? 5, '1', { class: 'configuration', source: 'the observer: five periods give nine or ten zero crossings to read the period from' }),
   };
 }

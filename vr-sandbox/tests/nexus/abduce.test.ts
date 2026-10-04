@@ -5,15 +5,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { candidates, discriminates, groups, validate } from '../../src/nexus/abduce';
+import { candidates, discriminates, groups, observation, validate } from '../../src/nexus/abduce';
 import { RECT_MODULUS } from '../../src/nexus/book';
 import { dimOf } from '../../src/nexus/dimension';
-import { ofLeaf } from '../../src/nexus/evaluate';
+import { evaluate, measurement, ofLeaf } from '../../src/nexus/evaluate';
 import { anomalyOf, failuresOf } from '../../src/nexus/failure';
 import { compare } from '../../src/nexus/observe';
 import { solve, type System } from '../../src/nexus/solve';
 import { admit, choose, noTolerance, restIntent, restStudy, toppleStudy, type Study } from '../../src/nexus/study';
-import { leaf, varsOf } from '../../src/nexus/term';
+import { k, leaf, varsOf, type Leaf } from '../../src/nexus/term';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
 import { stale } from '../../src/nexus/why';
 import { WEIGHT, BENDING_STRESS, RECT_AREA } from '../../src/nexus/book';
@@ -62,7 +62,7 @@ describe('abduction over types', () => {
 
   it('with no observation of the other outcome, nothing separates and nothing is promoted', () => {
     const q = () => ({ hcm: given('hcm', 0.1, 'm'), half: given('half', 0.05, 'm') });
-    const obs = [0, 1].map((i) => ({ system: `s${i}`, coupling: 'c', quantities: q(), observed: given('settled', 1, '1'), derived: given('rests', 1, '1') }));
+    const obs = [0, 1].map((i) => observation({ system: `s${i}`, coupling: 'c', quantities: q(), observed: given('settled', 1, '1'), derived: given('rests', 1, '1') }));
     const cs = candidates(obs);
     expect(cs.length).toBeGreaterThan(0);
     expect(cs.every((c) => !c.separates)).toBe(true);
@@ -106,6 +106,8 @@ describe('the rest study on the kernel: the tall column that never settled', () 
     const r = s.relation!;
     expect(r.provenance).toMatch(/^abduced from observations /);
     expect(r.observations.length).toBe(8);
+    // eight systems, eight observations: an outcome seen twice is two observations, not one cited twice
+    expect(new Set(r.observations).size).toBe(8);
     const v = validate(s.chosen!);
     expect(v.holds).toBe(true);
     expect(v.predicted).toBeGreaterThanOrEqual(6);
@@ -168,4 +170,21 @@ describe('the rest study on the kernel: the tall column that never settled', () 
     const c = s.comparisons.find((x) => x.name === 'rests')!;
     expect(c.verdict.kind).toBe('within');
   }, 60000);
+});
+
+describe('the identity of an observation', () => {
+  it('two observations of one outcome in two systems are two observations; a measurement over another window is another measurement', () => {
+    const w = { seconds: 2, tick: 1 / 90, instrument: 'a' };
+    const mk = (name: string, value: number, unit: string, origin: Leaf['origin'], u?: number) => leaf(name, value, unit, origin, u);
+    const seen = measurement('stood', 1, '1', { instrument: 'the kernel', window: w }, mk);
+    const again = measurement('stood', 1, '1', { instrument: 'the kernel', window: { ...w, seconds: 3 } }, mk);
+    expect(again.hash).not.toBe(seen.hash);
+    const derived = evaluate('rests', k(1), {}, { unit: '1', law: 'statics' });
+    const q = (v: number) => ofLeaf(leaf('hcm', v, 'm', { class: 'given', by: 'the test' }));
+    const a = observation({ system: 'A', coupling: 'the load', quantities: { hcm: q(0.1) }, observed: seen, derived });
+    const b = observation({ system: 'B', coupling: 'the load', quantities: { hcm: q(0.2) }, observed: seen, derived });
+    const a2 = observation({ system: 'A', coupling: 'the load', quantities: { hcm: q(0.1) }, observed: seen, derived });
+    expect(a.hash).not.toBe(b.hash);
+    expect(a.hash).toBe(a2.hash);
+  });
 });

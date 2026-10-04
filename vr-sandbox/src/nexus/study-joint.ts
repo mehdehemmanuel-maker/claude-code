@@ -4,7 +4,7 @@
 // enter the abduction, since the ones it predicts to fail are explained; the missing relation is what separates,
 // among those, the ones that held from the ones that broke.
 
-import { candidates, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
+import { candidates, observation, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
 import { bracketIntent, bracketMaterial, bracketOnPost, boltCatalogue, type BracketSlice } from './bracket';
 import { lumberCatalogue } from './beam';
 import { anomalyOf, type Failure } from './failure';
@@ -51,18 +51,18 @@ function catalogueFor(c: JointCase, section: string): Option[] {
 export function observeJoint(s: BracketSlice): Observation | null {
   if (!s.configuration || !s.realization) return null;
   const bound = s.choice.pick!.solution.bound;
-  return {
+  return observation({
     system: `${s.intent.mass.hash}:${s.intent.reach.hash}:${s.choice.pick!.option.label}`,
     coupling: 'the arm on the post',
     quantities: { M: bound['M']!, V: bound['V']!, d: bound['d']!, nb: bound['nb']!, Rm: bound['Rm']!, lever: bound['lever']! },
     observed: s.realization.holds,
     derived: s.configuration.jointHolds,
-  };
+  });
 }
 
 /** `section`: the experiment's fixed arm section, a declared configuration, so only the load and the bolt group vary. */
 export function jointStudy(J: Jolt, cases: JointCase[], language = new Language(), section = '2x4 flat'): JointStudy {
-  const slices = cases.map((c) => bracketOnPost(bracketIntent('the person', { mass: c.mass, reach: c.reach, ...(c.patch === undefined ? {} : { patch: c.patch }), ...(c.across === undefined ? {} : { across: c.across }), ...(c.postSide === undefined ? {} : { postSide: c.postSide }) }), bracketMaterial(), catalogueFor(c, section), J, { jointConstraint: false }));
+  const slices = cases.map((c) => bracketOnPost(bracketIntent('the study', { mass: c.mass, reach: c.reach, ...(c.patch === undefined ? {} : { patch: c.patch }), ...(c.across === undefined ? {} : { across: c.across }), ...(c.postSide === undefined ? {} : { postSide: c.postSide }) }), bracketMaterial(), catalogueFor(c, section), J, { jointConstraint: false }));
   const observations = slices.map(observeJoint).filter((o): o is Observation => !!o);
   const residual = observations.filter((o) => o.derived.value === 1);
   const failures = slices.flatMap((s) => s.comparisons.filter((c) => c.name === 'the joint holds').map(anomalyOf).filter((f): f is Failure => !!f));

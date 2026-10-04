@@ -17,7 +17,7 @@ import { realizeBracket, type JointRealization, type JointSpec } from './realize
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { elasticContract, realizeCantilever, type CantileverRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
-import { add, div, k, le, leaf, max, min, mul, neg, sub, variable, type Leaf } from './term';
+import { add, div, intentLeaf, k, le, leaf, max, min, mul, neg, sub, variable, type Leaf } from './term';
 
 export interface BracketIntent {
   by: string;
@@ -253,16 +253,16 @@ export function bracketOnPost(intent: BracketIntent, material: MaterialLeaves, c
 
 /** A bracket as a person asks for it. */
 export function bracketIntent(by = 'the person', over: Partial<Record<'mass' | 'reach' | 'armLength' | 'patch' | 'across' | 'postSide', number>> = {}): BracketIntent {
-  const given = (name: string, v: number, unit: string, grounds?: string) => leaf(name, v, unit, { class: 'given', by, ...(grounds ? { grounds } : {}) });
+  const given = (name: string, v: number | undefined, fallback: number, unit: string, grounds: string) => intentLeaf(by, name, v, fallback, unit, grounds);
   return {
     by,
-    mass: given('mass to carry', over.mass ?? 20, 'kg'),
-    reach: given('reach of the load from the post\'s face', over.reach ?? 0.5, 'm'),
-    armLength: given('length of the arm', over.armLength ?? 1.0, 'm'),
-    patch: given('length of the thing carried, along the arm', over.patch ?? 0.1, 'm'),
-    across: given('width of the thing carried, across the arm', over.across ?? 0.1, 'm'),
-    postHeight: given('height of the post', 1, 'm', 'the post the person has'),
-    postSide: given('side of the square post', over.postSide ?? 0.1, 'm', 'the post the person has'),
+    mass: given('mass to carry', over.mass, 20, 'kg', 'a load a person carries'),
+    reach: given('reach of the load from the post\'s face', over.reach, 0.5, 'm', 'half a metre out'),
+    armLength: given('length of the arm', over.armLength, 1.0, 'm', 'a metre of arm, inside the slender domain'),
+    patch: given('length of the thing carried, along the arm', over.patch, 0.1, 'm', 'a hand-sized patch'),
+    across: given('width of the thing carried, across the arm', over.across, 0.1, 'm', 'a hand-sized patch'),
+    postHeight: given('height of the post', undefined, 1, 'm', 'a post of a metre'),
+    postSide: given('side of the square post', over.postSide, 0.1, 'm', 'a square post of a decimetre'),
     sagRatio: leaf('sag ratio', 180, '1', { class: 'assumed', by, grounds: 'span/180 is the customary serviceability limit for a cantilever, twice a span\'s L/360 (building codes; a declared limit, not a law)' }),
     factor: leaf('factor on strength', 3, '1', { class: 'assumed', by, grounds: 'clear-wood strength is a mean and a bolt group\'s prying model is crude; a factor of three covers both for a single member' }),
   };

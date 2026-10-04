@@ -133,8 +133,18 @@ export function leaf(name: string, value: number | null, unit: string, origin: O
   const { dim, scale, offset } = parseUnit(unit);
   const v = value === null ? null : value * scale + (offset ?? 0);
   const u = uncertainty === undefined ? undefined : uncertainty * scale;
-  const content = { leaf: true, class: origin.class, source: origin.source ?? null, grounds: origin.grounds ?? null, by: origin.by ?? null, value: v, dim, uncertainty: u ?? null };
+  const content = { leaf: true, class: origin.class, source: origin.source ?? null, grounds: origin.grounds ?? null, by: origin.by ?? null, window: origin.window ?? null, value: v, dim, uncertainty: u ?? null };
   return { kind: 'leaf', name, value: v, dim, unit, origin, ...(u === undefined ? {} : { uncertainty: u }), hash: hashOf(content) };
+}
+
+/**
+ * A leaf of an intent: given by the person when they gave it; when the slice filled it in, assumed, with the slice's
+ * grounds and the fact that it was not given. The origin says who chose the value; a slice's choice never claims to be the person's.
+ */
+export function intentLeaf(by: string, name: string, given: number | undefined, fallback: number, unit: string, grounds: string): Leaf {
+  return given === undefined
+    ? leaf(name, fallback, unit, { class: 'assumed', by: 'the slice', grounds: `${grounds}; not given by ${by}, varied through the intent` })
+    : leaf(name, given, unit, { class: 'given', by, grounds });
 }
 
 /** A mathematical constant of a derivation (the 48 in P L^3 / 48 E I): exact, its source the mathematics. */
