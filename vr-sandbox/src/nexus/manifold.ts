@@ -33,7 +33,10 @@ import { phaseAt, vapourPressure } from './phase';
 import { dimOf } from './dimension';
 import { facesCrossed, shapeOf, type Face, type Shape } from './shape';
 import { chooseMatter, keptMatters, propertyOf, statedOf } from './matter';
-import type { Leaf } from './term';
+import { sizeMembers } from './size';
+import { dressedMatters, lumberCatalogue } from './stock';
+import { ofLeaf } from './evaluate';
+import { leaf, type Leaf } from './term';
 import { regionOf, touches, type Intent, type Region, type Want } from './want';
 
 export type Kind = 'boundary' | 'path' | 'store' | 'conversion' | 'region' | 'observer' | 'modulation' | 'contact' | 'bound';
@@ -348,14 +351,23 @@ export function generate(intent: Intent): Structure {
         const ld = add({ id: `load:${l.region}->${R.id}`, kind: 'path', carrier: 'momentum', says: `the momentum ${l.region} brings (${l.q.leaf.name}) reaches ${R.id}${faces ? ` on its ${faces.join(' and ')} face${faces.length > 1 ? 's' : ''}` : ''}`, regions: route(l.region, R.id)!, values: [{ name: l.q.leaf.name, value: l.q.leaf.value!, unit: 'Pa', from: l.region }, ...(F !== null ? [{ name: 'force', value: F, unit: 'N', from: `${l.q.leaf.name} times the area it acts on` }] : [])], why: { want: w.id, rule: 'what the environment brings per area is a momentum flux into the faces it crosses', laws: [], parent: null } });
         if (sh && faces) for (const f of faces) {
           const span = f === 'side' ? sh.y.value! : Math.min(sh.x.value!, sh.z.value!);
-          add({ id: `members:${R.id}:${f}`, kind: 'path', carrier: 'momentum', says: `members spanning the ${f === 'side' ? 'sides' : `${f}-facing face`} of ${R.id} carry what reaches it to the face that meets the ground`, regions: [R.id], values: [{ name: 'span', value: span, unit: 'm', from: f === 'side' ? `${sh.y.name}` : 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: ld.id } });
+          const me = add({ id: `members:${R.id}:${f}`, kind: 'path', carrier: 'momentum', says: `members spanning the ${f === 'side' ? 'sides' : `${f}-facing face`} of ${R.id} carry what reaches it to the face that meets the ground`, regions: [R.id], values: [{ name: 'span', value: span, unit: 'm', from: f === 'side' ? `${sh.y.name}` : 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: ld.id } });
+          const carried = me.values.find((v) => v.name === 'load per area it carries');
+          if (!carried) me.values.push({ name: 'load per area it carries', value: l.q.leaf.value!, unit: 'Pa', from: l.q.leaf.name });
+          else if (!carried.from.includes(l.q.leaf.name)) { carried.value += l.q.leaf.value!; carried.from += ` and ${l.q.leaf.name}`; }
         }
       }
       const masses = intent.regions.filter((r) => r.id === R.id || (touches(intent, r.id, R.id) && !r.environment)).flatMap((r) => said(r, 'momentum', 'capacitance').map((q) => ({ region: r.id, q })));
       const weight = masses.reduce((s_, m) => s_ + m.q.leaf.value! * g, 0);
       down += weight;
       if (g === 0) { add({ id: `free:${R.id}`, kind: 'bound', carrier: 'momentum', says: `the site's gravity is zero: what ${R.id} holds has no weight to carry`, regions: [R.id], values: [{ name: 'gravity', value: 0, unit: 'm/s^2', from: gravityName }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass: none, where the site has none', laws: [], parent: null } }); if (!loads.length) return; }
-      if (sh && masses.length) add({ id: `members:${R.id}:down`, kind: 'path', carrier: 'momentum', says: `members spanning the down-facing face of ${R.id} carry what rests on it`, regions: [R.id], values: [{ name: 'span', value: Math.min(sh.x.value!, sh.z.value!), unit: 'm', from: 'the shorter extent of the plan' }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: null } });
+      if (sh && masses.length) {
+        // a face that touches a solid at rest may rest on it, borne by contact wherever it touches, or be held off it by members
+        const under = sh.touches.down ? intent.regions.find((r) => r.id === sh.touches.down && atRest(r) && phaseOf(r) === 'solid') : undefined;
+        const alt = under ? { oneOf: `carrying the down face of ${R.id}` } : {};
+        add({ ...alt, id: `members:${R.id}:down`, kind: 'path', carrier: 'momentum', says: `members spanning the down-facing face of ${R.id} carry what rests on it`, regions: [R.id], values: [{ name: 'span', value: Math.min(sh.x.value!, sh.z.value!), unit: 'm', from: 'the shorter extent of the plan' }, { name: 'weight resting on it at a place not stated', value: weight, unit: 'N', from: masses.map((m_) => m_.q.leaf.name).join(' and ') }], why: { want: w.id, rule: 'a face that receives momentum passes it on through members that span it', laws: lawIds(c, 'flux-stored-energy'), parent: null } });
+        if (under) add({ ...alt, id: `rests:${R.id}|${under.id}`, kind: 'bound', carrier: 'momentum', says: `or the down face of ${R.id} rests on ${under.id}, which bears what rests on it by contact wherever it touches: no member spans it`, regions: [R.id, under.id], values: [{ name: 'weight per area where it rests', value: weight / sh.area.down.value!, unit: 'Pa', from: 'the weights over the down face' }, ...said(under, 'momentum', 'flux density', true).map((q) => ({ name: q.leaf.name, value: q.leaf.value!, unit: 'Pa', from: under.id }))], why: { want: w.id, rule: 'a region held in place sends all the momentum it receives to a solid at rest, which bears it by contact', laws: lawIds(c, 'flux-stored-energy'), parent: null } });
+      }
       for (const m of masses) if (g > 0) add({ id: `weight:${m.region}`, kind: 'path', carrier: 'momentum', says: `gravity makes momentum in ${m.q.leaf.name}: ${(m.q.leaf.value! * g).toFixed(0)} N reaches ${R.id}`, regions: [m.region, R.id], values: [{ name: 'weight', value: m.q.leaf.value! * g, unit: 'N', from: `${m.q.leaf.name} times ${gravityName}` }], why: { want: w.id, rule: 'gravity is a production of momentum in every mass', laws: [], parent: null } });
       // what can take the weight depends on what the touched matter does: a solid bears it by contact, a fluid by its pressure, and nothing bears it in a vacuum
       const solids = intent.regions.filter((r) => r.id !== R.id && atRest(r) && phaseOf(r) === 'solid');
@@ -806,17 +818,65 @@ export function generate(intent: Intent): Structure {
   if (energyBoundaries.length) { const m = chooseMatter([...kept, ...intent.regions.map((r) => ({ id: r.id, name: r.id, properties: statedOf(r) }))], 'energy', 'conductivity', 'least'); if (!m.pick) for (const b of energyBoundaries.slice(0, 1)) gap(b.why.want, b.id, 'energy', `what the boundary is made of: ${m.lacks}`); }
   for (const b of elements.filter((e) => e.kind === 'boundary' && e.carrier.startsWith('volume of') && e.id.endsWith(':closed'))) { const m = chooseMatter(kept, b.carrier, 'conductivity', 'least'); if (!m.pick) gap(b.why.want, b.id, b.carrier, `what the boundary is made of: ${m.lacks}`); }
   const members = elements.filter((e) => e.id.startsWith('members:'));
+  const ownWeight = new Map<string, number>(); // what the sized members of each region weigh, alternatives aside
   if (members.length) {
     const m = chooseMatter(kept, 'momentum', 'stiffness', 'most');
     for (const e of members) put(e, { name: 'matters available that state a stiffness and a strength', value: m.candidates.filter((x) => propertyOf(x.properties, 'momentum', 'most flux density')).length, unit: '1', from: 'src/data/materials.ts' });
-    gap(members[0]!.why.want, members[0]!.id, 'momentum', 'a member\'s section is a configuration of the space its span, its load and its bounds make: no system is generated from an element');
+    // each member element is a system the space sizes, over the kept sections and the matters dressed to them
+    const stock = dressedMatters();
+    const gD = siteGravity ? ofLeaf(siteGravity.quantities[siteGravity.gravity!]!) : gravity();
+    const sizedUp = new Map<string, { perLength: number }>();
+    // the up face first: what it bears on the sides is read when the sides are sized
+    const order = (e: Element) => ['up', 'down', 'side'].indexOf(e.id.slice(e.id.lastIndexOf(':') + 1));
+    for (const e of [...members].sort((a, b) => order(a) - order(b))) {
+      const R = intent.regions.find((r) => r.id === e.regions[0]);
+      const sh = R ? shapeOf(R) : null;
+      if (!R || !sh) continue;
+      const face = e.id.slice(e.id.lastIndexOf(':') + 1) as Face;
+      const conf = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'configuration', source: `the generator: ${e.id}` }));
+      const span = e.values.find((v) => v.name === 'span')!;
+      const q = e.values.find((v) => v.name === 'load per area it carries');
+      const P = e.values.find((v) => v.name === 'weight resting on it at a place not stated');
+      const sag = intent.wants.find((x) => x.region === R.id && x.quantity.carrier === 'momentum' && x.hi && x.hi.unit === '1');
+      const runs = face === 'side' ? [sh.x.value!, sh.z.value!, sh.x.value!, sh.z.value!] : [Math.max(sh.x.value!, sh.z.value!)];
+      const r = sizeMembers(conf(`span of the ${face} face`, span.value, 'm'), conf(`width of the ${face} face`, runs.reduce((a, b) => a + b, 0), 'm'), conf(q ? q.from : 'no load per area on the face', q?.value ?? 0, 'Pa'), stock.matters[0]!.leaves, gD, lumberCatalogue(),
+        { loads: { ...(P && P.value > 0 ? { P: conf(`${P.from}, at the worst place`, P.value, 'N') } : {}), ...(sag ? { sag: ofLeaf(sag.hi!) } : {}) }, runs, matters: stock.matters });
+      const pick = r.choice.pick;
+      if (!pick) { gap(e.why.want, e.id, 'momentum', `no kept section of a matter dressed to it carries the ${face} face with up to four support lines: ${[...new Set(r.choice.candidates.flatMap((c) => c.unsatisfied))].join('; ')}`); continue; }
+      const b = pick.solution.bound, at = (sym: string) => b[sym]!.value!;
+      put(e, { name: `sized: ${pick.option.label}, the fewest support lines and then the least mass of the kept sections and the matters dressed to them`, value: at('m'), unit: 'kg', from: `the members across a face; ${stock.source}` });
+      for (const [name, sym, unit] of [['members', 'n', '1'], ['spacing', 's', 'm'], ['support lines across the span', 'k', '1'], ['bay', 'a', 'm'], ['breadth', 'b', 'm'], ['depth', 'h', 'm'], ['density of what they are made of', 'rho', 'kg/m^3']] as const) put(e, { name, value: at(sym), unit, from: 'the members across a face' });
+      put(e, { name: 'deflection over what is allowed', value: at('del') / Math.min(at('lim'), b['limw']?.value ?? Infinity), unit: '1', from: 'the members across a face' });
+      put(e, { name: 'bending stress over what is allowed', value: at('sig') / at('f'), unit: '1', from: 'the members across a face' });
+      if (!e.oneOf) ownWeight.set(R.id, (ownWeight.get(R.id) ?? 0) + at('m') * g);
+      if (face === 'up') sizedUp.set(R.id, { perLength: at('w') * at('a') / (2 * at('s')) });
+      if (at('k') > 0) {
+        const sp = add({ ...(e.oneOf ? { oneOf: e.oneOf } : {}), id: `supports:${R.id}:${face}`, kind: 'path', carrier: 'momentum', says: `${at('k')} line${at('k') === 1 ? '' : 's'} across the ${face === 'side' ? 'sides' : `${face}-facing face`} of ${R.id} carry its members' bays to the ground`, regions: [R.id], values: [{ name: 'support lines', value: at('k'), unit: '1', from: e.id }, { name: 'load per length each line carries', value: at('w') * at('a') / at('s'), unit: 'N/m', from: 'each member\'s two half-bays over the spacing' }, { name: 'length of each line', value: Math.max(sh.x.value!, sh.z.value!), unit: 'm', from: 'the longer extent of the plan' }], why: { want: e.why.want, rule: 'a span no member carries is divided by lines that carry its bays', laws: [], parent: e.id } });
+        gap(e.why.want, sp.id, 'momentum', 'a support line is a member of its own, carrying its bays\' load along its length to the ground: it is not yet sized, and its own weight is not counted');
+      }
+      if (face === 'side' && sizedUp.has(R.id)) {
+        put(e, { name: 'load per length along the top of the walls the up face bears on', value: sizedUp.get(R.id)!.perLength, unit: 'N/m', from: 'each up member\'s half-bay over its spacing' });
+        gap(e.why.want, e.id, 'momentum', 'the members along the sides carry what the up face bears on them to the ground along their length: pressing a member along its length (its buckling) is not in the member system');
+      }
+    }
+  }
+  // what reaches the ground now includes what the sized members weigh
+  for (const [Rid, W] of ownWeight) {
+    for (const p of elements.filter((e) => e.kind === 'path' && e.carrier === 'momentum' && e.regions[0] === Rid && e.values.some((v) => v.name === 'force down, without the structure\'s own weight'))) {
+      const down = p.values.find((v) => v.name === 'force down, without the structure\'s own weight')!.value;
+      put(p, { name: 'force down, with the sized members\' own weight', value: down + W, unit: 'N', from: 'the loads, the weights and the sized members' });
+      const gr = p.regions[p.regions.length - 1]!;
+      const bd = elements.find((e) => e.id === `bound:momentum:${Rid}|${gr}`);
+      if (bd && bd.values[0]) put(bd, { name: 'least meeting area, with the sized members\' own weight', value: (down + W) / bd.values[0].value, unit: 'm^2', from: 'the force down with the members over the bearing it allows' });
+    }
   }
   // what bears the heat: no available matter states the highest temperature it bears, unless the intent does
   for (const g of gaps.filter((x) => /the hottest it may run/.test(x.lacks))) {
     const m = chooseMatter(kept, 'energy', 'most potential', 'most');
     if (!m.pick) g.lacks = `the hottest it may run is a property of what it is made of: ${m.lacks}`;
   }
-  for (const g of gaps.filter((x) => /structure's own weight/.test(x.lacks))) g.lacks = 'the structure\'s own weight is its members\' matter times their size: no system is generated from an element';
+  for (const g_ of gaps.filter((x) => /structure's own weight/.test(x.lacks))) g_.lacks = 'the structure\'s own weight is its members\' matter times their size: no system is generated from an element';
+  if (ownWeight.size) for (let i = gaps.length - 1; i >= 0; i--) if (/structure's own weight is its members/.test(gaps[i]!.lacks)) gaps.splice(i, 1);
 
   // a flow of a medium carries what the medium holds: a species' boundary conducts a volume of the medium per time
   const aggregate = (e: Element) => e.kind === 'boundary' && !elements.some((p) => p.id === e.why.parent && p.kind === 'boundary');
@@ -874,6 +934,8 @@ export interface Lack { distinction: string; inventions: string[]; gaps: number;
 const SIGNATURES: [RegExp, string][] = [
   [/no available matter states/, 'knowledge: the kept data does not state it'],
   [/no system is generated from an element/, 'a system from an element: sizing what is generated'],
+  [/not yet sized/, 'a system from an element: sizing what is generated'],
+  [/buckling/, 'pressing along a length: a member\'s buckling'],
   [/no material is chosen/, 'what a region is made of'],
   [/no geometry/, 'geometry: the sizes, areas and shapes of regions'],
   [/no process/, 'a process: how long a change takes'],

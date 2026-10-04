@@ -76,3 +76,44 @@ describe('the members across a face, sized as a system: counts, spacing, section
     for (const c of r.choice.candidates.slice(0, 6)) expect(c.option.leaves['n']!.value).toBe(Math.ceil(sh.x.value! / c.option.leaves['s']!.value! - 1e-9) + 1);
   });
 });
+
+describe('the generator sizes the members it generates, and what they weigh reaches the ground', () => {
+  const el = (id: string) => s.elements.find((x) => x.id === id)!;
+  const val = (id: string, name: string) => el(id).values.find((v) => v.name === name || v.name.startsWith(name))!;
+
+  it('the roof\'s members come out as the space sized them by hand: Douglas-fir 2x8 on edge at 24 inches over two support lines, the matter chosen, not given', () => {
+    expect(val('members:inside:up', 'sized: ').name).toMatch(/^sized: Douglas-fir \(coast\) 2x8 on edge at 24 in, 2 support lines/);
+    expect(val('members:inside:up', 'members').value).toBe(19);
+    // of the woods dressed to the kept sections, each sized alone at the fewest lines, the fir weighs least
+    const up = el('members:inside:up');
+    const one = (id: string) => sizeMembers(ofLeaf(leaf('span', val('members:inside:up', 'span').value, 'm', { class: 'configuration', source: 'the generator' })), sh.x, ofLeaf(leaf('snow', 1400, 'Pa', { class: 'configuration', source: 'the generator' })), materialLeaves(id), gravity(), lumberCatalogue()).choice.pick!;
+    const masses = ['wood.douglas-fir', 'wood.southern-pine', 'wood.white-pine'].map((id) => one(id)).filter((c) => c.solution.bound['k']!.value === 2).map((c) => c.solution.bound['m']!.value!);
+    expect(Math.min(...masses)).toBeCloseTo(up.values.find((v) => v.name.startsWith('sized: '))!.value, 6);
+  });
+
+  it('the force down on the ground now carries the sized members\' own weight; the floor\'s members are an alternative and are not counted', () => {
+    const p = el('path:momentum:inside->the ground');
+    const without = p.values.find((v) => v.name === 'force down, without the structure\'s own weight')!.value;
+    const withIt = p.values.find((v) => v.name === 'force down, with the sized members\' own weight')!.value;
+    const counted = (val('members:inside:up', 'sized: ').value + val('members:inside:side', 'sized: ').value) * gravity().value!;
+    expect(withIt - without).toBeCloseTo(counted, 6);
+    expect(s.gaps.some((g) => /structure's own weight/.test(g.lacks))).toBe(false);
+  });
+
+  it('the down face touches the ground: it rests on it, borne by contact far within what the ground allows, or members span it carrying the people at the worst place', () => {
+    expect(el('members:inside:down').oneOf).toBe('carrying the down face of inside');
+    expect(el('rests:inside|the ground').oneOf).toBe('carrying the down face of inside');
+    expect(val('rests:inside|the ground', 'weight per area where it rests').value / val('rests:inside|the ground', 'bearing pressure the ground allows').value).toBeLessThan(1e-3);
+    expect(val('members:inside:down', 'weight resting on it at a place not stated').value).toBeCloseTo(300 * gravity().value!, 6);
+  });
+
+  it('what is not yet sized is named: the support lines, and the walls\' members, chosen by the wind alone, carry the roof along their length near the load at which a thin section buckles', () => {
+    expect(s.gaps.some((g) => g.element === 'supports:inside:up' && /not yet sized/.test(g.lacks))).toBe(true);
+    expect(s.gaps.some((g) => g.element === 'members:inside:side' && /buckling/.test(g.lacks))).toBe(true);
+    // the evidence: what each wall member carries from the roof against Euler's load about its weaker axis
+    const E = MATERIALS.find((m) => m.id === 'wood.douglas-fir')!.E, b = val('members:inside:side', 'breadth').value, h = val('members:inside:side', 'depth').value, L = val('members:inside:side', 'span').value;
+    const euler = Math.PI ** 2 * E * (Math.max(b, h) * Math.min(b, h) ** 3 / 12) / L ** 2;
+    const carried = val('members:inside:side', 'load per length along the top of the walls').value * val('members:inside:side', 'spacing').value;
+    expect(carried / euler).toBeGreaterThan(0.5);
+  });
+});

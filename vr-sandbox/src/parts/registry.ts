@@ -2,6 +2,7 @@
 // Mass always comes from the exact volume of the parametric geometry times the material density.
 
 import type { Material } from '../data/materials';
+import { LUMBER } from '../data/lumber';
 import type { Quat, Vec3 } from '../doc/types';
 import { axisAngle } from '../doc/math';
 import { choice, num, numberOf, stringOf, text, type ParamDef, type Params } from '../schema/params';
@@ -106,10 +107,7 @@ function ringCompound(outer: number, inner: number, halfHeight: number, n = 12):
   };
 }
 
-export const LUMBER: Record<string, [number, number]> = {
-  '1x4': [0.019, 0.089], '1x6': [0.019, 0.14], '2x2': [0.038, 0.038], '2x4': [0.038, 0.089],
-  '2x6': [0.038, 0.14], '2x8': [0.038, 0.184], '4x4': [0.089, 0.089],
-};
+export { LUMBER };
 
 const fracture = () => choice('fracture', 'Can break', 'auto', [
   { value: 'auto', label: 'Yes (auto resolution)' },

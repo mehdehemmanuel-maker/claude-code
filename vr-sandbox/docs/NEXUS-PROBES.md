@@ -644,7 +644,44 @@ span is the distinction, and the system says how many lines the span needs befor
 is given design values well below clear wood's, for its defects and the load's duration; no claim is made against those
 tables.
 
+## Round 15: the generator sizes what it generates
+
+After round 14 the generator still said "no system is generated from an element" about the members it generated, and
+it left their weight out of what reaches the ground. The language could size them, but the generator did not use it.
+Now every member element is sized where it is generated (src/nexus/manifold.ts, src/nexus/size.ts), and what it weighs
+is carried on:
+
+- **The load per area each face receives.** It is recorded on that face's members as the loads arrive.
+- **What rests on a face at a place not stated.** It can be anywhere, so the system carries it at the worst place,
+  mid-bay, on one member. The member system gains that weight: M = w a² / 8 + P a / 4, and δ = 5 w a⁴ / (384 E I) + P a³ /
+  (48 E I).
+- **A wanted sag.** The house's "floors that do not sag" bounds the deflection beside the code's limit.
+- **What the members are made of.** This is a configuration variable too. The options are the kept sections in every
+  kept matter dressed to them: PS 20 covers softwoods, so Douglas-fir, Southern pine and Eastern white pine. The
+  preferences are the fewest support lines, then the least mass. The arrangements are tried one count of lines at a
+  time, fewest first, which leaves the pick unchanged and spares the rest.
+
+| Face | What it carries | Sized |
+|---|---|---|
+| up | 1400 Pa of snow | Douglas-fir 2x8 on edge at 24 in, 2 support lines, 19 members, 771 kg |
+| side | 1000 Pa of wind | Douglas-fir 1x6 on edge at 24 in, no support line, 76 members in four runs, 268 kg |
+| down | the people, 2942 N at a place not stated | one of two alternatives: members (2x8 at 24 in, 3 support lines) or resting on the ground, at 24.5 Pa against the 72 kPa it allows |
+
+The fir is chosen, not given: of the three woods at two support lines, it weighs least. The force down on
+the ground now carries the sized members' 10.2 kN; the floor's members are an alternative and are not counted. The
+gap about the structure's own weight is gone.
+
+What is generated now shows what is missing next:
+
+- **Support lines.** Each is a member of its own: 5.3 kN per metre along 10.95 m for the roof. They are elements with
+  that load, but they are not yet sized and their weight is not counted.
+- **Buckling.** The walls' members are picked by the wind alone, as 1x6s. Each carries 1.6 kN from the roof along its
+  length, 0.96 of Euler's load about its thin axis, so with the declared factor of two it does not hold. Pressing a
+  member along its length is not in the member system.
+
 ## The next instrument
 
-Stores from the resistance to motion through them. The generator states a store's flow; a system needs the drag
-coefficient of what moves through it, which no kept matter states. Then the second family over the generator itself.
+Pressing along a length. A member carrying a load along its length buckles at π² E I / (K L)² about its weaker axis
+unless something braces it. The member system gains an axial load and that bound; the walls' members and the support
+lines' posts are then sized under what the faces above bear on them. Then stores from the resistance to motion through
+them, and the second family over the generator itself.

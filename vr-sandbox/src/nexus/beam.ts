@@ -5,8 +5,7 @@
 // derivation; WHY total on every value. No table, no kind, no default, no coordinate written by hand, no number
 // without an origin.
 
-import { getMaterial } from '../data/materials';
-import { LUMBER } from '../parts/registry';
+import { materialLeaves, type MaterialLeaves } from './stock';
 import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from './book';
 import { coarse, coverage, domain, field, type Field } from './domain';
 import { coordinate, ledger, postTo, restOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
@@ -38,27 +37,7 @@ export interface BeamIntent {
   factor: Leaf;
 }
 
-export interface MaterialLeaves { id: string; density: Derivation; E: Derivation; strength: Derivation }
-
-/** A kept material's constitutive values as measured leaves, each with the handbook that reports it. */
-export function materialLeaves(id: string): MaterialLeaves {
-  const m = getMaterial(id);
-  const src = `${m.name}: ${m.source} (${m.confidence})`;
-  const l = (name: string, v: number, unit: string) => ofLeaf(leaf(`${name} of ${m.name}`, v, unit, { class: 'measured', source: src }));
-  return { id, density: l('density', m.density, 'kg/m^3'), E: l('modulus', m.E, 'Pa'), strength: l('strength (modulus of rupture)', m.ultimate, 'Pa') };
-}
-
-/** The sawn-lumber sizes as a catalogue: each dressed section in both orientations, configuration leaves with their source. */
-export function lumberCatalogue(): Option[] {
-  const src = 'dressed sawn-lumber sizes (kept parts/registry.ts LUMBER; PS 20 American Softwood Lumber Standard: a 2×4 is 38 × 89 mm)';
-  const out: Option[] = [];
-  for (const [size, [t, w]] of Object.entries(LUMBER)) {
-    const l = (name: string, v: number) => leaf(name, v, 'm', { class: 'configuration', source: src });
-    out.push({ label: `${size} on edge`, leaves: { b: l(`${size} breadth (on edge)`, t), h: l(`${size} depth (on edge)`, w) } });
-    if (t !== w) out.push({ label: `${size} flat`, leaves: { b: l(`${size} breadth (flat)`, w), h: l(`${size} depth (flat)`, t) } });
-  }
-  return out;
-}
+export { lumberCatalogue, materialLeaves, type MaterialLeaves } from './stock';
 
 /** The preference that fills the free section: least material, declared with who and why. */
 export function leastMaterial(by: string): Law {
