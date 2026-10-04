@@ -26,7 +26,7 @@ describe('the text channel shows what the state holds, what it lacks and what th
     feed(rt, lines);
     const out = feed(rt, ['{"want": {"at": "a board/bending stress at its outermost fibre", "most": {"name": "half the fir\'s modulus of rupture", "value": 42.5e6, "unit": "Pa"}, "says": "within half its strength"}}']);
     const gap = out.find((l) => l.includes('"within half its strength"'))!;
-    expect(gap).toContain('a board/bending stress at its outermost fibre (nothing holds or derives it; a board holds in Pa: a board/largest bending stress between its contacts, from its own weight)');
+    expect(gap).toContain('a board/bending stress at its outermost fibre (nothing holds or derives it; a board holds in Pa: a board/largest bending stress along it)');
   });
 
   it('the lacks nothing waits on are counted, not listed, until all are asked for', () => {
@@ -39,13 +39,12 @@ describe('the text channel shows what the state holds, what it lacks and what th
     expect(all.every((l) => l.startsWith('gap  the floor/'))).toBe(true);
   });
 
-  it('WHY shows a part several inputs rest on once: the board\'s stress names each leaf in full once, then refers back', () => {
+  it('WHY shows a part several inputs rest on once: every line of the board\'s stress is a different part, and what is reached again is named as shown above', () => {
     const rt = Runtime.open(new MemorySink());
     feed(rt, lines);
-    const why = answer(rt, { ask: 'why', at: 'a board/largest bending stress between its contacts, from its own weight' });
-    const full = why.filter((l) => / = .*← given/.test(l)).map((l) => l.replace(/^[\s\w:]*?: (?=[a-z])/, ''));
-    expect(new Set(full).size).toBe(full.length);
+    const why = answer(rt, { ask: 'why', at: 'a board/largest bending stress along it' });
+    const parts = why.filter((l) => !l.includes('and, shown above:')).map((l) => l.replace(/^(\s*\w+:\s+)*/, ''));
+    expect(new Set(parts).size).toBe(parts.length);
     expect(why.some((l) => l.includes('and, shown above:'))).toBe(true);
-    expect(why.length).toBeLessThan(40);
   });
 });

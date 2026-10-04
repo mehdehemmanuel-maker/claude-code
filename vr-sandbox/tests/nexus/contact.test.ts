@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { apply } from '../../src/nexus/law';
-import { SELF_MOMENT } from '../../src/nexus/book/slice';
+import { PATCH_MOMENT, SELF_MOMENT } from '../../src/nexus/book/slice';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { MemorySink } from '../../src/nexus/journal';
 import { contactAt } from '../../src/nexus/contact';
@@ -63,6 +63,24 @@ describe('contacts form where faces touch, and the weight goes down them to what
     expect(rt.binding(contactAt.stress('a board'))!.value).toBeCloseTo(kept / (0.038 * 0.184 ** 2 / 6), 6);
   });
 
+  it('a block resting on the middle of the board bends it by the kept patch law and its own weight together: one rule for every force on it, nothing added for loads from above', () => {
+    const rt = room();
+    rt.admit(box('block C', [0, 0.584 + 0.05, 0], [0.05, 0.05, 0.1])); rt.admit(fir('block C'));
+    const P = W(rt, 'block C'), q = W(rt, 'a board') / 1.0;
+    expect(F(rt, 'block C', 'a board')).toBeCloseTo(P, 9);
+    expect(F(rt, 'a board', 'block A')).toBeCloseTo((W(rt, 'a board') + P) / 2, 9);
+    const lit = (name: string, v: number, unit: string) => ofLeaf(given(name, v, unit));
+    // the block's weight spreads over the 100 mm it rests on; both moments are largest at the middle, so they add there
+    const patch = apply(PATCH_MOMENT, { P: lit('P', P, 'N'), L: lit('L', 0.8, 'm'), w: lit('w', 0.1, 'm'), a: lit('a', 0, 'm') }).value!;
+    const own = apply(SELF_MOMENT, { q: lit('q', q, 'N/m'), L: lit('L', 0.8, 'm'), Lt: lit('Lt', 1.0, 'm'), a: lit('a', 0, 'm') }).value!;
+    expect(rt.binding(contactAt.moment('a board'))!.value).toBeCloseTo(patch + own, 9);
+    // moved off the middle, the shares follow moments and the moment is no longer the sum of the two largest
+    rt.admit(box('block C', [0.2, 0.584 + 0.05, 0], [0.05, 0.05, 0.1]));
+    expect(F(rt, 'a board', 'block B')).toBeCloseTo(W(rt, 'a board') / 2 + P * 0.6 / 0.8, 9);
+    expect(rt.binding(contactAt.moment('a board'))!.value).toBeLessThan(patch + own);
+    expect(rt.gaps().some((g) => g.kind === 'refused' || g.kind === 'unmet')).toBe(false);
+  });
+
   it('moving a block re-derives the shares by moments; moved past the board\'s middle, the board would pull up on a block, which a contact cannot: it tips, and the gap is at that contact', () => {
     const rt = room(0.1);
     expect(F(rt, 'a board', 'block B')! / W(rt, 'a board')).toBeCloseTo(0.4 / 0.5, 9);
@@ -77,13 +95,43 @@ describe('contacts form where faces touch, and the weight goes down them to what
     rt.admit(want);
     rt.admit(box('block B', [-0.2, 0.2, 0], [0.05, 0.2, 0.2]));
     const refused = rt.gaps().filter((g) => g.kind === 'refused').map((g) => [(g as { at: string }).at, (g as { domain: string }).domain]);
-    expect(refused).toContainEqual([contactAt.moment('a board'), 'a board rests on both its contacts: its weight falls between them']);
+    expect(refused).toContainEqual([contactAt.moment('a board'), 'a board is at rest on what bears it']);
+    expect(rt.binding(contactAt.rests('a board'))!.value).toBe(0);
     expect(refused).toContainEqual([contactAt.load('block A'), 'a board presses on block A']);
     const mine = rt.gaps().find((g) => (g.kind === 'unmet' || g.kind === 'undecided') && g.says === 'the board is stressed within half its strength');
     expect(mine?.kind).toBe('undecided');
     // set back between them, it rests again, and the same want is met
     rt.admit(box('block B', [0.4, 0.2, 0], [0.05, 0.2, 0.2]));
     expect(rt.gaps().some((g) => g.kind === 'refused' || ((g.kind === 'unmet' || g.kind === 'undecided') && g.says === 'the board is stressed within half its strength'))).toBe(false);
+  });
+
+  it('a place is at rest only while what bears it is: on a board that tips, a block resting on it is not at rest either, and what it derives as at rest is refused; the floor\'s rest is the headset\'s given', () => {
+    const rt = room();
+    rt.admit(box('block C', [0, 0.584 + 0.05, 0], [0.05, 0.05, 0.1])); rt.admit(fir('block C'));
+    expect(['the floor', 'block A', 'a board', 'block C'].map((p) => rt.binding(contactAt.rests(p))!.value)).toEqual([1, 1, 1, 1]);
+    expect(rt.binding(contactAt.momentAlong('block C', 0))!.value).not.toBeNull();
+    rt.admit(box('block B', [-0.2, 0.2, 0], [0.05, 0.2, 0.2]));
+    expect(rt.binding(contactAt.rests('a board'))!.value).toBe(0);
+    expect(rt.binding(contactAt.rests('block C'))!.value).toBe(0);
+    const refused = rt.gaps().filter((g) => g.kind === 'refused').map((g) => [(g as { at: string }).at, (g as { domain: string }).domain]);
+    expect(refused).toContainEqual([contactAt.momentAlong('block C', 0), 'block C is at rest on what bears it']);
+    expect(rt.why(contactAt.rests('the floor'))!.origin).toEqual({ class: 'given', by: 'the headset: what it measured as the floor is the ground', grounds: 'held at rest by what lies outside the domain' });
+  });
+
+  it('what one known part decides is decided without the unknown parts: a board that pulls on one block is not at rest, whatever the other block weighs', () => {
+    const rt = room(0.4, ['block A', 'a board']);
+    rt.admit(box('block B', [-0.2, 0.2, 0], [0.05, 0.2, 0.2]));
+    // block B's matter is unknown, so whether block B is at rest is undecided; the board's own pull decides the board
+    expect(rt.binding(contactAt.rests('block B'))).toBeUndefined();
+    const rest = rt.binding(contactAt.rests('a board'))!;
+    expect(rest.value).toBe(0);
+    expect(Object.values(rest.inputs).map((d) => d.name)).not.toContain(contactAt.rests('block B'));
+    // and so what block B lacks bears on what block B's own rest decides, not on the board
+    const mass = rt.gaps().find((g) => g.kind === 'unbound' && g.at === placeAt.mass('block B'))!;
+    expect(rt.bearing(mass).map((b) => b.says)).toEqual(['the load on block B falls within what bears it']);
+    // once block B's matter is known, nothing about the board's rest changes
+    rt.admit(fir('block B'));
+    expect(rt.binding(contactAt.rests('a board'))!.value).toBe(0);
   });
 
   it('a gap is told apart by what waits on it: the floor\'s unknown matter bears on no constraint; a block\'s bears on whether it stays on what bears it', () => {

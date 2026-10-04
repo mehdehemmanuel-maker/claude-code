@@ -99,6 +99,10 @@ const numeric = (t: Term, env: Values, halve = false): number | null => {
     return (s * h) / 3;
   }
   const args = t.args.map((a) => numeric(a, env, halve));
+  // a predicate one known part decides is decided, whatever the unknown parts are: false and anything is false, true
+  // or anything is true
+  if (t.op === 'and' && args.some((a) => a === 0)) return 0;
+  if (t.op === 'or' && args.some((a) => a !== null && a !== 0)) return 1;
   if (args.some((a) => a === null)) return null;
   return OPERATORS[t.op].eval(args as number[], t.k);
 };
@@ -117,6 +121,10 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
   };
   collect(term);
   for (const dc of cite?.domain ?? []) collect(dc.holds);
+  // what is decided without some inputs rests only on the others: an input without a value that the term and every
+  // domain are decided without is not an input of the result
+  const missing = Object.keys(inputs).filter((sym) => inputs[sym]!.value === null);
+  if (missing.length && [term, ...(cite?.domain ?? []).map((dc) => dc.holds)].every((t) => numeric(t, env) !== null)) for (const sym of missing) delete inputs[sym];
   const statuses = Object.values(inputs).map((d) => d.status);
   let status = weakest('derived', ...statuses);
   const unit = cite?.unit ?? dimText(term.dim);

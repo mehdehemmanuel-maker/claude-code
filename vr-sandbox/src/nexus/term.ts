@@ -186,8 +186,12 @@ export function app(id: OpId, args: Term[], kk?: number): App {
   const dim = o.dim(args.map((a) => a.dim), kk);
   const bound = new Set(args.flatMap((a) => boundSyms(a)));
   for (const a of args) for (const v of varsOf(a)) if (bound.has(v.sym)) throw new Error(`${id}: ${v.sym} is bound in one argument and free in another`);
-  const t: Omit<App, 'hash'> = { kind: 'app', op: id, args, ...(kk === undefined ? {} : { k: kk }), dim };
-  return { ...t, hash: hashOf(canonicalForm(t as App)) };
+  // its identity is its canonical form's hash, computed when first read: a term built inside a larger one is never
+  // hashed on its own, so building a term costs its size, not its size times its depth
+  const t = { kind: 'app', op: id, args, ...(kk === undefined ? {} : { k: kk }), dim } as Omit<App, 'hash'>;
+  let h: string | undefined;
+  Object.defineProperty(t, 'hash', { enumerable: true, get: () => (h ??= hashOf(canonicalForm(t as App))) });
+  return t as App;
 }
 
 export const add = (a: Term, b: Term) => app('add', [a, b]);

@@ -113,6 +113,8 @@ the generated laws are checked against, not the limit of what the language can s
 | A place's geometry generates its volume, weight and sections' stiffness about the line gravity bends it around, only for the sections gravity crosses: on edge the kept rectangle laws exactly, flat 184/38 less; no breadth or depth named | tests/nexus/place.test.ts |
 | Couplings form from geometry in the running state: contacts where faces touch, weight down them to what is held, shares by moments, own-weight bending by the kept law; what takes a place to be at rest is refused when it tips, and a want on it is undecided, never met | tests/nexus/contact.test.ts, `npm run nexus` |
 | A gap says what it bears on, and the text channel shows first what a want or the domain's requirements wait on; a want at an address nothing holds or derives says so; WHY is shown as a graph | tests/nexus/contact.test.ts, tests/nexus/channel-text.test.ts |
+| One rule bends a place under every force on it, each spread over its interval: alone the kept own-weight law, with a block resting mid-span the kept patch law plus it, to nine places | tests/nexus/contact.test.ts |
+| A place is at rest only while what bears it is, down to what is held: on a tipped board, the block on it is not at rest and its bending is refused; a decision a known part settles waits on nothing else | tests/nexus/contact.test.ts |
 
 ## 3. What is missing
 
@@ -141,10 +143,10 @@ the generated laws are checked against, not the limit of what the language can s
 
 docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
 from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
-every piece of Nexus into the seven structures. Sections 16 to 18 record each step executed, as a running process,
-with what running it found. Steps 1 to 3 run: the runtime on a journal, places in a measured domain, and couplings
-between them. Step 4 is the moment along a place under every force on it, replacing the own-weight case. An evolver
-over generated structure follows, for what statics refuses.
+every piece of Nexus into the seven structures. Sections 16 to 19 record each step executed, as a running process,
+with what running it found. Steps 1 to 4 run: the runtime on a journal, places in a measured domain, couplings between
+them, and one rule for bending under every force. Step 5 is an evolver over generated structure, starting with the
+places the state says are not at rest.
 
 ## 5. Why each primitive exists
 

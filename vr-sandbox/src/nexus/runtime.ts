@@ -9,11 +9,12 @@
 // its law's domain, a cycle that propagation cannot settle. A gap is never a sentence to be read back.
 
 import { contradiction, evaluate, ofLeaf, type Derivation, type Env } from './evaluate';
+import { dimText } from './dimension';
 import { Journal, type Address, type Contribution, type Sink } from './journal';
-import { ge, le, variable, type Leaf, type Term } from './term';
+import { ge, le, leaf, variable, type Leaf, type Term } from './term';
 import { hashOf } from './identity';
 import { placeLeaves, placeRelations } from './place';
-import { contactStructure } from './contact';
+import { contactAt, contactStructure } from './contact';
 import type { Law } from './law';
 import { why, type WhyNode } from './why';
 
@@ -157,7 +158,12 @@ export class Runtime {
     else {
       const seen = new Set<Address>([g.at]), stack = [g.at];
       while (stack.length) {
-        for (const id of this.readers.get(stack.pop()!) ?? []) {
+        const x = stack.pop()!;
+        for (const id of this.readers.get(x) ?? []) {
+          // a reader already decided without this address does not wait on it
+          const decided = this.constraints.has(id) ? this.checks.get(id) : this.outputs.get(id);
+          const ports = (this.constraints.get(id) ?? this.relations.get(id))!.ports;
+          if (decided && decided.value !== null && !Object.keys(decided.inputs).some((sym) => ports[sym] === x)) continue;
           if (this.constraints.has(id)) { found.add(id); continue; }
           const r = this.relations.get(id);
           if (r && !seen.has(r.out)) { seen.add(r.out); stack.push(r.out); }
@@ -243,7 +249,13 @@ export class Runtime {
   /** What a contribution changes directly: the addresses it sets and the relations it puts in, none yet evaluated. */
   private applyOne(c: Contribution): { start: Address[]; fresh: string[] } {
     const none = { start: [] as Address[], fresh: [] as string[] };
-    if (c.kind === 'held') { this.held.add(c.place); return none; }
+    if (c.kind === 'held') {
+      // held at rest by what lies outside the domain: its rest is a given, whose it is, and what rests on it rests on that
+      this.held.add(c.place);
+      const at = contactAt.rests(c.place);
+      this.leaves.set(at, leaf('held at rest', 1, '1', { class: 'given', by: c.by, grounds: 'held at rest by what lies outside the domain' }));
+      return { start: [at], fresh: [] };
+    }
     if (c.kind === 'leaf') { this.leaves.set(c.at, c.leaf); return { start: [c.at], fresh: [] }; }
     if (c.kind === 'relation') return { start: [], fresh: this.addRelation(c) ? [c.id] : [] };
     if (c.kind === 'place') {
@@ -297,11 +309,12 @@ export class Runtime {
   private refresh(id: string) {
     const r = this.relations.get(id)!;
     const waiting = Object.values(r.ports).filter((p) => { const b = this.bindings.get(p); return !b || b.value === null; });
-    if (waiting.length) { this.outputs.delete(id); this.failures.set(id, { kind: 'unbound', at: r.out, relation: id, waitingOn: [...new Set(waiting)] }); return; }
-    const env: Env = Object.fromEntries(Object.entries(r.ports).map(([sym, p]) => [sym, this.bindings.get(p)!]));
+    const env = this.envOf(id, r.ports);
+    if (waiting.length && !this.decidedWithout(r.term, r.domain, env)) { this.outputs.delete(id); this.failures.set(id, { kind: 'unbound', at: r.out, relation: id, waitingOn: [...new Set(waiting)] }); return; }
     this.evaluations++;
     try {
-      const d = evaluate(r.name, r.term, env, { law: r.law, unit: r.unit, ...(r.domain ? { domain: r.domain } : {}) });
+      // a derived value is named by where it is: two values a rule derives alike at two places are told apart
+      const d = evaluate(r.out, r.term, env, { law: r.law, unit: r.unit, ...(r.domain ? { domain: r.domain } : {}) });
       this.outputs.set(id, d);
       if (d.refusal) this.failures.set(id, { kind: 'refused', at: r.out, relation: id, domain: d.refusal.domain });
       else this.failures.delete(id);
@@ -314,10 +327,25 @@ export class Runtime {
   private evaluateConstraint(id: string) {
     const c = this.constraints.get(id)!;
     const ready = Object.values(c.ports).every((p) => { const b = this.bindings.get(p); return !!b && b.value !== null; });
-    if (!ready) { this.checks.delete(id); return; }
+    const env = this.envOf(id, c.ports);
+    if (!ready && !this.decidedWithout(c.holds, undefined, env)) { this.checks.delete(id); return; }
     this.evaluations++;
-    const env: Env = Object.fromEntries(Object.entries(c.ports).map(([sym, p]) => [sym, this.bindings.get(p)!]));
     this.checks.set(id, evaluate(c.says, c.holds, env, { law: c.holds.hash, unit: '1' }));
+  }
+
+  /** What a relation or a constraint reads, with an unknown record where an address holds no value yet. */
+  private envOf(id: string, ports: Record<string, Address>): Env {
+    return Object.fromEntries(Object.entries(ports).map(([sym, p]) => {
+      const b = this.bindings.get(p);
+      return [sym, b ?? ofLeaf(leaf(p, null, this.unitRead(id, p) ?? '1', { class: 'unknown' }))];
+    }));
+  }
+
+  /** Whether a term and its domain are decided by what is known, whatever the unknown parts are. */
+  private decidedWithout(term: Term, domain: { holds: Term }[] | undefined, env: Env): boolean {
+    if (!decides(term) && !(domain ?? []).some((x) => decides(x.holds))) return false;
+    const d = evaluate('a decision', term, env, { law: '', unit: dimText(term.dim), ...(domain ? { domain: domain.map((x) => ({ says: '', holds: x.holds })) } : {}) });
+    return Object.values(d.inputs).every((x) => x.value !== null);
   }
 
   /** What an address holds now: a leaf there, else the first relation that derives it. */
@@ -373,6 +401,16 @@ export class Runtime {
     }
     return changed;
   }
+}
+
+/** Whether a term holds a predicate that a part can decide alone (an and, an or): only such a term is decided without all it reads. */
+const decisive = new WeakMap<Term, boolean>();
+function decides(t: Term): boolean {
+  const hit = decisive.get(t);
+  if (hit !== undefined) return hit;
+  const v = t.kind === 'app' ? t.op === 'and' || t.op === 'or' || t.args.some(decides) : t.kind === 'bind' ? decides(t.body) || decides(t.lo) || decides(t.hi) : false;
+  decisive.set(t, v);
+  return v;
 }
 
 // ---- forming contributions ----------------------------------------------------------------------------------------

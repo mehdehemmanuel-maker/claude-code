@@ -454,9 +454,11 @@ These compute real results from real inputs, within tests:
   - on more, the split is a located gap (stiffness);
   - on none, the place is not borne.
 
-  A place on two contacts bends under its own weight, and its stress follows by the kept law. Whatever takes a place
-  to be at rest is refused when it is not. The structure is re-decided from the values on every change, before
-  anything is settled.
+  A place bends under every force on it, each spread over its interval of the line it bends along (since step 4),
+  and its stress follows by the kept law. Whether each place is at rest is derived, down to what is held, and
+  whatever takes a place to be at rest is refused when it is not. A predicate that a known part decides is decided
+  without the unknown parts. The structure is re-decided from the values on every change, before anything is
+  settled.
 - **Gaps that say what they bear on** (since step 3). Each gap reaches the constraints that read its address. The
   text channel shows first those that bear on a want or on the domain's requirements, and says when a want names an
   address nothing holds or derives. WHY is shown as the graph a derivation is.
@@ -664,3 +666,75 @@ When block B was moved to −0.2 m:
 
 Step 4 is the general moment, replacing the own-weight special case. An evolver over generated structure follows it,
 for what statics refuses.
+
+---
+
+## 19. Step 4, executed: what running it found
+
+**What was built.** The moment along a place is now one rule, `largestMoment` in src/nexus/contact.ts. Every force
+on a place is spread evenly over an interval of the line it bends along:
+- its weight over its own extent;
+- each contact's share over that contact's patch, the shares from what rests on it and the reactions alike.
+
+With every force spread, the shear is continuous and piecewise linear, so the moment at any station is exact for
+every arrangement. Its largest value is at an interval's end, or where the shear crosses zero just past one. Every
+station tried is a real station of the place, so the largest found is never more than the true largest, and the true
+one is among them.
+
+On two contacts, the place bends along the level line between them. Levers are measured across gravity, so contacts
+at different heights share by their level distance. On one contact, it bends along each of the contact's in-plane
+axes. The own-weight formula and the gap for "bending from what rests on it" are deleted: both are cases of the one
+rule.
+
+The evidence is the kept laws:
+- the board alone gives the kept `SELF_MOMENT` exactly, as before;
+- a fir block resting on the middle of the board gives the kept `PATCH_MOMENT` for its 100 mm patch plus
+  `SELF_MOMENT`, to nine places.
+
+**The scene, as run.** A block was set on the board, moved over one end, and then the board was tipped, in the
+process on one journal.
+
+| Configuration | Moment in the board |
+|---|---|
+| Block centred | 4.675 N·m |
+| Block over the end | 2.472 N·m |
+| Board tipped | refused |
+
+When tipped, the person's want on the board's stress is undecided, and the block on the board is not at rest either.
+
+**What running it found.**
+
+1. **Building a term cost its size times its depth.** Each operator hashed the canonical form of its whole subtree
+   when it was made. The first general moment inlined every force's interval into every candidate station: one block
+   took over 100 s. Two changes fixed it, both structural:
+   - **Each force's interval along the line is a derived quantity at its own address** ("a board/the share through
+     a board on block A, spread along the line between its contacts: from"). The moment reads only forces and
+     intervals, and WHY names each interval.
+   - **A term's identity is computed when it is first read,** not when it is built.
+
+   The scene went from 100 s to 1.7 s, with byte-identical output, and replay still checks every term's identity.
+   Hashing remains the largest cost.
+2. **Rest flowed down but not up.** When the board tipped, its bending was refused, but the block resting on it still
+   had its bending derived as at rest. A place is at rest only while its contacts hold it and what bears it is at
+   rest, down to what is held. That is now a derived quantity of every place ("at rest on what bears it"), and a held
+   place's rest is a given whose origin is who holds it. Whatever a place derives as at rest carries its rest as its
+   domain. On the tipped board, the block is not at rest, and its bending is refused with the reason.
+3. **A decision waited on what could not change it.** The board's rest waited on block B's unknown density, although
+   its own pull on block A already decides that it is not at rest. A predicate that one known part decides is now
+   decided: false and anything is false, true or anything is true. The decided result rests only on the inputs that
+   decided it. The runtime tries such a decision before it reports a wait. What a gap bears on stops at readers
+   already decided without it, so block B's unknown matter no longer reads as bearing on the board's stress.
+4. **Two different parts printed as the same line.** Both contacts' points read "contact point y = 0.4 m". A derived
+   value is now named by its address, so WHY says where each value is. Parts reached again are named together on one
+   line, so every other line of a WHY is a different part.
+
+**What it still lacks.** In the order running shows they stop it:
+
+- **What moves.** The state now says exactly which places are not at rest, and why. It cannot say where they go.
+  That needs time: an evolver realizing the generated structure, with the places not at rest as its input and the
+  state's places as its output. This is the next step.
+- **A place on more than two contacts** needs the contacts' stiffness.
+- **Forces off the bending line** twist a place (torsion), which nothing generates.
+- **Pressure under a patch** is taken as even. A stiff block on a flexible board presses harder at its edges.
+
+Step 5 is an evolver over generated structure, starting with the places the state says are not at rest.
