@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "gate": "tsc --noEmit -p . && vitest run",
     "nexus:build": "vite build --config vite.nexus.config.ts",
-    "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs"
+    "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs",
+    "nexus:round": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/round.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

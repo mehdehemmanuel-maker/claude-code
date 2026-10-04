@@ -858,3 +858,60 @@ Step 6 is contacts of any feature against a face, with vector forces and the ful
 internally and at random, from the manifold's own quantities, with the bar set high: advanced builds and generation
 at biological level. The round runs from an empty journal, so everything it needs is derived again. What breaks is
 classified, the general distinction is promoted, and the findings above, with every earlier one, are checked again.
+
+---
+
+## 22. Drawn round 1: intents the manifold draws for itself
+
+**The method.** A round no longer starts from a scene or an invention a person wrote down (src/nexus/draw.ts,
+src/nexus/round.ts; `npm run nexus:round -- <seed> <count> <bar>`).
+- **The draw.** Each intent is composed at random from the manifold's own vocabulary:
+  - the carriers physics conserves;
+  - the roles a region can take: a person's region, a reservoir that holds a potential, a limit on what it gives;
+  - the forms a want can take: hold a band, deliver on demand, reach a content by the end, stay within a bound, hear
+    within a lag, grow.
+- **Magnitudes.** Every magnitude is drawn from what the kept laws cover in its dimension (their worked examples,
+  their domain bounds, the kept matters' properties), widened by the bar: two decades either side in this round. A
+  band is a part in ten to a part in a million of its value. A growth is ten to a million times what the region
+  starts with.
+- **Seeds.** The draw is seeded, so a round runs again exactly.
+- **From nothing.** Each intent is generated with nothing kept from the one before, and a crash counts as a finding
+  like any gap.
+
+**Round 1 (seed 1, 200 intents, 1.1 s).**
+
+| | before the round's fixes | after |
+|---|---|---|
+| intents that crashed the generator | 5 | 0 |
+| grow wants answered by any element | 0 of 97 | 97 of 97 |
+| reach wants answered | 11 of 64 | 56 of 64 |
+| lawful refusals against what a reservoir gives | 0 | 11 |
+
+**What it found, and the rules it promoted.**
+
+1. **A generated region taken for one the intent states.** A rule looked up the limit of a power source among the
+   intent's regions. The source was a region the generator had made (a moving region's power is the store it
+   carries), and the lookup crashed. A region the language generates states nothing of its own, so limits are now read
+   only from regions that state them.
+2. **A content reached by the end was read by no rule, for any carrier.** The round found this for charge, energy and
+   matter alike. The rule is conservation over time: a region's content changes only by what crosses its boundary and
+   what is made in it, so there are two ways and no third.
+   - **Brought in:** a path from a reservoir of the carrier, at least (Q − Q₀)/T on average. A reservoir that gives
+     less refuses it lawfully.
+   - **Made inside**, for a matter. A matter is conserved only where it does not react: to grow, it is made, and
+     what is conserved then is what it is made of. Made in proportion to what is already there, as a matter that
+     makes more of itself is, it grows as Q₀·2^(t/τ). So it doubles at least every τ = T / log₂(Q/Q₀), and its rate of
+     making at the end is at least Q ln 2 / τ.
+
+     This is the first structure at biological level. What remains open is located at it: what the matter is made
+     of, so what supply its making draws on, what its making takes in energy, and what makes it in proportion to
+     itself.
+
+**What the round ranks next.** The ranking itself still classifies by regular expressions over gap sentences, a
+failure section 10 named. It has to become structured.
+- **A reservoir's limit no rule checked: 134 of 200 intents.** A stated limit is compared only by a few rules, not by
+  every path that draws on it.
+- **The kept data does not state it:** 122 intents.
+- **Where a region is, so how far apart its parts are, is not said:** 70. A drawn region has no extent, and the
+  generator does not choose one.
+- **How cold the sky is, for heat given away as light:** 38.

@@ -136,6 +136,9 @@ export function generate(intent: Intent): Structure {
     return null;
   };
   const movingOf = (region: string) => elements.find((e) => e.id === `moving:${region}`) ?? null;
+  /** What a region states of itself, when the intent states it: a region the language generates states nothing of its own. */
+  const stated = (id: string): Region | null => intent.regions.find((r) => r.id === id) ?? null;
+  const saidOf = (id: string, c: string, role: Role, limit = false) => { const r = stated(id); return r ? said(r, c, role, limit) : []; };
   /** Where power comes from for a region: the stores its moving region carries, or environment reservoirs of a conjugate carrier above a sink of it. */
   /**
    * Power is a difference of potential, never a potential alone. A held potential offers power toward the lowest the
@@ -215,7 +218,7 @@ export function generate(intent: Intent): Structure {
     if (from) {
       const src = path(c, from.region, into, want, `what is raised comes from ${from.region}`, conv.id);
       // the reservoir is a store: what it holds bounds how much can be raised from it
-      for (const q of said(regionOf(intent, from.region), c.id, 'content')) src?.values.push({ name: `what ${from.region} holds`, value: q.leaf.value!, unit: q.leaf.unit, from: q.leaf.name });
+      for (const q of saidOf(from.region, c.id, 'content')) src?.values.push({ name: `what ${from.region} holds`, value: q.leaf.value!, unit: q.leaf.unit, from: q.leaf.name });
     }
     for (const s of sources) {
       conv.why.laws = [...new Set([...conv.why.laws, ...(s.carrier.conjugate && c.conjugate ? coupling(s.carrier, c).map((l) => l.id) : lawIds(s.carrier, 'power', 'dissipation'))])];
@@ -664,7 +667,7 @@ export function generate(intent: Intent): Structure {
       ], why: { want: w.id, rule: 'erasing information is the second law\'s: what is told apart and forgotten leaves as heat', laws: [], parent: null } });
       for (const sct of powerSources(R.id)) {
         const pp = path(sct.carrier, sct.region, R.id, w.id, `${R.id} draws ${sct.carrier.id} from ${sct.region} to erase`, conv.id);
-        for (const lim of said(regionOf(intent, sct.region), sct.carrier.id, 'power', true)) put(pp, { name: `within what ${sct.region} gives: ${lim.leaf.name}`, value: lim.leaf.value!, unit: lim.leaf.unit, from: lim.leaf.name });
+        for (const lim of saidOf(sct.region, sct.carrier.id, 'power', true)) put(pp, { name: `within what ${sct.region} gives: ${lim.leaf.name}`, value: lim.leaf.value!, unit: lim.leaf.unit, from: lim.leaf.name });
       }
       shed(conv, R.id, w.id, true);
       gap(w.id, conv.id, 'information', 'what a realization spends per bit it erases is not derived: the least is k T ln 2, and nothing generated says how near to it a realization comes');
@@ -750,14 +753,50 @@ export function generate(intent: Intent): Structure {
       add({ id: `modulation:${c.id}:${R.id}:person`, kind: 'modulation', carrier: c.id, says: `the person opens and closes the flow of ${c.id} into ${R.id}`, regions: [R.id], values: [], why: { want: w.id, rule: 'on demand: the person modulates the path', laws: [], parent: via?.id ?? use_.id } });
       if (above && lo !== null) {
         flux.push({ region: R.id, carrier: c.id, J: role === 'power' ? lo / above.lo : lo, from: role === 'power' ? `${w.lo!.name} over ${above.leaves[0]!.name}` : w.lo!.name });
-        const srcRegion = regionOf(intent, above.region);
-        for (const lim of said(srcRegion, c.id, role, true)) {
+        for (const lim of saidOf(above.region, c.id, role, true)) {
           if (lim.leaf.value! < lo) gap(w.id, use_.id, c.id, `the want asks ${lo} ${w.quantity.unit} and ${above.region} gives at most ${lim.leaf.value} (${lim.leaf.name})`);
           else use_.values.push({ name: `within what ${above.region} gives`, value: lim.leaf.value!, unit: lim.leaf.unit, from: lim.leaf.name });
         }
       }
       if (c.id === 'charge') add({ id: `return:charge:${R.id}->${above?.region ?? 'its source'}`, kind: 'path', carrier: 'charge', says: `the charge returns from ${R.id} to ${above?.region ?? 'its source'}: charge is neither made nor destroyed`, regions: [R.id, above?.region ?? R.id], values: [], why: { want: w.id, rule: 'a delivered charge returns', laws: lawIds(c, 'conductance'), parent: use_.id } });
       else if (contentBound(R.id, c.id)) drain(c, R.id, usePotential, w.id, use_.id);
+      continue;
+    }
+
+    // a content reached by the end. A region's content changes only by what crosses its boundary and what is made in
+    // it, so there are two ways and no third: it is brought in, at least what is added over how long; or, for a matter,
+    // it is made inside. A matter is conserved only where it does not react: to grow, it is made, and what is conserved
+    // then is what it is made of. Made in proportion to what is already there (a matter that makes more of itself), it
+    // grows as Q0 2^(t/tau), so it doubles at least every tau = T / log2(Q / Q0).
+    if (role === 'content' && lo !== null && w.when === 'by the end') {
+      const T = intent.duration.value!;
+      const start = said(R, c.id, 'content');
+      for (const q of start) use(R, q.sym);
+      const Q0 = start.reduce((a, q) => a + q.leaf.value!, 0), dQ = lo - Q0;
+      const store = add({ id: `store:${c.id}:${R.id}:reached`, kind: 'store', carrier: c.id, says: `${R.id} holds ${c.id}: by the end, at least ${lo} ${w.quantity.unit}`, regions: [R.id], values: [{ name: 'content held by the end', value: lo, unit: w.quantity.unit, from: w.lo!.name }, ...(start.length ? [{ name: 'content it starts with', value: Q0, unit: w.quantity.unit, from: start.map((q) => q.leaf.name).join(' + ') }] : [])], why: { want: w.id, rule: 'a content reached by the end is held: a store of the carrier', laws: lawIds(c, 'storage'), parent: null } });
+      if (dQ <= 0) continue;
+      const from = reservoirs(c.id).filter((x) => x.region !== R.id);
+      if (from.length) {
+        const src = from[0]!;
+        const pth = path(c, src.region, R.id, w.id, `what is reached by the end is brought from ${src.region}`, store.id);
+        put(pth, { name: 'least mean flux: what is added over how long', value: dQ / T, unit: c.flux, from: `${w.lo!.name}${start.length ? ' less what it starts with' : ''}, over ${intent.duration.name}` });
+        for (const lim of saidOf(src.region, c.id, 'flux', true)) {
+          if (lim.leaf.value! < dQ / T) gap(w.id, pth?.id ?? store.id, c.id, `the want needs ${dQ / T} ${c.flux} on average and ${src.region} gives at most ${lim.leaf.value} (${lim.leaf.name})`);
+          else put(pth, { name: `within what ${src.region} gives`, value: lim.leaf.value!, unit: lim.leaf.unit, from: lim.leaf.name });
+        }
+        continue;
+      }
+      const isMatter = c.content === 'kg' || c.content === 'mol' || c.content === 'm^3';
+      if (!isMatter) { gap(w.id, store.id, c.id, `${c.id} is conserved and nothing ${R.id} touches holds it: what is reached cannot be brought`); continue; }
+      if (Q0 > 0) {
+        const doublings = Math.log2(lo / Q0), tau = T / doublings;
+        const make = add({ id: `conversion:${c.id}:${R.id}:itself`, kind: 'conversion', carrier: c.id, says: `${c.id} in ${R.id} is made in proportion to what is already there: it makes more of itself, doubling at least every ${Number(tau.toPrecision(3))} s`, regions: [R.id], values: [
+          { name: 'doublings by the end', value: doublings, unit: '1', from: `log2 of ${w.lo!.name} over what it starts with` },
+          { name: 'longest doubling time', value: tau, unit: 's', from: `${intent.duration.name} over the doublings` },
+          { name: 'least rate of making at the end: the content times ln 2 over the doubling time', value: (lo * Math.LN2) / tau, unit: c.flux, from: 'the growth law Q0 2^(t/tau) differentiated at the end' },
+        ], why: { want: w.id, rule: 'a matter that grows without being brought is made inside; made in proportion to itself it doubles every tau', laws: [], parent: store.id } });
+        gap(w.id, make.id, c.id, `a matter that makes more of itself: what ${c.id} is made of is not stated, so nothing says what supply its making draws on, what its making takes in energy, or what makes it in proportion to itself`);
+      } else gap(w.id, store.id, c.id, `${R.id} starts with no ${c.id} and nothing brings it: what would make it is not stated`);
       continue;
     }
 

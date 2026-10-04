@@ -117,6 +117,7 @@ the generated laws are checked against, not the limit of what the language can s
 | A place is at rest only while what bears it is, down to what is held: on a tipped board, the block on it is not at rest and its bending is refused; a decision a known part settles waits on nothing else | tests/nexus/contact.test.ts |
 | What statics says cannot stay, the rigid-body kernel evolves from the state's places until still, and where it came to rest returns as a measured place: a tipped board comes to rest lower; at rest, nothing moves past the kernel's resolution; read back, the same state without the kernel | tests/nexus/evolve.test.ts, `npm run nexus` |
 | Contacts of any feature against a face, from the separating face and the clipped feature; a place on two sloped contacts can stay exactly when some value of the one free force pushes at both and keeps each friction within its coefficient (Fourier–Motzkin): the kernel's leaning board stays at the kernel's friction and not at a tenth of it | tests/nexus/evolve.test.ts, tests/nexus/contact.test.ts |
+| Rounds draw their own intents from the manifold's carriers, roles and want forms, magnitudes from what the kept laws cover pushed past it, seeded; a content reached by the end is brought in at (Q − Q₀)/T or, for a matter that makes more of itself, doubles at least every T / log₂(Q/Q₀) | tests/nexus/round.test.ts, `npm run nexus:round` |
 
 ## 3. What is missing
 
@@ -145,7 +146,7 @@ the generated laws are checked against, not the limit of what the language can s
 
 docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
 from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
-every piece of Nexus into the seven structures. Sections 16 to 21 record each step executed, as a running process,
+every piece of Nexus into the seven structures. Sections 16 to 22 record each step executed, as a running process,
 with what running it found. Steps 1 to 6 run: the runtime on a journal, places in a measured domain, couplings of any
 feature against a face, one rule for bending under every force, an evolver that moves what cannot stay, and exact
 staying on sloped contacts. The next rounds generate their own targets at random from the manifold's quantities, with

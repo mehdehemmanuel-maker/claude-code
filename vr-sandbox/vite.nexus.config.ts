@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
-// Nexus as a Node program: the runtime and its text channel, bundled to run without a test runner.
+// Nexus as Node programs: the runtime with its text channel, and a round of intents it draws for itself, bundled to
+// run without a test runner.
 export default defineConfig({
-  build: { ssr: 'src/nexus/main.ts', outDir: 'dist-nexus', emptyOutDir: true, minify: false, rollupOptions: { output: { entryFileNames: 'nexus.mjs' } } },
+  build: { ssr: true, outDir: 'dist-nexus', emptyOutDir: true, minify: false, rollupOptions: { input: { nexus: 'src/nexus/main.ts', round: 'src/nexus/round-main.ts' }, output: { entryFileNames: '[name].mjs' } } },
 });
