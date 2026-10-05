@@ -37,7 +37,7 @@ import { extentOf, part, placeParts, type Flaw, type Part, type V3, type Value }
 import {
   awgDiameter, BOARDS, COLOURS, COPPER, COPPER_PIPES, COPPER_PIPES_SRC, DOWNPIPE, DRAG_COEFFICIENT, ENVELOPE_U, FANS, FANS_SRC, GAP_SHEAR_BY_COOLING, GAP_SHEAR_BY_COOLING_SRC,
   CELLS, HEAT_PUMP_COP, HEAT_RECOVERY, HONEYCOMB, INSULATIONS, LED_RADIANT_EFFICIENCY, MINERAL_WOOL, PACK_OVERHEAD, PEAK_OVER_CONTINUOUS, PIPE_VELOCITY, RECT_TUBES,
-  ROLLING_RESISTANCE, ROTOR, SKID_TURN, STRIP_FOOTING, TYRES, TYRES_SRC, BUS_VOLTAGES,
+  ROLLING_RESISTANCE, ROTOR, SKID_TURN, STRIP_FOOTING, TYRES, TYRES_SRC, BUS_VOLTAGES, PARALLEL_CONDUCTORS, HULL, ITTC_1957, PLANING, PROPELLER,
 } from './stock';
 import { floatingClusters } from './tree';
 
@@ -145,20 +145,32 @@ function builder(): B {
   return b;
 }
 // ---- the gates: each decision taken by a law over what it reads, the alternatives it tried kept --------------------------
-const INS = INSULATIONS[1]!, AWGS = [30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1, 0];
-/** The thinnest stocked conductor that carries a current over a run within its insulation's temperature and a 3 % drop. */
-function conductorFor(I: number, run: number, V: number, ambient: number): number | null {
-  const ok = (n: number) => { const d = awgDiameter(n), Rm = COPPER.rho / (Math.PI * d * d / 4); return conductorTemperature(n, INS, I, ambient) <= INS.maxC - 5 && 2 * Rm * run * I <= 0.03 * V; };
-  return AWGS.find(ok) ?? null;
+const AWGS = [30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1, 0];
+interface Cable { awg: number; n: number; ins: (typeof INSULATIONS)[number] }
+/**
+ * The cable for a current over a run: insulation rated for the voltage, then the thinnest conductor that holds its
+ * insulation's temperature and a 3 % drop; where one does not, as few equal conductors in parallel as do.
+ */
+function cableFor(I: number, run: number, V: number, ambient: number): Cable | null {
+  const ins = INSULATIONS.filter((x) => x.id === 'PVC-105' || x.id === 'XLPE-90').find((x) => x.volts >= V);
+  if (!ins) return null;
+  for (let n = 1; n <= PARALLEL_CONDUCTORS.value; n++) {
+    const each = I / n, ok = (a: number) => { const d = awgDiameter(a), Rm = COPPER.rho / (Math.PI * d * d / 4); return conductorTemperature(a, ins, each, ambient) <= ins.maxC - 5 && 2 * Rm * run * each <= 0.03 * V; };
+    const awg = AWGS.find(ok);
+    if (awg !== undefined) return { awg, n, ins };
+  }
+  return null;
 }
+const cableSays = (c: Cable) => `${c.n > 1 ? `${c.n} in parallel of ` : ''}AWG ${c.awg}, ${c.ins.name}`;
 /** The bus: the lowest level at which each circuit's current is carried by a stocked conductor; extra-low voltage where it can be. */
 function busGate(B: B, id: string, P: number, circuits: number, run: number, ambient: number): number {
   const each = P / Math.max(1, circuits), tried: string[] = [];
   for (const V of BUS_VOLTAGES.levels) {
-    const I = each / V, awg = conductorFor(I, run, V, ambient);
-    tried.push(`${V} V: ${I.toFixed(0)} A a circuit${awg === null ? ', no stocked conductor carries it' : `, AWG ${awg}`}`);
-    if (awg !== null) {
-      B.gate({ id: `${id}: bus`, question: `what voltage carries ${(each / 1e3).toFixed(2)} kW a circuit over ${run.toFixed(1)} m`, inputs: [{ name: 'power a circuit', value: each, unit: 'W' }, { name: 'run', value: run, unit: 'm' }], law: `I = P/V carried by the thinnest of AWG 30 to 0 within ${INS.name}'s ${INS.maxC} °C and a 3 % drop; the lowest level that does (${BUS_VOLTAGES.source})`, tried, outcome: `${V} V${V <= BUS_VOLTAGES.elv ? ', extra-low voltage' : ', insulated and guarded against contact'}`, held: true });
+    const I = each / V, cab = cableFor(I, run, V, ambient);
+    tried.push(`${V} V: ${I.toFixed(0)} A a circuit${cab === null ? ', no stocked conductor carries it' : `, ${cableSays(cab)}`}`);
+    // one conductor is the cable's own law; several in parallel only where no level carries it on one
+    if (cab !== null && (cab.n === 1 || V === BUS_VOLTAGES.levels.at(-1))) {
+      B.gate({ id: `${id}: bus`, question: `what voltage carries ${(each / 1e3).toFixed(2)} kW a circuit over ${run.toFixed(1)} m`, inputs: [{ name: 'power a circuit', value: each, unit: 'W' }, { name: 'run', value: run, unit: 'm' }], law: `I = P/V carried by the thinnest of AWG 30 to 0, in insulation rated for the voltage, within its temperature and a 3 % drop; the lowest level that does on one conductor, else on the fewest in parallel (${BUS_VOLTAGES.source})`, tried, outcome: `${V} V${V <= BUS_VOLTAGES.elv ? ', extra-low voltage' : ', insulated and guarded against contact'}`, held: true });
       return V;
     }
   }
@@ -367,6 +379,67 @@ function flying(c: Ctx, B: B, body: string, ext: V3, self: number, air: string):
   const cruise = (v: number) => P + (0.5 * rho * 1.0 * area * v ** 3) / eta;
   B.v('power at speed', cruise(c.want(body, 'm/s', /^speed/, 'lo') ?? c.want(body, 'm/s', /^speed/, 'hi') ?? 0), 'W', `hover and the drag at speed, ½ ρ C_d A v³ with C_d 1 for a bluff body and A ${area.toFixed(3)} m² (estimate)`);
   return { battery: [0, deck + ro + 3 * mm, 0], deck, P, cruise };
+}
+
+
+// ---- in water: a hull that displaces what it carries, a propeller that pushes back what its resistance takes ------------
+interface Floated { battery: V3; deck: number; cruise: (v: number) => number; P: number }
+function floating(c: Ctx, B: B, body: string, ext: V3, self: number, fluid: string, surface: boolean): Floated {
+  B.use(`moving:${body}`); for (const e of c.s.elements) if (/^(thrust|drag|buoyancy|load):/.test(e.id) && e.id.includes(body)) B.use(e.id);
+  B.use(`conversion:charge->momentum:moving:${body}`, `shed:conversion:charge->momentum:moving:${body}`, `conversion:momentum:${body}:removal`, `shed:conversion:momentum:${body}:removal`);
+  const payload = c.val(`moving:${body}`, /mass it moves/) ?? c.q(body, /mass/) ?? 10;
+  const M = B.v('mass it moves', payload + self, 'kg', `what it carries (${payload.toFixed(0)} kg) and itself (${self.toFixed(1)} kg, the last round's parts)`);
+  const rho = c.q(fluid, /density/) ?? 1000, mu = c.q(fluid, /viscosity/) ?? 1.1e-3, g = c.g;
+  const v = c.want(body, 'm/s', /^speed/, 'hi') ?? c.want(body, 'm/s', /^speed/, 'lo') ?? 2;
+  // the hull: as long as the carried region and half again, as wide and a margin; afloat it draws what Archimedes asks
+  // as long and wide as the carried region needs, and no less than the displacement asks at a small craft's proportions
+  const Vd = M / rho, Bdisp = Math.cbrt(Vd / (HULL.cb * HULL.lengthOverBeam * HULL.draftOverBeam));
+  const Bm = Math.max(ext[0] + 0.4, Bdisp);
+  const L = B.v('hull length', Math.max(2.5, ext[2] * 1.6, HULL.lengthOverBeam * Bdisp), 'm', `the carried region and half again, and at least ${HULL.lengthOverBeam} beams of the beam ${Bdisp.toFixed(2)} m its displacement asks at a draft of ${HULL.draftOverBeam} beams (${HULL.source})`);
+  const T = surface ? B.v('draft', Vd / (HULL.cb * L * Bm), 'm', `T = ∇ / (C_B L B): ${Vd.toFixed(2)} m³ displaced (M/ρ) at block coefficient ${HULL.cb} (${HULL.source})`) : 0;
+  const R0 = surface ? 0 : Math.sqrt(Math.max(Vd, (ext[0] * ext[1] * ext[2]) * 1.3) / (Math.PI * L)), depth = 10;
+  const pressure = rho * g * depth, sy = mat('aluminum.5052-h32').yield;
+  const t = surface ? HULL.plate : Math.max(HULL.plate, (pressure * R0 * 1.5) / (sy / 2));
+  if (!surface) B.v('pressure hull', t, 'm', `t = p r γ / (σ_y/2): ${(pressure / 1e3).toFixed(0)} kPa at a ${depth} m design depth (estimate), radius ${(R0 * 1e3).toFixed(0)} mm; ballast makes up ${Math.max(0, rho * Math.PI * R0 * R0 * L - M).toFixed(0)} kg to float neutral`);
+  const H = surface ? T + Math.max(HULL.freeboard, ext[1] * 0.6) : 2 * R0;
+  // resistance: friction on its wetted skin (ITTC 1957) with a form factor; past displacement speed, over the hump, planing
+  const S = surface ? 0.9 * L * (2 * T + Bm) : Math.PI * 2 * R0 * L, Re = (rho * v * L) / mu, Fn = v / Math.sqrt(g * L);
+  const Rf = (v2: number) => 0.5 * rho * v2 * v2 * S * ITTC_1957.cf(Math.max(1e5, (rho * v2 * L) / mu)) * (1 + HULL.formFactor);
+  const Rwave = (v2: number) => { const f = v2 / Math.sqrt(g * L); return !surface || f <= 0.4 ? 0 : M * g * (f <= 1 ? PLANING.hump : PLANING.planing); };
+  const R = (v2: number) => Rf(v2) + Rwave(v2);
+  B.v('resistance', R(v), 'N', `${(Rf(v)).toFixed(0)} N friction, C_F ${ITTC_1957.cf(Re).toExponential(2)} at Re ${Re.toExponential(1)} (${ITTC_1957.source}) with form factor ${HULL.formFactor}${Rwave(v) ? `, and ${Rwave(v).toFixed(0)} N past displacement speed at Froude ${Fn.toFixed(2)} (${PLANING.source})` : ''}`);
+  // the propeller: as wide as the draft lets it, its efficiency from the actuator disc, its speed from its advance ratio
+  const Dp = B.v('propeller diameter', Math.max(0.15, Math.min(surface ? 0.75 * T + 0.1 : 1.2 * R0, 1.2)), 'm', 'as large as the draft lets it turn clear: a larger disc pushes more water less for the same thrust');
+  const Ap = Math.PI * Dp * Dp / 4, Th = R(v), etaI = 2 / (1 + Math.sqrt(1 + (2 * Th) / (rho * Ap * v * v))), etaP = PROPELLER.ofIdeal * etaI;
+  const Ps = B.v('shaft power', (Th * v) / etaP, 'W', `P = T v / η: the actuator disc's ideal ${(etaI * 100).toFixed(0)} % times ${PROPELLER.ofIdeal} (${PROPELLER.source})`);
+  const n = v / (PROPELLER.advance * Dp), w = 2 * Math.PI * n;
+  const V = busGate(B, 'drive', Ps / eta, 1, L * 0.6 + 0.5, c.ambient);
+  // the structure: plates and frames; the region it carries rests on the frames
+  const al = mat('aluminum.5052-h32'), plateOf = (id: string, at: V3, size: V3, sys: string) => B.add({ id: `hull/${id}`, name: `${sys === 'frames' ? 'frame' : 'hull plate'}, aluminium ${(t * 1e3).toFixed(0)} mm`, category: 'structure/envelope', material: al.id, system: sys, shape: { kind: 'block', size }, at, colour: sys === 'frames' ? 0x90a4ae : 0xb0bec5, values: sys === 'frames' ? [] : B.of('hull length', 'draft', 'pressure hull', 'resistance') }, al.density);
+  if (surface) {
+    plateOf('bottom', [0, t / 2, 0], [Bm, t, L], 'plates');
+    for (const sx of [-1, 1]) plateOf(`side-${sx < 0 ? 'port' : 'starboard'}`, [sx * (Bm / 2 + t / 2), H / 2, 0], [t, H, L], 'plates');
+    plateOf('transom', [0, H / 2, -L / 2 - t / 2], [Bm + 2 * t, H, t], 'plates');
+    plateOf('bow', [0, H / 2, L / 2 + t / 2], [Bm + 2 * t, H, t], 'plates');
+    const frames = Math.max(2, Math.floor(L / HULL.frames));
+    for (let k = 1; k < frames; k++) plateOf(`frame-${k}`, [0, t + 0.04, -L / 2 + (k * L) / frames], [Bm, 0.08, 0.02], 'frames');
+    B.add({ id: 'hull/deck', name: `floor over the frames, marine plywood 12 mm`, category: 'structure/envelope', material: 'marine plywood', system: 'deck', shape: { kind: 'block', size: [Bm, 0.012, L * 0.8] }, at: [0, t + 0.086, 0], colour: 0xc8a165, values: [], into: ['hull/frame-1'] }, 600);
+  } else {
+    B.add({ id: 'hull/pressure-hull', name: `pressure hull Ø${(2 * R0 * 1e3).toFixed(0)} mm × ${L.toFixed(2)} m, aluminium ${(t * 1e3).toFixed(0)} mm`, category: 'structure/envelope', material: al.id, system: 'plates', shape: { kind: 'round', r: R0, length: L, axis: 'z', bore: 2 * (R0 - t) }, at: [0, R0, 0], colour: 0xb0bec5, values: B.of('pressure hull', 'resistance') }, al.density);
+    B.add({ id: 'hull/ballast', name: 'ballast tank and trim weights', category: 'structure/envelope', material: 'steel.a36', system: 'ballast', shape: { kind: 'block', size: [R0, 0.08, L * 0.5] }, at: [0, 0.06 + t, 0], colour: 0x546e7a, values: [], mass: Math.max(0, rho * Math.PI * R0 * R0 * L - M) * 0.5, into: ['hull/pressure-hull'] }, 0);
+  }
+  carried(c, B, body);
+  // propulsion: a pod at the stern, the motor in it, the propeller on its shaft; a rudder behind it
+  const zs = -L / 2 - 0.12, yp = surface ? Math.max(Dp / 2 + 0.02, T - Dp / 2) : R0;
+  motorAt(B, 'propulsion', 'propeller motor', Ps / w / eta, w, V, c.ambient, '-z', [0, yp, zs + 0.05]);
+  B.add({ id: 'propulsion/strut', name: 'motor strut to the transom, aluminium', category: 'structure/joints/brackets', material: al.id, system: 'pod', shape: { kind: 'block', size: [0.03, Math.max(0.1, H - yp), 0.12] }, at: [0, (H + yp) / 2, -L / 2 - 0.06], colour: 0x90a4ae, values: [], into: [surface ? 'hull/transom' : 'hull/pressure-hull', 'propulsion/motor/housing'] }, al.density);
+  B.add({ id: 'propulsion/propeller', name: `propeller Ø${(Dp * 1e3).toFixed(0)} mm, three blades, bronze`, category: 'motion/rotors', material: 'nickel-aluminium bronze', system: 'propeller', shape: { kind: 'round', r: Dp / 2, length: Dp * 0.18, axis: 'z' }, at: [0, yp, zs - 0.12], colour: 0xcd9b50, values: B.of('propeller diameter', 'shaft power'), into: ['propulsion/motor/shaft', 'propulsion/motor/housing'] }, 7600);
+  B.add({ id: 'propulsion/rudder', name: `rudder ${(0.02 * L * Math.max(T, R0) * 1e4).toFixed(0)} cm², steered by the controller`, category: 'motion/transmission/rack', material: al.id, system: 'rudder', shape: { kind: 'block', size: [0.012, Math.max(0.15, Math.max(T, R0)), Math.max(0.1, 0.02 * L * Math.max(T, R0) / Math.max(T, R0, 0.15))] }, at: [0, yp, zs - 0.32], colour: 0x78909c, values: [], into: ['propulsion/strut'] }, al.density);
+  B.use(`modulation:momentum:${body}:direction`, `path:momentum:${body}`, `filter:momentum:${body}`, `store:momentum:${body}:smoothing`);
+  B.loads.push({ id: 'propulsion motor', name: 'propeller motor', P: Ps / eta, V, at: [0, yp, zs], conductors: 3 });
+  B.trace.push({ stage: 'axis', where: 'propulsion', round: 1, says: `${surface ? `hull ${L.toFixed(1)} m drawing ${(T * 1e3).toFixed(0)} mm` : `pressure hull ${L.toFixed(1)} m`}, propeller Ø${(Dp * 1e3).toFixed(0)} mm, ${(Ps / 1e3).toFixed(2)} kW at ${v.toFixed(1)} m/s`, flaws: [], remedy: null });
+  const cruise = (v2: number) => (R(v2) * v2) / (PROPELLER.ofIdeal * 2 / (1 + Math.sqrt(1 + (2 * R(v2)) / (rho * Ap * v2 * v2)))) / eta;
+  return { battery: [0, surface ? t + 0.092 : R0 * 0.6, L * 0.15], deck: surface ? t + 0.092 : R0, cruise, P: Ps / eta };
 }
 
 // ---- stored charge ------------------------------------------------------------------------------------------------------
@@ -629,14 +702,29 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   let batteryAt: V3 = [0, 0.05, 0], batteryInto: string[] = [], source: V3 = [ext[0] / 2 + 0.2, 0.5, 0], sourceInto: string[] = [], cruise: ((v: number) => number) | null = null, hover = 0;
   // which designer: by what the generator says the region does, not what it is called
   const air = thrust ? thrust.id.split('|')[1] ?? 'air' : '', airRho = air ? c.q(air, /density/) ?? 1.2 : 0;
-  const designer = body.moving && ground ? 'on the ground' : body.moving && thrust && airRho < 10 ? 'in the air' : !body.moving ? 'a frame on the ground' : null;
-  B.gate({ id: 'designer', question: `how ${body.id} is held and moved`, inputs: [{ name: 'moves', value: body.moving ? 1 : 0, unit: '1' }, ...(air ? [{ name: `density of ${air}`, value: airRho, unit: 'kg/m^3' }] : [])], law: 'a contact with a solid rolls on wheels; a push on a fluid light enough to fly through is a rotor\'s; a region that stays is framed on the ground', tried: [`contact with a solid: ${ground ?? 'none'}`, `push on a fluid: ${thrust ? `${air}, ${airRho} kg/m³${airRho >= 10 ? ': too dense for a rotor (a propeller and a hull are not designed yet)' : ''}` : 'none'}`, `stays put: ${body.moving ? 'no' : 'yes'}`], outcome: designer ?? 'none: its elements are left as gaps', held: !!designer });
+  // how it stays up, where nothing solid holds it: the ways the generator offers, by the law of each
+  const fluids = [...new Set(s.elements.filter((e) => /^(buoyancy|hover|lift):/.test(e.id) && e.id.startsWith(`${e.id.split(':')[0]}:${body.id}|`)).map((e) => e.id.split('|')[1]!))];
+  const floats = fluids.find((f) => { const b = s.elements.find((e) => e.id === `buoyancy:${body.id}|${f}`); const mean = b ? c.val(b.id, /mean density/) : null; return mean !== null && mean < (c.q(f, /density/) ?? 0); }) ?? null;
+  if (body.moving && !ground && fluids.length) {
+    const ways = fluids.flatMap((f) => [
+      `buoyancy in ${f}: ${f === floats ? 'it floats as it is, at no power' : 'its mean density is past the fluid\'s'}`,
+      ...['hover', 'lift'].map((k) => { const e = s.elements.find((x) => x.id === `${k}:${body.id}|${f}`); const E = e ? c.val(e.id, /energy over the trip/) : null; return `${k} in ${f}: ${E !== null ? `${(E / 3.6e6).toFixed(2)} kWh over the trip` : 'not offered'}${k === 'lift' ? ' (a wing: not designed yet)' : ''}`; }),
+    ]);
+    B.gate({ id: 'staying up', question: `how ${body.id} stays up`, inputs: [], law: 'what floats needs no power to stay up: buoyancy where its mean density is under the fluid\'s; else of the ways a designer here builds, the least energy over the trip', tried: ways, outcome: floats ? `buoyancy in ${floats}` : 'hover', held: true });
+    for (const e of s.elements) if (/^(hover|lift|buoyancy):/.test(e.id) && e.id.includes(`${body.id}|`)) B.use(e.id);
+  }
+  const water = floats && (c.q(floats, /density/) ?? 0) >= 10 ? floats : body.moving && thrust && airRho >= 10 ? air : null;
+  const designer = body.moving && ground ? 'on the ground' : water ? 'in water' : body.moving && thrust && airRho < 10 ? 'in the air' : !body.moving ? 'a frame on the ground' : null;
+  B.gate({ id: 'designer', question: `how ${body.id} is held and moved`, inputs: [{ name: 'moves', value: body.moving ? 1 : 0, unit: '1' }, ...(air ? [{ name: `density of ${air}`, value: airRho, unit: 'kg/m^3' }] : [])], law: 'a contact with a solid rolls on wheels; what floats in a dense fluid is a hull with a propeller; a push on a fluid light enough to fly through is a rotor\'s; a region that stays is framed on the ground', tried: [`contact with a solid: ${ground ?? 'none'}`, `push on a fluid: ${thrust ? `${air}, ${airRho} kg/m³` : 'none'}`, `floats: ${floats ?? 'no'}`, `stays put: ${body.moving ? 'no' : 'yes'}`], outcome: designer ?? 'none: its elements are left as gaps', held: !!designer });
   if (body.moving && ground) {
     const r = rolling(c, B, body.id, ext, self, ground);
     shell(c, B, body.id, ext, r.deck);
     batteryAt = [0, r.deck + 2 * mm, -ext[2] / 4]; batteryInto = ['body/floor']; cruise = r.cruise;
     const V = B.loads[0]?.V ?? 48;
     climate(c, B, body.id, MINERAL_WOOL.k, 10 * mm, r.heatAt, ['chassis/cross-front'], V);
+  } else if (designer === 'in water' && water) {
+    const r = floating(c, B, body.id, ext, self, water, c.intent.regions.some((x) => x.environment && x.id !== water && /air/.test(x.id) && x.adjoins.includes(body.id)));
+    batteryAt = r.battery; batteryInto = ['hull/bottom', 'hull/pressure-hull'].filter((id) => B.parts.some((p) => p.id === id)); cruise = r.cruise;
   } else if (designer === 'in the air' && thrust) {
     const r = flying(c, B, body.id, ext, self, air);
     batteryAt = r.battery; batteryInto = ['frame/hub-top']; hover = r.P; cruise = r.cruise;
@@ -670,14 +758,12 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   });
   B.trace.push({ stage: 'whole', where: 'control', round: 1, says: `one controller, ${mods.length} modulations, ${obs.length} sensors`, flaws: [], remedy: null });
   // wiring: from the source to each load, the thinnest conductor that holds its insulation and a 3 % drop
-  const ins = INSULATIONS[1]!, sizes = [30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1, 0];
   for (const l of B.loads) {
     const I = l.P / l.V, len = Math.hypot(l.at[0] - source[0], l.at[1] - source[1], l.at[2] - source[2]) * 1.3 + 0.3;
-    const ok = (n: number) => { const d = awgDiameter(n), Rm = COPPER.rho / (Math.PI * d * d / 4); return conductorTemperature(n, ins, I, c.ambient) <= ins.maxC - 5 && 2 * Rm * len * I <= 0.03 * l.V; };
-    const awg = sizes.find(ok);
-    if (awg === undefined) B.flaws.push({ check: 'conductor', where: `wiring/${l.id}`, says: `no conductor to AWG 0 carries ${I.toFixed(0)} A over ${len.toFixed(1)} m within a 3 % drop`, law: 'ΔV = 2 I R l ≤ 3 %', value: I, limit: 0, remedy: null });
-    const n = awg ?? 0, d = awgDiameter(n) + 2 * ins.wall;
-    B.add({ id: `wiring/${l.id}`, name: `${l.name} cable: ${l.conductors} × AWG ${n}, ${ins.name}, ${len.toFixed(1)} m`, category: 'interconnect/conductors/awg', material: `copper, ${ins.name}`, system: 'cables', shape: { kind: 'wire', points: [source, [source[0], Math.max(source[1], l.at[1]) + 0.02, l.at[2]], l.at], r: (d / 2) * Math.sqrt(l.conductors) }, at: source, colour: l.conductors === 3 ? COLOURS['phase 1']!.hex : COLOURS['dc positive']!.hex, values: [{ name: 'current', value: I, unit: 'A', law: `I = P / V: ${l.P.toFixed(0)} W at ${l.V} V` }], mass: l.conductors * Math.PI * (awgDiameter(n) / 2) ** 2 * len * COPPER.density }, 0);
+    const cab = cableFor(I, len, l.V, c.ambient);
+    if (!cab) B.flaws.push({ check: 'conductor', where: `wiring/${l.id}`, says: `no cable of up to ${PARALLEL_CONDUCTORS.value} conductors in parallel carries ${I.toFixed(0)} A over ${len.toFixed(1)} m at ${l.V} V within a 3 % drop`, law: 'ΔV = 2 I R l ≤ 3 %, each conductor within its insulation', value: I, limit: 0, remedy: null });
+    const k = cab ?? { awg: 0, n: PARALLEL_CONDUCTORS.value, ins: INSULATIONS.find((x) => x.id === 'XLPE-90')! }, d = awgDiameter(k.awg) + 2 * k.ins.wall;
+    B.add({ id: `wiring/${l.id}`, name: `${l.name} cable: ${l.conductors} × ${cableSays(k)}, ${len.toFixed(1)} m`, category: 'interconnect/conductors/awg', material: `copper, ${k.ins.name}`, system: 'cables', shape: { kind: 'wire', points: [source, [source[0], Math.max(source[1], l.at[1]) + 0.02, l.at[2]], l.at], r: (d / 2) * Math.sqrt(l.conductors * k.n) }, at: source, colour: l.conductors === 3 ? COLOURS['phase 1']!.hex : COLOURS['dc positive']!.hex, values: [{ name: 'current', value: I, unit: 'A', law: `I = P / V: ${l.P.toFixed(0)} W at ${l.V} V` }], mass: l.conductors * k.n * Math.PI * (awgDiameter(k.awg) / 2) ** 2 * len * COPPER.density }, 0);
   }
   if (B.loads.length) B.trace.push({ stage: 'wiring', where: 'wiring', round: 1, says: `${B.loads.length} circuits from the ${store ? 'battery' : 'supply'}`, flaws: [], remedy: null });
   // what nothing here designs is a gap, located on its element

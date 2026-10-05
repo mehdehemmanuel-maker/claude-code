@@ -77,10 +77,18 @@ describe('embodiment of anything', () => {
     expect(mass(m)).toBeLessThan(20);
   });
 
-  it('says where it cannot yet build: a boat\'s push against water is a located gap, not a guess', () => {
-    const i = vehicle({ ...base, medium: 'water' }), m = embodyAny(i, generate(i))!;
-    const gaps = m.flaws.filter((f) => f.check === 'gap').map((f) => f.where);
-    expect(gaps).toContain('thrust:the payload|the water');
+  it('floats a payload on water: a hull that displaces what it carries, a propeller for its resistance; and says when the ask is past what it can carry', () => {
+    const i = vehicle({ ...base, medium: 'water', speed: 3, range: 20000 }), m = embodyAny(i, generate(i))!;
+    expect(m.flaws.filter((f) => f.check === 'gap' || f.check === 'held' || f.check === 'mass')).toEqual([]);
+    expect(m.gates!.find((g) => g.id === 'staying up')!.outcome).toBe('buoyancy in the water');
+    // Archimedes: the hull below its draft displaces the mass it moves
+    const L = val(m, 'hull length'), T = val(m, 'draft'), Mm = val(m, 'mass it moves'), bottom = m.parts.find((p) => p.id === 'hull/bottom')!;
+    const beam = (bottom.shape as { size: number[] }).size[0]!;
+    expect(0.45 * L * beam * T * 1000).toBeCloseTo(Mm, 3);
+    expect(m.parts.some((p) => p.id === 'propulsion/propeller')).toBe(true);
+    // 400 km at 30 m/s on cells: every round's pack weighs more than the last, and it says so
+    const fast = vehicle({ ...base, medium: 'water' }), f = embodyAny(fast, generate(fast))!;
+    expect(f.flaws.some((x) => x.check === 'mass')).toBe(true);
   });
 
   it('takes every decision by a gate over a law, keeping what it tried: the bus, the cooling, the steering, the store, the designer', () => {
@@ -90,7 +98,7 @@ describe('embodiment of anything', () => {
       // the bus is the lowest level a stocked conductor carries: every level tried before it carried nothing
       for (const g of gates.filter((x) => x.id.endsWith(': bus'))) {
         expect(g.held).toBe(true);
-        expect(g.tried.slice(0, -1).every((t) => /no stocked conductor/.test(t))).toBe(true);
+        expect(g.tried.slice(0, -1).every((t) => /no stocked conductor|in parallel/.test(t))).toBe(true);
         expect(g.tried.at(-1)!.startsWith(g.outcome.split(',')[0]!)).toBe(true);
       }
       // the cooling is the one that holds for the least mass, its own included

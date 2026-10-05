@@ -76,6 +76,7 @@ export const INSULATIONS: { id: string; name: string; maxC: number; wall: number
   { id: 'PVC-105', name: 'PVC (UL 1015)', maxC: 105, wall: 0.8 * mm, volts: 600, flexible: false, source: 'UL 1015: 105 °C, 600 V, 0.8 mm PVC' },
   { id: 'SIL-200', name: 'silicone rubber (UL 3135)', maxC: 200, wall: 0.8 * mm, volts: 600, flexible: true, source: 'UL 3135: 200 °C, 600 V silicone' },
   { id: 'PTFE-200', name: 'PTFE (UL 1213)', maxC: 200, wall: 0.25 * mm, volts: 600, flexible: false, source: 'UL 1213 / MIL-W-16878 type E: 200 °C PTFE' },
+  { id: 'XLPE-90', name: 'XLPE (IEC 60502-1, 1.8/3 kV)', maxC: 90, wall: 2.0 * mm, volts: 3000, flexible: false, source: 'IEC 60502-1: XLPE-insulated power cable, 90 °C, 1.8/3 kV, about 2.0 mm of insulation' },
 ];
 /** Natural convection and radiation from a thin cable in still air, the heat a conductor sheds per area per kelvin. */
 export const CABLE_H = { value: 12, source: 'natural convection from a horizontal cylinder of a few mm in air (Churchill–Chu), about 8 to 10, plus radiation from insulation of emissivity about 0.9 at moderate rise, about 5: an estimate', confidence: 'estimate' as Confidence };
@@ -213,6 +214,16 @@ export const LI_ION_21700_POWER = { id: 'INR-21700-P42A', V: 3.6, Vmax: 4.2, Vmi
 /** The cells a pack is made of: whichever makes it with the fewest. */
 export const CELLS = [LI_ION_21700, LI_ION_21700_POWER];
 /** The DC levels a bus is built at; up to 60 V is extra-low voltage, safe to touch dry. */
-export const BUS_VOLTAGES = { levels: [12, 24, 48, 96, 400], elv: 60, source: 'common DC bus levels; up to 60 V DC is extra-low voltage (IEC 61140, class III), above it basic insulation and protection against contact are needed', confidence: 'standard' as const };
+export const BUS_VOLTAGES = { levels: [12, 24, 48, 96, 400, 800, 1500, 3000], elv: 60, source: 'common DC bus levels: 12 to 96 V for small drives, 400 and 800 V for road traction, 1.5 and 3 kV for railways (EN 50163); up to 60 V DC is extra-low voltage (IEC 61140, class III), above it basic insulation and protection against contact are needed', confidence: 'standard' as const };
+/** The most conductors run in parallel in one circuit before it is a busbar's work, not a cable's. */
+export const PARALLEL_CONDUCTORS = { value: 12, source: 'large DC circuits run several cables in parallel per pole (IEC 60364-5-52, 523.7, equal conductors in parallel); kept to twelve here', confidence: 'estimate' as const };
 /** How much of the friction a skid turn may use as lateral acceleration and still steer by scrubbing its tyres. */
 export const SKID_TURN = { value: 0.1, source: 'skid-steered and tracked vehicles turn by sliding their tyres sideways, which uses the friction a curve would need: kept to about a tenth of μg (estimate)', confidence: 'estimate' as const };
+/** Skin friction of a hull: the ITTC 1957 model-ship correlation line. */
+export const ITTC_1957 = { cf: (Re: number) => 0.075 / (Math.log10(Re) - 2) ** 2, source: 'ITTC 1957 friction line: C_F = 0.075 / (log10 Re − 2)²', confidence: 'standard' as const };
+/** How a hull's resistance stands to its weight past displacement speed, by Froude number: over the hump, then planing. */
+export const PLANING = { hump: 0.18, planing: 0.12, source: 'resistance over weight about 0.15 to 0.2 at the hump (Froude 0.4 to 1) and 0.1 to 0.13 planing (Savitsky 1964; estimate)', confidence: 'estimate' as const };
+/** A small hull's form: block coefficient, form factor, the least plate and the spacing of its frames. */
+export const HULL = { cb: 0.45, formFactor: 0.25, plate: 4e-3, frames: 0.5, freeboard: 0.35, lengthOverBeam: 3, draftOverBeam: 0.35, source: 'small craft: block coefficient about 0.35 to 0.55, form factor 1 + k about 1.2 to 1.3, aluminium bottom plate at least 4 mm and frames about 500 mm apart (ISO 12215-5 minimums), length about 3 beams and draft about a third of the beam for small craft (estimate)', confidence: 'estimate' as const };
+/** A propeller: the share of the ideal efficiency a real one gets, and its advance ratio. */
+export const PROPELLER = { ofIdeal: 0.75, advance: 0.8, source: 'open propellers reach about 70 to 80 % of the actuator-disc ideal efficiency, at advance ratios about 0.6 to 1 (Carlton, Marine Propellers and Propulsion; estimate)', confidence: 'estimate' as const };
