@@ -3,7 +3,7 @@
 // answers, and where the next round of laws starts from. Where the page has no store (a local copy), they are kept in
 // this browser only, and the page says so.
 
-export type NoteKind = 'flaw' | 'question' | 'idea' | 'good';
+export type NoteKind = 'flaw' | 'question' | 'idea' | 'good' | 'note';
 export interface Note {
   id: string;
   partId: string; partName: string; assembly: string;
@@ -15,6 +15,14 @@ export interface Note {
   /** Where it was given in the causal graph (src/nexus/embody/causal.ts): the subsystem judged, and the judgment. */
   node?: string;
   verdict?: 'flag' | 'approve' | 'reject' | 'test';
+  /** A pin: at the exact point it was dropped (in the machine's frame), not at its part's centre. */
+  exact?: boolean;
+  /** What it is on: the build, the forge's own panels and controls, or the room. */
+  layer?: 'build' | 'ui' | 'environment';
+  /** Where on it, in words: "40 % across, 20 % down the Flaws board", "the ▶ Operate button". */
+  where?: string;
+  /** Whether it reached Claude Code, who writes the laws. */
+  relayed?: boolean;
   round: number; createdAt: number;
   /** What the person was looking at when they wrote it: a JPEG, as a data URL. */
   view?: string;

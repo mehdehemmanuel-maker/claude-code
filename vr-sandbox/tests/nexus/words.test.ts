@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { generate } from '../../src/nexus/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
-import { readAsk, type AskReading } from '../../src/nexus/words';
+import { readAsk, type AskReading, foldDemand } from '../../src/nexus/words';
 import { intentFromSpec } from '../../src/nexus/spec';
 
 const read = (s: string) => { const r = readAsk(s); if ('problems' in r) throw new Error(r.problems.join('; ')); return r as AskReading; };
@@ -55,5 +55,22 @@ describe('an ask in plain words', () => {
     expect(back.problems).toEqual([]);
     expect(generate(back.intent!).elements.map((e) => e.id).sort()).toEqual(generate(r.intent).elements.map((e) => e.id).sort());
     expect('problems' in readAsk('blue')).toBe(true);
+  });
+});
+
+describe('a demand folded into the ask', () => {
+  it('puts a number in the place of the ask\'s number of its kind', () => {
+    expect(foldDemand('a cart that carries 150 kg at 8 km/h', 'no, it has to carry 300 kg')).toEqual({ words: 'a cart that carries 300 kg at 8 km/h', changed: ['mass 150 kg → 300 kg'] });
+  });
+  it('adds a number of a kind the ask did not say', () => {
+    const f = foldDemand('a cart that carries 150 kg at 8 km/h', 'it should go 20 km on a charge');
+    expect(f.words).toBe('a cart that carries 150 kg at 8 km/h, 20 km');
+    expect(f.changed[0]).toMatch(/^range 20 km/);
+  });
+  it('moves the ask\'s own number by half again for a comparative', () => {
+    expect(foldDemand('a cart that carries 150 kg at 8 km/h', 'make it faster').words).toBe('a cart that carries 150 kg at 12 km/h');
+  });
+  it('changes nothing for what it cannot read, and says so by an empty list', () => {
+    expect(foldDemand('a cart that carries 150 kg at 8 km/h', 'mud from the wheels will hit the battery')).toEqual({ words: 'a cart that carries 150 kg at 8 km/h', changed: [] });
   });
 });

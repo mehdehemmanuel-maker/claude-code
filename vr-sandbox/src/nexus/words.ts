@@ -119,3 +119,43 @@ function nameOf(text: string, fallback: string): string {
   const m = text.trim().replace(/^(please\s+)?(build|make|design|create|give)\s+(me\s+)?/i, '').split(/[.,;!?]| that | which | where /i)[0]!.trim();
   return m.length >= 3 && m.length <= 60 ? m : fallback;
 }
+
+// ---- a demand on what stands, folded into the ask it came from -----------------------------------------------------------
+// "carry 300 kg", "make it faster", "for 4 people", "it should go 40 km": a number with a unit takes the place of the
+// ask's number of the same kind, or joins the ask where it had none; a comparative with no number moves the ask's own
+// number of that kind by half again. What reads as neither changes nothing, and is said to change nothing.
+const KINDS: { kind: string; re: RegExp }[] = [
+  { kind: 'speed', re: /(\d+(?:\.\d+)?)\s*(km\/h|kph|kmh|mph|m\/s)(?![a-z])/ },
+  { kind: 'range', re: /(\d+(?:\.\d+)?)\s*(km|kilomet(?:re|er)s?|miles?)(?![a-z/])/ },
+  { kind: 'mass', re: /(\d+(?:\.\d+)?)\s*(kg|kilograms?|tonnes?|t)(?![a-z])/ },
+  { kind: 'people', re: /(\d+)\s*(people|persons?|passengers?|seats?|riders?)(?![a-z])/ },
+  { kind: 'area', re: /(\d+(?:\.\d+)?)\s*(m²|m2|sq\.? ?m|square met(?:re|er)s?)(?![a-z])/ },
+  { kind: 'temperature', re: /(-?\d+(?:\.\d+)?)\s*(°c|deg ?c|degrees?)(?![a-z])/ },
+  { kind: 'time', re: /(\d+(?:\.\d+)?)\s*(hours?|h|minutes?|min)(?![a-z])/ },
+];
+const MORE: { kind: string; re: RegExp; by: number }[] = [
+  { kind: 'speed', re: /\b(faster|quicker|more speed|higher speed)\b/, by: 1.5 }, { kind: 'speed', re: /\b(slower|less speed|lower speed)\b/, by: 1 / 1.5 },
+  { kind: 'range', re: /\b(further|farther|more range|longer range|go longer)\b/, by: 1.5 }, { kind: 'range', re: /\b(less range|shorter range)\b/, by: 1 / 1.5 },
+  { kind: 'mass', re: /\b(carry more|heavier loads?|more load|more payload|carries more)\b/, by: 1.5 }, { kind: 'mass', re: /\b(carry less|lighter loads?|less load)\b/, by: 1 / 1.5 },
+  { kind: 'area', re: /\b(bigger|larger|roomier|more room|more space)\b/, by: 1.5 }, { kind: 'area', re: /\b(smaller|less room|less space)\b/, by: 1 / 1.5 },
+  { kind: 'people', re: /\b(more people|more seats|one more (?:person|seat))\b/, by: 0 },
+];
+export interface Folded { words: string; changed: string[] }
+export function foldDemand(words: string, demand: string): Folded {
+  let out = words; const changed: string[] = [], d = ` ${demand.toLowerCase()} `;
+  for (const { kind, re } of KINDS) {
+    const m = d.match(re); if (!m) continue;
+    const said = `${m[1]} ${m[2]}`, had = out.toLowerCase().match(re);
+    if (had && had.index !== undefined) { if (`${had[1]} ${had[2]}` !== said) { out = `${out.slice(0, had.index)}${said}${out.slice(had.index + had[0].length)}`; changed.push(`${kind} ${had[1]} ${had[2]} → ${said}`); } }
+    else { out = `${out}, ${said}`; changed.push(`${kind} ${said}, which the ask did not say`); }
+  }
+  for (const { kind, re, by } of MORE) {
+    if (!re.test(d) || changed.some((c) => c.startsWith(kind))) continue;
+    const r = KINDS.find((k) => k.kind === kind)!.re, had = out.toLowerCase().match(r);
+    if (!had || had.index === undefined) continue;
+    const v = Number(had[1]), next = by === 0 ? v + 1 : Number((v * by).toPrecision(2));
+    out = `${out.slice(0, had.index)}${next} ${had[2]}${out.slice(had.index + had[0].length)}`;
+    changed.push(`${kind} ${had[1]} → ${next} ${had[2]}`);
+  }
+  return { words: out, changed };
+}

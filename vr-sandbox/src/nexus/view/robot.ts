@@ -121,6 +121,17 @@ export class Robot {
   }
 
   /** Its voice: the chest ring lights with how loud it speaks, 0 to 1. */
+  private seen = 1;
+  /** Seen through, to what it is standing in front of, while it is between you and the work. */
+  fade(to: number): void {
+    if (Math.abs(to - this.seen) < 0.005) return;
+    const was = this.seen < 1; this.seen = to;
+    this.root.traverse((o) => {
+      if (o === this.cone || o === this.rays || o === this.hits) return;
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (!m || Array.isArray(m)) return;
+      m.opacity = to; m.transparent = to < 1; m.depthWrite = to >= 1; if (was !== to < 1) m.needsUpdate = true;
+    });
+  }
   speaking(level: number): void {
     (this.voice.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.4 + 2.6 * level;
     this.voice.scale.setScalar(1 + 0.25 * level);

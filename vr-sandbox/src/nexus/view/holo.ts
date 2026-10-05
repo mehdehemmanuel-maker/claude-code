@@ -34,6 +34,7 @@ export function card(w: number, h: number, px = 1024): Card {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   mesh.renderOrder = 15;
   const draw: Card['draw'] = (title, lines, accent = '#4dd0e1') => {
+    mesh.userData.title = title;
     g.clearRect(0, 0, c.width, c.height);
     g.fillStyle = 'rgba(3,14,22,0.78)'; g.beginPath(); g.roundRect(4, 4, c.width - 8, c.height - 8, 22); g.fill();
     g.strokeStyle = accent; g.lineWidth = 3; g.globalAlpha = 0.9; g.beginPath(); g.roundRect(4, 4, c.width - 8, c.height - 8, 22); g.stroke(); g.globalAlpha = 1;

@@ -30,7 +30,7 @@ export function pathOf(p: Part): string[] {
   if (id.startsWith('carrier:')) return ['wiring', 'carriers'];
   if (id.startsWith('cable:mains')) return ['wiring', 'mains'];
   if (id.startsWith('cable:')) return ['wiring', 'cables'];
-  if (id.startsWith('bb:')) return ['bench circuit', 'breadboard'];
+  if (id.startsWith('bb:')) return ['circuits', 'breadboard'];
   return ['other', p.category.split('/')[0]!];
 }
 const nameOf = (seg: string, depth: number) => (depth === 0 ? AXIS_NAME[seg] ?? seg.replace(/-/g, ' ') : seg);

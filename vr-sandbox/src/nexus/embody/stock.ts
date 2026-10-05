@@ -122,7 +122,7 @@ export const CABLE_CARRIERS: { id: string; h: number; w: number; radii: number[]
 ];
 export const CARRIER_SRC: Sourced = { source: 'igus E2 micro series (inner dimensions and radii, about)', confidence: 'maker' };
 /** A solderless breadboard of 830 points: 63 rows of two five-hole strips, four rails, 2.54 mm pitch, about 165 × 55 mm. */
-export const BREADBOARD = { pitch: 2.54 * mm, rows: 63, rails: 4, width: 55 * mm, length: 165 * mm, source: 'the common 830-point solderless breadboard', confidence: 'maker' as Confidence };
+export const BREADBOARD = { pitch: 2.54 * mm, rows: 63, rails: 4, width: 55 * mm, length: 165 * mm, contactA: 1, source: 'the common 830-point solderless breadboard: half-rows of five joined clips either side of a 7.62 mm channel, four rails along it; its clips are rated about 1 A (makers give 1 to 5 A; the lowest is kept)', confidence: 'maker' as Confidence };
 
 // ---- motor and heater matter ---------------------------------------------------------------------------------------
 
