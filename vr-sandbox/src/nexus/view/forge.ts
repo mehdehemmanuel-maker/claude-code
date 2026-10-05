@@ -1144,3 +1144,5 @@ async function boot() {
   (window as unknown as { ready: boolean }).ready = true;
 }
 void boot();
+// installed as an app where the page is served as one; an artifact's frame refuses it, and the room works without it
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.hostname.endsWith('claude.ai') && !location.hostname.endsWith('claudeusercontent.com')) navigator.serviceWorker.register('./sw.js').catch(() => undefined);

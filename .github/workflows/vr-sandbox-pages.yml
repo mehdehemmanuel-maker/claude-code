@@ -1,0 +1,54 @@
+name: vr-sandbox Pages
+
+# Publishes the Nexus forge so it opens in the Meta Quest browser (WebXR needs HTTPS) and installs as an app.
+# The forge is the landing page; the scene room stays at scene.html and room.html.
+# One-time setup: repository Settings -> Pages -> Source: GitHub Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vr-sandbox/**'
+      - '.github/workflows/vr-sandbox-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: vr-sandbox-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: vr-sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vr-sandbox/package-lock.json
+      - run: npm ci
+      - run: npm run gate
+      - run: npm run nexus:view
+      - name: The forge as the landing page
+        run: mv dist-view/index.html dist-view/scene.html && cp dist-view/forge.html dist-view/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: vr-sandbox/dist-view
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
