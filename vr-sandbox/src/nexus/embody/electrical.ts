@@ -16,10 +16,12 @@
 //   sensing      a divider whose fixed resistor equals the thermistor's resistance mid-band, where it is most sensitive
 //   switching    a transistor rated twice the supply and twice the current, losing under half a watt
 //
-// The heater's channel (its switch, its divider, an indicator) is laid out on a breadboard too, as a circuit tried
-// before it is made.
+// The heater's channel (its switch, its divider, an indicator) is drawn as nets and laid on a breadboard by its law
+// (./breadboard): only what the board's clips can carry goes on it, every lead in a hole, and the board is checked to
+// join exactly those nets. What it cannot carry is the controller's heater channel.
 
 import { part, type Assembly, type Flaw, type Part, type V3, type Value } from './part';
+import { conductorOf as conductorName, holeAt, layOut, type Component, type Layout } from './breadboard';
 import { AWG_SIZES, awgDiameter, BREADBOARD, CABLE_CARRIERS, CABLE_H, COLOURS, CONNECTORS, COPPER, FUSE_RATINGS, IEC_60062, INSULATIONS, PSU_24V } from './stock';
 
 const mm = 1e-3;
@@ -70,8 +72,34 @@ export function designElectrical(o: { loads: Load[]; controllerAt: V3; psuAt: V3
   const cables: Cable[] = [];
   const pvc = INSULATIONS.find((x) => x.id === 'PVC-80')!, sil = INSULATIONS.find((x) => x.id === 'SIL-200')!;
   const carriersUsed = new Map<string, Cable[]>();
+  // ---- the heater's channel as nets, laid on the breadboard before the cables, so the thermistor's ends at its header --
+  const heaterL = o.loads.find((l) => l.kind === 'heater'), sensorL = o.thermistor ? o.loads.find((l) => l.kind === 'sensor' && /thermistor/.test(`${l.id} ${l.name}`)) : undefined;
+  const bench = o.benchAt ?? [o.controllerAt[0] + 0.25, 0.002, o.controllerAt[2] + 0.3];
+  const top: V3 = [bench[0], bench[1] + 0.0045, bench[2]];
+  const comps: Component[] = [];
+  const RES: V3 = [6.3 * mm, 2.5 * mm, 2.5 * mm];
+  comps.push({ id: 'bb:j-controller', name: 'header to the controller', to: 'controller', body: [0, 8.5 * mm, 2.5 * mm], colour: 0x212121, pins: [{ name: '3V3', net: '+3.3 V' }, ...(sensorL ? [{ name: 'ADC', net: 'thermistor sense' }] : []), ...(heaterL ? [{ name: 'PWM', net: 'heater PWM' }] : []), { name: 'GND', net: '0 V' }] });
+  if (sensorL) {
+    comps.push({ id: 'bb:j-thermistor', name: 'header to the thermistor', to: 'thermistor', body: [0, 8.5 * mm, 2.5 * mm], colour: 0x212121, pins: [{ name: 'sense', net: 'thermistor sense' }, { name: '0 V', net: '0 V' }] });
+    comps.push({ id: 'bb:r-divider', name: 'divider resistor', body: RES, colour: 0xc8a165, pins: [{ name: '1', net: '+3.3 V' }, { name: '2', net: 'thermistor sense' }] });
+    comps.push({ id: 'bb:c-filter', name: 'filter capacitor', body: [4 * mm, 4 * mm, 2.5 * mm], colour: 0xe0a030, pins: [{ name: '1', net: 'thermistor sense' }, { name: '2', net: '0 V' }] });
+  }
+  if (heaterL) {
+    const Ih = heaterL.I;
+    comps.push({ id: 'bb:r-gate', name: 'gate resistor', body: RES, colour: 0xc8a165, pins: [{ name: '1', net: 'heater PWM' }, { name: '2', net: 'gate' }] });
+    comps.push({ id: 'bb:r-pulldown', name: 'pull-down resistor', body: RES, colour: 0xc8a165, pins: [{ name: '1', net: 'gate' }, { name: '2', net: '0 V' }] });
+    comps.push({ id: 'bb:q-heater', name: 'heater MOSFET', body: [10 * mm, 15 * mm, 4.5 * mm], colour: 0x111111, pins: [{ name: 'G', net: 'gate' }, { name: 'D', net: 'heater return', I: Ih }, { name: 'S', net: '0 V', I: Ih }] });
+    comps.push({ id: 'bb:r-led', name: 'indicator resistor', body: RES, colour: 0xc8a165, pins: [{ name: '1', net: '+24 V', I: 0.005 }, { name: '2', net: 'indicator', I: 0.005 }] });
+    comps.push({ id: 'bb:led', name: 'indicator LED', body: [5 * mm, 8.6 * mm, 5 * mm], colour: 0xff1744, pins: [{ name: 'A', net: 'indicator', I: 0.005 }, { name: 'K', net: 'heater return', I: 0.005 }] });
+    comps.push({ id: 'bb:terminal', name: 'terminal to the heater', to: 'heater', every: 2, body: [0, 10 * mm, 8 * mm], colour: 0x1565c0, pins: [{ name: '+', net: '+24 V', I: Ih }, { name: '−', net: 'heater return', I: Ih }] });
+    comps.push({ id: 'bb:supply', name: 'terminal from the supply', to: 'supply', every: 2, body: [0, 10 * mm, 8 * mm], colour: 0x1565c0, pins: [{ name: '+', net: '+24 V', I: Ih }, { name: '−', net: '0 V', I: Ih }] });
+  }
+  const lay: Layout = layOut(comps, { topPlus: '+3.3 V', topMinus: '0 V', bottomPlus: '+24 V', bottomMinus: '0 V' }, BREADBOARD.contactA);
+  const pinTop = (id: string, pin: string): V3 | null => { const pl = lay.placed.find((x) => x.comp.id === id); const i = pl?.comp.pins.findIndex((x) => x.name === pin) ?? -1; if (!pl || i < 0) return null; const h = holeAt(pl.holes[i]!, top); return [h[0], h[1] + pl.comp.body[1], h[2]]; };
+  const sensorEnd = pinTop('bb:j-thermistor', 'sense');
   for (const L of o.loads) {
-    const pts = route(L.at, o.controllerAt, o.via), len = lengthOf(pts) * 1.1;
+    const end = L === sensorL && sensorEnd ? sensorEnd : o.controllerAt;
+    const pts = route(L.at, end, o.via), len = lengthOf(pts) * 1.1;
     // its insulation: what the hottest point of its route allows; flexing runs need a flexible one
     const ins = L.hotAtEnd > pvc.maxC - 10 ? sil : L.rides.length ? sil : pvc;
     // its gauge: the thinnest that holds its insulation's temperature and keeps the drop within 3 %, and no thinner
@@ -149,33 +177,53 @@ export function designElectrical(o: { loads: Load[]; controllerAt: V3; psuAt: V3
     v('temperature resolution', lsb / dVdT, 'K', `one count of a 12-bit converter at 3.3 V over ${(dVdT * 1e3).toFixed(2)} mV/K there`);
     if (lsb / dVdT > t.resolution) flaws.push({ check: 'resolve', where: 'thermistor', says: 'the divider resolves coarser than the generator asked', law: 'dV/dT at mid-band', value: lsb / dVdT, limit: t.resolution, remedy: null });
   }
-  // ---- the breadboard: the heater channel, tried before it is made -------------------------------------------------
+  // ---- the breadboard: the board, each part with its leads in its holes, the jumpers, and the leads off it ---------------
   const bb: Part[] = [];
-  // on the bench beside the machine, where a circuit is tried before it is made
-  const bench = o.benchAt ?? [o.controllerAt[0] + 0.25, 0.002, o.controllerAt[2] + 0.3];
-  const pitch = BREADBOARD.pitch, bx0 = bench[0], by0 = bench[1], bz0 = bench[2];
-  const hole = (row: number, col: number): V3 => [bx0 - BREADBOARD.length / 2 + (row + 2) * pitch, by0 + 0.006, bz0 + (col - 4.5) * pitch * (col >= 5 ? 1 : 1) + (col >= 5 ? 2 * pitch : -2 * pitch) * 0.5];
-  bb.push(part({ id: 'bb:board', name: `solderless breadboard, ${BREADBOARD.rows} rows, 2.54 mm pitch`, category: 'circuits/prototyping', material: 'ABS, phosphor bronze clips', shape: { kind: 'block', size: [BREADBOARD.length, 0.009, BREADBOARD.width] }, at: [bx0, by0, bz0], colour: 0xf5f5f5, values: [] }, 0, ));
-  bb[0]!.mass = 0.06;
-  const comp = (id: string, name: string, a: V3, size: V3, colour: number, values: Value[] = []) => bb.push({ ...part({ id, name, category: 'circuits/prototyping', material: 'component', shape: { kind: 'block', size }, at: a, colour, values }, 0), mass: 0.001 });
-  const jumper = (id: string, from: V3, to: V3, fn: keyof typeof COLOURS) => bb.push(part({ id, name: `jumper, ${COLOURS[fn]!.colour} (${fn})`, category: 'interconnect/identification', material: 'copper, PVC', shape: { kind: 'wire', points: [from, [from[0], from[1] + 0.012, from[2]], [to[0], to[1] + 0.012, to[2]], to], r: 0.4 * mm }, at: from, colour: COLOURS[fn]!.hex, values: [] }, 0));
-  if (divider) {
-    comp('bb:r-divider', `${divider.Rfixed} Ω resistor (divider, E24)`, hole(10, 2), [7.5 * mm, 2.5 * mm, 2.5 * mm], 0xc8a165, vals.filter((x) => x.name === 'divider resistor'));
-    comp('bb:c-filter', '100 nF ceramic capacitor (filter)', hole(14, 3), [4 * mm, 4 * mm, 2.5 * mm], 0xe0a030);
-    comp('bb:j-thermistor', '2-pin header to the thermistor', hole(6, 1), [5 * mm, 8 * mm, 2.5 * mm], 0x212121);
-    jumper('bb:w-3v3', hole(10, 0), hole(10, -2), 'dc positive');
-    jumper('bb:w-adc', hole(14, 1), hole(40, -2), 'signal');
+  bb.push({ ...part({ id: 'bb:board', name: `solderless breadboard, ${BREADBOARD.rows} rows, 2.54 mm pitch: ${lay.placed.length} parts, ${lay.jumpers.length} jumpers, ${lay.opens.length + lay.shorts.length ? `${lay.opens.length} open, ${lay.shorts.length} short` : 'every net joined, none to another'}`, category: 'circuits/prototyping', material: 'ABS, phosphor bronze clips', shape: { kind: 'block', size: [BREADBOARD.length, 0.009, BREADBOARD.width] }, at: bench, colour: 0xf5f5f5, values: [] }, 0), mass: 0.06 });
+  const Rled = heaterL ? e24((o.Vbus - 2) / 0.005) : 0;
+  const ohms = (R: number) => (R >= 1000 ? `${Number((R / 1000).toPrecision(3))} kΩ` : `${R} Ω`);
+  const NAMES: Record<string, string> = {
+    'bb:r-divider': `${divider ? ohms(divider.Rfixed) : '?'} resistor, ¼ W: the divider's pull-up, the thermistor's resistance mid-band (E24)`,
+    'bb:c-filter': '100 nF ceramic capacitor: filters the sense line at the converter',
+    'bb:r-gate': '100 Ω gate resistor', 'bb:r-pulldown': '10 kΩ pull-down: off until driven',
+    'bb:q-heater': mosfet ? `N-channel MOSFET, ≥ ${mosfet.Vds} V, ≥ ${mosfet.Id.toFixed(0)} A, ≤ ${(mosfet.RdsOn * 1e3).toFixed(0)} mΩ (TO-220)` : 'MOSFET',
+    'bb:r-led': `${ohms(Rled)} resistor (E24: (V − 2 V) / 5 mA)`, 'bb:led': 'indicator LED, 5 mm: lit while the heater is on',
+  };
+  const FN = (net: string): keyof typeof COLOURS => (net === '0 V' ? 'dc negative' : /^\+/.test(net) ? 'dc positive' : 'signal');
+  for (const pl of lay.placed) {
+    const c = pl.comp, hs = pl.holes.map((h) => holeAt(h, top)), name = `${NAMES[c.id] ?? c.name}${c.to ? `: ${c.pins.map((x) => `${x.name} (${x.net})`).join(', ')}` : ''}`;
+    const values = c.id === 'bb:r-divider' ? vals.filter((x) => x.name === 'divider resistor') : c.id === 'bb:q-heater' ? vals.filter((x) => x.name === 'heater switch') : [];
+    const holesSaid: Value = { name: 'holes', value: pl.holes.length, unit: '', law: pl.holes.map((h, i) => `${c.pins[i]!.name} in ${h.col >= 0 && h.col <= 9 ? `${'abcdefghij'[h.col]}${h.row + 1}` : `the ${conductorName(h)} by row ${h.row + 1}`} (${c.pins[i]!.net})`).join(', ') };
+    if (c.pins.length >= 3 || c.to) {
+      // down its holes, standing on the board
+      const xs = hs.map((h) => h[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+      bb.push({ ...part({ id: c.id, name, category: 'circuits/prototyping', material: 'component', shape: { kind: 'block', size: [x1 - x0 + BREADBOARD.pitch, c.body[1], c.body[2]] }, at: [(x0 + x1) / 2, top[1] + c.body[1] / 2, hs[0]![2]], colour: c.colour, values: [...values, holesSaid] }, 0), mass: 0.002 });
+      continue;
+    }
+    // two leads: the body resting on the board between its holes, along the line from one to the other, each lead bent down into its hole
+    const [a, b] = hs as [V3, V3], dx = b[0] - a[0], dz = b[2] - a[2], along = Math.abs(dx) >= Math.abs(dz), lift = -0.2 * mm; // seated on the board, its leads bent down beside it
+    const mid: V3 = [(a[0] + b[0]) / 2, top[1] + lift + c.body[1] / 2, (a[2] + b[2]) / 2], L = Math.min(c.body[0], Math.hypot(dx, dz) - 1.5 * mm);
+    bb.push({ ...part({ id: c.id, name, category: 'circuits/prototyping', material: 'component', shape: { kind: 'block', size: along ? [L, c.body[1], c.body[2]] : [c.body[2], c.body[1], L] }, at: mid, colour: c.colour, values: [...values, holesSaid] }, 0), mass: 0.001 });
+    const u = Math.hypot(dx, dz) || 1;
+    for (const [k, h] of [a, b].entries()) {
+      const s2 = k === 0 ? -1 : 1, endAt: V3 = [mid[0] + s2 * (dx / u) * (L / 2), mid[1], mid[2] + s2 * (dz / u) * (L / 2)];
+      bb.push(part({ id: `${c.id}:lead-${c.pins[k]!.name}`, name: `lead ${c.pins[k]!.name} of ${c.name}, into ${conductorName(pl.holes[k]!)}`, category: 'circuits/prototyping', material: 'tinned copper', shape: { kind: 'wire', points: [[h[0], h[1] - 3 * mm, h[2]], [h[0], mid[1], h[2]], endAt], r: 0.3 * mm }, at: h, colour: 0xb0bec5, values: [] }, 0));
+    }
   }
-  if (mosfet) {
-    comp('bb:q-heater', `N-channel MOSFET, ≥ ${mosfet.Vds} V, ≥ ${mosfet.Id.toFixed(0)} A, ≤ ${(mosfet.RdsOn * 1e3).toFixed(0)} mΩ (TO-220)`, hole(24, 7), [10 * mm, 15 * mm, 4.5 * mm], 0x111111, vals.filter((x) => x.name === 'heater switch'));
-    comp('bb:r-gate', '100 Ω gate resistor', hole(20, 6), [7.5 * mm, 2.5 * mm, 2.5 * mm], 0xc8a165);
-    comp('bb:r-pulldown', '10 kΩ pull-down: off until driven', hole(22, 8), [7.5 * mm, 2.5 * mm, 2.5 * mm], 0xc8a165);
-    const Rled = e24((o.Vbus - 2) / 0.005);
-    comp('bb:led', `indicator LED with ${Rled >= 1000 ? `${Rled / 1000} kΩ` : `${Rled} Ω`} (E24: (V − 2 V) / 5 mA)`, hole(32, 7), [5 * mm, 8 * mm, 5 * mm], 0xff1744);
-    comp('bb:terminal', 'screw terminal 5.08 mm to the heater', hole(46, 7), [10 * mm, 10 * mm, 8 * mm], 0x1565c0);
-    jumper('bb:w-24v', hole(46, 9), hole(46, 11), 'dc positive');
-    jumper('bb:w-gnd', hole(26, 9), hole(26, 11), 'dc negative');
-    jumper('bb:w-gate', hole(20, 4), hole(40, -1), 'signal');
+  for (const [i, j] of lay.jumpers.entries()) {
+    const a = holeAt(j.from, top), b = holeAt(j.to, top);
+    bb.push(part({ id: `bb:jumper-${i + 1}`, name: `jumper, ${COLOURS[FN(j.net)]!.colour}: ${j.net}, ${conductorName(j.from)} to ${conductorName(j.to)}`, category: 'interconnect/identification', material: 'copper, PVC', shape: { kind: 'wire', points: [[a[0], a[1] - 3 * mm, a[2]], [a[0], a[1] + 3 * mm, a[2]], [b[0], b[1] + 3 * mm, b[2]], [b[0], b[1] - 3 * mm, b[2]]], r: 0.3 * mm }, at: a, colour: COLOURS[FN(j.net)]!.hex, values: [] }, 0));
   }
+  // the leads off the board, to the controller's pins
+  const hdr = lay.placed.find((x) => x.comp.id === 'bb:j-controller');
+  for (const [k, pin] of (hdr?.comp.pins ?? []).entries()) {
+    const from = pinTop('bb:j-controller', pin.name)!, via: V3 = [from[0], from[1] + 0.02, from[2]];
+    const pts = route(from, [o.controllerAt[0] + (k - 1.5) * 2.54 * mm, o.controllerAt[1], o.controllerAt[2]], via);
+    bb.push(part({ id: `bb:lead-${pin.name}`, name: `lead to the controller's ${pin.name} pin (${pin.net}), AWG 24, ${(lengthOf(pts) * 1e3).toFixed(0)} mm`, category: 'interconnect/conductors/awg', material: 'copper, PVC', shape: { kind: 'wire', points: pts, r: 0.5 * mm }, at: from, colour: COLOURS[FN(pin.net)]!.hex, values: [] }, 0));
+  }
+  v('breadboard clips', BREADBOARD.contactA, 'A', lay.refused.length ? `what it cannot carry is the controller's heater channel: ${lay.refused.map((r) => `${comps.find((c) => c.id === r.id)?.name} (${r.why})`).join('; ')}` : 'everything of the channel is within its clips');
+  v('breadboard nets', new Set(lay.placed.flatMap((x) => x.comp.pins.map((q) => q.net))).size, '', `${lay.opens.length + lay.shorts.length ? [...lay.opens, ...lay.shorts].join('; ') : 'checked by its strips, rails and jumpers: every net one conductor, no two nets on one'}`);
+  flaws.push(...lay.flaws);
+  bb[0]!.values = vals.filter((x) => x.name.startsWith('breadboard'));
   return { id: 'electrical', name: 'interconnect and circuits', category: 'interconnect', from: null, parts: P, values: vals, cables, psu: { ...psu, load }, fuse, mainsI, divider, mosfet, breadboard: bb, flaws };
 }

@@ -160,9 +160,10 @@ describe('the plain reading of what a person says', () => {
     make: (w) => { calls.push(`make ${w}`); return 'made'; },
     flaws: () => { calls.push('flaws'); return 'listed'; },
     operate: () => { calls.push('operate'); return 'operated'; },
+    again: (d) => { calls.push(`again ${d}`); return 'tried'; },
   };
   const b = plainBrain(world), ac = new AbortController();
-  it('takes apart, puts back, shows, notes, rebuilds and replays', async () => {
+  it('takes apart, puts back, shows, notes, rebuilds, replays, and tries again with a demand', async () => {
     await b.ask('take the hot end apart', () => undefined, ac.signal);
     await b.ask('put it back together', () => undefined, ac.signal);
     await b.ask('show me the y motor', () => undefined, ac.signal);
@@ -175,6 +176,12 @@ describe('the plain reading of what a person says', () => {
     await b.ask('hide everything', () => undefined, ac.signal);
     await b.ask('build me a cabin of 40 m² for 2 people', () => undefined, ac.signal);
     await b.ask('show me the flaws', () => undefined, ac.signal);
-    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'replay', 'expand x motor', 'build the machine', 'show rounds', 'show none', 'make build me a cabin of 40 m² for 2 people', 'flaws']);
+    await b.ask('show me the process from the start', () => undefined, ac.signal);
+    await b.ask('no, it has to carry 300 kg', () => undefined, ac.signal);
+    await b.ask('the wheels need a guard, mud will hit the battery', () => undefined, ac.signal);
+    await b.ask('mud from the wheels will hit the battery', () => undefined, ac.signal);
+    expect(calls.slice(-4)).toEqual(['replay', 'again no, it has to carry 300 kg', 'again the wheels need a guard, mud will hit the battery', 'again mud from the wheels will hit the battery']);
+    calls.splice(-4);
+    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'again run it again', 'expand x motor', 'build the machine', 'show rounds', 'show none', 'make build me a cabin of 40 m² for 2 people', 'flaws']);
   });
 });
