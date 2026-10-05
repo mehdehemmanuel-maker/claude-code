@@ -37,8 +37,7 @@ import { extentOf, part, placeParts, type Flaw, type Part, type V3, type Value }
 import {
   awgDiameter, BOARDS, COLOURS, COPPER, COPPER_PIPES, COPPER_PIPES_SRC, DOWNPIPE, DRAG_COEFFICIENT, ENVELOPE_U, FANS, FANS_SRC, GAP_SHEAR_BY_COOLING, GAP_SHEAR_BY_COOLING_SRC,
   CELLS, HEAT_PUMP_COP, HEAT_RECOVERY, HONEYCOMB, INSULATIONS, LED_RADIANT_EFFICIENCY, MINERAL_WOOL, PACK_OVERHEAD, PEAK_OVER_CONTINUOUS, PIPE_VELOCITY, RECT_TUBES,
-  ROLLING_RESISTANCE, ROTOR, SKID_TURN, STRIP_FOOTING, TYRES, TYRES_SRC, BUS_VOLTAGES, PARALLEL_CONDUCTORS, HULL, ITTC_1957, PLANING, PROPELLER,
-} from './stock';
+  ROLLING_RESISTANCE, ROTOR, SKID_TURN, STRIP_FOOTING, TYRES, TYRES_SRC, BUS_VOLTAGES, PARALLEL_CONDUCTORS, HULL, ITTC_1957, PLANING, PROPELLER, FUEL, GENSET, SOLAR } from './stock';
 import { floatingClusters } from './tree';
 
 const mm = 1e-3, g0 = 9.80665, eta = 0.9;
@@ -476,6 +475,57 @@ function battery(c: Ctx, B: B, E0: number, I0: number, V: number, at: V3, into: 
   for (const e of c.s.elements) if (e.id.startsWith('store:charge') || e.id.startsWith('refill:charge')) B.use(e.id);
 }
 
+/**
+ * Fuel as the store: an engine turning a generator onto the drives' bus, rated past their peak, and the tank that holds
+ * the trip's fuel. It burns the fuel with the air around it, at the fuel's ratio: where nothing around it is air (under
+ * water, in a vacuum) it cannot run, and that is the flaw, not a tank that pretends. Its waste heat goes to the same air.
+ */
+function genset(c: Ctx, B: B, E0: number, Ppeak: number, V: number, at: V3, into: string[], body: string): void {
+  const air = c.intent.regions.find((r) => r.environment && r.matter === 'air' && r.adjoins.includes(body));
+  const lhv = c.q('a fuel station', /energy in a kilogram/) ?? FUEL.lhv;
+  B.gate({ id: 'fuel: what it burns with', question: `what the fuel burns with${air ? ` in ${air.id}` : ', with no air around it'}`, inputs: [{ name: 'energy in a kilogram of the fuel', value: lhv, unit: 'J/kg' }], law: `a hydrocarbon burns with about ${FUEL.afr} kg of air for each kilogram (${FUEL.source})`, tried: [air ? `${air.id}: open to it, ${FUEL.afr} kg a kg` : 'the air: none around it (under water or in a vacuum)', 'an oxidiser carried aboard: no designer yet (the law to write: its tank, its feed and its mass)'], outcome: air ? `the air of ${air.id}` : 'nothing it can burn with', held: !!air });
+  if (!air) { B.flaws.push({ check: 'oxidiser', where: 'energy', says: 'the fuel cannot burn here: nothing around it is air, and nothing aboard carries an oxidiser', law: `combustion takes ${FUEL.afr} kg of air for each kg of fuel`, value: 0, limit: FUEL.afr, remedy: null }); return; }
+  const E = E0 * (c.learned.energy ?? 1), Prated = Math.max(200, Ppeak * 1.1 * (c.learned.current ?? 1)), eta = GENSET.efficiency;
+  const fuel = B.v('fuel carried', E / (lhv * eta), 'kg', `E/(LHV η): ${(E / 3.6e6).toFixed(2)} kWh onto the bus over ${(lhv / 1e6).toFixed(0)} MJ/kg at ${(eta * 100).toFixed(0)} % from fuel to charge (${GENSET.source})`);
+  const litres = B.v('tank', (fuel / FUEL.density) * 1000 * 1.1, 'L', `the fuel's volume at ${FUEL.density} kg/m³ and a tenth more for its vapour`);
+  B.v('engine-generator rating', Prated, 'W', `past the drives' peak draw of ${(Ppeak / 1e3).toFixed(2)} kW by a tenth`);
+  B.v('air it burns', (Prated / (lhv * eta)) * FUEL.afr, 'kg/s', `at full power: the fuel it burns, P/(LHV η), times ${FUEL.afr}`);
+  B.v('heat it sheds', Prated * (1 / eta - 1), 'W', `what of the fuel's energy is not charge, at full power, to ${air.id}`);
+  const tv = litres / 1000, a = Math.cbrt(2 * tv), tank: V3 = [a, Math.max(0.03, a / 2), a];
+  B.add({ id: 'fuel/tank', name: `fuel tank, ${litres.toFixed(1)} L of petrol (${fuel.toFixed(2)} kg)`, category: 'energy/fuel', material: 'HDPE, moulded', system: 'tank', shape: { kind: 'block', size: tank }, at: [at[0], at[1] + tank[1] / 2, at[2]], colour: 0xc62828, values: B.of('fuel carried', 'tank'), mass: Math.max(0.3, litres * GENSET.tankPerLitre) + fuel, into }, 0);
+  const gm = Prated / GENSET.specificPower, gs = Math.cbrt(gm / GENSET.density), set: V3 = [gs * 1.3, gs, gs];
+  B.add({ id: 'fuel/engine-generator', name: `engine-generator, ${(Prated / 1e3).toFixed(2)} kW onto ${V} V, ${(eta * 100).toFixed(0)} % from fuel`, category: 'energy/conversion', material: 'aluminium block, steel shaft, copper windings', system: 'engine', shape: { kind: 'block', size: set }, at: [at[0] + tank[0] / 2 + set[0] / 2 + 0.02, at[1] + set[1] / 2, at[2]], colour: 0x424242, values: B.of('engine-generator rating', 'air it burns', 'heat it sheds'), mass: gm, into }, 0);
+  const ex = [at[0] + tank[0] / 2 + set[0] + 0.02, at[1] + set[1] * 0.6, at[2]] as V3;
+  B.add({ id: 'fuel/exhaust', name: `exhaust, carrying ${(Prated * (1 / eta - 1) * 0.35 / 1e3).toFixed(1)} kW of hot gas away (about a third of the waste heat, an estimate)`, category: 'energy/conversion', material: 'stainless steel', system: 'engine', shape: { kind: 'wire', points: [ex, [ex[0] + 0.08, ex[1], ex[2]], [ex[0] + 0.12, ex[1] - 0.05, ex[2] - 0.1]], r: Math.max(0.008, Math.sqrt(Prated) * 2e-4) }, at: ex, colour: 0x9e9e9e, values: [], mass: 0.4, into: ['fuel/engine-generator'] }, 0);
+  B.plant.store = { node: 'fuel/tank', E: fuel * lhv * eta, V, Imax: Prated / V };
+  for (const e of c.s.elements) if (e.id.includes('mass of fuel')) B.use(e.id);
+}
+
+/**
+ * Sunlight as the source: panels on the top it has, as much area as cruising takes at the sky's light, A = P/(G η); where
+ * its top holds less, the shortfall is the flaw. What the sun does not give at once (pulling away, a climb) comes from a
+ * buffer of cells, for three starts to its speed.
+ */
+function solar(c: Ctx, B: B, Pcruise: number, Ppeak: number, V: number, ext: V3, vTop: number, sky: string, at: V3, into: string[]): void {
+  const G = c.q(sky, /sunlight/) ?? 1000, eta = SOLAR.efficiency, need = Pcruise / (G * eta), top = ext[0] * ext[2];
+  B.gate({ id: 'solar: panel area', question: `what area of panel cruises it on ${G} W/m² of ${sky}`, inputs: [{ name: 'power at cruise', value: Pcruise, unit: 'W' }, { name: 'sunlight', value: G, unit: 'W/m^2' }, { name: 'its top', value: top, unit: 'm^2' }], law: `A = P/(G η) at η ${eta} (${SOLAR.source}), on the top it has`, tried: [`for cruise: ${need.toFixed(2)} m²`, `its top: ${top.toFixed(2)} m²`], outcome: need <= top ? `${need.toFixed(2)} m² of panel` : `all ${top.toFixed(2)} m² of its top, short of ${need.toFixed(2)}`, held: need <= top });
+  if (need > top) B.flaws.push({ check: 'solar area', where: 'energy', says: `cruising takes ${need.toFixed(2)} m² of panel on ${G} W/m²; its top has ${top.toFixed(2)} m²`, law: 'A = P/(G η)', value: need, limit: top, remedy: null });
+  const A = Math.min(need, top), Psun = A * G * eta;
+  B.v('panel area', A, 'm^2', `A = P/(G η): ${Pcruise.toFixed(0)} W at cruise over ${G} W/m² of ${sky} (clear, at noon) at ${(eta * 100).toFixed(0)} %`);
+  B.v('solar power', Psun, 'W', `what the panel gives at that light`);
+  const w = Math.min(ext[0], Math.sqrt((A * ext[0]) / Math.max(1e-6, ext[2]))), l = A / Math.max(1e-6, w);
+  const ys = B.parts.filter((p) => p.shape.kind === 'block').map((p) => p.at[1] + (p.shape.kind === 'block' ? p.shape.size[1] / 2 : 0)), yTop = ys.length ? Math.max(...ys) : ext[1];
+  const under = B.parts.filter((p) => p.shape.kind === 'block').sort((a, b) => (b.at[1] + (b.shape.kind === 'block' ? b.shape.size[1] / 2 : 0)) - (a.at[1] + (a.shape.kind === 'block' ? a.shape.size[1] / 2 : 0)))[0];
+  B.add({ id: 'solar/panel', name: `solar panel, ${A.toFixed(2)} m², ${Psun.toFixed(0)} W at ${G} W/m²`, category: 'energy/solar', material: 'monocrystalline silicon, flexible laminate', system: 'panel', shape: { kind: 'block', size: [w, 0.004, l] }, at: [0, yTop + 0.002, 0], colour: 0x0d47a1, values: B.of('panel area', 'solar power'), mass: A * SOLAR.arealMass, into: under ? [under.id] : into }, 0);
+  const shortW = Math.max(0, Ppeak - Psun);
+  if (shortW > 0) {
+    const a = c.want(body0(c), 'm/s^2', /accel|pick/, 'lo') ?? 1, E = B.v('buffer energy', shortW * (vTop / Math.max(0.1, a)) * 3, 'J', `what the drives draw past the sun (${(shortW / 1e3).toFixed(2)} kW) for three starts to ${vTop.toFixed(1)} m/s at ${a.toFixed(1)} m/s²`);
+    battery(c, B, E, Ppeak / V, V, at, into);
+  }
+  for (const e of c.s.elements) if (e.id.startsWith('intercept:') && e.id.includes(sky)) B.use(e.id);
+}
+const body0 = (c: Ctx) => c.intent.regions.find((r) => !r.environment)?.id ?? 'the payload';
+
 // ---- a frame on the ground, its envelope and what serves the inside ----------------------------------------------------
 interface Framed { inner: { wall: Record<'front' | 'back' | 'left' | 'right', number>; floor: number; ceiling: number }; boards: Record<'front' | 'back' | 'left' | 'right', string>; ceilingJoists: { z: number; id: string }[]; outer: V3 }
 function framed(c: Ctx, B: B, body: string, ext: V3): Framed {
@@ -716,7 +766,7 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
   // ways that exclude each other: of the stores the generator offers, the ones a designer here can build; the rest
   // stay offered, not chosen, and say what law would build them
   const stores = s.elements.filter((e) => e.id.startsWith('store:') && e.id.includes(`:moving:${body.id}`));
-  const DESIGNABLE: Record<string, string> = { charge: 'cells in series and parallel (src/nexus/embody/any.ts, battery)' };
+  const DESIGNABLE: Record<string, string> = { charge: 'cells in series and parallel (src/nexus/embody/any.ts, battery)', 'mass of fuel': 'an engine turning a generator onto the bus, its tank, and the air it burns the fuel with (src/nexus/embody/any.ts, genset)' };
   const carrierOf = (e: { id: string }) => e.id.split(':')[1]!;
   const chosen = stores.find((e) => carrierOf(e) in DESIGNABLE) ?? null;
   if (stores.length) B.gate({ id: 'store', question: `what stores the energy it carries: ${stores.map(carrierOf).join(' or ')}`, inputs: [], law: 'the generator offers each store that lasts the range; of them, one a designer here builds', tried: stores.map((e) => `${carrierOf(e)}: ${DESIGNABLE[carrierOf(e)] ? `designable, by ${DESIGNABLE[carrierOf(e)]}` : 'no designer yet (the law to write: its conversion, store and path as parts)'}`), outcome: chosen ? carrierOf(chosen) : 'none designable', held: !!chosen });
@@ -727,9 +777,11 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
     B.use(...others.map((e) => e.id));
     B.trace.push({ stage: 'choose', where: st.id, round: 1, says: `${carrierOf(chosen)} chosen over ${carrier}: the generator offers both for the same store and a designer here builds only ${carrierOf(chosen)}; ${others.length} elements of ${carrier} not built`, flaws: [], remedy: null });
   }
-  let batteryAt: V3 = [0, 0.05, 0], batteryInto: string[] = [], source: V3 = [ext[0] / 2 + 0.2, 0.5, 0], sourceInto: string[] = [], cruise: ((v: number) => number) | null = null, hover = 0;
+  let baseInto: string[] = [], batteryAt: V3 = [0, 0.05, 0], batteryInto: string[] = [], source: V3 = [ext[0] / 2 + 0.2, 0.5, 0], sourceInto: string[] = [], cruise: ((v: number) => number) | null = null, hover = 0;
   // which designer: by what the generator says the region does, not what it is called
-  const air = thrust ? thrust.id.split('|')[1] ?? 'air' : '', airRho = air ? c.q(air, /density/) ?? 1.2 : 0;
+  // a push is on a fluid only where what it pushes on is matter with a density: light, in a vacuum, is pushed on by a
+  // photon drive (F = P/c), which nothing here designs; it is never air at an assumed density
+  const air = thrust ? thrust.id.split('|')[1] ?? '' : '', airRho = air && c.intent.regions.some((r) => r.id === air && r.matter) ? c.q(air, /density/) : null;
   // how it stays up, where nothing solid holds it: the ways the generator offers, by the law of each
   const fluids = [...new Set(s.elements.filter((e) => /^(buoyancy|hover|lift):/.test(e.id) && e.id.startsWith(`${e.id.split(':')[0]}:${body.id}|`)).map((e) => e.id.split('|')[1]!))];
   const floats = fluids.find((f) => { const b = s.elements.find((e) => e.id === `buoyancy:${body.id}|${f}`); const mean = b ? c.val(b.id, /mean density/) : null; return mean !== null && mean < (c.q(f, /density/) ?? 0); }) ?? null;
@@ -741,21 +793,21 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
     B.gate({ id: 'staying up', question: `how ${body.id} stays up`, inputs: [], law: 'what floats needs no power to stay up: buoyancy where its mean density is under the fluid\'s; else of the ways a designer here builds, the least energy over the trip', tried: ways, outcome: floats ? `buoyancy in ${floats}` : 'hover', held: true });
     for (const e of s.elements) if (/^(hover|lift|buoyancy):/.test(e.id) && e.id.includes(`${body.id}|`)) B.use(e.id);
   }
-  const water = floats && (c.q(floats, /density/) ?? 0) >= 10 ? floats : body.moving && thrust && airRho >= 10 ? air : null;
-  const designer = body.moving && ground ? 'on the ground' : water ? 'in water' : body.moving && thrust && airRho < 10 ? 'in the air' : !body.moving ? 'a frame on the ground' : null;
-  B.gate({ id: 'designer', question: `how ${body.id} is held and moved`, inputs: [{ name: 'moves', value: body.moving ? 1 : 0, unit: '1' }, ...(air ? [{ name: `density of ${air}`, value: airRho, unit: 'kg/m^3' }] : [])], law: 'a contact with a solid rolls on wheels; what floats in a dense fluid is a hull with a propeller; a push on a fluid light enough to fly through is a rotor\'s; a region that stays is framed on the ground', tried: [`contact with a solid: ${ground ?? 'none'}`, `push on a fluid: ${thrust ? `${air}, ${airRho} kg/m³` : 'none'}`, `floats: ${floats ?? 'no'}`, `stays put: ${body.moving ? 'no' : 'yes'}`], outcome: designer ?? 'none: its elements are left as gaps', held: !!designer });
+  const water = floats && (c.q(floats, /density/) ?? 0) >= 10 ? floats : body.moving && thrust && (airRho ?? 0) >= 10 ? air : null;
+  const designer = body.moving && ground ? 'on the ground' : water ? 'in water' : body.moving && thrust && airRho !== null && airRho < 10 ? 'in the air' : !body.moving ? 'a frame on the ground' : null;
+  B.gate({ id: 'designer', question: `how ${body.id} is held and moved`, inputs: [{ name: 'moves', value: body.moving ? 1 : 0, unit: '1' }, ...(air && airRho !== null ? [{ name: `density of ${air}`, value: airRho, unit: 'kg/m^3' }] : [])], law: 'a contact with a solid rolls on wheels; what floats in a dense fluid is a hull with a propeller; a push on a fluid light enough to fly through is a rotor\'s; a region that stays is framed on the ground', tried: [`contact with a solid: ${ground ?? 'none'}`, `push on a fluid: ${thrust ? (airRho !== null ? `${air}, ${airRho} kg/m³` : `${air}: not matter, so no fluid${air === 'light' ? '; a push on it is a photon drive, F = P/c, which nothing here designs yet (the law to write: its emitter, its power and the momentum light carries away)' : ''}`) : 'none'}`, `floats: ${floats ?? 'no'}`, `stays put: ${body.moving ? 'no' : 'yes'}`], outcome: designer ?? 'none: its elements are left as gaps', held: !!designer });
   if (body.moving && ground) {
     const r = rolling(c, B, body.id, ext, self, ground);
     shell(c, B, body.id, ext, r.deck);
-    batteryAt = [0, r.deck + 2 * mm, -ext[2] / 4]; batteryInto = ['body/floor']; cruise = r.cruise;
+    batteryAt = [0, r.deck + 2 * mm, -ext[2] / 4]; batteryInto = ['body/floor']; baseInto = batteryInto; cruise = r.cruise;
     const V = B.loads[0]?.V ?? 48;
     climate(c, B, body.id, MINERAL_WOOL.k, 10 * mm, r.heatAt, ['chassis/cross-front'], V);
   } else if (designer === 'in water' && water) {
     const r = floating(c, B, body.id, ext, self, water, c.intent.regions.some((x) => x.environment && x.id !== water && /air/.test(x.id) && x.adjoins.includes(body.id)));
-    batteryAt = r.battery; batteryInto = ['hull/bottom', 'hull/pressure-hull'].filter((id) => B.parts.some((p) => p.id === id)); cruise = r.cruise;
+    batteryAt = r.battery; batteryInto = ['hull/bottom', 'hull/pressure-hull'].filter((id) => B.parts.some((p) => p.id === id)); baseInto = batteryInto; cruise = r.cruise;
   } else if (designer === 'in the air' && thrust) {
     const r = flying(c, B, body.id, ext, self, air);
-    batteryAt = r.battery; batteryInto = ['frame/hub-top']; hover = r.P; cruise = r.cruise;
+    batteryAt = r.battery; batteryInto = ['frame/hub-top']; baseInto = batteryInto; hover = r.P; cruise = r.cruise;
   } else if (!body.moving) {
     const r = standing(c, B, body.id, ext);
     source = r.source; sourceInto = r.sourceInto;
@@ -771,13 +823,20 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
     const Pdraw = (cruise ? cruise(vCruise) : hover || P) + aux;
     const E = B.v('energy stored', Pdraw * time, 'J', range ? `${(Pdraw / 1e3).toFixed(2)} kW to hold ${vCruise.toFixed(0)} m/s${hover ? '' : ' (0.7 of top speed)'} and half the rest, over ${(range / 1e3).toFixed(1)} km` : `${Pdraw.toFixed(0)} W at hover over ${(time / 60).toFixed(0)} minutes`);
     const V = B.loads[0]?.V ?? 24;
-    battery(c, B, E, (P * 1.2) / V, V, batteryAt, batteryInto);
-    source = [batteryAt[0], batteryAt[1] + 0.05, batteryAt[2]]; sourceInto = ['battery/pack'];
+    if (carrierOf(store) === 'mass of fuel') { genset(c, B, E, P, V, batteryAt, batteryInto, body.id); source = [batteryAt[0], batteryAt[1] + 0.05, batteryAt[2]]; sourceInto = B.parts.some((p) => p.id === 'fuel/tank') ? ['fuel/tank'] : batteryInto; }
+    else { battery(c, B, E, (P * 1.2) / V, V, batteryAt, batteryInto); source = [batteryAt[0], batteryAt[1] + 0.05, batteryAt[2]]; sourceInto = ['battery/pack']; }
+  } else if (P > 0 && body.moving && designer && s.elements.some((e) => e.id.startsWith(`intercept:${body.id}|`))) {
+    // no store: the light it intercepts on the way, on the top it has, and a buffer for what the sun does not give at once
+    const icp = s.elements.find((e) => e.id.startsWith(`intercept:${body.id}|`))!, sky = icp.id.split('|')[1]!;
+    const vTop = c.want(body.id, 'm/s', /^speed/, 'hi') ?? c.want(body.id, 'm/s', /^speed/, 'lo') ?? 1.5;
+    solar(c, B, (cruise ? cruise(vTop * 0.7) : hover || P), P, B.loads[0]?.V ?? 24, ext, vTop, sky, batteryAt, batteryInto.length ? batteryInto : baseInto);
+    B.use(icp.id);
+    source = [batteryAt[0], batteryAt[1] + 0.05, batteryAt[2]]; sourceInto = B.parts.some((p) => p.id === 'battery/pack') ? ['battery/pack'] : baseInto;
   } else if (P > 0 && body.moving) B.flaws.push({ check: 'source', where: 'energy', says: 'it draws power and stores none: no source designed', law: 'every load has a source', value: P, limit: 0, remedy: null });
-  // one controller for every modulation, a sensor for each observer, on it
-  const mods = s.elements.filter((e) => e.kind === 'modulation'), obs = s.elements.filter((e) => e.kind === 'observer');
+  // one controller for every modulation, a sensor for each observer, on it; where nothing was designed, nothing to control
+  const mods = designer ? s.elements.filter((e) => e.kind === 'modulation') : [], obs = designer ? s.elements.filter((e) => e.kind === 'observer') : [];
   const ctl: V3 = body.moving ? [source[0] + 0.25, source[1], source[2]] : [source[0], source[1] - 0.35, source[2]];
-  B.add({ id: 'control/controller', name: `controller: ${B.loads.filter((l) => l.conductors === 3).length} motor drives, ${mods.length} modulations, ${obs.length} sensor inputs`, category: 'control/controller', material: 'FR4, aluminium heat spreader', system: 'controller', shape: { kind: 'block', size: [0.16, 0.03, 0.1] }, at: [ctl[0], ctl[1] + 0.015, ctl[2]], colour: 0x1b5e20, values: [], mass: 0.2, into: sourceInto.length ? sourceInto : ['body/floor'] }, 0);
+  if (designer) B.add({ id: 'control/controller', name: `controller: ${B.loads.filter((l) => l.conductors === 3).length} motor drives, ${mods.length} modulations, ${obs.length} sensor inputs`, category: 'control/controller', material: 'FR4, aluminium heat spreader', system: 'controller', shape: { kind: 'block', size: [0.16, 0.03, 0.1] }, at: [ctl[0], ctl[1] + 0.015, ctl[2]], colour: 0x1b5e20, values: [], mass: 0.2, into: sourceInto.length ? sourceInto : baseInto.length ? baseInto : ['body/floor'] }, 0);
   B.use(...mods.map((m) => m.id));
   obs.forEach((o, i) => {
     B.use(o.id);
@@ -797,7 +856,10 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
   }
   if (B.loads.length) B.trace.push({ stage: 'wiring', where: 'wiring', round: 1, says: `${B.loads.length} circuits from the ${store ? 'battery' : 'supply'}`, flaws: [], remedy: null });
   // what nothing here designs is a gap, located on its element
-  const gaps = s.elements.filter((e) => !B.used.has(e.id) && !/^(bound)$/.test(e.kind) && !(e.kind === 'region' && e.id.startsWith('moving:')));
+  // an element one of a group of ways (the generator's oneOf: any one suffices) is not missing where another of its group
+  // was built: it is a way offered and not taken
+  const taken = new Set(s.elements.filter((e) => e.oneOf && B.used.has(e.id)).map((e) => e.oneOf!));
+  const gaps = s.elements.filter((e) => !B.used.has(e.id) && !(e.oneOf && taken.has(e.oneOf)) && !/^(bound)$/.test(e.kind) && !(e.kind === 'region' && e.id.startsWith('moving:')));
   for (const e of gaps.slice(0, 24)) B.flaws.push({ check: 'gap', where: e.id, says: `nothing designs ${e.kind} "${e.id}" yet${e.says ? `: ${e.says}` : ''}`, law: 'every element the generator derived is embodied, or is a gap', value: 1, limit: 0, remedy: null });
   // the whole checked: every part held from the ground
   const loose = floatingClusters(B.parts);
