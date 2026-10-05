@@ -30,7 +30,7 @@ import { MATERIALS } from '../../data/materials';
 import { toSI } from '../../ganglia/units';
 import type { Structure } from '../manifold';
 import type { Intent } from '../want';
-import { embody, type Choices, type Gate, type Machine, type Round, type Step } from './embody';
+import { embody, type Choices, type DriveMap, type Gate, type Machine, type Plant, type Round, type Step } from './embody';
 import { conductorTemperature } from './electrical';
 import { motorFor, type Motor } from './motor';
 import { extentOf, part, placeParts, type Flaw, type Part, type V3, type Value } from './part';
@@ -45,14 +45,17 @@ const mm = 1e-3, g0 = 9.80665, eta = 0.9;
 const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
 const DEFAULT_CHOICES: Choices = { bedSupport: 1, bedT: 0, streams: 0, room: [0, 0, 0], exhausted: [] };
 
+/** What operating a design found it must meet (src/nexus/embody/operate.ts), each with why: it is designed again to meet it. */
+export interface Learned { torque?: number; energy?: number; current?: number; cable?: number; heat?: number; why?: string[] }
+
 /** A printer-like structure (something deposited, moved along axes) goes to the printer's embodiment; anything else here. */
-export function embodyAny(intent: Intent, s: Structure, maxRounds = 8): Machine | null {
+export function embodyAny(intent: Intent, s: Structure, maxRounds = 8, learned: Learned = {}): Machine | null {
   if (s.elements.some((e) => e.id.startsWith('deposit:')) && s.elements.some((e) => e.kind === 'conversion' && /:(x|y|z)$/.test(e.id))) return embody(intent, s);
   const rounds: Round[] = [];
   let self = 0;
   const masses: number[] = [0];
   for (let n = 1; n <= maxRounds; n++) {
-    const m = once(intent, s, self);
+    const m = once(intent, s, self, learned);
     const mass = m.parts.reduce((a, p) => a + p.mass, 0);
     masses.push(mass);
     // designed again on the mass it came to is a fixed point m = f(m): it settles where each round's change is smaller
@@ -67,7 +70,7 @@ export function embodyAny(intent: Intent, s: Structure, maxRounds = 8): Machine 
     if (settled || runs || n === maxRounds) return { ...m, rounds };
     self = mass;
   }
-  return { ...once(intent, s, self), rounds };
+  return { ...once(intent, s, self, learned), rounds };
 }
 
 // ---- reading the intent and the structure -----------------------------------------------------------------------------
@@ -81,8 +84,10 @@ interface Ctx {
   val(id: string, re: RegExp): number | null;
   has(id: string): boolean;
   ambient: number; g: number;
+  /** What operating it before found the design must meet. */
+  learned: Learned;
 }
-function context(intent: Intent, s: Structure): Ctx {
+function context(intent: Intent, s: Structure, learned: Learned = {}): Ctx {
   const qs = (region: string) => intent.regions.find((r) => r.id === region)?.quantities ?? {};
   const q: Ctx['q'] = (region, re) => { const all = qs(region); const l = typeof re === 'string' ? all[re] : Object.values(all).find((x) => re.test(x.name)); return l && l.value !== null ? l.value : null; };
   const want: Ctx['want'] = (region, unit, re, bound) => { const w = intent.wants.find((x) => x.region === region && x.quantity.unit === unit && re.test(x.quantity.name) && x[bound]); const l = w?.[bound]; return l && l.value !== null ? l.value : null; };
@@ -91,7 +96,7 @@ function context(intent: Intent, s: Structure): Ctx {
   const val: Ctx['val'] = (id, re) => { const e = s.elements.find((x) => x.id === id); const v = e?.values.find((x) => re.test(x.name)); return v ? si(v.value, v.unit) : null; };
   const temps = intent.regions.filter((r) => r.environment).flatMap((r) => Object.values(r.quantities)).filter((l) => /coldest|hottest/.test(l.name) && l.value !== null);
   const ambient = temps.length ? temps.reduce((a, l) => a + l.value!, 0) / temps.length - 273.15 : 20;
-  return { intent, s, q, want, val, has: (id) => s.elements.some((e) => e.id === id), ambient, g: g0 };
+  return { intent, s, q, want, val, has: (id) => s.elements.some((e) => e.id === id), ambient, g: g0, learned };
 }
 /** The region the person's thing is: the one that moves, or the one most of the wants are about. */
 function bodyOf(c: Ctx): { id: string; moving: boolean } | null {
@@ -124,9 +129,9 @@ function sizedOf(c: Ctx, id: string) {
 }
 
 // ---- the parts, as each designer makes them --------------------------------------------------------------------------
-interface Load { id: string; name: string; P: number; V: number; at: V3; conductors: number }
+interface Load { id: string; name: string; P: number; V: number; at: V3; conductors: number; /** The subsystem it feeds, where it is a drive. */ node?: string }
 interface B {
-  parts: Part[]; values: Value[]; flaws: Flaw[]; trace: Step[]; used: Set<string>; loads: Load[]; gates: Gate[];
+  parts: Part[]; values: Value[]; flaws: Flaw[]; trace: Step[]; used: Set<string>; loads: Load[]; gates: Gate[]; plant: Plant;
   gate(g: Gate): Gate;
   add(p: Omit<Part, 'mass'> & { mass?: number }, density: number): Part;
   v(name: string, value: number, unit: string, law: string): number;
@@ -135,7 +140,7 @@ interface B {
 }
 function builder(): B {
   const b: B = {
-    parts: [], values: [], flaws: [], trace: [], used: new Set(), loads: [], gates: [],
+    parts: [], values: [], flaws: [], trace: [], used: new Set(), loads: [], gates: [], plant: { drives: [], conductors: [] },
     gate: (g) => { b.gates.push(g); b.trace.push({ stage: 'choose', where: g.id, round: 1, says: `${g.question} → ${g.outcome}`, flaws: g.held ? [] : [{ check: 'gate', where: g.id, says: `${g.question}: ${g.outcome}`, law: g.law, value: 0, limit: 0, remedy: null }], remedy: null }); return g; },
     add: (p, density) => { const x = { ...part(p, density), unit: p.id.split('/')[0]! }; b.parts.push(x); return x; },
     v: (name, value, unit, law) => { b.values.push({ name, value, unit, law }); return value; },
@@ -196,8 +201,10 @@ function motorChoice(id: string, name: string, T: number, w: number, V: number, 
   const best = tries.filter((x) => x.holds).sort((a, b) => a.mass - b.mass)[0] ?? tries.at(-1)!;
   return { ...best, tried, holds: best.holds };
 }
-function motorAt(B: B, id: string, name: string, T: number, w: number, V: number, ambient: number, to: `${'' | '-'}${'x' | 'y' | 'z'}`, at: V3): Motor {
+function motorAt(B: B, id: string, name: string, T: number, w: number, V: number, ambient: number, to: `${'' | '-'}${'x' | 'y' | 'z'}`, at: V3, map?: DriveMap): Motor {
   const { motor, history, c, tried } = motorChoice(id, name, T, w, V, ambient);
+  const Tw = motor.values.find((x) => x.name === 'winding temperature')?.value ?? ambient + 60;
+  if (map) B.plant.drives.push({ node: `${id}/motor`, map, motor: { T, w, Kt: motor.electrical.Kt, Pcu: motor.electrical.Pcu, Pfe: motor.electrical.Pfe, mass: motor.parts.reduce((a, p) => a + p.mass, 0), Tw, ambient, limit: 155 }, circuit: null });
   const heat = (m: Motor) => m.flaws.filter((f) => f.check === 'winding-class' || f.check === 'magnet-grade');
   B.gate({ id: `${id}/motor: cooling`, question: `how ${name} sheds its heat at ${T.toFixed(2)} N m and ${w.toFixed(0)} rad/s`, inputs: [{ name: 'torque', value: T, unit: 'N m' }, { name: 'speed', value: w, unit: 'rad/s' }], law: 'ΔT = P/(hA) within the winding\'s class and the magnets\' grade, the gap carrying more shear the more its cooling carries away; of the coolings that hold, the least mass with the cooling\'s own', tried, outcome: c.cooling, held: !heat(motor).length });
   history.forEach((h, i) => B.trace.push({ stage: 'motor', where: `${id}/motor`, round: i + 1, says: `stack ${h.aspect.toFixed(2)} of its bore, ${h.grade}, cooled by ${c.cooling}`, flaws: h.flaws, remedy: h.remedy }));
@@ -237,8 +244,8 @@ function rolling(c: Ctx, B: B, body: string, ext: V3, self: number, ground: stri
   const bestG = ratios.filter((x) => x.holds).sort((a, b) => a.mass - b.mass)[0] ?? ratios.at(-1)!;
   B.gate({ id: 'reduction', question: `what ratio between each motor and its wheel, the wheel at ${wWheel.toFixed(1)} rad/s at top speed`, inputs: [{ name: 'wheel speed', value: wWheel, unit: 'rad/s' }], law: 'T_motor = T_wheel / G at G times the speed; of one belt stage up to 6 to 1, the ratio whose motor (in its own cooling) and belt (its larger pulley about 40 g a ratio per N m, an estimate) weigh least', tried: ratios.map((x) => `${x.G} to 1: ${x.holds ? `${x.mass.toFixed(2)} kg` : 'its heat does not hold'}`), outcome: `${bestG.G} to 1`, held: bestG.holds });
   const G = B.v('reduction', bestG.G, '1', `the reduction gate: ${bestG.G} to 1, the lightest motor and belt`), wMotor = wWheel * G;
-  const { Tpeak, Tcont } = torques(G);
-  B.v('motor torque, continuous', Tcont, 'N m', `the larger of top speed's ${((Ft * r) / driven / G / eta).toFixed(1)} N m and the peak ${Tpeak.toFixed(1)} N m over ${PEAK_OVER_CONTINUOUS.value} (${PEAK_OVER_CONTINUOUS.source})`);
+  const { Tpeak, Tcont: Tduty } = torques(G), Tcont = Math.max(Tduty, c.learned.torque ?? 0);
+  B.v('motor torque, continuous', Tcont, 'N m', `${c.learned.torque && c.learned.torque > Tduty ? `what operating it found its duty asks (${c.learned.torque.toFixed(1)} N m RMS and a tenth), past ` : ''}the larger of top speed's ${((Ft * r) / driven / G / eta).toFixed(1)} N m and the peak ${Tpeak.toFixed(1)} N m over ${PEAK_OVER_CONTINUOUS.value} (${PEAK_OVER_CONTINUOUS.source})`);
   // the chassis: two rails between the axles, each carrying half the weight at mid-span, on edge
   const L = B.v('wheelbase', Math.max(ext[2] + r, 4 * r), 'm', 'the length the carried region needs, and room for the wheels'), track = Math.max(ext[0] + 0.1, 3 * tyre.w + 0.1);
   const Mb = (M * c.g / 2) * 2 * L / 4, sy = 250e6;
@@ -270,10 +277,10 @@ function rolling(c: Ctx, B: B, body: string, ext: V3, self: number, ground: stri
     B.add({ id: `${id}/spring`, name: `coil spring ${(kSpring / 1e3).toFixed(1)} kN/m and damper`, category: 'motion/suspension', material: 'steel.music-wire', system: 'suspension', shape: { kind: 'round', r: Math.max(25 * mm, tyre.r * 0.12), length: deck - r, axis: 'y' }, at: [inner - sx * 0.04, (r + deck) / 2, z - sz * (tyre.r * 0.55)], colour: 0xffb300, values: B.of('spring rate'), into: [`chassis/rail-${sx < 0 ? 'left' : 'right'}`, `${id}/mount`] }, 3000);
     if (drives) {
       const mx = sx * (railX - tube.b / 2 - 0.09), mz = z - sz * (tyre.r * 0.5 + 0.08);
-      motorAt(B, id, `${name} wheel motor`, Tcont, wMotor, V, c.ambient, sx > 0 ? 'x' : '-x', [mx, r, mz]);
+      motorAt(B, id, `${name} wheel motor`, Tcont, wMotor, V, c.ambient, sx > 0 ? 'x' : '-x', [mx, r, mz], { kind: 'wheel', r, G, share: 1 / driven });
       B.add({ id: `${id}/motor-bracket`, name: 'motor bracket, steel plate, to the rail', category: 'structure/joints/brackets', material: 'steel.a36', system: 'drive', shape: { kind: 'block', size: [0.1, 10 * mm, 0.14] }, at: [mx, railY - tube.h / 2 - 5 * mm, mz], colour: 0x78909c, values: [], into: [`chassis/rail-${sx < 0 ? 'left' : 'right'}`, `${id}/motor/housing`] }, 7850);
       B.add({ id: `${id}/belt`, name: `toothed belt, ${G.toFixed(1)} to 1, motor to wheel`, category: 'motion/transmission/belt', material: 'glass-fibre reinforced neoprene', system: 'drive', shape: { kind: 'wire', points: [[mx, r, mz], [hubX, r, z]], r: 6 * mm }, at: [mx, r, z], colour: 0x111111, values: B.of('reduction'), mass: 0.12 }, 0);
-      B.loads.push({ id: `${id} motor`, name: `${name} motor`, P: P / driven, V, at: [mx, r, mz], conductors: 3 });
+      B.loads.push({ id: `${id} motor`, name: `${name} motor`, P: P / driven, V, at: [mx, r, mz], conductors: 3, node: `${id}/motor` });
     }
   }
   B.trace.push({ stage: 'axis', where: 'running gear', round: 1, says: `${driven} of 4 wheels driven, ${tyre.id}, ${G.toFixed(1)} to 1, ${(P / 1e3).toFixed(1)} kW at ${V} V`, flaws: [], remedy: null });
@@ -304,6 +311,8 @@ function rolling(c: Ctx, B: B, body: string, ext: V3, self: number, ground: stri
     const aMax = c.want(body, 'm/s^2', /in a stop|crash/, 'hi') ?? 400, A = (M * aMax) / HONEYCOMB.sigma, side = Math.sqrt(A / 2);
     for (const sx of [-1, 1]) B.add({ id: `crash/box-${sx < 0 ? 'left' : 'right'}`, name: `crush box ${(side * 1e3).toFixed(0)} mm square × ${(stroke * 1e3).toFixed(0)} mm, aluminium honeycomb`, category: 'safety/crash', material: 'aluminum honeycomb 5052', system: 'crash', shape: { kind: 'block', size: [side, side, stroke] }, at: [sx * railX, railY, railLen / 2 + stroke / 2], colour: 0xffcc80, values: [{ name: 'crush area', value: A, unit: 'm^2', law: `σ A = m a: ${M.toFixed(0)} kg at ${aMax} m/s² over ${(HONEYCOMB.sigma / 1e6).toFixed(1)} MPa (${HONEYCOMB.source}); the stroke s ≥ v²/2a the generator derived` }] }, HONEYCOMB.density);
   }
+  const dec = c.want(body, 'm/s^2', /^deceleration/, 'lo') ?? Math.max(1, a);
+  B.plant.move = { mass: M, vTop, accel: a, decel: dec, grade, range: c.want(body, 'm', /^distance/, 'lo') ?? vTop * 1800, resist: Array.from({ length: 13 }, (_, k) => { const v = (k / 12) * vTop * 1.2; return [v, road(v)] as [number, number]; }) };
   return { battery: [0, deck, -L / 6], deck, cruise: (v) => (road(v) * v) / eta, front: L / 2, heatAt: [0, deck, L / 2 - 0.12 - 0.25] };
 }
 
@@ -365,9 +374,9 @@ function flying(c: Ctx, B: B, body: string, ext: V3, self: number, air: string):
   for (let k = 0; k < n; k++) {
     const th = Math.PI / 4 + (k * Math.PI) / 2, dx = Math.cos(th), dz = Math.sin(th), tip: V3 = [dx * armL, deck, dz * armL];
     B.add({ id: `arm-${k + 1}/tube`, name: `arm, carbon tube Ø${(2 * ro * 1e3).toFixed(0)} × ${((ro - ri) * 1e3).toFixed(1)} mm × ${(armL * 1e3).toFixed(0)} mm`, category: 'structure/frame', material: 'composite.cfrp', system: 'arm', shape: { kind: 'round', r: ro, length: armL, axis: 'x', bore: 2 * ri }, at: [dx * armL / 2, deck, dz * armL / 2], turn: { axis: 'y', angle: -th }, colour: 0x37474f, values: B.of('arm tube'), into: ['frame/hub-top', 'frame/hub-bottom', `arm-${k + 1}/motor/housing`] }, cf.density);
-    motorAt(B, `arm-${k + 1}`, `rotor ${k + 1} motor`, Q * 1.3, w, V, c.ambient, 'y', [tip[0], deck + ro + 0.02, tip[2]]);
+    motorAt(B, `arm-${k + 1}`, `rotor ${k + 1} motor`, Math.max(Q * 1.3, c.learned.torque ?? 0), w, V, c.ambient, 'y', [tip[0], deck + ro + 0.02, tip[2]], { kind: 'rotor', n, Th: T, Qh: Q, wh: w });
     B.add({ id: `arm-${k + 1}/rotor`, name: `rotor Ø${(D * 1e3).toFixed(0)} mm, two blades, carbon`, category: 'motion/rotors', material: 'composite.cfrp', system: 'rotor', shape: { kind: 'block', size: [D, 3 * mm, D * 0.08] }, at: [tip[0], deck + ro + 0.06, tip[2]], turn: { axis: 'y', angle: k * 0.7 }, colour: 0x90a4ae, values: B.of('rotor diameter', 'hover power', 'rotor speed'), into: [`arm-${k + 1}/motor/rotor`, `arm-${k + 1}/motor/shaft`] }, cf.density);
-    B.loads.push({ id: `rotor ${k + 1} motor`, name: `rotor ${k + 1} motor`, P: (2 * P) / n, V, at: tip, conductors: 3 });
+    B.loads.push({ id: `rotor ${k + 1} motor`, name: `rotor ${k + 1} motor`, P: (2 * P) / n, V, at: tip, conductors: 3, node: `arm-${k + 1}/motor` });
   }
   for (const [k, sx, sz] of [[1, -1, -1], [2, 1, -1], [3, -1, 1], [4, 1, 1]] as const) B.add({ id: `frame/leg-${k}`, name: 'landing leg, carbon rod Ø8 mm', category: 'structure/frame', material: 'composite.cfrp', system: 'legs', shape: { kind: 'round', r: 4 * mm, length: deck - ro - 3 * mm, axis: 'y' }, at: [sx * hub * 0.4, (deck - ro - 3 * mm) / 2, sz * hub * 0.4], colour: 0x37474f, values: [], into: ['frame/hub-bottom'] }, cf.density);
   B.add({ id: 'payload/mount', name: `payload bay for ${payload.toFixed(2)} kg, carbon tray`, category: 'structure/frame', material: 'composite.cfrp', system: 'bay', shape: { kind: 'block', size: [Math.max(ext[0], 0.05), Math.max(ext[1], 0.02), Math.max(ext[2], 0.05)] }, at: [0, deck - ro - 3 * mm - Math.max(ext[1], 0.02) / 2, 0], colour: 0x455a64, values: [], mass: 0.05, into: ['frame/hub-bottom'] }, 0);
@@ -377,6 +386,8 @@ function flying(c: Ctx, B: B, body: string, ext: V3, self: number, air: string):
   // in forward flight the rotors also make up the drag: P(v) = P_hover + ½ ρ C_d A v³ / η
   const area = c.val(`drag:moving:${body}|${air}`, /area/) ?? ext[0] * ext[1];
   const cruise = (v: number) => P + (0.5 * rho * 1.0 * area * v ** 3) / eta;
+  const vF = c.want(body, 'm/s', /^speed/, 'lo') ?? c.want(body, 'm/s', /^speed/, 'hi') ?? 5;
+  B.plant.move = { mass: M, vTop: vF, accel: 1, decel: 1, grade: 0, range: c.want(body, 'm', /^distance/, 'lo') ?? vF * 600, resist: Array.from({ length: 13 }, (_, k) => { const v = (k / 12) * vF * 1.2; return [v, 0.5 * rho * area * v * v] as [number, number]; }), hover: { thrust: M * c.g } };
   B.v('power at speed', cruise(c.want(body, 'm/s', /^speed/, 'lo') ?? c.want(body, 'm/s', /^speed/, 'hi') ?? 0), 'W', `hover and the drag at speed, ½ ρ C_d A v³ with C_d 1 for a bluff body and A ${area.toFixed(3)} m² (estimate)`);
   return { battery: [0, deck + ro + 3 * mm, 0], deck, P, cruise };
 }
@@ -431,24 +442,28 @@ function floating(c: Ctx, B: B, body: string, ext: V3, self: number, fluid: stri
   carried(c, B, body);
   // propulsion: a pod at the stern, the motor in it, the propeller on its shaft; a rudder behind it
   const zs = -L / 2 - 0.12, yp = surface ? Math.max(Dp / 2 + 0.02, T - Dp / 2) : R0;
-  motorAt(B, 'propulsion', 'propeller motor', Ps / w / eta, w, V, c.ambient, '-z', [0, yp, zs + 0.05]);
+  motorAt(B, 'propulsion', 'propeller motor', Math.max(Ps / w / eta, c.learned.torque ?? 0), w, V, c.ambient, '-z', [0, yp, zs + 0.05], { kind: 'propeller', share: 1, D: Dp, rho, J: PROPELLER.advance });
+  B.plant.move = { mass: M, vTop: v, accel: 0.3, decel: 0.3, grade: 0, range: c.want(body, 'm', /^distance/, 'lo') ?? v * 1800, resist: Array.from({ length: 13 }, (_, k) => { const u = (k / 12) * v * 1.2; return [u, R(u)] as [number, number]; }) };
   B.add({ id: 'propulsion/strut', name: 'motor strut to the transom, aluminium', category: 'structure/joints/brackets', material: al.id, system: 'pod', shape: { kind: 'block', size: [0.03, Math.max(0.1, H - yp), 0.12] }, at: [0, (H + yp) / 2, -L / 2 - 0.06], colour: 0x90a4ae, values: [], into: [surface ? 'hull/transom' : 'hull/pressure-hull', 'propulsion/motor/housing'] }, al.density);
   B.add({ id: 'propulsion/propeller', name: `propeller Ø${(Dp * 1e3).toFixed(0)} mm, three blades, bronze`, category: 'motion/rotors', material: 'nickel-aluminium bronze', system: 'propeller', shape: { kind: 'round', r: Dp / 2, length: Dp * 0.18, axis: 'z' }, at: [0, yp, zs - 0.12], colour: 0xcd9b50, values: B.of('propeller diameter', 'shaft power'), into: ['propulsion/motor/shaft', 'propulsion/motor/housing'] }, 7600);
   B.add({ id: 'propulsion/rudder', name: `rudder ${(0.02 * L * Math.max(T, R0) * 1e4).toFixed(0)} cm², steered by the controller`, category: 'motion/transmission/rack', material: al.id, system: 'rudder', shape: { kind: 'block', size: [0.012, Math.max(0.15, Math.max(T, R0)), Math.max(0.1, 0.02 * L * Math.max(T, R0) / Math.max(T, R0, 0.15))] }, at: [0, yp, zs - 0.32], colour: 0x78909c, values: [], into: ['propulsion/strut'] }, al.density);
   B.use(`modulation:momentum:${body}:direction`, `path:momentum:${body}`, `filter:momentum:${body}`, `store:momentum:${body}:smoothing`);
-  B.loads.push({ id: 'propulsion motor', name: 'propeller motor', P: Ps / eta, V, at: [0, yp, zs], conductors: 3 });
+  B.loads.push({ id: 'propulsion motor', name: 'propeller motor', P: Ps / eta, V, at: [0, yp, zs], conductors: 3, node: 'propulsion/motor' });
   B.trace.push({ stage: 'axis', where: 'propulsion', round: 1, says: `${surface ? `hull ${L.toFixed(1)} m drawing ${(T * 1e3).toFixed(0)} mm` : `pressure hull ${L.toFixed(1)} m`}, propeller Ø${(Dp * 1e3).toFixed(0)} mm, ${(Ps / 1e3).toFixed(2)} kW at ${v.toFixed(1)} m/s`, flaws: [], remedy: null });
   const cruise = (v2: number) => (R(v2) * v2) / (PROPELLER.ofIdeal * 2 / (1 + Math.sqrt(1 + (2 * R(v2)) / (rho * Ap * v2 * v2)))) / eta;
   return { battery: [0, surface ? t + 0.092 : R0 * 0.6, L * 0.15], deck: surface ? t + 0.092 : R0, cruise, P: Ps / eta };
 }
 
 // ---- stored charge ------------------------------------------------------------------------------------------------------
-function battery(c: Ctx, B: B, E: number, Ipeak: number, V: number, at: V3, into: string[]): void {
+function battery(c: Ctx, B: B, E0: number, I0: number, V: number, at: V3, into: string[]): void {
+  // what operating it found the trip used and the current it drew, where it was more
+  const E = E0 * (c.learned.energy ?? 1), Ipeak = I0 * (c.learned.current ?? 1);
   // the cell that makes the pack with the fewest: energy cells where the energy asks most, power cells where the current does
   const plan = (cell: (typeof CELLS)[number]) => { const S = Math.max(1, Math.ceil(V / cell.V)); return { cell, S, Pn: Math.max(1, Math.ceil(E / (S * cell.V * cell.Ah * 3600 * 0.9)), Math.ceil(Ipeak / cell.Imax)) }; };
   const { cell, S, Pn } = CELLS.map(plan).sort((a, b) => a.S * a.Pn * a.cell.mass - b.S * b.Pn * b.cell.mass)[0]!;
   B.v('cells', S * Pn, '1', `${S}s${Pn}p of ${cell.id} (${cell.source}): ${S} in series for ${V} V, ${Pn} in parallel for ${(E / 3.6e6).toFixed(2)} kWh at 90 % usable and ${Ipeak.toFixed(0)} A at ${cell.Imax} A a cell`);
   const n = S * Pn, cols = Math.ceil(Math.sqrt(n * 1.6)), rows = Math.ceil(n / cols);
+  B.plant.store = { node: 'battery/cells', E: S * Pn * cell.V * cell.Ah * 3600 * 0.9, V: S * cell.V, Imax: Pn * cell.Imax };
   const size: V3 = [cols * cell.d * 1.05 + 10 * mm, cell.l + 12 * mm, rows * cell.d * 1.05 + 10 * mm];
   B.add({ id: 'battery/pack', name: `battery pack ${S}s${Pn}p, ${(S * cell.V).toFixed(0)} V, ${((S * Pn * cell.V * cell.Ah) / 1e3).toFixed(2)} kWh, ${n} cells`, category: 'energy/battery', material: `Li-ion cells (${cell.id}), aluminium case`, system: 'cells', shape: { kind: 'block', size }, at: [at[0], at[1] + size[1] / 2, at[2]], colour: 0x1565c0, values: B.of('cells', 'energy stored'), mass: n * cell.mass * PACK_OVERHEAD.value, into }, 0);
   B.add({ id: 'battery/bms', name: `battery management board, ${S} cell taps, cuts off past ${cell.Vmax} V or below ${cell.Vmin} V a cell`, category: 'circuits/power', material: 'FR4', system: 'management', shape: { kind: 'block', size: [Math.min(0.1, size[0]), 8 * mm, Math.min(0.06, size[2])] }, at: [at[0], at[1] + size[1] + 4 * mm, at[2]], colour: 0x2e7d32, values: [], mass: 0.08 }, 0);
@@ -617,7 +632,7 @@ function standing(c: Ctx, B: B, body: string, ext: V3): { source: V3; sourceInto
   if (supply) {
     B.use(supply.id);
     const Qair = (recovery ? 1 - HEAT_RECOVERY.value : 1) * (c.val(supply.id, /least it supplies/) ?? airHeat);
-    const Pheat = (Qenv + Qair) * 1.25, each = 1000, n = Math.max(1, Math.ceil(Pheat / each));
+    const Pheat = Math.max((Qenv + Qair) * 1.25, (Qenv + Qair) * 1.25 * (c.learned.heat ?? 1)), each = 1000, n = Math.max(1, Math.ceil(Pheat / each));
     B.v('heating', n * each, 'W', `${n} × ${each} W panels: 1.25 times the envelope's ${Qenv.toFixed(0)} W and the exchanged air's ${Qair.toFixed(0)} W${recovery ? ` (${HEAT_RECOVERY.value * 100} % recovered: ${HEAT_RECOVERY.source})` : ''}`);
     const wall = (k: number) => (['back', 'left', 'right', 'front'] as const)[k % 4];
     for (let k = 0; k < n; k++) {
@@ -628,6 +643,11 @@ function standing(c: Ctx, B: B, body: string, ext: V3): { source: V3; sourceInto
     }
   }
   B.use(`store:energy:${body}:smoothing`);
+  // the inside as something to operate: what it loses per kelvin, what it holds, what heats it and what it is given
+  const heaters = B.loads.filter((l) => l.id.startsWith('heater ')).reduce((a, l) => a + l.P, 0);
+  const people = c.intent.regions.flatMap((r) => Object.values(r.produces ?? {})).find((l) => /heat/.test(l.name))?.value ?? 0;
+  const UA = Qenv / dT + (airHeat / dT) * (recovery ? 1 - HEAT_RECOVERY.value : 1);
+  B.plant.hold = { node: 'heating/panels', heat: heaters, UA, C: B.parts.reduce((a, p) => a + p.mass, 0) * 1000, Tlo: Tin, Tcold: Tout, gains: people };
   // water in to a tap over a basin, waste out to the sewer
   const water = c.s.elements.find((e) => e.id.startsWith('path:volume of water') && e.id.endsWith(`->${body}`));
   const basin = onWall('back', W / 4, fl + 0.85, [0.5, 0.15, 0.4]);
@@ -677,8 +697,9 @@ function standing(c: Ctx, B: B, body: string, ext: V3): { source: V3; sourceInto
 }
 
 // ---- the whole --------------------------------------------------------------------------------------------------------
-function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds'> {
-  const c = context(intent, s), B = builder();
+function once(intent: Intent, s: Structure, self: number, learned: Learned = {}): Omit<Machine, 'rounds'> {
+  const c = context(intent, s, learned), B = builder();
+  for (const w of learned.why ?? []) B.trace.push({ stage: 'choose', where: 'learned', round: 1, says: `learned from operating it: ${w}`, flaws: [], remedy: null });
   const body = bodyOf(c);
   const empty = { axes: [], hotEnd: null, electrical: null, order: [] };
   if (!body) return { name: intent.name, parts: [], values: [], flaws: [{ check: 'body', where: intent.name, says: 'nothing of the person\'s to embody', law: 'a region the wants are about', value: 0, limit: 1, remedy: null }], trace: [], size: [0, 0, 0], bom: [], config: [], ...empty };
@@ -760,9 +781,11 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   // wiring: from the source to each load, the thinnest conductor that holds its insulation and a 3 % drop
   for (const l of B.loads) {
     const I = l.P / l.V, len = Math.hypot(l.at[0] - source[0], l.at[1] - source[1], l.at[2] - source[2]) * 1.3 + 0.3;
-    const cab = cableFor(I, len, l.V, c.ambient);
+    const cab = cableFor(I * (c.learned.cable ?? 1), len, l.V, c.ambient);
     if (!cab) B.flaws.push({ check: 'conductor', where: `wiring/${l.id}`, says: `no cable of up to ${PARALLEL_CONDUCTORS.value} conductors in parallel carries ${I.toFixed(0)} A over ${len.toFixed(1)} m at ${l.V} V within a 3 % drop`, law: 'ΔV = 2 I R l ≤ 3 %, each conductor within its insulation', value: I, limit: 0, remedy: null });
     const k = cab ?? { awg: 0, n: PARALLEL_CONDUCTORS.value, ins: INSULATIONS.find((x) => x.id === 'XLPE-90')! }, d = awgDiameter(k.awg) + 2 * k.ins.wall;
+    B.plant.conductors.push({ node: `wiring/${l.id}`, awg: k.awg, n: k.n, ins: k.ins.id, I });
+    for (const dr of B.plant.drives) if (dr.node === l.node) dr.circuit = `wiring/${l.id}`;
     B.add({ id: `wiring/${l.id}`, name: `${l.name} cable: ${l.conductors} × ${cableSays(k)}, ${len.toFixed(1)} m`, category: 'interconnect/conductors/awg', material: `copper, ${k.ins.name}`, system: 'cables', shape: { kind: 'wire', points: [source, [source[0], Math.max(source[1], l.at[1]) + 0.02, l.at[2]], l.at], r: (d / 2) * Math.sqrt(l.conductors * k.n) }, at: source, colour: l.conductors === 3 ? COLOURS['phase 1']!.hex : COLOURS['dc positive']!.hex, values: [{ name: 'current', value: I, unit: 'A', law: `I = P / V: ${l.P.toFixed(0)} W at ${l.V} V` }], mass: l.conductors * k.n * Math.PI * (awgDiameter(k.awg) / 2) ** 2 * len * COPPER.density }, 0);
   }
   if (B.loads.length) B.trace.push({ stage: 'wiring', where: 'wiring', round: 1, says: `${B.loads.length} circuits from the ${store ? 'battery' : 'supply'}`, flaws: [], remedy: null });
@@ -776,5 +799,5 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   const ex = B.parts.length ? extentOf(B.parts) : { lo: [0, 0, 0] as V3, hi: [0, 0, 0] as V3 };
   const bomMap = new Map<string, { name: string; qty: number; material: string; category: string; mass: number }>();
   for (const p of B.parts) { const e = bomMap.get(p.name) ?? { name: p.name, qty: 0, material: p.material, category: p.category, mass: 0 }; e.qty++; e.mass += p.mass; bomMap.set(p.name, e); }
-  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, gates: B.gates, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
+  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, gates: B.gates, plant: B.plant, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
 }

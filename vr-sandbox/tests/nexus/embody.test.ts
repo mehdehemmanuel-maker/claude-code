@@ -159,6 +159,7 @@ describe('the plain reading of what a person says', () => {
     show: (p) => { calls.push(`show ${p}`); return 'shown'; },
     make: (w) => { calls.push(`make ${w}`); return 'made'; },
     flaws: () => { calls.push('flaws'); return 'listed'; },
+    operate: () => { calls.push('operate'); return 'operated'; },
   };
   const b = plainBrain(world), ac = new AbortController();
   it('takes apart, puts back, shows, notes, rebuilds and replays', async () => {

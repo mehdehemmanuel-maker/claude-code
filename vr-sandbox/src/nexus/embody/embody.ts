@@ -35,12 +35,32 @@ const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
 /** One design step inside a round: a sub-loop's own round (the head, an axis, a motor) or the whole checked. */
 export interface Step { stage: 'head' | 'motor' | 'axis' | 'wiring' | 'whole' | 'frame' | 'choose'; where: string; round: number; says: string; flaws: Flaw[]; remedy: string | null }
 export interface Round { n: number; flaws: Flaw[]; remedies: string[]; parts: number; mass: number; choices: Choices; snapshot: Part[]; trace: Step[] }
+/** How a drive's motor turns what it moves: a wheel through a ratio, a rotor's thrust, a propeller's push. */
+export type DriveMap =
+  | { kind: 'wheel'; r: number; G: number; share: number }
+  | { kind: 'rotor'; n: number; Th: number; Qh: number; wh: number }
+  | { kind: 'propeller'; share: number; D: number; rho: number; J: number };
+/** What a motor is, thermally and electrically, as designed: its rated point, its losses there, how fast it warms. */
+export interface MotorPlant { T: number; w: number; Kt: number; Pcu: number; Pfe: number; mass: number; Tw: number; ambient: number; limit: number }
+/**
+ * A machine as something to operate (src/nexus/embody/operate.ts): what it moves and against what, each drive and the
+ * motor in it, what stores and carries its power, or the room it keeps and the heat it has. Data, from the designers.
+ */
+export interface Plant {
+  move?: { mass: number; vTop: number; accel: number; decel: number; grade: number; range: number; resist: [number, number][]; hover?: { thrust: number } };
+  drives: { node: string; map: DriveMap; motor: MotorPlant; circuit: string | null }[];
+  store?: { node: string; E: number; V: number; Imax: number };
+  conductors: { node: string; awg: number; n: number; ins: string; I: number }[];
+  hold?: { node: string; heat: number; UA: number; C: number; Tlo: number; Tcold: number; gains: number };
+}
 /** A decision the embodiment made: what it asked, what it read, the law that decided, what it tried, and what came of it. */
 export interface Gate { id: string; question: string; inputs: { name: string; value: number; unit: string }[]; law: string; tried: string[]; outcome: string; held: boolean }
 export interface Machine {
   name: string; parts: Part[]; values: Value[]; flaws: Flaw[]; rounds: Round[]; trace: Step[];
   /** The decisions that shaped it, each by a law (the general embodiment's; the printer's are its remedies). */
   gates?: Gate[];
+  /** It as something to operate, where its designers say how. */
+  plant?: Plant;
   axes: LinearAxis[]; hotEnd: HotEnd | null; electrical: Electrical | null;
   size: V3; bom: { name: string; qty: number; material: string; category: string; mass: number }[];
   config: { name: string; value: number; unit: string; law: string }[];
