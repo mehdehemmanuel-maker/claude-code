@@ -11,6 +11,10 @@
 // anything with a note (a flaw, a question, an idea, or what is good): it is pinned to the part with a picture of what
 // you were looking at, kept with the machine, and read back as a finding for the next round of laws.
 //
+// And the node boards (Boards): words and the links between them on a wall in front of you, the categories decided by
+// which nodes have the most links, the pipeline the order they are derived in; one of them made from what stands on the
+// pedestal. Call Claude on a board and say what you mean as it comes: it is read with the board and laid out to take.
+//
 // Desktop: drag to look, click a part to point at it, type to Claude. Space pauses the playback, → steps it, R runs it
 // again. Headset: point and pull the trigger at a part to select it, or at a button on the console; the left stick
 // walks, the right stick turns. Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|
@@ -43,6 +47,9 @@ import type { Intent } from '../want';
 import { card, label } from './holo';
 import { meshOfPart } from './parts';
 import { Robot } from './robot';
+import { Boards3D, LIST_W } from './boards3d';
+import { makeBoardStore } from './boards-store';
+import { checked, claudePrompt, understand, type Understanding } from '../understand';
 
 const params = new URLSearchParams(location.search);
 const frozen = params.has('t') ? Number(params.get('t')) : null;
@@ -474,7 +481,8 @@ function tick(): void {
   fps = fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
   const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length;
   hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`;
-  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn, dt);
+  // the clock and status step aside in a headset while the board is up: they would lie over its corner
+  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && panel !== 'boards', dt);
   if (!hudOn) hud.dom.style.display = 'none';
   drawModes();
   modeStrip.visible = renderer.xr.isPresenting && modeChips.length > 0;
@@ -498,11 +506,12 @@ function tick(): void {
   suggest.group.visible = wantNew && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
   if (suggest.group.visible && panel !== 'new') { suggest.group.position.copy(M).add(tmp.set(0, 1.25, 0.35)); suggest.group.lookAt(eye); }
   // the dock goes where you look, low; the menu above it when you open it
-  dock.group.visible = renderer.xr.isPresenting;
+  // the dock follows you low; it steps aside while the keyboard of light is where it would be, for the board
+  dock.group.visible = renderer.xr.isPresenting && !(panel === 'boards' && !!boards?.typing);
   if (dock.group.visible) { const head = renderer.xr.getCamera(), f2 = new THREE.Vector3(); head.getWorldDirection(f2); f2.y = 0; if (f2.lengthSq() < 1e-6) f2.set(0, 0, -1); f2.normalize(); const want = eye.clone().addScaledVector(f2, 0.62).add(tmp.set(0, -0.38, 0)); dock.group.position.lerp(want, Math.min(1, dt * 2.5)); dock.group.lookAt(eye); }
   menu.group.visible = menuOpen && renderer.xr.isPresenting;
   if (menu.group.visible) { menu.group.position.copy(dock.group.position).add(tmp.set(0, 0.36, 0)); menu.group.lookAt(eye); }
-  if (renderer.xr.isPresenting) { const c3 = renderer.xr.getController(pointerHand); ray.setFromXRController(c3); const hit = ray.intersectObjects(machine.children, true)[0]; hover(hit ? hit.point : null, hit ? partAt() : null); }
+  if (renderer.xr.isPresenting) { const c3 = renderer.xr.getController(pointerHand); ray.setFromXRController(c3); ray.camera = renderer.xr.getCamera(); const hit = ray.intersectObjects(machine.children, true)[0]; hover(hit ? hit.point : null, hit ? partAt() : null); }
   simBoard.visible = panel === 'operate';
   insideBoard.visible = panel === 'inside';
   causalGroup.visible = panel === 'causes';
@@ -510,7 +519,12 @@ function tick(): void {
   verdictBox.style.display = panel === 'causes' && causalNode && !renderer.xr.isPresenting ? 'flex' : 'none';
   if (panel === 'causes') for (const m of nodeMesh.values()) if (m.userData.bad) (m.material as THREE.MeshBasicMaterial).color.setHex(Math.sin(clock() * 6) > 0 ? 0xff1744 : 0x7f0000);
   flawBoard.visible = panel === 'flaws'; flawList.style.display = panel === 'flaws' ? 'flex' : 'none';
-  chatCard.mesh.visible = keyboard.mesh.visible = panel === 'chat';
+  chatCard.mesh.visible = panel === 'chat';
+  keyboard.mesh.visible = panel === 'chat' || (panel === 'boards' && !!boards?.typing && renderer.xr.isPresenting);
+  if (boards) { if (panel !== 'boards' && boards.group.visible) boards.hide(); boardBar.style.display = panel === 'boards' && boards.typing && !renderer.xr.isPresenting ? 'flex' : 'none'; }
+  // on a screen, the board has the view: the tools and the chat, which would lie over its corners, are put away while it is up
+  { const away = panel === 'boards' && !renderer.xr.isPresenting; tools.style.display = away ? 'none' : 'flex'; chat.style.display = away ? 'none' : 'flex'; }
+  if (boards && boardHand >= 0 && renderer.xr.isPresenting) { ray.setFromXRController(renderer.xr.getController(boardHand)); boards.move(ray); }
   decide.style.display = panel === 'loop' ? 'flex' : 'none';
   partCard.mesh.visible = clock() < partCardUntil && !holo.showing;
   if (partCard.mesh.visible) partCard.mesh.lookAt(eye);
@@ -666,7 +680,7 @@ const world2: WorldApi = {
   },
   flaws() { summonTo('flaws'); return flawRows().slice(0, 8).map((r, i) => `${i + 1}. ${r.text}`).join(' ') || 'No flaw, gap or report left on it.'; },
   expand: (target) => expand(target, true),
-  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes'].includes(p2) ? p2 : 'loop') as Panel); },
+  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes', 'boards'].includes(p2) ? p2 : 'loop') as Panel); },
   build: (target) => buildIt(target),
 };
 
@@ -734,7 +748,7 @@ async function noteOn(tg: Target, kind: NoteKind, text: string, on?: { node: str
   return `${pin ? 'Pinned' : 'Noted'} on ${s.part.name}: ${body.text}. ${sent.said}`;
 }
 // ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes' | 'new' | 'inside';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes' | 'new' | 'inside' | 'boards';
 let panel: Panel = 'none', lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 /** Bring a panel up, or put it away if it is the one up. */
 function summon(p: Panel): string { return summonTo(panel === p ? 'none' : p); }
@@ -771,8 +785,17 @@ function summonTo(p: Panel): string {
     else { const look = new THREE.Vector3(); camera.getWorldDirection(look); causalGroup.position.copy(eye).addScaledVector(look, 1.6); causalGroup.lookAt(eye); }
   }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
+  if (panel === 'boards') {
+    if (!boards) { panel = 'none'; return 'The boards are still opening; ask again in a moment.'; }
+    // in front of you at the height of your eyes, the wall and its list together centred on where you look
+    framing = false;
+    const g = boards.group, look = new THREE.Vector3(); (xr ? head : camera).getWorldDirection(look);
+    if (xr) { g.position.copy(eye).addScaledVector(fwd, 1.55).addScaledVector(left, LIST_W / 2).add(new THREE.Vector3(0, -0.08, 0)); g.lookAt(eye.x, g.position.y, eye.z); }
+    else { const side = new THREE.Vector3().crossVectors(look, camera.up).normalize(); g.position.copy(eye).addScaledVector(look, 1.75).addScaledVector(side, -LIST_W / 2); g.quaternion.copy(camera.quaternion); }
+    return boards.show();
+  }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: exec ? `What actually ran: ${exec.nodes.length} nodes, ${exec.edges.length} dependencies, ${exec.domains.length} domains, walked by depth. Point at any node.` : '', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', new: 'What shall I build? Pick one, or say your own.', inside: insideOf ? `${insideOf.levels.length} levels inside ${insideOf.name}.` : '', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: exec ? `What actually ran: ${exec.nodes.length} nodes, ${exec.edges.length} dependencies, ${exec.domains.length} domains, walked by depth. Point at any node.` : '', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', new: 'What shall I build? Pick one, or say your own.', inside: insideOf ? `${insideOf.levels.length} levels inside ${insideOf.name}.` : '', boards: '', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -1232,7 +1255,12 @@ const insideRowAt = (uv: THREE.Vector2) => { const y = (1 - uv.y) * insideCanvas
 interface Mode { id: string; label: string; exit: () => void }
 function modes(): Mode[] {
   const out: Mode[] = [];
-  if (panel !== 'none') out.push({ id: 'panel', label: panel === 'chat' ? 'Chat and keyboard' : `${panel[0]!.toUpperCase()}${panel.slice(1)} panel`, exit: () => { panel = 'none'; } });
+  if (panel === 'boards' && boards) {
+    if (boards.typing) out.push({ id: 'board-typing', label: boards.typing === 'ask' ? 'Calling Claude: say what you mean' : boards.typing === 'find' ? 'Finding a node' : boards.typing === 'title' ? 'Naming a board' : 'Adding words', exit: () => boards!.stopTyping() });
+    if (boards.call || boards.calling) out.push({ id: 'board-call', label: "Claude's reading", exit: () => boards!.act('dismiss') });
+    if (boards.sel) out.push({ id: 'board-node', label: `Node: ${(boards.board()?.nodes[boards.sel]?.label ?? '').slice(0, 28)}`, exit: () => boards!.act('deselect') });
+  }
+  if (panel !== 'none') out.push({ id: 'panel', label: panel === 'chat' ? 'Chat and keyboard' : panel === 'boards' ? 'Node boards' : `${panel[0]!.toUpperCase()}${panel.slice(1)} panel`, exit: () => { panel = 'none'; } });
   if (settingsOpen) out.push({ id: 'settings', label: 'Settings', exit: () => { settingsOpen = false; } });
   if (menuOpen) out.push({ id: 'menu', label: 'Menu', exit: () => { menuOpen = false; } });
   if (holo.showing) out.push({ id: 'holo', label: `Hologram: ${holo.showing.name}`.slice(0, 40), exit: () => holo.clear() });
@@ -1431,7 +1459,7 @@ tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-i
 const rowOf = (title: string) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center'; const t2 = document.createElement('span'); t2.textContent = title; t2.style.cssText = 'font:600 11px system-ui;color:#7fb3c8;letter-spacing:.08em;text-transform:uppercase'; r.appendChild(t2); tools.appendChild(r); return r; };
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 let loopBtn: HTMLButtonElement | null = null;
-for (const [name, p2] of [['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+for (const [name, p2] of [['Boards', 'boards'], ['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
 button('✗ Report', () => report(), actRow);
 { const fb = button('🛠 Fix', () => togglePin(), actRow); fb.dataset.fixOk = '1'; fixButtons.push(fb); }
 for (const [t2, q] of QUESTIONS) button(t2, () => askExec(q), execBox);
@@ -1482,7 +1510,7 @@ const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRec; webk
 interface SpeechRec { lang: string; interimResults: boolean; onresult: ((e: { results: { 0: { 0: { transcript: string } } } }) => void) | null; onerror: (() => void) | null; start(): void }
 function listen(): void {
   if (!SR) { line('system', 'This browser does not hear; type instead.'); return; }
-  try { const r = new SR(); r.lang = 'en-US'; r.interimResults = false; hud.set('listening'); r.onresult = (e) => { hud.set('idle'); const said = e.results[0][0].transcript; void converse(said); }; r.onerror = () => { hud.set('idle'); line('system', 'The microphone is not available here; type instead.'); }; r.start(); } catch { hud.set('idle'); line('system', 'The microphone is not available here; type instead.'); }
+  try { const r = new SR(); r.lang = 'en-US'; r.interimResults = false; hud.set('listening'); r.onresult = (e) => { hud.set('idle'); const said = e.results[0][0].transcript; if (panel === 'boards' && boards?.typing) { line('you', said); boards.enter(said); } else void converse(said); }; r.onerror = () => { hud.set('idle'); line('system', 'The microphone is not available here; type instead.'); }; r.start(); } catch { hud.set('idle'); line('system', 'The microphone is not available here; type instead.'); }
 }
 if (SR) { const mic = button('🎤', () => listen(), row); mic.type = 'button'; }
 // the same talk as a hologram, with a keyboard of light, for a headset
@@ -1496,6 +1524,10 @@ function drawChat(): void {
 /** A key pressed on the keyboard of light. */
 function pressKey(key: string): void {
   const r = keyboard.press(key);
+  if (panel === 'boards' && boards?.typing) {
+    if (r === 'mic') listen(); else if (r === 'send') { const t2 = keyboard.text; keyboard.text = ''; keyboard.draw(); boards.enter(t2); } else boards.key(keyboard.text);
+    return;
+  }
   if (r === 'mic') listen();
   if (r === 'send') { const t2 = keyboard.text.trim(); keyboard.text = ''; keyboard.draw(); if (t2) send(t2); }
 }
@@ -1588,10 +1620,57 @@ function send(text: string): void {
   if (reportFor) { const s2 = shown.get(reportFor); reportFor = null; if (s2) { void addNote(s2, 'flaw', text).then((r) => say(r)); return; } }
   void converse(text);
 }
+// ---- the node boards: words and their links on a wall in front of you (src/nexus/view/boards3d.ts) ------------------------
+let boards: Boards3D | null = null, boardHand = -1, boardMouse = false;
+const boardBar = document.createElement('form');
+boardBar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:7;display:none;gap:6px;width:min(34rem,calc(100vw - 32px));padding:8px;border-radius:12px;background:rgba(3,14,22,0.92);border:1px solid #4dd0e1';
+const boardInput = document.createElement('input');
+boardInput.style.cssText = 'flex:1;min-width:0;font:15px system-ui;padding:9px 10px;border-radius:8px;border:1px solid #2e7d8c;background:#020a10;color:#e6f7ff';
+boardBar.append(boardInput);
+{ const go = button('Send', () => undefined, boardBar); go.type = 'submit'; if (SR) { const mic = button('🎤', () => listen(), boardBar); mic.type = 'button'; } const x = button('✕', () => boards?.stopTyping(), boardBar); x.type = 'button'; }
+boardBar.onsubmit = (e) => { e.preventDefault(); const t2 = boardInput.value; boardInput.value = ''; boards?.enter(t2); };
+boardInput.addEventListener('input', () => boards?.key(boardInput.value));
+boardInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); boards?.stopTyping(); } });
+document.body.appendChild(boardBar);
+/** Calling Claude on a board: Claude reads the words with the board where this page may ask it; else Nexus reads them,
+ *  says so, and the call goes to Claude Code with the rest of the notes. */
+async function understandOnBoard(words: string, b: Parameters<typeof understand>[1], sel: string | null): Promise<Understanding> {
+  const local = understand(words, b, sel);
+  if (brain?.mode === 'claude' && brain.json) {
+    hud.set('thinking');
+    try { const r = checked(await brain.json(claudePrompt(words, b, sel, local)), b); if (r) return { ...r, heard: words, by: 'claude' }; } catch { /* read plainly below */ } finally { hud.set('idle'); }
+  }
+  const text = `Board "${b.title}"${sel ? `, at ${b.nodes[sel]?.label}` : ''}: the person called Claude and said "${words}". Nexus read it as: ${local.understood}`;
+  if (relay) void relay.send(text, renderer.domElement).then((r2) => { if (!r2.ok) { unsent.push(text); drawUnsent(); } }); else { unsent.push(text); drawUnsent(); }
+  return local;
+}
+const boardHost = {
+  say: (t2: string) => say(t2),
+  build: () => (empty || !run.m.parts.length ? null : { ask: lastMake?.words ?? run.intent.name, name: run.intent.name, parts: run.m.parts }),
+  type(on: boolean, hint: string) {
+    if (renderer.xr.isPresenting) {
+      keyboard.placeholder = on ? hint : 'type to Claude, or ask it to build anything'; if (on) { keyboard.text = ''; } keyboard.draw();
+      if (on) { eyeOf(eye); const head = renderer.xr.getCamera(), f2 = new THREE.Vector3(); head.getWorldDirection(f2); f2.y = 0; f2.normalize(); keyboard.mesh.position.copy(eye).addScaledVector(f2, 0.55).add(new THREE.Vector3(0, -0.34, 0)); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
+    } else { boardInput.placeholder = hint; boardInput.value = ''; if (on) window.setTimeout(() => boardInput.focus(), 30); else boardInput.blur(); }
+  },
+  close: () => { panel = 'none'; },
+  understand: understandOnBoard,
+  listen: () => { if (!SR) return false; listen(); return true; },
+};
+const ndc = (e: PointerEvent) => new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (panel !== 'boards' || !boards || renderer.xr.isPresenting || pinning) return;
+  ray.setFromCamera(ndc(e), camera);
+  if (boards.down(ray)) { boardMouse = true; orbit.enabled = false; }
+});
+renderer.domElement.addEventListener('pointermove', (e) => { if (!boardMouse || !boards) return; ray.setFromCamera(ndc(e), camera); boards.move(ray); });
+window.addEventListener('pointerup', () => { if (!boardMouse) return; boardMouse = false; boards?.up(); orbit.enabled = true; });
+
 let down: [number, number, number] | null = null;
 renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY, performance.now()]; });
 // a click is a press that barely moved: a laser pointer's hand shakes, so it is allowed a little
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (boardMouse) return;
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 14 || performance.now() - down[2] > 900) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
   if (dropPin()) return;
@@ -1618,7 +1697,7 @@ suggestBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px';
 for (const w of SUGGESTIONS) { const b2 = document.createElement('button'); b2.textContent = `Build ${w}`; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer'; b2.onclick = () => make(w); suggestBox.appendChild(b2); }
 chat.prepend(suggestBox);
 let menuOpen = false;
-const dock = chipGrid([['✗ Report', () => report()], ['🛠 Fix', () => togglePin()], ['⤓ Inside', () => line('system', openInside())], ['Ask', () => summon('chat')], ['＋ New', () => summon('new')], ['▶ Operate', () => say(operateIt())], ['Causes', () => line('system', summon('causes'))], ['Flaws', () => line('system', summon('flaws'))], ['✕ Exit', () => exitLatest()], ['☰ Menu', () => { menuOpen = !menuOpen; }]], 10, 0.09, 0.042, (i) => (i === 0 ? '#ff8a80' : i === 1 ? '#e0f7fa' : i === 8 ? '#ffd740' : '#80deea'), 2.5);
+const dock = chipGrid([['✗ Report', () => report()], ['🛠 Fix', () => togglePin()], ['⤓ Inside', () => line('system', openInside())], ['Ask', () => summon('chat')], ['＋ New', () => summon('new')], ['▶ Operate', () => say(operateIt())], ['Causes', () => line('system', summon('causes'))], ['Flaws', () => line('system', summon('flaws'))], ['Boards', () => say(summon('boards'))], ['✕ Exit', () => exitLatest()], ['☰ Menu', () => { menuOpen = !menuOpen; }]], 11, 0.09, 0.042, (i) => (i === 0 ? '#ff8a80' : i === 1 ? '#e0f7fa' : i === 9 ? '#ffd740' : '#80deea'), 2.5);
 
 // what you point at, lit before you press, its name beside it
 let hoverId: string | null = null, hoverTagFor: string | null = null;
@@ -1642,7 +1721,7 @@ const dolly = new THREE.Group(); scene.add(dolly); dolly.add(camera);
 const CHIPS: [string, () => void][] = [
   ['✕ Exit', () => exitLatest()], ['Exit all', () => exitAll()], ['Settings', () => toggleSettings()],
   ['🛠 Fix', () => togglePin()], ['⤓ Inside', () => line('system', openInside())], ['✗ Report', () => report()],
-  ['Flaws', () => line('system', summon('flaws'))], ['Chat', () => line('system', summon('chat'))], ['New build', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }],
+  ['Boards', () => say(summon('boards'))], ['Flaws', () => line('system', summon('flaws'))], ['Chat', () => line('system', summon('chat'))], ['New build', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }],
   ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
   ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
   ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Causes', () => line('system', summon('causes'))],
@@ -1680,15 +1759,20 @@ for (let i = 0; i < 2; i++) {
   const laser = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }));
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   ctl.addEventListener('selectstart', () => {
-    ray.setFromXRController(ctl);
+    // a sprite (a label) is hit only with the eye it faces: the headset's camera
+    ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
     pointerHand = i;
     const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
-    if (hit && (!pinning || hit.object.userData.fixOk)) { all.find((c) => c.mesh === hit.object)?.act(); return; }
+    // what is nearest along the ray is pressed: a chip, the keyboard of light, or the board behind them
+    const onBoard = panel === 'boards' && boards ? boards.distance(ray) : Infinity, onKeys = keyboard.mesh.visible ? ray.intersectObject(keyboard.mesh, false)[0]?.distance ?? Infinity : Infinity;
+    if (hit && (!pinning || hit.object.userData.fixOk) && hit.distance <= Math.min(onBoard, onKeys)) { all.find((c) => c.mesh === hit.object)?.act(); return; }
+    if (!pinning && onBoard < onKeys && boards?.down(ray)) { boardHand = i; return; }
     if (dropPin()) return;
     if (pressBoards()) return;
     if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
   });
+  ctl.addEventListener('selectend', () => { if (boardHand === i) { boardHand = -1; boards?.up(); } });
   ctl.addEventListener('squeezestart', () => togglePause());
 }
 // walking: the left stick moves you where you look, the right stick turns you a twelfth at a time
@@ -1739,6 +1823,7 @@ async function boot() {
     const { XRDevice, metaQuest3 } = await import('iwer');
     const device = new XRDevice(metaQuest3);
     device.installRuntime({ forceInstall: true });
+    (window as unknown as { xrDevice: unknown }).xrDevice = device;
     device.stereoEnabled = true;
     device.position.set(view[0], view[1], view[2]);
     const dir = new THREE.Vector3(view[3] - view[0], view[4] - view[1], view[5] - view[2]).normalize();
@@ -1749,7 +1834,9 @@ async function boot() {
     await renderer.xr.setSession(session as unknown as XRSession);
   } else document.body.appendChild(VRButton.createButton(renderer));
   let last = performance.now();
-  renderer.setAnimationLoop(() => { const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); renderer.render(scene, camera); });
+  // the frames drawn, for a test that must wait for the room to see what it did
+  let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
+  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); renderer.render(scene, camera); });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -1760,11 +1847,22 @@ async function boot() {
   unsentBtn.style.cssText = `${BTN};border-color:#ff8a80;display:none`; unsentBtn.dataset.fixOk = '1'; chat.append(unsentBtn);
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
   void makeRelay().then((r) => { relay = r; });
+  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); });
   void makeNotes().then((n) => { notes = n; n.subscribe((all) => { allNotes = all; drawPins(); }); n.proposals((all) => { proposals = all; drawLoop(); }); status.textContent = statusLine(); });
   drawLoop();
   void makeBrain(world2).then((b) => { brain = b; status.textContent = statusLine(); });
   void hud.watchBattery();
   (window as unknown as { ready: boolean }).ready = true;
+  // where a node, a control or a row of the board stands on the screen, for a test that points at it
+  (window as unknown as { boardPoint: (on: 'node' | 'strip' | 'list', key: string) => [number, number] | null }).boardPoint = (on, key) => {
+    const w = boards?.pointOf(on, key); if (!w) return null; const p = w.project(camera); return [((p.x + 1) / 2) * window.innerWidth, ((1 - p.y) / 2) * window.innerHeight];
+  };
+  (window as unknown as { boardsNow: () => Boards3D | null }).boardsNow = () => boards;
+  // and in a headset: where a key of the keyboard of light, or a thing on the board, is in the room; a panel brought up
+  const toWorld = (mesh: THREE.Mesh, uv: THREE.Vector2) => { const g = (mesh.geometry as THREE.PlaneGeometry).parameters; mesh.updateMatrixWorld(); const p = mesh.localToWorld(new THREE.Vector3((uv.x - 0.5) * g.width, (uv.y - 0.5) * g.height, 0)); return [p.x, p.y, p.z]; };
+  (window as unknown as { keyPoint: (k: string) => number[] | null }).keyPoint = (k) => { const uv = keyboard.keyUv(k); return uv && keyboard.mesh.visible ? toWorld(keyboard.mesh, uv) : null; };
+  (window as unknown as { boardWorld: (on: 'node' | 'strip' | 'list', key: string) => number[] | null }).boardWorld = (on, key) => { const w = boards?.pointOf(on, key); return w ? [w.x, w.y, w.z] : null; };
+  (window as unknown as { forgeSummon: (p: string) => string }).forgeSummon = (p) => summonTo(p as Panel);
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first
   (window as unknown as { causalPoint: () => [number, number] | null }).causalPoint = () => {
     const m = [...nodeMesh.entries()].find(([id]) => /motor/.test(id))?.[1] ?? [...nodeMesh.values()][0]; if (!m) return null;

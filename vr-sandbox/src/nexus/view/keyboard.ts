@@ -10,6 +10,8 @@ const ROWS = ['1234567890', 'qwertyuiop', "asdfghjkl'", 'zxcvbnm,.?'];
 export class Keyboard {
   readonly mesh: THREE.Mesh;
   text = '';
+  /** What the top line says while nothing is typed: what the typing is for. */
+  placeholder = 'type to Claude, or ask it to build anything';
   private shift = false;
   private readonly keys: Key[] = [];
   private readonly canvas = document.createElement('canvas');
@@ -35,6 +37,8 @@ export class Keyboard {
     const x = uv.x * this.canvas.width, y = (1 - uv.y) * this.canvas.height;
     return this.keys.find((k) => x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h)?.label ?? null;
   }
+  /** Where a key is on the board (its texture coordinates, at its middle), for whoever points at it. */
+  keyUv(label: string): THREE.Vector2 | null { const k = this.keys.find((x) => x.label === label); return k ? new THREE.Vector2((k.x + k.w / 2) / this.canvas.width, 1 - (k.y + k.h / 2) / this.canvas.height) : null; }
   /** Press a key: what it does to the text, or 'send' / 'mic' for the caller to act on. */
   press(key: string): 'send' | 'mic' | null {
     this.lit = { key, until: performance.now() + 180 };
@@ -54,7 +58,7 @@ export class Keyboard {
     g.fillStyle = 'rgba(2,12,20,0.78)'; g.beginPath(); g.roundRect(4, 4, W - 8, H - 8, 30); g.fill();
     g.strokeStyle = '#4dd0e1'; g.lineWidth = 3; g.stroke();
     g.textBaseline = 'middle'; g.fillStyle = this.text ? '#ffffff' : '#7fb3c8'; g.font = '500 44px system-ui';
-    const shown = this.text || 'type to Claude, or ask it to build anything';
+    const shown = this.text || this.placeholder;
     let s = shown; while (g.measureText(`${s}▏`).width > W - 70 && s.length > 1) s = s.slice(1);
     g.fillText(`${s}${this.text ? '▏' : ''}`, 34, 56);
     const now = performance.now();

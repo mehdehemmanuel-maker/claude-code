@@ -40,11 +40,13 @@ export interface WorldApi {
 }
 
 type Turn = { role: 'user' | 'assistant'; content: string };
-type Sample = ((input: string | Turn[], o?: Record<string, unknown>) => Promise<{ text: string }>) & { limits(): Promise<{ tools?: { maxCount: number } }> };
+type Sample = ((input: string | Turn[], o?: Record<string, unknown>) => Promise<{ text: string }>) & { limits(): Promise<{ tools?: { maxCount: number } }>; json?: (input: string | Turn[], o?: Record<string, unknown>) => Promise<unknown> };
 
 export interface Brain {
   readonly mode: 'claude' | 'plain';
   ask(text: string, onText: (t: string) => void, signal: AbortSignal): Promise<string>;
+  /** One answer as data, to a prompt that asks for it (a board called on): where Claude can be asked, else absent. */
+  json?(prompt: string): Promise<unknown>;
 }
 
 const fmt = (x: number) => (Math.abs(x) >= 1e-2 && Math.abs(x) < 1e5 ? Number(x.toPrecision(3)).toString() : x.toExponential(2).replace('e+', 'e'));
@@ -76,7 +78,7 @@ function claudeBrain(w: WorldApi, sample: Sample): Brain {
     { name: 'rebuild', description: 'Generate and embody the machine again to a new ask: size_mm (largest part), tolerance_mm, hours (time for the largest part). Returns the rounds, flaws, parts and size.', inputSchema: { type: 'object', properties: { size_mm: { type: 'number' }, tolerance_mm: { type: 'number' }, hours: { type: 'number' } } }, execute: (i: Record<string, unknown>) => w.rebuild({ ...(i.size_mm ? { size: Number(i.size_mm) / 1e3 } : {}), ...(i.tolerance_mm ? { tolerance: Number(i.tolerance_mm) / 1e3 } : {}), ...(i.hours ? { hours: Number(i.hours) } : {}) }) },
     { name: 'expand', description: 'Lift an assembly or subsystem (an id like "x/motor", "x/motor/rotor", "hot end", or words; "" for what the person points at) out of the machine as a hologram and unravel it in the air into its subsystems. Returns what it holds.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.expand(String(i.target ?? '')) },
     { name: 'build', description: 'Build an assembly step by step in the air from the inside out, or "the machine" in place from the ground up, in the order the build law gives. Returns how many steps and the first.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.build(String(i.target ?? '')) },
-    { name: 'show', description: 'Bring one panel in front of the person, the rest out of the way: pipeline, rounds, laws, bill (parts and settings), loop (their reports and the decisions put to them), flaws (every flaw, gap and report), chat (the transcript and a keyboard), gates (every decision the embodiment took, by which law, and what else it tried), operate (what operating it found and learned), causes (what causes what: the subsystems and what passes between them, the breaks lit, to walk through and judge); none to clear the view.', inputSchema: { type: 'object', properties: { panel: { type: 'string', enum: ['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes', 'none'] } }, required: ['panel'] }, execute: (i: Record<string, unknown>) => w.show(String(i.panel ?? 'none')) },
+    { name: 'show', description: 'Bring one panel in front of the person, the rest out of the way: pipeline, rounds, laws, bill (parts and settings), loop (their reports and the decisions put to them), flaws (every flaw, gap and report), chat (the transcript and a keyboard), gates (every decision the embodiment took, by which law, and what else it tried), operate (what operating it found and learned), causes (what causes what: the subsystems and what passes between them, the breaks lit, to walk through and judge), boards (node boards: words and the links between them, the categories decided by which nodes have the most links; one of the build standing here); none to clear the view.', inputSchema: { type: 'object', properties: { panel: { type: 'string', enum: ['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes', 'boards', 'none'] } }, required: ['panel'] }, execute: (i: Record<string, unknown>) => w.show(String(i.panel ?? 'none')) },
     { name: 'make', description: 'Design and build something new from the person\'s ask, replacing what stands here: a car, a house or cabin, a drone, a cart, a boat, a 3D printer, anything. words: the ask in plain English with every number and unit the person gave (e.g. "a car for 2 people that goes 300 km at 130 km/h", "a cabin of 40 m² for 2 people, winter to -25 °C", "a drone that carries 1.5 kg 8 km at 12 m/s"). Returns what was heard, what was assumed, and the rounds, parts, flaws and gaps.', inputSchema: { type: 'object', properties: { words: { type: 'string' } }, required: ['words'] }, execute: (i: Record<string, unknown>) => w.make(String(i.words ?? '')) },
     { name: 'again', description: 'Try again in front of the person with their demand or critique of what stands here: demand in their words (e.g. "it has to carry 300 kg", "make it faster", "mud from the wheels hits the battery"), and spec, a revised ask as data, when you can compose one. Folds it into the ask, builds again live, and returns what changed; what nothing in Nexus reads yet goes to Claude Code, who writes the laws, and it says so. Use this, not make, for a change to what stands here.', inputSchema: { type: 'object', properties: { demand: { type: 'string' }, spec: { type: 'object' } }, required: ['demand'] }, execute: (i: Record<string, unknown>) => w.again(String(i.demand ?? ''), i.spec) },
     { name: 'operate', description: 'Operate what stands here through the duty its wants ask (speed up, hold, climb, stop; or keep a room through cold days), observe every subsystem, find each failure with what asked it and what it hangs from, learn what the design must meet, rebuild and operate again. Returns what failed, when, and what it learned.', inputSchema: { type: 'object', properties: {} }, execute: () => w.operate() },
@@ -85,6 +87,11 @@ function claudeBrain(w: WorldApi, sample: Sample): Brain {
   ];
   return {
     mode: 'claude',
+    async json(prompt) {
+      if (sample.json) return sample.json(prompt, { modelTier: 'default' });
+      const { text } = await sample(prompt, { modelTier: 'default' });
+      const m = text.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null;
+    },
     async ask(text, onText, signal) {
       turns.push({ role: 'user', content: text });
       while (turns.length > 12) turns.shift();
@@ -123,8 +130,8 @@ export function plainBrain(w: WorldApi): Brain {
       const kind = /\b(flaw|wrong|bad|broken|too)\b/.test(t) ? 'flaw' : /\b(good|nice|love|great)\b/.test(t) ? 'good' : /\?|question/.test(t) ? 'question' : 'idea';
       const noteMatch = text.match(/^(?:note|mark)\s*(?:on\s+([^:]+))?[:,-]?\s*(.+)$/i);
       if (noteMatch) return w.note(noteMatch[1]?.trim() ?? '', kind, noteMatch[2]!.trim());
-      const pane = t.match(/\b(pipeline|rounds?|laws?|bill|parts list|settings|loop|decisions?|proposals?|chat|keyboard|gates?|logic|causes?|causal|dependenc(y|ies))\b/);
-      if (pane && /\b(show|open|bring|see|where)\b/.test(t)) return w.show(/round/.test(pane[1]!) ? 'rounds' : /law/.test(pane[1]!) ? 'laws' : /bill|parts|settings/.test(pane[1]!) ? 'bill' : /pipeline/.test(pane[1]!) ? 'pipeline' : /chat|keyboard/.test(pane[1]!) ? 'chat' : /gate|logic/.test(pane[1]!) ? 'gates' : /caus|depend/.test(pane[1]!) ? 'causes' : 'loop');
+      const pane = t.match(/\b(pipeline|rounds?|laws?|bill|parts list|settings|loop|decisions?|proposals?|chat|keyboard|gates?|logic|causes?|causal|dependenc(y|ies)|boards?|node boards?)\b/);
+      if (pane && /\b(show|open|bring|see|where)\b/.test(t)) return w.show(/round/.test(pane[1]!) ? 'rounds' : /law/.test(pane[1]!) ? 'laws' : /bill|parts|settings/.test(pane[1]!) ? 'bill' : /pipeline/.test(pane[1]!) ? 'pipeline' : /chat|keyboard/.test(pane[1]!) ? 'chat' : /gate|logic/.test(pane[1]!) ? 'gates' : /caus|depend/.test(pane[1]!) ? 'causes' : /board/.test(pane[1]!) ? 'boards' : 'loop');
       if (/\b(hide|clear|put away)\b/.test(t)) return w.show('none');
       if (/^build\b|\bbuild (it|this|the|me)\b/.test(t)) return w.build(/printer|machine|whole|everything/.test(t) ? 'the machine' : target);
       if (/\b(expand|unravel|hologram|holo|subsystems?|single out)\b/.test(t)) return w.expand(target.replace(/\b(expand|unravel|hologram|holo|subsystems?|single out|of)\b/g, '').trim());
