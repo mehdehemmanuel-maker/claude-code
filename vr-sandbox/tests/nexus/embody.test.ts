@@ -8,6 +8,7 @@ import { LAW_UPDATES } from '../../src/nexus/embody/journal';
 import { boxOf, extentOf, part, placeParts, type Part } from '../../src/nexus/embody/part';
 import { WINDING_CLASS } from '../../src/nexus/embody/stock';
 import { find } from '../../src/nexus/embody/taxonomy';
+import { buildSteps, loadPath, nodeAt, treeOf } from '../../src/nexus/embody/tree';
 import { generate } from '../../src/nexus/manifold';
 import { plainBrain, type WorldApi } from '../../src/nexus/view/brain';
 
@@ -83,6 +84,33 @@ describe('the laws the experiment updated', () => {
   });
 });
 
+describe('what holds it and how it goes together', () => {
+  it('holds every part: a load path from the ground through what it touches or is fastened into', () => {
+    expect(loadPath(m.parts).floating.map((p) => p.id)).toEqual([]);
+    expect(m.parts.find((p) => p.id === 'spool/axle')!.into).toEqual(['spool/bracket']);
+  });
+  it('knows a motor as its subsystems: what turns, what holds the field, what holds the two apart', () => {
+    const motor = nodeAt(treeOf(m.parts), 'x/motor')!;
+    expect(motor.children.map((c) => c.name).sort()).toEqual(['bearings', 'encoder', 'fasteners', 'housing', 'rotor', 'stator']);
+    expect(motor.parts.length).toBe(m.parts.filter((p) => p.id.startsWith('x/motor/')).length);
+  });
+  it('builds a motor from the inside out, every part once, fasteners last', () => {
+    const steps = buildSteps(m.parts, 'x/motor'), order = steps.map((s2) => s2.node.split('/').at(-1));
+    expect(steps.flatMap((s2) => s2.parts).sort()).toEqual(m.parts.filter((p) => p.id.startsWith('x/motor/')).map((p) => p.id).sort());
+    expect(order.indexOf('rotor')).toBeLessThan(order.indexOf('housing'));
+    expect(order.indexOf('stator')).toBeLessThan(order.indexOf('housing'));
+    expect(steps.at(-1)!.title).toMatch(/fasten/);
+  });
+  it('builds the whole machine from the ground up, every part once', () => {
+    const steps = buildSteps(m.parts), parts = steps.flatMap((s2) => s2.parts);
+    expect(new Set(parts).size).toBe(parts.length);
+    expect(parts.length).toBe(m.parts.length);
+    const first = (re: RegExp) => steps.findIndex((s2) => re.test(s2.node));
+    expect(first(/^frame/)).toBeLessThan(first(/^z1/));
+    expect(first(/^z1/)).toBeLessThan(first(/^support/));
+  });
+});
+
 describe('every part', () => {
   it('has a place in the taxonomy and a mass', () => {
     for (const p of m.parts) {
@@ -126,6 +154,8 @@ describe('the plain reading of what a person says', () => {
     note: async (t, k, x) => { calls.push(`note ${t}|${k}|${x}`); return 'noted'; },
     rebuild: (a) => { calls.push(`rebuild ${JSON.stringify(a)}`); return 'rebuilt'; },
     replay: () => { calls.push('replay'); return 'again'; },
+    expand: (t) => { calls.push(`expand ${t}`); return 'out'; },
+    build: (t) => { calls.push(`build ${t}`); return 'built'; },
   };
   const b = plainBrain(world), ac = new AbortController();
   it('takes apart, puts back, shows, notes, rebuilds and replays', async () => {
@@ -135,6 +165,8 @@ describe('the plain reading of what a person says', () => {
     await b.ask('note on the y motor: it is too loud', () => undefined, ac.signal);
     await b.ask('make it bigger, 300 mm', () => undefined, ac.signal);
     await b.ask('run it again', () => undefined, ac.signal);
-    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'replay']);
+    await b.ask('expand the x motor', () => undefined, ac.signal);
+    await b.ask('build the printer', () => undefined, ac.signal);
+    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'replay', 'expand x motor', 'build the machine']);
   });
 });

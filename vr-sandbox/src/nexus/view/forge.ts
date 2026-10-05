@@ -23,7 +23,9 @@ import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerM
 import { printer, type PrinterAsk } from '../asked';
 import { embody, type Machine, type Step } from '../embody/embody';
 import { describe, makeBrain, type Brain, type PartBrief, type WorldApi } from './brain';
-import { makeNotes, type Note, type NoteKind, type Notes } from './notes';
+import { makeNotes, STAGES as LOOP_STAGES, type Note, type NoteKind, type Notes, type Proposal } from './notes';
+import { buildSteps, nodeAt as treeNodeAt, pathOf, treeOf, type BuildStep, type TreeNode } from '../embody/tree';
+import { Unravel } from './unravel';
 import { LAW_UPDATES } from '../embody/journal';
 import type { Flaw, Part } from '../embody/part';
 import { generate, type Structure } from '../manifold';
@@ -273,15 +275,17 @@ function start(a: PrinterAsk = ask): string {
   for (const s of shown.values()) machine.remove(s.obj);
   shown.clear(); for (const d of dyingList) machine.remove(d.obj); dyingList.length = 0;
   run = next; explodeTo.clear(); exploded.clear(); attention = null; selectedId = null;
+  tree = treeOf(run.m.parts, run.m.name); partsById = new Map(run.m.parts.map((p) => [p.id, p])); holo.clear(); machineBuild = null;
   beats = beatsOf(run);
   starts = []; total = 0; for (const b of beats) { starts.push(total); total += b.dur * pace; }
   current = -1; lastRound = 0;
   if (frozen === null) offset -= clock();
+  if (params.has('end') && !jumped) { offset += total; jumped = true; }
   const last = run.m.rounds.at(-1)!;
   return `${run.m.rounds.length} rounds, ${last.flaws.length} flaw${last.flaws.length === 1 ? '' : 's'} left, ${run.m.parts.length} parts, ${fmt(run.m.parts.reduce((x, p) => x + p.mass, 0))} kg, ${run.m.size.map((x) => fmt(x * 1e3)).join(' × ')} mm; ${run.m.rounds.flatMap((r) => r.remedies).join('; ') || 'no remedy needed'}.`;
 }
 
-let lastT = 0;
+let lastT = 0, jumped = false;
 function tick(): void {
   const t = clock(), dt = Math.min(0.1, Math.max(0, (performance.now() - lastT) / 1000)); lastT = performance.now();
   // a frozen time past the end shows the end; at the end it stays, for you to look round and talk about
@@ -304,6 +308,10 @@ function tick(): void {
       s.obj.position.copy(base).add(off);
     }
     const m = s.obj.userData.material as THREE.MeshStandardMaterial;
+    // more sight: the frame and the guard seen through, or only the assembly you are looking at
+    const thin = xray && (s.group === 'placement' || /polycarbonate/.test(s.part.material)) && !/support/.test(s.part.id);
+    if (!/polycarbonate/.test(s.part.material)) { m.transparent = thin; m.opacity = thin ? 0.12 : 1; m.depthWrite = !thin; }
+    if (isolated && !isolated.has(s.part.id)) s.obj.visible = false;
     const red = lit.has(s.part.id), seen = attention?.ids.has(s.part.id) ?? false, sel = s.part.id === selectedId;
     m.emissive.setHex(red ? 0xff1744 : sel ? 0xffd740 : seen ? 0x4dd0e1 : t - s.born < 0.9 && s.born > -1e8 ? 0x4dd0e1 : 0x000000);
     m.emissiveIntensity = red ? 0.55 + 0.45 * Math.sin(t * 7) : sel ? 0.7 + 0.3 * Math.sin(t * 5) : seen ? 0.45 + 0.2 * Math.sin(t * 4) : 0.6 * (1 - (t - s.born) / 0.9);
@@ -328,6 +336,8 @@ function tick(): void {
   (loopLine.material as THREE.LineDashedMaterial).opacity = b && b.kind === 'remedy' ? 0.6 + 0.4 * Math.sin(t * 8) : 0.55;
 
   for (const [g, to] of explodeTo) { const now2 = exploded.get(g) ?? 0; exploded.set(g, now2 + (to - now2) * Math.min(1, dt * 4)); }
+  holo.update(performance.now() / 1000, eye);
+  if (machineBuild) stepMachineBuild(t);
   for (const n of pins) n.update(t);
 
   // Claude: what it attends to is what you pointed at or asked about, else what the playback is working on, else you
@@ -337,9 +347,17 @@ function tick(): void {
   for (const id of focusIds.slice(0, 40)) { const s = shown.get(id); if (!s || !s.obj.visible) continue; s.obj.getWorldPosition(world); focus.add(world); nf++; }
   const target = nf ? focus.divideScalar(nf) : null;
   eyeOf(eye);
-  if (target) { goal = standFor(target); faceAt = target; }
-  // with nothing to attend to it stands beside the machine on your side, turned to you, never between you and it
+  // beside a hologram when one is out, turned to it; else by what it attends to; else beside the machine, turned to you
+  if (holo.showing) { const hp = holo.group.position; goal = { th: clamp(Math.atan2(hp.x - M.x, hp.z - M.z) + 0.95, -2.3, 2.3), r: 0.9 }; faceAt = hp; }
+  else if (target) { goal = standFor(target); faceAt = target; }
   else { goal = { th: Math.max(-2.3, Math.min(2.3, Math.atan2(eye.x - M.x, eye.z - M.z) + 1.0)), r: 0.72 }; faceAt = eye; }
+  // never between you and what you are looking at: stepped round until it is out of the way
+  for (let k2 = 0; k2 < 6; k2++) {
+    const gx = M.x + Math.sin(goal.th) * goal.r, gz = M.z + Math.cos(goal.th) * goal.r, look = holo.showing ? holo.group.position : M;
+    const ex = look.x - eye.x, ez = look.z - eye.z, L2 = ex * ex + ez * ez, u2 = clamp(((gx - eye.x) * ex + (gz - eye.z) * ez) / Math.max(1e-6, L2), 0, 1);
+    if (Math.hypot(gx - (eye.x + u2 * ex), gz - (eye.z + u2 * ez)) > 0.5) break;
+    goal = { th: clamp(goal.th + 0.35 * Math.sign(goal.th || 1), -2.6, 2.6), r: goal.r };
+  }
   drive(dt);
   robot.root.updateWorldMatrix(true, true);
   const arm: 0 | 1 = target && robot.root.worldToLocal(tmp.copy(target)).x > 0 ? 1 : 0;
@@ -351,8 +369,13 @@ function tick(): void {
   robot.speaking(talking ? Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3)) : b && u < 0.6 && current < beats.length - 1 ? 0.5 * Math.abs(Math.sin(t * 11)) : 0);
   voiceCard.mesh.position.copy(robot.root.position).add(tmp.set(0, 1.58, 0)); voiceCard.mesh.lookAt(eye);
   consoleGroup.visible = renderer.xr.isPresenting;
+  stepCard.mesh.visible = roundsCard.mesh.visible = panelsOn && !holo.showing;
+  lawsCard.mesh.visible = liveCard.mesh.visible = loopBoard.visible = decideChips.visible = panelsOn;
   // on a screen, the view comes to what you asked about or pointed at
-  if (!renderer.xr.isPresenting && asked && target) { orbit.target.lerp(target, Math.min(1, dt * 2.5)); const want2 = tmp.copy(camera.position).sub(orbit.target); const d = want2.length(); if (d > 0.95) camera.position.copy(orbit.target).add(want2.setLength(d + (0.95 - d) * Math.min(1, dt * 2))); }
+  if (!renderer.xr.isPresenting) {
+    const frame = holo.showing ? { at: holo.group.position, d: 1.25 } : machineBuild ? { at: M.clone().add(tmp.set(0, 0.35, 0)), d: 1.7 } : asked && target ? { at: target, d: 0.95 } : null;
+    if (frame && framing) { orbit.target.lerp(frame.at, Math.min(1, dt * 2.5)); const want2 = off.copy(camera.position).sub(orbit.target); const d = want2.length(); if (Math.abs(d - frame.d) > 0.02) camera.position.copy(orbit.target).add(want2.setLength(d + (frame.d - d) * Math.min(1, dt * 2))); }
+  }
 }
 
 // ---- Claude's body: it drives round the machine, never through it, turning to what it attends to ------------------------
@@ -427,12 +450,15 @@ const world2: WorldApi = {
   part: (id) => brief(shown.get(id)),
   selected: () => (selectedId ? brief(shown.get(selectedId)) : null),
   focus(target) {
-    const ps = partsFor(target);
+    const ps = partsFor(target); framing = true;
     if (!ps.length) return `I can't find ${target} on this machine.`;
     attention = { ids: new Set(ps.map((s) => s.part.id)), until: clock() + 14 };
     return ps.length === 1 ? describe(brief(ps[0])!) : `${ps.length} parts of ${ps[0]!.group}: ${[...new Set(ps.map((s) => s.part.name))].slice(0, 5).join('; ')}`;
   },
   explode(target, amount) {
+    // taken apart the way you asked: lifted out as a hologram and unravelled in the air
+    if (amount > 0) return expand(target === 'all' ? '' : target, true);
+    if (holo.showing) { holo.whole(performance.now() / 1000); return `Putting ${holo.showing.name} back together.`; }
     const g = target === 'all' || !target ? null : groupFor(target) ?? partsFor(target)[0]?.group ?? null;
     measureCentres();
     for (const grp of g ? [g, ...[...new Set([...shown.values()].map((s) => s.group))].filter((x) => x.startsWith(`${g}/`))] : new Set([...shown.values()].map((s) => s.group))) explodeTo.set(grp, Math.max(0, Math.min(1, amount)));
@@ -446,6 +472,8 @@ const world2: WorldApi = {
   },
   rebuild(a) { const next: PrinterAsk = { ...ask, ...(a.size ? { size: a.size } : {}), ...(a.tolerance ? { tolerance: a.tolerance } : {}), ...(a.hours ? { time: a.hours * 3600 } : {}) }; return `Rebuilt to the new ask: ${start(next)}`; },
   replay() { start(ask); return 'Playing it again from the ask, every round.'; },
+  expand: (target) => expand(target, true),
+  build: (target) => buildIt(target),
 };
 
 // ---- notes: yours, pinned where you put them, with the view you saw -------------------------------------------------------
@@ -457,18 +485,22 @@ function drawPins(): void {
   for (const p of pins) machine.remove(p.group);
   pins.length = 0;
   for (const n of allNotes) {
+    if (reportsMode === 'off') continue;
     const g = new THREE.Group(), c = KIND_COLOUR[n.kind] ?? 0xffd740;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.009, 16, 12), new THREE.MeshBasicMaterial({ color: c }));
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0015, 0.0015, 0.05, 6), new THREE.MeshBasicMaterial({ color: c }));
     stem.position.y = -0.025; head.position.y = 0;
     const tag = label(`${n.kind === 'flaw' ? '✗' : n.kind === 'good' ? '✓' : n.kind === 'question' ? '?' : '✎'} ${n.text.length > 56 ? `${n.text.slice(0, 54)}…` : n.text}${n.reply ? `\nClaude: ${n.reply.length > 60 ? `${n.reply.slice(0, 58)}…` : n.reply}` : ''}`, 0.014, '#ffffff', 'rgba(20,20,28,0.85)');
     tag.position.set(0, 0.03, 0);
+    // as dots by default, out of the centre of your view; the words with the dots on 'full', or for the one you point at
+    tag.visible = reportsMode === 'full' || n.partId === selectedId;
     g.add(head, stem, tag);
     g.position.set(...(shown.get(n.partId)?.part.at ?? n.at)).add(new THREE.Vector3(0, 0.05, 0));
     machine.add(g);
     pins.push({ note: n, group: g, update: (t) => { head.scale.setScalar(1 + 0.25 * Math.sin(t * 4 + n.createdAt)); } });
   }
   drawRoundsNow();
+  drawLoop();
 }
 /** What you are looking at, as you see it: the screen, or the headset's left eye. */
 function snapshot(): string {
@@ -494,6 +526,161 @@ async function addNote(s: Shown, kind: NoteKind, text: string): Promise<string> 
   try { await notes.add(body); } catch (e) { return `The note could not be kept: ${(e as { code?: string }).code ?? 'the store refused it'}.`; }
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
+// ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
+let tree: TreeNode = { id: '', name: '', parts: [], children: [] }, partsById = new Map<string, Part>();
+const holo = new Unravel(scene, new THREE.Vector3(0, 1.36, -0.62), 0.55);
+let xray = false, isolated: Set<string> | null = null, reportsMode: 'dots' | 'full' | 'off' = 'dots', framing = true, panelsOn = true;
+// your own dragging takes the view back from me until I am asked to show something again
+renderer.domElement.addEventListener('pointerdown', () => { framing = false; });
+/** The node a request means: an id or name in the tree, the assembly of a part it names, or what you point at. */
+function nodeFor(target: string): TreeNode | null {
+  const t = target.toLowerCase().trim();
+  if (!t || t === 'this' || t === 'it') {
+    const s = selectedId ? partsById.get(selectedId) : null;
+    if (!s) return holo.showing;
+    const path = pathOf(s), showing = holo.showing;
+    // one level deeper than what is out, along the part you point at
+    for (let d = 1; d <= path.length; d++) { const id = path.slice(0, d).join('/'); if (!showing || (showing.id !== id && showing.id.split('/').length < d && id.startsWith(showing.id))) return treeNodeAt(tree, id); }
+    return treeNodeAt(tree, path.slice(0, 1).join('/'));
+  }
+  if (/^(the )?(machine|printer|whole|everything|all)/.test(t)) return tree;
+  const flat: TreeNode[] = []; const walk = (n: TreeNode) => { flat.push(n); n.children.forEach(walk); }; walk(tree);
+  const norm = t.replace(/\baxis\b/g, '').replace(/\s+/g, ' ').trim();
+  const exact = flat.find((n) => n.id === norm || n.id === norm.replace(/ /g, '/') || n.name.toLowerCase() === t);
+  if (exact) return exact;
+  const g = groupFor(t); if (g) { const n = treeNodeAt(tree, g === 'placement' ? 'frame' : g); if (n) return n; }
+  // an axis is named by one letter: keep it
+  const words = norm.split(' ').filter((w) => w.length > 1 || /^[xyz]$/.test(w));
+  const axisWord = words.find((w) => /^[xyz]$/.test(w));
+  const scored = flat.filter((n) => n.id && (!axisWord || n.id.split('/')[0]!.startsWith(axisWord))).map((n) => ({ n, k: words.filter((w) => (/^[xyz]$/.test(w) ? n.id.split('/')[0]!.startsWith(w) : `${n.id} ${n.name}`.toLowerCase().includes(w))).length - n.id.split('/').length * 0.01 })).filter((x) => x.k > 0.5).sort((a, b) => b.k - a.k);
+  if (scored[0]) return scored[0].n;
+  const p = partsFor(target)[0]; return p ? treeNodeAt(tree, pathOf(p.part).slice(0, 1).join('/')) : null;
+}
+function expand(target: string, apart: boolean): string {
+  const node = nodeFor(target); framing = true;
+  if (!node) return `I can't find ${target || 'what to open'} on this machine. Point at a part first, or name an assembly.`;
+  holo.show(node, partsById, performance.now() / 1000);
+  if (apart) window.setTimeout(() => holo.apart(performance.now() / 1000), 900);
+  attention = { ids: new Set(node.parts), until: clock() + 16 };
+  if (isolated) isolated = new Set(node.parts);
+  return `${node.name}: ${node.parts.length} parts${node.children.length ? `, in ${node.children.length} subsystems: ${node.children.map((c) => c.name).join(', ')}` : ''}. Point at any of them to open it.`;
+}
+function up(): string {
+  const n = holo.showing; if (!n) return 'Nothing is out.';
+  const parent = n.id.includes('/') ? treeNodeAt(tree, n.id.split('/').slice(0, -1).join('/')) : tree;
+  if (!parent || parent === tree) { holo.clear(); return 'Back in the machine.'; }
+  holo.show(parent, partsById, performance.now() / 1000); window.setTimeout(() => holo.apart(performance.now() / 1000), 600);
+  return `${parent.name}, ${parent.children.length} subsystems.`;
+}
+function pickHolo(): boolean {
+  const hit = holo.pick(ray);
+  if (!hit) return false;
+  if (hit.kind === 'child') { say(expand(hit.node.id, true)); return true; }
+  holo.showPart(hit.part);
+  const s = shown.get(hit.part.id); if (s) { selectedId = s.part.id; attention = { ids: new Set([s.part.id]), until: clock() + 14 }; }
+  say(describe(brief(s ?? undefined) ?? { id: hit.part.id, name: hit.part.name, category: hit.part.category, material: hit.part.material, mass: hit.part.mass, values: hit.part.values }, 3));
+  return true;
+}
+function toggleIsolate(): void { isolated = isolated ? null : new Set(holo.showing?.parts ?? (selectedId ? nodeFor('')?.parts ?? [] : [])); if (isolated && !isolated.size) isolated = null; }
+function cycleReports(): void { reportsMode = reportsMode === 'dots' ? 'full' : reportsMode === 'full' ? 'off' : 'dots'; drawPins(); }
+
+// ---- building the printer: every part to its place, step by step, in the order the build law gives -------------------------
+let machineBuild: { steps: BuildStep[]; t0: number; at: number } | null = null;
+const STEP_S = 1.4;
+function buildIt(target: string): string {
+  const node = target ? nodeFor(target) : holo.showing ?? nodeFor(''); framing = true;
+  if (!node || node === tree) {
+    const steps = buildSteps(run.m.parts);
+    machineBuild = { steps, t0: clock() + 0.5, at: -1 }; holo.clear();
+    return `Building the printer from nothing: ${steps.length} steps, from the ground up. The frame first, then each axis, the head, the wiring, the guard.`;
+  }
+  const steps = buildSteps(run.m.parts, node.id);
+  holo.show(node, partsById, performance.now() / 1000); holo.build(steps, performance.now() / 1000);
+  return `Building ${node.name} in the air: ${steps.length} steps, from the inside out. ${steps[0]?.title ?? ''} first.`;
+}
+function stepMachineBuild(t: number): void {
+  const b = machineBuild!, k = Math.floor((t - b.t0) / STEP_S);
+  const stepOf = new Map<string, number>(); b.steps.forEach((s2, i) => { for (const id of s2.parts) stepOf.set(id, i); });
+  for (const s2 of shown.values()) {
+    const si = stepOf.get(s2.part.id) ?? b.steps.length, u = ease((t - b.t0 - si * STEP_S) / 0.8);
+    s2.obj.visible = u > 0;
+    const base = s2.part.shape.kind === 'wire' ? ZERO : s2.obj.userData.at as THREE.Vector3;
+    s2.obj.position.copy(base).add(tmp.set(0, (1 - u) * 0.35, 0));
+    const m = s2.obj.userData.material as THREE.MeshStandardMaterial;
+    if (si === Math.min(k, b.steps.length - 1) && u > 0) { m.emissive.setHex(0x4dd0e1); m.emissiveIntensity = 0.6 * (1 - u) + 0.15; }
+  }
+  if (k !== b.at && k < b.steps.length) {
+    b.at = k; const st = b.steps[k]!;
+    attention = { ids: new Set(st.parts), until: t + STEP_S * 1.5 };
+    stepCard.draw(`BUILD · step ${st.n} of ${b.steps.length}`, [{ text: st.title, size: 1.1, color: '#ffffff' }, { text: st.says, size: 0.9, color: '#ffe082' }, ...b.steps.slice(Math.max(0, k - 5), k).map((x) => ({ text: `✓ ${x.n}. ${x.title}`, size: 0.75, color: '#69f0ae' }))], '#ffb74d');
+    subtitle.draw('', [{ text: `Claude: step ${st.n}, ${st.title}: ${st.says.slice(0, 120)}`, size: 1.0 }], '#ffb74d');
+  }
+  if (k >= b.steps.length + 1) { machineBuild = null; say(`Built: ${b.steps.length} steps, ${run.m.parts.length} parts, every one where its law put it.`); }
+}
+
+// ---- Claude's loop: each report you sent, where it is, and what I put to you --------------------------------------------------
+const loopCanvas = document.createElement('canvas'); loopCanvas.width = 1800; loopCanvas.height = 1100;
+const loopTex = new THREE.CanvasTexture(loopCanvas); loopTex.colorSpace = THREE.SRGBColorSpace;
+const loopBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.7), new THREE.MeshBasicMaterial({ map: loopTex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+facing(loopBoard, 1.85, 1.45, 0.2); loopBoard.renderOrder = 15;
+let proposals: Proposal[] = [];
+const STAGE_NAME: Record<string, string> = { reported: 'REPORTED', read: 'READ', diagnosed: 'DIAGNOSED', law: 'LAW WRITTEN', tested: 'TESTED', live: 'LIVE' };
+function drawLoop(): void {
+  const g = loopCanvas.getContext('2d')!, W = loopCanvas.width, H = loopCanvas.height;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(3,14,22,0.82)'; g.beginPath(); g.roundRect(6, 6, W - 12, H - 12, 26); g.fill();
+  g.strokeStyle = '#ffb74d'; g.lineWidth = 4; g.stroke();
+  g.fillStyle = '#ffb74d'; g.font = '600 46px system-ui'; g.textBaseline = 'top'; g.fillText("CLAUDE'S LOOP · your reports, live", 40, 30);
+  const cols = LOOP_STAGES.length, cw = (W - 80) / cols, top = 110;
+  LOOP_STAGES.forEach((st, i) => {
+    const x = 40 + i * cw;
+    g.fillStyle = 'rgba(77,208,225,0.08)'; g.fillRect(x + 4, top, cw - 8, H - top - 260);
+    g.fillStyle = '#9fdfee'; g.font = '600 26px system-ui'; g.fillText(STAGE_NAME[st]!, x + 14, top + 12);
+    if (i < cols - 1) { g.fillStyle = '#2e7d8c'; g.fillText('→', x + cw - 30, top + 12); }
+    const here = allNotes.filter((n) => (n.stage ?? 'reported') === st);
+    here.slice(0, 6).forEach((n, j) => {
+      const y = top + 56 + j * 118, c = `#${(KIND_COLOUR[n.kind] ?? 0xffd740).toString(16).padStart(6, '0')}`;
+      g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(x + 12, y, cw - 24, 108);
+      g.fillStyle = c; g.fillRect(x + 12, y, 8, 108);
+      g.fillStyle = '#ffffff'; g.font = '500 21px system-ui';
+      const words = (n.text || n.kind).split(/\s+/); let line = '', ly = y + 8, lines = 0;
+      for (const w of words) { const t = line ? `${line} ${w}` : w; if (g.measureText(t).width > cw - 48 && line) { g.fillText(line, x + 28, ly); ly += 25; line = w; if (++lines >= 3) { line = '…'; break; } } else line = t; }
+      if (lines < 4) g.fillText(line, x + 28, ly);
+      g.fillStyle = '#7fb3c8'; g.font = '400 17px system-ui'; g.fillText(`${n.partName.slice(0, 34)}${n.law ? ` · law ${n.law}` : ''}`, x + 28, y + 84);
+    });
+  });
+  // what I put to you
+  const py = H - 240;
+  g.fillStyle = '#ffd740'; g.font = '600 30px system-ui'; g.fillText('FOR YOU TO DECIDE', 40, py);
+  const open = proposals.filter((p) => p.status === 'proposed');
+  if (!open.length) { g.fillStyle = '#7fb3c8'; g.font = '400 24px system-ui'; g.fillText(proposals.length ? 'nothing open: every proposal decided' : 'nothing yet', 40, py + 48); }
+  open.slice(0, 2).forEach((p, i) => { g.fillStyle = '#ffffff'; g.font = '500 24px system-ui'; g.fillText(`${p.title}`.slice(0, 120), 40, py + 46 + i * 84); g.fillStyle = '#ffe082'; g.font = '400 20px system-ui'; g.fillText(`${(p.options ?? ['approve', 'decline']).join('  ·  ')}`.slice(0, 140), 40, py + 78 + i * 84); });
+  loopTex.needsUpdate = true;
+  drawDecide();
+}
+// the choices, pressable: on the screen, and as buttons under the board in the headset
+const decide = document.createElement('div');
+decide.style.cssText = 'position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(26rem,calc(100vw - 32px));z-index:5;display:flex;flex-direction:column;gap:6px;font:13px/1.4 system-ui;color:#d9f3ff';
+document.body.appendChild(decide);
+const decideChips = new THREE.Group(); decideChips.position.set(1.85, 1.0, 0.2); decideChips.lookAt(0, 1.55, 0.7); scene.add(decideChips);
+const decideMeshes: { mesh: THREE.Mesh; act: () => void }[] = [];
+function drawDecide(): void {
+  decide.replaceChildren(); for (const c of decideMeshes) decideChips.remove(c.mesh); decideMeshes.length = 0;
+  const open = proposals.filter((p) => p.status === 'proposed');
+  open.slice(0, 2).forEach((p, pi) => {
+    const box = document.createElement('div'); box.style.cssText = 'padding:8px 10px;border-radius:10px;background:rgba(3,14,22,0.85);border:1px solid #ffb74d';
+    const h = document.createElement('div'); h.style.cssText = 'font-weight:600;color:#ffe082'; h.textContent = `Claude proposes: ${p.title}`;
+    const w = document.createElement('div'); w.textContent = p.why; w.style.cssText = 'color:#bfe6f2;margin:4px 0';
+    const row2 = document.createElement('div'); row2.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+    for (const opt of p.options ?? ['approve', 'decline']) {
+      const act = () => { void notes?.decide(p.id, opt === 'approve' ? 'approved' : opt === 'decline' ? 'declined' : `chose: ${opt}`); line('you', `decided "${p.title}": ${opt}`); say(`Thank you. "${opt}" it is: I'll take it from here.`); };
+      button(opt, act, row2);
+      const c = card(0.32, 0.07, 512); c.draw('', [{ text: opt, size: 1.7 }], '#ffb74d'); c.mesh.position.set(((decideMeshes.length % 3) - 1) * 0.34, -pi * 0.16 - Math.floor((decideMeshes.length % 6) / 3) * 0.08, 0); decideChips.add(c.mesh); decideMeshes.push({ mesh: c.mesh, act });
+    }
+    box.append(h, w, row2); decide.appendChild(box);
+  });
+}
+
 // ---- controls: the playback ---------------------------------------------------------------------------------------------
 const step = () => { if (current + 1 < beats.length) offset += starts[current + 1]! - (clock()); };
 const togglePause = () => { if (paused) { offset -= (performance.now() - pausedAt) / 1000; paused = false; } else { pausedAt = performance.now(); paused = true; } };
@@ -506,6 +693,20 @@ button('Next', () => step());
 button('Run again', () => say(world2.replay()));
 button('Voice on', (b) => { voice = !voice; b.textContent = voice ? 'Voice on' : 'Voice off'; if (!voice) speechSynthesis.cancel(); });
 document.body.appendChild(ui);
+const tools = document.createElement('div');
+tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;z-index:5;max-width:min(34rem,calc(100vw - 32px))';
+button('⤢ Expand', () => say(expand('', true)), tools);
+button('▶ Build this', () => say(buildIt('')), tools);
+button('▶ Build the printer', () => say(buildIt('the machine')), tools);
+button('⟲ Up', () => say(up()), tools);
+button('✕ Close', () => { holo.clear(); isolated = null; }, tools);
+button('X-ray', (b) => { xray = !xray; b.style.borderColor = xray ? '#ffd740' : '#2e7d8c'; }, tools);
+button('Isolate', (b) => { toggleIsolate(); b.style.borderColor = isolated ? '#ffd740' : '#2e7d8c'; }, tools);
+button('Reports: dots', (b) => { cycleReports(); b.textContent = `Reports: ${reportsMode}`; }, tools);
+button('Panels', (b) => { panelsOn = !panelsOn; b.style.borderColor = panelsOn ? '#2e7d8c' : '#ffd740'; }, tools);
+button('Look: my loop', () => { framing = false; orbit.target.set(1.85, 1.45, 0.2); camera.position.set(0.45, 1.5, 1.05); }, tools);
+button('Look: machine', () => { framing = false; orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); }, tools);
+document.body.appendChild(tools);
 window.addEventListener('keydown', (e) => { if ((e.target as HTMLElement).tagName === 'INPUT') return; if (e.key === ' ') togglePause(); if (e.key === 'ArrowRight') step(); if (e.key === 'r') say(world2.replay()); });
 
 // ---- talking with Claude ------------------------------------------------------------------------------------------------
@@ -589,6 +790,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, 
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
+  if (pickHolo()) return;
   const s = partAt(); if (s) select(s);
 });
 
@@ -598,11 +800,12 @@ const CHIPS: [string, () => void][] = [
   ['What is this?', () => { const s = selectedId ? shown.get(selectedId) : null; void converse(s ? `What is ${s.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['Why this size?', () => void converse('Why is the part I am pointing at the size it is? Give me the law and the numbers.')],
   ['✗ Mark flaw', () => void markNote('flaw', '')], ['? Mark question', () => void markNote('question', '')], ['✓ Mark good', () => void markNote('good', '')],
-  ['Take apart', () => say(world2.explode(selectedId ? shown.get(selectedId)!.group : 'all', 1))], ['Put together', () => say(world2.explode('all', 0))],
-  ['Run again', () => say(world2.replay())], ['Bigger part', () => say(world2.rebuild({ size: (ask.size ?? 0.2) * 1.5 }))],
+  ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['⟲ Up a level', () => say(up())],
+  ['✕ Close hologram', () => { holo.clear(); isolated = null; say('Closed.'); }], ['▶ Build the printer', () => say(buildIt('the machine'))], ['X-ray', () => { xray = !xray; }],
+  ['Isolate', () => toggleIsolate()], ['Reports', () => cycleReports()], ['Run again', () => say(world2.replay())],
 ];
 const chips: { mesh: THREE.Mesh; act: () => void }[] = [];
-const consoleGroup = new THREE.Group(); consoleGroup.position.set(0.5, 1.0, -0.3); consoleGroup.lookAt(0, 1.6, 0.6); scene.add(consoleGroup);
+const consoleGroup = new THREE.Group(); consoleGroup.position.set(0.55, 1.05, -0.25); consoleGroup.lookAt(0, 1.6, 0.6); scene.add(consoleGroup);
 CHIPS.forEach(([text, act], i) => {
   const c = card(0.2, 0.06, 512); c.draw('', [{ text, size: 2.2 }], '#80deea');
   c.mesh.position.set((i % 3) * 0.215 - 0.215, -Math.floor(i / 3) * 0.07, 0); consoleGroup.add(c.mesh);
@@ -618,8 +821,9 @@ for (let i = 0; i < 2; i++) {
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   ctl.addEventListener('selectstart', () => {
     ray.setFromXRController(ctl);
-    const hit = ray.intersectObjects(chips.map((c) => c.mesh), false)[0];
-    if (hit) { chips.find((c) => c.mesh === hit.object)?.act(); return; }
+    const all = [...chips, ...decideMeshes], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    if (hit) { all.find((c) => c.mesh === hit.object)?.act(); return; }
+    if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
   });
   ctl.addEventListener('squeezestart', () => togglePause());
@@ -673,7 +877,8 @@ async function boot() {
   let last = performance.now();
   renderer.setAnimationLoop(() => { const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); renderer.render(scene, camera); });
   // the mind and the notes arrive when the viewer answers; the room works without them
-  void makeNotes().then((n) => { notes = n; n.subscribe((all) => { allNotes = all; drawPins(); }); status.textContent = statusLine(); });
+  void makeNotes().then((n) => { notes = n; n.subscribe((all) => { allNotes = all; drawPins(); }); n.proposals((all) => { proposals = all; drawLoop(); }); status.textContent = statusLine(); });
+  drawLoop();
   void makeBrain(world2).then((b) => { brain = b; status.textContent = statusLine(); });
   (window as unknown as { ready: boolean }).ready = true;
 }

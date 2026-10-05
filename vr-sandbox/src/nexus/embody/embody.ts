@@ -27,6 +27,7 @@ import { designElectrical, type Electrical, type Load } from './electrical';
 import { hotEndFor, STREAM_PITCH, type HotEnd } from './heater';
 import { boxOf, extentOf, part, placeParts, type Flaw, type Part, type V3, type Value } from './part';
 import { PROFILE_2020, stockScrew } from './stock';
+import { floatingClusters } from './tree';
 
 const mm = 1e-3, g0 = 9.80665;
 const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
@@ -182,7 +183,9 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   const supportY = zCarriage, zTop = supportY + ch.bedT / 2;
   const nozzleY = v('nozzle height', zTop + 0.0008 + layer, 'm', 'a layer above the build surface with the support at the top of its travel, where a print begins');
   const headH = hotEnd?.height ?? 0.08;
-  const xAxisY = nozzleY + headH + x.carrierTop;
+  // the head hangs from a plate across x's carriage standoffs, its top against the plate
+  const headPlateT = 4 * mm;
+  const xAxisY = nozzleY + headH + headPlateT + x.carrierTop;
   // the bridge that hangs x from y's carriage: two arms out from the carriage, each carrying the moving mass at its end
   // and half the axis, bending within the tolerance's share: δ = F a³/(3 E I), I = b h³/12
   const reach = x.length / 2, Fb = (x.moving + x.fixed / 2) * g0, bW = x.width;
@@ -197,6 +200,13 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   for (const p of placeParts(x.parts, 'x', [0, xAxisY, 0], 2)) add({ ...p, rides: p.rides ?? 'y', ...(p.id.includes('/mount-') ? { into: ['x/bridge'] } : {}) }, 'x axis');
   // the head hangs from x's carriage, its top against the carriage's face
   if (hotEnd) for (const p of hotEnd.parts) add({ ...p, at: [p.at[0], p.at[1] + nozzleY, p.at[2]], rides: 'x' }, 'hot end');
+  if (hotEnd) {
+    const hx = Math.max(x.carriage.length, extentOf(hotEnd.parts).hi[0] - extentOf(hotEnd.parts).lo[0]), hz = x.carriage.width;
+    add(part({ id: 'hot end/mount-plate', name: `head plate ${(hx * 1e3).toFixed(0)} × ${(hz * 1e3).toFixed(0)} × ${headPlateT * 1e3} mm, aluminium, across x's carriage standoffs`, category: 'structure/joints/brackets', material: 'aluminum.6061-t6', shape: { kind: 'block', size: [hx, headPlateT, hz] }, at: [0, nozzleY + headH + headPlateT / 2, 0], colour: 0x90a4ae, values: [], rides: 'x', system: 'mount' }, al.density), 'hot end');
+    // through the plate and each standoff into the carriage's tapped holes
+    const sl = stockScrew(headPlateT + 4 * mm + 6 * mm)!;
+    for (const sx2 of [-1, 1]) for (const sz2 of [-1, 1]) add(part({ id: `hot end/mount-screw-${sx2}${sz2}`, name: `M4×${(sl * 1e3).toFixed(0)} socket head cap screw (ISO 4762), head plate through a standoff into the carriage`, category: 'structure/fasteners/screws', material: 'steel class 8.8', shape: { kind: 'screw', size: 'M4', length: sl, axis: 'y', head: -1 }, at: [sx2 * (x.carriage.length / 2 - 7 * mm), nozzleY + headH + sl / 2, sz2 * (x.carriage.width / 2 - 7 * mm)], colour: 0x2b2b2b, values: [], rides: 'x', system: 'mount', into: ['hot end/mount-plate', `x/standoff-${sz2}${sx2}`, `x/standoff-${sx2}${sz2}`, 'x/carriage'] }, 7850), 'hot end');
+  }
   // the z axes stand on the plate against the frame, their carriages facing the support, arms reaching under it
   const zAt = (k: number): V3 => (ch.bedSupport === 1 ? [0, zCentre, -inZ + zEnd / 2] : [(k ? 1 : -1) * (inX - zEnd / 2), zCentre, 0]);
   zs.forEach((z, k) => {
@@ -204,7 +214,11 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
     for (const p of placeParts(z.parts, 'y', at, zTurn(k))) add(p, z.name);
     // an arm from the carriage's face to under the support's edge
     const inward = ch.bedSupport === 1 ? 2 : 0, sgn = ch.bedSupport === 1 ? 1 : k ? -1 : 1;
-    const face = at[inward]! + sgn * z.carrierTop, edge = sgn * -bed / 2, span = Math.abs(edge - face) + 20 * mm, c = (face + edge + sgn * 20 * mm) / 2;
+    // a plate across the carriage's standoffs, and from it the arm under the support's edge
+    const pT = 4 * mm, pf = at[inward]! + sgn * z.carrierTop;
+    const psize: V3 = inward === 0 ? [pT, z.carriage.length, z.carriage.width] : [z.carriage.width, z.carriage.length, pT], pc: V3 = inward === 0 ? [pf + sgn * pT / 2, zCarriage, 0] : [0, zCarriage, pf + sgn * pT / 2];
+    add(part({ id: `support/arm-${k + 1}-plate`, name: `arm plate ${(z.carriage.length * 1e3).toFixed(0)} × ${(z.carriage.width * 1e3).toFixed(0)} × 4 mm, across ${z.name}'s carriage standoffs`, category: 'structure/joints/brackets', material: 'aluminum.6061-t6', shape: { kind: 'block', size: psize }, at: pc, colour: 0x90a4ae, values: [], rides: 'z' }, al.density), 'support');
+    const face = pf + sgn * pT, edge = sgn * -bed / 2, span = Math.abs(edge - face) + 20 * mm, c = (face + edge + sgn * 20 * mm) / 2;
     const size: V3 = inward === 0 ? [span, 8 * mm, 40 * mm] : [40 * mm, 8 * mm, span], ac: V3 = inward === 0 ? [c, supportY - ch.bedT / 2 - 4 * mm, 0] : [0, supportY - ch.bedT / 2 - 4 * mm, c];
     add(part({ id: `support/arm-${k + 1}`, name: `support arm ${(span * 1e3).toFixed(0)} × 40 × 8 mm, from ${z.name}'s carriage`, category: 'structure/frame', material: 'aluminum.6061-t6', shape: { kind: 'block', size }, at: ac, colour: 0x90a4ae, values: [], rides: 'z' }, al.density), 'support');
   });
@@ -326,8 +340,20 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   const ctlAt = placeOn('controller', CTL, [-inletAt[0], 0, -inZ]);
   v('electronics', 2, '1', `the supply at ${psuAt.map((x2) => (x2 * 1e3).toFixed(0)).join(', ')} mm and the controller at ${ctlAt.map((x2) => (x2 * 1e3).toFixed(0)).join(', ')} mm: the nearest places on the plate to where they are wanted, clear of every part and every sweep`);
   if (spool) {
-    const at = face(side(spool.id) === 'back' ? 'right' : side(spool.id), H * 0.6);
-    add(part({ id: 'spool', name: `spool of ${spool.id.replace('a spool of ', '')}, Ø200 × 65 mm`, category: 'motion/transmission', material: 'PLA on an ABS reel', shape: { kind: 'round', r: 0.1, length: 0.065, axis: 'x' }, at: [at[0] + Math.sign(at[0] || 1) * 0.05, at[1], at[2]], colour: 0xf2f2f2, values: [] }, 0), 'spool');
+    // the store hangs where a member is to hold it: on the side its region is, from the side member nearest the height
+    // a person reaches, high enough that the spool clears the ground; an axle from a bracket on the member's outer face,
+    // the spool turning on two bearings in its hub
+    const sideOf = side(spool.id) === 'back' ? 'right' : side(spool.id), sx = sideOf === 'left' ? -1 : 1, R = 0.1, len = 0.065;
+    const on = members.filter((m2) => m2.axis === 'z' && Math.sign(m2.at[0]) === sx && m2.at[1] >= R + 0.02).sort((a2, b2) => Math.abs(a2.at[1] - H * 0.6) - Math.abs(b2.at[1] - H * 0.6))[0];
+    const my = on?.at[1] ?? H * 0.6, z0 = -D / 4, x0 = sx * (W / 2);
+    add(part({ id: 'spool/bracket', name: 'spool bracket 40 × 40 × 4 mm, aluminium, on the side member', category: 'structure/joints/brackets', material: 'aluminum.6061-t6', shape: { kind: 'block', size: [4 * mm, 0.04, 0.04] }, at: [x0 + sx * 2 * mm, my, z0], colour: 0x90a4ae, values: [], ...(on ? { into: [on.id] } : {}) }, al.density), 'spool');
+    for (const dz of [-12 * mm, 12 * mm]) add(part({ id: `spool/bracket-screw-${dz > 0 ? 'b' : 'a'}`, name: 'M5×10 socket head cap screw (ISO 4762) and T-nut, spool bracket', category: 'structure/fasteners/screws', material: 'steel class 8.8', shape: { kind: 'screw', size: 'M5', length: 10 * mm, axis: 'x', head: sx as 1 | -1 }, at: [x0 - sx * 1 * mm, my, z0 + dz], colour: 0x2b2b2b, values: [], into: ['spool/bracket', ...(on ? [on.id] : [])] }, 7850), 'spool');
+    const axleL = len + 30 * mm;
+    add(part({ id: 'spool/axle', name: `spool axle Ø8 × ${(axleL * 1e3).toFixed(0)} mm, steel, threaded into the bracket`, category: 'motion/guides/shafts', material: 'steel.1018-cd', shape: { kind: 'round', r: 4 * mm, length: axleL, axis: 'x' }, at: [x0 + sx * (4 * mm + axleL / 2), my, z0], colour: 0xd5dbe1, values: [], into: ['spool/bracket'] }, 7850), 'spool');
+    const sxc = x0 + sx * (4 * mm + 10 * mm + len / 2);
+    for (const e of [-1, 1]) add(part({ id: `spool/bearing-${e > 0 ? 'b' : 'a'}`, name: '608 bearing (8×22×7 mm) in the spool\'s hub', category: 'motion/guides/bearings', material: 'steel.52100', shape: { kind: 'round', r: 11 * mm, length: 7 * mm, axis: 'x', bore: 8 * mm }, at: [sxc + e * (len / 2 - 3.5 * mm), my, z0], colour: 0xdfe4ea, values: [] }, 7800), 'spool');
+    const at: V3 = [sxc, my, z0];
+    add(part({ id: 'spool', name: `spool of ${spool.id.replace('a spool of ', '')}, Ø200 × 65 mm`, category: 'motion/transmission', material: 'PLA on an ABS reel', shape: { kind: 'round', r: R, length: len, axis: 'x' }, at, colour: 0xf2f2f2, values: [{ name: 'held from', value: my, unit: 'm', law: `the side member nearest a person's reach (${on?.id ?? 'none'}), the spool clear of the ground` }] }, 0), 'spool');
     add(part({ id: 'guide', name: `PTFE guide tube 4 × ${(filament * 1e3 + 0.25).toFixed(2)} mm, spool to head`, category: 'motion/transmission', material: 'PTFE', shape: { kind: 'wire', points: [[at[0], at[1], at[2]], [at[0] * 0.5, H - 0.02, 0], [0, nozzleY + headH, 0]], r: 0.002 }, at, colour: 0xffffff, values: [] }, 2200), 'spool');
   }
   // the guard: panels enclosing everything hotter than the person may touch
@@ -358,7 +384,7 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   }
   // a carrier lies beside its axis on the side away from the drive that sits nearest it
   const carrierSide = (motor: string, k: number) => Math.sign(centre(motor)[k]!) || 1;
-  const electrical = designElectrical({ loads, controllerAt: ctlAt, psuAt, inletAt, via: [0, H - 0.03, -D / 2 + 0.03], Vbus, Vmains: Vgrid, outletW, ambient, axes: [{ id: 'x', travel: travel('x'), at: [0, xAxisY, -carrierSide('y/motor/housing', 2) * x.width / 2], dir: [1, 0, 0], across: [0, 0, -carrierSide('y/motor/housing', 2)] }, { id: 'y', travel: travel('z'), at: [-carrierSide('x/motor/housing', 0) * y.width / 2, yAxisY, 0], dir: [0, 0, 1], across: [-carrierSide('x/motor/housing', 0), 0, 0] }], benchAt: [W / 2 + 0.1, -0.015, D / 4], thermistor: hotEnd ? { R25: 100e3, B: 3950, Tlo: hotEnd.ask.Tlo, Thi: hotEnd.ask.Thi, resolution: val(s, (id) => id.startsWith('observer:energy'), /resolution/) ?? 15 } : null });
+  const electrical = designElectrical({ loads, controllerAt: ctlAt, psuAt, inletAt, via: [0, H - 0.03, -D / 2 + 0.03], Vbus, Vmains: Vgrid, outletW, ambient, axes: [{ id: 'x', travel: travel('x'), at: [0, xAxisY, -carrierSide('y/motor/housing', 2) * x.width / 2], dir: [1, 0, 0], across: [0, 0, -carrierSide('y/motor/housing', 2)] }, { id: 'y', travel: travel('z'), at: [-carrierSide('x/motor/housing', 0) * y.width / 2, yAxisY, 0], dir: [0, 0, 1], across: [-carrierSide('x/motor/housing', 0), 0, 0] }], benchAt: [W / 2 + 0.1, -0.015 + 0.0045, D / 4], thermistor: hotEnd ? { R25: 100e3, B: 3950, Tlo: hotEnd.ask.Tlo, Thi: hotEnd.ask.Thi, resolution: val(s, (id) => id.startsWith('observer:energy'), /resolution/) ?? 15 } : null });
   trace.push({ stage: 'wiring', where: 'wiring', round: 1, says: `${electrical.cables.length} cables, ${electrical.psu.id}, ${electrical.flaws.length ? `${electrical.flaws.length} flaw${electrical.flaws.length > 1 ? 's' : ''}` : 'every conductor within its insulation and drop'}`, flaws: electrical.flaws, remedy: null });
   // x's carrier rides with x on y's carriage
   for (const p of electrical.parts) add(p.id === 'carrier:x' ? { ...p, rides: 'y' } : p, 'wiring');
@@ -411,6 +437,10 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   for (const [key, e] of swept) flaws.push({ check: 'sweep', where: key, says: `${e.m.name} sweeps through ${e.f.name} as it travels, ${(e.depth * 1e3).toFixed(1)} mm`, law: 'nothing fixed in what a moving part sweeps', value: e.depth, limit: 1 * mm, remedy: e.k === 1 ? null : `make room in ${e.k === 0 ? 'x' : 'z'}`, parts: [...e.parts] });
   const placed = flaws.filter((f) => f.check === 'interference' || f.check === 'sweep' || f.check === 'room');
   trace.push({ stage: 'whole', where: 'placement', round: 1, says: placed.length ? `${clashes} overlaps and ${swept.size} sweeps through fixed parts` : 'every part in its own place, and nothing fixed where a moving part goes', flaws: placed, remedy: placed.find((f) => f.remedy)?.remedy ?? null });
+  // everything held: a load path from the ground to every part, through what it touches or is fastened into
+  const loose = floatingClusters(P);
+  for (const c of loose) flaws.push({ check: 'held', where: groupOf(c[0]!), says: `${c.length} part${c.length > 1 ? 's' : ''} held by nothing: ${[...new Set(c.map((p) => p.name))].slice(0, 3).join('; ')}`, law: 'every part has a load path to the ground', value: c.length, limit: 0, remedy: null, parts: c.map((p) => p.id) });
+  v('load path', P.filter((p) => p.shape.kind !== 'wire').length - loose.reduce((a, c) => a + c.length, 0), '1', 'parts with a path to the ground through what they touch or are fastened into');
   // the hottest thing a person could touch
   if (hotEnd && !guardEl) flaws.push({ check: 'reach', where: 'hot end', says: 'the hot end is within reach with no guard', law: 'the want on what a person may touch', value: hotEnd.ask.Thi, limit: 333, remedy: null });
 

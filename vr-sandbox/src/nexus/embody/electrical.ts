@@ -115,7 +115,8 @@ export function designElectrical(o: { loads: Load[]; controllerAt: V3; psuAt: V3
     const along = ax.travel / 2 + R, out = 2 * R + carrier.h + 4 * mm, deep = carrier.w + 4 * mm;
     const c0 = [0, 1, 2].map((k) => ax.at[k]! + ax.dir[k]! * (ax.travel / 4) + ax.across[k]! * (out / 2 + 4 * mm)) as V3;
     const size = [0, 1, 2].map((k) => (Math.abs(ax.dir[k]!) > 0.5 ? along : Math.abs(ax.across[k]!) > 0.5 ? out : deep)) as V3;
-    P.push(part({ id: `carrier:${axisId}`, name: `${carrier.id} cable carrier, R${R * 1e3}, ${(cl * 1e3).toFixed(0)} mm`, category: 'interconnect/containment', material: 'igumid (PA)', shape: { kind: 'block', size }, at: c0, colour: 0x263238, values: [{ name: 'bend radius', value: R, unit: 'm', law: `R ≥ 10 d over its thickest cable, ${(maxD * 1e3).toFixed(1)} mm` }] }, 300));
+    // its fixed end is screwed to the end of the axis it serves
+    P.push(part({ into: [`${axisId}/end-a`], id: `carrier:${axisId}`, name: `${carrier.id} cable carrier, R${R * 1e3}, ${(cl * 1e3).toFixed(0)} mm`, category: 'interconnect/containment', material: 'igumid (PA)', shape: { kind: 'block', size }, at: c0, colour: 0x263238, values: [{ name: 'bend radius', value: R, unit: 'm', law: `R ≥ 10 d over its thickest cable, ${(maxD * 1e3).toFixed(1)} mm` }] }, 300));
   }
   // the supply, its fuse and its mains conductors
   const load = o.loads.reduce((s, l) => s + l.P, 0) + 5;

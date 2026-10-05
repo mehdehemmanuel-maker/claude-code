@@ -148,7 +148,10 @@ export function designMotor(ask: MotorAsk): Motor {
   const P: Part[] = [];
   const cat = 'motion/actuators/pm-motor';
   const al = mat('aluminum.6061-t6'), cu = COPPER.density;
-  const add = (p: Omit<Part, 'mass' | 'category'> & { category?: string; mass?: number }, density: number) => P.push(part({ category: cat, ...p }, density));
+  // each part as the subsystem it is made for: the rotor turns, the stator holds the field still, the housing and its
+  // bearings hold the two apart across the gap, the encoder reads the angle
+  const systemOf = (id: string) => (/\/(shaft|rotor-iron|magnet)/.test(id) ? 'rotor' : /\/(stator|tooth|coil)/.test(id) ? 'stator' : /\/bearing/.test(id) ? 'bearings' : /\/cap-screw/.test(id) ? 'fasteners' : /\/(housing|cap-)/.test(id) ? 'housing' : /\/encoder/.test(id) ? 'encoder' : 'motor');
+  const add = (p: Omit<Part, 'mass' | 'category'> & { category?: string; mass?: number }, density: number) => P.push(part({ category: cat, system: systemOf(p.id), ...p }, density));
   const ext = 15 * mm;
   add({ id: `${ask.id}/shaft`, name: 'shaft', material: 'steel.1018-cd', shape: { kind: 'round', r: ds / 2, length: Lh + ext + 3 * mm, axis: 'z' }, at: [0, 0, (ext - 3 * mm) / 2], colour: 0xb0b8c0, values: vals.filter((x) => x.name === 'shaft diameter') }, steel.density);
   add({ id: `${ask.id}/rotor-iron`, name: 'rotor back iron', material: 'steel.1018-cd', shape: { kind: 'round', r: Dr / 2 - lm, length: L, axis: 'z', bore: ds }, at: [0, 0, 0], colour: 0x6b7480, values: [] }, steel.density);
@@ -177,7 +180,10 @@ export function designMotor(ask: MotorAsk): Motor {
   }
   // the encoder its position is read through: a diametral magnet on the shaft's rear end and a sensor board facing it
   add({ id: `${ask.id}/encoder-magnet`, name: 'diametral encoder magnet 6×2.5 mm', material: 'NdFeB N42', category: 'sensing/position', shape: { kind: 'round', r: 3 * mm, length: 2.5 * mm, axis: 'z' }, at: [0, 0, -Lh / 2 - 1.5 * mm], colour: 0x8e24aa, values: [] }, NDFEB_N42.density);
-  add({ id: `${ask.id}/encoder-board`, name: 'magnetic encoder board (12-bit, 4096 counts a turn)', material: 'FR4', category: 'sensing/position', shape: { kind: 'round', r: Math.min(OD / 2 - 1 * mm, 14 * mm), length: 1.6 * mm, axis: 'z' }, at: [0, 0, -Lh / 2 - 5 * mm], colour: 0x1b5e20, values: [] }, 1850);
+  const rBoard = Math.min(OD / 2 - 1 * mm, 14 * mm), gapE = 4.2 * mm;
+  add({ id: `${ask.id}/encoder-board`, name: 'magnetic encoder board (12-bit, 4096 counts a turn)', material: 'FR4', category: 'sensing/position', shape: { kind: 'round', r: rBoard, length: 1.6 * mm, axis: 'z' }, at: [0, 0, -Lh / 2 - gapE - 0.8 * mm], colour: 0x1b5e20, values: [{ name: 'sensor gap', value: gapE - 2.75 * mm, unit: 'm', law: 'the magnet\'s face to the sensor, within the 0.5 to 3 mm a magnetic encoder reads across' }] }, 1850);
+  // held off the rear cap by two standoffs, clear of the cap screws
+  for (const s of [-1, 1]) add({ id: `${ask.id}/encoder-standoff-${s > 0 ? 'b' : 'a'}`, name: `standoff M2 × ${(gapE * 1e3).toFixed(1)} mm, brass, encoder board to rear cap`, material: 'brass.c360', category: 'sensing/position', shape: { kind: 'round', r: 1.75 * mm, length: gapE, axis: 'z' }, at: [s * (rBoard - 3 * mm), 0, -Lh / 2 - gapE / 2], colour: 0xd4af37, values: [] }, 8500);
   const mass = P.reduce((s, x) => s + x.mass, 0);
   const flangePCD = 0.7 * OD, flangeScrew = screw;
   return {

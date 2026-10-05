@@ -68,7 +68,9 @@ export function designHotEnd(ask: HeaterAsk): HotEnd {
   v('fins', fins, '1', 'annular fins of 22 mm outer diameter on a 10 mm core, two faces each, enough for that area');
   // ---- parts: the stream along −y, the nozzle's tip at y = 0 -----------------------------------------------------
   const Pts: Part[] = [];
-  const add = (p: Omit<Part, 'mass'> & { mass?: number }, density: number) => Pts.push(part(p, density));
+  // the melt zone brings the stream to its flowing temperature, the break keeps that heat from climbing, the sink sheds what does
+  const systemOf = (id: string) => (/\/break/.test(id) ? 'heat break' : /\/(heatsink|fin-|fan)/.test(id) ? 'cooling' : 'melt zone');
+  const add = (p: Omit<Part, 'mass'> & { mass?: number }, density: number) => Pts.push(part({ system: systemOf(p.id), ...p }, density));
   const nozzleL = 12.5 * mm, yBlock = nozzleL - 5 * mm + by / 2;
   const xs = Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * pitch - (nc - 1) * 4 * mm);
   xs.forEach((x, i) => add({ id: `${ask.id}/nozzle${n > 1 ? `-${i + 1}` : ''}`, name: `brass nozzle M6×1, ${(ask.width * 1e3).toFixed(2)} mm orifice${n > 1 ? `, stream ${i + 1} of ${n}` : ''}`, category: 'thermal/heating/block', material: 'brass.c360', shape: { kind: 'round', r: 3.5 * mm, length: nozzleL, axis: 'y', bore: 2 * mm }, at: [x, nozzleL / 2, 0], colour: 0xd4af37, values: [{ name: 'orifice', value: ask.width, unit: 'm', law: 'as wide as the stream the tolerance allows' }] }, brass.density));

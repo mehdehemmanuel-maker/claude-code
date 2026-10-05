@@ -31,6 +31,8 @@ export interface LinearAxis extends Assembly {
   length: number; width: number; carrierTop: number;
   /** How far its end blocks reach either side of its rods, across them: half of it from the rods to the face it mounts by. */
   endHeight: number;
+  /** The carriage plate's extent: along the travel, and across it. */
+  carriage: { length: number; width: number };
   flaws: Flaw[];
 }
 
@@ -95,7 +97,9 @@ export function designAxis(ask: AxisAsk, carriageAt = 0.5): LinearAxis {
 
   // ---- parts, in its own frame -----------------------------------------------------------------------------------
   const P: Part[] = [];
-  const add = (p: Omit<Part, 'mass'> & { mass?: number }, density: number) => P.push(part(p, density));
+  // the guides carry the carriage straight, the ends hold the guides to what holds the axis, the drive moves it
+  const systemOf = (id: string) => (/\/(rod-[ab]|bushing-[-\d])/.test(id) ? 'guides' : /\/(carriage|bushing-screw|standoff)/.test(id) ? 'carriage' : /\/(end-|rod-clamp|mount-)/.test(id) ? 'ends' : 'drive');
+  const add = (p: Omit<Part, 'mass'> & { mass?: number }, density: number) => P.push(part({ system: systemOf(p.id), ...p }, density));
   const zc = -ask.travel / 2 + carriageAt * ask.travel;
   const yRod = 0, yPlate = bushing.D / 2 + t / 2 + 1 * mm;
   for (const s of [-1, 1]) add({ id: `${ask.id}/rod-${s > 0 ? 'b' : 'a'}`, name: `hardened rod Ø${bushing.d * 1e3} × ${(rodL * 1e3).toFixed(0)} mm`, category: 'motion/guides/shafts', material: 'steel.52100', shape: { kind: 'round', r: bushing.d / 2, length: rodL, axis: 'z' }, at: [(s * spacing) / 2, yRod, 0], colour: 0xd5dbe1, values: vals.filter((x) => x.name === 'rod sag' || x.name === 'rod spacing') }, steel.density);
@@ -106,6 +110,9 @@ export function designAxis(ask: AxisAsk, carriageAt = 0.5): LinearAxis {
     const len = stockScrew(t + bushing.D * 0.6)!;
     add({ id: `${ask.id}/bushing-screw-${s}${e}${k}`, name: `M4×${(len * 1e3).toFixed(0)} socket head cap screw (ISO 4762), bushing clamp`, category: 'structure/fasteners/screws', material: 'steel class 8.8', shape: { kind: 'screw', size: 'M4', length: len, axis: 'y', head: 1 }, at: [(s * spacing) / 2 + (k * (bushing.D / 2 + 3 * mm)), yPlate + t / 2 - len / 2, zc + (e * pitchB) / 2], colour: 0x2b2b2b, values: [{ name: 'length', value: len, unit: 'm', law: 'through the plate and into the clamp, a stocked length' }], rides: ask.id }, 7850);
   }
+  // what mounts to the carriage stands on four standoffs as tall as the clamp screws' heads it clears
+  const hk = SOCKET_HEAD[fasten]!.k;
+  for (const sx2 of [-1, 1]) for (const sz2 of [-1, 1]) add({ id: `${ask.id}/standoff-${sx2}${sz2}`, name: `standoff Ø8 × ${(hk * 1e3).toFixed(0)} mm, aluminium, M4 through`, category: 'structure/joints', material: 'aluminum.6061-t6', shape: { kind: 'round', r: 4 * mm, length: hk, axis: 'y', bore: 4.3 * mm }, at: [sx2 * (cWid / 2 - 7 * mm), yPlate + t / 2 + hk / 2, zc + sz2 * (cLen / 2 - 7 * mm)], colour: 0xb0bec5, values: [], rides: ask.id }, al.density);
   for (const e of [-1, 1]) {
     const z = (e * (L - endT)) / 2;
     add({ id: `${ask.id}/end-${e > 0 ? 'b' : 'a'}`, name: `end block ${(cWid * 1e3).toFixed(0)} × ${((bushing.D + 16 * mm) * 1e3).toFixed(0)} × ${(endT * 1e3).toFixed(0)} mm`, category: 'structure/joints', material: 'aluminum.6061-t6', shape: { kind: 'block', size: [cWid, bushing.D + 16 * mm, endT] }, at: [0, yRod, z], colour: 0x78909c, values: [] }, al.density);
@@ -119,14 +126,26 @@ export function designAxis(ask: AxisAsk, carriageAt = 0.5): LinearAxis {
   // the drive and its motor
   let motorParts: Part[];
   if (drive === 'belt') {
-    const zP = (L - endT) / 2 + endT / 2 + 12 * mm, zI = -zP;
+    // the motor stands clear of the end block it is held from, by a plate on the block's outer face
+    const R = motor.mech.diameter / 2, zP = L / 2 + Math.max(12 * mm, R + 2 * mm), zI = -zP;
     // the belt runs between the rods, in their plane; the motor stands past the end of the travel on the carriage's
     // side, away from the face the axis mounts by, where what holds the axis is
     const yB = 0;
-    motorParts = placeParts(motor.parts, 'y', [0, yB + 10 * mm + motor.mech.length / 2, zP]);
+    // its shaft points down through the plate to the pulley; its body and encoder above
+    motorParts = placeParts(motor.parts, '-y', [0, yB + 10 * mm + motor.mech.length / 2, zP]);
     for (const [id, z] of [['pulley', zP], ['idler', zI]] as const) add({ id: `${ask.id}/${id}`, name: id === 'pulley' ? `GT2 ${teeth}-tooth pulley, ${GT2.bores[0]! * 1e3} mm bore` : `GT2 ${teeth}-tooth idler on two 625 bearings`, category: 'motion/transmission/belt', material: 'aluminum.6061-t6', shape: { kind: 'round', r: rp + 1 * mm, length: beltW + 2 * mm, axis: 'y' }, at: [0, yB, z], colour: 0xc0c7cf, values: [] }, al.density);
     const loopL = 2 * (zP - zI) + 2 * Math.PI * rp;
     const belt = (pts: V3[], i: number) => add({ id: `${ask.id}/belt-${i}`, name: `GT2 belt ${beltW * 1e3} mm wide, ${(Math.ceil(loopL * 1e3 / 2) * 2)} mm long loop`, category: 'motion/transmission/belt', material: 'glass-fibre reinforced neoprene', shape: { kind: 'wire', points: pts, r: 0.8 * mm }, at: [0, yB, 0], colour: 0x111111, values: vals.filter((x) => x.name === 'belt tension' || x.name === 'belt stretch'), mass: loopL * beltW * 1.5e-3 * 1200 / 2 }, 0);
+    // the motor plate: from the end block's outer face out under the motor's flange, the shaft through it to the pulley
+    const plateY = yB + 10 * mm - 1.5 * mm;
+    add({ id: `${ask.id}/motor-plate`, name: `motor plate ${(2 * R * 1e3).toFixed(0)} × ${((zP + R - L / 2) * 1e3).toFixed(0)} × 3 mm, aluminium, from the end block`, category: 'structure/joints/brackets', material: 'aluminum.6061-t6', shape: { kind: 'block', size: [2 * R, 3 * mm, zP + R - L / 2] }, at: [0, plateY, (L / 2 + zP + R) / 2], colour: 0x90a4ae, values: [] }, al.density);
+    const fl = stockScrew(3 * mm + 6 * mm)!;
+    for (const [sx2, sz2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) add({ id: `${ask.id}/motor-screw-${sx2}${sz2}`, name: `M3×${(fl * 1e3).toFixed(0)} socket head cap screw (ISO 4762), motor flange`, category: 'structure/fasteners/screws', material: 'steel class 8.8', shape: { kind: 'screw', size: 'M3', length: fl, axis: 'y', head: -1 }, at: [sx2 * R * 0.7, plateY - 1.5 * mm + fl / 2, zP + sz2 * R * 0.7], colour: 0x2b2b2b, values: [], into: [`${ask.id}/motor-plate`, `${ask.id}/motor/housing`] }, 7850);
+    // the idler on an axle between two brackets from the other end block
+    const ir = rp + 1 * mm, ih = (beltW + 2 * mm) / 2, bz0 = -L / 2, bz1 = zI - ir - 3 * mm;
+    for (const s of [-1, 1]) add({ id: `${ask.id}/idler-bracket-${s > 0 ? 'b' : 'a'}`, name: `idler bracket ${((bz0 - bz1) * 1e3).toFixed(0)} × 18 × 3 mm, aluminium`, category: 'structure/joints/brackets', material: 'aluminum.6061-t6', shape: { kind: 'block', size: [18 * mm, 3 * mm, bz0 - bz1] }, at: [0, s * (ih + 1.5 * mm), (bz0 + bz1) / 2], colour: 0x90a4ae, values: [] }, al.density);
+    const axle = stockScrew(2 * ih + 6 * mm + 4 * mm)!;
+    add({ id: `${ask.id}/idler-axle`, name: `M5×${(axle * 1e3).toFixed(0)} socket head cap screw (ISO 4762), the idler's axle, and nut`, category: 'structure/fasteners/screws', material: 'steel class 8.8', shape: { kind: 'screw', size: 'M5', length: axle, axis: 'y', head: 1 }, at: [0, ih + 3 * mm - axle / 2, zI], colour: 0x2b2b2b, values: [], into: [`${ask.id}/idler-bracket-a`, `${ask.id}/idler-bracket-b`, `${ask.id}/idler`] }, 7850);
     belt([[rp, yB, zI], [rp, yB, zP]], 1);
     belt([[-rp, yB, zI], [-rp, yB, zc - cLen / 2], [-rp, yPlate - t / 2, zc], [-rp, yB, zc + cLen / 2], [-rp, yB, zP]], 2);
   } else {
@@ -145,7 +164,7 @@ export function designAxis(ask: AxisAsk, carriageAt = 0.5): LinearAxis {
     id: ask.id, name: ask.name, category: 'motion', from: ask.id, parts: all, values: vals, ask, drive, motor, motorHistory: history,
     moving: mass((p) => p.rides === ask.id) + ask.payload, fixed: mass((p) => p.rides !== ask.id),
     // what mounts to the carriage sits on its face past the heads of the screws that clamp its bushings
-    length: L, width: cWid, carrierTop: yPlate + t / 2 + SOCKET_HEAD[fasten]!.k, endHeight: bushing.D + 16 * mm, flaws,
+    length: L, width: cWid, carrierTop: yPlate + t / 2 + SOCKET_HEAD[fasten]!.k, endHeight: bushing.D + 16 * mm, carriage: { length: cLen, width: cWid }, flaws,
   };
 }
 

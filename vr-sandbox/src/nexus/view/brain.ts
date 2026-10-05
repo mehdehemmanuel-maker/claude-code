@@ -17,6 +17,10 @@ export interface WorldApi {
   note(target: string, kind: string, text: string): Promise<string>;
   rebuild(ask: { size?: number; tolerance?: number; hours?: number }): string;
   replay(): string;
+  /** Lift an assembly or subsystem out as a hologram and unravel it in the air ("" for what the person points at). */
+  expand(target: string): string;
+  /** Build it step by step in the order the build law gives: an assembly in the air, or "the machine" in place. */
+  build(target: string): string;
 }
 
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -32,7 +36,7 @@ export const describe = (p: PartBrief, n = 3) => `${p.name}, ${p.material}${p.ma
 
 const RULES = (w: WorldApi) => `You are Claude, embodied as the robot standing in the Nexus forge, a room in VR, talking with the person who is there with you, like Jarvis with Tony Stark. In front of you both stands a machine Nexus generated from the person's ask and embodied as real hardware: every part sized by a law from stocked parts, placed by placement laws, designed round after round (generate, identify flaws, update, repeat).
 
-Speak as you would aloud: two to four short sentences, warm and exact, no markdown, no lists. Act with the tools as you speak: when you talk about a part, call focus so you drive to it and point; to show inside an assembly, call explode (and explode with amount 0 to close it); to say why a part is what it is, call part_info and give the law and the numbers it came from; when the person wants something marked, call note; when they want the machine changed (a bigger part, a tighter tolerance, less time), call rebuild, then say what came of it. Use only numbers the tools and the summary give; where a thing is not designed yet, say it is a gap, plainly.
+Speak as you would aloud: two to four short sentences, warm and exact, no markdown, no lists. Act with the tools as you speak: when you talk about a part, call focus so you drive to it and point; to show inside an assembly, call expand: it lifts out as a hologram and unravels into its subsystems, and expand a subsystem to go deeper; to show how something goes together, call build; to say why a part is what it is, call part_info and give the law and the numbers it came from; when the person wants something marked, call note; when they want the machine changed (a bigger part, a tighter tolerance, less time), call rebuild, then say what came of it. Use only numbers the tools and the summary give; where a thing is not designed yet, say it is a gap, plainly.
 
 The machine now:
 ${w.brief()}
@@ -54,6 +58,8 @@ function claudeBrain(w: WorldApi, sample: Sample): Brain {
     { name: 'explode', description: 'Take an assembly apart in place so its insides show (amount 1), or put it back (amount 0). Target "all" for the whole machine.', inputSchema: { type: 'object', properties: { target: { type: 'string' }, amount: { type: 'number' } }, required: ['target', 'amount'] }, execute: (i: Record<string, unknown>) => w.explode(String(i.target ?? 'all'), Number(i.amount ?? 1)) },
     { name: 'note', description: 'Pin a note to a part, kept with the machine for the next round of laws: kind is flaw, question, idea or good.', inputSchema: { type: 'object', properties: { target: { type: 'string' }, kind: { type: 'string', enum: ['flaw', 'question', 'idea', 'good'] }, text: { type: 'string' } }, required: ['target', 'kind', 'text'] }, execute: (i: Record<string, unknown>) => w.note(String(i.target ?? ''), String(i.kind ?? 'idea'), String(i.text ?? '')) },
     { name: 'rebuild', description: 'Generate and embody the machine again to a new ask: size_mm (largest part), tolerance_mm, hours (time for the largest part). Returns the rounds, flaws, parts and size.', inputSchema: { type: 'object', properties: { size_mm: { type: 'number' }, tolerance_mm: { type: 'number' }, hours: { type: 'number' } } }, execute: (i: Record<string, unknown>) => w.rebuild({ ...(i.size_mm ? { size: Number(i.size_mm) / 1e3 } : {}), ...(i.tolerance_mm ? { tolerance: Number(i.tolerance_mm) / 1e3 } : {}), ...(i.hours ? { hours: Number(i.hours) } : {}) }) },
+    { name: 'expand', description: 'Lift an assembly or subsystem (an id like "x/motor", "x/motor/rotor", "hot end", or words; "" for what the person points at) out of the machine as a hologram and unravel it in the air into its subsystems. Returns what it holds.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.expand(String(i.target ?? '')) },
+    { name: 'build', description: 'Build an assembly step by step in the air from the inside out, or "the machine" in place from the ground up, in the order the build law gives. Returns how many steps and the first.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.build(String(i.target ?? '')) },
     { name: 'replay', description: 'Play the whole pipeline again from the ask: every round, flaw and remedy.', inputSchema: { type: 'object', properties: {} }, execute: () => w.replay() },
   ];
   return {
@@ -83,7 +89,7 @@ export function plainBrain(w: WorldApi): Brain {
     mode: 'plain',
     async ask(text) {
       const t = text.toLowerCase().trim();
-      const target = t.replace(/^(please |can you |could you |hey |claude,? |jarvis,? )+/, '').replace(/\b(show me|show|go to|where is|where's|look at|point at|tell me about|what is|what's|why is|why|explain|the|this|that|take apart|explode|open up|put back together|put together|close|is|so|thick|big|long|it|a|an|put|back|together|apart|take|open|up|me|please|again)\b/g, ' ').replace(/[?!.]/g, ' ').replace(/\s+/g, ' ').trim();
+      const target = t.replace(/^(please |can you |could you |hey |claude,? |jarvis,? )+/, '').replace(/\b(show me|show|go to|where is|where's|look at|point at|tell me about|what is|what's|why is|why|explain|the|this|that|take apart|explode|open up|put back together|put together|close|is|so|thick|big|long|it|a|an|put|back|together|apart|take|open|up|me|please|again|build|expand|unravel)\b/g, ' ').replace(/[?!.]/g, ' ').replace(/\s+/g, ' ').trim();
       if (/^(hi|hello|hey|yo)\b/.test(t)) return `Hey. I'm Claude, and this is the forge. ${w.brief().split('\n')[0]} Ask me about any part, point at one, or tell me to take it apart.`;
       if (/\b(again|replay|from the start|run it)\b/.test(t)) return w.replay();
       const size = num(t, /(\d+(?:\.\d+)?)\s*(?:mm|millimet)/), hours = num(t, /(\d+(?:\.\d+)?)\s*(?:h\b|hours?)/), tol = num(t, /tolerance\s*(?:of\s*)?(\d+(?:\.\d+)?)/);
@@ -91,6 +97,8 @@ export function plainBrain(w: WorldApi): Brain {
       const kind = /\b(flaw|wrong|bad|broken|too)\b/.test(t) ? 'flaw' : /\b(good|nice|love|great)\b/.test(t) ? 'good' : /\?|question/.test(t) ? 'question' : 'idea';
       const noteMatch = text.match(/^(?:note|mark)\s*(?:on\s+([^:]+))?[:,-]?\s*(.+)$/i);
       if (noteMatch) return w.note(noteMatch[1]?.trim() ?? '', kind, noteMatch[2]!.trim());
+      if (/^build\b|\bbuild (it|this|the|me)\b/.test(t)) return w.build(/printer|machine|whole|everything/.test(t) ? 'the machine' : target);
+      if (/\b(expand|unravel|hologram|holo|subsystems?|single out)\b/.test(t)) return w.expand(target.replace(/\b(expand|unravel|hologram|holo|subsystems?|single out|of)\b/g, '').trim());
       if (/\b(explode|apart|inside|open)\b/.test(t)) return w.explode(target || 'all', 1);
       if (/\b(together|close it|assemble|put back)\b/.test(t)) return w.explode(target || 'all', 0);
       if (/\b(flaws?|problems?|rounds?|wrong)\b/.test(t)) return w.brief().split('\n').slice(0, 4).join(' ');
@@ -99,7 +107,7 @@ export function plainBrain(w: WorldApi): Brain {
         const p = target ? w.find(target)[0] : w.selected();
         return /\b(why|how|explain)\b/.test(t) && p ? describe(p, 4) : said;
       }
-      return 'Here I read your words plainly: ask me to show a part (the y motor, the hot end, the frame), why it is what it is, to take it apart or put it back, to note something on it, or to make the part bigger, say 300 mm, or 12 hours.';
+      return 'Here I read your words plainly: ask me to show a part (the y motor, the hot end, the frame), why it is what it is, to take it apart or put it back, to note something on it, to expand it into its subsystems, to build it step by step, or to make the part bigger, say 300 mm, or 12 hours.';
     },
   };
 }

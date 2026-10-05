@@ -27,6 +27,8 @@ export interface Part {
   mass: number;
   colour?: number;
   values: Value[];
+  /** The subsystem of its assembly it was designed as part of: a motor's rotor, an axis's drive, a head's melt zone. */
+  system?: string;
   /** What it moves with: an axis it rides on. */
   rides?: string;
   /** A turn about one of its own frame's axes, radians (a magnet on a rotor, a tooth on a stator). */
