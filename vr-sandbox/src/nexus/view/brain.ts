@@ -21,6 +21,8 @@ export interface WorldApi {
   expand(target: string): string;
   /** Build it step by step in the order the build law gives: an assembly in the air, or "the machine" in place. */
   build(target: string): string;
+  /** Bring one panel in front of the person (pipeline, rounds, laws, bill, loop), or put it away (none). */
+  show(panel: string): string;
 }
 
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -60,6 +62,7 @@ function claudeBrain(w: WorldApi, sample: Sample): Brain {
     { name: 'rebuild', description: 'Generate and embody the machine again to a new ask: size_mm (largest part), tolerance_mm, hours (time for the largest part). Returns the rounds, flaws, parts and size.', inputSchema: { type: 'object', properties: { size_mm: { type: 'number' }, tolerance_mm: { type: 'number' }, hours: { type: 'number' } } }, execute: (i: Record<string, unknown>) => w.rebuild({ ...(i.size_mm ? { size: Number(i.size_mm) / 1e3 } : {}), ...(i.tolerance_mm ? { tolerance: Number(i.tolerance_mm) / 1e3 } : {}), ...(i.hours ? { hours: Number(i.hours) } : {}) }) },
     { name: 'expand', description: 'Lift an assembly or subsystem (an id like "x/motor", "x/motor/rotor", "hot end", or words; "" for what the person points at) out of the machine as a hologram and unravel it in the air into its subsystems. Returns what it holds.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.expand(String(i.target ?? '')) },
     { name: 'build', description: 'Build an assembly step by step in the air from the inside out, or "the machine" in place from the ground up, in the order the build law gives. Returns how many steps and the first.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] }, execute: (i: Record<string, unknown>) => w.build(String(i.target ?? '')) },
+    { name: 'show', description: 'Bring one panel in front of the person, the rest out of the way: pipeline, rounds, laws, bill (parts and settings), loop (their reports and the decisions put to them); none to clear the view.', inputSchema: { type: 'object', properties: { panel: { type: 'string', enum: ['pipeline', 'rounds', 'laws', 'bill', 'loop', 'none'] } }, required: ['panel'] }, execute: (i: Record<string, unknown>) => w.show(String(i.panel ?? 'none')) },
     { name: 'replay', description: 'Play the whole pipeline again from the ask: every round, flaw and remedy.', inputSchema: { type: 'object', properties: {} }, execute: () => w.replay() },
   ];
   return {
@@ -97,6 +100,9 @@ export function plainBrain(w: WorldApi): Brain {
       const kind = /\b(flaw|wrong|bad|broken|too)\b/.test(t) ? 'flaw' : /\b(good|nice|love|great)\b/.test(t) ? 'good' : /\?|question/.test(t) ? 'question' : 'idea';
       const noteMatch = text.match(/^(?:note|mark)\s*(?:on\s+([^:]+))?[:,-]?\s*(.+)$/i);
       if (noteMatch) return w.note(noteMatch[1]?.trim() ?? '', kind, noteMatch[2]!.trim());
+      const pane = t.match(/\b(pipeline|rounds?|laws?|bill|parts list|settings|loop|reports|decisions?|proposals?)\b/);
+      if (pane && /\b(show|open|bring|see|where)\b/.test(t)) return w.show(/round/.test(pane[1]!) ? 'rounds' : /law/.test(pane[1]!) ? 'laws' : /bill|parts|settings/.test(pane[1]!) ? 'bill' : /pipeline/.test(pane[1]!) ? 'pipeline' : 'loop');
+      if (/\b(hide|clear|put away)\b/.test(t)) return w.show('none');
       if (/^build\b|\bbuild (it|this|the|me)\b/.test(t)) return w.build(/printer|machine|whole|everything/.test(t) ? 'the machine' : target);
       if (/\b(expand|unravel|hologram|holo|subsystems?|single out)\b/.test(t)) return w.expand(target.replace(/\b(expand|unravel|hologram|holo|subsystems?|single out|of)\b/g, '').trim());
       if (/\b(explode|apart|inside|open)\b/.test(t)) return w.explode(target || 'all', 1);

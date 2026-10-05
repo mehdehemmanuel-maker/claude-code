@@ -65,7 +65,8 @@ rim.rotation.x = Math.PI / 2; rim.position.set(M.x, M.y + 0.002, M.z); scene.add
 const machine = new THREE.Group(); machine.position.copy(M).add(new THREE.Vector3(0, 0.015, 0)); scene.add(machine);
 const lamp = new THREE.PointLight(0xffffff, 1.4, 2.5); lamp.position.set(0.3, 1.9, -0.6); scene.add(lamp);
 
-// ---- the pipeline, above and behind it -----------------------------------------------------------------------------
+// ---- the pipeline, above and behind it: shown while it runs, or when you ask for it ---------------------------------------
+const pipelineGroup = new THREE.Group(); scene.add(pipelineGroup);
 const STAGES = ['INTENT', 'GENERATE', 'HEAD', 'MOTORS', 'AXES', 'WIRING', 'CHECK', 'REMEDY'] as const;
 type Stage = (typeof STAGES)[number];
 const nodeAt = (i: number) => { const th = ((i / (STAGES.length - 1)) * 2 - 1) * 1.15; return new THREE.Vector3(M.x + Math.sin(th) * 1.55, 2.05 - 0.12 * Math.cos(th * 1.4), M.z - Math.cos(th) * 0.75 - 0.15); };
@@ -73,22 +74,22 @@ interface Node { ring: THREE.Mesh; core: THREE.Mesh; tag: THREE.Sprite; at: THRE
 const nodes: Node[] = STAGES.map((s, i) => {
   const at = nodeAt(i);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.009, 10, 48), new THREE.MeshBasicMaterial({ color: 0x1d4f5c }));
-  ring.position.copy(at); ring.lookAt(0, 1.6, 0.6); scene.add(ring);
+  ring.position.copy(at); ring.lookAt(0, 1.6, 0.6); pipelineGroup.add(ring);
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 14), new THREE.MeshBasicMaterial({ color: 0x1d4f5c }));
-  core.position.copy(at); scene.add(core);
-  const tag = label(s, 0.042, '#9fdfee', 'rgba(0,0,0,0)'); tag.position.copy(at).add(new THREE.Vector3(0, -0.14, 0)); scene.add(tag);
+  core.position.copy(at); pipelineGroup.add(core);
+  const tag = label(s, 0.042, '#9fdfee', 'rgba(0,0,0,0)'); tag.position.copy(at).add(new THREE.Vector3(0, -0.14, 0)); pipelineGroup.add(tag);
   return { ring, core, tag, at };
 });
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x1f5866, transparent: true, opacity: 0.8 });
 const curveBetween = (a: THREE.Vector3, b: THREE.Vector3, lift = 0.06) => new THREE.QuadraticBezierCurve3(a, a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, lift, 0)), b);
 const edges = STAGES.slice(1).map((_, i) => curveBetween(nodes[i]!.at, nodes[i + 1]!.at));
-for (const c of edges) scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(c.getPoints(24)), edgeMat));
+for (const c of edges) pipelineGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(c.getPoints(24)), edgeMat));
 // the loop: from the remedy back to the head, over the top
 const loopBack = new THREE.CubicBezierCurve3(nodes[7]!.at, nodes[7]!.at.clone().add(new THREE.Vector3(0, 0.45, 0.05)), nodes[2]!.at.clone().add(new THREE.Vector3(0, 0.45, 0.05)), nodes[2]!.at);
 const loopLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(loopBack.getPoints(48)), new THREE.LineDashedMaterial({ color: 0xffb74d, dashSize: 0.03, gapSize: 0.02, transparent: true, opacity: 0.7 }));
-loopLine.computeLineDistances(); scene.add(loopLine);
-const loopTag = label('generate → identify flaws → update → repeat', 0.04, '#ffcc80', 'rgba(0,0,0,0)'); loopTag.position.copy(loopBack.getPoint(0.5)).add(new THREE.Vector3(0, 0.05, 0)); scene.add(loopTag);
-const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff })); scene.add(pulse);
+loopLine.computeLineDistances(); pipelineGroup.add(loopLine);
+const loopTag = label('generate → identify flaws → update → repeat', 0.04, '#ffcc80', 'rgba(0,0,0,0)'); loopTag.position.copy(loopBack.getPoint(0.5)).add(new THREE.Vector3(0, 0.05, 0)); pipelineGroup.add(loopTag);
+const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff })); pipelineGroup.add(pulse);
 const pulseLight = new THREE.PointLight(0x80deea, 0.8, 0.6); pulse.add(pulseLight);
 
 // ---- cards ---------------------------------------------------------------------------------------------------------
@@ -98,11 +99,16 @@ const roundsCard = card(0.66, 0.62); facing(roundsCard.mesh, 0.78, 1.3, -0.95);
 const lawsCard = card(0.7, 0.86); facing(lawsCard.mesh, -1.35, 1.25, -0.3);
 const liveCard = card(0.7, 0.86); facing(liveCard.mesh, 1.35, 1.25, -0.3);
 const subtitle = card(1.1, 0.2, 1400); subtitle.mesh.position.set(0, 1.62, -1.15); subtitle.mesh.lookAt(0, 1.5, 0.6); scene.add(subtitle.mesh);
-const title = label('NEXUS · the forge · live', 0.055, '#ffffff', 'rgba(0,0,0,0)'); title.position.set(0, 2.6, -1.7); scene.add(title);
+const title = label('NEXUS · the forge · live', 0.055, '#ffffff', 'rgba(0,0,0,0)'); title.position.set(0, 2.6, -1.7); pipelineGroup.add(title);
+// one voice, mine, above my head: the centre of your view stays the machine's
+subtitle.mesh.visible = false;
+// a part's own card, beside the part you point at, for a while
+const partCard = card(0.34, 0.27, 900); scene.add(partCard.mesh); partCard.mesh.visible = false;
+let partCardUntil = 0;
 
 // Claude, beside the machine
 const robot = new Robot(); scene.add(robot.root); for (const s of robot.senses) scene.add(s);
-const nameplate = label('CLAUDE', 0.035, '#4dd0e1', 'rgba(0,0,0,0)'); nameplate.position.set(0, 1.42, 0); robot.root.add(nameplate);
+const nameplate = label('CLAUDE', 0.022, '#4dd0e1', 'rgba(0,0,0,0)'); nameplate.position.set(0, 1.42, 0); robot.root.add(nameplate);
 const beam = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff8a80, transparent: true, opacity: 0.9 })); beam.frustumCulled = false; scene.add(beam);
 
 // ---- the run: here, in the page --------------------------------------------------------------------------------------
@@ -217,7 +223,7 @@ function enter(i: number, t: number, instant: boolean): void {
   light(b.flaws);
   if (instant && i !== targetBeat) return;
   stepCard.draw(`${b.kind === 'step' ? `${b.stage} · ${b.step!.where} · its round ${b.step!.round}` : b.kind.toUpperCase()}${b.round ? ` · machine round ${b.round}` : ''}`, b.detail, b.flaws.length ? '#ff5252' : b.kind === 'remedy' ? '#ffb74d' : '#4dd0e1');
-  subtitle.draw('', [{ text: `Claude: ${b.says}`, size: 1.0 }], b.flaws.length ? '#ff5252' : b.kind === 'remedy' ? '#ffb74d' : '#4dd0e1');
+  voiceCard.draw('', [{ text: b.says, size: 1.0 }], b.flaws.length ? '#ff5252' : b.kind === 'remedy' ? '#ffb74d' : '#4dd0e1');
   drawRounds(b);
   drawLive(b);
   if (voice && !instant && 'speechSynthesis' in window && (b.kind !== 'step' || b.flaws.length)) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(b.says); u.rate = 1.1; speechSynthesis.speak(u); }
@@ -260,7 +266,7 @@ function drawLive(b: Beat): void {
   }
   liveCard.draw(b.kind === 'done' ? 'BUILT · BILL AND SETTINGS' : 'LIVE', lines, '#4dd0e1');
 }
-lawsCard.draw('LAWS THE EXPERIMENT UPDATED', LAW_UPDATES.slice(-5).map((l) => ({ text: `${l.n}. ${l.found} → now ${l.now}`, size: 0.8, color: l.n >= 5 ? '#ffe0b2' : '#c8e6f0' })), '#ffb74d');
+lawsCard.draw('LAWS THE EXPERIMENT UPDATED', LAW_UPDATES.slice(-7).map((l) => ({ text: `${l.n}. ${l.found} → now ${l.now}`, size: 0.8, color: l.n >= 5 ? '#ffe0b2' : '#c8e6f0' })), '#ffb74d');
 
 // ---- time -----------------------------------------------------------------------------------------------------------------
 const realStart = performance.now();
@@ -368,9 +374,20 @@ function tick(): void {
   const talking = speaking || ('speechSynthesis' in window && speechSynthesis.speaking);
   robot.speaking(talking ? Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3)) : b && u < 0.6 && current < beats.length - 1 ? 0.5 * Math.abs(Math.sin(t * 11)) : 0);
   voiceCard.mesh.position.copy(robot.root.position).add(tmp.set(0, 1.58, 0)); voiceCard.mesh.lookAt(eye);
-  consoleGroup.visible = renderer.xr.isPresenting;
-  stepCard.mesh.visible = roundsCard.mesh.visible = panelsOn && !holo.showing;
-  lawsCard.mesh.visible = liveCard.mesh.visible = loopBoard.visible = decideChips.visible = panelsOn;
+  // what is on: only what you are doing. The pipeline while it runs; one panel you summoned; a part's card while you
+  // point at it; the hologram alone when one is out
+  const playing = current < beats.length - 1 && !machineBuild;
+  pipelineGroup.visible = (playing || panel === 'pipeline') && !holo.showing;
+  stepCard.mesh.visible = panel === 'pipeline' && !holo.showing;
+  roundsCard.mesh.visible = panel === 'rounds';
+  lawsCard.mesh.visible = panel === 'laws';
+  liveCard.mesh.visible = panel === 'bill';
+  loopBoard.visible = decideChips.visible = panel === 'loop';
+  decide.style.display = panel === 'loop' ? 'flex' : 'none';
+  partCard.mesh.visible = clock() < partCardUntil && !holo.showing;
+  if (partCard.mesh.visible) partCard.mesh.lookAt(eye);
+  for (const t2 of tags) t2.visible = playing;
+  if (wrist) { wrist.updateMatrixWorld(); const n2 = tmp.set(0, 0, 1).transformDirection(wrist.matrixWorld), to = off.copy(eye).sub(wrist.getWorldPosition(world)).normalize(); wrist.visible = renderer.xr.isPresenting && n2.dot(to) > 0.25; }
   // on a screen, the view comes to what you asked about or pointed at
   if (!renderer.xr.isPresenting) {
     const frame = holo.showing ? { at: holo.group.position, d: 1.25 } : machineBuild ? { at: M.clone().add(tmp.set(0, 0.35, 0)), d: 1.7 } : asked && target ? { at: target, d: 0.95 } : null;
@@ -473,6 +490,7 @@ const world2: WorldApi = {
   rebuild(a) { const next: PrinterAsk = { ...ask, ...(a.size ? { size: a.size } : {}), ...(a.tolerance ? { tolerance: a.tolerance } : {}), ...(a.hours ? { time: a.hours * 3600 } : {}) }; return `Rebuilt to the new ask: ${start(next)}`; },
   replay() { start(ask); return 'Playing it again from the ask, every round.'; },
   expand: (target) => expand(target, true),
+  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summon((['pipeline', 'rounds', 'laws', 'bill', 'loop'].includes(p2) ? p2 : 'loop') as Panel); },
   build: (target) => buildIt(target),
 };
 
@@ -526,10 +544,32 @@ async function addNote(s: Shown, kind: NoteKind, text: string): Promise<string> 
   try { await notes.add(body); } catch (e) { return `The note could not be kept: ${(e as { code?: string }).code ?? 'the store refused it'}.`; }
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
+// ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop';
+let panel: Panel = 'none';
+function summon(p: Panel): string {
+  panel = panel === p ? 'none' : p;
+  if (panel === 'none') return 'Put away.';
+  eyeOf(eye);
+  const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, fwd = new THREE.Vector3();
+  head.getWorldDirection(fwd); fwd.y = 0; if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1); fwd.normalize();
+  // to your left of what you are looking at, so the machine stays in view beside it
+  const left = new THREE.Vector3(fwd.z, 0, -fwd.x);
+  const at = eye.clone().addScaledVector(fwd, 0.9).addScaledVector(left, 0.38).add(new THREE.Vector3(0, -0.06, 0));
+  const place = (o: THREE.Object3D, dy = 0) => { o.position.copy(at).add(new THREE.Vector3(0, dy, 0)); o.lookAt(eye.x, eye.y + dy, eye.z); };
+  if (panel === 'pipeline') place(stepCard.mesh, -0.1);
+  if (panel === 'rounds') place(roundsCard.mesh);
+  if (panel === 'laws') place(lawsCard.mesh);
+  if (panel === 'bill') place(liveCard.mesh);
+  if (panel === 'loop') { place(loopBoard, 0.12); place(decideChips, -0.3); }
+  if (panel === 'pipeline') drawRoundsNow();
+  return ({ pipeline: 'The pipeline, over the machine: where it is and what it found.', rounds: 'The rounds: every flaw found and what remedied it.', laws: 'The laws the experiment updated, the newest last.', bill: 'What it is made of, and the settings the controller is given.', loop: 'My loop: each of your reports, where it is, and what I put to you.' } as Record<string, string>)[panel] ?? '';
+}
+
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
 let tree: TreeNode = { id: '', name: '', parts: [], children: [] }, partsById = new Map<string, Part>();
 const holo = new Unravel(scene, new THREE.Vector3(0, 1.36, -0.62), 0.55);
-let xray = false, isolated: Set<string> | null = null, reportsMode: 'dots' | 'full' | 'off' = 'dots', framing = true, panelsOn = true;
+let xray = false, isolated: Set<string> | null = null, reportsMode: 'dots' | 'full' | 'off' = 'dots', framing = true;
 // your own dragging takes the view back from me until I am asked to show something again
 renderer.domElement.addEventListener('pointerdown', () => { framing = false; });
 /** The node a request means: an id or name in the tree, the assembly of a part it names, or what you point at. */
@@ -613,7 +653,7 @@ function stepMachineBuild(t: number): void {
     b.at = k; const st = b.steps[k]!;
     attention = { ids: new Set(st.parts), until: t + STEP_S * 1.5 };
     stepCard.draw(`BUILD · step ${st.n} of ${b.steps.length}`, [{ text: st.title, size: 1.1, color: '#ffffff' }, { text: st.says, size: 0.9, color: '#ffe082' }, ...b.steps.slice(Math.max(0, k - 5), k).map((x) => ({ text: `✓ ${x.n}. ${x.title}`, size: 0.75, color: '#69f0ae' }))], '#ffb74d');
-    subtitle.draw('', [{ text: `Claude: step ${st.n}, ${st.title}: ${st.says.slice(0, 120)}`, size: 1.0 }], '#ffb74d');
+    voiceCard.draw('', [{ text: `Step ${st.n}: ${st.title}. ${st.says.slice(0, 110)}`, size: 1.0 }], '#ffb74d');
   }
   if (k >= b.steps.length + 1) { machineBuild = null; say(`Built: ${b.steps.length} steps, ${run.m.parts.length} parts, every one where its law put it.`); }
 }
@@ -665,6 +705,8 @@ document.body.appendChild(decide);
 const decideChips = new THREE.Group(); decideChips.position.set(1.85, 1.0, 0.2); decideChips.lookAt(0, 1.55, 0.7); scene.add(decideChips);
 const decideMeshes: { mesh: THREE.Mesh; act: () => void }[] = [];
 function drawDecide(): void {
+  const waiting = proposals.filter((p) => p.status === 'proposed').length;
+  if (loopBtn) { loopBtn.textContent = waiting ? `My loop · ${waiting} to decide` : 'My loop'; loopBtn.style.borderColor = waiting ? '#ffb74d' : '#2e7d8c'; }
   decide.replaceChildren(); for (const c of decideMeshes) decideChips.remove(c.mesh); decideMeshes.length = 0;
   const open = proposals.filter((p) => p.status === 'proposed');
   open.slice(0, 2).forEach((p, pi) => {
@@ -694,18 +736,20 @@ button('Run again', () => say(world2.replay()));
 button('Voice on', (b) => { voice = !voice; b.textContent = voice ? 'Voice on' : 'Voice off'; if (!voice) speechSynthesis.cancel(); });
 document.body.appendChild(ui);
 const tools = document.createElement('div');
-tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;z-index:5;max-width:min(34rem,calc(100vw - 32px))';
-button('⤢ Expand', () => say(expand('', true)), tools);
-button('▶ Build this', () => say(buildIt('')), tools);
-button('▶ Build the printer', () => say(buildIt('the machine')), tools);
-button('⟲ Up', () => say(up()), tools);
-button('✕ Close', () => { holo.clear(); isolated = null; }, tools);
-button('X-ray', (b) => { xray = !xray; b.style.borderColor = xray ? '#ffd740' : '#2e7d8c'; }, tools);
-button('Isolate', (b) => { toggleIsolate(); b.style.borderColor = isolated ? '#ffd740' : '#2e7d8c'; }, tools);
-button('Reports: dots', (b) => { cycleReports(); b.textContent = `Reports: ${reportsMode}`; }, tools);
-button('Panels', (b) => { panelsOn = !panelsOn; b.style.borderColor = panelsOn ? '#2e7d8c' : '#ffd740'; }, tools);
-button('Look: my loop', () => { framing = false; orbit.target.set(1.85, 1.45, 0.2); camera.position.set(0.45, 1.5, 1.05); }, tools);
-button('Look: machine', () => { framing = false; orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); }, tools);
+tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;align-items:flex-end;gap:6px;z-index:5;max-width:min(36rem,calc(100vw - 32px))';
+const rowOf = (title: string) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center'; const t2 = document.createElement('span'); t2.textContent = title; t2.style.cssText = 'font:600 11px system-ui;color:#7fb3c8;letter-spacing:.08em;text-transform:uppercase'; r.appendChild(t2); tools.appendChild(r); return r; };
+const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
+let loopBtn: HTMLButtonElement | null = null;
+for (const [name, p2] of [['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => say(summon(p2)), showRow); if (p2 === 'loop') loopBtn = b2; }
+button('⤢ Expand', () => say(expand('', true)), actRow);
+button('▶ Build this', () => say(buildIt('')), actRow);
+button('▶ Build printer', () => say(buildIt('the machine')), actRow);
+button('⟲ Up', () => say(up()), actRow);
+button('✕ Close', () => { holo.clear(); isolated = null; }, actRow);
+button('X-ray', (b2) => { xray = !xray; b2.style.borderColor = xray ? '#ffd740' : '#2e7d8c'; }, seeRow);
+button('Isolate', (b2) => { toggleIsolate(); b2.style.borderColor = isolated ? '#ffd740' : '#2e7d8c'; }, seeRow);
+button('Reports: dots', (b2) => { cycleReports(); b2.textContent = `Reports: ${reportsMode}`; }, seeRow);
+button('Recentre', () => { framing = false; panel = 'none'; orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); }, seeRow);
 document.body.appendChild(tools);
 window.addEventListener('keydown', (e) => { if ((e.target as HTMLElement).tagName === 'INPUT') return; if (e.key === ' ') togglePause(); if (e.key === 'ArrowRight') step(); if (e.key === 'r') say(world2.replay()); });
 
@@ -747,7 +791,6 @@ function say(text: string, el?: HTMLDivElement): void {
   if (!text) return;
   if (el) el.textContent = `Claude: ${text}`; else line('claude', text);
   voiceCard.draw('', [{ text, size: 1.0 }], '#4dd0e1');
-  subtitle.draw('', [{ text: `Claude: ${text}`, size: 1.0 }], '#4dd0e1');
   if (voice && 'speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/[✗✓✎↻·]/g, '')); u.rate = 1.07; speechSynthesis.speak(u); }
 }
 async function converse(text: string): Promise<void> {
@@ -783,6 +826,10 @@ function select(s: Shown): void {
   attention = { ids: new Set([s.part.id]), until: clock() + 14 };
   const b = brief(s)!;
   say(describe(b, 2));
+  partCard.draw(s.part.name, [{ text: `${s.part.material}${s.part.mass > 0 ? ` · ${fmt(s.part.mass * 1e3)} g` : ''}`, color: '#a5f3ff', size: 0.95 }, ...s.part.values.slice(0, 5).map((v) => ({ text: `${v.name} = ${fmt(v.value)} ${v.unit} · ${v.law}`, color: '#ffe082', size: 0.78 })), { text: '⤢ Expand to open it · 📌 to mark it', color: '#7fb3c8', size: 0.75 }], '#ffd740');
+  s.obj.getWorldPosition(world); eyeOf(eye);
+  partCard.mesh.position.copy(world).add(off.copy(eye).sub(world).setLength(0.18)).add(tmp.set(0, 0.12, 0)); partCard.mesh.lookAt(eye);
+  partCardUntil = clock() + 14;
   status.textContent = `Pointing at ${s.part.name}. Mark it with 📌, or ask about it.`;
 }
 let down: [number, number] | null = null;
@@ -796,32 +843,42 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 
 // ---- the console, for a headset: buttons the controller's ray presses ------------------------------------------------------
 const dolly = new THREE.Group(); scene.add(dolly); dolly.add(camera);
+// the wrist menu, on your left hand: turn your wrist to see it, point at it with your right and pull the trigger
 const CHIPS: [string, () => void][] = [
-  ['What is this?', () => { const s = selectedId ? shown.get(selectedId) : null; void converse(s ? `What is ${s.part.name}, and why is it this way?` : 'What am I looking at?'); }],
-  ['Why this size?', () => void converse('Why is the part I am pointing at the size it is? Give me the law and the numbers.')],
-  ['✗ Mark flaw', () => void markNote('flaw', '')], ['? Mark question', () => void markNote('question', '')], ['✓ Mark good', () => void markNote('good', '')],
-  ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['⟲ Up a level', () => say(up())],
-  ['✕ Close hologram', () => { holo.clear(); isolated = null; say('Closed.'); }], ['▶ Build the printer', () => say(buildIt('the machine'))], ['X-ray', () => { xray = !xray; }],
-  ['Isolate', () => toggleIsolate()], ['Reports', () => cycleReports()], ['Run again', () => say(world2.replay())],
+  ['Pipeline', () => say(summon('pipeline'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))],
+  ['Bill', () => say(summon('bill'))], ['My loop', () => say(summon('loop'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
+  ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build printer', () => say(buildIt('the machine'))],
+  ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
+  ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
+  ['X-ray', () => { xray = !xray; }], ['Isolate', () => toggleIsolate()], ['Reports', () => cycleReports()],
 ];
 const chips: { mesh: THREE.Mesh; act: () => void }[] = [];
-const consoleGroup = new THREE.Group(); consoleGroup.position.set(0.55, 1.05, -0.25); consoleGroup.lookAt(0, 1.6, 0.6); scene.add(consoleGroup);
-CHIPS.forEach(([text, act], i) => {
-  const c = card(0.2, 0.06, 512); c.draw('', [{ text, size: 2.2 }], '#80deea');
-  c.mesh.position.set((i % 3) * 0.215 - 0.215, -Math.floor(i / 3) * 0.07, 0); consoleGroup.add(c.mesh);
-  chips.push({ mesh: c.mesh, act });
-});
-const consoleTitle = label('CONSOLE · point and pull the trigger', 0.018, '#9fdfee', 'rgba(0,0,0,0)'); consoleTitle.position.set(0, 0.06, 0); consoleGroup.add(consoleTitle);
+let wrist: THREE.Group | null = null;
+function makeWrist(): THREE.Group {
+  const g = new THREE.Group();
+  const cw = 0.074, chh = 0.027, gap = 0.006;
+  CHIPS.forEach(([text, act], i) => {
+    const c = card(cw, chh, 384); c.draw('', [{ text, size: 2.6 }], i < 6 ? '#ffd740' : '#80deea');
+    c.mesh.position.set(((i % 3) - 1) * (cw + gap), -Math.floor(i / 3) * (chh + gap), 0); g.add(c.mesh);
+    chips.push({ mesh: c.mesh, act });
+  });
+  const t2 = label('CLAUDE · menu', 0.012, '#9fdfee', 'rgba(0,0,0,0)'); t2.position.set(0, chh, 0); g.add(t2);
+  // above the back of the hand, tilted toward you
+  g.position.set(0, 0.07, 0.03); g.rotation.x = -Math.PI / 3; g.scale.setScalar(1);
+  return g;
+}
 const factory = new XRControllerModelFactory();
 const lasers: THREE.Line[] = [];
 for (let i = 0; i < 2; i++) {
   const ctl = renderer.xr.getController(i); dolly.add(ctl);
   const grip = renderer.xr.getControllerGrip(i); grip.add(factory.createControllerModel(grip)); dolly.add(grip);
+  // the menu goes on the left hand, the pointer is the right
+  ctl.addEventListener('connected', (e) => { const hand = (e as unknown as { data?: { handedness?: string } }).data?.handedness; if ((hand === 'left' || (!hand && i === 0)) && !wrist) { wrist = makeWrist(); grip.add(wrist); } });
   const laser = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }));
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   ctl.addEventListener('selectstart', () => {
     ray.setFromXRController(ctl);
-    const all = [...chips, ...decideMeshes], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     if (hit) { all.find((c) => c.mesh === hit.object)?.act(); return; }
     if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
