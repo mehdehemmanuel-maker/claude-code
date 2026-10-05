@@ -9,8 +9,9 @@
 // rather than removed (a patch can only merge), and written whole without them when it is written whole.
 
 import { find } from './embody/taxonomy';
+import type { FlowRun, Step } from './flows';
 
-export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string }
+export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step }
 export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean }
 export interface Board {
   title: string; kind?: string; about?: string;
@@ -22,6 +23,8 @@ export interface Board {
   source?: string;
   /** Each time the person called Claude on it: their words as they said them, and what was understood. */
   calls?: { words: string; understood: string; by: 'claude' | 'nexus'; at: number; node?: string }[];
+  /** On a flow: whether its triggers start it by themselves, and its last runs, newest last. */
+  armed?: boolean; runs?: FlowRun[];
 }
 export type View = 'categories' | 'pipeline';
 export interface Live { id: string; label: string; note: string; pin: { x: number; y: number } | null }
@@ -169,9 +172,9 @@ export function compact(b: Board): Board {
 }
 export const uid = (p: string): string => p + Math.random().toString(36).slice(2, 9);
 /** A new node: just its word, linked from another if given. Where it goes and what it is come from its links. */
-export function addNode(label: string, linkTo?: string, id = uid('n')): { id: string; patch: Patch } {
+export function addNode(label: string, linkTo?: string, id = uid('n'), rel = 'connects'): { id: string; patch: Patch } {
   const patch: Patch = { nodes: { [id]: { label: label.trim() } } };
-  if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel: 'connects' } };
+  if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel } };
   return { id, patch };
 }
 /** A link between two nodes. One deleted before between the same two is brought back, so the board does not fill with dead ones. */
@@ -182,12 +185,13 @@ export function link(b: Board, from: string, to: string, rel = 'connects'): Patc
   const dead = Object.entries(b.edges ?? {}).find(([, e]) => e && e.deleted && same(e));
   return { edges: { [dead ? dead[0] : uid('e')]: { from, to, rel, deleted: false, label: '', note: '' } } };
 }
-/** Link two nodes, or unlink them if they are linked (every link between them goes). */
-export function toggleLink(b: Board, a: string, c: string): { patch: Patch; linked: boolean } | null {
+/** Link two nodes, or unlink them if they are linked (every link between them goes). On a flow the link is "flows to",
+ *  from the first to the second: the second runs after it. */
+export function toggleLink(b: Board, a: string, c: string, rel = 'connects'): { patch: Patch; linked: boolean } | null {
   if (a === c) return null;
   const between = edgesOf(b).filter((e) => (e.from === a && e.to === c) || (e.from === c && e.to === a));
   if (between.length) return { patch: { edges: Object.fromEntries(between.map((e) => [e.id, { deleted: true }])) }, linked: false };
-  const p = link(b, a, c, 'connects');
+  const p = link(b, a, c, rel);
   return p ? { patch: p, linked: true } : null;
 }
 export function deleteNode(b: Board, id: string): Patch {

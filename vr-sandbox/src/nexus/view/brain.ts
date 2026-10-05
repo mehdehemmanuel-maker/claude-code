@@ -40,13 +40,15 @@ export interface WorldApi {
 }
 
 type Turn = { role: 'user' | 'assistant'; content: string };
-type Sample = ((input: string | Turn[], o?: Record<string, unknown>) => Promise<{ text: string }>) & { limits(): Promise<{ tools?: { maxCount: number } }>; json?: (input: string | Turn[], o?: Record<string, unknown>) => Promise<unknown> };
+type Sample = ((input: string | Turn[], o?: Record<string, unknown>) => Promise<{ text: string }>) & { limits(): Promise<{ tools?: { maxCount: number }; images?: { maxCount: number; mediaTypes: string[] } }>; json?: (input: string | Turn[], o?: Record<string, unknown>) => Promise<unknown> };
 
 export interface Brain {
   readonly mode: 'claude' | 'plain';
   ask(text: string, onText: (t: string) => void, signal: AbortSignal): Promise<string>;
   /** One answer as data, to a prompt that asks for it (a board called on): where Claude can be asked, else absent. */
   json?(prompt: string): Promise<unknown>;
+  /** A message with a photo, from the phone: Claude sees it, where this view may send it a picture; else absent. */
+  see?(text: string, image: Blob): Promise<string>;
 }
 
 const fmt = (x: number) => (Math.abs(x) >= 1e-2 && Math.abs(x) < 1e5 ? Number(x.toPrecision(3)).toString() : x.toExponential(2).replace('e+', 'e'));
@@ -91,6 +93,15 @@ function claudeBrain(w: WorldApi, sample: Sample): Brain {
       if (sample.json) return sample.json(prompt, { modelTier: 'default' });
       const { text } = await sample(prompt, { modelTier: 'default' });
       const m = text.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null;
+    },
+    async see(text, image) {
+      const lim = await sample.limits().catch(() => null);
+      if (!lim?.images) throw Object.assign(new Error('This view cannot send Claude a picture.'), { code: 'images_unavailable' });
+      turns.push({ role: 'user', content: `${text}\n\n(Attached: a photo taken in the forge, through the phone's lens or of what the person sees.)` });
+      while (turns.length > 12) turns.shift();
+      const { text: answer } = await sample([{ role: 'user', content: RULES(w) }, ...turns], { tools: toolset, modelTier: 'default', images: [image] });
+      turns.push({ role: 'assistant', content: answer });
+      return answer;
     },
     async ask(text, onText, signal) {
       turns.push({ role: 'user', content: text });
