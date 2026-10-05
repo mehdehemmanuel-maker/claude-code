@@ -184,4 +184,10 @@ describe('the plain reading of what a person says', () => {
     calls.splice(-4);
     expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'again run it again', 'expand x motor', 'build the machine', 'show rounds', 'show none', 'make build me a cabin of 40 m² for 2 people', 'flaws']);
   });
+  it('opens the node boards when asked for them', async () => {
+    calls.length = 0;
+    await b.ask('show me the boards', () => undefined, ac.signal);
+    await b.ask('open the node board', () => undefined, ac.signal);
+    expect(calls).toEqual(['show boards', 'show boards']);
+  });
 });
