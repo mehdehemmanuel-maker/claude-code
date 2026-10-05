@@ -26,6 +26,7 @@ import { embodyAny, type Learned } from '../embody/any';
 import { practice, type Operation, type OpEvent } from '../embody/operate';
 import { breaks, causalOf, trace, type Causal, type CauseKind } from '../embody/causal';
 import { inside, type Descent } from '../embody/inside';
+import { executionOf, explain, retryOf, type ExecKind, type ExecNode, type Execution, type Question, type Relation } from '../embody/execution';
 import { foldDemand, readAsk } from '../words';
 import { intentFromSpec } from '../spec';
 import { Hud } from './hud';
@@ -358,6 +359,7 @@ function showEmpty(): void {
 const sizeOf = (m: Machine) => (Math.max(...m.size) > 2 ? `${m.size.map((x) => fmt(x)).join(' × ')} m` : `${m.size.map((x) => fmt(x * 1e3)).join(' × ')} mm`);
 function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } = {}): string {
   if (intent !== asked) { learnedNow = {}; operated = null; }
+  exec = null; execNode = null;
   empty = false;
   const next = runAll(intent);
   if (!next) return 'The generator gave nothing to embody for that ask: a gap, not a machine.';
@@ -482,8 +484,10 @@ function tick(): void {
   // what is on: only what you are doing. The pipeline while it runs; one panel you summoned; a part's card while you
   // point at it; the hologram alone when one is out
   const playing = current < beats.length - 1 && !machineBuild;
-  pipelineGroup.visible = (playing || panel === 'pipeline') && !holo.showing;
-  stepCard.mesh.visible = panel === 'pipeline' && !holo.showing;
+  pipelineGroup.visible = false;
+  if (panel !== 'pipeline' && execSaved && !renderer.xr.isPresenting) { camera.position.copy(execSaved.pos); orbit.target.copy(execSaved.target); execSaved = null; }
+  execGroup.visible = panel === 'pipeline'; execCard.mesh.visible = execGroup.visible && !!execNode; execAsk.group.visible = execCard.mesh.visible && renderer.xr.isPresenting; execBox.style.display = execCard.mesh.visible && !renderer.xr.isPresenting ? 'flex' : 'none';
+  stepCard.mesh.visible = false;
   roundsCard.mesh.visible = panel === 'rounds';
   lawsCard.mesh.visible = panel === 'laws';
   liveCard.mesh.visible = panel === 'bill';
@@ -650,8 +654,11 @@ const world2: WorldApi = {
     // the demand is a report too: kept with the machine, and sent to Claude Code, who writes the laws
     const on = selectedId ? shown.get(selectedId) : undefined;
     void (on ? addNote(on, 'flaw', demand) : noteOn({ id: 'build:whole', name: `the whole ${before.name.replace(/^(a|an|the) /, '')}`, group: 'build', at: [0, 0, 0], layer: 'build' }, 'flaw', demand)).then((r) => line('system', r));
-    if (!intent) return `I tried: nothing in Nexus reads "${demand}" as a change it can make yet, so building again gives the same ${before.name}. It's gone to Claude Code as a law to write; the next build has it.`;
+    const prevX = exec ?? execNow();
+    if (!intent) { exec = retryOf(prevX, demand, [], prevX); summonTo('pipeline'); return `I tried: nothing in Nexus reads "${demand}" as a change it can make yet, so building again gives the same ${before.name}. It's gone to Claude Code as a law to write; the next build has it. The path is around you: your demand, and where it stopped.`; }
     const out = start(intent, { build: true });
+    // the whole new path, not only what came of it: what was there, your demand, what it changed, and every step that ran again
+    exec = retryOf(prevX, demand, changed, execNow()); summonTo('pipeline');
     const after = { mass: mass(run.m), parts: run.m.parts.length, flaws: run.m.flaws.length };
     const renamed = run.m.parts.filter((p) => before.names.has(p.id) && before.names.get(p.id) !== p.name).slice(0, 3).map((p) => p.name);
     const kg = (x: number) => `${x >= 100 ? x.toFixed(0) : x.toPrecision(3)} kg`;
@@ -742,7 +749,7 @@ function summonTo(p: Panel): string {
   const left = new THREE.Vector3(fwd.z, 0, -fwd.x);
   const xr = renderer.xr.isPresenting, at = eye.clone().addScaledVector(fwd, xr ? 0.9 : 1.35).addScaledVector(left, xr ? 0.38 : 0.6).add(new THREE.Vector3(0, -0.06, 0));
   const place = (o: THREE.Object3D, dy = 0) => { o.position.copy(at).add(new THREE.Vector3(0, dy, 0)); o.lookAt(eye.x, eye.y + dy, eye.z); };
-  if (panel === 'pipeline') place(stepCard.mesh, -0.1);
+  if (panel === 'pipeline') layExec();
   if (panel === 'rounds') place(roundsCard.mesh);
   if (panel === 'laws') place(lawsCard.mesh);
   if (panel === 'bill') place(liveCard.mesh);
@@ -765,7 +772,7 @@ function summonTo(p: Panel): string {
   }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', new: 'What shall I build? Pick one, or say your own.', inside: insideOf ? `${insideOf.levels.length} levels inside ${insideOf.name}.` : '', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: exec ? `What actually ran: ${exec.nodes.length} nodes, ${exec.edges.length} dependencies, ${exec.domains.length} domains, walked by depth. Point at any node.` : '', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', new: 'What shall I build? Pick one, or say your own.', inside: insideOf ? `${insideOf.levels.length} levels inside ${insideOf.name}.` : '', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -887,7 +894,7 @@ simBoard.renderOrder = 15; simBoard.visible = false; scene.add(simBoard);
 function operateIt(): string {
   if (empty) return 'Nothing stands here yet: ask me to build something, then I can operate it.';
   if (isPrinter) return 'The printer\'s duty is its deposition: it is checked in its rounds. Ask me to make something that moves or keeps a room, and I\'ll operate it.';
-  hud.set('working', 'operating it');
+  hud.set('working', 'operating it'); exec = null;
   const r = practice(asked, generate(asked));
   learnedNow = r.learned;
   operated = { operation: r.operation, tries: r.history.map((h) => ({ events: h.events, why: h.learned.why ?? [] })) };
@@ -1076,6 +1083,112 @@ function fixDom(): void { for (const b of fixButtons) { b.textContent = pinning 
 // notes that could not reach Claude Code from here: one press files them for it
 const unsentBtn = document.createElement('button');
 function drawUnsent(): void { unsentBtn.style.display = unsent.length ? '' : 'none'; unsentBtn.textContent = `⇪ Send ${unsent.length} note${unsent.length === 1 ? '' : 's'} to Claude`; }
+
+// ---- the execution graph: what actually ran to make what stands, from the run's own records, laid by its own dependencies ----
+let exec: Execution | null = null, execNode: string | null = null, execSaved: { pos: THREE.Vector3; target: THREE.Vector3 } | null = null;
+const execGroup = new THREE.Group(); scene.add(execGroup); execGroup.visible = false;
+const EXEC_COLOUR: Record<ExecKind, string> = { want: '#ffd740', fact: '#ffe082', generated: '#80deea', law: '#b388ff', gap: '#ff8a80', step: '#4dd0e1', decision: '#69f0ae', built: '#90caf9', failure: '#ff5252', round: '#ffb74d', executed: '#f48fb1', evidence: '#b2ff59', demand: '#ffffff', change: '#ffffff', result: '#e0f7fa' };
+const REL_COLOUR: Record<Relation, number> = { reads: 0xffe082, 'derived for': 0x80deea, 'rests on': 0xb388ff, controls: 0xb388ff, then: 0x234452, makes: 0x90caf9, power: 0xff7043, signal: 0x64b5f6, drive: 0xaed581, support: 0x9e9e9e, decision: 0x69f0ae, finds: 0xff5252, 'lies in': 0xff8a80, redesigned: 0xffb74d, ran: 0xf48fb1, teaches: 0xb2ff59, asks: 0xffffff, changes: 0xffffff, results: 0x4dd0e1 };
+const execMeshes = new Map<string, THREE.Mesh>();
+let execLines: THREE.LineSegments | null = null;
+const execCard = card(0.66, 0.52, 1200); scene.add(execCard.mesh); execCard.mesh.visible = false;
+/** The graph of what ran for what stands now, with what operating it did and taught. */
+const execNow = (): Execution => executionOf(run.intent, run.s, run.m, { operation: operated?.operation ?? undefined, learned: learnedNow, assumed: lastMake?.assumed });
+function nodeMesh2(n: ExecNode): THREE.Mesh {
+  const c = document.createElement('canvas'); c.width = 384; c.height = 104;
+  const g = c.getContext('2d')!, col = EXEC_COLOUR[n.kind];
+  g.fillStyle = 'rgba(3,14,22,0.88)'; g.beginPath(); g.roundRect(2, 2, 380, 100, 12); g.fill();
+  g.strokeStyle = n.held === false ? '#ff5252' : col; g.lineWidth = n.held === false ? 5 : 3; g.stroke();
+  g.fillStyle = col; g.fillRect(2, 8, 8, 88);
+  g.textBaseline = 'top'; g.font = '600 17px system-ui'; g.fillStyle = col; g.fillText(`${n.kind.toUpperCase()}${n.was ? ' · CHANGED' : ''} · ${n.domain}`.slice(0, 40), 18, 8);
+  g.font = '500 19px system-ui'; g.fillStyle = '#e6f7ff';
+  const words = n.label.split(' '); let line2 = '', y = 32;
+  for (const w of words) { const t = line2 ? `${line2} ${w}` : w; if (g.measureText(t).width > 350) { g.fillText(line2, 18, y); y += 22; line2 = w; if (y > 76) break; } else line2 = t; }
+  if (y <= 76) g.fillText(line2, 18, y);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const m2 = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.073), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+  m2.userData.exec = n.id; m2.renderOrder = 14; return m2;
+}
+/** On an arc around you, each node at its depth along the chain of what it depends on: walk round it from what was wanted to what came of it. */
+function layExec(): void {
+  if (!exec) exec = execNow();
+  for (const m2 of execMeshes.values()) { execGroup.remove(m2); (m2.material as THREE.MeshBasicMaterial).map?.dispose(); (m2.material as THREE.Material).dispose(); m2.geometry.dispose(); }
+  execMeshes.clear(); if (execLines) { execGroup.remove(execLines); execLines.geometry.dispose(); }
+  // on a screen, you stand where the arc is laid, at a standing eye's height, and dragging looks round in place, as a head turns
+  if (!renderer.xr.isPresenting) {
+    if (!execSaved) execSaved = { pos: camera.position.clone(), target: orbit.target.clone() };
+    const f = orbit.target.clone().sub(camera.position).setY(0); if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+    camera.position.set(camera.position.x, 1.6, camera.position.z); orbit.target.copy(camera.position).addScaledVector(f, 0.05); orbit.update(); framing = false;
+  }
+  eyeOf(eye);
+  const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, fwd = new THREE.Vector3(); head.getWorldDirection(fwd); fwd.y = 0; if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1); fwd.normalize();
+  const cols = new Map<number, ExecNode[]>();
+  for (const n of exec.nodes) cols.set(n.depth, [...(cols.get(n.depth) ?? []), n]);
+  const depths = [...cols.keys()].sort((a, b) => a - b), R = 2.1, step2 = Math.min(0.16, 5.4 / Math.max(1, depths.length)), a0 = Math.atan2(fwd.x, fwd.z) + (depths.length * step2) / 2;
+  const ORDER: ExecKind[] = ['want', 'fact', 'demand', 'change', 'generated', 'law', 'gap', 'round', 'decision', 'step', 'built', 'executed', 'evidence', 'failure', 'result'];
+  const rows = 20, at = new Map<string, THREE.Vector3>();
+  depths.forEach((d, ci) => {
+    const ns = cols.get(d)!.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.id.localeCompare(b.id));
+    ns.forEach((n, ri) => {
+      const sub = Math.floor(ri / rows), r = R + sub * 0.32, th = a0 - ci * step2, y = Math.min(2.3, eye.y + 0.32) - (ri % rows) * 0.082;
+      const p = new THREE.Vector3(eye.x + Math.sin(th) * r, y, eye.z + Math.cos(th) * r);
+      const m2 = nodeMesh2(n); m2.position.copy(p); m2.lookAt(eye.x, y, eye.z); execGroup.add(m2); execMeshes.set(n.id, m2); at.set(n.id, p);
+    });
+  });
+  const pos: number[] = [], colr: number[] = [], c3 = new THREE.Color();
+  for (const e of exec.edges) { const a = at.get(e.from), b = at.get(e.to); if (!a || !b) continue; pos.push(a.x, a.y, a.z, b.x, b.y, b.z); c3.setHex(REL_COLOUR[e.rel]); const k = e.rel === 'then' ? 0.5 : 0.8; colr.push(c3.r * k, c3.g * k, c3.b * k, c3.r * k, c3.g * k, c3.b * k); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+  execLines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthTest: false })); execLines.renderOrder = 13; execLines.userData.base = colr.slice(); execGroup.add(execLines);
+  if (execNode && !exec.nodes.some((n) => n.id === execNode)) execNode = null;
+  if (execNode) pickExec(execNode);
+}
+const QUESTIONS: [string, Question][] = [['Why?', 'why'], ['Why here?', 'here'], ['What law?', 'law'], ['What calls it?', 'calledBy'], ['What does it call?', 'calls'], ['What depends on it?', 'depends'], ['Before it?', 'before'], ['After it?', 'after'], ['Remove it?', 'remove'], ['If modified?', 'modified'], ['Assumed?', 'assumed'], ['Unknown?', 'unknown'], ['What failed?', 'failed'], ['Other ways?', 'alternatives'], ['Changed on retry?', 'changed'], ['Geometry?', 'geometry'], ['Material?', 'material'], ['Scale?', 'scale'], ['Position?', 'position'], ['Interface?', 'interface'], ['Energy?', 'energy'], ['Information?', 'information'], ['Timing?', 'timing']];
+let execAnswer = '';
+function drawExecCard(): void {
+  const n = exec?.nodes.find((k) => k.id === execNode); if (!n || !exec) return;
+  const ins = exec.edges.filter((e) => e.to === n.id), outs = exec.edges.filter((e) => e.from === n.id && e.rel !== 'then');
+  execCard.draw(`${n.kind.toUpperCase()} · ${n.domain}`, [
+    { text: n.label, size: 1.0 },
+    { text: n.why, color: '#9fdfee', size: 0.78 },
+    ...(n.law ? [{ text: `law: ${n.law}`, color: '#d1c4e9', size: 0.72 }] : []),
+    ...(n.assumed ? [{ text: `assumed: ${n.assumed}`, color: '#ffe082', size: 0.72 }] : []),
+    ...(n.unknown ? [{ text: `unknown: ${n.unknown}`, color: '#ff8a80', size: 0.72 }] : []),
+    ...(n.was ? [{ text: `before the retry: ${n.was}`, color: '#ffb74d', size: 0.72 }] : []),
+    { text: `${ins.length} in · ${outs.length} out · depth ${n.depth}${n.held === false ? ' · did not hold' : n.held ? ' · held' : ''}`, color: '#7fb3c8', size: 0.7 },
+    ...(execAnswer ? [{ text: execAnswer, color: '#b2ff59', size: 0.8 }] : []),
+  ], EXEC_COLOUR[n.kind]);
+}
+function pickExec(id: string): void {
+  if (!exec || !execMeshes.has(id)) return;
+  execNode = id; execAnswer = '';
+  const m2 = execMeshes.get(id)!;
+  // what it takes and what takes it, lit; the rest dimmed
+  if (execLines) {
+    const base = execLines.userData.base as number[], col = execLines.geometry.getAttribute('color') as THREE.BufferAttribute;
+    let k = 0;
+    for (const e of exec.edges) { const a = execMeshes.has(e.from) && execMeshes.has(e.to); if (!a) continue; const lit = e.from === id || e.to === id; for (let j = 0; j < 6; j++) col.setX(k * 6 + j, base[k * 6 + j]! * (lit ? 1.6 : 0.25)); k++; }
+    col.needsUpdate = true;
+  }
+  for (const [nid, mm] of execMeshes) mm.scale.setScalar(nid === id ? 1.35 : 1);
+  eyeOf(eye); const p = m2.position.clone(), toEye = eye.clone().sub(p).setY(0).normalize();
+  execCard.mesh.position.copy(p).addScaledVector(toEye, 0.45).setY(Math.max(1.1, Math.min(1.75, p.y)));
+  execCard.mesh.lookAt(eye);
+  execAsk.group.position.copy(execCard.mesh.position).add(new THREE.Vector3(0, -0.36, 0)); execAsk.group.lookAt(eye.x, execAsk.group.position.y, eye.z);
+  drawExecCard();
+  const n = exec.nodes.find((k) => k.id === id)!;
+  line('system', `${n.kind}: ${n.label}`);
+}
+function askExec(q: Question): void { if (!exec || !execNode) return; execAnswer = explain(exec, execNode, q); drawExecCard(); say(execAnswer); }
+/** Your judgment on a node, as input: kept with the run, and sent to Claude Code with the node and what it rests on. */
+async function judgeExec(v: 'flag' | 'approve' | 'reject' | 'test'): Promise<void> {
+  if (!exec || !execNode) return;
+  const n = exec.nodes.find((k) => k.id === execNode)!, typed = input.value.trim(); input.value = '';
+  const text = `${({ flag: 'flagged', approve: 'approved', reject: 'rejected', test: 'test this' } as const)[v]} ${n.kind} "${n.label}"${typed ? `: ${typed}` : ''} (why: ${n.why}${n.law ? `; law: ${n.law}` : ''}; rests on: ${explain(exec, n.id, 'why').split('It takes ')[1] ?? 'nothing'})`;
+  say(await noteOn({ id: `exec:${n.id}`, name: `the ${n.kind} "${n.label.slice(0, 60)}"`, group: 'execution', at: [0, 0, 0], layer: 'ui', where: `in the execution graph at depth ${n.depth}` }, v === 'approve' ? 'good' : v === 'test' ? 'question' : 'flaw', text, { node: n.id, verdict: v }));
+}
+const execAsk = chipGrid([...QUESTIONS.map(([t2, q]): [string, () => void] => [t2, () => askExec(q)]), ['✗ Flag', () => void judgeExec('flag')], ['✓ Approve', () => void judgeExec('approve')], ['⟲ Test', () => void judgeExec('test')], ['✕ Reject', () => void judgeExec('reject')]], 4, 0.15, 0.036, (i) => (i >= QUESTIONS.length ? '#ff8a80' : '#b388ff'), 2.2);
+const execBox = document.createElement('div');
+execBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:min(36rem,calc(100vw - 32px))';
 
 // ---- inside a part: its matter followed down every level the generator's depth derives, to the floor -------------------
 const insideCanvas = document.createElement('canvas'); insideCanvas.width = 1400; insideCanvas.height = 1200;
@@ -1321,6 +1434,9 @@ let loopBtn: HTMLButtonElement | null = null;
 for (const [name, p2] of [['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
 button('✗ Report', () => report(), actRow);
 { const fb = button('🛠 Fix', () => togglePin(), actRow); fb.dataset.fixOk = '1'; fixButtons.push(fb); }
+for (const [t2, q] of QUESTIONS) button(t2, () => askExec(q), execBox);
+for (const [t2, v] of [['✗ Flag', 'flag'], ['✓ Approve', 'approve'], ['⟲ Test', 'test'], ['✕ Reject', 'reject']] as const) button(t2, () => void judgeExec(v), execBox);
+tools.append(execBox);
 button('⤓ Inside', () => line('system', openInside()), actRow);
 button('▶ Operate', () => say(operateIt()), actRow);
 button('⤢ Expand', () => say(expand('', true)), actRow);
@@ -1391,6 +1507,7 @@ function pressBoards(): boolean {
     const h = ray.intersectObjects([...nodeMesh.values()], false)[0];
     if (h) { pickCausal(h.object.userData.node as string); return true; }
   }
+  if (execGroup.visible) { const h = ray.intersectObjects([...execMeshes.values()], false)[0]; if (h) { pickExec(h.object.userData.exec as string); return true; } }
   if (insideBoard.visible) { const h = ray.intersectObject(insideBoard, false)[0]; if (h?.uv) { const i = insideRowAt(h.uv); if (i >= 0) { insideAt = i; drawInside(); } return true; } }
   if (keyboard.mesh.visible) { const h = ray.intersectObject(keyboard.mesh, false)[0]; if (h?.uv) { const k2 = keyboard.keyAt(h.uv); if (k2) pressKey(k2); return true; } }
   if (flawBoard.visible) { const h = ray.intersectObject(flawBoard, false)[0]; if (h?.uv) { const i = flawRowAt(h.uv); if (i >= 0) jumpTo(flawRows()[i]!); return true; } }
@@ -1486,7 +1603,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 // ---- chips of light: the dock that is always with you in a headset, the menu, and what you might ask for ----------------
 type Chip = { mesh: THREE.Mesh; act: () => void };
 /** A chip says what it is for a note on it; the ones that end fix mode stay live in it. */
-const tagChip = (m: THREE.Object3D, text: string) => { m.userData.chip = text; if (/^🛠|✕ Exit|Exit all/.test(text)) m.userData.fixOk = true; };
+function tagChip(m: THREE.Object3D, text: string): void { m.userData.chip = text; if (/^🛠|✕ Exit|Exit all/.test(text)) m.userData.fixOk = true; }
 function chipGrid(list: [string, () => void][], cols: number, w: number, h: number, accent: (i: number) => string, size = 2.4): { group: THREE.Group; chips: Chip[] } {
   const group = new THREE.Group(), chips2: Chip[] = [];
   list.forEach(([text, act], i) => { const c2 = card(w, h, 512); c2.draw('', [{ text, size }], accent(i)); tagChip(c2.mesh, text); c2.mesh.position.set(((i % cols) - (cols - 1) / 2) * (w + 0.006), -Math.floor(i / cols) * (h + 0.006), 0); group.add(c2.mesh); chips2.push({ mesh: c2.mesh, act }); });
@@ -1565,8 +1682,8 @@ for (let i = 0; i < 2; i++) {
   ctl.addEventListener('selectstart', () => {
     ray.setFromXRController(ctl);
     pointerHand = i;
-    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
-    if (hit) { all.find((c) => c.mesh === hit.object)?.act(); return; }
+    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    if (hit && (!pinning || hit.object.userData.fixOk)) { all.find((c) => c.mesh === hit.object)?.act(); return; }
     if (dropPin()) return;
     if (pressBoards()) return;
     if (pickHolo()) return;
@@ -1638,7 +1755,7 @@ async function boot() {
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
     [subtitle.mesh, 'the subtitle'], [partCard.mesh, 'the part card'], [hud.group, 'the HUD'], [stepCard.mesh, 'the pipeline card'], [roundsCard.mesh, 'the rounds card'], [lawsCard.mesh, 'the laws card'], [liveCard.mesh, 'the bill card'], [gatesCard.mesh, 'the gates card'],
     [simBoard, 'the Operate board'], [causalGroup, 'the causal space'], [causalCard.mesh, 'the causal card'], [insideBoard, 'the Inside board'], [settingsGroup, 'the settings'], [flawBoard, 'the Flaws board'], [loopBoard, 'the loop board'], [decideChips, 'the decision chips'],
-    [voiceCard.mesh, 'my voice card'], [chatCard.mesh, 'the chat panel'], [pipelineGroup, 'the pipeline'], [holo.group, 'the hologram'], [dock.group, 'the dock'], [menu.group, 'the menu'], [suggest.group, 'the suggestions'], [hoverTag, 'the hover label']] as [THREE.Object3D, string, ('ui' | 'environment')?][]) named(o, n, l ?? 'ui');
+    [voiceCard.mesh, 'my voice card'], [execGroup, 'the execution graph'], [execCard.mesh, 'the execution node card'], [execAsk.group, 'the execution questions'], [chatCard.mesh, 'the chat panel'], [pipelineGroup, 'the pipeline'], [holo.group, 'the hologram'], [dock.group, 'the dock'], [menu.group, 'the menu'], [suggest.group, 'the suggestions'], [hoverTag, 'the hover label']] as [THREE.Object3D, string, ('ui' | 'environment')?][]) named(o, n, l ?? 'ui');
   modeStrip.userData.fixOk = true; keyboard.mesh.userData.fixOk = true; modeBar.dataset.fixOk = '1';
   unsentBtn.style.cssText = `${BTN};border-color:#ff8a80;display:none`; unsentBtn.dataset.fixOk = '1'; chat.append(unsentBtn);
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
@@ -1652,6 +1769,10 @@ async function boot() {
   (window as unknown as { causalPoint: () => [number, number] | null }).causalPoint = () => {
     const m = [...nodeMesh.entries()].find(([id]) => /motor/.test(id))?.[1] ?? [...nodeMesh.values()][0]; if (!m) return null;
     const p = m.getWorldPosition(new THREE.Vector3()).project(camera); return [((p.x + 1) / 2) * window.innerWidth, ((1 - p.y) / 2) * window.innerHeight];
+  };  // and of the execution graph: a decision on the screen, else the node nearest the middle
+  (window as unknown as { execPoint: () => { x: number; y: number; id: string } | null }).execPoint = () => {
+    const on = [...execMeshes.entries()].map(([id, m]) => { const p = m.getWorldPosition(new THREE.Vector3()).project(camera); return { id, x: ((p.x + 1) / 2) * window.innerWidth, y: ((1 - p.y) / 2) * window.innerHeight, z: p.z }; }).filter((q) => q.z < 1 && q.x > 0 && q.x < window.innerWidth && q.y > 0 && q.y < window.innerHeight);
+    return on.find((q) => q.id.startsWith('step:') && exec?.nodes.find((n) => n.id === q.id)?.kind === 'decision') ?? on.sort((a, b) => Math.hypot(a.x - window.innerWidth / 2, a.y - window.innerHeight / 2) - Math.hypot(b.x - window.innerWidth / 2, b.y - window.innerHeight / 2))[0] ?? null;
   };
 }
 void boot();

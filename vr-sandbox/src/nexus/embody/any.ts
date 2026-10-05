@@ -30,7 +30,7 @@ import { MATERIALS } from '../../data/materials';
 import { toSI } from '../../ganglia/units';
 import type { Structure } from '../manifold';
 import type { Intent } from '../want';
-import { embody, type Choices, type DriveMap, type Gate, type Machine, type Plant, type Round, type Step } from './embody';
+import { embody, type Choices, type DriveMap, type Gate, type Machine, type Plant, type Read, type Round, type Step } from './embody';
 import { conductorTemperature } from './electrical';
 import { motorFor, type Motor } from './motor';
 import { extentOf, part, placeParts, type Flaw, type Part, type V3, type Value } from './part';
@@ -86,17 +86,23 @@ interface Ctx {
   ambient: number; g: number;
   /** What operating it before found the design must meet. */
   learned: Learned;
+  /** Every read of the above, as it happens, stamped with the step it feeds (set by the builder). */
+  reads: Read[];
+  step: () => number;
 }
 function context(intent: Intent, s: Structure, learned: Learned = {}): Ctx {
   const qs = (region: string) => intent.regions.find((r) => r.id === region)?.quantities ?? {};
-  const q: Ctx['q'] = (region, re) => { const all = qs(region); const l = typeof re === 'string' ? all[re] : Object.values(all).find((x) => re.test(x.name)); return l && l.value !== null ? l.value : null; };
-  const want: Ctx['want'] = (region, unit, re, bound) => { const w = intent.wants.find((x) => x.region === region && x.quantity.unit === unit && re.test(x.quantity.name) && x[bound]); const l = w?.[bound]; return l && l.value !== null ? l.value : null; };
+  const reads: Read[] = [];
+  const ctx = { step: () => 0 } as { step: () => number };
+  const note = (r: Omit<Read, 'step'>) => { reads.push({ ...r, step: ctx.step() }); };
+  const q: Ctx['q'] = (region, re) => { const all = qs(region); const l = typeof re === 'string' ? all[re] : Object.values(all).find((x) => re.test(x.name)); if (l) note({ kind: 'quantity', id: region, name: l.name, value: l.value, unit: l.unit }); return l && l.value !== null ? l.value : null; };
+  const want: Ctx['want'] = (region, unit, re, bound) => { const w = intent.wants.find((x) => x.region === region && x.quantity.unit === unit && re.test(x.quantity.name) && x[bound]); const l = w?.[bound]; if (w && l) note({ kind: 'want', id: w.id, name: `${bound === 'lo' ? 'at least' : 'at most'}: ${w.quantity.name}`, value: l.value, unit: l.unit }); return l && l.value !== null ? l.value : null; };
   // values the generator states in compound units ("m^3/s per Pa") are SI where they carry no prefix
   const si = (value: number, unit: string) => { try { return toSI(value, unit.replace(/ per /g, '/')); } catch { return value; } };
-  const val: Ctx['val'] = (id, re) => { const e = s.elements.find((x) => x.id === id); const v = e?.values.find((x) => re.test(x.name)); return v ? si(v.value, v.unit) : null; };
+  const val: Ctx['val'] = (id, re) => { const e = s.elements.find((x) => x.id === id); const v = e?.values.find((x) => re.test(x.name)); if (v) note({ kind: 'element', id, name: v.name, value: v.value, unit: v.unit }); return v ? si(v.value, v.unit) : null; };
   const temps = intent.regions.filter((r) => r.environment).flatMap((r) => Object.values(r.quantities)).filter((l) => /coldest|hottest/.test(l.name) && l.value !== null);
   const ambient = temps.length ? temps.reduce((a, l) => a + l.value!, 0) / temps.length - 273.15 : 20;
-  return { intent, s, q, want, val, has: (id) => s.elements.some((e) => e.id === id), ambient, g: g0, learned };
+  return { intent, s, q, want, val, has: (id) => s.elements.some((e) => e.id === id), ambient, g: g0, learned, reads, get step() { return ctx.step; }, set step(f) { ctx.step = f; } };
 }
 /** The region the person's thing is: the one that moves, or the one most of the wants are about. */
 function bodyOf(c: Ctx): { id: string; moving: boolean } | null {
@@ -699,6 +705,7 @@ function standing(c: Ctx, B: B, body: string, ext: V3): { source: V3; sourceInto
 // ---- the whole --------------------------------------------------------------------------------------------------------
 function once(intent: Intent, s: Structure, self: number, learned: Learned = {}): Omit<Machine, 'rounds'> {
   const c = context(intent, s, learned), B = builder();
+  c.step = () => B.trace.length;
   for (const w of learned.why ?? []) B.trace.push({ stage: 'choose', where: 'learned', round: 1, says: `learned from operating it: ${w}`, flaws: [], remedy: null });
   const body = bodyOf(c);
   const empty = { axes: [], hotEnd: null, electrical: null, order: [] };
@@ -799,5 +806,5 @@ function once(intent: Intent, s: Structure, self: number, learned: Learned = {})
   const ex = B.parts.length ? extentOf(B.parts) : { lo: [0, 0, 0] as V3, hi: [0, 0, 0] as V3 };
   const bomMap = new Map<string, { name: string; qty: number; material: string; category: string; mass: number }>();
   for (const p of B.parts) { const e = bomMap.get(p.name) ?? { name: p.name, qty: 0, material: p.material, category: p.category, mass: 0 }; e.qty++; e.mass += p.mass; bomMap.set(p.name, e); }
-  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, gates: B.gates, plant: B.plant, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
+  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, gates: B.gates, reads: c.reads, plant: B.plant, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
 }
