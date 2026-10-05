@@ -227,3 +227,10 @@ export const PLANING = { hump: 0.18, planing: 0.12, source: 'resistance over wei
 export const HULL = { cb: 0.45, formFactor: 0.25, plate: 4e-3, frames: 0.5, freeboard: 0.35, lengthOverBeam: 3, draftOverBeam: 0.35, source: 'small craft: block coefficient about 0.35 to 0.55, form factor 1 + k about 1.2 to 1.3, aluminium bottom plate at least 4 mm and frames about 500 mm apart (ISO 12215-5 minimums), length about 3 beams and draft about a third of the beam for small craft (estimate)', confidence: 'estimate' as const };
 /** A propeller: the share of the ideal efficiency a real one gets, and its advance ratio. */
 export const PROPELLER = { ofIdeal: 0.75, advance: 0.8, source: 'open propellers reach about 70 to 80 % of the actuator-disc ideal efficiency, at advance ratios about 0.6 to 1 (Carlton, Marine Propellers and Propulsion; estimate)', confidence: 'estimate' as const };
+
+/** Petrol, as a store: what a kilogram holds, how dense it is, and the air it takes to burn. */
+export const FUEL = { lhv: 4.3e7, density: 745, afr: 14.7, source: 'petrol: about 43 MJ/kg lower heating value, 720 to 775 kg/m³, burning with 14.7 kg of air a kg at the stoichiometric ratio', confidence: 'standard' as const };
+/** An engine turning a generator: how much of the fuel's energy reaches the bus, and how much it weighs a watt. */
+export const GENSET = { efficiency: 0.25, specificPower: 200, tankPerLitre: 0.15, density: 1200, source: 'small spark-ignition engine-generators turn about a fifth to a third of the fuel\'s energy into charge; a 2.2 kW portable set weighs about 21 kg and a 28 kW range extender about 120 kg, 0.1 to 0.25 kW/kg; a moulded tank about 0.15 kg a litre (estimates)', confidence: 'estimate' as const };
+/** A solar module on a vehicle: what it makes of the sun, and what it weighs. */
+export const SOLAR = { efficiency: 0.2, arealMass: 3, source: 'monocrystalline silicon modules turn about 20 % of sunlight into charge at 1000 W/m²; flexible ones weigh about 2 to 4 kg/m² (estimates)', confidence: 'estimate' as const };
