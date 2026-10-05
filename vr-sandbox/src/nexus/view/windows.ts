@@ -96,16 +96,27 @@ export class Windows {
   }
 
   private size(w: Win): { w: number; h: number; box: THREE.Box3 } { const box = localBounds(w.spec.obj, w.bar); return { w: box.max.x - box.min.x, h: box.max.y - box.min.y + BAR_H, box }; }
+  /** How far away a window is put: a large one further, so all of it is in view; a small one at reading distance. */
+  private distOf(ww: number, h: number, level: boolean): number { return Math.max(1.05, Math.min(1.9, 0.85 + 0.45 * Math.max(ww, h))) * (level ? 1 : 1.35); }
+  /** The first place round you clear of every open window by their widths as you see them, not only their middles:
+   *  a wide board takes the room of three small windows. Where none is clear, the one with the most room. */
   private freeSlot(w: Win): number {
-    const { at: eye, fwd: f } = this.host.eye(), fwd = f.clone().setY(0).normalize();
-    const taken = [...this.wins.values()].filter((o) => o !== w && o.state === 'open' && !o.spec.space && !o.spec.selfPlaced).map((o) => { const d = o.spec.obj.getWorldPosition(new THREE.Vector3()).sub(eye).setY(0).normalize(); return Math.atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z); });
-    const i = slots(this.host.eye().level).findIndex((s) => taken.every((t) => Math.abs(Math.atan2(Math.sin(t - s), Math.cos(t - s))) > 0.42));
-    return i < 0 ? 0 : i;
+    const { at: eye, fwd: f, level } = this.host.eye(), fwd = f.clone().setY(0).normalize();
+    const angle = (v: THREE.Vector3) => Math.atan2(fwd.x * v.z - fwd.z * v.x, fwd.x * v.x + fwd.z * v.z);
+    const taken = [...this.wins.values()].filter((o) => o !== w && o.state === 'open' && !o.spec.space && !o.spec.selfPlaced && seen(o.spec.obj)).map((o) => {
+      const { w: ow, box } = this.size(o); o.spec.obj.updateMatrixWorld(true);
+      const mid = box.getCenter(new THREE.Vector3()).applyMatrix4(o.spec.obj.matrixWorld).sub(eye).setY(0), dist = Math.max(0.3, mid.length());
+      return { a: angle(mid.normalize()), half: Math.atan2(ow / 2, dist) };
+    });
+    const { w: ww, h } = this.size(w), mine = Math.atan2(ww / 2, this.distOf(ww, h, level));
+    const room = (s: number) => Math.min(Infinity, ...taken.map((t) => Math.abs(Math.atan2(Math.sin(t.a - s), Math.cos(t.a - s))) - t.half - mine));
+    const all = slots(level), i = all.findIndex((s) => room(s) > 0.03);
+    if (i >= 0) return i;
+    let best = 0; all.forEach((s, j) => { if (room(s) > room(all[best]!)) best = j; }); return best;
   }
   private place(w: Win, slot: number): void {
     const { at: eye, fwd, level } = this.host.eye(), { w: ww, h, box } = this.size(w), a = slots(level)[slot] ?? 0;
-    // a large window further away, so all of it is in view; a small one at reading distance
-    const d = Math.max(1.05, Math.min(1.9, 0.85 + 0.45 * Math.max(ww, h))) * (level ? 1 : 1.35);
+    const d = this.distOf(ww, h, level);
     // round you about the vertical, keeping how far up or down you look
     const dir = (level ? fwd.clone().setY(0) : fwd.clone()).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), -a);
     const want = eye.clone().addScaledVector(dir, d).add(new THREE.Vector3(0, level ? -0.06 : 0, 0));

@@ -16,9 +16,9 @@ export type FlowEventKind = 'run' | 'built' | 'flaw' | 'note' | 'tick' | 'said';
 export interface FlowEvent { kind: FlowEventKind; text?: string; minutes?: number }
 export interface FlowApi {
   /** Do something in the room: returns what happened, in words; throws with why where it cannot. */
-  act(what: string, input: string): Promise<string>;
+  act(what: string, input: string, signal?: AbortSignal): Promise<string>;
   /** Ask: Claude where it can be reached, else Nexus; says which answered. */
-  ai(prompt: string, input: string): Promise<{ text: string; by: 'claude' | 'nexus' }>;
+  ai(prompt: string, input: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }>;
   /** The numbers a check reads, as they stand now: flaws, gaps, parts, mass, rounds, failures, notes. */
   facts(): Record<string, number>;
 }
@@ -128,8 +128,8 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
     let r: StepRun;
     try {
       if (id === from) r = { node: id, label: label(id), kind, status: 'ok', output: why, ms: 0, round: run.rounds };
-      else if (kind === 'ai') { const a = await api.ai(fill(step!.what || label(id), input), input); r = { node: id, label: label(id), kind, status: 'ok', output: a.text, ms: 0, round: run.rounds, by: a.by }; }
-      else if (kind === 'action') r = { node: id, label: label(id), kind, status: 'ok', output: await api.act(fill(step!.what || label(id), input), input), ms: 0, round: run.rounds };
+      else if (kind === 'ai') { const a = await api.ai(fill(step!.what || label(id), input), input, signal); r = { node: id, label: label(id), kind, status: 'ok', output: a.text, ms: 0, round: run.rounds, by: a.by }; }
+      else if (kind === 'action') r = { node: id, label: label(id), kind, status: 'ok', output: await api.act(fill(step!.what || label(id), input), input, signal), ms: 0, round: run.rounds };
       else if (kind === 'check' || kind === 'repeat') {
         const e = evaluate(step!.what || label(id), api.facts(), input);
         if ('error' in e) throw new Error(e.error);
@@ -151,8 +151,9 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
       } else if (kind === 'trigger') r = { node: id, label: label(id), kind, status: 'ok', output: input, ms: 0, round: run.rounds };
       else r = { node: id, label: label(id), kind, status: 'ok', output: input, ms: 0, round: run.rounds };
     } catch (err) {
-      r = { node: id, label: label(id), kind, status: 'failed', output: (err as Error).message, ms: Date.now() - t0, round: run.rounds };
-      run.steps.push(r); state.set(id, r); run.status = 'failed'; tell(); break;
+      const cut = !!signal?.aborted;
+      r = { node: id, label: label(id), kind, status: cut ? 'skipped' : 'failed', output: cut ? 'Stopped while it ran.' : (err as Error).message, ms: Date.now() - t0, round: run.rounds };
+      run.steps.push(r); state.set(id, r); run.status = cut ? 'stopped' : 'failed'; tell(); break;
     }
     r.ms = Date.now() - t0; run.steps.push(r); state.set(id, { status: r.status, output: r.output }); tell(); i++;
   }
@@ -160,6 +161,36 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
   run.ended = Date.now(); tell();
   return run;
 }
+
+// ---- a step from one word -------------------------------------------------------------------------------------------
+/** What the room's actions are called: the first word of an action step. */
+export const ACTIONS = ['make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait'] as const;
+/** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
+ *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
+ *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
+export function guessStep(word: string): Step | null {
+  const w = word.trim(), t = w.toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  if (/^(when|whenever|every|on)\b/.test(t) && triggerOf(t)) return { kind: 'trigger', what: t };
+  if (/^(until|repeat|loop|keep going)\b/.test(t)) { const c = t.replace(/^(repeat|loop|keep going)\s*(until\s*)?/, 'until ').replace(/^until\s*$/, 'until flaws = 0'); return { kind: 'repeat', what: /at most \d+/.test(c) ? c : `${c}, at most 3 times` }; }
+  if (/^(if|check|only if|is|are|any|no)\b/.test(t) || /\?$/.test(t)) return { kind: 'check', what: t.replace(/^(check|only if|if)\s+(whether\s+)?/, '').replace(/\?+$/, '').trim() || 'flaws > 0' };
+  if (/^(ask|ai|claude|think|explain|summari[sz]e|decide|suggest|why|how)\b/.test(t)) { const q = w.replace(/^(ask|ai|claude)\b\s*:?\s*/i, '').trim() || w; return { kind: 'ai', what: `${q.replace(/[.?!]+$/, '')}: {input}` }; }
+  if (/^list (the )?flaws$|^find (the )?flaws$/.test(t)) return { kind: 'action', what: 'flaws' };
+  if ((ACTIONS as readonly string[]).includes(t.split(' ')[0]!)) return { kind: 'action', what: t };
+  return null;
+}
+/** What to put in a step, by kind: a few to press, each as it is written. */
+export const SUGGEST: Record<StepKind, [string, string][]> = {
+  trigger: TRIGGERS.map((t): [string, string] => [t, t]),
+  ai: [['How to fix it', 'Say, in one sentence, the one change to the ask that fixes the worst of these: {input}'], ['Say it plainly', 'Say this plainly, in one sentence: {input}'], ['Which part, and why', 'Which part should change first, and why? {input}'], ['Make it lighter', 'Say one change that makes it lighter without a new flaw: {input}']],
+  action: [['List the flaws', 'flaws'], ['Build again with it', 'again {input}'], ['Operate', 'operate'], ['Make a cart', 'make a cart'], ['Note it', 'note flaw: {input}'], ['Say it', 'say {input}'], ['Show the flaws', 'show flaws'], ['Board of the build', 'board'], ['Wait 5 s', 'wait 5 s']],
+  check: ['flaws > 0', 'no flaws', 'no gaps', 'failures > 0', 'mass under 500', 'output contains wheel'].map((c): [string, string] => [c, c]),
+  repeat: ['until flaws = 0, at most 3 times', 'until no gaps, at most 5 times', 'until failures = 0, at most 3 times'].map((c): [string, string] => [c, c]),
+};
+/** A run as it is kept on the board: each output cut to a length, and the last so many steps. */
+export const keptRun = (r: FlowRun, chars = 240, steps = 40): FlowRun => ({ ...r, steps: r.steps.slice(-steps).map((x) => ({ ...x, output: x.output.length > chars ? `${x.output.slice(0, chars - 1)}…` : x.output })) });
+/** An event, in words: why a flow started. */
+export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶ Run' : e.kind === 'built' ? 'a build finished' : e.kind === 'flaw' ? `a flaw was found${e.text ? `: ${e.text}` : ''}` : e.kind === 'note' ? `a note was added${e.text ? `: ${e.text}` : ''}` : e.kind === 'tick' ? `${e.minutes} min in` : `you said "${e.text ?? ''}"`);
 
 // ---- flows to start from --------------------------------------------------------------------------------------------
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }

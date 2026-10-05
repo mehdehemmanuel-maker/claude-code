@@ -4,7 +4,7 @@
 // so a loop that converges does so on what the actions did.
 
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES, boardOfTemplate, evaluate, graphOf, maxRounds, orderFrom, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
+import { ACTIONS, SUGGEST, TEMPLATES, boardOfTemplate, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
 import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/boards';
 
 /** A room whose flaws go down by one each time it is built again, and whose AI says what it was asked. */
@@ -107,7 +107,42 @@ describe('running a flow', () => {
     const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), ac = new AbortController(); ac.abort();
     expect((await runFlow(b, id(b, 'Run'), room(), 'pressed', undefined, ac.signal)).status).toBe('stopped');
   });
+  it('Stop cuts a step short: the run is stopped, not failed, and nothing after it runs', async () => {
+    let b: Board = { title: 'f', kind: 'flow', nodes: {}, edges: {} };
+    const t = addNode('Go'), w = addNode('Wait'), s = addNode('Say');
+    b = deepMerge(deepMerge(deepMerge(b, t.patch), w.patch), s.patch);
+    b.nodes[t.id]!.step = { kind: 'trigger', what: 'when I press run' }; b.nodes[w.id]!.step = { kind: 'action', what: 'wait' }; b.nodes[s.id]!.step = { kind: 'action', what: 'say done' };
+    b = deepMerge(deepMerge(b, link(b, t.id, w.id, 'flows to')!), link(b, w.id, s.id, 'flows to')!);
+    const ac = new AbortController(), said: string[] = [];
+    const api: FlowApi = { act: (what, _i, signal) => (what === 'wait' ? new Promise((_, no) => signal!.addEventListener('abort', () => no(new Error('stopped')))) : (said.push(what), Promise.resolve(what))), ai: async () => ({ text: '', by: 'nexus' }), facts: () => ({}) };
+    const p = runFlow(b, t.id, api, 'pressed', undefined, ac.signal); setTimeout(() => ac.abort(), 20);
+    const r = await p;
+    expect(r.status).toBe('stopped'); expect(r.steps.map((x) => `${x.label}:${x.status}`)).toEqual(['Go:ok', 'Wait:skipped']); expect(said).toEqual([]);
+  });
   it('every template is a flow with a trigger to start it', () => {
     for (const t of TEMPLATES) { const b = boardOfTemplate(t); expect(b.kind).toBe('flow'); expect(triggersOf(b)).toHaveLength(1); expect(triggerOf(triggersOf(b)[0]!.step.what)).not.toBeNull(); }
+  });
+});
+
+describe('a step from one word', () => {
+  it('reads what the word does, and leaves a word it cannot read as a plain step', () => {
+    expect(guessStep('flaws')).toEqual({ kind: 'action', what: 'flaws' });
+    expect(guessStep('List the flaws')).toEqual({ kind: 'action', what: 'flaws' });
+    expect(guessStep('Operate')).toEqual({ kind: 'action', what: 'operate' });
+    expect(guessStep('Any flaws?')).toEqual({ kind: 'check', what: 'any flaws' });
+    expect(guessStep('until no flaws')).toEqual({ kind: 'repeat', what: 'until no flaws, at most 3 times' });
+    expect(guessStep('when a build finishes')).toEqual({ kind: 'trigger', what: 'when a build finishes' });
+    expect(guessStep('Ask how to fix it')).toEqual({ kind: 'ai', what: 'how to fix it: {input}' });
+    expect(guessStep('banana')).toBeNull();
+  });
+  it('every suggestion reads as what it is', () => {
+    for (const [, t] of SUGGEST.trigger) expect(triggerOf(t)).not.toBeNull();
+    const f = { flaws: 1, gaps: 0, parts: 1, mass: 1, rounds: 1, failures: 0, notes: 0 };
+    for (const [, c] of [...SUGGEST.check, ...SUGGEST.repeat]) expect(evaluate(c, f, 'a wheel')).not.toHaveProperty('error');
+    for (const [, a] of SUGGEST.action) expect(ACTIONS).toContain(a.split(' ')[0]);
+  });
+  it('keeps a run short enough to store', () => {
+    const r = { trigger: 't', why: 'x', started: 0, status: 'done' as const, rounds: 1, steps: Array.from({ length: 50 }, (_, i) => ({ node: `n${i}`, label: 'L', kind: 'action' as const, status: 'ok' as const, output: 'y'.repeat(500), ms: 1, round: 1 })) };
+    const k = keptRun(r); expect(k.steps).toHaveLength(40); expect(k.steps[0]!.output).toHaveLength(240); expect(r.steps).toHaveLength(50);
   });
 });

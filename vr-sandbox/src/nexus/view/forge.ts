@@ -48,6 +48,7 @@ import { card, label } from './holo';
 import { meshOfPart } from './parts';
 import { Robot } from './robot';
 import { Boards3D } from './boards3d';
+import type { FlowApi } from '../flows';
 import { Windows } from './windows';
 import { Phone } from './phone';
 import { makeBoardStore } from './boards-store';
@@ -386,6 +387,8 @@ function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } 
   if (frozen === null) offset -= clock();
   // the design's own process is there to replay when asked; otherwise it stands designed, and I build it, live
   if (!o.replay && frozen === null) { offset += total; if (o.build === true && !params.has('end')) buildIt('the machine'); }
+  // a pipeline armed on a build, or on a flaw, starts from here
+  if (!o.replay) queueMicrotask(() => { const f = factsNow(); boards?.event({ kind: 'built', text: run.m.name }, ...(f.flaws > 0 ? [{ kind: 'flaw' as const, text: flawRows()[0]?.text ?? '' }] : [])); });
   const last = run.m.rounds.at(-1)!;
   const gaps = last.flaws.filter((f) => f.check === 'gap').length;
   return `${run.m.rounds.length} rounds, ${last.flaws.length - gaps} flaw${last.flaws.length - gaps === 1 ? '' : 's'} and ${gaps} gap${gaps === 1 ? '' : 's'} left, ${run.m.parts.length} parts, ${fmt(run.m.parts.reduce((x, p) => x + p.mass, 0))} kg, ${sizeOf(run.m)}.`;
@@ -746,6 +749,7 @@ async function noteOn(tg: Target, kind: NoteKind, text: string, on?: { node: str
  // and to Claude Code, who writes the laws: what you see wrong is what the next law is written from
   const said = `${kind.toUpperCase()} on ${tg.layer === 'build' ? `the build's ${tg.name}` : tg.name}${tg.where ? ` (${tg.where})` : ''}, in ${run.m.name}, round ${run.m.rounds.length}${pin ? `, at (${pin.map((x) => x.toFixed(3)).join(', ')}) m in the machine's frame` : ''}: "${body.text}"${on ? ` [${on.verdict} on ${on.node}]` : ''}`;
   try { await notes.add(body); } catch (e) { return `The note could not be kept: ${(e as { code?: string }).code ?? 'the store refused it'}.`; }
+  boards?.event({ kind: 'note', text: body.text });
   const sent = relay ? await relay.send(said, renderer.domElement) : { ok: false, said: 'The relay to Claude Code is not ready yet; kept.' };
   if (!sent.ok) { unsent.push(said); drawUnsent(); }
   return `${pin ? 'Pinned' : 'Noted'} on ${s.part.name}: ${body.text}. ${sent.said}`;
@@ -1497,7 +1501,9 @@ window.addEventListener('keydown', (e) => { if (e.key === 'p' && (e.target as HT
 // ---- talking with Claude ------------------------------------------------------------------------------------------------
 let brain: Brain | null = null, busy: AbortController | null = null, lastSayAt = -1e9;
 voice = false;
-const voiceCard = card(0.55, 0.16, 1200); scene.add(voiceCard.mesh);
+// what I say, over my head: under every window and the board (drawn before them), so what you put up in front of you
+// covers it, never the other way round
+const voiceCard = card(0.55, 0.16, 1200); voiceCard.mesh.renderOrder = 13; scene.add(voiceCard.mesh);
 voiceCard.draw('', [{ text: 'Hi. Ask me anything about this machine, or point at a part.', size: 1.1 }]);
 const chat = document.createElement('div');
 chat.style.cssText = 'position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(30rem,calc(100vw - 32px));z-index:5;display:flex;flex-direction:column;gap:6px;font:14px/1.4 system-ui';
@@ -1576,6 +1582,7 @@ function say(text: string, el?: HTMLDivElement): void {
   if (voice && 'speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/[✗✓✎↻·]/g, '')); u.rate = 1.07; speechSynthesis.speak(u); }
 }
 async function converse(text: string): Promise<void> {
+  boards?.event({ kind: 'said', text });
   if (!brain) return;
   busy?.abort(); busy = new AbortController();
   line('you', text);
@@ -1636,7 +1643,7 @@ function send(text: string): void {
 let boards: Boards3D | null = null, boardHand = -1, boardMouse = false;
 const boardBar = document.createElement('form');
 boardBar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:7;display:none;gap:6px;width:min(34rem,calc(100vw - 32px));padding:8px;border-radius:12px;background:rgba(3,14,22,0.92);border:1px solid #4dd0e1';
-const boardInput = document.createElement('input');
+const boardInput = document.createElement('input'); boardInput.id = 'board-words';
 boardInput.style.cssText = 'flex:1;min-width:0;font:15px system-ui;padding:9px 10px;border-radius:8px;border:1px solid #2e7d8c;background:#020a10;color:#e6f7ff';
 boardBar.append(boardInput);
 { const go = button('Send', () => undefined, boardBar); go.type = 'submit'; if (SR) { const mic = button('🎤', () => listen(), boardBar); mic.type = 'button'; } const x = button('✕', () => boards?.stopTyping(), boardBar); x.type = 'button'; }
@@ -1656,8 +1663,60 @@ async function understandOnBoard(words: string, b: Parameters<typeof understand>
   if (relay) void relay.send(text, renderer.domElement).then((r2) => { if (!r2.ok) { unsent.push(text); drawUnsent(); } }); else { unsent.push(text); drawUnsent(); }
   return local;
 }
+// ---- pipelines: what a pipeline's steps do in the room, through the same world you act on (src/nexus/flows.ts) ---------
+/** A wait that Stop cuts short. */
+const nap = (ms: number, signal?: AbortSignal) => new Promise<void>((ok, no) => { if (signal?.aborted) { no(new Error('stopped')); return; } const t = setTimeout(ok, ms); signal?.addEventListener('abort', () => { clearTimeout(t); no(new Error('stopped')); }, { once: true }); });
+/** The numbers a pipeline's checks read, as they stand: the flaws and gaps left in the last round, as the HUD counts them. */
+function factsNow(): Record<string, number> {
+  const last = empty || !run ? null : run.m.rounds.at(-1) ?? null, gaps = last ? last.flaws.filter((f) => f.check === 'gap').length : 0;
+  return { flaws: last ? last.flaws.length - gaps : 0, gaps, parts: empty ? 0 : run.m.parts.length, mass: empty ? 0 : run.m.parts.reduce((a, p) => a + p.mass, 0), rounds: empty ? 0 : run.m.rounds.length, failures: operated?.operation?.events.length ?? 0, notes: allNotes.length };
+}
+const NOT_HERE = /^Nothing stands here yet|^The generator gave nothing/;
+async function flowAct(what: string, signal?: AbortSignal): Promise<string> {
+  const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
+  // what could not be done at all is a failure, and stops the pipeline with why
+  const out = (said: string) => { if (NOT_HERE.test(said)) throw new Error(said); return said; };
+  switch (verb) {
+    case 'make': case 'build': if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a cabin of 40 m²".'); return out(world2.make(arg));
+    case 'again': return out(world2.again(arg || 'again'));
+    case 'operate': return out(world2.operate());
+    case 'flaws': return world2.flaws();
+    case 'show': return world2.show(arg || 'flaws');
+    case 'note': {
+      const n = arg.match(/^(flaw|question|idea|good|note)\s*:\s*([\s\S]+)$/i), kind = (n?.[1]?.toLowerCase() ?? 'note') as NoteKind, text = (n?.[2] ?? arg).trim();
+      if (!text) throw new Error('Note what? Say it like "note flaw: {input}".'); if (empty) throw new Error('Nothing stands here yet to note on.');
+      return noteOn({ id: 'build:whole', name: `the whole ${run.m.name.replace(/^(a|an|the) /, '')}`, group: 'build', at: [0, 0, 0], layer: 'build' }, kind, text);
+    }
+    case 'say': if (!arg) throw new Error('Say what? "say {input}" says what came to it.'); say(arg); return arg;
+    case 'board': { const said = boards?.buildBoard(); if (!said) throw new Error('Nothing stands here yet to make a board of.'); return said; }
+    case 'wait': { const n = Math.min(60, Math.max(0, Number(arg.match(/\d+(?:\.\d+)?/)?.[0] ?? 1))); await nap(n * 1000, signal); return `Waited ${n} s.`; }
+    default: throw new Error(`I do not know how to "${t.slice(0, 60)}". A step can: make <what>, again <change>, operate, flaws, show <panel>, note <kind>: <text>, say <words>, board, wait <n> s.`);
+  }
+}
+async function flowAi(prompt: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }> {
+  if (brain?.mode === 'claude') {
+    hud.set('thinking');
+    try { const a = await brain.ask(prompt, () => undefined, signal ?? new AbortController().signal); if (a?.trim()) return { text: a.trim(), by: 'claude' }; } catch (e) { if (signal?.aborted) throw e; /* else Nexus below, and it says so */ } finally { hud.set('idle'); }
+  }
+  // Nexus cannot think a question through: what it has is its own rules' remedies for what it found, and it says so
+  const fix = flawRows().find((r) => r.flaw?.remedy);
+  if (fix && /\b(flaws?|fix\w*|change|wrong|worst|remed\w*)\b/i.test(prompt)) return { text: `${fix.flaw!.remedy} (Nexus's own rule for ${fix.flaw!.where}: Claude could not be asked from here)`, by: 'nexus' };
+  throw new Error(`Claude cannot be reached from this page, and Nexus has no rule that answers this${fix ? '' : ': no flaw here has a remedy it knows'}. Run it where Claude can answer (the forge in claude.ai), or make this step an action.`);
+}
+const flowApi: FlowApi = {
+  // a pipeline never puts windows in your face: what one of its steps opens waits, drawn, on the strip and the phone
+  async act(what, _input, signal) {
+    const was = new Set(windows.list().filter((w) => w.state === 'open').map((w) => w.id));
+    try { return await flowAct(what, signal); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
+  },
+  ai: (prompt, _input, signal) => flowAi(prompt, signal),
+  facts: factsNow,
+};
+// every minute, for a pipeline that starts "every so many minutes"
+{ let minutes = 0; window.setInterval(() => { minutes++; boards?.event({ kind: 'tick', minutes }); }, 60_000); }
 const boardHost = {
   say: (t2: string) => say(t2),
+  flowApi: () => flowApi,
   build: () => (empty || !run.m.parts.length ? null : { ask: lastMake?.words ?? run.intent.name, name: run.intent.name, parts: run.m.parts }),
   type(on: boolean, hint: string) {
     if (renderer.xr.isPresenting) {
@@ -1762,6 +1821,7 @@ const blobOf = (url: string): Blob => { const [head, data] = url.split(','); con
  *  so, and the message, its photo with it, goes on to Claude Code with the notes. */
 async function chatFromPhone(text: string, photo: string | null): Promise<{ text: string; by: 'claude' | 'nexus'; kept?: string }> {
   line('you', photo ? `${text} [a photo with it]` : text);
+  boards?.event({ kind: 'said', text });
   if (brain?.mode === 'claude') {
     try {
       const answer = photo && brain.see ? await brain.see(text, blobOf(photo)) : await brain.ask(text, () => undefined, new AbortController().signal);

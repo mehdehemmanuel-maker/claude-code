@@ -172,9 +172,9 @@ export function compact(b: Board): Board {
 }
 export const uid = (p: string): string => p + Math.random().toString(36).slice(2, 9);
 /** A new node: just its word, linked from another if given. Where it goes and what it is come from its links. */
-export function addNode(label: string, linkTo?: string, id = uid('n')): { id: string; patch: Patch } {
+export function addNode(label: string, linkTo?: string, id = uid('n'), rel = 'connects'): { id: string; patch: Patch } {
   const patch: Patch = { nodes: { [id]: { label: label.trim() } } };
-  if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel: 'connects' } };
+  if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel } };
   return { id, patch };
 }
 /** A link between two nodes. One deleted before between the same two is brought back, so the board does not fill with dead ones. */
@@ -185,12 +185,13 @@ export function link(b: Board, from: string, to: string, rel = 'connects'): Patc
   const dead = Object.entries(b.edges ?? {}).find(([, e]) => e && e.deleted && same(e));
   return { edges: { [dead ? dead[0] : uid('e')]: { from, to, rel, deleted: false, label: '', note: '' } } };
 }
-/** Link two nodes, or unlink them if they are linked (every link between them goes). */
-export function toggleLink(b: Board, a: string, c: string): { patch: Patch; linked: boolean } | null {
+/** Link two nodes, or unlink them if they are linked (every link between them goes). On a flow the link is "flows to",
+ *  from the first to the second: the second runs after it. */
+export function toggleLink(b: Board, a: string, c: string, rel = 'connects'): { patch: Patch; linked: boolean } | null {
   if (a === c) return null;
   const between = edgesOf(b).filter((e) => (e.from === a && e.to === c) || (e.from === c && e.to === a));
   if (between.length) return { patch: { edges: Object.fromEntries(between.map((e) => [e.id, { deleted: true }])) }, linked: false };
-  const p = link(b, a, c, 'connects');
+  const p = link(b, a, c, rel);
   return p ? { patch: p, linked: true } : null;
 }
 export function deleteNode(b: Board, id: string): Patch {
