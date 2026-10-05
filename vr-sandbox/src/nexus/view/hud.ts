@@ -27,6 +27,10 @@ export class Hud {
   detail = '';
   weather: Weather | null = null;
   weatherNote = 'weather: tap Weather to allow your location';
+  /** A line of what stands here: parts, mass, flaws; and of the room: frames a second, the headset's battery, time in. */
+  info = '';
+  battery: number | null = null;
+  private readonly since = Date.now();
   private readonly canvas = document.createElement('canvas');
   private readonly tex: THREE.CanvasTexture;
   private readonly ring: THREE.Mesh;
@@ -35,7 +39,7 @@ export class Hud {
   private placed = false;
 
   constructor() {
-    this.canvas.width = 1024; this.canvas.height = 384;
+    this.canvas.width = 1024; this.canvas.height = 392;
     this.tex = new THREE.CanvasTexture(this.canvas); this.tex.colorSpace = THREE.SRGBColorSpace;
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, depthTest: false }));
     plate.renderOrder = 30; this.group.add(plate);
@@ -70,6 +74,12 @@ export class Hud {
       return this.weatherNote;
     }
   }
+  /** The headset's or the device's charge, where the browser tells it. */
+  async watchBattery(): Promise<void> {
+    const nav = navigator as Navigator & { getBattery?: () => Promise<{ level: number; addEventListener(t: string, f: () => void): void }> };
+    if (!nav.getBattery) return;
+    try { const b = await nav.getBattery(); const up = () => { this.battery = b.level; this.drawnAt = ''; }; up(); b.addEventListener('levelchange', up); } catch { /* not told */ }
+  }
   set(status: Status, detail = ''): void { if (status !== this.status || detail !== this.detail) { this.status = status; this.detail = detail; this.drawnAt = ''; } }
 
   private draw(now: Date): void {
@@ -83,6 +93,8 @@ export class Hud {
     const w = this.weather;
     g.fillStyle = w ? '#ffe082' : '#7fb3c8'; g.font = '500 38px system-ui';
     g.fillText(w ? `${w.temperature.toFixed(0)} °C · ${sky(w.code)} · wind ${w.wind.toFixed(0)} m/s` : this.weatherNote.replace(/^weather: /, ''), 300, 238);
+    const mins = Math.floor((Date.now() - this.since) / 60000), extra = `${this.battery !== null ? `battery ${Math.round(this.battery * 100)} % · ` : ''}in the forge ${mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}`;
+    g.fillStyle = '#7fb3c8'; g.font = '400 30px system-ui'; g.fillText(`${this.info ? `${this.info} · ` : ''}${extra}`.slice(0, 64), 300, 350);
     g.fillStyle = st.color; g.beginPath(); g.arc(320, 316, 14, 0, Math.PI * 2); g.fill();
     g.font = '600 38px system-ui'; g.fillText(`CLAUDE · ${st.text}${this.detail ? ` · ${this.detail}` : ''}`.slice(0, 48), 346, 296);
     // the dial's numerals: the hour, large, in the ring
@@ -92,12 +104,13 @@ export class Hud {
       Object.assign(document.createElement('span'), { textContent: `${time} · ${date}` }),
       Object.assign(document.createElement('span'), { textContent: w ? `${w.temperature.toFixed(0)} °C ${sky(w.code)}` : this.weatherNote, style: `color:${w ? '#ffe082' : '#7fb3c8'};font-weight:500` }),
       Object.assign(document.createElement('span'), { textContent: `● Claude · ${st.text}${this.detail ? ` · ${this.detail}` : ''}`, style: `color:${st.color}` }),
+      Object.assign(document.createElement('span'), { textContent: `${this.info ? `${this.info} · ` : ''}${extra}`, style: 'color:#7fb3c8;font-weight:500' }),
     );
   }
 
   /** Each frame: the seconds sweep turns; once a second the face is drawn; in a headset it follows your head. */
   update(head: THREE.Camera, eye: THREE.Vector3, xr: boolean, dt: number): void {
-    const now = new Date(), key = `${now.getSeconds()}|${this.status}|${this.detail}|${this.weather?.at ?? this.weatherNote}`;
+    const now = new Date(), key = `${now.getSeconds()}|${this.status}|${this.detail}|${this.weather?.at ?? this.weatherNote}|${this.info}|${this.battery}`;
     if (key !== this.drawnAt) { this.drawnAt = key; this.draw(now); }
     this.sweep.rotation.z = -((now.getSeconds() + now.getMilliseconds() / 1000) / 60) * Math.PI * 2 + Math.PI / 2;
     (this.ring.material as THREE.MeshBasicMaterial).color.set(STATUS[this.status].color);

@@ -22,7 +22,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { printer, type PrinterAsk } from '../asked';
 import type { Machine, Step } from '../embody/embody';
-import { embodyAny } from '../embody/any';
+import { embodyAny, type Learned } from '../embody/any';
+import { practice, type Operation, type OpEvent } from '../embody/operate';
 import { readAsk } from '../words';
 import { intentFromSpec } from '../spec';
 import { Hud } from './hud';
@@ -147,9 +148,11 @@ renderer.localClippingEnabled = true;
 interface Run { intent: Intent; s: Structure; m: Machine; genMs: number; embMs: number }
 // what stands here: a printer to an ask of its size, tolerance and time, or anything asked in words
 let ask: PrinterAsk = {}, asked: Intent = printer({}), isPrinter = true;
+// what operating it taught the design, kept while the same ask stands
+let learnedNow: Learned = {};
 function runAll(intent: Intent): Run | null {
   const t0 = performance.now(); const s = generate(intent); const t1 = performance.now();
-  const m = embodyAny(intent, s); const t2 = performance.now();
+  const m = embodyAny(intent, s, 8, learnedNow); const t2 = performance.now();
   return m ? { intent, s, m, genMs: t1 - t0, embMs: t2 - t1 } : null;
 }
 
@@ -313,6 +316,7 @@ let paused = false, pausedAt = 0, offset = 0, voice = false, targetBeat = -1;
 const clock = () => (frozen ?? ((paused ? pausedAt : performance.now()) - realStart) / 1000 + offset);
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const playing0 = () => current < beats.length - 1 && !machineBuild;
+let fps = 60;
 
 // a machine of any size stands on the pedestal at a scale that fits it, centred, its feet on the top
 let fitScale = 1, standR = 0.85;
@@ -338,6 +342,7 @@ function relabel(): void {
 }
 const sizeOf = (m: Machine) => (Math.max(...m.size) > 2 ? `${m.size.map((x) => fmt(x)).join(' × ')} m` : `${m.size.map((x) => fmt(x * 1e3)).join(' × ')} mm`);
 function start(intent: Intent = asked): string {
+  if (intent !== asked) { learnedNow = {}; operated = null; }
   const next = runAll(intent);
   if (!next) return 'The generator gave nothing to embody for that ask: a gap, not a machine.';
   asked = intent; isPrinter = !!next.m.hotEnd;
@@ -447,7 +452,16 @@ function tick(): void {
   // my voice only when I answer you, for a while after
   voiceCard.mesh.visible = !!busy || performance.now() - lastSayAt < 22000;
   if (!machineBuild && !busy && hud.status !== 'listening') hud.set(playing0() ? 'working' : 'idle', playing0() ? `designing ${run.m.name}` : '');
-  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting, dt);
+  fps = fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
+  const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length;
+  hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`;
+  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn, dt);
+  if (!hudOn) hud.dom.style.display = 'none';
+  drawModes();
+  modeStrip.visible = renderer.xr.isPresenting && modeChips.length > 0;
+  if (modeStrip.visible) { modeStrip.position.copy(hud.group.position).add(tmp.set(0, -0.12, 0)); modeStrip.lookAt(eye); }
+  settingsGroup.visible = settingsOpen && renderer.xr.isPresenting; settingsBox.style.display = settingsOpen && !renderer.xr.isPresenting ? 'flex' : 'none';
+  if (settingsGroup.visible) { settingsGroup.position.copy(hud.group.position).add(tmp.set(0, -0.24, 0)); settingsGroup.lookAt(eye); }
   // what is on: only what you are doing. The pipeline while it runs; one panel you summoned; a part's card while you
   // point at it; the hologram alone when one is out
   const playing = current < beats.length - 1 && !machineBuild;
@@ -458,6 +472,7 @@ function tick(): void {
   liveCard.mesh.visible = panel === 'bill';
   loopBoard.visible = decideChips.visible = panel === 'loop';
   gatesCard.mesh.visible = panel === 'gates';
+  simBoard.visible = panel === 'operate';
   flawBoard.visible = panel === 'flaws'; flawList.style.display = panel === 'flaws' ? 'flex' : 'none';
   chatCard.mesh.visible = keyboard.mesh.visible = panel === 'chat';
   decide.style.display = panel === 'loop' ? 'flex' : 'none';
@@ -537,6 +552,7 @@ const world2: WorldApi = {
       `Assemblies (id: parts): ${[...groups].map(([g, n]) => `${g}: ${n}`).join(', ')}.`,
       isPrinter ? `Key values: ${['deposition speed', 'acceleration', 'support sag', 'bridge depth', 'nozzle height'].map((n) => { const x = val(n); return x ? `${n} ${fmt(x.value)} ${x.unit}` : ''; }).filter(Boolean).join('; ')}; ${m.hotEnd?.streams} streams, heater ${fmt(m.hotEnd?.electrical.P ?? 0)} W, supply ${m.electrical?.psu.id}.` : `Key values: ${m.values.slice(0, 14).map((x) => `${x.name} ${fmt(x.value)} ${x.unit}`).join('; ')}.`,
       `Laws the experiment updated: ${LAW_UPDATES.slice(-5).map((l) => `${l.n}. ${l.now}`).join(' | ')}`,
+      operated?.operation ? `Operated through its duty (${operated.operation.duty}): ${operated.tries.map((t, i) => `run ${i + 1}: ${t.events.length ? t.events.slice(0, 3).map((e) => `${e.node} ${e.check} at ${e.t.toFixed(0)} s: ${e.says}`).join('; ') : 'holds'}`).join(' | ')}; learned: ${(learnedNow.why ?? []).slice(0, 4).join('; ') || 'nothing'}` : '',
       run.m.gates?.length ? `Decisions (gates): ${run.m.gates.slice(0, 10).map((g) => `${g.id}: ${g.outcome} (${g.law.slice(0, 80)})`).join(' | ')}` : '',
       lastMake ? `Asked in words: "${lastMake.words}". Heard: ${lastMake.heard.join('; ') || 'nothing more'}. Assumed: ${lastMake.assumed.join('; ') || 'nothing'}.` : '',
       allNotes.length ? `The person's notes (${allNotes.length}): ${allNotes.slice(-6).map((n) => `${n.kind} on ${n.partName}: ${n.text}`).join(' | ')}` : 'No notes yet.',
@@ -580,6 +596,7 @@ const world2: WorldApi = {
     lastMake = { words, heard, assumed };
     return `${intent.name}: ${out}${assumed.length ? ` I assumed ${assumed.join('; ')}.` : ''}`;
   },
+  operate() { return operateIt(); },
   flaws() { summonTo('flaws'); return flawRows().slice(0, 8).map((r, i) => `${i + 1}. ${r.text}`).join(' ') || 'No flaw, gap or report left on it.'; },
   expand: (target) => expand(target, true),
   show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates'].includes(p2) ? p2 : 'loop') as Panel); },
@@ -638,7 +655,7 @@ async function addNote(s: Shown, kind: NoteKind, text: string): Promise<string> 
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
 // ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate';
 let panel: Panel = 'none', lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 /** Bring a panel up, or put it away if it is the one up. */
 function summon(p: Panel): string { return summonTo(panel === p ? 'none' : p); }
@@ -660,9 +677,10 @@ function summonTo(p: Panel): string {
   if (panel === 'loop') { place(loopBoard, 0.12); place(decideChips, -0.3); }
   if (panel === 'flaws') { drawFlaws(); place(flawBoard, 0.05); }
   if (panel === 'gates') { drawGates(); place(gatesCard.mesh); }
+  if (panel === 'operate') { drawSim(); place(simBoard, 0.05); }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.` } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.' } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -768,12 +786,128 @@ function stepMachineBuild(t: number): void {
     stepCard.draw(`BUILD · step ${st.n} of ${b.steps.length}`, [{ text: st.title, size: 1.1, color: '#ffffff' }, { text: st.says, size: 0.9, color: '#ffe082' }, ...b.steps.slice(Math.max(0, k - 5), k).map((x) => ({ text: `✓ ${x.n}. ${x.title}`, size: 0.75, color: '#69f0ae' }))], '#ffb74d');
     hud.set('building', `step ${st.n} of ${b.steps.length}`);
   }
-  if (k >= b.steps.length + 1) {
-    machineBuild = null; carry = null; hud.set('idle');
-    for (const s2 of shown.values()) { s2.obj.position.copy(s2.part.shape.kind === 'wire' ? ZERO : s2.obj.userData.at as THREE.Vector3); s2.obj.visible = !isolated || isolated.has(s2.part.id); }
-    line('system', `Built: ${b.steps.length} steps, ${run.m.parts.length} parts.`);
-  }
+  if (k >= b.steps.length + 1) { endBuild(); line('system', `Built: ${b.steps.length} steps, ${run.m.parts.length} parts.`); }
 }
+/** Every part back where its law put it, the build over. */
+function endBuild(): void {
+  machineBuild = null; carry = null; hud.set('idle');
+  for (const s2 of shown.values()) { s2.obj.position.copy(s2.part.shape.kind === 'wire' ? ZERO : s2.obj.userData.at as THREE.Vector3); s2.obj.scale.setScalar(1); s2.obj.visible = !isolated || isolated.has(s2.part.id); }
+}
+
+// ---- operating it: the duty its wants ask, run through time; what failed and what asked it; learned, built again ---------
+let operated: { operation: Operation | null; tries: { events: OpEvent[]; why: string[] }[] } | null = null;
+const simCanvas = document.createElement('canvas'); simCanvas.width = 1600; simCanvas.height = 1100;
+const simTex = new THREE.CanvasTexture(simCanvas); simTex.colorSpace = THREE.SRGBColorSpace;
+const simBoard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), new THREE.MeshBasicMaterial({ map: simTex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+simBoard.renderOrder = 15; simBoard.visible = false; scene.add(simBoard);
+function operateIt(): string {
+  if (isPrinter) return 'The printer\'s duty is its deposition: it is checked in its rounds. Ask me to make something that moves or keeps a room, and I\'ll operate it.';
+  hud.set('working', 'operating it');
+  const r = practice(asked, generate(asked));
+  learnedNow = r.learned;
+  operated = { operation: r.operation, tries: r.history.map((h) => ({ events: h.events, why: h.learned.why ?? [] })) };
+  start(asked);
+  if (current < beats.length - 1) offset += total - clock() + 0.01;
+  summonTo('operate'); drawFlaws();
+  const first = r.history[0]!.events, left = r.operation?.events ?? [];
+  if (!r.operation) return 'Nothing here to operate.';
+  return first.length === 0 ? `It holds its duty: ${r.operation.duty}.` : `${first.length} failure${first.length > 1 ? 's' : ''} on the first run, the first at ${first[0]!.t.toFixed(0)} s in ${first[0]!.node}: ${first[0]!.says}. ${r.history.length - 1} rebuild${r.history.length > 2 ? 's' : ''} from what I observed${left.length ? `; ${left.length} still fail` : '; now it holds'}.`;
+}
+function drawSim(): void {
+  const g = simCanvas.getContext('2d')!, W = simCanvas.width, H = simCanvas.height, op = operated?.operation;
+  g.clearRect(0, 0, W, H); g.fillStyle = 'rgba(3,14,22,0.88)'; g.beginPath(); g.roundRect(6, 6, W - 12, H - 12, 26); g.fill(); g.strokeStyle = '#69f0ae'; g.lineWidth = 4; g.stroke();
+  g.textBaseline = 'top'; g.fillStyle = '#b9f6ca'; g.font = '600 44px system-ui'; g.fillText('OPERATE · observe · trace · learn · rebuild', 40, 30);
+  if (!op) { g.fillStyle = '#9fdfee'; g.font = '400 30px system-ui'; g.fillText('Press ▶ Operate to run it through its duty.', 40, 110); simTex.needsUpdate = true; return; }
+  g.fillStyle = '#9fdfee'; g.font = '400 26px system-ui'; g.fillText(`duty: ${op.duty}`.slice(0, 110), 40, 88);
+  // the tries: each run's failures, and what it learned for the next
+  let y = 136;
+  operated!.tries.forEach((tr, i) => {
+    g.fillStyle = tr.events.length ? '#ff8a80' : '#69f0ae'; g.font = '600 28px system-ui';
+    g.fillText(`run ${i + 1}: ${tr.events.length ? `${tr.events.length} failure${tr.events.length > 1 ? 's' : ''}` : 'holds its duty'}`, 40, y); y += 38;
+    for (const e of tr.events.slice(0, 3)) { g.fillStyle = '#ffffff'; g.font = '400 23px system-ui'; g.fillText(`✗ ${e.t.toFixed(0)} s · ${e.node}: ${e.says}`.slice(0, 120), 60, y); y += 30; g.fillStyle = '#7fb3c8'; g.font = '400 20px system-ui'; g.fillText(`asked by ${e.demand.slice(0, 3).join(' → ') || '—'} · fed by ${e.supply.slice(0, 3).join(' ← ') || '—'}`.slice(0, 140), 80, y); y += 28; }
+    const next = operated!.tries[i + 1]; if (next) for (const w of next.why.slice(-2)) { g.fillStyle = '#ffcc80'; g.font = '400 21px system-ui'; g.fillText(`↻ learned: ${w}`.slice(0, 130), 60, y); y += 28; }
+    y += 8;
+  });
+  // what it observed, over the run: three channels
+  const plot = (name: string, values: number[], colour: string, x0: number, w: number, top: number, h: number, unit: string) => {
+    if (!values.length) return; const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+    g.strokeStyle = 'rgba(159,223,238,0.25)'; g.lineWidth = 2; g.strokeRect(x0, top, w, h);
+    g.strokeStyle = colour; g.lineWidth = 3; g.beginPath(); values.forEach((v, k) => { const px = x0 + (k / Math.max(1, values.length - 1)) * w, py = top + h - ((v - lo) / span) * h; if (k) g.lineTo(px, py); else g.moveTo(px, py); }); g.stroke();
+    g.fillStyle = colour; g.font = '500 22px system-ui'; g.fillText(`${name}: ${fmt(lo)} to ${fmt(hi)} ${unit}`, x0, top + h + 8);
+  };
+  const ch = (name: string) => op.channels.filter((c) => c.name === name);
+  const first = (name: string) => ch(name)[0]?.values ?? [];
+  const winding = ch('winding'), hot = winding.length ? winding[0]!.values.map((_, k) => Math.max(...winding.map((c) => c.values[k] ?? 0))) : [];
+  const top = Math.max(y + 10, H - 300), w3 = (W - 120) / 3;
+  if (first('speed').length) { plot('speed', first('speed'), '#80deea', 40, w3, top, 200, 'm/s'); plot('hottest winding', hot, '#ff8a65', 60 + w3, w3, top, 200, '°C'); plot('charge', first('charge'), '#69f0ae', 80 + 2 * w3, w3, top, 200, ''); }
+  else { plot('inside', first('inside'), '#ffcc80', 40, w3, top, 200, '°C'); plot('outside', first('outside'), '#80deea', 60 + w3, w3, top, 200, '°C'); plot('heating on', first('heating on'), '#ff8a65', 80 + 2 * w3, w3, top, 200, ''); }
+  simTex.needsUpdate = true;
+}
+
+// ---- modes: what is on, each with its own way out, and one way out of the latest (✕ on the strip, Esc, B or Y) ------------
+interface Mode { id: string; label: string; exit: () => void }
+function modes(): Mode[] {
+  const out: Mode[] = [];
+  if (panel !== 'none') out.push({ id: 'panel', label: panel === 'chat' ? 'Chat and keyboard' : `${panel[0]!.toUpperCase()}${panel.slice(1)} panel`, exit: () => { panel = 'none'; } });
+  if (settingsOpen) out.push({ id: 'settings', label: 'Settings', exit: () => { settingsOpen = false; } });
+  if (holo.showing) out.push({ id: 'holo', label: `Hologram: ${holo.showing.name}`.slice(0, 40), exit: () => holo.clear() });
+  if (machineBuild) out.push({ id: 'build', label: `Building ${Math.max(1, machineBuild.at + 1)} of ${machineBuild.steps.length}`, exit: () => endBuild() });
+  if (isolated) out.push({ id: 'isolate', label: 'Isolated', exit: () => { isolated = null; } });
+  if (section !== 'off') out.push({ id: 'section', label: `Section: ${section}`, exit: () => { section = 'off'; } });
+  if (xray) out.push({ id: 'xray', label: 'X-ray', exit: () => { xray = false; } });
+  if ([...explodeTo.values()].some((v) => v > 0)) out.push({ id: 'apart', label: 'Taken apart', exit: () => { for (const g of explodeTo.keys()) explodeTo.set(g, 0); } });
+  if (selectedId) out.push({ id: 'select', label: `Pointing: ${(shown.get(selectedId)?.part.name ?? selectedId).slice(0, 28)}`, exit: () => { selectedId = null; attention = null; partCardUntil = 0; light([]); } });
+  if (paused) out.push({ id: 'paused', label: 'Paused', exit: () => togglePause() });
+  return out;
+}
+/** Out of the latest mode: the panel in front of you first, then what is out in the air, then the ways of seeing. */
+function exitLatest(): void { const m = modes()[0]; if (m) { m.exit(); line('system', `Left: ${m.label}.`); } }
+function exitAll(): void { const ms = modes(); for (const m of ms) m.exit(); if (ms.length) line('system', 'Back to the room as it stands.'); }
+// on a screen, a strip under the clock; in a headset, the same strip under the clock that follows your head
+const modeBar = document.createElement('div');
+modeBar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+// the top left: the clock and status, then what is on, then the settings; clear of the buttons on the right
+const topLeft = document.createElement('div');
+topLeft.style.cssText = 'position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:max(18rem,calc(100vw - 640px))';
+hud.dom.style.position = 'static'; hud.dom.style.maxWidth = '100%';
+topLeft.append(hud.dom, modeBar);
+document.body.appendChild(topLeft);
+const modeStrip = new THREE.Group(); scene.add(modeStrip);
+let modeChips: { mesh: THREE.Mesh; act: () => void }[] = [], modeKey = '';
+function drawModes(): void {
+  const ms = modes(), key = ms.map((m) => m.label).join('|') + (renderer.xr.isPresenting ? '|xr' : '');
+  if (key === modeKey) return;
+  modeKey = key;
+  modeBar.replaceChildren();
+  const chip = (text: string, act: () => void, accent: string) => { const b2 = document.createElement('button'); b2.textContent = text; b2.style.cssText = `font:600 12px system-ui;padding:5px 10px;border-radius:999px;border:1px solid ${accent};background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer`; b2.onclick = act; modeBar.appendChild(b2); };
+  for (const m of ms) chip(`${m.label}  ✕`, () => { m.exit(); }, '#ffd740');
+  if (ms.length > 1) chip('Exit all', exitAll, '#ff8a80');
+  for (const c2 of modeChips) { modeStrip.remove(c2.mesh); (c2.mesh.material as THREE.MeshBasicMaterial).map?.dispose(); }
+  modeChips = [];
+  const all: [string, () => void, string][] = [...ms.map((m): [string, () => void, string] => [`${m.label} ✕`, () => m.exit(), '#ffd740']), ...(ms.length > 1 ? [['Exit all', exitAll, '#ff8a80'] as [string, () => void, string]] : [])];
+  all.forEach(([text, act, accent], i) => { const c2 = card(0.13, 0.03, 512); c2.draw('', [{ text, size: 2.2 }], accent); c2.mesh.position.set(((i % 3) - 1) * 0.135, -Math.floor(i / 3) * 0.034, 0); modeStrip.add(c2.mesh); modeChips.push({ mesh: c2.mesh, act }); });
+}
+// settings: the small things that make the room yours
+let settingsOpen = false, turnStep = Math.PI / 6, smoothTurn = false, hudOn = true;
+const settingsGroup = new THREE.Group(); scene.add(settingsGroup); settingsGroup.visible = false;
+let settingChips: { mesh: THREE.Mesh; act: () => void }[] = [];
+const SETTINGS: [() => string, () => void][] = [
+  [() => `Voice: ${voice ? 'on' : 'off'}`, () => { voice = !voice; if (!voice) speechSynthesis.cancel(); }],
+  [() => `Clock and status: ${hudOn ? 'shown' : 'hidden'}`, () => { hudOn = !hudOn; }],
+  [() => `Turning: ${smoothTurn ? 'smooth' : `${Math.round((turnStep * 180) / Math.PI)}° steps`}`, () => { if (smoothTurn) { smoothTurn = false; turnStep = Math.PI / 6; } else if (turnStep < Math.PI / 4 - 1e-6) turnStep = Math.PI / 4; else smoothTurn = true; }],
+  [() => `Reports: ${reportsMode}`, () => cycleReports()],
+  [() => `Weather: ${hud.weather ? 'on' : 'find'}`, () => { void hud.locate().then((w) => line('system', w)); }],
+  [() => 'Recentre me', () => { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); }],
+];
+function drawSettings(): void {
+  for (const c2 of settingChips) settingsGroup.remove(c2.mesh);
+  settingChips = SETTINGS.map(([label, act], i) => { const c2 = card(0.2, 0.034, 640); c2.draw('', [{ text: label(), size: 2.2 }], '#b388ff'); c2.mesh.position.set((i % 2 ? 1 : -1) * 0.104, -Math.floor(i / 2) * 0.039, 0); settingsGroup.add(c2.mesh); return { mesh: c2.mesh, act: () => { act(); drawSettings(); } }; });
+  settingsBox.replaceChildren(); for (const [label, act] of SETTINGS) button(label(), () => { act(); drawSettings(); }, settingsBox);
+}
+const settingsBox = document.createElement('div');
+settingsBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;max-width:30rem;padding:8px;border-radius:10px;background:rgba(3,14,22,0.88);border:1px solid #b388ff';
+topLeft.appendChild(settingsBox);
+function toggleSettings(): void { settingsOpen = !settingsOpen; if (settingsOpen) drawSettings(); }
 
 // ---- the supervisor's list: every flaw and gap left, and every report you made, each one a jump to where it is ------------
 interface FlawRow { kind: 'flaw' | 'gap' | 'report'; text: string; flaw?: Flaw; note?: Note }
@@ -782,6 +916,7 @@ function flawRows(): FlawRow[] {
   const last = run.m.rounds.at(-1)!;
   return [
     ...last.flaws.filter((f) => f.check !== 'gap').map((f): FlawRow => ({ kind: 'flaw', text: `${f.check} · ${f.where}: ${f.says}`, flaw: f })),
+    ...(operated?.operation?.events ?? []).map((e): FlawRow => ({ kind: 'flaw', text: `operating · ${e.node} at ${e.t.toFixed(0)} s: ${e.says}`, flaw: { check: e.check, where: e.node, says: e.says, law: e.law, value: 0, limit: 0, remedy: null, parts: run.m.parts.filter((p) => p.id.startsWith(`${e.node.split('/')[0]}/`) || p.id === e.node).map((p) => p.id) } })),
     ...allNotes.filter((n) => n.status !== 'done' && (!n.machine || n.machine === run.m.name)).map((n): FlawRow => ({ kind: 'report', text: `your ${n.kind} · ${n.partName}: ${n.text}${n.reply ? ` (answered)` : ''}`, note: n })),
     ...last.flaws.filter((f) => f.check === 'gap').map((f): FlawRow => ({ kind: 'gap', text: `gap · ${f.where}: ${f.says.replace(/^nothing designs \w+ "[^"]*" yet: ?/, '')}`, flaw: f })),
   ];
@@ -909,6 +1044,7 @@ const rowOf = (title: string) => { const r = document.createElement('div'); r.st
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 let loopBtn: HTMLButtonElement | null = null;
 for (const [name, p2] of [['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+button('▶ Operate', () => say(operateIt()), actRow);
 button('⤢ Expand', () => say(expand('', true)), actRow);
 button('▶ Build this', () => say(buildIt('')), actRow);
 button('▶ Build it all', () => say(buildIt('the machine')), actRow);
@@ -919,13 +1055,14 @@ button('Isolate', (b2) => { toggleIsolate(); b2.style.borderColor = isolated ? '
 button('Reports: dots', (b2) => { cycleReports(); b2.textContent = `Reports: ${reportsMode}`; }, seeRow);
 button('Section', (b2) => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; b2.textContent = section === 'off' ? 'Section' : `Section: ${section}`; b2.style.borderColor = section === 'off' ? '#2e7d8c' : '#ffd740'; }, seeRow);
 button('Weather', () => { void hud.locate().then((w) => line('system', w)); }, seeRow);
+button('Settings', () => toggleSettings(), seeRow);
 button('Recentre', () => { framing = false; panel = 'none'; orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); }, seeRow);
 document.body.appendChild(tools);
 // the supervisor's list on a screen: every flaw, gap and report, each a jump to it
 const flawList = document.createElement('div');
 flawList.style.cssText = 'position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(30rem,calc(100vw - 32px));max-height:42vh;overflow:auto;z-index:5;display:none;flex-direction:column;gap:5px;padding:8px;border-radius:10px;background:rgba(3,14,22,0.85);border:1px solid #ff8a80';
 document.body.appendChild(flawList);
-window.addEventListener('keydown', (e) => { if ((e.target as HTMLElement).tagName === 'INPUT') return; if (e.key === ' ') togglePause(); if (e.key === 'ArrowRight') step(); if (e.key === 'r') say(world2.replay()); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ((e.target as HTMLElement).tagName === 'INPUT') (e.target as HTMLElement).blur(); else if (e.shiftKey) exitAll(); else exitLatest(); return; } if ((e.target as HTMLElement).tagName === 'INPUT') return; if (e.key === ' ') togglePause(); if (e.key === 'ArrowRight') step(); if (e.key === 'r') say(world2.replay()); });
 
 // ---- talking with Claude ------------------------------------------------------------------------------------------------
 let brain: Brain | null = null, busy: AbortController | null = null, lastSayAt = -1e9;
@@ -1045,9 +1182,11 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 const dolly = new THREE.Group(); scene.add(dolly); dolly.add(camera);
 // the wrist menu, on your left hand: turn your wrist to see it, point at it with your right and pull the trigger
 const CHIPS: [string, () => void][] = [
+  ['✕ Exit', () => exitLatest()], ['Exit all', () => exitAll()], ['Settings', () => toggleSettings()],
   ['Flaws', () => line('system', summon('flaws'))], ['Chat', () => line('system', summon('chat'))], ['New build', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }],
   ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
   ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
+  ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Gates', () => line('system', summon('gates'))],
   ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
@@ -1080,7 +1219,7 @@ for (let i = 0; i < 2; i++) {
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   ctl.addEventListener('selectstart', () => {
     ray.setFromXRController(ctl);
-    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     if (hit) { all.find((c) => c.mesh === hit.object)?.act(); return; }
     if (pressBoards()) return;
     if (pickHolo()) return;
@@ -1100,9 +1239,16 @@ function walk(dt: number): void {
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       dolly.position.addScaledVector(fwd, -sy * 1.2 * dt).addScaledVector(right, sx * 1.2 * dt);
     }
-    if (src.handedness === 'right') { if (Math.abs(sx) > 0.7 && !turned) { dolly.rotateY(-Math.sign(sx) * Math.PI / 6); turned = true; } if (Math.abs(sx) < 0.3) turned = false; }
+    if (src.handedness === 'right') {
+      if (smoothTurn) { if (Math.abs(sx) > 0.15) dolly.rotateY(-sx * 1.6 * dt); }
+      else { if (Math.abs(sx) > 0.7 && !turned) { dolly.rotateY(-Math.sign(sx) * turnStep); turned = true; } if (Math.abs(sx) < 0.3) turned = false; }
+    }
+    // B on the right hand, Y on the left: out of the latest mode
+    const bButton = src.gamepad?.buttons[5]?.pressed ?? false, key2 = src.handedness;
+    if (bButton && !backHeld.has(key2)) { backHeld.add(key2); exitLatest(); } else if (!bButton) backHeld.delete(key2);
   }
 }
+const backHeld = new Set<string>();
 
 // ---- views, start ---------------------------------------------------------------------------------------------------------
 const VIEWS: Record<string, [number, number, number, number, number, number]> = {
@@ -1141,6 +1287,7 @@ async function boot() {
   void makeNotes().then((n) => { notes = n; n.subscribe((all) => { allNotes = all; drawPins(); }); n.proposals((all) => { proposals = all; drawLoop(); }); status.textContent = statusLine(); });
   drawLoop();
   void makeBrain(world2).then((b) => { brain = b; status.textContent = statusLine(); });
+  void hud.watchBattery();
   (window as unknown as { ready: boolean }).ready = true;
 }
 void boot();
