@@ -24,6 +24,7 @@ import { printer, type PrinterAsk } from '../asked';
 import type { Machine, Step } from '../embody/embody';
 import { embodyAny, type Learned } from '../embody/any';
 import { practice, type Operation, type OpEvent } from '../embody/operate';
+import { breaks, causalOf, trace, type Causal, type CauseKind } from '../embody/causal';
 import { readAsk } from '../words';
 import { intentFromSpec } from '../spec';
 import { Hud } from './hud';
@@ -473,6 +474,10 @@ function tick(): void {
   loopBoard.visible = decideChips.visible = panel === 'loop';
   gatesCard.mesh.visible = panel === 'gates';
   simBoard.visible = panel === 'operate';
+  causalGroup.visible = panel === 'causes';
+  if (panel !== 'causes') { causalCard.mesh.visible = false; for (const c2 of verdictChips) c2.mesh.visible = false; } else for (const c2 of verdictChips) c2.mesh.visible = !!causalNode;
+  verdictBox.style.display = panel === 'causes' && causalNode && !renderer.xr.isPresenting ? 'flex' : 'none';
+  if (panel === 'causes') for (const m of nodeMesh.values()) if (m.userData.bad) (m.material as THREE.MeshBasicMaterial).color.setHex(Math.sin(clock() * 6) > 0 ? 0xff1744 : 0x7f0000);
   flawBoard.visible = panel === 'flaws'; flawList.style.display = panel === 'flaws' ? 'flex' : 'none';
   chatCard.mesh.visible = keyboard.mesh.visible = panel === 'chat';
   decide.style.display = panel === 'loop' ? 'flex' : 'none';
@@ -599,7 +604,7 @@ const world2: WorldApi = {
   operate() { return operateIt(); },
   flaws() { summonTo('flaws'); return flawRows().slice(0, 8).map((r, i) => `${i + 1}. ${r.text}`).join(' ') || 'No flaw, gap or report left on it.'; },
   expand: (target) => expand(target, true),
-  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates'].includes(p2) ? p2 : 'loop') as Panel); },
+  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes'].includes(p2) ? p2 : 'loop') as Panel); },
   build: (target) => buildIt(target),
 };
 
@@ -647,15 +652,15 @@ function snapshot(): string {
   g.putImageData(img, 0, 0);
   return c.toDataURL('image/jpeg', 0.72);
 }
-async function addNote(s: Shown, kind: NoteKind, text: string): Promise<string> {
+async function addNote(s: Shown, kind: NoteKind, text: string, on?: { node: string; verdict: 'flag' | 'approve' | 'reject' | 'test' }): Promise<string> {
   if (!notes) return 'Notes are not ready yet.';
   const view = snapshot();
-  const body = { partId: s.part.id, partName: s.part.name, assembly: s.group, kind, text: text || `${kind} (marked in the headset)`, at: [...s.part.at] as [number, number, number], ask: { size: ask.size ?? 0.2, tolerance: ask.tolerance ?? 1e-4, hours: (ask.time ?? 86400) / 3600 }, machine: run.m.name, round: run.m.rounds.length, view };
+  const body = { partId: s.part.id, partName: s.part.name, assembly: s.group, kind, text: text || `${kind} (marked in the headset)`, at: [...s.part.at] as [number, number, number], ask: { size: ask.size ?? 0.2, tolerance: ask.tolerance ?? 1e-4, hours: (ask.time ?? 86400) / 3600 }, machine: run.m.name, round: run.m.rounds.length, view, ...(on ? { node: on.node, verdict: on.verdict } : {}) };
   try { await notes.add(body); } catch (e) { return `The note could not be kept: ${(e as { code?: string }).code ?? 'the store refused it'}.`; }
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
 // ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes';
 let panel: Panel = 'none', lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 /** Bring a panel up, or put it away if it is the one up. */
 function summon(p: Panel): string { return summonTo(panel === p ? 'none' : p); }
@@ -678,9 +683,15 @@ function summonTo(p: Panel): string {
   if (panel === 'flaws') { drawFlaws(); place(flawBoard, 0.05); }
   if (panel === 'gates') { drawGates(); place(gatesCard.mesh); }
   if (panel === 'operate') { drawSim(); place(simBoard, 0.05); }
+  if (panel === 'causes') {
+    layCausal(); causalNode = null; causalCard.mesh.visible = false;
+    // in a headset at arm's reach and level, to walk along; on a screen where the view looks, filling it
+    if (renderer.xr.isPresenting) { causalGroup.position.copy(eye).addScaledVector(fwd, 1.5).add(new THREE.Vector3(0, -0.15, 0)); causalGroup.lookAt(eye.x, causalGroup.position.y, eye.z); }
+    else { const look = new THREE.Vector3(); camera.getWorldDirection(look); causalGroup.position.copy(eye).addScaledVector(look, 1.6); causalGroup.lookAt(eye); }
+  }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.' } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -844,6 +855,92 @@ function drawSim(): void {
   simTex.needsUpdate = true;
 }
 
+// ---- the causal space: what causes what in this machine, laid out to walk through, every node its real parts ----------
+const causalGroup = new THREE.Group(); scene.add(causalGroup); causalGroup.visible = false;
+const KIND_LAYER: CauseKind[] = ['environment', 'store', 'source', 'conductor', 'control', 'sensor', 'actuator', 'transmission', 'effector', 'structure'];
+const KIND_HEX: Record<CauseKind, number> = { environment: 0x90a4ae, store: 0x42a5f5, source: 0x7e57c2, conductor: 0xffb74d, control: 0x26a69a, sensor: 0x4dd0e1, actuator: 0xef6c00, transmission: 0x9ccc65, effector: 0x66bb6a, structure: 0x78909c, gate: 0xb388ff };
+const CARRY_HEX: Record<string, number> = { power: 0xffb74d, signal: 0x4dd0e1, drive: 0x9ccc65, support: 0x455a64, decision: 0xb388ff };
+let causal: Causal | null = null, causalFor: Machine | null = null, causalNode: string | null = null;
+const nodeMesh = new Map<string, THREE.Mesh>(), edgeLines: { line: THREE.Line; from: string; to: string; carries: string }[] = [];
+const causalCard = card(0.5, 0.42, 1100); scene.add(causalCard.mesh); causalCard.mesh.visible = false;
+const verdictChips: { mesh: THREE.Mesh; act: () => void }[] = [];
+/** Lay the graph out: a column for each kind in the order power, command and motion flow, the gates above. */
+function layCausal(): void {
+  if (causalFor === run.m && causal) return;
+  for (const c2 of [...causalGroup.children]) causalGroup.remove(c2);
+  nodeMesh.clear(); edgeLines.length = 0;
+  causal = causalOf(run.m); causalFor = run.m;
+  const failing = new Set([...breaks(causal).map((b) => b.node), ...(operated?.operation?.events ?? []).map((e) => e.node)]);
+  const cols = KIND_LAYER.map((k) => causal!.nodes.filter((n) => n.kind === k)).filter((l) => l.length);
+  const W = 1.7, H = 0.95, at = new Map<string, THREE.Vector3>();
+  cols.forEach((list, i) => {
+    const x = -W / 2 + (cols.length > 1 ? (i * W) / (cols.length - 1) : W / 2), per = Math.min(list.length, 12);
+    list.forEach((n, j) => { const col = Math.floor(j / per), row = j % per; at.set(n.id, new THREE.Vector3(x + col * 0.07, H / 2 - (row + 0.5) * (H / per), -Math.abs(x) * 0.25)); });
+  });
+  const gates = causal.nodes.filter((n) => n.kind === 'gate');
+  gates.forEach((n, j) => at.set(n.id, new THREE.Vector3(-W / 2 + ((j + 0.5) * W) / Math.max(1, gates.length), H / 2 + 0.16, -0.05)));
+  for (const n of causal.nodes) {
+    const p = at.get(n.id); if (!p) continue;
+    const bad = n.status === 'fails' || failing.has(n.id);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(n.kind === 'gate' ? 0.012 : 0.018, 16, 12), new THREE.MeshBasicMaterial({ color: bad ? 0xff1744 : KIND_HEX[n.kind] }));
+    m.position.copy(p); m.userData.node = n.id; m.userData.bad = bad; causalGroup.add(m); nodeMesh.set(n.id, m);
+    if (n.kind !== 'gate' || gates.length < 14) { const tag = label(`${bad ? '✗ ' : ''}${n.name}`.slice(0, 34), 0.014, bad ? '#ffcdd2' : '#d9f3ff', 'rgba(0,0,0,0)'); tag.position.copy(p).add(new THREE.Vector3(0, -0.027, 0)); causalGroup.add(tag); }
+  }
+  for (const e of causal.edges) {
+    const a = at.get(e.from), b = at.get(e.to); if (!a || !b) continue;
+    const curve = new THREE.QuadraticBezierCurve3(a, a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, 0, 0.06)), b);
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(12)), new THREE.LineBasicMaterial({ color: CARRY_HEX[e.carries] ?? 0x607d8b, transparent: true, opacity: e.carries === 'support' ? 0.18 : 0.55 }));
+    causalGroup.add(line); edgeLines.push({ line, from: e.from, to: e.to, carries: e.carries });
+  }
+  const title = label(`WHAT CAUSES WHAT · ${run.m.name}`.slice(0, 60), 0.03, '#ffffff', 'rgba(0,0,0,0)'); title.position.set(0, H / 2 + 0.28, 0); causalGroup.add(title);
+  const legend = label('power ━ orange · signal ━ cyan · drive ━ green · support ━ grey · decision ━ violet · ✗ breaks', 0.013, '#9fdfee', 'rgba(0,0,0,0)'); legend.position.set(0, -H / 2 - 0.06, 0); causalGroup.add(legend);
+}
+/** Point at a node: its demand and supply lit, its parts lit in the machine, its card and the verdicts beside it. */
+function pickCausal(id: string): void {
+  if (!causal) return;
+  causalNode = id;
+  const n = causal.nodes.find((x) => x.id === id)!;
+  const supply = new Set(trace(causal, id, 'up', ['power', 'signal', 'decision'])), demand = new Set(trace(causal, id, 'down', ['power', 'drive']));
+  for (const e of edgeLines) {
+    const lit = (e.to === id || supply.has(e.to)) && (supply.has(e.from) || e.to === id) || (e.from === id || demand.has(e.from)) && (demand.has(e.to) || e.from === id);
+    const mat = e.line.material as THREE.LineBasicMaterial; mat.opacity = lit ? 1 : 0.08;
+  }
+  for (const [nid, m] of nodeMesh) m.scale.setScalar(nid === id ? 1.9 : supply.has(nid) || demand.has(nid) ? 1.35 : 0.8);
+  attention = { ids: new Set(n.parts), until: clock() + 30 };
+  const ev = (operated?.operation?.events ?? []).filter((e) => e.node === id), br = breaks(causal).filter((b) => b.node === id);
+  const name = (x: string) => causal!.nodes.find((y) => y.id === x)?.name ?? x;
+  causalCard.draw(`${n.name} · ${n.kind}`, [
+    { text: `${n.parts.length} part${n.parts.length === 1 ? '' : 's'}${n.status === 'fails' || ev.length || br.length ? ' · BREAKS' : ' · holds'}`, color: n.status === 'fails' || ev.length || br.length ? '#ff8a80' : '#69f0ae', size: 0.95 },
+    ...[...n.why, ...br.map((b) => b.says), ...ev.map((e) => `operating, at ${e.t.toFixed(0)} s: ${e.says}`)].slice(0, 3).map((w) => ({ text: `✗ ${w}`, color: '#ffcdd2', size: 0.78 })),
+    { text: `fed and commanded by: ${[...supply].slice(0, 5).map(name).join(' ← ') || 'nothing'}`, color: '#ffe082', size: 0.78 },
+    { text: `asks of it, and loses it if it fails: ${[...demand].slice(0, 5).map(name).join(' → ') || 'nothing'}`, color: '#b2ff59', size: 0.78 },
+    { text: 'judge it: ✗ flag · ✓ approve · ⨯ reject · ⚗ test it', color: '#9fdfee', size: 0.75 },
+  ], n.status === 'fails' || ev.length ? '#ff5252' : '#4dd0e1');
+  const p = nodeMesh.get(id)!.getWorldPosition(new THREE.Vector3());
+  eyeOf(eye); causalCard.mesh.position.copy(p).add(off.copy(eye).sub(p).setLength(0.12)).add(tmp.set(0.32, 0, 0)); causalCard.mesh.lookAt(eye); causalCard.mesh.visible = true;
+  for (const c2 of verdictChips) scene.remove(c2.mesh);
+  verdictChips.length = 0;
+  ([['✗ flag', 'flag'], ['✓ approve', 'approve'], ['⨯ reject', 'reject'], ['⚗ test it', 'test']] as const).forEach(([text, v], i) => {
+    const c2 = card(0.115, 0.032, 420); c2.draw('', [{ text, size: 2.2 }], v === 'approve' ? '#69f0ae' : v === 'test' ? '#80deea' : '#ff8a80');
+    c2.mesh.position.copy(causalCard.mesh.position).add(tmp.set(0, -0.24, 0)); c2.mesh.quaternion.copy(causalCard.mesh.quaternion); c2.mesh.translateX((i - 1.5) * 0.122);
+    scene.add(c2.mesh); verdictChips.push({ mesh: c2.mesh, act: () => void judge(v) });
+  });
+  verdictBox.replaceChildren(Object.assign(document.createElement('span'), { textContent: n.name, style: 'color:#e6f7ff;font-weight:600' }));
+  for (const [text, v] of [['✗ Flag', 'flag'], ['✓ Approve', 'approve'], ['⨯ Reject', 'reject'], ['⚗ Test it', 'test']] as const) button(text, () => void judge(v), verdictBox);
+}
+/** A judgment on a node, kept as a structured note on its subsystem: the node, the verdict, what it said, the view. */
+async function judge(v: 'flag' | 'approve' | 'reject' | 'test'): Promise<void> {
+  if (!causal || !causalNode) return;
+  const n = causal.nodes.find((x) => x.id === causalNode)!, s2 = n.parts.map((id) => shown.get(id)).find((x) => !!x);
+  if (!s2) { line('system', `${n.name} has no parts to pin a note to.`); return; }
+  const text = input.value.trim() || ({ flag: `flagged ${n.name} in the causal graph`, approve: `approved ${n.name}`, reject: `rejected ${n.name}: build it again another way`, test: `test ${n.name}: operate it and watch this` } as const)[v];
+  input.value = '';
+  say(await addNote(s2, v === 'approve' ? 'good' : v === 'test' ? 'question' : 'flaw', text, { node: n.id, verdict: v }));
+  if (v === 'test') say(operateIt());
+}
+const verdictBox = document.createElement('div');
+verdictBox.style.cssText = 'display:none;gap:6px;flex-wrap:wrap;align-items:center;padding:8px;border-radius:10px;background:rgba(3,14,22,0.88);border:1px solid #4dd0e1';
+
 // ---- modes: what is on, each with its own way out, and one way out of the latest (✕ on the strip, Esc, B or Y) ------------
 interface Mode { id: string; label: string; exit: () => void }
 function modes(): Mode[] {
@@ -870,7 +967,7 @@ modeBar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
 const topLeft = document.createElement('div');
 topLeft.style.cssText = 'position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:max(18rem,calc(100vw - 640px))';
 hud.dom.style.position = 'static'; hud.dom.style.maxWidth = '100%';
-topLeft.append(hud.dom, modeBar);
+topLeft.append(hud.dom, modeBar, verdictBox);
 document.body.appendChild(topLeft);
 const modeStrip = new THREE.Group(); scene.add(modeStrip);
 let modeChips: { mesh: THREE.Mesh; act: () => void }[] = [], modeKey = '';
@@ -1043,7 +1140,7 @@ tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-i
 const rowOf = (title: string) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center'; const t2 = document.createElement('span'); t2.textContent = title; t2.style.cssText = 'font:600 11px system-ui;color:#7fb3c8;letter-spacing:.08em;text-transform:uppercase'; r.appendChild(t2); tools.appendChild(r); return r; };
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 let loopBtn: HTMLButtonElement | null = null;
-for (const [name, p2] of [['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+for (const [name, p2] of [['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
 button('▶ Operate', () => say(operateIt()), actRow);
 button('⤢ Expand', () => say(expand('', true)), actRow);
 button('▶ Build this', () => say(buildIt('')), actRow);
@@ -1107,6 +1204,12 @@ function pressKey(key: string): void {
 }
 /** What a ray presses on the boards in the room: a key, a flaw to go to. */
 function pressBoards(): boolean {
+  if (causalGroup.visible) {
+    const vh = ray.intersectObjects(verdictChips.filter((c2) => c2.mesh.visible).map((c2) => c2.mesh), false)[0];
+    if (vh) { verdictChips.find((c2) => c2.mesh === vh.object)?.act(); return true; }
+    const h = ray.intersectObjects([...nodeMesh.values()], false)[0];
+    if (h) { pickCausal(h.object.userData.node as string); return true; }
+  }
   if (keyboard.mesh.visible) { const h = ray.intersectObject(keyboard.mesh, false)[0]; if (h?.uv) { const k2 = keyboard.keyAt(h.uv); if (k2) pressKey(k2); return true; } }
   if (flawBoard.visible) { const h = ray.intersectObject(flawBoard, false)[0]; if (h?.uv) { const i = flawRowAt(h.uv); if (i >= 0) jumpTo(flawRows()[i]!); return true; } }
   return false;
@@ -1186,7 +1289,7 @@ const CHIPS: [string, () => void][] = [
   ['Flaws', () => line('system', summon('flaws'))], ['Chat', () => line('system', summon('chat'))], ['New build', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }],
   ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
   ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
-  ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Gates', () => line('system', summon('gates'))],
+  ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Causes', () => line('system', summon('causes'))],
   ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
@@ -1289,6 +1392,11 @@ async function boot() {
   void makeBrain(world2).then((b) => { brain = b; status.textContent = statusLine(); });
   void hud.watchBattery();
   (window as unknown as { ready: boolean }).ready = true;
+  // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first
+  (window as unknown as { causalPoint: () => [number, number] | null }).causalPoint = () => {
+    const m = [...nodeMesh.entries()].find(([id]) => /motor/.test(id))?.[1] ?? [...nodeMesh.values()][0]; if (!m) return null;
+    const p = m.getWorldPosition(new THREE.Vector3()).project(camera); return [((p.x + 1) / 2) * window.innerWidth, ((1 - p.y) / 2) * window.innerHeight];
+  };
 }
 void boot();
 // installed as an app where the page is served as one; an artifact's frame refuses it, and the room works without it

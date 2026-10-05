@@ -12,6 +12,9 @@ export interface Note {
   ask: { size: number; tolerance: number; hours: number };
   /** What stood there when it was written: the machine's name (a printer, a car, a house). */
   machine?: string;
+  /** Where it was given in the causal graph (src/nexus/embody/causal.ts): the subsystem judged, and the judgment. */
+  node?: string;
+  verdict?: 'flag' | 'approve' | 'reject' | 'test';
   round: number; createdAt: number;
   /** What the person was looking at when they wrote it: a JPEG, as a data URL. */
   view?: string;
