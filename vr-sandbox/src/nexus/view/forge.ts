@@ -338,7 +338,8 @@ function tick(): void {
   const target = nf ? focus.divideScalar(nf) : null;
   eyeOf(eye);
   if (target) { goal = standFor(target); faceAt = target; }
-  else { goal = { th: Math.max(-2.3, Math.min(2.3, Math.atan2(eye.x - M.x, eye.z - M.z) + 0.6)), r: 0.95 }; faceAt = eye; }
+  // with nothing to attend to it stands beside the machine on your side, turned to you, never between you and it
+  else { goal = { th: Math.max(-2.3, Math.min(2.3, Math.atan2(eye.x - M.x, eye.z - M.z) + 1.0)), r: 0.72 }; faceAt = eye; }
   drive(dt);
   robot.root.updateWorldMatrix(true, true);
   const arm: 0 | 1 = target && robot.root.worldToLocal(tmp.copy(target)).x > 0 ? 1 : 0;
