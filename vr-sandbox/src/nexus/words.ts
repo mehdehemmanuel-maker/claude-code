@@ -116,6 +116,6 @@ function scalePeople(r: Intent['regions'][number], n: number): void {
 }
 /** A short name for the ask, from its own words. */
 function nameOf(text: string, fallback: string): string {
-  const m = text.trim().replace(/^(please\s+)?(build|make|design|create|give)\s+(me\s+)?/i, '').split(/[.,;!?]| that | which | to /i)[0]!.trim();
+  const m = text.trim().replace(/^(please\s+)?(build|make|design|create|give)\s+(me\s+)?/i, '').split(/[.,;!?]| that | which | where /i)[0]!.trim();
   return m.length >= 3 && m.length <= 60 ? m : fallback;
 }

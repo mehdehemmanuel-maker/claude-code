@@ -157,6 +157,8 @@ describe('the plain reading of what a person says', () => {
     expand: (t) => { calls.push(`expand ${t}`); return 'out'; },
     build: (t) => { calls.push(`build ${t}`); return 'built'; },
     show: (p) => { calls.push(`show ${p}`); return 'shown'; },
+    make: (w) => { calls.push(`make ${w}`); return 'made'; },
+    flaws: () => { calls.push('flaws'); return 'listed'; },
   };
   const b = plainBrain(world), ac = new AbortController();
   it('takes apart, puts back, shows, notes, rebuilds and replays', async () => {
@@ -170,6 +172,8 @@ describe('the plain reading of what a person says', () => {
     await b.ask('build the printer', () => undefined, ac.signal);
     await b.ask('show me the rounds', () => undefined, ac.signal);
     await b.ask('hide everything', () => undefined, ac.signal);
-    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'replay', 'expand x motor', 'build the machine', 'show rounds', 'show none']);
+    await b.ask('build me a cabin of 40 m² for 2 people', () => undefined, ac.signal);
+    await b.ask('show me the flaws', () => undefined, ac.signal);
+    expect(calls).toEqual(['explode hot end 1', 'explode all 0', 'focus y motor', 'note the y motor|flaw|it is too loud', 'rebuild {"size":0.3}', 'replay', 'expand x motor', 'build the machine', 'show rounds', 'show none', 'make build me a cabin of 40 m² for 2 people', 'flaws']);
   });
 });
