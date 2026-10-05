@@ -9,8 +9,9 @@
 // rather than removed (a patch can only merge), and written whole without them when it is written whole.
 
 import { find } from './embody/taxonomy';
+import type { FlowRun, Step } from './flows';
 
-export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string }
+export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step }
 export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean }
 export interface Board {
   title: string; kind?: string; about?: string;
@@ -22,6 +23,8 @@ export interface Board {
   source?: string;
   /** Each time the person called Claude on it: their words as they said them, and what was understood. */
   calls?: { words: string; understood: string; by: 'claude' | 'nexus'; at: number; node?: string }[];
+  /** On a flow: whether its triggers start it by themselves, and its last runs, newest last. */
+  armed?: boolean; runs?: FlowRun[];
 }
 export type View = 'categories' | 'pipeline';
 export interface Live { id: string; label: string; note: string; pin: { x: number; y: number } | null }

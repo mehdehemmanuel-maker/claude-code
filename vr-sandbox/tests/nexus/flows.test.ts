@@ -1,0 +1,113 @@
+// Pipelines you run (src/nexus/flows.ts): a board of steps, run in its own order. A check lets on only what its
+// condition holds for; a repeat goes back along its loop until its condition holds; a step that fails stops the flow;
+// a trigger starts it on its event. The world here counts what it is asked to do, and its numbers change as it acts,
+// so a loop that converges does so on what the actions did.
+
+import { describe, expect, it } from 'vitest';
+import { TEMPLATES, boardOfTemplate, evaluate, graphOf, maxRounds, orderFrom, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
+import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/boards';
+
+/** A room whose flaws go down by one each time it is built again, and whose AI says what it was asked. */
+function room(flaws = 2): FlowApi & { done: string[] } {
+  const done: string[] = [], facts = { flaws, gaps: 0, parts: 120, mass: 80, rounds: 3, failures: 0, notes: 0 };
+  return {
+    done,
+    async act(what) {
+      done.push(what);
+      if (/^flaws\b/.test(what)) return facts.flaws ? `${facts.flaws} flaws: the frame bends; the motor overheats` : 'No flaws.';
+      if (/^again\b/.test(what)) { facts.flaws = Math.max(0, facts.flaws - 1); return `Built again: ${facts.flaws} flaws left.`; }
+      if (/^say\b/.test(what)) return what.slice(4);
+      throw new Error(`I do not know how to "${what}"`);
+    },
+    async ai(prompt) { done.push(`ai: ${prompt}`); return { text: 'make the frame deeper', by: 'nexus' }; },
+    facts: () => ({ ...facts }),
+  };
+}
+const id = (b: Board, l: string) => nodesOf(b).find((n) => n.label === l)!.id;
+
+describe('triggers', () => {
+  it('reads what starts it from its words', () => {
+    expect(triggerOf('when I press run')).toEqual({ kind: 'run' });
+    expect(triggerOf('when a build finishes')).toEqual({ kind: 'built' });
+    expect(triggerOf('when a flaw is found')).toEqual({ kind: 'flaw' });
+    expect(triggerOf('when a note is added')).toEqual({ kind: 'note' });
+    expect(triggerOf('every 10 minutes')).toEqual({ kind: 'tick', every: 10 });
+    expect(triggerOf('every 2 hours')).toEqual({ kind: 'tick', every: 120 });
+    expect(triggerOf('when I say make it lighter')).toEqual({ kind: 'said', phrase: 'make it lighter' });
+    expect(triggerOf('banana')).toBeNull();
+  });
+  it('starts on its own event: a phrase heard inside what is said, a timer when its minutes come round', () => {
+    expect(starts({ kind: 'trigger', what: 'when I say go' }, { kind: 'said', text: 'ok go now' })).toBe(true);
+    expect(starts({ kind: 'trigger', what: 'when I say go' }, { kind: 'built' })).toBe(false);
+    expect(starts({ kind: 'trigger', what: 'every 10 minutes' }, { kind: 'tick', minutes: 20 })).toBe(true);
+    expect(starts({ kind: 'trigger', what: 'every 10 minutes' }, { kind: 'tick', minutes: 15 })).toBe(false);
+  });
+});
+
+describe('conditions', () => {
+  const f = { flaws: 2, gaps: 0, parts: 120, mass: 80.4, rounds: 3, failures: 0, notes: 1 };
+  it('reads numbers as they are said', () => {
+    expect(evaluate('flaws = 0', f, '')).toMatchObject({ ok: false });
+    expect(evaluate('flaws > 0', f, '')).toMatchObject({ ok: true });
+    expect(evaluate('no flaws', f, '')).toMatchObject({ ok: false });
+    expect(evaluate('no gaps', f, '')).toMatchObject({ ok: true });
+    expect(evaluate('mass under 100', f, '')).toMatchObject({ ok: true });
+    expect(evaluate('parts at most 100', f, '')).toMatchObject({ ok: false });
+    expect(evaluate('until flaws = 0, at most 3 times', { ...f, flaws: 0 }, '')).toMatchObject({ ok: true });
+    expect(evaluate('flaws > 0 and mass under 100', f, '')).toMatchObject({ ok: true });
+    expect(evaluate('output contains frame', f, 'the frame bends')).toMatchObject({ ok: true });
+  });
+  it('says what it cannot read, and which numbers it can', () => {
+    expect(evaluate('happiness > 3', f, '')).toEqual({ error: expect.stringMatching(/I do not know the number "happiness": I read flaws, gaps/) });
+    expect(evaluate('when the moon is blue', f, '')).toEqual({ error: expect.stringMatching(/cannot read the condition/) });
+    expect(maxRounds('until flaws = 0, at most 5 times')).toBe(5); expect(maxRounds('until flaws = 0')).toBe(3);
+  });
+});
+
+describe('running a flow', () => {
+  it("Nexus's own loop runs until the build is clean: flaws, ask, build again, round and round", async () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), w = room(2), seen: number[] = [];
+    const r = await runFlow(b, id(b, 'Run'), w, 'pressed', (x) => seen.push(x.steps.length));
+    // two flaws, one fixed a round: clean after two rounds, and the repeat says so
+    expect(r.status).toBe('done'); expect(r.rounds).toBe(2);
+    expect(w.done.filter((d) => d.startsWith('again'))).toEqual(['again make the frame deeper', 'again make the frame deeper']);
+    // the AI was asked with the flaws the action listed, not with its own words
+    expect(w.done.find((d) => d.startsWith('ai:'))).toMatch(/2 flaws: the frame bends/);
+    expect(r.steps.at(-1)).toMatchObject({ label: 'Until clean', status: 'ok', output: 'Done: flaws is 0' });
+    expect(seen.length).toBeGreaterThan(5);
+  });
+  it('a check that does not hold lets nothing after it on', async () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), w = room(0);
+    const r = await runFlow(b, id(b, 'Run'), w, 'pressed');
+    expect(r.status).toBe('done'); expect(r.rounds).toBe(1);
+    expect(r.steps.map((s) => `${s.label}:${s.status}`)).toEqual(['Run:ok', 'List the flaws:ok', 'Any flaws?:no', 'Ask how to fix:skipped', 'Build again with it:skipped', 'Until clean:skipped']);
+    expect(w.done).toEqual(['flaws']);
+  });
+  it('a repeat stops at its most rounds, and says it stopped', async () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), w = room(10);
+    const r = await runFlow(b, id(b, 'Run'), w, 'pressed');
+    expect(r.status).toBe('stopped'); expect(r.rounds).toBe(3);
+    expect(r.steps.at(-1)!.output).toMatch(/Stopped after 3 rounds: flaws is 7/);
+  });
+  it('a step that fails stops the flow, with why', async () => {
+    let b: Board = { title: 'f', kind: 'flow', nodes: {}, edges: {} };
+    const t = addNode('Go'), a = addNode('Do a backflip');
+    b = deepMerge(deepMerge(b, t.patch), a.patch);
+    b.nodes[t.id]!.step = { kind: 'trigger', what: 'when I press run' }; b.nodes[a.id]!.step = { kind: 'action', what: 'backflip' };
+    b = deepMerge(b, link(b, t.id, a.id, 'flows to')!);
+    const r = await runFlow(b, t.id, room(), 'pressed');
+    expect(r.status).toBe('failed'); expect(r.steps.at(-1)).toMatchObject({ label: 'Do a backflip', status: 'failed', output: 'I do not know how to "backflip"' });
+  });
+  it('runs in the order its links say, a node after everything that leads to it', () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), g = graphOf(b);
+    expect(orderFrom(b, g, id(b, 'Run')).map((x) => b.nodes[x]!.label)).toEqual(['Run', 'List the flaws', 'Any flaws?', 'Ask how to fix', 'Build again with it', 'Until clean']);
+    expect(g.back.get(id(b, 'Until clean'))).toBe(id(b, 'List the flaws'));
+  });
+  it('can be stopped from outside', async () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), ac = new AbortController(); ac.abort();
+    expect((await runFlow(b, id(b, 'Run'), room(), 'pressed', undefined, ac.signal)).status).toBe('stopped');
+  });
+  it('every template is a flow with a trigger to start it', () => {
+    for (const t of TEMPLATES) { const b = boardOfTemplate(t); expect(b.kind).toBe('flow'); expect(triggersOf(b)).toHaveLength(1); expect(triggerOf(triggersOf(b)[0]!.step.what)).not.toBeNull(); }
+  });
+});
