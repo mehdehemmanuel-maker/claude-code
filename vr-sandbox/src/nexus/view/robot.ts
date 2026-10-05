@@ -5,10 +5,31 @@
 // kinematics (the law of cosines). It is a projection, like everything in the viewer: it does what the timeline asks.
 
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-const metal = new THREE.MeshStandardMaterial({ color: 0x2b3340, metalness: 0.8, roughness: 0.35 });
-const shell = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.2, roughness: 0.4 });
+const metal = new THREE.MeshStandardMaterial({ color: 0x2b3340, metalness: 0.85, roughness: 0.32 });
+const gun = new THREE.MeshStandardMaterial({ color: 0x161b22, metalness: 0.7, roughness: 0.45 });
+const shell = new THREE.MeshStandardMaterial({ color: 0xe7ecf2, metalness: 0.15, roughness: 0.35 });
+const rubber = new THREE.MeshStandardMaterial({ color: 0x0d0f12, roughness: 0.95 });
+const amber = new THREE.MeshStandardMaterial({ color: 0xff9f1c, metalness: 0.3, roughness: 0.5 });
+const glass = new THREE.MeshStandardMaterial({ color: 0x0a1a24, metalness: 0.9, roughness: 0.08 });
 const glowOf = (c: number, i = 1.4) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.3 });
+const cyan = glowOf(0x4dd0e1, 1.6);
+/** A seam or a slot: a thin dark inset on a surface. */
+const seam = (w: number, h: number, d = 0.004) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gun);
+/** A joint's actuator: a housing along x, its end caps, its bolt circle and a ring of light where it turns. */
+function actuator(r: number, len: number): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 28), metal); body.rotation.z = Math.PI / 2; g.add(body);
+  for (const s of [-1, 1]) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 0.9, len * 0.18, 28), shell); cap.rotation.z = Math.PI / 2; cap.position.x = s * len * 0.58; g.add(cap);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.92, r * 0.07, 8, 32), cyan); ring.rotation.y = Math.PI / 2; ring.position.x = s * len * 0.5; g.add(ring);
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2, b = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, 0.004, 8), gun); b.rotation.z = Math.PI / 2; b.position.set(s * len * 0.68, Math.sin(a) * r * 0.55, Math.cos(a) * r * 0.55); g.add(b); }
+  }
+  return g;
+}
+/** A cable run along points, sheathed. */
+const cable = (pts: THREE.Vector3[], r = 0.006, m: THREE.Material = amber) => new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, r, 8), m);
 
 export interface Arm { root: THREE.Group; upper: THREE.Group; fore: THREE.Group; grip: THREE.Group; L1: number; L2: number }
 
@@ -17,7 +38,7 @@ export class Robot {
   readonly head = new THREE.Group();
   readonly lidar = new THREE.Group();
   readonly arms: [Arm, Arm];
-  private readonly wheels: THREE.Mesh[] = [];
+  private readonly wheels: THREE.Object3D[] = [];
   private readonly voice: THREE.Mesh;
   private readonly visor: THREE.Mesh;
   private readonly cone: THREE.Mesh;
@@ -28,58 +49,92 @@ export class Robot {
 
   constructor() {
     const r = this.root;
-    // base: a drum on two wheels and a caster, with a light at its rim
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.12, 40), metal);
-    base.position.y = 0.11; r.add(base);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.008, 8, 60), glowOf(0x4dd0e1, 1.8));
-    rim.rotation.x = Math.PI / 2; rim.position.y = 0.09; r.add(rim);
+    // base: a rounded skirt on two driven wheels and a caster, a rubber bumper, vents, a sensor window, a light at its foot
+    const skirt = new THREE.Mesh(new THREE.LatheGeometry([[0.0, 0.03], [0.235, 0.03], [0.245, 0.05], [0.245, 0.12], [0.232, 0.16], [0.2, 0.172], [0.0, 0.172]].map(([x, y]) => new THREE.Vector2(x, y)), 48), shell);
+    r.add(skirt);
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.2, 0.012, 48), gun); deck.position.y = 0.176; r.add(deck);
+    const bumper = new THREE.Mesh(new THREE.TorusGeometry(0.247, 0.012, 10, 64), rubber); bumper.rotation.x = Math.PI / 2; bumper.position.y = 0.07; r.add(bumper);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.236, 0.006, 8, 64), glowOf(0x4dd0e1, 1.8)); rim.rotation.x = Math.PI / 2; rim.position.y = 0.035; r.add(rim);
+    for (let k = 0; k < 14; k++) { const a = (k / 14) * Math.PI * 2 + 0.2; if (Math.abs(Math.sin(a)) > 0.93) continue; const v = seam(0.008, 0.045, 0.012); v.position.set(Math.sin(a) * 0.243, 0.115, Math.cos(a) * 0.243); v.rotation.y = a; r.add(v); }
+    const window2 = new THREE.Mesh(new THREE.CylinderGeometry(0.247, 0.247, 0.026, 32, 1, true, Math.PI - 0.5, 1.0), glass); window2.position.y = 0.105; r.add(window2);
+    for (let k = 0; k < 5; k++) { const a = Math.PI - 0.32 + k * 0.16, d = new THREE.Mesh(new THREE.SphereGeometry(0.004, 8, 6), glowOf(k === 2 ? 0xff5252 : 0x4dd0e1, 2)); d.position.set(Math.sin(a) * 0.25, 0.105, Math.cos(a) * 0.25); r.add(d); }
     for (const s of [-1, 1]) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 32), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }));
-      w.rotation.z = Math.PI / 2; w.position.set(s * 0.24, 0.08, 0); r.add(w); this.wheels.push(w);
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.045, 16), glowOf(0x4dd0e1, 0.8));
-      hub.rotation.z = Math.PI / 2; hub.position.copy(w.position); r.add(hub);
+      // a wheel: a tyre with its tread, a five-spoked hub, and the drive motor's cap
+      const w = new THREE.Group(); w.position.set(s * 0.255, 0.085, 0); r.add(w); this.wheels.push(w);
+      const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.066, 0.02, 12, 40), rubber); tyre.rotation.y = Math.PI / 2; w.add(tyre);
+      for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2, t = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.008), rubber); t.position.set(0, Math.sin(a) * 0.086, Math.cos(a) * 0.086); t.rotation.x = -a; w.add(t); }
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.026, 32), metal); hub.rotation.z = Math.PI / 2; w.add(hub);
+      for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2, sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.01, 0.07), shell); sp.position.x = s * 0.008; sp.rotation.x = a; w.add(sp); }
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.032, 20), glowOf(0x4dd0e1, 0.9)); cap.rotation.z = Math.PI / 2; w.add(cap);
     }
-    const caster = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), metal);
-    caster.position.set(0, 0.035, 0.16); r.add(caster);
-    // torso: a column and a chest
-    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.55, 24), metal);
-    column.position.y = 0.45; r.add(column);
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.28, 0.2), shell);
-    chest.position.y = 0.86; r.add(chest);
-    this.voice = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.012, 10, 40), glowOf(0x4dd0e1, 0.4));
-    this.voice.position.set(0, 0.88, -0.102); r.add(this.voice);
-    const core = new THREE.Mesh(new THREE.CircleGeometry(0.035, 32), glowOf(0xffffff, 1.2));
-    core.position.set(0, 0.88, -0.101); core.rotation.y = Math.PI; r.add(core);
-    // arms: shoulder, upper link, elbow, forearm, gripper
+    const fork = new THREE.Group(); fork.position.set(0, 0.03, 0.17); r.add(fork);
+    for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.04, 0.02), metal); leg.position.set(s * 0.016, 0.0, 0); fork.add(leg); }
+    const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.02, 20), rubber); cw.rotation.z = Math.PI / 2; cw.position.y = -0.004; fork.add(cw);
+    // spine: stacked rings round a column, a sheathed conduit up its back
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.56, 28), gun); column.position.y = 0.45; r.add(column);
+    for (let k = 0; k < 6; k++) { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.072 - k * 0.002, 0.075 - k * 0.002, 0.03, 28), k % 2 ? metal : shell); ring.position.y = 0.23 + k * 0.085; r.add(ring); }
+    r.add(cable([new THREE.Vector3(0, 0.18, 0.09), new THREE.Vector3(0, 0.35, 0.1), new THREE.Vector3(0, 0.55, 0.085), new THREE.Vector3(0, 0.74, 0.11)], 0.012));
+    // chest: a rounded shell with its seams, the ring of light it speaks with, and a power pack with fins on its back
+    const chest = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.3, 0.21, 4, 0.045), shell); chest.position.y = 0.87; r.add(chest);
+    for (const [w2, h2, x, y] of [[0.3, 0.004, 0, 0.96], [0.004, 0.12, -0.11, 0.8], [0.004, 0.12, 0.11, 0.8]] as const) { const sm = seam(w2, h2); sm.position.set(x, y, -0.106); r.add(sm); }
+    const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 40), gun); bezel.rotation.x = Math.PI / 2; bezel.position.set(0, 0.87, -0.106); r.add(bezel);
+    this.voice = new THREE.Mesh(new THREE.TorusGeometry(0.056, 0.01, 10, 48), glowOf(0x4dd0e1, 0.4));
+    this.voice.position.set(0, 0.87, -0.114); r.add(this.voice);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(0.032, 32), glowOf(0xffffff, 1.2)); core.position.set(0, 0.87, -0.1135); core.rotation.y = Math.PI; r.add(core);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, d = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.004, 0.003), cyan); d.position.set(Math.cos(a) * 0.068, 0.87 + Math.sin(a) * 0.068, -0.115); d.rotation.z = a; r.add(d); }
+    const pack = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.22, 0.07, 3, 0.02), gun); pack.position.set(0, 0.86, 0.135); r.add(pack);
+    for (let k = 0; k < 9; k++) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.18, 0.02), metal); fin.position.set(-0.096 + k * 0.024, 0.86, 0.178); r.add(fin); }
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.008, 0.004), glowOf(0x69f0ae, 1.6)); bar.position.set(0, 0.985, 0.172); r.add(bar);
+    // arms: a shoulder actuator, an upper link, an elbow actuator, a forearm with its cable, a wrist, a two-fingered hand
     const arm = (side: number): Arm => {
-      const root = new THREE.Group(); root.position.set(side * 0.21, 0.96, -0.02); r.add(root);
-      root.add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 20, 16), metal));
+      const root = new THREE.Group(); root.position.set(side * 0.215, 0.96, -0.02); r.add(root);
+      const sh = actuator(0.052, 0.07); root.add(sh);
       const upper = new THREE.Group(); root.add(upper);
       const L1 = 0.3, L2 = 0.28;
-      const u = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, L1, 16), shell); u.rotation.x = Math.PI / 2; u.position.z = L1 / 2; upper.add(u);
+      const u = new THREE.Mesh(new RoundedBoxGeometry(0.058, 0.064, L1 - 0.07, 3, 0.02), shell); u.position.z = L1 / 2; upper.add(u);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.012, L1 - 0.12), gun); strip.position.z = L1 / 2; upper.add(strip);
+      upper.add(cable([new THREE.Vector3(side * 0.034, 0.02, 0.04), new THREE.Vector3(side * 0.04, 0.025, L1 / 2), new THREE.Vector3(side * 0.034, 0.02, L1 - 0.04)], 0.005));
       const fore = new THREE.Group(); fore.position.z = L1; upper.add(fore);
-      fore.add(new THREE.Mesh(new THREE.SphereGeometry(0.038, 16, 12), metal));
-      const f = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.03, L2, 16), shell); f.rotation.x = Math.PI / 2; f.position.z = L2 / 2; fore.add(f);
+      fore.add(actuator(0.04, 0.062));
+      const f = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.032, L2 - 0.06, 20), shell); f.rotation.x = Math.PI / 2; f.position.z = L2 / 2; fore.add(f);
+      fore.add(cable([new THREE.Vector3(0, -0.03, 0.03), new THREE.Vector3(0, -0.032, L2 / 2), new THREE.Vector3(0, -0.026, L2 - 0.04)], 0.004));
+      const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.022, 24), metal); wrist.rotation.x = Math.PI / 2; wrist.position.z = L2 - 0.02; fore.add(wrist);
+      const wring = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.003, 6, 24), cyan); wring.position.z = L2 - 0.01; fore.add(wring);
       const grip = new THREE.Group(); grip.position.z = L2; fore.add(grip);
-      for (const g of [-1, 1]) { const finger = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.06), metal); finger.position.set(g * 0.02, 0, 0.03); grip.add(finger); }
-      grip.add(new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), glowOf(0x4dd0e1, 2)));
+      const palm = new THREE.Mesh(new RoundedBoxGeometry(0.05, 0.028, 0.03, 2, 0.008), gun); palm.position.z = 0.012; grip.add(palm);
+      for (const g of [-1, 1]) {
+        const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.018, 0.034), metal); p1.position.set(g * 0.018, 0, 0.042); grip.add(p1);
+        const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.016, 0.026), metal); p2.position.set(g * 0.014, 0, 0.07); p2.rotation.y = -g * 0.25; grip.add(p2);
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.014, 0.022), rubber); pad.position.set(g * 0.0085, 0, 0.072); pad.rotation.y = -g * 0.25; grip.add(pad);
+      }
+      grip.add(new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8), glowOf(0x4dd0e1, 2)).translateZ(0.03));
       return { root, upper, fore, grip, L1, L2 };
     };
     this.arms = [arm(-1), arm(1)];
-    // head: on a neck, a visor of light, a camera eye with its view cone, a lidar that turns
+    // head: on a neck with its tendons, a rounded skull, a visor of light round its face, a camera eye in a barrel,
+    // sensor pods at its sides, an antenna, and a lidar that turns on its crown
     this.head.position.y = 1.12; r.add(this.head);
-    this.head.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 12), metal).translateY(-0.06));
-    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.15, 0.17), shell);
-    skull.position.y = 0.03; this.head.add(skull);
-    this.visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.01), glowOf(0x4dd0e1, 2.2));
-    this.visor.position.set(0, 0.04, -0.088); this.head.add(this.visor);
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 16), glowOf(0xff5252, 1.5));
-    lens.rotation.x = Math.PI / 2; lens.position.set(0.07, -0.01, -0.09); this.head.add(lens);
+    this.head.add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.04, 0.09, 16), metal).translateY(-0.065));
+    for (const s of [-1, 1]) this.head.add(cable([new THREE.Vector3(s * 0.04, -0.11, 0.02), new THREE.Vector3(s * 0.045, -0.07, 0.03), new THREE.Vector3(s * 0.04, -0.035, 0.02)], 0.005, gun));
+    const skull = new THREE.Mesh(new RoundedBoxGeometry(0.25, 0.16, 0.185, 4, 0.05), shell); skull.position.y = 0.03; this.head.add(skull);
+    const face = new THREE.Mesh(new RoundedBoxGeometry(0.21, 0.075, 0.02, 3, 0.012), glass); face.position.set(0, 0.035, -0.088); this.head.add(face);
+    this.visor = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.012, 0.004), glowOf(0x4dd0e1, 2.2));
+    this.visor.position.set(0, 0.045, -0.1); this.head.add(this.visor);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.026, 24), gun); barrel.rotation.x = Math.PI / 2; barrel.position.set(0.07, 0.012, -0.1); this.head.add(barrel);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.006, 24), glowOf(0xff5252, 1.5)); lens.rotation.x = Math.PI / 2; lens.position.set(0.07, 0.012, -0.114); this.head.add(lens);
+    const lensRing = new THREE.Mesh(new THREE.TorusGeometry(0.019, 0.0025, 6, 24), metal); lensRing.position.set(0.07, 0.012, -0.114); this.head.add(lensRing);
+    for (const s of [-1, 1]) {
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 24), metal); pod.rotation.z = Math.PI / 2; pod.position.set(s * 0.135, 0.03, 0); this.head.add(pod);
+      const pr = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.003, 6, 24), cyan); pr.rotation.y = Math.PI / 2; pr.position.set(s * 0.152, 0.03, 0); this.head.add(pr);
+    }
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.09, 8), metal); mast.position.set(-0.08, 0.16, 0.04); this.head.add(mast);
+    this.head.add(new THREE.Mesh(new THREE.SphereGeometry(0.007, 10, 8), glowOf(0xff9f1c, 2.4)).translateX(-0.08).translateY(0.208).translateZ(0.04));
     this.cone = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xff5252, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }));
-    this.cone.rotation.x = Math.PI / 2; this.cone.position.set(0.07, -0.01, -0.39); this.head.add(this.cone);
-    this.lidar.position.y = 0.13; this.head.add(this.lidar);
-    this.lidar.add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.04, 24), metal));
-    this.lidar.add(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.012), glowOf(0xff1744, 2)).translateZ(-0.048));
+    this.cone.rotation.x = Math.PI / 2; this.cone.position.set(0.07, 0.012, -0.41); this.head.add(this.cone);
+    this.lidar.position.y = 0.135; this.head.add(this.lidar);
+    this.lidar.add(new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.05, 0.022, 32), gun));
+    const dome = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.042, 0.028, 32), metal); dome.position.y = 0.024; this.lidar.add(dome);
+    const slit = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.01, 0.006), glowOf(0xff1744, 2.2)); slit.position.set(0, 0.024, -0.041); this.lidar.add(slit);
     // what the lidar senses: rays and where they strike
     this.rays = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff5252, transparent: true, opacity: 0.35 }));
     this.hits = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xff8a80, size: 0.012 }));

@@ -54,11 +54,15 @@ export interface Plant {
   hold?: { node: string; heat: number; UA: number; C: number; Tlo: number; Tcold: number; gains: number };
 }
 /** A decision the embodiment made: what it asked, what it read, the law that decided, what it tried, and what came of it. */
+/** A value a designer read as it ran: a want's bound, a region's quantity, or a value the generator derived on an element; with the step of the trace it fed (the next one recorded after it was read). */
+export interface Read { kind: 'want' | 'quantity' | 'element'; id: string; name: string; value: number | null; unit: string; step: number }
 export interface Gate { id: string; question: string; inputs: { name: string; value: number; unit: string }[]; law: string; tried: string[]; outcome: string; held: boolean }
 export interface Machine {
   name: string; parts: Part[]; values: Value[]; flaws: Flaw[]; rounds: Round[]; trace: Step[];
   /** The decisions that shaped it, each by a law (the general embodiment's; the printer's are its remedies). */
   gates?: Gate[];
+  /** What the designers read of the ask and the generated structure, as they ran, each with the step it fed. */
+  reads?: Read[];
   /** It as something to operate, where its designers say how. */
   plant?: Plant;
   axes: LinearAxis[]; hotEnd: HotEnd | null; electrical: Electrical | null;
@@ -74,9 +78,11 @@ export const AT_SPEED = { value: 0.9, confidence: 'choice' as const, source: 'a 
 /** The checks of an axis or the supply that grow with the deposition speed: what more streams at a lower speed relieve. */
 const SPEED_BOUND = ['stiff', 'winding-class', 'magnet-grade', 'current-density', 'turns', 'slots', 'headroom', 'outlet', 'ampacity', 'termination', 'bend'];
 
+/** What the round being designed reads, as it reads it, with the step it feeds. */
+let reading: { reads: Read[]; step: () => number } | null = null;
 /** The value of an element by a name pattern, in SI. */
-const val = (s: Structure, id: (e: string) => boolean, name: RegExp) => { const e = s.elements.find((x) => id(x.id)); const v = e?.values.find((x) => name.test(x.name)); return v ? toSI(v.value, v.unit) : null; };
-const q = (intent: Intent, region: string, name: RegExp) => { const r = intent.regions.find((x) => x.id === region); const l = r && Object.values(r.quantities).find((x) => name.test(x.name)); return l && l.value !== null ? toSI(l.value, l.unit) : null; };
+const val = (s: Structure, id: (e: string) => boolean, name: RegExp) => { const e = s.elements.find((x) => id(x.id)); const v = e?.values.find((x) => name.test(x.name)); if (e && v && reading) reading.reads.push({ kind: 'element', id: e.id, name: v.name, value: v.value, unit: v.unit, step: reading.step() }); return v ? toSI(v.value, v.unit) : null; };
+const q = (intent: Intent, region: string, name: RegExp) => { const r = intent.regions.find((x) => x.id === region); const l = r && Object.values(r.quantities).find((x) => name.test(x.name)); if (l && reading) reading.reads.push({ kind: 'quantity', id: region, name: l.name, value: l.value, unit: l.unit, step: reading.step() }); return l && l.value !== null ? toSI(l.value, l.unit) : null; };
 
 export function embody(intent: Intent, s: Structure, maxRounds = 16, from: Partial<Choices> = {}): Machine | null {
   const axesEls = s.elements.filter((e) => e.kind === 'conversion' && /:(x|y|z)$/.test(e.id));
@@ -122,6 +128,7 @@ export function embody(intent: Intent, s: Structure, maxRounds = 16, from: Parti
 
 function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | null, ch: Choices): Omit<Machine, 'rounds'> {
   const vals: Value[] = [], flaws: Flaw[] = [], P: Part[] = [], order: string[] = [], trace: Step[] = [];
+  const reads: Read[] = []; reading = { reads, step: () => trace.length };
   const v = (name: string, value: number, unit: string, law: string) => { vals.push({ name, value, unit, law }); return value; };
   const add = (p: Part, group: string) => { P.push(p); if (!order.includes(group)) order.push(group); };
   const al = mat('aluminum.6061-t6');
@@ -477,5 +484,6 @@ function once(intent: Intent, s: Structure, axisIds: string[], flowId: string | 
   const bomMap = new Map<string, { name: string; qty: number; material: string; category: string; mass: number }>();
   for (const p of P) { const k = p.name; const e = bomMap.get(k) ?? { name: p.name, qty: 0, material: p.material, category: p.category, mass: 0 }; e.qty++; e.mass += p.mass; bomMap.set(k, e); }
   const bom = [...bomMap.values()].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
-  return { name: intent.name, parts: P, values: vals, flaws, axes: [x, y, ...zs], hotEnd, electrical, size: [W, H, D], bom, config, order, trace };
+  reading = null;
+  return { name: intent.name, parts: P, values: vals, flaws, axes: [x, y, ...zs], hotEnd, electrical, size: [W, H, D], bom, config, order, trace, reads };
 }
