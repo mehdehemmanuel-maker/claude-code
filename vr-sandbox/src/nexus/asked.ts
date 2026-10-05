@@ -108,9 +108,13 @@ export function car(): Intent {
 }
 
 /** What a person who wants plastic parts of any shape they draw wants of the thing that makes them. */
-export function printer(): Intent {
+/** What a person can change of the printer they ask for: the largest part (m), its tolerance (m), the time it may take (s). */
+export interface PrinterAsk { size?: number; tolerance?: number; time?: number }
+
+export function printer(o: PrinterAsk = {}): Intent {
+  const size = o.size ?? 0.2, tol = o.tolerance ?? 1e-4, time = o.time ?? 86400;
   const regions: Region[] = [
-    { id: 'the part', by: person, environment: false, adjoins: ['room air', 'the drawn shape'], extent: { x: 'size', y: 'size', z: 'size', faces: { up: 'room air', side: 'room air' } }, quantities: { size: given('largest part', 0.2, 'm', 'a part that fits a 200 mm cube') } },
+    { id: 'the part', by: person, environment: false, adjoins: ['room air', 'the drawn shape'], extent: { x: 'size', y: 'size', z: 'size', faces: { up: 'room air', side: 'room air' } }, quantities: { size: given('largest part', size, 'm', `a part that fits a ${(size * 1e3).toFixed(0)} mm cube`) } },
     { id: 'the drawn shape', by: person, environment: false, adjoins: ['the part'], quantities: {} },
     { id: 'a spool of filament', by: person, environment: false, adjoins: ['room air'], carriers: { V: 'volume of PLA', p: 'volume of PLA', cp: 'energy', k: 'energy', Tmelt: 'energy', Tmax: 'energy', Tg: 'energy' }, holds: ['p'],
       properties: { Tmelt: { of: 'volume of PLA', role: 'flows above' }, Tmax: { of: 'energy', role: 'most potential' }, Tg: { of: 'momentum', role: 'holds its shape below' }, cp: { of: 'energy', role: 'capacity per mass' }, k: { of: 'energy', role: 'conductivity' }, alpha: { of: 'momentum', role: 'expansion' }, rho: { of: 'momentum', role: 'density' } }, quantities: {
@@ -126,11 +130,11 @@ export function printer(): Intent {
     { id: 'the person', by: person, environment: false, adjoins: ['room air'], quantities: {} },
   ];
   const wants: Want[] = [
-    want('shape', 'the part has the shape I drew, within a tenth of a millimetre', 'the part', 'err', 'm', 'distance of the part\'s surface from the drawn shape', 'by the end', { carrier: 'momentum', relativeTo: 'the drawn shape', hi: given('tolerance', 1e-4, 'm', 'a tenth of a millimetre') }),
+    want('shape', 'the part has the shape I drew, within a tenth of a millimetre', 'the part', 'err', 'm', 'distance of the part\'s surface from the drawn shape', 'by the end', { carrier: 'momentum', relativeTo: 'the drawn shape', hi: given('tolerance', tol, 'm', tol === 1e-4 ? 'a tenth of a millimetre' : `${(tol * 1e3).toPrecision(2)} mm`) }),
     want('solid', 'the part comes out solid', 'the part', 'T', 'degC', 'temperature of the part when it is taken out', 'by the end', { carrier: 'energy', hi: given('solid', 60, 'degC', 'below the glass transition') }),
     want('whole', 'the part is strong, not a pile of layers', 'the part', 'bond', '1', 'strength between layers over the material\'s strength', 'by the end', { lo: given('fused', 0.5, '1', 'half the bulk strength') }),
     want('rate', 'it makes parts at a useful rate', 'the part', 'Qv', 'm^3/s', 'volume added to the part per time', 'on demand', { carrier: 'volume of PLA', lo: given('rate', 2.78e-9, 'm^3/s', '10 cm³ an hour') }),
-    want('in time', 'a big part within a day', 'the part', 'tmake', 's', 'time to make the largest part', 'by the end', { carrier: 'volume of PLA', hi: given('a day', 86400, 's', 'a day') }),
+    want('in time', time === 86400 ? 'a big part within a day' : `a big part within ${(time / 3600).toPrecision(3)} hours`, 'the part', 'tmake', 's', 'time to make the largest part', 'by the end', { carrier: 'volume of PLA', hi: given('a day', time, 's', time === 86400 ? 'a day' : `${(time / 3600).toPrecision(3)} hours`) }),
     want('safe', 'I cannot burn myself on it', 'the person', 'Ttouch', 'degC', 'temperature of anything the person can touch', 'always', { carrier: 'energy', relativeTo: 'room air', hi: given('safe to touch', 60, 'degC', 'brief contact (ISO 13732-1 order of magnitude)') }),
     want('start', 'I start and stop it when I want', 'the person', 'delay', 's', 'delay between the person\'s choice and the machine\'s response', 'on demand', { carrier: 'charge', hi: given('prompt', 1, 's', 'a second') }),
     want('take out', 'I can take the part out', 'the person', 'tout', 's', 'time to take the part out', 'on demand', { hi: given('a minute', 60, 's', 'a minute') }),

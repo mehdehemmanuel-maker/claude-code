@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Nexus Forge</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #04070b; color: #d8dee9; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+    #hud { position: fixed; left: 16px; top: 12px; max-width: 30rem; pointer-events: none; text-shadow: 0 1px 2px #000; }
+    #hud b { color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="hud"><b>Nexus forge</b>: the whole pipeline, run live in this page. Generate → identify flaws → update → repeat, at full size.</div>
+  <script type="module" src="../src/nexus/view/forge.ts"></script>
+</body>
+</html>

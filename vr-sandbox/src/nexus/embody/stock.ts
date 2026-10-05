@@ -95,6 +95,12 @@ export const COLOURS: Record<string, { colour: string; hex: number; standard: st
   'sensor return': { colour: 'white', hex: 0xeeeeee, standard: 'numbered by IEC 60062 order (9 white)' },
 };
 
+/** The numbered colours in IEC 60062 order (0 black … 9 white), what a conductor takes when its function's colour is already used in its cable. */
+export const IEC_60062: { colour: string; hex: number }[] = [
+  { colour: 'black', hex: 0x212121 }, { colour: 'brown', hex: 0x795548 }, { colour: 'red', hex: 0xe53935 }, { colour: 'orange', hex: 0xfb8c00 }, { colour: 'yellow', hex: 0xfbc02d },
+  { colour: 'green', hex: 0x43a047 }, { colour: 'blue', hex: 0x1e88e5 }, { colour: 'violet', hex: 0x8e24aa }, { colour: 'grey', hex: 0x9e9e9e }, { colour: 'white', hex: 0xeeeeee },
+];
+
 /** Connectors as rated by their makers: pitch, current per contact, voltage. */
 export const CONNECTORS: { id: string; pitch: number; amps: number; volts: number; source: string }[] = [
   { id: 'JST PH', pitch: 2.0 * mm, amps: 2, volts: 100, source: 'JST PH series: 2.0 mm, 2 A, 100 V' },
