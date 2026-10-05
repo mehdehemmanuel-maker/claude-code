@@ -21,7 +21,7 @@ import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { printer, type PrinterAsk } from '../asked';
-import type { Machine, Step } from '../embody/embody';
+import type { Choices, Machine, Step } from '../embody/embody';
 import { embodyAny, type Learned } from '../embody/any';
 import { practice, type Operation, type OpEvent } from '../embody/operate';
 import { breaks, causalOf, trace, type Causal, type CauseKind } from '../embody/causal';
@@ -147,6 +147,10 @@ renderer.localClippingEnabled = true;
 
 // ---- the run: here, in the page --------------------------------------------------------------------------------------
 interface Run { intent: Intent; s: Structure; m: Machine; genMs: number; embMs: number }
+// nothing stands here until you ask: the room waits, with what you might ask for one press away
+const NO_CHOICES: Choices = { bedSupport: 1, bedT: 0, streams: 0, room: [0, 0, 0], exhausted: [] };
+const EMPTY_MACHINE: Machine = { name: 'nothing yet', parts: [], values: [], flaws: [], rounds: [{ n: 1, flaws: [], remedies: [], parts: 0, mass: 0, choices: NO_CHOICES, snapshot: [], trace: [] }], trace: [], axes: [], hotEnd: null, electrical: null, size: [0, 0, 0], bom: [], config: [], order: [] };
+let empty = true;
 // what stands here: a printer to an ask of its size, tolerance and time, or anything asked in words
 let ask: PrinterAsk = {}, asked: Intent = printer({}), isPrinter = true;
 // what operating it taught the design, kept while the same ask stands
@@ -160,7 +164,7 @@ function runAll(intent: Intent): Run | null {
 // ---- beats: every step of the run, in order, each with how long it is shown ---------------------------------------------
 interface Beat { kind: 'intent' | 'generate' | 'step' | 'check' | 'remedy' | 'done'; stage: Stage; round: number; dur: number; step?: Step; flaws: Flaw[]; says: string; detail: { text: string; color?: string; size?: number }[] }
 const stageOf: Record<Step['stage'], Stage> = { head: 'HEAD', motor: 'MOTORS', axis: 'AXES', wiring: 'WIRING', whole: 'CHECK', frame: 'AXES', choose: 'GENERATE' };
-const fmt = (x: number) => (Math.abs(x) >= 1e-2 && Math.abs(x) < 1e5 ? Number(x.toPrecision(3)).toString() : x.toExponential(2).replace('e+', 'e'));
+const fmt = (x: number) => (x === 0 ? '0' : Math.abs(x) >= 1e-2 && Math.abs(x) < 1e5 ? Number(x.toPrecision(3)).toString() : x.toExponential(2).replace('e+', 'e'));
 const short = (f: Flaw) => `${f.check} @ ${f.where}: ${f.says}${f.remedy ? ` → ${f.remedy}` : ''}`;
 
 function beatsOf(r: Run): Beat[] {
@@ -341,9 +345,18 @@ function relabel(): void {
   nodes.forEach((n, i) => { pipelineGroup.remove(n.tag); n.tag.material.map?.dispose(); n.tag.material.dispose(); n.tag = label(names[i]!, 0.042, '#9fdfee', 'rgba(0,0,0,0)'); n.tag.position.copy(n.at).add(new THREE.Vector3(0, -0.14, 0)); pipelineGroup.add(n.tag); });
   title.material.map?.dispose(); pipelineGroup.remove(title);
 }
+/** The room with nothing in it yet: the pedestal, me standing by, and what you might ask for. */
+function showEmpty(): void {
+  empty = true;
+  run = { intent: printer({}), s: generate(printer({})), m: EMPTY_MACHINE, genMs: 0, embMs: 0 };
+  tree = treeOf([], 'nothing yet'); partsById = new Map(); beats = []; starts = []; total = 0; current = -1;
+  hud.set('idle', 'ask me to build anything');
+  line('system', 'Nothing here yet. Ask me to build anything, or pick one of these.');
+}
 const sizeOf = (m: Machine) => (Math.max(...m.size) > 2 ? `${m.size.map((x) => fmt(x)).join(' × ')} m` : `${m.size.map((x) => fmt(x * 1e3)).join(' × ')} mm`);
-function start(intent: Intent = asked): string {
+function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } = {}): string {
   if (intent !== asked) { learnedNow = {}; operated = null; }
+  empty = false;
   const next = runAll(intent);
   if (!next) return 'The generator gave nothing to embody for that ask: a gap, not a machine.';
   asked = intent; isPrinter = !!next.m.hotEnd;
@@ -358,13 +371,14 @@ function start(intent: Intent = asked): string {
   starts = []; total = 0; for (const b of beats) { starts.push(total); total += b.dur * pace; }
   current = -1; lastRound = 0;
   if (frozen === null) offset -= clock();
-  if (params.has('end') && !jumped) { offset += total; jumped = true; }
+  // the design's own process is there to replay when asked; otherwise it stands designed, and I build it, live
+  if (!o.replay && frozen === null) { offset += total; if (o.build !== false && !params.has('end')) buildIt('the machine'); }
   const last = run.m.rounds.at(-1)!;
   const gaps = last.flaws.filter((f) => f.check === 'gap').length;
   return `${run.m.rounds.length} rounds, ${last.flaws.length - gaps} flaw${last.flaws.length - gaps === 1 ? '' : 's'} and ${gaps} gap${gaps === 1 ? '' : 's'} left, ${run.m.parts.length} parts, ${fmt(run.m.parts.reduce((x, p) => x + p.mass, 0))} kg, ${sizeOf(run.m)}.`;
 }
 
-let lastT = 0, jumped = false;
+let lastT = 0;
 function tick(): void {
   const t = clock(), dt = Math.min(0.1, Math.max(0, (performance.now() - lastT) / 1000)); lastT = performance.now();
   // a frozen time past the end shows the end; at the end it stays, for you to look round and talk about
@@ -392,9 +406,9 @@ function tick(): void {
     if (m.userData.section !== section) { m.clippingPlanes = section === 'off' ? null : [clip]; m.needsUpdate = true; m.userData.section = section; }
     if (!/polycarbonate/.test(s.part.material)) { m.transparent = thin; m.opacity = thin ? 0.12 : 1; m.depthWrite = !thin; }
     if (isolated && !isolated.has(s.part.id)) s.obj.visible = false;
-    const red = lit.has(s.part.id), seen = attention?.ids.has(s.part.id) ?? false, sel = s.part.id === selectedId;
-    m.emissive.setHex(red ? 0xff1744 : sel ? 0xffd740 : seen ? 0x4dd0e1 : t - s.born < 0.9 && s.born > -1e8 ? 0x4dd0e1 : 0x000000);
-    m.emissiveIntensity = red ? 0.55 + 0.45 * Math.sin(t * 7) : sel ? 0.7 + 0.3 * Math.sin(t * 5) : seen ? 0.45 + 0.2 * Math.sin(t * 4) : 0.6 * (1 - (t - s.born) / 0.9);
+    const red = lit.has(s.part.id), seen = attention?.ids.has(s.part.id) ?? false, sel = s.part.id === selectedId, hov = s.part.id === hoverId;
+    m.emissive.setHex(red ? 0xff1744 : sel ? 0xffd740 : hov ? 0xffffff : seen ? 0x4dd0e1 : t - s.born < 0.9 && s.born > -1e8 ? 0x4dd0e1 : 0x000000);
+    m.emissiveIntensity = red ? 0.55 + 0.45 * Math.sin(t * 7) : sel ? 0.7 + 0.3 * Math.sin(t * 5) : hov ? 0.35 : seen ? 0.45 + 0.2 * Math.sin(t * 4) : 0.6 * (1 - (t - s.born) / 0.9);
   }
   for (let i = dyingList.length - 1; i >= 0; i--) { const d = dyingList[i]!; const g = 1 - (t - d.dying!) / 0.4; if (g <= 0) { machine.remove(d.obj); dyingList.splice(i, 1); } else d.obj.scale.setScalar(Math.max(1e-3, g)); }
   // the pipeline: the stage that runs, lit; a pulse along the way it came
@@ -435,9 +449,9 @@ function tick(): void {
   else { goal = { th: Math.max(-2.3, Math.min(2.3, Math.atan2(eye.x - M.x, eye.z - M.z) + 1.0)), r: Math.max(0.72, standR - 0.13) }; faceAt = eye; }
   // never between you and what you are looking at: stepped round until it is out of the way
   for (let k2 = 0; k2 < 6; k2++) {
-    const gx = M.x + Math.sin(goal.th) * goal.r, gz = M.z + Math.cos(goal.th) * goal.r, look = holo.showing ? holo.group.position : M;
+    const gx = M.x + Math.sin(goal.th) * goal.r, gz = M.z + Math.cos(goal.th) * goal.r, look = holo.showing ? holo.group.position : target ?? M;
     const ex = look.x - eye.x, ez = look.z - eye.z, L2 = ex * ex + ez * ez, u2 = clamp(((gx - eye.x) * ex + (gz - eye.z) * ez) / Math.max(1e-6, L2), 0, 1);
-    if (Math.hypot(gx - (eye.x + u2 * ex), gz - (eye.z + u2 * ez)) > 0.5) break;
+    if (Math.hypot(gx - (eye.x + u2 * ex), gz - (eye.z + u2 * ez)) > 0.5 && Math.hypot(gx - eye.x, gz - eye.z) > 1.0) break;
     goal = { th: clamp(goal.th + 0.35 * Math.sign(goal.th || 1), -2.6, 2.6), r: goal.r };
   }
   drive(dt);
@@ -473,6 +487,16 @@ function tick(): void {
   liveCard.mesh.visible = panel === 'bill';
   loopBoard.visible = decideChips.visible = panel === 'loop';
   gatesCard.mesh.visible = panel === 'gates';
+  // nothing here yet, or a new ask asked for: what you might ask, in front of you; on a screen, over the box you type in
+  const wantNew = panel === 'new' || (empty && panel === 'none');
+  suggest.group.visible = wantNew && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
+  if (suggest.group.visible && panel !== 'new') { suggest.group.position.copy(M).add(tmp.set(0, 1.25, 0.35)); suggest.group.lookAt(eye); }
+  // the dock goes where you look, low; the menu above it when you open it
+  dock.group.visible = renderer.xr.isPresenting;
+  if (dock.group.visible) { const head = renderer.xr.getCamera(), f2 = new THREE.Vector3(); head.getWorldDirection(f2); f2.y = 0; if (f2.lengthSq() < 1e-6) f2.set(0, 0, -1); f2.normalize(); const want = eye.clone().addScaledVector(f2, 0.62).add(tmp.set(0, -0.38, 0)); dock.group.position.lerp(want, Math.min(1, dt * 2.5)); dock.group.lookAt(eye); }
+  menu.group.visible = menuOpen && renderer.xr.isPresenting;
+  if (menu.group.visible) { menu.group.position.copy(dock.group.position).add(tmp.set(0, 0.36, 0)); menu.group.lookAt(eye); }
+  if (renderer.xr.isPresenting) { const c3 = renderer.xr.getController(pointerHand); ray.setFromXRController(c3); const hit = ray.intersectObjects(machine.children, true)[0]; hover(hit ? hit.point : null, hit ? partAt() : null); }
   simBoard.visible = panel === 'operate';
   causalGroup.visible = panel === 'causes';
   if (panel !== 'causes') { causalCard.mesh.visible = false; for (const c2 of verdictChips) c2.mesh.visible = false; } else for (const c2 of verdictChips) c2.mesh.visible = !!causalNode;
@@ -592,13 +616,14 @@ const world2: WorldApi = {
     const next: PrinterAsk = { ...ask, ...(a.size ? { size: a.size } : {}), ...(a.tolerance ? { tolerance: a.tolerance } : {}), ...(a.hours ? { time: a.hours * 3600 } : {}) };
     ask = next; return `Rebuilt: ${start(printer(next))}`;
   },
-  replay() { start(asked); return 'From the ask again, every round.'; },
+  replay() { if (empty) return 'Nothing stands here yet: ask me to build something.'; start(asked, { replay: true }); return 'The design process again, every round, as it ran.'; },
   make(words, spec) {
     let intent: Intent | null = null, heard: string[] = [], assumed: string[] = [];
     if (spec && typeof spec === 'object') { const r = intentFromSpec(spec as Parameters<typeof intentFromSpec>[0]); if (r.intent) intent = r.intent; }
     if (!intent) { const r = readAsk(words); if ('problems' in r) return r.problems.join(' '); intent = r.intent; heard = r.heard; assumed = r.assumed; if (r.shape === 'parts') ask = {}; }
     const out = start(intent);
     lastMake = { words, heard, assumed };
+    try { localStorage.setItem('forge:last-ask', words); } catch { /* kept nowhere */ }
     return `${intent.name}: ${out}${assumed.length ? ` I assumed ${assumed.join('; ')}.` : ''}`;
   },
   operate() { return operateIt(); },
@@ -660,7 +685,7 @@ async function addNote(s: Shown, kind: NoteKind, text: string, on?: { node: stri
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
 // ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes' | 'new';
 let panel: Panel = 'none', lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 /** Bring a panel up, or put it away if it is the one up. */
 function summon(p: Panel): string { return summonTo(panel === p ? 'none' : p); }
@@ -683,6 +708,7 @@ function summonTo(p: Panel): string {
   if (panel === 'flaws') { drawFlaws(); place(flawBoard, 0.05); }
   if (panel === 'gates') { drawGates(); place(gatesCard.mesh); }
   if (panel === 'operate') { drawSim(); place(simBoard, 0.05); }
+  if (panel === 'new') place(suggest.group, 0.12);
   if (panel === 'causes') {
     layCausal(); causalNode = null; causalCard.mesh.visible = false;
     // in a headset at arm's reach and level, to walk along; on a screen where the view looks, filling it
@@ -691,7 +717,7 @@ function summonTo(p: Panel): string {
   }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', new: 'What shall I build? Pick one, or say your own.', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -753,13 +779,12 @@ function toggleIsolate(): void { isolated = isolated ? null : new Set(holo.showi
 function cycleReports(): void { reportsMode = reportsMode === 'dots' ? 'full' : reportsMode === 'full' ? 'off' : 'dots'; drawPins(); }
 
 // ---- building the printer: every part to its place, step by step, in the order the build law gives -------------------------
-let machineBuild: { steps: BuildStep[]; t0: number; at: number } | null = null;
-const STEP_S = 1.4;
+let machineBuild: { steps: BuildStep[]; t0: number; at: number; step: number } | null = null;
 function buildIt(target: string): string {
   const node = target ? nodeFor(target) : holo.showing ?? nodeFor(''); framing = true;
   if (!node || node === tree) {
     const steps = buildSteps(run.m.parts);
-    machineBuild = { steps, t0: clock() + 0.5, at: -1 }; holo.clear();
+    machineBuild = { steps, t0: clock() + 0.3, at: -1, step: Math.max(0.22, Math.min(1.4, 22 / Math.max(1, steps.length))) }; holo.clear();
     hud.set('building');
     return `Building ${run.m.name} from the bay: ${steps.length} steps, from the ground up.`;
   }
@@ -768,7 +793,7 @@ function buildIt(target: string): string {
   return `Building ${node.name} in the air: ${steps.length} steps, from the inside out. ${steps[0]?.title ?? ''} first.`;
 }
 function stepMachineBuild(t: number): void {
-  const b = machineBuild!, k = Math.floor((t - b.t0) / STEP_S), cur = Math.max(0, Math.min(k, b.steps.length - 1));
+  const b = machineBuild!, STEP_S = b.step, k = Math.floor((t - b.t0) / STEP_S), cur = Math.max(0, Math.min(k, b.steps.length - 1));
   const stepOf = new Map<string, number>(); b.steps.forEach((s2, i) => { for (const id of s2.parts) stepOf.set(id, i); });
   // the step in hand: its parts as one bundle, taken from the bay, carried over, set down where the law put them
   const tau = (t - b.t0 - cur * STEP_S) / STEP_S, ids = b.steps[cur]?.parts ?? [];
@@ -812,6 +837,7 @@ const simTex = new THREE.CanvasTexture(simCanvas); simTex.colorSpace = THREE.SRG
 const simBoard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), new THREE.MeshBasicMaterial({ map: simTex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 simBoard.renderOrder = 15; simBoard.visible = false; scene.add(simBoard);
 function operateIt(): string {
+  if (empty) return 'Nothing stands here yet: ask me to build something, then I can operate it.';
   if (isPrinter) return 'The printer\'s duty is its deposition: it is checked in its rounds. Ask me to make something that moves or keeps a room, and I\'ll operate it.';
   hud.set('working', 'operating it');
   const r = practice(asked, generate(asked));
@@ -947,6 +973,7 @@ function modes(): Mode[] {
   const out: Mode[] = [];
   if (panel !== 'none') out.push({ id: 'panel', label: panel === 'chat' ? 'Chat and keyboard' : `${panel[0]!.toUpperCase()}${panel.slice(1)} panel`, exit: () => { panel = 'none'; } });
   if (settingsOpen) out.push({ id: 'settings', label: 'Settings', exit: () => { settingsOpen = false; } });
+  if (menuOpen) out.push({ id: 'menu', label: 'Menu', exit: () => { menuOpen = false; } });
   if (holo.showing) out.push({ id: 'holo', label: `Hologram: ${holo.showing.name}`.slice(0, 40), exit: () => holo.clear() });
   if (machineBuild) out.push({ id: 'build', label: `Building ${Math.max(1, machineBuild.at + 1)} of ${machineBuild.steps.length}`, exit: () => endBuild() });
   if (isolated) out.push({ id: 'isolate', label: 'Isolated', exit: () => { isolated = null; } });
@@ -954,6 +981,8 @@ function modes(): Mode[] {
   if (xray) out.push({ id: 'xray', label: 'X-ray', exit: () => { xray = false; } });
   if ([...explodeTo.values()].some((v) => v > 0)) out.push({ id: 'apart', label: 'Taken apart', exit: () => { for (const g of explodeTo.keys()) explodeTo.set(g, 0); } });
   if (selectedId) out.push({ id: 'select', label: `Pointing: ${(shown.get(selectedId)?.part.name ?? selectedId).slice(0, 28)}`, exit: () => { selectedId = null; attention = null; partCardUntil = 0; light([]); } });
+  if (!empty && current < beats.length - 1) out.push({ id: 'replay', label: 'Replaying the design process', exit: () => { offset += total - clock() + 0.01; } });
+  if (reportFor || reportNext) out.push({ id: 'report', label: reportFor ? `Reporting on ${(shown.get(reportFor)?.part.name ?? reportFor).slice(0, 26)}` : 'Point at what to report', exit: () => { reportFor = null; reportNext = false; } });
   if (paused) out.push({ id: 'paused', label: 'Paused', exit: () => togglePause() });
   return out;
 }
@@ -1141,6 +1170,7 @@ const rowOf = (title: string) => { const r = document.createElement('div'); r.st
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 let loopBtn: HTMLButtonElement | null = null;
 for (const [name, p2] of [['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+button('✗ Report', () => report(), actRow);
 button('▶ Operate', () => say(operateIt()), actRow);
 button('⤢ Expand', () => say(expand('', true)), actRow);
 button('▶ Build this', () => say(buildIt('')), actRow);
@@ -1200,7 +1230,7 @@ function drawChat(): void {
 function pressKey(key: string): void {
   const r = keyboard.press(key);
   if (r === 'mic') listen();
-  if (r === 'send') { const t2 = keyboard.text.trim(); keyboard.text = ''; keyboard.draw(); if (t2) void converse(t2); }
+  if (r === 'send') { const t2 = keyboard.text.trim(); keyboard.text = ''; keyboard.draw(); if (t2) send(t2); }
 }
 /** What a ray presses on the boards in the room: a key, a flaw to go to. */
 function pressBoards(): boolean {
@@ -1214,7 +1244,7 @@ function pressBoards(): boolean {
   if (flawBoard.visible) { const h = ray.intersectObject(flawBoard, false)[0]; if (h?.uv) { const i = flawRowAt(h.uv); if (i >= 0) jumpTo(flawRows()[i]!); return true; } }
   return false;
 }
-row.onsubmit = (e) => { e.preventDefault(); const t = input.value.trim(); if (t) { input.value = ''; void converse(t); } };
+row.onsubmit = (e) => { e.preventDefault(); const t = input.value.trim(); if (t) { input.value = ''; send(t); } };
 const status = document.createElement('div'); status.style.cssText = 'font-size:12px;color:#7fb3c8';
 chat.append(log, row, status);
 document.body.appendChild(chat);
@@ -1263,22 +1293,74 @@ function partAt(): Shown | null {
 function select(s: Shown): void {
   selectedId = s.part.id;
   attention = { ids: new Set([s.part.id]), until: clock() + 14 };
-  const b = brief(s)!;
-  say(describe(b, 2));
+  if (reportNext) { reportNext = false; openReport(s); }
   partCard.draw(s.part.name, [{ text: `${s.part.material}${s.part.mass > 0 ? ` · ${fmt(s.part.mass * 1e3)} g` : ''}`, color: '#a5f3ff', size: 0.95 }, ...s.part.values.slice(0, 5).map((v) => ({ text: `${v.name} = ${fmt(v.value)} ${v.unit} · ${v.law}`, color: '#ffe082', size: 0.78 })), { text: '⤢ Expand to open it · 📌 to mark it', color: '#7fb3c8', size: 0.75 }], '#ffd740');
   s.obj.getWorldPosition(world); eyeOf(eye);
   partCard.mesh.position.copy(world).add(off.copy(eye).sub(world).setLength(0.18)).add(tmp.set(0, 0.12, 0)); partCard.mesh.lookAt(eye);
   partCardUntil = clock() + 14;
-  status.textContent = `Pointing at ${s.part.name}. Mark it with 📌, or ask about it.`;
+  status.textContent = `Pointing at ${s.part.name}. ✗ Report it, or ask about it.`;
+  input.placeholder = `Report on ${s.part.name}, or ask about it`;
 }
-let down: [number, number] | null = null;
-renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+// ---- reporting: point at it, press Report, say what is wrong; kept on the part with your view, for the next round ----------
+let reportFor: string | null = null, reportNext = false;
+function report(): void {
+  const s2 = selectedId ? shown.get(selectedId) : undefined;
+  if (s2) openReport(s2); else { reportNext = true; line('system', 'Point at what is wrong and pull the trigger (or click it).'); }
+}
+function openReport(s2: Shown): void {
+  reportFor = s2.part.id;
+  if (renderer.xr.isPresenting) { summonTo('chat'); keyboard.text = ''; keyboard.draw(); }
+  else { input.focus(); input.placeholder = `What is wrong with ${s2.part.name}? Enter keeps it.`; }
+  line('system', `Reporting on ${s2.part.name}: type or say what is wrong, then send.`);
+}
+/** What you typed goes to the report you opened, else to me. */
+function send(text: string): void {
+  if (reportFor) { const s2 = shown.get(reportFor); reportFor = null; if (s2) { void addNote(s2, 'flaw', text).then((r) => say(r)); return; } }
+  void converse(text);
+}
+let down: [number, number, number] | null = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY, performance.now()]; });
+// a click is a press that barely moved: a laser pointer's hand shakes, so it is allowed a little
 renderer.domElement.addEventListener('pointerup', (e) => {
-  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 14 || performance.now() - down[2] > 900) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
   if (pressBoards()) return;
   if (pickHolo()) return;
   const s = partAt(); if (s) select(s);
+});
+
+// ---- chips of light: the dock that is always with you in a headset, the menu, and what you might ask for ----------------
+type Chip = { mesh: THREE.Mesh; act: () => void };
+function chipGrid(list: [string, () => void][], cols: number, w: number, h: number, accent: (i: number) => string, size = 2.4): { group: THREE.Group; chips: Chip[] } {
+  const group = new THREE.Group(), chips2: Chip[] = [];
+  list.forEach(([text, act], i) => { const c2 = card(w, h, 512); c2.draw('', [{ text, size }], accent(i)); c2.mesh.position.set(((i % cols) - (cols - 1) / 2) * (w + 0.006), -Math.floor(i / cols) * (h + 0.006), 0); group.add(c2.mesh); chips2.push({ mesh: c2.mesh, act }); });
+  scene.add(group); group.visible = false;
+  return { group, chips: chips2 };
+}
+const SUGGESTIONS = ['a cart that carries 150 kg at 8 km/h', 'a cabin of 40 m² for 2 people where winter gets to -25 °C', 'a drone that carries a 2 kg parcel 5 km at 15 m/s', 'a boat that carries 400 kg 20 km at 3 m/s', 'an electric car for 4 people that goes 400 km at 120 km/h', 'a 3D printer for parts up to 250 mm'];
+const make = (w: string) => { panel = 'none'; line('you', w); say(world2.make(w)); };
+const suggest = chipGrid([...SUGGESTIONS.map((w): [string, () => void] => [`build ${w}`, () => make(w)]), ['… type your own', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }]], 1, 0.46, 0.042, (i) => (i === SUGGESTIONS.length ? '#b388ff' : '#4dd0e1'), 1.9);
+const suggestBox = document.createElement('div');
+suggestBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px';
+for (const w of SUGGESTIONS) { const b2 = document.createElement('button'); b2.textContent = `Build ${w}`; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer'; b2.onclick = () => make(w); suggestBox.appendChild(b2); }
+chat.prepend(suggestBox);
+let menuOpen = false;
+const dock = chipGrid([['✗ Report', () => report()], ['Ask', () => summon('chat')], ['＋ New', () => summon('new')], ['▶ Operate', () => say(operateIt())], ['Causes', () => line('system', summon('causes'))], ['Flaws', () => line('system', summon('flaws'))], ['✕ Exit', () => exitLatest()], ['☰ Menu', () => { menuOpen = !menuOpen; }]], 8, 0.1, 0.042, (i) => (i === 0 ? '#ff8a80' : i === 6 ? '#ffd740' : '#80deea'), 2.6);
+
+// what you point at, lit before you press, its name beside it
+let hoverId: string | null = null, hoverTagFor: string | null = null;
+const hoverTag = label(' ', 0.016, '#ffffff', 'rgba(4,16,24,0.85)'); hoverTag.visible = false; scene.add(hoverTag);
+function hover(at: THREE.Vector3 | null, s2: Shown | null): void {
+  hoverId = s2?.part.id ?? null;
+  if (!s2 || !at) { hoverTag.visible = false; return; }
+  if (hoverTagFor !== s2.part.id) { hoverTagFor = s2.part.id; const t2 = label(s2.part.name.slice(0, 48), 0.016, '#ffffff', 'rgba(4,16,24,0.85)'); hoverTag.material.map?.dispose(); hoverTag.material.map = t2.material.map; hoverTag.scale.copy(t2.scale); hoverTag.material.needsUpdate = true; }
+  hoverTag.position.copy(at).add(tmp.set(0, 0.05, 0)); hoverTag.visible = true;
+}
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (e.buttons) return;
+  ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
+  const hit = ray.intersectObjects(machine.children, true)[0];
+  hover(hit ? hit.point : null, hit ? partAt() : null);
 });
 
 // ---- the console, for a headset: buttons the controller's ray presses ------------------------------------------------------
@@ -1297,7 +1379,9 @@ const CHIPS: [string, () => void][] = [
   ['Reports', () => cycleReports()], ['Weather', () => { void hud.locate().then((w) => line('system', w)); }], ['🎤 Talk', () => listen()],
 ];
 const chips: { mesh: THREE.Mesh; act: () => void }[] = [];
-let wrist: THREE.Group | null = null;
+let wrist: THREE.Group | null = null, pointerHand = 1;
+// the same menu as the wrist's, floating over the dock for whoever does not turn their wrist
+const menu = chipGrid(CHIPS.map(([t2, act]): [string, () => void] => [t2, () => { act(); }]), 3, 0.11, 0.032, (i) => (i < 3 ? '#ffd740' : '#80deea'), 2.4);
 function makeWrist(): THREE.Group {
   const g = new THREE.Group();
   const cw = 0.074, chh = 0.027, gap = 0.006;
@@ -1322,7 +1406,8 @@ for (let i = 0; i < 2; i++) {
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   ctl.addEventListener('selectstart', () => {
     ray.setFromXRController(ctl);
-    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    pointerHand = i;
+    const all = [...(wrist?.visible ? chips : []), ...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     if (hit) { all.find((c) => c.mesh === hit.object)?.act(); return; }
     if (pressBoards()) return;
     if (pickHolo()) return;
@@ -1369,8 +1454,11 @@ orbit.target.set(view[3], view[4], view[5]); orbit.enableDamping = true; orbit.m
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
 async function boot() {
-  // ?ask=words builds what the words ask for; else the printer
-  if (params.get('ask')) line('system', world2.make(params.get('ask')!)); else start(printer({}));
+  // ?ask=words builds what the words ask for; else what you asked last time; else nothing, until you ask
+  const lastAsk = (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })();
+  if (params.get('ask')) line('system', world2.make(params.get('ask')!));
+  else if (lastAsk) line('system', world2.make(lastAsk));
+  else showEmpty();
   if (params.get('xr') === 'quest3') {
     const { XRDevice, metaQuest3 } = await import('iwer');
     const device = new XRDevice(metaQuest3);
