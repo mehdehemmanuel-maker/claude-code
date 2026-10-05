@@ -161,9 +161,9 @@ export const PROFILE_2020 = { side: 20 * mm, I: 0.69e-8, A: 1.6e-4, massPerM: 0.
 // ---- for anything that moves, flies, holds heat or carries water (src/nexus/embody/any.ts) ------------------------
 /** The tangential stress a machine's air gap carries, by how it is cooled: what sizes a motor's rotor for its torque. */
 export const GAP_SHEAR_BY_COOLING = [
-  { cooling: 'still air', value: 4e3, h: 15 }, { cooling: 'a fan', value: 12e3, h: 45 }, { cooling: 'liquid', value: 35e3, h: 300 },
+  { cooling: 'still air', value: 4e3, h: 15, overhead: 0 }, { cooling: 'a fan', value: 12e3, h: 45, overhead: 0.08 }, { cooling: 'liquid', value: 35e3, h: 300, overhead: 0.35 },
 ] as const;
-export const GAP_SHEAR_BY_COOLING_SRC = { source: 'torque per rotor volume about 7 to 14 kN m/m³ for small totally enclosed machines, 14 to 42 integral-horsepower industrial, near 100 for liquid-cooled traction motors (Hendershot and Miller); σ is half of it. h is what the housing gives off per kelvin and square metre: about 10 to 20 W/m²K to still air, 30 to 60 with a fan over fins, a few hundred referred to the housing for a water jacket (estimate)', confidence: 'estimate' as const };
+export const GAP_SHEAR_BY_COOLING_SRC = { source: 'torque per rotor volume about 7 to 14 kN m/m³ for small totally enclosed machines, 14 to 42 integral-horsepower industrial, near 100 for liquid-cooled traction motors (Hendershot and Miller); σ is half of it. h is what the housing gives off per kelvin and square metre: about 10 to 20 W/m²K to still air, 30 to 60 with a fan over fins, a few hundred referred to the housing for a water jacket (estimate). overhead: what the cooling weighs over the motor, a fan and its shroud about 8 %, a jacket, pump and radiator about a third (estimate)', confidence: 'estimate' as const };
 /** A Li-ion cell as its maker rates it. */
 export const LI_ION_21700 = { id: 'INR21700-50E', V: 3.6, Vmax: 4.2, Vmin: 2.5, Ah: 4.9, Imax: 9.8, mass: 0.0685, d: 21.25 * mm, l: 70.8 * mm, source: 'Samsung SDI INR21700-50E datasheet: 3.6 V nominal, 4.9 Ah, 9.8 A continuous, 68.5 g, Ø21.25 × 70.8 mm', confidence: 'datasheet' as const };
 /** What a pack adds to its cells: holders, busbars, the management board, the case. */
@@ -212,3 +212,7 @@ export const BOARDS = { osb: { t: 0.018, density: 600 }, sheathing: { t: 0.012, 
 export const LI_ION_21700_POWER = { id: 'INR-21700-P42A', V: 3.6, Vmax: 4.2, Vmin: 2.5, Ah: 4.2, Imax: 45, mass: 0.07, d: 21.7 * mm, l: 70.4 * mm, source: 'Molicel INR-21700-P42A datasheet: 3.6 V nominal, 4.2 Ah, 45 A continuous, 70 g', confidence: 'datasheet' as const };
 /** The cells a pack is made of: whichever makes it with the fewest. */
 export const CELLS = [LI_ION_21700, LI_ION_21700_POWER];
+/** The DC levels a bus is built at; up to 60 V is extra-low voltage, safe to touch dry. */
+export const BUS_VOLTAGES = { levels: [12, 24, 48, 96, 400], elv: 60, source: 'common DC bus levels; up to 60 V DC is extra-low voltage (IEC 61140, class III), above it basic insulation and protection against contact are needed', confidence: 'standard' as const };
+/** How much of the friction a skid turn may use as lateral acceleration and still steer by scrubbing its tyres. */
+export const SKID_TURN = { value: 0.1, source: 'skid-steered and tracked vehicles turn by sliding their tyres sideways, which uses the friction a curve would need: kept to about a tenth of μg (estimate)', confidence: 'estimate' as const };

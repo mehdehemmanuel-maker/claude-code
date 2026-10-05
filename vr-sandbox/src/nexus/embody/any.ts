@@ -30,14 +30,14 @@ import { MATERIALS } from '../../data/materials';
 import { toSI } from '../../ganglia/units';
 import type { Structure } from '../manifold';
 import type { Intent } from '../want';
-import { embody, type Choices, type Machine, type Round, type Step } from './embody';
+import { embody, type Choices, type Gate, type Machine, type Round, type Step } from './embody';
 import { conductorTemperature } from './electrical';
 import { motorFor, type Motor } from './motor';
 import { extentOf, part, placeParts, type Flaw, type Part, type V3, type Value } from './part';
 import {
   awgDiameter, BOARDS, COLOURS, COPPER, COPPER_PIPES, COPPER_PIPES_SRC, DOWNPIPE, DRAG_COEFFICIENT, ENVELOPE_U, FANS, FANS_SRC, GAP_SHEAR_BY_COOLING, GAP_SHEAR_BY_COOLING_SRC,
   CELLS, HEAT_PUMP_COP, HEAT_RECOVERY, HONEYCOMB, INSULATIONS, LED_RADIANT_EFFICIENCY, MINERAL_WOOL, PACK_OVERHEAD, PEAK_OVER_CONTINUOUS, PIPE_VELOCITY, RECT_TUBES,
-  ROLLING_RESISTANCE, ROTOR, STRIP_FOOTING, TYRES, TYRES_SRC,
+  ROLLING_RESISTANCE, ROTOR, SKID_TURN, STRIP_FOOTING, TYRES, TYRES_SRC, BUS_VOLTAGES,
 } from './stock';
 import { floatingClusters } from './tree';
 
@@ -49,24 +49,22 @@ const DEFAULT_CHOICES: Choices = { bedSupport: 1, bedT: 0, streams: 0, room: [0,
 export function embodyAny(intent: Intent, s: Structure, maxRounds = 8): Machine | null {
   if (s.elements.some((e) => e.id.startsWith('deposit:')) && s.elements.some((e) => e.kind === 'conversion' && /:(x|y|z)$/.test(e.id))) return embody(intent, s);
   const rounds: Round[] = [];
-  let self = 0, grew = Infinity;
+  let self = 0;
+  const masses: number[] = [0];
   for (let n = 1; n <= maxRounds; n++) {
     const m = once(intent, s, self);
     const mass = m.parts.reduce((a, p) => a + p.mass, 0);
-    // a design whose every round adds more than the last carries itself less well each time: it does not settle
-    const growth = self > 0 ? mass / self : Infinity;
-    if (n >= 3 && growth > 1.03 && growth >= grew) {
-      m.flaws.push({ check: 'mass', where: 'the whole', says: `its mass does not settle: ${self.toFixed(1)} → ${mass.toFixed(1)} kg, each round adding more than the last; what it must carry, at what it is asked, is past what these parts carry of themselves`, law: 'the mass a drive moves includes the drive and its store', value: growth, limit: 1, remedy: null });
-      rounds.push({ n, flaws: m.flaws, remedies: [], parts: m.parts.length, mass, choices: DEFAULT_CHOICES, snapshot: m.parts, trace: m.trace });
-      return { ...m, rounds };
-    }
-    grew = growth;
-    // the drive was sized for what it carries and itself: run again on the mass it came to, until that holds
+    masses.push(mass);
+    // designed again on the mass it came to is a fixed point m = f(m): it settles where each round's change is smaller
+    // than the last's, and runs away where the change grows; stocked sizes step, so one larger change is not yet a run
+    const d = (k: number) => masses[k]! - masses[k - 1]!, slope = (k: number) => (k >= 3 && Math.abs(d(k - 1)) > 1e-9 ? d(k) / d(k - 1) : 0);
+    const runs = n >= 4 && slope(n) >= 1 && slope(n - 1) >= 1;
     const moves = m.values.some((v) => v.name === 'mass it moves');
     const settled = !moves || Math.abs(mass - self) <= Math.max(0.03 * mass, 0.05);
-    const remedies = settled ? [] : [`designed again for its own mass: ${self.toFixed(1)} → ${mass.toFixed(1)} kg`];
+    if (runs || (n === maxRounds && !settled)) m.flaws.push({ check: 'mass', where: 'the whole', says: runs ? `its mass runs away: ${masses.slice(1).map((x) => x.toFixed(1)).join(' → ')} kg, each round adding more than the last; what it carries, as asked, is past what these parts carry of themselves` : `its mass has not settled in ${maxRounds} rounds: ${masses.slice(1).map((x) => x.toFixed(1)).join(' → ')} kg`, law: 'the mass a drive moves includes the drive and its store: m = f(m) settles only where f grows slower than m', value: slope(n), limit: 1, remedy: null });
+    const remedies = settled || runs ? [] : [`designed again for its own mass: ${self.toFixed(1)} → ${mass.toFixed(1)} kg`];
     rounds.push({ n, flaws: m.flaws, remedies, parts: m.parts.length, mass, choices: DEFAULT_CHOICES, snapshot: m.parts, trace: m.trace });
-    if (settled) return { ...m, rounds };
+    if (settled || runs || n === maxRounds) return { ...m, rounds };
     self = mass;
   }
   return { ...once(intent, s, self), rounds };
@@ -128,7 +126,8 @@ function sizedOf(c: Ctx, id: string) {
 // ---- the parts, as each designer makes them --------------------------------------------------------------------------
 interface Load { id: string; name: string; P: number; V: number; at: V3; conductors: number }
 interface B {
-  parts: Part[]; values: Value[]; flaws: Flaw[]; trace: Step[]; used: Set<string>; loads: Load[];
+  parts: Part[]; values: Value[]; flaws: Flaw[]; trace: Step[]; used: Set<string>; loads: Load[]; gates: Gate[];
+  gate(g: Gate): Gate;
   add(p: Omit<Part, 'mass'> & { mass?: number }, density: number): Part;
   v(name: string, value: number, unit: string, law: string): number;
   use(...ids: string[]): void;
@@ -136,7 +135,8 @@ interface B {
 }
 function builder(): B {
   const b: B = {
-    parts: [], values: [], flaws: [], trace: [], used: new Set(), loads: [],
+    parts: [], values: [], flaws: [], trace: [], used: new Set(), loads: [], gates: [],
+    gate: (g) => { b.gates.push(g); b.trace.push({ stage: 'choose', where: g.id, round: 1, says: `${g.question} → ${g.outcome}`, flaws: g.held ? [] : [{ check: 'gate', where: g.id, says: `${g.question}: ${g.outcome}`, law: g.law, value: 0, limit: 0, remedy: null }], remedy: null }); return g; },
     add: (p, density) => { const x = { ...part(p, density), unit: p.id.split('/')[0]! }; b.parts.push(x); return x; },
     v: (name, value, unit, law) => { b.values.push({ name, value, unit, law }); return value; },
     use: (...ids) => { for (const id of ids) b.used.add(id); },
@@ -144,13 +144,50 @@ function builder(): B {
   };
   return b;
 }
-const coolingFor = (P: number) => GAP_SHEAR_BY_COOLING[P < 400 ? 0 : P < 6000 ? 1 : 2]!;
-const busFor = (P: number) => (P <= 600 ? 24 : P <= 6000 ? 48 : 400);
+// ---- the gates: each decision taken by a law over what it reads, the alternatives it tried kept --------------------------
+const INS = INSULATIONS[1]!, AWGS = [30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1, 0];
+/** The thinnest stocked conductor that carries a current over a run within its insulation's temperature and a 3 % drop. */
+function conductorFor(I: number, run: number, V: number, ambient: number): number | null {
+  const ok = (n: number) => { const d = awgDiameter(n), Rm = COPPER.rho / (Math.PI * d * d / 4); return conductorTemperature(n, INS, I, ambient) <= INS.maxC - 5 && 2 * Rm * run * I <= 0.03 * V; };
+  return AWGS.find(ok) ?? null;
+}
+/** The bus: the lowest level at which each circuit's current is carried by a stocked conductor; extra-low voltage where it can be. */
+function busGate(B: B, id: string, P: number, circuits: number, run: number, ambient: number): number {
+  const each = P / Math.max(1, circuits), tried: string[] = [];
+  for (const V of BUS_VOLTAGES.levels) {
+    const I = each / V, awg = conductorFor(I, run, V, ambient);
+    tried.push(`${V} V: ${I.toFixed(0)} A a circuit${awg === null ? ', no stocked conductor carries it' : `, AWG ${awg}`}`);
+    if (awg !== null) {
+      B.gate({ id: `${id}: bus`, question: `what voltage carries ${(each / 1e3).toFixed(2)} kW a circuit over ${run.toFixed(1)} m`, inputs: [{ name: 'power a circuit', value: each, unit: 'W' }, { name: 'run', value: run, unit: 'm' }], law: `I = P/V carried by the thinnest of AWG 30 to 0 within ${INS.name}'s ${INS.maxC} °C and a 3 % drop; the lowest level that does (${BUS_VOLTAGES.source})`, tried, outcome: `${V} V${V <= BUS_VOLTAGES.elv ? ', extra-low voltage' : ', insulated and guarded against contact'}`, held: true });
+      return V;
+    }
+  }
+  const V = BUS_VOLTAGES.levels.at(-1)!;
+  B.gate({ id: `${id}: bus`, question: `what voltage carries ${(each / 1e3).toFixed(2)} kW a circuit`, inputs: [{ name: 'power a circuit', value: each, unit: 'W' }], law: 'I = P/V carried by a stocked conductor', tried, outcome: `none: ${V} V, the highest, with the flaw located`, held: false });
+  B.flaws.push({ check: 'bus', where: id, says: `no stocked conductor carries ${(each / V).toFixed(0)} A at ${V} V`, law: 'I = P/V ≤ what AWG 0 carries', value: each / V, limit: 0, remedy: null });
+  return V;
+}
 
 /** A motor designed for the torque it holds at a speed, placed with its shaft along an axis. */
+/** The motor for a torque at a speed, in the cooling that holds its heat for the least mass with the cooling's own. */
+function motorChoice(id: string, name: string, T: number, w: number, V: number, ambient: number) {
+  // a motor kept cool in still air by being bigger may weigh more than a smaller one with a fan; a moving thing carries every gram
+  const tried: string[] = [];
+  const heat = (m: Motor) => m.flaws.filter((f) => f.check === 'winding-class' || f.check === 'magnet-grade');
+  type Try = { motor: Motor; history: ReturnType<typeof motorFor>['history']; c: (typeof GAP_SHEAR_BY_COOLING)[number]; mass: number; holds: boolean };
+  const tries: Try[] = GAP_SHEAR_BY_COOLING.map((c) => {
+    const r = motorFor({ id: `${id}/motor`, name, T, w, V, shaftAtLeast: 6 * mm, ambient, shear: { value: c.value, h: c.h, cooling: c.cooling, source: `${c.cooling}: ${GAP_SHEAR_BY_COOLING_SRC.source}` } });
+    const hot = heat(r.motor), mass = r.motor.parts.reduce((a, p) => a + p.mass, 0) * (1 + c.overhead);
+    tried.push(`${c.cooling}: ${hot.length ? hot[0]!.says : `holds, ${mass.toFixed(2)} kg with its cooling`}`);
+    return { ...r, c, mass, holds: !hot.length };
+  });
+  const best = tries.filter((x) => x.holds).sort((a, b) => a.mass - b.mass)[0] ?? tries.at(-1)!;
+  return { ...best, tried, holds: best.holds };
+}
 function motorAt(B: B, id: string, name: string, T: number, w: number, V: number, ambient: number, to: `${'' | '-'}${'x' | 'y' | 'z'}`, at: V3): Motor {
-  const c = coolingFor(T * w);
-  const { motor, history } = motorFor({ id: `${id}/motor`, name, T, w, V, shaftAtLeast: 6 * mm, ambient, shear: { value: c.value, h: c.h, cooling: c.cooling, source: `${c.cooling}: ${GAP_SHEAR_BY_COOLING_SRC.source}` } });
+  const { motor, history, c, tried } = motorChoice(id, name, T, w, V, ambient);
+  const heat = (m: Motor) => m.flaws.filter((f) => f.check === 'winding-class' || f.check === 'magnet-grade');
+  B.gate({ id: `${id}/motor: cooling`, question: `how ${name} sheds its heat at ${T.toFixed(2)} N m and ${w.toFixed(0)} rad/s`, inputs: [{ name: 'torque', value: T, unit: 'N m' }, { name: 'speed', value: w, unit: 'rad/s' }], law: 'ΔT = P/(hA) within the winding\'s class and the magnets\' grade, the gap carrying more shear the more its cooling carries away; of the coolings that hold, the least mass with the cooling\'s own', tried, outcome: c.cooling, held: !heat(motor).length });
   history.forEach((h, i) => B.trace.push({ stage: 'motor', where: `${id}/motor`, round: i + 1, says: `stack ${h.aspect.toFixed(2)} of its bore, ${h.grade}, cooled by ${c.cooling}`, flaws: h.flaws, remedy: h.remedy }));
   for (const p of placeParts(motor.parts, to, at)) B.parts.push({ ...p, unit: id });
   for (const f of motor.flaws) B.flaws.push(f);
@@ -180,10 +217,15 @@ function rolling(c: Ctx, B: B, body: string, ext: V3, self: number, ground: stri
   const P = B.v('drive power', Math.max(Ft * vTop, Fa * vTop * 0.4) / eta, 'W', `the larger of top speed and acceleration held to 40 % of top speed, over η ${eta}`);
   const driven = Fa > mu * (M * c.g / 2) * 0.8 ? 4 : 2;
   B.v('driven wheels', driven, '1', driven === 4 ? 'two driven wheels would slip: the force asked is past what friction on half the weight passes' : 'two: friction on half the weight passes the force asked');
-  const V = B.v('bus voltage', busFor(P), 'V', P <= 600 ? 'safety extra-low voltage for small drives' : P <= 6000 ? 'under the 60 V DC of extra-low voltage (IEC 61140) for light vehicles' : 'about 400 V for traction, so the current stays carriable');
-  const wWheel = vTop / r, wMotor = 400, G = B.v('reduction', Math.max(1, Math.min(6, wMotor / wWheel)), '1', `motor near ${wMotor} rad/s at top speed, the wheel at ${wWheel.toFixed(1)} rad/s; one belt stage, at most 6 to 1`);
-  // each motor holds the larger of what top speed needs and its share of the peak over the short-time duty
-  const Tpeak = (Fa * r) / driven / G / eta, Tcont = Math.max((Ft * r) / driven / G / eta, Tpeak / PEAK_OVER_CONTINUOUS.value);
+  const V = B.v('bus voltage', busGate(B, 'drive', P, driven, Math.max(ext[2], 1) * 0.8 + 0.5, c.ambient), 'V', 'the lowest level at which each motor\'s current is carried by a stocked conductor (the bus gate)');
+  // the reduction: one belt stage, at most 6 to 1; the ratio whose motor and belt weigh least, each motor holding the
+  // larger of what top speed needs and its share of the peak over the short-time duty
+  const wWheel = vTop / r, torques = (G: number) => { const Tpeak = (Fa * r) / driven / G / eta; return { Tpeak, Tcont: Math.max((Ft * r) / driven / G / eta, Tpeak / PEAK_OVER_CONTINUOUS.value) }; };
+  const ratios = [1, 1.5, 2, 3, 4, 5, 6].map((G) => { const { Tcont } = torques(G), m = motorChoice('trial', 'trial', Tcont, wWheel * G, V, c.ambient); return { G, mass: m.mass + 0.04 * G * Math.max(1, Tcont), holds: m.holds }; });
+  const bestG = ratios.filter((x) => x.holds).sort((a, b) => a.mass - b.mass)[0] ?? ratios.at(-1)!;
+  B.gate({ id: 'reduction', question: `what ratio between each motor and its wheel, the wheel at ${wWheel.toFixed(1)} rad/s at top speed`, inputs: [{ name: 'wheel speed', value: wWheel, unit: 'rad/s' }], law: 'T_motor = T_wheel / G at G times the speed; of one belt stage up to 6 to 1, the ratio whose motor (in its own cooling) and belt (its larger pulley about 40 g a ratio per N m, an estimate) weigh least', tried: ratios.map((x) => `${x.G} to 1: ${x.holds ? `${x.mass.toFixed(2)} kg` : 'its heat does not hold'}`), outcome: `${bestG.G} to 1`, held: bestG.holds });
+  const G = B.v('reduction', bestG.G, '1', `the reduction gate: ${bestG.G} to 1, the lightest motor and belt`), wMotor = wWheel * G;
+  const { Tpeak, Tcont } = torques(G);
   B.v('motor torque, continuous', Tcont, 'N m', `the larger of top speed's ${((Ft * r) / driven / G / eta).toFixed(1)} N m and the peak ${Tpeak.toFixed(1)} N m over ${PEAK_OVER_CONTINUOUS.value} (${PEAK_OVER_CONTINUOUS.source})`);
   // the chassis: two rails between the axles, each carrying half the weight at mid-span, on edge
   const L = B.v('wheelbase', Math.max(ext[2] + r, 4 * r), 'm', 'the length the carried region needs, and room for the wheels'), track = Math.max(ext[0] + 0.1, 3 * tyre.w + 0.1);
@@ -225,10 +267,13 @@ function rolling(c: Ctx, B: B, body: string, ext: V3, self: number, ground: stri
   B.trace.push({ stage: 'axis', where: 'running gear', round: 1, says: `${driven} of 4 wheels driven, ${tyre.id}, ${G.toFixed(1)} to 1, ${(P / 1e3).toFixed(1)} kW at ${V} V`, flaws: [], remedy: null });
   B.use(`conversion:charge->momentum:moving:${body}`, `conversion:momentum:${body}:removal`, `shed:conversion:charge->momentum:moving:${body}`, `shed:conversion:momentum:${body}:removal`, `path:momentum:${body}`, `filter:momentum:${body}`);
   // steering: past walking pace a steered axle; the tightest curve sets the angle, the friction on its tyres the force
-  const curve = c.q(ground, /tightest curve|radius/);
-  if (vTop > 4) {
+  const curve = c.q(ground, /tightest curve|radius/) ?? Math.max(5, 5 * L);
+  // steering: a skid turn slides the tyres sideways, using friction a curve needs; past a tenth of μg it cannot hold the curve
+  const lateral = (vTop * vTop) / curve, skidOk = lateral <= SKID_TURN.value * mu * c.g;
+  B.gate({ id: 'steering', question: `how it follows a ${curve.toFixed(0)} m curve at ${vTop.toFixed(1)} m/s`, inputs: [{ name: 'lateral acceleration', value: lateral, unit: 'm/s^2' }, { name: 'friction', value: mu, unit: '1' }], law: `a = v²/R against ${SKID_TURN.value} μ g (${SKID_TURN.source})`, tried: [`skid turn by the driven wheels' speed difference: ${skidOk ? 'holds' : `${lateral.toFixed(2)} m/s² is past ${(SKID_TURN.value * mu * c.g).toFixed(2)}`}`], outcome: skidOk ? 'skid turn' : 'a steered axle', held: true });
+  if (!skidOk) {
     B.use(`modulation:momentum:${body}:direction`);
-    const angle = B.v('steer angle', Math.atan(L / Math.max(L * 1.5, curve ?? 10)), 'rad', `δ = atan(L/R) at the tightest curve, ${(curve ?? 10).toFixed(0)} m`);
+    const angle = B.v('steer angle', Math.atan(L / Math.max(L * 1.5, curve)), 'rad', `δ = atan(L/R) at the tightest curve, ${curve.toFixed(0)} m`);
     const Frack = B.v('rack force', (2 * mu * (M * c.g / 4) * 0.03) / 0.13, 'N', 'turning both tyres at rest: friction times the load on each over a 30 mm scrub, through 130 mm steering arms (estimate)');
     const rackR = Math.max(10 * mm, Math.sqrt(Frack / (Math.PI * 120e6)));
     const zr = L / 2 - 0.12;
@@ -288,6 +333,7 @@ function climate(c: Ctx, B: B, body: string, k: number, t: number, at: V3, into:
 }
 
 // ---- in the air ---------------------------------------------------------------------------------------------------------
+const armL0 = (D: number, ext: V3) => D * 0.75 + Math.max(ext[0], ext[2]) / 2;
 function flying(c: Ctx, B: B, body: string, ext: V3, self: number, air: string): { battery: V3; deck: number; P: number; cruise: (v: number) => number } {
   B.use(`moving:${body}`); for (const e of c.s.elements) if (/^(thrust|hover|lift|drag):/.test(e.id) && e.id.includes(body)) B.use(e.id);
   B.use(`conversion:charge->momentum:moving:${body}`, `shed:conversion:charge->momentum:moving:${body}`, `conversion:momentum:${body}:removal`, `shed:conversion:momentum:${body}:removal`);
@@ -297,7 +343,7 @@ function flying(c: Ctx, B: B, body: string, ext: V3, self: number, air: string):
   const T = M * c.g / n, A = T / ROTOR.discLoading, D = B.v('rotor diameter', 2 * Math.sqrt(A / Math.PI), 'm', `disc loading ${ROTOR.discLoading} N/m² (${ROTOR.source}) at hover, a quarter of ${(M * c.g).toFixed(1)} N each`);
   const Pi = T ** 1.5 / Math.sqrt(2 * rho * A), P = B.v('hover power', (n * Pi) / ROTOR.figureOfMerit, 'W', `P = T^1.5/√(2ρA) a rotor, over a figure of merit ${ROTOR.figureOfMerit}`);
   const w = B.v('rotor speed', (2 * ROTOR.tipSpeed) / D, 'rad/s', `tip speed ${ROTOR.tipSpeed} m/s`), Q = Pi / ROTOR.figureOfMerit / w;
-  const V = busFor(P), armL = B.v('arm length', D * 0.75 + Math.max(ext[0], ext[2]) / 2, 'm', 'rotors clear of each other and of the body: three quarters of a diameter beyond its edge');
+  const V = busGate(B, 'rotors', 2 * P, n, armL0(D, ext) + 0.1, c.ambient), armL = B.v('arm length', D * 0.75 + Math.max(ext[0], ext[2]) / 2, 'm', 'rotors clear of each other and of the body: three quarters of a diameter beyond its edge');
   // arms: carbon tubes that bend under twice the hover thrust at their tips within a third of what they bear
   const cf = mat('composite.cfrp'), sAllow = cf.yield / 3, Mtip = 2 * T * armL;
   const ro = Math.max(4 * mm, Math.cbrt((4 * Mtip) / (Math.PI * sAllow * (1 - 0.8 ** 4)))), ri = 0.8 * ro;
@@ -566,24 +612,33 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   const ext = extentOfRegion(c, body.id);
   const ground = s.elements.find((e) => e.id.startsWith(`contact:${body.id}|`))?.id.split('|')[1] ?? null;
   const thrust = s.elements.find((e) => e.id.startsWith(`thrust:${body.id}|`));
-  // ways that exclude each other: charge where it is offered, the others kept as not chosen
+  // ways that exclude each other: of the stores the generator offers, the ones a designer here can build; the rest
+  // stay offered, not chosen, and say what law would build them
   const stores = s.elements.filter((e) => e.id.startsWith('store:') && e.id.includes(`:moving:${body.id}`));
-  const chosen = stores.find((e) => e.id.startsWith('store:charge')) ?? stores[0];
+  const DESIGNABLE: Record<string, string> = { charge: 'cells in series and parallel (src/nexus/embody/any.ts, battery)' };
+  const carrierOf = (e: { id: string }) => e.id.split(':')[1]!;
+  const chosen = stores.find((e) => carrierOf(e) in DESIGNABLE) ?? null;
+  if (stores.length) B.gate({ id: 'store', question: `what stores the energy it carries: ${stores.map(carrierOf).join(' or ')}`, inputs: [], law: 'the generator offers each store that lasts the range; of them, one a designer here builds', tried: stores.map((e) => `${carrierOf(e)}: ${DESIGNABLE[carrierOf(e)] ? `designable, by ${DESIGNABLE[carrierOf(e)]}` : 'no designer yet (the law to write: its conversion, store and path as parts)'}`), outcome: chosen ? carrierOf(chosen) : 'none designable', held: !!chosen });
   for (const st of stores.filter((x) => x !== chosen)) {
-    const carrier = st.id.split(':')[1]!;
+    if (!chosen) break;
+    const carrier = carrierOf(st);
     const others = s.elements.filter((e) => e.id.includes(`${carrier}:`) || e.id.includes(`${carrier}->`));
     B.use(...others.map((e) => e.id));
-    B.trace.push({ stage: 'choose', where: st.id, round: 1, says: `${chosen?.id.split(':')[1] ?? 'one'} chosen over ${carrier}: the generator offers both for the same store; ${others.length} elements of ${carrier} not built`, flaws: [], remedy: null });
+    B.trace.push({ stage: 'choose', where: st.id, round: 1, says: `${carrierOf(chosen)} chosen over ${carrier}: the generator offers both for the same store and a designer here builds only ${carrierOf(chosen)}; ${others.length} elements of ${carrier} not built`, flaws: [], remedy: null });
   }
   let batteryAt: V3 = [0, 0.05, 0], batteryInto: string[] = [], source: V3 = [ext[0] / 2 + 0.2, 0.5, 0], sourceInto: string[] = [], cruise: ((v: number) => number) | null = null, hover = 0;
+  // which designer: by what the generator says the region does, not what it is called
+  const air = thrust ? thrust.id.split('|')[1] ?? 'air' : '', airRho = air ? c.q(air, /density/) ?? 1.2 : 0;
+  const designer = body.moving && ground ? 'on the ground' : body.moving && thrust && airRho < 10 ? 'in the air' : !body.moving ? 'a frame on the ground' : null;
+  B.gate({ id: 'designer', question: `how ${body.id} is held and moved`, inputs: [{ name: 'moves', value: body.moving ? 1 : 0, unit: '1' }, ...(air ? [{ name: `density of ${air}`, value: airRho, unit: 'kg/m^3' }] : [])], law: 'a contact with a solid rolls on wheels; a push on a fluid light enough to fly through is a rotor\'s; a region that stays is framed on the ground', tried: [`contact with a solid: ${ground ?? 'none'}`, `push on a fluid: ${thrust ? `${air}, ${airRho} kg/m³${airRho >= 10 ? ': too dense for a rotor (a propeller and a hull are not designed yet)' : ''}` : 'none'}`, `stays put: ${body.moving ? 'no' : 'yes'}`], outcome: designer ?? 'none: its elements are left as gaps', held: !!designer });
   if (body.moving && ground) {
     const r = rolling(c, B, body.id, ext, self, ground);
     shell(c, B, body.id, ext, r.deck);
     batteryAt = [0, r.deck + 2 * mm, -ext[2] / 4]; batteryInto = ['body/floor']; cruise = r.cruise;
     const V = B.loads[0]?.V ?? 48;
     climate(c, B, body.id, MINERAL_WOOL.k, 10 * mm, r.heatAt, ['chassis/cross-front'], V);
-  } else if (body.moving && thrust && (c.q(thrust.id.split('|')[1] ?? '', /density/) ?? 1.2) < 10) {
-    const r = flying(c, B, body.id, ext, self, thrust.id.split('|')[1] ?? 'air');
+  } else if (designer === 'in the air' && thrust) {
+    const r = flying(c, B, body.id, ext, self, air);
     batteryAt = r.battery; batteryInto = ['frame/hub-top']; hover = r.P; cruise = r.cruise;
   } else if (!body.moving) {
     const r = standing(c, B, body.id, ext);
@@ -591,7 +646,7 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   }
   const P = B.loads.reduce((a, l) => a + l.P, 0);
   // stored charge for the range or the time asked
-  const store = chosen && chosen.id.startsWith('store:charge') ? chosen : s.elements.find((e) => e.id.startsWith('store:charge'));
+  const store = chosen ?? (body.moving ? null : s.elements.find((e) => e.id.startsWith('store:charge')) ?? null);
   if (store && P > 0) {
     const range = c.val(store.id, /distance/) ?? c.want(body.id, 'm', /^distance/, 'lo');
     const vTop = c.want(body.id, 'm/s', /^speed/, 'hi') ?? c.want(body.id, 'm/s', /^speed/, 'lo') ?? 1.5, vCruise = hover ? vTop : vTop * 0.7;
@@ -635,5 +690,5 @@ function once(intent: Intent, s: Structure, self: number): Omit<Machine, 'rounds
   const ex = B.parts.length ? extentOf(B.parts) : { lo: [0, 0, 0] as V3, hi: [0, 0, 0] as V3 };
   const bomMap = new Map<string, { name: string; qty: number; material: string; category: string; mass: number }>();
   for (const p of B.parts) { const e = bomMap.get(p.name) ?? { name: p.name, qty: 0, material: p.material, category: p.category, mass: 0 }; e.qty++; e.mass += p.mass; bomMap.set(p.name, e); }
-  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
+  return { name: intent.name, parts: B.parts, values: B.values, flaws: B.flaws, trace: B.trace, gates: B.gates, size: ex.hi.map((h, k) => h - ex.lo[k]!) as V3, bom: [...bomMap.values()], config: B.values.slice(0, 10).map((v) => ({ name: v.name, value: v.value, unit: v.unit, law: v.law })), ...empty };
 }

@@ -35,8 +35,12 @@ const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
 /** One design step inside a round: a sub-loop's own round (the head, an axis, a motor) or the whole checked. */
 export interface Step { stage: 'head' | 'motor' | 'axis' | 'wiring' | 'whole' | 'frame' | 'choose'; where: string; round: number; says: string; flaws: Flaw[]; remedy: string | null }
 export interface Round { n: number; flaws: Flaw[]; remedies: string[]; parts: number; mass: number; choices: Choices; snapshot: Part[]; trace: Step[] }
+/** A decision the embodiment made: what it asked, what it read, the law that decided, what it tried, and what came of it. */
+export interface Gate { id: string; question: string; inputs: { name: string; value: number; unit: string }[]; law: string; tried: string[]; outcome: string; held: boolean }
 export interface Machine {
   name: string; parts: Part[]; values: Value[]; flaws: Flaw[]; rounds: Round[]; trace: Step[];
+  /** The decisions that shaped it, each by a law (the general embodiment's; the printer's are its remedies). */
+  gates?: Gate[];
   axes: LinearAxis[]; hotEnd: HotEnd | null; electrical: Electrical | null;
   size: V3; bom: { name: string; qty: number; material: string; category: string; mass: number }[];
   config: { name: string; value: number; unit: string; law: string }[];

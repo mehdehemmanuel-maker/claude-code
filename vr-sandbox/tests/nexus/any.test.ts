@@ -82,4 +82,32 @@ describe('embodiment of anything', () => {
     const gaps = m.flaws.filter((f) => f.check === 'gap').map((f) => f.where);
     expect(gaps).toContain('thrust:the payload|the water');
   });
+
+  it('takes every decision by a gate over a law, keeping what it tried: the bus, the cooling, the steering, the store, the designer', () => {
+    for (const i of [car(), vehicle({ ...base, mass: 150, speed: 2.2, range: 4000 }), vehicle({ ...base, medium: 'air', mass: 2, speed: 15, range: 5000 })]) {
+      const m = embodyAny(i, generate(i))!, gates = m.gates!;
+      for (const id of ['designer', 'store']) expect(gates.some((g) => g.id === id)).toBe(true);
+      // the bus is the lowest level a stocked conductor carries: every level tried before it carried nothing
+      for (const g of gates.filter((x) => x.id.endsWith(': bus'))) {
+        expect(g.held).toBe(true);
+        expect(g.tried.slice(0, -1).every((t) => /no stocked conductor/.test(t))).toBe(true);
+        expect(g.tried.at(-1)!.startsWith(g.outcome.split(',')[0]!)).toBe(true);
+      }
+      // the cooling is the one that holds for the least mass, its own included
+      for (const g of gates.filter((x) => x.id.endsWith(': cooling'))) {
+        const holding = g.tried.map((t) => t.match(/^(.+?): holds, ([\d.]+) kg/)).filter((x): x is RegExpMatchArray => !!x);
+        if (!holding.length) continue;
+        const least = holding.sort((a, b) => Number(a[2]) - Number(b[2]))[0]!;
+        expect(g.outcome).toBe(least[1]);
+      }
+    }
+    // the reduction is the ratio whose motor and belt weigh least
+    const red = embodyAny(car(), generate(car()))!.gates!.find((g) => g.id === 'reduction')!;
+    const kg = red.tried.map((t) => t.match(/^([\d.]+) to 1: ([\d.]+) kg/)).filter((x): x is RegExpMatchArray => !!x).sort((a, b) => Number(a[2]) - Number(b[2]));
+    expect(red.outcome).toBe(`${kg[0]![1]} to 1`);
+    // a car on a 50 m curve at 33 m/s needs a steered axle; a cart at walking pace turns by its wheels
+    const steer = (i: ReturnType<typeof car>) => embodyAny(i, generate(i))!.gates!.find((g) => g.id === 'steering')!.outcome;
+    expect(steer(car())).toBe('a steered axle');
+    expect(steer(vehicle({ ...base, mass: 150, speed: 1.2, range: 2000 }))).toBe('skid turn');
+  });
 });

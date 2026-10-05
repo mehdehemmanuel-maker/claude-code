@@ -103,6 +103,17 @@ const stepCard = card(0.66, 0.62); facing(stepCard.mesh, -0.78, 1.3, -0.95);
 const roundsCard = card(0.66, 0.62); facing(roundsCard.mesh, 0.78, 1.3, -0.95);
 const lawsCard = card(0.7, 0.86); facing(lawsCard.mesh, -1.35, 1.25, -0.3);
 const liveCard = card(0.7, 0.86); facing(liveCard.mesh, 1.35, 1.25, -0.3);
+// the logic of it: every decision the embodiment took, the law that took it, and what else it tried
+const gatesCard = card(0.82, 0.86, 1400); facing(gatesCard.mesh, 1.35, 1.25, 0.3); gatesCard.mesh.visible = false;
+function drawGates(): void {
+  const gs = run?.m.gates ?? [];
+  const lines: { text: string; color?: string; size?: number }[] = gs.length ? gs.slice(0, 14).flatMap((g) => [
+    { text: `${g.held ? '◆' : '◇'} ${g.id}: ${g.outcome}`, color: g.held ? '#69f0ae' : '#ff8a80', size: 0.9 },
+    { text: `   ${g.question} · ${g.law}`.slice(0, 150), color: '#9fdfee', size: 0.68 },
+    ...(g.tried.length > 1 ? [{ text: `   tried: ${g.tried.join(' | ')}`.slice(0, 170), color: '#ffe082', size: 0.62 }] : []),
+  ]) : [{ text: 'The printer decides by its remedies, round by round: see the rounds.', color: '#9fdfee', size: 0.9 }];
+  gatesCard.draw(`LOGIC GATES · ${gs.length} decisions`, lines, '#b388ff');
+}
 const subtitle = card(1.1, 0.2, 1400); subtitle.mesh.position.set(0, 1.62, -1.15); subtitle.mesh.lookAt(0, 1.5, 0.6); scene.add(subtitle.mesh);
 const title = label('NEXUS · the forge · live', 0.055, '#ffffff', 'rgba(0,0,0,0)'); title.position.set(0, 2.6, -1.7); pipelineGroup.add(title);
 // one voice, mine, above my head: the centre of your view stays the machine's
@@ -446,6 +457,7 @@ function tick(): void {
   lawsCard.mesh.visible = panel === 'laws';
   liveCard.mesh.visible = panel === 'bill';
   loopBoard.visible = decideChips.visible = panel === 'loop';
+  gatesCard.mesh.visible = panel === 'gates';
   flawBoard.visible = panel === 'flaws'; flawList.style.display = panel === 'flaws' ? 'flex' : 'none';
   chatCard.mesh.visible = keyboard.mesh.visible = panel === 'chat';
   decide.style.display = panel === 'loop' ? 'flex' : 'none';
@@ -525,6 +537,7 @@ const world2: WorldApi = {
       `Assemblies (id: parts): ${[...groups].map(([g, n]) => `${g}: ${n}`).join(', ')}.`,
       isPrinter ? `Key values: ${['deposition speed', 'acceleration', 'support sag', 'bridge depth', 'nozzle height'].map((n) => { const x = val(n); return x ? `${n} ${fmt(x.value)} ${x.unit}` : ''; }).filter(Boolean).join('; ')}; ${m.hotEnd?.streams} streams, heater ${fmt(m.hotEnd?.electrical.P ?? 0)} W, supply ${m.electrical?.psu.id}.` : `Key values: ${m.values.slice(0, 14).map((x) => `${x.name} ${fmt(x.value)} ${x.unit}`).join('; ')}.`,
       `Laws the experiment updated: ${LAW_UPDATES.slice(-5).map((l) => `${l.n}. ${l.now}`).join(' | ')}`,
+      run.m.gates?.length ? `Decisions (gates): ${run.m.gates.slice(0, 10).map((g) => `${g.id}: ${g.outcome} (${g.law.slice(0, 80)})`).join(' | ')}` : '',
       lastMake ? `Asked in words: "${lastMake.words}". Heard: ${lastMake.heard.join('; ') || 'nothing more'}. Assumed: ${lastMake.assumed.join('; ') || 'nothing'}.` : '',
       allNotes.length ? `The person's notes (${allNotes.length}): ${allNotes.slice(-6).map((n) => `${n.kind} on ${n.partName}: ${n.text}`).join(' | ')}` : 'No notes yet.',
     ].filter(Boolean).join('\n');
@@ -569,7 +582,7 @@ const world2: WorldApi = {
   },
   flaws() { summonTo('flaws'); return flawRows().slice(0, 8).map((r, i) => `${i + 1}. ${r.text}`).join(' ') || 'No flaw, gap or report left on it.'; },
   expand: (target) => expand(target, true),
-  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat'].includes(p2) ? p2 : 'loop') as Panel); },
+  show: (p2) => { if (p2 === 'none') { panel = 'none'; return 'Out of your way.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates'].includes(p2) ? p2 : 'loop') as Panel); },
   build: (target) => buildIt(target),
 };
 
@@ -625,7 +638,7 @@ async function addNote(s: Shown, kind: NoteKind, text: string): Promise<string> 
   return `Noted on ${s.part.name}: ${body.text}.${notes.shared ? ' It is kept with the machine; I read it with your view.' : ' Kept in this browser only.'}`;
 }
 // ---- panels, summoned one at a time in front of you, and sent away again --------------------------------------------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates';
 let panel: Panel = 'none', lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 /** Bring a panel up, or put it away if it is the one up. */
 function summon(p: Panel): string { return summonTo(panel === p ? 'none' : p); }
@@ -646,9 +659,10 @@ function summonTo(p: Panel): string {
   if (panel === 'bill') place(liveCard.mesh);
   if (panel === 'loop') { place(loopBoard, 0.12); place(decideChips, -0.3); }
   if (panel === 'flaws') { drawFlaws(); place(flawBoard, 0.05); }
+  if (panel === 'gates') { drawGates(); place(gatesCard.mesh); }
   if (panel === 'chat') { drawChat(); place(chatCard.mesh, 0.1); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (panel === 'pipeline') drawRoundsNow();
-  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.' } as Record<string, string>)[panel] ?? '';
+  return ({ pipeline: 'The pipeline.', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.` } as Record<string, string>)[panel] ?? '';
 }
 
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
@@ -894,7 +908,7 @@ tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-i
 const rowOf = (title: string) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center'; const t2 = document.createElement('span'); t2.textContent = title; t2.style.cssText = 'font:600 11px system-ui;color:#7fb3c8;letter-spacing:.08em;text-transform:uppercase'; r.appendChild(t2); tools.appendChild(r); return r; };
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 let loopBtn: HTMLButtonElement | null = null;
-for (const [name, p2] of [['Flaws', 'flaws'], ['Chat', 'chat'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+for (const [name, p2] of [['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
 button('⤢ Expand', () => say(expand('', true)), actRow);
 button('▶ Build this', () => say(buildIt('')), actRow);
 button('▶ Build it all', () => say(buildIt('the machine')), actRow);
@@ -1032,8 +1046,8 @@ const dolly = new THREE.Group(); scene.add(dolly); dolly.add(camera);
 // the wrist menu, on your left hand: turn your wrist to see it, point at it with your right and pull the trigger
 const CHIPS: [string, () => void][] = [
   ['Flaws', () => line('system', summon('flaws'))], ['Chat', () => line('system', summon('chat'))], ['New build', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }],
-  ['Pipeline', () => say(summon('pipeline'))], ['Rounds', () => say(summon('rounds'))], ['Bill', () => say(summon('bill'))],
-  ['My loop', () => say(summon('loop'))], ['Laws', () => say(summon('laws'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
+  ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
+  ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Hide all', () => { panel = 'none'; holo.clear(); isolated = null; }],
   ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
