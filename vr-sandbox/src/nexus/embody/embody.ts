@@ -33,7 +33,7 @@ const mm = 1e-3, g0 = 9.80665;
 const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
 
 /** One design step inside a round: a sub-loop's own round (the head, an axis, a motor) or the whole checked. */
-export interface Step { stage: 'head' | 'motor' | 'axis' | 'wiring' | 'whole'; where: string; round: number; says: string; flaws: Flaw[]; remedy: string | null }
+export interface Step { stage: 'head' | 'motor' | 'axis' | 'wiring' | 'whole' | 'frame' | 'choose'; where: string; round: number; says: string; flaws: Flaw[]; remedy: string | null }
 export interface Round { n: number; flaws: Flaw[]; remedies: string[]; parts: number; mass: number; choices: Choices; snapshot: Part[]; trace: Step[] }
 export interface Machine {
   name: string; parts: Part[]; values: Value[]; flaws: Flaw[]; rounds: Round[]; trace: Step[];

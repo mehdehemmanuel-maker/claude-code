@@ -18,6 +18,7 @@ const AXIS_NAME: Record<string, string> = { x: 'x axis', y: 'y axis', z: 'z axis
 /** The path of a part in the tree, from its assembly down: what it was designed in, then what for. */
 export function pathOf(p: Part): string[] {
   const id = p.id;
+  if (p.unit) return id.startsWith(`${p.unit}/motor/`) ? [p.unit, 'motor', p.system ?? 'motor'] : [p.unit, p.system ?? p.category.split('/')[0]!];
   const ax = id.match(/^(x|y|z\d?)\/(motor\/)?/);
   if (ax) return ax[2] ? [ax[1]!, 'motor', p.system ?? 'motor'] : [ax[1]!, id === `${ax[1]}/bridge` ? 'bridge' : p.system ?? 'axis'];
   if (id.startsWith('hot end/')) return ['hot end', p.system ?? 'head'];
@@ -32,7 +33,7 @@ export function pathOf(p: Part): string[] {
   if (id.startsWith('bb:')) return ['bench circuit', 'breadboard'];
   return ['other', p.category.split('/')[0]!];
 }
-const nameOf = (seg: string, depth: number) => (depth === 0 ? AXIS_NAME[seg] ?? seg : seg);
+const nameOf = (seg: string, depth: number) => (depth === 0 ? AXIS_NAME[seg] ?? seg.replace(/-/g, ' ') : seg);
 
 /** The machine as a tree: assemblies, subsystems, parts. */
 export function treeOf(parts: Part[], name = 'the machine'): TreeNode {

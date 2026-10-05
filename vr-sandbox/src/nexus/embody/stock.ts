@@ -157,3 +157,58 @@ export const AIR_GAP = { value: 0.4 * mm, source: 'about 0.3 to 0.5 mm in small 
 
 /** 20 × 20 mm aluminium profile, slot 6: second moment of area, area, mass per metre. */
 export const PROFILE_2020 = { side: 20 * mm, I: 0.69e-8, A: 1.6e-4, massPerM: 0.48, slot: 6 * mm, source: 'Misumi HFS5-2020: I about 0.69 cm⁴, about 0.48 kg/m', confidence: 'maker' as Confidence };
+
+// ---- for anything that moves, flies, holds heat or carries water (src/nexus/embody/any.ts) ------------------------
+/** The tangential stress a machine's air gap carries, by how it is cooled: what sizes a motor's rotor for its torque. */
+export const GAP_SHEAR_BY_COOLING = [
+  { cooling: 'still air', value: 4e3, h: 15 }, { cooling: 'a fan', value: 12e3, h: 45 }, { cooling: 'liquid', value: 35e3, h: 300 },
+] as const;
+export const GAP_SHEAR_BY_COOLING_SRC = { source: 'torque per rotor volume about 7 to 14 kN m/m³ for small totally enclosed machines, 14 to 42 integral-horsepower industrial, near 100 for liquid-cooled traction motors (Hendershot and Miller); σ is half of it. h is what the housing gives off per kelvin and square metre: about 10 to 20 W/m²K to still air, 30 to 60 with a fan over fins, a few hundred referred to the housing for a water jacket (estimate)', confidence: 'estimate' as const };
+/** A Li-ion cell as its maker rates it. */
+export const LI_ION_21700 = { id: 'INR21700-50E', V: 3.6, Vmax: 4.2, Vmin: 2.5, Ah: 4.9, Imax: 9.8, mass: 0.0685, d: 21.25 * mm, l: 70.8 * mm, source: 'Samsung SDI INR21700-50E datasheet: 3.6 V nominal, 4.9 Ah, 9.8 A continuous, 68.5 g, Ø21.25 × 70.8 mm', confidence: 'datasheet' as const };
+/** What a pack adds to its cells: holders, busbars, the management board, the case. */
+export const PACK_OVERHEAD = { value: 1.35, source: 'pack mass about 1.25 to 1.5 times its cells for small packs (estimate)', confidence: 'estimate' as const };
+/** Wheels as stocked: radius, width, the most load each carries. */
+export const TYRES = [
+  { id: 'castor 100 mm', r: 0.05, w: 0.03, load: 400 }, { id: 'cart wheel 200 mm', r: 0.1, w: 0.05, load: 1200 },
+  { id: 'scooter 10 inch', r: 0.127, w: 0.065, load: 1500 }, { id: '155/80 R13', r: 0.28, w: 0.155, load: 4600 },
+  { id: '205/55 R16', r: 0.316, w: 0.205, load: 6000 }, { id: '235/45 R18', r: 0.34, w: 0.235, load: 7000 },
+];
+export const TYRES_SRC = { source: 'ETRTO load indices (205/55 R16 91: 615 kg) and wheel makers\' ratings for castors and cart wheels; widths nominal', confidence: 'estimate' as const };
+export const ROLLING_RESISTANCE = { value: 0.01, source: 'about 0.007 to 0.015 for pneumatic tyres on asphalt (estimate)', confidence: 'estimate' as const };
+export const DRAG_COEFFICIENT = { value: 0.32, source: 'about 0.25 to 0.35 for a closed road body (estimate)', confidence: 'estimate' as const };
+/** Rectangular hollow sections, cold-formed: outside sizes and wall. */
+export const RECT_TUBES = [[30, 20, 2], [40, 20, 2], [50, 30, 3], [60, 40, 3], [80, 40, 4], [100, 50, 4], [120, 60, 5], [150, 100, 6]].map(([b, h, t]) => ({ id: `RHS ${b}×${h}×${t}`, b: b! * mm, h: h! * mm, t: t! * mm }));
+export const RECT_TUBES_SRC = { source: 'EN 10219 cold-formed rectangular hollow sections (a selection)', confidence: 'standard' as const };
+/** Copper tube for water, outside diameter and wall. */
+export const COPPER_PIPES = [[10, 0.7], [15, 0.7], [22, 0.9], [28, 0.9], [35, 1.2], [42, 1.2]].map(([d, t]) => ({ id: `Cu ${d} × ${t}`, d: d! * mm, t: t! * mm }));
+export const COPPER_PIPES_SRC = { source: 'EN 1057 copper tube, half-hard (a selection)', confidence: 'standard' as const };
+export const PIPE_VELOCITY = { value: 1.5, source: 'water in domestic pipes kept below about 1.5 to 2 m/s against noise and erosion (estimate)', confidence: 'estimate' as const };
+/** Axial and inline duct fans by diameter: the flow each moves against a small duct. */
+export const FANS = [[0.1, 0.025], [0.125, 0.045], [0.15, 0.075], [0.2, 0.15], [0.25, 0.25], [0.315, 0.4]].map(([d, q]) => ({ id: `${Math.round(d! * 1e3)} mm inline fan`, d: d!, q: q!, W: Math.round(q! * 300) }));
+export const FANS_SRC = { source: 'inline duct fans: about 90 m³/h at 100 mm to 1400 m³/h at 315 mm, about 300 W per m³/s at low pressure (makers\' ranges, estimate)', confidence: 'estimate' as const };
+export const MINERAL_WOOL = { k: 0.035, density: 30, source: 'glass and stone wool batts: λ about 0.032 to 0.040 W/m K (EN 13162 declared values)', confidence: 'estimate' as const };
+/** What an envelope's walls, roof and floor let through per area per kelvin, where the person asks for an efficient one. */
+export const ENVELOPE_U = { wall: 0.18, roof: 0.13, floor: 0.15, source: 'about the Passive House component guidance (0.1 to 0.15 W/m²K) and good new-build practice (0.18 to 0.25)', confidence: 'estimate' as const };
+/** Aluminium honeycomb as a crush element: the stress it crushes at, nearly flat over its stroke. */
+export const HONEYCOMB = { sigma: 1.7e6, density: 50, source: 'aluminium 5052 honeycomb, 3/16 in cell, 3.1 pcf: crush strength about 1.6 to 1.9 MPa (makers\' data, estimate)', confidence: 'estimate' as const };
+/** Rotors for lift: the disc loading small multirotors run at, and how much of the ideal power a rotor reaches. */
+export const ROTOR = { discLoading: 250, figureOfMerit: 0.65, tipSpeed: 150, source: 'small multirotors: disc loading about 100 to 400 N/m², figure of merit about 0.6 to 0.7, tip speeds about 100 to 200 m/s (estimate)', confidence: 'estimate' as const };
+/** How far past its continuous torque a traction motor is driven for a short while. */
+export const PEAK_OVER_CONTINUOUS = { value: 2.5, source: 'traction motor datasheets rate peak torque about 2 to 3 times continuous for 30 to 60 s (IEC 60034-1 S2 short-time duty); estimate', confidence: 'estimate' as const };
+/** A heat pump's heat moved per unit of work. */
+export const HEAT_PUMP_COP = { value: 2.5, source: 'air-to-air heat pumps: COP about 2 to 4 across −20 to 7 °C outside (EN 14511 ratings; estimate at the cold end)', confidence: 'estimate' as const };
+/** What a heat-recovery ventilation unit gives back of the heat the exchanged air carries out. */
+export const HEAT_RECOVERY = { value: 0.8, source: 'counterflow heat-recovery ventilation: 75 to 90 % (Passive House certified units; estimate)', confidence: 'estimate' as const };
+/** Light out over power in, for white LED fittings. */
+export const LED_RADIANT_EFFICIENCY = { value: 0.35, source: 'white LED fittings turn about 30 to 45 % of their power into light (US DOE SSL programme; estimate)', confidence: 'estimate' as const };
+/** A strip footing's least practical width and depth. */
+export const STRIP_FOOTING = { width: 0.3, depth: 0.2, source: 'strip footings for light frame walls about 300 mm wide and 200 mm deep at the least (IRC R403.1 tables; estimate)', confidence: 'estimate' as const };
+/** Rain a vertical downpipe carries. */
+export const DOWNPIPE = { d: 0.08, q: 2e-3, source: 'an 80 mm downpipe carries about 2 L/s (EN 12056-3, table 8; estimate)', confidence: 'estimate' as const };
+/** Sheet goods a frame is clad in. */
+export const BOARDS = { osb: { t: 0.018, density: 600 }, sheathing: { t: 0.012, density: 600 }, plasterboard: { t: 0.0125, density: 700 }, source: 'OSB/3 to EN 300, gypsum board to EN 520 (typical thicknesses and densities)', confidence: 'standard' as const };
+/** A Li-ion cell made for current rather than energy. */
+export const LI_ION_21700_POWER = { id: 'INR-21700-P42A', V: 3.6, Vmax: 4.2, Vmin: 2.5, Ah: 4.2, Imax: 45, mass: 0.07, d: 21.7 * mm, l: 70.4 * mm, source: 'Molicel INR-21700-P42A datasheet: 3.6 V nominal, 4.2 Ah, 45 A continuous, 70 g', confidence: 'datasheet' as const };
+/** The cells a pack is made of: whichever makes it with the fewest. */
+export const CELLS = [LI_ION_21700, LI_ION_21700_POWER];

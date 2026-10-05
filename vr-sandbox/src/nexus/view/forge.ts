@@ -123,7 +123,7 @@ function runAll(a: PrinterAsk): Run | null {
 
 // ---- beats: every step of the run, in order, each with how long it is shown ---------------------------------------------
 interface Beat { kind: 'intent' | 'generate' | 'step' | 'check' | 'remedy' | 'done'; stage: Stage; round: number; dur: number; step?: Step; flaws: Flaw[]; says: string; detail: { text: string; color?: string; size?: number }[] }
-const stageOf: Record<Step['stage'], Stage> = { head: 'HEAD', motor: 'MOTORS', axis: 'AXES', wiring: 'WIRING', whole: 'CHECK' };
+const stageOf: Record<Step['stage'], Stage> = { head: 'HEAD', motor: 'MOTORS', axis: 'AXES', wiring: 'WIRING', whole: 'CHECK', frame: 'AXES', choose: 'GENERATE' };
 const fmt = (x: number) => (Math.abs(x) >= 1e-2 && Math.abs(x) < 1e5 ? Number(x.toPrecision(3)).toString() : x.toExponential(2).replace('e+', 'e'));
 const short = (f: Flaw) => `${f.check} @ ${f.where}: ${f.says}${f.remedy ? ` → ${f.remedy}` : ''}`;
 

@@ -25,7 +25,7 @@ import { AIR_GAP, AWG_SIZES, awgDiameter, BALL_BEARINGS, COPPER, CURRENT_DENSITY
 const mm = 1e-3;
 const mat = (id: string) => MATERIALS.find((m) => m.id === id)!;
 
-export interface MotorAsk { T: number; w: number; V: number; shaftAtLeast: number; ambient: number; aspect?: number; name: string; id: string; grade?: string; paths?: number; layout?: number }
+export interface MotorAsk { T: number; w: number; V: number; shaftAtLeast: number; ambient: number; aspect?: number; name: string; id: string; grade?: string; paths?: number; layout?: number; /** The air gap's tangential stress, where its cooling carries more than still air's, and what the housing gives off per kelvin and area. */ shear?: { value: number; source: string; h?: number; cooling?: string } }
 /** Slot and pole layouts with concentrated windings, from many poles (slow, low iron frequency per torque) to few; their winding factors. */
 export const LAYOUTS = [{ Q: 12, poles: 10, kw: 0.933 }, { Q: 6, poles: 4, kw: 0.866 }, { Q: 3, poles: 2, kw: 0.866 }];
 export interface Motor extends Assembly {
@@ -41,7 +41,7 @@ export function designMotor(ask: MotorAsk): Motor {
   const vals: Value[] = [];
   const v = (name: string, value: number, unit: string, law: string) => { vals.push({ name, value, unit, law }); return value; };
   const lay = LAYOUTS[ask.layout ?? 0]!;
-  const sigma = GAP_SHEAR.value, Q = lay.Q, poles = lay.poles, kw = Q === 12 ? WINDING_FACTOR_12S10P.value : lay.kw, Bd = ELECTRICAL_STEEL.Bdesign, g = AIR_GAP.value;
+  const sigma = ask.shear?.value ?? GAP_SHEAR.value, Q = lay.Q, poles = lay.poles, kw = Q === 12 ? WINDING_FACTOR_12S10P.value : lay.kw, Bd = ELECTRICAL_STEEL.Bdesign, g = AIR_GAP.value;
   const grade = NDFEB_GRADES.find((x) => x.id === (ask.grade ?? 'N42'))!, paths = ask.paths ?? 1;
 
   // the shaft first: it bounds the rotor from inside
@@ -55,7 +55,7 @@ export function designMotor(ask: MotorAsk): Motor {
   const lm = v('magnet thickness', Math.max(1.5 * mm, 3 * g), 'm', 'at least three air gaps, and no thinner than a sintered magnet is cut (1.5 mm)');
   const Vr = ask.T / (2 * sigma);
   const DrMin = ds + 2 * 2 * mm + 2 * lm;
-  const Dr = v('rotor diameter', Math.max(DrMin, 12 * mm, ((4 * Vr) / (Math.PI * a)) ** (1 / 3)), 'm', `T = 2σV_r with σ = ${sigma / 1e3} kPa (${GAP_SHEAR.source}) and L = ${a.toFixed(2)} D; no less than the shaft, 2 mm of back iron and the magnets`);
+  const Dr = v('rotor diameter', Math.max(DrMin, 12 * mm, ((4 * Vr) / (Math.PI * a)) ** (1 / 3)), 'm', `T = 2σV_r with σ = ${sigma / 1e3} kPa (${ask.shear?.source ?? GAP_SHEAR.source}) and L = ${a.toFixed(2)} D; no less than the shaft, 2 mm of back iron and the magnets`);
   const L = v('stack length', Math.max(8 * mm, a * Dr), 'm', `L = ${a.toFixed(2)} D`);
   const Bg = v('gap flux density', (grade.Br * lm) / (lm + NDFEB_N42.muR * g), 'T', `B_g = B_r l_m/(l_m + μ_r g), ${grade.id}: B_r ${grade.Br} T, gap ${g * 1e3} mm`);
   const Db = Dr + 2 * g;
@@ -116,7 +116,7 @@ export function designMotor(ask: MotorAsk): Motor {
   const OD = v('housing outer diameter', Ds + 2 * wall, 'm', 'the stator, pressed into its housing');
   const tcap = bearing.B + 1.5 * mm;
   const Lh = v('housing length', L + 2 * hew + 2 * tcap, 'm', 'stack, end turns, and two end caps each a bearing\'s width and 1.5 mm');
-  const surface = Math.PI * OD * Lh + (2 * Math.PI * OD ** 2) / 4, h = 15;
+  const surface = Math.PI * OD * Lh + (2 * Math.PI * OD ** 2) / 4, h = ask.shear?.h ?? 15, cooledBy = ask.shear?.cooling ?? 'still air';
   const ironMass = ELECTRICAL_STEEL.density * L * (Math.PI * ((Ds / 2) ** 2 - (Ds / 2 - ty) ** 2) + Q * bt * hs);
   const Pfe = v('iron loss', ELECTRICAL_STEEL.lossWkgAt1T5_50Hz * ironMass * (Bg / 1.5) ** 2 * (f / 50) ** 1.5, 'W', 'Steinmetz: p ∝ B² f^1.5 from 2.5 W/kg at 1.5 T, 50 Hz');
   let Tw = ask.ambient + 20;
@@ -129,7 +129,7 @@ export function designMotor(ask: MotorAsk): Motor {
   v('phase resistance (hot)', R, 'Ω', 'R = ρ N l_turn / A, at the winding\'s own temperature (α = 0.00393 /K)');
   v('copper loss', Pcu, 'W', 'P = 3 I² R');
   const Thousing = ask.ambient + (Pcu + Pfe) / (h * surface);
-  v('winding temperature', Tw, 'degC', `ΔT = P/(hA) to still air, h ≈ ${h} W/m²K (convection and radiation, an estimate), a quarter more inside the winding`);
+  v('winding temperature', Tw, 'degC', `ΔT = P/(hA) to ${cooledBy}, h ≈ ${h} W/m²K (an estimate), a quarter more inside the winding`);
   v('magnet temperature', Thousing, 'degC', 'the rotor at about the housing\'s temperature');
   const Kt = ask.T / (3 * I);
 

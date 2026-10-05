@@ -97,3 +97,24 @@ export function principlesOf(category: string): Principle[] {
   for (let i = 1; i <= parts.length; i++) { const node = find(parts.slice(0, i).join('/')); if (node) out.push(...node.principles); }
   return out;
 }
+
+// ---- what anything that moves, flies, holds heat or carries water adds (src/nexus/embody/any.ts) ----------------
+TAXONOMY.push(
+  n('energy', 'Energy storage', 'what holds energy until it is wanted', [p('capacity', 'a store holds what its longest want draws, with what it cannot give back to spare', 'E = P t / η')], [
+    n('energy/battery', 'Batteries', 'cells in series for the voltage, in parallel for the current and the energy', [p('c-rate', 'no cell gives more current than its maker rates', 'I_cell = I / P ≤ I_max')]),
+    n('energy/flywheel', 'Flywheels', 'a disc spun up', [p('hoop', 'its rim runs at a third of the stress its steel yields at, or less', 'σ = ρ ω² r²')]),
+    n('energy/tank', 'Tanks', 'a volume of what is stored'),
+  ]),
+  n('fluid', 'Fluids', 'water and air carried where they are wanted', [], [
+    n('fluid/pipes', 'Pipes', 'copper tube, its bore from the flow and the velocity it may run at', [p('velocity', 'water runs no faster than noise and erosion allow', 'v = Q / A ≤ v_max')]),
+    n('fluid/air', 'Ventilation', 'fans and ducts that exchange air at the rate what is made inside asks'),
+  ]),
+);
+find('motion')!.children.push(
+  n('motion/wheels', 'Wheels', 'what carries a load on the ground and turns its torque into force', [p('load', 'a tyre carries no more than its rating', 'F_wheel ≤ load index'), p('climb', 'a wheel rolls over the ground\'s steps', '√(2rh − h²)/(r − h) ≤ the traction share')]),
+  n('motion/brakes', 'Brakes', 'what takes motion away as heat', [p('heat', 'a stop heats the rotor no more than it bears', 'ΔT = E / (m c)')]),
+  n('motion/rotors', 'Rotors', 'lift from air pushed down', [p('momentum', 'a rotor\'s power is what the air it pushes asks', 'P = T^1.5 / (FoM √(2 ρ A))')]),
+  n('motion/suspension', 'Suspension', 'springs and dampers between the ground and what it carries', [p('ride', 'what is carried bobs slowly enough to be comfortable', 'k = m (2π f)²')]),
+);
+find('structure')!.children.push(n('structure/envelope', 'Envelopes', 'walls, roof and floor between inside and outside', [p('loss', 'it lets through no more heat than the heating can make up', 'Q = Σ U A ΔT')]));
+find('safety')!.children.push(n('safety/crash', 'Crash structure', 'what crushes so the people inside do not stop too hard', [p('stroke', 'it crushes far enough to stop them within the deceleration they survive', 'σ A = m a, s ≥ v² / 2a')]));

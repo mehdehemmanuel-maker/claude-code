@@ -31,6 +31,8 @@ export interface Part {
   system?: string;
   /** What it moves with: an axis it rides on. */
   rides?: string;
+  /** The assembly it was designed in, where its id does not say it (any machine's: a wheel, a wall, the roof). */
+  unit?: string;
   /** A turn about one of its own frame's axes, radians (a magnet on a rotor, a tooth on a stator). */
   turn?: { axis: Axis; angle: number };
   /** A fastener: the parts it passes into, where its shank lies by design. */
