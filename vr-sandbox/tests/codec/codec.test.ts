@@ -50,8 +50,10 @@ const docArb = fc.record({
     const kind = PART_KINDS.find((k) => k.id === spec.kind)!;
     const materials = MATERIALS.filter((m) => !kind.materialFilter || kind.materialFilter(m));
     const material = materials[Math.abs(Math.round(spec.tweak * 1000)) % materials.length]!.id;
+    // the first number the template offers, anywhere in its own range (K-2: a template takes only what it offers), as a raw float to stress the encoding
     const first = kind.params.find((p) => p.type === 'number');
-    const params = first ? { [first.key]: spec.tweak } : {};
+    const inRange = first ? first.min + (first.max - first.min) * ((spec.tweak + 10) / 20) : 0;
+    const params = first ? { [first.key]: first.integer ? Math.round(inRange) : inRange } : {};
     const part = makePart({ kind: spec.kind, pose: { p: [0, 0, 0], q: [0, 0, 0, 1] }, material, params, frozen: spec.frozen, name: spec.label }, ids);
     part.pose = spec.pose; // raw floats, including -0 and long fractions
     part.damage = { broken: [...spec.broken].sort((x, y) => x - y), segments: spec.segments };

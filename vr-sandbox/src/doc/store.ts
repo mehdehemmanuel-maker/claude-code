@@ -2,7 +2,8 @@
 // Updates record only the fields they touch, so non-undoable background writes (such as committing live
 // physics poses) never get clobbered by undoing an unrelated older edit.
 
-import type { BuildDoc, Collection, SimSettings } from './types';
+import type { BuildDoc, Collection, Connection, Part, SimSettings } from './types';
+import { admitConnection, admitPart, ConstructionRefused, judgeDoc, standingOf } from '../ganglia/tree/gate';
 
 type Entity = Record<string, unknown>;
 
@@ -68,6 +69,9 @@ export class TxBuilder {
   }
 }
 
+/** Fields whose change makes a different thing or puts it in a different place: judged again when a hand changes them. */
+const CONSTRUCTIVE = new Set(['kind', 'material', 'params', 'pose', 'damage', 'a', 'b']);
+
 export class DocStore {
   doc: BuildDoc;
   revision = 0;
@@ -77,7 +81,14 @@ export class DocStore {
   static readonly MAX_UNDO = 300;
   static readonly MERGE_WINDOW_MS = 1200;
 
+  /** Whether the running transaction constructs (places, joins, moves by hand): what it changes passes the gate. */
+  private constructing = false;
+  /** Parts this transaction placed or moved: judged for overlap when it closes, with its joints known. */
+  private pending = new Set<string>();
+
   constructor(doc: BuildDoc) {
+    const r = judgeDoc(doc);
+    if (r) throw new ConstructionRefused(r);
     this.doc = doc;
   }
 
@@ -93,12 +104,22 @@ export class DocStore {
   /** Run edits as one undoable transaction. Returns the changes made. */
   transact(label: string, fn: (tx: TxBuilder) => void, opts: { mergeKey?: string; undoable?: boolean } = {}): Change[] {
     const tx = new TxBuilder(this);
+    // a transaction that constructs is judged as it goes; one that records what the physics did (poses committed from
+    // a running world) is an observation, and the physics' contacts are its own law
+    const was = this.constructing, hadPending = this.pending;
+    this.constructing = opts.undoable ?? true;
+    this.pending = new Set();
     try {
       fn(tx);
+      // the construction closes: no part it placed or moved is where another is, its joints' bores allowed for
+      for (const id of this.pending) { const part = this.doc.parts[id]; if (part) admitPart(standingOf(this.doc), part); }
     } catch (e) {
-      // roll back anything applied so far
-      for (const c of [...tx.changes].reverse()) this.applyOne(invert(c), false);
+      // roll back anything applied so far: a refused construction leaves nothing behind
+      for (const c of [...tx.changes].reverse()) this.applyOne(invert(c), false, true);
       throw e;
+    } finally {
+      this.constructing = was;
+      this.pending = hadPending;
     }
     if (tx.changes.length === 0) return [];
     this.revision++;
@@ -156,8 +177,10 @@ export class DocStore {
     return this.redoStack.at(-1)?.label;
   }
 
-  /** Replace the whole document (load / new / template). Clears history. */
+  /** Replace the whole document (load / new / template). Clears history. A document the gate refuses is not loaded. */
   replace(doc: BuildDoc) {
+    const r = judgeDoc(doc);
+    if (r) throw new ConstructionRefused(r);
     this.doc = doc;
     this.undoStack = [];
     this.redoStack = [];
@@ -167,13 +190,19 @@ export class DocStore {
 
   /** Swap in a document snapshot (checkpoint rewind) while keeping undo history. */
   restore(doc: BuildDoc) {
+    const r = judgeDoc(doc);
+    if (r) throw new ConstructionRefused(r);
     this.doc = doc;
     this.revision++;
     this.emit([], 'load');
   }
 
-  /** Apply a change directly. `lenient` skips missing targets (undo of entities already gone). */
-  applyOne(c: Change, lenient: boolean) {
+  /**
+   * Apply a change directly. `lenient` skips missing targets (undo of entities already gone). A part or connection
+   * created, or changed in what it is or where it is by a constructing transaction, passes the gate first; `rollback`
+   * undoes changes already judged. The gate throws ConstructionRefused and the change is not made.
+   */
+  applyOne(c: Change, lenient: boolean, rollback = false) {
     if (c.op === 'sim') {
       const sim = this.doc.sim as unknown as Entity;
       for (const [k, f] of Object.entries(c.fields)) sim[k] = clone(f.after);
@@ -181,7 +210,9 @@ export class DocStore {
     }
     const coll = this.doc[c.coll] as unknown as Record<string, Entity>;
     if (c.op === 'create') {
-      coll[c.id] = clone(c.value);
+      const value = clone(c.value);
+      if (!rollback) this.admit(c.coll, value);
+      coll[c.id] = value;
     } else if (c.op === 'delete') {
       delete coll[c.id];
     } else {
@@ -192,8 +223,14 @@ export class DocStore {
       }
       const next = { ...cur };
       for (const [k, f] of Object.entries(c.fields)) next[k] = clone(f.after);
+      if (!rollback && this.constructing && Object.keys(c.fields).some((k) => CONSTRUCTIVE.has(k))) this.admit(c.coll, next);
       coll[c.id] = next;
     }
+  }
+
+  private admit(coll: Collection, value: Entity) {
+    if (coll === 'parts') { admitPart(standingOf(this.doc), value as unknown as Part, undefined, { overlaps: false }); this.pending.add(String(value['id'])); }
+    else if (coll === 'connections') admitConnection(standingOf(this.doc), value as unknown as Connection);
   }
 
   private emit(changes: Change[], source: ChangeSource) {

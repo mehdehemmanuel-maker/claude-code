@@ -28,7 +28,8 @@ describe('the energy ledger', () => {
     const ticks = 45;
     expect(lost).toBeCloseTo(ticks * 0.5 * 7.85 * g * g * (1 / 90) ** 2, 1);
     expect(lost / (7.85 * g * fell)).toBeLessThan(0.02);
-    expect(e.numerical - e0.numerical).toBeCloseTo(lost, 6);
+    expect(e.numerical.lost - e0.numerical.lost).toBeCloseTo(lost, 6);
+    expect(e.numerical.gained - e0.numerical.gained).toBeLessThan(1e-9); // and it made nothing from nothing
     expect(heatMade(e)).toBeLessThan(1e-6);
     r.done();
   });
@@ -75,7 +76,8 @@ describe('the energy ledger', () => {
     expect(workDone(e)).toBe(0);
     expect(Math.abs(imbalance(start, e))).toBeLessThan(1e-6 * Math.max(1, start));
     // the integrator's share is a small part of what moved
-    expect(Math.abs(e.numerical)).toBeLessThan(0.1 * heatMade(e) + 0.5);
+    expect(e.numerical.lost + e.numerical.gained).toBeLessThan(0.1 * heatMade(e) + 0.5);
+    expect(e.numerical.gainedHeld).toBe(0); // nothing was held
     r.done();
   });
 });

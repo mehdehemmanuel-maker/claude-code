@@ -10,7 +10,7 @@
 // processes that make it.
 
 /** How far a source can be trusted: a standard or the maker's own data first, a rule of thumb last. */
-export type SourceKind = 'standard' | 'maker' | 'textbook' | 'distributor' | 'handbook' | 'rule of thumb' | 'press' | 'patent' | 'paper';
+export type SourceKind = 'standard' | 'maker' | 'textbook' | 'distributor' | 'handbook' | 'rule of thumb' | 'press' | 'patent' | 'paper' | 'database';
 
 export interface Source {
   /** The book, standard or maker's document (edition, table or page where it matters). */
@@ -26,7 +26,7 @@ export interface Quantity {
   unit: string;
 }
 
-export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials' | 'information';
+export type Domain = 'mechanics' | 'structures' | 'machine elements' | 'electrical' | 'thermal' | 'fluids' | 'magnetism' | 'materials' | 'information' | 'chemistry' | 'optics';
 
 export interface Law {
   id: string;

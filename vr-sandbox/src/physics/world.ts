@@ -5,14 +5,15 @@
 // material. Nothing here knows about specific builds; behaviour comes only from geometry, materials and specs.
 
 import type JoltNS from 'jolt-physics';
+import { TICK } from './protocol';
 import type { Material } from '../data/materials';
 import { getConnectorKind, type ConnectorKind, type Derived } from '../connectors/registry';
-import { REACH, spans, throughOf, unreachable, type Through } from '../connectors/through';
+import { spans, throughOf, type Through } from '../connectors/through';
 import {
   getPartKind, effectiveParams, segmentLayout, segmentBodyId, segmentOfFrame, segmentOffset,
-  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf, boughtRefusal,
+  type PartDims, type PartKind, type MagnetGeometry, type SegmentLayout, massOf,
 } from '../parts/registry';
-import { closestOnShape, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
+import { closestOnShape, frontalAreas, shapeBounds, type CollisionShape, type ConvexShape } from '../parts/shapes';
 import {
   magnetWrench, cylinderCharges, blockCharges, cylinderFaces, blockFaces, imageFaces, transformFaces, plateSaturationFactor, ringLevel, faceField,
   blendedInteraction, transformCharges, dipoleMoment, type Charge, type PoleFace, type Vec3 as MVec3,
@@ -24,6 +25,9 @@ import { drain, packR, type Pack } from '../engineering/battery';
 import { getGearhead, getMotor, type GearheadData } from '../data/motors';
 import { getBattery } from '../data/batteries';
 import { solvePack, type Load } from './electric';
+import { CONTACT_TOLERANCE, judgeConnection, judgePart, type Refusal, type Standing } from '../ganglia/tree/gate';
+import { CONTROLLER_BOARD, RECEIVER_BOARD } from '../data/servos';
+import { getMaterial } from '../data/materials';
 import { emptyEnergies, emptyHeat, emptyWork, kineticEnergy, potentialEnergy, shareHeat, springEnergy, type Energies, type HeatBook, type HeatSource, type WorkBook } from './energy';
 import { bondCapacity, checkBond, type BondCapacity, type BondLoads } from '../engineering/fracture';
 import { axisAngle, composePose, cross, dot, length, normalize, relativePose, rotate, sub, add, scale, transformPoint } from '../doc/math';
@@ -110,12 +114,18 @@ interface MagnetStiffness {
   rate: number;
 }
 
-/** Penetration the contacts leave alone (Jolt's mPenetrationSlop, as set below). */
-const SLOP = 0.002;
+/** Penetration the contacts leave alone (Jolt's mPenetrationSlop, as set below): the construction gate's own tolerance. */
+const SLOP = CONTACT_TOLERANCE;
 /** Most overlap taken out in one tick, as Jolt does (its mMaxPenetrationDistance default). */
 const MAX_CORRECTION = 0.2;
 /** Closing speed below which a contact does not bounce (Jolt's own mMinVelocityForRestitution default). */
 const MIN_IMPACT_FOR_RESTITUTION = 1;
+/**
+ * A flat face whose normal is within this (rad) of the detector's is the face a contact is on: inside it the detector's
+ * own normal leans by its tolerance over the separation (up to 0.035 rad measured); further off, the face's normal is
+ * not the contact's (a box touching by its edge or corner), and only the other surface or the detector can say.
+ */
+const NORMAL_AGREE = 0.1;
 /** A contact point this close to a segment's joined end (m) lies on the seam; a normal this far off the end's plane leaves through it. */
 const SEAM_TOL = 1e-4;
 const SEAM_NORMAL = 1e-3;
@@ -163,10 +173,8 @@ type J = typeof JoltNS;
 
 const LAYER_STATIC = 0;
 const LAYER_MOVING = 1;
-export const TICK = 1 / 90;
-/** Jolt's angular damping on every body, 1/s: numerical, not a model of anything (architecture finding A5). */
-const ANGULAR_DAMPING = 0.02;
-const MAX_SUBSTEPS = 8;
+export { TICK };
+export const MAX_SUBSTEPS = 8;
 /** How far an intact joint's two sides may be apart before it is a defect (5 mm: well past any solver tolerance). */
 const JOINT_DRIFT = 0.005;
 /** A joint further apart than this is not yet holding: the solver pulls it in before the assembly pass takes it on. */
@@ -176,7 +184,7 @@ const MASS_RATIO = 10;
 /** How far a joint may run past its stop within one substep: 0.01 rad, 2 mm. */
 const STOP_TURN = 0.01, STOP_TRAVEL = 0.002;
 /** Largest omega * dt per substep at which a spring is still simulated accurately (spike: 0.11 -> 0.36% period error). */
-const SUBSTEP_OMEGA_DT = 0.12;
+export const SUBSTEP_OMEGA_DT = 0.12;
 const SUBGROUPS = 4096;
 /** A fractured bond whose faces are still this well aligned (rad) lets its two pieces collide with each other. */
 const CLEAN_BREAK_ANGLE = 0.15;
@@ -293,9 +301,16 @@ interface ConnRec {
   axisI?: { at: number; I: number };
   /** The topology its drive (servo, return spring) was last sized for. */
   sizedAt?: number;
-  /** A servo's aim this tick (rad, as Jolt measures its angle), and the tick the re-solve last drove it on true inertia. */
+  /** A servo's aim this tick (rad, as Jolt measures its angle): undefined when nothing commands it or nothing powers it. */
   aim?: number;
+  /** The tick the re-solve last drove it on true inertia. */
   servoRowAt?: number;
+  /** A servo's torque this tick as its impulse (N m s) and the work it did (J), gathered from whichever drove it; its stall and speed as its volts scale them. */
+  servoImpulse: number;
+  servoWork: number;
+  servoTorque: number;
+  servoScale: number;
+  loopScale?: number;
   /** Jolt's own motor is off: the re-solve drives it. */
   motorOff?: boolean;
   /** Already reported as coming apart (once is enough). */
@@ -344,6 +359,23 @@ interface DriveRec {
   I: number;
   w: number;
   impulse: number;
+}
+
+/** What feeds a servo or a board: the battery part a wire reaches it from, the wire's resistance, the volts at its terminals and the current it drew last tick. */
+interface Supply {
+  battery: string | null;
+  wire: number;
+  at: number;
+  V: number;
+  I: number;
+}
+
+/** A command a board put on a lead for one tick: nothing else makes a servo's aim. */
+interface Command {
+  tick: number;
+  board: string;
+  lead: string;
+  aim: number;
 }
 
 /** A battery's state: the pack its part is, its charge, and what it gives now. */
@@ -439,6 +471,8 @@ interface RecordedContact {
   oBody: JoltNS.Body;
   /** From m toward o. */
   n: Vec3;
+  /** The two surfaces' disagreement on that normal, rad, where it is theirs (surfaceNormal); null where the detector's stands. */
+  nErr: number | null;
   /** Contact points on m and on o, world, at tick start. */
   points: { pm: Vec3; po: Vec3 }[];
   friction: number;
@@ -477,14 +511,14 @@ function magnetOf(g: MagnetGeometry | undefined, material: Material, level: (ch:
 }
 
 /**
- * A servo's position loop: a hobby servo's controller drives its motor in proportion to how far it is off, reaching
- * full voltage, so its stall torque, `band` off (Wada et al., IEEE CCA 2009). So it is at least as stiff as stall torque
- * over band, whatever it turns; and at least a 6 Hz loop on the inertia it turns, so a light one still follows. Critically
- * damped on that inertia.
+ * A servo's position loop (C-11): a hobby servo's controller drives its motor in proportion to how far it is off,
+ * reaching full voltage, so its stall torque, `band` off (Wada et al., Practical Modeling and System Identification of
+ * R/C Servo Motors, IEEE CCA 2009): its stiffness is stall torque over band, whatever it turns. Its damping is its
+ * motor's back-EMF through the gears, which hobby servos do not publish: taken as critical on the inertia it turns
+ * (an estimate, docs/FRONTIER.md Q-servo-damping). Nothing else: a loop has no floor the hardware does not have.
  */
 export function servoLoop(I: number, sv: { maxTorque: number; band: number }): { k: number; c: number } {
-  const w = 2 * Math.PI * 6;
-  const k = Math.max(I * w * w, sv.maxTorque / Math.max(sv.band, 1e-3));
+  const k = sv.maxTorque / Math.max(sv.band, 1e-3);
   return { k, c: 2 * Math.sqrt(k * I) };
 }
 
@@ -512,6 +546,35 @@ export class PhysicsWorld {
   private channels: Record<string, number> = { throttle: 0, steer: 0, aux: 0, always: 1 };
   /** Each rhythmic servo's swing as its creature's nervous system commands it (op 'gait'): 1 as built when unset. */
   private amplitude = new Map<string, number>();
+
+  /** A nervous system's command to its rhythms, from a mind inside the step (runner.ts) or the 'gait' op. */
+  gait(amplitude: Record<string, number>) {
+    for (const [id, g] of Object.entries(amplitude)) this.amplitude.set(id, Math.max(0, Math.min(1, g)));
+  }
+
+  /** The ray cast's fixed pieces, made once: every layer and shape is in the way of a look, only a body can be excused. */
+  private sight: { settings: JoltNS.RayCastSettings; collector: JoltNS.CastRayClosestHitCollisionCollector; bp: JoltNS.BroadPhaseLayerFilter; ol: JoltNS.ObjectLayerFilter; shape: JoltNS.ShapeFilter; ignore: JoltNS.IgnoreMultipleBodiesFilter } | null = null;
+
+  /**
+   * Whether the straight line from one point to another is clear of every body but a looker's own parts: an eye sees
+   * along straight rays and sees nothing behind what blocks them (F-6.2). The ground, the room, a wall, any part
+   * blocks; `except` names the looker's own parts, which its eyes are not behind.
+   */
+  lineOfSight(from: Vec3, to: Vec3, except: Iterable<string> = []): boolean {
+    const J = this.J;
+    if (!this.sight) this.sight = { settings: new J.RayCastSettings(), collector: new J.CastRayClosestHitCollisionCollector(), bp: new J.BroadPhaseLayerFilter(), ol: new J.ObjectLayerFilter(), shape: new J.ShapeFilter(), ignore: new J.IgnoreMultipleBodiesFilter() };
+    const s = this.sight;
+    s.ignore.Clear();
+    for (const id of except) {
+      const pr = this.parts.get(id);
+      if (pr) for (const seg of pr.segs) s.ignore.IgnoreBody(seg.body.GetID());
+    }
+    s.collector.Reset();
+    const ray = new J.RRayCast(this.R(from), this.V(sub(to, from)));
+    this.ps.GetNarrowPhaseQuery().CastRay(ray, s.settings, s.collector, s.bp, s.ol, s.ignore, s.shape);
+    J.destroy(ray);
+    return !s.collector.HadHit();
+  }
   /**
    * The swing it has now: it follows the command over half a second, as a stride lengthens or shortens over a step,
    * never at once (a leg cut short mid-swing trips the body over it).
@@ -520,6 +583,11 @@ export class PhysicsWorld {
   /** Motor drives' electrical state by joint, batteries' by part. */
   private drives = new Map<string, DriveRec>();
   private cells = new Map<string, CellRec>();
+  /** What feeds each servo and board, by part; the command on each servo (by its part) for the tick to come; each board's power and its own clock. */
+  private supply = new Map<string, Supply>();
+  private commands = new Map<string, Command>();
+  private boardsOn = new Map<string, boolean>();
+  private clocks = new Map<string, number>();
   private events: PhysicsEvent[] = [];
   private slotVersion = 1;
   private slotsDirty = true;
@@ -604,6 +672,7 @@ export class PhysicsWorld {
     J.destroy(this.cg);
     J.destroy(this.contactListener);
     for (const o of [this.v1, this.v2, this.r1, this.q1, ...this.pv, ...this.pr, ...this.pq]) J.destroy(o);
+    if (this.sight) { for (const o of Object.values(this.sight)) J.destroy(o); this.sight = null; }
   }
 
   // Rotating scratch values: Jolt copies them on assignment / construction, so no WASM allocation leaks.
@@ -628,13 +697,16 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // ops
 
-  apply(op: PhysicsOp) {
+  apply(op: PhysicsOp): Refusal | void {
+    // a creature's nerves and your whereabouts are the runner's (runner.ts), no change to the world
+    if (op.op === 'mind' || op.op === 'you') return;
     // anything changed from outside (a load, a part, a hand, a switch): every magnetic pair is watched again closely
     this.magnetRest.clear();
     switch (op.op) {
       case 'environment': return this.setEnvironment(op.boxes, op.materials);
       case 'terrain': return this.setTerrain(op.field, op.material);
       case 'clear': return this.clear();
+      case 'construct': return this.construct(op.parts, op.conns);
       case 'upsertPart': return this.upsertPart(op.part, op.material, op.keepLivePose);
       case 'removePart': return this.removePart(op.id);
       case 'upsertConnection': return this.upsertConnection(op.conn, op.materials);
@@ -646,7 +718,7 @@ export class PhysicsWorld {
       case 'grabTarget': { const g = this.grabs.get(op.hand); if (g) g.target = op.target; return; }
       case 'release': return this.release(op.hand, op.linear, op.angular);
       case 'controls': this.channels = { ...this.channels, ...op.channels, always: 1 }; return;
-      case 'gait': for (const [id, g] of Object.entries(op.amplitude)) this.amplitude.set(id, Math.max(0, Math.min(1, g))); return;
+      case 'gait': return this.gait(op.amplitude);
       case 'damage': return this.setDamage(op.id, op.damage);
       case 'room': return this.setRoom(op.surfaces);
       case 'options':
@@ -677,7 +749,8 @@ export class PhysicsWorld {
     this.envMaterial.clear();
     for (const box of boxes) {
       const m = materials[box.material];
-      const shape = new J.BoxShape(this.V(box.half), Math.min(0.01, Math.min(...box.half) * 0.4));
+      const cr = Math.min(0.01, Math.min(...box.half) * 0.4);
+      const shape = new J.BoxShape(this.V(box.half), cr);
       const cs = new J.BodyCreationSettings(shape, this.R(box.pose.p), this.Q(box.pose.q), J.EMotionType_Static, LAYER_STATIC);
       cs.mFriction = m?.friction ?? 0.6;
       cs.mRestitution = m?.restitution ?? 0.3;
@@ -924,10 +997,53 @@ export class PhysicsWorld {
     return [[lv.GetX(), lv.GetY(), lv.GetZ()], [av.GetX(), av.GetY(), av.GetZ()]];
   }
 
-  upsertPart(part: Part, material: Material, keepLivePose: boolean) {
+  /**
+   * A construction as one: its parts and joints enter together and are judged whole, overlaps last, with the bores
+   * its joints declare known (a shaft in a bearing, a body in a clamp). Refused, nothing of it stays.
+   */
+  private constructing = false;
+
+  construct(parts: { part: Part; material: Material }[], conns: { conn: Connection; materials: Record<string, Material> }[]): Refusal | void {
+    const added: string[] = [], joined: string[] = [];
+    this.constructing = true;
+    try { return this.constructAll(parts, conns, added, joined); } finally { this.constructing = false; }
+  }
+
+  private constructAll(parts: { part: Part; material: Material }[], conns: { conn: Connection; materials: Record<string, Material> }[], added: string[], joined: string[]): Refusal | void {
+    const undo = (r: Refusal) => {
+      for (const id of joined) this.removeConnection(id);
+      for (const id of added) this.removePart(id);
+      this.events.push({ type: 'refused', what: r.what, id: r.id, law: r.law, note: r.reason });
+      return r;
+    };
+    for (const { part, material } of parts) {
+      const fresh = !this.parts.has(part.id);
+      const r = this.upsertPart(part, material, false, false);
+      if (r) return undo(r);
+      if (fresh) added.push(part.id);
+    }
+    for (const { conn, materials } of conns) {
+      const fresh = !this.conns.has(conn.id);
+      const r = this.upsertConnection(conn, materials);
+      if (r) return undo(r);
+      if (fresh) joined.push(conn.id);
+    }
+    for (const id of added) {
+      const pr = this.parts.get(id)!;
+      const r = judgePart(this.standing(), { ...pr.part, pose: this.virtualPose(pr) });
+      if (r) return undo(r);
+    }
+  }
+
+  upsertPart(part: Part, material: Material, keepLivePose: boolean, overlaps = true): Refusal | void {
+    const existing = this.parts.get(part.id);
+    // the intake: a part this world does not hold passes the construction gate against what stands here, live
+    if (!existing) {
+      const r = judgePart(this.standing(material), part, undefined, { overlaps });
+      if (r) { if (overlaps) this.events.push({ type: 'refused', what: 'part', id: part.id, law: r.law, note: r.reason }); return r; }
+    }
     this.topology++;
     const J = this.J;
-    const existing = this.parts.get(part.id);
     const kind = getPartKind(part.kind);
     const params = effectiveParams(kind, part.params, material);
     const layout = segmentLayout(kind, params);
@@ -970,8 +1086,6 @@ export class PhysicsWorld {
     const mass = massOf(kind, segParams, material);
     const density = mass / volume;
     const dims = kind.dims(segParams);
-    const bounds = shapeBounds(shapeDesc);
-    const ext = sub(bounds.max, bounds.min);
     const magGeom = kind.magnet?.(params);
     const pr: PartRec = {
       id: part.id, part, kind, material, layout, segs: [], bonds: [],
@@ -991,7 +1105,7 @@ export class PhysicsWorld {
       cs.mFriction = material.friction;
       cs.mRestitution = material.restitution;
       cs.mLinearDamping = 0;
-      cs.mAngularDamping = ANGULAR_DAMPING;
+      cs.mAngularDamping = 0; // a free spin slows only where something slows it (F-2.1): no damping that is nobody's
       cs.mMaxAngularVelocity = 400;
       // Torque-free bodies conserve angular momentum (tumbling, precession), not angular velocity. Segments of
       // breakable parts get this at the level of the whole rigid assembly in the projection instead.
@@ -1017,7 +1131,7 @@ export class PhysicsWorld {
       const rec: BodyRec = {
         id: layout ? segmentBodyId(part.id, k) : part.id, partId: part.id, seg: layout ? k : -1, pr,
         slot, subgroup, body, kind, material, shape: shapeDesc, dims, mass, volume,
-        faceAreas: [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]],
+        faceAreas: frontalAreas(shapeDesc),
         magnet: magnetOf(magGeom, material, (ch) => this.channelLevel(ch)),
         frozen: part.frozen, grabbed: null, inFluid: false, Iloc: null, prior: null,
       };
@@ -1071,6 +1185,10 @@ export class PhysicsWorld {
     this.destroyPartBodies(pr);
     for (const s of slots) this.freeSlot(s);
     this.parts.delete(id);
+    this.supply.delete(id);
+    this.commands.delete(id);
+    this.boardsOn.delete(id);
+    this.clocks.delete(id);
   }
 
   private poseOf(r: BodyRec): Pose {
@@ -1404,11 +1522,17 @@ export class PhysicsWorld {
       if (c.status === 'broken' || !c.constraint || !c.b || spans(c.kind.model)) continue;
       if (!free(c.a) || !free(c.b) || c.a === c.b) continue;
       // only a joint already close to holding: a fresh or badly misaligned one (a load left where it fell when its
-      // beam is put back) is pulled in by the solver first, so nothing is ever teleported
-      if (length(sub(this.anchorWorldB(c).p, this.anchorWorld(c).p)) > SEATED) continue;
+      // beam is put back) is pulled in by the solver first, so nothing is ever teleported. Misaligned in what the
+      // joint constrains: a slider's load along its own axis is where it is free to be, not a gap (a joint dropped
+      // here for a tick is left to Jolt's constraint alone, which under a heavy load drifts millimetres in that tick)
+      const wa = this.anchorWorld(c);
+      const seat = mat3Vec(anchorDofs(c.kind.model, rotate(wa.q, [0, 1, 0])).point, sub(this.anchorWorldB(c).p, wa.p));
+      if (length(seat) > SEATED) continue;
       (byBody.get(c.a) ?? byBody.set(c.a, []).get(c.a)!).push(c);
       (byBody.get(c.b) ?? byBody.set(c.b, []).get(c.b)!).push(c);
-      if ((c.a.body.IsActive() || c.b.body.IsActive()) && Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass)) seeds.push(c.a, c.b);
+      // a servo's joint is always re-solved here (its loop on the true inertia of both sides, servoRow): Jolt's own
+      // motor, on a 9 g case screwed to the bench against a 54 g arm, ran the arm away to its stop
+      if ((c.a.body.IsActive() || c.b.body.IsActive()) && (c.derived.revolute?.servo || Math.max(c.a.mass, c.b.mass) >= MASS_RATIO * Math.min(c.a.mass, c.b.mass))) seeds.push(c.a, c.b);
     }
     if (!this.clusters.length && !seeds.length) return;
     // islands with no assembly get their heaviest part as the root the mechanism is closed out from
@@ -1495,7 +1619,7 @@ export class PhysicsWorld {
     const m = (flip ? r2 : r1)!, o = flip ? r1 : r2;
     const ob = flip ? b1 : b2;
     const nn = man.mWorldSpaceNormal;
-    const n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
+    let n: Vec3 = flip ? [-nn.GetX(), -nn.GetY(), -nn.GetZ()] : [nn.GetX(), nn.GetY(), nn.GetZ()];
     const count = Math.min(4, man.mRelativeContactPointsOn1.size());
     // world points as the contact saw them (tick-start geometry, which is what the assembly solve uses)
     const points: { pm: Vec3; po: Vec3 }[] = [];
@@ -1504,11 +1628,58 @@ export class PhysicsWorld {
       const c2 = man.GetWorldSpaceContactPointOn2(i); const p2: Vec3 = [c2.GetX(), c2.GetY(), c2.GetZ()];
       points.push(flip ? { pm: p2, po: p1 } : { pm: p1, po: p2 });
     }
+    const sn = this.surfaceNormal(b1, b2, man, count);
+    if (sn) n = flip ? scale(sn.n, -1) : sn.n;
     const key = `${m.id}|${o?.id ?? `env${ob.GetID().GetIndexAndSequenceNumber()}`}`;
     this.contacts.set(key, {
       key, m, o, oStatic: !o || o.frozen || ob.IsStatic() || ob.IsKinematic(), oBody: ob, n, points,
-      friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution,
+      friction: settings.mCombinedFriction, restitution: settings.mCombinedRestitution, nErr: sn ? sn.err : null,
     });
+  }
+
+  /** Shapes whose surface normal at a point is a face's: exact wherever on the face the point is, whatever the detector's tolerance did to it. */
+  private flatness(b: JoltNS.Body): 'flat' | 'curved' | 'unknown' {
+    const J = this.J, t = b.GetShape().GetSubType();
+    if (t === J.EShapeSubType_Box || t === J.EShapeSubType_ConvexHull || t === J.EShapeSubType_Mesh || t === J.EShapeSubType_HeightField || t === J.EShapeSubType_Plane) return 'flat';
+    if (t === J.EShapeSubType_Sphere || t === J.EShapeSubType_Capsule || t === J.EShapeSubType_TaperedCapsule || t === J.EShapeSubType_Cylinder || t === J.EShapeSubType_TaperedCylinder) return 'curved';
+    return 'unknown';
+  }
+
+  /**
+   * The normal of a contact from the surfaces themselves, where they give one (F-3.2: a contact acts along the
+   * surfaces' common normal). A flat face touched anywhere inside it, by a face, an edge, a corner or a rounded foot,
+   * has the contact's normal: its own, exact, whatever the other body's shape does there. The detector finds the same
+   * direction to its tolerance (P-gjk-tolerance, 1e-4 m), a lean of up to tolerance over separation (0.035 rad
+   * measured at a centimetre, docs/FRONTIER.md D-contact-normal), which on a floor is a sideways force the floor
+   * cannot exert. So each flat surface's own normal at its contact point is read from the shape (a box's face, a
+   * hull's face, a terrain triangle's); where it is within NORMAL_AGREE of the detector's it is the face the contact
+   * is on, and of those the one the detector agrees with most is taken (a box's own normal at its edge is one of its
+   * faces', which the detector does not agree with: the other surface's wins). A curved surface's normal is off by
+   * the point's error over its radius, so it is never taken over a face's. Where no flat surface qualifies (edge on
+   * edge, a corner, a sphere on a cylinder) the detector's normal stands, with its contract. The correction applied,
+   * the angle from the detector's normal to the surface's, is kept as the contact's measured lean. Returns the normal
+   * from body 1 toward body 2.
+   */
+  private surfaceNormal(b1: JoltNS.Body, b2: JoltNS.Body, man: JoltNS.ContactManifold, count: number): { n: Vec3; err: number } | null {
+    const flat1 = this.flatness(b1) === 'flat', flat2 = this.flatness(b2) === 'flat';
+    if (!count || (!flat1 && !flat2)) return null;
+    const nd = man.mWorldSpaceNormal; const det: Vec3 = [nd.GetX(), nd.GetY(), nd.GetZ()];
+    const read = (b: JoltNS.Body, id: JoltNS.SubShapeID, c: JoltNS.RVec3): Vec3 => {
+      this.r1.Set(c.GetX(), c.GetY(), c.GetZ());
+      const v = b.GetWorldSpaceSurfaceNormal(id, this.r1);
+      return normalize([v.GetX(), v.GetY(), v.GetZ()]);
+    };
+    const angle = (a: Vec3, b: Vec3) => Math.acos(Math.max(-1, Math.min(1, dot(a, b))));
+    let n: Vec3 | null = null, err = 0;
+    for (let i = 0; i < count; i++) {
+      let best: Vec3 | null = null, off = NORMAL_AGREE;
+      if (flat1) { const n1 = read(b1, man.mSubShapeID1, man.GetWorldSpaceContactPointOn1(i)); const a = angle(n1, det); if (a <= off) { best = n1; off = a; } }
+      if (flat2) { const n2 = scale(read(b2, man.mSubShapeID2, man.GetWorldSpaceContactPointOn2(i)), -1); const a = angle(n2, det); if (a <= off) { best = n2; off = a; } }
+      if (!best) return null;
+      err = Math.max(err, off);
+      n = n ? normalize(add(n, best)) : best;
+    }
+    return n ? { n, err } : null;
   }
 
   private recOf(b: JoltNS.Body): BodyRec | null {
@@ -1690,6 +1861,17 @@ export class PhysicsWorld {
     }
     // iterated to convergence (a heavy load on a light bonded part needs more passes than a lone part), within a cap
     solveRows(rows, 40, this.warm, 1e-5);
+    // what each servo's drive gave (its impulse, its work) is gathered on the joint: the pack it is wired to pays for it
+    // (settleDrives). What each drive put into each body is kept for the observers: motion with a cause is motion a
+    // drive paid for.
+    for (const r of rows) {
+      const tag = r.tag as RowTag;
+      if (tag?.kind !== 'drive') continue;
+      if (tag.conn) { tag.conn.servoImpulse += Math.abs(r.acc); tag.conn.servoWork += r.work ?? 0; }
+      if (!r.work) continue;
+      this.noteDriveWork(tag.ma, r.work / 2);
+      this.noteDriveWork(tag.mb, r.work / 2);
+    }
     // an assembly on several fixed supports carries the least support load that holds it, as a real one does
     const supports = new Map<Entity, Row[]>();
     for (const r of rows) {
@@ -1729,13 +1911,14 @@ export class PhysicsWorld {
       this.r1.Set(...pose.p);
       this.q1.Set(...pose.q);
       this.v1.Set(...en.e.v);
-      this.v2.Set(...en.e.w);
+      // the spin carried through the turn as the body's own vector (as placeCluster does, F-2.1)
+      this.v2.Set(...rotate(normQuat(quatMul(pose.q, quatConj(cur.q))), en.e.w));
       this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
     }
     // the mechanism closed at position level, outward from its assemblies: each moving part is set exactly onto its
     // joint with the part it hangs from, as that part now is (the assembly pinned to its anchors carries what is
     // joined to it; without this the pin moves the arm and leaves the weight hung from it behind)
-    this.closeMechanism(this.closureRoots(works.map((w) => w.comp), anchored), works.map((w) => w.comp));
+    this.closeMechanism(this.closureRoots(works.map((w) => w.comp), anchored), works.map((w) => w.comp), anchored);
     // impulses our rows put on each body (linear, and angular about the world origin)
     const ourP = new Map<BodyRec, Vec3>(), ourL = new Map<BodyRec, Vec3>();
     const put = (r: BodyRec | null, J: Vec3, L: Vec3) => {
@@ -1859,14 +2042,20 @@ export class PhysicsWorld {
       // solved velocity, or every correction would slip in momentum w x d with no force behind it.
       comRef = add(comE, d.v);
     }
+    // The solved spin is the body's own, found at the tick's start (the midpoint step on Euler's equations keeps
+    // its energy and |L| exactly in that frame): carried through the tick's turn as the body-frame vector it is,
+    // w_end = R w, not as a world vector, so that the energy it holds in its new orientation is the energy it was
+    // solved with. Kept as a world vector, a 30 rad/s tumble of an uneven angle gained 1.8e-6 of its energy in two
+    // seconds (F-2.1), which the angular damping used to hide.
+    const wEnd = rotate(normQuat(quatMul(C.q, quatConj(C0.q))), ent.e.w);
     comp.forEach((r, i) => {
       const np = composePose(C, T[i]!);
-      const v = add(ent.e.v, cross(ent.e.w, sub(np.p, comRef)));
+      const v = add(ent.e.v, cross(wEnd, sub(np.p, comRef)));
       w.newV[i] = v;
       this.r1.Set(...np.p);
       this.q1.Set(...np.q);
       this.v1.Set(...v);
-      this.v2.Set(...ent.e.w);
+      this.v2.Set(...wEnd);
       this.bi.SetPositionRotationAndVelocity(r.body.GetID(), this.r1, this.q1, this.v1, this.v2);
     });
   }
@@ -1978,6 +2167,10 @@ export class PhysicsWorld {
     const Ic = mass.angularBlock();
     const invIc = inverse3(Ic);
     const L0 = mat3Vec(Ic, u0.w);
+    // what Jolt's step did to the cluster's momentum, read off its segments: external impulses, and the single-precision
+    // residue of the bonds' cancelling pairs (an instrument: docs/FRONTIER.md D-bond-float32)
+    this.clusterImpulse.P += length(dPsum);
+    this.clusterImpulse.L += length(dLsum);
     const wPred = gyroscopicStep(Ic, mat3Vec(invIc, add(L0, dLsum)), dt);
     const vPred = add(u0.v, scale(dPsum, 1 / M));
     const extent = comp.reduce((x, r, i) => Math.max(x, this.extentAbout(r, NP0[i]!.p, com0)), 0);
@@ -2314,11 +2507,16 @@ export class PhysicsWorld {
   // ---------------------------------------------------------------------------------------------
   // connections
 
-  upsertConnection(conn: Connection, materials: Record<string, Material>) {
+  upsertConnection(conn: Connection, materials: Record<string, Material>): Refusal | void {
     const pa = this.parts.get(conn.a.part);
     const pb = conn.b ? this.parts.get(conn.b.part) ?? null : null;
     if (!pa || (conn.b && !pb)) return;
     const prev = this.conns.get(conn.id);
+    // the intake: a connection this world does not hold passes the construction gate against what stands here, live
+    if (!prev) {
+      const r = judgeConnection(this.standing(), conn);
+      if (r) { if (!this.constructing) this.events.push({ type: 'refused', what: 'connection', id: conn.id, law: r.law, note: r.reason }); return r; }
+    }
     if (prev) this.destroyConstraint(prev);
     const kind = getConnectorKind(conn.kind);
     const rec: ConnRec = {
@@ -2327,25 +2525,31 @@ export class PhysicsWorld {
       status: conn.state.status, over: 0, slipTicks: 0, cure: prev?.cure ?? conn.state.cure, lastDerive: this.time,
       load: { id: conn.id, u: 0, mode: '', axial: 0, shear: 0, bending: 0, torsion: 0, extent: 0 },
       springRigid: false, omega: 0, bandRest: 0, materials, lastPositionLambda: 0, pairKeys: [], corrF: [0, 0, 0], corrT: [0, 0, 0], worldB: null,
+      servoImpulse: prev?.servoImpulse ?? 0, servoWork: prev?.servoWork ?? 0, servoTorque: prev?.servoTorque ?? 0, servoScale: prev?.servoScale ?? 0,
     };
     this.resolveEnds(rec);
     rec.derived = this.derive(rec);
     this.conns.set(conn.id, rec);
-    // a joint can only be where the parts are: one across a gap (an axle nobody made, a pin through air) holds nothing
-    let gap = unreachable(kind.model, kind.label, pa.part, pa.material, conn.a.frame, pb?.part ?? null, pb?.material ?? null, conn.b?.frame ?? null);
-    // and a new joint's two ends meet: each on its part but apart from each other would be an invisible rod
-    if (!gap && !prev && pb && !spans(kind.model)) {
-      const apart = length(sub(this.anchorWorldB(rec).p, this.anchorWorld(rec).p));
-      if (apart > REACH) gap = `The ${kind.label.toLowerCase()}'s two ends are ${Math.round(apart * 1000)} mm apart: nothing physical joins them. Make it where the parts touch.`;
-    }
-    // and a bought item takes only the joints its maker allows (R11): nothing is drilled into a motor or a battery
-    gap ??= boughtRefusal(pa.kind, kind.id, kind.label) ?? (pb ? boughtRefusal(pb.kind, kind.id, kind.label) : null);
-    const instant = gap ?? rec.derived.instantFailure;
+    // what was admitted can still come to fail as its parts change under it (a re-derivation of one already here)
+    const instant = rec.derived.instantFailure;
     if (rec.status !== 'broken' && instant) {
       rec.status = 'broken';
       this.events.push({ type: 'break', conn: rec.id, mode: 'instant', load: 0, capacity: 0, point: this.anchorWorld(rec).p, note: instant });
     }
     this.buildConstraint(rec);
+  }
+
+  /** What stands in this world as the construction gate sees it: every part where it is now, every connection, the materials in use. */
+  private standing(extra?: Material): Standing {
+    return {
+      parts: () => [...this.parts.values()].map((pr) => ({ ...pr.part, pose: this.virtualPose(pr) })),
+      connections: () => [...this.conns.values()].map((c) => c.conn),
+      material: (id) => {
+        if (extra && extra.id === id) return extra;
+        for (const pr of this.parts.values()) if (pr.segs[0]!.material.id === id) return pr.segs[0]!.material;
+        try { return getMaterial(id); } catch { return undefined; }
+      },
+    };
   }
 
   /** Attach each endpoint to the body (segment) under it, with the frame in that body's coordinates. */
@@ -2397,6 +2601,7 @@ export class PhysicsWorld {
       distance: length(sub(wb.p, wa.p)),
       cure: this.sim.cureClock <= 0 ? 1e12 : c.cure,
       partA: { kind: c.pa.kind.id, params: c.pa.part.params },
+      partB: c.pb ? { kind: c.pb.kind.id, params: c.pb.part.params } : undefined,
     });
   }
 
@@ -2417,7 +2622,7 @@ export class PhysicsWorld {
     c.extra = [];
     c.typed = null;
     this.setPairCollision(c, true);
-    if (had && c.kind.id === 'motor' && c.b && this.bodies.get(c.b.id) === c.b) this.rotorInertia(c.b);
+    if (had && (c.kind.id === 'motor' || c.kind.id === 'servo') && c.b && this.bodies.get(c.b.id) === c.b) this.rotorInertia(c.b);
   }
 
   /** Joined parts do not collide with each other (every body of one against every body of the other). */
@@ -2591,8 +2796,10 @@ export class PhysicsWorld {
         s.mMinDistance = c.kind.model === 'rope' ? 0 : sp.rest;
         s.mMaxDistance = sp.rest;
         if (!c.springRigid) {
-          // Jolt's implicit spring integration dissipates roughly zeta_num = omega * dt_sub / 2 by itself;
-          // subtract it so the total damping matches the material's real damping ratio.
+          // Jolt's implicit spring integration dissipates zeta_num = omega * dt_sub / 2 by itself (measured: 27 % of amplitude
+          // per cycle at omega dt_sub 0.1, at two sizes; tests/conformance/scale.test.ts); subtract it so the total damping
+          // matches the material's real damping ratio. Below zeta_num the surplus cannot be removed and lands in the
+          // ledger's numerical.lost: a declared bound of the model (N-5), not a hidden one.
           const sub = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil((omega * TICK) / SUBSTEP_OMEGA_DT)));
           const zetaSet = Math.max(0, zeta - (omega * TICK) / sub / 2);
           s.mLimitsSpringSettings.mMode = J.ESpringMode_StiffnessAndDamping;
@@ -2627,14 +2834,18 @@ export class PhysicsWorld {
     this.setPairCollision(c, false);
     this.bi.ActivateBody(c.a.body.GetID());
     if (c.b) this.bi.ActivateBody(c.b.body.GetID());
-    if (c.kind.id === 'motor' && c.b) this.rotorInertia(c.b);
+    if ((c.kind.id === 'motor' || c.kind.id === 'servo') && c.b) this.rotorInertia(c.b);
   }
 
   /**
-   * A gearmotor's rotor turns N times as fast as its output, so what the output turns carries the rotor's inertia
-   * times N^2 about the drive's axis (planetary gearheads are coaxial, so it is that axis). It is given to the driven
-   * body, the housing taken as mounted, as a gearmotor is: exact while the housing doesn't itself spin about the axis.
-   * Worked out again from the body's own inertia whenever a drive on it is made or goes.
+   * A drive's rotor turns N times as fast as its output, so what the output turns carries the rotor's inertia times
+   * N^2 about the drive's axis (planetary gearheads are coaxial, so it is that axis; a servo's horn carries its
+   * motor's rotor through its own gears, `rotor` as given at the horn). It is given to the driven body (side b, the
+   * horn's), the housing taken as mounted, as a gearmotor or a servo case is: exact while the housing doesn't itself
+   * spin about the axis (the rotor's own inertia about the housing is J/N^2, left out). Worked out again from the
+   * body's own inertia whenever a drive on it is made or goes. A rotor realised as a row instead (a soft row toward
+   * the joint's last rate) integrated the link without it and recoupled the two inelastically each tick: a servo then
+   * sagged 50% past its stiffness and a walker's centre of mass drifted on a frictionless floor (docs/FRONTIER.md).
    */
   private rotorInertia(r: BodyRec) {
     if (r.frozen || !r.Iloc) return;
@@ -2642,10 +2853,11 @@ export class PhysicsWorld {
     const I = [...own];
     let added = false;
     for (const c of this.conns.values()) {
-      if (c.kind.id !== 'motor' || c.b !== r || !c.typed || c.status === 'broken' || c.pa.kind.id !== 'motor.dc') continue;
-      const d = this.driveOf(c);
-      const N = d.gear?.ratio ?? 1;
-      const J = d.model.rotorInertia * N * N;
+      if (c.b !== r || !c.typed || c.status === 'broken') continue;
+      let J = 0;
+      if (c.kind.id === 'motor' && c.pa.kind.id === 'motor.dc') { const d = this.driveOf(c); const N = d.gear?.ratio ?? 1; J = d.model.rotorInertia * N * N; }
+      else if (c.kind.id === 'servo') J = c.derived.revolute?.servo?.rotor ?? 0;
+      if (!(J > 0)) continue;
       // the drive's axis in the driven body's own coordinates
       const q = this.poseOf(r).q;
       const n = rotate([-q[0], -q[1], -q[2], q[3]], rotate(this.anchorWorld(c).q, [0, 1, 0]));
@@ -2658,7 +2870,14 @@ export class PhysicsWorld {
     if (!values.every((v) => v > 0)) return;
     const [e0, e1, e2raw] = vectors as [Vec3, Vec3, Vec3];
     const e2 = dot(cross(e0, e1), e2raw) < 0 ? scale(e2raw, -1) : e2raw;
-    r.body.GetMotionProperties().SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    const mp = r.body.GetMotionProperties();
+    mp.SetInverseInertia(this.V(values.map((v) => 1 / v)), this.Q(quatFromAxes(e0, e1, e2)));
+    // A reflected inertia is an inertia about the drive's axis only: the rotor's angular momentum is J w / N about it
+    // (it spins N times faster with 1/N^2 the inertia), not J w, so the gyroscopic torque the full tensor would give
+    // (I w x w) is N times too large and in directions the rotor never couples. The term is left out for such a body:
+    // what is lost is its own I w x w, small for a light link, and the rotor's true J w / N x w (docs/FRONTIER.md
+    // D-rotor-housing). Found when a walker with its knees still paddled 3 m on the torque this term made up.
+    r.body.SetApplyGyroscopicForce(!added && !r.pr.layout);
     // a new array: segments of one part may share their inertia
     r.Iloc = this.localInertia(r);
     if (!added) r.Iown = undefined;
@@ -2725,9 +2944,19 @@ export class PhysicsWorld {
     return placed;
   }
 
-  private closeMechanism(placed: Set<BodyRec>, comps: BodyRec[][] = []) {
+  private closeMechanism(placed: Set<BodyRec>, comps: BodyRec[][] = [], anchored: Map<BodyRec, unknown> = new Map()) {
     if (!this.mechanism.length) return;
     const by = new Map<BodyRec, ConnRec[]>();
+    // every body the closure may touch, where it was before: closure is an internal correction (F-1.1.2), so each
+    // island is put back, whole, where its mass was (the rigid motion that undoes what closure shifted and turned)
+    const before = new Map<BodyRec, { c: Vec3; q: Quat }>();
+    const island = new Map<BodyRec, BodyRec>();
+    const find = (x: BodyRec): BodyRec => { let r = x; while (island.has(r) && island.get(r) !== r) r = island.get(r)!; return r; };
+    const union = (a: BodyRec, b: BodyRec) => { const ra = find(a), rb = find(b); if (ra !== rb) island.set(ra, rb); };
+    const touch = (r: BodyRec) => { if (!before.has(r)) before.set(r, { c: this.comOf(r), q: this.poseOf(r).q }); };
+    for (const comp of comps) { for (const r of comp) { touch(r); union(r, comp[0]!); } }
+    for (const c of this.mechanism) { if (c.status === 'broken' || !c.b) continue; touch(c.a); touch(c.b); union(c.a, c.b); }
+    for (const r of placed) touch(r);
     const group = new Map<BodyRec, BodyRec[]>();
     // an assembly not yet placed moves as one
     for (const comp of comps) if (!comp.some((r) => placed.has(r))) for (const r of comp) group.set(r, comp);
@@ -2784,6 +3013,57 @@ export class PhysicsWorld {
         }
       }
     }
+    this.undoClosureDrift(before, find, anchored);
+  }
+
+  /**
+   * Closing an island is a correction between its own parts, so it may move neither the island's centre of mass nor
+   * its mass's turn about it (F-1.1.2, the position-level form of F-1): nothing outside the island pushed on it. Set
+   * whole onto the body they hang from, a walker's legs did move its centre of mass, a few hundredths of a
+   * millimetre a tick with no impulse from anything, which on a frictionless floor walked it along at 4 cm/s (and in
+   * zero gravity, 8 mm in five seconds). Each island is put back by the one rigid motion of all its parts that undoes
+   * the mass-weighted shift and the mass-weighted turn its closure made: a rigid motion keeps every closed joint
+   * closed. An island holding something immovable (frozen, held, anchored) is moved against the earth, not here.
+   */
+  private undoClosureDrift(before: Map<BodyRec, { c: Vec3; q: Quat }>, find: (r: BodyRec) => BodyRec, anchored: Map<BodyRec, unknown>) {
+    const islands = new Map<BodyRec, BodyRec[]>();
+    for (const r of before.keys()) { const k = find(r); const list = islands.get(k); if (list) list.push(r); else islands.set(k, [r]); }
+    for (const members of islands.values()) {
+      if (members.length < 2 || members.some((r) => r.frozen || r.grabbed || !r.Iloc || anchored.has(r))) continue;
+      let M = 0;
+      const c0: Vec3 = [0, 0, 0], c1: Vec3 = [0, 0, 0];
+      const now = members.map((r) => ({ r, c: this.comOf(r), q: this.poseOf(r).q }));
+      for (const { r, c } of now) {
+        const b = before.get(r)!;
+        M += r.mass;
+        for (let k = 0; k < 3; k++) { c0[k]! += r.mass * b.c[k]!; c1[k]! += r.mass * c[k]!; }
+      }
+      for (let k = 0; k < 3; k++) { c0[k]! /= M; c1[k]! /= M; }
+      const shift = sub(c1, c0);
+      // the turn: the mass's angular displacement about its centre, L = sum m r x dc + I dtheta, undone by the rigid turn
+      // dTheta = -Itot^-1 L (Itot the island's inertia about its centre)
+      let L: Vec3 = [0, 0, 0];
+      const Itot = [...ZERO3];
+      for (const { r, c, q } of now) {
+        const b = before.get(r)!;
+        const rel = sub(b.c, c0), dc = sub(sub(c, b.c), shift);
+        L = add(L, scale(cross(rel, dc), r.mass));
+        const Iw = worldInertia(r.Iloc!, b.q);
+        L = add(L, mat3Vec(Iw, rotationVector(quatMul(q, quatConj(b.q)))));
+        const rr = dot(rel, rel);
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) Itot[3 * i + j]! += Iw[3 * i + j]! + r.mass * ((i === j ? rr : 0) - rel[i]! * rel[j]!);
+      }
+      const dTheta = scale(mat3Vec(inverse3(Itot), L), -1);
+      if (length(shift) < 1e-12 && length(dTheta) < 1e-12) continue;
+      const dq = quatFromRotationVector(dTheta);
+      for (const { r, q } of now) {
+        const p = this.poseOf(r).p;
+        const p2 = add(c0, rotate(dq, sub(p, c1)));
+        this.r1.Set(...p2);
+        this.q1.Set(...normQuat(quatMul(dq, q)));
+        this.bi.SetPositionAndRotation(r.body.GetID(), this.r1, this.q1, this.J.EActivation_DontActivate);
+      }
+    }
   }
 
   /**
@@ -2796,8 +3076,11 @@ export class PhysicsWorld {
    * less ahead the faster it turns. The angle is measured as limitRows measures it, from the tick's start.
    */
   private servoRow(c: ConnRec, a: Entity, b: Entity, ha: Pose, hb: Pose, axis: Vec3, dt: number, key: string): Row | null {
-    const sv = c.derived.revolute?.servo;
-    if (!sv || c.aim === undefined || c.status === 'broken') return null;
+    const sv0 = c.derived.revolute?.servo;
+    if (!sv0 || c.aim === undefined || c.status === 'broken' || !(c.servoScale > 0)) return null;
+    // its stall and its speed at the volts its pack gives it (a DC motor's both scale with voltage)
+    const sv = { ...sv0, maxTorque: sv0.maxTorque * c.servoScale, speed: sv0.speed * c.servoScale };
+    // its loop on what it really turns: the links, with its own rotor geared down onto them (rotorInertia)
     const loop = servoLoop(this.ownAxisInertia(c), sv);
     const angle = dot(rotationVector(quatMul(hb.q, quatConj(ha.q))), axis);
     const rate = dot(sub(b.w, a.w), axis);
@@ -2806,7 +3089,7 @@ export class PhysicsWorld {
     c.servoRowAt = this.ticks;
     return {
       a, b, kind: 'angular', pa: [0, 0, 0], pb: [0, 0, 0], dir: axis, target: -(bias / dt) * (angle - c.aim), soft: gamma,
-      lo: rate < 0 ? -ahead : -all, hi: rate > 0 ? ahead : all, acc: 0, tag: { kind: 'drive', ma: c.a, mb: c.b } satisfies RowTag, key: `${key}:servo`,
+      lo: rate < 0 ? -ahead : -all, hi: rate > 0 ? ahead : all, acc: 0, tag: { kind: 'drive', ma: c.a, mb: c.b, conn: c } satisfies RowTag, key: `${key}:servo`,
     };
   }
 
@@ -3009,7 +3292,8 @@ export class PhysicsWorld {
   private magnetPairs(only: Set<string> | null = null): MagnetPair[] {
     const pairs: MagnetPair[] = [];
     if (only && !only.size) return pairs;
-    const g = length(this.sim.gravity) || 9.81;
+    // in free fall there is no weight to measure a force against: every pair within reach matters, at the broadphase's cost
+    const g = length(this.sim.gravity);
     const magnets = [...this.bodies.values()].filter(fieldOn);
     if (magnets.length === 0) return [];
     // steel, and an electromagnet switched off: its core is steel
@@ -3078,7 +3362,7 @@ export class PhysicsWorld {
         const dist = length(sub(B.pose.p, A.pose.p));
         const light = Math.min(A.r.frozen ? Infinity : A.r.mass, B.r.frozen ? Infinity : B.r.mass);
         // Cutoff where the dipole force drops below 0.1% of the lighter magnet's weight.
-        const cutoff = Math.pow((3 * MU0 * A.m * B.m) / (2 * Math.PI * 0.001 * light * g), 0.25);
+        const cutoff = g > 0 ? Math.pow((3 * MU0 * A.m * B.m) / (2 * Math.PI * 0.001 * light * g), 0.25) : Infinity;
         if (dist > cutoff) continue;
         const gap = Math.max(0, dist - A.bound - B.bound);
         const level = ringLevel(gap, Math.min(A.size, B.size), this.opts.maxMagnetRings);
@@ -3102,7 +3386,7 @@ export class PhysicsWorld {
         if (only && !only.has(`${S.id}|${M.r.id}`)) continue;
         const sp = this.poseOf(S);
         const dist = length(sub(sp.p, M.pose.p));
-        const reach = Math.hypot(S.dims.length, S.dims.a) / 2 + Math.pow((3 * MU0 * M.m * M.m) / (2 * Math.PI * 0.001 * M.r.mass * g), 0.25);
+        const reach = Math.hypot(S.dims.length, S.dims.a) / 2 + (g > 0 ? Math.pow((3 * MU0 * M.m * M.m) / (2 * Math.PI * 0.001 * M.r.mass * g), 0.25) : Infinity);
         if (dist > reach) continue;
         const local = rotate(quatConj(sp.q), sub(M.pose.p, sp.p));
         const hit = closestOnShape(S.shape, local);
@@ -3724,9 +4008,15 @@ export class PhysicsWorld {
         this.r1.Set(cx, f.max[1], cz);
         this.v1.Set(0, 1, 0);
         const bodyDensity = r.mass / r.volume;
+        // the drag is of the motion the body had, read before the buoyancy impulse: that impulse is a step's worth
+        // of lift put on the velocity at once, which a light part joined to a heavy one never keeps (the joint
+        // shares it out within the step), and drag taken from it ate the lift. Found when a foam plate screwed to
+        // a steel rail sank though together they were lighter than the water they displaced.
+        const lv = this.bi.GetLinearVelocity(r.body.GetID());
+        const had: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
         const wetNow = this.bi.ApplyBuoyancyImpulse(r.body.GetID(), this.r1, this.v1, f.density / bodyDensity, 0.5, 0.05, this.v2, g, dt);
         if (wetNow) {
-          this.waterDrag(r, f.density, Math.min(1, Math.max(0, (f.max[1] - mn.GetY()) / Math.max(1e-6, mx.GetY() - mn.GetY()))), dt);
+          this.waterDrag(r, f.density, Math.min(1, Math.max(0, (f.max[1] - mn.GetY()) / Math.max(1e-6, mx.GetY() - mn.GetY()))), dt, had);
           wet = true;
           if (!r.inFluid) {
             const vy = this.bi.GetLinearVelocity(r.body.GetID()).GetY();
@@ -3745,10 +4035,8 @@ export class PhysicsWorld {
    * undulating body swim (resistive force theory), each segment pushing the water back and the body forward as a wave
    * runs down it. The force can at most stop the part in a step, never reverse it.
    */
-  private waterDrag(r: BodyRec, rho: number, wetShare: number, dt: number) {
+  private waterDrag(r: BodyRec, rho: number, wetShare: number, dt: number, v: Vec3) {
     if (wetShare <= 0) return;
-    const lv = r.body.GetLinearVelocity();
-    const v: Vec3 = [lv.GetX(), lv.GetY(), lv.GetZ()];
     const speed = length(v);
     if (speed < 1e-4) return;
     const q = r.body.GetRotation();
@@ -3861,34 +4149,47 @@ export class PhysicsWorld {
           }
         }
       } else if (rv.servo) {
-        const sv = rv.servo;
-        if (c.sizedAt !== this.topology) {
-          // the loop on the inertia it really turns, re-sized whenever what is joined to what changes
-          c.sizedAt = this.topology;
-          const loop = servoLoop(this.ownAxisInertia(c), sv);
-          const ss = h.GetMotorSettings().mSpringSettings;
-          ss.mStiffness = loop.k;
-          ss.mDamping = loop.c;
-        }
-        // its own rhythm, or its control channel, about its centre
-        const beat = Math.sin(2 * Math.PI * sv.rhythm * this.time + sv.phase);
-        const u = sv.rhythm > 0 ? (sv.wave === 'lift' ? Math.max(0, beat) : beat) : Math.max(-1, Math.min(1, this.channels[sv.channel] ?? 0));
-        const want = this.amplitude.get(c.id) ?? 1, had = this.swing.get(c.id) ?? want;
-        const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
-        this.swing.set(c.id, now);
-        c.aim = sv.offset + now * u * sv.range;
-        h.SetTargetAngle(c.aim);
-        // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing at
-        // its no-load speed; it can always brake with all it has
+        const sv0 = rv.servo;
+        // what its pack gives it (solveCircuits: the volts at its terminals, through the wire from a battery that holds
+        // charge), as a fraction of its rated volts: none, and the servo is a gear train with nothing behind it
+        const sup = this.supply.get(c.pa.id);
+        const scale = sup && sup.battery && sup.V > 0 ? Math.min(1.25, sup.V / sv0.volts) : 0;
+        // the command on its lead, made by a powered board at the end of last tick for this one, and by nothing else
+        const cmd = this.commands.get(c.pa.id);
+        const commanded = !!cmd && this.commandValid(cmd, c);
+        c.servoScale = scale;
         const ms = h.GetMotorSettings();
-        const ahead = sv.maxTorque * Math.max(0, 1 - Math.abs(wrel) / sv.speed);
-        ms.mMaxTorqueLimit = wrel > 0 ? ahead : sv.maxTorque;
-        ms.mMinTorqueLimit = wrel < 0 ? -ahead : -sv.maxTorque;
-        // where the re-solve drove it last tick on the true inertia of both sides, it drives it again: Jolt's own motor,
-        // which sees only the one light body the joint touches (a bracket bolted to a heavy base), stays off
-        const off = c.servoRowAt === this.ticks - 1;
-        if (off !== !!c.motorOff) { h.SetMotorState(off ? this.J.EMotorState_Off : this.J.EMotorState_Position); c.motorOff = off; }
-        if (Math.abs(u) > 0.01 || sv.rhythm > 0 || sv.offset !== 0) { this.bi.ActivateBody(c.a.body.GetID()); if (c.b) this.bi.ActivateBody(c.b.body.GetID()); }
+        if (scale <= 0 || !commanded) {
+          c.aim = undefined;
+          if (c.motorOff !== true) { h.SetMotorState(this.J.EMotorState_Off); c.motorOff = true; }
+          ms.mMinTorqueLimit = 0;
+          ms.mMaxTorqueLimit = 0;
+        } else {
+          const sv = { ...sv0, maxTorque: sv0.maxTorque * scale, speed: sv0.speed * scale };
+          if (c.sizedAt !== this.topology || Math.abs(scale - (c.loopScale ?? -1)) > 0.02) {
+            // the loop on the inertia it really turns, re-sized whenever what is joined to what changes, or its volts do
+            c.sizedAt = this.topology;
+            c.loopScale = scale;
+            const loop = servoLoop(this.ownAxisInertia(c), sv);
+            const ss = ms.mSpringSettings;
+            ss.mStiffness = loop.k;
+            ss.mDamping = loop.c;
+          }
+          const lim = rv.limits ?? [-Math.PI, Math.PI];
+          c.aim = Math.max(lim[0], Math.min(lim[1], sv.offset + cmd!.aim));
+          h.SetTargetAngle(c.aim);
+          // its motor gives less the faster it turns (wrel is Jolt's angle's rate: it makes every joint a to b), nothing
+          // at its no-load speed; it can always brake with all it has
+          const ahead = sv.maxTorque * Math.max(0, 1 - Math.abs(wrel) / sv.speed);
+          ms.mMaxTorqueLimit = wrel > 0 ? ahead : sv.maxTorque;
+          ms.mMinTorqueLimit = wrel < 0 ? -ahead : -sv.maxTorque;
+          // where the re-solve drove it last tick on the true inertia of both sides, it drives it again: Jolt's own
+          // motor, which sees only the one light body the joint touches (a bracket bolted to a heavy base), stays off
+          const off = c.servoRowAt === this.ticks - 1;
+          if (off !== !!c.motorOff) { h.SetMotorState(off ? this.J.EMotorState_Off : this.J.EMotorState_Position); c.motorOff = off; }
+          this.bi.ActivateBody(c.a.body.GetID());
+          if (c.b) this.bi.ActivateBody(c.b.body.GetID());
+        }
       } else if (rv.eddy) {
         // Viscous brake realised implicitly: a velocity motor to zero whose torque budget removes exactly the
         // momentum an exponential decay w(t) = w0 exp(-c t / I) would over this tick (stable for any c / I).
@@ -3943,8 +4244,18 @@ export class PhysicsWorld {
     return -(rel[0] * n.GetX() + rel[1] * n.GetY() + rel[2] * n.GetZ());
   }
 
+  /**
+   * The largest integration step a caller's generator asks for, s: the world is still read once a tick, but no
+   * substep of it is longer than this. Unset, only the world's own stiff couplings decide its substeps.
+   */
+  private requestedStep = Infinity;
+  /** Ask that no integration step exceed `step` seconds (Infinity to withdraw the request). */
+  resolveTime(step: number) { if (!(step > 0)) throw new Error('an integration step must be positive'); this.requestedStep = step; }
+  /** The integration step the world takes: its tick over its substeps. */
+  get integrationStep() { return TICK / Math.max(1, this.lastSubsteps); }
+
   private substepsNeeded(): number {
-    let n = 1;
+    let n = Number.isFinite(this.requestedStep) ? Math.max(1, Math.ceil(TICK / this.requestedStep - 1e-9)) : 1;
     for (const c of this.conns.values()) {
       if (c.status === 'broken' || c.springRigid || c.omega <= 0) continue;
       if (!c.a.body.IsActive() && !(c.b && c.b.body.IsActive())) continue;
@@ -4007,6 +4318,8 @@ export class PhysicsWorld {
     const dt = TICK;
     [this.restingOn, this.touchingNow] = [this.touchingNow, this.restingOn];
     this.touchingNow.clear();
+    this.driveWorkTick.clear();
+    this.clusterImpulse = { P: 0, L: 0 };
     const sec = (this.sections = { magnets: 0, jolt: 0, assemblies: 0, joints: 0, energy: 0 });
     let tm = performance.now();
     const lap = (k: keyof typeof sec) => { const n = performance.now(); sec[k] += n - tm; tm = n; };
@@ -4049,6 +4362,8 @@ export class PhysicsWorld {
     lap('magnets');
     this.time += dt;
     this.ticks++;
+    // the boards' programs for the tick to come, on what this tick left them (one tick of latency)
+    this.runBoards(dt);
     // constraint impulses are those of the last substep
     this.evaluateConnections(dt, this.lastSubsteps);
     this.watchJoints();
@@ -4173,9 +4488,45 @@ export class PhysicsWorld {
     return w;
   }
 
-  /** Every pack with the motors on it, solved for this substep. */
+  /** What feeds a servo or a board: the battery an intact power wire reaches it from, worked out again whenever what is joined to what changes. */
+  private supplyOf(pr: PartRec): Supply {
+    let sup = this.supply.get(pr.part.id);
+    if (!sup) { sup = { battery: null, wire: 0, at: -1, V: 0, I: 0 }; this.supply.set(pr.part.id, sup); }
+    if (sup.at === this.topology) return sup;
+    sup.at = this.topology;
+    sup.battery = null;
+    sup.wire = 0;
+    for (const w of this.conns.values()) {
+      if (w.kind.id !== 'wire' || w.status === 'broken' || !w.pb) continue;
+      const other = w.pa === pr ? w.pb : w.pb === pr ? w.pa : null;
+      if (!other || other.kind.id !== 'battery') continue;
+      sup.battery = other.id;
+      sup.wire = w.derived.wire?.resistance ?? 0;
+      break;
+    }
+    return sup;
+  }
+
+  /**
+   * A command stands only if it was made for this tick by a board that is here and powered, down an intact lead from
+   * that board to this servo: a command from anywhere else, or for any other tick, is nothing.
+   */
+  private commandValid(cmd: Command, c: ConnRec): boolean {
+    if (cmd.tick !== this.ticks) return false;
+    const board = this.parts.get(cmd.board);
+    if (!board || !this.boardsOn.get(cmd.board)) return false;
+    const lead = this.conns.get(cmd.lead);
+    return !!lead && lead.kind.id === 'signal' && lead.status === 'intact' && lead.pa === board && lead.pb === c.pa;
+  }
+
+  /** Every pack with what is wired to it (motors on their controllers, servos, boards), solved for this substep. */
   private solveCircuits() {
-    const on = new Map<string, { d: DriveRec; load: Load }[]>();
+    const on = new Map<string, { load: Load; take: (I: number, V: number) => void }[]>();
+    const put = (battery: string, entry: { load: Load; take: (I: number, V: number) => void }) => {
+      const list = on.get(battery) ?? [];
+      list.push(entry);
+      on.set(battery, list);
+    };
     for (const c of this.conns.values()) {
       const m = c.derived.revolute?.motor;
       if (!m || c.status === 'broken' || !c.typed || c.pa.kind.id !== 'motor.dc') { if (this.drives.has(c.id) && !m) this.drives.delete(c.id); continue; }
@@ -4190,22 +4541,32 @@ export class PhysicsWorld {
       if (!d.battery) continue;
       const N = d.gear?.ratio ?? 1;
       const load: Load = { model: d.model, u: d.u, w: d.w * N, R: windingR(d.model, d.heat.winding) + d.wire, limit: m.currentLimit, dead: d.burnt };
-      const list = on.get(d.battery) ?? [];
-      list.push({ d, load });
-      on.set(d.battery, list);
+      put(d.battery, { load, take: (I) => { d.I = I; } });
+    }
+    // servos and boards draw their own current: a servo what its torque last tick took, a board its idle draw
+    for (const pr of this.parts.values()) {
+      const k = pr.kind.id;
+      if (k !== 'servo' && k !== 'controller' && k !== 'receiver') continue;
+      const sup = this.supplyOf(pr);
+      if (!sup.battery) { sup.V = 0; sup.I = 0; continue; }
+      const spec = k === 'controller' ? CONTROLLER_BOARD : k === 'receiver' ? RECEIVER_BOARD : null;
+      const load: Load = spec ? { fixed: spec.idleCurrent, minVolts: spec.minVolts } : { fixed: sup.I, minVolts: 0 };
+      put(sup.battery, { load, take: (I, V) => { sup.V = Math.max(0, V - I * sup.wire); if (spec) sup.I = I; } });
     }
     for (const [id, list] of on) {
       const cell = this.cellOf(id);
-      if (!cell) { for (const x of list) x.d.battery = null; continue; }
+      if (!cell) { for (const x of list) x.take(0, 0); continue; }
       const r = solvePack(cell.pack, cell.soc, list.map((x) => x.load));
       cell.V = r.V;
-      list.forEach((x, k) => { x.d.I = r.currents[k]!; });
+      list.forEach((x, k) => x.take(r.currents[k]!, r.V));
       if (r.flat && !cell.flat) {
         const pr = this.parts.get(id)!;
         this.events.push({ type: 'flat', part: id, point: this.poseOf(pr.segs[0]!).p, note: `The battery is flat: at ${Math.round(cell.soc * 100)}% it can't hold its voltage up under the load.` });
       }
       cell.flat = r.flat;
     }
+    // a supply whose battery part is gone feeds nothing
+    for (const sup of this.supply.values()) if (sup.battery && !this.parts.has(sup.battery)) { sup.battery = null; sup.V = 0; sup.I = 0; }
   }
 
   /** The most torque a drive gives at its output at output speed w: its current through its gearhead, or its drag. */
@@ -4243,6 +4604,8 @@ export class PhysicsWorld {
     this.book.heat.electric += copper + wire;
     this.book.heat.friction += friction + gear;
     this.book.inMotors += friction + gear;
+    this.noteDriveWork(c.a, Po * dt / 2);
+    this.noteDriveWork(c.b, Po * dt / 2);
     this.warmPart(c.a, copper + friction + gear);
     if (cell && Pin > 0) {
       const V = Math.max(cell.V, 1e-3), Ib = Pin / V, Rp = packR(cell.pack);
@@ -4312,12 +4675,86 @@ export class PhysicsWorld {
       this.bookDrive(c, d.impulse / dt, (d.w + w) / 2, dt);
       d.impulse = 0;
     }
+    // each servo: the torque it gave over the tick took a current from its pack (its motor's, through its gears: idle
+    // to stall in proportion), and what of that did not turn its horn warmed its case
+    for (const c of this.conns.values()) {
+      const sv = c.derived.revolute?.servo;
+      if (!sv || c.status === 'broken' || !c.typed || c.pa.kind.id !== 'servo') continue;
+      const tau = c.servoImpulse / dt, work = c.servoWork;
+      c.servoImpulse = 0;
+      c.servoWork = 0;
+      c.servoTorque = tau;
+      const sup = this.supply.get(c.pa.id);
+      const cell = sup?.battery ? this.cells.get(sup.battery) : undefined;
+      let I = 0;
+      if (sup && cell && !cell.flat && sup.V > 0) {
+        const stall = sv.maxTorque * c.servoScale;
+        I = c.aim === undefined ? sv.idleCurrent : sv.idleCurrent + (sv.stallCurrent - sv.idleCurrent) * Math.min(1, stall > 0 ? tau / stall : 0);
+      }
+      if (sup) sup.I = I;
+      if (!(I > 0) || !sup || !cell) continue;
+      const Pin = sup.V * I;
+      const wire = I * I * sup.wire * dt;
+      const heat = Math.max(0, Pin * dt - work);
+      const cells = I * I * packR(cell.pack) * dt;
+      this.book.heat.electric += heat + wire + cells;
+      this.book.work.batteries += Pin * dt + wire + cells;
+      this.warmPart(c.pa.segs[0]!, heat);
+      const bp = this.parts.get(sup.battery!);
+      if (bp) this.warmPart(bp.segs[0]!, cells);
+      cell.I += I;
+      cell.soc = drain(cell.pack, cell.soc, I, dt);
+    }
+  }
+
+  /**
+   * Each board's program, run once at the end of the tick for the tick to come: one tick of latency, as a 50 Hz servo
+   * loop has at least. A controller board keeps its own clock while it has power (its program starts over when power
+   * comes back, as a rebooted board's does) and puts on each of its leads what its program says for that servo; a
+   * receiver puts your stick on each of its leads. A board with no power runs nothing; nothing else makes a command.
+   */
+  private runBoards(dt: number) {
+    this.commands.clear();
+    for (const pr of this.parts.values()) {
+      const kind = pr.kind.id;
+      if (kind !== 'controller' && kind !== 'receiver') continue;
+      const id = pr.part.id;
+      const sup = this.supply.get(id);
+      const spec = kind === 'controller' ? CONTROLLER_BOARD : RECEIVER_BOARD;
+      const on = !!sup && !!sup.battery && sup.V >= spec.minVolts;
+      this.boardsOn.set(id, on);
+      if (!on) { this.clocks.set(id, 0); continue; }
+      const clock = (this.clocks.get(id) ?? 0) + dt;
+      this.clocks.set(id, clock);
+      const rhythm = kind === 'controller' ? Math.max(0, Number(pr.part.params['rhythm'] ?? 0)) : 0;
+      for (const lead of this.conns.values()) {
+        if (lead.kind.id !== 'signal' || lead.status !== 'intact' || lead.pa !== pr || !lead.pb) continue;
+        const sg = lead.derived.signal;
+        if (!sg) continue;
+        let u: number;
+        if (kind === 'receiver') u = Math.max(-1, Math.min(1, this.channels[sg.channel] ?? 0));
+        else { const beat = Math.sin(2 * Math.PI * rhythm * clock + sg.phase); u = sg.wave === 'lift' ? Math.max(0, beat) : beat; }
+        // the program's amplitude for this servo (a mind's stride command, op 'gait', keyed by the horn), followed over
+        // half a second: a stride lengthens or shortens over a step, never at once
+        let key = lead.id;
+        for (const h of this.conns.values()) if (h.kind.id === 'servo' && h.pa === lead.pb) { key = h.id; break; }
+        const want = this.amplitude.get(key) ?? 1, had = this.swing.get(key) ?? want;
+        const now = had + Math.max(-2 * dt, Math.min(2 * dt, want - had));
+        this.swing.set(key, now);
+        this.commands.set(lead.pb.id, { tick: this.ticks, board: id, lead: lead.id, aim: now * u * sg.swing });
+      }
+    }
   }
 
   /** The electrical state for the client: batteries' charge and what they give, motors' current and heat. */
   private powerState(): PowerState | undefined {
-    if (!this.drives.size && !this.cells.size) return undefined;
-    const out: PowerState = { batteries: {}, motors: {} };
+    if (!this.drives.size && !this.cells.size && !this.supply.size) return undefined;
+    const out: PowerState = { batteries: {}, motors: {}, servos: {} };
+    for (const c of this.conns.values()) {
+      if (c.kind.id !== 'servo' || c.pa.kind.id !== 'servo') continue;
+      const sup = this.supply.get(c.pa.id);
+      out.servos![c.id] = { I: sup?.I ?? 0, V: sup?.V ?? 0, torque: c.servoTorque, battery: sup?.battery ?? null, commanded: c.aim !== undefined };
+    }
     for (const [id, cell] of this.cells) if (this.parts.has(id)) out.batteries[id] = { soc: cell.soc, V: cell.V, I: cell.I, flat: cell.flat };
     for (const [id, d] of this.drives) {
       if (!this.conns.has(id)) { this.drives.delete(id); continue; }
@@ -4334,12 +4771,13 @@ export class PhysicsWorld {
   private bookMotors(collisionSteps: number) {
     for (const c of this.conns.values()) {
       const rv = c.derived.revolute;
-      if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy)) continue;
+      if (c.status === 'broken' || c.kind.model !== 'revolute' || !c.typed || !rv || !(rv.motor || rv.eddy || rv.servo)) continue;
       const h = c.typed as JoltNS.HingeConstraint;
       const wrel = this.jointRate(c);
       // the motor's angular impulse each collision step, as a torque on b about the axis
       const T = (h.GetTotalLambdaMotor() * collisionSteps * this.hingeSign(c)) / this.subDt;
       if (rv.motor) { const d = this.drives.get(c.id); if (d) d.impulse += T * this.subDt; }
+      else if (rv.servo) { c.servoImpulse += Math.abs(T) * this.subDt; c.servoWork += T * wrel * this.subDt; }
       else { const work = T * wrel * this.subDt; this.book.heat.eddy -= work; this.warmPart(c.a, -work / 2); if (c.b) this.warmPart(c.b, -work / 2); }
     }
   }
@@ -4358,9 +4796,9 @@ export class PhysicsWorld {
   /**
    * Close this tick's books. What the world holds now, against what it held at the start plus the work put in, says
    * how much went to heat; what was measured directly (air, eddy currents, rubber) is already booked; the rest was made
-   * at contacts, bearings and yielding hinges, and is shared among them by what each made. Jolt's angular damping is
-   * the integrator's (A5), not heat. A gain nothing explains is the integrator's too, unless a hand moving a part
-   * kinematically made it.
+   * at contacts, bearings and yielding hinges, and is shared among them by what each made. A loss no source claims is
+   * the integrator's. A gain nothing explains is booked as a gain, apart from the losses: it is energy
+   * made from nothing, a defect of the realisation to find, never a hand's work (nobody measured any).
    */
   private closeBooks(start: ReturnType<PhysicsWorld['storedNow']>, dt: number) {
     const now = this.storedNow();
@@ -4368,16 +4806,17 @@ export class PhysicsWorld {
     const total = (x: { kinetic: number; potential: number; elastic: number }) => x.kinetic + x.potential + x.elastic;
     const W = b.work.hands + b.work.batteries + b.work.magnets + b.work.fluids;
     const measured = b.heat.air + b.heat.eddy + b.heat.damping + b.heat.electric + b.inMotors;
-    const damping = 2 * ANGULAR_DAMPING * dt * start.spin;
-    let rest = W - (total(now) - total(start)) - measured - damping;
-    let numerical = damping;
+    let rest = W - (total(now) - total(start)) - measured;
+    let lost = 0, gained = 0, gainedHeld = 0;
     if (rest < 0) {
-      if ([...this.grabs.values()].some((g) => g.mode === 'creative')) b.work.hands -= rest;
-      else numerical += rest;
+      // energy from nothing: the realisation's defect, booked as such (F-2.1); a hand moving a part kinematically is
+      // when it tends to happen, which the books note without crediting the hand with work nobody measured
+      gained = -rest;
+      if ([...this.grabs.values()].some((g) => g.mode === 'creative')) gainedHeld = -rest;
       rest = 0;
     }
     const sources = b.sources;
-    if (rest > 0 && !sources.length) { numerical += rest; rest = 0; }
+    if (rest > 0 && !sources.length) { lost += rest; rest = 0; }
     shareHeat(rest, sources).forEach((q, i) => {
       if (!q) return;
       const src = sources[i]!;
@@ -4392,13 +4831,13 @@ export class PhysicsWorld {
     L.kinetic = now.kinetic; L.potential = now.potential; L.elastic = now.elastic;
     for (const k of Object.keys(b.heat) as (keyof HeatBook)[]) L.heat[k] += b.heat[k];
     for (const k of Object.keys(b.work) as (keyof WorkBook)[]) L.work[k] += b.work[k];
-    L.numerical += numerical;
+    L.numerical.lost += lost; L.numerical.gained += gained; L.numerical.gainedHeld += gainedHeld;
   }
 
   /** The energy ledger since the scene began, with what the world holds read now. */
   energies(): Energies {
     const now = this.storedNow();
-    return { ...this.ledger, kinetic: now.kinetic, potential: now.potential, elastic: now.elastic, heat: { ...this.ledger.heat }, work: { ...this.ledger.work } };
+    return { ...this.ledger, kinetic: now.kinetic, potential: now.potential, elastic: now.elastic, heat: { ...this.ledger.heat }, work: { ...this.ledger.work }, numerical: { ...this.ledger.numerical } };
   }
 
   /** The ledger as the last tick closed it (no new reads). */
@@ -4501,6 +4940,7 @@ export class PhysicsWorld {
         awake: this.ps.GetNumActiveBodies(this.J.EBodyType_RigidBody),
         substeps: this.lastSubsteps,
         magnetPairs: this.lastMagnetPairs,
+        clusterImpulse: { ...this.clusterImpulse },
         ticks: this.ticks,
         sections: { ...this.sections },
       },
@@ -4814,28 +5254,34 @@ export class PhysicsWorld {
   /** Each body's rigid group, for the topology it was worked out for. */
   private groupsAt: { at: number; of: Map<BodyRec, string[]> } | null = null;
 
+  /** The net impulse Jolt's step put on every fitted cluster this tick, summed by magnitude (kg m/s, kg m²/s): an instrument (fitCluster). */
+  private clusterImpulse = { P: 0, L: 0 };
+
+  /** This tick's work by drives (servo rows, motors), per body it acted on, J. */
+  private driveWorkTick = new Map<BodyRec, number>();
+
+  private noteDriveWork(r: BodyRec | null, joules: number) {
+    if (!r || !joules) return;
+    this.driveWorkTick.set(r, (this.driveWorkTick.get(r) ?? 0) + joules);
+  }
+
   /**
-   * Bodies an actuator is driving now, with everything rigidly joined to them: a servo keeping a rhythm (its swing not
-   * stilled) or following a command off its centre, a motor drawing current.
+   * The work drives did this tick on each body, J, spread over everything rigidly joined to the body a drive acted
+   * on by mass (a bracket bolted to a driven link moves because the link does). An observer that asks whether a
+   * body's motion has a cause compares this, over its window, with the energy the motion holds.
    */
-  drivenBodies(): string[] {
-    const out = new Set<string>();
+  driveWork(): Map<string, number> {
+    const out = new Map<string, number>();
     if (this.groupsAt?.at !== this.topology) this.groupsAt = { at: this.topology, of: new Map() };
     const groups = this.groupsAt.of;
-    const add = (r: BodyRec | null) => {
-      if (!r) return;
+    for (const [r, w] of this.driveWorkTick) {
       let g = groups.get(r);
       if (!g) groups.set(r, (g = (this.rigidGroup(r, null) ?? [r]).map((x) => x.id)));
-      for (const id of g) out.add(id);
-    };
-    for (const c of this.conns.values()) {
-      if (c.status === 'broken') continue;
-      const sv = c.derived.revolute?.servo;
-      const servoing = !!sv && ((sv.rhythm > 0 && (this.amplitude.get(c.id) ?? 1) > 0) || (sv.rhythm === 0 && (this.channels[sv.channel] ?? 0) !== 0));
-      const motoring = !!c.derived.revolute?.motor && (this.drives.get(c.id)?.I ?? 0) !== 0;
-      if (servoing || motoring) { add(c.a); add(c.b); }
+      let M = 0;
+      for (const id of g) M += this.bodies.get(id)?.mass ?? 0;
+      for (const id of g) out.set(id, (out.get(id) ?? 0) + w * ((this.bodies.get(id)?.mass ?? 0) / (M || 1)));
     }
-    return [...out];
+    return out;
   }
 
   /** World-space inertia tensor (row-major 3 x 3, about the centre of mass) of one body, or null if it does not move. */

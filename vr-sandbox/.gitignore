@@ -4,3 +4,6 @@ dist-pages/
 test-results/
 playwright-report/
 reports/
+dist-nexus/
+dist-view/
+view/public/world.json

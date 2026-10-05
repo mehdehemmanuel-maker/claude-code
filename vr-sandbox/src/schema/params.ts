@@ -40,6 +40,7 @@ export const DISPLAY: Record<string, Display> = {
   'm/s²': { unit: 'm/s²', scale: 1, digits: 3 },
   'N·s/m': { unit: 'N·s/m', scale: 1, digits: 1 },
   'N·m·s/rad': { unit: 'N·m·s/rad', scale: 1, digits: 4 },
+  'g·cm²': { unit: 'g·cm²', scale: 1e7, digits: 0 },
   T: { unit: 'T', scale: 1, digits: 2 },
   '': { unit: '', scale: 1, digits: 0 },
 };
@@ -109,6 +110,32 @@ export function flag(key: string, label: string, def: boolean, extra: Partial<Bo
 export function defaultsOf(defs: ParamDef[]): Params {
   const out: Params = {};
   for (const d of defs) out[d.key] = d.default;
+  return out;
+}
+
+/**
+ * What is wrong with given values against a template's parameters, if anything: a key the template does not offer, a
+ * number out of its range or not a number, a choice the template does not list, a text too long. A template takes only
+ * what it offers (K-2): nothing is quietly replaced by a default, since a value that was replaced is a value that was
+ * never checked.
+ */
+export function paramProblems(defs: ParamDef[], values: Params | undefined): string[] {
+  const out: string[] = [];
+  if (!values) return out;
+  const byKey = new Map(defs.map((d) => [d.key, d]));
+  for (const [k, v] of Object.entries(values)) {
+    const d = byKey.get(k);
+    if (!d) { out.push(`"${k}" is not something this template offers`); continue; }
+    if (d.type === 'number') {
+      if (typeof v !== 'number' || !Number.isFinite(v)) out.push(`"${k}" must be a number`);
+      else if (v < d.min || v > d.max) out.push(`"${k}" = ${v} is outside ${d.min} to ${d.max}`);
+      else if (d.integer && Math.round(v) !== v) out.push(`"${k}" must be a whole number`);
+    } else if (d.type === 'enum') {
+      if (typeof v !== 'string' || !d.options.some((o) => o.value === v)) out.push(`"${k}" = ${String(v)} is not one of ${d.options.map((o) => o.value).join(', ')}`);
+    } else if (d.type === 'text') {
+      if (typeof v !== 'string' || v.length > d.max) out.push(`"${k}" must be text of at most ${d.max} characters`);
+    } else if (typeof v !== 'boolean') out.push(`"${k}" must be yes or no`);
+  }
   return out;
 }
 

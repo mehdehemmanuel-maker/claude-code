@@ -4,8 +4,9 @@
 // walking; turning comes from strides of different lengths on each side, as it does for a dog.
 //
 //   sense   what it can see: you, its goal, where the water is. Its eyes take in a wide arc ahead (a dog's about 240°,
-//           Miller & Murphy, Vision in dogs, J. Am. Vet. Med. Assoc. 207, 1995), not behind it; what it no longer sees
-//           it remembers where it last saw.
+//           Miller & Murphy, Vision in dogs, J. Am. Vet. Med. Assoc. 207, 1995), not behind it, and along straight
+//           rays: what stands between you and it hides you (F-6.2, the world's ray cast); what it no longer sees it
+//           remembers where it last saw.
 //   want    urges that rise and fall: company (to be near you, more the further you are), curiosity (to go somewhere it
 //           hasn't been, rising while nothing is new) and tiredness (rising as it walks, falling as it rests).
 //   choose  the strongest urge, with a little favour to what it is already doing so it doesn't dither between two;
@@ -39,6 +40,13 @@ export interface Mind {
   closest?: { d: number; time: number };
 }
 
+/**
+ * Where a walker is released so that its first want is you: the distance at which its company urge, which grows with
+ * how far you are, first outweighs a fresh mind's curiosity by itself (it would otherwise set off to look at something
+ * and turn hard on the spot), plus its own length to walk toward you.
+ */
+export const releaseDistance = (bodyLength: number, m: Mind = newMind()): number => NEAR_YOU + 2 * m.urge.curiosity + bodyLength;
+
 export function newMind(seed = 1): Mind {
   return { fov: (240 * Math.PI) / 180, sight: 30, urge: { company: 0.5, curiosity: 0.2, rest: 0 }, doing: 'company', since: 0, goal: null, sawYou: null, said: [], seed: seed >>> 0 || 1 };
 }
@@ -70,13 +78,15 @@ export interface World {
   you: Vec3;
   /** Whether ground is dry there (above the water, if any). */
   dry(x: number, z: number): boolean;
+  /** Whether a straight ray from its eyes reaches a point with nothing in the way (F-6.2). */
+  clear(from: Vec3, to: Vec3): boolean;
 }
 
 /** What its legs are told: each side's stride (0 still, 1 full), and what it is doing, in words. */
 export interface Command { left: number; right: number; doing: Want; says: string | null }
 
-/** How near is near enough: to you, and to a place it is going. */
-const NEAR_YOU = 1.0, ARRIVE = 0.3;
+/** How near is near enough: to you, and to a place it is going; and how far ahead it looks at the ground, m. */
+const NEAR_YOU = 1.0, ARRIVE = 0.3, LOOK = 0.8;
 
 function random(m: Mind): number {
   // mulberry32: a creature's own reproducible chance
@@ -103,7 +113,8 @@ function somewhereNew(m: Mind, self: Pose, w: World): Vec3 | null {
  */
 export function think(m: Mind, self: Pose, w: World, dt: number, walking: boolean): Command {
   // sense
-  if (sees(m, self, w.you)) m.sawYou = { at: [...w.you], time: w.time };
+  // within its eyes' arc and reach, and nothing between: its eyes are at its body, which is its own to see past
+  if (sees(m, self, w.you) && w.clear(self.p, w.you)) m.sawYou = { at: [...w.you], time: w.time };
   const you = m.sawYou ? bearing(self, m.sawYou.at) : null;
   // feel: company grows with how far you are; curiosity while nothing is new; tiredness with walking (two minutes of
   // walking tire it, half a minute of rest restores it)
@@ -151,8 +162,10 @@ export function think(m: Mind, self: Pose, w: World, dt: number, walking: boolea
     if (m.doing === 'curiosity') { m.urge.curiosity = 0; m.goal = null; m.closest = undefined; }
     return { left: 0, right: 0, doing: m.doing, says };
   }
-  // water ahead: turn from it as if it were behind
-  const ahead: Vec3 = [self.p[0] + 0.4 * Math.cos(headingOf(self.q)), 0, self.p[2] - 0.4 * Math.sin(headingOf(self.q))];
+  // water ahead: turn from it as if it were behind. It looks as far ahead as three seconds of walking take it, the
+  // time a one-sided turn needs to come round 90° (measured 3 October 2026 at a floor's edge over water: a look of
+  // 0.4 m turned it too late by 0.15 m and it went over; 0.8 m turns it on the floor)
+  const ahead: Vec3 = [self.p[0] + LOOK * Math.cos(headingOf(self.q)), 0, self.p[2] - LOOK * Math.sin(headingOf(self.q))];
   const turn = !w.dry(ahead[0], ahead[2]) ? Math.PI : g.turn;
   // the stride on the side it turns toward shortens, fully 25° off: a stride only a little shorter on one side
   // hardly turns a four-legged walk (one side still turns it about 30° a second)

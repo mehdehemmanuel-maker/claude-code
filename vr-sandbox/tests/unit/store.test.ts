@@ -12,9 +12,10 @@ const origin = { p: [0, 0, 0] as [number, number, number], q: [0, 0, 0, 1] as [n
 function setup() {
   const store = new DocStore(newDoc('t', '2026-01-01T00:00:00Z'));
   const ids = seededIds(1);
-  const a = addPart(store, { kind: 'block', pose: origin }, ids);
-  const b = addPart(store, { kind: 'plate', pose: { p: [0, 0.2, 0], q: [0, 0, 0, 1] } }, ids);
-  const c = addConnection(store, { kind: 'bolted', a: { part: a.id, frame: origin }, b: { part: b.id, frame: origin } }, ids);
+  // a 100 mm block with a 6 mm plate bolted on its top face: the bolt stands on the face the two parts share
+  const a = addPart(store, { kind: 'block', pose: origin, params: { x: 0.1, y: 0.1, z: 0.1 } }, ids);
+  const b = addPart(store, { kind: 'plate', pose: { p: [0, 0.053, 0], q: [0, 0, 0, 1] }, params: { length: 0.1, width: 0.1, thickness: 0.006 } }, ids);
+  const c = addConnection(store, { kind: 'bolted', a: { part: a.id, frame: { p: [0, 0.05, 0], q: [0, 0, 0, 1] } }, b: { part: b.id, frame: { p: [0, -0.003, 0], q: [1, 0, 0, 0] } }, params: { size: 'M6', count: 2, bondW: 0.08, bondL: 0.08 } }, ids);
   return { store, ids, a, b, c };
 }
 
@@ -68,10 +69,10 @@ describe('document store', () => {
 
   it('silent pose commits are not reverted by undoing an unrelated edit', () => {
     const { store, a } = setup();
-    setPartParam(store, a.id, 'y', 0.3);
+    setPartParam(store, a.id, 'x', 0.3); // longer, not taller: a block grown up into the plate on it is refused
     commitPoses(store, new Map([[a.id, { p: [5, 0, 0], q: [0, 0, 0, 1] }]]));
     store.undo();
-    expect(store.doc.parts[a.id]!.params['y']).toBe(0.1);
+    expect(store.doc.parts[a.id]!.params['x']).toBe(0.1);
     expect(store.doc.parts[a.id]!.pose.p[0]).toBe(5);
   });
 

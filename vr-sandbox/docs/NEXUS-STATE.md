@@ -1,0 +1,253 @@
+# Nexus: state
+
+A living document, updated with every step of the restart. It says where Nexus is, what is proven and by which
+test, what is missing, where it goes next, and why each primitive and rule exists. `docs/NEXUS-RESTART.md` is the
+interrogation that started the restart; `docs/NEXUS-ALIGNMENT-1.md` is the first check of the code against the
+deeper direction. This file is the running ledger between those checks.
+
+## 1. Where it is
+
+The derivation half is real: quantities with origins, laws as terms, observation under measured contracts,
+provenance by content hash, and learning by abduction (four growths of the language, each a real distinction the
+derivation lacked). The generative half has begun and has one proven milestone: a system's configuration space is
+represented (every bound variable a field over the free variables, the region the conjunction of constraints,
+validity domains and the learned language) and a configuration no catalogue holds is derived from it, realized by
+the kernel and observed to do what the system claims. A derivation at the edge of the language is an experiment:
+the first derived section rocked, the language grew over nine observations, the next one rested. Which bodies,
+couplings and fields a system has is still written by hand per slice; for an intent stated as wants, the carriers'
+balances now generate the structure (regions, boundaries, paths, stores, conversions, observers, modulations), each
+element with its lineage, and the complex inventions are the instruments that measure what the language lacks
+(docs/NEXUS-PROBES.md). Since round 5 the instrument is a family, not an invention. The vehicle want-space has 147
+points over medium, source, gravity, mass, speed and scale. Every point is lawful, and every one that fails is a
+refusal of physics with its reason. Rolling, displacing, planing, floating, flying, rockets, sails and swimmers at
+low Reynolds number are regions of that space, reached by the state of what is touched. None is named.
+
+Since round 6, scale is generated too. A matter's measured quantities make its mechanisms by their dimensions; where
+they cross, what no scale alters, the regime numbers, the levels and what an observer can see all follow. The observer
+is inside the observation: the kernel's own contract was found to be a law of its window, by an abduction that was
+given the observer's tick among the quantities.
+
+Since round 7 the tuner is a part of the generative loop. It generates the coarsest representation first, solves a
+refusing relation for the representation it needs, regenerates, and treats a broken contract with no relation to
+explain it as an experiment along the axis. Observation is a physical projection of the generated manifold: an
+observer is a configuration of senses, and none is handed the manifold. What the manifold does not yet represent is
+what matter is. A material is still a list of stated properties, not constituents bound by interactions
+(docs/NEXUS-ALIGNMENT-2.md).
+
+Since round 8 matter has a first deeper layer. A species is counted by the identities a transformation conserves, at
+the level of energy available. A transformation is a balance found by the same null-space algebra as dimensionless
+groups, and the blocking identity names a missing species. A molecule's enthalpy comes from its atoms and bonds, and a
+phase is the least Gibbs energy at a temperature and pressure. Boiling points, vapour pressures, a decay's energy and the
+neutrino's quantum numbers come out of it. Since round 9 a crystal's density comes from its atoms and lattice, and its stiffness is measured against its binding over its room; both residuals name what is missing (temperature, the electrons' arrangement), and the deeper layer finds the kernel's steel and copper stiffness pairs inconsistent with their metals.
+
+Laws are not a closed list. Each conserved quantity generates its own law family, and so does every matter an intent
+names. Couplings, the binder and the reaction family generate more. The book's kept laws are sourced instances that
+the generated laws are checked against, not the limit of what the language can state.
+
+## 2. What is proven
+
+| Claim | Test |
+|---|---|
+| Dimensional nonsense is not a term; every kept law and slice law checks | tests/nexus/book.test.ts |
+| The book is evidence, not a ceiling: laws are stated for any matter an intent names that no one wrote | tests/nexus/book.test.ts |
+| A derivation never claims more than its weakest input; unknown stays unknown | tests/nexus/evaluate.test.ts |
+| The kernel's errors are measured, and observation is within them | tests/conformance/*, tests/nexus/beam.test.ts |
+| A missing distinction is found from dimensions alone and promoted with provenance | tests/nexus/abduce.test.ts, joint-study, swing-study |
+| A promoted relation refuses a construction before it is realized | tests/nexus/admit.test.ts |
+| A law generated by the binder reproduces the written one and extends past its domain | tests/nexus/bind.test.ts |
+| Mass, area, second moment and inertia of a prism are one mechanism | tests/nexus/bind.test.ts |
+| A domain over design variables, with no frame, is sampled and latticed like space | tests/nexus/field.test.ts |
+| Symbolic propagation of a system agrees with the stepwise solve at every catalogue address | tests/nexus/space.test.ts |
+| Selecting within a catalogue inside the space reproduces the catalogue search | tests/nexus/space.test.ts |
+| A derived section no catalogue lists, with less material than its pick, is realized and rests in place | tests/nexus/space.test.ts |
+| Without the learned language in the region, the derived section's load falls off | tests/nexus/space.test.ts |
+| At the language's edge the kernel contradicts it; the relation is superseded and the next derivation agrees | tests/nexus/space.test.ts |
+| A library of 166 laws closes no structure for a house, a car or a printer: five distinctions, the same for all three | tests/nexus/probe.test.ts |
+| Twenty-two of the book's laws are instances of one carrier family and one coupling | tests/nexus/carrier.test.ts |
+| The balances and shapes generate 50 of the 64 aspects the request names, without naming a part | tests/nexus/probe.test.ts |
+| A free plan is chosen in the space under a declared preference: the least boundary is square | tests/nexus/probe.test.ts |
+| A matter's threshold makes a held region, its limit a protection, its expansion a calibration: 53 of 64 aspects | tests/nexus/probe.test.ts |
+| A flow of matter carries every carrier it holds, and a liquid's potential includes its height: 56 of 64 aspects | tests/nexus/probe.test.ts |
+| The rocket equation, Archimedes and a bar's wave speed are instances of the reaction family | tests/nexus/family.test.ts |
+| Every point of a 147-point vehicle want-space is lawful; every failure is physics' refusal, with its reason | tests/nexus/family.test.ts |
+| How a region is held up and pushed follows from the state of what it touches, with no class named | tests/nexus/family.test.ts |
+| Which law holds follows from a ratio of how momentum crosses: Reynolds, Mach, a wave its own length | tests/nexus/family.test.ts |
+| A matter's mechanisms come from its quantities by dimensions alone; water gives twenty, each with a meaning | tests/nexus/scale.test.ts |
+| The capillary, visco-capillary and continuum lengths, and the Prandtl, Schmidt and Lewis numbers, emerge unnamed | tests/nexus/scale.test.ts |
+| Levels are gaps in the spectrum of times: water's molecules and flow separate between 1.5 and 150 nm | tests/nexus/scale.test.ts |
+| An observer's window makes laws: the kernel sees water incompressible, inviscid and in an inertial frame | tests/nexus/scale.test.ts |
+| The finite chart s = λ / (1 + λ) is the logistic of ln λ; only ln λ keeps the mechanisms straight | tests/nexus/scale.test.ts |
+| The kernel's contract is a law of its window; the abduction names the window itself | tests/nexus/window-study.test.ts |
+| A learned relation over the observer's window refuses a swing before the kernel runs it | tests/nexus/window-study.test.ts |
+| Given both, the abduction tells the realization's step from the observer's tick by an experiment it runs itself | tests/nexus/window-study.test.ts |
+| The tuner generates the coarsest admitted representation, solves a refusing relation for it, regenerates, and refuses a short budget | tests/nexus/window-study.test.ts |
+| Only relations in force judge: a superseded one is silent | tests/nexus/space.test.ts |
+| An observer receives a physical projection: late, averaged, blurred, in band, above its least; never the manifold | tests/nexus/perceive.test.ts |
+| An observer finer than the representation holds is told what the manifold must be generated as, not given it | tests/nexus/perceive.test.ts |
+| Water's glow is invisible to the eye and bright to a thermal camera; a fast vibration is a line to a spectrometer | tests/nexus/perceive.test.ts |
+| An observer's own light is outside a bar's dynamics and inside a micrometre bead's | tests/nexus/perceive.test.ts |
+| A transformation is a balance of the identities its energy keeps; the smallest balance is found exactly | tests/nexus/matter.test.ts |
+| A blocked decay names its blocking identity and the quantum numbers of what is missing (the antineutrino) | tests/nexus/matter.test.ts |
+| Atoms less bonds give small molecules' enthalpies; benzene's residual names delocalization, a liquid's names binding between molecules | tests/nexus/matter.test.ts |
+| Boiling points and vapour pressures come from phases' Gibbs energies, none an input, within 1.2 % | tests/nexus/matter.test.ts |
+| A liquid in the vehicle family boils by its cavitation number, from its own vapour pressure | tests/nexus/family.test.ts |
+| A crystal's density from its atoms and lattice, within 1 % where the lattice was measured warm | tests/nexus/solid.test.ts |
+| The cold-measured lattices' residual names temperature; the stiffness residual names the electrons' arrangement | tests/nexus/solid.test.ts |
+| The kernel's steel and copper stiffness pairs disagree with their metals' measured compressibility | tests/nexus/solid.test.ts |
+| A liquid's viscosity gives the time of one molecular change, the scale generator's time at the molecule's size, near the measured relaxation | tests/nexus/rate.test.ts |
+| A barrier fitted at two temperatures misses at both ends; its local value falls across the series | tests/nexus/rate.test.ts |
+| Each region steps at its own time; across clocks nothing is made or lost; regions with no path share no clock | tests/nexus/clock.test.ts |
+| One clock at the slowest step runs away; the tuner refines only the region whose step changes the result | tests/nexus/clock.test.ts |
+| The least body that holds its temperature by its own heat: about 8 g in air, 15 kg in water, their ratio (k_w / k_a)^2.4 | tests/nexus/hold.test.ts |
+| A cell forgets a temperature difference in under a millisecond | tests/nexus/hold.test.ts |
+| A generated element becomes a system the space sizes: the house's wire is 16 mm², bound by its heat, not its stated drop | tests/nexus/size.test.ts |
+| The roof's members are counts the space sizes: two support lines, 19 members of 2x8 at 24 in; no clear span deflects within ten times its limit | tests/nexus/size.test.ts |
+| The generator sizes the members it generates, the matter chosen among those dressed to the kept sections; their weight reaches the ground; a face on the ground may rest on it | tests/nexus/size.test.ts |
+| A member pressed along its length is sized against buckling: the wind's 1x6 unbraced is refused, one row of blocking holds it; the lines under the roof are walls of their own, their matter chosen for them | tests/nexus/size.test.ts |
+| Whether bars carry a load by stretching is counted; the stiffness exponent follows the count (1 where carried, 3 where members bend) | tests/nexus/arrangement.test.ts |
+| Wood is one solid in two arrangements: along the grain exponent 0.93 and the wall's own stiffness recovered; across it 2.1 and 1.8, below uniform hexagons, a missing level named | tests/nexus/arrangement.test.ts |
+| The generated walls are a mechanism under the wind: two sways counted, two bars leave none; bending alone would drift a tenth of the height | tests/nexus/arrangement.test.ts |
+| A change carried through moving matter takes its own time: a round stream's heated length is Fo Q ρ c / (π k), whatever its diameter; the printer now sees its bar | tests/nexus/high-bar.test.ts |
+| Information is a carrier tied by the second law (k T ln 2 per bit erased), the barrier rate (about 50 k T to hold a bit ten years) and light's speed (a microsecond's lag bounds a place to 300 m) | tests/nexus/high-bar.test.ts |
+| Nexus runs as a process on a journal: stopped and restarted it is the same state; only what reads a change is evaluated again; every gap is a term at an address | tests/nexus/runtime.test.ts, `npm run nexus` |
+| A place's geometry generates its volume, weight and sections' stiffness about the line gravity bends it around, only for the sections gravity crosses: on edge the kept rectangle laws exactly, flat 184/38 less; no breadth or depth named | tests/nexus/place.test.ts |
+| Couplings form from geometry in the running state: contacts where faces touch, weight down them to what is held, shares by moments, own-weight bending by the kept law; what takes a place to be at rest is refused when it tips, and a want on it is undecided, never met | tests/nexus/contact.test.ts, `npm run nexus` |
+| A gap says what it bears on, and the text channel shows first what a want or the domain's requirements wait on; a want at an address nothing holds or derives says so; WHY is shown as a graph | tests/nexus/contact.test.ts, tests/nexus/channel-text.test.ts |
+| One rule bends a place under every force on it, each spread over its interval: alone the kept own-weight law, with a block resting mid-span the kept patch law plus it, to nine places | tests/nexus/contact.test.ts |
+| A place is at rest only while what bears it is, down to what is held: on a tipped board, the block on it is not at rest and its bending is refused; a decision a known part settles waits on nothing else | tests/nexus/contact.test.ts |
+| What statics says cannot stay, the rigid-body kernel evolves from the state's places until still, and where it came to rest returns as a measured place: a tipped board comes to rest lower; at rest, nothing moves past the kernel's resolution; read back, the same state without the kernel | tests/nexus/evolve.test.ts, `npm run nexus` |
+| Contacts of any feature against a face, from the separating face and the clipped feature; a place on two sloped contacts can stay exactly when some value of the one free force pushes at both and keeps each friction within its coefficient (Fourier–Motzkin): the kernel's leaning board stays at the kernel's friction and not at a tenth of it | tests/nexus/evolve.test.ts, tests/nexus/contact.test.ts |
+| Rounds draw their own intents from the manifold's carriers, roles and want forms, magnitudes from what the kept laws cover pushed past it, seeded; a content reached by the end is brought in at (Q − Q₀)/T or, for a matter that makes more of itself, doubles at least every T / log₂(Q/Q₀) | tests/nexus/round.test.ts, `npm run nexus:round` |
+| The scale tuner derives regimes from the constants alone: no free axis once gravitation joins (Planck's units); α, the Bohr radius, the Hartree, the Compton length, the classical radius and the Bjerrum length; where gravity crushes matter, holds a body and collapses it; temperature moves only the thermal clocks; a boundary only between energies of one unit; the ladder closes by itself | tests/nexus/tuner.test.ts, `{"scale": …}` on the channel |
+| A copy of the world at s times the size needs G × s², masses × s⁻¹, heat × s⁻¹, and its clocks run at s; with the constants as measured, the world at another size lies past the boundaries between | tests/nexus/depth.test.ts, `{"copy": …}` |
+| Depth: a process goes down through every level it takes apart or resolves and stops where it leaves one whole within the tolerance asked; heat's share is its law's (Gibbs, Saha, or Boltzmann) and no more than its duration's Eyring lifetimes; a quantity is explained at the level that sets its scale (iron's density and stiffness at its crystal) or the gap is located with its kind | tests/nexus/depth.test.ts, `{"depth": …}`, `{"explain": …}` |
+| Gaps carry their kind (data, resolution, relationship, variable, operator, law, primitive) where the rule that found them states it, and rank by it | tests/nexus/probe.test.ts, `npm run nexus:round` |
+
+## 3. What is missing
+
+- A learned relation's evidence domain: the span of its observations. Round 6 showed why it matters, since a measured
+  contract held only at the window it was measured at. The window relation now refuses outside the kernel's regime,
+  but a relation used beyond the span of its own observations is still not marked as a hypothesis.
+- Matter as constituents bound by interactions: identities, binding and the Gibbs state are begun (round 8). Still
+  missing: a solid's stiffness beyond its binding scale (the electrons' arrangement), thermal expansion, a solid phase in the Gibbs picture, a barrier that changes with temperature (named by
+  the viscosity residual; rates across barriers are begun in round 10), and a heat capacity that changes with
+  temperature (named by the vapour residual).
+- Local clocks in the realization kernel: a carrier's regions now step on their own clocks (round 11), but the rigid-body kernel still integrates one world on one step.
+- A sense's response across its band: a flat band places the eye's glow onset at 495 K, below the Draper point's 798 K.
+- Life across scale: begun with holding a temperature (round 12); Kleiber's exponent itself is used, not explained, and the smallest mammals' residual says the production law departs at small size.
+- A generator of structure from requirements for the kernel's slices: the carriers generate an intent's structure,
+  but nothing yet derives which bodies, couplings and fields a realized slice needs.
+- Systems from elements: begun with the wire (round 13) and the members (rounds 14 and 15, now inside the generator). Buckling is begun (round 16); the floor's lines need the height the floor is held at, and what one element does to another (a sheathing bracing members, a wall loading a floor, a fastener) is not stated. Stores need the resistance to motion (the drag coefficient); boundaries need their matter's conductivity; members need graded lumber's design values beside clear wood's, and the walls' members under wind.
+- Shape to resistance where a fluid carries momentum: a field over the shape, needing a fluid realization or
+  observations to abduce from.
+- A matter's state as a region of temperature and pressure, with liquid and gas apart.
+- Gravity as a field with a centre, and two media paired.
+- Conservation across a boundary as a construction constraint (what was called flows), and what generates it.
+- Sum and derivative rules for the binder.
+- In the tuner: forms with fractional powers (degeneracy, so a metal's stiffness from its electrons), the strong
+  interaction (nuclei), a plasma's density, and the eigenvalue problem that fixes the order-one factors which enter
+  exponents (the settled binding is the Hartree, twice hydrogen's ionization energy).
+- In depth: a molecule's size, the room freed parts gain where no density is given, and a motion's share from the
+  sound speed that decides a shock. Gap kinds are stated by the regime and depth rules only; the other rules still
+  rank by their words.
+- A test over the canonical form: which content is identity.
+
+## 4. Next
+
+docs/NEXUS-FROM-REALITY.md derives what must exist for Nexus to generate, interact with, observe and express reality,
+from reality forward, with the deleted application's failures as constraints. Its section 14 orders the transfer of
+every piece of Nexus into the seven structures. Sections 16 to 22 record each step executed, as a running process,
+with what running it found. Steps 1 to 6 run: the runtime on a journal, places in a measured domain, couplings of any
+feature against a face, one rule for bending under every force, an evolver that moves what cannot stay, and exact
+staying on sloped contacts. The next rounds generate their own targets at random from the manifold's quantities, with
+the bar high (advanced builds, generation at biological level), from an empty journal each time; every finding kept
+in sections 16 to 21 is checked again on every round. Section 23 makes scale a regime the generator derives, and section 24 makes depth a property of every descent: a process followed down as far as it changes things, a quantity explained at the level that sets its scale, every stop explained, sufficient, or a gap of a stated kind.
+
+## 5. Why each primitive exists
+
+| Primitive or rule | Why | Produced by |
+|---|---|---|
+| Leaf with origin | the end of every WHY chain is a warrant, never code | Part III |
+| Term, operators with identity | laws, couplings, fields, failures, relations are one machine's objects | Part III |
+| Status, weakest | a derivation cannot claim more than its inputs | Part IX |
+| Content hash | regeneration, staleness, provenance | Part III |
+| Field over a domain with scale bands | the one generator: a space is described, not enumerated | the beam's moment, the ground |
+| Resolution, coarse | an observer is a coarse-graining; a sample has a support | the kernel's seams |
+| Contract leaves measured by conformance | a realization's error is a measurement, not a hope | the bond moments |
+| Abduction over groups | a failure becomes language, never a patch | the tall load that never settled |
+| Observation identity | provenance must name every observation | a relation cited two hashes for nine observations |
+| Intent leaf | a value the slice chose is never claimed as the person's | a hidden default |
+| Binder | the language must say "over" to generate law families | 21 closed forms of one absent generator |
+| Declared coordinates | a configuration space is a domain; x, y, z, t was an enum | the alignment check |
+| A field constant along a coordinate is exact there | the mean of a constant is the constant; no sampling needed | t declared on a static field |
+| Configuration space | a system's free variables span a domain; every quantity is a field over it, the region is predicates | the alignment check: configurations were listed |
+| A catalogue is an availability set inside the space | what can be bought is a constraint, not the space | the catalogue search reproduced as a selection |
+| Couplings' quantities are system relations | what judges a configuration must be a predicate over the space | the derived section's load fell off its narrow beam |
+| The language is part of the region | a derivation never leaves what the language already knows | the same failure |
+| A derivation at the language's edge is an experiment | optimization goes to the boundary, where the language knows least | the first section inside the language rocked |
+| Supersession, appended | a contradicted relation is replaced, never removed | the rest relation, contradicted at its edge |
+| A relation's identity includes its observations | two relations with one group and bound but other evidence differ | supersession needed it |
+| Want: regions, wants, carriers, limits, conditions | a person's ask is predicates on regions' quantities, not parts | round 0 |
+| Carrier | a flow is generated by a conserved quantity counted over regions | round 0's five distinctions |
+| The carrier family and the coupling | one mechanism per carrier, not a law per case | the book's 22 instances |
+| The generator of structure | wants and balances make the structure, every element with its lineage | round 1 |
+| One region, one potential at a time | two held values are a range over time | summer air heated the winter house |
+| A capacity is not a load | what a region allows bounds a boundary; it does not cross it | the ground's bearing read as a load |
+| Unread quantities are reported | what the language cannot read becomes visible | the printer's material properties |
+| The ranking of distinctions across inventions | discover a principle once, from all its failures | round 1 |
+| Shape: a region as a domain with faces, areas and normals | a balance is a surface integral; geometry and direction are one primitive | round 1's ranking |
+| A flux travels a way; a want has a direction | which faces a flux crosses, which variation a want feels | rain on a roof, bumps under a ride |
+| A duration is a content change over a flux | the balance integrated over time | the timed wants of all three |
+| Matter: properties per carrier and role, with thresholds | what a region is made of, and where its properties change | round 2's ranking |
+| A threshold makes a held region | a matter that flows only above a potential must be held above it where it flows | the printer had no thermal system |
+| A knowledge gap is not a language gap | a role the language reads that no matter states is missing data | the kept data has no thermal properties |
+| Families as want-spaces | one invention proves little about its kind; a class is a region of a space | round 4's car |
+| The state of what is touched | being at rest is not bearing a contact: a solid bears, a fluid is pushed | the weight sent into the air |
+| Site gravity | gravity is a quantity of a site, not of the generator | the moon and no gravity |
+| Power is a difference of potential; a carrier states whether it reaches its zero | a potential alone offers nothing; heat needs a colder reservoir (the third law) | air at its own pressure offered as a store |
+| A contact's push is friction times what presses it | with no weight, a contact pushes only where it is gripped | wheels pushing in no gravity |
+| Support is paid over the trip | what holds a region up works for as long as it is up | hovering by ejection over the moon |
+| What crosses a boundary carries momentum, light too | a vacuum offers nothing to push; what leaves or arrives does | a vacuum with only charge |
+| A regime ratio chooses the law | each law of pushing a fluid holds where momentum is carried, or where it is conducted | a picogram given the lift of a wing |
+| Heat leaves by touch, moving matter or light | in a vacuum light is the only way | heat with nowhere to go |
+| One fact, either saying | density as a property or as a matter's content density | the car's drag vanished |
+| The book is evidence, not a ceiling | laws are generated without limit; the kept ones check them | a test pinned 144 as if laws were a list |
+| A mechanism from dimensions: a quantity holding a time, or two that hold none alone | scale is a relation of distance, crossing speed and the system's time | ε = L / (c τ): whether what crosses arrives before the system changes |
+| A combination of two mechanisms is a crossing, not a mechanism | a length the matter makes, never a new process | gravity over rotation read as a speed |
+| One molecule's quantities live at the molecule's size | what one molecule does is not stretched to the region | a molecule's relaxation extrapolated to a kilometre |
+| Crossings beneath the molecule or beyond the site are outside | the averaged and uniform quantities that made them do not hold there | sub-picometre lengths among water's |
+| Levels are gaps in the spectrum of times | a level of organization is a band far from the next; the gap is declared | molecules and flow in one band at a nanometre |
+| An observer: support, window, watch, information speed | what is averaged is a constant of its laws; what is slower than its watch is a condition | incompressibility, inviscidness, an inertial frame |
+| The observer's tick is a quantity of every observation it makes | a contract measured at one window is a law of that window | the kernel's 2 % per period, measured on one bar |
+| A slice is realized only where its constraints hold | a configuration that fails a constraint is refused, not run | bars that reached the floor crashed the kernel |
+| The tuner: the coarsest admitted representation, solved, regenerated | nothing computed finer than the phenomenon needs, and nothing patched | a short bar's swing integrated at the full tick |
+| A requested integration step, read once a tick | the realization's time resolution is the generator's, not a constant | the pendulum's own time never set the kernel's step |
+| The realization's step and the observer's tick are distinct quantities | two times always equal look like one, until varied apart | the abduced "tick" was the integration step |
+| Only relations in force judge | a superseded relation was contradicted | a superseded relation still refused constructions |
+| A sense: carrier, band, least and most, window, resolution, latency | an observer is a configuration, never a category | observers as named kinds |
+| The medium decides a carrier's speed | location enters the computation; the sense does not carry its own speed | sound through air and through water |
+| A series states the windows its representation holds for | an observer finer than that is told what to generate, not given invented detail | a high-speed camera on a rigid realization |
+| A line, where a sense answers a frequency faster than its window | pitch, colour and a spectrum's band are one way of receiving | the O–H stretch to a spectrometer |
+| An observer's light pushes what it lights | the observer is in the manifold | a bead in a rangefinder's beam |
+| Identities counted at a level of energy | what a transformation keeps is what its energy cannot break | lead into gold, a neutron's decay |
+| One null-space algebra for groups and balances | dimensionless groups and balanced transformations are the same linear algebra | two copies of one elimination |
+| The smallest balance by its free variables | every balance is an assignment of them; scaled bases miss the smallest | 20 Pb → 19 Au + 139 p … |
+| A blocking identity names what is missing | a balance that fails by one identity says what a missing species must carry | the neutron's decay without the antineutrino |
+| A molecule from its atoms and its bonds | a material quantity derived from the level below, with its residual | formation enthalpies stated as data |
+| A phase is the least Gibbs energy | a state is binding against room at a temperature, not a threshold | water boiling only by a stated 100 °C |
+| A liquid boils by its cavitation number | the state of what is touched depends on the motion through it | round 5's under-water motion at 250 m/s |
+| A cell's atoms counted from its geometry | the arrangement of constituents is structure, not a stated number | densities as data |
+| Stiffness against binding over room | the only pressure an atom's binding and room make | 33 materials' moduli as data |
+| A lattice states the temperature it was measured at | a quantity's state is part of it | three alkali crystals too dense |
+| A change over a barrier: attempted at kT / h, succeeding by the barrier's Boltzmann factor | what happens during a change has a rate, not only a before and an after | phases and reactions with no time |
+| Local clocks: each region at its own time, the finer side owning the flux | one world on one clock is unstable at the slow step and wasteful at the fast | a heat network spanning four decades of time |
+| Refine where the result changes, not where the region is fastest | errors accumulate where a region integrates over many of its own times | the sensor would have been refined |
+| The least conductance a body has to a still medium | holding a difference costs a power that grows with size more slowly than what a body makes | the smallest endotherms in air and in water |
+| An element is a system the space sizes | a bound is not a design; the configuration that meets every bound is derived | the wire stopped at its least conductance |
+| A count is a quantity of a configuration | how many members, and how many lines support them, follow from the width, the spacing and the span | the roof's 10.95 m had no members |
+| What the generator can size, it sizes where it generates | a bound left for later is stale downstream: what an element weighs is part of what reaches the ground | the members' weight was a gap after the language could size them |
+| A weight at a place not stated is carried at the worst place | a mass that can be anywhere loads every place it can reach | a floor spread under its people's mean weight |
+| A member pressed along its length buckles about its thinner axis between braces | a bound on one axis is not a bound on the other; bracing is timber that counts | the walls' members chosen by the wind alone |
+| How an arrangement carries a load is counted: the load in the span of the bars' equilibrium, or not | stretching or bending is an arrangement's, not a material's or a structure's; one count across micrometres and metres | human formulas taken as the relations; one cross-grain ratio for every wood |
+| A change carried through matter takes its own time against the time it is there | a throughput is bounded by a transport, not by a power; the bar must change what is generated | the printer's gaps the same at eighty times its rate |
+| Information is a carrier that is not conserved | what is told apart, held and heard ties to heat, barriers and light; a want on computing is not about no carrier | the hall generated nothing |

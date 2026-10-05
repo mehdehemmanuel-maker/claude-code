@@ -22,6 +22,17 @@ export const SIGMA_SB = 5.670374419e-8;
 const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002', kind: 'handbook' as const };
 const INCROPERA = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011', kind: 'textbook' as const };
+const HH = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015', kind: 'textbook' as const };
+const ANDERSON = { cite: 'Anderson, Introduction to Flight, 8th ed., McGraw-Hill 2016', kind: 'textbook' as const };
+const HOLMAN = { cite: 'Holman, Heat Transfer, 10th ed., McGraw-Hill 2010, table 7-2 (simplified equations for free convection in air)', kind: 'textbook' as const };
+const GRIFFITHS = { cite: 'Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017', kind: 'textbook' as const };
+const ATKINS = { cite: 'Atkins, de Paula & Keeler, Atkins\' Physical Chemistry, 11th ed., Oxford 2018', kind: 'textbook' as const };
+const CALLISTER = { cite: 'Callister & Rethwisch, Materials Science and Engineering: An Introduction, 10th ed., Wiley 2018', kind: 'textbook' as const };
+const COVER = { cite: 'Cover & Thomas, Elements of Information Theory, 2nd ed., Wiley 2006', kind: 'textbook' as const };
+const BARD = { cite: 'Bard & Faulkner, Electrochemical Methods, 2nd ed., Wiley 2001', kind: 'textbook' as const };
+const KITTEL = { cite: 'Kittel, Introduction to Solid State Physics, 8th ed., Wiley 2005', kind: 'textbook' as const };
+const MCMAHON = { cite: 'McMahon, Muscles, Reflexes, and Locomotion, Princeton 1984 (Hill\'s equation, the Froude number of gait)', kind: 'textbook' as const };
+const NORTON = { cite: 'Norton, Design of Machinery, 6th ed., McGraw-Hill 2020 (Gruebler\'s equation)', kind: 'textbook' as const };
 const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
 const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
@@ -74,7 +85,7 @@ export const LAWS: Law[] = [
     output: q('F', 'drag', 'N'), eval: ({ rho, Cd, A, v }) => dragForce(rho!, Cd!, A!, v!),
     valid: 'Turbulent flow (Reynolds above about 10^4); air at 20 °C is 1.204 kg/m^3.',
     example: { inputs: { rho: 1.204, Cd: 0.9, A: 0.5, v: 10 }, output: 27.09 }, source: { cite: 'Hoerner, Fluid-Dynamic Drag, 1965' }, tags: ['air', 'speed', 'vehicle'],
-    implementedIn: 'engineering/mechanics.ts dragForce',
+    implementedIn: 'engineering/mechanics.ts dragForce; physics/world.ts applyAirDrag with the frontal area by shape (frontalAreas): a sphere π r², a cylinder its rectangle across and its disc along, a box its faces',
   },
   {
     id: 'power.linear', name: 'Power of a force', domain: 'mechanics', statement: 'A force moving its point at a speed does work at force times speed.',
@@ -305,7 +316,7 @@ export const LAWS: Law[] = [
     constants: { V0: { value: 0.85, unit: 'V', name: 'offset of the rule' }, kSG: { value: 1, unit: 'V', name: 'volts per unit of specific gravity' } },
     eval: ({ SG, V0, kSG }) => V0! + kSG! * SG!, outside: ({ SG }) => (SG! < 1.05 || SG! > 1.32 ? `specific gravity ${SG} is outside a lead-acid cell's 1.05 (flat) to 1.32 (charged)` : null),
     valid: 'At rest (hours after charge or discharge), 25 °C; VRLA acid about 1.30 charged, 1.10 flat.', example: { inputs: { SG: 1.28 }, output: 2.13 }, source: { cite: 'Linden & Reddy, Handbook of Batteries, 3rd ed., ch. 23 (lead-acid)' }, tags: ['battery', 'charge', 'voltage'],
-    implementedIn: 'engineering/battery.ts cellOCV (SG from charge: ' + cellOCV(1).toFixed(2) + ' V charged)',
+    implementedIn: 'engineering/battery.ts cellOCV (SG from charge: ' + cellOCV('lead-acid-vrla', 1).toFixed(2) + ' V charged)',
   },
   {
     id: 'energy.electric', name: 'Electrical energy', domain: 'electrical', statement: 'Energy delivered is voltage times current times time.', formula: 'E = V I t',
@@ -325,6 +336,12 @@ export const LAWS: Law[] = [
     valid: 'Steady, one-dimensional.', example: { inputs: { k: 200, A: 0.01, dT: 50, L: 0.1 }, output: 1000 }, source: INCROPERA, tags: ['heat', 'conduction'],
   },
   {
+    id: 'convection.natural', name: 'Free convection in still air', domain: 'thermal', statement: 'A surface in still air loses heat at a coefficient that rises with the fourth root of its temperature excess over its size: hotter and smaller things shed heat faster per area, so a thing twice the size cools more than twice as slowly.', formula: 'h = 1.42 (ΔT / L)^¼',
+    inputs: [q('dT', 'temperature excess', 'K'), q('L', 'size', 'm')], output: q('h', 'heat transfer coefficient', 'W/m^2 K'), constants: { C: { value: 1.42, unit: 'W/m^1.75 K^1.25', name: 'the laminar air coefficient (Holman table 7-2), with its fractional units' } }, eval: ({ dT, L, C }) => C! * Math.pow(Math.abs(dT!) / L!, 0.25),
+    valid: 'Laminar (Gr Pr below about 10^9: sizes under a metre, excesses under a few hundred kelvin), still air at atmospheric pressure; the simplified laminar correlation, within about 20 % of the full one. The engine holds L at no less than 10 mm.', example: { inputs: { dT: 50, L: 0.1 }, output: 6.7147654239225485 }, source: HOLMAN, tags: ['heat', 'cooling', 'air', 'size'],
+    implementedIn: 'engineering/thermal.ts heatLoss',
+  },
+  {
     id: 'radiation', name: 'Stefan-Boltzmann radiation', domain: 'thermal', statement: 'A surface radiates at its emissivity times σ times its area times the fourth powers of absolute temperature, less what it receives.', formula: 'q = ε σ A (T⁴ − T∞⁴)',
     inputs: [q('eps', 'emissivity', '-'), q('A', 'area', 'm^2'), q('T', 'surface temperature', 'K'), q('Tinf', 'surroundings', 'K')], output: q('q', 'net heat flow', 'W'), constants: { sigma: { value: SIGMA_SB, unit: 'W/m^2 K^4', name: 'Stefan-Boltzmann constant' } }, eval: ({ eps, A, T, Tinf, sigma }) => eps! * sigma! * A! * (T! ** 4 - Tinf! ** 4),
     outside: ({ eps }) => (eps! < 0 || eps! > 1 ? `emissivity ${eps} is outside 0 to 1` : null),
@@ -340,6 +357,16 @@ export const LAWS: Law[] = [
     id: 'lumped.time-constant', name: 'Lumped thermal time constant', domain: 'thermal', statement: 'A small, well-conducting body cools toward its surroundings with time constant m c over h A.', formula: 'τ = m c / (h A)',
     inputs: [q('m', 'mass', 'kg'), q('c', 'specific heat', 'J/kg K'), q('h', 'heat transfer coefficient', 'W/m^2 K'), q('A', 'area', 'm^2')], output: q('tau', 'time constant', 's'), eval: ({ m, c, h, A }) => (m! * c!) / (h! * A!),
     valid: 'Biot number h L/k below 0.1.', example: { inputs: { m: 1, c: 460, h: 10, A: 0.1 }, output: 460 }, source: INCROPERA, tags: ['heat', 'cooling', 'time'],
+  },
+  {
+    id: 'rc.time-constant', name: 'RC time constant', domain: 'electrical', statement: 'A capacitor charges or discharges through a resistance toward its final voltage with time constant R C: 63 % of the way in one, 95 % in three.', formula: 'τ = R C',
+    inputs: [q('R', 'resistance', 'ohm'), q('C', 'capacitance', 'F')], output: q('tau', 'time constant', 's'), eval: ({ R, C }) => R! * C!,
+    valid: 'A linear resistance and capacitance, a source that holds its voltage.', example: { inputs: { R: 10e3, C: 100e-6 }, output: 1 }, source: HH, tags: ['capacitor', 'filter', 'decoupling', 'time'],
+  },
+  {
+    id: 'lift.aero', name: 'Aerodynamic lift', domain: 'fluids', statement: 'A surface moved through a fluid is pushed across the flow by half the fluid density times its lift coefficient, planform area and speed squared; the coefficient grows with the angle of attack up to the stall.', formula: 'L = ½ ρ C_L A v²',
+    inputs: [q('rho', 'fluid density', 'kg/m^3'), q('CL', 'lift coefficient', '-'), q('A', 'planform area', 'm^2'), q('v', 'speed', 'm/s')], output: q('L', 'lift', 'N'), eval: ({ rho, CL, A, v }) => 0.5 * rho! * CL! * A! * v! * v!,
+    valid: 'Below the stall angle; C_L from the section and angle (about 0.3 to 1.5 for a wing in flight).', example: { inputs: { rho: 1.225, CL: 1, A: 10, v: 50 }, output: 15312.5 }, source: ANDERSON, tags: ['wing', 'lift', 'flight', 'rotor'],
   },
   {
     id: 'thermal.network', name: 'Temperature rise through thermal resistances', domain: 'thermal', statement: 'A steady loss flowing through resistances in series raises the temperature by the loss times their sum.', formula: 'ΔT = P Σ R_th',
@@ -397,9 +424,37 @@ export const LAWS: Law[] = [
     eval: ({ h, g: gg }) => Math.sqrt(2 * gg! * h!), valid: 'No air drag (it matters past a few metres for light things).', example: { inputs: { h: 1.5 }, output: 5.424016039799293 }, source: PHYSICS, tags: ['drop', 'impact', 'fall'],
   },
   {
+    id: 'flywheel.specific-energy', name: 'Energy a flywheel can hold per kilogram', domain: 'mechanics',
+    statement: 'A rotor\'s energy per unit mass is bounded by its material\'s allowable stress over its density, times a shape factor: 0.606 for a constant-thickness solid disc, 0.5 for a thin rim, 1 for a constant-stress disc.',
+    formula: 'e = K σ / ρ', inputs: [q('K', 'shape factor', '-'), q('sigma', 'allowable stress', 'Pa'), q('rho', 'density', 'kg/m^3')], output: q('e', 'specific energy', 'J/kg'),
+    eval: ({ K, sigma, rho }) => (K! * sigma!) / rho!, outside: ({ K }) => (K! <= 0 || K! > 1 ? `K ${K} is outside any rotor shape (0 to 1)` : null),
+    valid: 'Isotropic rotors at the speed where the peak stress reaches σ; the shape factor is the rotor\'s geometry alone (Genta).',
+    example: { inputs: { K: 0.606, sigma: 185e6, rho: 7870 }, output: 14245.23506988564, rel: 1e-9 },
+    source: { cite: 'Genta, Kinetic Energy Storage: Theory and Practice of Advanced Flywheel Systems, Butterworths 1985, ch. 2', kind: 'textbook' }, tags: ['flywheel', 'energy', 'rotor', 'storage'],
+  },
+  {
+    id: 'gas.isothermal-work', name: 'Work in a compressed gas (isothermal)', domain: 'fluids',
+    statement: 'A volume of gas at pressure p, let down slowly enough to stay at its temperature, does work of p V ln(p / p0) expanding to p0.',
+    formula: 'W = p V ln(p / p0)', inputs: [q('p', 'stored pressure', 'Pa'), q('V', 'stored volume', 'm^3'), q('p0', 'pressure let down to', 'Pa')], output: q('W', 'work', 'J'),
+    eval: ({ p, V, p0 }) => p! * V! * Math.log(p! / p0!), outside: ({ p, p0 }) => (p! <= p0! ? 'the stored pressure must exceed what it is let down to' : null),
+    valid: 'Ideal gas, isothermal (slow) expansion; a fast (adiabatic) expansion gives less, the difference leaving as cooled gas.',
+    example: { inputs: { p: 2e6, V: 0.01, p0: 1e5 }, output: 59914.64547107982, rel: 1e-9 },
+    source: PHYSICS, tags: ['gas', 'compressed air', 'work', 'storage'],
+  },
+  {
     id: 'spring.energy', name: 'Energy in a spring', domain: 'mechanics', statement: 'A spring stretched or squeezed from rest holds half its rate times the stretch squared.',
     formula: 'E = ½ k x²', inputs: [q('k', 'rate', 'N/m'), q('x', 'deflection', 'm')], output: q('E', 'stored energy', 'J'),
     eval: ({ k, x }) => 0.5 * k! * x! * x!, valid: 'Linear spring, below its solid length and its yield.', example: { inputs: { k: 12100, x: 0.02 }, output: 2.42 }, source: PHYSICS, tags: ['spring', 'launcher', 'energy'], implementedIn: 'physics/energy.ts springEnergy',
+  },
+  {
+    id: 'capacitor.energy', name: 'Energy in a capacitor', domain: 'electrical', statement: 'A charged capacitor holds half its capacitance times the voltage across it squared.',
+    formula: 'E = ½ C V²', inputs: [q('C', 'capacitance', 'F'), q('V', 'voltage', 'V')], output: q('E', 'stored energy', 'J'),
+    eval: ({ C, V }) => 0.5 * C! * V! * V!, valid: 'A linear dielectric below its breakdown voltage.', example: { inputs: { C: 100e-6, V: 12 }, output: 7.2e-3 }, source: PHYSICS, tags: ['energy', 'capacitor', 'store'],
+  },
+  {
+    id: 'inductor.energy', name: 'Energy in an inductor', domain: 'electrical', statement: 'A current-carrying inductor holds half its inductance times the current squared.',
+    formula: 'E = ½ L I²', inputs: [q('L', 'inductance', 'H'), q('I', 'current', 'A')], output: q('E', 'stored energy', 'J'),
+    eval: ({ L, I }) => 0.5 * L! * I! * I!, valid: 'A linear core below saturation.', example: { inputs: { L: 10e-3, I: 2 }, output: 0.02 }, source: PHYSICS, tags: ['energy', 'inductor', 'store'],
   },
   {
     id: 'stress.hoop', name: 'Hoop stress in a thin-walled cylinder', domain: 'structures', statement: 'Pressure inside a thin tube pulls its wall round the circumference at pressure times radius over wall thickness.',
@@ -667,7 +722,7 @@ export const LAWS: Law[] = [
     statement: 'No lens or eye of diameter D can see detail finer than about 1.22 λ / D radians: long waves need huge apertures to make any image at all.',
     formula: 'θ = 1.22 λ / D', inputs: [q('lambda', 'wavelength', 'm'), q('D', 'aperture diameter', 'm')], output: q('theta', 'smallest angle resolved', 'rad'),
     eval: ({ lambda, D }) => (1.22 * lambda!) / D!, outside: ({ lambda, D }) => ((1.22 * lambda!) / D! > Math.PI ? 'wider than the whole sky: no image at all' : null),
-    valid: 'A circular aperture, the Rayleigh criterion.', example: { inputs: { lambda: 1, D: 0.05 }, output: 24.4 }, source: { cite: 'Hecht, Optics, 5th ed., Pearson 2017', kind: 'textbook' }, tags: ['optics', 'vision', 'radio', 'telescope', 'resolution'],
+    valid: 'A circular aperture, the Rayleigh criterion.', example: { inputs: { lambda: 550e-9, D: 5e-3 }, output: 1.342e-4 }, source: { cite: 'Hecht, Optics, 5th ed., Pearson 2017 (the eye: green light through a 5 mm pupil)', kind: 'textbook' }, tags: ['optics', 'vision', 'radio', 'telescope', 'resolution'],
   },
   {
     id: 'acoustic.mass-law', name: 'Sound insulation of a wall (mass law)', domain: 'fluids',
@@ -701,6 +756,174 @@ export const LAWS: Law[] = [
     valid: 'Raising the load; trapezoidal threads have α = 15°, square threads 0. Collar friction, if the screw bears on one, is extra.', example: { inputs: { l: 0.004, d2: 0.014, mu: 0.1, alpha: 0.2617993877991494 }, output: 0.46324813129085995 },
     source: { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, §8-2 (power screws)', kind: 'textbook' }, tags: ['lead screw', 'efficiency', 'self-locking', 'screw jack', 'linear actuator'],
   },
+  // ---- the laws the seeds cited and could not run, now executable ------------------------------------------------
+  {
+    id: 'griffith', name: 'Griffith criterion', domain: 'materials', statement: 'A crack grows when the energy released exceeds the surface energy made: brittle strength falls with the square root of flaw size.', formula: 'σ_f = √(2 E γ / (π a))',
+    inputs: [q('E', 'Young\'s modulus', 'Pa'), q('gamma', 'surface energy', 'J/m^2'), q('a', 'crack length', 'm')], output: q('sigma', 'fracture stress', 'Pa'), eval: ({ E, gamma, a }) => Math.sqrt((2 * E! * gamma!) / (Math.PI * a!)),
+    valid: 'Brittle (no plastic zone); for a ductile material γ becomes the plastic work per area, a thousand times more.', example: { inputs: { E: 70e9, gamma: 1, a: 1e-6 }, output: 211100412.28223762 }, source: CALLISTER, tags: ['crack', 'glass', 'ceramic', 'fracture'],
+  },
+  {
+    id: 'fick.diffusion', name: 'Fick\'s law of diffusion', domain: 'chemistry', statement: 'Flux is proportional to the concentration gradient; a distance L takes a time of order L²/D.', formula: 'J = D ΔC / L',
+    inputs: [q('D', 'diffusivity', 'm^2/s'), q('dC', 'concentration difference', 'mol/m^3'), q('L', 'distance', 'm')], output: q('J', 'flux', 'mol/m^2 s'), eval: ({ D, dC, L }) => (D! * dC!) / L!,
+    valid: 'Steady, dilute, one dimension; D of ions in water about 10^-9 m²/s, of carbon in hot iron 10^-11.', example: { inputs: { D: 1e-9, dC: 100, L: 1e-3 }, output: 0.0001 }, source: ATKINS, tags: ['diffusion', 'membrane', 'doping', 'case hardening'],
+  },
+  {
+    id: 'bernoulli', name: 'Bernoulli\'s equation', domain: 'fluids', statement: 'Along a streamline of an ideal fluid, pressure plus kinetic plus potential energy per volume is constant: where it speeds up, the pressure falls.', formula: 'p₂ = p₁ + ½ ρ (v₁² − v₂²)',
+    inputs: [q('p1', 'pressure upstream', 'Pa'), q('rho', 'density', 'kg/m^3'), q('v1', 'speed upstream', 'm/s'), q('v2', 'speed downstream', 'm/s')], output: q('p2', 'pressure downstream', 'Pa'), eval: ({ p1, rho, v1, v2 }) => p1! + 0.5 * rho! * (v1! * v1! - v2! * v2!),
+    valid: 'Inviscid, incompressible, steady, same height; losses add a term (Darcy-Weisbach).', example: { inputs: { p1: 101325, rho: 1000, v1: 1, v2: 3 }, output: 97325.0 }, source: PHYSICS, tags: ['venturi', 'pump', 'valve', 'lift', 'cavitation'],
+  },
+  {
+    id: 'nernst', name: 'Nernst equation', domain: 'chemistry', statement: 'An electrode\'s potential shifts from its standard value by (RT/zF) ln of the reaction quotient: cell voltages, membrane potentials, corrosion.', formula: 'E = E⁰ − (R T / z F) ln Q',
+    inputs: [q('E0', 'standard potential', 'V'), q('T', 'temperature', 'K'), q('z', 'electrons transferred', '-'), q('Q', 'reaction quotient', '-')], output: q('E', 'potential', 'V'), constants: { R: { value: 8.314462618, unit: 'J/mol K', name: 'gas constant' }, F: { value: 96485.33212, unit: 'C/mol', name: 'Faraday constant' } },
+    eval: ({ E0, T, z, Q, R: r, F: f }) => E0! - ((r! * T!) / (z! * f!)) * Math.log(Q!),
+    valid: 'Activities as concentrations (dilute); z whole.', example: { inputs: { E0: 1.1, T: 298.15, z: 2, Q: 10 }, output: 1.0704203251571394 }, source: ATKINS, tags: ['battery', 'corrosion', 'membrane', 'neuron'],
+  },
+  {
+    id: 'ampere.law', name: 'Ampère\'s law (a long solenoid)', domain: 'magnetism', statement: 'A current makes a magnetic field round it; inside a long coil the field is μ₀ times the turns per length times the current.', formula: 'B = μ₀ N I / L',
+    inputs: [q('N', 'turns', '-'), q('I', 'current', 'A'), q('L', 'coil length', 'm')], output: q('B', 'field inside', 'T'), constants: { mu0: { value: 1.2566370614359173e-06, unit: 'N/A^2', name: 'permeability of free space' } }, eval: ({ N, I, L, mu0: m }) => (m! * N! * I!) / L!,
+    valid: 'Length well over the diameter, air core; an iron core multiplies it by its relative permeability until it saturates.', example: { inputs: { N: 100, I: 2, L: 0.1 }, output: 0.0025132741228718345 }, source: GRIFFITHS, tags: ['solenoid', 'electromagnet', 'winding', 'inductor'],
+  },
+  {
+    id: 'hertz.contact', name: 'Hertzian contact (a sphere on a flat)', domain: 'machine elements', statement: 'Two curved elastic bodies pressed together touch over a small area with a peak pressure that rises as the cube root of the load.', formula: 'p₀ = (6 F E*² / (π³ R²))^⅓',
+    inputs: [q('F', 'load', 'N'), q('Estar', 'contact modulus', 'Pa'), q('R', 'sphere radius', 'm')], output: q('p0', 'peak contact pressure', 'Pa'), eval: ({ F, Estar, R }) => Math.cbrt((6 * F! * Estar! * Estar!) / (Math.PI ** 3 * R! * R!)),
+    valid: 'Elastic, frictionless, contact small against the radius; E* = 1 / ((1 − ν₁²)/E₁ + (1 − ν₂²)/E₂), about 1.1 × 10¹¹ Pa for steel on steel.', example: { inputs: { F: 100, Estar: 1.1e11, R: 0.005 }, output: 2107895117.920457 }, source: SHIGLEY, tags: ['bearing', 'ball', 'gear tooth', 'brinelling'],
+  },
+  {
+    id: 'coulomb.law', name: 'Coulomb\'s law', domain: 'electrical', statement: 'Charges attract or repel with a force proportional to their product over the distance squared.', formula: 'F = k q₁ q₂ / r²',
+    inputs: [q('q1', 'charge', 'C'), q('q2', 'charge', 'C'), q('r', 'distance', 'm')], output: q('F', 'force', 'N'), constants: { k: { value: 8987551792.3, unit: 'N m^2/C^2', name: 'Coulomb constant' } }, eval: ({ q1, q2, r, k: kk }) => (kk! * q1! * q2!) / (r! * r!),
+    valid: 'Point charges at rest in vacuum (air within 0.06 %).', example: { inputs: { q1: 1e-6, q2: 1e-6, r: 0.1 }, output: 0.8987551792299996 }, source: PHYSICS, tags: ['charge', 'electrostatic', 'ion', 'bond'],
+  },
+  {
+    id: 'gibbs.energy', name: 'Gibbs free energy', domain: 'chemistry', statement: 'A reaction goes forward when G falls: enthalpy minus temperature times entropy; its minimum is equilibrium.', formula: 'ΔG = ΔH − T ΔS',
+    inputs: [q('dH', 'enthalpy change', 'J/mol'), q('T', 'temperature', 'K'), q('dS', 'entropy change', 'J/mol K')], output: q('dG', 'free energy change', 'J/mol'), eval: ({ dH, T, dS }) => dH! - T! * dS!,
+    valid: 'Constant temperature and pressure.', example: { inputs: { dH: -92000, T: 298.15, dS: -199 }, output: -32668.15 }, source: ATKINS, tags: ['reaction', 'equilibrium', 'haber', 'metabolism'],
+  },
+  {
+    id: 'ideal.gas', name: 'Ideal gas law', domain: 'thermal', statement: 'The pressure of a dilute gas is its amount times the gas constant times its temperature over its volume.', formula: 'p = n R T / V',
+    inputs: [q('n', 'amount', 'mol'), q('T', 'temperature', 'K'), q('V', 'volume', 'm^3')], output: q('p', 'pressure', 'Pa'), constants: { R: { value: 8.314462618, unit: 'J/mol K', name: 'gas constant' } }, eval: ({ n, T, V, R: r }) => (n! * r! * T!) / V!,
+    valid: 'Far from condensing and at pressures of a few atmospheres or less.', example: { inputs: { n: 1, T: 273.15, V: 0.0224 }, output: 101388.19036190625 }, source: PHYSICS, tags: ['gas', 'compressor', 'tyre', 'atmosphere'],
+  },
+  {
+    id: 'michaelis-menten', name: 'Michaelis-Menten kinetics', domain: 'chemistry', statement: 'An enzyme\'s rate rises with substrate and saturates at its maximum; at the Michaelis constant it runs at half.', formula: 'v = V_max S / (K_m + S)',
+    inputs: [q('Vmax', 'maximum rate', 'mol/m^3 s'), q('S', 'substrate concentration', 'mol/m^3'), q('Km', 'Michaelis constant', 'mol/m^3')], output: q('v', 'rate', 'mol/m^3 s'), eval: ({ Vmax, S, Km }) => (Vmax! * S!) / (Km! + S!),
+    valid: 'A single substrate, steady state, enzyme far below substrate.', example: { inputs: { Vmax: 1, S: 2, Km: 1 }, output: 0.6666666666666666 }, source: ATKINS, tags: ['enzyme', 'metabolism', 'saturation'],
+  },
+  {
+    id: 'hall-petch', name: 'Hall-Petch relation', domain: 'materials', statement: 'Yield strength rises with the inverse square root of grain size: fine grains are strong.', formula: 'σ_y = σ₀ + k_y d^−½',
+    inputs: [q('sigma0', 'friction stress', 'Pa'), q('ky', 'Hall-Petch coefficient', 'Pa m^0.5'), q('d', 'grain size', 'm')], output: q('sigma', 'yield strength', 'Pa'), eval: ({ sigma0, ky, d }) => sigma0! + ky! / Math.sqrt(d!),
+    valid: 'Grains from about 100 nm to a millimetre; below that the trend reverses.', example: { inputs: { sigma0: 70e6, ky: 0.74e6, d: 25e-6 }, output: 218000000.0 }, source: CALLISTER, tags: ['grain', 'steel', 'grain refinement', 'strength'],
+  },
+  {
+    id: 'planck.energy', name: 'Planck relation', domain: 'optics', statement: 'A photon\'s energy is Planck\'s constant times the speed of light over its wavelength: colour is energy.', formula: 'E = h c / λ',
+    inputs: [q('lambda', 'wavelength', 'm')], output: q('E', 'photon energy', 'J'), constants: { h: { value: 6.62607015e-34, unit: 'J s', name: 'Planck constant' }, c: { value: 299792458.0, unit: 'm/s', name: 'speed of light' } }, eval: ({ lambda, h: hh, c: cc }) => (hh! * cc!) / lambda!,
+    valid: 'In vacuum.', example: { inputs: { lambda: 500e-9 }, output: 3.972891714297857e-19 }, source: PHYSICS, tags: ['light', 'led', 'photodiode', 'photosynthesis'],
+  },
+  {
+    id: 'shannon.capacity', name: 'Shannon capacity', domain: 'information', statement: 'A channel carries at most its bandwidth times log₂(1 + signal to noise) bits a second, whatever the code.', formula: 'C = B log₂(1 + S/N)',
+    inputs: [q('B', 'bandwidth', 'Hz'), q('snr', 'signal to noise power ratio', '-')], output: q('C', 'capacity (bits per second)', 'Hz'), eval: ({ B, snr }) => B! * Math.log2(1 + snr!),
+    valid: 'Additive white Gaussian noise.', example: { inputs: { B: 1e6, snr: 1000 }, output: 9967226.258835994 }, source: COVER, tags: ['channel', 'network', 'bus', 'noise'],
+  },
+  {
+    id: 'snell.law', name: 'Snell\'s law', domain: 'optics', statement: 'Light bends at an interface by the ratio of refractive indices: lenses, fibres, the eye.', formula: 'n₁ sin θ₁ = n₂ sin θ₂',
+    inputs: [q('n1', 'index of the first medium', '-'), q('n2', 'index of the second', '-'), q('theta1', 'angle of incidence', 'rad')], output: q('theta2', 'angle of refraction', 'rad'), eval: ({ n1, n2, theta1 }) => Math.asin((n1! * Math.sin(theta1!)) / n2!),
+    valid: 'Below the critical angle when going into the thinner medium; otherwise total internal reflection.', example: { inputs: { n1: 1, n2: 1.5, theta1: 0.5 }, output: 0.32532528522279924 }, source: PHYSICS, tags: ['lens', 'fibre', 'eye', 'refraction'],
+  },
+  {
+    id: 'faraday.induction', name: 'Faraday\'s law of induction', domain: 'magnetism', statement: 'A changing magnetic flux through a loop induces a voltage round it equal to the rate of change, times the turns: generators, transformers, inductors.', formula: 'V = N A dB/dt',
+    inputs: [q('N', 'turns', '-'), q('A', 'loop area', 'm^2'), q('dBdt', 'rate of change of the field', 'T/s')], output: q('V', 'induced voltage', 'V'), eval: ({ N, A, dBdt }) => N! * A! * dBdt!,
+    valid: 'A uniform field normal to the loop.', example: { inputs: { N: 100, A: 1e-3, dBdt: 10 }, output: 1.0 }, source: GRIFFITHS, tags: ['generator', 'transformer', 'inductor', 'motor'],
+  },
+  {
+    id: 'faraday.electrolysis', name: 'Faraday\'s laws of electrolysis', domain: 'chemistry', statement: 'The mass deposited or dissolved is the charge passed times the molar mass over the electrons per ion and the Faraday constant: plating, refining, batteries.', formula: 'm = M I t / (z F)',
+    inputs: [q('M', 'molar mass', 'kg/mol'), q('I', 'current', 'A'), q('t', 'time', 's'), q('z', 'electrons per ion', '-')], output: q('m', 'mass', 'kg'), constants: { F: { value: 96485.33212, unit: 'C/mol', name: 'Faraday constant' } }, eval: ({ M, I, t, z, F: f }) => (M! * I! * t!) / (z! * f!),
+    valid: 'At the current efficiency of the bath (100 % here).', example: { inputs: { M: 0.06355, I: 2, t: 3600, z: 2 }, output: 0.0023711376120410035 }, source: BARD, tags: ['plating', 'refining', 'battery', 'copper'],
+  },
+  {
+    id: 'shockley.diode', name: 'Shockley diode equation', domain: 'electrical', statement: 'A junction\'s current rises exponentially with its forward voltage, by n times the thermal voltage kT/q (25.85 mV at 300 K) per e-fold.', formula: 'I = I_s (e^(V / n V_T) − 1)',
+    inputs: [q('Is', 'saturation current', 'A'), q('V', 'forward voltage', 'V'), q('n', 'ideality factor', '-'), q('Vt', 'thermal voltage k T / q', 'V')], output: q('I', 'current', 'A'), eval: ({ Is, V, n, Vt }) => Is! * (Math.exp(V! / (n! * Vt!)) - 1),
+    valid: 'Below the series-resistance knee; n from 1 (ideal) to 2; V_T = k T / q, 25.85 mV at 300 K.', example: { inputs: { Is: 1e-12, V: 0.6, n: 1, Vt: 0.025851999786435535 }, output: 0.01201036955312849 }, source: KITTEL, tags: ['diode', 'led', 'transistor', 'junction'],
+  },
+  {
+    id: 'shannon.sampling', name: 'Nyquist-Shannon sampling theorem', domain: 'information', statement: 'A signal sampled above twice its highest frequency is recovered exactly; below that, higher frequencies alias into lower ones.', formula: 'f_s ≥ 2 f_max',
+    inputs: [q('fmax', 'highest frequency in the signal', 'Hz')], output: q('fs', 'least sampling rate', 'Hz'), eval: ({ fmax }) => 2 * fmax!,
+    valid: 'A band-limited signal; real converters sample a few times faster and filter first.', example: { inputs: { fmax: 20000 }, output: 40000.0 }, source: PHYSICS, tags: ['adc', 'sampling', 'aliasing', 'audio'],
+  },
+  {
+    id: 'sound.speed', name: 'Speed of a longitudinal wave in a bar', domain: 'mechanics', statement: 'A push travels along a thin bar at the root of its modulus over its density: about 5 km/s in steel, 40 m/s in soft rubber. Nothing in a solid knows of a push sooner.',
+    formula: 'c = √(E / ρ)', inputs: [q('E', 'modulus', 'Pa'), q('rho', 'density', 'kg/m^3')], output: q('c', 'wave speed', 'm/s'), eval: ({ E, rho }) => Math.sqrt(E! / rho!),
+    valid: 'Thin bar (lateral strain free); bulk waves in a block go faster by √((1 − ν) / ((1 + ν)(1 − 2ν))).', example: { inputs: { E: 200e9, rho: 7850 }, output: 5047.544651250688 }, source: { cite: 'Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000, ch. 3 (longitudinal waves in a bar)', kind: 'textbook' as const }, tags: ['sound', 'wave', 'propagation', 'rigid', 'impact'],
+  },
+  {
+    id: 'wave.speed.electromagnetic', name: 'Speed of an electromagnetic wave', domain: 'electrical', statement: 'An electromagnetic wave travels at the inverse root of the product of the medium\'s permeability and permittivity: in vacuum, c.',
+    formula: 'v = 1 / √(μ ε)', inputs: [q('mu', 'permeability', 'N/A^2'), q('eps', 'permittivity', 'F/m')], output: q('v', 'wave speed', 'm/s'), eval: ({ mu, eps }) => 1 / Math.sqrt(mu! * eps!),
+    valid: 'A linear, lossless medium; in a conductor the wave decays over the skin depth.', example: { inputs: { mu: 1.25663706212e-6, eps: 8.8541878128e-12 }, output: 299792458.0, rel: 1e-9 }, source: GRIFFITHS, tags: ['light', 'wave', 'propagation', 'c', 'vacuum'],
+  },
+  {
+    id: 'conservation.momentum', name: 'Conservation of momentum (two bodies that stick)', domain: 'mechanics', statement: 'The momentum of a closed system is constant: two bodies that collide and stick move on together at the momentum-weighted mean of their speeds.', formula: 'v = (m₁ v₁ + m₂ v₂) / (m₁ + m₂)',
+    inputs: [q('m1', 'mass', 'kg'), q('v1', 'speed', 'm/s'), q('m2', 'mass', 'kg'), q('v2', 'speed', 'm/s')], output: q('v', 'common speed after', 'm/s'), eval: ({ m1, v1, m2, v2 }) => (m1! * v1! + m2! * v2!) / (m1! + m2!),
+    valid: 'No outside force during the collision; along one line.', example: { inputs: { m1: 2, v1: 3, m2: 1, v2: 0 }, output: 2.0 }, source: PHYSICS, tags: ['collision', 'rocket', 'propeller', 'impact'],
+  },
+  {
+    id: 'continuity', name: 'Continuity equation', domain: 'fluids', statement: 'Mass flow in equals mass flow out of a steady volume: a pipe narrowing speeds its flow by the ratio of areas.', formula: 'v₂ = v₁ A₁ / A₂',
+    inputs: [q('v1', 'speed upstream', 'm/s'), q('A1', 'area upstream', 'm^2'), q('A2', 'area downstream', 'm^2')], output: q('v2', 'speed downstream', 'm/s'), eval: ({ v1, A1, A2 }) => (v1! * A1!) / A2!,
+    valid: 'Incompressible, steady.', example: { inputs: { v1: 1, A1: 0.01, A2: 0.0025 }, output: 4.0 }, source: PHYSICS, tags: ['pipe', 'nozzle', 'venturi', 'valve'],
+  },
+  {
+    id: 'clausius-clapeyron', name: 'Clausius-Clapeyron relation', domain: 'thermal', statement: 'A phase boundary\'s pressure rises with temperature by the latent heat over the temperature times the change of specific volume.', formula: 'dp/dT = L / (T Δv)',
+    inputs: [q('L', 'latent heat', 'J/kg'), q('T', 'temperature', 'K'), q('dv', 'change of specific volume', 'm^3/kg')], output: q('dpdT', 'slope of the boundary', 'Pa/K'), eval: ({ L, T, dv }) => L! / (T! * dv!),
+    valid: 'Along the coexistence line; for boiling at 100 °C, water\'s 2.26 MJ/kg and 1.67 m³/kg give 3.6 kPa/K.', example: { inputs: { L: 2.26e6, T: 373.15, dv: 1.672 }, output: 3622.335900169705 }, source: ATKINS, tags: ['boiling', 'melting', 'weather', 'phase'],
+  },
+  {
+    id: 'hill.muscle', name: 'Hill\'s muscle equation', domain: 'mechanics', statement: 'A muscle\'s force falls with its shortening speed along a hyperbola, (F + a)(v + b) = (F₀ + a) b; its power peaks near a third of its maximum speed.', formula: 'F = (F₀ + a) b / (v + b) − a',
+    inputs: [q('F0', 'isometric force', 'N'), q('a', 'Hill force constant', 'N'), q('b', 'Hill speed constant', 'm/s'), q('v', 'shortening speed', 'm/s')], output: q('F', 'force', 'N'), eval: ({ F0, a, b, v }) => ((F0! + a!) * b!) / (v! + b!) - a!,
+    valid: 'Shortening only; a about F₀/4, b about a quarter of the maximum speed.', example: { inputs: { F0: 100, a: 25, b: 0.25, v: 0.5 }, output: 16.666666666666664 }, source: MCMAHON, tags: ['muscle', 'actuator', 'power', 'locomotion'],
+  },
+  {
+    id: 'grubler', name: 'Gruebler\'s equation (planar)', domain: 'machine elements', statement: 'A planar mechanism\'s degrees of freedom are three per moving link less two per full joint and one per half joint.', formula: 'M = 3 (n − 1) − 2 j₁ − j₂',
+    inputs: [q('n', 'links, the ground among them', '-'), q('j1', 'full joints (pins, sliders)', '-'), q('j2', 'half joints (cam, gear contacts)', '-')], output: q('M', 'degrees of freedom', '-'), eval: ({ n, j1, j2 }) => 3 * (n! - 1) - 2 * j1! - j2!,
+    valid: 'Planar; a four-bar linkage (n = 4, j₁ = 4) has one.', example: { inputs: { n: 4, j1: 4, j2: 0 }, output: 1 }, source: NORTON, tags: ['linkage', 'mechanism', 'joint', 'kinematics'],
+  },
+  {
+    id: 'boltzmann.distribution', name: 'Boltzmann distribution', domain: 'thermal', statement: 'The probability of a state falls as exp(−E/kT) with its energy: carrier populations, reaction rates, the folding of proteins.', formula: 'p₂/p₁ = e^(−ΔE / k T)',
+    inputs: [q('dE', 'energy above the ground state', 'J'), q('T', 'temperature', 'K')], output: q('ratio', 'population ratio', '-'), constants: { k: { value: 1.380649e-23, unit: 'J/K', name: 'Boltzmann constant' } }, eval: ({ dE, T, k }) => Math.exp(-dE! / (k! * T!)),
+    valid: 'Thermal equilibrium; 0.1 eV above the ground state at room temperature is one in fifty.', example: { inputs: { dE: 1.602176634e-20, T: 300 }, output: 0.020896518618090255 }, source: ATKINS, tags: ['statistics', 'semiconductor', 'reaction', 'protein'],
+  },
+  {
+    id: 'queueing', name: 'Little\'s law', domain: 'information', statement: 'The items in a steady system equal their arrival rate times the time each spends in it: a queue, a network, a shop floor.', formula: 'L = λ W',
+    inputs: [q('lambda', 'arrival rate', '1/s'), q('W', 'time in the system', 's')], output: q('L', 'items in the system', '-'), eval: ({ lambda, W }) => lambda! * W!,
+    valid: 'Steady state, any arrival pattern.', example: { inputs: { lambda: 10, W: 0.5 }, output: 5.0 }, source: PHYSICS, tags: ['queue', 'network', 'latency', 'throughput'],
+  },
+  {
+    id: 'first.law', name: 'First law of thermodynamics', domain: 'thermal', statement: 'Energy is conserved: heat in minus work out is the change in internal energy.', formula: 'ΔU = Q − W',
+    inputs: [q('Q', 'heat in', 'J'), q('W', 'work out', 'J')], output: q('dU', 'change in internal energy', 'J'), eval: ({ Q, W }) => Q! - W!,
+    valid: 'A closed system.', example: { inputs: { Q: 1000, W: 300 }, output: 700 }, source: PHYSICS, tags: ['energy', 'engine', 'metabolism', 'heat'],
+  },
+  {
+    id: 'froude', name: 'Froude number of a gait', domain: 'mechanics', statement: 'Speed squared over gravity times leg length: animals of every size change gait at the same Froude number, walking to running near one half.', formula: 'Fr = v² / (g L)',
+    inputs: [q('v', 'speed', 'm/s'), q('L', 'leg length', 'm')], output: q('Fr', 'Froude number', '-'), constants: G, eval: ({ v, L, g: gg }) => (v! * v!) / (gg! * L!),
+    valid: 'Legged locomotion; the hip height as the leg length.', example: { inputs: { v: 1.5, L: 0.9 }, output: 0.25492905324448206 }, source: MCMAHON, tags: ['walking', 'gait', 'scale', 'legs'],
+  },
+  {
+    id: 'butler-volmer', name: 'Butler-Volmer equation', domain: 'chemistry', statement: 'Electrode current rises exponentially with overpotential in both directions, by the transfer coefficients over the thermal voltage R T / F (25.7 mV at 25 °C): why a cell\'s voltage sags under load.', formula: 'i = i₀ (e^(α_a η / V_T) − e^(−α_c η / V_T))',
+    inputs: [q('i0', 'exchange current density', 'A/m^2'), q('eta', 'overpotential', 'V'), q('Vt', 'thermal voltage R T / F', 'V'), q('alphaA', 'anodic transfer coefficient', '-'), q('alphaC', 'cathodic transfer coefficient', '-')], output: q('i', 'current density', 'A/m^2'),
+    eval: ({ i0, eta, Vt, alphaA, alphaC }) => i0! * (Math.exp((alphaA! * eta!) / Vt!) - Math.exp((-alphaC! * eta!) / Vt!)),
+    valid: 'Kinetics only, before mass transport limits the current; V_T = R T / F, 25.7 mV at 25 °C.', example: { inputs: { i0: 1, eta: 0.1, Vt: 0.025692579121493725, alphaA: 0.5, alphaC: 0.5 }, output: 6.85840779126327 }, source: BARD, tags: ['battery', 'electrode', 'overpotential', 'corrosion'],
+  },
+  {
+    id: 'tsiolkovsky', name: 'Rocket equation', domain: 'mechanics', statement: 'Velocity gained is the exhaust speed times the log of the initial over the final mass.', formula: 'Δv = v_e ln(m₀ / m₁)',
+    inputs: [q('ve', 'exhaust speed', 'm/s'), q('m0', 'initial mass', 'kg'), q('m1', 'final mass', 'kg')], output: q('dv', 'velocity gained', 'm/s'), eval: ({ ve, m0, m1 }) => ve! * Math.log(m0! / m1!),
+    valid: 'No gravity or drag during the burn.', example: { inputs: { ve: 3000, m0: 10, m1: 1 }, output: 6907.7552789821375 }, source: PHYSICS, tags: ['rocket', 'propulsion', 'thrust'],
+  },
+  {
+    id: 'bragg.law', name: 'Bragg\'s law', domain: 'optics', statement: 'Waves reflect from crystal planes only at angles where the path difference between planes is whole wavelengths: how structure is seen.', formula: 'n λ = 2 d sin θ',
+    inputs: [q('d', 'plane spacing', 'm'), q('theta', 'glancing angle', 'rad'), q('n', 'order', '-')], output: q('lambda', 'wavelength', 'm'), eval: ({ d, theta, n }) => (2 * d! * Math.sin(theta!)) / n!,
+    valid: 'Wavelength of the order of the spacing (X-rays for crystals).', example: { inputs: { d: 2.5e-10, theta: 0.3, n: 1 }, output: 1.4776010333066977e-10 }, source: KITTEL, tags: ['crystal', 'x-ray', 'diffraction', 'structure'],
+  },
+  {
+    id: 'cable.equation', name: 'Cable equation (the length constant)', domain: 'electrical', statement: 'A leaky conductor\'s steady signal decays with distance over a length constant, the root of the membrane resistance per length over the inner resistance per length: the axon, the undersea cable.', formula: 'λ = √(r_m / r_i)',
+    inputs: [q('rm', 'leak resistance of a unit length', 'ohm m'), q('ri', 'inner resistance per length', 'ohm/m')], output: q('lambda', 'length constant', 'm'), eval: ({ rm, ri }) => Math.sqrt(rm! / ri!),
+    valid: 'Steady state; the time constant r_m c_m sets the spreading.', example: { inputs: { rm: 1, ri: 0.5 }, output: 1.4142135623730951 }, source: PHYSICS, tags: ['axon', 'cable', 'signal', 'neuron'],
+  },
 ];
 
 export const lawById = (id: string) => LAWS.find((l) => l.id === id);
@@ -714,6 +937,8 @@ export function withConstants(law: Law, inputs: Record<string, number>): Record<
 
 /** Inputs a law may be run without (they have a sensible default inside it). */
 const OPTIONAL: Record<string, string[]> = { 'buckling.euler': ['K'], 'bearing.life.l10': ['p'] };
+/** Whether a law fills an input itself when it is not given (the life exponent of a ball bearing, the end factor of a column). */
+export const isOptional = (lawId: string, sym: string): boolean => (OPTIONAL[lawId] ?? []).includes(sym);
 
 /**
  * Run a law by id: its output, and a caution when the inputs leave the range it holds over. Throws on an unknown law or

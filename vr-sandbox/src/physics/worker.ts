@@ -6,12 +6,17 @@ import wasmUrl from 'jolt-physics/jolt-physics.wasm.wasm?url';
 import type { SimSettings } from '../doc/types';
 import type { PhysicsOp } from './protocol';
 import { Runner } from './runner';
+import { PhysicsWorld } from './world';
+import { runStand, type StandSetup } from './stand';
 
 export type ToWorker =
   | { type: 'init'; sim: SimSettings }
-  | { type: 'advance'; pre: number; ops: PhysicsOp[]; dt: number; singleStep: boolean; maxTicks: number };
+  | { type: 'advance'; pre: number; ops: PhysicsOp[]; dt: number; singleStep: boolean; maxTicks: number }
+  /** A test on the stand: a world of its own, with the same physics, run to its end and reported once. */
+  | { type: 'stand'; id: number; setup: StandSetup };
 
 let runner: Runner | null = null;
+let jolt: Parameters<typeof Runner.create>[0] | null = null;
 const queue: MessageEvent<ToWorker>[] = [];
 let ready = false;
 
@@ -20,13 +25,19 @@ const post = (msg: unknown, transfer: Transferable[] = []) => (self as unknown a
 async function handle(msg: ToWorker) {
   if (msg.type === 'init') {
     const J = await initJolt({ locateFile: () => wasmUrl } as never);
+    jolt = J;
     runner = Runner.create(J, msg.sim);
     ready = true;
     post({ type: 'ready' });
     for (const q of queue.splice(0)) await handle(q.data);
     return;
   }
-  if (!ready || !runner) {
+  if (!ready || !runner || !jolt) {
+    return;
+  }
+  if (msg.type === 'stand') {
+    const world = new PhysicsWorld(jolt, msg.setup.sim);
+    try { post({ type: 'stand', id: msg.id, result: runStand(world, msg.setup) }); } finally { world.destroy(); }
     return;
   }
   const r = runner.run(msg.pre, msg.ops, msg.dt, msg.maxTicks, msg.singleStep);

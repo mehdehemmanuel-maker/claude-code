@@ -2,6 +2,7 @@
 // Mass always comes from the exact volume of the parametric geometry times the material density.
 
 import type { Material } from '../data/materials';
+import { LUMBER } from '../data/lumber';
 import type { Quat, Vec3 } from '../doc/types';
 import { axisAngle } from '../doc/math';
 import { choice, num, numberOf, stringOf, text, type ParamDef, type Params } from '../schema/params';
@@ -14,6 +15,7 @@ import { bounds as formBounds, formKey, parseForm, type Form } from '../forms/fo
 import { boxes as formBoxes, solid as formSolid } from '../forms/mesh';
 import { GEARHEADS, MOTORS, getGearhead, getMotor } from '../data/motors';
 import { BATTERIES, getBattery } from '../data/batteries';
+import { CONTROLLER_BOARD, getServo, RECEIVER_BOARD, SERVOS, shaftOf, SHAFT_Q } from '../data/servos';
 
 export interface PartDims {
   /** Longest dimension, m. */
@@ -51,6 +53,8 @@ export interface BondSection {
 }
 
 export interface PartKind {
+  /** The material categories this is sold as stock in (the manufacturing law of stock, construct/laws.ts): absent, it is not stock. */
+  stock?: string[];
   id: string;
   label: string;
   category: string;
@@ -103,10 +107,7 @@ function ringCompound(outer: number, inner: number, halfHeight: number, n = 12):
   };
 }
 
-export const LUMBER: Record<string, [number, number]> = {
-  '1x4': [0.019, 0.089], '1x6': [0.019, 0.14], '2x2': [0.038, 0.038], '2x4': [0.038, 0.089],
-  '2x6': [0.038, 0.14], '2x8': [0.038, 0.184], '4x4': [0.089, 0.089],
-};
+export { LUMBER };
 
 const fracture = () => choice('fracture', 'Can break', 'auto', [
   { value: 'auto', label: 'Yes (auto resolution)' },
@@ -159,6 +160,7 @@ export const PART_KINDS: PartKind[] = [
     section: (p) => rectSection(n(p, 'y'), n(p, 'z')),
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer', 'wood', 'engineered-wood', 'stone', 'glass'],
     id: 'plate', label: 'Plate / sheet', category: 'Stock', defaultMaterial: 'aluminum.6061-t6', dragCd: 1.28, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -176,6 +178,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => rectBond(n(p, 'thickness'), n(p, 'width')),
   },
   {
+    stock: ['wood'],
     id: 'lumber', label: 'Lumber', category: 'Stock', defaultMaterial: 'wood.douglas-fir', dragCd: 1.1, spawnRotation: IDENTITY,
     materialFilter: isWood,
     params: [
@@ -192,6 +195,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const [t, w] = lumberDims(p); return rectBond(t, w); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer'],
     id: 'rod.round', label: 'Round rod', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 0.82, spawnRotation: Y_TO_X,
     materialFilter: notMagnet,
     params: [
@@ -208,6 +212,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = roundSection(n(p, 'diameter')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy'],
     id: 'rod.square', label: 'Square bar', category: 'Stock', defaultMaterial: 'steel.1018-cd', dragCd: 1.05, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -224,6 +229,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => rectBond(n(p, 'side'), n(p, 'side')),
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy', 'polymer'],
     id: 'tube.round', label: 'Round tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 0.82, spawnRotation: Y_TO_X,
     materialFilter: notMagnet,
     params: [
@@ -241,6 +247,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = tubeSection(n(p, 'od'), wallOf(p, 'od')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum', 'titanium', 'copper-alloy'],
     id: 'tube.square', label: 'Square tube', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.05, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -268,6 +275,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const sec = rectTubeSection(n(p, 'side'), n(p, 'side'), wallOf(p, 'side')); return symBond(sec, sec.S, sec.Z); },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum'],
     id: 'beam.i', label: 'I-beam', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.6, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -296,6 +304,7 @@ export const PART_KINDS: PartKind[] = [
     bond: (p) => { const { h, b, tf, tw } = ibeam(p); const weak = iBeamSection(b, h, tf, tw); const strong = iBeamStrongAxis(b, h, tf, tw); return { A: weak.A, J: weak.J, r: Math.max(tf, tw), S: [weak.S, strong.S], Z: [weak.Z, strong.Z] }; },
   },
   {
+    stock: ['steel', 'stainless', 'aluminum'],
     id: 'angle', label: 'Angle (L)', category: 'Structural', defaultMaterial: 'steel.a36', dragCd: 1.4, spawnRotation: IDENTITY,
     materialFilter: notMagnet,
     params: [
@@ -422,7 +431,7 @@ export const PART_KINDS: PartKind[] = [
     // a battery pack of blocks you can buy (data/batteries.ts), strapped side by side: in series for voltage, in
     // parallel strings for capacity. How charged it is is part of the build, and runs down as it is used.
     id: 'battery', label: 'Battery', category: 'Power', defaultMaterial: 'polymer.abs', dragCd: 1.05, spawnRotation: IDENTITY,
-    bought: { accepts: ['wire'], why: 'a sealed lead-acid block can\'t be drilled, screwed, welded or glued (its case holds the acid): stand it in a tray or under a strap, and wire it at its terminals' },
+    bought: { accepts: ['wire', 'glued', 'screwed'], why: 'a battery can\'t be drilled, welded or bolted through (its case holds the chemistry): a cell holder is screwed or glued down, a sealed block stands in a tray or under a strap, and it is wired at its terminals' },
     materialFilter: (m) => m.category === 'polymer',
     params: [
       choice('model', 'Battery', 'battery.sla.12v-7ah', Object.values(BATTERIES).map((b) => ({ value: b.id, label: b.label })), { group: 'Battery' }),
@@ -435,6 +444,46 @@ export const PART_KINDS: PartKind[] = [
     volume: (p) => { const [x, y, z] = packSize(p); return x * y * z; },
     mass: (p) => getBattery(stringOf(p, 'model', 'battery.sla.12v-7ah')).mass * numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1),
     dims: (p) => { const [x, y, z] = packSize(p); return sorted(x, y, z); },
+  },
+  {
+    id: 'servo', label: 'Servo', category: 'Power', defaultMaterial: 'polymer.abs', dragCd: 1.05, spawnRotation: IDENTITY,
+    bought: { accepts: ['servo', 'wire', 'signal', 'screwed', 'bolted', 'glued'], why: 'its maker charts no holes in its case: screw or bolt it by its tabs, glue it down, wire it at its lead, signal it from a controller, and turn things from its horn' },
+    materialFilter: (m) => m.category === 'polymer',
+    params: [choice('model', 'Servo', 'servo.micro-9g', Object.values(SERVOS).map((s) => ({ value: s.id, label: s.label })), { group: 'Servo' })],
+    collision: (p) => { const [l, w, h] = servoOf(p).dims; return box(l / 2, w / 2, h / 2); },
+    visual: (p) => {
+      const sv = servoOf(p), [l, w, h] = sv.dims, sh = servoShaft(p);
+      return { type: 'group', children: [
+        { shape: { type: 'box', half: [l / 2, w / 2, h / 2], bevel: 0.001 }, p: [0, 0, 0], q: IDENTITY, tint: 0x1c1f22 },
+        // the shaft and horn on its +z face, where the joint is made
+        { shape: { type: 'cylinder', radius: sv.shaftDiameter / 2, halfHeight: sv.horn / 2, segments: 16 }, p: [sh.p[0], sh.p[1], h / 2 + sv.horn / 2], q: SHAFT_Q, tint: 0xd8dade },
+      ] };
+    },
+    volume: (p) => { const [l, w, h] = servoOf(p).dims; return l * w * h; },
+    mass: (p) => servoOf(p).mass,
+    dims: (p) => { const [l, w, h] = servoOf(p).dims; return sorted(l, w, h); },
+  },
+  {
+    id: 'controller', label: 'Controller board', category: 'Power', defaultMaterial: 'polymer.abs', dragCd: 1.05, spawnRotation: IDENTITY,
+    bought: { accepts: ['wire', 'signal', 'screwed', 'bolted', 'glued'], why: 'a board: screw it by its holes or glue its standoffs down, power it by a wire, and let its program speak to servos down signal leads' },
+    materialFilter: (m) => m.category === 'polymer',
+    params: [num('rhythm', 'Program: rhythm (0: hold centre)', 2, 0, 10, 'Hz', { group: 'Program' })],
+    collision: () => box(CONTROLLER_BOARD.dims[0] / 2, CONTROLLER_BOARD.dims[1] / 2, CONTROLLER_BOARD.dims[2] / 2),
+    visual: () => ({ type: 'box', half: [CONTROLLER_BOARD.dims[0] / 2, CONTROLLER_BOARD.dims[1] / 2, CONTROLLER_BOARD.dims[2] / 2], bevel: 0.0005 }),
+    volume: () => CONTROLLER_BOARD.dims[0] * CONTROLLER_BOARD.dims[1] * CONTROLLER_BOARD.dims[2],
+    mass: () => CONTROLLER_BOARD.mass,
+    dims: () => sorted(CONTROLLER_BOARD.dims[0], CONTROLLER_BOARD.dims[1], CONTROLLER_BOARD.dims[2]),
+  },
+  {
+    id: 'receiver', label: 'Radio receiver', category: 'Power', defaultMaterial: 'polymer.abs', dragCd: 1.05, spawnRotation: IDENTITY,
+    bought: { accepts: ['wire', 'signal', 'screwed', 'bolted', 'glued'], why: 'a board: screw it by its holes or glue it down, power it by a wire, and let your sticks reach servos down its signal leads' },
+    materialFilter: (m) => m.category === 'polymer',
+    params: [],
+    collision: () => box(RECEIVER_BOARD.dims[0] / 2, RECEIVER_BOARD.dims[1] / 2, RECEIVER_BOARD.dims[2] / 2),
+    visual: () => ({ type: 'box', half: [RECEIVER_BOARD.dims[0] / 2, RECEIVER_BOARD.dims[1] / 2, RECEIVER_BOARD.dims[2] / 2], bevel: 0.0005 }),
+    volume: () => RECEIVER_BOARD.dims[0] * RECEIVER_BOARD.dims[1] * RECEIVER_BOARD.dims[2],
+    mass: () => RECEIVER_BOARD.mass,
+    dims: () => sorted(RECEIVER_BOARD.dims[0], RECEIVER_BOARD.dims[1], RECEIVER_BOARD.dims[2]),
   },
   {
     id: 'weight', label: 'Test weight', category: 'Test gear', defaultMaterial: 'cast-iron.gray-30', dragCd: 0.9, spawnRotation: IDENTITY,
@@ -526,6 +575,13 @@ export function motorEnvelope(p: Params) {
 }
 
 /** A pack's outline: its blocks side by side along Z (series, then parallel strings), each standing as made. */
+const servoOf = (p: Params) => getServo(stringOf(p, 'model', 'servo.micro-9g'));
+/** A hinge frame's local y along the part's +z: the shaft's axis. */
+/** A servo part's output shaft in its own coordinates (data/servos shaftOf): where, and only where, its horn can be. */
+export function servoShaft(p: Params): { p: Vec3; q: Quat } {
+  return shaftOf(servoOf(p));
+}
+
 export function packSize(p: Params): [number, number, number] {
   const b = getBattery(stringOf(p, 'model', 'battery.sla.12v-7ah'));
   const k = numberOf(p, 'series', 2) * numberOf(p, 'parallel', 1);
@@ -567,7 +623,7 @@ function ibeam(p: Params) {
   return { L: n(p, 'length'), h, b, tf, tw };
 }
 
-function weightD(p: Params) {
+export function weightD(p: Params) {
   // Uses cast iron density for the visual size if the material is unknown here; the physics mass comes from volume().
   const rho = numberOf(p, '_density', 7200);
   return Math.cbrt((4 * n(p, 'mass')) / (Math.PI * rho));

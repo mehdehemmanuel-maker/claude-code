@@ -1,0 +1,133 @@
+// The book, thermal: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// units people write. Metadata is the kept data's own; the terms and domains are written here.
+
+import { L } from './define';
+import { CONST, est } from './constants';
+import { sub, mul, div, pow, neg, le, ge, lt, gt, and, exp, ln, k } from '../term';
+
+export const THERMAL = [
+  L({
+    id: "convection", name: "Newton's law of cooling", statement: "A surface loses heat to a fluid at its heat transfer coefficient times its area times its temperature excess.", formula: "q = h A ΔT",
+    valid: "h: still air 2 to 25, moving air 25 to 250, water 50 to 20000 W/m² K.",
+    inputs: [["h", "W/m^2 K", "heat transfer coefficient"], ["A", "m^2", "area"], ["dT", "K", "temperature excess"]], output: ["q", "W", "heat flow"],
+    term: (v) => mul(v.h, v.A, v.dT),
+    domain: (v) => [{ says: 'a coefficient between still air (2) and boiling (20000) W/m² K', holds: and(ge(v.h, est('still air', 2, 'W/m^2 K', 'the least a surface loses to a gas')), le(v.h, est('boiling', 20000, 'W/m^2 K', 'the most a surface loses to a liquid'))) }],
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"h":10,"A":0.1,"dT":50}, output: 50 },
+  }),
+  L({
+    id: "conduction", name: "Fourier's law", statement: "Heat conducts through a wall at its conductivity times its area times the temperature difference over its thickness.", formula: "q = k A ΔT / L",
+    valid: "Steady, one-dimensional.",
+    inputs: [["k", "W/m K", "conductivity"], ["A", "m^2", "area"], ["dT", "K", "temperature difference"], ["L", "m", "thickness"]], output: ["q", "W", "heat flow"],
+    term: (v) => div(mul(v.k, v.A, v.dT), v.L),
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"k":200,"A":0.01,"dT":50,"L":0.1}, output: 1000 },
+  }),
+  L({
+    id: "convection.natural", name: "Free convection in still air", statement: "A surface in still air loses heat at a coefficient that rises with the fourth root of its temperature excess over its size: hotter and smaller things shed heat faster per area, so a thing twice the size cools more than twice as slowly.", formula: "h = 1.42 (ΔT / L)^¼",
+    valid: "Laminar (Gr Pr below about 10^9: sizes under a metre, excesses under a few hundred kelvin), still air at atmospheric pressure; the simplified laminar correlation, within about 20 % of the full one. The engine holds L at no less than 10 mm.",
+    inputs: [["dT", "K", "temperature excess"], ["L", "m", "size"]], output: ["h", "W/m^2 K", "heat transfer coefficient"],
+    term: (v) => mul(CONST.Cnat, pow(div(v.dT, v.L), 0.25)),
+    source: { cite: "Holman, Heat Transfer, 10th ed., McGraw-Hill 2010, table 7-2 (simplified equations for free convection in air)", kind: "textbook" }, example: { inputs: {"dT":50,"L":0.1}, output: 6.7147654239225485 },
+  }),
+  L({
+    id: "radiation", name: "Stefan-Boltzmann radiation", statement: "A surface radiates at its emissivity times σ times its area times the fourth powers of absolute temperature, less what it receives.", formula: "q = ε σ A (T⁴ − T∞⁴)",
+    valid: "Grey surface seeing large surroundings.",
+    inputs: [["eps", "-", "emissivity"], ["A", "m^2", "area"], ["T", "K", "surface temperature"], ["Tinf", "K", "surroundings"]], output: ["q", "W", "net heat flow"],
+    term: (v) => mul(v.eps, CONST.sigmaSB, v.A, sub(pow(v.T, 4), pow(v.Tinf, 4))),
+    domain: (v) => [{ says: 'an emissivity between 0 and 1', holds: and(ge(v.eps, k(0)), le(v.eps, k(1))) }],
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"eps":0.9,"A":0.1,"T":373.15,"Tinf":293.15}, output: 61.25474056958109 },
+  }),
+  L({
+    id: "heat.capacity", name: "Heat capacity", statement: "Warming a mass takes its specific heat times its mass times the temperature rise.", formula: "Q = m c ΔT",
+    valid: "No phase change.",
+    inputs: [["m", "kg", "mass"], ["c", "J/kg K", "specific heat"], ["dT", "K", "temperature rise"]], output: ["Q", "J", "heat"],
+    term: (v) => mul(v.m, v.c, v.dT),
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"m":1,"c":460,"dT":10}, output: 4600 },
+  }),
+  L({
+    id: "lumped.time-constant", name: "Lumped thermal time constant", statement: "A small, well-conducting body cools toward its surroundings with time constant m c over h A.", formula: "τ = m c / (h A)",
+    valid: "Biot number h L/k below 0.1.",
+    inputs: [["m", "kg", "mass"], ["c", "J/kg K", "specific heat"], ["h", "W/m^2 K", "heat transfer coefficient"], ["A", "m^2", "area"]], output: ["tau", "s", "time constant"],
+    term: (v) => div(mul(v.m, v.c), mul(v.h, v.A)),
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"m":1,"c":460,"h":10,"A":0.1}, output: 460 },
+  }),
+  L({
+    id: "thermal.network", name: "Temperature rise through thermal resistances", statement: "A steady loss flowing through resistances in series raises the temperature by the loss times their sum.", formula: "ΔT = P Σ R_th",
+    valid: "Steady state.",
+    inputs: [["P", "W", "heat flow"], ["R", "K/W", "sum of thermal resistances"]], output: ["dT", "K", "temperature rise"],
+    term: (v) => mul(v.P, v.R),
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"P":10,"R":6.58}, output: 65.8 },
+  }),
+  L({
+    id: "thermal.resistance.conduction", name: "Thermal resistance of a wall", statement: "A wall resists heat by its thickness over its conductivity times its area.", formula: "R_th = L / (k A)",
+    valid: "Steady, one-dimensional.",
+    inputs: [["L", "m", "thickness"], ["k", "W/m K", "conductivity"], ["A", "m^2", "area"]], output: ["R", "K/W", "thermal resistance"],
+    term: (v) => div(v.L, mul(v.k, v.A)),
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"L":0.1,"k":200,"A":0.01}, output: 0.05 },
+  }),
+  L({
+    id: "carnot", name: "Carnot efficiency", statement: "Heat flowing from a hot place to a cold one can be turned into work at most by one minus the cold over the hot absolute temperature: the ceiling on every heat engine.", formula: "η = 1 − T_c / T_h",
+    valid: "Reversible limit; real engines reach about half to three quarters of it.",
+    inputs: [["Tc", "K", "cold side"], ["Th", "K", "hot side"]], output: ["eta", "-", "most efficiency"],
+    term: (v) => sub(k(1), div(v.Tc, v.Th)),
+    domain: (v) => [{ says: 'the cold side is colder than the hot: no work flows from cold to hot', holds: lt(v.Tc, v.Th) }],
+    source: { cite: "Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019", kind: "textbook" }, example: { inputs: {"Tc":300,"Th":600}, output: 0.5 },
+  }),
+  L({
+    id: "weld.heat-input", name: "Arc welding heat input", statement: "An arc puts into the joint its efficiency times its volts times its amps over its travel speed, per metre of weld: too little and it doesn't fuse, too much and it burns through thin plate.", formula: "Q = η V I / v",
+    valid: "Arc efficiency about 0.8 for MIG and stick, 0.6 for TIG (EN 1011-1).",
+    inputs: [["eta", "-", "arc efficiency"], ["V", "V", "arc voltage"], ["I", "A", "current"], ["v", "m/s", "travel speed"]], output: ["Q", "J/m", "heat input"],
+    term: (v) => div(mul(v.eta, v.V, v.I), v.v),
+    source: { cite: "EN 1011-1 (welding: heat input and thermal efficiency factors)", kind: "standard" }, example: { inputs: {"eta":0.8,"V":20,"I":150,"v":0.005}, output: 480000 },
+  }),
+  L({
+    id: "arrhenius", name: "Arrhenius rate", statement: "A reaction, ageing a battery or spoiling food, runs at a rate that falls exponentially as the temperature drops but never reaches zero above absolute zero.", formula: "k = A e^(−E_a / R T)",
+    valid: "One rate-limiting step; real ageing is several in parallel, each with its own Ea.",
+    inputs: [["A", "1/s", "pre-exponential factor"], ["Ea", "J/mol", "activation energy"], ["T", "K", "temperature"]], output: ["k", "1/s", "rate"],
+    term: (v) => mul(v.A, exp(neg(div(v.Ea, mul(CONST.R, v.T))))),
+    source: { cite: "Atkins & de Paula, Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"A":10000000000000,"Ea":50000,"T":298}, output: 17217.4875757281 },
+  }),
+  L({
+    id: "absorbed.solar", name: "Sunlight a surface absorbs", statement: "A surface absorbs the sunlight it doesn't reflect: one minus its albedo, times the sunlight on it, times its area.", formula: "P = (1 − a) G A",
+    valid: "Shortwave balance only; a cover also insulates and changes the longwave balance.",
+    inputs: [["a", "-", "albedo (reflected share)"], ["G", "W/m^2", "sunlight"], ["A", "m^2", "area"]], output: ["P", "W", "absorbed power"],
+    term: (v) => mul(sub(k(1), v.a), v.G, v.A),
+    domain: (v) => [{ says: 'an albedo between 0 and 1', holds: and(ge(v.a, k(0)), le(v.a, k(1))) }],
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed. (radiation balance)", kind: "textbook" }, example: { inputs: {"a":0.9,"G":1000,"A":1}, output: 99.99999999999997 },
+  }),
+  L({
+    id: "separation.work", name: "Least work to take out a trace", statement: "Taking a substance out of a mixture costs at least R T ln(1/x) a mole, where x is how much is left: each tenfold cleaner costs as much again, and taking out the very last of it would cost without end.", formula: "W = R T ln(1/x)",
+    valid: "An ideal dilute mixture at constant temperature; every real filter needs many times this.",
+    inputs: [["T", "K", "temperature"], ["x", "-", "share left (mole fraction)"]], output: ["W", "J/mol", "least work a mole"],
+    term: (v) => mul(CONST.R, v.T, ln(div(k(1), v.x))),
+    domain: (v) => [{ says: 'a share left in (0, 1)', holds: and(gt(v.x, k(0)), lt(v.x, k(1))) }],
+    source: { cite: "Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019, ch. 16 (minimum separation work)", kind: "textbook" }, example: { inputs: {"T":298,"x":0.000001}, output: 34230.82673266793 },
+  }),
+  L({
+    id: "ideal.gas", name: "Ideal gas law", statement: "The pressure of a dilute gas is its amount times the gas constant times its temperature over its volume.", formula: "p = n R T / V",
+    valid: "Far from condensing and at pressures of a few atmospheres or less.",
+    inputs: [["n", "mol", "amount"], ["T", "K", "temperature"], ["V", "m^3", "volume"]], output: ["p", "Pa", "pressure"],
+    term: (v) => div(mul(v.n, CONST.R, v.T), v.V),
+    source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"n":1,"T":273.15,"V":0.0224}, output: 101388.19036190625 },
+  }),
+  L({
+    id: "clausius-clapeyron", name: "Clausius-Clapeyron relation", statement: "A phase boundary's pressure rises with temperature by the latent heat over the temperature times the change of specific volume.", formula: "dp/dT = L / (T Δv)",
+    valid: "Along the coexistence line; for boiling at 100 °C, water's 2.26 MJ/kg and 1.67 m³/kg give 3.6 kPa/K.",
+    inputs: [["L", "J/kg", "latent heat"], ["T", "K", "temperature"], ["dv", "m^3/kg", "change of specific volume"]], output: ["dpdT", "Pa/K", "slope of the boundary"],
+    term: (v) => div(v.L, mul(v.T, v.dv)),
+    source: { cite: "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"L":2260000,"T":373.15,"dv":1.672}, output: 3622.335900169705 },
+  }),
+  L({
+    id: "boltzmann.distribution", name: "Boltzmann distribution", statement: "The probability of a state falls as exp(−E/kT) with its energy: carrier populations, reaction rates, the folding of proteins.", formula: "p₂/p₁ = e^(−ΔE / k T)",
+    valid: "Thermal equilibrium; 0.1 eV above the ground state at room temperature is one in fifty.",
+    inputs: [["dE", "J", "energy above the ground state"], ["T", "K", "temperature"]], output: ["ratio", "-", "population ratio"],
+    term: (v) => exp(neg(div(v.dE, mul(CONST.kB, v.T)))),
+    source: { cite: "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"dE":1.602176634e-20,"T":300}, output: 0.020896518618090255 },
+  }),
+  L({
+    id: "first.law", name: "First law of thermodynamics", statement: "Energy is conserved: heat in minus work out is the change in internal energy.", formula: "ΔU = Q − W",
+    valid: "A closed system.",
+    inputs: [["Q", "J", "heat in"], ["W", "J", "work out"]], output: ["dU", "J", "change in internal energy"],
+    term: (v) => sub(v.Q, v.W),
+    source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"Q":1000,"W":300}, output: 700 },
+  }),
+];

@@ -1,141 +1,126 @@
-# Creative Sandbox (WebXR)
+# Nexus: the restart
 
-A physics-real creative sandbox for Meta Quest 3S (a headset app only: the web page just gets you into VR). You get unlimited parts,
-real materials and joints, and nothing is scripted: joints and parts behave, and fail, because of their
-geometry, material data and specs. The design and roadmap are in [PLAN.md](PLAN.md).
+On 4 October 2026 the application that lived here was deleted down to its kernel and its data, on purpose and with
+no sunk cost counted (the reasoning, measured, is in [docs/NEXUS-RESTART.md](docs/NEXUS-RESTART.md); the mid-restart
+alignment check against the code as written, with what is solid, at risk and missing, is
+[docs/NEXUS-ALIGNMENT-1.md](docs/NEXUS-ALIGNMENT-1.md)). The last commit
+of the whole application is `792c328`: a VR creative sandbox for the Quest 3S with an in-app engineer, a knowledge
+tree, a construction grammar, creatures and places. Everything it learned survives here as documents, data and tests;
+nothing of its architecture is extended again.
 
-## Run it
+## What is here now
+
+- `src/physics`, `src/engineering`, `src/connectors`, `src/parts`, `src/doc`, `src/schema`, `src/persistence`,
+  `src/construct/build.ts`: the rigid-body kernel (Jolt), its numerics, its joint capacities, its document of bodies and
+  the gate that admits bodies into it. This is a **realization backend** with measured error: its conformance tests
+  (`tests/conformance`, `tests/golden`) are against exact results and are kept green.
+- `src/data`, `src/ganglia/laws.ts`, `src/ganglia/units.ts`: materials with sources, the person's measures with
+  sources, 144 laws with inputs, outputs, validity and sources, and the dimension algebra. **Data**, to be re-expressed
+  as terms; not the executable form.
+- `docs`: every audit, autopsy, design and observation, including the failures that showed the way.
+- `src/nexus`: the new core, built in the order of docs/NEXUS-RESTART.md Part XXIV, on five primitives: quantity,
+  term, mode, origin, identity. `dimension` (the algebra, Buckingham groups), `status` (the lattice, no default),
+  `identity` (content hashes), `term` (leaves with origin classes, operators with identity, canonical form, and the
+  binder: ∫ body d(coordinate) between two ends, the one way a term says "over"; the bound coordinate is not free,
+  the rule's resolution is a leaf in the term so the method is in the identity and the closure, the discretization
+  error is measured by halving it; with it the pendulum's period factor is generated from energy conservation as
+  the elliptic integral instead of written as a series, the series becomes its expansion with a measured truncation,
+  and the prism's mass, section moments and inertia are one mechanism, integrals of the shape),
+  `evaluate` (every evaluation a derivation record; unknown stays unknown; validity refused with the domain named),
+  `law` and `book` (every one of the kept 144 laws as a term, SI inside and unit conventions at the ports, with its
+  validity as predicate terms, every constant a sourced leaf, and the kept worked example reproduced; plus the
+  slice's derived laws),
+  `solve` (propagation, free variables reported, contradictions kept, search over declared options under a declared
+  preference), `space` (a system's configuration space: every bound variable a field over the free variables by
+  symbolic propagation, the region the constraints, the applied laws' validity domains and the learned language
+  over the couplings' quantities; a catalogue is an availability set inside it and selecting within it reproduces
+  the search; a derivation visits a lattice and refines around the least admissible address, keeping every address
+  visited), `explore` (a derivation at the edge of the language is an experiment: realized, observed, and when the
+  kernel contradicts the language the observation joins the evidence, the distinction is abduced again, the old
+  relation is superseded and the space is derived again: the beam's first derived section rocked, the language grew
+  to hcm · halfX / halfZ² over nine observations, and the next section rested with less material than the
+  catalogue's pick), `field` (declared frame, sourced gravity, ground as a field query, the observer's window and the rigid
+  domain), `domain` (regions of x, y, z, t in a frame with the scale bands their description holds in; fields as
+  laws composed over coordinates, sampled as records that cite the laws; the observer's resolution, with the window
+  as the coarse-graining operator: a sample is the field's mean over the support cell, uncertain by its range
+  across it, refused outside a scale band with the band named; coverage of a lattice of point samples is zero), `coupling` (rest and stand couplings: every coordinate a solution; the ledger), `realize` (the kernel as a
+  morphism under a contract whose numbers are its own conformance measurements), `elastic` (a second realization:
+  the elastic line integrated on a grid, for a span on two supports and for a cantilever from a fixed root,
+  independent of the closed-form laws, every observable's error measured by halving the cell, stationary in time;
+  it observes the sag the rigid kernel cannot, and it caught the bracket's tip-sag law treating a patch as a point), `observe` (comparison within the
+  contract, unobserved as its own status, the append-only journal), `why` (WHY total, IMPACT, staleness),
+  `failure` (the four representational failures as terms: anomaly, contradiction, a variable free that the intent
+  did not leave free, a measurement no variable can hold), `abduce` (the missing distinction searched for over the
+  dimensionless groups of the failing coupling's quantity types, found from their dimensions alone; a candidate that
+  separates every observation, validated on held-out observations where it predicts and silent where it does not,
+  promoted with provenance "abduced from observations h1…hn" (each an observation's own identity: its system, its
+  coupling, its quantities' records, the observed and the derived) only when it changes more than one system; a tie names
+  the quantities the next observation must vary; a judgement inside the bound's uncertainty is unresolved, not
+  decided), `study` (the same intent realized with one coupling's quantities varied, every run a system in the
+  journal), `project` (a scene is a pure function of bound records: a box for every placed body and nothing else,
+  every number naming its record; a renderer consumes it and decides nothing), `beam`: the vertical slice of
+  Part XXV, `swing`: the third slice, where time is the coordinate (a bar on a free hinge released from an angle:
+  the period derived from the prism's inertia and the amplitude series, the angle a field over t whose scale band
+  is the sampling law, the kernel's samples a lattice at its tick with the tick as their support, the period read
+  from the zero crossings with the tick as its resolution, the swing energy the hinge coupling's ledger over time,
+  and the kernel's dissipation and period error its contract, fixed by a new conformance test), and `bracket`: the
+  second slice, an arm bolted to a post, where a joint is a coupling whose shared
+  boundary variables (the root moment and shear) are read from the solution, bounded by the bolt group's capacity
+  at the declared factor, and measured by the kernel under a contract its own conformance test fixes at 1 %; the
+  catalogue of sections and bolt groups is searched under two preferences in order (least section, then least bolt
+  steel), and a 0.6 m arm was refused honestly because a 38 mm section is not slender enough for the sag law's
+  domain. A 60 kg mass across 1.2 m: the solver reports the section free, the
+  catalogue under least material picks a 2×4 laid flat (the on-edge sections refused by the lateral-stability
+  domain, the 4×4 by slenderness, the 2×2 by sag), every coordinate is derived from the declared frame, the kernel
+  measures the bending moment at four seams, each the mean over its quiet time with the range as uncertainty, within
+  1 % of the moment field resolved at those points under a quasi-static scale band, and the sag is unobserved
+  by the rigid realization, which says it cannot see it, and observed by the elastic one within the error it
+  measured on itself, which also confirms the derived patch-load laws independently. The environment test of Part XX runs: the same intent on a flat
+  field, a slope and a field with a hole; the ground is a field over x and z, the supports are posts cut to their own
+  ground, the design is identical by hash on all three, and every record that differs between the fields rests on the
+  ground field or on a kernel measurement. The second growth came from the joint: the derivation bounds a bolted joint by the group's bending capacity
+  only, the kernel also breaks one in shear; ten brackets with the load and the bolt group varied, the arm section
+  fixed as the experiment's configuration, gave two anomalies among the nine the language predicted to hold (the
+  residual rule: what it already predicts to fail is explained and does not enter the abduction); over the joint's
+  quantities (root moment, root shear, bolt diameter, bolts, their strength, the lever) the unique simplest group
+  separating the two from the seven is the shear over the bolts' section strength, with its bound bracketing the
+  kernel's own capacity; without the small-post observation it ties with a lever group and the next observation is
+  named. The third growth came from time: the derivation conserves the swing energy and the kernel's contract allows
+  its own dissipation over the watch; nine bars on a pin with the hinge's friction torque, the release angle and the
+  pin's place varied gave four anomalies; over the hinge's quantities (the friction torque, the swing energy, the
+  release angle, the mass, gravity, the pivot distance) the unique simplest separating group is the friction's work
+  over a swing against the swing energy, τ θ₀ / E₀, Coulomb's, its bound bracketing the contract's two per cent a
+  period (4 τ θ₀ a period is 0.005 of E₀ at that allowance); the torque over the weight's lever alone, τ / (m g d),
+  does not separate, and the group through the small-angle identity, τ / (m g d θ₀), separates with half the bound.
+  The first growth of the language came from the
+  kernel: a tall load that the static derivation said rests never settled; eight realizations of the same intent
+  with the load's footprint varied gave the observations; over the rest coupling's quantities (centre of mass above
+  the base, half the contact along and across, gravity, the observer's patience, the mass) the one simplest group
+  that separates rest from rocking or toppling is the centre of mass over half the contact across the beam, with the
+  bound between 4.3 and 5.7 fixed by the observations; the language now refuses the column, admits the slab and
+  says it cannot decide a case inside the gap. Among what did not rest in place, the drop separates rocking from
+  falling by the same group further out, a second relation: a column that rocks is refused by the first and admitted
+  by the second, a slab on edge by neither.
+
+## The gate
 
 ```bash
-cd vr-sandbox
-npm install
-npm run dev          # http://localhost:5173 (open it in the headset, or ?iwer to emulate one)
+npm ci
+npm run gate      # typecheck, then every test: kernel conformance, golden, codec, and the architecture tests
 ```
 
-- **In the headset:** trigger uses the active tool, grip grabs, A cycles tools, B shows or hides the wrist tablet, X / Y undo and redo. The tablet's Tools page shows what the active tool can do besides its trigger (turn or tip a part before placing it, the joint axis, "Whole assembly").
-- **Without a headset (development and tests only):** open `http://localhost:5173/?iwer`. This installs Meta's WebXR emulator (a virtual Quest 3) with a synthetic scanned room (floor, walls, a table and a couch), and **Enter VR** works in any browser in all three modes. `?iwer=noroom` leaves the room out.
-- **On a Quest 3S:** WebXR needs HTTPS or `localhost`. Either:
-  - use GitHub Pages (once per repository):
-    1. Go to *Settings → Pages → Build and deployment → Source* and pick **GitHub Actions**.
-    2. Merge to `main`. The **vr-sandbox Pages** workflow builds, tests and deploys. If you merged before step 1, run the workflow by hand: *Actions → vr-sandbox Pages → Run workflow*.
-    3. Open the site in the Quest Browser, e.g. `https://<owner>.github.io/<repo>/`. The build uses relative paths, so it works from the subpath (tested in `tests/e2e/deploy.spec.ts`).
-  - or plug the headset in over USB and run `adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173` in the Quest Browser.
-- **First time in the headset:** pick a mode next to **Enter VR**, then press it. Mixed reality asks for permission to use your room scan (Space Setup). If you've never run Space Setup, the tablet's **Scan room** starts it.
-- **Debug:** `?physics=inline` runs physics on the main thread instead of the worker.
+Promoted relations enter construction: before anything is realized, a slice judges every coupling by the language
+and refuses with the relation named, or says it cannot decide a case inside a bound's uncertainty; every judgement
+cites the language's hash, so a promotion makes exactly the judgements stale, and regenerating them under the grown
+language changes them and nothing else.
 
-### Three ways to be there
+The architecture tests (`tests/nexus`) are the gate that matters: a bare value is unconstructable, an unknown never
+becomes a default, WHY is total, every coordinate is a solution, every runtime effect is a derivation record, and a
+change to a law reaches exactly what rests on it.
 
-Pick one next to **Enter VR**, or switch any time on the wrist tablet (**World** page).
+## What must not be built yet
 
-- **Relax:** the virtual workshop. Fly with the sticks, snap turn, and shrink or grow yourself.
-- **Walk:** the workshop at 1:1, calibrated to your real room.
-  - The spot where you stand, and the way you face, when the session starts become the workshop's home spot, 2 m in front of the workbench. **Recalibrate** redoes it wherever you stand.
-  - With a bounded (guardian) space the calibration is remembered between sessions.
-  - You move by walking; the sticks don't move you.
-  - Your real walls and furniture, from the headset's room scan (Space Setup), appear in the workshop and are solid to the parts. **Room solid** turns that off. The play-area boundary is drawn on the floor.
-- **Mixed reality:** passthrough, so the build sits in your real room.
-  - The scanned floor, walls, table and couch are the physics: parts land on your real table.
-  - Real surfaces hide the virtual parts behind them and catch their shadows.
-  - The workshop and its test pool are gone.
-  - **Scan room** opens Space Setup; **Show scan** outlines what the headset found.
-
-Walk and mixed reality ask for an AR-capable session, which is what grants the room scan (WebXR `plane-detection` and `mesh-detection`). Walk keeps the workshop opaque over the passthrough. On a headset without passthrough, walk runs without the room and shows only the play-area boundary.
-
-### VR controls
-| Input | Action |
-|---|---|
-| Trigger | Use the active tool, or tap the wrist tablet |
-| Grip | Grab what the ray points at (each hand holds its own part; wrist rotation carries over) |
-| Left stick | Relax mode: fly where you look, or, in a build with motors, drive it (menu hidden). Switch with **World → Left stick**. Walk and mixed reality: always drives |
-| Right stick | Snap turn (about your head) and rise/sink (relax mode), or push/pull a held part |
-| A / B | Next tool / show-hide the wrist tablet |
-| X / Y | Undo / redo |
-| Stick clicks | Checkpoint (left) / rewind (right) |
-
-## What's in it
-
-- **Physics:** Jolt (WASM) in a Web Worker at a fixed 90 Hz, interpolated for rendering. Mass comes from exact
-  parametric volume × material density. Every joint's real constraint force is read back each tick,
-  resolved into axial, shear, bending and torsion loads, and checked against spec-derived capacities.
-- **Breakable stock:** rods, bars, tubes, beams, angles, lumber and long strips are bonded segments whose strength
-  comes from the section and the material:
-  - Ductile metals yield into a plastic hinge at Mp = Z·Fy, keep carrying Mp while they bend, and tear once the
-    hinge has rotated past their ductility.
-  - Wood snaps at S × modulus of rupture; glass, ceramics and cast iron snap at their tensile strength.
-  - Tension, shear, torsion and crushing fail at handbook ratios.
-  - Damage (fractures and bent pieces) is saved in the build, undoable, and repairable.
-  - Rigid assemblies with bonded stock stay exactly rigid under load. After each Jolt step they are re-solved as
-    the single rigid bodies they are, and every section force is exact Newton–Euler statics and dynamics.
-- **Joining (from specs):**
-  - Bolts: ISO 898-1 classes, VDI 2230 torque → preload. They slip, then bear, then shear or snap, and can be over-torqued.
-  - Wood screws and nails: USDA Wood Handbook withdrawal, NDS yield modes.
-  - Welds: AWS fillet throat × filler, with a weldability matrix (aluminium can't be welded to steel).
-  - Rivets and solder.
-  - Adhesives: lap shear vs peel, a cure clock, and substrate compatibility.
-- **Joints and stored energy:**
-  - Hinges, free-spinning bearings with load-dependent SKF friction, sliders, ball joints.
-  - DC gearmotors on their torque-speed line, servos, eddy-current brakes.
-  - Coil springs (Shigley rate, stress and surge frequency), ropes/cables/chain (EA/L, breaking load, slack), neo-Hookean rubber bands.
-- **Fields:**
-  - Magnets use the Gilbert charge model: magnet–magnet forces and torques, plus an image method against steel. Austenitic stainless and aluminium stay non-magnetic.
-  - Buoyancy uses the real submerged volume.
-  - Quadratic air drag.
-- **The drawing wall:** draw on a wall with the controller and say what it is. Ego reads each stroke as a line,
-  circle, rectangle or triangle by least-squares fitting, makes it the part you mean at the size drawn (or said), and
-  "build it" makes it real. See [docs/EGO.md](docs/EGO.md).
-- **Energy and heat:** the world keeps books on every joule. Motion, height and stretched springs hold it; hands,
-  motors, magnets and water put it in or take it out. Friction, impacts, bending past yield, air drag, induced
-  currents and rubber's hysteresis turn it to heat, which goes into the parts by Blok's partition. Each part warms by
-  its real specific heat and cools to the room by natural convection and radiation. What nothing explains is shown
-  as the integrator's own, never hidden. The books are on the tablet's World page.
-- **Catalogs:** 51 cited materials, each with its thermal properties (steels, aluminium alloys, copper, titanium, woods, polymers, rubber, glass, concrete, fired clay brick, stone, textiles, leather, foam, cork, composites, magnets); 17 parametric part families, including an electromagnet; 18 connector kinds. Every parameter is editable on the tablet.
-- **Joining:** **Best join** picks the real process for the two materials and sizes it to the stock: welds with the matching filler, screws that reach into the second piece, rivets, bolts or the trade's adhesive. A process that can't hold those materials is replaced by one that can, and the headset says why.
-- **Magnets:** strength by grade (Ferrite, N35, N42, N52) and size, stepped on the part page with a "holds ≈ kg on steel" readout. The electromagnet has power from 0 to 100 % and can be put on the tablet's switch.
-- **Save format:** canonical JSON with IDs and a parent/child hierarchy, and full material snapshots embedded. Saves are byte-exact. Share codes (`VRSB1.` deflate + base64url + CRC32) and `#build=` links are supported.
-- **Feel:**
-  - Modal-synthesis impact audio pitched to each part's flexural frequency.
-  - Creaks above 80% utilisation, motor whine, break/slip/splash sounds.
-  - Sparks by real spark-test signature (aluminium doesn't spark).
-  - Dust, splashes and debris, haptics, and a stress overlay.
-- **Creative loop:** undo/redo (including sim-caused failures), checkpoints and rewind, pause/step/slow motion, freeze to world, duplicate assemblies, Build mode (hold still, snap, Play).
-- **My builds:** save, open and delete your own builds on the headset. Nothing pre-made ships; the physics test scenes live only in the tests.
-- **Ego, the mind of this world (docs/EGO.md), short for evolution:** she grows through six levels (sight, habits, skills she teaches herself from what you repeat, foresight before Play, initiative, memory), takes complaints while you play (fixes what she can, writes the rest up for Claude as a GitHub issue). She needs no outside AI service, because she reads the whole simulation: when a joint nears failure or breaks she says why, with the numbers, and offers one-tap fixes that carry 1.5× the load. She learns your habits to suggest your next tool, and runs **Forge**, the build language (`repeat 4 { place lumber … as leg }`), typed on the tablet.
-- **Tablet:** icon tabs, a Materials page, Search (parts, materials, joints, tools, builds, actions as you type) and a 9-slot hotbar of what you used last, with isometric item icons in each part's real material colour.
-
-## Tests
-
-```bash
-npm run typecheck
-npm test        # 209 tests: engineering golden values, codec property tests, physics laws, fracture, joins, magnets, Forge, Ego, test scenes
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run e2e   # 19 browser tests on an emulated Quest (building, joining, My builds, Ego, Forge, search, hotbar, movement, walk and mixed reality) and the Pages subpath
-```
-
-The physics conformance suite checks laws, not builds:
-- free fall, incline slip threshold, rolling a = ⅔ g sin θ
-- spring and pendulum periods, buoyant fraction
-- joint force = m·g (with substeps), cantilever shear and moment
-- bolt tensile failure and slip, rope static, dynamic-amplification and snatch loads
-- weld compatibility, adhesive cure
-- magnet force and polarity, motor no-load speed, eddy-brake decay
-- breakable stock:
-  - exact section forces along a cantilever and in a hanging rod
-  - a plank on knife edges carrying a resting weight
-  - ductile hold below Mp, and a plastic hinge arresting where M0·sin θ = Mp·θ
-  - tearing past the material's ductility
-  - wood and glass holding at 0.8× and snapping at 1.2× capacity
-  - a tumbling bar matching Euler's equations
-  - servo response identical on segmented and solid bars
-  - repair, and frozen parts that never break
-
-## Status against the plan
-
-| Area | Done | Not yet |
-|---|---|---|
-| Physics core, joints, failure | Real loads, capacities and failure modes for all connector kinds; breakable stock (plastic hinges, fracture, damage in the build) | Buckling; elastic flex (springboards, bows); frame action in rigid assemblies (a table top's sag does not bend its leg joints); the rigid-assembly solve for joints to wheels and motors (Jolt handles those) |
-| Transmissions | Motors, servos, bearings, eddy brakes | Gears, racks, lead screws, belts |
-| Tools | Grab, place, join (every joining method), erase, freeze, clone, poke, inspect, measure | Physical tool models (drill making holes, welder settings → bead quality, grinder cutting, hammer and nails) |
-| VR | Controllers, wrist tablet, two-hand grab, locomotion, haptics, player scale; relax, walk (room-scale, calibrated, real furniture) and mixed-reality (passthrough, the scanned room as physics) modes; IWER testing with a synthetic room | Hand tracking, measured Quest 3S performance, a device check of the room scan and passthrough |
-| Rendering | Classic WebGLRenderer, instancing-ready materials, foveation | Multiview `WebGPURenderer` A/B on device, instancing/batching, adaptive quality |
-| Stretch | – | Text/voice → 3D part (needs a provider and an API key) |
-
-Performance numbers are **unmeasured on a real Quest 3S**: M0 in the plan still needs a device run.
+A dog, a motor, a table, a beach; a category, a family, a role, a kind; a construction library, a template, a default;
+a natural-language front end; the headset and the tablet; a renderer that is anything but a projection of bound terms;
+a second realization before the first has a measured contract. See docs/NEXUS-RESTART.md Part XXII for the full list
+of red flags.

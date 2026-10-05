@@ -75,7 +75,7 @@ describe('batteries, as their makers rate them', () => {
     near(packOCV(pack, 1), 2 * 6 * 2.15, 1e-9);
     near(packOCV(pack, 0), 2 * 6 * 1.95, 1e-9);
     expect(packR(pack)).toBeCloseTo(0.046, 9);
-    expect(cellOCV(0.5)).toBeCloseTo(2.05, 9);
+    expect(cellOCV('lead-acid-vrla', 0.5)).toBeCloseTo(2.05, 9);
     expect(flat(pack, 1, 10)).toBe(false);
     expect(flat(pack, 0.02, 200)).toBe(true);
   });

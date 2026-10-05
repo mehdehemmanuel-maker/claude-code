@@ -2,7 +2,11 @@
 // at their ductility, brittle materials and wood snap at their strength. Generic laws, never specific builds.
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { at, rig as makeRig, within, type Rig } from './helpers';
+import { at, machine, rig as makeRig, within, type Rig } from './helpers';
+import { getServo } from '../../src/data/servos';
+import { weightD } from '../../src/parts/registry';
+import { axisAngle } from '../../src/doc/math';
+
 import { STANDARD_GRAVITY as g, getMaterial } from '../../src/data/materials';
 import { makePart } from '../../src/doc/commands';
 import type { PhysicsEvent } from '../../src/physics/protocol';
@@ -53,6 +57,9 @@ interface Cantilever {
   events: PhysicsEvent[];
   n: number;
   tip: () => [number, number, number];
+  /** The tip load, N, and how far under the bar's tip it hangs, m. */
+  W: number;
+  hang: number;
 }
 
 /**
@@ -73,13 +80,26 @@ async function cantilever(kind: string, material: string, params: Record<string,
   const barMass = r.world.bodyMass(bar.id)!;
   const selfM = ((barMass * (n - 1)) / n) * g * (d / 2);
   const W = (ratio * C - selfM) / d;
-  const weight = r.part('weight', at(L, 1, 0), { params: { mass: W / g } });
+  // the weight hangs under the tip (a weight cannot be where the bar is): its weight still acts at x = L
+  const dw = weightD({ mass: W / g }), thick = Number(params['side'] ?? 0.038);
+  const weight = r.part('weight', at(L, 1 - thick / 2 - dw / 2 - 0.001, 0), { params: { mass: W / g } });
   r.connect('fixed', { part: bar, frame: at(-L / 2, 0, 0) }, null);
-  r.connect('fixed', { part: bar, frame: at(L / 2, 0, 0) }, { part: weight, frame: at(0, 0, 0) });
+  r.connect('fixed', { part: bar, frame: at(L / 2, -thick / 2, 0) }, { part: weight, frame: at(0, dw / 2 + 0.001, 0) });
   const events: PhysicsEvent[] = [];
   const origStep = r.world.step.bind(r.world);
   r.world.step = () => { const res = origStep(); events.push(...res.events); return res; };
-  return { r, bar, events, n, tip: () => r.world.livePose(`${bar.id}#${n - 1}`)!.p, M0: ratio * C, cap: C };
+  return { r, bar, events, n, tip: () => r.world.livePose(`${bar.id}#${n - 1}`)!.p, M0: ratio * C, cap: C, W, hang: thick / 2 + dw / 2 + 0.001 };
+}
+
+/**
+ * Where a plastic hinge one segment from the clamp comes to rest under a tip load of `ratio` x Mp whose weight hangs
+ * `hang` under the tip: gravity work M0 sin t - W hang (1 - cos t) equals plastic work Mp t (the hanging weight swings
+ * back toward the hinge as the arm drops, so its arm shortens); k = W hang / Mp.
+ */
+function arrest(ratio: number, k: number): number {
+  let t = 1;
+  for (let i = 0; i < 50; i++) t = t - (ratio * Math.sin(t) - k * (1 - Math.cos(t)) - t) / (ratio * Math.cos(t) - k * Math.sin(t) - 1);
+  return t;
 }
 
 describe('breakable stock: section forces', () => {
@@ -108,9 +128,11 @@ describe('breakable stock: section forces', () => {
     // local +X turned to point up: segment 0 at the bottom, segment 3 at the top
     const rod = r.part('rod.square', at(0, 2, 0, [0, 0, Math.SQRT1_2, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: L, side: 0.01, fracture: '4' } });
     r.connect('fixed', { part: rod, frame: at(L / 2, 0, 0) }, null);
-    const w = r.part('weight', at(0, 2 - L / 2, 0), { params: { mass: 50 } });
+    // the weight hangs under the rod's end (a weight cannot be where the rod is)
+    const dw = weightD({ mass: 50 });
+    const w = r.part('weight', at(0, 2 - L / 2 - dw / 2 - 0.001, 0), { params: { mass: 50 } });
     // both joint frames share one world orientation (as the Join tool makes them)
-    r.connect('fixed', { part: rod, frame: at(-L / 2, 0, 0) }, { part: w, frame: at(0, 0, 0, [0, 0, Math.SQRT1_2, Math.SQRT1_2]) });
+    r.connect('fixed', { part: rod, frame: at(-L / 2, 0, 0) }, { part: w, frame: at(0, dw / 2 + 0.001, 0, [0, 0, Math.SQRT1_2, Math.SQRT1_2]) });
     r.run(1);
     const perSeg = (r.world.bodyMass(rod.id)! / 4) * g;
     r.world.bondStates(rod.id).forEach((s, k) => {
@@ -149,19 +171,36 @@ describe('breakable stock: loads through contacts', () => {
   });
 
   it('a servo turns a segmented bar exactly like a solid one', async () => {
+    const I: Quat = [0, 0, 0, 1];
+    /** A servo under the base with its shaft face down. */
+    const DOWN: Quat = axisAngle([1, 0, 0], Math.PI / 2);
     const angles = async (fracture: string) => {
-      const r = await rig({ gravity: [0, 0, 0] }, false);
-      const base = r.part('block', at(0, 1, 0), { frozen: true, material: 'steel.a36', params: { x: 0.3, y: 0.05, z: 0.3 } });
-      const bar = r.part('rod.square', at(0, 0.9, 0, [0, Math.SQRT1_2, 0, Math.SQRT1_2]), { material: 'steel.1018-cd', params: { length: 0.62, side: 0.05, fracture } });
-      const c = r.connect('servo', { part: base, frame: at(0, -0.05, 0) }, { part: bar, frame: { p: [0, 0.05, 0], q: [0, -Math.SQRT1_2, 0, Math.SQRT1_2] } }, { maxTorque: 80, range: 0.5, channel: 'steer', pin: 0.02 });
+      const r = await makeRig({ gravity: [0, 0, 0] }, false);
+      const sv = getServo('servo.large-60kg'), [l, w, h] = sv.dims;
+      const { out: horn } = machine(r, (b) => {
+        const base = b.place('block', [0, 1, 0], I, { x: 0.3, y: 0.05, z: 0.3 }, 'base', { material: 'steel.a36', frozen: true });
+        const servo = b.place('servo', [0, 1 - 0.025 - h / 2, 0], DOWN, { model: sv.id }, 'servo');
+        servo.fasten({ thin: h, at: [0, 0, -h / 2] }, base, { thin: 0.05, at: [0, -0.025, 0] }, [l, w], 'screwed');
+        const shaft = servo.worldOf(servo.shaft).p;
+        // the bar hangs from the horn, its length down
+        const bar = b.place('rod.square', [shaft[0], shaft[1] - sv.horn - 0.31, shaft[2]], axisAngle([0, 0, 1], -Math.PI / 2), { length: 0.62, side: 0.05, fracture }, 'bar', { material: 'steel.1018-cd' });
+        const horn = servo.horn(bar);
+        const pack = b.place('battery', [0.4, 1, 0], I, { model: 'battery.nimh.aa', series: 6, parallel: 1, charge: 1 }, 'pack', { frozen: true });
+        const rx = b.place('receiver', [0.4, 1.1, 0], I, {}, 'receiver', { frozen: true });
+        pack.wire(servo);
+        pack.wire(rx);
+        rx.stick(servo, 'steer', 0.5);
+        return horn;
+      });
       r.world.apply({ op: 'controls', channels: { steer: 1 } });
       const out: number[] = [];
-      for (let i = 0; i < 45; i++) { r.world.step(); if (i % 5 === 4) out.push(r.world.connectionLoad(c.id)!.extent); }
+      for (let i = 0; i < 45; i++) { r.world.step(); if (i % 5 === 4) out.push(r.world.connectionLoad(horn)!.extent); }
       r.done();
       return out;
     };
     const solid = await angles('off');
     const seg = await angles('3');
+    expect(Math.abs(solid.at(-1)!)).toBeGreaterThan(0.02);
     seg.forEach((a, i) => expect(Math.abs(a - solid[i]!)).toBeLessThan(0.01));
   });
 });
@@ -175,16 +214,14 @@ describe('breakable stock: ductile metal', () => {
     c.r.done();
   });
 
-  it('yields into a plastic hinge and comes to rest where gravity work equals plastic work (M0 sin t = Mp t)', async () => {
+  it('yields into a plastic hinge and comes to rest where gravity work equals plastic work (M0 sin t - W h (1 - cos t) = Mp t)', async () => {
     const ratio = 1.1;
     const c = await cantilever('rod.square', 'steel.1018-cd', { length: 0.6, side: 0.012, fracture: '6' }, ratio, 'Mp');
     c.r.run(3);
     expect(c.events.some((e) => e.type === 'yield')).toBe(true);
     expect(c.events.some((e) => e.type === 'fracture')).toBe(false);
     expect(c.r.world.bondStates(c.bar.id)[0]!.state).toBe('plastic');
-    // solve ratio sin t = t
-    let t = 1;
-    for (let i = 0; i < 50; i++) t = t - (ratio * Math.sin(t) - t) / (ratio * Math.cos(t) - 1);
+    const t = arrest(ratio, (c.W * c.hang) / c.cap);
     // the hinge sits at bond 0, one 0.1 m segment from the clamp; the outboard is straight and rigid
     const hinge = c.r.world.livePose(`${c.bar.id}#0`)!.p[0] + 0.05;
     const tip = c.tip();
@@ -194,8 +231,10 @@ describe('breakable stock: ductile metal', () => {
   });
 
   it('tears once the hinge rotation passes the material ductility', async () => {
-    // 6061-T6: 12% elongation -> 0.72 rad capacity; at 1.15 Mp the hinge would need ~0.93 rad to arrest
-    const c = await cantilever('rod.square', 'aluminum.6061-t6', { length: 0.6, side: 0.012, fracture: '6' }, 1.15, 'Mp');
+    // 6061-T6: 12% elongation -> 0.72 rad hinge capacity; the load is chosen so the hinge could only arrest past it
+    const ratio = 1.3;
+    const c = await cantilever('rod.square', 'aluminum.6061-t6', { length: 0.6, side: 0.012, fracture: '6' }, ratio, 'Mp');
+    expect(arrest(ratio, (c.W * c.hang) / c.cap)).toBeGreaterThan(0.72);
     const y0 = c.tip()[1];
     c.r.run(2);
     const f = c.events.find((e) => e.type === 'fracture');
@@ -240,7 +279,8 @@ describe('breakable stock: bookkeeping', () => {
     const beam = r.part('lumber', at(0, 1, 0), { material: m.id, frozen: true, params: { length: 2.4, size: '2x4' } });
     within(r.world.bodyMass(beam.id)!, 2.4 * 0.038 * 0.089 * m.density, 1e-9);
     expect(r.world.segmentCount(beam.id)).toBeGreaterThan(1);
-    const w = r.part('weight', at(0, 1.2, 0), { params: { mass: 2000 } });
+    // two tonnes standing on the beam's top (its 38 mm is its thickness here)
+    const w = r.part('weight', at(0, 1 + 0.019 + weightD({ mass: 2000 }) / 2 + 0.001, 0), { params: { mass: 2000 } });
     const events: PhysicsEvent[] = [];
     for (let i = 0; i < 90; i++) events.push(...r.world.step().events);
     expect(events.filter((e) => e.type === 'fracture' || e.type === 'yield')).toEqual([]);

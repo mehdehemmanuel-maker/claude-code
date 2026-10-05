@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { at, rig, within } from './helpers';
-import { axisAngle, length, sub } from '../../src/doc/math';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
+import { axisAngle, length, rotate, sub } from '../../src/doc/math';
 import { TICK } from '../../src/physics/world';
 import { tensileStressArea, threadFor } from '../../src/engineering/threads';
 import { blockCharges, blockFaces, cylinderCharges, cylinderFaces, dipoleMoment, imageFaces, magnetWrench, plateSaturationFactor } from '../../src/engineering/magnets';
@@ -131,6 +132,32 @@ describe('stored energy and oscillation', () => {
     const T = (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1);
     within(T, 2 * Math.PI * Math.sqrt(L / g), 0.01);
     r2.done();
+  });
+
+  it('a bar on a free hinge: the physical pendulum\'s period within 0.5 %, and under 2 % of the swing energy lost per period at 30°', async () => {
+    const r = await rig({}, false);
+    const L = 1.0, th0 = Math.PI / 6, zoff = 0.01 + 0.019 + 0.0005, zp = 0.01 + 0.00025;
+    const pivot = r.part('block', at(0, 2, 0), { frozen: true, params: { x: 0.02, y: 0.02, z: 0.02 } });
+    const bar = r.part('plate', at((L / 2) * Math.sin(th0), 2 - (L / 2) * Math.cos(th0), zoff, axisAngle([0, 0, 1], th0 - Math.PI / 2)), { material: 'wood.douglas-fir', params: { length: L, thickness: 0.089, width: 0.038, fracture: 'off' } });
+    const yToZ = axisAngle([1, 0, 0], Math.PI / 2);
+    r.connect('hinge', { part: pivot, frame: at(0, 0, zp, yToZ) }, { part: bar, frame: at(-L / 2, 0, zp - zoff, yToZ) }, { pin: 0.008, friction: 0 });
+    const m = getMaterial('wood.douglas-fir').density * 0.038 * 0.089 * L, I = (m * (L * L + 0.089 ** 2)) / 12 + m * (L / 2) ** 2;
+    const angles: number[] = [], E: number[] = [];
+    r.run(8, () => {
+      const pose = r.world.livePose(bar.id)!, d = rotate(pose.q, [1, 0, 0]), w = r.world.angularVelocity(bar.id)!;
+      angles.push(Math.atan2(d[0], -d[1]));
+      E.push(0.5 * I * w[2] * w[2] + m * g * pose.p[1]);
+    });
+    const crossings: number[] = [];
+    for (let i = 1; i < angles.length; i++) if ((angles[i - 1]! > 0) !== (angles[i]! > 0)) { const a0 = angles[i - 1]!, a1 = angles[i]!; crossings.push((i - 1) * TICK + TICK * (a0 / (a0 - a1))); }
+    const T = (2 * (crossings.at(-1)! - crossings[0]!)) / (crossings.length - 1);
+    const T0 = 2 * Math.PI * Math.sqrt(I / (m * g * (L / 2))), f = 1 + th0 ** 2 / 16 + (11 * th0 ** 4) / 3072;
+    within(T, T0 * f, 0.005);
+    const Emin = m * g * (2 - L / 2), periods = 8 / (T0 * f);
+    const lost = (E[0]! - Math.max(...E.slice(-150))) / (E[0]! - Emin);
+    expect(lost / periods).toBeLessThan(0.02);
+    expect(lost).toBeGreaterThan(-0.005);
+    r.done();
   });
 
   it('nothing rests out of equilibrium: a slow, small swing keeps its amplitude instead of sleeping at the top of its swing', async () => {
@@ -330,13 +357,15 @@ describe('fasteners fail at their real capacities', () => {
     r.done();
   });
 
-  it('aluminium cannot be fusion welded to steel', async () => {
+  it('aluminium cannot be fusion welded to steel: the weld is not made (K-9)', async () => {
     const r = await rig({}, false);
     const a = r.part('plate', at(0, 1, 0), { material: 'aluminum.6061-t6' });
     const s = r.part('plate', at(0, 1.006, 0), { material: 'steel.a36' });
-    const weld = r.connect('weld', { part: a, frame: at(0, 0.003, 0) }, { part: s, frame: at(0, -0.003, 0) });
-    r.run(0.1);
-    expect(r.world.connectionStatus(weld.id)).toBe('broken');
+    let no: ConstructionRefused | null = null;
+    try { r.connect('weld', { part: a, frame: at(0, 0.003, 0) }, { part: s, frame: at(0, -0.003, 0) }); } catch (e) { if (e instanceof ConstructionRefused) no = e; else throw e; }
+    expect(no?.refusal.law).toBe('K-9');
+    expect(no?.refusal.reason).toMatch(/cannot be fusion welded/);
+    expect(r.world.connectionStatus('nothing')).toBeUndefined();
     r.done();
   });
 
@@ -665,17 +694,16 @@ describe('powered and damped joints', () => {
     const R = windingR(m, mot.winding) + 2 * 0.5 * 0.008286;
     const w0 = (bat.V - m.I0 * R) / m.Kt / g.ratio;
     within(Math.abs(b.spin()), w0, 0.01);
-    // and the battery gives what the motor's no-load current takes, plus what holds the flywheel against the world's
-    // numerical angular damping, 0.02/s of its spin (audit A5, fix F4: stated, not hidden; a real one loses only its
-    // bearings' and the air's share)
-    const damping = (0.02 * I * w0) / (m.Kt * g.ratio * g.efficiency);
-    within(bat.I, m.I0 + damping, 0.1);
+    // and the battery gives what the motor's no-load current takes, and nothing more: a flywheel in this world loses
+    // only what its bearings and the air take from it, and neither is modelled yet (the 0.02/s numerical damping
+    // that used to stand in for them is gone, F-2.1: a free spin slows only where something slows it)
+    within(bat.I, m.I0, 0.1);
     // cut the wire and it coasts down on its own friction, reflected through the gearhead
     b.r.world.apply({ op: 'removeConnection', id: b.w!.id });
     const before = Math.abs(b.spin());
     b.r.run(1);
     const drag = (m.Tf * g.ratio) / g.efficiency;
-    within(before - Math.abs(b.spin()), drag / I + 0.02 * before, 0.1);
+    within(before - Math.abs(b.spin()), drag / I, 0.1);
     b.r.done();
   });
 

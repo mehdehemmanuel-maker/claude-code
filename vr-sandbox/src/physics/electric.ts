@@ -7,7 +7,16 @@
 import { flat, packOCV, packR, type Pack } from '../engineering/battery';
 import type { MotorModel } from '../engineering/dcmotor';
 
-export interface Load {
+/** A motor on its controller (PWM), or a thing that draws a current of its own (a servo's electronics and motor, a board). */
+export type Load = MotorLoad | FixedLoad;
+
+export interface FixedLoad {
+  /** The current it draws at any terminal voltage above `minVolts`, A; nothing below it. */
+  fixed: number;
+  minVolts: number;
+}
+
+export interface MotorLoad {
   model: MotorModel;
   /** Duty the controller applies, -1..1 (sign: which way it drives the motor). */
   u: number;
@@ -31,6 +40,7 @@ export interface PackSolve {
 
 /** One load's current at terminal voltage V. */
 function loadCurrent(l: Load, V: number): number {
+  if ('fixed' in l) return V >= l.minVolts ? l.fixed : 0;
   if (l.dead || l.u === 0) return 0;
   let i = (l.u * V - l.model.Kt * l.w) / l.R;
   // a plain brushed controller doesn't regenerate: driven faster than it drives, the motor just freewheels
@@ -46,7 +56,7 @@ export function solvePack(pack: Pack, soc: number, loads: Load[]): PackSolve {
   for (let it = 0; it < 12; it++) {
     currents = loads.map((l) => loadCurrent(l, V));
     // a PWM controller draws its duty's share of the motor's current from the pack
-    I = loads.reduce((s, l, k) => s + Math.abs(l.u) * Math.abs(currents[k]!), 0);
+    I = loads.reduce((s, l, k) => s + ('fixed' in l ? Math.abs(currents[k]!) : Math.abs(l.u) * Math.abs(currents[k]!)), 0);
     const next = ocv - Rp * I;
     if (Math.abs(next - V) < 1e-7) { V = next; break; }
     V = next;

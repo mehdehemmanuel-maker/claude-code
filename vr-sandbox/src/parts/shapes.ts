@@ -2,6 +2,7 @@
 // `VisualShape` into three.js geometry. Cylinders are along local +Y, boxes are centred.
 
 import type { Quat, Vec3 } from '../doc/types';
+import { add, rotate } from '../doc/math';
 
 export type ConvexShape =
   | { type: 'box'; half: Vec3 }
@@ -93,6 +94,45 @@ export function closestOnShape(shape: CollisionShape, pt: Vec3): { p: Vec3; n: V
 }
 
 /** Axis-aligned local bounds of a collision shape. */
+/** The area of the convex hull of points in a plane (Andrew's monotone chain), m². */
+function hullArea2(pts: [number, number][]): number {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return 0;
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const q of p) { while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0) lower.pop(); lower.push(q); }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]!; while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0) upper.pop(); upper.push(q); }
+  const hull = [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  let a = 0;
+  for (let i = 0; i < hull.length; i++) { const u = hull[i]!, v = hull[(i + 1) % hull.length]!; a += u[0] * v[1] - v[0] * u[1]; }
+  return Math.abs(a) / 2;
+}
+
+/** Points on a convex shape's surface, enough for its silhouette: a box's corners, a cylinder's two rims (24 points each), a sphere's spiral (400 points, its silhouette within 3 % of π r²), a hull's own points. */
+function surfacePoints(s: ConvexShape): Vec3[] {
+  const out: Vec3[] = [];
+  if (s.type === 'box') { for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) out.push([x * s.half[0], y * s.half[1], z * s.half[2]]); }
+  else if (s.type === 'cylinder') { for (let k = 0; k < 24; k++) { const a = (2 * Math.PI * k) / 24; for (const y of [-1, 1]) out.push([s.radius * Math.cos(a), y * s.halfHeight, s.radius * Math.sin(a)]); } }
+  else if (s.type === 'sphere') { const n = 400; for (let k = 0; k < n; k++) { const y = 1 - (2 * (k + 0.5)) / n, r = Math.sqrt(1 - y * y), a = k * 2.399963229728653; out.push([s.radius * r * Math.cos(a), s.radius * y, s.radius * r * Math.sin(a)]); } }
+  else out.push(...s.points);
+  return out;
+}
+
+/**
+ * The area a shape shows along each of its own axes, for the drag ½ ρ C_d A v²: a sphere π r², a cylinder its rectangle
+ * across and its disc along, a box its faces, exactly; a hull the silhouette of its points, exact for a convex hull;
+ * a compound the silhouette of its children's surfaces together, the convex outline of the union, which is the union
+ * itself for anything convex and a little over it for a concave one.
+ */
+export function frontalAreas(shape: CollisionShape): Vec3 {
+  if (shape.type === 'sphere') { const a = Math.PI * shape.radius * shape.radius; return [a, a, a]; }
+  if (shape.type === 'cylinder') { const across = 2 * shape.radius * 2 * shape.halfHeight; return [across, Math.PI * shape.radius * shape.radius, across]; }
+  if (shape.type === 'box') return [4 * shape.half[1] * shape.half[2], 4 * shape.half[0] * shape.half[2], 4 * shape.half[0] * shape.half[1]];
+  const pts: Vec3[] = shape.type === 'hull' ? shape.points : shape.children.flatMap((c) => surfacePoints(c.shape).map((v) => add(rotate(c.q, v), c.p)));
+  return [hullArea2(pts.map((v) => [v[1], v[2]])), hullArea2(pts.map((v) => [v[0], v[2]])), hullArea2(pts.map((v) => [v[0], v[1]]))];
+}
+
 export function shapeBounds(shape: CollisionShape): { min: Vec3; max: Vec3 } {
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];

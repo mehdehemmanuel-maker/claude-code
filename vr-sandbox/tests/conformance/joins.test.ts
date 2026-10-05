@@ -3,6 +3,7 @@
 // through a 100 mm block never reached the second piece, so the joint fell apart under its own weight.
 
 import { describe, expect, it } from 'vitest';
+import { ConstructionRefused } from '../../src/ganglia/tree/gate';
 import { at, rig } from './helpers';
 import { axisAngle } from '../../src/doc/math';
 import { getMaterial, MATERIALS, type Material } from '../../src/data/materials';
@@ -88,6 +89,30 @@ describe('Best join', () => {
   });
 });
 
+describe('joint loads against statics', () => {
+  it('a bolted cantilever arm: the joint reports the root moment and shear of statics within 1 %', async () => {
+    const r = await rig({}, true);
+    const toX = axisAngle([0, 0, 1], -Math.PI / 2);
+    const L = 1.0, mass = 20, reach = 0.5;
+    const post = r.part('block', at(0, 0.5, 0), { frozen: true, material: 'wood.douglas-fir', params: { x: 0.1, y: 1.0, z: 0.1 } });
+    const arm = r.part('lumber', at(0.05 + L / 2, 1.0, 0), { material: 'wood.douglas-fir', params: { size: '2x4', length: L } });
+    const c = r.connect('bolted', { part: post, frame: at(0.05, 0.5, 0, toX) }, { part: arm, frame: at(-L / 2, 0, 0, toX) }, { size: 'M8', class: '8.8', count: 2, bondW: 0.089, bondL: 0.038 });
+    const h = mass / (getMaterial('steel.a36').density * 0.01);
+    r.part('block', at(0.05 + reach, 1.0 + 0.019 + 0.0005 + h / 2, 0), { material: 'steel.a36', params: { x: 0.1, y: h, z: 0.1 } });
+    let bending = 0, shear = 0, n = 0;
+    for (let i = 0; i < 270; i++) {
+      const res = r.world.step();
+      const l = res.loads.find((x) => x.id === c.id);
+      if (i >= 243 && l) { bending += l.bending; shear += l.shear; n++; }
+    }
+    const g = 9.80665, q = getMaterial('wood.douglas-fir').density * 0.038 * 0.089 * g, P = mass * g;
+    expect(r.world.connectionStatus(c.id)).toBe('intact');
+    expect(Math.abs((bending / n) / (P * reach + (q * L * L) / 2) - 1)).toBeLessThan(0.01);
+    expect(Math.abs((shear / n) / (P + q * L) - 1)).toBeLessThan(0.01);
+    r.done();
+  });
+});
+
 describe('joined parts stay joined', () => {
   // a 600 mm arm cantilevered off the side of a fixed 100 mm post: the joint carries the arm's weight as shear and
   // its moment as bending, the way a shelf bracket or a table rail does
@@ -97,7 +122,8 @@ describe('joined parts stay joined', () => {
     const p = r.part('block', at(0, 1, 0), { frozen: true, material: post, params: { x: 0.1, y: 0.1, z: 0.1 } });
     const b = r.part(arm.kind, at(0.35, 1, 0), { material: arm.material, params: { ...arm.params, length: 0.6 } });
     const j = join(g);
-    const c = r.connect(j.kind, { part: p, frame: at(0.05, 0, 0, toX) }, { part: b, frame: at(-0.3, 0, 0, toX) }, j.params as never);
+    let c;
+    try { c = r.connect(j.kind, { part: p, frame: at(0.05, 0, 0, toX) }, { part: b, frame: at(-0.3, 0, 0, toX) }, j.params as never); } catch (e) { r.done(); throw e; }
     r.run(3);
     const status = r.world.connectionStatus(c.id);
     const droop = 1 - r.pos(b)[1];
@@ -118,9 +144,11 @@ describe('joined parts stay joined', () => {
     expect(res.status).toBe('intact');
   });
 
-  it('a 40 mm screw through a 100 mm post never reaches the arm: that joint falls apart, as it would', async () => {
-    const res = await cantilever(beam, 'wood.douglas-fir', () => ({ kind: 'screwed', params: { bondW: 0.089, bondL: 0.038 } }), beamOnPost);
-    expect(res.status).toBe('broken');
+  it('a 40 mm screw through a 100 mm post never reaches the arm: that joint is not made (K-9)', async () => {
+    let no: ConstructionRefused | null = null;
+    try { await cantilever(beam, 'wood.douglas-fir', () => ({ kind: 'screwed', params: { bondW: 0.089, bondL: 0.038 } }), beamOnPost); } catch (e) { if (e instanceof ConstructionRefused) no = e; else throw e; }
+    expect(no?.refusal.law).toBe('K-9');
+    expect(no?.refusal.reason).toMatch(/A 40 mm screw can't reach through 100 mm/);
   });
 
   it('a steel plate welded to a steel post holds', async () => {

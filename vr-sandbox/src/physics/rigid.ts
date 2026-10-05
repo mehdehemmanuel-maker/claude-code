@@ -261,98 +261,142 @@ export interface Row {
    * target - relVel - soft acc. Its target carries the spring's pull on the position error.
    */
   soft?: number;
+  /** The work its impulse did in the last solve, J: λ (w⁻ + w⁺)/2, with w⁻ and w⁺ its relative velocity before and after (set by solveRows). */
+  work?: number;
 }
 
-/** Jacobian of a row on one of its entities: linear part and angular part (impulse response directions). */
-function jac(r: Row, side: 'a' | 'b'): { lin: Vec3; ang: Vec3 } | null {
-  const e = side === 'a' ? r.a : r.b;
-  if (!e || e.invMass === 0) return null;
-  const s = side === 'a' ? -1 : 1;
-  if (r.kind === 'angular') return { lin: [0, 0, 0], ang: scale(r.dir, s) };
-  const p = side === 'a' ? r.pa : r.pb;
-  return { lin: scale(r.dir, s), ang: scale(cross(sub(p, e.origin), r.dir), s) };
+/**
+ * Inverse of a small dense n x n matrix, row-major (Gauss-Jordan with partial pivoting); a column with no usable
+ * pivot is passed over, as the solver's blocks need (a singular direction takes no impulse from it).
+ */
+function invertFlat(A: Float64Array, n: number): Float64Array {
+  const w = 2 * n, M = new Float64Array(n * w);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) M[i * w + j] = A[i * n + j]!;
+    M[i * w + n + i] = 1;
+  }
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r * w + c]!) > Math.abs(M[piv * w + c]!)) piv = r;
+    if (Math.abs(M[piv * w + c]!) < 1e-14 * (Math.abs(M[c * w + c]!) + 1e-300)) continue;
+    if (piv !== c) for (let k = 0; k < w; k++) { const t = M[c * w + k]!; M[c * w + k] = M[piv * w + k]!; M[piv * w + k] = t; }
+    const d = M[c * w + c]!;
+    if (Math.abs(d) < 1e-300) continue;
+    for (let k = 0; k < w; k++) M[c * w + k]! /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r * w + c]!;
+      if (f) for (let k = 0; k < w; k++) M[r * w + k]! -= f * M[c * w + k]!;
+    }
+  }
+  const out = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out[i * n + j] = M[i * w + n + j]!;
+  return out;
 }
 
-/** Coupling K_ij: relative velocity of row i per unit impulse of row j. */
-function coupling(ri: Row, rj: Row): number {
+/**
+ * Precomputed row data for the inner loop, flat in one buffer per solve: each row's Jacobians (signs folded in) on
+ * its two sides and the matching velocity responses M^-1 J, so a relative velocity is 4 dot products, an impulse 4
+ * in-place axpys, and a block's coupling K_ij one dot product per shared entity. Nothing is allocated per row
+ * beyond its record; nothing per iteration at all.
+ *
+ *   J[o + 0..5]   side a: [lin 3, ang 3]      J[o + 12..17]  side a's response (when a moves)
+ *   J[o + 6..11]  side b                      J[o + 18..23]  side b's response
+ */
+const STRIDE = 24;
+
+interface Prepared {
+  r: Row;
+  /** Offset of its data in the solve's buffer. */
+  o: number;
+  /** Whether each side moves (has a response). */
+  ma: boolean;
+  mb: boolean;
+  /** The block it is solved in, if any; only the block's first row runs it. */
+  block: Block | null;
+  lead: boolean;
+}
+
+interface Block { rows: Prepared[]; Kinv: Float64Array; n: number }
+
+function prepareInto(J: Float64Array, o: number, r: Row): Prepared {
+  const d = r.dir;
+  // Both sides of a linear row push about one point, so the pair is equal and opposite on one line and the row can't
+  // make angular momentum: λ (p_b − p_a) × d is what it would make about any point with a lever point each (F-1.1.1).
+  // Where p_b − p_a lies along d (a contact's normal, a rope) the torques are the same either way.
+  const mid: Vec3 = [(r.pa[0] + r.pb[0]) / 2, (r.pa[1] + r.pb[1]) / 2, (r.pa[2] + r.pb[2]) / 2];
+  const fill = (e: Entity, at: number, s: number, p: Vec3): boolean => {
+    // an immovable entity still has a velocity (a hand-held part): read it, never write it
+    if (r.kind === 'angular') {
+      J[at] = 0; J[at + 1] = 0; J[at + 2] = 0;
+      J[at + 3] = s * d[0]; J[at + 4] = s * d[1]; J[at + 5] = s * d[2];
+    } else {
+      const rx = p[0] - e.origin[0], ry = p[1] - e.origin[1], rz = p[2] - e.origin[2];
+      J[at] = s * d[0]; J[at + 1] = s * d[1]; J[at + 2] = s * d[2];
+      J[at + 3] = s * (ry * d[2] - rz * d[1]); J[at + 4] = s * (rz * d[0] - rx * d[2]); J[at + 5] = s * (rx * d[1] - ry * d[0]);
+    }
+    if (e.invMass === 0) return false;
+    const m = at + 12, I = e.invI, ax = J[at + 3]!, ay = J[at + 4]!, az = J[at + 5]!;
+    J[m] = J[at]! * e.invMass; J[m + 1] = J[at + 1]! * e.invMass; J[m + 2] = J[at + 2]! * e.invMass;
+    J[m + 3] = I[0]! * ax + I[1]! * ay + I[2]! * az; J[m + 4] = I[3]! * ax + I[4]! * ay + I[5]! * az; J[m + 5] = I[6]! * ax + I[7]! * ay + I[8]! * az;
+    return true;
+  };
+  const ma = r.a ? fill(r.a, o, -1, mid) : false;
+  const mb = r.b ? fill(r.b, o + 6, 1, mid) : false;
+  return { r, o, ma, mb, block: null, lead: false };
+}
+
+function relVel(J: Float64Array, p: Prepared): number {
+  let v = 0;
+  const a = p.r.a, b = p.r.b, o = p.o;
+  if (a) v += J[o]! * a.v[0] + J[o + 1]! * a.v[1] + J[o + 2]! * a.v[2] + J[o + 3]! * a.w[0] + J[o + 4]! * a.w[1] + J[o + 5]! * a.w[2];
+  if (b) v += J[o + 6]! * b.v[0] + J[o + 7]! * b.v[1] + J[o + 8]! * b.v[2] + J[o + 9]! * b.w[0] + J[o + 10]! * b.w[1] + J[o + 11]! * b.w[2];
+  return v;
+}
+
+function push(J: Float64Array, p: Prepared, lambda: number) {
+  const a = p.r.a, b = p.r.b;
+  if (a && p.ma) {
+    const m = p.o + 12;
+    a.v[0] += lambda * J[m]!; a.v[1] += lambda * J[m + 1]!; a.v[2] += lambda * J[m + 2]!;
+    a.w[0] += lambda * J[m + 3]!; a.w[1] += lambda * J[m + 4]!; a.w[2] += lambda * J[m + 5]!;
+  }
+  if (b && p.mb) {
+    const m = p.o + 18;
+    b.v[0] += lambda * J[m]!; b.v[1] += lambda * J[m + 1]!; b.v[2] += lambda * J[m + 2]!;
+    b.w[0] += lambda * J[m + 3]!; b.w[1] += lambda * J[m + 4]!; b.w[2] += lambda * J[m + 5]!;
+  }
+}
+
+/** Coupling K_ij: relative velocity of row i per unit impulse of row j, summed over the moving entities they share. */
+function coupling(J: Float64Array, pi: Prepared, pj: Prepared): number {
   let k = 0;
-  for (const si of ['a', 'b'] as const) for (const sj of ['a', 'b'] as const) {
-    const ei = si === 'a' ? ri.a : ri.b, ej = sj === 'a' ? rj.a : rj.b;
-    if (!ei || ei !== ej || ei.invMass === 0) continue;
-    const ji = jac(ri, si)!, jj = jac(rj, sj)!;
-    k += ei.invMass * dot(ji.lin, jj.lin) + dot(ji.ang, mat3Vec(ei.invI, jj.ang));
+  const ri = pi.r, rj = pj.r;
+  const dot6 = (x: number, y: number) => J[x]! * J[y]! + J[x + 1]! * J[y + 1]! + J[x + 2]! * J[y + 2]! + J[x + 3]! * J[y + 3]! + J[x + 4]! * J[y + 4]! + J[x + 5]! * J[y + 5]!;
+  if (ri.a && pi.ma) {
+    if (ri.a === rj.a && pj.ma) k += dot6(pi.o, pj.o + 12);
+    if (ri.a === rj.b && pj.mb) k += dot6(pi.o, pj.o + 18);
+  }
+  if (ri.b && pi.mb) {
+    if (ri.b === rj.a && pj.ma) k += dot6(pi.o + 6, pj.o + 12);
+    if (ri.b === rj.b && pj.mb) k += dot6(pi.o + 6, pj.o + 18);
   }
   return k;
 }
 
-/** Inverse of a small dense matrix (Gauss-Jordan with partial pivoting); singular directions map to 0. */
-function invertN(A: number[][]): number[][] {
-  const n = A.length;
-  const M = A.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
-  for (let c = 0; c < n; c++) {
-    let piv = c;
-    for (let r = c + 1; r < n; r++) if (Math.abs(M[r]![c]!) > Math.abs(M[piv]![c]!)) piv = r;
-    if (Math.abs(M[piv]![c]!) < 1e-14 * (Math.abs(M[c]![c]!) + 1e-300)) continue;
-    [M[c], M[piv]] = [M[piv]!, M[c]!];
-    const d = M[c]![c]!;
-    if (Math.abs(d) < 1e-300) continue;
-    for (let k = 0; k < 2 * n; k++) M[c]![k]! /= d;
-    for (let r = 0; r < n; r++) {
-      if (r === c) continue;
-      const f = M[r]![c]!;
-      if (f) for (let k = 0; k < 2 * n; k++) M[r]![k]! -= f * M[c]![k]!;
-    }
-  }
-  return M.map((row) => row.slice(n));
-}
-
-/**
- * Precomputed row data for the inner loop: Jacobians (signs folded in) and the matching velocity responses
- * M^-1 J for each side, so a relative velocity is 4 dot products and an impulse is 4 in-place axpys.
- */
-interface Prepared {
-  r: Row;
-  ja: Float64Array | null; // [lin 3, ang 3]
-  jb: Float64Array | null;
-  ma: Float64Array | null; // [invMass lin 3, invI ang 3]
-  mb: Float64Array | null;
-}
-
-function prepare(r: Row): Prepared {
-  const side = (s: 'a' | 'b') => {
-    const e = s === 'a' ? r.a : r.b;
-    if (!e) return { j: null, m: null, moving: false };
-    const j = jac(r, s);
-    // an immovable entity still has a velocity (a hand-held part): read it, never write it
-    const lin: Vec3 = j ? j.lin : r.kind === 'linear' ? scale(r.dir, s === 'a' ? -1 : 1) : [0, 0, 0];
-    const ang: Vec3 = j ? j.ang : r.kind === 'angular' ? scale(r.dir, s === 'a' ? -1 : 1) : scale(cross(sub(s === 'a' ? r.pa : r.pb, e.origin), r.dir), s === 'a' ? -1 : 1);
-    const jj = Float64Array.of(lin[0], lin[1], lin[2], ang[0], ang[1], ang[2]);
-    if (!j) return { j: jj, m: null, moving: false };
-    const Ia = mat3Vec(e.invI, ang);
-    return { j: jj, m: Float64Array.of(lin[0] * e.invMass, lin[1] * e.invMass, lin[2] * e.invMass, Ia[0], Ia[1], Ia[2]), moving: true };
-  };
-  const A = side('a'), B = side('b');
-  return { r, ja: A.j, jb: B.j, ma: A.m, mb: B.m };
-}
-
-function relVel(p: Prepared): number {
-  let v = 0;
-  const a = p.r.a, b = p.r.b;
-  if (a && p.ja) v += p.ja[0]! * a.v[0] + p.ja[1]! * a.v[1] + p.ja[2]! * a.v[2] + p.ja[3]! * a.w[0] + p.ja[4]! * a.w[1] + p.ja[5]! * a.w[2];
-  if (b && p.jb) v += p.jb[0]! * b.v[0] + p.jb[1]! * b.v[1] + p.jb[2]! * b.v[2] + p.jb[3]! * b.w[0] + p.jb[4]! * b.w[1] + p.jb[5]! * b.w[2];
-  return v;
-}
-
-function push(p: Prepared, lambda: number) {
-  const a = p.r.a, b = p.r.b;
-  if (a && p.ma) {
-    a.v[0] += lambda * p.ma[0]!; a.v[1] += lambda * p.ma[1]!; a.v[2] += lambda * p.ma[2]!;
-    a.w[0] += lambda * p.ma[3]!; a.w[1] += lambda * p.ma[4]!; a.w[2] += lambda * p.ma[5]!;
-  }
-  if (b && p.mb) {
-    b.v[0] += lambda * p.mb[0]!; b.v[1] += lambda * p.mb[1]!; b.v[2] += lambda * p.mb[2]!;
-    b.w[0] += lambda * p.mb[3]!; b.w[1] += lambda * p.mb[4]!; b.w[2] += lambda * p.mb[5]!;
-  }
+/** What a solve did: its passes, the kinetic energy it changed, and how far it fell short of being passive. */
+export interface Solved {
+  passes: number;
+  /** Kinetic energy the impulses changed, J: exactly the sum of every row's work. */
+  dK: number;
+  /**
+   * The most kinetic energy the impulses could have added beyond what their targets pay for: Σ max(0, λ w⁺) over rows
+   * with no target. Zero at convergence (each such row's impulse opposes the velocity it leaves, or that velocity is
+   * zero); above zero, what stopping early let through.
+   */
+  leak: number;
+  /** 1: the warm start stood; 0: the solve ended above zero with it and was done again from nothing; −1: scaled back along its ray as well. */
+  warmKept: number;
 }
 
 /**
@@ -360,18 +404,33 @@ function push(p: Prepared, lambda: number) {
  * as one block with their exact coupling (a 6-DOF anchor converges in one pass). `warm` holds last tick's
  * accumulated impulses by row key: applying them first is what lets heavy-on-light stacks converge; it is
  * refreshed on exit. Entity velocities are updated in place.
+ *
+ * Why it can't make energy (FOUNDATIONS.md, F-2.6): for any impulses Λ at all, however found, the kinetic energy they
+ * change is ΔK = g(Λ) − ½ΛᵀΓΛ + Λᵀt with g(Λ) = ½Λᵀ(A + Γ)Λ + Λᵀ(w⁻ − t), so a solve that ends with g ≤ 0 has added
+ * no more than its targets paid for (Λᵀt: drives, rebounds). From nothing, each update is the exact minimiser of g
+ * along its row within fixed bounds, so g only falls from 0 (theorem A). A warm start (last tick's impulses, applied
+ * first: what lets heavy-on-light stacks converge) can begin above zero, and friction's moving bounds can lift g; so g
+ * is computed exactly at the end (one pass over the rows) and, in the rare solve that ends above zero, the solve is
+ * done again from nothing; if even that ends above zero (friction), the impulses are scaled back along their own ray
+ * to where g is least, which is below zero (joints then drift a little this tick and are pulled in next tick). Every
+ * solve therefore ends with g ≤ 0: it is the one exit.
  */
-export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0) {
-  const prep = rows.map(prepare);
-  const byRow = new Map<Row, Prepared>();
-  prep.forEach((p) => byRow.set(p.r, p));
-  for (const p of prep) {
-    const r = p.r;
+export function solveRows(rows: Row[], iterations: number, warm?: Map<string, number>, tolerance = 0): Solved {
+  const n = rows.length;
+  const J = new Float64Array(n * STRIDE);
+  const w0 = new Float64Array(n);
+  const prep: Prepared[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = (prep[i] = prepareInto(J, i * STRIDE, rows[i]!));
+    const r = p.r, o = p.o;
     let k = 0;
-    if (p.ja && p.ma) for (let i = 0; i < 6; i++) k += p.ja[i]! * p.ma[i]!;
-    if (p.jb && p.mb) for (let i = 0; i < 6; i++) k += p.jb[i]! * p.mb[i]!;
+    if (p.ma) for (let c = 0; c < 6; c++) k += J[o + c]! * J[o + 12 + c]!;
+    if (p.mb) for (let c = 0; c < 6; c++) k += J[o + 6 + c]! * J[o + 18 + c]!;
     r.k = k;
   }
+  // every row's relative velocity before any impulse: the solve's work is measured from it
+  for (let i = 0; i < n; i++) w0[i] = relVel(J, prep[i]!);
+  let warmKept = 1;
   if (warm) {
     // normals before their friction rows, so friction warm starts inside its cone
     for (const pass of [false, true]) for (const p of prep) {
@@ -381,7 +440,7 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
       if (w === undefined) continue;
       const lim = r.frictionOf ? (r.mu ?? 0) * Math.max(0, r.frictionOf.acc) : 0;
       const a = r.frictionOf ? Math.min(lim, Math.max(-lim, w)) : Math.min(r.hi, Math.max(r.lo, w));
-      if (a !== 0) { r.acc = a; push(p, a); }
+      if (a !== 0) { r.acc = a; push(J, p, a); }
     }
   }
   // blocks: unbounded rows sharing a group, solved jointly with their exact coupling (inverse computed once)
@@ -389,58 +448,107 @@ export function solveRows(rows: Row[], iterations: number, warm?: Map<string, nu
   for (const p of prep) {
     const r = p.r;
     if (!r.group || r.frictionOf || r.lo !== -Infinity || r.hi !== Infinity || !r.k) continue;
-    (groups.get(r.group) ?? groups.set(r.group, []).get(r.group)!).push(p);
+    const g = groups.get(r.group);
+    if (g) g.push(p); else groups.set(r.group, [p]);
   }
-  const blockOf = new Map<Prepared, { rows: Prepared[]; Kinv: number[][] }>();
-  const inBlock = new Set<Prepared>();
   for (const g of groups.values()) {
-    if (g.length < 2) continue;
-    blockOf.set(g[0]!, { rows: g, Kinv: invertN(g.map((pi) => g.map((pj) => coupling(pi.r, pj.r)))) });
-    for (const p of g) inBlock.add(p);
+    const m = g.length;
+    if (m < 2) continue;
+    const K = new Float64Array(m * m);
+    for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) K[i * m + j] = coupling(J, g[i]!, g[j]!);
+    const block: Block = { rows: g, Kinv: invertFlat(K, m), n: m };
+    for (const p of g) p.block = block;
+    g[0]!.lead = true;
   }
   const res = new Float64Array(6);
-  for (let it = 0; it < iterations; it++) {
-    // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
-    let change = 0, largest = 0;
-    for (const p of prep) {
-      const block = blockOf.get(p);
-      if (block) {
-        const n = block.rows.length;
-        for (let i = 0; i < n; i++) res[i] = block.rows[i]!.r.target - relVel(block.rows[i]!);
-        for (let i = 0; i < n; i++) {
-          let d = 0;
-          const row = block.Kinv[i]!;
-          for (let j = 0; j < n; j++) d += row[j]! * res[j]!;
-          if (d) { block.rows[i]!.r.acc += d; push(block.rows[i]!, d); change = Math.max(change, Math.abs(d)); }
+  let passes = 0;
+  const sweep = () => {
+    for (let it = 0; it < iterations; it++) {
+      passes++;
+      // with a tolerance, stop once no impulse changed by more than that fraction of the largest one
+      let change = 0;
+      for (let q = 0; q < n; q++) {
+        const p = prep[q]!;
+        const block = p.block;
+        if (block) {
+          if (!p.lead) continue;
+          const m = block.n, br = block.rows, Kinv = block.Kinv;
+          for (let i = 0; i < m; i++) res[i] = br[i]!.r.target - relVel(J, br[i]!);
+          for (let i = 0; i < m; i++) {
+            let d = 0;
+            for (let j = 0; j < m; j++) d += Kinv[i * m + j]! * res[j]!;
+            if (d) { br[i]!.r.acc += d; push(J, br[i]!, d); change = Math.max(change, Math.abs(d)); }
+          }
+          continue;
         }
-        continue;
+        const r = p.r;
+        if (!r.k || r.k <= 0) continue;
+        let lo = r.lo, hi = r.hi;
+        if (r.frictionOf) {
+          const lim = (r.mu ?? 0) * Math.max(0, r.frictionOf.acc);
+          lo = -lim;
+          hi = lim;
+        }
+        const soft = r.soft ?? 0;
+        const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(J, p) - soft * r.acc) / (r.k + soft)));
+        const lambda = next - r.acc;
+        if (lambda === 0) continue;
+        r.acc = next;
+        push(J, p, lambda);
+        change = Math.max(change, Math.abs(lambda));
       }
-      if (inBlock.has(p)) continue;
-      const r = p.r;
-      if (!r.k || r.k <= 0) continue;
-      let lo = r.lo, hi = r.hi;
-      if (r.frictionOf) {
-        const lim = (r.mu ?? 0) * Math.max(0, r.frictionOf.acc);
-        lo = -lim;
-        hi = lim;
+      if (tolerance > 0) {
+        let largest = 0;
+        for (let q = 0; q < n; q++) largest = Math.max(largest, Math.abs(prep[q]!.r.acc));
+        if (change <= tolerance * largest) break;
       }
-      const soft = r.soft ?? 0;
-      const next = Math.min(hi, Math.max(lo, r.acc + (r.target - relVel(p) - soft * r.acc) / (r.k + soft)));
-      const lambda = next - r.acc;
-      if (lambda === 0) continue;
-      r.acc = next;
-      push(p, lambda);
-      change = Math.max(change, Math.abs(lambda));
     }
-    if (tolerance > 0) {
-      for (const p of prep) largest = Math.max(largest, Math.abs(p.r.acc));
-      if (change <= tolerance * largest) break;
+  };
+  /** g(Λ) now, and the scale of the terms it is made of (for a tolerance). */
+  const gNow = (): [number, number] => {
+    let g = 0, scale = 0, b = 0;
+    for (let i = 0; i < n; i++) {
+      const r = prep[i]!.r;
+      if (!r.acc) continue;
+      const w1 = relVel(J, prep[i]!), mean = (w0[i]! + w1) / 2;
+      g += r.acc * (mean - r.target) + 0.5 * (r.soft ?? 0) * r.acc * r.acc;
+      scale += Math.abs(r.acc) * (Math.abs(mean) + Math.abs(r.target));
+      b += r.acc * (w0[i]! - r.target);
     }
+    gRay = b;
+    return [g, scale];
+  };
+  let gRay = 0;
+  sweep();
+  let [g, scale] = gNow();
+  if (g > 1e-9 * scale) {
+    // not provably passive: again from nothing, which is (theorem A)
+    for (let i = 0; i < n; i++) { const p = prep[i]!; if (p.r.acc) { push(J, p, -p.r.acc); p.r.acc = 0; } }
+    warmKept = 0;
+    sweep();
+    [g, scale] = gNow();
+    if (g > 1e-9 * scale) {
+      // friction's moving bounds can still leave g above zero: along the ray s Λ, g(s) = a s² + b s with b = Λᵀ(w⁻ − t)
+      // and a = g(1) − b ≥ 0, least at s = −b / 2a (nothing, if b ≥ 0)
+      const b = gRay, a = g - b;
+      const sc = b < 0 && a > 0 ? Math.min(1, -b / (2 * a)) : 0;
+      for (let i = 0; i < n; i++) { const p = prep[i]!; if (p.r.acc) { push(J, p, (sc - 1) * p.r.acc); p.r.acc *= sc; } }
+      warmKept = -1;
+    }
+  }
+  // what each row did: its impulse times its mean relative velocity, exactly the kinetic energy it changed
+  let dK = 0, leak = 0;
+  for (let i = 0; i < n; i++) {
+    const r = prep[i]!.r, w1 = relVel(J, prep[i]!);
+    r.work = r.acc * (w0[i]! + w1) / 2;
+    dK += r.work;
+    if (r.target === 0 && !r.soft) leak += Math.max(0, r.acc * w1);
   }
   if (warm) {
     warm.clear();
     for (const r of rows) if (r.key && r.acc) warm.set(r.key, r.acc);
   }
+  return { passes, dK, leak, warmKept };
 }
 
 /**

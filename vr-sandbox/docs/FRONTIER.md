@@ -1,108 +1,153 @@
 # The frontier
 
-Forty-six inventions far past what is built, asked for in plain words, are stored as challenges to everything Ego is (`src/ganglia/frontier.ts`). Each is taken to the want under its words. None ends at "impossible": each is labelled for what it takes.
+What this physics does not yet do, does not know, or does not trust. A permanent document: entries are retired by a
+repair that lands as a law node with a test (docs/LAW-TREE.md), never by deletion. Each entry has an id that code,
+tests and the tree cite. Levels: V0–V6 validity and E0–E5 evidence are those of docs/AUDIT-2-FALSE-CONFIDENCE.md;
+anomaly levels are §3's; statuses (FORMALLY PROVED … OUTSIDE DOMAIN) are docs/NEXUS-STRESS.md §J's.
 
-| Label | Meaning | How many |
-|---|---|---|
-| made | someone has made it; the path is how | 13 |
-| buildable | known physics and methods, not yet made whole | 9 |
-| research | it waits on a discovery no law rules out | 6 |
-| relabelled | the words ask for something a law rules out (a 100%, a zero, a forever, a mass below nothing); she names the law and relabels the want as what meets it | 18 |
+Last reconciled: 2026-10-02, batch 2 of the audited evolution.
 
-Every item carries:
+## 1. Known defects (D-)
 
-- its bounds, computed by her own laws;
-- the nearest real thing, with its source;
-- a path, step by step;
-- what she learns next to blueprint every step herself.
+Behaviour the laws forbid and the realisation still shows. Each names the law it breaks, the measured size, where it
+is contained, and what retires it.
 
-What it does in her language of flows is grown by her real machinery. Some she sizes whole with her own workflows.
+| id | breaks | what | measured | contained by | retired by |
+|---|---|---|---|---|---|
+| D-contact-normal | F-3.2, F-1.3 | the collision detector's contact normal is found to a tolerance (Jolt's GJK/EPA, 1e-4 m, P-gjk-tolerance) and at centimetre separations leans off a flat face: a sideways force a flat surface cannot exert | 0.035 rad at most, 0.010 on average, on 24% of the normal impulse of a walking dog; a frictionless-floor centre-of-mass drift of 0.48 m in 9 s | repaired for watched assemblies as a rule over surfaces: a flat face (a box's, a hull's, a terrain triangle's) whose own normal the detector agrees with within P-normal-agree sets the normal, exact (`PhysicsWorld#surfaceNormal`); unwatched bodies keep the detector's normal, and so do edge-on-edge and curved-on-curved contacts, where there is no face to take | exact normals in Jolt's own solve (not settable from the bindings), or every body re-solved |
+| D-joint-residual | F-3.1, F-3.5 | a bilateral row's gap under a heavy load through a light part | the slider's 2.3 mm was a joint dropped from the mechanism for one tick (A-slider-residual, retired); what remains is the a dt² residual of the velocity rows before closure, 0.5 mm measured | the test cites the F-3.5 bound | a test at two step rates showing the dt² order (Q-step-rate); D-light-link |
+| D-light-link | F-3.1 | the row solver fails to converge on a 22 g rod between 0.9 kg and 120 kg bodies through ball joints | open finding #54 | such designs are not placed by Ego's designer | a mass-ratio-aware ordering or a direct solve of small islands (R-1's contract) |
+| D-rotor-housing | F-2.3.1, F-1 | a drive's rotor realised as reflected inertia on the horn's body (R-10) also spins when the *housing* turns about the axis, which a rotor does not: a pitching walker's body carries its four hip rotors' inertia as its own | 1.4e-3 kg m² against the dog body's own 7e-4 about pitch (3x); a 4-rotor deer the same | R-10's contract names the domain (the housing side's inertia about the axis large against Σ J); the gyroscopic term is left out for rotor-laden bodies (it was N times too large: a knees-still walker paddled 3 m on it); walker verdicts carry the caveat; the deer's is UNRESOLVED (A-deer-trot) | the rotor as its own degree of freedom coupled to the joint rate inside the velocity solve: a coupling row among three entities (Q-rotor-dof), which is also what real gears need |
+| D-servo-source | F-2.2 | retired in batch 3: a servo is a part (a case with a datasheet); its horn is a joint only on that part's shaft; it runs on the pack an intact wire reaches it from, at the volts there, and its current (idle to stall in proportion to its torque) is drawn from that pack and booked, its heat the pack's power less its work; `work.servos` is gone from the books | a walking dog's eight servos draw 0.8 to 2 A from a 4-cell AAA pack | the construction gate (K-6, K-9, K-10, C-12); held by firewall.test.ts | the current is a linear proxy (D-servo-current-proxy) |
+| D-servo-current-proxy | C-12 | a servo's current is idle plus (stall − idle) in proportion to the torque it gave, a linear DC-motor proxy with no winding resistance, back-EMF or thermal limit of its own | unmeasured against a real servo's draw | declared in C-12's limits; the books take the pack's power less the horn's work as the case's heat | a servo's own motor model (its winding, its gear ratio) under its proportional loop, with a thermal limit |
+| D-motor-channel | C-13, F-6 | a gearmotor's duty still comes from the world's control channels directly: its receiver is not a part, so its command has no body, no power and no latency, which a servo's command now has | the go-kart's throttle | the servo's chain is complete (C-13); the motor's is declared here | a receiver part and a lead to the motor's controller, as the servo has; the controls op then reaches a receiver's leads only |
+| D-tyre-pivot | F-2.2, R-9 | a wheel is a rigid cylinder on two contact points, so pivoting a loaded wheel about the vertical takes its full friction at both points (μ N × half the width: 7 N m for the kart's 300 N front axle) rolling or not; a real tyre's patch refreshes as it rolls and the twist it resists falls to the aligning torque of its slip angle | the kart's steering: a 60 kg servo on the kingpin stalls at 6 N m (found by the kart test after the servo from nowhere, 80 N m, was retired), so the kart steers by a 150 kg class servo, which also works in life | the kart turns as its tyres' two-point friction says; the datasheet servo is the one that would do the job on a real kart | a tyre contact as a patch with a slip-angle aligning torque, and the kart back on the servo its load really needs |
+| D-bores-as-geometry | K-5, M-4 | a part with a hole (a pillow block, a wheel's hub, a split clamp) has no hole in its collision shape, so a shaft in it would be two solids in one space; the gate exempts a pair joined by a bearing or a clamp (the joint's template declares the bore) | the kart's axles in their hangers, the clamps round its gearheads | K-5 names the exemption and judges a construction when it closes, its joints known | holes as geometry: a bored part's collision as a compound round the bore, and the exemption retired |
+| D-jolt-motor-work | F-2.1 | a servo on a body no assembly watches is driven by Jolt's own hinge motor, whose work is not read into the books (`GetTotalLambdaMotor` is read for gearmotors and eddy brakes only) | unmeasured | watched assemblies (every creature) are re-solved, where the servo row's work is booked | read the motor lambda for servos as for motors (bookMotors) |
+| D-correction-energy | F-2.1, R-9 | the potential energy that position corrections move (mechanism closure, the position pass) is booked nowhere, so the books of a walking dog show a gain and an equal friction heat that are the same noise | 3.5 mJ a tick on a walking dog, 1.27 J over 4 s each way | the ledger keeps it as `gained`, attributed to no cause (the point of the split) | book Σ m g·Δh of every position correction as the integrator's, signed, in a `corrected` term of the numerical book |
+| D-bond-float32 | F-1, F-2.1 | the bond constraints that hold a breakable part's segments together are solved by Jolt in single precision, and their impulse pairs do not cancel to better than that: the cluster fit reads a net impulse on a free body (`stats.clusterImpulse`) | 2.5e-8 of the angular momentum a tick on a 30 rad/s tumbling angle; 1.8e-6 of its energy in two seconds; a linear impulse of 6e-7 kg m/s a tick | the assembly test bounds the energy gain by the spin times the leak (dE = w . dL) and the leak by 32 ulps of |L| a tick; the angular damping that hid it is gone | tally the external impulses on a cluster (gravity, the world's own applied fields, the constraints to bodies outside it) in double precision instead of reading Jolt's segment velocities, so that internal pairs never enter (Q-external-tally) |
+| D-restitution-floor | F-4.6 | nothing bounces under a closing speed of 1 m/s (P-restitution-floor), a default without a source | all of a bounce from under 5 cm | marked provisional in the tree | a measured low-speed restitution for the material pairs in use, or an energetic restitution model |
+| D-minds-read-world | F-6, F-6.2 | creatures' minds read the world's state rather than sensor elements with latency and line of sight | FC-17 | the law node F-6.2 is marked `violated` | sensor nodes (F-6.1) realised; minds take only their readings (docs/NEXUS-MINDS.md §C forbids anything else) |
+| D-unstamped-beliefs | AUDIT-3 | Ego's habit and skill stores (`vrsb.habits`, `vrsb.skills`) are unversioned | not physical knowledge (they are about the user and the UI), left as they are | the stand's learning is stamped and quarantined on a physics change; reports carry the physics stamp | any physical content found in them gets the same stamp |
 
-## How far she gets herself
+Retired in batch 2: D-angular-damping (the damping is gone: a free spin slows only where something slows it; the
+books no longer carry a damping term), D-gravity-fallback (the magnet cutoff reads the scene's gravity and in free
+fall keeps every pair within reach; particles fall under the scene's gravity read each frame; foresight takes gravity
+as an argument), D-driven-exemption (the watchdog is an observer: a body's motion has a cause when the drives' work on
+it over the window covers the energy it holds, O-1; the list of driven bodies is gone), D-servo in part (hardware
+travel with the command's swing inside it, F-3.4 tested; the rotor's inertia felt, R-10; the 6 Hz loop floor gone,
+C-11; current and heat remain as D-servo-source).
 
-| Reach | How many | Which |
-|---|---|---|
-| blueprinted | 4 | a geodesic dome, an aerogel tent, a spinning habitat, the core of a living bridge |
-| grown | 4 | shape-shifting furniture, synthetic muscles, a translating earpiece's hearing, self-assembling drones' talk |
-| pathed | 38 | the rest: a sourced path, with what she learns next |
+Retired in batch 3: D-servo-source (above). Found in batch 3 and made unrepresentable rather than patched: a servo
+joint with no servo in it, drawing torque from no battery on commands the solver made from the world's time; a
+renderer drawing a servo case at every servo joint with no part behind it; parts placed inside one another (a walker's
+feet 6 mm into its shanks); a name ("dog-shaped") standing in for a machine. Each is now a failed construction at the
+first boundary it meets (docs/LAW-TREE-INTEGRITY.md), not a defect carried by an object. Also found and retired: the
+water drag was taken from a body's velocity *after* the buoyancy impulse, a step's worth of lift put on the velocity
+at once, so a foam plate screwed to a steel rail sank though together they floated (A-buoyancy-drag); a servo whose
+case was screwed to a frozen mount was driven by Jolt's own motor, which ran a 54 g arm away to its stop against the
+9 g case (every servo joint is now re-solved, A-frozen-mount); a rigid joint made with identity frames on a turned
+part turned the part back to its neighbour's orientation in one tick (the language's `fasten` now makes the second
+frame the same place in the world, A-fasten-frames).
 
-Highlights:
+## 2. Unmodelled physics (U-)
 
-- **Geodesic dome.** A two-frequency dome 10 m across has 26 hubs, 65 struts in two lengths (chord factors 0.54653 and 0.61803) and 40 panes. Each strut is a stocked hollow section, sized against buckling for a whole hub's share of snow and glass.
-- **Aerogel tent.** It keeps 20 °C inside at −30 °C outside on a resting body's 100 W. That takes 80 mm of silica aerogel over 10.4 m², by Fourier's law.
-- **Spinning habitat.** A ring of radius 223.6 m turning at 2 rpm gives 1 g at its rim, which moves at 46.8 m/s.
-- **Furniture and muscles** grow whole and real: a motor turning a lead screw, every part catalogued.
+What the model assumptions leave out. Not defects: the laws say so. Listed so that no claim is made where they apply.
 
-## Relabelled, and why
+- U-elastic: parts are rigid between declared hinges and seams (M-2); no elastic deflection, no vibration within a part, no stress waves. A beam's deflection is computed by the engineering layer for a design check, not simulated.
+- U-thermal-expansion, U-creep, U-fatigue: temperature changes stiffness and strength only through the material tables' limits; nothing grows, creeps or fatigues.
+- U-electrical-dynamics: circuits are solved quasi-statically (R-10's circuit solve); no inductance transients; motors have no electrical time constant.
+- U-fluid: water is drag on faces and buoyancy (C-9); no flow field, no wakes, no waves made by bodies.
+- U-air: air is a drag on faces at a Reynolds regime; no lift, no compressibility; nothing slows a free spin (rotational air drag is not modelled, and since batch 2 nothing stands in for it).
+- U-wear, U-lubrication, U-backlash: bearings have a static rating and a friction torque; no wear, no film, no play in gears.
+- U-sound: audio is an observation of the state, never a physical pressure field.
+- U-contact-compliance: contacts are rigid with a slop (P-slop); no Hertzian compliance, no contact area beyond the manifold's points.
+- U-servo-electrics: a servo's motor has no winding, no current, no back-EMF of its own (C-11 takes its damping as critical); its rotor's gyroscopic angular momentum (J w / N) is left out.
 
-| Asked | The law it runs into | Relabelled as |
-|---|---|---|
-| everlasting battery | conservation of energy; Arrhenius ageing never stops above 0 K | a century at a small draw (nickel-63 betavoltaic), or a store with a harvester |
-| invisibility cloak | causality and passivity bound a cloak's band | invisible in one band, or active camouflage tracked to the viewer |
-| instant medicine | blood goes round in about a minute | medicine that acts within a circulation, by a fast route |
-| filter taking 100% from a lake | the least work grows as ln(1/x) without end; rays aren't a substance | a filter train to each contaminant's safe limit |
-| zero-latency translator | causality: the deciding word may come last | a beat behind, or ahead by prediction and correction |
-| full-spectrum glasses | 1.22 λ / D: a metre of radio through 5 cm makes no image | a few more bands by sensors, shown to the eye |
-| ever-clean tableware | Young's angle; textures wear | shedding food, renewed by a rinse (liquid-infused) |
-| forcefield umbrella | only air pushes on rain | an air curtain: 446 W of air at 9 m/s a square metre |
-| radiation-proof thin suit | a 1 GeV proton runs about 3.2 m of water | a suit for solar storms, a shelter for cosmic rays |
-| Mars or Venus mask | the Armstrong limit, 6.3 kPa; Mars has 0.6 kPa | a pressure suit with an oxygen maker (three of NASA's MOXIE for one person) |
-| gravity boots | only mass makes gravity | a spinning habitat, and magnetic soles |
-| negative-mass alloy | everything weighed falls down, antimatter too | effective negative mass, within a band |
-| time-dilating container | halving time takes Earth inside 11.8 mm | a stasis box by cold: chemistry runs 7 × 10⁻²⁶ as fast at −196 °C |
-| light panels with near-infinite energy | a square metre of sun is 1000 W; a single junction turns 33.7% | absorb nearly all, convert what physics allows, use the heat |
-| sound-proof paint | the mass law: 1 mm of paint adds 0.03 dB | a wall with mass, a gap and a soft layer |
-| liquid-repelling asphalt | tyres wear textures and coatings | asphalt that drains water through itself |
-| frictionless gears | the second law: losses never zero | superlubric gears, friction a thousandth of oiled steel's |
-| scent released permanently | finite mass: life is mass over rate | years at a level you can just smell |
+## 3. Anomalies (A-)
 
-## What the frontier found in her, and what changed
+An unexplained disagreement between a prediction and a trusted observation is a persistent object: it is never
+deleted, only retired with its explanation. Levels (the default hypothesis is never new physics):
 
-| Found | Change |
-|---|---|
-| no straight-line actuator could be built here, so furniture and muscles were unbuildable | trapezoidal lead screws (ISO 2904) and the lead screw block; a screw efficiency law; an actuator workflow that sizes the screw, then the drive |
-| grown machines that weren't vehicles came out unsized ("not chosen") | the drive search is shared by vehicles and actuators; grow sizes shafts and pushes too, and frames, mounts and trays from stock |
-| a drive near its wire's limit could not be fused: the wire was sized for the current, but its fuse must be 125% of it and no bigger than the wire | the wire is sized for the fuse that protects it |
-| no word for sound: hearing was said as a push | a sound flow, microphones and loudspeakers |
-| no physics for bioluminescence, photosynthesis or cameras | ways for each |
-| the dome blueprint read a section's area under the wrong name | fixed, and the dome is pinned by a test |
-| a catalogue gap: the drives here give at most about 1 N·m continuous | named as what she learns next (gearmotors of tens of N·m) |
+- A0 numerical suspicion: seen once; may be rounding, a tolerance, a probe's own error.
+- A1 reproducible simulator anomaly: reproduces on the same realisation with the same inputs.
+- A2 independent realisation reproduces: a second, independent realisation of the same law shows it too.
+- A3 the model's own obligations are met and it still disagrees with a trusted measurement.
+- A4 an independent measurement replicates the disagreement.
+- A5 the competing explanations (numerical error, defect, regime, data, hidden writes, assumptions) are rejected by hostile investigation.
+- A6 a candidate theory is required.
 
-## Every law has a scale
+| id | level | prediction | observation | explanation | status |
+|---|---|---|---|---|---|
+| A-closure-drift | A1 → retired | a walker in zero gravity keeps its centre of mass (F-1.3) | it drifted; 99.98% from `closeMechanism` | a realisation defect: the island's drift was never undone (F-1.1.2) | retired by `undoClosureDrift`; held by momentum.test.ts |
+| A-floor-leak | A1 → retired | a walker on a frictionless floor keeps its horizontal centre of mass | 0.48 m in 9 s on the contact normal rows, friction rows exactly zero | D-contact-normal: the detector's normals lean | retired by `surfaceNormal`; held by momentum.test.ts and walker.test.ts |
+| A-slider-residual | A1 → retired | a slider's anchors stay within the F-3.5 bound | 2.33 mm on one tick; zero after closure on every other tick | the joint was dropped from the mechanism for that tick by a seated check that measured its gap along its own free axis (SEATED, 2 cm, against a load that had slid 2 cm along the slider); Jolt's constraint alone then drifted a tick's worth | retired: the seated check projects the gap onto the joint's constrained directions (anchorDofs); the common-point impulse law (F-1.1.1) was never the cause and is kept |
+| A-rotor-row | A1 → retired | a servo with its rotor sags a static load by load torque over stiffness | 0.044 rad against 0.029; a frictionless-floor centre-of-mass drift returned | the rotor as a soft row toward the joint's last rate was a split scheme: the step integrated the link without the rotor and the row recoupled them inelastically, and its equilibrium with the servo's implicit spring row was not the physical one; the momentum drift it made is unexplained and moot | retired by removing the realisation (R-10 is reflected inertia); the momentum leak of a momentum-exact angular row is recorded as not understood (Q-rotor-row-leak) |
+| A-gyro-paddle | A1 → retired | a trot with its knees still moves the walker little (its dragged feet cancel) | 3.2 m in 10 s | the reflected rotor's full tensor gave Jolt's gyroscopic term N times the rotor's real angular momentum, in directions it never couples | retired: the gyroscopic term is left out for rotor-laden bodies (R-10's contract); the walker then shuffles 0.5–0.9 m, see A-knees-still |
+| A-knees-still | A1, explained, open as a claim | "with its knees still a trot only paddles": under 0.3 m in 10 s | 0.5 to 0.9 m in 10 s under the real servo, whatever the rotor (0.62 m at no rotor) | the old bound was set from the old output (docs/LAW-TREE.md K-24) under false stops and an unphysical angular damping; under a compliant servo a body free to rock loads its rear-moving feet more, and dragged feet shuffle it along: physically plausible, not derived | the test now holds the order only (knees still moves less than with lift); a derivation of the shuffle from load asymmetry would make it a claim |
+| A-deer-trot | A1, UNRESOLVED | the long-legged walker trots five body lengths in ten seconds | it trots at P-rotor-per-stall = 5e-4 s²; at 1e-3 it stands; at 2e-3 (the estimate) it rolls over | the verdict depends on an estimate datum (the rotor at the horn) and on R-10's known error (a pitching body's inertia overstated 3x), so it is OUTSIDE DOMAIN of the realisation and UNRESOLVED on the datum; neither "walks" nor "falls" is claimed, and no test asserts either | the experiment that settles the datum: measure one 9 g servo's rotor inertia at the horn (spin-down, or a step response unloaded); the realisation that removes the domain limit: Q-rotor-dof |
+| A-free-spin-gain | A1 → retired | a torque-free tumbling bonded part keeps its energy | +1.8e-6 relative over 2 s once the damping was gone; Jolt's step added up to 0.045 J a tick and the assembly fit took it back to within 1e-6 J | D-bond-float32: the bonds' pairs in single precision; the fit reads their residue as an external impulse | retired with the bound (the test) and the instrument; the exact tally is Q-external-tally |
+| A-fake-servo | A1 → retired | a walker is a machine of parts: what moves it is in the world | a walker stood on servo joints between bars, no servo, no pack, no board; commands came from the solver's clock; a blind viewer called it a chassis with no working machine (97%) | every layer below the law tree could represent what the tree forbade: the connector took any two parts, the solver made commands from `this.time`, the renderer drew a case, the overlap went unjudged, the name was the identity | retired by the construction gate (K-1..K-11), the constructor's language (L-1), boards (C-13), the hardware table (O-2); held by firewall.test.ts (18 attacks) and makeable.test.ts |
+| A-buoyancy-drag | A1 → retired | a foam plate screwed to a steel rail floats when together they are lighter than the water they displace | the pair sank at 0.45 m/s; the plate alone floated | the drag was computed from the velocity after Jolt's buoyancy impulse (a step's lift at once on a 24 g body: 0.56 m/s it never kept), and capped at 90% of that momentum, it ate the lift | retired: the drag takes the velocity the body had before the impulse (`applyFluids`); the whale floats and swims |
+| A-frozen-mount | A1 → retired | a servo on a mount screwed to the bench holds its arm level | the arm ran away to the servo's stop (1.59 rad) | the 9 g case between the frozen mount and the arm was not re-solved (no cluster of two), so Jolt's iterative motor drove a light case against a heavier arm and never settled | retired: every servo joint seeds the mechanism re-solve (`prepareClusters`); the rules sag test holds on a frozen mount again |
+| A-trot-flip | A1, explained | a walker's trot with lift carries it forward | with a 120 g pack of AA cells it trotted 13 cm and flipped onto its back within 1.4 s; with 48 g of AAA cells it trots 1.6 m in 6 s | the 9 g servos' stall at the pack's volts against a 450 g machine two legs at a time: a design limit, not a defect | the dog's plan carries a 4-cell AAA pack; the AA pack is the deer's open question with its longer legs (A-deer-trot) |
+| A-bracket-glue | A1 → retired | a swimmer's joints hold | four bracket glue joints tore off in 5 s and three plates flopped to 75° | an 8 × 8 mm hot-melt patch on foam under a 2 N m servo (23 MPa in bending at the glue line) | retired by design: a strip glued across the plate's whole front face carries the arm, the arm the plate's full height; the whale swims 0.25 m in 10 s with no joint broken |
+| A-walker-gain | A1, explained | a walking dog's books close with its servos' work as the only source | gained 1.27 J and friction 1.27 J over 4 s, equal | D-correction-energy: position corrections' potential energy, 3.5 mJ a tick, booked nowhere, so the books see it as noise of both signs | open as D-correction-energy |
 
-The user's point: everything known came from humans with limited senses, measuring at the scales they could reach. Every law is exact only in a limit, and has exceptions in time, geometry or scale. So each law now carries the number that says where it holds, the deeper law it is the limit of, and its error against it (`scales.ts`; see [GANGLIA.md](GANGLIA.md)). She can also find a law herself, from units and her own measurements (`discover.ts`). The first law she found that way, the pendulum's, exposed a flaw in her world: slow pendulums froze at the top of their swing. That is fixed, and a rule now keeps it fixed.
+## 4. Open questions (Q-)
 
-## Worlds, lessons and a life
+- Q-rotor-dof: the exact realisation of a drive's rotor is a scalar degree of freedom with inertia J coupled rigidly to the joint's *relative* rate inside the velocity solve: a coupling row among three entities, which is what real gears (a gear row between two rotations with a ratio) also need. R-1's row kinds are pairwise today.
+- Q-rotor-row-leak: an angular soft row between two entities, momentum-exact by construction (a torque pair), drifted a walker's horizontal centre of mass on a frictionless floor when it realised the rotor. The realisation is gone; why a torque pair leaked linear momentum is not known. Either an entity in a cluster took the angular impulse about a point other than its centre, or the row's work accounting moved the fit. Worth a reproduction on a two-body test before any three-entity row is written.
+- Q-servo-damping: the servo loop's damping ratio is an estimate (critical); the motor's back-EMF through the gears sets it in reality; a 9 g servo's step response would give it.
+- Q-step-rate: the test rig runs at 90 Hz only; the residual-order obligations (F-3.5) are tested as a bound, not as a scaling. A rig at two rates would test the order.
+- Q-gjk-tolerance: the detector's tolerance cannot be set from the bindings; whether a smaller one would remove D-contact-normal for unwatched bodies is untested.
+- Q-restitution: no low-speed restitution data for the material pairs in use.
+- Q-support-stiffness: least support (R-8) assumes equal stiffness; the error for unequal supports is unbounded in the contract.
+- Q-external-tally: the cluster fit infers what the world did to a cluster from Jolt's velocity changes of its segments, which carry the bonds' single-precision residue; the exact form tallies the external impulses directly (gravity, fields the world applies, constraint lambdas to outside bodies) and never reads the internal ones.
+- Q-shuffle: on the walker as now built, a trot and a walk with the knees still (dragged feet) carry it further on concrete (2.9 m in 10 s) than the same gaits with lift (2.1 m), the reverse of the old order, which was never derived either. The physics of a compliant servo loading its rear-moving feet more (A-knees-still) is plausible; which order the laws require is not derived, so walker.test.ts asserts forward and upright for all four, and no order (docs/LAW-TREE.md K-24).
+- Q-gait-derivation: the walkers' rhythms, swings and lifts are design numbers. The command lead and gain per servo are now derived from the loop (C-11) at the rhythm; the rhythm itself should follow from Froude similarity (F-5.2) and the servo envelope (torque against speed), and the gait's stability from the leg's load feedback (task #74).
 
-What people ask of her beyond making (a sky-reef full of creatures, a cyberpunk bazaar, a chronicle village, lessons with ghost limbs and stress vision, a chess tree, a pilot sim, to chill on a beach, to be a dog) is stored in `src/assistant/asks.ts`. Each ask is read like any other request by `understand`, which takes it to:
+## 5. Unregistered
 
-- what it is: to be somewhere, to fill it with life, to become something, to learn, to make, to change the rules, to see the hidden, to feel a mood;
-- the capabilities it takes, each backed by the code that does it (checked by the tests) or marked not built;
-- what she does about it now.
+What the tree (`src/ganglia/tree/nodes.ts`) does not yet carry, from docs/LAW-TREE.md §K: the C-layer beyond
+materials and the servo (fasteners, springs, motors, batteries, magnets, thermal, welding, water and sand), the
+D-layer, R-4, R-5, R-6, the circuit solve, the engineering formulas as nodes with two realisations, the creature and
+place tables, mind constants, foresight, Jolt's remaining settings, the simulation settings as run records, fitted
+friction values as calibration nodes, the estimate sentinels, and the bare constants of world.ts, rigid.ts, stand.ts
+and mind.ts. Each lands as it is touched; none is cited as knowledge until it does. docs/NEXUS-STRESS.md §M moves
+M-1..M-5 from roots of the tree to roots of the rigid-body theory once theories are terms.
 
-Asked for a zero-gravity cockpit with time slowed, she turns gravity off and slows time at once. Asked for a beach, she grows its sand and sea and takes you there. A world whose physics is "broken" is given other constants instead: strange, but still a world things work in.
+## 6. Beliefs invalidated
 
-Over everything asked, what to build next is ranked by how many wants call for it, and built in that order:
+Batch 1: everything the stand learned before the physics stamp (`vrsb.stand` without a `physics` field) is
+quarantined; every report before the stamp is evidence about an unknown physics; "a walker on a frictionless floor
+moves less than 0.3 m" became the F-1.3 bound; "energy unexplained while a hand held a part was the hand's work" is
+gone; the one-number "integrator" became lost and made; Ego's "I stilled it" is gone.
 
-- **Ground** ranked first, so it was built first ([PLACES.md](PLACES.md)). Asked for a beach, she grows its sand and sea and takes you there.
-- **Lessons that check what you do** came next ([LESSONS.md](LESSONS.md)). Any design she can make becomes the steps of building it yourself, each shown by a guide and done only when done in your world.
-- **Swimmers with bodies** came next ([CREATURES.md](CREATURES.md)): real parts and rhythmic servos that swim by the water's push.
-- **Walkers that choose** came next ([CREATURES.md](CREATURES.md)): a dog and a deer on hobby servos that walk by their feet's grip and go where their wants take them. Making them walk found five flaws in the world, now fixed and held as rules.
+Batch 2: "the deer trots" (UNRESOLVED, A-deer-trot); "with its knees still a trot moves under 0.3 m" (a number from an
+output; the order is kept); "a free spin slows at 2% a second" (it does not); "a servo follows at least a 6 Hz loop"
+(it follows its stiffness over its inertia); "a servo's stops are at its command" (they are at its travel); "driven
+bodies are exempt from the watchdog" (a cause is a drive's work); every walker verdict now carries R-10's caveat on a
+pitching body's inertia.
 
-Now ranked first:
+Batch 3: "a servo joint is a servo" (it is a horn on a servo part, or nothing); "a creature's rhythm is the joint's"
+(it is a board's program, down a lead, one tick late); "the renderer shows the machine" (it shows what the document
+holds, and the document holds what the gate admitted); "a joint that cannot hold is a joint with a warning" (it is
+not a joint); "a part placed inside another is a bonded exception" (it is a failed construction); "lifting the feet
+is what makes a walk" (the order is open, Q-shuffle); "the swimmer floats on polyethylene" (it cannot carry its
+electronics; it is foam with a keel and ballast); "the dog carries four AA cells" (it carries AAA, or it flips).
 
-1. characters with minds (called for by 8 of the stored asks);
-2. plants, creatures that fly or crawl, and seeing what is hidden (6 each);
-3. buildings (4).
+## 8. The blind look
 
-## Ask her
+A picture of a machine is judged by an instance that was told nothing: what it sees, whether it looks like a working
+machine, what is missing. Its words are reported verbatim, never summarised by whoever built the thing. A verdict of
+"blocks" or "not functional" is a finding against the construction, and the construction, not the picture, is what is
+fixed. Batch 3's verdicts, before and after, are in docs/LAW-TREE-INTEGRITY.md §H.
 
-- *"what's on your frontier?"*
-- *"can you make an invisibility cloak?"*
-- *"blueprint for gravity boots"*
-- *"how would you build a geodesic dome?"*
-- *"where does kinetic energy break down?"*
-- *"I just want to chill on a beach"*
-- *"put a dog on the beach"*
-- *"spawn me in a simulation as a dog"*
-- *"teach me chess"*
+## 7. Revision burden
+
+A node's revision costs what its depth and its support cost: a fitted friction value is revised by a measurement; a
+law of layer 3 by evidence at A5 with every dependent claim re-run; an axiom by a demonstration that the tree built on
+it predicts worse than one built without it. No empirical node is immune; none is cheap in proportion to what rests
+on it. Ego wanting a design to work changes none of these costs. The deer is the batch's example: wanting it to trot
+bought it nothing; the datum it waits on is a measurement.

@@ -1,0 +1,11 @@
+{
+  "name": "Nexus Forge",
+  "short_name": "Forge",
+  "description": "Claude's forge: ask for anything and watch it designed and built from laws; supervise its flaws, gates and reports, in VR.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#04070b",
+  "theme_color": "#04070b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

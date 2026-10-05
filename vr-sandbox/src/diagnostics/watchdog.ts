@@ -61,12 +61,6 @@ export interface WatchOptions {
   settleTicks: number;
   /** Bodies held by a hand whose target is still: they must stop turning after `settleTicks`. */
   held: Set<string>;
-  /**
-   * Bodies an actuator is driving (a servo keeping a rhythm or following a command, a motor drawing current): they
-   * move because something moves them, so neither shaking in place (a walker's foot swinging) nor not coming to rest
-   * is wrong for them.
-   */
-  driven: Set<string>;
   /** Half-spaces bodies must stay in: n . p >= d - margin. */
   walls: { n: Vec3; d: number; margin: number }[];
 }
@@ -81,7 +75,9 @@ const WINDOW = 30;
 
 export class Watchdog {
   private found = new Map<string, Anomaly>();
-  private hist = new Map<string, { p: Vec3[]; speed: number[] }>();
+  private hist = new Map<string, { p: Vec3[]; speed: number[]; ke: number[]; drive: number[] }>();
+  /** The work drives did on each body this tick, J (observeDrives), read into the window by observe. */
+  private drives = new Map<string, number>();
   private e0: number | null = null;
   private eMax = -Infinity;
   private ticks = 0;
@@ -95,7 +91,7 @@ export class Watchdog {
   constructor(private info: Map<string, BodyInfo>, opts: Partial<WatchOptions> = {}) {
     this.opts = {
       gravity: [0, -9.81, 0], floorY: 0, flungSpeed: 20, budgetMs: 4, passive: false, settleTicks: Infinity,
-      held: new Set(), driven: new Set(), walls: [], ...opts,
+      held: new Set(), walls: [], ...opts,
     };
   }
 
@@ -112,6 +108,11 @@ export class Watchdog {
    * The electrical side, each tick: no motor carries more than its controller lets through, and no battery gains
    * charge (nothing here charges one), nor holds less than none or more than full.
    */
+  /** What the drives (servos, motors) put into each body this tick, J: the cause a moving body may have. */
+  observeDrives(work: Map<string, number>) {
+    this.drives = work;
+  }
+
   observePower(power: PowerState | undefined) {
     if (!power) return;
     for (const [id, m] of Object.entries(power.motors)) {
@@ -167,13 +168,16 @@ export class Watchdog {
         if (s < w.d - w.margin) this.flag('tunnel', b.id, w.d - s, w.margin, `${((w.d - s) * 1000).toFixed(0)} mm through a wall`);
       }
       const rot = wIw ?? info.mass * (spin * info.gyration) ** 2;
-      energy += 0.5 * (info.mass * speed * speed + rot) + info.mass * g * (b.p[1] - o.floorY);
+      const ke = 0.5 * (info.mass * speed * speed + rot);
+      energy += ke + info.mass * g * (b.p[1] - o.floorY);
       // history for jitter and rest
       let h = this.hist.get(b.id);
-      if (!h) this.hist.set(b.id, (h = { p: [], speed: [] }));
+      if (!h) this.hist.set(b.id, (h = { p: [], speed: [], ke: [], drive: [] }));
       h.p.push(b.p);
       h.speed.push(rim);
-      if (h.p.length > WINDOW) { h.p.shift(); h.speed.shift(); }
+      h.ke.push(ke);
+      h.drive.push(Math.max(0, this.drives.get(b.id) ?? 0));
+      if (h.p.length > WINDOW) { h.p.shift(); h.speed.shift(); h.ke.shift(); h.drive.shift(); }
       if (this.ticks > o.settleTicks && h.p.length === WINDOW) {
         const rms = Math.sqrt(h.speed.reduce((s, x) => s + x * x, 0) / WINDOW);
         const a = h.p[0]!, z = h.p[WINDOW - 1]!;
@@ -182,8 +186,9 @@ export class Watchdog {
           const n = spin > 2 ? (this.spinTicks.get(b.id) ?? 0) + 1 : 0;
           this.spinTicks.set(b.id, n);
           if (n >= 20) this.flag('spin', b.id, spin, 2, `still turning at ${spin.toFixed(1)} rad/s in a still hand`);
-        } else if (o.driven.has(b.id)) {
-          // driven: its motion has a cause
+        } else if (h.drive.reduce((s, x) => s + x, 0) >= h.ke.reduce((s, x) => s + x, 0) / WINDOW) {
+          // its motion has a cause: over the window a drive put at least the energy it holds into it (a walker's foot
+          // swinging, a motor's wheel turning); shaking nobody pays for has none
         } else if (rms > 0.01 && net < 0.002) {
           this.flag('jitter', b.id, rms, 0.01, `shaking in place at ${(rms * 1000).toFixed(0)} mm/s rms, going nowhere`);
         } else if (rim > 0.01) {
