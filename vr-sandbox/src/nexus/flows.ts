@@ -9,10 +9,11 @@
 // what its steps say, through the same world the person acts on, and every step's output, failure and time is kept.
 
 import { BACK, BEFORE, STRUCT, derive, edgesOf, nodesOf, type Board } from './boards';
+import { Workshop, scopeOf, truth, type Scope } from './generate';
 
 export type StepKind = 'trigger' | 'ai' | 'action' | 'check' | 'repeat';
 export interface Step { kind: StepKind; what: string }
-export type FlowEventKind = 'run' | 'built' | 'flaw' | 'note' | 'tick' | 'said';
+export type FlowEventKind = 'run' | 'built' | 'flaw' | 'note' | 'tick' | 'said' | 'made' | 'start' | 'cond';
 export interface FlowEvent { kind: FlowEventKind; text?: string; minutes?: number }
 export interface FlowApi {
   /** Do something in the room: returns what happened, in words; throws with why where it cannot. */
@@ -21,28 +22,36 @@ export interface FlowApi {
   ai(prompt: string, input: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }>;
   /** The numbers a check reads, as they stand now: flaws, gaps, parts, mass, rounds, failures, notes. */
   facts(): Record<string, number>;
+  /** What a condition reads as an expression: the facts, and the things made, to measure between. */
+  reader?(): Scope;
 }
 export interface StepRun { node: string; label: string; kind: StepKind | 'plain'; status: 'ok' | 'no' | 'failed' | 'skipped'; output: string; ms: number; round: number; by?: 'claude' | 'nexus' }
 export interface FlowRun { trigger: string; why: string; started: number; ended?: number; status: 'running' | 'done' | 'stopped' | 'failed'; rounds: number; steps: StepRun[] }
 
 // ---- triggers --------------------------------------------------------------------------------------------------------
-export const TRIGGERS = ['when I press run', 'when a build finishes', 'when a flaw is found', 'when a note is added', 'every 10 minutes', 'when I say go'] as const;
-/** What starts a trigger, from its words. */
-export function triggerOf(what: string): { kind: FlowEventKind; every?: number; phrase?: string } | null {
-  const t = what.toLowerCase().trim();
-  if (/\b(press|run|start|manual|button|by hand)\b/.test(t) && !/\bsay\b/.test(t)) return { kind: 'run' };
+export const TRIGGERS = ['when I press run', 'when a build finishes', 'when a flaw is found', 'when a note is added', 'when a shape is made', 'when the forge opens', 'every 10 minutes', 'every 30 seconds', 'when I say go', 'when load over 500 N'] as const;
+/** What starts a trigger, from its words: a press, a build, a flaw, a note, a shape made, the forge opening, a timer, a
+ *  phrase said, or a condition the moment it turns true. */
+export function triggerOf(what: string): { kind: FlowEventKind; every?: number; phrase?: string; cond?: string } | null {
+  const raw = what.trim(), t = raw.toLowerCase();
+  const say = t.match(/\bsay\s+["“]?(.+?)["”]?$/);
+  if (say) return { kind: 'said', phrase: say[1]!.replace(/[.!?]+$/, '').trim() };
+  if (/\b(forge|room|app)\b.*\b(opens?|starts?|begins?|loads?)\b|\b(opens?|starts?)\b.*\b(forge|room|app)\b|\bat (the )?start\b/.test(t)) return { kind: 'start' };
+  if (/\b(shape|thing|something)s?\b.*\b(is |are )?(made|placed|changed|generated)\b/.test(t)) return { kind: 'made' };
+  if (/\b(press|run|start|manual|button|by hand)\b/.test(t)) return { kind: 'run' };
   if (/\b(build|built|made|finish|done)\b/.test(t)) return { kind: 'built' };
   if (/\bflaws?\b|\bproblem/.test(t)) return { kind: 'flaw' };
   if (/\bnotes?\b|\breport/.test(t)) return { kind: 'note' };
   const ev = t.match(/every\s+(\d+(?:\.\d+)?)\s*(m|min|mins|minutes?|h|hours?|s|sec|seconds?)\b/);
   if (ev) { const n = Number(ev[1]), u = ev[2]!; return { kind: 'tick', every: /^h/.test(u) ? n * 60 : /^s/.test(u) ? n / 60 : n }; }
-  const say = t.match(/\bsay\s+["“]?(.+?)["”]?$/);
-  if (say) return { kind: 'said', phrase: say[1]!.replace(/[.!?]+$/, '').trim() };
+  // a condition: started the moment it turns true ("when load over 500 N", "whenever cap.mass > 50 g")
+  const cond = /^(?:when|whenever|as soon as|once|if)\s+(.+)$/i.exec(raw);
+  if (cond && /<|>|=|\b(under|over|above|below|at most|at least|is|less than|more than)\b/i.test(cond[1]!)) return { kind: 'cond', cond: cond[1]!.trim() };
   return null;
 }
 /** Whether an event starts a trigger: a phrase is heard inside what was said; a timer when its minutes come round. */
 export function starts(trigger: Step, e: FlowEvent): boolean {
-  const t = triggerOf(trigger.what); if (!t || t.kind !== e.kind) return false;
+  const t = triggerOf(trigger.what); if (!t || t.kind !== e.kind || t.kind === 'cond') return false;
   if (t.kind === 'said') return !!t.phrase && (e.text ?? '').toLowerCase().includes(t.phrase.toLowerCase());
   if (t.kind === 'tick') return !!t.every && (e.minutes ?? 0) > 0 && Math.abs((e.minutes! / t.every) - Math.round(e.minutes! / t.every)) < 1e-6;
   return true;
@@ -52,11 +61,19 @@ export function starts(trigger: Step, e: FlowEvent): boolean {
 const ALIAS: Record<string, string> = { flaw: 'flaws', problem: 'flaws', problems: 'flaws', gap: 'gaps', part: 'parts', weight: 'mass', kg: 'mass', round: 'rounds', failure: 'failures', fails: 'failures', note: 'notes', reports: 'notes' };
 const OPS: [RegExp, string][] = [[/\bis not\b|\bisn'?t\b|!=|≠/, '!='], [/\bat least\b|>=|≥/, '>='], [/\bat most\b|<=|≤/, '<='], [/\bmore than\b|\bover\b|\babove\b|>/, '>'], [/\bless than\b|\bunder\b|\bbelow\b|\bfewer than\b|</, '<'], [/==|=|\bis\b|\bequals?\b/, '=']];
 /** Whether a condition holds: "flaws = 0", "no flaws", "mass under 500", "parts at most 200", "output contains wheel". */
-export function evaluate(cond: string, facts: Record<string, number>, input: string): { ok: boolean; says: string } | { error: string } {
+export function evaluate(cond: string, facts: Record<string, number>, input: string, scope?: Scope): { ok: boolean; says: string } | { error: string } {
+  const plain = readPlain(cond, facts, input);
+  if (!('error' in plain)) return plain;
+  // read as an expression: units, and, or, sizes and masses of what is made, the gap between two things
+  const t = cond.trim().replace(/^(if|until|when|while|only if)\s+/i, '').replace(/,?\s*at most \d+ (times|rounds?)\.?$/i, '').trim();
+  try { const ok = truth(t, scope ?? scopeOf(facts)); return { ok, says: `${t}: ${ok ? 'holds' : 'does not hold'}` }; }
+  catch (e) { return /cannot read the condition/.test(plain.error) ? { error: `${plain.error} Read as an expression: ${(e as Error).message}` } : plain; }
+}
+function readPlain(cond: string, facts: Record<string, number>, input: string): { ok: boolean; says: string } | { error: string } {
   let t = cond.toLowerCase().trim().replace(/^(if|until|when|while|only if)\s+/, '').replace(/,?\s*at most \d+ (times|rounds?)\.?$/, '').trim();
   if (!t || /^(yes|always|true|ok)$/.test(t)) return { ok: true, says: 'always' };
   const parts = t.split(/\s+and\s+/);
-  if (parts.length > 1) { const rs = parts.map((p) => evaluate(p, facts, input)); const bad = rs.find((r) => 'error' in r); if (bad) return bad; const ok = rs.every((r) => (r as { ok: boolean }).ok); return { ok, says: rs.map((r) => (r as { says: string }).says).join(' and ') }; }
+  if (parts.length > 1) { const rs = parts.map((p) => readPlain(p, facts, input)); const bad = rs.find((r) => 'error' in r); if (bad) return bad; const ok = rs.every((r) => (r as { ok: boolean }).ok); return { ok, says: rs.map((r) => (r as { says: string }).says).join(' and ') }; }
   let m = t.match(/^(?:the )?(?:output|answer|it|input|result)?\s*(?:contains|says|mentions|has the word)\s+["“]?(.+?)["”]?$/);
   if (m) { const ok = input.toLowerCase().includes(m[1]!); return { ok, says: `the output ${ok ? 'says' : 'does not say'} "${m[1]}"` }; }
   m = t.match(/^(no|any|some|there are no|there are|there is a|there's a)\s+(\w+)$/);
@@ -131,7 +148,7 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
       else if (kind === 'ai') { const a = await api.ai(fill(step!.what || label(id), input), input, signal); r = { node: id, label: label(id), kind, status: 'ok', output: a.text, ms: 0, round: run.rounds, by: a.by }; }
       else if (kind === 'action') r = { node: id, label: label(id), kind, status: 'ok', output: await api.act(fill(step!.what || label(id), input), input, signal), ms: 0, round: run.rounds };
       else if (kind === 'check' || kind === 'repeat') {
-        const e = evaluate(step!.what || label(id), api.facts(), input);
+        const e = evaluate(step!.what || label(id), api.facts(), input, api.reader?.());
         if ('error' in e) throw new Error(e.error);
         if (kind === 'check') r = { node: id, label: label(id), kind, status: e.ok ? 'ok' : 'no', output: e.ok ? input || e.says : `Not on: ${e.says}`, ms: 0, round: run.rounds };
         else {
@@ -164,14 +181,16 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
 /** What the room's actions are called: the first word of an action step. */
-export const ACTIONS = ['make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait'] as const;
+export const ACTIONS = ['make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
 /** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
  *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
  *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
 export function guessStep(word: string): Step | null {
   const w = word.trim(), t = w.toLowerCase().replace(/\s+/g, ' ');
   if (!t) return null;
-  if (/^(when|whenever|every|on)\b/.test(t) && triggerOf(t)) return { kind: 'trigger', what: t };
+  if (/^(when|whenever|every|on|as soon as)\b/.test(t) && triggerOf(w)) return { kind: 'trigger', what: w };
+  // what makes, sizes, turns, joins or works out: said as it was said, its units and names kept
+  if (Workshop.handles(w) && !/^(if|until)\b/i.test(t) || /^if\s.+\sthen\s/i.test(t)) return { kind: 'action', what: w };
   if (/^(until|repeat|loop|keep going)\b/.test(t)) { const c = t.replace(/^(repeat|loop|keep going)\s*(until\s*)?/, 'until ').replace(/^until\s*$/, 'until flaws = 0'); return { kind: 'repeat', what: /at most \d+/.test(c) ? c : `${c}, at most 3 times` }; }
   if (/^(if|check|only if|is|are|any|no)\b/.test(t) || /\?$/.test(t)) return { kind: 'check', what: t.replace(/^(check|only if|if)\s+(whether\s+)?/, '').replace(/\?+$/, '').trim() || 'flaws > 0' };
   if (/^(ask|ai|claude|think|explain|summari[sz]e|decide|suggest|why|how)\b/.test(t)) { const q = w.replace(/^(ask|ai|claude)\b\s*:?\s*/i, '').trim() || w; return { kind: 'ai', what: `${q.replace(/[.?!]+$/, '')}: {input}` }; }
@@ -183,7 +202,8 @@ export function guessStep(word: string): Step | null {
 export const SUGGEST: Record<StepKind, [string, string][]> = {
   trigger: TRIGGERS.map((t): [string, string] => [t, t]),
   ai: [['How to fix it', 'Say, in one sentence, the one change to the ask that fixes the worst of these: {input}'], ['Say it plainly', 'Say this plainly, in one sentence: {input}'], ['Which part, and why', 'Which part should change first, and why? {input}'], ['Make it lighter', 'Say one change that makes it lighter without a new flaw: {input}']],
-  action: [['List the flaws', 'flaws'], ['Build again with it', 'again {input}'], ['Operate', 'operate'], ['Make a cart', 'make a cart'], ['Note it', 'note flaw: {input}'], ['Say it', 'say {input}'], ['Show the flaws', 'show flaws'], ['Board of the build', 'board'], ['Wait 5 s', 'wait 5 s']],
+  action: [['List the flaws', 'flaws'], ['Build again with it', 'again {input}'], ['Operate', 'operate'], ['Make a cart', 'make a cart'], ['Note it', 'note flaw: {input}'], ['Say it', 'say {input}'], ['Show the flaws', 'show flaws'], ['Board of the build', 'board'], ['Wait 5 s', 'wait 5 s'],
+    ['Set a load', 'set load = 200 N'], ['Cap the bearing', 'place plate named cap on bearing'], ['Size it by its law', 'size cap.h so 3 * load * cap.w / (2 * cap.d * cap.h^2) <= cap.yield / 2'], ['Report what is made', 'report']],
   check: ['flaws > 0', 'no flaws', 'no gaps', 'failures > 0', 'mass under 500', 'output contains wheel'].map((c): [string, string] => [c, c]),
   repeat: ['until flaws = 0, at most 3 times', 'until no gaps, at most 5 times', 'until failures = 0, at most 3 times'].map((c): [string, string] => [c, c]),
 };
@@ -225,6 +245,62 @@ export const TEMPLATES: Template[] = [
       { id: 'n', label: 'Note it', step: { kind: 'action', what: 'note flaw: {input}' } },
     ],
     links: [['t', 'o'], ['o', 'c'], ['c', 'n']],
+  },
+  {
+    id: 'random', title: 'Make something new, at random', about: 'Offline, no one in the middle: a matter, a base, something on it and pegs scattered round it, every size and turn drawn at random and kept to its rules. Run it again for another.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'm', label: 'A matter', step: { kind: 'action', what: 'material one of steel, aluminium, brass, wood, acrylic, carbon fibre' } },
+      { id: 'b', label: 'A base', step: { kind: 'action', what: 'place plate named base at 1.4 m, 0.3 m, 0 size random(150, 300) x random(150, 300) x random(6, 16) mm' } },
+      { id: 'r', label: 'Turn it', step: { kind: 'action', what: 'rotate base y randomly' } },
+      { id: 'c', label: 'Something on it', step: { kind: 'action', what: 'place one of ball, cone, cylinder, ring, cube named crown on base' } },
+      { id: 'k', label: 'Smaller', step: { kind: 'action', what: 'shrink crown by randint(2, 4)' } },
+      { id: 'p', label: 'A peg', step: { kind: 'action', what: 'place peg named peg size random(6, 14) x random(15, 50) mm' } },
+      { id: 'n', label: 'Nothing overlaps', step: { kind: 'action', what: 'rule no overlap' } },
+      { id: 's', label: 'Scatter the pegs', step: { kind: 'action', what: 'scatter peg randint(4, 14) on base turned randomly' } },
+      { id: 'w', label: 'What was made', step: { kind: 'action', what: 'report' } },
+    ],
+    links: [['t', 'm'], ['m', 'b'], ['b', 'r'], ['r', 'c'], ['c', 'k'], ['k', 'p'], ['p', 'n'], ['n', 's'], ['s', 'w']],
+  },
+  {
+    id: 'cap', title: 'Cap the bearing, sized by its load', about: 'A plate on the bearing, of the matter the load calls for, as thick as its bending stress allows at half its yield, σ = 3 F L / (2 b h²). Set the load again and it sizes itself again.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'l', label: 'The load', step: { kind: 'action', what: 'set load = 200 N' } },
+      { id: 'm', label: 'Matter by the load', step: { kind: 'action', what: 'if load > 500 N then material steel else material aluminium' } },
+      { id: 'p', label: 'Cap the bearing', step: { kind: 'action', what: 'place plate named cap on bearing' } },
+      { id: 's', label: 'Size it to hold', step: { kind: 'action', what: 'size cap.h so 3 * load * cap.w / (2 * cap.d * cap.h^2) <= cap.yield / 2' } },
+      { id: 'c', label: 'Light enough?', step: { kind: 'check', what: 'cap.mass under 50 g' } },
+      { id: 'e', label: 'Energy to lift it', step: { kind: 'action', what: 'energy lift cap 1 m' } },
+      { id: 'r', label: 'What was made', step: { kind: 'action', what: 'report' } },
+    ],
+    links: [['t', 'l'], ['l', 'm'], ['m', 'p'], ['p', 's'], ['s', 'c'], ['c', 'e'], ['e', 'r']],
+  },
+  {
+    id: 'shaft', title: 'A shaft through the bearing, sized by its torque', about: 'A shaft takes the bearing\'s bore and lies along its axis; its diameter from τ = 16 T / (π d³) at a third of its yield, its matter by the torque, and the energy to spin it.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'q', label: 'The torque', step: { kind: 'action', what: 'set torque = 20 N·m' } },
+      { id: 'm', label: 'Matter by the torque', step: { kind: 'action', what: 'if torque > 50 N·m then material steel else material aluminium' } },
+      { id: 'p', label: 'Shaft through it', step: { kind: 'action', what: 'place shaft named axle through bearing' } },
+      { id: 's', label: 'Size it to the torque', step: { kind: 'action', what: 'size axle.D so 16 * torque / (pi * axle.D^3) <= axle.yield / 3' } },
+      { id: 'e', label: 'Energy to spin it', step: { kind: 'action', what: 'energy spin axle 3000 rpm' } },
+      { id: 'r', label: 'What was made', step: { kind: 'action', what: 'report' } },
+    ],
+    links: [['t', 'q'], ['q', 'm'], ['m', 'p'], ['p', 's'], ['s', 'e'], ['e', 'r']],
+  },
+  {
+    id: 'walls', title: 'Two walls, joined into one', about: 'Two walls that meet at a corner, joined so they are one piece: moved, turned and stretched as one, where they meet counted once.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'm', label: 'Concrete', step: { kind: 'action', what: 'material concrete' } },
+      { id: 'a', label: 'A wall', step: { kind: 'action', what: 'place wall named wall1 at 1.6 m, 1 m, 0 size 1000 x 100 x 2000 mm' } },
+      { id: 'b', label: 'A wall meeting it', step: { kind: 'action', what: 'place wall named wall2 at 2.05 m, 1 m, 450 mm size 100 x 1000 x 2000 mm' } },
+      { id: 'j', label: 'Join them', step: { kind: 'action', what: 'join wall1 and wall2 as walls' } },
+      { id: 'r', label: 'Turn them as one', step: { kind: 'action', what: 'rotate walls 30 about y' } },
+      { id: 'w', label: 'What was made', step: { kind: 'action', what: 'report' } },
+    ],
+    links: [['t', 'm'], ['m', 'a'], ['a', 'b'], ['b', 'j'], ['j', 'r'], ['r', 'w']],
   },
   {
     id: 'blank', title: 'A new pipeline', about: 'A trigger to start from: add steps after it, each an AI call, an action, a check or a repeat.',
