@@ -240,7 +240,7 @@ type Place =
 /** A size kept as the law it was sized by: solved again whenever it is read, so it follows what it depends on. */
 interface Law { cond: string; lo: string | null; hi: string | null; half: boolean }
 interface Flip { axis: Axis; through: string | null }
-interface Spec { /** who made it: a pipeline's board, or you */ by?: string; /** a motor: its datasheet */ motor?: string; /** a mass its maker gives, kg */ massGiven?: number; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
+interface Spec { /** broken under a load put on it */ broken?: boolean; /** who made it: a pipeline's board, or you */ by?: string; /** a motor: its datasheet */ motor?: string; /** a mass its maker gives, kg */ massGiven?: number; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
 /** Shapes joined into one piece: named, moved, turned, flipped and stretched as one; its mass and volume the union's. */
 /** How two members of a piece hold together: fused into one solid, glued, or bolted; a group's members are not held. */
 interface Bond { a: string; b: string; how: 'fused' | 'glued' | 'bolted'; with?: string; why: string }
@@ -251,7 +251,9 @@ type JoinHow = 'any' | 'fuse' | 'glue' | 'bolt' | 'group';
 type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string }) & { by: string };
 /** A shape as it stands: its sizes, where its middle is, how it is turned (radians about x, y, z), its extents along
  *  x, y and z as turned, its extents as made, and what follows from them. */
-export interface Made { /** a motor: its datasheet, and how fast it was left turning, rad/s */ motor?: string; spin?: number;
+/** A chart: panels of one quantity each, its series over time. */
+export interface Chart { title: string; note: string; panels: { label: string; unit: string; series: { name: string; t: number[]; v: number[] }[] }[] }
+export interface Made { /** a motor: its datasheet, and how fast it was left turning, rad/s */ motor?: string; spin?: number; /** broken under a load put on it */ broken?: boolean;
   /** Why it is not computed: wholly inside a solid, or too small to be. Not drawn, not let go, not weighed, not judged. */ unseen?: string; name: string; kind: Kind; word: string; matter: Material | null; axis: Axis; dims: Record<string, number>; at: V3; turn: V3; local: { w: number; h: number; d: number }; scale: V3; w: number; h: number; d: number; volume: number; area: number; mass: number; text?: string; group?: string }
 /** A joined piece as it stands: its members, the box round them, and the union's volume and mass (exact, or sampled). */
 export interface Joined { name: string; members: string[]; at: V3; w: number; h: number; d: number; volume: number; mass: number; exact: boolean; within: number; axis?: Axis }
@@ -343,7 +345,7 @@ function motorFor(said: string): MotorData {
   return all.find((d) => /coreless/i.test(said) && /coreless/i.test(d.label)) ?? all.find((d) => /brushed/i.test(said) && /^Brushed/i.test(d.label)) ?? all[0]!;
 }
 interface Standing { name: string; header: { word: string; param: boolean; optional: boolean }[]; body: string[]; text: string; builtIn: boolean }
-const CALL_VERBS = /^(run|simulate|drop|push|let|calc|calculate|compute|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|if|action|actions|show|default|require)$/i;
+const CALL_VERBS = /^(run|simulate|drop|push|let|load|chart|repeat|for|while|parts|bom|calc|calculate|compute|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|if|action|actions|show|default|require)$/i;
 
 export class Workshop {
   private vars = new Map<string, string>(); private unitOf = new Map<string, string>(); private laws = new Map<string, Law>();
@@ -354,7 +356,9 @@ export class Workshop {
   /** Each motor's last run, and how fast it was left turning. */
   private runsKept = new Map<string, MotorRun>(); private spins = new Map<string, number>();
   /** The physics engine, once it is loaded; and the last motion it worked out, for the room to show. */
-  private J: Jolt | null = null; private track: SimTrack | null = null;
+  private J: Jolt | null = null; private track: SimTrack | null = null; private lastSim: SimOut | null = null; private chartKept: Chart | null = null;
+  /** The last chart asked for, taken once: the room draws it. */
+  takeChart(): Chart | null { const c = this.chartKept; this.chartKept = null; return c; }
   usePhysics(J: Jolt): void { this.J = J; }
   get hasPhysics(): boolean { return !!this.J; }
   /** The last motion worked out, taken once: the room shows it as it happened. */
@@ -445,7 +449,7 @@ export class Workshop {
         const c = f.through ? this.boxOf(f.through, over, busy, memo) : null; if (f.through && !c) throw new Error(this.noPart(f.through));
         const i = AX[f.axis], o = c ? c.at[i]! : 0; at = [...at] as V3; at[i] = 2 * o - at[i]!; turn = mirrorTurn(turn, f.axis);
       }
-      const made: Made = { name, kind: s.kind, word: s.word, matter: mt, axis, dims, at, turn, local, scale: [...k] as V3, ...g, ...box, mass: s.massGiven ?? (mt ? mt.density * g.volume : 0), ...(s.motor ? { motor: s.motor, spin: this.spins.get(name) ?? 0 } : {}), ...(s.text ? { text: s.text } : {}), ...(this.groupOf(name) ? { group: this.groupOf(name)!.name } : {}) };
+      const made: Made = { name, kind: s.kind, word: s.word, matter: mt, axis, dims, at, turn, local, scale: [...k] as V3, ...g, ...box, mass: s.massGiven ?? (mt ? mt.density * g.volume : 0), ...(s.broken ? { broken: true } : {}), ...(s.motor ? { motor: s.motor, spin: this.spins.get(name) ?? 0 } : {}), ...(s.text ? { text: s.text } : {}), ...(this.groupOf(name) ? { group: this.groupOf(name)!.name } : {}) };
       if (!over.size) memo.set(key, made);
       return made;
     } finally { busy.delete(`shape:${name}`); }
@@ -646,7 +650,7 @@ export class Workshop {
   private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; this.actions = z.actions; this.runsKept = z.runs; this.spins = z.spins; }
   // -- what a step says --------------------------------------------------------------------------------------------------
   /** Whether a step's words are generation's to do. */
-  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|action|actions|default|require|mount|support|cover|stack|run|simulate|drop|push)\b/i.test(t) || /^let (it |them )?go\b/i.test(t) || /^show\s+action\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
+  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|action|actions|default|require|mount|support|cover|stack|run|simulate|drop|push|chart)\b/i.test(t) || /^load\s+[\p{L}_][\p{L}\d_]*\s+with\s/iu.test(t) || /^let (it |them )?go\b/i.test(t) || /^repeat\s+.+?\s+times?\s*:/i.test(t) || /^for\s+each\b/i.test(t) || /^while\s+.+:/i.test(t) || /^(parts list|parts|list (the )?parts|bill of materials|bom|cut list)$/i.test(t) || /^show\s+action\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
   /** Whether a step's words are this workshop's: generation's, or a standing action it knows. */
   does(line: string): boolean { return Workshop.handles(line) || this.actions.has(line.trim().split(/\s+/)[0]!.toLowerCase()); }
   /** The standing actions it knows: each one's name, how it is called, and whether it is its own or yours. */
@@ -741,6 +745,21 @@ export class Workshop {
       const F = num(m[2]!, this.reader()), i = AX[(m[4] ?? 'x') as Axis], f: V3 = [0, 0, 0]; f[i] = m[3] ? -F : F;
       return this.letGo(3, { name: m[1]!, force: f, seconds: m[5] ? num(m[5], this.reader()) : 0.2 });
     }
+    // loops: the same steps again, over things, or while a condition holds
+    if ((m = /^repeat\s+(.+?)\s+times?\s*:\s*([\s\S]+)$/i.exec(t))) { const n = Math.round(num(m[1]!, this.reader())); if (!(n >= 1 && n <= 200)) throw new Error('Repeat 1 to 200 times.'); return this.loop(`Repeated ${n} times`, Array.from({ length: n }, (_, k) => ({ i: String(k + 1) })), m[2]!); }
+    if ((m = /^for\s+each\s+([\p{L}_][\p{L}\d_]*)(?:\s+in\s+(.+?))?\s*:\s*([\s\S]+)$/iu.exec(t))) {
+      const p = m[1]!, names = m[2] ? m[2].split(/\s*,\s*|\s+and\s+/).map((x) => x.trim()).filter(Boolean) : [...this.specs.keys()].filter((k) => k === p || k.startsWith(`${p}_`) || new RegExp(`^${p}\\d+$`).test(k));
+      if (!names.length) throw new Error(`Nothing made here is named ${p}, or ${p}_2, ${p}_3, ….`);
+      return this.loop(`For each of ${names.length} (${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''})`, names.map((n, k) => ({ it: n, i: String(k + 1) })), m[3]!);
+    }
+    if ((m = /^while\s+(.+?)\s*:\s*([\s\S]+?)(?:\s*,?\s*at most\s+(\d+)\s+times?)?$/i.exec(t))) {
+      const cap = Math.min(200, Number(m[3] ?? 50)), cond = m[1]!; let k = 0; const outs: string[] = [];
+      while (this.holds(cond)) { if (k >= cap) return `While ${cond}: done ${k} times, at most ${cap}, and it still holds. ${outs.at(-1) ?? ''}`; k++; for (const st of m[2]!.split(/\s*;\s*/).filter(Boolean)) outs.push(this.step(this.bake(st.replace(/\{i\}/g, String(k))))); }
+      return `While ${cond}: done ${k} time${k === 1 ? '' : 's'}, until it no longer held.${outs.length ? ` Last: ${outs.at(-1)!.split(/(?<=[.;])\s/)[0]}` : ''}`;
+    }
+    if (/^(?:parts list|parts|list (?:the )?parts|bill of materials|bom|cut list)$/i.test(t)) return this.partsList();
+    if ((m = /^load\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+at\s+(?:the\s+|its\s+)?(middle|centre|center|end))?$/iu.exec(t))) return this.loadStep(m[1]!, num(m[2]!, this.reader()), (m[3] ?? 'middle').toLowerCase());
+    if ((m = /^chart\s+(.+)$/i.exec(t))) return this.chartStep(m[1]!.trim());
     if (/^action\s/i.test(t)) return this.define(t);
     if (/^actions$/i.test(t)) return `Standing actions: ${this.standing().map((a) => `${a.call} (${a.steps} steps${a.builtIn ? '' : ', yours'})`).join('; ')}. "show action <name>" says how one is worked out.`;
     if ((m = /^show\s+action\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const a = this.actions.get(m[1]!.toLowerCase()); if (!a) throw new Error(`No action named ${m[1]}: ${[...this.actions.keys()].join(', ')}.`); return `${this.callForm(a)}: ${a.body.map((b, k) => `${k + 1}. ${b}`).join(' ')}`; }
@@ -826,10 +845,99 @@ export class Workshop {
     // where they ended is where they are: a piece's moves written into its members first
     for (const g of this.groups.values()) if (!identity(g)) this.bakeIn(g);
     for (const p of out.parts) { const sp = this.specs.get(p.name); if (!sp) continue; sp.place = { how: 'at', x: `${p.at[0]}`, y: `${p.at[1]}`, z: `${p.at[2]}` }; sp.turn = [`${p.turn[0]}`, `${p.turn[1]}`, `${p.turn[2]}`]; sp.flips = []; }
-    this.track = out.track;
+    this.track = out.track; this.lastSim = out;
     const r = (v: number) => mm(v), still = out.ends.filter((e) => e.moved < 0.001 && e.turned < 0.01), moved = out.ends.filter((e) => !still.includes(e)).sort((x, y) => y.moved - x.moved);
     const says = moved.slice(0, 8).map((e) => `${e.name} ${e.dropped > 0.002 ? `fell ${r(e.dropped)}` : `moved ${r(e.moved)}`}${e.turned > 0.05 ? `, turning ${deg(e.turned)}` : ''}, at most ${+e.speed.toPrecision(3)} m/s, ${e.resting ? 'and came to rest' : 'still moving'}`);
     return `${push ? `Pushed ${push.name} with ${+Math.hypot(...push.force).toPrecision(3)} N for ${push.seconds} s, and let` : 'Let'} ${things.length} thing${things.length === 1 ? '' : 's'} go for ${+out.seconds.toPrecision(3)} s${out.restedAt !== null ? `, all at rest by ${+out.restedAt.toPrecision(3)} s` : ''} (Jolt rigid bodies, the build fixed where it stands, the floor at 0): ${says.length ? says.join('; ') : 'nothing moved: all of it stands'}${moved.length > 8 ? `; and ${moved.length - 8} more` : ''}${still.length && moved.length ? `; ${still.length} stood still` : ''}.${out.hulls.length ? ` ${[...new Set(out.hulls)].join(', ')} ${out.hulls.length === 1 ? 'is' : 'are'} let go as the hull round ${out.hulls.length === 1 ? 'it' : 'them'}.` : ''}${skipped.length ? ` Not let go: ${skipped.join(', ')} (surfaces have no mass; what is unseen is not computed).` : ''}`;
+  }
+  /** The same steps again: once for each binding, {i} its count and {it} the thing it is over. */
+  private loop(head: string, binds: Record<string, string>[], body: string): string {
+    const steps = body.split(/\s*;\s*/).map((x) => x.trim()).filter(Boolean), outs: string[] = [];
+    for (const b of binds) for (const st of steps) { const line = st.replace(/\{(\w+)\}/g, (all, k: string) => b[k] ?? all); try { outs.push(this.step(this.bake(line))); } catch (e) { throw new Error(`${head}: stopped at ${Object.values(b).join(', ')} ("${line.slice(0, 80)}"): ${(e as Error).message}`); } }
+    return `${head}: ${outs.length} step${outs.length === 1 ? '' : 's'} done. Last: ${(outs.at(-1) ?? '').replace(/ Now: .*$/, '').split(/(?<=[.;])\s/)[0]}`;
+  }
+  /** Everything made, as it would be bought and cut: each thing's shape, size, matter and mass; each piece and what
+   *  holds it; each motor's sheet; totals by matter. */
+  private partsList(): string {
+    const { made } = this.all(), seen = made.filter((m) => !m.unseen), rows: string[] = [], byMatter = new Map<string, { n: number; mass: number; vol: number }>();
+    const stock = (m: Made) => {
+      const d = m.dims, r = (v: number) => +(v * 1e3).toPrecision(3);
+      if (m.motor) { const sh = MOTORS[m.motor]!; return `${sh.label}${sh.price ? `, seen at ${sh.price.amount} ${sh.price.currency} (${sh.price.seen})` : ''}`; }
+      if (m.kind === 'box') { const [a, b, c] = [d.w!, d.d!, d.h!].sort((x, y) => x - y); return a <= 0.4 * b ? `${r(b)} × ${r(c)} mm cut from ${r(a)} mm sheet` : `${r(a)} × ${r(b)} × ${r(c)} mm block`; }
+      if (m.kind === 'cylinder') return d.h! > d.D! ? `Ø${r(d.D!)} mm bar, ${r(d.h!)} mm long` : `Ø${r(d.D!)} mm disc, ${r(d.h!)} mm thick`;
+      if (m.kind === 'tube') return `Ø${r(d.D!)} × ${r(d.wall!)} mm tube, ${r(d.h!)} mm long`;
+      if (m.kind === 'sphere') return `Ø${r(d.D!)} mm ball`;
+      return `${m.word} ${DIMS[m.kind].map((k) => `${r(d[k]!)}`).join(' × ')} mm`;
+    };
+    for (const m of seen) { if (!m.matter) continue; rows.push(`${m.name}: ${stock(m)}, ${m.matter.name}, ${kg(m.mass)}${m.broken ? ' (broken)' : ''}`); const t = byMatter.get(m.matter.name) ?? { n: 0, mass: 0, vol: 0 }; t.n++; t.mass += m.mass; t.vol += m.volume; byMatter.set(m.matter.name, t); }
+    if (!rows.length) return 'Nothing made here has matter to list.';
+    const held = (g: Group) => { const n: Record<string, number> = {}; for (const x of g.bonds ?? []) n[x.how] = (n[x.how] ?? 0) + 1; return Object.entries(n).map(([k, v]) => `${v} ${k}`).join(', ') || 'held'; };
+    const pieces = [...this.groups.values()].map((g) => (g.loose ? `${g.name} (grouped, not held): ${g.members.join(', ')}` : `${g.name}: ${g.members.join(' + ')}, ${held(g)}`));
+    const total = [...byMatter.values()].reduce((a, x) => a + x.mass, 0);
+    this.vars.set('parts.count', String(rows.length)); this.vars.set('parts.mass', String(total)); this.unitOf.set('parts.mass', 'kg');
+    const hidden = made.filter((m) => m.unseen).map((m) => m.name);
+    return `Parts list, ${rows.length} part${rows.length === 1 ? '' : 's'}, ${kg(total)}: ${rows.join(' · ')}.${pieces.length ? ` Pieces: ${pieces.join(' · ')}.` : ''} By matter: ${[...byMatter].map(([k, x]) => `${k} ${x.n} part${x.n === 1 ? '' : 's'}, ${kg(x.mass)}, ${+(x.vol * 1e6).toPrecision(3)} cm³`).join('; ')}.${hidden.length ? ` Not listed, not computed: ${hidden.join(', ')}.` : ''} No prices are kept for matters; a motor's is the one seen for it.`;
+  }
+  /** A load put on a thing: what it rests on found from what touches its bottom, and the beam law that fits. Between
+   *  two supports, simply supported (M = F a b / L, deflection F a² b² / (3 E I L)); past its last support, a
+   *  cantilever (M = F a, deflection F a³ / (3 E I)); over a support, bearing on it (σ = F / A). Bending stress
+   *  σ = M c / I of its section across the span: a rectangle b h³ / 12, a round π D⁴ / 64, a tube π (D⁴ - d⁴) / 64.
+   *  Below its yield it holds, by a factor; past it, it bends for good; past its ultimate, it breaks. Its own weight
+   *  is not added: add it to the load ("with 500 N + cap.mass * g"). Its section is read from its box along x or z. */
+  private loadStep(name: string, F: number, where: string): string {
+    const s = this.specOf(name), X = this.all().made.find((m) => m.name === name)!; if (!X.matter) throw new Error(`${name} is a surface: it has nothing to bear a load with.`);
+    const own = this.groupOf(name)?.members ?? [name], others: Box3[] = [...this.all().made.filter((m) => !own.includes(m.name) && !m.unseen), ...this.world.parts()];
+    const along = X.w >= X.d ? 0 : 2, across = along === 0 ? 2 : 0, ext = [X.w, X.h, X.d], bottom = X.at[1] - X.h / 2;
+    const lo = X.at[along]! - ext[along]! / 2, hi = X.at[along]! + ext[along]! / 2, p = where === 'end' ? hi : X.at[along]!;
+    const patches: { lo: number; hi: number; area: number; by: string }[] = [];
+    if (bottom <= 1e-3) patches.push({ lo, hi, area: X.w * X.d, by: 'the floor' });
+    for (const o of others) {
+      if (Math.abs(o.at[1] + o.h / 2 - bottom) > 1e-3) continue;
+      const a0 = Math.max(lo, o.at[along]! - [o.w, o.h, o.d][along]! / 2), a1 = Math.min(hi, o.at[along]! + [o.w, o.h, o.d][along]! / 2);
+      const c0 = Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - [o.w, o.h, o.d][across]! / 2), c1 = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + [o.w, o.h, o.d][across]! / 2);
+      if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
+    }
+    if (!patches.length) throw new Error(`Nothing holds ${name} up: nothing touches its bottom. Let it go to see where it falls.`);
+    const mt = X.matter, E = mt.E, d = X.dims, round = X.kind === 'cylinder' || X.kind === 'tube';
+    let law: string, M = 0, defl = 0, sigma: number;
+    const over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9);
+    // its section across the span: depth up and down, width across
+    const depth = X.h, width = ext[across]!;
+    const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
+    if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
+    else {
+      const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
+      if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
+      else { const q = (left ?? right)!, arm = left ? p - q.hi : q.lo - p; M = F * arm; defl = (F * arm ** 3) / (3 * E * I); law = `a cantilever ${mm(arm)} out past ${q.by}: M = F a`; }
+      sigma = (M * c) / I;
+    }
+    const factor = mt.yield / sigma, breaks = sigma >= mt.ultimate, yields = !breaks && sigma >= mt.yield;
+    const keep = (k: string, v: number, u?: string) => { this.vars.set(`${name}.${k}`, u ? `${v} ${u}` : String(v)); if (u) this.unitOf.set(`${name}.${k}`, u); else this.unitOf.delete(`${name}.${k}`); };
+    keep('stress', sigma / 1e6, 'MPa'); keep('factor', +factor.toPrecision(4)); keep('deflection', defl * 1e3, 'mm'); keep('broken', breaks ? 1 : 0);
+    s.broken = breaks || undefined;
+    const MPa = (v: number) => `${+(v / 1e6).toPrecision(3)} MPa`;
+    return `${+F.toPrecision(4)} N on ${name}${where === 'end' ? ' at its end' : ''}: ${law}${M ? `, ${+M.toPrecision(3)} N·m, σ = M c / I = ${MPa(sigma)}` : `, ${MPa(sigma)}`}${defl ? `, bending ${mm(defl)} under it` : ''}. ${breaks ? `It breaks: past the ${MPa(mt.ultimate)} ${mt.name} takes before it breaks.` : yields ? `It yields: past its ${MPa(mt.yield)} yield it bends for good (it holds ${MPa(mt.ultimate)} before it breaks).` : `It holds, ${+factor.toPrecision(3)} times over its yield of ${MPa(mt.yield)}.`} Its own weight is not added to the load.`;
+  }
+  /** A chart of what was worked out over time: a motor's run, or the last fall. */
+  private chartStep(what: string): string {
+    const name = what.replace(/^(the|its)\s+/i, '').trim(), run = this.runsKept.get(name);
+    if (run) {
+      const rpm = run.rpm.some((v) => v > 0);
+      this.chartKept = { title: `${name}: ${run.label}`, note: `${run.V} V for ${run.seconds} s against ${run.load} N·m${run.jacket ? `, cooled by ${run.jacket.liquid}` : ''}${run.overheated !== null ? `; its winding passed ${run.maxWinding} °C at ${+run.overheated.toPrecision(3)} s` : ''}`, panels: [
+        ...(rpm ? [{ label: 'Speed (rpm)', unit: 'rpm', series: [{ name: 'speed', t: run.t, v: run.rpm }] }] : []),
+        { label: 'Current (A)', unit: 'A', series: [{ name: 'current', t: run.t, v: run.current }] },
+        { label: 'Temperature (°C)', unit: '°C', series: [{ name: 'winding', t: run.t, v: run.winding }, { name: 'housing', t: run.t, v: run.housing }] },
+      ] };
+      return `Charted ${name}'s run: ${rpm ? 'speed, ' : ''}current and temperature over its ${run.seconds} s, each on its own scale.`;
+    }
+    if (/^(fall|falls|the fall|motion|heights|drop|let go)$/i.test(name) || this.lastSim?.track.names.includes(name)) {
+      const sim = this.lastSim; if (!sim) throw new Error('Nothing has been let go yet: "simulate 3 s" first.');
+      const tr = sim.track, ys = tr.names.map((n, i) => ({ n, v: tr.frames.map((f) => f.poses[i]!.at[1]) }));
+      const pick = this.lastSim!.track.names.includes(name) ? ys.filter((y) => y.n === name) : ys.sort((a, b) => (b.v[0]! - b.v.at(-1)!) - (a.v[0]! - a.v.at(-1)!)).slice(0, 8);
+      this.chartKept = { title: pick.length === 1 ? `${pick[0]!.n}: its height as it fell` : 'Heights as they fell', note: `${tr.frames.length} moments over ${+sim.seconds.toPrecision(3)} s, Jolt rigid bodies${ys.length > pick.length ? `; the ${pick.length} that fell furthest of ${ys.length}` : ''}`, panels: [{ label: 'Height (m)', unit: 'm', series: pick.map((y) => ({ name: y.n, t: tr.frames.map((f) => f.t), v: y.v })) }] };
+      return `Charted ${pick.length === 1 ? `${pick[0]!.n}'s height` : `the heights of the ${pick.length} that fell furthest`} over ${+sim.seconds.toPrecision(3)} s.`;
+    }
+    throw new Error(`Nothing to chart as "${what}": a motor that has run ("chart m"), or the last fall ("chart fall").`);
   }
   /** Each motor's last run, for a chart. */
   runs(): Map<string, MotorRun> { return this.runsKept; }
@@ -864,6 +972,9 @@ export class Workshop {
       s.dims[key] = k === 'r' ? `2 * (${expr})` : expr; delete s.laws[key];
       return `${s.name}'s ${key} = ${mm(this.value(`${s.name}.${key === 'h' ? 't' : key}`))}. ${this.check(s.name)}.`;
     }
+    // set from itself ("n = n + 1"): worked out now, from what it is now, and kept as that number
+    const self = lex(expr).some((x) => x.t === 'id' && x.v === name), was = this.unitOf.get(name);
+    if (self) { const now = num(expr, this.reader()); this.vars.set(name, String(now)); this.laws.delete(name); if (!was) this.unitOf.delete(name); const k = was ? UNITS.find(([w]) => w === was)?.[1] ?? 1 : 1; if (was) this.vars.set(name, `${now / k} ${was}`); return `${name} = ${this.show(name, now)}.`; }
     this.vars.set(name, expr); this.laws.delete(name);
     const v = this.value(name), u = this.unitFor(expr); if (u) this.unitOf.set(name, u); else this.unitOf.delete(name);
     return `${name} = ${this.show(name, v)}.${this.follows()}`;

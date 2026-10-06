@@ -110,6 +110,7 @@ export const CALLS: CallGroup[] = [
     c('Run it hard', 'run m at 24 V for 10 min against 0.3 N·m', 'past its rating its winding heats past its limit, and it says when'),
     c('Run it cooled', 'run m at 24 V for 10 min against 0.3 N·m cooled by water at 2 L/min', 'a jacket of liquid carries its heat off: laminar or turbulent by its Reynolds number'),
     c('Cooled by oil', 'run m for 60 s against 0.2 N·m cooled by oil at 1 L/min from 30 °C', 'water, ethylene glycol, glycol and water, engine oil'),
+    c('Chart its run', 'chart m', 'speed, current and temperature over time, each on its own scale'),
     c('If it runs hot, cool it', 'if m.temp > 120 then run m at 24 V for 10 min against 0.3 N·m cooled by water at 2 L/min', 'a condition chooses how it runs'),
   ] },
   { id: 'physics', name: 'Let it go: physics', short: 'Physics', kind: 'action', says: 'real rigid-body physics (Jolt) over what is made: it falls, lands, slides, tips and comes to rest, by what each is made of; shown in the room as it happened', calls: [
@@ -117,6 +118,21 @@ export const CALLS: CallGroup[] = [
     c('Drop one', 'drop s from 0.5 m', 'raised so much, then let go with the rest'),
     c('Push one', 'push s with 20 N along x for 0.2 s', 'a force on it for so long, then let go'),
     c('Push the other way', 'push base with 50 N along -z', 'any axis, either way'),
+    c('Chart the fall', 'chart fall', 'heights over time of the ones that fell furthest'),
+  ] },
+  { id: 'loops', name: 'Loops & lists', short: 'Loops', kind: 'action', says: 'the same steps again: so many times, over each of a kind, or while a condition holds; {i} counts, {it} is the thing; and the list of all that is made', calls: [
+    c('Repeat', 'repeat 4 times: place cube named k{i} at {i} * 150 mm + 2 m, 0.3 m, 1 m size 50 mm', '{i} is 1, 2, 3, 4'),
+    c('For each of a kind', 'for each post: rotate {it} y 15', 'every post, post_2, post3, …: {it} is each'),
+    c('For each, named', 'for each p in a, b, c: expand {it} y by 10 mm', 'over the ones you name'),
+    c('While it holds', 'while load < 1 kN: set load = load * 2', 'until it no longer holds; at most 50 times unless said'),
+    c('While, at most', 'while s.h < 200 mm: grow s by 1.5, at most 10 times', 'a cap on how many'),
+    c('Parts list', 'parts list', 'each part as bought and cut, its matter and mass; each piece and what holds it; totals by matter'),
+  ] },
+  { id: 'strength', name: 'Loads & strength', short: 'Strength', kind: 'action', says: 'a load put on a thing: what it rests on found from what touches it, the beam law that fits, its stress, its bend, and whether it holds, yields or breaks', calls: [
+    c('Load it', 'load plank with 200 N', 'between two supports: simply supported, M = F a b / L'),
+    c('Load its end', 'load plank with 50 N at the end', 'past its last support: a cantilever, M = F a'),
+    c('Load it on what holds it', 'load cap with 200 N', 'over a support: bearing, σ = F / A'),
+    c('With its own weight', 'load plank with 200 N + plank.mass * g', 'its weight added to the load'),
   ] },
   { id: 'rules', name: 'Rules & conditions', short: 'Rules', kind: 'check', says: 'what must hold: a check lets the pipeline on only where it holds; a rule undoes a step that breaks it', calls: [
     c('If, then, else', 'if load > 500 N then material steel else material aluminium', 'a step chosen by a condition'),
@@ -134,6 +150,7 @@ export const CALLS: CallGroup[] = [
     c('How a motor ran', 'm.temp under 155 and m.rpm over 5000 rpm', 'm.rpm, current, torque, temp, case, power, output, efficiency, energy, heat, overheated, coolant_out, coolant_heat, pump'),
     c('Where it came to rest', 's.bottom at most 1 mm', 'read after it is let go: what is on the floor, what stands'),
     c('Whether it is computed', 's.unseen is 0', '1 where it is wholly inside a solid, or too small to be'),
+    c('Whether it holds a load', 'cap.factor at least 2', 'after "load": stress, factor, deflection, broken'),
   ] },
   { id: 'energy', name: 'Energy', short: 'Energy', kind: 'action', says: 'what it takes, by its law', calls: [
     c('Lift', 'energy lift cap 1 m', 'E = m g h'), c('Heat', 'energy heat cap 30 K', 'Q = m c ΔT'),
