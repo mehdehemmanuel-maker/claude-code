@@ -148,7 +148,14 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
   const unwrap = new Map<Held, { last: number; add: number }>();
   const valueOf = (h: Held) => { const v = raw(h); if (h.j.kind !== 'hinge') return v; const u = unwrap.get(h) ?? { last: v, add: 0 }; if (v - u.last > Math.PI) u.add -= 2 * Math.PI; else if (u.last - v > Math.PI) u.add += 2 * Math.PI; u.last = v; unwrap.set(h, u); return v + u.add; };
   /** A driven hinge's motor: its torque at the speed it turns, on what turns and back on what holds it. */
-  const integ = new Map<Held, number>();
+  const integ = new Map<Held, number>(), least = new Map<Held, number>();
+  // what it turns alone, about the axis it turns on (its own inertia from the engine, read in its principal frame): the
+  // least load the controller ever drives, so the stiffest it can be and stay steady
+  const inertiaAbout = (b: InstanceType<Jolt['Body']>, axis: V3) => {
+    const mp = b.GetMotionProperties(), dv = mp.GetInverseInertiaDiagonal(), d: V3 = [dv.GetX(), dv.GetY(), dv.GetZ()], iq = mp.GetInertiaRotation(), q: Q4 = [iq.GetX(), iq.GetY(), iq.GetZ(), iq.GetW()], r = b.GetRotation();
+    const local = apply(T(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()])), axis), p = apply(T(matQ(q)), local), inv = d[0] * p[0] ** 2 + d[1] * p[1] ** 2 + d[2] * p[2] ** 2;
+    return inv > 0 ? 1 / inv : Infinity;
+  };
   const drive = (h: Held, dt: number) => {
     const m = h.j.drive!, hc = h.c as InstanceType<Jolt['HingeConstraint']>, l = hc.GetLocalSpaceHingeAxis1(), la: V3 = [l.GetX(), l.GetY(), l.GetZ()], r1 = hc.GetBody1().GetRotation();
     const axis = apply(matQ([r1.GetX(), r1.GetY(), r1.GetZ(), r1.GetW()]), la);
@@ -163,7 +170,11 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     // volts held to the supply's and to what drives no more than its current limit through the winding
     let Vin = m.V;
     if (m.hold) {
-      const wt = n * m.hold.w, e = wt - w, kp = 4 * m.Kt, ki = 8 * m.Kt, lo = Math.max(-m.V, m.Kt * w - m.hold.Imax * m.R), hi = Math.min(m.V, m.Kt * w + m.hold.Imax * m.R);
+      // as stiff as a speed controller is: its current limit reached at a twentieth off the speed held; no stiffer than half
+      // what this step lets a loop on what it turns alone stay steady at (n² Kt (Kt + kp) dt / R J ≤ ½), nor softer than 4 Kt
+      if (!least.has(h)) least.set(h, inertiaAbout(h.mover.body, axis));
+      const Jm = least.get(h)!, kpMax = (0.5 * m.R * Jm) / (n * n * m.Kt * dt) - m.Kt, kpWant = (m.hold.Imax * m.R) / Math.max(0.05 * Math.abs(n * m.hold.w), 1e-6);
+      const wt = n * m.hold.w, e = wt - w, kp = Math.max(4 * m.Kt, Math.min(kpWant, kpMax)), ki = 2 * kp, lo = Math.max(-m.V, m.Kt * w - m.hold.Imax * m.R), hi = Math.min(m.V, m.Kt * w + m.hold.Imax * m.R);
       const base = m.Kt * wt + m.R * (m.Tf / m.Kt) * Math.sign(wt), held = integ.get(h) ?? 0, raw = base + kp * e + ki * held;
       Vin = Math.max(lo, Math.min(hi, raw));
       // the sum of what has been off grows only while the volts are not held at a limit (so it does not wind up)
