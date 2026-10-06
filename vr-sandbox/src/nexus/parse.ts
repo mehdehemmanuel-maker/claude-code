@@ -28,7 +28,9 @@ const WHERE = new Set(['as', 'on', 'in', 'at', 'into', 'onto', 'from', 'under', 
 const AND = new Set(['and', 'or', 'but', 'then', 'plus', 'also']);
 const SKIP = new Set(['can', 'could', 'will', 'would', 'should', 'must', 'may', 'also', 'then', 'just', 'only', 'automatically', 'always', 'never', 'still', 'even', 'each', 'both', 'all', 'it', 'they', 'is', 'are', 'be', 'to', 'not', 'really', 'actually', 'safely', 'quietly', 'about', 'roughly', 'nearly', 'approximately', 'exactly', 'almost', 'barely', 'some', 'very', 'so', 'too']);
 /** How an ask is put, before what is asked for: "I want", "Can you design", "Make me": no part of the thing. */
-const ASKING = /^\s*(?:(?:please|hey|hi|ok|okay|so)[,\s]+)*(?:(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:design|make|build|create|invent|draw|devise|engineer|come up with|give|get|show|imagine|think up)\s+(?:me\s+|us\s+)?|i\s*(?:want|need|would like|'d like|wish for|am looking for|would love)\s+(?:you\s+to\s+(?:design|make|build|create|invent)\s+(?:me\s+)?)?)/i;
+const ASKING = /^\s*(?:(?:please|hey|hi|ok|okay|so)[,\s]+)*(?:(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:design|make|build|create|invent|draw|devise|engineer|come up with|give|get|show|imagine|think up)\s+(?:me\s+|us\s+)?|(?:i\s*|i'm\s+|we\s+)?(?:want|need|would like|'d like|wish for|am looking for|looking for|are looking for|would love)\s+(?:you\s+to\s+(?:design|make|build|create|invent)\s+(?:me\s+)?)?)/i;
+/** "What would a 4 cm robot look like that burrows…": a question about the thing, read as asking for it. */
+const LOOKS = /^\s*what\s+would\s+(.+?)\s+look\s+like\s+(that|which|if|with)\b/i;
 /** Words after a verb that finish it rather than start a place: "measures out", "folds flat", "lifts up". */
 const PARTICLE = new Set(['out', 'up', 'down', 'off', 'away', 'back', 'over', 'flat', 'open', 'shut', 'closed', 'apart', 'together', 'around', 'in']);
 /** Words that say which way a number goes ("75 cm high", "300 mm across"): part of the number, not a thing. */
@@ -43,7 +45,7 @@ const VERB_BASE = new Set(('hold carry move roll spin turn rotate revolve open c
   + 'unlock plug connect link talk listen record compute process see lower reach support bear take bring push pull lean stack sits lie flip tip rock bounce jump balance '
   + 'steer brake land orbit shade block reflect absorb collect generate convert produce sit rain grow drain flow vent breathe sail paddle row pedal wind spool reel stretch '
   + 'bend twist squeeze press clamp hook attach mount hang carry deploy unroll rotate glow blink vibrate hum sing play lift tow haul drag dig drill saw sand polish '
-  + 'scan photograph film stream transmit receive charge sleep wake count dose portion fold iron dry wet spray mist heat boil brew bake fry toast chill keep is are be has have '
+  + 'scan photograph film stream transmit receive charge sleep wake count dose portion fold iron dry wet spray mist heat boil brew bake fry toast chill keep is are be has have survive withstand endure weather resist '
   + 'span cross reach pack unpack inflate deflate deploy hold carry lift lower haul pull tow store hang open shut cool warm sit stand').split(' '));
 export function isVerb(w: string): boolean {
   if (VERB_BASE.has(w)) return true;
@@ -53,9 +55,9 @@ export function isVerb(w: string): boolean {
 
 /** The words of an ask, its clauses, the thing and the verb of each, and every number with the words around it. */
 export function parseAsk(words: string): Parse {
-  const src = ` ${words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().replace(ASKING, '')} `, t = src.toLowerCase();
+  const src = ` ${words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().replace(LOOKS, '$1 $2').replace(ASKING, '')} `, t = src.toLowerCase();
   const toks: Tok[] = []; let grp = 0, last = -2;
-  for (const m of t.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|[a-zµμ°%"'][a-z0-9µμ°'²³^/]*|[,;:()!?]|\.(?=\s)/g)) {
+  for (const m of t.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|[a-zµμ°%"'][a-z0-9µμ°'²³^/]*|[,;:()!?×]|\.(?=\s)/g)) {
     const w = m[0]!.replace(/^'+|'+$/g, ''), at = m.index!; if (!w) continue;
     // joined to the token before it by a hyphen ("wall-mounted", "40-micrometre"): one group
     if (!(at === last + 2 && t[at - 1] === '-')) grp++;
@@ -122,13 +124,16 @@ export function parseAsk(words: string): Parse {
     }
     if (cur.kind === 'does' && cur.verb === null) {
       if (SKIP.has(x.w) && x.w !== 'is' && x.w !== 'are' || /ly$/.test(x.w)) continue;
+      // "that an ordinary adult can use": a thing first, then what it does; a word that names no thing is not the verb
+      if (DET.has(x.w)) { const v = verbAfterThing(i); if (v >= 0) { cur.subj = toks[v - 1]!.w; cur.verb = toks[v]!.w; cur.verbAt = v; i = v; } continue; }
       // "whose bed lifts": what does it comes first, then the verb
       if (cur.opener === 'whose') { if (verbAt(i) && i > cur.from) { const h = headOf(toks, cur.from, i); cur.subj = h?.head ?? null; cur.verb = x.w; cur.verbAt = i; } continue; }
       cur.verb = x.w; cur.verbAt = i;
     }
   }
   for (const c of clauses) {
-    c.text = toks.slice(c.from, c.to).filter((x) => !x.punct).map((x, k, xs) => (k && xs[k - 1]!.grp === x.grp ? '-' : k ? ' ' : '') + x.w).join('');
+    // (a number said below nothing keeps its sign: "from -160 °C")
+    c.text = toks.slice(c.from, c.to).filter((x) => !x.punct).map((x, k, xs) => (k && xs[k - 1]!.grp === x.grp ? '-' : k ? ' ' : '') + (x.num && t[x.at - 1] === '-' && /\s/.test(t[x.at - 2] ?? ' ') ? '-' : '') + x.w).join('');
     if (c.kind !== 'does' && c.head === null) { const h = headOf(toks, c.from, c.to); if (h) { c.head = h.head; c.headAt = h.at; c.mods = h.mods; } }
     if (c.kind === 'does' && c.verbAt >= 0) c.obj = Array.from({ length: Math.max(0, c.to - c.verbAt - 1) }, (_, k) => c.verbAt + 1 + k);
   }

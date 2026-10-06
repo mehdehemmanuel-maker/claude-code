@@ -184,3 +184,77 @@ describe('making it, and checking what was asked', () => {
     expect(len(52000)).toBe('52 km');
   });
 });
+
+describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wind', () => {
+  it('keeping hot or cold over a time is not done, and is weighed as made: a bare cup cools in about an hour', () => {
+    const c = go('Design a mug that keeps tea above 55 °C for 2 hours and weighs no more than 350 g');
+    expect(c.asked.find((a) => /keeps tea/.test(a.text))!.got).toBe(null);
+    const [d] = designs(c, 1, { seed: 101, physics: null });
+    const k = d!.checks.find((x) => /^as made, it keeps what it holds above 55 °C/.test(x.what))!;
+    expect(k.ok).toBe(false);
+    expect(k.says).toMatch(/falls to 55 °C in (\d+(\.\d+)? (h|min))/);
+  });
+  it('reads "keeps it ... in a 5 °C car" as a place, not as keeping something in, and "under 400 g empty" as its own weight', () => {
+    const c = go('I want a 1 litre vacuum flask, under 400 g empty, that keeps tea poured at 95°C still above 70°C after 48 hours sitting in a 5°C car.');
+    expect(c.wants.map((w) => w.fn)).toEqual(['contain']);
+    expect(c.limits.mass).toBeCloseTo(0.4, 9);
+  });
+  it('stands the vessel it holds inside what encloses it, and sizes that to take it', () => {
+    const [d] = designs(go('a cooler box that holds 20 litres of drinks at 4°C for 72 hours in 35°C heat'), 1, { seed: 101, physics: null });
+    expect(d!.checks.find((x) => x.what === 'it can be made under the laws')!.ok).toBe(true);
+    expect(d!.plan.some((p) => /hold a liquid.*, in what is to enclose a space/.test(p))).toBe(true);
+    const cold = d!.checks.find((x) => /^as made, it keeps what it holds at 4 °C/.test(x.what))!;
+    expect(cold.ok).toBe(false);
+    expect(cold.says).toMatch(/let in [\d.]+ W/);
+  });
+  it('sizes a shelter for who sleeps in it, takes the ground it may cover as a limit, and loads its roof with the snow said', () => {
+    const c = go('Can you come up with a 4-person emergency shelter for a mountain site that packs into a sled under 30 kg, takes up no more than 3 m x 2.5 m of ground, and survives 110 km/h winds and 80 cm of settled snow on the roof?');
+    expect(c.limits.W).toBe(3); expect(c.limits.D).toBe(2.5); expect(c.limits.mass).toBeCloseTo(30, 9);
+    const enc = c.wants.find((w) => w.fn === 'enclose')!;
+    expect(enc.q.W!.v).toBeCloseTo(2.6, 9); expect(enc.q.D!.v).toBe(2);
+    expect(enc.q.roofP!.v).toBeCloseTo(300 * 9.80665 * 0.8, 3);
+    expect(c.asked.some((a) => /winds/.test(a.text))).toBe(false);
+    const [d] = designs(c, 1, { seed: 101, physics: null });
+    const roof = d!.checks.find((x) => /its roof bears 80 cm of settled snow/.test(x.what))!;
+    expect(roof.says).toMatch(/bending [\d.]+ mm/);
+  });
+  it('bears a footbridge of several people spread along it on a frame of deep lumber, its deck in pieces no heavier than a person may carry', () => {
+    const [d] = designs(go('design a footbridge over a 6.5 m wide creek on my property with a 1.1 m wide deck that can carry 4 adults plus a loaded wheelbarrow (call it 450 kg total), and no single piece can weigh more than 35 kg because we\'re carrying everything in by hand with no crane'), 1, { seed: 101, physics: null });
+    expect(d!.checks.find((x) => /no part weighs more than 35 kg/.test(x.what))!.ok).toBe(true);
+    expect(d!.checks.find((x) => /its rails bear half of all of it/.test(x.what))!.ok).toBe(true);
+    expect(d!.choices.some((x) => /its deck in \d+ pieces/.test(x))).toBe(true);
+    expect(d!.ok).toBe(true);
+  });
+  it('hangs a wall shelf on two brackets at the studs said, the wall standing for itself and not weighed', () => {
+    const [d] = designs(go('I need a wall shelf for my record collection that\'s 1.2 m long and 320 mm deep, holds 70 kg spread evenly, sags no more than 3 mm in the middle, and can only be screwed into two wall studs that are 600 mm apart.'), 1, { seed: 101, physics: J });
+    expect(d!.plan[0]).toMatch(/a board on two steel brackets screwed to the wall/);
+    expect(d!.choices.some((x) => /600 mm apart, at the studs/.test(x))).toBe(true);
+    for (const w of ['its board bears 70 kg', 'its brackets bear their half', 'its screws hold in the studs', 'it sags no more than 3 mm', 'pushed at its top, it does not tip']) expect(d!.checks.find((x) => x.what.startsWith(w))!.ok).toBe(true);
+    expect(d!.mass).toBeLessThan(20);
+  }, 60000);
+  it('turns the whole of what is asked to turn on what turns it, and stands its tank beside the soil, not in it', () => {
+    const [d] = designs(go('Can you make a balcony planter that turns 360° every 6 hours so the plants get even sun, holds 40 kg of wet soil, and waters itself from a 10 L tank for 3 weeks?'), 1, { seed: 101, physics: null });
+    expect(d!.asked.find((a) => a.kind === 'thing')!.got).toBe('support');
+    expect(d!.plan[0]).toMatch(/^to turn: .*, on the floor$/);
+    expect(d!.plan.filter((p) => /on what is to turn$/.test(p)).length).toBe(2);
+    expect(d!.checks.find((x) => x.what === 'it can be made under the laws')!.ok).toBe(true);
+  });
+  it('pushes the wind on the faces its parts show, where they are, so an open frame is not taken for a solid wall', () => {
+    const [d] = designs(go('Bird-watching tower: 5 m high platform, 2 m x 2 m footprint at most, has to hold 2 adults (200 kg) up top and not tip over in 90 km/h gusts.'), 1, { seed: 8020, physics: J });
+    const wind = d!.checks.find((x) => /it stands in a 90 km\/h wind/.test(x.what))!;
+    expect(wind.says).toMatch(/its parts show across it \(\d+ slender, by a drag coefficient of 2/);
+    expect(wind.says).toMatch(/centred [\d.]+ m up/);
+    expect(d!.asked.some((a) => /footprint/.test(a.text))).toBe(false);
+    expect(d!.asked.find((a) => /^not tip over/.test(a.text))!.got).toBe('support');
+  }, 60000);
+  it('holds a wood column to K L / d of 50 at most', () => {
+    const [d] = designs(go('a stool made of oak'), 1, { seed: 101, physics: null });
+    expect(d!.checks.find((x) => /legs carry it without buckling/.test(x.what))!.says).toMatch(/K L \/ d [\d.]+ \(a wood column no more than 50: NDS 3\.7\.1\.4\)/);
+  });
+  it('weighs a rated total dose against Europa\'s surface over the time there', () => {
+    const c = go('Need a flight computer board for a Europa lander that draws under 8 W and survives a 30-day surface mission without going over its 300 krad(Si) total dose rating.');
+    const b = c.bounds.find((x) => /on Europa's surface/.test(x.what))!;
+    expect(b.ok).toBe(true);
+    expect(b.says).toMatch(/30 days there is about 16\.2 krad unshielded/);
+  });
+});

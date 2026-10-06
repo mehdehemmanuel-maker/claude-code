@@ -36,7 +36,7 @@ export const UNITS: Record<string, UnitDef> = {
   Pa: u(PA), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
-  Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
+  Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), krad: u([0, 2, -2, 0, 0], 10), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
   W: u(W), kW: u(W, 1e3), hp: u(W, 745.69987158227), mW: u(W, 1e-3), uW: u(W, 1e-6), MW: u(W, 1e6), GW: u(W, 1e9), TW: u(W, 1e12),
   V: u(V), kV: u(V, 1e3), mV: u(V, 1e-3),
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
@@ -91,7 +91,8 @@ export function fromSI(value: number, unit: string): number {
 
 /** How people say units, to the symbols above. Longest first, so "km/h" wins over "km". */
 const SPOKEN: [RegExp, string][] = [
-  [/^(km\/h|kmh|kph|kilometres? per hour|kilometers? per hour)$/i, 'km/h'], [/^(mph|miles? per hour)$/i, 'mi/h'], [/^(m\/s|mps|metres? per second|meters? per second)$/i, 'm/s'],
+  [/^(km\/h|kmh|kph|kilometres? per hour|kilometers? per hour)$/i, 'km/h'], [/^(µm\/s|μm\/s|um\/s|microns? per second|micromet(re|er)s? per second)$/i, 'um/s'], [/^(mm\/s|millimet(re|er)s? per second)$/i, 'mm/s'], [/^(cm\/s|centimet(re|er)s? per second)$/i, 'cm/s'], [/^(m\/h|m per hour|met(re|er)s? per hour|met(re|er)s? an hour|m an hour)$/i, 'm/h'],
+  [/^(w\/m²|w\/m2|w\/m\^2|watts? per square met(re|er))$/i, 'W/m^2'], [/^(m²|m2|m\^2|square met(re|er)s?|sq m)$/i, 'm^2'], [/^(cm²|cm2|cm\^2|square centimet(re|er)s?)$/i, 'cm^2'], [/^(krad|kilorads?)(\(si\))?$/i, 'krad'], [/^(mph|miles? per hour)$/i, 'mi/h'], [/^(m\/s|mps|metres? per second|meters? per second)$/i, 'm/s'],
   [/^(m\/s\^?2|m\/s²|m s-2)$/i, 'm/s^2'], [/^(N[·.\s-]?m)$/, 'N m'], [/^(n[·.\s-]m|newton[- ]?met(re|er)s?)$/i, 'N m'], [/^(lbf?[·.\s-]?ft|ft[·.\s-]?lbf?)$/i, 'lbf ft'], [/^(in[·.\s-]?lbf?|lbf?[·.\s-]?in)$/i, 'lbf in'],
   [/^(lbf|pounds? force|pound-force)$/i, 'lbf'], [/^(kgf|kilograms? force)$/i, 'kgf'],
   [/^(kg|kgs|kilos?|kilograms?)$/i, 'kg'], [/^(g|grams?)$/i, 'g'], [/^(mg|milligrams?)$/i, 'mg'], [/^(µg|μg|ug|micrograms?)$/i, 'ug'], [/^(ng|nanograms?)$/i, 'ng'], [/^(lbs?|pounds?)$/i, 'lb'], [/^(t|tonnes?)$/i, 't'],
