@@ -1021,6 +1021,7 @@ Five fresh judges scored the outputs blind, reading only the output files, from 
 |---|---|---|---|---|
 | Wave 5, first run | 1.25 | 0.3 | 1.35 | 1.65 |
 | Wave 5, rejudged after the fixes below | 2.45 | 0.6 | 2.25 | 2.7 |
+| Wave 5, judged a third time (5c), before the fixes in "After the third judging" | 2.8 | 0.5 | 2.65 | 3.15 |
 
 "Made" stays low for the reason it did in wave 4: most of these are things no kept way makes. Where nothing is made, the laws that govern the thing are weighed, and that is where most of the gain is.
 
@@ -1123,6 +1124,48 @@ Five fresh judges scored the outputs blind, reading only the output files, from 
 - **The twelve folding asks were rerun.**
   - The wall-hung workbench folds to 100 mm, where it folded to 70 mm. Its arm's load is now found, so the draw that set an arm in sideways fails its overhang check.
   - The rest fold as before.
+
+### After the third judging (5c)
+
+Five more fresh judges read the outputs after the fixes above. What they found, fixed by cause:
+
+**Ticks and counts.**
+- **A limit said is asked.** Its weight, its size, a part's weight, how small it folds, its plan and its power are each counted in "DOES n OF m" and ticked only where their own check passes. The bridge's "no single piece over 20 kg" was missing from its count. A limit already said in what it does ("a 70 cm bundle weighing under 5 kg") is not counted twice.
+- **The plan limit is checked.** "No bigger than 1.2 m by 2 m" was heard as checked, and no check existed.
+- **A weight within a quarter of its limit, with parts still to come, is not ticked.** The hoist weighs 17.5 of its 18 kg, leaving 0.47 kg for its drive and battery.
+- **How it is tested is not a check.** "Tested with what it carries on it" was a tick for the test's setup; the load is now said in the tests themselves.
+- **Under a ceiling, its height is its top above the floor,** open and folded. The loft bed was 1.19 m tall itself, with its top 1.35 m up.
+- **A push test the physics fails and statics passes says so** in its name.
+- **A leg that buckles only if its top joint holds it square** says so, where its top is butt-glued.
+- **A latch that cannot hold it open** fails what it carries, not whether it folds. A hand too weak or an arm held out are weighed apart from folding too.
+
+**Laws added or corrected.**
+- **The mast:** C_d falls with Reynolds number (0.77 at 8.9 × 10⁵, where 1.2 was taken). The vehicle's restoring moment counts the mast's own weight, and 1240 kg of mast is more than a pickup carries.
+- **The flood wall:** moving water's push acts at half its depth and turns its foot too (7.04 kN·m a metre, not 2.82). Its C_d is FEMA P-55's by length over depth (1.3).
+- **The heat store:** wool at its mean temperature (k 0.06, not 0.04: 486 W, not 324). Its loss warms the house it stands in. It gives 31.6 kWh from 300 to 50 °C, and what a day's spare sun gives back is 643 to 1290 W through the night, against a house's 1 to 4 kW. It is weighed, not ticked.
+- **The cooler with no power:** no Peltier is offered. Ice is, with the ice that chills the medicine put in warm (8 kg more).
+- **The stair:** the load factor γ_Q 1.5 (29.9 mm, not 24.4), and the spring's band, 135 to 415 N·m, not only its least.
+- **The tilting bed:** its deck tilts too, through a drive of about 0.25. Held tilted, its weight turns it, and its battery allows for what it may not draw down.
+- **The balcony turbine:** the moment at its clamp, its own weight and the storm's push, against what a metre of railing is made for.
+- **The flat hatch:** how far it bends (13.7 mm) and what it weighs (346 kg).
+- **A leaf bent past half its thickness** says the small-deflection stress is too high, though whether it holds stands. A span bent past a tenth of it says the figure means only that it fails long before.
+- **The oven's heater:** one just strong enough holds 85 °C but never brings it there. Within 0.5 °C takes τ ln(65 / 0.5), and some of its heat goes down into the worktop.
+- **On a roof, the wind lifts it.** The solar heater's 9.85 kg is lifted by about 900 N in a 25 m/s storm.
+- **Sizes and rates:** a shed of heat past 85 °C is past what commercial parts are rated for; dose in low orbit is 0.1 to 2 krad a year; a grain's capillary pull is weighed; the titanium wall at its least yield is 8% thicker; the loft bed's guard is EN 747's, 160 mm over the mattress.
+
+**Reading.**
+- **The rules for "charges from" and "powered by the rolling wheels" never ran:** the electronics rule caught them first.
+- **A radio mast** is a mast, not electronics. **"Runs a cubesat"** works it and does not power it.
+- **"Brakes"** is a brake, not kept. **"Close"** with "open" is the same swing back. On a hand it is a grip.
+- **"Flat-pack"** is said, not dropped. **0.5 m/s** is a slow walk, not a walking pace.
+- **A sentence that goes on** ("…without tearing them? It has to close…") starts a new clause, so "them it" no longer appears.
+- **Read lines that contradicted the laws:** the wind, the case temperature and the tilting bed's battery are now said to be weighed where they are.
+
+**Checked.**
+- **The gate:** typecheck, and 1040 tests in 94 files, 5 new ones for this round.
+- **The three browser drives** pass with no script errors.
+- **The everyday set and waves 2, 3 and 4 were rerun.** Every change is a count: limits are now asked. The one headline that changed is wave 3's footbridge: its 7.8 m rails are longer than sawn timber is sold, so it is no longer passed as made.
+- **The twelve folding asks fold as before.**
 
 ### Open after wave 5
 
