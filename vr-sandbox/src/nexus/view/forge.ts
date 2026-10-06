@@ -1787,11 +1787,11 @@ function intentWords(text: string): string | null {
     }
   }
   if (!lastAsk) return null;
-  // its fold, played as planned and tested: each part a quarter turn about its hinge, held folded, opened out again
+  // its fold, played as planned and tested: each part a quarter or a half turn about its hinge, held folded, opened out again
   if (/^(?:(?:show (?:me )?)?(?:it |how it )?(?:fold|folds|folding|collapse|collapses|collapsing)(?: it)?(?: up| down| flat)?(?: and (?:open|unfold)(?: it)?(?: out| again)?)?|fold (?:it|them)(?: up| down| flat)?|(?:un)?fold it(?: out)?|open it out)[.!]?$/i.test(t)) {
     const d = lastDesigns.find((x) => x.foldTrack);
     if (!d) { const why = lastDesigns.flatMap((x) => x.checks.filter((c) => /^it folds flat$|^folding, nothing|^folded, /.test(c.what) && !c.ok)).map((c) => `${c.what}: ${c.says}`)[0]; return why ? `It does not fold as made. ${why.slice(0, 400)}` : 'Nothing made here was asked to fold. Ask for it folding ("a folding table…") and I plan its fold.'; }
-    play(d.foldTrack!); return `Folding ${d.title}: what is lifted off goes up first, each part turns a quarter turn about its hinge in the order they fold, it holds folded a second, then opens out again. Its checks say how it folds and that it lies still folded.`;
+    play(d.foldTrack!); return `Folding ${d.title}: what is lifted off goes up first, each part turns about its hinge (a quarter turn, or a half turn over the part beside it) in the order they fold, it holds folded a second, then opens out again. Its checks say how it folds and that it lies still folded.`;
   }
   const m = /^(?:make|build|give me|show me)\s+(\d+|two|three|four|five|six|several|a few)\s*(?:more|of them|different ones|variants|versions)?$/i.exec(t);
   if (m) { const n = Math.min(6, Number(m[1]) || COUNT[m[1]!.replace(/^a /, '')] || 3); void makeIt(lastAsk.words, lastAsk.answers, n); return `Making ${n} more, each from its own seed and each unlike the others.`; }

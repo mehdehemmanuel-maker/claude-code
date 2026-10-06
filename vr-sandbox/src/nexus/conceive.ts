@@ -31,7 +31,7 @@ import { AMBIENT, heatLoss, thermalOf } from '../engineering/thermal';
 import { FUSION } from '../engineering/fusion';
 import { lateralUltimate, withdrawalUltimate } from '../engineering/wood';
 import { matOf, matterOf, Workshop, type Axis, type Made, type World } from './generate';
-import { planFold, touching, type Leaf } from './fold';
+import { planTree, touching, type Ax, type Box as FBox, type Fold, type TreePlan } from './foldtree';
 import type { Clip } from './flows';
 import type { Jolt } from './realize';
 import type { SimTrack } from './sim';
@@ -169,9 +169,9 @@ function readVerb(v: string, obj: string, all: string): VerbRead {
 }
 /** What kind of knowing a thing that is not made needs: said, so it is known what is missing. */
 /** Folding or packing the whole of a thing down to carry and opening it out again: what it would need. */
-const COLLAPSE = 'folding or packing the whole of it down and opening it out again: what is made folds flat onto its widest flat part, a quarter turn at each hinge, but nothing here is made for it to fold';
-/** Folding the whole of it, judged where it is made (src/nexus/fold.ts): onto its widest flat part, a quarter turn at each hinge. */
-const FOLD_JUDGED = 'folding the whole of it flat onto its widest flat part, a quarter turn at each hinge: judged as made';
+const COLLAPSE = 'folding or packing the whole of it down and opening it out again: what is made folds flat, each part onto what holds it, a quarter or a half turn at each hinge, but nothing here is made for it to fold';
+/** Folding the whole of it, judged where it is made (src/nexus/foldtree.ts): each part onto what holds it, a quarter or a half turn at each hinge. */
+const FOLD_JUDGED = 'folding the whole of it flat, each part onto what holds it, a quarter or a half turn at each hinge: judged as made';
 /** Loose stuff that lies in a heap and pushes sideways, kg/m³ wet and dry (estimates: soil 1300 dry, 1900 soaked). */
 const LOOSE: Record<string, [number, number]> = { soil: [1300, 1900], earth: [1300, 1900], dirt: [1300, 1900], compost: [600, 1000], sand: [1600, 1900], gravel: [1700, 1900], snow: [300, 500], grain: [780, 780], mulch: [400, 600], clay: [1700, 2000] };
 const LOOSE_RE = /^(?:(?:soaking|wet|dry|damp|loose|packed|fresh|heavy|settled|compacted|new|deep)[- ]?)*(soil|earth|dirt|compost|sand|gravel|snow|grain|mulch|clay)/;
@@ -778,7 +778,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   const rai = by('raise'); if (rai && sup && rai.q.m?.by === 'estimate') rai.q.m = fig(0, 'kg', 'usual', `what it raises is what its ${sup.says === 'hold a weight up' ? 'top' : sup.says} holds`);
   if (rai && sup && rai.q.m?.by === 'you' && sup.q.F?.by !== 'you') { sup.q.F = fig(rai.q.m.v * G, 'N', 'you', rai.q.m.grounds); rai.q.m = fig(0, 'kg', 'usual', `what it raises is what its ${sup.says} holds`); }
   // part of it is not something kept: asked first, once, whether to make the part that is
-  // folding the whole of it is judged where it is made: onto its widest flat part, a quarter turn at each hinge
+  // folding the whole of it is judged where it is made: each part onto what holds it, a quarter or a half turn at each hinge
   if (wants.length) for (const a of asked) if (a.why === COLLAPSE) { a.got = wants[0]!.fn; a.how = 'folds'; a.why = FOLD_JUDGED; }
   const notRead = asked.filter((x) => x.kind !== 'for' && !x.got);
   // (not asked where it is smaller than anything kept: no part of it can be made, as said with what is made)
@@ -1704,7 +1704,7 @@ export interface Design {
   choices: string[]; tries: { seed: number; why: string }[]; gaps: string[]; mass: number; parts: number; footprint: [number, number]; words: string; plan: string[];
   /** what was asked, each met or not; and how many of the things asked it does */ asked: Asked[]; does: [number, number];
   /** it holds, does everything asked, and has nothing left not yet derived */ whole: boolean;
-  /** where it folds as planned: its fold, played (each part a quarter turn about its hinge in the order they fold, held
+  /** where it folds as planned: its fold, played (each part a quarter or a half turn about its hinge in the order they fold, held
    *  folded, then opened out again), in the room as it stands */ foldTrack?: SimTrack;
 }
 /** How many of the things asked (what it is, does and has; not what it is for) were read into wants it meets. */
@@ -1728,8 +1728,9 @@ function scaleBars(n: Need, con: Conception): string | null {
 // -- folding the whole of it ---------------------------------------------------------------------------------------------
 /** What it is asked to fold: "a folding table", "folds flat to 8 cm", "packs into a 70 cm bundle". */
 const foldWanted = (con: Conception) => con.asked.some((a) => a.how === 'folds') || !!con.limits.fold?.length || con.limits.foldThin !== undefined;
-interface Folding { plan: ReturnType<typeof planFold>; made: Map<string, Made>; blocks: Map<string, string>; matter: string; /** planned with nothing in the way: what is made is made so */ clean: boolean }
+interface Folding { plan: TreePlan; made: Map<string, Made>; /** what it is fixed to and folds against */ grounds: Map<string, Made>; blocks: Map<string, string>; /** planned with nothing in the way: what is made is made so */ clean: boolean }
 type P3 = [number, number, number];
+const AXI: Record<Axis, Ax> = { x: 0, y: 1, z: 2 };
 /** A place step for a part as made, at a new middle and new sizes along x, y and z, a round one along its axis. */
 function placeAgain(m: Made, at: P3, e: { w: number; h: number; d: number }, axis: Axis = m.axis): string | null {
   const mat = m.matter?.id, where = `at ${M(at[0])}, ${M(at[1])}, ${M(at[2])}`; if (!mat) return null;
@@ -1738,9 +1739,10 @@ function placeAgain(m: Made, at: P3, e: { w: number; h: number; d: number }, axi
   if (m.kind === 'sphere' && m.dims.D !== undefined) return `place ${m.word} named ${m.name} of ${mat} ${where} size ${MM(m.dims.D)} mm`;
   return null;
 }
-/** Folding planned on the parts as drawn (src/nexus/fold.ts): the parts that hang from a hinge block shortened by it and
- *  placed again, the blocks placed on the base after it, each with what called it and why. What moves already, rides
- *  on what moves, or is set at an angle is not folded. */
+/** Folding planned on the parts as drawn (src/nexus/foldtree.ts): the parts that hang from a hinge block shortened by
+ *  it, or set in sideways, placed again; the blocks placed on what holds them, each with what called it and why. What
+ *  turns or slides, carries what does, rides on what moves, is set at an angle, or is fixed to a wall or a bank, is not
+ *  folded, and says so; then nothing is made otherwise. */
 function foldFor(prefix: string, steps: string[], traces: Trace[], riders: string[], seed: number): Folding | null {
   const ww = new Workshop(ROOM, 1);
   try { for (const x of steps) if (/^place /.test(x)) ww.run(x); } catch { return null; }
@@ -1748,81 +1750,108 @@ function foldFor(prefix: string, steps: string[], traces: Trace[], riders: strin
   const made = new Map(ww.all().made.filter((m) => m.name.startsWith(`${prefix}_`) && !STANDS.has(m.name)).map((m) => [m.name, m]));
   if (!made.size) return null;
   const keep = new Map<string, string>();
-  // what is fixed to a wall or rests on a bank stays where it is fixed: it is not folded or lifted off (folding it against
-  // the wall, hinged where it is fixed, is not derived yet)
-  const box3 = (m: Made) => ({ name: m.name, at: [...m.at] as P3, w: m.w, h: m.h, d: m.d }), stands = ww.all().made.filter((m) => STANDS.has(m.name));
-  const fixed = new Map<string, string>(); for (const m of made.values()) { const st = stands.find((x) => touching(box3(m), box3(x))); if (st) fixed.set(m.name, `it is fixed to ${STANDS.get(st.name)!.replace(/ it (is screwed to|rests on)$/, '')}`); }
-  // what turns (a wheel, what a motor drives) or slides is not folded; a door or lid that swings folds shut with what holds it
+  // what it is screwed to (a wall) it folds against where it hangs: that stays and the rest folds against it; what it
+  // only rests on (the banks) it is lifted off to fold
+  const box3 = (m: Made) => ({ name: m.name, at: [...m.at] as P3, w: m.w, h: m.h, d: m.d });
+  const grounds = new Map(ww.all().made.filter((m) => STANDS.has(m.name) && /screwed|fixed|bolted/.test(STANDS.get(m.name)!) && [...made.values()].some((x) => touching(box3(x), box3(m)))).map((m) => [m.name, m]));
+  const fixed = new Map<string, string>([...grounds.keys()].map((n) => [n, `it stands for ${STANDS.get(n)!}`]));
+  // what turns (a wheel, what a motor drives) or slides is not folded, nor what it turns or slides on; a door or lid that
+  // swings folds shut with what holds it
   for (const x of steps) { const j = /^(hinge|slide)\s+(\S+)\s+(?:to|on|onto|in)\s+(\S+)/.exec(x), m = j ? made.get(j[2]!) : undefined; if (j && m && (j[1] === 'slide' || /\bdriven by\b/.test(x) || m.kind === 'cylinder' || m.kind === 'tube')) { keep.set(j[2]!, j[1] === 'slide' ? 'it slides already' : 'it turns already'); if (made.has(j[3]!)) keep.set(j[3]!, `${j[2]!.slice(prefix.length + 1)} ${j[1] === 'slide' ? 'slides' : 'turns'} on it`); } }
   for (const r of riders) keep.set(r, 'it rides on what moves');
   for (const m of made.values()) { if (m.turn.some((t) => Math.abs(t) > 1e-9)) keep.set(m.name, 'it is set at an angle'); else if (!placeAgain(m, m.at as P3, m)) keep.set(m.name, 'its shape is not one placed again turned'); }
   // where two would fold onto each other: hinged from a block over the first, or set in sideways past it, drawn by the
   // seed (a block keeps its feet where they are; set in, it folds thinner)
-  const plan = planFold([...made.values()].map((m) => ({ name: m.name, at: [...m.at] as P3, w: m.w, h: m.h, d: m.d })), keep, { inset: rngOf(seed * 7 + 3)() < 0.5, fixed });
-  const rootM = made.get(plan.root)!, blocks = new Map<string, string>(), short = (n: string) => n.slice(prefix.length + 1);
-  if (!rootM.matter) return null;
+  const plan = planTree([...made.values(), ...grounds.values()].map(box3), keep, { inset: rngOf(seed * 7 + 3)() < 0.5, fixed, ground: [...grounds.keys()] });
+  const blocks = new Map<string, string>(), short = (n: string) => n.slice(prefix.length + 1);
   plan.spacers.forEach((sp, k) => blocks.set(sp.name, `${prefix}_hinge${k + 1}`));
   // what does not fold as planned is left as it was drawn: said so, not made otherwise
-  if (!plan.leaves.length || plan.trouble.length || !plan.sweep.ok) return { plan, made, blocks, matter: rootM.matter.id, clean: false };
-  // the parts that hang from a block, shortened by it, placed again so
+  if (!plan.folds.length || plan.trouble.length || !plan.sweep.ok) return { plan, made, grounds, blocks, clean: false };
+  // the parts that hang from a block, shortened by it, or set in sideways, placed again so
   for (const b of plan.open) {
-    const m = made.get(b.name); if (!m || [0, 1, 2].every((i) => Math.abs(b.at[i]! - m.at[i]!) < 1e-9) && Math.abs(b.h - m.h) < 1e-9) continue;
-    const lf = plan.leaves.find((l) => l.names.includes(m.name)), sideways = lf && Math.abs(lf.shift) > 1e-9;
+    const m = made.get(b.name); if (!m || [0, 1, 2].every((i) => Math.abs(b.at[i]! - m.at[i]!) < 1e-9) && Math.abs(b.w - m.w) + Math.abs(b.h - m.h) + Math.abs(b.d - m.d) < 1e-9) continue;
+    const fd = plan.folds.find((f) => f.names.includes(m.name) && (f.head === m.name || Math.abs(f.shift) > 1e-9)), sideways = !!fd && Math.abs(fd.shift) > 1e-9;
     const i = steps.findIndex((x) => x.startsWith('place ') && x.includes(` named ${m.name} `)), now = placeAgain(m, b.at, b);
-    if (i < 0 || !now) return null;
-    const t = traces.find((x) => x.step === steps[i]); steps[i] = now; if (t) { t.step = now; t.how = `${t.how}; ${sideways ? `set ${len(Math.abs(lf!.shift))} in along its hinge, so it folds beside what folds across from it, not onto it` : `${len(m.h - b.h)} shorter, to hang from a hinge block that lifts it over what folds under it first`}`; }
+    if (i < 0 || !now) return { plan, made, grounds, blocks, clean: false };
+    const t = traces.find((x) => x.step === steps[i]); steps[i] = now; if (t) { t.step = now; t.how = `${t.how}; ${sideways ? `set ${len(Math.abs(fd!.shift))} in along its hinge, so it folds beside what folds across from it, not onto it` : `${len(Math.max(m.w, m.h, m.d) - Math.max(b.w, b.h, b.d))} shorter, to hang from a hinge block that lifts it over what folds under it first`}`; }
   }
-  // the blocks, of the base's own matter, after the base
-  const at = steps.findIndex((x) => x.startsWith('place ') && x.includes(` named ${plan.root} `));
-  plan.spacers.forEach((sp, k) => {
-    const nm = blocks.get(sp.name)!, b = sp.box, step = `place block named ${nm} of ${rootM.matter!.id} at ${M(b.at[0])}, ${M(b.at[1])}, ${M(b.at[2])} size ${MM(b.w)} x ${MM(b.d)} x ${MM(b.h)} mm`;
-    steps.splice(at + 1 + k, 0, step);
-    traces.push({ step, what: short(nm), called: 'the fold', why: `so ${short(sp.under)} hinges ${len(b.h)} further from ${short(plan.root)}, and folds flat over what folds under it first`, when: '', where: `on ${short(plan.root)}, where ${short(sp.under)} meets it`, how: `a block of ${rootM.matter!.name} as thick as what lies folded under it, joined to the base; its hinge on its face` });
+  // the blocks, of the matter of what holds them (on what it is fixed to, of what hangs from them), after it
+  plan.spacers.forEach((sp) => {
+    const nm = blocks.get(sp.name)!, b = sp.box, on = made.get(sp.on) ?? made.get(sp.under)!, at = steps.findIndex((x) => x.startsWith('place ') && x.includes(` named ${sp.on} `));
+    const step = `place block named ${nm} of ${on.matter!.id} at ${M(b.at[0])}, ${M(b.at[1])}, ${M(b.at[2])} size ${MM(b.w)} x ${MM(b.d)} x ${MM(b.h)} mm`;
+    steps.splice(at + 1, 0, step);
+    traces.push({ step, what: short(nm), called: 'the fold', why: `so ${short(sp.under)} hinges ${len(Math.min(b.w, b.h, b.d))} further from ${short(sp.on)}, and folds flat over what folds under it first`, when: '', where: `on ${short(sp.on)}, where ${short(sp.under)} meets it`, how: `a block of ${on.matter!.name} as thick as what lies folded under it, joined to ${short(sp.on)}; its hinge on its face` });
   });
-  return { plan, made, blocks, matter: rootM.matter.id, clean: true };
+  return { plan, made, grounds, blocks, clean: true };
 }
-/** Folding as made: what folds onto what, the path each fold takes, the latches that hold it open against the push it
- *  is tested with (and the wind said), and it made again folded, let go in Jolt and measured against what it must fold to. */
+/** Folding as made: what folds onto what, the path each fold takes, the latches that hold it open against the push it is
+ *  tested with (and the wind said), and the joints of what it spans against its bending; it made again folded, let go in
+ *  Jolt, and measured against what it must fold to. */
 function foldChecks(f: Folding, con: Conception, prefix: string, seed: number, J: Jolt | null): { checks: Check[]; ok: boolean; fits: boolean | null; why: string } {
-  const p = f.plan, out: Check[] = [], nm = (n: string) => (f.blocks.get(n) ?? n).replace(`${prefix}_`, ''), dir = (l: Leaf) => `${l.sign > 0 ? '+' : '−'}${'xyz'[l.along]}`, unpre = (x: string) => x.split(`${prefix}_`).join('');
-  const says = p.leaves.map((l) => `${l.names.map(nm).join(' with ')} ${l.side < 0 ? 'up under it' : 'down onto it'} toward ${dir(l)}${l.spacer > 0 ? `, from a ${len(l.spacer)} block, over what folds first` : ''}${Math.abs(l.shift) > 1e-9 ? `, set ${len(Math.abs(l.shift))} in, beside what folds across from it` : ''}`);
-  out.push({ what: 'it folds flat', ok: p.leaves.length > 0 && !p.trouble.length, says: p.leaves.length ? `its ${nm(p.root)} stays; ${p.leaves.length} part${p.leaves.length > 1 ? 's fold' : ' folds'} onto it, each a quarter turn about a hinge along where it meets it: ${says.join('; ')}${p.latched.length ? `; latched open where they meet, and let go to fold: ${p.latched.map(([a, b]) => `${nm(a)} with ${nm(b)}`).join(', ')}` : ''}${p.lifted.length ? `; lifted off and laid on top, being bigger than what it would fold onto: ${p.lifted.map(nm).join(', ')}` : ''}${p.trouble.length ? `; ${unpre(p.trouble.join('; '))}` : ''}` : `nothing folds: ${unpre(p.trouble.join('; ')) || 'it is made as one part over all of it: folding it would want it cut into pieces hinged end to end (a book fold), not derived yet'}` });
+  const p = f.plan, out: Check[] = [], nm = (n: string) => (f.blocks.get(n) ?? n).replace(`${prefix}_`, ''), unpre = (x: string) => x.split(`${prefix}_`).join('');
+  const says = p.folds.map((d) => { const w = d.names.filter((x) => x !== d.head && !/^hinge_block_/.test(x)); return `${nm(d.head)}${w.length ? ` (with ${w.map(nm).join(', ')} folded on it)` : ''} a ${d.kind === 'half' ? 'half turn over' : 'quarter turn'} onto ${nm(d.holder)}${d.spacer > 0 ? `, from a ${len(d.spacer)} block, over what folds first` : ''}${Math.abs(d.shift) > 1e-9 ? `, set ${len(Math.abs(d.shift))} in, beside what folds across from it` : ''}`; });
+  out.push({ what: 'it folds flat', ok: p.folds.length > 0 && !p.trouble.length, says: p.folds.length ? `${f.grounds.has(p.root) ? STANDS.get(p.root)! : `its ${nm(p.root)}`} stays; ${p.folds.length} fold${p.folds.length > 1 ? 's' : ''}, the deepest first, each about a hinge where it meets what holds it: ${says.join('; ')}${p.rigid.length ? `; ${p.rigid.map(([a, b]) => `${nm(a)} lies flat on ${nm(b)} and goes with it`).join('; ')}` : ''}${p.latched.length ? `; latched open where they meet, and let go to fold: ${p.latched.map(([a, b]) => `${nm(a)} with ${nm(b)}`).join(', ')}` : ''}${p.lifted.length ? `; lifted off and laid on top, too big to fold onto what holds it: ${p.lifted.map(nm).join(', ')}` : ''}${p.trouble.length ? `; ${unpre(p.trouble.join('; '))}` : ''}` : `nothing folds: ${unpre(p.trouble.join('; ')) || 'it is made as one part over all of it: folding it would want it cut into pieces hinged end to end (a book fold), not derived yet'}` });
   let measured = p.envelope as P3;
-  if (p.leaves.length) out.push({ what: 'folding, nothing runs into anything', ok: p.sweep.ok, says: p.sweep.ok ? 'turned a degree at a time, in the order they fold (nearest the base first), none of them meets the base, a block or another part on the way' : `turned a degree at a time, ${nm(p.sweep.what)} meets ${nm(p.sweep.hit)} ${p.sweep.deg}° into its fold` });
-  if (p.leaves.length && f.clean) {
+  if (p.folds.length) out.push({ what: 'folding, nothing runs into anything', ok: p.sweep.ok, says: p.sweep.ok ? 'turned a degree at a time, in the order they fold (the deepest first), none of them meets what holds it, a block or another part on the way' : `turned a degree at a time, ${nm(p.sweep.what)} meets ${nm(p.sweep.hit)} ${p.sweep.deg}° into its fold` });
+  if (p.folds.length && f.clean) {
     // latched open: each hinge held at its far side by steel pins in double shear (6 mm, 0.6 of 250 MPa: 8.48 kN each,
-    // estimate), one each 100 mm of its hinge at most (estimate), against the push it is tested with shared among what folds
-    // under it (each turned at its hinge by its share at its far end), or the wind said on what stands on it
-    const total = (MADE.get(prefix) ?? 0) + (CARRIED.get(prefix) ?? 0), F = 0.1 * total * G, cap = 2 * Math.PI * 0.003 ** 2 * 0.6 * 250e6;
-    const under = p.leaves.filter((l) => l.side < 0).length, on = p.leaves.filter((l) => l.side > 0).length, wind = con.said.wind;
-    const hingeLen = (l: Leaf) => { const bs = p.open.filter((b) => l.names.includes(b.name)); return Math.max(...bs.map((b) => b.at[l.hinge]! + [b.w, b.h, b.d][l.hinge]! / 2)) - Math.min(...bs.map((b) => b.at[l.hinge]! - [b.w, b.h, b.d][l.hinge]! / 2)); };
-    const latch = p.leaves.map((l) => { const share = F / (l.side < 0 ? under : on), Mw = l.side > 0 && wind !== undefined ? 0.5 * 1.204 * wind ** 2 * 1.2 * hingeLen(l) * l.length * (l.length / 2) : 0, Mo = Math.max(share * l.length, Mw), Fp = Mo / Math.max(l.thick, 1e-3), n = Math.ceil(Fp / cap), room = Math.max(1, Math.floor(hingeLen(l) / 0.1)); return { l, Mo, Fp, n, room, wind: Mw > share * l.length }; });
+    // estimate), one each 100 mm of its hinge at most (estimate). A part that stands off what holds it is turned at its
+    // hinge by its share of the push it is tested with, at its far end, or by the wind said on its face, as is a panel
+    // upright beside another (a half turn about an upright edge); a joint in what lies flat end to end, in what it spans,
+    // carries its bending there, taken at its worst, a weight at its middle: W L / 4
+    const total = (MADE.get(prefix) ?? 0) + (CARRIED.get(prefix) ?? 0), F = 0.1 * total * G, W = total * G, cap = 2 * Math.PI * 0.003 ** 2 * 0.6 * 250e6, wind = con.said.wind;
+    const openOf = (n: string) => p.open.find((b) => b.name === n)!, ext = (b: FBox, i: Ax) => [b.w, b.h, b.d][i]!, own = p.open.filter((b) => !f.grounds.has(b.name));
+    const [gl, gh] = [[0, 1, 2].map((i) => Math.min(...own.map((b) => b.at[i]! - ext(b, i as Ax) / 2))), [0, 1, 2].map((i) => Math.max(...own.map((b) => b.at[i]! + ext(b, i as Ax) / 2)))];
+    const latch = p.folds.map((d) => {
+      const head = openOf(d.head), hinge = ext(head, d.axis), room = Math.max(1, Math.floor(hinge / 0.1)), sibs = p.folds.filter((x) => x.holder === d.holder && x.kind === d.kind).length;
+      // a joint in what lies flat end to end carries what it spans; one between upright panels is pushed as a part is
+      if (d.kind === 'half' && 3 - d.n - d.axis === 1) { const L = gh[d.n]! - gl[d.n]!, Mo = (W * L) / 4, Fp = Mo / Math.max(d.thick, 1e-3); return { d, Mo, Fp, n: Math.ceil(Fp / cap), room, why: `a joint in what it spans, ${len(L)} long, bends at worst by ${+W.toPrecision(3)} N at its middle (W L / 4, its weight and its load's)` }; }
+      const share = F / Math.max(1, sibs), Mw = wind !== undefined && ext(head, 1) >= Math.max(head.w, head.d) ? 0.5 * 1.204 * wind ** 2 * 1.2 * hinge * d.length * (d.length / 2) : 0, Mo = Math.max(share * d.length, Mw), Fp = Mo / Math.max(d.thick, 1e-3);
+      return { d, Mo, Fp, n: Math.ceil(Fp / cap), room, why: Mw > share * d.length ? `the ${+(wind! * 3.6).toPrecision(3)} km/h wind on its ${+(hinge * d.length).toPrecision(3)} m²` : `pushed at its top with a tenth of its weight and its load's (${+F.toPrecision(3)} N, as tested), its share` };
+    });
     const worst = latch.reduce((a, b) => (b.n / b.room > a.n / a.room ? b : a));
-    out.push({ what: 'latched open, its hinges hold', ok: latch.every((x) => x.n <= x.room), says: `latched open, each hinge is held at its far side by 6 mm steel pins in double shear (8.48 kN each at 0.6 of 250 MPa, estimate), ${len(worst.l.thick)} from the hinge line for ${worst.l.names.map(nm).join(' with ')}; ${worst.wind ? `the ${+(wind! * 3.6).toPrecision(3)} km/h wind on its ${+(hingeLen(worst.l) * worst.l.length).toPrecision(3)} m²` : `pushed at its top with a tenth of its weight and its load's (${+F.toPrecision(3)} N, as tested), its share`} turns that hinge with ${+worst.Mo.toPrecision(3)} N·m, ${+worst.Fp.toPrecision(3)} N on its pins: ${worst.n} pin${worst.n > 1 ? 's' : ''}${worst.n > worst.room ? `, more than the ${worst.room} its hinge has room for (one each 100 mm, estimate)` : ''}; what it carries bears straight down where they meet, not through its pins` });
-    // folded, made again in a room of its own and let go
+    out.push({ what: 'latched open, its hinges hold', ok: latch.every((x) => x.n <= x.room), says: `latched open, each hinge is held at its far side by 6 mm steel pins in double shear (8.48 kN each at 0.6 of 250 MPa, estimate); for ${nm(worst.d.head)}, ${len(worst.d.thick)} from its hinge line, ${worst.why} turns it with ${+worst.Mo.toPrecision(3)} N·m, ${+worst.Fp.toPrecision(3)} N on its pins: ${worst.n} pin${worst.n > 1 ? 's' : ''}${worst.n > worst.room ? `, more than the ${worst.room} its hinge has room for (one each 100 mm, estimate)` : ''}; what it carries bears straight down where its parts meet, not through its pins` });
+    // held out: a part that stands its longest way off an upright face, with nothing under its far half, carries its
+    // share of all of it and its load out from its hinge, spread along it (W L / 2 at its hinge): where its pin stands
+    // upright, over the hinge's own length; where its pin lies across, by its latch or its stop, its thickness away
+    const lo3 = (b: FBox, i: Ax) => b.at[i]! - ext(b, i) / 2, hi3 = (b: FBox, i: Ax) => b.at[i]! + ext(b, i) / 2;
+    const heldOut = p.folds.filter((d) => {
+      if (d.kind !== 'quarter' || d.n === 1) return false;
+      const V = openOf(d.head), L = ext(V, d.n), face = d.side === 1 ? lo3(V, d.n) : hi3(V, d.n), far = face + (d.side * L) / 2;
+      if (L < Math.max(V.w, V.h, V.d) - 1e-9) return false;
+      return !own.some((o) => o.name !== V.name && Math.abs(hi3(o, 1) - lo3(V, 1)) < 1e-6 && ([0, 2] as Ax[]).every((i) => Math.min(hi3(o, i), hi3(V, i)) - Math.max(lo3(o, i), lo3(V, i)) > 1e-6) && (d.side === 1 ? hi3(o, d.n) > far + 1e-6 : lo3(o, d.n) < far - 1e-6));
+    });
+    if (heldOut.length) {
+      const held = heldOut.map((d) => {
+        const V = openOf(d.head), L = ext(V, d.n), Mo = ((W / heldOut.length) * L) / 2, upright = d.axis === 1, lever = upright ? ext(V, 1) : Math.max(d.thick, 1e-3), Fp = Mo / lever, room = Math.max(1, Math.floor(ext(V, d.axis) / 0.1));
+        return { d, L, Mo, Fp, n: Math.ceil(Fp / cap), room, upright, lever };
+      });
+      const w = held.reduce((a, b) => (b.n / b.room > a.n / a.room ? b : a));
+      out.push({ what: 'held out, its hinges carry it', ok: held.every((x) => x.n <= x.room), says: `${held.length === 1 ? `${nm(w.d.head)} is held out` : `${held.map((x) => nm(x.d.head)).join(', ')} are held out`} from ${f.grounds.has(w.d.holder) ? STANDS.get(w.d.holder)! : nm(w.d.holder)} with nothing under ${held.length === 1 ? 'its' : 'their'} far half; ${nm(w.d.head)}, ${len(w.L)} out, with ${held.length === 1 ? 'all' : `1/${held.length}`} of it and its load (${+(W / held.length).toPrecision(3)} N) spread along it, turns its hinge with ${+w.Mo.toPrecision(3)} N·m (W L / 2), carried ${w.upright ? `over its ${len(w.lever)} of hinge, its pin upright` : `by its latch ${len(w.lever)} from its pin`}: ${+w.Fp.toPrecision(3)} N on 6 mm pins (8.48 kN each, estimate): ${w.n} pin${w.n > 1 ? 's' : ''}${w.n <= w.room ? `, within the ${w.room} its hinge has room for` : `, more than the ${w.room} its hinge has room for (one each 100 mm, estimate)`}` });
+    }
+    // folded, made again in a room of its own and let go: each part where it lies, the blocks with what holds them and
+    // what lies flat on another with it, each fold's hinge free to open and stopping where it lies (what a joint holds
+    // does not collide with what it is held to, in the engine)
     const room = new Workshop(ROOM, seed + 7); if (J) room.usePhysics(J); room.run('rule no overlap'); room.run('rule no overlap with the build');
-    const tf = (v: P3): P3 => [v[0], (p.flip ? -v[1] : v[1]) - p.dy, v[2]], steps: string[] = [];
+    const steps: string[] = [];
     for (const b of p.folded) {
-      const m = f.made.get(b.name);
-      if (!m) { steps.push(`place block named ${f.blocks.get(b.name)} of ${f.matter} at ${M(b.at[0])}, ${M(b.at[1])}, ${M(b.at[2])} size ${MM(b.w)} x ${MM(b.d)} x ${MM(b.h)} mm`); continue; }
-      const l = p.leaves.find((x) => x.names.includes(b.name)), A: Axis = l?.along === 0 ? 'x' : 'z', round = m.kind === 'cylinder' || m.kind === 'tube';
-      const axis: Axis = round && p.lifted.includes(b.name) ? (b.w >= b.d ? 'x' : 'z') : round && l ? (m.axis === 'y' ? A : m.axis === A ? 'y' : m.axis) : m.axis;
+      const m = f.made.get(b.name) ?? f.grounds.get(b.name);
+      if (!m) { const sp = p.spacers.find((x) => x.name === b.name), on = sp ? f.made.get(sp.on) ?? f.made.get(sp.under) : undefined; steps.push(`place block named ${f.blocks.get(b.name)} of ${on?.matter?.id ?? 'wood.birch-plywood'} at ${M(b.at[0])}, ${M(b.at[1])}, ${M(b.at[2])} size ${MM(b.w)} x ${MM(b.d)} x ${MM(b.h)} mm`); continue; }
+      const round = m.kind === 'cylinder' || m.kind === 'tube', la = p.axisOf.get(`${b.name}:${AXI[m.axis]}`), axis: Axis = round && p.lifted.includes(b.name) ? (b.w >= b.d ? 'x' : 'z') : round && la !== undefined ? 'xyz'[la] as Axis : m.axis;
       steps.push(placeAgain(m, b.at, b, axis)!);
     }
-    const base = [p.root, ...p.spacers.map((x) => f.blocks.get(x.name)!)];
-    if (base.length > 1) steps.push(`join ${base.join(', ')} as ${prefix}_folded`);
-    p.leaves.forEach((l, k) => { if (l.names.length > 1) steps.push(`join ${l.names.join(', ')} as ${prefix}_leaf${k + 1}`); });
-    // each hinge turns only the way it opens: it stops where it lies folded (what it is hinged to does not hold it up in the
-    // engine, as two bodies a joint holds do not collide). Folded about z by a quarter turn up from x (k -1) is +90° (right
-    // hand), about x the same turn is -90°; laid down upside down, each turn is the other way
-    for (const l of p.leaves) {
-      const sp = p.spacers.find((x) => x.under === l.touch[0]), holder = l.spacer > 0 && sp ? f.blocks.get(sp.name)! : p.root, pv = tf(l.pivot), k = l.side * l.sign;
-      const foldDeg = (l.hinge === 2 ? (k === -1 ? 90 : -90) : k === -1 ? -90 : 90) * (p.flip ? -1 : 1), opens = -foldDeg;
-      steps.push(`hinge ${l.touch[0]} to ${holder} about ${'xyz'[l.hinge]} at ${M(pv[0])}, ${M(pv[1])}, ${M(pv[2])} ${opens > 0 ? 'from 0° to 90°' : 'from -90° to 0°'}`);
+    // held as one: a block with what it is on, what lies flat with what it lies on
+    const one = new Map<string, string>(), find = (x: string): string => { const y = one.get(x) ?? x; return y === x ? x : find(y); }, unite = (a: string, b: string) => one.set(find(a), find(b));
+    for (const sp of p.spacers) unite(f.blocks.get(sp.name)!, sp.on); for (const [a, b] of p.rigid) unite(a, b);
+    const groups = new Map<string, string[]>(); for (const x of [...p.spacers.map((sp) => f.blocks.get(sp.name)!), ...p.spacers.map((sp) => sp.on), ...p.rigid.flat()]) { const r = find(x); groups.set(r, [...new Set([...(groups.get(r) ?? []), x])]); }
+    [...groups.values()].filter((g) => g.length > 1).forEach((g, k) => steps.push(`join ${g.join(', ')} as ${prefix}_one${k + 1}`));
+    for (const [k, h] of p.hinges.entries()) {
+      const d = p.folds[k]!, sp = d.spacer > 0 ? p.spacers.find((x) => x.under === d.head) : undefined, holder = sp ? f.blocks.get(sp.name)! : d.holder;
+      steps.push(`hinge ${h.head} to ${holder} about ${'xyz'[h.axis]} at ${M(h.pivot[0])}, ${M(h.pivot[1])}, ${M(h.pivot[2])} ${h.opens > 0 ? `from 0° to ${h.deg}°` : `from -${h.deg}° to 0°`}`);
     }
     let built = true, err = '';
     for (const x of steps) { try { room.run(x); } catch (e) { built = false; err = `"${unpre(x).slice(0, 80)}": ${unpre((e as Error).message).slice(0, 200)}`; break; } }
-    out.push({ what: 'folded, it can be made under the laws', ok: built, says: built ? `${steps.length} steps: laid down folded${p.flip ? ', upside down,' : ''} its ${nm(p.root)} on the floor, ${p.leaves.length} hinge${p.leaves.length > 1 ? 's' : ''}, nothing in anything` : err });
+    out.push({ what: 'folded, it can be made under the laws', ok: built, says: built ? `${steps.length} steps: ${f.grounds.has(p.root) ? `folded against ${STANDS.get(p.root)!} as it hangs` : `laid down folded, its ${nm(p.root)} on the floor`}, ${p.hinges.length} hinge${p.hinges.length > 1 ? 's' : ''}, nothing in anything` : err });
     if (built && J) {
       // let go folded, it lies as it stands: nothing it is made of drops 10 mm or tilts 2° (as when it stands); what was laid
       // on top may settle onto what is under it, then lies still
@@ -1830,42 +1859,47 @@ function foldChecks(f: Folding, con: Conception, prefix: string, seed: number, J
       const lifted = new Set(p.lifted), fell = (n: string, b: Made) => b.at[1] - (after.get(n)?.at[1] ?? b.at[1]);
       const drop = Math.max(0, ...[...first].filter(([n]) => !lifted.has(n)).map(([n, b]) => fell(n, b))), settled = Math.max(0, ...[...first].filter(([n]) => lifted.has(n)).map(([n, b]) => fell(n, b)));
       const moving = Math.max(0, ...[...before].filter(([n]) => lifted.has(n)).map(([n, b]) => Math.hypot(...[0, 1, 2].map((i) => (after.get(n)?.at[i] ?? b.at[i]!) - b.at[i]!)))), tilt = tiltOf(first.get(p.root)!.turn, after.get(p.root)!.turn);
-      const ms = [...after.values()], ext = (i: number) => Math.max(...ms.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2)) - Math.min(...ms.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2));
-      measured = [ext(0), ext(1), ext(2)]; const still = drop < 0.01 && tilt < (2 * Math.PI) / 180 && settled < 0.05 && moving < 1e-3;
+      const ms = [...after.values()].filter((m) => !STANDS.has(m.name)), ex = (i: number) => Math.max(...ms.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2)) - Math.min(...ms.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2));
+      measured = [ex(0), ex(1), ex(2)]; const still = drop < 0.01 && tilt < (2 * Math.PI) / 180 && settled < 0.05 && moving < 1e-3;
       out.push({ what: 'folded, it lies still when let go', ok: still, says: `let go folded (Jolt), each hinge free to open, it dropped ${len(drop)} at most and its ${nm(p.root)} tilted ${+((tilt * 180) / Math.PI).toFixed(2)}° (10 mm or 2° fails, as when it stands)${p.lifted.length ? `; what was laid on top settled ${len(settled)} and then moved ${len(moving)} in half a second (50 mm, or moving on, fails)` : ''}: folded, it is ${measured.map(len).join(' × ')}` });
     }
   }
   // what it must fold to, against it folded
-  const L = con.limits, env = [...measured].sort((a, b) => b - a); let fits: boolean | null = null;
-  if (L.foldThin !== undefined) { const ok = env[2]! <= L.foldThin * 1.0001; fits = ok; out.push({ what: `it folds flat to ${len(L.foldThin)}`, ok, says: `folded, it is ${env.map(len).join(' × ')}: ${len(env[2]!)} thick against ${len(L.foldThin)}` }); }
-  if (L.fold?.length) { const want = [...L.fold].sort((a, b) => b - a), ok = want.every((v, i) => env[i]! <= v * 1.0001); fits = (fits ?? true) && ok; out.push({ what: `it folds or packs to ${want.map(len).join(' × ')}`, ok, says: `folded, it is ${env.map(len).join(' × ')}${ok ? '' : `: ${want.map((v, i) => (env[i]! > v * 1.0001 ? `${len(env[i]!)} where ${len(v)} is wanted` : '')).filter(Boolean).join(', ')}`}` }); }
-  if (L.foldVol !== undefined) { const v = measured[0]! * measured[1]! * measured[2]!, ok = v <= L.foldVol * 1.0001; fits = (fits ?? true) && ok; out.push({ what: `it packs into ${+(L.foldVol * 1e3).toPrecision(3)} L`, ok, says: `folded, it is ${measured.map(len).join(' × ')}, the box round it ${+(v * 1e3).toPrecision(3)} L${ok ? '' : `, ${+(v / L.foldVol).toPrecision(3)} times as much`}` }); }
+  // where nothing folds it is measured as it is made, and said so
+  const L = con.limits, env = [...measured].sort((a, b) => b - a), as = f.clean ? 'folded' : 'not folded, as made'; let fits: boolean | null = null;
+  if (L.foldThin !== undefined) { const ok = env[2]! <= L.foldThin * 1.0001; fits = ok; out.push({ what: `it folds flat to ${len(L.foldThin)}`, ok, says: `${as}, it is ${env.map(len).join(' × ')}: ${len(env[2]!)} thick against ${len(L.foldThin)}` }); }
+  if (L.fold?.length) { const want = [...L.fold].sort((a, b) => b - a), ok = want.every((v, i) => env[i]! <= v * 1.0001); fits = (fits ?? true) && ok; out.push({ what: `it folds or packs to ${want.map(len).join(' × ')}`, ok, says: `${as}, it is ${env.map(len).join(' × ')}${ok ? '' : `: ${want.map((v, i) => (env[i]! > v * 1.0001 ? `${len(env[i]!)} where ${len(v)} is wanted` : '')).filter(Boolean).join(', ')}`}` }); }
+  if (L.foldVol !== undefined) { const v = measured[0]! * measured[1]! * measured[2]!, ok = v <= L.foldVol * 1.0001; fits = (fits ?? true) && ok; out.push({ what: `it packs into ${+(L.foldVol * 1e3).toPrecision(3)} L`, ok, says: `${as}, it is ${measured.map(len).join(' × ')}, the box round it ${+(v * 1e3).toPrecision(3)} L${ok ? '' : `, ${+(v / L.foldVol).toPrecision(3)} times as much`}` }); }
   const bad = out.find((x) => x.ok === false && !/^it (folds (flat to|or packs to)|packs into)/.test(x.what));
   return { checks: out, ok: !bad, fits, why: bad ? `${bad.what}: ${bad.says}` : '' };
 }
-/** A fold played, in the room as it stands: what is lifted off goes up onto it first, then each part turns a quarter
- *  turn about its hinge in the order they fold (a turn about z from x up toward y is +90°, right hand; about x the same
- *  turn from z is -90°), it holds folded a second, and opens out again the same way back. 30 frames a second. */
+type Q4 = [number, number, number, number];
+const qMul = (a: Q4, b: Q4): Q4 => [a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0], a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
+const qAbout = (ax: Ax, th: number): Q4 => { const s = Math.sin(th / 2), c = Math.cos(th / 2), q: Q4 = [0, 0, 0, c]; q[ax] = s; return q; };
+/** A turn about a world axis through a point, of a middle. */
+const turnAt = (c: P3, pv: P3, ax: Ax, th: number): P3 => { const d: P3 = [c[0] - pv[0], c[1] - pv[1], c[2] - pv[2]], co = Math.cos(th), si = Math.sin(th), [u, v] = ([0, 1, 2] as Ax[]).filter((i) => i !== ax) as [Ax, Ax], r: P3 = [...d] as P3; r[u] = d[u]! * co - d[v]! * si; r[v] = d[u]! * si + d[v]! * co; if (ax === 1) { r[u] = d[u]! * co + d[v]! * si; r[v] = -d[u]! * si + d[v]! * co; } return [pv[0] + r[0], pv[1] + r[1], pv[2] + r[2]]; };
+/** A fold played, in the room as it stands: what is lifted off goes up onto it first, then each fold in its order (the
+ *  deepest first), a part and all folded on it turning about its hinge; it holds folded a second, and opens out again
+ *  the same way back. 30 frames a second. */
 function foldTrackOf(f: Folding, asBuilt: Made[]): SimTrack {
-  const p = f.plan, at = new Map(asBuilt.map((m) => [m.name, m])), names = [...new Set([p.root, ...p.spacers.map((x) => f.blocks.get(x.name)!), ...p.leaves.flatMap((l) => l.names), ...p.lifted])].filter((n) => at.has(n));
-  const seq = [...p.leaves].sort((a, b) => a.spacer - b.spacer), step = 0.8, fps = 30, k = (l: Leaf) => l.side * l.sign;
-  const angleOf = (l: Leaf) => ((l.hinge === 2 ? (k(l) === -1 ? 1 : -1) : k(l) === 1 ? 1 : -1) * Math.PI) / 2;
-  const qAbout = (ax: 0 | 2, th: number): [number, number, number, number] => { const s = Math.sin(th / 2), c = Math.cos(th / 2); return ax === 0 ? [s, 0, 0, c] : [0, 0, s, c]; };
-  const turn = (c: P3, pv: P3, ax: 0 | 2, th: number): P3 => { const d = [c[0] - pv[0], c[1] - pv[1], c[2] - pv[2]], co = Math.cos(th), si = Math.sin(th); return ax === 2 ? [pv[0] + d[0]! * co - d[1]! * si, pv[1] + d[0]! * si + d[1]! * co, c[2]] : [c[0], pv[1] + d[1]! * co - d[2]! * si, pv[2] + d[1]! * si + d[2]! * co]; };
-  // where what is lifted off goes: onto the top of the base (where things fold under it) or of the stack (where they fold onto it)
-  const root = at.get(p.root)!, under = p.leaves.some((l) => l.side < 0), lift = new Map<string, { to: P3; q: [number, number, number, number] }>();
-  let yTop = under ? root.at[1] + root.h / 2 : Math.max(...p.folded.map((b) => b.at[1] + b.h / 2)) + p.dy;
-  for (const n of p.lifted) { const m = at.get(n); if (!m) continue; const thin = Math.min(m.w, m.h, m.d), q = thin === m.h ? [0, 0, 0, 1] as [number, number, number, number] : thin === m.w ? qAbout(2, Math.PI / 2) : qAbout(0, Math.PI / 2); lift.set(n, { to: [root.at[0], yTop + thin / 2, root.at[2]], q }); yTop += thin; }
-  const pose = (n: string, u: number) => {
-    // u: 0 open, 1 folded; what is lifted off moves in the first share of it, then each fold in turn
-    const m = at.get(n)!, parts = seq.length + (lift.size ? 1 : 0), share = 1 / Math.max(1, parts);
-    const li = lift.get(n); if (li) { const e = Math.min(1, u / share); return { at: [0, 1, 2].map((i) => m.at[i]! + (li.to[i]! - m.at[i]!) * e) as P3, q: e >= 1 ? li.q : e > 0.5 ? li.q : [0, 0, 0, 1] as [number, number, number, number] }; }
-    const i = seq.findIndex((l) => l.names.includes(n)); if (i < 0) return { at: [...m.at] as P3, q: [0, 0, 0, 1] as [number, number, number, number] };
-    const l = seq[i]!, s0 = (i + (lift.size ? 1 : 0)) * share, e = Math.max(0, Math.min(1, (u - s0) / share)), th = angleOf(l) * e;
-    return { at: turn(m.at as P3, l.pivot, l.hinge, th), q: qAbout(l.hinge, th) };
+  const p = f.plan, at = new Map(asBuilt.map((m) => [m.name, m])), names = [...new Set([p.root, ...p.spacers.map((x) => f.blocks.get(x.name)!), ...p.folds.flatMap((d) => d.names.map((n) => f.blocks.get(n) ?? n)), ...p.rigid.flat(), ...p.lifted])].filter((n) => at.has(n));
+  const fps = 30, step = 0.8, segs = p.folds.length + (p.lifted.length ? 1 : 0), T = step * Math.max(1, segs);
+  // the poses after each fold in turn, from open: a part's middle and its turn
+  type Pose = { at: P3; q: Q4 };
+  const open = new Map(names.map((n) => [n, { at: [...at.get(n)!.at] as P3, q: [0, 0, 0, 1] as Q4 }]));
+  const lifted = new Map(p.lifted.filter((n) => at.has(n)).map((n) => { const t = p.liftTo.get(n)!; return [n, { at: t.at, q: t.about === null ? [0, 0, 0, 1] as Q4 : qAbout(t.about, Math.PI / 2) }]; }));
+  const stages: Map<string, Pose>[] = [new Map(open)];
+  if (p.lifted.length) { const s = new Map(stages[0]!); for (const [n, x] of lifted) s.set(n, x); stages.push(s); }
+  const turnSet = (from: Map<string, Pose>, d: Fold, th: number) => { const s = new Map(from); for (const n0 of d.names) { const n = f.blocks.get(n0) ?? n0, x = from.get(n); if (!x || lifted.has(n)) continue; s.set(n, { at: turnAt(x.at, d.pivot, d.axis, th), q: qMul(qAbout(d.axis, th), x.q) }); } return s; };
+  for (const d of p.folds) stages.push(turnSet(stages.at(-1)!, d, (d.turns * Math.PI) / 2));
+  const poseAt = (u: number): Map<string, Pose> => {
+    const x = u * segs, k = Math.min(segs - 1, Math.floor(x)), e = Math.min(1, x - k);
+    if (u >= 1) return stages.at(-1)!;
+    if (p.lifted.length && k === 0) { const s = new Map(stages[0]!); for (const [n, li] of lifted) { const o = open.get(n)!; s.set(n, { at: [0, 1, 2].map((i) => o.at[i]! + (li.at[i]! - o.at[i]!) * e) as P3, q: e > 0.5 ? li.q : o.q }); } return s; }
+    const d = p.folds[k - (p.lifted.length ? 1 : 0)]!; return turnSet(stages[k]!, d, (d.turns * Math.PI * e) / 2);
   };
-  const T = step * (seq.length + (lift.size ? 1 : 0)), frames: SimTrack['frames'] = [];
-  for (let t = 0; t <= 2 * T + 1 + 1e-9; t += 1 / fps) { const u = t <= T ? t / T : t <= T + 1 ? 1 : Math.max(0, 1 - (t - T - 1) / T); frames.push({ t, poses: names.map((n) => pose(n, u)) }); }
+  const frames: SimTrack['frames'] = [];
+  for (let t = 0; t <= 2 * T + 1 + 1e-9; t += 1 / fps) { const u = t <= T ? t / T : t <= T + 1 ? 1 : Math.max(0, 1 - (t - T - 1) / T), s = poseAt(u); frames.push({ t, poses: names.map((n) => s.get(n) ?? open.get(n)!) }); }
   return { names, frames };
 }
 /** Made once, from one seed: each need met by a way drawn from those that apply, stacked, sized from the top down,
@@ -1933,7 +1967,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     for (const k of [...LOADS.keys()]) if (k.startsWith(`${prefix}_`)) LOADS.delete(k);
     // each load where it is said; where one part is loaded in more than one place, the worst of them is kept
     for (const s of loads) { try { room.run(s); const key = /^load\s+(\S+)/.exec(s)![1]!, was = LOADS.get(key), f = room.value(`${key}.factor`), b = room.value(`${key}.deflection`); LOADS.set(key, was ? { factor: Math.min(was.factor, f), bend: Math.max(was.bend, b) } : { factor: f, bend: b }); } catch (e) { out.push({ what: s, ok: false, says: (e as Error).message.slice(0, 200) }); } }
-    MADE.set(prefix, room.all().made.filter((m) => m.name.startsWith(`${prefix}_`)).reduce((a, m) => a + m.mass, 0));
+    MADE.set(prefix, room.all().made.filter((m) => m.name.startsWith(`${prefix}_`) && !STANDS.has(m.name)).reduce((a, m) => a + m.mass, 0));
     CARRIED.set(prefix, con.wants.reduce((a, w) => a + (w.fn === 'support' ? (w.q.F!.v / G) * (w.flags.includes('levels') ? Math.max(2, Math.round(w.q.levels?.v ?? 4)) : 1) : w.fn === 'contain' ? w.q.V!.v * 1000 : w.fn === 'move' || w.fn === 'raise' ? w.q.m?.v ?? 0 : w.fn === 'enclose' && w.q.roofP ? (w.q.roofP.v * (w.q.W!.v + 0.05) * (w.q.D!.v + 0.05)) / G : 0), 0));
     for (const f of checks) { const r = f(); if (r) out.push(r); }
     // what it is to carry, put on it as a block of steel of that weight while it is tested (not part of it)

@@ -893,3 +893,100 @@ A design that folds as planned and tested carries its fold as a track (`Design.f
 - **Half-turn folds:** panels meeting edge to edge folding onto each other, zig-zag (a room divider, a deck in pieces, a book fold).
 - **Folding onto an upright base:** a bookshelf onto its back, a bench against its wall.
 - **Folding a part onto what folds:** the roof onto a wall before the wall folds.
+
+## Phase 4b: folding in general
+
+Phase 4a folded the parts held to one flat base, a quarter turn each. That left out:
+- half-turn folds (panels meeting edge to edge);
+- folding onto an upright base (a bookshelf's side);
+- folding against the wall a thing hangs on.
+
+The planner is now `src/nexus/foldtree.ts`; `src/nexus/fold.ts` is gone. It is still geometry alone, with no template per kind of thing.
+
+### How it folds
+
+- **A fold turns a whole branch.** Each part folds onto the part that holds it, after everything it holds has folded onto it. So a fold is a rigid turn of a part, with all that hangs off it, about a hinge where it meets its holder.
+- **Quarter turns.** A part standing off a face (a leg under a top, a wall on a floor, a shelf off a side) turns a quarter turn flat onto that face. It lies flat only if the turn brings its thinnest way onto the face. A shelf swung sideways like a door would end beside the side panel, not on it, so that turn is never taken.
+- **Half turns.** A part lying in line with its holder, meeting it at an edge (the pieces of a deck, the panels of a screen, a door beside its wall), turns over the top of it or under it. Done in turn, that gives a zig-zag.
+- **Flat parts go along.** A part already lying flat on its holder (a square batten under a shelf, a cleat on a side) goes with it, and nothing is chosen for it.
+- **The hinge is on the part's own edge,** where it meets the face or its block. Whatever hangs off the part turns with it. A batten under a shelf's far end therefore needs the block. Before, the hinge was put at the edge of everything that turns, 20 mm off the shelf, and the shelf and its block did not touch.
+- **Blocks and set-ins,** as in 4a. A block is now also tried when the part would meet something on its way, not only where it lands: a shelf hinged at a side swings into the batten under its hinge 4° into its turn.
+- **Shortening for a block** is refused only where another part of the same branch sits in the slab the block takes. A batten at the shelf's far end does not stop it.
+- **Which part folds next, and how, is searched.** Any part whose own parts have folded may go next. Every way that folds all of it is weighed:
+  - how far it lies past what it folds onto;
+  - how thick it stacks;
+  - a block or a set-in, as the seed prefers;
+  - any part lifted off.
+
+  The least is kept (branch and bound, with a state reached again no better not searched again, within 3000 tries per pass). A first pass allows nothing past the base; a second allows it where nothing else folds. Before, the order was fixed and the first fold found was kept: a 4-shelf bookshelf folded all four shelves up, 2.56 m long and 562 mm thick.
+- **What is lifted off** is laid on what lies under it, not on the highest point of the whole stack.
+
+### Against the wall
+
+- **A thing screwed to a wall folds against it, where it hangs.** The wall stays, and the rest folds onto its face. A part screwed flat to it (an upright) goes with it.
+- Folded, it is measured without the wall, and it is not laid down on the floor.
+- **A thing that only rests on something** (a footbridge on its banks) is lifted off it to fold.
+- The fold-down workbench now folds its arms and its board flat against the wall: 70 mm, against the 100 mm asked.
+
+### What it is checked by, added
+
+- **Held out, its hinges carry it.** A part standing its longest way off an upright face, with nothing under its far half (a bracket arm), carries its share of all of it and its load out from its hinge: W L / 2. Where its pin stands upright, the hinge's own length carries that moment. Where its pin lies across, its latch or its stop carries it at the part's thickness.
+
+  The 150 kg bench's 30 mm arm, hinged at the wall, needs 2 pins where it has room for 1. That fails, and the bench says so: a real fold-down bench locks its arm with a brace, which is not derived yet.
+- **Half-turn latches.** A joint between upright panels is pushed as a standing part is (its share of the push at its far edge, or the wind on its face). A joint in what lies flat end to end still carries what it spans (W L / 4). Before, the shelter's door, beside its wall, was weighed as a 2.65 m span and needed 49 pins; it needs 6.
+- **The push counts only its own mass.** The concrete block standing for a wall weighed 1150 kg into it before.
+
+### The engine, fixed
+
+A 9 mm kennel floor joined to its two 9 mm hinge blocks sank 9 mm into the floor on one side and tilted 1.23°. It passed "lies still" (under 10 mm) only by chance. It was the engine, not the fold:
+- Jolt merges the contacts of every sub-shape of a body that face the same way into one set of four.
+- The block on top of the plate is 9 mm up, within the 10 mm ahead that a contact is looked for, so its points replaced the plate's own corner contacts on that side.
+
+The same compound made in raw Jolt does it too; a 20 mm plate or a centred block does not. A body of joined parts in `src/nexus/sim.ts` now keeps each part's contacts its own (`mUseManifoldReduction = false`). The kennel now settles 12 µm.
+
+The VR world (`src/physics/world.ts`) builds compounds the same way, but its conformance suite failed with the same change (a thin bonded angle no longer came to rest). So it is left as it was, and is open.
+
+### Twelve folding asks, made and tested
+
+| Ask | Folds | What it says |
+|---|---|---|
+| a folding camping table, 20 kg, folds flat to 8 cm | ✓ | its two side panels fold under the top, one from a 22 mm block: 66 mm |
+| a folding stool, 100 kg, packs flat | ✓ | three legs under it, set in beside each other: 78 mm (it fails its own edge load: three legs) |
+| a collapsible crate 600 × 400 × 300 mm, flat to 6 cm | ✓ | its walls down in turn on 12 mm blocks: 60 mm |
+| a folding footbridge, a 70 cm bundle | ✗ | lifted off its banks, it is one deck over all of it: a book fold is not derived yet |
+| the emergency shelter, into a 25 litre backpack | ✗ | it folds, to 3.51 m × 125 mm × 3.51 m: 1540 L, 61.7 times the pack |
+| a folding electric cargo bike | ✗ | each part it would fold carries a wheel |
+| a fold-down workbench on a garage wall, flat to under 10 cm against it | ✗ | it folds against the wall, 70 mm; but its 700 mm arm, hinged at the wall, needs 2 pins where it has room for 1 |
+| a folding bookshelf with 4 shelves, 30 kg each | ✓ | its shelves fold onto one side, three from blocks; the other side is laid on top: 2.56 m × 201 mm × 540 mm, longer than it stands |
+| a folding picnic table, 15 cm thick | ✓ | 112 mm (the table fails its own edge load) |
+| a collapsible dog kennel, flat to 8 cm | ✓ | its walls fold down, its roof and door are laid on the stack: 54 mm |
+| a folding room divider of 4 panels | ✗ | nothing made: "divide a space" is not a want it keeps |
+| a folding drying rack, 5 kg, flat to 5 cm | ✓ | 29 mm (seed 8020; seed 101 folds to 56.9 mm and is drawn again) |
+
+Seven of the twelve fold within what was asked. Before this phase, the bookshelf and the workbench did not fold at all.
+
+### Checked
+
+- **The gate:** typecheck, and 1012 tests in 93 files:
+  - `tests/nexus/foldtree.test.ts`, 12 tests of the planner (`tests/nexus/fold.test.ts` is gone with `fold.ts`):
+    - the table with blocks and set in;
+    - the stool, the box, the zig-zag deck and the screen;
+    - shelves onto a back;
+    - folding flat, never on an edge;
+    - flat battens going with their shelf;
+    - folding against a wall;
+    - what turns already.
+  - the generator tests, folding as made: the footbridge, lifted off its banks, is again one deck to be cut.
+- **The VR world's own suite,** 154 tests in 13 files, unchanged.
+- **The everyday set, waves 2, 3 and 4** (74 asks) were rerun against the last merge. Two headlines changed:
+  - the w3c shelter's "packs into a sled under 30 kg" fails, as its 279 kg says it must;
+  - the w2b fold-down workbench folds against its wall (82 mm), drawn on its second seed: on its first, hanging an arm from a block took the arm's end off the upright under it.
+- **All three browser drives** pass with no script errors. "Fold it" plays the table's fold in the forge.
+
+### Open after 4b
+
+- **A room divider** makes nothing: "divide a space" is not a want the reader keeps. A screen standing in a zig-zag would want its panels at an angle, and the planner folds only parts square to each other.
+- **A book fold:** one deck over all of a bridge, cut into pieces hinged end to end.
+- **A locking brace** for a bracket arm hinged at a wall.
+- **The bookshelf's overhang:** four 756 mm shelves, 566 mm apart, cannot all fold onto a 1.8 m side. One of each pair must lie past its end. A parallelogram fold (each shelf hinged at both sides) is not derived.
+- **The VR world's compounds:** each child's contacts kept its own, without upsetting its bonded parts.
