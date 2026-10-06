@@ -1200,6 +1200,7 @@ Five fresh testers with no context each wrote four asks, twenty in all. These we
 | | Read | Made | Holds | Honest |
 |---|---|---|---|---|
 | Wave 6, first run | 0.9 | 0.3 | 0.95 | 2.1 |
+| Wave 6, rejudged after the fixes below | 2.3 | 1.0 | 1.8 | 2.5 |
 
 ### What was wrong, by cause
 
@@ -1300,3 +1301,57 @@ Five fresh testers with no context each wrote four asks, twenty in all. These we
 - **The twelve folding asks fold as before.**
   - The picnic table for 6 is now 1.8 m long and holds.
   - The origami shelter is 2.1 m tall inside, a room people stand in, and so heavier.
+
+### After the rejudge
+
+Five fresh judges read the outputs after the fixes above, and scored them 2.3, 1.0, 1.8 and 2.5. What they found, fixed by cause:
+
+**Ticks and counts.**
+- **What a check or a law weighs is asked and counted.** A snow load, a wind, a night held warm, how long the cells last, a child climbing it: each is now an asked item, met only where the checks and laws that weigh it pass.
+  - Checks and laws of one thing said are taken as one, by topic or by a figure they share, units aside (90 mph is the 145 km/h wind; 30 psf is 1.44 kPa of snow; a year is 365 days).
+  - One weighed by the laws but done by nothing made is not met: the stall's "under 32 °C inside" and the slider's "crawl at 2 mm/s".
+  - The greenhouse went from 2 of 3 to 2 of 8; the goat shelter from 0 of 3 to 0 of 5.
+- **A tip test passes only where statics agrees.** Half a second of push is too short to show a slow topple. The tall hay lifter tilted 0.5° and passed; by statics it tips. It now stands on a base a third of its height each way.
+- **A slide crosses its whole travel.** The slider passed "slides 1.2 m" on a 459 mm push. It is now pushed long enough to reach its stop, and passes only there.
+- **A motor asked for is had where one is made.** The clock's "with a motor" and the "motorized" slider were ticked with nothing driving them.
+- **Who assembles it, and with what tools,** are asked and not checked, not only heard.
+- **A met limit is not listed** as what it cannot make.
+- **A load's failure reaches what carries a weight, not every item that moves.** The cart's "Rolling" no longer fails because its cylinders tip. Whether a person can push it up its slope is no longer taken as whether it carries its load.
+
+**Laws added or corrected.**
+- **The dock heels by its section clipped at its waterline, not wall-sided.** The wall-sided formula holds only until the bottom's edge leaves the water (tan θ = 2 T / B). Solved properly, the 2.18 m dock with its crowd 1.37 m up at one side would have gone over. It is now widened until it rests at 6.55°, its low edge 620 mm above still water. The raft for two widens the same way.
+- **The airlock keeps its gas.** Pumping it down to keep its gas takes V [(p₁ − p₂) − p₂ ln(p₁ / p₂)]: 227 kJ a cycle and 52.4 W for the Mars door, not 1110 kJ. "Seals against regolith" is a seal, not biology.
+- **A tool worked in the sea is open to it.** The sea squeezes the corer's solid parts in bulk only (0.034% in titanium), and it wants no sphere.
+- **No grid power is not no power.** The greenhouse may have power of its own. Its night law sizes the cells that would make up what the sun lacks: about 281 m² and a store for the night's 123 kWh. "No burning fuel" is a limit of its own. A greenhouse that lets no light through is not that house.
+- **Open at its front, the wind gets in.** Inside, it pushes the roof up 0.63 of the wind's ½ ρ v² (0.9 of a windward wall's +0.7, EN 1991-1-4 7.2.9), not 0.2. A market stall is open at its front.
+- **A shelter for goats, horses or cattle has no floor.**
+- **Wood breaks at its bending strength; it does not yield.**
+- **Stakes.** On paving no stake goes in, so the weights its poles' feet want are said (47 kg each for the stall). In snow or ice a peg holds little, and it says so. What holds a cloth frame square is said not weighed.
+- **The welding cart.** Its deck is checked under what it carries. Cylinders 229 mm across and 1.4 m tall tip loose at 9.3°, less than its 10° slope. They are kept upright and secured (OSHA 29 CFR 1926.350), by a chain or rack not made.
+- **The clock lifts its ball back to the top of its track.** The track falls about 1 in 20 (estimate), so 25 mm, not 150. What carries the ball up is counted, and the height past which its cells would not last (68 mm) is said. Its cells now last.
+- **The crawler.** "150 W each" is a motor's rating, not what it draws, and "$250" is a cost. The climb sizes its cells (65.6 Wh, 262 g) and says the current and the grip it wants.
+- **The drone.** It reads its 2 m drop and its 7 inch rotors. They must not overlap (251 mm motor to motor). Its motors want twice its weight (450 g each), and it says what folding into its 120 mm tube asks.
+- **A child climbing it** is weighed with it empty, hung 300 mm out from its front, not as a load on it. "Tip-proof" stands on its tip checks, and corners not rounded are asked and not met.
+- **A folded width is across its plan, not its thinnest way.** The trailer, unfolded, is 793 mm across, against 300 mm.
+- **The habitat's ends are hemispherical**, holding p r / 2 in the same wall: 1930 kg of wall, not 1450 with flat ends. Its launch loads are said not weighed.
+- **Altitude.** High up, the air is said by its pressure (0.36 of the sea's at 7,800 m); its density waits for how cold it is.
+
+**Reading.**
+- **The treehouse.** The kids were counted twice: once in "for three 30 kg kids" and again from their weights, so "7 on it". "No more than two bolts through the trunk" is a limit. Binding where it must sway is not checked. The tree and the 750 mm hole for its trunk are said not made.
+- **"For three 30 kg kids"** is what it carries, done where what carries it bears it.
+
+### Checked
+
+- **The gate:** typecheck, and 1072 tests in 95 files. That includes 16 new ones in `tests/nexus/wave6.test.ts`, 32 in all.
+- **The three browser drives** pass with no script errors. The flows drive's first run timed out on one click while the generate drive had just loaded the machine; run again alone, all ten of its steps passed.
+- **The everyday set and waves 2, 3 and 4 were rerun.** The changes are counts, and one law:
+  - limits weighed by checks are now asked;
+  - the raft for two is wider, its bottom now pieced;
+  - the cattle gate's "does not bend or break" is no longer ticked, since nothing made is run against the 5600 J hit.
+- **The twelve folding asks fold as before.** The origami shelter counts its wind.
+
+### Open after wave 6
+
+- **Ways most asked for and not kept:** a stair, a truss, a frame of tubes, a telescoping mast, a drive that raises or climbs, a thermostat, tracks, a latch and the post it closes on.
+- **A frame braced by cloth:** what holds a cloth shelter square is not weighed.
+- **Reading a clause split by "than"** ("no more than two bolts") is mended where it is read, not in the parser.
