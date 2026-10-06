@@ -822,7 +822,7 @@ export class Workshop {
       return `While ${cond}: done ${k} time${k === 1 ? '' : 's'}, until it no longer held.${outs.length ? ` Last: ${outs.at(-1)!.split(/(?<=[.;])\s/)[0]}` : ''}`;
     }
     if (/^(?:parts list|parts|list (?:the )?parts|bill of materials|bom|cut list)$/i.test(t)) return this.partsList();
-    if ((m = /^load\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+at\s+(?:the\s+|its\s+)?(middle|centre|center|end))?$/iu.exec(t))) return this.loadStep(m[1]!, num(m[2]!, this.reader()), (m[3] ?? 'middle').toLowerCase());
+    if ((m = /^load\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+at\s+(?:the\s+|its\s+)?(middle|centre|center|end)|\s+(spread)(?:\s+(?:evenly|over it))?)?(?:\s+over\s+([\d.]+)\s*mm)?$/iu.exec(t))) return this.loadStep(m[1]!, num(m[2]!, this.reader()), (m[3] ?? m[4] ?? 'middle').toLowerCase(), m[5] ? Number(m[5]) / 1000 : undefined);
     if ((m = /^chart\s+(.+)$/i.exec(t))) return this.chartStep(m[1]!.trim());
     // moving joints, where things touch: a hinge turns about an axis, a slide runs along one
     if ((m = /^(hinge|slide)\s+([\p{L}_][\p{L}\d_]*)\s+(?:to|on|onto|in)\s+(.+)$/iu.exec(t))) return this.jointStep(m[1]!.toLowerCase() as Joint['kind'], m[2]!, m[3]!);
@@ -1144,7 +1144,9 @@ export class Workshop {
    *  σ = M c / I of its section across the span: a rectangle b h³ / 12, a round π D⁴ / 64, a tube π (D⁴ - d⁴) / 64.
    *  Below its yield it holds, by a factor; past it, it bends for good; past its ultimate, it breaks. Its own weight
    *  is not added: add it to the load ("with 500 N + cap.mass * g"). Its section is read from its box along x or z. */
-  private loadStep(name: string, F: number, where: string): string {
+  /** A load on a part: at its middle or its end, or spread evenly along it; borne across its whole width, or across so
+   *  much of it ("over 150 mm") where it bears on a patch narrower than the part. */
+  private loadStep(name: string, F: number, where: string, onWidth?: number): string {
     const s = this.specOf(name), X = this.all().made.find((m) => m.name === name)!; if (!X.matter) throw new Error(`${name} is a surface: it has nothing to bear a load with.`);
     // what holds it up may be joined to it: a table's legs hold its top though they are one piece with it
     const others: Box3[] = [...this.all().made.filter((m) => m.name !== name && !m.unseen), ...this.world.parts()];
@@ -1167,12 +1169,15 @@ export class Workshop {
       let law: string, M = 0, defl = 0, sigma: number;
       const over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9);
       // its section across the span: depth up and down, width across
-      const depth = X.h, width = ext[across]!;
+      const depth = X.h, width = onWidth !== undefined ? Math.min(onWidth, ext[across]!) : ext[across]!;
       const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
       if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
       else {
         const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
-        if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
+        const spread = where === 'spread';
+        if (left && right && spread) { const L = right.lo - left.hi; M = (F * L) / 8; defl = (5 * F * L ** 3) / (384 * E * I); law = `spread evenly across ${mm(L)} between ${left.by} and ${right.by}: M = F L / 8`; }
+        else if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
+        else if (spread) { const q = (left ?? right)!, arm = left ? hi - q.hi : q.lo - lo; M = (F * arm) / 2; defl = (F * arm ** 3) / (8 * E * I); law = `spread along a cantilever ${mm(arm)} out past ${q.by}: M = F a / 2`; }
         else { const q = (left ?? right)!, arm = left ? p - q.hi : q.lo - p; M = F * arm; defl = (F * arm ** 3) / (3 * E * I); law = `a cantilever ${mm(arm)} out past ${q.by}: M = F a`; }
         sigma = (M * c) / I;
       }
@@ -1186,7 +1191,7 @@ export class Workshop {
     keep('stress', sigma / 1e6, 'MPa'); keep('factor', +factor.toPrecision(4)); keep('deflection', defl * 1e3, 'mm'); keep('broken', breaks ? 1 : 0);
     s.broken = breaks || undefined;
     const MPa = (v: number) => `${+(v / 1e6).toPrecision(3)} MPa`;
-    return `${+F.toPrecision(4)} N on ${name}${where === 'end' ? ' at its end' : ''}: ${law}${M ? `, ${+M.toPrecision(3)} N·m, σ = M c / I = ${MPa(sigma)}` : `, ${MPa(sigma)}`}${defl ? `, bending ${mm(defl)} under it` : ''}. ${breaks ? `It breaks: past the ${MPa(mt.ultimate)} ${mt.name} takes before it breaks.` : yields ? `It yields: past its ${MPa(mt.yield)} yield it bends for good (it holds ${MPa(mt.ultimate)} before it breaks).` : `It holds, ${+factor.toPrecision(3)} times over its yield of ${MPa(mt.yield)}.`} Its own weight is not added to the load.`;
+    return `${+F.toPrecision(4)} N on ${name}${where === 'end' ? ' at its end' : where === 'spread' ? ' spread along it' : ''}${onWidth !== undefined ? ` over ${mm(onWidth)} of its width` : ''}: ${law}${M ? `, ${+M.toPrecision(3)} N·m, σ = M c / I = ${MPa(sigma)}` : `, ${MPa(sigma)}`}${defl ? `, bending ${mm(defl)} under it` : ''}. ${breaks ? `It breaks: past the ${MPa(mt.ultimate)} ${mt.name} takes before it breaks.` : yields ? `It yields: past its ${MPa(mt.yield)} yield it bends for good (it holds ${MPa(mt.ultimate)} before it breaks).` : `It holds, ${+factor.toPrecision(3)} times over its yield of ${MPa(mt.yield)}.`} Its own weight is not added to the load.`;
   }
   /** A chart of what was worked out over time: a motor's run, or the last fall. */
   private chartStep(what: string): string {

@@ -269,3 +269,61 @@ Fixed in this round, as each was a wrong figure or a false pass:
 - **Clear-wood strengths.** The load law takes clear-wood strengths (USDA Wood Handbook). Graded lumber with knots is weaker, so wood frames are less safe than their factor says.
 - **Point loads.** A spread load (soil) is read as one load at the middle, which is conservative by about two on bending.
 - **What raises a lift** (a screw, a winch, a scissor linkage) is still pushed up in the test, and it says so.
+
+## Round D3: the wave-2 findings, fixed by cause
+
+Each finding the four testers made was fixed in general, then all 16 requests and the 18 everyday ones were run again.
+
+**What a thing is for.**
+- **Loose stuff is held in.** Soil, sand, grain and the like lie in walls round the surface. Each wall is the least board that bears the stuff's sideways push spanning between its corners: at rest K0 γ z with K0 = 1 − sin 30° (Jaky, estimate).
+  - The raised bed: 40 mm walls, 2.79 kPa at their foot.
+  - A cart carrying soil by weight gets a tub as deep as a wheelbarrow's (250 mm, estimate).
+- **Wheelchairs.** Something to be used from a wheelchair is checked for 685 mm of knee room and a work surface no higher than 865 mm (2010 ADA Standards 306.3, 902.3). The raised bed fails both, as the tester worked out by hand: 471 mm and 1.05 m.
+- **A cabinet has a door**, assumed and said.
+- **Drying** is weighed by the water's latent heat, 2.41 MJ/kg at 40 °C. Each 100 g dried in 3 h takes 22 W beyond keeping warm. A closed 36 L box holds only 1.8 g of vapour at 40 °C (Buck's saturation formula), so the boot dryer fails: it needs air moved through it, and air flow is not kept.
+
+**Loads as they are.**
+- **Spread loads.** The workshop's load law now reads a load spread along a part (M = F L / 8, δ = 5 F L³ / 384 E I), and a load that bears on only part of a width.
+- **Frames by how the load lies.** A frame is sized and checked by how its load lies:
+  - spread, each part takes its share;
+  - a person may stand anywhere, so the joist and the rail under them take it all, and the sheet bears it on a strip a foot wide and the bay again.
+- **Creep.** Wood under a load that stays creeps (EN 1995-1-1 k_def: 2.0 kept wet, 0.6 dry), and the bending checks include it.
+- **Graded lumber.** Framing is sawn softwood graded C24 (EN 338: 24 MPa, 11 GPa, 420 kg/m³), not clear wood.
+- **What it rolls on.** Rolling resistance and grip now come from what it rolls on: mud 0.2 and 0.3, grass, gravel, sand, snow (estimates).
+  - A slope needs grip as well as torque. The garden cart's wheels need a friction of 0.85 on mud and get about 0.3.
+  - What powers its motors is said as not made, and not counted in its weight.
+- **Wind.** A wind said is a push in the Jolt test: ½ ρ v² on its outline, drag coefficient 1.2 (estimate). The umbrella, now a canopy on a pole (its cloth a thin sheet, said so), takes 446 N at 40 km/h and blows over, as the tester expected (about 450 N).
+- **Folded sizes** are checked against the sizes as made. It does not fold, so it fits only if it is that small already.
+
+**The laws where nothing is made.**
+- **The Mars ship (`orbits.ts`).**
+  - Lambert's problem gives the least transfer for the days asked: 13.9 km/s each way for 90 days, falling to Hohmann's 5.7 km/s at 259 days.
+  - The rocket equation then leaves 0.7 t (chemical) and 17 t (nuclear-thermal) of the 400 t, less its tanks, against a 40 t habitat for four (NASA DRA 5.0, estimate).
+  - The dose on the way is 0.33 Sv at 1.84 mSv a day (Curiosity's RAD).
+- **The heat engine.** The most power through what conducts heat to it is K ΔT² / 4 T (Curzon and Ahlborn): 1 nW, 992 times too little. Across its own 10 µm it sees far less than the 0.5 K.
+- **The Earth motor.**
+  - Its surface is a sphere's, and in vacuum it sheds heat by radiation alone: its losses warm it by 0.0004 K.
+  - To power a world it must be a generator, and its own spin holds 3.6 × 10²⁹ J, 570 million years at 20 TW.
+- **The microSD card.** Sending 50 MB/s by radio draws about 1 W (2.5 nJ a bit, estimate), and it settles near 131 °C against its 70 °C limit. A quarter wave at 2.4 GHz, 31 mm, is twice the card.
+- **The drone.** It can carry the energy to hover, but must flap, as wasps and beetles its size do. At 1 m/s its drag is 2.3 times its weight.
+- **The city walker.** Sand bears about 200 kPa, so a million tonnes needs at least 49,000 m² of foot.
+
+**Reading.**
+- Every number said is accounted for: 70 °C, 400 t and 1 million tonnes are now read.
+- Sieverts, crews and data rates (MB/s as bytes, Mbps as bits) are read.
+- A model number ("Orange Pi 5") is said as part of a name.
+- "To power the whole planet" and "to run a pacemaker" are said back as what it is for.
+- A heat engine is a conversion, not a turntable.
+- "Crawls through 15 cm pipes" is on wheels, its width and height no more than the pipe.
+- "Without the bottom sagging" is ticked by its bending check. "Without wobbling" is said as untested, since its parts are rigid.
+- "150 kg of hammering" is said as a weight held still; impact is not tested.
+- "What should it do?" is no longer put to a request it cannot fit.
+- When nothing is made, the generator says what it heard, and what nothing made line says no longer repeats.
+- Text is cut at a word.
+
+### Open after D3
+
+- **Folding, collapsing and unfolding** (the scissor lift, the footbridge, the umbrella): the linkage itself, with its folded and opened states each checked, is next (Phase 4).
+- **What raises a lift** (a screw or a winch, and what turns it), and **a supply for its motors** (cells sized for the run, which the bounds already weigh).
+- **Racking and impact.** Racking needs joints that give, and impact needs a blow in time; the physics has neither yet.
+- **Sizes of what is put in a thing** (four boots in a dryer) are not yet read from what is named.

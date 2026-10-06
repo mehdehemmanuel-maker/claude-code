@@ -51,7 +51,8 @@ describe('whether an arrangement carries a load by stretching is counted, not na
 });
 
 describe('wood, as a test of the counting: one solid, two arrangements at once', () => {
-  const kept = MATERIALS.filter((m) => m.category === 'wood');
+  // the species measured as clear wood (USDA Wood Handbook): a strength grade of sawn lumber (C24) is no species
+  const kept = MATERIALS.filter((m) => m.category === 'wood' && /USDA/.test(m.source));
   const phi = (m: (typeof kept)[number]) => (m.specificGravity! * 1000) / CELL_WALL_DENSITY.value;
   const EL = (m: (typeof kept)[number]) => m.E * ALONG_FROM_BENDING.value;
   const listed = kept.filter((m) => ELASTIC_RATIOS[m.id]);

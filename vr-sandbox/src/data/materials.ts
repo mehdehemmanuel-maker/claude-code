@@ -161,6 +161,10 @@ export const MATERIALS: Material[] = [
   wood('wood.white-oak', 'White oak', 0.68, 750, 12.3, 105, 0xa98a5f),
   wood('wood.hard-maple', 'Hard (sugar) maple', 0.63, 700, 12.6, 109, 0xe0c9a0),
   wood('wood.balsa', 'Balsa', 0.16, 160, 3.4, 21, 0xefe0b9, 'estimated'),
+  // a grade of sawn softwood, not a species: what framing lumber is sold as. Its yield taken as its characteristic
+  // bending strength, the 5th-percentile strength of graded pieces with their knots, so the load law's factor of two
+  // is near what EN 1995 allows it (EN 338:2016 Table 1, C24: fm,k 24 MPa, E0,mean 11 GPa, ρmean 420 kg/m³)
+  { ...wood('wood.c24', 'Softwood graded C24', 0.42, 420, 11, 24 / 0.7, 0xd9b77e), source: 'EN 338:2016 Table 1, strength class C24: fm,k 24 MPa (taken as its yield), E0,mean 11 GPa, ρmean 420 kg/m³', confidence: 'spec' },
   {
     id: 'wood.birch-plywood', name: 'Birch plywood', category: 'engineered-wood', density: 680, E: 9 * GPa, nu: 0.3,
     yield: 40 * MPa, ultimate: 40 * MPa, elongation: 0.01, ductile: false, ferromagnetic: false, conductivity: 0, weld: 'none',

@@ -124,7 +124,7 @@ describe('making it, and checking what was asked', () => {
   it('frames a top no sheet alone bears: joists on two rails, each the least the load law lets bear its share', () => {
     const [d] = designs(go('a raised vegetable bed on legs, 2 m by 1 m and 75 cm tall, that holds 30 cm of soaking-wet soil'), 1, { seed: 8020, physics: J });
     expect(d!.choices.some((x) => /so it is framed: the top on \d+ joists/.test(x))).toBe(true);
-    for (const re of [/its top bears .* between its joists/, /its joists bear half the load/, /its rails bear half of all of it/]) { const k = d!.checks.find((x) => re.test(x.what))!; expect(k.ok, k.says).toBe(true); }
+    for (const re of [/its top bears .* between its joists/, /its joists bear their share/, /its rails bear half of all of it/]) { const k = d!.checks.find((x) => re.test(x.what))!; expect(k.ok, k.says).toBe(true); }
     expect(d!.ok).toBe(true);
   }, 60000);
   it('holds loose soil in with walls against its sideways push, and checks it for a wheelchair', () => {
