@@ -79,9 +79,12 @@ describe('what the laws say of it', () => {
     const b = law('a titanium sphere that holds out the sea 4000 m deep', /^it holds out the sea 4 km down$/)!;
     expect(b.says).toContain('Zoelly'); expect(b.says).toContain('4.15% of its radius'); expect(b.says).toContain('buckling sets it');
   });
-  it('a ball lifted each minute for a year against two AA cells: more than they hold', () => {
+  it('a ball lifted each minute for a year against two AA cells, with what carries it up: lifted to the top of its track, within them; with no track said, a desk height, more than they hold', () => {
     const b = law(CLOCK, /^its cells last/)!;
-    expect(b.ok).toBe(false); expect(b.says).toContain('5.26 × 10^5 lifts'); expect(b.says).toContain('9.9 Wh against the 7 Wh');
+    // 525,960 lifts of 8.4 g and a 4.2 g carriage by 25 mm (500 mm falling 1 in 20): 3.09 mJ each, 0.451 Wh, 2.26 Wh at 0.2, and 0.877 Wh to keep time
+    expect(b.ok).toBe(true); expect(b.says).toContain('5.26 × 10^5 lifts'); expect(b.says).toContain('25 mm (the fall of its 500 mm track at about 1 in 20, estimate)'); expect(b.says).toContain('3.13 Wh against the 7 Wh'); expect(b.says).toContain('lifted more than 67.8 mm each time, they would not last');
+    const d = law(CLOCK.replace('down a 500 mm zig-zag track ', ''), /^its cells last/)!;
+    expect(d.ok).toBe(false); expect(d.says).toContain("150 mm (a desk thing's height, estimate)"); expect(d.says).toContain('14.4 Wh against the 7 Wh');
   });
   it('stairs climbed, a frame hovering, a slow slide: each weighed', () => {
     expect(law('Tracked stair-climbing crawler for carrying a 6 kg grocery bag. Climbs 35 degree stairs at 0.15 m/s, 24 V battery for 90 minutes of runtime.', /^it climbs stairs at 35°$/)?.says).toContain('118 N');
@@ -146,6 +149,29 @@ describe('what was asked is counted where a check or a law weighs it', () => {
   it('weighed by the laws but done by nothing made, it is not met; a law that answers what is asked says so beside it', () => {
     expect(ask(made(STALL), /^under 32 °C inside with 46 °C round it$/)).toMatchObject({ kind: 'limit', met: false, why: 'the laws weigh it, but nothing made is checked to do it' });
     expect(ask(made(SLIDER), /^crawl at 2 mm\/s/)).toMatchObject({ got: null, why: expect.stringMatching(/^the laws weigh it \(it slides at 2 mm\/s\), but nothing made is checked to do it$/) });
-    expect(ask(made(CLOCK), /^running on two aa batteries/)?.why).toMatch(/; and the laws say not: its cells last 365 days/);
+    expect(ask(made(CLOCK.replace('down a 500 mm zig-zag track ', '')), /^running on two aa batteries/)?.why).toMatch(/; and the laws say not: its cells last 365 days/);
+    // a motor asked for is had only where one is made
+    expect(ask(made(CLOCK), /^with a motor$/)).toMatchObject({ got: null, why: expect.stringMatching(/^no motor is made/) });
+    expect(ask(made(SLIDER), /^a motorized camera slider$/)?.got).toBeNull();
   });
+});
+
+describe('a platform at a tree, a slide to its stop', () => {
+  const TREE = 'so we have a 45 cm diameter oak and want a treehouse platform 2.4 m up for three 30 kg kids plus an 80 kg parent, no more than two bolts through the trunk, and it has to tolerate 15 cm of trunk sway in wind without binding or cracking';
+  it('people counted from their weights are counted once; what it is for, said with its weight, is what it carries', () => {
+    const c = go(TREE);
+    expect(c.said.people).toBe(4); expect(c.said.peopleArea).toBeCloseTo(1.4, 6);
+    expect(c.asked.find((a) => a.text === 'for three 30 kg kids')).toMatchObject({ kind: 'does', got: 'support', load: true });
+  });
+  it('"no more than two bolts through the trunk" is a limit; "without binding" where it must sway is not checked; the tree is not made', () => {
+    const d = made(TREE);
+    expect(d.asked.find((a) => a.text === 'no more than two bolts through the trunk')).toMatchObject({ kind: 'limit', met: true });
+    expect(d.asked.find((a) => a.text === 'without binding or cracking')).toMatchObject({ got: null });
+    expect(d.gaps.join(' ')).toContain('a hole of its 450 mm and 150 mm of sway each way, 750 mm across, is not cut');
+    expect(d.does[0]).toBeLessThan(d.does[1]);
+  });
+  it('a slide is pushed across its whole travel, and passes only where it reaches its stop', () => {
+    const [d] = designs(go(SLIDER), 1, { seed: 101, physics: J });
+    expect(d!.checks.find((x) => x.what === 'it slides 1.2 m')).toMatchObject({ ok: true, says: expect.stringMatching(/it slid as far as 1\.2 m, its stop at 1\.2 m/) });
+  }, 120000);
 });
