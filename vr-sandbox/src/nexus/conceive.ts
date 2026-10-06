@@ -1713,6 +1713,10 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   if (made && rt && con.said.within !== undefined) { const rn = new Set([rt.name, ...(rides.get(rt.name) ?? [])]), kg = ms.filter((m) => rn.has(m.name)).reduce((a, m) => a + m.mass, 0) + (con.wants.find((w) => w.fn === 'raise')?.q.m?.v ?? 0), P = (kg * G * rt.L) / con.said.within; out.push({ what: `it raises what it carries ${len(rt.L)} in ${+con.said.within.toPrecision(3)} s`, ok: false, says: `${+kg.toPrecision(3)} kg up ${len(rt.L)} in that time takes about ${+P.toPrecision(3)} W (m g h / t), with nothing lost, from what raises it, which is not derived` }); }
   // what it raises, it raises only in part where what raises and holds it is not derived: its travel and guides are made
   const unraised = gaps.some((g) => g.startsWith('what raises it'));
+  // held slower than its motor turns smoothly (its brushes' friction sticks and slips there, estimate), a turn the physics
+  // holds is not held: the physics takes its friction as smooth
+  const stalls = gaps.find((g) => /where its brushes' friction stalls it/.test(g));
+  if (stalls) for (const [i, x] of out.entries()) if (/^it turns at /.test(x.what) && x.ok) out[i] = { ...x, ok: false, says: `${x.says}; but the physics takes its brushes' friction as smooth, and that slow they stick and slip (estimate): it is not held there by the motor kept` };
   // what it does is done only where its own test of it passes: a turn its test does not reach, a "not tip over" its wind
   // or push test shows it does
   const TESTED: [Fn, RegExp][] = [['turn', /^it turns at /], ['move', /^it moves at /], ['swing', /^it swings open$/], ['slide', /^it slides /], ['raise', /^it raises what it carries [\d.]+ \S+$/]];

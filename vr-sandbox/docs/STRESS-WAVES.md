@@ -536,6 +536,13 @@ On average, reading rose from 1.2 to 2.75, making from 0.95 to 1.1, holding from
 - sizes and feet are read off it as built;
 - the empty wind, the uplift, and the wind's statics are checked.
 
+**A speed held.** The drain robot's speed controller was soft. With its 5 kg load it crept up over 1.4 s, overshot by 44%, and was at its peak (0.307 m/s against 0.2) in the third second, where its speed is read. Now:
+- the controller reaches its current limit at a twentieth off the speed held, as a speed controller does;
+- it is no stiffer than half of what the time step lets a loop on the wheel alone stay steady at (n² Kt (Kt + kp) dt / R J ≤ ½, J being the wheel's own inertia from the engine);
+- the robot runs at 0.203 m/s.
+
+Held that stiffly, the planter's turntable also held 0.00278 rpm in the physics. But the physics takes a brushed motor's friction as smooth, and at 0.033 rpm at the motor its brushes stick and slip (estimate). So a turn held below a hundredth of the motor's speed with no load is ✗, said so.
+
 **The size table.** A row is folded into one line, "far from bearing on it here", in these cases:
 - a rim speed for what does not turn;
 - coils against combs for what a field drives, or what nothing drives;
@@ -548,7 +555,7 @@ What is past its threshold is always shown.
 
 ### Checked
 
-- **The gate:** typecheck, and 973 tests in 92 files.
+- **The gate:** typecheck, and 975 tests in 92 files.
 - **Both browser drives:** the generator drive and the flow board drive, with no script errors.
 - **The everyday set (18) and wave 2 (16)** were rerun against their last outputs.
   - The doghouse has a door that swings.
@@ -557,11 +564,82 @@ What is past its threshold is always shown.
   - The fold-down workbench, battery-assisted cart, scissor-lift platform and folding footbridge are ✗ as what they are named for.
   - Nothing else changed.
 
+### The D4 outputs judged
+
+Five more judges, with no context, scored the D4 outputs the same way. They read only the output files.
+
+| # | request | D3 rescored | D4 judged |
+|---|---|---|---|
+| 1 | lowering wall cabinet | 3/1/2/3 | 3/1/2/3 |
+| 2 | tremor mug | 2/1/2/3 | 3/1/2/3 |
+| 3 | turning planter | 3/2/2/2 | 3/2/2/3 |
+| 4 | stair-climbing walker | 2/1/2/3 | 2/0/1/2 |
+| 5 | blood microswimmer | 3/0/2/2 | 3/1/3/2 |
+| 6 | 450 m cargo airship | 4/1/3/3 | 4/1/3/3 |
+| 7 | burrowing worm | 3/0/3/3 | 2/0/3/3 |
+| 8 | solar-sail tug | 3/0/3/3 | 3/0/4/4 |
+| 9 | wall record shelf | 3/4/3/3 | 4/4/3/3 |
+| 10 | 6.5 m footbridge | 3/4/1/1 | 3/2/2/2 |
+| 11 | mountain shelter | 3/1/2/3 | 4/1/1/2 |
+| 12 | bird-watching tower | 4/2/1/2 | 4/1/1/3 |
+| 13 | backpack solar charger | 3/0/3/3 | 4/0/4/4 |
+| 14 | 48 h vacuum flask | 3/1/3/3 | 4/1/3/3 |
+| 15 | Peltier cooler | 2/1/2/2 | 3/1/3/3 |
+| 16 | hand-crank kettle | 3/1/2/2 | 4/1/3/3 |
+| 17 | Mars transfer stage | 3/1/3/2 | 3/1/3/3 |
+| 18 | lunar habitat | 1/0/1/1 | 3/0/3/3 |
+| 19 | Challenger Deep pod | 3/1/3/3 | 4/0/4/4 |
+| 20 | Europa flight board | 1/0/1/1 | 3/0/2/3 |
+
+The averages:
+
+| | D3 rescored | D4 judged |
+|---|---|---|
+| read | 2.75 | 3.3 |
+| made | 1.1 | 0.9 |
+| holds | 2.2 | 2.6 |
+| honest | 2.4 | 2.95 |
+
+These are different judges, so part of each change is the judge. "Made" fell where the judges were stricter about what is buildable:
+- they gave the footbridge 2, as its 7.8 m rails cannot be spliced over a support on one clear span;
+- they gave the walker and the deep-sea pod 0, as no walker and no pod is made.
+
+Their findings are the next round's work (D5), by cause:
+
+- **Ticks not earned.**
+  - The shelter's "empty, it stands in that wind" weighs the wind's turning without its lift: together they flip it.
+  - The cabinet's "raises 500 mm" is a ride along its guides, pushed.
+  - The walker's "supports body weight" is a weight on a table top.
+  - The planter's 10 L counts as a success apart from its watering.
+  - The tower's push does not test its glued joints racking.
+  - The footbridge says it does what was asked though its rails cannot be had in one length and its abutments are not derived.
+- **Loads.** The 450 kg on the footbridge is spread along it, but people bunch: at midspan its rails bend 33.6 mm against 26 mm. The shelter's uplift has no margin, and has no inside pressure with its door open.
+- **What is said back.** The mug's 5 ml spill is a thing asked, not a number unused; knocked over, open, it spills it all.
+- **The size table.**
+  - Reynolds' number in blood uses blood, not water.
+  - The time heat takes to cross it says what it means at milliseconds and at years.
+  - Self-weight does not bear on a hull held up by its gas.
+- **The laws.**
+  - **Microswimmer.** Swimming and reaching the clot are judged apart. Its mass is taken at the density it sinks by, and the field gradient that would hold it up is worked out.
+  - **Worm.** The diameter it takes is said. The power its cells give is set against the power to burrow.
+  - **Sail.** It is not read as solar cells. The sail that would make it in 3 years is sized.
+  - **Solar charger.** The weight of its panels is weighed.
+  - **Flask.** The radiation across a silvered vacuum gap is weighed against the makers' figures. A wall that must keep heat in takes a matter that conducts little.
+  - **Cooler.**
+    - Its Peltier is taken at the lift it has.
+    - A compressor behind vacuum panels comes near the 100 Wh, and is said to.
+    - The sun on it is weighed.
+    - The 3 cm wall limit is checked as made.
+  - **Kettle.** Its open top's evaporation keeps a hand-cranked kettle from ever boiling.
+  - **Mars stage.** The propellant at three twentieths is said as propellant. Capture into an ellipse is worked through. More than one launch is said to be needed.
+  - **Lunar habitat.** A closed sphere and a dome on a floor are told apart. The first hours, before its cover warms, lose more than 15 kW.
+  - **Deep-sea pod.** Its wall is said as part of its radius. 900 Wh/kg is beyond any cell.
+  - **Europa board.** It is warmed when off, and on its surface alone its dose would pass.
+
 ### Open after D4
 
 - **Folding, collapsing and unfolding**: the linkage (Phase 4).
 - **What raises a lift and holds it**; a speed reducer of many stages, or a stepping motor; a bearing under a turntable.
 - **Insulated walls and a cooler** as ways and parts.
 - **A roof on rafters**; guy lines and stakes; bracing for a tall frame.
-- **A cart's speed.** Its speed is held by its controller, yet runs 50% over in the physics. This was so before D4 too.
 - **A rescore** of the D4 outputs by fresh judges.

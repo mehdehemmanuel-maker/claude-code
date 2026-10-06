@@ -321,3 +321,19 @@ describe('wave 3 rescored: what it is named for, and what powers it', () => {
     expect(p.bounds.find((x) => /^it carries what it needs for 90 days at 50 W$/.test(x.what))!.ok).toBe(false);
   });
 });
+
+describe('a speed held by its controller, and a speed too slow for the motor kept', () => {
+  it('a robot carrying its load is held at the speed asked by the third second, as a stiff speed controller holds it', () => {
+    const [d] = designs(go('Can you make a little robot that crawls through 15 cm diameter drain pipes by itself at about 0.2 m/s'), 1, { seed: 101, physics: J });
+    const m = d!.checks.find((x) => x.what === 'it moves at 0.2 m/s')!;
+    expect(m.ok).toBe(true);
+    const v = Number(/it went ([\d.]+) m\/s/.exec(m.says)![1]); expect(Math.abs(v - 0.2) / 0.2).toBeLessThan(0.05);
+  }, 60000);
+  it('a turn held slower than its brushes let it turn smoothly is not ticked, though the physics holds it', () => {
+    const [d] = designs(go('a turntable that turns once every 6 hours'), 1, { seed: 101, physics: J });
+    const t = d!.checks.find((x) => /^it turns at /.test(x.what))!;
+    expect(t.ok).toBe(false);
+    if (/came to/.test(t.says) && !/but the physics takes its brushes' friction as smooth/.test(t.says)) expect(Math.abs(Number(/came to ([\d.]+) rpm/.exec(t.says)![1]) / 0.00278 - 1)).toBeGreaterThan(0.15);
+    expect(d!.gaps.some((g) => /where its brushes' friction stalls it/.test(g))).toBe(true);
+  }, 60000);
+});
