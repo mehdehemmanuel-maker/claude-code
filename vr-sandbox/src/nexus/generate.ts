@@ -248,7 +248,7 @@ const MATTER_WORDS: [RegExp, string][] = [
   [/^copper$/, 'copper.c110'], [/^brass$/, 'brass.c360'], [/^(titanium|ti)$/, 'titanium.ti6al4v'], [/^(wood|plywood|birch)$/, 'wood.birch-plywood'], [/^mdf$/, 'wood.mdf'],
   [/^(nylon|printed nylon|pa)$/, 'polymer.nylon-microcarbon'], [/^(acrylic|pmma|perspex|plexiglass)$/, 'polymer.pmma'], [/^rubber$/, 'rubber.natural'], [/^glass$/, 'glass.soda-lime'],
   [/^concrete$/, 'concrete.c30'], [/^brick$/, 'ceramic.clay-brick'], [/^(carbon|carbon fibre|carbon fiber|cfrp)$/, 'composite.cfrp'], [/^(fibreglass|fiberglass|gfrp)$/, 'composite.gfrp'],
-  [/^(foam|eva)$/, 'foam.eva'], [/^cork$/, 'cork.agglomerated'], [/^leather$/, 'leather.veg-tan'], [/^canvas$/, 'textile.canvas'], [/^phenolic$/, 'polymer.phenolic'],
+  [/^(foam|eva)$/, 'foam.eva'], [/^cork$/, 'cork.agglomerated'], [/^leather$/, 'leather.veg-tan'], [/^canvas$/, 'textile.canvas'], [/^(ripstop|nylon ripstop|tent cloth|tent fabric|silnylon)$/, 'textile.nylon-ripstop'], [/^phenolic$/, 'polymer.phenolic'],
 ];
 /** A matter by its word, its id or its name. */
 export function matterOf(word: string): Material {

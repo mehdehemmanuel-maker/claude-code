@@ -93,6 +93,7 @@ export const FUSION: Record<string, FusionProps> = {
   'stone.granite': F('ceramic', 1215, null, '', 8e-6, { base: 'granite' }, 'granite melts about 1215-1260 °C; alpha about 8 µm/m·K (estimated)'),
   'stone.marble': F('none', null, 825, 'its calcite gives off CO₂ from about 825 °C: it never melts', 7e-6, {}, 'CaCO₃ calcines from about 825 °C (CRC Handbook)'),
   'textile.baize': F('none', null, 230, 'its wool chars from about 230 °C', 0, {}, 'wool decomposes without melting (estimated onset)'),
+  'textile.nylon-ripstop': F('thermoplastic', 220, 350, 'it decomposes from about 350 °C', 80e-6, { delta: 27.8 }, 'nylon 6 fibre: melting about 220 °C (MatWeb); alpha about 80 µm/m·K, delta as nylon (Polymer Handbook), estimate'),
   'textile.canvas': F('none', null, 250, 'its cotton chars from about 250 °C', 0, {}, 'cellulose decomposes without melting (estimated onset)'),
   'leather.veg-tan': F('none', null, 80, 'its collagen shrinks from about 80 °C and chars after', 0, {}, 'veg-tan leather shrink temperature about 70-85 °C (estimated)'),
   'cork.agglomerated': F('none', null, 200, 'it chars from about 200 °C', 0, {}, 'cork decomposes without melting (estimated onset)'),

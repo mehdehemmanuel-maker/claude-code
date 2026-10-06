@@ -117,7 +117,9 @@ export function parseAsk(words: string): Parse {
       }
       if (x.w === ',' || x.w === ';' || x.w === '(' || x.w === ')') {
         const n2 = next?.w ?? ''; if (DOES.has(n2) || HAS.has(n2) || FOR.has(n2) || WHERE.has(n2) || AND.has(n2)) continue;
-        // a list goes on as the clause it is a list of: a verb starts another thing it does, a thing another of the same
+        // a list goes on as the clause it is a list of: a verb starts another thing it does, a thing another of the same;
+        // "…, no tools beyond a drill": another thing it must not have or use
+        if (/^(no|without)$/.test(n2) && !verbAt(i + 2)) { open('main', ',', i + 1); continue; }
         if (verbAt(i + 1)) open('does', ',', i + 1);
         else { const v = verbAfterThing(i + 1); if (v >= 0) { const c = open('does', ',', i + 1); c.subj = toks[v - 1]!.w; c.verb = toks[v]!.w; c.verbAt = v; i = v; } else if (host().kind !== 'does') open(host().kind, ',', i + 1); /* else more of what it acts on, in the clause it is in */ }
       }

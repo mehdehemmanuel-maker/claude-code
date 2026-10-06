@@ -61,6 +61,7 @@ const BY_ID: Record<string, ThermalProps> = {
   'ground.soil': T(1840, 0.52, 0.9, 'Incropera Table A.3, soil: c 1840 J/kg K, k 0.52 W/m K'),
   'stone.marble': T(880, 2.8, 0.9, 'Engineering Toolbox, marble: c 0.88 J/g K, k 2.1-2.9 W/m K'),
   'textile.baize': T(1360, 0.04, 0.9, 'Engineering Toolbox, wool: c 1.36 J/g K; felt k 0.04 W/m K'),
+  'textile.nylon-ripstop': T(1670, 0.25, 0.9, 'as nylon 6/6 (MatWeb): c 1.67 J/g K, k 0.25 W/m K; a thin cloth, estimate'),
   'textile.canvas': T(1300, 0.06, 0.9, 'Engineering Toolbox, cotton: c 1.3 J/g K; cloth k 0.04-0.08 W/m K'),
   'leather.veg-tan': T(1500, 0.16, 0.9, 'Engineering Toolbox, leather: c 1.5 J/g K, k 0.14-0.17 W/m K (estimated)'),
   'foam.eva': T(2000, 0.04, 0.9, 'Closed-cell EVA foam 100 kg/m3: k 0.035-0.045 W/m K, c 2.0 J/g K (estimated)'),
