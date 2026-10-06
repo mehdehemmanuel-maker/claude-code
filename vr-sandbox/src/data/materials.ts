@@ -244,6 +244,13 @@ export const MATERIALS: Material[] = [
     source: 'Typical No. 10 cotton duck: about 0.6 mm, 400 g/m2; breaking strength 25-35 MPa of section', confidence: 'estimated',
   },
   {
+    // a tent's cloth, modelled 0.2 mm thick (the thinnest the physics holds well) at the density that gives its 70 g/m²
+    id: 'textile.nylon-ripstop', name: 'Coated nylon ripstop (tent cloth)', category: 'textile', density: 350, E: 250 * MPa, nu: 0.3,
+    yield: 30 * MPa, ultimate: 40 * MPa, elongation: 0.25, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
+    friction: 0.5, restitution: 0.2, sound: 'rubber', loss: 0.2, sparks: 'none', color: 0xd9682b, metalness: 0, roughness: 0.8,
+    source: 'Typical 70D PU-coated nylon ripstop tent fly: about 70 g/m2; strip tensile about 400 N per 50 mm (ISO 13934-1), 8 kN/m, here over a modelled 0.2 mm', confidence: 'estimated',
+  },
+  {
     id: 'leather.veg-tan', name: 'Leather (vegetable-tanned cowhide)', category: 'leather', density: 860, E: 150 * MPa, nu: 0.35,
     yield: 15 * MPa, ultimate: 25 * MPa, elongation: 0.4, ductile: true, ferromagnetic: false, conductivity: 0, weld: 'none',
     friction: 0.6, restitution: 0.3, sound: 'rubber', loss: 0.15, sparks: 'none', color: 0x7a4b2a, metalness: 0, roughness: 0.7,

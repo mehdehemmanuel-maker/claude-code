@@ -136,10 +136,14 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     if (j.kind === 'hinge') {
       const st = new J.HingeConstraintSettings(); st.mPoint1 = R(j.at); st.mPoint2 = R(j.at); st.mHingeAxis1 = V(u); st.mHingeAxis2 = V(u); st.mNormalAxis1 = V(nrm); st.mNormalAxis2 = V(nrm);
       if (j.limits) { st.mLimitsMin = j.limits[0]; st.mLimitsMax = j.limits[1]; }
+      // more solver steps on a joint than on contacts: a light part (a wheel) held to a heavy one (a loaded deck) by its
+      // hinge alone would otherwise give under the load, which no law asks of it
+      st.mNumVelocityStepsOverride = 120; st.mNumPositionStepsOverride = 40;
       st.mMaxFrictionTorque = j.friction ?? 0; c = J.castObject(st.Create(b1, b2), J.HingeConstraint); J.destroy(st);
     } else {
       const st = new J.SliderConstraintSettings(); st.mPoint1 = R(j.at); st.mPoint2 = R(j.at); st.mSliderAxis1 = V(u); st.mSliderAxis2 = V(u); st.mNormalAxis1 = V(nrm); st.mNormalAxis2 = V(nrm);
       if (j.limits) { st.mLimitsMin = j.limits[0]; st.mLimitsMax = j.limits[1]; }
+      st.mNumVelocityStepsOverride = 120; st.mNumPositionStepsOverride = 40;
       st.mMaxFrictionForce = j.friction ?? 0; c = J.castObject(st.Create(b1, b2), J.SliderConstraint); J.destroy(st);
     }
     ps.AddConstraint(c);

@@ -35,7 +35,7 @@ export const UNITS: Record<string, UnitDef> = {
   A: u(I), mA: u(I, 1e-3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
   N: u(N), kN: u(N, 1e3), mN: u(N, 1e-3), uN: u(N, 1e-6), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
-  Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
+  Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168), psf: u(PA, 47.88025898),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
   Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), krad: u([0, 2, -2, 0, 0], 10), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
@@ -97,7 +97,7 @@ const SPOKEN: [RegExp, string][] = [
   [/^(knots?|kn|kt|kts)$/i, 'kn'], [/^(µn|μn|un|micronewtons?)$/i, 'uN'], [/^(mn|millinewtons?)$/, 'mN'], [/^(hectares?|ha)$/i, 'ha'], [/^(u|ru|rack ?units?)$/i, 'U'],
   [/^(w\/m²|w\/m2|w\/m\^2|watts? per square met(re|er))$/i, 'W/m^2'], [/^(n\/m²|n\/m2|n\/m\^2|newtons? per square met(re|er))$/i, 'Pa'], [/^(kn\/m²|kn\/m2|kn\/m\^2|kilonewtons? per square met(re|er))$/i, 'kPa'], [/^(m²|m2|m\^2|square met(re|er)s?|sq m)$/i, 'm^2'], [/^(cm²|cm2|cm\^2|square centimet(re|er)s?)$/i, 'cm^2'], [/^(krad|kilorads?)(\(si\))?$/i, 'krad'], [/^(mph|miles? per hour)$/i, 'mi/h'], [/^(m\/s|mps|metres? per second|meters? per second)$/i, 'm/s'],
   [/^(m\/s\^?2|m\/s²|m s-2)$/i, 'm/s^2'], [/^(N[·.\s-]?m)$/, 'N m'], [/^(n[·.\s-]m|newton[- ]?met(re|er)s?)$/i, 'N m'], [/^(lbf?[·.\s-]?ft|ft[·.\s-]?lbf?)$/i, 'lbf ft'], [/^(in[·.\s-]?lbf?|lbf?[·.\s-]?in)$/i, 'lbf in'],
-  [/^(lbf|pounds? force|pound-force)$/i, 'lbf'], [/^(kgf|kilograms? force)$/i, 'kgf'],
+  [/^(lbf|pounds? force|pound-force|pounds? of force|lbs? of force)$/i, 'lbf'], [/^(psf|pounds? per square (foot|ft))$/i, 'psf'], [/^(kgf|kilograms? force)$/i, 'kgf'],
   [/^(kg|kgs|kilos?|kilograms?)$/i, 'kg'], [/^(g|grams?)$/i, 'g'], [/^(mg|milligrams?)$/i, 'mg'], [/^(µg|μg|ug|micrograms?)$/i, 'ug'], [/^(ng|nanograms?)$/i, 'ng'], [/^(lbs?|pounds?)$/i, 'lb'], [/^(t|tonnes?)$/i, 't'],
   [/^(m³|m3|m\^3|cubic met(re|er)s?)$/i, 'm^3'], [/^(ml|millilit(re|er)s?)$/i, 'mL'], [/^(cl|centilit(re|er)s?)$/i, 'cL'], [/^(l|lit(re|er)s?)$/i, 'L'], [/^(gal|gallons?)$/i, 'gal'],
   [/^(mm|millimet(re|er)s?)$/i, 'mm'], [/^(cm|centimet(re|er)s?)$/i, 'cm'], [/^(m|met(re|er)s?)$/i, 'm'], [/^(km|kilomet(re|er)s?)$/i, 'km'], [/^(µm|um|μm|microns?|micromet(re|er)s?)$/i, 'um'], [/^(nanomet(re|er)s?)$/i, 'nm'], [/^nm$/, 'nm'], [/^(au|astronomical units?)$/i, 'au'], [/^(in|inch|inches|")$/i, 'in'], [/^(ft|foot|feet|')$/i, 'ft'],
@@ -107,7 +107,9 @@ const SPOKEN: [RegExp, string][] = [
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
   [/^(sv|sieverts?)$/i, 'Sv'], [/^(msv|millisieverts?)$/i, 'mSv'], [/^(µsv|μsv|usv|microsieverts?)$/i, 'uSv'], [/^(gy|grays?)$/i, 'Gy'],
   [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],
-  [/^(°c|degc|celsius|degrees? (c|celsius|centigrade))$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? (f|fahrenheit))$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
+  [/^(°c|degc|celsius|degrees? (c|celsius|centigrade))$/i, 'degC'],
+  // "46 C every July", "minus 40 C": said plainly, a C alone after a number is degrees Celsius (not a C-clamp, not C cells)
+  [/^c$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? (f|fahrenheit))$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
 
 export interface Said { value: number; unit: string; si: number; dim: Dim; at: number; text: string }
@@ -131,9 +133,10 @@ export function findQuantities(text: string): Said[] {
     // words after it, a hyphen splitting them too ("metre-tall" is "metre", then "tall")
     const words = m[4]!.trim().split(/[\s-]+/);
     let unit: string | null = null, used = 0;
+    const plainC = /^c(?![a-z0-9-])/i.test(m[4]!) && !/^c\s+(cells?|batter(y|ies)|sizes?|rated|rating)\b/i.test(m[4]!);
     for (let k = Math.min(words.length, 4); k >= 1 && !unit; k--) {
       const cand = words.slice(0, k).join(' ').replace(/[.,;:]+$/, '');
-      for (const [pat, sym] of SPOKEN) if (pat.test(cand)) { unit = sym; used = k; break; }
+      for (const [pat, sym] of SPOKEN) if (pat.test(cand) && (cand.toLowerCase() !== 'c' || plainC)) { unit = sym; used = k; break; }
     }
     // no unit after it: look again just past this number (the next number may have one)
     const head = (m[1] ?? '').length + m[2]!.length;
