@@ -462,6 +462,18 @@ describe('folding the whole of it: planned on what is made, latched open, tested
     for (const re of [/^it folds flat$/, /^folding, nothing runs into anything$/, /^latched open, its hinges hold$/, /^folded, it can be made under the laws$/, /^folded, it lies still when let go$/, /^it folds flat to 80 mm$/]) expect(ck(d!, re).ok, String(re)).toBe(true);
     expect(d!.asked.filter((a) => a.how === 'folds').every((a) => a.got)).toBe(true); expect(d!.asked.find((a) => a.kind === 'thing')!.got).toBe('support');
   }, 60000);
+  it('its fold is played as it is planned: held folded, nothing is in anything and all of it lies within its thickness under the top', () => {
+    const [d] = designs(go('a folding camping table that holds 20 kg and folds flat to 8 cm'), 1, { seed: 8020, physics: J });
+    const tr = d!.foldTrack!; expect(tr).toBeDefined();
+    const held = tr.frames[Math.floor(tr.frames.length / 2)]!, ms = new Map(d!.steps.filter((x) => x.startsWith('place ')).map((x) => { const m = /named (\S+) .* at ([-\d.]+) m, ([-\d.]+) m, ([-\d.]+) m size ([\d.]+) x ([\d.]+) x ([\d.]+) mm/.exec(x)!; return [m[1]!, { w: +m[5]! / 1e3, d: +m[6]! / 1e3, h: +m[7]! / 1e3 }] as const; }));
+    // a quarter turn about x or z swaps the sizes it turns between
+    const boxes = tr.names.map((n, i) => { const p = held.poses[i]!, e = ms.get(n)!, about = Math.abs(p.q[0]) > 0.5 ? 'x' : Math.abs(p.q[2]) > 0.5 ? 'z' : null, w = about === 'z' ? e.h : e.w, h = about === 'z' ? e.w : about === 'x' ? e.d : e.h, dd = about === 'x' ? e.h : e.d; return { n, lo: [p.at[0] - w / 2, p.at[1] - h / 2, p.at[2] - dd / 2], hi: [p.at[0] + w / 2, p.at[1] + h / 2, p.at[2] + dd / 2] }; });
+    for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect([0, 1, 2].every((k) => Math.min(a.hi[k]!, b.hi[k]!) - Math.max(a.lo[k]!, b.lo[k]!) > 1e-4), `${a.n} in ${b.n}`).toBe(false);
+    const top = boxes.find((b) => /_top$/.test(b.n))!, lowest = Math.min(...boxes.map((b) => b.lo[1]!));
+    expect(top.hi[1]! - lowest).toBeLessThan(0.1);
+    // and it ends open, as it began
+    expect(tr.frames.at(-1)!.poses.every((p, i) => Math.hypot(...p.at.map((v, k) => v - tr.frames[0]!.poses[i]!.at[k]!)) < 1e-9)).toBe(true);
+  }, 60000);
   it('a collapsible crate folds its walls down in turn, latched where they meet; folded it is no thicker than asked', () => {
     const [d] = designs(go('a collapsible crate 600 x 400 x 300 mm that folds flat to 6 cm'), 1, { seed: 101, physics: J });
     expect(ck(d!, /^it folds flat$/).says).toMatch(/latched open where they meet, and let go to fold/);

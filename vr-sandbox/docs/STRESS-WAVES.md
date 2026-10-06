@@ -884,9 +884,12 @@ Those are said as not kept, and their laws are weighed. The fixes below are to w
 - **Both browser drives** pass with no script errors.
 - **The everyday set, waves 2, 3 and 4** were rerun against the last merge. What changed is folding now made and judged. The w3c walker folds into 625 × 375 × 58 mm, within its 30 × 40 × 80 cm.
 
+### The fold, shown
+
+A design that folds as planned and tested carries its fold as a track (`Design.foldTrack`). What is lifted off goes up first; then each part turns a quarter turn about its hinge, in the order they fold; it holds folded a second, then opens out again. In the forge, "fold it" plays it in the room, on the desktop or in a headset. A browser drive makes the camping table from its words, plays its fold, and checks for script errors. A test checks that held folded, nothing in the track is in anything, all of it lies within 100 mm under the top, and it ends open as it began.
+
 ### Open after 4a
 
 - **Half-turn folds:** panels meeting edge to edge folding onto each other, zig-zag (a room divider, a deck in pieces, a book fold).
 - **Folding onto an upright base:** a bookshelf onto its back, a bench against its wall.
 - **Folding a part onto what folds:** the roof onto a wall before the wall folds.
-- **The fold shown in the forge:** turning, in VR.

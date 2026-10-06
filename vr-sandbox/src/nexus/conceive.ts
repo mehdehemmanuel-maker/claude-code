@@ -34,6 +34,7 @@ import { matOf, matterOf, Workshop, type Axis, type Made, type World } from './g
 import { planFold, touching, type Leaf } from './fold';
 import type { Clip } from './flows';
 import type { Jolt } from './realize';
+import type { SimTrack } from './sim';
 
 // ==== wants, read from words ============================================================================================
 export type Fn = 'support' | 'move' | 'turn' | 'swing' | 'slide' | 'raise' | 'contain' | 'enclose' | 'warm' | 'lift' | 'float';
@@ -1703,6 +1704,8 @@ export interface Design {
   choices: string[]; tries: { seed: number; why: string }[]; gaps: string[]; mass: number; parts: number; footprint: [number, number]; words: string; plan: string[];
   /** what was asked, each met or not; and how many of the things asked it does */ asked: Asked[]; does: [number, number];
   /** it holds, does everything asked, and has nothing left not yet derived */ whole: boolean;
+  /** where it folds as planned: its fold, played (each part a quarter turn about its hinge in the order they fold, held
+   *  folded, then opened out again), in the room as it stands */ foldTrack?: SimTrack;
 }
 /** How many of the things asked (what it is, does and has; not what it is for) were read into wants it meets. */
 const doesOf = (asked: Asked[], gaps: string[], wants: Want[]): [number, number] => { const xs = asked.filter((a) => a.kind !== 'for'); const met = xs.filter((a) => { const fn = a.got; return !!fn && wants.some((w) => w.fn === fn) && !gaps.some((g) => g.startsWith(`nothing kept here can ${FN_WORDS[fn]}`)); }).length; return [met, Math.max(xs.length, met ? 1 : 0)]; };
@@ -1839,6 +1842,31 @@ function foldChecks(f: Folding, con: Conception, prefix: string, seed: number, J
   if (L.foldVol !== undefined) { const v = measured[0]! * measured[1]! * measured[2]!, ok = v <= L.foldVol * 1.0001; fits = (fits ?? true) && ok; out.push({ what: `it packs into ${+(L.foldVol * 1e3).toPrecision(3)} L`, ok, says: `folded, it is ${measured.map(len).join(' × ')}, the box round it ${+(v * 1e3).toPrecision(3)} L${ok ? '' : `, ${+(v / L.foldVol).toPrecision(3)} times as much`}` }); }
   const bad = out.find((x) => x.ok === false && !/^it (folds (flat to|or packs to)|packs into)/.test(x.what));
   return { checks: out, ok: !bad, fits, why: bad ? `${bad.what}: ${bad.says}` : '' };
+}
+/** A fold played, in the room as it stands: what is lifted off goes up onto it first, then each part turns a quarter
+ *  turn about its hinge in the order they fold (a turn about z from x up toward y is +90°, right hand; about x the same
+ *  turn from z is -90°), it holds folded a second, and opens out again the same way back. 30 frames a second. */
+function foldTrackOf(f: Folding, asBuilt: Made[]): SimTrack {
+  const p = f.plan, at = new Map(asBuilt.map((m) => [m.name, m])), names = [...new Set([p.root, ...p.spacers.map((x) => f.blocks.get(x.name)!), ...p.leaves.flatMap((l) => l.names), ...p.lifted])].filter((n) => at.has(n));
+  const seq = [...p.leaves].sort((a, b) => a.spacer - b.spacer), step = 0.8, fps = 30, k = (l: Leaf) => l.side * l.sign;
+  const angleOf = (l: Leaf) => ((l.hinge === 2 ? (k(l) === -1 ? 1 : -1) : k(l) === 1 ? 1 : -1) * Math.PI) / 2;
+  const qAbout = (ax: 0 | 2, th: number): [number, number, number, number] => { const s = Math.sin(th / 2), c = Math.cos(th / 2); return ax === 0 ? [s, 0, 0, c] : [0, 0, s, c]; };
+  const turn = (c: P3, pv: P3, ax: 0 | 2, th: number): P3 => { const d = [c[0] - pv[0], c[1] - pv[1], c[2] - pv[2]], co = Math.cos(th), si = Math.sin(th); return ax === 2 ? [pv[0] + d[0]! * co - d[1]! * si, pv[1] + d[0]! * si + d[1]! * co, c[2]] : [c[0], pv[1] + d[1]! * co - d[2]! * si, pv[2] + d[1]! * si + d[2]! * co]; };
+  // where what is lifted off goes: onto the top of the base (where things fold under it) or of the stack (where they fold onto it)
+  const root = at.get(p.root)!, under = p.leaves.some((l) => l.side < 0), lift = new Map<string, { to: P3; q: [number, number, number, number] }>();
+  let yTop = under ? root.at[1] + root.h / 2 : Math.max(...p.folded.map((b) => b.at[1] + b.h / 2)) + p.dy;
+  for (const n of p.lifted) { const m = at.get(n); if (!m) continue; const thin = Math.min(m.w, m.h, m.d), q = thin === m.h ? [0, 0, 0, 1] as [number, number, number, number] : thin === m.w ? qAbout(2, Math.PI / 2) : qAbout(0, Math.PI / 2); lift.set(n, { to: [root.at[0], yTop + thin / 2, root.at[2]], q }); yTop += thin; }
+  const pose = (n: string, u: number) => {
+    // u: 0 open, 1 folded; what is lifted off moves in the first share of it, then each fold in turn
+    const m = at.get(n)!, parts = seq.length + (lift.size ? 1 : 0), share = 1 / Math.max(1, parts);
+    const li = lift.get(n); if (li) { const e = Math.min(1, u / share); return { at: [0, 1, 2].map((i) => m.at[i]! + (li.to[i]! - m.at[i]!) * e) as P3, q: e >= 1 ? li.q : e > 0.5 ? li.q : [0, 0, 0, 1] as [number, number, number, number] }; }
+    const i = seq.findIndex((l) => l.names.includes(n)); if (i < 0) return { at: [...m.at] as P3, q: [0, 0, 0, 1] as [number, number, number, number] };
+    const l = seq[i]!, s0 = (i + (lift.size ? 1 : 0)) * share, e = Math.max(0, Math.min(1, (u - s0) / share)), th = angleOf(l) * e;
+    return { at: turn(m.at as P3, l.pivot, l.hinge, th), q: qAbout(l.hinge, th) };
+  };
+  const T = step * (seq.length + (lift.size ? 1 : 0)), frames: SimTrack['frames'] = [];
+  for (let t = 0; t <= 2 * T + 1 + 1e-9; t += 1 / fps) { const u = t <= T ? t / T : t <= T + 1 ? 1 : Math.max(0, 1 - (t - T - 1) / T); frames.push({ t, poses: names.map((n) => pose(n, u)) }); }
+  return { names, frames };
 }
 /** Made once, from one seed: each need met by a way drawn from those that apply, stacked, sized from the top down,
  *  placed from the bottom up, joined, then checked. */
@@ -2006,7 +2034,8 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     const nf = a.kind === 'thing' && a.got ? all.find((x) => x.how === 'folds' && !x.got && x.text.toLowerCase().split(/[\s-]+/).every((w) => a.text.toLowerCase().split(/[\s-]+/).includes(w))) : undefined;
     return nf ? { ...a, got: null, why: `made only as something to ${FN_WORDS[a.got!]}: what it is named for (${nf.text}) is not done, as below` } : a;
   }), does = doesOf(asked, gaps, con.wants), ok = made && out.every((x) => x.ok);
-  return { name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, choices, tries: [], gaps, mass: ownKg, parts: own.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };
+  const foldTrack = fold?.clean && folded?.ok && asBuilt ? foldTrackOf(fold, asBuilt) : undefined;
+  return { ...(foldTrack ? { foldTrack } : {}), name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, choices, tries: [], gaps, mass: ownKg, parts: own.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };
 }
 /** What stands on the floor holds it up within the outline its feet make (their convex hull); a weight put down at a
  *  corner or edge of its top outside that outline turns it over the nearest edge of it, held back only by its own weight
