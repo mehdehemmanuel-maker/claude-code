@@ -125,7 +125,10 @@ describe('what is made of it', () => {
   });
   it('staked, a cloth shelter stands in its wind by statics and in the physics', () => {
     const [d] = designs(go(STALL), 1, { seed: 101, physics: J });
-    expect(check(d!, /^the wind does not lift it$/)).toMatchObject({ ok: true, says: expect.stringMatching(/its 8 stakes hold/) });
+    expect(check(d!, /^the wind does not lift it$/)).toMatchObject({ ok: true, says: expect.stringMatching(/its 9 stakes hold/) });
+    // open at its front, the air inside pushes its roof up 0.63 of the wind's ½ ρ v², not 0.2
+    expect(check(d!, /^the wind does not lift it$/)?.says).toMatch(/pushing up 0\.63 of it through its open front/);
+    expect(d!.gaps.join(' ')).toMatch(/on paving no stake goes in: weights on its four poles' feet hold it instead, about \d+ kg on each/);
     expect(check(d!, /^it stands in a 50 km\/h wind$/)?.ok).toBe(true);
   }, 120000);
   it('what it does is tested before it is pushed to tip it: a pump that tips in the push still turns', () => {
@@ -143,7 +146,7 @@ describe('what was asked is counted where a check or a law weighs it', () => {
   const ask = (d: ReturnType<typeof made>, text: RegExp) => d.asked.find((a) => text.test(a.text));
   it('a snow load and a night held warm are asked: each met only where its check or its law passes', () => {
     const d = made(GREENHOUSE);
-    expect(ask(d, /^its roof bears 2.4 kPa of snow$/)).toMatchObject({ kind: 'limit', met: false, why: expect.stringMatching(/^its own check fails: [\d.]+ times over its yield$/) });
+    expect(ask(d, /^its roof bears 2.4 kPa of snow$/)).toMatchObject({ kind: 'limit', met: false, why: expect.stringMatching(/^its own check fails: [\d.]+ times over its bending strength$/) });
     expect(ask(d, /^it holds above 4 °C through the night/)).toMatchObject({ kind: 'limit', met: false, why: 'the laws say not: it loses 3.57 times what it gathers' });
     expect(ask(d, /^it draws no power from a grid$/)?.met).toBe(true); expect(ask(d, /^it burns no fuel$/)?.met).toBe(true);
     // a house for light that lets none through is not that house
@@ -196,5 +199,30 @@ describe('a cart of gas cylinders on a slope', () => {
     // pushing it up the slope is not what it carries: "Rolling" stands; what it carries falls with its load
     expect(d.asked.find((a) => a.text === 'Rolling')?.got).toBe('move');
     expect(d.asked.find((a) => /^carries two 150 lb gas cylinders/.test(a.text))).toMatchObject({ got: null, why: expect.stringMatching(/^its load fails: what it carries stands on its 10° slope/) });
+  });
+});
+
+describe('what it stands in, and on', () => {
+  const GOATS = 'Please design a freestanding three-sided loafing shelter for four adult goats, roughly 12 feet by 8 feet, rated for 90 mph wind gusts and a 30 psf snow load, assembled by two people with hand tools, with no single component heavier than 50 pounds.';
+  it('a shelter beasts stand in has no floor; plywood breaks at its bending strength, it does not yield', () => {
+    const d = made(GOATS);
+    expect(d.choices.join(' ')).toMatch(/^no floor \(they stand on the ground\), three walls \(its front left open\)/);
+    expect(d.steps.some((x) => /_floor\b/.test(x))).toBe(false);
+    expect(check(d, /^its roof bears 1.44 kPa of snow$/)?.says).toMatch(/times under its bending strength/);
+  });
+  it('a tool worked in the sea is open to it: no sphere, only its solid parts squeezed in bulk', () => {
+    const b = law('Formal request: a hand-carried deep-sea sampling tool for a crewed submersible at 4,000 m depth (400 bar), capable of cutting and retrieving a 2 kg sediment core, with no more than 3 N-m of manipulator torque and zero hydraulic oil leakage.', /^open to the sea 4 km down/)!;
+    expect(b.says).toContain('0.0339% of their volume in Ti-6Al-4V'); expect(b.says).not.toMatch(/\bsphere\b/);
+  });
+  it('an airlock pumped down to keep its gas: V [(p₁ − p₂) − p₂ ln(p₁ / p₂)], not p V ln(p₁ / p₂); "seals against" is a seal, not biology', () => {
+    const AIR = "I want a Martian dust-proof airlock door for a surface greenhouse that cycles about 20 times a day, holds 0.6 bar against Mars's 0.006 bar outside, seals against abrasive regolith, and must run on under 50 watts of power.";
+    // 4 m³ × (59.4 kPa − 0.6 kPa × ln 100) = 227 kJ; 20 a day over 86 400 s: 52.4 W
+    expect(law(AIR, /^its door holds/)?.says).toMatch(/227 kJ each time .* 52\.4 W through a 24 h day/);
+    expect(go(AIR).asked.find((a) => /^seals against/.test(a.text))?.why).toMatch(/^sealing \(a gasket or lip pressed shut\)/);
+  });
+  it('high up, the air is said by its pressure; how dense it is waits for how cold it is; in snow a peg holds little', () => {
+    const EV = 'need a wind-proof emergency shelter for 6 climbers at 7,800 m on Everest-type terrain, must survive 160 km/h gusts at minus 40 C, weigh under 35 kg packed, and be pitched by two gloved people in under four minutes';
+    expect(go(EV).heard).toContain("7,800 m up: the air's pressure there is 0.36 of the sea's (standard atmosphere); how dense it is there, with how cold it is, is weighed in the wind on it");
+    expect(made(EV).gaps.join(' ')).toMatch(/in snow or ice a peg holds little/);
   });
 });
