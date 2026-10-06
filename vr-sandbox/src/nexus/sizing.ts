@@ -39,7 +39,7 @@ export function namedSize(t: string): { L: number; said: string; source: string 
   return null;
 }
 
-export interface Group { key: string; name: string; value: number; at: number; /** which side of its threshold the size is on */ past: boolean; says: string }
+export interface Group { key: string; name: string; value: number; at: number; /** which side of its threshold the size is on */ past: boolean; says: string; /** so far from its threshold, or so beside what it does, that it does not bear on it: said in one line, not each */ far?: boolean }
 export interface SizeReading { L: number; groups: Group[]; /** what a thing this size would have to be built as, from which side of each threshold it lies on */ must: string[] }
 
 const best = () => STRONG.map((id) => { const m = matterOf(id), sy = /^wood/.test(id) ? 0.5 * m.ultimate : m.yield; return { id, name: m.name, rho: m.density, sy, E: m.E, spec: sy / m.density }; }).sort((a, b) => b.spec - a.spec);
@@ -54,7 +54,7 @@ export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; 
   const sw = (top.rho * g * L) / top.sy;
   // a craft in space weighs nothing to speak of; a world has its own gravity
   const weightless = !!o.vacuum && L < 1e6;
-  if (!weightless) groups.push({ key: 'self-weight', name: 'self-weight ρ g L / σ', value: sw, at: 1, past: sw > 1, says: `${fmt(sw)} for ${top.name}, the strongest for its weight kept: ${sw > 1 ? `past 1: a column of it ${lenSay(L)} tall crushes under its own weight (the most it can stand is ${lenSay(top.sy / (top.rho * g))})` : sw > 0.1 ? 'it spends a large share of its strength holding itself up' : 'its own weight is a small part of what it bears'}` });
+  if (!weightless) groups.push({ key: 'self-weight', name: 'self-weight ρ g L / σ', value: sw, at: 1, past: sw > 1, far: sw < 1e-3 || !!o.immersed, says: `${fmt(sw)} for ${top.name}, the strongest for its weight kept: ${sw > 1 ? `past 1: a column of it ${lenSay(L)} tall crushes under its own weight (the most it can stand is ${lenSay(top.sy / (top.rho * g))})` : sw > 0.1 ? 'it spends a large share of its strength holding itself up' : 'its own weight is a small part of what it bears'}` });
   if (sw > 1 && !weightless) must.push(`nothing solid kept holds its own shape at ${lenSay(L)}: it must be held by tension (cables, an inflated or spun shell), by pressure, or by its own gravity, not by bars or plates in compression`);
   else if (sw > 0.1 && !weightless) must.push(`at ${lenSay(L)} its structure must be tapered, trussed or put in tension: bars sized for what they carry are crushed by what they weigh`);
   // self-gravity: the size past which a body of the strongest matter is crushed round by its own pull
@@ -65,7 +65,7 @@ export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; 
   // tip speed: the fastest a rim of the strongest matter turns before it flies apart, σ = ρ v²
   const vt = Math.sqrt(top.sy / top.rho), T0 = (Math.PI * L) / vt;
   const spin = o.w !== undefined ? (o.w * L) / 2 / vt : null;
-  groups.push({ key: 'tip speed', name: 'rim speed against √(σ/ρ)', value: spin ?? T0, at: 1, past: spin !== null && spin > 1, says: spin !== null ? `${fmt(spin)}: its rim would go ${fmt((o.w! * L) / 2)} m/s, ${spin > 1 ? 'faster than' : 'within'} the ${fmt(vt)} m/s a rim of ${top.name} bears before it flies apart` : `a rim of ${top.name} ${lenSay(L)} across turns at most once in ${timeSay(T0)} before it flies apart (${fmt(vt)} m/s at its edge)` });
+  groups.push({ key: 'tip speed', name: 'rim speed against √(σ/ρ)', value: spin ?? T0, at: 1, past: spin !== null && spin > 1, far: spin === null, says: spin !== null ? `${fmt(spin)}: its rim would go ${fmt((o.w! * L) / 2)} m/s, ${spin > 1 ? 'faster than' : 'within'} the ${fmt(vt)} m/s a rim of ${top.name} bears before it flies apart` : `a rim of ${top.name} ${lenSay(L)} across turns at most once in ${timeSay(T0)} before it flies apart (${fmt(vt)} m/s at its edge)` });
   if (spin !== null && spin > 1) { const vo = Math.sqrt((Gn * (4 / 3) * Math.PI * (L / 2) ** 3 * 5500) / (L / 2)); must.push(`turning that fast at ${lenSay(L)} no matter holds it by strength: ${L / 2 > Rc ? `only gravity can (a body of rock that size holds a rim at up to ${fmt(vo)} m/s, its orbital speed)` : 'it must turn slower, or be made of many small rotors'}`); }
   // Reynolds: inertia against viscosity, in air and in water, at its speed (or the speed gravity gives a thing its size)
   const v = o.v ?? Math.sqrt(g * L), Ra = (AIR.rho * v * L) / AIR.mu, Rw = (WATER.rho * v * L) / WATER.mu;
@@ -76,7 +76,7 @@ export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; 
   // Bond: gravity against surface tension, wet
   const Bo = (WATER.rho * g * L * L) / WATER.gamma;
   // in a liquid there is no surface to stick to: surface tension does not reach it
-  if (!o.immersed && !o.vacuum) groups.push({ key: 'Bond', name: 'Bond number ρ g L² / γ', value: Bo, at: 1, past: Bo < 1, says: `${fmt(Bo)}: ${Bo < 1 ? 'surface tension beats its weight: a drop of water is a wall to it, and it sticks to what it touches when damp' : 'its weight beats surface tension'}` });
+  if (!o.immersed && !o.vacuum) groups.push({ key: 'Bond', name: 'Bond number ρ g L² / γ', value: Bo, at: 1, past: Bo < 1, far: Bo > 1e4, says: `${fmt(Bo)}: ${Bo < 1 ? 'surface tension beats its weight: a drop of water is a wall to it, and it sticks to what it touches when damp' : 'its weight beats surface tension'}` });
   // heat: how long its own heat takes to cross it, L² / α, for steel
   const th = thermalOf(matterOf('steel.a36')), alpha = th.k / (steel.rho * th.c), tau = (L * L) / alpha;
   // how long its inside takes to follow its surface; what it can shed is a matter of its surface and the heat on each
@@ -88,17 +88,18 @@ export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; 
   const Lx = Math.sqrt((eps0 * 3e6 ** 2) / (mu0 * 1e7 ** 2));
   // a rough crossing: it moves with the field and the current density taken, so it is said to one figure
   const Lr = +Lx.toPrecision(1);
-  groups.push({ key: 'actuation', name: 'magnetic against electrostatic force', value: L / Lx, at: 1, past: L < Lx, says: `${fmt(L / Lx)} of the size where they are about equal, near ${lenSay(Lr)} (a rough crossing: it moves with the breakdown field and the current density taken): ${L < Lx ? 'electrostatic and piezoelectric drives are stronger than any coil this small' : 'coils and magnets are stronger than charges'}` });
+  // driven from outside by a field, or not driven at all, it has no motor of its own for this to bear on
+  groups.push({ key: 'actuation', name: 'magnetic against electrostatic force', value: L / Lx, at: 1, past: L < Lx && !o.fieldDriven && o.driven !== false, far: !!o.fieldDriven || o.driven === false || L / Lx > 1e4, says: `${fmt(L / Lx)} of the size where they are about equal, near ${lenSay(Lr)} (a rough crossing: it moves with the breakdown field and the current density taken): ${L < Lx ? 'electrostatic and piezoelectric drives are stronger than any coil this small' : 'coils and magnets are stronger than charges'}` });
   if (L < Lx && o.driven !== false && !o.fieldDriven) must.push(`below about ${lenSay(Lr)} its motor would better be electrostatic (a comb drive) or piezoelectric than a coil and magnet: no motor kept is either`);
   // light: how long a signal takes to cross it
   // against the time it takes to do what it does (a turn, or crossing its own size at its speed): a delay that is a
   // small part of that is made up by timing; one that is not cannot be
   const lt = L / c, Tm = o.w !== undefined ? (2 * Math.PI) / o.w : o.v !== undefined ? L / o.v : undefined, lr = Tm !== undefined ? lt / Tm : undefined;
-  groups.push({ key: 'light time', name: 'light crossing it, L / c', value: lt, at: 1e-3, past: lr !== undefined && lr > 1e-3, says: `${timeSay(lt)}${lr !== undefined ? `, ${fmt(lr)} of the ${timeSay(Tm!)} it takes to ${o.w !== undefined ? 'turn once' : 'cross its own size'}: ${lr > 1e-3 ? 'too long to keep its far parts in step by a signal from one place: each must act on what it senses where it is' : 'a delay that timing makes up'}` : ''}` });
+  groups.push({ key: 'light time', name: 'light crossing it, L / c', value: lt, at: 1e-3, past: lr !== undefined && lr > 1e-3, far: (lr === undefined || lr < 1e-6) && L < 1e3, says: `${timeSay(lt)}${lr !== undefined ? `, ${fmt(lr)} of the ${timeSay(Tm!)} it takes to ${o.w !== undefined ? 'turn once' : 'cross its own size'}: ${lr > 1e-3 ? 'too long to keep its far parts in step by a signal from one place: each must act on what it senses where it is' : 'a delay that timing makes up'}` : ''}` });
   if (lr !== undefined && lr > 1e-3) must.push(`its far parts are ${timeSay(lt)} of light apart, ${fmt(lr)} of the time it takes to move: no one controller keeps them in step; each part must act on what it senses where it is`);
   // heat noise: how far k T shakes a part of steel this size, against its size
   const xn = Math.sqrt((kB * 293) / (steel.E * L)) / L;
-  groups.push({ key: 'thermal noise', name: 'thermal shaking √(kT / E L) / L', value: xn, at: 0.01, past: xn > 0.01, says: `${fmt(xn)} of its size: ${xn > 0.01 ? 'Brownian motion shakes it as much as anything that drives it' : 'heat shakes it negligibly'}` });
+  groups.push({ key: 'thermal noise', name: 'thermal shaking √(kT / E L) / L', value: xn, at: 0.01, past: xn > 0.01, far: xn < 1e-5, says: `${fmt(xn)} of its size: ${xn > 0.01 ? 'Brownian motion shakes it as much as anything that drives it' : 'heat shakes it negligibly'}` });
   if (xn > 0.01) must.push(`at ${lenSay(L)} heat shakes it by more than a hundredth of its size: it must work by chemistry or by ratcheting on that shaking, as molecular motors do`);
   return { L, groups, must };
 }

@@ -33,7 +33,7 @@ export const UNITS: Record<string, UnitDef> = {
   A: u(I), mA: u(I, 1e-3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
   N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
-  Pa: u(PA), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
+  Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
   Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), krad: u([0, 2, -2, 0, 0], 10), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
@@ -100,7 +100,7 @@ const SPOKEN: [RegExp, string][] = [
   [/^(mm|millimet(re|er)s?)$/i, 'mm'], [/^(cm|centimet(re|er)s?)$/i, 'cm'], [/^(m|met(re|er)s?)$/i, 'm'], [/^(km|kilomet(re|er)s?)$/i, 'km'], [/^(µm|um|μm|microns?|micromet(re|er)s?)$/i, 'um'], [/^(nanomet(re|er)s?)$/i, 'nm'], [/^nm$/, 'nm'], [/^(au|astronomical units?)$/i, 'au'], [/^(in|inch|inches|")$/i, 'in'], [/^(ft|foot|feet|')$/i, 'ft'],
   [/^(s|sec|secs|seconds?)$/i, 's'], [/^(min|mins|minutes?)$/i, 'min'], [/^(h|hr|hrs|hours?)$/i, 'h'], [/^(days?)$/i, 'd'], [/^(weeks?|wks?)$/i, 'wk'], [/^(months?)$/i, 'mo'], [/^(years?|yrs?)$/i, 'yr'],
   [/^(a|amps?|amperes?)$/i, 'A'], [/^(ma|milliamps?)$/i, 'mA'], [/^(v|volts?)$/i, 'V'], [/^(w|watts?)$/i, 'W'], [/^(kw|kilowatts?)$/i, 'kW'], [/^(m[Ww])$/, 'mW'], [/^(milliwatts?)$/i, 'mW'], [/^(µw|μw|uw|microwatts?)$/i, 'uW'], [/^(M[Ww])$/, 'MW'], [/^(megawatts?)$/i, 'MW'], [/^(gw|gigawatts?)$/i, 'GW'], [/^(tw|terawatts?)$/i, 'TW'], [/^(hp|horsepower)$/i, 'hp'],
-  [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
+  [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa|pascals?)$/i, 'Pa'], [/^(kpa|kilopascals?)$/i, 'kPa'], [/^(mpa|megapascals?)$/i, 'MPa'], [/^(gpa|gigapascals?)$/i, 'GPa'], [/^(hpa|hectopascals?|mbar|millibars?)$/i, 'hPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
   [/^(sv|sieverts?)$/i, 'Sv'], [/^(msv|millisieverts?)$/i, 'mSv'], [/^(µsv|μsv|usv|microsieverts?)$/i, 'uSv'], [/^(gy|grays?)$/i, 'Gy'],
   [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],

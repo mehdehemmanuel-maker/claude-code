@@ -60,7 +60,7 @@ describe('what the laws say of what is asked', () => {
     expect((fast.dv1 + fast.dv2) / 1e3).toBeGreaterThan(12);
     expect((fast.dv1 + fast.dv2) / 1e3).toBeLessThan(16);
     const sh = conceive('a crewed ship that carries 4 astronauts from low Earth orbit to Mars orbit in 90 days and back again, weighing under 400 tonnes, keeping each dose below 0.6 Sv');
-    expect(sh.bounds.find((b) => /goes from a low orbit/.test(b.what))!.ok).toBe(false);
+    expect(sh.bounds.find((b) => /takes it from a low orbit/.test(b.what))!.ok).toBe(false);
     const dose = sh.bounds.find((b) => /the dose on the way/.test(b.what))!;
     expect(dose.ok).toBe(true);
     expect(dose.says).toMatch(/0\.331 Sv/);
@@ -89,5 +89,19 @@ describe('what the laws say of what is asked', () => {
     expect(m.ok).toBe(true);
     expect(m.what).toMatch(/turning once in 1 day$/);
     expect(m.says).toMatch(/far less than the Earth's own/);
+  });
+});
+
+describe('what does not bear on it at its size is said so, in one line', () => {
+  it('a rim speed for what does not turn, a coil against a comb for what a field drives, light across a thing in a room', () => {
+    expect(group(450, 'tip speed').far).toBe(true);
+    expect(group(450, 'tip speed', { w: 1 }).far).toBe(false);
+    const a = group(2e-4, 'actuation', { fieldDriven: true, driven: true });
+    expect(a.far).toBe(true); expect(a.past).toBe(false);
+    expect(group(2e-4, 'actuation', { driven: true }).past).toBe(true);
+    expect(group(0.3, 'light time').far).toBe(true);
+    expect(group(1.27e7, 'light time').far).toBe(false);
+    // what is past its threshold is never folded away
+    for (const g of [...sizeAt(5e-4).groups, ...sizeAt(1.27e7).groups]) if (g.past) expect(g.far ?? false).toBe(false);
   });
 });
