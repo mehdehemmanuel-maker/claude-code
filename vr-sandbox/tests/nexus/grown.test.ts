@@ -18,9 +18,10 @@ describe('a frame grown along its loads', () => {
     const d = made('a wall bracket that holds a 17 kg camera 400 mm out from the wall');
     expect(d.plan[0]).toMatch(/a frame grown along its loads/);
     expect(struts(d)).toBe(3);
-    expect(d.choices.join(' ')).toMatch(/a frame of 3 struts of Carbon fibre .* 3 of them held by the wall/);
-    expect(d.choices.join(' ')).toMatch(/grown and made of the others: Structural steel ASTM A36 [\d.]+ kg/);
+    expect(d.choices.join(' ')).toMatch(/a frame of 3 struts of [A-Z][\w -]+ meeting at 4 joints, 3 of them held by the (wall|face)/);
+    expect(d.choices.join(' ')).toMatch(/grown and made of the others: .*Aluminium 6061-T6 [\d.]+ kg/);
     for (const w of [/^its struts carry what it holds$/, /^what it holds moves no more than it may$/, /^it does not fold under any load$/]) expect(check(d, w)?.ok).toBe(true);
+    expect(d.conditions?.join(' ')).toMatch(/400 mm out from what holds it/);
   }, 120000);
   it('"a 10 m tower" is 10 m tall; standing alone it grows four legs to a point, none of its feet lifting', () => {
     const c = go('a 10 m tower that holds a 5 kg antenna at its top');
@@ -41,4 +42,12 @@ describe('a frame grown along its loads', () => {
     const d = made("I need a wall shelf for my record collection that's 1.2 m long and 320 mm deep, holds 70 kg spread evenly, and can only be screwed into two wall studs that are 600 mm apart.");
     expect(d.plan[0]).toMatch(/a board on two steel brackets screwed to the wall/);
   }, 120000);
+  it('an ask that names nothing kept is grown from its conditions: an arm clamped to a post grows three struts to its lamp, within the sag said', () => {
+    const d = made("need an arm that clamps onto the 32 mm round post of my stereo microscope and sticks out 150 mm sideways to hold a 40 g gooseneck LED head over the stage. tip can't droop more than 0.5 mm", J);
+    expect(d.conditions?.join(' ')).toMatch(/150 mm out from what holds it/); expect(d.conditions?.join(' ')).toMatch(/the post it clamps to, 32 mm across/);
+    expect(struts(d)).toBe(3);
+    expect(check(d, /^it sags no more than 0\.5 mm$/)?.ok).toBe(true);
+    expect(check(d, /^its struts carry what it holds$/)?.ok).toBe(true);
+    expect(check(d, /^it stands when let go$/)?.says).toMatch(/fixed at its plates to the post it clamps round/);
+  }, 240000);
 });

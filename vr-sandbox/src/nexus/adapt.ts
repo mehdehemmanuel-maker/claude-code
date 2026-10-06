@@ -77,9 +77,11 @@ export function ground(nodes: V3[], reach: number, o: { keepOut?: [V3, V3][]; he
 }
 
 /** Conjugate gradients on A x = b, A symmetric and positive definite, preconditioned by blocks of its diagonal. */
-function pcg(apply: (x: Float64Array, out: Float64Array) => void, precond: (r: Float64Array, z: Float64Array) => void, b: Float64Array, tol = 1e-10, most = 20000): { x: Float64Array; iterations: number; converged: boolean } {
-  const n = b.length, x = new Float64Array(n), r = Float64Array.from(b), z = new Float64Array(n), p = new Float64Array(n), Ap = new Float64Array(n);
-  const bn = Math.sqrt(b.reduce((s, v) => s + v * v, 0)); if (bn === 0) return { x, iterations: 0, converged: true };
+function pcg(apply: (x: Float64Array, out: Float64Array) => void, precond: (r: Float64Array, z: Float64Array) => void, b: Float64Array, tol = 1e-10, most = 20000, x0?: Float64Array): { x: Float64Array; iterations: number; converged: boolean } {
+  const n = b.length, x = x0 && x0.length === n ? Float64Array.from(x0) : new Float64Array(n), r = Float64Array.from(b), z = new Float64Array(n), p = new Float64Array(n), Ap = new Float64Array(n);
+  const bn = Math.sqrt(b.reduce((s, v) => s + v * v, 0)); if (bn === 0) return { x: new Float64Array(n), iterations: 0, converged: true };
+  // started from a guess (the last solve's answer), what is left to solve is what that guess misses
+  if (x0 && x0.length === n) { apply(x, Ap); for (let i = 0; i < n; i++) r[i]! -= Ap[i]!; if (Math.sqrt(r.reduce((s2, v) => s2 + v * v, 0)) <= tol * bn) return { x, iterations: 0, converged: true }; }
   precond(r, z); p.set(z); let rz = r.reduce((s, v, i) => s + v * z[i]!, 0);
   for (let it = 1; it <= most; it++) {
     apply(p, Ap); const pAp = p.reduce((s, v, i) => s + v * Ap[i]!, 0); if (!(pAp > 0)) return { x, iterations: it, converged: false };
@@ -170,8 +172,12 @@ export interface Strut { E: number; /** in tension */ sy: number; /** pressed, b
 export interface Section { A: number; I: number; label: string; /** how wide it shows to a wind across it, m */ width?: number }
 
 /** Joints' motions and each strut's pull (tension positive) under loads at the joints, the held joints held still. */
-export function truss(G: Graph, A: number[], E: number, held: Set<number>, load: V3[]): { u: V3[]; N: number[]; converged: boolean } {
-  const n = G.nodes.length, idx = new Int32Array(n).fill(-1); let m = 0; for (let i = 0; i < n; i++) if (!held.has(i)) idx[i] = m++;
+/** Joints held but free to slide one way (an end resting on a bank that may move along it): joint, and the way (0 x, 1 y, 2 z). */
+export type Slides = Map<number, number>;
+export function truss(G: Graph, A: number[], E: number, held: Set<number>, load: V3[], guess?: V3[], slides?: Slides): { u: V3[]; N: number[]; converged: boolean } {
+  const n = G.nodes.length, idx = new Int32Array(n).fill(-1); let m = 0; for (let i = 0; i < n; i++) if (!held.has(i) || slides?.has(i)) idx[i] = m++;
+  // a joint that slides is free the way it slides and held the others: those of its freedoms are kept at nothing
+  const mask = new Uint8Array(m * 3); if (slides) for (const [j, ax] of slides) { const f = idx[j]!; if (f >= 0) for (let r = 0; r < 3; r++) if (r !== ax) mask[f * 3 + r] = 1; }
   const dir = G.edges.map(([a, c], e) => { const d = sub(G.nodes[c]!, G.nodes[a]!), L = G.len[e]!; return [d[0] / L, d[1] / L, d[2] / L] as V3; });
   const k = G.edges.map((_, e) => (E * A[e]!) / G.len[e]!);
   const blocks = new Float64Array(m * 9);
@@ -181,6 +187,7 @@ export function truss(G: Graph, A: number[], E: number, held: Set<number>, load:
   const inv = new Float64Array(m * 9);
   for (let f = 0; f < m; f++) {
     const B = Array.from({ length: 9 }, (_, i) => blocks[f * 9 + i]!), tr = B[0]! + B[4]! + B[8]!, eps = 1e-9 * (tr || 1); B[0]! += eps; B[4]! += eps; B[8]! += eps;
+    for (let r = 0; r < 3; r++) if (mask[f * 3 + r]) for (let q = 0; q < 3; q++) { B[r * 3 + q] = r === q ? 1 : 0; B[q * 3 + r] = r === q ? 1 : 0; }
     const [a, b, c, d, e, g, h, i, j] = B as [number, number, number, number, number, number, number, number, number], det = a * (e * j - g * i) - b * (d * j - g * h) + c * (d * i - e * h);
     const I = [e * j - g * i, c * i - b * j, b * g - c * e, g * h - d * j, a * j - c * h, c * d - a * g, d * i - e * h, b * h - a * i, a * e - b * d].map((x) => x / det);
     for (let q = 0; q < 9; q++) inv[f * 9 + q] = I[q]!;
@@ -192,9 +199,11 @@ export function truss(G: Graph, A: number[], E: number, held: Set<number>, load:
       for (let r = 0; r < 3; r++) s += d[r]! * ((fc >= 0 ? x[fc * 3 + r]! : 0) - (fa >= 0 ? x[fa * 3 + r]! : 0));
       const t = k[e]! * s; for (let r = 0; r < 3; r++) { if (fc >= 0) out[fc * 3 + r]! += t * d[r]!; if (fa >= 0) out[fa * 3 + r]! -= t * d[r]!; }
     });
+    for (let q = 0; q < mask.length; q++) if (mask[q]) out[q] = x[q]!;
   };
-  const b = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) b[idx[i]! * 3 + r] = load[i]?.[r] ?? 0;
-  const { x, converged } = pcg(apply, (r, z) => { for (let f = 0; f < m; f++) for (let a = 0; a < 3; a++) { let s = 0; for (let c = 0; c < 3; c++) s += inv[f * 9 + a * 3 + c]! * r[f * 3 + c]!; z[f * 3 + a] = s; } }, b, 1e-10, 40000);
+  const b = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) b[idx[i]! * 3 + r] = mask[idx[i]! * 3 + r] ? 0 : load[i]?.[r] ?? 0;
+  let x0: Float64Array | undefined; if (guess) { x0 = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) x0[idx[i]! * 3 + r] = guess[i]?.[r] ?? 0; }
+  const { x, converged } = pcg(apply, (r, z) => { for (let f = 0; f < m; f++) for (let a = 0; a < 3; a++) { let s = 0; for (let c = 0; c < 3; c++) s += inv[f * 9 + a * 3 + c]! * r[f * 3 + c]!; z[f * 3 + a] = s; } }, b, 1e-9, 40000, x0);
   const u: V3[] = Array.from({ length: n }, (_, i) => (idx[i]! >= 0 ? [x[idx[i]! * 3]!, x[idx[i]! * 3 + 1]!, x[idx[i]! * 3 + 2]!] : [0, 0, 0]));
   const N = G.edges.map(([a, c], e) => k[e]! * dot(dir[e]!, sub(u[c]!, u[a]!)));
   return { u, N, converged };
@@ -245,17 +254,17 @@ export function mergeChains(nodes: V3[], list: Member[], held: Set<number>, load
  *  the loads (and its own weight and the others', pulled down by g), solved again, until the sizes settle. Struts left
  *  carrying nothing are cut away; struts left in a straight line through a joint nothing else holds or loads are one
  *  strut; and if what is left is a mechanism, the least of what was cut is put back until it is not. */
-export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], o: { g?: number; rounds?: number; floor?: number; start?: number[]; wind?: Wind[] } = {}): Grown & { A: number[]; keptEdges: number[] } {
+export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], o: { g?: number; rounds?: number; floor?: number; start?: number[]; wind?: Wind[]; slides?: Slides } = {}): Grown & { A: number[]; keptEdges: number[] } {
   const g = o.g ?? 9.80665, rounds = o.rounds ?? 120, n = G.nodes.length;
   const planar = G.nodes.every((p) => Math.abs(p[2] - G.nodes[0]![2]) < 1e-12);
   // its own weight on every load, and where a wind blows, the wind on each strut as thick as it now is (a thin tube's width, √(20 A / π))
   const loadsWith = (A: number[]) => cases.map((c, k) => { const f: V3[] = Array.from({ length: n }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); G.edges.forEach(([a, b], e) => { const w = (s.density * A[e]! * G.len[e]! * g) / 2; f[a]![1] -= w; f[b]![1] -= w; for (const wd of o.wind ?? []) if (wd.case === k) windOn(f, G.nodes[a]!, G.nodes[b]!, a, b, Math.sqrt((20 * A[e]!) / Math.PI), wd); }); return f; });
   // every strut starts alike, as thick as the largest load wants pulled
   const Fmax = Math.max(...cases.flat().map((v) => (v ? norm(v) : 0))), A0 = (2 * Fmax) / s.sy || 1e-6;
-  let A = o.start ? [...o.start] : G.edges.map(() => A0), done = 0;
+  let A = o.start ? [...o.start] : G.edges.map(() => A0), done = 0; const last: V3[][] = [];
   for (let it = 0; it < rounds; it++) {
     const floor = (o.floor ?? 1e-4) * Math.max(...A);
-    const N = loadsWith(A).map((f) => truss(G, A, s.E, held, f).N);
+    const runs = loadsWith(A).map((f, k) => truss(G, A, s.E, held, f, last[k], o.slides)); runs.forEach((r, k) => { last[k] = r.u; }); const N = runs.map((r) => r.N);
     const next = G.edges.map((_, e) => Math.max(floor, ...N.map((Nk) => areaFor(Nk[e]!, G.len[e]!, s))));
     // half of the change taken each round (in the logarithm), so that two struts sharing a load settle
     const blended = next.map((x, e) => Math.sqrt(x * A[e]!));
@@ -265,12 +274,12 @@ export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], 
   const loaded = new Set<number>(); cases.forEach((c) => c.forEach((v, i) => { if (v && norm(v) > 0) loaded.add(i); }));
   const top = Math.max(...A), order = G.edges.map((_, e) => e).sort((a, b) => A[b]! - A[a]!);
   const build = (es: number[]): Member[] => mergeChains(G.nodes, es.map((e) => ({ a: G.edges[e]![0], b: G.edges[e]![1], A: A[e]!, L: G.len[e]! })), held, loaded);
-  const mech = (ms: Member[]) => { const used = [...new Set(ms.flatMap((m) => [m.a, m.b]))], at = new Map(used.map((j, i) => [j, i])); return count({ dim: planar ? 2 : 3, nodes: used.map((j) => (planar ? [G.nodes[j]![0], G.nodes[j]![1]] : G.nodes[j]!)), bars: ms.map((m) => [at.get(m.a)!, at.get(m.b)!] as [number, number]), held: used.filter((j) => held.has(j)).map((j) => at.get(j)!) }).mechanisms; };
+  const mech = (ms: Member[]) => { const used = [...new Set(ms.flatMap((m) => [m.a, m.b]))], at = new Map(used.map((j, i) => [j, i])); return count({ dim: planar ? 2 : 3, nodes: used.map((j) => (planar ? [G.nodes[j]![0], G.nodes[j]![1]] : G.nodes[j]!)), bars: ms.map((m) => [at.get(m.a)!, at.get(m.b)!] as [number, number]), held: used.filter((j) => held.has(j) && !o.slides?.has(j)).map((j) => at.get(j)!), rollers: used.filter((j) => o.slides?.has(j)).flatMap((j) => [0, 1, 2].filter((d) => d !== o.slides!.get(j) && (!planar || d < 2)).map((d) => [at.get(j)!, d] as [number, number])) }).mechanisms; };
   let k = order.filter((e) => A[e]! > top * 2e-3).length, members = build(order.slice(0, k)), mechanisms = mech(members);
   while (mechanisms > 0 && k < order.length) { k = Math.min(order.length, k + Math.max(1, Math.ceil(k * 0.05))); members = build(order.slice(0, k)); mechanisms = mech(members); }
   // the frame as kept, solved again under each load with its own weight
   const KG: Graph = { nodes: G.nodes, edges: members.map((m) => [m.a, m.b]), len: members.map((m) => m.L) };
-  const KA = members.map((m) => m.A), N = cases.map((c) => { const f: V3[] = Array.from({ length: n }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); members.forEach((m) => { const w = (s.density * m.A * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; }); return truss(KG, KA, s.E, held, f).N; });
+  const KA = members.map((m) => m.A), N = cases.map((c) => { const f: V3[] = Array.from({ length: n }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); members.forEach((m) => { const w = (s.density * m.A * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; }); return truss(KG, KA, s.E, held, f, undefined, o.slides).N; });
   const mass = members.reduce((sum, m) => sum + s.density * m.A * m.L, 0);
   return { nodes: G.nodes, members, N, mass, rounds: done, mechanisms, planar, A, keptEdges: order.slice(0, k) };
 }
@@ -279,12 +288,12 @@ export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], 
 
 /** What a frame must do: the room it may take, which of its joints what it stands on or is fixed to holds, the loads it
  *  must carry (each a set of forces at points, every one carried alone), and boxes it must keep clear. */
-export interface FrameAsk { lo: V3; hi: V3; cells: [number, number, number]; held: (p: V3) => boolean; /** winds, each on one of its loads */ wind?: Wind[]; /** resting, its feet may be weighed down (ballast) as much as keeps them down and from sliding */ ballast?: boolean; /** what holds it only pushes (it rests on a floor or a bank): no foot may be pulled down, and no foot slides past μ of what presses it (0.5, estimate) */ rests?: boolean; /** resting, the plan of its top (x0, z0, x1, z1), anywhere on which what it carries may be put: it lies inside the outline its feet make, so what is put at its edge does not tip it */ over?: [number, number, number, number]; cases: { at: V3; F: V3 }[][]; keepOut?: [V3, V3][]; /** how far a strut may reach, in cells (2.3: across a cell's face and a knight's move) */ reach?: number }
+export interface FrameAsk { lo: V3; hi: V3; cells: [number, number, number]; held: (p: V3) => boolean; /** of the held joints, those free to slide one way, and which (0 x, 1 y, 2 z) */ slide?: (p: V3) => number | null; /** points to have joints at besides the lattice's: where what holds it is */ anchors?: V3[]; /** the most a load may move, m (else 1/250 of twice how far it is held out); the longest a strut may be, m */ sagMax?: number; maxLen?: number; /** winds, each on one of its loads */ wind?: Wind[]; /** resting, its feet may be weighed down (ballast) as much as keeps them down and from sliding */ ballast?: boolean; /** what holds it only pushes (it rests on a floor or a bank): no foot may be pulled down, and no foot slides past μ of what presses it (0.5, estimate) */ rests?: boolean; /** resting, the plan of its top (x0, z0, x1, z1), anywhere on which what it carries may be put: it lies inside the outline its feet make, so what is put at its edge does not tip it */ over?: [number, number, number, number]; cases: { at: V3; F: V3 }[][]; keepOut?: [V3, V3][]; /** how far a strut may reach, in cells (2.3: across a cell's face and a knight's move) */ reach?: number }
 /** A matter a frame may be made of, and the sections of it that can be had. */
 export interface FrameMatter { id: string; name: string; strut: Strut; sections: Section[] }
 /** A strut as made: its ends, its section, its length, and its pull under each load. */
 export interface MadeStrut { a: number; b: number; L: number; section: Section; N: number[]; /** the least of its margins: tension and crushing by two, buckling by three, as a factor over what each asks */ margin: number; mode: 'pulled' | 'crushed' | 'buckled' }
-export interface MadeFrame { matter: FrameMatter; nodes: V3[]; struts: MadeStrut[]; held: number[]; loaded: number[]; mass: number; mechanisms: number; /** what it was grown for, as forces at its joints (its own weight apart), and the winds on them */ cases: V3[][]; wind: Wind[]; /** where it rests on what only pushes: the most any foot would have to be pulled down (N, 0 if none), the most any would slide (as a share of μ of what presses it) */ lift: { most: number; slide: number; /** its top lies inside its feet's outline */ inside: boolean }; /** at each foot (as held, in order), the weight it wants set on it to stay down and not slide, by 1.5, N */ ballast: number[]; /** under each load, the most any loaded joint moves, against what it may */ sag: { most: number; allowed: number; at: number }[]; ok: boolean; grownMass: number; rounds: number }
+export interface MadeFrame { matter: FrameMatter; nodes: V3[]; struts: MadeStrut[]; held: number[]; loaded: number[]; mass: number; mechanisms: number; /** what it was grown for, as forces at its joints (its own weight apart), and the winds on them */ cases: V3[][]; wind: Wind[]; /** held joints free to slide one way */ slides: [number, number][]; /** where it rests on what only pushes: the most any foot would have to be pulled down (N, 0 if none), the most any would slide (as a share of μ of what presses it) */ lift: { most: number; slide: number; /** its top lies inside its feet's outline */ inside: boolean }; /** at each foot (as held, in order), the weight it wants set on it to stay down and not slide, by 1.5, N */ ballast: number[]; /** under each load, the most any loaded joint moves, against what it may */ sag: { most: number; allowed: number; at: number }[]; ok: boolean; grownMass: number; rounds: number }
 
 /** The convex hull of points in a plane, anticlockwise (Andrew's monotone chain). */
 export function hullOf(pts: [number, number][]): [number, number][] {
@@ -311,15 +320,22 @@ export function sectionFor(N: number[], L: number, s: Strut, sections: Section[]
  *  it may (1/250 of twice how far it is held out, estimate). The lightest that holds is kept; each is returned. */
 export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: number; /** each round of its growth, as it goes: what is left of it, and what it would weigh made */ trace?: (r: { matter: string; round: number; ground: number; struts: number; joints: number; mass: number; ok: boolean }) => void; /** what each joint costs, as a mass (a node, a gusset, its bolts), kg */ jointKg?: number; /** and each joint held by what holds it (its plate), kg */ heldKg?: number } = {}): { best: MadeFrame | null; tried: MadeFrame[] } {
   const g = o.g ?? 9.80665, pts = ask.cases.flat().map((x) => x.at);
-  const { nodes, at } = lattice(ask.lo, ask.hi, ask.cells, pts);
+  const { nodes, at } = lattice(ask.lo, ask.hi, ask.cells, [...pts, ...(ask.anchors ?? [])]);
   const held = new Set(nodes.map((p, i) => (ask.held(p) ? i : -1)).filter((i) => i >= 0));
+  const slides: Slides = new Map(); if (ask.slide) for (const j of held) { const ax = ask.slide(nodes[j]!); if (ax !== null) slides.set(j, ax); }
   const cell = Math.max(...[0, 1, 2].filter((d) => ask.cells[d]! > 0).map((d) => (ask.hi[d]! - ask.lo[d]!) / ask.cells[d]!));
   // every joint may reach every other where there are few enough of them (the full ground: a strut may be as long as
   // the room), else as far as a knight's move across the cells
   const span = Math.hypot(ask.hi[0] - ask.lo[0], ask.hi[1] - ask.lo[1], ask.hi[2] - ask.lo[2]);
-  const G = ground(nodes, ask.reach !== undefined ? cell * ask.reach : nodes.length <= 64 ? span * 1.001 : cell * 2.3, { held, ...(ask.keepOut ? { keepOut: ask.keepOut } : {}) });
+  const G = ground(nodes, Math.min(ask.maxLen ?? Infinity, ask.reach !== undefined ? cell * ask.reach : nodes.length <= 48 ? span * 1.001 : cell * 2.3), { held, ...(ask.keepOut ? { keepOut: ask.keepOut } : {}) });
+  // from each load, a way straight to each held joint, however far (a hypha grows to its food, a strut to what holds it),
+  // unless another joint lies on it or a box kept clear is in its way
+  { const have = new Set(G.edges.map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)), loads0 = [...new Set(at.slice(0, pts.length))];
+    for (const i of loads0) for (const j of held) { const key = `${Math.min(i, j)}-${Math.max(i, j)}`; if (i === j || have.has(key)) continue; const p = nodes[i]!, q = nodes[j]!, u = sub(q, p), L = norm(u); if (L < 1e-12 || (ask.maxLen !== undefined && L > ask.maxLen)) continue; if (ask.keepOut?.some((b) => through(p, q, b))) continue; let blocked = false; for (let k2 = 0; k2 < nodes.length && !blocked; k2++) { if (k2 === i || k2 === j) continue; const w = sub(nodes[k2]!, p), t2 = dot(w, u) / (L * L); if (t2 <= 1e-9 || t2 >= 1 - 1e-9) continue; if (norm(sub(w, [u[0] * t2, u[1] * t2, u[2] * t2])) < L * 1e-6) blocked = true; } if (!blocked) { G.edges.push([i, j]); G.len.push(L); have.add(key); } } }
   let k = 0; const cases: V3[][] = ask.cases.map((c) => { const f: V3[] = []; for (const x of c) { const j = at[k++]!; f[j] = [(f[j]?.[0] ?? 0) + x.F[0], (f[j]?.[1] ?? 0) + x.F[1], (f[j]?.[2] ?? 0) + x.F[2]]; } return f; });
-  const loaded = [...new Set(at)];
+  const loaded = [...new Set(at.slice(0, pts.length))];
+  // nothing in the room is held: nothing holds a frame grown there
+  if (!held.size) return { best: null, tried: [] };
   const tried = matters.map((mt) => {
     // made of what can be had: each strut the lightest section that bears it, the frame solved again as made, until no
     // strut changes; then stiffened where a load moves more than it may
@@ -327,7 +343,7 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
       const KG: Graph = { nodes, edges: grown.members.map((m) => [m.a, m.b]), len: grown.members.map((m) => m.L) };
       let picks: ReturnType<typeof sectionFor>[] = [];
       const widthOf = (A: number, e: number) => picks[e]?.section.width ?? Math.sqrt((20 * A) / Math.PI);
-      const solve = (A: number[]) => cases.map((c, k) => { const f: V3[] = Array.from({ length: nodes.length }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); grown.members.forEach((m, e) => { const w = (mt.strut.density * A[e]! * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; for (const wd of ask.wind ?? []) if (wd.case === k) windOn(f, nodes[m.a]!, nodes[m.b]!, m.a, m.b, widthOf(A[e]!, e), wd); }); return { r: truss(KG, A, mt.strut.E, held, f), f }; }).map((x) => Object.assign(x.r, { f: x.f }));
+      const solve = (A: number[]) => cases.map((c, k) => { const f: V3[] = Array.from({ length: nodes.length }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); grown.members.forEach((m, e) => { const w = (mt.strut.density * A[e]! * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; for (const wd of ask.wind ?? []) if (wd.case === k) windOn(f, nodes[m.a]!, nodes[m.b]!, m.a, m.b, widthOf(A[e]!, e), wd); }); return { r: truss(KG, A, mt.strut.E, held, f, undefined, slides), f }; }).map((x) => Object.assign(x.r, { f: x.f }));
       let least = grown.members.map(() => 0);
       picks = grown.members.map((m, e) => sectionFor(grown.N.map((Nk) => Nk[e]!), m.L, mt.strut, mt.sections));
       let runs = solve(picks.map((p) => p.section.A));
@@ -335,7 +351,7 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
         const next = grown.members.map((m, e) => sectionFor(runs.map((r) => r.N[e]!), m.L, mt.strut, mt.sections, Math.max(least[e]!, picks[e]!.section.A)));
         const changed = next.some((p, e) => p.section !== picks[e]!.section); picks = next; runs = solve(picks.map((p) => p.section.A)); if (!changed) break;
       }
-      const reachOf = (j: number) => Math.min(...[...held].map((h) => Math.hypot(nodes[j]![0] - nodes[h]![0], nodes[j]![2] - nodes[h]![2]))), allow = (j: number) => Math.max(2 * reachOf(j), cell) / 250;
+      const reachOf = (j: number) => Math.min(...[...held].map((h) => Math.hypot(nodes[j]![0] - nodes[h]![0], nodes[j]![2] - nodes[h]![2]))), allow = (j: number) => ask.sagMax ?? Math.max(2 * reachOf(j), cell) / 250;
       const sagOf = () => runs.map((r) => { let most = 0, allowed = Infinity, w = -1; for (const j of loaded) { const d = norm(r.u[j]!), a = allow(j); if (w < 0 || d / a > most / allowed) { most = d; allowed = a; w = j; } } return { most, allowed, at: w }; });
       let sag = sagOf();
       for (let it = 0; it < 6 && sag.some((x) => x.most > x.allowed); it++) {
@@ -359,7 +375,7 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
       const feet = [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)).map((h) => [nodes[h]![0], nodes[h]![2]] as [number, number]);
       const inside = !ask.rests || !ask.over || ((): boolean => { const hull = hullOf(feet); if (hull.length < 3) return false; const [x0, z0, x1, z1] = ask.over!; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].every(([x, z]) => hull.every((p, i) => { const q = hull[(i + 1) % hull.length]!; return (q[0] - p[0]) * (z! - p[1]) - (q[1] - p[1]) * (x! - p[0]) >= -1e-9; })); })();
       const ok = grown.mechanisms === 0 && struts.every((x) => x.margin >= 1) && sag.every((x) => x.most <= x.allowed) && runs.every((r) => r.converged) && (ask.ballast || (lift.most <= 1e-6 * Math.max(1, mass * g) && lift.slide <= 1)) && inside;
-      return { matter: mt, nodes, struts, held: [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)), loaded, mass, mechanisms: grown.mechanisms, cases, wind: ask.wind ?? [], lift: { ...lift, inside }, ballast: heldList.map((h, i) => (struts.some((x) => x.a === h || x.b === h) ? ballast[i]! : 0)).filter((_, i) => struts.some((x) => x.a === heldList[i] || x.b === heldList[i])), sag, ok, grownMass: grown.mass, rounds: grown.rounds };
+      return { matter: mt, nodes, struts, held: [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)), loaded, mass, mechanisms: grown.mechanisms, cases, wind: ask.wind ?? [], slides: [...slides], lift: { ...lift, inside }, ballast: heldList.map((h, i) => (struts.some((x) => x.a === h || x.b === h) ? ballast[i]! : 0)).filter((_, i) => struts.some((x) => x.a === heldList[i] || x.b === heldList[i])), sag, ok, grownMass: grown.mass, rounds: grown.rounds };
     };
     // grown on all the ground; then, as a bone gives up what it does not use, the struts doing least (what they carry
     // times how long they are) are taken away a few at a time, the rest grown again as their loads find new ways, and
@@ -370,10 +386,14 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
     const score = (m: MadeFrame) => m.mass + m.ballast.reduce((x, y) => x + y / g, 0) + (o.jointKg ?? 0) * new Set(m.struts.flatMap((x) => [x.a, x.b])).size + (o.heldKg ?? 0) * m.held.length;
     const needed = new Set<number>(), planar = nodes.every((p) => Math.abs(p[2] - nodes[0]![2]) < 1e-12);
     const loadedSet = new Set(loaded);
-    const groundMech = (es: number[]) => { const ms = mergeChains(nodes, es.map((e) => ({ a: G.edges[e]![0], b: G.edges[e]![1], A: 1, L: G.len[e]! })), held, loadedSet), used = [...new Set(ms.flatMap((m) => [m.a, m.b]))], at = new Map(used.map((j, i) => [j, i])); return count({ dim: planar ? 2 : 3, nodes: used.map((j) => (planar ? [nodes[j]![0], nodes[j]![1]] : nodes[j]!)), bars: ms.map((m) => [at.get(m.a)!, at.get(m.b)!] as [number, number]), held: used.filter((j) => held.has(j)).map((j) => at.get(j)!) }).mechanisms + (loaded.some((j) => !used.includes(j)) ? 1 : 0); };
+    // a cut that leaves a free joint with fewer struts than it has freedoms, or all of them in one plane (in a plane, on one
+    // line), leaves it a mechanism there: said at once, without the count
+    const localBad = (es: number[]) => { const at = new Map<number, number[]>(); for (const e of es) for (const j of G.edges[e]!) at.set(j, [...(at.get(j) ?? []), e]); for (const [j, list] of at) { if (held.has(j)) continue; const dirs = list.map((e) => { const [a, b] = G.edges[e]!, o2 = a === j ? b : a; return sub(nodes[o2]!, nodes[j]!); }); if (planar ? dirs.length < 2 : dirs.length < 3) { if (dirs.length === 2 && !planar) { /* two in line through it may be merged: the count decides */ const c2 = dot(dirs[0]!, dirs[1]!) / (norm(dirs[0]!) * norm(dirs[1]!)); if (c2 < -1 + 1e-9 && !loaded.includes(j)) continue; } return true; } if (!planar) { let spans = false; for (let i = 0; i < dirs.length && !spans; i++) for (let k = i + 1; k < dirs.length && !spans; k++) for (let l = k + 1; l < dirs.length && !spans; l++) { const cr = [dirs[i]![1] * dirs[k]![2] - dirs[i]![2] * dirs[k]![1], dirs[i]![2] * dirs[k]![0] - dirs[i]![0] * dirs[k]![2], dirs[i]![0] * dirs[k]![1] - dirs[i]![1] * dirs[k]![0]] as V3; if (Math.abs(dot(cr, dirs[l]!)) > 1e-9 * norm(dirs[i]!) * norm(dirs[k]!) * norm(dirs[l]!)) spans = true; } if (!spans) return true; } } return false; };
+    const groundMech = (es: number[]) => { if (localBad(es)) return 1; return groundCount(es); };
+    const groundCount = (es: number[]) => { const ms = mergeChains(nodes, es.map((e) => ({ a: G.edges[e]![0], b: G.edges[e]![1], A: 1, L: G.len[e]! })), held, loadedSet), used = [...new Set(ms.flatMap((m) => [m.a, m.b]))], at = new Map(used.map((j, i) => [j, i])); return count({ dim: planar ? 2 : 3, nodes: used.map((j) => (planar ? [nodes[j]![0], nodes[j]![1]] : nodes[j]!)), bars: ms.map((m) => [at.get(m.a)!, at.get(m.b)!] as [number, number]), held: used.filter((j) => held.has(j) && !slides.has(j)).map((j) => at.get(j)!), rollers: used.filter((j) => slides.has(j)).flatMap((j) => [0, 1, 2].filter((d) => d !== slides.get(j) && (!planar || d < 2)).map((d) => [at.get(j)!, d] as [number, number])) }).mechanisms + (loaded.some((j) => !used.includes(j)) ? 1 : 0); };
     for (let round = 0; round < 60 && edges.length > 0; round++) {
       const Gs: Graph = { nodes, edges: edges.map((e) => G.edges[e]!), len: edges.map((e) => G.len[e]!) };
-      const grown = growFrame(Gs, mt.strut, held, cases, { g, rounds: start ? 40 : 120, ...(start ? { start } : {}), ...(ask.wind ? { wind: ask.wind } : {}) });
+      const grown = growFrame(Gs, mt.strut, held, cases, { g, rounds: start ? 40 : 120, ...(start ? { start } : {}), ...(ask.wind ? { wind: ask.wind } : {}), slides });
       const made = make(grown);
       o.trace?.({ matter: mt.id, round, ground: edges.length, struts: made.struts.length, joints: new Set(made.struts.flatMap((x) => [x.a, x.b])).size, mass: made.mass, ok: made.ok });
       if (!best || (made.ok && (!best.ok || score(made) < score(best))) || (!made.ok && !best.ok && score(made) < score(best))) { best = made; since = 0; } else since++;
@@ -382,7 +402,7 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
       const live = grown.keptEdges; edges = live.map((e) => edges[e]!); const GA = live.map((e) => grown.A[e]!);
       const Gl: Graph = { nodes, edges: edges.map((e) => G.edges[e]!), len: edges.map((e) => G.len[e]!) };
       // what each carries times its length, the most under any load
-      const N = cases.map((c) => truss(Gl, GA, mt.strut.E, held, Array.from({ length: nodes.length }, (_, i) => c[i] ?? [0, 0, 0]) as V3[]).N);
+      const N = cases.map((c) => truss(Gl, GA, mt.strut.E, held, Array.from({ length: nodes.length }, (_, i) => c[i] ?? [0, 0, 0]) as V3[], undefined, slides).N);
       const work = Gl.edges.map((_, e) => Math.max(...N.map((Nk) => Math.abs(Nk[e]!))) * Gl.len[e]!);
       // a joint nothing holds or loads may go, with every strut that meets it: a bone gives up a whole region it does
       // not use, not a strut at a time (a joint in space wants three struts, so taking one leaves it a mechanism)
@@ -424,7 +444,7 @@ export function frameAt(f: MadeFrame, sc: number, withIt: boolean, g = 9.80665):
   f.cases.forEach((c, ci) => {
     const load: V3[] = nodes.map((_, i) => { const v = c[i]; return v ? [v[0] * k, v[1] * k, v[2] * k] : [0, 0, 0]; });
     f.struts.forEach((x, e) => { const w = (f.matter.strut.density * A[e]! * G.len[e]! * g) / 2; load[x.a]![1] -= w; load[x.b]![1] -= w; for (const wd of f.wind) if (wd.case === ci) windOn(load, nodes[x.a]!, nodes[x.b]!, x.a, x.b, (x.section.width ?? Math.sqrt((20 * x.section.A) / Math.PI)) * sc, wd); });
-    const r = truss(G, A, f.matter.strut.E, held, load);
+    const r = truss(G, A, f.matter.strut.E, held, load, undefined, new Map(f.slides));
     f.struts.forEach((x, e) => { const N = r.N[e]!; if (N > 0) strength = Math.min(strength, (A[e]! * f.matter.strut.sy) / (2 * N)); else if (N < 0) { strength = Math.min(strength, (A[e]! * f.matter.strut.sc) / (-2 * N)); buckling = Math.min(buckling, (Math.PI ** 2 * f.matter.strut.E * I[e]!) / (G.len[e]! ** 2) / (-3 * N)); } });
     const reach = (j: number) => Math.min(...f.held.map((h) => Math.hypot(nodes[j]![0] - nodes[h]![0], nodes[j]![2] - nodes[h]![2])));
     for (const j of f.loaded) sag = Math.max(sag, norm(r.u[j]!) / (Math.max(2 * reach(j), 1e-9 + 0.1 * sc) / 250));
