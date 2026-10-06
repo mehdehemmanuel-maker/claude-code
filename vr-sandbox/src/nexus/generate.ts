@@ -12,13 +12,15 @@
 // metres, every number in SI; a number may carry its unit (40 mm, 2 kN, 20 N·m, 45 deg).
 
 import { MATERIALS, type Material } from '../data/materials';
-import { fusible } from '../engineering/fusion';
+import { FUSION, fusible } from '../engineering/fusion';
+import { motorModel, windingR } from '../engineering/dcmotor';
+import { flowHeat, GLUE_K, TOUCHING_R, type HeatLink, type HeatNode, type HeatRun } from './heatflow';
 import { liquidOf, runMotor, type MotorRun } from '../engineering/motorrun';
 import { MOTORS, type MotorData } from '../data/motors';
 import type { Jolt } from './realize';
-import { simulate, type SimOut, type SimThing, type SimTrack } from './sim';
+import { simulate, type SimJoint, type SimOut, type SimThing, type SimTrack } from './sim';
 import { ADHESIVES, substrateFactor } from '../engineering/joining';
-import { thermalOf } from '../engineering/thermal';
+import { AMBIENT, thermalOf, type ThermalProps } from '../engineering/thermal';
 
 // ---- numbers with their units, and the expressions they are said in ---------------------------------------------------
 const UNITS: [string, number][] = ([
@@ -108,6 +110,56 @@ function unseenIn(A: Made, all: Made[]): string | null {
     if (inB) return `wholly inside ${B.name}, a solid: nothing could see it, and it could not be where ${B.name} is`;
   }
   return null;
+}
+/** Points over a thing's surface, each with the area it stands for, in the room: a box's six faces, a cylinder's side
+ *  and ends, a tube's outside, bore and ends, a ball all over, each on a grid fine enough to see a millimetre. Null for
+ *  a shape whose surface is not sampled here (a cone, a ring). */
+function surfaceOf(X: Made): { p: V3; a: number }[] | null {
+  const R = matOf(X.turn), out: { p: V3; a: number }[] = [], cells = (len: number, most = 64) => Math.max(4, Math.min(most, Math.ceil(len / 1.5e-3)));
+  const put = (l: V3, a: number) => { const w = apply3(R, l); out.push({ p: [X.at[0] + w[0], X.at[1] + w[1], X.at[2] + w[2]], a }); };
+  if (X.kind === 'box') {
+    const e = [X.local.w / 2, X.local.h / 2, X.local.d / 2];
+    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
+      const j = (i + 1) % 3, k = (i + 2) % 3, nj = cells(2 * e[j]!), nk = cells(2 * e[k]!), a = ((2 * e[j]!) / nj) * ((2 * e[k]!) / nk);
+      for (let u = 0; u < nj; u++) for (let v = 0; v < nk; v++) { const l: V3 = [0, 0, 0]; l[i] = s * e[i]!; l[j] = -e[j]! + ((u + 0.5) * 2 * e[j]!) / nj; l[k] = -e[k]! + ((v + 0.5) * 2 * e[k]!) / nk; put(l, a); }
+    }
+    return out;
+  }
+  const ax = AX[X.axis], o1 = (ax + 1) % 3, o2 = (ax + 2) % 3, at = (r: number, th: number, z: number): V3 => { const l: V3 = [0, 0, 0]; l[ax] = z; l[o1] = r * Math.cos(th); l[o2] = r * Math.sin(th); return l; };
+  if (X.kind === 'sphere') {
+    const r = X.dims.D! / 2, nl = 64, nm = 128;
+    for (let i = 0; i < nl; i++) { const p0 = (i / nl) * Math.PI, p1 = ((i + 1) / nl) * Math.PI, a = (2 * Math.PI * r * r * (Math.cos(p0) - Math.cos(p1))) / nm; for (let k = 0; k < nm; k++) { const ph = (p0 + p1) / 2, th = ((k + 0.5) / nm) * 2 * Math.PI; put(at(r * Math.sin(ph), th, r * Math.cos(ph)), a); } }
+    return out;
+  }
+  if (X.kind === 'cylinder' || X.kind === 'tube') {
+    const ro = X.dims.D! / 2, ri = X.kind === 'tube' ? ro - X.dims.wall! : 0, h = X.dims.h!, nt = 128, nh = cells(h), nr = cells(ro - ri, 32);
+    for (const r of X.kind === 'tube' ? [ro, ri] : [ro]) for (let k = 0; k < nt; k++) for (let i = 0; i < nh; i++) put(at(r, ((k + 0.5) / nt) * 2 * Math.PI, -h / 2 + ((i + 0.5) * h) / nh), (2 * Math.PI * r * h) / (nt * nh));
+    for (const z of [-h / 2, h / 2]) for (let i = 0; i < nr; i++) { const r0 = ri + ((ro - ri) * i) / nr, r1 = ri + ((ro - ri) * (i + 1)) / nr, a = (Math.PI * (r1 * r1 - r0 * r0)) / nt; for (let k = 0; k < nt; k++) put(at((r0 + r1) / 2, ((k + 0.5) / nt) * 2 * Math.PI, z), a); }
+    return out;
+  }
+  return null;
+}
+/** How far a point is from a thing's surface: more than nothing outside it, less inside it. A shape not sampled here
+ *  is its box. */
+function surfaceDistance(X: Made, p: V3): number {
+  const R = matOf(X.turn), q = applyT(R, [p[0] - X.at[0], p[1] - X.at[1], p[2] - X.at[2]]);
+  if (X.kind === 'sphere') return Math.hypot(...q) - X.dims.D! / 2;
+  if (X.kind === 'cylinder' || X.kind === 'tube') {
+    const ax = AX[X.axis], r = Math.hypot(...q.filter((_, i) => i !== ax)), ro = X.dims.D! / 2, ri = X.kind === 'tube' ? ro - X.dims.wall! : -Infinity;
+    const dr = X.kind === 'tube' ? Math.max(ri - r, r - ro) : r - ro, dz = Math.abs(q[ax]!) - X.dims.h! / 2;
+    return dr <= 0 && dz <= 0 ? Math.max(dr, dz) : Math.hypot(Math.max(dr, 0), Math.max(dz, 0));
+  }
+  const e = [X.local.w / 2, X.local.h / 2, X.local.d / 2], d = q.map((v, i) => Math.abs(v) - e[i]!);
+  return d.every((v) => v <= 0) ? Math.max(...d) : Math.hypot(...d.map((v) => Math.max(v, 0)));
+}
+/** Where two things touch: the area of each one's surface within half a millimetre of the other's (or up to 2 mm
+ *  into it, as a thing left resting sits), the less of the two; and the middle of it. Null where nothing touches. */
+function touchPatch(A: Made, B: Made): { area: number; at: V3; sampled: boolean } | null {
+  const side = (X: Made, Y: Made) => { const pts = surfaceOf(X); if (!pts) return null; let a = 0; const c: V3 = [0, 0, 0]; for (const s of pts) { const d = surfaceDistance(Y, s.p); if (d <= TOUCH && d >= -2e-3) { a += s.a; c[0] += s.p[0] * s.a; c[1] += s.p[1] * s.a; c[2] += s.p[2] * s.a; } } return { a, c: (a > 0 ? c.map((v) => v / a) : c) as V3 }; };
+  const sa = side(A, B), sb = side(B, A), ss = [sa, sb].filter((x): x is { a: number; c: V3 } => !!x);
+  if (!ss.length) return null;
+  const best = ss.reduce((x, y) => (y.a < x.a ? y : x)); if (!(best.a > 0)) return null;
+  return { area: best.a, at: (sa && sa.a > 0 ? sa : best).c, sampled: ss.length === 2 };
 }
 /** Things touch where nothing parts them by more than this: half a millimetre. */
 export const TOUCH = 5e-4;
@@ -246,14 +298,17 @@ interface Spec { /** broken under a load put on it */ broken?: boolean; /** who 
 interface Bond { a: string; b: string; how: 'fused' | 'glued' | 'bolted'; with?: string; why: string }
 interface Group { name: string; members: string[]; move: V3; turn: V3; flips: Flip[]; stretch: V3; bonds?: Bond[]; /** moved as one, not connected */ loose?: boolean }
 type JoinHow = 'any' | 'fuse' | 'glue' | 'bolt' | 'group';
+/** A joint: what turns or slides (a), on what holds it (b: a thing made here, or a part of the build), about or along an
+ *  axis through where they touched. Its point and axis are kept in a's own frame, so they go where a goes. */
+interface Joint { kind: 'hinge' | 'slide'; a: string; b: string; fixed: boolean; pivot: V3; axis: V3; limits?: [number, number]; friction?: number; drive?: { motor: string; V: number } }
 /** A rule over everything made: a condition, or that nothing overlaps, or a clearance between things. */
 /** A rule, and who said it: a pipeline's "no overlap" or clearance holds over what that pipeline makes; a condition, over what it names. */
 type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string }) & { by: string };
 /** A shape as it stands: its sizes, where its middle is, how it is turned (radians about x, y, z), its extents along
  *  x, y and z as turned, its extents as made, and what follows from them. */
 /** A chart: panels of one quantity each, its series over time. */
-export interface Chart { title: string; note: string; panels: { label: string; unit: string; series: { name: string; t: number[]; v: number[] }[] }[] }
-export interface Made { /** a motor: its datasheet, and how fast it was left turning, rad/s */ motor?: string; spin?: number; /** broken under a load put on it */ broken?: boolean;
+export interface Chart { title: string; note: string; /** what time is counted in on its axis: s unless said */ tUnit?: string; panels: { label: string; unit: string; series: { name: string; t: number[]; v: number[] }[] }[] }
+export interface Made { /** a motor: its datasheet, and how fast it was left turning, rad/s */ motor?: string; spin?: number; /** broken under a load put on it */ broken?: boolean; /** its temperature, deg C, where heat has been put in it or has flowed */ temp?: number;
   /** Why it is not computed: wholly inside a solid, or too small to be. Not drawn, not let go, not weighed, not judged. */ unseen?: string; name: string; kind: Kind; word: string; matter: Material | null; axis: Axis; dims: Record<string, number>; at: V3; turn: V3; local: { w: number; h: number; d: number }; scale: V3; w: number; h: number; d: number; volume: number; area: number; mass: number; text?: string; group?: string }
 /** A joined piece as it stands: its members, the box round them, and the union's volume and mass (exact, or sampled). */
 export interface Joined { name: string; members: string[]; at: V3; w: number; h: number; d: number; volume: number; mass: number; exact: boolean; within: number; axis?: Axis }
@@ -345,7 +400,7 @@ function motorFor(said: string): MotorData {
   return all.find((d) => /coreless/i.test(said) && /coreless/i.test(d.label)) ?? all.find((d) => /brushed/i.test(said) && /^Brushed/i.test(d.label)) ?? all[0]!;
 }
 interface Standing { name: string; header: { word: string; param: boolean; optional: boolean }[]; body: string[]; text: string; builtIn: boolean }
-const CALL_VERBS = /^(run|simulate|drop|push|let|load|chart|repeat|for|while|parts|bom|calc|calculate|compute|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|if|action|actions|show|default|require)$/i;
+const CALL_VERBS = /^(hinge|slide|unhinge|unslide|heat|warm|cool|run|simulate|drop|push|let|load|chart|repeat|for|while|parts|bom|calc|calculate|compute|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|if|action|actions|show|default|require)$/i;
 
 export class Workshop {
   private vars = new Map<string, string>(); private unitOf = new Map<string, string>(); private laws = new Map<string, Law>();
@@ -357,6 +412,8 @@ export class Workshop {
   private runsKept = new Map<string, MotorRun>(); private spins = new Map<string, number>();
   /** The physics engine, once it is loaded; and the last motion it worked out, for the room to show. */
   private J: Jolt | null = null; private track: SimTrack | null = null; private lastSim: SimOut | null = null; private chartKept: Chart | null = null;
+  /** Hinges and slides; each thing's temperature where it is not the room's, and the heat put into it; the last flow of heat. */
+  private jointsKept: Joint[] = []; private temps = new Map<string, number>(); private heaters = new Map<string, number>(); private heatKept: { names: string[]; run: HeatRun; seconds: number } | null = null;
   /** The last chart asked for, taken once: the room draws it. */
   takeChart(): Chart | null { const c = this.chartKept; this.chartKept = null; return c; }
   usePhysics(J: Jolt): void { this.J = J; }
@@ -406,6 +463,8 @@ export class Workshop {
         rx: p.turn?.[0], ry: p.turn?.[1], rz: p.turn?.[2],
         // its own extents, as made, before it is turned: what a thing put on it is sized by
         lw: p.local?.w ?? b.w, lh: p.local?.h ?? b.h, ld: p.local?.d ?? b.d,
+        // its temperature, deg C: the room's until heat is put in it or flows
+        temperature: p.temp ?? (p.matter ? AMBIENT : undefined),
       };
       if (prop in v && v[prop] !== undefined) return v[prop];
       if (p.matter) return matterValue(p.matter, prop);
@@ -449,7 +508,7 @@ export class Workshop {
         const c = f.through ? this.boxOf(f.through, over, busy, memo) : null; if (f.through && !c) throw new Error(this.noPart(f.through));
         const i = AX[f.axis], o = c ? c.at[i]! : 0; at = [...at] as V3; at[i] = 2 * o - at[i]!; turn = mirrorTurn(turn, f.axis);
       }
-      const made: Made = { name, kind: s.kind, word: s.word, matter: mt, axis, dims, at, turn, local, scale: [...k] as V3, ...g, ...box, mass: s.massGiven ?? (mt ? mt.density * g.volume : 0), ...(s.broken ? { broken: true } : {}), ...(s.motor ? { motor: s.motor, spin: this.spins.get(name) ?? 0 } : {}), ...(s.text ? { text: s.text } : {}), ...(this.groupOf(name) ? { group: this.groupOf(name)!.name } : {}) };
+      const made: Made = { name, kind: s.kind, word: s.word, matter: mt, axis, dims, at, turn, local, scale: [...k] as V3, ...g, ...box, mass: s.massGiven ?? (mt ? mt.density * g.volume : 0), ...(s.broken ? { broken: true } : {}), ...(s.motor ? { motor: s.motor, spin: this.spins.get(name) ?? 0 } : {}), ...(s.text ? { text: s.text } : {}), ...(this.groupOf(name) ? { group: this.groupOf(name)!.name } : {}), ...(this.temps.has(name) ? { temp: this.temps.get(name)! } : {}) };
       if (!over.size) memo.set(key, made);
       return made;
     } finally { busy.delete(`shape:${name}`); }
@@ -465,12 +524,13 @@ export class Workshop {
       const a = (2 * Math.PI * p.i) / p.n, ax = o.axis ?? 'y', v: V3 = [c[0] - o.at[0], c[1] - o.at[1], c[2] - o.at[2]], [i, j] = ax === 'x' ? [1, 2] : ax === 'z' ? [0, 1] : [0, 2];
       const out: V3 = [...o.at] as V3; out[i] += v[i]! * Math.cos(a) - v[j]! * Math.sin(a); out[j] += v[i]! * Math.sin(a) + v[j]! * Math.cos(a); out[3 - i - j] = c[3 - i - j]!; return out;
     }
-    const by = p.by ? num(p.by, sc) : 0, dx = p.dx ? num(p.dx, sc) : 0, dz = p.dz ? num(p.dz, sc) : 0, gap = by || 0.01;
+    // a gap said is the gap, nothing included ("right of m by 0": touching it); unsaid, beside is 10 mm off, above 50 mm
+    const said = !!p.by, by = said ? num(p.by!, sc) : 0, dx = p.dx ? num(p.dx, sc) : 0, dz = p.dz ? num(p.dz, sc) : 0, gap = said ? by : 0.01, up = said ? by : 0.05;
     switch (p.how) {
       case 'on': return [c[0] + dx, c[1] + T.h / 2 + by + g.h / 2, c[2] + dz];
-      case 'above': return [c[0] + dx, c[1] + T.h / 2 + (by || 0.05) + g.h / 2, c[2] + dz];
+      case 'above': return [c[0] + dx, c[1] + T.h / 2 + up + g.h / 2, c[2] + dz];
       case 'under': return [c[0] + dx, c[1] - T.h / 2 - by - g.h / 2, c[2] + dz];
-      case 'below': return [c[0] + dx, c[1] - T.h / 2 - (by || 0.05) - g.h / 2, c[2] + dz];
+      case 'below': return [c[0] + dx, c[1] - T.h / 2 - up - g.h / 2, c[2] + dz];
       case 'beside': case 'right': return [c[0] + T.w / 2 + gap + g.w / 2, c[1], c[2]];
       case 'left': return [c[0] - T.w / 2 - gap - g.w / 2, c[1], c[2]];
       case 'front': return [c[0], c[1], c[2] + T.d / 2 + gap + g.d / 2];
@@ -630,7 +690,7 @@ export class Workshop {
   /** The scope a check reads, over everything set and made, and the room's facts. */
   reader(): Scope { return this.scope(new Map(), new Set(), new Map()); }
   // -- rules, and a step undone that would break one ---------------------------------------------------------------------
-  private related(a: Spec, b: Spec): boolean { const of = (s: Spec) => ('of' in s.place ? s.place.of : null), ga = this.groupOf(a.name); return of(a) === b.name || of(b) === a.name || (!!ga && !ga.loose && ga === this.groupOf(b.name)); }
+  private related(a: Spec, b: Spec): boolean { const of = (s: Spec) => ('of' in s.place ? s.place.of : null), ga = this.groupOf(a.name); return of(a) === b.name || of(b) === a.name || (!!ga && !ga.loose && ga === this.groupOf(b.name)) || this.jointsKept.some((j) => (j.a === a.name && j.b === b.name) || (j.a === b.name && j.b === a.name)); }
   /** What breaks a rule as things stand: each broken rule, with why. */
   broken(): string[] {
     const out: string[] = [], { made } = this.all(), sc = this.reader();
@@ -646,11 +706,11 @@ export class Workshop {
     }
     return out;
   }
-  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, said: this.matterSaid, rand: this.rand.s, actions: new Map(this.actions), runs: new Map(this.runsKept), spins: new Map(this.spins) }; }
-  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; this.actions = z.actions; this.runsKept = z.runs; this.spins = z.spins; }
+  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, said: this.matterSaid, rand: this.rand.s, actions: new Map(this.actions), runs: new Map(this.runsKept), spins: new Map(this.spins), joints: structuredClone(this.jointsKept), temps: new Map(this.temps), heaters: new Map(this.heaters) }; }
+  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; this.actions = z.actions; this.runsKept = z.runs; this.spins = z.spins; this.jointsKept = z.joints; this.temps = z.temps; this.heaters = z.heaters; }
   // -- what a step says --------------------------------------------------------------------------------------------------
   /** Whether a step's words are generation's to do. */
-  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|action|actions|default|require|mount|support|cover|stack|run|simulate|drop|push|chart)\b/i.test(t) || /^load\s+[\p{L}_][\p{L}\d_]*\s+with\s/iu.test(t) || /^let (it |them )?go\b/i.test(t) || /^repeat\s+.+?\s+times?\s*:/i.test(t) || /^for\s+each\b/i.test(t) || /^while\s+.+:/i.test(t) || /^(parts list|parts|list (the )?parts|bill of materials|bom|cut list)$/i.test(t) || /^show\s+action\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
+  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|action|actions|default|require|mount|support|cover|stack|run|simulate|drop|push|chart|hinge|unhinge|unslide|heat|warm|cool)\b/i.test(t) || /^slide\s+[\p{L}_][\p{L}\d_]*\s+(?:on|onto|along|in)\s/iu.test(t) || /^load\s+[\p{L}_][\p{L}\d_]*\s+with\s/iu.test(t) || /^let (it |them )?go\b/i.test(t) || /^repeat\s+.+?\s+times?\s*:/i.test(t) || /^for\s+each\b/i.test(t) || /^while\s+.+:/i.test(t) || /^(parts list|parts|list (the )?parts|bill of materials|bom|cut list)$/i.test(t) || /^show\s+action\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
   /** Whether a step's words are this workshop's: generation's, or a standing action it knows. */
   does(line: string): boolean { return Workshop.handles(line) || this.actions.has(line.trim().split(/\s+/)[0]!.toLowerCase()); }
   /** The standing actions it knows: each one's name, how it is called, and whether it is its own or yours. */
@@ -760,6 +820,13 @@ export class Workshop {
     if (/^(?:parts list|parts|list (?:the )?parts|bill of materials|bom|cut list)$/i.test(t)) return this.partsList();
     if ((m = /^load\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+at\s+(?:the\s+|its\s+)?(middle|centre|center|end))?$/iu.exec(t))) return this.loadStep(m[1]!, num(m[2]!, this.reader()), (m[3] ?? 'middle').toLowerCase());
     if ((m = /^chart\s+(.+)$/i.exec(t))) return this.chartStep(m[1]!.trim());
+    // moving joints, where things touch: a hinge turns about an axis, a slide runs along one
+    if ((m = /^(hinge|slide)\s+([\p{L}_][\p{L}\d_]*)\s+(?:to|on|onto|in)\s+(.+)$/iu.exec(t))) return this.jointStep(m[1]!.toLowerCase() as Joint['kind'], m[2]!, m[3]!);
+    if ((m = /^(?:unhinge|unslide)\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const n = m[1]!, was = this.jointsKept.length; this.jointsKept = this.jointsKept.filter((j) => j.a !== n && j.b !== n); if (was === this.jointsKept.length) throw new Error(`${n} is on no hinge or slide.`); return `${n} is on no hinge or slide now: what was hinged or slid there stands free.`; }
+    // heat: put in a thing, and let flow between what touches and out to the air
+    if ((m = /^(?:let\s+)?heat\s+flow(?:\s+for\s+(.+))?$/i.exec(t)) || (m = /^let\s+(?:it|them|things|everything)\s+cool(?:\s+(?:down\s+)?for\s+(.+))?$/i.exec(t))) return this.heatFlow(m[1] ? num(m[1], this.reader()) : 60);
+    if ((m = /^(?:heat|warm|cool)\s+([\p{L}_][\p{L}\d_]*)\s+to\s+(.+)$/iu.exec(t))) return this.setTemp(m[1]!, m[2]!);
+    if ((m = /^heat\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+)$/iu.exec(t))) return this.setHeater(m[1]!, m[2]!);
     if (/^action\s/i.test(t)) return this.define(t);
     if (/^actions$/i.test(t)) return `Standing actions: ${this.standing().map((a) => `${a.call} (${a.steps} steps${a.builtIn ? '' : ', yours'})`).join('; ')}. "show action <name>" says how one is worked out.`;
     if ((m = /^show\s+action\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const a = this.actions.get(m[1]!.toLowerCase()); if (!a) throw new Error(`No action named ${m[1]}: ${[...this.actions.keys()].join(', ')}.`); return `${this.callForm(a)}: ${a.body.map((b, k) => `${k + 1}. ${b}`).join(' ')}`; }
@@ -790,10 +857,10 @@ export class Workshop {
     if ((m = /^move\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t)) && this.groups.has(m[1]!)) return this.groupMove(m[1]!, m[2]!);
     if ((m = /^move\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t))) { const s = this.specOf(m[1]!), place = this.placeWords(` ${m[2]!}`); if (!place) throw new Error(`Move ${m[1]} where? Say "to 0, 0.5 m, 0", "on bearing", "left of cap by 10 mm", "from cap by 0, 20 mm, 0".`); s.place = place; return `Moved ${this.check(s.name)}.`; }
     if ((m = /^(?:remove|delete)\s+([\p{L}_][\p{L}\d_-]*)$/iu.exec(t))) {
-      const g = this.groups.get(m[1]!); if (g) { for (const x of g.members) this.specs.delete(x); this.groups.delete(g.name); return `Removed ${g.name}: ${g.members.join(', ')}.`; }
-      this.specOf(m[1]!); this.leave(m[1]!); this.specs.delete(m[1]!); return `Removed ${m[1]}.`;
+      const g = this.groups.get(m[1]!); if (g) { for (const x of g.members) { this.specs.delete(x); this.forget(x); } this.groups.delete(g.name); return `Removed ${g.name}: ${g.members.join(', ')}.`; }
+      this.specOf(m[1]!); this.leave(m[1]!); this.specs.delete(m[1]!); this.forget(m[1]!); return `Removed ${m[1]}.`;
     }
-    if (/^clear(\s+all)?$/i.test(t)) { const n = this.specs.size; this.specs.clear(); this.groups.clear(); return `Cleared ${n} shape${n === 1 ? '' : 's'}.`; }
+    if (/^clear(\s+all)?$/i.test(t)) { const n = this.specs.size; this.specs.clear(); this.groups.clear(); this.jointsKept = []; this.temps.clear(); this.heaters.clear(); return `Cleared ${n} shape${n === 1 ? '' : 's'}.`; }
     if ((m = /^(?:pattern|copy)\s+([\p{L}_][\p{L}\d_]*)\s+(\d+)\s*(?:times\s*)?(?:along\s+([xyz])\s+(?:every\s+)?(.+)|round\s+([\p{L}_][\p{L}\d_ ]*))$/iu.exec(t))) return this.pattern(m[1]!, Number(m[2]), m[3] as Axis | undefined, m[4], m[5]);
     if ((m = /^scatter\s+([\p{L}_][\p{L}\d_]*)\s+(\d+)\s*(?:times\s*)?(?:on|over|onto|across)\s+([\p{L}_][\p{L}\d_ ]*?)(\s+turned randomly)?$/iu.exec(t))) return this.scatter(m[1]!, Number(m[2]), m[3]!.trim(), !!m[4]);
     if ((m = /^rules?\s+(.+)$/i.exec(t))) return this.rule(m[1]!);
@@ -818,6 +885,8 @@ export class Workshop {
       ...(cool ? { coolant: { liquid: liquidOf(cool[1]!), flow: num(cool[2]!, sc), tIn: cool[3] ? num(cool[3].replace(/°C$/, ''), sc) : 20, ...(gap ? { gap: num(gap, sc) } : {}) } } : {}),
     });
     this.runsKept.set(name, run); this.spins.set(name, (run.end.rpm * 2 * Math.PI) / 60);
+    // its body is as warm as its housing came to: heat flows from it to what it touches
+    this.temps.set(name, run.end.housing);
     const keep = (k: string, v: number, u?: string) => { this.vars.set(`${name}.${k}`, u ? `${v} ${u}` : String(v)); if (u) this.unitOf.set(`${name}.${k}`, u); else this.unitOf.delete(`${name}.${k}`); };
     const e = run.end;
     keep('rpm', +e.rpm.toPrecision(6), 'rpm'); keep('current', e.current, 'A'); keep('torque', e.torque, 'N·m'); keep('temp', +e.winding.toPrecision(5), '°C'); keep('case', +e.housing.toPrecision(5), '°C');
@@ -840,15 +909,189 @@ export class Workshop {
     }
     for (const m of made) { if (done.has(m.name)) continue; if (m.unseen) { skipped.push(`${m.name} (${m.unseen.split(':')[0]})`); continue; } if (!m.matter) { skipped.push(m.name); continue; } things.push({ name: m.name, parts: [part(m)], mass: m.mass, friction: m.matter.friction, restitution: m.matter.restitution }); }
     if (!things.length) throw new Error('Nothing made here has mass to let go.');
-    const fixed = this.world.parts().map((p) => ({ at: p.at, w: p.w, h: p.h, d: p.d }));
-    const out: SimOut = simulate(this.J, things, fixed, { seconds, floor: 0, ...(push ? { push } : {}) });
+    // what goes into the floor before it is let go: the engine pushes it out, and that push is said (past 2 mm: a thing
+    // the engine left resting sits up to a millimetre in)
+    const sunk = made.filter((m) => !m.unseen && m.matter && m.at[1] - m.h / 2 < -2e-3).map((m) => `${m.name} (${mm(-(m.at[1] - m.h / 2))})`);
+    const parts = this.world.parts(), fixed = parts.map((p) => ({ at: p.at, w: p.w, h: p.h, d: p.d }));
+    // the joints, where what they hold still touches: each through its point, about its axis, as its thing now stands
+    const joints: SimJoint[] = [], unheld: string[] = [];
+    for (const j of this.jointsKept) {
+      const A = made.find((m) => m.name === j.a), B: Box3 | undefined = j.fixed ? parts.find((p) => p.name === j.b) : made.find((m) => m.name === j.b);
+      if (!A || !B || A.unseen || (B as Made).unseen || !A.matter) { unheld.push(`${j.a}'s ${j.kind} (${!A || !B ? 'one of the two is gone' : 'one of the two is not computed'})`); continue; }
+      const gap = separation(A, B); if (gap > 1e-3) { unheld.push(`${j.a}'s ${j.kind} on ${j.b} (they are ${mm(gap)} apart now: it connects only what touches)`); continue; }
+      const ga = this.groupOf(j.a); if (!j.fixed && ga && !ga.loose && ga === this.groupOf(j.b)) { unheld.push(`${j.a}'s ${j.kind} on ${j.b} (they are one piece now)`); continue; }
+      const R = matOf(A.turn), off = apply3(R, j.pivot), at: V3 = [A.at[0] + off[0], A.at[1] + off[1], A.at[2] + off[2]];
+      let drive: SimJoint['drive'];
+      if (j.drive) { const sp = this.specs.get(j.drive.motor); if (sp?.motor) { const md = motorModel(MOTORS[sp.motor]!); drive = { name: j.drive.motor, V: j.drive.V, Kt: md.Kt, R: windingR(md, this.temps.get(j.drive.motor) ?? AMBIENT), Tf: md.Tf }; } }
+      joints.push({ kind: j.kind, name: j.a, a: j.a, b: j.fixed ? { fixed: parts.indexOf(B as PartRef) } : j.b, at, axis: apply3(R, j.axis), ...(j.limits ? { limits: j.limits } : {}), ...(j.friction ? { friction: j.friction } : {}), ...(drive ? { drive } : {}) });
+    }
+    const out: SimOut = simulate(this.J, things, fixed, { seconds, floor: 0, ...(push ? { push } : {}), joints });
     // where they ended is where they are: a piece's moves written into its members first
     for (const g of this.groups.values()) if (!identity(g)) this.bakeIn(g);
     for (const p of out.parts) { const sp = this.specs.get(p.name); if (!sp) continue; sp.place = { how: 'at', x: `${p.at[0]}`, y: `${p.at[1]}`, z: `${p.at[2]}` }; sp.turn = [`${p.turn[0]}`, `${p.turn[1]}`, `${p.turn[2]}`]; sp.flips = []; }
     this.track = out.track; this.lastSim = out;
+    // what the joints did, kept as values; a motor that drove one, what it drew, and the heat it made in it
+    const keep = (k: string, v: number, u?: string) => { this.vars.set(k, u ? `${v} ${u}` : String(v)); if (u) this.unitOf.set(k, u); else this.unitOf.delete(k); };
+    const jsays: string[] = [];
+    for (const j of out.joints) {
+      if (j.kind === 'hinge') { keep(`${j.name}.angle`, +((j.end * 180) / Math.PI).toPrecision(6), '°'); jsays.push(`${j.name} turned on its hinge to ${deg(j.end)} (between ${deg(j.min)} and ${deg(j.max)})`); }
+      else { keep(`${j.name}.travel`, +(j.end * 1e3).toPrecision(6), 'mm'); jsays.push(`${j.name} slid to ${mm(j.end)} from where it was (between ${mm(j.min)} and ${mm(j.max)})`); }
+      const d = j.drive, jd = joints.find((x) => x.name === j.name)?.drive;
+      if (d && jd) {
+        keep(`${jd.name}.rpm`, +d.rpm.toPrecision(6), 'rpm'); keep(`${jd.name}.current`, d.current, 'A'); keep(`${jd.name}.energy`, d.energyIn, 'J'); keep(`${jd.name}.heat`, d.copper, 'J');
+        this.spins.set(jd.name, (d.rpm * 2 * Math.PI) / 60);
+        // the heat it made, in its own body as one temperature
+        const mt = this.all().made.find((x) => x.name === jd.name); if (mt?.matter) { try { const c = thermalOf(mt.matter).c; this.temps.set(jd.name, (this.temps.get(jd.name) ?? AMBIENT) + (d.copper + d.friction) / (mt.mass * c)); } catch { /* no figures: it stays as it was */ } }
+        const r3 = (v: number) => +v.toPrecision(3);
+        jsays.push(`${jd.name} drove it at ${r3(jd.V)} V, by its torque at the speed it turned, to ${r3(d.rpm)} rpm, drawing ${r3(d.current)} A at the end and ${r3(d.maxCurrent)} A at most: ${joules(d.energyIn)} from the source, ${joules(d.out)} into what it turns, ${joules(d.copper)} as heat in its copper and ${joules(d.friction)} to its friction (its own rotor's inertia left out)`);
+      }
+    }
     const r = (v: number) => mm(v), still = out.ends.filter((e) => e.moved < 0.001 && e.turned < 0.01), moved = out.ends.filter((e) => !still.includes(e)).sort((x, y) => y.moved - x.moved);
     const says = moved.slice(0, 8).map((e) => `${e.name} ${e.dropped > 0.002 ? `fell ${r(e.dropped)}` : `moved ${r(e.moved)}`}${e.turned > 0.05 ? `, turning ${deg(e.turned)}` : ''}, at most ${+e.speed.toPrecision(3)} m/s, ${e.resting ? 'and came to rest' : 'still moving'}`);
-    return `${push ? `Pushed ${push.name} with ${+Math.hypot(...push.force).toPrecision(3)} N for ${push.seconds} s, and let` : 'Let'} ${things.length} thing${things.length === 1 ? '' : 's'} go for ${+out.seconds.toPrecision(3)} s${out.restedAt !== null ? `, all at rest by ${+out.restedAt.toPrecision(3)} s` : ''} (Jolt rigid bodies, the build fixed where it stands, the floor at 0): ${says.length ? says.join('; ') : 'nothing moved: all of it stands'}${moved.length > 8 ? `; and ${moved.length - 8} more` : ''}${still.length && moved.length ? `; ${still.length} stood still` : ''}.${out.hulls.length ? ` ${[...new Set(out.hulls)].join(', ')} ${out.hulls.length === 1 ? 'is' : 'are'} let go as the hull round ${out.hulls.length === 1 ? 'it' : 'them'}.` : ''}${skipped.length ? ` Not let go: ${skipped.join(', ')} (surfaces have no mass; what is unseen is not computed).` : ''}`;
+    return `${push ? `Pushed ${push.name} with ${+Math.hypot(...push.force).toPrecision(3)} N for ${push.seconds} s, and let` : 'Let'} ${things.length} thing${things.length === 1 ? '' : 's'} go for ${+out.seconds.toPrecision(3)} s${out.restedAt !== null ? `, all at rest by ${+out.restedAt.toPrecision(3)} s` : ''} (Jolt rigid bodies, the build fixed where it stands, the floor at 0): ${says.length ? says.join('; ') : 'nothing moved: all of it stands'}${moved.length > 8 ? `; and ${moved.length - 8} more` : ''}${still.length && moved.length ? `; ${still.length} stood still` : ''}.${out.hulls.length ? ` ${[...new Set(out.hulls)].join(', ')} ${out.hulls.length === 1 ? 'is' : 'are'} let go as the hull round ${out.hulls.length === 1 ? 'it' : 'them'}.` : ''}${skipped.length ? ` Not let go: ${skipped.join(', ')} (surfaces have no mass; what is unseen is not computed).` : ''}${jsays.length ? ` Joints: ${jsays.join('; ')}.` : ''}${unheld.length ? ` Not held: ${unheld.join('; ')}.` : ''}${sunk.length ? ` Into the floor when let go, and pushed out of it by the engine: ${sunk.join(', ')}; what it did after is real, where it started was not.` : ''}`;
+  }
+  /** A thing gone: its joints, its temperature and its heat go with it. */
+  private forget(name: string): void { this.jointsKept = this.jointsKept.filter((j) => j.a !== name && j.b !== name); this.temps.delete(name); this.heaters.delete(name); }
+  /** "hinge a to b [about x] [at x, y, z] [from -90° to 90°] [friction 0.05 N·m] [driven by m at 12 V]", "slide a on b
+   *  [along x] [between -50 mm and 50 mm] [friction 2 N]": a joint where a and b touch, and only there. Its axis, unsaid,
+   *  is a round one's own (a wheel's, a shaft's), else the long way of where they touch (a hinge) or the long way of b
+   *  (a slide: what it runs on); its point is the middle of where they touch. */
+  private jointStep(kind: Joint['kind'], a: string, rest: string): string {
+    let r = ` ${rest} `;
+    const take = (re: RegExp) => { const x = re.exec(r); if (x) r = r.replace(x[0], ' '); return x; };
+    const STOP = '(?=\\s+(?:about|along|on|at|from|between|friction|driven)\\b|\\s*$)';
+    const drv = take(new RegExp(`\\sdriven\\s+by\\s+([\\p{L}_][\\p{L}\\d_]*)(?:\\s+at\\s+(.+?V))?${STOP}`, 'iu'));
+    const ax = take(/\s(?:about|along|on)\s+(-?)([xyz])\b/i);
+    const lim = take(new RegExp(kind === 'hinge' ? `\\sfrom\\s+(.+?)\\s+to\\s+(.+?)${STOP}` : `\\sbetween\\s+(.+?)\\s+and\\s+(.+?)${STOP}`, 'i'));
+    const fr = take(new RegExp(`\\s(?:with\\s+)?friction\\s+(?:of\\s+)?(.+?)${STOP}`, 'i'));
+    const at = take(new RegExp(`\\sat\\s+(.+?)${STOP}`, 'i'));
+    const bWord = r.trim().replace(/\s+/g, '_'), sc = this.reader();
+    if (!bWord) throw new Error(`${kind === 'hinge' ? 'Hinge' : 'Slide'} ${a} ${kind === 'hinge' ? 'to' : 'on'} what? "${kind === 'hinge' ? `hinge ${a} to frame` : `slide ${a} on rail along x`}".`);
+    if (this.groups.has(a)) throw new Error(`${a} is a joined piece: ${kind} one of its members (${this.groups.get(a)!.members.join(', ')}), and the piece turns with it.`);
+    if (this.groups.has(bWord)) throw new Error(`${bWord} is a joined piece: ${kind} ${a} to the member of it that ${a} touches (${this.groups.get(bWord)!.members.join(', ')}).`);
+    this.specOf(a);
+    const { made } = this.all(), A = made.find((x) => x.name === a)!;
+    if (A.unseen) throw new Error(`${a} is not computed (${A.unseen}): nothing can turn or slide it.`);
+    const fixed = !this.specs.has(bWord), B: Box3 & Partial<Made> = fixed ? this.partOf(bWord) ?? (() => { throw new Error(this.noPart(bWord)); })() : made.find((x) => x.name === bWord)!;
+    const bName = fixed ? (B as PartRef).name : bWord;
+    if (bName === a) throw new Error(`${a} cannot turn on itself.`);
+    const ga = this.groupOf(a); if (!fixed && ga && !ga.loose && ga === this.groupOf(bWord)) throw new Error(`${a} and ${bWord} are one piece (${ga.name}), held together: a ${kind} between them would hold nothing. Split ${ga.name} first, or join them only where they do not move.`);
+    const gap = separation(A, B);
+    if (gap > TOUCH) throw new Error(`${a} and ${bName} do not touch (${mm(gap)} apart): a ${kind} connects only what touches. Move them together first.`);
+    // the two it joins do not collide: neither may already be in the other, nor in the rest of the other's piece
+    const gb = fixed ? undefined : this.groupOf(bWord), others = fixed ? [B] : gb && !gb.loose ? gb.members.map((n) => made.find((x) => x.name === n)!).filter(Boolean) : [B];
+    for (const O of others) if (boxesOver(A, O)) throw new Error(`${a} goes into ${O === B ? bName : `${(O as Made).name} (in ${gb!.name}, with ${bName})`} by ${mm(-separation(A, O))}: a ${kind} lets the two it holds pass through each other, so ${a} would turn inside it. Move ${a} clear first.`);
+    // where they touch: the box where each one's box meets the other's
+    const ea = [A.w, A.h, A.d], eb = [B.w, B.h, B.d], lo = [0, 1, 2].map((i) => Math.max(A.at[i]! - ea[i]! / 2, B.at[i]! - eb[i]! / 2)), hi = [0, 1, 2].map((i) => Math.min(A.at[i]! + ea[i]! / 2, B.at[i]! + eb[i]! / 2));
+    const o = [0, 1, 2].map((i) => hi[i]! - lo[i]!), across = [0, 1, 2].reduce((b, i) => (o[i]! < o[b]! ? i : b), 0);
+    const p: V3 = at ? (() => { const xs = at[1]!.split(/\s*,\s*/); if (xs.length !== 3) throw new Error(`Say where as "at x, y, z".`); return xs.map((x) => num(x, sc)) as V3; })() : [0, 1, 2].map((i) => (lo[i]! + hi[i]!) / 2) as V3;
+    const roundOf = (X: Box3 & Partial<Made>) => ((X.kind === 'cylinder' || X.kind === 'tube' || X.kind === 'torus' || X.kind === 'cone') && X.axis ? X.axis : X.r !== undefined && X.axis ? X.axis : null);
+    let k: number, why: string;
+    if (ax) { k = AX[ax[2]!.toLowerCase() as Axis]; why = 'as said'; }
+    else if (kind === 'hinge' && (roundOf(A) || roundOf(B))) { const w = roundOf(A) ? A : B; k = AX[roundOf(w)!]; why = `${w === A ? a : bName}'s own axis`; }
+    else if (kind === 'hinge') { k = [0, 1, 2].filter((i) => i !== across).reduce((b, i) => (o[i]! > o[b]! ? i : b), across === 0 ? 1 : 0); why = 'the long way of where they touch'; }
+    else { k = [0, 1, 2].reduce((b, i) => (eb[i]! > eb[b]! ? i : b), 0); why = `the long way of ${bName}`; }
+    const u: V3 = [0, 0, 0]; u[k] = ax?.[1] === '-' ? -1 : 1;
+    let limits: [number, number] | undefined;
+    if (lim) {
+      const read = (x: string) => (kind === 'hinge' && !lex(x).some((q) => q.t === 'num' && q.unit) ? (num(x, sc) * Math.PI) / 180 : num(x, sc));
+      limits = [read(lim[1]!), read(lim[2]!)];
+      if (!(limits[0] < limits[1])) throw new Error(`Its limits go from the less to the more: ${lim[1]} is not less than ${lim[2]}.`);
+      if (kind === 'hinge' && (limits[0] < -Math.PI - 1e-9 || limits[1] > Math.PI + 1e-9)) throw new Error('A hinge turns between -180° and 180° at most.');
+    }
+    const friction = fr ? num(fr[1]!, sc) : undefined;
+    let drive: Joint['drive'];
+    if (drv) {
+      if (kind !== 'hinge') throw new Error('A motor turns a hinge: a slide is pushed ("push carriage with 5 N along x").');
+      const ms = this.specOf(drv[1]!); if (!ms.motor) throw new Error(`${drv[1]} is not a motor: place one with "place motor named ${drv[1]}".`);
+      const gm = this.groupOf(drv[1]!), gb = fixed ? undefined : this.groupOf(bWord);
+      if (drv[1] !== bName && !(gm && !gm.loose && gm === gb)) throw new Error(`${drv[1]} turns ${a} against what holds ${a}: it must be ${bName}, or joined to it ("join ${drv[1]} and ${bName}"), for its torque to push back on something.`);
+      drive = { motor: drv[1]!, V: drv[2] ? num(drv[2], sc) : MOTORS[ms.motor]!.V };
+    }
+    // kept in a's own frame, so they go where it goes
+    const R = matOf(A.turn), pivot = applyT(R, [p[0] - A.at[0], p[1] - A.at[1], p[2] - A.at[2]]), axis = applyT(R, u);
+    this.jointsKept = this.jointsKept.filter((j) => !(j.a === a && j.b === bName));
+    this.jointsKept.push({ kind, a, b: bName, fixed, pivot, axis, ...(limits ? { limits } : {}), ...(friction ? { friction } : {}), ...(drive ? { drive } : {}) });
+    const where = `(${p.map((v) => +(v * 1e3).toPrecision(4)).join(', ')}) mm`, lims = limits ? (kind === 'hinge' ? `, from ${deg(limits[0])} to ${deg(limits[1])}` : `, from ${mm(limits[0])} to ${mm(limits[1])} of where it is`) : '';
+    return `${kind === 'hinge' ? 'Hinged' : 'Slid'} ${a} ${kind === 'hinge' ? 'to' : 'on'} ${bName}${fixed ? ' (the build: fixed)' : ''} ${kind === 'hinge' ? 'about' : 'along'} ${ax?.[1] ?? ''}${'xyz'[k]} (${why}), through ${where} where they touch${lims}. Let go, it ${kind === 'hinge' ? 'turns' : 'slides'} there and nowhere else, and the two do not collide with each other${friction ? `; held back by ${+friction.toPrecision(3)} ${kind === 'hinge' ? 'N·m' : 'N'} of friction` : `, with no friction (say "friction ${kind === 'hinge' ? '0.05 N·m' : '2 N'}" for some)`}${drive ? `; ${drive.motor} turns it at ${+drive.V.toPrecision(3)} V, by its sheet's torque at the speed it turns` : ''}.`;
+  }
+  /** Where two touching things pass heat: the area of what touches, sampled on their surfaces (any turning, any of a
+   *  box, a cylinder, a tube with its bore, a ball), and how far each one's middle is from the middle of it. A round
+   *  side or a ball touching passes heat only through what lies within half a millimetre of touching (estimated: the
+   *  air in the thin gap round it carries some more). */
+  private contactOf(A: Made, B: Made): { area: number; LA: number; LB: number; assumed?: string } | null {
+    const t = touchPatch(A, B); if (!t) return null;
+    const round = (X: Made) => X.kind === 'sphere' || X.kind === 'cylinder' || X.kind === 'tube' || X.kind === 'cone' || X.kind === 'torus';
+    const dist = (X: Made) => Math.max(Math.hypot(X.at[0] - t.at[0], X.at[1] - t.at[1], X.at[2] - t.at[2]), 1e-4);
+    const assumed = !t.sampled ? 'a cone or a ring touches as the box round it does (estimated)' : (round(A) || round(B)) && t.area < 0.5 * Math.min(A.area, B.area) ? 'where a round side or a ball touches, the heat goes through what lies within half a millimetre of touching (estimated: the air in the thin gap round it carries some more)' : undefined;
+    return { area: t.area, LA: dist(A), LB: dist(B), ...(assumed ? { assumed } : {}) };
+  }
+  /** What the face between two things resists heat by, m² K/W: nothing where they are fused (one body); a glue line
+   *  over its thickness; pressed or bolted, an interface in air. */
+  private interfaceR(a: string, b: string): { R: number; how: string } {
+    const g = this.groupOf(a);
+    if (g && !g.loose && g === this.groupOf(b)) {
+      const bd = g.bonds?.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a));
+      if (bd?.how === 'fused') return { R: 0, how: 'fused' };
+      if (bd?.how === 'glued') { const ad = Object.values(ADHESIVES).find((x) => x.label === bd.with), t = ad?.bondline ?? 2e-4; return { R: t / GLUE_K, how: `glued (${mm(t)} of ${bd.with})` }; }
+    }
+    return { R: TOUCHING_R, how: 'touching' };
+  }
+  /** A temperature, said in °C (or K): what it reads in °C. */
+  private tempOf(expr: string): number {
+    const e = expr.trim(), v = /\dK$|\sK$/.test(e) ? num(e, this.reader()) - 273.15 : num(e, this.reader());
+    if (!(v > -273.15)) throw new Error(`${expr} is below absolute zero.`);
+    return v;
+  }
+  /** "heat cap to 150 °C": its temperature now. A piece: every member. */
+  private setTemp(name: string, expr: string): string {
+    const T = this.tempOf(expr), names = this.groups.get(name)?.members ?? [this.specOf(name).name];
+    const was = names.map((n) => this.temps.get(n) ?? AMBIENT); for (const n of names) this.temps.set(n, T);
+    return `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} at ${+T.toPrecision(4)} °C now (${names.length > 1 ? 'they were' : 'it was'} ${[...new Set(was.map((x) => +x.toPrecision(4)))].join(', ')} °C). Let heat flow ("let heat flow for 60 s") and it spreads to what touches it and goes to the air.`;
+  }
+  /** "heat cap with 5 W": heat put into it while heat flows, as a heater, or as what it does that makes heat. */
+  private setHeater(name: string, expr: string): string {
+    const P = num(expr, this.reader()); this.specOf(name);
+    if (P === 0) { this.heaters.delete(name); return `${name}: no heat put into it now.`; }
+    this.heaters.set(name, P);
+    return `${name}: ${+P.toPrecision(4)} W put into it while heat flows${P < 0 ? ' (taken out: a cooler)' : ''}.`;
+  }
+  /** Heat let flow for so long: between everything made that touches, and out of each to the room's air. */
+  private heatFlow(seconds: number): string {
+    if (!(seconds > 0) || seconds > 30 * 86400) throw new Error('Let heat flow for a moment, up to 30 days.');
+    const { made } = this.all(), keep: Made[] = [], props: ThermalProps[] = [], left: string[] = [];
+    for (const m of made) { if (m.unseen || !m.matter) continue; try { props.push(thermalOf(m.matter)); keep.push(m); } catch { left.push(m.name); } }
+    if (!keep.length) throw new Error('Nothing made here has matter to hold heat.');
+    const links: HeatLink[] = [], touching = keep.map(() => 0), notes = new Set<string>(), hows = new Map<string, number>(), floor: string[] = [];
+    for (let i = 0; i < keep.length; i++) for (let j = i + 1; j < keep.length; j++) {
+      const A = keep[i]!, B = keep[j]!; if (separation(A, B) > TOUCH) continue;
+      const c = this.contactOf(A, B); if (!c) continue;
+      const f = this.interfaceR(A.name, B.name), G = 1 / (c.LA / (props[i]!.k * c.area) + f.R / c.area + c.LB / (props[j]!.k * c.area));
+      links.push({ a: i, b: j, G }); touching[i] += c.area; touching[j] += c.area; if (c.assumed) notes.add(c.assumed); hows.set(f.how.replace(/ \(.*/, ''), (hows.get(f.how.replace(/ \(.*/, '')) ?? 0) + 1);
+    }
+    // what rests on the floor: the part of its surface within touching of it, which the air does not reach
+    keep.forEach((m, i) => { if (m.at[1] - m.h / 2 > 1e-3) return; const pts = surfaceOf(m), a = pts ? pts.filter((q) => q.p[1] <= TOUCH && q.p[1] >= -2e-3).reduce((t, q) => t + q.a, 0) : m.w * m.d; if (a > 0) { touching[i] += a; floor.push(m.name); } });
+    const nodes: HeatNode[] = keep.map((m, i) => {
+      const whole = Number.isFinite(m.area) ? m.area : 2 * (m.w * m.h + m.w * m.d + m.h * m.d);
+      return { name: m.name, C: m.mass * props[i]!.c, T0: this.temps.get(m.name) ?? AMBIENT, P: this.heaters.get(m.name) ?? 0, area: Math.max(0, whole - touching[i]!), L: Math.max(m.h, 0.01), emissivity: props[i]!.emissivity };
+    });
+    const run = flowHeat(nodes, links, seconds);
+    keep.forEach((m, i) => this.temps.set(m.name, run.end[i]!));
+    this.heatKept = { names: keep.map((m) => m.name), run, seconds };
+    // what passed where it melts or breaks down; and where one temperature is too few for it
+    const hot: string[] = [], thick: string[] = [];
+    keep.forEach((m, i) => {
+      const top = Math.max(...run.T[i]!), fu = FUSION[m.matter!.id];
+      if (fu?.lost !== null && fu?.lost !== undefined && top >= fu.lost) hot.push(`${m.name} reached ${+top.toPrecision(4)} °C, past ${fu.lost} °C where ${fu.lostWhat.replace(/^it /, 'it ')}`);
+      else if (fu?.melts !== null && fu?.melts !== undefined && top >= fu.melts) hot.push(`${m.name} reached ${+top.toPrecision(4)} °C, past its melting point of ${fu.melts} °C`);
+      const n = nodes[i]!, h = n.area > 0 ? run.gAir[i]! / n.area : 0, Bi = (h * (m.volume / Math.max(n.area + touching[i]!, 1e-12))) / props[i]!.k;
+      if (Bi > 0.1 && Math.max(...run.T[i]!) - Math.min(...run.T[i]!) > 0.1) thick.push(`${m.name} (Bi ${+Bi.toPrecision(2)})`);
+    });
+    const moved = keep.map((m, i) => ({ m, d: run.end[i]! - nodes[i]!.T0, i })).filter((x) => Math.abs(x.d) > 0.005).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+    const r = (v: number) => +v.toPrecision(4), e = run.energy, J = (v: number) => (Math.abs(v) < 1e-6 ? '0 J' : joules(Math.abs(v)).replace(/^/, v < 0 ? '-' : ''));
+    const says = moved.slice(0, 8).map((x) => `${x.m.name} ${r(nodes[x.i]!.T0)} → ${r(run.end[x.i]!)} °C`);
+    const T = (v: number) => (seconds >= 3600 ? `${r(v / 3600)} h` : seconds >= 120 ? `${r(v / 60)} min` : `${r(v)} s`);
+    return `Heat flowed for ${T(seconds)} among ${keep.length} thing${keep.length === 1 ? '' : 's'} through ${links.length} contact${links.length === 1 ? '' : 's'}${hows.size ? ` (${[...hows].map(([k, v]) => `${v} ${k}`).join(', ')})` : ''}, and out to air at ${AMBIENT} °C: ${says.length ? says.join('; ') : 'nothing changed temperature: everything is at the room\'s'}${moved.length > 8 ? `; and ${moved.length - 8} more` : ''}. Energy: ${J(e.in)} put in, ${J(e.air)} to the air, ${e.stored >= 0 ? `${J(e.stored)} more` : `${J(-e.stored)} less`} held in them at the end (in less out less held: ${J(e.in - e.air - e.stored)}).${hot.length ? ` ${hot.join('; ')}.` : ''} Each is one temperature through it; contacts pass heat by L / k A to the face from each middle, and across it ${TOUCHING_R * 1e4}×10⁻⁴ m² K/W where they only touch (Incropera Table 3.1, aluminium in air: an estimate for other pairs), nothing where fused, a glue line by its thickness.${thick.length ? ` One temperature is too few for ${thick.join(', ')}: its inside and outside differ (Biot over 0.1).` : ''}${floor.length ? ` The floor is not in it: what rests on it (${floor.slice(0, 4).join(', ')}${floor.length > 4 ? ', …' : ''}) loses nothing through it.` : ''}${notes.size ? ` ${[...notes].join('; ')}.` : ''}${left.length ? ` Not in it, with no thermal figures kept: ${left.join(', ')}.` : ''}`;
   }
   /** The same steps again: once for each binding, {i} its count and {it} the thing it is over. */
   private loop(head: string, binds: Record<string, string>[], body: string): string {
@@ -873,6 +1116,8 @@ export class Workshop {
     if (!rows.length) return 'Nothing made here has matter to list.';
     const held = (g: Group) => { const n: Record<string, number> = {}; for (const x of g.bonds ?? []) n[x.how] = (n[x.how] ?? 0) + 1; return Object.entries(n).map(([k, v]) => `${v} ${k}`).join(', ') || 'held'; };
     const pieces = [...this.groups.values()].map((g) => (g.loose ? `${g.name} (grouped, not held): ${g.members.join(', ')}` : `${g.name}: ${g.members.join(' + ')}, ${held(g)}`));
+    const axisWord = (v: V3) => 'xyz'[[0, 1, 2].reduce((b, i) => (Math.abs(v[i]!) > Math.abs(v[b]!) ? i : b), 0)];
+    for (const j of this.jointsKept) pieces.push(`${j.a} ${j.kind === 'hinge' ? 'hinged to' : 'slides on'} ${j.b} (its own ${axisWord(j.axis)})${j.drive ? `, driven by ${j.drive.motor}` : ''}: a ${j.kind === 'hinge' ? 'hinge or bearing' : 'slide or rail'} there`);
     const total = [...byMatter.values()].reduce((a, x) => a + x.mass, 0);
     this.vars.set('parts.count', String(rows.length)); this.vars.set('parts.mass', String(total)); this.unitOf.set('parts.mass', 'kg');
     const hidden = made.filter((m) => m.unseen).map((m) => m.name);
@@ -930,6 +1175,25 @@ export class Workshop {
       ] };
       return `Charted ${name}'s run: ${rpm ? 'speed, ' : ''}current and temperature over its ${run.seconds} s, each on its own scale.`;
     }
+    if (/^(heat|heats|temperature|temperatures|warmth|cooling)$/i.test(name) || (this.heatKept?.names.includes(name) && !this.lastSim?.joints.some((j) => j.name === name))) {
+      const h = this.heatKept; if (!h) throw new Error('No heat has flowed yet: "heat cap to 150 °C" and "let heat flow for 60 s" first.');
+      // those whose temperature moved: more than a tenth of a degree, and a fiftieth of the most any moved
+      const all = h.names.map((n, i) => ({ n, i, d: Math.max(...h.run.T[i]!) - Math.min(...h.run.T[i]!) })), most = Math.max(...all.map((x) => x.d));
+      const ix = (h.names.includes(name) ? all.filter((x) => x.n === name) : all.filter((x) => x.d > Math.max(0.1, most / 50))).sort((a, b) => b.d - a.d).slice(0, 8);
+      if (!ix.length) throw new Error('No temperature moved as heat flowed: heat something first ("heat cap to 150 °C").');
+      const hours = h.seconds >= 3600, mins = !hours && h.seconds >= 120, k = hours ? 3600 : mins ? 60 : 1, unit = hours ? 'h' : mins ? 'min' : 's';
+      this.chartKept = { title: ix.length === 1 ? `${ix[0]!.n}: its temperature` : 'Temperatures as heat flowed', note: `${+(h.seconds / k).toPrecision(3)} ${unit}, each one temperature through it, cooled by still air at ${AMBIENT} °C`, tUnit: unit, panels: [{ label: 'Temperature (°C)', unit: '°C', series: ix.map((x) => ({ name: x.n, t: h.run.t.map((t) => t / k), v: h.run.T[x.i]! })) }] };
+      return `Charted ${ix.length === 1 ? `${ix[0]!.n}'s temperature` : `the temperatures of the ${ix.length} that changed most`} over ${+(h.seconds / k).toPrecision(3)} ${unit}.`;
+    }
+    if (/^(joints?|hinges?|slides?|swing|angles?)$/i.test(name) || this.lastSim?.joints.some((j) => j.name === name)) {
+      const sim = this.lastSim; if (!sim?.joints.length) throw new Error('No joint has moved yet: hinge or slide something, then "simulate 2 s".');
+      const js = sim.joints.filter((j) => (sim.joints.some((x) => x.name === name) ? j.name === name : true)), hs = js.filter((j) => j.kind === 'hinge'), ss = js.filter((j) => j.kind === 'slide');
+      this.chartKept = { title: js.length === 1 ? `${js[0]!.name}: how it ${js[0]!.kind === 'hinge' ? 'turned' : 'slid'}` : 'How the joints moved', note: `${+sim.seconds.toPrecision(3)} s let go, Jolt hinge and slider constraints`, panels: [
+        ...(hs.length ? [{ label: 'Angle (°)', unit: '°', series: hs.slice(0, 8).map((j) => ({ name: j.name, t: j.t, v: j.v.map((v) => (v * 180) / Math.PI) })) }] : []),
+        ...(ss.length ? [{ label: 'Travel (mm)', unit: 'mm', series: ss.slice(0, 8).map((j) => ({ name: j.name, t: j.t, v: j.v.map((v) => v * 1e3) })) }] : []),
+      ] };
+      return `Charted how ${js.length === 1 ? js[0]!.name : `the ${js.length} joints`} moved over ${+sim.seconds.toPrecision(3)} s.`;
+    }
     if (/^(fall|falls|the fall|motion|heights|drop|let go)$/i.test(name) || this.lastSim?.track.names.includes(name)) {
       const sim = this.lastSim; if (!sim) throw new Error('Nothing has been let go yet: "simulate 3 s" first.');
       const tr = sim.track, ys = tr.names.map((n, i) => ({ n, v: tr.frames.map((f) => f.poses[i]!.at[1]) }));
@@ -937,7 +1201,7 @@ export class Workshop {
       this.chartKept = { title: pick.length === 1 ? `${pick[0]!.n}: its height as it fell` : 'Heights as they fell', note: `${tr.frames.length} moments over ${+sim.seconds.toPrecision(3)} s, Jolt rigid bodies${ys.length > pick.length ? `; the ${pick.length} that fell furthest of ${ys.length}` : ''}`, panels: [{ label: 'Height (m)', unit: 'm', series: pick.map((y) => ({ name: y.n, t: tr.frames.map((f) => f.t), v: y.v })) }] };
       return `Charted ${pick.length === 1 ? `${pick[0]!.n}'s height` : `the heights of the ${pick.length} that fell furthest`} over ${+sim.seconds.toPrecision(3)} s.`;
     }
-    throw new Error(`Nothing to chart as "${what}": a motor that has run ("chart m"), or the last fall ("chart fall").`);
+    throw new Error(`Nothing to chart as "${what}": a motor that has run ("chart m"), the last fall ("chart fall"), the joints ("chart joints") or the heat ("chart heat").`);
   }
   /** Each motor's last run, for a chart. */
   runs(): Map<string, MotorRun> { return this.runsKept; }

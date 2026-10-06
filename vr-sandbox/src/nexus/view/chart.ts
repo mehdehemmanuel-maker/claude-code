@@ -47,7 +47,7 @@ export function chartPanel(w = 0.9, h = 0.72): ChartPanel {
       g.fillStyle = INK; g.font = `600 30px ${FONT}`; g.fillText(p.label, left, y0 + 22);
       g.font = `400 24px ${FONT}`; g.textAlign = 'right';
       for (const v of yt) { const y = Y(v); if (y < y0 + 26) continue; g.strokeStyle = GRID; g.lineWidth = 2; g.beginPath(); g.moveTo(left, y); g.lineTo(right, y); g.stroke(); g.fillStyle = INK2; g.fillText(fmt(v), left - 14, y + 8); }
-      g.textAlign = 'center'; for (const t of ticks(t0, t1)) { if (t < t0 - 1e-9 || t > t1 + 1e-9) continue; g.fillStyle = INK2; g.fillText(`${fmt(t)} s`, X(t), y1 + 34); }
+      g.textAlign = 'center'; for (const t of ticks(t0, t1)) { if (t < t0 - 1e-9 || t > t1 + 1e-9) continue; g.fillStyle = INK2; g.fillText(`${fmt(t)} ${c.tUnit ?? 's'}`, X(t), y1 + 34); }
       g.textAlign = 'left';
       // each series, its line in its own colour, its name and last value at its end in text colours
       const ends: { y: number; s: (typeof p.series)[number]; col: string }[] = [];
