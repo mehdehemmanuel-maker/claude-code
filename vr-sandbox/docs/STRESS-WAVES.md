@@ -1201,6 +1201,8 @@ Five fresh testers with no context each wrote four asks, twenty in all. These we
 |---|---|---|---|---|
 | Wave 6, first run | 0.9 | 0.3 | 0.95 | 2.1 |
 | Wave 6, rejudged after the fixes below | 2.3 | 1.0 | 1.8 | 2.5 |
+| Wave 6, judged a third time | 2.85 | 0.9 | 2.05 | 3.0 |
+| Wave 6, judged a fourth time, after the fixes below | 3.1 | 1.05 | 2.1 | 3.05 |
 
 ### What was wrong, by cause
 
@@ -1350,8 +1352,65 @@ Five fresh judges read the outputs after the fixes above, and scored them 2.3, 1
   - the cattle gate's "does not bend or break" is no longer ticked, since nothing made is run against the 5600 J hit.
 - **The twelve folding asks fold as before.** The origami shelter counts its wind.
 
+### After wave 6 was judged a third time
+
+Five more fresh judges read the outputs, scoring them 2.85, 0.9, 2.05 and 3.0. Every figure they re-derived came out as printed. What they marked down was what is not made or not weighed, and the ticks that rested on it. Fixed by cause:
+
+**Ticks and counts.**
+- **A limit said in what it does is not asked twice when its units differ.** "Under 6 inches thick" and "it folds flat to 152 mm" are one thing.
+- **A budget is a cost, not a thing to make.**
+- **"30 cubbies" is not ticked** where their dividers are not made.
+- **"Footprint under 0.5 m by 3 m" is a limit,** and checked.
+- **A towed cart with no hitch made is not towed.** Its plan says "pushed by hand or towed".
+- **"Not tip on a 10° slope" fails where its load tips on it.**
+- **The airlock has two verdicts,** one for its door and one for what pumping its lock down draws.
+- **Limits heard as checked are said unchecked** where nothing is made.
+
+**Laws added or corrected.**
+- **The welding cart** is sized for its two cylinders side by side. On its slope it tips the worse way of across its track and along its wheelbase (12.4° along).
+- **A deck people stand on rests on cross frames,** close enough that one person between two of them bends it within 1/150 of that. Where none are made, it says it wants them.
+  - The dock's 12 mm deck across 2.88 m sagged 453 mm under one person; on 7 frames 553 mm apart it bends 3.2 mm.
+  - The raft for two now holds.
+- **A cloth frame is worked consistently with what holds it.**
+  - Its poles are held at their feet alone (M = w H² / 2), and the sockets that hold them so are said not made.
+  - Its eaves take the roof's lift and the inward pull of its cloth (T = p s² / 8 f, sagging a tenth of its span, estimate).
+  - The stall's poles become 40 mm and it still holds at 8.6 kg.
+  - The Everest shelter's poles become 89 mm, and at 26.3 kg it leaves too little of its 35 kg for what is not made. It says so.
+- **A roof on four walls is a plate held round its edges,** bending mostly across its shorter way (Roark Table 11.4). The greenhouse's roof is 31.9 MPa across its 4 m, sagging 392 mm against 16 mm.
+- **A tiny geared motor pulsed each minute** does about 0.05 of the lifting, not 0.2 (estimate). The clock's cells no longer last: 9.9 Wh against 7. Lifted no more than 17 mm each time, they would.
+- **The habitat.**
+  - It is as long as its crew want (3.54 m, 1530 kg of wall).
+  - Its launch at about 5 g presses its wall 7.8 MPa against the 12.8 MPa it buckles at (NASA SP-8007 knockdown, estimate).
+  - A uniform swing of its temperature stresses no wall free to grow.
+- **The airlock's door leaf** is about 11.5 mm of 6061-T6 (Roark), and its seal's land takes 16.4 kN a metre. On Mars a day is a sol, so the pump-down draws 51 W.
+- **The gate:**
+  - says its push bends it 54.6 mm;
+  - is latched at its far end to a post set in the ground;
+  - its latch pin and its posts are checked;
+  - "stay shut when cattle lean on it" is now done.
+- **The treehouse's side panels** are checked for buckling. That they stand square only while their joints with the top hold is said.
+- **Smaller corrections:**
+  - the crawler's current goes through its converter (1.64 A);
+  - the drone's arm is bent at its root by 0.556 N·m at full throttle;
+  - a child pulling outward at the storage's top tips it at 298 N.
+
+**Reading.**
+- **", needs no power or batteries"** is a clause of its own.
+- **A tree's trunk said** is the tree it is built at, not a number unused.
+- **A payload with a weight** is what it carries, not electronics it must make.
+- **The cold at 7,800 m** is said to weigh only the air, not the cloth.
+- **Ways not drawn** read "not drawn: …; nor …", so a gate is no longer taken for the shelter's door.
+
+**Checked.**
+- **The gate:** typecheck, and 1079 tests in 95 files. That includes 39 in `tests/nexus/wave6.test.ts`.
+- **The three browser drives** pass with no script errors. The generate drive's first run timed out on its first click while five judges were working the machine; run again alone, it passed.
+
+**Judged a fourth time.** Five more fresh judges, each given four outputs and nothing else, scored 3.1, 1.05, 2.1 and 3.05. All four scores are up. Again every printed figure they re-derived came out right. What they marked down:
+- what is still not made: the crank, the actuator, the mooring, the cubbies' dividers;
+- ticks resting on what is not made, or on a load spread more kindly than it falls.
+
 ### Open after wave 6
 
-- **Ways most asked for and not kept:** a stair, a truss, a frame of tubes, a telescoping mast, a drive that raises or climbs, a thermostat, tracks, a latch and the post it closes on.
+- **Ways most asked for and not kept:** a stair, a truss, a frame of tubes, a telescoping mast, a drive that raises or climbs, a thermostat, tracks. A latch and the post it closes on are now made for a framed gate.
 - **A frame braced by cloth:** what holds a cloth shelter square is not weighed.
 - **Reading a clause split by "than"** ("no more than two bolts") is mended where it is read, not in the parser.

@@ -122,6 +122,8 @@ export function parseAsk(words: string): Parse {
         // a list goes on as the clause it is a list of: a verb starts another thing it does, a thing another of the same;
         // "…, no tools beyond a drill": another thing it must not have or use
         if (/^(no|without)$/.test(n2) && !verbAt(i + 2)) { open('main', ',', i + 1); continue; }
+        // "…, needs no power or batteries": what it may not use, a clause of its own
+        if (/^(needs?|uses?|requires?|takes?)$/.test(n2) && /^(no|zero)$/.test(toks[i + 2]?.w ?? '')) { open('main', ',', i + 1); continue; }
         if (verbAt(i + 1)) open('does', ',', i + 1);
         else { const v = verbAfterThing(i + 1); if (v >= 0) { const c = open('does', ',', i + 1); c.subj = toks[v - 1]!.w; c.verb = toks[v]!.w; c.verbAt = v; i = v; } else if (host().kind !== 'does') open(host().kind, ',', i + 1); /* else more of what it acts on, in the clause it is in */ }
       }
