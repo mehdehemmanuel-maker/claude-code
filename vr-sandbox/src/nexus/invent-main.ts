@@ -31,8 +31,13 @@ for (let round = 0; round < 3 && c.questions.length; round++) {
   console.log(`${answersSaid ? 'ANSWERED' : 'NO ONE ANSWERED; IT TOOK WHAT IT WOULD'}: ${c.questions.map((q) => `${q.kind === 'what' ? q.ask.replace(/ Shall I.*$/, '').slice(0, 160) : q.ask} → ${q.kind === 'what' ? (answers[q.key] ? answers[q.key] : c.wants.length ? 'make the part it can' : '(nothing said)') : `${answers[q.key] ?? '(not answered)'} [${showValue(q)}]`}`).join(' | ')}`);
   c = conceive(words, answers);
 }
+// what its size asks, and what the laws say of what was asked: whether or not anything is made
+if (c.scale) console.log(`AT ITS SIZE (${len(c.scale.L)}):\n  ${c.scale.groups.map((g) => `${g.past ? '!' : '·'} ${g.name}: ${g.says}`).join('\n  ')}${c.scale.must.length ? `\n  SO IT WOULD HAVE TO BE BUILT SO:\n    - ${c.scale.must.join('\n    - ')}` : ''}`);
+if (c.bounds.length) console.log(`WHAT THE LAWS SAY OF WHAT WAS ASKED:\n  ${c.bounds.map((b) => `${b.ok === null ? '·' : b.ok ? '✓' : '✗'} ${b.what}: ${b.says}`).join('\n  ')}`);
 if (!c.wants.length) { console.log(`NOTHING MADE: ${sayConception({ ...c, questions: [] })}`); finish([]); }
 const ds = designs(c, n, { seed, physics: J, at: [0, 0] });
+// every want barred (by its size, or nothing kept meets it): nothing is made, and why is said
+if (ds.every((d) => d.parts === 0)) { console.log(`NOTHING MADE: ${[...new Set(ds.flatMap((d) => d.gaps))].join('; ')}`); finish(ds); }
 for (const d of ds) {
   console.log(`\n=== ${d.title}: ${d.ok ? 'HOLDS' : 'DOES NOT HOLD'} · ${d.does[0] === d.does[1] ? 'DOES WHAT WAS ASKED' : `DOES ${d.does[0]} OF ${d.does[1]} THINGS ASKED`}${d.gaps.length ? ' · NOT ALL DERIVED' : ''} — ${d.parts} parts, ${+d.mass.toPrecision(3)} kg, footprint ${d.footprint.map(len).join(' × ')}`);
   console.log(`WHAT WAS ASKED:\n  ${d.asked.map((a) => `${a.kind === 'for' ? '·' : a.got ? '✓' : '✗'} ${a.kind === 'for' ? 'for' : a.kind}: ${a.text}${a.got ? ` → ${a.got}` : a.why ? ` (${a.why})` : ''}`).join('\n  ') || '(nothing said but numbers)'}`);
@@ -48,6 +53,6 @@ finish(ds);
 
 function finish(ds: ReturnType<typeof designs>): never {
   console.log(`\n(${((Date.now() - t0) / 1000).toFixed(1)} s)`);
-  if (log) appendFileSync(log, `${JSON.stringify({ at: new Date().toISOString(), words, answers, seed, wants: c.wants.map((w) => ({ fn: w.fn, says: w.says, q: Object.fromEntries(Object.entries(w.q).map(([k, f]) => [k, [f.v, f.unit, f.by]])) })), asked: c.asked, dropped: c.dropped, limits: c.limits, designs: ds.map((d) => ({ title: d.title, ok: d.ok, does: d.does, whole: d.whole, parts: d.parts, mass: d.mass, choices: d.choices, failed: d.checks.filter((x) => !x.ok).map((x) => `${x.what}: ${x.says}`), gaps: d.gaps, tries: d.tries.length })), ms: Date.now() - t0 })}\n`);
+  if (log) appendFileSync(log, `${JSON.stringify({ at: new Date().toISOString(), words, answers, seed, wants: c.wants.map((w) => ({ fn: w.fn, says: w.says, q: Object.fromEntries(Object.entries(w.q).map(([k, f]) => [k, [f.v, f.unit, f.by]])) })), asked: c.asked, dropped: c.dropped, limits: c.limits, scale: c.scale ? { L: c.scale.L, past: c.scale.groups.filter((g) => g.past).map((g) => g.key), must: c.scale.must } : null, bounds: c.bounds, designs: ds.map((d) => ({ title: d.title, ok: d.ok, does: d.does, whole: d.whole, parts: d.parts, mass: d.mass, choices: d.choices, failed: d.checks.filter((x) => !x.ok).map((x) => `${x.what}: ${x.says}`), gaps: d.gaps, tries: d.tries.length })), ms: Date.now() - t0 })}\n`);
   process.exit(0);
 }

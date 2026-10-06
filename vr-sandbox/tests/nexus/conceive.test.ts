@@ -61,6 +61,27 @@ describe('reading what is said', () => {
     expect(city.dropped.some((d) => /^2 km: the size of cable/.test(d))).toBe(true);
     expect(conceive('a 2 m bridge').wants[0]!.q.span!.v).toBe(2);
   });
+  it('reads a chain of sizes as one size, by the words before and after it', () => {
+    const p = conceive('a platform that folds flat to 60 x 40 x 15 cm so it fits in a car trunk');
+    expect(p.dropped.filter((x) => /the size it folds or packs down to/.test(x)).length).toBe(3);
+    const w = conceive('a fold-down workbench that opens to a 120 x 60 cm top at 90 cm high in a cabinet only 15 cm deep');
+    const top = w.wants.find((x) => x.fn === 'support')!;
+    expect([top.q.W!.v, top.q.D!.v, top.q.H!.v]).toEqual([1.2, 0.6, 0.9]);
+    expect(w.dropped.some((x) => /^15 cm: said of the cabinet/.test(x))).toBe(true);
+  });
+  it('tells a part that folds from the whole of it folding down, and what it does by from what it does', () => {
+    // the whole of it folding is a linkage, not kept: no leaf is made in its place
+    const b = conceive('a folding footbridge that packs into a 70 cm long bundle');
+    expect(b.wants.some((x) => x.fn === 'swing')).toBe(false);
+    expect(b.asked.filter((a) => /collapse together/.test(a.why)).length).toBe(2);
+    // a part of it that folds is a leaf that swings
+    expect(conceive('a box with a lid that folds back').wants.some((x) => x.fn === 'swing')).toBe(true);
+    // "extends to raise": how it raises, not a slide of its own
+    const l = conceive('a platform that extends to raise a 90 kg person to a 1.8 m standing height');
+    expect(l.wants.some((x) => x.fn === 'slide')).toBe(false);
+    expect(l.wants.find((x) => x.fn === 'raise')!.q.L!.v).toBe(1.8);
+    expect(l.asked.some((a) => a.text.startsWith('extends to raise'))).toBe(true);
+  });
   it('takes what it would, said back in round numbers', () => {
     const c = conceive('a turntable');
     expect(Object.values(answersFrom(c, 'go')!)).toContain('60');
@@ -69,12 +90,29 @@ describe('reading what is said', () => {
 
 describe('making it, and checking what was asked', () => {
   it('says how much of the ask it does, and holds what it makes to the limits said', () => {
-    const c = go('a wall-mounted gadget that folds a fitted bed sheet into a neat 30 cm square, weighs under 4 kg and folds flat to 8 cm deep');
+    const c = go('a cart that carries 20 kg, folds a fitted bed sheet and weighs under 1 kg');
     const [d] = designs(c, 1, { seed: 101, physics: null });
     expect(d!.does[0]).toBeLessThan(d!.does[1]);
     expect(d!.whole).toBe(false);
-    const lim = d!.checks.find((x) => /weighs no more than 4 kg/.test(x.what))!;
-    expect(lim.ok).toBe(d!.mass <= 4);
+    const lim = d!.checks.find((x) => /weighs no more than 1 kg/.test(x.what))!;
+    expect(lim.ok).toBe(d!.mass <= 1);
+    // under a weight limit its matter is chosen for lightness, and said so
+    expect(d!.choices.some((x) => /lightest for its stiffness \(Ashby/.test(x))).toBe(true);
+  });
+  it('frames a top no sheet alone bears: joists on two rails, each the least the load law lets bear its share', () => {
+    const [d] = designs(go('a raised vegetable bed on legs, 2 m by 1 m and 75 cm tall, that holds 30 cm of soaking-wet soil'), 1, { seed: 8020, physics: J });
+    expect(d!.choices.some((x) => /so it is framed: the top on \d+ joists/.test(x))).toBe(true);
+    for (const re of [/its top bears .* between its joists/, /its joists bear half the load/, /its rails bear half of all of it/]) { const k = d!.checks.find((x) => re.test(x.what))!; expect(k.ok, k.says).toBe(true); }
+    expect(d!.ok).toBe(true);
+  }, 60000);
+  it('weighs a bridge without the ends that stand for its banks, framed where a frame is lighter than a sheet', () => {
+    const [d] = designs(go('a footbridge that weighs under 5 kg and spans a 3 m wide stream while one 100 kg adult walks across'), 1, { seed: 101, physics: null });
+    const lim = d!.checks.find((x) => /weighs no more than 5 kg/.test(x.what))!;
+    expect(lim.says).toMatch(/not counting its 2 ends, .* which stand for the banks it rests on/);
+    expect(d!.choices.some((x) => /a sheet alone would weigh .* so it is framed/.test(x))).toBe(true);
+    // the bridge proper is still more than 5 kg, and it says where its weight is
+    expect(lim.ok).toBe(false);
+    expect(lim.says).toMatch(/where it weighs most: the 2 rails /);
   });
   it('makes a cart that moves at the speed asked, its speed held by its controller', () => {
     const [d] = designs(go('a cart that carries 20 kg at 1 m/s'), 1, { seed: 101, physics: J });

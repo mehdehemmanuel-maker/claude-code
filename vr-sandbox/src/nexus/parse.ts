@@ -10,7 +10,7 @@
 
 import { findQuantities, type Said } from '../ganglia/units';
 
-export interface Tok { w: string; at: number; /** the hyphenated group it belongs to ("wall-mounted" is one) */ grp: number; num: boolean; punct: boolean; /** covered by a quantity said with its unit */ q: number | null }
+export interface Tok { w: string; at: number; /** the hyphenated group it belongs to ("wall-mounted" is one) */ grp: number; num: boolean; punct: boolean; /** covered by a quantity said with its unit */ q: number | null; /** a word saying how big ("the size of") */ size?: boolean }
 export type ClauseKind = 'main' | 'does' | 'has' | 'for' | 'where';
 export interface Clause {
   kind: ClauseKind; opener: string; from: number; to: number; text: string;
@@ -24,9 +24,11 @@ const DET = new Set(['a', 'an', 'the', 'my', 'our', 'your', 'his', 'her', 'its',
 const DOES = new Set(['that', 'which', 'who', 'whose']);
 const HAS = new Set(['with', 'having', 'featuring', 'including', 'has', 'have']);
 const FOR = new Set(['for', 'so', 'because']);
-const WHERE = new Set(['on', 'in', 'at', 'into', 'onto', 'from', 'under', 'over', 'between', 'through', 'near', 'beside', 'of', 'by', 'inside', 'above', 'below', 'around', 'underneath', 'along', 'against', 'behind', 'within', 'across', 'past', 'toward', 'towards', 'outside', 'beneath', 'among', 'like', 'than', 'via', 'per', 'during', 'until', 'after', 'before', 'without', 'when', 'even', 'if', 'unless', 'while']);
+const WHERE = new Set(['as', 'on', 'in', 'at', 'into', 'onto', 'from', 'under', 'over', 'between', 'through', 'near', 'beside', 'of', 'by', 'inside', 'above', 'below', 'around', 'underneath', 'along', 'against', 'behind', 'within', 'across', 'past', 'toward', 'towards', 'outside', 'beneath', 'among', 'like', 'than', 'via', 'per', 'during', 'until', 'after', 'before', 'without', 'when', 'even', 'if', 'unless', 'while']);
 const AND = new Set(['and', 'or', 'but', 'then', 'plus', 'also']);
-const SKIP = new Set(['can', 'could', 'will', 'would', 'should', 'must', 'may', 'also', 'then', 'just', 'only', 'automatically', 'always', 'never', 'still', 'even', 'each', 'both', 'all', 'it', 'they', 'is', 'are', 'be', 'to', 'not', 'really', 'actually', 'safely', 'quietly']);
+const SKIP = new Set(['can', 'could', 'will', 'would', 'should', 'must', 'may', 'also', 'then', 'just', 'only', 'automatically', 'always', 'never', 'still', 'even', 'each', 'both', 'all', 'it', 'they', 'is', 'are', 'be', 'to', 'not', 'really', 'actually', 'safely', 'quietly', 'about', 'roughly', 'nearly', 'approximately', 'exactly', 'almost', 'barely', 'some', 'very', 'so', 'too']);
+/** How an ask is put, before what is asked for: "I want", "Can you design", "Make me": no part of the thing. */
+const ASKING = /^\s*(?:(?:please|hey|hi|ok|okay|so)[,\s]+)*(?:(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:design|make|build|create|invent|draw|devise|engineer|come up with|give|get|show|imagine|think up)\s+(?:me\s+|us\s+)?|i\s*(?:want|need|would like|'d like|wish for|am looking for|would love)\s+(?:you\s+to\s+(?:design|make|build|create|invent)\s+(?:me\s+)?)?)/i;
 /** Words after a verb that finish it rather than start a place: "measures out", "folds flat", "lifts up". */
 const PARTICLE = new Set(['out', 'up', 'down', 'off', 'away', 'back', 'over', 'flat', 'open', 'shut', 'closed', 'apart', 'together', 'around', 'in']);
 /** Words that say which way a number goes ("75 cm high", "300 mm across"): part of the number, not a thing. */
@@ -41,7 +43,8 @@ const VERB_BASE = new Set(('hold carry move roll spin turn rotate revolve open c
   + 'unlock plug connect link talk listen record compute process see lower reach support bear take bring push pull lean stack sits lie flip tip rock bounce jump balance '
   + 'steer brake land orbit shade block reflect absorb collect generate convert produce sit rain grow drain flow vent breathe sail paddle row pedal wind spool reel stretch '
   + 'bend twist squeeze press clamp hook attach mount hang carry deploy unroll rotate glow blink vibrate hum sing play lift tow haul drag dig drill saw sand polish '
-  + 'scan photograph film stream transmit receive charge sleep wake count dose portion fold iron dry wet spray mist heat boil brew bake fry toast chill keep is are be has have').split(' '));
+  + 'scan photograph film stream transmit receive charge sleep wake count dose portion fold iron dry wet spray mist heat boil brew bake fry toast chill keep is are be has have '
+  + 'span cross reach pack unpack inflate deflate deploy hold carry lift lower haul pull tow store hang open shut cool warm sit stand').split(' '));
 export function isVerb(w: string): boolean {
   if (VERB_BASE.has(w)) return true;
   const tries = [w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'), w.replace(/es$/, ''), w.replace(/s$/, ''), w.replace(/ing$/, ''), w.replace(/ing$/, 'e'), w.replace(/ed$/, ''), w.replace(/ed$/, 'e'), w.replace(/(.)\1(ing|ed)$/, '$1')];
@@ -50,7 +53,7 @@ export function isVerb(w: string): boolean {
 
 /** The words of an ask, its clauses, the thing and the verb of each, and every number with the words around it. */
 export function parseAsk(words: string): Parse {
-  const src = ` ${words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim()} `, t = src.toLowerCase();
+  const src = ` ${words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().replace(ASKING, '')} `, t = src.toLowerCase();
   const toks: Tok[] = []; let grp = 0, last = -2;
   for (const m of t.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|[a-zµμ°%"'][a-z0-9µμ°'²³^/]*|[,;:()!?]|\.(?=\s)/g)) {
     const w = m[0]!.replace(/^'+|'+$/g, ''), at = m.index!; if (!w) continue;
@@ -59,6 +62,10 @@ export function parseAsk(words: string): Parse {
     toks.push({ w, at, grp, num: /^\d/.test(w), punct: /^[,;:()!?.]$/.test(w), q: null });
     last = at + m[0]!.length - 1;
   }
+  // "the size of", "the same size as", "as big as": words that say how big, not what it is (so not its name)
+  for (let i = 0; i < toks.length; i++) { const w = toks[i]!.w, n1 = toks[i + 1]?.w, n2 = toks[i + 2]?.w;
+    if (w === 'size' && (n1 === 'of' || n1 === 'as')) { toks[i]!.size = true; if (toks[i - 1] && /^(the|same)$/.test(toks[i - 1]!.w)) toks[i - 1]!.size = true; if (toks[i - 2]?.w === 'the' && toks[i - 1]?.w === 'same') toks[i - 2]!.size = true; }
+    if (w === 'as' && n1 && /^(big|large|small|tiny|tall|wide|long|heavy|light)$/.test(n1) && n2 === 'as') { toks[i]!.size = true; toks[i + 1]!.size = true; } }
   // every number said with its unit, over the tokens it covers
   const qs = findQuantities(src);
   qs.forEach((q, k) => { const i = toks.findIndex((x) => x.num && (x.at === q.at || x.at === q.at + 1)); if (i < 0) return; const n = q.text.replace(/^-/, '').split(/[\s-]+/).length; for (let j = i; j < Math.min(toks.length, i + n); j++) toks[j]!.q = k; });
@@ -93,7 +100,8 @@ export function parseAsk(words: string): Parse {
     const p = toks[i - 1]; if (p && (p.q !== null || p.num) && ROLE_WORDS.has(x.w)) continue;
     if (DOES.has(x.w)) { open('does', x.w, i + 1); continue; }
     if (HAS.has(x.w) && !(x.w === 'has' && cur.kind === 'does' && cur.verb === null)) { open('has', x.w, i + 1); continue; }
-    if (x.w === 'to' && next && !next.num && !DET.has(next.w) && next.q === null && isVerb(next.w)) { open('for', 'to', i + 1); continue; }
+    // "to raise a person", "to keep a cat in": what it is for is something it does
+    if (x.w === 'to' && next && !next.num && !DET.has(next.w) && next.q === null && isVerb(next.w)) { const c = open('does', 'to', i + 1); c.verb = next.w; c.verbAt = i + 1; i++; continue; }
     if (FOR.has(x.w)) { open('for', x.w, i + 1); continue; }
     if (WHERE.has(x.w) || x.w === 'to') { open('where', x.w, i + 1); continue; }
     if (AND.has(x.w)) {
@@ -132,9 +140,18 @@ export function parseAsk(words: string): Parse {
   for (let i = 0; i < toks.length; i++) {
     const x = toks[i]!; if (!x.num) continue;
     const qk = x.q, said = qk !== null ? qs[qk]! : null; let end = i + 1; while (end < toks.length && qk !== null && toks[end]!.q === qk) end++;
-    const v = Number(x.w.replace(/,/g, '')), x2 = toks[i + 1], n2 = toks[i + 2];
-    // "6 x 6 cm": the first number is said in the second's unit
-    if (!said && x2 && /^(x|×|by)$/.test(x2.w) && n2?.num && n2.q !== null) { const s2 = qs[n2.q]!; nums.push({ said: { ...s2, value: v, si: (v * s2.si) / s2.value, text: `${x.w} ${s2.unit}` }, text: `${x.w} × ${s2.text}`, value: v, tok: i, end: i + 1, clause: clauseOf(i), ...around(i, i + 1), by: nums.length + 1 }); continue; }
+    const v = Number(x.w.replace(/,/g, ''));
+    // "6 x 6 cm", "60 x 40 x 15 cm": each number of a chain said in the unit of the last, each one's partner the next,
+    // and all of them read by the words before the chain and after it, as one size
+    const chain = [i]; let k2 = i + 1;
+    while (!said && toks[k2] && /^(x|×|by)$/.test(toks[k2]!.w) && toks[k2 + 1]?.num) { chain.push(k2 + 1); if (toks[k2 + 1]!.q !== null) break; k2 += 2; }
+    const tail = chain.length > 1 && toks[chain.at(-1)!]!.q !== null ? toks[chain.at(-1)!]! : null;
+    if (tail) {
+      const s2 = qs[tail.q!]!; let tend = chain.at(-1)! + 1; while (tend < toks.length && toks[tend]!.q === tail.q) tend++;
+      const ctx = { before: around(i, i + 1).before, after: around(i, tend).after }, base = nums.length;
+      chain.forEach((j, m) => { const vj = Number(toks[j]!.w.replace(/,/g, '')), sj = m === chain.length - 1 ? s2 : { ...s2, value: vj, si: (vj * s2.si) / s2.value, text: `${toks[j]!.w} ${s2.unit}` }; nums.push({ said: sj, text: sj.text, value: vj, tok: j, end: m === chain.length - 1 ? tend : j + 1, clause: clauseOf(j), ...ctx, by: m < chain.length - 1 ? base + m + 1 : null }); });
+      i = tend - 1; continue;
+    }
     nums.push({ said, text: said ? said.text : `${x.w}${phrase(i + 1, 2)}`, value: said ? said.value : v, tok: i, end, clause: clauseOf(i), ...around(i, end), by: null });
   }
   return { src, t, toks, clauses, nums };
@@ -149,7 +166,10 @@ function headOf(toks: Tok[], from: number, to: number): { head: string; at: numb
     const x = toks[i]!;
     if (x.punct) break;
     if (!starts(i)) { if (at >= 0 && toks[at]!.grp === x.grp) at = i; continue; }
+    if (x.size) break;
     if (x.num || x.q !== null || DET.has(x.w) && !(toks[i + 1] && toks[i + 1]!.grp === x.grp) || SKIP.has(x.w)) continue;
+    // "100 x 62 mm": the times sign of a chain of sizes, not a thing
+    if (/^(x|×)$/.test(x.w) && toks[i - 1]?.num && toks[i + 1]?.num) continue;
     const p = toks[i - 1];
     if (p && (p.q !== null || p.num) && ROLE_WORDS.has(x.w)) continue;
     if (WHERE.has(x.w) || DOES.has(x.w) || HAS.has(x.w) || FOR.has(x.w) || AND.has(x.w)) break;
