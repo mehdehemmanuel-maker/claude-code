@@ -444,3 +444,124 @@ The scores are the testers' on the baseline. The right-hand column is what the g
 - **A roof on rafters**, so a shelter's roof can bear its snow; **guy lines and stakes** to hold down what slides in the wind.
 - **Bracing**, so a tall frame's columns are not free to sway (K below 2), and a 5 m tower can stand.
 - **A retest** by the same five testers.
+
+## Round D4: wave 3 rescored, and fixed by cause
+
+Five new judges, with no context, each scored four of the twenty outputs as the generator gave them after wave 3's fixes. They read only the output files, and they listed what was still wrong. Their findings were then fixed by cause, in four batches: what is read and said back, the laws where nothing is made, structures and the checks of what is made, and the size table.
+
+### The rescore
+
+Each score is read / made / holds / honest, from 0 to 4.
+
+| # | request | baseline | rescored | now |
+|---|---|---|---|---|
+| 1 | lowering wall cabinet | 1/0/0/2 | 3/1/2/3 | its lowest at 900 mm (a worktop, estimate), its highest 1.4 m; its plates carried on the box floor; let go at the top it falls in 0.32 s, so it needs a brake or a drive that does not run back, holding about 243 N; "wall-mounted" is ✗, so the cabinet is ✗ as a wall cabinet |
+| 2 | tremor mug | 1/0/1/1 | 2/1/2/3 | "for someone with a Parkinson's tremor" is who it is for; its open top counts, and it falls to 55 °C in at most 54 min; its bare aluminium near 85 °C burns on touch (ISO 13732-1) |
+| 3 | turning planter | 3/1/1/2 | 3/2/2/2 | "turns 360°" is ✗ where its own turn test fails; on a balcony it is weighed against 2.5 kPa and 2 kN on any 50 mm square (EN 1991-1-1 Table 6.2): 1.99 kPa, 0.97 kN |
+| 4 | stair-climbing walker | 2/1/2/3 | 2/1/2/3 | a load at its top's edge is tested for tipping over its feet; climbing 180 mm in 3 s takes 74.7 W (m g h / t) |
+| 5 | blood microswimmer | 1/2/1/2 | 3/0/2/2 | it sinks at 6.2 mm/s unless as light as blood; swept by blood 200 to 2000 times its speed; a field turns it as a helix (8 π μ a³ ω against m × B); its size table drops coils against combs, as a field drives it |
+| 6 | 450 m cargo airship | 0/0/1/1 | 4/1/3/3 | half its gross lift for its own structure (1930s rigid airships, estimate): 241 t over the 300 t at sea level, 51.8 t at 1.5 km; the ballast as fuel burns |
+| 7 | burrowing worm | 2/3/2/3 | 3/0/3/3 | its 1 m/h is weighed (cone resistance and skin friction, 3.4 mW), not dropped |
+| 8 | solar-sail tug | 1/0/1/1 | 3/0/3/3 | (1 + R) S / c; spiralling out of Earth orbit and down to Mars at 0.3 of its push; light 1 / r²; about 9590 days against 1100 |
+| 9 | wall record shelf | 1/0/0/1 | 3/4/3/3 | creep under a load that stays (k_def 0.8, EN 1995-1-1 Table 3.2); its overhanging ends; screws in withdrawal and shear: 2.34 mm against 3 mm |
+| 10 | 6.5 m footbridge | 1/0/1/1 | 3/4/1/1 | one person standing between joists (100 kg, estimate) on deck and joists; the rails held against sideways buckling (EN 1995-1-1 6.3.3); the deck's middle bay its own piece; 7.8 m rails must be spliced (lumber about 4.88 m, estimate) |
+| 11 | mountain shelter | 1/0/2/2 | 3/1/2/3 | a 700 mm door between two front walls, which swings; roof uplift and the wind empty; it slides in a 110 km/h wind and needs holding down |
+| 12 | bird-watching tower | 2/1/2/2 | 4/2/1/2 | "not tip over" is ✗ where its wind test fails; empty it tips (11 300 N·m against 5830); its panels are bigger than any sheet sold; a guard and a stair are not derived |
+| 13 | backpack solar charger | 1/3/1/2 | 3/0/3/3 | even all the light on it, at 100%, is 2 times too little |
+| 14 | 48 h vacuum flask | 1/0/1/1 | 3/1/3/3 | a held bottle, 85 mm across inside and 2 to 4 times as tall; "vacuum" ✗, so it is ✗ as a vacuum flask; a flask's heat loss scaled by its surface |
+| 15 | Peltier cooler | 2/0/1/2 | 2/1/2/2 | the air between its tank and its box, 3 W/m²K a face (estimate): 20.8 W leaks in, not 144 W; even a Carnot cooler draws 134 Wh against the 100 Wh |
+| 16 | hand-crank kettle | 1/1/2/2 | 3/1/2/2 | as made, its walls let out 46.7 W at 100 °C: a person's 52.5 W at the water brings it to a boil in about 4.1 h |
+| 17 | Mars transfer stage | 0/0/1/1 | 3/1/3/2 | "400 km" heard as its orbit; Lambert's problem for 180 days; tanks a tenth, and three twentieths with its engines and structure |
+| 18 | lunar habitat | 0/0/1/1 | 1/0/1/1 | a sphere at 101 kPa: 202 kN on each metre, 5.08 MN on its floor; under 2.5 m of regolith (k 0.01) it loses 248 W, so the trouble is shedding its 15 kW; 1410 t of cover |
+| 19 | Challenger Deep pod | 2/4/3/3 | 3/1/3/3 | a thick sphere (Lamé), cells packed at 60%, primary cells, cells in oil outside the hull; at 120 kg it runs 17.8 days |
+| 20 | Europa flight board | 1/3/0/2 | 1/0/1/1 | 5.4 Sv a day is tissue dose, not silicon's behind a shield, and its 300 krad is not judged; 2 kg of tantalum is 4.44 g/cm²; it radiates to Europa's ground at about −163 °C and settles near −28 °C; its 30 days of cells weighed only as if it ran on its own |
+
+On average, reading rose from 1.2 to 2.75, making from 0.95 to 1.1, holding from 1.2 to 2.2, and honesty from 1.75 to 2.4. The right-hand column is what the generator says after D4. No judge has scored it yet.
+
+### What was wrong, by cause
+
+**What is ticked.**
+- A thing named for something it does not have is ✗ as that thing. Examples are a vacuum flask with no vacuum, a hand-crank kettle with no crank, a fold-down bench that does not fold and a scissor-lift with no scissors. It is made only as what it does.
+- What it is said to carry is said back, done by what carries it. Its motion test and an underived drive do not fail it: a cabinet that lowers its plates still carries them.
+- A thing it does is ✓ only where its own test passes.
+- What it must not do ("without wobbling") is said apart from the load it is said with.
+- The weight check says that what is not made would weigh more.
+
+**Reading.**
+- Who it is for keeps its words: "for someone with a Parkinson's tremor". A size said with it ("my record collection that's 1.2 m long") is the thing's own.
+- Qualities (vacuum, insulated, hand-crank, silent) are has-items, ✗ where not made.
+- A balcony is what it stands on.
+- Several things are now heard rather than dropped:
+  - the orbit's height (400 km);
+  - a card's size (100 × 160 mm);
+  - a climb's height;
+  - "to counter height";
+  - a speed it burrows at, read before its numbers are.
+- What powers it is read from the words. A board for a lander runs on the lander, unless cells, a battery or a charge are said.
+- Trailing punctuation and spaced brackets are cut from what is said back.
+
+**The laws where nothing is made.**
+- **Under the sea.** A sphere this thick is a thick sphere (Lamé). Cells pack in at about 60%, primary lithium cells hold about 600 Wh/kg, and cells in oil outside the hull need no sphere. Each says how long its weight would last.
+- **The airship.** Its own structure is about half its gross lift, it flies at 1.5 km, and it takes on ballast as its fuel burns.
+- **The microswimmer.** It is weighed for Stokes settling, blood flow, and a field turning it as a helix.
+- **The sail.** It is weighed by (1 + R) S / c, spiralling out and in, and light falling off as 1 / r².
+- **The Moon.** A buried habitat is weighed by shell conduction through its cover, the cover's mass, and the dose under it, which is not derived.
+- **Europa.** Its dose is tissue dose, and the dose to silicon is not judged. It sheds its heat to Europa's ground, at about 110 K at the equator (as Wikipedia's Europa article gives it).
+- **The energy carried.** It is judged only where it runs on its own. Otherwise it is weighed as if it did.
+
+**Structures, and what is made.**
+- **Point loads.** A crowd's point load, one person of about 100 kg standing between joists, is checked on the deck and on the joist under them.
+- **Rails.** Rails are held against sideways buckling (EN 1995-1-1 6.3.3).
+- **A deck in pieces.** The middle bay is its own piece. Pieces are named as "the deck in its 3 pieces".
+- **A shelf.**
+  - It creeps under a load that stays (EN 1995-1-1 Table 3.2).
+  - Its overhanging ends are checked.
+  - Its screws are checked in withdrawal and in shear (USDA Wood Handbook ch. 8; NDS yield modes).
+  - The board and the brackets are sized together for the overhangs, the lighter way first. A wall workbench that had failed by 6% now holds on a 22 mm board.
+- **What it stands on.** It is weighed with all it weighs and carries:
+  - on a balcony, 2.5 kPa spread over it and 2 kN on any 50 mm square (EN 1991-1-1 Table 6.2);
+  - on sand or soft soil, about 200 or 100 kPa under each foot (presumptive bearing, estimate).
+- **A load at its edge.** A load at any edge of its top is weighed against the outline its feet make on the floor (statics). A three-legged stool with a square top tips from its corner, so it is redrawn on four legs. A tenth of a millimetre is where a part is drawn, not outside it.
+- **A walk-in door.** A shelter, hut or doghouse has a walk-in door 700 mm wide between two front walls.
+- **Sheets and lumber.** Wood sheets bigger than any sold (about 1525 × 3050 mm) and sawn timber longer than is commonly stocked (about 4.88 m) are said to need piecing or splicing.
+- **Where people stand high.** Where they stand more than 760 mm up, a guard and a stair are said to be not derived.
+- **Vessels.**
+  - A vessel held in one hand is no wider inside than about 85 mm.
+  - A bottle stands 2 to 4 times as tall as it is wide.
+  - An open top loses heat as bare surface, and the air between a vessel and its box counts.
+  - Bare metal over 60 °C burns (ISO 13732-1).
+
+**Tests that spoiled each other.** Each physics test went on from where the last left it. A 110 km/h gust slid the shelter 6.6 m and flung its door open, so the door's own test then read 0°. Now:
+- the wind test runs last;
+- sizes and feet are read off it as built;
+- the empty wind, the uplift, and the wind's statics are checked.
+
+**The size table.** A row is folded into one line, "far from bearing on it here", in these cases:
+- a rim speed for what does not turn;
+- coils against combs for what a field drives, or what nothing drives;
+- self-weight where it is immersed or a thousandth of its strength;
+- Bond's number past 10⁴;
+- light time across something in a room;
+- thermal shaking under 10⁻⁵ of its size.
+
+What is past its threshold is always shown.
+
+### Checked
+
+- **The gate:** typecheck, and 973 tests in 92 files.
+- **Both browser drives:** the generator drive and the flow board drive, with no script errors.
+- **The everyday set (18) and wave 2 (16)** were rerun against their last outputs.
+  - The doghouse has a door that swings.
+  - The stool is redrawn on four legs, as its three-legged draw tipped from a corner.
+  - The wall workbench holds.
+  - The fold-down workbench, battery-assisted cart, scissor-lift platform and folding footbridge are ✗ as what they are named for.
+  - Nothing else changed.
+
+### Open after D4
+
+- **Folding, collapsing and unfolding**: the linkage (Phase 4).
+- **What raises a lift and holds it**; a speed reducer of many stages, or a stepping motor; a bearing under a turntable.
+- **Insulated walls and a cooler** as ways and parts.
+- **A roof on rafters**; guy lines and stakes; bracing for a tall frame.
+- **A cart's speed.** Its speed is held by its controller, yet runs 50% over in the physics. This was so before D4 too.
+- **A rescore** of the D4 outputs by fresh judges.

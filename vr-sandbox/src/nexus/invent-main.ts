@@ -32,7 +32,7 @@ for (let round = 0; round < 3 && c.questions.length; round++) {
   c = conceive(words, answers);
 }
 // what its size asks, and what the laws say of what was asked: whether or not anything is made
-if (c.scale) console.log(`AT ITS SIZE (${len(c.scale.L)}):\n  ${c.scale.groups.map((g) => `${g.past ? '!' : '·'} ${g.name}: ${g.says}`).join('\n  ')}${c.scale.must.length ? `\n  SO IT WOULD HAVE TO BE BUILT SO:\n    - ${c.scale.must.join('\n    - ')}` : ''}`);
+if (c.scale) console.log(`AT ITS SIZE (${len(c.scale.L)}):\n  ${c.scale.groups.filter((g) => !g.far || g.past).map((g) => `${g.past ? '!' : '·'} ${g.name}: ${g.says}`).join('\n  ')}${c.scale.groups.some((g) => g.far && !g.past) ? `\n  · far from bearing on it here: ${c.scale.groups.filter((g) => g.far && !g.past).map((g) => g.name).join('; ')}` : ''}${c.scale.must.length ? `\n  SO IT WOULD HAVE TO BE BUILT SO:\n    - ${c.scale.must.join('\n    - ')}` : ''}`);
 if (c.bounds.length) console.log(`WHAT THE LAWS SAY OF WHAT WAS ASKED:\n  ${c.bounds.map((b) => `${b.ok === null ? '·' : b.ok ? '✓' : '✗'} ${b.what}: ${b.says}`).join('\n  ')}`);
 // nothing is made: what was read is said above, each part with what it would need; it is not said again
 if (!c.wants.length) { console.log(`NOTHING MADE: ${c.asked.some((a) => a.kind !== 'for' && !a.got) ? `none of what was asked is something I make yet (each part is said above with what it would need)${c.bounds.length || c.scale ? '; what its size and the laws say of it is above' : ''}` : 'nothing in the words says what it is to do'}.`); finish([]); }

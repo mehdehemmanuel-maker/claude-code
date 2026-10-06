@@ -96,7 +96,7 @@ describe('reading what is said, D3', () => {
     expect(si('below 0.6 Sv for the trip').unit).toBe('Sv');
     const sh = conceive('a crewed ship that carries 4 astronauts from low Earth orbit to Mars orbit in 90 days and back again, weighing under 400 tonnes, keeping each dose below 0.6 Sv');
     expect(sh.said.crew).toBe(4);
-    expect(sh.said.trip).toEqual({ from: 'earth', to: 'mars', back: true, days: 90 });
+    expect(sh.said.trip).toEqual({ from: 'earth', to: 'mars', back: true, days: 90, low: true });
     expect(sh.said.dose).toBeCloseTo(0.6, 9);
     expect(sh.limits.mass).toBe(4e5);
     expect(conceive('a microSD card with Wi-Fi at 50 MB/s').said.rate).toBe(4e8);
@@ -156,7 +156,7 @@ describe('making it, and checking what was asked', () => {
     expect(d!.choices.some((x) => /a sheet alone would weigh .* so it is framed/.test(x))).toBe(true);
     // the bridge proper is still more than 5 kg, and it says where its weight is
     expect(lim.ok).toBe(false);
-    expect(lim.says).toMatch(/where it weighs most: the 2 rails /);
+    expect(lim.says).toMatch(/where it weighs most: the deck in its 3 pieces [\d.]+ kg, the 2 rails /);
   });
   it('makes a cart that moves at the speed asked, its speed held by its controller', () => {
     const [d] = designs(go('a cart that carries 20 kg at 1 m/s'), 1, { seed: 101, physics: J });
@@ -192,7 +192,7 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
     const [d] = designs(c, 1, { seed: 101, physics: null });
     const k = d!.checks.find((x) => /^as made, it keeps what it holds above 55 °C/.test(x.what))!;
     expect(k.ok).toBe(false);
-    expect(k.says).toMatch(/falls to 55 °C in (\d+(\.\d+)? (h|min))/);
+    expect(k.says).toMatch(/falls to 55 °C in (at most )?(\d+(\.\d+)? (h|min))/);
   });
   it('reads "keeps it ... in a 5 °C car" as a place, not as keeping something in, and "under 400 g empty" as its own weight', () => {
     const c = go('I want a 1 litre vacuum flask, under 400 g empty, that keeps tea poured at 95°C still above 70°C after 48 hours sitting in a 5°C car.');
@@ -251,10 +251,73 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
     const [d] = designs(go('a stool made of oak'), 1, { seed: 101, physics: null });
     expect(d!.checks.find((x) => /legs carry it without buckling/.test(x.what))!.says).toMatch(/K L \/ d [\d.]+ \(a wood column no more than 50: NDS 3\.7\.1\.4\)/);
   });
-  it('weighs a rated total dose against Europa\'s surface over the time there', () => {
-    const c = go('Need a flight computer board for a Europa lander that draws under 8 W and survives a 30-day surface mission without going over its 300 krad(Si) total dose rating.');
-    const b = c.bounds.find((x) => /on Europa's surface/.test(x.what))!;
-    expect(b.ok).toBe(true);
-    expect(b.says).toMatch(/30 days there is about 16\.2 krad unshielded/);
+  it('says the surface dose on Europa, and does not judge a silicon rating by a dose to tissue', () => {
+    const c = go('Need a flight computer board for a Europa lander that fits on a 100 mm x 160 mm card, draws under 8 W, and survives a 30-day surface mission behind no more than 2 kg of tantalum shielding without going over its 300 krad(Si) total dose rating.');
+    const b = c.bounds.find((x) => /stays within its 300 krad on Europa/.test(x.what))!;
+    expect(b.ok).toBe(null);
+    expect(b.says).toMatch(/30 days there is about 162 Sv; that is not the dose to silicon/);
+    expect(b.says).toMatch(/its 2 kg of tantalum round a 160 mm × 100 mm × 25 mm box \(estimate\) is about 4\.44 g\/cm²/);
+    expect(c.bounds.some((x) => /into still air/.test(x.says))).toBe(false);
+  });
+});
+
+describe('wave 3 rescored: what was asked said back, what it stands on, tests that do not spoil each other', () => {
+  it('a door hung in a walk-in front swings, its test run before a gust blows the shelter away, and its sizes are read as built', () => {
+    const [d] = designs(go('Can you come up with a 4-person emergency shelter for a mountain site that packs into a sled under 30 kg, takes up no more than 3 m x 2.5 m of ground, and survives 110 km/h winds and 80 cm of settled snow on the roof?'), 1, { seed: 101, physics: J });
+    const sw = d!.checks.find((x) => x.what === 'it swings open')!;
+    expect(sw.ok).toBe(true);
+    // the wind test comes after it, and the door swung open does not make it deeper than it was built
+    expect(d!.checks.findIndex((x) => /^it stands in a 110 km\/h wind$/.test(x.what))).toBeGreaterThan(d!.checks.indexOf(sw));
+    expect(d!.checks.find((x) => /no more than 2\.5 m deep/.test(x.what))!.says).toBe('it is 2.05 m deep as made');
+  }, 60000);
+  it('a planter on a balcony is weighed against what a balcony is made for, all it weighs and carries', () => {
+    const [d] = designs(go('Can you make a balcony planter for a tiny apartment that turns 360° every 6 hours so the plants get even sun, holds 40 kg of wet soil, and waters itself from a 10 L tank for 3 weeks?'), 1, { seed: 8020, physics: null });
+    const b = d!.checks.find((x) => x.what === 'the balcony bears it')!;
+    expect(b.says).toMatch(/kPa over its .* footprint against the 2\.5 kPa a balcony is made for, and .* kN on its one foot against 2 kN on any 50 mm square \(EN 1991-1-1 Table 6\.2/);
+  });
+  it('what it is said to carry is said back as done by what carries it, and who it is for keeps its "with"', () => {
+    const c = go("design a footbridge over a 6.5 m wide creek on my property with a 1.1 m wide deck that can carry 4 adults plus a loaded wheelbarrow (call it 450 kg total), and no single piece can weigh more than 35 kg because we're carrying everything in by hand with no crane");
+    expect(c.asked.find((a) => /^carry 4 adults plus a loaded wheelbarrow \(call it 450 kg total\)$/.test(a.text))).toMatchObject({ kind: 'does', got: 'support', load: true });
+    expect(go("Design a mug for someone with a Parkinson's tremor that keeps tea above 55 °C for 2 hours").asked.some((a) => a.kind === 'for' && a.text === "for someone with a parkinson's tremor")).toBe(true);
+    // the size said with what it is for is its own, not what it is for
+    expect(go("I need a wall shelf for my record collection that's 1.2 m long and 320 mm deep, holds 70 kg").asked.some((a) => a.kind === 'for' && a.text === 'for my record collection')).toBe(true);
+  });
+  it('a cabinet that lowers what it carries carries it: only the raising is not derived', () => {
+    const [d] = designs(go('I want a wall-mounted kitchen cabinet that lowers itself 50 cm to counter height for a wheelchair user in under 10 seconds, carries up to 20 kg of plates'), 1, { seed: 101, physics: J });
+    expect(d!.asked.find((a) => /^carries up to 20 kg/.test(a.text))!.got).toBe('raise');
+    expect(d!.asked.find((a) => /^lowers itself/.test(a.text))!.got).toBe(null);
+  }, 60000);
+  it('a flask held in the hand is narrow and tall, a mug no wider than a hand closes round', () => {
+    const [f] = designs(go('I want a 1 litre vacuum flask, under 400 g empty'), 1, { seed: 101, physics: null });
+    const [m] = designs(go('a mug that holds 350 ml'), 1, { seed: 101, physics: null });
+    const dims = (d: typeof f) => /an upright tube of .* ([\d.]+) mm across and ([\d.]+) mm tall/.exec(d!.choices.join('; '))!.slice(1).map(Number);
+    const [fw, fh] = dims(f), [mw] = dims(m);
+    expect(fw).toBeLessThanOrEqual(90); expect(fh / fw).toBeGreaterThanOrEqual(2);
+    expect(mw).toBeLessThanOrEqual(90);
+  });
+  it('a speed it burrows at is weighed, not dropped; a board on Europa sheds its heat to Europa\'s cold ground', () => {
+    const w = go('what would a 4 cm earthworm-style robot look like that burrows through wet clay soil at 1 m per hour, draws 0.5 W');
+    expect(w.dropped.some((x) => /1 m per hour/.test(x))).toBe(false);
+    expect(w.bounds.some((b) => /^pushing through the ground at 1 m\/h$/.test(b.what))).toBe(true);
+    const e = go('Need a flight computer board for a Europa lander that fits on a 100 mm x 160 mm card, draws under 8 W');
+    const sh = e.bounds.find((b) => /^it sheds the 8 W/.test(b.what))!;
+    expect(sh.says).toMatch(/to Europa's ground round it at about -163 °C/);
+    expect(sh.says).toMatch(/settles near -2\d(\.\d+)? °C/);
+  });
+});
+
+describe('wave 3 rescored: what it is named for, and what powers it', () => {
+  it('a vacuum flask made with no vacuum is not ticked as a vacuum flask; a mug is a mug', () => {
+    const f = go('I want a 1 litre vacuum flask, under 400 g empty, that keeps tea poured at 95°C still above 70°C after 48 hours sitting in a 5°C car.');
+    const th = f.asked.find((a) => a.kind === 'thing')!;
+    expect(th.got).toBe(null); expect(th.why).toMatch(/^made only as something to hold a liquid: what it is named for \(vacuum\) is not made/);
+    expect(go('a mug that holds 350 ml').asked.find((a) => a.kind === 'thing')!.got).toBe('contain');
+  });
+  it('a board for a lander runs on the lander: what it would carry is weighed, not judged; a pod said to be battery-powered is judged', () => {
+    const e = go('Need a flight computer board for a Europa lander that fits on a 100 mm x 160 mm card, draws under 8 W, and survives a 30-day surface mission');
+    const b = e.bounds.find((x) => /^it carries what it needs for 30 days at 8 W, if it ran on cells of its own$/.test(x.what))!;
+    expect(b.ok).toBe(null);
+    const p = go('Could you invent a battery-powered sensor pod that sits at the bottom of the Challenger Deep (10,935 m) for 90 days drawing 50 W on average, with the whole titanium pressure sphere and batteries weighing under 120 kg?');
+    expect(p.bounds.find((x) => /^it carries what it needs for 90 days at 50 W$/.test(x.what))!.ok).toBe(false);
   });
 });
