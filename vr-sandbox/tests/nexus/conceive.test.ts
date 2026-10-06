@@ -63,7 +63,8 @@ describe('reading what is said', () => {
   });
   it('reads a chain of sizes as one size, by the words before and after it', () => {
     const p = conceive('a platform that folds flat to 60 x 40 x 15 cm so it fits in a car trunk');
-    expect(p.dropped.filter((x) => /the size it folds or packs down to/.test(x)).length).toBe(3);
+    // what it must fold down to is checked against it as made, all three sizes as one
+    expect(p.limits.fold).toEqual([0.6, 0.4, 0.15]);
     const w = conceive('a fold-down workbench that opens to a 120 x 60 cm top at 90 cm high in a cabinet only 15 cm deep');
     const top = w.wants.find((x) => x.fn === 'support')!;
     expect([top.q.W!.v, top.q.D!.v, top.q.H!.v]).toEqual([1.2, 0.6, 0.9]);
@@ -88,6 +89,27 @@ describe('reading what is said', () => {
   });
 });
 
+describe('reading what is said, D3', () => {
+  it('reads millions, sieverts, crews, data rates, and a model number as part of a name', () => {
+    const si = (x: string) => findQuantities(` ${x} `)[0]!;
+    expect(si('a 1 million tonne city').si).toBe(1e9);
+    expect(si('below 0.6 Sv for the trip').unit).toBe('Sv');
+    const sh = conceive('a crewed ship that carries 4 astronauts from low Earth orbit to Mars orbit in 90 days and back again, weighing under 400 tonnes, keeping each dose below 0.6 Sv');
+    expect(sh.said.crew).toBe(4);
+    expect(sh.said.trip).toEqual({ from: 'earth', to: 'mars', back: true, days: 90 });
+    expect(sh.said.dose).toBeCloseTo(0.6, 9);
+    expect(sh.limits.mass).toBe(4e5);
+    expect(conceive('a microSD card with Wi-Fi at 50 MB/s').said.rate).toBe(4e8);
+    expect(conceive('a board the same size as an Orange Pi 5 (100 x 62 mm)').dropped.some((d) => /part of a name \("Orange Pi 5"\)/.test(d))).toBe(true);
+  });
+  it('says what it read when nothing is made, and asks nothing it cannot use', () => {
+    const c = conceive('I want a microSD card that stores 2 TB and has built-in Wi-Fi so I can pull photos off it at 50 MB/s, without the card going above 70 °C.');
+    expect(c.wants).toEqual([]);
+    expect(c.questions).toEqual([]);
+    expect(c.heard.some((h) => /no hotter than 70 °C/.test(h))).toBe(true);
+  });
+});
+
 describe('making it, and checking what was asked', () => {
   it('says how much of the ask it does, and holds what it makes to the limits said', () => {
     const c = go('a cart that carries 20 kg, folds a fitted bed sheet and weighs under 1 kg');
@@ -102,8 +124,30 @@ describe('making it, and checking what was asked', () => {
   it('frames a top no sheet alone bears: joists on two rails, each the least the load law lets bear its share', () => {
     const [d] = designs(go('a raised vegetable bed on legs, 2 m by 1 m and 75 cm tall, that holds 30 cm of soaking-wet soil'), 1, { seed: 8020, physics: J });
     expect(d!.choices.some((x) => /so it is framed: the top on \d+ joists/.test(x))).toBe(true);
-    for (const re of [/its top bears .* between its joists/, /its joists bear half the load/, /its rails bear half of all of it/]) { const k = d!.checks.find((x) => re.test(x.what))!; expect(k.ok, k.says).toBe(true); }
+    for (const re of [/its top bears .* between its joists/, /its joists bear their share/, /its rails bear half of all of it/]) { const k = d!.checks.find((x) => re.test(x.what))!; expect(k.ok, k.says).toBe(true); }
     expect(d!.ok).toBe(true);
+  }, 60000);
+  it('holds loose soil in with walls against its sideways push, and checks it for a wheelchair', () => {
+    const [d] = designs(go('a raised vegetable bed on legs, 2 m by 1 m and 75 cm tall so I can garden from a wheelchair, that holds 30 cm of soaking-wet soil'), 1, { seed: 8020, physics: null });
+    const walls = d!.checks.find((x) => /its walls hold the .*soil in/.test(x.what))!;
+    expect(walls.ok, walls.says).toBe(true);
+    expect(walls.says).toMatch(/2\.79 kPa at the foot/);
+    expect(d!.checks.find((x) => /a wheelchair fits under it/.test(x.what))!.ok).toBe(false);
+    expect(d!.checks.find((x) => /within reach from a wheelchair/.test(x.what))!.ok).toBe(false);
+  });
+  it('rolls on mud as mud rolls, and its wheels must grip to climb', () => {
+    const [d] = designs(go('a garden cart that hauls 100 kg of wet soil up a 20-degree muddy slope'), 1, { seed: 101, physics: null });
+    const grip = d!.checks.find((x) => /its driven wheels grip/.test(x.what))!;
+    expect(grip.ok).toBe(false);
+    expect(d!.checks.find((x) => /rolling what it carries/.test(x.what))!.says).toMatch(/rolling resistance 0\.2 of its weight on mud/);
+    expect(d!.choices.some((x) => /lies 250 mm deep in it, as in a wheelbarrow/.test(x))).toBe(true);
+  });
+  it('dries only as far as heat and moving air take the water away', () => {
+    const [d] = designs(go('a cabinet that dries soaked boots at 40°C in under 3 hours and uses less than 200 W'), 1, { seed: 101, physics: J });
+    const dry = d!.checks.find((x) => /it dries what is put in it/.test(x.what))!;
+    expect(dry.ok).toBe(false);
+    expect(dry.says).toMatch(/2\.41 MJ\/kg at 40 °C/);
+    expect(dry.says).toMatch(/51\.1 g of it a cubic metre/);
   }, 60000);
   it('weighs a bridge without the ends that stand for its banks, framed where a frame is lighter than a sheet', () => {
     const [d] = designs(go('a footbridge that weighs under 5 kg and spans a 3 m wide stream while one 100 kg adult walks across'), 1, { seed: 101, physics: null });

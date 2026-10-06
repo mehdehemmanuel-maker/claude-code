@@ -18,13 +18,14 @@ export const AIR = { rho: 1.204, mu: 1.813e-5 }, WATER = { rho: 998.2, mu: 1.002
 const STRONG = ['steel.a36', 'aluminum.6061-t6', 'composite.cfrp', 'wood.douglas-fir'];
 
 /** Sizes of things everyone names, so "the size of a tardigrade" or "as big as the Earth" is a length, with its source. */
-export const NAMED_SIZES: [RegExp, number, string][] = [
+/** Each: what names it, its length (m), its source, and where kept its three sizes, m. */
+export const NAMED_SIZES: [RegExp, number, string, [number, number, number]?][] = [
   [/\b(the )?earth\b/, 1.2742e7, 'the Earth, 12,742 km across (mean radius 6,371 km, IUGG)'], [/\b(the )?moon\b/, 3.4748e6, 'the Moon, 3,475 km across (NASA)'], [/\b(the )?sun\b/, 1.3927e9, 'the Sun, 1.39 million km across (IAU nominal radius 695,700 km)'],
   [/\bjupiter\b/, 1.3982e8, 'Jupiter, 139,820 km across (NASA)'], [/\bmars\b/, 6.779e6, 'Mars, 6,779 km across (NASA)'], [/\bvenus\b/, 1.2104e7, 'Venus, 12,104 km across (NASA)'],
   [/\b(water ?bears?|tardigrades?)\b/, 5e-4, 'a tardigrade, about 0.5 mm long (adults 0.05 to 1.2 mm)'], [/\b(dust ?mites?)\b/, 3e-4, 'a dust mite, about 0.3 mm long'], [/\b(red )?blood cells?\b/, 8e-6, 'a red blood cell, about 8 µm across'],
   [/\bbacteri(a|um)\b/, 2e-6, 'a bacterium, about 1 to 2 µm long (E. coli)'], [/\bvirus(es)?\b/, 1e-7, 'a virus, about 100 nm across'], [/\batoms?\b/, 1e-10, 'an atom, about 0.1 nm across'], [/\b(human )?hairs?\b/, 7e-5, 'a human hair, about 70 µm thick'],
   [/\bgrains? of sand\b|\bsand grains?\b/, 5e-4, 'a grain of sand, 0.06 to 2 mm (0.5 mm taken)'], [/\bants?\b/, 5e-3, 'an ant, about 5 mm long'], [/\b(honey ?)?bees?\b/, 1.2e-2, 'a honey bee, about 12 mm long'], [/\bmosquito(es)?\b/, 5e-3, 'a mosquito, about 5 mm long'],
-  [/\bsugar cubes?\b/, 1.6e-2, 'a sugar cube, about 16 mm on a side'], [/\bcoins?\b/, 2.4e-2, 'a coin, about 24 mm across'], [/\bcredit[- ]cards?\b/, 8.56e-2, 'a credit card, 85.60 × 53.98 mm (ISO/IEC 7810 ID-1)'], [/\bmicro ?sd( cards?)?\b/, 1.5e-2, 'a microSD card, 15 × 11 × 1 mm (SD Association)'],
+  [/\bsugar cubes?\b/, 1.6e-2, 'a sugar cube, about 16 mm on a side', [0.016, 0.016, 0.016]], [/\bcoins?\b/, 2.4e-2, 'a coin, about 24 mm across'], [/\bcredit[- ]cards?\b/, 8.56e-2, 'a credit card, 85.60 × 53.98 × 0.76 mm (ISO/IEC 7810 ID-1)', [0.0856, 0.05398, 0.00076]], [/\bmicro ?sd( cards?)?\b/, 1.5e-2, 'a microSD card, 15 × 11 × 1 mm (SD Association)', [0.015, 0.011, 0.001]],
   [/\borange pi 5\b/, 1e-1, 'an Orange Pi 5 board, 100 × 62 mm (its maker\'s sheet)'], [/\braspberry pi\b/, 8.5e-2, 'a Raspberry Pi board, 85 × 56 mm (its maker\'s sheet)'], [/\bfists?\b/, 1e-1, 'a fist, about 100 mm'], [/\b(phone|smartphone)s?\b/, 1.5e-1, 'a phone, about 150 mm long'],
   [/\b(person|human|man|woman|adult)\b/, 1.75, 'a person, about 1.75 m tall'], [/\bcars?\b/, 4.5, 'a car, about 4.5 m long'], [/\bbus(es)?\b/, 12, 'a bus, about 12 m long'], [/\bhouses?\b/, 10, 'a house, about 10 m'], [/\b(football|soccer) (field|pitch)\b/, 105, 'a football pitch, 105 m long (FIFA)'],
   [/\b(skyscraper|tower)s?\b/, 300, 'a tall tower, about 300 m'], [/\bmount everest\b|\bmountains?\b/, 8849, 'Mount Everest, 8,849 m high'], [/\bcit(y|ies)\b/, 1e4, 'a city, about 10 km across'], [/\bcontinents?\b/, 5e6, 'a continent, about 5,000 km across'],
@@ -47,7 +48,7 @@ const lenSay = (v: number) => (v >= 1e3 ? `${fmt(v / 1e3)} km` : v >= 1 ? `${fmt
 const timeSay = (s: number) => (s >= 3.156e7 ? `${fmt(s / 3.156e7)} year${fmt(s / 3.156e7) === '1' ? '' : 's'}` : s >= 86400 ? `${fmt(s / 86400)} day${fmt(s / 86400) === '1' ? '' : 's'}` : s >= 3600 ? `${fmt(s / 3600)} h` : s >= 1 ? `${fmt(s)} s` : s >= 1e-3 ? `${fmt(s * 1e3)} ms` : s >= 1e-6 ? `${fmt(s * 1e6)} µs` : `${fmt(s * 1e9)} ns`);
 
 /** The groups at size L (m), moving at v (m/s) where it moves, turning at w (rad/s) where it turns. */
-export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; swims?: boolean; /** it is in a liquid (blood, water) */ immersed?: boolean } = {}): SizeReading {
+export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; swims?: boolean; /** it is in a liquid (blood, water) */ immersed?: boolean; /** it moves or turns by a motor */ driven?: boolean } = {}): SizeReading {
   const ms = best(), top = ms[0]!, steel = ms.find((x) => x.id === 'steel.a36')!, groups: Group[] = [], must: string[] = [];
   // self-weight: how much of its strength a thing L tall spends holding itself up (a column of it: ρ g L / σ)
   const sw = (top.rho * g * L) / top.sy;
@@ -86,7 +87,7 @@ export function sizeAt(L: number, o: { v?: number; w?: number; flies?: boolean; 
   // a rough crossing: it moves with the field and the current density taken, so it is said to one figure
   const Lr = +Lx.toPrecision(1);
   groups.push({ key: 'actuation', name: 'magnetic against electrostatic force', value: L / Lx, at: 1, past: L < Lx, says: `${fmt(L / Lx)} of the size where they are about equal, near ${lenSay(Lr)} (a rough crossing: it moves with the breakdown field and the current density taken): ${L < Lx ? 'electrostatic and piezoelectric drives are stronger than any coil this small' : 'coils and magnets are stronger than charges'}` });
-  if (L < Lx) must.push(`below about ${lenSay(Lr)} its motor would better be electrostatic (a comb drive) or piezoelectric than a coil and magnet: no motor kept is either`);
+  if (L < Lx && o.driven !== false) must.push(`below about ${lenSay(Lr)} its motor would better be electrostatic (a comb drive) or piezoelectric than a coil and magnet: no motor kept is either`);
   // light: how long a signal takes to cross it
   // against the time it takes to do what it does (a turn, or crossing its own size at its speed): a delay that is a
   // small part of that is made up by timing; one that is not cannot be
