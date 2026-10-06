@@ -37,6 +37,11 @@ export interface Said {
   /** it is buried (under regolith, soil); the shield round it, kg and of what */ buried?: boolean; shield?: { kg: number; of: string };
   /** it has a vacuum wall */ vacuumWall?: boolean; burrows?: boolean; /** it waters what grows in it, over so much soil, m² */ waters?: boolean; waterArea?: number;
   /** how long it must keep, s; what it has to do it in, s; its walls' thickness, m; it is worked by hand; what it holds, m³ */ keepFor?: number; within?: number; wall?: number; human?: boolean; volume?: number;
+  /** the words asked, for what a law needs to know of what it is */ words?: string; /** a journey said in legs, each so far at its own speed (m/s), on water or not; the most it may squeeze with, N; the people it seats */ legs?: { d: number; v?: number; water?: boolean }[]; grip?: number; seats?: number;
+  /** a grade it climbs, rise over run; so many of a thing moved in a time (people, litres, kg), per second, with their mass each, kg; how high they are lifted, m; a sail's distance in from the Sun, m */ grade?: number; flow?: { n: number; per: number; kg: number; what: string }; lift?: number; rSun?: number;
+  /** a force a hand puts on its handle, N; a pull on a part, N; its rim's top speed, m/s */ effort?: number; pull?: number; rimMax?: number;
+  /** what hits it or what it throws: its speed, mass, what it is, whether it throws it, how many */ hit?: { v: number; m?: number; what: string; fires: boolean; n?: number };
+  /** what it spans has nothing to stand in (a deep fjord): it spans it all at once */ clearSpan?: boolean; /** the span said, m */ span?: number;
   /** whether it is said to run on power it carries (a battery, cells, fuel, a charge); false where nothing says so and it is part of something else that powers it */ ownPower?: boolean;
   /** the least its contents may cool to, °C; an area of it (panels, sail), m²; energy it stores, J; how far it must go, m */ tmin?: number; area?: number; store?: number; distance?: number;
 }
@@ -64,8 +69,8 @@ export function bounds(s: Said): Bound[] {
   const area = s.slender && W ? Math.PI * (W / 8) * W : s.round && W ? Math.PI * W * W : W && D && H ? 2 * (W * D + W * H + D * H) : undefined, vol = s.slender && W ? (Math.PI * (W / 8) ** 2 * W) / 4 : s.round && W ? (Math.PI * W ** 3) / 6 : W && D && H ? W * D * H : undefined, Lc = H ?? W;
   // what its surface sheds at T °C: in air by convection and radiation, in vacuum by radiation alone, to what is round it: on
   // Europa its ground, about 110 K at the equator (as Wikipedia's Europa article gives it), else a room's 20 °C
-  const SINK = s.on === 'europa' ? -163 : AMBIENT, sinkSays = s.on === 'europa' ? "Europa's ground round it at about -163 °C (110 K at its equator, as Wikipedia's Europa article gives it)" : `surroundings at ${AMBIENT} °C`;
-  const SB = 5.670374419e-8, shed = (T: number) => (s.vacuum ? 0.9 * SB * area! * ((T + 273.15) ** 4 - (SINK + 273.15) ** 4) : heatLoss(T, area!, Lc!, 0.9));
+  const AIRT = s.Tamb ?? AMBIENT, SINK = s.on === 'europa' ? -163 : AIRT, sinkSays = s.on === 'europa' ? "Europa's ground round it at about -163 °C (110 K at its equator, as Wikipedia's Europa article gives it)" : `surroundings at ${AMBIENT} °C`;
+  const SB = 5.670374419e-8, shed = (T: number) => (s.vacuum ? 0.9 * SB * area! * ((T + 273.15) ** 4 - (SINK + 273.15) ** 4) : heatLoss(T, area!, Lc!, 0.9, AIRT));
   // a radio: what it draws sending so much, at so many joules a bit, unless what it draws is said; and its antenna
   if (s.radio && s.rate !== undefined) {
     const Pr = s.rate * RADIO_J_PER_BIT; if (!s.power?.some((x) => x.as === 'draws')) s.power = [...(s.power ?? []), { W: Pr, as: 'draws' }];
@@ -81,11 +86,13 @@ export function bounds(s: Said): Bound[] {
   if (heat !== undefined && area !== undefined && Lc && !s.burrows && !s.buried) {
     const cap = s.tmax !== undefined ? shed(s.tmax) : undefined;
     // where it settles: found by halving between the room and far above it
-    const T0 = s.vacuum ? SINK : AMBIENT; let lo = T0, hi = T0 + 1; while (shed(hi) < heat && hi < 1e5) hi = T0 + (hi - T0) * 2; for (let k = 0; k < 100; k++) { const mid = (lo + hi) / 2; if (shed(mid) < heat) lo = mid; else hi = mid; }
+    const T0 = s.vacuum ? SINK : AIRT; let lo = T0, hi = T0 + 1; while (shed(hi) < heat && hi < 1e5) hi = T0 + (hi - T0) * 2; for (let k = 0; k < 100; k++) { const mid = (lo + hi) / 2; if (shed(mid) < heat) lo = mid; else hi = mid; }
     const T = (lo + hi) / 2, perM2 = heat / area;
     // past its limit: the size of the same shape that would shed it there (its surface grows as the square of its size)
     const grow = cap !== undefined && cap < heat ? Math.sqrt(heat / cap) : 1;
-    out.push({ what: `it sheds the ${fmt(heat)} W it turns to heat${s.tmax !== undefined ? ` at no more than ${s.tmax} °C` : ''}`, ok: cap === undefined ? null : cap >= heat, says: `its ${fmt(area * 1e4)} cm² of ${s.round ? 'round ' : ''}surface${thick} (${fmt(perM2)} W on each square metre) sheds ${cap !== undefined ? `${fmt(cap)} W at ${s.tmax} °C` : 'it'} ${s.vacuum ? `in vacuum by radiation alone (emissivity 0.9, to ${sinkSays})` : `into still air at ${AMBIENT} °C (natural convection and radiation, emissivity 0.9)`}; left so, it settles near ${T - T0 < 0.01 ? `${T0} °C, ${fmt(T - T0)} K above it` : `${fmt(T)} °C`}${s.vacuum && SINK < -55 ? `${T >= -55 && T <= 125 ? ', within the −55 to +125 °C military-grade parts are rated for (estimate)' : ''}; switched off, it falls toward the ${SINK} °C round it: kept warm then by a heater or a radioisotope heater unit, not kept` : ''}${P('gives') !== undefined && P('draws') === undefined ? ` (the heat is what it loses passing on ${fmt(P('gives')!)} W at 95% (estimate))` : ''}${grow > 1 ? `: it needs ${fmt(grow * grow)} times the surface, so the same shape ${fmt(grow)} times as big, ${lenSay(grow * (W ?? 0))} across where it is ${lenSay(W ?? 0)}; or air blown over it (a fan: a few times what still air takes, estimate)` : ''}` });
+    // kept above a temperature by the heat it makes ("keeps every hold above 5 °C on 300 W"), where nothing says how long
+    const warmBy = s.tmin !== undefined && s.keepFor === undefined && s.tmax === undefined;
+    out.push({ what: warmBy ? `the ${fmt(heat)} W keeps it above ${s.tmin} °C in ${AIRT} °C air` : `it sheds the ${fmt(heat)} W it turns to heat${s.tmax !== undefined ? ` at no more than ${s.tmax} °C` : ''}`, ok: warmBy ? T >= s.tmin! : cap === undefined ? null : cap >= heat, says: `${P('draws') === undefined && P('gives') !== undefined ? `the 5% it loses of the ${fmt(P('gives')!)} W it gives (95% through, estimate); ` : ''}its ${fmt(area * 1e4)} cm² of ${s.round ? 'round ' : ''}surface${thick} (${fmt(perM2)} W on each square metre) sheds ${cap !== undefined ? `${fmt(cap)} W at ${s.tmax} °C` : 'it'} ${s.vacuum ? `in vacuum by radiation alone (emissivity 0.9, to ${sinkSays})` : `into still air at ${AIRT} °C (natural convection and radiation, emissivity 0.9)`}; left so, it settles near ${T - T0 < 0.01 ? `${T0} °C, ${fmt(T - T0)} K above it` : `${fmt(T)} °C`}${s.vacuum && SINK < -55 ? `${T >= -55 && T <= 125 ? ', within the −55 to +125 °C military-grade parts are rated for (estimate)' : ''}; switched off, it falls toward the ${SINK} °C round it: kept warm then by a heater or a radioisotope heater unit, not kept` : ''}${P('gives') !== undefined && P('draws') === undefined ? ` (the heat is what it loses passing on ${fmt(P('gives')!)} W at 95% (estimate))` : ''}${grow > 1 ? `: it needs ${fmt(grow * grow)} times the surface, so the same shape ${fmt(grow)} times as big, ${lenSay(grow * (W ?? 0))} across where it is ${lenSay(W ?? 0)}; or air blown over it (a fan: a few times what still air takes, estimate)` : ''}` });
   }
   // energy carried: so many watts for so long, against what cells of its size and weight hold
   const run = P('draws') ?? P('gives') ?? P('makes');
@@ -261,6 +268,14 @@ function more(s: Said, W: number | undefined, D: number | undefined, H: number |
     const cellSays = run0 === undefined ? '' : `; cells in 40% of it (estimate) give ${fmt(run0 * 1000)} mW for the ${timeSay(s.runFor!)} asked: ${run0 < P ? 'less than even this, with nothing lost: no cell kept can' : run0 < 3 * P ? 'barely this, and its actuators lose most of what they draw (about a third reaching the ground at best, estimate): it cannot' : `${fmt(run0 / P)} times this`}`;
     out.push({ what: `pushing through the ground at ${fmt(s.v * 3600)} m/h`, ok: run0 === undefined ? null : run0 >= 3 * P ? null : false, says: `wet clay pushes back about 0.3 MPa ahead of it (cone resistance, estimate) over its ${lenSay(d)} tip (taken as an eighth of its length, estimate): ${fmt(F)} N; and dragging half its skin along the burrow against about 20 kPa (the strength of soft clay, estimate), ${fmt(skin)} N more: ${fmt(P * 1000)} mW at its speed at the least, before what anchors it and its actuators lose${cellSays}` });
   }
+  // one span longer than beams reach: hung from cables, which carry their own weight over it with a sag a tenth of it,
+  // σ = ρ g L² / 8 d = 1.25 ρ g L, and the deck and what crosses it, about twice the cables' own weight (estimate), at
+  // high-strength wire's 1770 MPa over a margin of 2.2 (estimate); against the longest span built, 2023 m (the 1915
+  // Çanakkale Bridge, as Wikipedia gives it)
+  if (s.span !== undefined && s.span > 300) {
+    const self = 1.25 * 7850 * 9.80665 * s.span, all = 3 * self, allow = 1770e6 / 2.2;
+    out.push({ what: `one span of ${lenSay(s.span)}`, ok: all <= allow ? null : false, says: `${s.clearSpan ? 'nothing stands in what it spans, so ' : ''}${lenSay(s.span)} in one is past what beams or arches reach: it hangs from cables, which carry their own weight over it, a tenth of it sag: ${fmt(self / 1e6)} MPa in steel wire by that alone (1.25 ρ g L), about ${fmt(all / 1e6)} MPa with its deck and what crosses it (about twice the cables' weight, estimate), against ${fmt(allow / 1e6)} MPa (1770 MPa wire over a margin of 2.2, estimate)${all > allow ? `: past what steel wire carries; it wants a lighter, stronger cable (carbon fibre, estimate) or a pier` : ''}; the longest span built is 2023 m (the 1915 Çanakkale Bridge, as Wikipedia gives it)${s.span > 2023 ? `, ${fmt(s.span / 2023)} times less` : ''}` });
+  }
   // deep under water: the pressure there, ρ g h, and a sphere of titanium (Ti-6Al-4V, its yield over 1.5) holding a volume
   // against it, its wall thick (Lamé: the most stress, at its inside, 3 p r_o³ / 2 (r_o³ − r_i³))
   if (s.depth !== undefined) {
@@ -307,5 +322,71 @@ function more(s: Said, W: number | undefined, D: number | undefined, H: number |
     const days = (s.runFor ?? s.keepFor ?? 7 * 86400) / 86400, lo = soil * 3 * days, hi = soil * 6 * days;
     out.push({ what: 'its tank waters it for the time asked', ok: V === undefined ? null : V * 1000 >= hi, says: `${fmt(soil * 1e4)} cm² of soil loses about 3 to 6 mm of water a day in summer sun (evapotranspiration, estimate): ${fmt(lo)} to ${fmt(hi)} L over ${fmt(days)} days${V !== undefined ? ` against the ${fmt(V * 1000)} L it holds` : ''}` });
   }
+  const g0 = 9.80665, P0 = s.power?.find((x) => x.as === 'draws')?.W ?? s.power?.find((x) => x.as === 'gives')?.W;
+  // what hits it: its energy ½ m v² and its momentum m v; over a contact of about a millisecond (a hard hit, estimate) its
+  // peak force about 2 m v / τ, as it bounces; a heavy one stopped within 100 mm (a rail that gives, estimate) pushes E / d
+  if (s.hit && !s.hit.fires && s.hit.m !== undefined) {
+    const { v, m, what } = s.hit, E = 0.5 * m * v * v, p = m * v, light = m < 5;
+    out.push({ what: `${what} hitting it at ${fmt(v * 3.6)} km/h`, ok: null, says: `${fmt(m)} kg at ${fmt(v)} m/s carries ${fmt(E)} J and ${fmt(p)} N·s; ${light ? `bouncing off in about a millisecond (a hard hit, estimate) it strikes with about ${fmt((2 * p) / 1e-3 / 1000)} kN at its peak, on a spot a few centimetres across` : `stopped within 100 mm (a rail that gives, estimate) it pushes about ${fmt(E / 0.1 / 1000)} kN, ${fmt(E / 0.05 / 1000)} kN within 50 mm: what it hits must give that far, or take that much`}; what is made is not run against it` });
+  }
+  // what it throws: so many of them, each ½ m v², stored and let go; wound by a hand at the force said on a crank about
+  // 150 mm long (estimate): the turns that takes, at half of it reaching the balls (estimate)
+  if (s.hit?.fires && s.hit.m !== undefined) {
+    const n = s.hit.n ?? 1, E1 = 0.5 * s.hit.m * s.hit.v ** 2, E = n * E1, turn = s.effort !== undefined ? s.effort * 2 * Math.PI * 0.15 : undefined;
+    out.push({ what: `throwing ${n > 1 ? `${n} of them` : 'it'} at ${fmt(s.hit.v * 3.6)} km/h`, ok: null, says: `${s.hit.what} at ${fmt(s.hit.v)} m/s carries ${fmt(E1)} J; ${n > 1 ? `${n} of them ${fmt(E)} J` : ''}${turn !== undefined ? `; a hand at ${fmt(s.effort!)} N on a crank 150 mm long (estimate) puts in ${fmt(turn)} J a turn: about ${fmt(Math.ceil(E / (0.5 * turn)))} turns, half of it reaching the balls (a spring or a flywheel and its catch, estimate)` : ''}; what stores it and lets it go is not made` });
+  }
+  // a flywheel that stores what it runs on, its rim no faster than said: ½ m v² at its rim (a ring, all its mass there)
+  if (s.rimMax !== undefined && P0 !== undefined && s.runFor !== undefined) {
+    const E = (P0 * s.runFor) / (0.9 * 0.9), m = (2 * E) / s.rimMax ** 2, kids = s.payload !== undefined ? 0.5 * s.payload * s.rimMax ** 2 : undefined;
+    out.push({ what: `a flywheel stores ${fmt(P0)} W for ${timeSay(s.runFor)} with its rim under ${fmt(s.rimMax)} m/s`, ok: false, says: `${fmt(E / 1000)} kJ (${fmt(E / 3600)} Wh, through a generator and a converter at 90% each, estimate) at ${fmt(s.rimMax)} m/s at its rim takes ${fmt(m / 1000)} t of ring there (½ m v², all its mass at its rim)${kids !== undefined ? `; ${fmt(s.payload!)} kg riding at that speed hold only ${fmt(kids / 1000)} kJ` : ''}: a flywheel that slow cannot hold it; a battery charged by what turns it, about ${fmt((E / 3600 / 250) * 1000)} g of lithium-ion cells (250 Wh/kg, estimate), can` });
+  }
+  // lifting a flow: so many kilograms a second up so high, ṁ g h, before what the pump or the cable loses
+  if (s.flow && s.lift !== undefined) {
+    const mdot = (s.flow.n * s.flow.kg) / s.flow.per, P = mdot * g0 * s.lift, eff = s.human ? 0.5 : 0.7;
+    out.push({ what: `lifting ${s.flow.n} ${s.flow.what} ${s.flow.per === 3600 ? 'an hour' : s.flow.per === 86400 ? 'a day' : 'a minute'} ${lenSay(s.lift)}`, ok: P0 === undefined ? null : P / eff <= P0, says: `${fmt(mdot)} kg a second up ${lenSay(s.lift)} is ${fmt(P)} W (ṁ g h), ${fmt(P / eff)} W at ${eff * 100}% (a ${s.human ? 'hand pump' : 'drive and its cable or pump'}, estimate)${P0 !== undefined ? ` against the ${fmt(P0)} W said` : ''}${/litre|liter|l$/.test(s.flow.what) && s.lift > 8 ? `; water is lifted by suction no more than about 8 m (10.3 m at best, the air's push): from deeper, the pump must sit down the well (a rod pump) or lift it on a rope (a rope-and-washer pump)` : ''}${s.light !== undefined || /solar/.test(s.flow.what) ? '' : ''}` });
+  }
+  // so much oxygen put into water a time: a surface aerator puts in about 1 to 2 kg of oxygen for each kilowatt-hour (field
+  // aeration efficiency, estimate)
+  if (s.flow && /oxygen/.test(s.flow.what)) {
+    const kgph = (s.flow.n * s.flow.kg * 3600) / s.flow.per, kWlo = kgph / 2, kWhi = kgph / 1;
+    out.push({ what: `putting ${fmt(kgph)} kg of oxygen an hour into the water`, ok: null, says: `at about 1 to 2 kg of oxygen a kilowatt-hour (a surface aerator in the field, estimate) it draws ${fmt(kWlo)} to ${fmt(kWhi)} kW; through a 12 h night that is ${fmt(kWlo * 12)} to ${fmt(kWhi * 12)} kWh of cells, about ${fmt((kWlo * 12) / 0.25)} to ${fmt((kWhi * 12) / 0.25)} kg of lithium-ion (250 Wh/kg, estimate), and by day about ${fmt((kWlo * 24) / (0.2 * 5))} to ${fmt((kWhi * 24) / (0.2 * 5))} m² of panels to fill them and run it (20%, about 5 h of full sun a day, estimate)` });
+  }
+  // going so far at a speed on a road: rolling and air, F = Crr m g + ½ ρ CdA v² (Crr 0.012 for car tyres, CdA 0.6 m² for a
+  // small car, estimate), over the distance; up a grade, m g v sin θ more
+  const vehicle = /\b(car|cars|van|truck|bike|bicycle|scooter|trike|cart|kart|buggy)\b/.exec(s.words ?? '')?.[1];
+  if (vehicle && s.distance !== undefined && s.v !== undefined) {
+    const bike = /bike|bicycle|scooter|trike/.test(vehicle), mv = s.massLimit ?? (bike ? 25 : 1200), riders = s.seats !== undefined ? 0 : bike ? 80 : 160, m = mv + (s.payload ?? 0) + riders, Crr = bike ? 0.008 : 0.012, CdA = 0.6;
+    // a journey in legs, each at its own speed; on water a hull at its displacement holds about 1.34 √(waterline in feet)
+    // knots (the hull-speed rule, 1.25 √L m/s): past it the hull climbs its own bow wave and must plane, about 0.12 of its
+    // weight against it near the hump (estimate); under it about 0.02 (estimate); 50% from shaft to water (estimate)
+    const legs = s.legs && s.legs.length > 1 && s.legs.every((l) => l.v !== undefined) ? s.legs : [{ d: s.distance, v: s.v, water: false }];
+    const Lw = bike ? 2 : 4.5, vHull = 1.25 * Math.sqrt(Lw), kn = (v: number) => `${fmt(v / 0.51444)} knots`, says: string[] = [];
+    let cells = 0;
+    for (const l of legs) {
+      const v = l.v!;
+      if (l.water) {
+        const plane = v > vHull, R = (plane ? 0.12 : 0.02) * m * g0, E = (R * l.d) / 0.5; cells += E / 0.85;
+        says.push(`${lenSay(l.d)} on the water at ${kn(v)}: ${plane ? `past the ${kn(vHull)} a hull ${lenSay(Lw)} long (estimate) holds before it climbs its own bow wave (1.34 √(waterline in feet) knots, the hull-speed rule), so it must plane, about 0.12 of its weight against it near the hump (estimate)` : `under the ${kn(vHull)} its hull holds (the hull-speed rule), about 0.02 of its weight against it (estimate)`}: ${fmt(R)} N, ${fmt((R * v) / 0.5 / 1000)} kW at the shaft at 50% through a jet or propeller (estimate), ${fmt(E / 3.6e6)} kWh`);
+      } else { const F = Crr * m * g0 + 0.5 * 1.204 * CdA * v ** 2, E = F * l.d; cells += E / 0.85; says.push(`${lenSay(l.d)} at ${fmt(v * 3.6)} km/h: ${fmt(F)} N, ${fmt((F * v) / 1000)} kW, ${fmt(E / 3.6e6)} kWh at the wheels`); }
+    }
+    out.push({ what: `going ${legs.map((l) => `${lenSay(l.d)} at ${l.water ? kn(l.v!) : `${fmt(l.v! * 3.6)} km/h`}`).join(' and then ')}`, ok: null, says: `${fmt(m)} kg in all (${s.seats !== undefined ? `${s.seats} people of about 80 kg` : bike ? 'a rider of about 80 kg' : 'two of about 80 kg'}${s.payload !== undefined && s.seats === undefined ? `, ${fmt(s.payload)} kg it carries` : ''} and itself at ${fmt(mv)} kg, estimate) on rolling resistance ${Crr} (estimate) and ${CdA} m² of drag area (estimate): ${says.join('; ')}: about ${fmt(cells / 3.6e6)} kWh from its cells at 85% (estimate), ${fmt(cells / 3.6e6 / 0.16)} kg of lithium-ion cells packed at 160 Wh/kg (estimate)` });
+  }
+  if (vehicle && s.grade !== undefined && s.v !== undefined) {
+    const bike = /bike|bicycle|scooter|trike/.test(vehicle), m = (s.massLimit ?? (bike ? 25 : 1200)) + (s.payload ?? 0) + (bike ? 80 : 0), th = Math.atan(s.grade), P = m * g0 * s.v * (Math.sin(th) + 0.01 * Math.cos(th));
+    out.push({ what: `climbing a ${fmt(s.grade * 100)}% grade at ${fmt(s.v * 3.6)} km/h`, ok: null, says: `${fmt(m)} kg${bike ? ' (with a rider of about 80 kg, estimate)' : ''} up ${fmt((th * 180) / Math.PI)}° at ${fmt(s.v)} m/s takes ${fmt(P)} W (m g v (sin θ + 0.01 cos θ)), before its drive loses any${bike ? `; a rider keeps up about 100 to 200 W (estimate), and an electric bike's motor is held to 250 W where it is sold as a bicycle (EU 2002/24/EC, estimate)` : ''}` });
+  }
+  // up on foils at a speed: its weight carried at a lift-to-drag L/D, the drag it must be pushed against at that speed, P η =
+  // m g v / (L/D): the L/D it needs on the power said, at 85% through its propeller (estimate)
+  if (/\bfoils?\b|\bhydrofoil/.test(s.words ?? '') && s.v !== undefined && P0 !== undefined) {
+    const m = (s.payload ?? 80) + 20, need = (m * g0 * s.v) / (P0 * 0.85);
+    out.push({ what: `kept up on its foils at ${fmt(s.v * 3.6)} km/h on ${fmt(P0)} W`, ok: null, says: `${fmt(m)} kg (a rider of about 80 kg and the craft about 20, estimate) at ${fmt(s.v)} m/s on ${fmt(P0)} W through a propeller at 85% (estimate) needs a lift-to-drag of ${fmt(need)} over all of it, foils and struts and propeller: ${need > 20 ? 'past what small foils give (about 10 to 20, estimate): it cannot' : need > 12 ? 'near the best small foils give (about 10 to 20, estimate): it might, finely made' : 'within what small foils give (about 10 to 20, estimate)'}; taking off, through the hump before it rises, takes more` });
+  }
+  // a sail near the Sun: how hot it settles, α S / (σ (ε front + ε back)), aluminised in front (α 0.1, ε 0.05) and dark behind
+  // (ε 0.6) (estimate), against the polyimide film's 400 °C or so (estimate)
+  if (s.sail && s.rSun !== undefined) {
+    const r = s.rSun / 1.496e11, S = 1361 / (r * r), T = Math.pow((0.1 * S) / (5.670374419e-8 * 0.65), 0.25) - 273.15;
+    out.push({ what: `its sail at ${fmt(r)} AU from the Sun`, ok: T < 400 ? null : false, says: `the light there is ${fmt(S)} W/m² (1361 W/m² at 1 AU, 1 / r²); aluminised in front (absorbing 0.1, emissivity 0.05) and dark behind (emissivity 0.6) (estimate) it settles near ${fmt(T)} °C${T < 400 ? ', under the 400 °C or so a polyimide film bears (estimate), not that of a polyester one (about 150 °C)' : ': past what any film kept bears'}; tilted from the light it runs cooler and pushes less` });
+  }
+
   return out;
 }
