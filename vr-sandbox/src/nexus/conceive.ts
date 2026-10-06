@@ -1613,7 +1613,7 @@ way({
     const low = n.want.q.low?.v ?? 0, Hp = low + L + 0.05 + 0.05, mem = memberFor(mt, 'square', ((rides * G) / 2) * 1.5, Hp), sp = mem.size;
     let yb = c.y0;
     // the base as deep as a third of the posts' height at least, so a push at their top of a tenth of the weight does not tip it
-    const w0 = c.why, bw = W + 2 * sp + Math.min(0.1, W / 3), bt = Math.max(0.003, Math.min(0.012, (0.012 * W) / 0.3)), bd = Math.max(D, Hp / 3);
+    const w0 = c.why, bw = Math.max(W + 2 * sp + Math.min(0.1, W / 3), n.on ? 0 : Hp / 3), bt = Math.max(0.003, Math.min(0.012, (0.012 * W) / 0.3)), bd = Math.max(D, Hp / 3);
     if (!n.on) { c.why = 'to stand the posts on the floor and tie them together'; box(c, 'base', 'steel.a36', X, yb + bt / 2, Z, bw, bd, bt, 'base', 'on the floor, under the posts', `a ${len(bt)} steel plate as wide as the posts and what rides between them: its size is theirs, its thickness a twenty-fifth of its width between 3 and 12 mm, taken, not derived`); yb += bt; c.choices.push(`a ${len(bt)} steel base ${len(bw)} × ${len(bd)} under it all (${+(bw * bd * bt * matterOf('steel.a36').density).toPrecision(3)} kg; its thickness taken, not derived)`); }
     c.why = 'to guide the carriage up and down';
     for (const [i, sx] of [-1, 1].entries()) upright(c, `post${i + 1}`, mt, 'square', mem, X + sx * (W / 2 + sp / 2), yb, Z, Hp, `${sx < 0 ? 'left' : 'right'} of the carriage, on ${n.on ? 'what it stands on' : 'the base'}`, `the least square bar of ${matterOf(mt).name} that carries half of what rides by three: ${mem.says}`);
@@ -1625,7 +1625,8 @@ way({
     c.checks.push(() => ({ what: 'its posts carry what rides without buckling', ok: mem.ok, says: `each carries half of ${+rides.toPrecision(3)} kg (what rides and the carriage), half again: ${mem.says}` }));
     c.tests.push({ kind: 'raise', name: cn, L });
     if (low) c.choices.push(`its lowest at ${len(low)} up (${n.want.q.low!.grounds}), its highest ${len(low + L)}`);
-    c.top = { y: yb + 0.002 + low + cw, w: W, d: D, name: cn }; c.foot = [W + 2 * sp + (n.on ? 0 : Math.min(0.1, W / 3)), n.on ? D : bd];
+    if (!n.on && Hp > 1) c.gaps.push(`standing alone, its ${len(Hp)} posts want a base ${len(Hp / 3)} each way not to tip; braced to a wall or a beam above, it could stand on less`);
+    c.top = { y: yb + 0.002 + low + cw, w: W, d: D, name: cn }; c.foot = [n.on ? W + 2 * sp : bw, n.on ? D : bd];
   },
 });
 
@@ -2771,7 +2772,11 @@ function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], ri
       // so, it is weighed by statics as well, that weight standing on the middle of its foot (as a liquid's does while it
       // stands upright): it tips if the push's moment F h passes m g b / 2
       const off = carried > loadKg + 1e-6, hTop = top.at[1] + top.h / 2 - Math.min(...[...after.values()].map((m) => m.at[1] - m.h / 2)), bw = ax === 'z' ? wz : wx, Mp = F * hTop, Mr = total * G * (bw / 2), stat = off && tip >= (5 * Math.PI) / 180;
-      out.push({ what: stat ? `pushed at its top, it does not tip by statics, though the physics test tips it` : 'pushed at its top, it does not tip', ok: stat ? Mp < Mr : tip < (5 * Math.PI) / 180, says: `pushed at the top of ${top.name.replace(`${prefix}_`, '')} ${ROLLS.has(prefix) ? 'sideways, across the way its wheels roll' : 'across its narrower way'} (${ax}) with a tenth of its weight${Math.max(loadKg, carried) > 0 ? " and its load's" : ''} (${+F.toPrecision(3)} N) for half a second (Jolt), it tilted ${+((tip * 180) / Math.PI).toFixed(1)}° (more than 5° fails)${off ? `; ${+(carried - loadKg).toPrecision(3)} kg of what it carries is counted in the push but not on it, so the push is the harsher for it` : ''}${stat ? `; with that weight standing on the middle of its foot, as a liquid's does while it stands, by statics the push's moment ${+Mp.toPrecision(3)} N·m (F h, ${len(hTop)} up) against ${+Mr.toPrecision(3)} N·m holding it down (m g b / 2, its foot ${len(bw)} across): it ${Mp < Mr ? 'does not tip' : 'tips'}` : ''}` });
+      // and by statics, on what it stands on (its feet, and what stands for the ground or for its stakes): a push held only
+      // half a second may not show a tip that a steady one would
+      const all0 = [...after.values()], yf = Math.min(...all0.map((m) => m.at[1] - m.h / 2)), feet = all0.filter((m) => m.at[1] - m.h / 2 <= yf + 2e-3), ix = ax === 'z' ? 2 : 0, fw = feet.length ? Math.max(...feet.map((m) => m.at[ix]! + [m.w, m.h, m.d][ix]! / 2)) - Math.min(...feet.map((m) => m.at[ix]! - [m.w, m.h, m.d][ix]! / 2)) : bw;
+      const standKg = all0.filter((m) => STANDS.has(m.name)).reduce((a, m) => a + m.mass, 0), MrS = (total + standKg) * G * (fw / 2), statTips = !stat && Mp >= MrS;
+      out.push({ what: stat ? `pushed at its top, it does not tip by statics, though the physics test tips it` : 'pushed at its top, it does not tip', ok: stat ? Mp < Mr : tip < (5 * Math.PI) / 180 && !statTips, says: `pushed at the top of ${top.name.replace(`${prefix}_`, '')} ${ROLLS.has(prefix) ? 'sideways, across the way its wheels roll' : 'across its narrower way'} (${ax}) with a tenth of its weight${Math.max(loadKg, carried) > 0 ? " and its load's" : ''} (${+F.toPrecision(3)} N) for half a second (Jolt), it tilted ${+((tip * 180) / Math.PI).toFixed(1)}° (more than 5° fails)${off ? `; ${+(carried - loadKg).toPrecision(3)} kg of what it carries is counted in the push but not on it, so the push is the harsher for it` : ''}${stat ? `; with that weight standing on the middle of its foot, as a liquid's does while it stands, by statics the push's moment ${+Mp.toPrecision(3)} N·m (F h, ${len(hTop)} up) against ${+Mr.toPrecision(3)} N·m holding it down (m g b / 2, its foot ${len(bw)} across): it ${Mp < Mr ? 'does not tip' : 'tips'}` : ''}${statTips ? `; but by statics the push's moment, ${+Mp.toPrecision(3)} N·m (F h, ${len(hTop)} up), passes the ${+MrS.toPrecision(3)} N·m its weight holds it with over half its foot (${len(fw)} across): held steady, it tips; half a second is too short to show it` : ''}` });
       };
       // in the wind said: ½ ρ v² on the face each part shows across the wind, a slender one's (a bar, a board edge on: five
       // times as long as it is wide there) by a drag coefficient of 2 and any other's by 1.2 (estimate), no more in all than
