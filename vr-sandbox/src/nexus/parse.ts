@@ -49,7 +49,7 @@ const VERB_BASE = new Set(('hold carry move roll spin turn rotate revolve open c
   + 'steer brake land orbit shade block reflect absorb collect generate convert produce sit rain grow drain flow vent breathe sail paddle row pedal wind spool reel stretch '
   + 'bend twist squeeze press clamp hook attach mount hang carry deploy unroll rotate glow blink vibrate hum sing play lift tow haul drag dig drill saw sand polish '
   + 'scan photograph film stream transmit receive charge sleep wake count dose portion fold iron dry wet spray mist heat boil brew bake fry toast chill keep is are be has have survive withstand endure weather resist '
-  + 'span cross reach pack unpack inflate deflate deploy hold carry lift lower haul pull tow store hang open shut cool warm sit stand').split(' '));
+  + 'stay remain assemble pitch span cross reach pack unpack inflate deflate deploy hold carry lift lower haul pull tow store hang open shut cool warm sit stand').split(' '));
 export function isVerb(w: string): boolean {
   if (VERB_BASE.has(w)) return true;
   const tries = [w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'), w.replace(/es$/, ''), w.replace(/s$/, ''), w.replace(/ing$/, ''), w.replace(/ing$/, 'e'), w.replace(/ed$/, ''), w.replace(/ed$/, 'e'), w.replace(/(.)\1(ing|ed)$/, '$1')];
@@ -107,6 +107,14 @@ export function parseAsk(words: string): Parse {
       // a sentence that ends and one that goes on of the same thing ("…without tearing them? It has to close…"): what it
       // does next, its "it" left out
       if ((x.w === '.' || x.w === '?' || x.w === '!') && /^(it|they|this)$/.test(next?.w ?? '') && verbAt(i + 2)) { open('does', x.w, i + 2); clauses.at(-2)!.to = i; i++; continue; }
+      // any other sentence after it says something new: what it does where a verb comes first ("Must hold…") or after
+      // what does it ("One person assembles it"), else another thing said of it ("Panels max 12 kg each")
+      if ((x.w === '.' || x.w === '?' || x.w === '!') && next && word(i + 1) && clauses.length) {
+        if (DOES.has(next.w) || HAS.has(next.w) || FOR.has(next.w) || WHERE.has(next.w) || AND.has(next.w)) continue;
+        if (verbAt(i + 1)) { open('does', x.w, i + 1); continue; }
+        const v = verbAfterThing(i + 1); if (v >= 0) { const c = open('does', x.w, i + 1); c.subj = toks[v - 1]!.w; c.verb = toks[v]!.w; c.verbAt = v; i = v; continue; }
+        open('main', x.w, i + 1); continue;
+      }
       if (x.w === ',' || x.w === ';' || x.w === '(' || x.w === ')') {
         const n2 = next?.w ?? ''; if (DOES.has(n2) || HAS.has(n2) || FOR.has(n2) || WHERE.has(n2) || AND.has(n2)) continue;
         // a list goes on as the clause it is a list of: a verb starts another thing it does, a thing another of the same
@@ -123,11 +131,15 @@ export function parseAsk(words: string): Parse {
     // "to raise a person", "to keep a cat in": what it is for is something it does
     if (x.w === 'to' && next && !next.num && !DET.has(next.w) && next.q === null && isVerb(next.w)) { const c = open('does', 'to', i + 1); c.verb = next.w; c.verbAt = i + 1; i++; continue; }
     if (FOR.has(x.w)) { open('for', x.w, i + 1); continue; }
+    // "capable of cutting and retrieving a core": what it does
+    if (x.w === 'of' && /^(capable|able|incapable)$/.test(toks[i - 1]?.w ?? '') && next && isVerb(next.w)) { const c = open('does', 'of', i + 1); c.verb = next.w; c.verbAt = i + 1; i++; continue; }
     if (WHERE.has(x.w) || x.w === 'to') { open('where', x.w, i + 1); continue; }
     if (AND.has(x.w)) {
       // "and runs a month": another thing it does; "and the whole staircase rotates": another, said of a thing;
       // "and a door": another thing of the same kind, where things are being named; "and the sun": more of the same
       if (next && (DOES.has(next.w) || HAS.has(next.w) || FOR.has(next.w) || WHERE.has(next.w))) continue;
+      // "…that can shed microplastics, and no fixed piles": another thing it must not have, not more of what it does
+      if (next && /^(no|without)$/.test(next.w) && cur.kind === 'does' && !verbAt(i + 2)) { open('main', x.w, i + 1); continue; }
       let k = i + 1; while (toks[k] && word(k) && (SKIP.has(toks[k]!.w) || /ly$/.test(toks[k]!.w))) k++;
       if (verbAt(k)) { open('does', x.w, i + 1); continue; }
       const v = verbAfterThing(i + 1);
