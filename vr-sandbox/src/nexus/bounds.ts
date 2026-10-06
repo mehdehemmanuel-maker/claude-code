@@ -319,6 +319,16 @@ export function bounds(s: Said): Bound[] {
   }
   // a weight spread on its top: p over its plan
   if (s.topP !== undefined) { const pl = s.plan ?? (W && D ? [W, D] : undefined); out.push({ what: `${fmt(s.topP / 1000)} kPa on its top`, ok: null, says: pl ? `over its ${lenSay(pl[0])} × ${lenSay(pl[1])}, ${fmt((s.topP * pl[0] * pl[1]) / 1000)} kN` : 'over what its top is, which is not said' }); }
+  // a crew kept where it stays (no trip said): about 25 m³ of room each for a long stay (NASA's habitable volume studies,
+  // estimate), and about 5 kg a person a day of oxygen, water and food where nothing is recycled (0.84 kg of it oxygen,
+  // NASA's Baseline Values and Assumptions Document, estimate)
+  if (s.crew !== undefined && !s.trip) { const vol = 25 * s.crew, Dm = s.size?.W, Lc = Dm && /\b(cylinder|module|diameter|tube|can)\b/.test(s.words ?? '') ? vol / ((Math.PI * Dm * Dm) / 4) : undefined;
+    out.push({ what: `it keeps a crew of ${s.crew}`, ok: null, says: `about 25 m³ of room each for a long stay (NASA's habitable volume studies, estimate): ${fmt(vol)} m³${Lc !== undefined ? `, which in a ${lenSay(Dm!)} cylinder is ${lenSay(Lc)} of its length` : ''}; and about 5 kg a person a day of oxygen, water and food where nothing is recycled (0.84 kg of it oxygen, NASA BVAD, estimate): ${fmt(5 * s.crew)} kg a day, ${fmt(5 * s.crew * 30)} kg a month${s.massLimit !== undefined ? `, against the ${fmt(s.massLimit)} kg it may weigh in all` : ''}; what recycles them is not weighed` }); }
+  // pushed sideways at so many times its weight ("a 3 g lateral load test"): the push, with what it carries and itself at its
+  // weight limit, held by a frame of two uprights about 1 m tall fixed at their feet (estimate), each taking half of it at
+  // its top (M = F h / 2), and the least tube of aluminium 6061-T6 that bears that at its yield over 1.5
+  if (s.gLoad !== undefined && (s.payload !== undefined || s.massLimit !== undefined)) { const m = (s.payload ?? 0) + (s.massLimit ?? 0), F = s.gLoad * m * g, M = (F * 1) / 2, Sn = M / (276e6 / 1.5), tube = ([[25, 2], [30, 2], [40, 2], [50, 2.5], [60, 3], [76, 3], [89, 3.5], [114, 4]] as const).find(([D0, t0]) => (Math.PI * ((D0 / 1e3) ** 4 - ((D0 - 2 * t0) / 1e3) ** 4)) / (32 * (D0 / 1e3)) >= Sn);
+    out.push({ what: `it bears ${fmt(s.gLoad)} g sideways`, ok: null, says: `${fmt(s.gLoad)} times ${fmt(m)} kg (${s.payload !== undefined ? `the ${fmt(s.payload)} kg it carries` : ''}${s.payload !== undefined && s.massLimit !== undefined ? ' and ' : ''}${s.massLimit !== undefined ? `itself at its ${fmt(s.massLimit)} kg limit` : ''}): ${fmt(F / 1000)} kN; on a frame of two uprights about 1 m tall fixed at their feet (estimate), each takes ${fmt(M)} N·m at its foot, which wants a section of ${fmt(Sn * 1e6)} cm³: ${tube ? `an aluminium 6061-T6 tube of about ${tube[0]} × ${tube[1]} mm` : 'more than the tubes kept here'} (at its yield over 1.5); the frame is not made` }); }
   // sliding slowly: what drives it at that speed, a lead screw of 8 mm a turn on a stepper of 200 steps a turn at 16
   // microsteps (estimates): how fast it turns, how far each microstep moves it and how many a second; what it carries on
   // rolling bearings (a pull of about 0.005 of its weight, estimate) through the screw at about 0.3 (estimate)

@@ -1172,3 +1172,131 @@ Five more fresh judges read the outputs after the fixes above. What they found, 
 - **A stair** (stringers and treads), **a truss** for the rescue bridge, **a frame of tubes** for a walker, **cloth on poles** for a tent, and **a telescoping mast** are the ways most asked for and not kept.
 - **A drive** that raises, tilts or climbs, and **a thermostat** that holds what a heater warms.
 - **Tipping with a person on it,** and loads that push sideways as well as down.
+
+## Wave 6: asks said the way people say them
+
+Five fresh testers with no context each wrote four asks, twenty in all. These were written the way people talk: context first, a sentence at a time, with what may not be used. They were:
+- a hand-cranked hay bale lifter that folds flat;
+- a three-sided goat shelter under snow, no part over 50 lb;
+- a welding cart that must not tip on a slope;
+- a pasture gate that opens for an ATV and holds against cattle;
+- a pop-up school climbing frame;
+- a bike trailer for two children;
+- a treehouse platform on one oak;
+- classroom backpack storage;
+- a flood barrier that rises by itself;
+- a floating dock in a tidal estuary;
+- a greenhouse at −30 °C with no power or fuel;
+- a market stall that stays under 32 °C in 46 °C heat;
+- a camera slider that crawls at 2 mm/s;
+- a foldable 7-inch drone frame;
+- a ball-rolling desk clock on two AA cells;
+- a stair-climbing crawler;
+- a lunar lava-tube habitat module;
+- an emergency shelter at 7,800 m;
+- a deep-sea corer at 400 bar;
+- a Martian airlock door.
+
+| | Read | Made | Holds | Honest |
+|---|---|---|---|---|
+| Wave 6, first run | 0.9 | 0.3 | 0.95 | 2.1 |
+
+### What was wrong, by cause
+
+**Reading what people say.**
+- **Context said first is read after the ask.** In "our front door floods about once a year, so I need…" and "we have a 45 cm oak and want…", the context moves behind what is asked. In "I have a 14 foot gate and I want it to swing open…", the gate is what swings.
+- **Each sentence is a clause of its own.** "No grid power, no burning fuel. Panels max 12 kg each" was one clause read as electronics. Now:
+  - "no power", "no electricity" and "no burning fuel" are a limit checked against what is made (it draws no power);
+  - "one person assembles" and "no tools beyond a drill" are said back;
+  - a figure with the few words that name it ("Snow load 2.4 kPa", "Panels max 12 kg each") is no thing asked.
+- **Units as said:**
+  - a plain "C" is Celsius;
+  - "minus 40" keeps its sign;
+  - psf, pounds of force and dB are read;
+  - a cost is said back, not weighed;
+  - ranges are read at their worst ("6-9 kg" as 9 kg);
+  - "for at least a year" is one year.
+- **What a number is of:**
+  - "max", "min" and "at most" beside a number;
+  - "three 30 kg kids plus an 80 kg parent";
+  - "two 150 lb cylinders plus a 90 lb welder";
+  - "30 cubbies for 9 kg bags", 270 kg on its shelves;
+  - "for two people", now two of them;
+  - stairs at 35°, climbing at 0.15 m/s, crawling at 2 mm/s;
+  - an all-up mass, a drop height and a rotor size;
+  - AA cells and "every minute";
+  - a tide, a chop and a freeboard;
+  - "3 N-m of torque" is a twist, not energy stored.
+- **Words that are not what they look like:**
+  - "hand-carried" is how a thing is carried, not a hand it has;
+  - "tip-proof" and "freestanding" are qualities;
+  - "so it won't wake me" carries no one;
+  - "with a motor", said of what lifts, drives it;
+  - "stays shut" is a latch not made;
+  - "pitched by two people" is who puts it up;
+  - "opens in under 2 minutes" is how long it takes to put up, not a door;
+  - "capable of cutting" is what it does;
+  - "zero hydraulic oil leakage" and "zero visible judder" are said back with what of them is weighed.
+- **Who it is for:**
+  - a cart, trolley or trailer with nothing said to drive it is pushed or towed: no motors, even where a towing speed is said;
+  - "6 people" is a crew kept alive only in a habitat, a craft or a shelter;
+  - a table for 6 seats them, three a side, and bears a person leaning, not six on its top.
+
+**Laws added.**
+- **A glazed house through a cold night with no power.**
+  - Heat goes out through its glazing (NRAES-33's U for twin-wall polycarbonate), round its foot and with its leaking air.
+  - Water could hold the night, but a winter day's sun is short of the whole day's loss. The greenhouse loses 211 kWh a day against the 59 kWh it gathers. To hold, its shell would need about 0.48 W/m² K, which glazing does not reach.
+- **Held in against what is round it.**
+  - The airlock door takes 85.5 kN, and pumping it down 20 times a day takes 256 W against the 50 W said.
+  - The habitat's hoop pull is p r round a cylinder, and its least gauge is weighed against its launch mass. Its thermal swing gives E α ΔT, and the dome-floor uplift is weighed.
+- **A sphere under the sea must not buckle.** Zoelly's 2E(t/R)²/√(3(1−ν²)) is taken with a knockdown of 0.25 (NASA SP-8032 gives 0.14 to 0.3). At 4 km it sets the wall: 4.15% of its radius, more than strength needs.
+- **Other laws:**
+  - wet-bulb cooling (Stull) for a shelter kept below the air with no power;
+  - the push on a flood barrier to each jamb;
+  - holding shut against cattle;
+  - climbing stairs: m g v sin θ, and leaning back by h tan θ;
+  - hovering on four rotors;
+  - a fall from a height;
+  - a slow slide's lead screw and steps;
+  - a ball lifted each minute for a year against two AA cells, 9.9 Wh against 7 Wh.
+  - a crew kept where it stays, about 25 m³ each and 5 kg a person a day with nothing recycled (NASA's habitable volume studies and BVAD, estimates): 100 m³ is 3.54 m of the 6 m habitat;
+  - a push of so many g sideways on a frame, and the least aluminium tube that bears it: the trailer's 3 g is 1.59 kN, a 60 × 3 mm tube for each of two uprights.
+
+**What is made.**
+- **A cloth on a frame of poles, staked to the ground**, is a new way to enclose.
+  - Its poles and eaves are sized for the wind said.
+  - Its stakes are as many as hold it against the wind's lift, each standing in the physics as a block of what a stake holds.
+  - It packs down rather than folding on hinges, and a hung flap is its way in.
+  - The 12 kg market stall now weighs 4.7 kg instead of 429 kg. The 7,800 m shelter weighs 11.6 kg and stands in its wind.
+  - Snow on its roof, a rigid room, or a thing named for its walls keeps a design to sheet.
+- **A dock** is a decked hull, made deep and wide enough heeled with its crowd at one side and clear of half the chop.
+- **A camera slider's carriage** is a light plate with its load put on it, and its rail is checked bending under it. It weighed 16.3 kg; it now weighs 5.6 kg.
+- **A carriage between two posts** is sized to what it carries: 40 mm for the clock's 8 g ball, not 300. Its base is deep enough not to tip.
+- **Sizes to who stands on it.**
+  - Two or more people stand on about 0.3 m² a child and 0.5 m² a grown person. What carries people has deck room for them.
+  - A climbing frame is as high as it may be, and any height taken is kept under a height limit said.
+- **Smaller fixes:**
+  - metal plates bigger than sold are said;
+  - a gate's face is no longer taken for its solar panel.
+
+**Tested in the physics.**
+- **What it does is tested before it is pushed to tip it,** and let settle first. A push that tipped the pump over had left its turning tested where it fell: 0.000014 rpm, now 60.
+- **A raise is pushed up steadily,** enough to rise its travel in 3 s, counting what turns on what rides. Twice its weight had flung the lift's test load 4.9 m into the air.
+- **Other tests:**
+  - a cart on free wheels is pushed sideways to tip it, not along its wheels;
+  - a heavy door is leaned on for as long as it takes to turn.
+
+**Honest ticks.**
+- **A weight said that nothing made is tested with** is not ticked ("carries 4 kg" on the slider, before its rail was checked).
+- **"Weighed below" now names something below that weighs it.** Where nothing does, it says so.
+
+### Checked
+
+- **The gate:** typecheck, and 1056 tests in 95 files. That includes 16 new ones in `tests/nexus/wave6.test.ts`.
+- **The three browser drives** (generate, flows, fold) pass with no script errors.
+- **The everyday set and waves 2, 3 and 4 were rerun.**
+  - Gains: the lift and pump raise their full travel, and the pump turns. The gate and gondola now hold, and the cart with a table holds, pushed across its wheels.
+  - Changes: a raft for two people carries 160 kg, not 80. The drawer's carriage is a plate, not a block.
+- **The twelve folding asks fold as before.**
+  - The picnic table for 6 is now 1.8 m long and holds.
+  - The origami shelter is 2.1 m tall inside, a room people stand in, and so heavier.
