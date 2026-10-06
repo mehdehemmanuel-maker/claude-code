@@ -21,7 +21,7 @@ const t0 = Date.now();
 let J: Jolt | null = null; try { J = (await (await import('jolt-physics/wasm-compat')).default()) as unknown as Jolt; } catch (e) { console.log(`(the physics engine is not here: ${(e as Error).message.split('\n')[0]}; standing, pushing and moving are not tested)`); }
 let c = conceive(words);
 process.on('uncaughtException', (e) => { console.log(`\nTHE GENERATOR FAILED: ${e.message}\n${(e.stack ?? '').split('\n').slice(1, 4).join('\n')}`); if (log) appendFileSync(log, `${JSON.stringify({ at: new Date().toISOString(), words, failed: e.message })}\n`); process.exit(2); });
-console.log(`ASKED: ${words}\nREAD: ${sayConception(c)}`);
+console.log(`ASKED: ${words}\nREAD: ${sayConception(c, { laws: false })}`);
 // the questions: answered as said, or (no one being here to answer) with what it would take, said as taken
 let answers: Record<string, string> = {};
 for (let round = 0; round < 3 && c.questions.length; round++) {
@@ -40,7 +40,7 @@ const ds = designs(c, n, { seed, physics: J, at: [0, 0] });
 // every want barred (by its size, or nothing kept meets it): nothing is made, and why is said
 if (ds.every((d) => d.parts === 0)) { console.log(`NOTHING MADE: ${[...new Set(ds.flatMap((d) => d.gaps))].join('; ')}`); finish(ds); }
 for (const d of ds) {
-  console.log(`\n=== ${d.title}: ${d.ok ? 'WHAT IS MADE HOLDS' : 'WHAT IS MADE DOES NOT HOLD'} · ${d.does[0] === d.does[1] ? 'DOES WHAT WAS ASKED' : `DOES ${d.does[0]} OF ${d.does[1]} THINGS ASKED`}${d.gaps.length ? ' · NOT ALL DERIVED' : ''} — ${d.parts} parts, ${+d.mass.toPrecision(3)} kg, footprint ${d.footprint.map(len).join(' × ')}`);
+  console.log(`\n=== ${d.title}: ${d.ok ? 'WHAT IS MADE HOLDS' : d.holds ? 'WHAT IS MADE HOLDS, BUT NOT TO ALL ITS LIMITS' : 'WHAT IS MADE DOES NOT HOLD'} · ${d.does[0] === d.does[1] ? 'DOES WHAT WAS ASKED' : `DOES ${d.does[0]} OF ${d.does[1]} THINGS ASKED`}${d.gaps.length ? ' · NOT ALL DERIVED' : ''} — ${d.parts} parts, ${+d.mass.toPrecision(3)} kg, footprint ${d.footprint.map(len).join(' × ')}`);
   console.log(`WHAT WAS ASKED:\n  ${d.asked.map((a) => `${a.kind === 'for' ? '·' : a.got || a.met ? '✓' : '✗'} ${a.kind === 'for' ? 'for' : a.kind}: ${a.text}${a.got ? ` → ${a.how ?? a.got}` : a.why ? ` (${a.why})` : ''}`).join('\n  ') || '(nothing said but numbers)'}`);
   if (c.dropped.length) console.log(`NUMBERS NOT USED:\n  ${c.dropped.join('\n  ')}`);
   console.log(`PLAN:\n  ${d.plan.join('\n  ')}`);
