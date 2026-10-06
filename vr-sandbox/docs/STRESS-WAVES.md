@@ -1409,8 +1409,75 @@ Five more fresh judges read the outputs, scoring them 2.85, 0.9, 2.05 and 3.0. E
 - what is still not made: the crank, the actuator, the mooring, the cubbies' dividers;
 - ticks resting on what is not made, or on a load spread more kindly than it falls.
 
+### After wave 6 was judged a fourth time
+
+The fourth judges found again that the figures were right. They marked down what was not made, and ticks resting on it. Fixed by cause:
+
+**The verdict.**
+- **"Does not hold" now means a load breaks it.** Where only a limit is missed (a size, a weight, how it packs, whether it folds), the headline reads "what is made holds, but not to all its limits".
+
+**Made where nothing was.**
+- **A frame of a thing is that thing, made as its frame.** "A quadcopter frame" is now made as a hub and four arms, its motors, rotors and battery carried as weights:
+  - its 7-inch rotors as said, motors 138 mm out, so each clears the next by a tenth of a rotor;
+  - 12 × 4 mm carbon arms bearing full throttle (twice its share of all it lifts) within a hundredth of their length;
+  - 61 g against its 140 g.
+  - Its 2 m drop is weighed: 17.7 J landed, against what its arms can bend away elastically (σ² V / 18 E, 7.5 J for all four). An arm breaks unless what it lands on takes the rest.
+  - A tube it must go into is checked against its folded cross-section's diagonal, not its width as made. Its arms do not yet fold.
+- **What is towed is a deck slung between two wheels, with a tow arm and a hitch.**
+  - Its axle is set back so a tenth of it rests on its hitch (estimate).
+  - Its tow arm bears that share and braking at half of g.
+  - Its wheels are set out until a 5 m turn at its speed tips it at no less than 1.5 times what pulls it (v² / r against g track / 2 h).
+  - At road speed its wheels are 20-inch discs of 3 mm aluminium; their tyres are said not made.
+  - The bicycle trailer is 13.9 kg against 14.
+- **Compartments are divided.**
+  - "30 cubbies" makes dividers standing between each shelf and the next, carrying the shelf over them; each row has a shelf under it and over it.
+  - Its shelves are sized for a child standing on one between two dividers.
+  - Where a child pulling back from its top would tip it, a steel plate in its foot gives the weight it lacks (freestanding, 490 mm deep, it wants 152 kg).
+  - The storage does 7 of 8 and holds.
+- **A lifter said to hang on the wall is screwed to it.** It stands on no base of its own: 10.6 kg, not 95.
+
+**Laws added or corrected.**
+- **The habitat's ends are counted in its room.** Two hemispherical ends 6 m across hold 113 m³, more than the 100 m³ its crew want, so it is a sphere.
+- **Launch buckling** uses SP-8007's own knockdown, γ = 1 − 0.901 (1 − e^−φ) (0.224 here), with NASA-STD-5001's factor of 1.4 for metal flight structures. Its wall is thickened to 3.2 mm until it stands.
+- **The airlock's leaf** is sized three ways, and the greatest is kept:
+  - its yield (11.5 mm, sagging 27 mm);
+  - 13,400 pushes a Mars year under the 96.5 MPa 6061-T6 bears 5 × 10⁸ times (ASM): 15.8 mm;
+  - a sag of a hundredth of its width for its seal to seat: 17.3 mm.
+  - Its pump draws 755 W while it pumps, and 51 W only on average.
+- **A flood flap that rises on its own is weighed.**
+  - A hollow flap of 3 mm aluminium weighs 12.3 kg. Water 50 mm deep in its recess holds it up with 31.5 kg, so it floats up. It stands upright once the water is 346 mm deep.
+  - Hinged at its sill it takes no turning there: stops at its sides take its push.
+- **A gate leant on** has the push borne by the two rails nearest it, not all five alike.
+- **"Swing open on its own"** is not done where no drive is made. For one unpowered, what is missing is said as a spring, a weight or aslant hinges.
+- **Five cloudy days** are weighed in the cells of the ram that would open it: 100 Wh.
+- **A hand crank is weighed.** The lifter wants no gearing, 17.5 turns, and a ratchet to hold it.
+- **The clock** lifts only as far as its cells allow, 15 mm along its track, so they last its year.
+- **A deck person's weight** spreads only as wide as the deck spans (the dock now rests on 12 frames).
+- **Guide piles** are not offered where piles are ruled out; the gangway to the shore is said.
+- **High up**, people at the edge and a lean at the top are weighed together. The treehouse platform tips: 763 N·m against 532.
+- **Put up by so many people:** no part heavier than they lift together (two-thirds of 16 kg each, HSE L23; estimate).
+
+**Ticks and counts.**
+- **A wind it must survive is not ticked** where its poles are held by sockets not made, or its pegs are in snow.
+- **Stakes are counted** as 30 g pegs against what it may weigh. The block standing for their grip is said not to be a weight it has.
+- **An assumed door is said as assumed**, not as something asked.
+- **"Zero visible judder" and a loudness in dB are counted** among what was asked.
+- **A size read from a limit it must be under** is made 10 mm under it.
+- **Where the laws are shown apart**, as on the command line, the reading no longer repeats them.
+
+**Checked.**
+- **The gate:** typecheck, and 1088 tests in 95 files. That includes 48 in `tests/nexus/wave6.test.ts`.
+- **The three browser drives** pass with no script errors.
+- **The 74 asks of the everyday set and waves 2, 3 and 4 were rerun.** Two headlines changed:
+  - a scissor-lift whose only failure is its packed size now reads "holds, but not to all its limits";
+  - the cattle-race gate no longer ticks "swings shut by itself", since nothing made shuts it.
+- **The twelve folding asks fold as before.** One headline's wording moved the same way.
+
 ### Open after wave 6
 
 - **Ways most asked for and not kept:** a stair, a truss, a frame of tubes, a telescoping mast, a drive that raises or climbs, a thermostat, tracks. A latch and the post it closes on are now made for a framed gate.
 - **A frame braced by cloth:** what holds a cloth shelter square is not weighed.
 - **Reading a clause split by "than"** ("no more than two bolts") is mended where it is read, not in the parser.
+- **Folding arms up a quarter turn at a hub's edge,** so a frame goes into a tube: the fold engine half-turns parts lying in line, and the drone's arms are longer than its hub.
+- **What widens a base by law** for something high up that a crowd and a lean together tip (the treehouse platform): it says so, but does not yet draw itself wider.
+- **A spoked wheel and its tyre,** and a crank, drum, ratchet and rope: weighed, not made.
