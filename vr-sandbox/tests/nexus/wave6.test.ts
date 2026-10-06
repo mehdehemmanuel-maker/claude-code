@@ -175,3 +175,15 @@ describe('a platform at a tree, a slide to its stop', () => {
     expect(d!.checks.find((x) => x.what === 'it slides 1.2 m')).toMatchObject({ ok: true, says: expect.stringMatching(/it slid as far as 1\.2 m, its stop at 1\.2 m/) });
   }, 120000);
 });
+
+describe('a cart of gas cylinders on a slope', () => {
+  const CART = 'Rolling welding cart: carries two 150 lb gas cylinders (9 in dia, 55 in tall) plus 90 lb welder, must not tip on a 10 degree slope, fit through 30 inch door, total weight under 120 lb empty, steel.';
+  it('its deck bears what it carries; loose on its slope, cylinders 229 mm across and 1.4 m tall tip at 9.29°, and want securing', () => {
+    const d = made(CART);
+    expect(check(d, /^its deck bears 177 kg$/)?.ok).toBe(true);
+    expect(check(d, /^what it carries stands on its 10° slope$/)).toMatchObject({ ok: false, says: expect.stringMatching(/tips at 9\.29° \(tan θ = d \/ h, statics\), less than its slope; gas cylinders are kept upright and secured \(OSHA 29 CFR 1926\.350\)/) });
+    // pushing it up the slope is not what it carries: "Rolling" stands; what it carries falls with its load
+    expect(d.asked.find((a) => a.text === 'Rolling')?.got).toBe('move');
+    expect(d.asked.find((a) => /^carries two 150 lb gas cylinders/.test(a.text))).toMatchObject({ got: null, why: expect.stringMatching(/^its load fails: what it carries stands on its 10° slope/) });
+  });
+});
