@@ -214,7 +214,8 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
     const enc = c.wants.find((w) => w.fn === 'enclose')!;
     expect(enc.q.W!.v).toBeCloseTo(2.6, 9); expect(enc.q.D!.v).toBe(2);
     expect(enc.q.roofP!.v).toBeCloseTo(300 * 9.80665 * 0.8, 3);
-    expect(c.asked.some((a) => /winds/.test(a.text))).toBe(false);
+    // surviving the wind is what it does, tied to its test of it
+    expect(c.asked.find((a) => /winds/.test(a.text))?.kind).toBe('does');
     const [d] = designs(c, 1, { seed: 101, physics: null });
     const roof = d!.checks.find((x) => /its roof bears 80 cm of settled snow/.test(x.what))!;
     expect(roof.says).toMatch(/bending [\d.]+ mm/);
@@ -237,7 +238,8 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
   }, 60000);
   it('turns the whole of what is asked to turn on what turns it, and stands its tank beside the soil, not in it', () => {
     const [d] = designs(go('Can you make a balcony planter that turns 360° every 6 hours so the plants get even sun, holds 40 kg of wet soil, and waters itself from a 10 L tank for 3 weeks?'), 1, { seed: 101, physics: null });
-    expect(d!.asked.find((a) => a.kind === 'thing')!.got).toBe('support');
+    // not all it is asked to do is done, so the thing is made only as what it does
+    expect(d!.asked.find((a) => a.kind === 'thing')!.why).toMatch(/^made only as something to /);
     expect(d!.plan[0]).toMatch(/^to turn: .*, on the floor$/);
     expect(d!.plan.filter((p) => /on what is to turn$/.test(p)).length).toBe(2);
     expect(d!.checks.find((x) => x.what === 'it can be made under the laws')!.ok).toBe(true);
@@ -384,7 +386,7 @@ describe('round D5: what the D4 judges found, by cause', () => {
   });
   it('a shelter in the wind: its lift and its turning together, the air inside pushing up too, the margins taken', () => {
     const [d] = designs(go('Can you come up with a 4-person emergency shelter for a mountain site that packs into a sled under 30 kg, takes up no more than 3 m x 2.5 m of ground, and survives 110 km/h winds and 80 cm of settled snow on the roof?'), 1, { seed: 101, physics: J });
-    expect(d!.checks.find((x) => x.what === 'empty, it stands in that wind')!.says).toMatch(/less the wind's lift below/);
+    expect(d!.checks.find((x) => x.what === 'empty, it stands in that wind')!.says).toMatch(/less the .* N the wind lifts it by/);
     const up = d!.checks.find((x) => x.what === 'the wind does not lift it')!;
     expect(up.ok).toBe(false); expect(up.says).toMatch(/the air inside pushing up 0\.2 of it/); expect(up.says).toMatch(/with its door open into the wind/);
   }, 60000);
