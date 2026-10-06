@@ -22,6 +22,8 @@ describe('reading what is said', () => {
     expect(calc('BxD', sc)).toBe(12); expect(calc('B*D%', sc)).toBeCloseTo(0.12); expect(calc('32º + 22', sc)).toBeCloseTo(22.5585, 4); expect(calc('B²+D²', sc)).toBe(25);
     const w = shop(); w.run('set B = 3'); w.run('set D = 4'); expect(w.run('B x D =')).toMatch(/= 12/); expect(w.run('calc B*D%=')).toMatch(/= 0\.12/); expect(w.value('ans')).toBeCloseTo(0.12);
     expect(w.run('calc B*D = 12')).toMatch(/yes, it holds/);
+    // one side = the other, ending in =: each side worked out, and whether they are the same
+    expect(w.run('B*D%=32º+22*2=')).toMatch(/^B\*D% = 0\.12 and 32º\+22\*2 = 44\.5585: no, they are not the same/); expect(w.value('ans')).toBeCloseTo(44.5585, 4);
   });
   it('says what it does not know, and what it does', () => {
     expect(() => calc('happiness * 2', sc)).toThrow(/I do not know "happiness": I know B, D, load/);
@@ -40,7 +42,8 @@ describe('making things, sized by what is required', () => {
     near(w.value('cap.h'), h, 1e-6); near(w.value('cap.bottom'), 0.3 + 0.0235, 1e-9);
     // the law is kept: a load set again sizes it again; a condition that chooses steel sizes it by steel
     w.run('set load = 800 N'); near(w.value('cap.h'), 2 * h, 1e-6);
-    w.run('if load > 500 N then material steel else material aluminium');
+    // what is made keeps the matter it was made of: a condition says which, for the cap
+    w.run('if load > 500 N then material steel for cap else material aluminium for cap');
     near(w.value('cap.h'), Math.sqrt((3 * 800 * 0.047) / (2 * 0.014 * (250e6 / 2))), 1e-6);
     near(w.value('cap.mass'), 7850 * 0.047 * 0.014 * w.value('cap.h'), 1e-9);
   });
@@ -125,6 +128,49 @@ describe('joined into one piece', () => {
     // two unit spheres a radius apart: 2 V − the lens 5π r³ / 12
     const R = 0.05, exact = 2 * ((4 / 3) * Math.PI * R ** 3) - (5 * Math.PI * R ** 3) / 12;
     expect(Math.abs(w.value('a_b.volume') - exact) / exact).toBeLessThan(0.02);
+  });
+});
+
+describe('many pipelines in one room', () => {
+  it('what is made keeps the matter it was made of; a matter said for a thing, or a piece, changes it', () => {
+    const w = shop(); w.run('material concrete'); w.run('place wall named w1 at 1 m, 1 m, 0 size 1000 x 100 x 2000 mm'); w.run('place wall named w2 at 1.45 m, 1 m, 450 mm size 100 x 1000 x 2000 mm');
+    expect(w.run('material steel')).toMatch(/for what is made from here; what is made already keeps its own/);
+    near(w.value('w1.mass'), 2400 * 0.2, 1e-9); w.run('place cube named c at 0, 1 m, 0 size 100 mm'); near(w.value('c.mass'), 7850 * 1e-3, 1e-9);
+    w.run('join w1 and w2 as walls'); expect(w.run('material brick for walls')).toMatch(/^w1, w2 now of /);
+    near(w.value('w1.mass'), matterOf('brick').density * 0.2, 1e-9); near(w.value('c.mass'), 7850 * 1e-3, 1e-9);
+  });
+  it('a thing said nowhere goes on the floor beside the build, clear of what was made before it; turned, it stays', () => {
+    const w = shop(); w.run('place cube named big at 0.4 m, 0.2 m, 0 size 300 mm');
+    w.run('place plate named p size 200 x 200 x 10 mm'); expect(w.holds('overlap(p, big) = 0')).toBe(true); expect(w.holds('overlap(p, frame_rail) = 0')).toBe(true);
+    const x = w.value('p.x'); w.run('rotate p y 40'); near(w.value('p.x'), x, 1e-12);
+    // what sits on it is not in its way, so a pipeline run again puts it back where it was
+    w.run('place cube named top on p'); w.run('place plate named p size 200 x 200 x 10 mm'); near(w.value('p.x'), x, 1e-12);
+    // and what is made after it, or made again, never moves it
+    w.run('place cube named big at 0.4 m, 0.2 m, 0 size 300 mm'); near(w.value('p.x'), x, 1e-12);
+  });
+  it("a pipeline's rule holds over what it makes, not over what another makes; run again, a pipeline makes the same", () => {
+    const w = shop(5), walls = ['material concrete', 'place wall named w1 at 1.6 m, 1 m, 0 size 1000 x 100 x 2000 mm', 'place wall named w2 at 2.05 m, 1 m, 450 mm size 100 x 1000 x 2000 mm', 'join w1 and w2 as walls', 'rotate walls 30 about y'];
+    w.run('rule no overlap', 'other'); w.run('place cube named c at 1.6 m, 1 m, 0 size 50 mm', 'mine');
+    // two walls that meet before they are joined: another pipeline's rule is not theirs
+    for (const round of [1, 2]) { for (const t of walls) w.run(t, 'walls'); near(w.value('w1.ry'), Math.PI / 6, 1e-12); expect(w.joined().map((j) => j.members.join())).toEqual(['w1,w2']); void round; }
+    expect(() => w.run('place cube named d at 1.6 m, 1 m, 0 size 50 mm', 'other')).toThrow(/That would break the rules?: c and d overlap/);
+  });
+  it('split, each stays where its piece had it; made anew, what stood on it goes with it', () => {
+    const w = shop(); w.run('place wall named w1 at 1.6 m, 1 m, 0 size 1000 x 100 x 2000 mm'); w.run('place wall named w2 at 2.05 m, 1 m, 450 mm size 100 x 1000 x 2000 mm'); w.run('join w1 and w2 as walls'); w.run('rotate walls 30 about y');
+    const x = w.value('w1.x'); w.run('split walls'); near(w.value('w1.x'), x, 1e-12); near(w.value('w1.ry'), Math.PI / 6, 1e-12);
+    w.run('place plate named base at 0, 0.5 m, 0 size 300 x 300 x 10 mm'); w.run('place cube named top on base');
+    expect(w.run('place plate named base at 0, 0.5 m, 0 size 200 x 200 x 10 mm')).toMatch(/Made anew base: .*\(what stood on the one before, top, went with it\)/); expect(w.all().made.some((m) => m.name === 'top')).toBe(false);
+  });
+  it('things turned are judged as they stand, not by the boxes round them', () => {
+    const w = shop(); w.run('place cube named a at 0, 1 m, 0 size 100 mm turned y 45');
+    // a's box round it reaches 70.7 mm out, into b's; a itself, a diamond, stops at x + z = 70.7 mm, short of b's corner at 80 mm
+    w.run('place cube named b at 90 mm, 1 m, 90 mm size 100 mm'); expect(w.holds('overlap(a, b) = 0')).toBe(true);
+    w.run('move b to 70 mm, 1 m, 70 mm'); expect(w.holds('overlap(a, b) = 1')).toBe(true);
+  });
+  it('scattered again, fewer: the copies of the last scatter are gone', () => {
+    const w = shop(3); w.run('place plate named base at 0, 0.5 m, 0 size 400 x 400 x 10 mm'); w.run('place peg named peg size 8 x 20 mm');
+    w.run('scatter peg 9 on base'); expect(w.all().made.filter((m) => /^peg/.test(m.name))).toHaveLength(9);
+    w.run('scatter peg 3 on base'); expect(w.all().made.filter((m) => /^peg/.test(m.name))).toHaveLength(3);
   });
 });
 

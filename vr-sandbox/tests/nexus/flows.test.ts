@@ -4,7 +4,7 @@
 // so a loop that converges does so on what the actions did.
 
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, SUGGEST, TEMPLATES, boardOfTemplate, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
+import { ACTIONS, SUGGEST, TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, pasteOf, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
 import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/boards';
 import { Workshop } from '../../src/nexus/generate';
 import { ALL_CALLS, CALLS } from '../../src/nexus/calls';
@@ -187,5 +187,22 @@ describe('pipelines that make, offline', () => {
     }
     const names = ALL_CALLS.map((x) => `${x.group}/${x.label}`); expect(new Set(names).size).toBe(names.length);
     expect(CALLS.length).toBeGreaterThanOrEqual(14);
+  });
+});
+
+describe('a pipeline carried from board to board', () => {
+  it('copied from a step on, pasted after a step on another board, it runs there in its own order', async () => {
+    const from = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), c = clipOf(from, id(from, 'List the flaws'));
+    expect(c.nodes.map((n) => n.label)).toEqual(['List the flaws', 'Any flaws?', 'Ask how to fix', 'Build again with it', 'Until clean']);
+    expect(c.links.map(([, , r]) => r)).toContain('feeds back to');
+    let to = boardOfTemplate(TEMPLATES.find((t) => t.id === 'blank')!);
+    to = deepMerge(to, pasteOf(c, id(to, 'Run')).patch);
+    const g = graphOf(to); expect(orderFrom(to, g, id(to, 'Run')).map((x) => to.nodes[x]!.label)).toEqual(['Run', 'List the flaws', 'Any flaws?', 'Ask how to fix', 'Build again with it', 'Until clean']);
+    const r = await runFlow(to, id(to, 'Run'), room(2), 'pressed'); expect(r.status).toBe('done'); expect(r.rounds).toBe(2);
+  });
+  it('kept whole, a board is made from it again, every step as it was', () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'cap')!), again = boardOfClip(clipOf(b));
+    expect(nodesOf(again).map((n) => [n.label, again.nodes[n.id]!.step?.what]).sort()).toEqual(nodesOf(b).map((n) => [n.label, b.nodes[n.id]!.step?.what]).sort());
+    expect(triggersOf(again)).toHaveLength(1);
   });
 });

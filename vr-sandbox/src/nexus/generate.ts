@@ -49,13 +49,30 @@ export interface Scope { get(name: string): number | undefined; names(): string[
 /** A thing's place and extents along x, y and z (an axis-aligned box round it), and what is known of it. */
 export interface Box3 { at: V3; w: number; h: number; d: number; mass: number; r?: number; bore?: number; axis?: Axis }
 const SPATIAL = new Set(['gap', 'dist', 'distance', 'overlap', 'overlaps', 'inside', 'touches']);
-/** Between two boxes: how far apart their middles are, the gap between them, whether they overlap, touch, or one is inside the other. */
+/** Whether two boxes, each turned as it stands, go into each other: the separating-axis test, over the three faces of
+ *  each and the nine pairs of their edges (Gottschalk, Lin & Manocha, OBBTree, SIGGRAPH 1996). A box touching another
+ *  face to face does not go into it. A thing with no turning of its own (a part of the build) is its box as it stands. */
+function boxesOver(A: Box3, B: Box3): boolean {
+  const own = (X: Box3) => { const m = X as Partial<Made>; return { R: matOf(m.turn ?? [0, 0, 0]), e: m.local ? [m.local.w / 2, m.local.h / 2, m.local.d / 2] : [X.w / 2, X.h / 2, X.d / 2] }; };
+  const a = own(A), b = own(B), col = (R: M3, j: number): V3 => [R[j]!, R[3 + j]!, R[6 + j]!];
+  const ua = [0, 1, 2].map((j) => col(a.R, j)), ub = [0, 1, 2].map((j) => col(b.R, j)), T: V3 = [B.at[0] - A.at[0], B.at[1] - A.at[1], B.at[2] - A.at[2]];
+  const dot = (u: V3, v: V3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2], cross = (u: V3, v: V3): V3 => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const axes: V3[] = [...ua, ...ub]; for (const u of ua) for (const v of ub) axes.push(cross(u, v));
+  for (const L of axes) {
+    const n = Math.hypot(L[0], L[1], L[2]); if (n < 1e-9) continue;
+    const rA = a.e.reduce((t, e, i) => t + e * Math.abs(dot(ua[i]!, L)), 0), rB = b.e.reduce((t, e, i) => t + e * Math.abs(dot(ub[i]!, L)), 0);
+    if (Math.abs(dot(T, L)) >= rA + rB - 1e-9 * n) return false;
+  }
+  return true;
+}
+/** Between two things: how far apart their middles are, the gap between the boxes round them, whether they go into
+ *  each other (each as it is turned), touch, or one is inside the other's box. */
 export function spatial(f: string, A: Box3, B: Box3): number {
   const ha = [A.w / 2, A.h / 2, A.d / 2], hb = [B.w / 2, B.h / 2, B.d / 2], dc = [0, 1, 2].map((i) => Math.abs(A.at[i]! - B.at[i]!));
   if (f === 'dist' || f === 'distance') return Math.hypot(...dc);
   const sep = dc.map((d, i) => d - ha[i]! - hb[i]!), gap = Math.hypot(...sep.map((x) => Math.max(0, x))), over = sep.every((x) => x < -1e-9);
   if (f === 'gap') return gap;
-  if (f === 'overlap' || f === 'overlaps') return over ? 1 : 0;
+  if (f === 'overlap' || f === 'overlaps') return over && boxesOver(A, B) ? 1 : 0;
   if (f === 'touches') return !over && gap <= 1e-6 ? 1 : 0;
   return dc.every((d, i) => d + ha[i]! <= hb[i]! + 1e-9) ? 1 : 0;
 }
@@ -177,11 +194,12 @@ type Place =
 /** A size kept as the law it was sized by: solved again whenever it is read, so it follows what it depends on. */
 interface Law { cond: string; lo: string | null; hi: string | null; half: boolean }
 interface Flip { axis: Axis; through: string | null }
-interface Spec { name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
+interface Spec { /** who made it: a pipeline's board, or you */ by?: string; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
 /** Shapes joined into one piece: named, moved, turned, flipped and stretched as one; its mass and volume the union's. */
 interface Group { name: string; members: string[]; move: V3; turn: V3; flips: Flip[]; stretch: V3 }
 /** A rule over everything made: a condition, or that nothing overlaps, or a clearance between things. */
-type Rule = { text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string };
+/** A rule, and who said it: a pipeline's "no overlap" or clearance holds over what that pipeline makes; a condition, over what it names. */
+type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string }) & { by: string };
 /** A shape as it stands: its sizes, where its middle is, how it is turned (radians about x, y, z), its extents along
  *  x, y and z as turned, its extents as made, and what follows from them. */
 export interface Made { name: string; kind: Kind; word: string; matter: Material | null; axis: Axis; dims: Record<string, number>; at: V3; turn: V3; local: { w: number; h: number; d: number }; scale: V3; w: number; h: number; d: number; volume: number; area: number; mass: number; text?: string; group?: string }
@@ -234,7 +252,7 @@ export class Workshop {
   private vars = new Map<string, string>(); private unitOf = new Map<string, string>(); private laws = new Map<string, Law>();
   private specs = new Map<string, Spec>(); private count = new Map<string, number>(); private rulesKept: Rule[] = []; private groups = new Map<string, Group>();
   private rand: { s: number };
-  matter: Material = matterOf('aluminium');
+  matter: Material = matterOf('aluminium'); private matterSaid = 'aluminium'; private by = '';
   constructor(private readonly world: World, seed = 1) { this.rand = { s: seed | 0 }; }
   // -- reading values: the pipeline's own, its shapes', the build's parts', the matters', the room's --------------------
   private scope(over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): Scope {
@@ -307,7 +325,7 @@ export class Workshop {
       const k = s.scale ?? [1, 1, 1], even = Math.abs(k[0] - k[1]) < 1e-12 && Math.abs(k[1] - k[2]) < 1e-12;
       if (k[0] !== 1 || k[1] !== 1 || k[2] !== 1) { g.w *= k[0]; g.h *= k[1]; g.d *= k[2]; g.volume *= k[0] * k[1] * k[2]; g.area = even ? g.area * k[0] * k[0] : NaN; }
       const local = { w: g.w, h: g.h, d: g.d }, box = turnedBox(local, turn);
-      let at = this.placeOf(s, box, target, sc, over, busy, memo);
+      let at = this.placeOf(s, box, target, sc, over, busy, memo, local);
       // flipped: its place mirrored across the plane square to the axis through what it is flipped through, and its turning with it
       for (const f of s.flips) {
         const c = f.through ? this.boxOf(f.through, over, busy, memo) : null; if (f.through && !c) throw new Error(this.noPart(f.through));
@@ -318,10 +336,10 @@ export class Workshop {
       return made;
     } finally { busy.delete(`shape:${name}`); }
   }
-  private placeOf(s: Spec, g: { w: number; h: number; d: number }, t: Box3 | Made | null, sc: Scope, over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): V3 {
+  private placeOf(s: Spec, g: { w: number; h: number; d: number }, t: Box3 | Made | null, sc: Scope, over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>, local = g): V3 {
     const p = s.place;
     if (p.how === 'at') return [num(p.x, sc), num(p.y, sc), num(p.z, sc)];
-    if (p.how === 'free') { const b = this.bounds(); return [b.right + 0.1 + g.w / 2, b.bottom + g.h / 2, 0]; }
+    if (p.how === 'free') return this.freeSpot(s.name, g, local, over, busy, memo);
     const T = t!, c = T.at;
     if (p.how === 'off') return [c[0] + num(p.dx, sc), c[1] + num(p.dy, sc), c[2] + num(p.dz, sc)];
     if (p.how === 'round') {
@@ -343,6 +361,14 @@ export class Workshop {
     }
   }
   // -- joined pieces ------------------------------------------------------------------------------------------------------
+  /** A piece let go: each member stays where the piece had it, turned and stretched as it was, and stands on its own. */
+  private settle(g: Group, members = g.members): void {
+    const ms = members.filter((x) => this.specs.has(x)).map((x) => this.madeOf(x, new Map(), new Set(), new Map()));
+    for (const m of ms) { const s = this.specs.get(m.name)!; s.place = { how: 'at', x: `${m.at[0]}`, y: `${m.at[1]}`, z: `${m.at[2]}` }; s.turn = [`${m.turn[0]}`, `${m.turn[1]}`, `${m.turn[2]}`]; s.flips = []; s.scale = [...m.scale] as V3; }
+    this.groups.delete(g.name);
+  }
+  /** A member taken out of its piece (before it goes): a piece left with one stands it where the piece had it. */
+  private leave(name: string): void { const g = this.groupOf(name); if (!g) return; const rest = g.members.filter((x) => x !== name); if (rest.length < 2) this.settle(g, rest); else g.members = rest; }
   private groupOf(name: string): Group | undefined { for (const g of this.groups.values()) if (g.members.includes(name)) return g; return undefined; }
   /** Where a joined piece's middle is before its own moves: the middle of the box round its members as each is placed. */
   private pivot(g: Group, over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): V3 { return boxRound(g.members.map((n) => this.madeOf(n, over, busy, memo, true))).at; }
@@ -386,6 +412,24 @@ export class Workshop {
     const j = this.joinedOf(g.name, new Map(), new Set(), new Map());
     return `Joined ${g.members.join(' + ')} as ${g.name}, one piece: ${mm(j.w)} × ${mm(j.h)} × ${mm(j.d)}, ${kg(j.mass)}${j.exact ? '' : ` (the union's volume sampled at 40 000 points, within ${+(j.within * 100).toPrecision(2)} %)`}; where they meet is counted once.`;
   }
+  /** Where a thing said nowhere goes: on the floor beside the build, along x past whatever was made before it, so it
+   *  never goes into what stands. What is placed on it, by it or sized from it is not in its way. */
+  private freeSpot(name: string, g: { w: number; h: number; d: number }, local: { w: number; h: number; d: number }, over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): V3 {
+    const b = this.bounds(), names = [...this.specs.keys()], i0 = names.indexOf(name), boxes: Made[] = [];
+    for (const n of names.slice(0, i0 < 0 ? names.length : i0)) { if (this.leansOn(n, name)) continue; try { boxes.push(this.madeOf(n, over, busy, memo)); } catch { /* what cannot be made takes no room */ } }
+    // its start past the build by its own reach, which no turning changes: turned, it stays where it was
+    const x0 = b.right + 0.1 + Math.hypot(local.w, local.h, local.d) / 2, y = b.bottom + g.h / 2;
+    // clear whichever way it is turned about y later: the round it sweeps, as a box
+    const sweep = Math.hypot(local.w, local.d);
+    for (let i = 0; i < 400; i++) { const at: V3 = [x0 + i * 0.05, y, 0]; if (!boxes.some((o) => spatial('overlap', { at, w: sweep, h: g.h, d: sweep, mass: 0 }, o))) return at; }
+    return [x0 + 400 * 0.05, y, 0];
+  }
+  /** Whether a thing is placed by another, or by something placed by it. */
+  private leansOn(n: string, by: string, seen = new Set<string>()): boolean {
+    const s = this.specs.get(n); if (!s || seen.has(n)) return false; seen.add(n); if (s.copyOf === by) return true;
+    const p = s.place, of = 'of' in p ? p.of : null, about = p.how === 'round' ? p.about : null;
+    return [of, about].some((x) => !!x && (x === by || this.leansOn(x, by, seen)));
+  }
   private bounds() { const ps = this.world.parts(); if (!ps.length) return { right: 0, bottom: 0 }; return { right: Math.max(...ps.map((p) => p.at[0] + p.w / 2)), bottom: Math.min(...ps.map((p) => p.at[1] - p.h / 2)) }; }
   private noPart(word: string): string {
     const names = [...new Set(this.world.parts().map((p) => p.name.split(/[ ,(]/)[0]!.toLowerCase()))].slice(0, 16);
@@ -420,27 +464,28 @@ export class Workshop {
     const out: string[] = [], { made } = this.all(), sc = this.reader();
     for (const r of this.rulesKept) {
       if (r.kind === 'cond') { try { if (!truth(r.text, sc)) out.push(`${r.text} does not hold`); } catch (e) { out.push(`${r.text}: ${(e as Error).message}`); } continue; }
-      const d = r.kind === 'clear' ? num(r.d, sc) : 0;
+      const d = r.kind === 'clear' ? num(r.d, sc) : 0, mine = (n: string) => (this.specs.get(n)?.by ?? '') === r.by;
       for (let i = 0; i < made.length; i++) for (let j = i + 1; j < made.length; j++) {
-        const A = made[i]!, B = made[j]!; if (this.related(this.specs.get(A.name)!, this.specs.get(B.name)!)) continue;
+        const A = made[i]!, B = made[j]!; if ((!mine(A.name) && !mine(B.name)) || this.related(this.specs.get(A.name)!, this.specs.get(B.name)!)) continue;
         if (r.kind === 'apart' && spatial('overlap', A, B)) out.push(`${A.name} and ${B.name} overlap`);
         if (r.kind === 'clear' && spatial('gap', A, B) < d - 1e-9) out.push(`${A.name} and ${B.name} are ${mm(spatial('gap', A, B))} apart, less than ${mm(d)}`);
       }
-      if (r.kind === 'apart' && r.withBuild) for (const A of made) { const s = this.specs.get(A.name)!; for (const p of this.world.parts()) if (!('of' in s.place && this.partOf(s.place.of) === p) && spatial('overlap', A, p)) { out.push(`${A.name} goes into the build's ${p.name}`); break; } }
+      if (r.kind === 'apart' && r.withBuild) for (const A of made) { const s = this.specs.get(A.name)!; if (!mine(A.name)) continue; for (const p of this.world.parts()) if (!('of' in s.place && this.partOf(s.place.of) === p) && spatial('overlap', A, p)) { out.push(`${A.name} goes into the build's ${p.name}`); break; } }
     }
     return out;
   }
-  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, rand: this.rand.s }; }
-  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.rand.s = z.rand; }
+  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, said: this.matterSaid, rand: this.rand.s }; }
+  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; }
   // -- what a step says --------------------------------------------------------------------------------------------------
   /** Whether a step's words are generation's to do. */
   static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|combine|unite|merge|weld|split)\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
   /** A step done: what it made or changed, in words; or why it could not be, with nothing changed. */
-  run(line: string): string {
-    const before = this.snapshot();
+  run(line: string, by = ''): string {
+    const before = this.snapshot(), was = new Set(this.broken()); this.by = by;
     try {
       const said = this.step(this.bake(line.trim().replace(/[.;]+$/, '')));
-      const bad = this.broken();
+      // what this step breaks: a rule broken already, by what stood before it, does not stop it
+      const bad = this.broken().filter((x) => !was.has(x));
       if (bad.length) throw new Error(`That would break the rule${bad.length > 1 ? 's' : ''}: ${bad.slice(0, 4).join('; ')}. Undone.`);
       return said;
     } catch (e) { this.restore(before); throw e; }
@@ -467,11 +512,12 @@ export class Workshop {
     if ((m = /^(?:calc|calculate|compute|what is|work out)\s+(.+?)\s*=?\s*$/i.exec(t)) || (m = /^(.+?)\s*=\s*\??$/.exec(t))) return this.calcStep(m[1]!);
     if ((m = /^seed\s+(-?\d+)$/i.exec(t))) { this.rand.s = Number(m[1]) | 0; return `Seed ${m[1]}: what is drawn at random from here is drawn the same each time.`; }
     if ((m = /^(?:set|let)\s+([\p{L}_][\p{L}\d_.]*)\s*(?:=|to|be)\s*(.+)$/iu.exec(t)) || (m = /^(?:size|resize)\s+([\p{L}_][\p{L}\d_.]*)\s*(?:=|to)\s*(.+)$/iu.exec(t)) || (m = /^([\p{L}_][\p{L}\d_.]*)\s*=\s*([^=].*)$/u.exec(t))) return this.assign(m[1]!, m[2]!);
-    if ((m = /^(?:material|matter|use)\s+(.+)$/i.exec(t))) { this.matter = matterOf(m[1]!); return `Matter: ${this.matter.name}, ${fmt(this.matter.density)} kg/m³, yielding at ${fmt(this.matter.yield / 1e6)} MPa (${this.matter.source}).${this.follows()}`; }
+    if ((m = /^(?:material|matter|use)\s+(.+?)\s+for\s+(.+)$/i.exec(t))) return this.matterFor(m[1]!.trim(), m[2]!.split(/\s*,\s*|\s+and\s+/).map((x) => x.trim()).filter(Boolean));
+    if ((m = /^(?:material|matter|use)\s+(.+)$/i.exec(t))) { this.matter = matterOf(m[1]!); this.matterSaid = m[1]!.trim(); const n = this.specs.size; return `Matter: ${this.matter.name}, ${fmt(this.matter.density)} kg/m³, yielding at ${fmt(this.matter.yield / 1e6)} MPa (${this.matter.source}), for what is made from here${n ? `; what is made already keeps its own (say "material ${this.matterSaid} for <name>" to change one)` : ''}.`; }
     if ((m = /^size\s+([\p{L}_][\p{L}\d_.]*)\s+(?:so that|so|until|such that|for)\s+(.+?)(?:\s+between\s+(.+?)\s+and\s+(.+))?$/iu.exec(t))) return this.solve(m[1]!, m[2]!, m[3], m[4]);
     if ((m = /^(place|put|add|surface)\s+(.+)$/i.exec(t))) return this.place(m[1]!.toLowerCase(), m[2]!);
     if ((m = /^(?:join|combine|unite|merge|weld)\s+(.+?)(?:\s+(?:as|into|named|called)\s+([\p{L}_][\p{L}\d_]*))?$/iu.exec(t))) return this.join(m[1]!.split(/\s*,\s*|\s+and\s+|\s+with\s+|\s+to\s+/).map((x) => x.trim()).filter(Boolean), m[2]);
-    if ((m = /^split\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const g = this.groups.get(m[1]!); if (!g) throw new Error(`${m[1]} is not a joined piece`); this.groups.delete(g.name); return `Split ${g.name}: ${g.members.join(', ')} stand apart again, each as its piece left it.`; }
+    if ((m = /^split\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const g = this.groups.get(m[1]!); if (!g) throw new Error(`${m[1]} is not a joined piece`); this.settle(g); return `Split ${g.name}: ${g.members.join(', ')} stand apart again, each as its piece left it.`; }
     if ((m = /^(expand|stretch|grow|shrink|squash)\s+([\p{L}_][\p{L}\d_]*)\s*(.*)$/iu.exec(t))) return this.stretch(m[1]!.toLowerCase(), m[2]!, m[3]!);
     if ((m = /^(?:rotate|turn)\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t)) && this.groups.has(m[1]!)) return this.groupTurn(m[1]!, m[2]!);
     if ((m = /^(?:rotate|turn)\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t))) return this.rotate(m[1]!, m[2]!);
@@ -483,7 +529,7 @@ export class Workshop {
     if ((m = /^move\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t))) { const s = this.specOf(m[1]!), place = this.placeWords(` ${m[2]!}`); if (!place) throw new Error(`Move ${m[1]} where? Say "to 0, 0.5 m, 0", "on bearing", "left of cap by 10 mm", "from cap by 0, 20 mm, 0".`); s.place = place; return `Moved ${this.check(s.name)}.`; }
     if ((m = /^(?:remove|delete)\s+([\p{L}_][\p{L}\d_-]*)$/iu.exec(t))) {
       const g = this.groups.get(m[1]!); if (g) { for (const x of g.members) this.specs.delete(x); this.groups.delete(g.name); return `Removed ${g.name}: ${g.members.join(', ')}.`; }
-      this.specOf(m[1]!); this.specs.delete(m[1]!); const in_ = this.groupOf(m[1]!); if (in_) { in_.members = in_.members.filter((x) => x !== m![1]); if (in_.members.length < 2) this.groups.delete(in_.name); } return `Removed ${m[1]}.`;
+      this.specOf(m[1]!); this.leave(m[1]!); this.specs.delete(m[1]!); return `Removed ${m[1]}.`;
     }
     if (/^clear(\s+all)?$/i.test(t)) { const n = this.specs.size; this.specs.clear(); this.groups.clear(); return `Cleared ${n} shape${n === 1 ? '' : 's'}.`; }
     if ((m = /^(?:pattern|copy)\s+([\p{L}_][\p{L}\d_]*)\s+(\d+)\s*(?:times\s*)?(?:along\s+([xyz])\s+(?:every\s+)?(.+)|round\s+([\p{L}_][\p{L}\d_ ]*))$/iu.exec(t))) return this.pattern(m[1]!, Number(m[2]), m[3] as Axis | undefined, m[4], m[5]);
@@ -493,12 +539,23 @@ export class Workshop {
     if (/^report$/i.test(t)) return this.report();
     throw new Error(`I cannot do "${t.slice(0, 60)}". Generation can: set <name> = <value>; material <matter>; place <shape> [named <n>] [of <matter>] [on|under|above|below|beside|left of|right of|in front of|behind|through <thing> | at x, y, z | from <thing> by dx, dy, dz] [size a x b x c] [turned x a y b z c]; surface plane|circle …; size <name> so <condition>; rotate <shape> <angle> about x|y|z, or randomly; flip <shape> x|y|z [through <thing>]; mirror <shape> x|y|z; pattern <shape> <n> along x <pitch> | round <thing>; scatter <shape> <n> on <thing>; rule <condition> | no overlap | clearance <d>; if <condition> then <step> [else <step>]; energy lift|heat|spin|move <shape> <amount>; move, remove, clear, seed <n>, report. Random: random(a, b), randint(a, b), chance(p), pick(a, b), one of a, b.`);
   }
+  /** Things made already, made of another matter: a joined piece, every member of it. */
+  private matterFor(word: string, names: string[]): string {
+    const mt = matterOf(word), done: string[] = [];
+    for (const n of names) { const g = this.groups.get(n); for (const x of g ? g.members : [n]) { this.specOf(x).matter = word; done.push(x); } }
+    return `${done.join(', ')} now of ${mt.name}, ${fmt(mt.density)} kg/m³ (${mt.source}).${this.follows()}`;
+  }
   /** A calculation, worked out and said; "name = …" keeps it as a value, an equation says whether it holds. The answer is kept as `ans`. */
   private calcStep(expr: string): string {
     const named = /^([\p{L}_][\p{L}\d_]*)\s*=\s*([^=].*)$/u.exec(expr);
     if (named && !this.specs.has(named[1]!) && !named[2]!.includes('=')) return this.assign(named[1]!, named[2]!);
     const v = calc(expr, this.reader());
-    if (typeof v === 'boolean') return `${expr}: ${v ? 'yes, it holds' : 'no, it does not hold'}.`;
+    if (typeof v === 'boolean') {
+      // one side = the other: each side worked out, and whether they are the same
+      const sides = expr.split(/(?<![<>=!])=(?!=)/);
+      if (sides.length === 2) { const [a, b] = sides.map((x) => calc(x, this.reader())); if (typeof a === 'number' && typeof b === 'number') { this.vars.set('ans', String(b)); this.unitOf.delete('ans'); return `${sides[0]!.trim()} = ${+a.toPrecision(6)} and ${sides[1]!.trim()} = ${+b.toPrecision(6)}: ${v ? 'yes, it holds' : 'no, they are not the same'}; the last kept as ans.`; } }
+      return `${expr}: ${v ? 'yes, it holds' : 'no, it does not hold'}.`;
+    }
     this.vars.set('ans', String(v)); this.unitOf.delete('ans');
     const angled = /[°º]|\bdeg\b|\brad\b/.test(expr);
     return `${expr} = ${+v.toPrecision(6)}${angled ? ` (as an angle, ${+((v * 180) / Math.PI).toPrecision(6)}°)` : ''}${/\d\s*[a-zA-Z°º%]/.test(expr) ? ' in SI' : ''}; kept as ans.`;
@@ -535,7 +592,9 @@ export class Workshop {
     if (!kind) throw new Error(`I do not know the shape "${word}". I can place a box, block, cube, plate, tile, brick or bar; a cylinder, rod, shaft, pin, peg, axle, post or disc; a tube, pipe or sleeve; a sphere or ball; a cone; a torus or ring; the surfaces plane, sheet, panel and circle; and a title.`);
     const name = grab('(?:named|called)')?.split(' ')[0] ?? this.nameFor(word);
     // a pipeline run again makes it again: placed under a name made already, it is made anew
-    const again = this.specs.has(name); if (again) { this.specs.delete(name); for (const k of [...this.specs.keys()]) if (this.specs.get(k)!.copyOf === name) this.specs.delete(k); }
+    // and what stood on it, by it or was copied from it goes with it, to be made again by the steps that made it
+    const again = this.specs.has(name), gone = again ? [...this.specs.keys()].filter((k) => k !== name && this.leansOn(k, name)) : [];
+    if (again) for (const k of [name, ...gone]) { this.leave(k); this.specs.delete(k); }
     const matterWord = /\b(?:made of|of)\s+(.+?)(?=\s+(?:named|called|on|onto|under|above|below|beside|next to|left of|right of|in front of|behind|in|inside|through|at|size|sized|along|by|turned|rotated|joined)\b|$)/i.exec(s)?.[1]?.trim();
     if (matterWord) matterOf(matterWord);
     const along = /\balong\s+([xyz])\b/i.exec(s)?.[1]?.toLowerCase() as Axis | undefined;
@@ -544,13 +603,15 @@ export class Workshop {
     if ('of' in place && !target) throw new Error(this.noPart(place.of));
     const turnWords = grab('(?:turned|rotated)'), tt = target as Partial<Made> | null;
     const follows = !turnWords && place.how === 'on' && tt?.turn && Math.abs(tt.turn[0]!) < 1e-9 && Math.abs(tt.turn[2]!) < 1e-9 && Math.abs(tt.turn[1]!) > 1e-9 && (kind === 'box' || kind === 'plane');
-    const spec: Spec = { name, kind, word, dims: {}, laws: {}, axis: along ?? null, matter: matterWord ?? null, place, turn: turnWords ? this.angles(turnWords, ['0', '0', '0']) : follows ? ['0', `${place.of}.ry`, '0'] : ['0', '0', '0'], flips: [], scale: [1, 1, 1], ...(text ? { text } : {}) };
+    const spec: Spec = { name, kind, word, dims: {}, laws: {}, axis: along ?? null, by: this.by, matter: matterWord ?? this.matterSaid, place, turn: turnWords ? this.angles(turnWords, ['0', '0', '0']) : follows ? ['0', `${place.of}.ry`, '0'] : ['0', '0', '0'], flips: [], scale: [1, 1, 1], ...(text ? { text } : {}) };
     const given = grab('(?:size|sized)');
     spec.dims = given ? this.sizes(kind, given) : this.fitted(kind, word, place, target);
     this.specs.set(name, spec);
+    // said nowhere: a spot found now, clear of what stands, and kept, so what is made after it never moves it
+    if (place.how === 'free') { try { const at = this.madeOf(name, new Map(), new Set(), new Map()).at; spec.place = { how: 'at', x: `${at[0]}`, y: `${at[1]}`, z: `${at[2]}` }; } catch { /* check says why */ } }
     const to = /\bjoined\s+(?:to|with)\s+([\p{L}_][\p{L}\d_]*)/iu.exec(s)?.[1];
     if (to) { this.check(name); return `Placed ${this.check(name)}. ${this.join([to, name])}`; }
-    return `${again ? 'Made anew' : 'Placed'} ${this.check(name)}${given ? '' : `, sized ${'of' in place ? `to ${place.of.replace(/_/g, ' ')}` : 'as a start'} (say "size ${name}.${DIMS[kind].at(-1)} so …" to size it by a law)`}.`;
+    return `${again ? 'Made anew' : 'Placed'} ${this.check(name)}${gone.length ? ` (what stood on the one before, ${gone.slice(0, 6).join(', ')}${gone.length > 6 ? ', …' : ''}, went with it)` : ''}${given ? '' : `, sized ${'of' in place ? `to ${place.of.replace(/_/g, ' ')}` : 'as a start'} (say "size ${name}.${DIMS[kind].at(-1)} so …" to size it by a law)`}.`;
   }
   private nameFor(word: string): string { const base = word.replace(/-/g, ''); let n = this.count.get(base) ?? 0, name: string; do { n++; name = `${base}${n}`; } while (this.specs.has(name)); this.count.set(base, n); return name; }
   private placeWords(s: string): Place | null {
@@ -674,6 +735,8 @@ export class Workshop {
     const s = this.specOf(name), T = on.replace(/\s+/g, '_'), t = this.boxOf(T, new Map(), new Set(), new Map());
     if (!t) throw new Error(this.noPart(T)); if (n < 1 || n > 200) throw new Error('Scatter 1 to 200 of it.');
     const ids = [name, ...Array.from({ length: n - 1 }, (_, i) => `${name}_${i + 2}`)]; let placed = 0;
+    // scattered again: the copies of the last scatter go first
+    for (const [k, v] of [...this.specs]) if (v.copyOf === name && /_\d+$/.test(k)) this.specs.delete(k);
     for (const id of ids) {
       if (id !== name) { this.specs.delete(id); this.specs.set(id, { ...structuredClone(s), name: id, dims: this.follow(name, s), laws: {}, flips: [], copyOf: name }); }
       const sp = this.specs.get(id)!, was = { place: sp.place, turn: [...sp.turn] as [string, string, string] }; let ok = false;
@@ -694,10 +757,10 @@ export class Workshop {
   }
   private rule(said: string): string {
     const t = said.trim(); let r: Rule;
-    if (/^no\s+overlaps?(\s+with\s+(the\s+)?build)?$/i.test(t) || /^(nothing|none)\s+overlaps?$/i.test(t)) r = { text: t, kind: 'apart', withBuild: /build/i.test(t) };
-    else if (/^clearance\s+(.+)$/i.test(t)) r = { text: t, kind: 'clear', d: /^clearance\s+(.+)$/i.exec(t)![1]! };
-    else { this.holds(t); r = { text: t, kind: 'cond' }; }
-    if (!this.rulesKept.some((x) => x.text === r.text)) this.rulesKept.push(r);
+    if (/^no\s+overlaps?(\s+with\s+(the\s+)?build)?$/i.test(t) || /^(nothing|none)\s+overlaps?$/i.test(t)) r = { text: t, kind: 'apart', withBuild: /build/i.test(t), by: this.by };
+    else if (/^clearance\s+(.+)$/i.test(t)) r = { text: t, kind: 'clear', d: /^clearance\s+(.+)$/i.exec(t)![1]!, by: this.by };
+    else { this.holds(t); r = { text: t, kind: 'cond', by: this.by }; }
+    if (!this.rulesKept.some((x) => x.text === r.text && x.by === r.by)) this.rulesKept.push(r);
     return `Rule: ${t}. Every step from here keeps it, or is undone.`;
   }
   private report(): string {

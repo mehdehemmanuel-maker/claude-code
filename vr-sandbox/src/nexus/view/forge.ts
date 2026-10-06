@@ -50,6 +50,7 @@ import { meshOfPart } from './parts';
 import { Robot } from './robot';
 import { Boards3D } from './boards3d';
 import type { FlowApi } from '../flows';
+import { Workshop, type Made, type PartRef } from '../generate';
 import { Windows } from './windows';
 import { Phone } from './phone';
 import { makeBoardStore } from './boards-store';
@@ -388,6 +389,8 @@ function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } 
   if (frozen === null) offset -= clock();
   // the design's own process is there to replay when asked; otherwise it stands designed, and I build it, live
   if (!o.replay && frozen === null) { offset += total; if (o.build === true && !params.has('end')) buildIt('the machine'); }
+  // what pipelines made by the build's parts stands where those parts now are
+  queueMicrotask(() => drawMade());
   // a pipeline armed on a build, or on a flaw, starts from here
   if (!o.replay) queueMicrotask(() => { const f = factsNow(); boards?.event({ kind: 'built', text: run.m.name }, ...(f.flaws > 0 ? [{ kind: 'flaw' as const, text: flawRows()[0]?.text ?? '' }] : [])); });
   const last = run.m.rounds.at(-1)!;
@@ -1532,10 +1535,10 @@ if (SR) { const mic = button('🎤', () => listen(), row); mic.type = 'button'; 
 // the same talk as a hologram, with a keyboard of light, for a headset
 const chatCard = card(0.56, 0.34, 1200); scene.add(chatCard.mesh); chatCard.mesh.visible = false;
 const keyboard = new Keyboard(!!SR); scene.add(keyboard.mesh);
-const transcript: { who: 'you' | 'claude' | 'system'; text: string }[] = [];
+const transcript: { who: 'you' | 'claude' | 'nexus' | 'system'; text: string }[] = [];
 function drawChat(): void {
   if (!on('chat')) return;
-  chatCard.draw('CLAUDE · talk', transcript.slice(-9).map((l) => ({ text: `${l.who === 'you' ? 'You' : l.who === 'claude' ? 'Claude' : '·'}: ${l.text.length > 150 ? `${l.text.slice(0, 148)}…` : l.text}`, color: l.who === 'you' ? '#ffe082' : l.who === 'claude' ? '#d9f3ff' : '#7fb3c8', size: 0.82 })), '#4dd0e1');
+  chatCard.draw('CLAUDE · talk', transcript.slice(-9).map((l) => ({ text: `${l.who === 'you' ? 'You' : l.who === 'claude' ? 'Claude' : l.who === 'nexus' ? 'Nexus' : '·'}: ${l.text.length > 150 ? `${l.text.slice(0, 148)}…` : l.text}`, color: l.who === 'you' ? '#ffe082' : l.who === 'claude' ? '#d9f3ff' : l.who === 'nexus' ? '#ffe9a8' : '#7fb3c8', size: 0.82 })), '#4dd0e1');
 }
 /** A key pressed on the keyboard of light. */
 function pressKey(key: string): void {
@@ -1569,22 +1572,25 @@ row.onsubmit = (e) => { e.preventDefault(); const t = input.value.trim(); if (!t
 const status = document.createElement('div'); status.style.cssText = 'font-size:12px;color:#7fb3c8';
 chat.append(log, row, status);
 document.body.appendChild(chat);
-function line(who: 'you' | 'claude' | 'system', text: string): HTMLDivElement {
+function line(who: 'you' | 'claude' | 'nexus' | 'system', text: string): HTMLDivElement {
   const d = document.createElement('div');
-  d.style.cssText = `color:${who === 'you' ? '#ffe082' : who === 'claude' ? '#d9f3ff' : '#7fb3c8'}`;
-  d.textContent = `${who === 'you' ? 'You' : who === 'claude' ? 'Claude' : '·'}: ${text}`;
+  d.style.cssText = `color:${who === 'you' ? '#ffe082' : who === 'claude' ? '#d9f3ff' : who === 'nexus' ? '#ffe9a8' : '#7fb3c8'}`;
+  d.textContent = `${who === 'you' ? 'You' : who === 'claude' ? 'Claude' : who === 'nexus' ? 'Nexus' : '·'}: ${text}`;
   log.appendChild(d); while (log.children.length > 24) log.firstChild!.remove(); log.scrollTop = log.scrollHeight;
   transcript.push({ who, text }); while (transcript.length > 40) transcript.shift(); drawChat();
   return d;
 }
-function say(text: string, el?: HTMLDivElement): void {
+function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claude'): void {
   if (!text) return;
-  if (el) { el.textContent = `Claude: ${text}`; const last = [...transcript].reverse().find((l) => l.who === 'claude'); if (last) last.text = text; drawChat(); } else line('claude', text);
+  if (who === 'nexus') line('nexus', text);
+  else if (el) { el.textContent = `Claude: ${text}`; const last = [...transcript].reverse().find((l) => l.who === 'claude'); if (last) last.text = text; drawChat(); } else line('claude', text);
   voiceCard.draw('', [{ text, size: 1.0 }], '#4dd0e1'); lastSayAt = performance.now();
   if (voice && 'speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/[✗✓✎↻·]/g, '')); u.rate = 1.07; speechSynthesis.speak(u); }
 }
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text });
+  // generation's words are done here and now, offline: no one is asked
+  if (generationWords(text)) { line('you', text); let said: string; try { said = makeStep(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
   if (!brain) return;
   busy?.abort(); busy = new AbortController();
   line('you', text);
@@ -1674,8 +1680,10 @@ function factsNow(): Record<string, number> {
   return { flaws: last ? last.flaws.length - gaps : 0, gaps, parts: empty ? 0 : run.m.parts.length, mass: empty ? 0 : run.m.parts.reduce((a, p) => a + p.mass, 0), rounds: empty ? 0 : run.m.rounds.length, failures: operated?.operation?.events.length ?? 0, notes: allNotes.length };
 }
 const NOT_HERE = /^Nothing stands here yet|^The generator gave nothing/;
-async function flowAct(what: string, signal?: AbortSignal): Promise<string> {
+async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
+  // what makes, sizes, turns, joins or works out: the workshop, offline
+  if (Workshop.handles(t)) return makeStep(t, true, who);
   // what could not be done at all is a failure, and stops the pipeline with why
   const out = (said: string) => { if (NOT_HERE.test(said)) throw new Error(said); return said; };
   switch (verb) {
@@ -1692,7 +1700,7 @@ async function flowAct(what: string, signal?: AbortSignal): Promise<string> {
     case 'say': if (!arg) throw new Error('Say what? "say {input}" says what came to it.'); say(arg); return arg;
     case 'board': { const said = boards?.buildBoard(); if (!said) throw new Error('Nothing stands here yet to make a board of.'); return said; }
     case 'wait': { const n = Math.min(60, Math.max(0, Number(arg.match(/\d+(?:\.\d+)?/)?.[0] ?? 1))); await nap(n * 1000, signal); return `Waited ${n} s.`; }
-    default: throw new Error(`I do not know how to "${t.slice(0, 60)}". A step can: make <what>, again <change>, operate, flaws, show <panel>, note <kind>: <text>, say <words>, board, wait <n> s.`);
+    default: throw new Error(`I do not know how to "${t.slice(0, 60)}". A step can: make <what>, again <change>, operate, flaws, show <panel>, note <kind>: <text>, say <words>, board, wait <n> s; and every call in Pipeline calls (✨ New on the board): place, size, rotate, flip, expand, join, scatter, rule, calc, energy, …`);
   }
 }
 async function flowAi(prompt: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }> {
@@ -1707,15 +1715,63 @@ async function flowAi(prompt: string, signal?: AbortSignal): Promise<{ text: str
 }
 const flowApi: FlowApi = {
   // a pipeline never puts windows in your face: what one of its steps opens waits, drawn, on the strip and the phone
-  async act(what, _input, signal) {
+  async act(what, _input, signal, who) {
     const was = new Set(windows.list().filter((w) => w.state === 'open').map((w) => w.id));
-    try { return await flowAct(what, signal); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
+    try { return await flowAct(what, signal, who); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: factsNow,
+  facts: () => ({ ...factsNow(), ...shop.facts() }),
+  reader: () => shop.reader(),
 };
-// every minute, for a pipeline that starts "every so many minutes"
-{ let minutes = 0; window.setInterval(() => { minutes++; boards?.event({ kind: 'tick', minutes }); }, 60_000); }
+// ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
+/** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
+function partRefs(): PartRef[] {
+  if (empty || !run) return [];
+  return run.m.parts.filter((p) => p.shape.kind !== 'wire').map((p): PartRef => { const b = boxOf(p), sh = p.shape; return { name: p.name, at: [...b.c] as [number, number, number], w: 2 * b.h[0], h: 2 * b.h[1], d: 2 * b.h[2], mass: p.mass, ...(sh.kind === 'round' ? { r: sh.r, axis: sh.axis, ...(sh.bore ? { bore: sh.bore } : {}) } : {}) }; });
+}
+const shop = new Workshop({ parts: partRefs, facts: factsNow }, (Date.now() % 2147483647) | 0);
+const madeGroup = new THREE.Group(); machine.add(madeGroup); named(madeGroup, 'what pipelines made');
+/** A made shape's mesh: its own geometry along its own axis, of its matter's look, turned and stretched as it is. */
+function meshOf(m: Made): THREE.Object3D {
+  const d = m.dims, mt = m.matter;
+  if (m.kind === 'title') {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(3,12,19,0.85)'; g.beginPath(); g.roundRect(4, 4, 504, 120, 24); g.fill(); g.strokeStyle = '#80deea'; g.lineWidth = 6; g.stroke();
+    g.fillStyle = '#ffffff'; g.font = '600 64px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText((m.text ?? m.name).slice(0, 18), 256, 68);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true })); sp.scale.set(d.w!, d.w! / 4, 1); sp.position.set(...m.at); return sp;
+  }
+  let geo: THREE.BufferGeometry;
+  switch (m.kind) {
+    case 'box': geo = new THREE.BoxGeometry(d.w!, d.h!, d.d!); break;
+    case 'cylinder': geo = new THREE.CylinderGeometry(d.D! / 2, d.D! / 2, d.h!, 40); break;
+    case 'tube': { const ro = d.D! / 2, ri = ro - d.wall!, hh = d.h! / 2; geo = new THREE.LatheGeometry([new THREE.Vector2(ri, -hh), new THREE.Vector2(ro, -hh), new THREE.Vector2(ro, hh), new THREE.Vector2(ri, hh), new THREE.Vector2(ri, -hh)], 40); break; }
+    case 'sphere': geo = new THREE.SphereGeometry(d.D! / 2, 36, 18); break;
+    case 'cone': geo = new THREE.ConeGeometry(d.D! / 2, d.h!, 40); break;
+    case 'torus': geo = new THREE.TorusGeometry((d.D! - d.dt!) / 2, d.dt! / 2, 18, 56).rotateX(Math.PI / 2); break;
+    case 'plane': geo = new THREE.PlaneGeometry(d.w!, d.d!).rotateX(-Math.PI / 2); break;
+    default: geo = new THREE.CircleGeometry(d.D! / 2, 48).rotateX(-Math.PI / 2);
+  }
+  // round things along their own axis
+  if (m.kind === 'cylinder' || m.kind === 'tube' || m.kind === 'cone' || m.kind === 'torus') { if (m.axis === 'x') geo.rotateZ(-Math.PI / 2); else if (m.axis === 'z') geo.rotateX(Math.PI / 2); }
+  const surface = !mt, mat = surface ? new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.6 }) : new THREE.MeshStandardMaterial({ color: mt.color, metalness: mt.metalness, roughness: mt.roughness });
+  const mesh = new THREE.Mesh(geo, mat); mesh.position.set(...m.at); mesh.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); mesh.scale.set(...m.scale); mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.userData.made = m.name; return mesh;
+}
+/** Everything made, drawn again as it now stands. */
+function drawMade(): void {
+  for (const o of [...madeGroup.children]) { madeGroup.remove(o); o.traverse((x) => { const mm = x as THREE.Mesh; mm.geometry?.dispose(); const mt = mm.material as THREE.Material | undefined; mt?.dispose(); }); }
+  for (const m of shop.all().made) madeGroup.add(meshOf(m));
+}
+/** A generation step, done: drawn, and said to the pipelines watching for a shape made. */
+function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); if (!quiet) boards?.event({ kind: 'made', text }); return said; }
+/** Whether words said in the chat are generation's: its verbs, or a calculation ending in =; moving or turning only what is made. */
+function generationWords(t: string): boolean {
+  const w = t.trim(); if (!Workshop.handles(w)) return false;
+  if (/^(move|rotate|turn|remove|delete|split)\b/i.test(w)) return shop.all().made.some((m) => m.name === w.split(/\s+/)[1]) || shop.joined().some((j) => j.name === w.split(/\s+/)[1]);
+  return true;
+}
+// every 5 seconds: for a pipeline that starts every so many seconds or minutes, and for a condition that may have turned true
+{ let n = 0; window.setInterval(() => { n++; boards?.event({ kind: 'tick', minutes: (n * 5) / 60 }); }, 5_000); }
 const boardHost = {
   say: (t2: string) => say(t2),
   flowApi: () => flowApi,
@@ -2010,7 +2066,7 @@ async function boot() {
   unsentBtn.style.cssText = `${BTN};border-color:#ff8a80;display:none`; unsentBtn.dataset.fixOk = '1'; chat.append(unsentBtn);
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
   void makeRelay().then((r) => { relay = r; });
-  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); });
+  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => boards?.event({ kind: 'start' }), 1500); });
   // every panel a window with a bar; the spaces you stand in (what ran, the causes) without one
   for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
   named(phone.group, 'the phone in your hand');
@@ -2040,6 +2096,8 @@ async function boot() {
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
     phoneNow: () => ({ app: phone.app, photos: phone.photos.length, lines: phone.lines.map((l) => `${l.who}: ${l.text}`), typing: phone.typing, visible: phone.group.visible }),
+    madeNow: () => ({ made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
+    shopRun: (t: string) => makeStep(t),
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first

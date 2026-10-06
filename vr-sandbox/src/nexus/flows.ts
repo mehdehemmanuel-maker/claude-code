@@ -8,7 +8,7 @@
 // Nothing here acts by itself: the engine walks the board and calls what it is given (FlowApi), so a flow does exactly
 // what its steps say, through the same world the person acts on, and every step's output, failure and time is kept.
 
-import { BACK, BEFORE, STRUCT, derive, edgesOf, nodesOf, type Board } from './boards';
+import { BACK, BEFORE, STRUCT, derive, edgesOf, nodesOf, uid as newId, type Board, type Patch } from './boards';
 import { Workshop, scopeOf, truth, type Scope } from './generate';
 
 export type StepKind = 'trigger' | 'ai' | 'action' | 'check' | 'repeat';
@@ -17,7 +17,7 @@ export type FlowEventKind = 'run' | 'built' | 'flaw' | 'note' | 'tick' | 'said' 
 export interface FlowEvent { kind: FlowEventKind; text?: string; minutes?: number }
 export interface FlowApi {
   /** Do something in the room: returns what happened, in words; throws with why where it cannot. */
-  act(what: string, input: string, signal?: AbortSignal): Promise<string>;
+  act(what: string, input: string, signal?: AbortSignal, /** the board it runs on: what it makes, and its rules, are its own */ who?: string): Promise<string>;
   /** Ask: Claude where it can be reached, else Nexus; says which answered. */
   ai(prompt: string, input: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }>;
   /** The numbers a check reads, as they stand now: flaws, gaps, parts, mass, rounds, failures, notes. */
@@ -210,7 +210,7 @@ export const SUGGEST: Record<StepKind, [string, string][]> = {
 /** A run as it is kept on the board: each output cut to a length, and the last so many steps. */
 export const keptRun = (r: FlowRun, chars = 240, steps = 40): FlowRun => ({ ...r, steps: r.steps.slice(-steps).map((x) => ({ ...x, output: x.output.length > chars ? `${x.output.slice(0, chars - 1)}…` : x.output })) });
 /** An event, in words: why a flow started. */
-export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶ Run' : e.kind === 'built' ? 'a build finished' : e.kind === 'flaw' ? `a flaw was found${e.text ? `: ${e.text}` : ''}` : e.kind === 'note' ? `a note was added${e.text ? `: ${e.text}` : ''}` : e.kind === 'tick' ? `${e.minutes} min in` : `you said "${e.text ?? ''}"`);
+export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶ Run' : e.kind === 'built' ? 'a build finished' : e.kind === 'flaw' ? `a flaw was found${e.text ? `: ${e.text}` : ''}` : e.kind === 'note' ? `a note was added${e.text ? `: ${e.text}` : ''}` : e.kind === 'tick' ? `${Number.isInteger(e.minutes) ? `${e.minutes} min` : `${Math.round((e.minutes ?? 0) * 60)} s`} in` : e.kind === 'start' ? 'the forge opened' : e.kind === 'made' ? `a shape was made${e.text ? `: ${e.text}` : ''}` : e.kind === 'cond' ? `it came true${e.text ? `: ${e.text}` : ''}` : `you said "${e.text ?? ''}"`);
 
 // ---- flows to start from --------------------------------------------------------------------------------------------
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
@@ -251,7 +251,7 @@ export const TEMPLATES: Template[] = [
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'm', label: 'A matter', step: { kind: 'action', what: 'material one of steel, aluminium, brass, wood, acrylic, carbon fibre' } },
-      { id: 'b', label: 'A base', step: { kind: 'action', what: 'place plate named base at 1.4 m, 0.3 m, 0 size random(150, 300) x random(150, 300) x random(6, 16) mm' } },
+      { id: 'b', label: 'A base', step: { kind: 'action', what: 'place plate named base size random(150, 300) x random(150, 300) x random(6, 16) mm' } },
       { id: 'r', label: 'Turn it', step: { kind: 'action', what: 'rotate base y randomly' } },
       { id: 'c', label: 'Something on it', step: { kind: 'action', what: 'place one of ball, cone, cylinder, ring, cube named crown on base' } },
       { id: 'k', label: 'Smaller', step: { kind: 'action', what: 'shrink crown by randint(2, 4)' } },
@@ -315,4 +315,32 @@ export function boardOfTemplate(t: Template, at = Date.now(), uid: (p: string) =
   for (const s of t.steps) b.nodes[ids.get(s.id)!] = { label: s.label, ...(s.step ? { step: { ...s.step } } : {}) };
   t.links.forEach(([f, to, rel], i) => { b.edges[`e${i}`] = { from: ids.get(f)!, to: ids.get(to)!, rel: rel ?? 'flows to' }; });
   return b;
+}
+
+// ---- a pipeline carried from one board to another, or kept ------------------------------------------------------------
+/** A pipeline as it travels: its steps (each its word and what it does) and the links between them. */
+export interface Clip { title: string; at: number; nodes: { k: string; label: string; step?: Step }[]; links: [string, string, string][] }
+/** Taken from a board: from a step and all it leads to, or the whole of it (every step; every node where none does anything). */
+export function clipOf(b: Board, from?: string | null, at = Date.now()): Clip {
+  const g = graphOf(b), all = nodesOf(b).map((n) => n.id), steps = all.filter((id) => stepOf(b, id));
+  const ids = from && b.nodes[from] ? orderFrom(b, g, from) : steps.length ? steps : all;
+  const set = new Set(ids), key = new Map(ids.map((id, i) => [id, `n${i}`]));
+  return {
+    title: from && b.nodes[from] ? `${b.title}, from ${b.nodes[from]!.label}` : b.title, at,
+    nodes: ids.map((id) => { const st = stepOf(b, id); return { k: key.get(id)!, label: b.nodes[id]!.label, ...(st ? { step: { ...st } } : {}) }; }),
+    links: edgesOf(b).filter((e) => set.has(e.from) && set.has(e.to)).map((e): [string, string, string] => [key.get(e.from)!, key.get(e.to)!, e.rel ?? 'connects']),
+  };
+}
+/** Put onto a board: its steps as new nodes and its links as they were; where a step is open, the first runs after it. */
+export function pasteOf(c: Clip, after?: string | null, uid: (p: string) => string = newId): { patch: Patch; ids: string[] } {
+  const ids = new Map(c.nodes.map((n) => [n.k, uid('n')])), patch: Patch = { nodes: {}, edges: {} };
+  for (const n of c.nodes) patch.nodes![ids.get(n.k)!] = { label: n.label, ...(n.step ? { step: { ...n.step } } : {}) };
+  for (const [f, t, rel] of c.links) if (ids.has(f) && ids.has(t)) patch.edges![uid('e')] = { from: ids.get(f)!, to: ids.get(t)!, rel };
+  const first = c.nodes[0] ? ids.get(c.nodes[0].k)! : null;
+  if (after && first) patch.edges![uid('e')] = { from: after, to: first, rel: 'flows to' };
+  return { patch, ids: [...ids.values()] };
+}
+/** A board made from a kept pipeline. */
+export function boardOfClip(c: Clip, at = Date.now()): Board {
+  const { patch } = pasteOf(c); return { title: c.title, kind: 'flow', about: `Started from the pipeline kept as "${c.title}".`, nodes: patch.nodes as Board['nodes'], edges: patch.edges as Board['edges'], createdAt: at, updatedAt: at };
 }
