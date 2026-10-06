@@ -104,6 +104,10 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     const cs = new J.BodyCreationSettings(shape, R(origin), Q(q0), J.EMotionType_Dynamic, LAYER_MOVING);
     cs.mFriction = th.friction; cs.mRestitution = th.restitution; cs.mLinearDamping = 0; cs.mAngularDamping = 0; cs.mMaxAngularVelocity = 400;
     cs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia; cs.mMassPropertiesOverride.mMass = Math.max(th.mass, 1e-4); cs.mMotionQuality = J.EMotionQuality_LinearCast;
+    // a body of parts joined keeps each part's contacts its own: merged into one set of four, the points of a part not yet
+    // touching (a block 9 mm up on a 9 mm plate, within the 10 mm a contact is looked for ahead) were kept in place of the
+    // plate's own, and that side of the plate sank 9 mm into the floor
+    if (!single) cs.mUseManifoldReduction = false;
     const g = groupOf(); cs.mCollisionGroup = g;
     const body = bi.CreateBody(cs); J.destroy(cs); bi.AddBody(body.GetID(), J.EActivation_Activate);
     if (single) rel[0]!.at = [0, 0, 0];
