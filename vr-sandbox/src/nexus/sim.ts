@@ -29,14 +29,15 @@ export interface SimJoint {
   /** N·m about a hinge, N along a slide */
   friction?: number;
   /** a DC motor turning a hinge: its constants and the volts across it */
-  drive?: { name: string; V: number; Kt: number; R: number; Tf: number };
+  drive?: { name: string; V: number; Kt: number; R: number; Tf: number; /** a gearhead between: its ratio and efficiency */ gear?: { ratio: number; efficiency: number };
+    /** a speed controller: it sets the volts, up to V, to hold the hinge at so many rad/s, its current held under Imax */ hold?: { w: number; Imax: number } };
 }
 export interface SimJointOut {
   name: string; kind: 'hinge' | 'slide';
   /** sampled with the motion: a hinge's angle in radians, a slide's travel in metres */
   t: number[]; v: number[]; end: number; min: number; max: number;
   /** the motor driving it: where it ended, and the energy over the run, J */
-  drive?: { rpm: number; current: number; maxCurrent: number; energyIn: number; copper: number; out: number; friction: number };
+  drive?: { rpm: number; current: number; maxCurrent: number; energyIn: number; copper: number; out: number; friction: number; /** lost in a gearhead */ gears: number };
 }
 export interface SimOut { ends: SimEnd[]; parts: { name: string; at: V3; turn: V3 }[]; seconds: number; restedAt: number | null; track: SimTrack; hulls: string[]; joints: SimJointOut[] }
 
@@ -56,7 +57,7 @@ const T = (A: M3): M3 => [A[0], A[3], A[6], A[1], A[4], A[7], A[2], A[5], A[8]];
 const AXIS_TO: Record<Axis, M3> = { y: [1, 0, 0, 0, 1, 0, 0, 0, 1], x: [0, 1, 0, -1, 0, 0, 0, 0, 1], z: [1, 0, 0, 0, 0, -1, 0, 1, 0] };
 
 /** Let it go for so many seconds (or until all of it is at rest), on a floor at the height given, the build fixed. */
-export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seconds: number; floor?: number; push?: { name: string; force: V3; seconds: number }; joints?: SimJoint[] }): SimOut {
+export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seconds: number; floor?: number; push?: { name: string; force: V3; seconds: number; /** where it is pushed, in the room, as it stands when let go: else at its middle of mass */ at?: V3 }; joints?: SimJoint[] }): SimOut {
   const LAYER_STATIC = 0, LAYER_MOVING = 1, s = new J.JoltSettings();
   const pairs = new J.ObjectLayerPairFilterTable(2); pairs.EnableCollision(LAYER_STATIC, LAYER_MOVING); pairs.EnableCollision(LAYER_MOVING, LAYER_MOVING);
   const bp = new J.BroadPhaseLayerInterfaceTable(2, 2); bp.MapObjectToBroadPhaseLayer(LAYER_STATIC, new J.BroadPhaseLayer(0)); bp.MapObjectToBroadPhaseLayer(LAYER_MOVING, new J.BroadPhaseLayer(1));
@@ -70,8 +71,12 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
   const filter = new J.GroupFilterTable(things.length + fixed.length + 1); let sub = 0;
   const groupOf = () => new J.CollisionGroup(filter, 0, sub++);
   const staticBox = (b: SimBox) => { const sh = new J.BoxShapeSettings(V([b.w / 2, b.h / 2, b.d / 2]), cr(Math.min(b.w, b.h, b.d) / 2)).Create().Get(); const cs = new J.BodyCreationSettings(sh, R(b.at), Q([0, 0, 0, 1]), J.EMotionType_Static, LAYER_STATIC); cs.mFriction = 0.6; const g = groupOf(); cs.mCollisionGroup = g; const body = bi.CreateBody(cs); J.destroy(cs); bi.AddBody(body.GetID(), J.EActivation_DontActivate); return { body, sub: g.GetSubGroupID() }; };
-  // the floor, a metre thick, a hundred metres across; and the build, where it stands
-  staticBox({ at: [0, (o.floor ?? 0) - 0.5, 0], w: 100, h: 1, d: 100 }); const builds = fixed.map(staticBox);
+  // the floor: a plane, its top where it is said to be (a box a hundred metres across met a 9 mm plate with contact
+  // depths off by millimetres, more the further from its middle: a plywood box sank 3 mm and crept 10 to 40 mm); and the
+  // build, where it stands
+  { const pl = new J.Plane(V([0, 1, 0]), -(o.floor ?? 0)), ps0 = new J.PlaneShapeSettings(pl, undefined, 1000), sh = ps0.Create().Get(); J.destroy(ps0); J.destroy(pl);
+    const cs = new J.BodyCreationSettings(sh, R([0, 0, 0]), Q([0, 0, 0, 1]), J.EMotionType_Static, LAYER_STATIC); cs.mFriction = 0.6; const g = groupOf(); cs.mCollisionGroup = g; const body = bi.CreateBody(cs); J.destroy(cs); bi.AddBody(body.GetID(), J.EActivation_DontActivate); }
+  const builds = fixed.map(staticBox);
   const convex = (p: SimPart): InstanceType<Jolt['ConvexShapeSettings']> => {
     const d = p.dims, l = p.local;
     if (p.kind === 'box') return new J.BoxShapeSettings(V([Math.max(l.w / 2, 1e-4), Math.max(l.h / 2, 1e-4), Math.max(l.d / 2, 1e-4)]), cr(Math.min(l.w, l.h, l.d) / 2));
@@ -135,35 +140,56 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     }
     ps.AddConstraint(c);
     // a motor may turn it faster than the engine's usual cap: up to half again its no-load speed
-    if (j.drive) bi.SetMaxAngularVelocity(b2.GetID(), Math.max(400, (1.5 * Math.abs(j.drive.V)) / j.drive.Kt));
-    held.push({ j, c, mover, holder, out: { name: j.name, kind: j.kind, t: [], v: [], end: 0, min: 0, max: 0 }, d: j.drive ? { rpm: 0, current: 0, maxCurrent: 0, energyIn: 0, copper: 0, out: 0, friction: 0 } : null });
+    if (j.drive) bi.SetMaxAngularVelocity(b2.GetID(), Math.max(400, (1.5 * Math.abs(j.drive.V)) / j.drive.Kt / (j.drive.gear?.ratio ?? 1)));
+    held.push({ j, c, mover, holder, out: { name: j.name, kind: j.kind, t: [], v: [], end: 0, min: 0, max: 0 }, d: j.drive ? { rpm: 0, current: 0, maxCurrent: 0, energyIn: 0, copper: 0, out: 0, friction: 0, gears: 0 } : null });
   }
   // a hinge's angle unwrapped: a wheel that turns round and round counts its turns
   const raw = (h: Held) => (h.j.kind === 'hinge' ? (h.c as InstanceType<Jolt['HingeConstraint']>).GetCurrentAngle() : (h.c as InstanceType<Jolt['SliderConstraint']>).GetCurrentPosition());
   const unwrap = new Map<Held, { last: number; add: number }>();
   const valueOf = (h: Held) => { const v = raw(h); if (h.j.kind !== 'hinge') return v; const u = unwrap.get(h) ?? { last: v, add: 0 }; if (v - u.last > Math.PI) u.add -= 2 * Math.PI; else if (u.last - v > Math.PI) u.add += 2 * Math.PI; u.last = v; unwrap.set(h, u); return v + u.add; };
   /** A driven hinge's motor: its torque at the speed it turns, on what turns and back on what holds it. */
+  const integ = new Map<Held, number>();
   const drive = (h: Held, dt: number) => {
     const m = h.j.drive!, hc = h.c as InstanceType<Jolt['HingeConstraint']>, l = hc.GetLocalSpaceHingeAxis1(), la: V3 = [l.GetX(), l.GetY(), l.GetZ()], r1 = hc.GetBody1().GetRotation();
     const axis = apply(matQ([r1.GetX(), r1.GetY(), r1.GetZ(), r1.GetW()]), la);
     // read each at once: the engine hands back one vector it reuses
     const spin = (b: InstanceType<Jolt['Body']>): V3 => { const v = b.GetAngularVelocity(); return [v.GetX(), v.GetY(), v.GetZ()]; };
     const wa = spin(h.mover.body), wb = h.holder ? spin(h.holder.body) : [0, 0, 0];
-    const w = (wa[0] - wb[0]) * axis[0] + (wa[1] - wb[1]) * axis[1] + (wa[2] - wb[2]) * axis[2];
-    const I = (m.V - m.Kt * w) / m.R, Te = m.Kt * I;
+    const out = (wa[0] - wb[0]) * axis[0] + (wa[1] - wb[1]) * axis[1] + (wa[2] - wb[2]) * axis[2];
+    // through a gearhead, the motor turns n times as fast and gives n times its torque, less what the gears lose
+    const n = m.gear?.ratio ?? 1, eta = m.gear?.efficiency ?? 1, w = n * out;
+    // held at a speed: the controller sets the volts that would turn it at that speed with only its friction to carry,
+    // and more by how far off it is and has been (proportional and integral), the motor's own back-EMF damping it; the
+    // volts held to the supply's and to what drives no more than its current limit through the winding
+    let Vin = m.V;
+    if (m.hold) {
+      const wt = n * m.hold.w, e = wt - w, kp = 4 * m.Kt, ki = 8 * m.Kt, lo = Math.max(-m.V, m.Kt * w - m.hold.Imax * m.R), hi = Math.min(m.V, m.Kt * w + m.hold.Imax * m.R);
+      const base = m.Kt * wt + m.R * (m.Tf / m.Kt) * Math.sign(wt), held = integ.get(h) ?? 0, raw = base + kp * e + ki * held;
+      Vin = Math.max(lo, Math.min(hi, raw));
+      // the sum of what has been off grows only while the volts are not held at a limit (so it does not wind up)
+      if (raw === Vin) integ.set(h, held + e * dt);
+    }
+    const I = (Vin - m.Kt * w) / m.R, Te = m.Kt * I;
     // its friction against the way it turns; at rest, holding back no more than it is pushed
-    const Tf = Math.abs(w) > 1e-6 ? Math.sign(w) * m.Tf : Math.sign(Te) * Math.min(m.Tf, Math.abs(Te)), T = Te - Tf;
+    const Tf = Math.abs(w) > 1e-6 ? Math.sign(w) * m.Tf : Math.sign(Te) * Math.min(m.Tf, Math.abs(Te)), Tm = Te - Tf, T = Tm * w >= 0 ? n * eta * Tm : (n * Tm) / eta;
     bi.AddTorque(h.mover.body.GetID(), V([axis[0] * T, axis[1] * T, axis[2] * T]), J.EActivation_Activate);
     if (h.holder) bi.AddTorque(h.holder.body.GetID(), V([-axis[0] * T, -axis[1] * T, -axis[2] * T]), J.EActivation_Activate);
     const d = h.d!; d.rpm = (w * 60) / (2 * Math.PI); d.current = I; d.maxCurrent = Math.max(d.maxCurrent, Math.abs(I));
-    d.energyIn += m.V * I * dt; d.copper += I * I * m.R * dt; d.out += T * w * dt; d.friction += Tf * w * dt;
+    d.energyIn += Vin * I * dt; d.copper += I * I * m.R * dt; d.out += T * out * dt; d.friction += Tf * w * dt; d.gears += Tm * w * dt - T * out * dt;
   };
   const dt = 1 / 240, track: SimTrack = { names: live.flatMap((l) => l.rel.map((x) => x.part.name)), frames: [] };
   let t = 0, restedAt: number | null = null, sample = 0;
   const pushed = o.push ? live.find((l) => l.thing.name === o.push!.name || l.rel.some((x) => x.part.name === o.push!.name)) : undefined;
   if (o.push && !pushed) throw new Error(`Nothing named ${o.push.name} is let go here`);
+  // pushed at a point: where that point is on the body, kept as the body turns
+  let pushOff: V3 | null = null;
+  if (pushed && o.push!.at) { const p = pushed.body.GetPosition(), r = pushed.body.GetRotation(), q: Q4 = [r.GetX(), r.GetY(), r.GetZ(), r.GetW()], d: V3 = [o.push!.at[0] - p.GetX(), o.push!.at[1] - p.GetY(), o.push!.at[2] - p.GetZ()]; pushOff = apply(T(matQ(q)), d); }
   while (t < o.seconds - 1e-9) {
-    if (pushed && t < o.push!.seconds) { bi.ActivateBody(pushed.body.GetID()); bi.AddForce(pushed.body.GetID(), V(o.push!.force), J.EActivation_Activate); }
+    if (pushed && t < o.push!.seconds) {
+      bi.ActivateBody(pushed.body.GetID());
+      if (pushOff) { const p = pushed.body.GetPosition(), r = pushed.body.GetRotation(), at = [p.GetX(), p.GetY(), p.GetZ()], w = apply(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()]), pushOff); bi.AddForce(pushed.body.GetID(), V(o.push!.force), R([at[0]! + w[0], at[1]! + w[1], at[2]! + w[2]]), J.EActivation_Activate); }
+      else bi.AddForce(pushed.body.GetID(), V(o.push!.force), J.EActivation_Activate);
+    }
     for (const h of held) if (h.d) drive(h, dt);
     // with joints, four steps to each: a hinge's solver loses a little of a swing's energy each step, less the shorter the step
     jolt.Step(dt, held.length ? 4 : 1); t += dt;

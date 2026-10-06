@@ -21,8 +21,15 @@ const V: Dim = [1, 2, -3, -1, 0], OHM: Dim = [1, 2, -3, -2, 0];
 export const UNITS: Record<string, UnitDef> = {
   '-': u(DIMLESS), '1': u(DIMLESS), mol: u(DIMLESS), dB: u(DIMLESS), rad: u(DIMLESS), rev: u(DIMLESS, 2 * Math.PI), deg: u(DIMLESS, Math.PI / 180), '%': u(DIMLESS, 0.01),
   kg: u(M), g: u(M, 1e-3), t: u(M, 1000), lb: u(M, 0.45359237), lbs: u(M, 0.45359237), oz: u(M, 0.028349523125),
-  m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
-  s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600),
+  m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), um: u(L, 1e-6), 'µm': u(L, 1e-6), nm: u(L, 1e-9), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
+  // the astronomical unit, exactly (IAU 2012 Resolution B2)
+  au: u(L, 149597870700),
+  mg: u(M, 1e-6),
+  // volumes: the litre is a cubic decimetre (SI Brochure, 9th ed., Table 8); the US gallon 231 cubic inches exactly
+  'm^3': u([0, 3, 0, 0, 0]), L: u([0, 3, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0], 1e-6), cL: u([0, 3, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0], 231 * 0.0254 ** 3),
+  s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600), d: u(T, 86400), wk: u(T, 604800),
+  // a month and a year on average in the Gregorian calendar (365.2425 days)
+  mo: u(T, 2629746), yr: u(T, 31556952),
   A: u(I), mA: u(I, 1e-3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
   N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
@@ -83,16 +90,17 @@ export function fromSI(value: number, unit: string): number {
 /** How people say units, to the symbols above. Longest first, so "km/h" wins over "km". */
 const SPOKEN: [RegExp, string][] = [
   [/^(km\/h|kmh|kph|kilometres? per hour|kilometers? per hour)$/i, 'km/h'], [/^(mph|miles? per hour)$/i, 'mi/h'], [/^(m\/s|mps|metres? per second|meters? per second)$/i, 'm/s'],
-  [/^(m\/s\^?2|m\/s²|m s-2)$/i, 'm/s^2'], [/^(n[·.\s-]?m|nm|newton[- ]?met(re|er)s?)$/i, 'N m'], [/^(lbf?[·.\s-]?ft|ft[·.\s-]?lbf?)$/i, 'lbf ft'], [/^(in[·.\s-]?lbf?|lbf?[·.\s-]?in)$/i, 'lbf in'],
+  [/^(m\/s\^?2|m\/s²|m s-2)$/i, 'm/s^2'], [/^(N[·.\s-]?m)$/, 'N m'], [/^(n[·.\s-]m|newton[- ]?met(re|er)s?)$/i, 'N m'], [/^(lbf?[·.\s-]?ft|ft[·.\s-]?lbf?)$/i, 'lbf ft'], [/^(in[·.\s-]?lbf?|lbf?[·.\s-]?in)$/i, 'lbf in'],
   [/^(lbf|pounds? force|pound-force)$/i, 'lbf'], [/^(kgf|kilograms? force)$/i, 'kgf'],
-  [/^(kg|kgs|kilos?|kilograms?)$/i, 'kg'], [/^(g|grams?)$/i, 'g'], [/^(lbs?|pounds?)$/i, 'lb'], [/^(t|tonnes?)$/i, 't'],
-  [/^(mm|millimet(re|er)s?)$/i, 'mm'], [/^(cm|centimet(re|er)s?)$/i, 'cm'], [/^(m|met(re|er)s?)$/i, 'm'], [/^(km|kilomet(re|er)s?)$/i, 'km'], [/^(in|inch|inches|")$/i, 'in'], [/^(ft|foot|feet|')$/i, 'ft'],
-  [/^(s|sec|secs|seconds?)$/i, 's'], [/^(min|mins|minutes?)$/i, 'min'], [/^(h|hr|hrs|hours?)$/i, 'h'],
+  [/^(kg|kgs|kilos?|kilograms?)$/i, 'kg'], [/^(g|grams?)$/i, 'g'], [/^(mg|milligrams?)$/i, 'mg'], [/^(lbs?|pounds?)$/i, 'lb'], [/^(t|tonnes?)$/i, 't'],
+  [/^(m³|m3|m\^3|cubic met(re|er)s?)$/i, 'm^3'], [/^(ml|millilit(re|er)s?)$/i, 'mL'], [/^(cl|centilit(re|er)s?)$/i, 'cL'], [/^(l|lit(re|er)s?)$/i, 'L'], [/^(gal|gallons?)$/i, 'gal'],
+  [/^(mm|millimet(re|er)s?)$/i, 'mm'], [/^(cm|centimet(re|er)s?)$/i, 'cm'], [/^(m|met(re|er)s?)$/i, 'm'], [/^(km|kilomet(re|er)s?)$/i, 'km'], [/^(µm|um|μm|microns?|micromet(re|er)s?)$/i, 'um'], [/^(nanomet(re|er)s?)$/i, 'nm'], [/^nm$/, 'nm'], [/^(au|astronomical units?)$/i, 'au'], [/^(in|inch|inches|")$/i, 'in'], [/^(ft|foot|feet|')$/i, 'ft'],
+  [/^(s|sec|secs|seconds?)$/i, 's'], [/^(min|mins|minutes?)$/i, 'min'], [/^(h|hr|hrs|hours?)$/i, 'h'], [/^(days?)$/i, 'd'], [/^(weeks?|wks?)$/i, 'wk'], [/^(months?)$/i, 'mo'], [/^(years?|yrs?)$/i, 'yr'],
   [/^(a|amps?|amperes?)$/i, 'A'], [/^(ma|milliamps?)$/i, 'mA'], [/^(v|volts?)$/i, 'V'], [/^(w|watts?)$/i, 'W'], [/^(kw|kilowatts?)$/i, 'kW'], [/^(hp|horsepower)$/i, 'hp'],
   [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
   [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],
-  [/^(°c|degc|celsius|degrees? c)$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? f)$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
+  [/^(°c|degc|celsius|degrees? (c|celsius|centigrade))$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? (f|fahrenheit))$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
 
 export interface Said { value: number; unit: string; si: number; dim: Dim; at: number; text: string }
@@ -103,14 +111,16 @@ export interface Said { value: number; unit: string; si: number; dim: Dim; at: n
  */
 export function findQuantities(text: string): Said[] {
   const out: Said[] = [];
-  const re = /(?:(?<![\w.])(-|minus\s+|−))?(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)\s*(°c|%|"|'|[a-zµΩ°][a-z²^0-9·./ -]{0,24})/gi;
+  // a number may be written with thousands set apart ("12,000"), and joined to its unit by a hyphen ("a 40-micrometre robot")
+  const re = /(?:(?<![\w.])(-|minus\s+|−))?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?:\s*-\s*|\s*)(°c|%|"|'|[a-zµμΩ°][a-z²³^0-9·./ -]{0,24})/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    const raw = m[2]!.replace(/\s+/g, '');
+    const raw = m[2]!.replace(/[\s,]+/g, '');
     const sign = m[1] ? -1 : 1;
     const value = sign * (raw.includes('/') ? Number(raw.split('/')[0]) / Number(raw.split('/')[1]) : Number(raw));
     // the longest run of words after the number that is a unit people say
-    const words = m[3]!.trim().split(/\s+/);
+    // words after it, a hyphen splitting them too ("metre-tall" is "metre", then "tall")
+    const words = m[3]!.trim().split(/[\s-]+/);
     let unit: string | null = null, used = 0;
     for (let k = Math.min(words.length, 4); k >= 1 && !unit; k--) {
       const cand = words.slice(0, k).join(' ').replace(/[.,;:]+$/, '');
@@ -126,4 +136,4 @@ export function findQuantities(text: string): Said[] {
   return out;
 }
 
-export const DIMS = { mass: M, length: L, time: T, current: I, temperature: K, force: N, pressure: PA, energy: J, power: W, voltage: V, resistance: OHM, speed: [0, 1, -1, 0, 0] as Dim, accel: [0, 1, -2, 0, 0] as Dim, torque: [1, 2, -2, 0, 0] as Dim, frequency: [0, 0, -1, 0, 0] as Dim, charge: [0, 0, 1, 1, 0] as Dim };
+export const DIMS = { volume: [0, 3, 0, 0, 0] as Dim, mass: M, length: L, time: T, current: I, temperature: K, force: N, pressure: PA, energy: J, power: W, voltage: V, resistance: OHM, speed: [0, 1, -1, 0, 0] as Dim, accel: [0, 1, -2, 0, 0] as Dim, torque: [1, 2, -2, 0, 0] as Dim, frequency: [0, 0, -1, 0, 0] as Dim, charge: [0, 0, 1, 1, 0] as Dim };
