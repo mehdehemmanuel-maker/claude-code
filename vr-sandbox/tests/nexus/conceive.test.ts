@@ -63,7 +63,7 @@ describe('reading what is said', () => {
   });
   it('reads a chain of sizes as one size, by the words before and after it', () => {
     const p = conceive('a platform that folds flat to 60 x 40 x 15 cm so it fits in a car trunk');
-    // what it must fold down to is checked against it as made, all three sizes as one
+    // what it must fold down to is checked against it folded, all three sizes as one
     expect(p.limits.fold).toEqual([0.6, 0.4, 0.15]);
     const w = conceive('a fold-down workbench that opens to a 120 x 60 cm top at 90 cm high in a cabinet only 15 cm deep');
     const top = w.wants.find((x) => x.fn === 'support')!;
@@ -71,10 +71,10 @@ describe('reading what is said', () => {
     expect(w.dropped.some((x) => /^15 cm: said of the cabinet/.test(x))).toBe(true);
   });
   it('tells a part that folds from the whole of it folding down, and what it does by from what it does', () => {
-    // the whole of it folding is a linkage, not kept: no leaf is made in its place
+    // the whole of it folding is judged where it is made (it folds flat onto its widest flat part): no leaf is made in its place
     const b = conceive('a folding footbridge that packs into a 70 cm long bundle');
     expect(b.wants.some((x) => x.fn === 'swing')).toBe(false);
-    expect(b.asked.filter((a) => /collapse together/.test(a.why)).length).toBe(2);
+    expect(b.asked.filter((a) => a.how === 'folds').length).toBe(2);
     // a part of it that folds is a leaf that swings
     expect(conceive('a box with a lid that folds back').wants.some((x) => x.fn === 'swing')).toBe(true);
     // "extends to raise": how it raises, not a slide of its own
@@ -451,5 +451,41 @@ describe('wave 4: what twenty new asks found, by cause', () => {
     expect(g.heard).toContain('squeezing with no more than 10 µN: heard, but no law here weighs it yet');
     const m = go('Design an electric motor as big as the Earth, with a rotor about 12,700 km across spinning once every 24 hours, that puts out 20 terawatts to power the whole planet.');
     expect(m.heard.some((h) => /20 terawatts: weighed below$/.test(h))).toBe(true); expect(b(m, /^it sheds the/).says).toMatch(/^the 5% it loses of the 2\.00 × 10\^13 W it gives/);
+  });
+});
+describe('folding the whole of it: planned on what is made, latched open, tested folded', () => {
+  const ck = (d: ReturnType<typeof designs>[number], re: RegExp) => d.checks.find((x) => re.test(x.what))!;
+  it('a folding camping table folds up under its top, latched open; laid down folded it lies still, under the 8 cm asked', () => {
+    const c = go('a folding camping table that holds 20 kg and folds flat to 8 cm');
+    expect(c.limits.foldThin).toBe(0.08); expect(c.asked.find((a) => a.text === 'folding')).toMatchObject({ got: 'support', how: 'folds' });
+    const [d] = designs(c, 1, { seed: 101, physics: J });
+    for (const re of [/^it folds flat$/, /^folding, nothing runs into anything$/, /^latched open, its hinges hold$/, /^folded, it can be made under the laws$/, /^folded, it lies still when let go$/, /^it folds flat to 80 mm$/]) expect(ck(d!, re).ok, String(re)).toBe(true);
+    expect(d!.asked.filter((a) => a.how === 'folds').every((a) => a.got)).toBe(true); expect(d!.asked.find((a) => a.kind === 'thing')!.got).toBe('support');
+  }, 60000);
+  it('a collapsible crate folds its walls down in turn, latched where they meet; folded it is no thicker than asked', () => {
+    const [d] = designs(go('a collapsible crate 600 x 400 x 300 mm that folds flat to 6 cm'), 1, { seed: 101, physics: J });
+    expect(ck(d!, /^it folds flat$/).says).toMatch(/latched open where they meet, and let go to fold/);
+    expect(ck(d!, /^it folds flat to 60 mm$/).ok).toBe(true); expect(ck(d!, /^folded, it lies still when let go$/).ok).toBe(true);
+  }, 60000);
+  it('a shelter that folds into a 25 litre backpack: what it packs into is checked against it folded', () => {
+    const c = go('Design me an emergency shelter that folds flat like origami into a 25 litre backpack at under 9 kg, then snaps open into a rigid 12 m² room that holds up in 90 km/h winds.');
+    expect(c.limits.foldVol).toBeCloseTo(0.025, 9); expect(c.heard).toContain('packs into 25 litre (a backpack): checked against it folded');
+    const [d] = designs(c, 1, { seed: 101, physics: J });
+    expect(ck(d!, /^it packs into 25 L$/)).toMatchObject({ ok: false, says: expect.stringMatching(/times as much$/) });
+    expect(d!.asked.find((a) => /^folds flat like origami/.test(a.text))!.got).toBe(null);
+  }, 60000);
+  it('a footbridge made as one deck does not fold, and says what folding it would take; its banks are not folded', () => {
+    const [d] = designs(go('a folding footbridge that packs into a 70 cm long bundle'), 1, { seed: 101, physics: J });
+    expect(ck(d!, /^it folds flat$/)).toMatchObject({ ok: false, says: expect.stringMatching(/cut into pieces hinged end to end \(a book fold\)/) });
+    expect(d!.asked.find((a) => a.text === 'folding')!.got).toBe(null);
+  }, 60000);
+  it('what turns, and what carries what turns, is not folded: said so', () => {
+    const [d] = designs(go('I need a folding electric cargo bike that can haul 120 kg of kids and groceries up a 15% hill at 20 km/h, but still weighs under 25 kg so I can carry it up three flights of stairs.'), 1, { seed: 101, physics: J });
+    expect(ck(d!, /^it can be made under the laws$/).ok).toBe(true); expect(ck(d!, /^it folds flat$/).says).toMatch(/wheel\d turns on it/);
+  }, 60000);
+  it('"a bookshelf with 4 shelves that holds 30 kg each and folds flat": four shelves of 30 kg; the folding is the bookshelf\'s', () => {
+    const c = go('a folding bookshelf with 4 shelves that holds 30 kg each and folds flat for moving');
+    expect(c.heard).toContain('load: 30 kg each, 4 of them'); expect(c.wants.map((w) => w.fn)).toEqual(['support']);
+    expect(c.asked.find((a) => a.text === 'folds flat for moving')).toMatchObject({ how: 'folds' });
   });
 });
