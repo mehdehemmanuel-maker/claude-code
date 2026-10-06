@@ -22,7 +22,7 @@ export function rank(M: number[][], tol = 1e-9): number {
   if (!M.length || !M[0]!.length) return 0;
   const A = M.map((r) => [...r]);
   const rows = A.length, cols = A[0]!.length;
-  const scale = Math.max(...A.flat().map(Math.abs)) || 1;
+  const scale = A.reduce((m, r) => r.reduce((k, v) => Math.max(k, Math.abs(v)), m), 0) || 1;
   let r = 0;
   for (let c = 0; c < cols && r < rows; c++) {
     let p = r;

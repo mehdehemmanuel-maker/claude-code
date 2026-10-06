@@ -167,7 +167,7 @@ export function treeFlows(G: Graph, edges: number[], source: number, draw: Map<n
 /** What a strut is made of: its stiffness, what it bears and what it weighs. */
 export interface Strut { E: number; /** in tension */ sy: number; /** pressed, before it crushes */ sc: number; density: number }
 /** A section that can be had: its area, its least second moment, its mass for a metre, and its name. */
-export interface Section { A: number; I: number; label: string }
+export interface Section { A: number; I: number; label: string; /** how wide it shows to a wind across it, m */ width?: number }
 
 /** Joints' motions and each strut's pull (tension positive) under loads at the joints, the held joints held still. */
 export function truss(G: Graph, A: number[], E: number, held: Set<number>, load: V3[]): { u: V3[]; N: number[]; converged: boolean } {
@@ -211,6 +211,15 @@ export function areaFor(N: number, L: number, s: Strut): number {
   return Math.max(crush, buck);
 }
 
+/** A wind on a load: in that load's case, ½ ρ v² (q) along a way (dir), on each strut as wide as it is (drag 1.2, a round
+ *  strut across the wind, estimate), half to each end. */
+export interface Wind { case: number; q: number; dir: V3 }
+/** What the wind puts on a strut's ends: q Cd w L sin θ along the wind, θ between the strut and the wind. */
+function windOn(f: V3[], p: V3, q0: V3, a: number, b: number, width: number, w: Wind): void {
+  const d = sub(q0, p), L = norm(d), cos = Math.abs(dot(d, w.dir)) / L, F = w.q * 1.2 * width * L * Math.sqrt(Math.max(0, 1 - cos * cos)) / 2;
+  for (const j of [a, b]) for (let k = 0; k < 3; k++) f[j]![k]! += F * w.dir[k]!;
+}
+
 /** A strut kept: its ends, its area and its length. */
 export interface Member { a: number; b: number; A: number; L: number }
 export interface Grown { nodes: V3[]; members: Member[]; /** each load's pull in each member, tension positive */ N: number[][]; mass: number; rounds: number; mechanisms: number; planar: boolean }
@@ -236,10 +245,11 @@ export function mergeChains(nodes: V3[], list: Member[], held: Set<number>, load
  *  the loads (and its own weight and the others', pulled down by g), solved again, until the sizes settle. Struts left
  *  carrying nothing are cut away; struts left in a straight line through a joint nothing else holds or loads are one
  *  strut; and if what is left is a mechanism, the least of what was cut is put back until it is not. */
-export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], o: { g?: number; rounds?: number; floor?: number; start?: number[] } = {}): Grown & { A: number[]; keptEdges: number[] } {
+export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], o: { g?: number; rounds?: number; floor?: number; start?: number[]; wind?: Wind[] } = {}): Grown & { A: number[]; keptEdges: number[] } {
   const g = o.g ?? 9.80665, rounds = o.rounds ?? 120, n = G.nodes.length;
   const planar = G.nodes.every((p) => Math.abs(p[2] - G.nodes[0]![2]) < 1e-12);
-  const loadsWith = (A: number[]) => cases.map((c) => { const f: V3[] = Array.from({ length: n }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); G.edges.forEach(([a, b], e) => { const w = (s.density * A[e]! * G.len[e]! * g) / 2; f[a]![1] -= w; f[b]![1] -= w; }); return f; });
+  // its own weight on every load, and where a wind blows, the wind on each strut as thick as it now is (a thin tube's width, √(20 A / π))
+  const loadsWith = (A: number[]) => cases.map((c, k) => { const f: V3[] = Array.from({ length: n }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); G.edges.forEach(([a, b], e) => { const w = (s.density * A[e]! * G.len[e]! * g) / 2; f[a]![1] -= w; f[b]![1] -= w; for (const wd of o.wind ?? []) if (wd.case === k) windOn(f, G.nodes[a]!, G.nodes[b]!, a, b, Math.sqrt((20 * A[e]!) / Math.PI), wd); }); return f; });
   // every strut starts alike, as thick as the largest load wants pulled
   const Fmax = Math.max(...cases.flat().map((v) => (v ? norm(v) : 0))), A0 = (2 * Fmax) / s.sy || 1e-6;
   let A = o.start ? [...o.start] : G.edges.map(() => A0), done = 0;
@@ -269,12 +279,21 @@ export function growFrame(G: Graph, s: Strut, held: Set<number>, cases: V3[][], 
 
 /** What a frame must do: the room it may take, which of its joints what it stands on or is fixed to holds, the loads it
  *  must carry (each a set of forces at points, every one carried alone), and boxes it must keep clear. */
-export interface FrameAsk { lo: V3; hi: V3; cells: [number, number, number]; held: (p: V3) => boolean; cases: { at: V3; F: V3 }[][]; keepOut?: [V3, V3][]; /** how far a strut may reach, in cells (2.3: across a cell's face and a knight's move) */ reach?: number }
+export interface FrameAsk { lo: V3; hi: V3; cells: [number, number, number]; held: (p: V3) => boolean; /** winds, each on one of its loads */ wind?: Wind[]; /** resting, its feet may be weighed down (ballast) as much as keeps them down and from sliding */ ballast?: boolean; /** what holds it only pushes (it rests on a floor or a bank): no foot may be pulled down, and no foot slides past μ of what presses it (0.5, estimate) */ rests?: boolean; /** resting, the plan of its top (x0, z0, x1, z1), anywhere on which what it carries may be put: it lies inside the outline its feet make, so what is put at its edge does not tip it */ over?: [number, number, number, number]; cases: { at: V3; F: V3 }[][]; keepOut?: [V3, V3][]; /** how far a strut may reach, in cells (2.3: across a cell's face and a knight's move) */ reach?: number }
 /** A matter a frame may be made of, and the sections of it that can be had. */
 export interface FrameMatter { id: string; name: string; strut: Strut; sections: Section[] }
 /** A strut as made: its ends, its section, its length, and its pull under each load. */
 export interface MadeStrut { a: number; b: number; L: number; section: Section; N: number[]; /** the least of its margins: tension and crushing by two, buckling by three, as a factor over what each asks */ margin: number; mode: 'pulled' | 'crushed' | 'buckled' }
-export interface MadeFrame { matter: FrameMatter; nodes: V3[]; struts: MadeStrut[]; held: number[]; loaded: number[]; mass: number; mechanisms: number; /** under each load, the most any loaded joint moves, against what it may */ sag: { most: number; allowed: number; at: number }[]; ok: boolean; grownMass: number; rounds: number }
+export interface MadeFrame { matter: FrameMatter; nodes: V3[]; struts: MadeStrut[]; held: number[]; loaded: number[]; mass: number; mechanisms: number; /** what it was grown for, as forces at its joints (its own weight apart), and the winds on them */ cases: V3[][]; wind: Wind[]; /** where it rests on what only pushes: the most any foot would have to be pulled down (N, 0 if none), the most any would slide (as a share of μ of what presses it) */ lift: { most: number; slide: number; /** its top lies inside its feet's outline */ inside: boolean }; /** at each foot (as held, in order), the weight it wants set on it to stay down and not slide, by 1.5, N */ ballast: number[]; /** under each load, the most any loaded joint moves, against what it may */ sag: { most: number; allowed: number; at: number }[]; ok: boolean; grownMass: number; rounds: number }
+
+/** The convex hull of points in a plane, anticlockwise (Andrew's monotone chain). */
+export function hullOf(pts: [number, number][]): [number, number][] {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]), cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [], upper: [number, number][] = [];
+  for (const x of p) { while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, x) <= 1e-12) lower.pop(); lower.push(x); }
+  for (const x of [...p].reverse()) { while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, x) <= 1e-12) upper.pop(); upper.push(x); }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
 
 /** The lightest section that bears what a strut carries under every load: pulled, its area by two of its strength;
  *  pressed, by two of its crushing and by three of its buckling (Euler, ends pinned). */
@@ -290,12 +309,15 @@ export function sectionFor(N: number[], L: number, s: Strut, sections: Section[]
  *  section that bears it, solved again as made (a frame with more struts than it needs shares its loads by their
  *  stiffness, so a strut made thicker draws more), until no strut changes; then stiffened where a load moves more than
  *  it may (1/250 of twice how far it is held out, estimate). The lightest that holds is kept; each is returned. */
-export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: number } = {}): { best: MadeFrame | null; tried: MadeFrame[] } {
+export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: number; /** each round of its growth, as it goes: what is left of it, and what it would weigh made */ trace?: (r: { matter: string; round: number; ground: number; struts: number; joints: number; mass: number; ok: boolean }) => void; /** what each joint costs, as a mass (a node, a gusset, its bolts), kg */ jointKg?: number; /** and each joint held by what holds it (its plate), kg */ heldKg?: number } = {}): { best: MadeFrame | null; tried: MadeFrame[] } {
   const g = o.g ?? 9.80665, pts = ask.cases.flat().map((x) => x.at);
   const { nodes, at } = lattice(ask.lo, ask.hi, ask.cells, pts);
   const held = new Set(nodes.map((p, i) => (ask.held(p) ? i : -1)).filter((i) => i >= 0));
   const cell = Math.max(...[0, 1, 2].filter((d) => ask.cells[d]! > 0).map((d) => (ask.hi[d]! - ask.lo[d]!) / ask.cells[d]!));
-  const G = ground(nodes, cell * (ask.reach ?? 2.3), { held, ...(ask.keepOut ? { keepOut: ask.keepOut } : {}) });
+  // every joint may reach every other where there are few enough of them (the full ground: a strut may be as long as
+  // the room), else as far as a knight's move across the cells
+  const span = Math.hypot(ask.hi[0] - ask.lo[0], ask.hi[1] - ask.lo[1], ask.hi[2] - ask.lo[2]);
+  const G = ground(nodes, ask.reach !== undefined ? cell * ask.reach : nodes.length <= 64 ? span * 1.001 : cell * 2.3, { held, ...(ask.keepOut ? { keepOut: ask.keepOut } : {}) });
   let k = 0; const cases: V3[][] = ask.cases.map((c) => { const f: V3[] = []; for (const x of c) { const j = at[k++]!; f[j] = [(f[j]?.[0] ?? 0) + x.F[0], (f[j]?.[1] ?? 0) + x.F[1], (f[j]?.[2] ?? 0) + x.F[2]]; } return f; });
   const loaded = [...new Set(at)];
   const tried = matters.map((mt) => {
@@ -303,8 +325,11 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
     // strut changes; then stiffened where a load moves more than it may
     const make = (grown: Grown): MadeFrame => {
       const KG: Graph = { nodes, edges: grown.members.map((m) => [m.a, m.b]), len: grown.members.map((m) => m.L) };
-      const solve = (A: number[]) => cases.map((c) => { const f: V3[] = Array.from({ length: nodes.length }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); grown.members.forEach((m, e) => { const w = (mt.strut.density * A[e]! * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; }); return truss(KG, A, mt.strut.E, held, f); });
-      let least = grown.members.map(() => 0), picks = grown.members.map((m, e) => sectionFor(grown.N.map((Nk) => Nk[e]!), m.L, mt.strut, mt.sections));
+      let picks: ReturnType<typeof sectionFor>[] = [];
+      const widthOf = (A: number, e: number) => picks[e]?.section.width ?? Math.sqrt((20 * A) / Math.PI);
+      const solve = (A: number[]) => cases.map((c, k) => { const f: V3[] = Array.from({ length: nodes.length }, (_, i) => [...(c[i] ?? [0, 0, 0])] as V3); grown.members.forEach((m, e) => { const w = (mt.strut.density * A[e]! * m.L * g) / 2; f[m.a]![1] -= w; f[m.b]![1] -= w; for (const wd of ask.wind ?? []) if (wd.case === k) windOn(f, nodes[m.a]!, nodes[m.b]!, m.a, m.b, widthOf(A[e]!, e), wd); }); return { r: truss(KG, A, mt.strut.E, held, f), f }; }).map((x) => Object.assign(x.r, { f: x.f }));
+      let least = grown.members.map(() => 0);
+      picks = grown.members.map((m, e) => sectionFor(grown.N.map((Nk) => Nk[e]!), m.L, mt.strut, mt.sections));
       let runs = solve(picks.map((p) => p.section.A));
       for (let it = 0; it < 8; it++) {
         const next = grown.members.map((m, e) => sectionFor(runs.map((r) => r.N[e]!), m.L, mt.strut, mt.sections, Math.max(least[e]!, picks[e]!.section.A)));
@@ -321,23 +346,38 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
       }
       const struts: MadeStrut[] = grown.members.map((m, e) => { const N = runs.map((r) => r.N[e]!), p = sectionFor(N, m.L, mt.strut, [picks[e]!.section]); return { a: m.a, b: m.b, L: m.L, section: picks[e]!.section, N, margin: p.margin, mode: p.mode }; });
       const mass = struts.reduce((x, y) => x + mt.strut.density * y.section.A * y.L, 0);
-      const ok = grown.mechanisms === 0 && struts.every((x) => x.margin >= 1) && sag.every((x) => x.most <= x.allowed) && runs.every((r) => r.converged);
-      return { matter: mt, nodes, struts, held: [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)), loaded, mass, mechanisms: grown.mechanisms, sag, ok, grownMass: grown.mass, rounds: grown.rounds };
+      // what holds it pushes back at each held joint: what its struts pull it with, and what is put on it, less (R = −Σ N u − f);
+      // resting, none may pull it down, nor push it sideways past half of what presses it
+      const lift = { most: 0, slide: 0 };
+      const heldList = [...held], need = heldList.map(() => 0);
+      if (ask.rests) runs.forEach((r) => { heldList.forEach((h, hi) => { const R: V3 = [0, 0, 0]; struts.forEach((x, e) => { if (x.a !== h && x.b !== h) return; const o2 = x.a === h ? x.b : x.a, u = sub(nodes[o2]!, nodes[h]!), L = norm(u); for (let d = 0; d < 3; d++) R[d]! -= (r.N[e]! * u[d]!) / L; }); const f = r.f[h]!; for (let d = 0; d < 3; d++) R[d]! -= f[d]!;
+        // what would keep it down, and from sliding (μ 0.5, estimate): pressed by at least what it is pushed sideways over μ
+        const want = Math.max(-R[1], Math.hypot(R[0], R[2]) / 0.5 - R[1]); need[hi] = Math.max(need[hi]!, want);
+        if (R[1] < 0) lift.most = Math.max(lift.most, -R[1]); else if (R[1] > 0) lift.slide = Math.max(lift.slide, Math.hypot(R[0], R[2]) / (0.5 * R[1])); }); });
+      const ballast = ask.ballast ? need.map((x) => Math.max(0, x) * 1.5) : need.map(() => 0);
+      // resting, its feet's outline on the floor (their convex hull) holds the whole of its top
+      const feet = [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)).map((h) => [nodes[h]![0], nodes[h]![2]] as [number, number]);
+      const inside = !ask.rests || !ask.over || ((): boolean => { const hull = hullOf(feet); if (hull.length < 3) return false; const [x0, z0, x1, z1] = ask.over!; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].every(([x, z]) => hull.every((p, i) => { const q = hull[(i + 1) % hull.length]!; return (q[0] - p[0]) * (z! - p[1]) - (q[1] - p[1]) * (x! - p[0]) >= -1e-9; })); })();
+      const ok = grown.mechanisms === 0 && struts.every((x) => x.margin >= 1) && sag.every((x) => x.most <= x.allowed) && runs.every((r) => r.converged) && (ask.ballast || (lift.most <= 1e-6 * Math.max(1, mass * g) && lift.slide <= 1)) && inside;
+      return { matter: mt, nodes, struts, held: [...held].filter((h) => struts.some((x) => x.a === h || x.b === h)), loaded, mass, mechanisms: grown.mechanisms, cases, wind: ask.wind ?? [], lift: { ...lift, inside }, ballast: heldList.map((h, i) => (struts.some((x) => x.a === h || x.b === h) ? ballast[i]! : 0)).filter((_, i) => struts.some((x) => x.a === heldList[i] || x.b === heldList[i])), sag, ok, grownMass: grown.mass, rounds: grown.rounds };
     };
     // grown on all the ground; then, as a bone gives up what it does not use, the struts doing least (what they carry
     // times how long they are) are taken away a few at a time, the rest grown again as their loads find new ways, and
     // made again of what can be had: the lightest made that holds and is no mechanism is kept (evolutionary structural
     // optimisation, Xie and Steven, Comput. Struct. 49, 1993)
     let edges = G.edges.map((_, e) => e), start: number[] | undefined, best: MadeFrame | null = null, since = 0;
+    // what is made is weighed with what its joints cost: fewer joints, and fewer held, where the struts allow
+    const score = (m: MadeFrame) => m.mass + m.ballast.reduce((x, y) => x + y / g, 0) + (o.jointKg ?? 0) * new Set(m.struts.flatMap((x) => [x.a, x.b])).size + (o.heldKg ?? 0) * m.held.length;
     const needed = new Set<number>(), planar = nodes.every((p) => Math.abs(p[2] - nodes[0]![2]) < 1e-12);
     const loadedSet = new Set(loaded);
     const groundMech = (es: number[]) => { const ms = mergeChains(nodes, es.map((e) => ({ a: G.edges[e]![0], b: G.edges[e]![1], A: 1, L: G.len[e]! })), held, loadedSet), used = [...new Set(ms.flatMap((m) => [m.a, m.b]))], at = new Map(used.map((j, i) => [j, i])); return count({ dim: planar ? 2 : 3, nodes: used.map((j) => (planar ? [nodes[j]![0], nodes[j]![1]] : nodes[j]!)), bars: ms.map((m) => [at.get(m.a)!, at.get(m.b)!] as [number, number]), held: used.filter((j) => held.has(j)).map((j) => at.get(j)!) }).mechanisms + (loaded.some((j) => !used.includes(j)) ? 1 : 0); };
     for (let round = 0; round < 60 && edges.length > 0; round++) {
       const Gs: Graph = { nodes, edges: edges.map((e) => G.edges[e]!), len: edges.map((e) => G.len[e]!) };
-      const grown = growFrame(Gs, mt.strut, held, cases, { g, rounds: start ? 40 : 120, ...(start ? { start } : {}) });
+      const grown = growFrame(Gs, mt.strut, held, cases, { g, rounds: start ? 40 : 120, ...(start ? { start } : {}), ...(ask.wind ? { wind: ask.wind } : {}) });
       const made = make(grown);
-      if (!best || (made.ok && (!best.ok || made.mass < best.mass)) || (!made.ok && !best.ok && made.mass < best.mass)) { best = made; since = 0; } else since++;
-      if (since >= 8) break;
+      o.trace?.({ matter: mt.id, round, ground: edges.length, struts: made.struts.length, joints: new Set(made.struts.flatMap((x) => [x.a, x.b])).size, mass: made.mass, ok: made.ok });
+      if (!best || (made.ok && (!best.ok || score(made) < score(best))) || (!made.ok && !best.ok && score(made) < score(best))) { best = made; since = 0; } else since++;
+      if (since >= 12) break;
       // from here on, only what still carries: the struts withered to nothing are gone from the ground
       const live = grown.keptEdges; edges = live.map((e) => edges[e]!); const GA = live.map((e) => grown.A[e]!);
       const Gl: Graph = { nodes, edges: edges.map((e) => G.edges[e]!), len: edges.map((e) => G.len[e]!) };
@@ -353,7 +393,7 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
       // a tenth of them a round at most
       let keep: number[] | null = null;
       for (const list of [nodeItems, strutItems]) {
-        const cut = new Set<number>(), most = Math.max(1, Math.floor(list.length * 0.1)); let taken = 0;
+        const cut = new Set<number>(), most = Math.max(1, Math.floor(list.length * (list === nodeItems ? 0.25 : 0.1))); let taken = 0;
         for (const x of list) {
           if (taken >= most) break;
           if (x.es.every((e) => cut.has(e))) continue;
@@ -369,4 +409,44 @@ export function designFrame(ask: FrameAsk, matters: FrameMatter[], o: { g?: numb
   });
   const best = tried.filter((x) => x.ok).sort((a, b) => a.mass - b.mass)[0] ?? null;
   return { best, tried };
+}
+
+// ---- the law of scale: a frame as made, made bigger or smaller ----------------------------------------------------------
+
+/** A frame as made, every length times s (its struts' areas by s², their second moments by s⁴), and what it carries
+ *  either made with it (its loads by s³, as a thing of the same stuff scaled) or kept as it is; solved again: the least
+ *  margin of its struts (in strength by two, in buckling by three) and how far its loads move against what they may. */
+export function frameAt(f: MadeFrame, sc: number, withIt: boolean, g = 9.80665): { strength: number; buckling: number; sag: number } {
+  const nodes = f.nodes.map((p) => [p[0] * sc, p[1] * sc, p[2] * sc] as V3), held = new Set(f.held);
+  const G: Graph = { nodes, edges: f.struts.map((x) => [x.a, x.b]), len: f.struts.map((x) => x.L * sc) };
+  const A = f.struts.map((x) => x.section.A * sc * sc), I = f.struts.map((x) => x.section.I * sc ** 4), k = withIt ? sc ** 3 : 1;
+  let strength = Infinity, buckling = Infinity, sag = 0;
+  f.cases.forEach((c, ci) => {
+    const load: V3[] = nodes.map((_, i) => { const v = c[i]; return v ? [v[0] * k, v[1] * k, v[2] * k] : [0, 0, 0]; });
+    f.struts.forEach((x, e) => { const w = (f.matter.strut.density * A[e]! * G.len[e]! * g) / 2; load[x.a]![1] -= w; load[x.b]![1] -= w; for (const wd of f.wind) if (wd.case === ci) windOn(load, nodes[x.a]!, nodes[x.b]!, x.a, x.b, (x.section.width ?? Math.sqrt((20 * x.section.A) / Math.PI)) * sc, wd); });
+    const r = truss(G, A, f.matter.strut.E, held, load);
+    f.struts.forEach((x, e) => { const N = r.N[e]!; if (N > 0) strength = Math.min(strength, (A[e]! * f.matter.strut.sy) / (2 * N)); else if (N < 0) { strength = Math.min(strength, (A[e]! * f.matter.strut.sc) / (-2 * N)); buckling = Math.min(buckling, (Math.PI ** 2 * f.matter.strut.E * I[e]!) / (G.len[e]! ** 2) / (-3 * N)); } });
+    const reach = (j: number) => Math.min(...f.held.map((h) => Math.hypot(nodes[j]![0] - nodes[h]![0], nodes[j]![2] - nodes[h]![2])));
+    for (const j of f.loaded) sag = Math.max(sag, norm(r.u[j]!) / (Math.max(2 * reach(j), 1e-9 + 0.1 * sc) / 250));
+  });
+  return { strength, buckling, sag: sag > 0 ? 1 / sag : Infinity };
+}
+
+/** How each of its margins goes with its size: the power of s it goes as near its own size (measured, d ln m / d ln s),
+ *  and the size, as a multiple of its own, where it first falls to what it asks (searched over a thousandth to a
+ *  thousand times), with what it carries made with it and kept as it is. */
+export function scaleLaw(f: MadeFrame): { withIt: boolean; laws: { what: 'strength' | 'buckling' | 'sag'; power: number; at1: number; fails: number | null }[] }[] {
+  const out: ReturnType<typeof scaleLaw> = [];
+  for (const withIt of [true, false]) {
+    const m1 = frameAt(f, 1, withIt), m2 = frameAt(f, 1.01, withIt);
+    const grid = Array.from({ length: 121 }, (_, i) => 10 ** (-3 + i * 0.05)), at = grid.map((x) => frameAt(f, x, withIt));
+    out.push({ withIt, laws: (['strength', 'buckling', 'sag'] as const).filter((k) => Number.isFinite(m1[k])).map((k) => {
+      const power = Math.log(m2[k] / m1[k]) / Math.log(1.01);
+      // where it falls below 1 nearest its own size, up or down
+      let fails: number | null = null, best = Infinity;
+      for (let i = 1; i < grid.length; i++) { const a = at[i - 1]![k], b = at[i]![k]; if ((a - 1) * (b - 1) <= 0 && Number.isFinite(a) && Number.isFinite(b)) { const x = Math.exp(Math.log(grid[i - 1]!) + (Math.log(grid[i]!) - Math.log(grid[i - 1]!)) * ((Math.log(a) - 0) / (Math.log(a) - Math.log(b)))); if (Math.abs(Math.log(x)) < best) { best = Math.abs(Math.log(x)); fails = x; } } }
+      return { what: k, power, at1: m1[k], fails };
+    }) });
+  }
+  return out;
 }

@@ -1,5 +1,5 @@
 // The intent pipeline as a program anyone can ask for anything, and read what it did:
-//   npm run invent -- "a lamp that follows the sun" [--answers "2 kg, 1 m"] [--n 3] [--seed 7] [--log stress.jsonl] [--steps]
+//   npm run invent -- "a lamp that follows the sun" [--answers "2 kg, 1 m"] [--n 3] [--seed 7] [--log stress.jsonl] [--steps] [--grow]
 // It reads the words, says what it heard, what it could not use and what it would ask; answers its own questions
 // with what it would take (or with --answers, in the order asked); designs from a seed (or several, each unlike the
 // others), each checked under every law it keeps and with real physics (Jolt, loaded here); and prints each design:
@@ -8,12 +8,15 @@
 // where and how. With --log, each run is kept as a line of JSON, for a stress test.
 
 import { appendFileSync } from 'node:fs';
-import { answersFrom, conceive, designs, len, sayConception, showValue } from './conceive';
+import { answersFrom, conceive, designs, GROW_TRACE, len, sayConception, scaleSay, showValue } from './conceive';
 import type { Jolt } from './realize';
 
 const args = process.argv.slice(2), flag = (f: string) => { const i = args.indexOf(f); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
+// --grow: each round of a frame's growth said as it goes
+if (args.includes('--grow')) GROW_TRACE.on = (r) => console.log(`  grow ${r.matter} round ${r.round}: ${r.ground} ways left, made as ${r.struts} struts at ${r.joints} joints, ${+r.mass.toPrecision(3)} kg${r.ok ? '' : ', does not hold'}`);
+const scaleSaid = flag('--scale');
 const answersSaid = flag('--answers'), n = Number(flag('--n') ?? 1), seed = Number(flag('--seed') ?? ((Date.now() % 1e9) | 0)), log = flag('--log'), steps = args.includes('--steps');
-const words = args.filter((x) => x !== '--steps').join(' ').trim();
+const words = args.filter((x) => x !== '--steps' && x !== '--grow').join(' ').trim();
 if (!words) { console.log('Say what to invent: npm run invent -- "a table that holds 30 kg"'); process.exit(1); }
 
 const t0 = Date.now();
@@ -44,6 +47,8 @@ for (const d of ds) {
   console.log(`WHAT WAS ASKED:\n  ${d.asked.map((a) => `${a.kind === 'for' ? '·' : a.got || a.met ? '✓' : '✗'} ${a.kind === 'for' ? 'for' : a.kind}: ${a.text}${a.got ? ` → ${a.how ?? a.got}` : a.why ? ` (${a.why})` : ''}`).join('\n  ') || '(nothing said but numbers)'}`);
   if (c.dropped.length) console.log(`NUMBERS NOT USED:\n  ${c.dropped.join('\n  ')}`);
   console.log(`PLAN:\n  ${d.plan.join('\n  ')}`);
+  if (d.conditions?.length) console.log(`CONDITIONS IT WAS GROWN TO MEET:\n${d.conditions.map((x) => `  · ${x}`).join('\n')}`);
+  { const law = scaleSay(d, scaleSaid !== undefined ? Number(scaleSaid) : undefined); if (law.length) console.log(`THE LAW OF ITS SCALE:\n${law.map((x) => `  · ${x}`).join('\n')}`); }
   console.log(`CHOICES: ${d.choices.join('; ')}`);
   console.log(`CHECKS:\n  ${d.checks.map((x) => `${x.ok ? '✓' : '✗'} ${x.what}: ${x.says}`).join('\n  ')}`);
   if (d.gaps.length) console.log(`NOT YET: ${d.gaps.join('; ')}`);

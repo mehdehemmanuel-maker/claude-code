@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areaFor, designFrame, flowScalar, ground, growFrame, growTree, lattice, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/adapt';
+import { areaFor, designFrame, flowScalar, frameAt, ground, growFrame, growTree, lattice, scaleLaw, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/adapt';
 import { matterOf } from '../../src/nexus/generate';
 
 const TUBES: [number, number][] = [[12, 1], [16, 1.5], [20, 1.5], [25, 2], [30, 2], [40, 2], [50, 2.5], [60, 3], [76, 3], [89, 3.5], [114, 4], [168, 5]];
@@ -74,4 +74,14 @@ describe('a network grown by what flows through it', () => {
     expect(b.struts.some((x) => x.N.some((n) => n > 0)) && b.struts.some((x) => x.N.some((n) => n < 0))).toBe(true);
     expect(b.sag.every((x) => x.most <= x.allowed)).toBe(true);
   }, 120000);
+  it("made bigger with what it carries, each margin falls as 1/s (Galileo's square-cube law); carrying the same, shrunk, it falls as s² or so", () => {
+    const f = mount(17).best!, law = scaleLaw(f);
+    const withIt = law.find((x) => x.withIt)!, kept = law.find((x) => !x.withIt)!;
+    for (const l of withIt.laws) expect(l.power).toBeCloseTo(-1, 1);
+    // its own weight is a small part of what it carries, so the same load on it shrunk goes nearly as s² (strength, buckling)
+    expect(kept.laws.find((l) => l.what === 'strength')!.power).toBeGreaterThan(1.8);
+    expect(kept.laws.find((l) => l.what === 'buckling')!.power).toBeGreaterThan(1.8);
+    // shrunk a thousand times with its load shrunk too, it is a thousand times stronger for what it carries
+    expect(frameAt(f, 1e-3, true).strength / frameAt(f, 1, true).strength).toBeCloseTo(1000, -1);
+  }, 60000);
 });
