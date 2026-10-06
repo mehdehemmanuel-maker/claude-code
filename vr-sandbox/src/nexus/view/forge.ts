@@ -54,6 +54,7 @@ import { Workshop, type Made, type PartRef } from '../generate';
 import type { Jolt } from '../realize';
 import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
+import { chartPanel } from './chart';
 import { Windows } from './windows';
 import { Phone } from './phone';
 import { makeBoardStore } from './boards-store';
@@ -513,6 +514,7 @@ function tick(): void {
   liveCard.mesh.visible = on('bill');
   loopWin.visible = decideChips.visible = on('loop');
   gatesCard.mesh.visible = on('gates');
+  chartWin.mesh.visible = on('chart' as Panel);
   // nothing here yet, or a new ask asked for: what you might ask, in front of you; on a screen, over the box you type in
   const wantNew = on('new') || (empty && !windows.top());
   suggest.group.visible = wantNew && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
@@ -1756,6 +1758,8 @@ function meshOf(m: Made): THREE.Object3D {
   }
   // round things along their own axis
   if (m.kind === 'cylinder' || m.kind === 'tube' || m.kind === 'cone' || m.kind === 'torus') { if (m.axis === 'x') geo.rotateZ(-Math.PI / 2); else if (m.axis === 'z') geo.rotateX(Math.PI / 2); }
+  // broken under a load: drawn red, so it is seen
+  if (m.broken) { const red = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xff5252, emissive: 0x5a0000, roughness: 0.6 })); red.position.set(...m.at); red.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); red.scale.set(...m.scale); red.userData.made = m.name; return red; }
   const surface = !mt, mat = surface ? new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.6 }) : new THREE.MeshStandardMaterial({ color: mt.color, metalness: mt.metalness, roughness: mt.roughness });
   const mesh = new THREE.Mesh(geo, mat); mesh.position.set(...m.at); mesh.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); mesh.scale.set(...m.scale); mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.userData.made = m.name;
@@ -1774,6 +1778,8 @@ function meshOf(m: Made): THREE.Object3D {
   return mesh;
 }
 const spinners: THREE.Object3D[] = [];
+// a chart of what was worked out over time: a window like the others
+const chartWin = chartPanel(); named(chartWin.mesh, 'a chart'); scene.add(chartWin.mesh); chartWin.mesh.visible = false;
 /** Everything made, drawn again as it now stands. */
 function drawMade(): void {
   spinners.length = 0;
@@ -1786,7 +1792,7 @@ let joltP: Promise<Jolt> | null = null;
 const physics = (): Promise<Jolt> => (joltP ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>).then((J) => { shop.usePhysics(J); setTestPhysics(J); return J; }));
 const PHYSICS_WORDS = /^(simulate|drop|push|let (it |them )?go)\b/i;
 /** A generation step, done: drawn, its motion shown as it happened, and said to the pipelines watching for a shape made. */
-function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); const tr = shop.takeTrack(); if (tr) play(tr); if (!quiet) boards?.event({ kind: 'made', text }); return said; }
+function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); const tr = shop.takeTrack(); if (tr) play(tr); const ch = shop.takeChart(); if (ch) { chartWin.draw(ch); windows.title('chart', `Chart: ${ch.title.slice(0, 40)}`); eyeOf(eye); windows.open('chart'); } if (!quiet) boards?.event({ kind: 'made', text }); return said; }
 /** Let go of what is made with the engine loaded first. */
 async function makeStepLoaded(text: string, quiet = false, who = 'you'): Promise<string> { if (PHYSICS_WORDS.test(text.trim()) && !shop.hasPhysics) await physics(); return makeStep(text, quiet, who); }
 // the motion worked out, played back in the room at the pace it happened; then everything stands where it ended
@@ -2099,7 +2105,7 @@ async function boot() {
   window.setTimeout(() => void physics().catch(() => undefined), 8000);
   void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => boards?.event({ kind: 'start' }), 1500); });
   // every panel a window with a bar; the spaces you stand in (what ran, the causes) without one
-  for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
+  for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['chart', 'Chart', chartWin.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
   named(phone.group, 'the phone in your hand');
   { const pb = button('📱 Phone', () => togglePhone(), seeRow); pb.title = 'The phone: camera, photos, chat with Claude, windows, and every control'; }
   void makeNotes().then((n) => { notes = n; n.subscribe((all) => { allNotes = all; drawPins(); }); n.proposals((all) => { proposals = all; drawLoop(); }); status.textContent = statusLine(); });
