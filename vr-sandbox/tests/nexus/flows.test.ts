@@ -4,8 +4,10 @@
 // so a loop that converges does so on what the actions did.
 
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, SUGGEST, TEMPLATES, boardOfTemplate, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
+import { ACTIONS, SUGGEST, TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, pasteOf, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
 import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/boards';
+import { Workshop } from '../../src/nexus/generate';
+import { ALL_CALLS, CALLS } from '../../src/nexus/calls';
 
 /** A room whose flaws go down by one each time it is built again, and whose AI says what it was asked. */
 function room(flaws = 2): FlowApi & { done: string[] } {
@@ -144,5 +146,63 @@ describe('a step from one word', () => {
   it('keeps a run short enough to store', () => {
     const r = { trigger: 't', why: 'x', started: 0, status: 'done' as const, rounds: 1, steps: Array.from({ length: 50 }, (_, i) => ({ node: `n${i}`, label: 'L', kind: 'action' as const, status: 'ok' as const, output: 'y'.repeat(500), ms: 1, round: 1 })) };
     const k = keptRun(r); expect(k.steps).toHaveLength(40); expect(k.steps[0]!.output).toHaveLength(240); expect(r.steps).toHaveLength(50);
+  });
+});
+
+describe('pipelines that make, offline', () => {
+  const bearing = { name: 'front bearing 6204 (20×47×14 mm)', at: [0, 0.3, 0] as [number, number, number], w: 0.047, h: 0.047, d: 0.014, mass: 0.11, r: 0.0235, bore: 0.02, axis: 'z' as const };
+  it('every template that makes runs to its end with nothing but the workshop: an AI that is never reached', async () => {
+    for (const id of ['cap', 'shaft', 'walls', 'random']) {
+      const w = new Workshop({ parts: () => [bearing] }, 5), api: FlowApi = { act: async (x) => w.run(x), ai: async () => { throw new Error('no one is asked'); }, facts: () => w.facts(), reader: () => w.reader() };
+      const b = boardOfTemplate(TEMPLATES.find((t) => t.id === id)!), r = await runFlow(b, triggersOf(b)[0]!.id, api, 'pressed');
+      expect(r.status, `${id}: ${r.steps.map((s) => `${s.label}: ${s.output}`).join(' | ')}`).toBe('done');
+      expect(r.steps.every((s) => s.status !== 'failed' && s.kind !== 'ai')).toBe(true);
+    }
+  });
+  it('run again, it makes again, rather than failing on a name it made', async () => {
+    const w = new Workshop({ parts: () => [bearing] }), api: FlowApi = { act: async (x) => w.run(x), ai: async () => ({ text: '', by: 'nexus' }), facts: () => w.facts(), reader: () => w.reader() };
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'cap')!);
+    await runFlow(b, triggersOf(b)[0]!.id, api, 'pressed'); const r = await runFlow(b, triggersOf(b)[0]!.id, api, 'pressed');
+    expect(r.status).toBe('done'); expect(w.facts().made).toBe(1);
+  });
+  it('reads the new triggers, and a condition that starts it the moment it holds', () => {
+    expect(triggerOf('when a shape is made')).toEqual({ kind: 'made' }); expect(triggerOf('when the forge opens')).toEqual({ kind: 'start' });
+    expect(triggerOf('every 30 seconds')).toEqual({ kind: 'tick', every: 0.5 }); expect(triggerOf('when load over 500 N')).toEqual({ kind: 'cond', cond: 'load over 500 N' });
+    expect(triggerOf('when a flaw is found')).toEqual({ kind: 'flaw' });
+    for (const g of CALLS.find((x) => x.id === 'start')!.calls) expect(triggerOf(g.text), g.text).not.toBeNull();
+  });
+  it('a check reads expressions with units, and what is made', () => {
+    const w = new Workshop({ parts: () => [bearing] }); w.run('set load = 200 N'); w.run('place plate named cap on bearing');
+    expect(evaluate('cap.mass under 50 g', w.facts(), '', w.reader())).toMatchObject({ ok: true });
+    expect(evaluate('load over 100 N and gap(cap, bearing) at most 1 mm', w.facts(), '', w.reader())).toMatchObject({ ok: true });
+  });
+  it('a step said in generation\'s words is an action, as it was said', () => {
+    expect(guessStep('place plate named cap on bearing')).toEqual({ kind: 'action', what: 'place plate named cap on bearing' });
+    expect(guessStep('if load > 500 N then material steel')).toEqual({ kind: 'action', what: 'if load > 500 N then material steel' });
+    expect(guessStep('B x D =')).toEqual({ kind: 'action', what: 'B x D =' });
+  });
+  it('every call in the catalogue is one a step can do', () => {
+    for (const g of CALLS) for (const x of g.calls) {
+      if (g.kind === 'action') expect(Workshop.handles(x.text) || (ACTIONS as readonly string[]).includes(x.text.split(' ')[0]!), `${g.id}: ${x.text}`).toBe(true);
+    }
+    const names = ALL_CALLS.map((x) => `${x.group}/${x.label}`); expect(new Set(names).size).toBe(names.length);
+    expect(CALLS.length).toBeGreaterThanOrEqual(14);
+  });
+});
+
+describe('a pipeline carried from board to board', () => {
+  it('copied from a step on, pasted after a step on another board, it runs there in its own order', async () => {
+    const from = boardOfTemplate(TEMPLATES.find((t) => t.id === 'improve')!), c = clipOf(from, id(from, 'List the flaws'));
+    expect(c.nodes.map((n) => n.label)).toEqual(['List the flaws', 'Any flaws?', 'Ask how to fix', 'Build again with it', 'Until clean']);
+    expect(c.links.map(([, , r]) => r)).toContain('feeds back to');
+    let to = boardOfTemplate(TEMPLATES.find((t) => t.id === 'blank')!);
+    to = deepMerge(to, pasteOf(c, id(to, 'Run')).patch);
+    const g = graphOf(to); expect(orderFrom(to, g, id(to, 'Run')).map((x) => to.nodes[x]!.label)).toEqual(['Run', 'List the flaws', 'Any flaws?', 'Ask how to fix', 'Build again with it', 'Until clean']);
+    const r = await runFlow(to, id(to, 'Run'), room(2), 'pressed'); expect(r.status).toBe('done'); expect(r.rounds).toBe(2);
+  });
+  it('kept whole, a board is made from it again, every step as it was', () => {
+    const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'cap')!), again = boardOfClip(clipOf(b));
+    expect(nodesOf(again).map((n) => [n.label, again.nodes[n.id]!.step?.what]).sort()).toEqual(nodesOf(b).map((n) => [n.label, b.nodes[n.id]!.step?.what]).sort());
+    expect(triggersOf(again)).toHaveLength(1);
   });
 });

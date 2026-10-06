@@ -54,11 +54,12 @@ describe('a board of what Nexus knows', () => {
     const { boardOfKnowledge, derive, nodesOf, edgesOf } = await import('../../src/nexus/boards');
     const b = boardOfKnowledge(GEOMETRY), ns = nodesOf(b);
     expect(ns).toHaveLength(181); expect(edgesOf(b)).toHaveLength(180);
-    expect(b.about).toMatch(/180 entries, 43 of them made or measured by Nexus/);
+    expect(b.about).toMatch(/180 entries, 58 of them made or measured by Nexus/);
     const box = Object.values(b.nodes).find((n) => n.label === 'Box')!;
     expect(box.kind).toBe('made'); expect(box.note).toMatch(/V = a b c · Nexus makes it: a block/);
-    const torus = Object.values(b.nodes).find((n) => n.label === 'Torus')!;
-    expect(torus.kind).toBeUndefined(); expect(torus.note).toMatch(/Nexus knows it by name and law only/);
+    const loft = Object.values(b.nodes).find((n) => n.label === 'Loft')!;
+    expect(loft.kind).toBeUndefined(); expect(loft.note).toMatch(/Nexus knows it by name and law only/);
+    expect(Object.values(b.nodes).find((n) => n.label === 'Torus')!.note).toMatch(/Nexus makes it: a ring a pipeline places/);
     // what heads it is what its links make head it: the features, with nineteen under them, outrank the sixteen
     const d = derive(b), head = d.roots.filter((r) => d.deg.get(r)! > 0).map((r) => b.nodes[r]!.label);
     expect(head).toEqual(['Geometric features']);
