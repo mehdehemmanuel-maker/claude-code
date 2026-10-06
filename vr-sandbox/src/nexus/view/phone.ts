@@ -180,6 +180,8 @@ export class Phone {
         g.font = `500 24px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText(name, x + cw / 2, y + cw - 2); g.textAlign = 'left';
         hit(x, y, x + cw, y + ch - 10, 'app', id);
       });
+      // the buttons, where they are learned: on the phone you hold
+      g.textAlign = 'center'; text('Trigger presses · right grip holds and moves', CW / 2, CH - 64, 19, '#9fdfee', 500, CW - 40); text('X or Y puts this phone away, and back', CW / 2, CH - 36, 19, '#9fdfee', 500, CW - 40); g.textAlign = 'left';
     } else if (this.app === 'camera') {
       // the viewfinder shows through; the shutter, your view, and the last photo over it
       if (performance.now() - this.flash < 160) { g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(0, 0, CW, CH); }

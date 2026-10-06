@@ -1,8 +1,8 @@
 // The node board in the room (src/nexus/boards.ts): a wall of words and the links between them in front of you, a list
 // beside it of every other node, and a strip of controls above. Point at a node and press to open its list; press a row
-// to link it or unlink it, one press each, so you go down the list linking; hold the trigger on a node and move to drag
-// it, and let go to leave it there. A word comes from the keyboard of light or your voice: one word is a node, nothing
-// else is asked. What each node is (a category, a subcategory, …) is what its links make it, and the pipeline view is
+// to link it or unlink it, one press each, so you go down the list linking; hold a node (the right grip in a headset,
+// the mouse on a screen) and move to drag it, and let go to leave it there. A word comes from the keyboard of light or
+// your voice: one word is a node, nothing else is asked. What each node is (a category, a subcategory, …) is what its links make it, and the pipeline view is
 // the same nodes in the order they are derived. Each surface is one canvas, so a board of hundreds of nodes is three
 // textures, not hundreds.
 //
@@ -11,9 +11,10 @@
 // shows on its card what it did as it runs.
 
 import * as THREE from 'three';
-import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, categoriesOf, deleteNode, derive, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../boards';
+import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, boardOfKnowledge, categoriesOf, deleteNode, derive, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../boards';
 import type { BoardStore } from './boards-store';
 import { resolve, type Understanding } from '../understand';
+import { TAXONOMY, find as findKnown, type Node as TaxNode } from '../embody/taxonomy';
 import { SUGGEST, TEMPLATES, boardOfTemplate, graphOf, guessStep, keptRun, orderFrom, runFlow, saidOf, starts, stepOf, triggerOf, triggersOf, type FlowApi, type FlowEvent, type FlowRun, type Step, type StepKind, type StepRun } from '../flows';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
@@ -46,6 +47,8 @@ export interface BoardHost {
 }
 type Region = { x0: number; x1: number; y0: number; y1: number; act: string; id?: string };
 type Typing = 'add' | 'find' | 'title' | 'ask' | 'what';
+/** How a hand is on the board: the mouse both presses and drags; in a headset the trigger presses and the grip holds. */
+export type Hold = 'both' | 'press' | 'grab';
 
 function surface(w: number, h: number, pw: number, ph: number): { mesh: THREE.Mesh; g: CanvasRenderingContext2D; tex: THREE.CanvasTexture; c: HTMLCanvasElement } {
   const c = document.createElement('canvas'); c.width = pw; c.height = ph;
@@ -75,13 +78,13 @@ export class Boards3D {
   private d: Derived = derive(null); private P = new Map<string, { x: number; y: number }>(); private geo = new Map<string, { w: number; h: number; lines: string[] }>();
   private stripHits: Region[] = []; private listHits: Region[] = [];
   private undoStack: { id: string; what: string; body: Board }[] = [];
-  private drag: { node?: string; px: number; py: number; ox: number; oy: number; cam0: { x: number; y: number }; moved: boolean } | null = null;
+  private drag: { node?: string; px: number; py: number; ox: number; oy: number; cam0: { x: number; y: number }; moved: boolean; how: Hold } | null = null;
   private confirmDel: { id: string; until: number } | null = null;
   private readonly plane = new THREE.Plane(); private readonly hitP = new THREE.Vector3();
   /** What came of calling Claude: what it understood, and the changes it proposes, each taken or not. */
   call: (Understanding & { done: Set<number> }) | null = null; calling = false;
   /** The list shows the pipelines to start from; the last run in full; a step's words being typed. */
-  picking = false; log = false; private draft = '';
+  picking = false; log = false; knowing = false; private draft = '';
   /** Pipelines running now, by board, and when each last started by itself. */
   readonly running = new Map<string, { from: string; run: FlowRun | null; ac: AbortController }>(); private auto = new Map<string, number>();
 
@@ -155,7 +158,7 @@ export class Boards3D {
     g.font = `600 38px ${FONT}`;
     const items: [string, string, string?][] = [['prev', '‹'], ['title', fit2(g, b?.title ?? 'No board', flow ? 320 : 400)], ['next', '›'],
       ...(flow ? [['run', live ? '■ Stop' : '▶ Run', live ? 'on' : undefined], ['arm', b!.armed ? '⚡ Armed' : 'Arm', b!.armed ? 'on' : undefined], ['log', 'Log', this.log ? 'on' : b!.runs?.length || live ? undefined : 'off']] as [string, string, string?][] : []),
-      ['word', flow ? '＋ Step' : '＋ Word', this.typing === 'add' ? 'on' : undefined], ['find', 'Find', this.typing === 'find' ? 'on' : undefined], ['cat', 'Categories', this.view === 'categories' ? 'on' : undefined], ['pipe', 'Pipeline', this.view === 'pipeline' ? 'on' : undefined], ['undo', 'Undo', this.undoStack.some((u) => u.id === this.id) ? undefined : 'off'], ['tidy', 'Tidy'], ['zout', '−'], ['fit', 'Fit'], ['zin', '+'], ['call', '🎙 Call Claude', this.typing === 'ask' || this.calling ? 'on' : undefined], ['flows', '⚡ Pipelines', this.picking ? 'on' : undefined], ['build', 'This build'], ['new', 'New board', this.typing === 'title' ? 'on' : undefined], ['close', '✕']];
+      ['word', flow ? '＋ Step' : '＋ Word', this.typing === 'add' ? 'on' : undefined], ['find', 'Find', this.typing === 'find' ? 'on' : undefined], ['cat', 'Categories', this.view === 'categories' ? 'on' : undefined], ['pipe', 'Pipeline', this.view === 'pipeline' ? 'on' : undefined], ['undo', 'Undo', this.undoStack.some((u) => u.id === this.id) ? undefined : 'off'], ['tidy', 'Tidy'], ['zout', '−'], ['fit', 'Fit'], ['zin', '+'], ['call', '🎙 Call Claude', this.typing === 'ask' || this.calling ? 'on' : undefined], ['flows', '⚡ Pipelines', this.picking ? 'on' : undefined], ['know', '📚 Knowledge', this.knowing ? 'on' : undefined], ['build', 'This build'], ['new', 'New board', this.typing === 'title' ? 'on' : undefined], ['close', '✕']];
     g.textBaseline = 'middle';
     // as many controls as there are, each still a press wide: the words get smaller before they run off the end
     let fs = 38, pad = 22, widths: number[] = [];
@@ -220,6 +223,8 @@ export class Boards3D {
         g.font = `500 ${13 * k}px ${FONT}`; g.fillStyle = '#ffffff'; gm.lines.forEach((l, i) => g.fillText(l, q.x + 13 * k, q.y + (33 + i * 16) * k));
       }
       if (b.notes?.[id]) { g.fillStyle = '#ff8a80'; g.beginPath(); g.arc(q.x + w - 8 * k, q.y + 8 * k, 4 * k, 0, Math.PI * 2); g.fill(); }
+      // what Nexus makes, on a board of what it knows
+      if (b.nodes[id]?.kind === 'made') { g.fillStyle = '#69f0ae'; g.beginPath(); g.arc(q.x + w - 19 * k, q.y + 8 * k, 4 * k, 0, Math.PI * 2); g.fill(); }
     }
     g.restore();
     // the store's word, small, in the corner
@@ -235,6 +240,7 @@ export class Boards3D {
     const button = (x: number, y: number, w: number, h: number, text: string, act: string, accent = 'rgba(77,208,225,0.55)', id?: string) => { g.fillStyle = 'rgba(77,208,225,0.1)'; g.beginPath(); g.roundRect(x, y, w, h, 12); g.fill(); g.strokeStyle = accent; g.lineWidth = 2; g.stroke(); g.font = `600 32px ${FONT}`; g.fillStyle = '#e6f7ff'; g.textAlign = 'center'; g.fillText(text, x + w / 2, y + h / 2 + 11); g.textAlign = 'left'; hit(x, y, x + w, y + h, act, id); };
     if (b && (this.call || this.calling || this.typing === 'ask')) { this.drawCall(b, hit, button); tex.needsUpdate = true; return; }
     if (this.picking) { this.drawPicker(hit, button); tex.needsUpdate = true; return; }
+    if (this.knowing) { this.drawKnow(hit, button); tex.needsUpdate = true; return; }
     if (b?.kind === 'flow' && this.log) { this.drawLog(b, button); tex.needsUpdate = true; return; }
     if (b?.kind === 'flow' && !this.sel) { this.drawFlow(b, hit, button); tex.needsUpdate = true; return; }
     if (!b) { g.font = `600 44px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText('Boards', 36, 80); g.font = `400 32px ${FONT}`; g.fillStyle = '#9fdfee'; wrap(g, 'A board is words and the links between them. Press New board above, or This build for a board of what stands here.', LPX - 72).forEach((l, i) => g.fillText(l, 36, 150 + i * 44)); tex.needsUpdate = true; return; }
@@ -270,7 +276,14 @@ export class Boards3D {
       g.font = `600 26px ${FONT}`; g.fillStyle = this.colour(id); g.fillText((lv === 'unlinked' ? 'NOT LINKED' : lv).toUpperCase(), 36, 128);
       const path = pathTo(this.d, id).map((x) => b.nodes[x]!.label);
       g.font = `400 28px ${FONT}`; g.fillStyle = '#9fdfee';
-      wrap(g, deg === 0 ? 'Not linked to anything yet. Press the nodes below that it connects to.' : `${path.join(' › ')} · ${deg} link${deg === 1 ? '' : 's'}. ${lv === 'category' ? 'It heads a category: no node it links to has more links.' : `It sits under ${b.nodes[this.d.parent.get(id)!]!.label}, its most connected neighbour.`}`, LPX - 72, 4).forEach((l, i) => g.fillText(l, 36, 172 + i * 38));
+      const said = wrap(g, deg === 0 ? 'Not linked to anything yet. Press the nodes below that it connects to.' : `${path.join(' › ')} · ${deg} link${deg === 1 ? '' : 's'}. ${lv === 'category' ? 'It heads a category: no node it links to has more links.' : `It sits under ${b.nodes[this.d.parent.get(id)!]!.label}, its most connected neighbour.`}`, LPX - 72, 4);
+      said.forEach((l, i) => g.fillText(l, 36, 172 + i * 38));
+      // what it is, where the board knows: its note (on a board of what Nexus knows, what it is, its law, what makes it)
+      if (n.note) {
+        g.font = `400 26px ${FONT}`; g.fillStyle = n.kind === 'made' ? '#b9f6ca' : '#e6f7ff';
+        const lines = wrap(g, n.note, LPX - 72, 7), y0 = 172 + said.length * 38 + 14; lines.forEach((l, i) => g.fillText(l, 36, y0 + i * 34));
+        const more = Math.max(0, y0 + lines.length * 34 - 310); fy += more; top += more;
+      }
     }
     // the find box, pressed to type into
     g.fillStyle = this.typing === 'find' ? 'rgba(77,208,225,0.22)' : 'rgba(10,30,40,0.95)'; g.beginPath(); g.roundRect(30, fy, LPX - 60, 72, 12); g.fill(); g.strokeStyle = this.typing === 'find' ? '#80deea' : 'rgba(128,222,234,0.45)'; g.lineWidth = 2; g.stroke();
@@ -378,6 +391,20 @@ export class Boards3D {
       hit(30, y, LPX - 30, y + ROW - 10, 'openb', id); y += ROW;
     }
   }
+  /** What Nexus knows, a board of each branch a press away: how many entries it has, how many Nexus makes. */
+  private drawKnow(hit: (x0: number, y0: number, x1: number, y1: number, act: string, id?: string) => void, button: (x: number, y: number, w: number, h: number, text: string, act: string, accent?: string, id?: string) => void): void {
+    const g = this.list.g;
+    g.font = `600 44px ${FONT}`; g.fillStyle = '#ffffff'; g.fillText('📚 What Nexus knows', 36, 76); button(LPX - 120, 22, 90, 70, '✕', 'closeknow', '#ffd740');
+    let y = this.para(110, 'Each is a branch of Nexus\'s taxonomy: what each thing is, the law that decides it, and whether Nexus makes or measures it (● on the board) or knows it by name and law only. Press one for a board of it.', 28, '#9fdfee', 6);
+    const count = (t: TaxNode) => { let e = 0, m = 0; const w = (x: TaxNode) => { for (const c of x.children) { e++; if (c.made) m++; w(c); } }; w(t); return { e, m }; };
+    for (const t of TAXONOMY.slice(0, Math.max(0, Math.floor((LHPX - y - 30) / ROW)))) {
+      const { e, m } = count(t), open = this.id === `know-${t.id}`;
+      g.fillStyle = open ? 'rgba(77,208,225,0.24)' : 'rgba(10,30,40,0.95)'; g.beginPath(); g.roundRect(30, y, LPX - 60, ROW - 10, 12); g.fill(); g.strokeStyle = m ? 'rgba(105,240,174,0.6)' : 'rgba(128,222,234,0.35)'; g.lineWidth = 2; g.stroke();
+      g.font = `500 32px ${FONT}`; g.fillStyle = '#ffffff'; g.fillText(fit2(g, t.name, LPX - 420), 52, y + 48);
+      g.font = `500 23px ${FONT}`; g.fillStyle = '#9fdfee'; g.textAlign = 'right'; g.fillText(`${e} entries${m ? ` · ${m} made` : ''}`, LPX - 52, y + 46); g.textAlign = 'left';
+      hit(30, y, LPX - 30, y + ROW - 10, 'kb', t.id); y += ROW;
+    }
+  }
   /** A pipeline with no step open: what starts it, how its last run went, and its steps in the order they run. */
   private drawFlow(b: Board, hit: (x0: number, y0: number, x1: number, y1: number, act: string, id?: string) => void, button: (x: number, y: number, w: number, h: number, text: string, act: string, accent?: string, id?: string) => void): void {
     const g = this.list.g, sh = this.shown(b), ts = triggersOf(b);
@@ -466,21 +493,24 @@ export class Boards3D {
   hits(ray: THREE.Raycaster): boolean { return !!this.uvOf(ray); }
   /** How far along a ray the board is (Infinity where it misses): what is nearer is pressed first. */
   distance(ray: THREE.Raycaster): number { return this.group.visible ? ray.intersectObjects([this.strip.mesh, this.list.mesh, this.wall.mesh], false)[0]?.distance ?? Infinity : Infinity; }
-  /** The trigger pulled, or the mouse pressed: true when it is on the board. */
-  down(ray: THREE.Raycaster): boolean {
+  /** The mouse pressed, the trigger pulled (`press`: it clicks, never drags) or the grip closed (`grab`: it holds a node
+   *  to move it, or the sheet to slide it; the strip and the list are the board's frame, which the window carries, so a
+   *  grab there is not the board's): true when the board took it. */
+  down(ray: THREE.Raycaster, how: Hold = 'both'): boolean {
     const u = this.uvOf(ray); if (!u) return false;
+    if (how === 'grab' && u.on !== 'wall') return false;
     if (u.on === 'strip') { const x = u.uv.x * WPX, r = this.stripHits.find((h) => x >= h.x0 && x <= h.x1); if (r) this.act(r.act); return true; }
     if (u.on === 'list') { const x = u.uv.x * LPX, y = (1 - u.uv.y) * LHPX, r = this.listHits.find((h) => x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1); if (r) this.act(r.act, r.id); return true; }
     const px = u.uv.x * WPX, py = (1 - u.uv.y) * HPX, bx = (px - this.cam.x) / this.cam.k, by = (py - this.cam.y) / this.cam.k;
     const node = [...this.P].reverse().find(([id, p]) => { const gm = this.geo.get(id)!; return bx >= p.x && bx <= p.x + gm.w && by >= p.y && by <= p.y + gm.h; })?.[0];
     const p = node ? this.P.get(node)! : { x: 0, y: 0 };
-    this.drag = { ...(node ? { node } : {}), px, py, ox: bx - p.x, oy: by - p.y, cam0: { x: this.cam.x, y: this.cam.y }, moved: false };
+    this.drag = { ...(node ? { node } : {}), px, py, ox: bx - p.x, oy: by - p.y, cam0: { x: this.cam.x, y: this.cam.y }, moved: false, how };
     return true;
   }
   get pressing(): boolean { return !!this.drag; }
   /** The ray moved while held: a node follows it across the wall, or the sheet does. */
   move(ray: THREE.Raycaster): void {
-    const d = this.drag; if (!d) return;
+    const d = this.drag; if (!d || d.how === 'press') return;
     this.wall.mesh.updateMatrixWorld(); this.plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1).transformDirection(this.wall.mesh.matrixWorld), this.wall.mesh.getWorldPosition(new THREE.Vector3()));
     if (!ray.ray.intersectPlane(this.plane, this.hitP)) return;
     const local = this.wall.mesh.worldToLocal(this.hitP.clone()), px = (local.x / WALL_W + 0.5) * WPX, py = (0.5 - local.y / WALL_H) * HPX;
@@ -491,10 +521,12 @@ export class Boards3D {
     else { this.cam.x = d.cam0.x + px - d.px; this.cam.y = d.cam0.y + py - d.py; }
     this.drawWall();
   }
-  /** Let go: a node moved stays where it is; a press that did not move opens the node, or on the bare sheet closes it. */
+  /** Let go: a node moved stays where it is; a press that did not move opens the node, or on the bare sheet closes it; a
+   *  hold let go where it was taken does nothing. */
   up(): void {
     const d = this.drag; this.drag = null; if (!d) return;
     if (d.node && d.moved) { const p = this.P.get(d.node)!; this.remember(`move ${this.label(d.node)}`); this.store.write(this.id!, moveNode(d.node, this.view, p.x, p.y)); return; }
+    if (d.how === 'grab') return;
     if (d.node) { this.sel = d.node; this.page = 0; this.find = ''; if (this.typing === 'find') this.host.type(true, `find or add a node linked to ${this.label(d.node)}`); this.drawAll(); return; }
     if (!d.moved && this.sel) { this.sel = null; this.page = 0; this.drawAll(); }
   }
@@ -525,6 +557,15 @@ export class Boards3D {
       // pipelines
       case 'flows': this.picking = !this.picking; this.page = 0; if (this.picking) { this.call = null; this.log = false; } this.drawAll(); return;
       case 'closepick': this.picking = false; this.drawAll(); return;
+      case 'know': this.knowing = !this.knowing; this.page = 0; if (this.knowing) { this.picking = false; this.call = null; this.log = false; } this.drawAll(); return;
+      case 'closeknow': this.knowing = false; this.drawAll(); return;
+      case 'kb': {
+        const t = id ? findKnown(id) : null; if (!t) return;
+        const bid = `know-${t.id}`, was = this.store.boards.get(bid), made = boardOfKnowledge(t);
+        // made again only when what Nexus knows has changed; else as you left it, moved nodes and all
+        if (!was || was.about !== made.about || Object.keys(was.nodes).length !== Object.keys(made.nodes).length) { if (was) { made.createdAt = was.createdAt ?? made.createdAt; if (was.review) made.review = was.review; if (was.notes) made.notes = was.notes; } this.store.write(bid, made, true); this.fitted.delete(`${bid}|${this.view}`); }
+        this.knowing = false; this.open(bid); this.host.say(`${made.title}. ${made.about}`); return;
+      }
       case 'tpl': { const t = TEMPLATES.find((x) => x.id === id); if (!t) return; const nid = uid('f'); this.store.write(nid, boardOfTemplate(t), true); this.picking = false; this.open(nid); this.host.say(`${t.title}. ${t.about} Press ▶ Run.`); return; }
       case 'openb': if (id && this.store.boards.has(id)) { this.picking = false; this.open(id); this.host.say(`${this.board()!.title}.`); } return;
       case 'run': {

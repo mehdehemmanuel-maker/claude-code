@@ -3,8 +3,14 @@
 // it applies, so what was built can be read back as what was known. The tree is data: it grows as embodiment learns
 // another kind of part, and nothing here is about any one machine.
 
+import { GEOMETRY } from './geometry';
+
 export interface Principle { id: string; says: string; law: string }
-export interface Node { id: string; name: string; says: string; principles: Principle[]; children: Node[] }
+export interface Node {
+  id: string; name: string; says: string; principles: Principle[]; children: Node[];
+  /** What in Nexus makes or measures it; absent, it is known by its name and its law only (a gap to fill). */
+  made?: string;
+}
 
 const n = (id: string, name: string, says: string, principles: Principle[] = [], children: Node[] = []): Node => ({ id, name, says, principles, children });
 const p = (id: string, says: string, law: string): Principle => ({ id, says, law });
@@ -97,6 +103,9 @@ export function principlesOf(category: string): Principle[] {
   for (let i = 1; i <= parts.length; i++) { const node = find(parts.slice(0, i).join('/')); if (node) out.push(...node.principles); }
   return out;
 }
+
+// ---- geometry: what a shape is, before what it is for (src/nexus/embody/geometry.ts) --------------------------------
+TAXONOMY.push(GEOMETRY);
 
 // ---- what anything that moves, flies, holds heat or carries water adds (src/nexus/embody/any.ts) ----------------
 TAXONOMY.push(

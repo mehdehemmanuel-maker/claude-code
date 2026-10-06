@@ -8,7 +8,7 @@
 // (src/nexus/view/boards3d.ts). A board is stored as one document: nodes and edges keyed by id, a deleted one marked so
 // rather than removed (a patch can only merge), and written whole without them when it is written whole.
 
-import { find } from './embody/taxonomy';
+import { find, type Node as TaxNode } from './embody/taxonomy';
 import type { FlowRun, Step } from './flows';
 
 export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step }
@@ -117,24 +117,40 @@ export interface Box { w: number; h: number }
 /** Where each node goes, unless it has been dragged: in the categories view, each category a column with what sits under
  *  it stacked beneath, a step in for each level (a category over a large tree heads it, its children's trees the columns);
  *  in the pipeline view, a column for each step, left to right. Words not linked yet come first in both. */
-export function layout(d: Derived, view: View, box: (id: string) => Box): Map<string, { x: number; y: number }> {
+export function layout(d: Derived, view: View, box: (id: string) => Box, aspect = 1.78): Map<string, { x: number; y: number }> {
   const pos = new Map<string, { x: number; y: number }>();
   const loose = d.order.filter((id) => d.deg.get(id) === 0);
   if (view !== 'pipeline') {
     const cols: { id: string; d: number }[][] = [], heads: string[] = [];
     for (let i = 0; i < loose.length; i += 8) cols.push(loose.slice(i, i + 8).map((id) => ({ id, d: 0 })));
     const walk = (col: { id: string; d: number }[], id: string, dd: number): void => { col.push({ id, d: dd }); for (const k of d.kids.get(id) ?? []) walk(col, k, dd + 1); };
-    for (const r of d.roots) {
-      if (d.deg.get(r) === 0) continue;
-      const ks = d.kids.get(r) ?? [];
-      if (ks.length >= 2 && d.size.get(r)! > 16) { heads.push(r); for (const k of ks) { const col: { id: string; d: number }[] = []; walk(col, k, 0); cols.push(col); } }
-      else { const col: { id: string; d: number }[] = []; walk(col, r, 0); cols.push(col); }
+    // a large tree is headed by its root, its children's trees the columns, and so on down: no column taller than a
+    // tree of `TALL`, so a board of hundreds stays a page of columns rather than one long one
+    const TALL = 24;
+    const lay = (id: string, top: boolean): void => {
+      const ks = d.kids.get(id) ?? [];
+      if (ks.length >= 2 && d.size.get(id)! > (top ? 16 : TALL)) { heads.push(id); for (const k of ks) lay(k, false); return; }
+      const col: { id: string; d: number }[] = []; walk(col, id, 0); cols.push(col);
+    };
+    const own = cols.length;
+    for (const r of d.roots) if (d.deg.get(r)! > 0) lay(r, true);
+    // short trees side by side share a column, up to eight cards, as the words not linked yet do
+    const packed = cols.slice(0, own), shared = new Set<number>();
+    for (const col of cols.slice(own)) {
+      const i = packed.length - 1;
+      if (col.length <= 2 && shared.has(i) && packed[i]!.length + col.length <= 8) packed[i]!.push(...col);
+      else { packed.push([...col]); if (col.length <= 2) shared.add(packed.length - 1); }
     }
-    const perRow = Math.max(1, Math.min(8, Math.ceil(Math.sqrt(cols.length * 1.6))));
+    const size = packed.map((col) => ({ w: Math.max(...col.map(({ id, d: dd }) => dd * 22 + box(id).w)), h: col.reduce((t, { id }) => t + box(id).h + 10, 0) }));
     let hx = 0; for (const id of heads) { pos.set(id, { x: hx, y: 0 }); hx += box(id).w + 60; }
-    let y0 = heads.length ? Math.max(...heads.map((id) => box(id).h)) + 50 : 0;
-    for (let r = 0; r * perRow < cols.length; r++) {
-      const row = cols.slice(r * perRow, r * perRow + perRow); let tallest = 0, x = 0;
+    const top0 = heads.length ? Math.max(...heads.map((id) => box(id).h)) + 50 : 0;
+    // as many columns to a row as fill a wall of `aspect` best: wide enough, and not so wide its words go small
+    const extent = (per: number) => { let w = 0, h = top0; for (let r = 0; r * per < size.length; r++) { const row = size.slice(r * per, r * per + per); w = Math.max(w, row.reduce((t, c) => t + c.w + 56, 0)); h += Math.max(...row.map((c) => c.h)) + 90; } return { w: Math.max(w, hx), h }; };
+    let perRow = 1, best = 0;
+    for (let per = 1; per <= Math.min(12, Math.max(1, size.length)); per++) { const e = extent(per), k = Math.min(aspect / Math.max(1, e.w), 1 / Math.max(1, e.h)); if (k > best * 1.0001) { best = k; perRow = per; } }
+    let y0 = top0;
+    for (let r = 0; r * perRow < packed.length; r++) {
+      const row = packed.slice(r * perRow, r * perRow + perRow); let tallest = 0, x = 0;
       for (const col of row) { let y = y0, wide = 0; for (const { id, d: dd } of col) { pos.set(id, { x: x + dd * 22, y }); y += box(id).h + 10; wide = Math.max(wide, dd * 22 + box(id).w); } tallest = Math.max(tallest, y - y0); x += wide + 56; }
       y0 += tallest + 90;
     }
@@ -236,5 +252,23 @@ export function boardOfBuild(ask: string, name: string, parts: PartLike[], at = 
   }
   let i = 0;
   for (const it of items.values()) { const id = `i${i++}`; b.nodes[id] = { label: it.count > 1 ? `${it.count} × ${it.label}` : it.label, note: it.mass ? `${Number(it.mass.toPrecision(4))} kg in all` : '' }; edge(it.under, id); }
+  return b;
+}
+
+// ---- a board of what Nexus knows: a branch of its taxonomy -------------------------------------------------------------
+/** A branch of the taxonomy as a board: each entry a node under what holds it, its note what it is, the law that decides
+ *  it, and what in Nexus makes it, or that nothing does yet; an entry Nexus makes is marked so. Its categories are what
+ *  the links make them, as on every board. */
+export function boardOfKnowledge(t: TaxNode, at = Date.now()): Board {
+  const b: Board = { title: `Nexus knows: ${t.name}`, kind: 'categories', about: '', nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `taxonomy:${t.id}` };
+  let e = 0, entries = 0, made = 0;
+  const add = (n: TaxNode, under?: string) => {
+    const id = `k-${n.id.replace(/[^a-z0-9]+/gi, '-')}`, laws = n.principles.map((p) => p.law);
+    b.nodes[id] = { label: n.name, note: [n.says, ...laws, n.made ? `Nexus makes it: ${n.made}.` : under ? 'Nexus knows it by name and law only: nothing makes it yet.' : ''].filter(Boolean).join(' · '), ...(n.made ? { kind: 'made' } : {}) };
+    if (under) { b.edges[`e${e++}`] = { from: under, to: id, rel: 'contains' }; entries++; if (n.made) made++; }
+    for (const c of n.children) add(c, id);
+  };
+  add(t);
+  b.about = `What Nexus knows of ${t.name.toLowerCase()}, as its taxonomy files it: ${entries} entries, ${made} of them made or measured by Nexus (marked ●), the rest known by name and law only.`;
   return b;
 }
