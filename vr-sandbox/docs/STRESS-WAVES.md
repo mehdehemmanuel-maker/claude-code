@@ -719,3 +719,103 @@ Their findings are the next round's work (D5), by cause:
   - the mug, its spill asked;
   - the two small bridges, whose abutments are said;
   - the drain robot, at its speed since the controller fix.
+
+## Wave 4: twenty new asks, judged blind, fixed by cause
+
+Five fresh testers with no context each wrote four asks, twenty in all. They ranged from a flywheel merry-go-round to a microgripper, a 3.7 km fjord bridge, an amphibious car, a 12U rack and a solar sail. Five fresh judges then scored the outputs blind, reading only the output files. The scale for each criterion is 0 to 3.
+
+**The baseline.** The averages over the twenty:
+
+| Read | Made | Holds | Honest |
+|---|---|---|---|
+| 1.2 | 0.25 | 0.9 | 2.1 |
+
+"Made" is low for a plain reason. Most of these asks are things no kept way makes yet:
+- **Folding or unfolding.** Five of the twenty ask for it: the hockey goal, the cargo bike, the origami shelter, the self-folding gripper and the sail that unfurls.
+- **Electronics.** Two ask for it: the board and the card.
+- **A process.** One is a printer printing PEEK.
+
+Those are said as not kept, and their laws are weighed. The fixes below are to what was read, weighed and ticked.
+
+### What was wrong, by cause
+
+**Ticks not earned.**
+- **Nothing made, nothing ticked.** What cannot be put together under the laws now does nothing it was asked.
+- **A failed load law un-ticks the load.** What it was asked to carry is carried only where the law of its load passes. Four cases:
+  - The fjord bridge no longer ticks "carry 44 tonne trucks" while its 3.7 km span gives 122000 times over its yield.
+  - The garden cart no longer ticks hauling 100 kg up its slope while its motors cannot.
+  - Floating, hovering and holding a liquid are judged the same way.
+- **A sealed rack is not ticked as sealed.** Sealed, airtight, watertight, dustproof and waterproof are qualities with no gasket or seal kept. A thing named for one is made only as what it does.
+- **A number heard as "weighed below" that no law takes up now says so:**
+  - "Squeezing with no more than 10 µN: heard, but no law here weighs it yet."
+  - A law that uses a figure without restating it now restates it. The Earth-sized motor's heat is "the 5% it loses of the 2.00 × 10^13 W it gives".
+- **An asked item a law weighs carries that law.** "Keeps the gear inside under 40 °C while it dissipates 1.2 kW" is said with "✗ it sheds the 1200 W it turns to heat at no more than 40 °C".
+
+**Reading.**
+- **Context words.**
+  - "Has to carry" and "needs to" are not things it has, split across clauses or not.
+  - "Holds up in 90 km/h winds" and "crosses a lake at 10 knots" are read as what they are.
+- **Places across.** A fjord, lake, valley, canyon, strait, bay or channel is a gap.
+  - A width said with one is its span.
+  - A depth said with one means nothing can stand in it: "1,200 m deep" spans it all at once.
+  - "A 1.1 m wide deck" over a creek stays the deck's width.
+- **A journey in legs.**
+  - "100 km at 80 km/h and then 5 km across a lake at 10 knots" pairs each distance with its own speed.
+  - The first speed is the one it moves at.
+  - A leg in knots, or across water, is on water.
+- **Seats.** "A two-seat car" carries two people, 160 kg (80 kg each, estimate), where no weight is said.
+- **A place's area.** "A 0.5 hectare fish pond" is the place it works in, not panels on it.
+- **Forces said beside a word.**
+  - "With less than 40 N on the handle" is the most a hand puts on it, the word after the number counting too.
+  - "Squeezing with less than 10 µN" is a grip.
+- **Speeds of other things.**
+  - "The rim under 3 m/s" is its rim's.
+  - "A 160 km/h slapshot" is a puck's: 170 g, IIHF.
+  - "Fires 25 balls at 60 km/h" is a tennis ball's, 59.4 g (ITF).
+  - "Tip over in 90 km/h gusts" stays a wind; the "tip" there is not a blade tip.
+- **Flows and lifts.** "400 litres an hour out of a 25 m deep well" and "400 people per hour up 600 m" are a flow and a lift.
+- **Temperatures.**
+  - A frosty morning is about −5 °C (estimate).
+  - "Held at 250 °C" is kept warm.
+  - "When it warms to 37 °C" is a temperature it acts at.
+- **Units and figures.**
+  - "12U" is 12 rack units of 44.45 mm (EIA-310).
+  - "Per panel" is a panel of 1.22 × 2.44 m.
+  - "15%" is a grade.
+  - "0.3 AU" is a distance from the Sun.
+  - kn, ha, µN and mN are read.
+  - "A 3D printer" is one thing, not three days of something.
+- **As written.** What was asked is said back as it was written: "40 °C", "1.2 kW", "PEEK", "so I can".
+
+**The laws.** Each is a law with its assumptions said, and an estimate where it is one.
+- **Impact.** What hits it carries ½ m v² and m v. Stopped in about a millisecond, the puck strikes with about 15.1 kN. A 700 kg steer at 4 m/s stopped within 100 mm pushes about 56 kN.
+- **What it throws, and the hand that winds it.** 25 tennis balls at 60 km/h take 206 J. A hand at 40 N on a 150 mm crank puts in 37.7 J a turn: about 11 turns, half of it reaching the balls.
+- **A flywheel** stores ½ m v². 20 W for 4 h through a generator at 90% is 356 kJ. With its rim under 3 m/s that takes 79 t of ring: it cannot. 500 kg of children at that speed hold 2.25 kJ.
+- **Lifting a flow,** ṁ g h.
+  - The well pump needs 27.2 W, or 54.5 W at 50%, against 60 W: ✓.
+  - Water is lifted by suction no more than about 8 m, so from 25 m the pump must sit down the well.
+  - The gondola needs about 75 kW at 70%.
+- **Aeration.** 2 kg of oxygen an hour takes about 1 to 2 kW at 1 to 2 kg O₂ per kWh (estimate). That is 12 to 24 kWh of cells through a night.
+- **A road trip.**
+  - Rolling and air drag on each leg: Crr 0.012 and CdA 0.6 m² (estimates).
+  - On water, the hull-speed rule, 1.34 √(waterline in feet) knots: 5.15 knots for a 4.5 m hull. At 10 knots it must plane, about 0.12 of its weight against it (estimate).
+  - The two legs need about 16 kWh from its cells, about 100 kg of cells at 160 Wh/kg packed.
+- **A grade.** m g v (sin θ + 0.01 cos θ): 1940 W for the cargo bike up 15% at 20 km/h. A rider keeps up 100 to 200 W, and an e-bike is held to 250 W where it is sold as a bicycle.
+- **A hydrofoil** needs a lift-to-drag of 23.1 on 250 W at 18 km/h. That is past what small foils give (about 10 to 20): it cannot.
+- **Warming in a frost.** 300 W on a 1.22 × 2.44 m panel settles near 0.4 °C in −5 °C air, against 5 °C: ✗.
+- **A sail near the Sun.** At 0.3 AU (1.51 × 10⁴ W/m²) it settles near 177 °C. A polyimide film bears that; a polyester one does not.
+- **One long span.** Cables carry their own weight, 1.25 ρ g L at a tenth's sag. Over 3.7 km that is 356 MPa in steel wire alone, about 1070 MPa with its deck, against 805 MPa allowed. The longest span built is 2023 m, the 1915 Çanakkale Bridge.
+- **A power cap.** "Runs on under 5 W" is checked against the rated power of the motors made.
+
+### Checked
+
+- **The gate:** typecheck, and 993 tests in 92 files. Nine new tests, one per cause above.
+- **Both browser drives** pass with no script errors.
+- **The everyday set (18), wave 2 (16) and wave 3 (20)** were rerun. Against the last run, one changed: the garden cart no longer ticks hauling 100 kg up a slope its motors cannot climb.
+
+### Open after wave 4
+
+- **Folding and unfolding (linkages).** It is the most asked-for thing not kept: five of these twenty asks want it.
+- **Electronics:** circuits, chips and cells.
+- **Processes,** such as printing or cutting.
+- **A thing sized to what it carries.** The two-seat car is still made as a small cart, and fails its own speed test honestly.

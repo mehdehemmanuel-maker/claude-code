@@ -24,6 +24,8 @@ export const UNITS: Record<string, UnitDef> = {
   m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), um: u(L, 1e-6), 'µm': u(L, 1e-6), nm: u(L, 1e-9), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
   // the astronomical unit, exactly (IAU 2012 Resolution B2)
   au: u(L, 149597870700),
+  // a rack unit, 1.75 in (EIA-310); a knot, a nautical mile (1852 m, exactly) an hour; a hectare, 10 000 m²
+  U: u(L, 0.04445), kn: u([0, 1, -1, 0, 0], 1852 / 3600), ha: u([0, 2, 0, 0, 0], 1e4),
   mg: u(M, 1e-6), ug: u(M, 1e-9), ng: u(M, 1e-12),
   // volumes: the litre is a cubic decimetre (SI Brochure, 9th ed., Table 8); the US gallon 231 cubic inches exactly
   'm^3': u([0, 3, 0, 0, 0]), L: u([0, 3, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0], 1e-6), cL: u([0, 3, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0], 231 * 0.0254 ** 3),
@@ -32,7 +34,7 @@ export const UNITS: Record<string, UnitDef> = {
   mo: u(T, 2629746), yr: u(T, 31556952),
   A: u(I), mA: u(I, 1e-3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
-  N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
+  N: u(N), kN: u(N, 1e3), mN: u(N, 1e-3), uN: u(N, 1e-6), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
@@ -92,6 +94,7 @@ export function fromSI(value: number, unit: string): number {
 /** How people say units, to the symbols above. Longest first, so "km/h" wins over "km". */
 const SPOKEN: [RegExp, string][] = [
   [/^(km\/h|kmh|kph|kilometres? per hour|kilometers? per hour)$/i, 'km/h'], [/^(µm\/s|μm\/s|um\/s|microns? per second|micromet(re|er)s? per second)$/i, 'um/s'], [/^(mm\/s|millimet(re|er)s? per second)$/i, 'mm/s'], [/^(cm\/s|centimet(re|er)s? per second)$/i, 'cm/s'], [/^(m\/h|m per hour|met(re|er)s? per hour|met(re|er)s? an hour|m an hour)$/i, 'm/h'],
+  [/^(knots?|kn|kt|kts)$/i, 'kn'], [/^(µn|μn|un|micronewtons?)$/i, 'uN'], [/^(mn|millinewtons?)$/, 'mN'], [/^(hectares?|ha)$/i, 'ha'], [/^(u|ru|rack ?units?)$/i, 'U'],
   [/^(w\/m²|w\/m2|w\/m\^2|watts? per square met(re|er))$/i, 'W/m^2'], [/^(m²|m2|m\^2|square met(re|er)s?|sq m)$/i, 'm^2'], [/^(cm²|cm2|cm\^2|square centimet(re|er)s?)$/i, 'cm^2'], [/^(krad|kilorads?)(\(si\))?$/i, 'krad'], [/^(mph|miles? per hour)$/i, 'mi/h'], [/^(m\/s|mps|metres? per second|meters? per second)$/i, 'm/s'],
   [/^(m\/s\^?2|m\/s²|m s-2)$/i, 'm/s^2'], [/^(N[·.\s-]?m)$/, 'N m'], [/^(n[·.\s-]m|newton[- ]?met(re|er)s?)$/i, 'N m'], [/^(lbf?[·.\s-]?ft|ft[·.\s-]?lbf?)$/i, 'lbf ft'], [/^(in[·.\s-]?lbf?|lbf?[·.\s-]?in)$/i, 'lbf in'],
   [/^(lbf|pounds? force|pound-force)$/i, 'lbf'], [/^(kgf|kilograms? force)$/i, 'kgf'],
