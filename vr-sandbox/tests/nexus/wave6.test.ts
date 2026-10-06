@@ -226,3 +226,35 @@ describe('what it stands in, and on', () => {
     expect(made(EV).gaps.join(' ')).toMatch(/in snow or ice a peg holds little/);
   });
 });
+
+describe('ratings, costs, rotors, a child climbing it, a width folded', () => {
+  const CRAWL = 'Tracked stair-climbing crawler for carrying a 6 kg grocery bag. Climbs 35 degree stairs at 0.15 m/s, width max 330 mm, 24 V battery for 90 minutes of runtime, brushed gearmotors under 150 W each, must not tip backward at the top edge. Budget BOM $250.';
+  it('"150 W each" is what each motor is rated at; "$250" is a cost; the cells are sized from the climb', () => {
+    const c = go(CRAWL);
+    expect(c.said.motorW).toBe(150); expect(c.said.volts).toBe(24); expect(c.said.power).toBeUndefined();
+    expect(c.dropped).toContain('250: a cost: what it costs is not weighed');
+    const b = c.bounds.find((x) => /^it climbs stairs at 35°$/.test(x.what))!;
+    // 21 kg × g × sin 35° × 0.15 m/s / 0.5 = 35.4 W; 53.2 Wh over 1.5 h; through 0.9 and 0.9, 65.6 Wh, 262 g at 250 Wh/kg
+    expect(b.says).toContain('65.6 Wh, about 262 g of lithium-ion cells'); expect(b.says).toContain('about 1.48 A'); expect(b.says).toContain('two motors rated 150 W each (300 W) are 8.47 times what it takes: a rating, not what they draw');
+  });
+  it('a drone reads its drop and its rotors: no overlap, twice its weight, folded into its tube', () => {
+    const c = go('Please design a foldable quadcopter frame for a 7-inch propeller cinematic drone with an all-up weight of 900 g including a 250 g camera payload. The frame must weigh under 140 g, survive a 2 m drop onto concrete, and collapse to fit inside a 120 mm diameter tube for storage.');
+    expect(c.said.drop).toBe(2); expect(c.said.prop).toBeCloseTo(0.1778, 4); expect(c.said.fitDia).toBeCloseTo(0.12, 6);
+    const b = c.bounds.find((x) => /^it lifts 900 g in all$/.test(x.what))!;
+    expect(b.says).toContain('at least 251 mm across from motor to motor'); expect(b.says).toContain('4.41 N (450 g) from each motor'); expect(b.says).toContain('its 178 mm rotors must fold or come off');
+    expect(c.bounds.some((x) => /^it survives a 2 m drop$/.test(x.what))).toBe(true);
+  });
+  it('a child climbing it is weighed with it empty, not as a load; "tip-proof" stands on its tip checks; corners not rounded are not met', () => {
+    const W = 'Classroom backpack storage: freestanding, tip-proof unit, 30 cubbies for 6-9 kg bags, 1.1 m max height so teachers see over it, rounded corners radius 25 mm minimum, survives a 25 kg child climbing it, footprint under 0.5 m by 3 m.';
+    expect(go(W).said.climber).toBe(25);
+    const d = designs(go(W), 1, { seed: 101, physics: null })[0]!;
+    expect(check(d, /^empty, a 25 kg child climbing its front does not tip it$/)).toMatchObject({ ok: true, says: expect.stringMatching(/300 mm out from its foot there/) });
+    expect(d.asked.find((a) => a.text === 'tip-proof')?.got).toBe('support');
+    expect(d.asked.find((a) => a.text === 'corners rounded to at least 25 mm')).toMatchObject({ kind: 'limit', met: false });
+  });
+  it('a folded width is across its plan, not its thinnest way', () => {
+    const d = made('Design a child bicycle trailer for two children aged 2 to 6, combined payload 40 kg, towed at a maximum 20 km/h, with a rollover protection frame passing a 3 g lateral load test, a five-point harness, an empty mass below 14 kg, and a folded width under 30 cm.');
+    expect(check(d, /^folded, it is no more than 300 mm wide$/)).toMatchObject({ ok: false, says: expect.stringMatching(/793 mm across at its narrower way/) });
+    expect(d.checks.some((x) => /^it folds flat to/.test(x.what))).toBe(false);
+  });
+});
