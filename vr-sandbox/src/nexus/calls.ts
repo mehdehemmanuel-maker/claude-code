@@ -103,6 +103,21 @@ export const CALLS: CallGroup[] = [
     c('A value, unless set', 'default s_load = 50 N', 'kept unless it is set already: what an action reads'),
     c('Stop unless it holds', 'require load > 0 N: there is no load to size it by', 'stops the action here, saying why'),
   ] },
+  { id: 'motors', name: 'Motors & liquids', short: 'Motors', kind: 'action', says: 'motors you can buy, run in time from their makers\' sheets: speed, current, heat and energy; cooled by a liquid that carries heat by its own properties', calls: [
+    c('Place a motor', 'place motor named m at -0.4 m, 0.8 m, 0.4 m', 'one you can buy: its body, mass and constants are its maker\'s'),
+    c('A motor by its power', 'place motor named big 250 W at -0.4 m, 1.2 m, 0.4 m', 'the kept one nearest that power'),
+    c('Run it', 'run m at 24 V for 10 s against 0.1 N·m', 'speed, current, heat and energy, worked out in time'),
+    c('Run it hard', 'run m at 24 V for 10 min against 0.3 N·m', 'past its rating its winding heats past its limit, and it says when'),
+    c('Run it cooled', 'run m at 24 V for 10 min against 0.3 N·m cooled by water at 2 L/min', 'a jacket of liquid carries its heat off: laminar or turbulent by its Reynolds number'),
+    c('Cooled by oil', 'run m for 60 s against 0.2 N·m cooled by oil at 1 L/min from 30 °C', 'water, ethylene glycol, glycol and water, engine oil'),
+    c('If it runs hot, cool it', 'if m.temp > 120 then run m at 24 V for 10 min against 0.3 N·m cooled by water at 2 L/min', 'a condition chooses how it runs'),
+  ] },
+  { id: 'physics', name: 'Let it go: physics', short: 'Physics', kind: 'action', says: 'real rigid-body physics (Jolt) over what is made: it falls, lands, slides, tips and comes to rest, by what each is made of; shown in the room as it happened', calls: [
+    c('Let it all go', 'simulate 3 s', 'everything made under gravity, until it is at rest; where it ends is where it is'),
+    c('Drop one', 'drop s from 0.5 m', 'raised so much, then let go with the rest'),
+    c('Push one', 'push s with 20 N along x for 0.2 s', 'a force on it for so long, then let go'),
+    c('Push the other way', 'push base with 50 N along -z', 'any axis, either way'),
+  ] },
   { id: 'rules', name: 'Rules & conditions', short: 'Rules', kind: 'check', says: 'what must hold: a check lets the pipeline on only where it holds; a rule undoes a step that breaks it', calls: [
     c('If, then, else', 'if load > 500 N then material steel else material aluminium', 'a step chosen by a condition'),
     c('No overlap', 'rule no overlap', 'nothing made may go into anything else made'), c('No overlap with the build', 'rule no overlap with the build', 'nor into the build'),
@@ -116,6 +131,9 @@ export const CALLS: CallGroup[] = [
     c('Its top', 'cap.top under 1 m', 'top, bottom, left, right, front, back, x, y, z'), c('Its size', 'cap.w at least 40 mm', 'w, h, d, D, r, t, wall, length'),
     c('Its mass', 'cap.mass under 50 g', 'mass, volume, area'), c('Its matter', 'cap.yield over 200 MPa', 'density, yield, E, c'),
     c('All made', 'made.mass under 5 kg', 'made (how many), made.mass'),
+    c('How a motor ran', 'm.temp under 155 and m.rpm over 5000 rpm', 'm.rpm, current, torque, temp, case, power, output, efficiency, energy, heat, overheated, coolant_out, coolant_heat, pump'),
+    c('Where it came to rest', 's.bottom at most 1 mm', 'read after it is let go: what is on the floor, what stands'),
+    c('Whether it is computed', 's.unseen is 0', '1 where it is wholly inside a solid, or too small to be'),
   ] },
   { id: 'energy', name: 'Energy', short: 'Energy', kind: 'action', says: 'what it takes, by its law', calls: [
     c('Lift', 'energy lift cap 1 m', 'E = m g h'), c('Heat', 'energy heat cap 30 K', 'Q = m c ΔT'),
@@ -134,3 +152,18 @@ export const CALLS: CallGroup[] = [
 ];
 /** Every call, with its group, for a search. */
 export const ALL_CALLS = CALLS.flatMap((g) => g.calls.map((x) => ({ ...x, group: g.id, kind: g.kind })));
+
+/** Offline, from words said: for each thing said in turn ("a plate on the bearing, then size it, then let it go"), the
+ *  call whose own words share most with it. This is matching, not understanding: Nexus cannot write a pipeline from
+ *  words; it lays out the calls that match, in the order said, to be changed to what is meant. */
+export function callsFor(words: string): { said: string; call: (Call & { group: string }) | null }[] {
+  const STOP = new Set(['the', 'and', 'then', 'with', 'that', 'this', 'for', 'from', 'into', 'onto', 'its', 'it', 'a', 'an', 'of', 'to', 'on', 'in', 'is', 'be', 'make', 'want', 'some', 'them', 'they', 'what']);
+  const toks = (s: string) => s.toLowerCase().replace(/[^\p{L}\d\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 1 && !STOP.has(w)).map((w) => w.replace(/(ing|ed|es|s)$/, ''));
+  // a call's own name says what it is for: its words count twice
+  const pool = ALL_CALLS.filter((c) => c.kind !== 'ai' && c.group !== 'start').map((c) => ({ c, l: new Set(toks(c.label)), t: new Set(toks(`${c.text} ${c.says} ${CALLS.find((g) => g.id === c.group)!.name}`)) }));
+  return words.split(/[,;.]|\bthen\b|\band\b|\bafter that\b/i).map((x) => x.trim()).filter(Boolean).map((said) => {
+    const t = toks(said); let best: (Call & { group: string }) | null = null, score = 0;
+    for (const p of pool) { const s = t.reduce((n, w) => n + (p.l.has(w) ? 2 : p.t.has(w) ? 1 : 0), 0); if (s > score) { score = s; best = { label: p.c.label, text: p.c.text, says: p.c.says, group: p.c.group }; } }
+    return { said, call: best };
+  });
+}

@@ -51,6 +51,9 @@ import { Robot } from './robot';
 import { Boards3D } from './boards3d';
 import type { FlowApi } from '../flows';
 import { Workshop, type Made, type PartRef } from '../generate';
+import type { Jolt } from '../realize';
+import type { SimTrack } from '../sim';
+import { setTestPhysics } from '../calltest';
 import { Windows } from './windows';
 import { Phone } from './phone';
 import { makeBoardStore } from './boards-store';
@@ -1590,7 +1593,7 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text });
   // generation's words are done here and now, offline: no one is asked
-  if (generationWords(text)) { line('you', text); let said: string; try { said = makeStep(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
+  if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
   if (!brain) return;
   busy?.abort(); busy = new AbortController();
   line('you', text);
@@ -1683,7 +1686,7 @@ const NOT_HERE = /^Nothing stands here yet|^The generator gave nothing/;
 async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
   // what makes, sizes, turns, joins or works out: the workshop, offline
-  if (shop.does(t)) return makeStep(t, true, who);
+  if (shop.does(t)) return makeStepLoaded(t, true, who);
   // what could not be done at all is a failure, and stops the pipeline with why
   const out = (said: string) => { if (NOT_HERE.test(said)) throw new Error(said); return said; };
   switch (verb) {
@@ -1755,15 +1758,42 @@ function meshOf(m: Made): THREE.Object3D {
   if (m.kind === 'cylinder' || m.kind === 'tube' || m.kind === 'cone' || m.kind === 'torus') { if (m.axis === 'x') geo.rotateZ(-Math.PI / 2); else if (m.axis === 'z') geo.rotateX(Math.PI / 2); }
   const surface = !mt, mat = surface ? new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.6 }) : new THREE.MeshStandardMaterial({ color: mt.color, metalness: mt.metalness, roughness: mt.roughness });
   const mesh = new THREE.Mesh(geo, mat); mesh.position.set(...m.at); mesh.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); mesh.scale.set(...m.scale); mesh.castShadow = true; mesh.receiveShadow = true;
-  mesh.userData.made = m.name; return mesh;
+  mesh.userData.made = m.name;
+  // a motor turns as fast as its last run left it, drawn slowed to at most 1.5 turns a second; a stripe shows it turning
+  if (m.motor) {
+    const outer = new THREE.Group(), spinner = new THREE.Group(), ax = new THREE.Vector3(m.axis === 'x' ? 1 : 0, m.axis === 'y' ? 1 : 0, m.axis === 'z' ? 1 : 0);
+    outer.position.copy(mesh.position); outer.rotation.copy(mesh.rotation); outer.scale.copy(mesh.scale); mesh.position.set(0, 0, 0); mesh.rotation.set(0, 0, 0); mesh.scale.set(1, 1, 1);
+    const along = d.h!, r = d.D! / 2, stripe = new THREE.Mesh(new THREE.BoxGeometry(along * 0.9, r * 0.12, r * 0.3), new THREE.MeshStandardMaterial({ color: 0xffd740, roughness: 0.5 }));
+    stripe.position.set(0, r, 0); if (m.axis === 'y') { stripe.geometry.rotateZ(Math.PI / 2); stripe.position.set(r, 0, 0); } else if (m.axis === 'z') { stripe.geometry.rotateY(Math.PI / 2); }
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.15, r * 0.15, along * 0.3, 16), new THREE.MeshStandardMaterial({ color: 0xcfd8dc, metalness: 0.9, roughness: 0.3 }));
+    if (m.axis === 'x') { shaft.geometry.rotateZ(-Math.PI / 2); shaft.position.x = along * 0.65; } else if (m.axis === 'z') { shaft.geometry.rotateX(Math.PI / 2); shaft.position.z = along * 0.65; } else shaft.position.y = along * 0.65;
+    spinner.add(mesh, stripe, shaft); outer.add(spinner); outer.userData.made = m.name;
+    const w = m.spin ?? 0; spinner.userData.spin = Math.sign(w) * Math.min(Math.abs(w), 3 * Math.PI); spinner.userData.axis = ax; if (w) spinners.push(spinner);
+    return outer;
+  }
+  return mesh;
 }
+const spinners: THREE.Object3D[] = [];
 /** Everything made, drawn again as it now stands. */
 function drawMade(): void {
+  spinners.length = 0;
   for (const o of [...madeGroup.children]) { madeGroup.remove(o); o.traverse((x) => { const mm = x as THREE.Mesh; mm.geometry?.dispose(); const mt = mm.material as THREE.Material | undefined; mt?.dispose(); }); }
-  for (const m of shop.all().made) madeGroup.add(meshOf(m));
+  // what is unseen is not computed, so not drawn
+  for (const m of shop.all().made) if (!m.unseen) madeGroup.add(meshOf(m));
 }
-/** A generation step, done: drawn, and said to the pipelines watching for a shape made. */
-function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); if (!quiet) boards?.event({ kind: 'made', text }); return said; }
+/** The physics engine, loaded the first time something is let go (and soon after the forge opens, so it is ready). */
+let joltP: Promise<Jolt> | null = null;
+const physics = (): Promise<Jolt> => (joltP ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>).then((J) => { shop.usePhysics(J); setTestPhysics(J); return J; }));
+const PHYSICS_WORDS = /^(simulate|drop|push|let (it |them )?go)\b/i;
+/** A generation step, done: drawn, its motion shown as it happened, and said to the pipelines watching for a shape made. */
+function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); const tr = shop.takeTrack(); if (tr) play(tr); if (!quiet) boards?.event({ kind: 'made', text }); return said; }
+/** Let go of what is made with the engine loaded first. */
+async function makeStepLoaded(text: string, quiet = false, who = 'you'): Promise<string> { if (PHYSICS_WORDS.test(text.trim()) && !shop.hasPhysics) await physics(); return makeStep(text, quiet, who); }
+// the motion worked out, played back in the room at the pace it happened; then everything stands where it ended
+let playing: { track: SimTrack; start: number; by: Map<string, THREE.Object3D> } | null = null;
+function play(track: SimTrack): void { const by = new Map<string, THREE.Object3D>(); for (const o of madeGroup.children) if (o.userData.made) by.set(o.userData.made as string, o); playing = { track, start: performance.now(), by }; showFrame(0); }
+function showFrame(k: number): void { if (!playing) return; const f = playing.track.frames[k]; if (!f) return; playing.track.names.forEach((n, i) => { const o = playing!.by.get(n), p = f.poses[i]; if (o && p) { o.position.set(...p.at); o.quaternion.set(...p.q); } }); }
+function stepPlay(now: number): void { if (!playing) return; const k = Math.floor(((now - playing.start) / 1000) * 30); if (k >= playing.track.frames.length) { playing = null; drawMade(); return; } showFrame(k); }
 /** Whether words said in the chat are generation's: its verbs, or a calculation ending in =; moving or turning only what is made. */
 function generationWords(t: string): boolean {
   const w = t.trim(); if (!shop.does(w)) return false;
@@ -2055,7 +2085,7 @@ async function boot() {
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
-  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); phone.render(renderer, scene); renderer.render(scene, camera); });
+  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -2066,6 +2096,7 @@ async function boot() {
   unsentBtn.style.cssText = `${BTN};border-color:#ff8a80;display:none`; unsentBtn.dataset.fixOk = '1'; chat.append(unsentBtn);
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
   void makeRelay().then((r) => { relay = r; });
+  window.setTimeout(() => void physics().catch(() => undefined), 8000);
   void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => boards?.event({ kind: 'start' }), 1500); });
   // every panel a window with a bar; the spaces you stand in (what ran, the causes) without one
   for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
@@ -2096,8 +2127,9 @@ async function boot() {
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
     phoneNow: () => ({ app: phone.app, photos: phone.photos.length, lines: phone.lines.map((l) => `${l.who}: ${l.text}`), typing: phone.typing, visible: phone.group.visible }),
-    madeNow: () => ({ made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
-    shopRun: (t: string) => makeStep(t),
+    madeNow: () => ({ spinning: spinners.length, made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null, ...(m.motor ? { motor: m.motor, spin: m.spin } : {}) })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
+    shopRun: (t: string) => makeStepLoaded(t),
+    playingNow: () => (playing ? { frames: playing.track.frames.length, names: playing.track.names.length } : null),
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first

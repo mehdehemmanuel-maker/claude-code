@@ -202,6 +202,16 @@ describe('many pipelines in one room', () => {
     // a name with "to" in it is one name: "size rotor_disc.h so …" is not "size ro to r_disc.h"
     w.run('place plate named rotor_disc at 3 m, 1 m, 0 size 100 x 100 x 5 mm'); expect(w.run('size rotor_disc.h so rotor_disc.mass > 100 g')).toMatch(/^Sized rotor_disc's h to 3\.7\d* mm/);
   });
+  it('what nothing could see, and nothing could be, is not computed: inside a solid, or too small', () => {
+    const w = shop(); w.run('place box named block at 0, 1 m, 0 size 400 x 400 x 400 mm');
+    expect(w.run('place cube named hidden at 0, 1 m, 0 size 50 mm')).toMatch(/not computed: wholly inside block, a solid: nothing could see it/);
+    expect(w.value('hidden.unseen')).toBe(1); near(w.value('made.mass'), 0.4 ** 3 * 2700, 1e-9);
+    w.run('rule no overlap'); expect(w.run('place cube named dust at 2 m, 1 m, 0 size 0.05 mm')).toMatch(/smaller than a tenth of a millimetre every way/);
+    // moved out, it is computed again: seen, weighed, judged
+    w.run('move hidden to 1 m, 1 m, 0'); expect(w.value('hidden.unseen')).toBe(0); near(w.value('made.mass'), (0.4 ** 3 + 0.05 ** 3) * 2700, 1e-9);
+    // a tube's bore is not solid: what is in it is seen
+    w.run('place tube named pipe at 0, 3 m, 0 size 100 x 300 x 5 mm'); w.run('place ball named marble at 0, 3 m, 0 size 20 mm'); expect(w.value('marble.unseen')).toBe(0);
+  });
   it('things turned are judged as they stand, not by the boxes round them', () => {
     const w = shop(); w.run('place cube named a at 0, 1 m, 0 size 100 mm turned y 45');
     // a's box round it reaches 70.7 mm out, into b's; a itself, a diamond, stops at x + z = 70.7 mm, short of b's corner at 80 mm

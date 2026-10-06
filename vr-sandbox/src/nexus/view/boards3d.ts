@@ -18,7 +18,7 @@ import type { BoardStore } from './boards-store';
 import { resolve, type Understanding } from '../understand';
 import { TAXONOMY, find as findKnown, type Node as TaxNode } from '../embody/taxonomy';
 import { TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, orderFrom, pasteOf, runFlow, saidOf, starts, stepOf, triggerOf, triggersOf, type Clip, type FlowApi, type FlowEvent, type FlowRun, type Step, type StepKind, type StepRun } from '../flows';
-import { CALLS } from '../calls';
+import { CALLS, callsFor } from '../calls';
 import { testCall, type CallTest } from '../calltest';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
@@ -62,7 +62,7 @@ export interface BoardHost {
   flowApi(): FlowApi;
 }
 type Region = { x0: number; x1: number; y0: number; y1: number; act: string; id?: string };
-type Typing = 'add' | 'find' | 'title' | 'ask' | 'what';
+type Typing = 'add' | 'find' | 'title' | 'ask' | 'what' | 'describe';
 /** How a hand is on the board: the mouse both presses and drags; in a headset the trigger presses and the grip holds. */
 export type Hold = 'both' | 'press' | 'grab';
 
@@ -393,7 +393,7 @@ export class Boards3D {
     const saved = readJSON<Clip[]>('nexus-pipelines', []);
     type Row = { head: string } | { label: string; note: string; act: string; id?: string; col?: string; side?: { act: string; id: string; text: string } };
     const rows: Row[] = [
-      { head: 'START' }, { label: 'A blank board', note: 'say its name', act: 'blank', col: '#80deea' }, { label: 'A board of the build standing here', note: 'its parts', act: 'build', col: '#80deea' },
+      { head: 'START' }, { label: '✨ Describe it', note: 'Claude writes the steps; offline, the calls that match', act: 'describe', col: '#ffd740' }, { label: 'A blank board', note: 'say its name', act: 'blank', col: '#80deea' }, { label: 'A board of the build standing here', note: 'its parts', act: 'build', col: '#80deea' },
       { head: 'PIPELINES TO START FROM' }, ...TEMPLATES.map((t): Row => ({ label: t.title, note: `${t.steps.length} steps`, act: 'tpl', id: t.id, col: '#ffd740' })),
       ...(saved.length ? [{ head: `YOUR SAVED PIPELINES · ${saved.length}` } as Row, ...saved.map((c, i): Row => ({ label: c.title, note: `${c.nodes.length} steps · ${ago(c.at)}`, act: 'saved', id: String(i), col: '#69f0ae', side: { act: 'clipsaved', id: String(i), text: '📋' } }))] : []),
       { head: 'WHAT NEXUS KNOWS' }, { label: 'Every pipeline call, by what it is for', note: `${CALLS.reduce((t, c) => t + c.calls.length, 0)} calls`, act: 'kb', id: 'calls', col: '#b388ff' },
@@ -575,6 +575,7 @@ export class Boards3D {
       case 'take': if (id !== undefined) this.take(Number(id)); return;
       case 'takeall': if (this.call) this.call.proposals.forEach((_, i) => this.take(i)); return;
       case 'blank': this.picking = false; this.startTyping('title'); return;
+      case 'describe': this.picking = false; this.startTyping('describe'); return;
       case 'close': this.host.close(); return;
       case 'deselect': this.sel = null; this.page = 0; this.find = ''; if (this.typing === 'find' || this.typing === 'what') this.stopTyping(); this.drawAll(); return;
       // pipelines
@@ -697,6 +698,7 @@ export class Boards3D {
   private hint(t: Typing): string {
     const b = this.board(), st = b && this.sel ? stepOf(b, this.sel) : null, flow = !!st || (!!b && hasSteps(b));
     if (t === 'what') return st?.kind === 'trigger' ? 'when it starts: "when a build finishes", "every 10 minutes", "when I say go"' : st?.kind === 'ai' ? 'what to ask; {input} is what came to it' : st?.kind === 'check' || st?.kind === 'repeat' ? 'a condition: "flaws > 0", "no gaps", "mass under 500"' : 'what to do: flaws, again {input}, operate, make a cart, note flaw: {input}, say {input}, show flaws, board, wait 5 s';
+    if (t === 'describe') return 'what the pipeline should make or do, in your own words: "a plate on the bearing, sized by its load, then let it go"';
     return t === 'ask' ? 'say or type what you mean, in your own words' : t === 'add' ? (flow ? `a step${this.sel ? ` to run after ${this.label(this.sel)}` : ''}: one word is enough ("flaws", "any flaws?", "ask how to fix")` : 'a word for a new node, then send') : t === 'find' ? `find or add a node linked to ${this.label(this.sel ?? '')}` : 'a name for the new board, then send';
   }
   startTyping(t: Typing): void { this.typing = t; if (t === 'find') this.find = ''; if (t === 'what') { const b = this.board(); this.draft = b && this.sel ? stepOf(b, this.sel)?.what ?? '' : ''; } this.host.type(true, this.hint(t)); this.drawAll(); }
@@ -707,6 +709,7 @@ export class Boards3D {
   enter(text: string): void {
     const w = text.trim(); if (!w || !this.typing) return;
     if (this.typing === 'ask') { void this.ask(w); return; }
+    if (this.typing === 'describe') { void this.describe(w); return; }
     if (this.typing === 'what') {
       const b = this.board(); if (!b || !this.sel) return;
       const was = stepOf(b, this.sel); this.remember(`change ${this.label(this.sel)}`);
@@ -728,6 +731,23 @@ export class Boards3D {
     this.find = ''; this.host.type(true, this.hint('find')); this.drawList();
   }
 
+  /** A pipeline from words: Claude writes its steps in the calls' own words where it can be reached; where it cannot,
+   *  Nexus lays out the calls whose words match, in the order said, and says that it matched rather than understood. */
+  async describe(words: string): Promise<void> {
+    this.stopTyping(); this.host.say('Writing the steps…');
+    const grammar = CALLS.filter((g) => g.kind !== 'ai').map((g) => `${g.name}: ${g.calls.map((c) => c.text).join(' | ')}`).join('\n');
+    const prompt = `Write a pipeline for what is asked below, as steps in this call language, one step per line, nothing else: no numbering, no commentary. Use names you make up for the things you place. Every step must be one of these forms, with its own sizes, names and conditions:\n${grammar}\n\nWhat is asked: ${words}`;
+    let lines: string[] = [], why = '';
+    try { const r = await this.host.flowApi().ai(prompt, words); if (r.by === 'claude') lines = r.text.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/^`+|`+$/g, '').trim()).filter((l) => l && !/^(here|steps?|pipeline)\b.*:$/i.test(l)).slice(0, 40); else why = 'Claude could not be asked from here'; }
+    catch (e) { why = (e as Error).message.split(/[.:]/)[0]!; }
+    const offline = !lines.length, found = offline ? callsFor(words) : [];
+    if (offline) lines = found.map((f) => f.call?.text).filter((x): x is string => !!x);
+    if (!lines.length) { this.host.say(`${why}, and no call's words match "${words}". Start from ✨ New and a blank board.`); return; }
+    const clip: Clip = { title: words.slice(0, 60), at: Date.now(), nodes: [{ k: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } }, ...lines.map((l, i) => ({ k: `s${i}`, label: l.length > 38 ? `${l.slice(0, 36)}…` : l, step: guessStep(l) ?? { kind: 'action' as const, what: l } }))], links: [] };
+    clip.links = clip.nodes.slice(1).map((n, i) => [clip.nodes[i]!.k, n.k, 'flows to'] as [string, string, string]);
+    const nid = uid('f'); this.store.write(nid, { ...boardOfClip(clip), about: offline ? `Matched offline from "${words}": the calls whose words share most with what was said, in the order said. Nexus matched, it did not understand: change each to what you mean.` : `Written by Claude from "${words}".` }, true); this.open(nid);
+    this.host.say(offline ? `${why}. Offline, Nexus matched your words to ${lines.length} call${lines.length === 1 ? '' : 's'} (${found.filter((f) => f.call).map((f) => `"${f.said}" → ${f.call!.label}`).slice(0, 4).join(', ')}): matching, not understanding. Open each and change it to what you mean, then ▶ Run.` : `Claude wrote ${lines.length} steps. Read them, then ▶ Run.`);
+  }
   /** Call Claude with the words: it reads them with the board, and what it understood is laid out to take or leave. */
   async ask(words: string): Promise<void> {
     const b = this.board(), id = this.id; if (!b || !id) return;
