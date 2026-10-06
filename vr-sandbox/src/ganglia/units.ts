@@ -35,6 +35,8 @@ export const UNITS: Record<string, UnitDef> = {
   N: u(N), kN: u(N, 1e3), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   Pa: u(PA), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
+  // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
+  Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
   W: u(W), kW: u(W, 1e3), hp: u(W, 745.69987158227), mW: u(W, 1e-3), uW: u(W, 1e-6), MW: u(W, 1e6), GW: u(W, 1e9), TW: u(W, 1e12),
   V: u(V), kV: u(V, 1e3), mV: u(V, 1e-3),
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
@@ -99,6 +101,7 @@ const SPOKEN: [RegExp, string][] = [
   [/^(a|amps?|amperes?)$/i, 'A'], [/^(ma|milliamps?)$/i, 'mA'], [/^(v|volts?)$/i, 'V'], [/^(w|watts?)$/i, 'W'], [/^(kw|kilowatts?)$/i, 'kW'], [/^(m[Ww])$/, 'mW'], [/^(milliwatts?)$/i, 'mW'], [/^(µw|μw|uw|microwatts?)$/i, 'uW'], [/^(M[Ww])$/, 'MW'], [/^(megawatts?)$/i, 'MW'], [/^(gw|gigawatts?)$/i, 'GW'], [/^(tw|terawatts?)$/i, 'TW'], [/^(hp|horsepower)$/i, 'hp'],
   [/^(n|newtons?)$/i, 'N'], [/^(kn|kilonewtons?)$/i, 'kN'], [/^(pa)$/i, 'Pa'], [/^(mpa)$/i, 'MPa'], [/^(psi)$/i, 'psi'], [/^(bar)$/i, 'bar'],
   [/^(rpm|revs? per minute)$/i, 'rpm'], [/^(ah|amp[- ]?hours?)$/i, 'Ah'], [/^(wh|watt[- ]?hours?)$/i, 'Wh'], [/^(kwh|kilowatt[- ]?hours?)$/i, 'kWh'], [/^(%|percent)$/i, '%'],
+  [/^(sv|sieverts?)$/i, 'Sv'], [/^(msv|millisieverts?)$/i, 'mSv'], [/^(µsv|μsv|usv|microsieverts?)$/i, 'uSv'], [/^(gy|grays?)$/i, 'Gy'],
   [/^(j|joules?)$/i, 'J'], [/^(kj|kilojoules?)$/i, 'kJ'], [/^(mj|megajoules?)$/i, 'MJ'], [/^(k|kelvin)$/i, 'K'], [/^(khz|kilohertz)$/i, 'kHz'], [/^(mhz|megahertz)$/i, 'MHz'], [/^(ghz|gigahertz)$/i, 'GHz'],
   [/^(°c|degc|celsius|degrees? (c|celsius|centigrade))$/i, 'degC'], [/^(°f|degf|fahrenheit|degrees? (f|fahrenheit))$/i, 'degF'], [/^(deg|degrees?|°)$/i, 'deg'],
 ];
@@ -112,15 +115,17 @@ export interface Said { value: number; unit: string; si: number; dim: Dim; at: n
 export function findQuantities(text: string): Said[] {
   const out: Said[] = [];
   // a number may be written with thousands set apart ("12,000"), and joined to its unit by a hyphen ("a 40-micrometre robot")
-  const re = /(?:(?<![\w.])(-|minus\s+|−))?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?:\s*-\s*|\s*)(°c|%|"|'|[a-zµμΩ°][a-z²³^0-9·./ -]{0,24})/gi;
+  // and said with a word for how many thousands ("1 million tonnes", "20 thousand litres")
+  const re = /(?:(?<![\w.])(-|minus\s+|−))?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?:\s+(thousand|million|billion|trillion)\b)?(?:\s*-\s*|\s*)(°c|%|"|'|[a-zµμΩ°][a-z²³^0-9·./ -]{0,24})/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const raw = m[2]!.replace(/[\s,]+/g, '');
     const sign = m[1] ? -1 : 1;
-    const value = sign * (raw.includes('/') ? Number(raw.split('/')[0]) / Number(raw.split('/')[1]) : Number(raw));
+    const many = ({ thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 } as Record<string, number>)[(m[3] ?? '').toLowerCase()] ?? 1;
+    const value = sign * many * (raw.includes('/') ? Number(raw.split('/')[0]) / Number(raw.split('/')[1]) : Number(raw));
     // the longest run of words after the number that is a unit people say
     // words after it, a hyphen splitting them too ("metre-tall" is "metre", then "tall")
-    const words = m[3]!.trim().split(/[\s-]+/);
+    const words = m[4]!.trim().split(/[\s-]+/);
     let unit: string | null = null, used = 0;
     for (let k = Math.min(words.length, 4); k >= 1 && !unit; k--) {
       const cand = words.slice(0, k).join(' ').replace(/[.,;:]+$/, '');
@@ -130,8 +135,9 @@ export function findQuantities(text: string): Said[] {
     const head = (m[1] ?? '').length + m[2]!.length;
     if (!unit) { re.lastIndex = m.index + head; continue; }
     const p = parseUnit(unit);
-    out.push({ value, unit, si: value * p.scale + (p.offset ?? 0), dim: p.dim, at: m.index, text: `${m[1] ?? ''}${m[2]} ${words.slice(0, used).join(' ')}` });
-    re.lastIndex = m.index + head + 1 + words.slice(0, used).join(' ').length;
+    const said = words.slice(0, used).join(' ');
+    out.push({ value, unit, si: value * p.scale + (p.offset ?? 0), dim: p.dim, at: m.index, text: `${m[1] ?? ''}${m[2]}${m[3] ? ` ${m[3]}` : ''} ${said.replace(/[.,;:]+$/, '')}` });
+    re.lastIndex = m.index + head + (m[3] ? m[3].length + 1 : 0) + 1 + said.length;
   }
   return out;
 }
