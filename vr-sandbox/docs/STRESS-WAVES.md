@@ -208,8 +208,63 @@ The everyday set of 18 (tables, carts, shelves, a gate, a raft, a heater, a lift
 
   Each estimate is said as one.
 
-### Open after wave 2
+### The testers on the result, and what was fixed at once
 
+The four testers read the outputs above (requests 1, 10 and 13 a little before their last fixes). Their scores, 0 to 5:
+
+| request | read | made | holds | honest |
+|---|---|---|---|---|
+| 1 workbench | 2 | 1 | 2 | 3 |
+| 2 garden cart | 3 | 1 | 2 | 2 |
+| 3 raised bed | 2 | 0 | 2 | 1 |
+| 4 boot dryer | 3 | 1 | 1 | 2 |
+| 5 scissor platform | 3 | 1 | 2 | 2 |
+| 6 footbridge | 4 | 2 | 2 | 3 |
+| 7 pipe crawler | 2 | 3 | 1 | 3 |
+| 8 umbrella | 1 | 2 | 1 | 2 |
+| 9 Earth motor | 2 | 2 | 2 | 2 |
+| 10 tardigrade drone | 4 | 3 | 2 | 3 |
+| 11 heat engine | 1 | 2 | 3 | 2 |
+| 12 city walker | 1 | 1 | 1 | 2 |
+| 13 board and battery | 2 | 2 | 3 | 2 |
+| 14 microSD | 1 | 1 | 0 | 1 |
+| 15 Mars ship | 1 | 1 | 0 | 2 |
+| 16 sugar-cube charger | 3 | 3 | 4 | 3 |
+
+Fixed in this round, as each was a wrong figure or a false pass:
+- **Self-gravity.** It was said as the ratio of radii (37.4 for the Earth); it is now the ratio of the centre's pressure to the yield, the square of that (1,400).
+- **Light crossing a thing** is now weighed against the time the thing takes to turn or move, so an Earth-sized rotor turning once a day is not "out of step".
+- **Heat crossing a thing.** The time its heat takes to cross it no longer gives a "must"; what it can shed is weighed by its surface.
+- **The magnetic and electrostatic crossover** is said to one figure, about 0.8 mm, as a rough one.
+- **A named mechanism not kept** ("scissor-lift") is ✗, not ✓.
+- **A lift raised by no derived drive** is ✗: its travel and guides are made and tested, but what raises it and holds it there is not derived.
+- **A law's figure with no limit to pass against** is now said (·), not ticked (✓).
+- **A deflection limit** is said as "1/250 of its span is …: more fails", not "… passes" beside a figure that fails.
+- **A lift's posts** are sized for what really rides on them, the carriage included (139 kg, not 104). Its 159 kg steel base is said, with its thickness taken, not derived.
+- **A missed weight limit** says where the weight is by kind and count ("the 20 joists 6.93 kg"). Each choice of matter made for lightness says what part it is for.
+
+### Open after wave 2 (the next round, D3, by cause)
+
+- **What it makes must hold what it is for.** The raised bed has no walls to keep its soil (it needs sides against the soil's sideways push), and no knee room for a wheelchair (ADA 306). The cart has no tub for its soil. The boot dryer has no door and no vent.
+- **Loads as they are.**
+  - A spread load (soil) should be read as spread, not as one point at the middle.
+  - A person should be read as standing anywhere, over one rail.
+  - Wet wood under a load that stays creeps (EN 1995 k_def), and framing lumber is graded, weaker than clear wood (EN 338 C24).
+  - Mud rolls far harder than pavement and grips less, and a slope needs grip as well as torque.
+  - Wind can be weighed as a push on what faces it.
+- **The laws said where nothing is made.**
+  - The heat engine: the most power from heat that must cross a conductance, K ΔT² / 4T, and how little of the 0.5 K it sees across 10 µm.
+  - The Earth motor: a sphere's surface, radiation alone in vacuum, and its own spin as the store a generator would draw on.
+  - The drone: the hover verdict without flapping wings, and its drag at 1 m/s.
+  - The city walker: what sand bears under it.
+  - The Mars ship: the rocket equation and the dose on the way.
+  - The microSD card: the radio's power for 50 MB/s, and an antenna longer than the card.
+- **Reading.**
+  - Every number is to be accounted for: 70 °C and 400 t went unsaid.
+  - "1 million tonne" and sieverts are to be read.
+  - A model number ("Orange Pi 5") is no quantity.
+  - The "what should it do?" menu should not be put to a request it cannot fit.
+  - Cut-off text, and lines that repeat each other, are to go.
 - **Folding and collapsing structures** (the scissor lift, the footbridge, the umbrella) are now honestly refused. Their linkage, with its folded and opened states each checked, is the next thing to build (Phase 4).
 - **Clear-wood strengths.** The load law takes clear-wood strengths (USDA Wood Handbook). Graded lumber with knots is weaker, so wood frames are less safe than their factor says.
 - **Point loads.** A spread load (soil) is read as one load at the middle, which is conservative by about two on bending.

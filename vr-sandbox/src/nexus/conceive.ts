@@ -134,6 +134,8 @@ function readVerb(v: string, obj: string, all: string): VerbRead {
 /** What kind of knowing a thing that is not made needs: said, so it is known what is missing. */
 /** Folding or packing the whole of a thing down to carry and opening it out again: what it would need. */
 const COLLAPSE = 'folding or packing the whole of it down and opening it out again: a body of hinged or sliding parts that collapse together (a linkage) is not kept yet, only a part that swings';
+/** Mechanisms named by their kind, none of them kept yet: what each is. */
+const MECH_KINDS: Record<string, string> = { scissor: 'a scissor linkage (crossed bars pinned at their middles)', screw: 'a lead screw', hydraulic: 'a hydraulic ram (fluids under pressure)', pneumatic: 'a pneumatic ram (air under pressure)', telescopic: 'telescoping sections', telescoping: 'telescoping sections', rack: 'a rack and pinion', chain: 'a chain drive', belt: 'a belt drive', cable: 'a cable and pulleys' };
 /** The surface of a thing that holds a weight up, named as a part of it. */
 const SURFACE_PART = /^(top|tops|worktop|tabletop|deck|surface|seat|tread)$/;
 const FOLDS = /^(fold|folds|folded|folding|collapses?|collapsed|collapsing|packs?|packed|packing)$/;
@@ -227,7 +229,11 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
         const ps = mod.split('-'), v0 = ps[0]!, r = isVerb(v0) && !/^(wall|battery|pedal|solar|hand|self)$/.test(v0) ? readVerb(v0, ps.slice(1).join(' '), t) : null, mech = ps.map((x) => purposeOf(x)).find((x) => x && ['raise', 'slide', 'swing', 'turn', 'move'].includes(x.fn));
         if (r?.fn && wholeFold(r, c.kind === 'main', p?.fn)) asked.push({ text: mod, kind: 'does', got: null, why: COLLAPSE });
         else if (r?.fn) { add(r.fn, FN_WORDS[r.fn], BASE[r.fn], r.flags); asked.push({ text: mod, kind: 'does', got: r.fn, why: '' }); }
-        else if (mech) { add(mech.fn, mech.name, mech.q, mech.flags); asked.push({ text: mod, kind: 'has', got: mech.fn, why: '' }); }
+        else if (mech) {
+          // a mechanism named by its kind ("scissor-lift", "screw jack"): what it does is wanted; that kind of it is made only where kept
+          const kind = ps.find((x) => MECH_KINDS[x]); add(mech.fn, mech.name, mech.q, mech.flags);
+          asked.push(kind ? { text: mod, kind: 'has', got: null, why: `${MECH_KINDS[kind]} is not kept: the plan says how it is done instead` } : { text: mod, kind: 'has', got: mech.fn, why: '' });
+        }
         else if (/^self-(propelled|driving|moving)$/.test(mod)) { add('move', FN_WORDS.move, BASE.move); asked.push({ text: mod, kind: 'does', got: 'move', why: '' }); }
       }
       // what drives it, and where it hangs: said in a word before it ("pedal-powered", "wall-mounted")
@@ -502,10 +508,10 @@ const LIQUID = ['stainless.304', 'aluminum.6061-t6', 'steel.a36', 'polymer.pmma'
 const merit = (id: string, as: 'panel' | 'beam') => { const m = matterOf(id); return (as === 'panel' ? Math.cbrt(m.E) : Math.sqrt(m.E)) / m.density; };
 /** Parts that stand for the ground it rests on (a bridge's ends for its banks): made so it stands, not counted as it. */
 const STANDS = new Map<string, string>();
-const matterFor = (c: Ctx, options: string[], as: 'panel' | 'beam' = 'panel') => {
+const matterFor = (c: Ctx, options: string[], as: 'panel' | 'beam' = 'panel', role = as === 'panel' ? 'sheets' : 'bars') => {
   if (c.matter) { try { return matterOf(c.matter).id; } catch { /* not a matter: drawn */ } }
   // under a weight limit: the matter that is lightest for its stiffness, by the index for how it is loaded
-  if (c.light !== undefined) { const best = [...options].sort((x, y) => merit(y, as) - merit(x, as))[0]!; if (!c.choices.some((x) => x.startsWith(`${matterOf(best).name} for its ${as === 'panel' ? 'sheets' : 'bars'}:`))) { c.choices.push(`${matterOf(best).name} for its ${as === 'panel' ? 'sheets' : 'bars'}: it must weigh under ${+c.light.toPrecision(3)} kg, and of the matters kept for them it is the lightest for its stiffness (Ashby's index ${as === 'panel' ? 'E^1/3 / ρ for a panel' : 'E^1/2 / ρ for a beam'})`); } return best; }
+  if (c.light !== undefined) { const best = [...options].sort((x, y) => merit(y, as) - merit(x, as))[0]!; if (!c.choices.some((x) => x.startsWith(`${matterOf(best).name} for its ${role}:`))) { c.choices.push(`${matterOf(best).name} for its ${role}: it must weigh under ${+c.light.toPrecision(3)} kg, and of the matters kept for them it is the lightest for its stiffness (Ashby's index ${as === 'panel' ? 'E^1/3 / ρ for a panel' : 'E^1/2 / ρ for a beam'})`); } return best; }
   const a = pick(c.rnd, options), b = pick(c.rnd, options); return matterOf(a).density <= matterOf(b).density ? a : b;
 };
 /** What a matter bears pressed before it gives: its yield (wood: about half its bending strength along the grain; estimate). */
@@ -590,6 +596,8 @@ function frameFor(top: string, by: string, Lw: number, Dw: number, F: number, ra
   }
   return best;
 }
+/** The dressed softwood a frame is sawn from: drawn, or under a weight limit the lightest of them for its stiffness as a beam. */
+const framingWood = (c: Ctx) => (c.light === undefined ? pick(c.rnd, DRESSED_SPECIES) : [...DRESSED_SPECIES].sort((x, y) => merit(y, 'beam') - merit(x, 'beam'))[0]!);
 /** Lays a frame's sheet, joists and rails, the sheet's top at yTop over (X, Z): returns the height of the rails' feet. */
 function placeFrame(c: Ctx, f: Frame, top: string, X: number, yTop: number, Z: number, Lw: number, Dw: number, sheetName = 'top'): number {
   const { T, n, joist: j, rail: r, by, alongX } = f, mb = matterOf(by).name, at = (u: number, v: number): [number, number] => (alongX ? [X + u, Z + v] : [X + v, Z + u]);
@@ -606,7 +614,7 @@ function placeFrame(c: Ctx, f: Frame, top: string, X: number, yTop: number, Z: n
   for (const [k, sv] of [-1, 1].entries()) member(`rail${k + 1}`, r, 0, ry, sv * (Dw / 2 - r.b / 2), 'u', Lw, `under the joists along its ${sv < 0 ? 'near' : 'far'} edge`, `the least ${r.says} of ${mb} that bears half of all of it over its span, by two, bending under 1/250 of it`);
   c.why = w0; return yTop - T - j.h - r.h;
 }
-const frameSays = (f: Frame) => `on ${f.n} joists of ${f.joist.says} and two rails of ${f.rail.says}, in ${matterOf(f.by).name}`;
+const frameSays = (f: Frame, c?: Ctx) => `on ${f.n} joists of ${f.joist.says} and two rails of ${f.rail.says}, in ${matterOf(f.by).name}${c?.light !== undefined && familyOf(f.by) === 'wood' ? ` (under a weight limit, of the softwoods dressed to lumber sizes the lightest for its stiffness as a beam, by Ashby's index E^1/2 / ρ)` : ''}`;
 
 const WAYS: Way[] = [];
 const way = (w: Way) => { WAYS.push(w); return w; };
@@ -622,7 +630,7 @@ const surfaceHow = (n: Need) => {
 };
 function onMembers(kind: 'legs4' | 'legs4in' | 'legs3' | 'column' | 'panels'): (n: Need, c: Ctx) => void {
   return (n, c) => {
-    const { H, W, D, F } = surfaceHow(n), top = matterFor(c, STRUCTURAL), fam = familyOf(top), bars = c.matter ? top : c.light !== undefined ? matterFor(c, BARS.filter((b) => familyOf(b) === fam || fam === 'plastic'), 'beam') : pick(c.rnd, BARS.filter((b) => familyOf(b) === fam || fam === 'plastic'));
+    const { H, W, D, F } = surfaceHow(n), top = matterFor(c, STRUCTURAL), fam = familyOf(top), bars = c.matter ? top : c.light !== undefined ? matterFor(c, BARS.filter((b) => familyOf(b) === fam || fam === 'plastic'), 'beam', 'legs') : pick(c.rnd, BARS.filter((b) => familyOf(b) === fam || fam === 'plastic'));
     const shape: Shape = familyOf(bars) === 'wood' ? 'square' : pick(c.rnd, ['square', 'rod', 'tube']), nLegs = kind === 'legs3' ? 3 : kind === 'column' ? 1 : 4, y0 = c.y0, X = c.x0, Z = c.z0;
     // each leg's share of the load and of the top's own weight (half again for a load off the middle); the top's weight
     // first from the least sheet it could be, then again from the one it is
@@ -657,13 +665,13 @@ function onMembers(kind: 'legs4' | 'legs4in' | 'legs3' | 'column' | 'panels'): (
     // no sheet alone bears it on four legs: the lightest frame of joists and rails under it that does, the legs under the rails
     const sheetKg = W * D * T * matterOf(top).density;
     if ((!tried.ok || c.light !== undefined) && (kind === 'legs4' || kind === 'legs4in') && mem) {
-      const by = fam === 'wood' ? (c.light !== undefined ? [...DRESSED_SPECIES].sort((x, y) => merit(y, 'beam') - merit(x, 'beam'))[0]! : pick(c.rnd, DRESSED_SPECIES)) : familyOf(bars) === 'metal' ? bars : 'aluminum.6061-t6';
+      const by = fam === 'wood' ? framingWood(c) : familyOf(bars) === 'metal' ? bars : 'aluminum.6061-t6';
       frame = frameFor(top, by, Lw, Dw, F, Lw - 2 * inset - 2 * mem.size, alongX);
       if (frame && tried.ok && frame.kg >= sheetKg) { frame = null; make(T); }
       else if (frame) {
         T = frame.T; Pshare = ((F + frame.kg * G) / 4) * 1.5; mem = memberFor(bars, shape, Pshare, H - frame.T - frame.joist.h - frame.rail.h);
         frame = frameFor(top, by, Lw, Dw, F, Lw - 2 * inset - 2 * mem.size, alongX) ?? frame; make(frame.T); T = frame.T;
-        c.choices.push(`${tried.ok ? `a sheet alone would weigh ${+sheetKg.toPrecision(3)} kg` : noSheet(fam, span0)}, so it is framed: the top ${frameSays(frame)}, the lightest of the frames that bear it (${+frame.kg.toPrecision(3)} kg)`);
+        c.choices.push(`${tried.ok ? `a sheet alone would weigh ${+sheetKg.toPrecision(3)} kg` : noSheet(fam, span0)}, so it is framed: the top ${frameSays(frame, c)}, the lightest of the frames that bear it (${+frame.kg.toPrecision(3)} kg)`);
       } else if (!tried.ok) { make(T); c.gaps.push(`${noSheet(fam, span0)}, and no frame of joists and rails of the kept sections does either`); }
     } else if (!tried.ok) c.gaps.push(`${noSheet(fam, span0)}: a beam under it is the next thing to derive`);
     // the legs again, for the top as it is; if they change, the top again on them
@@ -673,7 +681,7 @@ function onMembers(kind: 'legs4' | 'legs4in' | 'legs3' | 'column' | 'panels'): (
     c.choices.push(`${kind === 'legs4' ? 'four legs at the corners' : kind === 'legs4in' ? 'four legs set in from the corners' : kind === 'legs3' ? 'three legs' : kind === 'column' ? `a column on a ${len(2 * footHalf(T))} square foot of 12 mm steel, the column` : 'two side panels'}${mem ? ` of ${shape === 'square' ? `${MM(mem.size)} mm square bar` : shape === 'rod' ? `Ø${MM(mem.size)} mm rod` : `Ø${MM(mem.size)} × ${MM(mem.wall!)} mm tube`} in ${matterOf(bars).name}` : ''}; a ${MM(T)} mm top of ${matterOf(top).name}`);
     c.loads.push(...loadsOn());
     const fr = frame, bay = fr ? (Lw - fr.joist.b) / (fr.n - 1) - fr.joist.b : Math.max(W, D);
-    c.checks.push(() => { const v = LOADS.get(`${c.p}_top`); return v ? { what: `its top bears ${+(F / G).toPrecision(3)} kg${fr ? ' between its joists' : ''}`, ok: v.factor >= 2 && v.bend <= bay / 250, says: `the load law, the load at its middle and at its edge, the worse: ${factorSays(v.factor)}, bending ${len(v.bend)} (under 1/250 of ${fr ? `the ${len(bay)} between joists` : 'its span'}, ${len(bay / 250)}, passes)` } : null; });
+    c.checks.push(() => { const v = LOADS.get(`${c.p}_top`); return v ? { what: `its top bears ${+(F / G).toPrecision(3)} kg${fr ? ' between its joists' : ''}`, ok: v.factor >= 2 && v.bend <= bay / 250, says: `the load law, the load at its middle and at its edge, the worse: ${factorSays(v.factor)}, bending ${len(v.bend)} (1/250 of ${fr ? `the ${len(bay)} between joists` : 'its span'} is ${len(bay / 250)}: more fails)` } : null; });
     if (fr) {
       const mid = `${c.p}_joist${fr.n / 2}`, topN = Lw * Dw * fr.T * matterOf(top).density * G, sp = (Lw - fr.joist.b) / (fr.n - 1), jF = F / 2 + (topN * sp) / Lw;
       c.loads.push(`load ${mid} with ${+jF.toFixed(1)} N + ${mid}.mass * g`, `load ${c.p}_rail1 with ${+((F + topN) / 2).toFixed(1)} N + ${fr.n} * ${c.p}_joist1.mass * g / 2 + ${c.p}_rail1.mass * g`);
@@ -701,7 +709,7 @@ way({
   make: (n, c) => shelves(n, c, 'panels'),
 });
 function shelves(n: Need, c: Ctx, by: 'posts' | 'panels'): void {
-  const { H, W, D, F, levels } = surfaceHow(n), top = matterFor(c, STRUCTURAL), fam = familyOf(top), bars = c.matter ? top : c.light !== undefined ? matterFor(c, BARS, 'beam') : pick(c.rnd, BARS), y0 = c.y0, X = c.x0, Z = c.z0, bat = 0.02;
+  const { H, W, D, F, levels } = surfaceHow(n), top = matterFor(c, STRUCTURAL), fam = familyOf(top), bars = c.matter ? top : c.light !== undefined ? matterFor(c, BARS, 'beam', 'posts') : pick(c.rnd, BARS), y0 = c.y0, X = c.x0, Z = c.z0, bat = 0.02;
   const mem = by === 'posts' ? memberFor(bars, 'square', ((F * levels + 30 * G) / 4) * 1.5, H) : null;
   const make = (T: number) => {
     c.steps.length = 0; c.traces.length = 0; c.members.length = 0; c.riders.length = 0; c.loose.length = 0; c.led = false; c.after = c.base0 ?? null;
@@ -728,7 +736,7 @@ function shelves(n: Need, c: Ctx, by: 'posts' | 'panels'): void {
 way({
   id: 'deck on two ends', meets: 'surface', says: 'a deck resting on two ends, one each side of the gap', when: (n) => (!n.want.flags.includes('span') ? 'there is no gap to span' : null),
   make: (n, c) => {
-    const L = n.want.q.span!.v, W = n.want.q.W!.v, H = n.want.q.H!.v, F = n.want.q.F!.v + n.above, deck = matterFor(c, STRUCTURAL), ends = matterFor(c, BARS, 'beam'), seat = Math.max(0.15, L * 0.1);
+    const L = n.want.q.span!.v, W = n.want.q.W!.v, H = n.want.q.H!.v, F = n.want.q.F!.v + n.above, deck = matterFor(c, STRUCTURAL), ends = matterFor(c, BARS, 'beam', 'ends'), seat = Math.max(0.15, L * 0.1);
     let frame: Frame | null = null;
     const make = (t: number) => {
       c.steps.length = 0; c.traces.length = 0; c.members.length = 0; c.riders.length = 0; c.led = false; c.after = c.base0 ?? null;
@@ -744,10 +752,10 @@ way({
     for (const k of [1, 2]) STANDS.set(`${c.p}_end${k}`, 'the banks it rests on');
     // no sheet alone spans it, or it must be light and a frame is lighter: joists across the deck on two rails along the
     // span, held on the ends
-    const fam = familyOf(deck), by = fam === 'wood' ? (c.light !== undefined ? [...DRESSED_SPECIES].sort((x, y) => merit(y, 'beam') - merit(x, 'beam'))[0]! : pick(c.rnd, DRESSED_SPECIES)) : familyOf(ends) === 'metal' ? ends : 'aluminum.6061-t6';
+    const fam = familyOf(deck), by = fam === 'wood' ? framingWood(c) : familyOf(ends) === 'metal' ? ends : 'aluminum.6061-t6';
     if (!tried.ok || c.light !== undefined) {
       const f = frameFor(deck, by, L + 2 * seat, W, F, L, true), sheetKg = (L + 2 * seat) * W * t * matterOf(deck).density;
-      if (f && (!tried.ok || f.kg < sheetKg)) { frame = f; t = f.T; make(t); c.choices.push(`${tried.ok ? `a sheet alone would weigh ${+sheetKg.toPrecision(3)} kg` : noSheet(fam, L)}, so it is framed: the deck ${frameSays(f)}, the lightest of the frames that bear it (${+f.kg.toPrecision(3)} kg)`); }
+      if (f && (!tried.ok || f.kg < sheetKg)) { frame = f; t = f.T; make(t); c.choices.push(`${tried.ok ? `a sheet alone would weigh ${+sheetKg.toPrecision(3)} kg` : noSheet(fam, L)}, so it is framed: the deck ${frameSays(f, c)}, the lightest of the frames that bear it (${+f.kg.toPrecision(3)} kg)`); }
       else if (!tried.ok) c.gaps.push(`${noSheet(fam, L)}, and no frame of joists and rails of the kept sections does either`);
     }
     c.choices.push(`a ${MM(t)} mm deck of ${matterOf(deck).name} over ${M(L)} on two ends of ${matterOf(ends).name}`);
@@ -788,22 +796,24 @@ way({
   id: 'a carriage between two posts', meets: 'hoist', says: 'a carriage that rides up and down between two posts', when: () => null,
   make: (n, c) => {
     const L = n.want.q.L!.v, carried = (n.want.q.m?.v ?? 0) + n.above / G, W = Math.max(n.fit[0], 0.3), D = Math.max(n.fit[1], 0.3), mt = matterFor(c, ['steel.a36', 'aluminum.6061-t6']), X = c.x0, Z = c.z0;
-    // each post a column carrying half of what rides, as tall as the travel and the carriage, held at its foot only
-    const Hp = L + 0.05 + 0.05, mem = memberFor(mt, 'square', ((carried + 5) * G / 2) * 1.5, Hp), sp = mem.size;
+    // the carriage first: a plate held at its ends by the posts, what rides spread on it (M = F W / 8, deflection
+    // 5 F W³ / 384 E I), as thin as bears it by two and bends under 1/250 of its span
+    const deck = 'aluminum.6061-t6', md = matterOf(deck), Fr = carried * G, cw = (() => { for (const t2 of SHEET.metal!.map((x) => x / 1e3)) { const I = (D * t2 ** 3) / 12, sg = ((Fr * W) / 8) * (t2 / 2) / I, dl = (5 * Fr * W ** 3) / (384 * md.E * I); if (md.yield / sg >= 2 && dl <= W / 250) return t2; } return 0.025; })();
+    const rides = carried + W * D * cw * md.density;
+    // then each post: a column carrying half of all that rides (what it carries and the carriage), half again, as tall as
+    // the travel and the carriage, held at its foot only
+    const Hp = L + 0.05 + 0.05, mem = memberFor(mt, 'square', ((rides * G) / 2) * 1.5, Hp), sp = mem.size;
     let yb = c.y0;
-    const w0 = c.why;
-    if (!n.on) { c.why = 'to stand the posts on the floor'; box(c, 'base', 'steel.a36', X, yb + 0.006, Z, W + 2 * sp + 0.1, D, 0.012, 'base', 'on the floor, under the posts', 'a 12 mm steel plate as wide as the posts and what rides between them'); yb += 0.012; }
+    const w0 = c.why, bw = W + 2 * sp + 0.1, bt = 0.012;
+    if (!n.on) { c.why = 'to stand the posts on the floor and tie them together'; box(c, 'base', 'steel.a36', X, yb + bt / 2, Z, bw, D, bt, 'base', 'on the floor, under the posts', `a ${len(bt)} steel plate as wide as the posts and what rides between them: its size is theirs, its thickness taken, not derived`); yb += bt; c.choices.push(`a ${len(bt)} steel base ${len(bw)} × ${len(D)} under it all (${+(bw * D * bt * matterOf('steel.a36').density).toPrecision(3)} kg; its thickness taken, not derived)`); }
     c.why = 'to guide the carriage up and down';
     for (const [i, sx] of [-1, 1].entries()) upright(c, `post${i + 1}`, mt, 'square', mem, X + sx * (W / 2 + sp / 2), yb, Z, Hp, `${sx < 0 ? 'left' : 'right'} of the carriage, on ${n.on ? 'what it stands on' : 'the base'}`, `the least square bar of ${matterOf(mt).name} that carries half of what rides by three: ${mem.says}`);
     c.why = w0;
-    // the carriage: a plate held at its ends by the posts, what rides spread on it (M = F W / 8, deflection 5 F W³ / 384 E I), as
-    // thin as bears it by two and bends under 1/250 of its span
-    const deck = 'aluminum.6061-t6', md = matterOf(deck), Fr = carried * G, cw = (() => { for (const t2 of SHEET.metal!.map((x) => x / 1e3)) { const I = (D * t2 ** 3) / 12, sg = ((Fr * W) / 8) * (t2 / 2) / I, dl = (5 * Fr * W ** 3) / (384 * md.E * I); if (md.yield / sg >= 2 && dl <= W / 250) return t2; } return 0.025; })();
     const cn = box(c, 'carriage', deck, X, yb + 0.002 + cw / 2, Z, W, D, cw, 'plate', 'between the posts, its ends against them, 2 mm up', `a ${len(cw)} plate of ${md.name}: held at its ends by the posts, what rides spread on it, it bears it by two and bends under 1/250 of ${len(W)} (M = F W / 8)`, { moving: true });
     c.steps.push(`slide ${cn} on ${c.p}_post1 along y between 0 mm and ${MM(L)} mm`); c.traces.push({ step: c.steps.at(-1)!, what: `${cn}'s slide`, called: c.way, why: `so it rides up ${len(L)} and back`, when: '', where: 'where its end touches the left post, along it', how: 'a Jolt slider along y with its stops at the bottom and at the travel' });
     c.choices.push(`a ${len(cw)} carriage of ${md.name} ${len(W)} × ${len(D)} riding ${len(L)} up and down between two ${len(sp)} square posts of ${matterOf(mt).name}`);
     c.gaps.push('what raises it (a screw, a winch or a scissor linkage, and what turns that) is not derived: it is pushed up in the test');
-    c.checks.push(() => ({ what: 'its posts carry what rides without buckling', ok: mem.ok, says: `each carries half of ${+(carried + 5).toPrecision(3)} kg, half again: ${mem.says}` }));
+    c.checks.push(() => ({ what: 'its posts carry what rides without buckling', ok: mem.ok, says: `each carries half of ${+rides.toPrecision(3)} kg (what rides and the carriage), half again: ${mem.says}` }));
     c.tests.push({ kind: 'raise', name: cn, L });
     c.top = { y: yb + 0.002 + cw, w: W, d: D, name: cn }; c.foot = [W + 2 * sp + (n.on ? 0 : 0.1), D];
   },
@@ -1158,13 +1168,15 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   }
   const ms = room.all().made.filter((m) => m.name.startsWith(`${prefix}_`)), mass = ms.reduce((a, m) => a + m.mass, 0);
   // where its weight is: the kinds of part that weigh most, each summed (its joists as one), so a limit missed says where to look
-  const heaviest = (xs: typeof ms) => { const by = new Map<string, number>(); for (const m of xs) { const k = m.name.slice(prefix.length + 1).replace(/\d+$/, ''); by.set(k, (by.get(k) ?? 0) + m.mass); } return [...by].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => `${k.replace(/_/g, ' ')} ${+v.toPrecision(3)} kg`).join(', '); };
+  const heaviest = (xs: typeof ms) => { const by = new Map<string, [number, number]>(); for (const m of xs) { const k = m.name.slice(prefix.length + 1).replace(/\d+$/, ''), was = by.get(k) ?? [0, 0]; by.set(k, [was[0] + m.mass, was[1] + 1]); } return [...by].sort((x, y) => y[1][0] - x[1][0]).slice(0, 3).map(([k, [v, n]]) => `${n > 1 ? `the ${n} ${k.replace(/_/g, ' ')}s` : `the ${k.replace(/_/g, ' ')}`} ${+v.toPrecision(3)} kg`).join(', '); };
   // what was said it must not pass: its own weight, its width, height and depth, as made
   const L = con.limits, ext = (i: number) => (ms.length ? Math.max(...ms.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2)) - Math.min(...ms.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2)) : 0);
   const own = ms.filter((m) => !STANDS.has(m.name)), ownKg = own.reduce((a, m) => a + m.mass, 0), stand = ms.filter((m) => STANDS.has(m.name));
-  if (made && L.mass !== undefined) out.push({ what: `it weighs no more than ${+L.mass.toPrecision(3)} kg`, ok: ownKg <= L.mass * 1.0001, says: `it weighs ${+ownKg.toPrecision(3)} kg, its parts added up${stand.length ? ` (not counting its ${stand.length} ${[...new Set(stand.map((m) => m.name.slice(prefix.length + 1).replace(/\d+$/, '')))].join(', ')}s, ${+(mass - ownKg).toPrecision(3)} kg, which stand for ${STANDS.get(stand[0]!.name)})` : ''}${ownKg > L.mass ? `: ${+(ownKg / L.mass).toPrecision(2)} times the limit; the heaviest ${heaviest(own)}` : ''}` });
+  if (made && L.mass !== undefined) out.push({ what: `it weighs no more than ${+L.mass.toPrecision(3)} kg`, ok: ownKg <= L.mass * 1.0001, says: `it weighs ${+ownKg.toPrecision(3)} kg, its parts added up${stand.length ? ` (not counting its ${stand.length} ${[...new Set(stand.map((m) => m.name.slice(prefix.length + 1).replace(/\d+$/, '')))].join(', ')}s, ${+(mass - ownKg).toPrecision(3)} kg, which stand for ${STANDS.get(stand[0]!.name)})` : ''}${ownKg > L.mass ? `: ${+(ownKg / L.mass).toPrecision(2)} times the limit; where it weighs most: ${heaviest(own)}` : ''}` });
   for (const [k, i, word] of [['W', 0, 'wide'], ['H', 1, 'tall'], ['D', 2, 'deep']] as const) if (made && L[k] !== undefined) { const e = ext(i); out.push({ what: `it is no more than ${len(L[k]!)} ${word}`, ok: e <= L[k]! * 1.0001, says: `it is ${len(e)} ${word} as made` }); }
-  const asked = con.asked, does = doesOf(asked, gaps, con.wants), ok = made && out.every((x) => x.ok);
+  // what it raises, it raises only in part where what raises and holds it is not derived: its travel and guides are made
+  const unraised = gaps.some((g) => g.startsWith('what raises it'));
+  const asked = con.asked.map((a) => (a.got === 'raise' && a.kind === 'does' && unraised ? { ...a, got: null, why: 'its travel and its guides are made and tested; what raises it and holds it there (a screw, a winch, a linkage) is not derived' } : a)), does = doesOf(asked, gaps, con.wants), ok = made && out.every((x) => x.ok);
   return { name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, choices, tries: [], gaps, mass, parts: ms.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };
 }
 /** How far a thing's up axis turned between two turnings: tipping, whatever it turned about its upright. */
@@ -1209,7 +1221,7 @@ function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], ri
         // linkage) is not derived; this tests that it rides up and down where it should, and stops at its travel
         const ride = new Set([t.name, ...riders]), kg = [...mine().values()].filter((m) => ride.has(m.name)).reduce((a, m) => a + m.mass, 0) + w.all().made.filter((m) => m.name.startsWith('test_load')).reduce((a, m) => a + m.mass, 0), F = 2 * kg * G;
         w.run(`push ${t.name} with ${+F.toFixed(1)} N along y for 1.5 s`); const tr = w.value(`${t.name}.most`);
-        out.push({ what: `it raises what it carries ${len(t.L)}`, ok: tr > 0.2 * t.L && tr <= t.L + 2e-3, says: `pushed up with twice the weight of what rides (${+F.toPrecision(3)} N, for ${+kg.toPrecision(3)} kg) for 1.5 s (Jolt), it rose as far as ${len(tr)}, its stop at ${len(t.L)}, and came down again when let go; the work to raise it the whole way is ${+((kg * G * t.L) / 1000).toPrecision(3)} kJ (m g h)` });
+        out.push({ what: `it raises what it carries ${len(t.L)}`, ok: tr > 0.2 * t.L && tr <= t.L + 2e-3, says: `pushed up with twice the weight of what rides (${+F.toPrecision(3)} N, for ${+kg.toPrecision(3)} kg) for 1.5 s (Jolt), it rose as far as ${len(tr)}, its stop at ${len(t.L)}, and came down again when let go, as nothing holds it there; the work to raise it the whole way is ${+((kg * G * t.L) / 1000).toPrecision(3)} kJ (m g h)` });
       }
     }
   } catch (e) { out.push({ what: 'it behaves when let go', ok: false, says: (e as Error).message.slice(0, 240) }); }
@@ -1263,7 +1275,7 @@ export function clipOfDesign(d: Design, at = Date.now()): Clip {
 export const showValue = (q: Question) => (q.kind === 'mass' ? `${+(q.value / G).toPrecision(3)} kg` : q.kind === 'length' ? `${+(q.value * 1e3).toPrecision(4)} mm` : q.kind === 'speed' ? `${+q.value.toPrecision(3)} m/s` : q.kind === 'rpm' ? `${+((q.value * 60) / (2 * Math.PI)).toPrecision(3)} rpm` : q.kind === 'volume' ? `${+(q.value * 1e3).toPrecision(3)} L` : q.kind === 'temperature' ? `${q.value} °C` : String(q.value));
 /** What was conceived, said back: what it is to do, what was heard, and what is asked. */
 export function sayConception(c: Conception): string {
-  const not = c.asked.filter((a) => a.kind !== 'for' && !a.got), laws = `${c.scale?.must.length ? ` At ${len(c.scale.L)} it would have to be built so: ${c.scale.must.join('; ')}.` : ''}${c.bounds.length ? ` The laws say: ${c.bounds.map((b) => `${b.ok ? '✓' : '✗'} ${b.what} (${b.says})`).join('; ')}.` : ''}`;
+  const not = c.asked.filter((a) => a.kind !== 'for' && !a.got), laws = `${c.scale?.must.length ? ` At ${len(c.scale.L)} it would have to be built so: ${c.scale.must.join('; ')}.` : ''}${c.bounds.length ? ` The laws say: ${c.bounds.map((b) => `${b.ok === null ? '·' : b.ok ? '✓' : '✗'} ${b.what} (${b.says})`).join('; ')}.` : ''}`;
   return sayIt(c, not) + laws;
 }
 function sayIt(c: Conception, not: Asked[]): string {

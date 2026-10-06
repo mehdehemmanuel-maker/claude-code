@@ -112,7 +112,7 @@ describe('making it, and checking what was asked', () => {
     expect(d!.choices.some((x) => /a sheet alone would weigh .* so it is framed/.test(x))).toBe(true);
     // the bridge proper is still more than 5 kg, and it says where its weight is
     expect(lim.ok).toBe(false);
-    expect(lim.says).toMatch(/the heaviest /);
+    expect(lim.says).toMatch(/where it weighs most: the 2 rails /);
   });
   it('makes a cart that moves at the speed asked, its speed held by its controller', () => {
     const [d] = designs(go('a cart that carries 20 kg at 1 m/s'), 1, { seed: 101, physics: J });

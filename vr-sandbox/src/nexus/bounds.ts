@@ -9,7 +9,8 @@ import { heatLoss, AMBIENT } from '../engineering/thermal';
 import { AIR, fmt, lenSay, timeSay } from './sizing';
 
 const g = 9.80665;
-export interface Bound { what: string; ok: boolean; says: string }
+/** A bound: ok when what was asked is within it, not ok when past it, null when nothing was asked to hold it against (a figure, said). */
+export interface Bound { what: string; ok: boolean | null; says: string }
 /** What an ask said that the bounds read: each figure with what it is of. */
 export interface Said {
   /** its own sizes, m: as said or named */ size?: { W?: number; D?: number; H?: number };
@@ -40,13 +41,13 @@ export function bounds(s: Said): Bound[] {
   if (heat !== undefined && area !== undefined && Lc) {
     const cap = s.tmax !== undefined ? heatLoss(s.tmax, area, Lc, 0.9) : undefined;
     let T = AMBIENT + 1; for (let k = 0; k < 200 && heatLoss(T, area, Lc, 0.9) < heat; k++) T = AMBIENT + (T - AMBIENT) * 1.08 + 0.5;
-    out.push({ what: `it sheds the ${fmt(heat)} W it turns to heat${s.tmax !== undefined ? ` at no more than ${s.tmax} °C` : ''}`, ok: cap === undefined || cap >= heat, says: `its ${fmt(area * 1e4)} cm² of surface${thick} sheds ${cap !== undefined ? `${fmt(cap)} W at ${s.tmax} °C` : 'it'} into still air at ${AMBIENT} °C (natural convection and radiation, emissivity 0.9); left so, it settles near ${fmt(T)} °C${P('gives') !== undefined && P('draws') === undefined ? ` (the heat is what it loses passing on ${fmt(P('gives')!)} W at 95% (estimate))` : ''}${cap !== undefined && cap < heat ? `: it needs ${fmt(heat / cap)} times the surface, or a fan or a heat sink` : ''}` });
+    out.push({ what: `it sheds the ${fmt(heat)} W it turns to heat${s.tmax !== undefined ? ` at no more than ${s.tmax} °C` : ''}`, ok: cap === undefined ? null : cap >= heat, says: `its ${fmt(area * 1e4)} cm² of surface${thick} sheds ${cap !== undefined ? `${fmt(cap)} W at ${s.tmax} °C` : 'it'} into still air at ${AMBIENT} °C (natural convection and radiation, emissivity 0.9); left so, it settles near ${fmt(T)} °C${P('gives') !== undefined && P('draws') === undefined ? ` (the heat is what it loses passing on ${fmt(P('gives')!)} W at 95% (estimate))` : ''}${cap !== undefined && cap < heat ? `: it needs ${fmt(heat / cap)} times the surface, or a fan or a heat sink` : ''}` });
   }
   // energy carried: so many watts for so long, against what cells of its size and weight hold
   const run = P('draws') ?? P('gives') ?? P('makes');
   if (run !== undefined && s.runFor !== undefined) {
     const Wh = (run * s.runFor) / 3600, kg = Wh / CELL.whPerKg, L = Wh / CELL.whPerL;
-    out.push({ what: `it carries what it needs for ${timeSay(s.runFor)} at ${fmt(run)} W`, ok: vol === undefined || L / 1000 <= vol * 0.5, says: `${fmt(Wh)} Wh: ${fmt(kg * 1000)} g of lithium-ion cells, ${fmt(L * 1000)} cm³ (about ${CELL.whPerKg} Wh/kg and ${CELL.whPerL} Wh/L, estimate)${vol !== undefined ? `, against its ${fmt(vol * 1e6)} cm³ in all${thick}${L / 1000 > vol * 0.5 ? `: more than half of it` : ''}` : ''}${s.massLimit !== undefined && kg > s.massLimit ? `, more than the ${fmt(s.massLimit)} kg it may weigh` : ''}` });
+    out.push({ what: `it carries what it needs for ${timeSay(s.runFor)} at ${fmt(run)} W`, ok: vol === undefined && s.massLimit === undefined ? null : (vol === undefined || L / 1000 <= vol * 0.5) && (s.massLimit === undefined || kg <= s.massLimit), says: `${fmt(Wh)} Wh: ${fmt(kg * 1000)} g of lithium-ion cells, ${fmt(L * 1000)} cm³ (about ${CELL.whPerKg} Wh/kg and ${CELL.whPerL} Wh/L, estimate)${vol !== undefined ? `, against its ${fmt(vol * 1e6)} cm³ in all${thick}${L / 1000 > vol * 0.5 ? `: more than half of it` : ''}` : ''}${s.massLimit !== undefined && kg > s.massLimit ? `, more than the ${fmt(s.massLimit)} kg it may weigh` : ''}` });
   }
   // hovering: momentum theory, power ideal (m g)^1.5 / √(2 ρ A) over a disc as wide as it is; out of its range below Re ~ 1000
   if (s.flies && W) {
@@ -58,7 +59,7 @@ export function bounds(s: Said): Bound[] {
   // size by conduction through water or tissue, k A ΔT / L, k = 0.5 W/(m K) (estimate)
   if (s.heatEngine && s.dT !== undefined) {
     const T = s.Tat ?? 310, eta = s.dT / T, L = W ?? 0.01, Q = 0.5 * L * L * s.dT / L, most = eta * Q, want = P('makes') ?? P('gives');
-    out.push({ what: 'a heat engine on that difference gives what is asked', ok: want === undefined || most >= want, says: `at most ${fmt(eta * 100)}% of the heat it passes (Carnot, ΔT / T at ${fmt(T)} K); ${fmt(Q)} W of heat crosses ${lenSay(L)} of water or tissue at ${s.dT} K (k A ΔT / L, k 0.5 W/(m K), estimate), so it gives at most ${fmt(most)} W${want !== undefined ? ` against the ${fmt(want)} W asked${most < want ? `: ${fmt(want / most)} times too little` : ''}` : ''}` });
+    out.push({ what: 'a heat engine on that difference gives what is asked', ok: want === undefined ? null : most >= want, says: `at most ${fmt(eta * 100)}% of the heat it passes (Carnot, ΔT / T at ${fmt(T)} K); ${fmt(Q)} W of heat crosses ${lenSay(L)} of water or tissue at ${s.dT} K (k A ΔT / L, k 0.5 W/(m K), estimate), so it gives at most ${fmt(most)} W${want !== undefined ? ` against the ${fmt(want)} W asked${most < want ? `: ${fmt(want / most)} times too little` : ''}` : ''}` });
   }
   // a motor: its torque, and the shear its air gap must carry for it at its size
   if (s.motor && (P('gives') ?? P('makes')) !== undefined && s.w !== undefined && W) {
@@ -68,7 +69,7 @@ export function bounds(s: Said): Bound[] {
   // light: what a cell of its face gathers at the light it is under, at 20% (estimate)
   if (s.light !== undefined && W && D) {
     const got = s.light * W * D * 0.2, need = P('draws');
-    out.push({ what: 'the light on it powers it', ok: need === undefined || got >= need, says: `${fmt(s.light)} W/m² on ${fmt(W * D * 1e4)} cm² at 20% (estimate) gives ${fmt(got)} W${need !== undefined ? ` against the ${fmt(need)} W it draws${got < need ? `: ${fmt(need / got)} times too little` : ''}` : ''}` });
+    out.push({ what: 'the light on it powers it', ok: need === undefined ? null : got >= need, says: `${fmt(s.light)} W/m² on ${fmt(W * D * 1e4)} cm² at 20% (estimate) gives ${fmt(got)} W${need !== undefined ? ` against the ${fmt(need)} W it draws${got < need ? `: ${fmt(need / got)} times too little` : ''}` : ''}` });
   }
   return out;
 }
