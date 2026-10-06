@@ -643,3 +643,79 @@ Their findings are the next round's work (D5), by cause:
 - **Insulated walls and a cooler** as ways and parts.
 - **A roof on rafters**; guy lines and stakes; bracing for a tall frame.
 - **A rescore** of the D4 outputs by fresh judges.
+
+## Round D5: the D4 findings, fixed by cause
+
+**Ticks not earned.**
+- **The empty wind.** It now weighs the wind's lift and its turning together: what holds it down is its weight less the lift.
+- **Lift and inside pressure.** The lift counts the air inside pushing up: 0.2 of ½ ρ v² with its openings shut (EN 1991-1-4 7.2.9), and 0.6 with a door open into the wind. It is ticked only within the margins taken for it, 0.9 of its weight against 1.5 of the lift (EN 1990 Table A1.2(A)).
+- **The shelter.** It is no longer ticked as standing empty or as not lifting.
+- **The cabinet's ride.** "It raises what it carries 500 mm" is now "it rides 500 mm up and down its guides", as it is pushed.
+- **The mug's spill.** Its 5 ml is a thing asked, ✗: knocking it over is not tested, and with no lid it would spill all it holds.
+
+**Loads.**
+- **A crowd bunches.** A crowd on a span is weighed on its rails both spread along them and gathered at their middle, whichever is worse. Its own weight is taken there too, on the safe side.
+- **The footbridge's rails.** Gathered at midspan, the 450 kg needs a 2x12 rail. That weighs 35.6 kg, more than a piece may. So the frame now takes two rails side by side under each edge where one would be too heavy, each bearing a quarter. It now holds on four 2x10s, the heaviest piece 29.3 kg.
+- **Rails too long, on one span.** Over a single clear span there is nothing to splice a 7.8 m rail over. It must be engineered timber made to length, a splice made to carry the whole moment, or a pier midway.
+- **A bridge's ends.** They stand for its banks, so its abutments and their footings are said to be not derived.
+
+**The size table.**
+- Reynolds' number in blood uses blood: 1060 kg/m³, 3.5 mPa s.
+- The time heat takes to cross it says what that means from a second to ages.
+- Self-weight does not bear on a hull held up by its gas.
+- Water's Reynolds' number is not given for what flies.
+
+**The laws.**
+- **Microswimmer.**
+  - Swimming is ✓: it covers 3 cm in 10 min against 15, and its field gives 152 times the drag torque.
+  - Getting to the clot through flowing blood is ✗.
+  - Its mass is taken at the density it sinks by, 8.63 µg.
+  - The field gradient that would hold it up is about 0.98 T/m, many times what a clinical MRI's gradient coils give.
+  - It no longer offers to make "the part it can" at 200 µm.
+- **Worm.**
+  - The width it is taken at is said: an eighth of its length.
+  - Its cells give 3.45 mW against the 3.38 mW its burrowing takes before any loss, so it cannot.
+- **Sail.**
+  - It is no longer read as solar cells.
+  - To make it in 3 years it would want a sail 1.24 km square, or 266 m square for the leg between the planets alone.
+- **Solar charger.** Folding panels weigh about 2 to 3 kg/m² (estimate). The 2.27 m² it would need weigh at least 4.55 kg, against its 1.5 kg.
+- **Flask.**
+  - Two silvered faces across its vacuum radiate only 0.00424 W/K, so the laws allow it.
+  - What flasks lose goes through the neck and stopper, which must let through under 0.00365 W/K.
+  - The bound says "walls and a lid".
+- **Cooler.**
+  - Its Peltier is taken at the lift it has, about 0.29 at 31 K: 41 times too little.
+  - A compressor behind vacuum panels comes near the 100 Wh, at 119 Wh, though it is neither a Peltier nor silent.
+  - The sun on its top is weighed.
+- **Open vessels.** An open top's evaporation is weighed by the Lewis analogy:
+  - the mug falls to 55 °C in about 30 min;
+  - the flask to 70 °C in about 29 min;
+  - the hand-cranked kettle settles near 71 °C and never boils.
+- **Mars stage.**
+  - At three twentieths it must carry 1040 t of propellant, 1240 t leaving.
+  - Captured into a long ellipse it brakes 1.58 km/s and needs 222 t.
+  - 537 t in a low orbit takes several launches.
+- **Lunar habitat.**
+  - A closed sphere carries its own pressure; a dome on a floor needs 5.08 MN held down.
+  - It settles only over about 19 years. Until then its warm wall loses more than its 15 kW for the first 5.5 h, so its warmth is weighed, not ticked.
+- **Deep-sea pod.**
+  - Its wall is said as part of its radius.
+  - 120 kg holding 108 kWh would be 900 Wh/kg, more than any cell holds.
+- **Europa board.**
+  - It settles at −28 °C, within the −55 to +125 °C parts are rated for.
+  - Switched off, it falls toward −163 °C and must be warmed.
+  - On the surface alone its dose would be about 16 krad, 18.5 times under its rating. The whole mission is not judged.
+
+**Reading.**
+- "And tell me how much propellant it has to carry" is a question put with it, answered by the laws, not a thing it has.
+- "With 370 s specific impulse" is a quantity heard with its number, not a part.
+
+### Checked
+
+- **The gate:** typecheck, and 984 tests in 92 files.
+- **Both browser drives** pass with no script errors.
+- **The everyday set (18), wave 2 (16) and wave 3 (20)** were rerun. Against D4, these changed:
+  - the 6.5 m footbridge, 206 kg on four rails;
+  - the mug, its spill asked;
+  - the two small bridges, whose abutments are said;
+  - the drain robot, at its speed since the controller fix.
