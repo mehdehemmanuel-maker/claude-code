@@ -74,7 +74,7 @@ const PURPOSES: Purpose[] = [
   P(/\b(bed|bunk|cot)\b/, 'bed', 'support', { H: fig(0.45, 'm', 'estimate', 'a mattress base at 450 mm'), W: fig(0.9, 'm', 'usual', 'a single bed 900 mm wide'), D: fig(2.0, 'm', 'usual', 'and 2.0 m long'), F: fig(150 * G, 'N', 'estimate', 'a person and a mattress, about 150 kg') }),
   P(/\b(shelf|shelves|shelving|bookcase|bookshelf|rack|cubbies|cubby|cubbyholes?|pigeonholes?|storage units?|backpack storage|bag storage)\b/, 'shelf', 'support', { H: fig(1.8, 'm', 'estimate', 'shelving 1.8 m tall'), W: fig(0.8, 'm', 'estimate', '800 mm wide'), D: fig(0.3, 'm', 'estimate', '300 mm deep'), F: fig(25 * G, 'N', 'estimate', 'about 25 kg on each shelf (books weigh about 20 kg a metre)'), levels: fig(4, '', 'estimate', 'four shelves') }, ['levels']),
   P(/\b(tower|lookout|watchtower|scaffold|hide)\b/, 'platform', 'support', { H: fig(3, 'm', 'estimate', 'standing 3 m up'), W: fig(1.5, 'm', 'estimate', '1.5 m across'), D: fig(1.5, 'm', 'estimate', 'and 1.5 m deep'), F: fig(200 * G, 'N', 'estimate', 'two people on it, about 200 kg') }),
-  P(/\b(climbing frames?|jungle gyms?|play ?structures?|play ?frames?|monkey bars)\b/, 'platform', 'support', { H: fig(1.0, 'm', 'estimate', 'its top 1 m up (estimate)'), W: fig(2.0, 'm', 'estimate', '2 m long'), D: fig(1.2, 'm', 'estimate', 'and 1.2 m deep'), F: fig(4 * 30 * G, 'N', 'estimate', 'four children of 30 kg (estimate)') }),
+  P(/\b(climbing frames?|jungle gyms?|play ?structures?|play ?frames?|monkey bars)\b|(?=.*\bclimbing\b)(?=.*\b(frames?|structures?)\b)/, 'platform', 'support', { H: fig(1.0, 'm', 'estimate', 'its top 1 m up (estimate)'), W: fig(2.0, 'm', 'estimate', '2 m long'), D: fig(1.2, 'm', 'estimate', 'and 1.2 m deep'), F: fig(4 * 30 * G, 'N', 'estimate', 'four children of 30 kg (estimate)') }),
   P(/\b(platform|stage|deck|step|footstool|tray|surface)\b/, 'platform', 'support', { H: fig(0.3, 'm', 'estimate', 'standing 300 mm up'), W: fig(1.2, 'm', 'estimate', '1.2 m across'), D: fig(1.2, 'm', 'estimate', 'and 1.2 m deep'), F: fig(200 * G, 'N', 'estimate', 'two people standing on it, about 200 kg') }),
   P(/\b(bridge|footbridge|span|walkway|gangway|catwalk)\b/, 'bridge', 'support', { span: fig(2, 'm', 'estimate', 'a gap of 2 m'), W: fig(0.6, 'm', 'estimate', '600 mm wide'), H: fig(0.3, 'm', 'estimate', 'its deck 300 mm up'), F: fig(100 * G, 'N', 'estimate', 'a person crossing, about 100 kg') }, ['span']),
   P(/\b(umbrella|parasol)\b/, 'shade', 'support', { H: fig(2.0, 'm', 'estimate', 'its canopy 2 m up'), W: fig(2.0, 'm', 'estimate', 'a canopy 2 m across'), D: fig(2.0, 'm', 'estimate', 'and 2 m deep'), F: fig(1 * G, 'N', 'estimate', 'nothing on it but itself, about 1 kg') }, ['pole']),
@@ -114,6 +114,8 @@ function readVerb(v: string, obj: string, all: string): VerbRead {
   // "opens in under 2 minutes", "sets up in 30 s": how long it takes to put up, not a door that swings
   if (/^(open|opens|opening|unfold|unfolds|deploy|deploys|erect|erects|pitch|pitches)$/.test(w) && /^\s*(in|within)\s+(under|less than|about|around|\d)/.test(o)) return { note: 'how long it takes to put up: setting it up is not weighed' };
   if (/^(open|swing|hinge|pivot)/.test(w)) return { fn: 'swing' };
+  // "a tracked crawler": on tracks, not wheels
+  if (/^(tracked|treaded|crawler)$/.test(w)) return { note: 'on tracks (a crawler): tracks are not kept; only wheels are' };
   // "brakes on its own on a slope": a brake its wheels drive against, not kept; the pull it must hold is weighed below
   if (/^(brake|brakes|braking)$/.test(w)) return { note: 'braking: a brake (a shoe or band pressed on a turning wheel) is not kept; what it must hold is weighed below' };
   // "to open or close": shutting is what opens it, back: said with it, not a thing of its own
@@ -346,16 +348,22 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       if (/^(airships?|blimps?|zeppelins?|dirigibles?|balloons?|aerostats?)$/.test(c.head) && c.kind === 'main') { said.buoyant = true; asked.push({ text: c.text.replace(/\s+(that|which|who|whose|with|for)$/, ''), kind: 'thing', got: null, why: 'held up by a gas lighter than air (an airship, a balloon): buoyancy in a gas is not kept yet; what its gas would lift is weighed below' }); if (!name) name = singular(c.head); return; }
       // "a heat engine", "a Stirling engine": a conversion of heat into work, weighed by the laws below, not a thing that turns
       if (/^(engine|engines|motor)$/.test(c.head) && c.mods.some((x) => /^(heat|stirling|steam|thermal|thermoelectric)$/.test(x))) { asked.push({ text: c.text.replace(/\s+(that|which|who|whose|with|for)$/, ''), kind: c.kind === 'has' ? 'has' : 'thing', got: null, why: 'a heat engine (turning heat into work): energy conversion is not kept; what the laws allow it is weighed below' }); if (c.kind === 'main' && !name) name = singular(c.head); return; }
-      const p = purposeOf(c.head), generic = GENERIC.test(c.head), m = massOf(c.head), nxs = pa.clauses[ci + 1];
+      // the word for it, or where that names nothing, the words with it ("a climbing frame", "backpack storage")
+      // (only where the word for it is part of what names it: "a desk clock" is a clock, not a desk)
+      const phrase = (x: string) => { const pp = purposeOf(x); return pp && !pp.re.test(` ${x.replace(new RegExp(`\\b${c.head}\\b`, 'g'), ' ').replace(/-/g, ' ')} `) ? pp : undefined; };
+      const p = purposeOf(c.head) ?? (c.mods.length ? phrase([...c.mods, c.head].join(' ')) : undefined) ?? (c.kind === 'main' && /\b(climbing|storage|frame)\b/.test(c.text) ? phrase(c.text) : undefined), generic = GENERIC.test(c.head), m = massOf(c.head), nxs = pa.clauses[ci + 1];
       const named = /\b(the |same )size$/.test(c.text) && nxs?.kind === 'where' && /^(of|as)$/.test(nxs.opener) ? `${c.text} ${nxs.opener} ${nxs.text}` : c.text;
       if (c.kind === 'main' && !name && (ci === 0 || pa.clauses.slice(0, ci).every((x) => x.kind !== 'main' || !x.head))) name = singular(c.head);
-      if (p) { add(p.fn, p.name, p.q, p.flags); asked.push({ text: `${c.kind === 'has' ? 'with ' : ''}${c.text.replace(/\s+(that|which|who|whose|with|for)$/, '')}`, kind: c.kind === 'has' ? 'has' : 'thing', got: p.fn, why: '' }); }
+      // "lifting it back up with a motor": the motor is what drives what it does, not a second thing that turns
+      const drove = p?.name === 'motor' && c.kind === 'has' && /^(with|by|using)$/.test(c.opener) ? wants.find((w) => ['raise', 'slide', 'move', 'swing', 'lift'].includes(w.fn)) : undefined;
+      if (drove) asked.push({ text: `with ${c.text}`, kind: 'has', got: drove.fn, why: '' });
+      else if (p) { add(p.fn, p.name, p.q, p.flags); asked.push({ text: `${c.kind === 'has' ? 'with ' : ''}${c.text.replace(/\s+(that|which|who|whose|with|for)$/, '')}`, kind: c.kind === 'has' ? 'has' : 'thing', got: p.fn, why: '' }); }
       // "one gripper mechanism": what it is, by the word that names it, where that is not kept
       else if (generic) { const ar = c.kind === 'main' && c.mods.length ? areaOf(c.mods.join(' ')) : ''; if (ar && !/^not a kind/.test(ar)) asked.push({ text: c.text.replace(/\s+(that|which|who|whose|with|for)$/, ''), kind: 'thing', got: null, why: ar }); }
       else if (m && c.kind === 'has') { loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` }; }
       // a figure's own label ("with an empty mass", "a folded width", "a 30 psf snow load") or a word that only says how it
       // is ("rated", "assembled", "capable", "formal request") is no thing asked: what it says is read as a number or not at all
-      else if (/^(?:an?\s+|its\s+|the\s+)?(?:empty|folded|total|combined|overall|all-up|max(?:imum)?|min(?:imum)?|gross|net|packed|dry)\s+(?:mass|weight|width|height|length|payload|size|depth|load|volume)\b/.test(c.text) || /^(?:an?\s+)?\d[\d.,]*\s*\S+\s+(?:snow|ice|wind|live|roof)\s+loads?$/.test(c.text) || /^(?:rated|assembled|capable|formal request|requested|needed|required|designed|built|made)$/.test(c.text.trim()) && areaOf(`${c.head} ${c.mods.join(' ')}`) === 'not a kind of thing kept') { /* no thing */ }
+      else if (/^(?:an?\s+|its\s+|the\s+)?(?:empty|folded|total|combined|overall|all-up|max(?:imum)?|min(?:imum)?|gross|net|packed|dry)\s+(?:mass|weight|width|height|length|payload|size|depth|load|volume)\b/.test(c.text) || /^(?:with\s+)?(?:maybe|about|around|roughly|some|up to|at least|nearly|almost|over|under)?\s*(?:an?\s+)?\d[\d.,]*\s*\S+(?:\s+of\s+\S+)?(?:\s+\S+)?$/.test(c.text) && areaOf(`${c.head} ${c.mods.join(' ')}`) === 'not a kind of thing kept' || /^(?:an?\s+)?\d[\d.,]*\s*\S+\s+(?:snow|ice|wind|live|roof)\s+loads?$/.test(c.text) || /^(?:rated|assembled|capable|formal request|requested|needed|required|designed|built|made)$/.test(c.text.trim()) && areaOf(`${c.head} ${c.mods.join(' ')}`) === 'not a kind of thing kept') { /* no thing */ }
       else asked.push({ text: `${c.kind === 'has' ? 'with ' : ''}${named.replace(/\s+(that|which|who|whose|with|for)$/, '')}`, kind: c.kind === 'has' ? 'has' : 'thing', got: null, why: areaOf(`${c.head} ${c.mods.join(' ')}`) });
       // the words before it: what it does ("a rolling cart"), what it holds ("a laptop stand"), or what it is for
       for (const mod of c.mods) for (const part of mod.split('-')) {
@@ -413,7 +421,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       else if (r.note) asked.push({ text, kind: 'does', got: null, why: r.note });
       else if (!r.load) asked.push({ text, kind: 'does', got: null, why: 'not kept' });
       else loadsSaid.push(text);
-      const m = massOf(obj); if (m && (r.load || r.fn === 'support' || r.fn === 'move' || r.fn === 'raise' || r.fn === 'lift')) loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` };
+      // what it holds is named before the clause runs on: "lifting it back up ..., so it won't wake me" lifts no person
+      const m = massOf(obj.split(/[,;]|\s(?:so|because|while|which|running|won't|wont|without|or else)\b/)[0]!); if (m && (r.load || r.fn === 'support' || r.fn === 'move' || r.fn === 'raise' || r.fn === 'lift')) loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` };
       return;
     }
     // "without the bottom sagging", "without wobbling": what it must not do, checked where a check covers it
@@ -431,7 +440,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     // what it is for, and where: things there are what it works on or for; what everyone knows the weight of is a load
     // ("collapses into a tube for my backpack": what it packs into goes in the backpack, which is no load on it)
     const afterFold = pa.clauses.slice(0, ci).reverse().find((x) => x.kind === 'does' && !!x.verb)?.verb, packed = !!afterFold && FOLDS.test(afterFold);
-    const m = massOf(c.text); if (m && !packed) { if (c.kind === 'for' || /^(on|onto|in|inside|into)$/.test(c.opener)) { occupant ??= m; loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` }; } }
+    // "so it won't wake me": why it is asked, not who it carries
+    const m = c.opener === 'so' ? undefined : massOf(c.text); if (m && !packed) { if (c.kind === 'for' || /^(on|onto|in|inside|into)$/.test(c.opener)) { occupant ??= m; loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` }; } }
     if (c.kind === 'for' && c.text.trim() && !/^(a |an |the |about |up to |over |at least )?[\d.,]+\s*(s|secs?|seconds?|min|mins|minutes?|h|hrs?|hours?|days?|weeks?|months?|years?)\b/.test(c.text.trim())) asked.push({ text: `${c.opener} ${c.text}`.replace(/\s+(that's|that is|which is|that are|which are)\s.*\d.*$/, '').trim(), kind: 'for', got: null, why: 'what it is for: said back, not checked' }); // "for my records that's 1.2 m long": the size is its own, heard with it
     if (/\bon wheels\b/.test(` ${c.opener} ${c.text} `)) { add('move', FN_WORDS.move, BASE.move); asked.push({ text: 'on wheels', kind: 'has', got: 'move', why: '' }); }
   });
@@ -439,7 +449,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   if (/\b(hangs?|hung|hanging|mounts?|mounted|fixed|bolted|screwed)\b[^,.;]*\bwall\b/.test(t) && !asked.some((a) => /wall/.test(a.text))) asked.push({ text: 'hangs on a wall', kind: 'has', got: null, why: 'hung on a wall: it is made to stand on the floor; a wall to hang it on is not kept' });
   // an answer to "what should it do?"
   if (answers.what) { for (const fn of Object.keys(FN_WORDS) as Fn[]) if (new RegExp(`\\b(${fn}|${FN_WORDS[fn].split(' ').slice(0, 2).join(' ')})`, 'i').test(answers.what)) add(fn, FN_WORDS[fn], BASE[fn]); for (const p of PURPOSES) if (p.re.test(` ${answers.what.toLowerCase()} `)) { add(p.fn, p.name, p.q, p.flags); } }
-  const matterWord = /\b(?:of|from|in|made of)\s+(wood|oak|pine|maple|fir|plywood|birch|mdf|steel|stainless(?: steel)?|aluminium|aluminum|acrylic|plastic|nylon|concrete|glass|carbon fibre|carbon fiber|fibreglass|fiberglass)\b/.exec(t)?.[1] ?? /\b(wooden|metal|steel|aluminium|aluminum|plastic|glass)\b/.exec(t)?.[1] ?? null;
+  const tNoBall = t.replace(/\b(steel|glass|brass|wooden|metal)\s+(balls?|marbles?|bearings?|spheres?)\b/g, '$2');
+  const matterWord = /\b(?:of|from|in|made of)\s+(wood|oak|pine|maple|fir|plywood|birch|mdf|steel|stainless(?: steel)?|aluminium|aluminum|acrylic|plastic|nylon|concrete|glass|carbon fibre|carbon fiber|fibreglass|fiberglass)\b/.exec(tNoBall)?.[1] ?? /\b(wooden|metal|steel|aluminium|aluminum|plastic|glass)\b/.exec(tNoBall)?.[1] ?? null;
   const matter = matterWord ? ({ wooden: 'wood', metal: 'steel', plastic: 'acrylic', oak: 'wood.red-oak', pine: 'wood.southern-pine', maple: 'wood.hard-maple', fir: 'wood.douglas-fir', birch: 'wood', aluminum: 'aluminium', 'stainless steel': 'stainless' } as Record<string, string>)[matterWord] ?? matterWord : null;
   if (matter) { try { matterOf(matter); heard.push(`made of ${matterWord}`); } catch { dropped.push(`made of ${matterWord}: no matter of that name is kept`); } }
   const take = (w: Want, k: string, v: number, unit: string, text: string) => { w.q[k] = fig(v, unit, 'you', text); heard.push(`${({ H: 'height', W: 'width', D: 'depth', F: 'load', m: 'load', v: 'speed', V: 'volume', T: 'temperature', L: 'travel', Dia: 'across', rpm: 'speed', span: 'span' } as Record<string, string>)[k] ?? k}: ${text}`); };
@@ -461,6 +472,11 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   if (tripM) { said.trip = { from: tripM[1]!, to: tripM[2]!, back: /\b(and back|back again|round trip|return(s|ing)?\b)/.test(t) }; heard.push(`from ${/\blow\b/.test(tripM[0]) ? 'a low orbit' : 'an orbit'} of ${tripM[1]} to one of ${tripM[2]}${said.trip.back ? ' and back' : ''}: weighed below`); said.trip.low = /\blow\b/.test(tripM[0]); }
   // what powers it: its own cells, fuel or charge where said; where it is a part for something larger ("a board for a
   // Europa lander") and none is said, what it is part of powers it
+  // "every minute", "once an hour": how often it does it, said with no number
+  { const ev = /\b(?:every|each|once an?|once per)\s+(second|minute|hour|day)\b/.exec(t); if (ev && said.every === undefined) { said.every = ({ second: 1, minute: 60, hour: 3600, day: 86400 } as Record<string, number>)[ev[1]!]; heard.push(`every ${ev[1]}: how often it does it, weighed below`); } }
+  // "two AA batteries", "4 D cells": what its cells hold, about 3.5, 1.5, 9 and 18 Wh each for alkaline AA, AAA, C and D
+  // at a light draw (estimates, from makers' sheets)
+  { const cm = /\b(\d+|one|two|three|four|six|eight)\s+(aa|aaa|c|d)[- ]?(?:size\s+)?(?:batter(?:y|ies)|cells?|alkalines?)\b/.exec(t); if (cm) { const n0 = countOf(cm[1]!), each = ({ aa: 3.5, aaa: 1.5, c: 9, d: 18 } as Record<string, number>)[cm[2]!]!; said.cellWh = n0 * each; heard.push(`${n0} ${cm[2]!.toUpperCase()} cells: about ${+(n0 * each).toPrecision(3)} Wh (${each} Wh each, alkaline at a light draw, estimate), weighed below`); } }
   // "cycles about 20 times a day": how often it is worked
   { const pd = /\b(\d+|once|twice|two|three|four|five|six|ten|twenty)\s*(?:times|cycles)?\s+(?:a|per|each|every)\s+day\b/.exec(t); if (pd) { said.perDay = pd[1] === 'once' ? 1 : pd[1] === 'twice' ? 2 : countOf(pd[1]!); heard.push(`${said.perDay} times a day: weighed below where what it does each time is`); } }
   // "from a normal kitchen outlet", "plugged in": it runs from the mains, and carries no store of its own
@@ -532,6 +548,14 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       if (/^wheels?\b/.test(thing) && mov) { mov.q.wheels = fig(cnt, '', 'you', n.text); heard.push(`wheels: ${n.text}`); continue; }
       // light said in lux: about 300 lumens to a watt for daylight or white LEDs (estimate), for what a cell would gather
       if (/^lux\b/.test(thing)) { said.light = n.value / 300; heard.push(`${n.text}: light of about ${+(n.value / 300).toPrecision(3)} W/m² (300 lm/W, estimate), weighed below`); continue; }
+      // "$150", "a budget around 150", "BOM $250": what it may cost, which is not weighed
+      if (new RegExp(`\\$\\s*${n.text.trim().replace(/[.]/g, '\\.')}\\b`).test(pa.src) || /^(dollars?|usd|bucks|euros?|eur|gbp)\b/.test(thing) || b.slice(0, 3).some((x) => /^(budget|cost|costs|price|bom|spend|around|under)$/.test(x)) && /\b(budget|cost|price|bom|\$)/.test(t)) { drop('a cost: what it costs is not weighed'); continue; }
+      // "quieter than 40 dB": how loud it may be
+      if (/^(db|dba|db\(a\)|decibels?)\b/.test(thing)) { drop('how loud it may be: the sound it makes is not weighed'); continue; }
+      // "30 cubbies": so many compartments, made here as shelves
+      if (/^(cubbies|cubby|cubbyholes?|compartments?|pigeonholes?|bays|slots|lockers)\b/.test(thing)) { heard.push(`${n.text.trim()}: so many compartments; it is made as shelves, its dividers not derived`); continue; }
+      // "20 times a day": read with how often it is worked
+      if (/^times?\b/.test(thing) && said.perDay !== undefined) continue;
       drop(/^(tb|gb|mb|kb|bytes?)\b/.test(thing) ? 'information: electronics are not kept yet' : `a count or a unit not kept (${areaOf(n.text)})`);
       continue;
     }
@@ -541,6 +565,13 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     // "spiral in to 0.3 AU from the Sun": how near the Sun it goes
     if (q.unit === 'au' || /\bAU\b/.test(q.text)) { said.rSun = q.si; heard.push(`${q.text} from the Sun: weighed below`); continue; }
     if (sameDim(d, DIMS.length)) {
+      // "1.1 m max height", "width max 330 mm", "max height of 1.1 m": a limit on its own size; "radius 25 mm minimum":
+      // its corners rounded at least so much, which is not made
+      { const dimA = /^(max|maximum)$/.test(a[0] ?? '') ? a[1] : undefined, dimB = /^(max|maximum)$/.test(b[0] ?? '') ? b[1] : b[0] === 'of' && /^(max|maximum)$/.test(b[2] ?? '') ? b[1] : undefined, dim = dimA ?? dimB;
+        if (dim && /^(height|tall|width|wide|length|long|depth|deep)$/.test(dim)) { const k = /^(height|tall)$/.test(dim) ? 'H' : /^(width|wide)$/.test(dim) ? 'W' : 'D'; limits[k] = Math.min(limits[k] ?? Infinity, q.si); heard.push(`${dim} ${q.text} at most: a limit, checked`); continue; }
+        if (/^(radius|radii|corners?|edges?)$/.test(b[0] ?? '') && /^(min|minimum)$/.test(a[0] ?? '') || /^(min|minimum)$/.test(b[0] ?? '') && /^(radius|radii)$/.test(b[1] ?? '')) { heard.push(`corners rounded to at least ${q.text}: not made, its edges are square as made`); continue; } }
+      // "swing open when my ATV gets within 20 feet": a distance it senses at, which wants a sensor
+      if (b[0] === 'within' && /\b(gets?|comes?|approach\w*|near\w*|arrives?|when)\b/.test(b.slice(1, 6).join(' '))) { drop('a distance it senses something at: sensing is not kept'); continue; }
       // "crawls through 15 cm pipes", "fits through a 70 cm door": what it goes through limits its own width and height
       const through = cl.kind === 'where' && /^(through|into|inside)$/.test(cl.opener) && !!cl.head && /^(pipes?|tubes?|ducts?|tunnels?|sewers?|drains?|culverts?|holes?|openings?|hatch(es)?|doors?|doorways?|gates?|gaps?)$/.test(cl.head);
       // through a door it is only as wide as the door (a door is about 2 m tall, estimate); through a hole or a hatch, both ways
@@ -613,8 +644,12 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       // "carries two gas cylinders (9 in dia, 55 in tall)": the size of what it carries, not its own
       if (/^(carr|hold|haul|take|transport|move|tow)/.test(cl.verb ?? '') && pa.nums.some((o) => o.clause === n.clause && o.tok < n.tok && o.said && sameDim(o.said.dim, DIMS.mass)) && /^(dia|diameter|across|round|wide|tall|high|long)$/.test(a[0] ?? '')) { const mv0 = by('move') ?? by('support'); if (mv0 && /^(tall|high|long)$/.test(a[0]!)) mv0.q.lh = fig(q.si, 'm', 'you', `${q.text} ${a[0]}`); heard.push(`${q.text} ${a[0]}: the size of what it carries${/^(tall|high)$/.test(a[0]!) ? ', its weight about half that up' : ''}`); continue; }
       if (nounAfter && nounAfter !== pa.clauses[0]?.head && !purposeOf(nounAfter) && cl.kind !== 'main' && !ofTop) { drop(`the size of ${singular(nounAfter)}, ${areaOf(nounAfter).startsWith('not a kind') ? 'which is not made here' : areaOf(nounAfter)}`); continue; }
+      // "survive a 2 m drop", "dropped from 1.5 m": a fall it must survive
+      if (/^drops?$/.test(a[0] ?? '') || near(/^(dropped|falls?|falling|fallen)$/, 3) && /^(from|of)$/.test(b[0] ?? '')) { said.drop = q.si; heard.push(`a ${q.text} drop: weighed below`); continue; }
+      // "a 7-inch propeller": the size of its rotors
+      if (/^(props?|propellers?|rotors?|blades?)$/.test(a[0] ?? '') && /\b(drone|quadcopter|copter|multicopter|uav|quad)\b/.test(t)) { said.prop = q.si; heard.push(`${q.text} ${a[0]}: the size of its rotors, weighed below`); continue; }
       // "15 cm of trunk sway": a movement it must allow where it is fixed, not a size of it
-      if (a[0] === 'of' && a.slice(1, 3).some((x) => /^(sway|swaying|movement|motion|play|flex|give|deflection|drift|settlement|settling|travel|stretch)$/.test(x))) { heard.push(`${q.text} of ${a.slice(1, 3).join(' ')}: a movement it must allow where it is fixed (a joint that slides or floats), not derived`); continue; }
+      if (a[0] === 'of' && a.slice(1, 3).some((x) => /^(sway|swaying|movement|motion|play|flex|give|deflection|drift|settlement|settling)$/.test(x))) { heard.push(`${q.text} of ${a.slice(1, 3).join(' ')}: a movement it must allow where it is fixed (a joint that slides or floats), not derived`); continue; }
       if (elsewhere && !(b[0] === 'at' && !a.length) && !/^(up|high)$/.test(a[0] ?? '')) { drop(`said of ${cl.head ? `the ${singular(cl.head)}` : 'something else'}, not of what it makes`); continue; }
       // its own sizes, kept for what the laws say of them, whether or not it is made
       if (cl.kind === 'main' || (ownerWant && ownerWant === ofHead) || /^(by|x|×)$/.test(b[0] ?? '') && own.length > 0 && cl.kind === 'where') { own.push({ ax: ax ?? 'plain', v: q.si }); const n2 = ax === 'W' && n.by !== null ? pa.nums[n.by]?.said : null; if (n2) own.push({ ax: 'D', v: n2.si }); }
@@ -636,6 +671,12 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       if (sameDim(d, DIMS.force) && near(/^(squeez\w*|grips?|gripping|clamps?|clamping|presses|pressing|pinch\w*|close|closes|closing)$/, 6)) { said.grip = q.si; heard.push(`squeezing with no more than ${q.text}: weighed below`); continue; }
       if (sameDim(d, DIMS.force) && (near(/^(handle|handles|crank|cranks|lever|levers|pedal|pedals|grip|grips|tiller)$/, 4) || a[0] === 'of' && /^(pull|push|effort|hand|force)$/.test(a[1] ?? '') || /^(on|at)$/.test(a[0] ?? '') && /^(the|its|a)?$/.test(a[1] ?? '') && /^(handle|crank|lever|pedal)s?$/.test(a[2] ?? a[1] ?? ''))) { said.effort = q.si; heard.push(`${q.text} at the handle: the most a hand puts on it, weighed below`); continue; }
       if (sameDim(d, DIMS.force) && near(/^(pull|pulls|pull-out|fall|rated|rating|holds?)$/, 4) && !near(/^(carry|carries|hold|holds|support|supports|bear|bears)$/, 2)) { said.pull = q.si; heard.push(`${q.text} pulling on a part: weighed below`); continue; }
+      // "stay shut when cattle lean on it with 1200 pounds of force": a push it must hold shut against, at its latch
+      if (sameDim(d, DIMS.force) && by('swing') && b.slice(0, 8).some((x) => /^(lean|leans|leaning|push|pushes|pushing|shove|shoves|press|presses|ram|rams|charge|charges|rub|rubs)$/.test(x))) { said.holdShut = q.si; heard.push(`a push of ${q.text} on it: it must hold shut against it, weighed below`); continue; }
+      // "an all-up weight of 900 g": all it lifts, itself and what it carries, not a limit on what is made
+      if (sameDim(d, DIMS.mass) && /\b(all[- ]up|auw|gross|take-?off|takeoff|flying|loaded)\b/.test(b.slice(0, 5).reverse().join(' '))) { said.auw = q.si; heard.push(`all-up ${q.text}: all it lifts, weighed below`); continue; }
+      // "panels max 12 kg each": a limit on each part
+      if (sameDim(d, DIMS.mass) && /^(max|maximum|at most)$/.test(b[0] ?? '') && /^(panels?|pieces?|parts?|components?|sections?|modules?|boards?)$/.test(b[1] ?? '')) { limits.part = q.si; heard.push(`no part weighing more than ${q.text}: each part checked against it`); continue; }
       // "behind no more than 2 kg of tantalum shielding": its shield, not what it carries
       if (a[0] === 'of' && /^(tantalum|tungsten|lead|aluminium|aluminum|copper)$/.test(a[1] ?? '') && /^shield/.test(a[2] ?? '')) { heard.push(`${q.text} of ${a[1]} shielding: weighed below`); continue; }
       // "a camera that weighs 0.2 µg": the weight of the thing named just before, not its own
@@ -652,7 +693,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       const count = !each && /^(two|three|four|five|six|seven|eight|nine|ten|twelve|\d+)$/.test(b[0] ?? '') && !/^(x|×|by)$/.test(a[0] ?? '') ? countOf(b[0]!) : 1, k0 = each ? many : count;
       const more = !!loadSaid && (b.slice(0, 3).some((x) => /^(plus|and|with|alongside)$/.test(x)) || b[0] === 'a' && b[1] === 'plus' || /^(an?|one)$/.test(b[0] ?? '') && /^(plus|and)$/.test(b[1] ?? ''));
       const stop = a.findIndex((x) => !/^[a-z-]+$/.test(x) || /^(of|each|apiece|in|on|at|to|for|with|plus|and|or|that|which|total|totally|up|down|from|by|when|while)$/.test(x)), what = a.slice(0, Math.min(3, stop < 0 ? a.length : stop)).join(' ');
-      const part = `${k0 > 1 ? `${k0} ${q.text} ${what || 'of them'}` : `${more ? 'a ' : ''}${q.text}${what && more ? ` ${what}` : ''}`}${each ? ' each' : ''}`, base = loadSaid?.text.replace(/: [\d.]+ kg in all$/, '');
+      const part = `${k0 > 1 ? `${each ? k0 : b[0]} ${q.text} ${what || 'of them'}` : `${more ? (/^(8|11|18)(?![\d])/.test(q.text) ? 'an ' : 'a ') : ''}${q.text}${what && more ? ` ${what}` : ''}`}${each ? ' each' : ''}`, base = loadSaid?.text.replace(/: [\d.]+ kg in all$/, '');
       loadSaid = more && loadSaid ? { N: loadSaid.N + N * k0, text: `${base} and ${part}: ${+((loadSaid.N + N * k0) / G).toPrecision(3)} kg in all` } : { N: N * k0, text: each && many > 1 ? `${q.text} each, ${many} of them` : k0 > 1 ? `${part}: ${+((N * k0) / G).toPrecision(3)} kg in all` : q.text };
       said.payload = loadSaid.N / G;
       // "150 kg of hammering": read as that weight held still; a blow's peak force is several times it, and is not tested
@@ -685,6 +726,9 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       heard.push(`${p ? p[2] : animal ? `the ${animal}` : 'something'} at ${q.text}: ${fires ? 'what it throws' : 'what hits it'}, weighed below`); continue;
     }
     if (sameDim(d, DIMS.speed)) {
+      // "climbs 35 degree stairs at 0.15 m/s": how fast it climbs them; "crawl at 2 mm/s for timelapses": how slowly what slides moves
+      if (said.stairSlope !== undefined && /\b(climb\w*|stairs?)\b/.test(`${cl.text} ${b.slice(0, 6).join(' ')}`)) { said.climbV = q.si; heard.push(`climbing at ${q.text}: weighed below`); continue; }
+      { const sl = by('slide'); if (sl && near(/^(crawl|crawls|crawling|creep|creeps|creeping|moves?|moving|travels?|glides?|runs?)$/, 3)) { said.slideV = q.si; heard.push(`sliding at ${q.text}: what drives it at that speed weighed below`); continue; } }
       // a journey said in legs ("100 km at 80 km/h, then 5 km across a lake at 10 knots"): each speed goes with the
       // distance before it; the first leg's is the speed it moves at
       const windy = a.slice(0, 3).some((x) => /^(gusts?|winds?|breeze|gales?|current)$/.test(x)) || near(/^(winds?|gusts?)$/, 3), leg = windy ? undefined : said.legs?.find((l) => l.v === undefined), later = leg !== undefined && said.legs!.indexOf(leg) > 0;
@@ -772,6 +816,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     if (q.unit === 'deg' || q.unit === 'rad') {
       if (Math.abs(q.si - 2 * Math.PI) < 1e-6 && /\bevery\b/.test(cl.text + ' ' + a.join(' '))) { heard.push(`${q.text}: a whole turn, read with its time as its speed`); continue; }
       if (/^(slope|incline|hill|grade|ramp|gradient)s?$/.test(a.find((x) => !/^(muddy|steep|wet|grassy|gravel|rough)$/.test(x)) ?? '') && mov) { mov.q.slope = fig(q.si, 'rad', 'you', q.text); heard.push(/\b(tip|tips|tipping|topple|roll over|overturn)\b/.test(cl.text) ? `on a ${q.text} slope: weighed for its tipping, and for what drives or pushes it up it` : `up a ${q.text} slope: weighed for what drives or pushes it up it`); continue; }
+      // "climbs 35 degree stairs": the slope of the stairs it climbs
+      if (/^(stairs?|staircases?|steps|stairways?|flights?)$/.test(a[0] ?? '') || /^(stairs?|staircases?)$/.test(a[1] ?? '') && /^(steep|indoor|outdoor|normal)$/.test(a[0] ?? '')) { said.stairSlope = q.si; heard.push(`stairs at ${q.text}: climbing them weighed below`); continue; }
       // "keeping the seat level within 3 degrees": how near level it is held, a tolerance, not a turn
       if (near(/^(within|to|±)$/, 2) && /\b(level|upright|plumb|flat|true)\b/.test(`${cl.text} ${b.slice(0, 8).join(' ')}`)) { drop(`how near level it is held, within ${q.text}: what senses and levels it is not kept, so it is not checked`); continue; }
       // "tilts a patient 30 degrees side to side": a tilt of what it carries, weighed below
@@ -801,6 +847,9 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     enc0.q.W = fig(cols * 0.65, 'm', 'estimate', `room for ${crew} lying side by side${rows > 1 ? ' in two rows' : ''}, 0.65 m each (a sleeping pad and a little room, estimate)`); enc0.q.D = fig(rows * 2, 'm', 'estimate', `${rows > 1 ? 'two lengths' : 'a length'} of 2 m`); enc0.q.H = fig(1.1, 'm', 'estimate', 'and 1.1 m to sit up in (a seated adult\'s head up to about 1 m, estimate)');
     heard.push(`for ${crew}: sized for them lying down and sitting up`);
   }
+  // a ball it lifts ("lifting a steel ball back up"): a 12.7 mm steel ball, 8.4 g (estimate), where nothing heavier is
+  // said; on a desk it lifts it about 150 mm (estimate)
+  { const ra = by('raise'); if (ra && /\b(balls?|marbles?|ball bearings?)\b/.test(t) && ra.q.m?.by !== 'you') { ra.q.m = fig(/\bglass\b|\bmarbles?\b/.test(t) ? 0.005 : 0.0084, 'kg', 'usual', /\bmarbles?\b/.test(t) ? 'a glass marble, about 5 g (estimate)' : 'a steel ball 12.7 mm across, about 8.4 g (estimate)'); loadSaid = null; if (ra.q.L?.by !== 'you' && /\b(desk|bedside|tabletop|table-top|shelf)\b/.test(t)) ra.q.L = fig(0.15, 'm', 'usual', 'lifted about 150 mm, a desk thing\'s height (estimate)'); said.liftKg = ra.q.m.v; said.liftH = ra.q.L?.v; heard.push(`what it lifts: ${ra.q.m.grounds}`); } }
   // a cart, a trolley, a trailer with nothing said to drive it is pushed by hand (or towed): no motors; it moves at a walk
   { const mv = by('move'); if (mv && mv.q.v?.by !== 'you' && /^(carts?|trolleys?|wagons?|wheelbarrows?|dollies|dolly|trailers?|strollers?|prams?|buggies|buggy|barrows?)$/.test(mainHead ?? '') && !/\b(motor\w*|electric\w*|powered|battery|batteries|self[- ]propelled|self[- ]driving|driven|drives itself|autonomous|remote[- ]control\w*|engines?|robot\w*|e-?(bike|cart)|battery-assisted|assisted)\b/.test(t)) {
     const towed = /\b(towed|tow|towing|hitched|pulled behind|behind a bike|bicycle trailer|bike trailer)\b/.test(t) || /^trailers?$/.test(mainHead ?? '');
@@ -904,7 +953,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   for (let i = 0; i < heard.length; i++) {
     const h = heard[i]!;
     if (/: weighed below by the energy it must carry$/.test(h) && NOPOWER.test(t) && weighs(/^ice keeps/)) heard[i] = h.replace(/the energy it must carry$/, 'the ice it must carry');
-    else if (/: weighed below by the energy it must carry$/.test(h) && !weighs(/carries what it needs|cells kept dry|the energy to hover|keeps what it holds|keep what it holds|keep it at/) && !(said.every !== undefined && weighs(/, tilted /))) heard[i] = h.replace(/: weighed below by the energy it must carry$/, said.mains ? (weighs(/from the mains/) ? ': weighed below, from the mains' : ': from the mains, so it carries nothing for it') : ': what it draws in that time is not said, so the energy it must carry is not weighed');
+    else if (/: weighed below by the energy it must carry$/.test(h) && !weighs(/carries what it needs|its cells last|cells kept dry|the energy to hover|keeps what it holds|keep what it holds|keep it at/) && !(said.every !== undefined && weighs(/, tilted /))) heard[i] = h.replace(/: weighed below by the energy it must carry$/, said.mains ? (weighs(/from the mains/) ? ': weighed below, from the mains' : ': from the mains, so it carries nothing for it') : ': what it draws in that time is not said, so the energy it must carry is not weighed');
     else if (/^within .*: weighed below by the power it takes$/.test(h) && said.Tto === undefined && said.climb === undefined && said.store === undefined && !by('raise')) heard[i] = h.replace(/: weighed below by the power it takes$/, said.distance !== undefined || said.trip ? ': weighed below against how far it goes in it' : ': a time, with nothing made that does it and nothing said to weigh it by');
     else if (/^a dose of no more than .*: weighed below for the trip$/.test(h) && !said.trip) heard[i] = h.replace(/for the trip$/, said.dosePerYear ? 'over a year where it is' : 'where it is');
   }
@@ -1481,7 +1530,9 @@ for (const w of WAYS) if (w.meets === 'surface' && w.id !== 'a deck laid on what
 way({
   id: 'a carriage between two posts', meets: 'hoist', says: 'a carriage that rides up and down between two posts', when: () => null,
   make: (n, c) => {
-    const L = n.want.q.L!.v, carried = (n.want.q.m?.v ?? 0) + n.above / G, W = Math.max(n.fit[0], 0.3), D = Math.max(n.fit[1], 0.3), mt = matterFor(c, ['steel.a36', 'aluminum.6061-t6']), X = c.x0, Z = c.z0;
+    // with no room said for it, the carriage is as big as what it carries: 300 mm for about 20 kg, by the cube root of the
+    // mass at one density (a steel ball of 8 g wants a carriage 40 mm across, not 300), estimate
+    const L = n.want.q.L!.v, carried = (n.want.q.m?.v ?? 0) + n.above / G, W0 = Math.min(0.3, Math.max(0.04, 0.3 * Math.cbrt(carried / 20))), W = Math.max(n.fit[0], W0), D = Math.max(n.fit[1], W0), mt = matterFor(c, ['steel.a36', 'aluminum.6061-t6']), X = c.x0, Z = c.z0;
     // the carriage first: a plate held at its ends by the posts, what rides spread on it (M = F W / 8, deflection
     // 5 F W³ / 384 E I), as thin as bears it by two and bends under 1/250 of its span
     const deck = 'aluminum.6061-t6', md = matterOf(deck), Fr = carried * G, cw = (() => { for (const t2 of SHEET.metal!.map((x) => x / 1e3)) { const I = (D * t2 ** 3) / 12, sg = ((Fr * W) / 8) * (t2 / 2) / I, dl = (5 * Fr * W ** 3) / (384 * md.E * I); if (md.yield / sg >= 2 && dl <= W / 250) return t2; } return 0.025; })();
@@ -1491,8 +1542,9 @@ way({
     // its lowest at the height said ("to counter height": a kitchen worktop about 900 mm up, estimate), its posts that much taller
     const low = n.want.q.low?.v ?? 0, Hp = low + L + 0.05 + 0.05, mem = memberFor(mt, 'square', ((rides * G) / 2) * 1.5, Hp), sp = mem.size;
     let yb = c.y0;
-    const w0 = c.why, bw = W + 2 * sp + 0.1, bt = 0.012;
-    if (!n.on) { c.why = 'to stand the posts on the floor and tie them together'; box(c, 'base', 'steel.a36', X, yb + bt / 2, Z, bw, D, bt, 'base', 'on the floor, under the posts', `a ${len(bt)} steel plate as wide as the posts and what rides between them: its size is theirs, its thickness taken, not derived`); yb += bt; c.choices.push(`a ${len(bt)} steel base ${len(bw)} × ${len(D)} under it all (${+(bw * D * bt * matterOf('steel.a36').density).toPrecision(3)} kg; its thickness taken, not derived)`); }
+    // the base as deep as a third of the posts' height at least, so a push at their top of a tenth of the weight does not tip it
+    const w0 = c.why, bw = W + 2 * sp + Math.min(0.1, W / 3), bt = Math.max(0.003, Math.min(0.012, (0.012 * W) / 0.3)), bd = Math.max(D, Hp / 3);
+    if (!n.on) { c.why = 'to stand the posts on the floor and tie them together'; box(c, 'base', 'steel.a36', X, yb + bt / 2, Z, bw, bd, bt, 'base', 'on the floor, under the posts', `a ${len(bt)} steel plate as wide as the posts and what rides between them: its size is theirs, its thickness a twenty-fifth of its width between 3 and 12 mm, taken, not derived`); yb += bt; c.choices.push(`a ${len(bt)} steel base ${len(bw)} × ${len(bd)} under it all (${+(bw * bd * bt * matterOf('steel.a36').density).toPrecision(3)} kg; its thickness taken, not derived)`); }
     c.why = 'to guide the carriage up and down';
     for (const [i, sx] of [-1, 1].entries()) upright(c, `post${i + 1}`, mt, 'square', mem, X + sx * (W / 2 + sp / 2), yb, Z, Hp, `${sx < 0 ? 'left' : 'right'} of the carriage, on ${n.on ? 'what it stands on' : 'the base'}`, `the least square bar of ${matterOf(mt).name} that carries half of what rides by three: ${mem.says}`);
     c.why = w0;
@@ -1503,7 +1555,7 @@ way({
     c.checks.push(() => ({ what: 'its posts carry what rides without buckling', ok: mem.ok, says: `each carries half of ${+rides.toPrecision(3)} kg (what rides and the carriage), half again: ${mem.says}` }));
     c.tests.push({ kind: 'raise', name: cn, L });
     if (low) c.choices.push(`its lowest at ${len(low)} up (${n.want.q.low!.grounds}), its highest ${len(low + L)}`);
-    c.top = { y: yb + 0.002 + low + cw, w: W, d: D, name: cn }; c.foot = [W + 2 * sp + (n.on ? 0 : 0.1), D];
+    c.top = { y: yb + 0.002 + low + cw, w: W, d: D, name: cn }; c.foot = [W + 2 * sp + (n.on ? 0 : Math.min(0.1, W / 3)), n.on ? D : bd];
   },
 });
 
@@ -2505,7 +2557,7 @@ function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], ri
         // what rides, with what it carries, pushed up by twice its weight: what would raise it (a screw, a winch, a
         // linkage) is not derived; this tests that it rides up and down where it should, and stops at its travel
         const ride = new Set([t.name, ...riders]), kg = [...mine().values()].filter((m) => ride.has(m.name)).reduce((a, m) => a + m.mass, 0) + w.all().made.filter((m) => m.name.startsWith('test_load')).reduce((a, m) => a + m.mass, 0), F = 2 * kg * G;
-        w.run(`push ${t.name} with ${+F.toFixed(1)} N along y for 1.5 s`); const tr = w.value(`${t.name}.most`);
+        w.run(`push ${t.name} with ${+F.toPrecision(3)} N along y for 1.5 s`); const tr = w.value(`${t.name}.most`);
         out.push({ what: `it rides ${len(t.L)} up and down its guides`, ok: tr > 0.2 * t.L && tr <= t.L + 2e-3, says: `pushed up with twice the weight of what rides (${+F.toPrecision(3)} N, for ${+kg.toPrecision(3)} kg) for 1.5 s (Jolt), it rose as far as ${len(tr)}, its stop at ${len(t.L)}, and came down again when let go, as nothing holds it there; the work to raise it the whole way is ${+((kg * G * t.L) / 1000).toPrecision(3)} kJ (m g h); let go at its top it falls the ${len(t.L)} in ${+Math.sqrt((2 * t.L) / G).toPrecision(2)} s, at ${+Math.sqrt(2 * G * t.L).toPrecision(2)} m/s at the bottom: it needs a brake, or a drive that does not run back (a screw, a worm), holding about ${+(kg * G).toPrecision(3)} N, not derived` });
       }
     }

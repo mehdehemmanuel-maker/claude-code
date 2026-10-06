@@ -62,6 +62,10 @@ export function parseAsk(words: string): Parse {
   // "I have a 14 foot gate and I want it to swing open on its own": the gate, that swings open
   w0 = w0.replace(/^(?:(?:so|well|ok|okay)[,\s]+)?(?:i|we)\s+(?:have|own|'ve got|have got|got)\s+((?:a|an|the|my|our)\s+.+?)\s*,?\s+and\s+(?:i|we)\s+(?:want|need|would like|'d like)\s+(?:it|them)\s+to\s+/i, '$1 that ');
   if (!ASKING.test(w0) && !LOOKS.test(w0)) { const m = LEAD.exec(w0); if (m) w0 = `${w0.slice(m[0].length).replace(/[.!?\s]+$/, '')}, while ${m[1]!.replace(/^(?:so|well|ok|okay|hi|hey)[,\s]+/i, '').replace(/^(?:i|we)\s+(?:have|own|'ve got|have got|got)\s+/i, 'by ')}`; }
+  // "6-9 kg bags": a range of one unit, read at its worst, the most
+  w0 = w0.replace(/\b(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*(kg|lbs?|g|mm|cm|m|kw|w|kn|n)\b/gi, (m0, a: string, b2: string, u: string) => (Number(b2) > Number(a) ? `${b2} ${u}` : m0));
+  // "for at least a year", "lasting a week": one of it
+  w0 = w0.replace(/\b(for|lasting|lasts|last|through|over)\s+(at least\s+|about\s+|around\s+)?(?:a|an|one)\s+(year|month|week|day|night|hour)\b/gi, '$1 $21 $3');
   // "5 cloudy days", "12 straight hours": the time, its word after it
   w0 = w0.replace(/\b(\d+(?:\.\d+)?)\s+(cloudy|sunny|rainy|dark|overcast|winter|summer|straight|full|whole|working|consecutive|long|cold|hot)\s+(days?|hours?|nights?|weeks?|months?)\b/gi, '$1 $3 $2');
   const src = ` ${w0.replace(LOOKS, '$1 $2').replace(ASKING, '')} `, t = src.toLowerCase();
