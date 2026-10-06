@@ -227,7 +227,8 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
     expect(d!.checks.find((x) => /its rails bear a quarter of all of it each, two under each edge/.test(x.what))!.ok).toBe(true);
     expect(d!.choices.some((x) => /4 rails, two side by side under each edge/.test(x))).toBe(true);
     expect(d!.choices.some((x) => /its deck in \d+ pieces/.test(x))).toBe(true);
-    expect(d!.ok).toBe(true);
+    // its rails, 7.8 m as one piece, are longer than sawn timber is sold: said, and not passed as made
+    expect(d!.checks.find((x) => x.what === 'it can be made under the laws')!.says).toMatch(/must be pieced and joined/);
   });
   it('hangs a wall shelf on two brackets at the studs said, the wall standing for itself and not weighed', () => {
     const [d] = designs(go('I need a wall shelf for my record collection that\'s 1.2 m long and 320 mm deep, holds 70 kg spread evenly, sags no more than 3 mm in the middle, and can only be screwed into two wall studs that are 600 mm apart.'), 1, { seed: 101, physics: J });
@@ -461,7 +462,7 @@ describe('folding the whole of it: planned on what is made, latched open, tested
     const c = go('a folding camping table that holds 20 kg and folds flat to 8 cm');
     expect(c.limits.foldThin).toBe(0.08); expect(c.asked.find((a) => a.text === 'folding')).toMatchObject({ got: 'support', how: 'folds' });
     const [d] = designs(c, 1, { seed: 101, physics: J });
-    for (const re of [/^it folds flat$/, /^folding, nothing runs into anything$/, /^latched open, its hinges hold$/, /^folded, it can be made under the laws$/, /^folded, it lies still when let go$/, /^it folds flat to 80 mm$/]) expect(ck(d!, re).ok, String(re)).toBe(true);
+    for (const re of [/^it folds flat$/, /^folding, nothing runs into anything$/, /^latched open, its hinges hold against a push$/, /^folded, it can be made under the laws$/, /^folded, it lies still when let go$/, /^it folds flat to 80 mm$/]) expect(ck(d!, re).ok, String(re)).toBe(true);
     expect(d!.asked.filter((a) => a.how === 'folds').every((a) => a.got)).toBe(true); expect(d!.asked.find((a) => a.kind === 'thing')!.got).toBe('support');
   }, 60000);
   it('its fold is played as it is planned: held folded, nothing is in anything and all of it lies within its thickness under the top', () => {

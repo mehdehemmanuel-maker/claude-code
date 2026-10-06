@@ -89,6 +89,9 @@ export function parseAsk(words: string): Parse {
     if (!starts(i)) continue;
     if (x.punct) {
       if (x.w === ':') { open('main', ':', i + 1); continue; }
+      // a sentence that ends and one that goes on of the same thing ("…without tearing them? It has to close…"): what it
+      // does next, its "it" left out
+      if ((x.w === '.' || x.w === '?' || x.w === '!') && /^(it|they|this)$/.test(next?.w ?? '') && verbAt(i + 2)) { open('does', x.w, i + 2); clauses.at(-2)!.to = i; i++; continue; }
       if (x.w === ',' || x.w === ';' || x.w === '(' || x.w === ')') {
         const n2 = next?.w ?? ''; if (DOES.has(n2) || HAS.has(n2) || FOR.has(n2) || WHERE.has(n2) || AND.has(n2)) continue;
         // a list goes on as the clause it is a list of: a verb starts another thing it does, a thing another of the same
