@@ -87,7 +87,9 @@ export function parseAsk(words: string): Parse {
   qs.forEach((q, k) => { const sw = /^minus\s+/i.exec(q.text)?.[0].length ?? 0, i = toks.findIndex((x) => x.num && (x.at === q.at + sw || x.at === q.at + sw + 1)); if (i < 0) return; const n = q.text.replace(/^-|^minus\s+/i, '').split(/[\s-]+/).length; for (let j = i; j < Math.min(toks.length, i + n); j++) toks[j]!.q = k; });
   const starts = (i: number) => i === 0 || toks[i - 1]!.grp !== toks[i]!.grp;
   const word = (i: number) => { const x = toks[i]; return !!x && !x.num && !x.punct && x.q === null && /^[a-z]/.test(x.w); };
-  const verbAt = (i: number) => word(i) && starts(i) && !DET.has(toks[i]!.w) && !WHERE.has(toks[i]!.w) && isVerb(toks[i]!.w);
+  // "tip-proof", "slip-resistant", "lock-free": what it is, said of it, not a verb
+  const quality = (i: number) => { const nx = toks[i + 1]; return !!nx && nx.grp === toks[i]!.grp && /^(proof|resistant|safe|free|tight|less|ready|friendly|rated)$/.test(nx.w); };
+  const verbAt = (i: number) => word(i) && starts(i) && !DET.has(toks[i]!.w) && !WHERE.has(toks[i]!.w) && isVerb(toks[i]!.w) && !quality(i);
   /** After "and" or a mark: past the words of a thing ("the whole staircase"), is there a verb before the next mark? */
   const verbAfterThing = (i: number) => { for (let j = i; j < toks.length; j++) { const x = toks[j]!; if (x.punct || DOES.has(x.w) || WHERE.has(x.w) || HAS.has(x.w) || AND.has(x.w) || FOR.has(x.w)) return -1; if (j > i && verbAt(j) && !DET.has(toks[j - 1]!.w)) return j; } return -1; };
   // the clauses: each starts at a word that opens one, or after a mark; a list after a mark goes on as the one before
