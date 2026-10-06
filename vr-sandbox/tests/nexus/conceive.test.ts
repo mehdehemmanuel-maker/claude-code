@@ -166,7 +166,7 @@ describe('making it, and checking what was asked', () => {
   }, 60000);
   it('raises what it carries on a carriage between posts, what rides joined to the carriage', () => {
     const [d] = designs(go('a lift that raises 50 kg 1 m'), 1, { seed: 101, physics: J });
-    const up = d!.checks.find((x) => /raises what it carries/.test(x.what))!;
+    const up = d!.checks.find((x) => /^it rides 1 m up and down its guides$/.test(x.what))!;
     expect(up.ok, up.says).toBe(true);
     // what raises it is not derived: said, so it is not all done
     expect(d!.gaps.some((g) => /what raises it/.test(g))).toBe(true);
@@ -192,7 +192,8 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
     const [d] = designs(c, 1, { seed: 101, physics: null });
     const k = d!.checks.find((x) => /^as made, it keeps what it holds above 55 °C/.test(x.what))!;
     expect(k.ok).toBe(false);
-    expect(k.says).toMatch(/falls to 55 °C in (at most )?(\d+(\.\d+)? (h|min))/);
+    expect(k.says).toMatch(/falls to 55 °C in about (\d+(\.\d+)? (h|min))/);
+    expect(k.says).toMatch(/its open top's evaporation [\d.]+ W more \(the Lewis analogy, estimate\)/);
   });
   it('reads "keeps it ... in a 5 °C car" as a place, not as keeping something in, and "under 400 g empty" as its own weight', () => {
     const c = go('I want a 1 litre vacuum flask, under 400 g empty, that keeps tea poured at 95°C still above 70°C after 48 hours sitting in a 5°C car.');
@@ -221,7 +222,9 @@ describe('wave 3: what keeps, encloses, hangs, turns, spans and stands in the wi
   it('bears a footbridge of several people spread along it on a frame of deep lumber, its deck in pieces no heavier than a person may carry', () => {
     const [d] = designs(go('design a footbridge over a 6.5 m wide creek on my property with a 1.1 m wide deck that can carry 4 adults plus a loaded wheelbarrow (call it 450 kg total), and no single piece can weigh more than 35 kg because we\'re carrying everything in by hand with no crane'), 1, { seed: 101, physics: null });
     expect(d!.checks.find((x) => /no part weighs more than 35 kg/.test(x.what))!.ok).toBe(true);
-    expect(d!.checks.find((x) => /its rails bear half of all of it/.test(x.what))!.ok).toBe(true);
+    // with the crowd gathered at its middle one rail a side would weigh more than 35 kg: two side by side under each edge
+    expect(d!.checks.find((x) => /its rails bear a quarter of all of it each, two under each edge/.test(x.what))!.ok).toBe(true);
+    expect(d!.choices.some((x) => /4 rails, two side by side under each edge/.test(x))).toBe(true);
     expect(d!.choices.some((x) => /its deck in \d+ pieces/.test(x))).toBe(true);
     expect(d!.ok).toBe(true);
   });
@@ -336,4 +339,58 @@ describe('a speed held by its controller, and a speed too slow for the motor kep
     if (/came to/.test(t.says) && !/but the physics takes its brushes' friction as smooth/.test(t.says)) expect(Math.abs(Number(/came to ([\d.]+) rpm/.exec(t.says)![1]) / 0.00278 - 1)).toBeGreaterThan(0.15);
     expect(d!.gaps.some((g) => /where its brushes' friction stalls it/.test(g))).toBe(true);
   }, 60000);
+});
+
+describe('round D5: what the D4 judges found, by cause', () => {
+  const b = (c: ReturnType<typeof go>, re: RegExp) => c.bounds.find((x) => re.test(x.what))!;
+  it('swimming and getting there are judged apart; its mass at the density it sinks by; the field gradient that would hold it up', () => {
+    const c = go('Design a 200 µm magnetically driven microswimmer that travels through human blood at 50 µm/s and delivers a 5 ng drug payload to a clot 3 cm away within 15 minutes.');
+    expect(b(c, /^swimming at 50 µm\/s in blood$/).ok).toBe(true);
+    const g = b(c, /^getting to it through flowing blood$/); expect(g.ok).toBe(false);
+    expect(g.says).toMatch(/8\.63 µg/); expect(g.says).toMatch(/a gradient of about 0\.981 T\/m/);
+    expect(c.questions.some((q) => q.key === 'what')).toBe(false);
+    const re = c.scale!.groups.find((x) => x.key === 'Reynolds')!; expect(re.says).toMatch(/^0\.00303 in blood/);
+  });
+  it('a sail too small is sized for the time asked; a solar sail is not solar cells', () => {
+    const c = go('Come up with a 150 m square solar-sail tug that moves through the vacuum of space towing a 2 tonne probe from Earth orbit to Mars in under 3 years.');
+    expect(b(c, /^light alone carries it/).says).toMatch(/it would want a sail 1\.24 km square .* or 266 m square .* for the leg between the planets alone/);
+    expect(c.asked.some((a) => /electronics/.test(a.why))).toBe(false);
+  });
+  it('a hand-cranked kettle with an open top never boils: its evaporation is weighed', () => {
+    const [d] = designs(go('Looking for a hand-crank camping kettle under 2 kg that an ordinary adult can use to bring 1 litre of 15°C stream water to a boil in 5 minutes of cranking.'), 1, { seed: 101, physics: null });
+    const k = d!.checks.find((x) => /^as made, a hand crank brings/.test(x.what))!;
+    expect(k.ok).toBe(false); expect(k.says).toMatch(/settles near [67]\d(\.\d+)? °C and never reaches 100 °C/);
+  });
+  it('the Mars stage: its propellant at three twentieths said as propellant, the ellipse worked, several launches said', () => {
+    const r = b(go('Design a crewed transfer stage that pushes a 40-tonne payload from a 400 km low Earth orbit into Mars orbit in 180 days using methane-oxygen engines with 370 s specific impulse, and tell me how much propellant it has to carry.'), /^the rocket equation/);
+    expect(r.says).toMatch(/at three twentieths it must carry 1040 t of propellant, 1240 t leaving/);
+    expect(r.says).toMatch(/captured instead into a long ellipse.* 222 t of propellant/);
+    expect(r.says).toMatch(/over several launches/);
+  });
+  it('a buried lunar habitat loses more than it draws in its first hours; a closed sphere and a dome on a floor told apart', () => {
+    const c = go('I want an inflatable habitat at the lunar south pole, 8 m in diameter, kept at 101 kPa inside, buried under enough regolith to hold crew dose below 50 mSv per year, and kept warm through -170 °C nights on no more than 15 kW of power.');
+    const w = b(c, /^it keeps warm under its cover$/); expect(w.ok).toBe(null); expect(w.says).toMatch(/more than its 15 kW for the first 5\.5\d? h/);
+    expect(b(c, /^it holds 101 kPa in$/).says).toMatch(/as a closed sphere its wall holds it all round.* set instead as a dome on a floor 8 m across, the floor or what anchors it must hold 5\.08 MN up/);
+  });
+  it('a pod at the bottom of the sea: 900 Wh/kg is beyond any cell; its wall said as part of its radius', () => {
+    const c = go('Could you invent a battery-powered sensor pod that sits at the bottom of the Challenger Deep (10,935 m) for 90 days drawing 50 W on average, with the whole titanium pressure sphere and batteries weighing under 120 kg?');
+    expect(b(c, /^its cells kept dry/).says).toMatch(/120 kg must hold 900 Wh\/kg, more than any cell holds/);
+    expect(b(c, /^it holds out the sea/).says).toMatch(/has a wall 11\.6% as thick as the radius inside it/);
+  });
+  it('a mug that may spill 5 ml if knocked over is asked that, not left as a number unused', () => {
+    const c = go("Design a mug for someone with a Parkinson's tremor that keeps tea above 55 °C for 2 hours, weighs no more than 350 g, and spills less than 5 ml if it gets knocked over on a table.");
+    expect(c.asked.find((a) => /^spills no more than 5 ml if knocked over$/.test(a.text))).toMatchObject({ kind: 'does', got: null });
+    expect(c.dropped.some((x) => /spill/.test(x))).toBe(false);
+  });
+  it('a shelter in the wind: its lift and its turning together, the air inside pushing up too, the margins taken', () => {
+    const [d] = designs(go('Can you come up with a 4-person emergency shelter for a mountain site that packs into a sled under 30 kg, takes up no more than 3 m x 2.5 m of ground, and survives 110 km/h winds and 80 cm of settled snow on the roof?'), 1, { seed: 101, physics: J });
+    expect(d!.checks.find((x) => x.what === 'empty, it stands in that wind')!.says).toMatch(/less the wind's lift below/);
+    const up = d!.checks.find((x) => x.what === 'the wind does not lift it')!;
+    expect(up.ok).toBe(false); expect(up.says).toMatch(/the air inside pushing up 0\.2 of it/); expect(up.says).toMatch(/with its door open into the wind/);
+  }, 60000);
+  it('a footbridge says its abutments are not made, and that rails too long for one span must be made to length', () => {
+    const [d] = designs(go("design a footbridge over a 6.5 m wide creek on my property with a 1.1 m wide deck that can carry 4 adults plus a loaded wheelbarrow (call it 450 kg total), and no single piece can weigh more than 35 kg because we're carrying everything in by hand with no crane"), 1, { seed: 101, physics: null });
+    expect(d!.gaps.some((g) => /abutments and their footings/.test(g))).toBe(true);
+    expect(d!.gaps.some((g) => /nothing to splice it over, so it must be engineered timber made to length/.test(g))).toBe(true);
+  });
 });
