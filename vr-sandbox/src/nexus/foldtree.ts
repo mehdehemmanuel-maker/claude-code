@@ -121,6 +121,8 @@ export function planTree(parts: Box[], keep: Map<string, string> = new Map(), op
   for (const b of parts) if (!depth.has(b.name)) trouble.push(`${b.name} touches nothing that leads to ${root.name}`);
   if (keep.has(root.name)) trouble.push(`${root.name}, what the rest would fold onto, is not still: ${keep.get(root.name)}`);
   const grounded = ground.has(root.name);
+  // folding where it hangs, the floor under it is there: nothing folds through it
+  const floorY = Math.min(...parts.map((b) => b.at[1]! - b.h / 2)), floor: Box = { name: 'the floor', at: [0, floorY - 50, 0], w: 1e4, h: 100, d: 1e4 };
   const kids = (n: string) => [...parent].filter(([, p]) => p === n).map(([c]) => c);
   const below = (n: string): string[] => [n, ...kids(n).flatMap(below)];
   // latched: what touches but is not held along the tree
@@ -143,7 +145,7 @@ export function planTree(parts: Box[], keep: Map<string, string> = new Map(), op
     nodeFail = null;
     const p = parent.get(v)!, V = s.boxes.get(v)!, P = s.boxes.get(p)!, mine = new Set([v, ...below(v).filter((x) => !s.lifted.includes(x)), ...s.spacers.filter((x) => below(v).includes(x.on)).map((x) => x.name)]);
     const ct = contactOf(V, P); if (!ct) return [];
-    const { n, s: side } = ct, tp = thinOf(P), faceOn = thinAlong(P, n), flatV = thinAlong(V, n), others = [...s.boxes.values()].filter((b) => !mine.has(b.name));
+    const { n, s: side } = ct, tp = thinOf(P), faceOn = thinAlong(P, n), flatV = thinAlong(V, n), others = [...[...s.boxes.values()].filter((b) => !mine.has(b.name)), ...(grounded ? [floor] : [])];
     const out: Way[] = [];
     const sweepOk = (moving: Box[], c: Ax, pv: V3, turns: number): boolean => {
       const steps = Math.abs(turns) * 90, sgn = Math.sign(turns);
@@ -162,7 +164,7 @@ export function planTree(parts: Box[], keep: Map<string, string> = new Map(), op
       for (const b of moving) { st.boxes.set(b.name, turnBox(b, c, pv, turns)); st.R.set(b.name, mm3(Rq, st.R.get(b.name) ?? I3)); }
       for (const sb of extra.spBoxes) { st.boxes.set(sb.name, sb); st.R.set(sb.name, I3); st.spacers.push({ name: sb.name, under: v, on: p, box: sb }); }
       const now = [...mine].map((x) => st.boxes.get(x)!);
-      const rest = [...st.boxes.values()].filter((b) => !mine.has(b.name));
+      const rest = [...[...st.boxes.values()].filter((b) => !mine.has(b.name)), ...(grounded ? [floor] : [])];
       if (now.some((b) => rest.some((o) => overlap(b, o)))) return null;
       st.folds.push({ head: v, holder: p, names: [...mine], pivot: pv, axis: c, turns, kind, spacer: extra.sp, shift: extra.shift, length: extra.length, thick: extra.thick, n, side });
       return st;
@@ -184,9 +186,9 @@ export function planTree(parts: Box[], keep: Map<string, string> = new Map(), op
           const now = [...mine].map((x) => changed.get(x) ?? s.boxes.get(x)!), [ml, mh] = bound(now), vv = changed.get(v) ?? V, pv: V3 = [0, 0, 0];
           pv[n] = faceAt(sp); pv[a] = sg === 1 ? hi(vv, a) : lo(vv, a); pv[c] = vv.at[c]!;
           const turnedNow = now.map((b) => turnBox(b, c, pv, turns)), spBoxes = sp > 0 ? (() => { const vv = changed.get(v) ?? V, l: V3 = [lo(vv, 0), lo(vv, 1), lo(vv, 2)], h: V3 = [hi(vv, 0), hi(vv, 1), hi(vv, 2)]; if (side === 1) { l[n] = hi(P, n); h[n] = hi(P, n) + sp; } else { l[n] = lo(P, n) - sp; h[n] = lo(P, n); } return [boxOf(`hinge_block_${v}`, l, h)]; })() : [];
-          const clash = placed.filter((o) => turnedNow.some((b) => overlap(b, o)) || spBoxes.some((x) => overlap(x, o)));
+          const clash = [...placed, ...(grounded ? [floor] : [])].filter((o) => turnedNow.some((b) => overlap(b, o)) || spBoxes.some((x) => overlap(x, o)));
           // where it would lie on a part still standing, that part must fold first: said so, for the order to be drawn again
-          const up = clash.find((o) => !foldedNames.has(o.name) && o.name !== p && !s.spacers.some((x) => x.name === o.name) && !flatOn(o.name, p)); if (up && (!nodeFail || nodeFail.deg !== 90)) nodeFail = { what: v, hit: up.name, deg: 90 };
+          const up = clash.find((o) => o !== floor && !foldedNames.has(o.name) && o.name !== p && !s.spacers.some((x) => x.name === o.name) && !flatOn(o.name, p)); if (up && (!nodeFail || nodeFail.deg !== 90)) nodeFail = { what: v, hit: up.name, deg: 90 };
           const [fl, fh] = bound(turnedNow), over = Math.max(0, lo(P, a) - fl[a]!, fh[a]! - hi(P, a), lo(P, c) - fl[c]!, fh[c]! - hi(P, c)), thick = side === 1 ? fh[n]! - hi(P, n) : lo(P, n) - fl[n]!;
           return { clash, pv, changed, spBoxes, over, score: over * 10 + thick + (shift ? (opts.inset ? 1e-4 : 0.1) : 0) + (sp > 0 && !opts.inset ? 0 : sp > 0 ? 0.1 : 0) + 1e-3 * (a === ([0, 1, 2] as Ax[]).filter((i) => i !== n).sort((x, y) => E(P)[y]! - E(P)[x]!)[0] ? 0 : 1), length: Math.abs(side === 1 ? mh[n]! - pv[n]! : pv[n]! - ml[n]!), thick: mh[a]! - ml[a]! };
         };
@@ -194,7 +196,7 @@ export function planTree(parts: Box[], keep: Map<string, string> = new Map(), op
         // in sideways past what it lands on
         const tries: { sp: number; shift: number }[] = [{ sp: 0, shift: 0 }], first = tryOne(0, 0);
         const more = () => {
-          const cs = first?.clash ?? [], gc = (ml0[c]! + mh0[c]!) / 2, mc = P.at[c]!;
+          const cs = (first?.clash ?? []).filter((o) => o !== floor), gc = (ml0[c]! + mh0[c]!) / 2, mc = P.at[c]!;
           const insets = cs.length ? [Math.max(...cs.map((o) => hi(o, c))) - ml0[c]! + 1e-4, Math.min(...cs.map((o) => lo(o, c))) - mh0[c]! - 1e-4].sort((x, y) => Math.abs(gc + x - mc) - Math.abs(gc + y - mc)).map((sh) => ({ sp: 0, shift: sh })) : [];
           const depths = [...new Set(lying.filter((o) => Math.min(mh0[c]!, hi(o, c)) - Math.max(ml0[c]!, lo(o, c)) > 1e-3).map((o) => +(side === -1 ? lo(P, n) - lo(o, n) : hi(o, n) - hi(P, n)).toFixed(6)))].filter((d) => d > 0).sort((x, y) => x - y).map((d) => ({ sp: d, shift: 0 }));
           tries.push(...(opts.inset ? [...insets, ...depths] : [...depths, ...insets]));

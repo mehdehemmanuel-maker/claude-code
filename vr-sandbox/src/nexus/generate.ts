@@ -1167,7 +1167,17 @@ export class Workshop {
         const c0 = Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - [o.w, o.h, o.d][across]! / 2), c1 = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + [o.w, o.h, o.d][across]! / 2);
         if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, c0, c1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
       }
-      if (!patches.length) return null;
+      // nothing under it, but held at an end it is joined at (a bracket's arm latched to its hinge block): a cantilever
+      // fixed there, its joint taking its moment
+      const g = !patches.length ? [...this.groups.values()].find((x) => !x.loose && x.members.includes(name)) : undefined;
+      const fixedAt = g ? others.flatMap((o) => {
+        const on = (o as PartRef).name; if (!on || !g.members.includes(on)) return [];
+        const oe = [o.w, o.h, o.d], yOv = Math.min(X.at[1] + X.h / 2, o.at[1] + o.h / 2) - Math.max(bottom, o.at[1] - o.h / 2), cOv = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + oe[across]! / 2) - Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - oe[across]! / 2);
+        if (yOv <= 1e-6 || cOv <= 1e-6) return [];
+        const oLo = o.at[along]! - oe[along]! / 2, oHi = o.at[along]! + oe[along]! / 2;
+        return Math.abs(oHi - lo) < 1e-3 ? [{ at: lo, far: hi, by: on }] : Math.abs(oLo - hi) < 1e-3 ? [{ at: hi, far: lo, by: on }] : [];
+      })[0] : undefined;
+      if (!patches.length && !fixedAt) return null;
       let law: string, M = 0, defl = 0, sigma: number;
       // it bears straight down on what is under the load itself; what holds it along one edge (a wall under a roof's side)
       // is under it along this way but not under the load, and holds it only across the other way
@@ -1175,6 +1185,12 @@ export class Workshop {
       // its section across the span: depth up and down, width across
       const depth = X.h, width = onWidth !== undefined ? Math.min(onWidth, ext[across]!) : ext[across]!;
       const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
+      if (fixedAt) {
+        const L = Math.abs(fixedAt.far - fixedAt.at), a = where === 'end' ? L : Math.abs(X.at[along]! - fixedAt.at);
+        if (where === 'spread') { M = (F * L) / 2; defl = (F * L ** 3) / (8 * E * I); law = `spread along a cantilever ${mm(L)} out from ${fixedAt.by}, fixed to it at its end: M = F L / 2`; }
+        else { M = F * a; defl = (F * a ** 3) / (3 * E * I); law = `a cantilever ${mm(a)} out from ${fixedAt.by}, fixed to it at its end: M = F a`; }
+        return { law, M, defl, sigma: (M * c) / I };
+      }
       if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
       else {
         const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
