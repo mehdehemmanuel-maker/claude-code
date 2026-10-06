@@ -343,8 +343,14 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     // "no grid power", "needs no power or batteries", "with no electricity", "no burning fuel": it may draw none, a limit
     // checked against what is made; "no tools beyond a drill": how it goes together, said back
     { const nn = /^(?:needs?\s+|uses?\s+|with\s+|and\s+|runs?\s+on\s+|has\s+)?(?:no|zero|without(?:\s+any)?)\s+(.+)$/.exec(c.text.trim());
-      if (nn && /^(?:grid\s+|mains\s+|electric(?:al)?\s+|outside\s+|external\s+|burning\s+|fossil\s+)?(?:power|electricity|batter(?:y|ies)|fuel|mains|gas|grid|propane|petrol|diesel)\b/.test(nn[1]!)) { said.noPower = true; heard.push(`${c.text.trim()}: a limit, checked against what it makes that draws power`); return; }
-      if (nn && /^(?:special\s+|power\s+)?tools?\b/.test(nn[1]!)) { heard.push(`${c.text.trim()}: how it goes together is not derived, so this is not checked`); return; } }
+      if (nn && /^(?:grid\s+|mains\s+|electric(?:al)?\s+|outside\s+|external\s+|burning\s+|fossil\s+)?(?:power|electricity|batter(?:y|ies)|fuel|mains|gas|grid|propane|petrol|diesel)\b/.test(nn[1]!)) {
+        // "no grid power" rules out the grid, not power of its own (cells in the sun, a store they fill); "no burning
+        // fuel" rules out a flame; "no power", "no electricity" rule out both
+        const w0 = nn[1]!;
+        if (/^(?:grid|mains|outside|external)\b|^(?:power|electricity)\s+(?:from|off)\s+(?:the\s+)?(?:grid|mains)\b/.test(w0)) { said.noGrid = true; heard.push(`${c.text.trim()}: a limit: nothing it makes is wired to a grid; power of its own (cells in the sun, a store they fill) is not ruled out`); return; }
+        if (/^(?:burning\s+|fossil\s+)?(?:fuel|gas|propane|petrol|diesel)\b/.test(w0)) { said.noFuel = true; heard.push(`${c.text.trim()}: a limit, checked against what it makes that burns`); return; }
+        said.noPower = true; heard.push(`${c.text.trim()}: a limit, checked against what it makes that draws power`); return; }
+      if (nn && /^(?:special\s+|power\s+)?tools?\b/.test(nn[1]!)) { asked.push({ text: c.text.trim(), kind: 'limit', got: null, met: false, why: 'what it takes to put together: how it goes together is not derived, so this is not checked' }); return; } }
     // "with zero visible judder": said back above, not a thing it has
     if (/^zero\s+((?:[\w-]+\s+){0,2}?)(leak\w*|emissions?|spills?|judder|jitter|vibrations?|backlash|play|drift|wobble)\b/.test(c.text.trim())) return;
     // "no foam that can shed microplastics": what the thing not wanted does is not something it does
@@ -352,7 +358,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     // "1.2 m wind chop": the waves it floats in, read as a figure, not something it does
     if (c.kind === 'does' && /^(chop|chops|waves?|swells?|wind)$/.test(c.verb ?? '') && /\b(chop|waves?|swells?|seas?)\b/.test(c.text) && /\d/.test(c.text) && wants.some((w) => w.fn === 'float')) return;
     // "one person assembles", "two teachers can put it up": who puts it together, said back: how is not derived
-    if (/^(?:by\s+)?(?:one|two|three|four|a single|\d+)\s+(?:gloved\s+|adult\s+|grown\s+)?(?:person|people|adults?|teachers?|workers?|men|women|volunteers?|climbers?)\s+(?:can\s+|could\s+|must\s+|should\s+)?(?:assembles?|erects?|puts?|pitch(?:es)?|builds?|installs?|sets?|raises?)\b/.test(c.text.trim())) { heard.push(`${c.text.trim()}: who puts it together; how it goes together is not derived, so this is not checked`); return; }
+    if (/^(?:by\s+)?(?:one|two|three|four|a single|\d+)\s+(?:gloved\s+|adult\s+|grown\s+)?(?:person|people|adults?|teachers?|workers?|men|women|volunteers?|climbers?)\s+(?:can\s+|could\s+|must\s+|should\s+)?(?:assembles?|erects?|puts?|pitch(?:es)?|builds?|installs?|sets?|raises?)\b/.test(c.text.trim())) { asked.push({ text: c.text.trim(), kind: 'does', got: null, why: 'who puts it together, and how long it takes: setting it up is not derived' }); return; }
     if (c.kind === 'main' || c.kind === 'has') {
       if (!c.head) return;
       // "for someone with a Parkinson's tremor": who it is for, said of them, not of it
@@ -2650,6 +2656,10 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   // a glazed house lets the light in: what is made is its shape and what bears on it, not its glazing
   if (made && con.wants.some((w) => w.fn === 'enclose') && /\b(greenhouses?|glasshouses?|polytunnels?|hoop ?houses?|conservator(y|ies)|hothouses?)\b/.test(con.words.toLowerCase())) gaps.push('it is a house for light: its walls and roof want glazing (glass, or twin-wall polycarbonate in a frame), which is not kept; what is made is its shape and what bears on it, of what is kept, which lets no light through');
   // said to draw no power: nothing it makes may turn on a motor, drive on one or warm by a heater
+  // no grid: what it makes that draws power draws it from cells or a store of its own, which are not kept; nothing kept
+  // is wired to a grid. No fuel: nothing kept burns (no flame, stove or engine)
+  if (made && con.said.noGrid) { const drawn = tests.some((x) => x.kind === 'spin' || x.kind === 'drive' || x.kind === 'warm'); out.push({ what: 'it draws no power from a grid', ok: true, says: drawn ? 'nothing it makes is wired to a grid: what it draws must come from cells or a store of its own, which are not made here' : 'nothing it makes draws power, nor is wired to a grid' }); }
+  if (made && con.said.noFuel) out.push({ what: 'it burns no fuel', ok: true, says: 'nothing it makes burns: no flame, stove or engine is kept' });
   if (made && con.said.noPower) { const drawn = tests.filter((x) => x.kind === 'spin' || x.kind === 'drive' || x.kind === 'warm'); out.push({ what: 'it draws no power', ok: !drawn.length, says: drawn.length ? `what it makes draws power: ${drawn.map((x) => x.kind === 'spin' ? `the motor that turns ${x.name.slice(prefix.length + 1)}` : x.kind === 'drive' ? 'the motors that drive it' : `the heater that warms ${x.name.slice(prefix.length + 1)}`).join(', ')}` : 'nothing it makes turns on a motor, drives or warms by a heater: what it does it does by hand, by its own weight or not at all' }); }
   // raising in a time said: the power that takes (m g h / t), from what raises it, which is not derived: what rides and
   // what it carries
@@ -2670,11 +2680,13 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   const TESTED: [Fn, RegExp][] = [['turn', /^it turns at /], ['move', /^it moves at /], ['swing', /^it swings open$|^its \w+ holds [\d.]+ kPa across it$/], ['slide', /^it slides /], ['raise', /^it rides [\d.]+ \S+ up and down its guides$/], ['warm', /^it keeps warm at |^its heater holds the air inside at |^its walls let out no more than what warms it/]];
   const failed = (re: RegExp) => out.find((x) => re.test(x.what) && !x.ok);
   // what a failed check found, in a few words: its first figure
-  const short = (says: string) => { const pin = /(\d+) pins?\b[^;]*?, more than the (\d+) its hinge has room for/.exec(says); if (pin) return ` (${pin[1]} pins wanted, more than the ${pin[2]} its hinge has room for)`; const k = /[\d.]+ times (?:over|under) its yield[^;:,(]*|it (?:tips|lifts off|blows over)\b/.exec(says), m = k ?? /^[^;:]*?(\d[\d.]*\s*(?:× 10\^-?\d+\s*)?[a-zA-Zµ°%²³/·]+[^;:,(]{0,30})/.exec(says), x = m?.[0].trim() ?? ''; return x ? ` (${x.length > 90 ? `${x.slice(0, 90)}…` : x})` : ''; };
+  const short = (says: string) => { const pin = /(\d+) pins?\b[^;]*?, more than the (\d+) its hinge has room for/.exec(says); if (pin) return ` (${pin[1]} pins wanted, more than the ${pin[2]} its hinge has room for)`; const bend = /times under its yield, bending ([\d.]+ \S+) \((1\/\d+) of /.exec(says); if (bend) return ` (bending ${bend[1]}, more than ${bend[2]} of its span)`; const k = /[\d.]+ times (?:over|under) its yield[^;:,(]*|(?:it loses )?[\d.]+ times what [^;:,(]*|it (?:tips|lifts off|blows over)\b|it (?:wants|needs) holding down/.exec(says), m = k ?? /^[^;:]*?(\d[\d.]*\s*(?:× 10\^-?\d+\s*)?[a-zA-Zµ°%²³/·]+[^;:,(]{0,30})/.exec(says), x = m?.[0].trim() ?? ''; return x ? ` (${x.length > 90 ? `${x.slice(0, 90)}…` : x})` : ''; };
   const LOADED: [Fn, RegExp][] = [['support', /^it spans |^its (top|deck|board|roof|rails?|joists?) bears? |^each shelf bears |^its (legs|column) carr|^the .* bears it$|^\S+ kg at (an|any) edge of its top|^its screws hold|^its brackets bear|^held out, its hinges carry it$|^latched open, its hinges hold|^its rear legs bear|^a lean on its top does not tip it$/], ['move', /^its motors can start|^its driven wheels grip|^a person pushes it|^on its .* slope, it does not tip$/], ['float', /^it floats with /], ['lift', /^it can hover with /], ['contain', /^it holds [\d.]+ L|^its walls hold /], ['slide', /^its rail bears /]];
   const asked = con.asked.map((a) => {
     // what cannot be put together under the laws does nothing it was asked
     if (!made && a.got && a.kind !== 'for') return { ...a, got: null, why: 'not made: its parts do not go together under the laws (see the first check)' };
+    // a house for light that lets none through is not that house: its shape is made, its glazing is not
+    if (a.kind === 'thing' && a.got && gaps.some((g) => g.startsWith('it is a house for light'))) return { ...a, got: null, why: `made only as something to ${FN_WORDS[a.got]}: what it is made of lets no light through, and glazing is not kept` };
     // folding: done where it folds, lies still folded, and (where a size is said with it) folds that small
     if (a.how === 'folds') { if (!folded) return { ...a, got: null, why: fold ? 'it does not fold: nothing it is made of folds' : 'it does not fold: what it is made of is not one I fold' }; if (!folded.ok) return { ...a, got: null, why: `it does not fold: ${folded.why}` }; if (/\bwall\b/.test(a.text) && !fold?.grounds.size) return { ...a, got: null, why: 'folded, it lies on the floor: it is not hung on a wall to fold against' }; { const h = out.find((x) => /hand folds it$/.test(x.what) && x.ok === false); if (h) return { ...a, got: null, why: `its own check fails: ${h.what}${short(h.says.replace(/^[^,]*,\s*/, ''))}` }; } if (/\b\d[\d.]*\s*(s|secs?|seconds?|minutes?|mins?)\b/i.test(a.text) && !a.how?.includes('not checked')) a = { ...a, how: 'folds; how long it takes is not checked' }; if (/\d/.test(a.text) && folded.fits === false) return { ...a, got: null, why: 'folded, it is bigger than this (see its checks)' }; const nums = (a.text.toLowerCase().match(/\d[\d.,]*\s*(°\s*[cf]|[a-zµ/%²³]+)/g) ?? []).map((x) => x.replace(/\s+/g, ' ')), hit = nums.length ? out.find((x) => x.ok === false && nums.some((n) => x.what.toLowerCase().replace(/\s+/g, ' ').includes(n))) : undefined; if (hit) return { ...a, got: null, why: `its own check fails: ${hit.what}${short(hit.says)}` }; return a; }
     if (a.got === 'raise' && a.kind === 'does' && unraised && !a.load) return { ...a, got: null, why: 'its travel and its guides are made and tested; what raises it and holds it there (a screw, a winch, a linkage) is not derived' };
@@ -2702,11 +2714,38 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   });
   // what it was said it must keep within (its weight, its size, a part's weight, how small it folds) is asked as much as
   // what it does: each is met where its own check passes, and is not where nothing is made to check it
-  const LIMIT = /^(as made, )?it weighs no more than |^no part weighs more than |^it is no more than |^it stands under the |^folded, it stays under |^it folds flat to |^it folds or packs to |^it packs into |^its plan is within |^it draws no more than |^it draws no power$|^\d+ of it stack/;
+  const LIMIT = /^(as made, )?it weighs no more than |^no part weighs more than |^it is no more than |^it stands under the |^folded, it stays under |^it folds flat to |^it folds or packs to |^it packs into |^its plan is within |^it draws no more than |^it draws no power$|^it draws no power from a grid$|^it burns no fuel$|^\d+ of it stack/;
   // a limit already said in what it does ("packs into a 70 cm bundle weighing under 5 kg") is that, not asked again
   const figs = (x: string) => [...x.toLowerCase().matchAll(/(\d[\d.,]*)\s*(kg|g|mm|cm|m|kw|w|l)\b/g)].map((m) => { const v = parseFloat(m[1]!.replace(/,/g, '')), u = m[2]!; return u === 'g' ? [v / 1000, 'kg'] : u === 'mm' ? [v / 1000, 'm'] : u === 'cm' ? [v / 100, 'm'] : u === 'kw' ? [v * 1000, 'w'] : [v, u]; }) as [number, string][];
   const said = (lim: string, text: string) => figs(lim).some(([v, u]) => figs(text).some(([v2, u2]) => u === u2 && Math.abs(v - v2) <= 1e-3 * Math.max(v, v2)));
   for (const x of out.filter((y) => LIMIT.test(y.what) && !asked.some((a) => a.why.includes(y.what) || (a.kind !== 'for' && a.kind !== 'limit' && said(y.what, a.text))))) { const left = /only ([\d.]+ kg) is left for it/.exec(x.says); asked.push({ text: x.what.replace(/^as made, /, '').replace(/, with too little left for what it does not make$/, ''), kind: 'limit', got: null, met: x.ok, why: x.ok ? '' : left ? `as made it is within it, but only ${left[1]} is left for what it does not make` : `its own check fails${short(x.says)}` }); }
+  // what it was said to stand in or keep to (a wind, snow, cold or heat, how long its cells last, water held back) is
+  // asked as much as what it does: met where the checks and the laws that weigh it pass. Checks and laws of one thing
+  // said (by its topic, or a figure they share, units aside) are taken as one; one that no item above answers is asked
+  // in its own words, and where the laws weigh it but nothing made is checked to do it, it is not shown met
+  {
+    const TOPIC: [string, RegExp][] = [['wind', /\b(winds?|gusts?|gales?|storms?|wind-?proof)\b/i], ['snow', /\bsnow\b/i], ['cells', /\b(batter(y|ies)|cells?)\b/i], ['water', /\bwater(s|ed|ing)?\b/i], ['shut', /\bshut\b/i]];
+    const topic = (x: string) => TOPIC.find(([, re]) => re.test(x))?.[0], qs = (x: string) => findQuantities(x).filter((q) => q.dim && q.si !== 0);
+    const share = (x: string, y: string) => { const tx = topic(x); return (!!tx && tx === topic(y)) || qs(x).some((p) => qs(y).some((q) => sameDim(p.dim, q.dim) && Math.abs(p.si - q.si) <= 0.01 * Math.max(Math.abs(p.si), Math.abs(q.si)))); };
+    const ENV = /\bwind$|^the wind does not lift it$|\bbear the wind\b|\bof snow$|°C|^its cells last |\bof water\b|\bholds [\d.]+ k?Pa\b|\babove the water\b/;
+    const saidQ = qs(con.words), weighs = [...out.filter((x) => ENV.test(x.what)), ...con.bounds.filter((b) => b.ok !== null || qs(b.what).some((p) => saidQ.some((q) => sameDim(p.dim, q.dim) && Math.abs(p.si - q.si) <= 0.01 * Math.abs(q.si))))];
+    const groups: (typeof weighs)[] = [];
+    for (const x of weighs) { const g = groups.find((g0) => g0.some((y) => share(x.what, y.what))); if (g) g.push(x); else groups.push([x]); }
+    // a check of the same thing that is not one of these ("shut, its rails bear the 5.34 kN push") answers it too
+    for (const x of out) if (!weighs.includes(x)) groups.find((g0) => g0.some((y) => share(x.what, y.what)))?.push(x);
+    for (const g of groups) {
+      const bad = g.find((x) => x.ok === false), checked = g.some((x) => x.ok === true), head = g.find((x) => x.ok !== null && qs(x.what).length) ?? bad ?? g.find((x) => x.ok !== null) ?? g[0]!, met = !bad && checked;
+      const why = (a: Asked | null) => bad ? `${out.includes(bad as Check) ? 'its own check fails' : 'the laws say not'}${a?.text === bad.what ? short(bad.says).replace(/^ \((.*)\)$/, ': $1') : `: ${bad.what}${short(bad.says)}`}` : met ? '' : `the laws weigh it${a?.text === head.what ? '' : ` (${head.what})`}, but nothing made is checked to do it`;
+      const hit = asked.map((a, i) => [a, i] as const).filter(([a]) => a.kind !== 'thing' && g.some((x) => share(a.text, x.what)));
+      for (const [a, i] of hit) {
+        if (a.kind === 'for') asked[i] = { ...a, kind: 'limit', met, why: why(a) };
+        else if (a.kind === 'limit') asked[i] = { ...a, met: !!a.met && met, why: a.met && !met ? why(a) : a.why };
+        else if (a.got && !met) asked[i] = { ...a, got: null, why: why(a) };
+        else if (!a.got && bad && !a.why.includes(bad.what)) asked[i] = { ...a, why: `${a.why}; and ${why(a)}` };
+      }
+      if (!hit.length) asked.push({ text: head.what, kind: 'limit', got: null, met, why: why({ text: head.what } as Asked) });
+    }
+  }
   const does = doesOf(asked, gaps, con.wants), ok = made && out.every((x) => x.ok);
   const foldTrack = fold?.clean && folded?.ok && asBuilt ? foldTrackOf(fold, asBuilt) : undefined;
   return { ...(foldTrack ? { foldTrack } : {}), name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, choices, tries: [], gaps, mass: ownKg, parts: own.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };

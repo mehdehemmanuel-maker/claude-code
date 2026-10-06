@@ -31,11 +31,12 @@ describe('reading an ask a sentence at a time', () => {
     expect(c.asked.filter((a) => a.kind === 'thing').map((a) => a.text)).toEqual(['Greenhouse']);
     expect(c.limits.part).toBe(12);
   });
-  it('"no grid power, no burning fuel" is a limit checked against what is made, not electronics; who assembles it is said back', () => {
+  it('"no grid power" rules out the grid, not power of its own; "no burning fuel" rules out a flame; who assembles it is asked, not checked', () => {
     const c = go(GREENHOUSE);
-    expect(c.said.noPower).toBe(true);
-    expect(c.heard).toContain('no grid power: a limit, checked against what it makes that draws power'); expect(c.heard).toContain('no burning fuel: a limit, checked against what it makes that draws power');
-    expect(c.heard.some((h) => /^one person assembles: who puts it together/.test(h))).toBe(true);
+    expect(c.said.noPower).toBeUndefined(); expect(c.said.noGrid).toBe(true); expect(c.said.noFuel).toBe(true);
+    expect(c.heard).toContain('no grid power: a limit: nothing it makes is wired to a grid; power of its own (cells in the sun, a store they fill) is not ruled out'); expect(c.heard).toContain('no burning fuel: a limit, checked against what it makes that burns');
+    expect(c.asked.find((a) => a.text === 'one person assembles')).toMatchObject({ kind: 'does', got: null });
+    expect(c.asked.find((a) => a.text === 'no tools beyond a drill')).toMatchObject({ kind: 'limit', met: false });
     expect(c.asked.some((a) => /power/.test(a.text) && a.kind === 'does')).toBe(false);
   });
   it('"so it won\'t wake me" carries no one; a motor named with what it lifts drives it; "for at least a year" is one year', () => {
@@ -66,10 +67,13 @@ describe('reading an ask a sentence at a time', () => {
 });
 
 describe('what the laws say of it', () => {
-  it('a glazed house through a cold night with no power: U A ΔT out, the water that would hold it, and the sun short of the day', () => {
-    const b = law(GREENHOUSE, /^it holds above 4 °C through the night in -30 °C with no power and no fuel$/)!;
+  it('a glazed house through a cold night off the grid: U A ΔT out, the water that would hold it, the sun short of the day, and the cells that would make it up', () => {
+    const b = law(GREENHOUSE, /^it holds above 4 °C through the night in -30 °C with no grid power and no fuel$/)!;
     expect(b.ok).toBe(false);
-    expect(b.says).toContain('258 W/K'); expect(b.says).toContain('123 kWh'); expect(b.says).toContain('4.07 m³'); expect(b.says).toContain('3.57 times');
+    expect(b.says).toContain('258 W/K'); expect(b.says).toContain('123 kWh'); expect(b.says).toContain('4.07 m³'); expect(b.says).toContain('it loses 3.57 times');
+    // 211 kWh a day lost against 59 kWh gathered: 152 kWh from cells at 0.18 of 3 kWh/m², 281 m²
+    expect(b.says).toContain('the 152 kWh a day it lacks'); expect(b.says).toContain('about 281 m² of them');
+    expect(law(GREENHOUSE.replace('no grid power, no burning fuel', 'no power'), /^it holds above 4 °C/)!.what).toMatch(/with no power and no fuel$/);
   });
   it('a sphere pushed from outside must not buckle: Zoelly with a knockdown, buckling setting its wall', () => {
     const b = law('a titanium sphere that holds out the sea 4000 m deep', /^it holds out the sea 4 km down$/)!;
@@ -119,4 +123,29 @@ describe('what is made of it', () => {
     const [d] = designs(go('a cart with a table on it'), 1, { seed: 101, physics: J });
     expect(check(d!, /^pushed at its top, it does not tip$/)).toMatchObject({ ok: true, says: expect.stringMatching(/sideways, across the way its wheels roll/) });
   }, 120000);
+});
+
+describe('what was asked is counted where a check or a law weighs it', () => {
+  const ask = (d: ReturnType<typeof made>, text: RegExp) => d.asked.find((a) => text.test(a.text));
+  it('a snow load and a night held warm are asked: each met only where its check or its law passes', () => {
+    const d = made(GREENHOUSE);
+    expect(ask(d, /^its roof bears 2.4 kPa of snow$/)).toMatchObject({ kind: 'limit', met: false, why: expect.stringMatching(/^its own check fails: [\d.]+ times over its yield$/) });
+    expect(ask(d, /^it holds above 4 °C through the night/)).toMatchObject({ kind: 'limit', met: false, why: 'the laws say not: it loses 3.57 times what it gathers' });
+    expect(ask(d, /^it draws no power from a grid$/)?.met).toBe(true); expect(ask(d, /^it burns no fuel$/)?.met).toBe(true);
+    // a house for light that lets none through is not that house
+    expect(ask(d, /^Greenhouse$/)).toMatchObject({ kind: 'thing', got: null, why: expect.stringMatching(/lets no light through/) });
+    expect(d.does[1]).toBe(d.asked.filter((a) => a.kind !== 'for').length);
+  });
+  it('a wind said as what it is for is a limit its wind test answers, once, however many checks weigh it', () => {
+    const [d] = designs(go('Please design a freestanding three-sided loafing shelter for four adult goats, roughly 12 feet by 8 feet, rated for 90 mph wind gusts and a 30 psf snow load, assembled by two people with hand tools, with no single component heavier than 50 pounds.'), 1, { seed: 101, physics: J });
+    const wind = d!.asked.filter((a) => /wind/.test(a.text));
+    expect(wind).toHaveLength(1); expect(wind[0]).toMatchObject({ text: 'for 90 mph wind gusts', kind: 'limit' });
+    expect(wind[0]!.met).toBe(!!d!.checks.filter((x) => /wind/.test(x.what)).every((x) => x.ok));
+    expect(ask(d!, /^its roof bears 1.44 kPa of snow$/)?.kind).toBe('limit');
+  }, 120000);
+  it('weighed by the laws but done by nothing made, it is not met; a law that answers what is asked says so beside it', () => {
+    expect(ask(made(STALL), /^under 32 °C inside with 46 °C round it$/)).toMatchObject({ kind: 'limit', met: false, why: 'the laws weigh it, but nothing made is checked to do it' });
+    expect(ask(made(SLIDER), /^crawl at 2 mm\/s/)).toMatchObject({ got: null, why: expect.stringMatching(/^the laws weigh it \(it slides at 2 mm\/s\), but nothing made is checked to do it$/) });
+    expect(ask(made(CLOCK), /^running on two aa batteries/)?.why).toMatch(/; and the laws say not: its cells last 365 days/);
+  });
 });
