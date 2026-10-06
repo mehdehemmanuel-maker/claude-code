@@ -1683,7 +1683,7 @@ const NOT_HERE = /^Nothing stands here yet|^The generator gave nothing/;
 async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
   // what makes, sizes, turns, joins or works out: the workshop, offline
-  if (Workshop.handles(t)) return makeStep(t, true, who);
+  if (shop.does(t)) return makeStep(t, true, who);
   // what could not be done at all is a failure, and stops the pipeline with why
   const out = (said: string) => { if (NOT_HERE.test(said)) throw new Error(said); return said; };
   switch (verb) {
@@ -1766,7 +1766,7 @@ function drawMade(): void {
 function makeStep(text: string, quiet = false, who = 'you'): string { const said = shop.run(text, who); drawMade(); if (!quiet) boards?.event({ kind: 'made', text }); return said; }
 /** Whether words said in the chat are generation's: its verbs, or a calculation ending in =; moving or turning only what is made. */
 function generationWords(t: string): boolean {
-  const w = t.trim(); if (!Workshop.handles(w)) return false;
+  const w = t.trim(); if (!shop.does(w)) return false;
   if (/^(move|rotate|turn|remove|delete|split)\b/i.test(w)) return shop.all().made.some((m) => m.name === w.split(/\s+/)[1]) || shop.joined().some((j) => j.name === w.split(/\s+/)[1]);
   return true;
 }

@@ -12,6 +12,8 @@
 // metres, every number in SI; a number may carry its unit (40 mm, 2 kN, 20 N·m, 45 deg).
 
 import { MATERIALS, type Material } from '../data/materials';
+import { fusible } from '../engineering/fusion';
+import { ADHESIVES, substrateFactor } from '../engineering/joining';
 import { thermalOf } from '../engineering/thermal';
 
 // ---- numbers with their units, and the expressions they are said in ---------------------------------------------------
@@ -52,19 +54,25 @@ const SPATIAL = new Set(['gap', 'dist', 'distance', 'overlap', 'overlaps', 'insi
 /** Whether two boxes, each turned as it stands, go into each other: the separating-axis test, over the three faces of
  *  each and the nine pairs of their edges (Gottschalk, Lin & Manocha, OBBTree, SIGGRAPH 1996). A box touching another
  *  face to face does not go into it. A thing with no turning of its own (a part of the build) is its box as it stands. */
-function boxesOver(A: Box3, B: Box3): boolean {
+/** How far apart two things are, each as it is turned: the most any face or edge direction parts them (the
+ *  separating-axis test); less than nothing where they go into each other. It is never more than the true distance. */
+export function separation(A: Box3, B: Box3): number {
   const own = (X: Box3) => { const m = X as Partial<Made>; return { R: matOf(m.turn ?? [0, 0, 0]), e: m.local ? [m.local.w / 2, m.local.h / 2, m.local.d / 2] : [X.w / 2, X.h / 2, X.d / 2] }; };
   const a = own(A), b = own(B), col = (R: M3, j: number): V3 => [R[j]!, R[3 + j]!, R[6 + j]!];
   const ua = [0, 1, 2].map((j) => col(a.R, j)), ub = [0, 1, 2].map((j) => col(b.R, j)), T: V3 = [B.at[0] - A.at[0], B.at[1] - A.at[1], B.at[2] - A.at[2]];
   const dot = (u: V3, v: V3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2], cross = (u: V3, v: V3): V3 => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
   const axes: V3[] = [...ua, ...ub]; for (const u of ua) for (const v of ub) axes.push(cross(u, v));
+  let most = -Infinity;
   for (const L of axes) {
     const n = Math.hypot(L[0], L[1], L[2]); if (n < 1e-9) continue;
     const rA = a.e.reduce((t, e, i) => t + e * Math.abs(dot(ua[i]!, L)), 0), rB = b.e.reduce((t, e, i) => t + e * Math.abs(dot(ub[i]!, L)), 0);
-    if (Math.abs(dot(T, L)) >= rA + rB - 1e-9 * n) return false;
+    most = Math.max(most, (Math.abs(dot(T, L)) - rA - rB) / n);
   }
-  return true;
+  return most;
 }
+const boxesOver = (A: Box3, B: Box3) => separation(A, B) < -1e-9;
+/** Things touch where nothing parts them by more than this: half a millimetre. */
+export const TOUCH = 5e-4;
 /** Between two things: how far apart their middles are, the gap between the boxes round them, whether they go into
  *  each other (each as it is turned), touch, or one is inside the other's box. */
 export function spatial(f: string, A: Box3, B: Box3): number {
@@ -196,7 +204,10 @@ interface Law { cond: string; lo: string | null; hi: string | null; half: boolea
 interface Flip { axis: Axis; through: string | null }
 interface Spec { /** who made it: a pipeline's board, or you */ by?: string; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
 /** Shapes joined into one piece: named, moved, turned, flipped and stretched as one; its mass and volume the union's. */
-interface Group { name: string; members: string[]; move: V3; turn: V3; flips: Flip[]; stretch: V3 }
+/** How two members of a piece hold together: fused into one solid, glued, or bolted; a group's members are not held. */
+interface Bond { a: string; b: string; how: 'fused' | 'glued' | 'bolted'; with?: string; why: string }
+interface Group { name: string; members: string[]; move: V3; turn: V3; flips: Flip[]; stretch: V3; bonds?: Bond[]; /** moved as one, not connected */ loose?: boolean }
+type JoinHow = 'any' | 'fuse' | 'glue' | 'bolt' | 'group';
 /** A rule over everything made: a condition, or that nothing overlaps, or a clearance between things. */
 /** A rule, and who said it: a pipeline's "no overlap" or clearance holds over what that pipeline makes; a condition, over what it names. */
 type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string }) & { by: string };
@@ -205,10 +216,10 @@ type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; wit
 export interface Made { name: string; kind: Kind; word: string; matter: Material | null; axis: Axis; dims: Record<string, number>; at: V3; turn: V3; local: { w: number; h: number; d: number }; scale: V3; w: number; h: number; d: number; volume: number; area: number; mass: number; text?: string; group?: string }
 /** A joined piece as it stands: its members, the box round them, and the union's volume and mass (exact, or sampled). */
 export interface Joined { name: string; members: string[]; at: V3; w: number; h: number; d: number; volume: number; mass: number; exact: boolean; within: number; axis?: Axis }
-const mm = (v: number) => (Math.abs(v) >= 1 ? `${+v.toPrecision(4)} m` : `${+(v * 1e3).toPrecision(3)} mm`);
+const mm = (v: number) => (Math.abs(v) < 1e-9 ? '0 mm' : Math.abs(v) >= 1 ? `${+v.toPrecision(4)} m` : `${+(v * 1e3).toPrecision(3)} mm`);
 const kg = (v: number) => (v >= 1 ? `${+v.toPrecision(4)} kg` : `${+(v * 1e3).toPrecision(3)} g`);
 const joules = (v: number) => `${+v.toPrecision(4)} J${v >= 360 ? ` (${+(v / 3600).toPrecision(3)} Wh)` : ''}`;
-const fmt = (v: number) => (Number.isInteger(v) && Math.abs(v) < 1e6 ? String(v) : String(+v.toPrecision(4)));
+const fmt = (v: number) => (Number.isInteger(v) && Math.abs(v) < 1e6 ? String(v) : v !== 0 && Math.abs(v) < 1e-3 ? v.toExponential(3).replace(/\.?0+e/, 'e') : String(+v.toPrecision(4)));
 const deg = (r: number) => `${+((r * 180) / Math.PI).toFixed(1)}°`;
 const extents = (axis: Axis, across: number, along: number): { w: number; h: number; d: number } => (axis === 'x' ? { w: along, h: across, d: across } : axis === 'z' ? { w: across, h: across, d: along } : { w: across, h: along, d: across });
 const AX: Record<Axis, number> = { x: 0, y: 1, z: 2 };
@@ -248,15 +259,59 @@ function argsAt(s: string, open: number): { args: string[]; end: number } {
   throw new Error(`a ( in "${s}" is never closed`);
 }
 
+/** Standing actions: several steps as one, called by name on anything, every size in them worked out from what they
+ *  are given, with the conditions that change them. Written in the steps' own words, so "show action mount" shows
+ *  exactly how a mount is worked out. Laws: a plate across its bolts as a beam loaded at its middle, σ = 3 F L / (2 b h²),
+ *  at half its yield; a leg as an Euler column, P ≤ π² E I / (3 L²) with I = π D⁴ / 64 (a factor of 3), and in
+ *  compression at half its yield. The edge a mount reaches past what it holds, 15 % of its size and at least 10 mm, and
+ *  a cover's clearance, 5 % of its size and at least 5 mm, are rules of thumb, said as such; so is a mount's matter: one that
+ *  yields under 100 MPa (wood, concrete, plastics) does not hold a bolt's preload, so the mount is aluminium, and steel
+ *  past 20 kg. */
+export const STANDING: string[] = [
+  `action mount {X} [on {Y}]: default {X}_load = 0 N; set {X}_edge = max(10 mm, 0.15 * max({X}.w, {X}.d));
+   place plate named {X}_mount under {X} size {X}.w + 2 * {X}_edge x {X}.d + 2 * {X}_edge x 3 mm;
+   if {X}_mount.yield < 100 MPa then material aluminium for {X}_mount;
+   if {X}.mass > 20 kg then material steel for {X}_mount;
+   size {X}_mount.h so 3 * ({X}.mass * g + {X}_load) * {X}_mount.w / (2 * {X}_mount.d * {X}_mount.h^2) <= {X}_mount.yield / 2 between 2 mm and 60 mm;
+   if {X}.made = 1 then bolt {X} and {X}_mount as {X}_mounted;
+   if {X}.made = 1 then move {X}_mounted on {Y} else move {X}_mount on {Y};
+   if {X}.made = 1 and {Y}.made = 1 then bolt {X}_mounted and {Y}`,
+  `action support {X}: default {X}_floor = 0 m; set {X}_rise = {X}.bottom - {X}_floor;
+   require {X}_rise > 1 mm: {X} stands on the floor already, so there is nothing under it to support;
+   set {X}_n = if {X}.w > 1.2 m or {X}.d > 1.2 m then 6 else 4; set {X}_P = {X}.mass * g / {X}_n;
+   size {X}_legD so {X}_P <= pi^2 * E * pi * {X}_legD^4 / 64 / (3 * {X}_rise^2) and 4 * {X}_P / (pi * {X}_legD^2) <= yield / 2 between 5 mm and 300 mm;
+   place rod named {X}_leg1 at {X}.left + {X}_legD / 2, {X}_floor + {X}_rise / 2, {X}.back + {X}_legD / 2 size {X}_legD x {X}_rise;
+   place rod named {X}_leg2 at {X}.right - {X}_legD / 2, {X}_floor + {X}_rise / 2, {X}.back + {X}_legD / 2 size {X}_legD x {X}_rise;
+   place rod named {X}_leg3 at {X}.left + {X}_legD / 2, {X}_floor + {X}_rise / 2, {X}.front - {X}_legD / 2 size {X}_legD x {X}_rise;
+   place rod named {X}_leg4 at {X}.right - {X}_legD / 2, {X}_floor + {X}_rise / 2, {X}.front - {X}_legD / 2 size {X}_legD x {X}_rise;
+   if {X}_n = 6 then place rod named {X}_leg5 at {X}.x, {X}_floor + {X}_rise / 2, {X}.back + {X}_legD / 2 size {X}_legD x {X}_rise;
+   if {X}_n = 6 then place rod named {X}_leg6 at {X}.x, {X}_floor + {X}_rise / 2, {X}.front - {X}_legD / 2 size {X}_legD x {X}_rise;
+   if {X}.made = 1 then join {X} and {X}_leg1, {X}_leg2, {X}_leg3, {X}_leg4 as {X}_stand;
+   if {X}.made = 1 and {X}_n = 6 then join {X}_stand and {X}_leg5, {X}_leg6`,
+  `action cover {X}: set {X}_gap = max(5 mm, 0.05 * max({X}.w, {X}.h, {X}.d)); default {X}_wall = 2 mm;
+   place plate named {X}_lid at {X}.x, {X}.top + {X}_gap + {X}_wall / 2, {X}.z size {X}.w + 2 * ({X}_gap + {X}_wall) x {X}.d + 2 * ({X}_gap + {X}_wall) x {X}_wall;
+   place plate named {X}_left at {X}.left - {X}_gap - {X}_wall / 2, {X}.bottom + ({X}.h + {X}_gap) / 2, {X}.z size {X}_wall x {X}.d + 2 * {X}_gap x {X}.h + {X}_gap;
+   place plate named {X}_right at {X}.right + {X}_gap + {X}_wall / 2, {X}.bottom + ({X}.h + {X}_gap) / 2, {X}.z size {X}_wall x {X}.d + 2 * {X}_gap x {X}.h + {X}_gap;
+   place plate named {X}_back at {X}.x, {X}.bottom + ({X}.h + {X}_gap) / 2, {X}.back - {X}_gap - {X}_wall / 2 size {X}.w + 2 * ({X}_gap + {X}_wall) x {X}_wall x {X}.h + {X}_gap;
+   place plate named {X}_front at {X}.x, {X}.bottom + ({X}.h + {X}_gap) / 2, {X}.front + {X}_gap + {X}_wall / 2 size {X}.w + 2 * ({X}_gap + {X}_wall) x {X}_wall x {X}.h + {X}_gap;
+   join {X}_lid, {X}_left, {X}_right, {X}_back, {X}_front as {X}_cover`,
+  `action stack {X} on {Y}: move {X} on {Y}; if {X}.made = 1 and {Y}.made = 1 then join {X} and {Y}`,
+];
+interface Standing { name: string; header: { word: string; param: boolean; optional: boolean }[]; body: string[]; text: string; builtIn: boolean }
+const CALL_VERBS = /^(calc|calculate|compute|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|if|action|actions|show|default|require)$/i;
+
 export class Workshop {
   private vars = new Map<string, string>(); private unitOf = new Map<string, string>(); private laws = new Map<string, Law>();
   private specs = new Map<string, Spec>(); private count = new Map<string, number>(); private rulesKept: Rule[] = []; private groups = new Map<string, Group>();
   private rand: { s: number };
   matter: Material = matterOf('aluminium'); private matterSaid = 'aluminium'; private by = '';
-  constructor(private readonly world: World, seed = 1) { this.rand = { s: seed | 0 }; }
+  private actions = new Map<string, Standing>(); private depth = 0;
+  constructor(private readonly world: World, seed = 1) { this.rand = { s: seed | 0 }; for (const a of STANDING) this.define(a, true); }
   // -- reading values: the pipeline's own, its shapes', the build's parts', the matters', the room's --------------------
-  private scope(over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): Scope {
-    const self = this;
+  /** What a step reads. Within a piece, a member is placed and sized by the others as they stand before the piece
+   *  moves them (the piece's move, turn and stretch come after), so a member never reads itself through the piece. */
+  private scope(over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>, within?: Group): Scope {
+    const self = this, read = (n: string) => (within?.members.includes(n) ? self.madeOf(n, over, busy, memo, true) : self.boxOf(n, over, busy, memo));
     const sc: Scope = {
       get(name) {
         if (over.has(name)) return over.get(name);
@@ -266,16 +321,21 @@ export class Workshop {
         const e = self.vars.get(name);
         if (e !== undefined) { if (busy.has(`var:${name}`)) throw new Error(`${name} is sized from itself`); busy.add(`var:${name}`); try { return num(e, sc); } finally { busy.delete(`var:${name}`); } }
         if (/^(density|rho|ρ|yield|ultimate|E|modulus|c|cp|k)$/.test(name)) return matterValue(self.matter, name);
+        // everything made, together: how many, its mass and volume
+        if (name === 'made' || name === 'made.count') return self.specs.size;
+        if (name === 'made.mass' || name === 'made.volume') { let t = 0; for (const n of self.specs.keys()) { const m = self.madeOf(n, over, busy, memo); t += name === 'made.mass' ? m.mass : m.volume; } return t; }
         const dot = name.indexOf('.');
         if (dot > 0) {
           const head = name.slice(0, dot), prop = name.slice(dot + 1);
-          const b = self.boxOf(head, over, busy, memo); if (b) return propOf(b, prop);
+          // made here (1), or a part of the build, or nothing (0)
+          if (prop === 'made') return self.specs.has(head) || self.groups.has(head) ? 1 : 0;
+          const b = read(head); if (b) return propOf(b, prop);
           try { const m = matterOf(head); const v = matterValue(m, prop); if (v !== undefined) return v; } catch { /* not a matter */ }
         }
         return self.world.facts?.()[name];
       },
       names: () => [...self.vars.keys(), ...self.laws.keys(), ...[...self.specs.keys()].map((s) => `${s}.mass`), 'density', 'yield', 'E', 'c', ...Object.keys(self.world.facts?.() ?? {})],
-      box: (name) => self.boxOf(name, over, busy, memo),
+      box: (name) => read(name),
     };
     return sc;
     function propOf(b: Box3 | Made | Joined, prop: string): number | undefined {
@@ -314,9 +374,9 @@ export class Workshop {
     if (busy.has(`shape:${name}`)) throw new Error(`${name} is placed or sized from itself`);
     busy.add(`shape:${name}`);
     try {
-      const sc = this.scope(over, busy, memo), dims: Record<string, number> = {};
+      const within = raw ? this.groupOf(name) : undefined, sc = this.scope(over, busy, memo, within), dims: Record<string, number> = {};
       for (const k of DIMS[s.kind]) { const o = over.get(`${name}.${k}`), law = s.laws[k]; dims[k] = o ?? (law ? this.least(`${name}.${k}`, law, sc) : num(s.dims[k]!, sc)); if (!(dims[k]! > 0)) throw new Error(`${name}'s ${k} comes to ${mm(dims[k]!)}: a size must be more than nothing`); }
-      const target = 'of' in s.place ? this.boxOf(s.place.of, over, busy, memo) : null;
+      const target = 'of' in s.place ? (within?.members.includes(s.place.of) ? this.madeOf(s.place.of, over, busy, memo, true) : this.boxOf(s.place.of, over, busy, memo)) : null;
       if ('of' in s.place && !target) throw new Error(this.noPart(s.place.of));
       const axis: Axis = s.axis ?? (s.kind === 'cylinder' || s.kind === 'tube' || s.kind === 'cone' ? (s.place.how === 'in' && target?.axis ? target.axis : 'y') : 'y');
       const g = geometry(s.kind, dims, axis), mt = s.kind === 'plane' || s.kind === 'circle' || s.kind === 'title' ? null : (s.matter ? matterOf(s.matter) : this.matter);
@@ -367,6 +427,13 @@ export class Workshop {
     for (const m of ms) { const s = this.specs.get(m.name)!; s.place = { how: 'at', x: `${m.at[0]}`, y: `${m.at[1]}`, z: `${m.at[2]}` }; s.turn = [`${m.turn[0]}`, `${m.turn[1]}`, `${m.turn[2]}`]; s.flips = []; s.scale = [...m.scale] as V3; }
     this.groups.delete(g.name);
   }
+  /** A piece's moves, turns, flips and stretches written into its members, each where the piece had it, so the piece
+   *  itself is moved by nothing. */
+  private bakeIn(g: Group): void {
+    const ms = g.members.filter((x) => this.specs.has(x)).map((x) => this.madeOf(x, new Map(), new Set(), new Map()));
+    for (const m of ms) { const s = this.specs.get(m.name)!; s.place = { how: 'at', x: `${m.at[0]}`, y: `${m.at[1]}`, z: `${m.at[2]}` }; s.turn = [`${m.turn[0]}`, `${m.turn[1]}`, `${m.turn[2]}`]; s.flips = []; s.scale = [...m.scale] as V3; }
+    g.move = [0, 0, 0]; g.turn = [0, 0, 0]; g.flips = []; g.stretch = [1, 1, 1];
+  }
   /** A member taken out of its piece (before it goes): a piece left with one stands it where the piece had it. */
   private leave(name: string): void { const g = this.groupOf(name); if (!g) return; const rest = g.members.filter((x) => x !== name); if (rest.length < 2) this.settle(g, rest); else g.members = rest; }
   private groupOf(name: string): Group | undefined { for (const g of this.groups.values()) if (g.members.includes(name)) return g; return undefined; }
@@ -395,23 +462,68 @@ export class Workshop {
   }
   /** Every joined piece as it stands. */
   joined(): Joined[] { const memo = new Map<string, Made>(), out: Joined[] = []; for (const n of this.groups.keys()) { try { out.push(this.joinedOf(n, new Map(), new Set(), memo)); } catch { /* its members say why */ } } return out; }
-  private join(names: string[], as?: string): string {
-    if (names.length < 2 && !as) throw new Error('Join two or more: "join wall1 and wall2 as walls".');
+  private join(names: string[], as?: string, how: JoinHow = 'any'): string {
+    if (names.length < 2 && !as) throw new Error(`${how === 'group' ? 'Group' : 'Join'} two or more: "${how === 'group' ? 'group' : 'join'} wall1 and wall2 as walls".`);
     for (const n of names) if (!this.specs.has(n) && !this.groups.has(n)) this.specOf(n);
     // a piece already joined takes the rest into it; two pieces become one
     const into = (as ? this.groups.get(as) : undefined) ?? names.map((n) => this.groups.get(n) ?? this.groupOf(n)).find((x): x is Group => !!x);
     const id = into?.name ?? as ?? names.join('_');
     if (!into && (this.specs.has(id))) throw new Error(`Something named ${id} is made here already: join them as another name.`);
     const g: Group = into ?? { name: id, members: [], move: [0, 0, 0], turn: [0, 0, 0], flips: [], stretch: [1, 1, 1] };
+    // a piece moved, turned or stretched stands where it is before it takes anything in: what joins it is not moved by
+    // what was done to it before
+    if (!identity(g) && names.some((n) => !g.members.includes(n) && n !== g.name)) this.bakeIn(g);
     for (const n of names) {
-      const other = this.groups.get(n) ?? this.groupOf(n), ms = other && other !== g ? (this.groups.delete(other.name), other.members) : [n];
+      const other = this.groups.get(n) ?? this.groupOf(n); if (other && other !== g && !identity(other)) this.bakeIn(other);
+      const ms = other && other !== g ? (this.groups.delete(other.name), other.members) : [n];
       for (const x of ms) if (this.specs.has(x) && !g.members.includes(x)) g.members.push(x);
     }
     if (as && g.name !== as) { this.groups.delete(g.name); g.name = as; }
+    if (how === 'group') g.loose = true;
     this.groups.set(g.name, g);
     const j = this.joinedOf(g.name, new Map(), new Set(), new Map());
-    return `Joined ${g.members.join(' + ')} as ${g.name}, one piece: ${mm(j.w)} × ${mm(j.h)} × ${mm(j.d)}, ${kg(j.mass)}${j.exact ? '' : ` (the union's volume sampled at 40 000 points, within ${+(j.within * 100).toPrecision(2)} %)`}; where they meet is counted once.`;
+    if (g.loose) return `Grouped ${g.members.join(' + ')} as ${g.name}: they move, turn and stretch as one, but nothing holds them together (join them where they touch to connect them).`;
+    const held = this.bondsOf(g, how);
+    return `Joined ${g.members.join(' + ')} as ${g.name}, one piece: ${held}. ${mm(j.w)} × ${mm(j.h)} × ${mm(j.d)}, ${kg(j.mass)}${j.exact ? '' : ` (the union's volume sampled at 40 000 points, within ${+(j.within * 100).toPrecision(2)} %)`}; where they meet is counted once.`;
   }
+  /** What holds a piece together: each pair of its members that touch, held by the one way that can hold them. Things
+   *  that do not touch are not connected: a piece whose members do not all reach each other through touching is not
+   *  one piece, and is not made. Fused only where the fusion law says the two fuse; else glued where an adhesive
+   *  holds both; else bolted where both are firm enough to hold a bolt. */
+  private bondsOf(g: Group, how: JoinHow): string {
+    const ms = g.members.map((n) => this.madeOf(n, new Map(), new Set(), new Map())), n = ms.length, kept = new Map((g.bonds ?? []).map((x) => [`${x.a}|${x.b}`, x]));
+    for (const m of ms) if (!m.matter) throw new Error(`${m.name} is a surface, with no matter to join: group it instead ("group ${g.members.join(' and ')} as ${g.name}")`);
+    const up = Array.from({ length: n }, (_, i) => i), root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i]!))), bonds: Bond[] = [];
+    let nearest = { gap: Infinity, a: '', b: '' };
+    for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) {
+      const A = ms[i]!, B = ms[k]!, gap = separation(A, B);
+      if (gap > TOUCH) { if (root(i) !== root(k) && gap < nearest.gap) nearest = { gap, a: A.name, b: B.name }; continue; }
+      up[root(i)] = root(k);
+      bonds.push(kept.get(`${A.name}|${B.name}`) ?? kept.get(`${B.name}|${A.name}`) ?? this.bondFor(A, B, how));
+    }
+    if (new Set(ms.map((_, i) => root(i))).size > 1) {
+      const lone = ms.filter((_, i) => root(i) !== root(0)).map((m) => m.name);
+      throw new Error(`${lone.join(', ')} ${lone.length > 1 ? 'do' : 'does'} not touch the rest of ${g.name}: things are connected only where they touch${Number.isFinite(nearest.gap) ? ` (the nearest, ${nearest.a} and ${nearest.b}, are ${mm(nearest.gap)} apart)` : ''}. Move them together, or "group" them to move as one without connecting them.`);
+    }
+    g.bonds = bonds;
+    const by = new Map<string, Bond[]>(); for (const x of bonds) { const k = x.how === 'glued' ? `glued with ${x.with}` : x.how; by.set(k, [...(by.get(k) ?? []), x]); }
+    return [...by].map(([k, xs]) => `${k} ${xs.map((x) => `${x.a}–${x.b}`).join(', ')} (${xs[0]!.why})`).join('; ');
+  }
+  private bondFor(A: Made, B: Made, how: JoinHow): Bond {
+    const a = A.matter!, b = B.matter!, fu = fusible(a, b);
+    if (how === 'fuse' || (how === 'any' && fu.fuses)) { if (!fu.fuses) throw new Error(`${A.name} and ${B.name} cannot be fused: ${fu.why}. Glue or bolt them instead.`); return { a: A.name, b: B.name, how: 'fused', why: fu.checks.find((c) => c.law === 'they mix')?.says ?? 'they fuse' }; }
+    const glue = Object.values(ADHESIVES).filter((x) => substrateFactor(x, a.category) === 1 && substrateFactor(x, b.category) === 1).sort((x, y) => y.lapShear - x.lapShear)[0];
+    const fusedNot = how === 'any' ? `they do not fuse: ${fu.why}` : '';
+    if (how === 'glue' || (how === 'any' && glue)) { if (!glue) throw new Error(`No adhesive kept here holds both ${a.name} and ${b.name}: bolt them instead.`); return { a: A.name, b: B.name, how: 'glued', with: glue.label, why: `${fusedNot}${fusedNot ? '; ' : ''}${glue.label} holds both, ${+(glue.lapShear / 1e6).toPrecision(3)} MPa in lap shear (${glue.source})` }; }
+    const soft = [a, b].find((m) => m.yield < 5e6);
+    if (soft) throw new Error(`${A.name} and ${B.name} cannot be held: ${how === 'any' ? `${fusedNot}; no adhesive kept here holds both; and ` : ''}${soft.name} is too soft to hold a bolt (it yields at ${+(soft.yield / 1e6).toPrecision(2)} MPa)`);
+    return { a: A.name, b: B.name, how: 'bolted', why: how === 'bolt' ? 'as asked: both are firm enough to hold a bolt, and it comes apart again' : `${fusedNot}${fusedNot ? '; ' : ''}no adhesive kept here holds both, and both are firm enough to hold a bolt` };
+  }
+  private joinWords(how: JoinHow, t: string): string {
+    const m = /^(.+?)(?:\s+(?:as|into|named|called)\s+([\p{L}_][\p{L}\d_]*))?$/u.exec(t.trim())!;
+    return this.join(m[1]!.split(/\s*,\s*|\s+and\s+|\s+to\s+|\s+with\s+/).map((x) => x.trim()).filter(Boolean), m[2], how);
+  }
+
   /** Where a thing said nowhere goes: on the floor beside the build, along x past whatever was made before it, so it
    *  never goes into what stands. What is placed on it, by it or sized from it is not in its way. */
   private freeSpot(name: string, g: { w: number; h: number; d: number }, local: { w: number; h: number; d: number }, over: Map<string, number>, busy: Set<string>, memo: Map<string, Made>): V3 {
@@ -458,7 +570,7 @@ export class Workshop {
   /** The scope a check reads, over everything set and made, and the room's facts. */
   reader(): Scope { return this.scope(new Map(), new Set(), new Map()); }
   // -- rules, and a step undone that would break one ---------------------------------------------------------------------
-  private related(a: Spec, b: Spec): boolean { const of = (s: Spec) => ('of' in s.place ? s.place.of : null), ga = this.groupOf(a.name); return of(a) === b.name || of(b) === a.name || (!!ga && ga === this.groupOf(b.name)); }
+  private related(a: Spec, b: Spec): boolean { const of = (s: Spec) => ('of' in s.place ? s.place.of : null), ga = this.groupOf(a.name); return of(a) === b.name || of(b) === a.name || (!!ga && !ga.loose && ga === this.groupOf(b.name)); }
   /** What breaks a rule as things stand: each broken rule, with why. */
   broken(): string[] {
     const out: string[] = [], { made } = this.all(), sc = this.reader();
@@ -474,11 +586,53 @@ export class Workshop {
     }
     return out;
   }
-  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, said: this.matterSaid, rand: this.rand.s }; }
-  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; }
+  private snapshot() { return { groups: new Map([...this.groups].map(([k, v]) => [k, structuredClone(v)])), vars: new Map(this.vars), unitOf: new Map(this.unitOf), laws: new Map(this.laws), specs: new Map([...this.specs].map(([k, v]) => [k, structuredClone(v)])), count: new Map(this.count), rules: [...this.rulesKept], matter: this.matter, said: this.matterSaid, rand: this.rand.s, actions: new Map(this.actions) }; }
+  private restore(z: ReturnType<Workshop['snapshot']>) { this.groups = z.groups; this.vars = z.vars; this.unitOf = z.unitOf; this.laws = z.laws; this.specs = z.specs; this.count = z.count; this.rulesKept = z.rules; this.matter = z.matter; this.matterSaid = z.said; this.rand.s = z.rand; this.actions = z.actions; }
   // -- what a step says --------------------------------------------------------------------------------------------------
   /** Whether a step's words are generation's to do. */
-  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|combine|unite|merge|weld|split)\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
+  static handles(line: string): boolean { const t = line.trim(); return /=\s*\??$/.test(t) || /^(calc|calculate|compute|what is|work out|set|let|material|matter|use|place|put|add|surface|size|resize|energy|move|rotate|turn|flip|mirror|remove|delete|clear|pattern|copy|scatter|rule|rules|seed|report|expand|stretch|grow|shrink|squash|join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group|split|action|actions|default|require|mount|support|cover|stack)\b/i.test(t) || /^show\s+action\b/i.test(t) || /^if\s.+\sthen\s/i.test(t) || /^[\p{L}_][\p{L}\d_.]*\s*=[^=]/u.test(t); }
+  /** Whether a step's words are this workshop's: generation's, or a standing action it knows. */
+  does(line: string): boolean { return Workshop.handles(line) || this.actions.has(line.trim().split(/\s+/)[0]!.toLowerCase()); }
+  /** The standing actions it knows: each one's name, how it is called, and whether it is its own or yours. */
+  standing(): { name: string; call: string; steps: number; builtIn: boolean; text: string }[] { return [...this.actions.values()].map((a) => ({ name: a.name, call: this.callForm(a), steps: a.body.length, builtIn: a.builtIn, text: a.text })); }
+  private callForm(a: Standing): string { return `${a.name} ${a.header.map((h) => `${h.optional ? '[' : ''}${h.param ? `{${h.word}}` : h.word}${h.optional ? ']' : ''}`).join(' ').replace(/\] \[/g, ' ')}`; }
+  /** "action name {A} [on {B}]: step; step; …": its steps kept as one action, called by its name. */
+  private define(src: string, builtIn = false): string {
+    const m = /^action\s+([\p{L}_][\p{L}\d_]*)\s*([^:]*?)\s*:\s*([\s\S]+)$/u.exec(src.trim());
+    if (!m) throw new Error('Say an action as "action riser {X} [on {Y}]: place plate named {X}_riser under {X}; join {X} and {X}_riser".');
+    const name = m[1]!.toLowerCase(); if (CALL_VERBS.test(name)) throw new Error(`"${name}" is a call already: give the action another name.`);
+    const header: Standing['header'] = []; let optional = false;
+    for (const tok of m[2]!.match(/\[|\]|\{[\p{L}_][\p{L}\d_]*\}|[^\s[\]]+/gu) ?? []) { if (tok === '[') optional = true; else if (tok === ']') optional = false; else header.push({ word: tok.replace(/[{}]/g, ''), param: tok.startsWith('{'), optional }); }
+    const body = m[3]!.split(/\s*;\s*|\n+/).map((x) => x.trim().replace(/\s+/g, ' ')).filter(Boolean);
+    for (const b of body) for (const p of b.match(/\{[^}]+\}/g) ?? []) if (!header.some((h) => h.param && h.word === p.slice(1, -1))) throw new Error(`${p} in "${b}" is not one of ${name}'s: ${header.filter((h) => h.param).map((h) => `{${h.word}}`).join(', ') || 'it takes none'}.`);
+    const a: Standing = { name, header, body, text: src.trim().replace(/\s+/g, ' '), builtIn }; this.actions.set(name, a);
+    return `Action ${name}: ${body.length} step${body.length === 1 ? '' : 's'} as one, called as "${this.callForm(a)}". Every size in it is worked out again from what it is given, each time it is called.`;
+  }
+  /** A standing action called: its words bound to what it was given, each of its steps done in turn; a step that
+   *  names something not given is left out; one that cannot be done undoes the whole action, saying where it stopped. */
+  private callAction(t: string): string | null {
+    const words = t.trim().split(/\s+/), a = this.actions.get(words[0]!.toLowerCase()); if (!a) return null;
+    const bind = new Map<string, string>(); let i = 1;
+    for (let k = 0; k < a.header.length; k++) {
+      const h = a.header[k]!, w = words[i], lastParam = !a.header.slice(k + 1).some((x) => x.param);
+      if (!h.param) { if (w?.toLowerCase() === h.word.toLowerCase()) { i++; continue; } if (h.optional) { while (k + 1 < a.header.length && a.header[k + 1]!.optional) k++; continue; } throw new Error(`${a.name} is called as "${this.callForm(a)}": "${h.word}" is missing.`); }
+      if (w === undefined) { if (h.optional) continue; throw new Error(`${a.name} is called as "${this.callForm(a)}": say what {${h.word}} is.`); }
+      // the last thing it is given may be a part's name of several words
+      bind.set(h.word, lastParam ? words.slice(i).join('_') : w); i = lastParam ? words.length : i + 1;
+    }
+    if (i < words.length) throw new Error(`${a.name} is called as "${this.callForm(a)}": "${words.slice(i).join(' ')}" is more than it takes.`);
+    if (++this.depth > 8) { this.depth = 0; throw new Error(`${a.name} calls actions more than 8 deep: one calls itself.`); }
+    const done: string[] = [];
+    try {
+      for (const line of a.body) {
+        if ((line.match(/\{[^}]+\}/g) ?? []).some((p) => !bind.has(p.slice(1, -1)))) continue;
+        const step = line.replace(/\{([^}]+)\}/g, (_, p: string) => bind.get(p)!);
+        try { done.push(this.step(this.bake(step))); } catch (e) { throw new Error(`${a.name} stopped at step ${done.length + 1} ("${step.slice(0, 90)}"): ${(e as Error).message}`); }
+      }
+    } finally { this.depth--; }
+    const short = (x: string) => { const c = x.replace(/ Now: .*$/, '').split(/(?<=[.;])\s/)[0]!; return c.length > 110 ? `${c.slice(0, 108)}…` : c; };
+    return `${a.name} ${[...bind.values()].join(', ')}: ${done.length} step${done.length === 1 ? '' : 's'}. ${done.map((x, k) => `${k + 1}. ${short(x)}`).join(' ')}`;
+  }
   /** A step done: what it made or changed, in words; or why it could not be, with nothing changed. */
   run(line: string, by = ''): string {
     const before = this.snapshot(), was = new Set(this.broken()); this.by = by;
@@ -499,7 +653,12 @@ export class Workshop {
       const sc = this.reader(); let out: string;
       if (f === 'pick') { if (!args.length) throw new Error('pick( ) needs things to pick from'); out = args[Math.floor(u * args.length)]!; }
       else if (f === 'chance') out = u < num(args[0] ?? '0.5', sc) ? '1' : '0';
-      else { const a = num(args[0] ?? '0', sc), b = num(args[1] ?? '1', sc); out = String(f === 'randint' ? Math.floor(a + u * (Math.floor(b) - a + 1)) : a + u * (b - a)); }
+      else {
+        const a = num(args[0] ?? '0', sc), b = num(args[1] ?? '1', sc), v = f === 'randint' ? Math.floor(a + u * (Math.floor(b) - a + 1)) : a + u * (b - a);
+        // drawn between two lengths, it is a length: written in their unit, so it reads as it was said
+        const us = [...new Set(args.flatMap((x) => lex(x).filter((k) => k.t === 'num' && k.unit).map((k) => (k as { unit?: string }).unit!)))], k = us.length === 1 ? UNITS.find(([w]) => w === us[0])?.[1] : undefined;
+        out = k && f !== 'randint' ? `${+(v / k).toPrecision(6)} ${us[0]}` : String(v);
+      }
       s = s.slice(0, m.index) + out + s.slice(end);
     }
     const one = /\bone of\s+(.+?)(?=\s+\b(?:named|called|of|from|on|onto|under|above|below|beside|left of|right of|in front of|behind|in|through|at|size|along|by|turned|rotated)\b|$)/i.exec(s);
@@ -510,13 +669,25 @@ export class Workshop {
     let m: RegExpExecArray | null;
     if ((m = /^if\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+(.+))?$/i.exec(t))) { const yes = this.holds(m[1]!), branch = yes ? m[2] : m[3]; return branch ? `${m[1]}: ${yes ? 'yes' : 'no'}, so ${this.step(branch)}` : `${m[1]}: no, so nothing.`; }
     if ((m = /^(?:calc|calculate|compute|what is|work out)\s+(.+?)\s*=?\s*$/i.exec(t)) || (m = /^(.+?)\s*=\s*\??$/.exec(t))) return this.calcStep(m[1]!);
+    if (/^action\s/i.test(t)) return this.define(t);
+    if (/^actions$/i.test(t)) return `Standing actions: ${this.standing().map((a) => `${a.call} (${a.steps} steps${a.builtIn ? '' : ', yours'})`).join('; ')}. "show action <name>" says how one is worked out.`;
+    if ((m = /^show\s+action\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const a = this.actions.get(m[1]!.toLowerCase()); if (!a) throw new Error(`No action named ${m[1]}: ${[...this.actions.keys()].join(', ')}.`); return `${this.callForm(a)}: ${a.body.map((b, k) => `${k + 1}. ${b}`).join(' ')}`; }
+    if ((m = /^default\s+([\p{L}_][\p{L}\d_.]*)\s*=\s*(.+)$/iu.exec(t))) return this.vars.has(m[1]!) || this.laws.has(m[1]!) ? `${m[1]} is kept as ${this.show(m[1]!, this.value(m[1]!))}.` : this.assign(m[1]!, m[2]!);
+    if ((m = /^require\s+(.+?)\s*:\s*(.+)$/i.exec(t))) { if (!this.holds(m[1]!)) throw new Error(m[2]!); return `${m[1]}: it holds.`; }
     if ((m = /^seed\s+(-?\d+)$/i.exec(t))) { this.rand.s = Number(m[1]) | 0; return `Seed ${m[1]}: what is drawn at random from here is drawn the same each time.`; }
-    if ((m = /^(?:set|let)\s+([\p{L}_][\p{L}\d_.]*)\s*(?:=|to|be)\s*(.+)$/iu.exec(t)) || (m = /^(?:size|resize)\s+([\p{L}_][\p{L}\d_.]*)\s*(?:=|to)\s*(.+)$/iu.exec(t)) || (m = /^([\p{L}_][\p{L}\d_.]*)\s*=\s*([^=].*)$/u.exec(t))) return this.assign(m[1]!, m[2]!);
+    // "to" and "be" only as words of their own: "size motor_mount.h so …" is not "size mo to r_mount.h"
+    if ((m = /^(?:set|let)\s+([\p{L}_][\p{L}\d_.]*)(?:\s*=\s*|\s+(?:to|be)\s+)(.+)$/iu.exec(t)) || (m = /^(?:size|resize)\s+([\p{L}_][\p{L}\d_.]*)(?:\s*=\s*|\s+to\s+)(.+)$/iu.exec(t)) || (m = /^([\p{L}_][\p{L}\d_.]*)\s*=\s*([^=].*)$/u.exec(t))) return this.assign(m[1]!, m[2]!);
     if ((m = /^(?:material|matter|use)\s+(.+?)\s+for\s+(.+)$/i.exec(t))) return this.matterFor(m[1]!.trim(), m[2]!.split(/\s*,\s*|\s+and\s+/).map((x) => x.trim()).filter(Boolean));
     if ((m = /^(?:material|matter|use)\s+(.+)$/i.exec(t))) { this.matter = matterOf(m[1]!); this.matterSaid = m[1]!.trim(); const n = this.specs.size; return `Matter: ${this.matter.name}, ${fmt(this.matter.density)} kg/m³, yielding at ${fmt(this.matter.yield / 1e6)} MPa (${this.matter.source}), for what is made from here${n ? `; what is made already keeps its own (say "material ${this.matterSaid} for <name>" to change one)` : ''}.`; }
     if ((m = /^size\s+([\p{L}_][\p{L}\d_.]*)\s+(?:so that|so|until|such that|for)\s+(.+?)(?:\s+between\s+(.+?)\s+and\s+(.+))?$/iu.exec(t))) return this.solve(m[1]!, m[2]!, m[3], m[4]);
     if ((m = /^(place|put|add|surface)\s+(.+)$/i.exec(t))) return this.place(m[1]!.toLowerCase(), m[2]!);
-    if ((m = /^(?:join|combine|unite|merge|weld)\s+(.+?)(?:\s+(?:as|into|named|called)\s+([\p{L}_][\p{L}\d_]*))?$/iu.exec(t))) return this.join(m[1]!.split(/\s*,\s*|\s+and\s+|\s+with\s+|\s+to\s+/).map((x) => x.trim()).filter(Boolean), m[2]);
+    // connected only where they touch, and held by what can hold them: fused, glued, bolted; or grouped, not held
+    if ((m = /^(join|connect|attach|combine|unite|merge|fuse|weld|glue|bond|bolt|screw|rivet|group)\s+(.+)$/iu.exec(t))) {
+      const v = m[1]!.toLowerCase(); let rest = m[2]!, how: JoinHow = /^(combine|unite|merge|fuse|weld)$/.test(v) ? 'fuse' : /^(glue|bond)$/.test(v) ? 'glue' : /^(bolt|screw|rivet)$/.test(v) ? 'bolt' : v === 'group' ? 'group' : 'any';
+      const w = /\s+(?:with|by)\s+(fus\w*|weld\w*|glue|epoxy|adhesive|bolts?|screws?|rivets?)\b/i.exec(rest);
+      if (w) { rest = rest.replace(w[0], ''); how = /^(fus|weld)/i.test(w[1]!) ? 'fuse' : /^(glue|epoxy|adhesive)/i.test(w[1]!) ? 'glue' : 'bolt'; }
+      return this.joinWords(how, rest);
+    }
     if ((m = /^split\s+([\p{L}_][\p{L}\d_]*)$/iu.exec(t))) { const g = this.groups.get(m[1]!); if (!g) throw new Error(`${m[1]} is not a joined piece`); this.settle(g); return `Split ${g.name}: ${g.members.join(', ')} stand apart again, each as its piece left it.`; }
     if ((m = /^(expand|stretch|grow|shrink|squash)\s+([\p{L}_][\p{L}\d_]*)\s*(.*)$/iu.exec(t))) return this.stretch(m[1]!.toLowerCase(), m[2]!, m[3]!);
     if ((m = /^(?:rotate|turn)\s+([\p{L}_][\p{L}\d_]*)\s+(.+)$/iu.exec(t)) && this.groups.has(m[1]!)) return this.groupTurn(m[1]!, m[2]!);
@@ -537,6 +708,7 @@ export class Workshop {
     if ((m = /^rules?\s+(.+)$/i.exec(t))) return this.rule(m[1]!);
     if (/^rules$/i.test(t)) return this.rulesKept.length ? `Rules: ${this.rulesKept.map((r) => r.text).join('; ')}.` : 'No rules.';
     if (/^report$/i.test(t)) return this.report();
+    const called = this.callAction(t); if (called !== null) return called;
     throw new Error(`I cannot do "${t.slice(0, 60)}". Generation can: set <name> = <value>; material <matter>; place <shape> [named <n>] [of <matter>] [on|under|above|below|beside|left of|right of|in front of|behind|through <thing> | at x, y, z | from <thing> by dx, dy, dz] [size a x b x c] [turned x a y b z c]; surface plane|circle …; size <name> so <condition>; rotate <shape> <angle> about x|y|z, or randomly; flip <shape> x|y|z [through <thing>]; mirror <shape> x|y|z; pattern <shape> <n> along x <pitch> | round <thing>; scatter <shape> <n> on <thing>; rule <condition> | no overlap | clearance <d>; if <condition> then <step> [else <step>]; energy lift|heat|spin|move <shape> <amount>; move, remove, clear, seed <n>, report. Random: random(a, b), randint(a, b), chance(p), pick(a, b), one of a, b.`);
   }
   /** Things made already, made of another matter: a joined piece, every member of it. */
@@ -557,8 +729,9 @@ export class Workshop {
       return `${expr}: ${v ? 'yes, it holds' : 'no, it does not hold'}.`;
     }
     this.vars.set('ans', String(v)); this.unitOf.delete('ans');
-    const angled = /[°º]|\bdeg\b|\brad\b/.test(expr);
-    return `${expr} = ${+v.toPrecision(6)}${angled ? ` (as an angle, ${+((v * 180) / Math.PI).toPrecision(6)}°)` : ''}${/\d\s*[a-zA-Z°º%]/.test(expr) ? ' in SI' : ''}; kept as ans.`;
+    const toks = lex(expr).filter((x) => x.t === 'num') as { unit?: string }[], angle = (u?: string) => !!u && /^([°º]|deg|rad)$/.test(u);
+    const angled = toks.some((x) => angle(x.unit)), mixed = angled && toks.some((x) => !x.unit);
+    return `${expr} = ${+v.toPrecision(6)}${mixed ? ' (each angle counted in radians, as SI counts it, and added to the plain numbers)' : angled ? ` (as an angle, ${+((v * 180) / Math.PI).toPrecision(6)}°)` : ''}${/\d\s*[a-zA-Z°º%]/.test(expr) ? ' in SI' : ''}; kept as ans.`;
   }
   private specOf(name: string): Spec { const s = this.specs.get(name); if (!s) throw new Error(`Nothing named ${name} is made here${this.specs.size ? `: made here are ${[...this.specs.keys()].join(', ')}` : ''}.`); return s; }
   /** A value set, or a shape's size set ("cap.h = 3 mm"): kept as said, so what it is made from changes it. */
@@ -570,8 +743,20 @@ export class Workshop {
       return `${s.name}'s ${key} = ${mm(this.value(`${s.name}.${key === 'h' ? 't' : key}`))}. ${this.check(s.name)}.`;
     }
     this.vars.set(name, expr); this.laws.delete(name);
-    const v = this.value(name), u = lex(expr).at(-1); if (u?.t === 'num' && u.unit) this.unitOf.set(name, u.unit); else this.unitOf.delete(name);
+    const v = this.value(name), u = this.unitFor(expr); if (u) this.unitOf.set(name, u); else this.unitOf.delete(name);
     return `${name} = ${this.show(name, v)}.${this.follows()}`;
+  }
+  /** The unit a value is shown in: the one its result's numbers share (a condition's branches, not its test), or a
+   *  length where it is a sum of lengths (a thing's sides and places, values kept as lengths). */
+  private unitFor(expr: string): string | undefined {
+    const res = /^\s*if\s.+?\sthen\s(.+)$/is.exec(expr)?.[1] ?? expr;
+    const us = [...new Set(lex(res).filter((x) => x.t === 'num' && x.unit).map((x) => (x as { unit?: string }).unit!))];
+    if (us.length === 1) return us[0];
+    if (us.length) return undefined;
+    // a sum or difference of lengths is a length
+    const LEN = /^(x|y|z|w|h|d|lw|lh|ld|top|bottom|left|right|front|back|D|r|t|length|wall|dt|bore)$/;
+    const terms = res.split(/(?<![eE*/^(])[+-]/).map((x) => x.trim()).filter(Boolean);
+    return terms.length && terms.every((x) => { const dot = x.lastIndexOf('.'); return /^[\p{L}_][\p{L}\d_.]*$/u.test(x) && ((dot > 0 && LEN.test(x.slice(dot + 1))) || LENGTH.has(this.unitOf.get(x) ?? '')); }) ? 'mm' : undefined;
   }
   private dimKey(s: Spec, k: string): string { const key = k === 't' || k === 'length' ? 'h' : k === 'r' ? 'D' : k; if (!(key in s.dims)) throw new Error(`${s.name} is sized by ${DIMS[s.kind].join(', ')}, not ${k}`); return key; }
   private show(name: string, v: number): string { const u = this.unitOf.get(name); if (!u) return fmt(v); const k = UNITS.find(([w]) => w === u)![1]; return LENGTH.has(u) ? mm(v) : `${fmt(v / k)} ${u}`; }
@@ -712,7 +897,7 @@ export class Workshop {
     let e: number, law: string;
     if (how === 'lift' || how === 'raise') { e = m.mass * 9.80665 * x; law = 'E = m g h'; }
     else if (how === 'heat' || how === 'warm') { const t = thermalOf(m.matter); e = m.mass * t.c * x; law = `Q = m c ΔT, c = ${t.c} J/kg K (${t.source})`; }
-    else if (how === 'spin' || how === 'turn') { const I = inertia(m); e = 0.5 * I * x * x; law = `E = ½ I ω², I = ${+I.toPrecision(3)} kg m² about its axis`; }
+    else if (how === 'spin' || how === 'turn') { const I = inertia(m); e = 0.5 * I * x * x; law = `E = ½ I ω², I = ${fmt(I)} kg m² about its axis`; }
     else { e = 0.5 * m.mass * x * x; law = 'E = ½ m v²'; }
     this.vars.set('energy', `${e} J`); this.unitOf.set('energy', 'J'); this.vars.set(`${name}_energy`, `${e} J`); this.unitOf.set(`${name}_energy`, 'J');
     return `To ${how} ${name} (${kg(m.mass)} of ${m.matter.name}) ${how === 'lift' || how === 'raise' ? `by ${mm(x)}` : how === 'heat' || how === 'warm' ? `by ${fmt(x)} K` : how === 'spin' || how === 'turn' ? `to ${fmt((x * 60) / (2 * Math.PI))} rpm` : `to ${fmt(x)} m/s`} takes ${joules(e)}: ${law}.`;

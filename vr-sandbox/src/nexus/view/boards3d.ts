@@ -19,6 +19,7 @@ import { resolve, type Understanding } from '../understand';
 import { TAXONOMY, find as findKnown, type Node as TaxNode } from '../embody/taxonomy';
 import { TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, orderFrom, pasteOf, runFlow, saidOf, starts, stepOf, triggerOf, triggersOf, type Clip, type FlowApi, type FlowEvent, type FlowRun, type Step, type StepKind, type StepRun } from '../flows';
 import { CALLS } from '../calls';
+import { testCall, type CallTest } from '../calltest';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 const HUE = ['#78909c', '#80deea', '#69f0ae', '#ffd740', '#ff8a80', '#b388ff', '#ffb74d', '#90caf9', '#f48fb1'];
@@ -37,7 +38,11 @@ const writeJSON = (key: string, v: unknown) => { try { localStorage.setItem(key,
 /** The calls a kind of step starts on. */
 const GROUP_OF: Partial<Record<StepKind, string>> = { trigger: 'start', ai: 'ask', check: 'rules', repeat: 'rules', action: 'shapes' };
 /** Every call there is, as a branch of what Nexus knows: a board of them is a map of what a pipeline can do. */
-const callsTree = (): TaxNode => ({ id: 'calls', name: 'Pipeline calls', says: 'every call a step can make, by what it is for', principles: [], children: CALLS.map((g) => ({ id: `calls/${g.id}`, name: g.name, says: g.says, principles: [], children: g.calls.map((c, i) => ({ id: `calls/${g.id}/${i}`, name: c.label, says: `${c.text} · ${c.says}`, principles: [], children: [], made: g.kind === 'ai' ? 'asks Claude, where Claude can be reached' : g.id === 'room' ? 'the forge, with the build standing here' : g.kind === 'trigger' ? 'the board, when armed' : 'worked out offline (src/nexus/generate.ts, src/nexus/flows.ts)' })) })) });
+/** What each call does when run for real, run once and kept: works, does not, or is not run here (it acts on the
+ *  build, or asks Claude). */
+const TESTED = new Map<string, CallTest>();
+const tested = (g: string, i: number): CallTest => { const k = `${g}:${i}`; let t = TESTED.get(k); if (!t) { t = testCall(g, i); TESTED.set(k, t); } return t; };
+const callsTree = (): TaxNode => ({ id: 'calls', name: 'Pipeline calls', says: 'every call a step can make, by what it is for, each run for real', principles: [], children: CALLS.map((g) => ({ id: `calls/${g.id}`, name: g.name, says: g.says, principles: [], children: g.calls.map((c, i) => { const t = tested(g.id, i); return { id: `calls/${g.id}/${i}`, name: c.label, says: `${c.text} · ${c.says} · tested: ${t.ok ? 'works' : t.ok === null ? 'not run here' : 'DOES NOT WORK'}: ${t.said.slice(0, 160)}`, principles: [], children: [], ...(t.ok ? { made: `run for real, offline: ${t.said.slice(0, 140)}` } : {}) }; }) })) });
 const ago = (t: number) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
 
 export interface BoardHost {
@@ -490,7 +495,7 @@ export class Boards3D {
     g.font = `600 22px ${FONT}`; g.fillStyle = '#7fb3c8'; g.fillText(active ? 'CALLS · PRESS ONE TO MAKE IT THIS STEP' : 'WHAT SHOULD IT DO? PRESS A KIND OF CALL', 36, y + 20); y += 32;
     chips(CALLS.map((c) => ({ label: c.short, act: 'cgroup', id: c.id, on: c.id === active, col: KIND[c.kind][1] })), 44, 21, 3);
     const grp = CALLS.find((c) => c.id === active);
-    if (grp) { g.font = `400 21px ${FONT}`; g.fillStyle = '#9fdfee'; g.fillText(fit2(g, `${grp.name}: ${grp.says}`, LPX - 72), 36, y + 16); y += 28; chips(grp.calls.map((x, i) => ({ label: x.label, act: 'usecall', id: `${grp.id}:${i}`, on: !!st && st.what === x.text })), 46, 21, 5); }
+    if (grp) { g.font = `400 21px ${FONT}`; g.fillStyle = '#9fdfee'; g.fillText(fit2(g, `${grp.name}: ${grp.says}`, LPX - 72), 36, y + 16); y += 28; chips(grp.calls.map((x, i) => { const t = tested(grp.id, i); return { label: `${t.ok === false ? '✗ ' : ''}${x.label}`, act: 'usecall', id: `${grp.id}:${i}`, on: !!st && st.what === x.text, ...(t.ok === false ? { col: '#ff8a80' } : {}) }; }), 46, 21, 5); }
     // what it did, the last time it ran
     const done = this.shown(b).last.get(id);
     if (st || done) {
@@ -605,7 +610,8 @@ export class Boards3D {
         const [gid, i] = String(id).split(':'), grp = CALLS.find((x) => x.id === gid), call = grp?.calls[Number(i)]; if (!b || !this.sel || !grp || !call) return;
         const kind = guessStep(call.text)?.kind ?? grp.kind; this.remember(`make ${this.label(this.sel)} ${call.label}`);
         this.store.write(this.id!, { nodes: { [this.sel]: { step: { kind, what: call.text } } } }); if (this.typing === 'what') this.stopTyping();
-        this.host.say(`${this.label(this.sel)}: ${call.label}. ${call.says}. Press its words to change them.`); return;
+        const t = tested(gid!, Number(i));
+        this.host.say(`${this.label(this.sel)}: ${call.label}. ${call.says}. Run for real, ${t.ok ? `it works: ${t.said.slice(0, 110)}` : t.ok === null ? `it is not run in a test: ${t.said}` : `it does not work: ${t.said.slice(0, 110)}`}. Press its words to change them.`); return;
       }
       case 'tpl': { const t = TEMPLATES.find((x) => x.id === id); if (!t) return; const nid = uid('f'); this.store.write(nid, boardOfTemplate(t), true); this.picking = false; this.open(nid); this.host.say(`${t.title}. ${t.about} Press ▶ Run.`); return; }
       case 'openb': if (id && this.store.boards.has(id)) { this.picking = false; this.open(id); this.host.say(`${this.board()!.title}.`); } return;
