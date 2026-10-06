@@ -16,7 +16,7 @@ import { FUSION, fusible } from '../engineering/fusion';
 import { motorModel, windingR } from '../engineering/dcmotor';
 import { flowHeat, GLUE_K, TOUCHING_R, type HeatLink, type HeatNode, type HeatRun } from './heatflow';
 import { liquidOf, runMotor, type MotorRun } from '../engineering/motorrun';
-import { MOTORS, type MotorData } from '../data/motors';
+import { GEARHEADS, MOTORS, type MotorData } from '../data/motors';
 import type { Jolt } from './realize';
 import { simulate, type SimJoint, type SimOut, type SimThing, type SimTrack } from './sim';
 import { ADHESIVES, substrateFactor } from '../engineering/joining';
@@ -272,7 +272,7 @@ export type Axis = 'x' | 'y' | 'z';
 export type V3 = [number, number, number];
 const KINDS: Record<string, Kind> = {
   box: 'box', block: 'box', cube: 'box', plate: 'box', tile: 'box', slab: 'box', bar: 'box', beam: 'box', wall: 'box', shelf: 'box', base: 'box', brick: 'box',
-  motor: 'cylinder', cylinder: 'cylinder', rod: 'cylinder', shaft: 'cylinder', pin: 'cylinder', peg: 'cylinder', axle: 'cylinder', post: 'cylinder', column: 'cylinder', disc: 'cylinder', disk: 'cylinder', puck: 'cylinder', wheel: 'cylinder',
+  motor: 'cylinder', gearhead: 'cylinder', gearbox: 'cylinder', cylinder: 'cylinder', rod: 'cylinder', shaft: 'cylinder', pin: 'cylinder', peg: 'cylinder', axle: 'cylinder', post: 'cylinder', column: 'cylinder', disc: 'cylinder', disk: 'cylinder', puck: 'cylinder', wheel: 'cylinder',
   tube: 'tube', pipe: 'tube', sleeve: 'tube', bush: 'tube', bushing: 'tube', spacer: 'tube', collar: 'tube',
   sphere: 'sphere', ball: 'sphere', cone: 'cone', torus: 'torus', ring: 'torus', donut: 'torus', 'o-ring': 'torus',
   plane: 'plane', sheet: 'plane', surface: 'plane', panel: 'plane', floor: 'plane', circle: 'circle', title: 'title', label: 'title', sign: 'title', text: 'title',
@@ -292,7 +292,7 @@ type Place =
 /** A size kept as the law it was sized by: solved again whenever it is read, so it follows what it depends on. */
 interface Law { cond: string; lo: string | null; hi: string | null; half: boolean }
 interface Flip { axis: Axis; through: string | null }
-interface Spec { /** broken under a load put on it */ broken?: boolean; /** who made it: a pipeline's board, or you */ by?: string; /** a motor: its datasheet */ motor?: string; /** a mass its maker gives, kg */ massGiven?: number; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
+interface Spec { /** a gearhead: its datasheet */ gearhead?: string; /** broken under a load put on it */ broken?: boolean; /** who made it: a pipeline's board, or you */ by?: string; /** a motor: its datasheet */ motor?: string; /** a mass its maker gives, kg */ massGiven?: number; name: string; kind: Kind; word: string; dims: Record<string, string>; laws: Record<string, Law>; axis: Axis | null; matter: string | null; place: Place; turn: [string, string, string]; flips: Flip[]; text?: string; copyOf?: string; /** Stretched unevenly where its own sizes cannot say it: factors along its own x, y, z. */ scale: V3 }
 /** Shapes joined into one piece: named, moved, turned, flipped and stretched as one; its mass and volume the union's. */
 /** How two members of a piece hold together: fused into one solid, glued, or bolted; a group's members are not held. */
 interface Bond { a: string; b: string; how: 'fused' | 'glued' | 'bolted'; with?: string; why: string }
@@ -300,7 +300,7 @@ interface Group { name: string; members: string[]; move: V3; turn: V3; flips: Fl
 type JoinHow = 'any' | 'fuse' | 'glue' | 'bolt' | 'group';
 /** A joint: what turns or slides (a), on what holds it (b: a thing made here, or a part of the build), about or along an
  *  axis through where they touched. Its point and axis are kept in a's own frame, so they go where a goes. */
-interface Joint { kind: 'hinge' | 'slide'; a: string; b: string; fixed: boolean; pivot: V3; axis: V3; limits?: [number, number]; friction?: number; drive?: { motor: string; V: number } }
+interface Joint { kind: 'hinge' | 'slide'; a: string; b: string; fixed: boolean; pivot: V3; axis: V3; limits?: [number, number]; friction?: number; drive?: { motor: string; V: number; gear?: string; /** rad/s it is held at, by a speed controller */ hold?: number } }
 /** A rule over everything made: a condition, or that nothing overlaps, or a clearance between things. */
 /** A rule, and who said it: a pipeline's "no overlap" or clearance holds over what that pipeline makes; a condition, over what it names. */
 type Rule = ({ text: string; kind: 'cond' } | { text: string; kind: 'apart'; withBuild: boolean } | { text: string; kind: 'clear'; d: string }) & { by: string };
@@ -396,6 +396,8 @@ export const STANDING: string[] = [
 /** The motor a placing asks for: by its power ("150 W"), its kind ("coreless", "brushed"), or else the first kept. */
 function motorFor(said: string): MotorData {
   const all = Object.values(MOTORS), w = /(\d+(?:\.\d+)?)\s*W\b/.exec(said), power = (d: MotorData) => Number(/(\d+)\s*W/.exec(d.label)?.[1] ?? d.published.rated?.power ?? 0);
+  // named by its catalogue id, in brackets: that one
+  const byId = all.find((d) => said.includes(`(${d.id})`)); if (byId) return byId;
   if (w) return all.reduce((a, b) => (Math.abs(power(b) - Number(w[1])) < Math.abs(power(a) - Number(w[1])) ? b : a));
   return all.find((d) => /coreless/i.test(said) && /coreless/i.test(d.label)) ?? all.find((d) => /brushed/i.test(said) && /^Brushed/i.test(d.label)) ?? all[0]!;
 }
@@ -801,9 +803,11 @@ export class Workshop {
       if (h) { if (piece) this.groupMove(piece, `by 0, ${h}, 0`); else { const at = this.madeOf(n, new Map(), new Set(), new Map()).at, sp = this.specOf(n); this.leave(n); sp.place = { how: 'at', x: `${at[0]}`, y: `${at[1] + h}`, z: `${at[2]}` }; } }
       return this.letGo(m[3] ? num(m[3], this.reader()) : 3);
     }
-    if ((m = /^push\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+along\s+(-?)([xyz]))?(?:\s+for\s+(.+?))?$/iu.exec(t))) {
+    if ((m = /^push\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+along\s+(-?)([xyz]))?(?:\s+for\s+(.+?))?(?:\s+at\s+(?:its\s+|the\s+)?(top|middle|centre|center))?$/iu.exec(t))) {
       const F = num(m[2]!, this.reader()), i = AX[(m[4] ?? 'x') as Axis], f: V3 = [0, 0, 0]; f[i] = m[3] ? -F : F;
-      return this.letGo(3, { name: m[1]!, force: f, seconds: m[5] ? num(m[5], this.reader()) : 0.2 });
+      // at its top: the middle of its top face, as it stands, where a push tips it if anything does
+      const top = m[6] && /top/i.test(m[6]) ? (() => { const b = this.boxOf(m![1]!, new Map(), new Set(), new Map()); if (!b) throw new Error(`Nothing named ${m![1]} is made here.`); return [b.at[0], b.at[1] + b.h / 2, b.at[2]] as V3; })() : undefined;
+      return this.letGo(3, { name: m[1]!, force: f, seconds: m[5] ? num(m[5], this.reader()) : 0.2, ...(top ? { at: top } : {}) });
     }
     // loops: the same steps again, over things, or while a condition holds
     if ((m = /^repeat\s+(.+?)\s+times?\s*:\s*([\s\S]+)$/i.exec(t))) { const n = Math.round(num(m[1]!, this.reader())); if (!(n >= 1 && n <= 200)) throw new Error('Repeat 1 to 200 times.'); return this.loop(`Repeated ${n} times`, Array.from({ length: n }, (_, k) => ({ i: String(k + 1) })), m[2]!); }
@@ -897,7 +901,7 @@ export class Workshop {
   }
   /** Everything made, let go: each lone thing, and each joined piece as one, under gravity, landing on the floor, the
    *  build (fixed where it stands) and each other; where each comes to rest is where it is made from then on. */
-  private letGo(seconds: number, push?: { name: string; force: V3; seconds: number }): string {
+  private letGo(seconds: number, push?: { name: string; force: V3; seconds: number; at?: V3 }): string {
     if (!this.J) throw new Error('The physics engine is still loading: say it again in a moment.');
     if (!(seconds > 0) || seconds > 60) throw new Error('Let it go for between a moment and 60 s.');
     const { made } = this.all(), things: SimThing[] = [], done = new Set<string>(), skipped: string[] = [];
@@ -922,7 +926,7 @@ export class Workshop {
       const ga = this.groupOf(j.a); if (!j.fixed && ga && !ga.loose && ga === this.groupOf(j.b)) { unheld.push(`${j.a}'s ${j.kind} on ${j.b} (they are one piece now)`); continue; }
       const R = matOf(A.turn), off = apply3(R, j.pivot), at: V3 = [A.at[0] + off[0], A.at[1] + off[1], A.at[2] + off[2]];
       let drive: SimJoint['drive'];
-      if (j.drive) { const sp = this.specs.get(j.drive.motor); if (sp?.motor) { const md = motorModel(MOTORS[sp.motor]!); drive = { name: j.drive.motor, V: j.drive.V, Kt: md.Kt, R: windingR(md, this.temps.get(j.drive.motor) ?? AMBIENT), Tf: md.Tf }; } }
+      if (j.drive) { const sp = this.specs.get(j.drive.motor), gh = j.drive.gear ? GEARHEADS[j.drive.gear] : undefined; if (sp?.motor) { const md = motorModel(MOTORS[sp.motor]!); drive = { name: j.drive.motor, V: j.drive.V, Kt: md.Kt, R: windingR(md, this.temps.get(j.drive.motor) ?? AMBIENT), Tf: md.Tf, ...(gh ? { gear: { ratio: gh.ratio, efficiency: gh.efficiency } } : {}), ...(j.drive.hold !== undefined ? { hold: { w: j.drive.hold, Imax: MOTORS[sp.motor]!.maxContinuousCurrent * 2 } } : {}) }; } }
       joints.push({ kind: j.kind, name: j.a, a: j.a, b: j.fixed ? { fixed: parts.indexOf(B as PartRef) } : j.b, at, axis: apply3(R, j.axis), ...(j.limits ? { limits: j.limits } : {}), ...(j.friction ? { friction: j.friction } : {}), ...(drive ? { drive } : {}) });
     }
     const out: SimOut = simulate(this.J, things, fixed, { seconds, floor: 0, ...(push ? { push } : {}), joints });
@@ -934,6 +938,8 @@ export class Workshop {
     const keep = (k: string, v: number, u?: string) => { this.vars.set(k, u ? `${v} ${u}` : String(v)); if (u) this.unitOf.set(k, u); else this.unitOf.delete(k); };
     const jsays: string[] = [];
     for (const j of out.joints) {
+      // and the furthest each way it went over the run, as its most and its least
+      if (j.kind === 'hinge') { keep(`${j.name}.most`, +((j.max * 180) / Math.PI).toPrecision(6), '°'); keep(`${j.name}.least`, +((j.min * 180) / Math.PI).toPrecision(6), '°'); } else { keep(`${j.name}.most`, +(j.max * 1e3).toPrecision(6), 'mm'); keep(`${j.name}.least`, +(j.min * 1e3).toPrecision(6), 'mm'); }
       if (j.kind === 'hinge') { keep(`${j.name}.angle`, +((j.end * 180) / Math.PI).toPrecision(6), '°'); jsays.push(`${j.name} turned on its hinge to ${deg(j.end)} (between ${deg(j.min)} and ${deg(j.max)})`); }
       else { keep(`${j.name}.travel`, +(j.end * 1e3).toPrecision(6), 'mm'); jsays.push(`${j.name} slid to ${mm(j.end)} from where it was (between ${mm(j.min)} and ${mm(j.max)})`); }
       const d = j.drive, jd = joints.find((x) => x.name === j.name)?.drive;
@@ -943,7 +949,7 @@ export class Workshop {
         // the heat it made, in its own body as one temperature
         const mt = this.all().made.find((x) => x.name === jd.name); if (mt?.matter) { try { const c = thermalOf(mt.matter).c; this.temps.set(jd.name, (this.temps.get(jd.name) ?? AMBIENT) + (d.copper + d.friction) / (mt.mass * c)); } catch { /* no figures: it stays as it was */ } }
         const r3 = (v: number) => +v.toPrecision(3);
-        jsays.push(`${jd.name} drove it at ${r3(jd.V)} V, by its torque at the speed it turned, to ${r3(d.rpm)} rpm, drawing ${r3(d.current)} A at the end and ${r3(d.maxCurrent)} A at most: ${joules(d.energyIn)} from the source, ${joules(d.out)} into what it turns, ${joules(d.copper)} as heat in its copper and ${joules(d.friction)} to its friction (its own rotor's inertia left out)`);
+        jsays.push(`${jd.name} drove it at ${r3(jd.V)} V, by its torque at the speed it turned, to ${r3(d.rpm)} rpm, drawing ${r3(d.current)} A at the end and ${r3(d.maxCurrent)} A at most: ${joules(d.energyIn)} from the source, ${joules(d.out)} into what it turns, ${joules(d.copper)} as heat in its copper, ${joules(d.friction)} to its friction${d.gears > 1e-9 ? ` and ${joules(d.gears)} in its gears` : ''} (its own rotor's inertia left out)`);
       }
     }
     const r = (v: number) => mm(v), still = out.ends.filter((e) => e.moved < 0.001 && e.turned < 0.01), moved = out.ends.filter((e) => !still.includes(e)).sort((x, y) => y.moved - x.moved);
@@ -960,7 +966,7 @@ export class Workshop {
     let r = ` ${rest} `;
     const take = (re: RegExp) => { const x = re.exec(r); if (x) r = r.replace(x[0], ' '); return x; };
     const STOP = '(?=\\s+(?:about|along|on|at|from|between|friction|driven)\\b|\\s*$)';
-    const drv = take(new RegExp(`\\sdriven\\s+by\\s+([\\p{L}_][\\p{L}\\d_]*)(?:\\s+at\\s+(.+?V))?${STOP}`, 'iu'));
+    const drv = take(new RegExp(`\\sdriven\\s+by\\s+([\\p{L}_][\\p{L}\\d_]*)(?:\\s+at\\s+(.+?V))?(?:\\s+through\\s+([\\p{L}_][\\p{L}\\d_]*|\\d+(?:\\.\\d+)?\\s*:\\s*1))?(?:\\s+held\\s+at\\s+(.+?rpm))?${STOP}`, 'iu'));
     const ax = take(/\s(?:about|along|on)\s+(-?)([xyz])\b/i);
     const lim = take(new RegExp(kind === 'hinge' ? `\\sfrom\\s+(.+?)\\s+to\\s+(.+?)${STOP}` : `\\sbetween\\s+(.+?)\\s+and\\s+(.+?)${STOP}`, 'i'));
     const fr = take(new RegExp(`\\s(?:with\\s+)?friction\\s+(?:of\\s+)?(.+?)${STOP}`, 'i'));
@@ -1006,14 +1012,23 @@ export class Workshop {
       const ms = this.specOf(drv[1]!); if (!ms.motor) throw new Error(`${drv[1]} is not a motor: place one with "place motor named ${drv[1]}".`);
       const gm = this.groupOf(drv[1]!), gb = fixed ? undefined : this.groupOf(bWord);
       if (drv[1] !== bName && !(gm && !gm.loose && gm === gb)) throw new Error(`${drv[1]} turns ${a} against what holds ${a}: it must be ${bName}, or joined to it ("join ${drv[1]} and ${bName}"), for its torque to push back on something.`);
-      drive = { motor: drv[1]!, V: drv[2] ? num(drv[2], sc) : MOTORS[ms.motor]!.V };
+      // through a gearhead: one placed here (its own sheet), or by its ratio, one kept that fits this motor
+      let gear: string | undefined;
+      if (drv[3]) {
+        const gs = this.specs.get(drv[3]), r = /^(\d+(?:\.\d+)?)\s*:\s*1$/.exec(drv[3].trim());
+        gear = gs?.gearhead ?? Object.values(GEARHEADS).find((g) => (r ? Math.abs(g.ratio - Number(r[1])) < 1e-9 : false) && g.fits.includes(ms.motor!))?.id;
+        if (!gear) throw new Error(`${drv[3]} is no gearhead kept here for ${drv[1]}: ${Object.values(GEARHEADS).filter((g) => g.fits.includes(ms.motor!)).map((g) => `${g.ratio}:1`).join(', ') || 'none fits it'}.`);
+        if (gs && !(drv[3] === bName || (this.groupOf(drv[3]) && this.groupOf(drv[3]) === (fixed ? undefined : this.groupOf(bWord))))) throw new Error(`${drv[3]} must hold ${a}, or be joined to what does.`);
+      }
+      const hold = drv[4] ? (num(drv[4].replace(/rpm$/i, ''), sc) * 2 * Math.PI) / 60 : undefined;
+      drive = { motor: drv[1]!, V: drv[2] ? num(drv[2], sc) : MOTORS[ms.motor]!.V, ...(gear ? { gear } : {}), ...(hold !== undefined ? { hold } : {}) };
     }
     // kept in a's own frame, so they go where it goes
     const R = matOf(A.turn), pivot = applyT(R, [p[0] - A.at[0], p[1] - A.at[1], p[2] - A.at[2]]), axis = applyT(R, u);
     this.jointsKept = this.jointsKept.filter((j) => !(j.a === a && j.b === bName));
     this.jointsKept.push({ kind, a, b: bName, fixed, pivot, axis, ...(limits ? { limits } : {}), ...(friction ? { friction } : {}), ...(drive ? { drive } : {}) });
     const where = `(${p.map((v) => +(v * 1e3).toPrecision(4)).join(', ')}) mm`, lims = limits ? (kind === 'hinge' ? `, from ${deg(limits[0])} to ${deg(limits[1])}` : `, from ${mm(limits[0])} to ${mm(limits[1])} of where it is`) : '';
-    return `${kind === 'hinge' ? 'Hinged' : 'Slid'} ${a} ${kind === 'hinge' ? 'to' : 'on'} ${bName}${fixed ? ' (the build: fixed)' : ''} ${kind === 'hinge' ? 'about' : 'along'} ${ax?.[1] ?? ''}${'xyz'[k]} (${why}), through ${where} where they touch${lims}. Let go, it ${kind === 'hinge' ? 'turns' : 'slides'} there and nowhere else, and the two do not collide with each other${friction ? `; held back by ${+friction.toPrecision(3)} ${kind === 'hinge' ? 'N·m' : 'N'} of friction` : `, with no friction (say "friction ${kind === 'hinge' ? '0.05 N·m' : '2 N'}" for some)`}${drive ? `; ${drive.motor} turns it at ${+drive.V.toPrecision(3)} V, by its sheet's torque at the speed it turns` : ''}.`;
+    return `${kind === 'hinge' ? 'Hinged' : 'Slid'} ${a} ${kind === 'hinge' ? 'to' : 'on'} ${bName}${fixed ? ' (the build: fixed)' : ''} ${kind === 'hinge' ? 'about' : 'along'} ${ax?.[1] ?? ''}${'xyz'[k]} (${why}), through ${where} where they touch${lims}. Let go, it ${kind === 'hinge' ? 'turns' : 'slides'} there and nowhere else, and the two do not collide with each other${friction ? `; held back by ${+friction.toPrecision(3)} ${kind === 'hinge' ? 'N·m' : 'N'} of friction` : `, with no friction (say "friction ${kind === 'hinge' ? '0.05 N·m' : '2 N'}" for some)`}${drive ? `; ${drive.motor} turns it ${drive.hold !== undefined ? `held at ${+((drive.hold * 60) / (2 * Math.PI)).toPrecision(4)} rpm by a speed controller (up to ${+drive.V.toPrecision(3)} V, twice its continuous current at most)` : `at ${+drive.V.toPrecision(3)} V`}${drive.gear ? ` through ${GEARHEADS[drive.gear]!.label}` : ''}, by its sheet's torque at the speed it turns` : ''}.`;
   }
   /** Where two touching things pass heat: the area of what touches, sampled on their surfaces (any turning, any of a
    *  box, a cylinder, a tube with its bore, a ball), and how far each one's middle is from the middle of it. A round
@@ -1131,31 +1146,41 @@ export class Workshop {
    *  is not added: add it to the load ("with 500 N + cap.mass * g"). Its section is read from its box along x or z. */
   private loadStep(name: string, F: number, where: string): string {
     const s = this.specOf(name), X = this.all().made.find((m) => m.name === name)!; if (!X.matter) throw new Error(`${name} is a surface: it has nothing to bear a load with.`);
-    const own = this.groupOf(name)?.members ?? [name], others: Box3[] = [...this.all().made.filter((m) => !own.includes(m.name) && !m.unseen), ...this.world.parts()];
-    const along = X.w >= X.d ? 0 : 2, across = along === 0 ? 2 : 0, ext = [X.w, X.h, X.d], bottom = X.at[1] - X.h / 2;
-    const lo = X.at[along]! - ext[along]! / 2, hi = X.at[along]! + ext[along]! / 2, p = where === 'end' ? hi : X.at[along]!;
-    const patches: { lo: number; hi: number; area: number; by: string }[] = [];
-    if (bottom <= 1e-3) patches.push({ lo, hi, area: X.w * X.d, by: 'the floor' });
-    for (const o of others) {
-      if (Math.abs(o.at[1] + o.h / 2 - bottom) > 1e-3) continue;
-      const a0 = Math.max(lo, o.at[along]! - [o.w, o.h, o.d][along]! / 2), a1 = Math.min(hi, o.at[along]! + [o.w, o.h, o.d][along]! / 2);
-      const c0 = Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - [o.w, o.h, o.d][across]! / 2), c1 = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + [o.w, o.h, o.d][across]! / 2);
-      if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
-    }
-    if (!patches.length) throw new Error(`Nothing holds ${name} up: nothing touches its bottom. Let it go to see where it falls.`);
+    // what holds it up may be joined to it: a table's legs hold its top though they are one piece with it
+    const others: Box3[] = [...this.all().made.filter((m) => m.name !== name && !m.unseen), ...this.world.parts()];
     const mt = X.matter, E = mt.E, d = X.dims, round = X.kind === 'cylinder' || X.kind === 'tube';
-    let law: string, M = 0, defl = 0, sigma: number;
-    const over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9);
-    // its section across the span: depth up and down, width across
-    const depth = X.h, width = ext[across]!;
-    const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
-    if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
-    else {
-      const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
-      if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
-      else { const q = (left ?? right)!, arm = left ? p - q.hi : q.lo - p; M = F * arm; defl = (F * arm ** 3) / (3 * E * I); law = `a cantilever ${mm(arm)} out past ${q.by}: M = F a`; }
-      sigma = (M * c) / I;
-    }
+    // read along each way it lies, the load where it is said along that way: the way that bears it worst governs (a
+    // shelf held along its ends bends across its width, whichever of its sides is the longer)
+    const across0 = (along: number) => (along === 0 ? 2 : 0);
+    const reading = (along: number) => {
+      const across = across0(along), ext = [X.w, X.h, X.d], bottom = X.at[1] - X.h / 2;
+      const lo = X.at[along]! - ext[along]! / 2, hi = X.at[along]! + ext[along]! / 2, p = where === 'end' ? hi : X.at[along]!;
+      const patches: { lo: number; hi: number; area: number; by: string }[] = [];
+      if (bottom <= 1e-3) patches.push({ lo, hi, area: X.w * X.d, by: 'the floor' });
+      for (const o of others) {
+        if (Math.abs(o.at[1] + o.h / 2 - bottom) > 1e-3) continue;
+        const a0 = Math.max(lo, o.at[along]! - [o.w, o.h, o.d][along]! / 2), a1 = Math.min(hi, o.at[along]! + [o.w, o.h, o.d][along]! / 2);
+        const c0 = Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - [o.w, o.h, o.d][across]! / 2), c1 = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + [o.w, o.h, o.d][across]! / 2);
+        if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
+      }
+      if (!patches.length) return null;
+      let law: string, M = 0, defl = 0, sigma: number;
+      const over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9);
+      // its section across the span: depth up and down, width across
+      const depth = X.h, width = ext[across]!;
+      const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
+      if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
+      else {
+        const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
+        if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
+        else { const q = (left ?? right)!, arm = left ? p - q.hi : q.lo - p; M = F * arm; defl = (F * arm ** 3) / (3 * E * I); law = `a cantilever ${mm(arm)} out past ${q.by}: M = F a`; }
+        sigma = (M * c) / I;
+      }
+      return { law, M, defl, sigma };
+    };
+    const r0 = reading(X.w >= X.d ? 0 : 2), r1 = reading(X.w >= X.d ? 2 : 0), r = [r0, r1].filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.sigma - a.sigma)[0];
+    if (!r) throw new Error(`Nothing holds ${name} up: nothing touches its bottom. Let it go to see where it falls.`);
+    const { law, M, defl, sigma } = r;
     const factor = mt.yield / sigma, breaks = sigma >= mt.ultimate, yields = !breaks && sigma >= mt.yield;
     const keep = (k: string, v: number, u?: string) => { this.vars.set(`${name}.${k}`, u ? `${v} ${u}` : String(v)); if (u) this.unitOf.set(`${name}.${k}`, u); else this.unitOf.delete(`${name}.${k}`); };
     keep('stress', sigma / 1e6, 'MPa'); keep('factor', +factor.toPrecision(4)); keep('deflection', defl * 1e3, 'mm'); keep('broken', breaks ? 1 : 0);
@@ -1290,6 +1315,8 @@ export class Workshop {
     spec.dims = given ? this.sizes(kind, given) : this.fitted(kind, word, place, target);
     // a motor is one that can be bought: its body, its mass and its constants are its datasheet's
     if (word === 'motor') { const d = motorFor(s); spec.motor = d.id; spec.massGiven = d.mass; if (!given) spec.dims = { D: `${d.diameter} m`, h: `${d.length} m` }; if (!along) spec.axis = 'x'; if (!matterWord) spec.matter = 'steel'; }
+    // a gearhead is one that can be bought too: its body and mass its sheet's (by its ratio, "12:1", or the first kept)
+    if (word === 'gearhead' || word === 'gearbox') { const r = /(\d+(?:\.\d+)?)\s*:\s*1/.exec(s), g = Object.values(GEARHEADS).find((x) => !r || Math.abs(x.ratio - Number(r[1])) < 1e-9) ?? Object.values(GEARHEADS)[0]!; spec.gearhead = g.id; spec.massGiven = g.mass; if (!given) spec.dims = { D: `${g.diameter} m`, h: `${g.length} m` }; if (!along) spec.axis = 'x'; if (!matterWord) spec.matter = 'steel'; }
     this.specs.set(name, spec);
     // said nowhere: a spot found now, clear of what stands, and kept, so what is made after it never moves it
     if (place.how === 'free') { try { const at = this.madeOf(name, new Map(), new Set(), new Map()).at; spec.place = { how: 'at', x: `${at[0]}`, y: `${at[1]}`, z: `${at[2]}` }; } catch { /* check says why */ } }

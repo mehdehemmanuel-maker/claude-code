@@ -55,6 +55,7 @@ import { glow } from '../../engineering/thermal';
 import type { Jolt } from '../realize';
 import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
+import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../conceive';
 import { chartPanel } from './chart';
 import { Windows } from './windows';
 import { Phone } from './phone';
@@ -656,15 +657,9 @@ const world2: WorldApi = {
     ask = next; return `Rebuilt: ${start(printer(next))}`;
   },
   replay() { if (empty) return 'Nothing stands here yet: ask me to build something.'; start(asked, { replay: true }); return 'The design process again, every round, as it ran.'; },
-  make(words, spec) {
-    let intent: Intent | null = null, heard: string[] = [], assumed: string[] = [];
-    if (spec && typeof spec === 'object') { const r = intentFromSpec(spec as Parameters<typeof intentFromSpec>[0]); if (r.intent) intent = r.intent; }
-    if (!intent) { const r = readAsk(words); if ('problems' in r) return r.problems.join(' '); intent = r.intent; heard = r.heard; assumed = r.assumed; if (r.shape === 'parts') ask = {}; }
-    const out = start(intent);
-    lastMake = { words, heard, assumed };
-    try { localStorage.setItem('forge:last-ask', words); } catch { /* kept nowhere */ }
-    return `${intent.name}: ${out}${assumed.length ? ` I assumed ${assumed.join('; ')}.` : ''}`;
-  },
+  // words: the intent pipeline, no template between: read into wants, asked what matters, derived, checked, made;
+  // an ask as data (regions and wants) still goes to the carrier generator and its embodiment
+  make(words, spec) { return spec && typeof spec === 'object' ? machineFrom(words, spec) : conceiveAndMake(words); },
   operate() { return operateIt(); },
   again(demand, spec) {
     if (empty) return 'Nothing stands here yet: ask me to build something, then tell me what to change.';
@@ -1595,6 +1590,8 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 }
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text });
+  // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
+  { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
   if (!brain) return;
@@ -1693,7 +1690,8 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): 
   // what could not be done at all is a failure, and stops the pipeline with why
   const out = (said: string) => { if (NOT_HERE.test(said)) throw new Error(said); return said; };
   switch (verb) {
-    case 'make': case 'build': if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a cabin of 40 m²".'); return out(world2.make(arg));
+    // made by a pipeline, no one is there to answer: it takes what it would take, says so, and makes it
+    case 'make': case 'build': { if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a table that holds 30 kg".'); const c = conceive(arg); if (!c.wants.length) throw new Error(sayConception(c)); const all = c.questions.length ? answersFrom(c, 'go') ?? {} : {}; const ds = await makeIt(arg, all, 1); return ds.map((d) => sayDesign(d).slice(0, 600)).join(' ') || 'Nothing made.'; }
     case 'again': return out(world2.again(arg || 'again'));
     case 'operate': return out(world2.operate());
     case 'flaws': return world2.flaws();
@@ -1736,6 +1734,72 @@ function partRefs(): PartRef[] {
   return run.m.parts.filter((p) => p.shape.kind !== 'wire').map((p): PartRef => { const b = boxOf(p), sh = p.shape; return { name: p.name, at: [...b.c] as [number, number, number], w: 2 * b.h[0], h: 2 * b.h[1], d: 2 * b.h[2], mass: p.mass, ...(sh.kind === 'round' ? { r: sh.r, axis: sh.axis, ...(sh.bore ? { bore: sh.bore } : {}) } : {}) }; });
 }
 const shop = new Workshop({ parts: partRefs, facts: factsNow }, (Date.now() % 2147483647) | 0);
+// ---- the intent pipeline in the room: what was asked, what it asks back, what it made ------------------------------
+let pendingAsk: { words: string; c: Conception; answers: Record<string, string>; n: number } | null = null;
+let lastAsk: { words: string; answers: Record<string, string> } | null = null, lastDesigns: Design[] = [];
+const COUNT: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, couple: 2, few: 3, several: 4 };
+/** The carrier generator and its embodiment: for an ask as data, or for words when it is asked for by name (?machine=). */
+function machineFrom(words: string, spec?: unknown): string {
+  let intent: Intent | null = null, heard: string[] = [], assumed: string[] = [];
+  if (spec && typeof spec === 'object') { const r = intentFromSpec(spec as Parameters<typeof intentFromSpec>[0]); if (r.intent) intent = r.intent; }
+  if (!intent) { const r = readAsk(words); if ('problems' in r) return r.problems.join(' '); intent = r.intent; heard = r.heard; assumed = r.assumed; if (r.shape === 'parts') ask = {}; }
+  const out = start(intent);
+  lastMake = { words, heard, assumed };
+  try { localStorage.setItem('forge:last-ask', words); } catch { /* kept nowhere */ }
+  return `${intent.name}: ${out}${assumed.length ? ` I assumed ${assumed.join('; ')}.` : ''}`;
+}
+/** Read the words, ask what matters, or make it: the questions said back at once, the making done when the engine is in. */
+function conceiveAndMake(words: string, n = 1): string {
+  // the room stands empty of any machine until one is asked for as data
+  if (run === undefined) { empty = true; run = { intent: printer({}), s: generate(printer({})), m: EMPTY_MACHINE, genMs: 0, embMs: 0 }; }
+  const many = /\b(\d+|two|three|four|five|six|several|a few|a couple of)\s+(different\s+)?(of them|ways|variants|versions|kinds|designs|options)\b/i.exec(words); if (many) { n = Math.min(6, Number(many[1]) || COUNT[many[1]!.replace(/^a (few|couple of)$/, '$1').replace(' of', '')] || 3); }
+  const c = conceive(words);
+  if (c.questions.length) { pendingAsk = { words, c, answers: {}, n }; return sayConception(c); }
+  void makeIt(words, {}, n);
+  return `${sayConception(c)} Making ${n > 1 ? `${n} of it, each different` : 'it'}: each step under the laws, then checked, standing, pushed and run for real.`;
+}
+/** Made in the room: designed and checked with the physics loaded, set beside what stands, built step by step. */
+async function makeIt(words: string, answers: Record<string, string>, n: number, seed = (Date.now() % 1e9) | 0): Promise<Design[]> {
+  const J = await physics(), c = conceive(words, answers), stem = c.name.replace(/[^a-z]/gi, '').toLowerCase() || 'thing';
+  // to the right of everything that stands, so nothing made goes into it
+  const boxes = [...shop.all().made.map((m) => m.at[0] + m.w / 2), ...partRefs().map((p) => p.at[0] + p.w / 2)], x0 = (boxes.length ? Math.max(...boxes) : 0) + 0.8;
+  let first = 1; while (shop.all().made.some((m) => m.name.startsWith(`${stem}${first}_`))) first++;
+  const ds = designsOf(c, n, { seed, at: [x0, 0.6], world: { parts: partRefs }, physics: J, first });
+  for (const d of ds) for (const st of d.steps) { try { shop.run(st, 'you'); } catch (e) { line('nexus', `${st.slice(0, 60)}: ${(e as Error).message.slice(0, 160)}`); } }
+  drawMade(); lastAsk = { words, answers }; lastDesigns = ds;
+  for (const d of ds) say(`${sayDesign(d).slice(0, 900)}${ds.length === 1 ? ' Say "another" for a different one, "make 3" for more, "again" to make it again, "save it" to keep it, or "why the …" for why a part is there.' : ''}`, undefined, 'nexus');
+  boards?.event({ kind: 'made', text: words }, { kind: 'built', text: ds.map((d) => d.title).join(', ') });
+  return ds;
+}
+/** What the person says to the intent pipeline: answers to its questions, and its own words for what it made. */
+function intentWords(text: string): string | null {
+  const t = text.trim();
+  if (pendingAsk) {
+    if (/^(cancel|stop|never ?mind|forget it)\b/i.test(t)) { pendingAsk = null; return 'Left it.'; }
+    const a = answersFrom(pendingAsk.c, t);
+    if (a) {
+      const p = pendingAsk, all = { ...p.answers, ...a }, c = conceive(p.words, all);
+      // a question not answered is asked again; the rest are taken
+      const left = c.questions.filter((q) => !(q.key in all));
+      if (left.length && !/^\s*(go|yes|ok)/i.test(t)) { pendingAsk = { ...p, c, answers: all }; return `Taken. ${sayConception({ ...c, questions: left, heard: [], unread: [] })}`; }
+      pendingAsk = null; void makeIt(p.words, all, p.n);
+      return `Making ${p.n > 1 ? `${p.n} of it` : 'it'} with ${Object.values(a).filter(Boolean).join(', ') || 'what I would take'}: each step under the laws, then checked for real.`;
+    }
+  }
+  if (!lastAsk) return null;
+  const m = /^(?:make|build|give me|show me)\s+(\d+|two|three|four|five|six|several|a few)\s*(?:more|of them|different ones|variants|versions)?$/i.exec(t);
+  if (m) { const n = Math.min(6, Number(m[1]) || COUNT[m[1]!.replace(/^a /, '')] || 3); void makeIt(lastAsk.words, lastAsk.answers, n); return `Making ${n} more, each from its own seed and each unlike the others.`; }
+  if (/^(another( one)?|a different one|something different|try another|shuffle|new one)$/i.test(t)) { void makeIt(lastAsk.words, lastAsk.answers, 1); return 'Another, from a new seed.'; }
+  if (/^(again|make it again|rerun( it)?|run it again|same again)$/i.test(t) && lastDesigns[0]) { void makeIt(lastAsk.words, lastAsk.answers, 1, lastDesigns[0].seed); return `${lastDesigns[0].title} again, from the same seed: the same thing.`; }
+  if (/^(save( it| them| this)?|keep (it|them|this))$/i.test(t) && lastDesigns.length) {
+    let kept: unknown[] = []; try { kept = JSON.parse(localStorage.getItem('nexus-pipelines') ?? '[]') as unknown[]; } catch { /* none kept yet */ }
+    const clips = lastDesigns.map((d) => clipOfDesign(d)); try { localStorage.setItem('nexus-pipelines', JSON.stringify([...clips, ...kept].slice(0, 30))); } catch { /* kept nowhere */ }
+    return `Saved ${clips.map((c) => c.title).join(', ')} to your pipelines: ✨ New on a board makes ${clips.length > 1 ? 'any of them' : 'it'} again, step by step, each step saying why it is there.`;
+  }
+  const why = /^(?:why|what is|what's|explain)\s+(?:is\s+)?(?:the\s+)?([a-z]+\d*)(?:\s+(?:there|here|for|made like that|that size))?\??$/i.exec(t);
+  if (why && lastDesigns.length) { for (const d of lastDesigns) { const said = sayTrace(d, why[1]!.toLowerCase()); if (!said.startsWith('Nothing')) return said; } }
+  return null;
+}
 const madeGroup = new THREE.Group(); machine.add(madeGroup); named(madeGroup, 'what pipelines made');
 /** A made shape's mesh: its own geometry along its own axis, of its matter's look, turned and stretched as it is. */
 function meshOf(m: Made): THREE.Object3D {
@@ -2074,8 +2138,9 @@ window.addEventListener('resize', () => { camera.aspect = window.innerWidth / wi
 async function boot() {
   // ?ask=words builds what the words ask for; else what you asked last time; else nothing, until you ask
   const lastAsk = (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })();
-  if (params.get('ask')) line('system', world2.make(params.get('ask')!));
-  else if (lastAsk) line('system', world2.make(lastAsk));
+  if (params.get('ask')) { showEmpty(); line('system', world2.make(params.get('ask')!)); }
+  else if (params.get('machine')) line('system', machineFrom(params.get('machine')!));
+  else if (lastAsk) line('system', machineFrom(lastAsk));
   else showEmpty();
   if (params.get('xr') === 'quest3') {
     const { XRDevice, metaQuest3 } = await import('iwer');
