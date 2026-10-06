@@ -135,11 +135,11 @@ describe('making it, and checking what was asked', () => {
     expect(d!.checks.find((x) => /a wheelchair fits under it/.test(x.what))!.ok).toBe(false);
     expect(d!.checks.find((x) => /within reach from a wheelchair/.test(x.what))!.ok).toBe(false);
   });
-  it('rolls on mud as mud rolls, and its wheels must grip to climb', () => {
+  it('pushed by hand up a muddy slope, as mud rolls: past what a person keeps pushing', () => {
     const [d] = designs(go('a garden cart that hauls 100 kg of wet soil up a 20-degree muddy slope'), 1, { seed: 101, physics: null });
-    const grip = d!.checks.find((x) => /its driven wheels grip/.test(x.what))!;
-    expect(grip.ok).toBe(false);
-    expect(d!.checks.find((x) => /rolling what it carries/.test(x.what))!.says).toMatch(/rolling resistance 0\.2 of its weight on mud/);
+    // nothing said drives it: pushed by hand, up the slope on mud, by m g (0.2 cos θ + sin θ), far past a person's 200 N
+    const push = d!.checks.find((x) => /^a person pushes it up 20° on mud$/.test(x.what))!;
+    expect(push.ok).toBe(false); expect(push.says).toMatch(/0\.2 cos θ \+ sin θ/);
     expect(d!.choices.some((x) => /lies 250 mm deep in it, as in a wheelbarrow/.test(x))).toBe(true);
   });
   it('dries only as far as heat and moving air take the water away', () => {

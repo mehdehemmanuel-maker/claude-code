@@ -29,6 +29,9 @@ const AND = new Set(['and', 'or', 'but', 'then', 'plus', 'also']);
 const SKIP = new Set(['can', 'could', 'will', 'would', 'should', 'must', 'may', 'also', 'then', 'just', 'only', 'automatically', 'always', 'never', 'still', 'even', 'each', 'both', 'all', 'it', 'they', 'is', 'are', 'be', 'to', 'not', 'really', 'actually', 'safely', 'quietly', 'about', 'roughly', 'nearly', 'approximately', 'exactly', 'almost', 'barely', 'some', 'very', 'so', 'too']);
 /** How an ask is put, before what is asked for: "I want", "Can you design", "Make me": no part of the thing. */
 const ASKING = /^\s*(?:(?:please|hey|hi|ok|okay|so)[,\s]+)*(?:(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:design|make|build|create|invent|draw|devise|engineer|come up with|give|get|show|imagine|think up)\s+(?:me\s+|us\s+)?|(?:i\s*|i'm\s+|we\s+)?(?:want|need|would like|'d like|wish for|am looking for|looking for|are looking for|would love)\s+(?:you\s+to\s+(?:design|make|build|create|invent)\s+(?:me\s+)?)?|(?:my|our|his|her|their)\s+(?:[a-z'-]+\s+){1,3}(?:needs|wants|would like|could use)\s+)/i;
+/** What is said before the ask ("our front door floods every year, so I need a flood barrier…", "we have a 45 cm oak and
+ *  want a treehouse platform…"): the ask is what follows, and what came before is where it is, said after it. */
+const LEAD = /^(.{8,}?)(?:[,;.!?]\s*|\s+)(?:so\s+|and\s+|but\s+)?(?:(?:i|we)\s+(?:really\s+|just\s+|also\s+)?(?:need|want|would like|'d like|am looking for|are looking for)|(?:and\s+)?want|(?:can|could|would)\s+you\s+(?:please\s+)?(?:design|make|build|come up with)|please\s+(?:design|make|build))\s+(?=(?:a|an|the|some|one|two|three|four|five|six|\d)\b)/i;
 /** "What would a 4 cm robot look like that burrows…": a question about the thing, read as asking for it. */
 const LOOKS = /^\s*what\s+would\s+(.+?)\s+look\s+like\s+(that|which|if|with)\b/i;
 /** Words after a verb that finish it rather than start a place: "measures out", "folds flat", "lifts up". */
@@ -55,7 +58,13 @@ export function isVerb(w: string): boolean {
 
 /** The words of an ask, its clauses, the thing and the verb of each, and every number with the words around it. */
 export function parseAsk(words: string): Parse {
-  const src = ` ${words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().replace(LOOKS, '$1 $2').replace(ASKING, '')} `, t = src.toLowerCase();
+  let w0 = words.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim();
+  // "I have a 14 foot gate and I want it to swing open on its own": the gate, that swings open
+  w0 = w0.replace(/^(?:(?:so|well|ok|okay)[,\s]+)?(?:i|we)\s+(?:have|own|'ve got|have got|got)\s+((?:a|an|the|my|our)\s+.+?)\s*,?\s+and\s+(?:i|we)\s+(?:want|need|would like|'d like)\s+(?:it|them)\s+to\s+/i, '$1 that ');
+  if (!ASKING.test(w0) && !LOOKS.test(w0)) { const m = LEAD.exec(w0); if (m) w0 = `${w0.slice(m[0].length).replace(/[.!?\s]+$/, '')}, while ${m[1]!.replace(/^(?:so|well|ok|okay|hi|hey)[,\s]+/i, '').replace(/^(?:i|we)\s+(?:have|own|'ve got|have got|got)\s+/i, 'by ')}`; }
+  // "5 cloudy days", "12 straight hours": the time, its word after it
+  w0 = w0.replace(/\b(\d+(?:\.\d+)?)\s+(cloudy|sunny|rainy|dark|overcast|winter|summer|straight|full|whole|working|consecutive|long|cold|hot)\s+(days?|hours?|nights?|weeks?|months?)\b/gi, '$1 $3 $2');
+  const src = ` ${w0.replace(LOOKS, '$1 $2').replace(ASKING, '')} `, t = src.toLowerCase();
   const toks: Tok[] = []; let grp = 0, last = -2;
   for (const m of t.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|[a-zµμ°%"'][a-z0-9µμ°'²³^/]*|[,;:()!?×]|\.(?=\s)/g)) {
     const w = m[0]!.replace(/^'+|'+$/g, ''), at = m.index!; if (!w) continue;
@@ -70,7 +79,8 @@ export function parseAsk(words: string): Parse {
     if (w === 'as' && n1 && /^(big|large|small|tiny|tall|wide|long|heavy|light)$/.test(n1) && n2 === 'as') { toks[i]!.size = true; toks[i + 1]!.size = true; } }
   // every number said with its unit, over the tokens it covers
   const qs = findQuantities(src);
-  qs.forEach((q, k) => { const i = toks.findIndex((x) => x.num && (x.at === q.at || x.at === q.at + 1)); if (i < 0) return; const n = q.text.replace(/^-/, '').split(/[\s-]+/).length; for (let j = i; j < Math.min(toks.length, i + n); j++) toks[j]!.q = k; });
+  // (a sign said in words, "minus 40 C", puts the number past where the quantity starts)
+  qs.forEach((q, k) => { const sw = /^minus\s+/i.exec(q.text)?.[0].length ?? 0, i = toks.findIndex((x) => x.num && (x.at === q.at + sw || x.at === q.at + sw + 1)); if (i < 0) return; const n = q.text.replace(/^-|^minus\s+/i, '').split(/[\s-]+/).length; for (let j = i; j < Math.min(toks.length, i + n); j++) toks[j]!.q = k; });
   const starts = (i: number) => i === 0 || toks[i - 1]!.grp !== toks[i]!.grp;
   const word = (i: number) => { const x = toks[i]; return !!x && !x.num && !x.punct && x.q === null && /^[a-z]/.test(x.w); };
   const verbAt = (i: number) => word(i) && starts(i) && !DET.has(toks[i]!.w) && !WHERE.has(toks[i]!.w) && isVerb(toks[i]!.w);
@@ -88,7 +98,8 @@ export function parseAsk(words: string): Parse {
     // a word of a group is a word of what the group says: only the group's first word can open a clause
     if (!starts(i)) continue;
     if (x.punct) {
-      if (x.w === ':') { open('main', ':', i + 1); continue; }
+      // "a welding cart: carries two cylinders…": after its name, what it does; else more of what it is
+      if (x.w === ':') { open(verbAt(i + 1) ? 'does' : 'main', ':', i + 1); continue; }
       // a sentence that ends and one that goes on of the same thing ("…without tearing them? It has to close…"): what it
       // does next, its "it" left out
       if ((x.w === '.' || x.w === '?' || x.w === '!') && /^(it|they|this)$/.test(next?.w ?? '') && verbAt(i + 2)) { open('does', x.w, i + 2); clauses.at(-2)!.to = i; i++; continue; }
