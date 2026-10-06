@@ -20,9 +20,9 @@ describe('what the laws say of things not kept', () => {
     const b = law('Design a small wind turbine that clamps onto a balcony railing, weighs under 15 kg, and puts out 300 W in a 10 m/s wind without the blades ever swinging out past the railing.', /rotor gives 300 W/);
     expect(b?.says).toContain('0.841 m²'); expect(b?.says).toContain('1.03 m across'); expect(b?.says).toContain('railing');
   });
-  it('a cubic metre of sand holds m c ΔT: 36.9 kWh for each 100 K', () => {
+  it('a cubic metre of sand inside its insulation holds m c ΔT: 12.7 kWh for each 100 K, and loses some through it', () => {
     const b = law('Looking for a sand-filled heat battery that fits in a 1 m³ space under my stairs, charges from 3 kW of spare solar, and keeps the house warm through a 14-hour night while the outside of the case stays below 40 °C.', /store of heat in 1 m³ of sand/);
-    expect(b?.says).toContain('36.9 kWh'); expect(b?.says).toContain('12.3 h');
+    expect(b?.says).toContain('0.343 m³'); expect(b?.says).toContain('12.7 kWh'); expect(b?.says).toContain('4.22 h'); expect(b?.says).toContain('324 W'); expect(b?.ok).toBe(true);
   });
   it('still water 1.2 m deep pushes ½ ρ g h² on each metre of wall, at a third of its depth', () => {
     const b = law('I need a flood wall for my street that folds flat into a 30 cm deep slot in the sidewalk and flips up to hold back 1.2 m of fast-moving floodwater, and two neighbors should be able to raise a 20 m run in under 10 minutes.', /holding back 1.2 m of water/);
@@ -32,13 +32,13 @@ describe('what the laws say of things not kept', () => {
     const b = law('Design a docking collar for a spinning station ring that can latch onto a visiting ship while the ring keeps turning at 2 rpm, with a 1.6 m clear hatch that holds 101 kPa of cabin air.', /hatch 1.6 m across/);
     expect(b?.says).toContain('203 kN'); expect(b?.says).toContain('21.9 mm');
   });
-  it('kept cold with no electricity: what leaks in melts ice at 334 kJ/kg', () => {
+  it('kept cold with no electricity: what leaks in at 0 °C inside, edges and corners counted, melts ice at 334 kJ/kg', () => {
     const b = law("Can you design a cooler that runs on no electricity at all and keeps 20 liters of medicine below 8 °C for 10 days when it's 40 °C outside?", /^ice keeps/);
-    expect(b?.says).toContain('44.3 kg'); expect(b?.says).toContain('13.3 kg');
+    expect(b?.says).toContain('126 kg'); expect(b?.says).toContain('40.5 kg'); expect(b?.says).toContain('Incropera');
   });
   it('a mast standing alone in a gale: its foot as wide as the wind\'s moment needs, and Greenhill\'s height', () => {
     const b = law('Looking for a self-erecting emergency radio mast that rides in a pickup bed, telescopes up to 25 m in under 15 minutes with no guy wires, and doesn\'t buckle in a 150 km/h hurricane gust at full height.', /standing 25 m tall/);
-    expect(b?.says).toContain('387 mm'); expect(b?.says).toContain('Greenhill');
+    expect(b?.says).toContain('399 mm'); expect(b?.says).toContain('Greenhill'); expect(b?.says).toContain('20.8 kN·m');
   });
   it('the sun on a 2.4 m² heater on a winter day warms air by P = ṁ c_p ΔT', () => {
     const b = law('I need a flat-pack solar air heater for my shed roof, no bigger than 1.2 m by 2 m, that blows out 55 °C air on a clear winter day and still holds up under 1.5 kN/m² of snow.', /sun warms air to 55/);
@@ -76,17 +76,17 @@ describe('what is made, checked as it is used', () => {
     const c = check(d, /holds 101 kPa across it$/); expect(c?.ok).toBe(false); expect(c?.says).toContain('Roark');
     expect(d.asked.find((a) => /hatch/.test(a.text))?.got).toBeNull();
   });
-  it('an oven\'s inside held at 85 °C through its walls, within the power it may use', () => {
+  it('an oven\'s inside held at 85 °C through its walls; its heater sized by them, and too hot for the plywood it is in', () => {
     const d = made('Design a countertop slow-roast oven that holds 85°C to within ±0.5°C for 12 hours straight while never drawing more than 400 W from a normal kitchen outlet.');
-    const c = check(d, /holds the air inside at 85 °C/); expect(c?.ok).toBe(true); expect(c?.says).toContain('400 W');
-    // the heater reaches its mark, within half a degree
-    expect(check(d, /keeps warm at 85 °C/)?.ok).toBe(true);
-    // what it does is ticked, and the steadiness said is marked as not checked
-    expect(d.asked.find((a) => a.kind === 'does')?.how).toContain('0.5 °C not checked');
+    const c = check(d, /^as made, it holds the air inside at 85 °C/); expect(c?.ok).toBe(true); expect(c?.says).toContain('400 W');
+    const h = check(d, /^its heater holds the air inside at 85 °C$/); expect(h?.ok).toBe(false); expect(h?.says).toContain('2.44 W/K'); expect(h?.says).toContain('chars');
+    // it has a door, and what it does is not ticked while its heater fails
+    expect(d.choices.join(' ')).toContain('a door hung in the front');
+    expect(d.asked.find((a) => a.kind === 'does')?.got).toBeNull(); expect(d.asked.find((a) => a.kind === 'thing')?.got).toBeNull();
   });
   it('a tent warmed by the two in it at -45 °C: its walls let out far more than 200 W', () => {
     const d = made('Can you design a two-person Antarctic tent that packs down to under 2.5 kg, stays standing in 120 km/h katabatic gusts, and keeps the inside livable at -45°C using nothing but body heat?');
-    const c = check(d, /holds the air inside at 18 °C with -45 °C round it/); expect(c?.ok).toBe(false); expect(c?.says).toContain('200 W of the people in it'); expect(c?.says).toContain('foam');
+    const c = check(d, /holds the air inside at 18 °C with -45 °C round it/); expect(c?.ok).toBe(false); expect(c?.says).toContain('150 W of the 200 W the people in it give'); expect(c?.says).toContain('the wind outside (0.04 m² K/W'); expect(c?.says).toContain('foam');
   });
   it('a solar heater, bare, loses more than the winter sun puts into it', () => {
     const d = made('I need a flat-pack solar air heater for my shed roof, no bigger than 1.2 m by 2 m, that blows out 55 °C air on a clear winter day and still holds up under 1.5 kN/m² of snow.');
@@ -99,6 +99,38 @@ describe('what is made, checked as it is used', () => {
     // its own height, not the wall's it hangs on
     const hh = check(d, /no more than 2.4 m tall/); expect(hh?.ok).toBe(true); expect(hh?.says).not.toContain('1.65 m');
     expect(d.asked.find((a) => /folds/.test(a.text))?.got).toBeNull();
+  });
+});
+
+describe('wave 5b: what the blind rejudge found, by cause', () => {
+  it('a thing is ticked only where all it is asked to do is done; a number said and not used un-ticks what it was said with', () => {
+    const d = made('I want a powered wheelchair that can go up and down a normal staircase with 18 cm steps while carrying a 120 kg rider, keeping the seat level within 3 degrees the whole way.');
+    expect(d.asked.find((a) => a.kind === 'thing')?.got).toBeNull();
+    // its wheels cannot roll up a step taller than their radius
+    const w = check(d, /^its wheels climb a 180 mm step$/); expect(w?.ok).toBe(false); expect(w?.says).toContain('360 mm');
+  });
+  it('rocked back, a chair\'s rear legs bend at the seat: weighed, and what it survives is listed and tied to it', () => {
+    const d = made('Can you make a stacking dining chair that weighs under 3 kg, survives a 150 kg person rocking back on the two rear legs, and nests 12 high without the stack going over 1.5 m?', 8020);
+    const c = check(d, /^its rear legs bear it rocked back$/); expect(c?.says).toContain('W/2 · L sin θ');
+    const a = d.asked.find((x) => /rocking back/.test(x.text)); expect(a?.kind).toBe('does'); expect(a?.got ?? null).toBe(c?.ok ? 'support' : null);
+  });
+  it('snow on a solar heater\'s plate is borne by the load law, not only said', () => {
+    const d = made('I need a flat-pack solar air heater for my shed roof, no bigger than 1.2 m by 2 m, that blows out 55 °C air on a clear winter day and still holds up under 1.5 kN/m² of snow.');
+    const c = check(d, /bears 1.5 kPa on it$/); expect(c?.ok).toBe(false); expect(c?.says).toContain('3.6 kN');
+    expect(d.asked.find((a) => a.kind === 'thing')?.got).toBeNull();
+  });
+  it('standing in a wind is what it is asked to do, listed (its test of it, with Jolt, decides its tick)', () => {
+    const c = go('Can you design a two-person Antarctic tent that packs down to under 2.5 kg, stays standing in 120 km/h katabatic gusts, and keeps the inside livable at -45°C using nothing but body heat?');
+    expect(c.asked.find((a) => /^stays standing in 120 km\/h/.test(a.text))?.kind).toBe('does');
+  });
+  it('a ring that spins, a grip over eight decades, a grain that sticks, a thickness from what it is the size of, a stair\'s treads', () => {
+    expect(law('Design a docking collar for a spinning station ring that can latch onto a visiting ship while the ring keeps turning at 2 rpm, with a 1.6 m clear hatch that holds 101 kPa of cabin air.', /^on a ring turning at 2 rpm$/)?.says).toContain('224 m');
+    const g = go('Need one gripper mechanism that can handle both a 20 micron dust grain and a 3 m solar panel, with grip force adjustable anywhere from 1 micronewton up to 500 N.');
+    expect(g.asked.find((a) => a.kind === 'thing')?.text).toBe('one gripper mechanism');
+    expect(g.bounds.find((b) => /^a grip from/.test(b.what))?.says).toContain('28.9 bits');
+    expect(g.bounds.find((b) => /^a grain 20 µm across$/.test(b.what))?.says).toContain('times its weight');
+    expect(go('looking for a flight computer the size of a microSD card, roughly 15 x 11 mm, that runs a cubesat on under 200 mW and survives 100 krad of radiation').said.size?.H).toBe(0.001);
+    expect(law('A pull-down attic staircase that fits through a hatch only 60 cm wide, takes 120 kg on any step, and is spring-counterbalanced so it needs less than 50 N of pull to open or close.', /^each step bears 120 kg$/)?.says).toContain('147 N·m');
   });
 });
 

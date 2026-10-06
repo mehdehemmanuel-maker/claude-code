@@ -990,3 +990,142 @@ Seven of the twelve fold within what was asked. Before this phase, the bookshelf
 - **A locking brace** for a bracket arm hinged at a wall.
 - **The bookshelf's overhang:** four 756 mm shelves, 566 mm apart, cannot all fold onto a 1.8 m side. One of each pair must lie past its end. A parallelogram fold (each shelf hinged at both sides) is not derived.
 - **The VR world's compounds:** each child's contacts kept its own, without upsetting its bonded parts.
+
+## Wave 5: things not yet invented, weighed by their laws
+
+Five fresh testers with no context each wrote four asks, twenty in all, for things that do not exist yet or barely do:
+- a loft bed that folds up against the wall with one hand;
+- a slow-roast oven held to ±0.5 °C;
+- a stacking chair rocked back on its rear legs;
+- a pull-down attic stair;
+- a solar air heater;
+- a medicine cooler with no electricity;
+- a balcony wind turbine;
+- a sand heat battery;
+- a stair-climbing wheelchair;
+- a folding patient hoist;
+- a self-braking walker;
+- a tilting hospital bed;
+- a fold-up flood wall;
+- an Antarctic tent warmed by body heat;
+- a 25 m mast with no guy wires;
+- a rescue bridge carried in 20 kg pieces;
+- a docking collar on a spinning ring;
+- a soft hand 10.9 km down;
+- a flight computer the size of a microSD card;
+- one gripper from a dust grain to a solar panel.
+
+Five fresh judges scored the outputs blind, reading only the output files, from 0 to 4 for each criterion. After the fixes, five more fresh judges scored them again.
+
+| | Read | Made | Holds | Honest |
+|---|---|---|---|---|
+| Wave 5, first run | 1.25 | 0.3 | 1.35 | 1.65 |
+| Wave 5, rejudged after the fixes below | 2.45 | 0.6 | 2.25 | 2.7 |
+
+"Made" stays low for the reason it did in wave 4: most of these are things no kept way makes. Where nothing is made, the laws that govern the thing are weighed, and that is where most of the gain is.
+
+### What was wrong, by cause
+
+**Ticks not earned.**
+- **A thing is ticked only where all it is asked to do is done.** Otherwise it is "made only as something to hold a weight up: not all it is asked to do is done". This takes the "✓ thing" off the wheelchair, the walker, the hospital bed, the tent, the oven, the solar heater and the loft bed.
+- **A number said in what it does, and not used, un-ticks it.** "Holds 85 °C to within 0.5 °C" is not done while the 0.5 °C is not checked.
+- **A load is carried only where every check of it holds.** The loft bed's "holds two adults" fails with its screws and its held-out hinges, not only with its board.
+- **"Keeps warm" is done only where the check of its warmth passes:** the heater, the air held inside, or the walls.
+- **The hatch is not a hatch** while its leaf gives under the pressure it holds.
+- **Standing in a wind is listed** where it is asked ("stays standing in 120 km/h gusts") and tied to the wind test.
+- **The headline says what it is about:** "WHAT IS MADE HOLDS" or "WHAT IS MADE DOES NOT HOLD".
+
+**Reading.**
+- **Tolerances, intervals and how level something is held:**
+  - "to within ±0.5 °C" and "within 3 degrees" of level are tolerances, not targets.
+  - "every 2 hours" is how often, not how long.
+- **Power:**
+  - "from a kitchen outlet" carries no battery.
+  - "charges from 3 kW of solar" is what it takes in.
+  - "on just 300 W" is a cap.
+  - "powered by the rolling wheels" is its own motion, not stored power.
+- **Sizes:**
+  - "a 2.4 m ceiling" is a limit, and a loft bed's deck sits under it with room to sit up.
+  - "two adults" is a double's width.
+  - "no bigger than 1.2 m by 2 m" is a plan, either way round.
+  - "fits in a 1 m³ space" is its room.
+  - "a 1.6 m clear hatch" is the hatch.
+  - "a 20 m run" is its length.
+  - "18 cm steps" is a climb, not a width.
+  - "the size of a microSD card" gives its 1 mm thickness (SD Association) when only 15 × 11 mm is said.
+- **Who and what:**
+  - "My dad needs a walker" names a walker.
+  - "a footbridge a rescue crew can hike in" puts back the "that" left out.
+  - "one gripper mechanism" is a gripper.
+  - "a docking collar" is a rigid ring, not cloth.
+  - "carried in on their backs" is the limit on a piece.
+- **Loads:**
+  - "rocking back on the two rear legs" puts all of it on two legs.
+  - "nests 12 high without the stack going over 1.5 m" is a count and a height.
+  - "a sudden 1000 N lean" counts twice its static effect.
+  - "using one hand" is checked against one hand.
+  - "tilts a 140 kg patient 30 degrees" is a tilt of what it carries.
+- **Temperatures:**
+  - "keeps 20 L of medicine below 8 °C" is kept cold, read across the clause it is in.
+  - "keeps the inside livable at −45 °C" is −45 °C round it and 18 °C in it (the least the WHO advises in homes, a strict reading for a tent).
+  - "kept above 5 °C" is what a heater holds.
+
+**New laws.** Each is a law with its assumptions said, and an estimate where it is one.
+- **Wind through a rotor:** ½ ρ v³ A, of which it takes at most 16/27 (Betz). 300 W at 10 m/s sweeps at least 1.03 m, about 1.45 m at 0.3 overall. Its storm thrust, about 556 N at 25 m/s, is weighed against a railing made for 0.2 to 1 kN a metre (EN 1991-1-1 Table 6.12).
+- **Heat held in sand,** m c ΔT, inside the insulation that keeps its case cool. Inside 150 mm of mineral wool, 1 m³ holds 0.343 m³ of sand, 12.7 kWh for each 100 K. It loses about 324 W at 300 °C, and its case stays near 29 °C. 3 kW fills 100 K in 4.2 h, but winter sun gives 3 to 6 hours of it.
+- **Water held back:** ½ ρ g h² a metre at a third of its depth, 7.06 kN at 1.2 m. Moving at 3 m/s, with C_d 1.25 (FEMA, estimate), it pushes 6.75 kN more.
+- **A hatch under pressure:** p A, and a flat steel disc 3(3 + ν) p a² / 8 t² (Roark). 101 kPa on 1.6 m needs 21.9 mm.
+- **Ice with no power:** ice holds the inside at 0 °C, so all of Ta drives heat in. It melts at 334 kJ/kg; the ice's own room is inside; the box's edges and corners are counted (shape factors, Incropera Table 4.1). Ten days at 40 °C behind 100 mm of foam takes about 40.5 kg of ice.
+- **A mast alone in a gale:** its foot's moment ½ q C_d D H². Its tube's own section modulus gives a 399 mm × 8 mm steel foot for 25 m in 150 km/h. Greenhill's height (1881) is 73 m. A pickup holds only about 21 kN·m against 156 kN·m.
+- **A ring that spins:** 1 g at its rim of a 2 rpm ring is 224 m out, moving at 47 m/s. That is what a ship latching on there must match.
+- **A slope, a tilt, steps:**
+  - On 8%, m g sin θ pulls it downhill, and a pendulum senses that with no power.
+  - Tilted 30°, it holds only past a friction of tan θ = 0.577. Each tilt's work, with a controller of a few watts, sizes a 72 h battery.
+  - Each 18 cm step lifts m g h.
+- **A stair's treads:** F L / 4 across its stringers, and C24 tread thickness (EN 338, EN 1995-1-1). The springs carry what a hand's 50 N does not.
+- **The sun on a heater:** about 600 W/m² square to the winter sun (estimate). The air it can warm to 55 °C, by P = ṁ c_p ΔT, is 10.9 L/s from 2.4 m².
+- **Small things and wide ranges:**
+  - A 20 µm grain sticks by van der Waals about 9600 times its weight (Hamaker, estimates).
+  - 1 µN to 500 N is 8.7 decades, 29 bits.
+  - 100 krad lasts 10 to 100 years in low Earth orbit (taken, as none is said).
+- **Air,** p / R T: 1.55 kg/m³ at −45 °C, so every wind force on the tent is 29% higher.
+
+**Checks of what is made, as it is used.**
+- **The air held inside through its walls:** inside film 0.13 m² K/W (ISO 6946), the wind's 0.04 outside where there is one. It is set against what warms it: the people in it (three quarters of their heat warms air, estimate), or the power it may use.
+- **A heater in what encloses** is sized by its walls, held by a thermostat (not derived), and its face checked against what it is in. The oven's heater in a 9 mm plywood floor would run near 248 °C; wood chars from about 270 °C (estimate), and it needs 50 °C to spare. The oven also has a door now.
+- **A heater must reach its mark,** within half a degree, and is never a cooler.
+- **A top's bending limit** uses its span between its supports, not its length.
+- **A chair rocked back:** each rear leg bends where it meets the seat, by (W / 2) L sin θ. At 32 MPa in a 25 mm fir leg, that is short of two.
+- **Twelve stacked** stand 10.2 m as made; to nest in 1.5 m, each must sit 59 mm above the one below.
+- **A leaf under a pressure:** β p b² / t² (Roark Table 11.4). The collar's plywood leaf gives 5.7 times over.
+- **Snow on its top** is borne by the load law. The solar heater's plate gives 3.1 times over.
+- **Wheels climb a step** only lower than their radius: 144 mm wheels against an 18 cm step fail.
+- **One hand folding it:** m g / 2 at its far end against the 148 N a hand should raise a lid with (Eastman Kodak, 1986).
+- **Pins in wood** crush it before they shear: d t f_h (EN 1995-1-1 (8.32)).
+- **The rigid test says what it is.** Its parts are held rigid, so it says nothing of what the load law finds gives. A part bigger than any sheet sold must be pieced and joined.
+- **The size limits** are of what is made, not of the wall it hangs on.
+
+**Against a wall, and the floor.**
+- "Folds flat up against the wall" hangs it on the wall.
+- Its board runs its long way along the wall.
+- Its brackets go every other stud, where that bends it less.
+- The concrete standing for the wall is deep enough to stand with what hangs off it, as a wall held by its building does.
+- Nothing folds through the floor under it.
+- An arm held only at the end it is joined at is a cantilever fixed there (the load law, F L³ / 8 E I spread along it).
+
+### Checked
+
+- **The gate:** typecheck, and 1035 tests in 94 files. That includes 23 new ones in `tests/nexus/wave5.test.ts`, one or more per cause above.
+- **The three browser drives** (generate, flows, fold) pass with no script errors. The flow drive passed on a second run: the first timed out clicking while the page was still loading.
+- **The everyday set (18), waves 2 (16), 3 (20) and 4 (20) were rerun.**
+  - Every change lowers a "DOES n OF m", from the stricter ticks: a thing named, not ticked while a part of what it is asked to do is not done.
+  - The heated climbing wall (wave 4) now makes its 1.22 × 2.44 m panel and fails honestly: holding 5 °C in −5 °C air takes 656 W against 300 W. Before, it made nothing.
+- **The twelve folding asks were rerun.**
+  - The wall-hung workbench folds to 100 mm, where it folded to 70 mm. Its arm's load is now found, so the draw that set an arm in sideways fails its overhang check.
+  - The rest fold as before.
+
+### Open after wave 5
+
+- **A stair** (stringers and treads), **a truss** for the rescue bridge, **a frame of tubes** for a walker, **cloth on poles** for a tent, and **a telescoping mast** are the ways most asked for and not kept.
+- **A drive** that raises, tilts or climbs, and **a thermostat** that holds what a heater warms.
+- **Tipping with a person on it,** and loads that push sideways as well as down.
