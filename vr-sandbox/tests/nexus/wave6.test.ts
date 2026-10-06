@@ -258,3 +258,14 @@ describe('ratings, costs, rotors, a child climbing it, a width folded', () => {
     expect(d.checks.some((x) => /^it folds flat to/.test(x.what))).toBe(false);
   });
 });
+
+describe('a gate held shut', () => {
+  it('latched at its far end to a post set in the ground: its pin and its posts hold half the push each, and "stay shut" is done', () => {
+    const [d] = designs(go('so I have a 14 foot wide pasture gate and I want it to swing open on its own when my ATV gets within 20 feet but stay shut when cattle lean on it with maybe 1200 pounds of force, solar powered, and it has to keep working through 5 cloudy days'), 1, { seed: 101, physics: J });
+    // 5340 N shared by its two posts, 2670 N each 700 mm up: a 16 mm pin holds 30.2 kN in single shear; a 50 mm post at its foot 89.7 MPa
+    expect(check(d!, /^shut, its latch and its posts hold half the push each$/)).toMatchObject({ ok: true, says: expect.stringMatching(/30\.2 kN in single shear .* 89\.7 MPa .* 760 mm at the latch post/) });
+    expect(check(d!, /^it can be made under the laws$/)?.ok).toBe(true);
+    expect(check(d!, /^it swings open$/)?.ok).toBe(true);
+    expect(d!.asked.find((a) => a.text === 'stay shut when cattle lean on it')?.got).toBe('swing');
+  }, 120000);
+});

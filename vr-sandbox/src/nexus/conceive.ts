@@ -2163,12 +2163,13 @@ way({
     const [bd, bw] = tubes.find(([D0, w0]) => (Math.PI ** 2 * md.E * Ir(D0, w0)) / (Lb * Lb) >= 3 * Nb && D0 >= d * 0.75) ?? tubes.at(-1)!;
     // its post: square steel, bearing the leaf held out (m g W / 2) and, shut, half the push about 600 mm up, under half its yield
     const Mp = Math.max((kg * G * W) / 2, (shut / 2) * 0.6), p = Math.max(0.05, Math.cbrt((6 * Mp) / (250e6 / 2)));
-    c.choices.push(`a frame of ${k} rails between two stiles of ${MM(d)} × ${MM(wt)} mm ${md.name} tube, ${len(W)} × ${len(H)}, braced corner to corner by a ${MM(bd)} × ${MM(bw)} mm tube, on a ${MM(p)} mm square steel post`);
+    c.choices.push(`a frame of ${k} rails between two stiles of ${MM(d)} × ${MM(wt)} mm ${md.name} tube, ${len(W)} × ${len(H)}, braced corner to corner by a ${MM(bd)} × ${MM(bw)} mm tube, on a ${MM(p)} mm square steel post${shut ? `, latched at its far end to a second post by a 16 mm steel pin` : ''}`);
     const w0 = c.why; c.why = 'to hang the leaf from';
     const pn = box(c, 'post', 'steel.a36', X, c.y0 + (H + 0.1) / 2, Z, p, p, H + 0.1, 'bar', 'upright, set in the ground', `${MM(p)} mm square steel: the leaf held out from it, and half of what pushes it shut, bend it under half its yield`);
     // the ground it is set in stands here as a cube of concrete behind its foot, heavy enough that the leaf held out does not
     // turn it over the post's front edge, by two: 2400 b³ (p + b / 2) ≥ 2 m (W / 2 + p / 2); the leaf 100 mm clear of the ground
-    const mPost = 7850 * p * p * (H + 0.1), fb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * b ** 3 * (p + b / 2) + (mPost * p) / 2 >= 2 * kg * (W / 2 + p / 2)) return b; return 3; })();
+    // (and, shut, that half the push about 700 mm up does not turn it over either: 2400 g b³ b / 2 ≥ 2 F h)
+    const Fl = shut / 2, hl = 0.7, mPost = 7850 * p * p * (H + 0.1), fb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * b ** 3 * (p + b / 2) + (mPost * p) / 2 >= 2 * kg * (W / 2 + p / 2) && 2400 * G * b ** 4 / 2 >= 2 * Fl * hl) return b; return 3; })();
     const fn = box(c, 'footing', 'concrete.c30', X - p / 2 - fb / 2, c.y0 + fb / 2, Z, fb, fb, fb, 'block', 'against the post\'s foot', `a ${MM(fb)} mm cube of concrete standing for the ground the post is set in: heavy enough that the leaf held out does not turn it over (by two)`);
     STANDS.set(fn, 'the ground its post is set in');
     c.why = 'to swing open and shut';
@@ -2183,10 +2184,25 @@ way({
     void was; c.why = w0;
     c.steps.push(`hinge ${hs} to ${pn} about y from -90° to 90°`); c.traces.push({ step: c.steps.at(-1)!, what: `${hs}'s hinge`, called: c.way, why: 'so it swings open either way', when: '', where: 'where its stile touches the post, about the upright', how: 'a Jolt hinge with stops at 90° each way' });
     c.tests.push({ kind: 'swing', name: hs, at: `${c.p}_stile2` });
-    if (shut) c.checks.push(() => ({ what: `shut, its rails bear the ${+(shut / 1000).toPrecision(3)} kN push`, ok: md.yield / (Mshut / (k * S(d, wt))) >= 2, says: `latched at its far end, ${len(W)} between its posts, the push at its middle bends it with ${+(Mshut / 1000).toPrecision(3)} kN·m (F W / 4), shared by its ${k} rails: ${+(md.yield / (Mshut / (k * S(d, wt)))).toPrecision(3)} times under its yield; the latch and the post at its far end are not made` }));
+    // shut, it is latched at its far end to a post set in the ground as its hinge post is, 10 mm clear of its latch stile:
+    // the push shared by its two posts, half each, about 700 mm up (estimate); its latch a 16 mm steel pin dropped through a
+    // keeper on that post, in single shear at 0.6 of 250 MPa (estimate), by two; the pin is not placed in the physics, so
+    // there it swings unlatched
+    let lb = 0, lp = p;
+    if (shut) {
+      const lx2 = X + p / 2 + W + 0.01 + lp / 2, rr = c.ride; c.ride = was; c.why = 'to latch it shut against';
+      // (a piece of its own with its footing, apart from the hinge post: the ground between them is not made)
+      const lpn = box(c, 'latchpost', 'steel.a36', lx2, c.y0 + (H + 0.1) / 2, Z, lp, lp, H + 0.1, 'bar', 'upright at its far end, 10 mm clear of its latch stile, set in the ground', `${MM(lp)} mm square steel, as its hinge post: half the push it is held shut against bends it`, { loose: true });
+      lb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * G * b ** 4 / 2 >= 2 * Fl * hl) return b; return 3; })();
+      const lf = box(c, 'latchfooting', 'concrete.c30', lx2 + lp / 2 + lb / 2, c.y0 + lb / 2, Z, lb, lb, lb, 'block', 'against the latch post\'s foot', `a ${MM(lb)} mm cube of concrete standing for the ground it is set in: heavy enough that half the push does not turn it over (by two)`, { loose: true });
+      STANDS.set(lf, 'the ground its latch post is set in'); c.steps.push(`join ${lpn}, ${lf} as ${c.p}_latch`); c.traces.push({ step: c.steps.at(-1)!, what: `${c.p}_latch`, called: c.way, why: 'so its latch post stands in the ground it is set in, apart from the leaf and its hinge post', when: '', where: 'where the post meets its footing', how: 'joined' }); c.why = w0; c.ride = rr;
+      const pinCap = 0.6 * 250e6 * Math.PI * 0.008 ** 2, Mlp = Fl * hl, sLp = (6 * Mlp) / lp ** 3;
+      c.checks.push(() => ({ what: `shut, its rails bear the ${+(shut / 1000).toPrecision(3)} kN push`, ok: md.yield / (Mshut / (k * S(d, wt))) >= 2, says: `latched at its far end, ${len(W)} between its posts, the push at its middle bends it with ${+(Mshut / 1000).toPrecision(3)} kN·m (F W / 4), shared by its ${k} rails: ${+(md.yield / (Mshut / (k * S(d, wt)))).toPrecision(3)} times under its yield` }));
+      c.checks.push(() => ({ what: 'shut, its latch and its posts hold half the push each', ok: pinCap >= 2 * Fl && 250e6 / sLp >= 2, says: `${+(Fl / 1000).toPrecision(3)} kN at each end, about ${len(hl)} up (estimate): its 16 mm steel latch pin holds ${+(pinCap / 1000).toPrecision(3)} kN in single shear (0.6 of 250 MPa, estimate), ${+(pinCap / Fl).toPrecision(3)} times it; its ${MM(lp)} mm posts bend under it at ${+(sLp / 1e6).toPrecision(3)} MPa at their feet, ${+(250e6 / sLp).toPrecision(3)} times under their yield; each set in a cube of concrete heavy enough not to turn over by two (2400 g b³ b / 2 ≥ 2 F h: ${MM(lb)} mm at the latch post); the pin is not placed in the physics, so there it swings unlatched` }));
+    }
     c.checks.push(() => ({ what: 'held open, its brace bears it', ok: (Math.PI ** 2 * md.E * Ir(bd, bw)) / (Lb * Lb) >= 3 * Nb, says: `its ${+kg.toPrecision(3)} kg held out from its hinges comes down its ${len(Lb)} brace at ${+((th * 180) / Math.PI).toPrecision(3)}°: ${+Nb.toPrecision(3)} N (m g / sin θ), buckling at ${+((Math.PI ** 2 * md.E * Ir(bd, bw)) / (Lb * Lb) / Nb).toPrecision(3)} times it (Euler, K = 1)` }));
-    c.gaps.push(`its post stands in a block of concrete standing for the ground: how deep it is set (about 900 mm in concrete for a gate this size, estimate) is not derived${shut ? '; nor the latch at its far end and the post it closes on' : ''}`);
-    c.top = { y: y + H, w: W, d: d, name: null }; c.foot = [W + p + fb, fb];
+    c.gaps.push(`${shut ? 'its posts stand' : 'its post stands'} in blocks of concrete standing for the ground: how deep each is set (about 900 mm in concrete for a gate this size, estimate) is not derived${shut ? '; its latch pin, dropped through a keeper on its far post, is said and weighed but not placed' : ''}`);
+    c.top = { y: y + H, w: W, d: d, name: null }; c.foot = [W + p + fb + (shut ? 0.01 + lp + lb : 0), Math.max(fb, lb)];
   },
 });
 way({ id: 'the door of what it is part of', meets: 'leaf', says: 'a door hung in the front of what encloses', when: (n) => (n.on?.kind === 'enclosure' ? null : 'there is nothing it is the door of'), make: () => { /* the enclosure hangs it: its want carries the flag */ } });
@@ -2770,6 +2786,8 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     // a motor asked for ("with a motor", "a motorized slider") is had only where one is made that turns or drives it; what
     // is pushed in its test is not driven
     if (a.got && (a.kind === 'has' && /\b(motors?|gear ?motors?|engines?|actuators?|servos?|steppers?)\b/i.test(a.text) || a.kind === 'thing' && /\b(motori[sz]ed|motor-driven|electric)\b/i.test(a.text)) && !tests.some((x) => x.kind === 'spin' || x.kind === 'drive')) return { ...a, got: null, why: a.kind === 'thing' ? `made only as something to ${FN_WORDS[a.got]}: no motor is made; what moves is pushed in its test, and what drives it is not derived` : 'no motor is made: what moves is pushed in its test, and what drives it is not derived' };
+    // "stay shut when cattle lean on it": done where its latch is made and holds; read before what is made, it waits on it
+    if (a.kind === 'does' && !a.got && a.why.startsWith('what holds it shut')) { const lc = out.find((x) => x.what === 'shut, its latch and its posts hold half the push each'); if (lc) return lc.ok ? { ...a, got: 'swing' as Fn, why: '' } : { ...a, why: `its own check fails: ${lc.what}${short(lc.says)}` }; }
     // a house for light that lets none through is not that house: its shape is made, its glazing is not
     if (a.kind === 'thing' && a.got && gaps.some((g) => g.startsWith('it is a house for light'))) return { ...a, got: null, why: `made only as something to ${FN_WORDS[a.got]}: what it is made of lets no light through, and glazing is not kept` };
     // folding: done where it folds, lies still folded, and (where a size is said with it) folds that small
