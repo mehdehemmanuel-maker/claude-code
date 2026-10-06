@@ -2066,28 +2066,45 @@ way({
     // their height above still water, estimate), so they do not wash over; and wider where it heels past 10°
     const m = n.want.q.m!.v + n.above / G, mt = matterFor(c, ['wood.birch-plywood', 'aluminum.6061-t6', 'composite.gfrp']), t = familyOf(mt) === 'wood' ? 0.012 : 0.003, rho = matterOf(mt).density;
     const people = n.want.flags.includes('people'), fb = n.want.q.fb?.v, wave = n.want.q.wave?.v, keep = Math.max(fb ?? 0, (wave ?? 0) / 2);
-    const L = pick(c.rnd, [1.2, 1.8, 2.4, 3]) * Math.max(1, Math.cbrt(m / 80));
-    let Wd = Math.max(0.6, L * (0.3 + 0.2 * c.rnd())), Hh = 0.3, hull = 0, total = 0, draft = 0, GM = 0, tanH = 0, drop = 0, off = 0;
-    for (let k = 0; k < 12; k++) {
+    let L = pick(c.rnd, [1.2, 1.8, 2.4, 3]) * Math.max(1, Math.cbrt(m / 80));
+    let Wd = Math.max(0.6, L * (0.3 + 0.2 * c.rnd())), Hh = 0.3, hull = 0, total = 0, draft = 0, GM = 0, tanH = 0, drop = 0, off = 0, low = 0, over = false;
+    for (let k = 0; k < 40; k++) {
       hull = rho * t * ((people ? 2 : 1) * L * Wd + 2 * (L + Wd) * Hh); total = m + hull; draft = total / (1000 * L * Wd);
       const KG = (hull * Hh * 0.45 + n.want.q.m!.v * (people ? Hh + t + 1 : t + 0.1) + (n.above / G) * (t + 0.1)) / total, BM = (Wd * Wd) / (12 * draft);
-      GM = draft / 2 + BM - KG; off = people ? Math.max(0, Wd / 2 - 0.3) : 0; tanH = GM > 0 ? (n.want.q.m!.v * off) / (total * GM) : Infinity; drop = (Wd / 2) * tanH;
-      if ((tanH > Math.tan((10 * Math.PI) / 180) || GM <= 0.05 * Wd) && Wd < L) { Wd = Math.min(L, Wd * 1.15); continue; }
-      const want = Math.min(1.5, Math.max(0.3, fb === undefined && wave === undefined ? 2 * draft : 0, draft + drop + keep + 0.02));
+      GM = draft / 2 + BM - KG; off = people ? Math.max(0, Wd / 2 - 0.3) : 0;
+      // heeled by its section clipped at its waterline, not wall-sided: past where its bottom's edge comes out of the water
+      // (tan θ = 2 T / B) its waterplane narrows and what rights it falls away
+      const hb = GM > 0 ? heelBox(Wd, Hh, total / (1000 * L), Wd / 2 - (n.want.q.m!.v * off) / total, KG) : null;
+      over = !hb; tanH = hb ? Math.tan(hb.th) : Infinity; low = hb ? hb.low : -draft; drop = Hh - draft - low;
+      if (!hb || tanH > Math.tan((10 * Math.PI) / 180) + 1e-9 || GM <= 0.05 * Wd) { if (Wd < L) Wd = Math.min(L, Wd * 1.15); else L *= 1.15; continue; }
+      const want = Math.min(1.5, Math.max(0.3, fb === undefined && wave === undefined ? 2 * draft : 0, Hh + keep + 0.02 - low));
       if (Math.abs(want - Hh) < 1e-3) break; Hh = want;
     }
-    const low = Hh - draft - drop, X = c.x0, Z = c.z0, y = c.y0, how = `${MM(t)} mm ${matterOf(mt).name}`;
+    const X = c.x0, Z = c.z0, y = c.y0, how = `${MM(t)} mm ${matterOf(mt).name}`;
     c.choices.push(`${people ? 'a decked' : 'an open'} hull of ${matterOf(mt).name} ${M(L)} by ${M(Wd)}, ${MM(Hh)} mm deep${fb !== undefined || wave !== undefined || people ? ': as deep as floating heeled with its load to one side and what was said of the water wants' : ''}`);
     box(c, 'bottom', mt, X, y + t / 2, Z, L, Wd, t, 'plate', 'on what it stands on', `${M(L)} by ${M(Wd)}: it displaces ${+total.toPrecision(3)} kg of water ${MM(draft)} mm deep`);
     for (const [i, sz] of [-1, 1].entries()) box(c, `side${i + 1}`, mt, X, y + t + Hh / 2, Z + sz * (Wd / 2 - t / 2), L, t, Hh, 'slab', `on the bottom, its ${sz < 0 ? 'back' : 'front'} side`, how);
     for (const [i, sx] of [-1, 1].entries()) box(c, `end${i + 1}`, mt, X + sx * (L / 2 - t / 2), y + t + Hh / 2, Z, t, Wd - 2 * t, Hh, 'slab', `on the bottom between the sides, its ${sx < 0 ? 'stern' : 'bow'}`, how);
     if (people) box(c, 'deck', mt, X, y + t + Hh + t / 2, Z, L, Wd, t, 'plate', 'on its sides and ends, closing it', `${how}: what they stand on, so what washes over it does not fill it`);
     c.checks.push(() => ({ what: `it floats with ${+m.toPrecision(3)} kg`, ok: draft <= Hh / 2 || (fb !== undefined || wave !== undefined) && low >= keep - 1e-6 && low > 0, says: `${+total.toPrecision(3)} kg sits ${MM(draft)} mm deep in water, its sides ${MM(Hh)} mm (Archimedes)` }));
-    c.checks.push(() => ({ what: 'it rights itself', ok: GM > 0.05 * Wd, says: `its metacentre ${MM(GM)} mm above its weight (GM = KB + BM - KG, BM = B² / 12 T${people ? ', with them standing on its deck, about 1 m up, estimate' : ''}); worked out, not floated: there is no water in the physics here` }));
-    if (people || fb !== undefined || wave !== undefined) c.checks.push(() => ({ what: `with its load to one side, its ${people ? 'deck' : 'sides'} stand${people ? 's' : ''} ${fb !== undefined ? `at least ${MM(fb)} mm above` : 'above'} the water${wave !== undefined ? ` and above ${len(wave)} waves` : ''}`, ok: low > 0 && low >= keep - 1e-6 && tanH <= Math.tan((10 * Math.PI) / 180) + 1e-9, says: `${people ? `all ${+n.want.q.m!.v.toPrecision(3)} kg of them crowded to one side, ${MM(off)} mm off its middle (a pace in from its edge, estimate)` : 'what it carries on its middle'}, it heels ${+((Math.atan(tanH) * 180) / Math.PI).toPrecision(3)}° (tan θ = w d / Δ GM${people ? '; more than 10° is more than people stand on easily, estimate' : ''}) and its low side sinks ${MM(drop)} mm: there it stands ${MM(low)} mm above still water${fb !== undefined ? ` against the ${MM(fb)} mm said` : ''}${wave !== undefined ? `; ${len(wave)} waves crest about ${MM(wave / 2)} mm above still water (half their height, estimate), so ${low >= wave / 2 ? 'they do not wash over it' : 'they wash over it'}` : ''}; ${Hh >= 1.5 - 1e-6 && low < keep ? 'its sides at the 1.5 m most taken here are still too low' : `its sides made ${MM(Hh)} mm deep for it`}` }));
+    c.checks.push(() => ({ what: 'it rights itself', ok: GM > 0.05 * Wd, says: `its metacentre ${MM(GM)} mm above its weight (GM = KB + BM - KG, BM = B² / 12 T${people ? ', with them standing on its deck, about 1 m up, estimate' : ''}), for a small heel: its bottom's edge comes out of the water past ${+((Math.atan((2 * draft) / Wd) * 180) / Math.PI).toPrecision(3)}° (tan θ = 2 T / B), and past that its section is worked out clipped at its waterline; worked out, not floated: there is no water in the physics here` }));
+    if (people || fb !== undefined || wave !== undefined) c.checks.push(() => ({ what: `with its load to one side, its ${people ? 'deck' : 'sides'} stand${people ? 's' : ''} ${fb !== undefined ? `at least ${MM(fb)} mm above` : 'above'} the water${wave !== undefined ? ` and above ${len(wave)} waves` : ''}`, ok: !over && low > 0 && low >= keep - 1e-6 && tanH <= Math.tan((10 * Math.PI) / 180) + 1e-9, says: `${people ? `all ${+n.want.q.m!.v.toPrecision(3)} kg of them crowded to one side, ${MM(off)} mm off its middle (a pace in from its edge, estimate)` : 'what it carries on its middle'}, ${over ? 'no heel brings what holds it up under its weight before its deck\'s edge goes under: it goes over' : `it heels ${+((Math.atan(tanH) * 180) / Math.PI).toPrecision(3)}° (its section under water clipped at its waterline, its centre of buoyancy brought under its weight, statics${people ? '; more than 10° is more than people stand on easily, estimate' : ''}) and its low side sinks ${MM(drop)} mm`}: there it stands ${MM(low)} mm above still water${fb !== undefined ? ` against the ${MM(fb)} mm said` : ''}${wave !== undefined ? `; ${len(wave)} waves crest about ${MM(wave / 2)} mm above still water (half their height, estimate), so ${low >= wave / 2 ? 'they do not wash over it' : 'they wash over it'}` : ''}; ${Hh >= 1.5 - 1e-6 && low < keep ? 'its sides at the 1.5 m most taken here are still too low' : `its sides made ${MM(Hh)} mm deep for it`}` }));
     c.top = { y: y + t + (people ? Hh + t : 0), w: L, d: Wd, name: `${c.p}_${people ? 'deck' : 'bottom'}` }; c.foot = [L, Wd];
   },
 });
+/** A box section B wide and D deep with A of it under water (m²), its weight xg in from its low side and KG up: heeled to
+ *  its low side until the centroid of what is under water (the section clipped at its waterline) stands under its weight.
+ *  Where none does before its deck's low edge goes under, it goes over (null). Returns the heel and how far its low edge
+ *  then stands above the water. */
+export function heelBox(B: number, D: number, A: number, xg: number, KG: number): { th: number; low: number } | null {
+  const box: [number, number][] = [[0, 0], [B, 0], [B, D], [0, D]];
+  const under = (s: number, co: number, h: number) => { const out: [number, number][] = []; for (let i = 0; i < 4; i++) { const p = box[i]!, q = box[(i + 1) % 4]!, fp = p[0] * s + p[1] * co - h, fq = q[0] * s + q[1] * co - h; if (fp <= 0) out.push(p); if (fp < 0 !== fq < 0) { const u = fp / (fp - fq); out.push([p[0] + u * (q[0] - p[0]), p[1] + u * (q[1] - p[1])]); } } return out; };
+  const cen = (poly: [number, number][]) => { let a = 0, cx = 0, cy = 0; for (let i = 0; i < poly.length; i++) { const [x0, y0] = poly[i]!, [x1, y1] = poly[(i + 1) % poly.length]!, cr = x0 * y1 - x1 * y0; a += cr; cx += (x0 + x1) * cr; cy += (y0 + y1) * cr; } a /= 2; return a > 0 ? { a, x: cx / (6 * a), y: cy / (6 * a) } : { a: 0, x: 0, y: 0 }; };
+  const at = (th: number) => { const s = Math.sin(th), co = Math.cos(th); let lo = -B - D, hi = B + D; for (let k = 0; k < 60; k++) { const h = (lo + hi) / 2; if (cen(under(s, co, h)).a < A) lo = h; else hi = h; } const h = (lo + hi) / 2, c0 = cen(under(s, co, h)); return { f: c0.x * co - c0.y * s - (xg * co - KG * s), low: D * co - h }; };
+  let prev = at(0), th0 = 0; if (prev.f <= 1e-12) return { th: 0, low: prev.low };
+  for (let k = 1; k <= 600; k++) { const th = (k * 0.1 * Math.PI) / 180, cur = at(th); if (cur.low <= 0) return null; if (cur.f <= 0) { const th1 = th0 + ((th - th0) * prev.f) / (prev.f - cur.f); return { th: th1, low: at(th1).low }; } prev = cur; th0 = th; }
+  return null;
+}
 // -- what goes into another ----------------------------------------------------------------------------------------------
 way({
   id: 'a leaf on a post', meets: 'leaf', says: 'a leaf hung on a post that stands on a foot', when: (n) => (n.on && n.on.kind === 'enclosure' ? 'it is the door of what it is part of' : n.want.flags.includes('gate') && n.want.q.W!.v > 1.8 ? 'a gate this wide is a frame, not a sheet' : null),

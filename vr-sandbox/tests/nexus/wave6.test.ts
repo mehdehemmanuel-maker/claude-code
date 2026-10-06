@@ -7,7 +7,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
 import type { Jolt } from '../../src/nexus/realize';
-import { answersFrom, conceive, designs } from '../../src/nexus/conceive';
+import { answersFrom, conceive, designs, heelBox } from '../../src/nexus/conceive';
 import { parseAsk } from '../../src/nexus/parse';
 
 let J: Jolt;
@@ -96,7 +96,18 @@ describe('what the laws say of it', () => {
 describe('what is made of it', () => {
   it('a dock: a decked hull made deep and wide enough heeled with its crowd at one side, clear of the chop', () => {
     const d = made(DOCK), c = check(d, /^with its load to one side, its deck stands at least 200 mm above the water and above 1.2 m waves$/)!;
-    expect(c.ok).toBe(true); expect(c.says).toMatch(/heels 7\.99°/); expect(c.says).toContain('they do not wash over it');
+    expect(c.ok).toBe(true); expect(c.says).toMatch(/heels 6\.55° \(its section under water clipped at its waterline/); expect(c.says).toContain('they do not wash over it');
+    expect(d.choices.join(' ')).toMatch(/4\.4208 m by 2\.8817 m/);
+  });
+  it('heeled by its section clipped at its waterline: a box past its bottom edge loses what rights it; with its weight too high and to one side, it goes over', () => {
+    // a 2.179 m wide box 63 mm deep in the water rights itself by small heels (GM 3.76 m) but its bottom edge is out of the
+    // water past 4.1°; its crowd 527 mm to one side and 1.37 m up brings no heel to rest before its deck goes under
+    expect(heelBox(2.179, 0.8512, 749 / 1000 / 4.4208, 2.179 / 2 - (500 * 0.7895) / 749, 1.3705)).toBeNull();
+    // the 2.8817 m one made: at rest at 6.55°, its low edge 620 mm above still water
+    const h = heelBox(2.8817, 0.8283, 807 / 1000 / 4.4208, 2.8817 / 2 - (500 * (2.8817 / 2 - 0.3)) / 807, (307 * 0.8283 * 0.45 + 500 * (0.8283 + 0.012 + 1)) / 807)!;
+    expect((h.th * 180) / Math.PI).toBeCloseTo(6.55, 1); expect(h.low).toBeCloseTo(0.6195, 2);
+    // even and low, it does not heel
+    expect(heelBox(2, 0.5, 0.2, 1, 0.1)).toEqual({ th: 0, low: expect.closeTo(0.4, 6) });
   });
   it('a slider: a light carriage with what it carries put on it, its rail checked bending under it', () => {
     const d = made(SLIDER);
