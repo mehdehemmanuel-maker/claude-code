@@ -2,7 +2,8 @@
 // matters, shapes and surfaces, where things go, how they are turned and flipped, how big they are and how they
 // stretch, patterns and scatters, joining into one piece, rules and conditions, what can be read between things,
 // energy, what the room does, and asking. Each call is written as it is said, ready to press and change; every one
-// runs offline (asking Claude is the one that needs Claude, and nothing else waits on it).
+// runs offline (asking Claude is the one that needs Claude, and nothing else waits on it). Each is run for real by
+// src/nexus/calltest.ts, and the board marks the ones that do not work, and the ones that act on your build.
 
 import type { StepKind } from './flows';
 
@@ -84,10 +85,23 @@ export const CALLS: CallGroup[] = [
     c('Along a line', 'pattern s 6 along x 30 mm', 'n of it at a pitch'), c('Round an axis', 'pattern s 6 round bearing', 'n of it round its axis'),
     c('Scatter on a thing', 'scatter s 12 on base', 'at random over its top, none overlapping'), c('Scatter, turned', 'scatter s 12 on base turned randomly', 'each turned at random about y'),
   ] },
-  { id: 'join', name: 'Join into one', short: 'Join', kind: 'action', says: 'shapes made one piece: moved, turned, flipped and stretched as one, where they meet counted once', calls: [
-    c('Join', 'join wall1 and wall2 as walls', 'one piece'), c('Join several', 'join a, b, c as frame', 'one piece'),
+  { id: 'join', name: 'Join & connect', short: 'Join', kind: 'action', says: 'connected only where they touch, and held by what can hold them: fused where the fusion law lets them, else glued, else bolted; a group moves as one but is not held', calls: [
+    c('Join', 'join wall1 and wall2 as walls', 'fused, glued or bolted: whichever can hold them'), c('Join several', 'join a, b, c as frame', 'each that touches another, held'),
+    c('Fuse', 'fuse a and b', 'one solid, only where the fusion law lets them'), c('Glue', 'glue a and b', 'the strongest adhesive that holds both'),
+    c('Bolt', 'bolt a and b', 'both firm enough to hold a bolt'), c('Group, not held', 'group s and base as set', 'moved as one; nothing holds them'),
     c('Move the piece', 'move walls by 0, 0, 1 m', 'all of it'), c('Turn the piece', 'rotate walls 90 about y', 'about its middle'),
     c('Stretch the piece', 'expand walls y by 2', 'about its middle'), c('Split it', 'split walls', 'apart again'),
+  ] },
+  { id: 'standing', name: 'Standing actions', short: 'Standing', kind: 'action', says: 'several steps as one action, called on anything: every size worked out from what it is given, by its law, with the conditions that change it; make your own', calls: [
+    c('Mount it', 'mount s on base', 'a plate under it, 15 % wider each way; as thick as its weight bends it to half yield; steel past 20 kg; bolted to it, and onto what it stands on'),
+    c('Mount, on its own', 'mount s', 'the plate, sized and bolted, where it is'),
+    c('Support it', 'support base', 'legs down to the floor, 4, or 6 past 1.2 m; each as thick as buckling and yield allow'),
+    c('Cover it', 'cover s', 'a lid and four sides round it, clear of it by 5 % of its size, joined as one'),
+    c('Stack it', 'stack s on base', 'on it, and connected where they touch'),
+    c('Make your own', 'action riser {X}: place plate named {X}_riser under {X}; join {X} and {X}_riser', 'steps as one action: {X} is what it is given'),
+    c('Every standing action', 'actions', 'its name and how it is called'), c('How one is worked out', 'show action mount', 'its steps, as written'),
+    c('A value, unless set', 'default s_load = 50 N', 'kept unless it is set already: what an action reads'),
+    c('Stop unless it holds', 'require load > 0 N: there is no load to size it by', 'stops the action here, saying why'),
   ] },
   { id: 'rules', name: 'Rules & conditions', short: 'Rules', kind: 'check', says: 'what must hold: a check lets the pipeline on only where it holds; a rule undoes a step that breaks it', calls: [
     c('If, then, else', 'if load > 500 N then material steel else material aluminium', 'a step chosen by a condition'),

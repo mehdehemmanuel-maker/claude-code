@@ -161,6 +161,47 @@ describe('many pipelines in one room', () => {
     w.run('place plate named base at 0, 0.5 m, 0 size 300 x 300 x 10 mm'); w.run('place cube named top on base');
     expect(w.run('place plate named base at 0, 0.5 m, 0 size 200 x 200 x 10 mm')).toMatch(/Made anew base: .*\(what stood on the one before, top, went with it\)/); expect(w.all().made.some((m) => m.name === 'top')).toBe(false);
   });
+  it('things are connected only where they touch, and held by what can hold them; a group is moved as one but not held', () => {
+    const w = shop(); w.run('material steel'); w.run('place cube named a at 0, 1 m, 0 size 100 mm'); w.run('place cube named b at 100 mm, 1 m, 0 size 100 mm');
+    w.run('place cube named far at 0.5 m, 1 m, 0 size 100 mm');
+    expect(() => w.run('join a and far as x')).toThrow(/far does not touch the rest of x: things are connected only where they touch \(the nearest, a and far, are 400 mm apart\)/);
+    expect(w.run('join a and b as ab')).toMatch(/one piece: fused a–b \(both are iron at base\)/);
+    // steel to aluminium touching: they do not fuse, so the strongest adhesive that holds both holds them
+    w.run('place cube named c of aluminium at 200 mm, 1 m, 0 size 100 mm');
+    expect(() => w.run('fuse b and c')).toThrow(/b and c cannot be fused: molten iron and aluminium do not dissolve in each other/);
+    expect(w.run('join ab and c')).toMatch(/glued with Structural epoxy \(24 h\) b–c \(they do not fuse: molten .* 25 MPa in lap shear/);
+    expect(w.run('group a and far as loose')).toMatch(/nothing holds them together/);
+  });
+  it('a standing action: steps as one, every size worked out from what it is given, by its law, with its conditions', () => {
+    const w = shop(); w.run('place cube named m at 0, 0.8 m, 0 size 100 mm'); w.run('place plate named deck at 0, 0.4 m, 0 size 600 x 600 x 20 mm');
+    const said = w.run('mount m on deck');
+    // the plate: 100 mm + 2 × max(10 mm, 15 mm) each way; as thick as m's weight bends it, at half yield, but not under 2 mm
+    expect(w.value('m_mount.w')).toBeCloseTo(0.13); expect(w.value('m_mount.h')).toBeCloseTo(0.002, 6);
+    expect(said).toMatch(/^mount m, deck: 9 steps\./); expect(w.joined().find((j) => j.name === 'm_mounted')!.members).toEqual(['m', 'm_mount', 'deck']);
+    near(w.value('m_mount.bottom'), w.value('deck.top'), 1e-9); near(w.value('m.bottom'), w.value('m_mount.top'), 1e-9);
+    // heavier than 20 kg: the mount is steel, and the law sizes it again by steel's yield and its load
+    const v = shop(); v.run('place cube named big of steel at 0, 1 m, 0 size 300 mm'); v.run('set big_load = 20 kN'); v.run('mount big');
+    const F = 0.3 ** 3 * 7850 * 9.80665 + 20000, Lw = v.value('big_mount.w'), b = v.value('big_mount.d');
+    near(v.value('big_mount.h'), Math.sqrt((3 * F * Lw) / (2 * b * (250e6 / 2))), 1e-3); expect(v.value('big_mount.density')).toBe(7850);
+    // with concrete the matter in hand, a mount is aluminium all the same: concrete does not hold a bolt
+    const c = shop(); c.run('material concrete'); c.run('place cube named q of steel at 0, 1 m, 0 size 100 mm'); c.run('mount q'); expect(c.value('q_mount.density')).toBe(2700);
+    // and what is itself too soft for a bolt cannot be mounted by one: it says so
+    c.run('place cube named soft at 1 m, 1 m, 0 size 100 mm'); expect(() => c.run('mount soft')).toThrow(/Concrete C30 is too soft to hold a bolt \(it yields at 3 MPa\)/);
+  });
+  it('support: as many legs as its size asks, each sized by buckling and yield; your own action, called the same way', () => {
+    const w = shop(); w.run('place box named slab at 0, 1 m, 0 size 1500 x 600 x 40 mm'); w.run('support slab');
+    expect(w.joined().find((j) => j.name === 'slab_stand')!.members).toHaveLength(7);
+    // each leg carries a sixth of the weight over 0.98 m: Euler with a factor 3 sets its diameter
+    const P = 1.5 * 0.6 * 0.04 * 2700 * 9.80665 / 6, L = 0.98, D = ((P * 3 * L * L * 64) / (Math.PI ** 3 * 68.9e9)) ** 0.25;
+    near(w.value('slab_legD'), Math.max(D, 0.005), 1e-3); expect(w.value('slab_leg1.bottom')).toBeCloseTo(0, 9);
+    const f = shop(); f.run('place cube named low at 1 m, 25 mm, 0 size 50 mm'); expect(() => f.run('support low')).toThrow(/support stopped at step 3 .*: low stands on the floor already, so there is nothing under it to support/);
+    expect(w.run('action riser {X}: place plate named {X}_riser under {X}; join {X} and {X}_riser')).toMatch(/called as "riser \{X\}"/);
+    w.run('place cube named k at 2 m, 1 m, 0 size 50 mm'); expect(w.run('riser k')).toMatch(/^riser k: 2 steps/);
+    expect(() => w.run('action place {X}: report')).toThrow(/"place" is a call already/);
+    expect(() => w.run('riser')).toThrow(/riser is called as "riser \{X\}": say what \{X\} is/);
+    // a name with "to" in it is one name: "size rotor_disc.h so …" is not "size ro to r_disc.h"
+    w.run('place plate named rotor_disc at 3 m, 1 m, 0 size 100 x 100 x 5 mm'); expect(w.run('size rotor_disc.h so rotor_disc.mass > 100 g')).toMatch(/^Sized rotor_disc's h to 3\.7\d* mm/);
+  });
   it('things turned are judged as they stand, not by the boxes round them', () => {
     const w = shop(); w.run('place cube named a at 0, 1 m, 0 size 100 mm turned y 45');
     // a's box round it reaches 70.7 mm out, into b's; a itself, a diamond, stops at x + z = 70.7 mm, short of b's corner at 80 mm
