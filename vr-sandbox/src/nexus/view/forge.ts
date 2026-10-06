@@ -51,6 +51,7 @@ import { Robot } from './robot';
 import { Boards3D } from './boards3d';
 import type { FlowApi } from '../flows';
 import { Workshop, type Made, type PartRef } from '../generate';
+import { glow } from '../../engineering/thermal';
 import type { Jolt } from '../realize';
 import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
@@ -1761,6 +1762,8 @@ function meshOf(m: Made): THREE.Object3D {
   // broken under a load: drawn red, so it is seen
   if (m.broken) { const red = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xff5252, emissive: 0x5a0000, roughness: 0.6 })); red.position.set(...m.at); red.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); red.scale.set(...m.scale); red.userData.made = m.name; return red; }
   const surface = !mt, mat = surface ? new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.6 }) : new THREE.MeshStandardMaterial({ color: mt.color, metalness: mt.metalness, roughness: mt.roughness });
+  // hot enough, it glows as a black body does (past the Draper point, 525 °C); below it, nothing hot is seen to glow
+  if (mt && m.temp !== undefined) { const gl = glow(m.temp); if (gl.intensity > 0) { (mat as THREE.MeshStandardMaterial).emissive.setHex(gl.color); (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.4 + gl.intensity; } }
   const mesh = new THREE.Mesh(geo, mat); mesh.position.set(...m.at); mesh.rotation.set(m.turn[0], m.turn[1], m.turn[2], 'XYZ'); mesh.scale.set(...m.scale); mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.userData.made = m.name;
   // a motor turns as fast as its last run left it, drawn slowed to at most 1.5 turns a second; a stripe shows it turning
