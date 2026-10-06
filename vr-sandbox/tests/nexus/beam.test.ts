@@ -34,7 +34,7 @@ describe('the beam slice: semantics and the solver', () => {
   it('the catalogue under least material picks a 2×4 laid flat; the refusals name their domain', async () => {
     const s = await slice();
     expect(s.choice.pick!.option.label).toBe('2x4 flat');
-    expect(s.choice.manifold.map((c) => c.option.label)).toEqual(['2x4 flat', '2x6 flat', '2x8 flat']);
+    expect(s.choice.manifold.map((c) => c.option.label)).toEqual(['2x4 flat', '2x6 flat', '2x8 flat', '2x10 flat', '2x12 flat']);
     const by = Object.fromEntries(s.choice.candidates.map((c) => [c.option.label, c]));
     expect(by['1x4 on edge']!.refused).toContain('lateral stability of an unbraced sawn beam: d/b ≤ 2 needs no lateral support');
     expect(by['2x4 on edge']!.refused[0]).toMatch(/lateral stability/);

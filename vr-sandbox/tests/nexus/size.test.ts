@@ -58,14 +58,16 @@ describe('the members across a face, sized as a system: counts, spacing, section
   const r = sizeMembers(span, sh.x, load, materialLeaves('wood.douglas-fir'), gravity(), lumberCatalogue());
   const at = (k: number) => r.choice.candidates.filter((c) => c.option.leaves['k']!.value === k);
 
-  it('no kept lumber spans the 10.95 m roof under its snow, nor with one support line: the stiffest clear span deflects ten times what is allowed', () => {
+  it('no kept lumber spans the 10.95 m roof under its snow clear: the stiffest clear span (2x12) deflects three times what is allowed; with one support line the 2x10 and 2x12 do', () => {
     expect(at(0).some((c) => c.admissible)).toBe(false);
-    expect(at(1).some((c) => c.admissible)).toBe(false);
-    expect(Math.min(...at(0).map((c) => c.solution.bound['del']!.value! / c.solution.bound['lim']!.value!))).toBeGreaterThan(10);
+    expect(Math.min(...at(0).map((c) => c.solution.bound['del']!.value! / c.solution.bound['lim']!.value!))).toBeGreaterThan(2.9);
+    expect(at(1).filter((c) => c.admissible).map((c) => c.option.label).every((l) => /^2x1[02] /.test(l))).toBe(true);
   });
 
-  it('two support lines are the fewest that frame it, and of those the least timber is 2x8 on edge at 24 inches: 19 members, deflection binding, stress far within strength', () => {
-    expect(r.choice.pick!.option.label).toBe('2x8 on edge at 24 in, 2 support lines');
+  // by hand: two bays of 5.477 m; 1400 Pa over 24 in is 853 N/m, and a 38 × 286 mm fir member's own 56.5 N/m; I = 7.41e-5
+  // m⁴, E 13.4 GPa (Wood Handbook): δ = 5 w L⁴ / 384 E I = 10.7 mm against L / 360 = 15.2 mm; 19 members 10.95 m long, 1199 kg
+  it('one support line is the fewest that frames it, and of those the least timber is 2x12 on edge at 24 inches: 19 members, deflection binding, stress far within strength', () => {
+    expect(r.choice.pick!.option.label).toBe('2x12 on edge at 24 in, 1 support line');
     const b = r.choice.pick!.solution.bound;
     expect(b['n']!.value).toBe(19);
     expect(b['del']!.value! / b['lim']!.value!).toBeGreaterThan(0.7);
@@ -81,13 +83,13 @@ describe('the generator sizes the members it generates, and what they weigh reac
   const el = (id: string) => s.elements.find((x) => x.id === id)!;
   const val = (id: string, name: string) => el(id).values.find((v) => v.name === name || v.name.startsWith(name))!;
 
-  it('the roof\'s members come out as the space sized them by hand: Douglas-fir 2x8 on edge at 24 inches over two support lines, the matter chosen, not given', () => {
-    expect(val('members:inside:up', 'sized: ').name).toMatch(/^sized: Douglas-fir \(coast\) 2x8 on edge at 24 in, 2 support lines/);
+  it('the roof\'s members come out as the space sized them by hand: Douglas-fir 2x12 on edge at 24 inches over one support line, the matter chosen, not given', () => {
+    expect(val('members:inside:up', 'sized: ').name).toMatch(/^sized: Douglas-fir \(coast\) 2x12 on edge at 24 in, 1 support line/);
     expect(val('members:inside:up', 'members').value).toBe(19);
     // of the woods dressed to the kept sections, each sized alone at the fewest lines, the fir weighs least
     const up = el('members:inside:up');
     const one = (id: string) => sizeMembers(ofLeaf(leaf('span', val('members:inside:up', 'span').value, 'm', { class: 'configuration', source: 'the generator' })), sh.x, ofLeaf(leaf('snow', 1400, 'Pa', { class: 'configuration', source: 'the generator' })), materialLeaves(id), gravity(), lumberCatalogue()).choice.pick!;
-    const masses = ['wood.douglas-fir', 'wood.southern-pine', 'wood.white-pine'].map((id) => one(id)).filter((c) => c.solution.bound['k']!.value === 2).map((c) => c.solution.bound['m']!.value!);
+    const masses = ['wood.douglas-fir', 'wood.southern-pine', 'wood.white-pine'].map((id) => one(id)).filter((c) => c.solution.bound['k']!.value === 1).map((c) => c.solution.bound['m']!.value!);
     expect(Math.min(...masses)).toBeCloseTo(up.values.find((v) => v.name.startsWith('sized: '))!.value, 6);
   });
 
@@ -130,9 +132,9 @@ describe('pressing along a length: the walls and the lines under the roof are si
     expect(unbraced.unsatisfied).toEqual(['each member pressed along its length stays below its buckling load between braces, over the declared factor']);
   });
 
-  it('each line under the roof is a wall of its own, standing on the floor: its matter is chosen for it, white pine 1x4 at 16 inches with two rows of blocking, lighter than the fir would be', () => {
-    expect(val('supports:inside:up', 'sized: ').name).toMatch(/^sized: Eastern white pine 1x4 on edge at 16 in, 0 support lines, 2 rows of blocking/);
-    expect(val('supports:inside:up', 'force along each member').value).toBeCloseTo(val('supports:inside:up', 'load per length each line carries').value * 0.406, 6);
+  it('each line under the roof is a wall of its own, standing on the floor: its matter is chosen for it, white pine 1x4 at 12 inches with two rows of blocking (the one line carries half the roof), lighter than the fir would be', () => {
+    expect(val('supports:inside:up', 'sized: ').name).toMatch(/^sized: Eastern white pine 1x4 on edge at 12 in, 0 support lines, 2 rows of blocking/);
+    expect(val('supports:inside:up', 'force along each member').value).toBeCloseTo(val('supports:inside:up', 'load per length each line carries').value * 0.305, 6);
     const line = val('supports:inside:up', 'load per length each line carries').value, len = val('supports:inside:up', 'length of each line').value;
     const firOnly = sizeMembers(conf('height', 2.5, 'm'), conf('lines', 2 * len, 'm'), conf('none', 0, 'Pa'), fir, gravity(), lumberCatalogue(), { loads: { along: conf('the line', line, 'N/m') }, runs: [len, len] }).choice.pick!;
     expect(firOnly.solution.bound['m']!.value!).toBeGreaterThan(val('supports:inside:up', 'sized: ').value);

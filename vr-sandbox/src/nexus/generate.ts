@@ -803,10 +803,12 @@ export class Workshop {
       if (h) { if (piece) this.groupMove(piece, `by 0, ${h}, 0`); else { const at = this.madeOf(n, new Map(), new Set(), new Map()).at, sp = this.specOf(n); this.leave(n); sp.place = { how: 'at', x: `${at[0]}`, y: `${at[1] + h}`, z: `${at[2]}` }; } }
       return this.letGo(m[3] ? num(m[3], this.reader()) : 3);
     }
-    if ((m = /^push\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+along\s+(-?)([xyz]))?(?:\s+for\s+(.+?))?(?:\s+at\s+(?:its\s+|the\s+)?(top|middle|centre|center))?$/iu.exec(t))) {
+    if ((m = /^push\s+([\p{L}_][\p{L}\d_]*)\s+with\s+(.+?)(?:\s+along\s+(-?)([xyz]))?(?:\s+for\s+(.+?))?(?:\s+at\s+(?:its\s+|the\s+)?(top|middle|centre|center)|\s+at\s+(-?[\d.]+)\s*m\s+up)?$/iu.exec(t))) {
       const F = num(m[2]!, this.reader()), i = AX[(m[4] ?? 'x') as Axis], f: V3 = [0, 0, 0]; f[i] = m[3] ? -F : F;
-      // at its top: the middle of its top face, as it stands, where a push tips it if anything does
-      const top = m[6] && /top/i.test(m[6]) ? (() => { const b = this.boxOf(m![1]!, new Map(), new Set(), new Map()); if (!b) throw new Error(`Nothing named ${m![1]} is made here.`); return [b.at[0], b.at[1] + b.h / 2, b.at[2]] as V3; })() : undefined;
+      // at its top: the middle of its top face, as it stands, where a push tips it if anything does; or so high up, over
+      // its middle (a wind's push, where the push on all its faces is centred)
+      const box = () => { const b = this.boxOf(m![1]!, new Map(), new Set(), new Map()); if (!b) throw new Error(`Nothing named ${m![1]} is made here.`); return b; };
+      const top = m[6] && /top/i.test(m[6]) ? (() => { const b = box(); return [b.at[0], b.at[1] + b.h / 2, b.at[2]] as V3; })() : m[7] !== undefined ? (() => { const b = box(); return [b.at[0], Number(m![7]), b.at[2]] as V3; })() : undefined;
       return this.letGo(3, { name: m[1]!, force: f, seconds: m[5] ? num(m[5], this.reader()) : 0.2, ...(top ? { at: top } : {}) });
     }
     // loops: the same steps again, over things, or while a condition holds
@@ -1157,24 +1159,36 @@ export class Workshop {
     const reading = (along: number) => {
       const across = across0(along), ext = [X.w, X.h, X.d], bottom = X.at[1] - X.h / 2;
       const lo = X.at[along]! - ext[along]! / 2, hi = X.at[along]! + ext[along]! / 2, p = where === 'end' ? hi : X.at[along]!;
-      const patches: { lo: number; hi: number; area: number; by: string }[] = [];
-      if (bottom <= 1e-3) patches.push({ lo, hi, area: X.w * X.d, by: 'the floor' });
+      const patches: { lo: number; hi: number; c0: number; c1: number; area: number; by: string }[] = [];
+      if (bottom <= 1e-3) patches.push({ lo, hi, c0: X.at[across]! - ext[across]! / 2, c1: X.at[across]! + ext[across]! / 2, area: X.w * X.d, by: 'the floor' });
       for (const o of others) {
         if (Math.abs(o.at[1] + o.h / 2 - bottom) > 1e-3) continue;
         const a0 = Math.max(lo, o.at[along]! - [o.w, o.h, o.d][along]! / 2), a1 = Math.min(hi, o.at[along]! + [o.w, o.h, o.d][along]! / 2);
         const c0 = Math.max(X.at[across]! - ext[across]! / 2, o.at[across]! - [o.w, o.h, o.d][across]! / 2), c1 = Math.min(X.at[across]! + ext[across]! / 2, o.at[across]! + [o.w, o.h, o.d][across]! / 2);
-        if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
+        if (a1 > a0 && c1 > c0) patches.push({ lo: a0, hi: a1, c0, c1, area: (a1 - a0) * (c1 - c0), by: (o as PartRef).name ?? 'a part' });
       }
       if (!patches.length) return null;
       let law: string, M = 0, defl = 0, sigma: number;
-      const over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9);
+      // it bears straight down on what is under the load itself; what holds it along one edge (a wall under a roof's side)
+      // is under it along this way but not under the load, and holds it only across the other way
+      const mid = X.at[across]!, over = patches.find((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9 && mid >= q.c0 - 1e-9 && mid <= q.c1 + 1e-9);
       // its section across the span: depth up and down, width across
       const depth = X.h, width = onWidth !== undefined ? Math.min(onWidth, ext[across]!) : ext[across]!;
       const I = round && X.axis === (along === 0 ? 'x' : 'z') ? (X.kind === 'tube' ? (Math.PI * (d.D! ** 4 - (d.D! - 2 * d.wall!) ** 4)) / 64 : (Math.PI * d.D! ** 4) / 64) : (width * depth ** 3) / 12, c = depth / 2;
       if (over) { sigma = F / over.area; law = `it bears on ${over.by}: σ = F / A over ${+(over.area * 1e4).toPrecision(3)} cm²`; }
       else {
         const left = patches.filter((q) => q.hi < p).sort((a, b) => b.hi - a.hi)[0], right = patches.filter((q) => q.lo > p).sort((a, b) => a.lo - b.lo)[0];
+        // under the load along this way but to either side of it the other way (a stool's two front legs, the load at the
+        // front edge between them): it spans between those two, the other way
+        const straddle = patches.filter((q) => p >= q.lo - 1e-9 && p <= q.hi + 1e-9), sl = straddle.filter((q) => q.c1 < mid).sort((a, b) => b.c1 - a.c1)[0], sr = straddle.filter((q) => q.c0 > mid).sort((a, b) => a.c0 - b.c0)[0];
         const spread = where === 'spread';
+        if (!(left && right) && sl && sr) {
+          const a = mid - sl.c1, b = sr.c0 - mid, L = a + b, Ia = round ? I : (ext[along]! * depth ** 3) / 12;
+          if (spread) { M = (F * L) / 8; defl = (5 * F * L ** 3) / (384 * E * Ia); law = `spread evenly across ${mm(L)} the other way, between ${sl.by} and ${sr.by}: M = F L / 8`; }
+          else { M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * Ia * L); law = `simply supported across ${mm(L)} the other way, between ${sl.by} and ${sr.by}: M = F a b / L`; }
+          return { law, M, defl, sigma: (M * c) / Ia };
+        }
+        if (!left && !right) return null;
         if (left && right && spread) { const L = right.lo - left.hi; M = (F * L) / 8; defl = (5 * F * L ** 3) / (384 * E * I); law = `spread evenly across ${mm(L)} between ${left.by} and ${right.by}: M = F L / 8`; }
         else if (left && right) { const a = p - left.hi, b = right.lo - p, L = a + b; M = (F * a * b) / L; defl = (F * a * a * b * b) / (3 * E * I * L); law = `simply supported across ${mm(L)} between ${left.by} and ${right.by}: M = F a b / L`; }
         else if (spread) { const q = (left ?? right)!, arm = left ? hi - q.hi : q.lo - lo; M = (F * arm) / 2; defl = (F * arm ** 3) / (8 * E * I); law = `spread along a cantilever ${mm(arm)} out past ${q.by}: M = F a / 2`; }

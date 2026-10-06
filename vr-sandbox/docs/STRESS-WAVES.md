@@ -327,3 +327,120 @@ Each finding the four testers made was fixed in general, then all 16 requests an
 - **What raises a lift** (a screw or a winch, and what turns it), and **a supply for its motors** (cells sized for the run, which the bounds already weigh).
 - **Racking and impact.** Racking needs joints that give, and impact needs a blow in time; the physics has neither yet.
 - **Sizes of what is put in a thing** (four boots in a dryer) are not yet read from what is named.
+
+## Wave 3: 20 requests, 5 fresh testers
+
+Five testers with no context each wrote four requests for things not yet made, harder than wave 2. They covered:
+
+- the home and access (a lowering cabinet, a tremor mug, a turning planter, a stair-climbing walker);
+- the very small and the very large (a blood microswimmer, a 450 m airship, a burrowing worm, a solar-sail tug);
+- structures (a wall shelf, a 6.5 m footbridge carried in by hand, a mountain shelter, a bird-watching tower);
+- heat and energy (a solar charger, a 48 h flask, a Peltier cooler, a hand-crank kettle);
+- space and the deep sea (a Mars transfer stage, a lunar habitat, a Challenger Deep pod, a Europa flight board).
+
+They read only the generator's output files; it ran each with seed 101. Each output was scored 0 to 4 on what it read, what it made, whether that holds, and how honest it is.
+
+### Baseline, and what changed by cause
+
+| # | request | read | made | holds | honest | after the fixes |
+|---|---|---|---|---|---|---|
+| 1 | lowering wall cabinet | 1 | 0 | 0 | 2 | the power to lower it in 10 s, 12.1 W for what rides and its 20 kg (m g h / t), said, from what raises it, which is not derived |
+| 2 | tremor mug | 1 | 0 | 1 | 1 | keeping it hot is ✗ (no insulated wall is kept); as made, its bare aluminium wall lets 0.35 kg fall to 55 °C in about an hour |
+| 3 | turning planter | 3 | 1 | 1 | 2 | "planter" is read as a surface holding soil. The turntable stands under all of it, the soil box on legs on its plate and the tank beside the soil, not in it. Its 0.003 rpm is honestly out of reach of every motor kept |
+| 4 | stair-climbing walker | 2 | 1 | 2 | 3 | unchanged: climbing and folding are said as not kept |
+| 5 | blood microswimmer | 1 | 2 | 1 | 2 | Reynolds 0.003, Stokes drag, the time to the clot, and blood flow 20 to 10⁴ times its speed |
+| 6 | 450 m cargo airship | 0 | 0 | 1 | 1 | buoyancy, drag, power and fuel weighed: it lifts 1350 t; 12.2 MW, 135 t of fuel |
+| 7 | burrowing worm | 2 | 3 | 2 | 3 | the energy for 48 h against its volume; the power to burrow |
+| 8 | solar-sail tug | 1 | 0 | 1 | 1 | light pressure on 2.25 × 10⁴ m² against 2.23 t; space is not made, said so |
+| 9 | wall record shelf | 1 | 0 | 0 | 1 | **holds and does what was asked.** One 15 mm board sits on two steel brackets at the studs 600 mm apart, the wall standing for itself and not weighed. It bends 2.27 mm against the 3 mm said; each top screw is pulled with 259 N against the 955 N taken as safe |
+| 10 | 6.5 m footbridge | 1 | 0 | 1 | 1 | **holds and does what was asked.** 2x10 C24 rails bend 21.5 mm against 26 mm under 450 kg spread along it, and no part weighs over 35 kg: the deck is cut into pieces ending on joists |
+| 11 | mountain shelter | 1 | 0 | 2 | 2 | sized for four lying down (2.6 × 2 × 1 m inside), within the 3 × 2.5 m of ground said. Its roof under 80 cm of settled snow (2.35 kPa) bends 82 mm against 10 mm, and in a 110 km/h wind it slides away: it needs holding down, not kept |
+| 12 | bird-watching tower | 2 | 1 | 2 | 2 | wind pushes on its parts' faces at their height. "Not tip over" is ticked by the wind test, and 5 m wood legs fail K L / d ≤ 50 (NDS 3.7.1.4), honestly |
+| 13 | backpack solar charger | 1 | 3 | 1 | 2 | unchanged: 9 times too little light |
+| 14 | 48 h vacuum flask | 1 | 0 | 1 | 1 | read as one flask, no box, with "under 400 g empty" as its own weight; as made, bare, it cools to 70 °C in 45 min |
+| 15 | Peltier cooler | 2 | 0 | 1 | 2 | its 20 L vessel stands inside the box, sized to take it. As made, 144 W leaks in: 20,700 Wh against the 100 Wh it stores |
+| 16 | hand-crank kettle | 1 | 1 | 2 | 2 | "to bring it to a boil" is said as heating not kept, and weighed: 15.8 times what a hand gives |
+| 17 | Mars transfer stage | 0 | 0 | 1 | 1 | refused as space, with the transfer and propellant weighed |
+| 18 | lunar habitat | 0 | 0 | 1 | 1 | refused as space; dose, pressure and heat weighed |
+| 19 | Challenger Deep pod | 2 | 4 | 3 | 3 | the titanium sphere's mass at depth, with the cells |
+| 20 | Europa flight board | 1 | 3 | 0 | 2 | about 5.4 Sv a day on Europa's surface (Ringwald 2000, as Wikipedia gives it) makes 30 days about 16 krad unshielded, against the 300 krad rating. The trip through Jupiter's belts is said to be uncounted. "From −160 °C" keeps its sign |
+
+The scores are the testers' on the baseline. The right-hand column is what the generator says now. The same testers have not yet rescored it.
+
+### What was wrong, by cause
+
+**The load law.**
+- **It mistook an edge support for one under the load.** A wall along one edge of a roof counted as bearing straight under its middle, because each reading looked along one way only. A roof under snow showed 0 mm bending. Now a part bears the load directly only when it is under the load point both ways.
+- **The load between two supports the other way.** A load lying on the line between two supports that are offset the other way (a stool's front edge between its two front legs) now spans between them that way. It is no longer taken as a cantilever from the back leg.
+
+**Keeping hot or cold.**
+- Keeping something hot or cold over a time is ✗ when no insulated wall is made. Before, it was ticked because a vessel was made.
+- A check of the made walls says how long it really keeps, or what keeping it cold costs. It takes each wall in series (t / k A) and the still air outside (laminar convection and radiation, estimate), stepped in time.
+
+**Enclosures and vessels.**
+- A vessel where something encloses goes inside it, on its floor. The enclosure is sized to take a vessel of that volume.
+- The vessel's shape is drawn to fit the inside: from 0.7 to 1.6 times as tall as it is wide.
+
+**Reading.**
+- **"Keeps … in a 5 °C car"** is a place. Keeping something in or out now needs "in" or "out" to end the clause.
+- **"Under 400 g empty"** and "lighter than" are its own weight, where nothing near the number carries.
+- **"No single piece can weigh more than"** is the part limit. The words before a number are read in their order.
+- **"Takes up no more than 3 m × 2.5 m of ground"** is a footprint limit, both numbers of it. "2 m x 2 m footprint" is a size, not a thing to make.
+- **"Survives", "withstands"** are verbs. What they must stand is heard with its numbers and checked there; "110 km/h winds" is no longer read as winding.
+- **"And not tip over"** is ticked by the test that covers it.
+- **Counts of people.**
+  - "4-person" sizes a shelter for them.
+  - "4 adults plus a wheelbarrow" on a span is a load spread along it.
+  - "2 adults (200 kg)" is counted in the weight said, or 80 kg each where none is said.
+- **"80 cm of settled snow on the roof"** loads the roof, ρ g h.
+- **"70 kg spread evenly"** is a spread load.
+- **"600 mm apart"** is where it is fixed.
+- **"Works from −160 °C to +120 °C"** is a range heard with its numbers, its minus kept in what is said back. "Its total dose rating" is a rating, not a dose measured out.
+- **"That an ordinary adult can use"** finds the thing before the verb.
+- **"To bring it to a boil in 5 minutes"** is heating, weighed.
+
+**Ways and parts.**
+- **A wall shelf** is a board on two steel brackets screwed to the wall at the studs: one board unless more are said.
+  - The wall is a block of concrete standing for it, not weighed, not pushed and not counted in its footprint.
+  - Each top screw is checked against a wood screw's withdrawal: USDA Wood Handbook ch. 8, 4770 N for 5 mm × 50 mm at G 0.42, a fifth of it taken as safe.
+- **A planter** is a surface holding soil, its soil a weight unless a depth is said.
+- **The whole of it turning.** Where the whole of what is asked turns, the turntable stands under all of it, and its plate is as wide as what stands on it.
+- **A vessel and loose stuff.** A vessel does not stand in loose stuff a surface holds; it stands beside it.
+- **Lumber.** The 2x10 and 2x12 PS 20 sizes are kept. This also changed the house's roof sizing: one support line of 2x12 at 24 in now frames the 10.95 m roof. By hand: 10.7 mm against L/360 = 15.2 mm, E 13.4 GPa.
+- **A load of several.** A crowd on a span is spread along it, on both rails.
+- **A deck in pieces.** Where no part may weigh more than said, the deck is laid in pieces, each ending on a joist.
+- **Its deck raised.** A bridge's deck is raised where its frame is deeper than the height said, so its ends stand at least 100 mm.
+- **Wood columns** are held to K L / d ≤ 50 (NDS 2018 3.7.1.4).
+- **A vessel's base** is as thin as the liquid's push lets it be (σ = 3 p r² / 4 t², by three), and said to be square. The tube's mass was exact; the base's square lip was what the tester missed.
+- **Part names.** The vessel's base no longer shares its name with a turntable's base.
+
+**Tests in the physics.**
+- **Wind.**
+  - The wind pushes on the face each part shows across it: a slender part by a drag coefficient of 2, any other by 1.2 (estimates).
+  - That is no more in all than the solid outline would take, centred where those pushes are.
+  - An open tower's frame is no longer a solid wall, and something that slides rather than tips is said to need holding down.
+- **Stand-ins.** What stands for something else (a bank, a wall) is neither pushed nor weighed in the push. It is not counted in the design's mass or parts.
+- **A liquid that is not in the physics.** Where its weight is not in the physics but its push is, tipping is also weighed by statics, its weight on the middle of its foot. A full 20 L tank pushed with 21 N no longer "tips" because its water is missing.
+- **Raising in a time** needs the power m g h / t for what rides and what it carries, from what raises it, which is not derived.
+
+**The laws where nothing is made.** On Europa's surface, a rated total dose is weighed over the time there.
+
+### Checked
+
+- The gate: typecheck, and 964 tests in 92 files.
+- Both browser drives: the generator drive, 22 steps, and the flow board drive, 10 steps, with no script errors.
+  - On its first run, the generator drive timed out on the first click after the page loaded. It passed in full when run again.
+- The everyday set (18) and wave 2 (16) were rerun.
+  - The stool's top is 18 mm, not 15 mm, under the corrected load law.
+  - The 20 L tank holds by statics.
+  - The wall-hung workbench of wave 2 is now a board on brackets.
+  - No other result changed.
+
+### Open after wave 3
+
+- **Folding, collapsing and unfolding** (the walker, the shelter in a sled, the folding bridge): the linkage (Phase 4).
+- **What raises a lift and holds it**; a speed reducer of many stages, or a stepping motor, for very slow turning; a bearing under what a turntable carries.
+- **Insulated walls** (a vacuum gap, foam) as a way, and a cooler (a Peltier, a compressor) as a part.
+- **A roof on rafters**, so a shelter's roof can bear its snow; **guy lines and stakes** to hold down what slides in the wind.
+- **Bracing**, so a tall frame's columns are not free to sway (K below 2), and a 5 m tower can stand.
+- **A retest** by the same five testers.
