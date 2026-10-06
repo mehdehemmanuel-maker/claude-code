@@ -41,7 +41,7 @@ const ds = designs(c, n, { seed, physics: J, at: [0, 0] });
 if (ds.every((d) => d.parts === 0)) { console.log(`NOTHING MADE: ${[...new Set(ds.flatMap((d) => d.gaps))].join('; ')}`); finish(ds); }
 for (const d of ds) {
   console.log(`\n=== ${d.title}: ${d.ok ? 'HOLDS' : 'DOES NOT HOLD'} · ${d.does[0] === d.does[1] ? 'DOES WHAT WAS ASKED' : `DOES ${d.does[0]} OF ${d.does[1]} THINGS ASKED`}${d.gaps.length ? ' · NOT ALL DERIVED' : ''} — ${d.parts} parts, ${+d.mass.toPrecision(3)} kg, footprint ${d.footprint.map(len).join(' × ')}`);
-  console.log(`WHAT WAS ASKED:\n  ${d.asked.map((a) => `${a.kind === 'for' ? '·' : a.got ? '✓' : '✗'} ${a.kind === 'for' ? 'for' : a.kind}: ${a.text}${a.got ? ` → ${a.got}` : a.why ? ` (${a.why})` : ''}`).join('\n  ') || '(nothing said but numbers)'}`);
+  console.log(`WHAT WAS ASKED:\n  ${d.asked.map((a) => `${a.kind === 'for' ? '·' : a.got ? '✓' : '✗'} ${a.kind === 'for' ? 'for' : a.kind}: ${a.text}${a.got ? ` → ${a.how ?? a.got}` : a.why ? ` (${a.why})` : ''}`).join('\n  ') || '(nothing said but numbers)'}`);
   if (c.dropped.length) console.log(`NUMBERS NOT USED:\n  ${c.dropped.join('\n  ')}`);
   console.log(`PLAN:\n  ${d.plan.join('\n  ')}`);
   console.log(`CHOICES: ${d.choices.join('; ')}`);

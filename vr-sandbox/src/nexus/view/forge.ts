@@ -1767,7 +1767,7 @@ async function makeIt(words: string, answers: Record<string, string>, n: number,
   const ds = designsOf(c, n, { seed, at: [x0, 0.6], world: { parts: partRefs }, physics: J, first });
   for (const d of ds) for (const st of d.steps) { try { shop.run(st, 'you'); } catch (e) { line('nexus', `${st.slice(0, 60)}: ${(e as Error).message.slice(0, 160)}`); } }
   drawMade(); lastAsk = { words, answers }; lastDesigns = ds;
-  for (const d of ds) say(`${sayDesign(d).slice(0, 900)}${ds.length === 1 ? ' Say "another" for a different one, "make 3" for more, "again" to make it again, "save it" to keep it, or "why the …" for why a part is there.' : ''}`, undefined, 'nexus');
+  for (const d of ds) say(`${sayDesign(d).slice(0, 900)}${ds.length === 1 ? ` ${d.foldTrack ? 'Say "fold it" to watch it fold and open out again. ' : ''}Say "another" for a different one, "make 3" for more, "again" to make it again, "save it" to keep it, or "why the …" for why a part is there.` : ''}`, undefined, 'nexus');
   boards?.event({ kind: 'made', text: words }, { kind: 'built', text: ds.map((d) => d.title).join(', ') });
   return ds;
 }
@@ -1787,6 +1787,12 @@ function intentWords(text: string): string | null {
     }
   }
   if (!lastAsk) return null;
+  // its fold, played as planned and tested: each part a quarter turn about its hinge, held folded, opened out again
+  if (/^(?:(?:show (?:me )?)?(?:it |how it )?(?:fold|folds|folding|collapse|collapses|collapsing)(?: it)?(?: up| down| flat)?(?: and (?:open|unfold)(?: it)?(?: out| again)?)?|fold (?:it|them)(?: up| down| flat)?|(?:un)?fold it(?: out)?|open it out)[.!]?$/i.test(t)) {
+    const d = lastDesigns.find((x) => x.foldTrack);
+    if (!d) { const why = lastDesigns.flatMap((x) => x.checks.filter((c) => /^it folds flat$|^folding, nothing|^folded, /.test(c.what) && !c.ok)).map((c) => `${c.what}: ${c.says}`)[0]; return why ? `It does not fold as made. ${why.slice(0, 400)}` : 'Nothing made here was asked to fold. Ask for it folding ("a folding table…") and I plan its fold.'; }
+    play(d.foldTrack!); return `Folding ${d.title}: what is lifted off goes up first, each part turns a quarter turn about its hinge in the order they fold, it holds folded a second, then opens out again. Its checks say how it folds and that it lies still folded.`;
+  }
   const m = /^(?:make|build|give me|show me)\s+(\d+|two|three|four|five|six|several|a few)\s*(?:more|of them|different ones|variants|versions)?$/i.exec(t);
   if (m) { const n = Math.min(6, Number(m[1]) || COUNT[m[1]!.replace(/^a /, '')] || 3); void makeIt(lastAsk.words, lastAsk.answers, n); return `Making ${n} more, each from its own seed and each unlike the others.`; }
   if (/^(another( one)?|a different one|something different|try another|shuffle|new one)$/i.test(t)) { void makeIt(lastAsk.words, lastAsk.answers, 1); return 'Another, from a new seed.'; }
@@ -2204,6 +2210,8 @@ async function boot() {
     madeNow: () => ({ spinning: spinners.length, made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null, ...(m.motor ? { motor: m.motor, spin: m.spin } : {}) })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
     shopRun: (t: string) => makeStepLoaded(t),
     playingNow: () => (playing ? { frames: playing.track.frames.length, names: playing.track.names.length } : null),
+    // for a test: the camera on what was made under a name's stem, from its front and a little above
+    lookAtMade: (stem: string) => { const ms = shop.all().made.filter((m) => m.name.startsWith(stem)); if (!ms.length) return false; const lo = [0, 1, 2].map((i) => Math.min(...ms.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2))), hi = [0, 1, 2].map((i) => Math.max(...ms.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2))), c = lo.map((v, i) => (v + hi[i]!) / 2), r = Math.max(...hi.map((v, i) => v - lo[i]!)); framing = false; orbit.target.set(c[0]!, c[1]!, c[2]!); camera.position.set(c[0]! + r * 0.9, c[1]! + r * 0.7, c[2]! + r * 1.4); orbit.update(); return true; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first

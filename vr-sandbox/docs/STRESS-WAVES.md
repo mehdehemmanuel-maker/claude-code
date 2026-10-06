@@ -819,3 +819,77 @@ Those are said as not kept, and their laws are weighed. The fixes below are to w
 - **Electronics:** circuits, chips and cells.
 - **Processes,** such as printing or cutting.
 - **A thing sized to what it carries.** The two-seat car is still made as a small cart, and fails its own speed test honestly.
+
+## Phase 4a: folding the whole of it
+
+"Folding" was the most-asked thing not kept: five of wave 4's twenty asks want it. Directive C asks for it too ("collapsing and unfolding structures"). It is now kept, planned on whatever is made, with no template per kind of thing. The planner is `src/nexus/fold.ts`, by geometry alone. The generator (`src/nexus/conceive.ts`) makes it, tests it and judges it.
+
+### How it folds
+
+- **Its base stays.** The base is its widest flat part.
+- **What folds.** Each part held to the base, with what hangs off it, folds a quarter turn flat onto it, about a hinge along the edge where they meet. It folds the way that keeps it over the base, and makes it thinnest.
+- **Where two would fold onto each other,** the later one either:
+  - hangs from a hinge block as thick as what lies under it, shortened by that much so it stands as made; or
+  - is set in sideways past it, as a folding table's legs are.
+
+  The seed draws which is tried first. A block keeps the feet where they are; set in, it folds thinner. The draw keeps whichever passes the checks: set in, a stool's edge load tips it.
+- **Latched.** Parts held to each other but not through the base (walls meeting at a corner) are latched open, and let go to fold.
+- **Lifted off.** A part held only by what folds, and as long as half of it (a roof on a wall), cannot fold with it. It is lifted off and laid on the stack.
+- **The path.** It is turned a degree at a time, in the order they fold, and must meet nothing. Where it runs into a part still standing, that part folds first and the order is drawn again. Where it runs into one hung from a block, that one is set in instead.
+- **Left as drawn.** These are not folded, and the reason is said:
+  - what turns already (a wheel, what a motor drives), and what carries it;
+  - what is fixed to a wall or rests on a bank.
+
+  A plan with anything in its way leaves the design exactly as drawn.
+
+### What it is checked by
+
+- **It folds flat.** What folds onto what, and how; what is latched; what is lifted off.
+- **Folding, nothing runs into anything.** The path, a degree at a time.
+- **Latched open, its hinges hold.** Each hinge is held at its far side by 6 mm steel pins in double shear (8.48 kN each, estimate), at most one each 100 mm. They are checked against the push it is tested with, shared among what folds, or the wind said on what stands. The 110 km/h shelter needs 6 pins on its back wall.
+- **Folded, it can be made under the laws.** It is made again folded, in a room of its own: laid down (upside down where things fold under it), each hinge free to open and stopping where it lies. Two bodies a joint holds do not collide in the engine, so without that stop a folded leg sinks into its top.
+- **Folded, it lies still when let go** (Jolt). It is judged as when it stands: 10 mm or 2° fails. What was laid on top may settle, then must lie still.
+- **What it must fold to,** against it folded:
+  - a thickness ("folds flat to 8 cm");
+  - sizes ("folds down to 30 × 40 × 80 cm");
+  - what it packs into ("into a 25 litre backpack", now read as such).
+- **Asked items.** "Folding" and the items said with it are ticked only where all of that holds. Where a size or weight is said with the fold, its own check must pass too: "packs into a sled under 30 kg" fails with the 279 kg shelter.
+
+### Ten folding asks, made and tested
+
+| Ask | Folds | What it says |
+|---|---|---|
+| a folding camping table, 20 kg, folds flat to 8 cm | ✓ | its two side panels fold up under the top, one from a 22 mm block: 66 mm thick |
+| a folding stool, 100 kg, packs flat | ✓ | three legs fold under it (the stool fails its own edge load: three legs) |
+| a collapsible crate 600 × 400 × 300 mm, flat to 6 cm | ✓ | its walls fold down in turn on 12 and 24 mm sills: 48 mm |
+| a collapsible dog kennel, flat to 8 cm | ✓ | its walls fold down, its roof and door are lifted onto the stack: 62 mm |
+| a folding picnic table, folds to 15 cm thick | ✓ | 82 mm (the table fails its own edge load) |
+| the emergency shelter, into a 25 litre backpack | ✗ | it folds, to 3.51 m × 125 mm × 3.51 m: 1540 L, 61.7 times the pack |
+| a folding footbridge, a 70 cm bundle | ✗ | one deck over all of it: folding it wants it cut into pieces hinged end to end (a book fold), not derived yet |
+| a folding electric cargo bike | ✗ | each part it would fold carries a wheel |
+| a fold-down workbench on a garage wall | ✗ | its brackets are fixed to the wall: folding it against the wall is not derived yet |
+| a folding bookshelf with 4 shelves | ✗ | its base would be a shelf: folding onto an upright back or side is not derived yet |
+
+### Reading, fixed with it
+
+- "A bookshelf with 4 shelves that … folds flat": a verb said of one (folds) is not said of many (shelves). The folding is the bookshelf's.
+- "Holds 30 kg each" counts the 4 shelves, not the 30 kg.
+- "Folds flat to 8 cm" is a thickness, where it is not one of a chain of sizes.
+
+### Checked
+
+- **The gate:** typecheck, and 1005 tests in 93 files:
+  - `tests/nexus/fold.test.ts`, the planner;
+  - six generator tests, folding as made.
+- **Both browser drives** pass with no script errors.
+- **The everyday set, waves 2, 3 and 4** were rerun against the last merge. What changed is folding now made and judged. The w3c walker folds into 625 × 375 × 58 mm, within its 30 × 40 × 80 cm.
+
+### The fold, shown
+
+A design that folds as planned and tested carries its fold as a track (`Design.foldTrack`). What is lifted off goes up first; then each part turns a quarter turn about its hinge, in the order they fold; it holds folded a second, then opens out again. In the forge, "fold it" plays it in the room, on the desktop or in a headset. A browser drive makes the camping table from its words, plays its fold, and checks for script errors. A test checks that held folded, nothing in the track is in anything, all of it lies within 100 mm under the top, and it ends open as it began.
+
+### Open after 4a
+
+- **Half-turn folds:** panels meeting edge to edge folding onto each other, zig-zag (a room divider, a deck in pieces, a book fold).
+- **Folding onto an upright base:** a bookshelf onto its back, a bench against its wall.
+- **Folding a part onto what folds:** the roof onto a wall before the wall folds.
