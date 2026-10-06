@@ -1,7 +1,7 @@
 // Windows in the room: every panel the forge brings up (the rounds, the laws, the flaws, the boards, …) is a window
-// with a bar along its top, as a headset's windows are. Hold the trigger on the bar and move to carry it; push the stick
-// forward or back while you hold it to send it further or bring it nearer; – puts it away to the phone's Windows app,
-// ✕ closes it. Several stand open at once. A window opens off to the side of what is already open, not in your face,
+// with a bar along its top, as a headset's windows are. Hold the grip on a window (its bar or itself) and move to carry
+// it, or the mouse on its bar on a screen; push the stick forward or back while you hold it to send it further or bring
+// it nearer; the trigger on – puts it away to the phone's Windows app, on ✕ closes it. Several stand open at once. A window opens off to the side of what is already open, not in your face,
 // at a distance its size asks; Arrange lays every open one in an arc round you, the one you last used in the middle.
 
 import * as THREE from 'three';
@@ -135,14 +135,37 @@ export class Windows {
     return { id: w.spec.id, act: w.hits.find((r) => x >= r.x0 && x <= r.x1)?.act ?? 'move', distance: h.distance, point: h.point.clone() };
   }
   /** A press on a bar: – or ✕ act, the rest of it takes hold to carry. */
-  press(ray: THREE.Raycaster): boolean {
+  /** A press on a bar: – and ✕ act; the rest of it takes hold to carry, unless the press only clicks (a headset's
+   *  trigger: there the grip carries). */
+  press(ray: THREE.Raycaster, carry = true): boolean {
     const b = this.barAt(ray); if (!b) return false;
     const w = this.wins.get(b.id)!; w.at = ++this.clock;
     if (b.act === 'min') this.min(b.id);
     else if (b.act === 'close') this.close(b.id);
-    else this.grab = { id: b.id, dist: b.point.distanceTo(ray.ray.origin), offset: w.spec.obj.position.clone().sub(b.point) };
+    else if (carry) this.grab = { id: b.id, dist: b.point.distanceTo(ray.ray.origin), offset: w.spec.obj.position.clone().sub(b.point) };
     return true;
   }
+  /** The nearest open window a ray touches, by its bar or anything of it, and where. */
+  private touched(ray: THREE.Raycaster): { id: string; distance: number; point: THREE.Vector3 } | null {
+    let best: { id: string; distance: number; point: THREE.Vector3 } | null = null;
+    for (const w of this.wins.values()) {
+      if (w.state !== 'open' || w.spec.space || !seen(w.spec.obj)) continue;
+      const h = ray.intersectObject(w.spec.obj, true).find((x) => seen(x.object));
+      if (h && (!best || h.distance < best.distance)) best = { id: w.spec.id, distance: h.distance, point: h.point.clone() };
+    }
+    return best;
+  }
+  /** How far along a ray the nearest open window is (Infinity where it touches none). */
+  distance(ray: THREE.Raycaster): number { return this.touched(ray)?.distance ?? Infinity; }
+  /** The grip: take hold of the window the ray touches, by its bar or anywhere on it, to carry it. */
+  grabAt(ray: THREE.Raycaster): string | null {
+    const t = this.touched(ray); if (!t) return null;
+    const w = this.wins.get(t.id)!; w.at = ++this.clock;
+    this.grab = { id: t.id, dist: t.distance, offset: w.spec.obj.position.clone().sub(t.point) };
+    return t.id;
+  }
+  /** What stands open, the spaces you stand in too, for a pointer to land on. */
+  objects(): THREE.Object3D[] { return [...this.wins.values()].filter((w) => w.state === 'open' && seen(w.spec.obj)).map((w) => w.spec.obj); }
   get holding(): string | null { return this.grab?.id ?? null; }
   /** While held: it follows the ray at the distance it was taken at, turned to face you. */
   move(ray: THREE.Raycaster): void {

@@ -16,9 +16,10 @@
 // pedestal. Call Claude on a board and say what you mean as it comes: it is read with the board and laid out to take.
 //
 // Desktop: drag to look, click a part to point at it, type to Claude. Space pauses the playback, → steps it, R runs it
-// again. Headset: point and pull the trigger at a part to select it, or at a button on the console; the left stick
-// walks, the right stick turns. Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|
-// pipeline|wide, ?xr=quest3.
+// again. Headset: the beam ends on what it touches, a ball where it touches; the trigger presses (a part, a button, a
+// window's – or ✕, a node); the right grip holds (a window by its bar or anywhere on it, a node, the board's sheet) and
+// moves it until let go; X or Y on the left puts the phone away, and back; the left stick walks, the right stick turns.
+// Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|pipeline|wide, ?xr=quest3.
 
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
@@ -534,7 +535,8 @@ function tick(): void {
   partCard.mesh.visible = clock() < partCardUntil && !holo.showing;
   if (partCard.mesh.visible) partCard.mesh.lookAt(eye);
   for (const t2 of tags) t2.visible = playing || on('flaws');
-  phone.group.visible = renderer.xr.isPresenting ? phone.group.parent !== camera : desktopPhone;
+  phone.group.visible = renderer.xr.isPresenting ? phone.group.parent !== camera && !phoneHidden : desktopPhone;
+  if (renderer.xr.isPresenting) pointNow(); else for (const b2 of balls) b2.visible = false;
   if (winHand >= 0 && renderer.xr.isPresenting) { ray.setFromXRController(renderer.xr.getController(winHand)); windows.move(ray); }
   // on a screen, the view comes to what you asked about or pointed at
   if (!renderer.xr.isPresenting) {
@@ -1864,34 +1866,74 @@ const phone = new Phone({
 function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
 const factory = new XRControllerModelFactory();
 const lasers: THREE.Line[] = [];
+// which hand each controller is in; the board or a window held, and by which button
+const handOf: (string | null)[] = [null, null];
+let boardBy: 'select' | 'squeeze' = 'select', winBy: 'select' | 'squeeze' = 'select';
+/** The chips a press can land on, as they stand. */
+const chipsNow = () => [...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])];
 for (let i = 0; i < 2; i++) {
   const ctl = renderer.xr.getController(i); dolly.add(ctl);
   const grip = renderer.xr.getControllerGrip(i); grip.add(factory.createControllerModel(grip)); dolly.add(grip);
   // the menu goes on the left hand, the pointer is the right
   // the phone goes in the left hand, held as a phone is, its screen turned up toward you; the pointer is the right
-  ctl.addEventListener('connected', (e) => { const hand = (e as unknown as { data?: { handedness?: string } }).data?.handedness; if (hand === 'left' || (!hand && i === 0)) { desktopPhone = false; grip.add(phone.group); phone.group.position.set(0, 0.06, 0.02); phone.group.rotation.set(-Math.PI / 3, 0, 0); } });
+  ctl.addEventListener('disconnected', () => { handOf[i] = null; });
+  ctl.addEventListener('connected', (e) => { const hand = (e as unknown as { data?: { handedness?: string } }).data?.handedness; handOf[i] = hand ?? (i === 0 ? 'left' : 'right'); if (hand === 'left' || (!hand && i === 0)) { desktopPhone = false; grip.add(phone.group); phone.group.position.set(0, 0.06, 0.02); phone.group.rotation.set(-Math.PI / 3, 0, 0); } });
   const laser = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }));
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
+  // the trigger is the clicker: it presses what it points at, and never drags (the grip holds)
   ctl.addEventListener('selectstart', () => {
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
     pointerHand = i;
-    const all = [...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])], hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
+    const all = chipsNow(), hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     // what is nearest along the ray is pressed: the phone, a window's bar, a chip, the keyboard of light, or the board behind
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onKeys = keyboard.mesh.visible ? ray.intersectObject(keyboard.mesh, false)[0]?.distance ?? Infinity : Infinity;
     const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity;
     const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys);
     if (nearest < Infinity && nearest === onPhone) { phone.press(ray, renderer, scene); return; }
-    if (nearest < Infinity && nearest === onBar) { windows.press(ray); if (windows.holding) winHand = i; return; }
+    if (nearest < Infinity && nearest === onBar) { windows.press(ray, false); return; }
     if (nearest < Infinity && nearest === onChip) { all.find((c) => c.mesh === hit!.object)?.act(); return; }
-    if (nearest < Infinity && nearest === onBoard && boards?.down(ray)) { boardHand = i; return; }
+    if (nearest < Infinity && nearest === onBoard && boards?.down(ray, 'press')) { boardHand = i; boardBy = 'select'; return; }
     if (dropPin()) return;
     if (pressBoards()) return;
     if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
   });
-  ctl.addEventListener('selectend', () => { if (boardHand === i) { boardHand = -1; boards?.up(); } if (winHand === i) { winHand = -1; windows.release(); } });
-  ctl.addEventListener('squeezestart', () => togglePause());
+  ctl.addEventListener('selectend', () => { if (boardHand === i && boardBy === 'select') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'select') { winHand = -1; windows.release(); } });
+  // the grip on the right hand holds: a node on the board to move it, the board's sheet to slide it, a window (its bar,
+  // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
+  ctl.addEventListener('squeezestart', () => {
+    if (handOf[i] !== 'right') { togglePause(); return; }
+    ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
+    const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onWin = pinning ? Infinity : windows.distance(ray);
+    if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
+    if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
+  });
+  ctl.addEventListener('squeezeend', () => { if (boardHand === i && boardBy === 'squeeze') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'squeeze') { winHand = -1; windows.release(); } });
+}
+// ---- the pointer: each hand's beam ends on the first thing it touches, with a ball where it touches ----------------------
+// What it can land on: the windows and spaces open, the board, the phone (from the other hand), the keyboard of light,
+// the chips, the machine, me, and the floor. Nothing behind what it touches is reached, so nothing behind it is lit.
+const pointRay = new THREE.Raycaster(), floorAt = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), onFloor = new THREE.Vector3();
+const balls = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe0f7fa, transparent: true, opacity: 0.95, depthTest: false })); m.renderOrder = 30; m.visible = false; scene.add(m); return m; });
+const shownUp = (o: THREE.Object3D) => { for (let x: THREE.Object3D | null = o; x; x = x.parent) if (!x.visible) return false; return true; };
+/** Where each hand's pointer touches now: its distance, or null where it touches nothing within reach. */
+const touching: (number | null)[] = [null, null];
+function pointNow(): void {
+  for (let i = 0; i < 2; i++) {
+    const ctl = renderer.xr.getController(i), ball = balls[i]!, laser = lasers[i];
+    if (!laser || !handOf[i]) { ball.visible = false; continue; }
+    pointRay.setFromXRController(ctl); pointRay.camera = renderer.xr.getCamera(); pointRay.far = 8;
+    const things: THREE.Object3D[] = [...windows.objects(), ...(phone.group.visible && handOf[i] !== 'left' ? [phone.group] : []), ...(keyboard.mesh.visible ? [keyboard.mesh] : []), ...chipsNow().map((c) => c.mesh), machine, robot.root];
+    const hit = pointRay.intersectObjects(things, true).find((h) => shownUp(h.object));
+    floorAt.constant = -dolly.position.y;
+    const fl = pointRay.ray.intersectPlane(floorAt, onFloor) ? pointRay.ray.origin.distanceTo(onFloor) : Infinity;
+    const d = Math.min(hit?.distance ?? Infinity, fl);
+    touching[i] = d <= 8 ? d : null;
+    if (touching[i] === null) { laser.scale.z = 3; ball.visible = false; continue; }
+    laser.scale.z = d; ball.visible = true;
+    ball.position.copy(pointRay.ray.origin).addScaledVector(pointRay.ray.direction, d - 0.002); ball.scale.setScalar(0.005 + 0.0025 * d);
+  }
 }
 // walking: the left stick moves you where you look, the right stick turns you a twelfth at a time
 let turned = false;
@@ -1910,12 +1952,14 @@ function walk(dt: number): void {
       if (smoothTurn) { if (Math.abs(sx) > 0.15) dolly.rotateY(-sx * 1.6 * dt); }
       else { if (Math.abs(sx) > 0.7 && !turned) { dolly.rotateY(-Math.sign(sx) * turnStep); turned = true; } if (Math.abs(sx) < 0.3) turned = false; }
     }
-    // B on the right hand, Y on the left: out of the latest mode
-    const bButton = src.gamepad?.buttons[5]?.pressed ?? false, key2 = src.handedness;
-    if (bButton && !backHeld.has(key2)) { backHeld.add(key2); exitLatest(); } else if (!bButton) backHeld.delete(key2);
+    // X or Y on the left hand puts the phone away, or brings it back; B on the right: out of the latest mode
+    const bs = src.gamepad?.buttons, key2 = src.handedness;
+    if (key2 === 'left') { const xy = !!(bs?.[4]?.pressed || bs?.[5]?.pressed); if (xy && !backHeld.has(key2)) { backHeld.add(key2); phoneHidden = !phoneHidden; if (phoneHidden && phone.typing) phone.stopTyping(); } else if (!xy) backHeld.delete(key2); }
+    else { const bButton = bs?.[5]?.pressed ?? false; if (bButton && !backHeld.has(key2)) { backHeld.add(key2); exitLatest(); } else if (!bButton) backHeld.delete(key2); }
   }
 }
 const backHeld = new Set<string>();
+let phoneHidden = false;
 
 // ---- views, start ---------------------------------------------------------------------------------------------------------
 const VIEWS: Record<string, [number, number, number, number, number, number]> = {
@@ -1996,6 +2040,7 @@ async function boot() {
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
     phoneNow: () => ({ app: phone.app, photos: phone.photos.length, lines: phone.lines.map((l) => `${l.who}: ${l.text}`), typing: phone.typing, visible: phone.group.visible }),
+    pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first
   (window as unknown as { causalPoint: () => [number, number] | null }).causalPoint = () => {
