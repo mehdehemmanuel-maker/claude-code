@@ -9,9 +9,10 @@ import { INDUSTRIAL } from './industrial';
 import { DEVICES } from './devices';
 import { MORE } from './more';
 import { MOTION } from './motion';
+import { PLANT } from './plant';
 import { SITE } from './site';
 import { STOCK } from './stock';
 import { TOOLS } from './tools';
 
-export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS];
+export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS, ...PLANT];
 export type { KindDef } from './core';

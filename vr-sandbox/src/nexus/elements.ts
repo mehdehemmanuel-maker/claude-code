@@ -147,7 +147,8 @@ export const MATERIALS: Record<string, Spec> = {
   'acid-electrolyte': { blend: [['H2SO4', 37], ['water', 63]], says: 'sulfuric acid in water' },
   gypsum: { formula: 'CaSO6H4', says: 'calcium sulfate dihydrate, CaSO₄·2H₂O' }, argon: { formula: 'Ar' }, co2: { formula: 'CO2', says: 'carbon dioxide' },
   borosilicate: { blend: [['SiO2', 81], ['B2O3', 13], ['Na2O', 4], ['Al2O3', 2]], says: 'borosilicate 3.3 (ISO 3585)' }, rutile: { formula: 'TiO2', says: 'titanium dioxide' },
-  ps: { formula: 'C8H8', says: 'polystyrene' }, zirconia: { formula: 'ZrO2', says: 'zirconium dioxide' }, 'zinc-oxide': { formula: 'ZnO', says: 'zinc oxide' }, tungsten: { alloy: { W: 'bal' }, grade: 'pure tungsten (lamp and TIG wire)' },
+  ps: { formula: 'C8H8', says: 'polystyrene' }, zirconia: { formula: 'ZrO2', says: 'zirconium dioxide' }, 'zinc-oxide': { formula: 'ZnO', says: 'zinc oxide' }, pvb: { formula: 'C8H14O2', says: 'polyvinyl butyral' },
+  portland: { blend: [['CaO', 64], ['SiO2', 21], ['Al2O3', 5], ['Fe2O3', 3], ['SO3', 3], ['MgO', 2], ['K2O', 1], ['Na2O', 1]], says: 'Portland cement, as oxides; typical shares' }, tungsten: { alloy: { W: 'bal' }, grade: 'pure tungsten (lamp and TIG wire)' },
   'al-4043': { alloy: { Si: 5.2, Al: 'bal' }, grade: 'AWS ER4043, nominal' }, 'al-5356': { alloy: { Mg: 5, Mn: 0.12, Cr: 0.12, Al: 'bal' }, grade: 'AWS ER5356, nominal' },
 };
 const isMaterial = (x: string) => x in MATERIALS;

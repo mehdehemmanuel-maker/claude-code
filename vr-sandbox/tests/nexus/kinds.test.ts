@@ -134,6 +134,15 @@ describe('kinds of bought part, as data', () => {
     expect(make('cardboardbox L333 W211 H177 BC').size).toEqual([341, 219, 185]); // made to any size
     expect(make('hvacfilter 20x20x1in MERV13').spec).toMatch(/at least 50 % of 0\.3–1 µm/);
   });
+  it('pipework, power and fixings: Barlow, EN 1092-1, d²/162, the Cardan joint, f = k Q', () => {
+    expect(make('steelpipe 2 sch80 6m').spec).toMatch(/^60\.3 × 5\.54 mm \(ASME B36\.10M\); holds about 254 bar by Barlow/); // 2 × 138 × 5.54 / 60.3 MPa
+    expect(make('flange DN100 weld-neck').spec).toMatch(/220 mm across, 8 × M16 bolts on a 180 mm circle in 18 mm holes/);
+    expect(make('rebar d16 12m').spec).toMatch(/201 mm².*yields at f_y A = 100\.5 kN.*1\.580 kg a metre/);
+    expect(make('flowsensor YF-S201').spec).toMatch(/f = 7\.5 × Q Hz/);
+    expect(make('glasssheet toughened t8 W1234 H777').size).toEqual([1234, 777, 8]); // cut to any size
+    expect(make('cement CEM-II/A-L-32.5R').name).toBe('CEM II/A-L 32.5 R cement, 25 kg');
+    expect(make('powerinverter 1000W 12V pure-sine').spec).toMatch(/I = P \/ \(V η\) = 93 A/);
+  });
   it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
     const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
     expect(t.name).toBe('torsion spring 1.35 × 12.7, 7.75 coils, legs at 135°, right-hand, legs 42 and 18 mm');
