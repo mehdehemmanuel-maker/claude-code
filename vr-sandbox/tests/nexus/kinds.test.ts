@@ -24,6 +24,8 @@ describe('kinds of bought part, as data', () => {
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(HAND_FAMILIES.some((f) => f.id === id), id).toBe(false);
     for (const k of KINDS) expect(FAMILIES.find((f) => new RegExp(`^${f.id}s?\\b`, 'i').test(`${k.id} x`))?.id, k.id).toBe(k.id);
+    // a value written as its kind's own name would be read as the name and lost ("frl FRL")
+    for (const k of KINDS) for (const l of linesOf(k).filter((_, i) => i % 5 === 0)) expect(l.split(' ').slice(1).some((t) => t.toLowerCase() === k.id), l).toBe(false);
   });
   it('every size it is sold in is made: a real item, a mass, a box, and children the inventory holds', () => {
     const seen = new Map<string, string>();
@@ -116,6 +118,21 @@ describe('kinds of bought part, as data', () => {
     expect((resolve('pump gear') as Item).id).toBe('pump-gear'); // a product a kind's words would refuse is still found
     expect((resolve('relay') as Item).id).toBe('relay');
     expect((resolve('relay 12V SPDT 10A') as Item).id).toBe('relay-12-spdt-10');
+  });
+  it('panels, plant, garage, rigging and lab say their standards\' numbers', () => {
+    expect(make('dinterminal 10mm² feed-through').spec).toMatch(/rated 57 A \(IEC 60947-7-1\)/);
+    expect(make('energymeter three 80A B').spec).toMatch(/within ±1 % of the energy/);
+    expect(make('gearpump 10cc').spec).toMatch(/Q = V n η_v = 13\.95 l\/min/); // 10 cc × 1500 rpm × 0.93
+    expect(make('airprep G1/4 FRL um5').name).toBe('FRL unit G1/4, 5 µm'); // a value may not be its kind's own name
+    expect(make('supercap 3000F').spec).toMatch(/½CV² = 10935 J/);
+    expect(make('motoroil 5W-30 4L').spec).toMatch(/cranks at -30 °C; 30: 9\.3 to under 12\.5 mm²\/s/);
+    expect(make('liftingsling flat 3t 2m').spec).toMatch(/^yellow: 3 t straight, 2\.4 t choked, 6 t in a basket/);
+    expect(make('liftchain d10 5m').spec).toMatch(/WLL 3\.15 t/);
+    expect(make('ratchetstrap w50 5000daN 8m').spec).toMatch(/LC 5000 daN \(50 kN, 5\.10 t-force\)/);
+    expect(make('carbattery 70Ah AGM').spec).toMatch(/840 Wh/);
+    expect(make('cardboardbox L300 W200 H150 C').name).toBe('300 × 200 × 150 mm box, single wall');
+    expect(make('cardboardbox L333 W211 H177 BC').size).toEqual([341, 219, 185]); // made to any size
+    expect(make('hvacfilter 20x20x1in MERV13').spec).toMatch(/at least 50 % of 0\.3–1 µm/);
   });
   it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
     const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
