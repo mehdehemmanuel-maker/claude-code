@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INVENTORY, resolve } from '../../src/nexus/inventory';
+import { KINDS } from '../../src/nexus/kinds';
+import { linesOf } from '../../src/nexus/kinds/core';
 import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST, MATTER_TO_INVENTORY } from '../../src/nexus/pieces';
 import { MATERIALS as MATTERS } from '../../src/data/materials';
 import { LOOKS, lookRow } from '../../src/nexus/looks';
@@ -26,6 +28,10 @@ describe('everything in 3D: its look, and how it comes apart', () => {
     for (const [w, k] of [['transformer toroidal 50VA 12V', 'ring'], ['devboard RP2040', 'board'], ['cartyre w205 ar55 R16 V', 'torus'], ['shieldgas argon 20L', 'can'], ['wirerope 6x36-IWRC d12 20m', 'coil']] as const) expect(lookOf(get(w)).kind, w).toBe(k);
     expect(lookOf(get('sparkplug M14x1.25 reach19 nickel'))).toMatchObject({ kind: 'screw', mark: 'hex' });
     expect(lookOf(get('wirerope 6x36-IWRC d12 20m')).wire).toBe(0.012); // its rope, not its reel, is the wire drawn
+    const first = (id: string) => get(linesOf(KINDS.find((k) => k.id === id)!)[0]!);
+    expect(lookOf(first('sawblade'))).toMatchObject({ kind: 'gear', teeth: 24 }); // a toothed disc, as many teeth as it has
+    expect(lookOf(first('castor')).kind).toBe('wheel');
+    expect(lookOf(first('drillbit'))).toMatchObject({ kind: 'rod', mark: 'thread' });
   });
   it('its finish is what it is mostly made of', () => {
     expect(finishOf('brass').color).toBe(0xd4af5a);

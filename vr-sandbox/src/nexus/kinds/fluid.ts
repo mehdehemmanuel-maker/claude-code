@@ -33,7 +33,7 @@ export const FLUID: KindDef[] = [
     box: (p) => [Math.max(G(p, 'thread') * 1.3, n(p, 'hose') + 4), Math.max(G(p, 'thread') * 1.3, n(p, 'hose') + 4), n(p, 'hose') * 2 + 25], g: (p) => gOf(cyl(n(p, 'hose'), n(p, 'hose') * 2 + 10) * 0.5 + cyl(G(p, 'thread') * 1.3, 10) * 0.6, madeOf(p)[1]),
   },
   {
-    id: 'pushfitting', name: 'push-in pneumatic fitting', path: 'Fluid/Pneumatics/Push-in fittings', says: 'a fitting that grips plastic air tube when it is pushed in, and lets it go when its collet is pressed', std: 'the tube sizes and threads sold',
+    id: 'pushfitting', look: 'tube', name: 'push-in pneumatic fitting', path: 'Fluid/Pneumatics/Push-in fittings', says: 'a fitting that grips plastic air tube when it is pushed in, and lets it go when its collet is pressed', std: 'the tube sizes and threads sold',
     axes: [bare('type', 'type', ['straight', 'elbow', 'tee', 'Y', 'bulkhead', 'union']), bare('thread', 'thread', (p) => (p.type === 'straight' || p.type === 'elbow' ? ['M5', 'G1/8', 'G1/4', 'G3/8', 'G1/2'] : ['none'])), ax('tube', 'for tube', 'mm', [3, 4, 6, 8, 10, 12, 14, 16])],
     title: (p) => `push-in ${p.type} for ${p.tube} mm tube${p.thread === 'none' ? '' : `, ${p.thread}`}`, of: (p) => `brass nickel pbt stainless-304 {oring ${p.tube}x1.5 nbr}`, make: 'assemble', how: 'a moulded PBT body, a nickel-plated brass thread, a stainless toothed collet and an NBR seal', spec: (p) => `${p.tube} mm OD tube; to about 10 bar (typical)`,
     box: (p) => [n(p, 'tube') * 2 + 4, n(p, 'tube') * 2 + 4, n(p, 'tube') * 2.5 + 15], g: (p) => n(p, 'tube') * 1.6 + 3,

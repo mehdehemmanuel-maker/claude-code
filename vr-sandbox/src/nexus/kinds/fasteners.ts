@@ -82,7 +82,7 @@ export const FASTENERS: KindDef[] = [
     box: (p) => [Number(p.slot) * 1.8, Number(p.slot) * 1.1, Number(p.slot) * 0.7], g: (p) => gOf(Number(p.slot) ** 3 * 1.8 * 1.1 * 0.7 * 0.7, 7.85),
   },
   {
-    id: 'blindrivet', name: 'blind rivet', path: 'Hardware/Fasteners/Rivets', says: 'a hollow rivet set from one side: its mandrel pulled until it snaps, swelling the far end', std: 'ISO 15977/15983 diameters, in the lengths makers sell (typical)',
+    id: 'blindrivet', look: 'rod', name: 'blind rivet', path: 'Hardware/Fasteners/Rivets', says: 'a hollow rivet set from one side: its mandrel pulled until it snaps, swelling the far end', std: 'ISO 15977/15983 diameters, in the lengths makers sell (typical)',
     axes: [ax('d', 'diameter', 'mm', [2.4, 3.2, 4, 4.8, 6.4]), ax('L', 'length', 'mm', (p) => ({ 2.4: [4, 6, 8, 10], 3.2: [6, 8, 10, 12, 16], 4: [6, 8, 10, 12, 14, 16, 20], 4.8: [8, 10, 12, 14, 16, 20, 25], 6.4: [10, 12, 16, 20, 25, 30] } as Record<number, number[]>)[Number(p.d)]!), bare('matter', 'made of', ['aluminium', 'steel', 'stainless'])],
     title: (p) => `blind rivet ${p.d} × ${p.L}, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} ${p.matter === 'aluminium' ? 'steel-low' : madeOf(p)[0]}`, make: 'cold-head', how: 'its body cold-headed and drawn hollow, a mandrel put through it with a neck to snap',
     spec: (p) => `drill ${(Number(p.d) + 0.1).toFixed(1)} mm; grips about ${Math.max(0.5, Number(p.L) - 1.6 * Number(p.d)).toFixed(1)}–${(Number(p.L) - 1.1 * Number(p.d)).toFixed(1)} mm of plate (typical)`, box: (p) => [2 * Number(p.d), 2 * Number(p.d), Number(p.L) + 25], g: (p) => gOf(ring(Number(p.d), 0.55 * Number(p.d), Number(p.L)), madeOf(p)[1]) + gOf(cyl(0.5 * Number(p.d), Number(p.L) + 25), 7.85),
@@ -134,20 +134,20 @@ export const FASTENERS: KindDef[] = [
     box: (p) => [Number(p.d) * 2, Number(p.d) * 2, 1], g: (p) => gOf(ring(Number(p.d) * 2, Number(p.d), Number(p.d) / 12 + 0.2) * 0.6, 7.85),
   },
   {
-    id: 'wallplug', name: 'wall plug (anchor)', path: 'Hardware/Fasteners/Anchors', says: 'a nylon sleeve pushed into a drilled hole; a screw spreads it to grip the wall', std: 'the diameters and lengths makers sell for masonry (typical)',
+    id: 'wallplug', look: 'rod', name: 'wall plug (anchor)', path: 'Hardware/Fasteners/Anchors', says: 'a nylon sleeve pushed into a drilled hole; a screw spreads it to grip the wall', std: 'the diameters and lengths makers sell for masonry (typical)',
     axes: [ax('d', 'diameter (= the drill)', 'mm', [5, 6, 8, 10, 12, 14]), ax('L', 'length', 'mm', (p) => ({ 5: [25], 6: [30, 50], 8: [40, 65], 10: [50, 80], 12: [60, 100], 14: [70] } as Record<number, number[]>)[Number(p.d)]!)],
     title: (p) => `wall plug ${p.d} × ${p.L}`, of: () => 'nylon', make: 'mould', how: 'injection-moulded in nylon 6, with barbs and splitting legs', spec: (p) => { const S: Record<number, string> = { 5: '3–4', 6: '4–5', 8: '4.5–6', 10: '6–8', 12: '8–10', 14: '10–12' }; return `drill ${p.d} mm, ${Number(p.L) + 10} mm deep; for ${S[Number(p.d)]} mm screws (typical)`; },
     box: (p) => [Number(p.d), Number(p.d), Number(p.L)], g: (p) => gOf(ring(Number(p.d), Number(p.d) * 0.55, Number(p.L)), 1.14),
   },
   {
-    id: 'helicoil', name: 'wire thread insert', path: 'Hardware/Fasteners/Inserts', says: 'a coil of diamond-section wire that lines a tapped hole with a hard, true thread', std: 'DIN 8140, M2–M12, 1 to 3 diameters long',
+    id: 'helicoil', look: 'spring', name: 'wire thread insert', path: 'Hardware/Fasteners/Inserts', says: 'a coil of diamond-section wire that lines a tapped hole with a hard, true thread', std: 'DIN 8140, M2–M12, 1 to 3 diameters long',
     axes: [bare('thread', 'thread', threads('M2', 'M12')), ax('x', 'length, in diameters', 'd', [1, 1.5, 2, 2.5, 3])],
     title: (p) => `${p.thread} wire thread insert, ${p.x}d`, of: () => 'stainless-304', make: 'coil', how: 'stainless wire rolled to a diamond section and coiled, its tang notched to snap off',
     spec: (p) => { const D: Record<string, number> = { M2: 2.1, 'M2.5': 2.6, M3: 3.2, M4: 4.2, M5: 5.2, M6: 6.3, M8: 8.4, M10: 10.5, M12: 12.5 }; return `drill ${D[String(p.thread)] ?? dOf(p) + 0.2} mm, tap ${p.thread} STI; ${(Number(p.x) * dOf(p)).toFixed(1)} mm long`; },
     box: (p) => [dOf(p) * 1.3, dOf(p) * 1.3, Number(p.x) * dOf(p)], g: (p) => gOf(ring(dOf(p) * 1.25, dOf(p), Number(p.x) * dOf(p)) * 0.8, 8),
   },
   {
-    id: 'rivnut', name: 'blind rivet nut', path: 'Hardware/Fasteners/Inserts', says: 'a threaded sleeve set into a hole in thin sheet from one side, to bolt into', std: 'flat-head rivet nuts M3–M10, the sizes makers sell (typical)',
+    id: 'rivnut', look: 'tube', name: 'blind rivet nut', path: 'Hardware/Fasteners/Inserts', says: 'a threaded sleeve set into a hole in thin sheet from one side, to bolt into', std: 'flat-head rivet nuts M3–M10, the sizes makers sell (typical)',
     axes: [bare('thread', 'thread', ['M3', 'M4', 'M5', 'M6', 'M8', 'M10']), bare('matter', 'made of', ['steel', 'aluminium', 'stainless'])],
     title: (p) => `${p.thread} rivet nut, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'cold-head', how: 'cold-formed sleeve, tapped, its thin wall to fold and grip',
     spec: (p) => { const H: Record<string, number> = { M3: 5, M4: 6, M5: 7, M6: 9, M8: 11, M10: 13 }; return `hole ${H[String(p.thread)]} mm (typical)`; }, box: (p) => [2 * dOf(p) + 2, 2 * dOf(p) + 2, 2.2 * dOf(p) + 4], g: (p) => gOf(ring(1.6 * dOf(p) + 1, dOf(p), 2.2 * dOf(p) + 4), madeOf(p)[1]),

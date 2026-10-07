@@ -163,7 +163,7 @@ export const SITE: KindDef[] = [
     box: (p) => { const [d, h] = CYL[n(p, 'L')]!; return [d, d, h]; }, g: (p) => { const V = n(p, 'L'); return CYL[V]![2] * 1000 + (p.gas === 'co2' ? V * 750 : ((V * 200) / 1.013 / 0.97) * 1.67); }, look: 'can',
   },
   {
-    id: 'caliper', name: 'caliper', path: 'Tools/Measuring/Calipers', says: 'a sliding jaw gauge: outside, inside and depth', std: 'the ranges and readings sold; accuracy typical of datasheets',
+    id: 'caliper', look: 'sheet', name: 'caliper', path: 'Tools/Measuring/Calipers', says: 'a sliding jaw gauge: outside, inside and depth', std: 'the ranges and readings sold; accuracy typical of datasheets',
     axes: [bare('type', 'reading', ['vernier', 'dial', 'digital']), ax('range', 'range', 'mm', [150, 200, 300])],
     title: (p) => `${p.range} mm ${p.type} caliper`, of: (p) => `stainless-304${p.type === 'digital' ? ' abs pcb-bare' : p.type === 'dial' ? ' brass pc' : ''}`, make: 'machine', how: 'a hardened stainless beam and slider ground true, its scale etched (or read by a dial or a capacitive sensor)',
     spec: (p) => `reads ${p.type === 'digital' ? '0.01' : '0.02'} mm; within about ±${n(p, 'range') <= 200 ? '0.03' : '0.04'} mm (typical)`, box: (p) => [n(p, 'range') + 85, n(p, 'range') / 4 + 35, 16], g: (p) => 0.0045 * n(p, 'range') ** 2 + 70,
@@ -193,7 +193,7 @@ export const SITE: KindDef[] = [
     spec: (p) => `opens to ${p.open} mm, reaches ${r1(CLAMP[s(p, 'type')]![1](n(p, 'open')))} mm in from the edge`, box: (p) => { const o = n(p, 'open'), t = CLAMP[s(p, 'type')]![1](o); return [r1(o + 80), r1(t + 40), 30]; }, g: (p) => CLAMP[s(p, 'type')]![3](n(p, 'open')), look: 'frame',
   },
   {
-    id: 'hammer', name: 'hammer', path: 'Tools/Hand tools/Hammers', says: 'a head on a handle: what it does is the energy its head carries in', std: 'the head masses sold (oz and lb); the energy at 10 m/s an estimate of a full swing',
+    id: 'hammer', look: 'rod', name: 'hammer', path: 'Tools/Hand tools/Hammers', says: 'a head on a handle: what it does is the energy its head carries in', std: 'the head masses sold (oz and lb); the energy at 10 m/s an estimate of a full swing',
     axes: [bare('type', 'type', Object.keys(HAMMER)), unit('oz', 'head', 'oz', (p) => HAMMER[s(p, 'type')]![0])],
     title: (p) => `${n(p, 'oz') >= 40 ? `${n(p, 'oz') / 16} lb` : `${p.oz} oz`} ${p.type} hammer`, of: (p) => HAMMER[s(p, 'type')]![2], make: (p) => (p.type === 'mallet' ? 'mould' : 'forge'), how: (p) => (p.type === 'mallet' ? 'a rubber head moulded on a wooden handle' : 'a head drop-forged, hardened on its face, fixed on its handle'),
     spec: (p) => { const m = (n(p, 'oz') * 28.35) / 1000; return `${(m * 1000).toFixed(0)} g head (1 oz = 28.35 g); at 10 m/s it carries ½mv² = ${(0.5 * m * 100).toFixed(0)} J`; }, box: (p) => { const L = HAMMER[s(p, 'type')]![1]; return [r1(L * 0.35), 35, L]; }, g: (p) => n(p, 'oz') * 28.35 + HAMMER[s(p, 'type')]![1] * 0.6,

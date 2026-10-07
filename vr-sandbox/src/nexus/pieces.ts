@@ -77,8 +77,8 @@ export function lookOf(i: Item): Look {
   const f = F(i), id = i.id, name = i.name.toLowerCase(), size = boxOf(i), finish = finishOf(mainMaterial(i) || 'steel');
   const L = (kind: ShapeKind, more: Partial<Look> = {}): Look => ({ kind, size, finish, ...more });
   const bores: Partial<Record<ShapeKind, number>> = { gear: 0.2, ring: 0.5, tube: 0.8, bearing: 0.35 };
-  // a kind's own look: its shape, then a mark and its wire in mm ("coil w12")
-  const own = (t: string[]) => { const w = t.find((x) => /^w[\d.]+$/.test(x)), mark = t.find((x) => !/^w[\d.]+$/.test(x)); return { ...(mark ? { mark } : {}), ...(w ? { wire: Number(w.slice(1)) / 1000 } : {}) }; };
+  // a kind's own look: its shape, then a mark, its wire in mm and its teeth ("coil w12", "gear z60")
+  const own = (t: string[]) => { const w = t.find((x) => /^w[\d.]+$/.test(x)), z = t.find((x) => /^z\d+$/.test(x)), mark = t.find((x) => !/^[wz][\d.]+$/.test(x)); return { ...(mark ? { mark } : {}), ...(w ? { wire: Number(w.slice(1)) / 1000 } : {}), ...(z ? { teeth: Number(z.slice(1)) } : {}) }; };
   const row: { kind: string; teeth?: number; mark?: string; wire?: number } | null = lookRow(id) ?? (i.look ? (([kind, ...t]) => ({ kind: kind!, ...own(t) }))(i.look.split(' ')) : null);
   if (row && SHAPES.includes(row.kind as ShapeKind)) return L(row.kind as ShapeKind, { ...(row.teeth ? { teeth: row.teeth } : {}), ...(row.mark ? { mark: row.mark } : {}), ...(row.wire ? { wire: row.wire } : {}), ...(bores[row.kind as ShapeKind] ? { bore: bores[row.kind as ShapeKind] } : {}) });
   if (i.kind === 'element') return L('atom', { mark: Object.keys(ELEMENTS).find((s) => `el-${s.toLowerCase()}` === id) ?? '?' });
