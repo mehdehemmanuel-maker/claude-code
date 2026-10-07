@@ -42,6 +42,7 @@ import { makeNotes, STAGES as LOOP_STAGES, type Note, type NoteKind, type Notes,
 import { buildSteps, nodeAt as treeNodeAt, pathOf, treeOf, type BuildStep, type TreeNode } from '../embody/tree';
 import { Unravel } from './unravel';
 import { Exploded, type BuildPiece } from './explode';
+import { MATTER_TO_INVENTORY } from '../pieces';
 import { LAW_UPDATES } from '../embody/journal';
 import { boxOf, type Flaw, type Part } from '../embody/part';
 import { generate, type Structure } from '../manifold';
@@ -838,9 +839,9 @@ const apart3d = new Exploded(scene);
 /** The hand holding a part out of the 3D view, or -1. */
 let gripHeld3d = -1;
 /** Lift an item out in 3D before you, apart: its parts round it, each to open in turn, down to the elements. */
-function see3d(id: string): string { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 0.95, renderer.xr.isPresenting ? 0 : 0.16); aim3d(); return apart3d.show(id, performance.now() / 1000); }
+function see3d(id: string): string { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.show(id, performance.now() / 1000); }
 /** On a screen, the view turned to look at it (in a headset you turn your own head). */
-function aim3d(): void { if (renderer.xr.isPresenting) return; framing = false; orbit.target.copy(apart3d.group.position).add(new THREE.Vector3(0.12, 0, 0)); orbit.update(); }
+function aim3d(): void { if (renderer.xr.isPresenting) return; framing = false; orbit.target.copy(apart3d.group.position).addScaledVector(apart3d.right, -0.14); orbit.update(); }
 /** The build on the table lifted out before you and pushed apart from where its parts stand. */
 function seeBuild3d(): string {
   const pieces: BuildPiece[] = [];
@@ -853,7 +854,7 @@ function seeBuild3d(): string {
     if (pieces.length >= 160) break;
   }
   if (!pieces.length) return 'Nothing stands on the table to take apart: build something first, or ask to see any part of the inventory in 3D.';
-  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 0.95, renderer.xr.isPresenting ? 0 : 0.16); aim3d();
+  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d();
   return apart3d.showBuild(lastBuilt?.title ?? 'the build', pieces, performance.now() / 1000);
 }
 /** What you point at in the 3D view: a part opens, a chip goes back, round, or away. */
@@ -863,8 +864,10 @@ function pick3d(): boolean {
   if ('chip' in h) { if (h.chip === 'back') say(apart3d.back(now)); else if (h.chip === 'close') apart3d.close(); else apart3d.toggle(now); return true; }
   const i = INVENTORY.get(h.piece);
   if (i) { say(apart3d.open(h.piece, now)); return true; }
-  const m = shop.all().made.find((x) => x.name === h.piece);
-  say(m ? `${m.name}: a ${m.kind}${m.matter ? ` of ${m.matter.name}` : ''}${m.mass ? `, ${m.mass.toFixed(3)} kg` : ''}. It was made here from the pipeline's steps: it has no parts inside it.` : h.piece);
+  const m = shop.all().made.find((x) => x.name === h.piece), mat = m?.matter ? MATTER_TO_INVENTORY[m.matter.id] : undefined;
+  // a shape made here is one piece: it opens into what it is made of, and that into its elements
+  if (m && mat && INVENTORY.has(mat)) { say(`${m.name}: a ${m.kind} of ${m.matter!.name}${m.mass ? `, ${m.mass.toFixed(3)} kg` : ''}, made here in one piece. Inside it: ${apart3d.open(mat, now)}`); return true; }
+  say(m ? `${m.name}: a ${m.kind}${m.matter ? ` of ${m.matter.name}` : ''}${m.mass ? `, ${m.mass.toFixed(3)} kg` : ''}, made here in one piece from the pipeline's steps.` : h.piece);
   return true;
 }
 let xray = false, isolated: Set<string> | null = null, reportsMode: 'dots' | 'full' | 'off' = 'dots', framing = true;
@@ -2956,6 +2959,7 @@ async function boot() {
     buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
     resetBuild: () => resetBuild(),
     see3d: (id: string) => see3d(id), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids(), holding: apart3d.holding }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)), xrRay3d: () => { const i = handOf.indexOf('right'); if (i < 0) return null; const ctl = renderer.xr.getController(i); ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera(); return { pick: apart3d.pick(ray), d: apart3d.distance(ray), phone: phone.distance(ray), board: on('boards') && boards ? boards.distance(ray) : null, holo: holos.distance(ray), bar: windows.barAt(ray)?.distance ?? null }; },
+    pick3dAt: (x: number, y: number) => { ray.setFromCamera(new THREE.Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1), camera); return { pick: apart3d.pick(ray), d: apart3d.distance(ray) }; },
     apart3dWorld: (id: string) => { const w = apart3d.pointOf(id); return w ? [w.x, w.y, w.z] : null; },
     storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),

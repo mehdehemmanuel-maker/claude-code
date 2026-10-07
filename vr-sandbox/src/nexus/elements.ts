@@ -136,6 +136,12 @@ export const MATERIALS: Record<string, Spec> = {
   asa: { blend: [['C3H3N', 30], ['C8H8', 50], ['C7H12O2', 20]], says: 'acrylonitrile, styrene and butyl acrylate, typical shares' },
   wood: { blend: [['paper', 45], ['C5H8O4', 25], ['C10H12O3', 30]], says: 'softwood: cellulose, hemicellulose and lignin' },
   bk7: { blend: [['SiO2', 70], ['B2O3', 10], ['Na2O', 8], ['K2O', 8], ['BaO', 4]], says: 'borosilicate crown glass (N-BK7 type), approximate' },
+  'al-2024': { alloy: { Cu: 4.4, Mg: 1.5, Mn: 0.6, Al: 'bal' }, grade: 'AA 2024, nominal' },
+  concrete: { blend: [['SiO2', 64], ['CaO', 15], ['Al2O3', 6], ['Fe2O3', 3], ['MgO', 2], ['H2O', 10]], says: 'cement, sand and gravel, as oxides, with the water bound in it; typical shares' },
+  granite: { blend: [['SiO2', 72], ['Al2O3', 14], ['K2O', 4], ['Na2O', 3.5], ['CaO', 2], ['Fe2O3', 2.5], ['MgO', 1], ['H2O', 1]], says: 'quartz, feldspar and mica, as oxides; typical shares' },
+  slate: { blend: [['SiO2', 60], ['Al2O3', 17], ['Fe2O3', 7], ['K2O', 4], ['MgO', 3], ['CaO', 2], ['Na2O', 2], ['H2O', 5]], says: 'metamorphosed shale, as oxides; typical shares' },
+  marble: { formula: 'CaCO3', says: 'calcite' },
+  brick: { blend: [['SiO2', 60], ['Al2O3', 25], ['Fe2O3', 7], ['CaO', 4], ['MgO', 2], ['K2O', 2]], says: 'fired clay, as oxides; typical shares' },
   'koh-electrolyte': { blend: [['KOH', 35], ['water', 65]], says: 'potassium hydroxide in water' },
   'acid-electrolyte': { blend: [['H2SO4', 37], ['water', 63]], says: 'sulfuric acid in water' },
 };

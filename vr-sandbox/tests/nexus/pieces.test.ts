@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INVENTORY, resolve } from '../../src/nexus/inventory';
-import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST } from '../../src/nexus/pieces';
+import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST, MATTER_TO_INVENTORY } from '../../src/nexus/pieces';
+import { MATERIALS as MATTERS } from '../../src/data/materials';
 import { LOOKS, lookRow } from '../../src/nexus/looks';
 import type { Item } from '../../src/nexus/inventory';
 
@@ -55,6 +56,14 @@ describe('everything in 3D: its look, and how it comes apart', () => {
     for (const id of ['bicycle', 'printer-fdm', 'kettle', 'quadcopter', get('aircylinder bore32 double 100mm').id, get('lens d25.4 f100 uncoated').id]) {
       const way = wayDown(id);
       expect(way.at(-1)!.startsWith('el-'), `${id}: ${way.join(' › ')}`).toBe(true);
+    }
+  });
+  it('a shape made in the room opens into its matter: every matter the generator builds with has its material here, but cloth, leather and soil', () => {
+    for (const m of MATTERS) {
+      const id = MATTER_TO_INVENTORY[m.id];
+      if (!id) { expect(['textile.baize', 'leather.veg-tan', 'cork.agglomerated', 'ground.soil'], m.id).toContain(m.id); continue; }
+      expect(INVENTORY.get(id)?.kind, `${m.id} → ${id}`).toBe('material');
+      expect(wayDown(id).at(-1)!.startsWith('el-'), m.id).toBe(true);
     }
   });
 });
