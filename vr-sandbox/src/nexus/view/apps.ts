@@ -5,6 +5,8 @@
 import type { Kit, Nav, PhoneApp, View } from './phone';
 import { ABILITIES, factName, type AbilityId, type Bot, type Fleet } from '../fleet';
 import { METALS, RECIPES, bill, type Cell, type MadePart } from '../cell';
+import { INVENTORY, categories, resolve, routeOf, summary, type Item } from '../inventory';
+import { FAMILIES } from '../families';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
 export interface StoredBuild { id: string; title: string; ask?: string; kind: 'steps' | 'machine' | 'shapes'; steps?: string[]; footprint?: [number, number]; verdict?: string; kg?: number; slot?: string; at: number; parts: MiniPart[] }
@@ -169,6 +171,60 @@ export function workshopApp(h: WorkshopHost): PhoneApp {
         case 'dobuild': said = h.build(String(arg)); return true;
         case 'preset': said = h.gcode(String(arg)); return true;
         case 'write': nav.write('G-code: lines separated by ; or new lines, e.g. G28; M104 S210', (t) => { said = h.gcode(t.replace(/\s*;\s*(?=[GMT]\d)/gi, '\n')); nav.redraw(); }); return true;
+      }
+      return false;
+    },
+  };
+}
+
+export interface InventoryHost { make(words: string): void; board(id: string): string; tree(id: string): string; open(): string; feed(text: string): string; said(): string }
+/** The inventory on the phone: its categories, down to each entry; what is inside it (press a part to go into it);
+ *  making it; its pipeline and its tree on the board; the adjustable families and their sizes; and feeding it. */
+export function inventoryApp(h: InventoryHost): PhoneApp {
+  const C = '#26c6da', per = 9; let said = '';
+  const list = (sub: string): { label: string; note: string; act: string; arg: string }[] => {
+    if (sub === '') return [...categories().keys()].map((c) => ({ label: c, note: `${[...categories().get(c)!.values()].reduce((a, m) => a + [...m.values()].reduce((x, ids) => x + ids.length, 0), 0)} entries`, act: 'go', arg: `cat:${c}` }));
+    if (sub.startsWith('cat:')) { const cat = sub.slice(4), subs = categories().get(cat); if (!subs) return []; return [...subs].flatMap(([sc, m]) => [...m].flatMap(([ss, ids]) => ids.filter((id) => !(INVENTORY.get(id)!.adjustable && !INVENTORY.get(id)!.family)).map((id) => { const i = INVENTORY.get(id)!; return { label: `${i.family ? '⚙ ' : ''}${i.name}`, note: [sc, ss].filter(Boolean).join(' › '), act: 'go', arg: `item:${id}` }; }))); }
+    if (sub === 'fam') return FAMILIES.map((f) => ({ label: `⚙ ${f.name}`, note: f.examples.join(', '), act: 'go', arg: `famx:${f.id}` }));
+    if (sub.startsWith('famx:')) { const f = FAMILIES.find((x) => x.id === sub.slice(5)); return f ? f.examples.map((ex) => ({ label: ex, note: 'press to see it, made to these sizes', act: 'fam', arg: ex })) : []; }
+    if (sub.startsWith('item:')) { const i = INVENTORY.get(sub.slice(5)); return i ? i.of.map((c) => { const ci = INVENTORY.get(c.id)!, r = routeOf(ci); return { label: `${c.n > 1 ? `${c.n} × ` : ''}${ci.name}`, note: ci.kind === 'material' ? 'from stock' : r.bought ? 'bought' : `made here: ${r.process}`, act: 'go', arg: `item:${c.id}` }; }) : []; }
+    return [];
+  };
+  return {
+    id: 'inventory', name: 'Inventory', icon: '🗃', colour: C,
+    pages: (sub) => Math.max(1, Math.ceil(list(sub).length / per)),
+    draw(k: Kit, v: View) {
+      const { text, wrapped, button, g, W, bottom, hit } = k, sub = v.sub;
+      let y = 160;
+      if (sub.startsWith('item:')) {
+        const i = INVENTORY.get(sub.slice(5)); if (!i) { text('Not found', 40, 122, 36, C, 800); return; }
+        const r = routeOf(i), sm = i.kind === 'material' ? null : summary(i.id);
+        text(i.name, 40, 118, 32, C, 800, W - 80); text(i.path.join(' › '), 40, 146, 15, '#b2ebf2', 500, W - 80);
+        y = 172 + wrapped(i.says, 40, 172, 17, W - 80, '#ffffff', 3);
+        if (i.spec) y += wrapped(i.spec, 40, y + 4, 15, W - 80, '#b2ebf2', 3) + 4;
+        text(i.kind === 'material' ? 'a material: from stock' : r.bought ? `bought: ${r.why.replace(/^bought: /, '')}` : `made here: ${r.why}`, 40, y + 22, 15, r.bought ? '#ffb74d' : '#69f0ae', 600, W - 80); y += 30;
+        if (sm) { text(`inside: ${sm.made} made here · ${sm.bought} bought · ${sm.stock} from stock · ${sm.depth} levels`, 40, y + 18, 15, '#e0f7fa', 500, W - 80); y += 26; }
+        if (i.kind !== 'material') { const bw = (W - 80) / 3; button(30, y + 10, bw, 58, '▶ Make it', 'make', i.id, C, 'rgba(38,198,218,0.3)'); button(40 + bw, y + 10, bw, 58, '⚡ Pipeline', 'board', i.id, C); button(50 + 2 * bw, y + 10, bw, 58, '🌳 Tree', 'tree', i.id, C); y += 76; }
+        text(i.of.length ? 'What is in it (press to go in)' : '', 40, y + 18, 16, C, 700); y += 26;
+      } else {
+        text(sub === '' ? 'Inventory' : sub === 'fam' ? 'Adjustable families' : sub.startsWith('famx:') ? `⚙ ${FAMILIES.find((f) => f.id === sub.slice(5))?.name ?? ''}` : sub.slice(4), 40, 118, 38, C, 800, W - 80);
+        if (sub === '') { text(`${INVENTORY.size} entries · ${FAMILIES.length} adjustable families`, 40, 146, 16, '#b2ebf2', 500); const bw = (W - 80) / 3; button(30, 160, bw, 56, '⚙ Families', 'go', 'fam', C); button(40 + bw, 160, bw, 56, '⌨ Find / make', 'find', undefined, C); button(50 + 2 * bw, 160, bw, 56, '＋ Feed', 'feed', undefined, C); button(30, 224, W - 60, 52, '🗂 The inventory as a board', 'open', undefined, C); y = 284; }
+        else if (sub.startsWith('famx:')) { const f = FAMILIES.find((x) => x.id === sub.slice(5)); if (f) { y = 150 + wrapped(f.says, 40, 150, 16, W - 80, '#ffffff', 3); f.params.forEach((q) => { text(`${q.says}: ${q.values ? q.values.join(', ') : `${q.min}–${q.max} ${q.unit}`}`, 40, y + 18, 14, '#b2ebf2', 500, W - 80); y += 22; }); y += 8; } }
+      }
+      const rows = list(sub).slice(v.page * per, v.page * per + per), rh = Math.min(68, (bottom - y - 60) / per);
+      rows.forEach((r, j) => { const ry = y + j * (rh + 6); g.fillStyle = 'rgba(38,198,218,0.10)'; g.beginPath(); g.roundRect(30, ry, W - 60, rh, 12); g.fill(); text(r.label, 46, ry + rh * 0.45, 17, '#ffffff', 600, W - 92); text(r.note, 46, ry + rh * 0.8, 13, '#b2ebf2', 400, W - 92); hit(30, ry, W - 30, ry + rh, r.act, r.arg); });
+      const sd = said || h.said(); if (sd) wrapped(sd, 40, bottom - 40, 14, W - 80, '#ffd740', 2);
+    },
+    act(act, arg, nav: Nav) {
+      switch (act) {
+        case 'go': said = ''; nav.go(String(arg)); return true;
+        case 'make': { const i = INVENTORY.get(String(arg)); if (i) { h.make(i.id); said = `Making ${i.name} in the workshop, everything in it first.`; } return true; }
+        case 'board': said = h.board(String(arg)); return true;
+        case 'tree': said = h.tree(String(arg)); return true;
+        case 'open': said = h.open(); return true;
+        case 'fam': { const x = resolve(String(arg)); if (x && typeof x === 'object') { said = ''; nav.go(`item:${(x as Item).id}`); } else said = String(x ?? 'not found'); return true; }
+        case 'find': nav.write('a part, or a size of one: "nema17", "screw M4x20", "bearing 6201", "gear m1 z30"', (t) => { const x = resolve(t); if (x && typeof x === 'object') nav.go(`item:${(x as Item).id}`); else said = String(x ?? `Nothing called "${t}".`); nav.redraw(); }); return true;
+        case 'feed': nav.write('entries: id | name | Category/Sub | kind | process | child*n child | what it is   (;; between entries)', (t) => { said = h.feed(t); nav.redraw(); }); return true;
       }
       return false;
     },

@@ -49,7 +49,7 @@ import { card, label } from './holo';
 import { meshOfPart } from './parts';
 import { Robot } from './robot';
 import { Boards3D } from './boards3d';
-import { claudeBoard, type FlowApi } from '../flows';
+import { claudeBoard, guessStep, type FlowApi } from '../flows';
 import { Workshop, type Made, type PartRef } from '../generate';
 import { glow } from '../../engineering/thermal';
 import type { Jolt } from '../realize';
@@ -62,10 +62,13 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { robotsApp, warehouseApp, workshopApp, type MiniPart, type StoredBuild } from './apps';
+import { inventoryApp, robotsApp, warehouseApp, workshopApp, type MiniPart, type StoredBuild } from './apps';
 import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
 import { CellView, deviceMesh } from './cell-view';
 import { Devices } from '../devices';
+import { INVENTORY, boardOfInventory, boardOfTree, feed, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
+import { FAMILIES } from '../families';
+import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../pipe';
 import { makeBoardStore } from './boards-store';
@@ -1609,6 +1612,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  if (/^pipeline\s+new\b/i.test(text.trim()) || /^inventory\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
@@ -1732,7 +1736,105 @@ async function pipelineStep(arg: string): Promise<string> {
   if (/^best$/i.test(t)) { await phone.findBest(); return phone.pipeSaid || 'Searched.'; }
   throw new Error(`"pipeline ${t}"? Say pipeline run, pipeline run <an ask>, pipeline ask <an ask>, pipeline set seed 101, matter any, physics on, grow on, pipeline seed +1, pipeline matter steel, pipeline physics off, pipeline stage check, or pipeline best.`);
 }
-async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
+// ---- code in a pipeline step: each language where the forge can run it, else handed on (src/nexus/languages.ts) --------
+let codeWorker: Worker | null = null, codeSeq = 0; const codeWaiting = new Map<number, { ok: (r: { value: string; logs: string[]; steps: string[] }) => void; no: (e: Error) => void }>();
+let pyLoaded = false, dataFacts: Record<string, number> = {};
+function codeRun(lang: 'js' | 'ts' | 'python' | 'cpp', code: string, input: string): Promise<{ value: string; logs: string[]; steps: string[] }> {
+  if (!codeWorker) {
+    codeWorker = new Worker(new URL('./code-worker.ts', import.meta.url), { type: 'module' });
+    codeWorker.onmessage = (e: MessageEvent<{ id: number; value?: string; logs?: string[]; steps?: string[]; error?: string }>) => { const w = codeWaiting.get(e.data.id); if (!w) return; codeWaiting.delete(e.data.id); if (e.data.error !== undefined) w.no(new Error(e.data.error)); else w.ok({ value: e.data.value ?? '', logs: e.data.logs ?? [], steps: e.data.steps ?? [] }); };
+  }
+  const id = ++codeSeq, facts = { ...flowApi.facts() }, most = lang === 'python' && !pyLoaded ? 90_000 : lang === 'ts' ? 30_000 : 5_000;
+  return new Promise((ok, no) => {
+    const timer = window.setTimeout(() => { codeWaiting.delete(id); codeWorker?.terminate(); codeWorker = null; no(new Error(`${lang} ran past ${most / 1000} s and was stopped`)); }, most);
+    codeWaiting.set(id, { ok: (r) => { window.clearTimeout(timer); if (lang === 'python') pyLoaded = true; ok(r); }, no: (e) => { window.clearTimeout(timer); no(e); } });
+    codeWorker!.postMessage({ id, lang, code, facts, input });
+  });
+}
+/** A step written in a language: run where the forge can run it, else handed to Claude or kept, and said which. */
+async function runLanguage(lang: Language, code: string, input: string, signal?: AbortSignal, who?: string): Promise<string> {
+  switch (lang.id) {
+    case 'gcode': return cell.gcode(code.replace(/\s*;\s*(?=[GMT]\d|$)/gi, '\n'));
+    case 'js': case 'ts': case 'python': case 'cpp': {
+      const r = await codeRun(lang.id === 'cpp' ? 'cpp' : lang.id as 'js' | 'ts' | 'python', lang.id === 'cpp' ? cppToJs(code) : code, input);
+      const done: string[] = [];
+      for (const st of r.steps) { try { done.push(await flowAct(st, signal, who, r.value)); } catch (e) { done.push(`${st}: ${(e as Error).message}`); } }
+      return [r.value && `${lang.name}: ${r.value}`, ...r.logs.map((l) => `log: ${l}`), ...done].filter(Boolean).join(' · ') || `${lang.name}: ran, and gave nothing back.`;
+    }
+    case 'scad': { const { steps, notes } = scadToSteps(code); const out: string[] = []; for (const st of steps) out.push(await makeStepLoaded(st, true, who)); return `OpenSCAD: ${steps.length / 2} solid${steps.length === 2 ? '' : 's'} made in the workshop.${notes.length ? ` ${notes.join('; ')}.` : ''} ${out.filter((_, k) => k % 2 === 1).map((x) => x.replace(/^Moved /, '')).join(' ')}`; }
+    case 'forge': return makeStepLoaded(code, true, who);
+    case 'json': { const v = JSON.parse(code) as unknown; if (Array.isArray(v)) { const r = feed(code); keepInventory(); return `JSON: ${r.added.length} added to the inventory${r.refused.length ? `; not added: ${r.refused.join('; ')}` : ''}.`; } if (v && typeof v === 'object') { const nums = Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => typeof x === 'number')) as Record<string, number>; dataFacts = { ...dataFacts, ...nums }; return `JSON: ${Object.keys(nums).length} numbers set for checks to read: ${Object.entries(nums).map(([k, x]) => `${k} = ${x}`).join(', ')}.`; } return `JSON: ${JSON.stringify(v)}`; }
+    case 'csv': { const r = feed(code); keepInventory(); return `CSV: ${r.added.length} added to the inventory${r.refused.length ? `; not added: ${r.refused.join('; ')}` : ''}.`; }
+    case 'math': return makeStepLoaded(/=\s*\??$/.test(code.trim()) ? code : `calc ${code}`, true, who);
+    case 'markdown': return code;
+    case 'sql': { const rows = [...INVENTORY.values()].map((i) => ({ id: i.id, name: i.name, path: i.path.join('/'), kind: i.kind, make: i.make, says: i.says, spec: i.spec ?? '' })); const r = sqlSelect(code, rows); if (typeof r === 'string') throw new Error(r); return `SQL: ${r.length} row${r.length === 1 ? '' : 's'}: ${r.map((x) => Object.values(x).join(' — ')).join(' | ')}`; }
+    case 'pipeline': return pipelineStep(code);
+    default:
+      if (lang.runs === 'claude') { const a = await flowAi(`Turn this ${lang.name} into forge pipeline steps, one line, steps separated by " -> " (a step can be: forge: place cube named x size 20 x 20 x 10 mm, ts: <code>, gcode: <code>, device <name> <command>, say <words>): ${code}`, signal); return `${lang.name} is not run in the forge; ${a.by === 'claude' ? 'Claude' : 'Nexus (not Claude)'} read it as: ${a.text}`; }
+      return `Kept as written: ${lang.name} is not run in the forge (${lang.how}).`;
+  }
+}
+
+// ---- the inventory: real products down to their materials, made in the workshop (src/nexus/inventory.ts) ---------------
+const INV_KEY = 'forge:inventory-yours';
+let invMade = 0, invLast: string | null = null;
+function keepInventory(): void { try { localStorage.setItem(INV_KEY, [...INVENTORY.values()].filter((i) => i.yours).map((i) => [i.id, i.name, i.path.join('/'), i.kind, i.make, i.of.map((c) => (c.n > 1 ? `${c.id}*${c.n}` : c.id)).join(' '), i.says, i.spec ?? ''].join(' | ')).join('\n')); } catch { /* kept for this visit */ } }
+try { const kept2 = localStorage.getItem(INV_KEY); if (kept2) feed(kept2); } catch { /* none kept */ }
+/** An item made in the workshop, everything in it first, all the way down: made here where the workshop can, bought
+ *  where it cannot, materials from stock; what each was is said. */
+async function makeItem(i: Item, n = 1, log: string[] = [], depth = 0): Promise<string[]> {
+  if (depth > 12) { log.push(`${i.name}: too deep, taken as bought`); return log; }
+  if (i.kind === 'material') { log.push(`${n > 1 ? `${n} × ` : ''}${i.name}: from stock`); return log; }
+  const r = routeOf(i);
+  if (r.bought) { await cell.bring(i.name); log.push(`${n > 1 ? `${n} × ` : ''}${i.name}: bought (${r.why.replace(/^bought: /, '')})`); return log; }
+  // what is in it: materials from stock, what is bought brought in one trip, what is made here made, each all the way down
+  const bought: string[] = [];
+  for (const c of i.of) {
+    const ci = INVENTORY.get(c.id); if (!ci) continue;
+    if (ci.kind === 'material') { log.push(`${c.n * n > 1 ? `${c.n * n} × ` : ''}${ci.name}: from stock`); continue; }
+    if (routeOf(ci).bought) { bought.push(`${c.n * n > 1 ? `${c.n * n} × ` : ''}${ci.name}`); continue; }
+    await makeItem(ci, c.n * n, log, depth + 1);
+  }
+  if (bought.length) { await cell.bring(...bought); log.push(`bought, off the rack in one trip: ${bought.join(', ')}`); }
+  const uses = i.of.map((c) => INVENTORY.get(c.id)?.name ?? c.id), label = `${n > 1 ? `${n} × ` : ''}${i.name}`;
+  if (r.process === 'print') { await cell.printNow({ id: i.id, name: i.name, sections: sectionsOf(i) }); await cell.take(i.name); log.push(`${label}: printed${r.why.includes('instead') ? ` (${r.why})` : ''}`); }
+  else if (r.process === 'cast') { await cell.castNow({ id: i.id, name: i.name, sections: sectionsOf(i), cast: 'aluminium' }); await cell.take(i.name); log.push(`${label}: cast in aluminium${r.why.includes('instead') ? ` (${r.why})` : ''}`); }
+  else if (r.process === 'heat-treat') { log.push(`${label}: ${await cell.temper(i.name).then((x) => x.replace(/^[^:]+: /, ''))}`); }
+  else { await cell.work(r.process === 'assemble' ? 'putting together' : r.process === 'wind' ? 'winding' : r.process === 'solder' ? 'soldering' : r.process === 'crimp' ? 'crimping' : r.process === 'coil' ? 'coiling' : 'bending', i.name, uses, Math.min(6, 1.5 + 0.3 * i.of.length)); log.push(`${label}: ${PROCESSES_SAY[r.process] ?? r.process}`); }
+  return log;
+}
+const PROCESSES_SAY: Record<string, string> = { assemble: 'put together', wind: 'wound', solder: 'soldered', crimp: 'crimped', coil: 'coiled', bend: 'bent' };
+/** The inventory's words, from the chat or a pipeline: find, map, make, finish, board, add, list, families, open. */
+async function inventoryStep(arg: string): Promise<string> {
+  const t = arg.trim(); let m: RegExpExecArray | null;
+  const get = (w: string): Item => { const x = /^last$/i.test(w.trim()) && invLast ? INVENTORY.get(invLast)! : resolve(w); if (typeof x === 'string') throw new Error(x); if (!x) throw new Error(`Nothing in the inventory called "${w}". Families make any size: ${FAMILIES.map((f) => f.examples[0]).join(', ')}.`); invLast = x.id; return x; };
+  if ((m = /^(?:find|what is|show)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), s2 = i.kind === 'material' ? null : summary(i.id); return `${i.name} (${i.path.join(' › ')}): ${i.says}.${i.spec ? ` ${i.spec}.` : ''}${s2 ? ` Inside it, down to its materials: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock, ${s2.depth} levels.` : ''}${i.family || i.adjustable ? ' ⚙ adjustable: call it with other sizes.' : ''}`; }
+  if ((m = /^(?:map|tree|inside)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = boardOfTree(i.id); if (b && boards) boards.put(`inv-tree-${i.id}`, b); return `Inside ${i.name}: ${treeLines(i.id, 40).join(' / ')}${boards ? ` (its tree is the board "Inside: ${i.name}")` : ''}`; }
+  if ((m = /^make\s+(.+?)(?:\s+(?:x|×|times\s*)(\d+))?$/i.exec(t))) { const i = get(m[1]!), n = Number(m[2] ?? 1), log = await makeItem(i, n); invMade++; const s2 = summary(i.id); return `Made ${n > 1 ? `${n} × ` : ''}${i.name}: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock. ${log.slice(-12).join('; ')}`; }
+  if ((m = /^finish\s+(.+)$/i.exec(t))) { const i = get(m[1]!), r = routeOf(i); if (r.bought) return cell.bring(i.name); return cell.work(r.process === 'assemble' ? 'putting together' : r.process, i.name, i.of.map((c) => INVENTORY.get(c.id)?.name ?? c.id)); }
+  if ((m = /^(?:board|pipeline)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = makeBoard(i.id); if (!b || !boards) throw new Error('The boards are still loading.'); const id = `inv-make-${i.id}`; boards.put(id, b); summonTo('boards'); boards.openBoard(id); return `"Make: ${i.name}" is on the board: a step for each thing inside it, each made all the way down when it runs.`; }
+  if ((m = /^add\s+([\s\S]+)$/i.exec(t))) { const r = feed(m[1]!); keepInventory(); if (r.added.length) invLast = r.added[0]!.id; return `${r.added.length} added to the inventory${r.added.length ? `: ${r.added.map((x) => x.name).join(', ')}` : ''}.${r.refused.length ? ` Not added: ${r.refused.join('; ')}.` : ''}`; }
+  if ((m = /^list(?:\s+(.+))?$/i.exec(t))) { const want = (m[1] ?? '').toLowerCase(); const hits = [...INVENTORY.values()].filter((i) => !want || i.path.join('/').toLowerCase().includes(want)).filter((i) => i.kind !== 'material' || want.includes('material')); return `${hits.length} in ${want || 'the inventory'}: ${hits.slice(0, 40).map((i) => i.name).join(', ')}${hits.length > 40 ? ', …' : ''}`; }
+  if (/^families$/i.test(t)) return `Adjustable families (any size): ${FAMILIES.map((f) => `${f.name}: ${f.examples.join(', ')}`).join(' · ')}`;
+  if (/^(open|board)$/i.test(t) || !t) { if (!boards) throw new Error('The boards are still loading.'); boards.put('inventory', boardOfInventory()); summonTo('boards'); boards.openBoard('inventory'); return `The inventory is on the board: ${[...invCategories().keys()].join(', ')}.`; }
+  if (/^languages$/i.test(t)) return [...byCategory()].map(([c, ls]) => `${c}: ${ls.map((l) => `${l.name} (${l.runs === 'here' ? 'runs here' : l.runs === 'claude' ? 'to Claude' : 'kept'})`).join(', ')}`).join(' · ');
+  throw new Error('"inventory …"? Say inventory find <part>, inventory map <part>, inventory make <part> [x<n>], inventory board <part>, inventory add <lines>, inventory list <category>, inventory families, inventory open. A part can be an adjustable size: screw M4x20, bearing 6201, gear m1 z30 b8.');
+}
+/** The pipeline language: "pipeline new <title>: <step> -> <step> -> …" makes a pipeline of those steps, each read as
+ *  a step is (a trigger, an action, a check, a repeat, a question for Claude, code in a language). */
+function pipelineNew(spec: string): string {
+  const m = /^(.*?):\s*([\s\S]+)$/.exec(spec.trim()); if (!m) throw new Error('Say it as: pipeline new <title>: <step> -> <step> -> …');
+  if (!boards) throw new Error('The boards are still loading.');
+  const title = m[1]!.trim() || 'A new pipeline', parts = m[2]!.split(/\s*(?:->|→|\|>)\s*/).map((x) => x.trim()).filter(Boolean);
+  const steps = parts.map((p) => stepLanguage(p) ? { kind: 'action' as const, what: p } : guessStep(p) ?? { kind: 'action' as const, what: p });
+  if (steps[0]?.kind !== 'trigger') steps.unshift({ kind: 'trigger', what: 'when I press run' });
+  const b = { title, kind: 'flow', about: `Made from one line of the pipeline language: ${spec.trim().slice(0, 300)}`, nodes: {} as Record<string, { label: string; step: { kind: 'trigger' | 'ai' | 'action' | 'check' | 'repeat'; what: string } }>, edges: {} as Record<string, { from: string; to: string; rel: string }>, armed: steps[0]!.what !== 'when I press run', createdAt: Date.now(), updatedAt: Date.now() };
+  steps.forEach((st, k) => { b.nodes[`s${k}`] = { label: st.what.length > 40 ? `${st.what.slice(0, 38)}…` : st.what, step: st as { kind: 'trigger' | 'ai' | 'action' | 'check' | 'repeat'; what: string } }; if (k) b.edges[`e${k}`] = { from: `s${k - 1}`, to: `s${k}`, rel: st.kind === 'repeat' ? 'flows to' : 'flows to' }; });
+  const id = `p${Date.now().toString(36)}`; boards.put(id, b as never); summonTo('boards'); boards.openBoard(id);
+  return `Made the pipeline "${title}": ${steps.length} steps (${steps.map((x) => x.kind).join(', ')})${b.armed ? ', armed: it starts by itself' : ''}. ▶ Run it on the board.`;
+}
+async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline', input = ''): Promise<string> {
+  { const sl = stepLanguage(what); if (sl) return runLanguage(sl.lang, sl.code, input, signal, who); }
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
   // what makes, sizes, turns, joins or works out: the workshop, offline
   if (shop.does(t)) return makeStepLoaded(t, true, who);
@@ -1741,12 +1843,13 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): 
   switch (verb) {
     // made by a pipeline, no one is there to answer: it takes what it would take, says so, and makes it
     case 'make': case 'build': { if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a table that holds 30 kg".'); const c = conceive(arg); if (!c.wants.length) throw new Error(sayConception(c)); const all = c.questions.length ? answersFrom(c, 'go') ?? {} : {}; const ds = await makeIt(arg, all, 1); return ds.map((d) => sayDesign(d).slice(0, 600)).join(' ') || 'Nothing made.'; }
-    case 'pipeline': return pipelineStep(arg);
+    case 'pipeline': return /^new\b/i.test(arg) ? pipelineNew(arg.replace(/^new\s*/i, '')) : pipelineStep(arg);
+    case 'inventory': return inventoryStep(arg);
     case 'reset': case 'clear': return resetBuild();
     case 'store': return storeBuild();
     case 'cell': return cellStep(t);
     case 'device': {
-      const m2 = /^(\S+)\s+(.+)$/.exec(arg), d = m2 ? devices.find(m2[1]!) : null;
+      const m2 = /^(\S+)\s+(.+)$/.exec(arg), d = m2 ? (m2[1] === 'first' ? devices.list[0] ?? null : devices.find(m2[1]!)) : null;
       if (!d) throw new Error(devices.list.length ? `No device called ${arg.split(' ')[0]}: there are ${devices.list.map((x) => x.id).join(', ')}.` : 'No device is out yet: build one in the workshop first ("cell build rover").');
       const said = devices.command(d, m2![2]!); if (/does not know/.test(said)) throw new Error(said); return said;
     }
@@ -1784,12 +1887,12 @@ const flowApi: FlowApi = {
   // a pipeline never puts windows in your face: what one of its steps opens waits, drawn, on the strip and the phone
   async act(what, _input, signal, who) {
     const was = new Set(windows.list().filter((w) => w.state === 'open').map((w) => w.id));
-    try { return await flowAct(what, signal, who); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
+    try { return await flowAct(what, signal, who, _input); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts() }),
+  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade }),
   // what is made and the facts as the workshop reads them, and the robots' numbers beside them
-  reader: () => { const sc = shop.reader(), more = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts() }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
+  reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
 // ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
@@ -2410,6 +2513,8 @@ const phone = new Phone({
   tell: async (note) => { line('you', note); const kept = await noteOn(fromPhone, 'note', note); return kept.replace(/^Noted on a message from the phone: /, 'For Claude: '); },
 });// the apps the forge adds to it: the warehouse and its robots
 phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = storeBuild(); line('system', t2); return t2; }, fetch: (id) => { const t2 = fetchBuild(id); line('system', t2); return t2; }, remove: removeKept, go: goPlace, where: () => place }));
+let invSaid = '';
+phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // apps pulled off the phone onto screens of their own: hold the trigger (or the mouse) on an app and pull it off the phone
@@ -2429,7 +2534,7 @@ function stepDrag(): void {
 /** An app let go: pulled out, its screen stays; not pulled out, it was a press, and the app opens on the phone. */
 function endDrag(): void { if (!appDrag) return; if (!appDrag.id) phone.act('app', appDrag.app); appDrag = null; }
 // what the phone shows of the robots moves with them: drawn again twice a second while an app of theirs is open
-window.setInterval(() => { if (['robots', 'warehouse', 'workshop'].includes(phone.app) || phone.showing(['robots', 'warehouse', 'workshop'])) phone.draw(); }, 500);
+window.setInterval(() => { if (['robots', 'warehouse', 'workshop', 'inventory'].includes(phone.app) || phone.showing(['robots', 'warehouse', 'workshop', 'inventory'])) phone.draw(); }, 500);
 
 /** On a screen, the phone in the lower left of the view, or put away. */
 function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
