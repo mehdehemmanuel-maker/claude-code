@@ -41,6 +41,7 @@ import { makeRelay, type Relay } from './relay';
 import { makeNotes, STAGES as LOOP_STAGES, type Note, type NoteKind, type Notes, type Proposal } from './notes';
 import { buildSteps, nodeAt as treeNodeAt, pathOf, treeOf, type BuildStep, type TreeNode } from '../embody/tree';
 import { Unravel } from './unravel';
+import { Exploded, type BuildPiece } from './explode';
 import { LAW_UPDATES } from '../embody/journal';
 import { boxOf, type Flaw, type Part } from '../embody/part';
 import { generate, type Structure } from '../manifold';
@@ -482,7 +483,7 @@ function tick(): void {
 
   if (section !== 'off') { machine.getWorldPosition(world); const c0 = machine.localToWorld(tmp.copy(centre0)); clip.set(section === 'depth' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0), section === 'depth' ? c0.z : c0.x); }
   for (const [g, to] of explodeTo) { const now2 = exploded.get(g) ?? 0; exploded.set(g, now2 + (to - now2) * Math.min(1, dt * 4)); }
-  prof.time('holo', () => holo.update(performance.now() / 1000, eye));
+  prof.time('holo', () => { holo.update(performance.now() / 1000, eye); apart3d.update(performance.now() / 1000); });
   if (machineBuild) stepMachineBuild(t);
   for (const n of pins) n.update(t);
 
@@ -832,6 +833,38 @@ function summonTo(p: Panel): string {
 // ---- the hologram: any assembly lifted out and unravelled in the air ---------------------------------------------------------
 let tree: TreeNode = { id: '', name: '', parts: [], children: [] }, partsById = new Map<string, Part>();
 const holo = new Unravel(scene, new THREE.Vector3(0, 1.36, -0.62), 0.55);
+// anything in 3D, taken apart before you: an item of the inventory, or the build on the table (src/nexus/view/explode.ts)
+const apart3d = new Exploded(scene);
+/** Lift an item out in 3D before you, apart: its parts round it, each to open in turn, down to the elements. */
+function see3d(id: string): string { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 0.95, renderer.xr.isPresenting ? 0 : 0.16); aim3d(); return apart3d.show(id, performance.now() / 1000); }
+/** On a screen, the view turned to look at it (in a headset you turn your own head). */
+function aim3d(): void { if (renderer.xr.isPresenting) return; framing = false; orbit.target.copy(apart3d.group.position).add(new THREE.Vector3(0.12, 0, 0)); orbit.update(); }
+/** The build on the table lifted out before you and pushed apart from where its parts stand. */
+function seeBuild3d(): string {
+  const pieces: BuildPiece[] = [];
+  for (const m of shop.all().made) {
+    if (m.unseen || m.kind === 'title') continue;
+    const o = drawn.get(m.name)?.obj; if (!o) continue;
+    o.updateWorldMatrix(true, true); const c = o.clone(true); o.matrixWorld.decompose(c.position, c.quaternion, c.scale);
+    const d = m.dims as Record<string, number>, size = Object.values(d).filter((v) => typeof v === 'number').slice(0, 3).map((v) => `${+(v * 1000).toPrecision(3)}`).join(' × ');
+    pieces.push({ id: m.name, name: m.name, obj: c, note: `${m.name.replace(/^[a-z]+\d*_/, '')}: ${m.kind}${size ? ` ${size} mm` : ''}${m.matter ? `, ${m.matter.name}` : ''}${m.mass ? `, ${m.mass >= 1 ? `${m.mass.toFixed(2)} kg` : `${(m.mass * 1000).toFixed(0)} g`}` : ''}` });
+    if (pieces.length >= 160) break;
+  }
+  if (!pieces.length) return 'Nothing stands on the table to take apart: build something first, or ask to see any part of the inventory in 3D.';
+  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 0.95, renderer.xr.isPresenting ? 0 : 0.16); aim3d();
+  return apart3d.showBuild(lastBuilt?.title ?? 'the build', pieces, performance.now() / 1000);
+}
+/** What you point at in the 3D view: a part opens, a chip goes back, round, or away. */
+function pick3d(): boolean {
+  const h = apart3d.pick(ray); if (!h) return false;
+  const now = performance.now() / 1000;
+  if ('chip' in h) { if (h.chip === 'back') say(apart3d.back(now)); else if (h.chip === 'close') apart3d.close(); else apart3d.toggle(now); return true; }
+  const i = INVENTORY.get(h.piece);
+  if (i) { say(apart3d.open(h.piece, now)); return true; }
+  const m = shop.all().made.find((x) => x.name === h.piece);
+  say(m ? `${m.name}: a ${m.kind}${m.matter ? ` of ${m.matter.name}` : ''}${m.mass ? `, ${m.mass.toFixed(3)} kg` : ''}. It was made here from the pipeline's steps: it has no parts inside it.` : h.piece);
+  return true;
+}
 let xray = false, isolated: Set<string> | null = null, reportsMode: 'dots' | 'full' | 'off' = 'dots', framing = true;
 // your own dragging takes the view back from me until I am asked to show something again
 renderer.domElement.addEventListener('pointerdown', () => { framing = false; });
@@ -1309,7 +1342,7 @@ function modes(): Mode[] {
   return out;
 }
 /** Out of the latest mode: the panel in front of you first, then what is out in the air, then the ways of seeing. */
-function exitLatest(): void { const m = modes()[0]; if (m) { m.exit(); line('system', `Left: ${m.label}.`); } }
+function exitLatest(): void { if (apart3d.visible) { say(apart3d.back(performance.now() / 1000)); return; } const m = modes()[0]; if (m) { m.exit(); line('system', `Left: ${m.label}.`); } }
 function exitAll(): void { const ms = modes(); for (const m of ms) m.exit(); if (ms.length) line('system', 'Back to the room as it stands.'); }
 // on a screen, a strip under the clock; in a headset, the same strip under the clock that follows your head
 const modeBar = document.createElement('div');
@@ -1667,6 +1700,8 @@ async function converse(text: string): Promise<void> {
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
   if (RESET_WORDS.test(text.trim())) { line('you', text); say(resetBuild(), undefined, 'nexus'); return; }
   if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
+  if (/^(explode|take apart|open up|see|show)( me)? (the |this |that )?(build|it|whole thing)( apart| in 3d)?[.!]?$|^(take|pull) (the |this )?build apart[.!]?$/i.test(text.trim())) { line('you', text); say(seeBuild3d(), undefined, 'nexus'); return; }
+  if (/^(close|put away) (the )?(3d|exploded|parts)( view)?[.!]?$/i.test(text.trim())) { line('you', text); apart3d.close(); say('Put away.', undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
@@ -1869,6 +1904,7 @@ async function inventoryStep(arg: string): Promise<string> {
   const t = arg.trim(); let m: RegExpExecArray | null;
   const get = (w: string): Item => { const x = /^last$/i.test(w.trim()) && invLast ? INVENTORY.get(invLast)! : resolve(w); if (typeof x === 'string') throw new Error(x); if (!x) throw new Error(`Nothing in the inventory called "${w}". Families make any size: ${FAMILIES.map((f) => f.examples[0]).join(', ')}.`); invLast = x.id; return x; };
   if ((m = /^(?:find|what is|show)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), s2 = i.kind === 'material' ? null : summary(i.id); return `${i.name} (a ${typeOf(i)}; ${i.path.join(' › ')}): ${i.says}.${i.spec ? ` ${i.spec}.` : ''}${s2 ? ` Inside it, down to its materials: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock, ${s2.depth} levels.` : ''}${i.family || i.adjustable ? ' ⚙ adjustable: call it with other sizes.' : ''}`; }
+  if ((m = /^(?:3d|see|look at|explode|apart|take apart)\s+(.+)$/i.exec(t))) { const i = get(m[1]!); return see3d(i.id); }
   if ((m = /^(?:map|tree|inside)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = boardOfTree(i.id); if (b && boards) boards.put(`inv-tree-${i.id}`, b); return `Inside ${i.name}: ${treeLines(i.id, 40).join(' / ')}${boards ? ` (its tree is the board "Inside: ${i.name}")` : ''}`; }
   if ((m = /^make\s+(.+?)(?:\s+(?:x|×|times\s*)(\d+))?$/i.exec(t))) { const i = get(m[1]!), n = Number(m[2] ?? 1), log = await makeItem(i, n); invMade++; const s2 = summary(i.id); return `Made ${n > 1 ? `${n} × ` : ''}${i.name}: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock. ${log.slice(-12).join('; ')}`; }
   if ((m = /^finish\s+(.+)$/i.exec(t))) { const i = get(m[1]!), r = routeOf(i); if (r.bought) return cell.bring(i.name); return cell.work(r.process === 'assemble' ? 'putting together' : r.process, i.name, i.of.map((c) => INVENTORY.get(c.id)?.name ?? c.id)); }
@@ -2106,7 +2142,7 @@ function drawMade(): void {
   spinners.length = 0; drawn.clear();
   for (const grp of [madeGroup, buildFloor]) for (const o of [...grp.children]) { grp.remove(o); dispose(o); }
   // what is unseen is not computed, so not drawn
-  for (const m of shop.all().made) if (!m.unseen) drawGroupOf(m.name).add(meshOf(m));
+  for (const m of shop.all().made) if (!m.unseen) { const o = meshOf(m); drawGroupOf(m.name).add(o); drawn.set(m.name, { obj: o, sig: sigOf(m) }); }
 }
 const dispose = (o: THREE.Object3D) => o.traverse((x) => { const mm = x as THREE.Mesh; mm.geometry?.dispose(); const mt = mm.material as THREE.Material | undefined; if (mt && !(mt as THREE.Material & { shared?: boolean }).shared) mt.dispose(); });
 // ---- a pipeline run, built in the room: its steps one at a time, each part seen arriving, Claude at work on it -------------
@@ -2160,6 +2196,7 @@ async function buildRun(r: PipeRun): Promise<void> { if (r.build) await playBuil
 /** A build's steps played into the room: the last pipeline build taken away first, then one beat at a time. */
 async function playBuild(b: PipeBuild, verdict: string, kg: number | null = null): Promise<void> {
   if (!b.steps.length) return;
+  { const keptIt = keepQuietly(); if (keptIt) line('system', keptIt); }
   lastBuilt = { ...b, verdict, ...(kg !== null ? { kg } : {}) }; onTable = null;
   if (b.steps.some((st) => PHYSICS_WORDS.test(st.trim())) && !shop.hasPhysics) await physics();
   for (const n of pipeParts) { try { shop.run(`remove ${n}`, 'you'); } catch { /* already gone */ } }
@@ -2322,6 +2359,18 @@ function storeBuild(): string {
   const can = fleet.bots.filter((b) => b.abilities.includes('deliver') && !b.asleep);
   return `Kept as "${k.title}". ${can.length ? `${can.map((b) => b.name).join(' or ')} will come for it: their rule "A build waits → Take it in" starts it. Watch the table.` : 'No robot that delivers is awake: wake one in the Robots app, or switch on its deliver ability.'}`;
 }
+/** The build on the table kept on a shelf by itself before another takes its place, so no build is lost: its model,
+ *  and the steps to build it again. One already kept (or brought back from a shelf) is not kept twice. */
+function keepQuietly(): string | null {
+  if (!lastBuilt || !pipeParts.size || onTable) return null;
+  const parts = partsOfTable(); if (!parts.length) return null;
+  const slot = fleet.floor.slots.find((x) => !x.holds);
+  if (!slot) return `${lastBuilt.title} is not kept: every shelf in the warehouse is full. Remove a kept build in the Warehouse app to make room.`;
+  const id = `build-${Date.now().toString(36)}`;
+  const k: StoredBuild = { id, title: lastBuilt.title, kind: 'steps', steps: lastBuilt.steps, footprint: lastBuilt.footprint, ...(lastBuilt.verdict ? { verdict: lastBuilt.verdict } : {}), at: Date.now(), parts, slot: slot.id };
+  slot.holds = id; kept.push(k); keepKept(); warehouse.setMini(id, miniOf(k), k.title); boards?.event();
+  return `The last build, ${k.title}, is kept on shelf ${slot.id} in the warehouse before the new one takes the table: fetch it back from the Warehouse app.`;
+}
 /** A kept build brought back: a robot that delivers takes it off its shelf and brings it to the table, where it is built. */
 function fetchBuild(id: string): string {
   const k = kept.find((x) => x.id === id); if (!k) return 'That build is not kept here.';
@@ -2477,6 +2526,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (boardMouse || winMouse || phoneClick) return;
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 14 || performance.now() - down[2] > 900) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
+  if (pick3d()) return;
   if (dropPin()) return;
   if (pressBoards()) return;
   if (pickHolo()) return;
@@ -2529,7 +2579,7 @@ const CHIPS: [string, () => void][] = [
   ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
   ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Put windows away', () => { windows.minAll(); newOpen = false; holo.clear(); isolated = null; }], ['Arrange windows', () => windows.arrange()],
   ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Causes', () => line('system', summon('causes'))],
-  ['⟲ Reset build', () => say(resetBuild())], ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
+  ['⟲ Reset build', () => say(resetBuild())], ['🧊 Take apart', () => say(seeBuild3d())], ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
   ['X-ray', () => { xray = !xray; }], ['Isolate', () => toggleIsolate()], ['Section', () => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; }],
@@ -2605,7 +2655,7 @@ const phone = new Phone({
 });// the apps the forge adds to it: the warehouse and its robots
 phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = storeBuild(); line('system', t2); return t2; }, fetch: (id) => { const t2 = fetchBuild(id); line('system', t2); return t2; }, remove: removeKept, go: goPlace, where: () => place }));
 let invSaid = '';
-phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid }));
+phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid, see: (id) => see3d(id) }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // ---- the weather: where you are, or a place you name; kept, fetched again each quarter hour, read by rules -------------
@@ -2729,8 +2779,9 @@ for (let i = 0; i < 2; i++) {
     const all = chipsNow(), hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     // what is nearest along the ray is pressed: the phone, a window's bar, a chip, the keyboard of light, or the board behind
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onKeys = keyboard.mesh.visible ? ray.intersectObject(keyboard.mesh, false)[0]?.distance ?? Infinity : Infinity;
-    const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity, onHolo = holos.distance(ray);
-    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys, onHolo);
+    const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity, onHolo = holos.distance(ray), on3d = apart3d.distance(ray);
+    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys, onHolo, on3d);
+    if (nearest < Infinity && nearest === on3d && pick3d()) return;
     if (nearest < Infinity && nearest === onPhone) { const uv = phone.uvOf(ray), app = uv ? phone.appAt(uv) : null; if (app) { appDrag = { app, hand: i, id: null }; return; } phone.press(ray, renderer, scene); return; }
     if (nearest < Infinity && nearest === onHolo) { holos.press(ray, renderer, scene); return; }
     if (nearest < Infinity && nearest === onBar) { windows.press(ray, false); return; }
@@ -2748,6 +2799,8 @@ for (let i = 0; i < 2; i++) {
   ctl.addEventListener('squeezestart', () => {
     if (handOf[i] !== 'right') { togglePause(); return; }
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
+    // a part of the build on the table, gripped: the whole build lifted out before you, apart, each part to open
+    { const made = [...drawn.values()].map((d) => d.obj).filter((o) => o.visible), hb = made.length ? ray.intersectObjects(made, true)[0] : undefined; if (hb && hb.distance < (windows.distance(ray) || Infinity) && hb.distance < 3) { say(seeBuild3d()); return; } }
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onWin = pinning ? Infinity : windows.distance(ray);
     if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
     if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
@@ -2767,7 +2820,7 @@ function pointNow(): void {
     const ctl = renderer.xr.getController(i), ball = balls[i]!, laser = lasers[i];
     if (!laser || !handOf[i]) { ball.visible = false; continue; }
     pointRay.setFromXRController(ctl); pointRay.camera = renderer.xr.getCamera(); pointRay.far = 8;
-    const things: THREE.Object3D[] = [...windows.objects(), ...(phone.group.visible && handOf[i] !== 'left' ? [phone.group] : []), ...(keyboard.mesh.visible ? [keyboard.mesh] : []), ...chipsNow().map((c) => c.mesh), machine, robot.root];
+    const things: THREE.Object3D[] = [...windows.objects(), ...(phone.group.visible && handOf[i] !== 'left' ? [phone.group] : []), ...(keyboard.mesh.visible ? [keyboard.mesh] : []), ...chipsNow().map((c) => c.mesh), machine, robot.root, ...(apart3d.visible ? [apart3d.group] : [])];
     const hit = pointRay.intersectObjects(things, true).find((h) => shownUp(h.object));
     floorAt.constant = -dolly.position.y;
     const fl = pointRay.ray.intersectPlane(floorAt, onFloor) ? pointRay.ray.origin.distanceTo(onFloor) : Infinity;
@@ -2897,6 +2950,7 @@ async function boot() {
     phoneAct: (act: string, arg?: number | string) => phone.act(act, arg),
     buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
     resetBuild: () => resetBuild(),
+    see3d: (id: string) => see3d(id), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids() }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)),
     storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
