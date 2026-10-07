@@ -181,7 +181,7 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
 /** What the room's actions are called: the first word of an action step. */
-export const ACTIONS = ['pipeline', 'robot', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
+export const ACTIONS = ['pipeline', 'robot', 'cell', 'device', 'reset', 'clear', 'store', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
 /** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
  *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
  *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
@@ -212,9 +212,54 @@ export const keptRun = (r: FlowRun, chars = 240, steps = 40): FlowRun => ({ ...r
 /** An event, in words: why a flow started. */
 export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶ Run' : e.kind === 'built' ? 'a build finished' : e.kind === 'flaw' ? `a flaw was found${e.text ? `: ${e.text}` : ''}` : e.kind === 'note' ? `a note was added${e.text ? `: ${e.text}` : ''}` : e.kind === 'tick' ? `${Number.isInteger(e.minutes) ? `${e.minutes} min` : `${Math.round((e.minutes ?? 0) * 60)} s`} in` : e.kind === 'start' ? 'the forge opened' : e.kind === 'made' ? `a shape was made${e.text ? `: ${e.text}` : ''}` : e.kind === 'cond' ? `it came true${e.text ? `: ${e.text}` : ''}` : `you said "${e.text ?? ''}"`);
 
+// ---- Claude's build pipeline, as a board ------------------------------------------------------------------------------
+/** The pipeline Claude runs on every ask, as a board you run and change like any other: the ask and the edits are
+ *  steps you can rewrite, the run builds in the room, and each stage is a node that shows what it found (red where it
+ *  failed). Put your own steps between them: a check on pipeline_kg, another matter, a robot told to store it. */
+export function claudeBoard(ask: string, at = Date.now()): Board {
+  const steps: [string, string, Step][] = [
+    ['t', 'Run', { kind: 'trigger', what: 'when I press run' }],
+    ['ask', 'The ask', { kind: 'action', what: `pipeline ask ${ask}` }],
+    ['edits', 'Edits', { kind: 'action', what: 'pipeline set seed 101, matter any, physics on, grow on' }],
+    ['run', "Run Claude's pipeline (builds it in the room)", { kind: 'action', what: 'pipeline run' }],
+    ['read', 'Read', { kind: 'action', what: 'pipeline stage read' }],
+    ['conditions', 'Conditions', { kind: 'action', what: 'pipeline stage conditions' }],
+    ['grow', 'Grow', { kind: 'action', what: 'pipeline stage grow' }],
+    ['make', 'Make', { kind: 'action', what: 'pipeline stage make' }],
+    ['check', 'Check', { kind: 'action', what: 'pipeline stage check' }],
+    ['scale', 'Scale', { kind: 'action', what: 'pipeline stage scale' }],
+    ['rt', 'I say reset', { kind: 'trigger', what: 'when I say reset' }],
+    ['clear', 'Clear the table', { kind: 'action', what: 'reset' }],
+  ];
+  const b: Board = { title: "Claude's build pipeline", kind: 'flow', about: "The pipeline Claude runs on every ask: read the words, read them into conditions (loads, holds, reach, limits), grow a frame to them, make it from what can be had, check every law and limit, and say its law of scale. Change the ask or the edits by changing their steps' words; ▶ Run builds it in the room; add your own steps anywhere.", nodes: {}, edges: {}, createdAt: at, updatedAt: at };
+  for (const [id, label, step] of steps) b.nodes[id] = { label, step };
+  const chain = ['t', 'ask', 'edits', 'run', 'read', 'conditions', 'grow', 'make', 'check', 'scale'];
+  chain.slice(1).forEach((id, i) => { b.edges[`e${i}`] = { from: chain[i]!, to: id, rel: 'flows to' }; });
+  b.edges.ereset = { from: 'rt', to: 'clear', rel: 'flows to' };
+  return b;
+}
+
 // ---- flows to start from --------------------------------------------------------------------------------------------
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
 export const TEMPLATES: Template[] = [
+  {
+    id: 'workshop-microscope', title: 'Make a microscope in the workshop', about: 'The workshop builds a digital microscope: its frame and stage printed, then the camera, lens, LED ring, stepper, lead screw, driver and computer taken off the rack and put together on the plate by the bench arm. Change "microscope" to another recipe: pan-tilt, weather, scale, rover, gear.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'f', label: 'Workshop free?', step: { kind: 'check', what: 'cell_busy = 0' } },
+      { id: 'b', label: 'Build a microscope', step: { kind: 'action', what: 'cell build microscope' } },
+    ],
+    links: [['t', 'f'], ['f', 'b']],
+  },
+  {
+    id: 'workshop-cast', title: 'Cast a gear when the furnace is cold', about: 'Every 10 minutes: if the workshop is free, cast a 20-tooth gear in aluminium by lost-PLA: the pattern printed, invested, burnt out in the kiln, the metal melted and poured.',
+    steps: [
+      { id: 't', label: 'Every 10 minutes', step: { kind: 'trigger', what: 'every 10 minutes' } },
+      { id: 'f', label: 'Workshop free?', step: { kind: 'check', what: 'cell_busy = 0' } },
+      { id: 'c', label: 'Cast a gear', step: { kind: 'action', what: 'cell cast gear in aluminium' } },
+    ],
+    links: [['t', 'f'], ['f', 'c']],
+  },
   {
     id: 'claude-build', title: "Claude's build pipeline, until it holds", about: "Claude's own build pipeline as a step of yours: run the ask on the Pipeline app through it (read, conditions, grow, make, check, scale), and while any check fails, draw the next seed and run it again, at most 5 times. Change a step: \"pipeline matter steel\", \"pipeline physics off\", \"pipeline ask a shelf for 20 kg\", \"pipeline best\".",
     steps: [

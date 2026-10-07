@@ -4,20 +4,21 @@
 
 import type { Kit, Nav, PhoneApp, View } from './phone';
 import { ABILITIES, factName, type AbilityId, type Bot, type Fleet } from '../fleet';
+import { METALS, RECIPES, bill, type Cell, type MadePart } from '../cell';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
 export interface StoredBuild { id: string; title: string; ask?: string; kind: 'steps' | 'machine' | 'shapes'; steps?: string[]; footprint?: [number, number]; verdict?: string; kg?: number; slot?: string; at: number; parts: MiniPart[] }
 /** A part of a stored build's model: its shape, where it is, how it is turned and stretched, and its look. */
 export interface MiniPart { k: string; at: [number, number, number]; d: Record<string, number>; t: [number, number, number]; s: [number, number, number]; axis?: string; c: number; m: number; r: number }
 
-export interface WarehouseHost { kept(): StoredBuild[]; store(): string; fetch(id: string): string; remove(id: string): string; go(place: 'warehouse' | 'table'): string; where(): 'warehouse' | 'table'; fleet: Fleet }
+export interface WarehouseHost { kept(): StoredBuild[]; store(): string; fetch(id: string): string; remove(id: string): string; go(place: 'warehouse' | 'table'): string; where(): 'warehouse' | 'table' | 'workshop'; fleet: Fleet }
 const AMBER = '#ffd600';
 
 export function warehouseApp(h: WarehouseHost): PhoneApp {
   let said = '';
   const per = 5;
   return {
-    id: 'warehouse', name: 'Warehouse', icon: '🏭', colour: AMBER,
+    id: 'warehouse', name: 'Warehouse', icon: '📦', colour: AMBER,
     pages: () => Math.max(1, Math.ceil(h.kept().length / per)),
     draw(k: Kit, v: View) {
       const { text, wrapped, button, g, W, bottom } = k, kept = h.kept(), f = h.fleet;
@@ -100,6 +101,74 @@ export function robotsApp(h: RobotsHost): PhoneApp {
         case 'ability': if (b) said = h.toggle(b, arg as AbilityId); return true;
         case 'rules': if (b) said = h.rules(b); return true;
         case 'rename': if (b) nav.write(`a new name for ${b.name}`, (t) => { said = h.rename(b, t); nav.redraw(); }); return true;
+      }
+      return false;
+    },
+  };
+}
+
+export interface WorkshopHost { cell: Cell; go(): string; print(p: MadePart): string; cast(p: MadePart, metal: string): string; build(id: string): string; gcode(text: string): string; stop(): string }
+/** The workshop on the phone: what each machine is doing, how fast time runs there, and what to make: a part printed,
+ *  a part cast, a device built from a recipe, or G-code of your own. */
+export function workshopApp(h: WorkshopHost): PhoneApp {
+  let said = '', metal = 'aluminium';
+  const C = '#ff7043', parts = (): MadePart[] => RECIPES.flatMap((r) => r.printed).filter((p, i, a) => a.findIndex((q) => q.name === p.name) === i);
+  return {
+    id: 'workshop', name: 'Workshop', icon: '🔩', colour: C,
+    draw(k: Kit, v: View) {
+      const { text, wrapped, button, W, g } = k, c = h.cell, pr = c.printer, m = c.furnace.metal();
+      if (v.sub === 'print' || v.sub === 'cast') {
+        text(v.sub === 'print' ? 'Print a part' : 'Cast a part', 40, 122, 40, C, 800);
+        if (v.sub === 'cast') { text('in', 40, 160, 20, '#ffccbc'); METALS.forEach((x, i) => button(80 + i * 112, 134, 106, 44, x.id, 'metal', x.id, metal === x.id ? '#ffffff' : C, metal === x.id ? 'rgba(255,112,67,0.6)' : 'rgba(255,112,67,0.12)')); }
+        parts().forEach((p, i) => { const y = 196 + i * 86; button(30, y, W - 60, 74, `${p.name}${p.cast ? ` (made to be cast in ${p.cast})` : ''}`, v.sub === 'print' ? 'doprint' : 'docast', p.name, C); });
+        if (said) wrapped(said, 40, 196 + parts().length * 86 + 20, 17, W - 80, '#ffccbc', 4);
+        return;
+      }
+      if (v.sub === 'build') {
+        text('Build a device', 40, 122, 40, C, 800); text('printed and cast parts, and parts off the rack, put together', 40, 152, 16, '#ffccbc', 500, W - 80);
+        RECIPES.forEach((r, i) => { const y = 176 + i * 132, b = bill(r); g.fillStyle = 'rgba(255,112,67,0.10)'; g.beginPath(); g.roundRect(30, y, W - 60, 120, 16); g.fill(); text(r.name, 46, y + 32, 22, '#ffffff', 700, W - 220); wrapped(r.does, 46, y + 56, 15, W - 220, '#ffccbc', 2); text(`${(b.g / 1000).toFixed(2)} kg · ${(b.mA / 1000).toFixed(2)} A`, 46, y + 106, 15, '#b0bec5'); button(W - 160, y + 30, 114, 64, '▶ Build', 'dobuild', r.id, C, 'rgba(255,112,67,0.3)'); });
+        if (said) wrapped(said, 40, 176 + RECIPES.length * 132 + 10, 16, W - 80, '#ffccbc', 3);
+        return;
+      }
+      if (v.sub === 'gcode') {
+        text('Program the printer', 40, 122, 36, C, 800); wrapped('Write G-code line by line on the keyboard of light; the printer runs it as Marlin would (G28 first; it will not extrude below 170 °C).', 40, 152, 16, W - 80, '#ffccbc', 3);
+        const presets: [string, string][] = [['Home and heat for PLA', 'G28\nM140 S60\nM104 S210'], ['Draw a 40 mm square', 'G28\nM190 S60\nM109 S210\nG90\nM82\nG92 E0\nG1 Z0.2 F600\nG1 X90 Y90 F6000\nG1 X130 Y90 E1.33 F1500\nG1 X130 Y130 E2.66\nG1 X90 Y130 E3.99\nG1 X90 Y90 E5.32\nG1 Z10 F600\nM104 S0\nM140 S0'], ['Cool down', 'M104 S0\nM140 S0\nM107\nM84']];
+        presets.forEach(([l, code], i) => button(30, 230 + i * 84, W - 60, 72, l, 'preset', code, C));
+        button(30, 230 + presets.length * 84, W - 60, 72, '⌨ Write G-code', 'write', undefined, '#ffffff', 'rgba(255,112,67,0.3)');
+        text('The printer now', 40, 560, 18, C, 700);
+        pr.log.slice(-8).forEach((l, i) => text(`· ${l}`, 40, 592 + i * 26, 15, '#e0e0e0', 400, W - 80));
+        if (said) wrapped(said, 40, 820, 16, W - 80, '#ffccbc', 3);
+        return;
+      }
+      text('Workshop', 40, 122, 44, C, 800); text(`time here runs ×${c.speed}: a print takes hours, a burnout a day`, 40, 152, 16, '#ffccbc', 500, W - 80);
+      const rows = [
+        `🖨 ${pr.busy ? `printing ${Math.round((100 * pr.done) / Math.max(1, pr.total))}%` : 'printer idle'} · ${pr.hot.t.toFixed(0)}/${pr.hot.target} °C · bed ${pr.bed.t.toFixed(0)}/${pr.bed.target} °C`,
+        `🔥 kiln ${c.kiln.says()}`, `⚗ furnace ${Math.round(c.furnace.t)} °C${m ? ` · metal ${Math.round(m.T)} °C, ${Math.round(m.liquid * 100)}% molten` : ''}`,
+        `🦾 ${c.arms.rail.name}: ${c.arms.rail.doing}`, `🦾 ${c.arms.bench.name}: ${c.arms.bench.doing}`,
+      ];
+      rows.forEach((r, i) => text(r, 40, 190 + i * 32, 17, '#ffffff', 500, W - 80));
+      const bw = (W - 80) / 3; [1, 60, 600].forEach((x, i) => button(30 + i * (bw + 10), 352, bw, 56, `×${x}`, 'speed', x, c.speed === x ? '#ffffff' : C, c.speed === x ? 'rgba(255,112,67,0.6)' : 'rgba(255,112,67,0.12)'));
+      const b2 = (W - 70) / 2;
+      button(30, 422, b2, 70, '🖨 Print a part', 'go', 'print', C); button(40 + b2, 422, b2, 70, '⚗ Cast a part', 'go', 'cast', C);
+      button(30, 502, b2, 70, '🔧 Build a device', 'go', 'build', C); button(40 + b2, 502, b2, 70, '⌨ Program it', 'go', 'gcode', C);
+      button(30, 582, b2, 70, '🚶 Go there', 'walk', undefined, '#ffd600'); button(40 + b2, 582, b2, 70, '🛑 Stop all', 'stop', undefined, '#ff5252');
+      text('Jobs', 40, 690, 18, C, 700);
+      c.jobs.slice(-5).reverse().forEach((j, i) => wrapped(`${j.done ? (j.failed ? '✗' : '✓') : '▶'} ${j.name}: ${j.stage}`, 40, 720 + i * 52, 15, W - 80, j.done ? '#b0bec5' : '#ffffff', 2));
+      if (said) wrapped(said, 40, 990, 15, W - 80, '#ffccbc', 2);
+    },
+    act(act, arg, nav: Nav) {
+      const p = parts().find((x) => x.name === arg);
+      switch (act) {
+        case 'go': said = ''; nav.go(String(arg)); return true;
+        case 'speed': h.cell.speed = Number(arg); return true;
+        case 'walk': said = h.go(); return true;
+        case 'stop': said = h.stop(); return true;
+        case 'metal': metal = String(arg); return true;
+        case 'doprint': if (p) said = h.print(p); return true;
+        case 'docast': if (p) said = h.cast(p, metal); return true;
+        case 'dobuild': said = h.build(String(arg)); return true;
+        case 'preset': said = h.gcode(String(arg)); return true;
+        case 'write': nav.write('G-code: lines separated by ; or new lines, e.g. G28; M104 S210', (t) => { said = h.gcode(t.replace(/\s*;\s*(?=[GMT]\d)/gi, '\n')); nav.redraw(); }); return true;
       }
       return false;
     },
