@@ -8,6 +8,8 @@
 
 import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40, callFamily } from './families';
 import type { Item } from './inventory';
+import { KINDS } from './kinds';
+import { linesOf } from './kinds/core';
 
 /** ISO preferred lengths, mm (the series ISO 4762, 4017, 4029 and 8734 take their lengths from). */
 const PREF = [2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 30, 32, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 90, 100, 110, 120, 130, 140, 150, 160, 180, 200];
@@ -90,6 +92,9 @@ export const SERIES: Record<string, { says: string; lines: () => string[] }> = {
   coupling: { says: 'helical-beam shaft couplings, 2–12 mm bores', lines: () => { const b = [2, 3, 4, 5, 6, 8, 10, 12], out: string[] = []; for (let i = 0; i < b.length; i++) for (let j = i; j < b.length; j++) out.push(`coupling ${b[i]}x${b[j]}`); return out; } },
 };
 
+// every kind of bought part, in every size it is sold in
+for (const k of KINDS) SERIES[k.id] = { says: k.std, lines: () => linesOf(k) };
+
 let lines: string[] | null = null;
 /** Every line of the catalogue, family by family (made once, the first time it is asked for). */
 const byFamily = new Map<string, string[]>();
@@ -104,6 +109,7 @@ export function catalogueItem(line: string): Item | null { if (!made.has(line)) 
 export function searchCatalogue(q: string, n = 20): string[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
   const scored: [string, number][] = [];
-  for (const l of catalogue()) { const low = l.toLowerCase(); let s = 0; for (const w of ws) if (low.includes(w)) s += w.length; if (s >= ws.join('').length * 0.75) scored.push([l, s - low.length / 100]); }
+  const toks = (l: string) => l.toLowerCase().split(/\s+/);
+  for (const l of catalogue()) { const low = l.toLowerCase(); let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (toks(l).some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
   return scored.sort((a, b) => b[1] - a[1]).slice(0, n).map(([l]) => l);
 }

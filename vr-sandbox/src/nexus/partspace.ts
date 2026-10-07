@@ -10,6 +10,8 @@
 import { BEARINGS, CHAINS, CIRCLIPS, IPE, JST, KEYS, LM, METRIC, NDFEB, NPS40, callFamily } from './families';
 import type { Item } from './inventory';
 import { E24 } from './catalogue';
+import { KINDS } from './kinds';
+import { vals, wordsOf, type KindDef } from './kinds/core';
 
 type V = number | string;
 /** An axis: a list of values, or a range lo…hi by step. */
@@ -92,6 +94,18 @@ const DEFS: { family: string; says: string; words(p: Record<string, V>): string;
   { family: 'cell', says: 'cells by size code', words: (p) => `cell ${p.size}`, blocks: () => [block({}, [L('size', ['14500', '18650', '21700', '26650'])])] },
   { family: 'servo', says: 'hobby servos', words: (p) => `servo ${p.size}`, blocks: () => [block({}, [L('size', ['micro', 'standard'])])] },
 ];
+
+/** A kind of bought part as blocks: the axes up to its last one whose sizes hang on those before are fixed, one block
+ *  for each of their combinations; that axis and the rest are free, over the sizes it is sold in, or the whole range
+ *  it is made to order in. */
+export function kindBlocks(k: KindDef): (Block | null)[] {
+  const last = k.axes.reduce((at, a, i) => (typeof a.values === 'function' ? i : at), -1), out: (Block | null)[] = [];
+  const free = (p: Record<string, V>) => k.axes.slice(Math.max(0, last)).map((a): Axis => (a.cut ? R(a.key, ...a.cut) : L(a.key, vals(a, p))));
+  const walk = (i: number, p: Record<string, V>) => { if (i >= last) { out.push(block(p, free(p))); return; } const a = k.axes[i]!; for (const v of vals(a, p)) walk(i + 1, { ...p, [a.key]: v }); };
+  walk(0, {});
+  return out;
+}
+for (const k of KINDS) DEFS.push({ family: k.id, says: `${k.name}: ${k.std}`, words: (p) => wordsOf(k, p), blocks: () => kindBlocks(k) });
 
 let built: FamilySpace[] | null = null, starts: number[] = [], TOTAL = 0;
 const keyOf = (fixed: Record<string, V>) => Object.keys(fixed).sort().map((k) => `${k}=${String(fixed[k])}`).join('&');

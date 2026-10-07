@@ -523,6 +523,49 @@ e('power-bank', 'power bank', 'Electrical/Power/Power banks', 'product', 'assemb
 e('pcb-matrix', 'LED matrix board', 'Electrical/Displays/LED matrices', 'part', 'etch', 'fr4 copper solder-mask', 'a board etched with the data line running through every LED');
 e('led-matrix', 'LED matrix sign', 'Electrical/Displays/LED matrices', 'product', 'solder', 'ws2812b*256 pcb-matrix esp32-module buck-module capacitor-electrolytic enclosure-printed', '256 addressable LEDs in a 16 × 16 grid, each told its colour down one wire by a Wi-Fi board', '16 × 16, 5 V, up to about 15 A at full white (60 mA an LED)');
 
+// the materials of the kinds of bought part
+m('stainless-316', '316 stainless steel', 'Metals/Stainless steels', 'stainless with molybdenum: it stands salt water and acids better than 304', 'A4');
+m('al-7075', '7075 aluminium', 'Metals/Aluminium alloys', 'zinc-strengthened aluminium, as strong as mild steel at a third the weight', '7075-T6');
+m('al-5052', '5052 aluminium', 'Metals/Aluminium alloys', 'magnesium-strengthened sheet aluminium that bends well and stands salt water', '5052-H32');
+m('ti-6al4v', 'titanium alloy', 'Metals/Titanium', 'titanium with aluminium and vanadium: strong, light, it does not corrode', 'Ti-6Al-4V');
+m('cast-iron', 'cast iron', 'Metals/Irons', 'iron with 3–4 % carbon: it casts well, machines cleanly and damps vibration', 'grey iron');
+m('zamak', 'zinc die-casting alloy', 'Metals/Zinc alloys', 'zinc with a little aluminium, die-cast into handles, buckles and bodies', 'Zamak 3');
+m('steel-hss', 'high-speed steel', 'Metals/Steels', 'tool steel with tungsten, molybdenum and vanadium that stays hard when hot: drills and taps', 'M2');
+m('tungsten-carbide', 'tungsten carbide', 'Ceramics', 'hard carbide grains cemented with cobalt: the cutting edge of carbide tools', 'WC-Co');
+m('iron', 'pure iron', 'Metals/Irons', 'iron with almost nothing else: the positive leg of a type J thermocouple');
+m('lead', 'lead', 'Metals/Pure metals', 'a soft, heavy metal: the plates of lead-acid batteries');
+m('lithium', 'lithium metal', 'Metals/Pure metals', 'the lightest metal, the anode of primary lithium cells');
+m('platinum', 'platinum', 'Metals/Precious metals', 'a precious metal of steady resistance: RTDs and thermocouples');
+m('chromium', 'chromium plating', 'Metals/Pure metals', 'a hard, bright plating of chromium');
+m('pt-rh6', 'platinum-6 % rhodium', 'Metals/Thermocouple alloys', 'type B negative leg');
+m('pt-rh10', 'platinum-10 % rhodium', 'Metals/Thermocouple alloys', 'type S positive leg');
+m('pt-rh13', 'platinum-13 % rhodium', 'Metals/Thermocouple alloys', 'type R positive leg');
+m('pt-rh30', 'platinum-30 % rhodium', 'Metals/Thermocouple alloys', 'type B positive leg');
+m('constantan', 'constantan', 'Metals/Thermocouple alloys', 'copper-nickel of nearly constant resistance: the negative leg of types J, T and E');
+m('nicrosil', 'Nicrosil', 'Metals/Thermocouple alloys', 'type N positive leg');
+m('nisil', 'Nisil', 'Metals/Thermocouple alloys', 'type N negative leg');
+m('solder-snpb', 'tin-lead solder', 'Metals/Solders', 'the eutectic tin-lead solder, melting at one temperature', 'Sn63Pb37');
+m('solder-sn60', 'tin-lead solder, 60/40', 'Metals/Solders', 'tin-lead solder with a short pasty range', 'Sn60Pb40');
+m('solder-sncu', 'tin-copper solder', 'Metals/Solders', 'a cheap lead-free solder for wave soldering', 'Sn99.3Cu0.7');
+m('peek', 'PEEK', 'Plastics', 'a stiff, tough plastic that stands 250 °C and most chemicals');
+m('si3n4', 'silicon nitride', 'Ceramics', 'a tough, light ceramic: hybrid-bearing balls');
+m('mno2', 'manganese dioxide', 'Chemicals', 'the cathode of alkaline and lithium primary cells');
+m('pbo2', 'lead dioxide', 'Chemicals', 'the positive plate of a charged lead-acid battery');
+m('ag2o', 'silver oxide', 'Chemicals', 'the cathode of silver-oxide button cells');
+m('lani5', 'lanthanum-nickel alloy', 'Metals/Hydrogen storage', 'an alloy that soaks up hydrogen: the negative of NiMH cells');
+m('rosin', 'rosin', 'Chemicals', 'pine resin: the flux in cored solder');
+m('cyanoacrylate', 'cyanoacrylate', 'Chemicals', 'the monomer of super glue, polymerised by moisture');
+m('algainp', 'AlGaInP', 'Semiconductors', 'the semiconductor of red, orange and yellow LEDs');
+m('yag-phosphor', 'YAG:Ce phosphor', 'Ceramics', 'a yellow phosphor over a blue LED that makes it white');
+m('cds', 'cadmium sulfide', 'Semiconductors', 'the light-dependent resistor\'s film');
+m('epdm', 'EPDM rubber', 'Rubbers', 'a rubber that stands weather, steam and coolant');
+m('fkm', 'FKM rubber', 'Rubbers', 'a fluoro-rubber (Viton-type) that stands fuel, oil and 200 °C');
+m('asa', 'ASA', 'Plastics', 'a weather-proof cousin of ABS');
+m('wood', 'softwood', 'Natural', 'spruce, pine or fir, sawn and dried');
+m('bk7', 'borosilicate crown glass', 'Glasses', 'the clear optical glass of most lenses', 'N-BK7 type, n = 1.5168');
+m('koh-electrolyte', 'potassium hydroxide electrolyte', 'Chemicals', 'the alkaline electrolyte of alkaline and NiMH cells');
+m('acid-electrolyte', 'battery acid', 'Chemicals', 'dilute sulfuric acid, the electrolyte of lead-acid batteries');
+
 // ==== the fundamentals: every material down to its elements ==========================================================
 // Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).
 for (const [sym, el] of Object.entries(ELEMENTS)) put({ id: elementId(sym), name: `${el.name} (${sym})`, path: ['Elements', el.group], kind: 'element', make: 'chemistry', of: [], says: `got from ${el.from}`, spec: `atomic weight ${el.w}` });

@@ -27,6 +27,8 @@ describe('the catalogue', () => {
   it('found by its words without making the rest', () => {
     expect(searchCatalogue('bearing 6205 2RS')[0]).toBe('bearing 6205 2RS');
     expect(searchCatalogue('M4x20').some((l) => l === 'screw M4x20')).toBe(true);
-    expect(searchCatalogue('resistor 4.7k').every((l) => l.startsWith('resistor 4.7k'))).toBe(true);
+    const r = searchCatalogue('resistor 4.7k'); // whole words first: the resistors, then the chip resistors
+    expect(r.slice(0, 5).every((l) => l.startsWith('resistor 4.7k'))).toBe(true);
+    expect(r.every((l) => /resistor .*4\.7k/.test(l))).toBe(true);
   });
 });
