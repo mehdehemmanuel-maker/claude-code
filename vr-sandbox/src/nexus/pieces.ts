@@ -8,7 +8,7 @@
 // whole is not in the inventory: they are laid round it, not placed in it, and it says so.
 
 import { ELEMENTS } from './elements';
-import { INVENTORY, type Item } from './inventory';
+import { INVENTORY, countSays, type Item } from './inventory';
 import { lookRow } from './looks';
 
 export type V3 = [number, number, number];
@@ -128,7 +128,7 @@ export function planOf(id: string, fit = 0.3): Plan | null {
     says = `${i.name}: ${i.spec ?? i.says}. By mass: ${rows.slice(0, 6).map((r) => `${r.item.name.replace(/ \(.*\)$/, '')} ${r.pct! >= 1 ? r.pct!.toFixed(1) : r.pct!.toFixed(2)} %`).join(', ')}.`;
   } else {
     rows = i.of.map((c) => ({ item: INVENTORY.get(c.id)!, n: c.n })).filter((r) => r.item).sort((a, b) => vol(boxOf(b.item)) * b.n - vol(boxOf(a.item)) * a.n);
-    says = `${i.name}: ${rows.length} kinds of part, ${rows.reduce((a, r) => a + r.n, 0)} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
+    says = `${i.name}: ${rows.length} kinds of part, ${countSays(rows.reduce((a, r) => a + r.n, 0))} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
   }
   const shownRows = rows.slice(0, MOST), at = ringOf(shownRows.length, fit * 1.6, fit * 1.0);
   const pieces: Piece[] = shownRows.map((r, k) => {
@@ -141,7 +141,7 @@ export function planOf(id: string, fit = 0.3): Plan | null {
     const size = s.map((x) => x * shown) as V3;
     const sz = sized(r.item), real = sz.box.map((x) => +(x * 1000).toPrecision(3)) as V3, dims = sz.from === 'guess' ? 'size not known' : `${sz.from === 'size' ? '' : 'about '}${real.join(' × ')} mm${sz.from === 'mass' ? ' (from its mass)' : ''}`;
     return { id: r.item.id, name: r.item.name, n: r.n, look: { ...look, size }, whole: [0, 0, 0], apart: at[k]!, shown,
-      note: `${r.n > 1 ? `${r.n} × ` : ''}${r.item.name}${r.pct !== undefined ? ` · ${r.pct >= 1 ? r.pct.toFixed(1) : r.pct.toFixed(2)} %` : ''}${r.item.kind === 'material' || r.item.kind === 'element' ? '' : ` · ${dims}`}${shown > 1.01 ? ' · shown larger' : shown < 0.99 ? ' · shown smaller' : ''}` };
+      note: `${r.n !== 1 ? `${countSays(r.n)} × ` : ''}${r.item.name}${r.pct !== undefined ? ` · ${r.pct >= 1 ? r.pct.toFixed(1) : r.pct.toFixed(2)} %` : ''}${r.item.kind === 'material' || r.item.kind === 'element' ? '' : ` · ${dims}`}${shown > 1.01 ? ' · shown larger' : shown < 0.99 ? ' · shown smaller' : ''}` };
   });
   return { id, name: i.name, says, whole: { ...whole, size: whole.size.map((x) => x * scale) as V3 }, pieces, more: Math.max(0, rows.length - MOST), scale, deeper: rows.length > 0 };
 }

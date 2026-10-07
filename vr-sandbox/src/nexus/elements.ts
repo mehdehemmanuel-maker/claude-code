@@ -4,6 +4,8 @@
 // fibreglass and epoxy), each of those down to elements in turn. So every part's tree, followed far enough, ends in the
 // same few dozen elements, and each element says where it is got from.
 
+import { MOLECULES } from './life/molecules';
+
 /** Standard atomic weights (IUPAC 2021, abridged), and where each element comes from. */
 export const ELEMENTS: Record<string, { name: string; w: number; group: string; from: string }> = {
   H: { name: 'hydrogen', w: 1.008, group: 'Non-metals', from: 'water, split by electrolysis, and natural gas, by steam reforming' },
@@ -54,6 +56,7 @@ export const ELEMENTS: Record<string, { name: string; w: number; group: string; 
   La: { name: 'lanthanum', w: 138.91, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
   Ce: { name: 'cerium', w: 140.12, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
   Pt: { name: 'platinum', w: 195.08, group: 'Metals', from: 'platinum ores (the Bushveld, Norilsk), and a by-product of refining nickel' },
+  I: { name: 'iodine', w: 126.9, group: 'Non-metals', from: 'brine from gas and oil wells (Japan, the US) and caliche in Chile, where it comes with nitrate' },
 };
 
 /** A formula's mass fractions, %: "C3H4O2" (PLA's unit), "PbZr0.52Ti0.48O3" (PZT). */
@@ -151,6 +154,8 @@ export const MATERIALS: Record<string, Spec> = {
   portland: { blend: [['CaO', 64], ['SiO2', 21], ['Al2O3', 5], ['Fe2O3', 3], ['SO3', 3], ['MgO', 2], ['K2O', 1], ['Na2O', 1]], says: 'Portland cement, as oxides; typical shares' }, tungsten: { alloy: { W: 'bal' }, grade: 'pure tungsten (lamp and TIG wire)' },
   'al-4043': { alloy: { Si: 5.2, Al: 'bal' }, grade: 'AWS ER4043, nominal' }, 'al-5356': { alloy: { Mg: 5, Mn: 0.12, Cr: 0.12, Al: 'bal' }, grade: 'AWS ER5356, nominal' },
 };
+// the molecules of life (src/nexus/life/molecules.ts), each by its formula or blend
+for (const mo of MOLECULES) { if (mo.id in MATERIALS) throw new Error(`molecule ${mo.id} is already a material`); MATERIALS[mo.id] = 'formula' in mo.spec ? { formula: mo.spec.formula, says: mo.name } : { blend: mo.spec.blend, says: mo.says }; }
 const isMaterial = (x: string) => x in MATERIALS;
 /** A material's own make-up, one level: [element symbol or material id, %]. */
 export function makeup(id: string): [string, number][] {

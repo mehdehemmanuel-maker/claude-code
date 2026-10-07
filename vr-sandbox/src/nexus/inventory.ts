@@ -13,11 +13,12 @@ import { shapes, type Section } from './cell';
 import type { Board } from './boards';
 import { callFamily, FAMILIES } from './families';
 import { ELEMENTS, elementId, elementsOf, makeup, makeupSays } from './elements';
+import { LIFE, MOLECULES, daltonsOf } from './life';
 
 /** How a thing is made from what is in it. */
 export type Process =
   | 'stock' | 'print' | 'cast' | 'wind' | 'solder' | 'crimp' | 'assemble' | 'heat-treat' | 'bend'
-  | 'machine' | 'stamp' | 'mould' | 'extrude' | 'draw' | 'cold-head' | 'roll-thread' | 'sinter' | 'etch' | 'fab' | 'coat' | 'grind' | 'laminate' | 'weld' | 'forge' | 'blow' | 'coil' | 'chemistry' | 'roll' | 'swage';
+  | 'machine' | 'stamp' | 'mould' | 'extrude' | 'draw' | 'cold-head' | 'roll-thread' | 'sinter' | 'etch' | 'fab' | 'coat' | 'grind' | 'laminate' | 'weld' | 'forge' | 'blow' | 'coil' | 'chemistry' | 'roll' | 'swage' | 'grow';
 export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   stock: { says: 'taken from stock as a raw material', here: true },
   print: { says: 'printed in PLA on the 3D printer', here: true },
@@ -48,6 +49,7 @@ export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   chemistry: { says: 'made by chemistry: refined, reacted or synthesised', here: false },
   roll: { says: 'hot-rolled in a mill: needs a rolling mill', here: false },
   swage: { says: 'swaged: compacted by a swaging machine', here: false },
+  grow: { says: 'grown by living cells, from food, as their genes direct', here: false },
 };
 export type Kind = 'product' | 'assembly' | 'part' | 'material' | 'element';
 export interface Item {
@@ -61,6 +63,8 @@ export interface Item {
   /** made to sizes by a family: which, and the numbers it was called with (what its behaviours are worked out from) */ sized?: { family: string; params: Record<string, string | number> };
   /** parts made to its sizes with it, each by its own family (a cylinder's barrel and rod), put in with it */ inner?: Item[];
   /** its 3D shape where its kind says it: a shape kind of the view and a mark (src/nexus/pieces.ts) */ look?: string;
+  /** grams of each of what is in it, where that is said by mass (tissue in an organ, water in a cell) */ mass?: Record<string, number>;
+  /** a molecule's weight, daltons */ da?: number;
 }
 const items = new Map<string, Item>();
 /** The inventory's revision: one more each time an entry is added, so what is worked out from it (its categories, each
@@ -587,6 +591,10 @@ m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: l
 m('al-4043', '4043 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % silicon: a filler wire that flows well', 'AWS A5.10 ER4043');
 m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % magnesium: a stronger filler wire', 'AWS A5.10 ER5356');
 
+// ==== life: molecules, cells, tissues, organs, the human body, the organisms used in technology (src/nexus/life) =====
+for (const mo of MOLECULES) { const da = daltonsOf(mo); put({ id: mo.id, name: mo.name, path: ['Life', 'Molecules', ...mo.group.split('/').slice(1)], kind: 'material', make: /Salts|Gases|Biominerals/.test(mo.group) ? 'stock' : 'grow', of: [], says: mo.says, ...(da ? { da: +da.toFixed(1) } : {}) }); }
+for (const e of LIFE) put({ id: e.id, name: e.name, path: e.path.split('/'), kind: e.kind, make: 'grow', of: e.of.map((c) => ({ ...c })), says: e.says, ...(e.spec ? { spec: e.spec } : {}), ...(e.size ? { size: e.size } : {}), g: e.g, ...(e.look ? { look: e.look } : {}), ...(Object.keys(e.mass).length ? { mass: { ...e.mass } } : {}) });
+
 // ==== the fundamentals: every material down to its elements ==========================================================
 // Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).
 for (const [sym, el] of Object.entries(ELEMENTS)) put({ id: elementId(sym), name: `${el.name} (${sym})`, path: ['Elements', el.group], kind: 'element', make: 'chemistry', of: [], says: `got from ${el.from}`, spec: `atomic weight ${el.w}` });
@@ -594,6 +602,13 @@ for (const i of items.values()) if (i.kind === 'material') { const mk = makeup(i
 
 // ==== reading it ========================================================================================================
 export const INVENTORY: ReadonlyMap<string, Item> = items;
+/** A count to read: 12, 4,000, 2.6 million, 26 trillion, 0.5. */
+export function countSays(n: number): string {
+  if (n < 1) return n.toPrecision(2).replace(/\.?0+$/, '');
+  if (n < 1e6) return (Number.isInteger(n) ? n : +n.toPrecision(3)).toLocaleString('en');
+  const [d, w] = n >= 1e18 ? [1e18, 'quintillion'] : n >= 1e15 ? [1e15, 'quadrillion'] : n >= 1e12 ? [1e12, 'trillion'] : n >= 1e9 ? [1e9, 'billion'] : [1e6, 'million'];
+  return `${+(n / (d as number)).toPrecision(3)} ${w}`;
+}
 export const itemOf = (id: string): Item | null => items.get(id) ?? null;
 /** An item from words: an adjustable family called with its sizes ("screw M4x20"), else an entry by its id or name. */
 export function resolve(words: string): Item | string | null {
@@ -621,6 +636,7 @@ export function categories(): Map<string, Map<string, Map<string, string[]>>> {
 export function routeOf(i: Item): { process: Process; here: boolean; bought: boolean; why: string } {
   if (PROCESSES[i.make].here) return { process: i.make, here: true, bought: false, why: PROCESSES[i.make].says };
   if (i.alt && PROCESSES[i.alt].here) return { process: i.alt, here: true, bought: false, why: `${PROCESSES[i.alt].says}, instead of ${i.make === 'mould' ? 'moulded' : i.make === 'machine' ? 'machined' : i.make === 'forge' ? 'forged' : i.make} as it is made in a factory` };
+  if (i.make === 'grow') return { process: 'grow', here: false, bought: true, why: `grown, not made: ${PROCESSES.grow.says}` };
   return { process: i.make, here: false, bought: true, why: `bought: ${PROCESSES[i.make].says}, which the workshop has not` };
 }
 /** Everything inside an item, depth first, each with how many go into one of it and how it is made here. */
@@ -655,6 +671,35 @@ export const fundamentals = memo((id: string): { id: string; name: string; via: 
   return [...via].map(([e, m]) => ({ id: e, name: items.get(e)?.name ?? e, via: [...m].map(([material, pct]) => ({ material, pct })).sort((a, b) => b.pct - a.pct) })).sort((a, b) => b.via.length - a.via.length || a.name.localeCompare(b.name));
 });
 
+/** grams one of an item weighs: its own, else a molecule's weight; null where it is not known. */
+const AMU = 1.66053907e-24;
+export const gramsOfItem = (i: Item): number | null => i.g ?? (i.da ? i.da * AMU : null);
+/** What an item is, element by element, by mass: each part weighed (its grams said, or its count times what one
+ *  weighs) and each part's own make-up so, down to the materials' elements. Fractions adding to 1; null where no part
+ *  of it has a weight (a screw's parts are not weighed). */
+export const massMakeup = memo((id: string): Record<string, number> | null => {
+  const i = items.get(id); if (!i) return null;
+  if (i.kind === 'element') { const sym = Object.keys(ELEMENTS).find((s) => elementId(s) === id); return sym ? { [sym]: 1 } : null; }
+  if (i.kind === 'material') { const e = elementsOf(id), t = Object.values(e).reduce((a, b) => a + b, 0); if (!t) return null; return Object.fromEntries(Object.entries(e).map(([k, v]) => [k, v / t])); }
+  const out: Record<string, number> = {}; let all = 0;
+  for (const c of i.of) {
+    const ci = items.get(c.id); if (!ci) continue;
+    const g = i.mass?.[c.id] ?? (gramsOfItem(ci) ?? NaN) * c.n; if (!(g > 0)) continue;
+    const mk = massMakeup(c.id); if (!mk) continue;
+    for (const [el, f] of Object.entries(mk)) out[el] = (out[el] ?? 0) + g * f;
+    all += g;
+  }
+  if (!all) return null;
+  for (const k of Object.keys(out)) out[k]! /= all;
+  return out;
+});
+/** How many of a thing there are in an item, all the way down (red cells in a body, synapses in a brain). */
+export const countIn = (id: string, what: string): number => {
+  const memoN = new Map<string, number>();
+  const n = (x: string): number => { if (x === what) return 1; const k = memoN.get(x); if (k !== undefined) return k; memoN.set(x, 0); const i = items.get(x); let t = 0; if (i) for (const c of i.of) t += c.n * n(c.id); memoN.set(x, t); return t; };
+  return n(id);
+};
+
 /** The tree of what is in an item, every level, as lines to read. */
 /** The tree of what is in an item, every level, as lines to read: inside what is bought too (its maker's parts, said
  *  as bought), each material's make-up under it, down to the elements. */
@@ -664,7 +709,7 @@ export function treeLines(id: string, most = 60): string[] {
   const walk = (x: string, depth: number, n: number, seen: Set<string>) => {
     const i = items.get(x); if (!i || out.length >= most || seen.has(x)) return;
     const r = routeOf(i);
-    out.push(`${'  '.repeat(depth)}${n > 1 ? `${n} × ` : ''}${i.name} — ${i.kind === 'element' ? 'element' : i.kind === 'material' ? 'stock' : r.bought ? 'bought' : r.process}`);
+    out.push(`${'  '.repeat(depth)}${n !== 1 ? `${countSays(n)} × ` : ''}${i.name} — ${i.kind === 'element' ? 'element' : i.kind === 'material' ? 'stock' : i.make === 'grow' ? 'grown' : r.bought ? 'bought' : r.process}`);
     if (i.kind === 'material' && i.makeup) { out.push(`${'  '.repeat(depth + 1)}= ${i.makeup.slice(0, 8).map((m) => `${(items.get(m.id)?.name ?? m.id).replace(/ \(.*\)$/, '')} ${pct(m.pct)} %`).join(' · ')}`); for (const m of i.makeup) if (items.get(m.id)?.kind === 'material') walk(m.id, depth + 1, 1, new Set(seen).add(x)); return; }
     for (const c of i.of) walk(c.id, depth + 1, c.n, new Set(seen).add(x));
   };
@@ -745,8 +790,8 @@ export function boardOfTree(id: string, at = Date.now()): Board | null {
   const b: Board = { title: `Inside: ${top.name}`, kind: 'categories', about: `${top.says}. Every part inside it, and what is inside that, down to its materials and their elements (each element one node, where every branch meets); each marked by how it is made here (made, bought, or from stock).`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
   let e2 = 0;
   const walk = (x: string, under: string | null, n: number, path: string) => {
-    const i = items.get(x); if (!i) return; const r = routeOf(i), nid = `${path}/${x}`.replace(/[^a-z0-9/.-]/gi, '-');
-    b.nodes[nid] = { label: `${n > 1 ? `${n} × ` : ''}${i.name}`, note: `${i.says}${i.spec ? ` · ${i.spec}` : ''} · ${i.kind === 'material' ? 'from stock' : r.bought ? r.why : `made here: ${r.why}`}` };
+    const i = items.get(x); if (!i || Object.keys(b.nodes).length >= 600) return; const r = routeOf(i), nid = `${path}/${x}`.replace(/[^a-z0-9/.-]/gi, '-');
+    b.nodes[nid] = { label: `${n !== 1 ? `${countSays(n)} × ` : ''}${i.name}`, note: `${i.says}${i.spec ? ` · ${i.spec}` : ''} · ${i.kind === 'material' ? 'from stock' : r.bought ? r.why : `made here: ${r.why}`}` };
     if (under) b.edges[`e${e2++}`] = { from: under, to: nid, rel: 'contains' };
     if (path.split('/').length < 8) for (const c of i.of) walk(c.id, nid, c.n, `${path}/${x}`);
     // a material: what it is made of; an element is one node, so every branch that comes to it meets there
