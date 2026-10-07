@@ -22,6 +22,17 @@ export interface Look { kind: ShapeKind; /** its box, metres */ size: V3; teeth?
 export interface Piece { id: string; name: string; n: number; look: Look; /** where it sits whole, and laid out, metres from the centre */ whole: V3; apart: V3; /** its display size over its true size (1 is true to the whole's scale) */ shown: number; note: string }
 export interface Plan { id: string; name: string; says: string; whole: Look; pieces: Piece[]; more: number; /** display metres for each real metre */ scale: number; deeper: boolean }
 
+/** The inventory's material for each matter the generator builds with (src/data/materials.ts), so a shape made in the
+ *  room opens into what it is made of, then its elements. A matter with none here (textiles, leather, soil) has none. */
+export const MATTER_TO_INVENTORY: Record<string, string> = {
+  'steel.a36': 'steel-low', 'steel.1018-cd': 'steel-low', 'steel.4140-ann': 'steel-alloy', 'steel.52100': 'steel-chrome', 'steel.music-wire': 'steel-spring', 'stainless.304': 'stainless-304', 'stainless.316': 'stainless-316',
+  'cast-iron.gray-30': 'cast-iron', 'aluminum.6061-t6': 'al-6061', 'aluminum.7075-t6': 'al-7075', 'aluminum.5052-h32': 'al-5052', 'aluminum.2024-t3': 'al-2024', 'copper.c110': 'copper', 'brass.c360': 'brass',
+  'titanium.ti6al4v': 'ti-6al4v', 'wood.birch-plywood': 'wood-veneer', 'wood.mdf': 'wood', 'polymer.nylon-microcarbon': 'nylon', 'polymer.pmma': 'pmma', 'rubber.natural': 'rubber', 'glass.soda-lime': 'glass',
+  'concrete.c30': 'concrete', 'ceramic.clay-brick': 'brick', 'textile.canvas': 'paper', 'textile.nylon-ripstop': 'nylon', 'foam.eva': 'eva', 'composite.cfrp': 'cfrp', 'composite.gfrp': 'fr4', 'polymer.phenolic': 'phenolic', 'ground.sand-dry': 'quartz',
+  'wood.douglas-fir': 'wood', 'wood.southern-pine': 'wood', 'wood.white-pine': 'wood', 'wood.red-oak': 'wood', 'wood.white-oak': 'wood', 'wood.hard-maple': 'wood', 'wood.balsa': 'wood', 'wood.c24': 'wood',
+  'polymer.abs': 'abs', 'polymer.pla': 'pla', 'polymer.nylon66': 'nylon', 'polymer.pom': 'pom', 'polymer.pc': 'pc', 'polymer.hdpe': 'pe', 'polymer.ptfe': 'ptfe',
+  'stone.slate': 'slate', 'stone.granite': 'granite', 'stone.marble': 'marble', 'magnet.n35': 'ndfeb', 'magnet.n42': 'ndfeb', 'magnet.n52': 'ndfeb', 'magnet.ferrite-c8': 'ferrite-hard',
+};
 /** The finish of a material: its colour, how metallic, how rough. */
 export function finishOf(material: string): Finish {
   const m = material.toLowerCase();

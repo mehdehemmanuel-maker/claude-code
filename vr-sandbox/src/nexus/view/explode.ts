@@ -90,7 +90,7 @@ export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
 interface Shown { /** in a hand, held */ held?: boolean; id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean }
 const free = (o: THREE.Object3D) => o.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh && !(x as THREE.LineSegments).isLineSegments) return; m.geometry?.dispose(); for (const mt of Array.isArray(m.material) ? m.material : [m.material]) mt?.dispose(); });
 /** A source of parts to take apart: the inventory (by its plans), or a build's own parts (from where they stand). */
-export interface BuildPiece { id: string; name: string; obj: THREE.Object3D; note: string }
+export interface BuildPiece { id: string; name: string; obj: THREE.Object3D; note: string; /** where it stood and how it was scaled, kept the first time it is shown so it can be shown again */ at?: THREE.Vector3; scale0?: THREE.Vector3 }
 
 export class Exploded {
   readonly group = new THREE.Group();
@@ -102,6 +102,8 @@ export class Exploded {
   private t0 = 0;
   private plan: Plan | null = null;
   private build: { name: string; pieces: BuildPiece[] } | null = null;
+  /** the build last taken apart, kept while its parts are opened, to come back to */
+  private source: { name: string; pieces: BuildPiece[]; c: THREE.Vector3; ext: number } | null = null;
   readonly info = card(0.5, 0.3, 768);
   private readonly ring: THREE.Mesh;
   /** The chips under it: back up a level, put it away. */
@@ -118,9 +120,12 @@ export class Exploded {
     (['back', 'whole', 'close'] as const).forEach((act, k) => { const c = card(0.12, 0.04, 384); c.draw('', [{ text: act === 'back' ? '‹ Back' : act === 'whole' ? '⟳ Whole / apart' : '✕ Close', size: 2.4 }], act === 'close' ? '#ff8a80' : '#4dd0e1'); c.mesh.position.set(0.44 + k * 0.125, -0.13, 0.1); c.mesh.rotation.y = -0.4; this.group.add(c.mesh); this.chips.push({ mesh: c.mesh, act }); });
   }
   /** Set it before you, a metre off at chest height, facing you. */
-  place(eye: THREE.Vector3, forward: THREE.Vector3, far = 0.85, left = 0): void {
+  /** Your right, level, as it was when it was last set before you. */
+  readonly right = new THREE.Vector3(1, 0, 0);
+  place(eye: THREE.Vector3, forward: THREE.Vector3, far = 0.85, aside = 0): void {
     const f = forward.clone(); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
-    this.group.position.copy(eye).addScaledVector(f, far).addScaledVector(new THREE.Vector3(f.z, 0, -f.x), left); this.group.position.y = Math.max(0.9, eye.y - 0.12);
+    this.right.set(-f.z, 0, f.x);
+    this.group.position.copy(eye).addScaledVector(f, far).addScaledVector(this.right, aside); this.group.position.y = Math.max(0.9, eye.y - 0.12);
     this.group.lookAt(eye.x, this.group.position.y, eye.z);
   }
   private clearStage(): void {
@@ -149,12 +154,16 @@ export class Exploded {
   /** A build on the table, its parts as they stand, then each pushed out from its middle. */
   showBuild(name: string, pieces: BuildPiece[], now: number): string {
     this.clearStage(); this.plan = null; this.build = { name, pieces }; this.trail = [{ id: `build:${name}`, name }];
-    const box = new THREE.Box3(); for (const p of pieces) { p.obj.updateMatrixWorld(true); box.expandByObject(p.obj); }
-    const c = box.getCenter(new THREE.Vector3()), ext = Math.max(1e-3, ...box.getSize(new THREE.Vector3()).toArray()), k = 0.5 / ext;
+    // where each stood and how big the whole was, taken once, while its parts are as they were made
+    const again = this.source && this.source.pieces === pieces ? this.source : null;
+    let c: THREE.Vector3, ext: number;
+    if (again) { c = again.c; ext = again.ext; }
+    else { const box = new THREE.Box3(); for (const p of pieces) { p.obj.updateMatrixWorld(true); p.at = p.obj.getWorldPosition(new THREE.Vector3()); p.scale0 = p.obj.scale.clone(); box.expandByObject(p.obj); } c = box.getCenter(new THREE.Vector3()); ext = Math.max(1e-3, ...box.getSize(new THREE.Vector3()).toArray()); }
+    const k = 0.5 / ext; this.source = { name, pieces, c, ext };
     pieces.forEach((p, j) => {
       const obj = p.obj; obj.userData.piece = p.id;
-      const at = obj.getWorldPosition(new THREE.Vector3()).sub(c).multiplyScalar(k);
-      const wrap = new THREE.Group(); wrap.add(obj); obj.position.set(0, 0, 0); obj.scale.multiplyScalar(k); wrap.userData.piece = p.id; this.stage.add(wrap);
+      const at = p.at!.clone().sub(c).multiplyScalar(k);
+      const wrap = new THREE.Group(); wrap.add(obj); obj.position.set(0, 0, 0); obj.scale.copy(p.scale0!).multiplyScalar(k); wrap.userData.piece = p.id; this.stage.add(wrap);
       const dir = at.lengthSq() > 1e-8 ? at.clone().normalize() : new THREE.Vector3(Math.cos(j), 0.3, Math.sin(j)).normalize();
       const tag = label(p.note.length > 40 ? `${p.note.slice(0, 38)}…` : p.note, 0.016); tag.visible = false; this.group.add(tag);
       const bb = new THREE.Box3().setFromObject(wrap);
@@ -168,11 +177,11 @@ export class Exploded {
   back(now: number): string {
     if (this.trail.length < 2) { this.close(); return 'Put away.'; }
     this.trail.pop(); const up = this.trail.pop()!;
-    if (up.id.startsWith('build:') && this.build) { this.trail = []; return this.showBuild(this.build.name, this.build.pieces, now); }
+    if (up.id.startsWith('build:') && this.source) { this.trail = []; return this.showBuild(this.source.name, this.source.pieces, now); }
     return this.show(up.id, now, true, false);
   }
   toggle(now: number): void { this.mode = this.mode === 'apart' ? 'whole' : 'apart'; this.t0 = now; this.drawInfo(); }
-  close(): void { this.release(); this.clearStage(); this.plan = null; this.build = null; this.trail = []; this.group.visible = false; }
+  close(): void { this.release(); this.clearStage(); this.plan = null; this.build = null; this.source = null; this.trail = []; this.group.visible = false; }
   /** What a ray points at: a part's id, a chip, or nothing. */
   pick(ray: THREE.Raycaster): { piece: string } | { chip: 'back' | 'close' | 'whole' } | null {
     if (!this.group.visible) return null;

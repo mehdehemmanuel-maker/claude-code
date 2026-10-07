@@ -564,6 +564,12 @@ m('fkm', 'FKM rubber', 'Rubbers', 'a fluoro-rubber (Viton-type) that stands fuel
 m('asa', 'ASA', 'Plastics', 'a weather-proof cousin of ABS');
 m('wood', 'softwood', 'Natural', 'spruce, pine or fir, sawn and dried');
 m('bk7', 'borosilicate crown glass', 'Glasses', 'the clear optical glass of most lenses', 'N-BK7 type, n = 1.5168');
+m('al-2024', '2024 aluminium', 'Metals/Aluminium alloys', 'copper-strengthened aluminium of aircraft skins and fittings', '2024-T3');
+m('concrete', 'concrete', 'Building/Masonry', 'cement binding sand and gravel: strong in compression, weak pulled', 'C30/37');
+m('granite', 'granite', 'Building/Stone', 'a hard igneous stone of quartz, feldspar and mica');
+m('slate', 'slate', 'Building/Stone', 'a fine stone that splits flat: roofs and billiard beds');
+m('marble', 'marble', 'Building/Stone', 'recrystallised limestone: calcite');
+m('brick', 'fired clay brick', 'Building/Masonry', 'clay shaped and fired in a kiln');
 m('koh-electrolyte', 'potassium hydroxide electrolyte', 'Chemicals', 'the alkaline electrolyte of alkaline and NiMH cells');
 m('acid-electrolyte', 'battery acid', 'Chemicals', 'dilute sulfuric acid, the electrolyte of lead-acid batteries');
 
