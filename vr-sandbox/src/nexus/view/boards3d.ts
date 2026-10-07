@@ -13,7 +13,7 @@
 // from one board to another; 💾 Save keeps it to start boards from.
 
 import * as THREE from 'three';
-import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, boardOfKnowledge, categoriesOf, deleteNode, derive, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../boards';
+import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, boardOfKnowledge, categoriesOf, deleteNode, derive, duplicateNode, freeName, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../boards';
 import type { BoardStore } from './boards-store';
 import { resolve, type Understanding } from '../understand';
 import { TAXONOMY, find as findKnown, type Node as TaxNode } from '../embody/taxonomy';
@@ -118,6 +118,12 @@ export class Boards3D {
   }
 
   board(): Board | null { return this.id ? this.store.boards.get(this.id) ?? null : null; }
+  /** A board by its id, brought up on the wall; false where there is none. */
+  openBoard(id: string): boolean { if (!this.store.boards.has(id)) return false; this.group.visible = true; this.picking = false; this.open(id); return true; }
+  /** The boards kept, by id (read only: write through put). */
+  get all(): ReadonlyMap<string, Board> { return this.store.boards; }
+  /** A board written whole, by id. */
+  put(id: string, b: Board): void { this.store.write(id, b, true); }
   /** Bring the board up: the one open last, else the first; with none, a board of the build standing here. */
   show(): string {
     this.group.visible = true;
@@ -307,14 +313,14 @@ export class Boards3D {
     const rows = this.rowsFrom(top);
     const found = findNodes(b, this.d, this.find, id).sort((a, c) => (this.find ? 0 : Number(lk.has(c.id)) - Number(lk.has(a.id))));
     const exact = this.find.trim() && found.some((r) => r.label.toLowerCase() === this.find.trim().toLowerCase());
-    const list: { id?: string; add?: boolean }[] = [...(this.find.trim() && !exact && !found.length ? [{ add: true }] : []), ...found.map((r) => ({ id: r.id })), ...(this.find.trim() && !exact && found.length ? [{ add: true }] : [])];
+    const list: { id?: string; add?: boolean; again?: boolean }[] = [...(this.find.trim() && !exact && !found.length ? [{ add: true }] : []), ...found.map((r) => ({ id: r.id })), ...(this.find.trim() && found.length ? [{ add: true, again: !!exact }] : [])];
     const pages = Math.max(1, Math.ceil(list.length / rows)); if (this.page >= pages) this.page = pages - 1;
     list.slice(this.page * rows, this.page * rows + rows).forEach((r, i) => {
       const y = top + i * ROW, on = !!r.id && lk.has(r.id);
       g.fillStyle = on ? 'rgba(77,208,225,0.24)' : 'rgba(10,30,40,0.95)'; g.beginPath(); g.roundRect(30, y, LPX - 150, ROW - 10, 12); g.fill(); g.strokeStyle = on ? '#80deea' : 'rgba(128,222,234,0.35)'; g.lineWidth = 2; g.setLineDash(r.add ? [10, 8] : []); g.stroke(); g.setLineDash([]);
       // the tick
       g.strokeStyle = on ? '#80deea' : '#7fb3c8'; g.lineWidth = 3; g.strokeRect(50, y + 22, 30, 30); if (on) { g.fillStyle = '#80deea'; g.fillRect(50, y + 22, 30, 30); g.strokeStyle = '#03141c'; g.beginPath(); g.moveTo(56, y + 38); g.lineTo(63, y + 45); g.lineTo(75, y + 29); g.stroke(); }
-      if (r.add) { g.font = `500 32px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText(fit2(g, `＋ Add “${this.find.trim()}” and link it`, LPX - 280), 100, y + 48); hit(30, y, LPX - 120, y + ROW - 10, 'add'); return; }
+      if (r.add) { g.font = `500 32px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText(fit2(g, r.again ? `＋ Add another “${freeName(b, this.find.trim())}” and link it` : `＋ Add “${this.find.trim()}” and link it`, LPX - 280), 100, y + 48); hit(30, y, LPX - 120, y + ROW - 10, r.again ? 'addagain' : 'add'); return; }
       g.font = `500 32px ${FONT}`; g.fillStyle = '#ffffff'; g.fillText(fit2(g, b.nodes[r.id!]!.label, LPX - 470), 100, y + 46);
       const rs = flow || stepOf(b, r.id!); g.font = `500 22px ${FONT}`; g.fillStyle = rs ? KIND[stepOf(b, r.id!)?.kind ?? 'plain'][1] : '#9fdfee'; g.textAlign = 'right'; g.fillText(fit2(g, rs ? this.flowTag(b, id, r.id!) : this.tag(r.id!), 260), LPX - 140, y + 46); g.textAlign = 'left';
       hit(30, y, LPX - 120, y + ROW - 10, 'row', r.id);
@@ -324,6 +330,7 @@ export class Boards3D {
     this.pager(list.length, button, rows);
     const dy = LHPX - 96, del = this.confirmDel && this.confirmDel.id === id && performance.now() < this.confirmDel.until;
     button(LPX - 330, dy, 300, 70, del ? 'Press again' : 'Delete node', 'delete', '#ff8a80');
+    button(LPX - 650, dy, 300, 70, '⧉ Duplicate', 'dup', '#80deea');
     tex.needsUpdate = true;
   }
   /** Calling Claude: what you said, what was understood, the names for what you meant, and each change to take or leave. */
@@ -638,6 +645,13 @@ export class Boards3D {
       case 'open': if (id) { if (this.sel !== id) this.callGroup = null; this.sel = id; this.page = 0; this.find = ''; this.drawAll(); } return;
       case 'row': if (id && this.sel) this.toggle(this.sel, id); return;
       case 'add': if (this.sel && this.find.trim()) { const w = this.find.trim(); this.add(w, this.sel); this.find = ''; this.host.type(this.typing === 'find', `find or add a node linked to ${this.label(this.sel)}`); this.host.say(`${w}, linked to ${this.label(this.sel)}.`); } return;
+      case 'dup': {
+        if (!this.sel || !b) return;
+        const d = duplicateNode(b, this.sel); if (!d) return;
+        const name = this.label(this.sel); this.remember(`duplicate ${name}`); this.store.write(this.id!, d.patch); this.sel = d.id; this.page = 0; this.drawAll();
+        this.host.say(`Duplicated ${name} as ${d.label}: the same words${stepOf(b, this.sel ?? '') ? ', the same step' : ''}, linked to what it is linked to. Undo takes it away.`); return;
+      }
+      case 'addagain': if (this.sel && this.find.trim()) { const w = this.find.trim(); this.add(w, this.sel, true); this.find = ''; this.drawAll(); } return;
       case 'delete': {
         if (!this.sel || !b) return;
         if (!(this.confirmDel && this.confirmDel.id === this.sel && performance.now() < this.confirmDel.until)) { this.confirmDel = { id: this.sel, until: performance.now() + 3000 }; this.drawList(); setTimeout(() => this.drawList(), 3100); return; }
@@ -662,17 +676,20 @@ export class Boards3D {
     this.remember(`${t.linked ? 'link' : 'unlink'} ${this.label(a)} and ${this.label(c)}`);
     this.store.write(this.id!, t.patch);
   }
-  private add(word: string, linkTo?: string): string | null {
+  private add(word: string, linkTo?: string, again = false): string | null {
     const b = this.board(); if (!b || !word.trim()) return null;
     const same = nodesOf(b).find((n) => n.label.toLowerCase() === word.trim().toLowerCase());
-    if (same && !linkTo) { this.sel = same.id; this.drawAll(); this.host.say(`${same.label} is already on the board: here it is.`); return same.id; }
-    if (same && linkTo) { if (!this.d.nb.get(linkTo)?.has(same.id)) this.toggle(linkTo, same.id); return same.id; }
+    // a name already on the board is a node of its own all the same, numbered so the two are told apart; one found to link
+    // to is linked to, unless another is asked for
+    if (same && linkTo && !again) { if (!this.d.nb.get(linkTo)?.has(same.id)) this.toggle(linkTo, same.id); return same.id; }
+    if (same) word = freeName(b, word);
     this.remember(`add ${word.trim()}`);
     // what the word does is read from it, one word being enough; a step, or one added after a step, links onward in order
     const st = guessStep(word), from = linkTo ? stepOf(b, linkTo) : null, flow = !!st || !!from;
     const { id, patch } = addNode(word, linkTo, uid('n'), !flow ? 'connects' : from?.kind === 'repeat' ? 'feeds back to' : 'flows to');
     if (st) patch.nodes![id]!.step = st;
     this.store.write(this.id!, patch);
+    if (same) this.host.say(`${same.label} is on the board already, so this one is ${word.trim()}.`);
     return id;
   }
   undo(): void {
@@ -778,7 +795,7 @@ export class Boards3D {
     finally { this.running.delete(id); }
     const cur = this.store.boards.get(id); if (cur) this.store.write(id, { runs: [...(cur.runs ?? []), keptRun(r)].slice(-8) });
     const end = r.steps.at(-1);
-    this.host.say(`⚡ ${b.title}: ${r.status === 'done' ? 'done' : r.status}${r.rounds > 1 ? ` after ${r.rounds} rounds` : ''}.${end ? ` ${end.label}: ${end.output.slice(0, 220)}` : ''}`);
+    if (!b.quiet || r.status !== 'done') this.host.say(`⚡ ${b.title}: ${r.status === 'done' ? 'done' : r.status}${r.rounds > 1 ? ` after ${r.rounds} rounds` : ''}.${end ? ` ${end.label}: ${end.output.slice(0, 220)}` : ''}`);
     if (this.id === id && this.group.visible) this.drawAll();
     return r;
   }
@@ -795,7 +812,7 @@ export class Boards3D {
         const c = triggerOf(t.step.what); if (c?.kind !== 'cond' || !c.cond) continue;
         api ??= this.host.flowApi(); const r = evaluate(c.cond, api.facts(), '', api.reader?.()), now = !('error' in r) && r.ok, key = `${id}:${t.id}`, was = this.condWas.get(key) ?? false;
         this.condWas.set(key, now);
-        if (now && !was && Date.now() - (this.auto.get(id) ?? 0) >= 10_000) { this.auto.set(id, Date.now()); started.push(b.title); this.host.say(`⚡ ${b.title} starts: ${c.cond} now holds.`); void this.runBoard(id, t.id, `${c.cond} came to hold`); }
+        if (now && !was && Date.now() - (this.auto.get(id) ?? 0) >= 10_000) { this.auto.set(id, Date.now()); started.push(b.title); if (!b.quiet) this.host.say(`⚡ ${b.title} starts: ${c.cond} now holds.`); void this.runBoard(id, t.id, `${c.cond} came to hold`); }
       }
     }
     if (this.running.size) return started;
@@ -804,7 +821,7 @@ export class Boards3D {
       let e: FlowEvent | undefined; const t = triggersOf(b).find((x) => (e = es.find((y) => starts(x.step, y)))); if (!t || !e) continue;
       if (Date.now() - (this.auto.get(id) ?? 0) < 10_000) continue;
       this.auto.set(id, Date.now()); started.push(b.title);
-      this.host.say(`⚡ ${b.title} starts: ${saidOf(e)}.`);
+      if (!b.quiet) this.host.say(`⚡ ${b.title} starts: ${saidOf(e)}.`);
       void this.runBoard(id, t.id, saidOf(e));
     }
     return started;

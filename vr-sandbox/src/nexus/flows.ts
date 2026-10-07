@@ -181,7 +181,7 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
 /** What the room's actions are called: the first word of an action step. */
-export const ACTIONS = ['make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
+export const ACTIONS = ['pipeline', 'robot', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
 /** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
  *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
  *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
@@ -215,6 +215,17 @@ export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶
 // ---- flows to start from --------------------------------------------------------------------------------------------
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
 export const TEMPLATES: Template[] = [
+  {
+    id: 'claude-build', title: "Claude's build pipeline, until it holds", about: "Claude's own build pipeline as a step of yours: run the ask on the Pipeline app through it (read, conditions, grow, make, check, scale), and while any check fails, draw the next seed and run it again, at most 5 times. Change a step: \"pipeline matter steel\", \"pipeline physics off\", \"pipeline ask a shelf for 20 kg\", \"pipeline best\".",
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'p', label: "Claude's build pipeline", step: { kind: 'action', what: 'pipeline run' } },
+      { id: 'c', label: 'Any check failed?', step: { kind: 'check', what: 'pipeline_failed > 0' } },
+      { id: 's', label: 'Next seed', step: { kind: 'action', what: 'pipeline seed +1' } },
+      { id: 'r', label: 'Until it holds', step: { kind: 'repeat', what: 'until pipeline_failed = 0, at most 5 times' } },
+    ],
+    links: [['t', 'p'], ['p', 'c'], ['c', 's'], ['s', 'r'], ['r', 'p', 'feeds back to']],
+  },
   {
     id: 'improve', title: 'Improve it until it is clean', about: "Nexus's own loop as a pipeline: find the flaws, ask for the change that fixes the worst, build again with it, and go round until no flaw is left (at most 3 rounds).",
     steps: [

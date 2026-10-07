@@ -3813,12 +3813,12 @@ export function design(con: Conception, o: { seed: number; prefix?: string; at?:
   return { ...best!, tries };
 }
 /** Several designs for the same wants, each from its own seed and each unlike the others, set side by side. */
-export function designs(con: Conception, n: number, o: { seed: number; at?: [number, number]; world?: World; physics?: Jolt | null; gap?: number; first?: number }): Design[] {
+export function designs(con: Conception, n: number, o: { seed: number; at?: [number, number]; world?: World; physics?: Jolt | null; gap?: number; first?: number; /** the first stands centred on `at`, not starting from it */ centre?: boolean }): Design[] {
   const out: Design[] = [], seen = new Set<string>(), stem = con.name.replace(/[^a-z]/gi, '').toLowerCase() || 'thing'; let x = o.at?.[0] ?? 0;
   for (let k = 0; out.length < n && k < n * 6; k++) {
     const probe = design(con, { seed: o.seed + k * 104729, prefix: `${stem}${(o.first ?? 1) + out.length}`, at: [0, o.at?.[1] ?? 0], world: o.world ?? { parts: () => [] }, physics: null, tries: 1 });
     const sig = probe.choices.join('|'); if (seen.has(sig)) continue; seen.add(sig);
-    const half = probe.footprint[0] / 2; x += half;
+    const half = probe.footprint[0] / 2; if (o.centre && !out.length) x -= half; x += half;
     const d = design(con, { seed: probe.seed, prefix: probe.prefix, at: [x, o.at?.[1] ?? 0], world: o.world, physics: o.physics ?? null, tries: 4 });
     out.push(d); x += Math.max(half, d.footprint[0] / 2) + (o.gap ?? 0.5);
   }
