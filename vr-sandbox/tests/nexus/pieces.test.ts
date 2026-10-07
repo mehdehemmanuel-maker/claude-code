@@ -50,7 +50,7 @@ describe('everything in 3D: its look, and how it comes apart', () => {
   it('anything comes apart: a product into its parts, a material into its elements, an element into what it is in', () => {
     for (const i of INVENTORY.values()) {
       const p = planOf(i.id)!; expect(p, i.id).toBeTruthy();
-      expect(p.pieces.length, i.id).toBeLessThanOrEqual(MOST);
+      expect(p.pieces.length, i.id).toBeLessThanOrEqual(p.inPlace ? MOST * 3 : MOST); // a body's part opened in place shows every placed part (a spine's 26 bones)
       for (const pc of p.pieces) { expect(INVENTORY.has(pc.id), `${i.id} → ${pc.id}`).toBe(true); expect(pc.look.size.every((x) => x > 0 && x < 1), `${i.id} → ${pc.id}`).toBe(true); }
     }
     const bike = planOf('bicycle')!;

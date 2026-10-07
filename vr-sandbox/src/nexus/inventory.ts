@@ -693,6 +693,13 @@ export const massMakeup = memo((id: string): Record<string, number> | null => {
   for (const k of Object.keys(out)) out[k]! /= all;
   return out;
 });
+/** The atoms in one of an item, element by element: its grams by element over each one's atomic weight, times
+ *  Avogadro's number; kept as these counts until it is opened, they are its atoms as a mapped probability. */
+export const atomsOf = memo((id: string): { total: number; by: { el: string; n: number; share: number }[] } | null => {
+  const i = items.get(id), mk = massMakeup(id); if (!i || !mk) return null; const g = gramsOfItem(i); if (!g) return null;
+  const by = Object.entries(mk).map(([el, f]) => ({ el, n: (g * f / ELEMENTS[el]!.w) * 6.02214076e23 })), total = by.reduce((a, b) => a + b.n, 0);
+  return { total, by: by.map((b) => ({ ...b, share: b.n / total })).sort((a, b) => b.n - a.n) };
+});
 /** How many of a thing there are in an item, all the way down (red cells in a body, synapses in a brain). */
 export const countIn = (id: string, what: string): number => {
   const memoN = new Map<string, number>();
