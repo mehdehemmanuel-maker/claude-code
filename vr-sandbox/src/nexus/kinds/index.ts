@@ -4,10 +4,12 @@ import type { KindDef } from './core';
 import { ELECTRICAL } from './electrical';
 import { FASTENERS } from './fasteners';
 import { FLUID } from './fluid';
+import { DEVICES } from './devices';
 import { MORE } from './more';
 import { MOTION } from './motion';
+import { SITE } from './site';
 import { STOCK } from './stock';
 import { TOOLS } from './tools';
 
-export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE];
+export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE];
 export type { KindDef } from './core';

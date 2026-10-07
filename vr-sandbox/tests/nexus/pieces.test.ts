@@ -22,6 +22,10 @@ describe('everything in 3D: its look, and how it comes apart', () => {
     expect(lookOf(INVENTORY.get('el-fe')!)).toMatchObject({ kind: 'atom', mark: 'Fe' });
     for (const [w, k] of [['acmotor 90L 1.5kW 4P B5', 'motor'], ['taperbearing 30204', 'bearing'], ['sensormodule HC-SR04', 'board'], ['biketyre w28 622mm folding', 'torus'], ['mcb B 6A 2P', 'case'], ['pexpipe 16x2 3m', 'tube'], ['drywallscrew 3.5x35 coarse black', 'screw'], ['antenna 868MHz whip', 'rod']] as const) expect(lookOf(get(w)).kind, w).toBe(k);
     expect(lookOf(get('taperbearing 30204')).mark).toBe('taper'); // rollers, not balls
+    // a kind says its own shape as data
+    for (const [w, k] of [['transformer toroidal 50VA 12V', 'ring'], ['devboard RP2040', 'board'], ['cartyre w205 ar55 R16 V', 'torus'], ['shieldgas argon 20L', 'can'], ['wirerope 6x36-IWRC d12 20m', 'coil']] as const) expect(lookOf(get(w)).kind, w).toBe(k);
+    expect(lookOf(get('sparkplug M14x1.25 reach19 nickel'))).toMatchObject({ kind: 'screw', mark: 'hex' });
+    expect(lookOf(get('wirerope 6x36-IWRC d12 20m')).wire).toBe(0.012); // its rope, not its reel, is the wire drawn
   });
   it('its finish is what it is mostly made of', () => {
     expect(finishOf('brass').color).toBe(0xd4af5a);

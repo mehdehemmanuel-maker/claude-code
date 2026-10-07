@@ -60,6 +60,7 @@ export interface Item {
   /** a material's make-up by mass, one level down: elements (el-…), or the materials a blend is of */ makeup?: { id: string; pct: number }[];
   /** made to sizes by a family: which, and the numbers it was called with (what its behaviours are worked out from) */ sized?: { family: string; params: Record<string, string | number> };
   /** parts made to its sizes with it, each by its own family (a cylinder's barrel and rod), put in with it */ inner?: Item[];
+  /** its 3D shape where its kind says it: a shape kind of the view and a mark (src/nexus/pieces.ts) */ look?: string;
 }
 const items = new Map<string, Item>();
 /** The inventory's revision: one more each time an entry is added, so what is worked out from it (its categories, each
@@ -572,6 +573,16 @@ m('marble', 'marble', 'Building/Stone', 'recrystallised limestone: calcite');
 m('brick', 'fired clay brick', 'Building/Masonry', 'clay shaped and fired in a kiln');
 m('koh-electrolyte', 'potassium hydroxide electrolyte', 'Chemicals', 'the alkaline electrolyte of alkaline and NiMH cells');
 m('acid-electrolyte', 'battery acid', 'Chemicals', 'dilute sulfuric acid, the electrolyte of lead-acid batteries');
+m('gypsum', 'gypsum', 'Building/Boards', 'calcium sulfate set with its water: the core of plasterboard and plaster');
+m('argon', 'argon', 'Other materials/Gases', 'an inert gas, the shield of TIG and MIG welding', '99.996 %');
+m('co2', 'carbon dioxide', 'Other materials/Gases', 'a cheap active shielding gas for steel; liquid in its cylinder');
+m('borosilicate', 'borosilicate glass 3.3', 'Glasses', 'the glass of lab ware: it stands heat and thermal shock', 'ISO 3585');
+m('rutile', 'rutile (titanium dioxide)', 'Ceramics', 'the main mineral of a rutile electrode\'s flux');
+m('zirconia', 'zirconia', 'Ceramics', 'a tough white ceramic: fibre ferrules, blades and bearing balls');
+m('ps', 'polystyrene', 'Polymers', 'a light rigid plastic; foamed, it is EPS and XPS insulation');
+m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: lamp filaments and TIG electrodes');
+m('al-4043', '4043 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % silicon: a filler wire that flows well', 'AWS A5.10 ER4043');
+m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % magnesium: a stronger filler wire', 'AWS A5.10 ER5356');
 
 // ==== the fundamentals: every material down to its elements ==========================================================
 // Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).
@@ -583,7 +594,9 @@ export const INVENTORY: ReadonlyMap<string, Item> = items;
 export const itemOf = (id: string): Item | null => items.get(id) ?? null;
 /** An item from words: an adjustable family called with its sizes ("screw M4x20"), else an entry by its id or name. */
 export function resolve(words: string): Item | string | null {
-  const f = callFamily(words); if (typeof f === 'string') return f;
+  const byId = items.get(words.trim().toLowerCase()); if (byId) return byId; // "pump-gear" is that pump, not the pump kind's sizes
+  const f = callFamily(words);
+  if (typeof f === 'string') { const ws = words.trim().toLowerCase().split(/[\s-]+/).filter(Boolean); return [...items.values()].find((i) => ws.every((x) => i.id.includes(x) || i.name.toLowerCase().includes(x))) ?? f; }
   if (f) { const had = items.get(f.id); if (!had) { put(f); return f; } return had; }
   return findItem(words);
 }

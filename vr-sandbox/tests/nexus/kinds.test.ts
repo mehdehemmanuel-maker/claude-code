@@ -103,6 +103,20 @@ describe('kinds of bought part, as data', () => {
     expect(make('acmotor 132M 7.5kW 4P B3').inner?.some((x) => /6205/.test(x.name))).toBe(true);
     expect(callFamily('acmotor 56 7.5kW 4P B3')).toMatch(/power comes in/);
   });
+  it('the site and the devices say their standards\' numbers: p·A, K·d²·R, R = t/λ, the tyre\'s diameter, MID tolerance', () => {
+    expect(make('hydrauliccylinder D50 d22 200mm').spec).toMatch(/pushes 31\.4 kN, pulls 25\.3 kN/);
+    expect(make('wirerope 6x19-FC d10 50m').spec).toMatch(/breaks at 58\.4 kN/); // EN 12385-4's table value
+    expect(make('twinearth 2.5mm² 50m').spec).toMatch(/carries 27 A clipped direct/);
+    expect(make('cartyre w205 ar55 R16 V').spec).toMatch(/about 632 mm across.*to 240 km\/h/);
+    expect(make('tapemeasure 5m w25 II').spec).toMatch(/±1\.3 mm/);
+    expect(make('insulation PIR t100').spec).toMatch(/R = t \/ λ = 4\.55/);
+    expect(make('ledbulb E27 806lm 2700K').spec).toMatch(/like a 60 W incandescent/);
+    expect(make('prism equilateral a25 N-BK7').spec).toMatch(/= 38\.6° at 587\.6 nm/);
+    expect(callFamily('cartyre w275 ar80')).toMatch(/aspect ratio comes in 35, 40, 45, 50/);
+    expect((resolve('pump gear') as Item).id).toBe('pump-gear'); // a product a kind's words would refuse is still found
+    expect((resolve('relay') as Item).id).toBe('relay');
+    expect((resolve('relay 12V SPDT 10A') as Item).id).toBe('relay-12-spdt-10');
+  });
   it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
     const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
     expect(t.name).toBe('torsion spring 1.35 × 12.7, 7.75 coils, legs at 135°, right-hand, legs 42 and 18 mm');
