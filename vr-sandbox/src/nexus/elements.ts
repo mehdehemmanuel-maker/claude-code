@@ -46,6 +46,13 @@ export const ELEMENTS: Record<string, { name: string; w: number; group: string; 
   Au: { name: 'gold', w: 196.97, group: 'Metals', from: 'gold ore' },
   Pb: { name: 'lead', w: 207.2, group: 'Metals', from: 'galena ore' },
   Bi: { name: 'bismuth', w: 208.98, group: 'Metals', from: 'a by-product of refining lead' },
+  Y: { name: 'yttrium', w: 88.906, group: 'Rare earths', from: 'rare-earth ores (xenotime, ion-adsorption clays), separated by solvent extraction' },
+  Rh: { name: 'rhodium', w: 102.91, group: 'Metals', from: 'a by-product of refining platinum and nickel' },
+  Cd: { name: 'cadmium', w: 112.41, group: 'Metals', from: 'a by-product of refining zinc ore' },
+  In: { name: 'indium', w: 114.82, group: 'Metals', from: 'a by-product of refining zinc ore' },
+  La: { name: 'lanthanum', w: 138.91, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
+  Ce: { name: 'cerium', w: 140.12, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
+  Pt: { name: 'platinum', w: 195.08, group: 'Metals', from: 'platinum ores (the Bushveld, Norilsk), and a by-product of refining nickel' },
 };
 
 /** A formula's mass fractions, %: "C3H4O2" (PLA's unit), "PbZr0.52Ti0.48O3" (PZT). */
@@ -108,6 +115,29 @@ export const MATERIALS: Record<string, Spec> = {
   grease: { blend: [['oil', 88], ['C18H35LiO2', 12]], says: 'mineral oil thickened with lithium stearate' },
   'al-laminate': { blend: [['al-foil', 40], ['nylon', 25], ['pp', 35]], says: 'nylon, aluminium foil and polypropylene' },
   'silver-paste': { blend: [['silver', 80], ['glass', 5], ['C10H18O', 15]], says: 'silver powder and glass frit in terpineol' },
+  // the materials of the kinds of bought part (src/nexus/kinds)
+  'stainless-316': { alloy: { Cr: 17, Ni: 12, Mo: 2.5, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 316, nominal' },
+  'al-7075': { alloy: { Zn: 5.6, Mg: 2.5, Cu: 1.6, Cr: 0.23, Al: 'bal' }, grade: 'AA 7075, nominal' },
+  'al-5052': { alloy: { Mg: 2.5, Cr: 0.25, Al: 'bal' }, grade: 'AA 5052, nominal' },
+  'ti-6al4v': { alloy: { Al: 6, V: 4, Fe: 0.25, O: 0.2, Ti: 'bal' }, grade: 'Ti-6Al-4V (grade 5), nominal' },
+  'cast-iron': { alloy: { C: 3.4, Si: 2.2, Mn: 0.6, Fe: 'bal' }, grade: 'grey iron, nominal' },
+  zamak: { alloy: { Al: 4, Mg: 0.04, Zn: 'bal' }, grade: 'Zamak 3, nominal' },
+  'steel-hss': { alloy: { W: 6.4, Mo: 5, Cr: 4.2, V: 1.9, C: 0.85, Fe: 'bal' }, grade: 'AISI M2 high-speed steel, nominal' },
+  'tungsten-carbide': { blend: [['WC', 90], ['Co', 10]], says: 'tungsten carbide grains cemented with 10 % cobalt' },
+  iron: { alloy: { Fe: 'bal' }, grade: 'commercially pure (type J +)' }, lead: { alloy: { Pb: 'bal' }, grade: 'commercially pure' }, lithium: { alloy: { Li: 'bal' }, grade: 'battery grade' },
+  platinum: { alloy: { Pt: 'bal' }, grade: 'fine platinum' }, chromium: { alloy: { Cr: 'bal' }, grade: 'electroplated chromium' },
+  'pt-rh6': { alloy: { Rh: 6, Pt: 'bal' }, grade: 'Pt-6 % Rh (type B −)' }, 'pt-rh10': { alloy: { Rh: 10, Pt: 'bal' }, grade: 'Pt-10 % Rh (type S +)' }, 'pt-rh13': { alloy: { Rh: 13, Pt: 'bal' }, grade: 'Pt-13 % Rh (type R +)' }, 'pt-rh30': { alloy: { Rh: 30, Pt: 'bal' }, grade: 'Pt-30 % Rh (type B +)' },
+  constantan: { alloy: { Ni: 45, Cu: 'bal' }, grade: 'Cu-45 % Ni (types J, T and E −)' }, nicrosil: { alloy: { Cr: 14.2, Si: 1.4, Ni: 'bal' }, grade: 'Nicrosil (type N +)' }, nisil: { alloy: { Si: 4.4, Mg: 0.1, Ni: 'bal' }, grade: 'Nisil (type N −)' },
+  'solder-snpb': { alloy: { Pb: 37, Sn: 'bal' }, grade: 'Sn63Pb37' }, 'solder-sn60': { alloy: { Pb: 40, Sn: 'bal' }, grade: 'Sn60Pb40' }, 'solder-sncu': { alloy: { Cu: 0.7, Sn: 'bal' }, grade: 'Sn99.3Cu0.7' },
+  peek: { formula: 'C19H12O3', says: 'polyether ether ketone' }, si3n4: { formula: 'Si3N4' }, mno2: { formula: 'MnO2' }, pbo2: { formula: 'PbO2' }, ag2o: { formula: 'Ag2O' }, lani5: { formula: 'LaNi5', says: 'a hydrogen-storing alloy' },
+  rosin: { formula: 'C20H30O2', says: 'abietic acid' }, cyanoacrylate: { formula: 'C6H7NO2', says: 'ethyl cyanoacrylate' }, algainp: { formula: 'Al0.25Ga0.25In0.5P', says: 'aluminium gallium indium phosphide' }, 'yag-phosphor': { formula: 'Y2.94Ce0.06Al5O12', says: 'cerium-doped yttrium aluminium garnet' }, cds: { formula: 'CdS' },
+  epdm: { blend: [['C2H4', 60], ['C3H6', 35], ['C9H12', 5]], says: 'ethylene, propylene and a little ENB diene, typical shares' },
+  fkm: { blend: [['C2H2F2', 60], ['C3F6', 40]], says: 'vinylidene fluoride and hexafluoropropylene, typical shares' },
+  asa: { blend: [['C3H3N', 30], ['C8H8', 50], ['C7H12O2', 20]], says: 'acrylonitrile, styrene and butyl acrylate, typical shares' },
+  wood: { blend: [['paper', 45], ['C5H8O4', 25], ['C10H12O3', 30]], says: 'softwood: cellulose, hemicellulose and lignin' },
+  bk7: { blend: [['SiO2', 70], ['B2O3', 10], ['Na2O', 8], ['K2O', 8], ['BaO', 4]], says: 'borosilicate crown glass (N-BK7 type), approximate' },
+  'koh-electrolyte': { blend: [['KOH', 35], ['water', 65]], says: 'potassium hydroxide in water' },
+  'acid-electrolyte': { blend: [['H2SO4', 37], ['water', 63]], says: 'sulfuric acid in water' },
 };
 const isMaterial = (x: string) => x in MATERIALS;
 /** A material's own make-up, one level: [element symbol or material id, %]. */

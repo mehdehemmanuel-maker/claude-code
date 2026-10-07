@@ -6,9 +6,14 @@
 // the AWG formula, NEMA ICS 16 faces); laws are the textbooks' (a spring's rate, a gear's pitch circle).
 
 import type { Item, Process } from './inventory';
+import { METRIC } from './threads';
+import { KINDS } from './kinds';
+import { familyOf } from './kinds/core';
+
+export { METRIC };
 
 export interface Param { key: string; says: string; unit: string; values?: (string | number)[]; min?: number; max?: number; default: string | number }
-export interface Family { id: string; name: string; path: string[]; says: string; params: Param[]; examples: string[]; /** its sizes read from words, or why not */ read(words: string): Record<string, string | number> | string; make(p: Record<string, string | number>): Item }
+export interface Family { id: string; name: string; path: string[]; says: string; params: Param[]; examples: string[]; /** a kind of bought part made from its table (src/nexus/kinds): called only with its sizes */ kind?: true; /** its sizes read from words, or why not */ read(words: string): Record<string, string | number> | string; make(p: Record<string, string | number>): Item }
 
 const RHO = { steel: 7.85, stainless: 8.0, brass: 8.5, aluminium: 2.7, copper: 8.96, pla: 1.24, pom: 1.41 }; // g/cm³
 const mm3g = (mm3: number, rho: number) => +((mm3 / 1000) * rho).toFixed(2);
@@ -18,15 +23,6 @@ const item = (id: string, name: string, path: string, kind: Item['kind'], make: 
 const num = (s: string | undefined) => (s === undefined ? NaN : Number(s.replace(/,/g, '.')));
 
 // ---- metric threads (ISO 261 coarse pitch; ISO 4762 socket heads; ISO 4032 nuts; ISO 7089 washers) ------------------
-export const METRIC: Record<string, { p: number; dk: number; k: number; s: number; m: number; d1: number; d2: number; h: number }> = {
-  'M1.6': { p: 0.35, dk: 3, k: 1.6, s: 3.2, m: 1.3, d1: 1.7, d2: 4, h: 0.3 },
-  M2: { p: 0.4, dk: 3.8, k: 2, s: 4, m: 1.6, d1: 2.2, d2: 5, h: 0.3 }, 'M2.5': { p: 0.45, dk: 4.5, k: 2.5, s: 5, m: 2, d1: 2.7, d2: 6, h: 0.5 },
-  M3: { p: 0.5, dk: 5.5, k: 3, s: 5.5, m: 2.4, d1: 3.2, d2: 7, h: 0.5 }, M4: { p: 0.7, dk: 7, k: 4, s: 7, m: 3.2, d1: 4.3, d2: 9, h: 0.8 },
-  M5: { p: 0.8, dk: 8.5, k: 5, s: 8, m: 4.7, d1: 5.3, d2: 10, h: 1 }, M6: { p: 1, dk: 10, k: 6, s: 10, m: 5.2, d1: 6.4, d2: 12, h: 1.6 },
-  M8: { p: 1.25, dk: 13, k: 8, s: 13, m: 6.8, d1: 8.4, d2: 16, h: 1.6 }, M10: { p: 1.5, dk: 16, k: 10, s: 16, m: 8.4, d1: 10.5, d2: 20, h: 2 },
-  M12: { p: 1.75, dk: 18, k: 12, s: 18, m: 10.8, d1: 13, d2: 24, h: 2.5 }, M14: { p: 2, dk: 21, k: 14, s: 21, m: 12.8, d1: 15, d2: 28, h: 2.5 },
-  M16: { p: 2, dk: 24, k: 16, s: 24, m: 14.8, d1: 17, d2: 30, h: 3 }, M20: { p: 2.5, dk: 30, k: 20, s: 30, m: 18, d1: 21, d2: 37, h: 3 }, M24: { p: 3, dk: 36, k: 24, s: 36, m: 21.5, d1: 25, d2: 44, h: 4 },
-};
 const thread = (w: string) => { const m = /\bM(\d+(?:\.\d)?)(?![\d.])/i.exec(w); return m ? `M${m[1]}` : null; };
 const screw: Family = {
   id: 'screw', name: 'socket head cap screw', path: ['Hardware', 'Fasteners', 'Screws'], says: 'any metric size and length, with its pitch and head from ISO 261 and ISO 4762',
@@ -412,11 +408,15 @@ const coupling: Family = {
   make(p) { const a = Number(p.d1), b = Number(p.d2), big = Math.max(a, b) > 8, D = big ? 25 : 19, L = big ? 30 : 25; return item(`coupling-${a}x${b}`, `shaft coupling ${a} × ${b} mm`, 'Mechanical/Shafts and hubs/Couplings', 'product', 'machine', 'al-6061 screw-set*4', 'turned from aluminium bar, a helix cut through its middle so it bends and twists a little', `${a} and ${b} mm bores, ${D} mm outside, ${L} mm long (a typical size for these bores)`, [D, D, L], mm3g(Math.PI * ((D / 2) ** 2 * L - (a / 2) ** 2 * L / 2 - (b / 2) ** 2 * L / 2), RHO.aluminium), 'print'); },
 };
 
-export const FAMILIES: Family[] = [screw, nut, washer, bearing, gear, spring, wire, extrusion, resistor, stepper, cell, pulley, leadscrew, led, oring, dcmotor, servo, fan, rail, rod, tube, threadedrod, sheet, pack, capacitor, standoff, insert, belt, pcb, bolt, setscrew, dowel, circlip, key, chain, sprocket, linear, magnet, pipe, ibeam, jst, header, heater, thermistor, coupling];
+/** The families written out by hand, each with its own reading of words. */
+export const HAND_FAMILIES: Family[] = [screw, nut, washer, bearing, gear, spring, wire, extrusion, resistor, stepper, cell, pulley, leadscrew, led, oring, dcmotor, servo, fan, rail, rod, tube, threadedrod, sheet, pack, capacitor, standoff, insert, belt, pcb, bolt, setscrew, dowel, circlip, key, chain, sprocket, linear, magnet, pipe, ibeam, jst, header, heater, thermistor, coupling];
+/** Every family: those by hand, then every kind of bought part made from its table. */
+export const FAMILIES: Family[] = [...HAND_FAMILIES, ...KINDS.map(familyOf)];
 /** A family called with its sizes, in words ("screw M4x20", "bearing 6201 2RS"): the item it gives, or why not. */
 export function callFamily(words: string): Item | string | null {
   const w = words.trim(), f = FAMILIES.find((x) => new RegExp(`^${x.id}s?\\b`, 'i').test(w)) ?? (/^M\d/i.test(w) && /x\d/i.test(w) ? screw : null);
   if (!f) return null;
+  if (f.kind && !w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim()) return null;
   const p = f.read(w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim() || w); if (typeof p === 'string') return p;
   for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
   return { ...f.make(p), sized: { family: f.id, params: p } };

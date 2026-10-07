@@ -1,0 +1,12 @@
+// ISO metric coarse threads, M1.6–M24: the pitch (ISO 261), the socket cap screw's head (ISO 4762: dk across, k high),
+// the hex across flats (s) and the nut's height (ISO 4032: m), the plain washer (ISO 7089: d1 × d2 × h). Every
+// family and kind of fastener reads its sizes from here.
+export const METRIC: Record<string, { p: number; dk: number; k: number; s: number; m: number; d1: number; d2: number; h: number }> = {
+  'M1.6': { p: 0.35, dk: 3, k: 1.6, s: 3.2, m: 1.3, d1: 1.7, d2: 4, h: 0.3 },
+  M2: { p: 0.4, dk: 3.8, k: 2, s: 4, m: 1.6, d1: 2.2, d2: 5, h: 0.3 }, 'M2.5': { p: 0.45, dk: 4.5, k: 2.5, s: 5, m: 2, d1: 2.7, d2: 6, h: 0.5 },
+  M3: { p: 0.5, dk: 5.5, k: 3, s: 5.5, m: 2.4, d1: 3.2, d2: 7, h: 0.5 }, M4: { p: 0.7, dk: 7, k: 4, s: 7, m: 3.2, d1: 4.3, d2: 9, h: 0.8 },
+  M5: { p: 0.8, dk: 8.5, k: 5, s: 8, m: 4.7, d1: 5.3, d2: 10, h: 1 }, M6: { p: 1, dk: 10, k: 6, s: 10, m: 5.2, d1: 6.4, d2: 12, h: 1.6 },
+  M8: { p: 1.25, dk: 13, k: 8, s: 13, m: 6.8, d1: 8.4, d2: 16, h: 1.6 }, M10: { p: 1.5, dk: 16, k: 10, s: 16, m: 8.4, d1: 10.5, d2: 20, h: 2 },
+  M12: { p: 1.75, dk: 18, k: 12, s: 18, m: 10.8, d1: 13, d2: 24, h: 2.5 }, M14: { p: 2, dk: 21, k: 14, s: 21, m: 12.8, d1: 15, d2: 28, h: 2.5 },
+  M16: { p: 2, dk: 24, k: 16, s: 24, m: 14.8, d1: 17, d2: 30, h: 3 }, M20: { p: 2.5, dk: 30, k: 20, s: 30, m: 18, d1: 21, d2: 37, h: 3 }, M24: { p: 3, dk: 36, k: 24, s: 36, m: 21.5, d1: 25, d2: 44, h: 4 },
+};
