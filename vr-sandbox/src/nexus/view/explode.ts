@@ -10,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { INVENTORY } from '../inventory';
 import { planOf, type Look, type Plan } from '../pieces';
 import { card, label } from './holo';
+import { mergeStatic } from './merge-static';
 
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const matOf = (l: Look, ghost = false) => {
@@ -32,10 +33,11 @@ function tslotShape(w: number, h: number): THREE.Shape {
   s.lineTo(-a, sl); s.lineTo(-a + dp, sl); s.lineTo(-a + dp, -sl); s.lineTo(-a, -sl); s.lineTo(-a, -b);
   return s;
 }
-const steel = () => new THREE.MeshStandardMaterial({ color: 0xc9ced3, metalness: 0.9, roughness: 0.3 });
-const dark = () => new THREE.MeshStandardMaterial({ color: 0x1c1c1e, metalness: 0.1, roughness: 0.7 });
-const rubber = () => new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0, roughness: 0.9 });
-const greenBoard = () => new THREE.MeshStandardMaterial({ color: 0x1f6f43, metalness: 0.05, roughness: 0.6 });
+// the finishes a look is drawn with besides its own, made once for the whole view and shared, so its meshes merge
+// by material into a few draws (they are never freed with a piece)
+const SHARED = { steel: new THREE.MeshStandardMaterial({ color: 0xc9ced3, metalness: 0.9, roughness: 0.3 }), dark: new THREE.MeshStandardMaterial({ color: 0x1c1c1e, metalness: 0.1, roughness: 0.7 }), rubber: new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0, roughness: 0.9 }), green: new THREE.MeshStandardMaterial({ color: 0x1f6f43, metalness: 0.05, roughness: 0.6 }), orbit: new THREE.MeshBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }) };
+for (const m of Object.values(SHARED)) (m as THREE.Material & { shared?: boolean }).shared = true;
+const steel = () => SHARED.steel, dark = () => SHARED.dark, rubber = () => SHARED.rubber, greenBoard = () => SHARED.green;
 /** A tube along a path of points: a frame's member, a spoke, a coil of wire. */
 const strut = (a: THREE.Vector3, b: THREE.Vector3, r: number, m: THREE.Material) => { const len = a.distanceTo(b), g = new THREE.CylinderGeometry(r, r, len, 10), me = new THREE.Mesh(g, m); me.position.copy(a).lerp(b, 0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return me; };
 /** A look drawn: its shape at its size, in its finish, centred on the origin. Axial shapes stand upright, disc shapes
@@ -81,14 +83,14 @@ export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
     case 'case': add(new RoundedBoxGeometry(x, y, z, 4, Math.min(x, y, z) * 0.25)); break;
     case 'ball': add(new THREE.SphereGeometry(across / 2, 24, 16)); break;
     case 'swatch': add(new RoundedBoxGeometry(x, y, z, 3, x * 0.12)); break;
-    case 'atom': { const r = x / 2; add(new THREE.SphereGeometry(r, 24, 16)); for (let k = 0; k < 3; k++) { const o = add(new THREE.TorusGeometry(r * 1.6, r * 0.03, 6, 48), new THREE.MeshBasicMaterial({ color: 0x80deea, transparent: true, opacity: ghost ? 0.1 : 0.6 })); o.rotation.set((k * Math.PI) / 3, (k * Math.PI) / 5, 0); } break; }
+    case 'atom': { const r = x / 2; add(new THREE.SphereGeometry(r, 24, 16)); for (let k = 0; k < 3; k++) { const o = add(new THREE.TorusGeometry(r * 1.6, r * 0.03, 6, 48), SHARED.orbit); o.rotation.set((k * Math.PI) / 3, (k * Math.PI) / 5, 0); } break; }
     default: add(new RoundedBoxGeometry(x, y, z, 2, Math.min(x, y, z) * 0.12));
   }
   return g;
 }
 
 interface Shown { /** in a hand, held */ held?: boolean; id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean }
-const free = (o: THREE.Object3D) => o.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh && !(x as THREE.LineSegments).isLineSegments) return; m.geometry?.dispose(); for (const mt of Array.isArray(m.material) ? m.material : [m.material]) mt?.dispose(); });
+const free = (o: THREE.Object3D) => o.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh && !(x as THREE.LineSegments).isLineSegments) return; m.geometry?.dispose(); for (const mt of Array.isArray(m.material) ? m.material : [m.material]) if (mt && !(mt as THREE.Material & { shared?: boolean }).shared) mt.dispose(); });
 /** A source of parts to take apart: the inventory (by its plans), or a build's own parts (from where they stand). */
 export interface BuildPiece { id: string; name: string; obj: THREE.Object3D; note: string; /** where it stood and how it was scaled, kept the first time it is shown so it can be shown again */ at?: THREE.Vector3; scale0?: THREE.Vector3 }
 
@@ -140,9 +142,12 @@ export class Exploded {
     this.clearStage(); this.build = null; this.plan = p;
     if (fresh) this.trail = [];
     this.trail.push({ id, name: p.name });
-    this.wholeObj = meshOfLook(p.whole); this.stage.add(this.wholeObj);
+    // the whole fades to a ghost when apart: its own copies of the shared finishes, so the parts keep theirs
+    this.wholeObj = meshOfLook(p.whole);
+    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if ((m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) mine.set(m0, (c = m0.clone())); me.material = c; } }); }
+    mergeStatic(this.wholeObj); this.stage.add(this.wholeObj);
     p.pieces.forEach((pc, k) => {
-      const obj = meshOfLook(pc.look); obj.userData.piece = pc.id; obj.visible = false; this.stage.add(obj);
+      const obj = meshOfLook(pc.look); mergeStatic(obj); obj.userData.piece = pc.id; obj.visible = false; this.stage.add(obj);
       const tag = label(pc.note.length > 52 ? `${pc.note.slice(0, 50)}…` : pc.note, 0.019); tag.visible = false; this.group.add(tag);
       this.shown.push({ id: pc.id, obj, from: new THREE.Vector3(...pc.whole), to: new THREE.Vector3(...pc.apart), tag, delay: k * 0.04, drop: (() => { const bb = new THREE.Box3().setFromObject(obj); return (bb.isEmpty() ? 0.03 : (bb.max.y - bb.min.y) / 2) + 0.016; })() });
     });
