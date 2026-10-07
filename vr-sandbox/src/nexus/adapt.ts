@@ -79,15 +79,17 @@ export function ground(nodes: V3[], reach: number, o: { keepOut?: [V3, V3][]; he
 /** Conjugate gradients on A x = b, A symmetric and positive definite, preconditioned by blocks of its diagonal. */
 function pcg(apply: (x: Float64Array, out: Float64Array) => void, precond: (r: Float64Array, z: Float64Array) => void, b: Float64Array, tol = 1e-10, most = 20000, x0?: Float64Array): { x: Float64Array; iterations: number; converged: boolean } {
   const n = b.length, x = x0 && x0.length === n ? Float64Array.from(x0) : new Float64Array(n), r = Float64Array.from(b), z = new Float64Array(n), p = new Float64Array(n), Ap = new Float64Array(n);
-  const bn = Math.sqrt(b.reduce((s, v) => s + v * v, 0)); if (bn === 0) return { x: new Float64Array(n), iterations: 0, converged: true };
+  // the same sums, in the same order, as plain loops: a closure for each element was most of a solve's time
+  const dot = (u: Float64Array, v: Float64Array) => { let s = 0; for (let i = 0; i < n; i++) s += u[i]! * v[i]!; return s; };
+  const bn = Math.sqrt(dot(b, b)); if (bn === 0) return { x: new Float64Array(n), iterations: 0, converged: true };
   // started from a guess (the last solve's answer), what is left to solve is what that guess misses
-  if (x0 && x0.length === n) { apply(x, Ap); for (let i = 0; i < n; i++) r[i]! -= Ap[i]!; if (Math.sqrt(r.reduce((s2, v) => s2 + v * v, 0)) <= tol * bn) return { x, iterations: 0, converged: true }; }
-  precond(r, z); p.set(z); let rz = r.reduce((s, v, i) => s + v * z[i]!, 0);
+  if (x0 && x0.length === n) { apply(x, Ap); for (let i = 0; i < n; i++) r[i]! -= Ap[i]!; if (Math.sqrt(dot(r, r)) <= tol * bn) return { x, iterations: 0, converged: true }; }
+  precond(r, z); p.set(z); let rz = dot(r, z);
   for (let it = 1; it <= most; it++) {
-    apply(p, Ap); const pAp = p.reduce((s, v, i) => s + v * Ap[i]!, 0); if (!(pAp > 0)) return { x, iterations: it, converged: false };
+    apply(p, Ap); const pAp = dot(p, Ap); if (!(pAp > 0)) return { x, iterations: it, converged: false };
     const a = rz / pAp; for (let i = 0; i < n; i++) { x[i]! += a * p[i]!; r[i]! -= a * Ap[i]!; }
-    const rn = Math.sqrt(r.reduce((s, v) => s + v * v, 0)); if (rn <= tol * bn) return { x, iterations: it, converged: true };
-    precond(r, z); const rz2 = r.reduce((s, v, i) => s + v * z[i]!, 0), beta = rz2 / rz; rz = rz2;
+    const rn = Math.sqrt(dot(r, r)); if (rn <= tol * bn) return { x, iterations: it, converged: true };
+    precond(r, z); const rz2 = dot(r, z), beta = rz2 / rz; rz = rz2;
     for (let i = 0; i < n; i++) p[i] = z[i]! + beta * p[i]!;
   }
   return { x, iterations: most, converged: false };
@@ -119,7 +121,8 @@ export function flowScalar(G: Graph, g: number[], fixed: Map<number, number>, in
     if (fa >= 0) diag[fa]! += ge; if (fc >= 0) diag[fc]! += ge;
     if (fa >= 0 && fc < 0) b[fa]! += ge * fixed.get(c)!; if (fc >= 0 && fa < 0) b[fc]! += ge * fixed.get(a)!;
   });
-  const apply = (x: Float64Array, out: Float64Array) => { out.fill(0); G.edges.forEach(([a, c], e) => { const fa = free[a]!, fc = free[c]!, ge = g[e]!; const xa = fa >= 0 ? x[fa]! : 0, xc = fc >= 0 ? x[fc]! : 0; if (fa >= 0) out[fa]! += ge * (xa - xc); if (fc >= 0) out[fc]! += ge * (xc - xa); }); };
+  const ne = G.edges.length, EA = new Int32Array(ne), EC = new Int32Array(ne), GE = Float64Array.from(g); G.edges.forEach(([a, c], e) => { EA[e] = free[a]!; EC[e] = free[c]!; });
+  const apply = (x: Float64Array, out: Float64Array) => { out.fill(0); for (let e = 0; e < ne; e++) { const fa = EA[e]!, fc = EC[e]!, ge = GE[e]!; const xa = fa >= 0 ? x[fa]! : 0, xc = fc >= 0 ? x[fc]! : 0; if (fa >= 0) out[fa]! += ge * (xa - xc); if (fc >= 0) out[fc]! += ge * (xc - xa); } };
   // a network of a few hundred joints is solved outright (Cholesky), whatever its conductances; a larger one by
   // conjugate gradients
   const { x, converged } = m <= 800 ? { x: cholesky(m, (put) => G.edges.forEach(([a, c], e) => { const fa = free[a]!, fc = free[c]!, ge = g[e]!; if (fa >= 0) put(fa, fa, ge); if (fc >= 0) put(fc, fc, ge); if (fa >= 0 && fc >= 0) { put(fa, fc, -ge); put(fc, fa, -ge); } }), b), converged: true } : pcg(apply, (r, z) => { for (let i = 0; i < m; i++) z[i] = diag[i]! > 0 ? r[i]! / diag[i]! : r[i]!; }, b);
@@ -192,14 +195,20 @@ export function truss(G: Graph, A: number[], E: number, held: Set<number>, load:
     const I = [e * j - g * i, c * i - b * j, b * g - c * e, g * h - d * j, a * j - c * h, c * d - a * g, d * i - e * h, b * h - a * i, a * e - b * d].map((x) => x / det);
     for (let q = 0; q < 9; q++) inv[f * 9 + q] = I[q]!;
   }
+  const ne = G.edges.length, EA = new Int32Array(ne), EC = new Int32Array(ne), D = new Float64Array(ne * 3), K = Float64Array.from(k);
+  G.edges.forEach(([a, c], e) => { EA[e] = idx[a]!; EC[e] = idx[c]!; D[e * 3] = dir[e]![0]; D[e * 3 + 1] = dir[e]![1]; D[e * 3 + 2] = dir[e]![2]; });
+  const masked = [...mask.keys()].filter((q) => mask[q]);
   const apply = (x: Float64Array, out: Float64Array) => {
     out.fill(0);
-    G.edges.forEach(([a, c], e) => {
-      const d = dir[e]!, fa = idx[a]!, fc = idx[c]!; let s = 0;
-      for (let r = 0; r < 3; r++) s += d[r]! * ((fc >= 0 ? x[fc * 3 + r]! : 0) - (fa >= 0 ? x[fa * 3 + r]! : 0));
-      const t = k[e]! * s; for (let r = 0; r < 3; r++) { if (fc >= 0) out[fc * 3 + r]! += t * d[r]!; if (fa >= 0) out[fa * 3 + r]! -= t * d[r]!; }
-    });
-    for (let q = 0; q < mask.length; q++) if (mask[q]) out[q] = x[q]!;
+    for (let e = 0; e < ne; e++) {
+      const fa = EA[e]!, fc = EC[e]!, a3 = fa * 3, c3 = fc * 3, d0 = D[e * 3]!, d1 = D[e * 3 + 1]!, d2 = D[e * 3 + 2]!;
+      const ax = fa >= 0 ? x[a3]! : 0, ay = fa >= 0 ? x[a3 + 1]! : 0, az = fa >= 0 ? x[a3 + 2]! : 0, cx = fc >= 0 ? x[c3]! : 0, cy = fc >= 0 ? x[c3 + 1]! : 0, cz = fc >= 0 ? x[c3 + 2]! : 0;
+      let s = 0; s += d0 * (cx - ax); s += d1 * (cy - ay); s += d2 * (cz - az);
+      const t = K[e]! * s;
+      if (fc >= 0) { out[c3]! += t * d0; out[c3 + 1]! += t * d1; out[c3 + 2]! += t * d2; }
+      if (fa >= 0) { out[a3]! -= t * d0; out[a3 + 1]! -= t * d1; out[a3 + 2]! -= t * d2; }
+    }
+    for (const q of masked) out[q] = x[q]!;
   };
   const b = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) b[idx[i]! * 3 + r] = mask[idx[i]! * 3 + r] ? 0 : load[i]?.[r] ?? 0;
   let x0: Float64Array | undefined; if (guess) { x0 = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) x0[idx[i]! * 3 + r] = guess[i]?.[r] ?? 0; }
