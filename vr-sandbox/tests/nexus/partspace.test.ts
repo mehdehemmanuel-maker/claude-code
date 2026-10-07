@@ -3,7 +3,7 @@
 // that is in it known, down to the elements.
 
 import { describe, expect, it } from 'vitest';
-import { numberOf, numberOfWords, partAt, partItem, spaceSize } from '../../src/nexus/partspace';
+import { MADE_TO_ORDER_CAP, numberOf, numberOfWords, partAt, partItem, spaceSize } from '../../src/nexus/partspace';
 import { callFamily } from '../../src/nexus/families';
 import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
 
@@ -13,6 +13,14 @@ describe('the space of parts', () => {
     expect(performance.now() - t0).toBeLessThan(1000);
     expect(s.total).toBeGreaterThan(1e9);
     expect(s.families.length).toBeGreaterThanOrEqual(40);
+  });
+  it('counts a made-to-order potential as at most ten thousand distinct parts a family, its standard sizes in full', () => {
+    const s = spaceSize(), ts = s.families.find((f) => f.family === 'torsionspring')!;
+    expect(ts.n).toBeGreaterThan(1e12); // the potential is kept: any of them can be wound
+    expect(ts.counted).toBe(MADE_TO_ORDER_CAP); // but counts as ten thousand parts, not trillions
+    for (const f of s.families) expect(f.counted).toBeLessThanOrEqual(Math.max(f.n, 0));
+    expect(s.parts).toBe(s.families.reduce((a, f) => a + f.counted, 0));
+    expect(s.parts).toBeLessThan(s.total);
   });
   it('any number is a part its family makes, and the part numbers back to it: the first and last of every family, and thousands at random', () => {
     const s = spaceSize(); let seed = 12345; const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };

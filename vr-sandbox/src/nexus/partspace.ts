@@ -9,7 +9,7 @@
 
 import { BEARINGS, CHAINS, CIRCLIPS, IPE, JST, KEYS, LM, METRIC, NDFEB, NPS40, callFamily } from './families';
 import type { Item } from './inventory';
-import { E24 } from './catalogue';
+import { E24, catalogue } from './catalogue';
 import { KINDS } from './kinds';
 import { vals, wordsOf, type KindDef } from './kinds/core';
 
@@ -121,7 +121,19 @@ function build(): FamilySpace[] {
   return built;
 }
 /** How many parts there are, all told, and by family. */
-export function spaceSize(): { total: number; families: { family: string; says: string; n: number }[] } { const fs = build(); return { total: TOTAL, families: fs.map((f) => ({ family: f.family, says: f.says, n: f.total })).sort((a, b) => b.n - a.n) }; }
+/** The most of a family's made-to-order sizes counted as distinct parts. Its standard sizes count in full, and any size it
+ *  can be made to is still numbered and made; but a spring wound to every hundredth of a millimetre is one kind of part at
+ *  many sizes, a potential, not trillions of parts: what is counted as parts is capped, what is possible is said apart. */
+export const MADE_TO_ORDER_CAP = 10_000;
+let partsKept: { parts: number; counted: Map<string, number> } | null = null;
+/** The space: every size that can be made (its potential), and how many of them count as distinct parts (each family its
+ *  standard sizes, and its made-to-order sizes up to the cap). */
+export function spaceSize(): { total: number; parts: number; families: { family: string; says: string; n: number; counted: number }[] } {
+  const fs = build();
+  if (!partsKept) { const counted = new Map<string, number>(); let parts = 0; for (const f of fs) { const c = Math.min(f.total, Math.max(catalogue(f.family).length, MADE_TO_ORDER_CAP)); counted.set(f.family, c); parts += c; } partsKept = { parts, counted }; }
+  const pk = partsKept;
+  return { total: TOTAL, parts: pk.parts, families: fs.map((f) => ({ family: f.family, says: f.says, n: f.total, counted: pk.counted.get(f.family)! })).sort((a, b) => b.n - a.n) };
+}
 const upper = (xs: number[], x: number) => { let lo = 0, hi = xs.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (xs[m]! <= x) lo = m; else hi = m - 1; } return lo; };
 /** A part at random, every family as likely as any other (so the one with the most sizes does not crowd out the rest):
  *  its number. */
