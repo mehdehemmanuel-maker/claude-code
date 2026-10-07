@@ -30,6 +30,8 @@ export interface KindDef {
   ok?(p: P): string | null;
   /** its part space, where it is made to order over ranges that hang on each other: blocks of fixed sizes and free axes */
   space?(): SpaceBlock[];
+  /** its 3D shape, as one of the view's shape kinds and a mark ("screw hex", "ring"), where its name does not say */
+  look?: string | ((p: P) => string);
 }
 /** A block of a kind's own part space: some sizes fixed, the rest free over a list or a range lo…hi by step. */
 export interface SpaceBlock { fixed: P; axes: ({ key: string; values: V[] } | { key: string; lo: number; hi: number; step: number })[] }
@@ -76,6 +78,7 @@ export function readKind(k: KindDef, words: string): P | string {
   const toks = words.trim().split(/\s+/).filter((t) => t && t.toLowerCase() !== k.id), p: P = {}, used = new Set<number>();
   for (const a of k.axes) {
     const vs = vals(a, p); let got: V | undefined;
+    if (!vs.length && !a.cut) return `${k.name}: no ${a.says} goes with ${k.axes.slice(0, k.axes.indexOf(a)).map((b) => tokenOf(b, p[b.key]!)).join(' ')}.`;
     for (let i = 0; i < toks.length && got === undefined; i++) {
       if (used.has(i)) continue;
       const longer = k.axes.some((b) => b !== a && b.tag.length > a.tag.length && b.tag !== '' && a.tag !== '' && !b.tag.startsWith('~') && !a.tag.startsWith('~') && toks[i]!.startsWith(b.tag) && b.tag.startsWith(a.tag));
@@ -114,7 +117,7 @@ export function partsOf(text: string): { of: { id: string; n: number }[]; inner:
 export function makeKind(k: KindDef, p: P): Item {
   const { of, inner } = partsOf(k.of(p));
   const g = k.g(p), box = k.box(p).map((x) => +x.toFixed(2)) as [number, number, number];
-  return { id: [k.id, ...k.axes.map((a) => idPart(p[a.key]!))].join('-'), name: k.title(p), path: k.path.split('/'), kind: k.kind ?? 'product', make: typeof k.make === 'function' ? k.make(p) : k.make, of, says: typeof k.how === 'function' ? k.how(p) : k.how, spec: `${k.spec(p)} (sizes: ${k.std})`, size: box, ...(inner.length ? { inner } : {}), g: +(g < 100 ? g.toPrecision(3) : g.toFixed(0)), ...(k.alt ? { alt: k.alt } : {}), adjustable: true } as Item;
+  return { id: [k.id, ...k.axes.map((a) => idPart(p[a.key]!))].join('-'), name: k.title(p), path: k.path.split('/'), kind: k.kind ?? 'product', make: typeof k.make === 'function' ? k.make(p) : k.make, of, says: typeof k.how === 'function' ? k.how(p) : k.how, spec: `${k.spec(p)} (sizes: ${k.std})`, size: box, ...(inner.length ? { inner } : {}), g: +(g < 100 ? g.toPrecision(3) : g.toFixed(0)), ...(k.alt ? { alt: k.alt } : {}), ...(k.look ? { look: typeof k.look === 'function' ? k.look(p) : k.look } : {}), adjustable: true } as Item;
 }
 /** Every size a kind is sold in: the catalogue's lines for it. */
 export function linesOf(k: KindDef): string[] {

@@ -20,6 +20,7 @@ export const ELEMENTS: Record<string, { name: string; w: number; group: string; 
   P: { name: 'phosphorus', w: 30.974, group: 'Non-metals', from: 'phosphate rock' },
   S: { name: 'sulfur', w: 32.06, group: 'Non-metals', from: 'recovered from natural gas and crude oil' },
   Cl: { name: 'chlorine', w: 35.45, group: 'Non-metals', from: 'salt, split by electrolysis (chlor-alkali)' },
+  Ar: { name: 'argon', w: 39.95, group: 'Non-metals', from: 'air, liquefied and distilled' },
   K: { name: 'potassium', w: 39.098, group: 'Metals', from: 'potash (sylvite), mined' },
   Ca: { name: 'calcium', w: 40.078, group: 'Metals', from: 'limestone' },
   Ti: { name: 'titanium', w: 47.867, group: 'Metals', from: 'ilmenite and rutile sands (the Kroll process)' },
@@ -144,6 +145,10 @@ export const MATERIALS: Record<string, Spec> = {
   brick: { blend: [['SiO2', 60], ['Al2O3', 25], ['Fe2O3', 7], ['CaO', 4], ['MgO', 2], ['K2O', 2]], says: 'fired clay, as oxides; typical shares' },
   'koh-electrolyte': { blend: [['KOH', 35], ['water', 65]], says: 'potassium hydroxide in water' },
   'acid-electrolyte': { blend: [['H2SO4', 37], ['water', 63]], says: 'sulfuric acid in water' },
+  gypsum: { formula: 'CaSO6H4', says: 'calcium sulfate dihydrate, CaSO₄·2H₂O' }, argon: { formula: 'Ar' }, co2: { formula: 'CO2', says: 'carbon dioxide' },
+  borosilicate: { blend: [['SiO2', 81], ['B2O3', 13], ['Na2O', 4], ['Al2O3', 2]], says: 'borosilicate 3.3 (ISO 3585)' }, rutile: { formula: 'TiO2', says: 'titanium dioxide' },
+  ps: { formula: 'C8H8', says: 'polystyrene' }, zirconia: { formula: 'ZrO2', says: 'zirconium dioxide' }, tungsten: { alloy: { W: 'bal' }, grade: 'pure tungsten (lamp and TIG wire)' },
+  'al-4043': { alloy: { Si: 5.2, Al: 'bal' }, grade: 'AWS ER4043, nominal' }, 'al-5356': { alloy: { Mg: 5, Mn: 0.12, Cr: 0.12, Al: 'bal' }, grade: 'AWS ER5356, nominal' },
 };
 const isMaterial = (x: string) => x in MATERIALS;
 /** A material's own make-up, one level: [element symbol or material id, %]. */

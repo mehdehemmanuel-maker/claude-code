@@ -45,7 +45,7 @@ export function finishOf(material: string): Finish {
     [/nbr|epdm|fkm|rubber|neoprene/, { color: 0x262626, metal: 0, rough: 0.9 }], [/silicone/, { color: 0xd84f4f, metal: 0, rough: 0.8 }], [/pu$|^pu|tpu/, { color: 0xf2a541, metal: 0, rough: 0.7 }],
     [/pla|asa|abs/, { color: 0x3d8bfd, metal: 0, rough: 0.55 }], [/nylon|pom|pe$|^pe|pp$|ptfe|peek|pbt|pet/, { color: 0xf1efe8, metal: 0, rough: 0.6 }], [/pvc/, { color: 0x5d6b78, metal: 0, rough: 0.6 }], [/phenolic|epoxy|mould-compound/, { color: 0x3b2f2a, metal: 0, rough: 0.55 }],
     [/wood|paper|glue|rosin/, { color: 0xc8a06a, metal: 0, rough: 0.85 }], [/graphite|cfrp|sic|cds/, { color: 0x30343a, metal: 0.2, rough: 0.6 }], [/silicon|gan|algainp|bi2te3/, { color: 0x4a5a78, metal: 0.4, rough: 0.3 }],
-    [/water|electrolyte|oil|grease|acid|koh/, { color: 0x7ecbf2, metal: 0, rough: 0.1, clear: true }], [/nitrogen/, { color: 0xe0f7fa, metal: 0, rough: 0.1, clear: true }],
+    [/water|electrolyte|oil|grease|acid|koh/, { color: 0x7ecbf2, metal: 0, rough: 0.1, clear: true }], [/nitrogen|argon|co2/, { color: 0xe0f7fa, metal: 0, rough: 0.1, clear: true }], [/gypsum|rutile|zirconia/, { color: 0xf4f1ea, metal: 0, rough: 0.9 }], [/^ps$/, { color: 0xf7f7f2, metal: 0, rough: 0.8 }], [/borosilicate/, { color: 0xd8f3fb, metal: 0, rough: 0.05, clear: true }], [/^tungsten$/, { color: 0xa9adb1, metal: 1, rough: 0.35 }], [/al-4043|al-5356/, { color: 0xc9ced3, metal: 0.85, rough: 0.35 }],
   ];
   return T.find(([re]) => re.test(m))?.[1] ?? { color: 0x9aa7b0, metal: 0.3, rough: 0.5 };
 }
@@ -76,7 +76,11 @@ const P = (i: Item, k: string) => Number(i.sized?.params[k]);
 export function lookOf(i: Item): Look {
   const f = F(i), id = i.id, name = i.name.toLowerCase(), size = boxOf(i), finish = finishOf(mainMaterial(i) || 'steel');
   const L = (kind: ShapeKind, more: Partial<Look> = {}): Look => ({ kind, size, finish, ...more });
-  const row = lookRow(id); if (row && SHAPES.includes(row.kind as ShapeKind)) return L(row.kind as ShapeKind, { ...(row.teeth ? { teeth: row.teeth } : {}), ...(row.mark ? { mark: row.mark } : {}), ...(row.kind === 'gear' ? { bore: 0.2 } : {}), ...(row.kind === 'ring' ? { bore: 0.5 } : {}), ...(row.kind === 'tube' ? { bore: 0.8 } : {}), ...(row.kind === 'bearing' ? { bore: 0.35 } : {}) });
+  const bores: Partial<Record<ShapeKind, number>> = { gear: 0.2, ring: 0.5, tube: 0.8, bearing: 0.35 };
+  // a kind's own look: its shape, then a mark and its wire in mm ("coil w12")
+  const own = (t: string[]) => { const w = t.find((x) => /^w[\d.]+$/.test(x)), mark = t.find((x) => !/^w[\d.]+$/.test(x)); return { ...(mark ? { mark } : {}), ...(w ? { wire: Number(w.slice(1)) / 1000 } : {}) }; };
+  const row: { kind: string; teeth?: number; mark?: string; wire?: number } | null = lookRow(id) ?? (i.look ? (([kind, ...t]) => ({ kind: kind!, ...own(t) }))(i.look.split(' ')) : null);
+  if (row && SHAPES.includes(row.kind as ShapeKind)) return L(row.kind as ShapeKind, { ...(row.teeth ? { teeth: row.teeth } : {}), ...(row.mark ? { mark: row.mark } : {}), ...(row.wire ? { wire: row.wire } : {}), ...(bores[row.kind as ShapeKind] ? { bore: bores[row.kind as ShapeKind] } : {}) });
   if (i.kind === 'element') return L('atom', { mark: Object.keys(ELEMENTS).find((s) => `el-${s.toLowerCase()}` === id) ?? '?' });
   if (i.kind === 'material') return L('swatch');
   if (/^(screw|bolt|countersunk|buttonhead|panhead|carriagebolt|shoulderbolt|eyebolt|drywallscrew|chipboardscrew)$/.test(f) || /^screw-|^bolt-/.test(id)) return L('screw', { mark: /^(countersunk|drywallscrew|chipboardscrew)$/.test(f) ? 'flat' : f === 'buttonhead' || f === 'panhead' || f === 'carriagebolt' ? 'dome' : f === 'bolt' ? 'hex' : 'socket' });
