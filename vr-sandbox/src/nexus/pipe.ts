@@ -6,6 +6,7 @@
 
 import { answersFrom, conceive, designs, GROW_TRACE, READING, scaleSay } from './conceive';
 import type { Jolt } from './realize';
+import type { PartRef } from './generate';
 
 /** What you may change in the pipeline: which lawful design is drawn first, what its frame may be made of, whether it
  *  is grown from its conditions at all, and whether it is let go and pushed in the physics. */
@@ -18,7 +19,13 @@ const MATTER_ID: Record<Exclude<Matter, 'any'>, string> = { steel: 'steel.a36', 
 
 export type StageId = 'read' | 'conditions' | 'grow' | 'make' | 'check' | 'scale';
 export interface PipeStage { id: StageId; title: string; /** what this stage does, plainly */ does: string; /** passed, failed, or not reached */ ok: boolean | null; line: string; lines: string[] }
-export interface PipeRun { ask: string; edits: PipeEdits; stages: PipeStage[]; checks: number; failed: number; verdict: string; kg: number | null; ms: number }
+export interface PipeRun { ask: string; edits: PipeEdits; stages: PipeStage[]; checks: number; failed: number; verdict: string; kg: number | null; ms: number; /** what it made, as the steps that build it in the room */ build?: PipeBuild }
+/** A run's design as the steps that make it, to be built in the room one at a time: its title, the prefix its parts are
+ *  named by, and where it stands. */
+export interface PipeBuild { title: string; prefix: string; steps: string[]; at: [number, number]; /** its width and depth, m */ footprint: [number, number] }
+/** Where a run builds what it makes in the room: beside what stands (x, z), numbered after what is there, kept clear of
+ *  the parts already in the room. */
+export interface PipeWhere { at?: [number, number]; first?: number; parts?: PartRef[]; /** stood centred on `at` (on a clear table), not to the right of it */ centre?: boolean }
 
 export const STAGES: { id: StageId; title: string; does: string }[] = [
   { id: 'read', title: 'Read', does: 'the words are read into what it must do: hold, carry, span, stand, move, keep warm' },
@@ -30,7 +37,7 @@ export const STAGES: { id: StageId; title: string; does: string }[] = [
 ];
 
 /** An ask through the pipeline, with your edits: each stage and what it found. */
-export function runPipeline(ask: string, edits: PipeEdits = EDITS0, J: Jolt | null = null): PipeRun {
+export function runPipeline(ask: string, edits: PipeEdits = EDITS0, J: Jolt | null = null, where: PipeWhere = {}): PipeRun {
   const t0 = Date.now(), rounds: string[] = [], was = READING.conditions, watch = GROW_TRACE.on;
   READING.conditions = edits.grow;
   GROW_TRACE.on = (r) => { rounds.push(`${r.matter.replace(/\..*/, '')}, round ${r.round}: ${r.struts} struts at ${r.joints} joints, ${+r.mass.toPrecision(3)} kg${r.ok ? '' : ', not holding yet'}`); };
@@ -41,7 +48,8 @@ export function runPipeline(ask: string, edits: PipeEdits = EDITS0, J: Jolt | nu
     if (edits.matter !== 'any') { const id = MATTER_ID[edits.matter]; c = { ...c, matter: id, wants: c.wants.map((w) => (w.cond ? { ...w, cond: { ...w.cond, matter: id } } : w)) }; }
     const read = stage('read', c.wants.length > 0, c.wants.length ? c.wants.map((w) => w.says).join('; ') : 'nothing in it is something made yet', [...c.heard, ...c.unread.map((u) => `not made: ${u}`), ...c.dropped.map((d) => `not used: ${d}`)]);
     if (!c.wants.length) return finish([read, ...(['conditions', 'grow', 'make', 'check', 'scale'] as StageId[]).map((id) => stage(id, null, 'not reached', []))], 0, 0, 'NOTHING MADE', null);
-    const d = designs(c, 1, { seed: edits.seed, physics: edits.physics ? J : null })[0];
+    const at = where.at ?? [0, 0], world = { parts: () => where.parts ?? [] };
+    const d = designs(c, 1, { seed: edits.seed, physics: edits.physics ? J : null, at, world, ...(where.first ? { first: where.first } : {}), ...(where.centre ? { centre: true } : {}) })[0];
     if (!d) return finish([read, ...(['conditions', 'grow', 'make', 'check', 'scale'] as StageId[]).map((id) => stage(id, null, 'not reached', []))], 0, 0, 'NOTHING MADE', null);
     const grown = d.choices.find((x) => /^a frame of \d+ struts/.test(x)), made = d.checks.find((x) => x.what === 'it can be made under the laws');
     const failed = d.checks.filter((x) => !x.ok);
@@ -53,9 +61,9 @@ export function runPipeline(ask: string, edits: PipeEdits = EDITS0, J: Jolt | nu
       stage('check', failed.length === 0, `${d.checks.length - failed.length} of ${d.checks.length} checks pass`, d.checks.map((x) => `${x.ok ? '✓' : '✗'} ${x.what}: ${x.says}`)),
       stage('scale', null, (() => { const law = scaleSay(d); return law.length ? 'how it changes made bigger or smaller' : 'no law of scale for what is drawn'; })(), scaleSay(d)),
     ];
-    return finish(stages, d.checks.length, failed.length, d.ok ? 'HOLDS' : d.holds ? 'HOLDS, A LIMIT MISSED' : 'FAILS', d.mass);
+    return finish(stages, d.checks.length, failed.length, d.ok ? 'HOLDS' : d.holds ? 'HOLDS, A LIMIT MISSED' : 'FAILS', d.mass, { title: d.title, prefix: d.prefix, steps: d.steps, at, footprint: d.footprint });
   } finally { READING.conditions = was; GROW_TRACE.on = watch; }
-  function finish(stages: PipeStage[], checks: number, failed: number, verdict: string, kg: number | null): PipeRun { return { ask, edits, stages, checks, failed, verdict, kg, ms: Date.now() - t0 }; }
+  function finish(stages: PipeStage[], checks: number, failed: number, verdict: string, kg: number | null, build?: PipeBuild): PipeRun { return { ask, edits, stages, checks, failed, verdict, kg, ms: Date.now() - t0, ...(build ? { build } : {}) }; }
 }
 
 /** Two runs of the same ask, the second after an edit: better where fewer checks fail, or as many fail and it is lighter

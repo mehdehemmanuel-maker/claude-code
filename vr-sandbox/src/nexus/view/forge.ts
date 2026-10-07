@@ -59,7 +59,12 @@ import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConceptio
 import { chartPanel } from './chart';
 import { Windows } from './windows';
 import { Phone } from './phone';
-import { runPipeline, type PipeEdits, type PipeRun } from '../pipe';
+import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
+import { Warehouse } from './warehouse';
+import { HoloScreens } from './holo-screen';
+import { robotsApp, warehouseApp, type MiniPart, type StoredBuild } from './apps';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../pipe';
 import { makeBoardStore } from './boards-store';
 import { checked, claudePrompt, understand, type Understanding } from '../understand';
 
@@ -467,7 +472,7 @@ function tick(): void {
   const focusIds = asked ?? (b && current < beats.length - 1 ? (b.flaws.length ? b.flaws.flatMap(partsOfFlaw) : b.step ? [...shown.values()].filter((s) => s.group === (b.step!.stage === 'head' ? 'hot end' : b.step!.stage === 'wiring' ? 'wiring' : b.step!.where)).map((s) => s.part.id) : []) : []);
   const focus = new THREE.Vector3(); let nf = 0;
   for (const id of focusIds.slice(0, 40)) { const s = shown.get(id); if (!s || !s.obj.visible) continue; s.obj.getWorldPosition(world); focus.add(world); nf++; }
-  const target = carry ?? (nf ? focus.divideScalar(nf) : null);
+  const target = carry ?? buildFocus ?? (nf ? focus.divideScalar(nf) : null);
   eyeOf(eye);
   // beside a hologram when one is out, turned to it; else by what it attends to; else beside the machine, turned to you
   if (holo.showing) { const hp = holo.group.position; goal = { th: clamp(Math.atan2(hp.x - M.x, hp.z - M.z) + 0.95, -2.3, 2.3), r: standR + 0.05 }; faceAt = hp; }
@@ -767,7 +772,7 @@ type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws'
 let panel: Panel = 'none', newOpen = false, lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 const windows = new Windows({
   eye: () => { eyeOf(eye); const xr = renderer.xr.isPresenting, head = xr ? renderer.xr.getCamera() : camera, f = new THREE.Vector3(); head.getWorldDirection(f); if (xr) f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); return { at: eye.clone(), fwd: f.normalize(), level: xr }; },
-  changed: (id, st) => { if (st === 'open') panel = id as Panel; else if (panel === id) panel = (windows.top() as Panel | null) ?? 'none'; if (id === 'boards' && st !== 'open') boards?.hide(); },
+  changed: (id, st) => { if (id.startsWith('holo:')) { if (st === 'closed') holos.closed(id); return; } if (st === 'open') panel = id as Panel; else if (panel === id) panel = (windows.top() as Panel | null) ?? 'none'; if (id === 'boards' && st !== 'open') boards?.hide(); },
 });
 /** Whether a panel is up: its window open (not put away), or the suggestions. */
 const on = (p: Panel): boolean => (p === 'new' ? newOpen : p !== 'none' && windows.isOpen(p));
@@ -1589,9 +1594,16 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
   voiceCard.draw('', [{ text, size: 1.0 }], '#4dd0e1'); lastSayAt = performance.now();
   if (voice && 'speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/[✗✓✎↻·]/g, '')); u.rate = 1.07; speechSynthesis.speak(u); }
 }
+/** Words that clear the table: reset, clear, start over. */
+const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text });
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
+  if (RESET_WORDS.test(text.trim())) { line('you', text); say(resetBuild(), undefined, 'nexus'); return; }
+  if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
+  if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
+  if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
+  { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
@@ -1684,6 +1696,26 @@ function factsNow(): Record<string, number> {
   return { flaws: last ? last.flaws.length - gaps : 0, gaps, parts: empty ? 0 : run.m.parts.length, mass: empty ? 0 : run.m.parts.reduce((a, p) => a + p.mass, 0), rounds: empty ? 0 : run.m.rounds.length, failures: operated?.operation?.events.length ?? 0, notes: allNotes.length };
 }
 const NOT_HERE = /^Nothing stands here yet|^The generator gave nothing/;
+/** Claude's build pipeline as a step of any pipeline: run it (the Pipeline app's ask, or one given), or change how it
+ *  runs: the seed, the matter, the physics, reading into conditions, the ask; or search for the best. Its last run is
+ *  read by checks as pipeline_failed, pipeline_checks, pipeline_holds, pipeline_kg and pipeline_seed. */
+let pipeFacts: Record<string, number> = {};
+async function pipelineStep(arg: string): Promise<string> {
+  const t = arg.trim(), e = phone.pipeEdits; let m: RegExpExecArray | null;
+  if (!t || /^run\b/i.test(t)) {
+    const ask = t.replace(/^run\s*/i, '').trim() || phone.pipeAsk; if (ask !== phone.pipeAsk) phone.pipeAsk = ask;
+    const r = await pipelineRun(ask, { ...e }); phone.took(r, 'rule'); phone.draw();
+    pipeFacts = { pipeline_failed: r.failed, pipeline_checks: r.checks, pipeline_holds: r.failed === 0 && r.verdict !== 'NOTHING MADE' ? 1 : 0, pipeline_kg: r.kg ?? 0, pipeline_seed: e.seed };
+    return `${r.verdict}: ${r.failed} of ${r.checks} checks failed${r.kg ? `, ${+r.kg.toPrecision(3)} kg` : ''} (seed ${e.seed}, ${e.matter}).`;
+  }
+  if ((m = /^seed\s*([+-]?\d+)$/i.exec(t))) { const n = m[1]!; e.seed = Math.max(1, /^[+-]/.test(n) ? e.seed + Number(n) : Number(n)); phone.draw(); return `Seed ${e.seed}.`; }
+  if ((m = /^matter\s+(\w+)$/i.exec(t))) { const w = m[1]!.toLowerCase().replace('aluminum', 'aluminium'), all = ['any', 'steel', 'aluminium', 'wood', 'carbon'] as const; const k = w === 'next' ? all[(all.indexOf(e.matter) + 1) % all.length]! : all.find((x) => x === w); if (!k) throw new Error(`Matter ${w}? One of: ${all.join(', ')}, next.`); e.matter = k; phone.draw(); return `Matter: ${k}.`; }
+  if ((m = /^(physics|grow|conditions)\s+(on|off)$/i.exec(t))) { const on = m[2]!.toLowerCase() === 'on'; if (/physics/i.test(m[1]!)) e.physics = on; else e.grow = on; phone.draw(); return `${m[1]} ${on ? 'on' : 'off'}.`; }
+  if ((m = /^ask\s+(.+)$/i.exec(t))) { phone.pipeAsk = m[1]!.trim(); phone.draw(); return `The ask: ${phone.pipeAsk}.`; }
+  if (/^best$/i.test(t)) { await phone.findBest(); return phone.pipeSaid || 'Searched.'; }
+  throw new Error(`"pipeline ${t}"? Say pipeline run, pipeline run <an ask>, pipeline seed +1, pipeline matter steel, pipeline physics off, pipeline ask <an ask>, or pipeline best.`);
+}
+const triggersOfBoard = (b: { nodes: Record<string, { step?: { kind: string } }> }) => Object.values(b.nodes).some((n) => n.step?.kind === 'trigger');
 async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
   // what makes, sizes, turns, joins or works out: the workshop, offline
@@ -1693,6 +1725,12 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): 
   switch (verb) {
     // made by a pipeline, no one is there to answer: it takes what it would take, says so, and makes it
     case 'make': case 'build': { if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a table that holds 30 kg".'); const c = conceive(arg); if (!c.wants.length) throw new Error(sayConception(c)); const all = c.questions.length ? answersFrom(c, 'go') ?? {} : {}; const ds = await makeIt(arg, all, 1); return ds.map((d) => sayDesign(d).slice(0, 600)).join(' ') || 'Nothing made.'; }
+    case 'pipeline': return pipelineStep(arg);
+    case 'robot': {
+      const m2 = /^(\S+)\s+(.+)$/.exec(arg), bot = m2 ? fleet.bot(m2[1]!) : null;
+      if (!bot) throw new Error(`No robot called ${arg.split(' ')[0] || '…'}: the robots are ${fleet.bots.map((b) => factName(b.name)).join(', ')}.`);
+      const said = fleet.command(bot, m2![2]!); if (/cannot|does not know|There is no/.test(said)) throw new Error(said); return said;
+    }
     case 'again': return out(world2.again(arg || 'again'));
     case 'operate': return out(world2.operate());
     case 'flaws': return world2.flaws();
@@ -1725,8 +1763,9 @@ const flowApi: FlowApi = {
     try { return await flowAct(what, signal, who); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: () => ({ ...factsNow(), ...shop.facts() }),
-  reader: () => shop.reader(),
+  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts }),
+  // what is made and the facts as the workshop reads them, and the robots' numbers beside them
+  reader: () => { const sc = shop.reader(), more = { ...fleet.facts(), ...pipeFacts }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
 // ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
@@ -1856,11 +1895,217 @@ const spinners: THREE.Object3D[] = [];
 const chartWin = chartPanel(); named(chartWin.mesh, 'a chart'); scene.add(chartWin.mesh); chartWin.mesh.visible = false;
 /** Everything made, drawn again as it now stands. */
 function drawMade(): void {
-  spinners.length = 0;
-  for (const o of [...madeGroup.children]) { madeGroup.remove(o); o.traverse((x) => { const mm = x as THREE.Mesh; mm.geometry?.dispose(); const mt = mm.material as THREE.Material | undefined; mt?.dispose(); }); }
+  spinners.length = 0; drawn.clear();
+  for (const grp of [madeGroup, buildFloor]) for (const o of [...grp.children]) { grp.remove(o); dispose(o); }
   // what is unseen is not computed, so not drawn
-  for (const m of shop.all().made) if (!m.unseen) madeGroup.add(meshOf(m));
+  for (const m of shop.all().made) if (!m.unseen) drawGroupOf(m.name).add(meshOf(m));
 }
+const dispose = (o: THREE.Object3D) => o.traverse((x) => { const mm = x as THREE.Mesh; mm.geometry?.dispose(); const mt = mm.material as THREE.Material | undefined; if (mt && !(mt as THREE.Material & { shared?: boolean }).shared) mt.dispose(); });
+// ---- a pipeline run, built in the room: its steps one at a time, each part seen arriving, Claude at work on it -------------
+// A build too big for the table stands on the floor beyond it, full size; one that fits stands on the table.
+const buildFloor = new THREE.Group(); scene.add(buildFloor); named(buildFloor, 'what a pipeline run built, on the floor');
+/** The parts the last pipeline run built (so the next run replaces them, not crowds them), and whether they are on the floor. */
+let pipeParts = new Set<string>(), pipeOnFloor = false;
+const drawGroupOf = (name: string) => (pipeOnFloor && pipeParts.has(name) ? buildFloor : madeGroup);
+/** What is drawn of each made part, by name, and how it stood when drawn: drawn again only when it changed. */
+const drawn = new Map<string, { obj: THREE.Object3D; sig: string }>();
+const sigOf = (m: Made) => JSON.stringify([m.kind, m.at, m.dims, m.turn, m.scale, !!m.broken, m.temp ?? null, m.matter?.color ?? null, m.text ?? null, m.spin ?? null]);
+/** What is made, drawn as it now stands, touching only what changed: each new part grows into place with a flash of light. */
+function syncMade(now: number): THREE.Object3D | null {
+  const seen = new Set<string>(); let newest: THREE.Object3D | null = null;
+  for (const m of shop.all().made) {
+    if (m.unseen) continue; seen.add(m.name);
+    const sig = sigOf(m), had = drawn.get(m.name); if (had?.sig === sig) continue;
+    if (had) { had.obj.parent?.remove(had.obj); dispose(had.obj); }
+    const o = meshOf(m); drawGroupOf(m.name).add(o); drawn.set(m.name, { obj: o, sig });
+    if (!had) { o.userData.born = now; o.userData.base = o.scale.clone(); o.scale.setScalar(1e-3); growing.add(o); newest = o; }
+  }
+  for (const [n, d] of drawn) if (!seen.has(n)) { d.obj.parent?.remove(d.obj); dispose(d.obj); drawn.delete(n); }
+  return newest;
+}
+/** Parts growing into place: out to their full size in a third of a second, overshooting a little as a thing set down does. */
+const growing = new Set<THREE.Object3D>();
+function stepGrow(now: number): void {
+  for (const o of growing) {
+    const u = Math.min(1, (now - (o.userData.born as number)) / 340), s = u >= 1 ? 1 : 1 + 2.2 * (u - 1) ** 3 + 1.2 * (u - 1) ** 2;
+    o.scale.copy(o.userData.base as THREE.Vector3).multiplyScalar(Math.max(1e-3, s));
+    const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+    if (mat?.emissive && o.userData.flash !== false) { if (u === 0 || o.userData.flash === undefined) o.userData.flash = mat.emissive.getHex() === 0; if (o.userData.flash) { mat.emissive.setHex(0x4dd0e1); mat.emissiveIntensity = 1.2 * (1 - u); } }
+    if (u >= 1) { growing.delete(o); if (mat?.emissive && o.userData.flash) { mat.emissive.setHex(0); mat.emissiveIntensity = 1; } }
+  }
+}
+/** A build being played into the room: its steps, how far along, how many a beat, when the next beat is, what failed. */
+let building: { b: PipeBuild; k: number; per: number; beat: number; next: number; failed: string[]; verdict: string; t0: number } | null = null;
+let buildFocus: THREE.Vector3 | null = null;
+const BUILD_BEAT = 90;
+/** Where the next pipeline run builds: on a clear table, centred on it; else to the right of what stands (what the last
+ *  run built left out, as it is taken away first). */
+function pipeWhere(): PipeWhere {
+  const others = shop.all().made.filter((m) => !pipeParts.has(m.name)), refs = partRefs();
+  if (!others.length && !refs.length) return { at: [0, 0], centre: true, parts: [] };
+  const right = [...others.map((m) => m.at[0] + (m.dims.w ?? m.dims.D ?? 0) / 2), ...refs.map((p) => p.at[0] + p.w / 2)];
+  let first = 1; while (others.some((m) => /^[a-z]+(\d+)_/.test(m.name) && Number(/^[a-z]+(\d+)_/.exec(m.name)![1]) === first)) first++;
+  return { at: [Math.max(...right) + 0.8, 0], first, parts: refs };
+}
+/** A run's design, built in the room: the last run's build taken away, then its steps played one beat at a time. */
+async function buildRun(r: PipeRun): Promise<void> { if (r.build) await playBuild(r.build, r.verdict, r.kg); }
+/** A build's steps played into the room: the last pipeline build taken away first, then one beat at a time. */
+async function playBuild(b: PipeBuild, verdict: string, kg: number | null = null): Promise<void> {
+  if (!b.steps.length) return;
+  lastBuilt = { ...b, verdict, ...(kg !== null ? { kg } : {}) }; onTable = null;
+  if (b.steps.some((st) => PHYSICS_WORDS.test(st.trim())) && !shop.hasPhysics) await physics();
+  for (const n of pipeParts) { try { shop.run(`remove ${n}`, 'you'); } catch { /* already gone */ } }
+  pipeParts = new Set(); pipeOnFloor = Math.max(...b.footprint) > 0.8;
+  buildFloor.position.set(M.x, 0, M.z - 1.2 - b.footprint[1] / 2);
+  drawMade();
+  // about a tenth of a second a beat, as many steps a beat as bring it up in 4 to 20 seconds
+  const secs = Math.min(20, Math.max(4, b.steps.length * 0.12)), per = Math.max(1, Math.ceil(b.steps.length / ((secs * 1000) / BUILD_BEAT)));
+  building = { b, k: 0, per, beat: Math.max(BUILD_BEAT, (secs * 1000) / b.steps.length), next: performance.now(), failed: [], verdict, t0: performance.now() };
+  line('system', `Building ${b.title} in the room: ${b.steps.length} steps${pipeOnFloor ? ', on the floor beyond the table (too big for it)' : ', on the table'}.`);
+  rulesEvent?.({ kind: 'building' });
+}
+function stepBuild(now: number): void {
+  const B = building; if (!B || now < B.next) return;
+  B.next = now + B.beat;
+  const before = new Set(shop.all().made.map((m) => m.name));
+  for (let j = 0; j < B.per && B.k < B.b.steps.length; j++, B.k++) {
+    const st = B.b.steps[B.k]!;
+    try { shop.run(st, 'you'); } catch (e) { B.failed.push(`${st.slice(0, 50)}: ${(e as Error).message.slice(0, 120)}`); }
+  }
+  shop.takeTrack(); shop.takeChart();
+  for (const m of shop.all().made) if (!before.has(m.name)) pipeParts.add(m.name);
+  const newest = syncMade(now);
+  if (newest) { buildFocus = newest.getWorldPosition(new THREE.Vector3()); }
+  hud.set('working', `building ${B.b.title}: ${Math.min(B.k, B.b.steps.length)} of ${B.b.steps.length} steps`);
+  if (B.k < B.b.steps.length) return;
+  building = null; buildFocus = null; drawMade();
+  const n = [...pipeParts].length, s2 = ((now - B.t0) / 1000).toFixed(1);
+  say(`Built ${B.b.title}: ${n} parts in ${s2} s, ${B.verdict.toLowerCase()}.${B.failed.length ? ` ${B.failed.length} step${B.failed.length === 1 ? '' : 's'} could not be made here: ${B.failed[0]}` : ''} Say "reset build" to clear the table.`, undefined, 'nexus');
+  boards?.event({ kind: 'built', text: B.b.title });
+  rulesEvent?.({ kind: 'built' });
+}
+// ---- the warehouse behind you: builds kept on shelves, robots at work (src/nexus/fleet.ts, view/warehouse.ts) ------------
+/** The last build made on the table as steps to make it again; and the kept build the table now holds, if it is one. */
+let lastBuilt: (PipeBuild & { verdict?: string; kg?: number }) | null = null, onTable: string | null = null;
+const KEPT_KEY = 'forge:warehouse', FLEET_KEY = 'forge:fleet';
+const kept: StoredBuild[] = (() => { try { return JSON.parse(localStorage.getItem(KEPT_KEY) ?? '[]') as StoredBuild[]; } catch { return []; } })();
+const keepKept = () => { try { localStorage.setItem(KEPT_KEY, JSON.stringify(kept)); } catch { /* too big for this browser: kept for this visit */ } };
+const fleet = new Fleet({
+  took: (id, by) => { if (onTable === id) { resetBuild(); onTable = null; } line('system', `${by.name} lifted ${kept.find((k) => k.id === id)?.title ?? 'the build'} off the table and is taking it in.`); },
+  stored: (id, slot, by) => { const k = kept.find((x) => x.id === id); if (k) { k.slot = slot.id; keepKept(); } line('system', `${by.name} shelved ${k?.title ?? 'the build'} on ${slot.id}.`); },
+  arrived: (id, by) => { const k = kept.find((x) => x.id === id); if (k) { line('system', `${by.name} brought ${k.title} to the table: building it again.`); rebuild(k); } },
+});
+// the names and abilities you gave them, and where the builds are shelved
+try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Record<string, { name: string; abilities: AbilityId[] }>; for (const b of fleet.bots) { const c = saved[b.id]; if (c) { b.name = c.name; b.abilities = c.abilities.filter((a) => a in ABILITIES); } } } catch { /* as they started */ }
+const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
+for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
+const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse');
+/** What stands on the table, as a model's parts: what is made, and the machine's parts as boxes; the biggest 300. */
+function partsOfTable(): MiniPart[] {
+  const out: (MiniPart & { v: number })[] = [];
+  for (const m of shop.all().made) { if (m.unseen || m.kind === 'title') continue; const d = m.dims as Record<string, number>, mt = m.matter; out.push({ k: m.kind, at: [...m.at] as [number, number, number], d: { ...d }, t: [...m.turn] as [number, number, number], s: [...m.scale] as [number, number, number], ...(m.axis ? { axis: m.axis } : {}), c: mt?.color ?? 0x80deea, m: mt?.metalness ?? 0.2, r: mt?.roughness ?? 0.6, v: (d.w ?? d.D ?? 0.01) * (d.h ?? d.D ?? 0.01) * (d.d ?? d.D ?? 0.01) }); }
+  if (!empty) for (const p of run.m.parts) { if (p.shape.kind === 'wire') continue; const b = boxOf(p); out.push({ k: 'box', at: [...b.c] as [number, number, number], d: { w: 2 * b.h[0], h: 2 * b.h[1], d: 2 * b.h[2] }, t: [0, 0, 0], s: [1, 1, 1], c: 0x90a4ae, m: 0.6, r: 0.4, v: 8 * b.h[0] * b.h[1] * b.h[2] }); }
+  return out.sort((a, b) => b.v - a.v).slice(0, 300).map(({ v: _v, ...p }) => p);
+}
+/** A kept build's model: its parts drawn, then merged into one mesh a colour, so a shelf of them costs little to draw. */
+function miniOf(k: StoredBuild): THREE.Object3D {
+  const raw = new THREE.Group();
+  for (const p of k.parts) { try { raw.add(meshOf({ name: 'mini', kind: p.k, at: p.at, dims: p.d, turn: p.t, scale: p.s, axis: p.axis, matter: { color: p.c, metalness: p.m, roughness: p.r } } as unknown as Made)); } catch { /* a part that will not draw */ } }
+  raw.updateMatrixWorld(true);
+  const byColour = new Map<number, { geos: THREE.BufferGeometry[]; mat: THREE.MeshStandardMaterial }>();
+  raw.traverse((o) => { const mm = o as THREE.Mesh; if (!mm.isMesh) return; const mat = mm.material as THREE.MeshStandardMaterial, c = mat.color.getHex(); let e = byColour.get(c); if (!e) byColour.set(c, (e = { geos: [], mat: new THREE.MeshStandardMaterial({ color: c, metalness: mat.metalness, roughness: mat.roughness }) })); const gg = mm.geometry.index ? mm.geometry.toNonIndexed() : mm.geometry.clone(); for (const n of Object.keys(gg.attributes)) if (!['position', 'normal'].includes(n)) gg.deleteAttribute(n); e.geos.push(gg.applyMatrix4(mm.matrixWorld)); });
+  const out = new THREE.Group();
+  for (const { geos, mat } of byColour.values()) { const merged = mergeGeometries(geos, false); if (merged) out.add(new THREE.Mesh(merged, mat)); for (const gg of geos) gg.dispose(); }
+  dispose(raw); return out;
+}
+for (const k of kept) warehouse.setMini(k.id, miniOf(k), k.title);
+/** The build on the table kept: its model made, and left at the table for a robot to take in to a shelf. */
+function storeBuild(): string {
+  const parts = partsOfTable(); if (!parts.length) return 'There is nothing on the table to store: build something first (▶ Run in the Pipeline app, or ask for it).';
+  if (onTable && fleet.waiting.includes(onTable)) return 'That build is already waiting at the table for a robot to take it in.';
+  const id = `build-${Date.now().toString(36)}`, at = Date.now();
+  const k: StoredBuild = lastBuilt && pipeParts.size ? { id, title: lastBuilt.title, kind: 'steps', steps: lastBuilt.steps, footprint: lastBuilt.footprint, ...(lastBuilt.verdict ? { verdict: lastBuilt.verdict } : {}), at, parts }
+    : lastDesigns.length && shop.all().made.length ? { id, title: lastDesigns.map((d) => d.title).join(' + '), ask: lastAsk?.words, kind: 'steps', steps: lastDesigns.flatMap((d) => d.steps), footprint: lastDesigns[0]!.footprint, at, parts }
+    : !empty ? { id, title: run.m.name, ask: lastMake?.words ?? run.intent.name, kind: 'machine', at, parts }
+    : { id, title: 'shapes', kind: 'shapes', at, parts };
+  kept.push(k); keepKept(); warehouse.setMini(id, miniOf(k), k.title); fleet.waiting.push(id); onTable = id;
+  boards?.event();
+  const can = fleet.bots.filter((b) => b.abilities.includes('deliver') && !b.asleep);
+  return `Kept as "${k.title}". ${can.length ? `${can.map((b) => b.name).join(' or ')} will come for it: their rule "A build waits → Take it in" starts it. Watch the table.` : 'No robot that delivers is awake: wake one in the Robots app, or switch on its deliver ability.'}`;
+}
+/** A kept build brought back: a robot that delivers takes it off its shelf and brings it to the table, where it is built. */
+function fetchBuild(id: string): string {
+  const k = kept.find((x) => x.id === id); if (!k) return 'That build is not kept here.';
+  if (k.kind === 'shapes') return `${k.title} was kept as a model only: no steps were kept to build it again.`;
+  if (!fleet.floor.slots.some((s) => s.holds === id)) return `${k.title} is not on a shelf yet: it is still on its way in.`;
+  if (fleet.bots.some((b) => b.task?.build === id)) return `A robot is already on it.`;
+  const can = fleet.bots.filter((b) => b.abilities.includes('deliver') && !b.asleep && b.battery > 15 && b.task?.kind !== 'charge');
+  const b = can.sort((x, y) => Number(!!x.task) - Number(!!y.task) || y.battery - x.battery)[0];
+  if (!b) return 'No robot can bring it: every one that delivers is asleep, charging or too low. Wake one in the Robots app.';
+  return fleet.fetch(b, id);
+}
+function rebuild(k: StoredBuild): void {
+  resetBuild();
+  if (k.kind === 'machine' && k.ask) { line('system', machineFrom(k.ask)); onTable = k.id; return; }
+  if (k.steps) void playBuild({ title: k.title, prefix: '', steps: k.steps, at: [0, 0], footprint: k.footprint ?? [0.5, 0.5] }, k.verdict ?? 'kept').then(() => { onTable = k.id; });
+}
+function removeKept(id: string): string {
+  const i = kept.findIndex((x) => x.id === id); if (i < 0) return 'Not kept.';
+  if (fleet.bots.some((b) => b.carrying === id || b.task?.build === id)) return 'A robot has it in hand: let it finish first.';
+  const [k] = kept.splice(i, 1); keepKept(); warehouse.dropMini(id);
+  for (const s2 of fleet.floor.slots) if (s2.holds === id || s2.holds === `reserved:${id}`) s2.holds = null;
+  fleet.waiting = fleet.waiting.filter((x) => x !== id);
+  return `${k!.title} is gone from the warehouse.`;
+}
+/** Where you stand: at the table, or at the warehouse's open front looking in. */
+let place: 'warehouse' | 'table' = 'table';
+function goPlace(p: 'warehouse' | 'table'): string {
+  place = p;
+  if (renderer.xr.isPresenting) { if (p === 'warehouse') { dolly.position.copy(Warehouse.VIEW.stand); dolly.rotation.set(0, Math.PI, 0); } else { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); } }
+  else { framing = false; if (p === 'warehouse') { orbit.target.copy(Warehouse.VIEW.look); camera.position.set(0.9, 2.7, WZ - 2.2); } else { orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); } orbit.update(); }
+  return p === 'warehouse' ? `At the warehouse: ${kept.length} build${kept.length === 1 ? '' : 's'} kept, ${fleet.bots.map((b) => `${b.name} ${b.asleep ? 'asleep' : b.doing}`).join('; ')}.` : 'Back at the table.';
+}
+/** Each robot's rules, as a pipeline on the boards: made once a robot, then yours to change. */
+function robotBoards(): void {
+  if (!boards) return;
+  let made: string[] = []; try { made = JSON.parse(localStorage.getItem('forge:robot-boards') ?? '[]') as string[]; } catch { /* none made */ }
+  for (const b of fleet.bots) { const id = `robot-${b.id}`; if (!boards.all.has(id) && !made.includes(id)) { boards.put(id, boardOfBot(b)); made.push(id); } }
+  try { localStorage.setItem('forge:robot-boards', JSON.stringify(made)); } catch { /* made again next time */ }
+}
+function renameBot(b: Bot, name: string): string {
+  const n = name.trim().replace(/\s+/g, ' ').slice(0, 24); if (!n) return 'A name needs a letter in it.';
+  if (fleet.bots.some((x) => x !== b && factName(x.name) === factName(n))) return `Another robot is called ${n}.`;
+  const was = b.name; b.name = n; keepFleet();
+  const bd = boards?.all.get(`robot-${b.id}`); if (bd && boards) boards.put(`robot-${b.id}`, renameOnBoard(bd, was, n));
+  return `${was} is now ${n}. Its rules read ${factName(n)}_battery, ${factName(n)}_idle …, and "robot ${factName(n)} …".`;
+}
+function toggleAbility(b: Bot, a: AbilityId): string {
+  const on = !b.abilities.includes(a); b.abilities = on ? [...b.abilities, a] : b.abilities.filter((x) => x !== a); keepFleet();
+  return `${b.name} ${on ? 'can now' : 'can no longer'}: ${ABILITIES[a]}.`;
+}
+function openRules(b: Bot): string {
+  robotBoards(); summonTo('boards');
+  return boards?.openBoard(`robot-${b.id}`) ? `${b.name}'s rules are on the board: each IF starts its THEN. Change a step's words to change what it does.` : `${b.name}'s rules board was deleted. It comes back the next time you open the forge with it gone from the list: or make a new pipeline with "robot ${factName(b.name)} …" steps.`;
+}
+/** Words to a robot by its name: "Rex, sleep", "juno go charge". */
+function robotWords(t: string): string | null {
+  const m = /^(?:hey\s+)?([a-z][\w ]*?)[,:]?\s+(sleep|go to sleep|wake( up)?|charge|go charge|dock|go to (the )?(charging )?dock|stop|come( here| to me| to the table)?|store( the build)?|restock|tidy|patrol|wander|dance|something)$/i.exec(t.trim());
+  const b = m ? fleet.bot(m[1]!) : null; return b ? fleet.command(b, m![2]!) : null;
+}
+/** The table cleared: everything made taken away, the machine gone, and nothing kept to bring it back on the next visit. */
+function resetBuild(): string {
+  const parts = shop.all().made.length + (empty ? 0 : run.m.parts.length);
+  building = null; buildFocus = null; playing = null; pipeParts = new Set(); pipeOnFloor = false; growing.clear();
+  try { shop.run('clear', 'you'); } catch { /* nothing made */ }
+  for (const s2 of shown.values()) machine.remove(s2.obj); shown.clear(); for (const d of dyingList) machine.remove(d.obj); dyingList.length = 0;
+  holo.clear(); machineBuild = null; carry = null; explodeTo.clear(); exploded.clear(); attention = null; selectedId = null;
+  pendingAsk = null; lastAsk = null; lastDesigns = []; lastMake = null; lastBuilt = null; onTable = null;
+  showEmpty(); drawMade(); drawPins(); drawFlaws(); relabel();
+  try { localStorage.removeItem('forge:last-ask'); } catch { /* nothing kept */ }
+  return parts ? `The table is clear: ${parts} part${parts === 1 ? '' : 's'} taken away, and the last build is not kept to come back next time. Run the pipeline or ask for something new.` : 'The table was already clear.';
+}
+/** What the forge's rules hear of the room (set once the rules are up). */
+let rulesEvent: ((e: { kind: 'built' } | { kind: 'building' }) => void) | null = null;
 /** The physics engine, loaded the first time something is let go (and soon after the forge opens, so it is ready). */
 let joltP: Promise<Jolt> | null = null;
 const physics = (): Promise<Jolt> => (joltP ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>).then((J) => { shop.usePhysics(J); setTestPhysics(J); return J; }));
@@ -1901,9 +2146,14 @@ let winHand = -1, winMouse = false, phoneClick = false;
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (renderer.xr.isPresenting) return;
   ray.setFromCamera(ndc(e), camera);
+  const dBar = pinning ? Infinity : windows.barAt(ray)?.distance ?? Infinity, dHolo = holos.distance(ray), dPhone = phone.distance(ray);
+  if (dPhone < Infinity && dPhone <= Math.min(dBar, dHolo)) { const uv = phone.uvOf(ray), app = uv ? phone.appAt(uv) : null; if (app) { appDrag = { app, hand: 'mouse', id: null, mouse: ndc(e) }; orbit.enabled = false; phoneClick = true; return; } }
+  if (dHolo < Infinity && dHolo < dBar && dHolo <= dPhone) { holos.press(ray, renderer, scene); phoneClick = true; return; }
   if (phone.group.visible && phone.press(ray, renderer, scene)) { phoneClick = true; return; }
   if (!pinning && windows.barAt(ray)) { windows.press(ray); winMouse = true; orbit.enabled = false; }
 });
+renderer.domElement.addEventListener('pointermove', (e) => { if (appDrag?.hand === 'mouse') appDrag.mouse = ndc(e); });
+window.addEventListener('pointerup', () => { if (appDrag?.hand !== 'mouse') return; endDrag(); orbit.enabled = true; });
 renderer.domElement.addEventListener('pointermove', (e) => { if (!winMouse || !windows.holding) return; ray.setFromCamera(ndc(e), camera); windows.move(ray); });
 window.addEventListener('pointerup', () => { phoneClick = false; if (!winMouse) return; winMouse = false; windows.release(); orbit.enabled = true; });
 renderer.domElement.addEventListener('pointerdown', (e) => {
@@ -1973,7 +2223,7 @@ const CHIPS: [string, () => void][] = [
   ['Pipeline', () => say(summon('pipeline'))], ['Gates', () => line('system', summon('gates'))], ['Bill', () => say(summon('bill'))],
   ['My loop', () => say(summon('loop'))], ['Rounds', () => say(summon('rounds'))], ['Laws', () => say(summon('laws'))], ['Put windows away', () => { windows.minAll(); newOpen = false; holo.clear(); isolated = null; }], ['Arrange windows', () => windows.arrange()],
   ['▶ Operate', () => say(operateIt())], ['Operate panel', () => line('system', summon('operate'))], ['Causes', () => line('system', summon('causes'))],
-  ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
+  ['⟲ Reset build', () => say(resetBuild())], ['⤢ Expand', () => say(expand('', true))], ['▶ Build this', () => say(buildIt(''))], ['▶ Build all', () => say(buildIt('the machine'))],
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
   ['X-ray', () => { xray = !xray; }], ['Isolate', () => toggleIsolate()], ['Section', () => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; }],
@@ -2005,22 +2255,22 @@ async function chatFromPhone(text: string, photo: string | null): Promise<{ text
  *  build grows; on the page's thread where a worker cannot be made. */
 let pipeWorker: Worker | null = null, pipeSeq = 0;
 const pipeWaiting = new Map<number, { ok: (r: PipeRun) => void; no: (e: Error) => void }>();
-function pipelineRun(ask: string, edits: PipeEdits): Promise<PipeRun> {
+function pipelineRun(ask: string, edits: PipeEdits, build = true): Promise<PipeRun> {
   if (!pipeWorker) {
     try {
       pipeWorker = new Worker(new URL('./pipe-worker.ts', import.meta.url), { type: 'module' });
       pipeWorker.onmessage = (e: MessageEvent<{ id: number; run?: PipeRun; error?: string }>) => { const w = pipeWaiting.get(e.data.id); if (!w) return; pipeWaiting.delete(e.data.id); if (e.data.run) w.ok(e.data.run); else w.no(new Error(e.data.error ?? 'the pipeline stopped')); };
       pipeWorker.onerror = (e) => { for (const w of pipeWaiting.values()) w.no(new Error(e.message || 'the pipeline stopped')); pipeWaiting.clear(); pipeWorker = null; };
-    } catch { return (edits.physics ? physics() : Promise.resolve(null)).then((J) => runPipeline(ask, edits, J)); }
+    } catch { return (edits.physics ? physics() : Promise.resolve(null)).then((J) => { const r = runPipeline(ask, edits, J, pipeWhere()); if (build) void buildRun(r); return r; }); }
   }
   line('system', `The pipeline runs "${ask.slice(0, 80)}${ask.length > 80 ? '…' : ''}" (seed ${edits.seed}, matter ${edits.matter}, grow ${edits.grow ? 'on' : 'off'}, physics ${edits.physics ? 'on' : 'off'}).`);
-  return new Promise((ok, no) => { const id = ++pipeSeq; pipeWaiting.set(id, { ok: (r) => { line('system', `The pipeline: ${r.verdict}, ${r.failed} of ${r.checks} checks failed, ${(r.ms / 1000).toFixed(1)} s.`); ok(r); }, no }); pipeWorker!.postMessage({ id, ask, edits }); });
+  const where = pipeWhere();
+  return new Promise((ok, no) => { const id = ++pipeSeq; pipeWaiting.set(id, { ok: (r) => { line('system', `The pipeline: ${r.verdict}, ${r.failed} of ${r.checks} checks failed, ${(r.ms / 1000).toFixed(1)} s.`); if (build) void buildRun(r); ok(r); }, no }); pipeWorker!.postMessage({ id, ask, edits, where }); });
 }
 let desktopPhone = false;
 const phone = new Phone({
   open: (a) => {
     if (a === 'boards') say(summonTo('boards'));
-    else if (a === 'flows') { const said = summonTo('boards'); boards?.act('flows'); line('system', said); }
     else if (a === 'build') line('system', summonTo('new'));
     else if (a === 'flaws') line('system', summonTo('flaws'));
     else if (a === 'fix') togglePin();
@@ -2042,9 +2292,34 @@ const phone = new Phone({
   },
   listen: () => { if (!SR) return false; listen(); return true; },
   answers: () => (brain?.mode === 'claude' ? 'claude' : 'nexus'),
-  pipeline: pipelineRun,
+  pipeline: (ask, edits, o) => pipelineRun(ask, edits, o?.build ?? true),
+  resetBuild: () => { const said = resetBuild(); line('system', said); return said; },
+  pipelines: () => boards ? [...boards.all].filter(([, b]) => b.kind === 'flow' || triggersOfBoard(b)).map(([id, b]) => { const r = b.runs?.at(-1); return { id, title: b.title, armed: !!b.armed, last: r ? `${r.status}, ${new Date(r.started).toLocaleTimeString()}` : '', robot: id.startsWith('robot-') }; }).sort((a, b) => Number(a.robot) - Number(b.robot)) : [],
+  openPipeline: (id) => { summonTo('boards'); boards?.openBoard(id); },
+  newPipeline: () => { const said = summonTo('boards'); boards?.act('flows'); line('system', said); },
   tell: async (note) => { line('you', note); const kept = await noteOn(fromPhone, 'note', note); return kept.replace(/^Noted on a message from the phone: /, 'For Claude: '); },
-});
+});// the apps the forge adds to it: the warehouse and its robots
+phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = storeBuild(); line('system', t2); return t2; }, fetch: (id) => { const t2 = fetchBuild(id); line('system', t2); return t2; }, remove: removeKept, go: goPlace, where: () => place }));
+phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
+// apps pulled off the phone onto screens of their own: hold the trigger (or the mouse) on an app and pull it off the phone
+const holos = new HoloScreens(phone, scene, { add: (id, title, obj) => windows.add({ id, title, obj, selfPlaced: true }), open: (id) => windows.open(id), isOpen: (id) => windows.isOpen(id) });
+let appDrag: { app: string; hand: number | 'mouse'; id: string | null; mouse?: THREE.Vector2 } | null = null;
+const dragRay = new THREE.Raycaster();
+/** While an app is held: once the ray leaves the phone, its screen opens where the ray points and follows it till let go. */
+function stepDrag(): void {
+  if (!appDrag) return;
+  if (appDrag.hand === 'mouse') { if (!appDrag.mouse) return; dragRay.setFromCamera(appDrag.mouse, camera); }
+  else { const ctl = renderer.xr.getController(appDrag.hand); dragRay.setFromXRController(ctl); dragRay.camera = renderer.xr.getCamera(); }
+  eyeOf(eye);
+  const at = dragRay.ray.origin.clone().addScaledVector(dragRay.ray.direction, appDrag.hand === 'mouse' ? 1.2 : 0.8);
+  if (!appDrag.id) { if (phone.uvOf(dragRay)) return; appDrag.id = holos.spawn(appDrag.app, at, eye); line('system', `${phone.appName(appDrag.app)} is on a screen of its own: let go where you want it; its bar carries it, ✕ closes it.`); }
+  else holos.move(appDrag.id, at, eye);
+}
+/** An app let go: pulled out, its screen stays; not pulled out, it was a press, and the app opens on the phone. */
+function endDrag(): void { if (!appDrag) return; if (!appDrag.id) phone.act('app', appDrag.app); appDrag = null; }
+// what the phone shows of the robots moves with them: drawn again twice a second while an app of theirs is open
+window.setInterval(() => { if (['robots', 'warehouse'].includes(phone.app) || phone.showing(['robots', 'warehouse'])) phone.draw(); }, 500);
+
 /** On a screen, the phone in the lower left of the view, or put away. */
 function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
 const factory = new XRControllerModelFactory();
@@ -2071,9 +2346,10 @@ for (let i = 0; i < 2; i++) {
     const all = chipsNow(), hit = ray.intersectObjects(all.map((c) => c.mesh), false)[0];
     // what is nearest along the ray is pressed: the phone, a window's bar, a chip, the keyboard of light, or the board behind
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onKeys = keyboard.mesh.visible ? ray.intersectObject(keyboard.mesh, false)[0]?.distance ?? Infinity : Infinity;
-    const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity;
-    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys);
-    if (nearest < Infinity && nearest === onPhone) { phone.press(ray, renderer, scene); return; }
+    const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity, onHolo = holos.distance(ray);
+    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys, onHolo);
+    if (nearest < Infinity && nearest === onPhone) { const uv = phone.uvOf(ray), app = uv ? phone.appAt(uv) : null; if (app) { appDrag = { app, hand: i, id: null }; return; } phone.press(ray, renderer, scene); return; }
+    if (nearest < Infinity && nearest === onHolo) { holos.press(ray, renderer, scene); return; }
     if (nearest < Infinity && nearest === onBar) { windows.press(ray, false); return; }
     if (nearest < Infinity && nearest === onChip) { all.find((c) => c.mesh === hit!.object)?.act(); return; }
     if (nearest < Infinity && nearest === onBoard && boards?.down(ray, 'press')) { boardHand = i; boardBy = 'select'; return; }
@@ -2082,6 +2358,7 @@ for (let i = 0; i < 2; i++) {
     if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
   });
+  ctl.addEventListener('selectend', () => { if (appDrag?.hand === i) endDrag(); });
   ctl.addEventListener('selectend', () => { if (boardHand === i && boardBy === 'select') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'select') { winHand = -1; windows.release(); } });
   // the grip on the right hand holds: a node on the board to move it, the board's sheet to slide it, a window (its bar,
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
@@ -2183,7 +2460,7 @@ async function boot() {
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
-  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
+  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); stepBuild(now); stepGrow(now); fleet.step(dt); warehouse.update(dt); stepDrag(); holos.update(dt); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -2195,7 +2472,7 @@ async function boot() {
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
   void makeRelay().then((r) => { relay = r; });
   window.setTimeout(() => void physics().catch(() => undefined), 8000);
-  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => boards?.event({ kind: 'start' }), 1500); });
+  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => { robotBoards(); boards?.event({ kind: 'start' }); }, 1500); });
   // every panel a window with a bar; the spaces you stand in (what ran, the causes) without one
   for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['chart', 'Chart', chartWin.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
   named(phone.group, 'the phone in your hand');
@@ -2225,7 +2502,14 @@ async function boot() {
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
     phoneNow: () => ({ app: phone.app, photos: phone.photos.length, lines: phone.lines.map((l) => `${l.who}: ${l.text}`), typing: phone.typing, visible: phone.group.visible }),
-    phoneAct: (act: string, arg?: number | string) => phone.act(act, arg), phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),
+    phoneAct: (act: string, arg?: number | string) => phone.act(act, arg),
+    buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
+    resetBuild: () => resetBuild(),
+    storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table') => goPlace(p2),
+    fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
+    robotSay: (t: string) => robotWords(t),
+    holoOut: (app: string) => { eyeOf(eye); const f = new THREE.Vector3(); camera.getWorldDirection(f); return holos.spawn(app, eye.clone().addScaledVector(f, 1.1).add(new THREE.Vector3(0.35, -0.1, 0)), eye); },
+    holoPress: (act: string, arg?: string | number) => { const id = holos.ids().at(-1); return id ? (phone.act(act, arg, undefined, undefined, phone.holoSurface(id.split(':')[1]!) ?? undefined), true) : false; }, phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),
     madeNow: () => ({ spinning: spinners.length, made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null, ...(m.motor ? { motor: m.motor, spin: m.spin } : {}) })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
     shopRun: (t: string) => makeStepLoaded(t),
     playingNow: () => (playing ? { frames: playing.track.frames.length, names: playing.track.names.length } : null),

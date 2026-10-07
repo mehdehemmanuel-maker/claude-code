@@ -25,6 +25,8 @@ export interface Board {
   calls?: { words: string; understood: string; by: 'claude' | 'nexus'; at: number; node?: string }[];
   /** On a flow: whether its triggers start it by themselves, and its last runs, newest last. */
   armed?: boolean; runs?: FlowRun[];
+  /** Runs without saying so in the chat (a robot's rules, which run often): its runs are kept on it, to read there. */
+  quiet?: boolean;
 }
 export type View = 'categories' | 'pipeline';
 export interface Live { id: string; label: string; note: string; pin: { x: number; y: number } | null }
@@ -192,6 +194,23 @@ export function addNode(label: string, linkTo?: string, id = uid('n'), rel = 'co
   const patch: Patch = { nodes: { [id]: { label: label.trim() } } };
   if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel } };
   return { id, patch };
+}
+/** A name not on the board yet: the name itself where it is free, else it numbered ("Check 2", "Check 3"), so two nodes
+ *  may say the same and still be told apart. */
+export function freeName(b: Board | null, label: string): string {
+  const base = label.trim().replace(/\s+\d+$/, ''), taken = new Set(nodesOf(b).map((n) => n.label.toLowerCase()));
+  if (!taken.has(label.trim().toLowerCase())) return label.trim();
+  for (let k = 2; ; k++) if (!taken.has(`${base} ${k}`.toLowerCase())) return `${base} ${k}`;
+}
+/** A node again, beside itself: its words, its note and its step, linked to what it is linked to, under a name of its own. */
+export function duplicateNode(b: Board, id: string, nid = uid('n')): { id: string; label: string; patch: Patch } | null {
+  const n = b.nodes[id]; if (!n || n.deleted) return null;
+  const label = freeName(b, n.label), copy: BoardNode = { label, ...(n.note ? { note: n.note } : {}), ...(n.kind ? { kind: n.kind } : {}), ...(n.step ? { step: { ...n.step } } : {}) };
+  // set just beside it where it is pinned, so the two are seen as a pair
+  for (const [kx, ky] of [['x', 'y'], ['px', 'py']] as const) { const x = n[kx], y = n[ky]; if (typeof x === 'number' && typeof y === 'number') { copy[kx] = x + 40; copy[ky] = y + 40; } }
+  const edges: Record<string, BoardEdge> = {};
+  for (const e of edgesOf(b)) { if (e.from !== id && e.to !== id) continue; if (e.from === e.to) continue; edges[uid('e')] = { from: e.from === id ? nid : e.from, to: e.to === id ? nid : e.to, ...(e.rel ? { rel: e.rel } : {}), ...(e.label ? { label: e.label } : {}) }; }
+  return { id: nid, label, patch: { nodes: { [nid]: copy }, ...(Object.keys(edges).length ? { edges } : {}) } };
 }
 /** A link between two nodes. One deleted before between the same two is brought back, so the board does not fill with dead ones. */
 export function link(b: Board, from: string, to: string, rel = 'connects'): Patch | null {
