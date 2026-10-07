@@ -204,7 +204,8 @@ export function behave(i: Item, words = '', families?: { id: string; examples: s
   let sized = i.sized;
   if (!sized && i.family && families && call) { const fam = families.find((x) => x.id === i.family); const ex = fam && call(fam.examples[0]!); if (ex && typeof ex === 'object') sized = ex.sized; }
   if (!sized) return `${i.name} has no law of its own here: it is ${i.kind === 'material' ? 'a material' : 'made of its parts'}; ask what one of its parts does.`;
-  const rule = RULES[sized.family]; if (!rule) return `A ${sized.family} has no behaviour worked out here yet.`;
+  // a kind of bought part made from its table: what it does is in its own numbers, worked out from its standard and law
+  const rule = RULES[sized.family]; if (!rule) return i.spec ? { law: 'its standard, and the law in each of its numbers', lines: [i.spec.replace(/ \(sizes: [\s\S]*\)$/, '')], values: {} } : `${i.name} has no behaviour worked out here yet.`;
   return rule(sized.params, given(words), i);
 }
 export const BEHAVIOURS = Object.keys(RULES);

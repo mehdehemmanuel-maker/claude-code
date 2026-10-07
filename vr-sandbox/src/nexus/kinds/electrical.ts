@@ -94,10 +94,10 @@ export const ELECTRICAL: KindDef[] = [
     box: (p) => (p.type === 'mini' ? [10.9, 3.6, 16.3] : [19.1, 5.1, 18.5]), g: (p) => (p.type === 'mini' ? 0.6 : 1.4),
   },
   {
-    id: 'chipresistor', name: 'chip resistor', path: 'Electrical/Passive components/Resistors', says: 'a thick-film resistor on a ceramic chip, for soldering to a board\'s surface', std: 'E96 values 1 Ω–10 MΩ (IEC 60063), 1 %, in the standard packages and their usual powers',
-    axes: [bare('pkg', 'package', Object.keys(CHIP)), unit('R', 'resistance', 'ohm', [...decades(E96, 1, 9.99e6), 1e7])],
-    title: (p) => `${si(n(p, 'R'))}Ω chip resistor, ${p.pkg}, 1 %`, of: () => 'alumina silver-paste glass tin nickel', make: 'assemble', how: 'a ruthenium-oxide film printed on an alumina chip and fired, laser-trimmed to value, its ends plated nickel then tin',
-    spec: (p) => { const [, , , W] = CHIP[s(p, 'pkg')]!; return `${si(n(p, 'R'))}Ω ±1 %; ${W} W at 70 °C; up to ${Math.sqrt(W / n(p, 'R')).toPrecision(3)} A at that power (I = √(P/R))`; },
+    id: 'chipresistor', name: 'chip resistor', path: 'Electrical/Passive components/Resistors', says: 'a thick-film resistor on a ceramic chip, for soldering to a board\'s surface', std: 'E96 values at 1 % and E24 values at 5 %, 1 Ω–10 MΩ (IEC 60063), in the standard packages and their usual powers',
+    axes: [bare('pkg', 'package', Object.keys(CHIP)), bare('tol', 'tolerance', ['1%', '5%']), unit('R', 'resistance', 'ohm', (p) => (p.tol === '5%' ? [...decades(E24, 1, 9.99e6), 1e7] : [...decades(E96, 1, 9.99e6), 1e7]))],
+    title: (p) => `${si(n(p, 'R'))}Ω chip resistor, ${p.pkg}, ${String(p.tol).replace('%', ' %')}`, of: () => 'alumina silver-paste glass tin nickel', make: 'assemble', how: 'a ruthenium-oxide film printed on an alumina chip and fired, laser-trimmed to value, its ends plated nickel then tin',
+    spec: (p) => { const [, , , W] = CHIP[s(p, 'pkg')]!; return `${si(n(p, 'R'))}Ω ±${String(p.tol).replace('%', ' %')}; ${W} W at 70 °C; up to ${Math.sqrt(W / n(p, 'R')).toPrecision(3)} A at that power (I = √(P/R))`; },
     box: (p) => CHIP[s(p, 'pkg')]!.slice(0, 3) as [number, number, number], g: (p) => { const [l, w, h] = CHIP[s(p, 'pkg')]!; return gOf(l * w * h, 3.5); },
   },
   {
