@@ -4,7 +4,7 @@ import { linesOf, readKind, wordsOf } from '../../src/nexus/kinds/core';
 import { FAMILIES, HAND_FAMILIES, callFamily } from '../../src/nexus/families';
 import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
 import { catalogue } from '../../src/nexus/catalogue';
-import { numberOf, partAt, spaceSize } from '../../src/nexus/partspace';
+import { numberOf, partAt, randomPart, spaceSize } from '../../src/nexus/partspace';
 import { ELEMENTS, MATERIALS, elementsOf } from '../../src/nexus/elements';
 import type { Item } from '../../src/nexus/inventory';
 
@@ -31,7 +31,8 @@ describe('kinds of bought part, as data', () => {
       expect(seen.get(i.id) ?? l, `${i.id} twice`).toBe(l); seen.set(i.id, l);
       expect((i.g ?? 0) > 0 && Number.isFinite(i.g), `${l} mass ${i.g}`).toBe(true);
       expect((i.size ?? []).length === 3 && i.size!.every((x) => x > 0 && Number.isFinite(x)), `${l} box`).toBe(true);
-      for (const c of i.of) expect(INVENTORY.has(c.id), `${l}: ${c.id}`).toBe(true);
+      for (const c of i.of) expect(INVENTORY.has(c.id) || !!i.inner?.some((x) => x.id === c.id), `${l}: ${c.id}`).toBe(true);
+      for (const x of i.inner ?? []) for (const c of x.of) expect(INVENTORY.has(c.id), `${l} › ${x.id}: ${c.id}`).toBe(true);
     }
     expect(seen.size).toBeGreaterThan(30000);
   });
@@ -75,12 +76,34 @@ describe('kinds of bought part, as data', () => {
     expect(make('outrunner 2207 kv1750').spec).toMatch(/5\.46 mN·m an amp/); // 60 / 2π KV
     expect(make('multicore c2 1.5mm² plain 10m').spec).toMatch(/0\.115 Ω/);
   });
+  it('assembled parts carry their own parts, each made to its size by its own family, down to the elements', () => {
+    const c = make('aircylinder bore32 double 100mm');
+    expect(c.inner!.map((x) => x.id)).toEqual(['tube-round-37x2.5-152-aluminium', 'rod-12-162-steel', 'oring-27x2.5-nbr', 'oring-12x2.5-nbr']);
+    expect(c.of.find((x) => x.id === 'oring-27x2.5-nbr')!.n).toBe(2);
+    const r = resolve('aircylinder bore32 double 100mm') as Item; expect(INVENTORY.has('rod-12-162-steel')).toBe(true);
+    const els = fundamentals(r.id).map((e) => e.id); expect(els).toContain('el-al'); expect(els).toContain('el-fe');
+    expect(make('pillowblock 205').inner!.map((x) => x.id)).toContain('bearing-62052rs');
+    expect(make('pillowblock 210').of.map((x) => x.id)).toContain('bearing-ball'); // no 6210 in the table: its fallback
+  });
+  it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
+    const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
+    expect(t.name).toBe('torsion spring 1.35 × 12.7, 7.75 coils, legs at 135°, right-hand, legs 42 and 18 mm');
+    expect(callFamily('torsionspring d1 D30 n5 a90 left')).toMatch(/30\.0 wires across: makers wind 4 to 16/);
+    expect(callFamily('extspring d2 D20 L20 machine')).toMatch(/at least 42 mm/);
+    const sz = spaceSize(), ts = sz.families.find((f) => f.family === 'torsionspring')!.n;
+    expect(ts).toBeGreaterThan(1e13); // wire × coil × coils × angle × hand × leg × leg, every one a spring a maker would wind
+    expect(sz.total).toBeGreaterThan(1e12);
+    // a part at random comes from any family alike, not almost always the one with the most sizes
+    let seed = 7; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const fams = new Set(Array.from({ length: 300 }, () => partAt(randomPart(r))!.family));
+    expect(fams.size).toBeGreaterThan(80);
+  });
   it('the catalogue lists every size sold, and the part space every size each can be made in', () => {
     expect(catalogue().length).toBeGreaterThan(45000);
     const sz = spaceSize();
     for (const k of KINDS) {
       const last = k.axes.reduce((at, a, i) => (typeof a.values === 'function' ? i : at), -1);
-      k.axes.slice(0, Math.max(0, last)).forEach((a) => expect(a.cut, `${k.id}.${a.key}: a made-to-order axis before a dependent one`).toBeUndefined());
+      if (!k.space) k.axes.slice(0, Math.max(0, last)).forEach((a) => expect(a.cut, `${k.id}.${a.key}: a made-to-order axis before a dependent one`).toBeUndefined());
       expect(sz.families.find((f) => f.family === k.id)?.n, k.id).toBeGreaterThanOrEqual(linesOf(k).length);
     }
     let checked = 0;

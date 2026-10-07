@@ -9,7 +9,7 @@ import { INVENTORY, categories, fundamentals, resolve, routeOf, summary, type It
 import { behave } from '../behave';
 import { flatBom, massOf, typeOf } from '../outputs';
 import { catalogue, SERIES } from '../catalogue';
-import { numberOf, partAt, spaceSize } from '../partspace';
+import { numberOf, partAt, randomPart, spaceSize } from '../partspace';
 import { callFamily } from '../families';
 import { FAMILIES } from '../families';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
@@ -239,7 +239,7 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         case 'make': { const i = INVENTORY.get(String(arg)); if (i) { h.make(i.id); said = `Making ${i.name} in the workshop, everything in it first.`; } return true; }
         case 'board': said = h.board(String(arg)); return true;
         case 'tree': said = h.tree(String(arg)); return true;
-        case 'random': { const n = Math.floor(Math.random() * spaceSize().total), p = partAt(n)!, x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } else said = String(x); return true; }
+        case 'random': { const n = randomPart(), p = partAt(n)!, x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } else said = String(x); return true; }
         case 'number': nav.write(`a part number, 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}`, (t) => { const n = Number(t.replace(/[^\d]/g, '')), p = partAt(n); if (!p) { said = `No part ${t}: 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}.`; nav.redraw(); return; } const x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } nav.redraw(); }); return true;
         case 'see': said = h.see(String(arg)); return true;
         case 'behave': { const i = INVENTORY.get(String(arg)); if (i) { const r = behave(i, '', FAMILIES, callFamily); said = typeof r === 'string' ? r : `${r.lines.join(' ')} [${r.law}]`; } return true; }

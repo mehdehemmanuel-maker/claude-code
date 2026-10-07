@@ -105,7 +105,7 @@ export function kindBlocks(k: KindDef): (Block | null)[] {
   walk(0, {});
   return out;
 }
-for (const k of KINDS) DEFS.push({ family: k.id, says: `${k.name}: ${k.std}`, words: (p) => wordsOf(k, p), blocks: () => kindBlocks(k) });
+for (const k of KINDS) DEFS.push({ family: k.id, says: `${k.name}: ${k.std}`, words: (p) => wordsOf(k, p), blocks: () => (k.space ? k.space().map((b) => block(b.fixed, b.axes.map((a) => ('values' in a ? L(a.key, a.values) : R(a.key, a.lo, a.hi, a.step))))) : kindBlocks(k)) });
 
 let built: FamilySpace[] | null = null, starts: number[] = [], TOTAL = 0;
 const keyOf = (fixed: Record<string, V>) => Object.keys(fixed).sort().map((k) => `${k}=${String(fixed[k])}`).join('&');
@@ -123,6 +123,9 @@ function build(): FamilySpace[] {
 /** How many parts there are, all told, and by family. */
 export function spaceSize(): { total: number; families: { family: string; says: string; n: number }[] } { const fs = build(); return { total: TOTAL, families: fs.map((f) => ({ family: f.family, says: f.says, n: f.total })).sort((a, b) => b.n - a.n) }; }
 const upper = (xs: number[], x: number) => { let lo = 0, hi = xs.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (xs[m]! <= x) lo = m; else hi = m - 1; } return lo; };
+/** A part at random, every family as likely as any other (so the one with the most sizes does not crowd out the rest):
+ *  its number. */
+export function randomPart(r: () => number = Math.random): number { const fs = build(), fi = Math.floor(r() * fs.length); return starts[fi]! + Math.floor(r() * fs[fi]!.total); }
 /** Part number n (0 … total − 1): its family, its sizes, and the words that call it. */
 export function partAt(n: number): { family: string; params: Record<string, V>; words: string } | null {
   const fs = build(); if (!Number.isInteger(n) || n < 0 || n >= TOTAL) return null;

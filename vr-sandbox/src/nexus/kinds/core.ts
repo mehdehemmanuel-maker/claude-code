@@ -26,7 +26,13 @@ export interface KindDef {
   spec(p: P): string;
   box(p: P): [number, number, number];
   g(p: P): number;
+  /** why a size read from words cannot be made, or null when it can */
+  ok?(p: P): string | null;
+  /** its part space, where it is made to order over ranges that hang on each other: blocks of fixed sizes and free axes */
+  space?(): SpaceBlock[];
 }
+/** A block of a kind's own part space: some sizes fixed, the rest free over a list or a range lo…hi by step. */
+export interface SpaceBlock { fixed: P; axes: ({ key: string; values: V[] } | { key: string; lo: number; hi: number; step: number })[] }
 
 /** An axis whose value is written after its key ("d5", "L20"). */
 export const ax = (key: string, says: string, unit: string, values: V[] | ((p: P) => V[]), cut?: [number, number, number]): Ax => ({ key, tag: key, says, unit, values, ...(cut ? { cut } : {}) });
@@ -81,15 +87,34 @@ export function readKind(k: KindDef, words: string): P | string {
     p[a.key] = got ?? vs[0]!;
   }
   const left = toks.filter((_, i) => !used.has(i));
+  if (!left.length && k.ok) { const why = k.ok(p); if (why) return `${k.name}: ${why}`; }
   if (left.length) return `${k.name}: I do not know "${left.join(' ')}". Say its sizes as ${wordsOf(k, Object.fromEntries(k.axes.map((a) => [a.key, vals(a, p)[0]!])))}: ${k.axes.map((a) => `${a.says} (${vals(a, p).slice(0, 8).join(', ')}${vals(a, p).length > 8 ? ' …' : ''})`).join('; ')}.`;
   return p;
 }
 const idPart = (v: V) => String(v).toLowerCase().replace(/\//g, '_').replace(/[^\w.+-]/g, '');
+let caller: ((words: string) => Item | string | null) | null = null;
+/** How a kind's parts made to their own sizes are called: by their families' words (set by src/nexus/families.ts). */
+export function useFamilies(f: (words: string) => Item | string | null): void { caller = f; }
+/** What goes into one, read: materials and parts by id ("id*n"), and parts made to sizes by their own families in
+ *  braces ("{tube round 34x2.5 150 aluminium}*2"), each made now and carried with it; after a bar, what to use if that
+ *  size cannot be made ("{bearing 6210 2RS|steel-chrome bearing-ball*10}"). */
+export function partsOf(text: string): { of: { id: string; n: number }[]; inner: Item[] } {
+  const of: { id: string; n: number }[] = [], inner: Item[] = [];
+  const add = (id: string, n: number) => { const had = of.find((o) => o.id === id); if (had) had.n += n; else of.push({ id, n }); };
+  const plain = (t: string) => { for (const x of t.split(/\s+/).filter(Boolean)) { const [c, n] = x.split('*'); add(c!, Number(n ?? 1)); } };
+  const rest = text.replace(/\{([^}|]+)(?:\|([^}]*))?\}(?:\*(\d+))?/g, (_, w: string, alt: string | undefined, nn: string | undefined) => {
+    const r = caller?.(w.trim()) ?? null;
+    if (r && typeof r === 'object') { inner.push(r); add(r.id, Number(nn ?? 1)); } else if (alt !== undefined) plain(alt); else throw new Error(`a part "${w.trim()}" cannot be made: ${r ?? 'no family reads it'}`);
+    return ' ';
+  });
+  plain(rest);
+  return { of, inner };
+}
 /** The item one size of a kind is. */
 export function makeKind(k: KindDef, p: P): Item {
-  const of = k.of(p).split(/\s+/).filter(Boolean).map((x) => { const [c, n] = x.split('*'); return { id: c!, n: Number(n ?? 1) }; });
+  const { of, inner } = partsOf(k.of(p));
   const g = k.g(p), box = k.box(p).map((x) => +x.toFixed(2)) as [number, number, number];
-  return { id: [k.id, ...k.axes.map((a) => idPart(p[a.key]!))].join('-'), name: k.title(p), path: k.path.split('/'), kind: k.kind ?? 'product', make: typeof k.make === 'function' ? k.make(p) : k.make, of, says: typeof k.how === 'function' ? k.how(p) : k.how, spec: `${k.spec(p)} (sizes: ${k.std})`, size: box, g: +(g < 100 ? g.toPrecision(3) : g.toFixed(0)), ...(k.alt ? { alt: k.alt } : {}), adjustable: true } as Item;
+  return { id: [k.id, ...k.axes.map((a) => idPart(p[a.key]!))].join('-'), name: k.title(p), path: k.path.split('/'), kind: k.kind ?? 'product', make: typeof k.make === 'function' ? k.make(p) : k.make, of, says: typeof k.how === 'function' ? k.how(p) : k.how, spec: `${k.spec(p)} (sizes: ${k.std})`, size: box, ...(inner.length ? { inner } : {}), g: +(g < 100 ? g.toPrecision(3) : g.toFixed(0)), ...(k.alt ? { alt: k.alt } : {}), adjustable: true } as Item;
 }
 /** Every size a kind is sold in: the catalogue's lines for it. */
 export function linesOf(k: KindDef): string[] {

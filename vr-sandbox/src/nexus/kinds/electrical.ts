@@ -340,7 +340,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'rotaryencoder', name: 'optical rotary encoder', path: 'Electrical/Sensors/Encoders', says: 'a slotted disc and light gates on a shaft: two square waves a quarter-step apart count its turning', std: 'the resolutions, shafts and outputs sold',
     axes: [unit('ppr', 'pulses a turn', 'ppr', [100, 200, 360, 400, 500, 600, 1000, 1024, 2000, 2500]), ax('shaft', 'shaft', 'mm', [6, 8]), bare('out', 'output', ['NPN', 'pushpull', 'linedriver'])],
-    title: (p) => `rotary encoder ${p.ppr} ppr, ${p.shaft} mm shaft, ${p.out === 'pushpull' ? 'push-pull' : p.out === 'linedriver' ? 'line driver' : 'NPN open collector'}`, of: () => 'al-6061 glass gan silicon bearing-ring*4 bearing-ball*14 pcb-bare copper pvc', make: 'assemble', how: 'a printed glass (or metal) disc on a shaft in two bearings, an LED and photo-sensors either side',
+    title: (p) => `rotary encoder ${p.ppr} ppr, ${p.shaft} mm shaft, ${p.out === 'pushpull' ? 'push-pull' : p.out === 'linedriver' ? 'line driver' : 'NPN open collector'}`, of: () => 'al-6061 glass gan silicon {bearing 606}*2 pcb-bare copper pvc', make: 'assemble', how: 'a printed glass (or metal) disc on a shaft in two bearings, an LED and photo-sensors either side',
     spec: (p) => `${p.ppr} pulses a turn, ${4 * n(p, 'ppr')} counts in quadrature (${(360 / (4 * n(p, 'ppr'))).toFixed(4)}° each); 5–24 V`, box: () => [38, 38, 50], g: () => 120,
   },
   {
