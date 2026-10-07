@@ -182,9 +182,11 @@ export class CellView {
   update(dt: number): void {
     this.t += dt; const c = this.cell, pr = c.printer, m4 = new THREE.Matrix4();
     // the printer: beads laid since the last frame, the head and the gantry where the G-code has them
-    if (pr.beads.length < this.drawnBeads) this.drawnBeads = 0;
+    if (pr.beads.length < this.drawnBeads) { this.drawnBeads = 0; this.beads.count = 0; }
+    const from = this.drawnBeads;
     for (; this.drawnBeads < pr.beads.length && this.drawnBeads < this.beads.instanceMatrix.count; this.drawnBeads++) this.beads.setMatrixAt(this.drawnBeads, this.bead(m4, pr.beads[this.drawnBeads]!));
-    this.beads.count = this.drawnBeads; this.beads.instanceMatrix.needsUpdate = true;
+    // only the beads laid since the last frame go to the GPU: the whole buffer is 60 000 matrices, 3.8 MB
+    if (this.drawnBeads !== from || this.beads.count !== this.drawnBeads) { const im = this.beads.instanceMatrix; im.clearUpdateRanges(); im.addUpdateRange(from * 16, (this.drawnBeads - from) * 16); im.needsUpdate = true; this.beads.count = this.drawnBeads; }
     const n = pr.nozzle(), o = this.origin; this.gantry.position.set(o.x - 0.11 + (110 - n[1]) / 1000, o.y + n[2] / 1000 + 0.004, this.origin.z - 0.11); this.head.position.set(0, 0, -(n[0] - 110) / 1000);
     const lay = pr.laying(); this.laying.visible = !!lay; if (lay) { this.bead(m4, lay); m4.decompose(this.laying.position, this.laying.quaternion, this.laying.scale); }
     // the slower things, five times a second: screens, shelf, plate
@@ -212,8 +214,12 @@ export class CellView {
     const railView = this.arms[0]!;
     if (armFlask || inArm) { const w = new THREE.Vector3(); railView.wrist.getWorldPosition(w); const obj = armFlask ? this.flask : this.crucible; obj.visible = true; obj.position.set(w.x, w.y - 0.2, w.z); }
   }
+  private screensKey = '';
   private screens(): void {
-    const c = this.cell, pr = c.printer;
+    const c = this.cell, pr = c.printer, m = c.furnace.metal();
+    // drawn again (and sent to the GPU again) only when what they say changes
+    const key = [pr.hot.t.toFixed(0), pr.hot.target, pr.bed.t.toFixed(0), pr.bed.target, pr.busy, pr.done, pr.total, pr.message, pr.waiting, pr.fan, pr.beads.length, (pr.energy / 3.6e6).toFixed(3), pr.grams().toFixed(1), c.kiln.says(), Math.round(c.furnace.t), Math.round(c.furnace.burner * 100), m ? `${Math.round(m.T)}/${Math.round(m.liquid * 100)}` : '', c.arms.rail.doing, c.arms.bench.doing, c.arms.bench.pressing > 0, c.speed, c.jobs.slice(-4).map((j) => `${j.name}:${j.stage}:${j.done}:${j.failed ?? ''}`).join(',')].join('|');
+    if (key === this.screensKey) return; this.screensKey = key;
     { const s = this.prScreen, g = s.g; g.fillStyle = '#0b1a24'; g.fillRect(0, 0, s.W, s.H); g.fillStyle = '#80deea'; g.font = `600 20px ${FONT}`;
       g.fillText(`🔥 ${pr.hot.t.toFixed(0)}/${pr.hot.target.toFixed(0)} °C`, 10, 30); g.fillText(`▭ ${pr.bed.t.toFixed(0)}/${pr.bed.target.toFixed(0)} °C`, 10, 60);
       g.fillStyle = '#ffd600'; g.fillText(pr.busy ? `${Math.round((100 * pr.done) / Math.max(1, pr.total))}%` : pr.message || 'ready', 10, 92); g.fillText(pr.waiting ? `waiting: ${pr.waiting}` : '', 10, 122); s.done(); }

@@ -63,6 +63,8 @@ import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type Ability
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
 import { dataApp, inventoryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { Profile, BUDGET_MS } from '../profile';
+import { held, mergeStatic } from './merge-static';
 import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../weather';
 import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
 import { CellView, deviceMesh } from './cell-view';
@@ -163,6 +165,8 @@ let partCardUntil = 0;
 
 // Claude, beside the machine
 const robot = new Robot(); scene.add(robot.root); for (const s of robot.senses) scene.add(s);
+/** What merging each built thing's still meshes saved (src/nexus/view/merge-static.ts): meshes before, after. */
+const merged: Record<string, { before: number; after: number }> = { Claude: mergeStatic(robot.root, held(robot)) };
 const nameplate = label('CLAUDE', 0.022, '#4dd0e1', 'rgba(0,0,0,0)'); nameplate.position.set(0, 1.42, 0); robot.root.add(nameplate);
 const beam = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff8a80, transparent: true, opacity: 0.9 })); beam.frustumCulled = false; scene.add(beam);
 // the edge of your view: the time, the weather, and what I am doing
@@ -421,6 +425,7 @@ function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } 
 }
 
 let lastT = 0;
+let infoAt = -1e9;
 function tick(): void {
   const t = clock(), dt = Math.min(0.1, Math.max(0, (performance.now() - lastT) / 1000)); lastT = performance.now();
   // a frozen time past the end shows the end; at the end it stays, for you to look round and talk about
@@ -473,7 +478,7 @@ function tick(): void {
 
   if (section !== 'off') { machine.getWorldPosition(world); const c0 = machine.localToWorld(tmp.copy(centre0)); clip.set(section === 'depth' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0), section === 'depth' ? c0.z : c0.x); }
   for (const [g, to] of explodeTo) { const now2 = exploded.get(g) ?? 0; exploded.set(g, now2 + (to - now2) * Math.min(1, dt * 4)); }
-  holo.update(performance.now() / 1000, eye);
+  prof.time('holo', () => holo.update(performance.now() / 1000, eye));
   if (machineBuild) stepMachineBuild(t);
   for (const n of pins) n.update(t);
 
@@ -501,7 +506,7 @@ function tick(): void {
   const arm: 0 | 1 = target && robot.root.worldToLocal(tmp.copy(target)).x > 0 ? 1 : 0;
   const near = target && robot.root.position.distanceTo(tmp.set(target.x, 0, target.z)) < 1.4;
   robot.reach(arm, near ? target : null); robot.reach(arm === 0 ? 1 : 0, carry && near ? target : null);
-  robot.look(target ?? eye); robot.move(dt); stepMind(dt); sample(performance.now());
+  prof.time('claude', () => { robot.look(target ?? eye); robot.move(dt); }); prof.time('mind', () => { stepMind(dt); sample(performance.now()); });
   if (target && near) { robot.arms[arm].grip.getWorldPosition(world); beam.geometry.setAttribute('position', new THREE.Float32BufferAttribute([world.x, world.y, world.z, target.x, target.y, target.z], 3)); (beam.material as THREE.LineBasicMaterial).color.setHex(carry ? 0xffb74d : b && b.flaws.length && !asked ? 0xff8a80 : 0x80deea); beam.visible = true; } else beam.visible = false;
   const talking = speaking || ('speechSynthesis' in window && speechSynthesis.speaking);
   robot.speaking(talking ? Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3)) : b && u < 0.6 && current < beats.length - 1 ? 0.5 * Math.abs(Math.sin(t * 11)) : 0);
@@ -510,12 +515,12 @@ function tick(): void {
   voiceCard.mesh.visible = !!busy || performance.now() - lastSayAt < 22000;
   if (!machineBuild && !busy && hud.status !== 'listening') hud.set(playing0() ? 'working' : 'idle', playing0() ? `designing ${run.m.name}` : '');
   fps = fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
-  const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length;
-  hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`;
+  // the line of numbers, once a second: what is built and how fast the room runs (redrawn on every change, it would cost a frame)
+  if (performance.now() - infoAt > 1000) { infoAt = performance.now(); const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length; hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`; }
   // the clock and status step aside in a headset while the board is up: they would lie over its corner
-  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && !on('boards'), dt);
+  prof.time('hud', () => hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && !on('boards'), dt));
   if (!hudOn) hud.dom.style.display = 'none';
-  drawModes();
+  prof.time('modes', () => drawModes());
   modeStrip.visible = renderer.xr.isPresenting && modeChips.length > 0;
   if (modeStrip.visible) { modeStrip.position.copy(hud.group.position).add(tmp.set(0, -0.12, 0)); modeStrip.lookAt(eye); }
   settingsGroup.visible = settingsOpen && renderer.xr.isPresenting; settingsBox.style.display = settingsOpen && !renderer.xr.isPresenting ? 'flex' : 'none';
@@ -2179,7 +2184,7 @@ const fleet = new Fleet({
 try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Record<string, { name: string; abilities: AbilityId[] }>; for (const b of fleet.bots) { const c = saved[b.id]; if (c) { b.name = c.name; b.abilities = c.abilities.filter((a) => a in ABILITIES); } } } catch { /* as they started */ }
 const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
 for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
-const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse');
+const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse'); merged.warehouse = mergeStatic(warehouse.group, held(warehouse));
 // the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/cell.ts)
 const cell = new Cell({ said: (t2) => line('system', `🔩 ${t2}`), made: (m2) => line('system', `🔩 Made: ${m2.name} (${m2.kind}, ${m2.g.toFixed(0)} g). ${m2.spec.join('; ')}`), released: (r) => setDown(r) });
 // what the workshop builds, set down in the room and running its program (src/nexus/devices.ts)
@@ -2247,7 +2252,7 @@ async function cellStep(t: string): Promise<string> {
   const said = cellWords(`cell ${w}`); if (said !== null) return said;
   throw new Error(`"cell ${w}"? Say cell print chassis, cell cast gear in zinc, cell take n20 2, cell wire rover, cell upload rover, cell release rover, cell build rover, cell gcode G28; M104 S210, cell speed 600, or cell stop. Recipes: ${RECIPES.map((r) => r.id).join(', ')}; metals: ${METALS.map((x) => x.id).join(', ')}.`);
 }
-const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop');
+const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop'); merged.workshop = mergeStatic(cellView.group, held(cellView));
 /** A part by its name or a recipe's, for words and pipeline steps: "gear", "frame", "chassis". */
 const partNamed = (w: string) => CellView.partOf(w.trim()) ?? null;
 /** The workshop's words, from the chat or a pipeline step: print, cast, build, G-code, speed, stop. */
@@ -2625,6 +2630,8 @@ phone.add(weatherApp({ forecast: () => hud.forecast, note: () => hud.weatherNote
 if (wPlaces[0]) window.setTimeout(() => { void weatherAt(wPlaces[0]!); }, 1500);
 window.setInterval(() => { if (wLast && document.visibilityState !== 'hidden') void (wLast === 'here' ? weatherHere() : weatherAt(wLast)); }, 15 * 60_000);
 
+/** What each part of a frame costs (src/nexus/profile.ts): read by the Data app, and by the work of making the room faster. */
+const prof = new Profile();
 // ---- data: the forge in numbers; what changes over time sampled every 10 s, the last quarter hour kept --------------------
 const hist: Record<string, number[]> = {}; let histAt = -1e9;
 function sample(now: number): void {
@@ -2648,6 +2655,7 @@ function dataSections(): DataSection[] {
     { id: 'inventory', name: 'Inventory', icon: '🗃', colour: '#26c6da', stats: [{ label: 'entries', value: String(INVENTORY.size) }, { label: 'products', value: String(kinds.get('product') ?? 0) }, { label: 'assemblies and parts', value: String((kinds.get('assembly') ?? 0) + (kinds.get('part') ?? 0)) }, { label: 'materials', value: String(kinds.get('material') ?? 0) }, { label: 'adjustable families', value: String(FAMILIES.length) }, { label: 'made here this visit', value: String(invMade) }], bars: { name: 'Entries by category', rows: byCat.sort((a, c) => c.v - a.v).map((r) => ({ ...r, max: cmax })) } },
     { id: 'devices', name: 'Devices', icon: '🛰', colour: '#69f0ae', stats: [{ label: 'devices set down', value: String(devices.list.length) }, { label: 'running a program', value: String(devices.list.filter((d) => cell.programmed.has(d.recipe)).length) }], bars: { name: 'Battery, each device', rows: devices.list.map((d) => ({ label: d.name, v: (d.wh / d.whFull) * 100, max: 100, note: `${d.wh.toFixed(1)} of ${d.whFull} Wh` })) }, note: devices.list.length ? undefined : 'Build a device in the workshop (Workshop app, or "cell build rover") and it is set down here.' },
     { id: 'claude', name: 'Claude', icon: '◉', colour: '#4dd0e1', stats: [{ label: 'feels', value: felt }, { label: 'energy', value: `${Math.round(mind.energy * 100)} %` }, { label: 'bored', value: `${Math.round(mind.boredom * 100)} %` }, { label: 'curious', value: `${Math.round(mind.curiosity * 100)} %` }, { label: 'trials practised', value: String(training.trials.length) }, { label: 'asks it found better for', value: String(Object.keys(training.best).length) }], series: { name: `How pleased, %, ${mins('pleased')}`, unit: ' %', points: hist.pleased ?? [] }, note: 'A model of feeling (src/nexus/emotions.ts): it moves with what happens, and says why. It is not a claim that Claude feels.' },
+    (() => { const parts = prof.report().slice(0, 9), top = Math.max(BUDGET_MS, ...parts.map((x) => x.mean)), info = renderer.info; return { id: 'frame', name: 'Frame', icon: '⏱', colour: '#ff80ab', stats: [{ label: 'a frame takes', value: `${prof.frameMean.toFixed(1)} ms` }, { label: 'a 90 Hz headset gives', value: `${BUDGET_MS.toFixed(1)} ms` }, { label: 'worst lately', value: `${prof.frameWorst.toFixed(1)} ms` }, { label: 'draw calls', value: String(info.render.calls) }, { label: 'triangles', value: info.render.triangles.toLocaleString('en-GB') }, { label: 'geometries, textures', value: `${info.memory.geometries}, ${info.memory.textures}` }], bars: { name: 'Each part of a frame, ms, on one scale', rows: parts.map((x) => ({ label: x.name, v: x.mean, max: top, note: `${x.mean.toFixed(2)} ms` })) }, note: 'Measured as the room runs: each part timed every frame, a running mean of the last 20 or so. Render is the time to hand the frame to the GPU, not the GPU\'s own time.' } as DataSection; })(),
     fc ? { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: fc.place.name, value: `${fc.now.temp.toFixed(1)} °C` }, { label: 'humidity', value: `${fc.now.humidity.toFixed(0)} %` }, { label: 'wind, gusts', value: `${fc.now.wind.toFixed(1)}, ${fc.now.gusts.toFixed(1)} m/s` }, { label: 'rain chance, 6 h', value: `${Math.max(0, ...fc.hours.slice(0, 6).map((h) => h.rainChance))} %` }], series: { name: 'Temperature, °C, the next 24 hours', unit: '°', points: fc.hours.map((h) => h.temp), ticks: fc.hours.map((h) => h.time.slice(11, 13)) } }
       : { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: 'forecast', value: 'none yet' }], note: hud.weatherNote.replace(/^weather: /, '') || 'Open the Weather app to find where you are, or name a place.' },
   ];
@@ -2812,7 +2820,15 @@ async function boot() {
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
-  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); stepBuild(now); stepGrow(now); guarded('the warehouse', () => { fleet.step(dt); warehouse.update(dt); }); guarded('the workshop', () => { cell.step(dt); cellView.update(dt); }); guarded('the devices', () => stepDevices(dt)); guarded('a screen', () => { stepDrag(); holos.update(dt); }); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
+  renderer.setAnimationLoop(() => {
+    frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); prof.frame(now - last); last = now; const T = prof.time.bind(prof);
+    T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else orbit.update(); });
+    T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
+    guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
+    T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
+  });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -2844,6 +2860,7 @@ async function boot() {
   (window as unknown as { keyPoint: (k: string) => number[] | null }).keyPoint = (k) => { const uv = keyboard.keyUv(k); return uv && keyboard.mesh.visible ? toWorld(keyboard.mesh, uv) : null; };
   (window as unknown as { boardWorld: (on: 'node' | 'strip' | 'list', key: string) => number[] | null }).boardWorld = (on, key) => { const w = boards?.pointOf(on, key); return w ? [w.x, w.y, w.z] : null; };
   (window as unknown as { forgeSummon: (p: string) => string }).forgeSummon = (p) => summonTo(p as Panel);
+  (window as unknown as { forgeProfile: () => unknown }).forgeProfile = () => ({ line: prof.line(8), parts: prof.report(), frame: prof.frameMean, worst: prof.frameWorst, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length ?? 0, merged, objects: (() => { let n = 0; scene.traverse(() => { n++; }); return n; })(), groups: scene.children.map((c) => { let meshes = 0, shown = 0, tris = 0, auto = 0; c.traverse((o) => { if (o.matrixAutoUpdate) auto++; const m = o as THREE.Mesh; if (m.isMesh || (o as THREE.Sprite).isSprite || (o as THREE.Line).isLine) { meshes++; let vis = true; for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) { vis = false; break; } if (vis) { shown++; const gg = m.geometry; if (gg) tris += (gg.index ? gg.index.count : (gg.attributes.position?.count ?? 0)) / 3; } } }); return { name: c.name || (NAMED.get(c)?.[0] ?? '') || (c === robot.root ? 'Claude' : c === hud.group ? 'hud' : c === phone.group ? 'phone' : c.type), meshes, shown, tris: Math.round(tris), auto }; }).sort((x, y) => y.shown - x.shown) });
   // the windows and the phone, for a test: where a bar's part or a phone button is on the screen (or in the room), and what is open
   const toScreen = (w: THREE.Vector3 | null): [number, number] | null => { if (!w) return null; const q = w.clone().project(camera); return [((q.x + 1) / 2) * window.innerWidth, ((1 - q.y) / 2) * window.innerHeight]; };
   Object.assign(window as object, {
