@@ -10,6 +10,7 @@
 
 import { BACK, BEFORE, STRUCT, derive, edgesOf, nodesOf, uid as newId, type Board, type Patch } from './boards';
 import { Workshop, scopeOf, truth, type Scope } from './generate';
+import { stepLanguage } from './languages';
 
 export type StepKind = 'trigger' | 'ai' | 'action' | 'check' | 'repeat';
 export interface Step { kind: StepKind; what: string }
@@ -181,13 +182,15 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
 /** What the room's actions are called: the first word of an action step. */
-export const ACTIONS = ['pipeline', 'robot', 'cell', 'device', 'reset', 'clear', 'store', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
+export const ACTIONS = ['pipeline', 'robot', 'cell', 'device', 'inventory', 'reset', 'clear', 'store', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
 /** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
  *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
  *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
 export function guessStep(word: string): Step | null {
   const w = word.trim(), t = w.toLowerCase().replace(/\s+/g, ' ');
   if (!t) return null;
+  // code in a language ("ts: …", "python: …", "gcode: …") is an action: the forge runs it, or hands it on
+  if (stepLanguage(w)) return { kind: 'action', what: w };
   if (/^(when|whenever|every|on|as soon as)\b/.test(t) && triggerOf(w)) return { kind: 'trigger', what: w };
   // what makes, sizes, turns, joins or works out: said as it was said, its units and names kept
   if (Workshop.handles(w) && !/^(if|until)\b/i.test(t) || /^if\s.+\sthen\s/i.test(t)) return { kind: 'action', what: w };
@@ -242,6 +245,63 @@ export function claudeBoard(ask: string, at = Date.now()): Board {
 // ---- flows to start from --------------------------------------------------------------------------------------------
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
 export const TEMPLATES: Template[] = [
+  {
+    id: 'meta-pipeline', title: 'Write a pipeline from words', about: 'A pipeline that makes pipelines: say what you want done (change the first step\'s words), Claude writes it as one line of the pipeline language, and that line is run: the new pipeline appears on the board, ready to run.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'w', label: 'What it should do', step: { kind: 'action', what: 'say a robot that patrols every 10 minutes and goes to charge when its battery is low' } },
+      { id: 'a', label: 'Claude writes it', step: { kind: 'ai', what: 'Write a forge pipeline that does this: {input}. Answer with one line only, exactly of the form: pipeline new <a short title>: <step> -> <step> -> <step>. The first step is a trigger: when I press run, when I say <words>, every <n> minutes, or when <fact> < <number>. Other steps can be: make <what>, pipeline run, robot <rex|juno|pip> <sleep|wake|charge|patrol|restock|store|dance>, cell build <rover|microscope|pan-tilt|weather|scale|gear>, inventory make <part, e.g. screw M4x20 or nema17>, device <name> <forward 0.2|turn 90|stop>, say <words>, ts: <code>, python: <code>, gcode: <code>, scad: <code>, if <fact> > <number>, until <fact> = <number>, at most <n> times. Facts include rex_battery, juno_battery, pip_battery, rover_distance, printer_temp, kiln_temp, furnace_temp, cell_busy, parts, flaws.' } },
+      { id: 'm', label: 'Make it', step: { kind: 'action', what: '{input}' } },
+    ],
+    links: [['t', 'w'], ['w', 'a'], ['a', 'm']],
+  },
+  {
+    id: 'think', title: 'Think it through', about: 'A way of thinking, as a pipeline: a plan, what could go wrong with it, and the plan again guarded against each, kept as a note. Change the first step to the question.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'q', label: 'The question', step: { kind: 'action', what: 'say how should the workshop make a gearbox that lifts 5 kg' } },
+      { id: 'p', label: 'A plan', step: { kind: 'ai', what: 'Make a plan, in numbered steps, for: {input}' } },
+      { id: 'c', label: 'What could go wrong', step: { kind: 'ai', what: 'For this plan, say what could go wrong at each step and how likely it is: {input}' } },
+      { id: 'b', label: 'A better plan', step: { kind: 'ai', what: 'Rewrite the plan so each thing that could go wrong is guarded against, in numbered steps: {input}' } },
+      { id: 'n', label: 'Keep it', step: { kind: 'action', what: 'note good: {input}' } },
+    ],
+    links: [['t', 'q'], ['q', 'p'], ['p', 'c'], ['c', 'b'], ['b', 'n']],
+  },
+  {
+    id: 'map-product', title: 'Map a product into the inventory', about: 'Name a product (change the first step); Claude maps it into its parts, every level down to materials, in the inventory\'s one-line format; they are checked and added, and its tree is shown.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'w', label: 'The product', step: { kind: 'action', what: 'say an electric toothbrush' } },
+      { id: 'a', label: 'Claude maps it', step: { kind: 'ai', what: 'Map {input} into its parts for an inventory, every level down to raw materials. Answer only with lines, one entry a line, of the form: id | name | Category/Subcategory/Sub-subcategory | kind (product, assembly, part or material) | process (assemble, wind, solder, crimp, print, cast, coil, machine, stamp, mould, extrude, sinter, fab, etch, stock) | child*count child*count | what it is. Use these ids where they fit instead of new ones: motor-130 cell-18650 bms-board pcb-bare ic-package smd-passives led-5mm pushbutton screw-m3 spring-compression bearing-608 gear-plastic wire-hookup jst-xh nylon abs pp silicone steel-low stainless-304 copper brass magnet-wire ndfeb. Give the product first.' } },
+      { id: 'f', label: 'Add them', step: { kind: 'action', what: 'inventory add {input}' } },
+      { id: 'm', label: 'Its tree', step: { kind: 'action', what: 'inventory map last' } },
+    ],
+    links: [['t', 'w'], ['w', 'a'], ['a', 'f'], ['f', 'm']],
+  },
+  {
+    id: 'make-parts', title: 'Make any part from the inventory', about: 'Parts made in the workshop from the inventory: adjustable ones at the sizes said (a screw, a bearing), and a product made all the way down (what the workshop can make it makes; the rest is bought, and said so).',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'a', label: 'An M4 × 20 screw', step: { kind: 'action', what: 'inventory make screw M4x20' } },
+      { id: 'b', label: 'A 6201 bearing', step: { kind: 'action', what: 'inventory make bearing 6201' } },
+      { id: 'c', label: 'An MG996R servo', step: { kind: 'action', what: 'inventory make mg996r' } },
+    ],
+    links: [['t', 'a'], ['a', 'b'], ['b', 'c']],
+  },
+  {
+    id: 'languages', title: 'Code in many languages', about: 'One pipeline, a step in each language the forge runs: TypeScript, Python, C++ (Arduino), OpenSCAD, SQL over the inventory, maths with units, and G-code to the printer. Change any step\'s code.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'ts', label: 'TypeScript', step: { kind: 'action', what: 'ts: const parts: number = facts.parts ?? 0; return `TypeScript: ${parts} parts on the table`' } },
+      { id: 'py', label: 'Python', step: { kind: 'action', what: 'python: result = sum(i * i for i in range(1, 11))' } },
+      { id: 'cpp', label: 'C++ (Arduino)', step: { kind: 'action', what: 'cpp: int n = 21; void setup() { Serial.println(n * 2); }' } },
+      { id: 'scad', label: 'OpenSCAD', step: { kind: 'action', what: 'scad: cube([20, 20, 5]); translate([10, 10, 5]) cylinder(h = 10, d = 6);' } },
+      { id: 'sql', label: 'SQL', step: { kind: 'action', what: "sql: select name, spec from inventory where kind = 'product' and path like 'Mechanical/Bearings%' limit 5" } },
+      { id: 'm', label: 'Maths', step: { kind: 'action', what: 'math: 3 * 200 N * 0.4 m =' } },
+      { id: 'g', label: 'G-code', step: { kind: 'action', what: 'gcode: G28; M140 S60; M104 S200' } },
+    ],
+    links: [['t', 'ts'], ['ts', 'cpp'], ['cpp', 'scad'], ['scad', 'sql'], ['sql', 'm'], ['m', 'g'], ['g', 'py']],
+  },
   {
     id: 'workshop-microscope', title: 'Make a microscope in the workshop', about: 'The workshop builds a digital microscope: its frame and stage printed, then the camera, lens, LED ring, stepper, lead screw, driver and computer taken off the rack and put together on the plate by the bench arm. Change "microscope" to another recipe: pan-tilt, weather, scale, rover, gear.',
     steps: [

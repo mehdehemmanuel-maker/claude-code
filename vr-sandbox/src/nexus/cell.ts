@@ -449,6 +449,30 @@ export class Cell {
     const wait = this.armDone(B, steps.length); B.steps.push(...steps); await wait;
     this.programmed.add(r.id); return `Its program is on its controller: it runs the pipeline "${r.name}'s program", which you can change any time.`;
   }
+  // ---- what the inventory asks of it: any part, by the way it is made ----------------------------------------------------
+  /** Work at the plate by the bench arm: putting together, winding, soldering, crimping, bending, coiling (what it is
+   *  doing said); what went into it taken off the plate, it put there. */
+  async work(kind: string, name: string, uses: string[] = [], secs = 2.5): Promise<string> {
+    const B = this.arms.bench, steps: ArmStep[] = [{ to: 'plate', up: 0.1 }, { to: 'plate', up: 0.03, act: 'wait', secs }, { to: 'plate', up: 0.06, act: 'wait', secs: secs / 2 }];
+    B.doing = `${kind}: ${name}`;
+    const wait = this.armDone(B, steps.length); B.steps.push(...steps); await wait;
+    for (const u of uses) { const i = this.plate.indexOf(u); if (i >= 0) this.plate.splice(i, 1); }
+    this.plate.push(name); if (this.plate.length > 40) this.plate.splice(0, this.plate.length - 40);
+    return `${name}: ${kind}`;
+  }
+  /** Bought parts brought from the rack to the plate by the bench arm, in one trip. */
+  async bring(...names: string[]): Promise<string> {
+    const B = this.arms.bench, first = names[0] ?? 'parts', steps: ArmStep[] = [{ to: 'rack', up: 0.1 }, { to: 'rack', up: 0.02, act: 'grip', item: first }, { to: 'plate', up: 0.15 }, { to: 'plate', up: 0.04, act: 'release', item: first }];
+    const wait = this.armDone(B, steps.length); B.steps.push(...steps); await wait;
+    for (const n of names.slice(1)) this.plate.push(n);
+    return `${names.join(', ')}: bought, off the rack`;
+  }
+  /** Heat-treated in the kiln: hardened and tempered (a short program: up to 200 °C, held an hour). */
+  async temper(name: string): Promise<string> {
+    if (this.kiln.running) await this.until(() => !this.kiln.running);
+    this.kiln.run([{ to: 200, rate: 600, hold: 1 }]); await this.until(() => !this.kiln.running);
+    this.plate.push(name); return `${name}: tempered in the kiln at 200 °C for an hour`;
+  }
   /** Set down in the room, to run its program. */
   release(r: Recipe): string {
     if (!this.programmed.has(r.id)) throw new Error(`Upload the ${r.name}'s program first.`);
