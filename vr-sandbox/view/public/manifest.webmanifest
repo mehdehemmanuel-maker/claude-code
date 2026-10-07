@@ -1,11 +1,16 @@
 {
   "name": "Nexus Forge",
   "short_name": "Forge",
-  "description": "Claude's forge: ask for anything and watch it designed and built from laws; supervise its flaws, gates and reports, in VR.",
+  "description": "Claude's forge: ask for anything and watch it designed and built from laws; run, edit and test the pipeline Claude runs; supervise its flaws, gates and reports, in VR.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#04070b",
-  "theme_color": "#04070b",
-  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

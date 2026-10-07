@@ -1,5 +1,5 @@
 // The forge offline: the page and what it loaded are kept, fetched fresh when the network answers.
-const CACHE = 'forge-v1';
+const CACHE = 'forge-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {

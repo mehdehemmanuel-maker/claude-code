@@ -30,7 +30,9 @@ import { motorModel } from '../engineering/dcmotor';
 import { AMBIENT, heatLoss, thermalOf } from '../engineering/thermal';
 import { FUSION } from '../engineering/fusion';
 import { lateralUltimate, withdrawalUltimate } from '../engineering/wood';
-import { matOf, matterOf, Workshop, type Axis, type Made, type World } from './generate';
+import { eulerOf, matOf, matterOf, Workshop, type Axis, type Made, type World } from './generate';
+import { readConditions, roomOf, type Conditions } from './conditions';
+import { designFrame, frameAt, hullOf, scaleLaw, sectionFor, type FrameAsk, type FrameMatter, type MadeFrame, type Section as StrutSection, type V3, type Wind } from './adapt';
 import { planTree, touching, type Ax, type Box as FBox, type Fold, type TreePlan } from './foldtree';
 import type { Clip } from './flows';
 import type { Jolt } from './realize';
@@ -40,7 +42,7 @@ import type { SimTrack } from './sim';
 export type Fn = 'support' | 'move' | 'turn' | 'swing' | 'slide' | 'raise' | 'contain' | 'enclose' | 'warm' | 'lift' | 'float';
 /** A figure a want has: given by the person, answered to a question, the usual one for what was named, or estimated. */
 export interface Fig { v: number; unit: string; by: 'you' | 'answer' | 'usual' | 'estimate'; grounds: string }
-export interface Want { fn: Fn; says: string; q: Record<string, Fig>; flags: string[] }
+export interface Want { fn: Fn; says: string; q: Record<string, Fig>; flags: string[]; /** the conditions it is grown from, read from what the ask says it must do, whatever it calls it */ cond?: Conditions }
 export type Kind = 'length' | 'mass' | 'speed' | 'rpm' | 'temperature' | 'volume' | 'count' | 'what';
 export interface Question { key: string; want: number; ask: string; kind: Kind; value: number; unit: string; grounds: string }
 /** One thing the ask asks for, as said: what it is, something it does or has, or what it is for; and what of it was read. */
@@ -79,7 +81,7 @@ const PURPOSES: Purpose[] = [
   P(/\b(bridge|footbridge|span|walkway|gangway|catwalk)\b/, 'bridge', 'support', { span: fig(2, 'm', 'estimate', 'a gap of 2 m'), W: fig(0.6, 'm', 'estimate', '600 mm wide'), H: fig(0.3, 'm', 'estimate', 'its deck 300 mm up'), F: fig(100 * G, 'N', 'estimate', 'a person crossing, about 100 kg') }, ['span']),
   P(/\b(umbrella|parasol)\b/, 'shade', 'support', { H: fig(2.0, 'm', 'estimate', 'its canopy 2 m up'), W: fig(2.0, 'm', 'estimate', 'a canopy 2 m across'), D: fig(2.0, 'm', 'estimate', 'and 2 m deep'), F: fig(1 * G, 'N', 'estimate', 'nothing on it but itself, about 1 kg') }, ['pole']),
   P(/\b(stand|holder|pedestal|plinth|mount|easel|tripod|display)\b/, 'stand', 'support', { H: fig(0.8, 'm', 'estimate', 'holding it 800 mm up'), W: fig(0.3, 'm', 'estimate', 'on a top 300 mm across'), D: fig(0.3, 'm', 'estimate', 'and 300 mm deep'), F: fig(5 * G, 'N', 'estimate', 'something of about 5 kg') }),
-  P(/\b(cart|trolley|wagon|rover|vehicle|car|buggy|kart|truck|dolly|skateboard|tricycle|trike|bicycle|bike|scooter|wheelbarrow|pram|stroller|wheelchair|trailer)\b/, 'cart', 'move', { m: fig(5, 'kg', 'estimate', 'a load of 5 kg'), v: fig(0.5, 'm/s', 'estimate', 'at a slow walk, 0.5 m/s (a walk is about 1.3 m/s)') }),
+  P(/\b(cart|trolley|wagon|rover|vehicle|car|buggy|kart|truck|dolly|skateboard|tricycle|trike|bicycle|bike|scooter|wheelbarrow|pram|stroller|wheelchair|trailer|sleds?|sledges?|pulks?|pulkas?|toboggans?)\b/, 'cart', 'move', { m: fig(5, 'kg', 'estimate', 'a load of 5 kg'), v: fig(0.5, 'm/s', 'estimate', 'at a slow walk, 0.5 m/s (a walk is about 1.3 m/s)') }),
   P(/\b(motor|engine|flywheel|rotor|armature)\b/, 'motor', 'turn', { rpm: fig((60 * 2 * Math.PI) / 60, 'rpm', 'estimate', 'turning at 60 rpm'), Dia: fig(0.1, 'm', 'estimate', 'what turns 100 mm across') }),
   P(/\b(fan|turntable|spinner|spinning top|carousel|lazy susan|mixer|potter'?s wheel|centrifuge|rotisserie)\b/, 'turntable', 'turn', { rpm: fig((60 * 2 * Math.PI) / 60, 'rpm', 'estimate', 'turning at 60 rpm'), Dia: fig(0.3, 'm', 'estimate', 'a turning plate 300 mm across') }),
   P(/\b(door|gate|lid|hatch|flap|shutter)\b/, 'door', 'swing', { W: fig(0.8, 'm', 'estimate', 'a leaf 800 mm wide'), H: fig(2.0, 'm', 'estimate', 'and 2.0 m tall, as a person walks through') }),
@@ -96,6 +98,9 @@ const PURPOSES: Purpose[] = [
   P(/\b(drone|quadcopter|multicopter|helicopter|copter)\b/, 'flyer', 'lift', { m: fig(0.3, 'kg', 'estimate', 'carrying 300 g') }),
   P(/\b(boat|raft|canoe|kayak|ship|pontoon|barge|dinghy|floating docks?|floating platforms?|floating piers?)\b/, 'raft', 'float', { m: fig(80, 'kg', 'estimate', 'one person, 80 kg') }),
 ];
+/** Words that open what someone says, or say who it is for, and so name nothing it is: "ok so I cave dive", "my dad's 82",
+ *  "I'd like a design for". */
+const NOT_A_NAME = /^(ok|okay|so|well|hi|hey|um|uh|yes|yeah|please|hello|design|designs|plan|plans|blueprint|drawing|concept|request|requests|idea|budget|help|question|thing|things|something|anything|i|we|me|my|our|you)$|'s?$/;
 /** Words for the part that holds the rest of a thing together: "a quadcopter frame", "a cart chassis" is that thing, made
  *  as what holds it together ("a desk clock" is a clock: there the word before is only where it goes). */
 const PART_OF = /^(frames?|chassis|airframes?|hulls?|housings?|skeletons?|carcass(es)?)$/;
@@ -110,7 +115,7 @@ function readVerb(v: string, obj: string, all: string): VerbRead {
   // "a pull-down attic stair", "a drop-down desk": it folds out of where it is kept
   if (/^(pull|drop|fold|swing|flip)-(down|out|up|away)$/.test(w)) return { fn: 'swing', flags: ['fold'] };
   // "stays quieter than 40 dB", "stays under 32 C inside": how it keeps, read by its figures; how loud, said back
-  if (/^(stay|remain)/.test(w) && /^\s*(shut|closed|locked|latched)\b/.test(o)) return { note: 'what holds it shut (a latch at its far end to a post set in the ground) is not made' };
+  if (/^(stay|remain)/.test(w) && /^\s*(shut|closed|locked|latched)\b/.test(o)) return { note: 'what holds it shut: a latch at its far end to a post set in the ground, made and weighed below where a push it must stay shut against is said' };
   if (/^(stay|remain)/.test(w) && /\b(quiet|quieter|silent|noise|noisy|loud|db|decibels?)\b/.test(o)) return { note: 'how loud it is: the sound it makes is not weighed' };
   if (/^(stay|remain)/.test(w) && /\d|\b(under|below|above|over|within|cool|cooler|warm|warmer|dry|level|stable)\b/.test(o)) return { context: true };
   // "rides in a pickup bed": carried in a vehicle, which is not made
@@ -263,7 +268,7 @@ const MASSES: [RegExp, number, string, [number, number, number]?][] = [
   [/\bcats?\b/, 4.5, 'a cat', [0.46, 0.25, 0.3]], [/\bdogs?\b/, 25, 'a dog', [0.9, 0.35, 0.65]], [/\b(kids?|child|children)\b/, 30, 'a child', [0.4, 0.3, 1.3]], [/\b(person|adult|me|myself|human|man|woman|courier|people)\b/, 80, 'a person', [0.5, 0.3, 1.8]],
   [/\b(cups?|mugs?|coffee|tea)\b/, 0.35, 'a full cup', [0.1, 0.1, 0.12]], [/\bbottles?\b/, 1, 'a bottle'], [/\btools\b/, 10, 'tools'], [/\bprinters?\b/, 10, 'a printer', [0.45, 0.4, 0.3]],
   [/\bspeakers?\b/, 3, 'a speaker', [0.2, 0.2, 0.3]], [/\blamps?\b/, 2, 'a lamp', [0.25, 0.25, 0.5]], [/\b(groceries|shopping)\b/, 10, 'shopping'], [/\b(bags?|backpacks?)\b/, 8, 'a bag'], [/\bbikes?\b|\bbicycles?\b/, 13, 'a bicycle'],
-  [/\bguitars?\b/, 4, 'a guitar'], [/\bcameras?\b/, 1, 'a camera', [0.15, 0.12, 0.1]], [/\b(tiles?|bricks?)\b/, 15, 'a stack of tiles'],
+  [/\b(?:hay |straw )?bales?\b/, 25, 'a small square bale of hay (two-string, about 360 × 460 × 910 mm, estimate)', [0.91, 0.46, 0.36]], [/\bguitars?\b/, 4, 'a guitar'], [/\bcameras?\b/, 1, 'a camera', [0.15, 0.12, 0.1]], [/\b(tiles?|bricks?)\b/, 15, 'a stack of tiles'],
 ];
 /** What is thrown or hits: its mass by the rules of its game (a puck 156 to 170 g, IIHF; a tennis ball 56 to 59.4 g, ITF; a
  *  football 410 to 450 g, FIFA; a baseball 142 to 149 g, MLB; a golf ball at most 45.93 g, R&A; a cricket ball 156 to 163 g,
@@ -331,7 +336,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   const add = (fn: Fn, says: string, q: Record<string, Fig> = {}, flags: string[] = []) => { if (!wants.some((w) => w.fn === fn)) wants.push({ fn, says, q: structuredClone(q), flags: [...flags] }); const w = wants.find((x) => x.fn === fn)!; for (const f of flags) if (!w.flags.includes(f)) w.flags.push(f); return w; };
   const purposeOf = (w: string | null) => (w ? PURPOSES.find((p) => p.re.test(` ${w.replace(/-/g, ' ')} `) || p.re.test(` ${singular(w)} `)) : undefined);
   const massOf = (s: string) => MASSES.find(([re]) => re.test(` ${s} `));
-  let name = '', occupant: (typeof MASSES)[number] | null = null, loadSaid: { N: number; text: string } | null = null;
+  let name = '', purposeName = '', occupant: (typeof MASSES)[number] | null = null, loadSaid: { N: number; text: string } | null = null;
   const loadsSaid: string[] = [], said: Said = { size: {} }, own: { ax: string; v: number }[] = [];
   let planUnder = false;
   // "telescopes up to 25 m": how tall it stands
@@ -345,6 +350,20 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   const wholeFold = (r: VerbRead, whole: boolean, own: Fn | undefined, verb = '') => whole && r.fn === 'swing' && own !== 'swing' && (!!r.flags?.includes('fold') || /^open/.test(verb) && own !== 'enclose' && own !== 'contain' && !wants.some((w) => w.fn === 'enclose' || w.fn === 'contain'));
   const objOf = (c: (typeof pa.clauses)[number]) => [...c.obj.map((i) => pa.toks[i]!.w), ...pa.clauses.slice(pa.clauses.indexOf(c) + 1).filter((x, k, xs) => (x.kind === 'where' || x.kind === 'for') && xs.slice(0, k).every((y) => y.kind === 'where' || y.kind === 'for')).flatMap((x) => [x.opener, x.text])].join(' ');
   // what it is, what it has, what it does, what it is for: clause by clause
+  // "a design for a 4.8 m fishing kayak": what it is, is what the design is for
+  for (const [i, c] of pa.clauses.entries()) { const nx = pa.clauses[i + 1]; if (c.kind === 'main' && /^(design|designs|plan|plans|blueprint|blueprints|drawing|drawings|concept)$/.test(c.head ?? '') && nx?.kind === 'for' && nx.head) nx.kind = 'main'; }
+  for (const c of pa.clauses) {
+    // "a sled I can haul": a thing named before a clause about it with no "that": the thing is the word before its pronoun
+    const pi = c.mods.findIndex((m) => /^(i|we|you|he|she|they)$/.test(m));
+    if ((c.kind === 'main' || c.kind === 'has' || c.kind === 'for') && pi > 0) { c.head = c.mods[pi - 1]!; c.mods = c.mods.slice(0, pi - 1); }
+    // "want to build my own canister light", "I need a ...": what is wanted is the thing
+    const wm = c.kind === 'does' ? /^(?:i\s+|we\s+)?(?:want|wants|need|needs|would like|'d like)\s+(?:to\s+(?:build|make|design|get|have)\s+)?(?:(?:my|our|a|an|the|some)\s+)?(?:own\s+)?([a-z][a-z' -]*[a-z])$/.exec(c.text.trim()) : null;
+    if (wm && !/^(to|it|that|this|them|one|something|anything)\b/.test(wm[1]!)) { const ws = wm[1]!.split(/\s+/); c.kind = 'main'; c.head = ws.at(-1)!; c.mods = ws.slice(0, -1); }
+    // "my husky lives in the yard", "my dad's 82": who it is for and how they are, not a thing it is
+    if (c.kind === 'main' && c.head && (/'s$/.test(c.head) || /^(my|our|his|her|their)\b/.test(c.text.trim()) && /^(lives|works|flips|sells|exists|is|has|gets|keeps|runs|goes|uses|wants|needs|likes|hates|chews|knocks|tips|plays|sleeps|stays)$/.test(c.head))) c.head = null;
+    // "his right hand": what someone else has, not what it has
+    if (c.kind === 'has' && /^(his|her|their)\b/.test(c.text.trim())) c.head = null;
+  }
   pa.clauses.forEach((c, ci) => {
     // "Parts budget around $150", "BOM $250": what it may cost, said where its figure is (a cost, not weighed), not a thing
     if ((c.kind === 'main' || c.kind === 'has') && /^(budgets?|costs?|prices?|boms?|spend(ing)?)$/.test(c.head ?? '')) return;
@@ -397,11 +416,11 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       const p = purposeOf(c.head) ?? (c.mods.length ? phrase([...c.mods, c.head].join(' ')) : undefined) ?? (c.kind === 'main' && /\b(climbing|storage|frame)\b/.test(c.text) ? phrase(c.text) : undefined) ?? (PART_OF.test(c.head) && c.mods.length ? purposeOf(c.mods.join(' ')) : undefined), generic = GENERIC.test(c.head), m = massOf(c.head), nxs = pa.clauses[ci + 1];
       let labelled = false;
       const named = /\b(the |same )size$/.test(c.text) && nxs?.kind === 'where' && /^(of|as)$/.test(nxs.opener) ? `${c.text} ${nxs.opener} ${nxs.text}` : c.text;
-      if (c.kind === 'main' && !name && (ci === 0 || pa.clauses.slice(0, ci).every((x) => x.kind !== 'main' || !x.head))) name = singular(c.head);
+      if (c.kind === 'main' && !name && !NOT_A_NAME.test(c.head) && (ci === 0 || pa.clauses.slice(0, ci).every((x) => x.kind !== 'main' || !x.head || NOT_A_NAME.test(x.head)))) name = singular(c.head);
       // "lifting it back up with a motor": the motor is what drives what it does, not a second thing that turns
       const drove = p?.name === 'motor' && c.kind === 'has' && /^(with|by|using)$/.test(c.opener) ? wants.find((w) => ['raise', 'slide', 'move', 'swing', 'lift'].includes(w.fn)) : undefined;
       if (drove) asked.push({ text: `with ${c.text}`, kind: 'has', got: drove.fn, why: '' });
-      else if (p) { add(p.fn, p.name, p.q, PART_OF.test(c.head) && !p.re.test(` ${c.head} `) ? [...(p.flags ?? []), 'frame'] : p.flags); asked.push({ text: `${c.kind === 'has' ? 'with ' : ''}${c.text.replace(/\s+(that|which|who|whose|with|for)$/, '')}`, kind: c.kind === 'has' ? 'has' : 'thing', got: p.fn, why: '' }); }
+      else if (p) { if (c.kind === 'main' && !purposeName) purposeName = singular(c.head); add(p.fn, p.name, p.q, PART_OF.test(c.head) && !p.re.test(` ${c.head} `) ? [...(p.flags ?? []), 'frame'] : p.flags); asked.push({ text: `${c.kind === 'has' ? 'with ' : ''}${c.text.replace(/\s+(that|which|who|whose|with|for)$/, '')}`, kind: c.kind === 'has' ? 'has' : 'thing', got: p.fn, why: '' }); }
       // "one gripper mechanism": what it is, by the word that names it, where that is not kept
       else if (generic) { const ar = c.kind === 'main' && c.mods.length ? areaOf(c.mods.join(' ')) : ''; if (ar && !/^not a kind/.test(ar)) asked.push({ text: c.text.replace(/\s+(that|which|who|whose|with|for)$/, ''), kind: 'thing', got: null, why: ar }); }
       else if (m && c.kind === 'has') { loadSaid ??= { N: m[1] * G, text: `${m[2]}, about ${m[1]} kg (estimate)` }; }
@@ -501,7 +520,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   const matterWord = /\b(?:of|from|in|made of)\s+(wood|oak|pine|maple|fir|plywood|birch|mdf|steel|stainless(?: steel)?|aluminium|aluminum|acrylic|plastic|nylon|concrete|glass|carbon fibre|carbon fiber|fibreglass|fiberglass)\b/.exec(tNoBall)?.[1] ?? /\b(wooden|metal|steel|aluminium|aluminum|plastic|glass)\b/.exec(tNoBall)?.[1] ?? null;
   const matter = matterWord ? ({ wooden: 'wood', metal: 'steel', plastic: 'acrylic', oak: 'wood.red-oak', pine: 'wood.southern-pine', maple: 'wood.hard-maple', fir: 'wood.douglas-fir', birch: 'wood', aluminum: 'aluminium', 'stainless steel': 'stainless' } as Record<string, string>)[matterWord] ?? matterWord : null;
   if (matter) { try { matterOf(matter); heard.push(`made of ${matterWord}`); } catch { dropped.push(`made of ${matterWord}: no matter of that name is kept`); } }
-  const take = (w: Want, k: string, v: number, unit: string, text: string) => { w.q[k] = fig(v, unit, 'you', text); heard.push(`${({ H: 'height', W: 'width', D: 'depth', F: 'load', m: 'load', v: 'speed', V: 'volume', T: 'temperature', L: 'travel', Dia: 'across', rpm: 'speed', span: 'span', wave: 'waves', fb: 'freeboard' } as Record<string, string>)[k] ?? k}: ${text}`); };
+  const take = (w: Want, k: string, v: number, unit: string, text: string) => { w.q[k] = fig(v, unit, 'you', text); if (k === 'L' && w.fn === 'slide' && !asked.some((a) => a.text.includes(text))) asked.push({ text: `slides ${text}`, kind: 'does', got: 'slide', why: '' }); heard.push(`${({ H: 'height', W: 'width', D: 'depth', F: 'load', m: 'load', v: 'speed', V: 'volume', T: 'temperature', L: 'travel', Dia: 'across', rpm: 'speed', span: 'span', wave: 'waves', fb: 'freeboard' } as Record<string, string>)[k] ?? k}: ${text}`); };
   const by = (f: Fn) => wants.find((w) => w.fn === f), sup = by('support'), mov = by('move');
   // what raises a load, hung on a wall ("so it hangs on the wall"): its posts screwed to it, with no base of its own
   { const ra0 = by('raise'); if (ra0 && /\b(hangs?|hung|hanging|mounts?|mounted|fixed|bolted|screwed)\b[^,.;]*\b(walls?|studs?)\b|\bwall[- ]?(mounted|mount|hung)\b/.test(t)) { ra0.flags.push('wall'); heard.push('hung on a wall: its posts screwed to it, standing on no base of its own'); } }
@@ -529,7 +548,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   // "zero hydraulic oil leakage", "zero visible judder": said back, with what of it is weighed
   // "zero visible judder", "zero oil leakage": something asked of how it does what it does, said and not weighed
   for (const z of t.matchAll(/\bzero\s+((?:[\w-]+\s+){0,2}?)(leak\w*|emissions?|spills?|judder|jitter|vibrations?|backlash|play|drift|wobble)\b/g)) { const why = /leak|spill/.test(z[2]!) ? 'nothing made here holds a liquid under pressure, and what would drive it is not made, so it is not checked' : 'how smoothly it moves is not weighed here'; heard.push(`${z[0]}: said back; ${why}`); if (!asked.some((a) => a.text.includes(z[0]))) asked.push({ text: z[0], kind: 'does', got: null, why }); }
-  { const cm = /\b(\d+|one|two|three|four|six|eight)\s+(aa|aaa|c|d)[- ]?(?:size\s+)?(?:batter(?:y|ies)|cells?|alkalines?)\b/.exec(t); if (cm) { const n0 = countOf(cm[1]!), each = ({ aa: 3.5, aaa: 1.5, c: 9, d: 18 } as Record<string, number>)[cm[2]!]!; said.cellWh = n0 * each; heard.push(`${n0} ${cm[2]!.toUpperCase()} cells: about ${+(n0 * each).toPrecision(3)} Wh (${each} Wh each, alkaline at a light draw, estimate), weighed below`); } }
+  { const cm = /\b(\d+|one|two|three|four|six|eight)\s+(aa|aaa|c|d)[- ]?(?:size\s+)?(?:batter(?:y|ies)|cells?|alkalines?)\b/.exec(t); if (cm) { const n0 = countOf(cm[1]!), pulsed = /\b(motor|every|each (minute|hour|second))\b/.test(t), each = (pulsed ? { aa: 3.0, aaa: 1.2, c: 8, d: 16 } : { aa: 3.5, aaa: 1.5, c: 9, d: 18 } as Record<string, number>)[cm[2]!]!; said.cellWh = n0 * each; heard.push(`${n0} ${cm[2]!.toUpperCase()} cells: about ${+(n0 * each).toPrecision(3)} Wh (${each} Wh each, alkaline ${pulsed ? 'pulsed at tens of mA, less than at a light draw' : 'at a light draw'}, estimate), weighed below`); } }
   // "cycles about 20 times a day": how often it is worked
   { const pd = /\b(\d+|once|twice|two|three|four|five|six|ten|twenty)\s*(?:times|cycles)?\s+(?:a|per|each|every)\s+day\b/.exec(t); if (pd) { said.perDay = pd[1] === 'once' ? 1 : pd[1] === 'twice' ? 2 : countOf(pd[1]!); heard.push(`${said.perDay} times a day: weighed below where what it does each time is`); } }
   // "from a normal kitchen outlet", "plugged in": it runs from the mains, and carries no store of its own
@@ -637,7 +656,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       const through = cl.kind === 'where' && /^(through|into|inside)$/.test(cl.opener) && !!cl.head && /^(pipes?|tubes?|ducts?|tunnels?|sewers?|drains?|culverts?|holes?|openings?|hatch(es)?|doors?|doorways?|gates?|gaps?)$/.test(cl.head);
       // through a door it is only as wide as the door (a door is about 2 m tall, estimate); through a hole or a hatch, both ways
       if (through && !near(FOLDS, 6)) { const door = /^(doors?|doorways?|gates?|gateways?)$/.test(cl.head ?? ''); limits.W = Math.min(limits.W ?? Infinity, q.si); if (!door) limits.H = Math.min(limits.H ?? Infinity, q.si); said.through = q.si; heard.push(`through ${q.text} ${/(s|sh|ch|x|z)$/.test(cl.head ?? '') ? `${cl.head}es` : `${cl.head}s`}: its width${door ? '' : ' and height'} no more than that, checked`.replace(/sses: /, 'sses: ')); continue; }
-      const ax = AX[a[0] ?? ''] ?? (a[0] === 'in' && a[1] === 'diameter' ? 'W' : /^(standing|working|seat|overall|total|max|maximum|full|inside|outside)$/.test(a[0] ?? '') ? AX[a[1] ?? ''] : undefined);
+      // a thing whose word says it stands taller than it is wide (a tower, a mast, a pole): its one size is its height
+      const ax = AX[a[0] ?? ''] ?? (a[0] === 'in' && a[1] === 'diameter' ? 'W' : /^(standing|working|seat|overall|total|max|maximum|full|inside|outside)$/.test(a[0] ?? '') ? AX[a[1] ?? ''] : /^(towers?|masts?|poles?|pylons?|columns?|pillars?|chimneys?|flagpoles?|obelisks?|spires?|steeples?)$/.test(a[0] ?? '') ? 'H' : undefined);
       if (/^(run|length|stretch)$/.test(a[0] ?? '')) { said.runLength = q.si; if (sup) { take(sup, 'W', q.si, 'm', `${q.text} ${a[0]} of it`); continue; } heard.push(`a ${q.text} ${a[0]}: its length, weighed below`); continue; }
       if (/^(steps?|stairs?|risers?|kerbs?|curbs?)$/.test(a[0] ?? '') && !/\b(stair|staircase|ladder|steps)\b/.test(mainHead ?? '')) { said.climb = q.si; heard.push(`steps of ${q.text}: climbing them is not kept; the power it takes is weighed below`); continue; }
       if (a[0] === 'clear' && /^(hatch|hatches|opening|openings|door|doors|doorway|passage|aperture|port)$/.test(a[1] ?? '')) { said.hatch = q.si; const sw = by('swing'); if (sw) { take(sw, 'W', q.si, 'm', `${q.text} clear`); if (sw.q.H?.by !== 'you') sw.q.H = fig(q.si, 'm', 'estimate', 'as tall as it is wide'); continue; } }
@@ -707,6 +727,8 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       // "fits on a 100 mm x 160 mm card": the size of the card it is
       if (/\b(card|board|pcb)s?\b/.test(a.slice(0, 4).join(' ')) && /^(boards?|computers?|cards?|pcbs?|controllers?|circuits?|modules?)$/.test(mainHead ?? '')) { own.push({ ax: 'plain', v: q.si }); heard.push(`${q.text}: the size of its card`); continue; }
       if (said.trip && (a[0] === 'low' || /^(orbit|up|altitude)$/.test(a[0] ?? '')) && q.si >= 1e5) { heard.push(`${q.text} up: the orbit it leaves (its burns are worked from 400 km, estimate)`); continue; }
+      // "400 mm out from the wall", "sticking out 300 mm": how far from what it is fixed to it holds what it carries
+      if (sameDim(d, DIMS.length) && a[0] === 'out' && (/\b(from|off)\b/.test(a[1] ?? '') || /^(sticks?|sticking|reach(es|ing)?|projects?|projecting|stands?|standing|holds?|holding)$/.test(b[0] ?? ''))) { const su = by('support'); if (su) { take(su, 'D', q.si, 'm', `${q.text} out from what it is fixed to`); continue; } }
       // "a 20 micron dust grain": something small it handles, weighed below by what holds it to what it touches
       if (nounAfter && /^(dust|grains?|particles?|powder|specks?|motes?|spores?|cells?)$/.test(nounAfter) && q.si < 1e-3) { said.grain = q.si; heard.push(`something ${q.text} across (${nounAfter}): what holds it to what it touches is weighed below`); continue; }
       // "carries two gas cylinders (9 in dia, 55 in tall)": the size of what it carries, not its own
@@ -853,7 +875,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
       // "1.5 kN/m² of snow": a weight spread on its top
       if (a[0] === 'of' && /^(snow|ice|load|water|people|crowd)/.test(a[1] ?? '')) { said.topP = q.si; heard.push(`${q.text} of ${a[1]} on its top: weighed below`); continue; }
       // "a 30 psf snow load", "snow load 2.4 kPa", "rated for 1.5 kPa of live load": a weight spread on its top
-      if (/^(snow|ice|roof|live|design|floor)$/.test(a[0] ?? '') && /^loads?$/.test(a[1] ?? '') || /^loads?$/.test(b[0] ?? '') && /^(snow|ice|roof|live)$/.test(b[1] ?? '') || b[0] === 'snow') { said.topP = q.si; heard.push(`${q.text} of snow on its top: weighed below`); continue; }
+      if (/^(snow|ice|roof|live|design|floor)$/.test(a[0] ?? '') && /^loads?$/.test(a[1] ?? '') || /^loads?$/.test(b[0] ?? '') && /^(snow|ice|roof|live)$/.test(b[1] ?? '') || b[0] === 'snow' || a[0] === 'snow' || a[0] === 'ground' && a[1] === 'snow') { said.topP = q.si; heard.push(`${q.text} of snow on its top: weighed below`); continue; }
       // "4,000 m depth (400 bar)": the sea's push there, said again
       if (said.depth !== undefined && Math.abs(q.si - 1025 * 9.80665 * said.depth) < 0.15 * q.si) { heard.push(`${q.text}: the sea's push at that depth, weighed with it`); continue; }
       // "against Mars's 0.006 bar outside": what is round it, held against what it holds in
@@ -919,7 +941,9 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   }
   if (carrier && loadSaid) { if (carrier.fn === 'support') take(carrier, 'F', loadSaid.N, 'N', loadSaid.text); else take(carrier, 'm', loadSaid.N / G, 'kg', loadSaid.text); }
   const obj = occupant ?? MASSES.find(([re]) => re.test(t) && pa.clauses.some((c) => (c.kind === 'for' || c.kind === 'does') && re.test(` ${c.text} `)));
-  if (carrier?.fn === 'support' && obj?.[3] && carrier.q.W?.by !== 'you') { carrier.q.W = fig(Math.max(obj[3][0] * 1.25, 0.15), 'm', 'estimate', `a top a little wider than ${obj[2]}`); carrier.q.D = fig(Math.max(obj[3][1] * 1.25, 0.15), 'm', 'estimate', 'and a little deeper'); }
+  if (carrier?.fn === 'support' && obj?.[3] && carrier.q.W?.by !== 'you') { carrier.q.W = fig(Math.max(obj[3][0] * 1.25, 0.15), 'm', 'estimate', `a top a little wider than ${obj[2]}`); if (carrier.q.D?.by !== 'you') carrier.q.D = fig(Math.max(obj[3][1] * 1.25, 0.15), 'm', 'estimate', 'and a little deeper'); }
+  // what raises something everyone knows the size of carries it on a carriage a tenth bigger each way
+  { const ra3 = by('raise'), objR = MASSES.find(([re, , , sz]) => sz && /bale/.test(re.source) && re.test(t)); if (ra3 && objR?.[3] && ra3.q.W?.by !== 'you') { const obj = objR as [RegExp, number, string, [number, number, number]]; ra3.q.W = fig(obj[3][0] * 1.1, 'm', 'estimate', `a carriage a tenth longer than ${obj[2].replace(/ \(.*$/, '')} (${len(obj[3][0])})`); ra3.q.D = fig(obj[3][1] * 1.1, 'm', 'estimate', `and a tenth wider (${len(obj[3][1])})`); } }
   // what encloses something everyone knows the size of is made to hold it: a third again all round
   const enc0 = by('enclose'); if (enc0 && obj?.[3] && enc0.q.W?.by !== 'you') { const [ow, od, oh] = obj[3]; enc0.q.W = fig(ow * 1.3, 'm', 'estimate', `room for ${obj[2]} (${len(ow)} long), a third again`); enc0.q.D = fig(od * 1.3, 'm', 'estimate', `${len(od)} wide, a third again`); enc0.q.H = fig(oh * 1.3, 'm', 'estimate', `${len(oh)} tall, a third again`); }
   // what people shelter in is as big as they need: each lying down about 0.65 m by 2 m (a sleeping pad and a little
@@ -952,7 +976,9 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   // to the body at waist height, L23; estimate), where no part's weight is said
   { const W1 = '(one|two|three|four|five|six|\\d+)', P1 = '(?:\\w+\\s+)?(people|persons|adults|teachers|parents|workers|men|women|volunteers|kids|children)';
     const m1 = new RegExp(`\\b(assembled|put up|pitched|set up|erected|carried|lifted|installed|built)\\s+(?:\\w+\\s+){0,3}by\\s+${W1}\\s+${P1}\\b`).exec(t) ?? new RegExp(`\\b${W1}\\s+${P1}\\s+(?:can\\s+|could\\s+|must\\s+|will\\s+)?(assemble|put up|pitch|set up|erect|carry|lift|install|build)\\b`).exec(t);
-    if (m1 && limits.part === undefined && wants.length) { const nP = countOf(m1[2]!.match(/^(one|two|three|four|five|six|\d+)$/) ? m1[2]! : m1[1]!), kgP = nP <= 1 ? 16 : Math.round((2 / 3) * nP * 16 * 10) / 10; if (nP >= 1 && nP <= 6) { limits.part = kgP; heard.push(`put up by ${nP}: no part heavier than ${kgP} kg, what ${nP === 1 ? 'one person lifts' : `${nP} lift together (two-thirds of ${nP} × 16 kg`} (the HSE guideline for one person lifting close to the body at waist height, L23${nP === 1 ? '' : ')'}; estimate), checked`); } } }
+    if (m1 && limits.part === undefined && wants.length) { const nP = countOf(m1[2]!.match(/^(one|two|three|four|five|six|\d+)$/) ? m1[2]! : m1[1]!), kgP = nP <= 1 ? 16 : Math.round((2 / 3) * nP * 16 * 10) / 10; if (nP >= 1 && nP <= 6) { limits.part = kgP; said.partPeople = kgP; heard.push(`put up by ${nP}: no part heavier than ${kgP} kg, what ${nP === 1 ? 'one person lifts' : `${nP} lift together (two-thirds of ${nP} × 16 kg`} (the HSE guideline for one person lifting close to the body at waist height, L23${nP === 1 ? '' : ')'}; estimate), checked`); } } }
+  // "a 2 kg sediment core": the core it cuts and keeps
+  { const cm = /(\d+(?:\.\d+)?)\s*kg\s+(?:of\s+)?(?:sediment|mud|soil|ice|rock|seabed)?\s*cores?\b/.exec(t); if (cm) { said.coreKg = Number(cm[1]); heard.push(`a ${cm[1]} kg core: what it cuts and keeps, weighed below`); } }
   // what is raised by a hand crank: what it lifts and how far, weighed by its crank and drum
   { const ra1 = by('raise'); if (ra1 && said.human && said.liftKg === undefined && ra1.q.m && ra1.q.L) { said.liftKg = ra1.q.m.v; said.liftH = ra1.q.L.v; said.crank = /\bcrank/.test(t); } }
   // a cart, a trolley, a trailer with nothing said to drive it is pushed by hand (or towed): no motors; it moves at a walk
@@ -1139,6 +1165,30 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
     if (!asked.some((a) => a.kind === 'thing')) asked.unshift({ text: pa.clauses.find((c) => c.kind === 'main')?.text ?? name, kind: 'thing', got: null, why });
     wants.length = 0;
   }
+  // the conditions it sets, read from what it says and not from what it calls the thing: where it must hold a load,
+  // held by something (a post, a tube, a face, two ends, the ground), out, across or up to it, it is grown from those,
+  // whatever it is named; what it is otherwise read as making there (a top, a box, a leaf, a carriage) gives way to it
+  const cd0 = READING.conditions ? readConditions(t) : null;
+  // where a drawn way already makes it (a deck across a span, a board on brackets along a wall, shelves, a top a child
+  // climbs), that is kept until the grown frame is weighed as well as it is; the conditions are grown where nothing drawn
+  // does what they ask: clamped round a post or a tube, hung below one, held out from a face, or standing in a wind on a
+  // face it carries
+  const drawnDoes = cd0 && (cd0.hold.kind === 'ends' && wants.some((w) => w.flags.includes('span')) || cd0.hold.kind === 'face' && /\b(shelf|shelves|bench|benches|seat|seats|ledge)\b/.test(t) && cd0.dyn <= 1 || cd0.hold.kind === 'ground' && !cd0.cover && !cd0.loads.some((l) => l.side) && wants.some((w) => w.fn === 'support') || wants.some((w) => w.flags.includes('levels')));
+  const cd = drawnDoes ? null : cd0;
+  if (cd) {
+    const rolls = /\b(wheels?|rolls?|rolling|towed?|tows|drives? (itself|along)|self-propelled|motori[sz]ed)\b/.test(t);
+    const keep = (w: Want) => !/^(support|enclose|swing|raise|slide)$/.test(w.fn) && !(w.fn === 'move' && (cd.hold.kind !== 'ground' || !rolls));
+    const gone = wants.filter((w) => !keep(w)).map((w) => FN_WORDS[w.fn]);
+    wants.splice(0, wants.length, ...wants.filter(keep));
+    const down = cd.loads.filter((l) => !l.side).reduce((a, l) => a + l.N, 0) * cd.dyn;
+    wants.unshift({ fn: 'support', says: FN_WORDS.support, q: { F: fig(down, 'N', 'you', cd.loads.filter((l) => !l.side).map((l) => l.said).join(', ') + (cd.dyn > 1 ? `, by ${cd.dyn} as it ${cd.dynSaid ?? 'comes on hard'} (estimate)` : '')), H: fig(cd.up ?? 1, 'm', cd.up !== undefined ? 'you' : 'estimate', cd.up !== undefined ? 'as said' : 'held 1 m up (estimate)'), W: fig(cd.span ?? Math.max(0.1, cd.out ?? 0.3), 'm', 'estimate', 'as the conditions give it'), D: fig(Math.max(0.1, cd.out ?? 0.3), 'm', 'estimate', 'as the conditions give it') }, flags: ['grown'], cond: cd });
+    heard.push(`what it must do, as conditions: ${[...cd.heard, ...cd.loads.map((l) => `${l.said}${l.side ? ', sideways' : ''}`), `held by ${cd.hold.said}`].join('; ')}${gone.length ? ` (so it is grown as what holds its load, not drawn as something ${[...new Set(gone)].join(' or ')})` : ''}`);
+    if (cd.massMax !== undefined && limits.mass === undefined) limits.mass = cd.massMax;
+    if (cd.partMax !== undefined && limits.part === undefined) limits.part = cd.partMax;
+    // a roof's plan is the conditions'; what lies on it is said with them, as it lies on a roof
+    if (cd.cover) { said.plan = [cd.cover.L, cd.cover.W]; for (let k = lawSays.length - 1; k >= 0; k--) if (/kPa on its top$/.test(lawSays[k]!.what)) lawSays.splice(k, 1); const w0 = wants[0]!; w0.q.W = fig(cd.cover.L, 'm', 'you', cd.cover.said); w0.q.D = fig(cd.cover.W, 'm', 'you', cd.cover.said); }
+    for (const a of asked) if (!a.got && (a.kind === 'thing' || a.kind === 'does' && /\b(hold|holds|carry|carries|take|takes|support|span|spans|sticks? out|hang|hangs|clamp|clamps|bolts?|stand|stands|reach|reaches|lift|lifts|sits?)\b/.test(a.text))) { a.got = 'support'; a.why = 'made as what holds its load: a frame grown for the conditions it sets'; }
+  }
   if (!wants.length) {
     // what was heard as checked against what is made is not, where nothing is made; a limit on what it draws is weighed by
     // the laws where one of them draws it
@@ -1179,8 +1229,10 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   if (notRead.length && answers.what === undefined && !(scale && scale.L < 5e-3)) questions.push({ key: 'what', want: -1, ask: `I can make only part of it: something to ${wants.map((w) => FN_WORDS[w.fn]).join(', and to ')}. Not: ${notRead.map((x) => `${x.text} (${x.why})`).join('; ')}. Shall I make the part I can, or say what else it should do?`, kind: 'what', value: 0, unit: '', grounds: 'part of what was asked is not something kept' });
   // a mass is asked and read as a weight (N); one kept in kg is turned back
   const asN = (f: Fig) => (f.unit === 'kg' ? f.v * G : f.v), fromN = (f: Fig, v: number) => (f.unit === 'kg' ? v / G : v);
-  wants.forEach((w, i) => { for (const [k, kind, ask] of ASKS[w.fn]) { const f = w.q[k]; if (!f || f.by !== 'estimate') continue; const a = answers[`${i}.${k}`] ?? answers[k]; if (a !== undefined) { const v = readAnswer(a, kind); if (v !== null) { w.q[k] = fig(kind === 'mass' ? fromN(f, v) : v, f.unit, 'answer', a); heard.push(`${k}: ${a}`); continue; } } questions.push({ key: `${i}.${k}`, want: i, ask, kind, value: kind === 'mass' ? asN(f) : f.v, unit: f.unit, grounds: f.grounds }); } });
+  wants.forEach((w, i) => { if (w.flags.includes('grown')) return; for (const [k, kind, ask] of ASKS[w.fn]) { const f = w.q[k]; if (!f || f.by !== 'estimate') continue; const a = answers[`${i}.${k}`] ?? answers[k]; if (a !== undefined) { const v = readAnswer(a, kind); if (v !== null) { w.q[k] = fig(kind === 'mass' ? fromN(f, v) : v, f.unit, 'answer', a); heard.push(`${k}: ${a}`); continue; } } questions.push({ key: `${i}.${k}`, want: i, ask, kind, value: kind === 'mass' ? asN(f) : f.v, unit: f.unit, grounds: f.grounds }); } });
   for (const w of wants) for (const f of Object.values(w.q)) if (f.by === 'usual' || f.by === 'estimate') assumed.push(f.grounds);
+  // its name: the word that named a kind of thing it is, where one did ("a sled I can haul" is a sled)
+  if (purposeName && !purposeName.includes(name)) name = purposeName;
   if (!name || GENERIC.test(name)) name = name && name !== 'something' && name !== 'thing' ? name : ({ support: 'stand', move: 'cart', turn: 'turntable', contain: 'tank', enclose: 'box', warm: 'warmer', swing: 'door', slide: 'slider', raise: 'lift', lift: 'flyer', float: 'raft' } as Record<Fn, string>)[wants[0]!.fn];
   for (const a of notRead) unread.push(`${a.text} (${a.why})`);
   // what it is named for and does not have ("a vacuum flask" with no vacuum, "a hand-crank kettle" with no crank): the thing
@@ -1249,9 +1301,10 @@ interface Need { kind: NeedKind; want: Want; why: string; /** what it stands on 
 export interface Trace { step: string; what: string; called: string; why: string; when: string; where: string; how: string }
 export interface Check { what: string; ok: boolean; says: string }
 interface Ctx {
-  p: string; x0: number; z0: number; y0: number; rnd: () => number; matter: string | null; /** the most one part may weigh, kg; the most it may sag, m */ part?: number; sag?: number; /** the most it may weigh, kg: its matter chosen for lightness */ light?: number; /** the tube it must go into, across, m; the fall it must survive, m; the weight of a child said to climb it, N */ fitDia?: number; dropH?: number; climber?: number; steps: string[]; traces: Trace[]; members: string[]; loose: string[]; moving: string[];
+  p: string; x0: number; z0: number; y0: number; rnd: () => number; matter: string | null; /** the wind said it must stand in, m/s */ wind?: number; /** the most one part may weigh, kg; the most it may sag, m */ part?: number; sag?: number; /** the most it may weigh, kg: its matter chosen for lightness */ light?: number; /** the tube it must go into, across, m; the fall it must survive, m; the weight of a child said to climb it, N */ fitDia?: number; dropH?: number; climber?: number; steps: string[]; traces: Trace[]; members: string[]; loose: string[]; moving: string[];
   /** what moves under what it makes (a carriage it stands on): what it makes rides with that, joined to it */ ride: string | null; riders: string[];
   choices: string[]; gaps: string[]; checks: (() => Check | null)[]; loads: string[]; tests: Test[]; need: Need; way: string; why: string;
+  /** the conditions what is made was grown to meet, as said and as taken: its loads, what holds it, the room it may take */ conds?: string[];
   /** what it gives what stands on it or goes into it: its top surface, or its body */
   top: { y: number; w: number; d: number; name: string | null }; foot: [number, number];
   /** what encloses gives what stands in it its floor: its top, and its inside */ inside?: { y: number; W: number; D: number; H: number; name: string };
@@ -1323,6 +1376,21 @@ function memberFor(id: string, shape: Shape, P: number, L: number): Member {
   return last!;
 }
 
+/** The least square bar of a matter for a post screwed to a wall every 600 mm up it (estimate): it buckles only between
+ *  its screws (Euler, K = 1 there), crushing and buckling at three times P; and a carriage held out from the wall on two
+ *  rollers 300 mm apart up it (estimate) presses it with Pr at each, bending it between its screws (M = Pr s / 4) to no
+ *  more than half its yield. */
+function wallPost(id: string, P: number, Pr: number): Member {
+  const m = matterOf(id), fam = familyOf(id), fc = crush(id), s0 = 0.6;
+  let last: Member | null = null;
+  for (const s of SQUARE[fam]!.map((x) => x / 1e3)) {
+    const A = s * s, I = s ** 4 / 12, c = (fc * A) / P, b = (Math.PI ** 2 * m.E * I) / (s0 * s0) / P, sg = ((Pr * s0) / 4) * (s / 2) / I;
+    last = { size: s, A, I, ok: c >= 3 && b >= 3 && m.yield / sg >= 2, says: `crushing at ${+c.toPrecision(2)} and buckling at ${+b.toPrecision(2)} times its share (Euler, K = 1 between screws 600 mm apart up it, estimate); the carriage held out from the wall presses each post with ${+Pr.toPrecision(3)} N at its rollers (300 mm apart up it, estimate), bending it ${+(sg / 1e6).toPrecision(3)} MPa between its screws, ${+(m.yield / sg).toPrecision(3)} times under its yield` };
+    if (last.ok) return last;
+  }
+  return last!;
+}
+
 /** The least sheet a surface can be, found by trying it under its load with the workshop's own load law: the sheet,
  *  and whether any kept bears it. */
 function trySheets(c: Ctx, family: string, start: number, make: (t: number) => void, load: () => string | string[], span: number, creep = 1): { t: number; ok: boolean } {
@@ -1354,7 +1422,7 @@ const bearsAt = (id: string, s: Section, F: number, L: number, length: number, s
  *  and the sheet bears it on a strip a foot wide and the bay again (a 100 mm foot spreading at 45° each way, estimate).
  *  A load that stays on wood creeps: its bending grows by 1 + k_def (k_def 2.0 for solid timber kept wet, service class 3;
  *  0.6 kept dry, class 1: EN 1995-1-1 Table 3.2). */
-interface Lay { spread: boolean; creep: number; /** one of a crowd standing alone, N: what the sheet and a joist bear */ point?: number }
+interface Lay { spread: boolean; creep: number; /** one of a crowd standing alone, N: what the sheet and a joist bear */ point?: number; /** what is spread may gather at the middle of a rail, as a crowd bunches (not snow) */ bunches?: boolean }
 /** One person and what they carry standing alone, about 100 kg (estimate): what a deck and a joist under a crowd bear. */
 const ONE = 100 * 9.80665;
 /** A sheet as it is sold: about 2.44 m long (1220 × 2440 mm plywood, estimate). */
@@ -1366,10 +1434,10 @@ interface Frame { T: number; n: number; joist: Section; rail: Section; by: strin
 /** The lightest frame for a sheet Lw long and Dw across under F: so many joists across it (an even count, so its middle
  *  falls between two), the thinnest sheet that bears F between those two, the least joist that bears half of F and its
  *  share of the sheet across Dw, and the least rail that bears half of all of it over the span it is held across. */
-function frameFor(top: string, by: string, Lw: number, Dw: number, F: number, railSpan: number, alongX: boolean, lay: Lay = { spread: false, creep: 1 }, partKg?: number): Frame | null {
+function frameFor(top: string, by: string, Lw: number, Dw: number, F: number, railSpan: number, alongX: boolean, lay: Lay = { spread: false, creep: 1 }, partKg?: number, /** the least its joists may be apart, m */ apart = 0): Frame | null {
   const mt = matterOf(top), mb = matterOf(by), sheets = SHEET[familyOf(top)]!.map((x) => x / 1e3), secs = sectionsOf(by);
   let best: Frame | null = null;
-  for (let n = 2; n <= 24; n += 2) for (const T of sheets) {
+  for (let n = 2; n <= 24 && (n === 2 || Lw / (n - 1) >= apart); n += 2) for (const T of sheets) {
     const topN = Lw * Dw * T * mt.density * G;
     const joist = secs.find((j) => {
       const sp = (Lw - j.b) / (n - 1), bay = sp - j.b; if (bay <= 0) return false;
@@ -1383,7 +1451,7 @@ function frameFor(top: string, by: string, Lw: number, Dw: number, F: number, ra
     const jN = areaOf2(joist) * Dw * mb.density * G;
     let got = false;
     for (const plies of [1, 2]) {
-      const rail = secs.find((r) => (partKg === undefined || areaOf2(r) * Lw * mb.density <= partKg) && bearsAt(by, r, (lay.spread ? (F + topN + n * jN) / 2 : F + (topN + n * jN) / 2) / plies, railSpan, Lw, lay.spread, lay.creep) && (lay.point === undefined || bearsAt(by, r, (F + topN + n * jN) / 2 / plies, railSpan, Lw, false, 1)));
+      const rail = secs.find((r) => (partKg === undefined || areaOf2(r) * Lw * mb.density <= partKg) && bearsAt(by, r, (lay.spread ? (F + topN + n * jN) / 2 : F + (topN + n * jN) / 2) / plies, railSpan, Lw, lay.spread, lay.creep) && (lay.point === undefined || lay.bunches === false || bearsAt(by, r, (F + topN + n * jN) / 2 / plies, railSpan, Lw, false, 1)));
       if (!rail) continue;
       const kg = (topN + n * jN) / G + 2 * plies * areaOf2(rail) * Lw * mb.density;
       if (!best || kg < best.kg) best = { T, n, joist, rail, by, alongX, kg, plies };
@@ -1406,7 +1474,7 @@ function piecesOf(c: Ctx, Lw: number, Dw: number, T: number, top: string, f: Fra
   return Math.max(1, Math.min(f.n - 2, byKg, byLen));
 }
 /** Lays a frame's sheet, joists and rails, the sheet's top at yTop over (X, Z): returns the height of the rails' feet. */
-function placeFrame(c: Ctx, f: Frame, top: string, X: number, yTop: number, Z: number, Lw: number, Dw: number, sheetName = 'top'): number {
+function placeFrame(c: Ctx, f: Frame, top: string, X: number, yTop: number, Z: number, Lw: number, Dw: number, sheetName = 'top', tag = ''): number {
   const { T, n, joist: j, rail: r, by, alongX } = f, mb = matterOf(by).name, at = (u: number, v: number): [number, number] => (alongX ? [X + u, Z + v] : [X + v, Z + u]);
   const member = (name: string, s: Section, u: number, y: number, v: number, along: 'u' | 'v', L: number, where: string, how: string) => {
     const [x, z] = at(u, v), axis = (along === 'u') === alongX ? 'x' : 'z';
@@ -1428,9 +1496,9 @@ function placeFrame(c: Ctx, f: Frame, top: string, X: number, yTop: number, Z: n
     for (let k = 0; k + 1 < cuts.length; k++) { const u0 = cuts[k]!, u1 = cuts[k + 1]!, uc = (u0 + u1) / 2, Lp = u1 - u0, [x, z] = alongX ? [X + uc, Z] : [X, Z + uc], name = u0 <= 1e-9 && u1 >= -1e-9 && Math.abs(u0 - ju(m0)) < 1e-9 ? sheetName : `${sheetName}_${k + 1}`; box(c, name, top, x, yTop - T / 2, z, alongX ? Lp : Dw, alongX ? Dw : Lp, T, 'plate', `${M(yTop)} up, ${len(u0 + Lw / 2)} to ${len(u1 + Lw / 2)} along it, its ends on joists`, how); }
   }
   c.why = `to carry the ${sheetName} across, ${len(sp)} apart, onto the rails`;
-  for (let k = 0; k < n; k++) member(`joist${k + 1}`, j, -Lw / 2 + j.b / 2 + k * sp, jy, 0, 'v', Dw, `under the ${sheetName}, ${len(k * sp)} along it, across both rails`, `the least ${j.says} of ${mb} that bears half the load and its share of the ${sheetName} across ${len(Dw)} by two, bending under 1/250 of it`);
+  for (let k = 0; k < n; k++) member(`joist${tag}${k + 1}`, j, -Lw / 2 + j.b / 2 + k * sp, jy, 0, 'v', Dw, `under the ${sheetName}, ${len(k * sp)} along it, across both rails`, `the least ${j.says} of ${mb} that bears half the load and its share of the ${sheetName} across ${len(Dw)} by two, bending under 1/250 of it`);
   c.why = `to carry the joists along its length to what holds it up`;
-  for (const [k, sv] of [-1, 1].entries()) for (let p = 0; p < f.plies; p++) member(`rail${k + 1 + 2 * p}`, r, 0, ry, sv * (Dw / 2 - r.b / 2 - p * r.b), 'u', Lw, `under the joists along its ${sv < 0 ? 'near' : 'far'} edge${f.plies > 1 ? `, ${p ? 'inside the other' : 'outside'}` : ''}`, f.plies > 1 ? `one of two ${r.says} of ${mb} side by side, as one that bore it alone would weigh more than a part may: each bears a quarter of all of it over its span, by two, bending under 1/250 of it` : `the least ${r.says} of ${mb} that bears half of all of it over its span, by two, bending under 1/250 of it`);
+  for (const [k, sv] of [-1, 1].entries()) for (let p = 0; p < f.plies; p++) member(`rail${tag}${k + 1 + 2 * p}`, r, 0, ry, sv * (Dw / 2 - r.b / 2 - p * r.b), 'u', Lw, `under the joists along its ${sv < 0 ? 'near' : 'far'} edge${f.plies > 1 ? `, ${p ? 'inside the other' : 'outside'}` : ''}`, f.plies > 1 ? `one of two ${r.says} of ${mb} side by side, as one that bore it alone would weigh more than a part may: each bears a quarter of all of it over its span, by two, bending under 1/250 of it` : `the least ${r.says} of ${mb} that bears half of all of it over its span, by two, bending under 1/250 of it`);
   c.why = w0; return yTop - T - j.h - r.h;
 }
 // -- a rim: what holds loose stuff on a surface -----------------------------------------------------------------------
@@ -1601,6 +1669,7 @@ way({
 function shelves(n: Need, c: Ctx, by: 'posts' | 'panels'): void {
   const { H, W, D, F, levels } = surfaceHow(n), top = matterFor(c, STRUCTURAL), fam = familyOf(top), bars = c.matter ? top : c.light !== undefined ? matterFor(c, BARS, 'beam', 'posts') : pick(c.rnd, BARS), y0 = c.y0, X = c.x0, Z = c.z0, bat = 0.02;
   const mem = by === 'posts' ? memberFor(bars, 'square', ((F * levels + 30 * G) / 4) * 1.5, H) : null, cols = Math.max(1, Math.round(n.want.q.cols?.v ?? 1));
+  let tb = 0, balKg = 0, balNeed = 0;
   const make = (T: number) => {
     c.steps.length = 0; c.traces.length = 0; c.members.length = 0; c.riders.length = 0; c.loose.length = 0; c.led = false; c.after = c.base0 ?? null;
     const up = by === 'panels' ? Math.max(T, 0.012) : mem!.size, inner = W - 2 * up, ys = Array.from({ length: levels }, (_, i) => y0 + 0.08 + (i * (H - 0.08 - T)) / (levels - 1));
@@ -1620,11 +1689,11 @@ function shelves(n: Need, c: Ctx, by: 'posts' | 'panels'): void {
     // climbed on, freestanding: a child on its front leaning back from its top pulls it over its front foot, held by its own
     // weight about half its depth inside it: it must weigh F (H + 0.3) / (D / 2), and a tenth more (statics, as checked
     // below); what its parts do not weigh is a steel plate it stands on, low, between its sides
-    let tb = 0;
+    tb = 0; balKg = 0;
     if (c.climber !== undefined) {
       const rho = matterOf(top).density, rowH = (H - 0.08 - T) / Math.max(1, levels - 1), sideKg = by === 'panels' ? 2 * up * D * H * rho : 4 * mem!.A * H * matterOf(bars).density;
       const kgNow = levels * inner * D * T * rho + (cols > 1 ? (cols - 1) * D * T * rho * (0.08 + (levels - 1) * (rowH - T)) : 0) + sideKg, need = ((c.climber * (H + 0.3)) / (D / 2) / G) * 1.1, bal = need - kgNow;
-      if (bal > 0) { tb = Math.min(0.06, bal / (7850 * inner * (D - 0.02))); const w4 = c.why; c.why = 'to hold it down against a child pulling back from its top'; box(c, 'ballast', 'steel.a36', X, y0 + tb / 2, Z, inner, D - 0.02, tb, 'plate', 'on what it stands on, between its sides, under its lowest shelf', `${+(7850 * inner * (D - 0.02) * tb).toPrecision(3)} kg of steel plate, ${MM(tb)} mm: with its ${+kgNow.toPrecision(3)} kg of shelves and sides, the ${+need.toPrecision(3)} kg that a ${+(c.climber / G).toPrecision(3)} kg child pulling back from its ${len(H)} top does not tip, ${len(D / 2)} inside its front foot (statics, a tenth more)`); c.why = w4; }
+      if (bal > 0) { tb = Math.min(0.06, bal / (7850 * inner * (D - 0.02))); balKg = 7850 * inner * (D - 0.02) * tb; balNeed = need; const w4 = c.why; c.why = 'to hold it down against a child pulling back from its top'; box(c, 'ballast', 'steel.a36', X, y0 + tb / 2, Z, inner, D - 0.02, tb, 'plate', 'on what it stands on, between its sides, under its lowest shelf', `${+(7850 * inner * (D - 0.02) * tb).toPrecision(3)} kg of steel plate, ${MM(tb)} mm: with its ${+kgNow.toPrecision(3)} kg of shelves and sides, the ${+need.toPrecision(3)} kg that a ${+(c.climber / G).toPrecision(3)} kg child pulling back from its ${len(H)} top does not tip, ${len(D / 2)} inside its front foot (statics, a tenth more)`); c.why = w4; }
     }
     if (cols > 1) {
       const w3 = c.why; c.why = 'to make its compartments, and carry the shelf over each';
@@ -1646,9 +1715,10 @@ function shelves(n: Need, c: Ctx, by: 'posts' | 'panels'): void {
     const Tf = T; c.checks.push(() => ({ what: `a ${+(c.climber! / G).toPrecision(3)} kg child standing on a shelf does not break it`, ok: okT(Tf), says: `standing on its front between two ${cols > 1 ? 'dividers' : 'of what holds it up'}, ${len(sp)} apart, their weight by 1.5 (estimate) borne by a strip ${len(b)} wide (as wide as it spans, no narrower than their stance, estimate): ${+(sgOf(Tf) / 1e6).toPrecision(3)} MPa in ${MM(Tf)} mm ${mm0.name}, ${+(mm0.yield / sgOf(Tf)).toPrecision(3)} times under its strength, bending ${len(dOf(Tf))} (1/150 of its span is ${len(sp / 150)})` }));
   }
   const st = surfaceHow(n).steadied;
-  c.choices.push(`${st ? `${st}; ` : ''}${levels} shelves of ${len(T)} ${matterOf(top).name} on battens between ${by === 'posts' ? `four ${MM(mem!.size)} mm posts of ${matterOf(bars).name}` : 'two side panels'}${cols > 1 ? `, ${cols - 1} dividers between each shelf and the next making ${cols} compartments to a row` : ''}`);
+  c.choices.push(`${st ? `${st}; ` : ''}${levels} shelves of ${len(T)} ${matterOf(top).name} on battens between ${by === 'posts' ? `four ${MM(mem!.size)} mm posts of ${matterOf(bars).name}` : `two side panels of ${len(Math.max(T, 0.012))}`}${cols > 1 ? `, ${cols - 1} dividers of ${len(T)} between each shelf and the next making ${cols} compartments to a row, and under its lowest shelf as its feet` : ''}${balKg > 0 ? `; a ${MM(tb)} mm steel plate, ${+balKg.toPrecision(3)} kg, lying between its sides under its lowest shelf, so it weighs the ${+balNeed.toPrecision(3)} kg a child pulling back from its top does not tip` : ''}`);
+  if (cols > 1) c.gaps.push('its joints are held rigid in the physics: how its shelves, dividers and sides are fixed together, and its racking along its length with no back, are not weighed');
   c.loads.push(`load ${c.p}_shelf1 with ${+F.toFixed(1)} N + ${c.p}_shelf1.mass * g`);
-  c.checks.push(() => { const v = LOADS.get(`${c.p}_shelf1`); return v ? { what: `each shelf bears ${+(F / G).toPrecision(3)} kg`, ok: v.factor >= 2 && v.bend <= (cols > 1 ? W / cols : W) / 250, says: `the load law: ${factorSays(v.factor, v.wood)}, bending ${MM(v.bend)} mm` } : null; });
+  c.checks.push(() => { const v = LOADS.get(`${c.p}_shelf1`); return v ? { what: `each shelf bears ${+(F / G).toPrecision(3)} kg`, ok: v.factor >= 2 && v.bend <= (cols > 1 ? W / cols : W) / 250, says: `the load law${cols > 1 ? `, its row's ${+(F / G).toPrecision(3)} kg on it and the dividers under it holding it up every ${len(W / cols)}` : ''}: ${factorSays(v.factor, v.wood)}, bending ${len(v.bend)}` } : null; });
   if (mem) c.checks.push(() => ({ what: 'its posts carry every shelf without buckling', ok: mem.ok, says: mem.says }));
   c.top = { y: y0 + H, w: W, d: D, name: `${c.p}_shelf${levels}` }; c.foot = [W, D];
 }
@@ -1715,25 +1785,28 @@ way({
   make: (n, c) => {
     // with no room said for it, the carriage is as big as what it carries: 300 mm for about 20 kg, by the cube root of the
     // mass at one density (a steel ball of 8 g wants a carriage 40 mm across, not 300), estimate
-    const L = n.want.q.L!.v, carried = (n.want.q.m?.v ?? 0) + n.above / G, W0 = Math.min(0.3, Math.max(0.04, 0.3 * Math.cbrt(carried / 20))), W = Math.max(n.fit[0], W0), D = Math.max(n.fit[1], W0), mt = matterFor(c, ['steel.a36', 'aluminum.6061-t6']), X = c.x0, Z = c.z0;
+    const L = n.want.q.L!.v, carried = (n.want.q.m?.v ?? 0) + n.above / G, W0 = Math.min(0.3, Math.max(0.04, 0.3 * Math.cbrt(carried / 20))), W = Math.max(n.fit[0], n.want.q.W?.v ?? W0), D = Math.max(n.fit[1], n.want.q.D?.v ?? W0), mt = matterFor(c, ['steel.a36', 'aluminum.6061-t6']), X = c.x0, Z = c.z0;
     // the carriage first: a plate held at its ends by the posts, what rides spread on it (M = F W / 8, deflection
     // 5 F W³ / 384 E I), as thin as bears it by two and bends under 1/250 of its span
-    const deck = 'aluminum.6061-t6', md = matterOf(deck), Fr = carried * G, cw = (() => { for (const t2 of SHEET.metal!.map((x) => x / 1e3)) { const I = (D * t2 ** 3) / 12, sg = ((Fr * W) / 8) * (t2 / 2) / I, dl = (5 * Fr * W ** 3) / (384 * md.E * I); if (md.yield / sg >= 2 && dl <= W / 250) return t2; } return 0.025; })();
+    const onWall = n.want.flags.includes('wall') && !n.on;
+    // on a wall its posts are at its back, so it is held out from them as well: a cantilever D long, M = F D / 2, its end
+    // lowered F D³ / 8 E I, allowed 1/125 of its length (the 1/250 of a span twice as long)
+    const cant = (t2: number) => { const I = (W * t2 ** 3) / 12; return { sg: ((Fr * D) / 2) * (t2 / 2) / I, dl: (Fr * D ** 3) / (8 * md.E * I) }; };
+    const deck = 'aluminum.6061-t6', md = matterOf(deck), Fr = carried * G, cw = (() => { for (const t2 of SHEET.metal!.map((x) => x / 1e3)) { const I = (D * t2 ** 3) / 12, sg = ((Fr * W) / 8) * (t2 / 2) / I, dl = (5 * Fr * W ** 3) / (384 * md.E * I), k = cant(t2); if (onWall && (md.yield / k.sg < 2 || k.dl > D / 125)) continue; if (md.yield / sg >= 2 && dl <= W / 250) return t2; } return 0.025; })();
     const rides = carried + W * D * cw * md.density;
     // then each post: a column carrying half of all that rides (what it carries and the carriage), half again, as tall as
     // the travel and the carriage, held at its foot only
     // its lowest at the height said ("to counter height": a kitchen worktop about 900 mm up, estimate), its posts that much taller
-    const low = n.want.q.low?.v ?? 0, Hp = low + L + 0.05 + 0.05, mem = memberFor(mt, 'square', ((rides * G) / 2) * 1.5, Hp), sp = mem.size;
+    const low = n.want.q.low?.v ?? 0, Hp = low + L + 0.05 + 0.05, mem = onWall ? wallPost(mt, ((rides * G) / 2) * 1.5, (rides * G * (D / 2)) / 0.3 / 2) : memberFor(mt, 'square', ((rides * G) / 2) * 1.5, Hp), sp = mem.size;
     let yb = c.y0;
     // the base as deep as a third of the posts' height at least, so a push at their top of a tenth of the weight does not tip it
     const w0 = c.why, bw = Math.max(W + 2 * sp + Math.min(0.1, W / 3), n.on ? 0 : Hp / 3), bt = Math.max(0.003, Math.min(0.012, (0.012 * W) / 0.3)), bd = Math.max(D, Hp / 3);
-    const onWall = n.want.flags.includes('wall') && !n.on;
     if (onWall) { c.why = 'to stand for the wall its posts are screwed to'; const wt = 0.2, wall = box(c, 'wall', 'concrete.c30', X, yb + (Hp + 0.1) / 2, Z - D / 2 - wt / 2, W + 2 * sp + 0.4, wt, Hp + 0.1, 'slab', 'behind its posts, on the floor', `a block of concrete standing for the wall its posts are screwed to (its screws not derived)`); STANDS.set(wall, 'the wall it is screwed to'); }
     if (!n.on && !onWall) { c.why = 'to stand the posts on the floor and tie them together'; box(c, 'base', 'steel.a36', X, yb + bt / 2, Z, bw, bd, bt, 'base', 'on the floor, under the posts', `a ${len(bt)} steel plate as wide as the posts and what rides between them: its size is theirs, its thickness a twenty-fifth of its width between 3 and 12 mm, taken, not derived`); yb += bt; c.choices.push(`a ${len(bt)} steel base ${len(bw)} × ${len(bd)} under it all (${+(bw * bd * bt * matterOf('steel.a36').density).toPrecision(3)} kg; its thickness taken, not derived)`); }
     c.why = 'to guide the carriage up and down';
     for (const [i, sx] of [-1, 1].entries()) upright(c, `post${i + 1}`, mt, 'square', mem, X + sx * (W / 2 + sp / 2), yb, onWall ? Z - D / 2 + sp / 2 : Z, Hp, `${sx < 0 ? 'left' : 'right'} of the carriage, ${onWall ? 'screwed to the wall behind it' : `on ${n.on ? 'what it stands on' : 'the base'}`}`, `the least square bar of ${matterOf(mt).name} that carries half of what rides by three: ${mem.says}`);
     c.why = w0;
-    const cn = box(c, 'carriage', deck, X, yb + 0.002 + low + cw / 2, Z, W, D, cw, 'plate', low ? `between the posts, its ends against them, at its lowest ${len(low)} up` : 'between the posts, its ends against them, 2 mm up', `a ${len(cw)} plate of ${md.name}: held at its ends by the posts, what rides spread on it, it bears it by two and bends under 1/250 of ${len(W)} (M = F W / 8)`, { moving: true });
+    const cn = box(c, 'carriage', deck, X, yb + 0.002 + low + cw / 2, Z, W, D, cw, 'plate', low ? `between the posts, its ends against them, at its lowest ${len(low)} up` : 'between the posts, its ends against them, 2 mm up', `a ${len(cw)} plate of ${md.name}: held at its ends by the posts, what rides spread on it, it bears it by two and bends under 1/250 of ${len(W)} (M = F W / 8)${onWall ? `; held at its back by the posts on the wall, it is held out ${len(D)} from them, and bears that by ${+(md.yield / cant(cw).sg).toPrecision(3)}, its front lowered ${MM(cant(cw).dl)} mm (F D³ / 8 E I, 1/125 of it allowed)` : ''}`, { moving: true });
     c.steps.push(`slide ${cn} on ${c.p}_post1 along y between 0 mm and ${MM(L)} mm`); c.traces.push({ step: c.steps.at(-1)!, what: `${cn}'s slide`, called: c.way, why: `so it rides up ${len(L)} and back`, when: '', where: 'where its end touches the left post, along it', how: 'a Jolt slider along y with its stops at the bottom and at the travel' });
     c.choices.push(`a ${len(cw)} carriage of ${md.name} ${len(W)} × ${len(D)} riding ${len(L)} up and down between two ${len(sp)} square posts of ${matterOf(mt).name}`);
     c.gaps.push('what raises it (a screw, a winch or a scissor linkage, and what turns that) is not derived: it is pushed up in the test');
@@ -1742,6 +1815,411 @@ way({
     if (low) c.choices.push(`its lowest at ${len(low)} up (${n.want.q.low!.grounds}), its highest ${len(low + L)}`);
     if (!n.on && !onWall && Hp > 1) c.gaps.push(`standing alone, its ${len(Hp)} posts want a base ${len(Hp / 3)} each way not to tip; braced to a wall or a beam above, it could stand on less`);
     c.top = { y: yb + 0.002 + low + cw, w: W, d: D, name: cn }; c.foot = [n.on || onWall ? W + 2 * sp : bw, n.on || onWall ? D : bd];
+  },
+});
+
+// -- a frame grown along its loads: no legs, posts or brackets drawn; its shape is what what it carries asks ----------
+/** Matters a grown frame may be made of: each is grown and made, and the lightest that holds kept. */
+const FRAMED = ['steel.a36', 'aluminum.6061-t6', 'wood.douglas-fir', 'composite.cfrp'];
+const FRAME_WAY = 'a frame grown along its loads';
+/** Heavy timbers a frame's long struts may be: 8 × 8, 10 × 10 and 12 × 12 in, dressed (PS 20: timbers 5 in and over are
+ *  dressed half an inch under, 191, 241 and 292 mm). */
+const TIMBERS = [191, 241, 292];
+const strutSections = (id: string): StrutSection[] => familyOf(id) === 'wood'
+  ? [...SQUARE.wood!, ...TIMBERS].map((s) => { const a = s / 1e3; return { A: a * a, I: a ** 4 / 12, label: `${s} mm square`, width: a }; })
+  : TUBES.map(([D, w]) => { const d = D / 1e3, t = w / 1e3; return { A: (Math.PI * (d * d - (d - 2 * t) ** 2)) / 4, I: (Math.PI * (d ** 4 - (d - 2 * t) ** 4)) / 64, label: `${D} × ${w} mm tube`, width: d }; });
+/** How slender a strut may be, its length over its radius of gyration: pressed, a wood one no longer than 50 times its
+ *  least width (NDS 3.7.1.4; r = d / √12 for a square), any other 200 (AISC 360-16 E2, user note); pulled, 300 (AISC
+ *  360-16 D1, user note; taken for all). */
+const SLENDER = (id: string) => ({ push: familyOf(id) === 'wood' ? 50 * Math.sqrt(12) : 200, pull: 300 });
+const slenderSays = (id: string) => (familyOf(id) === 'wood' ? 'no longer than 50 times its width pressed (NDS 3.7.1.4), 300 times its radius of gyration pulled (AISC 360-16 D1, taken)' : 'no longer than 200 times its radius of gyration pressed (AISC 360-16 E2), 300 pulled (D1)');
+const frameMatter = (id: string): FrameMatter => { const m = matterOf(id), sy = familyOf(id) === 'wood' ? 0.5 * m.ultimate : m.yield; return { id, name: m.name, strut: { E: m.E, sy, sc: crush(id), density: m.density, slender: SLENDER(id) }, sections: strutSections(id) }; };
+/** What was grown for an ask, kept: the same ask on another try or another seed is not grown again. */
+const GROWN = new Map<string, ReturnType<typeof designFrame>>();
+/** The frame each design was grown as, by its prefix: what its law of scale is read from. */
+const FRAMES = new Map<string, MadeFrame>();
+/** Designs fixed to what holds them (bolted to a wall or a deck, clamped round a post or a tube), by prefix: what they
+ *  are fixed to stands for the world, so letting them go or pushing them over tests what stands for it, not them. */
+const FIXED = new Map<string, string>();
+/** Weights set on a frame's feet where it stands, moved apart from it (concrete, water, earth): not what it weighs to move. */
+const BALLAST = new Set<string>();
+/** Whether an ask is read into conditions and grown from them where no drawn way does what they ask (an edit you can
+ *  turn off, to see what the drawn ways alone make). */
+export const READING = { conditions: true };
+/** Who watches a frame grow, round by round (the command line, or a graph). */
+export const GROW_TRACE: { on: ((r: { matter: string; round: number; ground: number; struts: number; joints: number; mass: number; ok: boolean }) => void) | null } = { on: null };
+function grownFor(ask: FrameAsk, how: string, ids: string[]) {
+  const key = JSON.stringify([ask.lo, ask.hi, ask.cells, ask.cases, ask.wind ?? null, ask.ballast ?? false, ask.over ?? null, ask.sagMax ?? null, ask.maxLen ?? null, ask.rests ?? false, ask.anchors ?? null, ask.keepOut ?? null, ask.footings ?? false, how, ids]);
+  // each joint costs a node or a gusset (about 20 g, estimate), each joint held its plate (60 mm of 6 mm steel, 170 g)
+  let r = GROWN.get(key); if (!r) { r = designFrame(ask, ids.map(frameMatter), { jointKg: 0.02, heldKg: 0.06 * 0.06 * 0.006 * 7850, ...(GROW_TRACE.on ? { trace: GROW_TRACE.on } : {}) }); GROWN.set(key, r); } return r;
+}
+/** The turning that takes a part's length (along y) along a way from p to q, as the workshop says it (degrees about
+ *  x, then y, then z). */
+function turnAlong(p: V3, q: V3): string {
+  const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], L = Math.hypot(d[0]!, d[1]!, d[2]!), u = d.map((x) => x / L) as V3;
+  // the axis square to y and the way, turned through the angle between them (Rodrigues)
+  const ax: V3 = [u[2], 0, -u[0]], s = Math.hypot(ax[0], ax[2]), cth = u[1];
+  let m: [number, number, number, number, number, number, number, number, number];
+  if (s < 1e-12) m = cth > 0 ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : [1, 0, 0, 0, -1, 0, 0, 0, -1];
+  else { const [x, , z] = [ax[0] / s, 0, ax[2] / s], C = 1 - cth; m = [cth + x * x * C, -z * s, x * z * C, z * s, cth, -x * s, z * x * C, x * s, cth + z * z * C]; }
+  const e = eulerOf(m).map((r) => +((r * 180) / Math.PI).toFixed(4));
+  return `turned x ${e[0]} y ${e[1]} z ${e[2]}`;
+}
+/** A frame's plan from the conditions an ask sets: its room, what holds it and which way that faces into the room, its
+ *  loads (down by how hard they come on, sideways where something pushes it or the wind is on a face it carries), its
+ *  wind on its struts, the limits said, and what stands for what holds it. */
+function planOfConditions(n: Need, c: Ctx, cd: Conditions): FramePlan {
+  if (cd.cover) return planOfCover(n, c, cd);
+  const X = c.x0, Z = c.z0, k = cd.hold.kind, along = cd.hold.along, lay = layOf(n.want), r = (cd.hold.dia ?? 0) / 2;
+  // held where: on the ground and across ends at its foot; on a post, a tube or a face, as high as said or 1 m (estimate)
+  const Y = c.y0 + (k === 'ground' ? 0 : k === 'ends' ? 0 : cd.up ?? 1);
+  const yEnds = c.y0 + (cd.up ?? 0.3);
+  const room = roomOf(cd, [X, Y, Z]);
+  if (k === 'ends') { const dep = room.hi[1] - room.lo[1]; room.lo[1] = yEnds; room.hi[1] = yEnds + dep; const L2 = cd.span! / 2, X0 = X; room.held = (p) => (Math.abs(p[0] - (X0 - L2)) < 1e-9 || Math.abs(p[0] - (X0 + L2)) < 1e-9) && Math.abs(p[1] - yEnds) < 1e-9; }
+  const lo = room.lo, hi = room.hi, dims = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+  // a cell no longer than a piece may be (a strut is no longer than a cell's diagonal across its faces), else four cells
+  // along its longest way, at most about fifty joints
+  let cell0 = Math.max(...dims) / 4; if (cd.pieceMax) cell0 = Math.min(cell0, cd.pieceMax / Math.SQRT2);
+  let cells: [number, number, number] = [1, 1, 1];
+  for (let j = 0; j < 20; j++) { cells = dims.map((d) => Math.max(d < 1e-6 ? 0 : 1, Math.min(8, Math.ceil(d / cell0 - 1e-9)))) as [number, number, number]; if ((cells[0] + 1) * (cells[1] + 1) * (cells[2] + 1) <= 64 || cd.pieceMax) break; cell0 *= 1.15; }
+  const normal: V3 = k === 'ground' || k === 'ends' ? [0, 1, 0] : k === 'line' && along === 'x' && !cd.out ? [0, -1, 0] : [1, 0, 0];
+  const heldBy = k === 'ground' ? 'floor' : k === 'ends' ? 'banks' : k === 'line' ? (along === 'y' ? 'post' : cd.out ? 'rail' : 'tube') : k === 'above' ? 'tube' : 'face';
+  // what it carries: across ends spread over a deck along it; else at the point it holds, on a plate a third of its reach
+  // across (10 to 150 mm, estimate)
+  const span = k === 'ends', Wd = span ? dims[0]! : Math.max(dims[0]!, 0.1), Dd = Math.max(dims[2]!, 0.05), H = span ? lo[1] - c.y0 : room.load[1] - c.y0;
+  const reach = Math.max(cd.out ?? 0, cd.drop ?? 0, cd.span ?? 0, cd.up ?? 0), plate = span ? 0 : Math.max(0.01, Math.min(0.15, reach / 3)), plateKg = plate * plate * 0.006 * matterOf('aluminum.6061-t6').density;
+  const down = cd.loads.filter((l) => !l.side).reduce((a, l) => a + l.N, 0) * cd.dyn, F = down;
+  let tops: V3[] = [], deck: FramePlan['deck'] = null, sp = 0;
+  if (span) {
+    for (let i = 0; i <= cells[0]; i++) for (let j = 0; j <= cells[2]; j++) tops.push([lo[0] + (dims[0]! * i) / cells[0], lo[1], lo[2] + (cells[2] ? (dims[2]! * j) / cells[2] : dims[2]! / 2)]);
+    sp = Math.max(cells[0] ? dims[0]! / cells[0] : dims[0]!, cells[2] ? dims[2]! / cells[2] : dims[2]!);
+    deck = leastDeck(F, Wd, Dd, sp);
+  } else tops = [room.load];
+  const Wt = F + (deck ? deck.kg * G : plateKg * G), per = Wt / tops.length;
+  const downCase = tops.map((p) => ({ at: p, F: [0, -per, 0] as V3 }));
+  const cases: { at: V3; F: V3 }[][] = [downCase, tops.map((p) => ({ at: p, F: [0.1 * per, -per, 0] as V3 })), tops.map((p) => ({ at: p, F: [0, -per, 0.1 * per] as V3 }))];
+  // a person standing where it is worst, on a deck across ends
+  if (span && lay.point) cases.push([...downCase, { at: tops[Math.floor(tops.length / 2)]!, F: [0, -lay.point, 0] as V3 }]);
+  // what pushes it sideways, along it and across it: where it is a face the wind is on, at the face's middle, with what
+  // it carries on it and without; else at the point it holds
+  const winds: Wind[] = [], qw = cd.wind ? 0.5 * airRho() * cd.wind ** 2 : 0;
+  for (const l of cd.loads.filter((x) => x.side)) for (const dir of [[1, 0, 0], [0, 0, 1]] as V3[]) {
+    const at: V3 = l.at !== undefined && k === 'ground' ? [X, c.y0 + Math.min(l.at, hi[1] - c.y0), Z] : room.load;
+    cases.push([...downCase, { at, F: [dir[0] * l.N, 0, dir[2] * l.N] }]); if (qw) winds.push({ case: cases.length - 1, q: qw, dir });
+    if (l.at !== undefined) { cases.push([{ at, F: [dir[0] * l.N, 0, dir[2] * l.N] }]); if (qw) winds.push({ case: cases.length - 1, q: qw, dir }); }
+  }
+  if (qw && !cd.loads.some((l) => l.side)) for (const dir of [[1, 0, 0], [0, 0, 1]] as V3[]) { cases.push(downCase); winds.push({ case: cases.length - 1, q: qw, dir }); }
+  const ids = cd.matter ? [cd.matter] : c.matter ? [(() => { try { return matterOf(c.matter).id; } catch { return 'steel.a36'; } })()] : FRAMED;
+  const half = plate / 2, over: [number, number, number, number] = [room.load[0] - half, room.load[2] - half, room.load[0] + half, room.load[2] + half];
+  c.conds = [
+    `it carries ${+(down / G).toPrecision(3)} kg down${cd.dyn > 1 ? ` (its ${+(down / cd.dyn / G).toPrecision(3)} kg by ${cd.dyn}, as it ${cd.dynSaid ?? 'comes on hard'}, estimate)` : ''}${span ? `, spread across ${len(cd.span!)} between its ends` : cd.drop && !cd.out ? `, hanging ${len(cd.drop)} below what holds it` : cd.out ? `, ${len(cd.out)} out from what holds it` : `, ${len(cd.up ?? 0)} up`}: ${cd.loads.filter((l) => !l.side).map((l) => l.said).join(', ')}`,
+    ...cd.loads.filter((l) => l.side).map((l) => `it is pushed sideways with ${+(l.N / 1000).toPrecision(3)} kN, along it and across it: ${l.said}`),
+    `what holds it: ${room.heldSay}${k === 'ground' || k === 'ends' ? ', which only pushes up on it, and grips it sideways with half of that (μ 0.5, estimate)' : ', which it is clamped or fixed to (it may pull on it)'}${span ? '; one end free to slide along it, as one resting on a bank or a tower that moves is (it bears no push along it there)' : ''}`,
+    `the room it may take: ${dims.map((d) => len(d)).join(' × ')} (as far as it reaches, and half that again each side of it, estimate)`,
+    'a knock or a lean of a tenth of what it carries, along it and across it (estimate)',
+    ...(cd.wind ? [`a ${+(cd.wind * 3.6).toPrecision(3)} km/h wind on what it carries and on each of its struts as it grows`] : []),
+    ...(cd.sagMax !== undefined ? [`what it holds moves no more than ${MM(cd.sagMax)} mm, as said`] : []),
+    ...(cd.pieceMax !== undefined ? [`no strut longer than ${len(cd.pieceMax)}, as said of its pieces`] : []),
+    ...(cd.massMax !== undefined ? [`it weighs no more than ${+cd.massMax.toPrecision(3)} kg, as said`] : []),
+    ...(cd.partMax !== undefined ? [`no piece weighs more than ${+cd.partMax.toPrecision(3)} kg, as said`] : []),
+    `made of what can be had: tubes and sections kept, of ${ids.map((x) => matterOf(x).name).join(', ')}${cd.matter ? ' (the matter said)' : ''}, each sized by two in strength and three in buckling`,
+  ];
+  // what stands for what holds it, not counted as it: the post or the tube it clamps round, the face it is fixed to
+  const stand = (cc: Ctx, tf: number) => {
+    const w0 = cc.why; cc.why = `to stand for ${room.heldSay}`;
+    if (heldBy === 'post') { const D = Math.max(2 * r, 0.02), top = hi[1] + 0.1, Lp = top - cc.y0; put(cc, `${cc.p}_held`, `place tube named ${cc.p}_held of steel.a36 at ${M(lo[0] - r)}, ${M(cc.y0 + Lp / 2)}, ${M(Z)} size ${MM(D)} x ${MM(Lp)} x ${MM(Math.min(0.003, D / 4))} mm along y`, 'standing on the floor, where its plates clamp round it', `a tube ${MM(D)} mm across standing for ${room.heldSay}, from the floor`); STANDS.set(`${cc.p}_held`, room.heldSay); const bw = Math.max(0.3, 2 * dims[0]!); box(cc, 'heldbase', 'concrete.c30', lo[0] - r, cc.y0 - 0.05, Z, bw, bw, 0.1, 'slab', 'under it, the floor round its foot', `a slab standing for what ${room.heldSay} stands in (estimate)`); STANDS.set(`${cc.p}_heldbase`, room.heldSay); }
+    else if (heldBy === 'tube') { const D = Math.max(2 * r, 0.02), Lt = dims[0]! + 0.4, yc = hi[1] + r, cw = Math.max(D, 0.05); put(cc, `${cc.p}_held`, `place tube named ${cc.p}_held of steel.a36 at ${M(X)}, ${M(yc)}, ${M(Z)} size ${MM(D)} x ${MM(Lt)} x ${MM(Math.min(0.003, D / 4))} mm along x`, 'above it, where its plates clamp round it', `a tube ${MM(D)} mm across standing for ${room.heldSay}`); STANDS.set(`${cc.p}_held`, room.heldSay); box(cc, 'heldfoot', 'steel.a36', X + Lt / 2 + cw / 2, cc.y0 + (yc + D / 2 - cc.y0) / 2, Z, cw, cw, yc + D / 2 - cc.y0, 'bar', 'at its end, from the floor up to it', `a post standing for what holds ${room.heldSay} up (estimate)`); cc.steps[cc.steps.length - 1] += ` joined to ${cc.p}_held`; cc.traces[cc.traces.length - 1]!.step = cc.steps.at(-1)!; STANDS.set(`${cc.p}_heldfoot`, room.heldSay); const bs = Math.max(1, Lt); box(cc, 'heldbase', 'concrete.c30', X + Lt / 2 + cw / 2, cc.y0 - 0.05, Z, bs, bs, 0.1, 'slab', 'under its post', 'a slab standing for what holds the tube up (estimate)'); STANDS.set(`${cc.p}_heldbase`, room.heldSay); }
+    else if (heldBy === 'face') {
+      // a slab from the floor up past it, and a foot reaching back as far as it reaches out, so what holds it stands as
+      // what it is fixed to would (estimate)
+      const wt = 0.1, top = hi[1] + 0.1, Hs = top - cc.y0, back = Math.max(0.5, dims[0]!), wd = dims[2]! + 0.4;
+      box(cc, 'held', 'concrete.c30', lo[0] - wt / 2, cc.y0 + Hs / 2, Z, wt, wd, Hs, 'slab', 'behind it, from the floor', `a slab standing for ${room.heldSay} (estimate)`); STANDS.set(`${cc.p}_held`, room.heldSay);
+      box(cc, 'heldfoot', 'concrete.c30', lo[0] - wt - back / 2, cc.y0 + 0.05, Z, back, wd, 0.1, 'slab', 'behind its slab, on the floor', `its foot, standing for what ${room.heldSay} stands on (estimate)`); STANDS.set(`${cc.p}_heldfoot`, room.heldSay);
+    }
+    else if (heldBy === 'rail') {
+      // a tube lying across its reach, on two posts from the floor each in a slab (standing for what the tube is part of)
+      const D = Math.max(2 * r, 0.02), Lr = dims[2]! + 0.4, cw = Math.max(D, 0.05), yc = (lo[1] + hi[1]) / 2;
+      put(cc, `${cc.p}_held`, `place tube named ${cc.p}_held of steel.a36 at ${M(lo[0] - r)}, ${M(yc)}, ${M(Z)} size ${MM(D)} x ${MM(Lr)} x ${MM(Math.min(0.003, D / 4))} mm along z`, 'where its plates clamp round it', `a tube ${MM(D)} mm across standing for ${room.heldSay}`); STANDS.set(`${cc.p}_held`, room.heldSay);
+      for (const [j, sz] of [-1, 1].entries()) { const hp = yc - D / 2 - (cc.y0 + 0.1); box(cc, `heldpost${j + 1}`, 'steel.a36', lo[0] - r, cc.y0 + 0.1 + hp / 2, Z + sz * (Lr / 2 - cw / 2), cw, cw, hp, 'bar', 'under the tube at its end, from its slab', 'a post standing for what holds the tube up (estimate)'); STANDS.set(`${cc.p}_heldpost${j + 1}`, room.heldSay); box(cc, `heldbase${j + 1}`, 'concrete.c30', lo[0] - r, cc.y0 + 0.05, Z + sz * (Lr / 2 - cw / 2), 0.6, 0.6, 0.1, 'slab', 'under its post, on the floor', 'a slab standing for what the tube is part of (estimate)'); STANDS.set(`${cc.p}_heldbase${j + 1}`, room.heldSay); }
+    }
+    cc.why = w0;
+  };
+  const slide = span ? (p: V3) => (Math.abs(p[0] - hi[0]) < 1e-9 ? 0 : null) : undefined;
+  return { lo, hi, cells, held: room.held, ...(room.anchors ? { anchors: room.anchors } : {}), ...(slide ? { slide } : {}), cases, winds, heldBy, normal, ids, over, small: !span, plate, plateKg, deck, sp, F, H, Wd, Dd, X, Z, topY: span ? lo[1] : room.load[1], frontZ: span ? Z : room.load[2], topX: span ? X : room.load[0], dims, vw: cd.wind, lay, Wt, wall: heldBy === 'face', span, rests: k === 'ground' || k === 'ends', ...(cd.sagMax !== undefined ? { sagMax: cd.sagMax } : {}), ...(cd.pieceMax !== undefined ? { maxLen: cd.pieceMax } : {}), ...(cd.partMax !== undefined ? { partMax: cd.partMax } : {}), stand };
+}
+/** A roof's plan from the conditions of a cover. Its room is the plan said, up to the highest it may stand. Under its
+ *  headroom nothing passes across the width kept clear, nor out of the ends of an aisle down its middle (a box kept
+ *  clear), so only posts stand there, at its edges or either side of the aisle. What lies on its roof is spread over its
+ *  top joints: in bays, each roofed with the least frame of sheet, joists and rails that spans it, and the bays as wide
+ *  as let one. What hangs along it hangs from its lines of joints. The wind pushes it along and across and lifts its
+ *  roof; a lean of 0.002 of its weight either way stands for what is not straight (AISC 360-16 C2.2b, notional loads).
+ *  Its feet are cast into footings, each as heavy as the wind would lift it by and as wide as the ground under it bears. */
+function planOfCover(n: Need, c: Ctx, cd: Conditions): FramePlan {
+  const cv = cd.cover!, X = c.x0, Z = c.z0, y0 = c.y0, H = cd.up!, L = cv.L, W = cv.W, lay = layOf(n.want), hung = cd.loads.reduce((x, l) => x + (l.perM ?? 0), 0);
+  // the bays: as large as one roof frame spans (4 m down to 2 m), at most ten along it and six across, and no deeper across
+  // its joists than a sheet is sold long (about 3.05 m, estimate), so each piece of its sheet is one as sold
+  const top = 'wood.birch-plywood', by = framingWood(c), ny = H > cv.head + 1 ? 2 : 1;
+  let cells: [number, number, number] = [1, ny, 1], frame: Frame | null = null;
+  for (const bay of [4, 3.5, 3, 2.5, 2]) {
+    cells = [Math.min(10, Math.max(1, Math.ceil(L / bay - 1e-9))), ny, Math.min(6, Math.max(1, Math.ceil(W / Math.min(bay, 3.05) - 1e-9)))];
+    const bx = L / cells[0], bz = W / cells[2];
+    // what lies on it spread, and one at work on it standing anywhere: 300 lb on the sheet and a joist (ASCE 7-16 Table 4.3-1,
+    // a roof walked on to be kept); its joists as purlins are, no nearer than 1.2 m (4 ft, estimate), the sheet as thick as that asks
+    frame = frameFor(top, by, bx, bz, cv.p * bx * bz, bx, true, { spread: true, creep: 1, point: 300 * 4.44822, bunches: false }, cd.partMax, 1.2);
+    if (frame) break;
+  }
+  const bx = L / cells[0], bz = W / cells[2], nx = cells[0], nz = cells[2];
+  const roofKg = frame ? frame.kg : 0, selfQ = (roofKg * G) / (bx * bz), depth = frame ? frame.T + frame.joist.h + frame.rail.h : 0;
+  // its frame grown up to where its roof's own frame starts, so all of it is no higher than it may stand
+  const lo: V3 = [X - L / 2, y0, Z - W / 2], hi: V3 = [X + L / 2, y0 + H - depth, Z + W / 2], dims = [L, H - depth, W];
+  // its top joints, each bearing its share of the bays round it (half a bay at an edge), and of what hangs along its lines
+  const tops: V3[] = [], area: number[] = [], along: number[] = [];
+  for (let i = 0; i <= nx; i++) for (let k = 0; k <= nz; k++) { const wx = (i === 0 || i === nx ? 0.5 : 1) * bx, wz = (k === 0 || k === nz ? 0.5 : 1) * bz; tops.push([lo[0] + i * bx, hi[1], lo[2] + k * bz]); area.push(wx * wz); along.push(wx); }
+  const down = tops.map((at, j) => ({ at, F: [0, -((cv.p + selfQ) * area[j]! + hung * along[j]!), 0] as V3 }));
+  const Wt = -down.reduce((x, d) => x + d.F[1], 0), F = cv.p * L * W + hung * L * (nz + 1);
+  const cases: { at: V3; F: V3 }[][] = [down];
+  for (const dir of [[1, 0, 0], [0, 0, 1]] as V3[]) cases.push(down.map((d) => ({ at: d.at, F: [dir[0] * 0.002 * -d.F[1], d.F[1], dir[2] * 0.002 * -d.F[1]] as V3 })));
+  // the wind, along it and across it: on each strut as it grows, on its roof's edge (as deep as its roof frame, drag 1.2,
+  // estimate), with its roof loaded and with its roof lifted (0.8 of q over its plan, as a flat roof, estimate; its own
+  // roof frame weighing it down, nothing on it)
+  const winds: Wind[] = [], qw = cd.wind ? 0.5 * airRho() * cd.wind ** 2 : 0;
+  if (qw) for (const dir of [[1, 0, 0], [0, 0, 1]] as V3[]) {
+    const edge = (qw * 1.2 * depth * (dir[0] ? W : L)) / tops.length;
+    cases.push(down.map((d) => ({ at: d.at, F: [dir[0] * edge, d.F[1], dir[2] * edge] as V3 }))); winds.push({ case: cases.length - 1, q: qw, dir });
+    cases.push(tops.map((at, j) => ({ at, F: [dir[0] * edge, (0.8 * qw - selfQ) * area[j]!, dir[2] * edge] as V3 }))); winds.push({ case: cases.length - 1, q: qw, dir });
+  }
+  // its feet: at its long edges, and either side of the width kept clear where that is narrower
+  const half = cv.clear / 2, strips = half < W / 2 - 1e-6, e = 1e-6;
+  const anchors: V3[] = strips ? Array.from({ length: nx + 1 }, (_, i) => [[lo[0] + i * bx, y0, Z - half], [lo[0] + i * bx, y0, Z + half]] as V3[]).flat() : [];
+  const held = (p: V3) => Math.abs(p[1] - y0) < 1e-9 && Math.abs(p[2] - Z) >= half - e;
+  // under its headroom, the width kept clear, from end to end where it is an aisle (its ends open), else between its ends
+  // (an end may be braced)
+  const keepOut: [V3, V3][] = [[[strips ? X - L : lo[0], y0 - 1, Z - half], [strips ? X + L : hi[0], y0 + cv.head, Z + half]]];
+  const ids = cd.matter ? [cd.matter] : c.matter ? [(() => { try { return matterOf(c.matter).id; } catch { return 'steel.a36'; } })()] : FRAMED;
+  c.conds = [
+    `it carries ${+(F / G).toPrecision(3)} kg on its roof, spread over its ${len(L)} × ${len(W)} plan: ${cv.pSaid}${hung ? `; and ${+(hung / G).toPrecision(3)} kg hung on each metre along each of its ${nz + 1} lines of joints (${cd.loads.filter((l) => l.perM).map((l) => l.said).join(', ')})` : ''}`,
+    `what holds it: footings in the ground at its feet, each as heavy as the wind would lift it by (by 1.5) and as wide as the ground under it bears`,
+    `the room it may take: ${len(L)} × ${len(H - depth)} × ${len(W)}, its roof's own frame (${len(depth)} deep) on that${cd.upMax !== undefined ? ', so it is as high as it may stand' : ', its height taken'}`,
+    `${cv.clearSaid}; ${cv.headSaid}: under that only posts stand${strips ? ', and the aisle is open at its ends' : ''}`,
+    'a lean of 0.002 of its weight, along it and across it (AISC 360-16 C2.2b, notional loads)',
+    ...(cd.wind ? [`a ${+(cd.wind * 3.6).toPrecision(3)} km/h wind along it and across it, on each strut as it grows and on its roof's edge, with its roof loaded and with it lifted (0.8 of ½ ρ v² over its plan, as a flat roof, estimate)`] : []),
+    ...(cd.pieceMax !== undefined ? [`no strut longer than ${len(cd.pieceMax)}, as said of its pieces`] : []),
+    ...(cd.partMax !== undefined ? [`no piece weighs more than ${+cd.partMax.toPrecision(3)} kg, as said`] : []),
+    `made of what can be had: sections kept, of ${ids.map((x) => matterOf(x).name).join(', ')}${cd.matter ? ' (the matter said)' : ''}, each sized by two in strength and three in buckling, and no more slender than the codes allow`,
+  ];
+  const gaps = ['its roof is grown flat: one made to drain falls at least 2% (¼ in in each foot), not grown', 'what slides its footings sideways is borne by the ground round them, not weighed'];
+  return { lo, hi, cells, held, anchors, cases, winds, heldBy: 'floor', normal: [0, 1, 0], ids, over: [lo[0], lo[2], hi[0], hi[2]], small: false, plate: 0, plateKg: 0, deck: null, sp: Math.max(bx, bz), F, H, Wd: L, Dd: W, X, Z, topY: hi[1], frontZ: Z, topX: X, dims, vw: cd.wind, lay, Wt, wall: false, span: false, rests: true, keepOut, footings: true, ...(frame ? { roof: { frame, top, bx, bz, nx, nz } } : {}), gaps, ...(cd.pieceMax !== undefined ? { maxLen: cd.pieceMax } : {}), ...(cd.partMax !== undefined ? { partMax: cd.partMax } : {}) };
+}
+/** The least sheet that spans s between the joints it rests on under F spread over W × D (a strip across the wider way,
+ *  M = q s² / 8, its sag 5 q s⁴ / 384 E I, by two and within 1/250), of the matters a deck is made of. */
+function leastDeck(F: number, W: number, D: number, s: number): FramePlan['deck'] {
+  const q0 = F / (W * D);
+  const of = (id: string) => { const m = matterOf(id), fam = familyOf(id), sy = fam === 'wood' ? 0.5 * m.ultimate : m.yield; for (const t of SHEET[fam]!.map((x) => x / 1e3)) { const q = q0 + m.density * G * t, M0 = (q * s * s) / 8, sg = (6 * M0) / (t * t), dl = (5 * q * s ** 4) / (384 * m.E * (t ** 3 / 12)); if (sy / sg >= 2 && dl <= s / 250) return { id, t, kg: W * D * t * m.density, sg, dl }; } return null; };
+  return STRUCTURAL.filter((x) => !/stainless/.test(x)).map(of).filter((x) => !!x).sort((a, b) => a!.kg - b!.kg)[0] ?? null;
+}
+
+/** What a frame is grown for and how it stands: its room, what holds it (and the way from that into the room), its
+ *  loads, the matters it may be made of, and what is said of its top. */
+interface FramePlan {
+  lo: V3; hi: V3; cells: [number, number, number]; held: (p: V3) => boolean; cases: { at: V3; F: V3 }[][]; winds: Wind[];
+  heldBy: string; normal: V3; ids: string[]; anchors?: V3[]; /** where its top is along x, where not at X */ topX?: number; over: [number, number, number, number]; small: boolean; plate: number; plateKg: number;
+  deck: { id: string; t: number; kg: number; sg: number; dl: number } | null; sp: number; F: number; H: number; Wd: number; Dd: number; X: number; Z: number;
+  topY: number; frontZ: number; dims: number[]; vw: number | undefined; lay: Lay; Wt: number; wall: boolean; span: boolean; rests: boolean;
+  /** the most what it holds may move, m; the longest a strut may be, m; the most a piece may weigh, kg */ sagMax?: number; maxLen?: number; partMax?: number;
+  /** of its held joints, those free to slide one way (an end resting on a bank, free to move along the span) */ slide?: (p: V3) => number | null;
+  /** places what stands for what holds it (a post, a tube, a deck's face), not counted as it */ stand?: (c: Ctx, tf: number) => void;
+  /** boxes no strut may pass through (the floor under a roof, its clear width) */ keepOut?: [V3, V3][];
+  /** its feet cast into footings in the ground, each as heavy as what would lift it */ footings?: boolean;
+  /** a roof on its top joints: in bays, each its own frame of sheet, joists and rails between four of them */ roof?: { frame: Frame; top: string; bx: number; bz: number; nx: number; nz: number };
+  /** what more is said of what it was grown for, and what is not weighed */ said?: string[]; gaps?: string[];
+}
+function realizeFrame(n: Need, c: Ctx, P: FramePlan): void {
+  const { lo, hi, cells, held, cases, winds, heldBy, ids, over, small, plate, deck, sp, F, H, Wd, Dd, X, Z, topY, frontZ, dims, vw, lay, Wt, wall, span } = P;
+    const r = grownFor({ lo, hi, cells, held, cases, ...(P.anchors ? { anchors: P.anchors } : {}), ...(P.keepOut ? { keepOut: P.keepOut } : {}), ...(P.footings ? { footings: true, rests: false } : { rests: P.rests, ballast: heldBy === 'floor', tied: heldBy === 'floor' }), ...(winds.length ? { wind: winds } : {}), ...(heldBy === 'floor' && !P.footings ? { over } : {}), ...(P.sagMax !== undefined ? { sagMax: P.sagMax } : {}), ...(P.maxLen !== undefined ? { maxLen: P.maxLen } : {}), ...(P.slide ? { slide: P.slide } : {}) }, heldBy + (P.slide ? ' sliding' : ''), ids), f = r.best ?? r.tried.slice().sort((a, b) => a.mass - b.mass)[0];
+    if (!f) { c.gaps.push(`nothing in the room it may take reaches ${P.heldBy === 'floor' ? 'the floor' : `what holds it (${P.heldBy})`}: no frame can be grown there`); c.checks.push(() => ({ what: 'its frame is grown to what holds it', ok: false, says: 'no joint of the room it may take lies on what holds it' })); return; }
+    const mt = f.matter; FRAMES.set(c.p, f); if (P.footings) FIXED.set(c.p, 'its footings, cast into the ground'); else if (!P.rests && heldBy !== 'wall') FIXED.set(c.p, heldBy === 'post' ? 'the post it clamps round' : heldBy === 'tube' || heldBy === 'rail' ? 'the tube it clamps round' : 'the face it is bolted to');
+    // where it is held, a plate at each joint (on the floor its feet, on a wall or a bank its plates), as thick as the
+    // deepest a strut's end goes past the joint, turned as it meets what holds it (r sin φ, φ its angle off square),
+    // so the frame stands that far off what holds it and only its plates touch it; all of it one piece
+    const normal: V3 = P.normal, radius = (x: (typeof f.struts)[number]) => Number((x.section.label.match(/[\d.]+/) ?? ['20'])[0]) / 2e3;
+    const dip = (h: number) => Math.max(0, ...f.struts.filter((x) => x.a === h || x.b === h).map((x) => { const p = f.nodes[x.a]!, q = f.nodes[x.b]!, L = x.L, cos = Math.abs(((q[0] - p[0]) * normal[0] + (q[1] - p[1]) * normal[1] + (q[2] - p[2]) * normal[2]) / L); return radius(x) * Math.SQRT2 * Math.sqrt(Math.max(0, 1 - cos * cos)); }));
+    const tf = Math.max(0.006, Math.ceil((Math.max(0, ...f.held.map(dip)) + 0.001) * 1000) / 1000);
+    // on footings, its plates are cast into their tops and it stands where it was grown; else it stands on them
+    const lift = P.footings ? 0 : tf, at = (p: V3): V3 => [p[0] + normal[0] * lift, p[1] + normal[1] * lift, p[2] + normal[2] * lift];
+    const top0 = `${c.p}_top`, joined = ` joined to ${top0}`;
+    // made: its deck or the plate what it carries sits on, then each strut from joint to joint, then its plates
+    const w0 = c.why, tp = at([P.topX ?? X, topY, frontZ]);
+    let roofTop = 0;
+    if (P.roof) {
+      // its roof: in each bay, the least frame of sheet, joists and rails that spans it, its rails along it resting on the
+      // top joints at the bay's corners; all of it one piece with the frame
+      const { frame: rf, top: rt, bx, bz, nx, nz } = P.roof, yTop = at([0, topY, 0])[1] + rf.T + rf.joist.h + rf.rail.h; roofTop = yTop;
+      c.why = 'to carry what lies on its roof to its top joints';
+      for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
+        const s0 = c.steps.length, first = i === 0 && k === 0;
+        placeFrame(c, rf, rt, lo[0] + (i + 0.5) * bx, yTop, lo[2] + (k + 0.5) * bz, bx, bz, first ? 'top' : `roof_${i + 1}_${k + 1}`, first ? '' : `_${i + 1}_${k + 1}_`);
+        // what the rest is joined to is made first
+        if (first) { const t0 = c.steps.findIndex((x, q) => q >= s0 && / named \S+_top /.test(x)); if (t0 > s0) c.steps.splice(s0, 0, ...c.steps.splice(t0, 1)); }
+        for (let q = s0; q < c.steps.length; q++) if (!/ named \S+_top /.test(c.steps[q]!)) { c.steps[q] += ` joined to ${c.p}_top`; const tr = c.traces.find((x) => x.step === c.steps[q]!.replace(` joined to ${c.p}_top`, '')); if (tr) tr.step = c.steps[q]!; }
+      }
+      c.choices.push(`its roof in ${nx * nz} bays of ${len(bx)} × ${len(bz)}, each ${frameSays(rf)} under a ${MM(rf.T)} mm sheet of ${matterOf(rt).name}, ${+(rf.kg).toPrecision(3)} kg a bay: the lightest that bears what lies on it between the joints at its corners`);
+    }
+    else if (deck) {
+      // in panels, each ending on a joint: no longer than a sheet is sold (2.44 m, estimate) or a piece may be, nor heavier
+      // than a piece may weigh
+      c.why = 'to carry what lies on it to the joints it rests on';
+      const cellsX = Math.max(1, cells[0]), cellL = Wd / cellsX, longest = Math.min(2.44, P.maxLen ?? Infinity), pk = P.partMax;
+      let per = Math.max(1, Math.floor(longest / cellL + 1e-9)); if (pk !== undefined) per = Math.max(1, Math.min(per, Math.floor(pk / (deck.kg / cellsX))));
+      const panels = Math.ceil(cellsX / per), yd = at([0, topY, 0])[1] + deck.t / 2, zd = span ? Z : at([0, 0, lo[2] + dims[2]! / 2])[2];
+      for (let q = 0; q < panels; q++) { const n0 = q * per, n1 = Math.min(cellsX, n0 + per), x0p = lo[0] + n0 * cellL, x1p = lo[0] + n1 * cellL; box(c, q === 0 ? 'top' : `top${q + 1}`, deck.id, (x0p + x1p) / 2, yd, zd, x1p - x0p, Dd, deck.t, 'plate', `on the frame's top joints, ${len(sp)} apart${panels > 1 ? `, panel ${q + 1} of ${panels}` : ''}`, `the least sheet of ${matterOf(deck.id).name} that spans ${len(sp)} between them under ${+(F / G).toPrecision(3)} kg spread: ${+(deck.sg / 1e6).toPrecision(3)} MPa, sagging ${MM(deck.dl)} mm (a strip, M = q s² / 8, 5 q s⁴ / 384 E I; estimate for a sheet held at points)${panels > 1 ? `; in ${panels} panels, each ending on a joint, so none is longer than ${len(longest)}${pk !== undefined ? ` or heavier than ${+pk.toPrecision(3)} kg` : ''}` : ''}`); if (q > 0) { c.steps[c.steps.length - 1] += ` joined to ${c.p}_top`; c.traces[c.traces.length - 1]!.step = c.steps.at(-1)!; } }
+    }
+    else if (!P.roof) { c.why = 'to hold what it carries where the frame meets'; box(c, 'top', 'aluminum.6061-t6', tp[0], tp[1] + 0.003, tp[2] - (wall ? plate / 2 : 0), plate, plate, 0.006, 'plate', 'where its struts meet, under what it carries', `a 6 mm aluminium plate ${len(plate)} across, what it carries fixed to it`); }
+    c.why = `to carry what it holds to the ${heldBy}`;
+    // placed outward from where it holds what it carries, so each strut meets the piece already made
+    const topNode = f.nodes.reduce((b, p, i) => (Math.hypot(p[0] - (P.topX ?? X), p[1] - topY, p[2] - frontZ) < Math.hypot(f.nodes[b]![0] - (P.topX ?? X), f.nodes[b]![1] - topY, f.nodes[b]![2] - frontZ) ? i : b), f.loaded[0] ?? 0);
+    const order: typeof f.struts = [], reached = new Set(deck ? f.loaded : [topNode]), left = [...f.struts];
+    while (left.length) { const k = left.findIndex((x) => reached.has(x.a) || reached.has(x.b)); const x = left.splice(k < 0 ? 0 : k, 1)[0]!; order.push(x); reached.add(x.a); reached.add(x.b); }
+    order.forEach((s, i) => {
+      const p = at(f.nodes[s.a]!), q = at(f.nodes[s.b]!), mid: V3 = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], pull = Math.max(...s.N), push = Math.max(...s.N.map((x) => -x));
+      const how = `grown where its load goes: ${pull > 1 ? `pulled up to ${+(pull / 1000).toPrecision(3)} kN` : ''}${pull > 1 && push > 1 ? ', ' : ''}${push > 1 ? `pressed up to ${+(push / 1000).toPrecision(3)} kN` : ''}${pull <= 1 && push <= 1 ? 'holding the frame against folding' : ''}; the lightest ${s.section.label} of ${mt.name} that bears it, ${+s.margin.toPrecision(3)} times what it asks ${s.mode === 'slender' ? `as slender as it may be, ${slenderSays(mt.id)}` : s.mode === 'buckled' ? 'before it buckles' : s.mode === 'crushed' ? 'before it crushes' : 'before it yields'}`;
+      const tube = /tube/.test(s.section.label), [Dm, wm] = (s.section.label.match(/[\d.]+/g) ?? ['20', '2']).map(Number);
+      // a wood strut longer than sawn timber is stocked (about 4.88 m, 16 ft, estimate): in as many pieces, spliced end to end
+      const k = !tube && s.L > 4.88 ? Math.ceil(s.L / 4.88) : 1;
+      if (k > 1) {
+        for (let j = 0; j < k; j++) { const a = j / k, b = (j + 1) / k, pa: V3 = [p[0] + (q[0] - p[0]) * a, p[1] + (q[1] - p[1]) * a, p[2] + (q[2] - p[2]) * a], pb: V3 = [p[0] + (q[0] - p[0]) * b, p[1] + (q[1] - p[1]) * b, p[2] + (q[2] - p[2]) * b], mj: V3 = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, (pa[2] + pb[2]) / 2];
+          put(c, j ? `${c.p}_s${i + 1}_${j + 1}` : `${c.p}_s${i + 1}`, `place bar named ${j ? `${c.p}_s${i + 1}_${j + 1}` : `${c.p}_s${i + 1}`} of ${mt.id} at ${M(mj[0])}, ${M(mj[1])}, ${M(mj[2])} size ${Dm} x ${Dm} x ${MM(s.L / k)} mm ${turnAlong(p, q)}${joined}`, `from ${pa.map((x) => MM(x)).join(', ')} mm to ${pb.map((x) => MM(x)).join(', ')} mm${j ? `, piece ${j + 1} of ${k}` : ''}`, j ? `piece ${j + 1} of ${k} of a strut ${len(s.L)} long, spliced end to end, as sawn timber is stocked no longer than about 4.88 m (16 ft, estimate); the splice to carry what the strut does, not derived` : `${how}; in ${k} pieces spliced end to end, as sawn timber is stocked no longer than about 4.88 m (16 ft, estimate)`); }
+        return;
+      }
+      put(c, `${c.p}_s${i + 1}`, tube ? `place tube named ${c.p}_s${i + 1} of ${mt.id} at ${M(mid[0])}, ${M(mid[1])}, ${M(mid[2])} size ${Dm} x ${MM(s.L)} x ${wm} mm along y ${turnAlong(p, q)}${joined}` : `place bar named ${c.p}_s${i + 1} of ${mt.id} at ${M(mid[0])}, ${M(mid[1])}, ${M(mid[2])} size ${Dm} x ${Dm} x ${MM(s.L)} mm ${turnAlong(p, q)}${joined}`, `from ${p.map((x) => MM(x)).join(', ')} mm to ${q.map((x) => MM(x)).join(', ')} mm`, how);
+    });
+    c.why = heldBy === 'floor' ? 'to stand it on the floor where its struts meet it' : `to fix it to the ${heldBy === 'wall' ? 'wall' : 'banks'} where its struts meet ${heldBy === 'wall' ? 'it' : 'them'}`;
+    const plateW = new Map<number, number>();
+    f.held.forEach((h, i) => { const p = f.nodes[h]!, w = Math.max(0.06, 6 * radius(f.struts.filter((x) => x.a === h || x.b === h).sort((x, y) => radius(y) - radius(x))[0]!)); plateW.set(h, w); const sk = P.footings ? -tf / 2 : tf / 2, ctr: V3 = [p[0] + normal[0] * sk, p[1] + normal[1] * sk, p[2] + normal[2] * sk]; put(c, `${c.p}_plate${i + 1}`, `place plate named ${c.p}_plate${i + 1} of steel.a36 at ${M(ctr[0])}, ${M(ctr[1])}, ${M(ctr[2])} size ${MM(w)} x ${MM(heldBy === 'wall' ? w : w)} x ${MM(tf)} mm${normal[2] ? ' turned x 90' : normal[0] ? ' turned z 90' : ''}${joined}`, `at a joint where its struts meet the ${heldBy === 'banks' ? 'bank' : heldBy}`, `a ${MM(w)} mm square of ${MM(tf)} mm steel, as thick as the deepest a strut's end goes past the joint, ${heldBy === 'floor' ? 'so the joint does not dig in' : 'screwed or bolted to it (not weighed)'}`); });
+    // its feet tied together on the floor along their outline (as skids are), so it slides only as a whole: each tie the
+    // lightest section of its matter that bears, pulled or pressed, the most any foot is pushed sideways (estimate of
+    // what a tie carries), from the edge of one foot plate to the next
+    if (heldBy === 'floor' && !P.footings && f.held.length > 1) {
+      c.why = 'to tie its feet together on the floor, so it slides only as a whole';
+      const foot = f.held.map((h) => ({ h, p: [f.nodes[h]![0], f.nodes[h]![2]] as [number, number] })), hull = hullOf(foot.map((x) => x.p));
+      const ring = hull.length === 2 ? [[0, 1]] : hull.map((_, k) => [k, (k + 1) % hull.length]), T = Math.max(f.tie, 1); let tied = 0, tieSays = '';
+      for (const [a0, b0] of ring) {
+        const pa = hull[a0!]!, pb = hull[b0!]!, ha = foot.find((x) => x.p[0] === pa[0] && x.p[1] === pa[1])!.h, hb = foot.find((x) => x.p[0] === pb[0] && x.p[1] === pb[1])!.h;
+        const L0 = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), u = [(pb[0] - pa[0]) / L0, (pb[1] - pa[1]) / L0], cut = (h: number) => (plateW.get(h) ?? 0.06) / 2 / Math.max(Math.abs(u[0]!), Math.abs(u[1]!));
+        const ca = cut(ha), cb = cut(hb), Lt = L0 - ca - cb; if (Lt <= 0.01) continue;
+        const sec = sectionFor([T, -T], Lt, mt.strut, mt.sections), D = sec.section.width ?? 0.02, y = c.y0 + D / 2;
+        const p: V3 = [pa[0] + u[0]! * ca, y, pa[1] + u[1]! * ca], q: V3 = [pb[0] - u[0]! * cb, y, pb[1] - u[1]! * cb], mid: V3 = [(p[0] + q[0]) / 2, y, (p[2] + q[2]) / 2];
+        const tube = /tube/.test(sec.section.label), [Dm, wm] = (sec.section.label.match(/[\d.]+/g) ?? ['20', '2']).map(Number); tied++;
+        tieSays = `the lightest ${sec.section.label} of ${mt.name} that bears ${+(T / 1000).toPrecision(3)} kN pulled or pressed, ${+sec.margin.toPrecision(3)} times what it asks`;
+        // lying on the floor, turned only about the upright, so it lies flat on it
+        const yaw = +((Math.atan2(-(q[2] - p[2]), q[0] - p[0]) * 180) / Math.PI).toFixed(4);
+        put(c, `${c.p}_tie${tied}`, tube ? `place tube named ${c.p}_tie${tied} of ${mt.id} at ${M(mid[0])}, ${M(mid[1])}, ${M(mid[2])} size ${Dm} x ${MM(Lt)} x ${wm} mm along x turned y ${yaw}${joined}` : `place bar named ${c.p}_tie${tied} of ${mt.id} at ${M(mid[0])}, ${M(mid[1])}, ${M(mid[2])} size ${MM(Lt)} x ${Dm} x ${Dm} mm turned y ${yaw}${joined}`, 'on the floor, from one foot plate to the next along its outline', tieSays);
+      }
+      if (tied) c.choices.push(`its ${f.held.length} feet tied together on the floor by ${tied} tie${tied > 1 ? 's' : ''} along their outline, ${tieSays} (the most any foot is pushed sideways, an estimate of what a tie carries): so it slides only as a whole`);
+    }
+    // where the floor alone would not keep a foot down or from sliding, its weight set on it: concrete, by 1.5 of what it wants
+    const ballastKg = f.ballast.reduce((x, y) => x + y / G, 0);
+    if (P.footings) {
+      // a footing under each foot, cast into the ground, its top at the floor: as heavy as the wind would lift that foot by
+      // (by 1.5), and as wide as the ground bears what presses it down (1500 psf, 71.8 kPa: IBC Table 1806.2, the least of
+      // its soils, clay and silt; estimate of the ground), at least 0.3 m deep
+      c.why = 'to hold its feet down and spread what they press on the ground'; let most = 0, kgAll = 0;
+      f.held.forEach((h, i) => { const kg = (f.ballast[i] ?? 0) / G, side = Math.max(0.3, Math.sqrt((f.press[i] ?? 0) / 71.8e3)), dp = Math.max(0.3, kg / (2400 * side * side)), p = f.nodes[h]!; most = Math.max(most, f.press[i] ?? 0); kgAll += side * side * dp * 2400;
+        box(c, `footing${i + 1}`, 'concrete.c30', p[0], c.y0 - tf - dp / 2, p[2], side, side, dp, 'block', 'in the ground under its foot plate, cast round it, its top at the floor', `${len(side)} square and ${len(dp)} deep, ${+(side * side * dp * 2400).toPrecision(3)} kg: as wide as the ground bears ${+((f.press[i] ?? 0) / 1000).toPrecision(3)} kN on it (71.8 kPa, IBC Table 1806.2, estimate of the ground), as heavy as ${+(kg).toPrecision(3)} kg, what the wind would lift this foot by, by 1.5`, { loose: false }); c.steps[c.steps.length - 1] += joined; c.traces[c.traces.length - 1]!.step = c.steps.at(-1)!; STANDS.set(`${c.p}_footing${i + 1}`, 'the ground its footings are cast in'); });
+      c.choices.push(`${f.held.length} footings of concrete, ${+kgAll.toPrecision(3)} kg in all, cast into the ground under its feet: each as wide as the ground bears what it presses (the most, ${+(most / 1000).toPrecision(3)} kN) and as heavy as the wind would lift it by`);
+      c.checks.push(() => ({ what: 'its footings hold it down', ok: true, says: f.lift.most > 0 ? `under the worst of its loads a foot is lifted with ${+(f.lift.most / 1000).toPrecision(3)} kN, and its footing weighs 1.5 times that` : 'no foot is lifted under any of its loads: each footing is as wide as the ground under it bears' }));
+    }
+    else if (heldBy === 'floor' && ballastKg > 0.05) { c.why = 'to hold its foot down, where its loads would lift it or slide it'; f.held.forEach((h, i) => { const kg = (f.ballast[i] ?? 0) / G; if (kg < 0.05) return; const side = Math.cbrt(kg / 2400), p = at(f.nodes[h]!); box(c, `ballast${i + 1}`, 'concrete.c30', p[0], p[1] + side / 2, p[2], side, side, side, 'block', 'on its foot plate', `${+kg.toPrecision(3)} kg of concrete, ${len(side)} a side: what keeps this foot down under the worst of its loads, and its share of what keeps the whole from sliding, by 1.5 (μ 0.5 on the floor, estimate)`, { loose: false }); BALLAST.add(`${c.p}_ballast${i + 1}`); c.steps[c.steps.length - 1] += joined; c.traces[c.traces.length - 1]!.step = c.steps.at(-1)!; }); c.choices.push(`${+ballastKg.toPrecision(3)} kg of concrete set on its feet, as the ${vw ? 'wind' : 'push'} would lift or slide it there and its room is no wider (the frame was grown weighing that ballast with it, so a wider stance is chosen where it is lighter)`); }
+    if (heldBy === 'wall') { c.why = 'to stand for the wall it is fixed to'; const wt = 0.2; box(c, 'wall', 'concrete.c30', X, c.y0 + (H + 0.1) / 2, lo[2] - wt / 2, Wd + 0.4, wt, H + 0.1, 'slab', 'behind it, on the floor', 'a block of concrete standing for the wall it is fixed to (estimate)'); STANDS.set(`${c.p}_wall`, 'the wall it is fixed to'); }
+    if (P.stand) P.stand(c, tf);
+    if (heldBy === 'banks') { c.why = 'to stand for the banks it rests on'; for (const [k, sx2] of [-1, 1].entries()) { box(c, `bank${k + 1}`, 'concrete.c30', X + sx2 * (Wd / 2), c.y0 + Math.max(0.05, H) / 2 - Math.max(0, 0.05 - H), Z, Math.min(0.3, Math.max(0.01, Wd / 3)), Dd + 0.2, Math.max(0.05, H), 'block', `${sx2 < 0 ? 'left' : 'right'} of the gap`, 'a block of concrete standing for the bank (estimate)'); STANDS.set(`${c.p}_bank${k + 1}`, 'the banks it rests on'); } }
+    c.why = w0;
+    const joints = new Set(f.struts.flatMap((s) => [s.a, s.b])).size, others = r.tried.filter((x) => x !== f).map((x) => `${x.matter.name} ${+x.mass.toPrecision(3)} kg${x.ok ? '' : ' (does not hold)'}`);
+    c.choices.push(`a frame of ${f.struts.length} struts of ${mt.name} meeting at ${joints} joints, ${f.held.length} of them held by the ${heldBy === 'banks' ? 'banks' : heldBy}: grown from every way a strut could go in the ${dims.map((d) => len(d)).join(' × ')} it may take, each sized to what it carries and the least used given up, ${+f.mass.toPrecision(3)} kg${others.length ? `; grown and made of the others: ${others.join(', ')}` : ''}${c.matter ? ' (of the matter said)' : ''}`);
+    if (deck) c.choices.push(`its deck a ${MM(deck.t)} mm sheet of ${matterOf(deck.id).name} (${+deck.kg.toPrecision(3)} kg), the lightest that spans between the joints it rests on`);
+    if (P.footings) c.choices.push(`what it is grown for: ${+(Wt / G).toPrecision(3)} kg on its top joints, what lies on its roof and hangs from it and its roof's own weight; a lean of 0.002 of that along it and across it${vw ? `; a ${+(vw * 3.6).toPrecision(3)} km/h wind along it and across it, with its roof loaded and lifted` : ''}; its own weight with it`);
+    else c.choices.push(`what it is grown for: ${+(Wt / G).toPrecision(3)} kg down${small ? ' at the point it holds' : ', spread over its top'}, and a tenth of that along it and across it (a knock or a lean, estimate)${lay.point && !small ? `, and one of ${+(lay.point / G).toPrecision(3)} kg standing at its middle` : ''}${vw ? `; a ${+(vw * 3.6).toPrecision(3)} km/h wind along it and across it, with what it carries on it and empty, on what it carries, its ${deck ? 'deck (lifting it too, empty)' : 'plate'} and each strut as it grows` : ''}; its own weight with it`);
+    c.gaps.push(`its ${joints} joints, where its struts meet, are pinned in the solve: welded, bolted or lashed there, they are not weighed`);
+    const worst = f.struts.slice().sort((a, b) => a.margin - b.margin)[0];
+    c.checks.push(() => ({ what: `its struts carry what it holds`, ok: f.struts.every((s) => s.margin >= 1), says: worst ? `the most it asks of any strut: a ${worst.section.label} ${len(worst.L)} long, ${worst.mode === 'slender' ? (Math.min(...worst.N) < 0 ? 'pressed' : 'pulled') : worst.mode === 'buckled' ? 'pressed' : worst.mode === 'crushed' ? 'pressed' : 'pulled'} with ${+(Math.max(...worst.N.map(Math.abs)) / 1000).toPrecision(3)} kN, ${+worst.margin.toPrecision(3)} times what it asks ${worst.mode === 'slender' ? `of how slender it may be (${slenderSays(f.matter.id)})` : worst.mode === 'buckled' ? 'before it buckles (Euler, its ends pinned, by three)' : worst.mode === 'crushed' ? 'before it crushes (by two)' : 'before it yields (by two)'}; every strut solved under each load with the others by their stiffness (a truss, E A / L along each)` : 'no strut' }));
+    const sg = f.sag.slice().sort((a, b) => b.most / b.allowed - a.most / a.allowed)[0];
+    if (sg) c.checks.push(() => ({ what: P.sagMax !== undefined ? `it sags no more than ${MM(P.sagMax)} mm` : 'what it holds moves no more than it may', ok: f.sag.every((x) => x.most <= x.allowed), says: `under the worst of its loads a joint it carries on moves ${MM(sg.most)} mm, against the ${MM(sg.allowed)} mm it may (${P.sagMax !== undefined ? 'as said' : '1/250 of twice how far it is held out, estimate'})` }));
+    if ((heldBy === 'floor' || heldBy === 'banks') && !P.footings) c.checks.push(() => ({ what: `it rests on the ${heldBy === 'banks' ? 'banks' : 'floor'} without being held down`, ok: (f.ballast.some((x) => x > 0) || (f.lift.most <= 1e-6 * Math.max(1, f.mass * G) && f.lift.slide <= 1)) && f.lift.inside && f.lift.steady, says: !f.lift.inside ? 'its top reaches past the outline its feet make on the floor: what is put at its edge tips it' : !f.lift.steady ? 'what it carries lies nearer the edge of its feet\'s outline than a tenth of how high it is: pushed at its top with a tenth of its weight, it tips' : f.lift.most > 1e-6 * Math.max(1, f.mass * G) ? (f.ballast.some((x) => x > 0) ? `under the worst of its loads a foot would be lifted with ${+f.lift.most.toPrecision(3)} N, so it is weighed down there (above)` : `under the worst of its loads one foot would have to be pulled down with ${+f.lift.most.toPrecision(3)} N: resting, it lifts there and tips`) : `under each of its loads every foot is pressed down, and pushed sideways at most ${+(f.lift.slide * 100).toPrecision(3)}% of what half of that holds (μ 0.5, estimate)` }));
+    c.checks.push(() => ({ what: 'it does not fold under any load', ok: f.mechanisms === 0, says: f.mechanisms === 0 ? `no motion of its joints leaves every strut its length (the rank of how its struts stretch, against its joints' freedoms)` : `${f.mechanisms} way${f.mechanisms === 1 ? '' : 's'} its joints can move with no strut stretching` }));
+    if (deck) c.checks.push(() => ({ what: `its deck bears ${+(F / G).toPrecision(3)} kg between its joints`, ok: true, says: `a ${MM(deck.t)} mm sheet over ${len(sp)}: ${+(deck.sg / 1e6).toPrecision(3)} MPa, ${MM(deck.dl)} mm of sag (by two, within 1/250)` }));
+    c.top = { y: P.roof ? roofTop : at([0, topY, 0])[1] + (deck ? deck.t : 0.006), w: small ? plate : Wd, d: small ? plate : Dd, name: `${c.p}_top` };
+    for (const g of P.gaps ?? []) c.gaps.push(g);
+    c.foot = [Wd, wall ? Dd : Dd];
+}
+
+way({
+  id: FRAME_WAY, meets: 'surface', says: 'a frame grown along its loads to what holds it: its struts where what it carries sends its weight, each as thick as that asks',
+  when: (n) => (framed(n) ? null : 'a top worked at, sat at or lain on wants the room under it clear: legs, a column or panels leave it so'),
+  make: (n, c) => {
+    if (n.want.cond) return realizeFrame(n, c, planOfConditions(n, c, n.want.cond));
+    const wall = n.want.flags.includes('wall'), span = n.want.flags.includes('span'), lay = layOf(n.want), F = n.want.q.F!.v + n.above;
+    // the room it may take, what holds it, and where its loads are: on the floor, held where it meets the floor; on a
+    // wall, held where it meets the wall, reaching out as far as it holds what it carries; across a gap, held on the
+    // banks at each end of it
+    const s0 = span ? { H: n.want.q.H!.v, W: n.want.q.span!.v, D: n.want.q.W!.v } : surfaceHow(n);
+    // standing alone, as wide both ways as a push at its top of a tenth of its weight wants not to tip it (0.3 of its
+    // height, as for the others), since it may be pushed either way
+    const least = !span && !wall ? 0.3 * (s0.H + n.tall) : 0;
+    const H = s0.H, Wd = Math.max(s0.W, least), Dd = Math.max(s0.D, least), X = c.x0, Z = c.z0, y0 = c.y0;
+    // what it carries lies on a top as big as it (or as said): a small top is a point it holds; a wide one carries its
+    // load anywhere on it, spread over the joints its deck rests on
+    const small = !span && !lay.spread;
+    const depth = span ? Math.max(0.3, Wd / 8) : wall ? Math.max(0.15, Dd) : H;
+    const lo: V3 = span ? [X - Wd / 2, y0 + H, Z - Dd / 2] : wall ? [X - Wd / 2, c.y0 + H - depth, Z] : [X - Wd / 2, y0, Z - Dd / 2];
+    const hi: V3 = span ? [X + Wd / 2, y0 + H + depth, Z + Dd / 2] : wall ? [X + Wd / 2, c.y0 + H, Z + Dd] : [X + Wd / 2, y0 + H, Z + Dd / 2];
+    // the ground drawn coarse enough to grow in (at most about fifty joints): four cells along its longest way, as many
+    // as fit the same size along the others
+    const dims = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    let cell0 = Math.max(...dims) / 4, cells: [number, number, number] = [1, 1, 1];
+    for (let k = 0; k < 20; k++) { cells = dims.map((d) => Math.max(d < 1e-6 ? 0 : 1, Math.min(6, Math.round(d / cell0)))) as [number, number, number]; if ((cells[0] + 1) * (cells[1] + 1) * (cells[2] + 1) <= 50) break; cell0 *= 1.15; }
+    const topY = span ? lo[1] : hi[1], frontZ = wall ? hi[2] : Z;
+    const tops: V3[] = []; if (small) tops.push([X, topY, frontZ]); else for (let i = 0; i <= cells[0]; i++) for (let k = 0; k <= cells[2]; k++) tops.push([lo[0] + (dims[0]! * i) / cells[0], topY, lo[2] + (cells[2] ? (dims[2]! * k) / cells[2] : dims[2]! / 2)]);
+    // its deck, where its load is spread: the least sheet that spans between the joints it rests on (a strip across the
+    // wider of them, M = q s² / 8, its sag 5 q s⁴ / 384 E I, by two and within 1/250 of it)
+    const sx = cells[0] ? dims[0]! / cells[0] : dims[0]!, sz = cells[2] ? dims[2]! / cells[2] : dims[2]!, sp = Math.max(sx, sz);
+    const deckIds = STRUCTURAL.filter((x) => !/stainless/.test(x)), q0 = small ? 0 : F / (Wd * Dd);
+    const deckOf = (id: string) => { const m = matterOf(id), fam = familyOf(id), sy = fam === 'wood' ? 0.5 * m.ultimate : m.yield; for (const t of SHEET[fam]!.map((x) => x / 1e3)) { const q = q0 + m.density * G * t, M0 = (q * sp * sp) / 8, sg = (6 * M0) / (t * t), dl = (5 * q * sp ** 4) / (384 * m.E * (t ** 3 / 12)); if (sy / sg >= 2 && dl <= sp / 250) return { id, t, kg: Wd * Dd * t * m.density, sg, dl }; } return null; };
+    const deck = small ? null : deckIds.map(deckOf).filter((x) => !!x).sort((a, b) => a!.kg - b!.kg)[0] ?? null;
+    const plate = small ? Math.max(0.1, Math.min(0.3, Math.max(n.fit[0], n.fit[1]) || 0.15)) : 0, plateKg = small ? plate * plate * 0.006 * matterOf('aluminum.6061-t6').density : 0;
+    const Wt = F + (deck ? deck.kg * G : plateKg * G), per = Wt / tops.length;
+    // what it is grown for: its load and its deck down; a tenth of that pushing along it and across it, as a knock or a
+    // lean (estimate); one standing where it is worst, where one may
+    const down = tops.map((p) => ({ at: p, F: [0, -per, 0] as V3 })), cases = [down, tops.map((p) => ({ at: p, F: [0.1 * per, -per, 0] as V3 })), tops.map((p) => ({ at: p, F: [0, -per, 0.1 * per] as V3 }))];
+    if (lay.point && !small) { const mid = tops.reduce((b, p) => (Math.hypot(p[0] - X, p[2] - Z) < Math.hypot(b[0] - X, b[2] - Z) ? p : b), tops[0]!); cases.push([...down, { at: mid, F: [0, -lay.point, 0] as V3 }]); }
+    // in the wind said, blowing along it and across it: ½ ρ v² on what it carries (people standing, 0.7 m² each, 1.75 m
+    // by 0.4 m; else a body of its weight as dense as water, V^⅔; estimates), on its deck's edge, and on each strut as
+    // it grows; with what it carries on it, and empty (the wind on its deck alone)
+    const vw = c.wind ?? n.want.q.wind?.v, winds: Wind[] = [];
+    if (vw) {
+      const qw = 0.5 * (n.want.q.airRho?.v ?? airRho()) * vw * vw, people = n.want.flags.includes('crowd') ? Math.max(1, Math.round(F / (80 * G))) : 0;
+      const Acarry = people ? 0.7 * people : Math.cbrt(F / G / 1000) ** 2, Adeck = deck ? Math.max(Wd, Dd) * deck.t : plate * 0.006, selfDown = (deck ? deck.kg * G : plateKg * G) / tops.length;
+      for (const dir of [[1, 0, 0], [0, 0, 1]] as V3[]) {
+        const full = (qw * 1.2 * (Acarry + Adeck)) / tops.length, bare = (qw * 1.2 * Adeck) / tops.length;
+        cases.push(tops.map((p) => ({ at: p, F: [dir[0] * full, -per, dir[2] * full] as V3 }))); winds.push({ case: cases.length - 1, q: qw, dir });
+        // empty, a flat deck is lifted too: 0.8 of q over its plan (as a flat roof, estimate)
+        const up = deck ? (0.8 * qw * Wd * Dd) / tops.length : 0;
+        cases.push(tops.map((p) => ({ at: p, F: [dir[0] * bare, up - selfDown, dir[2] * bare] as V3 }))); winds.push({ case: cases.length - 1, q: qw, dir });
+      }
+    }
+    const heldBy = span ? 'banks' : wall ? 'wall' : 'floor';
+    const held = (p: V3) => (span ? (Math.abs(p[0] - lo[0]) < 1e-9 || Math.abs(p[0] - hi[0]) < 1e-9) && Math.abs(p[1] - lo[1]) < 1e-9 : wall ? Math.abs(p[2] - lo[2]) < 1e-9 : Math.abs(p[1] - lo[1]) < 1e-9);
+    const ids = c.matter ? [(() => { try { return matterOf(c.matter).id; } catch { return 'steel.a36'; } })()] : FRAMED;
+    const half = small ? plate / 2 : 0, over: [number, number, number, number] = small ? [X - half, frontZ - half, X + half, frontZ + half] : [lo[0], lo[2], hi[0], hi[2]];
+    // the conditions it is grown to meet, as the ask gave them and as they were taken: dropped to the growth below
+    c.conds = [
+      `it carries ${+(F / G).toPrecision(3)} kg${small ? ' at one point' : ', spread over its top'}${span ? `, across ${len(Wd)} between two banks` : wall ? `, ${len(Dd)} out from a wall` : `, ${len(H)} up`}${n.want.q.F?.grounds ? ` (${n.want.q.F.grounds})` : ''}${lay.point && !small ? `, and one of ${+(lay.point / G).toPrecision(3)} kg standing where it is worst` : ''}`,
+      span ? 'what holds it: the banks at its two ends, which only push up on it (it rests on them)' : wall ? 'what holds it: the wall, which it is fixed to (it may pull on it)' : 'what holds it: the floor, which only pushes up on it, and grips its feet sideways with half of that (μ 0.5, estimate)',
+      `the room it may take: ${dims.map((d) => len(d)).join(' × ')}${n.want.q.W?.by === 'you' || n.want.q.D?.by === 'you' ? ' (as said)' : ''}`,
+      'a knock or a lean of a tenth of what it carries, along it and across it (estimate)',
+      ...(vw ? [`a ${+(vw * 3.6).toPrecision(3)} km/h wind along it and across it, with what it carries on it and empty`] : []),
+      ...(heldBy === 'floor' ? ['what is put at the edge of its top does not tip it: its top lies inside its feet'] : []),
+      `made of what can be had: tubes and sections kept, of ${ids.map((x) => matterOf(x).name).join(', ')}${c.matter ? ' (the matter said)' : ''}, each sized by two in strength and three in buckling`,
+    ];
+    realizeFrame(n, c, { lo, hi, cells, held, cases, winds, heldBy, normal: heldBy === 'wall' ? [0, 0, 1] : [0, 1, 0], ...(span ? { slide: (p: V3) => (Math.abs(p[0] - hi[0]) < 1e-9 ? 0 : null) } : {}), ids, over, small, plate, plateKg, deck, sp, F, H, Wd, Dd, X, Z, topY, frontZ, dims, vw, lay, Wt, wall, span, rests: heldBy !== 'wall' });
   },
 });
 
@@ -1826,10 +2304,11 @@ function pushed(n: Need, c: Ctx) {
   // loose stuff it carries by its weight lies in a tub as deep as a wheelbarrow's, 250 mm (estimate)
   const tub = n.want.q.lkg && n.want.q.rho ? Math.sqrt(n.want.q.lkg.v / n.want.q.rho.v / 0.25) : 0;
   // (people it carries: room for them, its deck 1.25 times as long as wide)
-  const room = n.want.q.room?.v ?? 0, said = n.want.q.W?.by === 'you' ? n.want.q.W.v : 0, W = Math.max(n.fit[0], said, 0.4, tub, Math.sqrt(room / 1.25), (n.want.q.lcount?.v ?? 0) * (n.want.q.ld?.v ?? 0) + 0.05), D = Math.max(n.fit[1], n.want.q.D?.by === 'you' ? n.want.q.D.v : 0, 0.5, tub, room ? room / W : 0), deck = matterFor(c, STRUCTURAL), t = 0.012;
+  const room = n.want.q.room?.v ?? 0, said = n.want.q.W?.by === 'you' ? n.want.q.W.v : 0, W = Math.max(n.fit[0], said, 0.4, tub, Math.sqrt(room / 1.25), (n.want.q.lcount?.v ?? 0) * (n.want.q.ld?.v ?? 0) + 0.05), deck = matterFor(c, STRUCTURAL);
+  const t = 0.012, D = Math.max(n.fit[1], n.want.q.D?.by === 'you' ? n.want.q.D.v : 0, 0.5, tub, room ? room / W : 0);
   const r = pick(c.rnd, [0.075, 0.1, 0.125]), wt = 0.05, X = c.x0, Z = c.z0, yb = c.y0 + 2 * r + 0.02, towed = n.want.flags.includes('towed'), bar = 0.025;
   const crr = n.want.q.crr?.v ?? 0.02, slope = n.want.q.slope?.v ?? 0, ground = n.want.q.crr ? n.want.q.crr.grounds : null, p = c.p;
-  c.choices.push(`a deck of ${matterOf(deck).name} ${len(W)} × ${len(D)} on four free wheels ${len(2 * r)} across${towed ? ', towed' : `, a handle at its back ${len(0.95)} up`}: ${towed ? 'towed' : 'pushed by hand'}, it has no motors`);
+  c.choices.push(`a ${MM(t)} mm deck of ${matterOf(deck).name} ${len(W)} × ${len(D)} on four free wheels ${len(2 * r)} across${towed ? ', towed' : `, a handle at its back ${len(0.95)} up`}: ${towed ? 'towed' : 'pushed by hand'}, it has no motors`);
   if (towed) c.gaps.push('what hitches it to what tows it (a tow arm and a hitch at its front) is not made, nor what it meets on the road at speed (bumps, braking and turning)');
   box(c, 'deck', deck, X, yb + t / 2, Z, W, D, t, 'plate', `${len(yb)} up on its axle blocks, over ${len(W)} × ${len(D)}`, '12 mm sheet, close under what it carries');
   if (tub > 0.3) c.choices.push(`a deck ${len(W)} × ${len(D)}, so the ${+n.want.q.lkg!.v.toPrecision(3)} kg of ${n.want.q.lkg!.grounds} lies 250 mm deep in it, as in a wheelbarrow (estimate)`);
@@ -1861,7 +2340,7 @@ function pushed(n: Need, c: Ctx) {
   if (ld && lh) { const th = Math.atan(ld / lh), deg = (x: number) => +((x * 180) / Math.PI).toPrecision(3); c.checks.push(() => ({ what: `what it carries stands on its ${slope ? `${deg(slope)}° slope` : 'deck'}`, ok: !gas && th > slope, says: `${len(ld)} across and ${len(lh)} tall, standing loose it tips at ${deg(th)}° (tan θ = d / h, statics)${slope ? `, ${th > slope ? `${deg(th - slope)}° beyond` : 'less than'} its slope` : ''}${gas ? '; gas cylinders are kept upright and secured (OSHA 29 CFR 1926.350): a chain or a rack round them, which is not made' : th > slope ? '' : ': it must be chained or held in a rack, which is not made'}` })); }
   c.checks.push(() => { const kg = (MADE.get(p) ?? 20) + (CARRIED.get(p) ?? 0), up = kg * G * (crr * Math.cos(slope) + Math.sin(slope)), down = kg * G * (Math.sin(slope) - crr * Math.cos(slope)); return { what: `${towed ? 'it is towed' : 'a person pushes it'}${slope ? ` up ${+((slope * 180) / Math.PI).toPrecision(3)}°` : ''}${ground ? ` on ${ground}` : ''}`, ok: towed || up <= push, says: `${+kg.toPrecision(3)} kg in all (itself as made and what it carries): ${slope ? `up the slope m g (${crr} cos θ + sin θ)` : `rolling, ${crr} of its weight (estimate)`}, ${+up.toPrecision(3)} N${towed ? ', which what tows it gives' : `, against the 200 N an adult keeps pushing (Snook and Ciriello 1991, estimate)${up > push ? `: ${+(up / push).toPrecision(2)} times it, too heavy to push alone` : ''}`}${slope && down > 0 ? `; going down it, ${+down.toPrecision(3)} N must hold it back: it wants brakes or wheel locks, not made` : ''}` }; });
   // and along it, up or down the slope, over its wheelbase (its weight taken midway between its axles)
-  if (slope) c.checks.push(() => { const kgS = MADE.get(p) ?? 20, kgL = CARRIED.get(p) ?? 0, h = (kgS * yb + kgL * (yb + t + hLoad / 2)) / Math.max(1e-9, kgS + kgL), b = W + wt, tip = Math.atan(b / 2 / h), wb = D - 2 * r - 0.02, tipL = Math.atan(wb / 2 / h), worst = Math.min(tip, tipL), deg = (x: number) => +((x * 180) / Math.PI).toPrecision(3); return { what: `on its ${deg(slope)}° slope, it does not tip`, ok: worst > slope, says: `its weight and what it carries, ${+h.toPrecision(3)} m up together (what it carries at half its ${len(hLoad)} height${n.want.q.lh ? '' : ', estimate'}): over its ${len(b)} track it tips at ${deg(tip)}° sideways, and over its ${len(wb)} wheelbase at ${deg(tipL)}° up or down the slope (tan θ = b / 2 h, statics, its weight midway between its axles); the worse, ${deg(worst)}°, is ${worst > slope ? `${+(((worst - slope) * 180) / Math.PI).toPrecision(2)}° beyond its slope` : 'less than its slope: it tips'}; rolling and a push make it worse, not weighed` }; });
+  if (slope) c.checks.push(() => { const kgS = MADE.get(p) ?? 20, kgL = CARRIED.get(p) ?? 0, h = (kgS * yb + kgL * (yb + t + hLoad / 2)) / Math.max(1e-9, kgS + kgL), b = W + wt, tip = Math.atan(b / 2 / h), wb = D - 2 * r - 0.02, eL = ld ? (kgL * Math.max(0, D / 2 - ld / 2)) / Math.max(1e-9, kgS + kgL) : 0, tipL = Math.atan(Math.max(0, wb / 2 - eL) / h), worst = Math.min(tip, tipL), deg = (x: number) => +((x * 180) / Math.PI).toPrecision(3); return { what: `on its ${deg(slope)}° slope, it does not tip`, ok: worst > slope, says: `its weight and what it carries, ${+h.toPrecision(3)} m up together (what it carries at half its ${len(hLoad)} height${n.want.q.lh ? '' : ', estimate'}): over its ${len(b)} track it tips at ${deg(tip)}° sideways, and over its ${len(wb)} wheelbase at ${deg(tipL)}° up or down the slope (tan θ = b / 2 h, statics${eL > 0 ? `, what it carries standing at one end of its deck, ${len(eL)} off its middle together: tan θ = (b / 2 − e) / h` : ', its weight midway between its axles'}); the worse, ${deg(worst)}°, is ${worst > slope ? `${+(((worst - slope) * 180) / Math.PI).toPrecision(2)}° beyond its slope` : 'less than its slope: it tips'}; rolling and a push make it worse, not weighed` }; });
   c.top = { y: yb + t, w: W, d: D, name: `${c.p}_deck` }; c.foot = [W + 2 * wt, D + bar];
 }
 /** Towed behind what pulls it (a bicycle, a car): a deck slung between two wheels, its axle set back of its middle so a
@@ -1877,10 +2356,11 @@ function towedCart(n: Need, c: Ctx) {
   // a 5 m radius at that speed (estimate) pulls it with v² / r: its wheels are set out on their axles until its track bears
   // that by 1.5
   const aY = (v * v) / 5;
-  let t = 0.012, yb = c.y0 + r - 0.06, track = W + 0.06, side = 0.02, Ft = 0, Fb = 0, kgAll = 0;
+  let t = 0.012, yb = c.y0 + r - 0.06, track = W + 0.06, side = 0.02, Ft = 0, Fb = 0, kgAll = 0, outL = 0.035;
   const mA = matterOf(arm), make = (T: number) => {
     c.steps.length = 0; c.traces.length = 0; c.members.length = 0; c.riders.length = 0; c.loose.length = 0; c.led = false; c.after = c.base0 ?? null;
-    t = T; yb = c.y0 + r - 0.06; const hc = yb + t + 0.25; track = Math.max(W + 0.06 + wt, 2 * hc * (1.5 * aY) / G); const out = (track - wt) / 2 - W / 2;
+    // (its wheel's plane clear of its deck's edge by half a tyre 50 mm wide and 10 mm more, estimate)
+    t = T; yb = c.y0 + r - 0.06; const hc = yb + t + 0.25; track = Math.max(W + 2 * 0.035 + wt, 2 * hc * (1.5 * aY) / G); const out = (track - wt) / 2 - W / 2; outL = out;
     box(c, 'deck', deck, X, yb + t / 2, Z, W, D, t, 'plate', `${len(yb)} up between its wheels, over ${len(W)} × ${len(D)}`, `${MM(t)} mm sheet, as thin as bears what it carries by two within 1/250 of its span`);
     for (const [k, sx] of [-1, 1].entries()) {
       const w0 = c.why; c.why = 'to hold a wheel'; const bh = c.y0 + r + 0.015 - yb;
@@ -1907,6 +2387,10 @@ function towedCart(n: Need, c: Ctx) {
   const sd = side, Ft0 = Ft, Fb0 = Fb, kg0 = kgAll, tr = track, hc = yb + t + 0.25, aT = (G * tr) / 2 / hc;
   c.checks.push(() => ({ what: 'its tow arm bears its hitch\'s share and its braking', ok: (mA.yield * sd ** 3) / (Ft0 * La * 6) >= 2 && (Math.PI ** 2 * mA.E * sd ** 4) / 12 / (La * La) >= 3 * Fb0, says: `${+Ft0.toPrecision(3)} N on its end (a tenth of ${+kg0.toPrecision(3)} kg, estimate) bends its ${MM(sd)} mm square ${len(La)} arm at ${+((Ft0 * La * 6) / sd ** 3 / 1e6).toPrecision(3)} MPa, ${+((mA.yield * sd ** 3) / (Ft0 * La * 6)).toPrecision(3)} times under its yield; braked at half of g (estimate), ${+Fb0.toPrecision(3)} N along it, ${+((Math.PI ** 2 * mA.E * sd ** 4) / 12 / (La * La) / Fb0).toPrecision(3)} times under what buckles it (Euler, K = 1)` }));
   c.checks.push(() => ({ what: `turning at ${+(v * 3.6).toPrecision(3)} km/h, it does not tip over`, ok: aT >= 1.5 * aY - 1e-9, says: `on a ${len(tr)} track with what it carries about ${len(hc)} up (a seated child's middle about 250 mm over its deck, estimate), it tips once pulled sideways at ${+(aT / G).toPrecision(3)} of g (g track / 2 h); turning about a 5 m radius at ${+(v * 3.6).toPrecision(3)} km/h (estimate) pulls it at ${+(aY / G).toPrecision(3)} of g (v² / r), ${+(aT / aY).toPrecision(3)} times under it (by 1.5)` }));
+  // each stub axle, out from its deck's side to its wheel, a cantilever bearing half of all of it, twice over on a bump
+  // (estimate): M = 2 (m g / 2) L, under half its strength
+  const mdk = matterOf(deck), bh0 = c.y0 + r + 0.015 - yb, Ms = kg0 * G * outL, ss = (6 * Ms) / (0.06 * bh0 * bh0);
+  c.checks.push(() => ({ what: 'its stub axles bear it on a bump', ok: mdk.yield / ss >= 2, says: `each ${MM(outL)} mm out from its deck's side, ${MM(bh0)} × 60 mm of ${mdk.name}, under half of ${+kg0.toPrecision(3)} kg twice over on a bump (estimate): ${+Ms.toPrecision(3)} N·m, ${+(ss / 1e6).toPrecision(3)} MPa, ${factorSays(mdk.yield / ss, familyOf(deck) === 'wood')}; its wheels' own axles and bearings are not derived` }));
   c.top = { y: yb + t, w: W, d: D, name: `${p}_deck` }; c.foot = [tr + wt, D + La];
 }
 const cartFits = (n: Need) => { const { across, motor } = leastCart(), said = n.want.q.W?.by === 'you' ? n.want.q.W.v : null; return said !== null && said < across ? `at ${len(said)} across, nothing kept is small enough to drive it: the smallest motor kept is ${len(motor.diameter)} across, and its wheels and deck at least ${len(across)}` : null; };
@@ -2027,6 +2511,7 @@ way({
     c.steps.push(`slide ${cn} on ${c.p}_rail along x between 0 mm and ${MM(L)} mm`); c.traces.push({ step: c.steps.at(-1)!, what: `${cn}'s slide`, called: c.way, why: `so it slides ${MM(L)} mm`, when: '', where: `where it touches the rail, along it`, how: 'a Jolt slider with its limits at the ends of the travel' });
     c.checks.push(() => ({ what: `its rail bears ${+m.toPrecision(3)} kg on the carriage at its middle`, ok: dl <= span / 1000 + 1e-9, says: `held at its feet ${MM(span)} mm apart, ${+(m + mc).toPrecision(3)} kg (what it carries and the carriage) at its middle and its own weight along it bend it ${+(dl * 1000).toPrecision(3)} mm (F L³ / 48 E I and 5 w L⁴ / 384 E I), against 1/1000 of its span (${+(span).toPrecision(3)} mm), as what slides smoothly asks (estimate)` }));
     c.tests.push({ kind: 'slide', name: cn, L, m: mc + m });
+    c.gaps.push('how its carriage runs on its rail (its bearings or rollers), what it is mounted on (a tripod or stands) and the mount for what it carries are not derived');
     c.top = { y: y + 0.04 + rh + ct, w: cw, d: cd, name: cn }; c.foot = [len, 0.12];
   },
 });
@@ -2092,7 +2577,7 @@ way({
       const k = TBL.findIndex(([x]) => x >= ra), [x1, b1, a1] = TBL[Math.max(0, k - 1)]!, [x2, b2, a2] = TBL[Math.max(0, k)]!, f = x2 > x1 ? (ra - x1) / (x2 - x1) : 0, beta = b1 + f * (b2 - b1), alpha = a1 + f * (a2 - a1);
       const sg = (beta * q0 * b0 * b0) / (t * t), dl = (alpha * q0 * b0 ** 4) / (md.E * t ** 3), fac = md.yield / sg, wood = familyOf(mt) === 'wood';
       c.checks.push(() => ({ what: `its roof bears ${rp.grounds.replace(/, about .*$/, '')}`, ok: fac >= 2 && dl <= b0 / 250, says: `${+(rp.v / 1000).toPrecision(3)} kPa (${rp.grounds.replace(/^.*?, about /, 'about ')}) and its own weight on its ${len(W + 2 * t)} × ${len(D + 2 * t)}, a plate held round its edges on its four walls, bending mostly across its ${len(b0)} (Roark Table 11.4, β ${+beta.toPrecision(3)}, α ${+alpha.toPrecision(3)}): ${+(sg / 1e6).toPrecision(3)} MPa, ${factorSays(fac, wood)}, ${bendSays(dl, b0)} (1/250 of ${len(b0)} is ${len(b0 / 250)}: more fails); snow comes and goes, so no creep is taken` })); }
-    else if (rp) { const F = rp.v * (W + 2 * t) * (D + 2 * t), rn = `${c.p}_roof`, span = Math.max(W, D); c.loads.push(`load ${rn} with ${+F.toFixed(1)} N spread`); c.checks.push(() => { const v = LOADS.get(rn); if (!v) return null; return { what: `its roof bears ${rp.grounds.replace(/, about .*$/, '')}`, ok: v.factor >= 2 && v.bend <= span / 250, says: `${+(rp.v / 1000).toPrecision(3)} kPa (ρ g h, ${rp.grounds.replace(/^.*?, about /, 'about ')}) over ${len(W + 2 * t)} × ${len(D + 2 * t)}, ${+(F / G).toPrecision(3)} kg spread on it; the load law across its walls, the worse way: ${factorSays(v.factor, v.wood)}, ${bendSays(v.bend, span)} (1/250 of ${len(span)} is ${len(span / 250)}: more fails); snow comes and goes, so no creep is taken` }; }); }
+    else if (rp) { const F = rp.v * (W + 2 * t) * (D + 2 * t), rn = `${c.p}_roof`, span = Math.max(W, D); c.loads.push(`load ${rn} with ${+F.toFixed(1)} N + ${rn}.mass * g spread`); c.checks.push(() => { const v = LOADS.get(rn); if (!v) return null; return { what: `its roof bears ${rp.grounds.replace(/, about .*$/, '')}`, ok: v.factor >= 2 && v.bend <= span / 250, says: `${+(rp.v / 1000).toPrecision(3)} kPa (ρ g h, ${rp.grounds.replace(/^.*?, about /, 'about ')}) over ${len(W + 2 * t)} × ${len(D + 2 * t)}, ${+(F / G).toPrecision(3)} kg spread on it, with its own weight; the load law across its walls, the worse way: ${factorSays(v.factor, v.wood)}, ${bendSays(v.bend, span)} (1/250 of ${len(span)} is ${len(span / 250)}: more fails); snow comes and goes, so no creep is taken` }; }); }
     c.checks.push(() => ({ what: `it encloses ${MM(W)} × ${MM(D)} × ${MM(H)} mm`, ok: true, says: `inside, ${MM(W)} by ${MM(D)} mm and ${MM(H)} mm tall` }));
     SKINS.set(`${c.p}:box`, { A: 2 * (W * D + W * H + D * H), t, id: mt, L: H });
     c.top = { y: y0 + 2 * t + H, w: W + 2 * t, d: D + 2 * t, name: `${c.p}_floor` }; c.foot = [W + 2 * t, D + 2 * t]; c.inside = { y: y0 + t, W, D, H, name: `${c.p}_floor` };
@@ -2209,11 +2694,14 @@ way({
       // its hub: room for a flight controller on the usual 30.5 mm holes (estimate), and, where it must go in a tube, no wider
       // than lets it in folded, its arms standing up at its edges: (s + 2 h) √2 within the tube
       const lift = auw ?? payload * 3, Tmax = (2 * lift * G) / k, tip = auw !== undefined && c.light !== undefined ? Math.max(0.03, (auw - payload - c.light) / 2 / k) : 0.06;
-      const SECT: [number, number][] = [[10, 3], [12, 4], [14, 5], [16, 6], [18, 8], [20, 10]];
+      const SECT: [number, number][] = [[10, 3], [12, 4], [12, 5], [14, 5], [12, 6], [14, 6], [12, 8], [16, 6], [14, 8], [18, 8], [16, 10], [20, 10]];
+      // how fast its rotors turn hovering: T = C_T ρ n² D⁴, C_T about 0.1 for a small fixed-pitch rotor (estimate); its arms,
+      // each with its motor at its end, ring above that by a quarter, so they do not shake with it (estimate)
+      const nHov = Math.sqrt((lift * G) / k / (0.1 * 1.225 * Dr ** 4)), ringAt = (bb: number, hh: number, L: number) => Math.sqrt((3 * fm.E * (bb * hh ** 3) / 12) / (L ** 3 * (tip + 0.24 * bb * hh * L * fm.density))) / (2 * Math.PI);
       let b = 0, h = 0, sg = 0, s0 = 0.08, La = 0;
       for (const [bb, hh] of SECT) {
         b = bb / 1e3; h = hh / 1e3; s0 = tube !== undefined ? Math.min(0.09, tube / Math.SQRT2 - 2 * h - 0.002) : 0.08; La = R + 0.015 - s0 / 2;
-        sg = (6 * Tmax * (R - s0 / 2)) / (b * h * h); if (fm.yield / sg >= 2 && (Tmax * (R - s0 / 2) ** 2 * 4) / (fm.E * b * h ** 3) <= 1 / 100) break;
+        sg = (6 * Tmax * (R - s0 / 2)) / (b * h * h); if (fm.yield / sg >= 2 && (Tmax * (R - s0 / 2) ** 2 * 4) / (fm.E * b * h ** 3) <= 1 / 100 && ringAt(b, h, R - s0 / 2) >= 1.25 * nHov) break;
       }
       const s0f = s0, y = c.y0 + h / 2, I = (b * h ** 3) / 12, ma = b * h * La * fm.density, defl = (Tmax * (R - s0f / 2) ** 3) / (3 * fm.E * I), f1 = Math.sqrt((3 * fm.E * I) / ((R - s0f / 2) ** 3 * (tip + 0.24 * ma))) / (2 * Math.PI);
       c.choices.push(`a hub ${MM(s0f)} mm square and ${k} arms of ${fm.name}, ${MM(b)} × ${MM(h)} mm, to motors ${MM(R)} mm from its middle: rotors ${MM(Dr)} mm across${n.want.q.Dr ? ' as said' : ''} clear the next by a tenth of their size (estimate)`);
@@ -2224,12 +2712,12 @@ way({
       }
       const sv = (x: number) => +x.toPrecision(3);
       c.checks.push(() => ({ what: 'its arms bear its motors at full throttle', ok: fm.yield / sg >= 2 && defl <= (R - s0f / 2) / 100, says: `each motor pulls up ${sv(Tmax)} N (twice its share of ${sv(lift * 1e3)} g, estimate) ${MM(R - s0f / 2)} mm out from the hub: ${sv(Tmax * (R - s0f / 2))} N·m at the root of a ${MM(b)} × ${MM(h)} mm arm, ${sv(sg / 1e6)} MPa, ${sv(fm.yield / sg)} times under its ${sv(fm.yield / 1e6)} MPa; its end lifts ${sv(defl * 1e3)} mm (a hundredth of its length allowed, estimate)` }));
-      c.gaps.push(`how its arms shake: each arm with ${sv(tip * 1e3)} g of motor and rotor at its end (${auw !== undefined && c.light !== undefined ? 'half of what is left of all it lifts once its frame and what it carries are taken, estimate' : 'estimate'}) first rings at ${sv(f1)} Hz (a cantilever with a weight at its end); against how fast its rotors turn, not derived`);
+      c.checks.push(() => ({ what: 'its arms ring above how fast its rotors turn', ok: f1 >= 1.25 * nHov, says: `hovering, its rotors turn about ${+nHov.toPrecision(3)} times a second (T = C_T ρ n² D⁴, C_T about 0.1, estimate); each arm, with ${+(tip * 1e3).toPrecision(3)} g of motor and rotor at its end (${auw !== undefined && c.light !== undefined ? 'half of what is left of all it lifts once its frame and what it carries are taken, estimate' : 'estimate'}), first rings at ${+f1.toPrecision(3)} Hz (a cantilever with a weight at its end), ${+(f1 / nHov).toPrecision(3)} times that (a quarter above it wanted, estimate); at full throttle they turn faster still, not weighed` }));
       // a 2 m drop onto concrete: the arm that lands first takes what it can bend away, elastically, as a cantilever loaded at its end
       const hd = c.dropH;
       if (hd !== undefined) {
         const E0 = lift * G * hd, U = (fm.yield ** 2 * (b * h * La)) / (18 * fm.E);
-        c.checks.push(() => ({ what: `it survives a ${len(hd)} drop`, ok: k * U >= E0, says: `it lands with ${sv(E0)} J (m g h, all it lifts); an arm landed on at its end bends away at most ${sv(U)} J before it breaks (σ² V / 18 E for a cantilever loaded at its end, its ${sv(fm.yield / 1e6)} MPa), ${sv(k * U)} J were all four to share it alike; ${k * U >= E0 ? 'shared, they take it' : 'what it lands on must take the rest: feet or a bumper that crush (not made), or an arm breaks'}` }));
+        c.checks.push(() => ({ what: `it survives a ${len(hd)} drop`, ok: U >= E0, says: `it lands with ${sv(E0)} J (m g h, all it lifts); an arm landed on at its end bends away at most ${sv(U)} J before it breaks (σ² V / 18 E for a cantilever loaded at its end, its ${sv(fm.yield / 1e6)} MPa), ${sv(k * U)} J were all four to share it alike; ${k * U >= E0 ? (U >= E0 ? 'one arm alone takes it' : 'landed level on all four alike, they take it; landed on one arm first, it breaks unless what it lands on takes the rest (feet or a bumper that crush, not made)') : 'what it lands on must take the rest: feet or a bumper that crush (not made), or an arm breaks'}` }));
       }
       c.gaps.push(`what it carries is not made: its 4 motors and rotors, its battery and flight controller${payload ? ` and its ${sv(payload * 1e3)} g payload` : ''}, held at its arms' ends and on its hub; nor the hinges its arms fold up on, nor the holes its motors are screwed through`);
       c.top = { y: c.y0 + h, w: s0f, d: s0f, name: `${c.p}_hub` }; c.foot = [s0f + 2 * La, s0f + 2 * La];
@@ -2300,7 +2788,7 @@ way({
     if (people) { const sp = nF ? L / (nF + 1) : Wd, Id = Ib(sp), Md = (Pp * sp) / 4, sd = (Md * (t / 2)) / Id, dd = (Pp * sp ** 3) / (48 * matterOf(mt).E * Id), okD = sd <= matterOf(mt).yield / 2 && dd <= sp / 150;
       c.checks.push(() => ({ what: 'its deck bears a person standing on it', ok: okD, says: `${MM(t)} mm ${matterOf(mt).name} ${nF ? `on ${nF} cross frames, ${len(sp)} apart` : `across its ${len(Wd)} between its sides, nothing under it`}: a person (80 kg, by 1.5, estimate) at its middle, borne by a strip ${len(bw(sp))} wide (as wide as it spans, no narrower than a person's stance nor wider than a metre, estimate), ${+(sd / 1e6).toPrecision(3)} MPa (P L / 4): ${factorSays(matterOf(mt).yield / sd, familyOf(mt) === 'wood')}, bending ${len(dd)} (1/150 of its span is ${len(sp / 150)}: more fails; P L³ / 48 E I)${okD ? '' : '; it wants beams across under it, from side to side, which are not kept'}` })); }
     c.checks.push(() => ({ what: 'it rights itself', ok: GM > 0.05 * Wd, says: `its metacentre ${MM(GM)} mm above its weight (GM = KB + BM - KG, BM = B² / 12 T${people ? ', with them standing on its deck, about 1 m up, estimate' : ''}), for a small heel: its bottom's edge comes out of the water past ${+((Math.atan((2 * draft) / Wd) * 180) / Math.PI).toPrecision(3)}° (tan θ = 2 T / B), and past that its section is worked out clipped at its waterline; worked out, not floated: there is no water in the physics here` }));
-    if (people || fb !== undefined || wave !== undefined) c.checks.push(() => ({ what: `with its load to one side, its ${people ? 'deck' : 'sides'} stand${people ? 's' : ''} ${fb !== undefined ? `at least ${MM(fb)} mm above` : 'above'} the water${wave !== undefined ? ` and above ${len(wave)} waves` : ''}`, ok: !over && low > 0 && low >= keep - 1e-6 && tanH <= Math.tan((10 * Math.PI) / 180) + 1e-9, says: `${people ? `all ${+n.want.q.m!.v.toPrecision(3)} kg of them crowded to one side, ${MM(off)} mm off its middle (a pace in from its edge, estimate)` : 'what it carries on its middle'}, ${over ? 'no heel brings what holds it up under its weight before its deck\'s edge goes under: it goes over' : `it heels ${+((Math.atan(tanH) * 180) / Math.PI).toPrecision(3)}° (its section under water clipped at its waterline, its centre of buoyancy brought under its weight, statics${people ? '; more than 10° is more than people stand on easily, estimate' : ''}) and its low side sinks ${MM(drop)} mm`}: there it stands ${MM(low)} mm above still water${fb !== undefined ? ` against the ${MM(fb)} mm said` : ''}${wave !== undefined ? `; ${len(wave)} waves crest about ${MM(wave / 2)} mm above still water (half their height, estimate), so ${low >= wave / 2 ? 'they do not wash over it' : 'they wash over it'}` : ''}; ${Hh >= 1.5 - 1e-6 && low < keep ? 'its sides at the 1.5 m most taken here are still too low' : `its sides made ${MM(Hh)} mm deep for it`}` }));
+    if (people || fb !== undefined || wave !== undefined) c.checks.push(() => ({ what: `with its load to one side, its ${people ? 'deck' : 'sides'} stand${people ? 's' : ''} ${fb !== undefined ? `at least ${MM(fb)} mm above` : 'above'} the water${wave !== undefined ? ` and above ${len(wave)} waves` : ''}`, ok: !over && low > 0 && low >= keep - 1e-6 && tanH <= Math.tan((10 * Math.PI) / 180) + 1e-9, says: `${people ? `all ${+n.want.q.m!.v.toPrecision(3)} kg of them crowded to one side, ${MM(off)} mm off its middle (a pace in from its edge, estimate)` : 'what it carries on its middle'}, ${over ? 'no heel brings what holds it up under its weight before its deck\'s edge goes under: it goes over' : `it heels ${+((Math.atan(tanH) * 180) / Math.PI).toPrecision(3)}° (its section under water clipped at its waterline, its centre of buoyancy brought under its weight, statics${people ? '; more than 10° is more than people stand on easily, estimate' : ''}) and its low side sinks ${MM(drop)} mm`}: there it stands ${MM(low)} mm above still water${fb !== undefined ? ` against the ${MM(fb)} mm said` : ''}${wave !== undefined ? `; ${len(wave)} waves crest about ${MM(wave / 2)} mm above still water (half their height, estimate), so ${low >= wave / 2 ? 'they do not wash over it, as a still crest against its freeboard: how it heaves, rolls and pitches in that chop, and what it slams, are not weighed' : 'they wash over it'}` : ''}; ${Hh >= 1.5 - 1e-6 && low < keep ? 'its sides at the 1.5 m most taken here are still too low' : `its sides made ${MM(Hh)} mm deep for it`}` }));
     c.top = { y: y + t + (people ? Hh + t : 0), w: L, d: Wd, name: `${c.p}_${people ? 'deck' : 'bottom'}` }; c.foot = [L, Wd];
   },
 });
@@ -2351,15 +2839,16 @@ way({
     const kb = Math.min(2, k), Mshut = (shut * W) / 4, [d, wt] = tubes.find(([D0, w0]) => !shut || md.yield / (Mshut / (kb * S(D0, w0))) >= 2) ?? tubes.at(-1)!;
     const Lb = Math.hypot(W - d, H - d), th = Math.atan2(H - d, W - d), kg = md.density * Ar(d, wt) * (k * (W - 2 * d) + 2 * H + Lb), Nb = (kg * G) / Math.sin(th);
     const [bd, bw] = tubes.find(([D0, w0]) => (Math.PI ** 2 * md.E * Ir(D0, w0)) / (Lb * Lb) >= 3 * Nb && D0 >= d * 0.75) ?? tubes.at(-1)!;
-    // its post: square steel, bearing the leaf held out (m g W / 2) and, shut, half the push about 600 mm up, under half its yield
-    const Mp = Math.max((kg * G * W) / 2, (shut / 2) * 0.6), p = Math.max(0.05, Math.cbrt((6 * Mp) / (250e6 / 2)));
+    // its post: square steel, bearing the leaf held out (m g W / 2) and, shut, the push leant near it about 700 mm up, together, under half its yield
+    // (leant on near it, the post takes nearly the whole push, estimate; with the leaf held out bending it the other way at once)
+    const Mp = Math.hypot((kg * G * W) / 2, shut * 0.7), p = Math.max(0.05, Math.cbrt((6 * Mp) / (250e6 / 2)));
     c.choices.push(`a frame of ${k} rails between two stiles of ${MM(d)} × ${MM(wt)} mm ${md.name} tube, ${len(W)} × ${len(H)}, braced corner to corner by a ${MM(bd)} × ${MM(bw)} mm tube, on a ${MM(p)} mm square steel post${shut ? `, latched at its far end to a second post by a 16 mm steel pin` : ''}`);
     const w0 = c.why; c.why = 'to hang the leaf from';
-    const pn = box(c, 'post', 'steel.a36', X, c.y0 + (H + 0.1) / 2, Z, p, p, H + 0.1, 'bar', 'upright, set in the ground', `${MM(p)} mm square steel: the leaf held out from it, and half of what pushes it shut, bend it under half its yield`);
+    const pn = box(c, 'post', 'steel.a36', X, c.y0 + (H + 0.1) / 2, Z, p, p, H + 0.1, 'bar', 'upright, set in the ground', `${MM(p)} mm square steel: the leaf held out from it and the push leant on it near it, together, bend it under half its yield`);
     // the ground it is set in stands here as a cube of concrete behind its foot, heavy enough that the leaf held out does not
     // turn it over the post's front edge, by two: 2400 b³ (p + b / 2) ≥ 2 m (W / 2 + p / 2); the leaf 100 mm clear of the ground
-    // (and, shut, that half the push about 700 mm up does not turn it over either: 2400 g b³ b / 2 ≥ 2 F h)
-    const Fl = shut / 2, hl = 0.7, mPost = 7850 * p * p * (H + 0.1), fb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * b ** 3 * (p + b / 2) + (mPost * p) / 2 >= 2 * kg * (W / 2 + p / 2) && 2400 * G * b ** 4 / 2 >= 2 * Fl * hl) return b; return 3; })();
+    // (and, shut, that the push leant near it about 700 mm up does not turn it over either: 2400 g b³ b / 2 ≥ 2 F h)
+    const Fl = shut, hl = 0.7, mPost = 7850 * p * p * (H + 0.1), fb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * b ** 3 * (p + b / 2) + (mPost * p) / 2 >= 2 * kg * (W / 2 + p / 2) && 2400 * G * b ** 4 / 2 >= 2 * Fl * hl) return b; return 3; })();
     const fn = box(c, 'footing', 'concrete.c30', X - p / 2 - fb / 2, c.y0 + fb / 2, Z, fb, fb, fb, 'block', 'against the post\'s foot', `a ${MM(fb)} mm cube of concrete standing for the ground the post is set in: heavy enough that the leaf held out does not turn it over (by two)`);
     STANDS.set(fn, 'the ground its post is set in');
     c.why = 'to swing open and shut';
@@ -2382,13 +2871,13 @@ way({
     if (shut) {
       const lx2 = X + p / 2 + W + 0.01 + lp / 2, rr = c.ride; c.ride = was; c.why = 'to latch it shut against';
       // (a piece of its own with its footing, apart from the hinge post: the ground between them is not made)
-      const lpn = box(c, 'latchpost', 'steel.a36', lx2, c.y0 + (H + 0.1) / 2, Z, lp, lp, H + 0.1, 'bar', 'upright at its far end, 10 mm clear of its latch stile, set in the ground', `${MM(lp)} mm square steel, as its hinge post: half the push it is held shut against bends it`, { loose: true });
+      const lpn = box(c, 'latchpost', 'steel.a36', lx2, c.y0 + (H + 0.1) / 2, Z, lp, lp, H + 0.1, 'bar', 'upright at its far end, 10 mm clear of its latch stile, set in the ground', `${MM(lp)} mm square steel, as its hinge post: the push leant on it near its latch end bends it`, { loose: true });
       lb = (() => { for (let b = 0.2; b < 3; b += 0.01) if (2400 * G * b ** 4 / 2 >= 2 * Fl * hl) return b; return 3; })();
-      const lf = box(c, 'latchfooting', 'concrete.c30', lx2 + lp / 2 + lb / 2, c.y0 + lb / 2, Z, lb, lb, lb, 'block', 'against the latch post\'s foot', `a ${MM(lb)} mm cube of concrete standing for the ground it is set in: heavy enough that half the push does not turn it over (by two)`, { loose: true });
+      const lf = box(c, 'latchfooting', 'concrete.c30', lx2 + lp / 2 + lb / 2, c.y0 + lb / 2, Z, lb, lb, lb, 'block', 'against the latch post\'s foot', `a ${MM(lb)} mm cube of concrete standing for the ground it is set in: heavy enough that the push leant near it does not turn it over (by two)`, { loose: true });
       STANDS.set(lf, 'the ground its latch post is set in'); c.steps.push(`join ${lpn}, ${lf} as ${c.p}_latch`); c.traces.push({ step: c.steps.at(-1)!, what: `${c.p}_latch`, called: c.way, why: 'so its latch post stands in the ground it is set in, apart from the leaf and its hinge post', when: '', where: 'where the post meets its footing', how: 'joined' }); c.why = w0; c.ride = rr;
       const pinCap = 0.6 * 250e6 * Math.PI * 0.008 ** 2, Mlp = Fl * hl, sLp = (6 * Mlp) / lp ** 3;
       c.checks.push(() => ({ what: `shut, its rails bear the ${+(shut / 1000).toPrecision(3)} kN push`, ok: md.yield / (Mshut / (kb * S(d, wt))) >= 2, says: `latched at its far end, ${len(W)} between its posts, the push at its middle bends it with ${+(Mshut / 1000).toPrecision(3)} kN·m (F W / 4), taken by the ${kb} of its ${k} rails nearest where it is leant on (an animal leans over about 600 mm, estimate): ${+(md.yield / (Mshut / (kb * S(d, wt)))).toPrecision(3)} times under its yield, bending ${len((shut * W ** 3) / (48 * md.E * kb * Ir(d, wt)))} at its middle (F W³ / 48 E I, those rails together; its brace and stiles share some, not counted)` }));
-      c.checks.push(() => ({ what: 'shut, its latch and its posts hold half the push each', ok: pinCap >= 2 * Fl && 250e6 / sLp >= 2, says: `${+(Fl / 1000).toPrecision(3)} kN at each end, about ${len(hl)} up (estimate): its 16 mm steel latch pin holds ${+(pinCap / 1000).toPrecision(3)} kN in single shear (0.6 of 250 MPa, estimate), ${+(pinCap / Fl).toPrecision(3)} times it; its ${MM(lp)} mm posts bend under it at ${+(sLp / 1e6).toPrecision(3)} MPa at their feet, ${+(250e6 / sLp).toPrecision(3)} times under their yield; each set in a cube of concrete heavy enough not to turn over by two (2400 g b³ b / 2 ≥ 2 F h: ${MM(lb)} mm at the latch post); the pin is not placed in the physics, so there it swings unlatched` }));
+      c.checks.push(() => ({ what: 'shut, its latch and its posts hold the push leant near them', ok: pinCap >= 2 * Fl && 250e6 / sLp >= 2, says: `leant on near one end, nearly all ${+(Fl / 1000).toPrecision(3)} kN of it comes on the post there, about ${len(hl)} up (estimate): its 16 mm steel latch pin holds ${+(pinCap / 1000).toPrecision(3)} kN in single shear (0.6 of 250 MPa, estimate), ${+(pinCap / Fl).toPrecision(3)} times it; its ${MM(lp)} mm posts bend under it at ${+(sLp / 1e6).toPrecision(3)} MPa at their feet, ${+(250e6 / sLp).toPrecision(3)} times under their yield; each set in a cube of concrete heavy enough not to turn over by two (2400 g b³ b / 2 ≥ 2 F h: ${MM(lb)} mm at the latch post); the pin is not placed in the physics, so there it swings unlatched: what holds it shut is weighed by statics, here` }));
     }
     c.checks.push(() => ({ what: 'held open, its brace bears it', ok: (Math.PI ** 2 * md.E * Ir(bd, bw)) / (Lb * Lb) >= 3 * Nb, says: `its ${+kg.toPrecision(3)} kg held out from its hinges comes down its ${len(Lb)} brace at ${+((th * 180) / Math.PI).toPrecision(3)}°: ${+Nb.toPrecision(3)} N (m g / sin θ), buckling at ${+((Math.PI ** 2 * md.E * Ir(bd, bw)) / (Lb * Lb) / Nb).toPrecision(3)} times it (Euler, K = 1)` }));
     c.gaps.push(`${shut ? 'its posts stand' : 'its post stands'} in blocks of concrete standing for the ground: how deep each is set (about 900 mm in concrete for a gate this size, estimate) is not derived${shut ? '; its latch pin, dropped through a keeper on its far post, is said and weighed but not placed' : ''}`);
@@ -2536,6 +3025,7 @@ export interface Design {
   /** it holds every law and every limit it was checked for */ ok: boolean;
   /** it bears every load it was checked for, whether or not it keeps to every limit (a size, a weight, how it packs) */ holds: boolean;
   choices: string[]; tries: { seed: number; why: string }[]; gaps: string[]; mass: number; parts: number; footprint: [number, number]; words: string; plan: string[];
+  /** the conditions what is made was grown to meet, where it was grown from them */ conditions?: string[];
   /** what was asked, each met or not; and how many of the things asked it does */ asked: Asked[]; does: [number, number];
   /** it holds, does everything asked, and has nothing left not yet derived */ whole: boolean;
   /** where it folds as planned: its fold, played (each part a quarter or a half turn about its hinge in the order they fold, held
@@ -2752,19 +3242,24 @@ function foldTrackOf(f: Folding, asBuilt: Made[]): SimTrack {
   for (let t = 0; t <= 2 * T + 1 + 1e-9; t += 1 / fps) { const u = t <= T ? t / T : t <= T + 1 ? 1 : Math.max(0, 1 - (t - T - 1) / T), s = poseAt(u); frames.push({ t, poses: names.map((n) => s.get(n) ?? open.get(n)!) }); }
   return { names, frames };
 }
+/** Where holding it up is the whole of what it is: held far out from a wall, or high up on a stand much narrower than
+ *  it is tall. There the frame grown along its loads is drawn first, as the ways that draw legs or a column widen their
+ *  foot until it is heavy; elsewhere (a top worked at, sat at or slept on, which wants the room under it clear) the
+ *  others are drawn with it. */
+const framed = (n: Need) => n.kind === 'surface' && !!n.want.cond || n.kind === 'surface' && !n.on && !n.want.flags.includes('levels') && !n.want.flags.includes('span') && (n.want.flags.includes('wall') ? !layOf(n.want).spread && n.want.q.D?.by === 'you' && n.want.q.D.v >= 0.15 : n.want.q.H!.v >= 2.5 * Math.max(n.want.q.W!.v, n.want.q.D!.v, n.fit[0], n.fit[1]));
 /** Made once, from one seed: each need met by a way drawn from those that apply, stacked, sized from the top down,
  *  placed from the bottom up, joined, then checked. */
 function once(con: Conception, seed: number, prefix: string, at: [number, number], J: Jolt | null): Design {
-  PACKED.delete(prefix); ANCHORS.delete(prefix); ROLLS.delete(prefix); OPEN.delete(prefix);
+  PACKED.delete(prefix); ANCHORS.delete(prefix); ROLLS.delete(prefix); OPEN.delete(prefix); FRAMES.delete(prefix); FIXED.delete(prefix);
   const needs = stack(con.wants), ordered = order(needs), plan: string[] = [];
-  const base = (n: Need, i: number): Ctx => ({ p: prefix, x0: at[0], z0: at[1], y0: 0, rnd: rngOf(seed + i * 1013), matter: con.matter, light: con.limits.mass, ...(con.said.fitDia !== undefined ? { fitDia: con.said.fitDia } : {}), ...(con.said.drop !== undefined ? { dropH: con.said.drop } : {}), ...(con.said.climber !== undefined ? { climber: con.said.climber * G } : {}), ...(con.limits.part !== undefined ? { part: con.limits.part } : {}), ...(con.limits.sag !== undefined ? { sag: con.limits.sag } : {}), steps: [], traces: [], members: [], loose: [], moving: [], choices: [], gaps: [], checks: [], loads: [], tests: [], need: n, way: '', why: n.why, top: { y: 0, w: 0, d: 0, name: null }, foot: [0, 0], after: null, ride: null, riders: [] });
+  const base = (n: Need, i: number): Ctx => ({ p: prefix, x0: at[0], z0: at[1], y0: 0, rnd: rngOf(seed + i * 1013), matter: con.matter, light: con.limits.mass, ...(con.said.fitDia !== undefined ? { fitDia: con.said.fitDia } : {}), ...(con.said.wind !== undefined ? { wind: con.said.wind } : {}), ...(con.said.drop !== undefined ? { dropH: con.said.drop } : {}), ...(con.said.climber !== undefined ? { climber: con.said.climber * G } : {}), ...(con.limits.part !== undefined ? { part: con.limits.part } : {}), ...(con.limits.sag !== undefined ? { sag: con.limits.sag } : {}), steps: [], traces: [], members: [], loose: [], moving: [], choices: [], gaps: [], checks: [], loads: [], tests: [], need: n, way: '', why: n.why, top: { y: 0, w: 0, d: 0, name: null }, foot: [0, 0], after: null, ride: null, riders: [] });
   const chosen = new Map<Need, Way>(), barred = new Map<Need, string>();
   for (const [i, n] of ordered.entries()) {
     const bar = scaleBars(n, con); if (bar) barred.set(n, bar);
-    const ways = WAYS.filter((w) => w.meets === n.kind && (n.kind !== 'surface' || (w.id === WALL_WAY) === n.want.flags.includes('wall') || w.id === WALL_WAY)), probe = base(n, i), open = bar ? [] : ways.filter((w) => w.when(n, probe) === null && (n.kind !== 'surface' || (w.id === WALL_WAY) === n.want.flags.includes('wall')));
-    const w = open.length ? pick(rngOf(seed + i * 7 + 1), open) : null;
+    const ways = WAYS.filter((w) => w.meets === n.kind && (n.kind !== 'surface' || w.id === FRAME_WAY || (w.id === WALL_WAY) === n.want.flags.includes('wall') || w.id === WALL_WAY)), probe = base(n, i), open = bar ? [] : ways.filter((w) => w.when(n, probe) === null && (n.kind !== 'surface' || w.id === FRAME_WAY || (w.id === WALL_WAY) === n.want.flags.includes('wall')));
+    const w = open.length ? (framed(n) ? open.find((x) => x.id === FRAME_WAY) : undefined) ?? pick(rngOf(seed + i * 7 + 1), open) : null;
     if (w) chosen.set(n, w);
-    plan.push(`${n.why}: ${w ? `${w.says} (drawn from ${open.length} way${open.length === 1 ? ' that applies' : 's that apply'}${ways.length > open.length ? `; not drawn: ${ways.filter((x) => !open.includes(x)).map((x) => `${x.says}, as ${x.when(n, probe)}`).join('; nor ')}` : ''})` : bar ? `no way kept meets it ${bar}` : 'no way kept meets it'}${n.on ? `, ${n.kind === 'vessel' && n.on.kind === 'enclosure' ? 'in' : 'on'} ${n.on.why.replace(/^to /, 'what is to ')}` : w?.id === WALL_WAY ? ', on the wall' : ', on the floor'}`);
+    plan.push(`${n.why}: ${w ? `${w.says} (drawn from ${open.length} way${open.length === 1 ? ' that applies' : 's that apply'}${ways.length > open.length ? `; not drawn: ${ways.filter((x) => !open.includes(x)).map((x) => `${x.says}, as ${x.when(n, probe)}`).join('; nor ')}` : ''})` : bar ? `no way kept meets it ${bar}` : 'no way kept meets it'}${n.on ? `, ${n.kind === 'vessel' && n.on.kind === 'enclosure' ? 'in' : 'on'} ${n.on.why.replace(/^to /, 'what is to ')}` : w?.id === WALL_WAY ? ', on the wall' : n.kind === 'hoist' && n.want.flags.includes('wall') ? ', screwed to the wall' : ', on the floor'}`);
   }
   // sized from the top down: what stands on a thing is weighed, and what it stands on made wide enough for it
   const dry = new Map<Need, Ctx>(), row = new Map<Need, { n: Need; w: number }[]>();
@@ -2778,7 +3273,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     void i;
   }
   // placed from the bottom up, each on the top of what holds it
-  const steps: string[] = [], traces: Trace[] = [], members: string[] = [], loose: string[] = [], rides = new Map<string, string[]>(), choices: string[] = [], gaps: string[] = [], checks: (() => Check | null)[] = [], loads: string[] = [], tests: Test[] = [];
+  const steps: string[] = [], traces: Trace[] = [], members: string[] = [], loose: string[] = [], rides = new Map<string, string[]>(), choices: string[] = [], gaps: string[] = [], checks: (() => Check | null)[] = [], loads: string[] = [], tests: Test[] = [], conditions: string[] = [];
   const done = new Map<Need, Ctx>(); let foot: [number, number] = [0, 0];
   for (const [i, n] of ordered.entries()) {
     const w = chosen.get(n); if (!w) { gaps.push(`nothing kept here can ${FN_WORDS[n.want.fn]}${barred.has(n) ? ` ${barred.get(n)}` : ''}`); continue; }
@@ -2790,7 +3285,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     const within = n.kind === 'vessel' && below?.inside ? below.inside : null;
     if (below) { c.y0 = within ? within.y : below.top.y; c.top = { ...below.top }; if (within) c.after = c.base0 = { name: within.name, why: 'which it stands in, on its floor' }; else if (below.top.name) c.after = c.base0 = { name: below.top.name, why: NATURE[n.kind].goes === 'into' ? 'which it goes into' : 'which it stands on' }; c.ride = below.ride ?? (below.top.name && below.moving.includes(below.top.name) ? below.top.name : null); }
     w.make(n, c); done.set(n, c);
-    steps.push(...c.steps); traces.push(...c.traces); members.push(...c.members); loose.push(...c.loose); if (c.ride && c.riders.length) rides.set(c.ride, [...(rides.get(c.ride) ?? []), ...c.riders]); choices.push(...c.choices); gaps.push(...c.gaps); checks.push(...c.checks); loads.push(...c.loads); tests.push(...c.tests);
+    steps.push(...c.steps); traces.push(...c.traces); members.push(...c.members); loose.push(...c.loose); if (c.ride && c.riders.length) rides.set(c.ride, [...(rides.get(c.ride) ?? []), ...c.riders]); choices.push(...c.choices); gaps.push(...c.gaps); checks.push(...c.checks); loads.push(...c.loads); tests.push(...c.tests); conditions.push(...(c.conds ?? []));
     if (!n.on) foot = [Math.max(foot[0], c.foot[0]), Math.max(foot[1], c.foot[1])];
   }
   if (barred.size && con.scale) for (const m of con.scale.must) if (!gaps.includes(m)) gaps.push(m);
@@ -2860,7 +3355,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   // what was said it must not pass: its own weight, its width, height and depth, as made
   // its own size: not what stands for a wall or a bank it is fixed to
   const mine = ms.filter((m) => !STANDS.has(m.name)), L = con.limits, ext = (i: number) => (mine.length ? Math.max(...mine.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2)) - Math.min(...mine.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2)) : 0);
-  const own = ms.filter((m) => !STANDS.has(m.name)), ownKg = own.reduce((a, m) => a + m.mass, 0), stand = ms.filter((m) => STANDS.has(m.name));
+  const own = ms.filter((m) => !STANDS.has(m.name) && !BALLAST.has(m.name)), ownKg = own.reduce((a, m) => a + m.mass, 0), stand = ms.filter((m) => STANDS.has(m.name)), setOn = ms.filter((m) => BALLAST.has(m.name)), setOnKg = setOn.reduce((a, m) => a + m.mass, 0);
   const notMade = con.asked.some((a) => a.kind !== 'for' && !a.got) || gaps.length > 0;
   // with what it does not make still to come, a weight within a quarter of its limit is not shown as kept: there is too
   // little left for what is to come (estimate)
@@ -2868,7 +3363,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   // peg, estimate), carried with it and so counted against what it may weigh
   const pegs = stand.filter((m) => /_stake\d+$/.test(m.name)).length, pegKg = pegs * 0.03, kgL = ownKg + pegKg;
   const tight = notMade && kgL <= L.mass! * 1.0001 && kgL > 0.75 * L.mass!;
-  if (made && L.mass !== undefined) out.push({ what: `${notMade ? 'as made, ' : ''}it weighs no more than ${+L.mass.toPrecision(3)} kg${tight ? ', with too little left for what it does not make' : ''}`, ok: kgL <= L.mass * 1.0001 && !tight, says: `it weighs ${+kgL.toPrecision(3)} kg, its parts added up${pegs ? ` with its ${pegs} stakes as steel pegs of about 30 g each (estimate), ${+pegKg.toPrecision(3)} kg` : ''}${notMade ? ` (what it does not make, marked ✗ or not yet, is not in it and would weigh more${tight ? `: only ${+(L.mass - kgL).toPrecision(3)} kg is left for it` : ''})` : ''}${ms.some((m) => /_motor\d+$/.test(m.name)) ? ' (not what powers its motors, which is not made)' : ''}${stand.length ? (pegs === stand.length ? ` (the ${+(mass - ownKg).toPrecision(3)} kg that stands in the physics for what its stakes hold in the ground is not a weight it has)` : ` (not counting ${stand.length === 1 ? `its ${stand[0]!.name.slice(prefix.length + 1)}` : `its ${stand.length} ${[...new Set(stand.map((m) => m.name.slice(prefix.length + 1).replace(/\d+$/, '')))].join(', ')}s`}, ${+(mass - ownKg).toPrecision(3)} kg, which stand${stand.length === 1 ? 's' : ''} for ${STANDS.get(stand[0]!.name)})`) : ''}${kgL > L.mass ? `: ${kgL / L.mass < 1.1 ? `${+((kgL / L.mass - 1) * 100).toPrecision(2)}% over the limit` : `${+(kgL / L.mass).toPrecision(3)} times the limit`}; where it weighs most: ${heaviest(own)}` : ''}` });
+  if (made && L.mass !== undefined) out.push({ what: `${notMade ? 'as made, ' : ''}it weighs no more than ${+L.mass.toPrecision(3)} kg${tight ? ', with too little left for what it does not make' : ''}`, ok: kgL <= L.mass * 1.0001 && !tight, says: `it weighs ${+kgL.toPrecision(3)} kg, its parts added up${pegs ? ` with its ${pegs} stakes as steel pegs of about 30 g each (estimate), ${+pegKg.toPrecision(3)} kg` : ''}${notMade ? ` (what it does not make, marked ✗ or not yet, is not in it and would weigh more${tight ? `: only ${+(L.mass - kgL).toPrecision(3)} kg is left for it` : ''})` : ''}${ms.some((m) => /_motor\d+$/.test(m.name)) ? ' (not what powers its motors, which is not made)' : ''}${stand.length ? (pegs === stand.length ? ` (the ${+(mass - ownKg).toPrecision(3)} kg that stands in the physics for what its stakes hold in the ground is not a weight it has)` : ` (not counting ${stand.length === 1 ? `its ${stand[0]!.name.slice(prefix.length + 1)}` : `its ${stand.length} ${[...new Set(stand.map((m) => m.name.slice(prefix.length + 1).replace(/\d+$/, '')))].join(', ')}s`}, ${+(mass - ownKg).toPrecision(3)} kg, which stand${stand.length === 1 ? 's' : ''} for ${STANDS.get(stand[0]!.name)})`) : ''}${setOn.length ? ` (not counting the ${+setOnKg.toPrecision(3)} kg of ballast set on its feet where it stands, moved apart from it)` : ''}${kgL > L.mass ? `: ${kgL / L.mass < 1.1 ? `${+((kgL / L.mass - 1) * 100).toPrecision(2)}% over the limit` : `${+(kgL / L.mass).toPrecision(3)} times the limit`}; where it weighs most: ${heaviest(own)}` : ''}` });
   // what it stands on bears it, all it weighs and all it carries: a balcony is made for 2.5 kPa spread over it and 2 kN on
   // any one 50 mm square (EN 1991-1-1 Table 6.2, the least for balconies, estimate); sand or soft soil bears about 200 or
   // 100 kPa under each foot (presumptive bearing, estimate)
@@ -2909,7 +3404,8 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   // top with F sin θ, and down with F cos θ; it tips over its foot's edge where F sin θ · H passes (F cos θ + W) b / 2
   if (made && /\b(lean|leans|leaning|stumbl\w*|lurch\w*)\b/.test(con.words.toLowerCase())) { const F = con.wants.find((w) => w.fn === 'support')?.q.F?.v; if (F) { const th = (20 * Math.PI) / 180, Fh = F * Math.sin(th), Fv = F * Math.cos(th), H = ext(1), b = Math.min(ext(0), ext(2)), W = ownKg * G, Mo = Fh * H, Mr = ((Fv + W) * b) / 2; out.push({ what: 'a lean on its top does not tip it', ok: Mo < Mr, says: `${+(F / G).toPrecision(3)} kg of lean, 20° off upright (estimate): ${+Fh.toPrecision(3)} N sideways ${len(H)} up turns it over its ${len(b)} foot's edge with ${+Mo.toPrecision(3)} N·m, against ${+Mr.toPrecision(3)} N·m from the ${+Fv.toPrecision(3)} N down and its own ${+ownKg.toPrecision(3)} kg (statics)${Mo >= Mr ? ': it tips; it wants a wider foot, or to be held' : ''}` }); } }
   // a weight spread on its top (snow): borne by its widest flat part, as the load law finds, by two, bending within 1/250
-  if (made && con.said.topP !== undefined && !con.wants.some((w) => w.fn === 'enclose' && w.q.roofP)) { const top = mine.filter((m) => m.h <= Math.min(m.w, m.d) + 1e-9).sort((a2, b2) => b2.w * b2.d - a2.w * a2.d)[0]; if (top) { const F = con.said.topP * top.w * top.d, nm = top.name.slice(prefix.length + 1).replace(/\d+$/, ''), w2 = new Workshop(ROOM, 1); let r: Check; try { for (const x of ordSteps) if (/^place /.test(x)) w2.run(x); w2.run(`load ${top.name} with ${F.toFixed(1)} N + ${top.name}.mass * g spread`); const f = w2.value(`${top.name}.factor`), b = w2.value(`${top.name}.deflection`), span = Math.max(top.w, top.d); r = { what: `its ${nm} bears ${+(con.said.topP / 1000).toPrecision(3)} kPa on it`, ok: f >= 2 && b <= span / 250, says: `${+(F / 1000).toPrecision(3)} kN spread over its ${len(top.w)} × ${len(top.d)}: the load law: ${factorSays(f)}, ${bendSays(b, span)} (1/250 of ${len(span)} is ${len(span / 250)}: more fails)` }; } catch (e) { r = { what: `its ${nm} bears ${+(con.said.topP / 1000).toPrecision(3)} kPa on it`, ok: false, says: (e as Error).message.slice(0, 200) }; } out.push(r); } }
+  // a roof grown from its conditions bears what lies on it by its own frames (each bay sized for it), not as one sheet
+  if (made && con.said.topP !== undefined && !con.wants.some((w) => w.fn === 'enclose' && w.q.roofP || w.cond?.cover)) { const top = mine.filter((m) => m.h <= Math.min(m.w, m.d) + 1e-9).sort((a2, b2) => b2.w * b2.d - a2.w * a2.d)[0]; if (top) { const F = con.said.topP * top.w * top.d, nm = top.name.slice(prefix.length + 1).replace(/\d+$/, ''), w2 = new Workshop(ROOM, 1); let r: Check; try { for (const x of ordSteps) if (/^place /.test(x)) w2.run(x); w2.run(`load ${top.name} with ${F.toFixed(1)} N + ${top.name}.mass * g spread`); const f = w2.value(`${top.name}.factor`), b = w2.value(`${top.name}.deflection`), span = Math.max(top.w, top.d); r = { what: `its ${nm} bears ${+(con.said.topP / 1000).toPrecision(3)} kPa on it`, ok: f >= 2 && b <= span / 250, says: `${+(F / 1000).toPrecision(3)} kN spread over its ${len(top.w)} × ${len(top.d)}: the load law: ${factorSays(f)}, ${bendSays(b, span)} (1/250 of ${len(span)} is ${len(span / 250)}: more fails)` }; } catch (e) { r = { what: `its ${nm} bears ${+(con.said.topP / 1000).toPrecision(3)} kPa on it`, ok: false, says: (e as Error).message.slice(0, 200) }; } out.push(r); } }
   // stacked: as made, each stands on the one below, its height again; to nest, each part under it must stand outside the
   // one below it (legs splayed past the seat under them), which is not derived
   if (made && con.said.stackN !== undefined) { const n = con.said.stackN, h = ext(1), tall = n * h, room = con.said.stackH; out.push({ what: `${n} of it stack${room !== undefined ? ` within ${len(room)}` : ''}`, ok: room !== undefined && tall <= room * 1.0001, says: `${n} stand ${len(tall)}, each ${len(h)} tall as made and standing on the one below${room !== undefined ? `${tall > room ? `, more than ${len(room)}` : ''}; to nest within it, each must sit no more than ${len(Math.max(0, room - h) / Math.max(1, n - 1))} above the one below` : ''}; to nest, its legs must stand outside the seat under them, which is not derived` }); }
@@ -2987,7 +3483,7 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     // is pushed in its test is not driven
     if (a.got && (a.kind === 'has' && /\b(motors?|gear ?motors?|engines?|actuators?|servos?|steppers?)\b/i.test(a.text) || a.kind === 'thing' && /\b(motori[sz]ed|motor-driven|electric)\b/i.test(a.text)) && !tests.some((x) => x.kind === 'spin' || x.kind === 'drive')) return { ...a, got: null, why: a.kind === 'thing' ? `made only as something to ${FN_WORDS[a.got]}: no motor is made; what moves is pushed in its test, and what drives it is not derived` : 'no motor is made: what moves is pushed in its test, and what drives it is not derived' };
     // "stay shut when cattle lean on it": done where its latch is made and holds; read before what is made, it waits on it
-    if (a.kind === 'does' && !a.got && a.why.startsWith('what holds it shut')) { const lc = out.find((x) => x.what === 'shut, its latch and its posts hold half the push each'); if (lc) return lc.ok ? { ...a, got: 'swing' as Fn, why: '' } : { ...a, why: `its own check fails: ${lc.what}${short(lc.says)}` }; }
+    if (a.kind === 'does' && !a.got && a.why.startsWith('what holds it shut')) { const lc = out.find((x) => x.what === 'shut, its latch and its posts hold the push leant near them'); if (lc) return lc.ok ? { ...a, got: 'swing' as Fn, why: '' } : { ...a, why: `its own check fails: ${lc.what}${short(lc.says)}` }; }
     // towed: done only where what hitches it to what tows it is made; it is not
     if (a.got === 'move' && a.kind !== 'thing' && /\btow(ed|s|ing)?\b/i.test(a.text) && gaps.some((g) => g.startsWith('what hitches it to what tows it'))) return { ...a, got: null, why: 'it rolls, but what hitches it to what tows it (a tow arm and a hitch) is not made, and its speed is not weighed' };
     // "30 cubbies": so many compartments are that thing only where their dividers are made; made as shelves, they are not
@@ -3014,6 +3510,12 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
     const sp = (x: string) => x.toLowerCase().replace(/\s+/g, ' '), unused = a.got && a.kind !== 'for' && a.kind !== 'thing' ? con.dropped.filter((d) => { const n = d.split(':')[0]!.trim(); return /\d/.test(n) && sp(a.text).includes(sp(n)); }) : [];
     // "swings open on its own": nothing made does it by itself where no drive is made
     const bySelf = a.got && a.kind === 'does' && /\b(on its own|by itself|of itself|automatically|unaided)\b/i.test(a.text) && !ordSteps.some((x) => /^place motor\b/.test(x)) ? (/\b(unpowered|no (power|electricity)|without (power|electricity)|passive(ly)?)\b/i.test(con.words) ? `nothing made does it by itself: what ${/\b(shut|shuts|close|closes)\b/i.test(a.text) ? 'shuts' : 'moves'} it with no power (${a.got === 'swing' ? 'a spring, a weight, or hinges set aslant so it falls shut' : 'a spring or a weight'}) is not made` : `nothing made does it by itself: what drives it (${a.got === 'swing' ? 'a ram or a motor at its hinge' : 'a motor'}) is not made`) : '';
+    // made as its frame: all it lifts is borne by its arms at full throttle, and what it carries is a weight carried
+    if (con.wants.some((w) => w.flags.includes('frame'))) {
+      const arms = out.find((x) => x.what === 'its arms bear its motors at full throttle');
+      if (arms && /^it lifts .* in all$/.test(a.text)) return { ...a, got: arms.ok ? ('lift' as Fn) : null, met: arms.ok, why: arms.ok ? '' : `its own check fails: ${arms.what}${short(arms.says)}`, how: 'borne by its arms at full throttle' };
+      if (a.kind === 'has' && /\b(payload|camera|gimbal)\b/i.test(a.text) && findQuantities(` ${a.text} `).some((q) => sameDim(q.dim, DIMS.mass))) return { ...a, got: 'lift' as Fn, why: '', how: 'carried: its weight is in all it lifts' };
+    }
     // a wind it must survive is not done where what carries it there is not made: sockets that hold its poles upright at
     // their feet, or what holds it down in snow, where a peg holds little
     const rests = a.got && a.kind !== 'for' && /\b(gusts?|winds?|gales?|storms?)\b/i.test(a.text) ? gaps.find((g) => /wants a socket or base at each foot that holds it so, not made|in snow or ice a peg holds little/.test(g)) : undefined;
@@ -3032,7 +3534,9 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
   const figs = (x: string) => [...x.toLowerCase().matchAll(/(\d[\d.,]*)\s*(kg|g|mm|cm|m|kw|w|l)\b/g)].map((m) => { const v = parseFloat(m[1]!.replace(/,/g, '')), u = m[2]!; return u === 'g' ? [v / 1000, 'kg'] : u === 'mm' ? [v / 1000, 'm'] : u === 'cm' ? [v / 100, 'm'] : u === 'kw' ? [v * 1000, 'w'] : [v, u]; }) as [number, string][];
   // (by the units each is said in, inches against millimetres, as the same quantity within 1%)
   const said = (lim: string, text: string) => figs(lim).some(([v, u]) => figs(text).some(([v2, u2]) => u === u2 && Math.abs(v - v2) <= 1e-3 * Math.max(v, v2))) || findQuantities(lim).some((p) => p.dim && findQuantities(` ${text} `).some((q) => q.dim && sameDim(p.dim, q.dim) && Math.abs(p.si - q.si) <= 0.01 * Math.max(Math.abs(p.si), Math.abs(q.si))));
-  for (const x of out.filter((y) => LIMIT.test(y.what) && !asked.some((a) => a.why.includes(y.what) || (a.kind !== 'for' && a.kind !== 'limit' && said(y.what, a.text))))) { const left = /only ([\d.]+ kg) is left for it/.exec(x.says); asked.push({ text: x.what.replace(/^as made, /, '').replace(/, with too little left for what it does not make$/, ''), kind: 'limit', got: null, met: x.ok, why: x.ok ? '' : left ? `as made it is within it, but only ${left[1]} is left for what it does not make` : `its own check fails${short(x.says)}` }); }
+  // a part's weight taken from who puts it up is said with that, not as a thing of its own asked
+  if (con.said.partPeople !== undefined) { const pc = out.find((y) => /^no part weighs more than/.test(y.what)); const ai = asked.findIndex((a) => /^who puts it up|^setting it up is not derived|^putting it/.test(a.why) || /\b(assembl\w*|pitch\w*|put up|set up|erect\w*)\b/i.test(a.text)); if (pc && ai >= 0) asked[ai] = { ...asked[ai]!, why: `${asked[ai]!.why}; of it, ${pc.what} (what they lift together), ${pc.ok ? 'kept' : 'not kept'}: ${pc.says}` }; }
+  for (const x of out.filter((y) => LIMIT.test(y.what) && !(con.said.partPeople !== undefined && /^no part weighs more than/.test(y.what)) && !asked.some((a) => a.why.includes(y.what) || (a.kind !== 'for' && a.kind !== 'limit' && said(y.what, a.text))))) { const left = /only ([\d.]+ kg) is left for it/.exec(x.says); asked.push({ text: x.what.replace(/^as made, /, '').replace(/, with too little left for what it does not make$/, ''), kind: 'limit', got: null, met: x.ok, why: x.ok ? '' : left ? `as made it is within it, but only ${left[1]} is left for what it does not make` : `its own check fails${short(x.says)}` }); }
   // what it was said to stand in or keep to (a wind, snow, cold or heat, how long its cells last, water held back) is
   // asked as much as what it does: met where the checks and the laws that weigh it pass. Checks and laws of one thing
   // said (by its topic, or a figure they share, units aside) are taken as one; one that no item above answers is asked
@@ -3060,11 +3564,13 @@ function once(con: Conception, seed: number, prefix: string, at: [number, number
       if (!hit.length) asked.push({ text: head.what, kind: 'limit', got: null, met, why: why({ text: head.what } as Asked) });
     }
   }
+  // made as its frame: all it lifts is borne by its arms at full throttle
+  if (con.wants.some((w) => w.flags.includes('frame'))) { const arms = out.find((x) => x.what === 'its arms bear its motors at full throttle'); if (arms) for (const [i, a] of asked.entries()) if (/^it lifts .* in all$/.test(a.text)) asked[i] = { ...a, got: arms.ok ? ('lift' as Fn) : null, met: arms.ok, why: arms.ok ? '' : `its own check fails: ${arms.what}${short(arms.says)}`, how: 'borne by its arms at full throttle' }; }
   // what floats is let go and pushed on dry ground: there is no water in the physics
   if (con.wants.some((w) => w.fn === 'float')) for (const [i, x] of out.entries()) if (x.what === 'it stands when let go' || x.what === 'pushed at its top, it does not tip') out[i] = { ...x, says: `${x.says}; on dry ground: there is no water in the physics, so this says nothing of how it floats` };
   const does = doesOf(asked, gaps, con.wants), ok = made && out.every((x) => x.ok), holds = made && out.every((x) => x.ok || LIMIT.test(x.what) || /^it folds flat$|^folded, it lies still|^it packs down$/.test(x.what));
   const foldTrack = fold?.clean && folded?.ok && asBuilt ? foldTrackOf(fold, asBuilt) : undefined;
-  return { ...(foldTrack ? { foldTrack } : {}), name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, holds, choices, tries: [], gaps, mass: ownKg, parts: own.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };
+  return { ...(foldTrack ? { foldTrack } : {}), name: con.name, title: `${con.name} (seed ${seed})`, seed, prefix, steps: ordSteps, traces: tr, checks: out, ok, holds, choices, tries: [], gaps, ...(conditions.length ? { conditions } : {}), mass: ownKg, parts: own.length, footprint: foot, words: con.words, plan, asked, does, whole: ok && !gaps.length && does[0] === does[1] };
 }
 /** A child climbing it, it empty: their weight hung about 300 mm out from the outline its feet make, at the middle of its
  *  front (its longer side), turns it over that edge, held back only by its own weight: it tips where F d_out passes
@@ -3079,7 +3585,7 @@ function climbTips(ms: Box2[], F: number): Check | null {
   // and on it, leaning back from its top: their weight out on its front and their pull at its top together; a child hanging
   // back on straight arms pulls outward up to about their own weight (estimate)
   const P = Math.max(0, (Mr - Mt) / top), ok = Mt < Mr && P >= F;
-  return { what: `empty, a ${+(F / G).toPrecision(3)} kg child climbing its front does not tip it`, ok, says: `hung on the middle of its front, their weight about ${len(out)} out from its foot there (estimate): ${+Mt.toPrecision(3)} N·m over that edge against ${+Mr.toPrecision(3)} N·m its own ${+(W / G).toPrecision(3)} kg holds it with, ${len(inn)} inside (statics)${Mt < Mr ? `, ${+(Mr / Mt).toPrecision(3)} times it` : ': it tips'}; standing on it and leaning back from its top, ${len(top)} up, their pull there tips it at ${+P.toPrecision(3)} N ((W d_in − F d_out) / H, statics), ${+((P / F) * 100).toPrecision(2)}% of their weight, ${ok ? 'more than' : 'less than'} the up to their own weight a child hanging back on straight arms pulls (estimate)${ok ? '' : ': it wants fixing to the wall, a wider foot, or weight low in it'}` };
+  return { what: `empty, a ${+(F / G).toPrecision(3)} kg child climbing its front does not tip it`, ok, says: `hung on the middle of its front, their weight about ${len(out)} out from its foot there (estimate): ${+Mt.toPrecision(3)} N·m over that edge against ${+Mr.toPrecision(3)} N·m its own ${+(W / G).toPrecision(3)} kg holds it with, ${len(inn)} inside (statics)${Mt < Mr ? `, ${+(Mr / Mt).toPrecision(3)} times it` : ': it tips'}; standing on it and leaning back from its top, ${len(top)} up, their pull there tips it at ${+P.toPrecision(3)} N ((W d_in − F d_out) / H, statics), ${((P / F) * 100).toFixed(0)}% of their weight, ${ok ? 'more than' : 'less than'} the up to their own weight a child hanging back on straight arms pulls (estimate)${ok ? '' : ': it wants fixing to the wall, a wider foot, or weight low in it'}` };
 }
 /** What stands on the floor holds it up within the outline its feet make (their convex hull); a weight put down at a
  *  corner or edge of its top outside that outline turns it over the nearest edge of it, held back only by its own weight
@@ -3120,6 +3626,10 @@ const tiltOf = (from: number[], to: number[]) => { const a = matOf(from as [numb
 /** With real physics: let go, it stands; pushed at its top by a tenth of its weight, it does not tip; what moves, moves. */
 function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], riders: string[] = [], wind?: number, carried = 0, rho = airRho()): Check[] {
   const out: Check[] = [], mine = () => new Map(w.all().made.filter((m) => m.name.startsWith(`${prefix}_`)).map((m) => [m.name, m]));
+  // fixed to what holds it, it stands as that does: letting it go, pushing it or blowing on it would test what stands for
+  // the world, not it; what its fixings bear is weighed by statics with its struts
+  const fixedTo = FIXED.get(prefix);
+  if (fixedTo && !tests.some((t) => t.kind !== 'raise')) return [{ what: 'it stands when let go', ok: true, says: `fixed at its plates to ${fixedTo}, which stands for the world here: it does not fall or tip while that holds; what each plate is pulled and pushed with is weighed by statics with its struts, and how the bolts or clamps there hold it is not derived` }];
   try {
     const drive = tests.find((t) => t.kind === 'drive') as Extract<Test, { kind: 'drive' }> | undefined, spin = tests.find((t) => t.kind === 'spin') as Extract<Test, { kind: 'spin' }> | undefined;
     const before = mine(); w.run(drive || spin ? 'simulate 0.5 s' : 'simulate 1.5 s'); const after = mine();
@@ -3163,12 +3673,25 @@ function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], ri
       // run last: a gust that slides it away or flings a door open would leave what it does tested where it was blown to
       if (wind !== undefined) windLater = () => {
         const q = 0.5 * rho * wind ** 2, ys = [...after.values()].map((m) => [m.at[1] - m.h / 2, m.at[1] + m.h / 2]), y0 = Math.min(...ys.map((v) => v[0]!)), hy = Math.max(...ys.map((v) => v[1]!)) - y0, A = (ax === 'z' ? wx : wz) * hy;
-        const faces = [...after.values()].map((m) => { const across = ax === 'z' ? m.w : m.d, lo = Math.min(across, m.h), hi = Math.max(across, m.h), cd = hi > 5 * lo ? 2 : 1.2; return { F: q * cd * across * m.h, y: m.at[1], A: across * m.h, bar: cd === 2 }; });
-        const Fp = faces.reduce((a, f) => a + f.F, 0), Fs = q * 1.2 * A, Fw = Math.min(Fp, Fs), yc = Fp > 0 ? faces.reduce((a, f) => a + f.F * f.y, 0) / Fp : y0 + hy / 2, Ap = faces.reduce((a, f) => a + f.A, 0), bars = faces.filter((f) => f.bar).length;
+        // what each part shows across the wind as it is turned: a box, half the sum over its faces of each face's area by
+        // how square it stands to the wind (|n · d| A); a tube or a rod, its length by its width by the sine of its angle
+        // to the wind, and its end by the cosine; square to the axes, as its outline shows
+        const dW: [number, number, number] = ax === 'z' ? [0, 0, 1] : [1, 0, 0];
+        const shows = (m: Made): { A: number; slender: boolean; round?: boolean } => {
+          if (!m.turn.some((a) => Math.abs(a) > 1e-9)) { const across = ax === 'z' ? m.w : m.d; return { A: across * m.h, slender: Math.max(across, m.h) > 5 * Math.min(across, m.h) }; }
+          const R = matOf(m.turn), col = (i: number): [number, number, number] => [R[i]!, R[3 + i]!, R[6 + i]!], e = [m.local.w, m.local.h, m.local.d];
+          if (m.kind === 'tube' || m.kind === 'cylinder') { const i = ({ x: 0, y: 1, z: 2 } as const)[m.axis], u = col(i), c2 = Math.abs(u[0] * dW[0] + u[1] * dW[1] + u[2] * dW[2]), L = e[i]!, D = Math.max(...e.filter((_, k) => k !== i)); return { A: D * L * Math.sqrt(Math.max(0, 1 - c2 * c2)) + (Math.PI * D * D * c2) / 4, slender: L > 5 * D, round: true }; }
+          let A = 0; for (let i = 0; i < 3; i++) { const u = col(i), c2 = Math.abs(u[0] * dW[0] + u[1] * dW[1] + u[2] * dW[2]); A += c2 * e[(i + 1) % 3]! * e[(i + 2) % 3]!; }
+          const sorted = [...e].sort((a, b) => b - a); return { A, slender: sorted[0]! > 5 * sorted[1]! };
+        };
+        // a slender flat part (a bar, a board edge on) by a drag coefficient of 2; a round one across the wind (a tube, a
+        // pole) by 1.2, as a cylinder below its drag crisis (estimate); any other by 1.2
+        const faces = [...after.values()].map((m) => { const sh = shows(m), cd = sh.slender && !sh.round ? 2 : 1.2; return { F: q * cd * sh.A, y: m.at[1], A: sh.A, bar: sh.slender && !sh.round, round: sh.slender && !!sh.round }; });
+        const Fp = faces.reduce((a, f) => a + f.F, 0), Fs = q * 1.2 * A, Fw = Math.min(Fp, Fs), yc = Fp > 0 ? faces.reduce((a, f) => a + f.F * f.y, 0) / Fp : y0 + hy / 2, Ap = faces.reduce((a, f) => a + f.A, 0), bars = faces.filter((f) => f.bar).length, rounds = faces.filter((f) => f.round).length;
         const r1 = [...mine().get(frame.name)!.turn], at1 = [...mine().get(frame.name)!.at];
         w.run(`push ${frame.name} with ${+Fw.toFixed(2)} N along ${ax} for 2 s at ${+yc.toFixed(4)} m up`);
         const t2 = mine().get(frame.name)!, tip2 = tiltOf(r1, t2.turn), slid = Math.hypot(t2.at[0] - at1[0]!, t2.at[2] - at1[2]!);
-        out.push({ what: `it stands in a ${+(wind * 3.6).toPrecision(3)} km/h wind`, ok: tip2 < (5 * Math.PI) / 180 && slid < 0.05, says: `the wind pushes ½ ρ v² = ${+q.toPrecision(3)} Pa${Math.abs(rho - 1.204) > 0.01 ? ` (air ${+rho.toPrecision(3)} kg/m³ where it stands, p / R T)` : ''} on the ${+Ap.toPrecision(3)} m² its parts show across it (${bars} slender, by a drag coefficient of 2, the rest by 1.2, estimate)${Fp > Fs ? `, which is more than its ${+A.toPrecision(3)} m² outline would take as if solid, so that is taken` : ''}: ${+Fw.toPrecision(3)} N, centred ${len(yc - y0)} up, for 2 s (Jolt), it tilted ${+((tip2 * 180) / Math.PI).toFixed(1)}° and ${slid > 0.5 ? 'was moved more than 0.5 m, lifted or slid off (how far it then goes is no figure to build on)' : `slid ${len(slid)}`} (more than 5° or 50 mm fails); on what it carries the wind is not counted${tip2 >= (5 * Math.PI) / 180 ? ': it blows over' : slid >= 0.05 ? ': it does not tip but slides away: it needs holding down (stakes, guy lines, anchors or ballast), none of them kept' : ''}` });
+        out.push({ what: `it stands in a ${+(wind * 3.6).toPrecision(3)} km/h wind`, ok: tip2 < (5 * Math.PI) / 180 && slid < 0.05, says: `the wind pushes ½ ρ v² = ${+q.toPrecision(3)} Pa${Math.abs(rho - 1.204) > 0.01 ? ` (air ${+rho.toPrecision(3)} kg/m³ where it stands, p / R T)` : ''} on the ${+Ap.toPrecision(3)} m² its parts show across it (${bars} slender, by a drag coefficient of 2, ${rounds ? `${rounds} round across it and ` : ''}the rest by 1.2, estimate)${Fp > Fs ? `, which is more than its ${+A.toPrecision(3)} m² outline would take as if solid, so that is taken` : ''}: ${+Fw.toPrecision(3)} N, centred ${len(yc - y0)} up, for 2 s (Jolt), it tilted ${+((tip2 * 180) / Math.PI).toFixed(1)}° and ${slid > 0.5 ? 'was moved more than 0.5 m, lifted or slid off (how far it then goes is no figure to build on)' : `slid ${len(slid)}`} (more than 5° or 50 mm fails); on what it carries the wind is not counted${tip2 >= (5 * Math.PI) / 180 ? ': it blows over' : slid >= 0.05 ? ': it does not tip but slides away: it needs holding down (stakes, guy lines, anchors or ballast), none of them kept' : ''}` });
         // empty, by statics (what it carries is not on it in every wind): the wind's moment about its foot's edge against its
         // own weight on the middle of its foot; and the wind over its top lifting it, suction about 0.8 of ½ ρ v² over its
         // plan (a flat roof, estimate), against its own weight
@@ -3178,8 +3701,12 @@ function physics(w: Workshop, prefix: string, piece: string[], tests: Test[], ri
         // and its turning act together, so what holds it down is its weight less the lift
         const roofed = [...after.keys()].some((n) => n === `${prefix}_roof`), door = tests.some((t) => t.kind === 'swing'), openF = OPEN.has(prefix), cpi = roofed ? (openF ? 0.63 : 0.2) : 0, up = (0.8 + cpi) * q * wx * wz, upOpen = roofed && door ? (0.8 + 0.6) * q * wx * wz : 0;
         // what its stakes hold, where it has them: all of them against its lifting, the windward half, at its far edge, against its turning over
-        const an = ANCHORS.get(prefix), hold = an ? an.n * an.each : 0, holdW = an ? (Math.floor(an.n / 2) * an.each) : 0, Mr = an ? ((own - up) * bw) / 2 + holdW * bw : (Math.max(0, own - up) * bw) / 2;
-        out.push({ what: 'empty, it stands in that wind', ok: Mt < Mr, says: `with nothing on it, by statics: the wind's ${+Fw.toPrecision(3)} N, ${len(yc - y0)} up, turns it over its foot's edge with ${+Mt.toPrecision(3)} N·m; against it, its own ${+(own / G).toPrecision(3)} kg (${+own.toPrecision(3)} N) less the ${+up.toPrecision(3)} N the wind lifts it by, over half its ${len(bw)} foot, holds it down with ${+Mr.toPrecision(3)} N·m${an ? `, with ${Math.floor(an.n / 2)} of its ${an.n} stakes on the windward side holding ${+holdW.toPrecision(3)} N at its far edge (${an.says})` : ''}${up >= own && !an ? ' (the lift outweighs it)' : ''}${Mt >= Mr ? `: it tips: ${an ? 'its stakes do not hold it: it wants more of them, or guy lines from its top' : 'it needs holding down or ballast (none kept)'}` : ''}` });
+        // each part's weight about the edge of its feet the wind would tip it over (the far one, down the wind), where
+        // each part stands; the wind's lift about it from the middle of its plan
+        const ixw = ax === 'z' ? 2 : 0, all1 = [...after.values()], low = Math.min(...all1.map((m) => m.at[1] - m.h / 2)), feet1 = all1.filter((m) => m.at[1] - m.h / 2 <= low + 2e-3), edge = feet1.length ? Math.max(...feet1.map((m) => m.at[ixw]! + [m.w, m.h, m.d][ixw]! / 2)) : 0, xs1 = all1.map((m) => [m.at[ixw]! - [m.w, m.h, m.d][ixw]! / 2, m.at[ixw]! + [m.w, m.h, m.d][ixw]! / 2]), xc1 = (Math.min(...xs1.map((v) => v[0]!)) + Math.max(...xs1.map((v) => v[1]!))) / 2;
+        const Mown = all1.filter((m) => !STANDS.has(m.name)).reduce((a, m) => a + m.mass * G * (edge - m.at[ixw]!), 0), Mup = up * (edge - xc1);
+        const an = ANCHORS.get(prefix), hold = an ? an.n * an.each : 0, holdW = an ? (Math.floor(an.n / 2) * an.each) : 0, Mr = an ? Mown - Mup + holdW * bw : Math.max(0, Mown - Mup);
+        out.push({ what: 'empty, it stands in that wind', ok: Mt < Mr, says: `with nothing on it, by statics: the wind's ${+Fw.toPrecision(3)} N, ${len(yc - y0)} up, turns it over its foot's edge with ${+Mt.toPrecision(3)} N·m${openF ? ' (taken with the wind blowing into its open front, as its lift is: the air inside then pushes its back wall out about as hard as the wind outside would push it, 0.63 inside and 0.3 behind against the 1.2 its drag takes, estimate)' : ''}; against it, its own ${+(own / G).toPrecision(3)} kg (${+own.toPrecision(3)} N) less the ${+up.toPrecision(3)} N the wind lifts it by, each where it stands about the far edge of its ${len(bw)} foot, holds it down with ${+Mr.toPrecision(3)} N·m${an ? `, with ${Math.floor(an.n / 2)} of its ${an.n} stakes on the windward side holding ${+holdW.toPrecision(3)} N at its far edge (${an.says})` : ''}${up >= own && !an ? ' (the lift outweighs it)' : ''}${Mt >= Mr ? `: it tips: ${an ? 'its stakes do not hold it: it wants more of them, or guy lines from its top' : 'it needs holding down or ballast (none kept)'}` : ''}` });
         out.push({ what: 'the wind does not lift it', ok: 1.5 * up <= 0.9 * own + hold / 1.5 && upOpen < own + hold, says: `over its ${+(wx * wz).toPrecision(3)} m² plan the wind sucks up about ${+up.toPrecision(3)} N (0.8 of ½ ρ v² over a flat roof${roofed ? (openF ? ', and the air inside pushing up 0.63 of it through its open front facing the wind (0.9 of the +0.7 on a windward wall, EN 1991-1-4 7.2.9 and Table 7.1)' : ', and the air inside pushing up 0.2 of it with its openings shut (EN 1991-1-4 7.2.9)') : ''}, estimate) against its own ${+own.toPrecision(3)} N${an ? ` and the ${+hold.toPrecision(3)} N its ${an.n} stakes hold (by 1.5)` : ''}${an ? (1.5 * up > 0.9 * own + hold / 1.5 ? ': it wants more stakes, or guy lines from its top' : '') : up >= own ? ': it lifts off, and needs holding down (stakes, guy lines, anchors), none kept' : 1.5 * up > 0.9 * own ? `: within its weight, but not with the margins taken for it (0.9 of its weight against 1.5 of the lift, EN 1990 Table A1.2(A)): it wants holding down` : ''}${upOpen ? `; with its door open into the wind, about ${+upOpen.toPrecision(3)} N${upOpen >= own + hold ? ', and it lifts' : ''}` : ''}` });
       };
     }
@@ -3325,4 +3852,31 @@ export function sayDesign(d: Design): string {
 export function sayTrace(d: Design, part: string): string {
   const t = d.traces.find((x) => x.what === part || x.what === `${d.prefix}_${part}` || x.what.endsWith(`_${part}`)); if (!t) return `Nothing in ${d.title} is named ${part}.`;
   return `${t.what.replace(`${d.prefix}_`, '')}: called by "${t.called}"; ${t.when}; why: ${t.why}; where: ${t.where}; how: ${t.how}.`;
+}
+
+// ==== the law of scale ================================================================================================
+/** What happens to what was made as it is made bigger or smaller, every length by the same s: a frame grown is solved
+ *  again at each size, its load made with it (as a thing of the same stuff, its weight by s³) or kept as it is, and each
+ *  margin's power of s and the size it first fails at said; and at the size asked (s), its margins there and which of
+ *  the effects that rule things of a size (its own weight, the air's stickiness, surface tension, a motor's kind, heat)
+ *  have passed their thresholds between its size and that one. */
+export function scaleSay(d: Design, at?: number): string[] {
+  const out: string[] = [], f = FRAMES.get(d.prefix);
+  const L = Math.max(d.footprint[0], d.footprint[1], ...(f ? [Math.max(...f.nodes.map((p) => p[1])) - Math.min(...f.nodes.map((p) => p[1]))] : []));
+  const say = (x: number) => (x >= 10 ? `${+x.toPrecision(3)} times` : x >= 1 ? `${+x.toPrecision(3)} times` : `1/${+(1 / x).toPrecision(3)}`);
+  if (f) {
+    for (const k of scaleLaw(f)) {
+      const parts = k.laws.map((l) => `${l.what === 'strength' ? 'its struts\' strength' : l.what === 'buckling' ? 'their buckling' : 'how little its load moves'} ${+l.at1.toPrecision(3)} times what it asks, going as s^${+l.power.toFixed(2)}${l.fails ? `, so it fails at ${say(l.fails)} its size (${len(L * l.fails)} across)` : ', and holds from a thousandth to a thousand times its size'}`);
+      out.push(`${k.withIt ? 'made bigger or smaller with what it carries (that too by s³)' : 'made bigger or smaller, what it carries kept as it is'}: ${parts.join('; ')}`);
+    }
+    out.push('so: a thing of the same stuff and shape is weaker for its size the bigger it is (its weight grows as s³, what its struts bear as s²: Galileo, 1638), and a thing that carries the same load is weaker the smaller it is (what its struts bear shrinks as s², buckling as s⁴ over s²)');
+  }
+  if (at !== undefined) {
+    if (f) { const a = frameAt(f, at, true), b = frameAt(f, at, false); out.push(`at ${say(at)} its size (${len(L * at)} across): with what it carries made with it, its strength ${+a.strength.toPrecision(3)}, buckling ${+a.buckling.toPrecision(3)} times what it asks; with it kept as it is, ${+b.strength.toPrecision(3)} and ${+b.buckling.toPrecision(3)}`); }
+    const r0 = sizeAt(L), r1 = sizeAt(L * at), flips = r1.groups.filter((g) => { const g0 = r0.groups.find((x) => x.key === g.key); return g0 && g0.past !== g.past; });
+    out.push(`at ${len(L * at)}, what changes from ${len(L)}: ${flips.length ? flips.map((g) => `${g.name}: ${g.says}`).join('; ') : 'none of the effects that rule things of a size passes its threshold between them'}`);
+    for (const m of r1.must) out.push(`at ${len(L * at)}: ${m}`);
+    if (!f) out.push('its own checks are not solved again at that size: only a frame grown along its loads is (the others are drawn, not grown)');
+  }
+  return out;
 }

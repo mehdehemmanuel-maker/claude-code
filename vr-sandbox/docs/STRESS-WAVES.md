@@ -1203,6 +1203,7 @@ Five fresh testers with no context each wrote four asks, twenty in all. These we
 | Wave 6, rejudged after the fixes below | 2.3 | 1.0 | 1.8 | 2.5 |
 | Wave 6, judged a third time | 2.85 | 0.9 | 2.05 | 3.0 |
 | Wave 6, judged a fourth time, after the fixes below | 3.1 | 1.05 | 2.1 | 3.05 |
+| Wave 6, judged a fifth time | 3.05 | 1.2 | 2.25 | 3.0 |
 
 ### What was wrong, by cause
 
@@ -1472,6 +1473,43 @@ The fourth judges found again that the figures were right. They marked down what
   - a scissor-lift whose only failure is its packed size now reads "holds, but not to all its limits";
   - the cattle-race gate no longer ticks "swings shut by itself", since nothing made shuts it.
 - **The twelve folding asks fold as before.** One headline's wording moved the same way.
+
+### After wave 6 was judged a fifth time
+
+Made and holds rose again; read and honest held. The fifth judges again re-derived the figures and found them right. They found the laws thin where a part's own working was left out. Fixed by cause:
+
+**Laws added or corrected.**
+- **A flap that rises on its own** now lifts off when its weight is met by the water in its recess (19.5 mm deep for a 12.3 kg flap, ρ L W), and a latch freed by a float holds it down until the water outside is 50 mm up. Floated, the whole flap is under water (50.4 kg of lift, ρ L W T). It stands upright at 346 mm, where its buoyancy's turning about its hinge meets its weight's. Its skins want ribs no more than 287 mm apart to sag no more than their 3 mm (Roark); the ribs are said, not made.
+- **A gate leant on near one end** puts nearly the whole push on the post there, not half on each. Its posts and the concrete they stand in are sized for that: 59 mm posts at 109 MPa, a 900 mm cube at the latch post.
+- **The habitat's room** is now what is held at pressure, not only what is lived in. Its crew want 100 m³ to live in. The ISS holds 388 m³ habitable in 916 m³ pressurized, so this crew want 236 m³ at pressure, a cylinder 4.35 m long between its ends, 1770 kg of wall. What is left for all that goes in it is said.
+- **Two AA cells driving a motor in pulses** hold about 3 Wh each, not 3.5. The clock lifts 12 mm along its track (1 in 41.7) so they last its year.
+- **A quadcopter's arms** are sized three ways: by their yield at full throttle, by a sag of a hundredth of their length, and so that they ring above 1.25 times their rotors' hover speed. The arms are now 14 × 8 mm. Its drop is ticked only where one arm alone takes what it lands with.
+- **A corer** is weighed: the core it holds (2 kg of mud at 1600 kg/m³ in a 60 mm bore), and the push to drive it in and pull it out against the friction on its wall (τ about 2 kPa, estimate).
+- **A greenhouse that cannot hold its warmth bare** is not said impossible where night curtains and triple walls might keep it: it says "might", and why.
+- **A dock's chop** is weighed only as a still crest, so it is not ticked.
+- **A shelf a child climbs** is sized for them. Where they would tip it, a steel plate low in it gives the weight it lacks. The plate, and the dividers that make the cubbies, are said among the choices.
+
+**Made where it was not.**
+- **A trailer's wheels** are set out with room for their tyres, and its stub axles are checked.
+- **A cart's fore-aft tip** is weighed with what it carries where it stands, not midway.
+- **A lifter hung on a wall is screwed to it.** Its posts buckle only between their screws (600 mm apart, estimate), and they bear the push of a carriage held out from the wall on its rollers. Its carriage bears being held out from them as well as its span between them. Its carriage holds a 55 lb hay bale (910 × 460 × 360 mm, ×1.1). It is 12.5 kg.
+
+**Ticks and counts.**
+- **A limit only derived** ("no part heavier than its two people lift") is said, but not counted as asked.
+- **A slider's travel** is asked and ticked. Its feet, carriage, bearings and camera mount are said not made.
+- **What a frame lifts** is borne by its arms, not counted as a limit failed. A payload said to ride on it is carried.
+
+**Reading, from the first run of wave 7.**
+- "A design for X" is read as X.
+- "I want to build an X" is read as an X.
+- A word that is only a greeting, a pronoun or the word "design" is never taken as the name of the thing.
+- A frame, chassis, hull or housing of something is that thing, made as its frame.
+- "My X lives in ..." is context, not a thing to make.
+- Sleds and pulks are carts.
+
+**Checked.**
+- **The gate:** typecheck, and 1088 tests in 95 files.
+- **The twenty wave-6 asks** were rerun after the fixes. The lifter is 12.5 kg. The frame's headline is "does not hold": landed on one arm first, an arm breaks.
 
 ### Open after wave 6
 

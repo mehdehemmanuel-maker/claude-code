@@ -44,7 +44,7 @@ describe('reading an ask a sentence at a time', () => {
     expect(c.wants.map((w) => w.fn)).toEqual(['raise']);
     expect(c.wants[0]!.q.m!.v).toBeCloseTo(0.0084, 6);
     expect(c.said.runFor).toBeCloseTo(31556952, 0);
-    expect(c.said.cellWh).toBe(7);
+    expect(c.said.cellWh).toBe(6);
   });
   it('a slider that crawls slides; "zero visible judder" is said back, and asked: how steadily it moves is not weighed', () => {
     const c = go(SLIDER);
@@ -81,9 +81,9 @@ describe('what the laws say of it', () => {
   });
   it('a ball lifted each minute for a year against two AA cells, with what carries it up: lifted only as far as they allow along its track; with no track said, a desk height, more than they hold', () => {
     const b = law(CLOCK, /^its cells last/)!;
-    // 525,960 lifts of 8.4 g and a 4.2 g carriage: at 25 mm (500 mm falling 1 in 20) a tiny geared motor pulsed each minute at
-    // about 0.05 would take 9.9 Wh against 7; they would last at 17 mm, so it lifts nine-tenths of that, 15 mm: 6.29 Wh
-    expect(b.ok).toBe(true); expect(b.says).toContain('5.26 × 10^5 lifts'); expect(b.says).toContain('15 mm (nine-tenths of what its cells allow, so that they last; 1 in 33.3 along its track)'); expect(b.says).toContain('6.29 Wh against the 7 Wh'); expect(b.says).toContain('a small geared motor of about 0.05 (run a second or so at a time'); expect(b.says).toContain('lifted more than 17 mm each time, they would not last');
+    // 525,960 lifts of 8.4 g and a 4.2 g carriage: two AA cells pulsed by a motor hold about 6 Wh; a tiny geared motor at
+    // about 0.05 lets them last at 14.2 mm, so it lifts nine-tenths of that, 12 mm (500 mm falling 1 in 41.7): 5.21 Wh
+    expect(b.ok).toBe(true); expect(b.says).toContain('5.26 × 10^5 lifts'); expect(b.says).toContain('12 mm (nine-tenths of what its cells allow, so that they last; 1 in 41.7 along its track)'); expect(b.says).toContain('5.21 Wh against the 6 Wh'); expect(b.says).toContain('a small geared motor of about 0.05 (run a second or so at a time'); expect(b.says).toContain('lifted more than 14.2 mm each time, they would not last');
     const d = law(CLOCK.replace('down a 500 mm zig-zag track ', ''), /^its cells last/)!;
     expect(d.ok).toBe(false); expect(d.says).toContain("150 mm (a desk thing's height, estimate)");
   });
@@ -270,10 +270,10 @@ describe('ratings, costs, rotors, a child climbing it, a width folded', () => {
 });
 
 describe('a gate held shut', () => {
-  it('latched at its far end to a post set in the ground: its pin and its posts hold half the push each, and "stay shut" is done', () => {
+  it('latched at its far end to a post set in the ground: its pin and its posts hold the push leant near them, and "stay shut" is done', () => {
     const [d] = designs(go('so I have a 14 foot wide pasture gate and I want it to swing open on its own when my ATV gets within 20 feet but stay shut when cattle lean on it with maybe 1200 pounds of force, solar powered, and it has to keep working through 5 cloudy days'), 1, { seed: 101, physics: J });
-    // 5340 N shared by its two posts, 2670 N each 700 mm up: a 16 mm pin holds 30.2 kN in single shear; a 50 mm post at its foot 89.7 MPa
-    expect(check(d!, /^shut, its latch and its posts hold half the push each$/)).toMatchObject({ ok: true, says: expect.stringMatching(/30\.2 kN in single shear .* 89\.7 MPa .* 760 mm at the latch post/) });
+    // 5340 N leant near one end, nearly all on the post there 700 mm up: a 16 mm pin holds 30.2 kN in single shear; a 59 mm post at its foot 109 MPa
+    expect(check(d!, /^shut, its latch and its posts hold the push leant near them$/)).toMatchObject({ ok: true, says: expect.stringMatching(/nearly all 5\.34 kN of it comes on the post there.* 30\.2 kN in single shear .* 109 MPa .* 900 mm at the latch post/) });
     expect(check(d!, /^it can be made under the laws$/)?.ok).toBe(true);
     expect(check(d!, /^it swings open$/)?.ok).toBe(true);
     expect(d!.asked.find((a) => a.text === 'stay shut when cattle lean on it')?.got).toBe('swing');
@@ -290,7 +290,7 @@ describe('the third judging, fixed by cause', () => {
   it('compartments are divided; a footprint "under" is a limit and made under it; a child on it pulling at its top is weighed, and held by weight low in it', () => {
     const d = made('Classroom backpack storage: freestanding, tip-proof unit, 30 cubbies for 6-9 kg bags, 1.1 m max height so teachers see over it, rounded corners radius 25 mm minimum, survives a 25 kg child climbing it, footprint under 0.5 m by 3 m.');
     expect(d.asked.find((a) => a.text === '30 cubbies')?.got).toBe('support');
-    expect(d.choices.join(' ')).toMatch(/9 dividers between each shelf and the next making 10 compartments to a row/);
+    expect(d.choices.join(' ')).toMatch(/9 dividers of 9 mm between each shelf and the next making 10 compartments to a row/);
     expect(d.asked.find((a) => /^its plan is within 3 m × 500 mm/.test(a.text))?.met).toBe(true); expect(d.footprint.map((x) => +x.toFixed(3))).toEqual([2.99, 0.49]);
     expect(check(d, /^a 25 kg child standing on a shelf does not break it$/)?.ok).toBe(true);
     expect(d.steps.some((x) => /^place plate named \w+_ballast of steel\.a36/.test(x))).toBe(true);
@@ -318,9 +318,9 @@ describe('the third judging, fixed by cause', () => {
   });
   it('the habitat is as long as its crew want, its launch buckling weighed, its cold stated as a swing; "needs no power" is its own clause', () => {
     const b = law('Design a pressurized lunar lava-tube habitat module for 4 crew: 6 m inner diameter, 0.7 bar internal pressure, surviving a 300 K day-night swing, and total launch mass under 9,000 kg so it fits one lander delivery.', /^it holds 70 kPa in/)!;
-    // its ends alone, 6 m across, hold 113 m³, more than the 100 m³ its crew want: a sphere; launched at 5 g its 3 mm wall
+    // its crew want 100 m³ to live in, 236 m³ held at pressure (as on the ISS): its ends hold 113 m³ of it, a cylinder 4.35 m the rest; launched at 5 g its 3 mm wall
     // bears 1.4 × 7.8 MPa against 9.58 MPa (SP-8007's γ 0.224), so it is made 3.2 mm
-    expect(b.says).toContain('its two hemispherical ends alone hold 113 m³, more than the 100 m³ its crew of 4 want'); expect(b.says).toContain('1030 kg of wall');
+    expect(b.says).toContain('1770 kg of wall for a cylinder 4.35 m long between two hemispherical ends, the 236 m³ its crew of 4 want (as below) with 113 m³ of it in its ends');
     expect(b.says).toContain('against the 9.58 MPa it buckles at'); expect(b.says).toContain('γ 0.224'); expect(b.says).toContain('so its wall is made 3.2 mm'); expect(b.says).toContain('a wall free to grow takes no stress');
     expect(parseAsk('a flood barrier that holds back 60 cm of water, needs no power or batteries, and has to hide in a 10 cm deep recess').clauses.map((c) => c.text)).toContain('needs no power or batteries and');
   });
@@ -336,9 +336,9 @@ describe('the fourth judging, fixed by cause', () => {
     const d = made(W6(14));
     expect(d.mass).toBeLessThan(0.14); expect(d.steps.some((x) => /_motor\d/.test(x))).toBe(false);
     // rotors 178 mm across, a tenth apart: motors 138 mm out; at full throttle each pulls 4.41 N on a 12 × 4 mm arm
-    expect(check(d, /^its arms bear its motors at full throttle$/)).toMatchObject({ ok: true, says: expect.stringMatching(/4\.41 N .* 12 × 4 mm arm/) });
+    expect(check(d, /^its arms bear its motors at full throttle$/)).toMatchObject({ ok: true, says: expect.stringMatching(/4\.41 N .* 14 × 8 mm arm/) });
     // 17.7 J landed against what four arms bend away elastically: an arm breaks unless what it lands on takes the rest
-    expect(check(d, /^it survives a 2 m drop$/)).toMatchObject({ ok: false, says: expect.stringMatching(/17\.7 J .* or an arm breaks/) });
+    expect(check(d, /^it survives a 2 m drop$/)).toMatchObject({ ok: false, says: expect.stringMatching(/17\.7 J .* 4\.51 J before it breaks .* landed on one arm first, it breaks unless what it lands on takes the rest/) });
     expect(check(d, /^it goes inside a 120 mm tube$/)?.ok).toBe(false);
   });
   it('what bears every load holds, though it does not keep to every limit: said apart', () => {
@@ -353,7 +353,7 @@ describe('the fourth judging, fixed by cause', () => {
   });
   it('a flap that rises on its own: floated up by the water in its recess where it weighs less, its push taken by stops at its sides', () => {
     const b = law(W6(9), /^holding back 600 mm of water$/)!;
-    expect(b.says).toMatch(/weighs about 12\.3 kg; .* holds it up with 31\.5 kg \(ρ L W d\), so it floats up once the water is 50 mm up/);
+    expect(b.says).toMatch(/weighs about 12\.3 kg; .* lifts off once the water in its recess is 19\.5 mm deep .* holds it up with 50\.4 kg \(ρ L W T, all of it under water\), so it floats up/);
     expect(b.says).toContain('stands upright once the water is 346 mm deep'); expect(b.says).toContain('one or the other: a flap hinged at its sill turns freely there');
   });
   it('a cloth shelter on snow: its door assumed, said apart; its stakes counted as pegs; a wind it must survive not done where pegs in snow hold it', () => {
@@ -367,6 +367,7 @@ describe('the fourth judging, fixed by cause', () => {
     const LIFT = "I need a hand-cranked lifter to get 55 lb hay bales from the barn floor up to my loft hatch 9 feet high, no electricity, and it has to fold flat to under 6 inches thick so it hangs on the wall. Parts budget around $150.";
     const d = made(LIFT);
     expect(d.steps.some((x) => /named \w+_base /.test(x))).toBe(false); expect(d.steps.some((x) => /named \w+_wall of concrete/.test(x))).toBe(true); expect(d.mass).toBeLessThan(15);
+    expect(check(d, /^its posts carry what rides without buckling$/)?.says).toMatch(/K = 1 between screws 600 mm apart .* held out from the wall presses each post/);
     expect(law(LIFT, /^it is raised 2\.74 m by a hand crank$/)?.says).toMatch(/6\.12 N·m .* 15 N·m, so it wants no gearing .* 17\.5 turns .* a ratchet and pawl/);
   });
   it('put up by two people: no part heavier than they lift together (HSE L23, two-thirds of 2 × 16 kg)', () => {
