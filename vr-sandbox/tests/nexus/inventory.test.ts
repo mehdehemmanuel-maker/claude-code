@@ -17,7 +17,7 @@ describe('the inventory', () => {
   it('maps everything to what is in it: every part known, nothing inside itself, every branch down to materials', () => {
     for (const i of INVENTORY.values()) {
       for (const c of i.of) expect(INVENTORY.has(c.id), `${i.id} has ${c.id}`).toBe(true);
-      const seen = new Set<string>(); const walk = (x: string, path: string[]) => { expect(path, `a loop: ${path.join(' > ')}`).not.toContain(x); const it = INVENTORY.get(x)!; if (!it.of.length) { expect(it.kind, `${x} has nothing in it but is not a material`).toBe('material'); return; } if (seen.has(x)) return; seen.add(x); for (const c of it.of) walk(c.id, [...path, x]); };
+      const seen = new Set<string>(); const walk = (x: string, path: string[]) => { expect(path, `a loop: ${path.join(' > ')}`).not.toContain(x); const it = INVENTORY.get(x)!; if (!it.of.length) { expect(['material', 'element'], `${x} has nothing in it but is not a material or an element`).toContain(it.kind); return; } if (seen.has(x)) return; seen.add(x); for (const c of it.of) walk(c.id, [...path, x]); };
       walk(i.id, []);
       expect(i.make in PROCESSES).toBe(true);
     }
