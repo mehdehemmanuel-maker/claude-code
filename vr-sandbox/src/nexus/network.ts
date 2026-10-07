@@ -20,18 +20,21 @@ export interface Network {
 /** The rank of a matrix by elimination with partial pivoting, entries below a tolerance relative to the largest counted as zero. */
 export function rank(M: number[][], tol = 1e-9): number {
   if (!M.length || !M[0]!.length) return 0;
-  const A = M.map((r) => [...r]);
+  // rows as typed arrays: the same elimination, step for step, without boxing every entry
+  const A = M.map((r) => Float64Array.from(r));
   const rows = A.length, cols = A[0]!.length;
-  const scale = A.reduce((m, r) => r.reduce((k, v) => Math.max(k, Math.abs(v)), m), 0) || 1;
+  let scale = 0; for (const row of A) for (let j = 0; j < cols; j++) { const v = Math.abs(row[j]!); if (v > scale) scale = v; }
+  scale ||= 1;
   let r = 0;
   for (let c = 0; c < cols && r < rows; c++) {
     let p = r;
     for (let i = r + 1; i < rows; i++) if (Math.abs(A[i]![c]!) > Math.abs(A[p]![c]!)) p = i;
     if (Math.abs(A[p]![c]!) <= tol * scale) continue;
-    [A[r], A[p]] = [A[p]!, A[r]!];
+    const t = A[r]!; A[r] = A[p]!; A[p] = t;
+    const R = A[r]!, piv = R[c]!;
     for (let i = r + 1; i < rows; i++) {
-      const f = A[i]![c]! / A[r]![c]!;
-      if (f !== 0) for (let j = c; j < cols; j++) A[i]![j]! -= f * A[r]![j]!;
+      const Ri = A[i]!, f = Ri[c]! / piv;
+      if (f !== 0) for (let j = c; j < cols; j++) Ri[j]! -= f * R[j]!;
     }
     r++;
   }
