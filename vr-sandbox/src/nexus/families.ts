@@ -8,7 +8,7 @@
 import type { Item, Process } from './inventory';
 import { METRIC } from './threads';
 import { KINDS } from './kinds';
-import { familyOf } from './kinds/core';
+import { familyOf, useFamilies } from './kinds/core';
 
 export { METRIC };
 
@@ -421,3 +421,5 @@ export function callFamily(words: string): Item | string | null {
   for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
   return { ...f.make(p), sized: { family: f.id, params: p } };
 }
+// a kind's parts made to their own sizes are called by their families' words
+useFamilies(callFamily);

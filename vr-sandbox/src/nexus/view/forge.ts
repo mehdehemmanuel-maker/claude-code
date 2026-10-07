@@ -69,7 +69,7 @@ import { held, mergeStatic } from './merge-static';
 import { behave } from '../behave';
 import { compare as compareItems, flatBom, massOf, scadOf, search as searchInventory, typeOf, types as inventoryTypes, usedIn } from '../outputs';
 import { SERIES, catalogue, searchCatalogue } from '../catalogue';
-import { numberOfWords, partAt as spacePart, spaceSize } from '../partspace';
+import { numberOfWords, partAt as spacePart, randomPart, spaceSize } from '../partspace';
 import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../weather';
 import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
 import { CellView, deviceMesh } from './cell-view';
@@ -1927,7 +1927,7 @@ async function inventoryStep(arg: string): Promise<string> {
   if ((m = /^(?:search|look for|find all)\s+(.+)$/i.exec(t))) { const hits = searchInventory(m[1]!, 8), cat = searchCatalogue(m[1]!, 8); return `${hits.length ? `In the inventory: ${hits.map((x) => x.name).join(', ')}.` : ''}${cat.length ? ` In the catalogue: ${cat.join(', ')}.` : ''}` || `Nothing found for "${m[1]}".`; }
   if ((m = /^(?:part|no\.?|number)\s+#?([\d,_ ]+)$/i.exec(t))) { const n = Number(m[1]!.replace(/[^\d]/g, '')), p = spacePart(n); if (!p) throw new Error(`Part numbers run 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}.`); const i = get(p.words); invLast = i.id; return `Part ${n.toLocaleString('en-GB')} is ${i.name}${i.spec ? `: ${i.spec}` : ''} (${p.words}).`; }
   if ((m = /^(?:number of|which number|number)\s+(.+)$/i.exec(t))) { const n = numberOfWords(m[1]!); return n >= 0 ? `${m[1]} is part ${n.toLocaleString('en-GB')} of ${spaceSize().total.toLocaleString('en-GB')}.` : `${m[1]} is not a size the space numbers (it may be outside its ranges).`; }
-  if (/^(?:random|any|surprise me)$/i.test(t)) { const n = Math.floor(Math.random() * spaceSize().total), p = spacePart(n)!, i = get(p.words); invLast = i.id; return `Part ${n.toLocaleString('en-GB')}: ${i.name}${i.spec ? ` (${i.spec})` : ''}.`; }
+  if (/^(?:random|any|surprise me)$/i.test(t)) { const n = randomPart(), p = spacePart(n)!, i = get(p.words); invLast = i.id; return `Part ${n.toLocaleString('en-GB')}: ${i.name}${i.spec ? ` (${i.spec})` : ''}.`; }
   if (/^(?:space|all|how many)$/i.test(t)) { const s2 = spaceSize(); return `${s2.total.toLocaleString('en-GB')} parts can be made, each numbered and none stored until asked for: ${s2.families.slice(0, 12).map((f) => `${f.family} ${f.n.toLocaleString('en-GB')}`).join(', ')} …`; }
   if (/^types$/i.test(t)) return `By what they do: ${[...inventoryTypes()].map(([k, v]) => `${k} ${v}`).join(', ')}.`;
   if ((m = /^(?:elements|fundamentals|atoms|made of)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), f = fundamentals(i.id); invLast = i.id; return `${i.name} comes down to ${f.length} elements: ${f.map((e) => `${e.name}${e.via.length ? ` (in ${e.via.slice(0, 2).map((v) => v.material).join(', ')}${e.via.length > 2 ? ' …' : ''})` : ''}`).join('; ')}.`; }

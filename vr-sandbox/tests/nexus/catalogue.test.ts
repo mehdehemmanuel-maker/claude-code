@@ -18,7 +18,7 @@ describe('the catalogue', () => {
     const symbols = new Set(Object.keys(ELEMENTS).map((s) => `el-${s.toLowerCase()}`));
     for (const l of catalogue()) {
       const it = catalogueItem(l)!;
-      for (const c of it.of) expect(INVENTORY.has(c.id), `${l} has ${c.id}`).toBe(true);
+      for (const c of it.of) expect(INVENTORY.has(c.id) || !!it.inner?.some((x) => x.id === c.id), `${l} has ${c.id}`).toBe(true);
       expect(it.sized?.family, l).toBeTruthy();
     }
     // a sample of each family, made into the inventory and followed down to its elements

@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { INVENTORY, PROCESSES, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
+import type { Item } from '../../src/nexus/inventory';
 import { FAMILIES, callFamily } from '../../src/nexus/families';
 import { triggersOf } from '../../src/nexus/flows';
 
@@ -48,7 +49,7 @@ describe('adjustable families', () => {
     expect((callFamily('leadscrew T8 p2 s4 300') as { spec: string }).spec).toMatch(/lead 8 mm/);
     expect(callFamily('gear m1 z5')).toMatch(/Under 8 teeth/);
     expect(callFamily('bearing 9999')).toMatch(/Which bearing/);
-    for (const f of FAMILIES) for (const ex of f.examples) { const it = callFamily(ex); expect(typeof it, ex).toBe('object'); for (const c of (it as { of: { id: string }[] }).of) expect(INVENTORY.has(c.id), `${ex} has ${c.id}`).toBe(true); }
+    for (const f of FAMILIES) for (const ex of f.examples) { const it = callFamily(ex) as Item; expect(typeof it, ex).toBe('object'); for (const c of it.of) expect(INVENTORY.has(c.id) || !!it.inner?.some((x) => x.id === c.id), `${ex} has ${c.id}`).toBe(true); }
     expect(FAMILIES.length).toBeGreaterThanOrEqual(25);
   });
 });

@@ -149,7 +149,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'pullhandle', name: 'pull handle', path: 'Hardware/Door and cabinet/Handles', says: 'a bar handle for a drawer or door, its screws on the 32 mm system', std: 'centres on the 32 mm system',
     axes: [unit('c', 'hole centres', 'mm', [64, 96, 128, 160, 192, 224, 256, 320, 448]), bare('matter', 'made of', ['zamak', 'stainless', 'aluminium'])],
-    title: (p) => `pull handle ${p.c} mm centres, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} steel-low*2`, make: (p) => (p.matter === 'zamak' ? 'cast' : 'machine'), how: (p) => (p.matter === 'zamak' ? 'die-cast and plated' : 'bent from bar, brushed'), spec: (p) => `${p.c} mm between its M4 screws`,
+    title: (p) => `pull handle ${p.c} mm centres, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} {screw M4x25}*2`, make: (p) => (p.matter === 'zamak' ? 'cast' : 'machine'), how: (p) => (p.matter === 'zamak' ? 'die-cast and plated' : 'bent from bar, brushed'), spec: (p) => `${p.c} mm between its M4 screws`,
     box: (p) => [n(p, 'c') + 20, 12, 35], g: (p) => gOf(cyl(12, n(p, 'c') + 60), madeOf(p)[1]),
   },
   {
@@ -161,13 +161,13 @@ export const STOCK: KindDef[] = [
   {
     id: 'drawerslide', name: 'drawer slide', path: 'Hardware/Door and cabinet/Drawer slides', says: 'a pair of telescoping steel rails on ball bearings that let a drawer run all the way out', std: 'the lengths sold in 50 mm steps; loads typical',
     axes: [unit('L', 'length', 'mm', range(250, 700, 50)), unit('kg', 'load', 'kg', [35, 45])],
-    title: (p) => `drawer slides ${p.L} mm, full extension, ${p.kg} kg (a pair)`, of: () => 'steel-low*2 zinc steel-chrome pom', make: 'assemble', how: 'three roll-formed zinc-plated rails each side, balls in POM cages between them', spec: (p) => `${p.L} mm closed, ${p.L} mm of travel; ${p.kg} kg a pair (typical); 45 mm high`,
+    title: (p) => `drawer slides ${p.L} mm, full extension, ${p.kg} kg (a pair)`, of: () => 'steel-low*2 zinc {bearingball d4 chrome}*24 pom', make: 'assemble', how: 'three roll-formed zinc-plated rails each side, balls in POM cages between them', spec: (p) => `${p.L} mm closed, ${p.L} mm of travel; ${p.kg} kg a pair (typical); 45 mm high`,
     box: (p) => [12.7, 45, n(p, 'L')], g: (p) => n(p, 'L') * 2.4,
   },
   {
     id: 'castor', name: 'castor', path: 'Mechanical/Wheels/Castors', says: 'a wheel on a plate or stem, swivelling, fixed, or swivelling with a brake', std: 'the wheel diameters sold; loads per castor typical',
     axes: [unit('d', 'wheel', 'mm', [30, 40, 50, 75, 100, 125, 160, 200]), bare('mount', 'mount', ['swivel', 'fixed', 'brake']), bare('tread', 'tread', ['pu', 'rubber', 'nylon'])],
-    title: (p) => `${p.mount === 'brake' ? 'braked swivel' : p.mount} castor, ${p.d} mm ${p.tread === 'pu' ? 'polyurethane' : p.tread} wheel`, of: (p) => `steel-low zinc ${p.tread === 'pu' ? 'pu pp' : p.tread} bearing-ring*2 bearing-ball*14`, make: 'assemble', how: 'a pressed-steel fork (swivelling on a ball race) carrying a wheel on its axle',
+    title: (p) => `${p.mount === 'brake' ? 'braked swivel' : p.mount} castor, ${p.d} mm ${p.tread === 'pu' ? 'polyurethane' : p.tread} wheel`, of: (p) => `steel-low zinc ${p.tread === 'pu' ? 'pu pp' : p.tread} {bearing ${n(p, 'd') <= 100 ? '608' : '6202'}}*2`, make: 'assemble', how: 'a pressed-steel fork (swivelling on a ball race) carrying a wheel on its axle',
     spec: (p) => `about ${({ 30: 20, 40: 30, 50: 40, 75: 60, 100: 80, 125: 100, 160: 150, 200: 200 } as Record<number, number>)[n(p, 'd')]} kg each (typical)`, box: (p) => [n(p, 'd') * 0.9 + 20, n(p, 'd') * 0.9 + 20, n(p, 'd') * 1.3 + 10], g: (p) => n(p, 'd') ** 2 * 0.075,
   },
   {

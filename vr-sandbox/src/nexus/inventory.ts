@@ -59,12 +59,13 @@ export interface Item {
   /** added by you, not seeded */ yours?: boolean;
   /** a material's make-up by mass, one level down: elements (el-…), or the materials a blend is of */ makeup?: { id: string; pct: number }[];
   /** made to sizes by a family: which, and the numbers it was called with (what its behaviours are worked out from) */ sized?: { family: string; params: Record<string, string | number> };
+  /** parts made to its sizes with it, each by its own family (a cylinder's barrel and rod), put in with it */ inner?: Item[];
 }
 const items = new Map<string, Item>();
 /** The inventory's revision: one more each time an entry is added, so what is worked out from it (its categories, each
  *  item's plan) is worked out once and kept until it changes. */
 let rev = 0;
-const put = (it: Item): void => { items.set(it.id, it); rev++; };
+const put = (it: Item): void => { for (const c of it.inner ?? []) if (!items.has(c.id)) put(c); items.set(it.id, it); rev++; };
 export const inventoryRev = (): number => rev;
 /** f of an id, kept until the inventory changes. */
 function memo<T>(f: (id: string) => T): (id: string) => T {
