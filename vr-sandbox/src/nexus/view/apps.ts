@@ -7,6 +7,7 @@ import { ABILITIES, factName, type AbilityId, type Bot, type Fleet } from '../fl
 import { METALS, RECIPES, bill, type Cell, type MadePart } from '../cell';
 import { INVENTORY, categories, resolve, routeOf, summary, type Item } from '../inventory';
 import { FAMILIES } from '../families';
+import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
 export interface StoredBuild { id: string; title: string; ask?: string; kind: 'steps' | 'machine' | 'shapes'; steps?: string[]; footprint?: [number, number]; verdict?: string; kg?: number; slot?: string; at: number; parts: MiniPart[] }
@@ -228,5 +229,144 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
       }
       return false;
     },
+  };
+}
+
+// ---- charts on a phone's screen -----------------------------------------------------------------------------------------
+const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
+const INK = '#ffffff', INK2 = '#b2ebf2', INK3 = '#7fa9b5', RULE = 'rgba(255,255,255,0.14)';
+/** Words ending at x: values in a column line up on their right. */
+function right(k: Kit, s: string, x: number, y: number, size: number, colour = INK, weight = 600): void { k.g.font = `${weight} ${size}px ${FONT}`; const w = k.g.measureText(s).width; k.text(s, x - w, y, size, colour, weight, w + 4); }
+/** A line over time: one series, 2 px, its least and greatest marked and said, the hours under it every few steps. */
+function lineChart(k: Kit, x: number, y: number, w: number, h: number, pts: number[], o: { colour: string; unit: string; ticks?: string[]; every?: number; act?: string }): void {
+  const { g } = k; if (pts.length < 2) { k.text('sampled every 10 s: the line starts at the second sample', x, y + h / 2, 14, INK3, 500, w); return; }
+  const lo = Math.min(...pts), hi = Math.max(...pts), pad = (hi - lo) * 0.12 || 1, a = lo - pad, b = hi + pad;
+  const X = (i: number) => x + (i / (pts.length - 1)) * w, Y = (v: number) => y + h - ((v - a) / (b - a)) * h;
+  g.strokeStyle = RULE; g.lineWidth = 1; for (const v of [lo, hi]) { g.beginPath(); g.moveTo(x, Y(v)); g.lineTo(x + w, Y(v)); g.stroke(); }
+  g.strokeStyle = o.colour; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath(); pts.forEach((v, i) => (i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)))); g.stroke();
+  const fmt = (v: number) => `${Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}${o.unit}`;
+  for (const i of [pts.indexOf(hi), pts.indexOf(lo)]) { g.fillStyle = '#0a1a22'; g.beginPath(); g.arc(X(i), Y(pts[i]!), 6, 0, Math.PI * 2); g.fill(); g.fillStyle = o.colour; g.beginPath(); g.arc(X(i), Y(pts[i]!), 4.5, 0, Math.PI * 2); g.fill(); const s = fmt(pts[i]!), up = pts[i] === hi; k.g.font = `600 14px ${FONT}`; const tw = k.g.measureText(s).width; if (up) k.text(s, Math.min(x + w - tw, Math.max(x, X(i) - tw / 2)), Y(pts[i]!) - 10, 14, INK, 600, tw + 4); else k.text(s, X(i) + tw + 14 > x + w ? X(i) - tw - 10 : X(i) + 10, Y(pts[i]!) - 6, 14, INK, 600, tw + 4); }
+  if (o.ticks) { const ev = o.every ?? 3; o.ticks.forEach((t, i) => { if (i % ev === 0) k.text(t, Math.min(x + w - 30, X(i) - 14), y + h + 20, 12, INK3, 500, 40); }); }
+  if (o.act) pts.forEach((_, i) => k.hit(X(i) - w / pts.length / 2, y - 10, X(i) + w / pts.length / 2, y + h + 24, o.act!, i));
+}
+/** Columns from a baseline: 2 px apart, their tops rounded 4 px; the greatest said. */
+function columns(k: Kit, x: number, y: number, w: number, h: number, vals: number[], max: number, o: { colour: string; unit: string; act?: string }): void {
+  const { g } = k, n = vals.length, cw = w / n;
+  g.strokeStyle = RULE; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y + h + 0.5); g.lineTo(x + w, y + h + 0.5); g.stroke();
+  vals.forEach((v, i) => { const bh = Math.max(v > 0 ? 2 : 0, (v / max) * h); g.fillStyle = o.colour; g.beginPath(); g.roundRect(x + i * cw + 1, y + h - bh, cw - 2, bh, [4, 4, 0, 0]); g.fill(); if (o.act) k.hit(x + i * cw, y - 10, x + (i + 1) * cw, y + h + 6, o.act, i); });
+  const top = vals.indexOf(Math.max(...vals)); if (vals[top]! > 0) { const s = `${Math.round(vals[top]!)}${o.unit}`; k.g.font = `600 13px ${FONT}`; const tw = k.g.measureText(s).width; k.text(s, Math.min(x + w - tw, Math.max(x, x + (top + 0.5) * cw - tw / 2)), y + h - (vals[top]! / max) * h - 6, 13, INK, 600, tw + 4); }
+}
+/** Bars across, each named with its value: to compare things, not times. */
+function bars(k: Kit, x: number, y: number, w: number, rows: { label: string; v: number; max: number; note?: string; colour?: string }[], colour: string, rh = 40): number {
+  const { g } = k, lw = Math.min(170, w * 0.36);
+  rows.forEach((r, j) => { const ry = y + j * rh; k.text(r.label, x, ry + rh * 0.62, 15, INK, 600, lw - 8); const bw = Math.max(r.v > 0 ? 3 : 0, (Math.min(r.v, r.max) / r.max) * (w - lw - 70)); g.fillStyle = 'rgba(255,255,255,0.07)'; g.beginPath(); g.roundRect(x + lw, ry + rh * 0.3, w - lw - 70, rh * 0.4, 4); g.fill(); g.fillStyle = r.colour ?? colour; g.beginPath(); g.roundRect(x + lw, ry + rh * 0.3, bw, rh * 0.4, [0, 4, 4, 0]); g.fill(); right(k, r.note ?? String(Math.round(r.v)), x + w, ry + rh * 0.62, 14, INK2, 600); });
+  return rows.length * rh;
+}
+
+// ---- the weather ------------------------------------------------------------------------------------------------------
+export interface WeatherHost { forecast(): Forecast | null; note(): string; here(): void; find(name: string): Promise<Place[] | string>; pick(p: Place): void; recent(): Place[]; rules(): string; said(): string }
+const LEVEL = { ok: ['✓', 'OK', '#69f0ae'], mind: ['!', 'MIND', '#ffd740'], stop: ['✕', 'STOP', '#ff8a80'] } as const;
+const dayName = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+/** The weather on the phone: where you are or a place you name; now, the next twelve hours (temperature, and the chance of
+ *  rain, each its own chart), the week, and what it means for casting, filament, a drone and a solar panel here; and the
+ *  rules that start on it. Open-Meteo's numbers, said as they come; where it cannot be reached, it says so. */
+export function weatherApp(h: WeatherHost): PhoneApp {
+  const C = '#4fc3f7'; let said = '', found: Place[] = [];
+  return {
+    id: 'weather', name: 'Weather', icon: '🌦', colour: C,
+    draw(k: Kit, v: View) {
+      const { text, wrapped, button, g, W, bottom, hit } = k, f = h.forecast(), sub = v.sub;
+      if (sub === 'found') {
+        text('Which place?', 40, 118, 34, C, 800);
+        found.forEach((p, j) => { const ry = 150 + j * 74; g.fillStyle = 'rgba(79,195,247,0.12)'; g.beginPath(); g.roundRect(30, ry, W - 60, 66, 12); g.fill(); text(placeName(p), 46, ry + 30, 18, INK, 600, W - 92); text(`${p.lat.toFixed(2)}°, ${p.lon.toFixed(2)}°${p.tz ? ` · ${p.tz}` : ''}`, 46, ry + 54, 13, INK2, 400, W - 92); hit(30, ry, W - 30, ry + 66, 'pick', j); });
+        button(30, bottom - 70, W - 60, 56, '← Back', 'go', '', C); return;
+      }
+      if (!f) {
+        text('Weather', 40, 118, 38, C, 800);
+        let y = 150 + wrapped(h.note() || 'No forecast yet: find where you are, or name a place.', 40, 150, 17, W - 80, INK2, 4);
+        const bw = (W - 70) / 2; button(30, y + 10, bw, 60, '📍 Where I am', 'here', undefined, C, 'rgba(79,195,247,0.3)'); button(40 + bw, y + 10, bw, 60, '⌕ Find a place', 'find', undefined, C); y += 90;
+        const rec = h.recent(); if (rec.length) { text('Places you looked at', 40, y + 10, 16, C, 700); rec.slice(0, 6).forEach((p, j) => { const ry = y + 24 + j * 62; g.fillStyle = 'rgba(79,195,247,0.10)'; g.beginPath(); g.roundRect(30, ry, W - 60, 54, 12); g.fill(); text(placeName(p), 46, ry + 34, 17, INK, 600, W - 92); hit(30, ry, W - 30, ry + 54, 'recent', j); }); }
+        const sd = said || h.said(); if (sd) wrapped(sd, 40, bottom - 40, 14, W - 80, '#ffd740', 2);
+        return;
+      }
+      const n = f.now;
+      if (sub === 'week') {
+        text(`The week · ${f.place.name}`, 40, 118, 30, C, 800, W - 80);
+        const lo = Math.min(...f.days.map((d) => d.lo)), hi = Math.max(...f.days.map((d) => d.hi)), x0 = 276, x1 = W - 96;
+        f.days.forEach((d, j) => {
+          const ry = 150 + j * 92; g.fillStyle = j % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(79,195,247,0.07)'; g.fillRect(30, ry, W - 60, 88);
+          text(j ? dayName(d.date) : 'Today', 44, ry + 32, 18, INK, 700, 100); text(`${skyIcon(d.code)} ${sky(d.code)}`, 44, ry + 62, 14, INK2, 500, 180);
+          const X = (t: number) => x0 + ((t - lo) / (hi - lo || 1)) * (x1 - x0);
+          g.fillStyle = 'rgba(255,255,255,0.08)'; g.beginPath(); g.roundRect(x0, ry + 22, x1 - x0, 8, 4); g.fill();
+          g.fillStyle = C; g.beginPath(); g.roundRect(X(d.lo), ry + 22, Math.max(6, X(d.hi) - X(d.lo)), 8, 4); g.fill();
+          right(k, `${d.lo.toFixed(0)}°`, x0 - 10, ry + 31, 15, INK2, 600); text(`${d.hi.toFixed(0)}°`, x1 + 10, ry + 31, 15, INK, 700, 44);
+          text(`rain ${d.rain.toFixed(1)} mm · ${d.rainChance} % · UV ${d.uv.toFixed(0)} · wind ${d.wind.toFixed(0)} m/s`, 230, ry + 62, 13, INK2, 500, W - 270);
+        });
+        button(30, bottom - 70, W - 60, 56, '← Now', 'go', '', C); return;
+      }
+      if (sub === 'make') {
+        text('What it means here', 40, 118, 32, C, 800);
+        let y = 140; for (const a of forMaking(f)) { const [ic, word, col] = LEVEL[a.level]; g.fillStyle = 'rgba(255,255,255,0.05)'; const hh = 46 + 19 * Math.min(6, Math.ceil(a.says.length / 52)); g.beginPath(); g.roundRect(30, y, W - 60, hh, 12); g.fill(); g.fillStyle = col; g.fillRect(30, y, 5, hh); text(`${ic} ${word}`, 48, y + 28, 15, col, 800, 90); text(a.what, 130, y + 28, 18, INK, 700, W - 170); wrapped(a.says, 48, y + 52, 14, W - 96, INK2, 6); y += hh + 10; }
+        text('Numbers from the forecast; where each limit comes from is in its line.', 40, Math.min(bottom - 80, y + 18), 13, INK3, 500, W - 80);
+        button(30, bottom - 70, W - 60, 56, '← Now', 'go', '', C); return;
+      }
+      text(placeName(f.place), 40, 112, 22, C, 800, W - 80);
+      text(`${skyIcon(n.code, n.day)} ${n.temp.toFixed(0)}°`, 36, 196, 74, INK, 800, 280);
+      text(sky(n.code), 300, 158, 20, INK, 700, W - 330); text(`feels ${n.feels.toFixed(0)}°`, 300, 186, 17, INK2, 500, W - 330);
+      text(`💧 ${n.humidity.toFixed(0)} %   🌬 ${n.wind.toFixed(1)} m/s ${compass(n.windFrom)}${n.gusts > n.wind + 1 ? `, gusts ${n.gusts.toFixed(1)}` : ''}   ${n.pressure.toFixed(0)} hPa`, 40, 236, 16, INK, 500, W - 80);
+      const d0 = f.days[0]; text(`☀ ${n.sun.toFixed(0)} W/m² now${d0 ? ` · UV ${d0.uv.toFixed(1)} · up ${d0.sunrise.slice(11)} · down ${d0.sunset.slice(11)}` : ''}`, 40, 262, 15, INK2, 500, W - 80);
+      const hrs = f.hours.slice(0, 12), ticks = hrs.map((x) => x.time.slice(11, 13));
+      text('Temperature, °C, the next 12 hours', 40, 302, 15, C, 700); lineChart(k, 50, 316, W - 100, 110, hrs.map((x) => x.temp), { colour: C, unit: '°', ticks, act: 'hour' });
+      text(`Chance of rain, %: ${rainAhead(f)} % at most in 6 h`, 40, 482, 15, C, 700); columns(k, 50, 496, W - 100, 80, hrs.map((x) => x.rainChance), 100, { colour: '#81d4fa', unit: ' %', act: 'hour' });
+      hrs.forEach((x, i) => { if (i % 3 === 0) text(x.time.slice(11, 16), 50 + (i + 0.5) * ((W - 100) / 12) - 18, 598, 12, INK3, 500, 44); });
+      const bw = (W - 80) / 3;
+      button(30, 620, bw, 58, '🗓 Week', 'go', 'week', C); button(40 + bw, 620, bw, 58, '🛠 Making', 'go', 'make', C); button(50 + 2 * bw, 620, bw, 58, '⚡ Rules', 'rules', undefined, C);
+      button(30, 688, (W - 70) / 2, 54, '📍 Where I am', 'here', undefined, C); button(40 + (W - 70) / 2, 688, (W - 70) / 2, 54, '⌕ Find a place', 'find', undefined, C);
+      text(`Open-Meteo, for ${n.time.slice(11)} in ${f.tz} · fetched ${new Date(f.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 40, 768, 12, INK3, 500, W - 80);
+      const sd = said || h.said(); if (sd) wrapped(sd, 40, Math.min(bottom - 40, 790), 14, W - 80, '#ffd740', 3);
+    },
+    act(act, arg, nav: Nav) {
+      const f = h.forecast();
+      switch (act) {
+        case 'go': said = ''; nav.go(String(arg)); return true;
+        case 'here': said = 'Asking this device where it is…'; h.here(); return true;
+        case 'find': nav.write('a town or city: "Lagos", "Leeds", "Denver"', (t) => { said = `Looking for ${t}…`; nav.redraw(); void h.find(t).then((r) => { if (typeof r === 'string') { said = r; nav.redraw(); return; } found = r; if (r.length === 1) { h.pick(r[0]!); said = ''; } else { said = ''; nav.go('found'); } nav.redraw(); }); }); return true;
+        case 'pick': { const p = found[Number(arg)]; if (p) { h.pick(p); said = `Fetching ${placeName(p)}…`; nav.go(''); } return true; }
+        case 'recent': { const p = h.recent()[Number(arg)]; if (p) { h.pick(p); said = `Fetching ${placeName(p)}…`; } return true; }
+        case 'rules': said = h.rules(); return true;
+        case 'hour': { const x = f?.hours[Number(arg)]; if (x) said = `${x.time.slice(11, 16)}: ${x.temp.toFixed(1)} °C, ${sky(x.code)}, ${x.rainChance} % chance of rain, sunlight ${x.sun.toFixed(0)} W/m²`; return true; }
+      }
+      return false;
+    },
+  };
+}
+
+// ---- data: what the forge has done, in numbers ----------------------------------------------------------------------------
+export interface DataStat { label: string; value: string }
+export interface DataSection { id: string; name: string; icon: string; colour: string; stats: DataStat[]; series?: { name: string; unit: string; points: number[]; ticks?: string[] }; bars?: { name: string; rows: { label: string; v: number; max: number; note?: string }[] }; note?: string }
+/** Data on the phone: each part of the forge in numbers (its pipelines, boards, robots, workshop, inventory, devices,
+ *  Claude, the weather), a tile each; press one for its numbers and its chart: a line where it is over time, bars where
+ *  things are compared. Counted from what the forge keeps, nothing estimated. */
+export function dataApp(h: { sections(): DataSection[] }): PhoneApp {
+  const C = '#b388ff';
+  return {
+    id: 'data', name: 'Data', icon: '📊', colour: C,
+    draw(k: Kit, v: View) {
+      const { text, wrapped, button, g, W, bottom, hit } = k, all = h.sections();
+      if (v.sub.startsWith('sec:')) {
+        const s = all.find((x) => x.id === v.sub.slice(4)); if (!s) { text('Not found', 40, 122, 30, C, 800); return; }
+        text(`${s.icon} ${s.name}`, 40, 118, 34, s.colour, 800, W - 80);
+        let y = 140; s.stats.forEach((st, j) => { const ry = y + j * 36; if (j % 2 === 0) { g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(30, ry, W - 60, 36); } text(st.label, 44, ry + 24, 15, INK2, 500, W * 0.55); right(k, st.value, W - 44, ry + 24, 16, INK, 700); });
+        y += s.stats.length * 36 + 20;
+        if (s.series) { text(s.series.name, 40, y + 10, 15, s.colour, 700, W - 80); lineChart(k, 50, y + 28, W - 100, 150, s.series.points, { colour: s.colour, unit: s.series.unit, ticks: s.series.ticks, every: Math.max(1, Math.ceil(s.series.points.length / 6)) }); y += 210; }
+        if (s.bars && s.bars.rows.length) { text(s.bars.name, 40, y + 10, 15, s.colour, 700, W - 80); y += 18 + bars(k, 40, y + 18, W - 80, s.bars.rows.slice(0, Math.max(3, Math.floor((bottom - y - 120) / 40))), s.colour); }
+        if (s.note) wrapped(s.note, 40, Math.min(bottom - 110, y + 24), 13, W - 80, INK3, 3);
+        button(30, bottom - 70, W - 60, 56, '← All', 'go', '', C); return;
+      }
+      text('Data', 40, 118, 38, C, 800); text('the forge in numbers: press one for its chart', 40, 146, 15, INK2, 500);
+      const cols = 2, tw = (W - 60 - 12) / cols, th = Math.min(150, (bottom - 170) / Math.ceil(all.length / cols) - 12);
+      all.forEach((s, j) => { const x = 30 + (j % cols) * (tw + 12), y = 166 + Math.floor(j / cols) * (th + 12); g.fillStyle = 'rgba(255,255,255,0.05)'; g.beginPath(); g.roundRect(x, y, tw, th, 14); g.fill(); g.fillStyle = s.colour; g.fillRect(x, y + 14, 4, th - 28); text(`${s.icon} ${s.name}`, x + 18, y + 32, 17, s.colour, 800, tw - 30); const [a, b] = s.stats; if (a) { text(a.value, x + 18, y + 72, 28, INK, 800, tw - 30); text(a.label, x + 18, y + 94, 13, INK2, 500, tw - 30); } if (b && th > 120) text(`${b.label}: ${b.value}`, x + 18, y + 120, 13, INK3, 500, tw - 30); hit(x, y, x + tw, y + th, 'go', `sec:${s.id}`); });
+    },
+    act(act, arg, nav: Nav) { if (act === 'go') { nav.go(String(arg)); return true; } return false; },
   };
 }

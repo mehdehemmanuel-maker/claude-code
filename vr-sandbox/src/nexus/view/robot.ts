@@ -6,6 +6,8 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { QServo } from '../motion';
+import type { Expression } from '../emotions';
 
 const metal = new THREE.MeshStandardMaterial({ color: 0x2b3340, metalness: 0.85, roughness: 0.32 });
 const gun = new THREE.MeshStandardMaterial({ color: 0x161b22, metalness: 0.7, roughness: 0.45 });
@@ -169,11 +171,35 @@ export class Robot {
     a.fore.rotation.set(beta, 0, 0);
   }
 
-  /** Look at a point: the head turns to it, and the view cone with it. */
+  /** Look at a point: the head turns toward it as a servo turns, no faster than it may and easing in and out (it is
+   *  stepped by `move`), tilted as it feels. */
+  private headServo = new QServo(3.2, 9); private headWant = new THREE.Quaternion(); private tilt = { down: 0, side: 0 };
   look(target: THREE.Vector3 | null): void {
-    if (!target) { this.head.rotation.set(0, 0, 0); return; }
-    this.head.lookAt(target); this.head.rotateY(Math.PI);
+    const q = this.head.quaternion.clone();
+    if (!target) this.head.rotation.set(0, 0, 0); else { this.head.lookAt(target); this.head.rotateY(Math.PI); }
+    this.head.rotateX(this.tilt.down); this.head.rotateZ(this.tilt.side);
+    this.headWant.copy(this.head.quaternion); this.head.quaternion.copy(q);
   }
+  /** dt s of its joints: the head turned toward where it wants to look by its servo's profile. */
+  move(dt: number): void {
+    const left = this.head.quaternion.angleTo(this.headWant); if (left < 1e-4) return;
+    const step = this.headServo.step(left, dt); this.head.quaternion.rotateTowards(this.headWant, step);
+  }
+  /** How it shows what it feels: its visor and chest light the colour of its feeling, its chest light beating at its
+   *  pace, its head tilted and its body slumped or straight, a blink now and then. */
+  private beat = 0; private blinkAt = 3;
+  feel(x: Expression, t: number, dt: number): void {
+    const visor = this.visor.material as THREE.MeshStandardMaterial, voice = this.voice.material as THREE.MeshStandardMaterial;
+    const c = new THREE.Color(x.colour); visor.color.lerp(c, Math.min(1, dt * 2)); visor.emissive.lerp(c, Math.min(1, dt * 2)); voice.color.lerp(c, Math.min(1, dt * 2)); voice.emissive.lerp(c, Math.min(1, dt * 2));
+    this.beat += dt * (x.bpm / 60); const pulse = Math.pow(Math.max(0, Math.sin(this.beat * Math.PI * 2)), 6);
+    voice.emissiveIntensity = Math.max(voice.emissiveIntensity * 0.9, 0.35 + 0.9 * pulse);
+    this.tilt.down += (x.tiltDown - this.tilt.down) * Math.min(1, dt * 1.5); this.tilt.side += (x.tiltSide - this.tilt.side) * Math.min(1, dt * 1.5);
+    this.root.children[0] && (this.slumpTo(x.slump, dt));
+    // a blink: the visor dims for a tenth of a second every few seconds
+    if (t > this.blinkAt) { visor.emissiveIntensity = 0.2; if (t > this.blinkAt + 0.12) this.blinkAt = t + 2.5 + ((Math.sin(t * 7.3) + 1) * 2); } else visor.emissiveIntensity = Math.max(visor.emissiveIntensity, 1.6);
+  }
+  private slumped = 0;
+  private slumpTo(to: number, dt: number): void { this.slumped += (to - this.slumped) * Math.min(1, dt * 1.2); this.head.position.y = 1.12 - this.slumped * 0.4; for (const a of this.arms) a.root.position.y = 0.96 - this.slumped * 0.25; }
 
   /** Its voice: the chest ring lights with how loud it speaks, 0 to 1. */
   private seen = 1;

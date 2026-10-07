@@ -48,7 +48,8 @@ describe('adjustable families', () => {
     expect((callFamily('leadscrew T8 p2 s4 300') as { spec: string }).spec).toMatch(/lead 8 mm/);
     expect(callFamily('gear m1 z5')).toMatch(/Under 8 teeth/);
     expect(callFamily('bearing 9999')).toMatch(/Which bearing/);
-    for (const f of FAMILIES) for (const ex of f.examples) expect(typeof callFamily(ex), ex).toBe('object');
+    for (const f of FAMILIES) for (const ex of f.examples) { const it = callFamily(ex); expect(typeof it, ex).toBe('object'); for (const c of (it as { of: { id: string }[] }).of) expect(INVENTORY.has(c.id), `${ex} has ${c.id}`).toBe(true); }
+    expect(FAMILIES.length).toBeGreaterThanOrEqual(25);
   });
 });
 
