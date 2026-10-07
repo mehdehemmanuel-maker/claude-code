@@ -20,6 +20,8 @@ describe('everything in 3D: its look, and how it comes apart', () => {
     expect(lookOf(INVENTORY.get('bicycle')!)).toMatchObject({ kind: 'vehicle', mark: 'two' });
     expect(lookOf(INVENTORY.get('steel-chrome')!).kind).toBe('swatch');
     expect(lookOf(INVENTORY.get('el-fe')!)).toMatchObject({ kind: 'atom', mark: 'Fe' });
+    for (const [w, k] of [['acmotor 90L 1.5kW 4P B5', 'motor'], ['taperbearing 30204', 'bearing'], ['sensormodule HC-SR04', 'board'], ['biketyre w28 622mm folding', 'torus'], ['mcb B 6A 2P', 'case'], ['pexpipe 16x2 3m', 'tube'], ['drywallscrew 3.5x35 coarse black', 'screw'], ['antenna 868MHz whip', 'rod']] as const) expect(lookOf(get(w)).kind, w).toBe(k);
+    expect(lookOf(get('taperbearing 30204')).mark).toBe('taper'); // rollers, not balls
   });
   it('its finish is what it is mostly made of', () => {
     expect(finishOf('brass').color).toBe(0xd4af5a);

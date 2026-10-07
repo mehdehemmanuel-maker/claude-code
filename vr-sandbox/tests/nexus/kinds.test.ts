@@ -7,6 +7,7 @@ import { catalogue } from '../../src/nexus/catalogue';
 import { numberOf, partAt, randomPart, spaceSize } from '../../src/nexus/partspace';
 import { ELEMENTS, MATERIALS, elementsOf } from '../../src/nexus/elements';
 import type { Item } from '../../src/nexus/inventory';
+import { behave } from '../../src/nexus/behave';
 
 const make = (w: string): Item => { const r = callFamily(w); if (!r || typeof r === 'string') throw new Error(`${w}: ${r}`); return r; };
 
@@ -49,6 +50,8 @@ describe('kinds of bought part, as data', () => {
     expect(make('angle 40x4 steel 1234mm').size![2]).toBe(1234);
     expect(callFamily('angle 40x4 steel 7000mm')).toMatch(/made to order 10–6000/);
     expect(make('chipresistor 0603 4.99kohm').name).toBe('4.99kΩ chip resistor, 0603, 1 %');
+    expect(make('chipresistor 0805 5% 4.7kohm').name).toBe('4.7kΩ chip resistor, 0805, 5 %');
+    expect(callFamily('chipresistor 0805 4.7kohm')).toMatch(/resistance comes in/); // 4.7k is E24, not E96: at 1 % it is 4.64k or 4.75k
   });
   it('every kind reaches the same fundamentals: its tree ends in elements', () => {
     for (const k of KINDS) for (const l of [linesOf(k)[0]!, linesOf(k).at(-1)!]) {
@@ -84,6 +87,21 @@ describe('kinds of bought part, as data', () => {
     const els = fundamentals(r.id).map((e) => e.id); expect(els).toContain('el-al'); expect(els).toContain('el-fe');
     expect(make('pillowblock 205').inner!.map((x) => x.id)).toContain('bearing-62052rs');
     expect(make('pillowblock 210').of.map((x) => x.id)).toContain('bearing-ball'); // no 6210 in the table: its fallback
+  });
+  it('says what it does: its numbers, from its standard and law', () => {
+    const r = behave(resolve('aircylinder bore50 double 100mm') as Item, '', FAMILIES, callFamily);
+    expect(typeof r).toBe('object'); expect((r as { lines: string[] }).lines[0]).toMatch(/1178 N out/); // 0.6 MPa × π 50² / 4
+    expect((r as { lines: string[] }).lines[0]).not.toMatch(/sizes:/);
+  });
+  it('the second batch says its numbers from its standard: motors by frame, breakers by curve, antennas by wavelength', () => {
+    expect(make('acmotor 132M 7.5kW 4P B3').spec).toMatch(/1500 rpm synchronous .* about 1440 rpm .* 49\.7 N·m .* shaft 38 mm at 132 mm high/);
+    expect(make('mcb C 16A 1P').spec).toMatch(/between 80 and 160 A/);
+    expect(make('antenna 2.4GHz whip').spec).toMatch(/λ = 125 mm: a quarter-wave whip 31\.2 mm/);
+    expect(make('taperbearing 30205').name).toBe('tapered roller bearing 30205 (25 × 52 × 16.25)');
+    expect(make('angularbearing 7205').name).toBe('angular contact bearing 7205B (25 × 52 × 15)');
+    expect(make('hydraulichose -8 2.35m').spec).toMatch(/12\.7 mm bore; works at up to 275 bar/);
+    expect(make('acmotor 132M 7.5kW 4P B3').inner?.some((x) => /6205/.test(x.name))).toBe(true);
+    expect(callFamily('acmotor 56 7.5kW 4P B3')).toMatch(/power comes in/);
   });
   it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
     const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
