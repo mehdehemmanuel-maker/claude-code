@@ -1168,7 +1168,7 @@ export function conceive(words: string, answers: Record<string, string> = {}): C
   // the conditions it sets, read from what it says and not from what it calls the thing: where it must hold a load,
   // held by something (a post, a tube, a face, two ends, the ground), out, across or up to it, it is grown from those,
   // whatever it is named; what it is otherwise read as making there (a top, a box, a leaf, a carriage) gives way to it
-  const cd0 = readConditions(t);
+  const cd0 = READING.conditions ? readConditions(t) : null;
   // where a drawn way already makes it (a deck across a span, a board on brackets along a wall, shelves, a top a child
   // climbs), that is kept until the grown frame is weighed as well as it is; the conditions are grown where nothing drawn
   // does what they ask: clamped round a post or a tube, hung below one, held out from a face, or standing in a wind on a
@@ -1843,6 +1843,9 @@ const FRAMES = new Map<string, MadeFrame>();
 const FIXED = new Map<string, string>();
 /** Weights set on a frame's feet where it stands, moved apart from it (concrete, water, earth): not what it weighs to move. */
 const BALLAST = new Set<string>();
+/** Whether an ask is read into conditions and grown from them where no drawn way does what they ask (an edit you can
+ *  turn off, to see what the drawn ways alone make). */
+export const READING = { conditions: true };
 /** Who watches a frame grow, round by round (the command line, or a graph). */
 export const GROW_TRACE: { on: ((r: { matter: string; round: number; ground: number; struts: number; joints: number; mass: number; ok: boolean }) => void) | null } = { on: null };
 function grownFor(ask: FrameAsk, how: string, ids: string[]) {

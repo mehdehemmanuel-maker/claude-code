@@ -59,6 +59,7 @@ import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConceptio
 import { chartPanel } from './chart';
 import { Windows } from './windows';
 import { Phone } from './phone';
+import { runPipeline, type PipeEdits, type PipeRun } from '../pipe';
 import { makeBoardStore } from './boards-store';
 import { checked, claudePrompt, understand, type Understanding } from '../understand';
 
@@ -2000,6 +2001,21 @@ async function chatFromPhone(text: string, photo: string | null): Promise<{ text
   line('claude', answer);
   return { text: answer, by: 'nexus', kept: kept.replace(/^Noted on a message from the phone: Message from the phone: /, 'Kept for Claude Code: ') };
 }
+/** The pipeline, run for the phone off the room's thread (a worker of its own), so the headset keeps drawing while a big
+ *  build grows; on the page's thread where a worker cannot be made. */
+let pipeWorker: Worker | null = null, pipeSeq = 0;
+const pipeWaiting = new Map<number, { ok: (r: PipeRun) => void; no: (e: Error) => void }>();
+function pipelineRun(ask: string, edits: PipeEdits): Promise<PipeRun> {
+  if (!pipeWorker) {
+    try {
+      pipeWorker = new Worker(new URL('./pipe-worker.ts', import.meta.url), { type: 'module' });
+      pipeWorker.onmessage = (e: MessageEvent<{ id: number; run?: PipeRun; error?: string }>) => { const w = pipeWaiting.get(e.data.id); if (!w) return; pipeWaiting.delete(e.data.id); if (e.data.run) w.ok(e.data.run); else w.no(new Error(e.data.error ?? 'the pipeline stopped')); };
+      pipeWorker.onerror = (e) => { for (const w of pipeWaiting.values()) w.no(new Error(e.message || 'the pipeline stopped')); pipeWaiting.clear(); pipeWorker = null; };
+    } catch { return (edits.physics ? physics() : Promise.resolve(null)).then((J) => runPipeline(ask, edits, J)); }
+  }
+  line('system', `The pipeline runs "${ask.slice(0, 80)}${ask.length > 80 ? '…' : ''}" (seed ${edits.seed}, matter ${edits.matter}, grow ${edits.grow ? 'on' : 'off'}, physics ${edits.physics ? 'on' : 'off'}).`);
+  return new Promise((ok, no) => { const id = ++pipeSeq; pipeWaiting.set(id, { ok: (r) => { line('system', `The pipeline: ${r.verdict}, ${r.failed} of ${r.checks} checks failed, ${(r.ms / 1000).toFixed(1)} s.`); ok(r); }, no }); pipeWorker!.postMessage({ id, ask, edits }); });
+}
 let desktopPhone = false;
 const phone = new Phone({
   open: (a) => {
@@ -2026,6 +2042,8 @@ const phone = new Phone({
   },
   listen: () => { if (!SR) return false; listen(); return true; },
   answers: () => (brain?.mode === 'claude' ? 'claude' : 'nexus'),
+  pipeline: pipelineRun,
+  tell: async (note) => { line('you', note); const kept = await noteOn(fromPhone, 'note', note); return kept.replace(/^Noted on a message from the phone: /, 'For Claude: '); },
 });
 /** On a screen, the phone in the lower left of the view, or put away. */
 function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
@@ -2207,6 +2225,7 @@ async function boot() {
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
     phoneNow: () => ({ app: phone.app, photos: phone.photos.length, lines: phone.lines.map((l) => `${l.who}: ${l.text}`), typing: phone.typing, visible: phone.group.visible }),
+    phoneAct: (act: string, arg?: number | string) => phone.act(act, arg), phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),
     madeNow: () => ({ spinning: spinners.length, made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null, ...(m.motor ? { motor: m.motor, spin: m.spin } : {}) })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),
     shopRun: (t: string) => makeStepLoaded(t),
     playingNow: () => (playing ? { frames: playing.track.frames.length, names: playing.track.names.length } : null),
