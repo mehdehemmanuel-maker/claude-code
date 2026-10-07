@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { BAY_W, BAY_X, Fleet, LANES, LEVELS, RACK_D, RACK_Z, ROWS, SIDE_X, WZ, type Bot, type BotState } from '../fleet';
 import { wheelSpeeds, pitchOf } from '../motion';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 const std = (color: number, metalness = 0.4, roughness = 0.55) => new THREE.MeshStandardMaterial({ color, metalness, roughness });
@@ -24,6 +25,8 @@ function tag(lines: string[], colour = '#ffffff', w = 512, h = 128): { sprite: T
   };
   draw(lines); return { sprite, draw };
 }
+/** A texture drawn once on a canvas. */
+function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')!); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 const LIGHT: Record<BotState, number> = { idle: 0x4dd0e1, turning: 0x69f0ae, driving: 0x69f0ae, waiting: 0xffb300, lifting: 0x448aff, reaching: 0x448aff, working: 0xb388ff, charging: 0x00e676, sleeping: 0x5e35b1 };
 
 interface BotView { bot: Bot; root: THREE.Group; body: THREE.Group; wheels: THREE.Object3D[]; carriage: THREE.Group; forks: THREE.Group; strip: THREE.Mesh; beacon: THREE.Mesh; label: ReturnType<typeof tag>; said: string; tote: THREE.Mesh; held: THREE.Object3D | null; pitch: number }
@@ -85,29 +88,58 @@ export class Warehouse {
     for (const b of fleet.bots) this.views.push(this.botView(b));
   }
 
-  /** A mast robot's body, in its colour. */
+  /** A mast robot's body, in its colour: a rounded chassis with vents, name plates and hazard-striped bumpers; a safety
+   *  laser scanner and a depth camera at its front; an emergency stop on its back; two drive wheels with their bolts
+   *  and four swivel casters; a mast with its drive belt, cable chain, a screen and a beacon; a carriage with striped
+   *  fork tips and its own camera. */
   private botView(b: Bot): BotView {
     const root = new THREE.Group(), body = new THREE.Group(); root.add(body); this.group.add(root);
-    const shell = std(0x2b3036, 0.5, 0.45), accent = std(b.colour, 0.3, 0.45);
-    const base = box(0.56, 0.24, 0.66, shell); base.position.y = 0.17; body.add(base);
-    const band = box(0.57, 0.05, 0.67, accent); band.position.y = 0.22; body.add(band);
-    const bumper = box(0.58, 0.05, 0.04, std(0x111111, 0.1, 0.9)); bumper.position.set(0, 0.09, -0.35); body.add(bumper);
-    const strip = box(0.5, 0.02, 0.012, glow(b.colour, 1.6)); strip.position.set(0, 0.27, -0.334); body.add(strip);
+    const shell = std(0x2b3036, 0.5, 0.45), accent = std(b.colour, 0.3, 0.45), black = std(0x0d0d0d, 0.2, 0.8), steel = std(0x90a4ae, 0.75, 0.35);
+    const col = `#${b.colour.toString(16).padStart(6, '0')}`;
+    const base = new THREE.Mesh(new RoundedBoxGeometry(0.56, 0.24, 0.66, 3, 0.035), shell); base.position.y = 0.17; body.add(base);
+    const band = box(0.565, 0.045, 0.665, accent); band.position.y = 0.225; body.add(band);
+    const deck = box(0.5, 0.012, 0.6, std(0x37474f, 0.6, 0.5)); deck.position.y = 0.296; body.add(deck);
+    for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) { const v = box(0.004, 0.06, 0.03, black); v.position.set(sx * 0.281, 0.15, -0.18 + k * 0.06); body.add(v); }
+    // name plates on its sides, hazard stripes on its bumpers
+    const plate = canvasTex(256, 64, (g) => { g.fillStyle = '#101418'; g.fillRect(0, 0, 256, 64); g.fillStyle = col; g.fillRect(0, 0, 10, 64); g.font = `800 34px ${FONT}`; g.fillStyle = '#ffffff'; g.fillText(b.name.toUpperCase().slice(0, 10), 22, 44); g.font = `600 16px ${FONT}`; g.fillStyle = '#90a4ae'; g.fillText(b.id.toUpperCase(), 200, 44); });
+    for (const sx of [-1, 1]) { const np = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.055), new THREE.MeshStandardMaterial({ map: plate, roughness: 0.5 })); np.position.set(sx * 0.282, 0.205, 0.12); np.rotation.y = sx * Math.PI / 2; body.add(np); }
+    const stripes = canvasTex(256, 32, (g) => { g.fillStyle = '#ffd600'; g.fillRect(0, 0, 256, 32); g.fillStyle = '#111'; for (let x = -32; x < 256; x += 32) { g.beginPath(); g.moveTo(x, 32); g.lineTo(x + 16, 0); g.lineTo(x + 32, 0); g.lineTo(x + 16, 32); g.fill(); } });
+    for (const sz of [-1, 1]) { const bp = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.05, 0.035), new THREE.MeshStandardMaterial({ map: stripes, roughness: 0.6 })); bp.position.set(0, 0.085, sz * 0.345); body.add(bp); }
+    const strip = box(0.46, 0.018, 0.01, glow(b.colour, 1.6)); strip.position.set(0, 0.262, -0.333); body.add(strip);
+    // the safety scanner low at its front corner, a depth camera over it, the stop button on its back
+    const scan = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.07, 24), black); scan.position.set(0.2, 0.12, -0.3); body.add(scan);
+    const win = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.022, 24, 1, true, -1.2, 2.4), new THREE.MeshStandardMaterial({ color: 0x8b0000, emissive: 0x550000, transparent: true, opacity: 0.85 })); win.position.copy(scan.position); body.add(win);
+    const cam = box(0.11, 0.03, 0.025, black); cam.position.set(0, 0.255, -0.338); body.add(cam);
+    for (const sx of [-0.03, 0.03]) { const l = new THREE.Mesh(new THREE.CircleGeometry(0.007, 14), new THREE.MeshStandardMaterial({ color: 0x1a237e, metalness: 0.9, roughness: 0.1 })); l.position.set(sx, 0.255, -0.351); l.rotation.y = Math.PI; body.add(l); }
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.012, 20), std(0xffd600, 0.2, 0.5)); ring.position.set(-0.18, 0.308, 0.28); body.add(ring);
+    const estop = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xd50000, 0.2, 0.4)); estop.position.set(-0.18, 0.314, 0.28); body.add(estop);
+    // wheels with their bolts; casters on swivels at the corners
     const wheels: THREE.Object3D[] = [];
-    for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 24).rotateZ(Math.PI / 2), std(0x0d0d0d, 0.1, 0.9)); w.position.set(s * 0.29, 0.085, 0); body.add(w); wheels.push(w); const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.052, 12).rotateZ(Math.PI / 2), accent); w.add(hub); }
-    for (const [x, z] of [[-0.22, -0.26], [0.22, -0.26], [-0.22, 0.26], [0.22, 0.26]] as const) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), std(0x222222)); c.position.set(x, 0.03, z); body.add(c); }
-    // the mast at its back, a beacon on top, a lidar at its front
-    for (const s of [-1, 1]) { const u = box(0.05, 1.75, 0.06, std(0x90a4ae, 0.7, 0.35)); u.position.set(s * 0.22, 1.16, 0.22); body.add(u); }
+    for (const sx of [-1, 1]) {
+      const w = new THREE.Group(); w.position.set(sx * 0.29, 0.085, 0); body.add(w); wheels.push(w);
+      w.add(new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 28).rotateZ(Math.PI / 2), std(0x111111, 0.1, 0.9)));
+      w.add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.054, 20).rotateZ(Math.PI / 2), accent));
+      for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2, bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.058, 8).rotateZ(Math.PI / 2), steel); bolt.position.set(0, Math.sin(a) * 0.028, Math.cos(a) * 0.028); w.add(bolt); }
+    }
+    for (const [x, z] of [[-0.22, -0.26], [0.22, -0.26], [-0.22, 0.26], [0.22, 0.26]] as const) { const fork = box(0.02, 0.04, 0.03, steel); fork.position.set(x, 0.045, z); body.add(fork); const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.018, 14).rotateZ(Math.PI / 2), black); cw.position.set(x, 0.025, z + 0.01); body.add(cw); }
+    // the mast: uprights, a back plate, its belt, its cable chain, a screen, a beacon on top
+    for (const sx of [-1, 1]) { const u = box(0.05, 1.75, 0.06, steel); u.position.set(sx * 0.22, 1.16, 0.22); body.add(u); }
+    const backPlate = box(0.39, 1.6, 0.012, std(0x263238, 0.5, 0.5)); backPlate.position.set(0, 1.12, 0.25); body.add(backPlate);
+    const belt = box(0.03, 1.66, 0.008, black); belt.position.set(0.12, 1.14, 0.243); body.add(belt);
+    for (let k = 0; k < 26; k++) { const link = box(0.04, 0.03, 0.02, std(0x424242, 0.4, 0.6)); link.position.set(-0.13, 0.4 + k * 0.058, 0.262); body.add(link); }
     const top = box(0.5, 0.05, 0.08, shell); top.position.set(0, 2.05, 0.22); body.add(top);
     const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 16), glow(b.colour, 2)); beacon.position.set(0, 2.11, 0.22); body.add(beacon);
-    const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.05, 20), std(0x111111, 0.6, 0.3)); lidar.position.set(0, 0.31, -0.24); body.add(lidar);
+    const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.05, 20), std(0x111111, 0.6, 0.3)); lidar.position.set(0, 0.33, -0.24); body.add(lidar);
     // the carriage climbs the mast; its forks reach forward into a shelf
     const carriage = new THREE.Group(); carriage.position.set(0, 0.1, 0.17); body.add(carriage);
-    carriage.add(box(0.48, 0.12, 0.04, accent));
+    carriage.add(new THREE.Mesh(new RoundedBoxGeometry(0.48, 0.12, 0.05, 2, 0.01), accent));
+    for (const sx of [-0.18, -0.06, 0.06, 0.18]) { const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.006, 8).rotateX(Math.PI / 2), steel); bolt.position.set(sx, 0.03, -0.027); carriage.add(bolt); }
+    const ccam = box(0.04, 0.025, 0.02, black); ccam.position.set(0, 0.075, -0.03); carriage.add(ccam);
     const forks = new THREE.Group(); carriage.add(forks);
     const tray = box(0.44, 0.02, 0.46, std(0x78909c, 0.7, 0.35)); tray.position.set(0, -0.05, -0.25); forks.add(tray);
+    for (const sx of [-0.2, 0.2]) { const tip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.022, 0.08), new THREE.MeshStandardMaterial({ map: stripes, roughness: 0.6 })); tip.position.set(sx, -0.05, -0.47); forks.add(tip); }
     const tote = box(0.42, 0.22, 0.32, std(0x1e88e5, 0.1, 0.6)); tote.position.set(0, 0.07, -0.25); tote.visible = false; forks.add(tote);
-    const label = tag([b.name, ''], `#${b.colour.toString(16).padStart(6, '0')}`, 512, 160); label.sprite.scale.set(0.62, 0.195, 1); label.sprite.position.set(0, 2.42, 0.1); root.add(label.sprite);
+    const label = tag([b.name, ''], col, 512, 160); label.sprite.scale.set(0.62, 0.195, 1); label.sprite.position.set(0, 2.42, 0.1); root.add(label.sprite);
     return { bot: b, root, body, wheels, carriage, forks, strip, beacon, label, said: '', tote, held: null, pitch: 0 };
   }
 

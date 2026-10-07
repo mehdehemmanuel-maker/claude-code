@@ -27,6 +27,8 @@ export interface Board {
   armed?: boolean; runs?: FlowRun[];
   /** Runs without saying so in the chat (a robot's rules, which run often): its runs are kept on it, to read there. */
   quiet?: boolean;
+  /** The least time (ms) between two starts by itself; 10 s where not said (a device's program runs oftener). */
+  cooldown?: number;
 }
 export type View = 'categories' | 'pipeline';
 export interface Live { id: string; label: string; note: string; pin: { x: number; y: number } | null }

@@ -49,7 +49,7 @@ import { card, label } from './holo';
 import { meshOfPart } from './parts';
 import { Robot } from './robot';
 import { Boards3D } from './boards3d';
-import type { FlowApi } from '../flows';
+import { claudeBoard, type FlowApi } from '../flows';
 import { Workshop, type Made, type PartRef } from '../generate';
 import { glow } from '../../engineering/thermal';
 import type { Jolt } from '../realize';
@@ -62,7 +62,10 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { robotsApp, warehouseApp, type MiniPart, type StoredBuild } from './apps';
+import { robotsApp, warehouseApp, workshopApp, type MiniPart, type StoredBuild } from './apps';
+import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
+import { CellView, deviceMesh } from './cell-view';
+import { Devices } from '../devices';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../pipe';
 import { makeBoardStore } from './boards-store';
@@ -1603,6 +1606,8 @@ async function converse(text: string): Promise<void> {
   if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
+  if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
+  { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
@@ -1712,10 +1717,21 @@ async function pipelineStep(arg: string): Promise<string> {
   if ((m = /^matter\s+(\w+)$/i.exec(t))) { const w = m[1]!.toLowerCase().replace('aluminum', 'aluminium'), all = ['any', 'steel', 'aluminium', 'wood', 'carbon'] as const; const k = w === 'next' ? all[(all.indexOf(e.matter) + 1) % all.length]! : all.find((x) => x === w); if (!k) throw new Error(`Matter ${w}? One of: ${all.join(', ')}, next.`); e.matter = k; phone.draw(); return `Matter: ${k}.`; }
   if ((m = /^(physics|grow|conditions)\s+(on|off)$/i.exec(t))) { const on = m[2]!.toLowerCase() === 'on'; if (/physics/i.test(m[1]!)) e.physics = on; else e.grow = on; phone.draw(); return `${m[1]} ${on ? 'on' : 'off'}.`; }
   if ((m = /^ask\s+(.+)$/i.exec(t))) { phone.pipeAsk = m[1]!.trim(); phone.draw(); return `The ask: ${phone.pipeAsk}.`; }
+  if ((m = /^set\s+(.+)$/i.exec(t))) {
+    // "seed 101, matter any, physics on, grow on": each said is set
+    const said: string[] = [];
+    for (const part of m[1]!.split(/\s*,\s*/)) { const r2 = await pipelineStep(part); said.push(r2.replace(/\.$/, '')); }
+    return `${said.join(', ')}.`;
+  }
+  if ((m = /^stage\s+(\w+)$/i.exec(t))) {
+    const r = phone.pipeRun, st = r?.stages.find((x) => x.id === m![1]!.toLowerCase());
+    if (!r || !st) throw new Error(r ? `No stage ${m[1]}: read, conditions, grow, make, check, scale.` : 'Nothing has run yet: "pipeline run" first.');
+    const out = `${st.line}${st.lines.length ? ` — ${st.lines.slice(0, 6).join('; ')}` : ''}`;
+    if (st.ok === false) throw new Error(out); return out;
+  }
   if (/^best$/i.test(t)) { await phone.findBest(); return phone.pipeSaid || 'Searched.'; }
-  throw new Error(`"pipeline ${t}"? Say pipeline run, pipeline run <an ask>, pipeline seed +1, pipeline matter steel, pipeline physics off, pipeline ask <an ask>, or pipeline best.`);
+  throw new Error(`"pipeline ${t}"? Say pipeline run, pipeline run <an ask>, pipeline ask <an ask>, pipeline set seed 101, matter any, physics on, grow on, pipeline seed +1, pipeline matter steel, pipeline physics off, pipeline stage check, or pipeline best.`);
 }
-const triggersOfBoard = (b: { nodes: Record<string, { step?: { kind: string } }> }) => Object.values(b.nodes).some((n) => n.step?.kind === 'trigger');
 async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): Promise<string> {
   const t = what.trim(), m = t.match(/^(\w+)\s*([\s\S]*)$/), verb = m?.[1]?.toLowerCase() ?? '', arg = (m?.[2] ?? '').trim();
   // what makes, sizes, turns, joins or works out: the workshop, offline
@@ -1726,6 +1742,14 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): 
     // made by a pipeline, no one is there to answer: it takes what it would take, says so, and makes it
     case 'make': case 'build': { if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a table that holds 30 kg".'); const c = conceive(arg); if (!c.wants.length) throw new Error(sayConception(c)); const all = c.questions.length ? answersFrom(c, 'go') ?? {} : {}; const ds = await makeIt(arg, all, 1); return ds.map((d) => sayDesign(d).slice(0, 600)).join(' ') || 'Nothing made.'; }
     case 'pipeline': return pipelineStep(arg);
+    case 'reset': case 'clear': return resetBuild();
+    case 'store': return storeBuild();
+    case 'cell': return cellStep(t);
+    case 'device': {
+      const m2 = /^(\S+)\s+(.+)$/.exec(arg), d = m2 ? devices.find(m2[1]!) : null;
+      if (!d) throw new Error(devices.list.length ? `No device called ${arg.split(' ')[0]}: there are ${devices.list.map((x) => x.id).join(', ')}.` : 'No device is out yet: build one in the workshop first ("cell build rover").');
+      const said = devices.command(d, m2![2]!); if (/does not know/.test(said)) throw new Error(said); return said;
+    }
     case 'robot': {
       const m2 = /^(\S+)\s+(.+)$/.exec(arg), bot = m2 ? fleet.bot(m2[1]!) : null;
       if (!bot) throw new Error(`No robot called ${arg.split(' ')[0] || '…'}: the robots are ${fleet.bots.map((b) => factName(b.name)).join(', ')}.`);
@@ -1743,7 +1767,7 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline'): 
     case 'say': if (!arg) throw new Error('Say what? "say {input}" says what came to it.'); say(arg); return arg;
     case 'board': { const said = boards?.buildBoard(); if (!said) throw new Error('Nothing stands here yet to make a board of.'); return said; }
     case 'wait': { const n = Math.min(60, Math.max(0, Number(arg.match(/\d+(?:\.\d+)?/)?.[0] ?? 1))); await nap(n * 1000, signal); return `Waited ${n} s.`; }
-    default: throw new Error(`I do not know how to "${t.slice(0, 60)}". A step can: make <what>, again <change>, operate, flaws, show <panel>, note <kind>: <text>, say <words>, board, wait <n> s; and every call in Pipeline calls (✨ New on the board): place, size, rotate, flip, expand, join, scatter, rule, calc, energy, …`);
+    default: throw new Error(`I do not know how to "${t.slice(0, 60)}". A step can: make <what>, pipeline run, pipeline ask <words>, reset, store, robot <name> <command>, cell build <recipe>, device <name> <command>, again <change>, operate, flaws, show <panel>, note <kind>: <text>, say <words>, board, wait <n> s; and every call in Pipeline calls (✨ New on the board): place, size, rotate, flip, expand, join, scatter, rule, calc, energy, …`);
   }
 }
 async function flowAi(prompt: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }> {
@@ -1763,9 +1787,9 @@ const flowApi: FlowApi = {
     try { return await flowAct(what, signal, who); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts }),
+  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts() }),
   // what is made and the facts as the workshop reads them, and the robots' numbers beside them
-  reader: () => { const sc = shop.reader(), more = { ...fleet.facts(), ...pipeFacts }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
+  reader: () => { const sc = shop.reader(), more = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts() }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
 // ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
@@ -2000,6 +2024,86 @@ try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Recor
 const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
 for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
 const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse');
+// the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/cell.ts)
+const cell = new Cell({ said: (t2) => line('system', `🔩 ${t2}`), made: (m2) => line('system', `🔩 Made: ${m2.name} (${m2.kind}, ${m2.g.toFixed(0)} g). ${m2.spec.join('; ')}`), released: (r) => setDown(r) });
+// what the workshop builds, set down in the room and running its program (src/nexus/devices.ts)
+const devices = new Devices();
+const deviceViews = new Map<string, ReturnType<typeof deviceMesh>>();
+/** A device built, set down: the rover on the floor in front of the workshop, the rest on the floor beside the bench. */
+function setDown(r: Recipe): void {
+  const n = devices.list.length, at = r.id === 'rover' ? { x: -2.5, z: -0.6, h: -Math.PI / 2 } : { x: -2.75, z: -2.4 + n * 0.3, h: -Math.PI / 2 };
+  const d = devices.spawn(r.id, r.name, at.x, at.z, at.h), v = deviceMesh(r); scene.add(v.obj); named(v.obj, `the ${r.name} built in the workshop`); deviceViews.set(d.id, v);
+  ensureProgram(r);
+}
+/** A device's program, as a pipeline on the boards (made once; then yours to change). */
+function ensureProgram(r: Recipe): string | null {
+  const b = programBoard(r); if (!b || !boards) return null; const id = `program-${r.id}`;
+  if (!boards.all.has(id)) boards.put(id, b); return id;
+}
+const lookRay = new THREE.Raycaster(), lookCache = new Map<string, { at: number; d: number | null }>();
+/** How far a rover's time-of-flight sensor sees ahead (m): the nearest thing at its height, or the room's edge. */
+function lookAhead(x: number, z: number, h: number): number | null {
+  const key = `${x.toFixed(2)},${z.toFixed(2)},${h.toFixed(2)}`, now = performance.now(), c = lookCache.get('r');
+  if (c && now - c.at < 80) return c.d;
+  const dir = new THREE.Vector3(-Math.sin(h), 0, -Math.cos(h)), o = new THREE.Vector3(x - Math.sin(h) * 0.055, 0.04, z - Math.cos(h) * 0.055);
+  lookRay.set(o, dir); lookRay.far = 4.2; lookRay.camera = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  const hit = lookRay.intersectObjects([warehouse.group, cellView.group, pedestal, robot.root, madeGroup, buildFloor, ...[...deviceViews.values()].filter((v) => v.wheels.length === 0).map((v) => v.obj)], true).find((x2) => (x2.object as THREE.Mesh).isMesh && !(x2.object as THREE.Sprite).isSprite);
+  // the room's edge: a wall where the floor ends, 9.5 m out
+  const b = o.x * dir.x + o.z * dir.z, cc = o.x * o.x + o.z * o.z - 9.5 * 9.5, edge = -b + Math.sqrt(Math.max(0, b * b - cc));
+  const d = Math.min(hit?.distance ?? Infinity, edge); const out = d > 4.2 ? null : d; lookCache.set('r', { at: now, d: out }); void key; return out;
+}
+/** A part of the room stepped, so that if it fails the frame is still drawn: said once, not every frame. */
+const failedOnce = new Set<string>();
+function guarded(what: string, f: () => void): void { try { f(); } catch (e) { if (!failedOnce.has(what)) { failedOnce.add(what); console.warn(`${what} failed:`, e); line('system', `Something in ${what} failed (${(e as Error).message}); the rest of the room goes on.`); } } }
+function stepDevices(dt: number): void {
+  devices.outside = hud.weather ? { temperature: hud.weather.temperature } : {};
+  devices.step(dt, lookAhead);
+  for (const d of devices.list) {
+    const v = deviceViews.get(d.id); if (!v) continue;
+    v.obj.position.set(d.x, 0, d.z); v.obj.rotation.y = d.h;
+    for (const w of v.wheels) w.rotation.x -= (d.v / 0.017) * dt;
+    if (v.pan) v.pan.rotation.y = (d.pan * Math.PI) / 180; if (v.tilt) v.tilt.rotation.x = (-d.tilt * Math.PI) / 180;
+    if (v.stage) v.stage.position.y = 0.06 + d.focus / 1000;
+  }
+}
+// a device's program runs often: its rules are read five times a second while one is out
+window.setInterval(() => { if (devices.list.length) boards?.event(); }, 200);
+/** The workshop's build of a recipe, as a pipeline on the boards, made if it is not there and run. */
+async function buildOnBoard(r: Recipe, show = true): Promise<string> {
+  if (!boards) return 'The boards are still loading: a moment.';
+  const id = `build-${r.id}`; if (!boards.all.has(id)) boards.put(id, buildBoard(r));
+  if (show) { summonTo('boards'); boards.openBoard(id); }
+  const run2 = await boards.runBoard(id, null, 'asked to build it');
+  return run2 ? `Build a ${r.name}: ${run2.status}${run2.status !== 'done' ? `: ${run2.steps.at(-1)?.output ?? ''}` : ''}.` : `Build a ${r.name} is already running.`;
+}
+/** A workshop step a pipeline runs: done in the room before the pipeline goes on. */
+async function cellStep(t: string): Promise<string> {
+  let m: RegExpExecArray | null; const w = t.trim().replace(/^cell\s+/i, '').replace(/[.!]$/, '');
+  const recipe = (x: string) => RECIPES.find((r) => r.id === x.toLowerCase() || r.name === x.toLowerCase()) ?? null;
+  if ((m = /^print\s+(?:a\s+|the\s+)?(.+)$/i.exec(w)) && partNamed(m[1]!)) return cell.printNow(partNamed(m[1]!)!);
+  if ((m = /^cast\s+(?:a\s+|the\s+)?(.+?)(?:\s+(?:in|of|from)\s+(\w+))?$/i.exec(w)) && partNamed(m[1]!)) return cell.castNow(partNamed(m[1]!)!, m[2]?.toLowerCase().replace('aluminum', 'aluminium'));
+  if ((m = /^take\s+(?:a\s+|the\s+)?(.+?)(?:\s+(\d+))?$/i.exec(w))) return cell.take(m[1]!, Number(m[2] ?? 1));
+  if ((m = /^wire\s+(.+)$/i.exec(w)) && recipe(m[1]!)) return cell.wire(recipe(m[1]!)!);
+  if ((m = /^upload\s+(.+)$/i.exec(w)) && recipe(m[1]!)) { const r = recipe(m[1]!)!; const said = await cell.upload(r); ensureProgram(r); return said; }
+  if ((m = /^release\s+(.+)$/i.exec(w)) && recipe(m[1]!)) return cell.release(recipe(m[1]!)!);
+  if ((m = /^build\s+(?:a\s+|an\s+|the\s+)?(.+)$/i.exec(w)) && recipe(m[1]!)) return buildOnBoard(recipe(m[1]!)!, false);
+  const said = cellWords(`cell ${w}`); if (said !== null) return said;
+  throw new Error(`"cell ${w}"? Say cell print chassis, cell cast gear in zinc, cell take n20 2, cell wire rover, cell upload rover, cell release rover, cell build rover, cell gcode G28; M104 S210, cell speed 600, or cell stop. Recipes: ${RECIPES.map((r) => r.id).join(', ')}; metals: ${METALS.map((x) => x.id).join(', ')}.`);
+}
+const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop');
+/** A part by its name or a recipe's, for words and pipeline steps: "gear", "frame", "chassis". */
+const partNamed = (w: string) => CellView.partOf(w.trim()) ?? null;
+/** The workshop's words, from the chat or a pipeline step: print, cast, build, G-code, speed, stop. */
+function cellWords(t: string): string | null {
+  let m: RegExpExecArray | null; const w = t.trim().replace(/[.!]$/, '');
+  if ((m = /^(?:cell\s+)?print\s+(?:a\s+|the\s+)?(.+)$/i.exec(w)) && partNamed(m[1]!)) return cell.print(partNamed(m[1]!)!);
+  if ((m = /^(?:cell\s+)?cast\s+(?:a\s+|the\s+)?(.+?)(?:\s+(?:in|of|from)\s+(\w+))?$/i.exec(w)) && partNamed(m[1]!)) return cell.cast(partNamed(m[1]!)!, m[2]?.toLowerCase().replace('aluminum', 'aluminium'));
+  if ((m = /^(?:cell\s+)?build\s+(?:a\s+|an\s+|the\s+)?(.+)$/i.exec(w))) { const r = RECIPES.find((x) => x.id === m![1]!.toLowerCase() || x.name === m![1]!.toLowerCase()); if (r) { void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `Building a ${r.name} as a pipeline: "Build a ${r.name}" is on the board, each step done in the workshop before the next. Its program is "${r.name}'s program".`; } }
+  if ((m = /^cell\s+gcode\s+(.+)$/i.exec(w))) return cell.gcode(m[1]!.replace(/\s*;\s*/g, '\n'));
+  if ((m = /^cell\s+speed\s+(\d+)$/i.exec(w))) { cell.speed = Math.max(1, Math.min(3600, Number(m[1]))); return `The workshop runs ×${cell.speed}.`; }
+  if (/^cell\s+stop$|^stop the workshop$/i.test(w)) return cell.stopAll();
+  return null;
+}
 /** What stands on the table, as a model's parts: what is made, and the machine's parts as boxes; the biggest 300. */
 function partsOfTable(): MiniPart[] {
   const out: (MiniPart & { v: number })[] = [];
@@ -2058,12 +2162,20 @@ function removeKept(id: string): string {
   return `${k!.title} is gone from the warehouse.`;
 }
 /** Where you stand: at the table, or at the warehouse's open front looking in. */
-let place: 'warehouse' | 'table' = 'table';
-function goPlace(p: 'warehouse' | 'table'): string {
+let place: 'warehouse' | 'table' | 'workshop' = 'table';
+function goPlace(p: 'warehouse' | 'table' | 'workshop'): string {
   place = p;
-  if (renderer.xr.isPresenting) { if (p === 'warehouse') { dolly.position.copy(Warehouse.VIEW.stand); dolly.rotation.set(0, Math.PI, 0); } else { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); } }
-  else { framing = false; if (p === 'warehouse') { orbit.target.copy(Warehouse.VIEW.look); camera.position.set(0.9, 2.7, WZ - 2.2); } else { orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); } orbit.update(); }
+  if (renderer.xr.isPresenting) { if (p === 'warehouse') { dolly.position.copy(Warehouse.VIEW.stand); dolly.rotation.set(0, Math.PI, 0); } else if (p === 'workshop') { dolly.position.copy(CellView.VIEW.stand); dolly.rotation.set(0, Math.PI / 2, 0); } else { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); } }
+  else { framing = false; if (p === 'warehouse') { orbit.target.copy(Warehouse.VIEW.look); camera.position.set(0.9, 2.7, WZ - 2.2); } else if (p === 'workshop') { orbit.target.copy(CellView.VIEW.look); camera.position.set(-1.6, 2.0, -0.4); } else { orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); } orbit.update(); }
+  if (p === 'workshop') return `At the workshop: the printer ${cell.printer.busy ? 'printing' : 'idle'}, the kiln ${cell.kiln.says()}, the furnace at ${Math.round(cell.furnace.t)} °C. The Workshop app runs it.`;
   return p === 'warehouse' ? `At the warehouse: ${kept.length} build${kept.length === 1 ? '' : 's'} kept, ${fleet.bots.map((b) => `${b.name} ${b.asleep ? 'asleep' : b.doing}`).join('; ')}.` : 'Back at the table.';
+}
+/** The Pipelines: the board wall, on Claude's build pipeline (made the first time, as a board like every other). */
+function openPipelines(): string {
+  if (!boards) return 'The boards are still loading: a moment.';
+  if (!boards.all.has('claude-pipeline')) boards.put('claude-pipeline', claudeBoard(phone.pipeAsk));
+  summonTo('boards'); boards.openBoard('claude-pipeline');
+  return "Claude's build pipeline, as a board: ▶ Run it, change the ask or the edits by changing their words, or add your own steps. Every other pipeline (yours, the robots', the workshop's) is in the list beside it.";
 }
 /** Each robot's rules, as a pipeline on the boards: made once a robot, then yours to change. */
 function robotBoards(): void {
@@ -2270,7 +2382,8 @@ function pipelineRun(ask: string, edits: PipeEdits, build = true): Promise<PipeR
 let desktopPhone = false;
 const phone = new Phone({
   open: (a) => {
-    if (a === 'boards') say(summonTo('boards'));
+    if (a === 'pipelines') say(openPipelines());
+    else if (a === 'boards') say(summonTo('boards'));
     else if (a === 'build') line('system', summonTo('new'));
     else if (a === 'flaws') line('system', summonTo('flaws'));
     else if (a === 'fix') togglePin();
@@ -2294,12 +2407,10 @@ const phone = new Phone({
   answers: () => (brain?.mode === 'claude' ? 'claude' : 'nexus'),
   pipeline: (ask, edits, o) => pipelineRun(ask, edits, o?.build ?? true),
   resetBuild: () => { const said = resetBuild(); line('system', said); return said; },
-  pipelines: () => boards ? [...boards.all].filter(([, b]) => b.kind === 'flow' || triggersOfBoard(b)).map(([id, b]) => { const r = b.runs?.at(-1); return { id, title: b.title, armed: !!b.armed, last: r ? `${r.status}, ${new Date(r.started).toLocaleTimeString()}` : '', robot: id.startsWith('robot-') }; }).sort((a, b) => Number(a.robot) - Number(b.robot)) : [],
-  openPipeline: (id) => { summonTo('boards'); boards?.openBoard(id); },
-  newPipeline: () => { const said = summonTo('boards'); boards?.act('flows'); line('system', said); },
   tell: async (note) => { line('you', note); const kept = await noteOn(fromPhone, 'note', note); return kept.replace(/^Noted on a message from the phone: /, 'For Claude: '); },
 });// the apps the forge adds to it: the warehouse and its robots
 phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = storeBuild(); line('system', t2); return t2; }, fetch: (id) => { const t2 = fetchBuild(id); line('system', t2); return t2; }, remove: removeKept, go: goPlace, where: () => place }));
+phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // apps pulled off the phone onto screens of their own: hold the trigger (or the mouse) on an app and pull it off the phone
 const holos = new HoloScreens(phone, scene, { add: (id, title, obj) => windows.add({ id, title, obj, selfPlaced: true }), open: (id) => windows.open(id), isOpen: (id) => windows.isOpen(id) });
@@ -2318,7 +2429,7 @@ function stepDrag(): void {
 /** An app let go: pulled out, its screen stays; not pulled out, it was a press, and the app opens on the phone. */
 function endDrag(): void { if (!appDrag) return; if (!appDrag.id) phone.act('app', appDrag.app); appDrag = null; }
 // what the phone shows of the robots moves with them: drawn again twice a second while an app of theirs is open
-window.setInterval(() => { if (['robots', 'warehouse'].includes(phone.app) || phone.showing(['robots', 'warehouse'])) phone.draw(); }, 500);
+window.setInterval(() => { if (['robots', 'warehouse', 'workshop'].includes(phone.app) || phone.showing(['robots', 'warehouse', 'workshop'])) phone.draw(); }, 500);
 
 /** On a screen, the phone in the lower left of the view, or put away. */
 function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
@@ -2441,8 +2552,8 @@ async function boot() {
   const lastAsk = (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })();
   if (params.get('ask')) { showEmpty(); line('system', world2.make(params.get('ask')!)); }
   else if (params.get('machine')) line('system', machineFrom(params.get('machine')!));
-  else if (lastAsk) line('system', machineFrom(lastAsk));
-  else showEmpty();
+  // the table starts clear: what was made last time is not brought back (store it in the warehouse to keep it)
+  else { showEmpty(); if (lastAsk) { try { localStorage.removeItem('forge:last-ask'); } catch { /* fine */ } } }
   if (params.get('xr') === 'quest3') {
     const { XRDevice, metaQuest3 } = await import('iwer');
     const device = new XRDevice(metaQuest3);
@@ -2460,7 +2571,7 @@ async function boot() {
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
-  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); stepBuild(now); stepGrow(now); fleet.step(dt); warehouse.update(dt); stepDrag(); holos.update(dt); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
+  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); stepBuild(now); stepGrow(now); guarded('the warehouse', () => { fleet.step(dt); warehouse.update(dt); }); guarded('the workshop', () => { cell.step(dt); cellView.update(dt); }); guarded('the devices', () => stepDevices(dt)); guarded('a screen', () => { stepDrag(); holos.update(dt); }); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -2472,7 +2583,7 @@ async function boot() {
   unsentBtn.onclick = () => { if (!relay || !unsent.length) return; window.open(relay.issueUrl(unsent), '_blank', 'noopener'); line('system', `${unsent.length} note${unsent.length === 1 ? '' : 's'} filled in as an issue for Claude Code: press Submit there.`); unsent.length = 0; drawUnsent(); };
   void makeRelay().then((r) => { relay = r; });
   window.setTimeout(() => void physics().catch(() => undefined), 8000);
-  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Node boards', obj: boards.group }); window.setTimeout(() => { robotBoards(); boards?.event({ kind: 'start' }); }, 1500); });
+  void makeBoardStore().then((st) => { boards = new Boards3D(st, boardHost); scene.add(boards.group); named(boards.group, 'the node board'); windows.add({ id: 'boards', title: 'Pipelines', obj: boards.group }); window.setTimeout(() => { robotBoards(); boards?.event({ kind: 'start' }); }, 1500); });
   // every panel a window with a bar; the spaces you stand in (what ran, the causes) without one
   for (const [id, title, obj, space] of [['rounds', 'Rounds', roundsCard.mesh], ['laws', 'Laws', lawsCard.mesh], ['bill', 'Bill and settings', liveCard.mesh], ['gates', 'Logic gates', gatesCard.mesh], ['loop', 'My loop', loopWin], ['flaws', 'Flaws', flawBoard], ['operate', 'Operate', simBoard], ['inside', 'Inside', insideBoard], ['chat', 'Chat', chatCard.mesh], ['chart', 'Chart', chartWin.mesh], ['pipeline', 'What ran', execGroup, true], ['causes', 'Causes', causalGroup, true]] as [string, string, THREE.Object3D, boolean?][]) windows.add({ id, title, obj, ...(space ? { space: true } : {}) });
   named(phone.group, 'the phone in your hand');
@@ -2505,9 +2616,10 @@ async function boot() {
     phoneAct: (act: string, arg?: number | string) => phone.act(act, arg),
     buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
     resetBuild: () => resetBuild(),
-    storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table') => goPlace(p2),
+    storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
+    cellSay: (t: string) => cellWords(t), devicesNow: () => devices.list.map((d) => ({ id: d.id, x: +d.x.toFixed(2), z: +d.z.toFixed(2), h: +d.h.toFixed(2), doing: d.doing, read: d.read })), buildOnBoard: (id: string) => buildOnBoard(RECIPES.find((r) => r.id === id)!, true), cellNow: () => ({ ...cell.facts(), jobs: cell.jobs.map((j) => `${j.name}: ${j.stage}`), beads: cell.printer.beads.length, rail: cell.arms.rail.doing, bench: cell.arms.bench.doing, speed: cell.speed }), cellSpeed: (x: number) => { cell.speed = x; },
     holoOut: (app: string) => { eyeOf(eye); const f = new THREE.Vector3(); camera.getWorldDirection(f); return holos.spawn(app, eye.clone().addScaledVector(f, 1.1).add(new THREE.Vector3(0.35, -0.1, 0)), eye); },
     holoPress: (act: string, arg?: string | number) => { const id = holos.ids().at(-1); return id ? (phone.act(act, arg, undefined, undefined, phone.holoSurface(id.split(':')[1]!) ?? undefined), true) : false; }, phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),
     madeNow: () => ({ spinning: spinners.length, made: shop.all().made.map((m) => ({ name: m.name, kind: m.kind, at: m.at, w: m.w, h: m.h, d: m.d, mass: m.mass, matter: m.matter?.name ?? null, group: m.group ?? null, ...(m.motor ? { motor: m.motor, spin: m.spin } : {}) })), joined: shop.joined().map((j) => ({ name: j.name, members: j.members, volume: j.volume, mass: j.mass })), meshes: madeGroup.children.length }),

@@ -267,7 +267,7 @@ export class Boards3D {
     if (this.picking) { this.drawPicker(hit, button); tex.needsUpdate = true; return; }
     if (b && this.log) { this.drawLog(b, button); tex.needsUpdate = true; return; }
     if (b && !this.sel && hasSteps(b)) { this.drawFlow(b, hit, button); tex.needsUpdate = true; return; }
-    if (!b) { g.font = `600 44px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText('Boards', 36, 80); g.font = `400 32px ${FONT}`; g.fillStyle = '#9fdfee'; wrap(g, 'A board is words and the links between them. Press New board above, or This build for a board of what stands here.', LPX - 72).forEach((l, i) => g.fillText(l, 36, 150 + i * 44)); tex.needsUpdate = true; return; }
+    if (!b) { g.font = `600 44px ${FONT}`; g.fillStyle = '#e6f7ff'; g.fillText('Pipelines', 36, 80); g.font = `400 32px ${FONT}`; g.fillStyle = '#9fdfee'; wrap(g, 'A board is words and the links between them. Press New board above, or This build for a board of what stands here.', LPX - 72).forEach((l, i) => g.fillText(l, 36, 150 + i * 44)); tex.needsUpdate = true; return; }
     if (!this.sel) {
       // the board: what the links have made of it, every category a press away
       g.font = `600 44px ${FONT}`; g.fillStyle = '#ffffff'; wrap(g, b.title, LPX - 72, 2).forEach((l, i) => g.fillText(l, 36, 76 + i * 52));
@@ -405,7 +405,7 @@ export class Boards3D {
       ...(saved.length ? [{ head: `YOUR SAVED PIPELINES · ${saved.length}` } as Row, ...saved.map((c, i): Row => ({ label: c.title, note: `${c.nodes.length} steps · ${ago(c.at)}`, act: 'saved', id: String(i), col: '#69f0ae', side: { act: 'clipsaved', id: String(i), text: '📋' } }))] : []),
       { head: 'WHAT NEXUS KNOWS' }, { label: 'Every pipeline call, by what it is for', note: `${CALLS.reduce((t, c) => t + c.calls.length, 0)} calls`, act: 'kb', id: 'calls', col: '#b388ff' },
       ...TAXONOMY.map((t): Row => { const { e, m } = count(t); return { label: t.name, note: `${e} entries${m ? ` · ${m} made` : ''}`, act: 'kb', id: t.id, col: m ? '#69f0ae' : '#80deea' }; }),
-      { head: 'YOUR BOARDS' }, ...[...this.store.boards.entries()].sort((a, c) => (c[1].updatedAt ?? 0) - (a[1].updatedAt ?? 0)).map(([id, x]): Row => { const live = this.running.has(id), last = x.runs?.at(-1); return { label: `${x.armed ? '⚡ ' : ''}${x.title}`, note: live ? 'running…' : last ? `${last.status} · ${ago(last.ended ?? last.started)}` : `${nodesOf(x).length} nodes`, act: 'openb', id }; }),
+      { head: 'YOUR PIPELINES' }, ...[...this.store.boards.entries()].sort((a, c) => (c[1].updatedAt ?? 0) - (a[1].updatedAt ?? 0)).map(([id, x]): Row => { const live = this.running.has(id), last = x.runs?.at(-1); return { label: `${x.armed ? '⚡ ' : ''}${x.title}`, note: live ? 'running…' : last ? `${last.status} · ${ago(last.ended ?? last.started)}` : `${nodesOf(x).length} nodes`, act: 'openb', id }; }),
     ];
     const top = 120, H = 76, per = Math.floor((LHPX - top - 120) / H), pages = Math.max(1, Math.ceil(rows.length / per)); if (this.page >= pages) this.page = pages - 1;
     let y = top;
@@ -802,7 +802,6 @@ export class Boards3D {
   /** Something happened in the room: each armed pipeline whose trigger it is starts. Not while a pipeline is running (what
    *  one does never starts another, so two cannot set each other off), nor within 10 s of starting by itself. */
   event(...es: FlowEvent[]): string[] {
-    if (this.running.size) return [];
     const started: string[] = [];
     // a condition trigger starts the moment its condition turns true, read over everything set, made and in the room
     let api: FlowApi | null = null;
@@ -812,14 +811,13 @@ export class Boards3D {
         const c = triggerOf(t.step.what); if (c?.kind !== 'cond' || !c.cond) continue;
         api ??= this.host.flowApi(); const r = evaluate(c.cond, api.facts(), '', api.reader?.()), now = !('error' in r) && r.ok, key = `${id}:${t.id}`, was = this.condWas.get(key) ?? false;
         this.condWas.set(key, now);
-        if (now && !was && Date.now() - (this.auto.get(id) ?? 0) >= 10_000) { this.auto.set(id, Date.now()); started.push(b.title); if (!b.quiet) this.host.say(`⚡ ${b.title} starts: ${c.cond} now holds.`); void this.runBoard(id, t.id, `${c.cond} came to hold`); }
+        if (now && !was && !this.running.has(id) && Date.now() - (this.auto.get(id) ?? 0) >= (b.cooldown ?? 10_000)) { this.auto.set(id, Date.now()); started.push(b.title); if (!b.quiet) this.host.say(`⚡ ${b.title} starts: ${c.cond} now holds.`); void this.runBoard(id, t.id, `${c.cond} came to hold`); }
       }
     }
-    if (this.running.size) return started;
     for (const [id, b] of this.store.boards) {
-      if (!b.armed) continue;
+      if (!b.armed || this.running.has(id)) continue;
       let e: FlowEvent | undefined; const t = triggersOf(b).find((x) => (e = es.find((y) => starts(x.step, y)))); if (!t || !e) continue;
-      if (Date.now() - (this.auto.get(id) ?? 0) < 10_000) continue;
+      if (Date.now() - (this.auto.get(id) ?? 0) < (b.cooldown ?? 10_000)) continue;
       this.auto.set(id, Date.now()); started.push(b.title);
       if (!b.quiet) this.host.say(`⚡ ${b.title} starts: ${saidOf(e)}.`);
       void this.runBoard(id, t.id, saidOf(e));
