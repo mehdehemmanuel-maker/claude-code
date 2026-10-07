@@ -87,7 +87,7 @@ export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
   return g;
 }
 
-interface Shown { id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean }
+interface Shown { /** in a hand, held */ held?: boolean; id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean }
 const free = (o: THREE.Object3D) => o.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh && !(x as THREE.LineSegments).isLineSegments) return; m.geometry?.dispose(); for (const mt of Array.isArray(m.material) ? m.material : [m.material]) mt?.dispose(); });
 /** A source of parts to take apart: the inventory (by its plans), or a build's own parts (from where they stand). */
 export interface BuildPiece { id: string; name: string; obj: THREE.Object3D; note: string }
@@ -124,6 +124,7 @@ export class Exploded {
     this.group.lookAt(eye.x, this.group.position.y, eye.z);
   }
   private clearStage(): void {
+    this.release();
     for (const s of this.shown) { this.stage.remove(s.obj); if (!s.borrowed) free(s.obj); this.group.remove(s.tag); s.tag.material.map?.dispose(); s.tag.material.dispose(); }
     if (this.wholeObj) { this.stage.remove(this.wholeObj); free(this.wholeObj); }
     this.shown = []; this.wholeObj = null;
@@ -171,7 +172,7 @@ export class Exploded {
     return this.show(up.id, now, true, false);
   }
   toggle(now: number): void { this.mode = this.mode === 'apart' ? 'whole' : 'apart'; this.t0 = now; this.drawInfo(); }
-  close(): void { this.clearStage(); this.plan = null; this.build = null; this.trail = []; this.group.visible = false; }
+  close(): void { this.release(); this.clearStage(); this.plan = null; this.build = null; this.trail = []; this.group.visible = false; }
   /** What a ray points at: a part's id, a chip, or nothing. */
   pick(ray: THREE.Raycaster): { piece: string } | { chip: 'back' | 'close' | 'whole' } | null {
     if (!this.group.visible) return null;
@@ -180,6 +181,15 @@ export class Exploded {
     for (const h of hits) { let o: THREE.Object3D | null = h.object; while (o && !o.userData.piece) o = o.parent; if (o) return { piece: String(o.userData.piece) }; }
     return null;
   }
+  /** A part taken in the hand: it leaves its place and goes with the hand, as it is, until let go. */
+  grab(id: string, hand: THREE.Object3D): string | null {
+    const s = this.shown.find((x) => x.id === id && x.obj.visible); if (!s) return null;
+    this.release(); hand.attach(s.obj); s.held = true; s.tag.visible = false;
+    const i = INVENTORY.get(id); return i ? `${i.name}${i.spec ? `: ${i.spec.replace(/ \(sizes: .*\)$/, '')}` : ''}` : id;
+  }
+  /** What is in the hand put back: it flies home to its place round the whole. */
+  release(): void { for (const s of this.shown) if (s.held) { this.stage.attach(s.obj); s.held = false; } }
+  get holding(): boolean { return this.shown.some((s) => s.held); }
   /** Where a part (or a chip) is in the room, for a test or a guide. */
   pointOf(id: string): THREE.Vector3 | null {
     const c = this.chips.find((x) => x.act === id); if (c) return c.mesh.getWorldPosition(new THREE.Vector3());
@@ -197,10 +207,12 @@ export class Exploded {
     const k = now - this.t0, apart = this.mode === 'apart';
     if (this.wholeObj) { this.wholeObj.rotation.y = now * 0.4; this.wholeObj.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m && 'opacity' in m) { const ghost = apart ? 0.22 : 1; m.transparent = ghost < 1 || m.transparent; m.opacity += (ghost - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; } }); }
     for (const s of this.shown) {
+      if (s.held) continue;
       const u = ease((apart ? k - s.delay : 1.2 - k) / 1.1);
       s.obj.visible = this.build ? true : u > 0.02;
-      s.obj.position.lerpVectors(s.from, s.to, u);
-      if (!this.build) s.obj.rotation.y = now * 0.3 + s.delay * 10;
+      const home = new THREE.Vector3().lerpVectors(s.from, s.to, u);
+      if (s.obj.position.distanceToSquared(home) > 1e-6 && u >= 1) s.obj.position.lerp(home, 0.18); else s.obj.position.copy(home);
+      if (!this.build) { s.obj.rotation.y = now * 0.3 + s.delay * 10; s.obj.rotation.x *= 0.85; s.obj.rotation.z *= 0.85; }
       s.tag.visible = apart && u > 0.95;
       s.tag.position.copy(s.obj.position).add(new THREE.Vector3(0, -s.drop, 0.02));
     }

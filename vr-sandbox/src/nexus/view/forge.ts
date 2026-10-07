@@ -835,6 +835,8 @@ let tree: TreeNode = { id: '', name: '', parts: [], children: [] }, partsById = 
 const holo = new Unravel(scene, new THREE.Vector3(0, 1.36, -0.62), 0.55);
 // anything in 3D, taken apart before you: an item of the inventory, or the build on the table (src/nexus/view/explode.ts)
 const apart3d = new Exploded(scene);
+/** The hand holding a part out of the 3D view, or -1. */
+let gripHeld3d = -1;
 /** Lift an item out in 3D before you, apart: its parts round it, each to open in turn, down to the elements. */
 function see3d(id: string): string { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 0.95, renderer.xr.isPresenting ? 0 : 0.16); aim3d(); return apart3d.show(id, performance.now() / 1000); }
 /** On a screen, the view turned to look at it (in a headset you turn your own head). */
@@ -2799,12 +2801,15 @@ for (let i = 0; i < 2; i++) {
   ctl.addEventListener('squeezestart', () => {
     if (handOf[i] !== 'right') { togglePause(); return; }
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
+    // a part of what is out in 3D, gripped: in your hand, as it is, to turn and look at close; let go and it goes home
+    if (apart3d.visible) { const h = apart3d.pick(ray); if (h && 'piece' in h) { const said = apart3d.grab(h.piece, renderer.xr.getControllerGrip(i)); if (said) { gripHeld3d = i; say(said); return; } } }
     // a part of the build on the table, gripped: the whole build lifted out before you, apart, each part to open
     { const made = [...drawn.values()].map((d) => d.obj).filter((o) => o.visible), hb = made.length ? ray.intersectObjects(made, true)[0] : undefined; if (hb && hb.distance < (windows.distance(ray) || Infinity) && hb.distance < 3) { say(seeBuild3d()); return; } }
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onWin = pinning ? Infinity : windows.distance(ray);
     if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
     if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
   });
+  ctl.addEventListener('squeezeend', () => { if (gripHeld3d === i) { apart3d.release(); gripHeld3d = -1; } });
   ctl.addEventListener('squeezeend', () => { if (boardHand === i && boardBy === 'squeeze') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'squeeze') { winHand = -1; windows.release(); } });
 }
 // ---- the pointer: each hand's beam ends on the first thing it touches, with a ball where it touches ----------------------
@@ -2950,7 +2955,8 @@ async function boot() {
     phoneAct: (act: string, arg?: number | string) => phone.act(act, arg),
     buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
     resetBuild: () => resetBuild(),
-    see3d: (id: string) => see3d(id), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids() }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)),
+    see3d: (id: string) => see3d(id), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids(), holding: apart3d.holding }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)), xrRay3d: () => { const i = handOf.indexOf('right'); if (i < 0) return null; const ctl = renderer.xr.getController(i); ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera(); return { pick: apart3d.pick(ray), d: apart3d.distance(ray), phone: phone.distance(ray), board: on('boards') && boards ? boards.distance(ray) : null, holo: holos.distance(ray), bar: windows.barAt(ray)?.distance ?? null }; },
+    apart3dWorld: (id: string) => { const w = apart3d.pointOf(id); return w ? [w.x, w.y, w.z] : null; },
     storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
