@@ -2340,6 +2340,7 @@ function robotBoards(): void {
   let made: string[] = []; try { made = JSON.parse(localStorage.getItem('forge:robot-boards') ?? '[]') as string[]; } catch { /* none made */ }
   for (const b of fleet.bots) { const id = `robot-${b.id}`; if (!boards.all.has(id) && !made.includes(id)) { boards.put(id, boardOfBot(b)); made.push(id); } }
   if (!boards.all.has('robot-claude') && !made.includes('robot-claude')) { boards.put('robot-claude', claudeRules()); made.push('robot-claude'); }
+  if (!boards.all.has('weather-rules') && !made.includes('weather-rules')) { boards.put('weather-rules', weatherRules()); made.push('weather-rules'); }
   try { localStorage.setItem('forge:robot-boards', JSON.stringify(made)); } catch { /* made again next time */ }
 }
 /** Claude's own rules, as a pipeline: when it is bored or curious it practises; tired, it rests; asked, it says how it feels. */
