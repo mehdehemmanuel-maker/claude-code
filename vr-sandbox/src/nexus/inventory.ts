@@ -578,6 +578,7 @@ m('argon', 'argon', 'Other materials/Gases', 'an inert gas, the shield of TIG an
 m('co2', 'carbon dioxide', 'Other materials/Gases', 'a cheap active shielding gas for steel; liquid in its cylinder');
 m('borosilicate', 'borosilicate glass 3.3', 'Glasses', 'the glass of lab ware: it stands heat and thermal shock', 'ISO 3585');
 m('rutile', 'rutile (titanium dioxide)', 'Ceramics', 'the main mineral of a rutile electrode\'s flux');
+m('zinc-oxide', 'zinc oxide', 'Ceramics', 'a white semiconductor ceramic: sintered, the grains of a varistor');
 m('zirconia', 'zirconia', 'Ceramics', 'a tough white ceramic: fibre ferrules, blades and bearing balls');
 m('ps', 'polystyrene', 'Polymers', 'a light rigid plastic; foamed, it is EPS and XPS insulation');
 m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: lamp filaments and TIG electrodes');
