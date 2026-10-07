@@ -183,7 +183,7 @@ export function workshopApp(h: WorkshopHost): PhoneApp {
   };
 }
 
-export interface InventoryHost { make(words: string): void; board(id: string): string; tree(id: string): string; open(): string; feed(text: string): string; said(): string }
+export interface InventoryHost { make(words: string): void; board(id: string): string; tree(id: string): string; open(): string; feed(text: string): string; said(): string; /** lift it out in 3D before you, apart */ see(id: string): string }
 /** The inventory on the phone: its categories, down to each entry; what is inside it (press a part to go into it);
  *  making it; its pipeline and its tree on the board; the adjustable families and their sizes; and feeding it. */
 export function inventoryApp(h: InventoryHost): PhoneApp {
@@ -220,6 +220,7 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         if (sm) { text(`inside: ${sm.made} made here · ${sm.bought} bought · ${sm.stock} from stock · ${sm.depth} levels`, 40, y + 18, 15, '#e0f7fa', 500, W - 80); y += 26; }
         if (i.kind !== 'material' && i.kind !== 'element') { const bw = (W - 80) / 3; button(30, y + 10, bw, 58, '▶ Make it', 'make', i.id, C, 'rgba(38,198,218,0.3)'); button(40 + bw, y + 10, bw, 58, '⚡ Pipeline', 'board', i.id, C); button(50 + 2 * bw, y + 10, bw, 58, '🌳 Tree', 'tree', i.id, C); y += 70;
           button(30, y + 4, bw, 52, '⚙ Does', 'behave', i.id, C); button(40 + bw, y + 4, bw, 52, '📋 Parts', 'bom', i.id, C); button(50 + 2 * bw, y + 4, bw, 52, '⚛ Elements', 'go', `fund:${i.id}`, C); y += 64; }
+        button(30, y + 2, W - 60, 50, '🧊 See it in 3D, apart', 'see', i.id, C, 'rgba(38,198,218,0.22)'); y += 58;
         text(i.kind === 'material' ? 'What it is made of (press to go in)' : i.kind === 'element' ? 'The materials it is in' : i.of.length ? 'What is in it (press to go in)' : '', 40, y + 18, 16, C, 700); y += 26;
       } else {
         text(sub === '' ? 'Inventory' : sub === 'fam' ? 'Kinds of part' : sub.startsWith('famc:') ? sub.slice(5).split('/').join(' › ') : sub.startsWith('famx:') ? `⚙ ${FAMILIES.find((f) => f.id === sub.slice(5))?.name ?? ''}` : sub.startsWith('fund:') ? `⚛ ${INVENTORY.get(sub.slice(5))?.name ?? ''}` : sub.slice(4), 40, 118, sub.startsWith('fund:') ? 28 : 38, C, 800, W - 80);
@@ -240,6 +241,7 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         case 'tree': said = h.tree(String(arg)); return true;
         case 'random': { const n = Math.floor(Math.random() * spaceSize().total), p = partAt(n)!, x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } else said = String(x); return true; }
         case 'number': nav.write(`a part number, 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}`, (t) => { const n = Number(t.replace(/[^\d]/g, '')), p = partAt(n); if (!p) { said = `No part ${t}: 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}.`; nav.redraw(); return; } const x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } nav.redraw(); }); return true;
+        case 'see': said = h.see(String(arg)); return true;
         case 'behave': { const i = INVENTORY.get(String(arg)); if (i) { const r = behave(i, '', FAMILIES, callFamily); said = typeof r === 'string' ? r : `${r.lines.join(' ')} [${r.law}]`; } return true; }
         case 'bom': { const i = INVENTORY.get(String(arg)); if (i) { const b = flatBom(i.id), m = massOf(i.id); said = `${typeOf(i)}: to make one, buy ${b.buy.filter((r) => r.how === 'bought').length} kinds of part and take ${b.buy.filter((r) => r.how === 'stock').length} materials from stock; make ${b.made.length} kinds here.${m.g ? ` About ${m.g >= 1000 ? `${(m.g / 1000).toFixed(2)} kg` : `${m.g.toFixed(0)} g`} where the masses are known.` : ''} Most of: ${b.buy.slice(0, 4).map((r) => `${r.n} × ${r.name}`).join(', ')}.`; } return true; }
         case 'open': said = h.open(); return true;
