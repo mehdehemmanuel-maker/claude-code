@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areaFor, designFrame, flowScalar, frameAt, ground, growFrame, growTree, lattice, scaleLaw, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/adapt';
+import { areaFor, designFrame, sectionFor, flowScalar, frameAt, ground, growFrame, growTree, lattice, scaleLaw, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/adapt';
 import { matterOf } from '../../src/nexus/generate';
 
 const TUBES: [number, number][] = [[12, 1], [16, 1.5], [20, 1.5], [25, 2], [30, 2], [40, 2], [50, 2.5], [60, 3], [76, 3], [89, 3.5], [114, 4], [168, 5]];
@@ -74,6 +74,26 @@ describe('a network grown by what flows through it', () => {
     expect(b.struts.some((x) => x.N.some((n) => n > 0)) && b.struts.some((x) => x.N.some((n) => n < 0))).toBe(true);
     expect(b.sag.every((x) => x.most <= x.allowed)).toBe(true);
   }, 120000);
+  it('a strut carrying almost nothing is still no more slender than the code allows: L / r within 200 pressed, 300 pulled', () => {
+    const s: Strut = { E: 200e9, sy: 250e6, sc: 250e6, density: 7850, slender: { push: 200, pull: 300 } };
+    const tubes = TUBES.map(([D, w]) => { const d = D / 1e3, t = w / 1e3; return { A: (Math.PI * (d * d - (d - 2 * t) ** 2)) / 4, I: (Math.PI * (d ** 4 - (d - 2 * t) ** 4)) / 64, label: `${D}` }; });
+    const pushed = sectionFor([-10], 4, s, tubes), pulled = sectionFor([10], 4, s, tubes);
+    expect(4 / Math.sqrt(pushed.section.I / pushed.section.A)).toBeLessThanOrEqual(200); expect(pushed.mode).toBe('slender');
+    expect(4 / Math.sqrt(pulled.section.I / pulled.section.A)).toBeLessThanOrEqual(300);
+    expect(pulled.section.A).toBeLessThan(pushed.section.A);
+  });
+  it('resting with its feet tied, it slides only as a whole: weighed down for the push on all of it, less than foot by foot', () => {
+    const P: V3 = [0, 1, 0], ask = (tied: boolean) => designFrame({ lo: [-0.5, 0, -0.5], hi: [0.5, 1, 0.5], cells: [2, 2, 2], held: (p) => p[1] < 1e-9, rests: true, ballast: true, tied, cases: [[{ at: P, F: [0, -1000, 0] }], [{ at: P, F: [800, -1000, 0] }]] }, [MATTERS[0]!]).best!;
+    const loose = ask(false), tied = ask(true), kg = (f: typeof tied) => f.ballast.reduce((a, b) => a + b, 0);
+    // 800 N along it over μ 0.5 wants 1600 N pressing it in all, of which 1000 N and its own weight press it: by 1.5, the rest
+    // (or more, where a foot it would lift wants more weighing down than that)
+    expect(kg(tied)).toBeGreaterThanOrEqual(1.5 * (1600 - 1000 - tied.mass * g) - 1e-6); expect(kg(tied)).toBeLessThan(kg(loose));
+    expect(tied.tie).toBeGreaterThan(0);
+  }, 60000);
+  it('its feet cast into footings: each as heavy as what would lift it, by 1.5, and nothing for sliding', () => {
+    const P: V3 = [0, 1, 0], f = designFrame({ lo: [-0.5, 0, -0.5], hi: [0.5, 1, 0.5], cells: [2, 2, 2], held: (p) => p[1] < 1e-9, footings: true, cases: [[{ at: P, F: [0, 2000, 0] }]] }, [MATTERS[0]!]).best!;
+    expect(f.ballast.reduce((a, b) => a + b, 0)).toBeCloseTo(1.5 * (2000 - f.mass * g), 0);
+  }, 60000);
   it("made bigger with what it carries, each margin falls as 1/s (Galileo's square-cube law); carrying the same, shrunk, it falls as s² or so", () => {
     const f = mount(17).best!, law = scaleLaw(f);
     const withIt = law.find((x) => x.withIt)!, kept = law.find((x) => !x.withIt)!;

@@ -41,6 +41,16 @@ describe('the conditions an ask sets, read from what it says', () => {
     expect(c.hold.kind).toBe('ground'); expect(c.massMax).toBeCloseTo(1360.8, 0);
     const w = c.loads.find((l) => l.side)!; expect(w.said).toMatch(/80% solid/); expect(c.wind).toBeCloseTo(29.06, 1);
   });
+  it('a roof over a plan: snow on the ground as it lies on an open roof (ASCE 7), its clear span kept clear, who is under it not on it', () => {
+    const c = readConditions('open-sided timber market pavilion for our town square, 100 ft by 50 ft footprint, clear span of 40 ft down the center aisle with no columns, roof ridge no higher than 28 ft, sits on an existing 6 in concrete slab we can saw cut for new footings, design for 40 psf ground snow, 115 mph wind, glulam or local douglas fir, has to take 800 people packed in during the harvest festival plus string lights and banners hung off the beams at up to 25 lb every 10 ft')!;
+    const cv = c.cover!; expect(cv.L).toBeCloseTo(30.48, 2); expect(cv.W).toBeCloseTo(15.24, 2); expect(cv.clear).toBeCloseTo(12.19, 2);
+    // 0.7 Ce Ct Is pg: Ct 1.2 open to the air, Is 1.1 for more than 300 sheltered: 0.924 × 40 psf = 1.77 kPa
+    expect(cv.p).toBeCloseTo(0.7 * 1.2 * 1.1 * 40 * 47.88, 0); expect(cv.pSaid).toMatch(/ASCE 7-16 eq\. 7\.3-1/);
+    expect(c.up).toBeCloseTo(8.534, 3); expect(c.out).toBeUndefined(); expect(c.span).toBeUndefined();
+    expect(c.loads.some((l) => l.who)).toBe(false); expect(c.heard.join(' ')).toMatch(/800 people .*under it, on the floor, not on it/);
+    expect(c.loads.find((l) => l.perM)!.perM).toBeCloseTo((25 * 4.44822) / 3.048, 2);
+    expect(c.hold).toMatchObject({ kind: 'ground', footings: true }); expect(c.matter).toBe('wood.douglas-fir'); expect(c.wind).toBeCloseTo(51.41, 1);
+  });
   it('no load, or nothing holding it, or nothing between them: no conditions to grow from', () => {
     expect(readConditions('a gravity fed drip system for my orchard')).toBeNull();
     expect(readConditions('a 40 g lamp')).toBeNull();

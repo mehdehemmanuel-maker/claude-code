@@ -615,7 +615,8 @@ export class Workshop {
     for (const m of ms) if (!m.matter) throw new Error(`${m.name} is a surface, with no matter to join: group it instead ("group ${g.members.join(' and ')} as ${g.name}")`);
     const up = Array.from({ length: n }, (_, i) => i), root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i]!))), bonds: Bond[] = [];
     let nearest = { gap: Infinity, a: '', b: '' };
-    for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) {
+    // only those whose boxes come near can touch: each such pair, in order
+    for (const [i, k] of nearPairs(ms, NEAR)) {
       const A = ms[i]!, B = ms[k]!, gap = separation(A, B);
       if (gap > TOUCH) { if (root(i) !== root(k) && gap < nearest.gap) nearest = { gap, a: A.name, b: B.name }; continue; }
       up[root(i)] = root(k);
@@ -623,6 +624,7 @@ export class Workshop {
     }
     if (new Set(ms.map((_, i) => root(i))).size > 1) {
       const lone = ms.filter((_, i) => root(i) !== root(0)).map((m) => m.name);
+      if (!Number.isFinite(nearest.gap)) for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { if (root(i) === root(k)) continue; const gap = separation(ms[i]!, ms[k]!); if (gap < nearest.gap) nearest = { gap, a: ms[i]!.name, b: ms[k]!.name }; }
       throw new Error(`${lone.join(', ')} ${lone.length > 1 ? 'do' : 'does'} not touch the rest of ${g.name}: things are connected only where they touch${Number.isFinite(nearest.gap) ? ` (the nearest, ${nearest.a} and ${nearest.b}, are ${mm(nearest.gap)} apart)` : ''}. Move them together, or "group" them to move as one without connecting them.`);
     }
     g.bonds = bonds;
@@ -673,7 +675,9 @@ export class Workshop {
     const memo = new Map<string, Made>(), made: Made[] = [], failed: { name: string; why: string }[] = [];
     for (const n of this.specs.keys()) { try { made.push(this.madeOf(n, new Map(), new Set(), memo)); } catch (e) { failed.push({ name: n, why: (e as Error).message }); } }
     // what nothing could see, and nothing could be: not computed
-    for (const A of made) { const why = unseenIn(A, made); if (why) A.unseen = why; }
+    // a thing can be wholly inside only what its box meets: each tried against those, in order
+    const meets = made.map(() => [] as number[]); for (const [i, j] of nearPairs(made, 1e-6)) { meets[i]!.push(j); meets[j]!.push(i); }
+    made.forEach((A, i) => { const why = unseenIn(A, meets[i]!.sort((a, b) => a - b).map((j) => made[j]!)); if (why) A.unseen = why; });
     return { made, failed };
   }
   /** The numbers a check reads: every value set, and every shape's sizes, place, volume and mass. */
@@ -699,7 +703,9 @@ export class Workshop {
     for (const r of this.rulesKept) {
       if (r.kind === 'cond') { try { if (!truth(r.text, sc)) out.push(`${r.text} does not hold`); } catch (e) { out.push(`${r.text}: ${(e as Error).message}`); } continue; }
       const d = r.kind === 'clear' ? num(r.d, sc) : 0, mine = (n: string) => (this.specs.get(n)?.by ?? '') === r.by;
-      for (let i = 0; i < made.length; i++) for (let j = i + 1; j < made.length; j++) {
+      // only things whose boxes come near can go into each other, or come nearer than a clearance (taken twice over, as
+      // the separating-axis test may say turned things nearer than their boxes): each such pair, in order
+      for (const [i, j] of nearPairs(made, NEAR + 2 * d)) {
         const A = made[i]!, B = made[j]!; if (A.unseen || B.unseen || (!mine(A.name) && !mine(B.name)) || this.related(this.specs.get(A.name)!, this.specs.get(B.name)!)) continue;
         if (r.kind === 'apart' && spatial('overlap', A, B)) out.push(`${A.name} and ${B.name} overlap`);
         if (r.kind === 'clear' && spatial('gap', A, B) < d - 1e-9) out.push(`${A.name} and ${B.name} are ${mm(spatial('gap', A, B))} apart, less than ${mm(d)}`);
@@ -757,17 +763,21 @@ export class Workshop {
   }
   /** A step done: what it made or changed, in words; or why it could not be, with nothing changed. */
   run(line: string, by = ''): string {
-    const before = this.snapshot(), was = new Set(this.broken()); this.by = by;
+    // what stood broken before it is what stood broken after the last step done (only a step changes what is made here),
+    // unless the build round it has changed
+    const stamp = this.world.parts().length, before = this.snapshot(), was = new Set(this.brokenKept?.stamp === stamp ? this.brokenKept.list : this.broken()); this.by = by;
     try {
       const said = this.step(this.bake(line.trim().replace(/[.;]+$/, '')));
       // what this step breaks: a rule broken already, by what stood before it, does not stop it
-      const bad = this.broken().filter((x) => !was.has(x));
+      const now = this.broken(), bad = now.filter((x) => !was.has(x)); this.brokenKept = { stamp, list: now };
       // what happened when things were let go is not a choice to undo: it stands, and what it breaks is said
       if (bad.length && /^(simulate|drop|push|let (it |them )?go)\b/i.test(line.trim())) return `${said} What happened breaks ${bad.length > 1 ? 'rules' : 'a rule'}: ${bad.slice(0, 4).join('; ')}. It is what happened, so it stands: change what is made, not what happened.`;
       if (bad.length) throw new Error(`That would break the rule${bad.length > 1 ? 's' : ''}: ${bad.slice(0, 4).join('; ')}. Undone.`);
       return said;
-    } catch (e) { this.restore(before); throw e; }
+    } catch (e) { this.restore(before); this.brokenKept = { stamp, list: [...was] }; throw e; }
   }
+  /** What stood broken after the last step done, and the build's count of parts then. */
+  private brokenKept: { stamp: number; list: string[] } | null = null;
   /** Random values drawn now, from the seed, and written into the step: random(a, b), randint(a, b), chance(p), pick(a, b, …), "one of a, b, c". */
   private bake(t: string): string {
     let s = t;
@@ -1572,6 +1582,17 @@ export class Workshop {
 }
 
 /** The box round several things. */
+/** How near two boxes must come, along x, y and z, to be tried for touching: well beyond touching, as the separating-axis
+ *  test may say two turned boxes nearer than their boxes are (by up to √3, estimate). */
+const NEAR = 0.01;
+/** Each pair (i < k, in order) of things whose boxes along x, y and z come within pad of each other: the only ones that
+ *  can touch (sweep and prune along x). */
+function nearPairs(bs: { at: V3; w: number; h: number; d: number }[], pad: number): [number, number][] {
+  const lo = bs.map((b) => [b.at[0] - b.w / 2, b.at[1] - b.h / 2, b.at[2] - b.d / 2]), hi = bs.map((b) => [b.at[0] + b.w / 2, b.at[1] + b.h / 2, b.at[2] + b.d / 2]);
+  const order = bs.map((_, i) => i).sort((a, b) => lo[a]![0]! - lo[b]![0]!), out: [number, number][] = [];
+  for (let s0 = 0; s0 < order.length; s0++) { const i = order[s0]!; for (let t = s0 + 1; t < order.length; t++) { const k = order[t]!; if (lo[k]![0]! > hi[i]![0]! + pad) break; if (lo[k]![1]! > hi[i]![1]! + pad || lo[i]![1]! > hi[k]![1]! + pad || lo[k]![2]! > hi[i]![2]! + pad || lo[i]![2]! > hi[k]![2]! + pad) continue; out.push(i < k ? [i, k] : [k, i]); } }
+  return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
 function boxRound(bs: { at: V3; w: number; h: number; d: number }[]): { at: V3; w: number; h: number; d: number } {
   const lo = [0, 1, 2].map((i) => Math.min(...bs.map((b) => b.at[i]! - [b.w, b.h, b.d][i]! / 2))), hi = [0, 1, 2].map((i) => Math.max(...bs.map((b) => b.at[i]! + [b.w, b.h, b.d][i]! / 2)));
   return { at: [0, 1, 2].map((i) => (lo[i]! + hi[i]!) / 2) as V3, w: hi[0]! - lo[0]!, h: hi[1]! - lo[1]!, d: hi[2]! - lo[2]! };
@@ -1593,19 +1614,25 @@ function contains(m: Made, p: V3): boolean {
 function unionOf(ms: Made[]): { volume: number; mass: number; exact: boolean; within: number } {
   const solid = ms.filter((m) => m.matter && m.volume > 0); if (!solid.length) return { volume: 0, mass: 0, exact: true, within: 0 };
   const ext = (m: Made, i: number) => [m.w, m.h, m.d][i]! / 2;
-  if (solid.every((m) => m.kind === 'box' && square(m.turn))) {
-    const cuts = [0, 1, 2].map((i) => [...new Set(solid.flatMap((m) => [m.at[i]! - ext(m, i), m.at[i]! + ext(m, i)]))].sort((a, b) => a - b));
+  const cuts = solid.every((m) => m.kind === 'box' && square(m.turn)) ? [0, 1, 2].map((i) => [...new Set(solid.flatMap((m) => [m.at[i]! - ext(m, i), m.at[i]! + ext(m, i)]))].sort((a, b) => a - b)) : null;
+  // exact where the cells its faces cut space into are few enough to count (four million, estimate of what is quick)
+  if (cuts && cuts[0]!.length * cuts[1]!.length * cuts[2]!.length <= 4e6) {
+    // each cell between the cuts is the first box's that holds it: each box claims the cells between its own faces, in order
     let volume = 0, mass = 0;
-    for (let x = 0; x + 1 < cuts[0]!.length; x++) for (let y = 0; y + 1 < cuts[1]!.length; y++) for (let z = 0; z + 1 < cuts[2]!.length; z++) {
-      const c = [cuts[0]![x]!, cuts[1]![y]!, cuts[2]![z]!], e = [cuts[0]![x + 1]!, cuts[1]![y + 1]!, cuts[2]![z + 1]!], mid = [0, 1, 2].map((i) => (c[i]! + e[i]!) / 2);
-      const who = solid.find((m) => [0, 1, 2].every((i) => Math.abs(mid[i]! - m.at[i]!) < ext(m, i)));
-      if (who) { const v = (e[0]! - c[0]!) * (e[1]! - c[1]!) * (e[2]! - c[2]!); volume += v; mass += v * who.matter!.density; }
+    const n = cuts.map((c) => c.length - 1), owner = new Int32Array(n[0]! * n[1]! * n[2]!).fill(-1), at = cuts.map((c) => new Map(c.map((v, k) => [v, k])));
+    solid.forEach((m, j) => { const r = [0, 1, 2].map((i) => [at[i]!.get(m.at[i]! - ext(m, i))!, at[i]!.get(m.at[i]! + ext(m, i))!]); for (let x = r[0]![0]!; x < r[0]![1]!; x++) for (let y = r[1]![0]!; y < r[1]![1]!; y++) for (let z = r[2]![0]!; z < r[2]![1]!; z++) { const k = (x * n[1]! + y) * n[2]! + z; if (owner[k]! < 0) owner[k] = j; } });
+    for (let x = 0; x < n[0]!; x++) for (let y = 0; y < n[1]!; y++) for (let z = 0; z < n[2]!; z++) {
+      const j = owner[(x * n[1]! + y) * n[2]! + z]!; if (j < 0) continue;
+      const v = (cuts[0]![x + 1]! - cuts[0]![x]!) * (cuts[1]![y + 1]! - cuts[1]![y]!) * (cuts[2]![z + 1]! - cuts[2]![z]!); volume += v; mass += v * solid[j]!.matter!.density;
     }
     return { volume, mass, exact: true, within: 0 };
   }
   const b = boxRound(solid), lo: V3 = [b.at[0] - b.w / 2, b.at[1] - b.h / 2, b.at[2] - b.d / 2], V = b.w * b.h * b.d, N = 40000, st = { s: 12345 };
   let hits = 0, dens = 0;
-  for (let k = 0; k < N; k++) { const p: V3 = [lo[0] + draw(st) * b.w, lo[1] + draw(st) * b.h, lo[2] + draw(st) * b.d], who = solid.find((m) => contains(m, p)); if (who) { hits++; dens += who.matter!.density; } }
+  // each point tried only against what its box holds it in: the shapes binned by their boxes on a 16-cell grid, in order
+  const K = 16, size = [b.w / K, b.h / K, b.d / K], bins: number[][] = Array.from({ length: K * K * K }, () => []), cellOf = (v: number, i: number) => Math.max(0, Math.min(K - 1, size[i]! > 0 ? Math.floor((v - lo[i]!) / size[i]!) : 0));
+  solid.forEach((m, j) => { const r = [0, 1, 2].map((i) => [cellOf(m.at[i]! - [m.w, m.h, m.d][i]! / 2, i), cellOf(m.at[i]! + [m.w, m.h, m.d][i]! / 2, i)]); for (let x = r[0]![0]!; x <= r[0]![1]!; x++) for (let y = r[1]![0]!; y <= r[1]![1]!; y++) for (let z = r[2]![0]!; z <= r[2]![1]!; z++) bins[(x * K + y) * K + z]!.push(j); });
+  for (let k = 0; k < N; k++) { const p: V3 = [lo[0] + draw(st) * b.w, lo[1] + draw(st) * b.h, lo[2] + draw(st) * b.d], bin = bins[(cellOf(p[0], 0) * K + cellOf(p[1], 1)) * K + cellOf(p[2], 2)]!; let who: Made | undefined; for (const j of bin) if (contains(solid[j]!, p)) { who = solid[j]!; break; } if (who) { hits++; dens += who.matter!.density; } }
   const f = hits / N; return { volume: V * f, mass: (V * dens) / N, exact: false, within: f > 0 ? Math.sqrt((f * (1 - f)) / N) / f : 1 };
 }
 const identity = (g: Group) => !g.move.some((x) => x) && !g.turn.some((x) => x) && !g.flips.length && g.stretch.every((x) => x === 1);

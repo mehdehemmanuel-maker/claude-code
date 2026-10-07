@@ -16,13 +16,16 @@ type V3 = [number, number, number];
 /** What holds it. A line is a post, a pole, a tube or a trunk it clamps round (along y standing, along x lying); a face
  *  is a wall, a deck's front or a vehicle's guard it bolts to; ends are two banks or towers it rests across; the ground
  *  is what it sits on; above is what it hangs from. */
-export interface Hold { kind: 'line' | 'face' | 'ends' | 'ground' | 'above'; along?: 'x' | 'y'; dia?: number; said: string; /** it only pushes up on it (it rests there) */ rests: boolean }
-export interface Load { N: number; said: string; /** it pushes sideways (a head, a lean, the wind on a face), not down */ side?: boolean; /** how high it pushes, m, where it is a face the wind is on */ at?: number }
+export interface Hold { kind: 'line' | 'face' | 'ends' | 'ground' | 'above'; along?: 'x' | 'y'; dia?: number; said: string; /** it only pushes up on it (it rests there) */ rests: boolean; /** its feet are cast or bolted into footings, which hold them every way (not by friction) */ footings?: boolean }
+export interface Load { N: number; said: string; /** it pushes sideways (a head, a lean, the wind on a face), not down */ side?: boolean; /** how high it pushes, m, where it is a face the wind is on */ at?: number; /** hung along it, N on each metre, where it is said every so far ("25 lb every 10 ft") */ perM?: number; /** people, counted by how many */ who?: boolean }
+/** A roof over a floor: its plan, the width down its middle no post may stand in, what lies on it (snow, or what a roof
+ *  is made to bear), what hangs along it, and the headroom under it. */
+export interface Cover { L: number; W: number; said: string; /** clear of posts, m, across its middle */ clear: number; clearSaid: string; /** what lies on it, Pa */ p: number; pSaid: string; /** headroom kept under it, m */ head: number; headSaid: string }
 export interface Conditions {
   loads: Load[]; /** where its load lies spread over a top, how big that top is, m */ area?: [number, number]; /** how much harder than its weight a load comes on, where it is said to (a jump, a hard stop, a kick) */ dyn: number; dynSaid?: string;
   hold: Hold; /** how far out from what holds it the load is */ out?: number; /** how high */ up?: number; /** across between its ends */ span?: number; /** how far below what holds it the load hangs */ drop?: number;
   wind?: number; /** the most its load may move, m */ sagMax?: number; /** the longest a piece may be, m */ pieceMax?: number; /** the most it may weigh in all, and each piece, kg */ massMax?: number; partMax?: number;
-  matter?: string; heard: string[];
+  matter?: string; heard: string[]; /** a roof over a floor */ cover?: Cover; /** the highest it may stand, m */ upMax?: number;
 }
 
 /** The words before a quantity said, and after it (after its number and its unit). */
@@ -34,7 +37,7 @@ const LIMIT_BEFORE = /^(under|below|max|maximum|less|lighter|most|than|<|within|
 export function readConditions(text: string): Conditions | null {
   const t = text.replace(/’/g, "'"), lo = t.toLowerCase(), qs = findQuantities(t), heard: string[] = [];
   const loads: Load[] = []; let massMax: number | undefined, partMax: number | undefined, sagMax: number | undefined, pieceMax: number | undefined, wind: number | undefined;
-  let out: number | undefined, up: number | undefined, span: number | undefined, drop: number | undefined, dia: number | undefined, called = false;
+  let out: number | undefined, up: number | undefined, span: number | undefined, drop: number | undefined, dia: number | undefined, called = false, upMax: number | undefined;
   for (const q of qs) {
     const { b, a } = word(t, q.at, q.text, 5, 6), near = (re: RegExp, k = 3) => b.slice(-k).some((x) => re.test(x)), next = (re: RegExp, k = 3) => a.slice(0, k).some((x) => re.test(x));
     const isMass = sameDim(q.dim, DIMS.mass), isForce = sameDim(q.dim, DIMS.force), isLen = sameDim(q.dim, DIMS.length), isSpeed = sameDim(q.dim, DIMS.speed);
@@ -55,6 +58,9 @@ export function readConditions(text: string): Conditions | null {
       // "so call it 120 kg", "figure 1200 lb in all": what it carries in all, said
       if (/\b(call it|figure|in all|total|altogether|all up)\b/.test(lo.slice(Math.max(0, q.at - 16), q.at + q.text.length + 12))) { loads.splice(0, loads.length, { N, said: `${q.text}, said as what it carries in all` }); called = true; continue; }
       if (called) continue;
+      // "lights hung off the beams at up to 25 lb every 10 ft": hung along it, so much on each metre
+      const every = /^\s*(?:each\s+)?every\s+(\d+(?:\.\d+)?)\s*(m|metres?|meters?|ft|feet|foot)\b/.exec(lo.slice(q.at + q.text.length, q.at + q.text.length + 30));
+      if (every) { const s0 = Number(every[1]) * (/^f/.test(every[2]!) ? 0.3048 : 1); loads.push({ N: 0, perM: N / s0, said: `${q.text} every ${every[1]} ${every[2]}, hung along it` }); continue; }
       // "split over 4 brackets": its share
       const split = /split (?:over|between|across) (\d+)/.exec(lo.slice(q.at, q.at + 60));
       const each = /\beach\b/.test(lo.slice(q.at, q.at + 30)) ? Number(/(\d+|two|three|four)\s+(?:\w+\s+){0,3}(?:ops|operators|people|persons|adults|crew|riders)\b/.exec(lo.slice(Math.max(0, q.at - 80), q.at))?.[1]?.replace('two', '2').replace('three', '3').replace('four', '4') ?? 1) : 1;
@@ -66,10 +72,12 @@ export function readConditions(text: string): Conditions | null {
     if (!isLen) continue;
     // "tip can't bounce more than 10mm", "can't droop more than 0.5 mm", "must not move more than 5 microns"
     if (near(/^(bounce|droop|sag|deflect|move|flex|drop|bend)$/, 4) && near(/^(than|over|beyond)$/, 2)) { sagMax = q.si; heard.push(`${q.text}: the most what it holds may move`); continue; }
+    // "roof ridge no higher than 28 ft", "no taller than 3 m": the highest it may stand
+    if (near(/^(higher|taller)$/, 2) && near(/^than$/, 1)) { upMax = q.si; heard.push(`${q.text}: the highest it may stand`); continue; }
     // "pieces under 2.5 m long", "no longer than 1.5 m", "a road case under 1.3 m long", "fits a 60 cm pack"
     if ((near(/^(pieces?|parts?|sections?)$/, 6) || near(/^(case|bag|van|box|trunk|tube)$/, 4) || next(/^(long|length)$/, 1) && near(/^(under|than|within|max)$/, 2)) && near(/^(under|than|within|max|maximum|no|fit|fits|into)$/, 4)) { pieceMax = q.si; heard.push(`${q.text}: the longest a piece of it may be`); continue; }
     // its reach: "sticks out 2.5m", "3-4 ft ahead", "150 mm sideways", "swings out about 2 m"
-    if (next(/^(out|sideways|ahead|outward|outwards|forward|clear)$/, 2) || near(/^(out|sideways)$/, 2)) { out = Math.max(out ?? 0, q.si); heard.push(`${q.text} out: how far it holds its load from what holds it`); continue; }
+    if (next(/^(out|sideways|ahead|outward|outwards|forward)$/, 2) || next(/^clear$/, 1) && !/^(span|of|height|headroom)$/.test(a[1] ?? '') || near(/^(out|sideways)$/, 2)) { out = Math.max(out ?? 0, q.si); heard.push(`${q.text} out: how far it holds its load from what holds it`); continue; }
     // across: "4.5m apart", "gap is 60 mm", "30 ft bank to bank", "a 4 m gap"
     if (next(/^(apart|gap|across|span|between)$/, 2) && /\b(apart|gap|bank|span|across|between|bridge|creek|stream)\b/.test(lo) || next(/^(wide)$/, 1) && /^(gap|creek|stream|river|ditch|opening|lead|leads|channel)$/.test(a[1] ?? '') || near(/^(gap|span)$/, 3) || next(/^(bank)$/, 1)) { if (span === undefined || q.si > span) span = q.si; heard.push(`${q.text} across: what it spans`); continue; }
     // the post or tube it clamps to: "32 mm round post", "50mm tube", "1.5 inch frame clamps", "30 in diameter trunk"
@@ -87,7 +95,7 @@ export function readConditions(text: string): Conditions | null {
     if (/^\s*(can|could|will|to|build|builds|put|puts|set|sets|assemble|assembles|carry|carries|haul|hauls|install|installs|erect|erects|raise|raises|working|with|need|needs)\b/.test(lo.slice(m.index! + m[0].length, m.index! + m[0].length + 14)) || /\bcrew\b/.test(m[2]!)) continue;
     // a person whose weight is said alongside is counted by it
     if (loads.some((l) => Math.abs(m.index! - lo.indexOf(l.said.split(' ')[0]!.toLowerCase())) < 25)) continue;
-    loads.push({ N: n * (kid ? 35 : 80) * G, said: `${m[0]} (${kid ? '35' : '80'} kg each, estimate)` });
+    loads.push({ N: n * (kid ? 35 : 80) * G, said: `${m[0]} (${kid ? '35' : '80'} kg each, estimate)`, who: true });
   }
   // a face it carries that the wind pushes on: "holds a 1.5m wide x 5m tall mesh banner", "each one 24 ft long and 10 ft
   // tall, about 80 percent solid": ½ ρ v² by a drag of 1.2 (a flat face, estimate) by how solid it is (a mesh about half)
@@ -99,6 +107,39 @@ export function readConditions(text: string): Conditions | null {
     loads.push({ N: q * 1.2 * k * w * h, said: `the wind on its ${w.toFixed(2)} × ${h.toFixed(2)} m ${faceM[1]} (${k < 1 ? `${Math.round(k * 100)}% solid, ` : ''}½ ρ v² by a drag of 1.2, estimate)`, side: true, at: Math.max(0, (up ?? h) - h / 2) });
     if (up === undefined) up = h;
   }
+  // a roof over a floor: the plan said ("100 ft by 50 ft footprint") of what covers (a roof, a canopy, a pavilion, a
+  // shelter, a carport). What it bears is what lies on its roof and what hangs from it; who is under it stands on the
+  // floor, not on it
+  const roofy = /\b(roofs?|roofed|canop(?:y|ies)|pavilions?|shelters?|carports?|awnings?|gazebos?|pergolas?|lean-tos?|shade structures?|covered)\b/.test(lo);
+  const fp = /(\d+(?:\.\d+)?)\s*(m|ft|feet|foot|')?\s*(?:x|by|×)\s*(\d+(?:\.\d+)?)\s*(m|ft|feet|foot|')(?![a-z])[^.;,]{0,24}?\b(footprint|plan|area|roof|covered|cover|floor|pavilion|canopy|shelter|carport)\b/.exec(lo);
+  let cover: Cover | undefined;
+  if (roofy && fp) {
+    const u = (v: string, un?: string) => Number(v) * (/^(f|')/.test(un ?? '') ? 0.3048 : 1), a1 = u(fp[1]!, fp[2] ?? fp[4]), a2 = u(fp[3]!, fp[4]), L = Math.max(a1, a2), W = Math.min(a1, a2);
+    const crowd = loads.filter((l) => l.who).reduce((x, l) => x + l.N / (80 * G), 0), open = /\b(open[- ]?(?:sided|air)|unheated|carports?|canop(?:y|ies)|awnings?|pergolas?|gazebos?|pavilions?)\b/.test(lo);
+    // snow on the ground said, as it lies on a roof: 0.7 Ce Ct Is pg (ASCE 7-16 eq. 7.3-1), Ce 1.0 (estimate), Ct 1.2 open
+    // to the air (Table 7.3-2), Is 1.1 sheltering more than 300 (IBC 1604.5, risk category III; ASCE 7-16 Table 1.5-2);
+    // no less than 20 Is psf on a low roof where pg is over 20 psf, else pg Is (7.3.4)
+    let p = 0, pSaid = '';
+    for (const q of qs) if (sameDim(q.dim, DIMS.pressure)) {
+      const around = lo.slice(Math.max(0, q.at - 25), q.at + q.text.length + 25);
+      if (/\bsnow\b/.test(around)) {
+        if (/\bground\b/.test(around)) { const Is = crowd > 300 ? 1.1 : 1, Ct = open ? 1.2 : 1, v = Math.max(0.7 * Ct * Is * q.si, q.si > 957.6 ? 957.6 * Is : q.si * Is); if (v > p) { p = v; pSaid = `${q.text} of snow on the ground lies ${+(v / 1000).toPrecision(3)} kPa on its roof: 0.7 Ce Ct Is pg (ASCE 7-16 eq. 7.3-1), Ce 1.0 (estimate), Ct ${Ct}${open ? ', open to the air' : ''} (Table 7.3-2), Is ${Is}${Is > 1 ? `, as it shelters ${Math.round(crowd)}, more than 300 (IBC 1604.5, risk category III)` : ''} (Table 1.5-2)`; } }
+        else if (q.si > p) { p = q.si; pSaid = `${q.text} of snow on its roof, as said`; }
+      } else if (/\b(live|roof)\b/.test(around) && q.si > p) { p = q.si; pSaid = `${q.text} on its roof, as said`; }
+    }
+    // what a roof is made to bear when no snow is more: 20 psf (ASCE 7-16 Table 4.3-1, an ordinary roof), not with snow at once
+    if (p < 957.6) { pSaid = `${pSaid ? `${pSaid}; ` : ''}0.958 kPa, what an ordinary roof is made to bear (20 psf, ASCE 7-16 Table 4.3-1)${p ? ', more than that' : ''}`; p = 957.6; }
+    // a clear span said is the width down its middle no post stands in; else posts only at its long edges (estimate)
+    const clear = span !== undefined ? Math.min(span, W) : W, clearSaid = span !== undefined ? `${+(span / 0.3048).toPrecision(3)} ft clear across its middle, as said: no post in it` : `its floor clear of posts across its ${+W.toPrecision(3)} m width, posts only at its long edges (estimate)`;
+    if (span !== undefined) { const k = heard.findIndex((h) => /across: what it spans$/.test(h)); if (k >= 0) heard[k] = heard[k]!.replace('across: what it spans', 'clear across its middle, no post in it'); span = undefined; }
+    if (upMax !== undefined) up = upMax; else if (up === undefined) { up = 3; heard.push('3 m high (estimate)'); }
+    // a roof reaches out from nothing: what was read as a reach is its plan
+    if (out !== undefined) { const k = heard.findIndex((h) => / out: how far it holds its load from what holds it$/.test(h)); if (k >= 0) heard.splice(k, 1); out = undefined; }
+    const head = Math.min(2.4, 0.6 * up), headSaid = head < 2.4 ? `${+head.toPrecision(3)} m of headroom under it, six tenths of its height (estimate)` : '2.4 m of headroom under it (estimate; IBC 1208.2 asks 7 ft 6 in, 2.29 m, of a ceiling)';
+    for (let i = loads.length - 1; i >= 0; i--) if (loads[i]!.who) { heard.push(`${loads[i]!.said}: under it, on the floor, not on it`); loads.splice(i, 1); }
+    loads.push({ N: p * L * W, said: `${pSaid}, over its ${+L.toPrecision(3)} × ${+W.toPrecision(3)} m plan` });
+    cover = { L, W, said: `${fp[0].replace(/\s*\b(footprint|plan|area|roof|covered|cover|floor|pavilion|canopy|shelter|carport)$/, '')}, its plan`, clear, clearSaid, p, pSaid, head, headSaid };
+  } else
   // a pressure on what it covers: "45 lb/sq ft ground snow", "40 psf", "1.5 kPa": over the area said
   for (const q of qs) if (sameDim(q.dim, DIMS.pressure) && /\b(snow|load|live|roof|crowd|wind)\b/.test(lo.slice(q.at, q.at + 40))) { heard.push(`${q.text}: a load over what it covers (with the area it covers, below)`); }
   if (!loads.some((l) => !l.side) && !loads.some((l) => l.side)) return null;
@@ -109,7 +150,8 @@ export function readConditions(text: string): Conditions | null {
   let hold: Hold | null = null;
   const clamp = /\b(clamps?|clamp-on|clamping|grips?|straps?)\b[^.;]{0,100}?\b(posts?|poles?|tubes?|pipes?|chords?|truss|trusses|rails?|frames?|legs?|bars?|trunks?|oaks?|trees?|masts?)\b/.exec(lo);
   const face = /\b(bolts?|bolted|screws?|screwed|fixes|fixed|mounts?|mounted|attaches|attached|fastens?)\b[^.,;]{0,50}?\b(walls?|front|side|face|deck|guard|brush guard|frame|bumper|bed|tailgate)\b/.exec(lo) ?? /\b(walls?|wall-mounted)\b/.exec(lo);
-  if (span !== undefined) hold = { kind: 'ends', said: `its two ends, ${/tower/.test(lo) ? 'on the towers' : /bank|rock|creek|stream/.test(lo) ? 'on the banks' : 'at each side of the gap'}`, rests: true };
+  if (cover) hold = { kind: 'ground', said: /\b(footings?|piers?|anchor bolts?|cast in|bolted down)\b/.test(lo) ? 'footings in the ground it stands on' : 'the ground it stands on, on footings', rests: true, footings: true };
+  else if (span !== undefined) hold = { kind: 'ends', said: `its two ends, ${/tower/.test(lo) ? 'on the towers' : /bank|rock|creek|stream/.test(lo) ? 'on the banks' : 'at each side of the gap'}`, rests: true };
   else if (clamp) { const w = clamp[2]!, standing = /post|pole|trunk|oak|tree|leg|mast/.test(w); hold = { kind: 'line', along: standing ? 'y' : 'x', ...(dia !== undefined ? { dia } : {}), said: `the ${w.replace(/s$/, '')} it clamps to${dia !== undefined ? `, ${+(dia * 1000).toPrecision(3)} mm across` : ''}`, rests: false }; }
   else if (face) hold = { kind: 'face', said: `the ${face[2] ?? face[1]} it is fixed to`, rests: false };
   else if (/\b(hang|hangs|hanging|hung)\s+(off|from|under|below)\b/.test(lo)) hold = { kind: 'above', said: 'what it hangs from', rests: false };
@@ -126,7 +168,9 @@ export function readConditions(text: string): Conditions | null {
   const OTHER = /^\s+(stage|deck|decks|truss|shop|building|roof|truck|tank|wall|shed|barn|guard|post|pole|ranger|trailer|chassis|frame of)\b/;
   const matOf = (re: RegExp) => { for (const m of lo.matchAll(new RegExp(re.source, 'g'))) if (!OTHER.test(lo.slice(m.index! + m[0].length, m.index! + m[0].length + 12))) return true; return false; };
   const mat = matOf(/\b(aluminium|aluminum)\b/) ? 'aluminum.6061-t6' : matOf(/\bstainless\b/) ? 'stainless.304' : matOf(/\b(steel|square tube|drill stem|oilfield pipe)\b/) ? 'steel.a36' : matOf(/\b(timber|wood|wooden|fir|glulam)\b/) ? 'wood.douglas-fir' : matOf(/\bcarbon\b/) ? 'composite.cfrp' : undefined;
-  const c: Conditions = { loads, dyn: dynM ? 2 : 1, hold, heard };
+  // hung along it, where it is not a roof: along as far as it reaches (estimate)
+  if (!cover) for (const l of loads) if (l.perM) { const along = Math.max(span ?? 0, out ?? 0, up ?? 0, drop ?? 0); l.N = l.perM * along; l.said += `, over the ${+along.toPrecision(3)} m it reaches (estimate)`; }
+  const c: Conditions = { loads, dyn: dynM ? 2 : 1, hold, heard, ...(cover ? { cover } : {}), ...(upMax !== undefined ? { upMax } : {}) };
   if (dynM) c.dynSaid = dynM[0];
   if (out !== undefined) c.out = out; if (up !== undefined) c.up = up; if (span !== undefined) c.span = span; if (drop !== undefined) c.drop = drop;
   if (wind !== undefined) c.wind = wind; if (sagMax !== undefined) c.sagMax = sagMax; if (pieceMax !== undefined) c.pieceMax = pieceMax;
