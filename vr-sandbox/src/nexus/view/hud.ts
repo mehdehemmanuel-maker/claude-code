@@ -31,6 +31,11 @@ export class Hud {
   private readonly tex: THREE.CanvasTexture;
   private readonly ring: THREE.Mesh;
   private readonly sweep: THREE.Mesh;
+  /** the seconds, large in the ring, on a little texture of their own: the plate is drawn again only when what it says changes */
+  private readonly secCanvas = document.createElement('canvas');
+  private readonly secTex: THREE.CanvasTexture;
+  private secDrawn = -1;
+  private domAt = '';
   private drawnAt = '';
   private placed = false;
 
@@ -43,6 +48,9 @@ export class Hud {
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.046, 0.05, 64), new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.5, depthTest: false, side: THREE.DoubleSide }));
     this.sweep = new THREE.Mesh(new THREE.RingGeometry(0.052, 0.058, 64, 1, 0, Math.PI / 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
     for (const m of [this.ring, this.sweep]) { m.position.set(-0.14, 0, 0.002); m.renderOrder = 31; this.group.add(m); }
+    this.secCanvas.width = this.secCanvas.height = 128; this.secTex = new THREE.CanvasTexture(this.secCanvas); this.secTex.colorSpace = THREE.SRGBColorSpace;
+    const secs = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: this.secTex, transparent: true, depthWrite: false, depthTest: false }));
+    secs.position.set(-0.14, 0, 0.001); secs.renderOrder = 31; this.group.add(secs);
     this.dom.style.cssText = 'position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:6;display:flex;gap:12px;align-items:center;font:600 13px system-ui;color:#bdefff;padding:6px 12px;border-radius:999px;background:rgba(3,14,22,0.72);border:1px solid #1f5866;font-variant-numeric:tabular-nums;max-width:calc(100vw - 32px);flex-wrap:wrap';
     document.body.appendChild(this.dom);
   }
@@ -85,9 +93,18 @@ export class Hud {
     g.fillStyle = '#7fb3c8'; g.font = '400 30px system-ui'; g.fillText(`${this.info ? `${this.info} · ` : ''}${extra}`.slice(0, 64), 300, 350);
     g.fillStyle = st.color; g.beginPath(); g.arc(320, 316, 14, 0, Math.PI * 2); g.fill();
     g.font = '600 38px system-ui'; g.fillText(`CLAUDE · ${st.text}${this.detail ? ` · ${this.detail}` : ''}`.slice(0, 48), 346, 296);
-    // the dial's numerals: the hour, large, in the ring
-    g.fillStyle = '#4dd0e1'; g.font = '200 96px system-ui'; g.textAlign = 'center'; g.fillText(String(now.getSeconds()).padStart(2, '0'), 150, 136); g.textAlign = 'left';
     this.tex.needsUpdate = true;
+  }
+  /** The seconds in the ring, drawn once a second on their own little texture. */
+  private drawSeconds(sec: number): void {
+    const g = this.secCanvas.getContext('2d')!; g.clearRect(0, 0, 128, 128);
+    g.fillStyle = '#4dd0e1'; g.font = '200 84px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(sec).padStart(2, '0'), 64, 68);
+    this.secTex.needsUpdate = true;
+  }
+  /** The strip at the corner of a screen. */
+  private drawDom(now: Date): void {
+    const st = STATUS[this.status], w = this.weather, time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), date = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+    const mins = Math.floor((Date.now() - this.since) / 60000), extra = `${this.battery !== null ? `battery ${Math.round(this.battery * 100)} % · ` : ''}in the forge ${mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}`;
     this.dom.replaceChildren(
       Object.assign(document.createElement('span'), { textContent: `${time} · ${date}` }),
       Object.assign(document.createElement('span'), { textContent: w ? `${w.temperature.toFixed(0)} °C ${sky(w.code)}` : this.weatherNote, style: `color:${w ? '#ffe082' : '#7fb3c8'};font-weight:500` }),
@@ -98,8 +115,11 @@ export class Hud {
 
   /** Each frame: the seconds sweep turns; once a second the face is drawn; in a headset it follows your head. */
   update(head: THREE.Camera, eye: THREE.Vector3, xr: boolean, dt: number): void {
-    const now = new Date(), key = `${now.getSeconds()}|${this.status}|${this.detail}|${this.weather?.at ?? this.weatherNote}|${this.info}|${this.battery}`;
-    if (key !== this.drawnAt) { this.drawnAt = key; this.draw(now); }
+    // drawn only where it is seen (the plate in a headset, the strip on a screen), and only when what it says changes:
+    // the minute, the status, the weather, the line of numbers; the seconds on their own
+    const now = new Date(), key = `${now.getHours()}:${now.getMinutes()}|${this.status}|${this.detail}|${this.weather?.at ?? this.weatherNote}|${this.info}|${this.battery}`;
+    if (xr) { if (key !== this.drawnAt) { this.drawnAt = key; this.draw(now); } if (now.getSeconds() !== this.secDrawn) { this.secDrawn = now.getSeconds(); this.drawSeconds(this.secDrawn); } }
+    else if (key !== this.domAt) { this.domAt = key; this.drawDom(now); }
     this.sweep.rotation.z = -((now.getSeconds() + now.getMilliseconds() / 1000) / 60) * Math.PI * 2 + Math.PI / 2;
     (this.ring.material as THREE.MeshBasicMaterial).color.set(STATUS[this.status].color);
     this.dom.style.display = xr ? 'none' : 'flex';

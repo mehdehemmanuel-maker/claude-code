@@ -38,7 +38,7 @@ export class Warehouse {
   private readonly docks = new Map<string, THREE.Mesh>();
   /** The model of each stored build, and its label. */
   private readonly minis = new Map<string, { obj: THREE.Object3D; label: ReturnType<typeof tag> }>();
-  private t = 0;
+  private t = 0; private totesKey = '';
   constructor(readonly fleet: Fleet) {
     const g = this.group, f = fleet.floor;
     // the floor: sealed concrete, the lanes painted, a code at every marker
@@ -161,8 +161,9 @@ export class Warehouse {
   update(dt: number): void {
     this.t += dt;
     const f = this.fleet.floor, m4 = new THREE.Matrix4(), hide = new THREE.Matrix4().makeScale(0, 0, 0);
-    f.slots.forEach((s, i) => this.totes.setMatrixAt(i, s.holds?.startsWith('tote') ? m4.makeTranslation(s.x, s.y + 0.12, s.z) : hide));
-    this.totes.instanceMatrix.needsUpdate = true;
+    // the totes sent to the GPU only when one is shelved or taken
+    const tk = f.slots.map((s) => (s.holds?.startsWith('tote') ? 1 : 0)).join('');
+    if (tk !== this.totesKey) { this.totesKey = tk; f.slots.forEach((s, i) => this.totes.setMatrixAt(i, s.holds?.startsWith('tote') ? m4.makeTranslation(s.x, s.y + 0.12, s.z) : hide)); this.totes.instanceMatrix.needsUpdate = true; }
     // builds on shelves; a build on a robot's forks rides there
     for (const [id, m] of this.minis) { const s = f.slots.find((x) => x.holds === id); m.obj.visible = !!s; if (s && m.obj.parent !== this.group) this.group.add(m.obj); if (s) m.obj.position.set(s.x, s.y + 0.02, s.z); }
     for (const v of this.views) {

@@ -63,6 +63,12 @@ import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type Ability
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
 import { dataApp, inventoryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { Profile, BUDGET_MS } from '../profile';
+import { held, mergeStatic } from './merge-static';
+import { behave } from '../behave';
+import { compare as compareItems, flatBom, massOf, scadOf, search as searchInventory, typeOf, types as inventoryTypes, usedIn } from '../outputs';
+import { SERIES, catalogue, searchCatalogue } from '../catalogue';
+import { numberOfWords, partAt as spacePart, spaceSize } from '../partspace';
 import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../weather';
 import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
 import { CellView, deviceMesh } from './cell-view';
@@ -70,8 +76,8 @@ import { Devices } from '../devices';
 import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type Feeling } from '../emotions';
 import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../practice';
 import { TEST_ASKS } from '../test-asks';
-import { INVENTORY, boardOfInventory, boardOfTree, feed, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
-import { FAMILIES } from '../families';
+import { INVENTORY, boardOfInventory, boardOfTree, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
+import { FAMILIES, callFamily } from '../families';
 import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../pipe';
@@ -163,6 +169,8 @@ let partCardUntil = 0;
 
 // Claude, beside the machine
 const robot = new Robot(); scene.add(robot.root); for (const s of robot.senses) scene.add(s);
+/** What merging each built thing's still meshes saved (src/nexus/view/merge-static.ts): meshes before, after. */
+const merged: Record<string, { before: number; after: number }> = { Claude: mergeStatic(robot.root, held(robot)) };
 const nameplate = label('CLAUDE', 0.022, '#4dd0e1', 'rgba(0,0,0,0)'); nameplate.position.set(0, 1.42, 0); robot.root.add(nameplate);
 const beam = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff8a80, transparent: true, opacity: 0.9 })); beam.frustumCulled = false; scene.add(beam);
 // the edge of your view: the time, the weather, and what I am doing
@@ -421,6 +429,7 @@ function start(intent: Intent = asked, o: { replay?: boolean; build?: boolean } 
 }
 
 let lastT = 0;
+let infoAt = -1e9;
 function tick(): void {
   const t = clock(), dt = Math.min(0.1, Math.max(0, (performance.now() - lastT) / 1000)); lastT = performance.now();
   // a frozen time past the end shows the end; at the end it stays, for you to look round and talk about
@@ -473,7 +482,7 @@ function tick(): void {
 
   if (section !== 'off') { machine.getWorldPosition(world); const c0 = machine.localToWorld(tmp.copy(centre0)); clip.set(section === 'depth' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0), section === 'depth' ? c0.z : c0.x); }
   for (const [g, to] of explodeTo) { const now2 = exploded.get(g) ?? 0; exploded.set(g, now2 + (to - now2) * Math.min(1, dt * 4)); }
-  holo.update(performance.now() / 1000, eye);
+  prof.time('holo', () => holo.update(performance.now() / 1000, eye));
   if (machineBuild) stepMachineBuild(t);
   for (const n of pins) n.update(t);
 
@@ -501,7 +510,7 @@ function tick(): void {
   const arm: 0 | 1 = target && robot.root.worldToLocal(tmp.copy(target)).x > 0 ? 1 : 0;
   const near = target && robot.root.position.distanceTo(tmp.set(target.x, 0, target.z)) < 1.4;
   robot.reach(arm, near ? target : null); robot.reach(arm === 0 ? 1 : 0, carry && near ? target : null);
-  robot.look(target ?? eye); robot.move(dt); stepMind(dt); sample(performance.now());
+  prof.time('claude', () => { robot.look(target ?? eye); robot.move(dt); }); prof.time('mind', () => { stepMind(dt); sample(performance.now()); });
   if (target && near) { robot.arms[arm].grip.getWorldPosition(world); beam.geometry.setAttribute('position', new THREE.Float32BufferAttribute([world.x, world.y, world.z, target.x, target.y, target.z], 3)); (beam.material as THREE.LineBasicMaterial).color.setHex(carry ? 0xffb74d : b && b.flaws.length && !asked ? 0xff8a80 : 0x80deea); beam.visible = true; } else beam.visible = false;
   const talking = speaking || ('speechSynthesis' in window && speechSynthesis.speaking);
   robot.speaking(talking ? Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3)) : b && u < 0.6 && current < beats.length - 1 ? 0.5 * Math.abs(Math.sin(t * 11)) : 0);
@@ -510,12 +519,12 @@ function tick(): void {
   voiceCard.mesh.visible = !!busy || performance.now() - lastSayAt < 22000;
   if (!machineBuild && !busy && hud.status !== 'listening') hud.set(playing0() ? 'working' : 'idle', playing0() ? `designing ${run.m.name}` : '');
   fps = fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
-  const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length;
-  hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`;
+  // the line of numbers, once a second: what is built and how fast the room runs (redrawn on every change, it would cost a frame)
+  if (performance.now() - infoAt > 1000) { infoAt = performance.now(); const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length; hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`; }
   // the clock and status step aside in a headset while the board is up: they would lie over its corner
-  hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && !on('boards'), dt);
+  prof.time('hud', () => hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && !on('boards'), dt));
   if (!hudOn) hud.dom.style.display = 'none';
-  drawModes();
+  prof.time('modes', () => drawModes());
   modeStrip.visible = renderer.xr.isPresenting && modeChips.length > 0;
   if (modeStrip.visible) { modeStrip.position.copy(hud.group.position).add(tmp.set(0, -0.12, 0)); modeStrip.lookAt(eye); }
   settingsGroup.visible = settingsOpen && renderer.xr.isPresenting; settingsBox.style.display = settingsOpen && !renderer.xr.isPresenting ? 'flex' : 'none';
@@ -1859,7 +1868,7 @@ const PROCESSES_SAY: Record<string, string> = { assemble: 'put together', wind: 
 async function inventoryStep(arg: string): Promise<string> {
   const t = arg.trim(); let m: RegExpExecArray | null;
   const get = (w: string): Item => { const x = /^last$/i.test(w.trim()) && invLast ? INVENTORY.get(invLast)! : resolve(w); if (typeof x === 'string') throw new Error(x); if (!x) throw new Error(`Nothing in the inventory called "${w}". Families make any size: ${FAMILIES.map((f) => f.examples[0]).join(', ')}.`); invLast = x.id; return x; };
-  if ((m = /^(?:find|what is|show)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), s2 = i.kind === 'material' ? null : summary(i.id); return `${i.name} (${i.path.join(' › ')}): ${i.says}.${i.spec ? ` ${i.spec}.` : ''}${s2 ? ` Inside it, down to its materials: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock, ${s2.depth} levels.` : ''}${i.family || i.adjustable ? ' ⚙ adjustable: call it with other sizes.' : ''}`; }
+  if ((m = /^(?:find|what is|show)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), s2 = i.kind === 'material' ? null : summary(i.id); return `${i.name} (a ${typeOf(i)}; ${i.path.join(' › ')}): ${i.says}.${i.spec ? ` ${i.spec}.` : ''}${s2 ? ` Inside it, down to its materials: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock, ${s2.depth} levels.` : ''}${i.family || i.adjustable ? ' ⚙ adjustable: call it with other sizes.' : ''}`; }
   if ((m = /^(?:map|tree|inside)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = boardOfTree(i.id); if (b && boards) boards.put(`inv-tree-${i.id}`, b); return `Inside ${i.name}: ${treeLines(i.id, 40).join(' / ')}${boards ? ` (its tree is the board "Inside: ${i.name}")` : ''}`; }
   if ((m = /^make\s+(.+?)(?:\s+(?:x|×|times\s*)(\d+))?$/i.exec(t))) { const i = get(m[1]!), n = Number(m[2] ?? 1), log = await makeItem(i, n); invMade++; const s2 = summary(i.id); return `Made ${n > 1 ? `${n} × ` : ''}${i.name}: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock. ${log.slice(-12).join('; ')}`; }
   if ((m = /^finish\s+(.+)$/i.exec(t))) { const i = get(m[1]!), r = routeOf(i); if (r.bought) return cell.bring(i.name); return cell.work(r.process === 'assemble' ? 'putting together' : r.process, i.name, i.of.map((c) => INVENTORY.get(c.id)?.name ?? c.id)); }
@@ -1868,8 +1877,27 @@ async function inventoryStep(arg: string): Promise<string> {
   if ((m = /^list(?:\s+(.+))?$/i.exec(t))) { const want = (m[1] ?? '').toLowerCase(); const hits = [...INVENTORY.values()].filter((i) => !want || i.path.join('/').toLowerCase().includes(want)).filter((i) => i.kind !== 'material' || want.includes('material')); return `${hits.length} in ${want || 'the inventory'}: ${hits.slice(0, 40).map((i) => i.name).join(', ')}${hits.length > 40 ? ', …' : ''}`; }
   if (/^families$/i.test(t)) return `Adjustable families (any size): ${FAMILIES.map((f) => `${f.name}: ${f.examples.join(', ')}`).join(' · ')}`;
   if (/^(open|board)$/i.test(t) || !t) { if (!boards) throw new Error('The boards are still loading.'); boards.put('inventory', boardOfInventory()); summonTo('boards'); boards.openBoard('inventory'); return `The inventory is on the board: ${[...invCategories().keys()].join(', ')}.`; }
+  if ((m = /^(?:bom|bill|parts list|parts)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = flatBom(i.id); invLast = i.id; return `To make one ${i.name}: buy ${b.buy.filter((r) => r.how === 'bought').map((r) => `${r.n} × ${r.name}`).slice(0, 14).join(', ')}${b.buy.length > 14 ? ' …' : ''}; from stock: ${b.buy.filter((r) => r.how === 'stock').map((r) => r.name).slice(0, 10).join(', ')}; made here: ${b.made.map((r) => `${r.n} × ${r.name}`).slice(0, 10).join(', ') || 'nothing'}.`; }
+  if ((m = /^(?:mass|weight|weigh)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), w = massOf(i.id); return w.g ? `${i.name}: about ${w.g >= 1000 ? `${(w.g / 1000).toFixed(2)} kg` : `${w.g.toFixed(1)} g`}, added up from ${w.known} parts whose masses are known${w.unknown.length ? `; ${w.unknown.length} have none known yet (${w.unknown.slice(0, 5).join(', ')})` : ''}.` : `No mass is known for ${i.name} or what is in it yet.`; }
+  if ((m = /^(?:used|used in|where used|where is)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), u = usedIn(i.id); return u.direct.length ? `${i.name} is in ${u.direct.map((x) => x.name).slice(0, 12).join(', ')}; and so in ${u.products.length} products: ${u.products.map((x) => x.name).slice(0, 12).join(', ')}.` : `Nothing in the inventory has ${i.name} in it yet.`; }
+  if ((m = /^(?:scad|openscad|cad)\s+(.+)$/i.exec(t))) { const i = get(m[1]!); invLast = i.id; return scadOf(i); }
+  if ((m = /^model\s+(.+)$/i.exec(t))) { const i = get(m[1]!); invLast = i.id; return flowAct(`scad: ${scadOf(i).replace(/\n/g, ' ')}`); }
+  if ((m = /^(?:behave|what does|does|law|works?)\s+(.+)$/i.exec(t))) {
+    const toks = m[1]!.split(/\s+/), k = toks.findIndex((w, j) => j > 0 && /^(at|with|under|over|load|loaded|span|in|carrying|cantilever|for|from|through)$/i.test(w));
+    const part = (k < 0 ? toks : toks.slice(0, k)).join(' '), inputs = k < 0 ? '' : toks.slice(k).join(' '), i = get(part), r = behave(i, inputs, FAMILIES, callFamily); invLast = i.id;
+    return typeof r === 'string' ? r : `${i.name}: ${r.lines.join(' ')} [${r.law}]`;
+  }
+  if ((m = /^compare\s+(.+?)\s+(?:vs\.?|versus|with|and|to)\s+(.+)$/i.exec(t))) return compareItems(get(m[1]!), get(m[2]!)).join(' · ');
+  if ((m = /^(?:search|look for|find all)\s+(.+)$/i.exec(t))) { const hits = searchInventory(m[1]!, 8), cat = searchCatalogue(m[1]!, 8); return `${hits.length ? `In the inventory: ${hits.map((x) => x.name).join(', ')}.` : ''}${cat.length ? ` In the catalogue: ${cat.join(', ')}.` : ''}` || `Nothing found for "${m[1]}".`; }
+  if ((m = /^(?:part|no\.?|number)\s+#?([\d,_ ]+)$/i.exec(t))) { const n = Number(m[1]!.replace(/[^\d]/g, '')), p = spacePart(n); if (!p) throw new Error(`Part numbers run 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}.`); const i = get(p.words); invLast = i.id; return `Part ${n.toLocaleString('en-GB')} is ${i.name}${i.spec ? `: ${i.spec}` : ''} (${p.words}).`; }
+  if ((m = /^(?:number of|which number|number)\s+(.+)$/i.exec(t))) { const n = numberOfWords(m[1]!); return n >= 0 ? `${m[1]} is part ${n.toLocaleString('en-GB')} of ${spaceSize().total.toLocaleString('en-GB')}.` : `${m[1]} is not a size the space numbers (it may be outside its ranges).`; }
+  if (/^(?:random|any|surprise me)$/i.test(t)) { const n = Math.floor(Math.random() * spaceSize().total), p = spacePart(n)!, i = get(p.words); invLast = i.id; return `Part ${n.toLocaleString('en-GB')}: ${i.name}${i.spec ? ` (${i.spec})` : ''}.`; }
+  if (/^(?:space|all|how many)$/i.test(t)) { const s2 = spaceSize(); return `${s2.total.toLocaleString('en-GB')} parts can be made, each numbered and none stored until asked for: ${s2.families.slice(0, 12).map((f) => `${f.family} ${f.n.toLocaleString('en-GB')}`).join(', ')} …`; }
+  if (/^types$/i.test(t)) return `By what they do: ${[...inventoryTypes()].map(([k, v]) => `${k} ${v}`).join(', ')}.`;
+  if ((m = /^(?:elements|fundamentals|atoms|made of)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), f = fundamentals(i.id); invLast = i.id; return `${i.name} comes down to ${f.length} elements: ${f.map((e) => `${e.name}${e.via.length ? ` (in ${e.via.slice(0, 2).map((v) => v.material).join(', ')}${e.via.length > 2 ? ' …' : ''})` : ''}`).join('; ')}.`; }
+  if ((m = /^catalog(?:ue)?(?:\s+(.+))?$/i.exec(t))) { const f = m[1]?.trim().toLowerCase(); if (f && SERIES[f]) return `${SERIES[f]!.says}: ${catalogue(f).length} sizes, e.g. ${catalogue(f).slice(0, 6).join(', ')} …`; return `The catalogue: ${catalogue().length.toLocaleString('en-GB')} standard sizes in ${Object.keys(SERIES).length} families, each made from its standard when it is asked for: ${Object.keys(SERIES).map((k) => `${k} ${catalogue(k).length}`).join(', ')}.`; }
   if (/^languages$/i.test(t)) return [...byCategory()].map(([c, ls]) => `${c}: ${ls.map((l) => `${l.name} (${l.runs === 'here' ? 'runs here' : l.runs === 'claude' ? 'to Claude' : 'kept'})`).join(', ')}`).join(' · ');
-  throw new Error('"inventory …"? Say inventory find <part>, inventory map <part>, inventory make <part> [x<n>], inventory board <part>, inventory add <lines>, inventory list <category>, inventory families, inventory open. A part can be an adjustable size: screw M4x20, bearing 6201, gear m1 z30 b8.');
+  throw new Error('"inventory …"? Say inventory find <part>, inventory map <part>, inventory make <part> [x<n>], inventory board <part>, inventory add <lines>, inventory list <category>, inventory families, inventory open, inventory bom <part>, inventory mass <part>, inventory used <part>, inventory scad <part>, inventory model <part>, inventory behave <part> at <numbers>, inventory compare <a> vs <b>, inventory search <words>, inventory elements <part>, inventory types, inventory catalogue [family], inventory part <number>, inventory number <words>, inventory random, inventory space. A part can be an adjustable size: screw M4x20, bearing 6201, gear m1 z30 b8.');
 }
 /** The pipeline language: "pipeline new <title>: <step> -> <step> -> …" makes a pipeline of those steps, each read as
  *  a step is (a trigger, an action, a check, a repeat, a question for Claude, code in a language). */
@@ -2179,7 +2207,7 @@ const fleet = new Fleet({
 try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Record<string, { name: string; abilities: AbilityId[] }>; for (const b of fleet.bots) { const c = saved[b.id]; if (c) { b.name = c.name; b.abilities = c.abilities.filter((a) => a in ABILITIES); } } } catch { /* as they started */ }
 const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
 for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
-const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse');
+const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse'); merged.warehouse = mergeStatic(warehouse.group, held(warehouse));
 // the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/cell.ts)
 const cell = new Cell({ said: (t2) => line('system', `🔩 ${t2}`), made: (m2) => line('system', `🔩 Made: ${m2.name} (${m2.kind}, ${m2.g.toFixed(0)} g). ${m2.spec.join('; ')}`), released: (r) => setDown(r) });
 // what the workshop builds, set down in the room and running its program (src/nexus/devices.ts)
@@ -2247,7 +2275,7 @@ async function cellStep(t: string): Promise<string> {
   const said = cellWords(`cell ${w}`); if (said !== null) return said;
   throw new Error(`"cell ${w}"? Say cell print chassis, cell cast gear in zinc, cell take n20 2, cell wire rover, cell upload rover, cell release rover, cell build rover, cell gcode G28; M104 S210, cell speed 600, or cell stop. Recipes: ${RECIPES.map((r) => r.id).join(', ')}; metals: ${METALS.map((x) => x.id).join(', ')}.`);
 }
-const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop');
+const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop'); merged.workshop = mergeStatic(cellView.group, held(cellView));
 /** A part by its name or a recipe's, for words and pipeline steps: "gear", "frame", "chassis". */
 const partNamed = (w: string) => CellView.partOf(w.trim()) ?? null;
 /** The workshop's words, from the chat or a pipeline step: print, cast, build, G-code, speed, stop. */
@@ -2625,6 +2653,8 @@ phone.add(weatherApp({ forecast: () => hud.forecast, note: () => hud.weatherNote
 if (wPlaces[0]) window.setTimeout(() => { void weatherAt(wPlaces[0]!); }, 1500);
 window.setInterval(() => { if (wLast && document.visibilityState !== 'hidden') void (wLast === 'here' ? weatherHere() : weatherAt(wLast)); }, 15 * 60_000);
 
+/** What each part of a frame costs (src/nexus/profile.ts): read by the Data app, and by the work of making the room faster. */
+const prof = new Profile();
 // ---- data: the forge in numbers; what changes over time sampled every 10 s, the last quarter hour kept --------------------
 const hist: Record<string, number[]> = {}; let histAt = -1e9;
 function sample(now: number): void {
@@ -2645,9 +2675,10 @@ function dataSections(): DataSection[] {
     { id: 'boards', name: 'Pipelines', icon: '⚡', colour: '#ffd740', stats: [{ label: 'pipelines', value: String(all.length) }, { label: 'armed', value: String(all.filter(([, b]) => (b as { armed?: boolean }).armed).length) }, { label: 'runs kept', value: String(all.reduce((a, [, b]) => a + ((b as { runs?: unknown[] }).runs?.length ?? 0), 0)) }, { label: 'steps', value: String(all.reduce((a, [, b]) => a + Object.values(b.nodes).filter((n) => (n as { step?: unknown }).step).length, 0)) }], bars: { name: 'Runs kept, by pipeline', rows: all.map(([, b]) => ({ label: b.title, v: (b as { runs?: unknown[] }).runs?.length ?? 0 })).filter((r) => r.v > 0).sort((a, c) => c.v - a.v).slice(0, 8).map((r, _, xs) => ({ ...r, max: Math.max(1, xs[0]!.v) })) } },
     { id: 'robots', name: 'Robots', icon: '🤖', colour: '#ffb300', stats: [{ label: 'robots', value: String(fleet.bots.length) }, { label: 'mean battery', value: `${Math.round(fleet.bots.reduce((a, b) => a + b.battery, 0) / Math.max(1, fleet.bots.length))} %` }, { label: 'asleep', value: String(fleet.bots.filter((b) => b.asleep).length) }, { label: 'carrying', value: String(fleet.bots.filter((b) => b.carrying).length) }, { label: 'builds shelved', value: String(kept.length) }], bars: { name: 'Battery, each robot (sped up: see the Robots app)', rows: fleet.bots.map((b) => ({ label: b.name, v: b.battery, max: 100, note: `${Math.round(b.battery)} % · ${b.state}` })) }, series: { name: `Mean battery, %, ${mins('battery')}`, unit: ' %', points: hist.battery ?? [] } },
     { id: 'workshop', name: 'Workshop', icon: '🔥', colour: '#ff7043', stats: [{ label: 'jobs done', value: `${jobs.filter((j) => j.done && !j.failed).length} of ${jobs.length}${jobs.some((j) => j.failed) ? ` (${jobs.filter((j) => j.failed).length} failed)` : ''}` }, { label: 'parts on the shelf', value: String(cell.shelf.length) }, { label: 'filament used', value: `${(cell.printer.filament / 1000).toFixed(2)} m` }, { label: 'printer drew', value: kwh(cell.printer.energy) }, { label: 'kiln drew', value: kwh(cell.kiln.energy) }, { label: 'furnace burnt', value: `${(cell.furnace.energy / 1e6).toFixed(1)} MJ of propane` }], bars: { name: 'Temperatures now, °C, on one scale (0–1300)', rows: ([['nozzle', cell.printer.hot.t], ['bed', cell.printer.bed.t], ['kiln', cell.kiln.t], ['furnace', cell.furnace.t]] as [string, number][]).map(([l, v]) => ({ label: l, v, max: 1300, note: `${Math.round(v)} °C` })) }, series: { name: `Furnace, °C, ${mins('furnace')}`, unit: '°', points: hist.furnace ?? [] }, note: `The workshop runs ${cell.speed}× faster than real time; energy is what its heaters drew, counted as they ran.` },
-    { id: 'inventory', name: 'Inventory', icon: '🗃', colour: '#26c6da', stats: [{ label: 'entries', value: String(INVENTORY.size) }, { label: 'products', value: String(kinds.get('product') ?? 0) }, { label: 'assemblies and parts', value: String((kinds.get('assembly') ?? 0) + (kinds.get('part') ?? 0)) }, { label: 'materials', value: String(kinds.get('material') ?? 0) }, { label: 'adjustable families', value: String(FAMILIES.length) }, { label: 'made here this visit', value: String(invMade) }], bars: { name: 'Entries by category', rows: byCat.sort((a, c) => c.v - a.v).map((r) => ({ ...r, max: cmax })) } },
+    { id: 'inventory', name: 'Inventory', icon: '🗃', colour: '#26c6da', stats: [{ label: 'entries', value: String(INVENTORY.size) }, { label: 'products', value: String(kinds.get('product') ?? 0) }, { label: 'assemblies and parts', value: String((kinds.get('assembly') ?? 0) + (kinds.get('part') ?? 0)) }, { label: 'materials', value: String(kinds.get('material') ?? 0) }, { label: 'adjustable families', value: String(FAMILIES.length) }, { label: 'catalogue sizes', value: catalogue().length.toLocaleString('en-GB') }, { label: 'parts that can be made', value: spaceSize().total.toLocaleString('en-GB') }, { label: 'elements at the bottom', value: String(kinds.get('element') ?? 0) }, { label: 'made here this visit', value: String(invMade) }], bars: { name: 'Entries by category', rows: byCat.sort((a, c) => c.v - a.v).map((r) => ({ ...r, max: cmax })) } },
     { id: 'devices', name: 'Devices', icon: '🛰', colour: '#69f0ae', stats: [{ label: 'devices set down', value: String(devices.list.length) }, { label: 'running a program', value: String(devices.list.filter((d) => cell.programmed.has(d.recipe)).length) }], bars: { name: 'Battery, each device', rows: devices.list.map((d) => ({ label: d.name, v: (d.wh / d.whFull) * 100, max: 100, note: `${d.wh.toFixed(1)} of ${d.whFull} Wh` })) }, note: devices.list.length ? undefined : 'Build a device in the workshop (Workshop app, or "cell build rover") and it is set down here.' },
     { id: 'claude', name: 'Claude', icon: '◉', colour: '#4dd0e1', stats: [{ label: 'feels', value: felt }, { label: 'energy', value: `${Math.round(mind.energy * 100)} %` }, { label: 'bored', value: `${Math.round(mind.boredom * 100)} %` }, { label: 'curious', value: `${Math.round(mind.curiosity * 100)} %` }, { label: 'trials practised', value: String(training.trials.length) }, { label: 'asks it found better for', value: String(Object.keys(training.best).length) }], series: { name: `How pleased, %, ${mins('pleased')}`, unit: ' %', points: hist.pleased ?? [] }, note: 'A model of feeling (src/nexus/emotions.ts): it moves with what happens, and says why. It is not a claim that Claude feels.' },
+    (() => { const parts = prof.report().slice(0, 9), top = Math.max(BUDGET_MS, ...parts.map((x) => x.mean)), info = renderer.info; return { id: 'frame', name: 'Frame', icon: '⏱', colour: '#ff80ab', stats: [{ label: 'a frame takes', value: `${prof.frameMean.toFixed(1)} ms` }, { label: 'a 90 Hz headset gives', value: `${BUDGET_MS.toFixed(1)} ms` }, { label: 'worst lately', value: `${prof.frameWorst.toFixed(1)} ms` }, { label: 'draw calls', value: String(info.render.calls) }, { label: 'triangles', value: info.render.triangles.toLocaleString('en-GB') }, { label: 'geometries, textures', value: `${info.memory.geometries}, ${info.memory.textures}` }], bars: { name: 'Each part of a frame, ms, on one scale', rows: parts.map((x) => ({ label: x.name, v: x.mean, max: top, note: `${x.mean.toFixed(2)} ms` })) }, note: 'Measured as the room runs: each part timed every frame, a running mean of the last 20 or so. Render is the time to hand the frame to the GPU, not the GPU\'s own time.' } as DataSection; })(),
     fc ? { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: fc.place.name, value: `${fc.now.temp.toFixed(1)} °C` }, { label: 'humidity', value: `${fc.now.humidity.toFixed(0)} %` }, { label: 'wind, gusts', value: `${fc.now.wind.toFixed(1)}, ${fc.now.gusts.toFixed(1)} m/s` }, { label: 'rain chance, 6 h', value: `${Math.max(0, ...fc.hours.slice(0, 6).map((h) => h.rainChance))} %` }], series: { name: 'Temperature, °C, the next 24 hours', unit: '°', points: fc.hours.map((h) => h.temp), ticks: fc.hours.map((h) => h.time.slice(11, 13)) } }
       : { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: 'forecast', value: 'none yet' }], note: hud.weatherNote.replace(/^weather: /, '') || 'Open the Weather app to find where you are, or name a place.' },
   ];
@@ -2812,7 +2843,15 @@ async function boot() {
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
-  renderer.setAnimationLoop(() => { frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; if (renderer.xr.isPresenting) walk(dt); else orbit.update(); tick(); stepPlay(now); stepBuild(now); stepGrow(now); guarded('the warehouse', () => { fleet.step(dt); warehouse.update(dt); }); guarded('the workshop', () => { cell.step(dt); cellView.update(dt); }); guarded('the devices', () => stepDevices(dt)); guarded('a screen', () => { stepDrag(); holos.update(dt); }); for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt); phone.render(renderer, scene); renderer.render(scene, camera); });
+  renderer.setAnimationLoop(() => {
+    frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); prof.frame(now - last); last = now; const T = prof.time.bind(prof);
+    T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else orbit.update(); });
+    T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
+    guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
+    T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
+  });
   // the mind and the notes arrive when the viewer answers; the room works without them
   // what is in the room, by name, for a note on it
   for (const [o, n, l] of [[floor, 'the floor', 'environment'], [pedestal, 'the pedestal', 'environment'], [rim, 'the turntable rim', 'environment'], [robot.root, 'me, Claude (the robot)', 'environment'], [bay, 'the parts bay', 'environment'],
@@ -2844,6 +2883,7 @@ async function boot() {
   (window as unknown as { keyPoint: (k: string) => number[] | null }).keyPoint = (k) => { const uv = keyboard.keyUv(k); return uv && keyboard.mesh.visible ? toWorld(keyboard.mesh, uv) : null; };
   (window as unknown as { boardWorld: (on: 'node' | 'strip' | 'list', key: string) => number[] | null }).boardWorld = (on, key) => { const w = boards?.pointOf(on, key); return w ? [w.x, w.y, w.z] : null; };
   (window as unknown as { forgeSummon: (p: string) => string }).forgeSummon = (p) => summonTo(p as Panel);
+  (window as unknown as { forgeProfile: () => unknown }).forgeProfile = () => ({ line: prof.line(8), parts: prof.report(), frame: prof.frameMean, worst: prof.frameWorst, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length ?? 0, merged, objects: (() => { let n = 0; scene.traverse(() => { n++; }); return n; })(), groups: scene.children.map((c) => { let meshes = 0, shown = 0, tris = 0, auto = 0; c.traverse((o) => { if (o.matrixAutoUpdate) auto++; const m = o as THREE.Mesh; if (m.isMesh || (o as THREE.Sprite).isSprite || (o as THREE.Line).isLine) { meshes++; let vis = true; for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) { vis = false; break; } if (vis) { shown++; const gg = m.geometry; if (gg) tris += (gg.index ? gg.index.count : (gg.attributes.position?.count ?? 0)) / 3; } } }); return { name: c.name || (NAMED.get(c)?.[0] ?? '') || (c === robot.root ? 'Claude' : c === hud.group ? 'hud' : c === phone.group ? 'phone' : c.type), meshes, shown, tris: Math.round(tris), auto }; }).sort((x, y) => y.shown - x.shown) });
   // the windows and the phone, for a test: where a bar's part or a phone button is on the screen (or in the room), and what is open
   const toScreen = (w: THREE.Vector3 | null): [number, number] | null => { if (!w) return null; const q = w.clone().project(camera); return [((q.x + 1) / 2) * window.innerWidth, ((1 - q.y) / 2) * window.innerHeight]; };
   Object.assign(window as object, {

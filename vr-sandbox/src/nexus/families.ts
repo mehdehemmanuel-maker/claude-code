@@ -19,11 +19,13 @@ const num = (s: string | undefined) => (s === undefined ? NaN : Number(s.replace
 
 // ---- metric threads (ISO 261 coarse pitch; ISO 4762 socket heads; ISO 4032 nuts; ISO 7089 washers) ------------------
 export const METRIC: Record<string, { p: number; dk: number; k: number; s: number; m: number; d1: number; d2: number; h: number }> = {
+  'M1.6': { p: 0.35, dk: 3, k: 1.6, s: 3.2, m: 1.3, d1: 1.7, d2: 4, h: 0.3 },
   M2: { p: 0.4, dk: 3.8, k: 2, s: 4, m: 1.6, d1: 2.2, d2: 5, h: 0.3 }, 'M2.5': { p: 0.45, dk: 4.5, k: 2.5, s: 5, m: 2, d1: 2.7, d2: 6, h: 0.5 },
   M3: { p: 0.5, dk: 5.5, k: 3, s: 5.5, m: 2.4, d1: 3.2, d2: 7, h: 0.5 }, M4: { p: 0.7, dk: 7, k: 4, s: 7, m: 3.2, d1: 4.3, d2: 9, h: 0.8 },
   M5: { p: 0.8, dk: 8.5, k: 5, s: 8, m: 4.7, d1: 5.3, d2: 10, h: 1 }, M6: { p: 1, dk: 10, k: 6, s: 10, m: 5.2, d1: 6.4, d2: 12, h: 1.6 },
   M8: { p: 1.25, dk: 13, k: 8, s: 13, m: 6.8, d1: 8.4, d2: 16, h: 1.6 }, M10: { p: 1.5, dk: 16, k: 10, s: 16, m: 8.4, d1: 10.5, d2: 20, h: 2 },
-  M12: { p: 1.75, dk: 18, k: 12, s: 18, m: 10.8, d1: 13, d2: 24, h: 2.5 },
+  M12: { p: 1.75, dk: 18, k: 12, s: 18, m: 10.8, d1: 13, d2: 24, h: 2.5 }, M14: { p: 2, dk: 21, k: 14, s: 21, m: 12.8, d1: 15, d2: 28, h: 2.5 },
+  M16: { p: 2, dk: 24, k: 16, s: 24, m: 14.8, d1: 17, d2: 30, h: 3 }, M20: { p: 2.5, dk: 30, k: 20, s: 30, m: 18, d1: 21, d2: 37, h: 3 }, M24: { p: 3, dk: 36, k: 24, s: 36, m: 21.5, d1: 25, d2: 44, h: 4 },
 };
 const thread = (w: string) => { const m = /\bM(\d+(?:\.\d)?)(?![\d.])/i.exec(w); return m ? `M${m[1]}` : null; };
 const screw: Family = {
@@ -34,7 +36,7 @@ const screw: Family = {
   make(p) {
     const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!, a2 = p.class === 'A2';
     const v = Math.PI * (d / 2) ** 2 * L * 0.92 + Math.PI * (T.dk / 2) ** 2 * T.k * 0.85;
-    return item(`screw-${t.toLowerCase()}x${L}${a2 ? '-a2' : ''}`, `${t} × ${L} socket head cap screw${a2 ? ', stainless' : ''}`, 'Hardware/Fasteners/Screws', 'product', 'roll-thread', a2 ? 'stainless-304' : 'steel-alloy', `${a2 ? 'stainless wire' : 'alloy steel wire'} cold-headed to its head and hex socket, its thread rolled${a2 ? '' : ', hardened and tempered, black-oxided'}`, `ISO 4762, class ${p.class}; ${T.p} mm pitch (ISO 261); head ${T.dk} mm across, ${T.k} mm high; a ${t === 'M3' ? '2.5' : t === 'M4' ? '3' : t === 'M5' ? '4' : t === 'M6' ? '5' : t === 'M8' ? '6' : t === 'M2' ? '1.5' : t === 'M2.5' ? '2' : t === 'M10' ? '8' : '10'} mm hex key`, [T.dk, T.dk, L + T.k], mm3g(v, a2 ? RHO.stainless : RHO.steel));
+    return item(`screw-${t.toLowerCase()}x${L}${a2 ? '-a2' : p.class !== '12.9' ? `-${p.class}` : ''}`, `${t} × ${L} socket head cap screw${a2 ? ', stainless' : p.class !== '12.9' ? `, class ${p.class}` : ''}`, 'Hardware/Fasteners/Screws', 'product', 'roll-thread', a2 ? 'stainless-304' : 'steel-alloy', `${a2 ? 'stainless wire' : 'alloy steel wire'} cold-headed to its head and hex socket, its thread rolled${a2 ? '' : ', hardened and tempered, black-oxided'}`, `ISO 4762, class ${p.class}; ${T.p} mm pitch (ISO 261); head ${T.dk} mm across, ${T.k} mm high; a ${t === 'M3' ? '2.5' : t === 'M4' ? '3' : t === 'M5' ? '4' : t === 'M6' ? '5' : t === 'M8' ? '6' : t === 'M2' ? '1.5' : t === 'M2.5' ? '2' : t === 'M10' ? '8' : '10'} mm hex key`, [T.dk, T.dk, L + T.k], mm3g(v, a2 ? RHO.stainless : RHO.steel));
   },
 };
 const nut: Family = {
@@ -53,6 +55,10 @@ const washer: Family = {
 export const BEARINGS: Record<string, [number, number, number]> = {
   '623': [3, 10, 4], '624': [4, 13, 5], '625': [5, 16, 5], '626': [6, 19, 6], '608': [8, 22, 7], '6000': [10, 26, 8], '6001': [12, 28, 8], '6002': [15, 32, 9], '6003': [17, 35, 10], '6004': [20, 42, 12],
   '6200': [10, 30, 9], '6201': [12, 32, 10], '6202': [15, 35, 11], '6203': [17, 40, 12], '6204': [20, 47, 14], '6205': [25, 52, 15],
+  '606': [6, 17, 6], '607': [7, 19, 6], '609': [9, 24, 7], '627': [7, 22, 7], '629': [9, 26, 8], '6005': [25, 47, 12], '6006': [30, 55, 13], '6206': [30, 62, 16], '6207': [35, 72, 17],
+  '6300': [10, 35, 11], '6301': [12, 37, 12], '6302': [15, 42, 13], '6303': [17, 47, 14], '6304': [20, 52, 15], '6305': [25, 62, 17],
+  '6800': [10, 19, 5], '6801': [12, 21, 5], '6802': [15, 24, 5], '6803': [17, 26, 5], '6804': [20, 32, 7], '6805': [25, 37, 7],
+  '6900': [10, 22, 6], '6901': [12, 24, 6], '6902': [15, 28, 7], '6903': [17, 30, 7], '6904': [20, 37, 9], '6905': [25, 42, 9],
 };
 const bearing: Family = {
   id: 'bearing', name: 'deep-groove ball bearing', path: ['Mechanical', 'Bearings', 'Ball bearings'], says: 'any bearing number of the 62x, 60xx and 62xx series, its bore, outside and width from ISO 15', params: [{ key: 'number', says: 'bearing number', unit: '', values: Object.keys(BEARINGS), default: '608' }, { key: 'seal', says: 'shields or seals', unit: '', values: ['ZZ', '2RS', 'open'], default: 'ZZ' }],
@@ -179,7 +185,8 @@ const rail: Family = {
 };
 // ---- round stock: shafts, rods, tubes, threaded rod -----------------------------------------------------------------
 const MAT: Record<string, [string, number, string]> = { steel: ['steel-low', RHO.steel, 'steel'], stainless: ['stainless-304', RHO.stainless, 'stainless'], aluminium: ['al-6061', RHO.aluminium, 'aluminium'], brass: ['brass', RHO.brass, 'brass'], copper: ['copper', RHO.copper, 'copper'] };
-const matOf = (w: string) => /stainless|304/i.test(w) ? 'stainless' : /alumin/i.test(w) ? 'aluminium' : /brass/i.test(w) ? 'brass' : /copper/i.test(w) ? 'copper' : 'steel';
+// "304" as a word (the grade), not inside a number: a 1304 mm length is not stainless
+const matOf = (w: string) => /stainless|(?<![\d.])304(?![\d.x×])/i.test(w) ? 'stainless' : /alumin/i.test(w) ? 'aluminium' : /brass/i.test(w) ? 'brass' : /copper/i.test(w) ? 'copper' : 'steel';
 const rod: Family = {
   id: 'rod', name: 'round rod or shaft', path: ['Hardware', 'Structural', 'Rod'], says: 'any diameter, length and metal', params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 1, max: 100, default: 8 }, { key: 'length', says: 'length', unit: 'mm', min: 5, max: 3000, default: 300 }, { key: 'matter', says: 'metal', unit: '', values: Object.keys(MAT), default: 'steel' }],
   examples: ['rod 8mm 300 steel', 'rod 5mm 100 stainless', 'rod 20mm 500 aluminium'],
@@ -221,7 +228,7 @@ const capacitor: Family = {
   examples: ['capacitor 100uF 25V', 'capacitor 100nF 50V', 'capacitor 1000uF 16V'],
   read(w) { const m = /(\d+(?:\.\d+)?)\s*([pnuµm])f/i.exec(w); if (!m) return 'What value? e.g. 100nF, 10uF, 1000uF.'; const mul = { p: 1e-12, n: 1e-9, u: 1e-6, µ: 1e-6, m: 1e-3 }[m[2]!.toLowerCase() as 'p']; return { farads: num(m[1]) * mul, volts: num(/(\d+)\s*v\b/i.exec(w)?.[1]) || 25 }; },
   make(p) { const F = Number(p.farads), V = Number(p.volts), el = F >= 1e-6, say = F >= 1e-6 ? `${+(F * 1e6).toPrecision(3)} µF` : F >= 1e-9 ? `${+(F * 1e9).toPrecision(3)} nF` : `${+(F * 1e12).toPrecision(3)} pF`, E = 0.5 * F * V * V;
-    return item(`capacitor-${say.replace(/[^\w]/g, '')}-${V}v`, `${say} capacitor, ${V} V`, 'Electrical/Passive components/Capacitors', 'product', el ? 'assemble' : 'sinter', el ? 'al-foil*2 paper electrolyte-al lead-wire*2 rubber al-6061' : 'batio3 nickel tin', el ? 'aluminium foils and paper soaked in electrolyte, wound and sealed in a can' : 'ceramic layers and nickel electrodes fired together', `${say}, rated ${V} V; holds ${E < 1e-3 ? `${(E * 1e6).toFixed(1)} µJ` : `${E.toFixed(3)} J`} at that (½ C V²)${el ? '; polarised: mind its stripe' : ''}`, el ? [Math.max(5, Math.cbrt(F * 1e6 * V) * 2.2), Math.max(5, Math.cbrt(F * 1e6 * V) * 2.2), Math.max(7, Math.cbrt(F * 1e6 * V) * 3.5)] : [3.2, 1.6, 1.2], el ? +(Math.cbrt(F * 1e6 * V) * 0.6).toFixed(1) : 0.01); },
+    return item(`capacitor-${say.replace('µ', 'u').replace('.', '_').replace(/[^\w]/g, '').toLowerCase()}-${V}v`, `${say} capacitor, ${V} V`, 'Electrical/Passive components/Capacitors', 'product', el ? 'assemble' : 'sinter', el ? 'al-foil*2 paper electrolyte-al lead-wire*2 rubber al-6061' : 'batio3 nickel tin', el ? 'aluminium foils and paper soaked in electrolyte, wound and sealed in a can' : 'ceramic layers and nickel electrodes fired together', `${say}, rated ${V} V; holds ${E < 1e-3 ? `${(E * 1e6).toFixed(1)} µJ` : `${E.toFixed(3)} J`} at that (½ C V²)${el ? '; polarised: mind its stripe' : ''}`, el ? [Math.max(5, Math.cbrt(F * 1e6 * V) * 2.2), Math.max(5, Math.cbrt(F * 1e6 * V) * 2.2), Math.max(7, Math.cbrt(F * 1e6 * V) * 3.5)] : [3.2, 1.6, 1.2], el ? +(Math.cbrt(F * 1e6 * V) * 0.6).toFixed(1) : 0.01); },
 };
 // ---- standoffs and heat-set inserts ---------------------------------------------------------------------------------------
 const standoff: Family = {
@@ -250,12 +257,167 @@ const pcb: Family = {
   make(p) { const w = Number(p.w), h = Number(p.h), L = Number(p.layers), t = Number(p.t); return item(`pcb-${w}x${h}-${L}l-${t}`, `circuit board ${w} × ${h} mm, ${L} layers`, 'Electrical/Boards and controllers/Circuit boards', 'part', 'etch', `fr4 copper-foil*${L} solder-mask tin`, `FR-4 with ${L} layers of copper etched to traces, plated holes joining them, solder mask and tinned pads`, `${w} × ${h} × ${t} mm; 35 µm copper a layer (1 oz) typical`, [w, h, t], mm3g(w * h * t, 1.85)); },
 };
 
-export const FAMILIES: Family[] = [screw, nut, washer, bearing, gear, spring, wire, extrusion, resistor, stepper, cell, pulley, leadscrew, led, oring, dcmotor, servo, fan, rail, rod, tube, threadedrod, sheet, pack, capacitor, standoff, insert, belt, pcb];
+
+// ==== more families: hex bolts, set screws, dowels, circlips, keys, roller chain and its sprockets, linear bearings,
+// magnets, pipe, I-beams, connectors, cartridge heaters, thermistors, shaft couplings ===================================
+/** ISO 4017 hex head heights, mm. */
+export const HEX_K: Record<string, number> = { 'M1.6': 1.1, M2: 1.4, 'M2.5': 1.7, M3: 2, M4: 2.8, M5: 3.5, M6: 4, M8: 5.3, M10: 6.4, M12: 7.5, M14: 8.8, M16: 10, M20: 12.5, M24: 15 };
+export const CLASSES = ['4.6', '4.8', '5.6', '5.8', '6.8', '8.8', '10.9', '12.9', 'A2', 'A4'];
+const lengthIn = (w: string, d: number) => num(/[x×]\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1] ?? /(\d+(?:\.\d+)?)\s*mm\b/i.exec(w)?.[1]) || d;
+const classIn = (w: string, d: string) => /(?:^|\s)(4\.6|4\.8|5\.6|5\.8|6\.8|8\.8|10\.9|12\.9|A2|A4)(?=\s|$)/i.exec(w)?.[1]?.toUpperCase() ?? d;
+const metres = (w: string, d: number) => num(/(\d+(?:\.\d+)?)\s*m\b/i.exec(w)?.[1]) || d;
+const threadAsk = `Which thread? ${Object.keys(METRIC).join(', ')}.`;
+const bolt: Family = {
+  id: 'bolt', name: 'hex head bolt', path: ['Hardware', 'Fasteners', 'Bolts'], says: 'any metric size and length, its head from ISO 4017 and its pitch from ISO 261',
+  params: [{ key: 'thread', says: 'thread size', unit: '', values: Object.keys(METRIC), default: 'M8' }, { key: 'length', says: 'length under the head', unit: 'mm', min: 4, max: 300, default: 30 }, { key: 'class', says: 'strength class', unit: '', values: CLASSES, default: '8.8' }],
+  examples: ['bolt M8x30', 'bolt M10x50 10.9', 'bolt M6x20 A2', 'bolt M20x80'],
+  read(w) { const t = thread(w); if (!t || !METRIC[t]) return threadAsk; return { thread: t, length: lengthIn(w, 30), class: classIn(w, '8.8') }; },
+  make(p) {
+    const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!, k = HEX_K[t] ?? 0.7 * d, cl = String(p.class), st = /^A/.test(cl);
+    const v = Math.PI * (d / 2) ** 2 * L * 0.92 + ((3 * Math.sqrt(3)) / 2) * (T.s / Math.sqrt(3)) ** 2 * k;
+    return item(`bolt-${t.toLowerCase()}x${L}${cl === '8.8' ? '' : `-${cl.toLowerCase()}`}`, `${t} × ${L} hex bolt, class ${cl}`, 'Hardware/Fasteners/Bolts', 'product', 'roll-thread', st ? 'stainless-304' : 'steel-alloy', `cold-headed from ${st ? 'stainless' : 'alloy steel'} wire, its thread rolled${st ? '' : ', hardened and zinc-plated'}`, `${T.p} mm pitch, ${T.s} mm across flats, head ${k} mm high (ISO 4017); class ${cl}`, [T.s, T.s, L + k], mm3g(v, st ? RHO.stainless : RHO.steel));
+  },
+};
+const setscrew: Family = {
+  id: 'setscrew', name: 'set screw, cup point', path: ['Hardware', 'Fasteners', 'Set screws'], says: 'a headless screw with a hex socket and a cup point (ISO 4029), any metric size',
+  params: [{ key: 'thread', says: 'thread size', unit: '', values: Object.keys(METRIC), default: 'M4' }, { key: 'length', says: 'length', unit: 'mm', min: 2, max: 60, default: 6 }],
+  examples: ['setscrew M3x4', 'setscrew M4x6', 'setscrew M8x10'],
+  read(w) { const t = thread(w); if (!t || !METRIC[t]) return threadAsk; return { thread: t, length: lengthIn(w, 6) }; },
+  make(p) { const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!; return item(`setscrew-${t.toLowerCase()}x${L}`, `${t} × ${L} set screw, cup point`, 'Hardware/Fasteners/Set screws', 'product', 'roll-thread', 'steel-alloy', 'cold-formed with its socket, thread-rolled and hardened to class 45H', `${T.p} mm pitch; cup point (ISO 4029); hardness class 45H`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L * 0.85, RHO.steel)); },
+};
+const dowel: Family = {
+  id: 'dowel', name: 'dowel pin', path: ['Hardware', 'Fasteners', 'Pins'], says: 'a hardened, ground dowel pin of any diameter and length (ISO 8734), to locate one part on another',
+  params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 1, max: 20, default: 4 }, { key: 'length', says: 'length', unit: 'mm', min: 3, max: 120, default: 20 }],
+  examples: ['dowel 4x20', 'dowel 3x10', 'dowel 8x40'],
+  read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); return m ? { d: num(m[1]), length: num(m[2]) } : 'A dowel as diameter × length: "dowel 4x20".'; },
+  make(p) { const d = Number(p.d), L = Number(p.length); return item(`dowel-${d}x${L}`, `dowel pin ${d} × ${L}`, 'Hardware/Fasteners/Pins', 'product', 'grind', 'steel-chrome', 'cut from bar, through-hardened and ground to an m6 fit', `${d} mm m6 × ${L} mm, hardened (ISO 8734)`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L, RHO.steel)); },
+};
+/** DIN 471 external retaining rings, by shaft diameter: thickness and groove diameter, mm. */
+export const CIRCLIPS: Record<number, [number, number]> = { 4: [0.4, 3.8], 5: [0.6, 4.8], 6: [0.7, 5.7], 8: [0.8, 7.6], 10: [1, 9.6], 12: [1, 11.5], 15: [1, 14.3], 17: [1, 16.2], 20: [1.2, 19], 25: [1.2, 23.9], 30: [1.5, 28.6] };
+const circlip: Family = {
+  id: 'circlip', name: 'retaining ring (circlip), external', path: ['Hardware', 'Fasteners', 'Retaining rings'], says: 'a spring-steel ring that snaps into a groove on a shaft (DIN 471), by the shaft it fits',
+  params: [{ key: 'd', says: 'shaft diameter', unit: 'mm', values: Object.keys(CIRCLIPS).map(Number), default: 8 }],
+  examples: ['circlip 8', 'circlip 12mm', 'circlip 20'],
+  read(w) { const d = num(/(\d+)/.exec(w)?.[1]); return CIRCLIPS[d] ? { d } : `For which shaft? ${Object.keys(CIRCLIPS).join(', ')} mm.`; },
+  make(p) { const d = Number(p.d), [t, g] = CIRCLIPS[d]!, b = 0.1 * d + 1; return item(`circlip-${d}`, `circlip for ${/^(8|11|18)$/.test(String(d)) ? 'an' : 'a'} ${d} mm shaft`, 'Hardware/Fasteners/Retaining rings', 'product', 'stamp', 'steel-spring', 'stamped from spring steel, hardened, with two lug holes for the pliers', `${t} mm thick, into a ${g} mm groove (DIN 471)`, [d + 2 * b, d + 2 * b, t], mm3g(Math.PI * ((g / 2 + b) ** 2 - (g / 2) ** 2) * t * 0.85, RHO.steel)); },
+};
+/** DIN 6885 A parallel keys: the shafts each width is for (over, up to), and its width and height, mm. */
+export const KEYS: [number, number, number, number][] = [[6, 8, 2, 2], [8, 10, 3, 3], [10, 12, 4, 4], [12, 17, 5, 5], [17, 22, 6, 6], [22, 30, 8, 7], [30, 38, 10, 8], [38, 44, 12, 8]];
+const key: Family = {
+  id: 'key', name: 'parallel key', path: ['Mechanical', 'Shafts and hubs', 'Keys'], says: 'a parallel key for a shaft (DIN 6885 A): give the shaft, or width × height × length',
+  params: [{ key: 'b', says: 'width', unit: 'mm', min: 2, max: 12, default: 5 }, { key: 'h', says: 'height', unit: 'mm', min: 2, max: 8, default: 5 }, { key: 'length', says: 'length', unit: 'mm', min: 6, max: 100, default: 20 }],
+  examples: ['key 5x5x20', 'key shaft 20 L30', 'key 8x7x40'],
+  read(w) {
+    const m = /(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)/.exec(w); if (m) return { b: num(m[1]), h: num(m[2]), length: num(m[3]) };
+    const d = num(/(?:shaft|for)\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1] ?? /(\d+(?:\.\d+)?)\s*mm\s*shaft/i.exec(w)?.[1]), row = KEYS.find(([lo, hi]) => d > lo && d <= hi);
+    if (!row) return 'A key for which shaft (6–44 mm), or as width × height × length: "key 5x5x20".';
+    return { b: row[2], h: row[3], length: num(/\bL\s*(\d+)/i.exec(w)?.[1]) || Math.round(1.5 * d) };
+  },
+  make(p) { const b = Number(p.b), h = Number(p.h), L = Number(p.length); return item(`key-${b}x${h}x${L}`, `parallel key ${b} × ${h} × ${L}`, 'Mechanical/Shafts and hubs/Keys', 'product', 'machine', 'steel-alloy', 'cut from bright key steel (C45) and its ends rounded', `${b} × ${h} mm, ${L} mm long, form A (DIN 6885)`, [b, L, h], mm3g(b * h * L * 0.95, RHO.steel)); },
+};
+/** Roller chain (ISO 606 B series; ANSI 25, 35, 40): pitch, roller diameter, inner width (mm), and about how heavy (kg/m, makers' catalogues). */
+export const CHAINS: Record<string, { p: number; roller: number; width: number; kgm: number }> = {
+  '25': { p: 6.35, roller: 3.3, width: 3.18, kgm: 0.14 }, '35': { p: 9.525, roller: 5.08, width: 4.77, kgm: 0.33 }, '40': { p: 12.7, roller: 7.92, width: 7.95, kgm: 0.62 },
+  '06B': { p: 9.525, roller: 6.35, width: 5.72, kgm: 0.41 }, '08B': { p: 12.7, roller: 8.51, width: 7.75, kgm: 0.69 }, '10B': { p: 15.875, roller: 10.16, width: 9.65, kgm: 0.93 },
+};
+const chainOf = (w: string) => /(?:^|\s)(25|35|40|06B|08B|10B)(?=\s|$)/i.exec(w)?.[1]?.toUpperCase() ?? null;
+const chain: Family = {
+  id: 'chain', name: 'roller chain', path: ['Mechanical', 'Belts and chains', 'Roller chain'], says: 'roller chain of the ISO 606 B series or ANSI 25/35/40, any length (a whole number of links)',
+  params: [{ key: 'series', says: 'chain', unit: '', values: Object.keys(CHAINS), default: '08B' }, { key: 'length', says: 'length', unit: 'm', min: 0.1, max: 20, default: 1 }],
+  examples: ['chain 08B 1m', 'chain 25 0.5m', 'chain 40 2m'],
+  read(w) { const c = chainOf(w); return c ? { series: c, length: metres(w, 1) } : `Which chain? ${Object.keys(CHAINS).join(', ')}.`; },
+  make(p) { const c = String(p.series), C = CHAINS[c]!, L = Number(p.length), links = Math.max(2, Math.round((L * 1000) / C.p / 2) * 2); return item(`chain-${c.toLowerCase()}-${links}`, `roller chain ${c}, ${links} links`, 'Mechanical/Belts and chains/Roller chain', 'product', 'stamp', 'steel-alloy', 'plates stamped from strip, pins and bushes cold-headed, rollers formed; riveted together link by link', `${C.p} mm pitch, ${C.roller} mm rollers, ${C.width} mm inside; ${links} links, ${((links * C.p) / 1000).toFixed(2)} m; about ${C.kgm} kg/m`, [C.width + 4, (links * C.p), C.roller + 4], +(C.kgm * links * C.p).toFixed(0)); },
+};
+const sprocket: Family = {
+  id: 'sprocket', name: 'chain sprocket', path: ['Mechanical', 'Belts and chains', 'Sprockets'], says: 'a sprocket for any chain above and any number of teeth: its pitch circle is p / sin(180° / z)',
+  params: [{ key: 'series', says: 'chain', unit: '', values: Object.keys(CHAINS), default: '08B' }, { key: 'z', says: 'teeth', unit: '', min: 9, max: 120, default: 18 }, { key: 'bore', says: 'bore', unit: 'mm', min: 3, max: 60, default: 12 }],
+  examples: ['sprocket 08B z18 bore12', 'sprocket 25 z11', 'sprocket 40 z40 bore20'],
+  read(w) { const c = chainOf(w); if (!c) return `For which chain? ${Object.keys(CHAINS).join(', ')}.`; return { series: c, z: num(/\bz\s*(\d+)/i.exec(w)?.[1] ?? /(\d+)\s*(?:t|teeth)\b/i.exec(w)?.[1]) || 18, bore: num(/bore\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1]) || 12 }; },
+  make(p) { const c = String(p.series), C = CHAINS[c]!, z = Number(p.z), bore = Number(p.bore), D = C.p / Math.sin(Math.PI / z), Do = C.p * (0.6 + 1 / Math.tan(Math.PI / z)), t = 0.93 * C.width; return item(`sprocket-${c.toLowerCase()}-z${z}-b${bore}`, `sprocket ${c}, ${z} teeth`, 'Mechanical/Belts and chains/Sprockets', 'product', 'machine', 'steel-low', 'turned from bar, its teeth cut by hob and hardened at the tips', `pitch circle ${D.toFixed(1)} mm, outside ${Do.toFixed(1)} mm, ${t.toFixed(1)} mm thick, ${bore} mm bore`, [Do, Do, t], mm3g(Math.PI * ((D / 2) ** 2 - (bore / 2) ** 2) * t * 0.9, RHO.steel), 'cast'); },
+};
+/** Linear ball bushings, LM…UU: bore, outside, length (mm), the makers' common series. */
+export const LM: Record<string, [number, number, number]> = { '3': [3, 7, 10], '4': [4, 8, 12], '5': [5, 10, 15], '6': [6, 12, 19], '8': [8, 15, 24], '10': [10, 19, 29], '12': [12, 21, 30], '16': [16, 28, 37], '20': [20, 32, 42] };
+const linear: Family = {
+  id: 'linear', name: 'linear ball bushing', path: ['Mechanical', 'Bearings', 'Linear bearings'], says: 'a linear ball bushing (LM…UU) for any shaft of the series: balls in a cage, rolling along the shaft',
+  params: [{ key: 'd', says: 'shaft', unit: 'mm', values: Object.keys(LM).map(Number), default: 8 }],
+  examples: ['linear LM8UU', 'linear bearing LM12UU', 'linear 6mm'],
+  read(w) { const d = /LM\s*(\d+)/i.exec(w)?.[1] ?? /(\d+)\s*mm/i.exec(w)?.[1]; return d && LM[d] ? { d: Number(d) } : `For which shaft? ${Object.keys(LM).join(', ')} mm.`; },
+  make(p) { const d = String(p.d), [b, D, L] = LM[d]!; return item(`lm${d}uu`, `linear bearing LM${d}UU (${b} × ${D} × ${L})`, 'Mechanical/Bearings/Linear bearings', 'product', 'grind', 'steel-chrome bearing-ball*24 pom', 'a ground steel sleeve, its balls recirculating in a plastic cage between its seals', `${b} mm shaft, ${D} mm outside, ${L} mm long`, [D, D, L], mm3g(Math.PI * ((D / 2) ** 2 - (b / 2) ** 2) * L * 0.6, RHO.steel)); },
+};
+/** NdFeB grades: remanence Br, T (the middle of each grade's range in makers' grade tables). */
+export const NDFEB: Record<string, number> = { N35: 1.195, N38: 1.24, N42: 1.3, N45: 1.35, N48: 1.4, N50: 1.43, N52: 1.445 };
+const magnet: Family = {
+  id: 'magnet', name: 'neodymium disc magnet', path: ['Electrical', 'Magnets', 'Neodymium'], says: 'a nickel-plated NdFeB disc of any diameter, height and grade, magnetised through its height',
+  params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 1, max: 60, default: 10 }, { key: 'h', says: 'height', unit: 'mm', min: 0.5, max: 40, default: 3 }, { key: 'grade', says: 'grade', unit: '', values: Object.keys(NDFEB), default: 'N42' }],
+  examples: ['magnet 10x3 N52', 'magnet 6x2', 'magnet 20x10 N35'],
+  read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); if (!m) return 'A magnet as diameter × height: "magnet 10x3 N52".'; return { d: num(m[1]), h: num(m[2]), grade: /\bN(35|38|42|45|48|50|52)\b/i.exec(w)?.[0]?.toUpperCase() ?? 'N42' }; },
+  make(p) { const d = Number(p.d), h = Number(p.h), gr = String(p.grade); return item(`magnet-${d}x${h}-${gr.toLowerCase()}`, `neodymium magnet ${d} × ${h} ${gr}`, 'Electrical/Magnets/Neodymium', 'product', 'sinter', 'ndfeb nickel', 'pressed from NdFeB powder in a field, sintered, ground, nickel-plated and magnetised', `${d} mm × ${h} mm, ${gr} (Br about ${NDFEB[gr]} T), axially magnetised`, [d, d, h], mm3g(Math.PI * (d / 2) ** 2 * h, 7.5)); },
+};
+/** ASME B36.10M steel pipe, schedule 40: outside diameter and wall, mm, by nominal size. */
+export const NPS40: Record<string, [number, number]> = { '1/8': [10.3, 1.73], '1/4': [13.7, 2.24], '3/8': [17.1, 2.31], '1/2': [21.3, 2.77], '3/4': [26.7, 2.87], '1': [33.4, 3.38], '1-1/4': [42.2, 3.56], '1-1/2': [48.3, 3.68], '2': [60.3, 3.91], '3': [88.9, 5.49], '4': [114.3, 6.02] };
+const pipe: Family = {
+  id: 'pipe', name: 'pipe, schedule 40', path: ['Mechanical', 'Fluid power', 'Pipe'], says: 'pipe of any nominal size from 1/8" to 4", schedule 40 (ASME B36.10M; PVC to ASTM D1785 has the same outside and wall), any length',
+  params: [{ key: 'nps', says: 'nominal size', unit: 'in', values: Object.keys(NPS40), default: '1/2' }, { key: 'length', says: 'length', unit: 'm', min: 0.05, max: 12, default: 1 }, { key: 'matter', says: 'made of', unit: '', values: ['steel', 'stainless', 'pvc'], default: 'steel' }],
+  examples: ['pipe 1/2in 1m', 'pipe 2in 3m pvc', 'pipe 3/4 0.5m stainless'],
+  read(w) { const n = /(\d-\d\/\d|\d\/\d|\d)\s*(?:in\b|"|inch|nps)?/i.exec(w.replace(/nps\s*/i, ''))?.[1]; if (!n || !NPS40[n]) return `Which size? ${Object.keys(NPS40).join(', ')} (inches, nominal).`; return { nps: n, length: metres(w.replace(/(\d-\d\/\d|\d\/\d)\s*(in\b|")?/, ''), 1), matter: /pvc/i.test(w) ? 'pvc' : /stainless/i.test(w) ? 'stainless' : 'steel' }; },
+  make(p) { const n = String(p.nps), [OD, t] = NPS40[n]!, L = Number(p.length), mt = String(p.matter), rho = mt === 'pvc' ? 1.4 : mt === 'stainless' ? RHO.stainless : RHO.steel; return item(`pipe-${n.replace(/\//g, '_')}-${mt}-${L}m`, `${n}" ${mt} pipe, schedule 40, ${L} m`, 'Mechanical/Fluid power/Pipe', 'product', mt === 'pvc' ? 'extrude' : 'weld', mt === 'pvc' ? 'pvc' : mt === 'stainless' ? 'stainless-304' : 'steel-low', mt === 'pvc' ? 'extruded through a die and cut' : 'strip rolled into a tube and seam-welded, or pierced and drawn seamless', `${OD} mm outside, ${t} mm wall, ${(OD - 2 * t).toFixed(1)} mm inside`, [OD, OD, L * 1000], mm3g(Math.PI * (OD - t) * t * L * 1000, rho)); },
+};
+/** IPE beams (EN 10365): h, b, web, flange (mm); kg/m; Iy (cm⁴); Wy (cm³). */
+export const IPE: Record<string, [number, number, number, number, number, number, number]> = {
+  '80': [80, 46, 3.8, 5.2, 6.0, 80.1, 20.0], '100': [100, 55, 4.1, 5.7, 8.1, 171, 34.2], '120': [120, 64, 4.4, 6.3, 10.4, 318, 53.0], '140': [140, 73, 4.7, 6.9, 12.9, 541, 77.3],
+  '160': [160, 82, 5.0, 7.4, 15.8, 869, 109], '180': [180, 91, 5.3, 8.0, 18.8, 1317, 146], '200': [200, 100, 5.6, 8.5, 22.4, 1943, 194],
+};
+const ibeam: Family = {
+  id: 'ibeam', name: 'I-beam (IPE)', path: ['Hardware', 'Structural', 'Beams'], says: 'a hot-rolled steel IPE section from 80 to 200 mm deep (EN 10365), any length',
+  params: [{ key: 'size', says: 'depth', unit: 'mm', values: Object.keys(IPE).map(Number), default: 160 }, { key: 'length', says: 'length', unit: 'm', min: 0.2, max: 18, default: 3 }],
+  examples: ['ibeam IPE160 3m', 'ibeam IPE100 2m', 'ibeam IPE200 6m'],
+  read(w) { const n = /IPE\s*(\d+)/i.exec(w)?.[1] ?? /(\d{2,3})\b/.exec(w)?.[1]; return n && IPE[n] ? { size: Number(n), length: metres(w.replace(/IPE\s*\d+/i, ''), 3) } : `Which IPE? ${Object.keys(IPE).join(', ')}.`; },
+  make(p) { const n = String(p.size), [h, b, tw, tf, kgm, Iy] = IPE[n]!, L = Number(p.length); return item(`ipe${n}-${L}m`, `IPE ${n} beam, ${L} m`, 'Hardware/Structural/Beams', 'product', 'roll', 'steel-low', 'hot-rolled from a bloom through shaped rolls, straightened and cut', `${h} × ${b} mm, web ${tw}, flange ${tf} mm; ${kgm} kg/m; Iy ${Iy} cm⁴ (EN 10365); S235 or S355`, [b, L * 1000, h], Math.round(kgm * L * 1000)); },
+};
+/** JST connector series: pitch (mm) and the current each contact is rated for (A), from JST's datasheets. */
+export const JST: Record<string, { pitch: number; amps: number }> = { SH: { pitch: 1.0, amps: 1 }, PH: { pitch: 2.0, amps: 2 }, XH: { pitch: 2.5, amps: 3 }, VH: { pitch: 3.96, amps: 10 } };
+const jst: Family = {
+  id: 'jst', name: 'JST wire-to-board connector', path: ['Electrical', 'Connectors', 'Wire-to-board'], says: 'a JST housing and its header, SH, PH, XH or VH, with any number of pins',
+  params: [{ key: 'series', says: 'series', unit: '', values: Object.keys(JST), default: 'XH' }, { key: 'pins', says: 'pins', unit: '', min: 2, max: 16, default: 4 }],
+  examples: ['jst XH 4', 'jst PH 2', 'jst SH 6'],
+  read(w) { const s2 = /\b(SH|PH|XH|VH)\b/i.exec(w)?.[1]?.toUpperCase(); if (!s2) return `Which series? ${Object.keys(JST).join(', ')}.`; return { series: s2, pins: num(/(\d+)\s*(?:pins?|p\b|way)?/i.exec(w.replace(/\b(SH|PH|XH|VH)\b/i, ''))?.[1]) || 2 }; },
+  make(p) { const s2 = String(p.series), n = Number(p.pins), J = JST[s2]!, w = J.pitch * (n - 1) + 2.5 * J.pitch; return item(`jst-${s2.toLowerCase()}-${n}`, `JST ${s2} connector, ${n} pins`, 'Electrical/Connectors/Wire-to-board', 'product', 'mould', `nylon phosphor-bronze*${n} tin`, 'a moulded nylon housing with crimped, tin-plated phosphor-bronze contacts, and its header', `${J.pitch} mm pitch, ${n} ways, ${J.amps} A a contact (JST)`, [w, 6, 8], +(0.05 * n + 0.2).toFixed(2)); },
+};
+const header: Family = {
+  id: 'header', name: 'pin header', path: ['Electrical', 'Connectors', 'Pin headers'], says: 'a 2.54 mm pin header of any rows and pins',
+  params: [{ key: 'rows', says: 'rows', unit: '', min: 1, max: 3, default: 1 }, { key: 'pins', says: 'pins a row', unit: '', min: 1, max: 40, default: 8 }],
+  examples: ['header 1x8', 'header 2x20', 'header 1x40'],
+  read(w) { const m = /(\d+)\s*[x×]\s*(\d+)/.exec(w); return m ? { rows: num(m[1]), pins: num(m[2]) } : 'A header as rows × pins: "header 2x20".'; },
+  make(p) { const r = Number(p.rows), n = Number(p.pins); return item(`header-${r}x${n}`, `pin header ${r} × ${n}, 2.54 mm`, 'Electrical/Connectors/Pin headers', 'product', 'mould', `pbt brass*${r * n} gold`, 'square brass pins, gold-flashed, held in a moulded PBT strip', `${r} × ${n} pins at 2.54 mm; about 3 A a pin`, [2.54 * n, 2.54 * r, 8.5], +(0.08 * r * n).toFixed(2)); },
+};
+const heater: Family = {
+  id: 'heater', name: 'cartridge heater', path: ['Electrical', 'Heating', 'Cartridge heaters'], says: 'a cartridge heater of any diameter, length, voltage and power',
+  params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 3, max: 25, default: 6 }, { key: 'length', says: 'length', unit: 'mm', min: 10, max: 300, default: 20 }, { key: 'volts', says: 'voltage', unit: 'V', min: 5, max: 400, default: 24 }, { key: 'watts', says: 'power', unit: 'W', min: 5, max: 3000, default: 40 }],
+  examples: ['heater 24V 40W 6x20', 'heater 12V 40W', 'heater 230V 200W 10x60'],
+  read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); return { d: m ? num(m[1]) : 6, length: m ? num(m[2]) : 20, volts: num(/(\d+(?:\.\d+)?)\s*V\b/i.exec(w)?.[1]) || 24, watts: num(/(\d+(?:\.\d+)?)\s*W\b/i.exec(w)?.[1]) || 40 }; },
+  make(p) { const d = Number(p.d), L = Number(p.length), V = Number(p.volts), W = Number(p.watts); return item(`heater-${d}x${L}-${V}v-${W}w`, `cartridge heater ${d} × ${L}, ${V} V ${W} W`, 'Electrical/Heating/Cartridge heaters', 'product', 'swage', 'nichrome mgo stainless-304', 'a nichrome coil in magnesium oxide inside a stainless sheath, swaged down so the powder packs tight', `${d} × ${L} mm; ${W} W at ${V} V, so ${((V * V) / W).toFixed(1)} Ω`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L, 5.5)); },
+};
+const thermistor: Family = {
+  id: 'thermistor', name: 'NTC thermistor', path: ['Electrical', 'Sensors', 'Temperature'], says: 'an NTC thermistor of any resistance at 25 °C and β',
+  params: [{ key: 'r25', says: 'resistance at 25 °C', unit: 'Ω', min: 100, max: 1e6, default: 100000 }, { key: 'beta', says: 'β', unit: 'K', min: 2000, max: 5000, default: 3950 }],
+  examples: ['thermistor 100k B3950', 'thermistor 10k B3435', 'thermistor 100k'],
+  read(w) { const m = /(\d+(?:\.\d+)?)\s*(k|M)?\b/i.exec(w); const r = m ? num(m[1]) * (m[2]?.toLowerCase() === 'k' ? 1e3 : m[2] === 'M' ? 1e6 : 1) : 1e5; return { r25: r, beta: num(/\bB\s*(\d{4})/i.exec(w)?.[1]) || 3950 }; },
+  make(p) { const r = Number(p.r25), b = Number(p.beta), rs = r >= 1e3 ? `${r / 1e3}k` : String(r); return item(`ntc-${rs}-b${b}`, `NTC thermistor ${rs}Ω, β ${b}`, 'Electrical/Sensors/Temperature', 'product', 'sinter', 'ntc-ceramic copper glass', 'a bead of metal-oxide ceramic sintered onto two leads and sealed in glass', `${rs}Ω at 25 °C, β ${b} K`, [2, 2, 4], 0.1); },
+};
+const coupling: Family = {
+  id: 'coupling', name: 'flexible shaft coupling', path: ['Mechanical', 'Shafts and hubs', 'Couplings'], says: 'a helical-beam coupling joining any two shafts up to 12 mm, held by set screws',
+  params: [{ key: 'd1', says: 'first bore', unit: 'mm', min: 2, max: 12, default: 5 }, { key: 'd2', says: 'second bore', unit: 'mm', min: 2, max: 12, default: 8 }],
+  examples: ['coupling 5x8', 'coupling 5x5', 'coupling 8x10'],
+  read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); return m ? { d1: num(m[1]), d2: num(m[2]) } : 'A coupling as bore × bore: "coupling 5x8".'; },
+  make(p) { const a = Number(p.d1), b = Number(p.d2), big = Math.max(a, b) > 8, D = big ? 25 : 19, L = big ? 30 : 25; return item(`coupling-${a}x${b}`, `shaft coupling ${a} × ${b} mm`, 'Mechanical/Shafts and hubs/Couplings', 'product', 'machine', 'al-6061 screw-set*4', 'turned from aluminium bar, a helix cut through its middle so it bends and twists a little', `${a} and ${b} mm bores, ${D} mm outside, ${L} mm long (a typical size for these bores)`, [D, D, L], mm3g(Math.PI * ((D / 2) ** 2 * L - (a / 2) ** 2 * L / 2 - (b / 2) ** 2 * L / 2), RHO.aluminium), 'print'); },
+};
+
+export const FAMILIES: Family[] = [screw, nut, washer, bearing, gear, spring, wire, extrusion, resistor, stepper, cell, pulley, leadscrew, led, oring, dcmotor, servo, fan, rail, rod, tube, threadedrod, sheet, pack, capacitor, standoff, insert, belt, pcb, bolt, setscrew, dowel, circlip, key, chain, sprocket, linear, magnet, pipe, ibeam, jst, header, heater, thermistor, coupling];
 /** A family called with its sizes, in words ("screw M4x20", "bearing 6201 2RS"): the item it gives, or why not. */
 export function callFamily(words: string): Item | string | null {
   const w = words.trim(), f = FAMILIES.find((x) => new RegExp(`^${x.id}s?\\b`, 'i').test(w)) ?? (/^M\d/i.test(w) && /x\d/i.test(w) ? screw : null);
   if (!f) return null;
   const p = f.read(w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim() || w); if (typeof p === 'string') return p;
   for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
-  return f.make(p);
+  return { ...f.make(p), sized: { family: f.id, params: p } };
 }

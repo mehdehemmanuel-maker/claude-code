@@ -12,11 +12,12 @@
 import { shapes, type Section } from './cell';
 import type { Board } from './boards';
 import { callFamily, FAMILIES } from './families';
+import { ELEMENTS, elementId, elementsOf, makeup, makeupSays } from './elements';
 
 /** How a thing is made from what is in it. */
 export type Process =
   | 'stock' | 'print' | 'cast' | 'wind' | 'solder' | 'crimp' | 'assemble' | 'heat-treat' | 'bend'
-  | 'machine' | 'stamp' | 'mould' | 'extrude' | 'draw' | 'cold-head' | 'roll-thread' | 'sinter' | 'etch' | 'fab' | 'coat' | 'grind' | 'laminate' | 'weld' | 'forge' | 'blow' | 'coil' | 'chemistry';
+  | 'machine' | 'stamp' | 'mould' | 'extrude' | 'draw' | 'cold-head' | 'roll-thread' | 'sinter' | 'etch' | 'fab' | 'coat' | 'grind' | 'laminate' | 'weld' | 'forge' | 'blow' | 'coil' | 'chemistry' | 'roll' | 'swage';
 export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   stock: { says: 'taken from stock as a raw material', here: true },
   print: { says: 'printed in PLA on the 3D printer', here: true },
@@ -45,8 +46,10 @@ export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   forge: { says: 'forged: needs a forging press or hammer', here: false },
   blow: { says: 'blown or drawn from melt (glass)', here: false },
   chemistry: { says: 'made by chemistry: refined, reacted or synthesised', here: false },
+  roll: { says: 'hot-rolled in a mill: needs a rolling mill', here: false },
+  swage: { says: 'swaged: compacted by a swaging machine', here: false },
 };
-export type Kind = 'product' | 'assembly' | 'part' | 'material';
+export type Kind = 'product' | 'assembly' | 'part' | 'material' | 'element';
 export interface Item {
   id: string; name: string; path: string[]; kind: Kind; make: Process;
   /** a way the workshop can make it where its own way is not here (a moulded case printed, a die-cast part cast) */ alt?: Process;
@@ -54,11 +57,23 @@ export interface Item {
   /** about how big (mm) and heavy (g), where it is printed or cast here, or known */ size?: [number, number, number]; g?: number;
   /** made to sizes it is called with (a family's size), or one size of a family that makes any */ adjustable?: boolean; family?: string;
   /** added by you, not seeded */ yours?: boolean;
+  /** a material's make-up by mass, one level down: elements (el-…), or the materials a blend is of */ makeup?: { id: string; pct: number }[];
+  /** made to sizes by a family: which, and the numbers it was called with (what its behaviours are worked out from) */ sized?: { family: string; params: Record<string, string | number> };
 }
 const items = new Map<string, Item>();
+/** The inventory's revision: one more each time an entry is added, so what is worked out from it (its categories, each
+ *  item's plan) is worked out once and kept until it changes. */
+let rev = 0;
+const put = (it: Item): void => { items.set(it.id, it); rev++; };
+export const inventoryRev = (): number => rev;
+/** f of an id, kept until the inventory changes. */
+function memo<T>(f: (id: string) => T): (id: string) => T {
+  let at = -1; const kept = new Map<string, T>();
+  return (id) => { if (at !== rev) { kept.clear(); at = rev; } let v = kept.get(id); if (v === undefined) { v = f(id); kept.set(id, v); } return v; };
+}
 /** An entry, compactly: id, name, "Category/Subcategory[/Sub-subcategory]", kind, process, "child*n child …", says, spec, more. */
 function e(id: string, name: string, path: string, kind: Kind, make: Process, of: string, says: string, spec = '', more: Partial<Item> = {}): void {
-  items.set(id, { id, name, path: path.split('/'), kind, make, of: of.trim() ? of.trim().split(/\s+/).map((x) => { const [c, n] = x.split('*'); return { id: c!, n: Number(n ?? 1) }; }) : [], says, ...(spec ? { spec } : {}), ...more });
+  put({ id, name, path: path.split('/'), kind, make, of: of.trim() ? of.trim().split(/\s+/).map((x) => { const [c, n] = x.split('*'); return { id: c!, n: Number(n ?? 1) }; }) : [], says, ...(spec ? { spec } : {}), ...more });
 }
 const m = (id: string, name: string, group: string, says: string, spec = '') => e(id, name, `Materials/${group}`, 'material', 'stock', '', says, spec);
 
@@ -385,13 +400,141 @@ e('alternator', 'car alternator', 'Mechanical/Vehicle parts/Charging', 'product'
 // the fixed sizes a family makes any size of: called by the family's words for another size
 for (const [id, fam] of [['screw-m3', 'screw'], ['screw-set', 'screw'], ['nut-m3', 'nut'], ['washer-m3', 'washer'], ['bearing-608', 'bearing'], ['bearing-625', 'bearing'], ['spur-gear', 'gear'], ['spring-compression', 'spring'], ['wire-hookup', 'wire'], ['extrusion-2020', 'extrusion'], ['resistor-film', 'resistor'], ['nema17', 'stepper'], ['cell-18650', 'cell'], ['gt2-pulley', 'pulley'], ['lead-screw-t8', 'leadscrew'], ['led-5mm', 'led']] as const) { const it = items.get(id); if (it) it.family = fam; }
 
+// ==== more kinds of things: vehicles, home appliances, sound, light and heat, fluid, robots ===========================
+/** A part made to sizes by its family, put in the inventory for an entry's list: F('bearing 6805') gives its id. */
+const F = (words: string): string => { const it = callFamily(words); if (!it || typeof it === 'string') throw new Error(`the inventory's seed: "${words}": ${it ?? 'no such family'}`); if (!items.has(it.id)) put(it); return it.id; };
+m('mica', 'mica', 'Minerals', 'a sheet silicate that splits into thin plates: it insulates and stands red heat', 'muscovite');
+m('alnico', 'alnico', 'Metals/Magnetic alloys', 'an alloy of aluminium, nickel and cobalt with iron, cast and magnetised: the magnet of guitar pickups', 'e.g. alnico 5');
+m('bi2te3', 'bismuth telluride', 'Semiconductors', 'the thermoelectric semiconductor of Peltier modules, doped n and p', 'Bi₂Te₃');
+m('sic', 'silicon carbide grit', 'Ceramics', 'a very hard grit, bonded to paper or film as an abrasive', 'SiC');
+m('water', 'water', 'Fluids', 'the working fluid in a heat pipe, boiling at the hot end and condensing at the cold', 'H₂O');
+// a bicycle
+e('rim-bike', 'bicycle rim', 'Mechanical/Vehicle parts/Wheels', 'part', 'extrude', 'al-6063', 'an aluminium profile extruded, rolled into a hoop and joined, drilled for its spokes', '622 mm bead seat (700c)');
+e('spoke', 'spoke', 'Mechanical/Vehicle parts/Wheels', 'part', 'draw', 'stainless-304', 'stainless wire drawn, its head cold-formed and bent, its end thread-rolled', '2 mm, about 290 mm');
+e('nipple-spoke', 'spoke nipple', 'Mechanical/Vehicle parts/Wheels', 'part', 'machine', 'brass', 'a small threaded brass nut that tensions a spoke at the rim', '', { alt: 'cast' });
+e('hub-shell', 'hub shell', 'Mechanical/Vehicle parts/Wheels', 'part', 'machine', 'al-6061', 'turned and drilled for the spokes on its flanges', '', { alt: 'cast', size: [60, 60, 100] });
+e('hub-bike', 'bicycle hub', 'Mechanical/Vehicle parts/Wheels', 'assembly', 'assemble', `hub-shell ${F('bearing 6000')}*2 ${F('rod 9mm 140 steel')} ${F('nut M8 lock')}*2`, 'a shell turning on two bearings round a fixed axle');
+e('tyre-bike', 'bicycle tyre', 'Mechanical/Vehicle parts/Wheels', 'part', 'mould', 'rubber nylon steel-low', 'rubber vulcanised in a mould over a nylon casing, with steel beads that hold it on the rim', '700 × 28c');
+e('inner-tube', 'inner tube', 'Mechanical/Vehicle parts/Wheels', 'part', 'mould', 'rubber brass', 'a butyl tube with a brass valve', '');
+e('wheel-bike', 'bicycle wheel', 'Mechanical/Vehicles/Bicycles', 'assembly', 'assemble', 'rim-bike hub-bike spoke*32 nipple-spoke*32 tyre-bike inner-tube', 'a rim held round the hub by 32 tensioned spokes, trued; the tyre and tube on it');
+e('frame-bike', 'bicycle frame', 'Mechanical/Vehicles/Bicycles', 'assembly', 'weld', `${F('tube round 28x1 600 steel')}*3 ${F('tube round 19x1 450 steel')}*4 ${F('tube round 34x1.5 150 steel')}`, 'steel tubes mitred and welded: the main triangle and the stays, a head tube for the fork and a shell for the bottom bracket', 'chromoly, about 2.2 kg (typical)');
+e('fork-bike', 'bicycle fork', 'Mechanical/Vehicles/Bicycles', 'assembly', 'weld', `${F('tube round 25x1.5 250 steel')} ${F('tube round 22x1 400 steel')}*2`, 'a steerer tube and two blades welded to a crown, with dropouts for the wheel');
+e('crank-arm', 'crank arm', 'Mechanical/Vehicle parts/Drivetrain', 'part', 'forge', 'al-6061', 'forged from aluminium bar and machined', '170 mm', { alt: 'cast' });
+e('chainring', 'chainring', 'Mechanical/Vehicle parts/Drivetrain', 'part', 'stamp', 'al-6061', 'cut and stamped from plate, its teeth shaped for the chain to climb on', '44 teeth', { alt: 'cast' });
+e('bottom-bracket', 'bottom bracket', 'Mechanical/Vehicle parts/Drivetrain', 'assembly', 'assemble', `${F('bearing 6805')}*2 ${F('rod 24mm 120 steel')} al-6061`, 'two thin bearings in cups threaded into the frame, a spindle through them');
+e('crankset', 'crankset', 'Mechanical/Vehicles/Bicycles', 'assembly', 'assemble', `crank-arm*2 chainring bottom-bracket ${F('bolt M8x15')}*2`, 'the cranks on the spindle, the chainring on the right crank');
+e('chain-bike', 'bicycle chain', 'Mechanical/Belts and chains/Roller chain', 'product', 'stamp', 'steel-alloy', 'plates stamped from strip, pins pressed through bushings and rollers', '½" × 3/32", 116 links');
+e('freewheel', 'freewheel', 'Mechanical/Vehicle parts/Drivetrain', 'assembly', 'assemble', 'steel-low*7 bearing-ball*40 steel-spring steel-alloy', 'seven sprockets on a body that turns one way only: pawls on springs catch a ratchet', '14–28 teeth');
+e('pedal-body', 'pedal body', 'Mechanical/Vehicle parts/Drivetrain', 'part', 'cast', 'al-a380', 'a cast platform with pins to grip the shoe', '', { size: [100, 90, 20] });
+e('pedal', 'pedal', 'Mechanical/Vehicles/Bicycles', 'assembly', 'assemble', `pedal-body ${F('rod 9mm 90 steel')} bushing-bronze*2`, 'a platform turning on a steel spindle in bushings');
+e('saddle', 'saddle', 'Mechanical/Vehicles/Bicycles', 'product', 'assemble', 'pu nylon steel-low', 'foam on a moulded nylon shell, on steel rails');
+e('handlebar', 'handlebar', 'Mechanical/Vehicles/Bicycles', 'part', 'bend', F('tube round 22x2 600 aluminium'), 'an aluminium tube bent to shape', '600 mm wide');
+e('brake-arm', 'brake arm', 'Mechanical/Vehicle parts/Brakes', 'part', 'forge', 'al-6061', 'a forged arm that swings a pad onto the rim', '', { alt: 'cast' });
+e('brake-pad', 'brake pad', 'Mechanical/Vehicle parts/Brakes', 'part', 'mould', 'rubber', 'a moulded rubber block that grips the rim');
+e('brake-rim', 'rim brake', 'Mechanical/Vehicles/Bicycles', 'assembly', 'assemble', `brake-arm*2 brake-pad*2 spring-torsion ${F('bolt M6x30')}`, 'two arms on a bolt, pulled together by the cable against a spring');
+e('brake-cable', 'brake cable', 'Mechanical/Vehicle parts/Brakes', 'product', 'draw', 'steel-alloy pe', 'stranded steel wire in a lined housing');
+e('bicycle', 'bicycle', 'Mechanical/Vehicles/Bicycles', 'product', 'assemble', `frame-bike fork-bike wheel-bike*2 crankset chain-bike freewheel pedal*2 saddle handlebar brake-rim*2 brake-cable*2 ${F('bearing 6802')}*2`, 'a steel frame on two spoked wheels: the cranks drive the rear wheel by a chain through a freewheel; rim brakes; the fork steers on a headset of two bearings', 'about 11 kg (typical)');
+// an electric scooter
+e('tyre-scooter', 'scooter tyre', 'Mechanical/Vehicle parts/Wheels', 'part', 'mould', 'rubber', 'a solid or air-filled rubber tyre moulded for an 8.5" wheel');
+e('hub-motor', 'hub motor', 'Electrical/Motors and actuators/Brushless motors', 'assembly', 'assemble', `lamination-stack winding*27 magnet-ndfeb*30 al-a380 shaft-steel ${F('bearing 6202')}*2 tyre-scooter`, 'a brushless outrunner built into the wheel: the stator on the fixed axle, the magnets in the cast hub that turns round it', '36 V, about 350 W (typical)');
+e('wheel-scooter', 'scooter wheel', 'Mechanical/Vehicle parts/Wheels', 'assembly', 'assemble', `al-a380 tyre-scooter ${F('bearing 6001')}*2`, 'a cast rim with its tyre on two bearings');
+e('deck-scooter', 'scooter deck', 'Mechanical/Vehicles/Scooters', 'part', 'extrude', 'al-6063', 'an aluminium profile extruded, cut and machined: the battery rides inside it');
+e('stem-scooter', 'scooter stem', 'Mechanical/Vehicles/Scooters', 'assembly', 'weld', `${F('tube round 40x2 900 aluminium')} al-a380`, 'a tube welded to a cast folding hinge');
+e('brake-disc', 'brake disc', 'Mechanical/Vehicle parts/Brakes', 'part', 'stamp', 'stainless-304', 'cut from stainless plate, drilled to shed heat and water', '120 mm');
+e('brake-caliper-disc', 'disc brake caliper', 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', `al-a380 brake-pad*2 spring-compression ${F('bolt M6x20')}*2`, 'a cast body that a cable pulls shut, squeezing pads on the disc');
+e('throttle-thumb', 'thumb throttle', 'Electrical/Vehicles/Scooters', 'product', 'assemble', 'magnet-ndfeb ic-package pc wire-hookup*3', 'a lever turning a magnet past a Hall sensor: its voltage is how hard you press');
+e('e-scooter', 'electric scooter', 'Electrical/Vehicles/Scooters', 'product', 'assemble', `deck-scooter stem-scooter hub-motor wheel-scooter ${F('pack 10S3P')} esc throttle-thumb brake-disc brake-caliper-disc lcd-module ${F('bolt M6x20')}*12`, 'a hub motor in the front wheel driven by a controller from a 36 V pack in the deck; a disc brake at the back; the stem folds', 'about 12 kg, 25 km/h (typical)');
+// a skateboard
+e('deck-skate', 'skateboard deck', 'Mechanical/Vehicles/Skateboards', 'part', 'laminate', 'wood-veneer*7 glue', 'seven maple veneers glued and pressed in a mould to its concave', '8.0 × 31.5"');
+e('griptape', 'grip tape', 'Mechanical/Vehicles/Skateboards', 'part', 'coat', 'sic paper glue', 'silicon carbide grit bonded to paper, a glue on its back');
+e('truck', 'skateboard truck', 'Mechanical/Vehicles/Skateboards', 'assembly', 'assemble', `al-a380*2 ${F('bolt M10x60')} pu*2 ${F('rod 8mm 210 steel')} ${F('nut M8 lock')}*2`, 'a cast baseplate and hanger on a kingpin between polyurethane bushings: leaning turns the axle');
+e('wheel-skate', 'skateboard wheel', 'Mechanical/Vehicles/Skateboards', 'part', 'mould', 'pu', 'cast polyurethane, 99A hard', '54 mm', { alt: 'print', size: [54, 54, 32] });
+e('skateboard', 'skateboard', 'Mechanical/Vehicles/Skateboards', 'product', 'assemble', `deck-skate griptape truck*2 wheel-skate*4 ${F('bearing 608')}*8 ${F('screw M5x30')}*8`, 'a maple deck on two trucks; two 608 bearings in each wheel');
+// a radio-controlled car
+e('chassis-rc', 'RC car chassis', 'Electrical/Vehicles/RC cars', 'part', 'mould', 'pp', 'a moulded tub that carries everything', '', { alt: 'print', size: [300, 150, 40] });
+e('wheel-rc', 'RC car wheel', 'Electrical/Vehicles/RC cars', 'assembly', 'assemble', 'rubber nylon', 'a rubber tyre glued on a nylon rim', '', { size: [80, 80, 35] });
+e('shock-rc', 'RC shock absorber', 'Electrical/Vehicles/RC cars', 'assembly', 'assemble', 'spring-compression al-6061 oil nbr', 'a piston in an oil-filled body inside a spring');
+e('rc-car', 'radio-controlled car', 'Electrical/Vehicles/RC cars', 'product', 'assemble', `chassis-rc dcmotor-550 esc mg996r wheel-rc*4 ${F('gear m1 z60 b6 pom')} ${F('gear m1 z15 b6 steel')} shock-rc*4 pack-2s rc-receiver ${F('bearing 625')}*8`, 'a brushed motor drives the wheels through a spur gear; a servo steers the front; a receiver hands both the sticks of the transmitter');
+// home appliances
+e('mica-heater', 'mica heating element', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'nichrome mica', 'nichrome ribbon wound back and forth on a mica card', '', { size: [140, 100, 2] });
+e('toaster-case', 'toaster case', 'Electrical/Home appliances/Kitchen', 'part', 'stamp', 'steel-low', 'steel sheet stamped and folded, painted');
+e('toast-carriage', 'toast carriage', 'Electrical/Home appliances/Kitchen', 'part', 'stamp', 'steel-low', 'the wire racks that lower the bread and push it back up');
+e('power-cord', 'mains cord', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'copper pvc brass', 'three copper conductors in PVC, the plug moulded on its end');
+e('toaster', 'toaster', 'Electrical/Home appliances/Kitchen', 'product', 'assemble', 'mica-heater*3 toaster-case toast-carriage thermostat-bimetal solenoid spring-extension power-cord', 'a lever lowers the bread and switches the elements on; an electromagnet holds it down until the bimetal timer lets it spring up', 'about 900 W (typical)');
+e('field-coil', 'field winding', 'Electrical/Motors and actuators/Motor parts', 'assembly', 'wind', 'lamination-stack winding*2', 'two coils on a laminated stator: the field of a universal motor');
+e('motor-universal', 'universal motor', 'Electrical/Motors and actuators/Brushed motors', 'assembly', 'assemble', `field-coil armature carbon-brush*2 brush-spring*2 ${F('bearing 608')}*2`, 'a brushed motor whose field is wound and in series with its armature, so it runs on AC: fast and strong for its size', 'e.g. 500 W, 20 000 rpm unloaded (typical)');
+e('blade-blender', 'blender blade', 'Electrical/Home appliances/Kitchen', 'part', 'stamp', 'stainless-304', 'stamped from stainless sheet, its edges ground and bent up and down', '', { alt: 'grind' });
+e('blade-assembly', 'blade assembly', 'Electrical/Home appliances/Kitchen', 'assembly', 'assemble', `blade-blender shaft-steel ${F('bearing 6000')}*2 nbr`, 'the blade on a shaft turning in two bearings, sealed by a lip seal');
+e('jar-blender', 'blender jar', 'Electrical/Home appliances/Kitchen', 'part', 'mould', 'pc', 'a clear moulded jar with a spout and lid');
+e('drive-coupling', 'drive coupling', 'Mechanical/Shafts and hubs/Couplings', 'part', 'mould', 'pom', 'a toothed cup that joins the motor to the blades when the jar sits on it', '', { alt: 'print', size: [30, 30, 12] });
+e('base-blender', 'blender base', 'Electrical/Home appliances/Kitchen', 'part', 'mould', 'abs', 'the moulded housing the motor stands in', '', { alt: 'print', size: [180, 180, 120] });
+e('blender', 'blender', 'Electrical/Home appliances/Kitchen', 'product', 'assemble', 'motor-universal blade-assembly jar-blender drive-coupling base-blender pushbutton*3 power-cord', 'a universal motor under the jar spins the blades through a coupling; buttons choose its speed');
+e('fan-vacuum', 'vacuum impeller', 'Electrical/Home appliances/Cleaning', 'part', 'stamp', 'al-6061', 'aluminium blades stamped and riveted between two discs: it spins at 30 000 rpm and more', '', { alt: 'cast' });
+e('filter-hepa', 'HEPA filter', 'Electrical/Home appliances/Cleaning', 'part', 'assemble', 'fibreglass pp', 'pleated glass-fibre paper in a moulded frame: it holds 99.97 % of particles of 0.3 µm (the HEPA standard)');
+e('dust-bin', 'dust bin', 'Electrical/Home appliances/Cleaning', 'part', 'mould', 'pp', 'a clear moulded bin the air whirls round in', '', { alt: 'print' });
+e('hose', 'vacuum hose', 'Electrical/Home appliances/Cleaning', 'assembly', 'extrude', 'pvc steel-spring', 'PVC extruded round a spring-steel coil');
+e('brush-roll', 'brush roll', 'Electrical/Home appliances/Cleaning', 'assembly', 'assemble', 'nylon pp gt2-belt', 'nylon bristles set in a spinning roll, driven by a belt');
+e('vacuum-cleaner', 'vacuum cleaner', 'Electrical/Home appliances/Cleaning', 'product', 'assemble', 'motor-universal fan-vacuum filter-hepa dust-bin hose brush-roll caster*2 pushbutton power-cord', 'a universal motor spins an impeller that pulls air through the hose, the bin and the filter; the brush roll lifts the dirt');
+e('heater-coil', 'heating coil', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'nichrome mica', 'nichrome wire coiled round a mica cross');
+e('dryer-housing', 'hair dryer housing', 'Electrical/Home appliances/Personal', 'part', 'mould', 'pc', 'two moulded halves with a handle and a nozzle', '', { alt: 'print' });
+e('hair-dryer', 'hair dryer', 'Electrical/Home appliances/Personal', 'product', 'assemble', 'heater-coil fan-impeller motor-130 diode-1n4007*4 thermostat-bimetal fuse-glass dryer-housing pushbutton*2 power-cord', 'a small DC motor, fed through four diodes, blows air over a nichrome coil; a bimetal cuts the heat if it runs too hot', 'about 1800 W (typical)');
+// sound
+e('driver-headphone', 'headphone driver', 'Electrical/Audio/Speakers', 'assembly', 'assemble', 'magnet-ndfeb steel-low winding pet', 'a voice coil in the gap of a small neodymium magnet moves a thin PET diaphragm', '40 mm, 32 Ω (typical)');
+e('headband', 'headband', 'Electrical/Audio/Headphones', 'assembly', 'assemble', 'steel-spring pu pp', 'a spring-steel band in a padded cover, its sliders to fit');
+e('ear-cushion', 'ear cushion', 'Electrical/Audio/Headphones', 'part', 'mould', 'pu', 'memory foam in a soft cover');
+e('ear-cup', 'ear cup', 'Electrical/Audio/Headphones', 'part', 'mould', 'abs', 'the moulded shell a driver sits in', '', { alt: 'print', size: [80, 70, 30] });
+e('audio-cable', 'audio cable', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'copper pvc brass', 'three thin conductors in a jacket, a 3.5 mm plug on its end');
+e('headphones', 'headphones', 'Electrical/Audio/Headphones', 'product', 'assemble', 'driver-headphone*2 headband ear-cushion*2 ear-cup*2 audio-cable', 'a driver in each cup over each ear, on a sprung band');
+e('alnico-rod', 'alnico pole piece', 'Electrical/Audio/Music', 'part', 'cast', 'alnico', 'a cast rod of alnico, ground and magnetised', '5 mm × 17 mm', { size: [5, 5, 17] });
+e('guitar-pickup', 'guitar pickup', 'Electrical/Audio/Music', 'product', 'assemble', 'alnico-rod*6 bobbin winding lead-wire*2', 'six magnets under the strings in a bobbin wound with about 8 000 turns of fine wire: a moving steel string changes the field and makes a voltage in the coil', 'single coil, about 6 kΩ (typical)');
+// light and heat
+e('laser-diode', 'laser diode', 'Electrical/Optics/Lasers', 'product', 'fab', 'gan copper gold', 'a GaN laser die on a copper block in a TO-can', '405 nm, about 100 mW (typical)');
+e('lens-collimator', 'collimating lens', 'Electrical/Optics/Lenses', 'part', 'grind', 'glass', 'a ground and polished glass lens that makes the diode\'s cone of light a beam');
+e('housing-laser', 'laser housing', 'Electrical/Optics/Lasers', 'part', 'machine', 'brass', 'a turned brass barrel that holds the diode and focuses the lens on a thread', '', { alt: 'cast', size: [12, 12, 30] });
+e('laser-driver', 'laser driver', 'Electrical/Optics/Lasers', 'product', 'solder', 'pcb-bare ic-package smd-passives', 'a constant-current supply: a laser diode fed by voltage alone destroys itself');
+e('laser-module', 'laser module', 'Electrical/Optics/Lasers', 'product', 'assemble', 'laser-diode lens-collimator housing-laser laser-driver', 'a laser diode, its lens and its constant-current driver in a brass barrel');
+e('te-pellet', 'thermoelectric pellet', 'Electrical/Thermal/Peltier', 'part', 'sinter', 'bi2te3', 'a small block of n- or p-doped bismuth telluride');
+e('copper-tab', 'copper tab', 'Electrical/Thermal/Peltier', 'part', 'stamp', 'copper', 'a little copper strap that joins two pellets in series');
+e('peltier-module', 'Peltier module', 'Electrical/Thermal/Peltier', 'product', 'solder', 'te-pellet*254 copper-tab*254 alumina*2 solder silicone wire-hookup*2', '127 pairs of n and p pellets in series between two ceramic plates: a current carries heat from one plate to the other', 'TEC1-12706: 12 V, about 6 A, up to about 66 K across it (typical of its makers\' sheets)');
+e('heat-pipe', 'heat pipe', 'Electrical/Thermal/Coolers', 'part', 'draw', 'copper water', 'a sealed copper tube lined with a sintered wick, a little water in it under vacuum: it boils at the hot end and condenses at the cold, carrying heat far better than solid copper');
+e('fin-stack', 'fin stack', 'Electrical/Thermal/Coolers', 'part', 'stamp', 'al-6063', 'thin aluminium fins stamped and stacked on the heat pipes');
+e('base-cooler', 'cooler base', 'Electrical/Thermal/Coolers', 'part', 'machine', 'copper', 'a copper plate machined flat, the heat pipes soldered into it', '', { alt: 'cast' });
+e('cpu-cooler', 'CPU cooler', 'Electrical/Thermal/Coolers', 'product', 'assemble', `heat-pipe*4 fin-stack base-cooler ${F('fan 120x25 12V')} steel-spring grease`, 'heat pipes carry the chip\'s heat from the base up into the fins, and the fan blows it away');
+// fluid
+e('cam-pump', 'pump cam', 'Mechanical/Fluid power/Pump parts', 'part', 'machine', 'steel-low', 'an eccentric on the motor shaft that rocks the diaphragm', '', { alt: 'print', size: [20, 20, 8] });
+e('diaphragm', 'diaphragm', 'Mechanical/Fluid power/Pump parts', 'part', 'mould', 'nbr', 'a moulded rubber disc flexed by the cam');
+e('valve-flap', 'flap valve', 'Mechanical/Fluid power/Pump parts', 'part', 'mould', 'silicone', 'a soft flap that lets water one way only');
+e('pump-diaphragm', 'diaphragm pump, 12 V', 'Mechanical/Fluid power/Pumps', 'product', 'assemble', `${F('dcmotor 385 12V')} cam-pump diaphragm valve-flap*2 pump-housing screw-m3*4`, 'a motor rocks a diaphragm with a cam: each stroke draws water in past one flap valve and pushes it out past the other; it primes itself and can run dry', 'about 2 L/min (typical)');
+e('enclosure-printed', 'printed enclosure', 'Electrical/Enclosures/Boxes', 'part', 'print', 'pla', 'a box printed to fit what goes in it, with a lid', '', { size: [120, 80, 40] });
+e('irrigation-controller', 'irrigation controller', 'Mechanical/Fluid power/Irrigation', 'product', 'assemble', `valve-solenoid*4 relay*4 esp32-module buck-module enclosure-printed screw-terminal*8 ${F('pipe 3/4 0.5m pvc')}*4`, 'a Wi-Fi board switches four relays, each opening a solenoid valve on its own line, on a schedule or when the soil or the forecast says');
+// robots
+e('finger-printed', 'gripper finger', 'Mechanical/Robotics/Grippers', 'part', 'print', 'pla', 'a printed finger with a geared root', '', { size: [60, 15, 10] });
+e('gripper-base', 'gripper base', 'Mechanical/Robotics/Grippers', 'part', 'print', 'pla', 'a printed plate the servo and fingers mount on', '', { size: [70, 40, 6] });
+e('gripper', 'robot gripper', 'Mechanical/Robotics/Grippers', 'product', 'assemble', `mg996r finger-printed*2 gripper-base ${F('gear m1 z20 b6')}*2 screw-m3*6`, 'a servo turns one geared finger, which turns the other the opposite way: the two close together');
+e('link-printed', 'arm link', 'Mechanical/Robotics/Arms', 'part', 'print', 'pla', 'a printed link between two servos', '', { size: [120, 40, 30] });
+e('servo-driver', 'servo driver board', 'Electrical/Boards and controllers/Motor drivers', 'product', 'solder', `pcb-bare ic-package smd-passives ${F('header 3x16')}`, 'a 16-channel PWM chip that holds each servo where it is told, over I²C');
+e('robot-arm-desk', 'desktop robot arm', 'Mechanical/Robotics/Arms', 'product', 'assemble', `mg996r*4 ${F('servo micro')}*2 link-printed*4 gripper-base ${F('bearing 6805')} servo-driver esp32-devkit buck-module screw-m3*24`, 'six servos: a base that turns on a thin bearing, shoulder, elbow and wrist, and a small gripper; a board holds each joint where the controller says');
+e('ir-sensor', 'reflective IR sensor', 'Electrical/Sensors/Optical', 'product', 'solder', 'pcb-bare led-5mm ic-package smd-passives', 'an infrared LED and a phototransistor side by side: a dark line under it reflects less');
+e('chassis-printed', 'robot chassis', 'Mechanical/Robotics/Mobile robots', 'part', 'print', 'pla', 'a printed plate with mounts for motors, wheels and boards', '', { size: [150, 120, 4] });
+e('line-follower', 'line-following robot', 'Mechanical/Robotics/Mobile robots', 'product', 'assemble', 'chassis-printed n20-motor*2 wheel-robot*2 caster ir-sensor*5 drv8833-board esp32-devkit pack-2s screw-m3*12', 'five IR sensors under its nose see the line; it slows the wheel on the side the line drifts to');
+// power and display
+e('boost-module', 'boost converter module', 'Electrical/Power/DC-DC converters', 'product', 'solder', 'pcb-bare ic-package inductor-power capacitor-ceramic*2 diode-1n4007 smd-passives', 'a switching chip that steps a cell\'s 3.7 V up to 5 V');
+e('power-bank', 'power bank', 'Electrical/Power/Power banks', 'product', 'assemble', `${F('pack 1S2P')} boost-module usb-c-socket led-5mm*4 enclosure-printed`, 'two cells side by side behind a protection board; a boost converter gives 5 V at the USB socket; four LEDs show how full it is', 'about 6 Ah at 3.6 V (typical)');
+e('pcb-matrix', 'LED matrix board', 'Electrical/Displays/LED matrices', 'part', 'etch', 'fr4 copper solder-mask', 'a board etched with the data line running through every LED');
+e('led-matrix', 'LED matrix sign', 'Electrical/Displays/LED matrices', 'product', 'solder', 'ws2812b*256 pcb-matrix esp32-module buck-module capacitor-electrolytic enclosure-printed', '256 addressable LEDs in a 16 × 16 grid, each told its colour down one wire by a Wi-Fi board', '16 × 16, 5 V, up to about 15 A at full white (60 mA an LED)');
+
+// ==== the fundamentals: every material down to its elements ==========================================================
+// Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).
+for (const [sym, el] of Object.entries(ELEMENTS)) put({ id: elementId(sym), name: `${el.name} (${sym})`, path: ['Elements', el.group], kind: 'element', make: 'chemistry', of: [], says: `got from ${el.from}`, spec: `atomic weight ${el.w}` });
+for (const i of items.values()) if (i.kind === 'material') { const mk = makeup(i.id); if (mk.length) { i.makeup = mk.map(([x, pct]) => ({ id: ELEMENTS[x] ? elementId(x) : x, pct: +pct.toFixed(3) })).sort((a, b) => b.pct - a.pct); const ms = makeupSays(i.id); i.spec = i.spec && !ms.startsWith(i.spec) ? `${i.spec}; ${ms}` : ms; } }
+
 // ==== reading it ========================================================================================================
 export const INVENTORY: ReadonlyMap<string, Item> = items;
 export const itemOf = (id: string): Item | null => items.get(id) ?? null;
 /** An item from words: an adjustable family called with its sizes ("screw M4x20"), else an entry by its id or name. */
 export function resolve(words: string): Item | string | null {
   const f = callFamily(words); if (typeof f === 'string') return f;
-  if (f) { if (!items.has(f.id)) items.set(f.id, f); return f; }
+  if (f) { const had = items.get(f.id); if (!had) { put(f); return f; } return had; }
   return findItem(words);
 }
 /** An item by its id or (in part) its name. */
@@ -400,9 +543,12 @@ export function findItem(words: string): Item | null {
   return items.get(w) ?? [...items.values()].find((i) => i.name.toLowerCase() === w) ?? [...items.values()].find((i) => i.name.toLowerCase().includes(w) || i.id.includes(w.replace(/\s+/g, '-'))) ?? null;
 }
 /** The categories, as a tree of names: category → subcategory → sub-subcategory → the items filed there. */
+let catsAt = -1, cats: Map<string, Map<string, Map<string, string[]>>> = new Map();
 export function categories(): Map<string, Map<string, Map<string, string[]>>> {
+  if (catsAt === rev) return cats;
   const out = new Map<string, Map<string, Map<string, string[]>>>();
   for (const i of items.values()) { const [a, b = '', c = ''] = i.path; if (!out.has(a!)) out.set(a!, new Map()); const A = out.get(a!)!; if (!A.has(b)) A.set(b, new Map()); const B = A.get(b)!; if (!B.has(c)) B.set(c, []); B.get(c)!.push(i.id); }
+  catsAt = rev; cats = out;
   return out;
 }
 /** How an item is made here: its own way if the workshop has it, else a way it has that will do, else bought. */
@@ -413,7 +559,7 @@ export function routeOf(i: Item): { process: Process; here: boolean; bought: boo
 }
 /** Everything inside an item, depth first, each with how many go into one of it and how it is made here. */
 export interface PlanRow { id: string; name: string; depth: number; n: number; kind: Kind; route: ReturnType<typeof routeOf> }
-export function plan(id: string): PlanRow[] {
+export const plan = memo((id: string): readonly PlanRow[] => {
   const out: PlanRow[] = [];
   const walk = (x: string, depth: number, n: number, seen: Set<string>) => {
     const i = items.get(x); if (!i || seen.has(x)) return;
@@ -423,14 +569,42 @@ export function plan(id: string): PlanRow[] {
     const s2 = new Set(seen).add(x); for (const c of i.of) walk(c.id, depth + 1, n * c.n, s2);
   };
   walk(id, 0, 1, new Set());
+  return Object.freeze(out);
+});
+/** What making an item here comes to: how many things are made here, bought, taken from stock; how deep it goes. */
+export const summary = memo((id: string): { made: number; bought: number; stock: number; depth: number; processes: Process[] } => {
+  const p = plan(id); return { made: p.filter((r) => !r.route.bought && r.kind !== 'material').length, bought: p.filter((r) => r.route.bought).length, stock: p.filter((r) => r.kind === 'material').length, depth: Math.max(...p.map((r) => r.depth)), processes: [...new Set(p.filter((r) => r.route.here && r.kind !== 'material').map((r) => r.route.process))] };
+});
+/** Everything an item comes down to, inside what is bought too: the elements, each with the materials it comes in,
+ *  by mass in each. Every item's tree ends here. */
+export const fundamentals = memo((id: string): { id: string; name: string; via: { material: string; pct: number }[] }[] => {
+  const via = new Map<string, Map<string, number>>(), seen = new Set<string>();
+  const walk = (x: string, depth: number) => {
+    const i = items.get(x); if (!i || depth > 16 || seen.has(x)) return; seen.add(x);
+    if (i.kind === 'element') { if (!via.has(x)) via.set(x, new Map()); return; }
+    if (i.kind === 'material') { for (const [sym, pct] of Object.entries(elementsOf(x))) { const e = elementId(sym); if (!via.has(e)) via.set(e, new Map()); via.get(e)!.set(i.name, pct); } return; }
+    for (const c of i.of) walk(c.id, depth + 1);
+  };
+  walk(id, 0);
+  return [...via].map(([e, m]) => ({ id: e, name: items.get(e)?.name ?? e, via: [...m].map(([material, pct]) => ({ material, pct })).sort((a, b) => b.pct - a.pct) })).sort((a, b) => b.via.length - a.via.length || a.name.localeCompare(b.name));
+});
+
+/** The tree of what is in an item, every level, as lines to read. */
+/** The tree of what is in an item, every level, as lines to read: inside what is bought too (its maker's parts, said
+ *  as bought), each material's make-up under it, down to the elements. */
+export function treeLines(id: string, most = 60): string[] {
+  const out: string[] = [];
+  const pct = (x: number) => (x >= 1 ? x.toFixed(1) : x.toFixed(2));
+  const walk = (x: string, depth: number, n: number, seen: Set<string>) => {
+    const i = items.get(x); if (!i || out.length >= most || seen.has(x)) return;
+    const r = routeOf(i);
+    out.push(`${'  '.repeat(depth)}${n > 1 ? `${n} × ` : ''}${i.name} — ${i.kind === 'element' ? 'element' : i.kind === 'material' ? 'stock' : r.bought ? 'bought' : r.process}`);
+    if (i.kind === 'material' && i.makeup) { out.push(`${'  '.repeat(depth + 1)}= ${i.makeup.slice(0, 8).map((m) => `${(items.get(m.id)?.name ?? m.id).replace(/ \(.*\)$/, '')} ${pct(m.pct)} %`).join(' · ')}`); for (const m of i.makeup) if (items.get(m.id)?.kind === 'material') walk(m.id, depth + 1, 1, new Set(seen).add(x)); return; }
+    for (const c of i.of) walk(c.id, depth + 1, c.n, new Set(seen).add(x));
+  };
+  walk(id, 0, 1, new Set());
   return out;
 }
-/** What making an item here comes to: how many things are made here, bought, taken from stock; how deep it goes. */
-export function summary(id: string): { made: number; bought: number; stock: number; depth: number; processes: Process[] } {
-  const p = plan(id); return { made: p.filter((r) => !r.route.bought && r.kind !== 'material').length, bought: p.filter((r) => r.route.bought).length, stock: p.filter((r) => r.kind === 'material').length, depth: Math.max(...p.map((r) => r.depth)), processes: [...new Set(p.filter((r) => r.route.here && r.kind !== 'material').map((r) => r.route.process))] };
-}
-/** The tree of what is in an item, every level, as lines to read. */
-export function treeLines(id: string, most = 60): string[] { return plan(id).slice(0, most).map((r) => `${'  '.repeat(r.depth)}${r.n > 1 ? `${r.n} × ` : ''}${r.name} — ${r.route.bought ? 'bought' : r.kind === 'material' ? 'stock' : r.route.process}`); }
 /** A part's shape to print or cast it here: a hollow box of its size for a housing or case, a disc for a gear or wheel. */
 export function sectionsOf(i: Item): Section[] {
   const [w, d, h] = i.size ?? [30, 30, 10];
@@ -465,12 +639,12 @@ export function feed(text: string): { added: Item[]; refused: string[] } {
     fresh.set(id, { id, name: r.name || id, path: (r.path || 'Yours/Unsorted').split('/').map((x) => x.trim()).filter(Boolean), kind, make, of, says: r.says ?? '', ...(r.spec ? { spec: r.spec } : {}), ...(r.alt && r.alt in PROCESSES ? { alt: r.alt as Process } : {}), yours: true });
   }
   for (const it of fresh.values()) {
-    const unknown = it.of.filter((c) => { if (items.has(c.id) || fresh.has(c.id)) return false; const f = callFamily(c.id.replace(/-/g, ' ')); if (f && typeof f === 'object') { items.set(f.id, f); c.id = f.id; return false; } return true; });
+    const unknown = it.of.filter((c) => { if (items.has(c.id) || fresh.has(c.id)) return false; const f = callFamily(c.id.replace(/-/g, ' ')); if (f && typeof f === 'object') { if (!items.has(f.id)) put(f); c.id = f.id; return false; } return true; });
     if (unknown.length) { refused.push(`${it.id}: nothing known as ${unknown.map((c) => c.id).join(', ')}: add them too, or use what is in the inventory`); continue; }
     // nothing inside itself
     const inside = (x: string, seen: Set<string>): boolean => { const i = fresh.get(x) ?? items.get(x); if (!i) return false; for (const c of i.of) { if (c.id === it.id || seen.has(c.id)) return true; if (inside(c.id, new Set(seen).add(c.id))) return true; } return false; };
     if (inside(it.id, new Set([it.id]))) { refused.push(`${it.id}: it would be inside itself`); continue; }
-    items.set(it.id, it); added.push(it);
+    put(it); added.push(it);
   }
   return { added, refused };
 }
@@ -502,13 +676,19 @@ export function boardOfInventory(at = Date.now()): Board {
 /** What is inside an item, every level down to its materials, as a board. */
 export function boardOfTree(id: string, at = Date.now()): Board | null {
   const top = items.get(id); if (!top) return null;
-  const b: Board = { title: `Inside: ${top.name}`, kind: 'categories', about: `${top.says}. Every part inside it, and what is inside that, down to its materials; each marked by how it is made here (made, bought, or from stock).`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
+  const b: Board = { title: `Inside: ${top.name}`, kind: 'categories', about: `${top.says}. Every part inside it, and what is inside that, down to its materials and their elements (each element one node, where every branch meets); each marked by how it is made here (made, bought, or from stock).`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
   let e2 = 0;
   const walk = (x: string, under: string | null, n: number, path: string) => {
     const i = items.get(x); if (!i) return; const r = routeOf(i), nid = `${path}/${x}`.replace(/[^a-z0-9/.-]/gi, '-');
     b.nodes[nid] = { label: `${n > 1 ? `${n} × ` : ''}${i.name}`, note: `${i.says}${i.spec ? ` · ${i.spec}` : ''} · ${i.kind === 'material' ? 'from stock' : r.bought ? r.why : `made here: ${r.why}`}` };
     if (under) b.edges[`e${e2++}`] = { from: under, to: nid, rel: 'contains' };
     if (path.split('/').length < 8) for (const c of i.of) walk(c.id, nid, c.n, `${path}/${x}`);
+    // a material: what it is made of; an element is one node, so every branch that comes to it meets there
+    if (i.kind === 'material' && i.makeup) for (const m of i.makeup) {
+      const el = items.get(m.id); if (!el) continue;
+      if (el.kind === 'element') { const fid = `fund/${m.id}`; if (!b.nodes[fid]) b.nodes[fid] = { label: `⚛ ${el.name}`, note: el.says }; b.edges[`e${e2++}`] = { from: nid, to: fid, rel: `${m.pct >= 1 ? m.pct.toFixed(1) : m.pct.toFixed(2)} % of it` }; }
+      else if (path.split('/').length < 9) walk(m.id, nid, 1, `${path}/${x}`);
+    }
   };
   walk(id, null, 1, '');
   return b;
