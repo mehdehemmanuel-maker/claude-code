@@ -121,9 +121,16 @@ export function makeKind(k: KindDef, p: P): Item {
 }
 /** Every size a kind is sold in: the catalogue's lines for it. */
 export function linesOf(k: KindDef): string[] {
-  const out: string[] = [];
-  const walk = (i: number, p: P) => { if (i === k.axes.length) { out.push(wordsOf(k, p)); return; } const a = k.axes[i]!; for (const v of vals(a, p)) walk(i + 1, { ...p, [a.key]: v }); };
-  walk(0, {});
+  // the words are carried down the walk, each axis's token written once where it is chosen, and the sizes set in place
+  // (an axis read from those before it sees only those): the lines wordsOf writes, in the same order, at a third of the cost
+  const out: string[] = [], p: P = {};
+  const walk = (i: number, pre: string) => {
+    if (i === k.axes.length) { out.push(pre); return; }
+    const a = k.axes[i]!;
+    for (const v of vals(a, p)) { p[a.key] = v; walk(i + 1, `${pre} ${tokenOf(a, v)}`); }
+    delete p[a.key];
+  };
+  walk(0, k.id);
   return out;
 }
 /** A kind as a family: called by its words, it makes any of its sizes. Its examples (its first, middle and last sizes)
