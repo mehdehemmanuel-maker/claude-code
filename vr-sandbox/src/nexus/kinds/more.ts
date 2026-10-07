@@ -158,7 +158,7 @@ export const MORE: KindDef[] = [
     box: (p) => { const d = Number(String(p.size).split('x')[0]); return [d, d, Math.min(n(p, 'L') * 1000, 400)]; }, g: (p) => { const [D, t] = String(p.size).split('x').map(Number) as [number, number]; return gOf(ring(D, D - 2 * t, n(p, 'L') * 1000), 0.94); },
   },
   {
-    id: 'compressionfitting', name: 'compression fitting for copper', path: 'Fluid/Fittings/Compression fittings', says: 'a nut squeezing a brass ring onto copper tube to seal it, no solder', std: 'EN 1254-2, for 10–28 mm tube',
+    id: 'compressionfitting', look: 'tube', name: 'compression fitting for copper', path: 'Fluid/Fittings/Compression fittings', says: 'a nut squeezing a brass ring onto copper tube to seal it, no solder', std: 'EN 1254-2, for 10–28 mm tube',
     axes: [bare('type', 'type', ['straight', 'elbow', 'tee', 'reducer', 'endcap']), ax('d', 'for tube', 'mm', [10, 12, 15, 22, 28])],
     title: (p) => `${p.d} mm compression ${p.type}`, of: (p) => `brass*${({ straight: 3, elbow: 3, tee: 4, reducer: 3, endcap: 2 } as Record<string, number>)[s(p, 'type')]}`, make: 'machine', alt: 'cast', how: 'a forged brass body, its nuts and its olives (soft brass rings)', spec: (p) => `for ${p.d} mm copper tube (EN 1254-2); the olive grips when its nut is turned`,
     box: (p) => { const k = n(p, 'd') * 1.8; return p.type === 'tee' ? [k * 2.2, k * 1.6, k] : p.type === 'elbow' ? [k * 1.5, k * 1.5, k] : [k, k, k * 2.2]; }, g: (p) => n(p, 'd') ** 2 * 0.25,
