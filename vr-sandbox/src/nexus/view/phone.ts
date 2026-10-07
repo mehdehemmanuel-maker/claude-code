@@ -391,7 +391,8 @@ export class Phone {
     } else if (this.extras.some((x) => x.id === v.app)) {
       const x = this.extras.find((a) => a.id === v.app)!;
       x.draw({ g, W: CW, H: CH, bottom, hit, button, text, wrapped }, v);
-      const n = x.pages?.(v.sub) ?? 1; if (n > 1) { button(CW - 250, CH - 80, 90, 64, '▲', 'up', undefined, x.colour); button(CW - 150, CH - 80, 90, 64, '▼', 'down', undefined, x.colour); text(`${v.page + 1}/${n}`, CW - 330, CH - 38, 20, '#e6f7ff'); }
+      const n = x.pages?.(v.sub) ?? 1; if (n > 1) { // clear of the home button: the page arrows at the right edge, the page over them
+        button(CW - 198, CH - 80, 86, 64, '▲', 'up', undefined, x.colour); button(CW - 104, CH - 80, 86, 64, '▼', 'down', undefined, x.colour); text(`page ${v.page + 1} of ${n}`, CW - 198, CH - 88, 15, '#b2ebf2', 600, 180); }
     } else {
       // More and Settings: lists of what the forge does, a page at a time
       const all = v.app === 'settings' ? this.host.settings() : this.host.commands(), per = 9, start = v.page * per;

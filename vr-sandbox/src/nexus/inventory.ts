@@ -526,7 +526,7 @@ e('led-matrix', 'LED matrix sign', 'Electrical/Displays/LED matrices', 'product'
 // ==== the fundamentals: every material down to its elements ==========================================================
 // Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).
 for (const [sym, el] of Object.entries(ELEMENTS)) put({ id: elementId(sym), name: `${el.name} (${sym})`, path: ['Elements', el.group], kind: 'element', make: 'chemistry', of: [], says: `got from ${el.from}`, spec: `atomic weight ${el.w}` });
-for (const i of items.values()) if (i.kind === 'material') { const mk = makeup(i.id); if (mk.length) { i.makeup = mk.map(([x, pct]) => ({ id: ELEMENTS[x] ? elementId(x) : x, pct: +pct.toFixed(3) })).sort((a, b) => b.pct - a.pct); i.spec = i.spec ? `${i.spec}; ${makeupSays(i.id)}` : makeupSays(i.id); } }
+for (const i of items.values()) if (i.kind === 'material') { const mk = makeup(i.id); if (mk.length) { i.makeup = mk.map(([x, pct]) => ({ id: ELEMENTS[x] ? elementId(x) : x, pct: +pct.toFixed(3) })).sort((a, b) => b.pct - a.pct); const ms = makeupSays(i.id); i.spec = i.spec && !ms.startsWith(i.spec) ? `${i.spec}; ${ms}` : ms; } }
 
 // ==== reading it ========================================================================================================
 export const INVENTORY: ReadonlyMap<string, Item> = items;

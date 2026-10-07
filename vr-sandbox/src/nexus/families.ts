@@ -185,7 +185,8 @@ const rail: Family = {
 };
 // ---- round stock: shafts, rods, tubes, threaded rod -----------------------------------------------------------------
 const MAT: Record<string, [string, number, string]> = { steel: ['steel-low', RHO.steel, 'steel'], stainless: ['stainless-304', RHO.stainless, 'stainless'], aluminium: ['al-6061', RHO.aluminium, 'aluminium'], brass: ['brass', RHO.brass, 'brass'], copper: ['copper', RHO.copper, 'copper'] };
-const matOf = (w: string) => /stainless|304/i.test(w) ? 'stainless' : /alumin/i.test(w) ? 'aluminium' : /brass/i.test(w) ? 'brass' : /copper/i.test(w) ? 'copper' : 'steel';
+// "304" as a word (the grade), not inside a number: a 1304 mm length is not stainless
+const matOf = (w: string) => /stainless|(?<![\d.])304(?![\d.x×])/i.test(w) ? 'stainless' : /alumin/i.test(w) ? 'aluminium' : /brass/i.test(w) ? 'brass' : /copper/i.test(w) ? 'copper' : 'steel';
 const rod: Family = {
   id: 'rod', name: 'round rod or shaft', path: ['Hardware', 'Structural', 'Rod'], says: 'any diameter, length and metal', params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 1, max: 100, default: 8 }, { key: 'length', says: 'length', unit: 'mm', min: 5, max: 3000, default: 300 }, { key: 'matter', says: 'metal', unit: '', values: Object.keys(MAT), default: 'steel' }],
   examples: ['rod 8mm 300 steel', 'rod 5mm 100 stainless', 'rod 20mm 500 aluminium'],

@@ -9,6 +9,7 @@ import { INVENTORY, categories, fundamentals, resolve, routeOf, summary, type It
 import { behave } from '../behave';
 import { flatBom, massOf, typeOf } from '../outputs';
 import { catalogue, SERIES } from '../catalogue';
+import { numberOf, partAt, spaceSize } from '../partspace';
 import { callFamily } from '../families';
 import { FAMILIES } from '../families';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
@@ -208,18 +209,20 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         text(i.name, 40, 118, 32, C, 800, W - 80); text(i.path.join(' › '), 40, 146, 15, '#b2ebf2', 500, W - 80);
         y = 172 + wrapped(i.says, 40, 172, 17, W - 80, '#ffffff', 3);
         if (i.spec) y += wrapped(i.spec, 40, y + 4, 15, W - 80, '#b2ebf2', 3) + 4;
+        if (i.sized) { const no = numberOf(i.sized.family, i.sized.params); if (no >= 0) { text(`part no. ${no.toLocaleString('en-GB')} of ${spaceSize().total.toLocaleString('en-GB')}`, 40, y + 18, 13, '#7fa9b5', 600, W - 80); y += 20; } }
         text(i.kind === 'material' ? 'a material: from stock' : r.bought ? `bought: ${r.why.replace(/^bought: /, '')}` : `made here: ${r.why}`, 40, y + 22, 15, r.bought ? '#ffb74d' : '#69f0ae', 600, W - 80); y += 30;
         if (sm) { text(`inside: ${sm.made} made here · ${sm.bought} bought · ${sm.stock} from stock · ${sm.depth} levels`, 40, y + 18, 15, '#e0f7fa', 500, W - 80); y += 26; }
         if (i.kind !== 'material' && i.kind !== 'element') { const bw = (W - 80) / 3; button(30, y + 10, bw, 58, '▶ Make it', 'make', i.id, C, 'rgba(38,198,218,0.3)'); button(40 + bw, y + 10, bw, 58, '⚡ Pipeline', 'board', i.id, C); button(50 + 2 * bw, y + 10, bw, 58, '🌳 Tree', 'tree', i.id, C); y += 70;
-          button(30, y + 4, bw, 52, '⚙ What it does', 'behave', i.id, C); button(40 + bw, y + 4, bw, 52, '📋 Parts list', 'bom', i.id, C); button(50 + 2 * bw, y + 4, bw, 52, '⚛ Elements', 'go', `fund:${i.id}`, C); y += 64; }
+          button(30, y + 4, bw, 52, '⚙ Does', 'behave', i.id, C); button(40 + bw, y + 4, bw, 52, '📋 Parts', 'bom', i.id, C); button(50 + 2 * bw, y + 4, bw, 52, '⚛ Elements', 'go', `fund:${i.id}`, C); y += 64; }
         text(i.kind === 'material' ? 'What it is made of (press to go in)' : i.kind === 'element' ? 'The materials it is in' : i.of.length ? 'What is in it (press to go in)' : '', 40, y + 18, 16, C, 700); y += 26;
       } else {
         text(sub === '' ? 'Inventory' : sub === 'fam' ? 'Adjustable families' : sub.startsWith('famx:') ? `⚙ ${FAMILIES.find((f) => f.id === sub.slice(5))?.name ?? ''}` : sub.startsWith('fund:') ? `⚛ ${INVENTORY.get(sub.slice(5))?.name ?? ''}` : sub.slice(4), 40, 118, sub.startsWith('fund:') ? 28 : 38, C, 800, W - 80);
         if (sub.startsWith('fund:')) { text(`comes down to ${fundamentals(sub.slice(5)).length} elements, the same ones everything does`, 40, 146, 15, '#b2ebf2', 500, W - 80); y = 160; }
-        if (sub === '') { text(`${INVENTORY.size} entries · ${FAMILIES.length} families · ${catalogue().length.toLocaleString('en-GB')} catalogue sizes`, 40, 146, 16, '#b2ebf2', 500); const bw = (W - 80) / 3; button(30, 160, bw, 56, '⚙ Families', 'go', 'fam', C); button(40 + bw, 160, bw, 56, '⌨ Find / make', 'find', undefined, C); button(50 + 2 * bw, 160, bw, 56, '＋ Feed', 'feed', undefined, C); button(30, 224, W - 60, 52, '🗂 The inventory as a board', 'open', undefined, C); y = 284; }
+        if (sub === '') { wrapped(`${INVENTORY.size} entries · ${FAMILIES.length} families · ${catalogue().length.toLocaleString('en-GB')} catalogue sizes · ${spaceSize().total.toLocaleString('en-GB')} parts that can be made, each numbered`, 40, 140, 15, W - 80, '#b2ebf2', 2); const bw = (W - 80) / 3; button(30, 176, bw, 56, '⚙ Families', 'go', 'fam', C); button(40 + bw, 176, bw, 56, '⌨ Find', 'find', undefined, C); button(50 + 2 * bw, 176, bw, 56, '＋ Feed', 'feed', undefined, C); button(30, 240, bw, 52, '🗂 Board', 'open', undefined, C); button(40 + bw, 240, bw, 52, '🎲 Any part', 'random', undefined, C, 'rgba(38,198,218,0.3)'); button(50 + 2 * bw, 240, bw, 52, '# Number', 'number', undefined, C); y = 300; }
         else if (sub.startsWith('famx:')) { const f = FAMILIES.find((x) => x.id === sub.slice(5)); if (f) { y = 150 + wrapped(SERIES[f.id] ? `${f.says}. The catalogue: ${SERIES[f.id]!.says} (${catalogue(f.id).length} sizes).` : f.says, 40, 150, 16, W - 80, '#ffffff', 4); f.params.forEach((q) => { text(`${q.says}: ${q.values ? q.values.join(', ') : `${q.min}–${q.max} ${q.unit}`}`, 40, y + 18, 14, '#b2ebf2', 500, W - 80); y += 22; }); y += 8; } }
       }
-      const rows = list(sub).slice(v.page * per, v.page * per + per), rh = Math.min(68, (bottom - y - 60) / per);
+      // the rows leave room at the foot for what was said
+      const sd0 = said || h.said(), rows = list(sub).slice(v.page * per, v.page * per + per), rh = Math.min(68, (bottom - y - (sd0 ? 110 : 60)) / per - 6);
       rows.forEach((r, j) => { const ry = y + j * (rh + 6); g.fillStyle = 'rgba(38,198,218,0.10)'; g.beginPath(); g.roundRect(30, ry, W - 60, rh, 12); g.fill(); text(r.label, 46, ry + rh * 0.45, 17, '#ffffff', 600, W - 92); text(r.note, 46, ry + rh * 0.8, 13, '#b2ebf2', 400, W - 92); hit(30, ry, W - 30, ry + rh, r.act, r.arg); });
       const sd = said || h.said(); if (sd) wrapped(sd, 40, bottom - 40, 14, W - 80, '#ffd740', 2);
     },
@@ -229,6 +232,8 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         case 'make': { const i = INVENTORY.get(String(arg)); if (i) { h.make(i.id); said = `Making ${i.name} in the workshop, everything in it first.`; } return true; }
         case 'board': said = h.board(String(arg)); return true;
         case 'tree': said = h.tree(String(arg)); return true;
+        case 'random': { const n = Math.floor(Math.random() * spaceSize().total), p = partAt(n)!, x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } else said = String(x); return true; }
+        case 'number': nav.write(`a part number, 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}`, (t) => { const n = Number(t.replace(/[^\d]/g, '')), p = partAt(n); if (!p) { said = `No part ${t}: 0 to ${(spaceSize().total - 1).toLocaleString('en-GB')}.`; nav.redraw(); return; } const x = resolve(p.words); if (x && typeof x === 'object') { said = `Part ${n.toLocaleString('en-GB')}: ${p.words}`; nav.go(`item:${(x as Item).id}`); } nav.redraw(); }); return true;
         case 'behave': { const i = INVENTORY.get(String(arg)); if (i) { const r = behave(i, '', FAMILIES, callFamily); said = typeof r === 'string' ? r : `${r.lines.join(' ')} [${r.law}]`; } return true; }
         case 'bom': { const i = INVENTORY.get(String(arg)); if (i) { const b = flatBom(i.id), m = massOf(i.id); said = `${typeOf(i)}: to make one, buy ${b.buy.filter((r) => r.how === 'bought').length} kinds of part and take ${b.buy.filter((r) => r.how === 'stock').length} materials from stock; make ${b.made.length} kinds here.${m.g ? ` About ${m.g >= 1000 ? `${(m.g / 1000).toFixed(2)} kg` : `${m.g.toFixed(0)} g`} where the masses are known.` : ''} Most of: ${b.buy.slice(0, 4).map((r) => `${r.n} × ${r.name}`).join(', ')}.`; } return true; }
         case 'open': said = h.open(); return true;
