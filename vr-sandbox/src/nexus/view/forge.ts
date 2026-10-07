@@ -62,10 +62,14 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { inventoryApp, robotsApp, warehouseApp, workshopApp, type MiniPart, type StoredBuild } from './apps';
+import { dataApp, inventoryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../weather';
 import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
 import { CellView, deviceMesh } from './cell-view';
 import { Devices } from '../devices';
+import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type Feeling } from '../emotions';
+import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../practice';
+import { TEST_ASKS } from '../test-asks';
 import { INVENTORY, boardOfInventory, boardOfTree, feed, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
 import { FAMILIES } from '../families';
 import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
@@ -497,7 +501,7 @@ function tick(): void {
   const arm: 0 | 1 = target && robot.root.worldToLocal(tmp.copy(target)).x > 0 ? 1 : 0;
   const near = target && robot.root.position.distanceTo(tmp.set(target.x, 0, target.z)) < 1.4;
   robot.reach(arm, near ? target : null); robot.reach(arm === 0 ? 1 : 0, carry && near ? target : null);
-  robot.look(target ?? eye);
+  robot.look(target ?? eye); robot.move(dt); stepMind(dt); sample(performance.now());
   if (target && near) { robot.arms[arm].grip.getWorldPosition(world); beam.geometry.setAttribute('position', new THREE.Float32BufferAttribute([world.x, world.y, world.z, target.x, target.y, target.z], 3)); (beam.material as THREE.LineBasicMaterial).color.setHex(carry ? 0xffb74d : b && b.flaws.length && !asked ? 0xff8a80 : 0x80deea); beam.visible = true; } else beam.visible = false;
   const talking = speaking || ('speechSynthesis' in window && speechSynthesis.speaking);
   robot.speaking(talking ? Math.abs(Math.sin(t * 13)) * Math.abs(Math.sin(t * 5.3)) : b && u < 0.6 && current < beats.length - 1 ? 0.5 * Math.abs(Math.sin(t * 11)) : 0);
@@ -1335,7 +1339,7 @@ const SETTINGS: [() => string, () => void][] = [
   [() => `Dock: ${dockOn ? 'shown' : 'hidden, the phone has it all'}`, () => { dockOn = !dockOn; }],
   [() => `Turning: ${smoothTurn ? 'smooth' : `${Math.round((turnStep * 180) / Math.PI)}° steps`}`, () => { if (smoothTurn) { smoothTurn = false; turnStep = Math.PI / 6; } else if (turnStep < Math.PI / 4 - 1e-6) turnStep = Math.PI / 4; else smoothTurn = true; }],
   [() => `Reports: ${reportsMode}`, () => cycleReports()],
-  [() => `Weather: ${hud.weather ? 'on' : 'find'}`, () => { void hud.locate().then((w) => line('system', w)); }],
+  [() => `Weather: ${hud.weather ? 'on' : 'find'}`, () => { void weatherHere().then((w) => line('system', w)); }],
   [() => 'Recentre me', () => { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); }],
 ];
 function drawSettings(): void {
@@ -1506,7 +1510,7 @@ button('X-ray', (b2) => { xray = !xray; b2.style.borderColor = xray ? '#ffd740' 
 button('Isolate', (b2) => { toggleIsolate(); b2.style.borderColor = isolated ? '#ffd740' : '#2e7d8c'; }, seeRow);
 button('Reports: dots', (b2) => { cycleReports(); b2.textContent = `Reports: ${reportsMode}`; }, seeRow);
 button('Section', (b2) => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; b2.textContent = section === 'off' ? 'Section' : `Section: ${section}`; b2.style.borderColor = section === 'off' ? '#2e7d8c' : '#ffd740'; }, seeRow);
-button('Weather', () => { void hud.locate().then((w) => line('system', w)); }, seeRow);
+button('Weather', () => { void weatherHere().then((w) => line('system', w)); }, seeRow);
 button('Settings', () => toggleSettings(), seeRow);
 button('Recentre', () => { framing = false; closePanel('pipeline'); orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); }, seeRow);
 document.body.appendChild(tools);
@@ -1522,6 +1526,53 @@ voice = false;
 // what I say, over my head: under every window and the board (drawn before them), so what you put up in front of you
 // covers it, never the other way round
 const voiceCard = card(0.55, 0.16, 1200); voiceCard.mesh.renderOrder = 13; scene.add(voiceCard.mesh);
+// ---- what Claude's body feels, and why (src/nexus/emotions.ts): a model of feeling, shown honestly as one ---------------
+const mind = newMind(performance.now());
+let felt: Feeling = 'content', thoughtAt = 0, restUntil = 0;
+const thoughtTag = label('', 0.02, '#e0f7fa', 'rgba(0,0,0,0)'); scene.add(thoughtTag);
+/** Something that happened, felt: what it means to what it is doing moves its feeling, and it remembers why. */
+function happened(what: Appraisal, why: string, strength = 1): void { feel(mind, what, why, performance.now(), strength); }
+function stepMind(dt: number): void {
+  const now = performance.now(), busyNow = (!!building || cell.busy || phone.pipeBusy) && now >= restUntil;
+  pass(mind, dt, busyNow);
+  if (now < restUntil) mind.energy = Math.min(1, mind.energy + dt / 120);
+  const f = feeling(mind, now);
+  robot.feel(expression(f, mind), now / 1000, dt);
+  if (f !== felt) { felt = f; boards?.event(); }
+  // its inner voice, over it, while it is not speaking: what it feels and why, a line
+  if (now - thoughtAt > 2500) { thoughtAt = now; const th = `${f}: ${thought(f, mind)}`; (thoughtTag as THREE.Sprite & { userData: { said?: string } }).userData.said !== th && relabelTag(thoughtTag, th.slice(0, 90)); }
+  thoughtTag.position.copy(robot.root.position).add(tmp.set(0, 1.5, 0)); thoughtTag.visible = !voiceCard.mesh.visible;
+}
+function relabelTag(sp: THREE.Sprite, text: string): void { const fresh = label(text, 0.02, '#e0f7fa', 'rgba(4,10,16,0.55)'); (sp.material as THREE.SpriteMaterial).map?.dispose(); sp.material = fresh.material; sp.scale.copy(fresh.scale); sp.userData.said = text; }
+/** Its state as numbers its rules read: how bored, curious, rested and pleased (0–100). */
+function mindFacts(): Record<string, number> { return { claude_bored: Math.round(mind.boredom * 100), claude_curious: Math.round(mind.curiosity * 100), claude_energy: Math.round(mind.energy * 100), claude_happy: Math.round(((mind.emotion.valence + 1) / 2) * 100) }; }
+/** Praise, scolding and greetings, read from what you say to it. */
+function heardFeeling(text: string): void {
+  const t = text.toLowerCase();
+  if (/\b(good job|well done|nice( work)?|great( job)?|awesome|amazing|perfect|thank(s| you)|love (it|this)|you rock|brilliant)\b/.test(t)) happened('praise', `you said "${text.slice(0, 40)}"`, 1.2);
+  else if (/\b(bad|wrong|stupid|useless|broken|doesn'?t work|not working|terrible|awful|worse|hate)\b/.test(t)) happened('scold', `you said "${text.slice(0, 40)}"`);
+  else if (/^(hi|hello|hey|good (morning|evening|afternoon))\b/.test(t)) happened('greet', 'you said hello');
+}
+/** Its practice: test asks run through the pipeline (quickly: no physics, nothing built), the best edits of each kept. */
+const training: Training = (() => { try { return { ...newPractice(), ...(JSON.parse(localStorage.getItem('forge:practice') ?? '{}') as Partial<Training>) }; } catch { return newPractice(); } })();
+async function practise(): Promise<string> {
+  const t = nextTry(training, TEST_ASKS.map((x) => x.ask), { ...phone.pipeEdits, physics: false });
+  if (!t) return 'I have practised every edit on every test ask that runs in under a minute.';
+  happened('work', `practising ${t.why}`, 0.5);
+  const r = await pipelineRun(t.ask, t.edits, false), l = learn(training, trialOf(r));
+  try { localStorage.setItem('forge:practice', JSON.stringify(training)); } catch { /* kept for this visit */ }
+  happened(l.better ? 'improved' : r.failed ? 'failure' : 'success', l.better ? `I found better: ${l.why}` : `${t.why}: ${l.why}`);
+  return `Practised ${t.why}: ${r.verdict.toLowerCase()}, ${l.better ? `better than before (${l.why})` : l.first ? 'the first try of it' : l.why}. ${lessons(training)[0]}`;
+}
+/** Claude's own words, from a pipeline step: practise, rest, how it feels, what it has learned. */
+async function claudeStep(arg: string): Promise<string> {
+  const t = arg.trim().toLowerCase();
+  if (/^practi[cs]e/.test(t)) return practise();
+  if (/^rest/.test(t)) { restUntil = performance.now() + 60_000; happened('rest', 'you let me rest'); return 'Resting a minute: my energy comes back.'; }
+  if (/^(feel|how)/.test(t)) { const f = feeling(mind, performance.now()); return `I feel ${f}: ${thought(f, mind)} (A model of feeling: it moves with what happens to me, and says why.)`; }
+  if (/^(lessons|learned|learnt)/.test(t)) return lessons(training).join(' ');
+  throw new Error('"claude …"? Say claude practise, claude rest, claude feel, or claude lessons.');
+}
 voiceCard.draw('', [{ text: 'Hi. Ask me anything about this machine, or point at a part.', size: 1.1 }]);
 const chat = document.createElement('div');
 chat.style.cssText = 'position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(30rem,calc(100vw - 32px));z-index:5;display:flex;flex-direction:column;gap:6px;font:14px/1.4 system-ui';
@@ -1603,7 +1654,7 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 /** Words that clear the table: reset, clear, start over. */
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 async function converse(text: string): Promise<void> {
-  boards?.event({ kind: 'said', text });
+  boards?.event({ kind: 'said', text }); heardFeeling(text);
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
   if (RESET_WORDS.test(text.trim())) { line('you', text); say(resetBuild(), undefined, 'nexus'); return; }
   if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
@@ -1612,7 +1663,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  if (/^pipeline\s+new\b/i.test(text.trim()) || /^inventory\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
+  if (/^pipeline\s+new\b/i.test(text.trim()) || /^(inventory|weather)\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
@@ -1845,6 +1896,8 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline', i
     case 'make': case 'build': { if (!arg) throw new Error('Make what? Say it like "make a cart" or "make a table that holds 30 kg".'); const c = conceive(arg); if (!c.wants.length) throw new Error(sayConception(c)); const all = c.questions.length ? answersFrom(c, 'go') ?? {} : {}; const ds = await makeIt(arg, all, 1); return ds.map((d) => sayDesign(d).slice(0, 600)).join(' ') || 'Nothing made.'; }
     case 'pipeline': return /^new\b/i.test(arg) ? pipelineNew(arg.replace(/^new\s*/i, '')) : pipelineStep(arg);
     case 'inventory': return inventoryStep(arg);
+    case 'claude': return claudeStep(arg);
+    case 'weather': return weatherStep(arg);
     case 'reset': case 'clear': return resetBuild();
     case 'store': return storeBuild();
     case 'cell': return cellStep(t);
@@ -1890,9 +1943,9 @@ const flowApi: FlowApi = {
     try { return await flowAct(what, signal, who, _input); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade }),
+  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }),
   // what is made and the facts as the workshop reads them, and the robots' numbers beside them
-  reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
+  reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
 // ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
@@ -2109,7 +2162,7 @@ function stepBuild(now: number): void {
   const n = [...pipeParts].length, s2 = ((now - B.t0) / 1000).toFixed(1);
   say(`Built ${B.b.title}: ${n} parts in ${s2} s, ${B.verdict.toLowerCase()}.${B.failed.length ? ` ${B.failed.length} step${B.failed.length === 1 ? '' : 's'} could not be made here: ${B.failed[0]}` : ''} Say "reset build" to clear the table.`, undefined, 'nexus');
   boards?.event({ kind: 'built', text: B.b.title });
-  rulesEvent?.({ kind: 'built' });
+  rulesEvent?.({ kind: 'built' }); happened('success', `${B.b.title} stands on the table`, 0.6);
 }
 // ---- the warehouse behind you: builds kept on shelves, robots at work (src/nexus/fleet.ts, view/warehouse.ts) ------------
 /** The last build made on the table as steps to make it again; and the kept build the table now holds, if it is one. */
@@ -2119,7 +2172,7 @@ const kept: StoredBuild[] = (() => { try { return JSON.parse(localStorage.getIte
 const keepKept = () => { try { localStorage.setItem(KEPT_KEY, JSON.stringify(kept)); } catch { /* too big for this browser: kept for this visit */ } };
 const fleet = new Fleet({
   took: (id, by) => { if (onTable === id) { resetBuild(); onTable = null; } line('system', `${by.name} lifted ${kept.find((k) => k.id === id)?.title ?? 'the build'} off the table and is taking it in.`); },
-  stored: (id, slot, by) => { const k = kept.find((x) => x.id === id); if (k) { k.slot = slot.id; keepKept(); } line('system', `${by.name} shelved ${k?.title ?? 'the build'} on ${slot.id}.`); },
+  stored: (id, slot, by) => { const k = kept.find((x) => x.id === id); if (k) { k.slot = slot.id; keepKept(); } line('system', `${by.name} shelved ${k?.title ?? 'the build'} on ${slot.id}.`); happened('fine', `${by.name} shelved ${k?.title ?? 'a build'}`, 0.5); },
   arrived: (id, by) => { const k = kept.find((x) => x.id === id); if (k) { line('system', `${by.name} brought ${k.title} to the table: building it again.`); rebuild(k); } },
 });
 // the names and abilities you gave them, and where the builds are shelved
@@ -2135,6 +2188,7 @@ const deviceViews = new Map<string, ReturnType<typeof deviceMesh>>();
 /** A device built, set down: the rover on the floor in front of the workshop, the rest on the floor beside the bench. */
 function setDown(r: Recipe): void {
   const n = devices.list.length, at = r.id === 'rover' ? { x: -2.5, z: -0.6, h: -Math.PI / 2 } : { x: -2.75, z: -2.4 + n * 0.3, h: -Math.PI / 2 };
+  happened('novel', `a ${r.name} I built is running`, 1.2);
   const d = devices.spawn(r.id, r.name, at.x, at.z, at.h), v = deviceMesh(r); scene.add(v.obj); named(v.obj, `the ${r.name} built in the workshop`); deviceViews.set(d.id, v);
   ensureProgram(r);
 }
@@ -2159,7 +2213,7 @@ function lookAhead(x: number, z: number, h: number): number | null {
 const failedOnce = new Set<string>();
 function guarded(what: string, f: () => void): void { try { f(); } catch (e) { if (!failedOnce.has(what)) { failedOnce.add(what); console.warn(`${what} failed:`, e); line('system', `Something in ${what} failed (${(e as Error).message}); the rest of the room goes on.`); } } }
 function stepDevices(dt: number): void {
-  devices.outside = hud.weather ? { temperature: hud.weather.temperature } : {};
+  const fc = hud.forecast; devices.outside = fc ? { temperature: fc.now.temp, humidity: fc.now.humidity, pressure: fc.now.pressure } : hud.weather ? { temperature: hud.weather.temperature } : {};
   devices.step(dt, lookAhead);
   for (const d of devices.list) {
     const v = deviceViews.get(d.id); if (!v) continue;
@@ -2285,7 +2339,15 @@ function robotBoards(): void {
   if (!boards) return;
   let made: string[] = []; try { made = JSON.parse(localStorage.getItem('forge:robot-boards') ?? '[]') as string[]; } catch { /* none made */ }
   for (const b of fleet.bots) { const id = `robot-${b.id}`; if (!boards.all.has(id) && !made.includes(id)) { boards.put(id, boardOfBot(b)); made.push(id); } }
+  if (!boards.all.has('robot-claude') && !made.includes('robot-claude')) { boards.put('robot-claude', claudeRules()); made.push('robot-claude'); }
   try { localStorage.setItem('forge:robot-boards', JSON.stringify(made)); } catch { /* made again next time */ }
+}
+/** Claude's own rules, as a pipeline: when it is bored or curious it practises; tired, it rests; asked, it says how it feels. */
+function claudeRules(): Parameters<NonNullable<typeof boards>['put']>[1] {
+  const rules: [string, string, string, string][] = [['Bored', 'when claude_bored > 70', 'Practise a test ask', 'claude practise'], ['Curious', 'when claude_curious > 65', 'Practise a test ask', 'claude practise'], ['Tired', 'when claude_energy < 20', 'Rest', 'claude rest'], ['I ask how it feels', 'when I say how do you feel', 'Say how it feels, and why', 'claude feel']];
+  const b = { title: "Claude's rules", kind: 'flow', armed: true, quiet: true, about: "What Claude's body does by itself, as rules: each IF its state (claude_bored, claude_curious, claude_energy, claude_happy, 0–100) or what you say, each THEN what it does. Its feelings are a model: they move with what happens to it, and it says why.", nodes: {} as Record<string, { label: string; step: { kind: 'trigger' | 'action'; what: string } }>, edges: {} as Record<string, { from: string; to: string; rel: string }>, createdAt: Date.now(), updatedAt: Date.now() };
+  rules.forEach(([il, iw, tl, tw], i) => { b.nodes[`if${i}`] = { label: `IF ${il}`, step: { kind: 'trigger', what: iw } }; b.nodes[`then${i}`] = { label: `THEN ${tl}`, step: { kind: 'action', what: tw } }; b.edges[`e${i}`] = { from: `if${i}`, to: `then${i}`, rel: 'flows to' }; });
+  return b as never;
 }
 function renameBot(b: Bot, name: string): string {
   const n = name.trim().replace(/\s+/g, ' ').slice(0, 24); if (!n) return 'A name needs a letter in it.';
@@ -2442,7 +2504,7 @@ const CHIPS: [string, () => void][] = [
   ['⟲ Up', () => say(up())], ['✕ Close', () => { holo.clear(); isolated = null; }], ['What is this?', () => { const s2 = selectedId ? shown.get(selectedId) : null; void converse(s2 ? `What is ${s2.part.name}, and why is it this way?` : 'What am I looking at?'); }],
   ['✗ Flaw', () => void markNote('flaw', '')], ['? Question', () => void markNote('question', '')], ['✓ Good', () => void markNote('good', '')],
   ['X-ray', () => { xray = !xray; }], ['Isolate', () => toggleIsolate()], ['Section', () => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; }],
-  ['Reports', () => cycleReports()], ['Weather', () => { void hud.locate().then((w) => line('system', w)); }], ['🎤 Talk', () => listen()],
+  ['Reports', () => cycleReports()], ['Weather', () => { void weatherHere().then((w) => line('system', w)); }], ['🎤 Talk', () => listen()],
 ];
 let pointerHand = 1;
 // the same menu, floating over the dock, for whoever keeps the dock
@@ -2480,7 +2542,7 @@ function pipelineRun(ask: string, edits: PipeEdits, build = true): Promise<PipeR
   }
   line('system', `The pipeline runs "${ask.slice(0, 80)}${ask.length > 80 ? '…' : ''}" (seed ${edits.seed}, matter ${edits.matter}, grow ${edits.grow ? 'on' : 'off'}, physics ${edits.physics ? 'on' : 'off'}).`);
   const where = pipeWhere();
-  return new Promise((ok, no) => { const id = ++pipeSeq; pipeWaiting.set(id, { ok: (r) => { line('system', `The pipeline: ${r.verdict}, ${r.failed} of ${r.checks} checks failed, ${(r.ms / 1000).toFixed(1)} s.`); if (build) void buildRun(r); ok(r); }, no }); pipeWorker!.postMessage({ id, ask, edits, where }); });
+  return new Promise((ok, no) => { const id = ++pipeSeq; pipeWaiting.set(id, { ok: (r) => { line('system', `The pipeline: ${r.verdict}, ${r.failed} of ${r.checks} checks failed, ${(r.ms / 1000).toFixed(1)} s.`); if (build) { void buildRun(r); happened(r.failed || r.verdict === 'NOTHING MADE' ? 'failure' : 'success', `${r.ask.slice(0, 40)}… ${r.verdict.toLowerCase()}`); } ok(r); }, no }); pipeWorker!.postMessage({ id, ask, edits, where }); });
 }
 let desktopPhone = false;
 const phone = new Phone({
@@ -2517,6 +2579,79 @@ let invSaid = '';
 phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
+// ---- the weather: where you are, or a place you name; kept, fetched again each quarter hour, read by rules -------------
+let wSaid = '', wLast: WPlace | 'here' | null = null;
+let wPlaces: WPlace[] = (() => { try { return (JSON.parse(localStorage.getItem('forge:weather-places') ?? '[]') as WPlace[]).filter((x) => typeof x?.lat === 'number'); } catch { return []; } })();
+function weatherCame(said: string): string { wSaid = said; if (hud.forecast) boards?.event(); phone.draw(); return said; }
+function weatherAt(p: WPlace): Promise<string> {
+  wLast = p; wPlaces = [p, ...wPlaces.filter((x) => placeName(x) !== placeName(p))].slice(0, 6);
+  try { localStorage.setItem('forge:weather-places', JSON.stringify(wPlaces)); } catch { /* kept for this visit */ }
+  return hud.fetchWeather(p.lat, p.lon, p).then(weatherCame);
+}
+function weatherHere(): Promise<string> { wLast = 'here'; return hud.locate().then(weatherCame); }
+/** "weather" (now), "weather here", "weather in Leeds", "weather week", "weather making", "weather refresh". */
+async function weatherStep(arg: string): Promise<string> {
+  const t = arg.trim(), low = t.toLowerCase(), f = hud.forecast;
+  if (!low || low === 'now') { if (f) return weatherLine(f); return wPlaces[0] ? weatherAt(wPlaces[0]) : weatherHere(); }
+  if (/^(refresh|update|again)$/.test(low)) return wLast && wLast !== 'here' ? weatherAt(wLast) : weatherHere();
+  if (/^(here|where i am|my location)$/.test(low)) return weatherHere();
+  if (/^(making|make|advice|for making|what it means)$/.test(low)) { if (!f) throw new Error('No forecast yet: say "weather here" or "weather in" a town.'); return forMaking(f).map((a) => `${a.what} (${a.level}): ${a.says}`).join(' '); }
+  if (/^(week|days|the week)$/.test(low)) { if (!f) throw new Error('No forecast yet: say "weather here" or "weather in" a town.'); return f.days.map((d) => `${d.date}: ${sky(d.code)}, ${d.lo.toFixed(0)}–${d.hi.toFixed(0)} °C, rain ${d.rain.toFixed(1)} mm (${d.rainChance} %)`).join('; '); }
+  const ps = await findPlaces(t.replace(/^(in|at|for)\s+/i, ''));
+  if (typeof ps === 'string') throw new Error(ps);
+  return weatherAt(ps[0]!);
+}
+/** Rules on the weather, as a pipeline: each IF a number of it, each THEN what to say or do. */
+function weatherRules(): Parameters<NonNullable<typeof boards>['put']>[1] {
+  const rules: [string, string, string, string][] = [
+    ['Rain is coming', 'when outside_rain_chance > 70', 'Say: cast indoors', 'say Rain is likely in the next 6 hours: pour metal indoors and keep the flask dry.'],
+    ['Damp air', 'when outside_humidity > 75', 'Say: seal the filament', 'say The air outside is damp: keep the nylon and PETG sealed with desiccant.'],
+    ['Too gusty to fly', 'when outside_gusts > 10.7', 'Say: keep the drone down', 'say Gusts are past the 10.7 m/s a small drone is rated to hold against: keep it down.'],
+    ['Strong sun', 'when outside_sun > 600', 'Say: the panel is near its best', 'say Strong sun: a solar panel gives near its best now.'],
+  ];
+  const b = { title: 'Weather rules', kind: 'flow', armed: true, about: 'Rules on the weather where you are: each IF a number of it (outside_temp °C, outside_humidity %, outside_wind and outside_gusts m/s, outside_rain mm, outside_rain_chance % in the next 6 h, outside_sun W/m², outside_uv), each THEN what is said or done. Change the numbers or the words; add your own.', nodes: {} as Record<string, unknown>, edges: {} as Record<string, unknown>, createdAt: Date.now(), updatedAt: Date.now() };
+  rules.forEach(([il, iw, tl, tw], i) => { b.nodes[`if${i}`] = { label: `IF ${il}`, step: { kind: 'trigger', what: iw } }; b.nodes[`then${i}`] = { label: `THEN ${tl}`, step: { kind: 'action', what: tw } }; b.edges[`e${i}`] = { from: `if${i}`, to: `then${i}`, rel: 'flows to' }; });
+  return b as never;
+}
+function openWeatherRules(): string {
+  if (!boards) return 'The board is not up yet.';
+  if (!boards.all.has('weather-rules')) boards.put('weather-rules', weatherRules());
+  summonTo('boards'); boards.openBoard('weather-rules');
+  return 'The weather rules are on the board: each IF a number of the weather starts its THEN.';
+}
+phone.add(weatherApp({ forecast: () => hud.forecast, note: () => hud.weatherNote.replace(/^weather: /, ''), here: () => { void weatherHere(); }, find: (n) => findPlaces(n), pick: (p) => { void weatherAt(p); }, recent: () => wPlaces, rules: openWeatherRules, said: () => wSaid }));
+// a place looked at before is fetched again on its own (no permission is needed for a named place); then each quarter hour
+if (wPlaces[0]) window.setTimeout(() => { void weatherAt(wPlaces[0]!); }, 1500);
+window.setInterval(() => { if (wLast && document.visibilityState !== 'hidden') void (wLast === 'here' ? weatherHere() : weatherAt(wLast)); }, 15 * 60_000);
+
+// ---- data: the forge in numbers; what changes over time sampled every 10 s, the last quarter hour kept --------------------
+const hist: Record<string, number[]> = {}; let histAt = -1e9;
+function sample(now: number): void {
+  if (now - histAt < 10_000) return; histAt = now;
+  const put = (k: string, v: number) => { const a = (hist[k] ??= []); a.push(Math.round(v * 10) / 10); if (a.length > 90) a.shift(); };
+  put('furnace', cell.furnace.t); put('nozzle', cell.printer.hot.t); put('kiln', cell.kiln.t);
+  put('battery', fleet.bots.reduce((a, b) => a + b.battery, 0) / Math.max(1, fleet.bots.length)); put('pleased', ((mind.emotion.valence + 1) / 2) * 100);
+}
+const kwh = (j: number) => `${(j / 3.6e6).toFixed(j < 3.6e5 ? 3 : 2)} kWh`;
+function dataSections(): DataSection[] {
+  const runs = phone.runs, ok = runs.filter((r) => r.failed === 0).length, all = boards ? [...boards.all.entries()] : [];
+  const mins = (k: string) => `the last ${Math.max(1, Math.round(((hist[k]?.length ?? 1) * 10) / 60))} min, every 10 s`;
+  const kinds = new Map<string, number>(); for (const i of INVENTORY.values()) kinds.set(i.kind, (kinds.get(i.kind) ?? 0) + 1);
+  const byCat = [...invCategories()].map(([c, subs]) => ({ label: c, v: [...subs.values()].reduce((a, m) => a + [...m.values()].reduce((x, ids) => x + ids.length, 0), 0) }));
+  const cmax = Math.max(1, ...byCat.map((x) => x.v)), jobs = cell.jobs, fc = hud.forecast;
+  return [
+    { id: 'runs', name: 'Pipeline runs', icon: '▶', colour: '#ff5252', stats: [{ label: 'runs kept', value: String(runs.length) }, { label: 'held every check', value: `${ok} of ${runs.length}` }, { label: 'the last', value: runs.at(-1)?.verdict.slice(0, 34) ?? '—' }, { label: 'mean time a run', value: runs.length ? `${(runs.reduce((a, r) => a + r.ms, 0) / runs.length / 1000).toFixed(1)} s` : '—' }, { label: 'lightest that held', value: (() => { const k = runs.filter((r) => !r.failed && r.kg !== null).map((r) => r.kg!); return k.length ? `${Math.min(...k).toFixed(2)} kg` : '—'; })() }], series: runs.length > 1 ? { name: 'Seconds each run took, oldest first', unit: ' s', points: runs.map((r) => r.ms / 1000) } : undefined, note: 'Runs of Claude\'s build pipeline, from the Pipelines app, a board or Claude\'s own practice; the last 30 are kept.' },
+    { id: 'boards', name: 'Pipelines', icon: '⚡', colour: '#ffd740', stats: [{ label: 'pipelines', value: String(all.length) }, { label: 'armed', value: String(all.filter(([, b]) => (b as { armed?: boolean }).armed).length) }, { label: 'runs kept', value: String(all.reduce((a, [, b]) => a + ((b as { runs?: unknown[] }).runs?.length ?? 0), 0)) }, { label: 'steps', value: String(all.reduce((a, [, b]) => a + Object.values(b.nodes).filter((n) => (n as { step?: unknown }).step).length, 0)) }], bars: { name: 'Runs kept, by pipeline', rows: all.map(([, b]) => ({ label: b.title, v: (b as { runs?: unknown[] }).runs?.length ?? 0 })).filter((r) => r.v > 0).sort((a, c) => c.v - a.v).slice(0, 8).map((r, _, xs) => ({ ...r, max: Math.max(1, xs[0]!.v) })) } },
+    { id: 'robots', name: 'Robots', icon: '🤖', colour: '#ffb300', stats: [{ label: 'robots', value: String(fleet.bots.length) }, { label: 'mean battery', value: `${Math.round(fleet.bots.reduce((a, b) => a + b.battery, 0) / Math.max(1, fleet.bots.length))} %` }, { label: 'asleep', value: String(fleet.bots.filter((b) => b.asleep).length) }, { label: 'carrying', value: String(fleet.bots.filter((b) => b.carrying).length) }, { label: 'builds shelved', value: String(kept.length) }], bars: { name: 'Battery, each robot (sped up: see the Robots app)', rows: fleet.bots.map((b) => ({ label: b.name, v: b.battery, max: 100, note: `${Math.round(b.battery)} % · ${b.state}` })) }, series: { name: `Mean battery, %, ${mins('battery')}`, unit: ' %', points: hist.battery ?? [] } },
+    { id: 'workshop', name: 'Workshop', icon: '🔥', colour: '#ff7043', stats: [{ label: 'jobs done', value: `${jobs.filter((j) => j.done && !j.failed).length} of ${jobs.length}${jobs.some((j) => j.failed) ? ` (${jobs.filter((j) => j.failed).length} failed)` : ''}` }, { label: 'parts on the shelf', value: String(cell.shelf.length) }, { label: 'filament used', value: `${(cell.printer.filament / 1000).toFixed(2)} m` }, { label: 'printer drew', value: kwh(cell.printer.energy) }, { label: 'kiln drew', value: kwh(cell.kiln.energy) }, { label: 'furnace burnt', value: `${(cell.furnace.energy / 1e6).toFixed(1)} MJ of propane` }], bars: { name: 'Temperatures now, °C, on one scale (0–1300)', rows: ([['nozzle', cell.printer.hot.t], ['bed', cell.printer.bed.t], ['kiln', cell.kiln.t], ['furnace', cell.furnace.t]] as [string, number][]).map(([l, v]) => ({ label: l, v, max: 1300, note: `${Math.round(v)} °C` })) }, series: { name: `Furnace, °C, ${mins('furnace')}`, unit: '°', points: hist.furnace ?? [] }, note: `The workshop runs ${cell.speed}× faster than real time; energy is what its heaters drew, counted as they ran.` },
+    { id: 'inventory', name: 'Inventory', icon: '🗃', colour: '#26c6da', stats: [{ label: 'entries', value: String(INVENTORY.size) }, { label: 'products', value: String(kinds.get('product') ?? 0) }, { label: 'assemblies and parts', value: String((kinds.get('assembly') ?? 0) + (kinds.get('part') ?? 0)) }, { label: 'materials', value: String(kinds.get('material') ?? 0) }, { label: 'adjustable families', value: String(FAMILIES.length) }, { label: 'made here this visit', value: String(invMade) }], bars: { name: 'Entries by category', rows: byCat.sort((a, c) => c.v - a.v).map((r) => ({ ...r, max: cmax })) } },
+    { id: 'devices', name: 'Devices', icon: '🛰', colour: '#69f0ae', stats: [{ label: 'devices set down', value: String(devices.list.length) }, { label: 'running a program', value: String(devices.list.filter((d) => cell.programmed.has(d.recipe)).length) }], bars: { name: 'Battery, each device', rows: devices.list.map((d) => ({ label: d.name, v: (d.wh / d.whFull) * 100, max: 100, note: `${d.wh.toFixed(1)} of ${d.whFull} Wh` })) }, note: devices.list.length ? undefined : 'Build a device in the workshop (Workshop app, or "cell build rover") and it is set down here.' },
+    { id: 'claude', name: 'Claude', icon: '◉', colour: '#4dd0e1', stats: [{ label: 'feels', value: felt }, { label: 'energy', value: `${Math.round(mind.energy * 100)} %` }, { label: 'bored', value: `${Math.round(mind.boredom * 100)} %` }, { label: 'curious', value: `${Math.round(mind.curiosity * 100)} %` }, { label: 'trials practised', value: String(training.trials.length) }, { label: 'asks it found better for', value: String(Object.keys(training.best).length) }], series: { name: `How pleased, %, ${mins('pleased')}`, unit: ' %', points: hist.pleased ?? [] }, note: 'A model of feeling (src/nexus/emotions.ts): it moves with what happens, and says why. It is not a claim that Claude feels.' },
+    fc ? { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: fc.place.name, value: `${fc.now.temp.toFixed(1)} °C` }, { label: 'humidity', value: `${fc.now.humidity.toFixed(0)} %` }, { label: 'wind, gusts', value: `${fc.now.wind.toFixed(1)}, ${fc.now.gusts.toFixed(1)} m/s` }, { label: 'rain chance, 6 h', value: `${Math.max(0, ...fc.hours.slice(0, 6).map((h) => h.rainChance))} %` }], series: { name: 'Temperature, °C, the next 24 hours', unit: '°', points: fc.hours.map((h) => h.temp), ticks: fc.hours.map((h) => h.time.slice(11, 13)) } }
+      : { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: 'forecast', value: 'none yet' }], note: hud.weatherNote.replace(/^weather: /, '') || 'Open the Weather app to find where you are, or name a place.' },
+  ];
+}
+phone.add(dataApp({ sections: dataSections }));
 // apps pulled off the phone onto screens of their own: hold the trigger (or the mouse) on an app and pull it off the phone
 const holos = new HoloScreens(phone, scene, { add: (id, title, obj) => windows.add({ id, title, obj, selfPlaced: true }), open: (id) => windows.open(id), isOpen: (id) => windows.isOpen(id) });
 let appDrag: { app: string; hand: number | 'mouse'; id: string | null; mouse?: THREE.Vector2 } | null = null;

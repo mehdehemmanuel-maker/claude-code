@@ -5,18 +5,13 @@
 // that may not reach it (a claude.ai artifact) says so and shows the rest.
 
 import * as THREE from 'three';
+import { fetchForecast, sky, weatherLine, type Forecast, type Place } from '../weather';
 
 export type Status = 'idle' | 'listening' | 'thinking' | 'working' | 'building';
 const STATUS: Record<Status, { text: string; color: string }> = {
   idle: { text: 'standing by', color: '#4dd0e1' }, listening: { text: 'listening', color: '#69f0ae' }, thinking: { text: 'thinking', color: '#b388ff' },
   working: { text: 'working', color: '#ffd740' }, building: { text: 'building', color: '#ffb74d' },
 };
-/** WMO weather interpretation codes, as Open-Meteo gives them. */
-const WMO: [number[], string][] = [
-  [[0], 'clear'], [[1], 'mostly clear'], [[2], 'partly cloudy'], [[3], 'overcast'], [[45, 48], 'fog'], [[51, 53, 55, 56, 57], 'drizzle'],
-  [[61, 63, 65, 66, 67], 'rain'], [[71, 73, 75, 77], 'snow'], [[80, 81, 82], 'showers'], [[85, 86], 'snow showers'], [[95, 96, 99], 'thunderstorm'],
-];
-const sky = (code: number) => WMO.find(([cs]) => cs.includes(code))?.[1] ?? `code ${code}`;
 
 export interface Weather { temperature: number; code: number; wind: number; lat: number; lon: number; at: number }
 
@@ -26,6 +21,7 @@ export class Hud {
   status: Status = 'idle';
   detail = '';
   weather: Weather | null = null;
+  /** the whole forecast it was read from: the hours, the week, the sun; and the place */ forecast: Forecast | null = null;
   weatherNote = 'weather: tap Weather to allow your location';
   /** A line of what stands here: parts, mass, flaws; and of the room: frames a second, the headset's battery, time in. */
   info = '';
@@ -56,23 +52,15 @@ export class Hud {
     if (!('geolocation' in navigator)) { this.weatherNote = 'weather: this device gives no location'; return this.weatherNote; }
     const pos = await new Promise<GeolocationPosition | null>((ok) => navigator.geolocation.getCurrentPosition(ok, () => ok(null), { timeout: 8000, maximumAge: 6e5 }));
     if (!pos) { this.weatherNote = 'weather: location not allowed here'; return this.weatherNote; }
-    return this.fetchWeather(pos.coords.latitude, pos.coords.longitude);
+    return this.fetchWeather(pos.coords.latitude, pos.coords.longitude, { name: 'Where you are' });
   }
-  async fetchWeather(lat: number, lon: number): Promise<string> {
-    try {
-      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=ms`);
-      if (!r.ok) throw new Error(String(r.status));
-      const j = (await r.json()) as { current?: { temperature_2m: number; weather_code: number; wind_speed_10m: number } };
-      if (!j.current) throw new Error('no current weather');
-      this.weather = { temperature: j.current.temperature_2m, code: j.current.weather_code, wind: j.current.wind_speed_10m, lat, lon, at: Date.now() };
-      this.weatherNote = '';
-      this.drawnAt = '';
-      return `${this.weather.temperature.toFixed(0)} °C, ${sky(this.weather.code)}, wind ${this.weather.wind.toFixed(0)} m/s`;
-    } catch {
-      this.weatherNote = 'weather: the forecast is not reachable from this page';
-      this.drawnAt = '';
-      return this.weatherNote;
-    }
+  async fetchWeather(lat: number, lon: number, place: Partial<Place> = {}): Promise<string> {
+    const f = await fetchForecast(lat, lon, place);
+    this.drawnAt = '';
+    if (typeof f === 'string') { this.weatherNote = `weather: ${f.replace(/^The forecast is /, '').replace(/\.$/, '')}`; return f; }
+    this.forecast = f; this.weatherNote = '';
+    this.weather = { temperature: f.now.temp, code: f.now.code, wind: f.now.wind, lat: f.place.lat, lon: f.place.lon, at: f.at };
+    return weatherLine(f);
   }
   /** The headset's or the device's charge, where the browser tells it. */
   async watchBattery(): Promise<void> {

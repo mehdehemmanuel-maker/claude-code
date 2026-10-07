@@ -182,7 +182,7 @@ export async function runFlow(b: Board, from: string, api: FlowApi, why: string,
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
 /** What the room's actions are called: the first word of an action step. */
-export const ACTIONS = ['pipeline', 'robot', 'cell', 'device', 'inventory', 'reset', 'clear', 'store', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
+export const ACTIONS = ['pipeline', 'robot', 'cell', 'device', 'inventory', 'weather', 'reset', 'clear', 'store', 'make', 'build', 'again', 'operate', 'flaws', 'show', 'note', 'say', 'board', 'wait', 'set', 'calc', 'material', 'place', 'surface', 'size', 'move', 'rotate', 'flip', 'mirror', 'expand', 'shrink', 'stretch', 'pattern', 'scatter', 'join', 'split', 'rule', 'energy', 'report', 'remove', 'clear', 'seed', 'if'] as const;
 /** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
  *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
  *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
@@ -196,6 +196,8 @@ export function guessStep(word: string): Step | null {
   if (Workshop.handles(w) && !/^(if|until)\b/i.test(t) || /^if\s.+\sthen\s/i.test(t)) return { kind: 'action', what: w };
   if (/^(until|repeat|loop|keep going)\b/.test(t)) { const c = t.replace(/^(repeat|loop|keep going)\s*(until\s*)?/, 'until ').replace(/^until\s*$/, 'until flaws = 0'); return { kind: 'repeat', what: /at most \d+/.test(c) ? c : `${c}, at most 3 times` }; }
   if (/^(if|check|only if|is|are|any|no)\b/.test(t) || /\?$/.test(t)) return { kind: 'check', what: t.replace(/^(check|only if|if)\s+(whether\s+)?/, '').replace(/\?+$/, '').trim() || 'flaws > 0' };
+  // Claude's own body: practise, rest, say how it feels, its lessons (an action of the room, not a question to the AI)
+  if (/^claude (practi[cs]e|rest|feel|how|lessons|learn[et])/.test(t)) return { kind: 'action', what: t };
   if (/^(ask|ai|claude|think|explain|summari[sz]e|decide|suggest|why|how)\b/.test(t)) { const q = w.replace(/^(ask|ai|claude)\b\s*:?\s*/i, '').trim() || w; return { kind: 'ai', what: `${q.replace(/[.?!]+$/, '')}: {input}` }; }
   if (/^list (the )?flaws$|^find (the )?flaws$/.test(t)) return { kind: 'action', what: 'flaws' };
   if ((ACTIONS as readonly string[]).includes(t.split(' ')[0]!)) return { kind: 'action', what: t };
