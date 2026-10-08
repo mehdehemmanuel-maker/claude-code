@@ -47,7 +47,7 @@ export interface BodyRules {
 export const BODY_RULES: BodyRules = {
   room: { radial: 0.03, side: 0.015, poses: 7 },
   flare: 0.008,
-  side: { shoulder: 0.1, tumble: 0.03, tuck: 0.06, inset: 0.075 },
+  side: { shoulder: 0.1, tumble: 0.03, tuck: 0.035, inset: 0.075 },
   crown: { hood: 0.03, roof: 0.035, deck: 0.025 },
   plan: { nose: 0.5, tail: 0.4, k: 2.6 },
   stations: { step: 0.14, ends: 8 },
@@ -208,7 +208,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // (convex as drawn: each leg of it leans in more than the one below it, from the tuck under to the roll over the top)
     const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x), d = sh - lo, zt = w - r.side.inset * f, hand = Math.min(0.03, 0.3 * (top - sh)) * Math.max(0.15, f);
     const ar = arrive(x);
-    return [[x, lo, w - tk * f], [x, lo + Math.min(0.1, 0.25 * d), w - tk * 0.55 * f], [x, lo + 0.5 * d, w - tk * 0.12 * f], [x, sh - 0.04, w + 0.004 * f], [x, sh + 0.02, w + 0.004 * f], [x, sh + 0.02 + 0.6 * (top - sh - 0.02), w - r.side.tumble * 0.4 * f], [x, top - hand * ar[1], zt - hand * ar[2]], [x, top, zt]];
+    // (its sill a tight turn under the door's foot, the door upright above it, its shoulder a crisp line: the widest two
+    // points 30 mm apart, so a highlight runs along it)
+    return [[x, lo, w - tk * f], [x, lo + Math.min(0.045, 0.15 * d), w - tk * 0.4 * f], [x, lo + 0.5 * d, w - tk * 0.08 * f], [x, sh - 0.015, w + 0.004 * f], [x, sh + 0.015, w + 0.004 * f], [x, sh + 0.015 + 0.6 * (top - sh - 0.015), w - r.side.tumble * 0.4 * f], [x, top - hand * ar[1], zt - hand * ar[2]], [x, top, zt]];
   };
   const rows = xs.map(section);
   const fitOf = (xs2: number[]) => (r.fit ? { n: Math.max(5, Math.round(outlineLength(xs2, ln.plan) / r.fit.step)), lambda: r.fit.lambda } : undefined);

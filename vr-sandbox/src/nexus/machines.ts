@@ -508,7 +508,8 @@ const STYLE: Record<string, { L: number; W: number; H: number; wb: number; lines
 /** A car of a body style, its figures typical, on the wheels and power chosen. */
 export function styledCar(style: string, o: { color: number; rim: number; rims: string; power: string; tint: string }): Machine {
   const s = STYLE[style] ?? STYLE.sedan!, [w0, a0] = s.tyre ?? [0.185, 0.65], tw = w0 + (o.rim - 15) * 0.015, aspect = Math.max(0.3, a0 - (o.rim - 15) * 0.05), tyre = `${Math.round(tw * 1000 / 5) * 5}/${Math.round(aspect * 20) * 5}R${o.rim}`;
-  const oh = (s.L - s.wb) * 0.45, fx = s.L / 2 - oh, track = s.W * 0.84, rows = s.seats <= 2 ? 1 : s.seats <= 5 ? 2 : 3, seats: Seat[] = [];
+  // (its track from its width: each tyre's face about 30 mm inside the body's side, as a road car's is, typical)
+  const oh = (s.L - s.wb) * 0.45, fx = s.L / 2 - oh, track = s.W - Math.round(tw * 1000 / 5) * 5 / 1000 - 0.06, rows = s.seats <= 2 ? 1 : s.seats <= 5 ? 2 : 3, seats: Seat[] = [];
   // (its people placed by its cabin, not its axles: the driver's hip about 0.9 m behind the windscreen's base, as the
   // Corolla's is (an estimate), each row about 0.85 m behind the one before (typical), and none further back than its
   // backrest leaves room for at the cabin's back)

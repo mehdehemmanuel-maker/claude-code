@@ -109,12 +109,28 @@ Later rounds, on the panelled bodies:
 - **Then, from looking:** a sports car's liner stood out of its fenders, which cleared only half the tyre's bump. The
   fender line now clears the whole bump and the lip, so a low car's fenders rise over its wheels. Where a deck is too
   short for a lid (a van), the cabin runs to the tail, and the roof narrows with the body at its ends.
+- **Round 3 (3 of 10; the sports car 4):** the cars floated, every style had one featureless face, and the wheels were
+  small in big dark arches. Fixed with a contact shadow drawn under grounded kits (in VR too, which has no shadow maps).
+  The sweep now follows the tyre's section, rounded at its shoulder. Faces are laid out by height, with headlamps,
+  daytime-running strips, a grille as tall as each style's, bumper shut lines and red tail lamps. Each style gets its own
+  tyres and clearance; mirrors are lofted shells on stalks; handles are bars in pockets; long cabins get more pillars.
+- **Round 4 (4 of 10; the sports car 3):**
+  - the van's wheelhouses were open inboard, so the far side and a red spring showed. They are now closed by inner walls
+    beyond the tyre's full-lock reach;
+  - a sports car's liner ran away through its haunch. Its control points are now capped under the skin's top edge;
+  - the hatchback's rear door was a hand's width. The B pillar now splits the door line by length;
+  - mirrors moved to the foot of the A pillars;
+  - the bodies are crisper: less tuck under, a tight sill turn and a shoulder line. A styled car's track is its width
+    less its tyre's, with each tyre face 30 mm inside the body.
 
 Still open:
 
 - tight radii where a boxy body's tail turns over at its top (van 0.8 mm, pickup 1.2 mm), and a van's roof rail (2.0
   mm), against 2.4 mm. At a tail the section's tumblehome shrinks with the plan, which leaves its roll over no room. A
   crease under the cabin was tried and undone: it rippled the front doors;
-- the face per style, layered tail lamps, mirrors placed by the panels, and an arch lip in body colour;
+- a skin is fitted along its whole length at once, so a tighter corner in plan (a squarer nose) ripples a door metres
+  away. Tried at a 0.38 m nose radius and undone. The fix is more control columns where the plan turns tightly (local
+  refinement), not a looser fit;
+- an arch lip in body colour;
 - the go-kart on the track (`view/kart3d.ts`) is drawn apart from `machines.ts`;
 - planes, cranes and power tools are new architectures, not yet built.
