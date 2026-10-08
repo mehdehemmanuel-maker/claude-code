@@ -9,13 +9,19 @@
 import * as THREE from 'three';
 import { primDist, surfaceNets, type Body, type Prim, type V3 } from '../anatomy';
 import type { Person } from '../person';
-import { centreOf } from '../life/segments';
+import { centreOf, type Segment } from '../life/segments';
 import { hairColor, irisColor, skinColor } from './organic';
 
 const segDist = (p: V3, a: V3, b: V3): number => {
   const ab: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ap: V3 = [p[0] - a[0], p[1] - a[1], p[2] - a[2]], L2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1;
   const t = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / L2));
   return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t);
+};
+/** How far a point is outside a segment's own solid (its capsule, or its box, upright at rest), 0 inside it. */
+const outside = (q: V3, x: { s: Segment; c: V3 }): number => {
+  if (x.s.shape.kind === 'capsule') return Math.max(0, segDist(q, x.s.a, x.s.b) - x.s.shape.r);
+  const h = x.s.shape.half, d = [Math.abs(q[0] - x.c[0]) - h[0], Math.abs(q[1] - x.c[1]) - h[1], Math.abs(q[2] - x.c[2]) - h[2]];
+  return Math.hypot(Math.max(0, d[0]!), Math.max(0, d[1]!), Math.max(0, d[2]!));
 };
 const geo = (m: { pos: Float32Array; nrm: Float32Array; idx: Uint32Array }) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(m.nrm, 3)); g.setIndex(new THREE.BufferAttribute(m.idx, 1)); return g; };
 const mat = (c: number, rough = 0.6) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: 0 });
@@ -32,8 +38,11 @@ export function personView(p: Person, body: Body, o: { cell?: number } = {}): Pe
   const below = body.skin.filter((q) => !nearHead(q)), bones = rest.map((x) => { const b = new THREE.Bone(); b.position.set(...x.c); return b; });
   for (const b of bones) group.add(b);
   group.updateMatrixWorld(true); const skeleton = new THREE.Skeleton(bones);
-  const segOf = (q: V3) => { let best = 0, bd = Infinity; rest.forEach((x, k) => { const d = segDist(q, x.s.a, x.s.b) - 0.6 * x.r; if (d < bd) { bd = d; best = k; } }); return segs[best]!.id; };
-  const armOf = (q: Prim) => { const id = segOf([(q.a[0] + q.b[0]) / 2, (q.a[1] + q.b[1]) / 2, (q.a[2] + q.b[2]) / 2]); return /^(upperArm|forearm|hand)([LR])$/.exec(id)?.[2] ?? ''; };
+  const segOf = (q: V3) => { let best = 0, bd = Infinity; rest.forEach((x, k) => { const d = outside(q, x) - 0.2 * x.r; if (d < bd) { bd = d; best = k; } }); return segs[best]!.id; };
+  // an arm's own surface: the skin whose middle is nearest an arm's segment and out beyond the chest's side (the
+  // deltoid over the shoulder stays with the trunk, so the shoulder is one smooth surface)
+  const chest = rest.find((x) => x.s.id === 'thorax')!, chestHalf = chest.s.shape.kind === 'box' ? chest.s.shape.half[0] : 0.15 * hs;
+  const armOf = (q: Prim) => { const m: V3 = [(q.a[0] + q.b[0]) / 2, (q.a[1] + q.b[1]) / 2, (q.a[2] + q.b[2]) / 2], side = /^(upperArm|forearm|hand)([LR])$/.exec(segOf(m))?.[2] ?? ''; return side && Math.abs(m[0]) > chestHalf + 0.02 * hs ? side : ''; };
   const parts = [below.filter((q) => armOf(q) === ''), below.filter((q) => armOf(q) === 'L'), below.filter((q) => armOf(q) === 'R')];
   for (const prims of parts) {
     if (!prims.length) continue;
@@ -48,8 +57,9 @@ export function personView(p: Person, body: Body, o: { cell?: number } = {}): Pe
     for (let i = 0; i < n; i++) {
       const q = core([m.pos[i * 3]!, m.pos[i * 3 + 1]!, m.pos[i * 3 + 2]!]);
       let b1 = 0, d1 = Infinity, b2 = 0, d2 = Infinity;
-      rest.forEach((x, k) => { const d = Math.max(0.001, segDist(q, x.s.a, x.s.b) - 0.6 * x.r); if (d < d1) { b2 = b1; d2 = d1; b1 = k; d1 = d; } else if (d < d2) { b2 = k; d2 = d; } });
-      const w1 = 1 / d1 ** 4, w2 = d2 < 3 * d1 ? 1 / d2 ** 4 : 0, sum = w1 + w2;
+      // the segments whose solid the point is in (or nearest): inside two at once, as at a joint, it goes with both
+      rest.forEach((x, k) => { const d = 0.004 * hs + outside(q, x); if (d < d1) { b2 = b1; d2 = d1; b1 = k; d1 = d; } else if (d < d2) { b2 = k; d2 = d; } });
+      const w1 = 1 / d1 ** 3, w2 = d2 < 4 * d1 ? 1 / d2 ** 3 : 0, sum = w1 + w2;
       si[i * 4] = b1; si[i * 4 + 1] = b2; sw[i * 4] = w1 / sum; sw[i * 4 + 1] = w2 / sum;
     }
     const g = geo(m); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
