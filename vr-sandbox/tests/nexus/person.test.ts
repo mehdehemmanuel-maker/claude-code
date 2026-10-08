@@ -1,9 +1,11 @@
 // People by real physics: the rig's segments carry de Leva's shares of the body's mass and stand where its centre of mass
 // stands (about 55 % of its height); a body gone slack falls under gravity and lies there; held by its joints' muscles
 // alone it stands, and a fighter holds its guard; its strikes reach the speeds fists are measured at, their speed what
-// the muscles' torques make of the arm's mass; and what it senses is read out as the facts its rules use.
+// the muscles' torques make of the arm's mass; and what it senses is read out as the facts its rules use. Laid on its
+// back it lies there, soft, not counted as knocked down; a hand that grabs it lifts what it holds; its strength is what
+// it is told.
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
 import type { Jolt } from '../../src/nexus/realize';
 import { People, legsFor, STANCES } from '../../src/nexus/person';
@@ -13,7 +15,8 @@ import { layOut } from '../../src/nexus/anatomy';
 let J: Jolt;
 beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });
 const FIGHTER = { muscle: 1.3, fat: 0.6, mass: 84 };
-const run = (w: People, s: number) => { for (let k = 0; k < s * 60; k++) w.step(1 / 60); };
+const run = (w: People, s: number) => { worlds.add(w); for (let k = 0; k < s * 60; k++) w.step(1 / 60); };
+const worlds = new Set<People>(); afterEach(() => { for (const w of worlds) w.dispose(); worlds.clear(); });
 
 describe('a body as the segments physics moves', () => {
   it('carries de Leva\'s shares of its mass, its centre of mass about 55 % of its height up', () => {
@@ -48,6 +51,18 @@ describe('a body in the room, by real physics', () => {
       for (let k = 0; k < 60; k++) { w.step(1 / 60); for (const id of ['handL', 'handR']) { const v = p.parts.find((x) => x.seg.id === id)!.body.GetLinearVelocity(); peak = Math.max(peak, Math.hypot(v.GetX(), v.GetY(), v.GetZ())); } }
       expect(peak, move).toBeGreaterThan(lo); expect(peak, move).toBeLessThan(hi); expect(p.down(), move).toBe(false);
     }
+  });
+  it('lies where it is laid, soft, and is not counted as knocked down', () => {
+    const w = new People(J, 9.80665, 3), p = w.add('a', {}, { x: 0, z: 0, yaw: 0 }); run(w, 0.5); p.ask('lie down on his back'); run(w, 3);
+    expect(p.down()).toBe(true); expect(p.headY()).toBeLessThan(0.3); expect(p.power).toBeLessThan(0.5); expect(p.downFor).toBe(0);
+    p.ask('get up'); expect(p.laid).toBe(false); expect(p.power).toBe(1);
+  });
+  it('is lifted where a hand holds it, and is as strong as it is told', () => {
+    const w = new People(J, 9.80665, 3), p = w.add('a', {}, { x: 0, z: 0, yaw: 0 }); p.ask('on his back'); run(w, 2.5);
+    const h0 = p.at('handL'), g = w.grab(h0, 0.05)!; expect(g.seg).toBe('handL');
+    w.hold(g.id, [h0[0], 0.9, h0[2]]); run(w, 2.5); expect(p.at('handL')[1]).toBeGreaterThan(0.6);
+    w.letGo(g.id); run(w, 2); expect(p.at('handL')[1]).toBeLessThan(0.4);
+    p.ask('strength 150%'); expect(p.power).toBeCloseTo(1.5, 6); p.ask('weaker'); expect(p.power).toBeLessThan(1.5);
   });
   it('reads out what it senses as facts its rules can use', () => {
     const w = new People(J, 9.80665, 3), p = w.add('Kai', FIGHTER, { x: 0, z: 0, yaw: 0 }, { fighter: true }); p.target = { point: [0, 1.64, 0.68] }; run(w, 0.3);

@@ -28,6 +28,8 @@ describe('a directive read here, by rule', () => {
     expect(act('make a woman')).toMatchObject({ act: 'person', who: 'woman', sex: 'XX' });
     expect(act('spawn a female fighter')).toMatchObject({ act: 'person', who: 'fighter', sex: 'XX' });
     expect(act('fight')).toMatchObject({ act: 'fight' });
+    for (const t of ['surprise me', 'make something random', 'generate anything', 'build me something cool', 'random', 'you pick', 'anything', "I'm feeling lucky", 'Nexus, surprise me!']) expect(act(t).act, t).toBe('surprise');
+    expect(act('make a random chair').act).toBe('make');
   });
   it('passes on what is not a directive, as it was said', () => {
     for (const t of ['make it bigger', 'build it step by step', 'show me the flaws', 'show the pipeline', 'why is this 9 mm?', 'close the 3d view', 'what can a mouse do', 'hello']) expect(act(t).act, t).toBe('pass');
