@@ -26,6 +26,7 @@ import { massOf, type Part } from '../kits';
 import type { Conditions } from './conditions';
 import { edgeRadius } from '../finish';
 import { insideBy, stationAt, surfaceZ } from '../form';
+import { patchAt, patchPoints, type V3 } from '../surface';
 import { contacts, dirToLocal, grownOf, layout, least, patchIn, toLocal, type Contact, type Node } from './space';
 
 export type MatClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
@@ -113,6 +114,9 @@ export const RULES: DetailRule[] = [
       for (const t of c.touch) {
         const key = `${t.a.path}|${t.b.path}`; if (c.joined.has(key)) continue; c.joined.add(key);
         if ((c.living(t.a) || c.living(t.b)) && (classOf(t.a.p.mat) === 'wood' || classOf(t.b.p.mat) === 'wood')) continue; // grown, not joined
+        // a skinned panel (src/nexus/panels.ts) meets its neighbours at shut lines, not joints: how it is fixed (hinged,
+        // bolted along its flanges, bonded) is its maker's, said with it
+        if ((t.a.p.shape && 'surf' in t.a.p.shape) || (t.b.p.shape && 'surf' in t.b.p.shape)) continue;
         const how = jointFor(t.a, t.b); if (how === 'none') continue;
         // fastened from the side you can reach: the part whose face looks furthest out from the thing along the joint's axis
         const out = t.normal.clone().multiplyScalar(Math.sign(t.mid.clone().sub(c.centre).dot(t.normal)) || 1), reach = (x: Node) => { const o = x.obb!; return o.c.dot(out) + o.h[0] * Math.abs(o.u[0].dot(out)) + o.h[1] * Math.abs(o.u[1].dot(out)) + o.h[2] * Math.abs(o.u[2].dot(out)); };
@@ -213,6 +217,8 @@ export const RULES: DetailRule[] = [
     id: 'doors', family: 'access', on: true, source: 'car door gaps 3–5 mm (typical); handles at hand height', says: 'a space people sit in has a door for each row of seats on each side, its seam a 4 mm gap and its handle where a hand reaches',
     run(c) {
       const seats = c.nodes.filter((x) => /\bseat\b/i.test(x.p.name) && !x.p.detail); if (!seats.length) return 0;
+      // (a panelled body, src/nexus/panels.ts, has its doors already: its own panels between its shut lines, handles on them)
+      if (c.nodes.some((x) => x.p.shape && 'surf' in x.p.shape && /\bdoors?\b/.test(x.p.name))) return 0;
       const pos = (x: Node) => new THREE.Vector3().setFromMatrixPosition(x.m);
       // (a cabin people sit inside: a shell round every seat, wide enough to sit in and rising well above the cushions; an
       // ATV's fenders, a forklift's hood or a motorcycle's tank are not)
@@ -257,6 +263,17 @@ export const RULES: DetailRule[] = [
       let n = 0;
       for (const x of c.nodes) {
         if (!x.box || x.p.detail || !(/\b(head ?light|tail ?light|lamp|light)\b/i.test(x.p.name) || x.p.light) || (x.p.mat !== 'pc' && x.p.mat !== 'pmma' && x.p.mat !== 'glass')) continue;
+        // a lens that is a region of a skin (src/nexus/panels.ts): its reflector the same region set in behind it, its bulb
+        // behind its middle, on each side it is drawn
+        if (x.p.shape && 'surf' in x.p.shape) {
+          // (a lamp its maker built in its layers, a housing and units under the lens, is left as built)
+          if ((x.p.parts ?? []).some((q) => q.glow || /lamp unit/.test(q.name))) continue;
+          const pt = x.p.shape.surf, red = /tail/i.test(x.p.name);
+          // (behind a skin's lens, its own housing is the dark: what shows through the lens is the lamp units in it, a
+          // pair of projectors each side, typical of a modern car; a red lamp's glow is its whole lens)
+          for (const z of pt.s.mirror ? [1, -1] : [1]) for (const a of red ? [0.5] : [0.3, 0.62]) { const q = patchAt(pt, a, 0.5), p2: V3 = [q.at[0] - q.n[0] * 0.02, q.at[1] - q.n[1] * 0.02, (q.at[2] - q.n[2] * 0.02) * z]; (x.p.parts ??= []).push({ name: red ? 'brake light' : 'lamp', shape: { sphere: red ? 0.018 : 0.028 }, at: p2, mat: 'glass', color: red ? 0xff2a1a : 0xfff4dc, glow: true, detail: 'lamps' }); }
+          n += 2; continue;
+        }
         const s = x.box.getSize(new THREE.Vector3()), out = new THREE.Vector3().setFromMatrixPosition(x.m).sub(c.centre), axis = s.x <= s.y && s.x <= s.z ? 0 : s.z <= s.y ? 2 : 1, dir = AX[axis]!.clone().multiplyScalar(Math.sign(out.getComponent(axis)) || 1), mid = x.box.getCenter(new THREE.Vector3());
         const dims: [number, number, number] = [s.x * 0.9, s.y * 0.9, s.z * 0.9]; dims[axis] = Math.max(0.005, s.getComponent(axis) * 0.3);
         attach(x, 'lamps', { name: 'reflector', shape: { box: dims }, mat: 'al-6061', color: 0xe8ecf0, finish: 'chrome' }, mid.clone().addScaledVector(dir, -s.getComponent(axis) * 0.3), UP);
@@ -277,13 +294,30 @@ export const RULES: DetailRule[] = [
         const under = c.nodes.filter((x) => x !== T && x.box && !x.p.detail && within(x, T));
         if (!under.some((x) => /\bseat\b/i.test(x.p.name)) || !under.some((x) => /\b(wheel|tyre|tire)s?\b/i.test(x.p.name))) continue;
         const lb = new THREE.Box3(); for (const x of under) for (const q of corners(x)) lb.expandByPoint(toLocal(T, q));
-        const body = under.filter((x) => x.p.shell && classOf(x.p.mat) === 'metal').sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
+        // (its body: its skin where it has one (src/nexus/panels.ts), not its floor, which is a painted metal shell too and
+        // often the longest part)
+        const shells = under.filter((x) => x.p.shell && classOf(x.p.mat) === 'metal'), skins = shells.filter((x) => x.p.shape && 'surf' in x.p.shape), body = (skins.length ? skins : shells).sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
         const belt = body ? Math.max(...corners(body).map((q) => toLocal(T, q).y)) : lb.min.y + (lb.max.y - lb.min.y) * 0.6, yp = Math.min(0.55, lb.min.y + (belt - lb.min.y) * 0.45);
-        for (const e of [-1, 1]) { put(T, 'road kit', { name: 'number plate', shape: { box: [0.003, 0.11, 0.52] }, mat: 'al-6061', color: 0xf4f0d8, finish: 'plate' }, new THREE.Vector3(e > 0 ? lb.max.x + 0.002 : lb.min.x - 0.002, yp, 0), 1, 1); n++; }
+        // on a skinned body (src/nexus/panels.ts) a plate sits on the skin itself, where it is at the plate's height and
+        // width, and a mirror stands just off the skin at the side glass's front; else at the thing's bounds
+        const skin: THREE.Vector3[] = [], paint: THREE.Vector3[] = [];
+        for (const x of under) if (x.p.shape && 'surf' in x.p.shape) for (const q of patchPoints(x.p.shape.surf, 48, 18)) { const v = toLocal(T, new THREE.Vector3(...q).applyMatrix4(x.m)); skin.push(v); if (shells.includes(x)) paint.push(v); }
+        // (a plate's height on a skinned body from its face at that end: the painted skin within 12 cm of its end, across
+        // the plate's width, and the plate 40% of the way up it, on the bumper; not from any one panel's height)
+        const heightAt = (e: number) => { const ex = e > 0 ? Math.max(...paint.map((q) => q.x)) : Math.min(...paint.map((q) => q.x)), ys = paint.filter((q) => e * (q.x - ex) > -0.12 && Math.abs(q.z) < 0.27).map((q) => q.y); return ys.length ? Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) * 0.4 : yp; };
+        const reach = (e: number, y: number) => { const xs = skin.filter((q) => Math.abs(q.y - y) < 0.07 && Math.abs(q.z) < 0.27).map((q) => q.x); return xs.length ? (e > 0 ? Math.max(...xs) : Math.min(...xs)) : e > 0 ? lb.max.x : lb.min.x; };
+        for (const e of [-1, 1]) { const y = paint.length ? heightAt(e) : yp; put(T, 'road kit', { name: 'number plate', shape: { box: [0.003, 0.11, 0.52] }, mat: 'al-6061', color: 0xf4f0d8, finish: 'plate' }, new THREE.Vector3(reach(e, y) + e * 0.004, y, 0), 1, 1); n++; }
         const front = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).x));
         // (a mirror where the driver's eye looks out: about 0.55 m above the cushion, at the front of the side glass)
         const seatY = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).y)), my = belt > seatY + 0.7 ? seatY + 0.5 : Math.max(belt + 0.04, seatY + 0.5); // (in a tall cab, its roof is not its window line)
-        for (const side of [-1, 1]) { put(T, 'road kit', { name: 'wing mirror', shape: { box: [0.1, 0.11, 0.2] }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, make: 'pressed', finish: 'paint' }, new THREE.Vector3(front + 0.5, my, side * (lb.max.z + 0.04)), 1, 1); n++; }
+        // (on a panelled body, at the foot of its A pillars, where the side glass begins, a little over the belt: typical)
+        const aP = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(A pillars|windscreen frame)$/.test(x.p.name)), ab = aP ? new THREE.Box3().setFromPoints(corners(aP).map((q) => toLocal(T, q))) : null;
+        const mx = ab ? ab.max.x - 0.16 : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
+        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), side0 = zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
+        // a mirror: its head a shell lofted out from the door, about 0.22 m out, 0.12 m tall and 0.09 m deep, flat at the
+        // back where its glass is and rounded in front, on a short stalk from the door (typical of a car's)
+        const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.05, w: 0.045, lo: -0.058, hi: 0.052, n: 3 }, { x: 0.17, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];
+        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.17, 0.09, 0.003] }, at: [0.115, 0, side * 0.047], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
       }
       return n;
     },

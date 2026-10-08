@@ -23,7 +23,12 @@ import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
 import { classOf } from './detail';
 import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
-import { insideBy, stationAt, type Loft, type Station } from '../form';
+import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../form';
+import { inSweep } from '../panels';
+/** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
+ *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
+const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
+import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -33,7 +38,7 @@ const TURNS = /\b(wheels?|tyres?|tires?|rims?|rotors?|propellers?|fans?|augers?|
 export function turning(p: Part): { clearance: number; why: string; /** beside it, along its axle, where that differs */ side?: number } | null {
   const tyre = p.mat === 'rubber' && !!p.shape && ('torus' in p.shape || 'lathe' in p.shape), n = p.name.toLowerCase();
   // (a steering wheel turns, but its room is a hand's round its rim inside the cab, not an arch cut in the body)
-  if (/\b(steering|hand|fifth) ?wheel|wheel (nut|bolt|stud|arch|well|base|mount|hanger)/.test(n)) return null;
+  if (/\b(steering|hand|fifth) ?wheel|wheel ?(nut|bolt|stud|arch|well|base|mount|hanger|house)/.test(n)) return null;
   if (!tyre && !TURNS.test(n)) return null;
   if (tyre || /\b(wheel|tyre|tire|rim|disc)s?\b/.test(n)) return { clearance: 0.03, side: 0.015, why: 'a wheel needs about 30 mm to its arch and 15 mm beside its sidewall (typical)' };
   if (/\b(fan|propeller|rotor|turbine|impeller)/.test(n)) return { clearance: 0.005, why: "a fan's or propeller's tip about 1.5 % of its diameter, at least 5 mm (typical)" };
@@ -121,6 +126,19 @@ export function critique(root: Part): Finding[] {
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
       if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
+      // a skin (src/nexus/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
+      // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
+      if (f.p.shape && 'surf' in f.p.shape) {
+        // (its tyre sweeps the ring about the tyre's own middle, its full width; what is inside its rim, the hub and the
+        // brake, reaches further in but only within the rim's bore)
+        const ez = ax.clone().normalize(), ey = new THREE.Vector3(0, 1, 0).addScaledVector(ez, -ez.y).normalize(), ex = ey.clone().cross(ez), tr = m.p.travel ?? {};
+        const tyreN = nodes.find((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.box), tc = tyreN ? tyreN.box!.getCenter(new THREE.Vector3()) : ctr, tw = !tyreN ? 2 * along : tyreN.p.shape && 'lathe' in tyreN.p.shape ? latheWidth(tyreN.p.shape.lathe) : Math.abs(tyreN.box!.getSize(new THREE.Vector3()).dot(ez));
+        const off = tc.clone().sub(ctr).dot(ez), room = { radial: need.clearance, side: sideRoom, poses: 7 };
+        const section = tyreN?.p.shape && 'lathe' in tyreN.p.shape ? tyreN.p.shape.lathe : undefined, tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0, section }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along, section: undefined };
+        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; return inSweep(l, tyreSweep, room) || inSweep(l, hubSweep, { ...room, radial: 0 }); });
+        if (!hit) continue;
+        say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;
+      }
       const opened = (f.p.parts ?? []).some((q) => q.detail === 'room to move' && q.name === `opening for ${m.p.name}`);
       if (opened) continue;
       // a lofted panel over a wheel (a car's body, a fender): its lower edge raised round the wheel, so the panel is
@@ -182,6 +200,8 @@ export function critique(root: Part): Finding[] {
     const p = n.p; if (!p.shell || !p.mat || p.detail) continue; const w = WALL.find(([re]) => re.test(p.mat!));
     if (w && p.shell < w[1] - 1e-9) { say('walls', p.name, `its ${(p.shell * 1000).toFixed(1)} mm wall is thinner than ${w[2]} is made (${(w[1] * 1000).toFixed(1)} mm): thickened`, true); p.shell = w[1]; }
   }
+  // ---- skins: how each meets its neighbours (as its maker says, and why), whether it parts from its die, how tight it bends ----
+  skinChecks(nodes, say);
   // ---- through: one thing passing into another (a car into a house): within one thing, parts set into each
   // other (a pole into its base, a blade into its guard) are how it is built ----
   for (const t of touch) {
@@ -247,4 +267,54 @@ function gapBetween(a: THREE.Box3, b: THREE.Box3): THREE.Vector3 {
 function moveBy(n: Node, world: THREE.Vector3): void {
   const inv = (n.parent?.m ?? new THREE.Matrix4()).clone().invert(), d = world.clone().transformDirection(inv).multiplyScalar(world.length());
   const at = n.p.at ?? [0, 0, 0]; n.p.at = [at[0] + d.x, at[1] + d.y, at[2] + d.z];
+}
+
+// ---- skins (src/nexus/panels.ts): each checked once, its own results kept with it ----------------------------------
+const formed = new WeakMap<Patch, { least: number; pull: SV3; rmin: number; rminAt: [number, number] }>(), grids = new WeakMap<Patch, { a: number; b: number; at: SV3 }[]>();
+const met = new WeakMap<Patch, Map<string, { gap: number; angle: number }>>(), ids = new WeakMap<Patch, number>(); let nextId = 0;
+const idOf = (pt: Patch) => { let i = ids.get(pt); if (i === undefined) { i = nextId++; ids.set(pt, i); } return i; };
+const gridOf = (pt: Patch) => { let g = grids.get(pt); if (!g) { g = []; for (let i = 0; i <= 40; i++) for (let j = 0; j <= 16; j++) g.push({ a: i / 40, b: j / 16, at: patchAt(pt, i / 40, j / 16).at }); grids.set(pt, g); } return g; };
+const deg = (r: number) => (r * 180) / Math.PI;
+/** A skin's meetings with its neighbours checked against what its maker said of them: across a mirror, its normal with no
+ *  part across the mirror (within 1°); in one tangent plane with a neighbour (G1: within 8 mm and 3°); a crease, within
+ *  8 mm. A pressed or moulded skin is pulled from its die from the best direction there is (the die tipped as a stamping
+ *  engineer sets it), and said where it would still lock in; and its tightest radius is said where it is under three
+ *  times its sheet's thickness (tighter than an outer panel is pressed without splitting, typical). */
+function skinChecks(nodes: Node[], say: (check: string, part: string, says: string, fixed: boolean) => void): void {
+  const skins = nodes.filter((n) => n.p.shape && 'surf' in n.p.shape && !n.p.detail);
+  for (const n of skins) {
+    const pt = (n.p.shape as { surf: Patch }).surf;
+    for (const m of n.p.meets ?? []) {
+      const ts = Array.from({ length: 19 }, (_, k) => 0.05 + (0.9 * k) / 18), ab = (t: number): [number, number] => (m.edge === 'a0' ? [0, t] : m.edge === 'a1' ? [1, t] : m.edge === 'b0' ? [t, 0] : [t, 1]);
+      if (m.kind === 'mirror') {
+        let worst = 0; for (const t of ts) { const q = patchAt(pt, ...ab(t)); if (Math.abs(q.at[2]) < 2e-3) worst = Math.max(worst, deg(Math.asin(Math.min(1, Math.abs(q.n[2]))))); }
+        if (worst > 1) say('continuity', n.p.name, `it meets its own mirror at ${worst.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
+        continue;
+      }
+      const other = skins.find((x) => x.p.name === m.part); if (!other) { say('continuity', n.p.name, `it is to meet the ${m.part}, which is not there`, false); continue; }
+      // (each point of this edge taken into the neighbour's frame, the point of the neighbour nearest it found, and the
+      // two normals compared there)
+      const opt = (other.p.shape as { surf: Patch }).surf, into = new THREE.Matrix4().copy(other.m).invert().multiply(n.m), rot = new THREE.Matrix3().setFromMatrix4(into), og = gridOf(opt);
+      // (what two skins' meeting is depends only on them, the edge, and where one stands from the other: kept, so a car
+      // park of one model, or the critic's next round, does not work it out again)
+      let seen = met.get(pt); if (!seen) { seen = new Map(); met.set(pt, seen); }
+      const mk = `${idOf(opt)}|${m.edge}|${into.elements.map((v) => v.toFixed(4)).join(',')}`; let got = seen.get(mk);
+      if (!got) {
+        let g2 = 0, a2 = 0;
+        for (const t of ts) {
+          const q = patchAt(pt, ...ab(t)), P = new THREE.Vector3(...q.at).applyMatrix4(into), c = closestOn(opt, [P.x, P.y, P.z], og), on = patchAt(opt, c.a, c.b).n;
+          g2 = Math.max(g2, c.d); a2 = Math.max(a2, deg(Math.acos(Math.min(1, Math.abs(new THREE.Vector3(...q.n).applyMatrix3(rot).normalize().dot(new THREE.Vector3(...on)))))));
+        }
+        got = { gap: g2, angle: a2 }; seen.set(mk, got);
+      }
+      const { gap, angle } = got;
+      if (gap > 0.008) say('continuity', n.p.name, `it is to meet the ${m.part} (${m.why}), but stands ${(gap * 1000).toFixed(0)} mm from it`, false);
+      else if (m.kind === 'G1' && angle > 3) say('continuity', n.p.name, `it meets the ${m.part} at ${angle.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
+    }
+    const pressed = n.p.make === 'pressed' || (classOf(n.p.mat) === 'polymer' && !!n.p.shell);
+    if (!pressed) continue;
+    let f = formed.get(pt); if (!f) { const d = draft(pt, undefined, 16, 10), fr = fairness(pt, 24, 12); f = { least: d.least, pull: d.pull, rmin: fr.rmin, rminAt: fr.rminAt }; formed.set(pt, f); }
+    if (f.least < -0.5 * (Math.PI / 180)) say('draft', n.p.name, `it would lock in its die: an undercut of ${(-deg(f.least)).toFixed(1)}° however the press is set (its best, along ${f.pull.map((v) => v.toFixed(2)).join(', ')})`, false);
+    if (n.p.shell && n.p.make === 'pressed' && f.rmin < 3 * n.p.shell) say('radius', n.p.name, `it bends to a ${(f.rmin * 1000).toFixed(1)} mm radius (at ${f.rminAt.map((v) => v.toFixed(2)).join(', ')} on it), tighter than ${(n.p.shell * 1000).toFixed(1)} mm sheet is pressed (about three times its thickness, typical)`, false);
+  }
 }

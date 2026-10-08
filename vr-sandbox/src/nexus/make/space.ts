@@ -26,13 +26,13 @@ export function shapeBox(s: Shape | undefined, base?: boolean): THREE.Box3 | nul
   else if ('cone' in s) { const [r, h] = s.cone; min = new THREE.Vector3(-r, -h / 2, -r); max = new THREE.Vector3(r, h / 2, r); }
   else if ('torus' in s) { const [R, r] = s.torus; min = new THREE.Vector3(-R - r, -R - r, -r); max = new THREE.Vector3(R + r, R + r, r); }
   else if ('capsule' in s) { const [r, h] = s.capsule; min = new THREE.Vector3(-r, -h / 2 - r, -r); max = new THREE.Vector3(r, h / 2 + r, r); }
-  else if ('loft' in s || 'tube' in s || 'lathe' in s) { const b = boundsOf(piecesOf(s)); min = new THREE.Vector3(...b.min); max = new THREE.Vector3(...b.max); }
+  else if ('loft' in s || 'tube' in s || 'lathe' in s || 'surf' in s) { const b = boundsOf(piecesOf(s)); min = new THREE.Vector3(...b.min); max = new THREE.Vector3(...b.max); }
   else return null; // stars, fields and heaps are not solids to join
   const b = new THREE.Box3(min, max); if (base) b.translate(new THREE.Vector3(0, -min.y, 0)); return b;
 }
 /** A shape's covering boxes in the world (one, its own box, for the primitives). */
 function piecesIn(s: Shape | undefined, lb: THREE.Box3, m: THREE.Matrix4, base?: boolean): OBB[] {
-  if (!s || !('loft' in s || 'tube' in s || 'lathe' in s)) return [obbOf(lb, m)];
+  if (!s || !('loft' in s || 'tube' in s || 'lathe' in s || 'surf' in s)) return [obbOf(lb, m)];
   const lift = base ? -boundsOf(piecesOf(s)).min[1] : 0, x = new THREE.Vector3(), y = new THREE.Vector3(), z = new THREE.Vector3(); m.extractBasis(x, y, z);
   return piecesOf(s).map((q: LocalBox) => {
     const u = (q.u ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]]).map((v) => new THREE.Vector3(...v).transformDirection(m)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3];

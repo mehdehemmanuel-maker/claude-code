@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { edgeRadius } from '../finish';
 import type { Part, Shape } from '../kits';
 import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
+import { patchAt, tessellate, type Patch } from '../surface';
 import { findItem, resolve } from '../inventory';
 import { lookOf } from '../pieces';
 import { meshOfLook } from './explode';
@@ -31,9 +32,11 @@ const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: 
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
     const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
-    const base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? 0.35 : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
-    // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces)
-    m = f?.coat && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f.coat, clearcoatRoughness: 0.08 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
+    // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
+    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
+    // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear
+    // coat, the gloss that shows a body's shape in what it reflects)
+    m = (f?.coat || glass) && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
     mats.set(key, m);
   }
   return m;
@@ -66,7 +69,17 @@ export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24
   return new THREE.LatheGeometry(pts, seg);
 }
 const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' in s ? Math.min(2 * s.cyl[0], s.cyl[1]) : 'cone' in s ? s.cone[0] : 1);
+/** A freeform skin as triangles: as finely as about 3 cm a step across it (between 6 and 96 steps each way), its normals
+ *  the surface's own, so its highlights run as its curvature does. */
+function surfGeometry(pt: Patch): THREE.BufferGeometry {
+  const run = (f: (t: number) => [number, number]) => { let d = 0, q = patchAt(pt, ...f(0)).at; for (let k = 1; k <= 8; k++) { const r = patchAt(pt, ...f(k / 8)).at; d += Math.hypot(r[0] - q[0], r[1] - q[1], r[2] - q[2]); q = r; } return d; };
+  const steps = (d: number) => Math.max(6, Math.min(96, Math.round(d / 0.03)));
+  const t = tessellate(pt, steps(Math.max(run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1]))), steps(Math.max(run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])))), g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3)); g.setIndex(t.idx);
+  return g;
+}
 function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+  if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
   if ('lathe' in s) return new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), 40);
@@ -134,6 +147,29 @@ function heap(h: Extract<Shape, { heap: unknown }>['heap']): THREE.Object3D {
   inst.castShadow = true; return inst;
 }
 /** A thing drawn from its parts; up to so many of its lights really lit (the rest glow). */
+let blob: THREE.CanvasTexture | null = null;
+const blobTexture = (): THREE.CanvasTexture | null => {
+  if (blob) return blob; if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); if (!x) return null;
+  const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128); blob = new THREE.CanvasTexture(c); return blob;
+};
+/** The ground's shading under a thing that rests on it: one soft patch its footprint's size, and a darker one under each
+ *  part that touches the ground. Null for a thing that does not rest on the ground (or where there is no canvas). */
+function contactShadow(group: THREE.Group): THREE.Group | null {
+  const tex = blobTexture(); if (!tex) return null;
+  group.updateMatrixWorld(true); const all = new THREE.Box3().setFromObject(group); if (all.isEmpty() || all.min.y > 0.05) return null;
+  const out = new THREE.Group(); out.name = 'contact shadow'; out.userData.decor = true;
+  const patch = (cx: number, cz: number, sx: number, sz: number, opacity: number, lift: number) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(cx, all.min.y + lift, cz); m.renderOrder = 1; m.userData.decor = true; out.add(m);
+  };
+  const size = all.getSize(new THREE.Vector3()), ctr = all.getCenter(new THREE.Vector3());
+  patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002);
+  const b = new THREE.Box3();
+  group.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh) return; b.setFromObject(m); if (b.isEmpty() || b.min.y > all.min.y + 0.01 || b.max.y - b.min.y < 0.02) return; const s2 = b.getSize(new THREE.Vector3()), c2 = b.getCenter(new THREE.Vector3()); patch(c2.x, c2.z, Math.max(0.05, s2.x) * 1.3, Math.max(0.05, s2.z) * 1.3, 0.55, 0.003); });
+  return out;
+}
 export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
   const swingers: ((t: number, f: number) => void)[] = []; let clockT = 0;
   const group = new THREE.Group(), turners: ((dt: number) => void)[] = [], nodes: { obj: THREE.Object3D; home: THREE.Vector3; depth: number }[] = [];
@@ -145,7 +181,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, !!p.light || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size
@@ -159,6 +195,10 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
     return g;
   };
   group.add(draw(root, 0));
+  // grounded: what rests on the ground darkens the ground under it (the sky's light taken by what is over it), softly
+  // under its whole footprint and more where it touches (a tyre, a foot). Drawn, not cast, so it costs nothing on a
+  // headset that cannot afford shadow maps, and a thing never looks as if it floats.
+  const shade = contactShadow(group); if (shade) group.add(shade);
   const box = new THREE.Box3();
   const view: KitView = {
     group, lights, gait: 0,

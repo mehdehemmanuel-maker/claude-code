@@ -21,7 +21,10 @@ export interface Made { part: Part; conditions: Conditions; stages: { stage: str
 /** A thing taken through the whole pipeline (the thing given is not changed). */
 export function perfect(made: Part, words: string | Conditions = '', o: { rules?: (id: string) => boolean; rounds?: number } = {}): Made {
   const cond = typeof words === 'string' ? readConditions(words) : words, stages: Made['stages'] = [], before = [countParts(made), massOf(made)] as [number, number];
-  const applied = applyConditions(structuredClone(made), cond); let part = applied.part;
+  // (a copy of what was made to work on, its skins shared: a skin is never changed in place, and what is worked out
+  // about one, its fairness, its draft, its pieces, is kept by it, so a car park of one model works it out once)
+  const clone = (p: Part): Part => { const { shape, parts, ...rest } = p; return { ...structuredClone(rest), ...(shape ? { shape: 'surf' in shape ? shape : structuredClone(shape) } : {}), ...(parts ? { parts: parts.map(clone) } : {}) } as Part; };
+  const applied = applyConditions(clone(made), cond); let part = applied.part;
   stages.push({ stage: 'conditions', did: [...cond.said, ...applied.did] });
   let findings: Finding[] = [], counts: Record<string, number> = {}, kg: Record<string, number> = {}, rounds = 0;
   for (; rounds < (o.rounds ?? 3); rounds++) {
