@@ -293,7 +293,26 @@ export const RULES: DetailRule[] = [
         // on a lofted body the seams follow its surface, a short length at a time; on a box, its face
         const l = shell.p.shape && 'loft' in shell.p.shape ? shell.p.shape.loft : null;
         const on = (x: number, y: number) => { if (!l) return z; const q = toLocal(shell, new THREE.Vector3(x, y, 0)), st = stationAt(l, q.x), zz = st ? surfaceZ(st, q.y) : null; return zz === null ? null : side * (zz + 0.001); };
-        const seg = (ax: number, ay: number, bx: number, by: number) => { const k = l ? 8 : 1; for (let i = 0; i < k; i++) { const xa = ax + ((bx - ax) * i) / k, ya = ay + ((by - ay) * i) / k, xb = ax + ((bx - ax) * (i + 1)) / k, yb = ay + ((by - ay) * (i + 1)) / k, zz = on((xa + xb) / 2, (ya + yb) / 2); if (zz === null) continue; attach(shell, 'doors', { name: 'door seam', shape: { box: [Math.max(gap, Math.abs(xb - xa)), Math.max(gap, Math.abs(yb - ya)), gap] }, ...seam }, new THREE.Vector3((xa + xb) / 2, (ya + yb) / 2, zz), UP); } };
+        // (each a dark line 1 mm thick laid along the chord between its ends on the face, square to the face there (its
+        // normal from the face's slopes), and stood off it by as far as the face bulges past that chord, so it lies on it
+        // and never in it: a box laid square to the world on a side that leans in, as a cab's does, sinks in at one end,
+        // and one laid across a corner's roll sinks in along its edge)
+        const surf = (x: number, y: number) => { const q = on(x, y); return q === null ? null : q - side * 0.001; };
+        const seg = (ax: number, ay: number, bx: number, by: number) => {
+          const k = l ? 8 : 1;
+          for (let i = 0; i < k; i++) {
+            const xa = ax + ((bx - ax) * i) / k, ya = ay + ((by - ay) * i) / k, xb = ax + ((bx - ax) * (i + 1)) / k, yb = ay + ((by - ay) * (i + 1)) / k;
+            const ps = [0, 0.25, 0.5, 0.75, 1].map((f) => { const x = xa + (xb - xa) * f, y = ya + (yb - ya) * f, q = surf(x, y); return q === null ? null : new THREE.Vector3(x, y, q); });
+            if (ps.some((q) => q === null)) continue;
+            const P0 = ps[0]!, P1 = ps[4]!, mx = (xa + xb) / 2, my = (ya + yb) / 2, h = 0.004, sl = (dx: number, dy: number) => { const a = surf(mx + dx, my + dy), b = surf(mx - dx, my - dy); return a === null || b === null ? 0 : (a - b) / (2 * h); };
+            const e1 = P1.clone().sub(P0); const len = e1.length(); if (len < 1e-6) continue; e1.divideScalar(len);
+            const n = new THREE.Vector3(-sl(h, 0), -sl(0, h), 1).multiplyScalar(side).normalize(), e2 = n.clone().cross(e1).normalize(); n.copy(e1.clone().cross(e2)).normalize();
+            const out = Math.max(0, ...ps.map((q, m) => q!.clone().sub(P0.clone().lerp(P1, m / 4)).dot(n)));
+            const at = P0.clone().lerp(P1, 0.5).addScaledVector(n, out + 0.001);
+            const p = attach(shell, 'doors', { name: 'door seam', shape: { box: [Math.max(gap, len), gap, 0.001] }, ...seam }, at);
+            const e = new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(e1, e2, n)); p.rot = [e.x, e.y, e.z];
+          }
+        };
         const top = l ? Math.min(y1, ...[x0, x1].map((xx) => { const st = stationAt(l, toLocal(shell, new THREE.Vector3(xx, 0, 0)).x); return st ? st.hi - 0.06 : y1; })) : y1;
         seg(x0, y0, x1, y0); seg(x0, top, x1, top); seg(x0, y0, x0, top); seg(x1, y0, x1, top);
         const hy = y0 + (top - y0) * 0.75, hz = on(x1 - 0.18, hy);

@@ -103,7 +103,11 @@ export function critique(root: Part): Finding[] {
   const pairedTo = new Map<string, string[]>(); for (const k of pairs) { const [a, b] = k.split('|') as [string, string]; (pairedTo.get(a) ?? pairedTo.set(a, []).get(a)!).push(b); }
   let dirty = false;
   for (const m0 of movers) {
-    if (dirty) { nodes = layout(root); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes), ctr = m.sub!.getCenter(new THREE.Vector3());
+    if (dirty) { nodes = layout(root); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes);
+    // (what turns is what is of its link: a brake's caliper carried in a wheel's group, on its own link (its knuckle's, its
+    // fork's), does not turn with it, and the room is the wheel's, not the caliper's)
+    const ownLink = (x: Node): boolean => { for (let y: Node | null = x; y && y !== m; y = y.parent) if (y.p.link !== undefined && y.p.link !== m.p.link) return false; return true; };
+    const turns = nodes.filter((x) => isUnder(x, m) && x.box && ownLink(x)), box = turns.length ? turns.reduce((b, x) => b.union(x.box!), new THREE.Box3()) : m.sub!, ctr = box.getCenter(new THREE.Vector3());
     // the room it needs: the disc it sweeps round its axis (a blade's, not its still box), and the room past that
     // (a round thing's reach is its radius; a blade's, the farthest corner of it from its axis)
     // (a wheel sweeps a ring: inside its rim, behind its face, is where its knuckle, brake and strut foot live)
@@ -112,8 +116,8 @@ export function critique(root: Part): Finding[] {
     // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
     const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && classOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
     const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
-    const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = m.sub!.getSize(new THREE.Vector3());
-    const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(m.sub!).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(m.sub!).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
+    const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = box.getSize(new THREE.Vector3());
+    const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(box).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(box).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
     const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
     // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
     // kept the room asked inside the housing's walls
@@ -505,7 +509,9 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
       // (where a maker says two metal parts of one assembly are welded together and they overlap, the overlap is the weld's
       // fillet, which is not drawn: one piece, said so)
       // (or lap one on the other at a flange, sunk where they are spot-welded: a pressing's flange on the next)
-      const weldLap = (kind2 === 'through' || !flush) && kin !== 'apart' && METAL.test(meshes[i]!.mat ?? '') && METAL.test(meshes[j]!.mat ?? '') && [claimFor0(meshes[i]!, meshes[j]!), claimFor0(meshes[j]!, meshes[i]!)].some((c) => c && /weld/i.test(c));
+      // (of one assembly by any weld it says; across two, as a rack's post to its frame, only by a weld that names the other)
+      const weldsTo = (p: TriMesh, q: TriMesh) => { const c = claimFor0(p, q); return !!c && /weld/i.test(c) && (kin !== 'apart' || claimOf(p.joined, q) === 2); };
+      const weldLap = (kind2 === 'through' || !flush) && METAL.test(meshes[i]!.mat ?? '') && METAL.test(meshes[j]!.mat ?? '') && (weldsTo(meshes[i]!, meshes[j]!) || weldsTo(meshes[j]!, meshes[i]!));
       const kindF: Clash['kind'] = fit ? 'fitted' : joinedBy ? 'joined' : isFused || weldLap ? 'fused' : fixedBy ? 'joined' : kind2;
       const by = kindF === 'joined' ? (joinedBy ? 'a joint laid on them' : fixedBy) : kindF === 'fused' ? (weldLap ? `${claimFor0(meshes[i]!, meshes[j]!) ?? claimFor0(meshes[j]!, meshes[i]!)} (overlapping where the weld's fillet would be, not drawn)` : fixedBy && /weld/.test(fixedBy) ? fixedBy : meshes[i]!.weld || meshes[j]!.weld ? 'the weld bead between them' : 'one casting or moulding') : undefined;
       out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, ia: i, ib: j, kind: kindF, ...(depth !== undefined ? { depth } : {}), ...(fit ? { opening: cnt[0]! === 0 } : {}), ...(by ? { by } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
