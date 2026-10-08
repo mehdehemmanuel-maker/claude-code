@@ -20,7 +20,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curveAt, skinParams, skinThrough, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import { curveAt, fairness, greville, patchPoints, skinThrough, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
 import type { Lines } from './machines';
 
@@ -41,6 +41,8 @@ export interface BodyRules {
   /** stations along the body: their spacing, m, and how many round each end's corner */ stations: { step: number; ends: number };
   /** the cabin: its roof's half-width as a share of the body's, the pillars' width, m */ cabin: { roof: number; pillar: number };
   /** a shut line's gap, m */ gap: number;
+  /** skins fitted fairly across their stations: a control column to every so many metres of outline, so much weight on
+   *  bending (none: forced through every station) */ fit: { step: number; lambda: number } | null;
 }
 export const BODY_RULES: BodyRules = {
   room: { radial: 0.03, side: 0.015, poses: 7 },
@@ -51,10 +53,15 @@ export const BODY_RULES: BodyRules = {
   stations: { step: 0.14, ends: 8 },
   cabin: { roof: 0.72, pillar: 0.04 },
   gap: 0.004,
+  fit: { step: 0.25, lambda: 0.2 },
 };
 /** The rules' own history: what a practising critic found, what the rule was, what it is now. */
 export interface RuleUpdate { n: number; found: string; was: string; now: string; rule: string }
-export const RULE_UPDATES: RuleUpdate[] = [];
+export const RULE_UPDATES: RuleUpdate[] = [
+  { n: 1, rule: 'stations', found: 'a body skin forced through every station rippled along its length: up to 4.6 turns of curvature on one line of a hood, 4.2 on a fender (the critic\'s combs, 2026-10-08)', was: 'interpolated through every station', now: 'fitted fairly across its stations: least squares plus a weight on bending, its ends and end tangents kept' },
+  { n: 2, rule: 'section', found: 'doors still turned 3.5 times a line, 124 times a door, up and down: each section forced through its points on parameters shared with the pinched sections at the nose', was: 'a curve through each section\'s points', now: 'each section drawn as a convex control polygon (a B-spline never wavers more than its polygon): no turns on any door' },
+  { n: 3, rule: 'fit', found: 'practised on the Corolla, an SUV and a van, held out a hatchback, a sports car and a coupe: 0.02 scored 307 and 428. A weight of 0.5, or a control column every 0.35 m, did best on the bodies practised on (149, 150) and worst on those held out (12,208 and 11,179: the smoothed skin ran into the wheels\' sweep), so neither was kept', was: '{"step":0.25,"lambda":0.02}', now: '{"step":0.25,"lambda":0.2} (scored 162 and 224)' },
+];
 
 // ---- a wheel's sweep -------------------------------------------------------------------------------------------------
 /** The poses a wheel goes through: steered from full lock one way to the other, at rest and at full bump. */
@@ -132,6 +139,7 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
  *  change, together), so every station is a flat section of it and where the outline turns round a nose the skin's
  *  parameter turns with it (a station's place along x alone crowds the nose's whole width into a sliver of the skin, and
  *  what is interpolated there overshoots). */
+const outlineLength = (xs: number[], w: (x: number) => number) => { let d = 0; for (let i = 1; i < xs.length; i++) d += Math.hypot(xs[i]! - xs[i - 1]!, w(xs[i]!) - w(xs[i - 1]!)); return d; };
 const byOutline = (xs: number[], w: (x: number) => number) => { const d = [0]; for (let i = 1; i < xs.length; i++) d.push(d[i - 1]! + Math.hypot(xs[i]! - xs[i - 1]!, w(xs[i]!) - w(xs[i - 1]!))); const T = d[d.length - 1]! || 1; return d.map((x) => x / T); };
 /** Stations along a run: about so far apart, closer round its ends where its corners turn (cosine spaced). */
 function stationsOf(x0: number, x1: number, step: number, ends: { at0?: number; at1?: number; n: number }): number[] {
@@ -161,17 +169,25 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
   // round each arch the side is not tucked under: its lip stays outside the tyre's face by the room beside it, so the
   // tyre can rise behind it (a fender's lip is what a raised tyre tucks up inside)
   const tuckAt = (x: number) => { let t = r.side.tuck; for (const w of b.wheels) { const reach = w.R + r.room.radial + 0.25, d = Math.abs(x - w.x); if (d >= reach) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach), s3 = g * g * (3 - 2 * g), allowed = Math.max(0, ln.plan(x) - (w.z + w.w / 2 + r.room.side + 0.002)); t = t - (t - Math.min(t, allowed)) * s3; } return t; };
-  const section = (x: number): V3[] => {
-    const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x);
-    return [[x, lo, w - tk * f], [x, lo + Math.min(0.1, 0.25 * (sh - lo)), w - tk * 0.62 * f], [x, lo + 0.45 * (sh - lo), w - tk * 0.2 * f], [x, sh, w], [x, sh + 0.55 * (top - sh), w - r.side.tumble * f], [x, top, w - r.side.inset * f]];
-  };
-  const rows = xs.map(section);
   // arriving at its top edge going in, at the slope the hood's or deck's crown leaves it (G1 across the shut line); at
   // the very ends, where the section closes to the middle, along itself
   const edgeSlope = (x: number) => { const zt = Math.max(1e-3, ln.plan(x) * (1 - r.side.inset / W2)); return (2 * ln.crownAt(x)) / zt; };
   // (only in the last few centimetres, where the outline closes to the middle, does a section turn to run along itself)
-  const closing = (x: number) => Math.min(1, ln.plan(x) / W2 / 0.15), arrive = (x: number): V3 => { const f = closing(x); return [0, edgeSlope(x) * f + (1 - f), -f]; };
-  const uo = byOutline(xs, ln.plan), side = skinThrough(rows, { mirror: true, d1: (i) => arrive(xs[i]!), u: uo, e0: [0, 0, 1], e1: [0, 0, -1] }), sp = skinParams(rows, uo), sv = sp.v; // sv: the v of each section point
+  const closing = (x: number) => Math.min(1, ln.plan(x) / W2 / 0.15), arrive = (x: number): V3 => { const f = closing(x), d: V3 = [0, edgeSlope(x) * f + (1 - f), -f], l = Math.hypot(d[1], d[2]) || 1; return [0, d[1] / l, d[2] / l]; };
+  // each section drawn as its control polygon, bottom to top: tucked in at the rocker, out through the lower door to the
+  // shoulder (two points at its widest, so it is held there), leaning in above it, and rolled over to the top edge along
+  // the direction the hood leaves it. A B-spline never wavers more than its polygon, so a convex polygon makes a section
+  // with no ripple in it, whatever its neighbours are like.
+  const section = (x: number): V3[] => {
+    // (convex as drawn: each leg of it leans in more than the one below it, from the tuck under to the roll over the top)
+    const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x), d = sh - lo, ar = arrive(x), zt = w - r.side.inset * f, hand = Math.min(0.03, 0.3 * (top - sh)) * Math.max(0.15, f);
+    return [[x, lo, w - tk * f], [x, lo + Math.min(0.1, 0.25 * d), w - tk * 0.55 * f], [x, lo + 0.5 * d, w - tk * 0.12 * f], [x, sh - 0.04, w + 0.004 * f], [x, sh + 0.02, w + 0.004 * f], [x, sh + 0.02 + 0.6 * (top - sh - 0.02), w - r.side.tumble * 0.4 * f], [x, top - hand * ar[1], zt - hand * ar[2]], [x, top, zt]];
+  };
+  const rows = xs.map(section);
+  const fitOf = (xs2: number[]) => (r.fit ? { n: Math.max(5, Math.round(outlineLength(xs2, ln.plan) / r.fit.step)), lambda: r.fit.lambda } : undefined);
+  const uo = byOutline(xs, ln.plan), side = skinThrough(rows, { mirror: true, control: true, u: uo, e0: [0, 0, 1], e1: [0, 0, -1], fit: fitOf(xs) });
+  // where on the skin each line of its sections runs: the parameter under each control point (its Greville abscissa)
+  const gv = greville(rows[0]!.length, 3), sv = [0, gv[1]!, gv[2]!, (gv[3]! + gv[4]!) / 2, gv[5]!, 1];
   const vSill = sv[1]!, U = (x: number) => uAt(side, x, sv[3]!);
   // ---- each arch: concentric with its wheel, the least radius that clears its sweep on the skin ----
   const archOf = (w: WheelAt): { line: UV[]; Ra: number } => {
@@ -222,9 +238,11 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
   const lid = (name: string, x0: number, x1: number, crown: number, says: string): Part | null => {
     if (x1 - x0 < 0.08) return null;
     const ls = stationsOf(x0, x1, r.stations.step, x1 >= ln.xN - 1e-6 ? { at1: r.plan.nose, n: r.stations.ends } : x0 <= ln.xT + 1e-6 ? { at0: r.plan.tail, n: r.stations.ends } : { n: 0 });
-    const lr = ls.map((x): V3[] => { const zt = Math.max(0, ln.plan(x) * (1 - r.side.inset / W2) - r.gap), y = ln.top(x); return [[x, y, zt], [x, y + crown * 0.75, zt * 0.5], [x, y + crown, 0]]; });
-    const fOf = (i: number) => closing(ls[i]!);
-    const s = skinThrough(lr, { mirror: true, q: 2, u: byOutline(ls, ln.plan), d0: (i) => { const f = fOf(i); return [0, edgeSlope(ls[i]!) * f + (1 - f), -f]; }, d1: (i) => { const f = fOf(i); return [0, 1 - f, -f]; } });
+    // its section's control polygon: leaving the side's top edge along the side's own arrival there (one tangent plane
+    // across the shut line), crowned, and level across the middle (one tangent plane with its mirror); its points on the
+    // two tangent lines a parabola's crown has, so it is convex
+    const lr = ls.map((x): V3[] => { const zt = Math.max(0, ln.plan(x) * (1 - r.side.inset / W2) - r.gap), y = ln.top(x), ar = arrive(x), hand = Math.min(0.06, zt * 0.25) + 0.002; return [[x, y, zt], [x, y + hand * ar[1], zt + hand * ar[2]], [x, y + crown, zt * 0.5], [x, y + crown, zt * 0.16], [x, y + crown, 0]]; });
+    const s = skinThrough(lr, { mirror: true, control: true, u: byOutline(ls, ln.plan), fit: fitOf(ls) });
     return paint(name, { s }, { says });
   };
   const hood = lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops');
@@ -236,11 +254,13 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
     const cs = stationsOf(xStart, xEnd, r.stations.step * 0.8, { n: 0 });
     const cr = cs.map((x): V3[] => {
       const zt = ln.plan(x) * (1 - r.side.inset / W2), y0 = ln.top(x), yT = Math.max(y0 + 0.004, ln.roof(x)), k = Math.min(1, Math.max(0.02, (yT - y0) / Math.max(0.05, b.H - y0)));
-      const rail = yT - r.crown.roof * k, zR = zt - (zt - zRoof) * k, mid = (f: number): V3 => [x, y0 + (rail - y0) * f, zt + (zR - zt) * f + 0.012 * k * Math.sin(Math.PI * f)];
-      return [[x, y0, zt], mid(0.33), mid(0.75), [x, rail, zR], [x, yT - r.crown.roof * k * 0.25, zR * 0.5], [x, yT, 0]];
+      // its control polygon: up the glass from the belt, leaning in and bowed out a little, round the rail (a radius there,
+      // not an edge: its corner a control point, its neighbours a few centimetres off it), across the roof, level at the middle
+      const rail = yT - r.crown.roof * k, zR = zt - (zt - zRoof) * k, rr = 0.05 * k;
+      return [[x, y0, zt], [x, y0 + (rail - y0) * 0.35, zt + (zR - zt) * 0.35 + 0.012 * k], [x, rail - rr, zR + rr * 0.35], [x, rail + rr * 0.15, zR - rr * 0.25], [x, yT - r.crown.roof * k * 0.2, zR * 0.55], [x, yT, zR * 0.18], [x, yT, 0]];
     });
-    const cab = skinThrough(cr, { mirror: true, d1: () => [0, 0, -1], u: byOutline(cs, ln.plan) }), cv = skinParams(cr, byOutline(cs, ln.plan)).v, Uc = (x: number) => uAt(cab, x, cv[3]!);
-    const p = r.cabin.pillar / 1.2, vg0 = 0.022, v3 = cv[3]!;
+    const cab = skinThrough(cr, { mirror: true, control: true, u: byOutline(cs, ln.plan), fit: fitOf(cs) }), cg = greville(cr[0]!.length, 3), Uc = (x: number) => uAt(cab, x, (cg[2]! + cg[3]!) / 2);
+    const p = r.cabin.pillar / 1.2, vg0 = 0.022, v3 = (cg[2]! + cg[3]!) / 2;
     const glass = (name: string, uv: [UV, UV, UV, UV], says: string): Part => ({ name, shape: { surf: { s: cab, uv, off: 0.0015 } }, at: [0, 0, 0], mat: 'glass', color: 0x1e2a33, shell: 0.0045, says });
     const trim = (name: string, uv: [UV, UV, UV, UV], more: Partial<Part> = {}): Part => paint(name, { s: cab, uv }, more);
     const uWs = Uc(ln.xRoofF), uRr = Uc(ln.xRoofR), uB0 = Uc(xB - r.cabin.pillar), uB1 = Uc(xB + r.cabin.pillar), uCe = Uc(ln.xRoofR - 0.05);
@@ -263,4 +283,29 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
     }
   }
   return out;
+}
+
+// ---- practice: the critic changes the rules, never a body ---------------------------------------------------------------
+/** How the critic finds a body: for each painted panel, the most times any one line on it turns the other way (a ripple
+ *  a person sees in its reflections), how many such turns there are, and how fast its curvature changes; and anything
+ *  in a wheel's way, which outweighs all of that. Lower is better. */
+export function bodyScore(parts: Part[], plan: BodyPlan, room = BODY_RULES.room): { score: number; rows: { panel: string; worstLine: number; wobbles: number; roughness: number }[]; blocked: number } {
+  const rows: { panel: string; worstLine: number; wobbles: number; roughness: number }[] = []; let blocked = 0;
+  for (const p of parts) {
+    if (!p.shape || !('surf' in p.shape)) continue;
+    if (p.finish === 'paint') { const f = fairness(p.shape.surf, 30, 14); rows.push({ panel: p.name, worstLine: f.worstLine, wobbles: f.wobbles, roughness: f.roughness }); }
+    if (!/liner/.test(p.name)) for (const w of plan.wheels) blocked += patchPoints(p.shape.surf, 24, 10).filter((q) => inSweep(q, w, room)).length;
+  }
+  const score = rows.reduce((a, r) => a + r.worstLine * 10 + r.wobbles * 0.2 + Math.log1p(r.roughness / 100), 0) + blocked * 1000;
+  return { score, rows, blocked };
+}
+/** A rule practised: each value tried on the bodies it practises on and on bodies it has not seen (held out), and kept
+ *  only if it does better on both than the rule as it is (a change that helps only the bodies it was tried on is fitting
+ *  to them, not learning). Says what it found. */
+export function practise<K extends keyof BodyRules>(rule: K, values: BodyRules[K][], on: BodyPlan[], heldOut: BodyPlan[], base: BodyRules = BODY_RULES): { kept: BodyRules[K]; tried: { value: BodyRules[K]; on: number; held: number }[]; update: RuleUpdate | null } {
+  const total = (plans: BodyPlan[], rules: BodyRules) => plans.reduce((a, b) => a + bodyScore(bodyPanels(b, rules), b, rules.room).score, 0);
+  const now = { on: total(on, base), held: total(heldOut, base) }, tried = values.map((value) => { const rules = { ...base, [rule]: value }; return { value, on: total(on, rules), held: total(heldOut, rules) }; });
+  const better = tried.filter((t) => t.on < now.on && t.held < now.held).sort((a, b) => a.on + a.held - (b.on + b.held))[0];
+  if (!better) return { kept: base[rule], tried, update: null };
+  return { kept: better.value, tried, update: { n: RULE_UPDATES.length + 1, rule: String(rule), found: `on ${on.length} bodies the critic scored ${now.on.toFixed(0)}, on ${heldOut.length} it had not seen ${now.held.toFixed(0)}`, was: JSON.stringify(base[rule]), now: `${JSON.stringify(better.value)} (scored ${better.on.toFixed(0)} and ${better.held.toFixed(0)})` } };
 }

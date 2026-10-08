@@ -12,7 +12,7 @@
 // one part of that mass, said as such; where they weigh more, that is said too.
 
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
-import { bodyPanels, type KeepOut, type WheelAt } from './panels';
+import { bodyPanels, type BodyPlan, type KeepOut, type WheelAt } from './panels';
 import { getMaterial } from '../data/materials';
 import type { Station } from './form';
 
@@ -104,7 +104,9 @@ export const travelOf = (a: Axle): { steer: number; bump: number } => ({ steer: 
 const powerAt = (m: Machine): Power => (m.power.y !== undefined ? m.power : { ...m.power, y: m.clearance + 0.06 + engineSize(m.power, m.kind !== 'truck' && m.kind !== 'forklift').s[1] / 2 });
 /** A car-like body: its side skins, hood, deck lid and cabin, its doors, glass, pillars, lamps and grille, each arch
  *  trimmed round its wheel by how the wheel moves; a pickup's bed behind its cab. */
-function body(m: Machine, ln: Lines): Part[] {
+/** What a panelled body is made from: the machine's figures, its lines, its wheels and how they move, and what it must
+ *  clear inside (so a practising critic can make the same body under other rules: src/nexus/panels.ts practise). */
+export function bodyPlanOf(m: Machine): BodyPlan {
   const { L, W, clearance: c } = m, front = Math.max(...m.axles.map((a) => a.x)), rear = Math.min(...m.axles.map((a) => a.x));
   const wheels: WheelAt[] = m.axles.filter((a) => a.track > 0).map((a) => { const t = tyreOf(a.tyre)!; return { name: a.x === front ? 'front wheel' : a.x === rear ? 'rear wheel' : 'middle wheel', x: a.x, y: t.D / 2, z: a.track / 2, R: t.D / 2, w: t.W, ...travelOf(a) }; });
   // what it must clear: its engine under the hood, with room over it (about 50 mm, typical; more where a maker designs for
@@ -112,7 +114,10 @@ function body(m: Machine, ln: Lines): Part[] {
   const pw = powerAt(m), es = engineSize(pw, true).s, inside: KeepOut[] = pw.kind === 'electric' ? [] : [{ name: 'engine', min: [pw.x - es[0] / 2, pw.y! - es[1] / 2, -es[2] / 2], max: [pw.x + es[0] / 2, pw.y! + es[1] / 2, es[2] / 2], room: 0.05, why: 'room over the engine under its hood (about 50 mm, typical)' }];
   // and each strut's top, in its tower under the hood (suspension() puts it where it is)
   for (const a of m.axles) if (a.susp === 'strut' && a.track > 0) { const t = tyreOf(a.tyre)!, y = t.D / 2, top = Math.min(m.H * 0.62, y + 0.55) + 0.045, kz = a.track / 2 - t.W / 2 - 0.1; inside.push({ name: 'strut tower', min: [a.x - 0.09, top - 0.05, kz - 0.09], max: [a.x + 0.09, top, kz + 0.09], room: 0.03, why: 'room over the strut towers (about 30 mm, typical)' }); }
-  const out = bodyPanels({ L, W, H: m.H, c, lines: ln, wheels, color: m.color, inside });
+  return { L, W, H: m.H, c, lines: m.lines!, wheels, color: m.color, inside };
+}
+function body(m: Machine, ln: Lines): Part[] {
+  const plan = bodyPlanOf(m), { L, W, wheels } = plan, c = m.clearance, out = bodyPanels(plan);
   const x = (f: number) => L / 2 - f * L;
   // a pickup's bed: its floor over the rear tyres (with the room the tyres need), its sides the body's own skin
   const rt = Math.max(...wheels.filter((w) => w.x < 0).map((w) => w.y + w.R + w.bump), c + 0.4);

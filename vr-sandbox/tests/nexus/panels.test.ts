@@ -1,8 +1,8 @@
 // A panelled body made as its designers draw it (src/nexus/panels.ts): its arches from how its wheels move, its skin
 // closing smoothly across its middle, its hood over what is under it, its lines without ripples.
 import { describe, expect, test } from 'vitest';
-import { MACHINES, makeMachine, travelOf, tyreOf } from '../../src/nexus/machines';
-import { inSweep, lineBy } from '../../src/nexus/panels';
+import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf } from '../../src/nexus/machines';
+import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/panels';
 import { comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
 import type { Part } from '../../src/nexus/kits';
 
@@ -50,5 +50,21 @@ describe('lines without ripples', () => {
     const rs = line.filter(([, v]) => v > 0.25).map((uv) => { const q = patchAt({ s: surf('front fender').s }, uv[0], uv[1]).at; return Math.hypot(q[0] - a.x, q[1] - t.D / 2); });
     expect(rs.length).toBeGreaterThan(5); expect(Math.max(...rs) - Math.min(...rs)).toBeLessThan(0.012);
     expect(comb({ P: line.map(([u, v]) => [u, v, 0] as [number, number, number]) }).inflections).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('the critic changes the rules, never a body', () => {
+  const plan = (st: string) => bodyPlanOf(st === 'corolla' ? corolla : styledCar(st, { color: 0xb8bcc2, rim: 17, rims: 'alloy', power: 'petrol', tint: 'clear' }));
+  test('every door and roof of every body style is fair: no line on it turns the other way', () => {
+    for (const st of ['corolla', 'sedan', 'hatchback', 'SUV', 'coupe', 'van', 'sports car']) {
+      const pl = plan(st), sc = bodyScore(bodyPanels(pl), pl);
+      expect(sc.blocked, st).toBe(0);
+      for (const r of sc.rows.filter((x) => /door|^roof$/.test(x.panel))) expect(r.worstLine, `${st}: ${r.panel}`).toBe(0);
+    }
+  });
+  test('a rule that helps only the bodies it was tried on is not kept; one that helps the bodies held out too is', () => {
+    const on = [plan('corolla')], held = [plan('sports car')], base = { ...BODY_RULES, fit: { step: 0.25, lambda: 0.02 } };
+    expect(practise('fit', [{ step: 0.35, lambda: 0.2 }], on, held, base).update).toBeNull();
+    const r = practise('fit', [{ step: 0.25, lambda: 0.2 }], on, held, base); expect(r.kept).toEqual({ step: 0.25, lambda: 0.2 }); expect(r.update?.was).toMatch(/0\.02/);
   });
 });

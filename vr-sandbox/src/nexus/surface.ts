@@ -23,6 +23,9 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const unit = (a: V3): V3 => mul(a, 1 / (len(a) || 1));
 
 // ---- B-spline basis ----------------------------------------------------------------------------------------------
+/** Where on a clamped, uniform B-spline each of its n control points acts most: its Greville abscissa, the mean of the p
+ *  knots after it. (A region of a skin is bounded at a control point's line by this.) */
+export function greville(n: number, p: number): number[] { const U = clampedKnots(n, Math.min(p, n - 1)), q = Math.min(p, n - 1); return Array.from({ length: n }, (_, i) => { let a = 0; for (let k = 1; k <= q; k++) a += U[i + k]!; return a / q; }); }
 /** A clamped, uniform knot vector for n control points of degree p. */
 export function clampedKnots(n: number, p: number): number[] { const m = n + p + 1, k: number[] = []; for (let i = 0; i < m; i++) k.push(i <= p ? 0 : i >= n ? 1 : (i - p) / (n - p)); return k; }
 /** The knot span holding u (The NURBS Book A2.1). */
@@ -189,6 +192,28 @@ function through(Q: V3[], t: number[], U: number[], p: number, d0?: V3, d1?: V3)
 }
 /** The parameters a constrained interpolation's knots are averaged from: an end with a tangent said counted twice. */
 const withEnds = (t: number[], d0: boolean, d1: boolean) => [...(d0 ? [t[0]!] : []), ...t, ...(d1 ? [t[t.length - 1]!] : [])];
+/** Fair fitting (as car surfaces are reverse-engineered and refined): n control points whose curve passes near Q at the
+ *  parameters t rather than through them, the sum of squared misses plus λ times the curve's bending (the squared second
+ *  differences of its control polygon) the least. Its ends are kept exactly, and its end tangents where given. Forcing a
+ *  curve through every point turns each small irregularity between them into a wave; a fair fit does not. */
+export function fitThrough(Q: V3[], t: number[], n: number, p: number, lambda: number, d0?: V3, d1?: V3): { P: V3[]; U: number[] } {
+  const K = Q.length, nn = Math.max(p + 1, Math.min(n, K + (d0 ? 1 : 0) + (d1 ? 1 : 0))), U = clampedKnots(nn, p);
+  // what is fixed: the ends, and the points next to them where a tangent is said (C'(0) = p / U[p+1] (P1 − P0))
+  const fixed = new Map<number, V3>([[0, Q[0]!], [nn - 1, Q[K - 1]!]]);
+  if (d0) fixed.set(1, add(Q[0]!, mul(d0, U[p + 1]! / p))); if (d1) fixed.set(nn - 2, sub(Q[K - 1]!, mul(d1, (1 - U[nn - 1]!) / p)));
+  const free = Array.from({ length: nn }, (_, i) => i).filter((i) => !fixed.has(i)), idx = new Map(free.map((i, k) => [i, k])), m = free.length;
+  const A = Array.from({ length: m }, () => new Array(m).fill(0)), B: V3[] = Array.from({ length: m }, () => [0, 0, 0] as V3);
+  const addRow = (coef: Map<number, number>, rhs: V3, w: number) => {
+    let r: V3 = mul(rhs, 1); for (const [i, c] of coef) { const f = fixed.get(i); if (f) r = sub(r, mul(f, c)); }
+    for (const [i, ci] of coef) { const a = idx.get(i); if (a === undefined) continue; B[a] = add(B[a]!, mul(r, w * ci)); for (const [j, cj] of coef) { const b = idx.get(j); if (b !== undefined) A[a]![b] += w * ci * cj; } }
+  };
+  for (let k = 0; k < K; k++) { const i = span(nn, p, t[k]!, U), N = basis(i, t[k]!, p, U)[0]!, coef = new Map<number, number>(); for (let j = 0; j <= p; j++) if (N[j]) coef.set(i - p + j, N[j]!); addRow(coef, Q[k]!, 1); }
+  for (let i = 1; i < nn - 1; i++) addRow(new Map([[i - 1, 1], [i, -2], [i + 1, 1]]), [0, 0, 0], lambda);
+  // solved by elimination (the normal equations are small and, with the bending term, never singular)
+  for (let c = 0; c < m; c++) { let r = c; for (let k = c + 1; k < m; k++) if (Math.abs(A[k]![c]!) > Math.abs(A[r]![c]!)) r = k; [A[c], A[r]] = [A[r]!, A[c]!]; [B[c], B[r]] = [B[r]!, B[c]!]; const d = A[c]![c]! || 1e-300; for (let k = c + 1; k < m; k++) { const f = A[k]![c]! / d; if (!f) continue; for (let j = c; j < m; j++) A[k]![j] -= f * A[c]![j]!; B[k] = sub(B[k]!, mul(B[c]!, f)); } }
+  const X: V3[] = new Array(m); for (let c = m - 1; c >= 0; c--) { let acc = B[c]!; for (let j = c + 1; j < m; j++) acc = sub(acc, mul(X[j]!, A[c]![j]!)); X[c] = mul(acc, 1 / (A[c]![c]! || 1e-300)); }
+  return { P: Array.from({ length: nn }, (_, i) => fixed.get(i) ?? X[idx.get(i)!]!), U };
+}
 /** A curve through the points given, in their order (degree 3, or less where there are fewer than four). */
 export function interpolate(Q: V3[], p = 3, ends: { d0?: V3; d1?: V3 } = {}): Curve {
   const m = Q.length + (ends.d0 ? 1 : 0) + (ends.d1 ? 1 : 0), d = Math.min(p, m - 1), t = chordParams(Q), U = averagedKnots(withEnds(t, !!ends.d0, !!ends.d1), d);
@@ -197,16 +222,24 @@ export function interpolate(Q: V3[], p = 3, ends: { d0?: V3; d1?: V3 } = {}): Cu
 /** A skin through rows of points: each row a section (all with as many points), the surface passing through every
  *  point given. Each section is interpolated on parameters shared by all of them, then each column of the sections'
  *  control points across the sections (a skinned or lofted surface by interpolation). */
-export function skinThrough(rows: V3[][], o: { p?: number; q?: number; mirror?: boolean; /** each section's tangent leaving its first point and arriving at its last, where said (a hood's at its middle: straight across, so its mirror meets it in one tangent plane) */ d0?: (i: number) => V3 | undefined; d1?: (i: number) => V3 | undefined; /** the skin's tangent leaving its first section and arriving at its last, where said: a body's nose, where every line along it meets the mirror, square to the mirror (G1 across it, no crease down the middle) */ e0?: V3; e1?: V3; /** the sections' own parameters across the skin, where they are not to be by chord length: a body's by where its stations stand along it, so every station is a flat section of it and nothing between them runs past its ends */ u?: number[] } = {}): Surface {
+export function skinThrough(rows: V3[][], o: { p?: number; q?: number; mirror?: boolean; /** each section's tangent leaving its first point and arriving at its last, where said (a hood's at its middle: straight across, so its mirror meets it in one tangent plane) */ d0?: (i: number) => V3 | undefined; d1?: (i: number) => V3 | undefined; /** the skin's tangent leaving its first section and arriving at its last, where said: a body's nose, where every line along it meets the mirror, square to the mirror (G1 across it, no crease down the middle) */ e0?: V3; e1?: V3; /** across the sections, fitted fairly (so many control points, so much weight on bending) rather than forced through every one */ fit?: { n: number; lambda: number }; /** each section is the control polygon of its curve, not points on it */ control?: boolean; /** the sections' own parameters across the skin, where they are not to be by chord length: a body's by where its stations stand along it, so every station is a flat section of it and nothing between them runs past its ends */ u?: number[] } = {}): Surface {
   const K = rows.length, M = rows[0]!.length; if (rows.some((r) => r.length !== M)) throw new Error('every section needs as many points');
-  const has0 = !!o.d0?.(0), has1 = !!o.d1?.(0), Mc = M + (has0 ? 1 : 0) + (has1 ? 1 : 0);
+  const has0 = !o.control && !!o.d0?.(0), has1 = !o.control && !!o.d1?.(0), Mc = M + (has0 ? 1 : 0) + (has1 ? 1 : 0);
   const q = Math.min(o.q ?? 3, Mc - 1);
   const avg = (ts: number[][]) => ts[0]!.map((_, j) => ts.reduce((a, t) => a + t[j]!, 0) / ts.length);
   // a tangent's length: the section's own chord length, so the end is neither pinched nor ballooned
   const chord = (r: V3[]) => r.slice(1).reduce((a, q2, k) => a + len(sub(q2, r[k]!)), 0);
-  const vb = avg(rows.map(chordParams)), V = averagedKnots(withEnds(vb, has0, has1), q);
-  const R = rows.map((r, i) => through(r, vb, V, q, has0 ? mul(unit(o.d0!(i)!), chord(r)) : undefined, has1 ? mul(unit(o.d1!(i)!), chord(r)) : undefined));
-  const ub = o.u ?? avg(Array.from({ length: M }, (_, j) => chordParams(rows.map((r) => r[j]!)))), Kc = K + (o.e0 ? 1 : 0) + (o.e1 ? 1 : 0), pc = Math.min(o.p ?? 3, Kc - 1), U = averagedKnots(withEnds(ub, !!o.e0, !!o.e1), pc);
+  // each section either its control polygon as drawn (variation diminishing: it never wavers more than its polygon), or a
+  // curve forced through its points
+  const vb = avg(rows.map(chordParams)), V = o.control ? clampedKnots(M, q) : averagedKnots(withEnds(vb, has0, has1), q);
+  const R = o.control ? rows.map((r) => r.map((P) => [...P] as V3)) : rows.map((r, i) => through(r, vb, V, q, has0 ? mul(unit(o.d0!(i)!), chord(r)) : undefined, has1 ? mul(unit(o.d1!(i)!), chord(r)) : undefined));
+  const ub = o.u ?? avg(Array.from({ length: M }, (_, j) => chordParams(rows.map((r) => r[j]!))));
+  if (o.fit) {
+    const pc = Math.min(o.p ?? 3, o.fit.n - 1); let U: number[] = [];
+    const cols = Array.from({ length: Mc }, (_, j) => { const col = R.map((r) => r[j]!), ch = chord(col), f = fitThrough(col, ub, o.fit!.n, pc, o.fit!.lambda, o.e0 ? mul(unit(o.e0), ch) : undefined, o.e1 ? mul(unit(o.e1), ch) : undefined); U = f.U; return f.P; });
+    return { net: Array.from({ length: cols[0]!.length }, (_, i) => cols.map((c) => c[i]!)), U, V, p: pc, q, mirror: o.mirror };
+  }
+  const Kc = K + (o.e0 ? 1 : 0) + (o.e1 ? 1 : 0), pc = Math.min(o.p ?? 3, Kc - 1), U = averagedKnots(withEnds(ub, !!o.e0, !!o.e1), pc);
   const cols = Array.from({ length: Mc }, (_, j) => { const col = R.map((r) => r[j]!), ch = chord(col); return through(col, ub, U, pc, o.e0 ? mul(unit(o.e0), ch) : undefined, o.e1 ? mul(unit(o.e1), ch) : undefined); });
   return { net: Array.from({ length: Kc }, (_, i) => cols.map((c) => c[i]!)), U, V, p: pc, q, mirror: o.mirror };
 }
@@ -256,24 +289,45 @@ export function fair(s: Surface, passes = 1, k = 0.5): Surface {
 }
 
 // ---- the critic's eye -----------------------------------------------------------------------------------------------
-export interface Fairness { /** curvature sign changes along the grid's lines: a wobble or a dent each */ wobbles: number; /** where the worst is (u, v) */ worst: [number, number]; /** the mean change in mean curvature from one sample to the next, per metre */ roughness: number; /** the largest and smallest mean curvature, 1/m */ Hmax: number; Hmin: number }
-/** How fair a surface is: along each line of a sampling grid, how often its mean curvature changes sign (beyond a small
- *  dead band, so a flat region does not count) and how fast it changes. */
-export function fairness(x: Surface | Patch, nu = 24, nv = 18, band = 0.05): Fairness {
-  const pt = asPatch(x), H: number[][] = [], P: V3[][] = [];
-  for (let i = 0; i <= nu; i++) { H.push([]); P.push([]); for (let j = 0; j <= nv; j++) { const sp = patchAt(pt, i / nu, j / nv); H[i]!.push(curvatures(sp).H); P[i]!.push(sp.at); } }
-  let wobbles = 0, worst: [number, number] = [0, 0], worstD = 0, rough = 0, cnt = 0, Hmax = -Infinity, Hmin = Infinity;
-  const line = (get: (k: number) => [number, V3, number, number], n: number) => {
-    let sign = 0;
-    for (let k = 0; k <= n; k++) {
-      const [h, p, u, v] = get(k); Hmax = Math.max(Hmax, h); Hmin = Math.min(Hmin, h); const sg = h > band ? 1 : h < -band ? -1 : 0;
-      if (sg && sign && sg !== sign) wobbles++; if (sg) sign = sg;
-      if (k) { const [h0, p0] = get(k - 1), d = Math.abs(h - h0) / Math.max(1e-6, len(sub(p, p0))); rough += d; cnt++; if (d > worstD) { worstD = d; worst = [u, v]; } }
+export interface Fairness {
+  /** inflections along the grid's lines: where a line's curvature turns the other way (beyond a dead band): a wobble or a
+   *  dent each, unless a designer drew it there */ wobbles: number;
+  /** the most on any one line */ worstLine: number;
+  /** where curvature changes fastest (u, v) */ worst: [number, number];
+  /** the root mean square of how fast curvature changes along the lines, per metre (1/m²): a fair panel's is small */ roughness: number;
+  /** the tightest radius anywhere on it, m (a pressed panel's styling radii are a few millimetres at the least) */ rmin: number;
+  /** the largest and smallest mean curvature, 1/m */ Hmax: number; Hmin: number;
+  /** points left out because the surface pinches there (a pole, where a skin closes to a point): curvature is undefined */ pinched: number;
+}
+/** Where a surface is regular enough to measure: its area element not vanishing (a skin closing to a point, at a nose or
+ *  a tip, has none there, and any curvature computed there is noise). */
+function regularMask(g: SurfacePoint[][]): boolean[][] {
+  const el = g.map((r) => r.map((sp) => len(cross(sp.du, sp.dv)))), all = el.flat().sort((p, q) => p - q), med = all[all.length >> 1] || 1;
+  return el.map((r) => r.map((e) => e > med * 0.02));
+}
+/** How fair a surface is, as a surface modeller's curvature combs read it: along each line of a sampling grid, the
+ *  normal curvature in that line's own direction (L/E along u, N/G along v), how often it turns the other way beyond a
+ *  dead band (curvature under 0.2 1/m, a radius over 5 m, counts as flat), how fast it changes per metre, and the
+ *  tightest radius. Points where the surface pinches are left out (and counted). */
+export function fairness(x: Surface | Patch, nu = 24, nv = 18, band = 0.2): Fairness {
+  const pt = asPatch(x), g: SurfacePoint[][] = [];
+  for (let i = 0; i <= nu; i++) { g.push([]); for (let j = 0; j <= nv; j++) g[i]!.push(patchAt(pt, i / nu, j / nv)); }
+  const ok = regularMask(g); let wobbles = 0, worstLine = 0, worst: [number, number] = [0, 0], worstD = 0, sq = 0, cnt = 0, kmax = 0, Hmax = -Infinity, Hmin = Infinity, pinched = 0;
+  for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { if (!ok[i]![j]) { pinched++; continue; } const c = curvatures(g[i]![j]!); Hmax = Math.max(Hmax, c.H); Hmin = Math.min(Hmin, c.H); kmax = Math.max(kmax, Math.abs(c.k1), Math.abs(c.k2)); }
+  const kU = (sp: SurfacePoint) => dot(sp.duu, sp.n) / Math.max(1e-12, dot(sp.du, sp.du)), kV = (sp: SurfacePoint) => dot(sp.dvv, sp.n) / Math.max(1e-12, dot(sp.dv, sp.dv));
+  const line = (pts: [SurfacePoint, boolean, number, number][], k: (sp: SurfacePoint) => number) => {
+    let sign = 0, turns = 0, prev: { k: number; at: V3 } | null = null;
+    for (const [sp, good, u, v] of pts) {
+      if (!good) { prev = null; continue; }
+      const kk = k(sp), sg = kk > band ? 1 : kk < -band ? -1 : 0; if (sg && sign && sg !== sign) turns++; if (sg) sign = sg;
+      if (prev) { const d = Math.abs(kk - prev.k) / Math.max(1e-6, len(sub(sp.at, prev.at))); sq += d * d; cnt++; if (d > worstD) { worstD = d; worst = [u, v]; } }
+      prev = { k: kk, at: sp.at };
     }
+    wobbles += turns; worstLine = Math.max(worstLine, turns);
   };
-  for (let i = 0; i <= nu; i++) line((j) => [H[i]![j]!, P[i]![j]!, i / nu, j / nv], nv);
-  for (let j = 0; j <= nv; j++) line((i) => [H[i]![j]!, P[i]![j]!, i / nu, j / nv], nu);
-  return { wobbles, worst, roughness: rough / Math.max(1, cnt), Hmax, Hmin };
+  for (let j = 0; j <= nv; j++) line(g.map((r, i) => [r[j]!, ok[i]![j]!, i / nu, j / nv]), kU);
+  for (let i = 0; i <= nu; i++) line(g[i]!.map((sp, j) => [sp, ok[i]![j]!, i / nu, j / nv]), kV);
+  return { wobbles, worstLine, worst, roughness: Math.sqrt(sq / Math.max(1, cnt)), rmin: kmax > 0 ? 1 / kmax : Infinity, Hmax, Hmin, pinched };
 }
 /** Continuity where two surfaces meet along a seam: sampled pairs of points (a's at its edge, b's at its own), the
  *  gap between them (G0), the angle between their normals (G1), the jump in mean curvature (G2), and the jump in how
@@ -295,10 +349,11 @@ export function seam(a: Surface, ea: 'u0' | 'u1' | 'v0' | 'v1', b: Surface, eb: 
  *  axis), and how badly they break: the largest jump in ψ's slope from one sample to the next, against its typical slope.
  *  Smooth stripes on a fair surface score near 1; a crease or a dent several times that. */
 export function zebra(x: Surface | Patch, view: V3 = [-1, -0.3, -0.6], axis: V3 = [0, 1, 0], nu = 32, nv = 24): { psi: number[][]; breaks: number; at: [number, number] } {
-  const pt = asPatch(x), vdir = unit(view), psi: number[][] = [];
-  for (let i = 0; i <= nu; i++) { psi.push([]); for (let j = 0; j <= nv; j++) { const n = patchAt(pt, i / nu, j / nv).n, r = sub(vdir, mul(n, 2 * dot(vdir, n))); psi[i]!.push(dot(r, axis)); } }
-  let worst = 0, at: [number, number] = [0, 0], typical = 0, cnt = 0;
+  const pt = asPatch(x), vdir = unit(view), psi: number[][] = [], g: SurfacePoint[][] = [];
+  for (let i = 0; i <= nu; i++) { psi.push([]); g.push([]); for (let j = 0; j <= nv; j++) { const sp = patchAt(pt, i / nu, j / nv), n = sp.n, r = sub(vdir, mul(n, 2 * dot(vdir, n))); g[i]!.push(sp); psi[i]!.push(dot(r, axis)); } }
+  const ok = regularMask(g); let worst = 0, at: [number, number] = [0, 0], typical = 0, cnt = 0;
   for (let i = 1; i < nu; i++) for (let j = 1; j < nv; j++) {
+    if (!ok[i]![j] || !ok[i - 1]![j] || !ok[i + 1]![j] || !ok[i]![j - 1] || !ok[i]![j + 1]) continue;
     const kink = Math.max(Math.abs(psi[i + 1]![j]! - 2 * psi[i]![j]! + psi[i - 1]![j]!), Math.abs(psi[i]![j + 1]! - 2 * psi[i]![j]! + psi[i]![j - 1]!));
     typical += kink; cnt++; if (kink > worst) { worst = kink; at = [i / nu, j / nv]; }
   }
