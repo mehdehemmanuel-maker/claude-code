@@ -13,6 +13,7 @@
 // - a blizzard sees under 400 m (the US National Weather Service: a quarter mile); heavy rain is over 7.6 mm/h (AMS).
 
 import { makeTrack, topSpeed } from './karting';
+import { makeCoaster, sayCoaster } from './coaster';
 
 export type Hex = number;
 export interface Fall { what: string; m: number; A: number; Cd: number; size: number; color: Hex; perM2s: number; shape: 'drop' | 'flake' | 'bear' | 'thing' }
@@ -75,6 +76,7 @@ export const PLACES: { words: RegExp; make: () => Place }[] = [
   { words: /\b(mountains?|alps|peak|summit)\b/, make: () => base('the mountains', { ground: { kind: 'rock', color: 0x6c6a62, friction: 0.7, relief: 25, radius: 2000 }, air: { density: 0.82, tempC: -5 }, sees: 30000, props: [...pines(20), { kind: 'peaks', at: [0, -1500] }], says: ['3,500 m up: air 0.82 kg/m³ (two thirds of sea level, ISA)'] }) },
   // indoors
   { words: /\b(cabin|log cabin|cottage|chalet|lodge)\b/, make: () => base('a cabin', { ground: { kind: 'snow', color: 0xf1f4f8, friction: 0.2, relief: 1.5, radius: 400 }, sky: { zenith: 0x2a3340, horizon: 0x6c7a88, glow: 0xffffff, stars: false }, air: { density: 1.32, tempC: -12 }, sees: 300, room: { w: 5, d: 6, h: 2.6, wall: 0x8a5a32, floor: 0x6b4426, ceiling: 0x5c3a20, window: true }, lights: [{ kind: 'fire', at: [-2.0, 0.45, -2.6], color: 0xff8a3c, power: 2.5 }], props: [{ kind: 'fireplace', at: [-2.25, -2.6], yaw: Math.PI / 2 }, { kind: 'sofa', at: [-0.2, -2.6], yaw: Math.PI / 2 }, { kind: 'rug', at: [-1.1, -2.6], yaw: Math.PI / 2 }], says: ['a log cabin 5 by 6 m inside, its fire about 1,000 °C at the flames (wood fire, typical), warm orange light'] }) },
+  { words: /\b(roller ?coasters?|rollercoasters?|theme park|amusement park|thrill ride|loop the loop)\b/, make: () => base('a roller coaster', { ground: { kind: 'grass', color: 0x4f7a3a, friction: 0.6, relief: 0, radius: 800 }, props: [{ kind: 'coaster', at: [0, 0] }], says: [sayCoaster(makeCoaster())] }) },
   { words: /\b(go[- ]?karts?|go[- ]?karting|karting|karts?|kart track|race ?track|racing circuit|race circuit|grand prix)\b/, make: () => { const tr = makeTrack(); return base('a go-kart track', { ground: { kind: 'grass', color: 0x4f7a3a, friction: 0.6, relief: 0, radius: 600 }, props: [{ kind: 'kart track', at: [0, 0] }], says: [...tr.says, `rental karts: a Honda GX270 (6.3 kW at 3,600 rpm, Honda) governed to about ${Math.round(topSpeed() * 3.6)} km/h, tyres that grip to about 1.1 g`] }); } },
   { words: /\b(bar|pub|tavern|saloon|lounge|pool hall|darts?|billiards?|pool table)\b/, make: () => base('a bar', { room: { w: 9, d: 7, h: 3, wall: 0x3a2418, floor: 0x2a1a10, ceiling: 0x1e140e }, sky: { zenith: 0x0b0d14, horizon: 0x151a26, glow: 0xffd9a0, stars: true }, sun: { elev: -20, az: 0 }, lights: [{ kind: 'lamp', at: [1.5, 2.6, -1.5], color: 0xffd9a0, power: 1.6 }, { kind: 'lamp', at: [-2, 2.6, -2], color: 0xffc070, power: 1.2 }], props: [{ kind: 'bar counter', at: [-3.2, -2.5], yaw: Math.PI / 2 }, { kind: 'stool', at: [-2.5, -1.5] }, { kind: 'stool', at: [-2.5, -2.5] }, { kind: 'stool', at: [-2.5, -3.5] }, { kind: 'pool table', at: [1.5, -1.5] }, { kind: 'dartboard', at: [3.9, -3.2], yaw: -Math.PI / 2 }, { kind: 'oche', at: [1.53, -3.2], yaw: -Math.PI / 2 }], says: ['a bar 9 by 7 m: its counter 1.07 m high (42 in, typical)', 'a 9-foot pool table, its bed 2.54 by 1.27 m and 0.76 m off the floor (WPA)', 'a dartboard 451 mm across, the bull 1.73 m up, the throw line 2.37 m from the board (WDF rules)'] }) },
   { words: /\b(haunted|mansion|castle|manor|dungeon|crypt|spooky)\b/, make: () => base('a haunted mansion', { room: { w: 12, d: 10, h: 4.2, wall: 0x2a2630, floor: 0x241c18, ceiling: 0x18141c, window: true }, sky: { zenith: 0x05060c, horizon: 0x101420, glow: 0xc8d4ff, stars: true }, sun: { elev: -25, az: 0 }, sees: 60, lights: [{ kind: 'torch', at: [0, 0, 0], color: 0xfff4d6, power: 3 }], props: [{ kind: 'staircase', at: [0, -4.4] }, { kind: 'chandelier', at: [0, -1] }, { kind: 'armchair', at: [-3.5, -2], yaw: 0.6 }, { kind: 'clock', at: [5.7, -3.6], yaw: -Math.PI / 2 }], says: ['a mansion hall 12 by 10 m, dark: a torch in your hand (about 300 lumens, typical) lights what you point at'] }) },
@@ -99,8 +101,10 @@ export function skyFor(elev: number, p: Place): Place['sky'] {
 /** A place read from what was said, or null when no place is named. */
 export function readPlace(text: string, current?: Place): Place | null {
   const t = text.toLowerCase();
-  // a room named wins over the weather or land round it ("a cabin in a snowstorm" is the cabin, snowing outside)
-  const all = PLACES.filter((x) => x.words.test(t)).map((x) => x.make()), found = all.find((x) => x.room) ?? all[0] ?? null;
+  // a room named wins over the weather or land round it ("a cabin in a snowstorm" is the cabin, snowing outside),
+  const all = PLACES.filter((x) => x.words.test(t)).map((x) => x.make()), ride = (x: Place) => x.props.some((q) => q.kind === 'coaster' || q.kind === 'kart track');
+  // and a ride named (a roller coaster, a go-kart track) is where you go, whatever it is in ("a roller coaster through a volcano")
+  const found = all.find((x) => x.room) ?? all.find(ride) ?? all[0] ?? null;
   const time = TIMES.find(([w]) => w.test(t)), weather = /\b(gummy|candy|jelly)\b/.test(t) ? 'gummy bears' : /\b(snowstorm|blizzard|snowing|snowfall|snow falling)\b/.test(t) || (/\bsnow\b/.test(t) && /\b(storm|falling|make it)\b/.test(t)) ? 'snow' : /\b(rain|raining|rainy|storm|drizzle|downpour)\b/.test(t) ? 'rain' : null;
   const grav = gravityIn(t), size = sizeIn(t), alone = /\b(nobody|no one|no-one|alone|by myself|empty|deserted|just me)\b/.test(t);
   if (!found && !time && !weather && grav === null && size === null) return null;
@@ -120,6 +124,8 @@ export function readPlace(text: string, current?: Place): Place | null {
   if (p.water && /\b(warm|tropical|bath)\b/.test(t)) seaSaid(28, 'a tropical sea, typical');
   if (p.water && /\b(cold|freezing|icy)\b/.test(t)) seaSaid(4, 'a cold sea');
   p.alone = alone;
+  // a roller coaster through a volcano: the helix runs round inside a breached crater, over its lava
+  if (p.props.some((x) => x.kind === 'coaster') && /\b(volcan\w*|lava|crater)\b/.test(t) && !p.props.some((x) => x.kind === 'coaster volcano')) { p.props.push({ kind: 'coaster volcano', at: [0, 0] }); p.says[0] = sayCoaster(makeCoaster({ volcano: true })); }
   // what was asked and is not here yet: living things in it, and things done in it
   for (const [w, what] of [[/\b(dinosaurs?|t-?rex|raptors?)\b/, 'dinosaurs'], [/\b(whales?|dolphins?|sharks?|fish)\b/, 'sea creatures'], [/\b(penguins?|dogs?|puppy|cats?|horses?|birds?|dragons?)\b/, 'animals'], [/\b(crowd|audience|fans|people (?:watching|cheering))\b/, 'a crowd'], [/\b(orchestra|band|musicians)\b/, 'musicians'], [/\b(ghosts?)\b/, 'ghosts']] as const) if (w.test(t)) p.missing.push(what);
   if (/\b(rome|roman|forum|ancient|medieval|egypt|pyramids?)\b/.test(t)) p.missing.push('its buildings (old architecture is not made yet)');
@@ -160,6 +166,6 @@ function ferns(n: number): Prop[] { return scatter(n, 29, 3, 60, 'fern'); }
 /** A place said back: where you are and what makes it so, with what was asked that is not in it yet. */
 export function sayPlace(p: Place): string {
   const miss = p.missing.length ? ` Not here yet: ${p.missing.join(', ')}.` : '';
-  const prep = /^a go-kart track/.test(p.name) ? 'at' : /^(a beach|the surface|the Moon|a canyon|a snowfield|a stadium|the mountains|a desert)/.test(p.name) ? 'on' : /^(under|space)/.test(p.name) ? (p.name === 'space' ? 'in' : '') : 'in';
+  const prep = /^a roller coaster/.test(p.name) ? 'on' : /^a go-kart track/.test(p.name) ? 'at' : /^(a beach|the surface|the Moon|a canyon|a snowfield|a stadium|the mountains|a desert)/.test(p.name) ? 'on' : /^(under|space)/.test(p.name) ? (p.name === 'space' ? 'in' : '') : 'in';
   return `You are ${p.name === 'here' ? 'where you were' : `${prep ? `${prep} ` : ''}${p.name}`}: ${p.says.join('; ')}.${p.gravity !== G.earth && !p.says.some((s) => /gravity/.test(s)) ? ` Gravity ${p.gravity.toFixed(2)} m/s².` : ''}${miss} Say "back to the forge" to come back.`;
 }

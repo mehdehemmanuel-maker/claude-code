@@ -64,6 +64,8 @@ import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
 import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
 import { bump, drive as driveKart, idealLap, KART, lapSaid, makeTrack, onGrid, order, runKart, speedProfile, topSpeed, type KartState, type Track } from '../karting';
 import { kartView, trackView, type KartView, type TrackView } from './kart3d';
+import { at as coasterAt, LIMITS, makeCoaster, newRide, runRide, sayCoaster, type Ride, type Track as CoasterTrack } from '../coaster';
+import { coasterView, type CoasterView } from './coaster3d';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
 import '../creatures';
@@ -1936,7 +1938,8 @@ function goTo(p: Place): string {
   if (renderer.xr.isPresenting) { dolly.position.set(0, flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0, 0); dolly.rotation.set(0, 0, 0); dolly.scale.setScalar(k); }
   else { framing = false; const y0 = flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0; camera.position.set(0, y0 + eye, 0.2 * k); orbit.target.set(0, y0 + eye * 0.9, -2 * k); camera.near = Math.max(0.0005, 0.01 * k); camera.updateProjectionMatrix(); orbit.update(); }
   if (v.torch) { const hand = renderer.xr.isPresenting ? renderer.xr.getControllerGrip(1) : camera; hand.add(v.torch, v.torch.target); v.torch.target.position.set(0, 0, -1); }
-  place = 'table'; void setUpBar(); setUpKarts();
+  place = 'table'; void setUpBar(); setUpKarts(); setUpCoaster();
+  if (coaster) return sayPlace(p).replace(/ Say "back to the forge"/, ' You are in the front seat, lap bar down: the train leaves the station in 8 s (say "wait" to hold it). Say "get off" in the station to watch it from the platform, "stats" for what you felt. Say "back to the forge"');
   if (karting) return sayPlace(p).replace(/ Say "back to the forge"/, ` ${karting.racers.length > 1 ? `You are in kart 1 at the back of the grid, ${karting.racers.length - 1} others ahead of you` : 'You are in kart 1 on the grid, alone'}. The right trigger (or W/↑) is the throttle, the left trigger (or S/↓) the brake, a stick (or A/D, ←/→) steers. Press the throttle or say "go" and five lights come on: go when they go out. Say "back to the forge"`);
   return `${sayPlace(p)}${p.props.some((x) => x.kind === 'pool table') ? ' Say "break", "shoot at the 3", "rack", or "throw 3 darts at treble 20"; in a headset, strike the cue ball with your hand, and hold the trigger at the line for a dart and let go to throw it.' : ''}`;
 }
@@ -1944,7 +1947,7 @@ function goTo(p: Place): string {
 function backToForge(): string {
   dropKits((t) => !!t.fromPlace); if (riding?.fromPlace) riding = null;
   if (bar) { bar.pool.dispose(); bar = null; }
-  if (karting) { karting = null; kartKeys.clear(); dolly.rotation.set(0, 0, 0); dolly.position.set(0, 0, 0); }
+  if (karting || coaster) { karting = null; coaster = null; kartKeys.clear(); dolly.rotation.set(0, 0, 0); dolly.position.set(0, 0, 0); const f = VIEWS.front!; camera.position.set(f[0], f[1], f[2]); orbit.target.set(f[3], f[4], f[5]); }
   if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
   for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
   camera.far = 50; camera.near = 0.01; camera.updateProjectionMatrix(); dolly.scale.setScalar(1); peopleWorld?.setGravity(GRAVITY.earth); flying = false;
@@ -1968,7 +1971,7 @@ function placeWords(words: string): string {
   return came.length ? `${said.replace(/ Not here yet: [^.]*\./, '')} With you: ${came.join('; ')}.` : said;
 }
 function stepPlace(dt: number): void {
-  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt);
+  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt); stepCoaster(dt);
 }
 // ---- the bar's games, by real physics (src/nexus/games.ts): the pool table's balls moved by their own physics world, and
 // darts thrown by hand (in a headset) or by saying so, landing where their flight takes them and scored by the board ----
@@ -2156,6 +2159,68 @@ const KART_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowlef
 window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(), tag = (e.target as HTMLElement).tagName; if (!karting?.seated || !KART_KEYS.has(k) || tag === 'INPUT' || tag === 'TEXTAREA') return; kartKeys.add(k); e.preventDefault(); e.stopImmediatePropagation(); }, true);
 window.addEventListener('keyup', (e) => { kartKeys.delete(e.key.toLowerCase()); }, true);
 window.addEventListener('blur', () => kartKeys.clear());
+// ---- the roller coaster (src/nexus/coaster.ts): you in the front seat, the train run by its own physics, what you feel
+// said when it is back; a trigger (or the space bar, or "go") sends it from the station ----
+let coaster: { tr: CoasterTrack; view: CoasterView; ride: Ride; seated: boolean; head: THREE.Vector3 | null } | null = null;
+function setUpCoaster(): void {
+  coaster = null; if (!placeNow?.p.props.some((x) => x.kind === 'coaster')) return;
+  const g = placeNow.p.gravity || GRAVITY.earth, tr = makeCoaster({ volcano: placeNow.p.props.some((x) => x.kind === 'coaster volcano'), g }), view = coasterView(tr);
+  placeNow.v.group.add(view.group); const ride = newRide(tr); ride.dwell = 8; ride.auto = true;
+  coaster = { tr, view, ride, seated: true, head: null }; view.update(ride, 0);
+}
+const kmh = (v: number) => Math.round(v * 3.6);
+/** A ride said back: how long, how fast and where, what you felt and where, and why you stayed in your seat upside down. */
+function rideSaid(S: Ride['stats'], tr: CoasterTrack, g: number): string {
+  const R = 8, a = S.top.v ** 2 / R;
+  return `That ride took ${lapSaid(S.time)}: ${kmh(S.vMax)} km/h at its fastest (${S.at.vMax}), ${S.upMax.toFixed(1)} g into your seat at most (${S.at.upMax}), ${S.upMin.toFixed(1)} g lifting you out of it over ${S.at.upMin} — ${S.air.toFixed(1)} s of airtime in all — and never more than ${S.sideMax.toFixed(1)} g sideways (the turns are banked for their speed). Upside down at the top of the loop you went ${S.top.v.toFixed(1)} m/s round an ${R} m radius: v²/R is ${a.toFixed(0)} m/s², more than gravity's ${g.toFixed(1)}, so the track had to push you round and you were pressed into your seat at ${S.top.up.toFixed(1)} g. Commonly cited limits: about +6 g, −1.5 to −2 g, ±1.5 g sideways; this track keeps within +${LIMITS.up}, ${LIMITS.down}, ±${LIMITS.side}. ${tr.volcano ? 'The helix ran round inside the volcano\'s crater, over its lava. ' : ''}Say "again" for another ride.`;
+}
+function sendTrain(): string {
+  const C = coaster!; if (C.ride.phase === 'running') return 'You are on it: hold on.';
+  C.ride.auto = true; C.ride.dwell = 0; return 'Lap bar down. The station tyres push the train out to the chain; the chain takes it up at 2 m/s.';
+}
+function stepCoaster(dt: number): void {
+  const C = coaster; if (!C || dt <= 0) return; const g = placeNow?.p.gravity || GRAVITY.earth; dt = Math.min(dt, 0.05);
+  // a trigger squeezed (or the space bar) in the station sends the train
+  if (C.ride.phase === 'waiting' && !C.ride.auto) {
+    const session = renderer.xr.isPresenting ? renderer.xr.getSession() : null;
+    if (session) for (const src of session.inputSources) if ((src.gamepad?.buttons[0]?.value ?? 0) > 0.6) say(sendTrain(), undefined, 'nexus');
+  }
+  const was = C.ride.rides; runRide(C.ride, C.tr, dt, g); C.view.update(C.ride, dt);
+  if (C.ride.rides > was && C.ride.last) { C.ride.auto = false; say(rideSaid(C.ride.last, C.tr, g), undefined, 'nexus'); }
+  if (!C.seated) return;
+  // your seat: the front car's, left side. In a headset the rig turns with the car (your head where the seat's eye is);
+  // on a screen the camera is your eyes, looking down the track
+  const car = C.view.cars[0]!; car.updateMatrixWorld(); const seat = car.localToWorld(C.view.seat.clone()), q = coasterAt(C.tr, C.ride.s), t = new THREE.Vector3(...q.t), u = new THREE.Vector3(...q.u), r = new THREE.Vector3().crossVectors(t, u);
+  const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(r, u, t.clone().negate()));
+  // on a screen, looking a little down the track (12°), as a rider does, so the car's nose is in view
+  const look = renderer.xr.isPresenting ? turn : turn.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.21));
+  if (renderer.xr.isPresenting) {
+    if (!C.head) { const h = new THREE.Vector3(); renderer.xr.getCamera().getWorldPosition(h); dolly.updateMatrixWorld(); C.head = dolly.worldToLocal(h); }
+    dolly.scale.setScalar(1); dolly.quaternion.copy(turn); dolly.updateMatrixWorld(); dolly.position.copy(seat).sub(C.head.clone().applyQuaternion(turn));
+  } else { camera.position.copy(seat); camera.quaternion.copy(look); if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); } }
+}
+/** Words the coaster answers: go, again, wait, get off and watch, get on, its numbers, why you stay in. */
+function coasterWords(text: string): string | null {
+  const C = coaster; if (!C) return null; const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), g = placeNow?.p.gravity || GRAVITY.earth;
+  if (/^(go|ride|start|again|ride again|one more|one more time|send it|let'?s go|dispatch|ride it again)$/.test(t)) { if (!C.seated) { C.seated = true; C.head = null; } return sendTrain(); }
+  if (/^(wait|hold|hold it|not yet|stop the train)$/.test(t)) { if (C.ride.phase === 'running') return `It can't be stopped out there: it is ${Math.round(coasterAt(C.tr, C.ride.s).p[1])} m up and going ${kmh(C.ride.v)} km/h. The brakes stop it at the end.`; C.ride.auto = false; return 'Held in the station. Say "go" (or squeeze a trigger, or press space) when you are ready.'; }
+  if (/^(get off|off|step off|watch|let me watch|stand on the platform|get out)$/.test(t)) {
+    if (C.ride.phase === 'running') return `Not until it is back in the station: you are ${Math.round(coasterAt(C.tr, C.ride.s).p[1])} m up.`;
+    C.seated = false; C.ride.auto = true; C.ride.dwell = 4;
+    const st = coasterAt(C.tr, C.tr.stop - 14).p;
+    if (renderer.xr.isPresenting) { dolly.rotation.set(0, Math.PI / 2, 0); dolly.position.set(st[0], 0.9, st[2] + 2.4); } else { camera.position.set(st[0] + 40, 14, st[2] + 70); orbit.target.set(st[0] + 90, 12, st[2]); }
+    return 'Off, on the platform: the train goes round without you. Say "get on" to ride.';
+  }
+  if (/^(get on|sit down|get in|ride it|take a seat)$/.test(t)) { if (C.ride.phase === 'running') return 'Wait for it to come back to the station.'; C.seated = true; C.head = null; C.ride.auto = false; return 'In the front seat, lap bar down. Say "go" when you are ready.'; }
+  if (/^(recentre|recenter|center me|centre me)$/.test(t)) { C.head = null; return 'Your head put back in the seat.'; }
+  if (/\b(stats|g ?force|g's|how fast|how high|how long|how tall|top speed|numbers|how many g)\b/.test(t)) return C.ride.last ? rideSaid(C.ride.last, C.tr, g) : `It is ${sayCoaster(C.tr)}. Ride it and I'll tell you what you felt.`;
+  if (/\b(why|how)\b.*\b(fall|falling|fell|loop|upside|airtime|float|floating|weightless|lift(?:ed)? out)\b/.test(t)) {
+    const S = C.ride.last;
+    return `${S ? `At the top of the loop you were going ${S.top.v.toFixed(1)} m/s round an 8 m radius.` : 'At the top of the loop the train goes about 14 m/s round an 8 m radius.'} To go round a curve of radius R at speed v, something must pull you towards its middle at v²/R; at the top that is straight down. If v²/R is more than g, gravity alone is not enough and the seat must push you down too: you stay in. That is why the loop is a teardrop, tight at the top (8 m) and wide at the bottom (24 m): a round loop wide enough to bear at the bottom would be too slow at the top. Airtime is the opposite: over a crest, if v²/R is more than g, the track falls away faster than you fall and the lap bar holds you in (${S ? `${S.upMin.toFixed(1)} g over ${S.at.upMin}` : 'about −0.8 g over the camelback'}).`;
+  }
+  return null;
+}
+window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement).tagName; if (!coaster?.seated || e.key !== ' ' || tag === 'INPUT' || tag === 'TEXTAREA') return; e.preventDefault(); e.stopImmediatePropagation(); if (coaster.ride.phase === 'waiting') say(sendTrain(), undefined, 'nexus'); }, true);
 const personNamed = (w: string): Person | null => peopleWorld?.list.find((p) => personFact(p.name) === personFact(w)) ?? null;
 /** A body rebuilt where it stands with what was changed (its height, mass, muscle, fat, sex, skin, hair). */
 function adjustPerson(p: Person, change: Partial<BodyParams>): string {
@@ -2241,6 +2306,8 @@ async function perform(p: Parsed): Promise<string> {
     lastKind = 'build';
     // what the intent pipeline can read wants into is designed and built under the laws; what it cannot, but the
     // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
+    // a ride or a track to ride on is a place built round you: you are put on it
+    if (/\b(roller ?coasters?|rollercoasters?|go[- ]?kart tracks?|kart tracks?|race ?tracks?|theme park|amusement park)\b/i.test(d.what)) return placeWords(d.words);
     const words = `${d.n > 1 ? `${d.n} different ` : 'a '}${d.what}`, c = conceive(words);
     // a need said with its numbers (a cart that carries 150 kg) is designed; a thing named plainly (a red sports car, a
     // queen bed, an oak) a kit makes, where one does
@@ -2320,7 +2387,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3462,7 +3529,7 @@ for (let i = 0; i < 2; i++) {
   // the trigger is the clicker: it presses what it points at, and never drags (the grip holds)
   ctl.addEventListener('selectend', () => dartLetGo(i));
   ctl.addEventListener('selectstart', () => {
-    if (karting?.seated) return; // in the kart the triggers are its throttle and brake
+    if (karting?.seated || coaster?.seated) return; // in the kart the triggers are its throttle and brake; on the coaster, its go
     if (dartGrab(i)) return;
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
@@ -3595,7 +3662,7 @@ async function boot() {
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;
   renderer.setAnimationLoop(() => {
     frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); prof.frame(now - last); last = now; const T = prof.time.bind(prof);
-    T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else orbit.update(); });
+    T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else if (!coaster?.seated) orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
     guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
@@ -3640,6 +3707,8 @@ async function boot() {
     winPoint: (id: string, act: 'move' | 'min' | 'close') => toScreen(windows.pointOf(id, act)),
     winWorld: (id: string, act: 'move' | 'min' | 'close') => { const w = windows.pointOf(id, act); return w ? [w.x, w.y, w.z] : null; },
     winList: () => windows.list(),
+    coasterNow: () => coaster ? { phase: coaster.ride.phase, s: +coaster.ride.s.toFixed(1), v: +coaster.ride.v.toFixed(2), rides: coaster.ride.rides, seated: coaster.seated, piece: coasterAt(coaster.tr, coaster.ride.s).piece, g: coaster.ride.g, length: coaster.tr.length, volcano: !!coaster.tr.volcano } : null,
+    coasterSkip: (piece: string) => { if (!coaster) return null; const r = coaster.ride; if (r.phase === 'waiting') { r.auto = true; r.dwell = 0; } for (let i = 0; i < 200 * 200 && coasterAt(coaster.tr, r.s).piece !== piece; i++) runRide(r, coaster.tr, 0.005, placeNow?.p.gravity || GRAVITY.earth); return { s: r.s, v: r.v }; },
     kartsNow: () => karting ? { state: karting.state, seated: karting.seated, length: karting.tr.length, racers: karting.racers.map((r) => ({ name: r.name, laps: r.k.laps, s: +r.k.s.toFixed(1), v: +r.k.vx.toFixed(2), best: r.k.best, last: r.k.last, grass: r.k.onGrass, hits: r.k.hits, heading: +r.k.heading.toFixed(2) })) } : null,
     winAt: (id: string) => { const o = ({ rounds: roundsCard.mesh, laws: lawsCard.mesh, flaws: flawBoard, gates: gatesCard.mesh } as Record<string, THREE.Object3D>)[id]; return o ? o.getWorldPosition(new THREE.Vector3()).toArray() : null; },
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
