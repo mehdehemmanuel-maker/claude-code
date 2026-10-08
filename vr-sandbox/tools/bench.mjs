@@ -47,9 +47,9 @@ async function clash(name, query, n) {
   fs.writeFileSync(path.join(out, `${name}.clash.json`), JSON.stringify(all, null, 1));
   // (the same pair of names met many times, as a car's four handles each in its door, counted once, at its worst)
   const byPair = new Map(); for (const c of all) { const k = `${c.kind}|${[c.a, c.b].sort().join(' ~ ')}`; const was = byPair.get(k); if (!was || c.span > was.span) byPair.set(k, { ...c, times: (was?.times ?? 0) + 1 }); else was.times++; }
-  const rows = [...byPair.values()].sort((p, q) => ({ through: 0, touch: 1, layered: 2, meets: 3 }[p.kind] - { through: 0, touch: 1, layered: 2, meets: 3 }[q.kind]) || q.span - p.span);
+  const rows = [...byPair.values()].sort((p, q) => ({ through: 0, touch: 1, layered: 2, meets: 3, fitted: 4, fused: 5 }[p.kind] - { through: 0, touch: 1, layered: 2, meets: 3, fitted: 4, fused: 5 }[q.kind]) || q.span - p.span);
   console.log(`${name}: ${all.length} meetings, ${rows.length} pairs of names (${((Date.now() - t0) / 1000).toFixed(1)} s). size ${facts.size}`);
-  for (const r of rows) console.log(`  ${r.kind.padEnd(8)} ${r.a}  ~  ${r.b}  ×${r.times}  over ${(r.span * 1000).toFixed(0)} mm at ${v3(r.at)}  [${r.kin}]`);
+  for (const r of rows) console.log(`  ${r.kind.padEnd(8)} ${r.a}  ~  ${r.b}  ×${r.times}  over ${(r.span * 1000).toFixed(0)} mm${r.depth !== undefined ? `, ${(r.depth * 1000).toFixed(0)} mm deep` : ''} at ${v3(r.at)}  [${r.kin}]`);
   const c0 = [0, (facts.size[1] ?? 1) / 2, 0];
   for (const [k, r] of rows.slice(0, n).entries()) {
     // (looked at from outside the thing, along the surfaces' normal there, a little from above; as close as the meeting is long)

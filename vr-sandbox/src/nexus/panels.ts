@@ -27,7 +27,7 @@ import type { Lines } from './machines';
 /** A wheel as the body sees it: its middle (z its mid-plane's distance out), radius, width, and how it moves. */
 export interface WheelAt { name: string; x: number; y: number; z: number; R: number; w: number; /** its lock either way, rad */ steer: number; /** how far it rises in bump, m */ bump: number; /** its tyre's section as drawn, [radius from the axle, offset along it], where known: the sweep then has its shape, rounded at the shoulder, not a square-edged cylinder's */ section?: [number, number][] }
 /** What the body must clear inside it: a box, and the room kept over it (an engine under its hood). */
-export interface KeepOut { name: string; min: V3; max: V3; room: number; why: string }
+export interface KeepOut { name: string; min: V3; max: V3; room: number; why: string; /** where it stands: in a wheelhouse (a strut and its spring), which its liner stops short of, rather than under the hood */ in?: 'wheelhouse' }
 export interface BodyPlan { L: number; W: number; H: number; c: number; lines: Lines; wheels: WheelAt[]; color: number; inside?: KeepOut[] }
 /** The rules the body is made by: each a figure a designer would set, typical where not sourced. A practising critic
  *  changes these, never a made body's points (src/nexus/make/critic.ts, and RULE_UPDATES below). */
@@ -144,7 +144,7 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
   // what it must clear, as a height over x: an engine and its strut tops under the hood, and each arch with its lip over
   // the tyre risen through its whole bump (a low car's fender rises over its wheel), ramped in and out smoothly so the line lifted over it bends but never kinks
   // (lifting the drawn line's control points would not do: a B-spline only leans toward its points)
-  const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump + lip }))];
+  const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).filter((k) => !k.in).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump + lip }))];
   const need = (x: number) => { let v = -Infinity; for (const k of clears) { const ramp = 0.18, d = x < k.x0 ? k.x0 - x : x > k.x1 ? x - k.x1 : 0; if (d >= ramp) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / ramp); v = Math.max(v, k.y - (1 - g) * 0.12); } return v; };
   const drawn = lineBy([
     // (its ends a crisp edge, falling 20 to 30 mm in the last few centimetres where the face leans down from it, not a
@@ -315,7 +315,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // (a pickup's bed a box of its own behind the cab, a gap between them: drawn as a shut line down the side at the cab's back)
   if (b.lines.bed) { const ub = U(ln.xDeck - 0.012), dub = du(ln.xDeck) * 1.5; out.push({ name: 'cab to bed gap', shape: { surf: { s: side, uv: [[ub - dub, 0], [ub + dub, 0], [ub + dub, 1], [ub - dub, 1]], off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says: 'the gap between its cab and its bed (typical)' }); }
   // ---- its faces at its ends, laid out by height on the skin (each band of it where the skin is at that height) ----
-  const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
+  // (laid out along the face's most forward line, where it does not lean: a lamp or a grille a few centimetres from the nose
+  // is found there, not on the shoulder, which leans back from it)
+  const vF = gv[2]!, UF = (x: number) => uAt(side, x, vF), uN = (d: number) => UF(ln.xN - d), uTl = (d: number) => UF(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
   // (the skin's sections rise with v, so the v at a height is found by halving)
   const vAt = (u: number, y: number) => { let lo = 0, hi = 1; for (let k = 0; k < 28; k++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < y) lo = m; else hi = m; } return (lo + hi) / 2; };
   const quad = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]];
@@ -354,7 +356,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   for (const a of arches) {
     const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;
     // (in as far as the inner wheelhouse it meets: beyond where the tyre's inner corners reach at full lock)
-    const w = a.w, zW = Math.min(w.z - w.w / 2 - 0.04, w.z - (w.w / 2) * Math.cos(w.steer) - (w.R + r.room.radial) * Math.sin(w.steer) - r.room.side - 0.01), zIn = zW, zs = [0, 0, 0.25, 0.5, 0.75, 1], K = zs.length;
+    // (and short of what stands in the wheelhouse above the wheel, as a strut and its spring do: the liner is shaped in
+    // front of it, not through it)
+    const w = a.w, zW = Math.min(w.z - w.w / 2 - 0.04, w.z - (w.w / 2) * Math.cos(w.steer) - (w.R + r.room.radial) * Math.sin(w.steer) - r.room.side - 0.01), zs = [0, 0, 0.25, 0.5, 0.75, 1], K = zs.length;
+    const stands = (b.inside ?? []).filter((k) => k.in === 'wheelhouse' && k.max[2] > 0 && Math.abs((k.min[0] + k.max[0]) / 2 - w.x) < w.R && k.max[1] > w.y), zIn = Math.max(zW, ...stands.map((k) => Math.min(w.z - w.w / 2 - 0.005, k.max[2] + k.room)));
     // its net drawn, not interpolated (so every point of it is a blend of its control points with no negative weights, and
     // moving one out only moves it out): along the arch, one column per point of the lip; across it, from the lip, out at
     // the lip's own depth to where a risen tyre is clear (the return a fender's lip has, which the tyre tucks up behind),
@@ -394,7 +399,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // nothing is seen through the arch but the dark of the wheelhouse)
     // (its top the liner's own inner edge, which is held under the skin, so the wall never stands through the hood or the
     // deck; down to the rocker)
-    const yLoW = ln.low(w.x) + 0.02, wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
+    // (above where the wheel's own drive shaft, spindle and arms pass under it: 60 mm over its axle, the frame rail's
+    // height; under that the wheelhouse is open to the underbody, as a car's is)
+    const yLoW = Math.max(ln.low(w.x) + 0.02, w.y + 0.06), wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
     out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
     out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
   }
@@ -468,6 +475,14 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
 }
 
 // ---- what is inside it ------------------------------------------------------------------------------------------------
+/** The body's roof from inside: at x, the lowest of its cabin's skins over its middle (its roof, its glass, its pillars),
+ *  so what goes under them (a seat's back, a passenger's head) is fitted to the body as made. */
+const overhead = new WeakMap<Patch, V3[]>();
+export function roofOf(parts: Part[]): (x: number) => number {
+  const pts: V3[] = [];
+  for (const p of parts) { if (!p.shape || !('surf' in p.shape) || !/roof|glass|windscreen|pillar/i.test(p.name)) continue; const pt = p.shape.surf; let got = overhead.get(pt); if (!got) { got = patchPoints(pt, 24, 12, false).filter((q) => Math.abs(q[2]) < 0.35); overhead.set(pt, got); } pts.push(...got); }
+  return (x) => { let y = Infinity; for (const q of pts) if (Math.abs(q[0] - x) < 0.06 && q[1] > 0.6 && q[1] < y) y = q[1]; return y; };
+}
 /** The body's sides from inside: at x and height y, the least half-width of its skins that face sideways there (its
  *  doors, quarters and glass), so what goes in it (a seat) is fitted to the body as made, its tumblehome included. */
 const sideways = new WeakMap<Patch, V3[]>();

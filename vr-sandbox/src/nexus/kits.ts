@@ -35,6 +35,9 @@ export interface Iface {
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
+  /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
+   *  rule adds nothing to it */ fixed?: string;
+  /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
