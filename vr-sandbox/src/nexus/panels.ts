@@ -25,7 +25,7 @@ import type { Part } from './kits';
 import type { Lines } from './machines';
 
 /** A wheel as the body sees it: its middle (z its mid-plane's distance out), radius, width, and how it moves. */
-export interface WheelAt { name: string; x: number; y: number; z: number; R: number; w: number; /** its lock either way, rad */ steer: number; /** how far it rises in bump, m */ bump: number }
+export interface WheelAt { name: string; x: number; y: number; z: number; R: number; w: number; /** its lock either way, rad */ steer: number; /** how far it rises in bump, m */ bump: number; /** its tyre's section as drawn, [radius from the axle, offset along it], where known: the sweep then has its shape, rounded at the shoulder, not a square-edged cylinder's */ section?: [number, number][] }
 /** What the body must clear inside it: a box, and the room kept over it (an engine under its hood). */
 export interface KeepOut { name: string; min: V3; max: V3; room: number; why: string }
 export interface BodyPlan { L: number; W: number; H: number; c: number; lines: Lines; wheels: WheelAt[]; color: number; inside?: KeepOut[] }
@@ -66,16 +66,28 @@ export const RULE_UPDATES: RuleUpdate[] = [
 // ---- a wheel's sweep -------------------------------------------------------------------------------------------------
 /** The poses a wheel goes through: steered from full lock one way to the other, at rest and at full bump. */
 const posesOf = (w: WheelAt, n: number) => { const th = w.steer > 0 ? Array.from({ length: n }, (_, k) => -w.steer + (2 * w.steer * k) / (n - 1)) : [0]; return th; };
-/** Whether a point is inside the room a wheel needs anywhere through its motion: its tyre's cylinder grown by the room
- *  asked, steered about the vertical through its middle (a kingpin near the wheel's plane, typical of a modern car's
- *  small scrub radius) and risen anywhere up to its bump. */
+/** How far out along its axle a tyre reaches at a distance from it: its section's widest there (a tyre is rounded at
+ *  its shoulder: at its tread about 78% of its section's width), or its whole width where its section is not known. */
+const reachAt = (w: WheelAt, rho: number): number => {
+  const sec = w.section; if (!sec?.length) return w.w / 2;
+  // (inside its bead, the rim it sits on, as wide as the bead; beyond its tread, the tread's)
+  let best = 0; const r = Math.max(Math.min(...sec.map((q) => q[0])), Math.min(rho, Math.max(...sec.map((q) => q[0]))));
+  for (let k = 0; k + 1 < sec.length; k++) { const [r0, z0] = sec[k]!, [r1, z1] = sec[k + 1]!, lo = Math.min(r0, r1), hi = Math.max(r0, r1); if (r < lo - 1e-9 || r > hi + 1e-9) continue; const z = hi - lo < 1e-9 ? Math.max(Math.abs(z0), Math.abs(z1)) : Math.abs(z0 + ((z1 - z0) * (r - r0)) / (r1 - r0)); best = Math.max(best, z); }
+  return best;
+};
+/** Whether a point is inside the room a wheel needs anywhere through its motion: its tyre's section (or cylinder) grown
+ *  by the room asked, steered about the vertical through its middle (a kingpin near the wheel's plane, typical of a
+ *  modern car's small scrub radius) and risen anywhere up to its bump. */
 export function inSweep(P: V3, w: WheelAt, room = BODY_RULES.room): boolean {
-  const RR = w.R + room.radial, hw = w.w / 2 + room.side, dx = P[0] - w.x, dz = P[2] - w.z;
+  const RR = w.R + room.radial, dx = P[0] - w.x, dz = P[2] - w.z, lo = P[1] - w.y - w.bump, hi = P[1] - w.y; // (its height over the axle, risen 0…bump)
+  const knots = w.section ? [...new Set(w.section.map((q) => q[0]))] : [];
   for (const th of posesOf(w, room.poses)) {
-    const t = dx * Math.sin(th) + dz * Math.cos(th); if (Math.abs(t) > hw) continue;
-    const r2 = RR * RR - (dx * dx + dz * dz - t * t); if (r2 < 0) continue;
-    const r = Math.sqrt(r2), lo = P[1] - w.y - w.bump, hi = P[1] - w.y; // the offsets from the centre it can have, risen 0…bump
-    if (hi >= -r && lo <= r) return true;
+    const t = dx * Math.sin(th) + dz * Math.cos(th); if (Math.abs(t) > w.w / 2 + room.side + 1e-9) continue;
+    const d2 = Math.max(0, dx * dx + dz * dz - t * t), yMin = lo <= 0 && hi >= 0 ? 0 : Math.min(lo * lo, hi * hi), yMax = Math.max(lo * lo, hi * hi);
+    const rMin = Math.sqrt(d2 + yMin), rMax = Math.min(RR, Math.sqrt(d2 + yMax)); if (rMin > RR) continue;
+    // (the widest the tyre reaches anywhere it can be over this point, risen or not)
+    let reach = Math.max(reachAt(w, rMin), reachAt(w, rMax)); for (const k of knots) if (k > rMin && k < rMax) reach = Math.max(reach, reachAt(w, k));
+    if (Math.abs(t) <= reach + room.side) return true;
   }
   return false;
 }
@@ -237,19 +249,42 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // a handle near each door's back edge, a little under its shoulder, standing a few millimetres proud (typical)
     for (const x1 of twoDoors ? [xB, xRD] : [xRD]) out.push(paint('door handles', { s: side, uv: [[U(x1 + 0.07), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.025], [U(x1 + 0.07), sv[3]! - 0.025]], off: 0.002 }, { shell: 0.002, says: 'a door handle (typical)' }));
   } else out.push(paint('body sides', { s: side, above: trimmed(0, 1) }, { says: 'its sides: pressed steel about 0.8 mm (typical)' }));
-  // ---- lamps and the grille, on the faces at its ends ----
-  const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d);
-  // the face: the grille a slot between the headlamps under the hood's edge, the bumper below it in the body's colour
-  // (where the plate goes), and the intake under that (typical of a modern car's face)
-  out.push({ name: 'lower grille', shape: { surf: { s: side, uv: [[uN(0.012), sv[0]! + 0.015], [1, sv[0]! + 0.015], [1, sv[1]! + 0.02], [uN(0.012), sv[1]! + 0.02]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x101010, shell: 0.003, finish: 'texture', says: 'the lower intake in the front bumper (typical)' });
-  // a headlamp as it is built, in layers on the skin: its dark housing, two lamp units in it (projectors, typical of a
-  // modern car's), and the clear lens over them
-  const lampUV = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]], hl0 = uN(0.42), hl1 = uN(0.03), hb0 = sv[3]! + 0.005, hb1 = sv[5]! - 0.03;
-  const unit = (k: number): Part => { const a = hl0 + (hl1 - hl0) * (0.22 + 0.3 * k), w2 = (hl1 - hl0) * 0.1, b = (hb0 + hb1) / 2, h2 = (hb1 - hb0) * 0.28; return { name: 'lamp unit', shape: { surf: { s: side, uv: lampUV(a - w2, a + w2, b - h2, b + h2), off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color: 0xfff4dc, glow: true, shell: 0.002, says: 'an LED projector (typical)' }; };
-  out.push({ name: 'headlights', shape: { surf: { s: side, uv: lampUV(hl0, hl1, hb0, hb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pc', color: 0xd8e0e8, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)',
-    parts: [{ name: 'headlamp housing', shape: { surf: { s: side, uv: lampUV(hl0, hl1, hb0, hb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x0c0d0f, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' }, unit(0), unit(1)] });
-  out.push({ name: 'grille', shape: { surf: { s: side, uv: [[uN(0.03), sv[3]! + 0.01], [1, sv[3]! + 0.01], [1, sv[5]! - 0.05], [uN(0.03), sv[5]! - 0.05]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x121212, shell: 0.003, finish: 'texture', says: 'its grille between the headlamps (moulded ABS, typical)' });
-  out.push({ name: 'tail lights', shape: { surf: { s: side, uv: [[uTl(0.012), sv[3]! - 0.02], [uTl(0.3), sv[3]! - 0.02], [uTl(0.3), sv[5]! - 0.03], [uTl(0.012), sv[5]! - 0.03]], off: 0.002 } }, at: [0, 0, 0], mat: 'pmma', color: 0xb01818, shell: 0.003, says: 'its tail lamps round the tail\'s corners: red acrylic lenses (typical)' });
+  // ---- its faces at its ends, laid out by height on the skin (each band of it where the skin is at that height) ----
+  const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
+  // (the skin's sections rise with v, so the v at a height is found by halving)
+  const vAt = (u: number, y: number) => { let lo = 0, hi = 1; for (let k = 0; k < 28; k++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < y) lo = m; else hi = m; } return (lo + hi) / 2; };
+  const quad = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]];
+  const black = (name: string, uv: [UV, UV, UV, UV], says: string, off = 0.002): Part => ({ name, shape: { surf: { s: side, uv, off } }, at: [0, 0, 0], mat: 'abs', color: 0x111214, shell: 0.003, finish: 'texture', says });
+  // a seam: the dark line of a shut line drawn where one panel meets the next on the same skin (4 mm, typical)
+  const seam = (name: string, a0: number, a1: number, v: number, says: string): Part => ({ name, shape: { surf: { s: side, uv: quad(a0, a1, v - 0.0025, v + 0.0025), off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says });
+  const fArch = arches.filter((a) => a.w.x > 0), rArch = arches.filter((a) => a.w.x <= 0);
+  {
+    // the front: its headlamps under the hood's edge wrapping the corners, the grille between them as tall as its kind's
+    // (an SUV's or a pickup's far taller than a sedan's), the bumper cover below its shut line, the intake low in it
+    const uMid = uN(0.22), yTop = pointAt(side, uN(0.08), 1)[1] - 0.02, lampBot = yTop - fc.lamp, gBot = yTop - 0.012 - fc.grille;
+    const hb1 = vAt(uMid, yTop), hb0 = vAt(uMid, lampBot), hl0 = uN(0.5), hl1 = uN(0.035), wl = hl1 - hl0, hh = hb1 - hb0;
+    const lit = (name: string, uv: [UV, UV, UV, UV], color: number, says: string): Part => ({ name, shape: { surf: { s: side, uv, off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color, glow: true, shell: 0.002, says });
+    out.push({ name: 'headlights', shape: { surf: { s: side, uv: quad(hl0, hl1, hb0, hb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pc', color: 0xd8e0e8, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)',
+      parts: [{ name: 'headlamp housing', shape: { surf: { s: side, uv: quad(hl0, hl1, hb0, hb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x0c0d0f, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' },
+        lit('daytime running light', quad(hl0 + wl * 0.08, hl1 - wl * 0.04, hb1 - hh * 0.2, hb1 - hh * 0.08), 0xf4f8ff, 'its daytime running light: an LED strip along the lamp\'s top (typical)'),
+        ...[0.3, 0.62].map((k) => lit('lamp unit', quad(hl0 + wl * (k - 0.1), hl0 + wl * (k + 0.1), hb0 + hh * 0.18, hb1 - hh * 0.32), 0xfff4dc, 'an LED projector (typical)'))] });
+    const gv0 = vAt(uN(0.01), Math.max(gBot, lampBot - 0.02)), gv1 = vAt(uN(0.01), yTop - 0.012);
+    out.push(black('grille', quad(uN(0.035), 1, gv0, gv1), 'its grille between the headlamps (moulded ABS, typical): as tall as its kind\'s'));
+    // (its bumper cover: the face below a shut line under the lamps and the grille, round to the front arches)
+    const yB = Math.min(lampBot, gBot) - 0.035, uB0 = fArch.length ? U(Math.max(...fArch.map((a) => a.w.x + a.Ra)) + 0.03) : uN(0.6);
+    out.push(seam('front bumper shut line', uB0, 1, vAt(uMid, yB), 'where its front bumper cover meets the fenders (typical)'));
+    const yI = ln.low(ln.xN - 0.05) + 0.06; out.push(black('lower grille', quad(uN(0.012), 1, vAt(uN(0.01), yI), vAt(uN(0.01), Math.min(yI + 0.09, yB - 0.05))), 'the lower intake in its front bumper (typical)'));
+  }
+  {
+    // the back: its tail lamps round the corners under the deck's edge (a red lens over a dark housing, its lamps lit),
+    // the bumper cover below a shut line
+    const uMid = uTl(0.22), yTop = pointAt(side, uTl(0.08), 1)[1] - 0.03, tb1 = vAt(uMid, yTop), tb0 = vAt(uMid, yTop - 0.12), t0 = uTl(0.45), t1 = uTl(0.02), wt = t0 - t1, ht = tb1 - tb0;
+    out.push({ name: 'tail lights', shape: { surf: { s: side, uv: quad(t1, t0, tb0, tb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pmma', color: 0x9a0c0c, shell: 0.003, says: 'its tail lamps round the tail\'s corners: red acrylic lenses (typical)',
+      parts: [{ name: 'tail lamp housing', shape: { surf: { s: side, uv: quad(t1, t0, tb0, tb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x1a0606, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' },
+        { name: 'tail lamp', shape: { surf: { s: side, uv: quad(t1 + wt * 0.06, t0 - wt * 0.1, tb0 + ht * 0.55, tb0 + ht * 0.8), off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color: 0xff2a1a, glow: true, shell: 0.002, says: 'its tail lamps lit: an LED strip (typical)' }] });
+    const yB = yTop - 0.12 - 0.06, uB1 = rArch.length ? U(Math.min(...rArch.map((a) => a.w.x - a.Ra)) - 0.03) : uTl(0.6);
+    out.push(seam('rear bumper shut line', 0, uB1, vAt(uMid, yB), 'where its rear bumper cover meets the quarters (typical)'));
+  }
   // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
   for (const a of arches) {
     const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;

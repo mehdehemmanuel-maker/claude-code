@@ -1,7 +1,7 @@
 // A panelled body made as its designers draw it (src/nexus/panels.ts): its arches from how its wheels move, its skin
 // closing smoothly across its middle, its hood over what is under it, its lines without ripples.
 import { describe, expect, test } from 'vitest';
-import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf } from '../../src/nexus/machines';
+import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf, tyreSection } from '../../src/nexus/machines';
 import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/panels';
 import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
 import type { Part } from '../../src/nexus/kits';
@@ -13,9 +13,14 @@ const surf = (n: string) => (part(n).shape as { surf: Patch }).surf;
 describe('arches from how the wheels move', () => {
   test('no point of any panel is where a tyre goes, steered to full lock either way and risen through its bump', () => {
     for (const a of corolla.axles) {
-      const t = tyreOf(a.tyre)!, w = { name: 'wheel', x: a.x, y: t.D / 2, z: a.track / 2, R: t.D / 2, w: t.W, ...travelOf(a) };
+      const t = tyreOf(a.tyre)!, w = { name: 'wheel', x: a.x, y: t.D / 2, z: a.track / 2, R: t.D / 2, w: t.W, ...travelOf(a), section: tyreSection(t) };
       for (const p of all(car).filter((q) => q.shape && 'surf' in q.shape && !/liner/.test(q.name))) expect(patchPoints((p.shape as { surf: Patch }).surf, 40, 16).filter((q) => inSweep(q, w)), `${p.name} over the wheel at ${a.x.toFixed(2)}`).toHaveLength(0);
     }
+  });
+  test('a tyre sweeps its section, rounded at its shoulder: a point beside its tread is clear where it would not be beside a square-edged cylinder', () => {
+    const t = tyreOf('205/55R16')!, w = { name: 'w', x: 0, y: t.D / 2, z: 0.75, R: t.D / 2, w: t.W, steer: 0, bump: 0 }, P: [number, number, number] = [0, t.D - 0.005, 0.75 + t.W / 2 + 0.005];
+    expect(inSweep(P, w)).toBe(true); expect(inSweep(P, { ...w, section: tyreSection(t) })).toBe(false);
+    const widest = t.rim / 2 + 0.004 + 0.4 * (t.D / 2 - t.rim / 2 - 0.004); expect(inSweep([0, t.D / 2 + widest, 0.75 + t.W / 2 + 0.01], { ...w, section: tyreSection(t) })).toBe(true);
   });
   test('a steered wheel sweeps more than it fills: a point beside its tread at full lock is in its way only when it steers', () => {
     const w = { name: 'w', x: 0, y: 0.3, z: 0.75, R: 0.3, w: 0.2, steer: 0.61, bump: 0 }, P: [number, number, number] = [0.25, 0.3, 0.95];

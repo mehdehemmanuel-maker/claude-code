@@ -134,7 +134,7 @@ export function critique(root: Part): Finding[] {
         const ez = ax.clone().normalize(), ey = new THREE.Vector3(0, 1, 0).addScaledVector(ez, -ez.y).normalize(), ex = ey.clone().cross(ez), tr = m.p.travel ?? {};
         const tyreN = nodes.find((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.box), tc = tyreN ? tyreN.box!.getCenter(new THREE.Vector3()) : ctr, tw = !tyreN ? 2 * along : tyreN.p.shape && 'lathe' in tyreN.p.shape ? latheWidth(tyreN.p.shape.lathe) : Math.abs(tyreN.box!.getSize(new THREE.Vector3()).dot(ez));
         const off = tc.clone().sub(ctr).dot(ez), room = { radial: need.clearance, side: sideRoom, poses: 7 };
-        const tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0 }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along };
+        const section = tyreN?.p.shape && 'lathe' in tyreN.p.shape ? tyreN.p.shape.lathe : undefined, tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0, section }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along, section: undefined };
         const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; return inSweep(l, tyreSweep, room) || inSweep(l, hubSweep, { ...room, radial: 0 }); });
         if (!hit) continue;
         say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;

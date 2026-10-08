@@ -46,7 +46,7 @@ if (q.get('zebra') === '1' || q.get('draft') === '1') {
     const surf = p?.shape?.surf; if (surf) { const d = draft(surf).pull; m.material = draftMat(new THREE.Vector3(...d).transformDirection(m.matrixWorld)); }
   });
 }
-view.group.updateMatrixWorld(true); const box = new THREE.Box3(); view.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.visible) box.expandByObject(o); }); if (box.isEmpty()) box.setFromObject(view.group); const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()), r = size.length() / 2;
+view.group.updateMatrixWorld(true); const box = new THREE.Box3(); view.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.visible && !o.userData.decor) box.expandByObject(o); }); if (box.isEmpty()) box.setFromObject(view.group); const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()), r = size.length() / 2;
 const s = sun.shadow.camera as THREE.OrthographicCamera; s.left = s.bottom = -r * 1.5; s.right = s.top = r * 1.5; s.far = 60; s.updateProjectionMatrix(); sun.target.position.copy(c); scene.add(sun.target);
 // a closer look: &aim=x,y,z looks at that point instead of the middle (with &zoom under 1 to come close)
 const aim = q.get('aim'); if (aim) c.set(...(aim.split(',').map(Number) as [number, number, number]));

@@ -147,6 +147,29 @@ function heap(h: Extract<Shape, { heap: unknown }>['heap']): THREE.Object3D {
   inst.castShadow = true; return inst;
 }
 /** A thing drawn from its parts; up to so many of its lights really lit (the rest glow). */
+let blob: THREE.CanvasTexture | null = null;
+const blobTexture = (): THREE.CanvasTexture | null => {
+  if (blob) return blob; if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); if (!x) return null;
+  const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128); blob = new THREE.CanvasTexture(c); return blob;
+};
+/** The ground's shading under a thing that rests on it: one soft patch its footprint's size, and a darker one under each
+ *  part that touches the ground. Null for a thing that does not rest on the ground (or where there is no canvas). */
+function contactShadow(group: THREE.Group): THREE.Group | null {
+  const tex = blobTexture(); if (!tex) return null;
+  group.updateMatrixWorld(true); const all = new THREE.Box3().setFromObject(group); if (all.isEmpty() || all.min.y > 0.05) return null;
+  const out = new THREE.Group(); out.name = 'contact shadow'; out.userData.decor = true;
+  const patch = (cx: number, cz: number, sx: number, sz: number, opacity: number, lift: number) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(cx, all.min.y + lift, cz); m.renderOrder = 1; m.userData.decor = true; out.add(m);
+  };
+  const size = all.getSize(new THREE.Vector3()), ctr = all.getCenter(new THREE.Vector3());
+  patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002);
+  const b = new THREE.Box3();
+  group.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh) return; b.setFromObject(m); if (b.isEmpty() || b.min.y > all.min.y + 0.01 || b.max.y - b.min.y < 0.02) return; const s2 = b.getSize(new THREE.Vector3()), c2 = b.getCenter(new THREE.Vector3()); patch(c2.x, c2.z, Math.max(0.05, s2.x) * 1.3, Math.max(0.05, s2.z) * 1.3, 0.55, 0.003); });
+  return out;
+}
 export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
   const swingers: ((t: number, f: number) => void)[] = []; let clockT = 0;
   const group = new THREE.Group(), turners: ((dt: number) => void)[] = [], nodes: { obj: THREE.Object3D; home: THREE.Vector3; depth: number }[] = [];
@@ -172,6 +195,10 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
     return g;
   };
   group.add(draw(root, 0));
+  // grounded: what rests on the ground darkens the ground under it (the sky's light taken by what is over it), softly
+  // under its whole footprint and more where it touches (a tyre, a foot). Drawn, not cast, so it costs nothing on a
+  // headset that cannot afford shadow maps, and a thing never looks as if it floats.
+  const shade = contactShadow(group); if (shade) group.add(shade);
   const box = new THREE.Box3();
   const view: KitView = {
     group, lights, gait: 0,
