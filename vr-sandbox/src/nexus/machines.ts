@@ -492,20 +492,22 @@ export const MACHINES: Machine[] = [
   },
 ];
 // body styles by their typical figures (as the car kit had them), drawn by the same maker
-const STYLE: Record<string, { L: number; W: number; H: number; wb: number; lines: Lines; seats: number }> = {
+// (each style's tyres and ground clearance, typical of its kind: an SUV's and a pickup's tyres taller and wider than a
+// sedan's, a sports car's lower in profile; a tyre's width and aspect at a 15 in rim, wider and lower as the rim grows)
+const STYLE: Record<string, { L: number; W: number; H: number; wb: number; lines: Lines; seats: number; tyre?: [number, number]; clearance?: number }> = {
   sedan: { L: 4.8, W: 1.85, H: 1.45, wb: 2.85, seats: 5, lines: { cowl: 0.33, roofF: 0.45, roofR: 0.71, deck: 0.83, belt: 0.64, nose: 0.53, tail: 0.68, n: 5, face: { lamp: 0.1, grille: 0.08 } } },
   hatchback: { L: 4.3, W: 1.8, H: 1.47, wb: 2.65, seats: 5, lines: { cowl: 0.3, roofF: 0.42, roofR: 0.84, deck: 0.97, belt: 0.62, nose: 0.53, tail: 0.66, n: 5, face: { lamp: 0.1, grille: 0.08 } } },
-  SUV: { L: 4.8, W: 1.95, H: 1.75, wb: 2.85, seats: 7, lines: { cowl: 0.28, roofF: 0.38, roofR: 0.9, deck: 0.98, belt: 0.6, nose: 0.6, tail: 0.64, n: 6, face: { lamp: 0.12, grille: 0.22 } } },
+  SUV: { tyre: [0.215, 0.7], clearance: 0.2, L: 4.8, W: 1.95, H: 1.75, wb: 2.85, seats: 7, lines: { cowl: 0.28, roofF: 0.38, roofR: 0.9, deck: 0.98, belt: 0.6, nose: 0.6, tail: 0.64, n: 6, face: { lamp: 0.12, grille: 0.22 } } },
   // (a crew cab: two rows under its roof, its bed behind about 1.7 m long, a 5.5 ft box: typical)
-  pickup: { L: 5.8, W: 2.0, H: 1.9, wb: 3.6, seats: 5, lines: { cowl: 0.27, roofF: 0.36, roofR: 0.67, deck: 0.71, belt: 0.6, nose: 0.62, tail: 0.55, n: 6, bed: true, face: { lamp: 0.16, grille: 0.34 } } },
-  coupe: { L: 4.6, W: 1.85, H: 1.35, wb: 2.75, seats: 4, lines: { cowl: 0.36, roofF: 0.49, roofR: 0.67, deck: 0.85, belt: 0.62, nose: 0.48, tail: 0.66, n: 5 , doors: 1 } },
-  van: { L: 5.3, W: 2.0, H: 2.0, wb: 3.3, seats: 8, lines: { cowl: 0.16, roofF: 0.24, roofR: 0.97, deck: 0.99, belt: 0.52, nose: 0.52, tail: 0.6, n: 7, face: { lamp: 0.14, grille: 0.16 } } },
-  'sports car': { L: 4.4, W: 1.9, H: 1.2, wb: 2.45, seats: 2, lines: { cowl: 0.4, roofF: 0.52, roofR: 0.68, deck: 0.86, belt: 0.6, nose: 0.42, tail: 0.64, n: 4.5 , doors: 1, face: { lamp: 0.08, grille: 0.05 } } },
+  pickup: { tyre: [0.245, 0.75], clearance: 0.23, L: 5.8, W: 2.0, H: 1.9, wb: 3.6, seats: 5, lines: { cowl: 0.27, roofF: 0.36, roofR: 0.67, deck: 0.71, belt: 0.6, nose: 0.62, tail: 0.55, n: 6, bed: true, face: { lamp: 0.16, grille: 0.34 } } },
+  coupe: { tyre: [0.195, 0.6], clearance: 0.13, L: 4.6, W: 1.85, H: 1.35, wb: 2.75, seats: 4, lines: { cowl: 0.36, roofF: 0.49, roofR: 0.67, deck: 0.85, belt: 0.62, nose: 0.48, tail: 0.66, n: 5 , doors: 1 } },
+  van: { tyre: [0.205, 0.7], clearance: 0.16, L: 5.3, W: 2.0, H: 2.0, wb: 3.3, seats: 8, lines: { cowl: 0.16, roofF: 0.24, roofR: 0.97, deck: 0.99, belt: 0.52, nose: 0.52, tail: 0.6, n: 7, face: { lamp: 0.14, grille: 0.16 } } },
+  'sports car': { tyre: [0.205, 0.55], clearance: 0.12, L: 4.4, W: 1.9, H: 1.2, wb: 2.45, seats: 2, lines: { cowl: 0.4, roofF: 0.52, roofR: 0.68, deck: 0.86, belt: 0.6, nose: 0.42, tail: 0.64, n: 4.5 , doors: 1, face: { lamp: 0.08, grille: 0.05 } } },
   convertible: { L: 4.5, W: 1.85, H: 1.4, wb: 2.7, seats: 4, lines: { cowl: 0.36, roofF: 0.5, roofR: 0.66, deck: 0.84, belt: 0.62, nose: 0.48, tail: 0.66, n: 5, open: true , doors: 1 } },
 };
 /** A car of a body style, its figures typical, on the wheels and power chosen. */
 export function styledCar(style: string, o: { color: number; rim: number; rims: string; power: string; tint: string }): Machine {
-  const s = STYLE[style] ?? STYLE.sedan!, tw = 0.185 + (o.rim - 15) * 0.015, aspect = Math.max(0.3, 0.65 - (o.rim - 15) * 0.05), tyre = `${Math.round(tw * 1000 / 5) * 5}/${Math.round(aspect * 20) * 5}R${o.rim}`;
+  const s = STYLE[style] ?? STYLE.sedan!, [w0, a0] = s.tyre ?? [0.185, 0.65], tw = w0 + (o.rim - 15) * 0.015, aspect = Math.max(0.3, a0 - (o.rim - 15) * 0.05), tyre = `${Math.round(tw * 1000 / 5) * 5}/${Math.round(aspect * 20) * 5}R${o.rim}`;
   const oh = (s.L - s.wb) * 0.45, fx = s.L / 2 - oh, track = s.W * 0.84, rows = s.seats <= 2 ? 1 : s.seats <= 5 ? 2 : 3, seats: Seat[] = [];
   // (its people placed by its cabin, not its axles: the driver's hip about 0.9 m behind the windscreen's base, as the
   // Corolla's is (an estimate), each row about 0.85 m behind the one before (typical), and none further back than its
@@ -513,7 +515,7 @@ export function styledCar(style: string, o: { color: number; rim: number; rims: 
   const X = (f: number) => s.L / 2 - f * s.L, xCowl = X(s.lines.cowl), xBack = X(s.lines.deck) + 0.45;
   for (let r = 0; r < rows; r++) for (const z of r === 0 || rows === 1 ? [-0.38, 0.38] : r === 2 || s.seats >= 7 ? [-0.38, 0.38] : [0]) seats.push({ x: Math.max(xCowl - 0.9 - r * 0.85, xBack), z, y: s.H * 0.38, style: r === 0 || rows === 1 ? 'bucket' : 'bench' });
   return {
-    id: style, name: `${style}`, kind: 'car', source: 'typical of its body style', L: s.L, W: s.W, H: s.H, clearance: 0.14, frame: 'shell', hand: -1,
+    id: style, name: `${style}`, kind: 'car', source: 'typical of its body style', L: s.L, W: s.W, H: s.H, clearance: s.clearance ?? 0.14, frame: 'shell', hand: -1,
     axles: [{ x: fx, track, tyre, steer: true, drive: o.power !== 'rear', brake: { kind: 'disc', d: 0.3, vented: true }, susp: 'strut' }, { x: fx - s.wb, track, tyre, drive: true, brake: { kind: 'disc', d: 0.28 }, susp: style === 'pickup' || style === 'van' ? 'leaf' : 'beam' }],
     lines: s.lines, seats, power: o.power === 'electric' ? { kind: 'electric', kW: 150, x: fx - s.wb, y: 0.35, says: 'an electric motor at the rear axle (typical)' } : { kind: o.power === 'diesel' ? 'diesel' : 'inline', cc: o.power === 'diesel' ? 2000 : 1800, kW: 110, x: fx + oh * 0.35, says: 'typical' },
     controls: 'wheel', rims: { style: o.rims === 'steel' ? 'steel' : 'spokes', spokes: o.rims === '10-spoke' ? 10 : o.rims === 'mesh' ? 16 : o.rims === 'turbine' ? 12 : 5, mat: o.rims === 'steel' ? 'steel-low' : 'al-6061', lugs: 5, lug: 12 },

@@ -20,7 +20,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import { curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
 import type { Lines } from './machines';
 
@@ -247,8 +247,16 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     const door = (name: string, x0: number, x1: number) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1 - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
     if (twoDoors) out.push(door('front doors', xB, xFD), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xFD));
     // a handle near each door's back edge, a little under its shoulder, standing a few millimetres proud (typical)
-    for (const x1 of twoDoors ? [xB, xRD] : [xRD]) out.push(paint('door handles', { s: side, uv: [[U(x1 + 0.07), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.025], [U(x1 + 0.07), sv[3]! - 0.025]], off: 0.002 }, { shell: 0.002, says: 'a door handle (typical)' }));
+    // (each handle a bar on the door, in a dark pocket pressed into it for the fingers: the pocket a region of the skin,
+    // the bar a part standing just off it on each side)
+    for (const x1 of twoDoors ? [xB, xRD] : [xRD]) {
+      out.push({ name: 'door handle pockets', shape: { surf: { s: side, uv: [[U(x1 + 0.06), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.018], [U(x1 + 0.06), sv[3]! - 0.018]], off: 0.0008 } }, at: [0, 0, 0], mat: 'abs', color: 0x1a1b1d, shell: 0.002, finish: 'texture', kg: 0, says: 'the pocket under each door handle (typical)' });
+      const q = surfaceAt(side, U(x1 + 0.155), sv[3]! - 0.04);
+      for (const e of [1, -1]) out.push({ name: 'door handle', shape: { capsule: [0.011, 0.11] }, at: [q.at[0] + q.n[0] * 0.012, q.at[1] + q.n[1] * 0.012, e * (q.at[2] + q.n[2] * 0.012)], rot: [0, 0, Math.PI / 2], mat: 'abs', color: col, shell: 0.002, finish: 'paint', says: 'a door handle (typical)' });
+    }
   } else out.push(paint('body sides', { s: side, above: trimmed(0, 1) }, { says: 'its sides: pressed steel about 0.8 mm (typical)' }));
+  // (a pickup's bed a box of its own behind the cab, a gap between them: drawn as a shut line down the side at the cab's back)
+  if (b.lines.bed) { const ub = U(ln.xDeck - 0.012), dub = du(ln.xDeck) * 1.5; out.push({ name: 'cab to bed gap', shape: { surf: { s: side, uv: [[ub - dub, 0], [ub + dub, 0], [ub + dub, 1], [ub - dub, 1]], off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says: 'the gap between its cab and its bed (typical)' }); }
   // ---- its faces at its ends, laid out by height on the skin (each band of it where the skin is at that height) ----
   const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
   // (the skin's sections rise with v, so the v at a height is found by halving)
@@ -365,7 +373,13 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       if (twoDoors) {
         out.push(trim('B pillars', [[uB0, vg0], [uB1, vg0], [uB1, v3 - p], [uB0, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'its B pillars, trimmed black (typical)' }));
         out.push(glass('front side windows', [[uB1, vg0], [1, vg0], [1, v3 - p], [uB1, v3 - p]], 'its front door glass: toughened, about 4 mm (typical)'));
-        out.push(glass('rear side windows', [[uCe, vg0], [uB0, vg0], [uB0, v3 - p], [uCe, v3 - p]], 'its rear door glass (typical)'));
+        // (a long cabin's glass behind the B pillars split by pillars: at the rear doors' back edge, and every 1.1 m or so
+        // behind that, as a van's or an estate's is)
+        const xCe = ln.xRoofR - 0.05, cuts = xRD - xCe > 0.35 && xB - r.cabin.pillar - xRD > 0.3 ? [xRD] : [], last = cuts.length ? cuts[0]! : xB - r.cabin.pillar, more = Math.floor((last - xCe) / 1.1);
+        for (let k = 1; k <= more; k++) cuts.push(last - ((last - xCe) * k) / (more + 1));
+        const edges = [uB0, ...cuts.sort((a2, b2) => b2 - a2).flatMap((x) => [Uc(x + r.cabin.pillar), Uc(x - r.cabin.pillar)]), uCe];
+        for (let k = 0; k + 1 < edges.length; k += 2) out.push(glass('rear side windows', [[edges[k + 1]!, vg0], [edges[k]!, vg0], [edges[k]!, v3 - p], [edges[k + 1]!, v3 - p]], 'its rear side glass (typical)'));
+        for (const x of cuts) out.push(trim('D pillars', [[Uc(x - r.cabin.pillar), vg0], [Uc(x + r.cabin.pillar), vg0], [Uc(x + r.cabin.pillar), v3 - p], [Uc(x - r.cabin.pillar), v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'a pillar between its rear side windows, trimmed black (typical)' }));
       } else out.push(glass('side windows', [[uCe, vg0], [1, vg0], [1, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
     } else {
       out.push(glass('windscreen', [[0, v3 + p], [1, v3 + p], [1, 1], [0, 1]], 'its windscreen (typical)'));
