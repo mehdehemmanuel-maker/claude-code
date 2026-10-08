@@ -41,6 +41,9 @@ galactocerebroside | galactocerebroside | Biomolecules/Lipids | C48H93NO8 | the 
 cardiolipin | cardiolipin | Biomolecules/Lipids | C81H142O17P2 | the four-tailed lipid of the inner mitochondrial membrane
 dppc | dipalmitoylphosphatidylcholine | Biomolecules/Lipids | C40H80NO8P | lung surfactant: it lets alveoli open
 wax-ester | wax ester | Biomolecules/Lipids | C46H92O2 | beeswax's main part (triacontanyl palmitate)
+squalene | squalene | Biomolecules/Lipids | C30H50 | the skin's own hydrocarbon, an eighth of sebum: a step on the way to cholesterol
+palmitic-acid | palmitic acid | Biomolecules/Lipids | C16H32O2 | the commonest saturated fatty acid: free in sebum and earwax, bound in fat
+sapienic-acid | sapienic acid | Biomolecules/Lipids | C16H30O2 | a fatty acid only human sebum makes (16:1 Δ6): it kills bacteria on the skin
 // ---- small molecules: messengers --------------------------------------------------------------------------------
 glutamate | glutamate | Biomolecules/Neurotransmitters | C5H9NO4 | the main excitatory transmitter of the brain
 gaba | GABA | Biomolecules/Neurotransmitters | C4H9NO2 | the main inhibitory transmitter of the brain
@@ -63,6 +66,10 @@ glucagon | glucagon | Biomolecules/Hormones | C153H225N43O49S | the alpha cell's
 // ---- small molecules: other -----------------------------------------------------------------------------------------
 urea | urea | Biomolecules/Small molecules | CH4N2O | how nitrogen leaves the body, in urine
 creatine | creatine | Biomolecules/Small molecules | C4H9N3O2 | muscle's quick phosphate store
+creatinine | creatinine | Biomolecules/Small molecules | C4H7N3O | what muscle's creatine becomes, about 1.7 % a day: out in urine at a steady rate, so its blood level measures the kidneys
+uric-acid | uric acid | Biomolecules/Small molecules | C5H4N4O3 | how purines leave: people and apes lost the enzyme that breaks it further, so it can crystallise as gout
+urobilin | urobilin | Biomolecules/Pigments | C33H42N4O6 | the yellow of urine: bilirubin turned by gut bacteria and taken back
+lactose | lactose | Biomolecules/Sugars | C12H22O11 | milk's sugar: glucose and galactose
 bilirubin | bilirubin | Biomolecules/Small molecules | C33H36N4O6 | what haem becomes: the yellow of bruises and bile
 cholic-acid | cholic acid | Biomolecules/Small molecules | C24H40O5 | the main bile acid: fat into droplets
 heme | haem | Biomolecules/Small molecules | C34H32FeN4O4 | the iron ring that holds oxygen
@@ -126,6 +133,11 @@ vglut | vesicular glutamate transporter | Biomolecules/Proteins/Synapse | blend:
 myelin-protein | myelin proteins (MBP, PLP) | Biomolecules/Proteins/Myelin | blend: protein 100 | hold myelin's wraps together | 25000
 rhodopsin | rhodopsin | Biomolecules/Proteins/Receptors | blend: protein 99.3, retinal 0.7 | the light receptor of rods | 40000
 enzyme | enzyme (typical) | Biomolecules/Proteins/Enzymes | blend: protein 100 | a protein that speeds one reaction | 50000
+lysozyme | lysozyme | Biomolecules/Proteins/Enzymes | blend: protein 100 | cuts bacterial walls (Fleming 1922, from his own nasal mucus): in tears, saliva and milk | 14700
+lactoferrin | lactoferrin | Biomolecules/Proteins/Carriers | blend: protein 100 | holds iron away from bacteria: in tears, milk and saliva | 78000
+casein | casein | Biomolecules/Proteins/Carriers | blend: protein 100 | milk's protein, in micelles that carry calcium phosphate (about 40 % of human milk's protein) | 24000
+mucin | mucin | Biomolecules/Proteins/Structural | blend: protein 20, C8H15NO6 40, C6H12O6 25, C6H12O5 7, C11H19NO9 8 | a protein backbone bristling with sugar chains, 80 % sugar by mass: N-acetylgalactosamine and glucosamine, galactose, fucose and sialic acid make mucus slippery and gel (Bansil & Turner 2006, Curr Opin Colloid Interface Sci 11:164; shares typical) | 2500000
+hk-atpase | proton pump (H⁺/K⁺-ATPase) | Biomolecules/Proteins/Pumps and channels | blend: protein 100 | the stomach's acid pump: swaps a K⁺ in for an H⁺ out with each ATP at its steepest, a million-fold gradient; what omeprazole blocks | 135000
 mota | MotA | Biomolecules/Proteins/Bacterial motor | blend: protein 100 | the stator's proton channel (UniProt P09348) | 32000
 motb | MotB | Biomolecules/Proteins/Bacterial motor | blend: protein 100 | anchors the stator to the cell wall | 34000
 flig | FliG | Biomolecules/Proteins/Bacterial motor | blend: protein 100 | the rotor's torque ring, pushed by the stator | 37000
@@ -192,7 +204,7 @@ cartilage-matrix | cartilage matrix | Biomolecules/Matrices | blend: water 75, c
 enamel | tooth enamel | Biomolecules/Matrices | blend: hydroxyapatite 96, water 3, protein 1 | the hardest tissue of the body
 dentin | dentine | Biomolecules/Matrices | blend: hydroxyapatite 70, collagen 20, water 10 | the bulk of a tooth
 synovial-fluid | synovial fluid | Biomolecules/Fluids | blend: water 97, hyaluronic-acid 0.3, albumin 2.5, glucose 0.2 | lubricates joints
-cerebrospinal-fluid | cerebrospinal fluid | Biomolecules/Fluids | blend: water 99.14, nacl 0.75, glucose 0.06, albumin 0.03, kcl 0.02 | bathes and floats the brain (about 150 ml)
+cerebrospinal-fluid | cerebrospinal fluid | Biomolecules/Fluids | blend: water 98.96, nacl 0.75, sodium-bicarbonate 0.18, glucose 0.06, albumin 0.03, kcl 0.02 | bathes and floats the brain (about 150 ml): Na⁺ 147, Cl⁻ 125, HCO₃⁻ 22, K⁺ 2.9 mmol/l, glucose 3.3 mmol/l, protein 0.15–0.45 g/l (typical clinical values)
 cytosol | cytosol | Biomolecules/Fluids | blend: water 79.6, enzyme 15, potassium-phosphate 1.2, kcl 0.1, glycogen 1, rna 2, atp 0.3, glucose 0.2, magnesium-chloride 0.1, sodium-phosphate 0.5 | the cell's fluid: about 17 % protein and RNA, crowded; K⁺ about 140 mmol/l, Cl⁻ about 10
 nucleoplasm | nucleoplasm | Biomolecules/Fluids | blend: water 82.3, enzyme 12, rna 4, potassium-phosphate 1.5, kcl 0.2 | the fluid of the nucleus
 extracellular-fluid | interstitial fluid | Biomolecules/Fluids | blend: water 98.14, nacl 0.9, sodium-bicarbonate 0.2, glucose 0.1, albumin 0.6, kcl 0.03, calcium-chloride 0.03 | the fluid between cells
@@ -200,10 +212,21 @@ membrane-lipids | membrane lipids | Biomolecules/Lipids | blend: phosphatidylcho
 myelin-lipids | myelin lipids | Biomolecules/Lipids | blend: cholesterol 40, galactocerebroside 25, phosphatidylethanolamine 20, sphingomyelin 15 | myelin's lipids: rich in cholesterol and cerebroside
 fat-droplet | stored fat | Biomolecules/Lipids | blend: triglyceride 99, cholesterol 1 | what an adipocyte holds
 bile | bile | Biomolecules/Fluids | blend: water 97, cholic-acid 1.5, phosphatidylcholine 0.5, cholesterol 0.2, bilirubin 0.1, nacl 0.7 | from liver to gut: it breaks fat into droplets
-gastric-juice | gastric juice | Biomolecules/Fluids | blend: water 99.4, hydrochloric-acid 0.4, enzyme 0.2 | the stomach's acid and pepsin
-urine | urine | Biomolecules/Fluids | blend: water 95.8, urea 2, nacl 1, kcl 0.6, creatine 0.2, sodium-phosphate 0.4 | about 1.5 l a day
-saliva | saliva | Biomolecules/Fluids | blend: water 99.5, enzyme 0.3, nacl 0.1, sodium-bicarbonate 0.1 | starts digestion with amylase
-sweat | sweat | Biomolecules/Fluids | blend: water 99, nacl 0.8, urea 0.1, lactic-acid 0.1 | cools by evaporating: about 2.4 kJ a gram
+gastric-juice | gastric juice | Biomolecules/Fluids | blend: water 98.82, hydrochloric-acid 0.4, enzyme 0.2, mucin 0.3, nacl 0.2, kcl 0.08 | the stomach's acid, pepsin and mucus: about 110 mmol/l of HCl mixed (pH 1.5–3.5), 150–160 straight from the acid cells
+urine | urine | Biomolecules/Fluids | blend: water 96.86, urea 1.7, creatinine 0.1, nacl 0.6, kcl 0.4, uric-acid 0.04, sodium-phosphate 0.3, urobilin 0.0003 | a day's 1.5 l: urea about 26 g, creatinine 1.5 g, NaCl 9 g, potassium 3 g, uric acid 0.6 g, phosphorus 1 g (typical; Putnam 1971, NASA CR-1802)
+saliva | saliva | Biomolecules/Fluids | blend: water 99.4, enzyme 0.1, mucin 0.2, immunoglobulin 0.02, lysozyme 0.003, kcl 0.15, nacl 0.06, sodium-bicarbonate 0.05, urea 0.017 | wets, starts starch with amylase, guards with lysozyme and IgA: K⁺ about 20, Na⁺ 5–40 mmol/l (Humphrey & Williamson 2001, J Prosthet Dent 85:162)
+sweat | sweat | Biomolecules/Fluids | blend: water 99.47, nacl 0.25, kcl 0.04, lactic-acid 0.14, urea 0.06, protein 0.04 | cools by evaporating, 2.42 kJ a gram at the skin: Na⁺ about 40 mmol/l (10–90), K⁺ 5, lactate 15, urea 10 (Baker 2017, Sports Med 47:111; Sato et al. 1989)
+sebum | sebum | Biomolecules/Fluids | blend: triglyceride 41.5, palmitic-acid 8, sapienic-acid 8, wax-ester 26, squalene 12, cholesterol 4.5 | the oil of the skin and hair, from the sebaceous glands: triglycerides and free fatty acids 57.5 %, wax esters 26 %, squalene 12 %, cholesterol and its esters 4.5 % (Picardo et al. 2009, Dermatoendocrinol 1:68)
+cerumen | earwax (cerumen) | Biomolecules/Fluids | blend: keratin 60, palmitic-acid 16, wax-ester 8, squalene 6, cholesterol 7.5, water 2.5 | the ceruminous and sebaceous glands' oil with the ear canal's shed skin: about 60 % keratin, 12–20 % long-chain fatty acids, alcohols and squalene, 6–9 % cholesterol (Guest et al. 2004, QJM 97:477)
+tear-fluid | tears | Biomolecules/Fluids | blend: water 98.18, nacl 0.75, sodium-bicarbonate 0.22, kcl 0.18, lysozyme 0.2, lactoferrin 0.15, protein 0.3, mucin 0.02 | the eye's film, 7 µl of it: Na⁺ 145, K⁺ 24, Cl⁻ 128, HCO₃⁻ 26 mmol/l; protein about 7 g/l, lysozyme and lactoferrin about 2 g/l each (van Haeringen 1981, Surv Ophthalmol 26:84)
+meibum | meibum | Biomolecules/Fluids | blend: wax-ester 45, cholesterol 30, triglyceride 10, phosphatidylcholine 8, squalene 7 | the eyelids' oil that stops tears evaporating: wax and cholesterol esters most of it (McCulley & Shine 1997, Trans Am Ophthalmol Soc 95:79; shares typical)
+mucus | mucus (airway) | Biomolecules/Fluids | blend: water 97, mucin 2, protein 0.5, nacl 0.4, phosphatidylcholine 0.1 | the airways' sticky blanket that cilia sweep up: about 97 % water and 3 % solids, most of them mucins (Fahy & Dickey 2010, N Engl J Med 363:2233)
+pancreatic-juice | pancreatic juice | Biomolecules/Fluids | blend: water 98.56, sodium-bicarbonate 1, enzyme 0.3, nacl 0.1, kcl 0.04 | alkaline juice that neutralises the stomach's acid in the duodenum: bicarbonate up to about 120–145 mmol/l, with trypsinogen, lipase and amylase (Hall 2021, Guyton and Hall, ch. 65)
+milk | human milk | Biomolecules/Fluids | blend: water 87.75, lactose 7.2, triglyceride 3.6, protein 0.6, casein 0.4, immunoglobulin 0.1, lactoferrin 0.15, kcl 0.07, calcium-chloride 0.06, nacl 0.03, sodium-phosphate 0.04 | mature milk: lactose 6.7–7.8, fat 3.2–3.6, protein 0.9–1.2 g/dl (Ballard & Morrow 2013, Pediatr Clin N Am 60:49)
+seminal-plasma | seminal fluid | Biomolecules/Fluids | blend: water 93.5, protein 4, fructose 0.3, citric-acid 0.4, nacl 0.5, kcl 0.15, sodium-bicarbonate 0.15, sodium-phosphate 1 | the seminal vesicles' fructose and semenogelin and the prostate's citrate and PSA: protein 35–55 g/l (typical; shares an estimate)
+venom | snake venom (rattlesnake, as secreted) | Biomolecules/Fluids | blend: water 75, protein 22, enzyme 2.5, nacl 0.5 | phospholipases A₂, metalloproteases and serine proteases in a protein-rich fluid; about a quarter solids, nine tenths of them protein (typical; Mackessy 2008)
+cephalopod-ink | cephalopod ink (cuttlefish sepia) | Biomolecules/Fluids | blend: water 75, melanin 15, mucin 8, protein 2 | eumelanin granules about 150 nm in mucus (Derby 2014, Mar Drugs 12:2700; shares typical): the sepia of drawings
+hagfish-slime | hagfish slime | Biomolecules/Fluids | blend: water 99.996, mucin 0.0015, keratin 0.0025 | gels sea water in a split second with threads of intermediate filament protein: about 99.996 % water (Fudge et al. 2005, J Exp Biol 208:4613)
 bacterial-biomass | bacterial biomass (Gram-negative) | Biomolecules/Biomass | blend: water 70, protein 16.5, rna 6.15, phosphatidylethanolamine 2.73, lipopolysaccharide 1.02, dna 0.93, peptidoglycan 0.75, glycogen 0.75, kcl 1.17 | a growing E. coli's make-up: 70 % water; of its dry mass 55 % protein, 20.5 % RNA, 9.1 % lipid, 3.4 % LPS, 3.1 % DNA, 2.5 % wall, 2.5 % glycogen, 3.9 % small molecules and ions (Neidhardt 1987)
 gram-positive-biomass | bacterial biomass (Gram-positive) | Biomolecules/Biomass | blend: water 70, protein 16.5, rna 6.15, phosphatidylethanolamine 1.8, peptidoglycan 3.5, dna 0.93, glycogen 0.5, kcl 0.62 | a Gram-positive's: no outer membrane, a wall of peptidoglycan many layers thick (as E. coli's otherwise, an estimate)
 archaeal-biomass | archaeal biomass | Biomolecules/Biomass | blend: water 70, protein 17, rna 6, archaeol 2.5, dna 1, glycogen 0.5, kcl 3 | an archaeon's: ether lipids, a protein wall, and (in salt-lovers) molar potassium inside (an estimate)

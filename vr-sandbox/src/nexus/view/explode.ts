@@ -7,10 +7,12 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { INVENTORY } from '../inventory';
-import { planOf, type Look, type Plan } from '../pieces';
+import { INVENTORY, atomsOf, countSays } from '../inventory';
+import { fitFor, planOf, type Look, type Plan } from '../pieces';
 import { card, label } from './holo';
 import { mergeStatic } from './merge-static';
+import { organicInto } from './organic';
+import { clockOf } from '../life/time';
 
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const matOf = (l: Look, ghost = false) => {
@@ -46,6 +48,7 @@ export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
   const big = Math.max(...l.size), [x, y, z] = l.size.map((v) => Math.max(v, big * 0.01)) as [number, number, number], mat = matOf(l, ghost), g = new THREE.Group();
   const add = (geo: THREE.BufferGeometry, m: THREE.Material = mat) => { const me = new THREE.Mesh(geo, ghost ? mat : m); g.add(me); return me; };
   const across = Math.max(x, y), axisLen = z;
+  if (l.kind === 'organic') { organicInto(l, g, (geo, m) => add(geo, m ?? mat)); return g; }
   switch (l.kind) {
     // axial: a × b across, c along an upright axis
     case 'screw': { const d = Math.min(x, y), shank = add(new THREE.CylinderGeometry(d * 0.32, d * 0.32, axisLen * 0.82, 16)); shank.position.y = -axisLen * 0.09; const hd = l.mark === 'hex' ? new THREE.CylinderGeometry(d * 0.55, d * 0.55, axisLen * 0.18, 6) : l.mark === 'flat' ? new THREE.CylinderGeometry(d * 0.55, d * 0.3, axisLen * 0.14, 24) : l.mark === 'dome' ? new THREE.SphereGeometry(d * 0.5, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2) : new THREE.CylinderGeometry(d * 0.5, d * 0.5, axisLen * 0.18, 24); const h = add(hd); h.position.y = axisLen * 0.41; if (l.mark === 'dome') h.scale.y = 0.5; for (let k = 0; k < 6; k++) { const r = add(new THREE.TorusGeometry(d * 0.32, d * 0.035, 5, 18)); r.rotation.x = Math.PI / 2; r.position.y = -axisLen * 0.45 + k * axisLen * 0.11; } break; }
@@ -138,13 +141,13 @@ export class Exploded {
   }
   /** An item of the inventory, whole, then apart. */
   show(id: string, now: number, apart = true, fresh = true): string {
-    const p = planOf(id, 0.22); if (!p) return `Nothing in the inventory called ${id}.`;
+    const p = planOf(id, fitFor(id)); if (!p) return `Nothing in the inventory called ${id}.`;
     this.clearStage(); this.build = null; this.plan = p;
     if (fresh) this.trail = [];
     this.trail.push({ id, name: p.name });
     // the whole fades to a ghost when apart: its own copies of the shared finishes, so the parts keep theirs
     this.wholeObj = meshOfLook(p.whole);
-    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if ((m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) mine.set(m0, (c = m0.clone())); me.material = c; } }); }
+    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if ((m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) { c = m0.clone(); c.userData.base = m0.opacity; mine.set(m0, c); } me.material = c; } }); }
     mergeStatic(this.wholeObj); this.stage.add(this.wholeObj);
     p.pieces.forEach((pc, k) => {
       const obj = meshOfLook(pc.look); mergeStatic(obj); obj.userData.piece = pc.id; obj.visible = false; this.stage.add(obj);
@@ -219,14 +222,15 @@ export class Exploded {
   update(now: number): void {
     if (!this.group.visible) return;
     const k = now - this.t0, apart = this.mode === 'apart';
-    if (this.wholeObj) { this.wholeObj.rotation.y = now * 0.4; this.wholeObj.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m && 'opacity' in m) { const ghost = apart ? 0.22 : 1; m.transparent = ghost < 1 || m.transparent; m.opacity += (ghost - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; } }); }
+    const still = !!this.plan?.inPlace;
+    if (this.wholeObj) { if (!still) this.wholeObj.rotation.y = now * 0.4; this.wholeObj.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m && 'opacity' in m) { const base = (m.userData.base as number | undefined) ?? 1, ghost = (apart ? 0.22 : 1) * base; m.transparent = ghost < 1 || m.transparent; m.opacity += (ghost - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; } }); }
     for (const s of this.shown) {
       if (s.held) continue;
       const u = ease((apart ? k - s.delay : 1.2 - k) / 1.1);
       s.obj.visible = this.build ? true : u > 0.02;
       const home = new THREE.Vector3().lerpVectors(s.from, s.to, u);
       if (s.obj.position.distanceToSquared(home) > 1e-6 && u >= 1) s.obj.position.lerp(home, 0.18); else s.obj.position.copy(home);
-      if (!this.build) { s.obj.rotation.y = now * 0.3 + s.delay * 10; s.obj.rotation.x *= 0.85; s.obj.rotation.z *= 0.85; }
+      if (!this.build && !still) { s.obj.rotation.y = now * 0.3 + s.delay * 10; s.obj.rotation.x *= 0.85; s.obj.rotation.z *= 0.85; }
       s.tag.visible = apart && u > 0.95;
       s.tag.position.copy(s.obj.position).add(new THREE.Vector3(0, -s.drop, 0.02));
     }
@@ -240,6 +244,8 @@ export class Exploded {
       { text: this.path, color: '#7fb3c8', size: 0.75 },
       { text: p.says, color: '#e6fbff', size: 0.82 },
       ...(i.kind === 'element' ? [{ text: `${i.spec ?? ''} · ${i.says}`, color: '#ffe082', size: 0.8 }] : []),
+      ...(i.path[0] === 'Life' && clockOf(p.id) ? [{ text: `⏱ ${clockOf(p.id)}`, color: '#ffd180', size: 0.76 }] : []),
+      ...(i.path[0] === 'Life' && atomsOf(p.id) ? [{ text: `⚛ about ${countSays(atomsOf(p.id)!.total)} atoms: ${atomsOf(p.id)!.by.slice(0, 5).map((b) => `${b.el} ${(b.share * 100).toFixed(b.share < 0.01 ? 2 : 1)} %`).join(', ')}`, color: '#b388ff', size: 0.74 }] : []),
       { text: p.deeper ? `${p.pieces.length} shown${p.more ? `, ${p.more} more not shown` : ''}: point at one to open it` : 'the bottom: everything comes down to elements like this', color: '#69f0ae', size: 0.82 },
     ], i.kind === 'element' ? '#b388ff' : i.kind === 'material' ? '#ffd740' : '#4dd0e1');
   }

@@ -8,13 +8,14 @@ import { ELEMENTS } from '../elements';
 import { BRAIN_ENTRIES } from './brain';
 import { CELLS, MUSCLE, PARTS } from './cells';
 import type { LifeEntry, Molecule } from './core';
+import { CREATURE_GLANDS, GLAND_CELLS, GLANDS } from './glands';
 import { HUMAN } from './human';
 import { MOLECULES } from './molecules';
 import { ORGANISMS } from './organisms';
 
 /** grams a dalton. */
 export const AMU = 1.66053907e-24;
-export const LIFE: LifeEntry[] = [...PARTS, ...CELLS, ...MUSCLE, ...HUMAN, ...BRAIN_ENTRIES, ...ORGANISMS];
+export const LIFE: LifeEntry[] = [...PARTS, ...CELLS, ...MUSCLE, ...HUMAN, ...GLANDS, ...CREATURE_GLANDS, ...GLAND_CELLS, ...BRAIN_ENTRIES, ...ORGANISMS];
 const byId = new Map<string, LifeEntry>(LIFE.map((e) => [e.id, e]));
 const mols = new Map<string, Molecule>(MOLECULES.map((m) => [m.id, m]));
 /** A formula's weight, daltons. */

@@ -4,7 +4,7 @@
 // numbers their sources give.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, countIn, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/inventory';
+import { INVENTORY, atomsOf, countIn, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/inventory';
 import { AMU, LIFE, LIFE_FAULTS, MOLECULES, daltonsOf } from '../../src/nexus/life';
 import { BONES } from '../../src/nexus/life/human';
 
@@ -55,6 +55,11 @@ describe('the human body', () => {
       ['blood', { H: 10.2, C: 11.0, N: 3.3, O: 74.5 }], ['brain', { H: 10.7, C: 14.5, N: 2.2, O: 71.2 }], ['dermis-tissue', { H: 10.0, C: 20.4, N: 4.2, O: 64.5 }], ['liver-tissue', { H: 10.2, C: 13.9, N: 3.0, O: 71.6 }], ['lung-tissue', { H: 10.3, C: 10.5, N: 3.1, O: 74.9 }],
     ];
     for (const [id, want] of icru) { const m = massMakeup(id)!; for (const [el, w] of Object.entries(want)) expect(Math.abs(pct(m, el) - w), `${id} ${el}: ${pct(m, el).toFixed(1)} against ${w}`).toBeLessThan(el === 'H' || el === 'N' ? 1.2 : 3.5); }
+  });
+  it('is about 7 × 10²⁷ atoms, nearly two thirds of them hydrogen, each kept as a count until opened', () => {
+    const a = atomsOf('human')!; expect(a.total).toBeGreaterThan(6e27); expect(a.total).toBeLessThan(9e27);
+    expect(a.by[0]!.el).toBe('H'); expect(a.by[0]!.share).toBeGreaterThan(0.58); expect(a.by[0]!.share).toBeLessThan(0.66);
+    expect(atomsOf('haemoglobin')!.by.find((b) => b.el === 'Fe')!.n).toBeCloseTo(4, 0); // one molecule: its four irons
   });
   it('reads as a tree from the body to its elements, and comes down to them by fundamentals', () => {
     const t = treeLines('human', 40).join('\n');

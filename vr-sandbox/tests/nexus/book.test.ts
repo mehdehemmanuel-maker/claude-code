@@ -2,7 +2,7 @@
 // cases at their limits; a law inverts from the same term; every hash is content.
 
 import { describe, expect, it } from 'vitest';
-import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, WEIGHT, lawById } from '../../src/nexus/book';
+import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, UNIVERSAL as UNIVERSAL_LAWS, WEIGHT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply, invert, law } from '../../src/nexus/law';
 import { LAWS } from '../../src/ganglia/laws';
@@ -135,7 +135,7 @@ describe('the kept book as terms: every law, by its own example', () => {
 
   it('the book is evidence, not a ceiling: it holds every kept law, and the language states laws for any matter it is told of that no one wrote', () => {
     // the kept laws are the sourced instances generated laws are checked against (carrier.test.ts reproduces 22 of them); their number is the kept data's, not the language's
-    expect(BOOK.length).toBe(Object.values(KEPT).flat().length + SLICE.length);
+    expect(BOOK.length).toBe(Object.values(KEPT).flat().length + SLICE.length + UNIVERSAL_LAWS.length);
     const told = ['volume of honey', 'amount of carbon dioxide', 'mass of hydrogen', 'volume of lava', 'amount of a species not yet named'];
     const power = told.filter((id) => carrierById(id).conjugate);
     const generated = told.flatMap((id) => [...family(carrierById(id)), ...power.filter((x) => x !== id && power.includes(id)).flatMap((x) => coupling(carrierById(id), carrierById(x)))]);

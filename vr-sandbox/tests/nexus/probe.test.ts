@@ -9,22 +9,26 @@ import { ASPECTS, car, house, printer } from './inventions';
 const all = () => [house(), car(), printer()];
 
 describe('attempt 0: the substrate as it is', () => {
-  it('the closure over the book finds no chain for a held temperature: temperature is an input of 17 laws and the output of one, whose resistance nothing gives', () => {
+  it('the closure over the book finds no chain for a held temperature: temperature is an input of 24 laws (17 kept, 7 universal) and the output of one, whose resistance nothing gives', () => {
     for (const i of all()) {
       const a = attempt(i);
       const temps = a.outcomes.filter((o) => o.want.quantity.unit === 'degC');
       expect(temps.length).toBeGreaterThan(0);
       for (const o of temps) {
         expect(o.verdict).toBe('laws produce it from what nothing gives');
-        expect(o.consumers.length).toBe(17);
+        expect(o.consumers.length).toBe(24);
         expect(o.producers.map((l) => l.id)).toEqual(['thermal.network']);
       }
     }
   });
 
-  it('flows, rates and accelerations have no producer at all', () => {
+  it('accelerations and light have no producer; flows and rates now do, by the universal balances (src/nexus/book/universal.ts)', () => {
     const none = all().flatMap((i) => attempt(i).outcomes.filter((o) => o.verdict === 'no law produces it').map((o) => `${i.name}: ${o.want.id}`));
-    expect(none).toEqual(['a house: fresh', 'a house: not damp', 'a house: light', 'a house: water', 'a car: pick up', 'a car: stop', 'a car: smooth', 'a car: survive', 'a 3D printer: rate']);
+    expect(none).toEqual(['a house: light', 'a car: pick up', 'a car: stop', 'a car: smooth', 'a car: survive']);
+    // the house's fresh air and water and the printer's rate were unproduced before the universal laws: conservation,
+    // Henry's law and the counting laws produce them now, though by several chains with nothing yet to choose between them
+    const h = attempt(house());
+    for (const id of ['fresh', 'not damp', 'water']) expect(h.outcomes.find((o) => o.want.id === id)!.verdict, id).toBe('several chains, nothing to choose by');
   });
 
   it('what closes, closes by dimension alone, and reads as nonsense: the language has nothing else to check a chain by', () => {
@@ -36,11 +40,11 @@ describe('attempt 0: the substrate as it is', () => {
     expect(showChain(voltage.grounded[0]!)).toBe('lead-acid.ocv(SG = people [the people])');
   });
 
-  it('the same five distinctions stop all three, and nothing of the structure each needs is made', () => {
+  it('the same distinctions stop all three (the printer no longer lacks a flow), and nothing of the structure each needs is made', () => {
     const lacks = all().map((i) => distinctions(attempt(i)).map((d) => d.lacks));
-    for (const l of lacks) expect(l.length).toBe(5);
+    expect(lacks.map((l) => l.length)).toEqual([5, 5, 4]);
     expect(lacks[0]).toEqual(lacks[1]);
-    expect(lacks[1]).toEqual(lacks[2]);
+    for (const d of lacks[2]!) expect(lacks[0]).toContain(d);
     for (const i of all()) expect(attempt(i).structure.length).toBe(0);
     // the aspects the request names are evaluated against the structure made: none, for all three
     expect(ASPECTS.house.length + ASPECTS.car.length + ASPECTS.printer.length).toBe(29 + 19 + 16);

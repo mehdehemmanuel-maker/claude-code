@@ -79,6 +79,15 @@ import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type
 import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../practice';
 import { TEST_ASKS } from '../test-asks';
 import { INVENTORY, boardOfInventory, boardOfTree, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
+import { aged, clockOf, turnover } from '../life/time';
+import { LASTING, lifetimeLines, lifetimeOf, yearsSays } from '../life/decay';
+import { flowLines, flowsOf } from '../life/flows';
+import { CREATURES, abilityLines, type Creature } from '../abilities';
+import { discover, graphSummary } from '../lawgraph';
+import { profileLines } from '../derive';
+import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
+import { countSays } from '../inventory';
+import { setBody } from '../anatomy';
 import { FAMILIES, callFamily } from '../families';
 import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -839,6 +848,8 @@ const apart3d = new Exploded(scene);
 /** The hand holding a part out of the 3D view, or -1. */
 let gripHeld3d = -1;
 /** Lift an item out in 3D before you, apart: its parts round it, each to open in turn, down to the elements. */
+const people: Genome[] = [];
+const on3d = (): boolean => apart3d.visible;
 function see3d(id: string): string { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.show(id, performance.now() / 1000); }
 /** On a screen, the view turned to look at it (in a headset you turn your own head). */
 function aim3d(): void { if (renderer.xr.isPresenting) return; framing = false; orbit.target.copy(apart3d.group.position).addScaledVector(apart3d.right, -0.14); orbit.update(); }
@@ -1700,6 +1711,7 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 }
 /** Words that clear the table: reset, clear, start over. */
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
+const LIFE_WORDS = /^(?:nexus[,:]?\s*)?(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions)$|what can (?!you\b|i\b|we\b|nexus\b)(?:a |an |the )?\S|abilities of\s|(?:the )?law(?:s| graph)$|find (?:a )?law for\s|(?:profile|density of|derive)\s|(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?\S.*\b(?:last|lasts|live|lives)\b|(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(?:human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?[.!]?$|how long (?:does|would|will|can)\s|lifetime of\s|(?:time|clock|lifespan)\s+(?:of\s+)?\S|turnover$|a day in (?:the|a) body|what does (?:the|a) body do in a day|age\s+\d+|3d\s+\S)/i;
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text }); heardFeeling(text);
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
@@ -1713,6 +1725,8 @@ async function converse(text: string): Promise<void> {
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   if (/^pipeline\s+new\b/i.test(text.trim()) || /^(inventory|weather)\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
+  // life and time, read here: grow a body from a genome, how long a thing lasts where it is, a thing's clock, a body's day or age
+  if (LIFE_WORDS.test(text.trim())) { line('you', text); try { say(await inventoryStep(text.trim().replace(/^nexus[,:]?\s*/i, '')), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
@@ -1903,6 +1917,18 @@ async function makeItem(i: Item, n = 1, log: string[] = [], depth = 0): Promise<
   else { await cell.work(r.process === 'assemble' ? 'putting together' : r.process === 'wind' ? 'winding' : r.process === 'solder' ? 'soldering' : r.process === 'crimp' ? 'crimping' : r.process === 'coil' ? 'coiling' : 'bending', i.name, uses, Math.min(6, 1.5 + 0.3 * i.of.length)); log.push(`${label}: ${PROCESSES_SAY[r.process] ?? r.process}`); }
   return log;
 }
+/** Hair's colour in words, by its melanins. */
+const hairSays = (dark: number, red: number) => (red > 0.5 && dark < 0.6 ? 'red' : dark < 0.25 ? 'blond' : dark < 0.5 ? 'light brown' : dark < 0.8 ? 'brown' : 'black');
+/** A creature by name, or one made of the numbers said: "a 5 kg creature with 1 m2 wings, 2 cm thick". */
+function creatureOf(words: string): Creature {
+  const w = words.toLowerCase().trim(), kept = CREATURES.find((c) => w.includes(c.id.replace(/-/g, ' ')) || c.name.toLowerCase().includes(w) || w.includes(c.name.replace(/^an? /, '').toLowerCase()));
+  if (kept) return kept;
+  const num = (re: RegExp) => { const mm = re.exec(w); return mm ? Number(mm[1]) : undefined; };
+  const kg = num(/([\d.]+)\s*kg\b/) ?? (num(/([\d.]+)\s*g\b/) ?? NaN) / 1000;
+  if (!Number.isFinite(kg)) throw new Error(`I know ${CREATURES.map((c) => c.id).join(', ')}; or say a creature by its numbers, like "what can a 5 kg creature with 1 m2 wings do".`);
+  const r = Math.cbrt((3 * kg) / (4 * Math.PI * 1060)), wings = num(/([\d.]+)\s*(?:m2|m²|square metres?)\s*(?:of\s+)?wings?/) ?? num(/wings?\s+(?:of\s+)?([\d.]+)\s*(?:m2|m²)/), thick = num(/([\d.]+)\s*mm\s+thick/) ?? (num(/([\d.]+)\s*cm\s+thick/) ?? NaN) * 10;
+  return { id: 'yours', name: `a ${kg} kg creature`, says: 'made of the numbers you said', mass: [kg, 'you said'], half: [Number.isFinite(thick) ? thick / 2000 : r, Number.isFinite(thick) ? 'you said' : 'a sphere of its mass (an estimate)'], B0: [/cold|reptile|insect|fish/.test(w) ? 3.39 / 29 : 3.39, /cold|reptile|insect|fish/.test(w) ? 'Hemmingsen 1960' : 'Kleiber 1947'], frontal: [Math.PI * r * r * 2, 'twice a sphere\'s section, spread (an estimate)'], ...(wings ? { wings: [wings, 'you said'] as [number, string], flightMuscle: [0.17, 'a flying bird\'s share (an estimate)'] as [number, string] } : {}), insulation: [6, 'fur (an estimate)'], shape: [1.6, 'an estimate'], endotherm: !/cold|reptile|insect|fish/.test(w), ...( /fish|whale|swim/.test(w) ? { inWater: true } : {}) };
+}
 const PROCESSES_SAY: Record<string, string> = { assemble: 'put together', wind: 'wound', solder: 'soldered', crimp: 'crimped', coil: 'coiled', bend: 'bent' };
 /** The inventory's words, from the chat or a pipeline: find, map, make, finish, board, add, list, families, open. */
 async function inventoryStep(arg: string): Promise<string> {
@@ -1910,6 +1936,28 @@ async function inventoryStep(arg: string): Promise<string> {
   const get = (w: string): Item => { const x = /^last$/i.test(w.trim()) && invLast ? INVENTORY.get(invLast)! : resolve(w); if (typeof x === 'string') throw new Error(x); if (!x) throw new Error(`Nothing in the inventory called "${w}". Families make any size: ${FAMILIES.map((f) => f.examples[0]).join(', ')}.`); invLast = x.id; return x; };
   if ((m = /^(?:find|what is|show)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), s2 = i.kind === 'material' ? null : summary(i.id); return `${i.name} (a ${typeOf(i)}; ${i.path.join(' › ')}): ${i.says}.${i.spec ? ` ${i.spec}.` : ''}${s2 ? ` Inside it, down to its materials: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock, ${s2.depth} levels.` : ''}${i.family || i.adjustable ? ' ⚙ adjustable: call it with other sizes.' : ''}`; }
   if ((m = /^(?:3d|see|look at|explode|apart|take apart)\s+(.+)$/i.exec(t))) { const i = get(m[1]!); return see3d(i.id); }
+  // time in living things: a thing's clock, a body's day, a body at an age
+  if ((m = /^(?:(?:time|clock|lifespan)\s+(?:of\s+)?(.+)|how long does (?:a |an |the )?(.+?) live\??)$/i.exec(t))) { const i = get((m[1] || m[2])!); const c = clockOf(i.id); return c ? `${i.name}: ${c}.` : `${i.name} has no clock in the inventory yet.`; }
+  if (/^(?:turnover|a day in (?:the|a) body|what does (?:the|a) body do in a day)$/i.test(t)) { const d = turnover('human', 1); return `In a day a body makes and loses about ${countSays(d.cells)} cells (${d.grams.toFixed(0)} g): ${d.kinds.slice(0, 4).map((k) => `${countSays(k.n)} ${k.name}s`).join(', ')}; it burns about ${Math.round(d.kJ)} kJ (${Math.round(d.kJ / 4.184)} kcal) at rest and makes and spends about ${(d.atp / 1000).toFixed(0)} kg of ATP.`; }
+  // lifetime, worked out from where a thing is: what takes it apart there, against what holds it together
+  if ((m = /^(?:lifetime of|how long (?:does|would|will|can) (?:a |an |the )?)(.+?)(?: last| live| survive)?(?:\s+(?:in|by|on|under|at|inside)\s+(?:a |an |the )?(.+?))?\??$/i.exec(t))) { const what = m[1]!.trim(), where = (m[2] ?? 'room').trim(); const i = /human|person|man|woman|body|me\b/i.test(what) ? INVENTORY.get('human')! : get(what); const l = lifetimeOf(i.id, where); if (!l) return `${i.name}: no law here yet for what wears it out (I have: ${LASTING.join(', ')}).`; return `${i.name} ${l.env.name} (${l.env.says}) lasts about ${yearsSays(l.years)}, by ${l.by}: ${l.how}.`; }
+  // what a body makes, each flow by the universal laws, against what is measured
+  if (/^(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions))\??$/i.test(t)) return flowsOf().map((f) => flowLines(f)[0]!).join(' · ');
+  // if this then that: what a creature can do, by the same laws (one of the kept creatures, or one made of the numbers said)
+  if ((m = /^(?:what can (?:a |an |the )?(.+?) do|abilities of (?:a |an |the )?(.+?))\??$/i.exec(t))) { const c = creatureOf((m[1] ?? m[2])!); return abilityLines(c).join(' · '); }
+  if (/^(?:the )?law(?:s| graph)$/i.test(t)) { const g = graphSummary(); return `${g.laws} laws in the book. By what they rest on: ${Object.entries(g.byPrinciple).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `${k} ${v.length}`).join(', ')}. Their units force ${g.units.forced?.length ?? 0} of them outright (only a constant left to measure); ${g.units.open?.length ?? 0} carry what units cannot know; ${g.units['not a product of powers']?.length ?? 0} have more shape than a product of powers; none contradicts its units. One math across fields: ${g.families.slice(0, 3).map((f) => `${f.skeleton} is ${f.laws.slice(0, 6).join(', ')}${f.laws.length > 6 ? ` and ${f.laws.length - 6} more` : ''}`).join('; ')}.`; }
+  if ((m = /^find (?:a )?law for (.+?) from (.+)$/i.exec(t))) { const q = (x: string): [string, string] => { const mm = /^(.+?)\s+(?:in|as)\s+(\S+)$/.exec(x.trim()); if (!mm) throw new Error(`Say each quantity with its unit, like "period in s" or "length in m": "${x}"`); return [mm[1]!.trim(), mm[2]!]; }; const out = q(m[1]!), ins = m[2]!.split(/\s*(?:,|\band\b)\s*/).filter(Boolean).map(q); return discover(out, ins).says; }
+  if ((m = /^(?:profile|density of|derive)\s+(.+)$/i.exec(t))) { const i = get(m[1]!); invLast = i.id; return profileLines(i.id, true).slice(0, 28).join('\n'); }
+  if ((m = /^(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?(.+?)\s+(?:last|lasts|live|lives)(?:\s+(?:so long|that long))?(?:\s+(?:in|by|on|under|at|inside)\s+(?:a |an |the )?(.+?))?\??$/i.exec(t))) { const what = m[1]!.trim(), where = (m[2] ?? 'room').trim(); const id = /human|person|body|man|woman/i.test(what) ? 'human' : /tardigrade|water bear/i.test(what) ? 'tardigrade' : LASTING.find((x) => what.toLowerCase().includes(x)) ?? get(what).id; const ls = lifetimeLines(id, where); if (!ls.length) throw new Error(`No way to work out how long ${what} lasts yet.`); return ls.slice(0, 30).join('\n'); }
+  // a body grown from a genome: drawn from the population, or a child of the last two
+  if ((m = /^(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?$/i.exec(t))) {
+    const kind = m[1]!.toLowerCase(), seed = (Date.now() ^ (people.length * 2654435761)) >>> 0;
+    const g = /child|baby|kid/.test(kind) && people.length >= 2 ? childOf(people.find((x) => x.sex === 'XX') ?? people.at(-2)!, people.find((x) => x.sex === 'XY') ?? people.at(-1)!, seed) : randomGenome(seed, kind === 'man' ? 'XY' : kind === 'woman' ? 'XX' : undefined);
+    people.push(g); const ph = phenotype(g); setBody(ph.params); if (on3d()) see3d('human');
+    const tr = (n: string) => ph.traits.find((x) => x.name.startsWith(n))!;
+    return `Grown from a genome (${g.sex}, ${LOCI.length.toLocaleString('en')} loci, seed ${seed}${/child|baby|kid/.test(kind) && people.length >= 3 ? ', a child of the last two by meiosis' : ''}): ${(ph.params.height! * 100).toFixed(1)} cm (its genes ${tr('height').genes >= 0 ? '+' : ''}${(tr('height').genes * 7).toFixed(1)} cm, its life ${tr('height').life >= 0 ? '+' : ''}${(tr('height').life * 7).toFixed(1)} cm), ${ph.params.mass!.toFixed(0)} kg; its bones laid out from that height (Trotter & Gleser), its face from its genes; hair ${hairSays(ph.params.hairDark!, ph.params.hairRed!)}, ${(ph.params.hairLength! * 100).toFixed(0)} cm long (a choice: it can grow to about its speed times its growing phase), skin ${ph.params.skinDark! < 0.33 ? 'light' : ph.params.skinDark! < 0.66 ? 'medium' : 'dark'}, eyes ${ph.params.eyeDark! < 0.3 ? 'blue' : ph.params.eyeDark! < 0.6 ? 'green or hazel' : 'brown'}, ${earwax(g)} earwax (ABCC11). ${possibilities.says}.`;
+  }
+  if ((m = /^(?:age|aged?|make (?:the|a) body)\s+(\d+)(?:\s*(?:years?|yrs?)(?:\s*old)?)?$/i.exec(t))) { const age = Number(m[1]); const a = aged(age); setBody({ height: 1.76 + a.height, muscle: a.muscle, fat: a.fat }); if (apart3d.visible && apart3d.showing) see3d(apart3d.showing); return `A body at ${age}: ${a.says.join('; ')}.`; }
   if ((m = /^(?:map|tree|inside)\s+(.+)$/i.exec(t))) { const i = get(m[1]!), b = boardOfTree(i.id); if (b && boards) boards.put(`inv-tree-${i.id}`, b); return `Inside ${i.name}: ${treeLines(i.id, 40).join(' / ')}${boards ? ` (its tree is the board "Inside: ${i.name}")` : ''}`; }
   if ((m = /^make\s+(.+?)(?:\s+(?:x|×|times\s*)(\d+))?$/i.exec(t))) { const i = get(m[1]!), n = Number(m[2] ?? 1), log = await makeItem(i, n); invMade++; const s2 = summary(i.id); return `Made ${n > 1 ? `${n} × ` : ''}${i.name}: ${s2.made} made here, ${s2.bought} bought, ${s2.stock} from stock. ${log.slice(-12).join('; ')}`; }
   if ((m = /^finish\s+(.+)$/i.exec(t))) { const i = get(m[1]!), r = routeOf(i); if (r.bought) return cell.bring(i.name); return cell.work(r.process === 'assemble' ? 'putting together' : r.process, i.name, i.of.map((c) => INVENTORY.get(c.id)?.name ?? c.id)); }
@@ -2958,7 +3006,7 @@ async function boot() {
     phoneAct: (act: string, arg?: number | string) => phone.act(act, arg),
     buildNow: () => ({ building: !!building, k: building?.k ?? 0, n: building?.b.steps.length ?? 0, parts: pipeParts.size, onFloor: pipeOnFloor, made: shop.all().made.length, machine: empty ? 0 : run.m.parts.length, kept: (() => { try { return localStorage.getItem('forge:last-ask'); } catch { return null; } })() }),
     resetBuild: () => resetBuild(),
-    see3d: (id: string) => (INVENTORY.has(id) ? see3d(id) : inventoryStep(`3d ${id}`)), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids(), holding: apart3d.holding }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)), xrRay3d: () => { const i = handOf.indexOf('right'); if (i < 0) return null; const ctl = renderer.xr.getController(i); ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera(); return { pick: apart3d.pick(ray), d: apart3d.distance(ray), phone: phone.distance(ray), board: on('boards') && boards ? boards.distance(ray) : null, holo: holos.distance(ray), bar: windows.barAt(ray)?.distance ?? null }; },
+    see3d: (id: string) => (INVENTORY.has(id) ? see3d(id) : inventoryStep(`3d ${id}`)), seeBuild3d: () => seeBuild3d(), playSteps: (title: string, steps: string[]) => playBuild({ title, prefix: '', steps, at: [0, 0], footprint: [0.5, 0.5] }, 'made for a test'), keptNow: () => kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null })), lifeSay: (words: string) => inventoryStep(words), hideRobot: (hide = true) => { robot.root.visible = !hide; return true; }, toggle3d: () => { apart3d.toggle(performance.now() / 1000); return true; }, look3d: (back = 1.2, up = 0.1, side = 0) => { framing = false; const c = apart3d.group.getWorldPosition(new THREE.Vector3()), f = new THREE.Vector3(0, 0, 1).applyQuaternion(apart3d.group.quaternion); orbit.target.copy(c); camera.position.copy(c).addScaledVector(f, back).add(new THREE.Vector3(0, up, 0)).addScaledVector(apart3d.right, side); orbit.update(); return true; }, apart3dNow: () => ({ visible: apart3d.visible, showing: apart3d.showing, path: apart3d.path, ids: apart3d.ids(), holding: apart3d.holding }), apart3dPoint: (id: string) => toScreen(apart3d.pointOf(id)), xrRay3d: () => { const i = handOf.indexOf('right'); if (i < 0) return null; const ctl = renderer.xr.getController(i); ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera(); return { pick: apart3d.pick(ray), d: apart3d.distance(ray), phone: phone.distance(ray), board: on('boards') && boards ? boards.distance(ray) : null, holo: holos.distance(ray), bar: windows.barAt(ray)?.distance ?? null }; },
     pick3dAt: (x: number, y: number) => { ray.setFromCamera(new THREE.Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1), camera); return { pick: apart3d.pick(ray), d: apart3d.distance(ray) }; },
     apart3dWorld: (id: string) => { const w = apart3d.pointOf(id); return w ? [w.x, w.y, w.z] : null; },
     storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),

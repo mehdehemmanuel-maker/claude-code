@@ -9,18 +9,20 @@
 
 import { ELEMENTS } from './elements';
 import { INVENTORY, countSays, type Item } from './inventory';
+import { WHOLE_BODY, currentBody, extentOf, placeIn } from './anatomy';
 import { lookRow } from './looks';
 
 export type V3 = [number, number, number];
 /** Axial shapes (screw, rod, can, tube, spring, motor, dome) are a × b across and c along their axis, shown upright;
  *  disc shapes (ring, bearing, torus, gear, wheel, fan, blade, loop) a × b across their face and c thick, shown facing
  *  you; the rest are x wide, y high, z deep. */
-export type ShapeKind = 'screw' | 'hex' | 'ring' | 'bearing' | 'torus' | 'gear' | 'spring' | 'sheet' | 'tslot' | 'coil' | 'loop' | 'can' | 'chip' | 'dome' | 'rod' | 'tube' | 'box' | 'swatch' | 'atom' | 'motor' | 'ball' | 'wheel' | 'board' | 'frame' | 'case' | 'blade' | 'fan' | 'vehicle';
-export const SHAPES: ShapeKind[] = ['screw', 'hex', 'ring', 'bearing', 'torus', 'gear', 'spring', 'sheet', 'tslot', 'coil', 'loop', 'can', 'chip', 'dome', 'rod', 'tube', 'box', 'swatch', 'atom', 'motor', 'ball', 'wheel', 'board', 'frame', 'case', 'blade', 'fan', 'vehicle'];
+export type ShapeKind = 'organic' | 'screw' | 'hex' | 'ring' | 'bearing' | 'torus' | 'gear' | 'spring' | 'sheet' | 'tslot' | 'coil' | 'loop' | 'can' | 'chip' | 'dome' | 'rod' | 'tube' | 'box' | 'swatch' | 'atom' | 'motor' | 'ball' | 'wheel' | 'board' | 'frame' | 'case' | 'blade' | 'fan' | 'vehicle';
+export const SHAPES: ShapeKind[] = ['organic', 'screw', 'hex', 'ring', 'bearing', 'torus', 'gear', 'spring', 'sheet', 'tslot', 'coil', 'loop', 'can', 'chip', 'dome', 'rod', 'tube', 'box', 'swatch', 'atom', 'motor', 'ball', 'wheel', 'board', 'frame', 'case', 'blade', 'fan', 'vehicle'];
 export interface Finish { color: number; metal: number; rough: number; clear?: boolean }
-export interface Look { kind: ShapeKind; /** its box, metres */ size: V3; teeth?: number; coils?: number; /** a spring's or a cable's wire, metres */ wire?: number; /** a bore as a share of its outside */ bore?: number; /** an element's symbol, a chip's legs … */ mark?: string; finish: Finish }
+export interface Look { kind: ShapeKind; /** its box, metres */ size: V3; teeth?: number; coils?: number; /** a spring's or a cable's wire, metres */ wire?: number; /** a bore as a share of its outside */ bore?: number; /** an element's symbol, a chip's legs … */ mark?: string; finish: Finish;
+  /** a living thing's form: the item it draws (src/nexus/view/organic.ts), the way its length points, and a curve it follows (metres from its middle) */ ref?: string; axis?: V3; path?: V3[] }
 export interface Piece { id: string; name: string; n: number; look: Look; /** where it sits whole, and laid out, metres from the centre */ whole: V3; apart: V3; /** its display size over its true size (1 is true to the whole's scale) */ shown: number; note: string }
-export interface Plan { id: string; name: string; says: string; whole: Look; pieces: Piece[]; more: number; /** display metres for each real metre */ scale: number; deeper: boolean }
+export interface Plan { id: string; name: string; says: string; whole: Look; pieces: Piece[]; more: number; /** display metres for each real metre */ scale: number; deeper: boolean; /** its parts come apart from where they lie in it (a body's), not turning */ inPlace?: boolean }
 
 /** The inventory's material for each matter the generator builds with (src/data/materials.ts), so a shape made in the
  *  room opens into what it is made of, then its elements. A matter with none here (textiles, leather, soil) has none. */
@@ -80,6 +82,9 @@ export function lookOf(i: Item): Look {
   // a kind's own look: its shape, then a mark, its wire in mm and its teeth ("coil w12", "gear z60")
   const own = (t: string[]) => { const w = t.find((x) => /^w[\d.]+$/.test(x)), z = t.find((x) => /^z\d+$/.test(x)), mark = t.find((x) => !/^[wz][\d.]+$/.test(x)); return { ...(mark ? { mark } : {}), ...(w ? { wire: Number(w.slice(1)) / 1000 } : {}), ...(z ? { teeth: Number(z.slice(1)) } : {}) }; };
   const row: { kind: string; teeth?: number; mark?: string; wire?: number } | null = lookRow(id) ?? (i.look ? (([kind, ...t]) => ({ kind: kind!, ...own(t) }))(i.look.split(' ')) : null);
+  if (i.path[0] === 'Life' && i.kind !== 'material') return L('organic', { mark: (i.look ?? 'blob').split(' ')[0]!, ref: id });
+  // a molecule of life by what kind it is: a protein's fold, a nucleic acid's helix, a lipid's two tails, a sugar's ring
+  if (i.path[0] === 'Life' && i.kind === 'material') { const g = i.path.slice(2).join('/'); return L('organic', { ref: id, mark: /^Proteins/.test(g) ? 'blob' : /Nucleic/.test(g) ? 'helix' : /Lipids/.test(g) ? 'lipid' : /Sugars|Polymers|Walls/.test(g) ? 'sugar' : /Salts|Biominerals|Gases/.test(g) ? 'crystal' : /Fluids|Biomass|Matrices|Made by life/.test(g) ? 'fluid' : 'molecule' }); }
   if (row && SHAPES.includes(row.kind as ShapeKind)) return L(row.kind as ShapeKind, { ...(row.teeth ? { teeth: row.teeth } : {}), ...(row.mark ? { mark: row.mark } : {}), ...(row.wire ? { wire: row.wire } : {}), ...(bores[row.kind as ShapeKind] ? { bore: bores[row.kind as ShapeKind] } : {}) });
   if (i.kind === 'element') return L('atom', { mark: Object.keys(ELEMENTS).find((s) => `el-${s.toLowerCase()}` === id) ?? '?' });
   if (i.kind === 'material') return L('swatch');
@@ -111,6 +116,8 @@ function ringOf(n: number, rx: number, ry: number): V3[] {
   const rows = n <= 10 ? [n] : [Math.ceil(n * 0.45), n - Math.ceil(n * 0.45)];
   return rows.flatMap((k, r) => Array.from({ length: k }, (_, j): V3 => { const t = Math.PI / 2 + (j / k) * Math.PI * 2 + r * 0.3; const f = r ? 1.42 : 1; return [Math.cos(t) * rx * f, Math.sin(t) * ry * f, r ? -0.06 : 0]; }));
 }
+/** How big a thing is shown, metres across: a whole body half life size, the rest about a hand. */
+export const fitFor = (id: string): number => (WHOLE_BODY.has(id) ? 0.55 : 0.22);
 /** The most kinds of part laid out at once; the rest are counted. */
 export const MOST = 18;
 /** How an item comes apart: its look whole, scaled to fit about 0.3 m, and each of its parts round it at the same scale. */
@@ -128,8 +135,9 @@ export function planOf(id: string, fit = 0.3): Plan | null {
     says = `${i.name}: ${i.spec ?? i.says}. By mass: ${rows.slice(0, 6).map((r) => `${r.item.name.replace(/ \(.*\)$/, '')} ${r.pct! >= 1 ? r.pct!.toFixed(1) : r.pct!.toFixed(2)} %`).join(', ')}.`;
   } else {
     rows = i.of.map((c) => ({ item: INVENTORY.get(c.id)!, n: c.n })).filter((r) => r.item).sort((a, b) => vol(boxOf(b.item)) * b.n - vol(boxOf(a.item)) * a.n);
-    says = `${i.name}: ${rows.length} kinds of part, ${countSays(rows.reduce((a, r) => a + r.n, 0))} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
+    says = `${i.name}: ${rows.length} kinds of part, ${countSays(rows.reduce((a, r) => a + (/\(a gram\)$/.test(r.item.name) || (i.mass?.[r.item.id] !== undefined && !r.item.g) ? 0 : r.n), 0))} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
   }
+  if (i.path[0] === 'Life' && i.kind !== 'element' && i.kind !== 'material') { const p = inBodyPlan(i, rows, whole, scale, fit, says); if (p) return p; }
   const shownRows = rows.slice(0, MOST), at = ringOf(shownRows.length, fit * 1.6, fit * 1.0);
   const pieces: Piece[] = shownRows.map((r, k) => {
     const look = r.pct !== undefined && (r.item.kind === 'element' || r.item.kind === 'material') && i.kind === 'material'
@@ -144,6 +152,33 @@ export function planOf(id: string, fit = 0.3): Plan | null {
       note: `${r.n !== 1 ? `${countSays(r.n)} × ` : ''}${r.item.name}${r.pct !== undefined ? ` · ${r.pct >= 1 ? r.pct.toFixed(1) : r.pct.toFixed(2)} %` : ''}${r.item.kind === 'material' || r.item.kind === 'element' ? '' : ` · ${dims}`}${shown > 1.01 ? ' · shown larger' : shown < 0.99 ? ' · shown smaller' : ''}` };
   });
   return { id, name: i.name, says, whole: { ...whole, size: whole.size.map((x) => x * scale) as V3 }, pieces, more: Math.max(0, rows.length - MOST), scale, deeper: rows.length > 0 };
+}
+/** A part of the body opened where it lies: its parts come out from their places in it, the way they point, at its
+ *  scale (src/nexus/anatomy.ts places them, src/nexus/view/organic.ts draws them so); what the body does not place is
+ *  laid round it. The body itself opens into its systems side by side, each drawn whole. */
+function inBodyPlan(i: Item, rows: { item: Item; n: number }[], whole: Look, scale: number, fit: number, says: string): Plan | null {
+  const body = currentBody(), ext = extentOf(body, i.id); if (!ext) return null;
+  const ws = whole.size.map((x) => x * scale) as V3, d = [ext.hi[0] - ext.lo[0], ext.hi[1] - ext.lo[1], ext.hi[2] - ext.lo[2]] as V3, c = ext.lo.map((x, j) => (x + ext.hi[j]!) / 2) as V3;
+  const k = Math.min(ws[0] / Math.max(d[1], 1e-6), Math.max(ws[1], ws[2]) / Math.max(d[0], d[2], 1e-6));
+  const note = (r: { item: Item; n: number }) => `${r.n !== 1 ? `${countSays(r.n)} × ` : ''}${r.item.name}`;
+  const pieces: Piece[] = [], loose: { item: Item; n: number }[] = [];
+  if (i.id === 'human') {
+    const shown = rows.slice(0, 13), n = shown.length;
+    shown.forEach((r, j) => { const a = ((j / Math.max(1, n - 1)) - 0.5) * 2.5, R = fit * 2.1; pieces.push({ id: r.item.id, name: r.item.name, n: r.n, look: { ...lookOf(r.item), size: ws }, whole: [0, 0, 0], apart: [Math.sin(a) * R, 0, -Math.cos(a) * R * 0.55 + R * 0.25], shown: 1, note: note(r) }); });
+    return { id: i.id, name: i.name, says: `${i.name}: its ${n} systems side by side, each drawn where its parts lie; point at one to open it`, whole: { ...whole, size: ws }, pieces, more: Math.max(0, rows.length - n), scale, deeper: true, inPlace: true };
+  }
+  for (const r of rows) {
+    const pl = placeIn(body, i.id, r.item.id);
+    if (!pl || pieces.length >= MOST * 2) { loose.push(r); continue; }
+    const at = pl.c.map((x, j) => (x - c[j]!) * k) as V3, len = Math.hypot(...at), dir = len > 1e-6 ? at.map((x) => x / len) as V3 : [0, 0, 1] as V3, push = fit * 0.12 + len * 0.6;
+    const sys = WHOLE_BODY.has(r.item.id) || extentOf(body, r.item.id) !== null;
+    const size = (sys ? [pl.box[1], pl.box[0], pl.box[2]] : pl.box).map((x) => Math.max(x * k, fit * 0.004)) as V3;
+    pieces.push({ id: r.item.id, name: r.item.name, n: r.n, look: { ...lookOf(r.item), size, ...(sys ? {} : { axis: pl.axis }), ...(pl.path ? { path: pl.path.map((p) => p.map((x) => x * k) as V3) } : {}) }, whole: at, apart: at.map((x, j) => x + dir[j]! * push) as V3, shown: 1, note: note(r) });
+  }
+  // what the body does not place, round it
+  const ring = ringOf(Math.min(loose.length, MOST), fit * 1.7, fit * 1.05);
+  loose.slice(0, MOST).forEach((r, j) => { const look = lookOf(r.item), s = look.size.map((x) => x * scale) as V3, big = Math.max(...s), least = Math.min(fit * 0.2, 0.05), sh = big < least ? least / big : big > fit * 0.5 ? (fit * 0.5) / big : 1; pieces.push({ id: r.item.id, name: r.item.name, n: r.n, look: { ...look, size: s.map((x) => x * sh) as V3 }, whole: [0, 0, 0], apart: ring[j]!, shown: sh, note: `${note(r)}${sh > 1.01 ? ' · shown larger' : ''}` }); });
+  return { id: i.id, name: i.name, says: says.replace(/ \(where each sits inside it is not in the inventory\)/, ' (each from where it lies in it)'), whole: { ...whole, size: ws }, pieces, more: Math.max(0, loose.length - MOST), scale, deeper: rows.length > 0, inPlace: true };
 }
 /** The way down from an item to an element, always: its first part each time, then the material, then the element. */
 export function wayDown(id: string, most = 20): string[] {
