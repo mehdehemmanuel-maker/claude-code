@@ -12,16 +12,24 @@
 //                smoothly only where its tangent and curvature do), &draft=1 (each panel by how it parts from its die:
 //                green cleanly, yellow barely, red undercut), &holes=1 (every part flat and opaque on magenta, and where
 //                the magenta shows through the thing from inside its outline, painted green: a gap seen through)
+//                &hide=<regex> (those parts not drawn: the rest of only=), &lamp=x,y,z;… (a lamp hung there, as one in a
+//                cabin to see its inside by), &interior=1 (lamps in its middle, a cabin's dome light)
+//   posed        &pose=steer:<rad>,bump:<m> (each wheel that steers turned so far, each that rises risen so far, with what
+//                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at and
+//                clashed where it moves to
 //   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/panels.ts) on what is made, so a
 //                critic can show what it would change
 // And on window.look: parts() (each part drawn: name, holders, material, finish, colour, what it says of itself, its
 // bounds), facts() (what the thing says of itself and its measured size), pick(x, y) (the part under a pixel),
 // clash(touch) (every place two parts' surfaces cross or touch: src/nexus/make/critic.ts), gap(a, b) (the least distance
-// between parts so named).
+// between parts so named), section(axis, at) (every part cut by a plane: its outline there, as segments), mass() (its
+// mass part by part, its centre of mass, and what each axle carries), lint() (what no part should be: no thicker than a
+// sheet of paper when it is not a skin, hidden whole inside another, a weld on a casting, a bolt thicker than what it
+// holds).
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { KITS, makeKit } from '../kits';
+import { KITS, makeKit, massOf, type Part } from '../kits';
 import '../creatures';
 import { perfect } from '../make/pipeline';
 import { meshClashes, type TriMesh } from '../make/critic';
@@ -55,10 +63,30 @@ const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshSta
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
 scene.add(view.group);
 if (q.get('explode')) view.explode(Number(q.get('explode')));
+// a pose: each wheel that steers turned, each that rises risen, and what is carried with it moved with it
+const pose = Object.fromEntries((q.get('pose') ?? '').split(',').filter(Boolean).map((kv) => kv.split(':')).map(([k, v]) => [k!, Number(v)])) as { steer?: number; bump?: number };
+if (pose.steer || pose.bump) {
+  view.group.updateMatrixWorld(true);
+  const objs: THREE.Object3D[] = []; view.group.traverse((o) => { if (o.userData.part) objs.push(o); });
+  for (const w of objs) {
+    const tr = (w.userData.part as Part).travel; if (!tr) continue;
+    const a = Math.max(-(tr.steer ?? 0), Math.min(tr.steer ?? 0, pose.steer ?? 0)), up = Math.max(-(tr.bump ?? 0), Math.min(tr.bump ?? 0, pose.bump ?? 0)), c0 = w.getWorldPosition(new THREE.Vector3());
+    const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a), name = (w.userData.part as Part).name;
+    for (const o of objs.filter((x) => x === w || (x.userData.part as Part).movesWith === name)) {
+      const pw = o.getWorldPosition(new THREE.Vector3()).sub(c0).applyQuaternion(turn).add(c0).add(new THREE.Vector3(0, up, 0)), qw = o.getWorldQuaternion(new THREE.Quaternion()).premultiply(turn);
+      const par = o.parent!; par.updateMatrixWorld(true); const inv = par.matrixWorld.clone().invert(); o.position.copy(pw.applyMatrix4(inv)); o.quaternion.copy(par.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(qw));
+    }
+  }
+}
 view.group.updateMatrixWorld(true);
+// lamps hung where asked, or in its middle (a cabin's dome light), to see an inside by
+const lampsAt: [number, number, number][] = (q.get('lamp') ?? '').split(';').filter(Boolean).map((t) => t.split(',').map(Number) as [number, number, number]);
+if (q.get('interior') === '1') { const bb = new THREE.Box3().setFromObject(view.group), cc = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3()); for (const f of [-0.2, 0.15]) lampsAt.push([cc.x + f * sz.x, bb.min.y + sz.y * 0.62, cc.z]); }
+for (const at of lampsAt) { const l = new THREE.PointLight(0xfff4e6, 3, 4, 1.4); l.position.set(...at); scene.add(l); }
 const meshes: THREE.Mesh[] = []; view.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && !o.userData.decor) meshes.push(o as THREE.Mesh); });
 const pathOf = (o: THREE.Object3D) => { const n: string[] = []; for (let a: THREE.Object3D | null = o; a && a !== view.group; a = a.parent) n.unshift(a.name || '?'); return n.join('/'); };
 // one panel on its own: everything not so named hidden
+const hide = q.get('hide'); if (hide) { const re = new RegExp(hide, 'i'); for (const m of meshes) if (re.test(m.name) || re.test(pathOf(m))) m.visible = false; }
 const only = q.get('only'); if (only) { const re = new RegExp(only, 'i'); const keep = new Set<THREE.Object3D>(); view.group.traverse((o) => { if (re.test(o.name)) { o.traverse((c) => keep.add(c)); for (let a = o.parent; a; a = a.parent) keep.add(a); } }); for (const m of meshes) if (!keep.has(m)) m.visible = false; }
 // the reflection of parallel bars of light in the skin: a stripe for each, by the reflected view ray's height
 const zebraMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { k: { value: 9 } }, vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vP = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }', fragmentShader: 'uniform float k; varying vec3 vN; varying vec3 vP; void main(){ vec3 n = normalize(vN); vec3 v = normalize(vP - cameraPosition); if (dot(n, v) > 0.0) n = -n; vec3 r = reflect(v, n); float s = step(0.5, fract(r.y * k)); gl_FragColor = vec4(vec3(0.06 + 0.9 * s), 1.0); }' });
@@ -126,6 +154,63 @@ const look = {
     return best ? { ...best, d: +best.d.toFixed(4) } : null;
   },
 };
+// (each part cut by a plane: where each of its triangles crosses it, a segment, in the plane's two other axes, mm)
+const AX = { x: 0, y: 1, z: 2 } as const;
+const section = (axis: 'x' | 'y' | 'z', at: number) => {
+  // (seen as a draughtsman draws it: across a car's section, z across and y up; along it, x across and y up; from above, x
+  // across and z up)
+  const k = AX[axis], [u, v] = ({ x: [2, 1], y: [0, 2], z: [0, 1] } as const)[axis], out: { name: string; path: string; color?: string; segs: number[][] }[] = [];
+  for (const m of meshes) {
+    if (!m.visible) continue; const bb = new THREE.Box3().setFromObject(m); if (bb.min.getComponent(k) > at || bb.max.getComponent(k) < at) continue;
+    const t = worldTris(m), P = t.pos, I = t.idx, n = I ? I.length / 3 : P.length / 9, segs: number[][] = [];
+    const vtx = (i: number) => [P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!];
+    for (let f = 0; f < n; f++) {
+      const ids = I ? [I[f * 3]!, I[f * 3 + 1]!, I[f * 3 + 2]!] : [f * 3, f * 3 + 1, f * 3 + 2], vs = ids.map(vtx), d = vs.map((p) => p[k]! - at), hit: number[][] = [];
+      for (let e = 0; e < 3; e++) { const a = vs[e]!, b = vs[(e + 1) % 3]!, da = d[e]!, db = d[(e + 1) % 3]!; if ((da < 0) !== (db < 0)) { const s2 = da / (da - db); hit.push([a[u]! + (b[u]! - a[u]!) * s2, a[v]! + (b[v]! - a[v]!) * s2]); } }
+      if (hit.length === 2) segs.push([...hit[0]!, ...hit[1]!].map((x) => +(x * 1000).toFixed(1)));
+    }
+    if (segs.length) out.push({ name: m.name, path: pathOf(m), color: hex(m), segs });
+  }
+  return { axis, at, plane: [['x', 'y', 'z'][u], ['x', 'y', 'z'][v]], parts: out };
+};
+// (its mass part by part, where each part's own mass sits, the centre of all of it, and the share each axle carries)
+const massReport = () => {
+  const rows: { name: string; path: string; kg: number; at: number[] }[] = [];
+  view.group.traverse((o) => {
+    const p = o.userData.part as Part | undefined; if (!p || (o as THREE.Mesh).isMesh) return; const own = massOf(p) - (p.parts ?? []).reduce((a, x) => a + massOf(x), 0); if (own <= 1e-6) return;
+    const bb = new THREE.Box3(); for (const ch of o.children) if ((ch as THREE.Mesh).isMesh) bb.expandByObject(ch); const at = bb.isEmpty() ? o.getWorldPosition(new THREE.Vector3()) : bb.getCenter(new THREE.Vector3());
+    rows.push({ name: p.name, path: pathOf(o), kg: +own.toFixed(3), at: r3(at) });
+  });
+  const M = rows.reduce((a, r) => a + r.kg, 0), cg = [0, 1, 2].map((i) => rows.reduce((a, r) => a + r.kg * r.at[i]!, 0) / (M || 1));
+  const wheels: number[] = []; view.group.traverse((o) => { const p = o.userData.part as Part | undefined; if ((o as THREE.Mesh).isMesh) return; if (p?.travel !== undefined || (p && /wheel$/.test(p.name) && !/steering/.test(p.name))) wheels.push(+o.getWorldPosition(new THREE.Vector3()).x.toFixed(3)); });
+  const xs = [...new Set(wheels)].sort((a, b) => b - a), f = xs[0], rr = xs[xs.length - 1], front = f !== undefined && rr !== undefined && f !== rr ? (cg[0]! - rr) / (f - rr) : undefined;
+  return { kg: +M.toFixed(1), published: (part as { published?: number }).published, cog: cg.map((x) => +x.toFixed(3)), axles: xs, frontShare: front !== undefined ? +front.toFixed(3) : undefined, parts: rows.sort((a, b) => b.kg - a.kg) };
+};
+// (what no part should be, found by looking at every part as drawn)
+const lint = () => {
+  const out: { rule: string; part: string; path: string; says: string }[] = [], vis = meshes.filter((m) => m.visible), boxes = new Map(vis.map((m) => [m, new THREE.Box3().setFromObject(m)]));
+  const castLike = /a380|cast|zamak/;
+  for (const m of vis) {
+    const p = m.userData.part as Part, bb = boxes.get(m)!, sz = bb.getSize(new THREE.Vector3()), least = Math.min(sz.x, sz.y, sz.z), isSkin = !!p.shape && 'surf' in p.shape;
+    if (!isSkin && least < 0.0003 && Math.max(sz.x, sz.y, sz.z) > 0.002) out.push({ rule: 'paper thin', part: m.name, path: pathOf(m), says: `${(least * 1000).toFixed(2)} mm at its thinnest, and not a skin` });
+    // (what it is laid on: up past any fastener it sits under, a bolt's head on its washer)
+    let ho: THREE.Object3D | null | undefined = m.parent?.parent; while (ho && /washer|nut|hex head|screw/i.test((ho.userData.part as Part | undefined)?.name ?? '')) ho = ho.parent;
+    const host = ho?.userData.part as Part | undefined;
+    if (p.finish === 'weld' && host?.mat && castLike.test(host.mat)) out.push({ rule: 'weld on a casting', part: m.name, path: pathOf(m), says: `a weld bead on the ${host.name}, which is cast (${host.mat})` });
+    const mm = /\bM(\d+)\b/.exec(m.name); if (mm && host && /hex head|bolt|screw/i.test(m.name)) { const hb = host ? [...boxes.entries()].find(([x]) => x.parent?.userData.part === host)?.[1] : undefined; if (hb) { const hs = hb.getSize(new THREE.Vector3()), ht = Math.min(hs.x, hs.y, hs.z); if (Number(mm[1]) / 1000 > Math.max(0.006, ht * 0.5)) out.push({ rule: 'bolt too big', part: m.name, path: pathOf(m), says: `M${mm[1]} on the ${host.name}, whose least size is ${(ht * 1000).toFixed(0)} mm` }); } }
+    // (hidden whole inside another part that is not what holds it nor held by it, nor one it passes through)
+    for (const o of vis) {
+      if (o === m) continue; const ob = boxes.get(o)!; if (!ob.containsBox(bb)) continue; const op = o.userData.part as Part;
+      if (pathOf(m).startsWith(pathOf(o.parent!)) || pathOf(o).startsWith(pathOf(m.parent!)) || op.passes?.includes(m.name) || p.passes?.includes(o.name) || (op.shape && 'surf' in op.shape)) continue;
+      // (inside by six rays, each way along each axis, every one crossing its surface an odd number of times: an open
+      // shape, as a tyre's turned section open at its bead, is not something to be inside)
+      const ray = new THREE.Raycaster(), ctr = bb.getCenter(new THREE.Vector3()), odd = [[1, 0.013, 0.007], [-1, 0.011, 0.005], [0.009, 1, 0.012], [0.007, -1, 0.01], [0.012, 0.008, 1], [0.01, 0.006, -1]].every((d) => { ray.set(ctr, new THREE.Vector3(...(d as [number, number, number])).normalize()); return ray.intersectObject(o, false).length % 2 === 1; });
+      if (odd) { out.push({ rule: 'hidden inside', part: m.name, path: pathOf(m), says: `wholly inside the ${o.name} (${pathOf(o)})` }); break; }
+    }
+  }
+  return out;
+};
+Object.assign(look, { section, mass: massReport, lint });
 (window as unknown as { look: typeof look }).look = look;
 // gaps seen through: magenta from inside the thing's outline that cannot be reached from the picture's edge across
 // magenta (the edge's magenta is round it, not through it)

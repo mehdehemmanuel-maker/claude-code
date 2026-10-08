@@ -28,7 +28,7 @@ import type { Lines } from './machines';
 export interface WheelAt { name: string; x: number; y: number; z: number; R: number; w: number; /** its lock either way, rad */ steer: number; /** how far it rises in bump, m */ bump: number; /** its tyre's section as drawn, [radius from the axle, offset along it], where known: the sweep then has its shape, rounded at the shoulder, not a square-edged cylinder's */ section?: [number, number][] }
 /** What the body must clear inside it: a box, and the room kept over it (an engine under its hood). */
 export interface KeepOut { name: string; min: V3; max: V3; room: number; why: string; /** where it stands: in a wheelhouse (a strut and its spring), which its liner stops short of, rather than under the hood */ in?: 'wheelhouse' }
-export interface BodyPlan { L: number; W: number; H: number; c: number; lines: Lines; wheels: WheelAt[]; color: number; inside?: KeepOut[] }
+export interface BodyPlan { L: number; W: number; H: number; c: number; lines: Lines; wheels: WheelAt[]; color: number; inside?: KeepOut[]; /** how much more a lid is crowned over a stretch of its length, where its maker's own check found it short of what is under it near its edge */ lift?: { x0: number; x1: number; dy: number }[] }
 /** The rules the body is made by: each a figure a designer would set, typical where not sourced. A practising critic
  *  changes these, never a made body's points (src/nexus/make/critic.ts, and RULE_UPDATES below). */
 export interface BodyRules {
@@ -208,7 +208,46 @@ const merged = <T>(a: T, b: Deep<T> | undefined): T => { if (!b) return a; const
 export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES): Part[] {
   const r = trial ? merged(r0, trial.rules) : r0, b = trial?.lines ? { ...b0, lines: { ...b0.lines, ...trial.lines } } : b0;
   const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
-  const out = makeBody({ ...b, color: UNPAINTED }, r); if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
+  // (then looked at as made: its hood or deck, crowned from the side's top edge, can stand a few millimetres short of what
+  // is under it near that edge, as a strut's tower; where it does, the lid alone is crowned more there, by what is
+  // missing over the share of its crown that reaches that far out (about 40%), and the body made again, up to three
+  // times: the creator's own check, as its liner's is; the side skin, and the doors on it, are not touched)
+  let b2: BodyPlan = { ...b, color: UNPAINTED }, out = makeBody(b2, r);
+  for (let k = 0; k < 3; k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
+  if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
+}
+/** The nearest point on a ruled strip (a recess's wall: a degree-1 net of rows of two points), and how far: its quads
+ *  split in two triangles each, the point's least distance to them (fast enough to ask many times as a part is fitted). */
+function nearStrip(s: Surface, P: V3): { d: number; at: V3 } {
+  let best = { d: Infinity, at: P };
+  const tri = (A: V3, B: V3, C: V3) => { const q = closestOnTri(P, A, B, C), d = Math.hypot(q[0] - P[0], q[1] - P[1], q[2] - P[2]); if (d < best.d) best = { d, at: q }; };
+  for (let i = 0; i + 1 < s.net.length; i++) { const a = s.net[i]!, b = s.net[i + 1]!; tri(a[0]!, a[1]!, b[1]!); tri(a[0]!, b[1]!, b[0]!); }
+  return best;
+}
+/** The point of a triangle nearest P (Ericson, Real-Time Collision Detection, 5.1.5). */
+function closestOnTri(P: V3, A: V3, B: V3, C: V3): V3 {
+  const sub3 = (u: V3, v: V3): V3 => [u[0] - v[0], u[1] - v[1], u[2] - v[2]], dot3 = (u: V3, v: V3) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2], at = (u: V3, k: number, v: V3): V3 => [u[0] + k * v[0], u[1] + k * v[1], u[2] + k * v[2]];
+  const ab = sub3(B, A), ac = sub3(C, A), ap = sub3(P, A), d1 = dot3(ab, ap), d2 = dot3(ac, ap); if (d1 <= 0 && d2 <= 0) return A;
+  const bp = sub3(P, B), d3 = dot3(ab, bp), d4 = dot3(ac, bp); if (d3 >= 0 && d4 <= d3) return B;
+  const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) return at(A, d1 / (d1 - d3), ab);
+  const cp = sub3(P, C), d5 = dot3(ab, cp), d6 = dot3(ac, cp); if (d6 >= 0 && d5 <= d6) return C;
+  const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) return at(A, d2 / (d2 - d6), ac);
+  const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / (d4 - d3 + (d5 - d6)); return at(B, w, sub3(C, B)); }
+  const den = 1 / (va + vb + vc), v = vb * den, w = vc * den; return [A[0] + ab[0] * v + ac[0] * w, A[1] + ab[1] * v + ac[1] * w, A[2] + ab[2] * v + ac[2] * w];
+}
+/** How far short of each keep-out's room over it the lid over it (its hood, its deck lid) is, m (0 where it clears it, or
+ *  where no lid is over it): read off the lid as made, at the keep-out's top over a 5 by 5 grid. */
+function lidShort(parts: Part[], b: BodyPlan): number[] {
+  const lids = parts.filter((p) => (p.name === 'hood' || p.name === 'deck lid') && p.shape && 'surf' in p.shape).map((p) => patchPoints((p.shape as { surf: Patch }).surf, 40, 20));
+  return (b.inside ?? []).map((k) => {
+    if (k.in) return 0; let short = 0;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
+      const x = k.min[0] + ((k.max[0] - k.min[0]) * i) / 4, z = Math.abs(k.min[2] + ((k.max[2] - k.min[2]) * j) / 4);
+      let best = Infinity, y = Infinity; for (const pts of lids) for (const q of pts) { const d = Math.hypot(q[0] - x, Math.abs(q[2]) - z); if (d < best) { best = d; y = q[1]; } }
+      if (best < 0.03) short = Math.max(short, k.max[1] + k.room * 0.5 - y);
+    }
+    return short;
+  });
 }
 function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const ln = lined(b, r), W2 = b.W / 2, col = b.color, out: Part[] = [];
@@ -326,7 +365,15 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // the back: its tail lamps round the corners, under the deck's edge, from the tail's face out along the sides; the
   // valance low across the bumper
   const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - 0.12), lowT = ln.low(ln.xT + 0.05);
-  const tailW: Win = { u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(0.45), U(rArchBack - 0.08)), v0: tb0, v1: vAt(uMidT, yTopT - 0.015) }, valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
+  // (a lamp's opening only where the skin turns gently enough to set its housing in as deep as it asks, its back no
+  // nearer than 80% of its depth to folding: round a box van's tight tail corner, the longest run of the window that
+  // does, not all of it)
+  const roomy = (w: Win, deep0: number): Win => {
+    const N = 24, ok = Array.from({ length: N + 1 }, (_, i) => { const u = w.u0 + ((w.u1 - w.u0) * i) / N; let rm = Infinity; for (let j = 0; j <= 8; j++) { const c = curvatures(surfaceAt(side, u, w.v0 + ((w.v1 - w.v0) * j) / 8)), k = Math.max(Math.abs(c.k1), Math.abs(c.k2)); if (k > 1e-9) rm = Math.min(rm, 1 / k); } return rm * 0.75 >= deep0 * 0.8; });
+    if (ok.every(Boolean)) return w; let best: [number, number] = [0, -1]; for (let i = 0; i <= N; i++) if (ok[i]) { let j = i; while (j + 1 <= N && ok[j + 1]) j++; if (j - i > best[1] - best[0]) best = [i, j]; i = j; }
+    return best[1] - best[0] >= 4 ? { ...w, u0: w.u0 + ((w.u1 - w.u0) * best[0]) / N, u1: w.u0 + ((w.u1 - w.u0) * best[1]) / N } : w;
+  };
+  const tailW: Win = roomy({ u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(0.45), U(rArchBack - 0.08)), v0: tb0, v1: Math.min(vAt(uMidT, yTopT - 0.015), vUnder(uZ(W2 * 0.5, false), Math.min(uTl(0.45), U(rArchBack - 0.08)), 0.015)) }, 0.04), valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
   const fWins = [lampW, grilleW, intakeW], tWins = [tailW, valW];
   // a panel round openings: its run in slabs along u, each from its foot (round the arches in it) up to its top, less the
   // openings over that slab
@@ -361,17 +408,18 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // ---- its faces in their openings: each a recess, its back set in along the skin's normal and its walls from the opening's
   // edge down to it (a lamp's housing, a grille's throat), built on the skin itself so it meets the panels round it ----
   // (skip: where its side wall at u0 is a neighbour's, from that v up)
-  const recess = (name: string, w: Win, deep0: number, back: Partial<Part>, says: string, kids: Part[] | ((deep: number) => Part[]) = [], skip: { u0?: number } = {}): Part => {
+  const recess = (name: string, w: Win, deep0: number, back: Partial<Part>, says: string, kids: Part[] | ((deep: number, walls: Surface[]) => Part[]) = [], skip: { u0?: number } = {}): Part => {
     // (no deeper than three quarters of the tightest radius the skin turns through in the opening, so its back, set in
     // along the skin's normal, never folds through itself)
-    let rmin = Infinity; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 6; j++) { const sp = surfaceAt(side, w.u0 + ((w.u1 - w.u0) * i) / 8, w.v0 + ((w.v1 - w.v0) * j) / 6), c = curvatures(sp); const k = Math.max(Math.abs(c.k1), Math.abs(c.k2)); if (k > 1e-9) rmin = Math.min(rmin, 1 / k); }
+    // (looked at closely enough that a tight corner between the places looked at is not missed: 25 by 13 across it)
+    let rmin = Infinity; for (let i = 0; i <= 24; i++) for (let j = 0; j <= 12; j++) { const sp = surfaceAt(side, w.u0 + ((w.u1 - w.u0) * i) / 24, w.v0 + ((w.v1 - w.v0) * j) / 12), c = curvatures(sp); const k = Math.max(Math.abs(c.k1), Math.abs(c.k2)); if (k > 1e-9) rmin = Math.min(rmin, 1 / k); }
     const deep = Math.min(deep0, 0.75 * rmin);
     const edge = (a: UV, c: UV): Surface => { const N = 24; return { net: Array.from({ length: N + 1 }, (_, k) => { const u = a[0] + ((c[0] - a[0]) * k) / N, v = a[1] + ((c[1] - a[1]) * k) / N, q = surfaceAt(side, u, v); return [q.at, [q.at[0] - q.n[0] * deep, q.at[1] - q.n[1] * deep, q.at[2] - q.n[2] * deep]] as V3[]; }), p: 1, q: 1, mirror: true }; };
     const walls = [edge([w.u0, w.v0], [w.u1, w.v0]), edge([w.u0, w.v1], [w.u1, w.v1]), ...(w.u0 > 1e-6 && Math.min(w.v1, skip.u0 ?? w.v1) - w.v0 > 1e-4 ? [edge([w.u0, w.v0], [w.u0, Math.min(w.v1, skip.u0 ?? w.v1)])] : []), ...(w.u1 < 1 - 1e-6 ? [edge([w.u1, w.v0], [w.u1, w.v1])] : [])];
     return { name, at: [0, 0, 0], says, parts: [
       { name: `${name} back`, shape: { surf: { s: side, uv: quad(w.u0, w.u1, w.v0, w.v1), off: -deep } }, at: [0, 0, 0], mat: 'pp', color: 0x15161a, shell: 0.002, finish: 'texture', kg: 0, ...back },
       // (its walls drawn in from the opening's edge: one pressing or moulding with the skin there)
-      ...walls.map((sw) => ({ name: `${name} wall`, shape: { surf: { s: sw } }, at: [0, 0, 0] as V3, mat: 'pp', color: 0x111214, shell: 0.002, finish: 'texture', kg: 0, joins: ['front fender', 'rear quarter panel', 'body sides', 'front bumper', 'rear bumper'] })), ...(typeof kids === 'function' ? kids(deep) : kids)] };
+      ...walls.map((sw) => ({ name: `${name} wall`, shape: { surf: { s: sw } }, at: [0, 0, 0] as V3, mat: 'pp', color: 0x111214, shell: 0.002, finish: 'texture', kg: 0, joins: ['front fender', 'rear quarter panel', 'body sides', 'front bumper', 'rear bumper'] })), ...(typeof kids === 'function' ? kids(deep, walls) : kids)] };
   };
   // a part standing on the skin along its normal at (u, v), set in by `inset`, its axis (+y) out along the normal; on each side
   const onSkin = (name: string, shape: Part['shape'], u: number, v: number, inset: number, more: Partial<Part>): Part[] => [1, -1].map((e) => {
@@ -391,13 +439,24 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     const wl = lampW.u1 - lampW.u0, hh = lampW.v1 - lampW.v0, rp0 = Math.min(0.034, 0.3 * fc.lamp), vMid = lampW.v0 + hh * 0.5;
     // (each as big as the lamp has room for where it stands, a fifth of its height clear above and below, and as deep as
     // the housing is, its bowl's foot 12 mm off the housing's back)
-    const projector = (deep: number, k: number): Part[] => { const u = lampW.u0 + wl * k, room = Math.hypot(...(pointAt(side, u, lampW.v1).map((x, i) => x - pointAt(side, u, lampW.v0)[i]!) as V3)), bd = Math.max(0.006, Math.min(0.024, deep - 0.02)), rp = Math.min(rp0, room * 0.3, bd * 1.6), pin = Math.max(0.012, deep - bd - 0.012); return [
+    // (and then shrunk, 15% at a time, until its rim and its lens stand 3 mm clear of every wall of the housing: round a
+    // corner the walls, drawn in along the skin's normals, close in behind the opening, and a bowl as wide as the
+    // opening there would pass through them; the creator's own check, as the liner's is)
+    const projector = (deep: number, k: number, walls: Surface[]): Part[] => { const u = lampW.u0 + wl * k, room = Math.hypot(...(pointAt(side, u, lampW.v1).map((x, i) => x - pointAt(side, u, lampW.v0)[i]!) as V3)), bd = Math.max(0.006, Math.min(0.024, deep - 0.02));
+      const q = surfaceAt(side, u, vMid), y = unit3(q.n), ref: V3 = Math.abs(y[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1], x = unit3([y[1] * ref[2] - y[2] * ref[1], y[2] * ref[0] - y[0] * ref[2], y[0] * ref[1] - y[1] * ref[0]]), z: V3 = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+      // (clear, and inside: on the same side of each wall as the housing's own middle, half its depth in; its rim, its
+      // lens, its bowl and its foot, at 24 places round each)
+      const qm = surfaceAt(side, (lampW.u0 + lampW.u1) / 2, vMid), inner: V3 = [qm.at[0] - qm.n[0] * deep * 0.5, qm.at[1] - qm.n[1] * deep * 0.5, qm.at[2] - qm.n[2] * deep * 0.5];
+      const clear = (r: number, pin: number) => { const c: V3 = [q.at[0] - y[0] * pin, q.at[1] - y[1] * pin, q.at[2] - y[2] * pin]; return Array.from({ length: 24 * 5 }, (_, i) => { const t = ((i % 24) / 24) * 2 * Math.PI, ring = Math.floor(i / 24), d = [0, 0.011, -bd * 0.5, -bd * 0.88, -bd][ring]!, rr = r * [1, 0.6, 0.86, 0.5, 0][ring]! + (ring === 4 ? 0.004 : 0); return [c[0] + rr * (Math.cos(t) * x[0] + Math.sin(t) * z[0]) + d * y[0], c[1] + rr * (Math.cos(t) * x[1] + Math.sin(t) * z[1]) + d * y[1], c[2] + rr * (Math.cos(t) * x[2] + Math.sin(t) * z[2]) + d * y[2]] as V3; }).every((P) => walls.every((wsf) => { const h = nearStrip(wsf, P), R = inner; return h.d > 0.003 && (P[0] - h.at[0]) * (R[0] - h.at[0]) + (P[1] - h.at[1]) * (R[1] - h.at[1]) + (P[2] - h.at[2]) * (R[2] - h.at[2]) > 0; })); };
+      // (narrower and less deep, a step at a time, its lens kept 4 mm under the lamp's own, until it fits; where none fits, as where the housing's walls cross
+      // behind a tight corner, no projector there)
+      let rp = Math.min(rp0, room * 0.3, bd * 1.6), pin = Math.max(0.012, deep - bd - 0.012); for (let t = 0; t < 8 && !clear(rp, pin); t++) { rp *= 0.88; pin = Math.max(0.015, pin * 0.85); } if (!clear(rp, pin)) return []; return [
       ...onSkin('projector bowl', { lathe: [[0.004, -bd], [rp * 0.5, -bd * 0.88], [rp * 0.86, -bd * 0.5], [rp, 0]] }, u, vMid, pin, { mat: 'al-6061', color: 0xd4d8dc, finish: 'chrome', kg: 0 }),
       ...onSkin('projector lens', { lathe: [[0, 0.011], [rp * 0.42, 0.008], [rp * 0.6, 0.002], [rp * 0.6, -0.004]] }, u, vMid, pin, { mat: 'glass', color: 0xe8f0ff, kg: 0 }),
       ...onSkin('projector ring', { lathe: [[rp * 0.6, -0.004], [rp * 0.62, 0.003], [rp * 0.74, 0.004], [rp * 0.76, -0.006]] }, u, vMid, pin, { mat: 'pp', color: 0x16171a, finish: 'texture', kg: 0, joins: ['projector lens'] })]; };
-    out.push(recess('headlamp', lampW, 0.05, { color: 0x24272c }, 'its headlamps\' housings, open behind their lenses (typical)', (deep) => [
+    out.push(recess('headlamp', lampW, 0.05, { color: 0x24272c }, 'its headlamps\' housings, open behind their lenses (typical)', (deep, walls) => [
       { name: 'headlamp reflector', shape: { surf: { s: side, uv: quad(lampW.u0 + wl * 0.12, lampW.u1 - wl * 0.06, lampW.v0 + hh * 0.2, lampW.v1 - hh * 0.18), off: -deep + Math.min(0.004, deep * 0.15) } }, at: [0, 0, 0], mat: 'al-6061', color: 0xc8ccd2, shell: 0.001, finish: 'chrome', kg: 0, says: 'a chrome reflector in the housing (typical)' },
-      ...projector(deep, 0.38), ...projector(deep, 0.66),
+      ...projector(deep, 0.38, walls), ...projector(deep, 0.66, walls),
       lit('daytime running light', quad(lampW.u0 + wl * 0.06, lampW.u1 - wl * 0.03, lampW.v0 + hh * 0.07, lampW.v0 + hh * 0.115), -Math.min(0.01, deep * 0.3), 0xf4f8ff, 'its daytime running light: an LED light guide along the lamp\'s foot (typical)')]));
     out.push({ name: 'headlights', shape: { surf: { s: side, uv: quad(lampW.u0, lampW.u1, lampW.v0, lampW.v1), off: 0.0005 } }, at: [0, 0, 0], mat: 'pc', color: 0xe6ecf2, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps\' lenses, flush with the body: clear polycarbonate (typical)', fixed: 'bonded to its housing', joins: ['headlamp wall'] });
     // the grille: its throat dark, its bars across it gloss black, a bright strip along its top (typical of a sedan's)
@@ -489,7 +548,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     const s = fromEdge(split(side, a, c), (E, d): V3[] => {
       // (its crown easing off toward the face it ends at, to 40% of it at the edge: a hood is crowned across, and flattens
       // to its leading edge rather than doming over it)
-      const crown = crown0 * (1 - 0.6 * Math.max(ease(ln.xN - E[0], 0.35), ease(E[0] - ln.xT, 0.25)));
+      // (and crowned more where its maker's check found it short over something under it, easing in and out over 150 mm)
+      const liftAt = (x: number) => (b.lift ?? []).reduce((a, l) => { const d = x < l.x0 ? l.x0 - x : x > l.x1 ? x - l.x1 : 0; return a + (d >= 0.15 ? 0 : l.dy * (0.5 + 0.5 * Math.cos((Math.PI * d) / 0.15))); }, 0);
+      const crown = crown0 * (1 - 0.6 * Math.max(ease(ln.xN - E[0], 0.35), ease(E[0] - ln.xT, 0.25))) + liftAt(E[0]);
       const t = unit3(d), P0: V3 = [E[0], E[1] + t[1] * r.gap, Math.max(0, E[2] + t[2] * r.gap)], zt = P0[2], y = P0[1], k = Math.min(2, (zt * 0.25) / (Math.hypot(...d) || 1), Math.max(0, crown * 0.8) / Math.max(1e-6, Math.abs(d[1]) || 1e-6));
       return [P0, [E[0], y + d[1] * k, zt + d[2] * k], [E[0], y + crown, zt * 0.5], [E[0], y + crown, zt * 0.16], [E[0], y + crown, 0]];
     }, { mirror: true });
@@ -568,6 +629,16 @@ export function insideOf(parts: Part[]): (x: number, y: number) => number {
   return (x, y) => { let best = Infinity; for (const P of pts) if (Math.abs(P[0] - x) < 0.08 && Math.abs(P[1] - y) < 0.06) best = Math.min(best, Math.abs(P[2])); return best; };
 }
 
+/** The body's tail from inside: at height y, the most forward its skins that face rearward come within z of the middle
+ *  (where a bed's floor or a boot's floor must end to stay inside it). */
+export function tailOf(parts: Part[]): (y: number, z: number) => number {
+  const pts: V3[] = [];
+  for (const p of parts) {
+    if (!p.shape || !('surf' in p.shape) || /liner|handle|lamp|light|grille|plate|seam|shut line/.test(p.name)) continue;
+    const pt = p.shape.surf; for (let i = 0; i <= 32; i++) for (let j = 0; j <= 12; j++) { const q = patchAt(pt, i / 32, j / 12); if (q.n[0] < -0.5 && q.at[0] < 0) pts.push(q.at); }
+  }
+  return (y, z) => { let best = -Infinity; for (const P of pts) if (Math.abs(P[1] - y) < 0.06 && Math.abs(P[2]) <= z + 0.02) best = Math.max(best, P[0]); return best; };
+}
 // ---- practice: the critic changes the rules, never a body ---------------------------------------------------------------
 /** How the critic finds a body: for each painted panel, the most times any one line on it turns the other way (a ripple
  *  a person sees in its reflections), how many such turns there are, and how fast its curvature changes; and anything

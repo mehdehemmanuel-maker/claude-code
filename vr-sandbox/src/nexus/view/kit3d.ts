@@ -85,9 +85,11 @@ const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' 
 /** A freeform skin as triangles: as finely as about 3 cm a step across it (between 6 and 96 steps each way), its normals
  *  the surface's own, so its highlights run as its curvature does. */
 function surfGeometry(pt: Patch): THREE.BufferGeometry {
-  const run = (f: (t: number) => [number, number]) => { let d = 0, q = patchAt(pt, ...f(0)).at; for (let k = 1; k <= 8; k++) { const r = patchAt(pt, ...f(k / 8)).at; d += Math.hypot(r[0] - q[0], r[1] - q[1], r[2] - q[2]); q = r; } return d; };
-  const steps = (d: number) => Math.max(6, Math.min(96, Math.round(d / 0.03)));
-  const t = tessellate(pt, steps(Math.max(run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1]))), steps(Math.max(run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])))), g = new THREE.BufferGeometry();
+  // (a facet every 30 mm along it, and one for every 3° it turns: a tight corner is drawn round, not as a chord, so two
+  // skins a few millimetres apart round it, as a lamp's lens over its housing, are drawn apart and not through each other)
+  const run = (f: (t: number) => [number, number]): [number, number] => { let d = 0, turn = 0, q = patchAt(pt, ...f(0)).at, prev: number[] | null = null; for (let k = 1; k <= 32; k++) { const r = patchAt(pt, ...f(k / 32)).at, c = [r[0] - q[0], r[1] - q[1], r[2] - q[2]], l = Math.hypot(c[0]!, c[1]!, c[2]!); d += l; if (prev && l > 1e-9) { const pl = Math.hypot(prev[0]!, prev[1]!, prev[2]!); if (pl > 1e-9) turn += Math.acos(Math.max(-1, Math.min(1, (c[0]! * prev[0]! + c[1]! * prev[1]! + c[2]! * prev[2]!) / (l * pl)))); } if (l > 1e-9) prev = c; q = r; } return [d, turn]; };
+  const steps = (rs: [number, number][]) => Math.max(6, Math.min(160, Math.round(Math.max(...rs.map(([d, turn]) => Math.max(d / 0.03, turn / 0.052))))));
+  const t = tessellate(pt, steps([run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1])]), steps([run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])])), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3)); g.setIndex(t.idx);
   return g;
 }
