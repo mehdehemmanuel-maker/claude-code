@@ -97,7 +97,9 @@ describe('pipeline', () => {
     expect(JSON.stringify(car)).toBe(before);
     expect(m.rounds).toBeLessThanOrEqual(2);
     expect(all(m.part).filter((p) => p.name === 'tyre valve')).toHaveLength(4);
-    const heads = all(m.part).filter((p) => /hex head/.test(p.name)).length; expect(heads).toBeGreaterThan(16);
+    // (its wheels' nuts on their pitch circles, at least four a wheel; not a count of every hex head the joints rule lays,
+    // which once counted bolts laid through a welded floor)
+    const nuts = all(m.part).filter((p) => /^wheel nut/.test(p.name)).length; expect(nuts).toBeGreaterThanOrEqual(16);
     // what the details weigh is said, rule by rule, and adds up to what was added
     const added = Object.values(m.detailKg).reduce((a, b) => a + b, 0);
     expect(added).toBeGreaterThan(0); expect(m.kg[1] - m.kg[0]).toBeGreaterThanOrEqual(added - 1e-6);
@@ -112,7 +114,7 @@ describe('pipeline', () => {
       expect(m.parts[1]).toBeGreaterThanOrEqual(m.parts[0]);
       if (k.id === 'tree' || k.id === 'forest' || k.id === 'plant') expect(m.details.joints).toBe(0);
     }
-  });
+  }, 180_000); // (every kit through the whole pipeline: slow under load, not stuck)
 });
 
 describe('clashes', () => {

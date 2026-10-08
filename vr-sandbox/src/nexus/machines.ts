@@ -608,6 +608,11 @@ function engine(p: Power, alu: boolean, driven = 'rear axle', across = false): P
 }
 
 /** An axle hung from its frame (at the frame's half-width fz and height fy where the axle is), by its kind. */
+/** Where a unibody strut car's steering rack lies (suspension() lays it there, and its pinion's shaft is led to it):
+ *  its axis 140 mm behind the axle, 18 mm over the wheels' centres (the tie rods' and steering arms' height), its housing
+ *  out to zH each side. */
+const TIE_Y = 0.018;
+const rackOf = (m: Machine, a: Axle, t: Tyre) => { const cn = cornerOf(t, { ...m.rims, brake: a.brake }, true); return { x: a.x - 0.14, y: t.D / 2 + TIE_Y, zH: a.track / 2 + cn.zA - 0.39 }; };
 function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, m: Machine): Part[] {
   const out: Part[] = [], y = t.D / 2, k = a.susp ?? 'rigid', dark = 0x2a2a2a;
   for (const s of [-1, 1]) {
@@ -619,7 +624,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
       // damper up to the body or the frame; on a unibody with struts, the subframe the arms pivot on, the steering rack
       // on it with a tie rod to each knuckle, and the anti-roll bar Toyota (and most makers) list, linked to each strut
       const cn = cornerOf(t, { ...m.rims, brake: a.brake }, true), zW = a.track / 2, X = (dx: number) => (s > 0 ? dx : -dx), shellStrut = k === 'strut' && m.frame === 'shell';
-      const st = strutOf(a, t, m), zA = cn.zA, armT = cn.armT, tieY = 0.018, iron = { mat: 'cast-iron', color: 0x3a3a3a, finish: 'cast' } as const;
+      const st = strutOf(a, t, m), zA = cn.zA, armT = cn.armT, tieY = TIE_Y, iron = { mat: 'cast-iron', color: 0x3a3a3a, finish: 'cast' } as const;
       // (the knuckle's points in its own frame, the wheel's: out along +z; its x mirrored on the left, which is turned
       // half round, so what is behind the axle on one side is behind it on the other)
       // (a wishbone's two ball joints near the axle's height, so its arms leave the rim well inside its bead)
@@ -695,7 +700,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
         // out of it by its stroke (70 mm each way, typical) and a little more, so at full lock its inner joint stops short of
         // the housing; the joint's housing is screwed on the bar's end, the tie rod comes out of it, and the bellows run
         // from the housing's end to the tie rod, over the joint, so they stretch and fold with the stroke
-        const zH = zW + zA - 0.39, rackY = y + tieY, rackX = a.x - 0.14, stroke = 0.07, zJ = zH + stroke + 0.005, zT = zJ + 0.034;
+        const rk = rackOf(m, a, t), zH = rk.zH, rackY = rk.y, rackX = rk.x, stroke = 0.07, zJ = zH + stroke + 0.005, zT = zJ + 0.034;
         out.push(tube(`tie rod ${side}`, 0.008, [[rackX, rackY, s * zT], [a.x - 0.115, rackY, s * (zW + zA)]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: `${side} tie rod`, joint: 'ball', says: 'its tie rod: a ball joint at each end, its inner one on the rack\'s end inside the bellows, its outer one\'s stud in the steering arm (typical)' }));
         // the anti-roll bar's link, from its arm's end up to a bracket on the strut's tube behind it
         const lz = st.zAt(st.yb + 0.12), lt = footAt(0.12 / Math.cos(Math.atan(st.lean)), 0);
@@ -861,17 +866,17 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     // (on an electric car, on its battery pack, with no tunnel: nothing runs under its middle)
     if (pk) out.push(P('floor pan', { box: [len, t2, 2 * inner] }, [(toe + back) / 2, pk.y0 + pk.h + t2 / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'laid on its battery pack, bolted down through it', says: 'its floor, on its battery pack: pressed steel, about 0.9 mm (typical)' }));
     else {
-      for (const sd of [-1, 1]) out.push(P(`floor pan ${sd > 0 ? 'right' : 'left'}`, { box: [len, t2, inner - tun] }, [(toe + back) / 2, c + 0.06, (sd * (inner + tun)) / 2], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says }));
-      out.push(P('tunnel', undefined, [0, 0, 0], { says: 'the tunnel down the floor\'s middle, the exhaust under it (typical)', parts: [P('tunnel top', { box: [len, 0.02, 2 * tun] }, [(toe + back) / 2, c + 0.18, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed' }), ...[-1, 1].map((sd) => P('tunnel side', { box: [len, 0.15, 0.01] }, [(toe + back) / 2, c + 0.095, sd * (tun - 0.005)], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed' }))] }));
+      for (const sd of [-1, 1]) out.push(P(`floor pan ${sd > 0 ? 'right' : 'left'}`, { box: [len, t2, inner - tun] }, [(toe + back) / 2, c + 0.06, (sd * (inner + tun)) / 2], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to what it meets (the welds not drawn)', says }));
+      out.push(P('tunnel', undefined, [0, 0, 0], { says: 'the tunnel down the floor\'s middle, the exhaust under it (typical)', parts: [P('tunnel top', { box: [len, 0.02, 2 * tun] }, [(toe + back) / 2, c + 0.18, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded along its flanges to the floor pans and to the tunnel\'s other pressings (the welds not drawn)' }), ...[-1, 1].map((sd) => P('tunnel side', { box: [len, 0.15, 0.01] }, [(toe + back) / 2, c + 0.095, sd * (tun - 0.005)], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded along its flanges to the floor pans and to the tunnel\'s other pressings (the welds not drawn)' }))] }));
     }
     // (over a rigid axle's leaves, behind the pack: its floor raised over them, a kick up to it from the floor ahead)
     // (raised only over what is under it; between it and the pack's end, the floor at the pack's height)
-    const ov = overAxle(m); if (ov && !fl) { const y0 = pk ? pk.y0 + pk.h + t2 : c + 0.1; out.push(P('rear floor', { box: [ov.x1 - ov.x0, 0.03, 2 * inner] }, [(ov.x1 + ov.x0) / 2, ov.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says: 'its floor raised over what is at its rear axle (its leaves, or its motor; typical)' }), P('heel kick', { box: [0.02, ov.top - 0.03 - y0, 2 * inner] }, [ov.x1 + 0.01, (ov.top - 0.03 + y0) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says: 'where its floor rises over its rear axle (typical)' }));
+    const ov = overAxle(m); if (ov && !fl) { const y0 = pk ? pk.y0 + pk.h + t2 : c + 0.1; out.push(P('rear floor', { box: [ov.x1 - ov.x0, 0.03, 2 * inner] }, [(ov.x1 + ov.x0) / 2, ov.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick, the trunk floor and the inner wheelhouses (the welds not drawn)', says: 'its floor raised over what is at its rear axle (its leaves, or its motor; typical)' }), P('heel kick', { box: [0.02, ov.top - 0.03 - y0, 2 * inner] }, [ov.x1 + 0.01, (ov.top - 0.03 + y0) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the floor pans, the rear floor and the tunnel (the welds not drawn)', says: 'where its floor rises over its rear axle (typical)' }));
       // (over a twist beam's arms there, 30 mm over their top)
-      if (pk && back > ov.x1 + 0.03) { const yb = beamFloor(m, ov.x1) ?? y0; out.push(P('rear floor pan', { box: [back - ov.x1 - 0.02, t2, 2 * inner] }, [(back + ov.x1 + 0.02) / 2, Math.max(y0, yb) - t2 / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says: 'its floor between its pack and its rear axle (typical)' })); } }
+      if (pk && back > ov.x1 + 0.03) { const yb = beamFloor(m, ov.x1) ?? y0; out.push(P('rear floor pan', { box: [back - ov.x1 - 0.02, t2, 2 * inner] }, [(back + ov.x1 + 0.02) / 2, Math.max(y0, yb) - t2 / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick and the floor pan (the welds not drawn)', says: 'its floor between its pack and its rear axle (typical)' })); } }
     if (fl) {
-      out.push(P('heel kick', { box: [0.02, fl.top - 0.03 - (c + 0.1), 2 * inner] }, [fl.kick - 0.01, (fl.top - 0.03 + c + 0.1) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says: 'where the floor rises to the rear seat, over the fuel tank (typical)' }));
-      out.push(P('rear floor', { box: [fl.kick - fl.x0, 0.03, 2 * inner] }, [(fl.kick + fl.x0) / 2, fl.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', says: 'the raised floor under the rear seat (typical)' }));
+      out.push(P('heel kick', { box: [0.02, fl.top - 0.03 - (c + 0.1), 2 * inner] }, [fl.kick - 0.01, (fl.top - 0.03 + c + 0.1) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the floor pans, the rear floor and the tunnel (the welds not drawn)', says: 'where the floor rises to the rear seat, over the fuel tank (typical)' }));
+      out.push(P('rear floor', { box: [fl.kick - fl.x0, 0.03, 2 * inner] }, [(fl.kick + fl.x0) / 2, fl.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick, the trunk floor and the inner wheelhouses (the welds not drawn)', says: 'the raised floor under the rear seat (typical)' }));
     }
   } else if (m.frame === 'backbone') {
     const head: V3 = [front - 0.32, m.H * 0.78, 0], pivot: V3 = [rear + 0.58, c + 0.3, 0], r = 0.017;
@@ -1007,18 +1012,47 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     // the door's skin itself)
     const bodyAt = inside?.(bx, by) ?? Infinity, dashW = m.W * 0.42, bh = Number.isFinite(bodyAt) ? bodyAt - 0.03 : dashW + 0.02;
     // (a car's at the cross-car beam it hangs from: its end on the beam's face toward it, not inside the beam)
-    const toBeam = Math.hypot(bx - sx, by - sy) || 1, end: V3 = m.kind === 'kart' ? [sx + 0.42, c + 0.06, sz * 0.4] : low ? [sx + 0.28, m.kind === 'mower' ? sy - 0.45 : Math.max(c, tyres[0]!.D * 0.42) + 0.1 + 0.015, sz] : m.lines ? [bx - ((bx - sx) / toBeam) * 0.027, by - ((by - sy) / toBeam) * 0.027, sz] : [sx + 0.45, sy - 0.25, sz * 0.6];
-    out.push(tube('steering column', 0.012, [[sx + 0.02, sy - 0.02, sz], end], 'steel-low', 0x2a2a2a, { joint: 'bearing', fixed: 'bolted to the beam by its bracket, so it can be set for reach and height', says: 'its column: a tube on its bracket, the steering shaft turning in its bearings inside it (typical)' }));
+    // (a car's runs under its cross-car beam, hung from it: a clamp round the column and a bracket from the clamp up to
+    // the beam, turned to the column's own slope so the bracket lies along both, not touching either at a point; the
+    // column on 150 mm past the clamp to its lower end, its intermediate shaft's joint there)
+    const S0: V3 = [sx + 0.02, sy - 0.02, sz], rC = 0.02, hB = 0.012, dB = 0.025 + hB + rC;
+    let al = Math.atan2(by - dB - S0[1], bx - S0[0]), Bq: V3 = [bx, by - dB, sz];
+    for (let it = 0; it < 4; it++) { Bq = [bx + Math.sin(al) * dB, by - Math.cos(al) * dB, sz]; al = Math.atan2(Bq[1] - S0[1], Bq[0] - S0[0]); }
+    const dC: V3 = [Math.cos(al), Math.sin(al), 0], upC: V3 = [-Math.sin(al), Math.cos(al), 0];
+    // (no lower than 60 mm over the floor under it: a low car's or one on a battery pack's, its floor high)
+    const runC = m.lines && dC[1] < 0 ? Math.max(0.02, Math.min(0.15, (Bq[1] - floorTop(m, Bq[0]) - 0.06) / -dC[1])) : 0.15;
+    const end: V3 = m.kind === 'kart' ? [sx + 0.42, c + 0.06, sz * 0.4] : low ? [sx + 0.28, m.kind === 'mower' ? sy - 0.45 : Math.max(c, tyres[0]!.D * 0.42) + 0.1 + 0.015, sz] : m.lines ? [Bq[0] + dC[0] * runC, Bq[1] + dC[1] * runC, sz] : [sx + 0.45, sy - 0.25, sz * 0.6];
+    out.push(tube('steering column', 0.012, [S0, end], 'steel-low', 0x2a2a2a, { joint: 'bearing', ...(m.lines ? {} : { fixed: 'bolted to the beam by its bracket, so it can be set for reach and height' }), says: 'its column: a tube on its bracket, the steering shaft turning in its bearings inside it (typical)' }));
+    // (and in a car's, its steering shaft drawn: from inside its wheel's boss down through the column to its foot)
+    if (m.lines) out.push(tube('steering shaft', 0.0095, [[S0[0] - dC[0] * 0.02, S0[1] - dC[1] * 0.02, sz], end], 'steel-alloy', 0x5a5c5e, { finish: 'plate', link: 'steering wheel', fixed: 'splined into its wheel\'s boss and its universal joint', says: 'its steering shaft, turning in the column\'s bearings (typical)' }, 0.0095));
+    if (m.lines) out.push(P('steering column clamp', { lathe: [[0.012, -0.02], [rC, -0.02], [rC, 0.02], [0.012, 0.02], [0.012, -0.02]] }, Bq, { rot: [0, 0, al - PI / 2], mat: 'steel-low', color: 0x2a2a2a, finish: 'paint', fixed: 'clamped round its column', says: 'the clamp its column is held in, set for reach and height by its lever (typical)' }),
+      P('steering column bracket', { box: [0.03, hB, 0.05] }, [Bq[0] + upC[0] * (rC + hB / 2), Bq[1] + upC[1] * (rC + hB / 2), sz], { rot: [0, 0, al], mat: 'steel-low', color: 0x2a2a2a, finish: 'paint', fixed: 'bolted under the beam, its clamp bolted to it', says: 'a pressed bracket from its column\'s clamp up to the cross-car beam (typical)' }));
     // its wheel square to its column, so raked as the column is (a car's about 370 mm across, typical): a rim moulded over
     // a steel armature, three spokes and the boss its airbag's cover, all one moulding
     { const d0: V3 = [sx + 0.02 - end[0], sy - 0.02 - end[1], 0], dl = Math.hypot(d0[0], d0[1]) || 1, zA: V3 = [d0[0] / dl, d0[1] / dl, 0], xA: V3 = [0, 0, 1], yA: V3 = [zA[1] * xA[2] - zA[2] * xA[1], zA[2] * xA[0] - zA[0] * xA[2], zA[0] * xA[1] - zA[1] * xA[0]];
       const rot: V3 = [Math.atan2(-zA[1], zA[2]), Math.asin(Math.max(-1, Math.min(1, zA[0]))), Math.atan2(-yA[0], xA[0])], boss = Math.min(0.07, r * 0.4);
-      out.push(P('steering wheel', { torus: [r, 0.015] }, [sx, sy, sz], { rot, mat: 'pu', color: 0x1a1a1a, finish: 'leather', link: 'steering wheel', fixed: 'moulded over its steel armature with its spokes and boss, one piece; splined on its column', says: `its steering wheel, ${Math.round((r + 0.015) * 2000)} mm across (typical)`, parts: [P('steering wheel boss', { cyl: [boss, 0.068] }, [0, 0, 0.006], { rot: [PI / 2, 0, 0], mat: 'abs', color: 0x1a1a1a, finish: 'texture', passes: ['steering column'], says: 'its boss, its airbag\'s cover (typical)' }), ...[0, 1, 2].map((k) => { const a = -PI / 2 + (k - 1) * 1.9; return P('steering wheel spoke', { box: [r - boss - 0.011, 0.032, 0.014] }, [Math.cos(a) * (r + boss - 0.019) / 2, Math.sin(a) * (r + boss - 0.019) / 2, 0], { rot: [0, 0, a], mat: 'abs', color: 0x1a1a1a }); })] })); }
+      out.push(P('steering wheel', { torus: [r, 0.015] }, [sx, sy, sz], { rot, mat: 'pu', color: 0x1a1a1a, finish: 'leather', link: 'steering wheel', fixed: 'moulded over its steel armature with its spokes and boss, one piece; splined on its column', says: `its steering wheel, ${Math.round((r + 0.015) * 2000)} mm across (typical)`, parts: [P('steering wheel boss', { cyl: [boss, 0.068] }, [0, 0, 0.006], { rot: [PI / 2, 0, 0], mat: 'abs', color: 0x1a1a1a, finish: 'texture', passes: ['steering column', 'steering shaft'], says: 'its boss, its airbag\'s cover (typical)' }), ...[0, 1, 2].map((k) => { const a = -PI / 2 + (k - 1) * 1.9; return P('steering wheel spoke', { box: [r - boss - 0.011, 0.032, 0.014] }, [Math.cos(a) * (r + boss - 0.019) / 2, Math.sin(a) * (r + boss - 0.019) / 2, 0], { rot: [0, 0, a], mat: 'abs', color: 0x1a1a1a, fixed: 'moulded with its wheel\'s rim and boss' }); })] })); }
     if (m.kind === 'forklift') out.push(P('floor plate', { box: [0.55, 0.01, 2 * (m.axles[0]!.track / 2 - tyres[0]!.W / 2 - 0.06)] }, [end[0], end[1] - 0.01, 0], { mat: 'steel-low', color: 0x2a2a2a, finish: 'texture', says: 'its operator\'s floor, a tread plate (typical)' }));
     if (m.lines) out.push(tube('cross-car beam', 0.025, [[bx, by, -bh], [bx, by, bh]], 'steel-low', 0x2a2a2a, { finish: 'paint', says: 'the beam the dashboard and the steering column hang on, bolted to the A pillars (typical)' }));
+    // its steering led on to the rack: a universal joint's yoke square on the column's lower end, turning in its bearing;
+    // the intermediate shaft splined into it and down through the toe board's grommet, in line with the pinion's housing,
+    // cast on the rack's housing inboard of the rack's mount on the driver's side, its shaft's end on the housing's top
+    // (the pinion in it, meshing with the rack's teeth, not drawn)
+    const rackP = out.find((p) => p.name === 'steering rack');
+    if (m.lines && rackP && fa.susp === 'strut') {
+      const rk = rackOf(m, fa, tyres[0]!), zP = (Math.sign(sz) || -1) * Math.max(0.05, 0.7 * rk.zH - 0.055), R0: V3 = [rk.x, rk.y, zP], Y0: V3 = [end[0] + dC[0] * 0.015, end[1] + dC[1] * 0.015, end[2]];
+      // (the pinion's housing from within the rack housing's wall, its whole foot outside the bore, so it never reaches the
+      // rack inside: 28 mm out along its own axis; turned, with a bore the shaft fits in)
+      const L0 = Math.hypot(Y0[0] - R0[0], Y0[1] - R0[1], Y0[2] - R0[2]) || 1, u: V3 = [(Y0[0] - R0[0]) / L0, (Y0[1] - R0[1]) / L0, (Y0[2] - R0[2]) / L0], at = (k: number): V3 => [R0[0] + u[0] * k, R0[1] + u[1] * k, R0[2] + u[2] * k], P2 = at(0.05);
+      const qU = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...u)), eU = new THREE.Euler().setFromQuaternion(qU);
+      rackP.parts!.push(P('pinion housing', { lathe: [[0.009, 0], [0.022, 0], [0.022, 0.05], [0.009, 0.05], [0.009, 0]] }, at(0.028), { rot: [eU.x, eU.y, eU.z], mat: 'al-a380', color: 0x5a5c5e, finish: 'cast', passes: ['intermediate shaft'], says: 'its pinion\'s housing, cast with the rack\'s; the pinion in it meshing with the rack\'s teeth (not drawn), the intermediate shaft into its bore (typical)' }));
+      out.push(P('upper universal joint', { box: [0.03, 0.024, 0.024] }, Y0, { rot: [0, 0, al], mat: 'steel-alloy', color: 0x6a6c6e, finish: 'plate', link: 'steering wheel', joint: 'bearing', passes: ['intermediate shaft'], says: 'the universal joint at its column\'s foot, on the steering shaft turning inside the column (typical)' }));
+      out.push(tube('intermediate shaft', 0.009, [Y0, P2], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: 'steering wheel', joint: 'universal', fixed: 'splined into its universal joint', says: 'its intermediate shaft: from the column\'s universal joint down through the toe board to the pinion, a universal joint at each end (typical)' }, 0.009));
+      const bh = out.find((p) => p.name === 'bulkhead'); for (const q of bh?.parts ?? []) if (/^(toe board|dash panel)$/.test(q.name)) q.passes = [...(q.passes ?? []), 'intermediate shaft'];
+    }
     // (and short of the strut towers ahead of it where they stand as high as it does: a cab-forward van's are under its dash)
     const towerX = fa.susp === 'strut' && Math.min(m.H * 0.62, ftR + 0.55) + 0.045 > dashY - 0.15 ? fa.x - 0.09 - 0.01 : Infinity;
-    if (m.lines) out.push(P('dashboard', { loft: { st: [{ x: -0.15, w: dashW, lo: Math.min(0.02, -0.12 + lift), hi: 0.08, n: 4 }, { x: Math.max(-0.05, Math.min(0.25, xWs - dashX - 0.01, towerX - dashX)), w: dashW * 0.95, lo: Math.min(0.0, -0.14 + lift), hi: 0.05, n: 4 }] } }, [dashX, dashY, 0], { mat: 'abs', color: 0x1e1e20, shell: 0.003, finish: 'texture', passes: ['steering column', 'cross-car beam'] }));
+    if (m.lines) out.push(P('dashboard', { loft: { st: [{ x: -0.15, w: dashW, lo: Math.min(0.02, -0.12 + lift), hi: 0.08, n: 4 }, { x: Math.max(-0.05, Math.min(0.25, xWs - dashX - 0.01, towerX - dashX)), w: dashW * 0.95, lo: Math.min(0.0, -0.14 + lift), hi: 0.05, n: 4 }] } }, [dashX, dashY, 0], { mat: 'abs', color: 0x1e1e20, shell: 0.003, finish: 'texture', passes: ['steering column', 'steering shaft', 'cross-car beam'] }));
   } else {
     const bx = m.kind === 'motorcycle' ? front - 0.32 + 0.03 : front - 0.45, by = m.kind === 'motorcycle' ? m.H * 0.93 : m.H * 0.92;
     out.push(tube('handlebar', 0.011, [[bx - 0.04, by + 0.02, -0.4], [bx, by, -0.2], [bx, by, 0.2], [bx - 0.04, by + 0.02, 0.4]], 'al-6061', 0x2a2a2a, { item: 'handlebar' }));
@@ -1046,7 +1080,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       parts: pk ? [-1, 1].map((sd) => P(`pack flange ${sd > 0 ? 'right' : 'left'}`, { box: [pk.x1 - pk.x0 - 0.04, 0.03, 0.02] }, [0, pk.h / 2 - 0.015, sd * (pk.z + 0.01)], { mat: 'al-6061', color: 0x5a5c5e, finish: 'cast', kg: 0, fixed: 'part of its pack\'s tray along its side, bolted to its sill\'s inner', says: 'its tray\'s side flange, bolted to the sill\'s inner every 200 mm (typical)' })) : undefined }));
     else {
       const ft = floorOf(m)?.tank, tb: V3 = ft ? [ft.x1 - ft.x0, ft.h, ft.z1 - ft.z0] : [0.5, 0.2, 0.5], ta: V3 = ft ? [(ft.x0 + ft.x1) / 2, ft.y0 + ft.h / 2, (ft.z0 + ft.z1) / 2] : [rear + 0.35, c + 0.12, -0.3];
-      out.push(P(`fuel tank (${Math.round(tb[0] * tb[1] * tb[2] * 1000)} L)`, { box: tb }, ta, { mat: 'pe', color: 0x1a1a1a, shell: 0.005, finish: 'texture', says: 'its tank and the fuel in it, under the rear seat beside the exhaust (about 50 L, typical)', parts: [P('petrol', undefined, [0, 0, 0], { kg: tb[0] * tb[1] * tb[2] * 1000 * 0.74 * 0.5, says: 'half a tank (typical)' })] }));
+      out.push(P(`fuel tank (${Math.round(tb[0] * tb[1] * tb[2] * 1000)} L)`, { box: tb }, ta, { mat: 'pe', color: 0x1a1a1a, shell: 0.005, finish: 'texture', fixed: 'strapped up under the rear floor against the heel kick (its straps not drawn)', says: 'its tank and the fuel in it, under the rear seat beside the exhaust (about 50 L, typical)', parts: [P('petrol', undefined, [0, 0, 0], { kg: tb[0] * tb[1] * tb[2] * 1000 * 0.74 * 0.5, says: 'half a tank (typical)' })] }));
       // (across the car: on the engine's left end, as deep as from just behind its drive shafts to just ahead of its crank;
       // along it, behind the engine)
       const pw2 = powerAt(m), es2 = engineSize(pw2, true).s;

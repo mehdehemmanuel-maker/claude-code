@@ -405,7 +405,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const xRLine = (v: number) => (v <= vArch ? xRD : xRD + ((xRDt - xRD) * (v - vArch)) / (1 - vArch));
   if (doors) {
     out.push(...region('front fender', uFD + du(xFD), 1, fWins, { says: 'its front fenders, and the nose and front bumper they run into, open for its lamps, grille and intake: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }, fMeets, U(xFDt + g)));
-    out.push(...region('rear quarter panel', 0, uRD - du(xRD), tWins, { says: 'its rear quarters and the tail, open for its lamps: pressed steel about 0.8 mm (typical)' }, tMeets, undefined, xRDt < xRD - 0.01 ? { at: U(xRDt - g), v: vArch } : undefined));
+    out.push(...region('rear quarter panel', 0, uRD - du(xRD), tWins, { fixed: 'pressed as one with the pillars, roof rails and sill of its body side (one stamping: typical); spot-welded along its inner flanges to the trunk floor and the rear inner wheelhouses', says: 'its rear quarters and the tail, open for its lamps: pressed steel about 0.8 mm (typical)' }, tMeets, undefined, xRDt < xRD - 0.01 ? { at: U(xRDt - g), v: vArch } : undefined));
     out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [U(xLine(vSill - 0.004)), vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
     const door = (name: string, x0: number, x1: number, x1t = x1) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1t - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
     if (twoDoors) { out.push(door('front doors', xB, xLine(vSill), xFDt)); if (xRDt < xRD - 0.01) out.push(paint('rear doors', { s: side, uv: [[U(xRD + g), vSill], [U(xB - g), vSill], [U(xB - g), vArch], [U(xRD + g), vArch]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' }), paint('rear doors', { s: side, uv: [[U(xRD + g), vArch], [U(xB - g), vArch], [U(xB - g), 1], [U(xRDt + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical); its rear edge leaning back over the rear arch' })); else out.push(door('rear doors', xRD, xB)); } else out.push(door('doors', xRD, xLine(vSill), xFDt));
@@ -445,8 +445,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   });
   const lit = (name: string, uv: [UV, UV, UV, UV], off: number, color: number, says: string): Part => ({ name, shape: { surf: { s: side, uv, off } }, at: [0, 0, 0], mat: 'pc', color, glow: true, shell: 0.002, kg: 0, says });
   // a seam: the dark line of a shut line drawn where one panel meets the next on the same skin (4 mm, typical)
-  const seam = (name: string, a0: number, a1: number, v: number, says: string): Part => ({ name, shape: { surf: { s: side, uv: quad(a0, a1, v - 0.0025, v + 0.0025), off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says });
-  const slats = (name: string, w: Win, n: number, off: number, color: number, finish: string): Part[] => Array.from({ length: n }, (_, k) => { const f0 = (k + 0.62) / (n + 0.5), hv = (w.v1 - w.v0) / (n + 0.5); return { name, shape: { surf: { s: side, uv: quad(w.u0 + 0.004, w.u1, w.v0 + hv * (k + 0.55), w.v0 + hv * (k + 0.55) + hv * 0.32), off } }, at: [0, 0, 0] as V3, mat: 'abs', color, shell: 0.003, finish, kg: 0, says: f0 > 2 ? '' : undefined }; });
+  // (a dark strip drawn on the skin where a shut line runs: it stands for the gap, which is not cut, and says so)
+  const seam = (name: string, a0: number, a1: number, v: number, says: string): Part => ({ name, shape: { surf: { s: side, uv: quad(a0, a1, v - 0.0025, v + 0.0025), off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, fixed: 'drawn on what it meets, standing for a shut line\'s gap that is not cut', says });
+  // (bars across an opening from wall to wall, moulded with its walls: not stopping short of them, held by nothing)
+  const slats = (name: string, w: Win, n: number, off: number, color: number, finish: string): Part[] => Array.from({ length: n }, (_, k) => { const f0 = (k + 0.62) / (n + 0.5), hv = (w.v1 - w.v0) / (n + 0.5); return { name, shape: { surf: { s: side, uv: quad(w.u0 + 0.0001, w.u1, w.v0 + hv * (k + 0.55), w.v0 + hv * (k + 0.55) + hv * 0.32), off } }, at: [0, 0, 0] as V3, mat: 'abs', color, shell: 0.003, finish, kg: 0, fixed: 'moulded across the opening, one with its walls', says: f0 > 2 ? '' : undefined }; });
   {
     // a headlamp: a dark housing, a chrome reflector across its middle, a projector each for the low and the high beam (a
     // bowl, its lens in a dark ring, set in along the skin's normal), a light guide along its foot lit as its daytime
@@ -468,18 +470,22 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       let rp = Math.min(rp0, room * 0.3, bd * 1.6), pin = Math.max(0.012, deep - bd - 0.012); for (let t = 0; t < 8 && !clear(rp, pin); t++) { rp *= 0.88; pin = Math.max(0.015, pin * 0.85); } if (!clear(rp, pin)) return []; return [
       ...onSkin('projector bowl', { lathe: [[0.004, -bd], [rp * 0.5, -bd * 0.88], [rp * 0.86, -bd * 0.5], [rp, 0]] }, u, vMid, pin, { mat: 'al-6061', color: 0xd4d8dc, finish: 'chrome', kg: 0 }),
       ...onSkin('projector lens', { lathe: [[0, 0.011], [rp * 0.42, 0.008], [rp * 0.6, 0.002], [rp * 0.6, -0.004]] }, u, vMid, pin, { mat: 'glass', color: 0xe8f0ff, kg: 0 }),
-      ...onSkin('projector ring', { lathe: [[rp * 0.6, -0.004], [rp * 0.62, 0.003], [rp * 0.74, 0.004], [rp * 0.76, -0.006]] }, u, vMid, pin, { mat: 'pp', color: 0x16171a, finish: 'texture', kg: 0, joins: ['projector lens'] })]; };
+      // (its dark ring from round the lens out to the bowl's rim, clipped on it; and the bowl on a mount from its foot to the
+      // housing's back, screwed there)
+      ...onSkin('projector ring', { lathe: [[rp * 0.6, -0.004], [rp * 0.62, 0.003], [rp * 0.95, 0.002], [rp, 0]] }, u, vMid, pin, { mat: 'pp', color: 0x16171a, finish: 'texture', kg: 0, joins: ['projector lens'], fixed: 'clipped onto the rim of its bowl' }),
+      ...(deep - pin - bd > 0.002 ? onSkin('projector mount', { lathe: [[0.004, -(deep - pin - 0.0012)], [0.004, -bd]] }, u, vMid, pin, { mat: 'al-6061', color: 0x8a8c8e, finish: 'cast', kg: 0, fixed: 'screwed through its reflector to the back of its housing, holding its projector\'s bowl' }) : [])]; };
     out.push(recess('headlamp', lampW, 0.05, { color: 0x24272c }, 'its headlamps\' housings, open behind their lenses (typical)', (deep, walls) => [
-      { name: 'headlamp reflector', shape: { surf: { s: side, uv: quad(lampW.u0 + wl * 0.12, lampW.u1 - wl * 0.06, lampW.v0 + hh * 0.2, lampW.v1 - hh * 0.18), off: -deep + Math.min(0.004, deep * 0.15) } }, at: [0, 0, 0], mat: 'al-6061', color: 0xc8ccd2, shell: 0.001, finish: 'chrome', kg: 0, says: 'a chrome reflector in the housing (typical)' },
+      // (its reflector and its light guide laid on the housing's back, clipped there: not 4 and 10 mm off it, held by nothing)
+      { name: 'headlamp reflector', shape: { surf: { s: side, uv: quad(lampW.u0 + wl * 0.12, lampW.u1 - wl * 0.06, lampW.v0 + hh * 0.2, lampW.v1 - hh * 0.18), off: -deep + 0.0008 } }, at: [0, 0, 0], mat: 'al-6061', color: 0xc8ccd2, shell: 0.001, finish: 'chrome', kg: 0, fixed: 'clipped onto the back of its housing', says: 'a chrome reflector in the housing (typical)' },
       ...projector(deep, 0.38, walls), ...projector(deep, 0.66, walls),
-      lit('daytime running light', quad(lampW.u0 + wl * 0.06, lampW.u1 - wl * 0.03, lampW.v0 + hh * 0.07, lampW.v0 + hh * 0.115), -Math.min(0.01, deep * 0.3), 0xf4f8ff, 'its daytime running light: an LED light guide along the lamp\'s foot (typical)')]));
+      { ...lit('daytime running light', quad(lampW.u0 + wl * 0.06, lampW.u1 - wl * 0.03, lampW.v0 + hh * 0.07, lampW.v0 + hh * 0.115), -deep + 0.0008, 0xf4f8ff, 'its daytime running light: an LED light guide along the lamp\'s foot (typical)'), fixed: 'clipped onto the back of its housing' }]));
     out.push({ name: 'headlights', shape: { surf: { s: side, uv: quad(lampW.u0, lampW.u1, lampW.v0, lampW.v1), off: 0.0005 } }, at: [0, 0, 0], mat: 'pc', color: 0xe6ecf2, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps\' lenses, flush with the body: clear polycarbonate (typical)', fixed: 'bonded to its housing', joins: ['headlamp wall'] });
     // the grille: its throat dark, its bars across it gloss black, a bright strip along its top (typical of a sedan's)
-    out.push(recess('grille', grilleW, 0.05, {}, 'its upper grille between the headlamps: moulded ABS, its throat open to the radiator behind (typical)', (deep) => [...slats('grille bar', grilleW, Math.max(2, Math.round(fc.grille / 0.04)), -Math.min(0.012, deep * 0.4), 0x0d0e10, 'paint'),
-      { name: 'grille trim', shape: { surf: { s: side, uv: quad(grilleW.u0 + 0.004, 1, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.16, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.08), off: -Math.min(0.006, deep * 0.2) } }, at: [0, 0, 0], mat: 'abs', color: 0xc0c4ca, shell: 0.002, finish: 'chrome', kg: 0, says: 'a chrome strip along its grille (typical)' }], { u0: lampW.v0 }));
+    out.push(recess('grille', grilleW, 0.05, {}, 'its upper grille between the headlamps: moulded ABS, its throat open to the radiator behind (typical)', (deep) => [...slats('grille bar', { ...grilleW, u0: Math.max(grilleW.u0, lampW.u1) }, Math.max(2, Math.round(fc.grille / 0.04)), -Math.min(0.012, deep * 0.4), 0x0d0e10, 'paint'),
+      { name: 'grille trim', fixed: 'moulded across the opening, one with its walls', shape: { surf: { s: side, uv: quad(Math.max(grilleW.u0, lampW.u1) + 0.0001, 1, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.16, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.08), off: -Math.min(0.006, deep * 0.2) } }, at: [0, 0, 0], mat: 'abs', color: 0xc0c4ca, shell: 0.002, finish: 'chrome', kg: 0, says: 'a chrome strip along its grille (typical)' }], { u0: lampW.v0 }));
     out.push(recess('lower grille', intakeW, 0.06, {}, 'the lower intake in its front bumper: its throat open, bars across it (typical)', (deep) => slats('lower grille bar', intakeW, 3, -Math.min(0.014, deep * 0.4), 0x111214, 'texture')));
     // (where its number plate goes: on the bumper over the intake's middle, a plate's height above its foot)
-    const uP = 1, vP = vAt(uN(0.005), lowN + 0.04 + Math.max(0.05, iH) + 0.06); out.push({ name: 'plate mount', at: pointAt(side, uP, vP), shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['front fender'], says: 'its front number plate\'s bracket (typical)' });
+    const uP = 1, vP = vAt(uN(0.005), lowN + 0.04 + Math.max(0.05, iH) + 0.06), qP = surfaceAt(side, uP, vP); out.push({ name: 'plate mount', at: [qP.at[0] + qP.n[0] * 0.0033, qP.at[1] + qP.n[1] * 0.0033, qP.at[2] + qP.n[2] * 0.0033], shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['front fender'], says: 'its front number plate\'s bracket (typical)' });
     // (its bumper cover: the face below a shut line under the lamps and the grille, round to the front arches)
     const uB0 = fArch.length ? U(Math.max(...fArch.map((a) => a.w.x + a.Ra)) + 0.03) : uN(0.6);
     out.push(seam('front bumper shut line', uB0, 1, vAt(uMidF, yBF), 'where its front bumper cover meets the fenders (typical)'));
@@ -489,11 +495,13 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // valance low across the bumper a dark recess; the bumper cover below a shut line
     const wt = tailW.u1 - tailW.u0, ht = tailW.v1 - tailW.v0;
     out.push(recess('tail lamp', tailW, 0.04, { color: 0x2a0606 }, 'its tail lamps\' housings (typical)', (deep) => [
-      { name: 'tail lamp reflector', shape: { surf: { s: side, uv: quad(tailW.u0 + wt * 0.05, tailW.u1 - wt * 0.08, tailW.v0 + ht * 0.18, tailW.v1 - ht * 0.18), off: -deep * 0.7 } }, at: [0, 0, 0], mat: 'al-6061', color: 0x8a1a1a, shell: 0.001, finish: 'chrome', kg: 0 },
-      lit('tail lamp', quad(tailW.u0 + wt * 0.06, tailW.u1 - wt * 0.1, tailW.v0 + ht * 0.55, tailW.v0 + ht * 0.72), -deep * 0.2, 0xff2a1a, 'its tail lamps lit: an LED light guide (typical)')]));
+      // (its reflector on the housing's back, its light guide on the reflector, each clipped there)
+      { name: 'tail lamp reflector', shape: { surf: { s: side, uv: quad(tailW.u0 + wt * 0.05, tailW.u1 - wt * 0.08, tailW.v0 + ht * 0.18, tailW.v1 - ht * 0.18), off: -deep + 0.0008 } }, at: [0, 0, 0], mat: 'al-6061', color: 0x8a1a1a, shell: 0.001, finish: 'chrome', kg: 0, fixed: 'clipped onto the back of its housing' },
+      { ...lit('tail lamp', quad(tailW.u0 + wt * 0.06, tailW.u1 - wt * 0.1, tailW.v0 + ht * 0.55, tailW.v0 + ht * 0.72), -deep + 0.0016, 0xff2a1a, 'its tail lamps lit: an LED light guide (typical)'), fixed: 'clipped onto its reflector' }]));
     out.push({ name: 'tail lights', shape: { surf: { s: side, uv: quad(tailW.u0, tailW.u1, tailW.v0, tailW.v1), off: 0.0005 } }, at: [0, 0, 0], mat: 'pmma', color: 0xb01010, shell: 0.003, says: 'its tail lamps\' lenses, flush with the body: red acrylic (typical)', fixed: 'bonded to its housing', joins: ['tail lamp wall'] });
     out.push(recess('rear valance', valW, 0.02, {}, 'the dark valance low across its rear bumper (typical)'));
-    const vPt = vAt(uTl(0.005), yTopT - 0.03 - 0.12 - 0.07); out.push({ name: 'plate mount', at: pointAt(side, 0, vPt), shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['rear quarter panel'], says: 'its rear number plate\'s place (typical)' });
+    // (its back on the skin, not its middle: the mount stands out of the skin by its own thickness, not half sunk in it)
+    const vPt = vAt(uTl(0.005), yTopT - 0.03 - 0.12 - 0.07), qPt = surfaceAt(side, 0, vPt); out.push({ name: 'plate mount', at: [qPt.at[0] + qPt.n[0] * 0.0022, qPt.at[1] + qPt.n[1] * 0.0022, qPt.at[2] + qPt.n[2] * 0.0022], shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['rear quarter panel'], says: 'its rear number plate\'s place (typical)' });
     const yB = yTopT - 0.03 - 0.12 - 0.06, uB1 = rArch.length ? U(Math.min(...rArch.map((a) => a.w.x - a.Ra)) - 0.03) : uTl(0.6);
     out.push(seam('rear bumper shut line', 0, uB1, vAt(uMidT, yB), 'where its rear bumper cover meets the quarters (typical)'));
   }
@@ -548,7 +556,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // height; under that the wheelhouse is open to the underbody, as a car's is)
     const yLoW = Math.max(ln.low(w.x) + 0.02, w.y + 0.06), wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
     out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
-    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', joins: [`${w.name.replace(/ wheel$/, '')} inner wheelhouses`], fixed: 'clipped to its inner wheelhouse', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', joins: [`${w.name.replace(/ wheel$/, '')} inner wheelhouses`], fixed: 'clipped to its inner wheelhouse and onto the arch lip of the fender or quarter panel over it', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
   }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
   const lid = (name: string, x0: number, x1: number, crown0: number, says: string, meets: string): Part | null => {
@@ -591,19 +599,30 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       return [[x, y0, zt], [x, y0 + (rail - y0) * 0.35, zt + (zR - zt) * 0.35 + 0.012 * k], [x, rail - rr, zR + rr * 0.35], [x, rail + rr * 0.15, zR - rr * 0.25], [x, yT - r.crown.roof * k * 0.2, zR * 0.55], [x, yT, zR * 0.18], [x, yT, 0]];
     }, { mirror: true }), cg = greville(cab.net[0]!.length, 3), Uc = (x: number) => uAt(cab, x, (cg[2]! + cg[3]!) / 2);
     const p = r.cabin.pillar / 1.2, vg0 = 0.022, v3 = (cg[2]! + cg[3]!) / 2, uS = doors && xFDt < ln.xCowl - 0.01 ? Uc(xFDt - g) : 1;
-    const glass = (name: string, uv: [UV, UV, UV, UV], says: string): Part => ({ name, shape: { surf: { s: cab, uv, off: 0.0015 } }, at: [0, 0, 0], mat: 'glass', color: 0x1e2a33, shell: 0.0045, says });
+    // (flush in its opening, as a flush-glazed car's is: its edge on its frame's edge, bonded there on a urethane bead to
+    // the flange behind (the bead and the flange not drawn); not set 1.5 mm off its frame, touching nothing)
+    // (a door's glass is not bonded: it drops into the door, running in channels along its frame, not drawn)
+    const glass = (name: string, uv: [UV, UV, UV, UV], says: string): Part => ({ name, shape: { surf: { s: cab, uv } }, at: [0, 0, 0], mat: 'glass', color: 0x1e2a33, shell: 0.0045, fixed: /side windows/.test(name) ? 'its door\'s drop glass, running in channels in its door\'s frame (not drawn)' : 'bonded round its edge to what it meets, on a urethane bead (not drawn)', says });
     const trim = (name: string, uv: [UV, UV, UV, UV], more: Partial<Part> = {}): Part => paint(name, { s: cab, uv }, more);
     const xCe = b.lines.dloR !== undefined ? Math.min(ln.xRoofR - 0.05, b.L / 2 - b.lines.dloR * b.L) : ln.xRoofR - 0.05, uWs = Uc(ln.xRoofF), uRr = Uc(ln.xRoofR), uB0 = Uc(xB - r.cabin.pillar), uB1 = Uc(xB + r.cabin.pillar), uCe = Uc(xCe);
-    out.push(trim('belt mouldings', [[open ? 0 : uCe, 0], [1, 0], [1, vg0], [open ? 0 : uCe, vg0]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'the belt mouldings where the side glass leaves the doors (typical)' }));
+    // (its belt mouldings where the side glass leaves the doors: one on each door's top, parted at its shut lines so the
+    // door can open, clipped to that door; one on the quarter behind them, clipped to it. Not one strip across the shut
+    // lines, which would hold the doors shut and say they were held by it)
+    const belt = { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture' as const }, uBeltR = doors && twoDoors && xRDt > xCe + 0.03 ? Uc(xRDt + g / 2) : open ? 0 : uCe;
+    if (doors && twoDoors && !open) {
+      out.push(trim('front door belt moulding', [[Uc(xB + g / 2), 0], [uS, 0], [uS, vg0], [Uc(xB + g / 2), vg0]], { ...belt, fixed: 'clipped onto the top of its door', says: 'the belt moulding where the side glass leaves its front door (typical)' }));
+      out.push(trim('rear door belt moulding', [[uBeltR, 0], [Uc(xB - g / 2), 0], [Uc(xB - g / 2), vg0], [uBeltR, vg0]], { ...belt, fixed: 'clipped onto the top of its door', says: 'the belt moulding where the side glass leaves its rear door (typical)' }));
+      if (uBeltR > uCe + 1e-6) out.push(trim('quarter belt moulding', [[uCe, 0], [Uc(xRDt - g / 2), 0], [Uc(xRDt - g / 2), vg0], [uCe, vg0]], { ...belt, fixed: 'clipped onto the top of its quarter panel', says: 'the belt moulding under its quarter glass (typical)' }));
+    } else out.push(trim('belt mouldings', [[open ? 0 : uCe, 0], [1, 0], [1, vg0], [open ? 0 : uCe, vg0]], { ...belt, says: 'the belt mouldings where the side glass leaves the doors (typical)' }));
     if (!open) {
       out.push(glass('windscreen', [[uWs, v3 + p], [1, v3 + p], [1, 1], [uWs, 1]], 'its windscreen: laminated glass, about 4.5 mm (typical)'));
-      out.push(trim('roof', [[uRr, v3 - p], [uWs, v3 - p], [uWs, 1], [uRr, 1]], { says: 'its roof panel: pressed steel about 0.7 mm (typical)', meets: [{ part: 'roof', edge: 'b1', kind: 'mirror', why: 'it crosses its middle in one tangent plane' }] }));
-      out.push(trim('pillars and roof rails', [[0, v3 - p], [uRr, v3 - p], [uRr, v3 + p], [0, v3 + p]], { says: 'its C pillars and the rails along the roof (typical)' }));
-      out.push(trim('A pillars', [[uWs, v3 - p], [1, v3 - p], [1, v3 + p], [uWs, v3 + p]], { says: 'its A pillars beside the windscreen (typical)' }));
+      out.push(trim('roof', [[uRr, v3 - p], [uWs, v3 - p], [uWs, 1], [uRr, 1]], { fixed: 'spot-welded along its edges to the roof rails and the tops of the pillars', says: 'its roof panel: pressed steel about 0.7 mm (typical)', meets: [{ part: 'roof', edge: 'b1', kind: 'mirror', why: 'it crosses its middle in one tangent plane' }] }));
+      out.push(trim('pillars and roof rails', [[0, v3 - p], [uRr, v3 - p], [uRr, v3 + p], [0, v3 + p]], { fixed: 'pressed as one with the pillars, roof rails, quarter panel and sill of its body side (the body side outer, one stamping: typical)', says: 'its C pillars and the rails along the roof (typical)' }));
+      out.push(trim('A pillars', [[uWs, v3 - p], [1, v3 - p], [1, v3 + p], [uWs, v3 + p]], { fixed: 'pressed as one with the pillars, roof rails, quarter panel and sill of its body side (the body side outer, one stamping: typical)', says: 'its A pillars beside the windscreen (typical)' }));
       out.push(glass('back glass', [[0, v3 + p], [uRr, v3 + p], [uRr, 1], [0, 1]], 'its back glass: toughened glass about 4 mm (typical)'));
-      out.push(trim('C pillars', [[0, 0], [uCe, 0], [uCe, v3 - p], [0, v3 - p]], { says: 'its C pillars (typical)' }));
+      out.push(trim('C pillars', [[0, 0], [uCe, 0], [uCe, v3 - p], [0, v3 - p]], { fixed: 'pressed as one with the pillars, roof rails, quarter panel and sill of its body side (the body side outer, one stamping: typical)', says: 'its C pillars (typical)' }));
       if (twoDoors) {
-        out.push(trim('B pillars', [[uB0, vg0], [uB1, vg0], [uB1, v3 - p], [uB0, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'its B pillars, trimmed black (typical)' }));
+        out.push(trim('B pillars', [[uB0, vg0], [uB1, vg0], [uB1, v3 - p], [uB0, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', fixed: 'a black applique clipped over its pillar\'s pressing (not drawn)', says: 'its B pillars, trimmed black (typical)' }));
         out.push(glass('front side windows', [[uB1, vg0], [uS, vg0], [uS, v3 - p], [uB1, v3 - p]], 'its front door glass: toughened, about 4 mm (typical)'));
         // (a long cabin's glass behind the B pillars split by pillars: at the rear doors' back edge, and every 1.1 m or so
         // behind that, as a van's or an estate's is)
@@ -617,7 +636,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       } else out.push(glass('side windows', [[uCe, vg0], [uS, vg0], [uS, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
       // (where its door is set back from its windscreen's foot, the corner between its glass and its A pillar a black sail,
       // fixed: its glass in its door)
-      if (uS < 1 - 1e-6) out.push(trim('mirror sails', [[uS, vg0], [1, vg0], [1, v3 - p], [uS, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'the black sail between its front door glass and its A pillar, ahead of its door (typical)' }));
+      if (uS < 1 - 1e-6) out.push(trim('mirror sails', [[uS, vg0], [1, vg0], [1, v3 - p], [uS, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', fixed: 'clipped into the corner at the foot of its A pillar', says: 'the black sail between its front door glass and its A pillar, ahead of its door (typical)' }));
     } else {
       out.push(glass('windscreen', [[0, v3 + p], [1, v3 + p], [1, 1], [0, 1]], 'its windscreen (typical)'));
       out.push(trim('windscreen frame', [[0, v3 - p], [1, v3 - p], [1, v3 + p], [0, v3 + p]], { says: 'its windscreen frame (typical)' }));

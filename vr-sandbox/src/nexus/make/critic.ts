@@ -394,7 +394,11 @@ function pointTri(p: CV3, T: Tris, t: number): number {
 /** Every place two parts' surfaces cross or come within `touch` of each other (1 mm unless said), each pair once. */
 export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
   // (a holder and what it holds of its one casting, or two it holds that are: an alloy wheel's barrel, centre and spokes)
-  const fused = o.fused ?? ((a: TriMesh, b: TriMesh, kin: Clash['kin']) => (a.weld && (!a.welds || a.welds.includes(b.name))) || (b.weld && (!b.welds || b.welds.includes(a.name))) || (onePiece(a.mat, b.mat) && (kin === 'holds' || (kin === 'siblings' && (a.holder === a.mat || /^(abs|pp|pu|nylon)$/.test(a.mat ?? ''))))));
+  // (and a part drawn in pieces, its patches under one name and holder (a skin split at a crease, a door in two), is one
+  // pressing with itself)
+  const fused = o.fused ?? ((a: TriMesh, b: TriMesh, kin: Clash['kin']) => (a.name === b.name && a.path === b.path && a.mat === b.mat && !!a.mat) || (a.weld && (!a.welds || a.welds.includes(b.name))) || (b.weld && (!b.welds || b.welds.includes(a.name))) || (onePiece(a.mat, b.mat) && (kin === 'holds' || (kin === 'siblings' && (a.holder === a.mat || (/^(abs|pp|pu|nylon)$/.test(a.mat ?? '') && a.path.split('/').length > 2))))));
+  // (a moulding's own pieces are one with each other under the part they make (a wheel cover's rim and spokes); two
+  // mouldings that only share the whole thing as their holder (a car's B pillar trim and its belt moulding) are not)
   const fitted = (a: TriMesh, b: TriMesh) => !!a.passes?.includes(b.name) || !!b.passes?.includes(a.name);
   const tol = o.touch ?? 0.001, T = meshes.map(trisOf), out: Clash[] = [];
   const kinOf = (a: TriMesh, b: TriMesh): Clash['kin'] => (b.path.startsWith(a.path + '/') || a.path.startsWith(b.path + '/') ? 'holds' : a.path.slice(0, a.path.lastIndexOf('/')) === b.path.slice(0, b.path.lastIndexOf('/')) ? 'siblings' : 'apart');

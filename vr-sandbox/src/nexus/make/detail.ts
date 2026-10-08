@@ -385,15 +385,18 @@ export const RULES: DetailRule[] = [
         // (or on its front door, just behind the door's top front corner, where the door is set back from its A pillar's
         // foot: a mirror stands on the door, as a person reaching out of its window finds it)
         const fD = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(front doors|doors)$/.test(x.p.name)), db = fD ? new THREE.Box3().setFromPoints(corners(fD).map((q) => toLocal(T, q))) : null;
-        const mx = ab ? Math.min(ab.max.x - 0.16, db ? db.max.x - 0.18 : Infinity) : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
-        // (its stalk's foot on the skin where the stalk stands: the outermost of the skin within the stalk's own footprint, so
-        // its flat foot meets the skin and never stands off it where the door tucks in under its belt)
-        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), foot = skin.filter((q) => Math.abs(q.x - mx) < 0.03 && Math.abs(q.y - (mY - 0.035)) < 0.025).map((q) => Math.abs(q.z));
-        const side0 = foot.length ? Math.max(...foot) + 0.105 : zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
+        // (on a door, its stalk's foot on the door's own skin just under its top edge, the head over the belt: its door's
+        // surface sampled finely there, its foot on the outermost of it within the foot's own footprint less 0.3 mm, so its
+        // flat foot lies on the door's curve over the whole of it, not on whatever other skin is coarsely sampled nearby)
+        const dPts = fD && fD.p.shape && 'surf' in fD.p.shape ? patchPoints(fD.p.shape.surf, 160, 80).map((q) => toLocal(T, new THREE.Vector3(...q).applyMatrix4(fD.m))) : [];
+        const mx = ab ? Math.min(ab.max.x - 0.16, db ? db.max.x - 0.18 : Infinity) : front + 0.5, dTop = dPts.filter((q) => Math.abs(q.x - mx) < 0.03).map((q) => q.y), mY = dTop.length ? Math.max(...dTop) + 0.01 : ab ? ab.min.y + 0.06 : my;
+        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), foot = (dPts.length ? dPts : skin).filter((q) => Math.abs(q.x - mx) < 0.03 && q.y > mY - 0.0525 && q.y < mY - 0.0175).map((q) => Math.abs(q.z));
+        const side0 = foot.length ? Math.max(...foot) - 0.0003 + 0.105 : zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
         // a mirror: its head a shell lofted out from the door, about 0.22 m out, 0.12 m tall and 0.09 m deep, flat at the
         // back where its glass is and rounded in front, on a short stalk from the door (typical of a car's)
-        const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.05, w: 0.045, lo: -0.058, hi: 0.052, n: 3 }, { x: 0.17, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];
-        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.17, 0.09, 0.003] }, at: [0.115, 0, side * 0.047], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit', fixed: 'bonded to its backing plate in the housing' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
+        // (its back flat where its glass lies, 30 mm in from each end: the glass on it, not sunk at one end and off it at the other)
+        const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.03, w: 0.046, lo: -0.056, hi: 0.05, n: 3 }, { x: 0.19, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];
+        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.15, 0.09, 0.003] }, at: [0.11, 0, side * 0.0498], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit', fixed: 'bonded to its backing plate on the mirror\'s housing' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit', fixed: 'bolted through its foot to its door' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
       }
       return n;
     },
