@@ -21,6 +21,7 @@ export interface Part {
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
+  /** a limb that swings as it moves: about which axis, how far (radians), at what point in the stride (0–1) */ swing?: { axis: 'x' | 'z'; amp: number; phase: number };
   /** its mass taken as typical where its shape does not say it (a car's wiring, its fluids), kg */ kg?: number;
   /** how it is made where its material alone does not say (a car's pressed panels, round as they are styled) */ make?: 'pressed';
   /** it gives light: lumens, and the colour of it */ light?: { lm: number; color: number };
@@ -35,6 +36,10 @@ export interface Kit {
   /** the kits it uses, and how many of each (counted into the kinds there are) */ uses?: { kit: string; n: number }[];
   build(c: Pick, r: () => number, sub: (kit: string, over?: Pick) => Part): Part;
   says: string;
+  /** how what it makes moves, where it moves: walking, waddling, swimming or flying, at what speed and stride rate */
+  moves?: (c: Pick) => { kind: 'walk' | 'waddle' | 'swim' | 'fly'; speed: number; freq: number; height: number; says: string };
+  /** what it does when nothing else is asked: follows you, wanders, swims past */
+  does?: 'follow' | 'wander' | 'swim past' | 'hover';
 }
 
 /** Densities, kg/m³ (typical values). */
@@ -42,7 +47,7 @@ export const DENSITY: Record<string, number> = {
   'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
   wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
-  foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
+  tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
 };
 const vol = (s: Shape): number => {
   if ('box' in s) return s.box[0] * s.box[1] * s.box[2];
@@ -79,6 +84,8 @@ const seeds = (n: number) => range(1, n, 1);
 
 export const KITS: Kit[] = [];
 const kit = (k: Kit) => { KITS.push(k); return k; };
+/** A kit made elsewhere (creatures.ts) added to the rest. */
+export const addKit = (k: Kit): Kit => kit(k);
 
 // ---- a tree: its trunk as thick as its height asks (D ∝ H^1.5: McMahon 1973, elastic similarity; the coefficient an
 // estimate), branches in two orders, its crown by species and season ----
@@ -523,7 +530,7 @@ scene('armoury', 'a sword rack', /\b(sword rack|armou?ry|swords on a rack|collec
 });
 
 // ---- counting what there is, and choosing from words ----
-const byId = new Map(KITS.map((k) => [k.id, k]));
+const byId = { get: (id: string) => KITS.find((k) => k.id === id) };
 export const kitById = (id: string): Kit | undefined => byId.get(id);
 /** How many different things a kit makes, as a power of ten: the product of its choices, times every kit it uses to the
  *  number of times it uses it. */
@@ -554,7 +561,7 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
     if (hit === undefined && named.length && ch.options.includes('none')) hit = 'none';
     if (hit !== undefined) taken.add(hit);
     if (hit === undefined && typeof ch.options[0] === 'number') {
-      const unit = ch.unit === 'm' ? '(?:m|metres?|meters?)' : ch.unit === 'in' ? '(?:in|inch|inches|")' : ch.unit === '°' ? '(?:°|degrees?)' : '';
+      const unit = ch.unit === 'm' ? '(?:m|metres?|meters?)' : ch.unit === 'in' ? '(?:in|inch|inches|")' : ch.unit === '°' ? '(?:°|degrees?)' : ch.unit === 'kg' ? '(?:kg|kilos?|kilograms?)' : ch.unit === 's' ? '(?:s|seconds?)' : '';
       const m = unit ? new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${unit}\\b`).exec(t) : ch.key === 'storeys' ? /(\d)[- ]?(?:storey|story|stories|floor)/.exec(t) : ch.key === 'pillows' ? /(\d+)\s*pillows?/.exec(t) : ch.key === 'lanes' ? /(\d+)[- ]?lanes?/.exec(t) : ch.key === 'arms' ? /(\d)[- ]?arm/.exec(t) : ch.key === 'clump' ? /(\d+)\s+(?:of them|plants|flowers)/.exec(t) : null;
       if (m) { const v = Number(m[1]); hit = (ch.options as number[]).reduce((a, o) => (Math.abs(o - v) < Math.abs(a - v) ? o : a), ch.options[0] as number); }
     }
@@ -567,6 +574,8 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   if (k.id === 'road' && /\b(lamp|light)/.test(t)) out.lamps = 'yes';
   if (k.id === 'bed' && /\bbunk\b/.test(t)) out.frame = 'bunk';
   if (k.id === 'sword' && /\bsaber\b/.test(t)) out.type = 'sabre';
+  if (k.id === 'dragon' && /\b(saddle|ride|rider|riding|fly on|mount)\b/.test(t)) out.rider = 'yes';
+  if (k.id === 'dog' && /\bpupp/.test(t)) out.age = 'puppy';
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */

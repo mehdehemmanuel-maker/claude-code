@@ -64,6 +64,7 @@ import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
 import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
+import '../creatures';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
@@ -1812,7 +1813,11 @@ function reproWords(text: string): string | null {
 }
 // ---- kits: makers of things (src/nexus/kits.ts), drawn with every edge as it is made (src/nexus/view/kit3d.ts) ----
 const kitGroup = new THREE.Group(); scene.add(kitGroup); named(kitGroup, 'what the kits made');
-interface KitThing { name: string; part: KitPart; view: KitView; level: number; kit: string; words: string }
+interface KitThing { name: string; part: KitPart; view: KitView; level: number; kit: string; words: string;
+  /** a creature: how it moves and what it is doing (follow you, wander, swim past, hover, stay), where it is going */
+  /** brought in by a place (whales under the sea): gone when you leave it */ fromPlace?: boolean;
+  creature?: { kind: 'walk' | 'waddle' | 'swim' | 'fly'; speed: number; freq: number; height: number; does: 'follow' | 'wander' | 'swim past' | 'hover' | 'stay'; home: THREE.Vector3; wp?: THREE.Vector3; angle: number; says: string } }
+let riding: KitThing | null = null;
 let kitThings: KitThing[] = [];
 const fmtKg = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 1e4 ? 0 : 1)} t` : m >= 1 ? `${m.toFixed(m >= 10 ? 0 : 1)} kg` : `${(m * 1000).toFixed(0)} g`);
 /** Made by a kit, as many as asked, side by side in front of you (a scene laid out from where you stand). */
@@ -1821,7 +1826,7 @@ function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
   const { at: you, f, side } = facingYou(), yaw = Math.atan2(-f.x, -f.z), lays = (!!k.uses && k.choices.length === 1) || k.id === 'road', out: string[] = []; let x = 0;
   const made: KitThing[] = [];
   for (let i = 0; i < Math.min(Math.max(1, n), 6); i++) {
-    const { part } = makeKit(k, words, (seed0 + i * 7919) >>> 0), view = kitView(part); view.group.rotation.y = yaw;
+    const { part, pick } = makeKit(k, words, (seed0 + i * 7919) >>> 0), view = kitView(part); view.group.rotation.y = yaw;
     const box = new THREE.Box3().setFromObject(view.group), w = Math.max(0.3, box.max.x - box.min.x, box.max.z - box.min.z);
     const at = lays ? new THREE.Vector3(you.x, 0, you.z) : you.clone().addScaledVector(f, Math.max(2.2, w / 2 + 1.2)).addScaledVector(side, x + w / 2); at.y = 0; x += w + 0.4;
     // set down clear of the pedestal (its radius and half the thing's size)
@@ -1829,10 +1834,13 @@ function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
     view.group.position.copy(at); kitGroup.add(view.group);
     const t: KitThing = { name: part.name, part, view, level: 0, kit: k.id, words }; kitThings.push(t); made.push(t);
     const kg = kitMass(part); out.push(`${part.name}${part.says ? ` (${part.says})` : ''}: ${countParts(part).toLocaleString('en-US')} parts${kg > 0 ? `, ${fmtKg(kg)}` : ''}`);
+    if (k.moves) { const mv = k.moves(pick), does = /\b(follow|follows|come with|with me)\b/i.test(words) ? 'follow' : /\bswim/i.test(words) ? 'swim past' : (k.does ?? 'wander'); t.creature = { ...mv, does, home: at.clone(), angle: Math.atan2(at.z - you.z, at.x - you.x) }; if (mv.kind === 'swim' || mv.kind === 'fly') view.group.position.y = mv.height; out[out.length - 1] += `; it ${mv.says}; it ${does === 'follow' ? 'follows you' : does === 'swim past' ? 'swims round you' : does === 'hover' ? 'keeps near you in the air' : 'wanders'} (say "${does === 'follow' ? 'stay' : 'follow me'}"${k.id === 'dragon' ? ', "ride the dragon"' : ''})`; }
   }
   // a row is centred on where you look
   if (!lays && made.length > 1) for (const t of made) t.view.group.position.addScaledVector(side, -x / 2);
   lastKind = 'kit';
+  // the same thing many times is said once, with how many
+  if (out.length > 1 && out.every((o) => o === out[0])) out.splice(0, out.length, `${out.length} × ${out[0]}`);
   const when = /\b(at night|at sunset|at sunrise|at dawn|at dusk|at noon|in the rain|in the snow|in a snowstorm)\b/i.exec(words);
   if (when) { const p = readPlace(`make it ${when[1]!.replace(/^(at|in) (the |a )?/i, '')}`, placeNow?.p); if (p) { goTo(p); out.push(`and it is ${when[1]}`); } }
   return `${out.join('; ')}. One of ${sayKinds(log10Kinds(k))} different ${plural(k.name)} this kit makes (${sayKinds(log10All())} things across all ${KITS.length} kits). Every edge is as its material is made (say "edges" for the board). Say "take it apart", "what is the ${firstLeaf(made[0]!.part)} made of", "another", or "remove it".`;
@@ -1840,13 +1848,46 @@ function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
 const firstLeaf = (p: KitPart): string => { let q = p; while (q.parts?.length) q = q.parts.find((x) => x.mat) ?? q.parts[0]!; return q.name.replace(/ \d+$/, ''); };
 const allParts = (p: KitPart): KitPart[] => [p, ...(p.parts ?? []).flatMap(allParts)];
 const depthOf = (p: KitPart): number => 1 + Math.max(0, ...(p.parts ?? []).map(depthOf));
-function stepKits(dt: number): void { for (const t of kitThings) t.view.update(dt); }
+function stepKits(dt: number): void {
+  const you = new THREE.Vector3(); eyeOf(you);
+  for (const t of kitThings) {
+    const c = t.creature;
+    if (c) {
+      const g = t.view.group, at = g.position; let target: THREE.Vector3 | null = null, stop = 1.2;
+      if (riding === t) { const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); target = at.clone().addScaledVector(f, 20); target.y = Math.max(1.5, target.y); stop = 0; }
+      else if (c.does === 'follow') target = new THREE.Vector3(you.x, 0, you.z);
+      else if (c.does === 'hover') { target = new THREE.Vector3(you.x + 3, c.height, you.z - 3); stop = 1.5; }
+      else if (c.does === 'swim past') { c.angle += (c.speed / 14) * dt; target = new THREE.Vector3(you.x + Math.cos(c.angle) * 14, c.height, you.z + Math.sin(c.angle) * 14); stop = 0.5; }
+      else if (c.does === 'wander') { if (!c.wp || c.wp.distanceTo(new THREE.Vector3(at.x, c.wp.y, at.z)) < 0.5) c.wp = new THREE.Vector3(c.home.x + (Math.random() - 0.5) * 12, c.kind === 'swim' || c.kind === 'fly' ? c.height : 0, c.home.z + (Math.random() - 0.5) * 12); target = c.wp; stop = 0.3; }
+      let gait = c.kind === 'fly' ? c.freq : 0;
+      if (target) {
+        const d = target.clone().sub(at); if (c.kind !== 'swim' && c.kind !== 'fly') d.y = 0; const dist = d.length();
+        if (dist > stop) {
+          const speed = riding === t ? Math.min(c.speed, 9) : c.speed * (c.does === 'follow' && dist < 3 ? 0.55 : 1), step = Math.min(dist - stop, speed * dt); at.addScaledVector(d.normalize(), step);
+          const want = Math.atan2(-d.z, d.x); let dy = want - g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); g.rotation.y += Math.sign(dy) * Math.min(Math.abs(dy), 2.5 * dt);
+          gait = c.freq * (speed / c.speed);
+        }
+      }
+      if (c.kind === 'walk' || c.kind === 'waddle') at.y = 0;
+      t.view.gait = gait;
+      if (riding === t) { const seat = at.clone().add(new THREE.Vector3(0, 1.2, 0)); if (renderer.xr.isPresenting) dolly.position.copy(seat).sub(new THREE.Vector3(0, 0.9, 0)); else { const f = new THREE.Vector3(); camera.getWorldDirection(f); camera.position.copy(seat); orbit.target.copy(seat).addScaledVector(f, 3); } }
+    }
+    t.view.update(dt);
+  }
+}
 /** Words about what the kits made: take it apart, put it back, what a part is made of, how many there are, edges. */
 function kitWords(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), last = kitThings[kitThings.length - 1];
   if (/^(how many (things|kinds|different things|possibilities|variations)|what can (you|the kits) make)\b/.test(t)) return `${KITS.map((k) => `${plural(k.name)}: ${sayKinds(log10Kinds(k))}`).join('; ')}. In all, ${sayKinds(log10All())}: each kit's choices multiplied, and a kit that uses others (a street of eight houses) multiplies theirs.`;
   if (/^(show )?(the )?edges( board| rules)?$/.test(t)) { openEdges(); return `The edges, as things are made: ${EDGE_RULES.map((r) => `${r.id} ${typeof r.mm === 'number' ? `${r.mm} mm` : 'by thickness'}`).join('; ')}. Change one by its line ("edges wood 4 mm") and run the board.`; }
   if (/^edges\s+\S/.test(t)) { const said = setEdge(t); redrawKits(); return said; }
+  const critters = kitThings.filter((x) => x.creature), named = (w: string) => critters.find((x) => x.name.toLowerCase().includes(w) || x.kit === w) ?? critters[critters.length - 1];
+  if (critters.length) {
+    const fm = /^(?:(?:the )?(.+?) )?(follow me|come|come here|come on|heel|here boy|here girl|stay|sit|wait|stop|wander|go play|swim)$/.exec(t);
+    if (fm) { const who = fm[1] ? named(fm[1]) : critters.length === 1 ? critters[0] : undefined, list = who ? [who] : critters, does = /stay|sit|wait|stop/.test(fm[2]!) ? 'stay' : /wander|play/.test(fm[2]!) ? 'wander' : /swim/.test(fm[2]!) ? 'swim past' : 'follow'; for (const x of list) x.creature!.does = does as 'follow'; return `${list.map((x) => x.name).join(', ')}: ${does === 'stay' ? 'stays' : does === 'follow' ? 'follows you' : does}.`; }
+    if (/^(ride|fly|mount|get on)( on)? (the |my )?(dragon|it)$/.test(t)) { const d = critters.find((x) => x.kit === 'dragon'); if (!d) return 'There is no dragon here: say "make a dragon with a saddle".'; riding = d; d.creature!.does = 'hover'; return `On ${d.name}: it flies where you look (at up to 9 m/s here; it would cruise at ${d.creature!.speed} m/s). Say "get off" to land.`; }
+    if (/^(get off|land|dismount|stop riding)$/.test(t) && riding) { const d = riding; riding = null; d.view.group.position.y = d.creature!.height; return `Off ${d.name}.`; }
+  }
   if (!last || lastKind !== 'kit') return null;
   if (/^(take|pull|break) (it|this|that) apart$|^(explode|expand|open up|open) (it|this|that)$|^(show me )?(its|the) parts$|^take it apart more$|^further$|^deeper$/.test(t)) {
     const max = depthOf(last.part); last.level = Math.min(max, last.level + 1); last.view.explode(last.level);
@@ -1881,6 +1922,7 @@ const forgeRoom = () => [floor, grid, pedestal, rim, bay, robot.root, warehouse.
 /** Taken to a place: the forge's own room put away, the place's sky, ground, sea, weather and things round you, its air
  *  and gravity yours and the people's, you at its middle facing in, at your size there. */
 function goTo(p: Place): string {
+  if (p.name !== 'here') dropKits((t) => !!t.fromPlace);
   placeNow?.v.dispose(); if (placeNow) scene.remove(placeNow.v.group);
   const here = p.name === 'here', g = p.gravity, v = placeView(p, g); scene.add(v.group); placeNow = { p, v };
   for (const o of forgeRoom()) o.visible = here;
@@ -1897,6 +1939,7 @@ function goTo(p: Place): string {
 }
 /** Back to the forge: its room as it was, Earth's gravity, your own size. */
 function backToForge(): string {
+  dropKits((t) => !!t.fromPlace); if (riding?.fromPlace) riding = null;
   if (bar) { bar.pool.dispose(); bar = null; }
   if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
   for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
@@ -1905,12 +1948,20 @@ function backToForge(): string {
 }
 /** A place asked for in words: back to the forge, a place (changed from the one you are in when only its time, weather,
  *  gravity or your size is said), or, if no place is named, what places there are. */
+/** Creatures a place was asked with (whales under the sea, dinosaurs in the Cretaceous, penguins on the snowfield), made. */
+function placeCreatures(words: string): string[] {
+  const out: string[] = []; const ask = (re: RegExp, w: string, n: number) => { if (re.test(words)) { const before = kitThings.length, said = makeKits(w, n); for (const t of kitThings.slice(before)) t.fromPlace = true; if (said) out.push(said.split('. One of')[0]!); } };
+  ask(/\bwhales?\b/i, 'an adult humpback whale swimming', 2); ask(/\b(dinosaurs?|t-?rex)\b/i, 'an adult t rex', 2); ask(/\bpenguins?\b/i, 'emperor penguins', 5);
+  ask(/\b(pupp(?:y|ies)|dogs?)\b/i, `a ${/pupp/i.test(words) ? 'puppy' : 'dog'} that follows me`, 1); ask(/\bdragons?\b/i, 'a dragon with a saddle', 1);
+  return out;
+}
 function placeWords(words: string): string {
   const t = words.toLowerCase();
   if (/\b(back to|return to) (the )?(forge|room|start|normal)\b|\bbeam me up\b|\bleave (this|here)\b/.test(t)) return backToForge();
   const p = readPlace(words, placeNow?.p);
   if (!p) return `I don't have that place yet. Places I can take you: ${PLACES.map((x) => x.make().name).join(', ')}. And I can set the time (sunset, night, noon), the weather (rain, snow, a blizzard, gummy bears), gravity (off, the Moon's, Mars's, double) and your size (an ant, a mouse, a cat, a giant).${/\b(conduct|orchestra|ping ?pong|play)\b/.test(t) ? ' Games and music are not here yet.' : ''}`;
-  return goTo(p);
+  const said = goTo(p), came = placeCreatures(words);
+  return came.length ? `${said.replace(/ Not here yet: [^.]*\./, '')} With you: ${came.join('; ')}.` : said;
 }
 function stepPlace(dt: number): void {
   if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt);

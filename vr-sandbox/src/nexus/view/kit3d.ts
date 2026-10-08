@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { edgeRadius } from '../finish';
 import type { Part, Shape } from '../kits';
 
-export interface KitView { group: THREE.Group; update(dt: number): void; explode(level: number): void; dispose(): void; lights: number }
+export interface KitView { group: THREE.Group; update(dt: number): void; explode(level: number): void; dispose(): void; lights: number; /** how fast its limbs go round, strides a second (0: still) */ gait: number }
 
 const mats = new Map<string, THREE.MeshStandardMaterial>();
 const matFor = (color: number, mat: string | undefined, glow: boolean): THREE.MeshStandardMaterial => {
@@ -92,6 +92,7 @@ function heap(h: Extract<Shape, { heap: unknown }>['heap']): THREE.Object3D {
 }
 /** A thing drawn from its parts; up to so many of its lights really lit (the rest glow). */
 export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
+  const swingers: ((t: number, f: number) => void)[] = []; let clockT = 0;
   const group = new THREE.Group(), turners: ((dt: number) => void)[] = [], nodes: { obj: THREE.Object3D; home: THREE.Vector3; depth: number }[] = [];
   let lights = 0; const maxL = o.maxLights ?? 6;
   const draw = (p: Part, depth: number): THREE.Object3D => {
@@ -105,15 +106,16 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
     }
     if (p.light && lights < maxL) { const l = new THREE.PointLight(p.light.color, p.light.lm / (4 * Math.PI), 0, 2); g.add(l); lights++; }
     if (p.spin) { const period = p.spin; turners.push((dt) => { g.rotation.y += (2 * Math.PI * dt) / period; }); }
+    if (p.swing) { const sw = p.swing, base = sw.axis === 'x' ? g.rotation.x : g.rotation.z; swingers.push((t, f) => { const a = f > 0 ? sw.amp * Math.sin(2 * Math.PI * (f * t + sw.phase)) : 0; if (sw.axis === 'x') g.rotation.x = base + a; else g.rotation.z = base + a; }); }
     for (const q of p.parts ?? []) g.add(draw(q, depth + 1));
     nodes.push({ obj: g, home: g.position.clone(), depth });
     return g;
   };
   group.add(draw(root, 0));
   const box = new THREE.Box3();
-  return {
-    group, lights,
-    update: (dt) => { for (const t of turners) t(dt); },
+  const view: KitView = {
+    group, lights, gait: 0,
+    update: (dt) => { for (const t of turners) t(dt); clockT += dt; for (const s of swingers) s(clockT, view.gait); },
     /** Taken apart to so many levels: each part at that depth or less drawn out from its holder's middle, by its size. */
     explode(level) {
       for (const n of nodes) n.obj.position.copy(n.home);
@@ -126,4 +128,5 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
     },
     dispose: () => group.traverse((x) => { (x as THREE.Mesh).geometry?.dispose(); }),
   };
+  return view;
 }
