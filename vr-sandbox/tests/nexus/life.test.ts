@@ -26,9 +26,9 @@ describe('life, settled', () => {
 });
 
 describe('the human body', () => {
-  it('weighs its systems as ICRP 89 has them, and adds to its 73 kg within the spread of separate reference values', () => {
-    for (const [id, want] of [['muscles', 29000], ['adipose', 18200], ['skeleton', 10500], ['skin', 3300], ['blood', 5600], ['brain', 1450], ['liver', 1800], ['heart', 330]] as const) near(g(id), want, 0.012);
-    near(g('human'), 73000, 0.06);
+  it('weighs its systems as ICRP 89 has them, and adds to its 73 kg', () => {
+    for (const [id, want] of [['muscles', 29000], ['adipose', 14500], ['skeleton', 10500], ['skin', 3300], ['blood', 5600], ['brain', 1450], ['liver', 1800], ['heart', 330]] as const) near(g(id), want, 0.012);
+    near(g('human'), 73000, 0.02); // its 18.2 kg of adipose tissue counts the yellow marrow too: counted once, the parts add to 73 kg
   });
   it('has all 206 bones by name, and its long bones give its height back (Trotter & Gleser 1952)', () => {
     let n = 0; for (const b of BONES) n += countIn('skeleton', b.id);
