@@ -109,6 +109,15 @@ Each is a place in the room with its own physics, a coach that measures you, and
     - a casual hand's spread: median miss 4.4 cm, about one in eleven off the board when aimed at treble 20.
     - Say "throw 3 darts at treble 20"; in a headset, hold the trigger at the line and let go to throw with your hand's own speed.
   - Spin (follow, draw, side) is not modelled yet.
+- **works (creatures, src/nexus/creatures.ts)**:
+  - a dog (a golden retriever, by age), penguins (emperor, king, Adélie), a humpback whale, a T. rex, and a dragon;
+  - each at the size and mass its sources give, moving as its size lets it: walkers at the Froude number their gait keeps
+    (a puppy trots at 1.3 m/s), a whale's flukes at a Strouhal number of 0.3, a flier flapping at Pennycuick's rate;
+  - the dragon is fiction, sized as a real flier would have to be: 500 kg and a rider need 26 m² of wing, 12.4 m across;
+  - what each does: the dog follows you ("stay", "follow me"), penguins wander, whales swim round you, the dragon keeps
+    near you in the air ("ride the dragon": it flies where you look);
+  - places bring the animals they were asked with: whales under the sea, a T. rex in the Cretaceous, penguins on the snow.
+  - Next: their legs and bodies by physics, as the people's are (now their gait is a stride timed by their size).
 - **works**: a warehouse with robots, a workshop, flying and walking.
 - **next**: the people in a place standing on its ground everywhere (it is flat for 12 m round you), spin on the pool balls,
   a go-kart track, creatures (a dog that follows you, a dragon, penguins, whales), old cities, games (ping pong), music.
@@ -120,4 +129,5 @@ a lightsaber, gummy-bear rain, Mars, ping pong with a robot, a dragon, a cabin i
 sandwich…). First run: 0 of 25 did what was asked. After places: 13 of 25. After kits: 14 done, 5 partly (the Cretaceous
 without dinosaurs, the aquarium without whales, the snowfield without penguins, the beach without a surfboard, and "a car
 that turns into a boat" made as a car only), 6 not at all (a puppy, a dragon, ping pong, an orchestra, Rome, a roller
-coaster).
+coaster). Since, creatures: the puppy that follows you, the dragon you can ride, the penguins, the whales and the dinosaurs
+are there; ping pong, the orchestra, Rome, the roller coaster and "a car that turns into a boat" are still not.
