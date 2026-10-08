@@ -333,7 +333,7 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
 // dash) or two surfaces laid on each other so closely that the nearer flickers through (z-fighting): both found here
 // from the drawn triangles themselves, anywhere on the thing, whatever the parts are.
 /** A part as drawn: its triangles in the world, and where it is in the tree (its holders' names). */
-export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[]; /** how it is fixed to what holds it or sits beside it (Part.fixed): welded to it, seated on it, clipped into it */ joined?: string; /** the parts the joints laid on it join it to, by name (Part.joins) */ joins?: string[]; /** a weld bead's: the parts it welds together, by name (it is one with those, and nothing else it touches) */ welds?: string[]; /** the rigid link it is one of (Part.link, its holders' where not said; '' the thing's own frame) */ link?: string; /** the kind of joint it is (Part.joint) */ joint?: string; /** its own mass, kg (without what it holds) */ kg?: number; /** which drawn part it is, where two share a path (a left and a right of one name under one holder) */ id?: string }
+export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[]; /** how it is fixed to what holds it or sits beside it (Part.fixed): welded to it, seated on it, clipped into it */ joined?: string; /** the parts the joints laid on it join it to, by name (Part.joins) */ joins?: string[]; /** a weld bead's: the parts it welds together, by name (it is one with those, and nothing else it touches) */ welds?: string[]; /** the rigid link it is one of (Part.link, its holders' where not said; '' the thing's own frame) */ link?: string; /** the kind of joint it is (Part.joint) */ joint?: string; /** its own mass, kg (without what it holds) */ kg?: number; /** which drawn part it is, where two share a path (a left and a right of one name under one holder) */ id?: string; /** its sheet's thickness where it is a pressed or moulded shell (Part.shell), m */ shell?: number }
 type CV3 = [number, number, number];
 /** Where two parts meet: crossing (one through the other), touching (within the tolerance, across each other), or
  *  layered (laid parallel within it: a decal or a seam on a panel, which flickers if it is too close). */
@@ -642,7 +642,10 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
   const meshOf = (c: Clash, side: 0 | 1) => meshes[side ? c.ib! : c.ia!] ?? meshes.find((m) => m.path === (side ? c.pb : c.pa))!;
   // (what holds: no crossing, flush, 5 mm of meeting at the least, and a record of it or a joint across it)
   const sunk = (c: Clash) => c.kind === 'through' || (c.depth !== undefined && c.depth >= 0.0005 && c.kind !== 'fitted' && c.kind !== 'fused');
-  const holds = (c: Clash) => { if (sunk(c) || c.span < 0.005) return false; if (c.kind === 'joined' || c.kind === 'fused' || c.kind === 'fitted') return true; const a = meshOf(c, 0), b = meshOf(c, 1); return !!(a.joint || b.joint); };
+  // (a cover, a bellows or a boot, is held by its own link's part it is clamped on, and holds nothing across to another: it
+  // follows what it covers)
+  const covers = (c: Clash) => meshOf(c, 0).joint === 'cover' || meshOf(c, 1).joint === 'cover', sameLink = (c: Clash) => (meshOf(c, 0).link || '') === (meshOf(c, 1).link || '');
+  const holds = (c: Clash) => { if (sunk(c) || c.span < 0.005) return false; if (covers(c)) return sameLink(c); if (c.kind === 'joined' || c.kind === 'fused' || c.kind === 'fitted') return true; const a = meshOf(c, 0), b = meshOf(c, 1); return !!(a.joint || b.joint); };
   const whyNot = (c: Clash) => (c.kind === 'through' ? 'crossing' : sunk(c) ? `sunk ${((c.depth ?? 0) * 1000).toFixed(1)} mm` : c.span < 0.005 ? 'a point\'s touch' : 'a touch no joint is said for');
   // (a constant-velocity joint carries torque, not weight: what it joins is held by it only where it is the lighter, as a
   // drive shaft hangs between its joints; an engine is not held up by its drive shafts, but by its mounts)
@@ -678,10 +681,12 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
   const linkOf = (p: string) => byPath.get(p)?.link || FRAME, RIGID = /\b(hex head|washer|screw|bolt|rivet|stud|nut)\b|weld/i;
   const meets = new Map<string, Set<string>>(), jointed = new Set<string>(), count = new Map<string, number>(), jl = new Map<string, Map<string, Set<string>>>(); for (const p of byPath.keys()) count.set(linkOf(p), (count.get(linkOf(p)) ?? 0) + 1);
   for (const c of clashes) {
-    const ma = meshOf(c, 0), mb = meshOf(c, 1), la = ma.link || FRAME, lb = mb.link || FRAME; if (la === lb) continue; const links = [la, lb].sort() as [string, string];
+    const ma = meshOf(c, 0), mb = meshOf(c, 1), la = ma.link || FRAME, lb = mb.link || FRAME; if (la === lb || covers(c)) continue; const links = [la, lb].sort() as [string, string];
     (meets.get(la) ?? meets.set(la, new Set()).get(la)!).add(lb); (meets.get(lb) ?? meets.set(lb, new Set()).get(lb)!).add(la);
     const rigid = c.kind === 'fused' ? 'one piece (fused)' : ma?.weld || mb?.weld ? 'a weld bead' : RIGID.test(c.a) || RIGID.test(c.b) ? `a fastener (${RIGID.test(c.a) ? c.a : c.b})` : undefined;
-    const joint = ma?.joint ?? mb?.joint;
+    // (where both sides say a joint, the one that moves most is what they make: a cup turning in its seal and a spider rolling in
+    // it make a constant-velocity joint, not a bearing)
+    const RANK = ['cv', 'universal', 'ball', 'slide', 'hinge', 'bearing', 'bush', 'spring', 'mount'], joint = ma?.joint && mb?.joint ? [ma.joint, mb.joint].sort((p, q) => (RANK.indexOf(p) + 99) % 99 - (RANK.indexOf(q) + 99) % 99)[0] : ma?.joint ?? mb?.joint;
     if (rigid) out.blocks.push({ links, by: rigid, a: c.a, b: c.b, at: c.at });
     else if (joint && !sunk(c)) { jointed.add(la); jointed.add(lb); for (const [x, y] of [[la, lb], [lb, la]]) { const m2 = jl.get(x) ?? jl.set(x, new Map()).get(x)!; (m2.get(y) ?? m2.set(y, new Set()).get(y)!).add(joint); } if (!out.joints.some((j) => j.links[0] === links[0] && j.links[1] === links[1] && j.joint === joint)) out.joints.push({ links, joint, a: c.a, b: c.b }); }
     else out.rubs.push({ links, a: c.a, b: c.b, at: c.at, kind: c.kind });
@@ -707,5 +712,96 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
   // (each opening said and not drawn, pair by pair)
   const snd = new Map<string, { a: string; b: string; n: number }>(); for (const c of clashes) if (c.kind === 'fitted' && c.opening === false) { const k = [c.a, c.b].sort().join('|'); const e = snd.get(k) ?? { a: c.a, b: c.b, n: 0 }; e.n++; snd.set(k, e); }
   out.saidNotDrawn = [...snd.values()].sort((p, q) => q.n - p.n);
+  return out;
+}
+/** What a frame is built of, judged by what joins its parts (held v3, the critic's frame tool): the body-in-white, its
+ *  steel sheet joined by welds, bonds, drawn bolts and castings alone, which must be one piece without the powertrain;
+ *  every place a load comes into it (a mount, a bush, a spring's seat, a hinge, a slide) reached from that piece by
+ *  steel alone; each moving link's joints, and those that cannot move as they say (a rod sliding at both ends, a link
+ *  held rigidly and by a moving joint to the same thing); joints said by parts that cannot be them (a boot is never a
+ *  joint); and what is held only through openings said and not drawn. */
+export interface Frame {
+  /** the frame's steel sheet in pieces joined by structure alone, heaviest first, each with what joins it to the next by anything else */
+  biw: { n: number; kg: number; parts: string[]; cut: string[] }[];
+  /** the frame's structure (its sheet, and the steel bolted or welded to it, as a subframe), from its heaviest piece */
+  structure: { n: number; kg: number };
+  /** where a load comes into the frame and the part it comes to is not in its structure */
+  loads: { at: string; from: string; by: string; reaches: string }[];
+  /** each moving link's joints, and a fault where they cannot move as they say */
+  links: { link: string; joints: string[]; fault?: string }[];
+  /** joints said by parts that cannot be them */
+  kinds: { part: string; joint: string; why: string }[];
+  /** parts held to the root only through openings said and not drawn */
+  saidHeld: { parts: string[]; kg: number }[];
+}
+const ISOLATOR = new Set(['mount', 'bush', 'spring']), KINEMATIC = new Set(['ball', 'slide', 'bearing', 'cv', 'universal', 'hinge']), ELASTOMER = /^(rubber|pu|foam|epdm|nbr)$/;
+export function frame(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)): Frame {
+  const keyOf = (m: TriMesh) => m.id ?? m.path, byKey = new Map<string, TriMesh>(); for (const m of meshes) if (!byKey.has(keyOf(m))) byKey.set(keyOf(m), m);
+  const meshOf = (c: Clash, side: 0 | 1) => meshes[side ? c.ib! : c.ia!] ?? meshes.find((m) => m.path === (side ? c.pb : c.pa))!;
+  const linkOf = (m: TriMesh) => m.link || FRAME, kgOf = (ks: Iterable<string>) => [...ks].reduce((a, k) => a + (byKey.get(k)?.kg ?? 0), 0);
+  const sunk = (c: Clash) => c.kind === 'through' || (c.depth !== undefined && c.depth >= 0.0005 && c.kind !== 'fitted' && c.kind !== 'fused');
+  // (each meeting, by what it is: structure (welded, bonded, bolted, cast as one, with nothing that gives between),
+  // an isolator (rubber, a mount, a bush, a spring), a moving joint, a cover, or nothing that holds)
+  const FASTENER = /\b(bolt|nut|stud|screw|rivet|washer)\b/i;
+  const classOf = (c: Clash): 'structure' | 'isolator' | 'kinematic' | 'cover' | 'none' => {
+    const a = meshOf(c, 0), b = meshOf(c, 1); if (a.joint === 'cover' || b.joint === 'cover') return 'cover';
+    if (sunk(c) || c.span < 0.005) return 'none';
+    const joints = [a.joint, b.joint].filter(Boolean) as string[];
+    if (joints.some((j) => KINEMATIC.has(j)) && linkOf(a) !== linkOf(b)) return 'kinematic';
+    if (joints.some((j) => ISOLATOR.has(j)) || ELASTOMER.test(a.mat ?? '') || ELASTOMER.test(b.mat ?? '')) return 'isolator';
+    if (c.kind === 'fused' || c.kind === 'joined' || c.kind === 'fitted' || FASTENER.test(a.name) || FASTENER.test(b.name)) return 'structure';
+    return joints.length ? 'kinematic' : 'none';
+  };
+  const cls = clashes.map(classOf);
+  const uf = () => { const par = new Map<string, string>(), find = (k: string): string => { const q = par.get(k) ?? k; if (q === k) return k; const r = find(q); par.set(k, r); return r; }; return { find, join: (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) par.set(ra, rb); } }; };
+  const METALS = /^(steel|al-|aluminium|iron|cast-iron|stainless)/;
+  // (the body-in-white: the frame's own steel sheet, with nothing that gives between its pieces)
+  const sheet = new Set([...byKey.values()].filter((m) => linkOf(m) === FRAME && /^steel/.test(m.mat ?? '') && (m.shell ?? 0) > 0 && (m.shell ?? 0) < 0.004).map(keyOf));
+  const u1 = uf(); clashes.forEach((c, i) => { const a = keyOf(meshOf(c, 0)), b = keyOf(meshOf(c, 1)); if (cls[i] === 'structure' && sheet.has(a) && sheet.has(b)) u1.join(a, b); });
+  const pieces = new Map<string, string[]>(); for (const k of sheet) { const r = u1.find(k); (pieces.get(r) ?? pieces.set(r, []).get(r)!).push(k); }
+  const ranked = [...pieces.values()].sort((p, q) => kgOf(q) - kgOf(p)), nm = (k: string) => byKey.get(k)?.name ?? k, names = (ks: string[]) => [...new Set([...ks].sort((p, q) => (byKey.get(q)?.kg ?? 0) - (byKey.get(p)?.kg ?? 0)).map(nm))];
+  const out: Frame = { biw: [], structure: { n: 0, kg: 0 }, loads: [], links: [], kinds: [], saidHeld: [] };
+  const pieceOf = new Map<string, number>(); ranked.forEach((ps, i) => ps.forEach((k) => pieceOf.set(k, i)));
+  for (const [i, ps] of ranked.entries()) {
+    // (what joins this piece to another piece by anything but structure: its cut)
+    const cut = new Map<string, number>(); clashes.forEach((c, j) => { const a = keyOf(meshOf(c, 0)), b = keyOf(meshOf(c, 1)); const pa = pieceOf.get(a), pb = pieceOf.get(b); if (cls[j] === 'structure' && pa !== undefined && pb !== undefined) return; if (cls[j] === 'none' || cls[j] === 'cover') return; const mine = pa === i ? b : pb === i ? a : null; if (!mine || pieceOf.get(mine) === i) return; const lab = `${nm(mine)} (${cls[j]})`; cut.set(lab, (cut.get(lab) ?? 0) + 1); });
+    out.biw.push({ n: ps.length, kg: +kgOf(ps).toFixed(1), parts: names(ps).slice(0, 12), cut: [...cut.entries()].map(([l, n]) => (n > 1 ? `${l} ×${n}` : l)).slice(0, 8) });
+  }
+  // (the frame's structure: its sheet and the metal joined to it by structure, in the frame's own link)
+  const metal = new Set([...byKey.values()].filter((m) => linkOf(m) === FRAME && METALS.test(m.mat ?? '')).map(keyOf));
+  const u2 = uf(); clashes.forEach((c, i) => { const a = keyOf(meshOf(c, 0)), b = keyOf(meshOf(c, 1)); if (cls[i] === 'structure' && metal.has(a) && metal.has(b)) u2.join(a, b); });
+  const main = ranked[0] ? u2.find(ranked[0][0]!) : null, inStructure = (k: string) => main !== null && metal.has(k) && u2.find(k) === main;
+  out.structure = { n: [...metal].filter(inStructure).length, kg: +kgOf([...metal].filter(inStructure)).toFixed(1) };
+  // (each load into the frame: each part that gives or moves (a mount, a bush, a spring, rubber, a moving joint's part) that
+  // meets the frame's own metal, and meets none of it that is in the structure: what it bears on is held some other way)
+  const giving = (m: TriMesh) => (!!m.joint && m.joint !== 'cover') || ELASTOMER.test(m.mat ?? '');
+  const partners = new Map<string, { m: TriMesh; by: string }[]>();
+  clashes.forEach((c, i) => { if (cls[i] !== 'isolator' && cls[i] !== 'kinematic' && cls[i] !== 'structure') return; const a = meshOf(c, 0), b = meshOf(c, 1);
+    for (const [x, y] of [[a, b], [b, a]] as const) if (giving(x)) (partners.get(keyOf(x)) ?? partners.set(keyOf(x), []).get(keyOf(x))!).push({ m: y, by: cls[i]! }); });
+  // (an assembly hung on the structure by what gives (the engine on its mounts, the exhaust on its hangers) is mounted: a
+  // load into it is the assembly's, not the body's)
+  const mounted = new Set<string>(); for (const ps of partners.values()) { const roots = new Set(ps.filter((p2) => metal.has(keyOf(p2.m))).map((p2) => u2.find(keyOf(p2.m)))); if (main && roots.has(main)) for (const r of roots) if (r !== main) mounted.add(r); }
+  for (const [k, ps] of partners) { const g = byKey.get(k)!, body = ps.filter((p2) => linkOf(p2.m) === FRAME && METALS.test(p2.m.mat ?? '') && !giving(p2.m)); if (!body.length || body.some((p2) => inStructure(keyOf(p2.m)) || mounted.has(u2.find(keyOf(p2.m))))) continue;
+    for (const nm2 of new Set(body.map((p2) => p2.m.name))) out.loads.push({ at: nm2, from: g.name, by: g.joint ?? 'rubber', reaches: 'not the frame\'s structure: what it bears on is not welded or bolted into the body, so the load goes on only through what gives, moves or is the powertrain, or nowhere' }); }
+  // (each moving link's joints, as the meetings say them)
+  const lj = new Map<string, Map<string, Set<string>>>();
+  clashes.forEach((c, i) => { if (cls[i] !== 'kinematic' && cls[i] !== 'isolator') return; const a = meshOf(c, 0), b = meshOf(c, 1), la = linkOf(a), lb = linkOf(b); if (la === lb) return; const j = a.joint && b.joint ? (KINEMATIC.has(a.joint) ? a.joint : b.joint) : a.joint ?? b.joint ?? 'rubber';
+    for (const [x, y] of [[la, lb], [lb, la]]) { const m2 = lj.get(x!) ?? lj.set(x!, new Map()).get(x!)!; (m2.get(y!) ?? m2.set(y!, new Set()).get(y!)!).add(j); } });
+  for (const [l, to] of lj) { if (l === FRAME) continue; const joints = [...to.entries()].map(([o, ks]) => `${o}: ${[...ks].join(', ')}`), kinds = [...to.values()].flatMap((ks) => [...ks]);
+    let fault: string | undefined;
+    if (kinds.length >= 2 && kinds.every((k) => k === 'slide')) fault = 'UNDER-CONSTRAINED: it slides at every joint, so nothing holds it along its slides';
+    // (a spring beside a slide is a coil-over, as it should be; a mount or a bush beside a moving joint to the same thing holds it two ways)
+    for (const [o, ks] of to) if ([...ks].some((k) => k === 'mount' || k === 'bush') && [...ks].some((k) => KINEMATIC.has(k) && k !== 'bearing')) fault = `OVER-CONSTRAINED: held to ${o} both by a mount (${[...ks].filter((k) => k === 'mount' || k === 'bush').join(', ')}) and by a moving joint (${[...ks].filter((k) => KINEMATIC.has(k)).join(', ')})`;
+    out.links.push({ link: l, joints, ...(fault ? { fault } : {}) }); }
+  // (joints said by parts that cannot be them)
+  for (const m of byKey.values()) { if (!m.joint) continue;
+    if (m.joint !== 'cover' && /\b(boot|bellows|gaiter|dust cover)\b/.test(m.name)) out.kinds.push({ part: m.name, joint: m.joint, why: 'a boot or a bellows covers a joint; it is never one' });
+    else if (m.joint === 'cv' && !/\b(joint|race|spider|bell|housing|tripod|cup)\b/.test(m.name)) out.kinds.push({ part: m.name, joint: m.joint, why: 'a constant-velocity joint is a bell, a race or a spider, not this' });
+    else if (m.joint === 'ball' && !/\b(ball|joint)\b/.test(m.name)) out.kinds.push({ part: m.name, joint: m.joint, why: 'a ball joint is said by the part itself: no ball in a socket is drawn at its end' }); }
+  // (what is held to the root only through openings said and not drawn: held again without them, and what falls away)
+  const hold = (c: Clash, i: number) => cls[i] !== 'none' && cls[i] !== 'cover', u3 = uf(), u4 = uf();
+  clashes.forEach((c, i) => { if (!hold(c, i)) return; const a = keyOf(meshOf(c, 0)), b = keyOf(meshOf(c, 1)); u3.join(a, b); if (!(c.kind === 'fitted' && c.opening === false)) u4.join(a, b); });
+  if (ranked[0]) { const r3 = u3.find(ranked[0][0]!), r4 = u4.find(ranked[0][0]!), lost = [...byKey.keys()].filter((k) => u3.find(k) === r3 && u4.find(k) !== r4), grp = new Map<string, string[]>(); for (const k of lost) { const g = u4.find(k); (grp.get(g) ?? grp.set(g, []).get(g)!).push(k); }
+    out.saidHeld = [...grp.values()].map((ks) => ({ parts: names(ks).slice(0, 8), kg: +kgOf(ks).toFixed(2) })).sort((p, q) => q.kg - p.kg); }
   return out;
 }

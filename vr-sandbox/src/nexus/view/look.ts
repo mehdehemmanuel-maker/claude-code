@@ -32,7 +32,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { KITS, makeKit, massOf, type Part } from '../kits';
 import '../creatures';
 import { perfect } from '../make/pipeline';
-import { held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
+import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
 import { tryBody } from '../panels';
 import { kitView } from './kit3d';
 import { draft } from '../surface';
@@ -142,7 +142,7 @@ camera.lookAt(c); renderer.render(scene, camera);
 
 // ---- what the critic may ask ----
 const hex = (m: THREE.Mesh) => { const col = (m.material as THREE.MeshStandardMaterial).color; return col ? `#${col.getHexString()}` : undefined; };
-const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes, joined: (m.userData.part as { fixed?: string; detail?: string } | undefined)?.fixed ?? (m.parent?.userData.part as { fixed?: string } | undefined)?.fixed ?? ((m.userData.part as { detail?: string } | undefined)?.detail ? `laid on it by its ${(m.userData.part as { detail?: string }).detail} rule` : undefined), joins: (m.userData.part as { joins?: string[] } | undefined)?.joins ?? (m.parent?.userData.part as { joins?: string[] } | undefined)?.joins, ...weldsOf(m), link: linkOfObj(m), joint: (m.userData.part as Part | undefined)?.joint, id: (m.parent ?? m).uuid, kg: m.userData.part ? massOf({ ...(m.userData.part as Part), parts: [] }) : 0 }; };
+const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes, joined: (m.userData.part as { fixed?: string; detail?: string } | undefined)?.fixed ?? (m.parent?.userData.part as { fixed?: string } | undefined)?.fixed ?? ((m.userData.part as { detail?: string } | undefined)?.detail ? `laid on it by its ${(m.userData.part as { detail?: string }).detail} rule` : undefined), joins: (m.userData.part as { joins?: string[] } | undefined)?.joins ?? (m.parent?.userData.part as { joins?: string[] } | undefined)?.joins, ...weldsOf(m), link: linkOfObj(m), joint: (m.userData.part as Part | undefined)?.joint, shell: (m.userData.part as Part | undefined)?.shell, id: (m.parent ?? m).uuid, kg: m.userData.part ? massOf({ ...(m.userData.part as Part), parts: [] }) : 0 }; };
 // (a weld bead is one with the part it is laid on and what that part's joints join it to: nothing else it touches)
 function weldsOf(m: THREE.Mesh): { welds?: string[] } { const p = m.userData.part as Part | undefined; if (p?.finish !== 'weld') return {}; const host = m.parent?.parent?.userData.part as Part | undefined; return host ? { welds: [host.name, ...(host.joins ?? [])] } : {}; }
 // (the rigid link a mesh is one of: its part's, else its nearest holder's that says one; '' the thing's own frame)
@@ -178,6 +178,8 @@ const look = {
   landmarks: (side = 1) => landmarksOf(side),
   // what holds what: groups held by nothing, joints across which something rigid is laid, links that rub (critic.ts)
   held: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return held(ts, meshClashes(ts, { touch: 0.001 })); },
+  // what a frame is built of: its body-in-white by structure alone, where loads come into it, each link's joints (critic.ts)
+  frame: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return frame(ts, meshClashes(ts, { touch: 0.001 })); },
   gap: (a: string, b: string) => {
     // (the least distance between the parts so named, measured as the clash finder measures, so the two agree; the pairs
     // nearest by their boxes first, and given up on, said, after 20 s)

@@ -37,6 +37,8 @@
 //                                      column by column)
 //   grid:name|image|x0,y0,x1,y1|k      a corner of any picture enlarged k times with its pixels numbered (a line every 5 px,
 //                                      or every pixel from 8×), so landmarks can be read off it as pixels
+//   diff:name|query|otherdir           what changed between this build and another built viewer's (parts, held root, systems, pixels)
+//   frame:name|query                   what a frame is built of: body-in-white by structure alone, loads, links, joint kinds
 //   held:name|query|n                  what holds what, from the heaviest group held together, by joints that carry load
 //                                      (a face-to-face meeting a record explains, or a joint across it: no crossing, no
 //                                      point's touch, and the ground holds nothing up): every group held by nothing (the
@@ -63,10 +65,10 @@ const server = http.createServer((req, res) => { const p = path.join(root, decod
 await new Promise((ok) => server.listen(0, ok)); const port = server.address().port;
 const browser = await pw.chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const errs = [];
-async function open(query) {
+async function open(query, at = port) {
   const m = query.match(/(?:^|&)size=(\d+)x(\d+)/), [w, h] = m ? [Number(m[1]), Number(m[2])] : [1100, 720];
   const page = await browser.newPage({ viewport: { width: w, height: h } }); page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (c) => { if (c.type() === 'error' && !/Failed to load resource/.test(c.text())) errs.push(c.text().slice(0, 300)); });
-  await page.goto(`http://localhost:${port}/look.html?${query}`);
+  await page.goto(`http://localhost:${at}/look.html?${query}`);
   try { await page.waitForFunction(() => window.lookReady, null, { timeout: 120000 }); } catch { console.log('NOT READY', query, errs.slice(-3).join(' | ')); await page.close(); return null; }
   await page.waitForTimeout(250); return page;
 }
@@ -126,6 +128,86 @@ async function section(name, query, spec) {
 }
 // what holds what: groups held by nothing (with the nearest part of the rest), rigid things laid across a joint between
 // links, links rubbing with no joint between them, links with no joint at all; and a picture of each of the n worst
+// ---- diff: what changed between two builds of one query (the build in $BENCH_ROOT, or dist-view, against another built
+// viewer's directory): parts removed, added, moved, resized, re-materialed, re-linked; what fell out of the held root
+// since; whole systems gone; and the pictures from four cameras compared pixel by pixel. Exits non-zero where a removed part
+// was in the held root and something fell out of it since, or where a system lost all its parts ----
+const serve = (dir) => { const d = path.resolve(dir); const sv = http.createServer((req, res) => { const p = path.join(d, decodeURIComponent((req.url ?? '/').split('?')[0])); if (!p.startsWith(d) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'content-type': types[path.extname(p)] ?? 'application/octet-stream' }); fs.createReadStream(p).pipe(res); }); return new Promise((ok) => sv.listen(0, () => ok(sv))); };
+async function diffJob(name, query, other) {
+  if (!other || !fs.existsSync(path.join(other, 'look.html'))) { console.log(`${name}: diff needs another built viewer's directory (one with look.html), not "${other}"`); return; }
+  const svB = await serve(other), portB = svB.address().port, t0 = Date.now();
+  const take = async (at) => { const page = await open(query, at); if (!page) return null; const r = await page.evaluate(() => ({ parts: window.look.parts(), held: window.look.held() })); await page.close(); return r; };
+  const [A, B] = [await take(port), await take(portB)]; if (!A || !B) { svB.close(); return; }
+  const c = (p) => p.min.map((v, i) => (v + p.max[i]) / 2), ext = (p) => p.max.map((v, i) => v - p.min[i]), key = (p) => `${p.path}|${p.name}`;
+  const groupBy = (ps) => { const g = new Map(); for (const p of ps) (g.get(key(p)) ?? g.set(key(p), []).get(key(p))).push(p); return g; };
+  const gA = groupBy(A.parts), gB = groupBy(B.parts), removed = [], added = [], changed = [];
+  for (const k of new Set([...gA.keys(), ...gB.keys()])) {
+    const as = [...(gA.get(k) ?? [])], bs = [...(gB.get(k) ?? [])];
+    // (paired nearest first, by where each is)
+    const pairs = []; for (const a of as) for (const b of bs) pairs.push([Math.hypot(...c(a).map((v, i) => v - c(b)[i])), a, b]); pairs.sort((p, q) => p[0] - q[0]);
+    const usedA = new Set(), usedB = new Set();
+    for (const [d, a, b] of pairs) { if (usedA.has(a) || usedB.has(b)) continue; usedA.add(a); usedB.add(b);
+      const ea = ext(a), eb = ext(b), what = [];
+      if (d > 0.005) what.push(`moved ${(d * 1000).toFixed(0)} mm`);
+      if (ea.some((v, i) => Math.abs(v - eb[i]) > Math.max(0.001, 0.02 * Math.max(v, eb[i])))) what.push(`resized ${ea.map((v) => (v * 1000).toFixed(0)).join('×')} → ${eb.map((v) => (v * 1000).toFixed(0)).join('×')} mm`);
+      if ((a.mat ?? '') !== (b.mat ?? '')) what.push(`material ${a.mat ?? '-'} → ${b.mat ?? '-'}`);
+      if ((a.link ?? '') !== (b.link ?? '')) what.push(`link ${a.link ?? 'frame'} → ${b.link ?? 'frame'}`);
+      if ((a.joint ?? '') !== (b.joint ?? '')) what.push(`joint ${a.joint ?? '-'} → ${b.joint ?? '-'}`);
+      if (what.length) changed.push({ name: a.name, path: a.path, what }); }
+    for (const a of as) if (!usedA.has(a)) removed.push(a); for (const b of bs) if (!usedB.has(b)) added.push(b);
+  }
+  // (the held root: what was in it, and what fell out of it since; each removed part that was in it)
+  const rootA = new Set(A.held.main.parts), rootB = new Set(B.held.main.parts), namesB = new Set(B.parts.map((p) => p.name));
+  const fell = [...rootA].filter((n) => namesB.has(n) && !rootB.has(n)), rose = [...rootB].filter((n) => !rootA.has(n));
+  const removedHeld = [...new Set(removed.filter((p) => rootA.has(p.name) && !namesB.has(p.name)).map((p) => p.name))];
+  // (each system, its path's first two steps, and the systems that lost every part)
+  const sys = (ps) => { const m = new Map(); for (const p of ps) { const s2 = p.path.split('/').slice(0, 2).join('/'); m.set(s2, (m.get(s2) ?? 0) + 1); } return m; }, sA = sys(A.parts), sB = sys(B.parts);
+  const gone = [...sA.keys()].filter((s2) => !sB.has(s2)), born = [...sB.keys()].filter((s2) => !sA.has(s2));
+  // (the pictures: four cameras, each pixel compared, a red mark where they differ by more than 24 levels)
+  const cams = [['three', 'view=three'], ['side', 'view=side'], ['rear', 'view=rear'], ['under', 'view=under']], pix = [];
+  for (const [cn, cq] of cams) {
+    const shotAt = async (at) => { const page = await open(`${query}&${cq}`, at); if (!page) return null; const b = await page.screenshot(); await page.close(); return b.toString('base64'); };
+    const [ia, ib] = [await shotAt(port), await shotAt(portB)]; if (!ia || !ib) continue;
+    const pg = await browser.newPage({ viewport: { width: 1100, height: 720 } });
+    await pg.setContent(`<body style="margin:0"><img id="a" src="data:image/png;base64,${ia}"><img id="b" src="data:image/png;base64,${ib}"><canvas id="c"></canvas></body>`);
+    await pg.waitForFunction(() => document.getElementById('a').complete && document.getElementById('b').complete);
+    const r = await pg.evaluate(() => { const a = document.getElementById('a'), b = document.getElementById('b'), w = a.naturalWidth, h = a.naturalHeight, cv = document.getElementById('c'); cv.width = w; cv.height = h; const x = cv.getContext('2d');
+      x.drawImage(a, 0, 0); const da = x.getImageData(0, 0, w, h); x.drawImage(b, 0, 0); const db = x.getImageData(0, 0, w, h), o = x.createImageData(w, h); let n = 0;
+      for (let i = 0; i < da.data.length; i += 4) { const d = Math.max(Math.abs(da.data[i] - db.data[i]), Math.abs(da.data[i + 1] - db.data[i + 1]), Math.abs(da.data[i + 2] - db.data[i + 2])), g = (db.data[i] + db.data[i + 1] + db.data[i + 2]) / 6;
+        if (d > 24) { n++; o.data[i] = 255; o.data[i + 1] = 0; o.data[i + 2] = 0; } else { o.data[i] = o.data[i + 1] = o.data[i + 2] = 128 + g / 2; } o.data[i + 3] = 255; }
+      x.putImageData(o, 0, 0); return { share: n / (w * h), url: cv.toDataURL('image/png') }; });
+    fs.writeFileSync(path.join(out, `${name}-${cn}.diff.png`), Buffer.from(r.url.split(',')[1], 'base64')); pix.push([cn, r.share]); await pg.close();
+  }
+  svB.close();
+  const res = { a: root, b: path.resolve(other), removed: removed.map((p) => ({ name: p.name, path: p.path })), added: added.map((p) => ({ name: p.name, path: p.path })), changed, held: { a: A.held.main, b: B.held.main, fell, rose, floatsA: A.held.floats.length, floatsB: B.held.floats.length }, removedHeld, systems: { gone, born }, pixels: Object.fromEntries(pix) };
+  fs.writeFileSync(path.join(out, `${name}.diff.json`), JSON.stringify(res, null, 1));
+  const cnt = (ps) => { const m = new Map(); for (const p of ps) m.set(p.name, (m.get(p.name) ?? 0) + 1); return [...m.entries()].map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)); };
+  console.log(`${name}: ${root} → ${path.resolve(other)}: ${removed.length} parts removed, ${added.length} added, ${changed.length} changed; held root ${A.held.main.n} → ${B.held.main.n} parts (${A.held.main.kg} → ${B.held.main.kg} kg), floats ${A.held.floats.length} → ${B.held.floats.length}; ${gone.length} systems gone, ${born.length} new (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  if (removed.length) console.log(`  REMOVED  ${cnt(removed).slice(0, 40).join(', ')}`);
+  if (added.length) console.log(`  ADDED    ${cnt(added).slice(0, 40).join(', ')}`);
+  for (const ch of changed.slice(0, 40)) console.log(`  CHANGED  ${ch.name}: ${ch.what.join('; ')}`);
+  for (const s2 of gone) console.log(`  SYSTEM GONE ${s2} (${sA.get(s2)} parts in the first build, none in the second)`);
+  for (const s2 of born) console.log(`  SYSTEM NEW  ${s2} (${sB.get(s2)} parts)`);
+  if (fell.length) console.log(`  FELL FROM THE ROOT ${fell.slice(0, 30).join(', ')}`);
+  if (removedHeld.length && fell.length) console.log(`  REMOVED-HELD ${removedHeld.join(', ')} were in the held root, and since they went, ${fell.length} parts fell out of it`);
+  for (const [cn, sh] of pix) console.log(`  PIXELS   ${cn}: ${(sh * 100).toFixed(2)} % differ (${name}-${cn}.diff.png)`);
+  if ((removedHeld.length && fell.length) || gone.length) process.exitCode = 1;
+}
+// what a frame is built of (held v3): its body-in-white in pieces joined by structure alone (welds, bonds, drawn bolts,
+// castings; never rubber, a mount, a bush, a spring or a moving joint), each with its cut; where a load comes into the frame
+// and the part it comes to is not in its structure; each moving link's joints, flagged where it cannot move as they say;
+// joints said by parts that cannot be them; what is held only through openings said and not drawn. FAIL lines for each.
+async function frameJob(name, query) {
+  const page = await open(query); if (!page) return; const t0 = Date.now(); const f = await page.evaluate(() => window.look.frame()); await page.close();
+  fs.writeFileSync(path.join(out, `${name}.frame.json`), JSON.stringify(f, null, 1));
+  const faults = f.links.filter((l) => l.fault);
+  console.log(`${name}: body-in-white in ${f.biw.length} piece${f.biw.length === 1 ? '' : 's'} (${f.biw[0]?.n ?? 0} parts, ${f.biw[0]?.kg ?? 0} kg in the first); structure ${f.structure.n} parts, ${f.structure.kg} kg; ${f.loads.length} loads into what is not structure; ${faults.length} links that cannot move as they say; ${f.kinds.length} joints said by what cannot be one; ${f.saidHeld.length} groups held only by what is said (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  for (const [i, b] of f.biw.entries()) console.log(`  ${i ? 'BODY SPLIT' : 'BIW       '} ${b.parts.slice(0, 6).join(', ')}${b.n > 6 ? ` (+${b.n - 6} more)` : ''}, ${b.kg} kg${i ? `; joined to the rest only by ${b.cut.join('; ') || 'nothing'}` : ''}`);
+  for (const l of f.loads) console.log(`  LOAD PATH  ${l.at} takes ${l.from} (${l.by}): ${l.reaches}`);
+  for (const l of faults) console.log(`  ${l.fault.split(':')[0]} ${l.link}: ${l.joints.join('; ')} — ${l.fault.split(': ').slice(1).join(': ')}`);
+  for (const k of f.kinds) console.log(`  JOINT KIND ${k.joint} said by ${k.part}: ${k.why}`);
+  const sh = new Map(); for (const g of f.saidHeld) { const k = `${g.parts.join(', ')} (${g.kg} kg)`; sh.set(k, (sh.get(k) ?? 0) + 1); } for (const [k, n] of sh) console.log(`  HELD-BY-SAID ${k}${n > 1 ? ` ×${n}` : ''}`);
+}
 async function heldJob(name, query, n) {
   const page = await open(query); if (!page) return; const t0 = Date.now(); const h = await page.evaluate(() => window.look.held()); await page.close();
   fs.writeFileSync(path.join(out, `${name}.held.json`), JSON.stringify(h, null, 1));
@@ -308,11 +390,13 @@ async function gridJob(name, image, box, k) {
   console.log(`${name}.png: ${image} from ${x0},${y0} to ${x1},${y1}, ${K}× (a line every ${K >= 8 ? 1 : 5} px, labelled every 50)`);
 }
 for (const arg of process.argv.slice(2)) {
-  const m = arg.match(/^(\w+):(.*)$/), cmd = m && ['parts', 'facts', 'pick', 'gap', 'clash', 'holes', 'sheet', 'shot', 'section', 'mass', 'lint', 'held', 'ref', 'grid'].includes(m[1]) ? m[1] : 'shot', [name, query, ...more] = (m && cmd !== 'shot' ? m[2] : arg.replace(/^shot:/, '')).split('|');
+  const m = arg.match(/^(\w+):(.*)$/), cmd = m && ['parts', 'facts', 'pick', 'gap', 'clash', 'holes', 'sheet', 'shot', 'section', 'mass', 'lint', 'held', 'frame', 'diff', 'ref', 'grid'].includes(m[1]) ? m[1] : 'shot', [name, query, ...more] = (m && cmd !== 'shot' ? m[2] : arg.replace(/^shot:/, '')).split('|');
   if (cmd === 'shot') await shot(name, query);
   else if (cmd === 'holes') await shot(name, `${query}&holes=1`);
   else if (cmd === 'clash') await clash(name, query, Number(more[0] ?? 8));
   else if (cmd === 'held') await heldJob(name, query, Number(more[0] ?? 4));
+  else if (cmd === 'frame') await frameJob(name, query);
+  else if (cmd === 'diff') await diffJob(name, query, more[0]);
   else if (cmd === 'ref') await refJob(name, query, more[0], more[1], more[2]);
   else if (cmd === 'grid') await gridJob(name, query, more[0], more[1]);
   else if (cmd === 'sheet') await sheet(name, query);

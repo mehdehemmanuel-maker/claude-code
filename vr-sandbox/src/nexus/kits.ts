@@ -46,7 +46,8 @@ export interface Part {
    *  move (src/nexus/make/critic.ts's held check finds any that is not) */ link?: string;
   /** the kind of joint it is, between its own link and any other it meets: a bearing (a hub turning in its knuckle), a
    *  ball joint, a rubber bush (an arm's pivot), a slide (a damper's rod in its tube), a spring, a constant-velocity
-   *  joint, a hinge (a door's), a rubber mount (an engine's, a strut's top), a universal (Cardan) joint (a steering shaft's) */ joint?: 'bearing' | 'ball' | 'bush' | 'slide' | 'spring' | 'cv' | 'hinge' | 'mount' | 'universal';
+   *  joint, a hinge (a door's), a rubber mount (an engine's, a strut's top), a universal (Cardan) joint (a steering shaft's); or 'cover', a flexible cover clamped across one (a bellows, a boot), which
+   *  follows what it covers and joins nothing: never a joint, it holds and carries nothing across it */ joint?: 'bearing' | 'ball' | 'bush' | 'slide' | 'spring' | 'cv' | 'hinge' | 'mount' | 'universal' | 'cover';
   /** the parts it is meant to meet face to face, by name: seated on, clamped against, bonded or clipped to (its maker's),
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
   /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
