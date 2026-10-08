@@ -76,6 +76,7 @@ function scaleShape(s: NonNullable<Part['shape']>, k: number): NonNullable<Part[
   if ('loft' in s) return { loft: { st: s.loft.st.map((x) => ({ ...x, x: x.x * k, w: x.w * k, lo: x.lo * k, hi: x.hi * k })) } };
   if ('tube' in s) return { tube: { ...s.tube, r: s.tube.r * k, pts: s.tube.pts.map((q) => q.map((v) => v * k) as [number, number, number]), ...(s.tube.wall ? { wall: s.tube.wall * k } : {}), ...(s.tube.bend ? { bend: s.tube.bend * k } : {}) } };
   if ('lathe' in s) return { lathe: s.lathe.map(([r, y]) => [r * k, y * k] as [number, number]) };
+  if ('prism' in s) return { prism: { pts: s.prism.pts.map(([x, y]) => [x * k, y * k] as [number, number]), L: s.prism.L * k } };
   // (a skin scaled as a whole: its net scaled, the same skin at each scale shared, so what is known of it is kept)
   if ('surf' in s) { const pt = s.surf; return { surf: { ...pt, s: scaledSkin(pt.s, k), ...(pt.off !== undefined ? { off: pt.off * k } : {}) } }; }
   return s;

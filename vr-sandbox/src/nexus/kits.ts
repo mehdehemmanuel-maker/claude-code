@@ -9,8 +9,10 @@
 // material's density (estimates: the shapes are simple). A prop blaster is a shape only: it does not work as a weapon.
 
 import { VEHICLE_KITS, useMass } from './machines';
-import { latheArea, latheVolume, loftArea, loftVolume, tubeLength, tubeVolume, type Lathe, type Loft, type Tube } from './form';
-import { surfaceArea, type Patch } from './surface';
+import { DESIGNED, boltedJoint, exampleOf, partWords, use } from './components';
+import type { Lathe, Loft, Prism, Tube } from './form';
+import type { Patch } from './surface';
+import { DENSITY, massOf } from './mass';
 
 export type V3 = [number, number, number];
 export type Shape =
@@ -19,6 +21,7 @@ export type Shape =
   /** a body through cross-sections along x (src/nexus/form.ts) */ | { loft: Loft }
   /** a round tube along a path, bent round at its corners */ | { tube: Tube }
   /** a profile of [radius, height] spun about y */ | { lathe: Lathe }
+  /** a section of [x, y] points drawn along z, its length L (a rolled or extruded bar, angle, channel, beam) */ | { prism: Prism }
   /** a freeform skin (a NURBS surface, or a part of one: src/nexus/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
@@ -92,44 +95,7 @@ export interface Kit {
   does?: 'follow' | 'wander' | 'swim past' | 'hover';
 }
 
-/** Densities, kg/m³ (typical values). */
-export const DENSITY: Record<string, number> = {
-  'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
-  wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
-  cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
-  pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680,
-  tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
-};
-const vol = (s: Shape): number => {
-  if ('box' in s) return s.box[0] * s.box[1] * s.box[2];
-  if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return (Math.PI * h * (r * r + r * r2 + r2 * r2)) / 3; }
-  if ('sphere' in s) return (4 / 3) * Math.PI * s.sphere ** 3;
-  if ('cone' in s) return (Math.PI * s.cone[0] ** 2 * s.cone[1]) / 3;
-  if ('torus' in s) return 2 * Math.PI ** 2 * s.torus[0] * s.torus[1] ** 2;
-  if ('capsule' in s) return Math.PI * s.capsule[0] ** 2 * (s.capsule[1] + (4 / 3) * s.capsule[0]);
-  if ('loft' in s) return loftVolume(s.loft);
-  if ('tube' in s) return tubeVolume(s.tube);
-  if ('lathe' in s) return latheVolume(s.lathe);
-  // a heap: each brick's solid plastic, 0.386 of its box (a 2×4 brick's 2.3 g of ABS at 1,050 kg/m³ in its 31.8 × 11.3 × 15.8 mm)
-  if ('heap' in s) return s.heap.n * s.heap.size[0] * s.heap.size[1] * s.heap.size[2] * 0.386;
-  return 0;
-};
-const area = (s: Shape): number => {
-  if ('box' in s) { const [a, b, c] = s.box; return 2 * (a * b + a * c + b * c); }
-  if ('cyl' in s) { const [r, h] = s.cyl; return 2 * Math.PI * r * (r + h); }
-  if ('sphere' in s) return 4 * Math.PI * s.sphere ** 2;
-  if ('torus' in s) return 4 * Math.PI ** 2 * s.torus[0] * s.torus[1];
-  if ('loft' in s) return loftArea(s.loft);
-  if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
-  if ('lathe' in s) return latheArea(s.lathe);
-  if ('surf' in s) return surfaceArea(s.surf);
-  return 0;
-};
-/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
-export function massOf(p: Part): number {
-  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : vol(p.shape)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
-  return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
-}
+export { DENSITY, massOf } from './mass';
 /** How many parts it has, all the way down. */
 export const countParts = (p: Part): number => 1 + (p.parts ?? []).reduce((a, q) => a + countParts(q), 0);
 
@@ -258,6 +224,14 @@ kit({
 // (src/nexus/machines.ts), each kit only what can be chosen
 for (const k of VEHICLE_KITS) kit(k);
 useMass(massOf);
+
+// ---- a part on its own: any component the library draws (src/nexus/components.ts), by its words, its sizes in them
+// ("bolt M8x30", "angle 40x4 steel 1000mm", "bolted joint M10 22"), so it can be looked at, taken apart and checked alone
+kit({
+  id: 'part', name: 'part', get words() { return partWords(); }, get choices() { return [{ key: 'family', name: 'kind of part', options: DESIGNED }]; },
+  says: 'a part from the component library: designed once from its standard, by its words (its family\'s first example where no size is said)',
+  build(c) { const w = String(c.said ?? ''), j = /bolted joint\s+(M[\d.]+)\s+(\d+(?:\.\d+)?)/i.exec(w); return j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : use(/\d/.test(w) ? w : exampleOf(String(c.family))); },
+});
 
 // ---- a lamp post: its light by its lamp (high-pressure sodium about 100 lm/W at 2,000 K; LED street lights about 140
 // lm/W, typical), spaced about three times its height along a road (typical) ----
@@ -590,6 +564,8 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   if (k.id === 'sword' && /\bsaber\b/.test(t)) out.type = 'sabre';
   if (k.id === 'dragon' && /\b(saddle|ride|rider|riding|fly on|mount)\b/.test(t)) out.rider = 'yes';
   if (k.id === 'dog' && /\bpupp/.test(t)) out.age = 'puppy';
+  // (a part is called by its own words, its sizes in them: "bolt M8x30")
+  if (k.id === 'part') out.said = words.trim();
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */

@@ -655,8 +655,12 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
   // (a cover, a bellows or a boot, is held by its own link's part it is clamped on, and holds nothing across to another: it
   // follows what it covers)
   const covers = (c: Clash) => meshOf(c, 0).joint === 'cover' || meshOf(c, 1).joint === 'cover', sameLink = (c: Clash) => (meshOf(c, 0).link || '') === (meshOf(c, 1).link || '');
-  const holds = (c: Clash) => { if (sunk(c) || c.span < 0.005) return false; if (covers(c)) return sameLink(c); if (c.kind === 'joined' || c.kind === 'fused' || c.kind === 'fitted') return true; const a = meshOf(c, 0), b = meshOf(c, 1); return !!(a.joint || b.joint); };
-  const whyNot = (c: Clash) => (c.kind === 'through' ? 'crossing' : sunk(c) ? `sunk ${((c.depth ?? 0) * 1000).toFixed(1)} mm` : c.span < 0.005 ? 'a point\'s touch' : 'a touch no joint is said for');
+  // (a point's touch is under 5 mm of meeting, or under half the smaller part where that is smaller still: an M3 bolt's
+  // head meets its washer over less than 5 mm and is not touching it at a point)
+  const EXT = new Map<TriMesh, number>(), ext = (m: TriMesh) => { let e = EXT.get(m); if (e === undefined) { const t = trisOf(m); EXT.set(m, (e = t.n ? Math.max(t.hi[0]! - t.lo[0]!, t.hi[1]! - t.lo[1]!, t.hi[2]! - t.lo[2]!) : 0)); } return e; };
+  const least = (c: Clash) => Math.min(0.005, 0.5 * Math.min(ext(meshOf(c, 0)), ext(meshOf(c, 1))));
+  const holds = (c: Clash) => { if (sunk(c) || c.span < least(c)) return false; if (covers(c)) return sameLink(c); if (c.kind === 'joined' || c.kind === 'fused' || c.kind === 'fitted') return true; const a = meshOf(c, 0), b = meshOf(c, 1); return !!(a.joint || b.joint); };
+  const whyNot = (c: Clash) => (c.kind === 'through' ? 'crossing' : sunk(c) ? `sunk ${((c.depth ?? 0) * 1000).toFixed(1)} mm` : c.span < least(c) ? 'a point\'s touch' : 'a touch no joint is said for');
   // (a constant-velocity joint carries torque, not weight: what it joins is held by it only where it is the lighter, as a
   // drive shaft hangs between its joints; an engine is not held up by its drive shafts, but by its mounts)
   const cvEdge = (c: Clash) => { const a = meshOf(c, 0), b = meshOf(c, 1); return (a.link || '') !== (b.link || '') && (a.joint === 'cv' || b.joint === 'cv'); };

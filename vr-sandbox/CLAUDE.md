@@ -30,6 +30,17 @@ the task list and lose the why. So the why lives here, and every round is checke
   generative design, command prediction
 - "don't just adopt all these tools: improve them, expand, find flaws, find a branch it opens that no one thought of; try
   to be the system that future systems reference"
+- "Create every car there is you don't just design the outside … design each sub component the motor and other parts
+  but also you first need to design the sub components of that and so on and then you can save that component under its
+  name and category and now every other build using any of them is already ready screws nuts bolts, radios, buttons,
+  wires … mix and match and make emergent builds like a semi truck-atv hybrid, 3d printer with robot arms on it, a new most
+  efficient motor, a whole industrial plant … start small and work your way up … the most common parts" (2026-10-08:
+  the component library, `components.ts`)
+- "do the same thing for every 3d printer, metal filament and everything and robotic arms even the most advanced, all
+  versions of filament makers, even metal filament makers, study all bots even filabot … futuristic manufacturing … tony
+  stark level engineering" (2026-10-08: manufacturing built from the library)
+- "money manager / business agent with employees on computers and a board room with a giant screen I can edit, basically
+  a node tree that maps things in my situation out; don't lose context, find time for it" (2026-10-08: queued)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -48,6 +59,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/inventory.ts` (about 1,500 items) |
 | Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts`, `partspace.ts` |
+| Parts designed once in 3D from their standard, saved by name and category, used by every build (`use("bolt M8x30")`); assemblies of them (a bolted joint) | `src/nexus/components.ts` (kit `part`; checked over every catalogue size in `tests/nexus/components.test.ts`) |
+| A part's mass from its shape, material and fill | `src/nexus/mass.ts` (re-exported by `kits.ts`) |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
 | Conditions on loads, holds and reach | `src/nexus/conditions.ts` |
@@ -98,7 +111,12 @@ constraints → failure modes. Ideas and interfaces only: their code is GPL/LGPL
 
 Known gaps (from the 2026-10-08 audit, still open):
 - the inventory knows what is in a product but not where it sits; the kits know where but not what. Joining them, so
-  every placed part is an inventory item that expands into its sub-parts, is the merge that ends "two generators";
+  every placed part is an inventory item that expands into its sub-parts, is the merge that ends "two generators".
+  Begun (2026-10-08, the user: "design each sub component … save that component under its name and category and now
+  every other build using any of them is already ready"): `components.ts` draws stock and fasteners from their standards
+  (9,074 catalogue sizes), and the wheel nuts, wheel studs, the detail pass's bolts and anchor bolts come from it. Still
+  drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
+  each is next to become a component, smallest and commonest first;
 - the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
 - the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
 - planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
@@ -139,6 +157,12 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
 5. Re-read "What is wanted" above. Is this round still aimed at it?
 6. What am I not asking? (Scale against a person? How does it move? What does it sound like? What happens when it
    is clicked, taken apart, driven?)
+7. What would a real engineer expect that is plainly absent? Ask a fresh agent each round, with this file's owners table,
+   for the concepts a mechanical, electrical and manufacturing engineer would expect and do not find (2026-10-08: the
+   user had to name mating parts, a bolt pattern finding its reverse and connecting, though "next are mounts (bolt
+   patterns)" was already written here; holes cut, fits and tolerances, placement by constraints, fasteners sized by
+   load, motion, electrical and fluid ports, shape from process and cost were absent with it). Act on what it names
+   before polishing what the critic counts: a missing concept costs every build, a patched overlap costs one.
 
 ## Working here
 

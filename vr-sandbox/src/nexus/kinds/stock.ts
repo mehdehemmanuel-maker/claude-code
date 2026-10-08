@@ -10,7 +10,8 @@ const s = (p: P, k: string) => String(p[k]);
 const madeOf = (p: P) => matOf(p.matter);
 const LEN: [number, number, number] = [10, 6000, 1];
 /** EN 10279 UPN channels: height, flange, web, flange thickness (mm), kg a metre. */
-const UPN: Record<number, [number, number, number, number, number]> = { 50: [50, 38, 5, 7, 5.59], 65: [65, 42, 5.5, 7.5, 7.09], 80: [80, 45, 6, 8, 8.64], 100: [100, 50, 6, 8.5, 10.6], 120: [120, 55, 7, 9, 13.4], 140: [140, 60, 7, 10, 16], 160: [160, 65, 7.5, 10.5, 18.8], 180: [180, 70, 8, 11, 22], 200: [200, 75, 8.5, 11.5, 25.3] };
+/** EN 10279 UPN channels: h, b, web, flange (mean), mm; kg a metre. */
+export const UPN: Record<number, [number, number, number, number, number]> = { 50: [50, 38, 5, 7, 5.59], 65: [65, 42, 5.5, 7.5, 7.09], 80: [80, 45, 6, 8, 8.64], 100: [100, 50, 6, 8.5, 10.6], 120: [120, 55, 7, 9, 13.4], 140: [140, 60, 7, 10, 16], 160: [160, 65, 7.5, 10.5, 18.8], 180: [180, 70, 8, 11, 22], 200: [200, 75, 8.5, 11.5, 25.3] };
 const ANGLES = ['20x3', '25x3', '25x4', '30x3', '30x4', '40x4', '40x5', '50x5', '50x6', '60x6', '70x7', '80x8', '100x10'];
 const RHS = ['20x10', '30x15', '30x20', '40x20', '40x30', '50x25', '50x30', '60x30', '60x40', '80x40', '100x50', '120x60', '150x100', '200x100'];
 /** PS 20 dressed sizes of nominal timber, inches. */

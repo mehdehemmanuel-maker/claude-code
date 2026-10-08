@@ -9,6 +9,14 @@ const T = (p: P) => METRIC[String(p.thread)]!;
 const dOf = (p: P) => Number(String(p.thread).slice(1));
 const threads = (from: string, to: string) => { const ks = Object.keys(METRIC), a = ks.indexOf(from), b = ks.indexOf(to); return ks.slice(a, b + 1); };
 const madeOf = (p: P) => matOf(p.matter);
+/** Wheel threads: each thread's diameter and pitch, the hex across flats its wheel nut usually takes and the nut's height,
+ *  mm (typical of each: an M12 × 1.5 nut 21 mm across and about 19 mm tall, as Toyota's are; a truck's M22 × 1.5 nut 33 mm
+ *  across, as ISO 4107's two-piece flange nuts are). Of two pitches for one size, the commoner first (M12 × 1.5: Toyota's,
+ *  Honda's, Ford's; Nissan's and Subaru's are 1.25). */
+export const WHEEL: Record<string, { d: number; p: number; s: number; h: number }> = {
+  'M8x1.25': { d: 8, p: 1.25, s: 13, h: 12 }, 'M10x1.25': { d: 10, p: 1.25, s: 17, h: 16 }, 'M12x1.5': { d: 12, p: 1.5, s: 21, h: 19 },
+  'M12x1.25': { d: 12, p: 1.25, s: 19, h: 19 }, 'M14x1.5': { d: 14, p: 1.5, s: 22, h: 22 }, 'M22x1.5': { d: 22, p: 1.5, s: 33, h: 26 },
+};
 /** A screw's mass: its shank (a little under the full diameter, for the thread) and its head. */
 const screwG = (p: P, head: number) => gOf(cyl(dOf(p), Number(p.L)) * 0.92 + head, madeOf(p)[1]);
 
@@ -85,7 +93,7 @@ export const FASTENERS: KindDef[] = [
     id: 'blindrivet', look: 'rod', name: 'blind rivet', path: 'Hardware/Fasteners/Rivets', says: 'a hollow rivet set from one side: its mandrel pulled until it snaps, swelling the far end', std: 'ISO 15977/15983 diameters, in the lengths makers sell (typical)',
     axes: [ax('d', 'diameter', 'mm', [2.4, 3.2, 4, 4.8, 6.4]), ax('L', 'length', 'mm', (p) => ({ 2.4: [4, 6, 8, 10], 3.2: [6, 8, 10, 12, 16], 4: [6, 8, 10, 12, 14, 16, 20], 4.8: [8, 10, 12, 14, 16, 20, 25], 6.4: [10, 12, 16, 20, 25, 30] } as Record<number, number[]>)[Number(p.d)]!), bare('matter', 'made of', ['aluminium', 'steel', 'stainless'])],
     title: (p) => `blind rivet ${p.d} × ${p.L}, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} ${p.matter === 'aluminium' ? 'steel-low' : madeOf(p)[0]}`, make: 'cold-head', how: 'its body cold-headed and drawn hollow, a mandrel put through it with a neck to snap',
-    spec: (p) => `drill ${(Number(p.d) + 0.1).toFixed(1)} mm; grips about ${Math.max(0.5, Number(p.L) - 1.6 * Number(p.d)).toFixed(1)}–${(Number(p.L) - 1.1 * Number(p.d)).toFixed(1)} mm of plate (typical)`, box: (p) => [2 * Number(p.d), 2 * Number(p.d), Number(p.L) + 25], g: (p) => gOf(ring(Number(p.d), 0.55 * Number(p.d), Number(p.L)), madeOf(p)[1]) + gOf(cyl(0.5 * Number(p.d), Number(p.L) + 25), 7.85),
+    spec: (p) => `drill ${(Number(p.d) + 0.1).toFixed(1)} mm; grips about ${Math.max(0.5, Number(p.L) - 1.6 * Number(p.d)).toFixed(1)}–${(Number(p.L) - 1.1 * Number(p.d)).toFixed(1)} mm of plate (typical)`, box: (p) => [2 * Number(p.d), 2 * Number(p.d), Number(p.L) + 25], g: (p) => gOf(ring(Number(p.d), 0.55 * Number(p.d), Number(p.L)) + ring(1.8 * Number(p.d), 0.55 * Number(p.d), 0.3 * Number(p.d)), madeOf(p)[1]) + gOf(cyl(0.5 * Number(p.d), Number(p.L) + 25), 7.85), // (its body, its domed head about 2 d across and 0.3 d high, and its mandrel)
   },
   {
     id: 'splitpin', name: 'split pin (cotter pin)', path: 'Hardware/Fasteners/Pins', says: 'a doubled half-round wire put through a hole and bent open, so a nut or pin cannot come off', std: 'ISO 1234, 1–8 mm',
@@ -158,6 +166,24 @@ export const FASTENERS: KindDef[] = [
     title: (p) => `cable tie ${String(p.size).replace('x', ' × ')} mm, ${p.colour}`, of: () => 'nylon', make: 'mould', how: (p) => `moulded in nylon 6,6${p.colour === 'black' ? ' with carbon black against sunlight' : ''}`,
     spec: (p) => { const [L, w] = String(p.size).split('x').map(Number) as [number, number], kg: Record<number, number> = { 2.5: 8, 3.6: 18, 4.8: 22, 7.6: 54, 9: 79 }; return `holds about ${kg[w]} kg in its loop; bundles up to about ${((L - 30) / Math.PI).toFixed(0)} mm across`; },
     box: (p) => { const [L, w] = String(p.size).split('x').map(Number) as [number, number]; return [w * 2.2, w * 1.6, L]; }, g: (p) => { const [L, w] = String(p.size).split('x').map(Number) as [number, number]; return gOf(L * w * w * 0.32, 1.14); },
+  },
+  {
+    id: 'wheelnut', name: 'wheel nut', path: 'Mechanical/Wheels/Wheel nuts', says: 'a nut that clamps a wheel to its hub: a car\'s on a 60° cone seat that centres the wheel on its studs, a truck\'s with a flange that turns on its nut',
+    std: 'DIN 74361 form A cone-seat nuts and ISO 4107 flange nuts by thread; the hex each thread usually takes (typical: a maker\'s own may differ by a size)',
+    axes: [bare('thread', 'thread', Object.keys(WHEEL)), bare('seat', 'seat', (p) => (WHEEL[String(p.thread)]!.d >= 20 ? ['flange', 'cone'] : ['cone', 'flange']))],
+    title: (p) => `${p.thread} wheel nut, ${p.seat === 'cone' ? '60° cone seat' : 'flanged'}`, of: () => 'steel-alloy zinc', make: 'cold-head', how: 'cold-formed with its seat, pierced and tapped, hardened (class 8, ISO 898-2) and zinc-plated',
+    spec: (p) => { const w = WHEEL[String(p.thread)]!; return `${w.s} mm across flats, ${w.h} mm high; ${p.seat === 'cone' ? '60° cone seat (DIN 74361)' : `flange ${(1.45 * w.s).toFixed(0)} mm across (ISO 4107)`}`; },
+    box: (p) => { const w = WHEEL[String(p.thread)]!, D = p.seat === 'flange' ? 1.45 * w.s : w.s / Math.cos(Math.PI / 6); return [D, D, w.h]; },
+    g: (p) => { const w = WHEEL[String(p.thread)]!, seat = 0.25 * w.h; return gOf(hexPrism(w.s, w.h - seat) + (p.seat === 'flange' ? cyl(1.45 * w.s, seat) : cyl(0.85 * w.s, seat)) - cyl(w.d - 0.65 * w.p, w.h), 7.85); },
+  },
+  {
+    id: 'wheelstud', name: 'wheel stud', path: 'Mechanical/Wheels/Wheel studs', says: 'a stud pressed through a hub\'s flange from behind, its knurl gripping the flange, its head against the flange\'s back',
+    std: 'the threads wheel nuts take, any length 20–140 mm (made to the hub; typical)',
+    axes: [bare('thread', 'thread', Object.keys(WHEEL)), ax('L', 'length under the head', 'mm', [35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100], [20, 140, 0.5])],
+    title: (p) => `${p.thread} × ${p.L} wheel stud`, of: () => 'steel-alloy zinc', make: 'roll-thread', how: 'cold-headed, its knurl and thread rolled, hardened (class 10.9) and zinc-plated',
+    spec: (p) => { const w = WHEEL[String(p.thread)]!; return `head ${(2.1 * w.d).toFixed(0)} mm across, knurl ${(w.d * 1.12).toFixed(1)} mm for ${(1.1 * w.d).toFixed(0)} mm; class 10.9`; },
+    box: (p) => { const w = WHEEL[String(p.thread)]!; return [2.1 * w.d, 2.1 * w.d, Number(p.L) + 0.3 * w.d]; },
+    g: (p) => { const w = WHEEL[String(p.thread)]!, L = Number(p.L), kn = 1.1 * w.d; return gOf(cyl(2.1 * w.d, 0.3 * w.d) + cyl(1.12 * w.d, kn) + cyl(w.d - 0.65 * w.p, L - kn), 7.85); },
   },
   {
     id: 'nail', name: 'round wire nail', path: 'Hardware/Fasteners/Nails', says: 'a plain-shank wire nail with a flat head', std: 'the shank × length pairs merchants sell (typical)',

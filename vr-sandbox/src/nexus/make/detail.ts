@@ -23,6 +23,8 @@
 
 import * as THREE from 'three';
 import { massOf, type Part } from '../kits';
+import { use } from '../components';
+import { METRIC } from '../threads';
 import type { Conditions } from './conditions';
 import { edgeRadius } from '../finish';
 import { insideBy, stationAt, surfaceZ } from '../form';
@@ -88,12 +90,38 @@ function headClear(c: Ctx, host: Node, other: Node, at: THREE.Vector3, k: number
   }
   placed.push(o); return true;
 }
-function boltAt(to: Node, rule: string, at: THREE.Vector3, k: number, sk: number, dmm: number, mat = 'steel-low', clear?: (r: number, h: number) => boolean): void {
+/** A bolt from the component library (src/nexus/components.ts) through a washer, the part it is laid on and into the
+ *  part behind (its thread engaged 1.5 d, or as deep as that part allows less half a millimetre: into a tapped hole or a
+ *  clinch nut there, which is not drawn), its holes in both said; on a part's face in its own frame, pointing out along
+ *  its axis k one way. Stainless (A2) by the sea. */
+function boltAt(to: Node, rule: string, at: THREE.Vector3, k: number, sk: number, dmm: number, mat = 'steel-low', clear?: (r: number, h: number, from?: number, dir?: number) => boolean, other?: Node): void {
   if (!onShape(to, at, 1.2 * dmm / 1000)) return;
   if (clear && !clear((2.1 * dmm) / 2000, (0.18 + 0.65) * dmm / 1000)) return;
-  const d = dmm / 1000, s = 1.6 * d, kk = 0.65 * d, wd = 2.1 * d, wt = 0.18 * d, step = (x: number) => { const p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * x); return p; };
-  const washer = put(to, rule, { name: `M${dmm} washer (ISO 7089)`, shape: { cyl: [wd / 2, wt] }, mat, color: 0xb8bcc0 }, step(wt / 2), k, sk);
-  washer.parts = [{ name: `M${dmm} hex head (ISO 4017)`, shape: { cyl: [s / Math.sqrt(3), kk] }, facets: 6, mat, color: 0x9a9ea4, at: [0, wt / 2 + kk / 2, 0], detail: rule }];
+  const d = dmm / 1000, T = METRIC[`M${dmm}`]; if (!T) return;
+  // (through a part thicker than 3 d, its head and washer down a counterbore, 3 d of the part left under them: the
+  // counterbore said, not drawn, so it never runs out through a solid into what is beyond)
+  const h0 = wallOf(to), sink = Math.max(0, h0 - 3 * d), h1 = h0 - sink, h2 = other ? wallOf(other) : d, e = Math.max(0.5 * d, Math.min(1.5 * d, h2 - 0.0005)), L = Math.max(4, Math.round((h1 + e) * 2000) / 2);
+  // (and where the part behind is thinner than its thread's reach, the end of the bolt out past it, clear of all else)
+  if (clear && other && e > h2 - 0.0005 && !clear(d / 2, L / 1000 - h1 - h2 + 0.001, sink + h1 + h2, -1)) return;
+  const bolt = use(`bolt M${dmm}x${L}${/stainless/.test(mat) ? ' A2' : ''}`), washer = use(`washer M${dmm}`), step = (x: number) => { const p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * (x - sink)); return p; };
+  const { at: _w, rot: _wr, ...wd } = washer, { at: _b, rot: _br, ...bd } = bolt;
+  // (what is said of each, said of its pieces: they are what is drawn and met)
+  const say = (q: Omit<Part, 'at' | 'rot'>, rec: Partial<Part>) => ({ ...q, ...rec, parts: q.parts?.map((x) => (x.name === q.name ? { ...x, ...rec } : x)) });
+  put(to, rule, say(wd, { passes: [bolt.name], fixed: `under its bolt's head` }), step(0), k, sk);
+  put(to, rule, say(bd, { fixed: `through its washer and the ${to.p.name}${other ? `, into a thread in the ${other.p.name} (a tapped hole or a clinch nut there, not drawn)` : ''}` }), step((T.h) / 1000), k, sk);
+  for (const x of [to, other]) if (x) { const ps = (x.p.passes ??= []); for (const nm of sink > 0 && x === to ? [bolt.name, washer.name] : [bolt.name]) if (!ps.includes(nm)) ps.push(nm); }
+}
+/** An anchor bolt through a base plate: a threaded rod cast into the foundation (its length in it not drawn), up through
+ *  the plate, a washer and a nut on it, two pitches proud (typical of a lighting column's anchors). */
+function anchorAt(plate: Node, rule: string, at: THREE.Vector3, t: number, dmm: number): void {
+  const T = METRIC[`M${dmm}`]!, L = Math.round((t * 1000 + T.h + T.m + 2 * T.p) * 2) / 2, rod = use(`threadedrod M${dmm} ${L}`), nm = `M${dmm} anchor bolt`;
+  const { at: _r, rot: _rr, ...rd } = rod, { at: _w, rot: _wr, ...wd } = use(`washer M${dmm}`), { at: _n, rot: _nr, ...nd } = use(`nut M${dmm}`);
+  const y0 = at.y - t / 2;
+  const say = (q: Omit<Part, 'at' | 'rot'>, rec: Partial<Part>) => ({ ...q, ...rec, parts: q.parts?.map((x) => (x.name === q.name ? { ...x, ...rec } : x)) });
+  put(plate, rule, { ...say(rd, { fixed: 'cast into the foundation under its plate' }), name: nm, parts: rd.parts?.map((q) => ({ ...q, name: nm, fixed: 'cast into the foundation under its plate' })) }, new THREE.Vector3(at.x, y0 + L / 2000, at.z), 1, 1);
+  put(plate, rule, say(wd, { passes: [nm], fixed: 'under its nut' }), new THREE.Vector3(at.x, y0 + t, at.z), 1, 1);
+  put(plate, rule, say(nd, { passes: [nm], fixed: 'run onto its anchor and torqued' }), new THREE.Vector3(at.x, y0 + t + T.h / 1000, at.z), 1, 1);
+  const ps = (plate.p.passes ??= []); if (!ps.includes(nm)) ps.push(nm);
 }
 /** A pan-head screw (about 1.9 d across, 0.35 d high, typical) on a part's face in its own frame. */
 function screwAt(to: Node, at: THREE.Vector3, k: number, sk: number, dmm: number, clear?: (r: number, h: number) => boolean): void { if (!onShape(to, at, dmm / 1000)) return; if (clear && !clear((0.95 * dmm) / 1000, (0.35 * dmm) / 1000)) return; const d = dmm / 1000, p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * 0.175 * d); put(to, 'joints', { name: `${dmm} mm screw`, shape: { cyl: [0.95 * d, 0.35 * d] }, mat: 'steel-low', color: 0x8a8e94 }, p, k, sk); }
@@ -216,12 +244,14 @@ export const RULES: DetailRule[] = [
         // bolts or screws: no bigger than a quarter of the face they sit on (a head with room round it), and each head clear
         // of everything but the two parts it joins
         const fit = Math.min(ps.getComponent(u), ps.getComponent(v)) * 250, capd = (x: number) => [...ISO].reverse().find((q) => q <= Math.max(3, Math.min(x, fit))) ?? 3;
-        const dmm = how === 'screws' ? capd(Math.min(8, boltFor(thin))) : capd(boltFor(thin)), d = dmm / 1000; if (1.6 * d < seen(host)) continue;
-        const clear = (r: number, h: number, at: THREE.Vector3) => headClear(c, host, other, at, k, sk, r, h, placed);
+        // (on a thing a vehicle's size, no bolt under M6 on a sheet's flange: the least a carmaker uses there, typical)
+        const big = seen(host) * 2000 > 1.5, dmm = how === 'screws' ? capd(Math.min(8, boltFor(thin))) : capd(boltFor(big ? Math.max(thin, 0.003) : thin)), d = dmm / 1000; if (1.6 * d < seen(host)) continue;
+        // (a stack r round and h long, standing out of the face at at, or, from a depth under the face, on into what is behind)
+        const clear = (r: number, h: number, at: THREE.Vector3, from = 0, dir = 1) => { const p = at.clone(); p.setComponent(k, at.getComponent(k) - sk * from); return headClear(c, host, other, p, k, sk * dir, r, h, placed); };
         if (isRound(t.a) && isRound(t.b) && Math.abs(roundAxis(t.a).dot(roundAxis(t.b))) > 0.95 && Math.abs(roundAxis(t.a).dot(out)) > 0.9) {
           // two round parts on one axis: on a pitch circle, 4 under 0.2 m across the smaller, 5 to 0.6 m, else 8 (typical of hubs)
           const small = radiusOf(t.a) < radiusOf(t.b) ? t.a : t.b, r = radiusOf(small), count = r < 0.1 ? 4 : r < 0.3 ? 5 : 8, pcd = Math.max(r * 0.32, 2.5 * d), ctr = toLocal(host, small.obb!.c); ctr.setComponent(k, face);
-          for (let i = 0; i < count; i++) { const a = (i / count) * Math.PI * 2, at = ctr.clone(); at.setComponent(u, ctr.getComponent(u) + Math.cos(a) * pcd); at.setComponent(v, ctr.getComponent(v) + Math.sin(a) * pcd); boltAt(host, 'joints', at, k, sk, Math.max(dmm, 12), undefined, (r, h) => clear(r, h, at)); joins(host, other); n++; }
+          for (let i = 0; i < count; i++) { const a = (i / count) * Math.PI * 2, at = ctr.clone(); at.setComponent(u, ctr.getComponent(u) + Math.cos(a) * pcd); at.setComponent(v, ctr.getComponent(v) + Math.sin(a) * pcd); boltAt(host, 'joints', at, k, sk, Math.max(dmm, 12), undefined, (r, h, from, dir) => clear(r, h, at, from, dir), other); joins(host, other); n++; }
           continue;
         }
         // flat: a row along a long joint, else one near each corner; 2.5 d in from its edges, no closer than 3 d apart
@@ -229,7 +259,7 @@ export const RULES: DetailRule[] = [
         const pts: [number, number][] = [];
         if (Math.max(Lu, Lv) > 3 * Math.min(Lu, Lv)) { const L = Math.max(Lu, Lv), q = Math.max(2, Math.min(12, Math.floor((L - 2 * inset) / Math.max(3 * d, 0.15)) + 1)); for (let i = 0; i < q; i++) { const f = -L / 2 + inset + ((L - 2 * inset) * i) / (q - 1); pts.push(Lu >= Lv ? [f, 0] : [0, f]); } }
         else for (const a of [-1, 1]) for (const b of [-1, 1]) pts.push([a * (Lu / 2 - inset), b * (Lv / 2 - inset)]);
-        for (const [fu, fv] of pts) { const at = pc.clone(); at.setComponent(k, face); at.setComponent(u, pc.getComponent(u) + fu); at.setComponent(v, pc.getComponent(v) + fv); if (how === 'screws') screwAt(host, at, k, sk, dmm, (r, h) => clear(r, h, at)); else boltAt(host, 'joints', at, k, sk, dmm, undefined, (r, h) => clear(r, h, at)); joins(host, other); n++; }
+        for (const [fu, fv] of pts) { const at = pc.clone(); at.setComponent(k, face); at.setComponent(u, pc.getComponent(u) + fu); at.setComponent(v, pc.getComponent(v) + fv); if (how === 'screws') screwAt(host, at, k, sk, dmm, (r, h) => clear(r, h, at)); else boltAt(host, 'joints', at, k, sk, dmm, undefined, (r, h, from, dir) => clear(r, h, at, from, dir), other); joins(host, other); n++; }
       }
       return n;
     },
@@ -269,7 +299,7 @@ export const RULES: DetailRule[] = [
         const plate = Math.max(0.2, 2.5 * w), t = 0.02, ctr = new THREE.Vector3((x.box.min.x + x.box.max.x) / 2, t / 2, (x.box.min.z + x.box.max.z) / 2);
         const bp = attach(x, 'base plates', { name: 'base plate', shape: { box: [plate, t, plate] }, mat: x.p.mat, color: x.p.color, finish: 'paint' }, ctr);
         const holder: Node = { p: bp, parent: x, kids: [], m: new THREE.Matrix4(), box: null, obb: null, pieces: [], local: null, sub: null, depth: x.depth + 1, path: `${x.path}/bp` };
-        for (const a of [-1, 1]) for (const b of [-1, 1]) boltAt(holder, 'base plates', new THREE.Vector3(a * plate * 0.38, t / 2, b * plate * 0.38), 1, 1, 20);
+        for (const a of [-1, 1]) for (const b of [-1, 1]) anchorAt(holder, 'base plates', new THREE.Vector3(a * plate * 0.38, t / 2, b * plate * 0.38), t, 20);
         n += 5;
       }
       return n;

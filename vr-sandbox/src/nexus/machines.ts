@@ -11,6 +11,8 @@
 // Where the parts drawn weigh less than its published mass, the rest (trim, wiring, fluids, what is not drawn) is
 // one part of that mass, said as such; where they weigh more, that is said too.
 
+import { use } from './components';
+import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
 import { patchPoints, type Patch } from './surface';
@@ -89,7 +91,8 @@ export function tyreSection(t: Tyre): [number, number][] {
  *  and the nuts that hold it on their pitch circle, and its brake. Built with its outer face to +z. */
 /** A wheel's stud circle, m across: its maker's where given, else typical of its stud count (4×100, 5×114.3, 6×139.7,
  *  8×165.1 mm, as cars, pickups and trucks use), and never wider than its rim has room for. */
-const pcdOf = (lugs: number, rimR: number, given?: number) => Math.min(given ? given / 1000 : ({ 3: 0.07, 4: 0.1, 5: 0.1143, 6: 0.1397, 8: 0.1651 } as Record<number, number>)[lugs] ?? 0.1, 2 * Math.max(0.025, rimR * 0.62));
+// (ten studs: 285.75 mm, the North American hub-piloted truck wheel's circle, M22 × 1.5 studs; Europe's is 335 mm, ISO 4107)
+const pcdOf = (lugs: number, rimR: number, given?: number) => Math.min(given ? given / 1000 : ({ 3: 0.07, 4: 0.1, 5: 0.1143, 6: 0.1397, 8: 0.1651, 10: 0.28575 } as Record<number, number>)[lugs] ?? 0.1, 2 * Math.max(0.025, rimR * 0.62));
 /** Where a wheel's corner is along its axle, m out from the wheel's middle (+ toward its outer face), so the wheel and
  *  what holds it agree: its mounting face (where its maker's offset puts it, outboard of the rim's middle; else, typical,
  *  an alloy's 30 mm behind its centre pad at 30% of the half-width out, a steel or disc wheel's a quarter of the tyre's
@@ -148,7 +151,7 @@ function wheel(name: string, t: Tyre, o: { style: Machine['rims']['style']; spok
   if (o.style === 'spokes' || o.style === 'split') {
     // (its spokes run into the barrel, cast with it: their ends 1 mm into its wall, not short of it)
     const n = o.spokes ?? 5, share = n <= 6 ? 0.42 : n <= 10 ? 0.34 : 0.26, half = (r: number) => (Math.PI * r * share) / n, deep = Math.max(0.012, rr * 0.1), r1 = rr + 0.001;
-    face.push(P('centre pad', { lathe: [[rb, zc - 0.03], [rb, zc], [rp - 0.006, zc - 0.002], [rp, zc - 0.012], [rp, zc - 0.03]] }, [0, 0, 0], { rot: [PI / 2, 0, 0], mat: metal, color: o.color ?? 0xc8ccd2, finish: 'brushed' }));
+    face.push(P('centre pad', { lathe: [[rb, zc - 0.03], [rb, zc], [rp - 0.006, zc - 0.002], [rp, zc - 0.012], [rp, zc - 0.03]] }, [0, 0, 0], { rot: [PI / 2, 0, 0], mat: metal, color: o.color ?? 0xc8ccd2, finish: 'brushed', passes: Array.from({ length: o.lugs }, (_, i) => [`wheel nut ${i + 1}`, `wheel stud ${i + 1}`]).flat() }));
     for (let i = 0; i < n; i++) {
       const a = (i / n) * 2 * PI, st = [0, 0.5, 1].map((f) => { const r = rp - 0.006 + (r1 - rp + 0.006) * f, top = zc - 0.002 + (zr - zc + 0.002) * f - (f > 0 && f < 1 ? 0.006 : 0); return { x: r, w: half(r), lo: top - deep * (1 - 0.3 * f), hi: top, n: 3 }; });
       face.push(P(`spoke ${i + 1}`, { loft: { st } }, [0, 0, 0], { rot: [PI / 2, a, 0], mat: metal, color: o.color ?? 0xc8ccd2, finish: 'brushed' }));
@@ -211,12 +214,18 @@ function wheel(name: string, t: Tyre, o: { style: Machine['rims']['style']; spok
   // its nuts on the wheel's face (a lug nut: 1.75 d across its flats, 1.6 d tall, as Toyota's M12 × 1.5 are 21 mm
   // across and about 19 mm tall, typical), each on a stud pressed through the hub's flange, out through the disc's hat
   // and the wheel, its tip 3 mm past its nut
-  const nutH = o.lug * 0.0016, nutR = (o.lug * 0.00175) / Math.sqrt(3), padT = o.style === 'steel' || o.style === 'disc' ? 0.004 : 0, nutZ = o.style === 'spokes' || o.style === 'split' ? zc : o.style === 'steel' || o.style === 'disc' ? zMount + padT : t.W * 0.25 - 0.001;
+  // (on an alloy wheel's pad, its nut's 60° cone in the coned seat of its stud hole, the seat said, not drawn: the cone's
+  // foot as far under the pad's face there as the cone is high)
+  const padAt = (r: number) => (r <= rb ? zc : zc - (0.002 * (r - rb)) / Math.max(1e-6, rp - 0.006 - rb));
+  const thread = Object.keys(WHEEL).find((k) => WHEEL[k]!.d === o.lug) ?? `M${o.lug}x1.5`, nutH = (WHEEL[thread]?.h ?? o.lug * 1.6) / 1000, padT = o.style === 'steel' || o.style === 'disc' ? 0.004 : 0, nutZ = o.style === 'spokes' || o.style === 'split' ? padAt(pcd) - 0.25 * nutH : o.style === 'steel' || o.style === 'disc' ? zMount + padT : t.W * 0.25 - 0.001;
   const rimName = `${Math.round(t.rim / IN)} in ${o.style === 'steel' ? 'steel' : o.style === 'wire' ? 'spoked' : 'alloy'} rim`;
   for (let i = 0; i < o.lugs; i++) {
     const a = (i / o.lugs) * 2 * PI + PI / 2, z0 = hubFace - flangeT, z1 = nutZ + nutH + 0.003;
-    parts.push(P(`wheel nut ${i + 1}`, { cyl: [nutR, nutH] }, [Math.cos(a) * pcd, Math.sin(a) * pcd, nutZ + nutH / 2], { rot: [PI / 2, 0, 0], facets: 6, mat: 'steel-alloy', color: 0xb0b4ba, finish: 'plate', item: `nut M${o.lug}`, fixed: 'run onto its stud against the wheel and torqued', joins: ['wheel disc', 'centre pad', rimName], passes: [`wheel stud ${i + 1}`], iface: [{ kind: 'studs', role: 'requires', d: o.lug / 1000 }] }));
-    if (o.knuckle || o.style === 'steel' || o.style === 'disc') parts.push(P(`wheel stud ${i + 1}`, { cyl: [o.lug / 2000, z1 - z0] }, [Math.cos(a) * pcd, Math.sin(a) * pcd, (z0 + z1) / 2], { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x8a8e92, finish: 'plate', item: `stud M${o.lug}x1.5`, fixed: 'pressed into the hub\'s flange, knurled under its head', says: `a wheel stud, M${o.lug} × 1.5 (Toyota's thread), pressed into the hub` }));
+    // (each the library's: its nut on its cone seat against the wheel, its stud's head behind the hub's flange, its knurl
+    // through the flange, its thread out through the disc's hat and the wheel, 3 mm past its nut)
+    const xy = [Math.cos(a) * pcd, Math.sin(a) * pcd] as const;
+    parts.push(use(`wheelnut ${thread}`, [xy[0], xy[1], nutZ], { rot: [PI / 2, 0, 0], name: `wheel nut ${i + 1}`, fixed: 'run onto its stud against the wheel and torqued', joins: ['wheel disc', 'centre pad', rimName], passes: [`wheel stud ${i + 1}`] }));
+    parts.push(use(`wheelstud ${thread} L${Math.round((z1 - z0) * 2000) / 2}`, [xy[0], xy[1], z0], { rot: [-PI / 2, 0, 0], name: `wheel stud ${i + 1}`, fixed: 'pressed into the hub\'s flange, knurled under its head' }));
   }
   if (o.brake?.kind === 'disc') {
     const { r, th, zD, rh, sideIn, sideOut } = cn;
