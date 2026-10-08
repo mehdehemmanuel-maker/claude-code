@@ -27,6 +27,12 @@ export interface Part {
   /** it gives light: lumens, and the colour of it */ light?: { lm: number; color: number };
   /** it goes round its holder's middle once in so many seconds (an orbit) */ spin?: number;
   /** what it gives as food, kcal */ kcal?: number;
+  /** a round part drawn with so many flat sides (a hex head: 6) */ facets?: number;
+  /** it glows (a lamp's light, lit or not) */ glow?: boolean;
+  /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
+  /** how worn it is, 0 new to 1 derelict */ wear?: number;
+  /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
+  /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
   parts?: Part[]; says?: string;
 }
 export type Pick = Record<string, string | number>;
@@ -581,6 +587,6 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
 /** A thing made by a kit from words: its choices, its parts, its mass. */
 export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part } {
   let s = seed >>> 0 || 1; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return kk.build(pick, r, sub); };
-  const pick = choose(k, words, r); return { kit: k, pick, part: k.build(pick, r, sub) };
+  const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
+  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
 }
