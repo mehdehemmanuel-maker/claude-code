@@ -109,6 +109,21 @@ Each is a place in the room with its own physics, a coach that measures you, and
     - a casual hand's spread: median miss 4.4 cm, about one in eleven off the board when aimed at treble 20.
     - Say "throw 3 darts at treble 20"; in a headset, hold the trigger at the line and let go to throw with your hand's own speed.
   - Spin (follow, draw, side) is not modelled yet.
+- **works (the go-kart track, src/nexus/karting.ts)**: "take me to a go-kart track", and you are in a kart on the grid.
+  - The track is a 546 m loop, 7 m wide (the CIK-FIA asks 6–8 m by circuit grade), with 9 corners, the tightest a hairpin
+    8 m in radius. Red-and-white kerbs mark the corners, grass beyond them grips about half as well, tyre walls stand 3 m
+    out, and a gantry over the line carries five start lights and a timing board.
+  - The kart is a rental kart: a Honda GX270 (6.3 kW at 3,600 rpm and 19.1 N·m at 2,500 rpm, Honda's figures), governed
+    to about 59 km/h, with a brake on the rear axle only (so about 0.5 g). It handles as two tyres, front and rear, each
+    slipping at its own angle; their grip saturates at about 1.1 g and the rear shares its grip between drive and
+    cornering. Brake or accelerate too hard mid-corner and it slides or spins; once spinning, all four tyres slide until
+    it stops.
+  - The other drivers follow the line at the speed each corner allows, √(μ g R), braking in time for the next. The
+    quickest laps in about 42 s, against about 40 s for a perfect lap at the grip's limit; the others use 91–97 % of the grip.
+  - Drive it: in a headset, the right trigger is the throttle, the left the brake, and a stick steers; on a keyboard,
+    W/S and A/D or the arrow keys. Say "go" (five lights, then out), "restart", "practice" (alone), "race 5 karts",
+    "lap times", "get out" or "get in", "behind view", or "why did I spin" for the physics.
+  - Not yet: engine sound, the karts' weight shifting onto the outer tyres, kerbs as bumps.
 - **works (creatures, src/nexus/creatures.ts)**:
   - a dog (a golden retriever, by age), penguins (emperor, king, Adélie), a humpback whale, a T. rex, and a dragon;
   - each at the size and mass its sources give, moving as its size lets it: walkers at the Froude number their gait keeps
@@ -120,7 +135,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Next: their legs and bodies by physics, as the people's are (now their gait is a stride timed by their size).
 - **works**: a warehouse with robots, a workshop, flying and walking.
 - **next**: the people in a place standing on its ground everywhere (it is flat for 12 m round you), spin on the pool balls,
-  a go-kart track, creatures (a dog that follows you, a dragon, penguins, whales), old cities, games (ping pong), music.
+  old cities, games (ping pong), music.
 
 ## 5. Tested blind
 

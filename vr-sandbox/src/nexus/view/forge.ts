@@ -62,6 +62,8 @@ import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../surpris
 import { G as GRAVITY, PLACES, readPlace, sayPlace, type Place } from '../places';
 import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
 import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
+import { bump, drive as driveKart, idealLap, KART, lapSaid, makeTrack, onGrid, order, runKart, speedProfile, topSpeed, type KartState, type Track } from '../karting';
+import { kartView, trackView, type KartView, type TrackView } from './kart3d';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
 import '../creatures';
@@ -1934,13 +1936,15 @@ function goTo(p: Place): string {
   if (renderer.xr.isPresenting) { dolly.position.set(0, flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0, 0); dolly.rotation.set(0, 0, 0); dolly.scale.setScalar(k); }
   else { framing = false; const y0 = flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0; camera.position.set(0, y0 + eye, 0.2 * k); orbit.target.set(0, y0 + eye * 0.9, -2 * k); camera.near = Math.max(0.0005, 0.01 * k); camera.updateProjectionMatrix(); orbit.update(); }
   if (v.torch) { const hand = renderer.xr.isPresenting ? renderer.xr.getControllerGrip(1) : camera; hand.add(v.torch, v.torch.target); v.torch.target.position.set(0, 0, -1); }
-  place = 'table'; void setUpBar();
+  place = 'table'; void setUpBar(); setUpKarts();
+  if (karting) return sayPlace(p).replace(/ Say "back to the forge"/, ` ${karting.racers.length > 1 ? `You are in kart 1 at the back of the grid, ${karting.racers.length - 1} others ahead of you` : 'You are in kart 1 on the grid, alone'}. The right trigger (or W/↑) is the throttle, the left trigger (or S/↓) the brake, a stick (or A/D, ←/→) steers. Press the throttle or say "go" and five lights come on: go when they go out. Say "back to the forge"`);
   return `${sayPlace(p)}${p.props.some((x) => x.kind === 'pool table') ? ' Say "break", "shoot at the 3", "rack", or "throw 3 darts at treble 20"; in a headset, strike the cue ball with your hand, and hold the trigger at the line for a dart and let go to throw it.' : ''}`;
 }
 /** Back to the forge: its room as it was, Earth's gravity, your own size. */
 function backToForge(): string {
   dropKits((t) => !!t.fromPlace); if (riding?.fromPlace) riding = null;
   if (bar) { bar.pool.dispose(); bar = null; }
+  if (karting) { karting = null; kartKeys.clear(); dolly.rotation.set(0, 0, 0); dolly.position.set(0, 0, 0); }
   if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
   for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
   camera.far = 50; camera.near = 0.01; camera.updateProjectionMatrix(); dolly.scale.setScalar(1); peopleWorld?.setGravity(GRAVITY.earth); flying = false;
@@ -1964,7 +1968,7 @@ function placeWords(words: string): string {
   return came.length ? `${said.replace(/ Not here yet: [^.]*\./, '')} With you: ${came.join('; ')}.` : said;
 }
 function stepPlace(dt: number): void {
-  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt);
+  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt);
 }
 // ---- the bar's games, by real physics (src/nexus/games.ts): the pool table's balls moved by their own physics world, and
 // darts thrown by hand (in a headset) or by saying so, landing where their flight takes them and scored by the board ----
@@ -2036,6 +2040,122 @@ function dartLetGo(i: number): void {
   const s = dartScore(f.hit[0], f.hit[1]); if (s.score > 0 || Math.hypot(...f.hit) < 0.3) stickDart(f.hit); bar.scores.push(s.score);
   say(`${s.says} (let go at ${v.length().toFixed(1)} m/s, ${(f.t * 1000).toFixed(0)} ms in the air).`, undefined, 'nexus');
 }
+// ---- the go-kart track (src/nexus/karting.ts): your kart driven by your hands (in a headset: the right trigger is the
+// throttle, the left the brake, a stick steers) or by keys (W/S or ↑/↓, A/D or ←/→), the others by drivers following the
+// racing line at the speed its corners allow; five lights start the race; every lap timed ----
+interface Racer { k: KartState; v: KartView; skill: number; name: string; you: boolean }
+let karting: { tr: Track; view: TrackView; racers: Racer[]; profiles: Map<number, number[]>; state: 'grid' | 'lights' | 'racing'; lightsT: number; outAt: number; seated: boolean; cam: 'cockpit' | 'behind'; head: THREE.Vector3 | null; steer: number; boardT: number; lapsSaid: number } | null = null;
+const kartKeys = new Set<string>();
+const KART_COLOURS: [number, string][] = [[0xd12a1f, 'Red'], [0xf2c12e, 'Yellow'], [0x2fa84f, 'Green'], [0xe86a1a, 'Orange'], [0x8a3fd1, 'Purple'], [0xf2f2f2, 'White'], [0x111111, 'Black']];
+function setUpKarts(n = 3): void {
+  karting = null; if (!placeNow?.p.props.some((x) => x.kind === 'kart track')) return;
+  const tr = makeTrack(), view = trackView(tr); placeNow.v.group.add(view.group);
+  karting = { tr, view, racers: [], profiles: new Map(), state: 'grid', lightsT: 0, outAt: 0, seated: true, cam: 'cockpit', head: null, steer: 0, boardT: 0, lapsSaid: 0 };
+  addRacers(placeNow.p.alone ? 0 : n);
+}
+/** The grid set again: you at the back, the others ahead of you by how fast they drive (the quickest on pole). */
+function addRacers(n: number): void {
+  if (!karting || !placeNow) return; const K = karting;
+  for (const r of K.racers) r.v.group.parent?.remove(r.v.group); K.racers = [];
+  const skills = [0.97, 0.94, 0.91, 0.89, 0.87, 0.85, 0.83].slice(0, Math.max(0, Math.min(n, 7)));
+  skills.forEach((s, i) => { const [c, name] = KART_COLOURS[i]!; K.racers.push({ k: onGrid(K.tr, i), v: kartView(c, true, i + 2), skill: s, name, you: false }); });
+  K.racers.push({ k: onGrid(K.tr, skills.length), v: kartView(0x1f6fd1, false, 1), skill: 1, name: 'You', you: true });
+  for (const r of K.racers) { placeNow.v.group.add(r.v.group); if (!K.profiles.has(r.skill)) K.profiles.set(r.skill, speedProfile(K.tr, r.skill, placeNow.p.gravity || GRAVITY.earth)); }
+  K.state = 'grid'; K.view.lights(0, true); K.view.board(['say "go" or press the throttle', ...order(K.racers).map((r, i) => `${i + 1} ${r.name}`)]); K.head = null; K.lapsSaid = 0;
+  drawKarts(0);
+}
+const youKart = (): Racer | null => karting?.racers.find((r) => r.you) ?? null;
+/** What your hands or keys ask of your kart: throttle and brake 0..1, steer −1 (left) to 1 (right). */
+function kartInput(dt: number): { throttle: number; brake: number; steer: number } {
+  let throttle = 0, brake = 0, steer = 0;
+  const session = renderer.xr.isPresenting ? renderer.xr.getSession() : null;
+  if (session) for (const src of session.inputSources) {
+    const gp = src.gamepad; if (!gp) continue; const trig = gp.buttons[0]?.value ?? 0, sx = gp.axes[2] ?? 0;
+    if (src.handedness === 'right') throttle = Math.max(throttle, trig); else brake = Math.max(brake, trig);
+    if (Math.abs(sx) > Math.abs(steer) && Math.abs(sx) > 0.08) steer = sx;
+  }
+  if (kartKeys.has('w') || kartKeys.has('arrowup')) throttle = 1;
+  if (kartKeys.has('s') || kartKeys.has('arrowdown') || kartKeys.has(' ')) brake = 1;
+  // keys steer by easing towards full lock and back (about a quarter of a second), as hands turning a wheel do
+  const keySteer = (kartKeys.has('d') || kartKeys.has('arrowright') ? 1 : 0) - (kartKeys.has('a') || kartKeys.has('arrowleft') ? 1 : 0), K = karting!;
+  K.steer += Math.sign(keySteer - K.steer) * Math.min(Math.abs(keySteer - K.steer), 4 * dt);
+  if (Math.abs(K.steer) > Math.abs(steer)) steer = K.steer;
+  return { throttle, brake, steer };
+}
+/** The karts drawn where they are: turned to their heading, their wheels rolling, the front ones steered. */
+function drawKarts(dt: number): void {
+  for (const r of karting?.racers ?? []) {
+    const gr = r.v.group; gr.position.set(r.k.x, 0, r.k.z); gr.rotation.y = -r.k.heading;
+    for (const w of r.v.wheels) w.rotation.z -= (r.k.vx * dt) / 0.13;
+    for (const f of r.v.frontWheels) f.rotation.y = -r.k.steer * KART.steerMax;
+    r.v.steering.rotation.x = r.k.steer * 1.2;
+  }
+}
+function stepKarts(dt: number): void {
+  const K = karting; if (!K || dt <= 0) return; const g = placeNow?.p.gravity || GRAVITY.earth, me = youKart(); dt = Math.min(dt, 0.05);
+  if (me && K.seated) {
+    const inp = kartInput(dt), v = Math.max(me.k.vx, 1);
+    // a driver's aid, as a rental kart's slow steering is: full lock asks only a little more than the grip allows at speed
+    const aid = Math.max(0.12, Math.min(1, (1.3 * Math.atan((KART.wheelbase * KART.mu * g) / (v * v))) / KART.steerMax));
+    me.k.steer = inp.steer * aid; me.k.throttle = K.state === 'racing' ? inp.throttle : 0; me.k.brake = K.state === 'racing' ? inp.brake : 1;
+    if (K.state === 'grid' && inp.throttle > 0.3) startLights();
+  }
+  if (K.state === 'lights') {
+    const t = performance.now() / 1000 - K.lightsT; K.view.lights(Math.min(5, Math.floor(t) + 1), false);
+    if (t >= K.outAt) { K.state = 'racing'; K.view.lights(0, true); say('Lights out — go!', undefined, 'nexus'); }
+  }
+  for (const r of K.racers) {
+    if (!r.you) { if (K.state === 'racing') driveKart(r.k, K.tr, K.profiles.get(r.skill)!, r.skill); else { r.k.throttle = 0; r.k.brake = 1; } }
+    else if (!K.seated) { r.k.throttle = 0; r.k.brake = 1; }
+    const lapsBefore = r.k.laps; runKart(r.k, K.tr, dt, g);
+    if (r.you && r.k.laps > lapsBefore && r.k.last !== null && r.k.laps > K.lapsSaid) { K.lapsSaid = r.k.laps; say(`Lap ${r.k.laps}: ${lapSaid(r.k.last)}${r.k.best !== null ? ` (best ${lapSaid(r.k.best)})` : ''}. P${order(K.racers).indexOf(r) + 1} of ${K.racers.length}.`, undefined, 'nexus'); }
+  }
+  for (let i = 0; i < K.racers.length; i++) for (let j = i + 1; j < K.racers.length; j++) bump(K.racers[i]!.k, K.racers[j]!.k);
+  drawKarts(dt);
+  // you, in your seat: the headset's rig carried with the kart (your head where the seat's eye is), or the screen's camera
+  if (me && K.seated) {
+    me.v.group.updateMatrixWorld(); const seat = me.v.group.localToWorld(me.v.seat.clone()), fwd = new THREE.Vector3(Math.cos(me.k.heading), 0, Math.sin(me.k.heading));
+    if (renderer.xr.isPresenting) {
+      if (!K.head) { const h = new THREE.Vector3(); renderer.xr.getCamera().getWorldPosition(h); dolly.updateMatrixWorld(); K.head = dolly.worldToLocal(h); }
+      dolly.scale.setScalar(1); dolly.rotation.set(0, -me.k.heading - Math.PI / 2, 0); dolly.updateMatrixWorld();
+      dolly.position.copy(seat).sub(K.head.clone().applyQuaternion(dolly.quaternion));
+    } else if (K.cam === 'behind') { camera.position.copy(me.v.group.position).addScaledVector(fwd, -4.5).add(new THREE.Vector3(0, 2.2, 0)); orbit.target.copy(me.v.group.position).addScaledVector(fwd, 3).add(new THREE.Vector3(0, 0.5, 0)); }
+    else { camera.position.copy(seat); orbit.target.copy(seat).addScaledVector(fwd, 5).add(new THREE.Vector3(0, -0.45, 0)); if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); } }
+  }
+  K.boardT -= dt;
+  if (K.boardT <= 0) {
+    K.boardT = 0.25;
+    if (me) me.v.dash([`${Math.round(me.k.vx * 3.6)} km/h`, `lap ${Math.max(0, me.k.laps)}  P${order(K.racers).indexOf(me) + 1}`, `last ${lapSaid(me.k.last)}`, `best ${lapSaid(me.k.best)}`]);
+    if (K.state !== 'grid') K.view.board(order(K.racers).map((r, i) => `${i + 1} ${r.name.padEnd(7)} L${Math.max(0, r.k.laps)} ${lapSaid(r.k.best)}`));
+  }
+}
+function startLights(): string {
+  const K = karting!; if (K.state !== 'grid') return K.state === 'lights' ? 'The lights are coming on.' : 'The race is on.';
+  // five lights, one a second, then out after a moment no one can guess (Formula 1's start does the same)
+  K.state = 'lights'; K.lightsT = performance.now() / 1000; K.outAt = 5 + 0.2 + Math.random() * 1.3; return 'Five red lights, one a second: go when they go out.';
+}
+/** Words the track answers: go, restart, get in or out, the camera, practice alone, more karts, lap times, how it works. */
+function kartWords(text: string): string | null {
+  const K = karting; if (!K) return null; const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), me = youKart();
+  if (/^(go|start|start the race|start it|race|let'?s race|let'?s go|lights|green light)$/.test(t)) return startLights();
+  if (/^(restart|reset|reset the race|restart the race|new race|back to the grid|again)$/.test(t)) { addRacers(K.racers.length - 1); return 'Back on the grid: say "go" or press the throttle.'; }
+  if (/^(practi[cs]e|alone|just me|no other karts|drive alone|on my own)$/.test(t)) { addRacers(0); return 'Just you on the track: every lap timed. Say "race 3 karts" to have company.'; }
+  const add = /^(?:race|race against|add|with) (\d|a|one|two|three|four|five|six|seven) (?:other |more )?karts?$/.exec(t);
+  if (add) { const n = Math.min(7, ({ a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 } as Record<string, number>)[add[1]!] ?? Number(add[1])); addRacers(n); return `${n} other kart${n === 1 ? '' : 's'} on the grid ahead of you, ${n === 1 ? 'its driver' : 'their drivers'} taking each corner at ${K.racers.filter((r) => !r.you).map((r) => `${Math.round(r.skill * 100)} %`).join(', ')} of the speed the grip allows. Say "go".`; }
+  if (/^(get out|get out of the kart|stop driving|climb out|out of the kart)$/.test(t) && me) { K.seated = false; if (renderer.xr.isPresenting) { dolly.rotation.set(0, 0, 0); dolly.position.set(me.k.x - Math.sin(me.k.heading) * 2, 0, me.k.z + Math.cos(me.k.heading) * 2); } else { camera.position.set(me.k.x, 6, me.k.z + 8); orbit.target.set(me.k.x, 0.5, me.k.z); } return 'Out of the kart, standing beside it. Say "get in" to drive.'; }
+  if (/^(get in|drive|get in the kart|in the kart|climb in|sit in the kart|let me drive)$/.test(t)) { K.seated = true; K.head = null; return 'In the kart. Right trigger (or W) for throttle, left trigger (or S) to brake, a stick (or A/D) to steer.'; }
+  if (/^(behind|chase|third person|from behind)( view| camera| cam)?$|^(chase|behind) (view|camera|cam)$/.test(t)) { K.cam = 'behind'; return 'The camera behind your kart (on a screen; in a headset you are always in the seat).'; }
+  if (/^(cockpit|first person|in the seat|driver'?s? (?:view|seat))( view| camera| cam)?$/.test(t)) { K.cam = 'cockpit'; return 'The camera in your seat.'; }
+  if (/^(recentre|recenter|center me|centre me)$/.test(t)) { K.head = null; return 'Your head put back in the seat.'; }
+  if (/^(lap times?|times|my laps?|results|standings|positions|how am i doing|how fast(?: am i| was i)?)$/.test(t)) return `${order(K.racers).map((r, i) => `${i + 1}. ${r.name}: ${Math.max(0, r.k.laps)} laps, best ${lapSaid(r.k.best)}${r.k.last !== null ? `, last ${lapSaid(r.k.last)}` : ''}`).join('; ')}. The track is ${Math.round(K.tr.length)} m: a lap at the grip's limit all the way round takes about ${lapSaid(idealLap(K.tr, placeNow?.p.gravity || GRAVITY.earth))}.`;
+  if (/\b(how|why)\b.*\b(kart|karts|spin|spun|slide|slid|grip|corner|steer)/.test(t)) return `Your kart is about ${KART.mass} kg with you in it, pushed by a Honda GX270 (6.3 kW at 3,600 rpm, 19.1 N·m at 2,500: Honda) through a ${KART.ratio}:1 chain, governed to ${Math.round(topSpeed() * 3.6)} km/h. Its tyres grip sideways up to about ${KART.mu} g, so a corner of radius R can be taken at √(μ g R): the 8 m hairpin at about ${Math.round(Math.sqrt(KART.mu * 9.81 * 8) * 3.6)} km/h. Brake hard or give it throttle mid-corner and the rear tyres have less grip left for turning (the friction circle): the rear slides and you spin. The brake is on the rear axle only, so it stops you at about ${(KART.brake * (1 - KART.front)).toFixed(1)} g. On the grass beyond the kerbs the tyres grip about half as well.`;
+  return null;
+}
+// the keys drive while you are in the kart (and nothing else hears them then)
+const KART_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ']);
+window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(), tag = (e.target as HTMLElement).tagName; if (!karting?.seated || !KART_KEYS.has(k) || tag === 'INPUT' || tag === 'TEXTAREA') return; kartKeys.add(k); e.preventDefault(); e.stopImmediatePropagation(); }, true);
+window.addEventListener('keyup', (e) => { kartKeys.delete(e.key.toLowerCase()); }, true);
+window.addEventListener('blur', () => kartKeys.clear());
 const personNamed = (w: string): Person | null => peopleWorld?.list.find((p) => personFact(p.name) === personFact(w)) ?? null;
 /** A body rebuilt where it stands with what was changed (its height, mass, muscle, fat, sex, skin, hair). */
 function adjustPerson(p: Person, change: Partial<BodyParams>): string {
@@ -2200,6 +2320,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3341,6 +3462,7 @@ for (let i = 0; i < 2; i++) {
   // the trigger is the clicker: it presses what it points at, and never drags (the grip holds)
   ctl.addEventListener('selectend', () => dartLetGo(i));
   ctl.addEventListener('selectstart', () => {
+    if (karting?.seated) return; // in the kart the triggers are its throttle and brake
     if (dartGrab(i)) return;
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
@@ -3412,13 +3534,14 @@ function walk(dt: number): void {
   for (const src of session.inputSources) {
     const ax = src.gamepad?.axes; if (!ax || ax.length < 4) continue;
     const [sx, sy] = [ax[2]!, ax[3]!];
-    if (src.handedness === 'left' && Math.hypot(sx, sy) > 0.15) {
+    if (karting?.seated) { /* in the kart: the sticks steer it (stepKarts) */ }
+    else if (src.handedness === 'left' && Math.hypot(sx, sy) > 0.15) {
       const head = renderer.xr.getCamera(); const fwd = new THREE.Vector3(); head.getWorldDirection(fwd); if (!flying) fwd.y = 0; fwd.normalize();
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       const speed = (flying ? 12 : 1.2) * dolly.scale.x; dolly.position.addScaledVector(fwd, -sy * speed * dt).addScaledVector(right.normalize(), sx * speed * dt);
     }
     if (src.handedness === 'right' && windows.holding) { if (Math.abs(sy) > 0.15) windows.push(-sy * 1.5 * dt); continue; }
-    if (src.handedness === 'right') {
+    if (src.handedness === 'right' && !karting?.seated) {
       if (smoothTurn) { if (Math.abs(sx) > 0.15) dolly.rotateY(-sx * 1.6 * dt); }
       else { if (Math.abs(sx) > 0.7 && !turned) { dolly.rotateY(-Math.sign(sx) * turnStep); turned = true; } if (Math.abs(sx) < 0.3) turned = false; }
     }
@@ -3517,6 +3640,7 @@ async function boot() {
     winPoint: (id: string, act: 'move' | 'min' | 'close') => toScreen(windows.pointOf(id, act)),
     winWorld: (id: string, act: 'move' | 'min' | 'close') => { const w = windows.pointOf(id, act); return w ? [w.x, w.y, w.z] : null; },
     winList: () => windows.list(),
+    kartsNow: () => karting ? { state: karting.state, seated: karting.seated, length: karting.tr.length, racers: karting.racers.map((r) => ({ name: r.name, laps: r.k.laps, s: +r.k.s.toFixed(1), v: +r.k.vx.toFixed(2), best: r.k.best, last: r.k.last, grass: r.k.onGrass, hits: r.k.hits, heading: +r.k.heading.toFixed(2) })) } : null,
     winAt: (id: string) => { const o = ({ rounds: roundsCard.mesh, laws: lawsCard.mesh, flaws: flawBoard, gates: gatesCard.mesh } as Record<string, THREE.Object3D>)[id]; return o ? o.getWorldPosition(new THREE.Vector3()).toArray() : null; },
     phonePoint: (act: string, arg?: string | number) => toScreen(phone.pointOf(act, arg)),
     phoneWorld: (act: string, arg?: string | number) => { const w = phone.pointOf(act, arg); return w ? [w.x, w.y, w.z] : null; },
