@@ -24,6 +24,8 @@ export interface BodyParams {
   /** the face: eyes apart, eye size, nose length, nose width, mouth width, lips, jaw width, chin, brow, cheekbones, ears */
   eyesApart: number; eyeSize: number; noseLength: number; noseWidth: number; mouthWidth: number; lips: number; jaw: number; chin: number; brow: number; cheeks: number; ears: number;
   /** 0 male (XY), 1 female (XX) */ sex: number;
+  /** hair: its length on the scalp (m, a choice), how dark (eumelanin, 0–1) and how red (pheomelanin, 0–1) */ hairLength: number; hairDark: number; hairRed: number;
+  /** how dark the skin (its melanin, 0–1) and the iris (0 blue to 1 brown) */ skinDark: number; eyeDark: number;
 }
 export const PARAMS: { key: keyof BodyParams; name: string; def: number; min: number; max: number; step: number; says: string }[] = [
   { key: 'height', name: 'height', def: 1.76, min: 1.4, max: 2.1, step: 0.02, says: 'm: ICRP 89\'s reference man is 176 cm' },
@@ -47,6 +49,11 @@ export const PARAMS: { key: keyof BodyParams; name: string; def: number; min: nu
   { key: 'cheeks', name: 'cheekbones', def: 1, min: 0.8, max: 1.3, step: 0.02, says: 'width and height' },
   { key: 'ears', name: 'ears', def: 1, min: 0.8, max: 1.3, step: 0.02, says: 'about 62 mm tall (typical)' },
   { key: 'sex', name: 'sex', def: 0, min: 0, max: 1, step: 1, says: '0 male (XY: ICRP 89\'s reference man), 1 female (XX)' },
+  { key: 'hairLength', name: 'hair length', def: 0.04, min: 0, max: 1, step: 0.01, says: 'm on the scalp: cut, a choice (ICRP 89\'s 20 g of hair is 4 cm on 100,000 strands); it can grow to its speed times its growing phase, about 40 cm in 3 years' },
+  { key: 'hairDark', name: 'hair darkness', def: 0.7, min: 0, max: 1, step: 0.05, says: 'its eumelanin: 0 blond, 1 black' },
+  { key: 'hairRed', name: 'hair redness', def: 0.1, min: 0, max: 1, step: 0.05, says: 'its pheomelanin: red hair is mostly MC1R' },
+  { key: 'skinDark', name: 'skin darkness', def: 0.35, min: 0, max: 1, step: 0.05, says: 'its melanin' },
+  { key: 'eyeDark', name: 'eye darkness', def: 0.7, min: 0, max: 1, step: 0.05, says: 'the iris\'s melanin: 0 blue, 1 brown (mostly HERC2/OCA2)' },
 ];
 export const DEFAULT_BODY: BodyParams = Object.fromEntries(PARAMS.map((p) => [p.key, p.def])) as unknown as BodyParams;
 export const bodyOf = (p: Partial<BodyParams> = {}): BodyParams => { const out = { ...DEFAULT_BODY }; for (const q of PARAMS) { const v = p[q.key]; if (typeof v === 'number' && Number.isFinite(v)) out[q.key] = Math.min(q.max, Math.max(q.min, v)); } return out; };
@@ -64,6 +71,8 @@ export interface Body {
   muscles: Placed[];
   skin: Prim[];
   face: Prim[];
+  /** the hair on the scalp as a field (a shell of the cranium as thick as the hair lies, cut at its hairline and round the ears, with what hangs if it is long), and the brows as curves */
+  hair: Prim[]; brows: V3[][];
 }
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -266,7 +275,22 @@ export function layOut(p0: Partial<BodyParams> = {}): Body {
   F([0, -0.105, 0.072 * p.chin], [0, -0.115, 0.06 * p.chin], 0.02, 0.018, 0.012); // chin
   F([0, -0.06, 0.07], [0, -0.09, 0.075], 0.035, 0.03, 0.02); // the face below the eyes
   for (const k of [1, -1]) F([k * ex, ey, 0.066], [k * ex, ey, 0.066], 0.0122 * p.eyeSize, 0.0122 * p.eyeSize, 0.003); // the eyeball in its socket
-  return { params: p, H, joints: J, bones, organs, muscles, skin, face };
+  // ---- hair: a shell of the cranium as thick as the hair lies (short hair lies flat, long hair has more body), cut away
+  // at the forehead's hairline and round the ears, and what hangs below if it is long; the brows over the eyes ----
+  const hair: Prim[] = [], Hh = (a: V3, b: V3, r: number, r2 = r, k = 0.01, cut = false) => hair.push({ a: add(hc, mul(a, hk)), b: add(hc, mul(b, hk)), r: r * hk, r2: r2 * hk, k: k * hk, ...(cut ? { cut } : {}) });
+  const hairL = p.hairLength, hairT = hairL > 0.002 ? 0.003 + 0.25 * Math.min(hairL, 0.08) : 0;
+  if (hairT > 0) {
+    Hh([0, 0.012, -0.012], [0, 0.0, 0.005], 0.088 + hairT, 0.083 + hairT); // over the cranium
+    Hh([0, 0.04, -0.012], [0, 0.05, 0.02], 0.062 + hairT, 0.058 + hairT); // the crown and the top of the forehead
+    const hang = Math.max(0, hairL - 0.1) / hk; // what falls below the head
+    if (hang > 0) { Hh([0, -0.01, -0.07], [0, -0.01 - hang, -0.1], 0.07, 0.05, 0.03); for (const k of [1, -1]) Hh([k * 0.065, 0, -0.035], [k * 0.07, -0.01 - hang * 0.8, -0.07], 0.03, 0.02, 0.02); }
+    Hh([0, -0.05, 0.112], [0, -0.05, 0.112], 0.094, 0.094, 0.012, true); // the face, below the hairline (about 4 cm above the brows)
+    for (const k of [1, -1]) Hh([k * 0.085, -0.06, 0.035], [k * 0.085, -0.06, 0.035], 0.05, 0.05, 0.01, true); // the temples and cheeks, below the sideburns
+    Hh([0, -1.05 - (hang > 0 ? hang + 0.02 : 0), 0], [0, -1.05 - (hang > 0 ? hang + 0.02 : 0), 0], 1, 1, 0.01, true); // the nape (or, long, where it ends)
+    if (hairL < 0.12) for (const k of [1, -1]) Hh([k * 0.082, -0.015, -0.005], [k * 0.082, -0.015, -0.005], 0.024, 0.024, 0.01, true); // round the ears
+  }
+  const brows: V3[][] = [1, -1].map((k) => [[k * 0.011, 0.012, 0.086], [k * 0.03, 0.017, 0.083], [k * 0.05, 0.011, 0.07]].map((v) => add(hc, mul(v as V3, hk))));
+  return { params: p, H, joints: J, bones, organs, muscles, skin, face, hair, brows };
 }
 function lerpN(a: number, b: number, t: number): number { return a + (b - a) * t; }
 function clamp(x: number): number { return x < 0 ? 0 : x > 1 ? 1 : x; }

@@ -234,13 +234,36 @@ export function skinGeos(body: Body, key = currentKey()): THREE.BufferGeometry[]
   }
   return k.map((m) => geoOf(m));
 }
+const hairKept = new Map<string, { pos: Float32Array; nrm: Float32Array; idx: Uint32Array } | null>();
+/** The hair on a body's scalp, meshed once a body at 6 mm (it is a shell over the cranium's field, cut at its hairline). */
+export function hairGeo(body: Body, key = currentKey()): THREE.BufferGeometry | null {
+  if (hairKept.size > 8) hairKept.clear();
+  if (!hairKept.has(key)) { const m = body.hair.length ? surfaceNets(body.hair, 0.006 * body.H / 1.76) : null; hairKept.set(key, m && m.idx.length ? { pos: m.pos, nrm: m.nrm, idx: m.idx } : null); }
+  const k = hairKept.get(key); return k ? geoOf(k) : null;
+}
+/** Colours from melanin: hair by its eumelanin (blond to black) and pheomelanin (red), skin by its melanin, the iris from
+ *  blue (little melanin, scattered light) to brown. */
+const mix = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const hex = (c: [number, number, number]) => (Math.round(Math.max(0, Math.min(1, c[0])) * 255) << 16) | (Math.round(Math.max(0, Math.min(1, c[1])) * 255) << 8) | Math.round(Math.max(0, Math.min(1, c[2])) * 255);
+export const hairColor = (dark: number, red: number): number => hex(mix(mix([0.82, 0.68, 0.44], [0.07, 0.055, 0.045], Math.pow(dark, 0.8)), [0.58, 0.22, 0.08], red * (1 - 0.75 * dark)));
+export const skinColor = (dark: number): number => hex(mix([0.96, 0.82, 0.72], [0.32, 0.21, 0.15], dark));
+export const irisColor = (dark: number): number => hex(dark < 0.5 ? mix([0.36, 0.55, 0.74], [0.42, 0.5, 0.3], dark * 2) : mix([0.42, 0.5, 0.3], [0.3, 0.18, 0.1], dark * 2 - 1));
+/** The skin, hair, brows and eyes of a body, in its own colours. */
+function surfaceOf(body: Body, add: Add, o: { clear?: number } = {}): void {
+  const P = body.params, hs = body.H / 1.76, hc = hairColor(P.hairDark, P.hairRed);
+  for (const g of skinGeos(body)) add(g, tint(skinColor(P.skinDark), o.clear ? { clear: o.clear } : { rough: 0.55 }));
+  if (o.clear) return;
+  const hg = hairGeo(body); if (hg) add(hg, tint(hc, { rough: 0.9 }));
+  for (const b of body.brows) add(tubeAlong(b, 0.0026 * hs * (P.sex >= 0.5 ? 0.8 : 1), 12, 5), tint(hex(mix([((hc >> 16) & 255) / 255, ((hc >> 8) & 255) / 255, (hc & 255) / 255], [0.05, 0.04, 0.03], 0.3)), { rough: 0.9 }));
+  for (const og of body.organs) if (og.id === 'eye') { const e = new THREE.SphereGeometry(0.0115 * body.H / 1.76, 16, 12); e.translate(og.a[0], og.a[1], og.a[2] - 0.004); add(e, tint(C.eye, { rough: 0.15 })); const ir = new THREE.CircleGeometry(0.0055 * body.H / 1.76, 18); ir.translate(og.a[0], og.a[1], og.a[2] + 0.0076); add(ir, tint(irisColor(P.eyeDark), { rough: 0.2 })); const pu = new THREE.CircleGeometry(0.0022 * body.H / 1.76, 14); pu.translate(og.a[0], og.a[1], og.a[2] + 0.0077); add(pu, tint(0x0a0806, { rough: 0.1 })); }
+}
 /** A system of the body drawn where its parts lie, in body metres (feet at y = 0). */
 function systemInto(id: string, body: Body, add: Add): boolean {
-  const ghost = () => { for (const g of skinGeos(body)) add(g, tint(C.skin, { clear: 0.12 })); };
+  const ghost = () => surfaceOf(body, add, { clear: 0.12 });
   const organs = (ids: string[], wire = true) => { for (const o of body.organs) if (ids.includes(o.id)) add(organGeo(o, ORGAN_FORM[o.id] ?? 'blob'), tint(ORGAN_COLOR[o.id] ?? C.gland)); if (wire) ghost(); };
   const limbsTube = (color: number, r: number, off: V3 = [0, 0, 0]) => { const J = body.joints, o = (v: V3) => add3(v, off); for (const s of ['L', 'R']) { add(tubeAlong([o(J.c7!), o(J[`shoulder${s}`]!), o(J[`elbow${s}`]!), o(J[`wrist${s}`]!), o(J[`fingertip${s}`]!)], r, 40, 6), tint(color)); add(tubeAlong([o([0, J[`hip${s}`]![1] + 0.08, -0.01]), o(J[`hip${s}`]!), o(J[`knee${s}`]!), o(J[`ankle${s}`]!), o(J[`toe${s}`]!)], r * 1.3, 40, 6), tint(color)); } };
   switch (id) {
-    case 'human': case 'skin': { for (const g of skinGeos(body)) add(g, tint(C.skin, { rough: 0.55 })); for (const o of body.organs) if (o.id === 'eye') { const e = new THREE.SphereGeometry(0.0115 * body.H / 1.76, 16, 12); e.translate(o.a[0], o.a[1], o.a[2] - 0.004); add(e, tint(C.eye, { rough: 0.15 })); const ir = new THREE.CircleGeometry(0.0055 * body.H / 1.76, 18); ir.translate(o.a[0], o.a[1], o.a[2] + 0.0076); add(ir, tint(C.iris, { rough: 0.2 })); } return true; }
+    case 'human': case 'skin': { surfaceOf(body, add); return true; }
     case 'adipose': { for (const g of skinGeos(body)) add(g, tint(C.fat, { clear: 0.55 })); return true; }
     case 'skeleton': case 'skull': case 'cranium': case 'face-bones': case 'spine': case 'ribcage': case 'arm-bones': case 'hand-bones': case 'leg-bones': case 'foot-bones': case 'ossicles': {
       const bs = bonesOf(body, id), skullHere = ['skeleton', 'skull'].includes(id);

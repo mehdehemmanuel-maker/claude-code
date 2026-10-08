@@ -3,7 +3,7 @@
 // parents, every child different, the body laid out from what it grew into.
 
 import { describe, expect, it } from 'vitest';
-import { LOCI, TRAITS, childOf, gamete, phenotype, possibilities, randomGenome, rng, scores } from '../../src/nexus/life/genome';
+import { LOCI, TRAITS, childOf, earwax, gamete, phenotype, possibilities, randomGenome, rng, scores } from '../../src/nexus/life/genome';
 import { layOut } from '../../src/nexus/anatomy';
 
 describe('a body from a genome', () => {
@@ -35,5 +35,16 @@ describe('a body from a genome', () => {
     const g = randomGenome(99, 'XX'), p = phenotype(g), b = layOut(p.params);
     expect(b.params.sex).toBe(1); expect(b.H).toBeCloseTo(Math.min(2.1, Math.max(1.4, p.params.height!)), 6);
     expect(b.organs.some((o) => o.id === 'uterus')).toBe(true); expect(b.organs.some((o) => o.id === 'testis')).toBe(false);
+  });
+  it('pigments from genes, hair as long as it is let grow, earwax from one gene by Mendel', () => {
+    const ps = Array.from({ length: 200 }, (_, i) => phenotype(randomGenome(1000 + i)).params);
+    for (const k of ['hairDark', 'hairRed', 'skinDark', 'eyeDark'] as const) { const v = ps.map((p) => p[k]!); expect(Math.min(...v)).toBeGreaterThan(0); expect(Math.max(...v)).toBeLessThan(1); expect(Math.max(...v) - Math.min(...v), k).toBeGreaterThan(0.5); }
+    for (const p of ps) { expect(p.hairLength!).toBeGreaterThan(0); expect(p.hairLength!).toBeLessThan(0.35e-3 * 365 * 7 + 1e-9); }
+    // two dry-earwax parents have only dry-earwax children; the allele is recessive
+    const dry = (seed: number) => { for (let s = seed; ; s++) { const g = randomGenome(s); if (earwax(g) === 'dry') return g; } };
+    const m = dry(1), f = dry(5000); for (let k = 0; k < 20; k++) expect(earwax(childOf(m, f, k))).toBe('dry');
+    const share = ps.length ? Array.from({ length: 400 }, (_, i) => earwax(randomGenome(9000 + i)) === 'dry').filter(Boolean).length / 400 : 0; expect(share).toBeGreaterThan(0.04); expect(share).toBeLessThan(0.16); // 0.3² by Hardy–Weinberg
+    // and the body it grows into wears it: hair on its scalp, cut at its hairline; none when shaved
+    expect(layOut({ hairLength: 0.04 }).hair.length).toBeGreaterThan(3); expect(layOut({ hairLength: 0 }).hair.length).toBe(0); expect(layOut({}).brows.length).toBe(2);
   });
 });

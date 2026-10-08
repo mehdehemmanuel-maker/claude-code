@@ -11,6 +11,7 @@ import { densityOf, profile, profileFaults } from '../../src/nexus/derive';
 import { flowsOf } from '../../src/nexus/life/flows';
 import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/inventory';
 import { MOLECULES } from '../../src/nexus/life';
+import { GLAND_KINDS } from '../../src/nexus/life/glands';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { leaf } from '../../src/nexus/term';
 
@@ -96,5 +97,10 @@ describe('what a body makes', () => {
     expect(lawsUnder(bili.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['queueing', 'total.mass', 'stoichiometry.mass']));
     expect(leavesUnder(bili.rate).every((d) => d.term.kind === 'leaf')).toBe(true);
     const hair = fs.find((f) => f.id === 'hair')!; const longest = valueIn(hair.also[0]!.d, 'cm')!; expect(longest).toBeGreaterThan(20); expect(longest).toBeLessThan(80); // its growth rate times its growing phase
+  });
+  it('its glands are kinds other creatures have too: silk, wax, light, venom, ink, slime', () => {
+    for (const k of GLAND_KINDS) { expect(INVENTORY.has(k.id), k.id).toBe(true); for (const c of k.in) expect(countIn(c, k.id), `${c} has ${k.id}`).toBeGreaterThan(0); }
+    expect(countIn('hagfish', 'slime-gland')).toBe(300); expect(countIn('silkworm', 'silk-gland')).toBe(2);
+    expect(MOLECULES.find((m) => m.id === 'hagfish-slime')!.spec).toMatchObject({ blend: expect.arrayContaining([['water', 99.996]]) });
   });
 });
