@@ -10,11 +10,15 @@
 //   pick:name|query|x,y;x,y…           the part under each pixel of the picture
 //   gap:name|query|regexA|regexB       the least distance between the parts so named (0 where they cross)
 //   clash:name|query|n                 every place two parts' surfaces cross or touch, and a close-up of the n worst
-//                                      (each twice: as it is, and with the two parts coloured and the rest faint)
+//                                      (each twice: as it is, and with the two parts coloured and the rest faint); each
+//                                      as through, touch, layered, meets, or, where it is meant: joined (a joint laid
+//                                      on them, or said by its maker: seated, clamped, bonded), fitted (through an
+//                                      opening made for it), fused (one casting, moulding or weld)
 //   holes:name|query                   where the thing can be seen through from inside its outline, painted green
 //   sheet:name|query                   a contact sheet: whole from every side, under, and close on its faces, wheels,
 //                                      doors, mirrors, lamps and inside (cut away)
 //
+// A '|' inside a query (a regex's alternatives in only= or hi=) is written %7C, as '|' parts a job's fields.
 // Out to $BENCH_OUT (else ./bench-out). Serves dist-view (or $BENCH_ROOT) itself on a free port. Chromium from $CHROMIUM, else the
 // preinstalled one; Playwright from $PLAYWRIGHT, else node_modules, else the global install.
 import http from 'node:http';
@@ -47,7 +51,7 @@ async function clash(name, query, n) {
   fs.writeFileSync(path.join(out, `${name}.clash.json`), JSON.stringify(all, null, 1));
   // (the same pair of names met many times, as a car's four handles each in its door, counted once, at its worst)
   const byPair = new Map(); for (const c of all) { const k = `${c.kind}|${[c.a, c.b].sort().join(' ~ ')}`; const was = byPair.get(k); if (!was || c.span > was.span) byPair.set(k, { ...c, times: (was?.times ?? 0) + 1 }); else was.times++; }
-  const rows = [...byPair.values()].sort((p, q) => ({ through: 0, touch: 1, layered: 2, meets: 3, fitted: 4, fused: 5 }[p.kind] - { through: 0, touch: 1, layered: 2, meets: 3, fitted: 4, fused: 5 }[q.kind]) || q.span - p.span);
+  const rows = [...byPair.values()].sort((p, q) => ({ through: 0, touch: 1, layered: 2, meets: 3, joined: 4, fitted: 4, fused: 5 }[p.kind] - { through: 0, touch: 1, layered: 2, meets: 3, joined: 4, fitted: 4, fused: 5 }[q.kind]) || q.span - p.span);
   console.log(`${name}: ${all.length} meetings, ${rows.length} pairs of names (${((Date.now() - t0) / 1000).toFixed(1)} s). size ${facts.size}`);
   for (const r of rows) console.log(`  ${r.kind.padEnd(8)} ${r.a}  ~  ${r.b}  ×${r.times}  over ${(r.span * 1000).toFixed(0)} mm${r.depth !== undefined ? `, ${(r.depth * 1000).toFixed(0)} mm deep` : ''} at ${v3(r.at)}  [${r.kin}]`);
   const c0 = [0, (facts.size[1] ?? 1) / 2, 0];

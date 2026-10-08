@@ -33,7 +33,9 @@ const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === 
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);
 // (a trial of rules or lines, before anything is made)
 if (q.get('rules') || q.get('lines')) tryBody({ rules: q.get('rules') ? JSON.parse(q.get('rules')!) : undefined, lines: q.get('lines') ? JSON.parse(q.get('lines')!) : undefined });
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
+// (a logarithmic depth buffer, and the near plane set by how far the camera stands: so two faces a millimetre apart are
+// told apart close up, not drawn through each other as they are with a fixed 5 mm near plane and 500 m far one)
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3; renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
 const holes = q.get('holes') === '1';
 const scene = new THREE.Scene(); scene.background = new THREE.Color(holes ? 0xff00ff : 0xc9ccd0);
@@ -80,7 +82,9 @@ if (his.length || q.get('ghost') === '1') {
   }
 }
 // a gap seen through: every part flat, opaque and both sided, in a colour of its own, on magenta
-if (holes) { floor.visible = false; for (const m of meshes) { let h = 0; for (const ch of m.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; m.material = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL((h % 360) / 360, 0.35, 0.35 + ((h >> 9) % 30) / 100), side: THREE.DoubleSide }); } }
+// (the floor stays, flat grey: the ground seen under the car or through a wheel is the ground, not a gap; a gap is the
+// sky seen through it)
+if (holes) { (floor as THREE.Mesh).material = new THREE.MeshBasicMaterial({ color: 0x777777 }) as unknown as THREE.MeshStandardMaterial; for (const m of meshes) { let h = 0; for (const ch of m.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; m.material = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL((h % 360) / 360, 0.35, 0.35 + ((h >> 9) % 30) / 100), side: THREE.DoubleSide }); } }
 // a cutaway
 const cut = (q.get('cut') ?? '').match(/^([xyz])([<>])(-?[\d.]+)$/);
 if (cut) {
@@ -97,11 +101,12 @@ const dq = num3(q.get('dir')), d = (dq ? new THREE.Vector3(...dq) : (dirs[q.get(
 const cam = num3(q.get('cam')); if (cam) camera.position.set(...cam); else camera.position.copy(c).addScaledVector(d, dist);
 // (from under the floor, the floor is not there: what is underneath is what is looked at)
 if (camera.position.y < 0.02) floor.visible = false;
+{ const away = camera.position.distanceTo(c); camera.near = Math.max(0.001, Math.min(0.02, away * 0.01)); camera.far = away + r * 6 + 20; camera.updateProjectionMatrix(); }
 camera.lookAt(c); renderer.render(scene, camera);
 
 // ---- what the critic may ask ----
 const hex = (m: THREE.Mesh) => { const col = (m.material as THREE.MeshStandardMaterial).color; return col ? `#${col.getHexString()}` : undefined; };
-const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes }; };
+const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes, joined: (m.userData.part as { fixed?: string; detail?: string } | undefined)?.fixed ?? (m.parent?.userData.part as { fixed?: string } | undefined)?.fixed ?? ((m.userData.part as { detail?: string } | undefined)?.detail ? `laid on it by its ${(m.userData.part as { detail?: string }).detail} rule` : undefined), joins: (m.userData.part as { joins?: string[] } | undefined)?.joins ?? (m.parent?.userData.part as { joins?: string[] } | undefined)?.joins }; };
 const r3 = (v: THREE.Vector3) => v.toArray().map((x) => +x.toFixed(4));
 const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),

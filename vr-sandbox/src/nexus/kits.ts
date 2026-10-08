@@ -38,6 +38,11 @@ export interface Part {
   /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
    *  rule adds nothing to it */ fixed?: string;
   /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
+  /** the moving part it is carried with, by name (a knuckle and its strut's tube steer and rise with their wheel): no room
+   *  is kept between them, and a pose of that part moves it too */ movesWith?: string;
+  /** the parts it is meant to meet face to face, by name: seated on, clamped against, bonded or clipped to (its maker's),
+   *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
+  /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
@@ -52,7 +57,8 @@ export interface Part {
   /** it glows (a lamp's light, lit or not) */ glow?: boolean;
   /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
   /** how worn it is, 0 new to 1 derelict */ wear?: number;
-  /** it goes on public roads (and so carries number plates and mirrors) */ road?: boolean;
+  /** it goes on public roads (and so carries number plates and mirrors): where it is sold, so its plates are that
+   *  market's (US 12 × 6 in, AAMVA; else EU 520 × 110 mm) */ road?: boolean | 'us' | 'eu';
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
   /** what it offers or asks of the parts it meets */ iface?: Iface[];
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks

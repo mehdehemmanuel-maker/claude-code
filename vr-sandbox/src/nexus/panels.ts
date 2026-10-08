@@ -20,7 +20,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
 import type { Lines } from './machines';
 
@@ -297,9 +297,53 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // a panel trimmed round the arches in its run: its bottom edge along v = 0, rising round each arch and falling back
   const trimmed = (u0: number, u1: number): UV[] => { const pts: UV[] = [[u0, 0]]; for (const a of arches) for (const q of a.line) if (q[0] > u0 && q[0] < u1) pts.push(q); pts.push([u1, 0]); return pts.sort((p, q) => p[0] - q[0]); };
   const uFD = U(xFD), uRD = U(xRD), du = (x: number) => U(x + g) - U(x - g);
+  // ---- its faces' openings, laid out first, so the panels round them are cut to leave them open ----
+  // (laid out along the face's most forward line, where it does not lean: a lamp or a grille a few centimetres from the nose
+  // is found there, not on the shoulder, which leans back from it)
+  const vF = gv[2]!, UF = (x: number) => uAt(side, x, vF), uN = (d: number) => UF(ln.xN - d), uTl = (d: number) => UF(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
+  // (the skin's sections rise with v, so the v at a height is found by halving)
+  const vAt = (u: number, y: number) => { let lo = 0, hi = 1; for (let k = 0; k < 28; k++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < y) lo = m; else hi = m; } return (lo + hi) / 2; };
+  // (and the u where the face, round its corner, is so far off the middle: a grille's or a lamp's inner end)
+  const uZ = (z: number, front: boolean) => { let lo = front ? UF(ln.xN - r.plan.nose - 0.2) : 0, hi = front ? 1 : UF(ln.xT + r.plan.tail + 0.2); for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2, zm = pointAt(side, m, vF)[2]; if (front ? zm > z : zm < z) lo = m; else hi = m; } return (lo + hi) / 2; };
+  const quad = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]];
+  interface Win { u0: number; u1: number; v0: number; v1: number }
+  const fArch = arches.filter((a) => a.w.x > 0), rArch = arches.filter((a) => a.w.x <= 0);
+  // the front: its headlamps from half a metre back along the side round the corner to the grille, up to the hood's
+  // edge, as tall as its kind's; the grille between them (an SUV's or a pickup's taller and wider than a sedan's); the
+  // lower intake in the bumper under its shut line
+  const yTopF = pointAt(side, uN(0.08), 1)[1], uMidF = uN(0.22), lampBot = yTopF - 0.02 - fc.lamp, gShare = 0.25 + 0.3 * Math.min(1, fc.grille / 0.3);
+  // (its lamps reaching back along the side no further than 80 mm short of the front arch, on a short nose)
+  const fArchFront = fArch.length ? Math.max(...fArch.map((a) => a.w.x + a.Ra)) : -Infinity, rArchBack = rArch.length ? Math.min(...rArch.map((a) => a.w.x - a.Ra)) : Infinity;
+  const uG = uZ(W2 * gShare, true), hl0 = Math.max(uN(0.5), U(fArchFront + 0.08)), hb0 = vAt(uMidF, lampBot), gv0 = vAt(uN(0.01), yTopF - 0.012 - fc.grille);
+  const yBF = Math.min(lampBot, yTopF - 0.012 - fc.grille) - 0.035, lowN = ln.low(ln.xN - 0.05), iH = Math.min(0.1 + 0.3 * fc.grille, yBF - 0.06 - (lowN + 0.04));
+  const uI = uZ(W2 * Math.min(0.62, gShare + 0.22), true), vI0 = vAt(uN(0.01), lowN + 0.04), vI1 = vAt(uN(0.01), lowN + 0.04 + Math.max(0.05, iH));
+  // (each up to just under the roll of the top edge into the hood, 12 mm under it: set in along a surface turning tighter
+  // than its depth, its back would fold through itself)
+  // (12 mm under the top edge all along the window, not only where it was measured: the edge falls toward the nose, and a
+  // window as high as the edge is there would leave the hood's edge over nothing)
+  const vUnder = (u0: number, u1: number, d: number) => Math.min(...Array.from({ length: 9 }, (_, k) => { const u = u0 + ((u1 - u0) * k) / 8; return vAt(u, pointAt(side, u, 1)[1] - d); }));
+  const vTopF = Math.min(vAt(uMidF, yTopF - 0.012), vUnder(hl0, uG, 0.012)), lampW: Win = { u0: hl0, u1: uG, v0: hb0, v1: vTopF }, grilleW: Win = { u0: uG, u1: 1, v0: Math.min(gv0, hb0), v1: Math.min(vAt(uN(0.01), yTopF - 0.012), vUnder(uG, 1, 0.012)) }, intakeW: Win = { u0: uI, u1: 1, v0: vI0, v1: vI1 };
+  // the back: its tail lamps round the corners, under the deck's edge, from the tail's face out along the sides; the
+  // valance low across the bumper
+  const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - 0.12), lowT = ln.low(ln.xT + 0.05);
+  const tailW: Win = { u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(0.45), U(rArchBack - 0.08)), v0: tb0, v1: vAt(uMidT, yTopT - 0.015) }, valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
+  const fWins = [lampW, grilleW, intakeW], tWins = [tailW, valW];
+  // a panel round openings: its run in slabs along u, each from its foot (round the arches in it) up to its top, less the
+  // openings over that slab
+  const region = (name: string, u0: number, u1: number, wins: Win[], more: Partial<Part>, end?: { at: 0 | 1; meets: Part['meets'] }): Part[] => {
+    const cuts = [...new Set([u0, u1, ...wins.flatMap((w) => [w.u0, w.u1]).filter((u) => u > u0 + 1e-6 && u < u1 - 1e-6)])].sort((p, q) => p - q), res: Part[] = [];
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const a = cuts[i]!, c = cuts[i + 1]!, mid = (a + c) / 2, ex = wins.filter((w) => w.u0 <= mid && w.u1 >= mid).map((w) => [w.v0, w.v1] as [number, number]).sort((p, q) => p[0] - q[0]);
+      const m2 = end && ((end.at === 1 && c > 1 - 1e-6) || (end.at === 0 && a < 1e-6)) ? { ...more, meets: end.meets } : more;
+      res.push(paint(name, { s: side, above: trimmed(a, c), ...(ex.length ? { to: ex[0]![0] } : {}) }, m2));
+      for (let k = 0; k < ex.length; k++) { const top = k + 1 < ex.length ? ex[k + 1]![0] : 1; if (top - ex[k]![1] > 1e-4) res.push(paint(name, { s: side, uv: quad(a, c, ex[k]![1], top) }, m2)); }
+    }
+    return res;
+  };
+  const fMeets = { at: 1 as const, meets: [{ part: 'front fender', edge: 'a1' as const, kind: 'mirror' as const, why: 'its nose crosses the middle in one tangent plane, or a ridge runs down its face' }] }, tMeets = { at: 0 as const, meets: [{ part: 'rear quarter panel', edge: 'a0' as const, kind: 'mirror' as const, why: 'its tail crosses the middle in one tangent plane' }] };
   if (doors) {
-    out.push(paint('front fender', { s: side, above: trimmed(uFD + du(xFD), 1) }, { meets: [{ part: 'front fender', edge: 'a1', kind: 'mirror', why: 'its nose crosses the middle in one tangent plane, or a ridge runs down its face' }], says: 'its front fenders, and the nose and front bumper they run into: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }));
-    out.push(paint('rear quarter panel', { s: side, above: trimmed(0, uRD - du(xRD)) }, { meets: [{ part: 'rear quarter panel', edge: 'a0', kind: 'mirror', why: 'its tail crosses the middle in one tangent plane' }], says: 'its rear quarters and the tail: pressed steel about 0.8 mm (typical)' }));
+    out.push(...region('front fender', uFD + du(xFD), 1, fWins, { says: 'its front fenders, and the nose and front bumper they run into, open for its lamps, grille and intake: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }, fMeets));
+    out.push(...region('rear quarter panel', 0, uRD - du(xRD), tWins, { says: 'its rear quarters and the tail, open for its lamps: pressed steel about 0.8 mm (typical)' }, tMeets));
     out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [uFD, vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
     const door = (name: string, x0: number, x1: number) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1 - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
     if (twoDoors) out.push(door('front doors', xB, xFD), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xFD));
@@ -307,50 +351,77 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // (each handle a bar on the door, in a dark pocket pressed into it for the fingers: the pocket a region of the skin,
     // the bar a part standing just off it on each side)
     for (const x1 of twoDoors ? [xB, xRD] : [xRD]) {
-      out.push({ name: 'door handle pockets', shape: { surf: { s: side, uv: [[U(x1 + 0.06), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.018], [U(x1 + 0.06), sv[3]! - 0.018]], off: 0.0008 } }, at: [0, 0, 0], mat: 'abs', color: 0x1a1b1d, shell: 0.002, finish: 'texture', kg: 0, says: 'the pocket under each door handle (typical)' });
+      out.push({ name: 'door handle pockets', shape: { surf: { s: side, uv: [[U(x1 + 0.06), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.062], [U(x1 + 0.25), sv[3]! - 0.018], [U(x1 + 0.06), sv[3]! - 0.018]], off: 0.0008 } }, at: [0, 0, 0], mat: 'abs', color: 0x1a1b1d, shell: 0.002, finish: 'texture', kg: 0, joins: ['front doors', 'rear doors'], says: 'the pocket under each door handle (typical)' });
       const q = surfaceAt(side, U(x1 + 0.155), sv[3]! - 0.04);
-      for (const e of [1, -1]) out.push({ name: 'door handle', shape: { capsule: [0.011, 0.11] }, at: [q.at[0] + q.n[0] * 0.012, q.at[1] + q.n[1] * 0.012, e * (q.at[2] + q.n[2] * 0.012)], rot: [0, 0, Math.PI / 2], mat: 'abs', color: col, shell: 0.002, finish: 'paint', says: 'a door handle (typical)' });
+      for (const e of [1, -1]) out.push({ name: 'door handle', shape: { capsule: [0.011, 0.11] }, at: [q.at[0] + q.n[0] * 0.012, q.at[1] + q.n[1] * 0.012, e * (q.at[2] + q.n[2] * 0.012)], rot: [0, 0, Math.PI / 2], mat: 'abs', color: col, shell: 0.002, finish: 'paint', joins: ['front doors', 'rear doors', 'door handle pockets'], says: 'a door handle (typical)' });
     }
-  } else out.push(paint('body sides', { s: side, above: trimmed(0, 1) }, { says: 'its sides: pressed steel about 0.8 mm (typical)' }));
+  } else out.push(...region('body sides', 0, 1, [...fWins, ...tWins], { says: 'its sides, open for its lamps, grille and intake: pressed steel about 0.8 mm (typical)' }));
   // (a pickup's bed a box of its own behind the cab, a gap between them: drawn as a shut line down the side at the cab's back)
   if (b.lines.bed) { const ub = U(ln.xDeck - 0.012), dub = du(ln.xDeck) * 1.5; out.push({ name: 'cab to bed gap', shape: { surf: { s: side, uv: [[ub - dub, 0], [ub + dub, 0], [ub + dub, 1], [ub - dub, 1]], off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says: 'the gap between its cab and its bed (typical)' }); }
-  // ---- its faces at its ends, laid out by height on the skin (each band of it where the skin is at that height) ----
-  // (laid out along the face's most forward line, where it does not lean: a lamp or a grille a few centimetres from the nose
-  // is found there, not on the shoulder, which leans back from it)
-  const vF = gv[2]!, UF = (x: number) => uAt(side, x, vF), uN = (d: number) => UF(ln.xN - d), uTl = (d: number) => UF(ln.xT + d), fc = { lamp: 0.1, grille: 0.08, ...(b.lines.face ?? {}) };
-  // (the skin's sections rise with v, so the v at a height is found by halving)
-  const vAt = (u: number, y: number) => { let lo = 0, hi = 1; for (let k = 0; k < 28; k++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < y) lo = m; else hi = m; } return (lo + hi) / 2; };
-  const quad = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]];
-  const black = (name: string, uv: [UV, UV, UV, UV], says: string, off = 0.002): Part => ({ name, shape: { surf: { s: side, uv, off } }, at: [0, 0, 0], mat: 'abs', color: 0x111214, shell: 0.003, finish: 'texture', says });
+  // ---- its faces in their openings: each a recess, its back set in along the skin's normal and its walls from the opening's
+  // edge down to it (a lamp's housing, a grille's throat), built on the skin itself so it meets the panels round it ----
+  // (skip: where its side wall at u0 is a neighbour's, from that v up)
+  const recess = (name: string, w: Win, deep0: number, back: Partial<Part>, says: string, kids: Part[] | ((deep: number) => Part[]) = [], skip: { u0?: number } = {}): Part => {
+    // (no deeper than three quarters of the tightest radius the skin turns through in the opening, so its back, set in
+    // along the skin's normal, never folds through itself)
+    let rmin = Infinity; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 6; j++) { const sp = surfaceAt(side, w.u0 + ((w.u1 - w.u0) * i) / 8, w.v0 + ((w.v1 - w.v0) * j) / 6), c = curvatures(sp); const k = Math.max(Math.abs(c.k1), Math.abs(c.k2)); if (k > 1e-9) rmin = Math.min(rmin, 1 / k); }
+    const deep = Math.min(deep0, 0.75 * rmin);
+    const edge = (a: UV, c: UV): Surface => { const N = 24; return { net: Array.from({ length: N + 1 }, (_, k) => { const u = a[0] + ((c[0] - a[0]) * k) / N, v = a[1] + ((c[1] - a[1]) * k) / N, q = surfaceAt(side, u, v); return [q.at, [q.at[0] - q.n[0] * deep, q.at[1] - q.n[1] * deep, q.at[2] - q.n[2] * deep]] as V3[]; }), p: 1, q: 1, mirror: true }; };
+    const walls = [edge([w.u0, w.v0], [w.u1, w.v0]), edge([w.u0, w.v1], [w.u1, w.v1]), ...(w.u0 > 1e-6 && Math.min(w.v1, skip.u0 ?? w.v1) - w.v0 > 1e-4 ? [edge([w.u0, w.v0], [w.u0, Math.min(w.v1, skip.u0 ?? w.v1)])] : []), ...(w.u1 < 1 - 1e-6 ? [edge([w.u1, w.v0], [w.u1, w.v1])] : [])];
+    return { name, at: [0, 0, 0], says, parts: [
+      { name: `${name} back`, shape: { surf: { s: side, uv: quad(w.u0, w.u1, w.v0, w.v1), off: -deep } }, at: [0, 0, 0], mat: 'pp', color: 0x15161a, shell: 0.002, finish: 'texture', kg: 0, ...back },
+      // (its walls drawn in from the opening's edge: one pressing or moulding with the skin there)
+      ...walls.map((sw) => ({ name: `${name} wall`, shape: { surf: { s: sw } }, at: [0, 0, 0] as V3, mat: 'pp', color: 0x111214, shell: 0.002, finish: 'texture', kg: 0, joins: ['front fender', 'rear quarter panel', 'body sides', 'front bumper', 'rear bumper'] })), ...(typeof kids === 'function' ? kids(deep) : kids)] };
+  };
+  // a part standing on the skin along its normal at (u, v), set in by `inset`, its axis (+y) out along the normal; on each side
+  const onSkin = (name: string, shape: Part['shape'], u: number, v: number, inset: number, more: Partial<Part>): Part[] => [1, -1].map((e) => {
+    const q = surfaceAt(side, u, v), n: V3 = [q.n[0], q.n[1], e * q.n[2]], y = unit3(n), ref: V3 = Math.abs(y[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1];
+    const x = unit3([y[1] * ref[2] - y[2] * ref[1], y[2] * ref[0] - y[0] * ref[2], y[0] * ref[1] - y[1] * ref[0]]), z: V3 = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+    const ey = Math.asin(Math.max(-1, Math.min(1, z[0]))), rot: V3 = Math.abs(z[0]) < 0.9999999 ? [Math.atan2(-z[1], z[2]), ey, Math.atan2(-y[0], x[0])] : [Math.atan2(y[2], y[1]), ey, 0];
+    return { name, shape, at: [q.at[0] - n[0] * inset, q.at[1] - n[1] * inset, e * q.at[2] - n[2] * inset], rot, ...more } as Part;
+  });
+  const lit = (name: string, uv: [UV, UV, UV, UV], off: number, color: number, says: string): Part => ({ name, shape: { surf: { s: side, uv, off } }, at: [0, 0, 0], mat: 'pc', color, glow: true, shell: 0.002, kg: 0, says });
   // a seam: the dark line of a shut line drawn where one panel meets the next on the same skin (4 mm, typical)
   const seam = (name: string, a0: number, a1: number, v: number, says: string): Part => ({ name, shape: { surf: { s: side, uv: quad(a0, a1, v - 0.0025, v + 0.0025), off: 0.0006 } }, at: [0, 0, 0], mat: 'rubber', color: 0x0b0b0c, shell: 0.001, finish: 'texture', kg: 0, says });
-  const fArch = arches.filter((a) => a.w.x > 0), rArch = arches.filter((a) => a.w.x <= 0);
+  const slats = (name: string, w: Win, n: number, off: number, color: number, finish: string): Part[] => Array.from({ length: n }, (_, k) => { const f0 = (k + 0.62) / (n + 0.5), hv = (w.v1 - w.v0) / (n + 0.5); return { name, shape: { surf: { s: side, uv: quad(w.u0 + 0.004, w.u1, w.v0 + hv * (k + 0.55), w.v0 + hv * (k + 0.55) + hv * 0.32), off } }, at: [0, 0, 0] as V3, mat: 'abs', color, shell: 0.003, finish, kg: 0, says: f0 > 2 ? '' : undefined }; });
   {
-    // the front: its headlamps under the hood's edge wrapping the corners, the grille between them as tall as its kind's
-    // (an SUV's or a pickup's far taller than a sedan's), the bumper cover below its shut line, the intake low in it
-    const uMid = uN(0.22), yTop = pointAt(side, uN(0.08), 1)[1] - 0.02, lampBot = yTop - fc.lamp, gBot = yTop - 0.012 - fc.grille;
-    const hb1 = vAt(uMid, yTop), hb0 = vAt(uMid, lampBot), hl0 = uN(0.5), hl1 = uN(0.035), wl = hl1 - hl0, hh = hb1 - hb0;
-    const lit = (name: string, uv: [UV, UV, UV, UV], color: number, says: string): Part => ({ name, shape: { surf: { s: side, uv, off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color, glow: true, shell: 0.002, says });
-    out.push({ name: 'headlights', shape: { surf: { s: side, uv: quad(hl0, hl1, hb0, hb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pc', color: 0xd8e0e8, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)',
-      parts: [{ name: 'headlamp housing', shape: { surf: { s: side, uv: quad(hl0, hl1, hb0, hb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x0c0d0f, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' },
-        lit('daytime running light', quad(hl0 + wl * 0.08, hl1 - wl * 0.04, hb1 - hh * 0.2, hb1 - hh * 0.08), 0xf4f8ff, 'its daytime running light: an LED strip along the lamp\'s top (typical)'),
-        ...[0.3, 0.62].map((k) => lit('lamp unit', quad(hl0 + wl * (k - 0.1), hl0 + wl * (k + 0.1), hb0 + hh * 0.18, hb1 - hh * 0.32), 0xfff4dc, 'an LED projector (typical)'))] });
-    const gv0 = vAt(uN(0.01), Math.max(gBot, lampBot - 0.02)), gv1 = vAt(uN(0.01), yTop - 0.012);
-    out.push(black('grille', quad(uN(0.035), 1, gv0, gv1), 'its grille between the headlamps (moulded ABS, typical): as tall as its kind\'s'));
+    // a headlamp: a dark housing, a chrome reflector across its middle, a projector each for the low and the high beam (a
+    // bowl, its lens in a dark ring, set in along the skin's normal), a light guide along its foot lit as its daytime
+    // running light; under a clear lens flush with the body (typical of a modern car's LED lamp)
+    const wl = lampW.u1 - lampW.u0, hh = lampW.v1 - lampW.v0, rp0 = Math.min(0.034, 0.3 * fc.lamp), vMid = lampW.v0 + hh * 0.5;
+    // (each as big as the lamp has room for where it stands, a fifth of its height clear above and below, and as deep as
+    // the housing is, its bowl's foot 12 mm off the housing's back)
+    const projector = (deep: number, k: number): Part[] => { const u = lampW.u0 + wl * k, room = Math.hypot(...(pointAt(side, u, lampW.v1).map((x, i) => x - pointAt(side, u, lampW.v0)[i]!) as V3)), bd = Math.max(0.006, Math.min(0.024, deep - 0.02)), rp = Math.min(rp0, room * 0.3, bd * 1.6), pin = Math.max(0.012, deep - bd - 0.012); return [
+      ...onSkin('projector bowl', { lathe: [[0.004, -bd], [rp * 0.5, -bd * 0.88], [rp * 0.86, -bd * 0.5], [rp, 0]] }, u, vMid, pin, { mat: 'al-6061', color: 0xd4d8dc, finish: 'chrome', kg: 0 }),
+      ...onSkin('projector lens', { lathe: [[0, 0.011], [rp * 0.42, 0.008], [rp * 0.6, 0.002], [rp * 0.6, -0.004]] }, u, vMid, pin, { mat: 'glass', color: 0xe8f0ff, kg: 0 }),
+      ...onSkin('projector ring', { lathe: [[rp * 0.6, -0.004], [rp * 0.62, 0.003], [rp * 0.74, 0.004], [rp * 0.76, -0.006]] }, u, vMid, pin, { mat: 'pp', color: 0x16171a, finish: 'texture', kg: 0, joins: ['projector lens'] })]; };
+    out.push(recess('headlamp', lampW, 0.05, { color: 0x24272c }, 'its headlamps\' housings, open behind their lenses (typical)', (deep) => [
+      { name: 'headlamp reflector', shape: { surf: { s: side, uv: quad(lampW.u0 + wl * 0.12, lampW.u1 - wl * 0.06, lampW.v0 + hh * 0.2, lampW.v1 - hh * 0.18), off: -deep + Math.min(0.004, deep * 0.15) } }, at: [0, 0, 0], mat: 'al-6061', color: 0xc8ccd2, shell: 0.001, finish: 'chrome', kg: 0, says: 'a chrome reflector in the housing (typical)' },
+      ...projector(deep, 0.38), ...projector(deep, 0.66),
+      lit('daytime running light', quad(lampW.u0 + wl * 0.06, lampW.u1 - wl * 0.03, lampW.v0 + hh * 0.07, lampW.v0 + hh * 0.115), -Math.min(0.01, deep * 0.3), 0xf4f8ff, 'its daytime running light: an LED light guide along the lamp\'s foot (typical)')]));
+    out.push({ name: 'headlights', shape: { surf: { s: side, uv: quad(lampW.u0, lampW.u1, lampW.v0, lampW.v1), off: 0.0005 } }, at: [0, 0, 0], mat: 'pc', color: 0xe6ecf2, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps\' lenses, flush with the body: clear polycarbonate (typical)', fixed: 'bonded to its housing', joins: ['headlamp wall'] });
+    // the grille: its throat dark, its bars across it gloss black, a bright strip along its top (typical of a sedan's)
+    out.push(recess('grille', grilleW, 0.05, {}, 'its upper grille between the headlamps: moulded ABS, its throat open to the radiator behind (typical)', (deep) => [...slats('grille bar', grilleW, Math.max(2, Math.round(fc.grille / 0.04)), -Math.min(0.012, deep * 0.4), 0x0d0e10, 'paint'),
+      { name: 'grille trim', shape: { surf: { s: side, uv: quad(grilleW.u0 + 0.004, 1, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.16, grilleW.v1 - (grilleW.v1 - grilleW.v0) * 0.08), off: -Math.min(0.006, deep * 0.2) } }, at: [0, 0, 0], mat: 'abs', color: 0xc0c4ca, shell: 0.002, finish: 'chrome', kg: 0, says: 'a chrome strip along its grille (typical)' }], { u0: lampW.v0 }));
+    out.push(recess('lower grille', intakeW, 0.06, {}, 'the lower intake in its front bumper: its throat open, bars across it (typical)', (deep) => slats('lower grille bar', intakeW, 3, -Math.min(0.014, deep * 0.4), 0x111214, 'texture')));
+    // (where its number plate goes: on the bumper over the intake's middle, a plate's height above its foot)
+    const uP = 1, vP = vAt(uN(0.005), lowN + 0.04 + Math.max(0.05, iH) + 0.06); out.push({ name: 'plate mount', at: pointAt(side, uP, vP), shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['front fender'], says: 'its front number plate\'s bracket (typical)' });
     // (its bumper cover: the face below a shut line under the lamps and the grille, round to the front arches)
-    const yB = Math.min(lampBot, gBot) - 0.035, uB0 = fArch.length ? U(Math.max(...fArch.map((a) => a.w.x + a.Ra)) + 0.03) : uN(0.6);
-    out.push(seam('front bumper shut line', uB0, 1, vAt(uMid, yB), 'where its front bumper cover meets the fenders (typical)'));
-    const yI = ln.low(ln.xN - 0.05) + 0.06; out.push(black('lower grille', quad(uN(0.012), 1, vAt(uN(0.01), yI), vAt(uN(0.01), Math.min(yI + 0.09, yB - 0.05))), 'the lower intake in its front bumper (typical)'));
+    const uB0 = fArch.length ? U(Math.max(...fArch.map((a) => a.w.x + a.Ra)) + 0.03) : uN(0.6);
+    out.push(seam('front bumper shut line', uB0, 1, vAt(uMidF, yBF), 'where its front bumper cover meets the fenders (typical)'));
   }
   {
-    // the back: its tail lamps round the corners under the deck's edge (a red lens over a dark housing, its lamps lit),
-    // the bumper cover below a shut line
-    const uMid = uTl(0.22), yTop = pointAt(side, uTl(0.08), 1)[1] - 0.03, tb1 = vAt(uMid, yTop), tb0 = vAt(uMid, yTop - 0.12), t0 = uTl(0.45), t1 = uTl(0.02), wt = t0 - t1, ht = tb1 - tb0;
-    out.push({ name: 'tail lights', shape: { surf: { s: side, uv: quad(t1, t0, tb0, tb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pmma', color: 0x9a0c0c, shell: 0.003, says: 'its tail lamps round the tail\'s corners: red acrylic lenses (typical)',
-      parts: [{ name: 'tail lamp housing', shape: { surf: { s: side, uv: quad(t1, t0, tb0, tb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x1a0606, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' },
-        { name: 'tail lamp', shape: { surf: { s: side, uv: quad(t1 + wt * 0.06, t0 - wt * 0.1, tb0 + ht * 0.55, tb0 + ht * 0.8), off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color: 0xff2a1a, glow: true, shell: 0.002, says: 'its tail lamps lit: an LED strip (typical)' }] });
-    const yB = yTop - 0.12 - 0.06, uB1 = rArch.length ? U(Math.min(...rArch.map((a) => a.w.x - a.Ra)) - 0.03) : uTl(0.6);
-    out.push(seam('rear bumper shut line', 0, uB1, vAt(uMid, yB), 'where its rear bumper cover meets the quarters (typical)'));
+    // the back: each tail lamp a recess, red within, its light lit along it, under a red lens flush with the body; the
+    // valance low across the bumper a dark recess; the bumper cover below a shut line
+    const wt = tailW.u1 - tailW.u0, ht = tailW.v1 - tailW.v0;
+    out.push(recess('tail lamp', tailW, 0.04, { color: 0x2a0606 }, 'its tail lamps\' housings (typical)', (deep) => [
+      { name: 'tail lamp reflector', shape: { surf: { s: side, uv: quad(tailW.u0 + wt * 0.05, tailW.u1 - wt * 0.08, tailW.v0 + ht * 0.18, tailW.v1 - ht * 0.18), off: -deep * 0.7 } }, at: [0, 0, 0], mat: 'al-6061', color: 0x8a1a1a, shell: 0.001, finish: 'chrome', kg: 0 },
+      lit('tail lamp', quad(tailW.u0 + wt * 0.06, tailW.u1 - wt * 0.1, tailW.v0 + ht * 0.55, tailW.v0 + ht * 0.72), -deep * 0.2, 0xff2a1a, 'its tail lamps lit: an LED light guide (typical)')]));
+    out.push({ name: 'tail lights', shape: { surf: { s: side, uv: quad(tailW.u0, tailW.u1, tailW.v0, tailW.v1), off: 0.0005 } }, at: [0, 0, 0], mat: 'pmma', color: 0xb01010, shell: 0.003, says: 'its tail lamps\' lenses, flush with the body: red acrylic (typical)', fixed: 'bonded to its housing', joins: ['tail lamp wall'] });
+    out.push(recess('rear valance', valW, 0.02, {}, 'the dark valance low across its rear bumper (typical)'));
+    const vPt = vAt(uTl(0.005), yTopT - 0.03 - 0.12 - 0.07); out.push({ name: 'plate mount', at: pointAt(side, 0, vPt), shape: { box: [0.004, 0.08, 0.3] }, mat: 'pp', color: 0x111214, finish: 'texture', kg: 0, joins: ['rear quarter panel'], says: 'its rear number plate\'s place (typical)' });
+    const yB = yTopT - 0.03 - 0.12 - 0.06, uB1 = rArch.length ? U(Math.min(...rArch.map((a) => a.w.x - a.Ra)) - 0.03) : uTl(0.6);
+    out.push(seam('rear bumper shut line', 0, uB1, vAt(uMidT, yB), 'where its rear bumper cover meets the quarters (typical)'));
   }
   // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
   for (const a of arches) {
@@ -403,7 +474,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // height; under that the wheelhouse is open to the underbody, as a car's is)
     const yLoW = Math.max(ln.low(w.x) + 0.02, w.y + 0.06), wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
     out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
-    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', joins: [`${w.name.replace(/ wheel$/, '')} inner wheelhouses`], fixed: 'clipped to its inner wheelhouse', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
   }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
   const lid = (name: string, x0: number, x1: number, crown0: number, says: string, meets: string): Part | null => {

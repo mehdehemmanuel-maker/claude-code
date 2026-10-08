@@ -83,8 +83,9 @@ describe('the critic changes the rules, never a body', () => {
 describe('panels that meet by construction', () => {
   test('the hood and the deck lid stand off the side\'s top edge by their shut line\'s gap all along it, not only where sections were drawn', () => {
     for (const [lid, side] of [['hood', 'front fender'], ['deck lid', 'rear quarter panel']] as const) {
-      const pt = surf(lid), other = surf(side);
-      for (let k = 0; k <= 30; k++) { const at = patchAt(pt, 0.03 + (0.94 * k) / 30, 0).at; expect(closestOn(other, at).d, `${lid} at ${k}`).toBeLessThan(BODY_RULES.gap + 0.001); }
+      // (the side a panel of pieces between the openings cut in it: the lid's edge is off whichever piece it runs along)
+      const pt = surf(lid), others = all(car).filter((p) => p.name === side).map((p) => (p.shape as { surf: Patch }).surf);
+      for (let k = 0; k <= 30; k++) { const at = patchAt(pt, 0.03 + (0.94 * k) / 30, 0).at; expect(Math.min(...others.map((o) => closestOn(o, at).d)), `${lid} at ${k}`).toBeLessThan(BODY_RULES.gap + 0.001); }
     }
   });
   test('every point of every wheelhouse liner is clear of its tyre, steered and risen, on every style', () => {

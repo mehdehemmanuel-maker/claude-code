@@ -36,7 +36,10 @@ export interface Finding { check: string; part: string; says: string; fixed: boo
 const TURNS = /\b(wheels?|tyres?|tires?|rims?|rotors?|propellers?|fans?|augers?|screw conveyors?|gears?|pulleys?|sprockets?|(?:brake )?discs?|saw blades?|fan blades?|rotor blades?|mower blades?|cutting blades?|drums?|turbines?|impellers?|flywheels?|spindles?)\b/i;
 /** Whether a part turns, and the room it needs past its ring, m. */
 export function turning(p: Part): { clearance: number; why: string; /** beside it, along its axle, where that differs */ side?: number } | null {
-  const tyre = p.mat === 'rubber' && !!p.shape && ('torus' in p.shape || 'lathe' in p.shape), n = p.name.toLowerCase();
+  // (a tyre: a rubber ring round an axle big enough to hold air, as detail.ts's ringed is; a joint's boot, a rack's
+  // bellows, a bush or a seal is rubber turned round an axle too, but does not roll on the ground)
+  const n = p.name.toLowerCase(), big = !!p.shape && ('torus' in p.shape ? p.shape.torus[0] + p.shape.torus[1] > 0.08 : 'lathe' in p.shape ? Math.max(...p.shape.lathe.map(([r]) => r)) > 0.08 : false);
+  const tyre = p.mat === 'rubber' && big && !/\b(boot|bellows|bush|seal|gaiter|grommet|mount)/.test(n);
   // (a steering wheel turns, but its room is a hand's round its rim inside the cab, not an arch cut in the body)
   if (/\b(steering|hand|fifth) ?wheel|wheel ?(nut|bolt|stud|arch|well|base|mount|hanger|house)/.test(n)) return null;
   if (!tyre && !TURNS.test(n)) return null;
@@ -122,6 +125,8 @@ export function critique(root: Part): Finding[] {
     }
     for (const f of nodes) {
       if (blocked.has(f.path)) continue; // an interface (its axle in its hub), not in its way
+      // (what is carried with it, steered and risen with it as a knuckle is with its wheel, is never in its way)
+      if ([f, ...ancestors(f)].some((a) => a.p.movesWith === m.p.name)) continue;
       if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || classOf(f.p.mat) === 'soft' || classOf(f.p.mat) === 'organic') continue;
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
@@ -325,11 +330,11 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
 // dash) or two surfaces laid on each other so closely that the nearer flickers through (z-fighting): both found here
 // from the drawn triangles themselves, anywhere on the thing, whatever the parts are.
 /** A part as drawn: its triangles in the world, and where it is in the tree (its holders' names). */
-export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[] }
+export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[]; /** how it is fixed to what holds it or sits beside it (Part.fixed): welded to it, seated on it, clipped into it */ joined?: string; /** the parts the joints laid on it join it to, by name (Part.joins) */ joins?: string[] }
 type CV3 = [number, number, number];
 /** Where two parts meet: crossing (one through the other), touching (within the tolerance, across each other), or
  *  layered (laid parallel within it: a decal or a seam on a panel, which flickers if it is too close). */
-export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered' | /** one piece with what holds it (cast or moulded together, or welded), so not one part in another */ 'fused' | /** through an opening one of them has for it */ 'fitted'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** how far one passes into the other, m, where one of them is closed (a solid's surface) */ depth?: number; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart' }
+export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered' | /** one piece with what holds it (cast or moulded together, or welded), so not one part in another */ 'fused' | /** through an opening one of them has for it */ 'fitted' | /** face to face where a joint (welds, bolts, screws, a seal) joins them, as built */ 'joined'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** how far one passes into the other, m, where one of them is closed (a solid's surface) */ depth?: number; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart' }
 interface Tris { n: number; v: Float64Array; box: Float64Array; nor: Float64Array; lo: CV3; hi: CV3; /** which of each triangle's edges is on the mesh's boundary (one triangle uses it), a bit each */ edge: Uint8Array; /** no boundary at all: the surface of a solid, which has an inside */ closed: boolean }
 function trisOf(m: TriMesh): Tris {
   const P = m.pos, I = m.idx, n = Math.floor((I ? I.length : P.length / 3) / 3), v = new Float64Array(n * 9), box = new Float64Array(n * 6), nor = new Float64Array(n * 3), lo: CV3 = [Infinity, Infinity, Infinity], hi: CV3 = [-Infinity, -Infinity, -Infinity];
@@ -457,9 +462,14 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         if (B.closed) probe(A, new Set(hs.map((x) => x.ta)), B); if (A.closed) probe(B, new Set(hs.map((x) => x.tb)), A);
       }
       const nl = Math.hypot(...ns) || 1, kin = kinOf(meshes[i]!, meshes[j]!), kind2 = kind === 'through' && depth !== undefined && depth < 0.002 ? 'touch' : kind;
-      out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, kind: fitted(meshes[i]!, meshes[j]!) ? 'fitted' : (kin !== 'apart' || meshes[i]!.weld || meshes[j]!.weld) && fused(meshes[i]!, meshes[j]!, kin) ? 'fused' : kind2, ...(depth !== undefined ? { depth } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
+      // (a part said to be fixed to what holds it or beside it, welded, seated or clipped, meets it as it is fixed: unless
+      // it passes deep into it, which no fixing explains)
+      const fixedBy = kin !== 'apart' && (kind2 !== 'through' || (depth ?? 0) < 0.005) ? meshes[i]!.joined ?? meshes[j]!.joined : undefined;
+      // (and two parts a joint was laid on, face to face where it joins them: unless one passes deep into the other)
+      const joinedBy = (kind2 !== 'through' || (depth ?? 0) < 0.005) && (!!meshes[i]!.joins?.includes(meshes[j]!.name) || !!meshes[j]!.joins?.includes(meshes[i]!.name));
+      out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, kind: fitted(meshes[i]!, meshes[j]!) ? 'fitted' : joinedBy ? 'joined' : ((kin !== 'apart' || meshes[i]!.weld || meshes[j]!.weld) && fused(meshes[i]!, meshes[j]!, kin)) || /weld/.test(fixedBy ?? '') ? 'fused' : fixedBy ? 'fitted' : kind2, ...(depth !== undefined ? { depth } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
     }
   }
-  const rank = { through: 0, touch: 1, layered: 2, meets: 3, fitted: 4, fused: 5 } as const;
+  const rank = { through: 0, touch: 1, layered: 2, meets: 3, joined: 4, fitted: 4, fused: 5 } as const;
   return out.sort((p, q) => rank[p.kind] - rank[q.kind] || q.span - p.span);
 }
