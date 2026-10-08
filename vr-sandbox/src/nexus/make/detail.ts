@@ -403,11 +403,24 @@ export const RULES: DetailRule[] = [
     run(c) {
       let n = 0;
       for (const x of c.nodes) {
-        if (!x.box || x.p.detail || !/\b(engine|motor|generator|compressor|pump)\b/i.test(x.p.name) || x.box.getSize(new THREE.Vector3()).y < 0.05) continue;
-        // (laid flat on the face it is on, its thin side along that face's normal in the world, whichever way the engine is
-        // turned in the thing)
-        const s = x.box.getSize(new THREE.Vector3()), side = s.x >= s.z ? 2 : 0, at = x.box.getCenter(new THREE.Vector3()); at.setComponent(side, x.box.max.getComponent(side) + 0.0006);
-        attach(x, 'rating plates', { name: 'rating plate', shape: { box: [0.08, 0.001, 0.05] }, mat: 'al-6061', color: 0xd8dce0, finish: 'plate' }, at, AX[side]!.clone()); n++;
+        // (a machine by its head noun, the last word of its name: an engine's block is one, an engine's mount is not)
+        const head = x.p.name.replace(/\(.*?\)/g, ' ').trim().split(/\s+/).pop() ?? '';
+        if (!x.box || x.p.detail || !(/^(engine|motor|generator|compressor|pump)$/i.test(head) || x.p.name === 'engine block') || x.box.getSize(new THREE.Vector3()).y < 0.05) continue;
+        // (laid flat on a face of it, its thin side along that face's normal in the world, whichever way the engine is
+        // turned in the thing; on the first place, face by face, where nothing else is within 3 mm of it: never under a
+        // mount or against the intake beside it. A box's face anywhere on it; a turned part's only at its middle, where
+        // its face is)
+        const s = x.box.getSize(new THREE.Vector3()), side = s.x >= s.z ? 2 : 0, c0 = x.box.getCenter(new THREE.Vector3()), flat = !!x.p.shape && 'box' in x.p.shape;
+        const faces: [number, number][] = [[side, 1], [side, -1], [2 - side, 1], [2 - side, -1]], offs = flat ? [0, 0.3, -0.3] : [0];
+        const clear = (o: OBB) => !c.nodes.some((q) => q !== x && !within(q, x) && !within(x, q) && !!q.p.shape && !('surf' in q.p.shape) && q.pieces.some((pc) => sat(pc, o, 0)));
+        let placed = false;
+        for (const [k, sg] of faces) { const tk = 2 - k; for (const fu of offs) for (const fv of offs) {
+          if (placed) break;
+          const at = c0.clone(); at.setComponent(k, sg > 0 ? x.box.max.getComponent(k) + 0.0006 : x.box.min.getComponent(k) - 0.0006); at.setComponent(tk, c0.getComponent(tk) + fu * s.getComponent(tk)); at.y = c0.y + fv * s.y;
+          const h: [number, number, number] = [0.043, 0.043, 0.043]; h[k] = 0.0035;
+          if (!clear({ c: at.clone(), u: AX.map((a) => a.clone()) as [THREE.Vector3, THREE.Vector3, THREE.Vector3], h })) continue;
+          attach(x, 'rating plates', { name: 'rating plate', shape: { box: [0.08, 0.001, 0.05] }, mat: 'al-6061', color: 0xd8dce0, finish: 'plate' }, at, AX[k]!.clone().multiplyScalar(sg)); n++; placed = true;
+        } }
       }
       return n;
     },
