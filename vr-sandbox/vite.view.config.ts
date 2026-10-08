@@ -6,5 +6,5 @@ export default defineConfig({
   root: 'view',
   base: './',
   publicDir: 'public',
-  build: { outDir: '../dist-view', emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 4000, rollupOptions: { input: { index: 'view/index.html', room: 'view/room.html', forge: 'view/forge.html' } } },
+  build: { outDir: '../dist-view', emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 4000, rollupOptions: { input: { index: 'view/index.html', room: 'view/room.html', forge: 'view/forge.html', look: 'view/look.html' } } },
 });

@@ -8,14 +8,28 @@
 // Sizes are real where they have a source (named), else typical; masses are worked out from each part's shape and its
 // material's density (estimates: the shapes are simple). A prop blaster is a shape only: it does not work as a weapon.
 
+import { VEHICLE_KITS, useMass } from './machines';
+import { latheArea, latheVolume, loftArea, loftVolume, tubeLength, tubeVolume, type Lathe, type Loft, type Tube } from './form';
+
 export type V3 = [number, number, number];
 export type Shape =
   | { box: V3 } | { cyl: [r: number, h: number, r2?: number] } | { sphere: number } | { cone: [r: number, h: number] }
   | { torus: [R: number, r: number] } | { capsule: [r: number, h: number] }
+  /** a body through cross-sections along x (src/nexus/form.ts) */ | { loft: Loft }
+  /** a round tube along a path, bent round at its corners */ | { tube: Tube }
+  /** a profile of [radius, height] spun about y */ | { lathe: Lathe }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
   | { heap: { n: number; size: V3; r: number; h: number; colors: number[]; seed: number } };
+/** What a part offers another where they meet, or asks of it: a shaft and the bore it goes in, studs and the nuts on
+ *  them, a drive and the shaft it turns. Checked where they meet, with numbers (src/nexus/make/critic.ts contracts). */
+export interface Iface {
+  kind: 'shaft' | 'studs' | 'drive' | 'chain'; role: 'provides' | 'requires';
+  /** a shaft's or a stud's diameter, or a chain's pitch, m */ d?: number; /** how many (studs) */ n?: number;
+  /** N·m: what a drive delivers (provides), or the most a driven shaft carries (requires) */ torque?: number;
+  /** the part it goes to by name, where they do not touch (a chain drive and the axle it turns) */ to?: string; says?: string;
+}
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
@@ -27,6 +41,18 @@ export interface Part {
   /** it gives light: lumens, and the colour of it */ light?: { lm: number; color: number };
   /** it goes round its holder's middle once in so many seconds (an orbit) */ spin?: number;
   /** what it gives as food, kcal */ kcal?: number;
+  /** a round part drawn with so many flat sides (a hex head: 6) */ facets?: number;
+  /** it glows (a lamp's light, lit or not) */ glow?: boolean;
+  /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
+  /** how worn it is, 0 new to 1 derelict */ wear?: number;
+  /** it goes on public roads (and so carries number plates and mirrors) */ road?: boolean;
+  /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
+  /** what it offers or asks of the parts it meets */ iface?: Iface[];
+  /** its maker's published mass, kg: what is not drawn (its part named "the rest of it") makes up the difference */ published?: number;
+  /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
+  /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it
+   *  opens into what it is made of, down to the elements, and is drawn as that item looks where it has no shape of its own */ item?: string;
+  /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
   parts?: Part[]; says?: string;
 }
 export type Pick = Record<string, string | number>;
@@ -47,6 +73,7 @@ export const DENSITY: Record<string, number> = {
   'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
   wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
+  pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680,
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
 };
 const vol = (s: Shape): number => {
@@ -56,6 +83,9 @@ const vol = (s: Shape): number => {
   if ('cone' in s) return (Math.PI * s.cone[0] ** 2 * s.cone[1]) / 3;
   if ('torus' in s) return 2 * Math.PI ** 2 * s.torus[0] * s.torus[1] ** 2;
   if ('capsule' in s) return Math.PI * s.capsule[0] ** 2 * (s.capsule[1] + (4 / 3) * s.capsule[0]);
+  if ('loft' in s) return loftVolume(s.loft);
+  if ('tube' in s) return tubeVolume(s.tube);
+  if ('lathe' in s) return latheVolume(s.lathe);
   // a heap: each brick's solid plastic, 0.386 of its box (a 2×4 brick's 2.3 g of ABS at 1,050 kg/m³ in its 31.8 × 11.3 × 15.8 mm)
   if ('heap' in s) return s.heap.n * s.heap.size[0] * s.heap.size[1] * s.heap.size[2] * 0.386;
   return 0;
@@ -65,6 +95,9 @@ const area = (s: Shape): number => {
   if ('cyl' in s) { const [r, h] = s.cyl; return 2 * Math.PI * r * (r + h); }
   if ('sphere' in s) return 4 * Math.PI * s.sphere ** 2;
   if ('torus' in s) return 4 * Math.PI ** 2 * s.torus[0] * s.torus[1];
+  if ('loft' in s) return loftArea(s.loft);
+  if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
+  if ('lathe' in s) return latheArea(s.lathe);
   return 0;
 };
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
@@ -196,54 +229,10 @@ kit({
   },
 });
 
-// ---- a car: its size by body type (typical), its tyres by their size code (225/45R18: 225 mm wide, the sidewall 45 % of
-// that, an 18-inch rim) ----
-const BODIES: Record<string, { L: number; W: number; H: number; wb: number; cabin: number; seats: number }> = {
-  sedan: { L: 4.8, W: 1.85, H: 1.45, wb: 2.85, cabin: 0.5, seats: 5 }, hatchback: { L: 4.3, W: 1.8, H: 1.47, wb: 2.65, cabin: 0.6, seats: 5 }, SUV: { L: 4.8, W: 1.95, H: 1.75, wb: 2.85, cabin: 0.66, seats: 7 },
-  pickup: { L: 5.8, W: 2.0, H: 1.9, wb: 3.6, cabin: 0.36, seats: 5 }, coupe: { L: 4.6, W: 1.85, H: 1.35, wb: 2.75, cabin: 0.42, seats: 4 }, van: { L: 5.3, W: 2.0, H: 2.0, wb: 3.3, cabin: 0.85, seats: 8 },
-  'sports car': { L: 4.4, W: 1.9, H: 1.2, wb: 2.45, cabin: 0.38, seats: 2 }, convertible: { L: 4.5, W: 1.85, H: 1.4, wb: 2.7, cabin: 0.4, seats: 4 },
-};
-kit({
-  id: 'car', name: 'car', words: /\b(cars?|sedan|hatchback|suv|pickup|truck|coupe|van|sports car|convertible|automobile|vehicle)\b/i, says: 'a car: its length, width, height and wheelbase by body type (typical), its tyres by their size code, its power by petrol, diesel, battery or both',
-  choices: [{ key: 'body', name: 'body', options: Object.keys(BODIES) }, { key: 'colour', name: 'colour', options: COLOURS.map(([n]) => n) }, { key: 'rim', name: 'rim size', options: [15, 16, 17, 18, 19, 20, 21], unit: 'in' },
-    { key: 'rims', name: 'rims', options: ['5-spoke', '10-spoke', 'mesh', 'steel', 'turbine'] }, { key: 'power', name: 'power', options: ['petrol', 'diesel', 'electric', 'hybrid'] }, { key: 'tint', name: 'window tint', options: ['none', 'light', 'dark'] }],
-  build(c) {
-    const b = BODIES[c.body as string]!, rim = c.rim as number, tw = 0.185 + (rim - 15) * 0.015, aspect = Math.max(0.3, 0.65 - (rim - 15) * 0.05), tyreD = rim * 0.0254 + 2 * tw * aspect, col = colour(c.colour as string);
-    const glass = { none: 0x9ac8e0, light: 0x5a7a8a, dark: 0x1a2a34 }[c.tint as string]!, low = b.H * 0.55, wheels: Part[] = [];
-    for (const [fx, fz, nm] of [[1, 1, 'front left'], [1, -1, 'front right'], [-1, 1, 'rear left'], [-1, -1, 'rear right']] as const) {
-      const spokes = c.rims === 'steel' ? 0 : c.rims === '10-spoke' ? 10 : c.rims === 'mesh' ? 16 : c.rims === 'turbine' ? 12 : 5, rr = rim * 0.0254 / 2;
-      wheels.push(P(`${nm} wheel`, undefined, [(fx * b.wb) / 2, tyreD / 2, (fz * (b.W - tw)) / 2], { parts: [
-        P(`tyre ${Math.round(tw * 1000)}/${Math.round(aspect * 100)}R${rim}`, { torus: [rr + (tyreD / 2 - rr) / 2, (tyreD / 2 - rr) / 2 + 0.01] }, [0, 0, 0], { color: 0x111111, mat: 'rubber', shell: 0.011, rot: [0, 0, 0] }),
-        P(`${c.rims} rim`, { cyl: [rr, tw * 0.9] }, [0, 0, 0], { color: c.rims === 'steel' ? 0x444444 : 0xc8ccd2, mat: c.rims === 'steel' ? 'steel-low' : 'al-6061', shell: c.rims === 'steel' ? 0.003 : 0.006, rot: [Math.PI / 2, 0, 0], parts: Array.from({ length: spokes }, (_, i) => P(`spoke ${i + 1}`, { box: [0.025, rr * 1.7, 0.02] }, [0, 0, 0], { color: 0xd8dce2, mat: 'al-6061', rot: [0, (i / Math.max(1, spokes)) * Math.PI, 0] })) }),
-        P('brake disc', { cyl: [rr * 0.68, 0.026] }, [0, 0, -fz * 0.04], { color: 0x6a6a6a, mat: 'cast-iron', fill: 0.6, rot: [Math.PI / 2, 0, 0], says: 'a vented disc, about 60 % solid' }),
-      ] }));
-    }
-    const power: Part[] = c.power === 'electric' ? [P('battery pack (75 kWh)', { box: [2.1, 0.12, 1.5] }, [0, 0.25, 0], { color: 0x2a3a4a, mat: 'battery', fill: 0.8, says: 'about 450 kg at 6 kg per kWh (pack level, typical)' }), P('electric motor', { cyl: [0.14, 0.35] }, [-b.wb / 2, tyreD / 2, 0], { color: 0x8a8a90, mat: 'steel-low', fill: 0.5, rot: [Math.PI / 2, 0, 0] })]
-      : [P(`${c.power} engine`, { box: [0.7, 0.6, 0.7] }, [b.L * 0.33, low * 0.75, 0], { color: 0x5a5a5a, mat: 'al-6061', fill: 0.25, says: 'its block about a quarter solid round its bores, ports and passages (an estimate)' }), P('fuel tank (55 L)', { box: [0.6, 0.25, 0.8] }, [-b.wb / 2 + 0.3, 0.35, 0], { color: 0x2a2a2a, mat: 'steel-low', shell: 0.0012 }),
-        ...(c.power === 'hybrid' ? [P('battery (1.5 kWh)', { box: [0.5, 0.2, 0.6] }, [-b.wb / 2 + 0.2, 0.6, 0], { color: 0x2a3a4a, mat: 'battery', fill: 0.4 })] : [])];
-    const seats: Part[] = []; const rows = b.seats <= 2 ? 1 : b.seats <= 5 ? 2 : 3;
-    for (let row = 0; row < rows; row++) for (const s of rows === 1 || row === 0 ? [-1, 1] : b.seats >= 7 || row === 1 ? [-1, 0, 1] : [-1, 1]) seats.push(P(`seat ${seats.length + 1}`, undefined, [0.2 - row * 0.85, low * 0.65, s * 0.42], { parts: [P('cushion', { box: [0.5, 0.12, 0.48] }, [0, 0, 0], { color: 0x2a2a2a, mat: 'foam' }), P('back', { box: [0.12, 0.6, 0.48] }, [-0.25, 0.3, 0], { color: 0x2a2a2a, mat: 'foam' }), P('seat frame', { box: [0.5, 0.05, 0.48] }, [0, -0.08, 0], { color: 0x3a3a3a, mat: 'steel-low', fill: 0.08 })] }));
-    const open = c.body === 'convertible';
-    return P(`${c.colour} ${c.body}`, undefined, [0, 0, 0], { parts: [
-      // the body in white: its panels and the floor, sills and pillars inside them, as about 1.4 mm of steel over its skin (it weighs 280–350 kg, typical)
-      P('body', { box: [b.L, low - tyreD * 0.35, b.W] }, [0, tyreD * 0.35 + (low - tyreD * 0.35) / 2, 0], { color: col, mat: 'steel-low', shell: 0.0014, make: 'pressed' }),
-      open ? P('windscreen', { box: [0.05, b.H - low, b.W * 0.95] }, [b.L * 0.12, low + (b.H - low) / 2, 0], { color: glass, mat: 'glass', rot: [0, 0, -0.5] })
-        : P('cabin', { box: [b.L * b.cabin, b.H - low, b.W * 0.92] }, [c.body === 'pickup' ? b.L * 0.12 : -b.L * 0.05, low + (b.H - low) / 2, 0], { color: glass, mat: 'glass', shell: 0.0016, make: 'pressed', says: 'its glass and roof: about 4 mm of glass over 40 % of it' }),
-      ...(c.body === 'pickup' ? [P('bed', { box: [b.L * 0.38, 0.5, b.W * 0.95] }, [-b.L * 0.28, low + 0.1, 0], { color: col, mat: 'steel-low', shell: 0.0012, make: 'pressed' })] : []),
-      ...wheels, ...seats, ...power,
-      P('suspension, axles and steering', undefined, [0, tyreD / 2, 0], { parts: [
-        ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([fx, fz], i) => P(`strut ${i + 1}`, { cyl: [0.035, 0.5] }, [(fx! * b.wb) / 2, 0.15, (fz! * (b.W - 0.45)) / 2], { color: 0x3a3a3a, mat: 'steel-low' })),
-        ...[1, -1].map((fx, i) => P(i ? 'rear axle' : 'front axle', { cyl: [0.03, b.W - 0.3] }, [(fx * b.wb) / 2, 0, 0], { color: 0x3a3a3a, mat: 'steel-low', rot: [Math.PI / 2, 0, 0] }))] }),
-      ...(c.power === 'electric' ? [] : [P('gearbox', { box: [0.5, 0.35, 0.4] }, [b.L * 0.18, low * 0.55, 0], { color: 0x5a5a5a, mat: 'al-6061', fill: 0.35 }), P(`${c.power === 'diesel' ? 'diesel' : 'petrol'} (55 L)`, { box: [0.55, 0.22, 0.75] }, [-b.wb / 2 + 0.3, 0.35, 0], { mat: c.power === 'diesel' ? 'diesel' : 'petrol' })]),
-      P('dashboard', { box: [0.4, 0.3, b.W * 0.85] }, [0.55, low + 0.15, 0], { color: 0x1a1a1a, mat: 'abs', shell: 0.003 }),
-      P('wiring harness', undefined, [0, low * 0.6, 0], { kg: 40, says: 'about 40 kg of copper and insulation (typical)' }), P('climate system', undefined, [0.5, low * 0.6, 0], { kg: 20, says: 'typical' }),
-      P('trim, carpets and sound deadening', undefined, [0, low * 0.5, 0], { kg: 60, says: 'typical' }), P('oil, coolant and other fluids', undefined, [0, low * 0.4, 0], { kg: 15, says: 'typical' }),
-      P('steering wheel', { torus: [0.18, 0.017] }, [0.35, low + 0.3, 0.42], { color: 0x1a1a1a, mat: 'leather', rot: [0, Math.PI / 2, 0.3] }),
-      ...[1, -1].map((s) => P(`headlight ${s > 0 ? 'left' : 'right'}`, { box: [0.05, 0.12, 0.3] }, [b.L / 2, low * 0.75, s * b.W * 0.35], { color: 0xffffee, mat: 'pc', light: { lm: 1500, color: 0xfff4e0 } })),
-      ...[1, -1].map((s) => P(`tail light ${s > 0 ? 'left' : 'right'}`, { box: [0.05, 0.1, 0.3] }, [-b.L / 2, low * 0.8, s * b.W * 0.36], { color: 0xc81e1e, mat: 'pmma' })),
-    ], says: `${b.L} m long, ${b.W} m wide, wheelbase ${b.wb} m; tyres ${Math.round(tw * 1000)}/${Math.round(aspect * 100)}R${rim}, ${(tyreD * 1000).toFixed(0)} mm across` });
-  },
-});
+// cars, karts, ATVs, motorcycles, forklifts, trucks and lawn tractors: one maker for every wheeled machine
+// (src/nexus/machines.ts), each kit only what can be chosen
+for (const k of VEHICLE_KITS) kit(k);
+useMass(massOf);
 
 // ---- a lamp post: its light by its lamp (high-pressure sodium about 100 lm/W at 2,000 K; LED street lights about 140
 // lm/W, typical), spaced about three times its height along a road (typical) ----
@@ -581,6 +570,6 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
 /** A thing made by a kit from words: its choices, its parts, its mass. */
 export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part } {
   let s = seed >>> 0 || 1; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return kk.build(pick, r, sub); };
-  const pick = choose(k, words, r); return { kit: k, pick, part: k.build(pick, r, sub) };
+  const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
+  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
 }

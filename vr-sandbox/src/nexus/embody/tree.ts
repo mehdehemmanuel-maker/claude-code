@@ -74,8 +74,9 @@ export function contacts(parts: Part[], gap = 1e-3): Map<string, Set<string>> {
   return out;
 }
 /** How many contacts each part is from the ground (whatever stands at the lowest level), and what the ground does not reach. */
-export function loadPath(parts: Part[], gap = 1e-3): { depth: Map<string, number>; held: Set<string>; floating: Part[] } {
-  const c = contacts(parts, gap), solid = parts.filter((p) => p.shape.kind !== 'wire');
+/** (Contacts may be given: a caller that knows its parts' turned shapes better than their boxes passes its own.) */
+export function loadPath(parts: Part[], gap = 1e-3, given?: Map<string, Set<string>>): { depth: Map<string, number>; held: Set<string>; floating: Part[] } {
+  const c = given ?? contacts(parts, gap), solid = parts.filter((p) => p.shape.kind !== 'wire');
   if (!solid.length) return { depth: new Map(), held: new Set(), floating: [] };
   const ground = Math.min(...solid.map((p) => lohi(p).lo[1]));
   const depth = new Map<string, number>(), queue: string[] = [];
