@@ -66,13 +66,22 @@ export const RULE_UPDATES: RuleUpdate[] = [
 // ---- a wheel's sweep -------------------------------------------------------------------------------------------------
 /** The poses a wheel goes through: steered from full lock one way to the other, at rest and at full bump. */
 const posesOf = (w: WheelAt, n: number) => { const th = w.steer > 0 ? Array.from({ length: n }, (_, k) => -w.steer + (2 * w.steer * k) / (n - 1)) : [0]; return th; };
+/** What a wheel's sweep is made of, worked out once per wheel: its steering poses, and its section's bounds and the
+ *  radii where its outline turns (the only places the reach between two radii can be greatest, besides the ends). */
+interface Prepared { poses: number[]; sec?: [number, number][]; minR: number; maxR: number; knots: number[] }
+const prepared = new WeakMap<WheelAt, Map<number, Prepared>>();
+const prep = (w: WheelAt, n: number): Prepared => {
+  let m = prepared.get(w); if (!m) { m = new Map(); prepared.set(w, m); } let p = m.get(n);
+  if (!p) { const sec = w.section?.length ? w.section : undefined, rs = sec ? sec.map((q) => q[0]) : [0]; p = { poses: posesOf(w, n), sec, minR: Math.min(...rs), maxR: Math.max(...rs), knots: [...new Set(rs)] }; m.set(n, p); }
+  return p;
+};
 /** How far out along its axle a tyre reaches at a distance from it: its section's widest there (a tyre is rounded at
  *  its shoulder: at its tread about 78% of its section's width), or its whole width where its section is not known. */
-const reachAt = (w: WheelAt, rho: number): number => {
-  const sec = w.section; if (!sec?.length) return w.w / 2;
+const reachOf = (w: WheelAt, p: Prepared, rho: number): number => {
+  const sec = p.sec; if (!sec) return w.w / 2;
   // (inside its bead, the rim it sits on, as wide as the bead; beyond its tread, the tread's)
-  let best = 0; const r = Math.max(Math.min(...sec.map((q) => q[0])), Math.min(rho, Math.max(...sec.map((q) => q[0]))));
-  for (let k = 0; k + 1 < sec.length; k++) { const [r0, z0] = sec[k]!, [r1, z1] = sec[k + 1]!, lo = Math.min(r0, r1), hi = Math.max(r0, r1); if (r < lo - 1e-9 || r > hi + 1e-9) continue; const z = hi - lo < 1e-9 ? Math.max(Math.abs(z0), Math.abs(z1)) : Math.abs(z0 + ((z1 - z0) * (r - r0)) / (r1 - r0)); best = Math.max(best, z); }
+  let best = 0; const r = Math.max(p.minR, Math.min(rho, p.maxR));
+  for (let k = 0; k + 1 < sec.length; k++) { const r0 = sec[k]![0], z0 = sec[k]![1], r1 = sec[k + 1]![0], z1 = sec[k + 1]![1], lo = r0 < r1 ? r0 : r1, hi = r0 < r1 ? r1 : r0; if (r < lo - 1e-9 || r > hi + 1e-9) continue; const z = hi - lo < 1e-9 ? Math.max(Math.abs(z0), Math.abs(z1)) : Math.abs(z0 + ((z1 - z0) * (r - r0)) / (r1 - r0)); if (z > best) best = z; }
   return best;
 };
 /** Whether a point is inside the room a wheel needs anywhere through its motion: its tyre's section (or cylinder) grown
@@ -80,13 +89,15 @@ const reachAt = (w: WheelAt, rho: number): number => {
  *  modern car's small scrub radius) and risen anywhere up to its bump. */
 export function inSweep(P: V3, w: WheelAt, room = BODY_RULES.room): boolean {
   const RR = w.R + room.radial, dx = P[0] - w.x, dz = P[2] - w.z, lo = P[1] - w.y - w.bump, hi = P[1] - w.y; // (its height over the axle, risen 0…bump)
-  const knots = w.section ? [...new Set(w.section.map((q) => q[0]))] : [];
-  for (const th of posesOf(w, room.poses)) {
+  // (nothing further from the axle than its radius and room, nor further along it than its half-width and room, can be in it)
+  if (dx * dx + dz * dz > (RR + w.w / 2 + room.side) ** 2 || (lo > RR) || (hi < -RR)) return false;
+  const pr = prep(w, room.poses);
+  for (const th of pr.poses) {
     const t = dx * Math.sin(th) + dz * Math.cos(th); if (Math.abs(t) > w.w / 2 + room.side + 1e-9) continue;
     const d2 = Math.max(0, dx * dx + dz * dz - t * t), yMin = lo <= 0 && hi >= 0 ? 0 : Math.min(lo * lo, hi * hi), yMax = Math.max(lo * lo, hi * hi);
     const rMin = Math.sqrt(d2 + yMin), rMax = Math.min(RR, Math.sqrt(d2 + yMax)); if (rMin > RR) continue;
     // (the widest the tyre reaches anywhere it can be over this point, risen or not)
-    let reach = Math.max(reachAt(w, rMin), reachAt(w, rMax)); for (const k of knots) if (k > rMin && k < rMax) reach = Math.max(reach, reachAt(w, k));
+    let reach = Math.max(reachOf(w, pr, rMin), reachOf(w, pr, rMax)); for (const k of pr.knots) if (k > rMin && k < rMax) reach = Math.max(reach, reachOf(w, pr, k));
     if (Math.abs(t) <= reach + room.side) return true;
   }
   return false;
@@ -176,10 +187,13 @@ export function uAt(s: Surface, x: number, v = 0.5): number {
 /** The body made: its skins, cut into panels. (The same figures under the same rules make the same body, so a car park
  *  of one model makes it once; each caller gets its own parts, the skins themselves shared, as they are never changed.) */
 const made = new Map<string, Part[]>();
-const copy = (p: Part): Part => ({ ...p, parts: p.parts?.map(copy) });
+// (made once per shape, in a colour no paint has, and painted as asked when copied out: a car park of one model in ten
+// colours makes its body once)
+const UNPAINTED = 0xfe01fe;
+const copy = (color: number) => { const c = (p: Part): Part => ({ ...p, ...(p.color === UNPAINTED ? { color } : {}), parts: p.parts?.map(c) }); return c; };
 export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
-  const key = JSON.stringify([b, r]), kept = made.get(key); if (kept) return kept.map(copy);
-  const out = makeBody(b, r); if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy);
+  const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
+  const out = makeBody({ ...b, color: UNPAINTED }, r); if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
 }
 function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const ln = lined(b, r), W2 = b.W / 2, col = b.color, out: Part[] = [];
@@ -344,8 +358,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // and the wheelhouse closed on its inner side, as a car's inner wheelhouse panel closes it: a flat wall beyond where the
     // tyre's inner corners reach at full lock (so it is clear of the sweep), from the rocker up past the liner's top (so
     // nothing is seen through the arch but the dark of the wheelhouse)
-    const yTopW = w.y + Math.max(...rad.flat()) + 0.02, yLoW = ln.low(w.x) + 0.02, xW0 = w.x - a.Ra - 0.1, xW1 = w.x + a.Ra + 0.1;
-    out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: [[[xW0, yLoW, zW], [xW0, yTopW, zW]], [[xW1, yLoW, zW], [xW1, yTopW, zW]]], p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
+    // (its top the liner's own inner edge, which is held under the skin, so the wall never stands through the hood or the
+    // deck; down to the rocker)
+    const yLoW = ln.low(w.x) + 0.02, wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
     out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
   }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----

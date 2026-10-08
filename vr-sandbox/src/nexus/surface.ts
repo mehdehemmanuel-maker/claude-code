@@ -136,7 +136,14 @@ export function patchAt(pt: Patch, a: number, b: number): SurfacePoint {
   return pt.off ? { ...sp, at: add(sp.at, mul(sp.n, pt.off)) } : sp;
 }
 /** A patch's points over a grid of na × nb (and its mirror's after them, where it has one). */
+// (what a skin's points are depends only on it and how finely it is sampled: kept by the skin, as everything else known of it)
+const sampled = new WeakMap<object, Map<string, V3[]>>();
 export function patchPoints(x: Surface | Patch, na = 16, nb = 12, mirrored = true): V3[] {
+  let m = sampled.get(x); if (!m) { m = new Map(); sampled.set(x, m); }
+  const key = `${na}:${nb}:${mirrored}`; let got = m.get(key); if (!got) { got = samplePoints(x, na, nb, mirrored); m.set(key, got); }
+  return got;
+}
+function samplePoints(x: Surface | Patch, na: number, nb: number, mirrored: boolean): V3[] {
   const pt = asPatch(x), out: V3[] = [];
   for (let i = 0; i <= na; i++) for (let j = 0; j <= nb; j++) { if (pt.off) { out.push(patchAt(pt, i / na, j / nb).at); continue; } const [u, v] = uvOf(pt, i / na, j / nb); out.push(pointAt(pt.s, clamp01(u), clamp01(v))); }
   if (mirrored && pt.s.mirror) for (let k = 0, n = out.length; k < n; k++) { const q = out[k]!; out.push([q[0], q[1], -q[2]]); }

@@ -271,6 +271,8 @@ function moveBy(n: Node, world: THREE.Vector3): void {
 
 // ---- skins (src/nexus/panels.ts): each checked once, its own results kept with it ----------------------------------
 const formed = new WeakMap<Patch, { least: number; pull: SV3; rmin: number; rminAt: [number, number] }>(), grids = new WeakMap<Patch, { a: number; b: number; at: SV3 }[]>();
+const met = new WeakMap<Patch, Map<string, { gap: number; angle: number }>>(), ids = new WeakMap<Patch, number>(); let nextId = 0;
+const idOf = (pt: Patch) => { let i = ids.get(pt); if (i === undefined) { i = nextId++; ids.set(pt, i); } return i; };
 const gridOf = (pt: Patch) => { let g = grids.get(pt); if (!g) { g = []; for (let i = 0; i <= 40; i++) for (let j = 0; j <= 16; j++) g.push({ a: i / 40, b: j / 16, at: patchAt(pt, i / 40, j / 16).at }); grids.set(pt, g); } return g; };
 const deg = (r: number) => (r * 180) / Math.PI;
 /** A skin's meetings with its neighbours checked against what its maker said of them: across a mirror, its normal with no
@@ -293,11 +295,19 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
       // (each point of this edge taken into the neighbour's frame, the point of the neighbour nearest it found, and the
       // two normals compared there)
       const opt = (other.p.shape as { surf: Patch }).surf, into = new THREE.Matrix4().copy(other.m).invert().multiply(n.m), rot = new THREE.Matrix3().setFromMatrix4(into), og = gridOf(opt);
-      let gap = 0, angle = 0;
-      for (const t of ts) {
-        const q = patchAt(pt, ...ab(t)), P = new THREE.Vector3(...q.at).applyMatrix4(into), c = closestOn(opt, [P.x, P.y, P.z], og), on = patchAt(opt, c.a, c.b).n;
-        gap = Math.max(gap, c.d); angle = Math.max(angle, deg(Math.acos(Math.min(1, Math.abs(new THREE.Vector3(...q.n).applyMatrix3(rot).normalize().dot(new THREE.Vector3(...on)))))));
+      // (what two skins' meeting is depends only on them, the edge, and where one stands from the other: kept, so a car
+      // park of one model, or the critic's next round, does not work it out again)
+      let seen = met.get(pt); if (!seen) { seen = new Map(); met.set(pt, seen); }
+      const mk = `${idOf(opt)}|${m.edge}|${into.elements.map((v) => v.toFixed(4)).join(',')}`; let got = seen.get(mk);
+      if (!got) {
+        let g2 = 0, a2 = 0;
+        for (const t of ts) {
+          const q = patchAt(pt, ...ab(t)), P = new THREE.Vector3(...q.at).applyMatrix4(into), c = closestOn(opt, [P.x, P.y, P.z], og), on = patchAt(opt, c.a, c.b).n;
+          g2 = Math.max(g2, c.d); a2 = Math.max(a2, deg(Math.acos(Math.min(1, Math.abs(new THREE.Vector3(...q.n).applyMatrix3(rot).normalize().dot(new THREE.Vector3(...on)))))));
+        }
+        got = { gap: g2, angle: a2 }; seen.set(mk, got);
       }
+      const { gap, angle } = got;
       if (gap > 0.008) say('continuity', n.p.name, `it is to meet the ${m.part} (${m.why}), but stands ${(gap * 1000).toFixed(0)} mm from it`, false);
       else if (m.kind === 'G1' && angle > 3) say('continuity', n.p.name, `it meets the ${m.part} at ${angle.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
     }

@@ -6,6 +6,7 @@
 // Densities added for materials that may be asked for (typical values): gold 19,300, silver 10,490, titanium 4,500,
 // carbon fibre composite 1,600, marble 2,700, ice 917, bamboo 700, chocolate 1,300, cardboard 690 kg/m³.
 
+import type { Surface } from '../surface';
 import { DENSITY, type Part } from '../kits';
 
 export interface Conditions {
@@ -75,5 +76,13 @@ function scaleShape(s: NonNullable<Part['shape']>, k: number): NonNullable<Part[
   if ('loft' in s) return { loft: { st: s.loft.st.map((x) => ({ ...x, x: x.x * k, w: x.w * k, lo: x.lo * k, hi: x.hi * k })) } };
   if ('tube' in s) return { tube: { ...s.tube, r: s.tube.r * k, pts: s.tube.pts.map((q) => q.map((v) => v * k) as [number, number, number]), ...(s.tube.wall ? { wall: s.tube.wall * k } : {}), ...(s.tube.bend ? { bend: s.tube.bend * k } : {}) } };
   if ('lathe' in s) return { lathe: s.lathe.map(([r, y]) => [r * k, y * k] as [number, number]) };
+  // (a skin scaled as a whole: its net scaled, the same skin at each scale shared, so what is known of it is kept)
+  if ('surf' in s) { const pt = s.surf; return { surf: { ...pt, s: scaledSkin(pt.s, k), ...(pt.off !== undefined ? { off: pt.off * k } : {}) } }; }
   return s;
+}
+const scaled = new WeakMap<Surface, Map<number, Surface>>();
+function scaledSkin(sf: Surface, k: number): Surface {
+  let m = scaled.get(sf); if (!m) { m = new Map(); scaled.set(sf, m); }
+  let out = m.get(k); if (!out) { out = { ...sf, net: sf.net.map((col) => col.map((P) => [P[0] * k, P[1] * k, P[2] * k] as [number, number, number])) }; m.set(k, out); }
+  return out;
 }

@@ -122,6 +122,16 @@ Later rounds, on the panelled bodies:
   - mirrors moved to the foot of the A pillars;
   - the bodies are crisper: less tuck under, a tight sill turn and a shoulder line. A styled car's track is its width
     less its tyre's, with each tyre face 30 mm inside the body.
+- **Round 5 (4 of 10; the pickup 3, the sports car 2):** black triangles on the sports car's hood were the new inner
+  wheelhouse walls' corners, rectangles standing above its low hood. Each wall's top now follows the liner's inner edge.
+  The dashboard ends at the windscreen's base, its top 30 mm under the belt.
+
+**Speed.** Every kit through the pipeline took 26 s, then timed out under the gate's load. Three causes, fixed:
+- the pipeline deep-copied every skin's net, so nothing worked out about a skin carried from car to car;
+- a body was made again for each colour;
+- a wheel's sweep recomputed per call what is fixed per wheel.
+
+Every kit now takes 17 s. Skins are also scaled with a thing's size now; they had not been.
 
 Still open:
 
@@ -132,5 +142,8 @@ Still open:
   away. Tried at a 0.38 m nose radius and undone. The fix is more control columns where the plan turns tightly (local
   refinement), not a looser fit;
 - an arch lip in body colour;
+- nothing yet checks that what is inside a body stays inside its skin. A dashboard, the inner wheelhouse walls and a
+  liner have each stood through a panel and were found only by looking. The critic should test it, point by point, as it
+  tests a wheel's sweep;
 - the go-kart on the track (`view/kart3d.ts`) is drawn apart from `machines.ts`;
 - planes, cranes and power tools are new architectures, not yet built.
