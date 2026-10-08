@@ -40,6 +40,10 @@ export interface BodyRules {
   /** the corners in plan: their radius at the nose and the tail, m, and how square (a superellipse's exponent) */ plan: { nose: number; tail: number; k: number };
   /** stations along the body: their spacing, m, and how many round each end's corner */ stations: { step: number; ends: number };
   /** the cabin: its roof's half-width as a share of the body's, the pillars' width, m */ cabin: { roof: number; pillar: number };
+  /** the faces at its ends in side view: each leans back from its most forward line (at so far up its face, a share of
+   *  its height) to its top edge by so much, and under it to its foot by so much, m: a bumper's face stands forward of the
+   *  hood's or the deck's edge over it (typical of a car since pedestrian-protection rules lengthened its nose), never a
+   *  wall from the ground to the hood */ ends: { nose: { at: number; top: number; foot: number }; tail: { at: number; top: number; foot: number } };
   /** a shut line's gap, m */ gap: number;
   /** skins fitted fairly across their stations: a control column to every so many metres of outline, so much weight on
    *  bending (none: forced through every station) */ fit: { step: number; lambda: number } | null;
@@ -52,6 +56,7 @@ export const BODY_RULES: BodyRules = {
   plan: { nose: 0.5, tail: 0.4, k: 2.6 },
   stations: { step: 0.14, ends: 8 },
   cabin: { roof: 0.72, pillar: 0.04 },
+  ends: { nose: { at: 0.42, top: 0.13, foot: 0.06 }, tail: { at: 0.5, top: 0.07, foot: 0.06 } },
   gap: 0.004,
   fit: { step: 0.25, lambda: 0.2 },
 };
@@ -142,9 +147,11 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
   const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump + lip }))];
   const need = (x: number) => { let v = -Infinity; for (const k of clears) { const ramp = 0.18, d = x < k.x0 ? k.x0 - x : x > k.x1 ? x - k.x1 : 0; if (d >= ramp) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / ramp); v = Math.max(v, k.y - (1 - g) * 0.12); } return v; };
   const drawn = lineBy([
-    [xT, deckY - (ln.bed ? 0.02 : 0.09)], [xT + 0.06, deckY - (ln.bed ? 0.005 : 0.03)], [xT + 0.2, deckY], ...(xDeck - xT > 0.6 ? [[(xT + xDeck) / 2 + 0.1, deckY + 0.004] as [number, number]] : []), [xDeck, beltAt(xDeck)],
+    // (its ends a crisp edge, falling 20 to 30 mm in the last few centimetres where the face leans down from it, not a
+    // roll of a hand's height: a hood or deck rolling down into its face is what makes a body read as a bar of soap)
+    [xT, deckY - (ln.bed ? 0.02 : 0.03)], [xT + 0.05, deckY - (ln.bed ? 0.005 : 0.008)], [xT + 0.2, deckY], ...(xDeck - xT > 0.6 ? [[(xT + xDeck) / 2 + 0.1, deckY + 0.004] as [number, number]] : []), [xDeck, beltAt(xDeck)],
     [(xDeck + xCowl) / 2, beltAt((xDeck + xCowl) / 2)], [xCowl, beltAt(xCowl)],
-    [xCowl + hoodRun * 0.4, noseH + (belt - noseH) * 0.55], [xN - 0.16, noseH + 0.01], [xN - 0.05, noseH - 0.025], [xN, noseH - 0.075],
+    [xCowl + hoodRun * 0.4, noseH + (belt - noseH) * 0.55], [xN - 0.16, noseH + 0.008], [xN - 0.04, noseH - 0.004], [xN, noseH - 0.022],
   ]);
   const top = (x: number) => { const n = need(x); return n === -Infinity ? drawn(x) : -softMin(-drawn(x), -n, 0.04); };
   const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder, 0.08);
@@ -191,7 +198,15 @@ const made = new Map<string, Part[]>();
 // colours makes its body once)
 const UNPAINTED = 0xfe01fe;
 const copy = (color: number) => { const c = (p: Part): Part => ({ ...p, ...(p.color === UNPAINTED ? { color } : {}), parts: p.parts?.map(c) }); return c; };
-export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
+/** A trial: rules and lines tried on every body made until it is cleared. What a critic uses to show what it would change
+ *  (the look page's &rules= and &lines=), so a proposal is seen before it is argued; a maker never sets it, and a rule is
+ *  only changed in BODY_RULES after it helps bodies it was not tried on (RULE_UPDATES). */
+type Deep<T> = { [K in keyof T]?: T[K] extends object ? Deep<T[K]> : T[K] };
+let trial: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null = null;
+export function tryBody(t: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null): void { trial = t; made.clear(); }
+const merged = <T>(a: T, b: Deep<T> | undefined): T => { if (!b) return a; const o = { ...(a as object) } as Record<string, unknown>; for (const [k, v] of Object.entries(b)) o[k] = v && typeof v === 'object' && !Array.isArray(v) && o[k] && typeof o[k] === 'object' ? merged(o[k], v as Deep<unknown>) : v; return o as T; };
+export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES): Part[] {
+  const r = trial ? merged(r0, trial.rules) : r0, b = trial?.lines ? { ...b0, lines: { ...b0.lines, ...trial.lines } } : b0;
   const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
   const out = makeBody({ ...b, color: UNPAINTED }, r); if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
 }
@@ -226,9 +241,28 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // points 30 mm apart, so a highlight runs along it)
     return [[x, lo, w - tk * f], [x, lo + Math.min(0.045, 0.15 * d), w - tk * 0.4 * f], [x, lo + 0.5 * d, w - tk * 0.08 * f], [x, sh - 0.015, w + 0.004 * f], [x, sh + 0.015, w + 0.004 * f], [x, sh + 0.015 + 0.6 * (top - sh - 0.015), w - r.side.tumble * 0.4 * f], [x, top - hand * ar[1], zt - hand * ar[2]], [x, top, zt]];
   };
-  const rows = xs.map(section);
+  // each end's face leaned back from its most forward line, above it and below (in side view a bumper stands forward of
+  // the hood's edge and the chin under it), easing in from where the plan begins to turn round the corner: every point
+  // of a section moved back along the body by its height up its face, so the face is a curve in side view, not a wall
+  // (and the plan's corner tighter at the hood's edge than at the bumper's, as a car's is)
+  const leanOf = (e: { at: number; top: number; foot: number }, t: number) => (t > e.at ? e.top * ((t - e.at) / (1 - e.at)) ** 2 : e.foot * ((e.at - t) / e.at) ** 2);
+  const ease = (d: number, R: number) => { const t = Math.max(0, Math.min(1, 1 - d / R)); return t * t * (3 - 2 * t); };
+  const leaned = (x: number, row: V3[]): V3[] => {
+    const fN = ease(ln.xN - x, r.plan.nose), fT = ease(x - ln.xT, r.plan.tail); if (fN <= 0 && fT <= 0) return row;
+    const lo = row[0]![1], hi = row[row.length - 1]![1], h = Math.max(1e-3, hi - lo);
+    return row.map((P) => { const t = (P[1] - lo) / h; return [P[0] - fN * leanOf(r.ends.nose, t) + fT * leanOf(r.ends.tail, t), P[1], P[2]] as V3; });
+  };
+  const rows = xs.map((x) => leaned(x, section(x)));
   const fitOf = (xs2: number[]) => (r.fit ? { n: Math.max(5, Math.round(outlineLength(xs2, ln.plan) / r.fit.step)), lambda: r.fit.lambda } : undefined);
-  const uo = byOutline(xs, ln.plan), side = skinThrough(rows, { mirror: true, control: true, u: uo, e0: [0, 0, 1], e1: [0, 0, -1], fit: fitOf(xs) });
+  const uo = byOutline(xs, ln.plan), skinOf = (rs: V3[][]) => skinThrough(rs, { mirror: true, control: true, u: uo, e0: [0, 0, 1], e1: [0, 0, -1], fit: fitOf(xs) });
+  // (its length its published length: the faces leaned back, the skin is measured at each end and the leaned stations
+  // moved out by what it falls short, as the ends ease in, so its nose and tail are where its figures put them)
+  let side = skinOf(rows);
+  {
+    let xMax = -Infinity, xMin = Infinity; for (let i = 0; i <= 40; i++) for (let j = 0; j <= 24; j++) { const P0 = pointAt(side, 1 - (0.15 * i) / 40, j / 24), P1 = pointAt(side, (0.15 * i) / 40, j / 24); xMax = Math.max(xMax, P0[0]); xMin = Math.min(xMin, P1[0]); }
+    const dN = ln.xN - xMax, dT = xMin - ln.xT;
+    if (dN > 1e-4 || dT > 1e-4) side = skinOf(rows.map((row, i) => { const x = xs[i]!, fN = ease(ln.xN - x, r.plan.nose), fT = ease(x - ln.xT, r.plan.tail); return row.map((P) => [P[0] + fN * Math.max(0, dN) - fT * Math.max(0, dT), P[1], P[2]] as V3); }));
+  }
   // where on the skin each line of its sections runs: the parameter under each control point (its Greville abscissa)
   const gv = greville(rows[0]!.length, 3), sv = [0, gv[1]!, gv[2]!, (gv[3]! + gv[4]!) / 2, gv[5]!, 1];
   const vSill = sv[1]!, U = (x: number) => uAt(side, x, sv[3]!);
@@ -365,7 +399,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
   }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
-  const lid = (name: string, x0: number, x1: number, crown: number, says: string, meets: string): Part | null => {
+  const lid = (name: string, x0: number, x1: number, crown0: number, says: string, meets: string): Part | null => {
     if (x1 - x0 < 0.08) return null;
     // built on the side skin's own top edge, cut from it between its ends (so the two share their knots and meet along
     // all of it, not only where sections were drawn): each section's control polygon leaving that edge set in by the
@@ -375,7 +409,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     // a parabola's crown has, so it is convex
     const a = x0 <= ln.xT + 1e-6 ? 0 : uAt(side, x0, 1), c = x1 >= ln.xN - 1e-6 ? 1 : uAt(side, x1, 1);
     const s = fromEdge(split(side, a, c), (E, d): V3[] => {
-      const t = unit3(d), P0: V3 = [E[0], E[1] + t[1] * r.gap, Math.max(0, E[2] + t[2] * r.gap)], zt = P0[2], y = P0[1], k = Math.min(2, (zt * 0.25) / (Math.hypot(...d) || 1));
+      // (its crown easing off toward the face it ends at, to 40% of it at the edge: a hood is crowned across, and flattens
+      // to its leading edge rather than doming over it)
+      const crown = crown0 * (1 - 0.6 * Math.max(ease(ln.xN - E[0], 0.35), ease(E[0] - ln.xT, 0.25)));
+      const t = unit3(d), P0: V3 = [E[0], E[1] + t[1] * r.gap, Math.max(0, E[2] + t[2] * r.gap)], zt = P0[2], y = P0[1], k = Math.min(2, (zt * 0.25) / (Math.hypot(...d) || 1), Math.max(0, crown * 0.8) / Math.max(1e-6, Math.abs(d[1]) || 1e-6));
       return [P0, [E[0], y + d[1] * k, zt + d[2] * k], [E[0], y + crown, zt * 0.5], [E[0], y + crown, zt * 0.16], [E[0], y + crown, 0]];
     }, { mirror: true });
     return paint(name, { s }, { says, meets: [{ part: meets, edge: 'b0', kind: 'G1', why: `a highlight runs off the ${meets}'s top onto the ${name} across their shut line` }, { part: name, edge: 'b1', kind: 'mirror', why: 'it crosses its middle in one tangent plane, or a ridge runs down it' }] });

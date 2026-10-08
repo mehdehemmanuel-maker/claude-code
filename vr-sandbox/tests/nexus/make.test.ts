@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest';
 import { KITS, makeKit, massOf, type Part } from '../../src/nexus/kits';
 import { applyConditions, readConditions } from '../../src/nexus/make/conditions';
-import { critique, turning } from '../../src/nexus/make/critic';
+import { critique, meshClashes, turning, type TriMesh } from '../../src/nexus/make/critic';
 import { RULES } from '../../src/nexus/make/detail';
 import { perfect } from '../../src/nexus/make/pipeline';
 import { contacts, layout } from '../../src/nexus/make/space';
@@ -112,5 +112,28 @@ describe('pipeline', () => {
       expect(m.parts[1]).toBeGreaterThanOrEqual(m.parts[0]);
       if (k.id === 'tree' || k.id === 'forest' || k.id === 'plant') expect(m.details.joints).toBe(0);
     }
+  });
+});
+
+describe('clashes', () => {
+  // a square plate of two triangles, its corners as given (x, y, z each), named
+  const plate = (name: string, c: [number, number, number][], path = `car/${name}`): TriMesh => ({ name, path, pos: c.flat(), idx: [0, 1, 2, 0, 2, 3] });
+  const flat = (y: number, x0 = 0, x1 = 1): [number, number, number][] => [[x0, y, 0], [x1, y, 0], [x1, y, 1], [x0, y, 1]];
+  test('one plate through another is through, at where they cross', () => {
+    const c = meshClashes([plate('floor', flat(0.5)), plate('post', [[0.5, 0, 0.2], [0.5, 1, 0.2], [0.5, 1, 0.8], [0.5, 0, 0.8]])]);
+    expect(c.length).toBe(1); expect(c[0]!.kind).toBe('through'); expect(c[0]!.at[0]).toBeCloseTo(0.5, 3); expect(c[0]!.at[1]).toBeCloseTo(0.5, 3); expect(c[0]!.span).toBeGreaterThan(0.5);
+  });
+  test('two panels ending on one edge meet there; one laid on another 0.5 mm off is layered; a metre apart, nothing', () => {
+    // (a door and the glass above it, folded at their shared edge)
+    const meet = meshClashes([plate('door', [[0, 0, 0], [1, 0, 0], [1, 0.5, 0], [0, 0.5, 0]]), plate('glass', [[0, 0.5, 0], [1, 0.5, 0], [1, 0.9, -0.2], [0, 0.9, -0.2]])]);
+    expect(meet.every((x) => x.kind === 'meets')).toBe(true);
+    const lay = meshClashes([plate('panel', flat(0)), plate('decal', [[0.3, 0.0005, 0.2], [0.6, 0.0005, 0.2], [0.6, 0.0005, 0.8], [0.3, 0.0005, 0.8]])]);
+    expect(lay.length).toBeGreaterThan(0); expect(lay.every((x) => x.kind === 'layered')).toBe(true);
+    expect(meshClashes([plate('a', flat(0)), plate('b', flat(1))])).toEqual([]);
+  });
+  test('the same pair meeting in two places far apart is two meetings, each where it is', () => {
+    const left = flat(0.5, 0, 1).map(([x, y, z]) => [x, y, z - 3] as [number, number, number]), both: TriMesh = { name: 'skin', path: 'car/skin', pos: [...flat(0.5).flat(), ...left.flat()], idx: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7] };
+    const posts: TriMesh = { name: 'post', path: 'car/post', pos: [[0.5, 0, 0.5], [0.5, 1, 0.5], [0.6, 1, 0.5], [0.6, 0, 0.5], [0.5, 0, -2.5], [0.5, 1, -2.5], [0.6, 1, -2.5], [0.6, 0, -2.5]].flat(), idx: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7] };
+    const c = meshClashes([both, posts]).sort((p, q) => p.at[2] - q.at[2]); expect(c.length).toBe(2); expect(c[0]!.at[2]).toBeCloseTo(-2.5, 3); expect(c[1]!.at[2]).toBeCloseTo(0.5, 3);
   });
 });

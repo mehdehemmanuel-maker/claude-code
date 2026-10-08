@@ -7,3 +7,5 @@ reports/
 dist-nexus/
 dist-view/
 view/public/world.json
+dist-view-dev/
+bench-out/

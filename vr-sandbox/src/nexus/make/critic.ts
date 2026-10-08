@@ -318,3 +318,128 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
     if (n.p.shell && n.p.make === 'pressed' && f.rmin < 3 * n.p.shell) say('radius', n.p.name, `it bends to a ${(f.rmin * 1000).toFixed(1)} mm radius (at ${f.rminAt.map((v) => v.toFixed(2)).join(', ')} on it), tighter than ${(n.p.shell * 1000).toFixed(1)} mm sheet is pressed (about three times its thickness, typical)`, false);
   }
 }
+
+// ---- clashes: every triangle of every part against every other part's ----
+// A box says two parts might meet; only their surfaces say whether they do. What a person sees as wrong at a glance up
+// close is one part showing through another (a handle sunk in its door, a liner through its fender, a beam through the
+// dash) or two surfaces laid on each other so closely that the nearer flickers through (z-fighting): both found here
+// from the drawn triangles themselves, anywhere on the thing, whatever the parts are.
+/** A part as drawn: its triangles in the world, and where it is in the tree (its holders' names). */
+export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number> }
+type CV3 = [number, number, number];
+/** Where two parts meet: crossing (one through the other), touching (within the tolerance, across each other), or
+ *  layered (laid parallel within it: a decal or a seam on a panel, which flickers if it is too close). */
+export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart' }
+interface Tris { n: number; v: Float64Array; box: Float64Array; nor: Float64Array; lo: CV3; hi: CV3; /** which of each triangle's edges is on the mesh's boundary (one triangle uses it), a bit each */ edge: Uint8Array }
+function trisOf(m: TriMesh): Tris {
+  const P = m.pos, I = m.idx, n = Math.floor((I ? I.length : P.length / 3) / 3), v = new Float64Array(n * 9), box = new Float64Array(n * 6), nor = new Float64Array(n * 3), lo: CV3 = [Infinity, Infinity, Infinity], hi: CV3 = [-Infinity, -Infinity, -Infinity];
+  for (let t = 0; t < n; t++) {
+    for (let k = 0; k < 3; k++) { const vi = I ? I[t * 3 + k]! : t * 3 + k; for (let c = 0; c < 3; c++) v[t * 9 + k * 3 + c] = P[vi * 3 + c]!; }
+    for (let c = 0; c < 3; c++) { const a = v[t * 9 + c]!, b = v[t * 9 + 3 + c]!, d = v[t * 9 + 6 + c]!, mn = Math.min(a, b, d), mx = Math.max(a, b, d); box[t * 6 + c] = mn; box[t * 6 + 3 + c] = mx; if (mn < lo[c]!) lo[c] = mn; if (mx > hi[c]!) hi[c] = mx; }
+    const ux = v[t * 9 + 3]! - v[t * 9]!, uy = v[t * 9 + 4]! - v[t * 9 + 1]!, uz = v[t * 9 + 5]! - v[t * 9 + 2]!, wx = v[t * 9 + 6]! - v[t * 9]!, wy = v[t * 9 + 7]! - v[t * 9 + 1]!, wz = v[t * 9 + 8]! - v[t * 9 + 2]!;
+    const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx, l = Math.hypot(nx, ny, nz) || 1; nor[t * 3] = nx / l; nor[t * 3 + 1] = ny / l; nor[t * 3 + 2] = nz / l;
+  }
+  // (its boundary: the edges only one triangle uses, its corners matched by where they are, to a hundredth of a millimetre)
+  const key = (t: number, k: number) => `${Math.round(v[t * 9 + k * 3]! * 1e5)},${Math.round(v[t * 9 + k * 3 + 1]! * 1e5)},${Math.round(v[t * 9 + k * 3 + 2]! * 1e5)}`, ids = new Map<string, number>(), vid = new Int32Array(n * 3);
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) { const s2 = key(t, k); let id = ids.get(s2); if (id === undefined) { id = ids.size; ids.set(s2, id); } vid[t * 3 + k] = id; }
+  const uses = new Map<number, number>(), ek = (a: number, b: number) => (a < b ? a * 4194304 + b : b * 4194304 + a);
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) { const e = ek(vid[t * 3 + k]!, vid[t * 3 + ((k + 1) % 3)]!); uses.set(e, (uses.get(e) ?? 0) + 1); }
+  const edge = new Uint8Array(n); for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) if (uses.get(ek(vid[t * 3 + k]!, vid[t * 3 + ((k + 1) % 3)]!)) === 1) edge[t] |= 1 << k;
+  return { n, v, box, nor, lo, hi, edge };
+}
+/** Whether a point is within d of one of triangle t's boundary edges. */
+function nearEdge(p: CV3, T: Tris, t: number, d: number): boolean {
+  for (let k = 0; k < 3; k++) {
+    if (!(T.edge[t]! & (1 << k))) continue; const o = t * 9, a: CV3 = [T.v[o + k * 3]!, T.v[o + k * 3 + 1]!, T.v[o + k * 3 + 2]!], k2 = (k + 1) % 3, b: CV3 = [T.v[o + k2 * 3]!, T.v[o + k2 * 3 + 1]!, T.v[o + k2 * 3 + 2]!];
+    const ab: CV3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1e-18, s = Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] + (p[2] - a[2]) * ab[2]) / l2));
+    if (Math.hypot(p[0] - a[0] - ab[0] * s, p[1] - a[1] - ab[1] * s, p[2] - a[2] - ab[2] * s) < d) return true;
+  }
+  return false;
+}
+/** Where the segment p→q crosses triangle t of T (Möller and Trumbore's test), or null. */
+function segTri(p: CV3, q: CV3, T: Tris, t: number): CV3 | null {
+  const v = T.v, o = t * 9, e1 = [v[o + 3]! - v[o]!, v[o + 4]! - v[o + 1]!, v[o + 5]! - v[o + 2]!], e2 = [v[o + 6]! - v[o]!, v[o + 7]! - v[o + 1]!, v[o + 8]! - v[o + 2]!], d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+  const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!], a = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!;
+  if (Math.abs(a) < 1e-14) return null; const f = 1 / a, s = [p[0] - v[o]!, p[1] - v[o + 1]!, p[2] - v[o + 2]!], u = f * (s[0]! * h[0]! + s[1]! * h[1]! + s[2]! * h[2]!); if (u < 0 || u > 1) return null;
+  const qq = [s[1]! * e1[2]! - s[2]! * e1[1]!, s[2]! * e1[0]! - s[0]! * e1[2]!, s[0]! * e1[1]! - s[1]! * e1[0]!], w = f * (d[0]! * qq[0]! + d[1]! * qq[1]! + d[2]! * qq[2]!); if (w < 0 || u + w > 1) return null;
+  // (strictly within the segment: an end lying on the triangle is a touch, found as one, not a crossing)
+  const tt = f * (e2[0]! * qq[0]! + e2[1]! * qq[1]! + e2[2]! * qq[2]!); if (tt <= 1e-6 || tt >= 1 - 1e-6) return null;
+  return [p[0] + d[0]! * tt, p[1] + d[1]! * tt, p[2] + d[2]! * tt];
+}
+/** The least distance from a point to triangle t of T (Ericson, Real-Time Collision Detection 5.1.5). */
+function pointTri(p: CV3, T: Tris, t: number): number {
+  const v = T.v, o = t * 9, a: CV3 = [v[o]!, v[o + 1]!, v[o + 2]!], b: CV3 = [v[o + 3]!, v[o + 4]!, v[o + 5]!], c: CV3 = [v[o + 6]!, v[o + 7]!, v[o + 8]!];
+  const sub3 = (x: CV3, y: CV3): CV3 => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot3 = (x: CV3, y: CV3) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2], dist = (x: CV3) => Math.hypot(p[0] - x[0], p[1] - x[1], p[2] - x[2]);
+  const ab = sub3(b, a), ac = sub3(c, a), ap = sub3(p, a), d1 = dot3(ab, ap), d2 = dot3(ac, ap); if (d1 <= 0 && d2 <= 0) return dist(a);
+  const bp = sub3(p, b), d3 = dot3(ab, bp), d4 = dot3(ac, bp); if (d3 >= 0 && d4 <= d3) return dist(b);
+  const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) { const k = d1 / (d1 - d3); return dist([a[0] + ab[0] * k, a[1] + ab[1] * k, a[2] + ab[2] * k]); }
+  const cp = sub3(p, c), d5 = dot3(ab, cp), d6 = dot3(ac, cp); if (d6 >= 0 && d5 <= d6) return dist(c);
+  const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) { const k = d2 / (d2 - d6); return dist([a[0] + ac[0] * k, a[1] + ac[1] * k, a[2] + ac[2] * k]); }
+  const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const k = (d4 - d3) / (d4 - d3 + (d5 - d6)); return dist([b[0] + (c[0] - b[0]) * k, b[1] + (c[1] - b[1]) * k, b[2] + (c[2] - b[2]) * k]); }
+  const den = 1 / (va + vb + vc), sv = vb * den, tw = vc * den; return dist([a[0] + ab[0] * sv + ac[0] * tw, a[1] + ab[1] * sv + ac[1] * tw, a[2] + ab[2] * sv + ac[2] * tw]);
+}
+/** Every place two parts' surfaces cross or come within `touch` of each other (1 mm unless said), each pair once. */
+export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: TriMesh, b: TriMesh) => boolean } = {}): Clash[] {
+  const tol = o.touch ?? 0.001, T = meshes.map(trisOf), out: Clash[] = [];
+  const kinOf = (a: TriMesh, b: TriMesh): Clash['kin'] => (b.path.startsWith(a.path + '/') || a.path.startsWith(b.path + '/') ? 'holds' : a.path.slice(0, a.path.lastIndexOf('/')) === b.path.slice(0, b.path.lastIndexOf('/')) ? 'siblings' : 'apart');
+  for (let i = 0; i < meshes.length; i++) for (let j = i + 1; j < meshes.length; j++) {
+    const A = T[i]!, B = T[j]!; if (!A.n || !B.n) continue;
+    const lo: CV3 = [0, 0, 0], hi: CV3 = [0, 0, 0]; let apart = false;
+    for (let c = 0; c < 3; c++) { lo[c] = Math.max(A.lo[c]!, B.lo[c]!) - tol; hi[c] = Math.min(A.hi[c]!, B.hi[c]!) + tol; if (lo[c]! > hi[c]!) apart = true; }
+    if (apart || o.skip?.(meshes[i]!, meshes[j]!)) continue;
+    const inO = (X: Tris) => { const ids: number[] = []; for (let t = 0; t < X.n; t++) { let ok = true; for (let c = 0; c < 3 && ok; c++) if (X.box[t * 6 + c]! > hi[c]! || X.box[t * 6 + 3 + c]! < lo[c]!) ok = false; if (ok) ids.push(t); } return ids; };
+    const ia = inO(A); if (!ia.length) continue; const ib = inO(B); if (!ib.length) continue;
+    // (B's triangles in a grid over where the two overlap, so each of A's is tried only against those near it)
+    const ext = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), h = Math.max(ext / 48, 0.003), nx = Math.max(1, Math.ceil((hi[0] - lo[0]) / h)), ny = Math.max(1, Math.ceil((hi[1] - lo[1]) / h)), nz = Math.max(1, Math.ceil((hi[2] - lo[2]) / h));
+    const cell = (x: number, c: number, nn: number) => Math.max(0, Math.min(nn - 1, Math.floor((x - lo[c]!) / h))), grid = new Map<number, number[]>();
+    for (const t of ib) { const x0 = cell(B.box[t * 6]! - tol, 0, nx), x1 = cell(B.box[t * 6 + 3]! + tol, 0, nx), y0 = cell(B.box[t * 6 + 1]! - tol, 1, ny), y1 = cell(B.box[t * 6 + 4]! + tol, 1, ny), z0 = cell(B.box[t * 6 + 2]! - tol, 2, nz), z1 = cell(B.box[t * 6 + 5]! + tol, 2, nz); for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) { const k = (x * ny + y) * nz + z; let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(t); } }
+    // (each place they meet kept with what kind of meeting it is: 0 through, 1 where both end, 2 touching, 3 laid parallel)
+    const seen = new Int32Array(B.n).fill(-1), hits: { p: CV3; k: number; n: CV3; ta: number; tb: number }[] = [];
+    for (const ta of ia) {
+      const near0: number[] = [], x0 = cell(A.box[ta * 6]!, 0, nx), x1 = cell(A.box[ta * 6 + 3]!, 0, nx), y0 = cell(A.box[ta * 6 + 1]!, 1, ny), y1 = cell(A.box[ta * 6 + 4]!, 1, ny), z0 = cell(A.box[ta * 6 + 2]!, 2, nz), z1 = cell(A.box[ta * 6 + 5]!, 2, nz);
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (const tb of grid.get((x * ny + y) * nz + z) ?? []) if (seen[tb] !== ta) { seen[tb] = ta; near0.push(tb); }
+      if (!near0.length) continue;
+      const va = (k: number): CV3 => [A.v[ta * 9 + k * 3]!, A.v[ta * 9 + k * 3 + 1]!, A.v[ta * 9 + k * 3 + 2]!];
+      for (const tb of near0) {
+        let ov = true; for (let c = 0; c < 3 && ov; c++) if (A.box[ta * 6 + c]! > B.box[tb * 6 + 3 + c]! + tol || A.box[ta * 6 + 3 + c]! < B.box[tb * 6 + c]! - tol) ov = false; if (!ov) continue;
+        const vb = (k: number): CV3 => [B.v[tb * 9 + k * 3]!, B.v[tb * 9 + k * 3 + 1]!, B.v[tb * 9 + k * 3 + 2]!];
+        const nAB: CV3 = [A.nor[ta * 3]! + B.nor[tb * 3]!, A.nor[ta * 3 + 1]! + B.nor[tb * 3 + 1]!, A.nor[ta * 3 + 2]! + B.nor[tb * 3 + 2]!];
+        let crossed = false;
+        // (an edge of either crossing the other's triangle; where it is an edge each ends at, and the crossing is at the
+        // other's end too, the two are joined there, not one through the other)
+        // (every edge tried, so both ends of where two triangles cross are kept and a meeting's length is its own)
+        for (let e = 0; e < 3; e++) { const x = segTri(va(e), va((e + 1) % 3), B, tb); if (x) { hits.push({ p: x, k: A.edge[ta]! & (1 << e) && nearEdge(x, B, tb, 2 * tol + 0.001) ? 1 : 0, n: nAB, ta, tb }); crossed = true; } }
+        for (let e = 0; e < 3; e++) { const x = segTri(vb(e), vb((e + 1) % 3), A, ta); if (x) { hits.push({ p: x, k: B.edge[tb]! & (1 << e) && nearEdge(x, A, ta, 2 * tol + 0.001) ? 1 : 0, n: nAB, ta, tb }); crossed = true; } }
+        if (crossed) continue;
+        // (not crossing: is a corner of either within the tolerance of the other, and are they laid parallel there?)
+        const par = Math.abs(A.nor[ta * 3]! * B.nor[tb * 3]! + A.nor[ta * 3 + 1]! * B.nor[tb * 3 + 1]! + A.nor[ta * 3 + 2]! * B.nor[tb * 3 + 2]!) > 0.97;
+        // (a corner on its own part's edge lying on the other's edge: the two joined there, edge to edge)
+        const onEdge = (T2: Tris, t2: number, k: number) => !!(T2.edge[t2]! & ((1 << k) | (1 << ((k + 2) % 3))));
+        for (let k = 0; k < 3; k++) {
+          if (pointTri(va(k), B, tb) < tol) hits.push({ p: va(k), k: onEdge(A, ta, k) && nearEdge(va(k), B, tb, tol) ? 1 : par ? 3 : 2, n: nAB, ta, tb });
+          if (pointTri(vb(k), A, ta) < tol) hits.push({ p: vb(k), k: onEdge(B, tb, k) && nearEdge(vb(k), A, ta, tol) ? 1 : par ? 3 : 2, n: nAB, ta, tb });
+        }
+      }
+    }
+    if (!hits.length) continue;
+    // each place apart its own meeting (a mirrored skin meets its liner on both sides of the car; a bolt's two ends): the
+    // hits joined where they share a triangle of either part (so a crossing is followed along its own curve however large
+    // its triangles), or lie within 2 cm of each other
+    const par = hits.map((_, k) => k), find = (k: number): number => (par[k] === k ? k : (par[k] = find(par[k]!))), join = (a: number, b: number) => { par[find(a)] = find(b); };
+    const byA = new Map<number, number>(), byB = new Map<number, number>(); hits.forEach((hh, k) => { const a = byA.get(hh.ta), b = byB.get(hh.tb); if (a !== undefined) join(k, a); else byA.set(hh.ta, k); if (b !== undefined) join(k, b); else byB.set(hh.tb, k); });
+    const C = 0.02, cells = new Map<string, number[]>(); hits.forEach((hh, k) => { const ck = hh.p.map((x) => Math.floor(x / C)).join(','); let l = cells.get(ck); if (!l) cells.set(ck, (l = [])); l.push(k); });
+    for (const [ck, ks] of cells) { const [x, y, z] = ck.split(',').map(Number) as CV3; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) { const o2 = cells.get(`${x + dx},${y + dy},${z + dz}`); if (o2) for (const k of o2) join(k, ks[0]!); } }
+    const groups = new Map<number, typeof hits>(); hits.forEach((hh, k) => { const g = find(k); let l = groups.get(g); if (!l) groups.set(g, (l = [])); l.push(hh); });
+    for (const hs of groups.values()) {
+      const mn: CV3 = [Infinity, Infinity, Infinity], mx: CV3 = [-Infinity, -Infinity, -Infinity], at: CV3 = [0, 0, 0], ns: CV3 = [0, 0, 0], cnt = [0, 0, 0, 0];
+      for (const hh of hs) { cnt[hh.k]!++; for (let c = 0; c < 3; c++) { mn[c] = Math.min(mn[c]!, hh.p[c]!); mx[c] = Math.max(mx[c]!, hh.p[c]!); at[c] += hh.p[c]! / hs.length; ns[c] += hh.n[c]!; } }
+      // (through where any of it is one passing into the other, unless nearly all of it is the two ending together)
+      // (laid on it where most of it is parallel within the tolerance, a decal's outline meeting the panel's edge or not)
+      const kind: Clash['kind'] = cnt[0]! > 0.1 * (cnt[0]! + cnt[1]!) && cnt[0]! >= 2 ? 'through' : cnt[3]! >= 0.5 * (cnt[1]! + cnt[2]! + cnt[3]!) && cnt[3]! > 0 ? 'layered' : cnt[0]! + cnt[1]! > 0 ? 'meets' : 'touch';
+      const nl = Math.hypot(...ns) || 1;
+      out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, kind, hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin: kinOf(meshes[i]!, meshes[j]!) });
+    }
+  }
+  const rank = { through: 0, touch: 1, layered: 2, meets: 3 } as const;
+  return out.sort((p, q) => rank[p.kind] - rank[q.kind] || q.span - p.span);
+}
