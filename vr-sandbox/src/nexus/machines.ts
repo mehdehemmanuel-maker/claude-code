@@ -271,6 +271,8 @@ function packOf(m: Machine): { x0: number; x1: number; z: number; y0: number; h:
 /** The top of a car's cabin floor over x: on its battery pack where it has one, else on its pan; the rear seat's on its
  *  raised floor over the tank. */
 const floorTop = (m: Machine, x: number): number => { const fl = floorOf(m), pk = packOf(m), ov = overAxle(m), base = fl && x < fl.kick ? fl.top : pk ? pk.y0 + pk.h + 0.08 : m.clearance + 0.1; const bf = ov && pk && x - 0.45 < pk.x0 ? beamFloor(m, ov.x1) : null; return ov && x - 0.45 < ov.x1 && x + 0.25 > ov.x0 ? Math.max(base, ov.top) : bf ? Math.max(base, bf) : base; };
+// (the same, where a local name hides it)
+const floorTopAt = floorTop;
 /** The floor's top over a twist beam's trailing arms ahead of the axle, from x forward (their tube's top there, falling
  *  from the wheel's centre to their pivots 450 mm ahead; 30 mm over it, and the floor's own 80 mm). */
 const beamFloor = (m: Machine, x: number): number | null => { const ra = m.axles[m.axles.length - 1]!, R = tyreOf(ra.tyre)!.D / 2; return ra.susp === 'beam' ? R + (m.clearance + 0.1 - R) * Math.min(1, Math.max(0, (x - ra.x) / 0.45)) + 0.025 + 0.03 + 0.08 : null; };
@@ -343,19 +345,27 @@ function bulkhead(m: Machine, out: Part[], tyres: Tyre[]): Part[] {
   const fa = m.axles[0]!, ft = tyres[0]!, c = m.clearance, R = ft.D / 2, inside = insideOf(out), xWs = m.L / 2 - m.lines!.cowl * m.L;
   const toe = fa.x - R - 0.1, tr = travelOf(fa), zWb = Math.min(fa.track / 2 - ft.W / 2 - 0.04, fa.track / 2 - (ft.W / 2) * Math.cos(tr.steer) - (R + 0.03) * Math.sin(tr.steer) - 0.025) - 0.01;
   // (behind everything ahead of it: the rearmost x of the engine bay's parts as made, near the middle and low enough)
-  const bayBack = Math.min(fa.x - 0.27, ...out.filter((p) => /gearbox|engine|rack|anti-roll|subframe cross|electric motor|drive unit/.test(p.name)).map((p) => backOf(p) - 0.03));
-  const x = Math.max(xWs + 0.05, bayBack), hoods = out.filter((p) => p.name === 'hood' && p.shape && 'surf' in p.shape).flatMap((p) => patchPoints((p.shape as { surf: Patch }).surf, 40, 20));
+  // (by whole names: "rack" is in "bracket", and a damper's bracket behind the rear axle is not in the engine bay)
+  // (and not the subframe, which runs back under the toe board)
+  const bayBack = Math.min(fa.x - 0.27, ...out.filter((p) => /^(gearbox|steering rack|anti-roll bar|electric drive unit|electric motor.*)$|\bengine\b(?!.*\bmount)/.test(p.name)).map((p) => backOf(p) - 0.03));
+  // (its dash panel 50 mm ahead of the windscreen's foot where the bay ends ahead of that, as a long hood's does; else
+  // behind the bay, under the windscreen's foot, the cowl panel reaching forward from it to the foot)
+  const x = xWs + 0.05 <= bayBack ? xWs + 0.05 : bayBack, hoods = out.filter((p) => p.name === 'hood' && p.shape && 'surf' in p.shape).flatMap((p) => patchPoints((p.shape as { surf: Patch }).surf, 40, 20));
   const hoodAt = (xx: number) => { const near = hoods.filter((q) => Math.abs(q[0] - xx) < 0.04 && Math.abs(q[2]) < 0.3); return near.length ? Math.min(...near.map((q) => q[1])) : m.lines!.belt * m.H; };
   const yT = c + 0.35, yC = Math.min(hoodAt(x), hoodAt(xWs + 0.02)) - 0.025 - 0.004, half = (y: number) => Math.max(0.2, Math.min(zWb, Number.isFinite(inside(x, y)) ? inside(x, y) - 0.005 : zWb));
-  const w = Math.min(half(yT), half((yT + yC) / 2), half(yC)), floorTop = c + 0.1, steel = { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0008, make: 'pressed' as const, finish: 'paint' as const };
+  // (its toe board down to the floor as it is there: an electric car's on its pack, higher than a pan's)
+  const w = Math.min(half(yT), half((yT + yC) / 2), half(yC)), floorTop = Math.max(c + 0.1, packOf(m) ? floorTopAt(m, toe) : -Infinity), steel = { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0008, make: 'pressed' as const, finish: 'paint' as const, fixed: 'spot-welded to what it meets at its flanges (the welds not drawn)' };
   // (a cab-forward body, its windscreen's base over or ahead of what is under its front, as a van's, has its bulkhead
   // round its engine under its cab: not made here)
-  if (yC - yT < 0.1 || x - toe < 0.05 || xWs + 0.05 > bayBack) return [];
-  const slope = Math.atan2(yT - floorTop, x - toe), Lt = Math.hypot(yT - floorTop, x - toe);
+  // (a cab-forward body, its windscreen's foot over or ahead of its front axle, as a van's: not made here)
+  if (yC - yT < 0.1 || x - toe < 0.05 || xWs > fa.x) return [];
+  // (each pressing lapped on the next at its flange, a few millimetres, where they are spot-welded: the toe board's top on
+  // the dash panel's back, the cowl panel over the dash panel's top)
+  const xTe = x + 0.001, slope = Math.atan2(yT - floorTop, xTe - toe), Lt = Math.hypot(yT - floorTop, xTe - toe);
   return [P('bulkhead', undefined, [0, 0, 0], { says: 'its dash panel and toe board, the firewall between its engine bay and its cabin, and the cowl under its windscreen: pressed steel, about 0.8 mm (typical)', parts: [
-    P('toe board', { box: [Lt, 0.004, 2 * w] }, [(x + toe) / 2, (yT + floorTop) / 2, 0], { rot: [0, 0, slope], ...steel, joins: ['floor pan', 'floor pan left', 'floor pan right', 'tunnel top', 'dash panel'] }),
+    P('toe board', { box: [Lt, 0.004, 2 * w] }, [(xTe + toe) / 2, (yT + floorTop) / 2, 0], { rot: [0, 0, slope], ...steel, joins: ['floor pan', 'floor pan left', 'floor pan right', 'tunnel top', 'dash panel'] }),
     P('dash panel', { box: [0.004, yC - yT, 2 * w] }, [x, (yT + yC) / 2, 0], { ...steel, joins: ['toe board', 'cowl panel', 'front inner wheelhouses'] }),
-    P('cowl panel', { box: [x - xWs - 0.02, 0.004, 2 * w] }, [(x + xWs + 0.02) / 2, yC, 0], { ...steel, joins: ['dash panel', 'windscreen'] })] })];
+    P('cowl panel', { box: [Math.max(0.03, Math.abs(x - xWs - 0.02)), 0.004, 2 * w] }, [x - xWs - 0.02 >= 0.03 ? (x + xWs + 0.02) / 2 : x + Math.max(0.03, xWs + 0.02 - x) / 2, yC, 0], { ...steel, joins: ['dash panel', 'windscreen'] })] })];
 }
 /** A unibody's rear structure over a twist-beam axle, fitted to what is already made (its rear floor, its wheelhouses,
  *  its axle's pivots, springs and dampers), each piece touching what it is joined to: a pressed bracket under the rear
@@ -713,7 +723,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
           out.push(P('front subframe', undefined, [0, 0, 0], { says: 'the front subframe: pressed steel, bolted under the body, the arms, the rack and the anti-roll bar on it (typical)', parts: [
             ...[-1, 1].map((sd) => P(`subframe side ${sd > 0 ? 'right' : 'left'}`, { box: [0.42, 0.05, 0.06] }, [a.x - 0.15, yP, sd * zS], { mat: 'steel-low', color: dark, fill: 0.12, finish: 'paint' })),
             P('subframe cross member', { box: [0.06, 0.04, 2 * zS + 0.06] }, [xC, yC, 0], { mat: 'steel-low', color: dark, fill: 0.15, finish: 'paint' }),
-            ...[-1, 1].map((sd) => P('subframe riser', { box: [0.06, yC - 0.02 - (yP + 0.025) + 0.004, 0.06] }, [xC, (yC - 0.02 + yP + 0.025) / 2, sd * zS], { mat: 'steel-low', color: dark, fill: 0.15, finish: 'paint', fixed: 'welded between the side and the cross member' }))] }));
+            ...[-1, 1].map((sd) => P('subframe riser', { box: [0.06, yC - 0.02 - (yP + 0.025), 0.06] }, [xC, (yC - 0.02 + yP + 0.025) / 2, sd * zS], { mat: 'steel-low', color: dark, fill: 0.15, finish: 'paint', fixed: 'welded between the side and the cross member' }))] }));
           // (the rack itself its own link, sliding in a bush at each end of its housing: on a real rack one end is held by the
           // pinion and its yoke, not drawn; its teeth are not drawn either)
           const sideOf = (sd: number) => sd > 0 ? 'right' : 'left';
@@ -871,9 +881,10 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     }
     // (over a rigid axle's leaves, behind the pack: its floor raised over them, a kick up to it from the floor ahead)
     // (raised only over what is under it; between it and the pack's end, the floor at the pack's height)
-    const ov = overAxle(m); if (ov && !fl) { const y0 = pk ? pk.y0 + pk.h + t2 : c + 0.1; out.push(P('rear floor', { box: [ov.x1 - ov.x0, 0.03, 2 * inner] }, [(ov.x1 + ov.x0) / 2, ov.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick, the trunk floor and the inner wheelhouses (the welds not drawn)', says: 'its floor raised over what is at its rear axle (its leaves, or its motor; typical)' }), P('heel kick', { box: [0.02, ov.top - 0.03 - y0, 2 * inner] }, [ov.x1 + 0.01, (ov.top - 0.03 + y0) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the floor pans, the rear floor and the tunnel (the welds not drawn)', says: 'where its floor rises over its rear axle (typical)' }));
+    const ov = overAxle(m); if (ov && !fl) { const y0 = pk ? pk.y0 + pk.h + t2 : c + 0.1; out.push(P('rear floor', { box: [ov.x1 - ov.x0, 0.03, 2 * inner] }, [(ov.x1 + ov.x0) / 2, ov.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick, the trunk floor and the inner wheelhouses (the welds not drawn)', says: 'its floor raised over what is at its rear axle (its leaves, or its motor; typical)' }), P('heel kick', { box: [0.02, ov.top - 0.015 - y0, 2 * inner] }, [ov.x1 + 0.01, (ov.top - 0.015 + y0) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the floor pans, the rear floor and the tunnel (the welds not drawn)', says: 'where its floor rises over its rear axle (typical)' }));
       // (over a twist beam's arms there, 30 mm over their top)
-      if (pk && back > ov.x1 + 0.03) { const yb = beamFloor(m, ov.x1) ?? y0; out.push(P('rear floor pan', { box: [back - ov.x1 - 0.02, t2, 2 * inner] }, [(back + ov.x1 + 0.02) / 2, Math.max(y0, yb) - t2 / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick and the floor pan (the welds not drawn)', says: 'its floor between its pack and its rear axle (typical)' })); } }
+      // (its flanges lapped under the floor ahead and the kick behind, 10 mm, where they are spot-welded)
+      if (pk && back > ov.x1 + 0.03) { const yb = beamFloor(m, ov.x1) ?? y0; out.push(P('rear floor pan', { box: [back + 0.01 - ov.x1 - 0.01, t2, 2 * inner] }, [(back + 0.01 + ov.x1 + 0.01) / 2, Math.max(y0, yb) - t2 / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick and the floor pan (the welds not drawn)', says: 'its floor between its pack and its rear axle (typical)' })); } }
     if (fl) {
       out.push(P('heel kick', { box: [0.02, fl.top - 0.03 - (c + 0.1), 2 * inner] }, [fl.kick - 0.01, (fl.top - 0.03 + c + 0.1) / 2, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the floor pans, the rear floor and the tunnel (the welds not drawn)', says: 'where the floor rises to the rear seat, over the fuel tank (typical)' }));
       out.push(P('rear floor', { box: [fl.kick - fl.x0, 0.03, 2 * inner] }, [(fl.kick + fl.x0) / 2, fl.top - 0.015, 0], { mat: 'steel-low', color: 0x1a1a1a, shell: 0.0009, make: 'pressed', fixed: 'spot-welded to the heel kick, the trunk floor and the inner wheelhouses (the welds not drawn)', says: 'the raised floor under the rear seat (typical)' }));
