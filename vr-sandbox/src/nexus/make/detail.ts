@@ -383,7 +383,10 @@ export const RULES: DetailRule[] = [
         // (on a panelled body, at the foot of its A pillars, where the side glass begins, a little over the belt: typical)
         const aP = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(A pillars|windscreen frame)$/.test(x.p.name)), ab = aP ? new THREE.Box3().setFromPoints(corners(aP).map((q) => toLocal(T, q))) : null;
         const mx = ab ? ab.max.x - 0.16 : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
-        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), side0 = zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
+        // (its stalk's foot on the skin where the stalk stands: the outermost of the skin within the stalk's own footprint, so
+        // its flat foot meets the skin and never stands off it where the door tucks in under its belt)
+        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), foot = skin.filter((q) => Math.abs(q.x - mx) < 0.03 && Math.abs(q.y - (mY - 0.035)) < 0.025).map((q) => Math.abs(q.z));
+        const side0 = foot.length ? Math.max(...foot) + 0.105 : zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
         // a mirror: its head a shell lofted out from the door, about 0.22 m out, 0.12 m tall and 0.09 m deep, flat at the
         // back where its glass is and rounded in front, on a short stalk from the door (typical of a car's)
         const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.05, w: 0.045, lo: -0.058, hi: 0.052, n: 3 }, { x: 0.17, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];

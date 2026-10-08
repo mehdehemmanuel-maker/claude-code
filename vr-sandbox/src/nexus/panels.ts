@@ -377,23 +377,27 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const fWins = [lampW, grilleW, intakeW], tWins = [tailW, valW];
   // a panel round openings: its run in slabs along u, each from its foot (round the arches in it) up to its top, less the
   // openings over that slab
-  const region = (name: string, u0: number, u1: number, wins: Win[], more: Partial<Part>, end?: { at: 0 | 1; meets: Part['meets'] }): Part[] => {
+  // (lean: where its start's edge meets its top, as u, where that edge leans: a front fender's rear edge, the door's shut line)
+  const region = (name: string, u0: number, u1: number, wins: Win[], more: Partial<Part>, end?: { at: 0 | 1; meets: Part['meets'] }, lean?: number): Part[] => {
     const cuts = [...new Set([u0, u1, ...wins.flatMap((w) => [w.u0, w.u1]).filter((u) => u > u0 + 1e-6 && u < u1 - 1e-6)])].sort((p, q) => p - q), res: Part[] = [];
     for (let i = 0; i + 1 < cuts.length; i++) {
       const a = cuts[i]!, c = cuts[i + 1]!, mid = (a + c) / 2, ex = wins.filter((w) => w.u0 <= mid && w.u1 >= mid).map((w) => [w.v0, w.v1] as [number, number]).sort((p, q) => p[0] - q[0]);
       const m2 = end && ((end.at === 1 && c > 1 - 1e-6) || (end.at === 0 && a < 1e-6)) ? { ...more, meets: end.meets } : more;
-      res.push(paint(name, { s: side, above: trimmed(a, c), ...(ex.length ? { to: ex[0]![0] } : {}) }, m2));
+      res.push(paint(name, { s: side, above: trimmed(a, c), ...(ex.length ? { to: ex[0]![0] } : lean !== undefined && a === cuts[0] && lean < c ? { top: [lean, c] as [number, number] } : {}) }, m2));
       for (let k = 0; k < ex.length; k++) { const top = k + 1 < ex.length ? ex[k + 1]![0] : 1; if (top - ex[k]![1] > 1e-4) res.push(paint(name, { s: side, uv: quad(a, c, ex[k]![1], top) }, m2)); }
     }
     return res;
   };
   const fMeets = { at: 1 as const, meets: [{ part: 'front fender', edge: 'a1' as const, kind: 'mirror' as const, why: 'its nose crosses the middle in one tangent plane, or a ridge runs down its face' }] }, tMeets = { at: 0 as const, meets: [{ part: 'rear quarter panel', edge: 'a0' as const, kind: 'mirror' as const, why: 'its tail crosses the middle in one tangent plane' }] };
+  // (its front door's shut line: behind the front arch at the sill, forward as it rises, to the A pillar's foot at the
+  // belt, where the cowl puts it: so the door glass, which runs to the A pillar, always stands in its door)
+  const xFDt = Math.max(xFD, ln.xCowl), xLine = (v: number) => xFD + (xFDt - xFD) * v;
   if (doors) {
-    out.push(...region('front fender', uFD + du(xFD), 1, fWins, { says: 'its front fenders, and the nose and front bumper they run into, open for its lamps, grille and intake: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }, fMeets));
+    out.push(...region('front fender', uFD + du(xFD), 1, fWins, { says: 'its front fenders, and the nose and front bumper they run into, open for its lamps, grille and intake: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }, fMeets, U(xFDt + g)));
     out.push(...region('rear quarter panel', 0, uRD - du(xRD), tWins, { says: 'its rear quarters and the tail, open for its lamps: pressed steel about 0.8 mm (typical)' }, tMeets));
-    out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [uFD, vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
-    const door = (name: string, x0: number, x1: number) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1 - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
-    if (twoDoors) out.push(door('front doors', xB, xFD), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xFD));
+    out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [U(xLine(vSill - 0.004)), vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
+    const door = (name: string, x0: number, x1: number, x1t = x1) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1t - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
+    if (twoDoors) out.push(door('front doors', xB, xLine(vSill), xFDt), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xLine(vSill), xFDt));
     // a handle near each door's back edge, a little under its shoulder, standing a few millimetres proud (typical)
     // (each handle a bar on the door, in a dark pocket pressed into it for the fingers: the pocket a region of the skin,
     // the bar a part standing just off it on each side)

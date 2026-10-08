@@ -112,7 +112,8 @@ export type UV = [number, number];
  *  window's glass on its cabin, a door's skin within its shut lines, a lamp's lens in its fascia). The whole surface where
  *  no corners are said. Drawn with its mirror where its surface has one. */
 export interface Patch { s: Surface; uv?: [UV, UV, UV, UV]; /** or the region above a line across the surface, up to v = to (1 if not said): a panel trimmed
- *  round a wheel's arch, its line rising over the arch and falling back */ above?: UV[]; to?: number; off?: number }
+ *  round a wheel's arch, its line rising over the arch and falling back */ above?: UV[]; to?: number; /** where, on its top edge (v = to), its two ends
+ *  are, as u (else straight above the line's own ends): a door's shut line leaning forward as it rises */ top?: [number, number]; off?: number }
 const asPatch = (x: Surface | Patch): Patch => ('net' in x ? { s: x } : x);
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 /** Where (a, b) in a patch's own square falls on its surface (bilinear between its corners). */
@@ -126,7 +127,7 @@ function along(s: Surface, line: UV[], a: number): UV {
   return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
 }
 export function uvOf(pt: Patch, a: number, b: number): UV {
-  if (pt.above) { const [u, v] = along(pt.s, pt.above, a), top = pt.to ?? 1; return [u, v + (top - v) * b]; }
+  if (pt.above) { const [u, v] = along(pt.s, pt.above, a), top = pt.to ?? 1; if (!pt.top) return [u, v + (top - v) * b]; const uT = pt.top[0] + (pt.top[1] - pt.top[0]) * a; return [u + (uT - u) * b, v + (top - v) * b]; }
   if (!pt.uv) return [a, b]; const [p0, p1, p2, p3] = pt.uv;
   return [0, 1].map((k) => (1 - a) * (1 - b) * p0[k]! + a * (1 - b) * p1[k]! + a * b * p2[k]! + (1 - a) * b * p3[k]!) as UV;
 }
