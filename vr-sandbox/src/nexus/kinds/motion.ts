@@ -4,6 +4,17 @@
 // otherwise, said so.
 
 import { ax, bare, cyl, gOf, matOf, pref, range, ring, tagged, unit, type KindDef, type P } from './core';
+/** NEMA frame sizes, mm across the body. */
+export const NEMA: Record<string, number> = { '8': 20.3, '11': 28.2, '14': 35.2, '17': 42.3, '23': 57.15, '34': 86 };
+/** NEMA frames' faces: the four holes' square, their thread (tapped 4.5 mm deep on 8–17, through holes on 23 and 34),
+ *  the pilot boss's diameter and how far it stands proud, the shaft, mm (NEMA ICS 16; motor makers' drawings, typical). */
+export const NEMA_FACE: Record<string, { holes: number; thread: string; pilot: number; boss: number; shaft: number; out: number; through?: boolean }> = {
+  '8': { holes: 16, thread: 'M2', pilot: 15, boss: 1.5, shaft: 4, out: 15 }, '11': { holes: 23, thread: 'M2.5', pilot: 22, boss: 2, shaft: 5, out: 20 },
+  '14': { holes: 26, thread: 'M3', pilot: 22, boss: 2, shaft: 5, out: 20 }, '17': { holes: 31, thread: 'M3', pilot: 22, boss: 2, shaft: 5, out: 24 },
+  '23': { holes: 47.14, thread: 'M5', pilot: 38.1, boss: 1.6, shaft: 6.35, out: 21, through: true }, '34': { holes: 69.6, thread: 'M5', pilot: 73, boss: 2, shaft: 14, out: 32, through: true },
+};
+/** ISO 273 medium clearance holes, mm. */
+export const CLEAR: Record<string, number> = { M2: 2.4, 'M2.5': 2.9, M3: 3.4, M4: 4.5, M5: 5.5, M6: 6.6, M8: 9, M10: 11, M12: 13.5, M16: 17.5, M20: 22 };
 
 const n = (p: P, k: string) => Number(p[k]);
 const madeOf = (p: P) => matOf(p.matter);
@@ -63,6 +74,15 @@ export const MOTION: KindDef[] = [
     axes: [bare('number', 'bearing number', Object.keys(HK)), bare('ends', 'ends', ['open', 'closed'])],
     title: (p) => { const [d, D, B] = HK[String(p.number)]!; return `needle bearing ${p.number}${p.ends === 'closed' ? ' closed end' : ''} (${d} × ${D} × ${B})`; }, of: () => 'steel-low steel-chrome bearing-cage grease', make: 'assemble', how: 'a cup drawn from strip and case-hardened, needles held in a cage inside it',
     spec: (p) => { const [d, D, B] = HK[String(p.number)]!; return `${d} mm shaft (hardened, ground), ${D} mm housing bore (N6 press fit), ${B} mm wide (ISO 3245)`; }, box: (p) => { const [, D, B] = HK[String(p.number)]!; return [D, D, B]; }, g: (p) => { const [d, D, B] = HK[String(p.number)]!; return gOf(ring(D, d, B) * 0.7, 7.85); },
+  },
+  {
+    id: 'motorplate', name: 'NEMA motor plate', path: 'Mechanical/Motion/Motor mounts', says: 'a flat plate a stepper bolts to: its four clearance holes on the frame\'s square and its pilot bore, the motor\'s shaft through it',
+    std: 'the NEMA ICS 16 face it takes; holes ISO 273 medium; plate 5 mm wider than the frame each way (typical)',
+    axes: [tagged('nema', 'nema', 'frame', '', [17, 14, 23, 11, 8, 34]), ax('t', 'thickness', 'mm', [3, 4, 5, 6, 8, 10]), bare('matter', 'made of', ['aluminium', 'steel'])],
+    title: (p) => `NEMA ${p.nema} motor plate, ${p.t} mm, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'machine', alt: 'print', how: 'cut from plate, drilled and bored (or printed)',
+    spec: (p) => { const f = NEMA_FACE[String(p.nema)]!; return `4 × ${f.thread} clearance on a ${f.holes} mm square, ${(f.pilot + 0.5).toFixed(1)} mm pilot bore`; },
+    box: (p) => { const s = NEMA[String(p.nema)]! + 10; return [s, s, n(p, 't')]; },
+    g: (p) => { const f = NEMA_FACE[String(p.nema)]!, s = NEMA[String(p.nema)]! + 10, hole = CLEAR[f.thread] ?? Number(f.thread.slice(1)) * 1.1; return gOf((s * s - Math.PI * ((f.pilot + 0.5) / 2) ** 2 - 4 * Math.PI * (hole / 2) ** 2) * n(p, 't'), madeOf(p)[1]); },
   },
   {
     id: 'flangebearing', name: 'flanged miniature ball bearing', path: 'Mechanical/Bearings/Ball bearings', says: 'a small ball bearing with a flange on its outer ring, so it locates itself in a plate', std: 'F6xx and F69x miniature series (makers\' tables)',

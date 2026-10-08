@@ -10,6 +10,8 @@
 
 import { VEHICLE_KITS, useMass } from './machines';
 import { DESIGNED, boltedJoint, exampleOf, partWords, use } from './components';
+import { assemble } from './mate';
+import { layout } from './make/space';
 import type { Lathe, Loft, Prism, Tube } from './form';
 import type { Patch } from './surface';
 import { DENSITY, massOf } from './mass';
@@ -27,6 +29,20 @@ export type Shape =
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
   | { heap: { n: number; size: V3; r: number; h: number; colors: number[]; seed: number } };
+/** A mating face of a part: a pattern of holes through it, threads tapped into it, or pins (studs) standing out of it, on
+ *  a face at `at` (its own frame) facing out along `n`, the pattern laid out along `u` and n × u. Two ports mate where
+ *  one's pattern is the other's seen from the other side (its mirror), turned about the face: holes onto threads (cap
+ *  screws through the holes), holes onto holes (bolts and nuts through both), pins into holes (nuts on the pins). The
+ *  part it is on is placed by it (src/nexus/mate.ts), its fasteners laid from the component library. */
+export interface Port {
+  /** what it is called on its part ("front face", "tool flange") */ name: string;
+  sex: 'holes' | 'threads' | 'pins';
+  /** the thread or bolt it takes (M3, M6, M12x1.5) and the pattern's centres in its face, m */ thread: string; pattern: [number, number][];
+  at: V3; n: V3; u: V3;
+  /** how thick the part is behind the face where the holes are (the ply a bolt passes), or how deep its threads go, m */ t: number;
+  /** a spigot or a pilot bore that centres the two (its diameter, m): + stands proud, - is sunk */ pilot?: number;
+  /** the standard the pattern is (NEMA 17, ISO 9409-1-50-4-M6, wheel 5 × 114.3) */ std?: string;
+}
 /** What a part offers another where they meet, or asks of it: a shaft and the bore it goes in, studs and the nuts on
  *  them, a drive and the shaft it turns. Checked where they meet, with numbers (src/nexus/make/critic.ts contracts). */
 export interface Iface {
@@ -72,6 +88,7 @@ export interface Part {
    *  market's (US 12 × 6 in, AAMVA; else EU 520 × 110 mm) */ road?: boolean | 'us' | 'eu';
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
   /** what it offers or asks of the parts it meets */ iface?: Iface[];
+  /** its mating faces: where it meets another part by a pattern of holes, threads or pins (src/nexus/mate.ts) */ ports?: Port[];
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
@@ -230,7 +247,11 @@ useMass(massOf);
 kit({
   id: 'part', name: 'part', get words() { return partWords(); }, get choices() { return [{ key: 'family', name: 'kind of part', options: DESIGNED }]; },
   says: 'a part from the component library: designed once from its standard, by its words (its family\'s first example where no size is said)',
-  build(c) { const w = String(c.said ?? ''), j = /bolted joint\s+(M[\d.]+)\s+(\d+(?:\.\d+)?)/i.exec(w); return j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : use(/\d/.test(w) ? w : exampleOf(String(c.family))); },
+  // (parts said with "+" between them are assembled by their mates: "stepper nema17 40 + motorplate nema17 t4 aluminium")
+  // (and shown standing on its lowest point, as a part set down on a bench is)
+  build(c) { const w = String(c.said ?? ''), j = /bolted joint\s+(M[\d.]+)\s+(\d+(?:\.\d+)?)/i.exec(w);
+    const made = w.includes('+') ? ((a) => ({ ...a.part, says: `${a.part.says}${a.unplaced.length ? `; not placed: ${a.unplaced.join('; ')}` : ''}` }))(assemble(w, w.split('+').map((x) => use(x.trim())))) : j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : use(/\d/.test(w) ? w : exampleOf(String(c.family)));
+    const lo = Math.min(...layout(made).filter((n) => n.box).map((n) => n.box!.min.y)); return { name: made.name, at: [0, 0, 0], says: made.says, parts: [{ ...made, at: [0, Number.isFinite(lo) ? -lo : 0, 0] }] }; },
 });
 
 // ---- a lamp post: its light by its lamp (high-pressure sodium about 100 lm/W at 2,000 K; LED street lights about 140

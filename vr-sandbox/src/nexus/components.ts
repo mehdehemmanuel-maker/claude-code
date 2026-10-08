@@ -14,12 +14,13 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { FAMILIES, callFamily } from './families';
-import { HEX_K, IPE, METRIC, NPS40 } from './families';
+import { HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40 } from './families';
+import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
 import { UPN } from './kinds/stock';
 import { WHEEL } from './kinds/fasteners';
 import { itemOf, type Item } from './inventory';
-import type { Iface, Part, V3 } from './kits';
+import type { Iface, Part, Port, V3 } from './kits';
 import { massOf } from './mass';
 
 const PI = Math.PI, mm = 1e-3;
@@ -76,7 +77,26 @@ const shank = (name: string, d: number, P0: number, L: number, a: number, at: Pa
 };
 const P = (name: string, shape: Part['shape'], more: Partial<Part> = {}): Part => ({ name, shape, at: [0, 0, 0], ...more });
 
-const DESIGNS: Record<string, { says: string; leaves: string; make: Design; iface?: (p: Record<string, string | number>) => Iface[] }> = {
+/** A port on a part, its pattern in metres (src/nexus/kits.ts Port). */
+const port = (name: string, sex: Port['sex'], thread: string, pattern: [number, number][], at: V3, n: V3, u: V3, t: number, more: Partial<Port> = {}): Port => ({ name, sex, thread, pattern, at, n, u, t, ...more });
+const sq = (side: number): [number, number][] => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [(x! * side) / 2, (y! * side) / 2] as [number, number]);
+const DESIGNS: Record<string, { says: string; leaves: string; make: Design; iface?: (p: Record<string, string | number>) => Iface[]; ports?: (p: Record<string, string | number>) => Port[] }> = {
+  stepper: {
+    says: 'a hybrid stepper: its die-cast front and rear end bells, the laminated stator stack between them, its pilot boss and shaft; its face tapped on the NEMA square (NEMA ICS 16)', leaves: 'its rotor, windings and bearings inside not drawn (their mass in the stack\'s); its wires\' connector not drawn',
+    make: (p, it) => { const n = String(p.nema), F = NEMA[n]!, f = NEMA_FACE[n]!, L = Number(p.length), bell = Math.min(10, 0.2 * L), c = 0.1 * F, oct: [number, number][] = [[-F / 2 + c, -F / 2], [F / 2 - c, -F / 2], [F / 2, -F / 2 + c], [F / 2, F / 2 - c], [F / 2 - c, F / 2], [-F / 2 + c, F / 2], [-F / 2, F / 2 - c], [-F / 2, -F / 2 + c]];
+      const at = (y: number): V3 => [0, y * mm, 0], al = { mat: 'al-a380', color: 0x2a2b2e, finish: 'cast' };
+      return [P(`${it.name} front end bell`, section(oct, [], bell), { ...al, rot: ALONG_Y, at: at(-bell / 2), fixed: 'clamped to its stator by four long screws through it from the rear bell (not drawn)' }), P(`${it.name} stator`, section(oct.map(([x, y]) => [x * 0.985, y * 0.985] as [number, number]), [], L - 2 * bell), { mat: 'steel-low', color: 0x6a6e72, finish: 'texture', rot: ALONG_Y, at: at(-L / 2), fill: 0.62, fixed: 'clamped between its end bells', passes: [`${it.name} shaft`] }),
+        P(`${it.name} rear end bell`, section(oct, [], bell), { ...al, rot: ALONG_Y, at: at(-L + bell / 2), fixed: 'clamped to its stator by four long screws through it into the front bell (not drawn)' }), P(`${it.name} front end bell`, lathe([[f.shaft / 2 + 1, 0], [f.pilot / 2, 0], [f.pilot / 2, f.boss], [f.shaft / 2 + 1, f.boss], [f.shaft / 2 + 1, 0]]), al),
+        P(`${it.name} shaft`, lathe([[0, -L + bell], [f.shaft / 2, -L + bell], [f.shaft / 2, f.out], [0, f.out]]), { mat: 'steel-alloy', color: 0xb9bdc1, finish: 'brushed', link: `${it.name} rotor`, joint: 'bearing', fixed: 'its rotor\'s shaft, turning in the end bells\' bearings (not drawn)' })]; },
+    iface: (p) => [{ kind: 'shaft', role: 'provides', d: NEMA_FACE[String(p.nema)]!.shaft * mm }],
+    ports: (p) => { const f = NEMA_FACE[String(p.nema)]!; return [port('front face', f.through ? 'holes' : 'threads', f.thread, sq(f.holes * mm), [0, 0, 0], [0, 1, 0], [1, 0, 0], f.through ? 0.008 : 0.0045, { pilot: f.pilot * mm, std: `NEMA ${p.nema}` })]; },
+  },
+  motorplate: {
+    says: 'a NEMA motor plate: its clearance holes (ISO 273 medium) and pilot bore cut', leaves: 'its edges drawn square',
+    make: (p, it) => { const n = String(p.nema), f = NEMA_FACE[n]!, s = NEMA[n]! + 10, t = Number(p.t), mat = matIn(it), hole = CLEAR[f.thread] ?? Number(f.thread.slice(1)) * 1.1;
+      return [P(it.name, section(box(s, s), [circle((f.pilot + 0.5) / 2, 0, 0, 32), ...sq(f.holes).map(([x, y]) => circle(hole / 2, x, -y, 12))], t), { mat, ...looks(it, mat), rot: ALONG_Y, at: [0, (t / 2) * mm, 0] })]; },
+    ports: (p) => { const f = NEMA_FACE[String(p.nema)]!; return [port('motor face', 'holes', f.thread, sq(f.holes * mm), [0, 0, 0], [0, -1, 0], [1, 0, 0], Number(p.t) * mm, { pilot: -(f.pilot + 0.5) * mm, std: `NEMA ${p.nema}` })]; },
+  },
   bolt: {
     says: 'ISO 4017: hex head, washer face, threaded to within 2.5 pitches of the head', leaves: 'the thread drawn as its major cylinder, its helix not drawn',
     make: (p, it) => { const { t, d, P: P0 } = thr(p), L = Number(p.length), s = METRIC[t]!.s, k = HEX_K[t] ?? 0.7 * d, mat = matIn(it), lk = looks(it, mat), at = { mat, ...lk }; return [...hexHead(it.name, s, k, at), ...shank(it.name, d, P0, L, Math.min(L * 0.3, 2.5 * P0), at)]; },
@@ -230,7 +250,7 @@ export function component(words: string): Component | string {
   else {
     // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
     // reads its head noun; its class and its make in what it says)
-    const d = DESIGNS[r.sized.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized.params) } : {}) };
+    const d = DESIGNS[r.sized.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized.params) } : {}), ...(d.ports ? { ports: d.ports(r.sized.params) } : {}) };
     const g = massOf(part) * 1000, ratio = r.g ? g / r.g : 1, faults: string[] = [];
     // (a part a family weighs to a hundredth of a gram is not faulted for its rounding)
     if (r.g && Math.abs(ratio - 1) > 0.2 && Math.abs(g - r.g) > 0.01) faults.push(`drawn ${g.toFixed(2)} g against ${r.g.toFixed(2)} g from its standard (${((ratio - 1) * 100).toFixed(0)} %)`);

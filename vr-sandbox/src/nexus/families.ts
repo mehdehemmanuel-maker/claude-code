@@ -8,6 +8,8 @@
 import type { Item, Process } from './inventory';
 import { METRIC } from './threads';
 import { KINDS } from './kinds';
+import { NEMA, NEMA_FACE } from './kinds/motion';
+export { NEMA, NEMA_FACE };
 import { familyOf, useFamilies } from './kinds/core';
 
 export { METRIC };
@@ -106,12 +108,14 @@ const resistor: Family = {
     return item(`resistor-${R}-${W}w`, `${say} resistor, ${W} W`, 'Electrical/Passive components/Resistors', 'product', 'assemble', 'alumina nichrome lead-wire*2 epoxy', 'a metal film on a ceramic rod, a spiral cut to set its value, end caps, leads, a lacquer coat', `${say} ±1 %; carries up to ${Math.sqrt(W / R).toFixed(4)} A at ${W} W (I = √(P/R)); ${L} × ${D} mm body (typical)`, [D, D, L], 0.3); },
 };
 // ---- stepper motors by NEMA frame (face sizes, NEMA ICS 16) -------------------------------------------------------------
-const NEMA: Record<string, number> = { '8': 20.3, '11': 28.2, '14': 35.2, '17': 42.3, '23': 57.15, '34': 86 };
+// (NEMA frames and faces: src/nexus/kinds/motion.ts, where the motor plate's kind reads them too)
+
 const stepper: Family = {
   id: 'stepper', name: 'stepper motor', path: ['Electrical', 'Motors and actuators', 'Stepper motors'], says: 'any NEMA frame and body length, 1.8° a step', params: [{ key: 'nema', says: 'frame', unit: 'NEMA', values: Object.keys(NEMA), default: '17' }, { key: 'length', says: 'body length', unit: 'mm', min: 20, max: 120, default: 40 }],
   examples: ['stepper nema17 40', 'stepper nema23 56', 'stepper nema14 34'],
   read(w) { const n = /nema\s*(\d+)/i.exec(w)?.[1] ?? '17'; if (!NEMA[n]) return `Which frame? NEMA ${Object.keys(NEMA).join(', ')}.`; const L = num(/\b(\d{2,3})\s*(?:mm)?\s*$/.exec(w.replace(/nema\s*\d+/i, ''))?.[1]) || 40; return { nema: n, length: L }; },
-  make(p) { const n = String(p.nema), F = NEMA[n]!, L = Number(p.length), g = mm3g(F * F * L * 0.75, RHO.steel);
+  // (about half its box is iron and copper: a 40 mm NEMA 17 weighs about 280 g, typical of makers' sheets)
+  make(p) { const n = String(p.nema), F = NEMA[n]!, L = Number(p.length), g = mm3g(F * F * L * 0.5, RHO.steel);
     return item(`stepper-nema${n}-${L}`, `NEMA ${n} stepper, ${L} mm`, 'Electrical/Motors and actuators/Stepper motors', 'product', 'assemble', `stator-stepper rotor-stepper end-bell*2 bearing-625*2 screw-m3*4 jst-xh`, 'two phases of coils on a toothed stator, a toothed magnet rotor, end bells, two bearings', `${F} mm face (NEMA ICS 16); 1.8° a step (200 a turn); holding torque grows with body length; mass from its shape: about ${g} g`, [F, F, L], g); },
 };
 // ---- cells by their size code --------------------------------------------------------------------------------------------
