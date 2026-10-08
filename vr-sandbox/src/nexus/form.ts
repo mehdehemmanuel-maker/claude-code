@@ -14,7 +14,7 @@
 import { patchAt, type Patch } from './surface';
 
 export type V3 = [number, number, number];
-export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number }
+export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number; /** its section's middle moved across, m (0 if not said): a spoke sweeping round as it goes out */ z?: number }
 export interface Loft { st: Station[] }
 export interface Tube { r: number; pts: V3[]; /** its wall, m (solid if not said) */ wall?: number; /** bend radius at its corners, m (2 diameters if not said) */ bend?: number }
 /** a profile of [radius, height] points, spun about y */
@@ -64,7 +64,7 @@ export function insideBy(s: Station, y: number, z: number): number {
 /** A loft's section where it is at x, eased between its stations (a straight blend). */
 export function stationAt(l: Loft, x: number): Station | null {
   const st = [...l.st].sort((a, b) => a.x - b.x); if (!st.length || x < st[0]!.x || x > st[st.length - 1]!.x) return null;
-  for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; if (x <= b.x) { const f = (x - a.x) / Math.max(1e-9, b.x - a.x), m = (u: number, v: number) => u + (v - u) * f; return { x, w: m(a.w, b.w), lo: m(a.lo, b.lo), hi: m(a.hi, b.hi), n: m(a.n ?? 2, b.n ?? 2), wt: m(a.wt ?? a.w, b.wt ?? b.w), nt: m(a.nt ?? a.n ?? 2, b.nt ?? b.n ?? 2), mid: m(midOf(a), midOf(b)) }; } }
+  for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; if (x <= b.x) { const f = (x - a.x) / Math.max(1e-9, b.x - a.x), m = (u: number, v: number) => u + (v - u) * f; return { x, w: m(a.w, b.w), lo: m(a.lo, b.lo), hi: m(a.hi, b.hi), n: m(a.n ?? 2, b.n ?? 2), wt: m(a.wt ?? a.w, b.wt ?? b.w), nt: m(a.nt ?? a.n ?? 2, b.nt ?? b.n ?? 2), mid: m(midOf(a), midOf(b)), z: m(a.z ?? 0, b.z ?? 0) }; } }
   return st[st.length - 1]!;
 }
 /** A loft's volume and its skin's area (the ends left open, as a shell's are). */
@@ -107,7 +107,7 @@ const span = (min: V3, max: V3): LocalBox => ({ c: mul(add(min, max), 0.5), h: m
  *  these, so a parts inside a kart's frame touch only the tubes they meet, not the frame's bounds. */
 export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe } | { surf: Patch }): LocalBox[] {
   if ('surf' in s) return surfPieces(s.surf);
-  if ('loft' in s) return s.loft.st.slice(1).map((b, i) => { const a = s.loft.st[i]!, w = Math.max(a.w, b.w, a.wt ?? 0, b.wt ?? 0); return span([Math.min(a.x, b.x), Math.min(a.lo, b.lo), -w], [Math.max(a.x, b.x), Math.max(a.hi, b.hi), w]); });
+  if ('loft' in s) return s.loft.st.slice(1).map((b, i) => { const a = s.loft.st[i]!, w = Math.max(a.w, b.w, a.wt ?? 0, b.wt ?? 0), z0 = Math.min(a.z ?? 0, b.z ?? 0), z1 = Math.max(a.z ?? 0, b.z ?? 0); return span([Math.min(a.x, b.x), Math.min(a.lo, b.lo), z0 - w], [Math.max(a.x, b.x), Math.max(a.hi, b.hi), z1 + w]); });
   if ('tube' in s) return tubeLegs(s.tube).map((l): LocalBox => {
     const r = s.tube.r;
     if (l.kind === 'line') { const d = unit(sub(l.b, l.a)), [e1, e2] = perp(d); return { c: mul(add(l.a, l.b), 0.5), u: [d, e1, e2], h: [l.len / 2 + r * 0.02, r, r] }; }

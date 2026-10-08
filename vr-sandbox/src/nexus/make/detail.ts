@@ -382,7 +382,10 @@ export const RULES: DetailRule[] = [
         const seatY = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).y)), my = belt > seatY + 0.7 ? seatY + 0.5 : Math.max(belt + 0.04, seatY + 0.5); // (in a tall cab, its roof is not its window line)
         // (on a panelled body, at the foot of its A pillars, where the side glass begins, a little over the belt: typical)
         const aP = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(A pillars|windscreen frame)$/.test(x.p.name)), ab = aP ? new THREE.Box3().setFromPoints(corners(aP).map((q) => toLocal(T, q))) : null;
-        const mx = ab ? ab.max.x - 0.16 : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
+        // (or on its front door, just behind the door's top front corner, where the door is set back from its A pillar's
+        // foot: a mirror stands on the door, as a person reaching out of its window finds it)
+        const fD = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(front doors|doors)$/.test(x.p.name)), db = fD ? new THREE.Box3().setFromPoints(corners(fD).map((q) => toLocal(T, q))) : null;
+        const mx = ab ? Math.min(ab.max.x - 0.16, db ? db.max.x - 0.18 : Infinity) : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
         // (its stalk's foot on the skin where the stalk stands: the outermost of the skin within the stalk's own footprint, so
         // its flat foot meets the skin and never stands off it where the door tucks in under its belt)
         const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), foot = skin.filter((q) => Math.abs(q.x - mx) < 0.03 && Math.abs(q.y - (mY - 0.035)) < 0.025).map((q) => Math.abs(q.z));

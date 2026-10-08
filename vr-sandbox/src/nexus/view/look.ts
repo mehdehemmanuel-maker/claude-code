@@ -127,12 +127,17 @@ const box = new THREE.Box3(); for (const m of meshes) if (m.visible) box.expandB
 const s = sun.shadow.camera as THREE.OrthographicCamera; s.left = s.bottom = -r * 1.5; s.right = s.top = r * 1.5; s.far = 60; s.updateProjectionMatrix(); sun.target.position.copy(c); scene.add(sun.target);
 // a closer look: &aim=x,y,z looks at that point instead of the middle (with &zoom under 1, or &dist, to come close)
 const aim = num3(q.get('aim')); if (aim) c.set(...aim);
-const camera = new THREE.PerspectiveCamera(Number(q.get('fov') ?? 35), innerWidth / innerHeight, 0.005, 500), dirs: Record<string, THREE.Vector3> = { three: new THREE.Vector3(1, 0.42, 0.9), front: new THREE.Vector3(1, 0.15, 0), side: new THREE.Vector3(0, 0.12, 1), rear: new THREE.Vector3(-1, 0.4, -0.8), top: new THREE.Vector3(0.01, 1, 0.01), under: new THREE.Vector3(0.2, -1, 0.3) };
+// (&ortho=1: a lens 0.8° wide from far off, so it draws as a draughtsman's elevation does, to within half a percent, for laying
+// a photograph over; &mask=1: every part flat black on white, its silhouette)
+const camera = new THREE.PerspectiveCamera(Number(q.get('fov') ?? (q.get('ortho') === '1' ? 0.8 : 35)), innerWidth / innerHeight, 0.005, 500), dirs: Record<string, THREE.Vector3> = { three: new THREE.Vector3(1, 0.42, 0.9), front: new THREE.Vector3(1, 0.15, 0), side: new THREE.Vector3(0, 0.12, 1), rear: new THREE.Vector3(-1, 0.4, -0.8), top: new THREE.Vector3(0.01, 1, 0.01), under: new THREE.Vector3(0.2, -1, 0.3) };
 const dq = num3(q.get('dir')), d = (dq ? new THREE.Vector3(...dq) : (dirs[q.get('view') ?? 'three'] ?? dirs.three!).clone()).normalize(), dist = q.get('dist') ? Number(q.get('dist')) : (r / Math.sin((camera.fov * Math.PI) / 360)) * Number(q.get('zoom') ?? 1.05);
 const cam = num3(q.get('cam')); if (cam) camera.position.set(...cam); else camera.position.copy(c).addScaledVector(d, dist);
+// (&up=x,y,z: the camera's up, where a photograph laid over it was taken with its camera tilted)
+const upq = num3(q.get('up')); if (upq) camera.up.set(...upq).normalize();
 // (from under the floor, the floor is not there: what is underneath is what is looked at)
 if (camera.position.y < 0.02) floor.visible = false;
 { const away = camera.position.distanceTo(c); camera.near = Math.max(0.001, Math.min(0.02, away * 0.01)); camera.far = away + r * 6 + 20; camera.updateProjectionMatrix(); }
+if (q.get('mask') === '1') { const black = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }); for (const m of meshes) m.material = black; scene.background = new THREE.Color(0xffffff); scene.environment = null; floor.visible = false; renderer.shadowMap.enabled = false; renderer.toneMapping = THREE.NoToneMapping; }
 camera.lookAt(c); renderer.render(scene, camera);
 
 // ---- what the critic may ask ----
@@ -143,11 +148,34 @@ function weldsOf(m: THREE.Mesh): { welds?: string[] } { const p = m.userData.par
 // (the rigid link a mesh is one of: its part's, else its nearest holder's that says one; '' the thing's own frame)
 function linkOfObj(m: THREE.Object3D): string { for (let o: THREE.Object3D | null = m; o && o !== view.group; o = o.parent) { const l = (o.userData.part as Part | undefined)?.link; if (l !== undefined) return l; } return ''; }
 const r3 = (v: THREE.Vector3) => v.toArray().map((x) => +x.toFixed(4));
+// (each a point of the parts as drawn: the wheels' middles from their tyres; its nose, tail and roof from its skins; its A
+// pillar's foot and its roof's front from its windscreen's side edge; its roof's back and its C pillar's foot (where its deck
+// begins) from its back glass's)
+function landmarksOf(side: number): Record<string, number[]> {
+  const out: Record<string, number[]> = {}, vs = (re: RegExp, surfOnly = false) => { const o: THREE.Vector3[] = []; for (const m of meshes) { if (!m.visible || !re.test(m.name)) continue; const p = m.userData.part as Part | undefined; if (surfOnly && !(p?.shape && 'surf' in p.shape)) continue; const P = m.geometry.getAttribute('position'); for (let i = 0; i < P.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); if (v.z * side >= -0.001) o.push(v); } } return o; };
+  // (each wheel's middle on its tyre's outer face, and that face's top, bottom, front and back: a wheel's size is published,
+  // so these are what a camera is matched by. A tyre is a road wheel's: standing on the ground, not its valve nor a spare)
+  const tb = meshes.filter((m) => m.visible && /^tyre/.test(m.name) && !/valve/.test(m.name)).map((m) => new THREE.Box3().setFromObject(m)).filter((b) => (b.min.z + b.max.z) * side > 0 && b.min.y < 0.03 && b.max.y - b.min.y > 0.2).sort((a, b) => b.max.x + b.min.x - a.max.x - a.min.x);
+  for (const [nm, b] of [['front', tb[0]], ['rear', tb[tb.length - 1]]] as const) { if (!b || tb.length < 2) continue; const cx = (b.min.x + b.max.x) / 2, cy = (b.min.y + b.max.y) / 2, R = (b.max.y - b.min.y) / 2, zo = side > 0 ? b.max.z : b.min.z;
+    out[`${nm} wheel centre`] = [cx, cy, zo].map((v) => +v.toFixed(4)); out[`${nm} wheel top`] = [cx, cy + R, zo].map((v) => +v.toFixed(4)); out[`${nm} wheel bottom`] = [cx, cy - R, zo].map((v) => +v.toFixed(4)); out[`${nm} wheel front`] = [cx + R, cy, zo].map((v) => +v.toFixed(4)); out[`${nm} wheel back`] = [cx - R, cy, zo].map((v) => +v.toFixed(4)); }
+  const skin = vs(/.*/, true); if (skin.length) { const by = (f: (v: THREE.Vector3) => number) => skin.reduce((b, v) => (f(v) > f(b) ? v : b)); out.nose = r3(by((v) => v.x)); out.tail = r3(by((v) => -v.x)); out['roof peak'] = r3(by((v) => v.y)); }
+  const edge = (re: RegExp) => { const g = vs(re); if (!g.length) return null; const zmax = Math.max(...g.map((v) => Math.abs(v.z))), e = g.filter((v) => Math.abs(v.z) > zmax * 0.85); return { lo: e.reduce((b, v) => (v.y < b.y ? v : b)), hi: e.reduce((b, v) => (v.y > b.y ? v : b)) }; };
+  const ws = edge(/^windscreen$/), bg = edge(/^back glass$/);
+  if (ws) { out['A pillar foot'] = r3(ws.lo); out['roof front'] = r3(ws.hi); }
+  if (bg) { out['roof back'] = r3(bg.hi); out['C pillar foot'] = r3(bg.lo); }
+  return out;
+}
 const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
   facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says }),
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
   clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
+  // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side
+  // the camera looks at), for laying a photograph over it (the bench's ref:)
+  project: (pts: [number, number, number][]) => pts.map((p) => { const v = new THREE.Vector3(...p).project(camera); return [+(((v.x + 1) / 2) * innerWidth).toFixed(2), +(((1 - v.y) / 2) * innerHeight).toFixed(2)]; }),
+  unproject: (px: number, py: number, z: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1), camera); const t = (z - ray.ray.origin.z) / ray.ray.direction.z; return r3(ray.ray.origin.clone().addScaledVector(ray.ray.direction, t)); },
+  // its landmarks on one side (+1 its right, as it faces forward, or -1 its left), from its parts as drawn
+  landmarks: (side = 1) => landmarksOf(side),
   // what holds what: groups held by nothing, joints across which something rigid is laid, links that rub (critic.ts)
   held: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return held(ts, meshClashes(ts, { touch: 0.001 })); },
   gap: (a: string, b: string) => {

@@ -482,13 +482,23 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
       // (what a maker or a joint says explains only a meeting face to face: no word explains one passing into the other,
       // and where neither is closed there is no depth to excuse a crossing by, so it stays one: a liner said to be 4 mm in
       // from its skin that crosses it is through it, whatever it is said to be)
-      const fixedBy = kin !== 'apart' && kind2 !== 'through' ? meshes[i]!.joined ?? meshes[j]!.joined : undefined;
+      // (and only of what it names: a word on how a part is fixed labels its meeting with another where it names that other,
+      // or names none; "clipped to its inner wheelhouse" says nothing of the fender the liner also meets, and a seat's weld
+      // to its tube is not the spring's. Nor where one is sunk in the other: a label is earned face to face, with no depth)
+      const flush = kind2 !== 'through' && (depth === undefined || depth < 0.0005);
+      // (a word that names the other labels its meeting with it wherever it is; one that names none, only its meeting with
+      // what holds it or sits beside it)
+      const claimFor0 = (p: TriMesh, q: TriMesh) => { const c = claimOf(p.joined, q); return c === 2 || (c === 1 && kin !== 'apart') ? p.joined : undefined; }, claimFor = claimFor0;
+      const fixedBy = flush ? claimFor(meshes[i]!, meshes[j]!) ?? claimFor(meshes[j]!, meshes[i]!) : undefined;
       // (and two parts a joint was laid on, face to face where it joins them)
-      const joinedBy = kind2 !== 'through' && (!!meshes[i]!.joins?.includes(meshes[j]!.name) || !!meshes[j]!.joins?.includes(meshes[i]!.name));
+      const joinedBy = flush && (!!meshes[i]!.joins?.includes(meshes[j]!.name) || !!meshes[j]!.joins?.includes(meshes[i]!.name));
       // (through an opening its maker says one has for the other: where they cross, the opening is said, not drawn)
       const fit = fitted(meshes[i]!, meshes[j]!), isFused = ((kin !== 'apart' || meshes[i]!.weld || meshes[j]!.weld) && fused(meshes[i]!, meshes[j]!, kin)) || /weld/.test(fixedBy ?? '');
-      const kindF: Clash['kind'] = fit ? 'fitted' : joinedBy ? 'joined' : isFused ? 'fused' : fixedBy ? 'joined' : kind2;
-      const by = kindF === 'joined' ? (joinedBy ? 'a joint laid on them' : fixedBy) : kindF === 'fused' ? (fixedBy && /weld/.test(fixedBy) ? fixedBy : meshes[i]!.weld || meshes[j]!.weld ? 'the weld bead between them' : 'one casting or moulding') : undefined;
+      // (where a maker says two metal parts of one assembly are welded together and they overlap, the overlap is the weld's
+      // fillet, which is not drawn: one piece, said so)
+      const weldLap = kind2 === 'through' && kin !== 'apart' && METAL.test(meshes[i]!.mat ?? '') && METAL.test(meshes[j]!.mat ?? '') && [claimFor0(meshes[i]!, meshes[j]!), claimFor0(meshes[j]!, meshes[i]!)].some((c) => c && /weld/i.test(c));
+      const kindF: Clash['kind'] = fit ? 'fitted' : joinedBy ? 'joined' : isFused || weldLap ? 'fused' : fixedBy ? 'joined' : kind2;
+      const by = kindF === 'joined' ? (joinedBy ? 'a joint laid on them' : fixedBy) : kindF === 'fused' ? (weldLap ? `${claimFor0(meshes[i]!, meshes[j]!) ?? claimFor0(meshes[j]!, meshes[i]!)} (overlapping where the weld's fillet would be, not drawn)` : fixedBy && /weld/.test(fixedBy) ? fixedBy : meshes[i]!.weld || meshes[j]!.weld ? 'the weld bead between them' : 'one casting or moulding') : undefined;
       out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, ia: i, ib: j, kind: kindF, ...(depth !== undefined ? { depth } : {}), ...(fit ? { opening: cnt[0]! === 0 } : {}), ...(by ? { by } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
     }
   }
@@ -577,39 +587,75 @@ export function leastDistance(a: TriMesh | Tris, b: TriMesh | Tris, beyond = Inf
 //             a ball joint, a bush); a weld, a fastener or one casting laid across two links stops that motion
 //   rubs      two links that meet with no joint between them (a tyre on its liner, an arm on its subframe's face)
 //   unjointed a link that meets no other through a joint: it cannot move as it is said to, or it is held by nothing
+// (a maker's word names a part where one of that part's own words is in it, sides and plurals aside; it names none where it
+// says of all it meets, or names no place at all: "pressed", "cast as one")
+const SIDES = /\b(front|rear|left|right)\b/g, stemsOf = (s: string) => new Set(s.toLowerCase().replace(SIDES, ' ').split(/[^a-z]+/).filter((w) => w.length >= 3 && !/^(the|and|its|with|for)$/.test(w)).map((w) => w.replace(/(es|s)$/, '')));
+const TARGET = /\b(to|into|onto|on|in|under|through|across|over|from|against|between|round|inside|beside)\s+(its|the|a|an|their|each|two|three|four|both)\b/i;
+/** Whether a maker's word on how a part is fixed speaks of another: 2 where it names it, 1 where it names nothing (it says
+ *  it of all it meets), 0 where it names something else. */
+export function claimOf(text: string | undefined, other: TriMesh): 0 | 1 | 2 {
+  if (!text) return 0;
+  // (by its head noun, the last word of its name, or its holder's: "bolted to its caliper ear" names an ear, not the
+  // caliper's halves; "sliding in its carrier" names the legs of the carrier that holds them; a weld names no rubber)
+  if (/weld/i.test(text) && !METAL.test(other.mat ?? '')) return 0;
+  const ws = stemsOf(text), head = (s: string) => [...stemsOf(s.replace(/\(.*?\)/g, ' '))].pop(), segs = other.path.split('/'), hs = [head(other.name), segs.length > 2 ? head(segs[segs.length - 2]!) : undefined];
+  for (const h of hs) if (h && ws.has(h)) return 2;
+  return /what it (meets|touches)|where it meets|wherever it meets/i.test(text) || !TARGET.test(text) ? 1 : 0;
+}
+const METAL = /^(steel|al|cast|iron|zamak|zinc|ti|copper|brass|bronze)/i;
 export interface Held {
-  floats: { parts: string[]; n: number; kg: number; nearest: { a: string; b: string; d: number; at: CV3 } | null }[];
+  /** groups held by nothing: not reached from the root by joints that carry load. Each with how it touches the rest
+   *  without being held by it (crossing it, a point's touch, a plain touch no joint is said for, the ground) */
+  floats: { parts: string[]; n: number; kg: number; nearest: { a: string; b: string; d: number; at: CV3 } | null; via: string[] }[];
   blocks: { links: [string, string]; by: string; a: string; b: string; at: CV3 }[];
   rubs: { links: [string, string]; a: string; b: string; at: CV3; kind: Clash['kind'] }[];
   joints: { links: [string, string]; joint: string; a: string; b: string }[];
   unjointed: { link: string; parts: number; meets: string[] }[];
-  /** the heaviest group: how many parts, its mass, and whether it stands on the ground */ main: { n: number; kg: number; grounded: boolean };
+  /** a link (one rigid body) whose parts are not all one: its pieces, and how far apart the two largest are */
+  splits: { link: string; pieces: string[][]; gap: number | null }[];
+  /** a link joined to too few others to be held and to pass on what it carries: a shaft with a joint at one end only */
+  chains: { link: string; joinedTo: string[]; needs: string }[];
+  /** where a part is said to pass through an opening in another and none is drawn: the two cross */
+  saidNotDrawn: { a: string; b: string; n: number }[];
+  /** the root everything must reach (the heaviest group held together: the body, or a frame), how many parts, its mass */ main: { n: number; kg: number; root: string; parts: string[] };
   method: string;
 }
 const FRAME = 'its frame';
+/** What holds what (held:, v2, the critic's round 3): from a root, the heaviest group held together, each part must be
+ *  reached by joints that carry load, as built: a meeting face to face (no crossing, no point's touch: 5 mm of it at the
+ *  least) that a record explains (a joint laid on the two, a weld or one casting, a maker's word on how one is fixed to the
+ *  other, an opening said for it) or across which one of them is a joint (a bearing, a bush, a mount, a spring, a ball
+ *  joint, a slide, a hinge). The ground holds nothing up: what reaches the root only by standing on the road floats. And
+ *  each link's own parts must be one, and each link joined to as many others as it needs to carry anything. */
 export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)): Held {
   // (a part drawn as several meshes is one node: by which drawn part it is, else its path; a left and a right of one
   // name under one holder are two)
   const keyOf = (m: TriMesh) => m.id ?? m.path, ids = new Map<string, number>(), node = (key: string) => { let k = ids.get(key); if (k === undefined) { k = ids.size; ids.set(key, k); } return k; };
-  meshes.forEach((m) => node(keyOf(m))); const GROUND = node('(the ground)'), N = ids.size, par = Array.from({ length: N }, (_, i) => i);
+  meshes.forEach((m) => node(keyOf(m))); const N = ids.size, par = Array.from({ length: N }, (_, i) => i);
   const find = (k: number): number => (par[k] === k ? k : (par[k] = find(par[k]!))), join = (a: number, b: number) => { par[find(a)] = find(b); };
   const byPath = new Map<string, TriMesh>(); for (const m of meshes) if (!byPath.has(keyOf(m))) byPath.set(keyOf(m), m);
   const meshOf = (c: Clash, side: 0 | 1) => meshes[side ? c.ib! : c.ia!] ?? meshes.find((m) => m.path === (side ? c.pb : c.pa))!;
+  // (what holds: no crossing, flush, 5 mm of meeting at the least, and a record of it or a joint across it)
+  const sunk = (c: Clash) => c.kind === 'through' || (c.depth !== undefined && c.depth >= 0.0005 && c.kind !== 'fitted' && c.kind !== 'fused');
+  const holds = (c: Clash) => { if (sunk(c) || c.span < 0.005) return false; if (c.kind === 'joined' || c.kind === 'fused' || c.kind === 'fitted') return true; const a = meshOf(c, 0), b = meshOf(c, 1); return !!(a.joint || b.joint); };
+  const whyNot = (c: Clash) => (c.kind === 'through' ? 'crossing' : sunk(c) ? `sunk ${((c.depth ?? 0) * 1000).toFixed(1)} mm` : c.span < 0.005 ? 'a point\'s touch' : 'a touch no joint is said for');
   // (a constant-velocity joint carries torque, not weight: what it joins is held by it only where it is the lighter, as a
   // drive shaft hangs between its joints; an engine is not held up by its drive shafts, but by its mounts)
   const cvEdge = (c: Clash) => { const a = meshOf(c, 0), b = meshOf(c, 1); return (a.link || '') !== (b.link || '') && (a.joint === 'cv' || b.joint === 'cv'); };
-  for (const c of clashes) if (!cvEdge(c)) join(node(keyOf(meshOf(c, 0))), node(keyOf(meshOf(c, 1))));
+  for (const c of clashes) if (holds(c) && !cvEdge(c)) join(node(keyOf(meshOf(c, 0))), node(keyOf(meshOf(c, 1))));
   { const kg0 = new Map<number, number>(); for (const [k2, m] of byPath) { const g = find(node(k2)); kg0.set(g, (kg0.get(g) ?? 0) + (m.kg ?? 0)); }
-    const nb = new Map<number, Set<number>>(); for (const c of clashes) if (cvEdge(c)) { const ga = find(node(keyOf(meshOf(c, 0)))), gb = find(node(keyOf(meshOf(c, 1)))); if (ga === gb) continue; (nb.get(ga) ?? nb.set(ga, new Set()).get(ga)!).add(gb); (nb.get(gb) ?? nb.set(gb, new Set()).get(gb)!).add(ga); }
+    const nb = new Map<number, Set<number>>(); for (const c of clashes) if (holds(c) && cvEdge(c)) { const ga = find(node(keyOf(meshOf(c, 0)))), gb = find(node(keyOf(meshOf(c, 1)))); if (ga === gb) continue; (nb.get(ga) ?? nb.set(ga, new Set()).get(ga)!).add(gb); (nb.get(gb) ?? nb.set(gb, new Set()).get(gb)!).add(ga); }
     for (const [g, ns] of nb) { const mine = kg0.get(g) ?? 0, heavier = [...ns].filter((h) => (kg0.get(h) ?? 0) > mine).sort((p, q) => (kg0.get(q) ?? 0) - (kg0.get(p) ?? 0)); if (heavier.length) join(g, heavier[0]!); } }
   const T = new Map<TriMesh, Tris>(), tris = (m: TriMesh) => { let t = T.get(m); if (!t) T.set(m, (t = trisOf(m))); return t; };
-  for (const m of meshes) if (tris(m).n && tris(m).lo[1]! < 0.005) join(node(keyOf(m)), GROUND);
-  // (the groups, and how heavy each is)
-  const groups = new Map<number, string[]>(); for (const [p, k] of ids) { if (k === GROUND) continue; const g = find(k); let l = groups.get(g); if (!l) groups.set(g, (l = [])); l.push(p); }
-  const kgOf = (ps: string[]) => ps.reduce((s, p) => s + (byPath.get(p)?.kg ?? 0), 0);
+  const onGround = new Set<string>(); for (const m of meshes) if (tris(m).n && tris(m).lo[1]! < 0.005) onGround.add(keyOf(m));
+  // (the groups, and how heavy each is: the heaviest is the root)
+  const groups = new Map<number, string[]>(); for (const [p, k] of ids) { const g = find(k); let l = groups.get(g); if (!l) groups.set(g, (l = [])); l.push(p); }
+  const kgOf = (ps: string[]) => ps.reduce((s, p) => s + (byPath.get(p)?.kg ?? 0), 0), nameOf = (p: string) => byPath.get(p)?.name ?? p;
   const ranked = [...groups.entries()].map(([g, ps]) => ({ g, ps, kg: kgOf(ps) })).sort((p, q) => q.kg - p.kg || q.ps.length - p.ps.length);
-  const main = ranked[0]; const out: Held = { floats: [], blocks: [], rubs: [], joints: [], unjointed: [], main: { n: main?.ps.length ?? 0, kg: +(main?.kg ?? 0).toFixed(1), grounded: !!main && find(GROUND) === main.g }, method: `parts joined where the clash finder finds them meeting (within 1 mm) or on the ground; distances ${LEAST_METHOD}` };
-  const nameOf = (p: string) => byPath.get(p)?.name ?? p;
+  const main = ranked[0], heaviest = main ? [...main.ps].sort((p, q) => (byPath.get(q)?.kg ?? 0) - (byPath.get(p)?.kg ?? 0))[0] : undefined;
+  const out: Held = { floats: [], blocks: [], rubs: [], joints: [], unjointed: [], splits: [], chains: [], saidNotDrawn: [], main: { n: main?.ps.length ?? 0, kg: +(main?.kg ?? 0).toFixed(1), root: heaviest ? nameOf(heaviest) : '', parts: main ? [...new Set([...main.ps].sort((p, q) => (byPath.get(q)?.kg ?? 0) - (byPath.get(p)?.kg ?? 0)).map(nameOf))].slice(0, 24) : [] }, method: `held from the heaviest group held together, by meetings face to face (flush, 5 mm of it at the least) that a record explains (a joint laid on them, a weld or one casting, a maker's word naming the other, an opening said for it) or a joint is across; the ground holds nothing up; distances ${LEAST_METHOD}` };
+  // (what touches what without holding it, by group, for each float's account of itself)
+  const touchVia = new Map<number, Set<string>>(); for (const c of clashes) { if (holds(c)) continue; const ga = find(node(keyOf(meshOf(c, 0)))), gb = find(node(keyOf(meshOf(c, 1)))); if (ga === gb) continue; for (const [g, o] of [[ga, c.b], [gb, c.a]] as const) (touchVia.get(g) ?? touchVia.set(g, new Set()).get(g)!).add(`${whyNot(c)} of ${o}`); }
   for (const r of ranked.slice(1)) {
     // (its nearest part not in it: the meshes of the rest nearest by box first, measured until none nearer is possible)
     const mine = new Set(r.ps), own = meshes.filter((m) => mine.has(keyOf(m)) && tris(m).n), rest = meshes.filter((m) => !mine.has(keyOf(m)) && tris(m).n);
@@ -619,21 +665,42 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
     for (const [g, a, b] of pairs.slice(0, 400)) { if (best && g >= best.d) break; const d = leastDistance(tris(a), tris(b), best?.d ?? Infinity); if (d && (!best || d.d < best.d)) best = { a: a.name, b: b.name, d: +d.d.toFixed(4), at: d.at.map((x) => +x.toFixed(4)) as CV3 }; }
     // (named by its heaviest parts, so a subframe with its arms and rack reads as the subframe)
     const names = [...new Set(r.ps.sort((p, q) => (byPath.get(q)?.kg ?? 0) - (byPath.get(p)?.kg ?? 0)).map(nameOf))];
-    out.floats.push({ parts: names.slice(0, 8), n: r.ps.length, kg: +r.kg.toFixed(2), nearest: best });
+    const via = [...(touchVia.get(r.g) ?? [])].slice(0, 6); if (r.ps.some((p) => onGround.has(p))) via.unshift('standing on the ground (which holds nothing up)');
+    out.floats.push({ parts: names.slice(0, 8), n: r.ps.length, kg: +r.kg.toFixed(2), nearest: best, via });
   }
   out.floats.sort((p, q) => q.kg - p.kg);
   // (links: where two meet, it must be at a joint, and never by anything rigid)
   const linkOf = (p: string) => byPath.get(p)?.link || FRAME, RIGID = /\b(hex head|washer|screw|bolt|rivet|stud|nut)\b|weld/i;
-  const meets = new Map<string, Set<string>>(), jointed = new Set<string>(), count = new Map<string, number>(); for (const p of byPath.keys()) count.set(linkOf(p), (count.get(linkOf(p)) ?? 0) + 1);
+  const meets = new Map<string, Set<string>>(), jointed = new Set<string>(), count = new Map<string, number>(), jl = new Map<string, Map<string, Set<string>>>(); for (const p of byPath.keys()) count.set(linkOf(p), (count.get(linkOf(p)) ?? 0) + 1);
   for (const c of clashes) {
     const ma = meshOf(c, 0), mb = meshOf(c, 1), la = ma.link || FRAME, lb = mb.link || FRAME; if (la === lb) continue; const links = [la, lb].sort() as [string, string];
     (meets.get(la) ?? meets.set(la, new Set()).get(la)!).add(lb); (meets.get(lb) ?? meets.set(lb, new Set()).get(lb)!).add(la);
     const rigid = c.kind === 'fused' ? 'one piece (fused)' : ma?.weld || mb?.weld ? 'a weld bead' : RIGID.test(c.a) || RIGID.test(c.b) ? `a fastener (${RIGID.test(c.a) ? c.a : c.b})` : undefined;
     const joint = ma?.joint ?? mb?.joint;
     if (rigid) out.blocks.push({ links, by: rigid, a: c.a, b: c.b, at: c.at });
-    else if (joint) { jointed.add(la); jointed.add(lb); if (!out.joints.some((j) => j.links[0] === links[0] && j.links[1] === links[1] && j.joint === joint)) out.joints.push({ links, joint, a: c.a, b: c.b }); }
+    else if (joint && !sunk(c)) { jointed.add(la); jointed.add(lb); for (const [x, y] of [[la, lb], [lb, la]]) { const m2 = jl.get(x) ?? jl.set(x, new Map()).get(x)!; (m2.get(y) ?? m2.set(y, new Set()).get(y)!).add(joint); } if (!out.joints.some((j) => j.links[0] === links[0] && j.links[1] === links[1] && j.joint === joint)) out.joints.push({ links, joint, a: c.a, b: c.b }); }
     else out.rubs.push({ links, a: c.a, b: c.b, at: c.at, kind: c.kind });
   }
   for (const [l, n] of count) if (l !== FRAME && !jointed.has(l)) out.unjointed.push({ link: l, parts: n, meets: [...(meets.get(l) ?? [])] });
+  // (each link's own parts one rigid body: joined by any meeting but a crossing)
+  const lp = new Map<string, string[]>(); for (const p of byPath.keys()) { const l = linkOf(p); if (l !== FRAME) (lp.get(l) ?? lp.set(l, []).get(l)!).push(p); }
+  const lpar = new Map<string, string>(), lfind = (p: string): string => { const q = lpar.get(p) ?? p; if (q === p) return p; const r2 = lfind(q); lpar.set(p, r2); return r2; };
+  for (const c of clashes) { if (c.kind === 'through') continue; const a = keyOf(meshOf(c, 0)), b = keyOf(meshOf(c, 1)); if (linkOf(a) !== linkOf(b) || linkOf(a) === FRAME) continue; lpar.set(lfind(a), lfind(b)); }
+  for (const [l, ps] of lp) {
+    const by = new Map<string, string[]>(); for (const p of ps) { const r2 = lfind(p); (by.get(r2) ?? by.set(r2, []).get(r2)!).push(p); } if (by.size < 2) continue;
+    const pieces = [...by.values()].sort((p, q) => kgOf(q) - kgOf(p)), A = meshes.filter((m) => pieces[0]!.includes(keyOf(m)) && tris(m).n), B = meshes.filter((m) => pieces[1]!.includes(keyOf(m)) && tris(m).n);
+    let gap: number | null = null; for (const a of A) for (const b of B) { const d = leastDistance(tris(a), tris(b), gap ?? Infinity); if (d && (gap === null || d.d < gap)) gap = d.d; }
+    out.splits.push({ link: l, pieces: pieces.map((pc) => [...new Set(pc.map(nameOf))].slice(0, 6)), gap: gap === null ? null : +gap.toFixed(4) });
+  }
+  // (each link joined to as many others as it must be to carry anything: a wheel or a hand's control to one, a shaft or a
+  // rod to one at each end; a drive shaft by a constant-velocity joint at each)
+  for (const [l] of lp) {
+    const nb = jl.get(l) ?? new Map<string, Set<string>>(), ps = lp.get(l)!, wheel = ps.some((p) => /^(tyre|outer tyre)\b/.test(nameOf(p))), hand = ps.some((p) => /^steering wheel$|handlebar/.test(nameOf(p)));
+    const need = wheel || hand ? 1 : 2, cv = [...nb.entries()].filter(([, ks]) => ks.has('cv')).length, drive = /drive shaft/.test(l);
+    if (nb.size < need || (drive && cv < 2)) out.chains.push({ link: l, joinedTo: [...nb.entries()].map(([o, ks]) => `${o} (${[...ks].join(', ')})`), needs: drive ? 'a constant-velocity joint at each end, to what drives it and to what it drives' : need === 1 ? 'a joint to what it turns on' : 'a joint at each end: to what holds it and to what it moves' });
+  }
+  // (each opening said and not drawn, pair by pair)
+  const snd = new Map<string, { a: string; b: string; n: number }>(); for (const c of clashes) if (c.kind === 'fitted' && c.opening === false) { const k = [c.a, c.b].sort().join('|'); const e = snd.get(k) ?? { a: c.a, b: c.b, n: 0 }; e.n++; snd.set(k, e); }
+  out.saidNotDrawn = [...snd.values()].sort((p, q) => q.n - p.n);
   return out;
 }

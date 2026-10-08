@@ -47,12 +47,12 @@ function loftGeometry(l: Loft): THREE.BufferGeometry {
   // (taken from the back forward, so its faces look outward whichever way its stations were given)
   const st = [...l.st].sort((a, b) => a.x - b.x), K = 40, out: Station[] = [], at = (i: number) => st[Math.max(0, Math.min(st.length - 1, i))]!;
   const cub = (p0: number, p1: number, p2: number, p3: number, t: number) => { const m1 = (p2 - p0) / 2, m2 = (p3 - p1) / 2, t2 = t * t, t3 = t2 * t; return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2; };
-  for (let i = 0; i < st.length - 1; i++) for (let k = 0; k < 6; k++) { const t = k / 6, f = (g: (s: Station) => number) => cub(g(at(i - 1)), g(at(i)), g(at(i + 1)), g(at(i + 2)), t); out.push({ x: f((s) => s.x), w: Math.max(0, f((s) => s.w)), lo: f((s) => s.lo), hi: f((s) => s.hi), n: Math.max(1.5, f((s) => s.n ?? 2)), wt: Math.max(0, f((s) => s.wt ?? s.w)), nt: Math.max(1.5, f((s) => s.nt ?? s.n ?? 2)), mid: f((s) => s.mid ?? (s.lo + s.hi) / 2) }); }
+  for (let i = 0; i < st.length - 1; i++) for (let k = 0; k < 6; k++) { const t = k / 6, f = (g: (s: Station) => number) => cub(g(at(i - 1)), g(at(i)), g(at(i + 1)), g(at(i + 2)), t); out.push({ x: f((s) => s.x), w: Math.max(0, f((s) => s.w)), lo: f((s) => s.lo), hi: f((s) => s.hi), n: Math.max(1.5, f((s) => s.n ?? 2)), wt: Math.max(0, f((s) => s.wt ?? s.w)), nt: Math.max(1.5, f((s) => s.nt ?? s.n ?? 2)), mid: f((s) => s.mid ?? (s.lo + s.hi) / 2), z: f((s) => s.z ?? 0) }); }
   out.push(st[st.length - 1]!);
   const pos: number[] = [], idx: number[] = [];
-  for (const s of out) for (let j = 0; j < K; j++) { const [y, z] = sectionPoint(s, (j / K) * 2 * Math.PI); pos.push(s.x, y, z); }
+  for (const s of out) for (let j = 0; j < K; j++) { const [y, z] = sectionPoint(s, (j / K) * 2 * Math.PI); pos.push(s.x, y, z + (s.z ?? 0)); }
   for (let i = 0; i < out.length - 1; i++) for (let j = 0; j < K; j++) { const a = i * K + j, b = i * K + ((j + 1) % K), c = a + K, d = b + K; idx.push(a, c, b, b, c, d); }
-  for (const [ring, flip] of [[0, true], [out.length - 1, false]] as const) { const s = out[ring]!, ci = pos.length / 3; pos.push(s.x, (s.hi + s.lo) / 2, 0); for (let j = 0; j < K; j++) { const a = ring * K + j, b = ring * K + ((j + 1) % K); if (flip) idx.push(ci, a, b); else idx.push(ci, b, a); } }
+  for (const [ring, flip] of [[0, true], [out.length - 1, false]] as const) { const s = out[ring]!, ci = pos.length / 3; pos.push(s.x, (s.hi + s.lo) / 2, s.z ?? 0); for (let j = 0; j < K; j++) { const a = ring * K + j, b = ring * K + ((j + 1) % K); if (flip) idx.push(ci, a, b); else idx.push(ci, b, a); } }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
 /** A bent tube drawn along its straights and bends. */

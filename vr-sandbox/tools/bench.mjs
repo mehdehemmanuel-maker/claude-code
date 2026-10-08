@@ -22,9 +22,27 @@
 //   mass:name|query                    its mass part by part, its centre of mass, the share each axle carries
 //   lint:name|query                    what no part should be: paper thin, hidden inside another, a weld on a casting, a
 //                                      bolt thicker than what it holds
-//   held:name|query|n                  what holds what: every group held by nothing (with the part of the rest nearest it
-//                                      and how far), anything rigid laid across a joint between links, links that meet
-//                                      with no joint between them, links with no joint at all; and pictures of the n worst
+//   ref:name|query|photo|landmarks     a reference photograph laid over it, from the camera that took it: landmarks as the
+//                                      photo's pixels, "front wheel centre:x,y;front wheel top:x,y;...": each wheel's centre,
+//                                      top, bottom, front and back (its tyre's outer edge), and any landmark marked with a
+//                                      leading * ("*roof peak:x,y"), find the camera; nose, tail, roof
+//                                      peak, A pillar foot, roof front, roof back and C pillar foot are measured: each
+//                                      one's miss in the picture and in mm on the car, the silhouettes' IoU where the
+//                                      photo's background is plain, and the lines the photo says
+//   ref:name|query|drawing|landmarks|elevation
+//                                      the same over a side elevation (a drawing square to its side, no perspective): its
+//                                      scale from its two wheel centres (the wheelbase is published), and in every column
+//                                      the model's top and bottom against the drawing's outermost ink above its ground, in
+//                                      mm, charted under the picture and listed every 2.5 % of its length (in the .json
+//                                      column by column)
+//   grid:name|image|x0,y0,x1,y1|k      a corner of any picture enlarged k times with its pixels numbered (a line every 5 px,
+//                                      or every pixel from 8×), so landmarks can be read off it as pixels
+//   held:name|query|n                  what holds what, from the heaviest group held together, by joints that carry load
+//                                      (a face-to-face meeting a record explains, or a joint across it: no crossing, no
+//                                      point's touch, and the ground holds nothing up): every group held by nothing (the
+//                                      part of the rest nearest it, how far, and how it touches the rest), links in pieces,
+//                                      links joined at too few ends, anything rigid across a joint, links that meet with
+//                                      no joint, openings said and not drawn; and pictures of the n worst
 //   sheet:name|query                   a contact sheet: whole from every side, under, and close on its faces, wheels,
 //                                      doors, mirrors, lamps and inside (cut away)
 //
@@ -111,8 +129,12 @@ async function section(name, query, spec) {
 async function heldJob(name, query, n) {
   const page = await open(query); if (!page) return; const t0 = Date.now(); const h = await page.evaluate(() => window.look.held()); await page.close();
   fs.writeFileSync(path.join(out, `${name}.held.json`), JSON.stringify(h, null, 1));
-  console.log(`${name}: held ${h.main.n} parts, ${h.main.kg} kg, ${h.main.grounded ? 'on the ground' : 'NOT on the ground'}; ${h.floats.length} groups held by nothing, ${h.blocks.length} rigid across a joint, ${h.rubs.length} rubbing, ${h.unjointed.length} links with no joint (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
-  for (const f of h.floats) console.log(`  FLOAT   ${f.parts.slice(0, 3).join(', ')}${f.n > 3 ? ` (+${f.n - 3} more)` : ''}, ${f.kg} kg: nearest ${f.nearest ? `${f.nearest.a} to ${f.nearest.b}, ${(f.nearest.d * 1000).toFixed(1)} mm at ${v3(f.nearest.at)}` : 'none'}`);
+  console.log(`${name}: held from ${h.main.root} (${h.main.n} parts, ${h.main.kg} kg); ${h.floats.length} groups held by nothing (${h.floats.filter((f) => f.via[0]?.startsWith('standing')).length} only standing on the ground), ${h.splits.length} links in pieces, ${h.chains.length} links joined at too few ends, ${h.blocks.length} rigid across a joint, ${h.rubs.length} rubbing, ${h.unjointed.length} links with no joint, ${h.saidNotDrawn.length} openings said and not drawn (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  console.log(`  ROOT    ${h.main.parts.join(', ')}`);
+  for (const f of h.floats) console.log(`  FLOAT   ${f.parts.slice(0, 3).join(', ')}${f.n > 3 ? ` (+${f.n - 3} more)` : ''}, ${f.kg} kg: nearest ${f.nearest ? `${f.nearest.a} to ${f.nearest.b}, ${(f.nearest.d * 1000).toFixed(1)} mm at ${v3(f.nearest.at)}` : 'none'}${f.via.length ? `; touching the rest only by ${f.via.join('; ')}` : ''}`);
+  for (const s2 of h.splits) console.log(`  SPLIT   ${s2.link}: ${s2.pieces.map((p) => p.join(', ')).join(' | ')}${s2.gap !== null ? `, the two largest ${(s2.gap * 1000).toFixed(1)} mm apart` : ''}`);
+  for (const c of h.chains) console.log(`  CHAIN   ${c.link}: joined to ${c.joinedTo.length ? c.joinedTo.join(', ') : 'nothing'}; needs ${c.needs}`);
+  for (const s2 of h.saidNotDrawn) console.log(`  SAID    ${s2.a} through ${s2.b} ×${s2.n}: its opening said, not drawn`);
   for (const b of h.blocks) console.log(`  BLOCK   ${b.links.join(' / ')}: ${b.by}, ${b.a} ~ ${b.b} at ${v3(b.at)}`);
   const rubs = new Map(); for (const r of h.rubs) { const k = `${r.links.join(' / ')}: ${[r.a, r.b].sort().join(' ~ ')}`; if (!rubs.has(k)) rubs.set(k, r); } for (const [k, r] of rubs) console.log(`  RUB     ${k} (${r.kind}) at ${v3(r.at)}`);
   for (const u of h.unjointed) console.log(`  NOJOINT ${u.link} (${u.parts} parts)${u.meets.length ? `: meets ${u.meets.join(', ')} with no joint` : ': meets no other link'}`);
@@ -120,12 +142,179 @@ async function heldJob(name, query, n) {
   const shots = [...h.floats.filter((f) => f.nearest).map((f) => ({ a: f.parts, b: [f.nearest.b], at: f.nearest.at })), ...h.blocks.map((b) => ({ a: [b.a], b: [b.b], at: b.at }))].slice(0, n);
   for (const [k, s2] of shots.entries()) await shot(`${name}-held${k + 1}`, `${query}&aim=${v3(s2.at)}&dir=0.4,0.35,1&dist=0.9&hi=${encodeURIComponent(s2.a.map((x) => `^${esc(x)}$`).join('|'))};${encodeURIComponent(s2.b.map((x) => `^${esc(x)}$`).join('|'))}&ghost=1`);
 }
+// ---- ref: a reference photograph laid over it, the camera that took it found from the wheels ----
+// (a wheel's size is published, so its tyre's outer face is known: its middle, top, bottom, front and back. The camera
+// that took the photo, where it stood, which way it looked and how wide its lens was, is the one that puts those points
+// where the photo has them, found by least squares (Levenberg and Marquardt). The model is drawn from that camera, the
+// photo laid over it at half strength, and every other landmark the photo gives is measured against the model's: in the
+// picture, and on the car, by taking the photo's point back along its ray onto the car's side.)
+const v3sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], v3dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], v3cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], v3norm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
+// (the camera as three.js sets it: at C, looking at A with y up, its lens fov degrees tall)
+function camOf(p) {
+  const C = [p[0], p[1], p[2]], d = [Math.cos(p[4]) * Math.sin(p[3]), Math.sin(p[4]), Math.cos(p[4]) * Math.cos(p[3])], zc = d.map((x) => -x), x0 = v3norm(v3cross([0, 1, 0], zc)), y0 = v3cross(zc, x0), r = p[6] ?? 0;
+  // (its roll: its up turned about its line of sight)
+  const up = [0, 1, 2].map((i) => Math.cos(r) * y0[i] - Math.sin(r) * x0[i]);
+  return { C, A: [C[0] + d[0], C[1] + d[1], C[2] + d[2]], fov: p[5], up };
+}
+function projectCam(X, cam, W, H) {
+  const zc = v3norm(v3sub(cam.C, cam.A)), xc = v3norm(v3cross(cam.up ?? [0, 1, 0], zc)), yc = v3cross(zc, xc), d = v3sub(X, cam.C), x = v3dot(d, xc), y = v3dot(d, yc), z = v3dot(d, zc), f = H / 2 / Math.tan((cam.fov * Math.PI) / 360);
+  return [W / 2 + (f * x) / -z, H / 2 - (f * y) / -z];
+}
+function rayOf(px, cam, W, H) { const zc = v3norm(v3sub(cam.C, cam.A)), xc = v3norm(v3cross(cam.up ?? [0, 1, 0], zc)), yc = v3cross(zc, xc), f = H / 2 / Math.tan((cam.fov * Math.PI) / 360), u = (px[0] - W / 2) / f, v = -(px[1] - H / 2) / f; return v3norm([xc[0] * u + yc[0] * v - zc[0], xc[1] * u + yc[1] * v - zc[1], xc[2] * u + yc[2] * v - zc[2]]); }
+function solveCam(pairs, p0, W, H, prior = true, free = null) {
+  // (and, as weak priors, so a few points cannot put the camera anywhere: a photographer's eye 1.5 m up, give or take 0.5 m,
+  // and standing at least 3 m off; each worth as much as a few pixels)
+  const res = (p) => { const cam = camOf(p), r = pairs.flatMap(([X, u]) => { const q = projectCam(X, cam, W, H); return [q[0] - u[0], q[1] - u[1]]; }); if (prior) { r.push(((p[1] - 1.5) / 0.5) * 3); const off = Math.hypot(p[0], p[2]); r.push(off < 3 ? (3 - off) * 30 : 0); } return r; };
+  let p = p0.slice(), r = res(p), e = r.reduce((s, x) => s + x * x, 0), lam = 1e-2;
+  for (let it = 0; it < 200; it++) {
+    const J = p.map((_, k) => { if (free && !free.includes(k)) return r.map(() => 0); const h = k < 3 ? 1e-4 : k === 5 ? 1e-4 : 1e-6, q = p.slice(); q[k] += h; return res(q).map((x, i) => (x - r[i]) / h); });
+    const n = p.length, A = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => J[i].reduce((s, x, m) => s + x * J[j][m], 0))), g = J.map((col) => col.reduce((s, x, m) => s + x * r[m], 0));
+    const tryStep = (l) => { const M = A.map((row, i) => row.map((x, j) => x + (i === j ? l * (x || 1) : 0))), b = g.map((x) => -x);
+      // (Gauss elimination on the small normal equations)
+      for (let i = 0; i < n; i++) { let piv = i; for (let k = i + 1; k < n; k++) if (Math.abs(M[k][i]) > Math.abs(M[piv][i])) piv = k; [M[i], M[piv]] = [M[piv], M[i]]; [b[i], b[piv]] = [b[piv], b[i]]; for (let k = i + 1; k < n; k++) { const f = M[k][i] / (M[i][i] || 1e-18); for (let j = i; j < n; j++) M[k][j] -= f * M[i][j]; b[k] -= f * b[i]; } }
+      const x = Array(n).fill(0); for (let i = n - 1; i >= 0; i--) { let s = b[i]; for (let j = i + 1; j < n; j++) s -= M[i][j] * x[j]; x[i] = s / (M[i][i] || 1e-18); } return p.map((v, i) => v + x[i]); };
+    const q = tryStep(lam), rq = res(q), eq = rq.reduce((s, x) => s + x * x, 0);
+    if (eq < e && q[5] > 1e-4 && q[5] < 120) { p = q; r = rq; if (e - eq < 1e-9 * e) { e = eq; break; } e = eq; lam = Math.max(1e-7, lam / 3); } else lam *= 4;
+  }
+  const pix = pairs.reduce((s2, [X, u]) => { const q = projectCam(X, camOf(p), W, H); return s2 + (q[0] - u[0]) ** 2 + (q[1] - u[1]) ** 2; }, 0);
+  return { p, rms: Math.sqrt(pix / pairs.length) };
+}
+async function refJob(name, query, photo, lms, mode) {
+  // (mode "elevation": the picture is a draughtsman's side elevation, drawn square to the side with no perspective; else a
+  // photograph, with its camera to be found)
+  const elev = /^elev/.test(mode ?? '');
+  const buf = fs.readFileSync(photo), mime = /\.png$/i.test(photo) ? 'image/png' : 'image/jpeg', url = `data:${mime};base64,${buf.toString('base64')}`;
+  const star = new Set(), L = Object.fromEntries((lms ?? '').split(';').filter(Boolean).map((t) => { const i = t.lastIndexOf(':'); let n = t.slice(0, i).trim(); if (n.startsWith('*')) { n = n.slice(1); star.add(n); } return [n, t.slice(i + 1).split(',').map(Number)]; }));
+  const fw = L['front wheel centre'], rw = L['rear wheel centre']; if (!fw || !rw) { console.log(`${name}: ref needs at least the picture's front wheel centre and rear wheel centre (and better, each wheel's top, bottom, front and back)`); return; }
+  const p0 = await browser.newPage(); await p0.setContent(`<img id="i" src="${url}">`); await p0.waitForFunction(() => document.getElementById('i').complete); const [W, H] = await p0.evaluate(() => [document.getElementById('i').naturalWidth, document.getElementById('i').naturalHeight]); await p0.close();
+  // (its nose to the right in the picture: seen from its right, +z; to the left: from its left)
+  const side = fw[0] > rw[0] ? 1 : -1;
+  const pg = await open(`${query}&size=${W}x${H}`); if (!pg) return; const lm = await pg.evaluate((sd) => window.look.landmarks(sd), side), facts = await pg.evaluate(() => window.look.facts()); await pg.close();
+  const wheelPts = Object.keys(L).filter((n) => (/wheel/.test(n) || star.has(n)) && lm[n]), pairs = wheelPts.map((n) => [lm[n], L[n]]);
+  const lF = lm['front wheel centre'], lR = lm['rear wheel centre'], wbM = Math.hypot(lF[0] - lR[0], lF[1] - lR[1]), wbPx = Math.hypot(fw[0] - rw[0], fw[1] - rw[1]);
+  let best = null;
+  if (elev) {
+    // (an elevation's scale is its wheelbase, which is published: its pixels between the wheels' centres over the model's
+    // metres. It is drawn as by a camera 1 km off with a lens so long that it draws the same, to 0.1 %, its roll the tilt of
+    // its wheels' line; only where it stands across the picture, its lens and its roll are fitted, to the wheels' points)
+    const s = wbPx / wbM, um = (fw[0] + rw[0]) / 2, vm = (fw[1] + rw[1]) / 2, xm = (lF[0] + lR[0]) / 2, ym = (lF[1] + lR[1]) / 2, D = 1000;
+    const s0 = [xm + (side * (W / 2 - um)) / s, ym - (H / 2 - vm) / s, side * D, side > 0 ? Math.PI : 0, 0, (2 * Math.atan(H / 2 / (s * D)) * 180) / Math.PI, 0];
+    best = solveCam(pairs, s0, W, H, false, [0, 1, 5, 6]);
+  } else {
+    // (from many first guesses, standing anywhere from 5 to 25 m off and up to 40° round from square, as a photo may be taken
+    // from a car's quarter: the best of what each settles to)
+    const xm = (lF[0] + lR[0]) / 2;
+    for (const yaw of [-0.7, -0.45, -0.2, 0, 0.2, 0.45, 0.7]) for (const D2 of [5, 9, 16, 25]) for (const pitch of [-0.12, -0.03, 0.06]) {
+      const yw = (side > 0 ? Math.PI : 0) + yaw, C0 = [xm - Math.sin(yw) * D2, 1.0, -Math.cos(yw) * D2], f2 = (wbPx * D2) / wbM, s0 = [C0[0], C0[1], C0[2], yw, pitch, (2 * Math.atan(H / 2 / f2) * 180) / Math.PI, 0];
+      const r = solveCam(pairs, s0, W, H); if (!best || r.rms < best.rms) best = r; }
+  }
+  const { p, rms } = best, cam = camOf(p), fpx2 = H / 2 / Math.tan((cam.fov * Math.PI) / 360);
+  // (an elevation's camera looks at the car itself, 1 km on, so the drawing's far plane is past it)
+  if (elev) cam.A = cam.C.map((c, i) => c + (cam.A[i] - c) * Math.abs(cam.C[2]));
+  const q2 = `${query}&cam=${cam.C.map((x) => x.toFixed(5)).join(',')}&aim=${cam.A.map((x) => x.toFixed(5)).join(',')}&fov=${cam.fov.toPrecision(9)}&up=${cam.up.map((x) => x.toFixed(7)).join(',')}&size=${W}x${H}`;
+  const page = await open(q2); if (!page) return; const rpath = path.join(out, `${name}-render.png`); await page.screenshot({ path: rpath }); await page.close();
+  // (each landmark the picture gives: its miss in the picture, and on the car, the picture's ray taken onto the plane across
+  // the car where the model's landmark is)
+  const rows = [];
+  for (const [n, u] of Object.entries(L)) {
+    if (!lm[n]) { rows.push({ name: n, photoPx: u, model: null }); continue; }
+    const q = projectCam(lm[n], cam, W, H), ray = rayOf(u, cam, W, H), t = (lm[n][2] - cam.C[2]) / ray[2], at = [cam.C[0] + ray[0] * t, cam.C[1] + ray[1] * t, lm[n][2]];
+    rows.push({ name: n, photoPx: u, modelPx: q.map((x) => +x.toFixed(1)), missPx: +Math.hypot(q[0] - u[0], q[1] - u[1]).toFixed(1), photo: at.map((x) => +x.toFixed(4)), model: lm[n], dx: +((lm[n][0] - at[0]) * 1000).toFixed(0), dy: +((lm[n][1] - at[1]) * 1000).toFixed(0), matched: wheelPts.includes(n) });
+  }
+  const mpage = await open(`${q2}&mask=1`); if (!mpage) return; const mpath = path.join(out, `${name}-mask.png`); await mpage.screenshot({ path: mpath }); await mpage.close();
+  const rUrl = `data:image/png;base64,${fs.readFileSync(rpath).toString('base64')}`, mUrl = `data:image/png;base64,${fs.readFileSync(mpath).toString('base64')}`;
+  // (the ground in the picture: where the model's tyres stand, so the drawing's ground line is not taken for the car)
+  const groundV = Math.max(...['front wheel bottom', 'rear wheel bottom'].filter((n) => lm[n]).map((n) => projectCam(lm[n], cam, W, H)[1]));
+  const sPx = elev ? fpx2 / Math.abs(cam.C[2]) : null, CH = elev ? 230 : 0;
+  const cv = await browser.newPage({ viewport: { width: W, height: H + CH } });
+  await cv.setContent(`<body style="margin:0;background:#fff"><canvas id="c" width="${W}" height="${H + CH}"></canvas><img id="r" src="${rUrl}" style="display:none"><img id="m" src="${mUrl}" style="display:none"><img id="p" src="${url}" style="display:none"></body>`);
+  await cv.waitForFunction(() => ['r', 'm', 'p'].every((i) => document.getElementById(i).complete));
+  const marks = rows.map((r) => ({ name: r.name, p: r.photoPx, m: r.modelPx ?? null, matched: !!r.matched }));
+  const sil = await cv.evaluate(({ W, H, CH, marks, groundV, sPx, side }) => {
+    const c = document.getElementById('c'), x = c.getContext('2d'), img = (i) => document.getElementById(i);
+    // (the picture's background, the middle colour of its border, and how much its border varies: a busy one gives no silhouette)
+    const pc = document.createElement('canvas'); pc.width = W; pc.height = H; const px = pc.getContext('2d'); px.drawImage(img('p'), 0, 0, W, H); const pd = px.getImageData(0, 0, W, H).data, bord = [];
+    for (let i = 0; i < W; i += 3) for (const j of [0, H - 1]) bord.push(j * W + i); for (let j = 0; j < H; j += 3) for (const i of [0, W - 1]) bord.push(j * W + i);
+    const med = [0, 1, 2].map((ch) => { const v = bord.map((q) => pd[q * 4 + ch]).sort((p, q) => p - q); return v[v.length >> 1]; }), dev = bord.map((q) => Math.abs(pd[q * 4] - med[0]) + Math.abs(pd[q * 4 + 1] - med[1]) + Math.abs(pd[q * 4 + 2] - med[2])).sort((p, q) => p - q)[Math.floor(bord.length * 0.8)];
+    const mc = document.createElement('canvas'); mc.width = W; mc.height = H; const mg = mc.getContext('2d'); mg.drawImage(img('m'), 0, 0, W, H); const md = mg.getImageData(0, 0, W, H).data;
+    const inkP = (q) => Math.abs(pd[q * 4] - med[0]) + Math.abs(pd[q * 4 + 1] - med[1]) + Math.abs(pd[q * 4 + 2] - med[2]) > 60, inkM = (q) => md[q * 4] < 128;
+    // (each column's top and bottom: the model's outline, and the picture's outermost ink above its ground; between them, as
+    // a silhouette, filled, for the overlap of the two)
+    const gv = Math.floor(groundV) - 2, top = (f) => Array.from({ length: W }, (_, u) => { for (let v = 0; v < gv; v++) if (f(v * W + u)) return v; return null; }), bot = (f) => Array.from({ length: W }, (_, u) => { for (let v = gv - 1; v >= 0; v--) if (f(v * W + u)) return v; return null; });
+    const plain = dev < 40, mT = top(inkM), mB = bot(inkM), dT = plain ? top(inkP) : null, dB = plain ? bot(inkP) : null;
+    let inter = 0, uni = 0; if (plain) for (let u = 0; u < W; u++) { const a = mT[u] === null ? null : [mT[u], mB[u]], b = dT[u] === null ? null : [dT[u], dB[u]]; if (a && b) { inter += Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]) + 1); uni += Math.max(a[1], b[1]) - Math.min(a[0], b[0]) + 1; } else if (a) uni += a[1] - a[0] + 1; else if (b) uni += b[1] - b[0] + 1; }
+    // (the picture: the drawing, the reference over it at half strength, the model's outline in blue; the reference's landmarks
+    // red rings, the model's blue crosses, the wheels' points it was matched by in green)
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H + CH); x.drawImage(img('r'), 0, 0, W, H); x.globalAlpha = 0.5; x.drawImage(img('p'), 0, 0, W, H); x.globalAlpha = 1;
+    const od = x.getImageData(0, 0, W, H); for (let yy = 1; yy < H - 1; yy++) for (let xx = 1; xx < W - 1; xx++) { const q = yy * W + xx, A = md[q * 4] < 128; if (A && (md[(q - 1) * 4] >= 128 || md[(q + 1) * 4] >= 128 || md[(q - W) * 4] >= 128 || md[(q + W) * 4] >= 128)) { od.data[q * 4] = 40; od.data[q * 4 + 1] = 110; od.data[q * 4 + 2] = 255; } } x.putImageData(od, 0, 0);
+    x.lineWidth = 2; x.font = '12px sans-serif';
+    for (const mk of marks) { const col = mk.matched ? '#18a84a' : '#ff2a2a'; x.strokeStyle = col; x.beginPath(); x.arc(mk.p[0], mk.p[1], 6, 0, 7); x.stroke(); if (mk.m) { x.strokeStyle = '#2a6bff'; x.beginPath(); x.moveTo(mk.m[0] - 7, mk.m[1]); x.lineTo(mk.m[0] + 7, mk.m[1]); x.moveTo(mk.m[0], mk.m[1] - 7); x.lineTo(mk.m[0], mk.m[1] + 7); x.stroke(); x.strokeStyle = col; x.beginPath(); x.moveTo(mk.p[0], mk.p[1]); x.lineTo(mk.m[0], mk.m[1]); x.stroke(); } if (!mk.matched) { x.fillStyle = '#111'; x.fillText(mk.name, mk.p[0] + 8, mk.p[1] - 8); } }
+    let prof = null;
+    if (sPx && plain) {
+      // (an elevation's profile: in each column, how much higher the model's top and bottom stand than the drawing's, in mm,
+      // charted under the picture, column for column, from -80 to +80 mm)
+      const mm = (v) => ((groundV - v) / sPx) * 1000, cols = [];
+      for (let u = 0; u < W; u++) if (mT[u] !== null && dT[u] !== null) cols.push({ u, top: [mm(dT[u]), mm(mT[u])], bot: [mm(dB[u]), mm(mB[u])] });
+      const y0 = H + CH / 2, k = (CH / 2 - 14) / 80; x.font = '11px sans-serif';
+      for (const g of [-80, -40, -20, 0, 20, 40, 80]) { x.strokeStyle = g === 0 ? '#555' : '#ddd'; x.lineWidth = 1; x.beginPath(); x.moveTo(0, y0 - g * k); x.lineTo(W, y0 - g * k); x.stroke(); x.fillStyle = '#555'; x.fillText(`${g > 0 ? '+' : ''}${g} mm`, 4, y0 - g * k - 2); }
+      for (const [key, col] of [['top', '#2a6bff'], ['bot', '#e8860c']]) { x.strokeStyle = col; x.lineWidth = 1.5; x.beginPath(); let pen = false, last = -9; for (const cc of cols) { const d = Math.max(-80, Math.min(80, cc[key][1] - cc[key][0])), yy = y0 - d * k; if (pen && cc.u === last + 1) x.lineTo(cc.u, yy); else x.moveTo(cc.u, yy); pen = true; last = cc.u; } x.stroke(); }
+      x.fillStyle = '#2a6bff'; x.fillText('top: model minus drawing (mm, + where the model stands higher)', W - 380, H + 14); x.fillStyle = '#e8860c'; x.fillText('bottom: model minus drawing', W - 380, H + 28);
+      const xs = cols.map((cc) => cc.u), uN = side > 0 ? Math.max(...xs) : Math.min(...xs), uT = side > 0 ? Math.min(...xs) : Math.max(...xs);
+      prof = { cols: cols.map((cc) => ({ share: +((uN - cc.u) / (uN - uT)).toFixed(4), top: cc.top.map((v) => +v.toFixed(1)), bot: cc.bot.map((v) => +v.toFixed(1)) })) };
+      const inkCols = dT.map((v, u) => (v === null ? null : u)).filter((u) => u !== null), mCols = mT.map((v, u) => (v === null ? null : u)).filter((u) => u !== null);
+      prof.extent = { drawing: [(Math.max(...inkCols) - Math.min(...inkCols) + 1) / sPx, (groundV - Math.min(...dT.filter((v) => v !== null))) / sPx].map((v) => +(v * 1000).toFixed(0)), model: [(Math.max(...mCols) - Math.min(...mCols) + 1) / sPx, (groundV - Math.min(...mT.filter((v) => v !== null))) / sPx].map((v) => +(v * 1000).toFixed(0)) };
+    }
+    return { iou: plain && uni ? inter / uni : null, border: dev, prof };
+  }, { W, H, CH, marks, groundV, sPx, side });
+  const opath = path.join(out, `${name}.png`); await (await cv.$('#c')).screenshot({ path: opath }); await cv.close();
+  // (lines are shares of its length from its nose: what the reference's landmarks say each is, what the model's are, the move)
+  const Ln = facts.size[0], nose = lm.nose?.[0] ?? Ln / 2, share = (xx) => +((nose - xx) / Ln).toFixed(3), lineOf = { cowl: 'A pillar foot', roofF: 'roof front', roofR: 'roof back', deck: 'C pillar foot' }, lines = {};
+  for (const [ln, n] of Object.entries(lineOf)) { const r = rows.find((q) => q.name === n && q.photo); if (r) lines[ln] = { photo: share(r.photo[0]), model: share(lm[n][0]), move: +(share(r.photo[0]) - share(lm[n][0])).toFixed(3) }; }
+  // (the profile in stations: every 2.5 % of its length from its nose, the drawing's height and the model's there, top and
+  // bottom, and over all its columns, the root mean square and the worst)
+  let profile = null;
+  if (sil.prof) {
+    const cols = sil.prof.cols, at = (sh) => cols.reduce((b, cc) => (Math.abs(cc.share - sh) < Math.abs(b.share - sh) ? cc : b)), stat = (key) => { const d = cols.map((cc) => cc[key][1] - cc[key][0]), worst = cols[d.reduce((b, v, i) => (Math.abs(v) > Math.abs(d[b]) ? i : b), 0)]; return { rms: +Math.sqrt(d.reduce((s, v) => s + v * v, 0) / d.length).toFixed(1), worst: { share: worst.share, mm: +(worst[key][1] - worst[key][0]).toFixed(1) } }; };
+    profile = { cols, stations: Array.from({ length: 41 }, (_, i) => { const cc = at(i / 40); return { share: +(i / 40).toFixed(3), top: cc.top, bot: cc.bot }; }), top: stat('top'), bottom: stat('bot'), extent: sil.prof.extent, columns: cols.length };
+  }
+  const res = { photo, kind: elev ? 'elevation' : 'photograph', side: side > 0 ? 'right' : 'left', camera: { at: cam.C.map((x) => +x.toFixed(3)), aim: cam.A.map((x) => +x.toFixed(3)), fov: +cam.fov.toPrecision(6), roll: +(((p[6] ?? 0) * 180) / Math.PI).toFixed(3), focalPx: +fpx2.toFixed(1) }, ...(elev ? { scale: { pxPerM: +(wbPx / wbM).toFixed(3), mmPerPx: +((1000 * wbM) / wbPx).toFixed(4), from: `the wheelbase: ${wbPx.toFixed(2)} px in the drawing, ${(wbM * 1000).toFixed(1)} mm in the model` } } : {}), matchedBy: wheelPts, rmsPx: +rms.toFixed(2), iou: sil.iou === null ? null : +sil.iou.toFixed(4), ...(sil.iou === null ? { iouSays: `no silhouette: the picture's border is not plain (it varies by ${sil.border} in its three channels together, more than 40)` } : {}), landmarks: rows, lines, profile, method: elev ? 'an elevation scaled by the wheelbase (its pixels between the wheel centres over the model\'s metres), placed and rolled to the wheels\' points by least squares; the model drawn from 1 km off with a lens to match, its outline laid over the drawing; in each column the model\'s top and bottom against the drawing\'s outermost ink above its ground, in mm' : "the camera (where it stood, its yaw, pitch and roll, its lens's height in degrees) that puts the model's tyres' outer faces (middle, top, bottom, front, back) where the photo has them, by Levenberg-Marquardt; each other landmark's miss in the picture, and on the car where the photo's ray meets the plane across the car through the model's landmark" };
+  fs.writeFileSync(path.join(out, `${name}.ref.json`), JSON.stringify(res, null, 1));
+  console.log(`${name}.png: ${res.kind}; ${elev ? `${res.scale.mmPerPx} mm a pixel (${res.scale.from}), roll ${res.camera.roll}°` : `camera at ${res.camera.at.join(', ')}, lens ${res.camera.fov}°`} (matched by ${wheelPts.length} wheel points to ${res.rmsPx} px rms); silhouette IoU ${res.iou ?? `none (${res.iouSays})`}`);
+  if (profile) {
+    console.log(`  extent: drawing ${profile.extent.drawing.join(' × ')} mm (length × height), model ${profile.extent.model.join(' × ')} mm`);
+    console.log(`  top profile, model minus drawing: rms ${profile.top.rms} mm, worst ${profile.top.worst.mm} mm at ${profile.top.worst.share} of its length from the nose; bottom: rms ${profile.bottom.rms} mm, worst ${profile.bottom.worst.mm} mm at ${profile.bottom.worst.share}`);
+    console.log(`  station  top: drawing  model   diff | bottom: drawing  model   diff (mm above ground)`);
+    for (const st of profile.stations.filter((_, i) => i % 2 === 0)) console.log(`  ${st.share.toFixed(3).padStart(6)}  ${String(st.top[0].toFixed(0)).padStart(13)} ${String(st.top[1].toFixed(0)).padStart(6)} ${String((st.top[1] - st.top[0]).toFixed(0)).padStart(6)} | ${String(st.bot[0].toFixed(0)).padStart(15)} ${String(st.bot[1].toFixed(0)).padStart(6)} ${String((st.bot[1] - st.bot[0]).toFixed(0)).padStart(6)}`);
+  }
+  for (const r of rows.filter((q) => !q.matched)) console.log(`  ${r.name.padEnd(18)} ${r.model ? `misses by ${String(r.missPx).padStart(5)} px; on the car, model minus reference: dx ${String(r.dx).padStart(5)} mm, dy ${String(r.dy).padStart(5)} mm` : 'not a landmark the model has'}`);
+  for (const [ln, v] of Object.entries(lines)) console.log(`  line ${ln.padEnd(6)} reference ${v.photo}, model ${v.model}: move it by ${v.move} of its length`);
+}
+// ---- grid: a picture's corner, enlarged, with its pixels numbered, so landmarks can be read off it as pixels ----
+async function gridJob(name, image, box, k) {
+  const buf = fs.readFileSync(image), mime = /\.png$/i.test(image) ? 'image/png' : 'image/jpeg', url = `data:${mime};base64,${buf.toString('base64')}`;
+  const [x0, y0, x1, y1] = (box ?? '').split(',').map(Number), K = Math.max(1, Math.min(12, Number(k ?? 4))), w = (x1 - x0) * K, h = (y1 - y0) * K;
+  if (!(w > 0 && h > 0)) { console.log(`${name}: grid needs a box "x0,y0,x1,y1" inside the picture`); return; }
+  const pg = await browser.newPage({ viewport: { width: w, height: h } });
+  await pg.setContent(`<body style="margin:0"><canvas id="c" width="${w}" height="${h}"></canvas><img id="i" src="${url}" style="display:none"></body>`);
+  await pg.waitForFunction(() => document.getElementById('i').complete);
+  await pg.evaluate(({ x0, y0, x1, y1, K, w, h }) => {
+    const x = document.getElementById('c').getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(document.getElementById('i'), x0, y0, x1 - x0, y1 - y0, 0, 0, w, h);
+    // (a line every pixel where the enlargement allows it, darker every 10, labelled every 50)
+    const step = K >= 8 ? 1 : 5; x.font = '11px sans-serif';
+    for (let v = Math.ceil(x0 / step) * step; v <= x1; v += step) { const X = (v - x0) * K + 0.5; x.strokeStyle = v % 50 === 0 ? 'rgba(0,90,255,0.9)' : v % 10 === 0 ? 'rgba(0,90,255,0.45)' : 'rgba(0,90,255,0.15)'; x.beginPath(); x.moveTo(X, 0); x.lineTo(X, h); x.stroke(); if (v % 50 === 0) { x.fillStyle = '#0030a0'; x.fillText(String(v), X + 2, 11); } }
+    for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) { const Y = (v - y0) * K + 0.5; x.strokeStyle = v % 50 === 0 ? 'rgba(0,90,255,0.9)' : v % 10 === 0 ? 'rgba(0,90,255,0.45)' : 'rgba(0,90,255,0.15)'; x.beginPath(); x.moveTo(0, Y); x.lineTo(w, Y); x.stroke(); if (v % 50 === 0) { x.fillStyle = '#0030a0'; x.fillText(String(v), 2, Y - 2); } }
+  }, { x0, y0, x1, y1, K, w, h });
+  const file = path.join(out, `${name}.png`); await (await pg.$('#c')).screenshot({ path: file }); await pg.close();
+  console.log(`${name}.png: ${image} from ${x0},${y0} to ${x1},${y1}, ${K}× (a line every ${K >= 8 ? 1 : 5} px, labelled every 50)`);
+}
 for (const arg of process.argv.slice(2)) {
-  const m = arg.match(/^(\w+):(.*)$/), cmd = m && ['parts', 'facts', 'pick', 'gap', 'clash', 'holes', 'sheet', 'shot', 'section', 'mass', 'lint', 'held'].includes(m[1]) ? m[1] : 'shot', [name, query, ...more] = (m && cmd !== 'shot' ? m[2] : arg.replace(/^shot:/, '')).split('|');
+  const m = arg.match(/^(\w+):(.*)$/), cmd = m && ['parts', 'facts', 'pick', 'gap', 'clash', 'holes', 'sheet', 'shot', 'section', 'mass', 'lint', 'held', 'ref', 'grid'].includes(m[1]) ? m[1] : 'shot', [name, query, ...more] = (m && cmd !== 'shot' ? m[2] : arg.replace(/^shot:/, '')).split('|');
   if (cmd === 'shot') await shot(name, query);
   else if (cmd === 'holes') await shot(name, `${query}&holes=1`);
   else if (cmd === 'clash') await clash(name, query, Number(more[0] ?? 8));
   else if (cmd === 'held') await heldJob(name, query, Number(more[0] ?? 4));
+  else if (cmd === 'ref') await refJob(name, query, more[0], more[1], more[2]);
+  else if (cmd === 'grid') await gridJob(name, query, more[0], more[1]);
   else if (cmd === 'sheet') await sheet(name, query);
   else if (cmd === 'section') await section(name, query, more[0]);
   else {
