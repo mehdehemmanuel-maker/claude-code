@@ -57,6 +57,7 @@ import { glow } from '../../engineering/thermal';
 import type { Jolt } from '../realize';
 import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
+import { checkDirective, directivePrompt, readPlain, type Parsed } from '../directive';
 import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../conceive';
 import { chartPanel } from './chart';
 import { Windows } from './windows';
@@ -1712,6 +1713,67 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 /** Words that clear the table: reset, clear, start over. */
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 const LIFE_WORDS = /^(?:nexus[,:]?\s*)?(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions)$|what can (?!you\b|i\b|we\b|nexus\b)(?:a |an |the )?\S|abilities of\s|(?:the )?law(?:s| graph)$|find (?:a )?law for\s|(?:profile|density of|derive)\s|(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?\S.*\b(?:last|lasts|live|lives)\b|(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(?:human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?[.!]?$|how long (?:does|would|will|can)\s|lifetime of\s|(?:time|clock|lifespan)\s+(?:of\s+)?\S|turnover$|a day in (?:the|a) body|what does (?:the|a) body do in a day|age\s+\d+|3d\s+\S)/i;
+// ---- what is said, read into a directive (src/nexus/directive.ts), and carried out ----------------------------------------
+let pendingDirective: { parsed: Parsed; answers: string[] } | null = null;
+/** The directive in what was said: Claude reads it where Claude can be asked (the directive and any questions, in one
+ *  call; an answer to what it asked is read into the directive it asked for), else it is read here by rule. */
+async function readSaid(text: string): Promise<Parsed> {
+  if (brain?.mode === 'claude' && brain.json) {
+    hud.set('thinking');
+    try {
+      const room = { made: [...new Set(shop.all().made.map((m) => m.name.replace(/\d+$/, '')))], people: [] as string[], ...(pendingDirective ? { pending: { directive: pendingDirective.parsed.directive, questions: pendingDirective.parsed.questions, answers: pendingDirective.answers } } : {}) };
+      const p = checkDirective(await brain.json(directivePrompt(text, room)), text);
+      if (p) { if (pendingDirective && !p.questions.length) pendingDirective = null; return p; }
+    } catch { /* read here below */ } finally { hud.set('idle'); }
+  }
+  return readPlain(text);
+}
+/** Its questions first: kept, and the next thing said is read as their answer. */
+function askFirst(p: Parsed): string { pendingDirective = { parsed: p, answers: [...(pendingDirective?.answers ?? [])] }; return p.questions.join(' '); }
+/** The inventory's own thing the words name: by its whole name (a kettle, a 3D printer), else the name it ends on (a
+ *  drill: the cordless drill), never a word inside another's name (a car is not a carabiner). */
+function namedInInventory(words: string): Item | null {
+  const w = words.trim().toLowerCase().replace(/\s+/g, ' '), forms = [...new Set([w, w.replace(/(?<=[^s])s$/, ''), w.replace(/es$/, '')])], ok = (i: Item) => i.kind !== 'material' && i.kind !== 'element';
+  for (const f of forms) { const byId = INVENTORY.get(f.replace(/ /g, '-')); if (byId && ok(byId)) return byId; }
+  const base = (i: Item) => i.name.toLowerCase().replace(/\s*\(.*\)\s*$/, '').replace(/,.*$/, '');
+  const all = [...INVENTORY.values()].filter(ok);
+  // its whole name, else the name it ends on (a drill: the cordless drill), products first
+  return all.find((i) => forms.includes(base(i))) ?? all.filter((i) => forms.some((f) => base(i).endsWith(` ${f}`))).sort((a, b) => (a.kind === 'product' ? 0 : 1) - (b.kind === 'product' ? 0 : 1))[0] ?? null;
+}
+/** A directive carried out: what it made, brought in or took away, said back. */
+async function perform(p: Parsed): Promise<string> {
+  const d = p.directive;
+  if (d.act === 'remove') return removeAsked(d.what);
+  if (d.act === 'make') {
+    // what the intent pipeline can read wants into is designed and built under the laws; what it cannot, but the
+    // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
+    const words = `${d.n > 1 ? `${d.n} different ` : 'a '}${d.what}`, c = conceive(words);
+    if (c.wants.length) return conceiveAndMake(words, d.n);
+    const inv = namedInInventory(d.what);
+    if (inv) { invLast = inv.id; return `${see3d(inv.id)} It is the inventory's own ${inv.name}, every part inside it down to its materials. Say "remove it" to put it away.`; }
+    const near = [...INVENTORY.values()].filter((i) => i.kind === 'product' && d.what.toLowerCase().split(/\s+/).some((x) => x.length > 3 && i.name.toLowerCase().includes(x))).slice(0, 4).map((i) => i.name);
+    return `I can't make "${d.what}" yet: I design what a thing must do (hold a weight up, carry a load, turn, swing open, slide, hold a liquid, enclose a space, keep warm, lift itself, float), and the inventory has no ${d.what}. Say what it must do${near.length ? `, or ask for ${near.join(', ')}` : ''}${brain?.mode === 'claude' ? '' : ' (where Claude can be asked, Claude reads anything into what it must do)'}.`;
+  }
+  if (d.act === 'person') {
+    const kind = d.who === 'fighter' ? 'person' : d.who === 'person' ? (d.sex === 'XX' ? 'woman' : d.sex === 'XY' ? 'man' : 'person') : d.who;
+    const said: string[] = []; for (let k = 0; k < d.n; k++) said.push(await inventoryStep(`generate a ${kind}`));
+    return `${d.n > 1 ? `${d.n} grown from their genomes; the last shown. ` : ''}${said.at(-1) ?? ''}`;
+  }
+  if (d.act === 'fight') return 'No fighters are in the room yet: say "spawn two fighters".';
+  return '';
+}
+/** What was asked to go: the 3D view of an inventory thing, a thing made here by its name, the last build, or all of it. */
+function removeAsked(what: string): string {
+  const said: string[] = [];
+  if (apart3d.visible) { apart3d.close(); said.push('the 3D view put away'); }
+  if (what !== 'last' && what !== 'all') {
+    const stem = what.toLowerCase().replace(/[^a-z0-9]/g, ''), named = shop.all().made.filter((m) => m.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(stem));
+    if (named.length && named.length < shop.all().made.length) { for (const m of named) { try { shop.run(`remove ${m.name}`, 'you'); } catch { /* gone already */ } } drawMade(); return `Took away ${named.length === 1 ? named[0]!.name : `${named.length} parts of ${what}`}${said.length ? `, and ${said.join(', ')}` : ''}.`; }
+  }
+  const made = shop.all().made.length + (empty ? 0 : run.m.parts.length);
+  if (!made && said.length) return `Done: ${said.join(', ')}.`;
+  return resetBuild();
+}
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text }); heardFeeling(text);
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
@@ -1730,6 +1792,9 @@ async function converse(text: string): Promise<void> {
   { const said = intentWords(text); if (said !== null) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // generation's words are done here and now, offline: no one is asked
   if (generationWords(text)) { line('you', text); let said: string; try { said = await makeStepLoaded(text); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; }
+  // anything else said: read into one directive (by Claude where Claude can be asked, else here by rule) and carried out,
+  // its questions asked first where it has any; what is not a directive goes on to be answered
+  { const p = await readSaid(text); if (p.directive.act !== 'pass') { line('you', text); let said: string; try { said = p.questions.length ? askFirst(p) : await perform(p); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; } if (pendingDirective) pendingDirective = null; }
   if (!brain) return;
   busy?.abort(); busy = new AbortController();
   line('you', text);
@@ -2112,7 +2177,9 @@ async function makeIt(words: string, answers: Record<string, string>, n: number,
 function intentWords(text: string): string | null {
   const t = text.trim();
   if (pendingAsk) {
-    if (/^(cancel|stop|never ?mind|forget it)\b/i.test(t)) { pendingAsk = null; return 'Left it.'; }
+    if (/^(cancel|stop|never ?mind|forget it|no thanks|leave it)\b/i.test(t)) { pendingAsk = null; return 'Left it.'; }
+    // a remove, or a new ask, is not an answer to what was asked: the question is dropped and it is done as said
+    { const d = readPlain(t).directive; if (d.act === 'remove' || d.act === 'make' || d.act === 'person' || d.act === 'fight') { pendingAsk = null; return null; } }
     const a = answersFrom(pendingAsk.c, t);
     if (a) {
       const p = pendingAsk, all = { ...p.answers, ...a }, c = conceive(p.words, all);
