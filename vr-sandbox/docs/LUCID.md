@@ -13,6 +13,11 @@ What is true now is marked **works**; what is half there, **partial**; what is n
   "spawn a kettle", "I want a house", "remove it", "get rid of the chair", "undo", "throw it away" all work.
 - **works**: a make goes to the intent pipeline when it can read what the thing must do into it, else to the inventory's
   own (a drill: the cordless drill, every part down to its materials).
+- **works**: "surprise me" (or "make something random", "you pick", the 🎲 chip, or a board's `surprise` step): Claude
+  picks where it can be asked, and its pick is used only if it reads as something the forge can do; elsewhere it is
+  picked here from 22 kinds of design the pipeline is tested to read (a bridge over so far, a raft that floats so much,
+  a cabin for so cold a winter), the inventory's real products, people or a fight. It goes ahead on what I would take
+  for anything not said (src/nexus/surprise.ts).
 - **next**: things the pipeline cannot yet read into wants (a guitar, a sword, a dog): Claude, where it can be asked,
   writes them as an ask the pipeline can make (an ask as data, src/nexus/spec.ts); here, more kinds of want.
 - **next**: every directive a node on a board, so what was said, what it was read as and what was done can be seen and
@@ -22,15 +27,22 @@ What is true now is marked **works**; what is half there, **partial**; what is n
 
 - **works (anatomical)**: a body grown from a genome, male or female, every organ, tissue and cell down to molecules;
   its proportions from measured anthropometry; hair, skin and eyes from its genes (src/nexus/life, src/nexus/anatomy.ts).
-- **works (physical, not yet in the room)**: sixteen rigid segments with de Leva's (1996) masses for its sex, fifteen
+- **works (physical)**: sixteen rigid segments with de Leva's (1996) masses for its sex, fifteen
   joints moving only through the AAOS ranges, each turned by a motor that is its muscles (stiff enough for what the
   joint carries, never more torque than the muscles give). It stands on its joints alone, falls when slack, a fighter
   holds its guard, and a jab and a cross reach 7 and 9 m/s (src/nexus/life/segments.ts, src/nexus/person.ts).
 - **works (behavioural, as facts)**: what a body senses (reach to its target, how hard its head was jolted in g, down,
   balance, stamina) is read out as facts a rules board reads.
-- **next**: people in the room: their skin drawn on the moving segments, "spawn a fighter", "spawn 5 random people",
-  "set her height to 1.70", male or female, adjusted by slider; each one's rules a board (IF kai_open THEN attack, IF
-  kai_hurt > 15 THEN cover) that runs while they do and that you can edit.
+- **works**: people in the room: "spawn a man", "spawn a fighter", "generate 5 random people", male or female, each
+  one's skin drawn on its moving segments (each arm its own surface, so lifting it does not pull the chest with it);
+  they stand clear of the pedestal, which they meet as a solid. Each one's rules are a board (IF kai_open THEN attack,
+  IF kai_hurt > 15 THEN cover) that runs while they do and that you can edit; "fight" sets two on each other.
+- **works (the grappling sandbox)**: grab anyone with either grip (or the mouse): the segment nearest your hand is held
+  to it by a soft spring, so its joints and weight answer your pull. "Kai on his back", "Kai face down" lay it down
+  soft (a quarter of its strength); "Kai stronger", "Kai weaker", "Kai strength 150%"; "Kai height 1.9", "Kai mass
+  70", "make Kai taller / heavier / more muscular / leaner / a woman / bald / blond" rebuild it in place; "get up"
+  sets it back on its feet.
+- **next**: a slider panel for every body setting, and positions by name (mount, side control, guard).
 - **next**: stepping: a body that steps to catch itself (a capture step), walks and moves its feet in a fight; getting
   up by its own muscles.
 

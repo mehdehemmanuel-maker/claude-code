@@ -58,6 +58,10 @@ import type { Jolt } from '../realize';
 import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
 import { checkDirective, directivePrompt, readPlain, type Parsed } from '../directive';
+import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../surprise';
+import { People, boardOfPerson, fighterBuild, factName as personFact, type Person } from '../person';
+import { personView, type PersonView } from './people3d';
+import { PARAMS as BODY_PARAMS, type BodyParams } from '../anatomy';
 import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../conceive';
 import { chartPanel } from './chart';
 import { Windows } from './windows';
@@ -1713,6 +1717,108 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 /** Words that clear the table: reset, clear, start over. */
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 const LIFE_WORDS = /^(?:nexus[,:]?\s*)?(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions)$|what can (?!you\b|i\b|we\b|nexus\b)(?:a |an |the )?\S|abilities of\s|(?:the )?law(?:s| graph)$|find (?:a )?law for\s|(?:profile|density of|derive)\s|(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?\S.*\b(?:last|lasts|live|lives)\b|(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(?:human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?[.!]?$|how long (?:does|would|will|can)\s|lifetime of\s|(?:time|clock|lifespan)\s+(?:of\s+)?\S|turnover$|a day in (?:the|a) body|what does (?:the|a) body do in a day|age\s+\d+|3d\s+\S)/i;
+// ---- people in the room, by real physics (src/nexus/person.ts), each drawn on its own segments (people3d.ts) --------------
+let peopleWorld: People | null = null, personSeq = 0, lastPeople: Person[] = [], lastKind: 'build' | 'people' = 'build';
+const personViews = new Map<Person, PersonView>(), peopleGroup = new THREE.Group(); peopleGroup.name = 'people'; scene.add(peopleGroup);
+const PEOPLE_NAMES = { XY: ['Kai', 'Leo', 'Ivo', 'Teo', 'Max', 'Rio', 'Jon', 'Sol', 'Bo', 'Oz', 'Ren', 'Eli'], XX: ['Mia', 'Ana', 'Zoe', 'Nia', 'Ada', 'Lua', 'Eva', 'Uma', 'Lia', 'Ivy', 'Noa', 'Isa'] } as const;
+/** A name not yet in the room, a woman's or a man's by its genome (numbered once each is taken). */
+function nameFor(sex: 'XX' | 'XY'): string {
+  const used = new Set(peopleWorld?.list.map((p) => p.name) ?? []), names = PEOPLE_NAMES[sex];
+  for (let k = 1; ; k++) for (const n of names) { const name = k === 1 ? n : `${n}${k}`; if (!used.has(name)) return name; }
+}
+async function peopleNow(): Promise<People> { const J = await physics(); return (peopleWorld ??= new People(J, 9.80665, (Date.now() % 1e9) | 0)); }
+/** Where you are and which way you face, level. */
+function facingYou(): { at: THREE.Vector3; f: THREE.Vector3; side: THREE.Vector3 } {
+  const at = new THREE.Vector3(); eyeOf(at); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+  return { at, f, side: new THREE.Vector3(-f.z, 0, f.x) };
+}
+/** Where on the floor a row of people can stand: so far ahead of you, moved along to the side until each of them is
+ *  clear of the pedestal (its radius and 0.6 m more: room to lie down beside it). */
+function clearSpots(c: THREE.Vector3, side: THREE.Vector3, n: number, gap: number): THREE.Vector3[] {
+  const R = pedestal.visible ? 0.5 * pedestal.scale.x + 0.6 : 0, spots = (o: number) => Array.from({ length: n }, (_, k) => c.clone().addScaledVector(side, o + (k - (n - 1) / 2) * gap));
+  for (let o = 0; o < 12; o += 0.1) { const s = spots(o); if (s.every((v) => Math.hypot(v.x - M.x, v.z - M.z) >= R)) return s; }
+  return spots(0);
+}
+/** The pedestal, as the people meet it: a cylinder as wide as it is drawn. */
+let pedestalSolid = -1;
+function pedestalForPeople(w: People): void { const k = pedestal.visible ? pedestal.scale.x : 0; if (pedestalSolid === k) return; pedestalSolid = k; w.solid('pedestal', k ? { cyl: { r: 0.5 * k, h: M.y } } : null, [M.x, M.y / 2, M.z]); }
+function drawPerson(p: Person): void { const v = personView(p, p.body); peopleGroup.add(v.group); personViews.set(p, v); boards?.put(`person-${personFact(p.name)}`, boardOfPerson(p)); }
+function dropPerson(p: Person): void { const v = personViews.get(p); if (v) { peopleGroup.remove(v.group); v.dispose(); personViews.delete(p); } peopleWorld?.remove(p); lastPeople = lastPeople.filter((x) => x !== p); }
+const sayPerson = (p: Person) => `${p.name} (${p.params.sex >= 0.5 ? 'female' : 'male'}, ${(p.H * 100).toFixed(0)} cm, ${p.params.mass.toFixed(0)} kg${p.fighter ? ', a fighter' : ''})`;
+/** People brought in, in a row in front of you and facing you, each grown from a genome of its own (a fighter's body
+ *  trained to its weight class), by real physics. */
+async function spawnPeople(who: 'person' | 'man' | 'woman' | 'child' | 'fighter', n: number, sex?: 'XX' | 'XY'): Promise<string> {
+  const w = await peopleNow(), { at: you, f, side } = facingYou(), spots = clearSpots(you.clone().addScaledVector(f, 2.2), side, n, 0.9), made: Person[] = [];
+  for (let k = 0; k < n; k++) {
+    const seed = (Date.now() ^ ((personSeq + 1) * 2654435761)) >>> 0, g = randomGenome(seed, sex ?? (who === 'man' ? 'XY' : who === 'woman' ? 'XX' : undefined));
+    let params: Partial<BodyParams> = phenotype(g).params; if (who === 'fighter') params = fighterBuild(params);
+    const at = spots[k]!, yaw = Math.atan2(you.x - at.x, you.z - at.z);
+    const name = nameFor(g.sex); personSeq++;
+    const p = w.add(name, params, { x: at.x, z: at.z, yaw }, { fighter: who === 'fighter' }); drawPerson(p); made.push(p);
+  }
+  lastPeople = made; lastKind = 'people';
+  return `${made.map(sayPerson).join('; ')}: ${n > 1 ? 'they stand' : 'stands'} in front of you by real physics, held up by ${n > 1 ? 'their' : 'its'} own joints and muscles. Grab one with your grip (or drag with the mouse); say "${made[0]!.name} on his back", "${made[0]!.name} stronger", "${made[0]!.name} height 1.9", "${made[0]!.name} jab", "fight", or "remove ${made[0]!.name}". ${n > 1 ? 'Their' : 'Its'} rules are boards (${made.map((p) => `"${p.name}'s rules"`).join(', ')}).`;
+}
+/** Two fighters set on each other: the last two in the room (two brought in if there are not), facing, a jab apart. */
+async function setFight(): Promise<string> {
+  const w = await peopleNow(); let fs = w.list.filter((p) => p.fighter); if (fs.length < 2) { await spawnPeople('fighter', 2 - fs.length); fs = w.list.filter((p) => p.fighter); }
+  const [a, b] = fs.slice(-2) as [Person, Person], { at: you, f, side } = facingYou(), gap = 0.9, mid = clearSpots(you.clone().addScaledVector(f, 2.4), side, 2, gap + 0.8).reduce((a, v) => a.add(v.multiplyScalar(0.5)), new THREE.Vector3());
+  a.x = mid.x - side.x * gap / 2; a.z = mid.z - side.z * gap / 2; b.x = mid.x + side.x * gap / 2; b.z = mid.z + side.z * gap / 2;
+  a.yaw = Math.atan2(b.x - a.x, b.z - a.z); b.yaw = Math.atan2(a.x - b.x, a.z - b.z);
+  for (const [p, q] of [[a, b], [b, a]] as const) { p.target = { person: q }; p.stance = 'guard'; p.ask('get up'); }
+  lastKind = 'people';
+  return `${a.name} and ${b.name} face each other a jab apart, guards up: each one's board ("${a.name}'s rules", "${b.name}'s rules") throws when it is open and in reach, covers when it is hit hard, and gets up after four seconds down. Change their rules on the boards; say "${a.name} jab", "push ${b.name}", or "stop".`;
+}
+const personNamed = (w: string): Person | null => peopleWorld?.list.find((p) => personFact(p.name) === personFact(w)) ?? null;
+/** A body rebuilt where it stands with what was changed (its height, mass, muscle, fat, sex, skin, hair). */
+function adjustPerson(p: Person, change: Partial<BodyParams>): string {
+  const w = peopleWorld!, params: Partial<BodyParams> = { ...p.params, ...change }, keep = { x: p.x, z: p.z, yaw: p.yaw }, fighter = p.fighter, name = p.name, target = p.target, power = p.power;
+  dropPerson(p); const q = w.add(name, params, keep, { fighter }); q.target = target; q.power = power; drawPerson(q);
+  for (const o of w.list) if (o.target?.person === p) o.target = { person: q };
+  return `${sayPerson(q)}: ${Object.entries(change).map(([k, v]) => `${BODY_PARAMS.find((x) => x.key === k)?.name ?? k} ${typeof v === 'number' ? +v.toFixed(2) : v}`).join(', ')}.`;
+}
+/** Words for a person in the room by name: a move, a position, its strength, its body. */
+function personWords(t: string): string | null {
+  if (!peopleWorld?.list.length) return null;
+  const raw = t.trim().replace(/[.!?]+$/, '');
+  let m = /^(?:push|shove|knock down)\s+(\w+)$/i.exec(raw); if (m) { const p = personNamed(m[1]!); if (p) return p.ask('push'); }
+  m = /^(?:put|lay|place|set)\s+(\w+)\s+(?:on|face)\s+(.+)$/i.exec(raw); if (m) { const p = personNamed(m[1]!); if (p) return p.ask(/down|front|belly|stomach/.test(m[2]!) ? 'face down' : 'on his back'); }
+  m = /^(?:make|let)\s+(\w+)\s+(.+)$/i.exec(raw) ?? /^(\w+)[,:]?\s+(.+)$/i.exec(raw); if (!m) return null;
+  const p = personNamed(m[1]!); if (!p) return null;
+  const what = m[2]!.toLowerCase().trim();
+  // its body: proportions and looks
+  const num = (re: RegExp) => { const x = re.exec(what); return x ? Number(x[1]) : null; };
+  const h = num(/^(?:height|tall)\s+(\d+(?:\.\d+)?)\s*(?:m|cm)?$/); if (h !== null) return adjustPerson(p, { height: h > 3 ? h / 100 : h });
+  const kg = num(/^(?:mass|weight|weigh)\s+(\d+(?:\.\d+)?)\s*(?:kg)?$/); if (kg !== null) return adjustPerson(p, { mass: kg });
+  for (const key of ['muscle', 'fat', 'shoulders', 'hips', 'legs', 'arms', 'head'] as const) { const v = num(new RegExp(`^${key}\\s+(\\d+(?:\\.\\d+)?)$`)); if (v !== null) return adjustPerson(p, { [key]: v }); }
+  const P = p.params, rel: Record<string, Partial<BodyParams>> = {
+    taller: { height: P.height + 0.06 }, shorter: { height: P.height - 0.06 }, heavier: { mass: P.mass * 1.12 }, lighter: { mass: P.mass / 1.12 },
+    'more muscular': { muscle: P.muscle * 1.15, mass: P.mass * 1.05 }, leaner: { fat: P.fat * 0.8, mass: P.mass * 0.95 }, fatter: { fat: P.fat * 1.25, mass: P.mass * 1.08 },
+    'a woman': { sex: 1, muscle: Math.min(P.muscle, 0.8) }, female: { sex: 1, muscle: Math.min(P.muscle, 0.8) }, 'a man': { sex: 0 }, male: { sex: 0 },
+    'darker skin': { skinDark: Math.min(1, P.skinDark + 0.2) }, 'lighter skin': { skinDark: Math.max(0, P.skinDark - 0.2) },
+    'long hair': { hairLength: 0.4 }, 'short hair': { hairLength: 0.02 }, bald: { hairLength: 0 }, blond: { hairDark: 0.1, hairRed: 0.1 }, 'dark hair': { hairDark: 0.9 }, 'red hair': { hairRed: 0.9, hairDark: 0.25 },
+  };
+  if (rel[what]) return adjustPerson(p, rel[what]!);
+  if (/^(?:remove|delete|go|leave|vanish)$/.test(what)) { dropPerson(p); return `${p.name} is gone.`; }
+  if (/^(?:fight|spar)\b/.test(what)) { p.stance = 'guard'; return p.ask('guard'); }
+  return p.ask(what);
+}
+/** Each frame: the hands holding people move what they hold, the people's world steps, and each is drawn where it is. */
+const personGrip: (number | null)[] = [null, null];
+let mouseGrip: { id: number; plane: THREE.Plane } | null = null;
+function stepPeople(dt: number): void {
+  if (!peopleWorld?.list.length) return;
+  for (let i = 0; i < 2; i++) { const id = personGrip[i]; if (id == null) continue; const g = renderer.xr.getControllerGrip(i), v = new THREE.Vector3(); g.getWorldPosition(v); peopleWorld.hold(id, [v.x, v.y, v.z]); }
+  pedestalForPeople(peopleWorld); peopleWorld.step(dt); for (const v of personViews.values()) v.update();
+}
+/** A hand closing near a person: the segment nearest it, held. */
+function gripPerson(i: number): string | null {
+  if (!peopleWorld?.list.length) return null;
+  const g = renderer.xr.getControllerGrip(i), v = new THREE.Vector3(); g.getWorldPosition(v);
+  const h = peopleWorld.grab([v.x, v.y, v.z], 0.15); if (!h) return null; personGrip[i] = h.id;
+  return `Holding ${h.person.name}'s ${h.person.rig.segments.find((s) => s.id === h.seg)!.name}.`;
+}
+function ungripPerson(i: number): void { const id = personGrip[i]; if (id != null) { peopleWorld?.letGo(id); personGrip[i] = null; } }
 // ---- what is said, read into a directive (src/nexus/directive.ts), and carried out ----------------------------------------
 let pendingDirective: { parsed: Parsed; answers: string[] } | null = null;
 /** The directive in what was said: Claude reads it where Claude can be asked (the directive and any questions, in one
@@ -1745,6 +1851,7 @@ async function perform(p: Parsed): Promise<string> {
   const d = p.directive;
   if (d.act === 'remove') return removeAsked(d.what);
   if (d.act === 'make') {
+    lastKind = 'build';
     // what the intent pipeline can read wants into is designed and built under the laws; what it cannot, but the
     // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
     const words = `${d.n > 1 ? `${d.n} different ` : 'a '}${d.what}`, c = conceive(words);
@@ -1754,17 +1861,43 @@ async function perform(p: Parsed): Promise<string> {
     const near = [...INVENTORY.values()].filter((i) => i.kind === 'product' && d.what.toLowerCase().split(/\s+/).some((x) => x.length > 3 && i.name.toLowerCase().includes(x))).slice(0, 4).map((i) => i.name);
     return `I can't make "${d.what}" yet: I design what a thing must do (hold a weight up, carry a load, turn, swing open, slide, hold a liquid, enclose a space, keep warm, lift itself, float), and the inventory has no ${d.what}. Say what it must do${near.length ? `, or ask for ${near.join(', ')}` : ''}${brain?.mode === 'claude' ? '' : ' (where Claude can be asked, Claude reads anything into what it must do)'}.`;
   }
-  if (d.act === 'person') {
-    const kind = d.who === 'fighter' ? 'person' : d.who === 'person' ? (d.sex === 'XX' ? 'woman' : d.sex === 'XY' ? 'man' : 'person') : d.who;
-    const said: string[] = []; for (let k = 0; k < d.n; k++) said.push(await inventoryStep(`generate a ${kind}`));
-    return `${d.n > 1 ? `${d.n} grown from their genomes; the last shown. ` : ''}${said.at(-1) ?? ''}`;
-  }
-  if (d.act === 'fight') return 'No fighters are in the room yet: say "spawn two fighters".';
+  if (d.act === 'person') return spawnPeople(d.who, d.n, d.sex);
+  if (d.act === 'fight') return setFight();
+  if (d.act === 'surprise') return surprise();
   return '';
+}
+/** Something picked at random and made: Claude picks where it can be asked (its pick used only if it reads as
+ *  something to make or bring in), else it is picked here from the asks the pipeline reads. */
+async function surprise(): Promise<string> {
+  const products = [...INVENTORY.values()].filter((i) => i.kind === 'product').map((i) => i.name);
+  let said: string | null = null, by = 'I picked';
+  if (brain?.mode === 'claude' && brain.json) {
+    hud.set('thinking');
+    try {
+      const room = { made: [...new Set(shop.all().made.map((m) => m.name.replace(/\d+$/, '')))], people: peopleWorld?.list.map((p) => p.name) ?? [], products };
+      said = checkSurprise(await brain.json(surprisePrompt(room, DESIGNS.slice(0, 8).map((d) => `build ${d(Math.random)}`))));
+      if (said && !['make', 'person', 'fight'].includes(readPlain(said).directive.act)) said = null; else if (said) by = 'Claude picked';
+    } catch { said = null; } finally { hud.set('idle'); }
+  }
+  said ??= surpriseHere(Math.random, products).say;
+  const asked = pendingAsk, out = await perform(readPlain(said));
+  // a surprise goes ahead on what I would take, not stopping to ask
+  if (pendingAsk && pendingAsk !== asked) { const p = pendingAsk; pendingAsk = null; void makeIt(p.words, {}, p.n); return `🎲 ${by}: "${said}". Making it with what I would take for what was not said (${p.c.questions.map((q) => q.ask.replace(/\?.*$/, '').toLowerCase()).join('; ')}): each step under the laws, then checked for real.`; }
+  return `🎲 ${by}: "${said}". ${out}`;
 }
 /** What was asked to go: the 3D view of an inventory thing, a thing made here by its name, the last build, or all of it. */
 function removeAsked(what: string): string {
   const said: string[] = [];
+  // people: by name, all of them, or the last brought in when they were the last thing asked for
+  if (peopleWorld?.list.length) {
+    const named = personNamed(what), group = /^(?:people|persons?|humans?|everyone|everybody|them all|fighters?|men|women|man|woman|guys?|bodies|body)$/i.test(what);
+    if (named) { dropPerson(named); return `${named.name} is gone.`; }
+    if (group || what === 'all' || (what === 'last' && lastKind === 'people')) {
+      const go = what === 'last' ? lastPeople.slice() : /fighter/i.test(what) ? peopleWorld.list.filter((p) => p.fighter) : peopleWorld.list.slice();
+      for (const p of go) dropPerson(p); said.push(`${go.length} ${go.length === 1 ? 'person' : 'people'} gone`); lastKind = 'build';
+      if (what !== 'all') return `${said.join(', ')}.`;
+    }
+  }
   if (apart3d.visible) { apart3d.close(); said.push('the 3D view put away'); }
   if (what !== 'last' && what !== 'all') {
     const stem = what.toLowerCase().replace(/[^a-z0-9]/g, ''), named = shop.all().made.filter((m) => m.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(stem));
@@ -1786,6 +1919,8 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  if (/^(?:stop|stop fighting|break|break it up)$/i.test(text.trim()) && peopleWorld?.list.some((p) => p.target)) { line('you', text); for (const p of peopleWorld.list) { p.target = null; p.move = null; } say('They stop: no target, guards held.', undefined, 'nexus'); return; }
   if (/^pipeline\s+new\b/i.test(text.trim()) || /^(inventory|weather)\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
   // life and time, read here: grow a body from a genome, how long a thing lasts where it is, a thing's clock, a body's day or age
   if (LIFE_WORDS.test(text.trim())) { line('you', text); try { say(await inventoryStep(text.trim().replace(/^nexus[,:]?\s*/i, '')), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
@@ -2088,6 +2223,12 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline', i
       if (!d) throw new Error(devices.list.length ? `No device called ${arg.split(' ')[0]}: there are ${devices.list.map((x) => x.id).join(', ')}.` : 'No device is out yet: build one in the workshop first ("cell build rover").');
       const said = devices.command(d, m2![2]!); if (/does not know/.test(said)) throw new Error(said); return said;
     }
+    case 'surprise': return surprise();
+    case 'person': {
+      const m2 = /^(\S+)\s+(.+)$/.exec(arg), p = m2 ? personNamed(m2[1]!) : null;
+      if (!p) throw new Error(`No one called ${arg.split(' ')[0] || '…'} is in the room${peopleWorld?.list.length ? `: there are ${peopleWorld.list.map((x) => x.name).join(', ')}` : ''}.`);
+      return p.ask(m2![2]!);
+    }
     case 'robot': {
       const m2 = /^(\S+)\s+(.+)$/.exec(arg), bot = m2 ? fleet.bot(m2[1]!) : null;
       if (!bot) throw new Error(`No robot called ${arg.split(' ')[0] || '…'}: the robots are ${fleet.bots.map((b) => factName(b.name)).join(', ')}.`);
@@ -2125,9 +2266,9 @@ const flowApi: FlowApi = {
     try { return await flowAct(what, signal, who, _input); } finally { for (const w of windows.list()) if (w.state === 'open' && !was.has(w.id)) windows.min(w.id); }
   },
   ai: (prompt, _input, signal) => flowAi(prompt, signal),
-  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }),
+  facts: () => ({ ...factsNow(), ...shop.facts(), ...fleet.facts(), ...(peopleWorld?.facts() ?? {}), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }),
   // what is made and the facts as the workshop reads them, and the robots' numbers beside them
-  reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
+  reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...(peopleWorld?.facts() ?? {}), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
 // ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
@@ -2409,7 +2550,7 @@ function stepDevices(dt: number): void {
   }
 }
 // a device's program runs often: its rules are read five times a second while one is out
-window.setInterval(() => { if (devices.list.length) boards?.event(); }, 200);
+window.setInterval(() => { if (devices.list.length || peopleWorld?.list.length) boards?.event(); }, 200);
 /** The workshop's build of a recipe, as a pipeline on the boards, made if it is not there and run. */
 async function buildOnBoard(r: Recipe, show = true): Promise<string> {
   if (!boards) return 'The boards are still loading: a moment.';
@@ -2639,6 +2780,19 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 renderer.domElement.addEventListener('pointermove', (e) => { if (!boardMouse || !boards) return; ray.setFromCamera(ndc(e), camera); boards.move(ray); });
 window.addEventListener('pointerup', () => { if (!boardMouse) return; boardMouse = false; boards?.up(); orbit.enabled = true; });
 
+// a person dragged by the mouse: the segment the pointer is on held, carried on a plane facing the camera
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (renderer.xr.isPresenting || !peopleWorld?.list.length || winMouse || phoneClick || boardMouse) return;
+  ray.setFromCamera(ndc(e), camera);
+  let best: { at: THREE.Vector3; d: number } | null = null;
+  for (const p of peopleWorld.list) for (const x of p.poses()) { const c = new THREE.Vector3(...x.at), d = ray.ray.distanceToPoint(c); if (d < 0.12 && (!best || ray.ray.origin.distanceTo(c) < ray.ray.origin.distanceTo(best.at))) best = { at: c, d }; }
+  if (!best) return;
+  const h = peopleWorld.grab([best.at.x, best.at.y, best.at.z], 0.15); if (!h) return;
+  const n = new THREE.Vector3(); camera.getWorldDirection(n); mouseGrip = { id: h.id, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n.negate(), best.at) }; orbit.enabled = false;
+  status.textContent = `Holding ${h.person.name}'s ${h.person.rig.segments.find((s) => s.id === h.seg)!.name}: drag, then let go.`;
+});
+renderer.domElement.addEventListener('pointermove', (e) => { if (!mouseGrip || !peopleWorld) return; ray.setFromCamera(ndc(e), camera); const at = new THREE.Vector3(); if (ray.ray.intersectPlane(mouseGrip.plane, at)) peopleWorld.hold(mouseGrip.id, [at.x, Math.max(0.02, at.y), at.z]); });
+window.addEventListener('pointerup', () => { if (!mouseGrip) return; peopleWorld?.letGo(mouseGrip.id); mouseGrip = null; orbit.enabled = true; });
 let down: [number, number, number] | null = null;
 renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY, performance.now()]; });
 // a click is a press that barely moved: a laser pointer's hand shakes, so it is allowed a little
@@ -2665,9 +2819,10 @@ function chipGrid(list: [string, () => void][], cols: number, w: number, h: numb
 }
 const SUGGESTIONS = ['a cart that carries 150 kg at 8 km/h', 'a cabin of 40 m² for 2 people where winter gets to -25 °C', 'a drone that carries a 2 kg parcel 5 km at 15 m/s', 'a boat that carries 400 kg 20 km at 3 m/s', 'an electric car for 4 people that goes 400 km at 120 km/h', 'a 3D printer for parts up to 250 mm'];
 const make = (w: string) => { newOpen = false; line('you', w); say(world2.make(w)); };
-const suggest = chipGrid([...SUGGESTIONS.map((w): [string, () => void] => [`build ${w}`, () => make(w)]), ['… type your own', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }]], 1, 0.46, 0.042, (i) => (i === SUGGESTIONS.length ? '#b388ff' : '#4dd0e1'), 1.9);
+const suggest = chipGrid([['🎲 Surprise me', () => { newOpen = false; line('you', 'surprise me'); void surprise().then(say); }], ...SUGGESTIONS.map((w): [string, () => void] => [`build ${w}`, () => make(w)]), ['… type your own', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }]], 1, 0.46, 0.042, (i) => (i === 0 ? '#ffd740' : i === SUGGESTIONS.length + 1 ? '#b388ff' : '#4dd0e1'), 1.9);
 const suggestBox = document.createElement('div');
 suggestBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px';
+{ const b2 = document.createElement('button'); b2.textContent = '🎲 Surprise me'; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #ffd740;background:rgba(3,14,22,0.85);color:#fff3c4;cursor:pointer'; b2.onclick = () => { line('you', 'surprise me'); void surprise().then(say); }; suggestBox.appendChild(b2); }
 for (const w of SUGGESTIONS) { const b2 = document.createElement('button'); b2.textContent = `Build ${w}`; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer'; b2.onclick = () => make(w); suggestBox.appendChild(b2); }
 chat.prepend(suggestBox);
 let menuOpen = false;
@@ -2917,6 +3072,8 @@ for (let i = 0; i < 2; i++) {
   // the grip on the right hand holds: a node on the board to move it, the board's sheet to slide it, a window (its bar,
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
   ctl.addEventListener('squeezestart', () => {
+    // a person within reach of either hand is held by it
+    { const said = gripPerson(i); if (said) { say(said, undefined, 'nexus'); return; } }
     if (handOf[i] !== 'right') { togglePause(); return; }
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
     // a part of what is out in 3D, gripped: in your hand, as it is, to turn and look at close; let go and it goes home
@@ -2927,7 +3084,7 @@ for (let i = 0; i < 2; i++) {
     if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
     if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
   });
-  ctl.addEventListener('squeezeend', () => { if (gripHeld3d === i) { apart3d.release(); gripHeld3d = -1; } });
+  ctl.addEventListener('squeezeend', () => { ungripPerson(i); if (gripHeld3d === i) { apart3d.release(); gripHeld3d = -1; } });
   ctl.addEventListener('squeezeend', () => { if (boardHand === i && boardBy === 'squeeze') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'squeeze') { winHand = -1; windows.release(); } });
 }
 // ---- the pointer: each hand's beam ends on the first thing it touches, with a ball where it touches ----------------------
@@ -3024,7 +3181,7 @@ async function boot() {
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });
@@ -3087,6 +3244,11 @@ async function boot() {
     playingNow: () => (playing ? { frames: playing.track.frames.length, names: playing.track.names.length } : null),
     // for a test: the camera on what was made under a name's stem, from its front and a little above
     lookAtMade: (stem: string) => { const ms = shop.all().made.filter((m) => m.name.startsWith(stem)); if (!ms.length) return false; const lo = [0, 1, 2].map((i) => Math.min(...ms.map((m) => m.at[i]! - [m.w, m.h, m.d][i]! / 2))), hi = [0, 1, 2].map((i) => Math.max(...ms.map((m) => m.at[i]! + [m.w, m.h, m.d][i]! / 2))), c = lo.map((v, i) => (v + hi[i]!) / 2), r = Math.max(...hi.map((v, i) => v - lo[i]!)); framing = false; orbit.target.set(c[0]!, c[1]!, c[2]!); camera.position.set(c[0]! + r * 0.9, c[1]! + r * 0.7, c[2]! + r * 1.4); orbit.update(); return true; },
+    lookFrom: (x: number, y: number, z: number, tx: number, ty: number, tz: number) => { camera.position.set(x, y, z); orbit.target.set(tx, ty, tz); orbit.update(); },
+    peopleNow: () => (peopleWorld?.list ?? []).map((p) => ({ name: p.name, fighter: p.fighter, head: +p.headY().toFixed(3), down: p.down(), at: [+p.x.toFixed(2), +p.z.toFixed(2)], mass: +p.params.mass.toFixed(1), height: +p.H.toFixed(3), sex: p.params.sex, hits: p.hits, stamina: Math.round(p.stamina), moving: p.move?.name ?? null, thrown: p.thrown, facts: p.facts() })),
+    grabPersonAt: (name: string, seg: string, to: [number, number, number]) => { const p = personNamed(name); if (!p || !peopleWorld) return null; const c = p.at(seg as Parameters<Person['at']>[0]), h = peopleWorld.grab(c, 0.05); if (!h) return null; peopleWorld.hold(h.id, to); return h.id; },
+    letGoPerson: (id: number) => peopleWorld?.letGo(id),
+    restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first

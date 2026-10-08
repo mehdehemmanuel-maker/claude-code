@@ -13,6 +13,8 @@ export type Directive =
   | { act: 'person'; who: 'person' | 'man' | 'woman' | 'child' | 'fighter'; n: number; sex?: 'XX' | 'XY'; words: string }
   /** the fighters in the room set on each other */
   | { act: 'fight'; words: string }
+  /** something picked at random to be made or brought in (src/nexus/surprise.ts) */
+  | { act: 'surprise'; words: string }
   /** take away what was made last, everything, or what is named */
   | { act: 'remove'; what: string; words: string }
   /** not a directive: talk, a question, a command of its own; passed on as it was said */
@@ -22,6 +24,7 @@ export interface Parsed { directive: Directive; questions: string[]; by: 'claude
 const NUM: Record<string, number> = { a: 1, an: 1, one: 1, another: 1, some: 2, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, 'a couple of': 2, 'a few': 3, several: 3 };
 const LEAD = /^(?:(?:please|pls|hey|yo|ok(?:ay)?|so|now|nexus|claude|jarvis)[,:!]?\s+|(?:can|could|would|will) you\s+|(?:i want you to|i'd like you to|i would like you to|go ahead and|let's|lets|try to|just)\s+)+/i;
 const MAKE = /^(?:generate|spawn|summon|create|make|build|design|craft|produce|conjure|construct|give|bring|put|add|place|drop|get|show|render|model|grow|draw|i want|i need|i'd like|i would like|id like|let me have|let me see|can i have|can i get|gimme|i wanna see|i want to see)\b\s*(?:me|us|out|in|up|here)?\s*/i;
+const SURPRISE = /^(?:surprise me|(?:make|build|generate|spawn|show|give|create)(?: me)? (?:something|anything)(?: (?:random|cool|new|fun|surprising|interesting|crazy|wild))?(?: for me)?|(?:something|anything) (?:random|at random)|random(?: (?:thing|build|stuff|scene|invention|generation|idea))?|roll the dice|dealer'?s choice|you (?:pick|choose|decide)|pick (?:something|anything)(?: for me)?|anything|whatever|go wild|i'?m feeling lucky|feeling lucky|🎲)$/i;
 const REMOVE = /^(?:remove|delete|get rid of|throw (?:away|out)|take (?:away|out)|discard|despawn|unspawn|destroy|erase|bin|trash|scrap|dismiss|clear(?: away)?|put away|close|undo|lose|kill)\b\s*/i;
 const PEOPLE = /^(?:(?:mma |ufc |martial arts? )?(?:fighters?|boxers?|kickboxers?|wrestlers?|brawlers?)|(?:humans?|persons?|people|men|man|women|woman|guys?|lad(?:y|ies)|girls?|boys?|child(?:ren)?|kids?|bab(?:y|ies)|crowd)|(?:mma|ufc)(?: (?:guy|man|woman|human))?)\b/i;
 
@@ -29,6 +32,7 @@ const PEOPLE = /^(?:(?:mma |ufc |martial arts? )?(?:fighters?|boxers?|kickboxers
  *  fight; anything else passed on as it was said. */
 export function readPlain(text: string): Parsed {
   const heard = text.trim(), t = heard.replace(LEAD, '').replace(/[.!]+$/, '').trim(), pass = (): Parsed => ({ directive: { act: 'pass', words: heard }, questions: [], by: 'nexus', heard });
+  if (SURPRISE.test(t)) return { directive: { act: 'surprise', words: heard }, questions: [], by: 'nexus', heard };
   if (/^(?:fight|spar|box|start (?:the )?fight|let them fight|make them fight|have them fight|fight each other)\b/i.test(t)) return { directive: { act: 'fight', words: heard }, questions: [], by: 'nexus', heard };
   // "throw it away", "take the chair out", "put that away"
   const away = /^(?:throw|take|put|clear)\s+(.+?)\s+(?:away|out|off)$/i.exec(t);
@@ -73,12 +77,13 @@ export function readPlain(text: string): Parsed {
 /** What Claude is asked: the person's words, the directives there are, and what is in the room; a JSON answer. */
 export function directivePrompt(text: string, room: { made: string[]; people: string[]; pending?: { directive: Directive; questions: string[]; answers: string[] } }): string {
   return `You read what a person in a VR room says into ONE directive for the room to carry out. Reply with JSON only:
-{"directive": {"act": "make" | "person" | "fight" | "remove" | "pass", ...}, "questions": [string]}
+{"directive": {"act": "make" | "person" | "fight" | "surprise" | "remove" | "pass", ...}, "questions": [string]}
 
 The directives:
 - make: {"act":"make","what":"<the thing, plain words, with any sizes or needs said>","n":<how many, 1-12>} for anything to build, generate, spawn or show: a car, a chair, a guitar, a drone, a house, a sword. Keep the person's own numbers in "what".
 - person: {"act":"person","who":"person"|"man"|"woman"|"child"|"fighter","n":<1-12>,"sex":"XX"|"XY" (only if said)} for people or bodies: "an MMA fighter", "five random people", "a woman".
 - fight: {"act":"fight"} to set the fighters in the room on each other.
+- surprise: {"act":"surprise"} when they ask you to pick: "surprise me", "make something random", "anything", "you choose".
 - remove: {"act":"remove","what":"last"|"all"|"<what is named>"} to take something away: remove it, delete that, get rid of the chair, undo, clear everything.
 - pass: {"act":"pass"} for anything else: a question, talk, a change to what is there ("make it bigger"), a command for a panel.
 
@@ -99,6 +104,7 @@ export function checkDirective(j: unknown, heard: string): Parsed | null {
     case 'make': return typeof d.what === 'string' && d.what.trim() ? { directive: { act: 'make', what: d.what.trim(), n, words: heard }, questions: qs, by: 'claude', heard } : null;
     case 'person': { const who = ['person', 'man', 'woman', 'child', 'fighter'].includes(String(d.who)) ? (d.who as 'person') : 'person'; return { directive: { act: 'person', who, n, ...(d.sex === 'XX' || d.sex === 'XY' ? { sex: d.sex } : {}), words: heard }, questions: qs, by: 'claude', heard }; }
     case 'fight': return { directive: { act: 'fight', words: heard }, questions: qs, by: 'claude', heard };
+    case 'surprise': return { directive: { act: 'surprise', words: heard }, questions: [], by: 'claude', heard };
     case 'remove': return { directive: { act: 'remove', what: typeof d.what === 'string' && d.what.trim() ? d.what.trim() : 'last', words: heard }, questions: qs, by: 'claude', heard };
     case 'pass': return { directive: { act: 'pass', words: heard }, questions: [], by: 'claude', heard };
     default: return null;

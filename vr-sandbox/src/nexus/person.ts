@@ -13,7 +13,8 @@
 // centre of mass is off them.
 
 import type { Jolt } from './realize';
-import { layOut, type BodyParams, type V3 } from './anatomy';
+import { layOut, type Body, type BodyParams, type V3 } from './anatomy';
+import type { Board } from './boards';
 import { rigOf, centreOf, type Joint, type Rig, type Segment, type SegmentId } from './life/segments';
 
 type Q = [number, number, number, number];
@@ -136,19 +137,22 @@ function loadOf(rig: Rig, j: Joint): { m: number; d: number } {
 
 /** A person: a body, its rig, its joints driven toward the pose asked of it, and what it senses. */
 export class Person {
-  readonly rig: Rig; readonly params: BodyParams; readonly H: number;
+  readonly rig: Rig; readonly params: BodyParams; readonly H: number; readonly body: Body;
+  /** how long it has been down, s (not counted while it lies where it was laid) */ downFor = 0; /** laid down on purpose */ laid = false;
   readonly parts: Live[] = []; readonly joints: LiveJoint[] = [];
   /** where it stands and which way it faces (radians about +y: 0 faces +z) */ x: number; z: number; yaw: number;
   stance: keyof typeof STANCES = 'stand';
   /** each stance's whole pose, its legs solved for this body */ readonly stancePoses: Record<keyof typeof STANCES, Pose>;
   /** the move under way, and how far into it (s) */ move: Move | null = null; moveT = 0; queue: string[] = [];
   /** muscles on (1) or slack (0): a body knocked out goes slack */ tone = 1; dazed = 0;
-  target: { person?: Person; point?: V3 } | null = null; hits = 0; stamina = 100; struck = 0;
+  /** its strength, over what its muscle gives (set by you: a partner who resists less, or more) */ power = 1;
+  /** how its whole body is turned from upright, where it is laid down (on its back, face down) */ private root: Q = [0, 0, 0, 1];
+  target: { person?: Person; point?: V3 } | null = null; hits = 0; stamina = 100; struck = 0; /** strikes it has thrown */ thrown = 0;
   private hurtLog: { t: number; g: number }[] = []; private time = 0; private standHead: number; private headV: V3 = [0, 0, 0];
   log: string[] = [];
 
   constructor(readonly J: Jolt, readonly world: People, readonly name: string, params: Partial<BodyParams>, at: { x: number; z: number; yaw: number }, readonly group: number, density: number, readonly fighter = false) {
-    const body = layOut(params); this.params = body.params; this.H = body.H; this.rig = rigOf(body, density);
+    const body = layOut(params); this.body = body; this.params = body.params; this.H = body.H; this.rig = rigOf(body, density);
     this.stancePoses = Object.fromEntries(Object.entries(STANCES).map(([k, st]) => [k, { ...legsFor(this.rig, st), ...st.upper }])) as Record<keyof typeof STANCES, Pose>;
     this.x = at.x; this.z = at.z; this.yaw = at.yaw; this.stance = fighter ? 'guard' : 'stand';
     const bi = world.bi, filter = new J.GroupFilterTable(SEG_IDS.length);
@@ -210,7 +214,7 @@ export class Person {
    *  as stiff as gravity's pull on what it carries (κ = 1) is on the edge of falling over; people hold theirs a few times
    *  stiffer by holding both sides of each joint at once. */
   drive(pose: Pose, hz: number, zeta = 1): void {
-    const J = this.J, k = this.tone * (this.dazed > 0 ? 0.35 : 1), kappa = 12 * (hz / 5) ** 2;
+    const J = this.J, k = this.tone * this.power * (this.dazed > 0 ? 0.35 : 1), kappa = 12 * (hz / 5) ** 2;
     for (const lj of this.joints) {
       const m = lj.load.m, d = Math.max(0.15, lj.load.d), stiff = kappa * m * this.world.g * d, damp = 2 * zeta * Math.sqrt(stiff * m * d * d);
       const a = pose[lj.j.id] ?? [0, 0, 0], tq = lj.j.torque;
@@ -231,18 +235,19 @@ export class Person {
    *  the joint between them. */
   pose(pose: Pose, still = true): void {
     const J = this.J, bi = this.world.bi, R = new Map<SegmentId, { q: Q; t: V3 }>();
-    R.set('pelvis', { q: [0, 0, 0, 1], t: [0, 0, 0] });
+    const rq = this.root, rc = this.rig.segments.find((x) => x.id === 'pelvis')!; const rcen = centreOf(rc);
+    R.set('pelvis', { q: rq, t: sub(rcen, qRot(rq, rcen)) });
     for (const lj of this.joints) {
       const p = R.get(lj.j.parent)!, rel = qMul(qMul(lj.frame, this.turnOf(lj, pose[lj.j.id] ?? [0, 0, 0])), qConj(lj.frame));
       const q = qMul(p.q, rel), t = sub(addv(qRot(p.q, lj.j.at), p.t), qRot(q, lj.j.at));
       R.set(lj.j.child, { q, t });
     }
-    // the lowest corner of the feet on the floor
+    // the lowest point of it on the floor: the corners of its boxes, the ends of its capsules
     let low = Infinity;
     for (const l of this.parts) {
-      if (l.seg.shape.kind !== 'box' || !l.seg.id.startsWith('foot')) continue;
-      const m = R.get(l.seg.id)!, h = l.seg.shape.half;
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { const corner = addv(l.rest.c, [sx * h[0], sy * h[1], sz * h[2]]); low = Math.min(low, addv(qRot(m.q, corner), m.t)[1]); }
+      const m = R.get(l.seg.id)!, sh = l.seg.shape;
+      if (sh.kind === 'box') { const h = sh.half; for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { const corner = addv(l.rest.c, [sx * h[0], sy * h[1], sz * h[2]]); low = Math.min(low, addv(qRot(m.q, corner), m.t)[1]); } }
+      else for (const e of [l.seg.a, l.seg.b]) low = Math.min(low, addv(qRot(m.q, e), m.t)[1] - sh.r);
     }
     const lift = 0.002 - low, yawQ = qAxis([0, 1, 0], this.yaw);
     for (const l of this.parts) {
@@ -254,17 +259,27 @@ export class Person {
 
   /** Ask it to do something by name: a move, a stance, or what it does to stand, rest or go slack. */
   ask(what: string): string {
-    const w = what.trim().toLowerCase();
+    const w = what.trim().toLowerCase().replace(/[.!?]+$/, '');
+    const them = '(?:him|her|it|them|yourself|himself|herself|itself)', its = '(?:his|her|its|their|your)';
     if (w === 'attack') { const r = this.world.rand(); let acc = 0, pick = MIX[0]![0]; for (const [m, p] of MIX) { acc += p; if (r < acc) { pick = m; break; } } return this.ask(pick); }
     if (w === 'combo' || w === 'one two') { this.queue.push('jab', 'cross'); return this.next(); }
-    if (MOVES[w]) { if (this.down() || this.tone === 0) return `${this.name} is down`; if (this.move) { if (this.queue.length < 2) this.queue.push(w); return `${this.name} will ${w} next`; } this.move = MOVES[w]!; this.moveT = 0; this.stamina = Math.max(0, this.stamina - (w === 'cover' ? 1 : 4)); return `${this.name} throws a ${w}`; }
+    if (MOVES[w]) { if (this.down() || this.tone === 0) return `${this.name} is down`; if (this.move) { if (this.queue.length < 2) this.queue.push(w); return `${this.name} will ${w} next`; } this.move = MOVES[w]!; this.moveT = 0; if (w !== 'cover') this.thrown++; this.stamina = Math.max(0, this.stamina - (w === 'cover' ? 1 : 4)); return `${this.name} throws a ${w}`; }
     if (w === 'guard' || w === 'fight') { this.stance = 'guard'; return `${this.name} puts its guard up`; }
-    if (w === 'stand' || w === 'relax') { this.stance = 'stand'; this.move = null; return `${this.name} stands easy`; }
-    if (w === 'get up' || w === 'stand up' || w === 'reset') { this.tone = 1; this.dazed = 0; this.move = null; this.pose(this.stancePoses[this.stance]); return `${this.name} is set back on its feet (getting up by its own muscles is not modelled yet)`; }
+    if (w === 'stand easy') { this.stance = 'stand'; this.move = null; return `${this.name} stands easy`; }
+    if (w === 'get up' || w === 'stand up' || w === 'reset' || w === 'stand') { this.tone = 1; this.dazed = 0; this.move = null; this.root = [0, 0, 0, 1]; this.laid = false; if (this.power < 0.5) this.power = 1; this.pose(this.stancePoses[this.stance]); return `${this.name} is set back on its feet (getting up by its own muscles is not modelled yet)`; }
     if (w === 'go limp' || w === 'limp' || w === 'ragdoll' || w === 'knock out') { this.tone = 0; this.move = null; return `${this.name} goes slack: only its joints' limits hold it now`; }
+    if (new RegExp(`^(?:back|supine|lie down|lay ${them} down)$|\\bon ${its} back\\b|\\b(?:lie|lay) (?:${them} )?(?:down )?on ${its} back\\b`).test(w)) { this.lay([-Math.SQRT1_2, 0, 0, Math.SQRT1_2], 0.25); return `${this.name} is laid on its back, its muscles soft (a quarter of their strength): grab it and move it`; }
+    if (new RegExp(`^(?:prone|face ?down)$|\\bface ?down\\b|\\bon ${its} (?:front|belly|stomach|face)\\b`).test(w)) { this.lay([Math.SQRT1_2, 0, 0, Math.SQRT1_2], 0.25); return `${this.name} is laid face down, its muscles soft`; }
+    const pw = /^(?:strength|strong|power)\s+(\d+(?:\.\d+)?)\s*(%?)$/.exec(w);
+    if (pw || /^(?:stronger|weaker|full strength|resist|relax|go soft|soft)$/.test(w)) {
+      this.power = pw ? Math.max(0, Math.min(3, Number(pw[1]) / (pw[2] ? 100 : 1))) : w === 'stronger' ? Math.min(3, this.power * 1.5) : w === 'weaker' ? this.power / 1.5 : w === 'full strength' || w === 'resist' ? 1 : 0.25;
+      return `${this.name}'s muscles at ${Math.round(this.power * 100)} % of their strength (${this.joints.find((j) => j.j.id === 'hipL')!.j.torque.flex[0] * this.power | 0} N·m at the hip, extending)`;
+    }
     if (w === 'push') { const t = this.parts.find((p) => p.seg.id === 'thorax')!.body, f = qRot(qAxis([0, 1, 0], this.yaw), [0, 0, -1]); this.world.bi.AddImpulse(t.GetID(), new this.J.Vec3(...scale(f, 60))); return `${this.name} is pushed back with 60 N·s at the chest`; }
-    return `${this.name} cannot "${what}": it can ${[...Object.keys(MOVES), 'attack', 'combo', 'guard', 'stand', 'get up', 'go limp', 'push'].join(', ')}`;
+    return `${this.name} cannot "${what}": it can ${[...Object.keys(MOVES), 'attack', 'combo', 'guard', 'stand', 'get up', 'go limp', 'push', 'on its back', 'face down', 'strength 150%', 'stronger', 'weaker', 'soft'].join(', ')}`;
   }
+  /** Laid down where it is: its whole body turned from upright, its muscles at so much of their strength. */
+  lay(root: Q, power: number): void { this.laid = true; this.root = root; this.power = power; this.tone = 1; this.dazed = 0; this.move = null; this.stance = 'stand'; this.pose(this.stancePoses.stand); }
   private next(): string { const n = this.queue.shift(); return n ? this.ask(n) : `${this.name} waits`; }
   /** A straight strike steered: the throwing arm's angles that point it from where its shoulder is now at the target's
    *  head (and 10 cm through it), worked out in the chest's frame as it is now, so a chest that leans or turns as the
@@ -326,6 +341,7 @@ export class Person {
       if (acc > 40) this.dazed = Math.max(this.dazed, Math.min(3, (acc - 40) / 20 + 0.8));
     }
     this.hurtLog = this.hurtLog.filter((x) => this.time - x.t < 1);
+    this.downFor = this.down() && !this.laid ? this.downFor + dt : 0;
     // a hand that meets the target's head lands a strike
     const tgt = this.target?.person; if (tgt && this.move && this.move.name !== 'cover') {
       const head = tgt.at('head'), hr = (tgt.rig.segments.find((s) => s.id === 'head')!.shape as { r: number }).r;
@@ -349,7 +365,7 @@ export class Person {
     const s = this.sense(), n = factName(this.name), ready = !s.busy && !s.down && this.tone > 0 && this.dazed === 0 && this.stamina > 10;
     return {
       [`${n}_reach`]: +s.reach.toFixed(2), [`${n}_open`]: ready && s.reach <= 1.05 ? 1 : 0, [`${n}_hurt`]: +s.hurt.toFixed(1), [`${n}_down`]: s.down ? 1 : 0,
-      [`${n}_dazed`]: this.dazed > 0 ? 1 : 0, [`${n}_balance`]: +(Math.abs(s.off[0]) / 0.12).toFixed(2), [`${n}_hits`]: this.hits, [`${n}_stamina`]: Math.round(s.stamina), [`${n}_busy`]: s.busy ? 1 : 0,
+      [`${n}_dazed`]: this.dazed > 0 ? 1 : 0, [`${n}_balance`]: +(Math.abs(s.off[0]) / 0.12).toFixed(2), [`${n}_hits`]: this.hits, [`${n}_stamina`]: Math.round(s.stamina), [`${n}_busy`]: s.busy ? 1 : 0, [`${n}_down_for`]: +this.downFor.toFixed(1),
     };
   }
   /** Where each segment is now, for the view: its place and its turn, and its turn at rest. */
@@ -375,16 +391,84 @@ export class People {
     const cs = new J.BodyCreationSettings(sh, new J.RVec3(0, 0, 0), new J.Quat(0, 0, 0, 1), J.EMotionType_Static, 0); cs.mFriction = 1.0;
     const fl = this.bi.CreateBody(cs); J.destroy(cs); this.bi.AddBody(fl.GetID(), J.EActivation_DontActivate);
   }
+  private solids = new Map<string, InstanceType<Jolt['Body']>>();
+  /** Something fixed in the room that people meet (a pedestal, a table, a wall): an upright cylinder or a box, static,
+   *  its middle at the point given. Said again by the same name, it is put where it is said; null takes it away. */
+  solid(name: string, s: { cyl: { r: number; h: number } } | { box: V3 } | null, at: V3 = [0, 0, 0], yaw = 0): void {
+    const J = this.J, old = this.solids.get(name); if (old) { this.bi.RemoveBody(old.GetID()); this.bi.DestroyBody(old.GetID()); this.solids.delete(name); }
+    if (!s) return;
+    const ss = 'cyl' in s ? new J.CylinderShapeSettings(s.cyl.h / 2, s.cyl.r, 0.01) : new J.BoxShapeSettings(new J.Vec3(s.box[0] / 2, s.box[1] / 2, s.box[2] / 2), 0.01), sh = ss.Create().Get(); J.destroy(ss);
+    const cs = new J.BodyCreationSettings(sh, new J.RVec3(...at), new J.Quat(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)), J.EMotionType_Static, 0); cs.mFriction = 0.6;
+    const b = this.bi.CreateBody(cs); J.destroy(cs); this.bi.AddBody(b.GetID(), J.EActivation_DontActivate); this.solids.set(name, b);
+  }
   /** A number from 0 to 1, the same each run for the same seed. */
   rand(): number { let t = (this.seed += 0x6d2b79f5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
   add(name: string, params: Partial<BodyParams>, at: { x: number; z: number; yaw: number }, o: { fighter?: boolean; density?: number } = {}): Person {
     const p = new Person(this.J, this, name, params, at, this.list.length + 1, o.density ?? 1050, o.fighter ?? false); this.list.push(p); return p;
   }
-  remove(p: Person): void { p.remove(); this.list.splice(this.list.indexOf(p), 1); }
+  remove(p: Person): void { this.grips.forEach((g, i) => { if (g?.person === p) this.letGo(i); }); p.remove(); this.list.splice(this.list.indexOf(p), 1); }
   /** Run the world on by so many seconds of the room's time, in steps of 1/240 s. */
   step(dt: number): void {
     this.acc = Math.min(this.acc + dt, 0.1); const h = 1 / this.hz;
-    while (this.acc >= h) { for (const p of this.list) p.control(h); this.jolt.Step(h, 1); for (const p of this.list) p.observe(h, this.g); this.acc -= h; }
+    while (this.acc >= h) {
+      for (const g of this.grips) if (g) this.bi.MoveKinematic(g.hand.GetID(), new this.J.RVec3(...g.to), new this.J.Quat(0, 0, 0, 1), h);
+      for (const p of this.list) p.control(h); this.jolt.Step(h, 1); for (const p of this.list) p.observe(h, this.g); this.acc -= h; }
   }
+  private grips: { hand: InstanceType<Jolt['Body']>; c: InstanceType<Jolt['Constraint']>; to: V3; person: Person; seg: SegmentId }[] = [];
+  /** A hand closing on whoever is nearest it: the segment nearest the point (within reach of it), held to the hand by a
+   *  spring (a soft link at 5 Hz, damped: you pull, its joints and muscles answer, its weight hangs on your hand). */
+  grab(at: V3, reach = 0.2): { person: Person; seg: SegmentId; id: number } | null {
+    let best: { p: Person; l: Live; d: number } | null = null;
+    for (const p of this.list) for (const l of p.parts) {
+      const q = l.body.GetPosition(), c: V3 = [q.GetX(), q.GetY(), q.GetZ()], r = l.seg.shape.kind === 'capsule' ? l.seg.shape.r + Math.hypot(...sub(l.seg.b, l.seg.a)) / 2 : Math.max(...l.seg.shape.half);
+      const d = Math.hypot(...sub(at, c)) - r; if (d < reach && (!best || d < best.d)) best = { p, l, d };
+    }
+    if (!best) return null;
+    const J = this.J, ss = new J.SphereShapeSettings(0.03), sh = ss.Create().Get(); J.destroy(ss);
+    const cs = new J.BodyCreationSettings(sh, new J.RVec3(...at), new J.Quat(0, 0, 0, 1), J.EMotionType_Kinematic, this.MOVING); cs.mIsSensor = true;
+    const hand = this.bi.CreateBody(cs); J.destroy(cs); this.bi.AddBody(hand.GetID(), J.EActivation_Activate);
+    const ds = new J.DistanceConstraintSettings(); ds.mSpace = J.EConstraintSpace_WorldSpace; ds.mPoint1 = new J.RVec3(...at); ds.mPoint2 = new J.RVec3(...at); ds.mMinDistance = 0; ds.mMaxDistance = 0;
+    ds.mLimitsSpringSettings.mFrequency = 5; ds.mLimitsSpringSettings.mDamping = 1;
+    const c = ds.Create(hand, best.l.body); J.destroy(ds); this.ps.AddConstraint(c);
+    this.bi.ActivateBody(best.l.body.GetID());
+    this.grips.push({ hand, c, to: at, person: best.p, seg: best.l.seg.id });
+    return { person: best.p, seg: best.l.seg.id, id: this.grips.length - 1 };
+  }
+  /** Where a hand holding is now. */
+  hold(id: number, at: V3): void { const g = this.grips[id]; if (g) g.to = at; }
+  /** A hand opening: what it held let go. */
+  letGo(id: number): void { const g = this.grips[id]; if (!g) return; this.ps.RemoveConstraint(g.c); this.bi.RemoveBody(g.hand.GetID()); this.bi.DestroyBody(g.hand.GetID()); this.grips[id] = undefined as never; }
+  /** The world taken down: its bodies, constraints and memory given back. */
+  dispose(): void { this.J.destroy(this.jolt); }
   facts(): Record<string, number> { const f: Record<string, number> = { people: this.list.length, people_down: this.list.filter((p) => p.down()).length }; for (const p of this.list) Object.assign(f, p.facts()); return f; }
+}
+
+/** A fighter's body: its genome's height and face, its muscle as a trained fighter's (about a third more, an
+ *  estimate), its fat half again lower, and its mass the weight class its height puts it in (the UFC's limits: men
+ *  bantam 61.2 kg to heavy 120.2, women straw 52.2 to feather 65.8; a fighter's BMI about 24.5, an estimate). */
+export function fighterBuild(p: Partial<BodyParams>): Partial<BodyParams> {
+  const female = (p.sex ?? 0) >= 0.5, h = p.height ?? (female ? 1.65 : 1.78), classes = female ? [52.2, 56.7, 61.2, 65.8] : [61.2, 65.8, 70.3, 77.1, 83.9, 93.0, 120.2];
+  const want = 24.5 * h * h, mass = classes.reduce((a, c) => (Math.abs(c - want) < Math.abs(a - want) ? c : a), classes[0]!);
+  return { ...p, mass, muscle: Math.min(1.5, (p.muscle ?? (female ? 0.7 : 1)) * 1.3), fat: Math.max(0.5, (p.fat ?? 1) * 0.55) };
+}
+/** A person's rules, as a pipeline on the boards: each an IF on what it senses and a THEN it does, armed, and quick (a
+ *  fighter decides a few times a second). Change a step's words to change what it does ("person kai jab", "person kai
+ *  cover"); the facts it reads are named for it (kai_open, kai_hurt, kai_down_for…). */
+export function boardOfPerson(p: Person): Board {
+  const n = factName(p.name), rules: [string, string, string, string][] = p.fighter ? [
+    ['Open and in reach', `when ${n}_open > 0`, 'Attack', `person ${n} attack`],
+    ['Hit hard', `when ${n}_hurt > 15`, 'Cover up', `person ${n} cover`],
+    ['Down 4 seconds', `when ${n}_down_for > 4`, 'Get up', `person ${n} get up`],
+    ['I say fight', 'when I say fight', 'Guard up', `person ${n} guard`],
+  ] : [
+    ['I say guard', 'when I say guard', 'Guard up', `person ${n} guard`],
+    ['I say stand up', 'when I say stand up', 'Stand up', `person ${n} get up`],
+  ];
+  const board: Board = { title: `${p.name}'s rules`, kind: 'flow', armed: true, quiet: true, cooldown: 250, about: `${p.name}: ${p.fighter ? 'a fighter' : 'a person'}, ${(p.H * 100).toFixed(0)} cm, ${p.params.mass.toFixed(0)} kg, by real physics. Each IF starts its THEN; what it reads: ${n}_reach (its target over its reach), ${n}_open, ${n}_hurt (g), ${n}_down, ${n}_down_for (s), ${n}_balance, ${n}_stamina, ${n}_hits. What it can do: "person ${n} jab", cross, hook, uppercut, cover, combo, attack, guard, stand, get up, go limp, push.`, nodes: {}, edges: {} };
+  rules.forEach(([il, iw, tl, tw], i) => {
+    board.nodes[`if${i}`] = { label: `IF ${il}`, step: { kind: 'trigger', what: iw } };
+    board.nodes[`then${i}`] = { label: `THEN ${tl}`, step: { kind: 'action', what: tw } };
+    board.edges[`e${i}`] = { from: `if${i}`, to: `then${i}`, rel: 'flows to' };
+  });
+  return board;
 }
