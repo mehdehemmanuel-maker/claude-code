@@ -151,6 +151,26 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Say "go" (or squeeze a trigger, or press space), "wait", "get off" (in the station, to watch from the platform),
     "get on", "stats", or "why don't I fall out at the top".
   - Not yet: wind and sound, cars that sway, a coaster you lay yourself piece by piece.
+- **works (table tennis against a robot, src/nexus/pingpong.ts)**: "I want to play ping pong against a robot that's way
+  better than me", and you are at the table, the robot at the other end.
+  - The table, ball and net follow the ITTF's Laws: 2.74 by 1.525 m, the top 76 cm up, a 15.25 cm net, a 40 mm ball of
+    2.7 g. Dropped from 30 cm, the ball comes back to about 23 cm.
+  - In the air the ball is held back by drag (falling, it reaches no more than 8.3 m/s) and pushed by its spin (the
+    Magnus force). The robot's topspin pushes it down at about 1.7 g, on top of gravity.
+  - Off the table and the bats, spin and speed trade through friction until the ball rolls. Topspin kicks forwards off
+    the table; backspin checks.
+  - The rules: a serve bounces on the server's own half, then the receiver's. Your serve may go straight over (a friendly
+    serve). Then come one bounce each, the net, two bounces, hitting your own side; games to 11 by two, the serve
+    changing every two points, and every point from 10–10.
+  - The robot reads your shot's whole flight at once and meets the ball at the top of its bounce. It sends it back with
+    topspin to the corner farthest from your bat, wider the better it is: at full skill, 14 m/s with 100 rev/s, its aim
+    off by about 3 cm. Against a bat that never moves, it wins 11–0.
+  - In a headset your bat is in your right hand and hits by its own motion. On a screen the bat follows the ball: press
+    space (or click) to swing, best about 0.12 s before the ball arrives, and aim with the mouse.
+  - Say "easier", "harder", "score", "new game", or "why does it dip".
+  - Measured, not assumed: a 6 m/s ball with heavy topspin cannot reach 1 m deep on the far side (the air takes too
+    much). The robot then plays slower or shorter.
+  - Not yet: the lift dip at low spin found in free-flight measurements (Miyazaki et al., 2017), sound, a person to play.
 - **works (creatures, src/nexus/creatures.ts)**:
   - a dog (a golden retriever, by age), penguins (emperor, king, Adélie), a humpback whale, a T. rex, and a dragon;
   - each at the size and mass its sources give, moving as its size lets it: walkers at the Froude number their gait keeps
@@ -162,7 +182,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Next: their legs and bodies by physics, as the people's are (now their gait is a stride timed by their size).
 - **works**: a warehouse with robots, a workshop, flying and walking.
 - **next**: the people in a place standing on its ground everywhere (it is flat for 12 m round you), spin on the pool balls,
-  old cities, games (ping pong), music, a coaster you lay yourself.
+  old cities, music, a coaster you lay yourself.
 
 ## 5. Tested blind
 
@@ -172,5 +192,5 @@ sandwich…). First run: 0 of 25 did what was asked. After places: 13 of 25. Aft
 without dinosaurs, the aquarium without whales, the snowfield without penguins, the beach without a surfboard, and "a car
 that turns into a boat" made as a car only), 6 not at all (a puppy, a dragon, ping pong, an orchestra, Rome, a roller
 coaster). Since, creatures: the puppy that follows you, the dragon you can ride, the penguins, the whales and the dinosaurs
-are there. Then the roller coaster through a volcano. Ping pong, the orchestra, Rome and "a car that turns into a boat" are
-still not.
+are there. Then the roller coaster through a volcano, and ping pong against a robot far better than you. The orchestra,
+Rome and "a car that turns into a boat" are still not.

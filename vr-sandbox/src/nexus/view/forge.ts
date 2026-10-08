@@ -66,6 +66,8 @@ import { bump, drive as driveKart, idealLap, KART, lapSaid, makeTrack, onGrid, o
 import { kartView, trackView, type KartView, type TrackView } from './kart3d';
 import { at as coasterAt, LIMITS, makeCoaster, newRide, runRide, sayCoaster, type Ride, type Track as CoasterTrack } from '../coaster';
 import { coasterView, type CoasterView } from './coaster3d';
+import { assistHit, batHit, meetPoint, newRally, pingSkillSaid, robotStep, serveBall, setSkill, stepBall, terminalSpeed, TT, type Rally, type V3 as V3pp } from '../pingpong';
+import { bat, pingView, type PingView } from './pingpong3d';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
 import '../creatures';
@@ -1938,7 +1940,8 @@ function goTo(p: Place): string {
   if (renderer.xr.isPresenting) { dolly.position.set(0, flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0, 0); dolly.rotation.set(0, 0, 0); dolly.scale.setScalar(k); }
   else { framing = false; const y0 = flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0; camera.position.set(0, y0 + eye, 0.2 * k); orbit.target.set(0, y0 + eye * 0.9, -2 * k); camera.near = Math.max(0.0005, 0.01 * k); camera.updateProjectionMatrix(); orbit.update(); }
   if (v.torch) { const hand = renderer.xr.isPresenting ? renderer.xr.getControllerGrip(1) : camera; hand.add(v.torch, v.torch.target); v.torch.target.position.set(0, 0, -1); }
-  place = 'table'; void setUpBar(); setUpKarts(); setUpCoaster();
+  place = 'table'; void setUpBar(); setUpKarts(); setUpCoaster(); setUpPing();
+  if (ping) return sayPlace(p).replace(/ Say "back to the forge"/, ` ${renderer.xr.isPresenting ? 'Your bat is in your right hand: hit the ball with it, as you would a real one.' : 'Your bat follows the ball to your end: press space (or click) to swing as it reaches you, and aim with the mouse, left to right.'} First to 11, by two; the serve changes every two points. Say "easier" or "harder", "score", "new game", or "why does it dip". Say "back to the forge"`);
   if (coaster) return sayPlace(p).replace(/ Say "back to the forge"/, ' You are in the front seat, lap bar down: the train leaves the station in 8 s (say "wait" to hold it). Say "get off" in the station to watch it from the platform, "stats" for what you felt. Say "back to the forge"');
   if (karting) return sayPlace(p).replace(/ Say "back to the forge"/, ` ${karting.racers.length > 1 ? `You are in kart 1 at the back of the grid, ${karting.racers.length - 1} others ahead of you` : 'You are in kart 1 on the grid, alone'}. The right trigger (or W/↑) is the throttle, the left trigger (or S/↓) the brake, a stick (or A/D, ←/→) steers. Press the throttle or say "go" and five lights come on: go when they go out. Say "back to the forge"`);
   return `${sayPlace(p)}${p.props.some((x) => x.kind === 'pool table') ? ' Say "break", "shoot at the 3", "rack", or "throw 3 darts at treble 20"; in a headset, strike the cue ball with your hand, and hold the trigger at the line for a dart and let go to throw it.' : ''}`;
@@ -1947,6 +1950,7 @@ function goTo(p: Place): string {
 function backToForge(): string {
   dropKits((t) => !!t.fromPlace); if (riding?.fromPlace) riding = null;
   if (bar) { bar.pool.dispose(); bar = null; }
+  if (ping) { ping.bat.parent?.remove(ping.bat); ping = null; }
   if (karting || coaster) { karting = null; coaster = null; kartKeys.clear(); dolly.rotation.set(0, 0, 0); dolly.position.set(0, 0, 0); const f = VIEWS.front!; camera.position.set(f[0], f[1], f[2]); orbit.target.set(f[3], f[4], f[5]); }
   if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
   for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
@@ -1971,7 +1975,7 @@ function placeWords(words: string): string {
   return came.length ? `${said.replace(/ Not here yet: [^.]*\./, '')} With you: ${came.join('; ')}.` : said;
 }
 function stepPlace(dt: number): void {
-  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt); stepCoaster(dt);
+  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt); stepCoaster(dt); stepPing(dt);
 }
 // ---- the bar's games, by real physics (src/nexus/games.ts): the pool table's balls moved by their own physics world, and
 // darts thrown by hand (in a headset) or by saying so, landing where their flight takes them and scored by the board ----
@@ -2221,6 +2225,78 @@ function coasterWords(text: string): string | null {
   return null;
 }
 window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement).tagName; if (!coaster?.seated || e.key !== ' ' || tag === 'INPUT' || tag === 'TEXTAREA') return; e.preventDefault(); e.stopImmediatePropagation(); if (coaster.ride.phase === 'waiting') say(sendTrain(), undefined, 'nexus'); }, true);
+// ---- table tennis against a robot (src/nexus/pingpong.ts): in a headset your bat is in your right hand and hits by its
+// own motion; on a screen the bat follows the ball and you swing it (space or a click) and aim it (the mouse, left to
+// right); the robot plays the other end ----
+let ping: { R: Rally; view: PingView; bat: THREE.Group; prev: THREE.Vector3 | null; aim: number; swing: number; armed: number } | null = null;
+let pingAim = 0;
+window.addEventListener('mousemove', (e) => { pingAim = e.clientX / Math.max(1, window.innerWidth) - 0.5; });
+function setUpPing(): void {
+  if (ping) { ping.bat.parent?.remove(ping.bat); ping = null; }
+  const pr = placeNow?.p.props.find((x) => x.kind === 'ping pong'); if (!pr || !placeNow) return;
+  const view = pingView(); view.group.position.set(0, 0, -2.6); view.group.rotation.y = Math.PI / 2; placeNow.v.group.add(view.group);
+  const R = newRally(pr.s ?? 0.75); setSkill(R, pr.s ?? 0.75); R.robot.wait = 3;
+  ping = { R, view, bat: bat(), prev: null, aim: 0, swing: 0, armed: 0 }; placeBat();
+  if (!renderer.xr.isPresenting) { view.group.updateMatrixWorld(); camera.position.copy(view.group.localToWorld(new THREE.Vector3(-TT.L / 2 - 1.4, 1.5, 0))); orbit.target.copy(view.group.localToWorld(new THREE.Vector3(0.6, 0.85, 0))); orbit.update(); }
+}
+/** The bat where it belongs: in your right hand in a headset (its blade 12 cm ahead of your fist, its handle in it), or at
+ *  your end of the table on a screen. */
+function placeBat(): void {
+  const P = ping!; const ri = Math.max(0, handOf.indexOf('right')), grip = renderer.xr.getControllerGrip(ri === -1 ? 1 : ri);
+  if (renderer.xr.isPresenting && P.bat.parent !== grip) { grip.add(P.bat); P.bat.position.set(0, 0, -0.12); P.bat.rotation.set(-Math.PI / 2, 0, 0); P.prev = null; }
+  if (!renderer.xr.isPresenting && P.bat.parent !== P.view.group) { P.view.group.add(P.bat); P.bat.position.set(-TT.L / 2 - 0.25, TT.top + 0.2, 0); P.bat.rotation.set(0, Math.PI / 2, 0); P.prev = null; }
+}
+function stepPing(dt: number): void {
+  const P = ping; if (!P || dt <= 0) return; const R = P.R, g = placeNow?.p.gravity || GRAVITY.earth; dt = Math.min(dt, 0.05); placeBat();
+  // your serve: tossed for you when it is yours, a moment after the last point
+  if (!R.live && R.server === 'you') { R.robot.wait -= dt; if (R.robot.wait <= 0) serveBall(R); }
+  // your bat, in the game's frame: its face's middle and its normal, now and a frame ago
+  P.view.group.updateMatrixWorld(); const inv = P.view.group.getWorldQuaternion(new THREE.Quaternion()).invert();
+  if (!renderer.xr.isPresenting) desktopBat(P, dt);
+  const now = P.view.group.worldToLocal(P.bat.getWorldPosition(new THREE.Vector3())), n = new THREE.Vector3(1, 0, 0).applyQuaternion(P.bat.getWorldQuaternion(new THREE.Quaternion())).applyQuaternion(inv);
+  const prev = P.prev ?? now.clone(), batV = now.clone().sub(prev).divideScalar(dt), steps = Math.max(1, Math.ceil(dt / 0.001)), h = dt / steps;
+  for (let k = 1; k <= steps; k++) {
+    const at = prev.clone().lerp(now, k / steps);
+    if (renderer.xr.isPresenting) batHit(R, [at.x, at.y, at.z], [n.x, n.y, n.z], [batV.x, batV.y, batV.z]);
+    else if (P.armed > 0) { const said = assistHit(R, P.bat.position.toArray() as V3pp, P.armed, pingAim * 1.4, g); if (said) { P.armed = 0; say(said, undefined, 'nexus'); } }
+    stepBall(R, h, g); robotStep(R, h, [now.x, now.y, now.z], Math.random, g);
+  }
+  if (P.armed > 0) { P.armed -= dt; if (P.armed <= 0 && R.live && R.hitBy === 'robot') say('Swung too early.', undefined, 'nexus'); }
+  P.prev = now; P.view.update(R);
+  while (R.said.length) say(R.said.shift()!, undefined, 'nexus');
+}
+/** On a screen: the bat taken to where the ball will cross your end (at up to 4 m/s), and swung when you press space or
+ *  click: on time, the ball goes back where the mouse aims, fast in proportion to how near the bat it was. */
+function desktopBat(P: NonNullable<typeof ping>, dt: number): void {
+  const m = meetPoint(P.R, 'you', placeNow?.p.gravity || GRAVITY.earth), to = m ? new THREE.Vector3(...m) : new THREE.Vector3(-TT.L / 2 - 0.25, TT.top + 0.2, 0);
+  const d = to.clone().sub(P.bat.position), step = 4 * dt; P.bat.position.add(d.length() <= step ? d : d.setLength(step));
+  P.swing = Math.max(0, P.swing - dt); P.bat.rotation.set(0, Math.PI / 2, P.swing > 0 ? -0.6 * Math.sin((P.swing / 0.2) * Math.PI) : 0);
+}
+/** On a screen: a swing begun (space or a click) takes a quarter of a second; if the ball comes onto the bat in that
+ *  time it is struck, cleanly in proportion to how well timed the swing was (best begun 0.12 s before the ball arrives). */
+function pingSwing(): string {
+  const P = ping!, R = P.R; P.swing = 0.2;
+  if (!R.live) return R.server === 'you' ? 'The ball is coming up for your serve.' : 'The robot is serving.';
+  if (R.hitBy === 'you' && R.served) return 'It is the robot\'s ball.';
+  P.armed = 0.25; return '';
+}
+/** Words the table answers: serve, easier, harder, the score, a new game, why the ball does what it does. */
+function pingWords(text: string): string | null {
+  const P = ping; if (!P) return null; const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), R = P.R;
+  if (/^(serve|my serve|i'?ll serve)$/.test(t)) { if (R.live) return 'The ball is in play.'; if (R.server !== 'you') return 'It is the robot\'s serve (two each, as the Laws have it).'; serveBall(R); return 'Tossed: hit it as it falls.'; }
+  if (/^(hit|swing)$/.test(t) && !renderer.xr.isPresenting) return pingSwing() || 'Swinging.';
+  if (/^(easier|go easy|slower|be gentle|easy mode|too hard|ease up)$/.test(t)) { setSkill(R, R.robot.skill - 0.25); return `Gentler: ${pingSkillSaid(R.robot.skill)}.`; }
+  if (/^(harder|faster|full power|hard mode|go hard|don'?t hold back|too easy|bring it)$/.test(t)) { setSkill(R, R.robot.skill + 0.25); return `Harder: ${pingSkillSaid(R.robot.skill)}.`; }
+  if (/^(score|the score|what'?s the score|how am i doing)$/.test(t)) return `You ${R.score.you}, the robot ${R.score.robot}; games ${R.games.you}–${R.games.robot}. ${R.server === 'you' ? 'Your' : 'The robot\'s'} serve.`;
+  if (/^(new game|reset|restart|start over|again)$/.test(t)) { const k = R.robot.skill; P.R = newRally(k); setSkill(P.R, k); P.R.robot.wait = 2; return 'New game: 0–0, the robot to serve.'; }
+  if (/\b(why|how)\b.*\b(curve|curves|dip|dips|spin|topspin|drop|drops|bounce|fast|kick)/.test(t)) {
+    const v = R.robot.speed, w = R.robot.spin * 2 * Math.PI, S = (TT.r * w) / v, CL = Math.min(0.3, 0.5 * S), k = (0.5 * TT.rho * Math.PI * TT.r ** 2) / TT.m;
+    return `Its topspin: the robot's ball leaves at ${v.toFixed(0)} m/s turning ${R.robot.spin.toFixed(0)} times a second, its top going forwards. The air it drags round with it is thrown up off its back, so the air throws the ball down: the Magnus force, here about ${(k * CL * v * v).toFixed(0)} m/s² (${((k * CL * v * v) / 9.81).toFixed(1)} g) on top of gravity, so it dips onto the table fast and kicks forwards off it as its spin grips. A ball this light also slows fast: the air's drag is ${(k * TT.Cd * v * v).toFixed(0)} m/s² at that speed (it falls no faster than ${terminalSpeed().toFixed(1)} m/s).`;
+  }
+  return null;
+}
+window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement).tagName; if (!ping || renderer.xr.isPresenting || e.key !== ' ' || tag === 'INPUT' || tag === 'TEXTAREA') return; e.preventDefault(); e.stopImmediatePropagation(); pingSwing(); }, true);
+renderer.domElement.addEventListener('pointerdown', () => { if (ping && !renderer.xr.isPresenting) pingSwing(); });
 const personNamed = (w: string): Person | null => peopleWorld?.list.find((p) => personFact(p.name) === personFact(w)) ?? null;
 /** A body rebuilt where it stands with what was changed (its height, mass, muscle, fat, sex, skin, hair). */
 function adjustPerson(p: Person, change: Partial<BodyParams>): string {
@@ -2387,7 +2463,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3707,6 +3783,8 @@ async function boot() {
     winPoint: (id: string, act: 'move' | 'min' | 'close') => toScreen(windows.pointOf(id, act)),
     winWorld: (id: string, act: 'move' | 'min' | 'close') => { const w = windows.pointOf(id, act); return w ? [w.x, w.y, w.z] : null; },
     winList: () => windows.list(),
+    pingNow: () => ping ? { armed: +ping.armed.toFixed(2), bounces: ping.R.bounces, live: ping.R.live, hitBy: ping.R.hitBy, server: ping.R.server, served: ping.R.served, score: ping.R.score, ball: ping.R.ball.p.map((x) => +x.toFixed(2)), bat: ping.bat.position.toArray().map((x) => +x.toFixed(2)), skill: ping.R.robot.skill } : null,
+    pingSwing: () => (ping ? pingSwing() : null),
     coasterNow: () => coaster ? { phase: coaster.ride.phase, s: +coaster.ride.s.toFixed(1), v: +coaster.ride.v.toFixed(2), rides: coaster.ride.rides, seated: coaster.seated, piece: coasterAt(coaster.tr, coaster.ride.s).piece, g: coaster.ride.g, length: coaster.tr.length, volcano: !!coaster.tr.volcano } : null,
     coasterSkip: (piece: string) => { if (!coaster) return null; const r = coaster.ride; if (r.phase === 'waiting') { r.auto = true; r.dwell = 0; } for (let i = 0; i < 200 * 200 && coasterAt(coaster.tr, r.s).piece !== piece; i++) runRide(r, coaster.tr, 0.005, placeNow?.p.gravity || GRAVITY.earth); return { s: r.s, v: r.v }; },
     kartsNow: () => karting ? { state: karting.state, seated: karting.seated, length: karting.tr.length, racers: karting.racers.map((r) => ({ name: r.name, laps: r.k.laps, s: +r.k.s.toFixed(1), v: +r.k.vx.toFixed(2), best: r.k.best, last: r.k.last, grass: r.k.onGrass, hits: r.k.hits, heading: +r.k.heading.toFixed(2) })) } : null,

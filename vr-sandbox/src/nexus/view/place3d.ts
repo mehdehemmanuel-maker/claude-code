@@ -159,6 +159,7 @@ function prop(q: Prop, p: Place): THREE.Object3D | null {
     case 'peaks': { for (let k = -3; k <= 3; k++) { add(new THREE.ConeGeometry(500, 900 + 300 * hash(k, 3), 7), std(0x5a5852, 0.95), k * 600, 400, -hash(k, 9) * 600); add(new THREE.ConeGeometry(160, 260, 7), std(0xf2f4f8, 0.6), k * 600, 820 + 150 * hash(k, 3), -hash(k, 9) * 600); } return g; }
     case 'earth': { add(new THREE.SphereGeometry(160, 48, 32), std(0x2a5ab0, 0.6, 0, { emissive: 0x0a1a40, emissiveIntensity: 0.4 }), 0, -120, 0); return g; }
     case 'canyon': return null; // cut into the ground itself
+    case 'ping pong': return null; // drawn with its ball and robot by the forge (src/nexus/view/pingpong3d.ts)
     case 'coaster': case 'coaster volcano': return null; // drawn with its train by the forge (src/nexus/view/coaster3d.ts)
     case 'kart track': return null; // drawn with its karts by the forge (src/nexus/view/kart3d.ts)
     case 'fireplace': { const st = std(0x6a6460, 0.95); add(new THREE.BoxGeometry(1.6, 1.2, 0.5), st, 0, 0.6, 0); add(new THREE.BoxGeometry(0.9, 0.7, 0.3), std(0x111111), 0, 0.42, 0.12); add(new THREE.BoxGeometry(0.5, 1.4, 0.4), st, 0, 1.9, -0.05);

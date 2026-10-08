@@ -14,6 +14,7 @@
 
 import { makeTrack, topSpeed } from './karting';
 import { makeCoaster, sayCoaster } from './coaster';
+import { pingSkillSaid } from './pingpong';
 
 export type Hex = number;
 export interface Fall { what: string; m: number; A: number; Cd: number; size: number; color: Hex; perM2s: number; shape: 'drop' | 'flake' | 'bear' | 'thing' }
@@ -76,6 +77,7 @@ export const PLACES: { words: RegExp; make: () => Place }[] = [
   { words: /\b(mountains?|alps|peak|summit)\b/, make: () => base('the mountains', { ground: { kind: 'rock', color: 0x6c6a62, friction: 0.7, relief: 25, radius: 2000 }, air: { density: 0.82, tempC: -5 }, sees: 30000, props: [...pines(20), { kind: 'peaks', at: [0, -1500] }], says: ['3,500 m up: air 0.82 kg/m³ (two thirds of sea level, ISA)'] }) },
   // indoors
   { words: /\b(cabin|log cabin|cottage|chalet|lodge)\b/, make: () => base('a cabin', { ground: { kind: 'snow', color: 0xf1f4f8, friction: 0.2, relief: 1.5, radius: 400 }, sky: { zenith: 0x2a3340, horizon: 0x6c7a88, glow: 0xffffff, stars: false }, air: { density: 1.32, tempC: -12 }, sees: 300, room: { w: 5, d: 6, h: 2.6, wall: 0x8a5a32, floor: 0x6b4426, ceiling: 0x5c3a20, window: true }, lights: [{ kind: 'fire', at: [-2.0, 0.45, -2.6], color: 0xff8a3c, power: 2.5 }], props: [{ kind: 'fireplace', at: [-2.25, -2.6], yaw: Math.PI / 2 }, { kind: 'sofa', at: [-0.2, -2.6], yaw: Math.PI / 2 }, { kind: 'rug', at: [-1.1, -2.6], yaw: Math.PI / 2 }], says: ['a log cabin 5 by 6 m inside, its fire about 1,000 °C at the flames (wood fire, typical), warm orange light'] }) },
+  { words: /\b(ping ?-?pong|table tennis|tabletennis)\b/, make: () => base('a table tennis hall', { room: { w: 9, d: 14, h: 4.5, wall: 0x2a3440, floor: 0x7a3428, ceiling: 0x1a1e24 }, ground: { kind: 'floor', color: 0x7a3428, friction: 0.6, relief: 0, radius: 0 }, sky: { zenith: 0x0b0d14, horizon: 0x151a26, glow: 0xffffff, stars: false }, sun: { elev: -20, az: 0 }, lights: [{ kind: 'lamp', at: [0, 4.2, -2.6], color: 0xffffff, power: 2.2 }, { kind: 'lamp', at: [0, 4.2, -5.5], color: 0xffffff, power: 1.6 }], props: [{ kind: 'ping pong', at: [0, 0], s: 0.75 }], says: ['a table tennis hall: a table as the ITTF has it, 2.74 by 1.525 m, its top 76 cm up, the net 15.25 cm', 'a robot at the far end: it reads your shot\'s whole flight at once, reaches anywhere at its end, and sends the ball back with topspin'] }) },
   { words: /\b(roller ?coasters?|rollercoasters?|theme park|amusement park|thrill ride|loop the loop)\b/, make: () => base('a roller coaster', { ground: { kind: 'grass', color: 0x4f7a3a, friction: 0.6, relief: 0, radius: 800 }, props: [{ kind: 'coaster', at: [0, 0] }], says: [sayCoaster(makeCoaster())] }) },
   { words: /\b(go[- ]?karts?|go[- ]?karting|karting|karts?|kart track|race ?track|racing circuit|race circuit|grand prix)\b/, make: () => { const tr = makeTrack(); return base('a go-kart track', { ground: { kind: 'grass', color: 0x4f7a3a, friction: 0.6, relief: 0, radius: 600 }, props: [{ kind: 'kart track', at: [0, 0] }], says: [...tr.says, `rental karts: a Honda GX270 (6.3 kW at 3,600 rpm, Honda) governed to about ${Math.round(topSpeed() * 3.6)} km/h, tyres that grip to about 1.1 g`] }); } },
   { words: /\b(bar|pub|tavern|saloon|lounge|pool hall|darts?|billiards?|pool table)\b/, make: () => base('a bar', { room: { w: 9, d: 7, h: 3, wall: 0x3a2418, floor: 0x2a1a10, ceiling: 0x1e140e }, sky: { zenith: 0x0b0d14, horizon: 0x151a26, glow: 0xffd9a0, stars: true }, sun: { elev: -20, az: 0 }, lights: [{ kind: 'lamp', at: [1.5, 2.6, -1.5], color: 0xffd9a0, power: 1.6 }, { kind: 'lamp', at: [-2, 2.6, -2], color: 0xffc070, power: 1.2 }], props: [{ kind: 'bar counter', at: [-3.2, -2.5], yaw: Math.PI / 2 }, { kind: 'stool', at: [-2.5, -1.5] }, { kind: 'stool', at: [-2.5, -2.5] }, { kind: 'stool', at: [-2.5, -3.5] }, { kind: 'pool table', at: [1.5, -1.5] }, { kind: 'dartboard', at: [3.9, -3.2], yaw: -Math.PI / 2 }, { kind: 'oche', at: [1.53, -3.2], yaw: -Math.PI / 2 }], says: ['a bar 9 by 7 m: its counter 1.07 m high (42 in, typical)', 'a 9-foot pool table, its bed 2.54 by 1.27 m and 0.76 m off the floor (WPA)', 'a dartboard 451 mm across, the bull 1.73 m up, the throw line 2.37 m from the board (WDF rules)'] }) },
@@ -124,6 +126,9 @@ export function readPlace(text: string, current?: Place): Place | null {
   if (p.water && /\b(warm|tropical|bath)\b/.test(t)) seaSaid(28, 'a tropical sea, typical');
   if (p.water && /\b(cold|freezing|icy)\b/.test(t)) seaSaid(4, 'a cold sea');
   p.alone = alone;
+  // how good the robot at the table is: as asked
+  const pp = p.props.find((x) => x.kind === 'ping pong');
+  if (pp) { pp.s = /\b(way better|much better|better than me|pro|professional|world.?class|unbeatable|hard|hardest|impossible|best)\b/.test(t) ? 1 : /\b(easy|beginner|gentle|slow|kid|novice)\b/.test(t) ? 0.45 : 0.75; p.says[1] = `${p.says[1]!.split(':')[0]}: ${pingSkillSaid(pp.s)}`; }
   // a roller coaster through a volcano: the helix runs round inside a breached crater, over its lava
   if (p.props.some((x) => x.kind === 'coaster') && /\b(volcan\w*|lava|crater)\b/.test(t) && !p.props.some((x) => x.kind === 'coaster volcano')) { p.props.push({ kind: 'coaster volcano', at: [0, 0] }); p.says[0] = sayCoaster(makeCoaster({ volcano: true })); }
   // what was asked and is not here yet: living things in it, and things done in it
@@ -166,6 +171,6 @@ function ferns(n: number): Prop[] { return scatter(n, 29, 3, 60, 'fern'); }
 /** A place said back: where you are and what makes it so, with what was asked that is not in it yet. */
 export function sayPlace(p: Place): string {
   const miss = p.missing.length ? ` Not here yet: ${p.missing.join(', ')}.` : '';
-  const prep = /^a roller coaster/.test(p.name) ? 'on' : /^a go-kart track/.test(p.name) ? 'at' : /^(a beach|the surface|the Moon|a canyon|a snowfield|a stadium|the mountains|a desert)/.test(p.name) ? 'on' : /^(under|space)/.test(p.name) ? (p.name === 'space' ? 'in' : '') : 'in';
+  const prep = /^a table tennis hall/.test(p.name) ? 'in' : /^a roller coaster/.test(p.name) ? 'on' : /^a go-kart track/.test(p.name) ? 'at' : /^(a beach|the surface|the Moon|a canyon|a snowfield|a stadium|the mountains|a desert)/.test(p.name) ? 'on' : /^(under|space)/.test(p.name) ? (p.name === 'space' ? 'in' : '') : 'in';
   return `You are ${p.name === 'here' ? 'where you were' : `${prep ? `${prep} ` : ''}${p.name}`}: ${p.says.join('; ')}.${p.gravity !== G.earth && !p.says.some((s) => /gravity/.test(s)) ? ` Gravity ${p.gravity.toFixed(2)} m/s².` : ''}${miss} Say "back to the forge" to come back.`;
 }
