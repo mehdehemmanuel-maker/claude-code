@@ -310,11 +310,14 @@ export const RULES: DetailRule[] = [
         const front = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).x));
         // (a mirror where the driver's eye looks out: about 0.55 m above the cushion, at the front of the side glass)
         const seatY = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).y)), my = belt > seatY + 0.7 ? seatY + 0.5 : Math.max(belt + 0.04, seatY + 0.5); // (in a tall cab, its roof is not its window line)
-        const zs = skin.filter((q) => Math.abs(q.x - (front + 0.5)) < 0.12 && Math.abs(q.y - my) < 0.08).map((q) => Math.abs(q.z)), side0 = zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
+        // (on a panelled body, at the foot of its A pillars, where the side glass begins, a little over the belt: typical)
+        const aP = under.find((x) => x.p.shape && 'surf' in x.p.shape && /^(A pillars|windscreen frame)$/.test(x.p.name)), ab = aP ? new THREE.Box3().setFromPoints(corners(aP).map((q) => toLocal(T, q))) : null;
+        const mx = ab ? ab.max.x - 0.16 : front + 0.5, mY = ab ? ab.min.y + 0.06 : my;
+        const zs = skin.filter((q) => Math.abs(q.x - mx) < 0.12 && Math.abs(q.y - mY) < 0.08).map((q) => Math.abs(q.z)), side0 = zs.length ? Math.max(...zs) + 0.09 : lb.max.z + 0.04;
         // a mirror: its head a shell lofted out from the door, about 0.22 m out, 0.12 m tall and 0.09 m deep, flat at the
         // back where its glass is and rounded in front, on a short stalk from the door (typical of a car's)
         const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.05, w: 0.045, lo: -0.058, hi: 0.052, n: 3 }, { x: 0.17, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];
-        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.17, 0.09, 0.003] }, at: [0.115, 0, side * 0.047], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit' }] }, new THREE.Vector3(front + 0.5, my, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
+        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.17, 0.09, 0.003] }, at: [0.115, 0, side * 0.047], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
       }
       return n;
     },
