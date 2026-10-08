@@ -62,6 +62,8 @@ import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../surpris
 import { G as GRAVITY, PLACES, readPlace, sayPlace, type Place } from '../places';
 import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
 import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
+import { measure, speciesFor, type Species } from '../life/reproduce';
+import { lifeCycleView } from './lifecycle3d';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
@@ -1750,7 +1752,9 @@ function clearSpots(c: THREE.Vector3, side: THREE.Vector3, n: number, gap: numbe
 /** The pedestal, as the people meet it: a cylinder as wide as it is drawn. */
 let pedestalSolid = -1;
 function pedestalForPeople(w: People): void { const k = pedestal.visible ? pedestal.scale.x : 0; if (pedestalSolid === k) return; pedestalSolid = k; w.solid('pedestal', k ? { cyl: { r: 0.5 * k, h: M.y } } : null, [M.x, M.y / 2, M.z]); }
-function drawPerson(p: Person): void { const v = personView(p, p.body); peopleGroup.add(v.group); personViews.set(p, v); boards?.put(`person-${personFact(p.name)}`, boardOfPerson(p)); }
+/** Each person's genome, kept so two can have a child. */
+const personGenomes = new Map<Person, Genome>(); let pendingGenome: Genome | null = null;
+function drawPerson(p: Person): void { if (pendingGenome) { personGenomes.set(p, pendingGenome); pendingGenome = null; } const v = personView(p, p.body); peopleGroup.add(v.group); personViews.set(p, v); boards?.put(`person-${personFact(p.name)}`, boardOfPerson(p)); }
 function dropPerson(p: Person): void { const v = personViews.get(p); if (v) { peopleGroup.remove(v.group); v.dispose(); personViews.delete(p); } peopleWorld?.remove(p); lastPeople = lastPeople.filter((x) => x !== p); }
 const sayPerson = (p: Person) => `${p.name} (${p.params.sex >= 0.5 ? 'female' : 'male'}, ${(p.H * 100).toFixed(0)} cm, ${p.params.mass.toFixed(0)} kg${p.fighter ? ', a fighter' : ''})`;
 /** People brought in, in a row in front of you and facing you, each grown from a genome of its own (a fighter's body
@@ -1761,11 +1765,11 @@ async function spawnPeople(who: 'person' | 'man' | 'woman' | 'child' | 'fighter'
     const seed = (Date.now() ^ ((personSeq + 1) * 2654435761)) >>> 0, g = randomGenome(seed, sex ?? (who === 'man' ? 'XY' : who === 'woman' ? 'XX' : undefined));
     let params: Partial<BodyParams> = phenotype(g).params; params = who === 'fighter' ? fighterBuild(params) : fitBuild(params);
     const at = spots[k]!, yaw = Math.atan2(you.x - at.x, you.z - at.z);
-    const name = nameFor(g.sex); personSeq++;
+    const name = nameFor(g.sex); personSeq++; pendingGenome = g;
     const p = w.add(name, params, { x: at.x, z: at.z, yaw }, { fighter: who === 'fighter' }); drawPerson(p); made.push(p);
   }
   lastPeople = made; lastKind = 'people';
-  return `${made.map(sayPerson).join('; ')}: ${n > 1 ? 'they stand' : 'stands'} in front of you by real physics, held up by ${n > 1 ? 'their' : 'its'} own joints and muscles. Grab one with your grip (or drag with the mouse); say "${made[0]!.name} on his back", "${made[0]!.name} stronger", "${made[0]!.name} height 1.9", "${made[0]!.name} jab", "fight", or "remove ${made[0]!.name}". ${n > 1 ? 'Their' : 'Its'} rules are boards (${made.map((p) => `"${p.name}'s rules"`).join(', ')}).`;
+  return `${made.map(sayPerson).join('; ')}: ${n > 1 ? 'they stand' : 'stands'} in front of you by real physics, held up by ${n > 1 ? 'their' : 'its'} own joints and muscles. Grab one with your grip (or drag with the mouse); say "${made[0]!.name} on ${made[0]!.params.sex >= 0.5 ? 'her' : 'his'} back", "${made[0]!.name} stronger", "${made[0]!.name} height 1.9", "${made[0]!.name} jab", "fight", or "remove ${made[0]!.name}". ${n > 1 ? 'Their' : 'Its'} rules are boards (${made.map((p) => `"${p.name}'s rules"`).join(', ')}).`;
 }
 /** Two fighters set on each other: the last two in the room (two brought in if there are not), facing, a jab apart. */
 async function setFight(): Promise<string> {
@@ -1776,6 +1780,35 @@ async function setFight(): Promise<string> {
   for (const [p, q] of [[a, b], [b, a]] as const) { p.target = { person: q }; p.stance = 'guard'; p.ask('get up'); }
   lastKind = 'people';
   return `${a.name} and ${b.name} face each other a jab apart, guards up: each one's board ("${a.name}'s rules", "${b.name}'s rules") throws when it is open and in reach, covers when it is hit hard, and gets up after four seconds down. Change their rules on the boards; say "${a.name} jab", "push ${b.name}", or "stop".`;
+}
+// ---- how living things make more of themselves (src/nexus/life/reproduce.ts), drawn as a life cycle round you ----
+let cycleView: { group: THREE.Group; dispose(): void } | null = null;
+function showCycle(sp: Species): void {
+  if (cycleView) { scene.remove(cycleView.group); cycleView.dispose(); }
+  const m = measure(sp.system), lines = sp.system === 'haplodiploid' ? [`measured: sisters share ${m.sisters.toFixed(2)} of their genes (full sisters elsewhere 0.50)`] : sp.system === 'parthenogenetic' ? [`measured: daughters are clones (r = ${m.sisters.toFixed(2)}); every young can lay: twice a sexual line's growth`] : sp.system === 'mating types' ? ['measured: about 98 % of strains are mates (two mating loci of many types)'] : [`measured: siblings share ${m.sisters.toFixed(2)} of their genes, each young ${m.motherToYoung.toFixed(2)} of each parent's`];
+  cycleView = lifeCycleView(sp, [...lines, sp.why[0]!]);
+  const { at: you, f } = facingYou(); cycleView.group.position.set(you.x, 0, you.z); cycleView.group.rotation.y = Math.atan2(-f.x, -f.z); scene.add(cycleView.group);
+}
+function reproWords(text: string): string | null {
+  const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  // a child of two people in the room, crossed from their own genomes
+  const br = /^(?:breed|cross|mate) (\w+) (?:and|with|x) (\w+)$/.exec(t) ?? /^(?:a |the |make a |make the )?(?:child|baby|kid|son|daughter) of (\w+) and (\w+)$/.exec(t) ?? /^(\w+) and (\w+)'s (?:child|baby|kid)$/.exec(t);
+  if (br) {
+    const a = personNamed(br[1]!), b = personNamed(br[2]!); if (!a || !b) return `${!a ? br[1] : br[2]} is not in the room${peopleWorld?.list.length ? `: there are ${peopleWorld.list.map((p) => p.name).join(', ')}` : ''}.`;
+    const ga = personGenomes.get(a), gb = personGenomes.get(b); if (!ga || !gb) return `I do not have ${!ga ? a.name : b.name}'s genome (made before genomes were kept): bring them in again.`;
+    if (ga.sex === gb.sex) return `${a.name} and ${b.name} are both ${ga.sex === 'XX' ? 'women' : 'men'}: a child needs an egg from one and a sperm from the other.`;
+    const [mum, dad, mN, dN] = ga.sex === 'XX' ? [ga, gb, a.name, b.name] : [gb, ga, b.name, a.name];
+    const kid = childOf(mum, dad, (Date.now() % 1e9) | 0), ph = phenotype(kid).params, hm = phenotype(mum).params.height!, hd = phenotype(dad).params.height!;
+    void (async () => { const w = await peopleNow(), { at: you, f, side } = facingYou(), at = clearSpots(you.clone().addScaledVector(f, 2.2), side, 1, 0.9)[0]!; const name = nameFor(kid.sex); pendingGenome = kid; const p = w.add(name, ph, { x: at.x, z: at.z, yaw: Math.atan2(you.x - at.x, you.z - at.z) }); drawPerson(p); lastPeople = [p]; lastKind = 'people'; })();
+    return `${mN} and ${dN}'s ${kid.sex === 'XX' ? 'daughter' : 'son'}, grown up: a gamete from each by meiosis (each chromosome pair crossed over at random, about 35 crossovers from each parent), an X from ${mN} and ${kid.sex === 'XX' ? 'an X' : 'a Y'} from ${dN}. ${(ph.height! * 100).toFixed(0)} cm (${mN} ${(hm * 100).toFixed(0)}, ${dN} ${(hd * 100).toFixed(0)}: height is about 80 % heritable, so near their middle, a son taller and a daughter shorter, with chance either way). Every child of theirs would differ: a couple can make 2⁴⁶ sets of chromosomes before crossing over.`;
+  }
+  if (/^(how (do|does|are) .+ (reproduce|mate|breed|have (babies|young|kids)|made|multiply|spread)|(the )?life ?cycle (of|for) .+|.+ (life ?cycle|reproduction)|reproduction (of|in) .+|show me how .+ (mate|reproduce|breed)|how (do|does) .+ make (babies|more of themselves|young)|why did evolution make .+|why do .+ (reproduce|mate|breed) like that)$/.test(t)) {
+    const sp = speciesFor(t); if (!sp) return 'I have the life cycles of humans, humpback whales, pigs, fruit flies, ants, earthworms, water bears and mushrooms (their mycelium). Ask for one of those.';
+    showCycle(sp); const m = measure(sp.system);
+    return `${sp.name[0]!.toUpperCase()}${sp.name.slice(1)} (${sp.latin}): ${sp.system === 'XY' ? 'two sexes' : sp.system}; ${sp.chromosomes}. Gametes: ${sp.gametes.says}. Fertilised: ${sp.fertilisation}. ${sp.mating[0]!.toUpperCase()}${sp.mating.slice(1)}. Young: ${sp.young}; ${sp.develops}. Why: ${sp.why.join(' ')} Run here: ${sp.system === 'haplodiploid' ? `sisters share ${m.sisters.toFixed(2)} of their genes` : sp.system === 'parthenogenetic' ? `daughters are clones, ${(m.layersPerYoung * 100).toFixed(0)} % of young can lay` : sp.system === 'mating types' ? 'about 98 % of strains are compatible' : `siblings share ${m.sisters.toFixed(2)}`}. Its stages stand round you.`;
+  }
+  if (/^(close|hide|put away|remove) (the )?(life ?cycle|cycle)$/.test(t) && cycleView) { scene.remove(cycleView.group); cycleView.dispose(); cycleView = null; return 'Put away.'; }
+  return null;
 }
 // ---- kits: makers of things (src/nexus/kits.ts), drawn with every edge as it is made (src/nexus/view/kit3d.ts) ----
 const kitGroup = new THREE.Group(); scene.add(kitGroup); named(kitGroup, 'what the kits made');
@@ -2115,6 +2148,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
+  { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }

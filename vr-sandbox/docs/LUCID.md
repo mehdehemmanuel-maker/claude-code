@@ -46,6 +46,24 @@ What is true now is marked **works**; what is half there, **partial**; what is n
 - **next**: stepping: a body that steps to catch itself (a capture step), walks and moves its feet in a fight; getting
   up by its own muscles.
 
+## 2b. How living things make more of themselves (src/nexus/life/reproduce.ts)
+
+- **works**: "how do ants reproduce", "the life cycle of a pig", "how does mycelium reproduce", "how are babies made":
+  - the species' way stands round you as its life cycle, each stage on a stand at a stated magnification, egg and sperm
+    side by side at the same one;
+  - its card says its sex system, chromosomes, gametes, where its eggs are fertilised, its young, and why evolution
+    favoured it. Eight species: humans, humpback whales, pigs, fruit flies, ants, earthworms, water bears, a mushroom's
+    mycelium.
+- **works (the genetics run, not told)**: each system crossed by its own rules and its offspring measured:
+  - full sisters share 0.5 of their genes, ant sisters 0.75 (haplodiploidy, why sterile workers pay: Hamilton's rule);
+  - a parthenogenetic water bear's daughters are clones and every one can lay (twice a sexual line's growth: the twofold
+    cost of sex);
+  - a hermaphrodite worm's young all lay;
+  - almost any two strains of the mushroom can mate (two mating loci of many types: 98 %).
+- **works**: "breed Kai and Mia": their own genomes crossed by meiosis (each chromosome pair crossed over at random), an X
+  from her and an X or a Y from him, and their child brought in grown up, every trait from what they passed on.
+- Human reproduction is shown as a textbook does (gametes, fertilisation, the stages of development), not depicted otherwise.
+
 ## 3. Simulators that make you better at what you do
 
 Each is a place in the room with its own physics, a coach that measures you, and drills that get harder as you do.
