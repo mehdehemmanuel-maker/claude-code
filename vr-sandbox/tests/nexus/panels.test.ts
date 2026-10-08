@@ -11,10 +11,15 @@ const corolla = MACHINES.find((m) => m.short === 'corolla')!, car = makeMachine(
 const surf = (n: string) => (part(n).shape as { surf: Patch }).surf;
 
 describe('arches from how the wheels move', () => {
-  test('no point of any panel is where a tyre goes, steered to full lock either way and risen through its bump', () => {
+  test('no point of any panel is where a tyre goes straight ahead through its bump, or at full lock at ride height; at full lock in full bump at once, only at its arch\'s lip', () => {
     for (const a of corolla.axles) {
       const t = tyreOf(a.tyre)!, w = { name: 'wheel', x: a.x, y: t.D / 2, z: a.track / 2, R: t.D / 2, w: t.W, ...travelOf(a), section: tyreSection(t) };
-      for (const p of all(car).filter((q) => q.shape && 'surf' in q.shape && !/liner/.test(q.name))) expect(patchPoints((p.shape as { surf: Patch }).surf, 40, 16).filter((q) => inSweep(q, w)), `${p.name} over the wheel at ${a.x.toFixed(2)}`).toHaveLength(0);
+      for (const p of all(car).filter((q) => q.shape && 'surf' in q.shape && !/liner/.test(q.name))) {
+        const pts = patchPoints((p.shape as { surf: Patch }).surf, 40, 16);
+        expect(pts.filter((q) => inSweep(q, { ...w, steer: 0 }) || inSweep(q, { ...w, bump: 0 })), `${p.name} over the wheel at ${a.x.toFixed(2)}`).toHaveLength(0);
+        // (lock in bump, the bare tyre: it reaches the skin only within 40 mm of its lip, never further up the panel)
+        for (const q of pts.filter((q2) => inSweep(q2, w, { ...BODY_RULES.room, radial: 0, side: 0 }))) expect(Math.hypot(q[0] - w.x, q[1] - w.y), `${p.name}`).toBeLessThan(w.R + BODY_RULES.lip + 0.04);
+      }
     }
   });
   test('a tyre sweeps its section, rounded at its shoulder: a point beside its tread is clear where it would not be beside a square-edged cylinder', () => {
@@ -88,12 +93,13 @@ describe('panels that meet by construction', () => {
       for (let k = 0; k <= 30; k++) { const at = patchAt(pt, 0.03 + (0.94 * k) / 30, 0).at; expect(Math.min(...others.map((o) => closestOn(o, at).d)), `${lid} at ${k}`).toBeLessThan(BODY_RULES.gap + 0.001); }
     }
   });
-  test('every point of every wheelhouse liner is clear of its tyre, steered and risen, on every style', () => {
+  test('every point of every wheelhouse liner, from its lip\'s strip in, is clear of its tyre, steered and risen, on every style', () => {
     for (const st of ['sedan', 'hatchback', 'SUV', 'coupe', 'van', 'sports car']) {
       const plan = bodyPlanOf(styledCar(st, { color: 0x888888, rim: 17, rims: 'alloy', power: 'petrol', tint: 'dark' }));
       for (const p of bodyPanels(plan).filter((q) => /liner/.test(q.name))) {
         const w = plan.wheels.find((x) => x.z > 0 && p.name.startsWith(x.name.split(' ')[0]!))!;
-        expect(patchPoints((p.shape as { surf: Patch }).surf, 60, 30, false).filter((q) => inSweep(q, w)), `${st} ${p.name}`).toHaveLength(0);
+        // (from the strip along its lip on in: that strip is the arch's, the tyre passing just behind it in bump)
+        expect(patchPoints((p.shape as { surf: Patch }).surf, 60, 30, false).filter((q, i) => (i % 31) / 30 >= 0.15 && inSweep(q, w)), `${st} ${p.name}`).toHaveLength(0);
       }
     }
   });

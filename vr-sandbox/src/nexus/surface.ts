@@ -117,17 +117,27 @@ export interface Patch { s: Surface; uv?: [UV, UV, UV, UV]; /** or the region ab
 const asPatch = (x: Surface | Patch): Patch => ('net' in x ? { s: x } : x);
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 /** Where (a, b) in a patch's own square falls on its surface (bilinear between its corners). */
-const runs = new WeakMap<UV[], number[]>();
+// (by the line and the surface it is on: one line shared by two patches on different surfaces has two lengths)
+const runs = new WeakMap<UV[], WeakMap<Surface, number[]>>();
 /** Where a share a of the way along a line on a surface falls, by its length on the surface (not in (u, v)). */
 function along(s: Surface, line: UV[], a: number): UV {
-  let cum = runs.get(line);
-  if (!cum) { cum = [0]; for (let k = 1; k < line.length; k++) { const p = surfaceAt(s, clamp01(line[k - 1]![0]), clamp01(line[k - 1]![1])).at, q = surfaceAt(s, clamp01(line[k]![0]), clamp01(line[k]![1])).at; cum.push(cum[k - 1]! + len(sub(q, p)) + 1e-9); } runs.set(line, cum); }
+  let byS = runs.get(line); if (!byS) { byS = new WeakMap(); runs.set(line, byS); } let cum = byS.get(s);
+  if (!cum) { cum = [0]; for (let k = 1; k < line.length; k++) { const p = surfaceAt(s, clamp01(line[k - 1]![0]), clamp01(line[k - 1]![1])).at, q = surfaceAt(s, clamp01(line[k]![0]), clamp01(line[k]![1])).at; cum.push(cum[k - 1]! + len(sub(q, p)) + 1e-9); } byS.set(s, cum); }
   const T = cum[cum.length - 1]! * clamp01(a); let k = 1; while (k < cum.length - 1 && cum[k]! < T) k++;
   const f = (T - cum[k - 1]!) / Math.max(1e-12, cum[k]! - cum[k - 1]!), A = line[k - 1]!, B = line[k]!;
   return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
 }
+/** The height in v of a line sorted along u, at u (0 beyond its ends). */
+function lineAt(line: UV[], u: number): number {
+  if (!line.length || u <= line[0]![0] || u >= line[line.length - 1]![0]) return 0;
+  let lo = 0, hi = line.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (line[m]![0] <= u) lo = m; else hi = m; }
+  const A = line[lo]!, B = line[hi]!; return B[0] - A[0] < 1e-12 ? Math.max(A[1], B[1]) : A[1] + ((B[1] - A[1]) * (u - A[0])) / (B[0] - A[0]);
+}
 export function uvOf(pt: Patch, a: number, b: number): UV {
-  if (pt.above) { const [u, v] = along(pt.s, pt.above, a), top = pt.to ?? 1; if (!pt.top) return [u, v + (top - v) * b]; const uT = pt.top[0] + (pt.top[1] - pt.top[0]) * a; return [u + (uT - u) * b, v + (top - v) * b]; }
+  if (pt.above) { const [u, v] = along(pt.s, pt.above, a), top = pt.to ?? 1; if (!pt.top) return [u, v + (top - v) * b]; const uT = pt.top[0] + (pt.top[1] - pt.top[0]) * a, u2 = u + (uT - u) * b, v2 = v + (top - v) * b;
+    // (a leaning ruling, from the line to the top edge, never below the line at its own u: behind an arch it would cut
+    // through the arch's hole, leaving a sliver of skin in it)
+    return [u2, Math.max(v2, lineAt(pt.above, u2))]; }
   if (!pt.uv) return [a, b]; const [p0, p1, p2, p3] = pt.uv;
   return [0, 1].map((k) => (1 - a) * (1 - b) * p0[k]! + a * (1 - b) * p1[k]! + a * b * p2[k]! + (1 - a) * b * p3[k]!) as UV;
 }

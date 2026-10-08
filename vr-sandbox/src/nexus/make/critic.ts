@@ -143,7 +143,11 @@ export function critique(root: Part): Finding[] {
         const tyreN = nodes.find((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.box), tc = tyreN ? tyreN.box!.getCenter(new THREE.Vector3()) : ctr, tw = !tyreN ? 2 * along : tyreN.p.shape && 'lathe' in tyreN.p.shape ? latheWidth(tyreN.p.shape.lathe) : Math.abs(tyreN.box!.getSize(new THREE.Vector3()).dot(ez));
         const off = tc.clone().sub(ctr).dot(ez), room = { radial: need.clearance, side: sideRoom, poses: 7 };
         const section = tyreN?.p.shape && 'lathe' in tyreN.p.shape ? tyreN.p.shape.lathe : undefined, tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0, section }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along, section: undefined };
-        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; return inSweep(l, tyreSweep, room) || inSweep(l, hubSweep, { ...room, radial: 0 }); });
+        // (a skin by the wheel straight ahead through its bump and at full lock at ride height, as its arch is drawn (BODY_RULES
+        // 'lip'); a wheelhouse's liner by its whole sweep, lock in bump, from the strip along its lip on in: that strip is the
+        // arch's, the tyre passing just behind it)
+        const liner = /liner/.test(f.p.name), straight = { ...tyreSweep, steer: 0 }, atRest = { ...tyreSweep, bump: 0 };
+        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d, i) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; if (inSweep(l, hubSweep, { ...room, radial: 0 })) return true; return liner ? (i % 15) / 14 >= 0.15 && inSweep(l, tyreSweep, room) : inSweep(l, straight, room) || inSweep(l, atRest, room); });
         if (!hit) continue;
         say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;
       }

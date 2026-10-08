@@ -10,10 +10,11 @@
 //     plane (G1: a highlight runs across the shut line unbroken) and their mirrors in another;
 //   - a cabin from the belt to the roof, leaning in (tumblehome), its glass and pillars regions of it;
 //   - each arch trimmed out of the side skin, concentric with its wheel, its radius the least that clears the tyre
-//     wherever it goes: steered through its lock either way and risen through its bump (the room is the critic's: about
-//     30 mm past the tyre and 15 mm beside it). Where the lip would stand inside the tyre's face, the skin is flared out
-//     round the arch instead of the arch opened up. The arch is derived from how the wheel moves, not drawn;
-//   - a wheelhouse liner inside each arch, sized the same way at every depth;
+//     straight ahead through its bump, and at least 40 mm over it at rest (the room is the critic's: about 30 mm past the
+//     tyre and 15 mm beside it). Where the lip would stand inside the tyre's face, the skin is flared out round the arch
+//     instead of the arch opened up. The arch is derived from how the wheel moves, not drawn;
+//   - a wheelhouse liner inside each arch, clear of the tyre wherever it goes, steered through its lock either way and
+//     risen through its bump, at every depth: the lock is the wheelhouse's to clear, behind the skin, as on a real car;
 //   - doors, sills, fenders and quarters as regions of the side skin, with shut lines between them; lamps and the
 //     grille as regions of its faces.
 //
@@ -34,6 +35,9 @@ export interface BodyPlan { L: number; W: number; H: number; c: number; lines: L
 export interface BodyRules {
   /** room round a moving wheel, m (the critic's) and how many steering angles its sweep is taken at */ room: { radial: number; side: number; poses: number };
   /** how far the arch's lip stands outside the tyre's face where the skin is flared for it, m */ flare: number;
+  /** how far an arch's lip stands over its tyre at rest, seen from the side, m: the skin's opening is sized to the wheel
+   *  straight ahead through its bump, and at least this; its sweep at lock is the wheelhouse's and its liner's to clear,
+   *  inside the skin, as on a real car */ lip: number;
   /** the side's section: the shoulder so far below the belt, the side leaning in so far above it, tucked in so far at
    *  the rocker, rolled in so far to its top edge, m */ side: { shoulder: number; tumble: number; tuck: number; inset: number };
   /** crowns: how much higher the middle than the edges, m */ crown: { hood: number; roof: number; deck: number };
@@ -51,6 +55,7 @@ export interface BodyRules {
 export const BODY_RULES: BodyRules = {
   room: { radial: 0.03, side: 0.015, poses: 7 },
   flare: 0.008,
+  lip: 0.04,
   side: { shoulder: 0.1, tumble: 0.03, tuck: 0.035, inset: 0.075 },
   crown: { hood: 0.03, roof: 0.035, deck: 0.025 },
   plan: { nose: 0.5, tail: 0.4, k: 2.6 },
@@ -66,6 +71,7 @@ export const RULE_UPDATES: RuleUpdate[] = [
   { n: 1, rule: 'stations', found: 'a body skin forced through every station rippled along its length: up to 4.6 turns of curvature on one line of a hood, 4.2 on a fender (the critic\'s combs, 2026-10-08)', was: 'interpolated through every station', now: 'fitted fairly across its stations: least squares plus a weight on bending, its ends and end tangents kept' },
   { n: 2, rule: 'section', found: 'doors still turned 3.5 times a line, 124 times a door, up and down: each section forced through its points on parameters shared with the pinched sections at the nose', was: 'a curve through each section\'s points', now: 'each section drawn as a convex control polygon (a B-spline never wavers more than its polygon): no turns on any door' },
   { n: 3, rule: 'fit', found: 'practised on the Corolla, an SUV and a van, held out a hatchback, a sports car and a coupe: 0.02 scored 307 and 428. A weight of 0.5, or a control column every 0.35 m, did best on the bodies practised on (149, 150) and worst on those held out (12,208 and 11,179: the smoothed skin ran into the wheels\' sweep), so neither was kept', was: '{"step":0.25,"lambda":0.02}', now: '{"step":0.25,"lambda":0.2} (scored 162 and 224)' },
+  { n: 4, rule: 'lip', found: 'the critic (round 4, F23): the front arch\'s lip stood 109 mm off the tyre against the rear\'s 56 mm, 421 mm round its axle against about 362 mm on the Corolla\'s side elevation, because the skin\'s opening was sized to clear the tyre steered 35° and risen 80 mm; on a real car the steered tyre swings inside the wheelhouse, behind the skin', was: 'the arch the least radius clear of the whole sweep (lock and bump)', now: 'the arch the least radius clear of the wheel straight ahead through its bump, and at least 40 mm over the tyre at rest; the liner and the inner wheelhouse still clear the whole sweep' },
 ];
 
 // ---- a wheel's sweep -------------------------------------------------------------------------------------------------
@@ -311,15 +317,24 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const vSill = sv[1]!, U = (x: number) => uAt(side, x, sv[3]!);
   // ---- each arch: concentric with its wheel, the least radius that clears its sweep on the skin ----
   const archOf = (w: WheelAt): { line: UV[]; Ra: number } => {
-    const trimAt = (Ra: number) => { const pts: UV[] = [], u0 = U(w.x - Ra - 0.01), u1 = U(w.x + Ra + 0.01), n = 72;
-      for (let k = 0; k <= n; k++) { const u = u0 + ((u1 - u0) * k) / n, P = pointAt(side, u, 0), dx = P[0] - w.x; if (Math.abs(dx) >= Ra) { pts.push([u, 0]); continue; }
-        const yT = w.y + Math.sqrt(Ra * Ra - dx * dx); let lo = 0, hi = 1; if (pointAt(side, u, 1)[1] <= yT) { pts.push([u, 1]); continue; } if (pointAt(side, u, 0)[1] >= yT) { pts.push([u, 0]); continue; }
-        for (let it = 0; it < 24; it++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < yT) lo = m; else hi = m; } pts.push([u, hi]); }
+    // (each column cut where the skin, as it rises, last leaves the circle: by its own distance from the axle at each height,
+    // not by where its foot is along the car, as a skin curving round under itself comes nearer the wheel higher up)
+    // (and more columns where the cut climbs steeply between two, as at the circle's sides, so no sliver of skin is left
+    // inside it between them)
+    const trimAt = (Ra: number) => { const u0 = U(w.x - Ra - 0.05), u1 = U(w.x + Ra + 0.05), n = 72, inside = (u: number, v: number) => { const P = pointAt(side, u, v); return Math.hypot(P[0] - w.x, P[1] - w.y) < Ra; };
+      const cut = (u: number): UV => { let last = -1; for (let j = 0; j <= 32; j++) if (inside(u, j / 32)) last = j;
+        if (last < 0) return [u, 0]; if (last === 32) return [u, 1];
+        let lo = last / 32, hi = (last + 1) / 32; for (let it = 0; it < 24; it++) { const m = (lo + hi) / 2; if (inside(u, m)) lo = m; else hi = m; } return [u, hi]; };
+      let pts: UV[] = Array.from({ length: n + 1 }, (_, k) => cut(u0 + ((u1 - u0) * k) / n));
+      for (let depth = 0; depth < 4; depth++) { const next: UV[] = [pts[0]!]; for (let k = 1; k < pts.length; k++) { const a = pts[k - 1]!, b = pts[k]!; if (Math.abs(b[1] - a[1]) > 0.03) next.push(cut((a[0] + b[0]) / 2)); next.push(b); } if (next.length === pts.length) break; pts = next; }
       return pts; };
-    let Ra = w.R + r.room.radial;
+    // (the wheel straight ahead through its bump, and at full lock at ride height: the two at once (lock in bump) are cleared
+    // inside the skin, by the wheelhouse and its liner)
+    const wS: WheelAt = { ...w, steer: 0 }, wL: WheelAt = { ...w, bump: 0 };
+    let Ra = w.R + Math.max(r.room.radial, r.lip);
     for (let tries = 0; tries < 40; tries++) {
       const line = trimAt(Ra); let hit = false;
-      for (let k = 0; k < line.length && !hit; k++) { const [u, v0] = line[k]!; for (let j = 0; j <= 16 && !hit; j++) { const v = v0 + ((1 - v0) * j) / 16; if (inSweep(pointAt(side, u, v), w, r.room)) hit = true; } }
+      for (let k = 0; k < line.length && !hit; k++) { const [u, v0] = line[k]!; for (let j = 0; j <= 16 && !hit; j++) { const v = v0 + ((1 - v0) * j) / 16; const P = pointAt(side, u, v); if (inSweep(P, wS, r.room) || inSweep(P, wL, r.room)) hit = true; } }
       // (clear: and 5 mm more, so what is between the points looked at is clear too)
       if (!hit) return { line: trimAt(Ra + 0.005), Ra: Ra + 0.005 }; Ra += 0.005;
     }
@@ -507,59 +522,6 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     const yB = yTopT - 0.03 - 0.12 - 0.06, uB1 = rArch.length ? U(Math.min(...rArch.map((a) => a.w.x - a.Ra)) - 0.03) : uTl(0.6);
     out.push(seam('rear bumper shut line', 0, uB1, vAt(uMidT, yB), 'where its rear bumper cover meets the quarters (typical)'));
   }
-  // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
-  for (const a of arches) {
-    const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;
-    // (in as far as the inner wheelhouse it meets: beyond where the tyre's inner corners reach at full lock)
-    // (and short of what stands in the wheelhouse above the wheel, as a strut and its spring do: the liner is shaped in
-    // front of it, not through it)
-    const w = a.w, zW = Math.min(w.z - w.w / 2 - 0.04, w.z - (w.w / 2) * Math.cos(w.steer) - (w.R + r.room.radial) * Math.sin(w.steer) - r.room.side - 0.01), zs = [0, 0, 0.25, 0.5, 0.75, 1], K = zs.length;
-    const stands = (b.inside ?? []).filter((k) => k.in === 'wheelhouse' && k.max[2] > 0 && Math.abs((k.min[0] + k.max[0]) / 2 - w.x) < w.R && k.max[1] > w.y), zIn = Math.max(zW, ...stands.map((k) => Math.min(w.z - w.w / 2 - 0.005, k.max[2] + k.room)));
-    // its net drawn, not interpolated (so every point of it is a blend of its control points with no negative weights, and
-    // moving one out only moves it out): along the arch, one column per point of the lip; across it, from the lip, out at
-    // the lip's own depth to where a risen tyre is clear (the return a fender's lip has, which the tyre tucks up behind),
-    // then in past the tyre's inner face, each row no nearer the axle than the one outside it (the liner widens inward,
-    // so its core pulls out toward the car's middle)
-    const ang = pts.map((P) => Math.atan2(P[1] - w.y, P[0] - w.x)), rad = pts.map((P) => zs.map(() => Math.hypot(P[0] - w.x, P[1] - w.y))), zOf = (n: number, k: number) => pts[n]![2] + (zIn - pts[n]![2]) * zs[k]!;
-    // (its return just inside the skin it turns out from, 4 mm in from it at each height, as read off the skin's own
-    // column there: the skin is clear of the sweep by its arch, so the return following it is too, and never stands out of
-    // the fender where the skin leans in over the wheel)
-    const lipU = a.line.filter((q) => q[1] > 0.0005).map((q) => q[0]), topY = lipU.map((u) => pointAt(side, u, 1)[1]);
-    const skinZ = (n: number, y: number) => { if (y >= topY[n]!) return pointAt(side, lipU[n]!, 1)[2]; let lo = 0, hi = 1; for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (pointAt(side, lipU[n]!, m)[1] < y) lo = m; else hi = m; } return pointAt(side, lipU[n]!, (lo + hi) / 2)[2]; };
-    // (and nothing of it higher than 15 mm under the skin's top edge there: a liner never stands out of its fender; where
-    // the sweep would want it higher, it stays, and the critic says so)
-    const capR = (n: number) => { const sn = Math.sin(ang[n]!); return sn > 0.2 ? (topY[n]! - 0.015 - w.y) / sn : Infinity; }, radOf = (n: number, k: number) => Math.min(rad[n]![k]!, Math.max(rad[n]![0]!, capR(n)));
-    const at = (n: number, k: number): V3 => { const rr2 = radOf(n, k), x = w.x + Math.cos(ang[n]!) * rr2, y = w.y + Math.sin(ang[n]!) * rr2; return [x, y, k === 1 ? Math.min(pts[n]![2], skinZ(n, y)) - 0.004 : zOf(n, k)]; };
-    const build = (): Surface => ({ net: pts.map((_, n) => zs.map((_, k) => at(n, k))), mirror: true });
-    // then looked at, point by point, against the sweep; where it is in it, the control points under that point moved out
-    // 5 mm, until it is clear everywhere (the creator's own check, as the arch's radius is found)
-    // (looked at coarsely until clear, then finely, with 5 mm to spare, so what is between the points looked at is clear too)
-    let s2 = build(); const spare = { ...r.room, radial: r.room.radial + 0.005, side: r.room.side + 0.005 };
-    for (const [NA, NB] of [[pts.length * 2, 24], [pts.length * 4, 48]] as const) for (let tries = 0; tries < 40; tries++) {
-      // (each control point under any point in the sweep moved once a round, however many such points it is under)
-      const push = new Set<number>();
-      for (let ia = 0; ia <= NA; ia++) for (let ib = 1; ib <= NB; ib++) {
-        if (!inSweep(pointAt(s2, ia / NA, ib / NB), w, spare)) continue;
-        const n0 = Math.round((ia / NA) * (pts.length - 1)), k0 = Math.round((ib / NB) * (K - 1));
-        for (let n = Math.max(0, n0 - 1); n <= Math.min(pts.length - 1, n0 + 1); n++) for (let k = Math.max(1, k0 - 1); k <= Math.min(K - 1, k0 + 1); k++) push.add(n * K + k);
-      }
-      if (!push.size) break;
-      let moved = 0; for (const id of push) { const n = Math.floor(id / K), k = id % K; if (rad[n]![k]! < capR(n)) { rad[n]![k]! += 0.005; moved++; } }
-      if (!moved) break;
-      for (const row of rad) for (let k = 2; k < K; k++) row[k] = Math.max(row[k]!, row[k - 1]!);
-      s2 = build();
-    }
-    // and the wheelhouse closed on its inner side, as a car's inner wheelhouse panel closes it: a flat wall beyond where the
-    // tyre's inner corners reach at full lock (so it is clear of the sweep), from the rocker up past the liner's top (so
-    // nothing is seen through the arch but the dark of the wheelhouse)
-    // (its top the liner's own inner edge, which is held under the skin, so the wall never stands through the hood or the
-    // deck; down to the rocker)
-    // (above where the wheel's own drive shaft, spindle and arms pass under it: 60 mm over its axle, the frame rail's
-    // height; under that the wheelhouse is open to the underbody, as a car's is)
-    const yLoW = Math.max(ln.low(w.x) + 0.02, w.y + 0.06), wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
-    out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
-    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', joins: [`${w.name.replace(/ wheel$/, '')} inner wheelhouses`], fixed: 'clipped to its inner wheelhouse and onto the arch lip of the fender or quarter panel over it', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
-  }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
   const lid = (name: string, x0: number, x1: number, crown0: number, says: string, meets: string): Part | null => {
     if (x1 - x0 < 0.08) return null;
@@ -584,6 +546,75 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const hood = lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops', doors ? 'front fender' : 'body sides');
   if (hood) out.push(hood);
   if (deckLid) { const deck = lid('deck lid', ln.xT, xCab - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)', doors ? 'rear quarter panel' : 'body sides'); if (deck) out.push(deck); }
+  // (the lids are made first, so a liner is held under them)
+  const lidPts = out.filter((p) => (p.name === 'hood' || p.name === 'deck lid') && p.shape && 'surf' in p.shape).flatMap((p) => patchPoints((p.shape as { surf: Patch }).surf, 90, 40));
+  // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
+  for (const a of arches) {
+    const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;
+    // (in as far as the inner wheelhouse it meets: beyond where the tyre's inner corners reach at full lock)
+    // (and short of what stands in the wheelhouse above the wheel, as a strut and its spring do: the liner is shaped in
+    // front of it, not through it)
+    const w = a.w, zW = Math.min(w.z - w.w / 2 - 0.04, w.z - (w.w / 2) * Math.cos(w.steer) - (w.R + r.room.radial) * Math.sin(w.steer) - r.room.side - 0.01), zs = [0, 0, 0.25, 0.5, 0.75, 1], K = zs.length;
+    const stands = (b.inside ?? []).filter((k) => k.in === 'wheelhouse' && k.max[2] > 0 && Math.abs((k.min[0] + k.max[0]) / 2 - w.x) < w.R && k.max[1] > w.y), zIn = Math.max(zW, ...stands.map((k) => Math.min(w.z - w.w / 2 - 0.005, k.max[2] + k.room)));
+    // its net drawn, not interpolated (so every point of it is a blend of its control points with no negative weights, and
+    // moving one out only moves it out): along the arch, one column per point of the lip; across it, from the lip, out at
+    // the lip's own depth to where a risen tyre is clear (the return a fender's lip has, which the tyre tucks up behind),
+    // then in past the tyre's inner face, each row no nearer the axle than the one outside it (the liner widens inward,
+    // so its core pulls out toward the car's middle)
+    const ang = pts.map((P) => Math.atan2(P[1] - w.y, P[0] - w.x)), rad = pts.map((P) => zs.map(() => Math.hypot(P[0] - w.x, P[1] - w.y))), zOf = (n: number, k: number) => pts[n]![2] + (zIn - pts[n]![2]) * zs[k]!;
+    // (its return just inside the skin it turns out from, 4 mm in from it at each height, as read off the skin's own
+    // column there: the skin is clear of the sweep by its arch, so the return following it is too, and never stands out of
+    // the fender where the skin leans in over the wheel)
+    const lipU = a.line.filter((q) => q[1] > 0.0005).map((q) => q[0]), topY = lipU.map((u) => pointAt(side, u, 1)[1]);
+    // (and nothing of it higher than 15 mm under the skin's top edge there: a liner never stands out of its fender; where
+    // the sweep would want it higher, it stays, and the critic says so)
+    // (and at each depth in, no higher than where the skin over it, leaning in toward its top, is still 4 mm outside that
+    // depth, less 15 mm: a liner standing deeper in than the skin's top edge stops under the fender's roll-over too; each
+    // read at the point's own place along the car, where its ray reaches, not at its lip's)
+    const edgeY = (x: number) => pointAt(side, U(x), 1)[1];
+    const skinOver = (x: number, z: number) => { const u = U(x); for (let j = 0; j <= 48; j++) { const v = 1 - j / 48, P = pointAt(side, u, v); if (P[1] < w.y) break; if (P[2] >= z + 0.004) return j === 0 ? edgeY(x) : P[1]; } return edgeY(x); };
+    const capMemo = new Map<number, number>();
+    // (and under the hood or the deck lid over it, which can dip under the skin's top edge where the skin rolls over)
+    const lidY = (x: number, z: number) => { let y = Infinity; for (const q of lidPts) if (Math.abs(q[0] - x) < 0.02 && Math.abs(Math.abs(q[2]) - Math.abs(z)) < 0.02 && q[1] < y) y = q[1]; return y; };
+    const capR = (n: number, k = 1) => { const id = n * K + k, c0 = capMemo.get(id); if (c0 !== undefined) return c0; const sn = Math.sin(ang[n]!), cs = Math.cos(ang[n]!); let r2 = Infinity;
+      if (sn > 0.2) { r2 = (topY[n]! - 0.015 - w.y) / sn; for (let it = 0; it < 4; it++) { const x = w.x + cs * r2, z = k >= 2 ? zOf(n, k) : pts[n]![2], yc = Math.min(k >= 2 ? Math.min(edgeY(x), skinOver(x, z)) : edgeY(x), lidY(x, z)) - 0.015; r2 = (yc - w.y) / sn; } }
+      capMemo.set(id, r2); return r2; }, radOf = (n: number, k: number) => Math.min(rad[n]![k]!, Math.max(rad[n]![0]!, capR(n, k)));
+    // (the return's depth read off the skin where the return is, along the car, not at its lip: the skin curves in toward
+    // the arch's ends in plan)
+    const skinZAt = (x: number, y: number) => { const u = U(x); if (y >= pointAt(side, u, 1)[1]) return pointAt(side, u, 1)[2]; let lo = 0, hi = 1; for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < y) lo = m; else hi = m; } return pointAt(side, u, (lo + hi) / 2)[2]; };
+    const at = (n: number, k: number): V3 => { const rr2 = radOf(n, k), x = w.x + Math.cos(ang[n]!) * rr2, y = w.y + Math.sin(ang[n]!) * rr2; return [x, y, k === 1 ? Math.min(pts[n]![2], skinZAt(x, y)) - 0.004 : zOf(n, k)]; };
+    const build = (): Surface => ({ net: pts.map((_, n) => zs.map((_, k) => at(n, k))), mirror: true });
+    // then looked at, point by point, against the sweep; where it is in it, the control points under that point moved out
+    // 5 mm, until it is clear everywhere (the creator's own check, as the arch's radius is found)
+    // (looked at coarsely until clear, then finely, with 5 mm to spare, so what is between the points looked at is clear too)
+    let s2 = build(); const spare = { ...r.room, radial: r.room.radial + 0.005, side: r.room.side + 0.005 };
+    for (const [NA, NB] of [[pts.length * 2, 24], [pts.length * 4, 48]] as const) for (let tries = 0; tries < 40; tries++) {
+      // (each control point under any point in the sweep moved once a round, however many such points it is under)
+      const push = new Set<number>();
+      // (the lip's own strip, where the liner turns in from the skin, is the arch's: the tyre passes just behind it in bump
+      // and swings out through the opening at lock, as on a real car; the liner clears the sweep from there in)
+      for (let ia = 0; ia <= NA; ia++) for (let ib = Math.ceil(NB * 0.15); ib <= NB; ib++) {
+        if (!inSweep(pointAt(s2, ia / NA, ib / NB), w, spare)) continue;
+        const n0 = Math.round((ia / NA) * (pts.length - 1)), k0 = Math.round((ib / NB) * (K - 1));
+        for (let n = Math.max(0, n0 - 1); n <= Math.min(pts.length - 1, n0 + 1); n++) for (let k = Math.max(1, k0 - 1); k <= Math.min(K - 1, k0 + 1); k++) push.add(n * K + k);
+      }
+      if (!push.size) break;
+      let moved = 0; for (const id of push) { const n = Math.floor(id / K), k = id % K; if (rad[n]![k]! < capR(n, k)) { rad[n]![k]! += 0.005; moved++; } }
+      if (!moved) break;
+      for (const row of rad) for (let k = 2; k < K; k++) row[k] = Math.max(row[k]!, row[k - 1]!);
+      s2 = build();
+    }
+    // and the wheelhouse closed on its inner side, as a car's inner wheelhouse panel closes it: a flat wall beyond where the
+    // tyre's inner corners reach at full lock (so it is clear of the sweep), from the rocker up past the liner's top (so
+    // nothing is seen through the arch but the dark of the wheelhouse)
+    // (its top the liner's own inner edge, which is held under the skin, so the wall never stands through the hood or the
+    // deck; down to the rocker)
+    // (above where the wheel's own drive shaft, spindle and arms pass under it: 60 mm over its axle, the frame rail's
+    // height; under that the wheelhouse is open to the underbody, as a car's is)
+    const yLoW = Math.max(ln.low(w.x) + 0.02, w.y + 0.06), wallTop = Array.from({ length: 25 }, (_, i) => pointAt(s2, i / 24, 1));
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} inner wheelhouses`, shape: { surf: { s: { net: wallTop.map((P) => [[P[0], Math.min(yLoW, P[1]), zW], [P[0], P[1], zW]] as V3[]), p: 1, q: 1, mirror: true } } }, at: [0, 0, 0], mat: 'steel-low', color: 0x121212, shell: 0.0008, finish: 'paint', says: `the inner wheelhouse beside each ${w.name}: pressed steel, flat, beyond where the tyre's corners reach at full lock (typical)` });
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: s2 } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', joins: [`${w.name.replace(/ wheel$/, '')} inner wheelhouses`], fixed: 'clipped to its inner wheelhouse and onto the arch lip of the fender or quarter panel over it', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
+  }
   // ---- the cabin: from the belt leaning in to the roof's rails, then across; its glass and pillars regions of it ----
   {
     // (to the tail where it has no deck lid, as a van: its roof and back glass close the body there)
@@ -689,7 +720,9 @@ export function bodyScore(parts: Part[], plan: BodyPlan, room = BODY_RULES.room)
   for (const p of parts) {
     if (!p.shape || !('surf' in p.shape)) continue;
     if (p.finish === 'paint') { const f = fairness(p.shape.surf, 30, 14); rows.push({ panel: p.name, worstLine: f.worstLine, wobbles: f.wobbles, roughness: f.roughness }); }
-    if (!/liner/.test(p.name)) for (const w of plan.wheels) blocked += patchPoints(p.shape.surf, 24, 10).filter((q) => inSweep(q, w, room)).length;
+    // (a skin is in a wheel's way where the wheel goes straight ahead through its bump, or at full lock at ride height: the
+    // two at once are the wheelhouse's, behind the skin, BODY_RULES 'lip')
+    if (!/liner/.test(p.name)) for (const w of plan.wheels) blocked += patchPoints(p.shape.surf, 24, 10).filter((q) => inSweep(q, { ...w, steer: 0 }, room) || inSweep(q, { ...w, bump: 0 }, room)).length;
   }
   const score = rows.reduce((a, r) => a + r.worstLine * 10 + r.wobbles * 0.2 + Math.log1p(r.roughness / 100), 0) + blocked * 1000;
   return { score, rows, blocked };

@@ -1088,7 +1088,9 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     // (inside the cabin: no further forward than the windscreen's base, its top 30 mm under the belt, so it never stands
     // through the hood or the cowl)
     const xWs = m.lines ? m.L / 2 - m.lines.cowl * m.L : Infinity, dashX = Math.min(sx + 0.25, xWs - 0.12), dashY = Math.min(sy - 0.05, (m.lines?.belt ?? 1) * m.H - 0.11), fa = m.axles[0]!, ftR = tyres[0]!.D / 2, bx = dashX + 0.05;
-    const sweepTop = Math.abs(bx - fa.x) < ftR + 0.35 ? ftR * 2 + travelOf(fa).bump + 0.05 : -Infinity, by0 = Math.max(dashY - 0.153, sweepTop + 0.025), lift = by0 - (dashY - 0.153), by = by0 - 0.008;
+    // (over the front wheelhouses as made, where they rise under it, as a cab-forward van's do, and over the tyre's sweep)
+    const whTop = Math.max(...out.filter((p) => p.name === 'front inner wheelhouses' && p.shape && 'surf' in p.shape).flatMap((p) => patchPoints((p.shape as { surf: Patch }).surf, 40, 4)).filter((q) => Math.abs(q[0] - bx) < 0.3).map((q) => q[1]));
+    const sweepTop = Math.max(Math.abs(bx - fa.x) < ftR + 0.35 ? ftR * 2 + travelOf(fa).bump + 0.05 : -Infinity, whTop), by0 = Math.max(dashY - 0.153, sweepTop + 0.025), lift = by0 - (dashY - 0.153), by = by0 - 0.008;
     // (its ends at the hinge pillars, 30 mm inside the skin there, where a door's inner panel and trim would be: not at
     // the door's skin itself)
     const bodyAt = inside?.(bx, by) ?? Infinity, dashW = m.W * 0.42, bh = Number.isFinite(bodyAt) ? bodyAt - 0.03 : dashW + 0.02;
