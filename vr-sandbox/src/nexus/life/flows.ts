@@ -10,7 +10,7 @@ import { INVENTORY, countIn, gramsOfItem } from '../inventory';
 import { estimate, fixed, measured, setting, solve, step, valueIn } from '../lawgraph';
 import { ofLeaf, type Derivation } from '../evaluate';
 import { leaf } from '../term';
-import { LIFESPAN } from './time';
+import { LIFESPAN, wattsOf } from './time';
 
 /** A count or mass read off the body's tree, as a record: where it is from is the tree. */
 const counted = (name: string, n: number) => ofLeaf(leaf(name, n, '-', { class: 'configuration', source: 'counted in the body\'s tree (the life tables, each part from its source)' }));
@@ -71,6 +71,35 @@ export function flowsOf(body = 'human'): Flow[] {
   out.push(F({ id: 'bilirubin', name: 'bilirubin', by: 'spleen', makes: 'bilirubin', rate: bilirubin, unit: 'mg', also: [], measured: { lo: 200, hi: 300, unit: 'mg', source: '250–350 mg a day in all, about 80 % of it from red cells (typical)' } }));
   out.push(F({ id: 'iron', name: 'iron recycled from red cells', by: 'macrophage', rate: iron, unit: 'mg', also: [], measured: { lo: 20, hi: 25, unit: 'mg', source: 'about 20–25 mg a day (typical): a day\'s diet gives only 1–2' } }));
   out.push(F({ id: 'carbon-monoxide', name: 'carbon monoxide breathed out', by: 'spleen', rate: coGas, unit: 'mL', also: [{ d: co, unit: 'mg' }], measured: { lo: 7, hi: 12, unit: 'mL', source: 'about 0.4 ml an hour (Coburn, Blakemore & Forster 1963, J Clin Invest 42:1172)' } }));
+  // ---- breath and blood: what the body burns sets what it breathes and pumps (energy, then the Fick principle) -----------
+  const P = setting('resting power', wattsOf(body), 'W', 'its tissues\' masses times their resting rates (Elia 1992)');
+  const vo2 = solve('power.molar', 'n', { P, E: measured('energy a mole of O₂ burnt', 4.5e5, 'J/mol', 'mixed fuel 440–470 kJ a mole of O₂ (Brouwer 1957)') }, 'oxygen burnt a second');
+  const STPD = step('gas.concentration', { x: fixed('pure', 1, '-', 'the gas alone'), p: fixed('one atmosphere', 101325, 'Pa', 'standard'), T: fixed('0 °C', 273.15, 'K', 'standard') }, 'a gas at 0 °C and 1 atm');
+  const vo2Gas = solve('amount.concentration', 'V', { n: vo2, c: STPD }, 'oxygen taken up, as gas');
+  out.push(F({ id: 'oxygen', name: 'oxygen taken up at rest', by: 'lungs', rate: vo2Gas, unit: 'mL/min', also: [], measured: { lo: 200, hi: 300, unit: 'mL/min', source: 'resting VO₂ about 250 ml a minute STPD (typical)' } }));
+  const vco2 = solve('amount.concentration', 'V', { n: step('total.rate', { n: measured('respiratory quotient', 0.82, '-', 'CO₂ out over O₂ in on a mixed diet, about 0.8 (typical)'), r1: vo2 }, 'CO₂ made a second'), c: STPD }, 'CO₂ breathed out, as gas');
+  out.push(F({ id: 'co2', name: 'CO₂ breathed out at rest', by: 'lungs', rate: vco2, unit: 'mL/min', also: [], measured: { lo: 160, hi: 250, unit: 'mL/min', source: 'about 200 ml a minute (typical)' } }));
+  const room = (x: number, name: string) => step('gas.concentration', { x: measured(name, x, '-', x > 0.2 ? 'dry air 20.95 % O₂' : 'breath out about 16 % O₂ (typical)'), p: fixed('one atmosphere', 101325, 'Pa', 'standard'), T: measured('body temperature', 310.15, 'K', '37 °C') }, name);
+  const vent = solve('transport.advection', 'Q', { n: vo2, dc: step('concentration.difference', { c1: room(0.2095, 'oxygen in air'), c2: room(0.16, 'oxygen in breath out') }, 'oxygen taken from each litre breathed') }, 'air breathed');
+  out.push(F({ id: 'ventilation', name: 'air breathed at rest', by: 'lungs', rate: vent, unit: 'L/min', also: [], measured: { lo: 5, hi: 8, unit: 'L/min', source: 'about 6 l a minute, 12 breaths of 0.5 l (ICRP 89)' } }));
+  // the blood's oxygen capacity from its haemoglobin, counted in its red cells (stoichiometry: four O₂ a haemoglobin),
+  // then the Fick principle: the oxygen taken up is the blood pumped times what each litre gives up
+  const bloodVol = measured('blood volume', 5.3, 'L', 'ICRP 89');
+  const hb = step('total.mass', { n: counted('red cells in the blood', countIn(body, 'red-blood-cell')), m1: hbEach }, 'haemoglobin in the blood');
+  const o2Held = step('stoichiometry.moles', { nu: fixed('O₂ a haemoglobin holds', 4, '-', 'one on each haem'), n: step('moles.of-mass', { m: hb, M: fixed('molar mass of haemoglobin', 64.5, 'kg/mol', 'about 64.5 kDa') }, 'moles of haemoglobin') }, 'O₂ the blood can hold');
+  const o2cap = solve('amount.concentration', 'c', { n: o2Held, V: bloodVol }, 'O₂ a litre of blood can hold');
+  const sat = (theta: number, name: string, why: string) => step('saturation.share', { theta: measured(`${name}: its saturation`, theta, '-', why), cmax: o2cap }, name);
+  const given = step('concentration.difference', { c1: sat(0.98, 'O₂ in arterial blood', 'arterial blood about 98 % saturated (typical)'), c2: sat(0.75, 'O₂ in mixed venous blood', 'mixed venous blood about 75 % saturated at rest (typical)') }, 'O₂ each litre of blood gives up');
+  const cardiac = solve('transport.advection', 'Q', { n: vo2, dc: given }, 'blood the heart pumps');
+  const stroke = step('residence.stock', { Q: cardiac, tau: measured('a heartbeat', 60 / 70, 's', 'a resting heart about 70 beats a minute (typical)') }, 'blood each beat pumps');
+  out.push(F({ id: 'cardiac-output', name: 'blood the heart pumps at rest (the Fick principle)', by: 'heart', rate: cardiac, unit: 'L/min', also: [{ d: stroke, unit: 'mL' }, { d: solve('mass.volume', 'rho', { m: hb, V: bloodVol }, 'haemoglobin a litre of blood'), unit: 'kg/m^3' }], measured: { lo: 4.5, hi: 6.5, unit: 'L/min', source: 'about 5 l a minute at rest (typical)' } }));
+  // the brain's glucose, from its power and glucose's energy
+  const brainGlucose = step('molar.mass-flow', { n: solve('power.molar', 'n', { P: setting('the brain\'s power', wattsOf('brain'), 'W', 'its tissues\' rates (Elia 1992)'), E: measured('energy a mole of glucose burnt', 2.803e6, 'J/mol', 'its heat of combustion, 2,803 kJ/mol (CRC Handbook)') }, 'glucose burnt a second'), M: fixed('molar mass of glucose', 0.18016, 'kg/mol', 'IUPAC') }, 'glucose the brain burns');
+  out.push(F({ id: 'brain-glucose', name: 'glucose the brain burns', by: 'brain', makes: 'glucose', rate: brainGlucose, unit: 'g/d', also: [], measured: { lo: 80, hi: 130, unit: 'g/d', source: 'about 100–120 g a day fed (Cahill 2006, Annu Rev Nutr 26:1)' } }));
+  // albumin: a first-order turnover makes what it loses
+  const albPool = solve('share.of', 'M', { m: step('mass.volume', { rho: measured('albumin in plasma', 42, 'kg/m^3', '42 g/l (typical)'), V: measured('plasma volume', 3, 'L', 'ICRP 89 (about 3 l)') }, 'albumin in the plasma'), w: estimate('share of the body\'s albumin in the plasma', 0.4, '-', 'about 40 %, the rest in the tissues\' fluid (typical)') }, 'albumin in the body');
+  const albumin = step('loss.first-order', { k: solve('half-life', 'k', { t: measured('albumin\'s half-life', 19, 'd', 'about 19 days (Peters, All About Albumin, Academic Press 1996)') }, 'its rate constant'), m: albPool }, 'albumin made');
+  out.push(F({ id: 'albumin', name: 'albumin the liver makes', by: 'liver', makes: 'albumin', rate: albumin, unit: 'g/d', also: [], measured: { lo: 9, hi: 16, unit: 'g/d', source: 'about 10–15 g a day (Peters 1996)' } }));
   // ---- the brain's fluid ---------------------------------------------------------------------------------------------
   const plexus = countIn(body, 'choroid-plexus') * (gramsOfItem(INVENTORY.get('choroid-plexus')!) ?? 0);
   const csf = step('rate.per-mass', { q: measured('fluid a gram of choroid plexus makes', 0.2 / 60 * 1e-6 / 1e-3, 'm^3/s kg', 'about 0.2 ml a minute a gram (Brown et al. 2004, Neuroscience 129:957)'), m: weighed('choroid plexus', plexus) }, 'cerebrospinal fluid made');

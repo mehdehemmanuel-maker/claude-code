@@ -383,7 +383,7 @@ export function organicInto(l: Look, g: THREE.Group, add: Add): void {
     case 'molecule': { const atoms: [V3, number][] = [[[0, 0, 0], 0x404040], [[0.25, 0.15, 0], 0xff4040], [[-0.25, 0.12, 0.05], 0x4060ff], [[0.05, -0.28, 0.1], 0x404040], [[0.3, -0.25, -0.1], 0xf0f0f0], [[-0.28, -0.2, -0.1], 0xf0f0f0], [[0, 0.35, -0.15], 0xf0f0f0]]; for (const [p2, col] of atoms) { const s2 = new THREE.SphereGeometry(Math.min(L, W) * (col === 0xf0f0f0 ? 0.09 : 0.14), 12, 8); s2.translate(p2[0] * L, p2[1] * L, p2[2] * L); add(s2, tint(col)); } for (let j = 1; j < atoms.length; j++) add(tubeAlong([atoms[0]![0].map((x) => x * L) as V3, atoms[j]![0].map((x) => x * L) as V3], Math.min(L, W) * 0.03, 2, 5), tint(0xb0b0b0)); return; }
     case 'sheet': case 'skin': case 'gut': case 'vessels': case 'blood': case 'swatch': case 'valve': {
       const tissue = /bone|marrow/.test(ref) ? C.bone : /muscle|cardiac/.test(ref) ? C.muscle : /adipose|fat/.test(ref) ? C.fat : /tendon|ligament|fascia|dense/.test(ref) ? C.tendon : /cartilage/.test(ref) ? C.cartilage : /grey|cortex|brain/.test(ref) ? C.brain : /white/.test(ref) ? C.white : /liver/.test(ref) ? C.liver : /lung/.test(ref) ? C.lung : /blood|plasma/.test(ref) ? C.blood : /kidney|nephron/.test(ref) ? C.kidney : /epidermis|dermis|skin/.test(ref) ? C.skin : look.c;
-      const g = new THREE.BoxGeometry(L, Math.max(W, L * (form === 'sheet' ? 0.04 : 1)), Math.max(D, L * (form === 'sheet' ? 0.04 : 1)), 6, 6, 6); add(geoNoise(g, Math.min(L, W, D) * 0.03, 40 / L), tint(tissue)); return;
+      const g = new THREE.BoxGeometry(L, Math.max(W, L * 0.04), Math.max(D, L * 0.04), 6, 6, 6); add(geoNoise(g, Math.min(L, W, D) * 0.03, 40 / L), tint(tissue)); return;
     }
     default: {
       const f = FIELDS[form];

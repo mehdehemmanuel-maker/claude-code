@@ -3,7 +3,8 @@
 // organisms) as entries, each with what is in it by count or by mass. Written as tables, a line an entry:
 //
 //   molecule:  id | name | group | formula, or "blend: what %, what %…" | says [| MW in daltons, where it has no formula]
-//   entry:     id | name | path | kind | what is in it | grams one weighs | size, mm (LxWxH) | 3D look | says | spec
+//   entry:     id | name | path | kind | what is in it | grams one weighs | size, mm (LxWxH, or LxWxH*n for a set of n
+//              like members each that size) | 3D look | says | spec
 //
 // "What is in it" is "id*n" for n of a thing, "id:g" for g grams of it (how tissue and fluid are said), and "id:*" for
 // the rest of its mass, whatever the others leave. Its grams are a number, or "=" for the sum of what is in it. Counts
@@ -18,6 +19,7 @@ export interface LifeEntry {
   /** grams of each part said by mass; the rest's part (rest) is filled in when every mass is settled */ mass: Record<string, number>;
   /** grams one weighs: NaN where it is the sum of what is in it */ g: number; rest?: string;
   /** mm */ size?: [number, number, number]; look?: string; says: string; spec?: string;
+  /** a set of so many like members, each its size (both tonsils, the 23 ligamenta flava) */ members?: number;
 }
 
 const cells = (line: string) => line.split(' | ').map((x) => x.trim());
@@ -40,7 +42,7 @@ export function entries(text: string): LifeEntry[] {
     }
     if (g !== '=' && !(out.g > 0)) throw new Error(`${id}: no mass`);
     if (g === '=' && out.rest) throw new Error(`${id}: a sum of its parts has no rest`);
-    if (size && size !== '-') out.size = size.split('x').map(Number) as [number, number, number];
+    if (size && size !== '-') { const [dims, n] = size.split('*') as [string, string?]; out.size = dims.split('x').map(Number) as [number, number, number]; if (n) out.members = Number(n); if (out.size.length !== 3 || out.size.some((x) => !(x > 0)) || (n && !(Number(n) >= 1))) throw new Error(`${id}: cannot read size "${size}"`); }
     if (look && look !== '-') out.look = look;
     if (spec) out.spec = spec;
     return out;

@@ -9,6 +9,7 @@ import { MOLECULES } from './life/molecules';
 import { wattsOf } from './life/time';
 import { breakdown, estimate, fixed, measured, says, solve, step, valueIn } from './lawgraph';
 import { leaf } from './term';
+import { boxShape } from './boxfill';
 import { ofLeaf, type Derivation } from './evaluate';
 
 /** A density, kg/m³, with where it is from: for what is dissolved or packed in a cell, its partial specific volume's
@@ -114,21 +115,15 @@ export interface Profile {
   /** its volume over its shape's (what its size and kind of shape hold) */ fill: number | null;
   power: Derivation | null; oxygen: { demand: Derivation; reach: Derivation; halfThickness: number; needsVessels: boolean } | null;
 }
-/** The shape a look draws, and the share of its box it fills: a block or sheet all of it, a disc, rod or tube a cylinder's
- *  π/4, everything rounded an ellipsoid's π/6. */
-export function shapeOf(look?: string, size?: [number, number, number]): { name: string; phi: number; says: string } {
-  const sorted = size ? [...size].sort((a, b) => a - b) : null;
-  if ((look && /^(swatch|sheet|membrane|block|valve|flatbone|skull|shell|flake)$/.test(look)) || (sorted && sorted[0]! < 0.2 * sorted[1]!)) return { name: 'block', phi: 1, says: 'all' };
-  if (look === 'column') return { name: 'hexagonal prism', phi: Math.sqrt(3) / 2, says: '√3/2 (in a square box)' };
-  if (look && /disc|rod|tube|cord|nerve|longbone|column|fibre|spindle|stem|chromosome|bacterium|spirillum|helix|vessels|tendon|sperm|ring|worm|mito/.test(look)) return { name: 'cylinder', phi: Math.PI / 4, says: 'π/4' };
-  return { name: 'ellipsoid', phi: Math.PI / 6, says: 'π/6' };
-}
+/** The shape a look draws and the share of its box it fills (src/nexus/boxfill.ts). */
+export const shapeOf = boxShape;
 /** Every part, through the same laws. */
 export function profile(id: string): Profile | null {
   const i = INVENTORY.get(id), mass = massOf(id); if (!i || !mass) return null;
   const density = densityOf(id);
   const volume = density ? solve('mass.volume', 'V', { m: mass, rho: density }, `volume of ${i.name}`) : null;
-  const sz = i.size, shape = shapeOf(i.look, sz), box = sz ? step('volume.of-box', { phi: fixed(`a ${shape.name}'s share of its box`, shape.phi, '-', `geometry: a ${shape.name} fills ${shape.says} of the box round it`), a: measured('length', sz[0], 'mm', `its size (${i.path.join('/')})`), b: measured('width', sz[1], 'mm', 'its size'), c: measured('height', sz[2], 'mm', 'its size') }, `the ${shape.name} its size makes`) : null;
+  const sz = i.size, shape = shapeOf(i.look, sz), one = sz ? step('volume.of-box', { phi: fixed(`a ${shape.name}'s share of its box`, shape.phi, '-', `geometry: a ${shape.name} fills ${shape.says} of the box round it`), a: measured('length', sz[0], 'mm', `its size (${i.path.join('/')})`), b: measured('width', sz[1], 'mm', 'its size'), c: measured('height', sz[2], 'mm', 'its size') }, `the ${shape.name} its size makes`) : null;
+  const box = one && i.members ? step('total.volume', { n: fixed('its members', i.members, '-', `a set of ${i.members} like members, each its size`), V1: one }, `the ${i.members} ${shape.name}s its size makes`) : one;
   const fill = volume?.value && box?.value ? volume.value / box.value : null;
   const w = i.path[0] === 'Life' ? wattsOf(id) : 0;
   const power = w > 0 ? ofLeaf(leaf(`resting power of ${i.name}`, w, 'W', { class: 'configuration', source: 'its tissues\' masses times their resting rates (Elia 1992: liver 200, brain 240, heart and kidney 440, muscle 13, fat 4.5, the rest 12 kcal/kg/day)' })) : null;
@@ -160,7 +155,7 @@ export function profileFaults(ids: Iterable<string> = INVENTORY.keys()): { id: s
   for (const id of ids) {
     const i = INVENTORY.get(id); if (!i || i.kind === 'material' || i.kind === 'element' || i.path[0] !== 'Life') continue;
     const p = profile(id); if (!p || p.fill === null) continue;
-    if (p.fill > 1.15) out.push({ id, says: `${i.name}: ${(p.fill * 100).toFixed(0)} % of its ${shapeOf(i.look, i.size).name} (${says(p.volume!, 'mL')} in a ${i.size!.join('×')} mm box)` });
+    if (p.fill > 1.15) out.push({ id, says: `${i.name}: ${(p.fill * 100).toFixed(0)} % of its ${shapeOf(i.look, i.size).name} (${says(p.volume!, 'mL')} in ${i.members ? `${i.members} boxes of` : 'a'} ${i.size!.join('×')} mm)` });
   }
   return out;
 }

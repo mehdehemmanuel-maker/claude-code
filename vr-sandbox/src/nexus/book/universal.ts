@@ -90,6 +90,13 @@ export const UNIVERSAL: Law[] = [
     source: { cite: 'Counting: the mass of n things each of m₁', kind: 'derivation' }, example: { inputs: { n: 2.65e13, m1: 2.9e-14 }, output: 0.7685000000000001 },
   }),
   U({
+    id: 'total.volume', name: 'The room many take', statement: 'Things counted take their count times the room one takes: the 23 ligamenta flava, both tonsils, the vesicles in a bouton.', formula: 'V = n V₁',
+    valid: 'Each the same (or V₁ their mean).',
+    inputs: [['n', '-', 'count'], ['V1', 'm^3', 'volume of one']], output: ['V', 'm^3', 'volume of all'],
+    term: (v) => mul(v.n, v.V1),
+    source: { cite: 'Counting: the volume of n things each of V₁', kind: 'derivation' }, example: { inputs: { n: 23, V1: 7.07e-7 }, output: 1.6261e-5 },
+  }),
+  U({
     id: 'total.flow', name: 'The flow of many', statement: 'Many alike each making a flow make their count times it: sweat glands, nephrons, the cylinders of an engine.', formula: 'Q = n q',
     valid: 'Each the same (or q their mean).',
     inputs: [['n', '-', 'count'], ['q', 'm^3/s', 'flow of one']], output: ['Q', 'm^3/s', 'flow of all'],
@@ -144,6 +151,20 @@ export const UNIVERSAL: Law[] = [
     inputs: [['m', 'kg', 'reactant'], ['nu', '-', 'moles made a mole'], ['Mp', 'g/mol', 'molar mass of the product'], ['Mr', 'g/mol', 'molar mass of the reactant']], output: ['mp', 'kg', 'product'],
     term: (v) => div(mul(v.m, v.nu, v.Mp), v.Mr),
     source: { cite: 'Conservation of mass in reactions (Lavoisier 1789); IUPAC Compendium of Chemical Terminology, "stoichiometry"', kind: 'derivation' }, example: { inputs: { m: 0.0066, nu: 4, Mp: 584.66, Mr: 64500 }, output: 0.00023930269767441858 },
+  }),
+  U({
+    id: 'stoichiometry.moles', name: 'Stoichiometry by moles', statement: 'Atoms and binding sites are counted: a mole of something that holds or makes ν of another holds or makes ν moles of it, four O₂ to a haemoglobin, two hydrogens to a water.', formula: 'n_p = ν n_r',
+    valid: 'ν the number each one holds or makes.',
+    inputs: [['nu', '-', 'how many each'], ['n', 'mol', 'moles of it']], output: ['np', 'mol', 'moles of the other'],
+    term: (v) => mul(v.nu, v.n),
+    source: { cite: 'Conservation of atoms and sites: IUPAC Compendium, "stoichiometry"', kind: 'derivation' }, example: { inputs: { nu: 4, n: 0.0118 }, output: 0.0472 },
+  }),
+  U({
+    id: 'saturation.share', name: 'A share of what it can hold', statement: 'A carrier filled to a share of its capacity holds that share of it: haemoglobin\'s saturation, a binding site\'s occupancy, a battery\'s state of charge.', formula: 'c = θ c_max',
+    valid: 'θ between 0 and 1.',
+    inputs: [['theta', '-', 'share filled'], ['cmax', 'mol/m^3', 'capacity']], output: ['c', 'mol/m^3', 'held'],
+    term: (v) => mul(v.theta, v.cmax), domain: (v) => [share(v.theta, 'the share filled')],
+    source: ATKINS, example: { inputs: { theta: 0.98, cmax: 8.9 }, output: 8.722 },
   }),
   U({
     id: 'heat.latent-flow', name: 'Heat carried by a phase change', statement: 'Energy is conserved: evaporating or freezing a flow of mass carries its latent heat with it, so sweat cools a body, a cooling tower a plant, ice a drink.', formula: 'P = ṁ L',
@@ -353,6 +374,13 @@ export const UNIVERSAL: Law[] = [
     inputs: [['N0', '-', 'amount at the start'], ['k', '1/s', 'rate constant'], ['t', 's', 'time']], output: ['N', '-', 'amount left'],
     term: (v) => mul(v.N0, exp(mul(k(-1), v.k, v.t))),
     source: ATKINS, example: { inputs: { N0: 100, k: 1e-6, t: 1e6 }, output: 36.787944117144235 },
+  }),
+  U({
+    id: 'loss.first-order', name: 'Loss at a first-order rate', statement: 'What is lost in proportion to what is there leaves at its rate constant times the stock, so a steady stock is made at that rate too: albumin in plasma, a drug, a forest\'s carbon.', formula: 'ṁ = k m',
+    valid: 'First-order loss; at steady state, making equals losing.',
+    inputs: [['k', '1/s', 'rate constant'], ['m', 'kg', 'stock']], output: ['mdot', 'kg/s', 'loss (and making, when steady)'],
+    term: (v) => mul(v.k, v.m),
+    source: ATKINS, example: { inputs: { k: 1e-6, m: 2 }, output: 2e-6 },
   }),
   U({
     id: 'half-life', name: 'Half-life', statement: 'A first-order loss halves in ln 2 over its rate constant.', formula: 't½ = ln 2 / k',

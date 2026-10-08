@@ -6,6 +6,7 @@
 
 import { cellOf, type CellType } from './cells';
 import { entries, type LifeEntry } from './core';
+import { boxShape } from '../boxfill';
 
 // ---- tissues, a gram of each ------------------------------------------------------------------------------------------
 export const TISSUES = entries(`
@@ -159,7 +160,7 @@ hand-bones | the bones of a hand | Life/Human/Skeleton | assembly | scaphoid lun
 leg-bones | the bones of a leg | Life/Human/Skeleton | assembly | hip-bone femur patella tibia fibula foot-bones meniscus*2 | = | 1000x160x120 | longbone | 31 bones a side, hip to toe |
 foot-bones | the bones of a foot | Life/Human/Skeleton | assembly | calcaneus talus navicular cuboid medial-cuneiform intermediate-cuneiform lateral-cuneiform metatarsal-1 metatarsal-2 metatarsal-3 metatarsal-4 metatarsal-5 ${bones('foot-proximal-phalanx', 'foot-middle-phalanx', 'foot-distal-phalanx')} | = | 260x95x70 | shortbone | 26 bones: 7 of the ankle, 5 of the sole, 14 of the toes |
 intervertebral-disc | intervertebral disc | Life/Human/Skeleton | part | fibrocartilage:4 cartilage-matrix:2 | = | 45x35x9 | disc | a ring of fibrocartilage (annulus) round a gel (nucleus pulposus): the spine's shock absorber (its mass an estimate: lumbar ones larger) |
-costal-cartilage | costal cartilage | Life/Human/Skeleton | part | hyaline-cartilage:12 | = | 100x15x8 | rod | hyaline cartilage that joins a rib to the sternum and lets the chest spring (an estimate) |
+costal-cartilage | costal cartilage | Life/Human/Skeleton | part | hyaline-cartilage:12 | = | 100x16x9 | rod | hyaline cartilage that joins a rib to the sternum and lets the chest spring (an estimate) |
 meniscus | meniscus | Life/Human/Skeleton | part | fibrocartilage:8 | = | 45x35x8 | disc | a C of fibrocartilage between femur and tibia: two in each knee, medial and lateral (an estimate) |
 skeleton | skeleton | Life/Human/Systems | assembly | skull ossicles*2 hyoid spine ribcage arm-bones*2 leg-bones*2 teeth red-marrow:1170 yellow-marrow:2480 hyaline-cartilage:* dense-connective-skeleton:200 | 10500 | 1760x450x300 | skeleton | 206 bones, and the marrow, cartilage and teeth in them: about 14.5 % of the body (ICRP 89: bone 5.5 kg, red marrow 1.17 kg, yellow marrow 2.48 kg, cartilage 1.1 kg, teeth 50 g, other 200 g) | ICRP 89
 dense-connective-skeleton | periosteum and joint tissue (a gram) | Life/Human/Tissues/Connective | part | fibroblast:0.03 collagen:0.25 hyaluronic-acid:0.005 extracellular-fluid:* | 1 | 9.8x9.8x9.8 | swatch | the skin of bone (periosteum) and the capsules of joints |
@@ -256,41 +257,46 @@ function muscleSize(g: number, id: string): [number, number, number] {
 const musclesOf = () => MUSCLES.map((m) => (m.count === 2 ? `${m.id}*2` : m.id)).join(' ');
 
 // ---- tendons and ligaments, by name --------------------------------------------------------------------------------------
-// id | name | a side or one | where | its tissue | g (an estimate from its typical size) | LxWxH mm | what it is
+// id | name | a side or one | where | its tissue | how many like it, each its size | LxWxH mm | what it is
+// Each one's mass is its size's volume (its shape's share of its box, src/nexus/boxfill.ts) at its tissue's density (the
+// gram of it its swatch holds): an estimate from its typical size, worked out rather than guessed.
 const CONNECTIVE_TABLE = `
-achilles-tendon | Achilles (calcaneal) tendon | 2 | Tendons/Leg | tendon-tissue | 12 | 150x15x6 | the thickest, strongest tendon: gastrocnemius and soleus to the heel; takes up to 12 times body weight running
-patellar-tendon | patellar tendon (ligament) | 2 | Tendons/Knee | tendon-tissue | 8 | 50x30x5 | patella to tibial tuberosity: carries the quadriceps' pull
-quadriceps-tendon | quadriceps tendon | 2 | Tendons/Knee | tendon-tissue | 10 | 70x35x6 | the four quadriceps to the patella
-hamstring-tendons | hamstring tendons | 2 | Tendons/Thigh | tendon-tissue | 12 | 120x10x5 | the hamstrings to the ischium above, tibia and fibula below
-iliotibial-band | iliotibial band | 2 | Tendons/Thigh | fascia-tissue | 30 | 450x40x2 | a strap of fascia down the outer thigh, hip to tibia
-tibialis-tendons | tendons of the leg's front and back (tibialis, fibularis, toe flexors and extensors) | 2 | Tendons/Leg | tendon-tissue | 15 | 200x5x3 | they cross the ankle under retinacula to the foot
-plantar-fascia | plantar fascia (aponeurosis) | 2 | Tendons/Foot | tendon-tissue | 10 | 200x25x2 | the bowstring of the foot's arch, heel to toes
-rotator-cuff-tendons | rotator cuff tendons | 2 | Tendons/Shoulder | tendon-tissue | 8 | 40x30x5 | supraspinatus, infraspinatus, teres minor and subscapularis blended into the shoulder's capsule
-biceps-tendons | biceps tendons | 2 | Tendons/Arm | tendon-tissue | 4 | 90x6x4 | the long head through the shoulder, the distal one to the radius
-triceps-tendon | triceps tendon | 2 | Tendons/Arm | tendon-tissue | 4 | 50x20x4 | to the olecranon
-forearm-tendons | the wrist's and fingers' tendons (flexors through the carpal tunnel, extensors on the back) | 2 | Tendons/Hand | tendon-tissue | 18 | 200x4x2 | about 20 a side: they move the fingers from the forearm, like a puppet's strings
-palmar-aponeurosis | palmar aponeurosis | 2 | Tendons/Hand | tendon-tissue | 3 | 70x40x1 | under the palm's skin: shields the tendons
-central-tendon | central tendon of the diaphragm | 1 | Tendons/Trunk | tendon-tissue | 15 | 150x100x1 | the diaphragm's tendon centre, under the heart
-linea-alba | linea alba and the abdominal aponeuroses | 1 | Tendons/Trunk | tendon-tissue | 60 | 350x200x1 | the white line where the abdominal muscles' tendinous sheets meet
-thoracolumbar-fascia | thoracolumbar fascia | 1 | Tendons/Trunk | fascia-tissue | 60 | 300x250x1.5 | a diamond of fascia over the lower back
-acl | anterior cruciate ligament | 2 | Ligaments/Knee | ligament-tissue | 2 | 32x11x7 | stops the tibia sliding forward under the femur; the one torn in sport
-pcl | posterior cruciate ligament | 2 | Ligaments/Knee | ligament-tissue | 3 | 38x13x8 | stops the tibia sliding back
-mcl | medial collateral ligament | 2 | Ligaments/Knee | ligament-tissue | 3 | 100x15x2 | the knee's inner side
+achilles-tendon | Achilles (calcaneal) tendon | 2 | Tendons/Leg | tendon-tissue | 1 | 150x15x6 | the thickest, strongest tendon: gastrocnemius and soleus to the heel; takes up to 12 times body weight running
+patellar-tendon | patellar tendon (ligament) | 2 | Tendons/Knee | tendon-tissue | 1 | 50x30x5 | patella to tibial tuberosity: carries the quadriceps' pull
+quadriceps-tendon | quadriceps tendon | 2 | Tendons/Knee | tendon-tissue | 1 | 70x35x6 | the four quadriceps to the patella
+hamstring-tendons | hamstring tendons | 2 | Tendons/Thigh | tendon-tissue | 3 | 120x10x5 | the hamstrings to the ischium above, tibia and fibula below
+iliotibial-band | iliotibial band | 2 | Tendons/Thigh | fascia-tissue | 1 | 450x40x2 | a strap of fascia down the outer thigh, hip to tibia
+tibialis-tendons | tendons of the leg's front and back (tibialis, fibularis, toe flexors and extensors) | 2 | Tendons/Leg | tendon-tissue | 8 | 200x5x3 | they cross the ankle under retinacula to the foot
+plantar-fascia | plantar fascia (aponeurosis) | 2 | Tendons/Foot | tendon-tissue | 1 | 200x25x2 | the bowstring of the foot's arch, heel to toes
+rotator-cuff-tendons | rotator cuff tendons | 2 | Tendons/Shoulder | tendon-tissue | 4 | 30x22x5 | supraspinatus, infraspinatus, teres minor and subscapularis blended into the shoulder's capsule
+biceps-tendons | biceps tendons | 2 | Tendons/Arm | tendon-tissue | 2 | 90x6x4 | the long head through the shoulder, the distal one to the radius
+triceps-tendon | triceps tendon | 2 | Tendons/Arm | tendon-tissue | 1 | 50x20x4 | to the olecranon
+forearm-tendons | the wrist's and fingers' tendons (flexors through the carpal tunnel, extensors on the back) | 2 | Tendons/Hand | tendon-tissue | 20 | 200x4x2 | about 20 a side: they move the fingers from the forearm, like a puppet's strings
+palmar-aponeurosis | palmar aponeurosis | 2 | Tendons/Hand | tendon-tissue | 1 | 70x40x1 | under the palm's skin: shields the tendons
+central-tendon | central tendon of the diaphragm | 1 | Tendons/Trunk | tendon-tissue | 1 | 150x100x1 | the diaphragm's tendon centre, under the heart
+linea-alba | linea alba and the abdominal aponeuroses | 1 | Tendons/Trunk | tendon-tissue | 1 | 350x200x1 | the white line where the abdominal muscles' tendinous sheets meet
+thoracolumbar-fascia | thoracolumbar fascia | 1 | Tendons/Trunk | fascia-tissue | 1 | 300x250x1.5 | a diamond of fascia over the lower back
+acl | anterior cruciate ligament | 2 | Ligaments/Knee | ligament-tissue | 1 | 32x11x7 | stops the tibia sliding forward under the femur; the one torn in sport
+pcl | posterior cruciate ligament | 2 | Ligaments/Knee | ligament-tissue | 1 | 38x13x8 | stops the tibia sliding back
+mcl | medial collateral ligament | 2 | Ligaments/Knee | ligament-tissue | 1 | 100x15x2 | the knee's inner side
 lcl | lateral collateral ligament | 2 | Ligaments/Knee | ligament-tissue | 1 | 60x5x3 | the knee's outer side
-ankle-ligaments | ankle ligaments (anterior talofibular, calcaneofibular, deltoid) | 2 | Ligaments/Ankle | ligament-tissue | 4 | 30x15x3 | the ankle's sides: the anterior talofibular the one a sprain tears
-foot-ligaments | foot ligaments (spring, plantar, interosseous) | 2 | Ligaments/Foot | ligament-tissue | 10 | 30x10x3 | tie the 26 bones of the foot into arches
-hip-ligaments | hip ligaments (iliofemoral, pubofemoral, ischiofemoral, ligament of the head) | 2 | Ligaments/Hip | ligament-tissue | 25 | 80x40x5 | the iliofemoral, the strongest ligament, stops the hip over-extending
-pelvic-ligaments | pelvic ligaments (sacroiliac, sacrospinous, sacrotuberous, inguinal) | 2 | Ligaments/Pelvis | ligament-tissue | 30 | 100x30x5 | bind sacrum to hip bones
+ankle-ligaments | ankle ligaments (anterior talofibular, calcaneofibular, posterior talofibular, deltoid) | 2 | Ligaments/Ankle | ligament-tissue | 4 | 30x15x3 | the ankle's sides: the anterior talofibular the one a sprain tears
+foot-ligaments | foot ligaments (spring, long and short plantar, bifurcate, the tarsometatarsal and intermetatarsal rows) | 2 | Ligaments/Foot | ligament-tissue | 12 | 30x10x3 | tie the 26 bones of the foot into arches
+hip-ligaments | hip ligaments (iliofemoral, pubofemoral, ischiofemoral) | 2 | Ligaments/Hip | ligament-tissue | 3 | 60x25x5 | the iliofemoral, the strongest ligament, stops the hip over-extending
+pelvic-ligaments | pelvic ligaments (anterior, posterior and interosseous sacroiliac, sacrospinous, sacrotuberous, iliolumbar) | 2 | Ligaments/Pelvis | ligament-tissue | 6 | 60x20x5 | bind sacrum to hip bones
 shoulder-ligaments | shoulder ligaments (glenohumeral, coracohumeral, coracoclavicular, acromioclavicular) | 2 | Ligaments/Shoulder | ligament-tissue | 8 | 40x15x3 | the shoulder's loose capsule and the collarbone's ties
 elbow-ligaments | elbow ligaments (ulnar and radial collateral, annular) | 2 | Ligaments/Elbow | ligament-tissue | 3 | 30x10x2 | the annular ring holds the radius's head to the ulna
-wrist-hand-ligaments | wrist and hand ligaments (transverse carpal, scapholunate, collaterals) | 2 | Ligaments/Hand | ligament-tissue | 6 | 25x8x2 | tie the carpals; the transverse carpal roofs the carpal tunnel
-spinal-ligaments | spinal ligaments (anterior and posterior longitudinal, interspinous, supraspinous, nuchal) | 1 | Ligaments/Spine | ligament-tissue | 60 | 700x20x2 | run the spine's length, front and back
-ligamenta-flava | ligamenta flava | 1 | Ligaments/Spine | elastic-ligament-tissue | 20 | 15x15x4 | yellow elastic ligaments joining each vertebra's arch to the next: 23 of them
-deep-fascia | deep fascia and muscle sheaths | 1 | Fascia | fascia-tissue | 500 | 1700x500x1 | wraps every muscle (epimysium) and limb in compartments (an estimate)
+wrist-hand-ligaments | wrist and hand ligaments (transverse carpal, scapholunate, lunotriquetral, the fingers' collaterals) | 2 | Ligaments/Hand | ligament-tissue | 30 | 25x8x2 | tie the carpals; the transverse carpal roofs the carpal tunnel
+spinal-ligaments | spinal ligaments (anterior and posterior longitudinal) | 1 | Ligaments/Spine | ligament-tissue | 2 | 700x20x2 | run the spine's length, front and back
+ligamenta-flava | ligamenta flava | 1 | Ligaments/Spine | elastic-ligament-tissue | 23 | 15x15x4 | yellow elastic ligaments joining each vertebra's arch to the next: 23 of them
 `;
-interface Band { id: string; name: string; count: number; where: string; tissue: string; g: number; size: [number, number, number]; says: string }
-export const BANDS: Band[] = CONNECTIVE_TABLE.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [id, name, count, where, tissue, g, size, says] = l.split(' | ').map((x) => x.trim()) as string[]; return { id: id!, name: name!, count: Number(count), where: where!, tissue: tissue!, g: Number(g), size: size!.split('x').map(Number) as [number, number, number], says: says! }; });
-export const BAND_ENTRIES: LifeEntry[] = BANDS.map((b) => ({ id: b.id, name: b.name, path: `Life/Human/${b.where}`, kind: 'part', of: [{ id: b.tissue, n: b.g }], mass: { [b.tissue]: b.g }, g: b.g, size: b.size, look: b.tissue === 'fascia-tissue' ? 'sheet' : 'tendon', says: b.says, spec: `${b.count === 2 ? 'one each side' : 'one'}; about ${b.g} g (an estimate from its typical size)` }));
+interface Band { id: string; name: string; count: number; where: string; tissue: string; members: number; g: number; size: [number, number, number]; says: string }
+export const BANDS: Band[] = CONNECTIVE_TABLE.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [id, name, count, where, tissue, n, size, says] = l.split(' | ').map((x) => x.trim()) as string[];
+  const sz = size!.split('x').map(Number) as [number, number, number], members = Number(n), look = tissue === 'fascia-tissue' ? 'sheet' : 'tendon';
+  const swatch = TISSUES.find((t) => t.id === tissue)!.size!, perMm3 = 1 / (swatch[0] * swatch[1] * swatch[2]);
+  const g = +(members * boxShape(look, sz).phi * sz[0] * sz[1] * sz[2] * perMm3).toPrecision(3);
+  return { id: id!, name: name!, count: Number(count), where: where!, tissue: tissue!, members, g, size: sz, says: says! }; });
+export const BAND_ENTRIES: LifeEntry[] = BANDS.map((b) => ({ id: b.id, name: b.name, path: `Life/Human/${b.where}`, kind: 'part', of: [{ id: b.tissue, n: b.g }], mass: { [b.tissue]: b.g }, g: b.g, size: b.size, ...(b.members > 1 ? { members: b.members } : {}), look: b.tissue === 'fascia-tissue' ? 'sheet' : 'tendon', says: b.says, spec: `${b.count === 2 ? 'one each side' : 'one'}${b.members > 1 ? `, ${b.members} bands` : ''}; about ${b.g} g (its typical size's volume at its tissue's density, an estimate)` }));
 const bandsOf = () => BANDS.map((b) => (b.count === 2 ? `${b.id}*2` : b.id)).join(' ');
 
 // ---- organs and systems ----------------------------------------------------------------------------------------------------
@@ -302,7 +308,7 @@ left-ventricle | left ventricle | Life/Human/Heart | part | cardiac-muscle:150 |
 right-ventricle | right ventricle | Life/Human/Heart | part | cardiac-muscle:60 | = | 80x50x30 | chamber | pumps blood through the lungs at 25 mmHg; its wall 3–5 mm |
 atria | atria | Life/Human/Heart | part | cardiac-muscle:45 | = | 60x50x40 | chamber | the two receiving chambers; the right holds the pacemaker (sinoatrial node) |
 heart-valve | heart valve | Life/Human/Heart | part | dense-connective-skeleton:2 | = | 30x30x2 | valve | flaps of collagen that let blood one way: mitral, tricuspid, aortic, pulmonary (an estimate) |
-pericardium | pericardium | Life/Human/Heart | part | dense-connective-skeleton:20 | = | 120x100x1 | sheet | the bag round the heart (an estimate) |
+pericardium | pericardium | Life/Human/Heart | part | dense-connective-skeleton:20 | = | 160x150x1 | sheet | the bag round the heart: about 250 cm², the surface of a 12 × 9 × 6 cm heart, and 1 mm thick (an estimate) |
 heart | heart | Life/Human/Circulatory | assembly | left-ventricle right-ventricle atria heart-valve*4 pericardium adipose-tissue:20 cardiac-muscle:* | 330 | 120x85x60 | heart | pumps about 5 litres a minute at rest, 100,000 beats a day | ICRP 89: 330 g (tissue)
 circulatory-system | circulatory system | Life/Human/Systems | assembly | heart blood | = | 1760x450x300 | vessels | the heart and blood, through about 100,000 km of vessels (an estimate) |
 // ---- breathing ---------------------------------------------------------------------------------------------------------------
@@ -312,15 +318,18 @@ trachea | trachea | Life/Human/Lungs | part | hyaline-cartilage:4 smooth-muscle:
 larynx | larynx | Life/Human/Lungs | part | hyaline-cartilage:12 elastic-cartilage:2 skeletal-muscle-tissue:10 gut-wall-tissue:* | 28 | 50x45x40 | larynx | the voice box: the vocal folds vibrate at about 100–150 Hz in a man's voice | ICRP 89: 28 g
 respiratory-system | respiratory system | Life/Human/Systems | assembly | right-lung left-lung trachea larynx | = | 300x250x150 | lung | breathes about 12 times a minute, 0.5 l a breath at rest; 5 l of vital capacity (ICRP 89) |
 // ---- digestion ---------------------------------------------------------------------------------------------------------------
-tongue | tongue | Life/Human/Digestive | part | skeletal-muscle-tissue:60 gut-wall-tissue:* | 73 | 90x50x25 | tongue | muscle in three directions under a skin of papillae and about 5,000 taste buds | ICRP 89: 73 g
-salivary-glands | salivary glands | Life/Human/Digestive | part | gland-tissue:85 | = | 50x30x20 | gland | parotid, submandibular and sublingual, a pair of each: 0.5–1.5 l of saliva a day | ICRP 89: 85 g
+tongue | tongue | Life/Human/Digestive | part | skeletal-muscle-tissue:60 gut-wall-tissue:* | 73 | 100x50x27 | tongue | muscle in three directions under a skin of papillae and about 5,000 taste buds | ICRP 89: 73 g
+salivary-glands | salivary glands | Life/Human/Digestive | assembly | parotid-gland*2 submandibular-gland*2 sublingual-gland*2 | = | - | gland | parotid, submandibular and sublingual, a pair of each: 0.5–1.5 l of saliva a day | ICRP 89: 85 g
+parotid-gland | parotid gland | Life/Human/Digestive | part | gland-tissue:27 | = | 58x34x24 | gland | the largest, in front of the ear: watery saliva with amylase, most of it while eating | 27 g each (typical 15–30 g; the three pairs split to ICRP 89's 85 g, an estimate)
+submandibular-gland | submandibular gland | Life/Human/Digestive | part | gland-tissue:12 | = | 40x27x20 | gland | under the jaw, about a walnut: most of the saliva at rest, watery and mucous | 12 g each (an estimate)
+sublingual-gland | sublingual gland | Life/Human/Digestive | part | gland-tissue:3.5 | = | 40x13x12 | gland | the smallest, under the tongue: thick mucous saliva | 3.5 g each (typical 3–4 g)
 oesophagus | oesophagus | Life/Human/Digestive | part | gut-wall-tissue:40 | = | 250x20x20 | tube | 25 cm of muscle tube: swallowing pushes food down in waves | ICRP 89: 40 g
 stomach | stomach | Life/Human/Digestive | part | parietal-cell*1.09e9 chief-cell*1e9 gut-wall-tissue:* | 150 | 250x150x80 | stomach | churns food in acid and pepsin from about 35 million gastric glands: about a billion acid cells in a man (1.09 billion, Card & Marks 1960, Clin Sci 19:147), as many pepsin cells (an estimate) | ICRP 89: 150 g wall
 small-intestine | small intestine | Life/Human/Digestive | part | gut-wall-tissue:650 | = | 300x250x100 | intestine | duodenum, jejunum and ileum, about 6 m coiled in the belly (its box here as it lies): villi and microvilli make 30 m² to take food in | ICRP 89: 650 g wall
 colon | colon | Life/Human/Digestive | part | gut-wall-tissue:370 | = | 320x260x80 | colon | about 1.5 m framing the small intestine: right, transverse, left, sigmoid and rectum; takes water back | ICRP 89: right 150, left 150, rectosigmoid 70 g
 liver | liver | Life/Human/Digestive | part | liver-tissue:1800 | = | 210x160x110 | liver | the body's chemistry works: makes albumin and bile, stores glycogen and iron, breaks down drugs; four lobes | ICRP 89: 1,800 g
-gallbladder | gallbladder | Life/Human/Digestive | part | gut-wall-tissue:10 bile:58 | = | 90x35x35 | bag | stores bile and squeezes it out after a fat meal | ICRP 89: 10 g wall, 58 g bile
-pancreas | pancreas | Life/Human/Digestive | part | gland-tissue:138 islet*1000000 | = | 150x50x25 | gland | makes digestive enzymes (exocrine) and, in about a million islets, insulin and glucagon | ICRP 89: 140 g
+gallbladder | gallbladder | Life/Human/Digestive | part | gut-wall-tissue:10 bile:58 | = | 100x38x36 | bag | stores bile and squeezes it out after a fat meal | ICRP 89: 10 g wall, 58 g bile
+pancreas | pancreas | Life/Human/Digestive | part | gland-tissue:138 islet*1000000 | = | 155x55x28 | gland | makes digestive enzymes (exocrine) and, in about a million islets, insulin and glucagon | ICRP 89: 140 g
 islet | islet of Langerhans | Life/Human/Endocrine | part | beta-cell*900 alpha-cell*350 endothelial-cell*100 extracellular-fluid:* | 1.9e-6 | 0.15x0.15x0.15 | islet | a cluster of about 1,300 cells 150 µm across: beta cells (insulin) and alpha cells (glucagon), with a few delta cells (somatostatin) | about a million in a pancreas, 1–2 % of it (estimates)
 gut-contents | what is in the gut | Life/Human/Digestive | part | gastric-juice:250 chyme:350 faeces:300 | = | 300x200x100 | swatch | food on its way: stomach 250 g, small intestine 350 g, colon 300 g (ICRP 89) |
 chyme | chyme (a gram) | Life/Human/Digestive | part | water:0.85 enzyme:0.04 glucose:0.04 triglyceride:0.03 protein:0.03 bile:0.01 | = | 10x10x10 | swatch | half-digested food and juices in the small intestine (typical) |
@@ -328,44 +337,44 @@ faeces | faeces (a gram) | Life/Human/Digestive | part | gut-bacterium*1.27e11 w
 digestive-system | digestive system | Life/Human/Systems | assembly | tongue salivary-glands oesophagus stomach small-intestine colon liver gallbladder pancreas gut-contents | = | 600x350x200 | gut | mouth to anus, about 9 m: takes in about 2.5 kg of food and water a day |
 // ---- urinary --------------------------------------------------------------------------------------------------------------
 nephron | nephron | Life/Human/Kidney | part | podocyte*500 endothelial-cell*1500 tubule-cell*50000 extracellular-fluid:* | 1.3e-4 | 40x0.2x0.2 | nephron | the kidney's filter: a glomerulus (a knot of capillaries in podocytes' feet) and a tubule 4 cm long that takes back 99 % of what it filters (its cell counts estimates) |
-kidney | kidney | Life/Human/Urinary | part | kidney-tissue:155 | = | 115x55x35 | kidney | about 0.9 million nephrons (Bertram et al. 2011): filters 180 l of blood plasma a day into 1.5 l of urine | ICRP 89: 310 g for both
-ureter | ureter | Life/Human/Urinary | part | gut-wall-tissue:8 | = | 280x5x5 | tube | carries urine from kidney to bladder by waves | ICRP 89: 16 g both
+kidney | kidney | Life/Human/Urinary | part | kidney-tissue:155 | = | 120x65x35 | kidney | about 0.9 million nephrons (Bertram et al. 2011): filters 180 l of blood plasma a day into 1.5 l of urine | ICRP 89: 310 g for both
+ureter | ureter | Life/Human/Urinary | part | gut-wall-tissue:8 | = | 280x6x6 | tube | carries urine from kidney to bladder by waves | ICRP 89: 16 g both
 bladder | urinary bladder | Life/Human/Urinary | part | smooth-muscle:30 gut-wall-tissue:* | 50 | 90x80x60 | bag | holds 400–600 ml | ICRP 89: 50 g
 urethra | urethra | Life/Human/Urinary | part | gut-wall-tissue:10 | = | 200x8x8 | tube | about 20 cm in a man | ICRP 89: 10 g
 urinary-system | urinary system | Life/Human/Systems | assembly | kidney*2 ureter*2 bladder urethra | = | 400x300x150 | kidney | keeps the blood's water, salt and acid right |
 // ---- glands ----------------------------------------------------------------------------------------------------------------------
 thyroid | thyroid | Life/Human/Endocrine | part | thyroid-tissue:20 | = | 50x50x20 | gland | sets the body's pace with thyroxine (T4) and T3, made with iodine | ICRP 89: 20 g
 parathyroid | parathyroid gland | Life/Human/Endocrine | part | gland-tissue:0.03 | = | 6x4x2 | gland | four of them, a grain of rice each: hold blood calcium with parathyroid hormone | about 30 mg each (typical)
-adrenal | adrenal gland | Life/Human/Endocrine | part | gland-tissue:6 adipose-tissue:1 | = | 50x25x6 | gland | on each kidney: the cortex makes cortisol and aldosterone, the medulla adrenaline | ICRP 89: 14 g both
-pituitary | pituitary gland | Life/Human/Endocrine | part | gland-tissue:0.6 | = | 12x9x6 | gland | the master gland under the brain: growth hormone, ACTH, TSH, prolactin, LH, FSH, oxytocin, vasopressin | ICRP 89: 0.6 g
-pineal | pineal gland | Life/Human/Endocrine | part | gland-tissue:0.2 | = | 8x5x4 | gland | makes melatonin in the dark | ICRP 89: 0.2 g
+adrenal | adrenal gland | Life/Human/Endocrine | part | gland-tissue:6 adipose-tissue:1 | = | 50x30x10 | gland | on each kidney, about 5 cm high, 3 broad and 1 thick: the cortex makes cortisol and aldosterone, the medulla adrenaline | ICRP 89: 14 g both
+pituitary | pituitary gland | Life/Human/Endocrine | part | gland-tissue:0.6 | = | 14x10x7 | gland | the master gland under the brain: growth hormone, ACTH, TSH, prolactin, LH, FSH, oxytocin, vasopressin | ICRP 89: 0.6 g
+pineal | pineal gland | Life/Human/Endocrine | part | gland-tissue:0.2 | = | 9x7x6 | gland | makes melatonin in the dark | ICRP 89: 0.2 g
 endocrine-system | endocrine system | Life/Human/Systems | assembly | thyroid parathyroid*4 adrenal*2 pituitary pineal | = | 300x200x100 | gland | the glands that steer the body with hormones (the pancreas's islets are with the pancreas) |
 // ---- immune ------------------------------------------------------------------------------------------------------------------
 spleen | spleen | Life/Human/Immune | part | lymphoid-tissue:150 | = | 120x70x30 | spleen | filters the blood: old red cells out, and an immune check | ICRP 89: 150 g
-thymus | thymus | Life/Human/Immune | part | lymphoid-tissue:15 adipose-tissue:10 | = | 50x40x10 | gland | where T cells learn; it turns to fat with age | ICRP 89: 25 g
-lymph-node | lymph node | Life/Human/Immune | part | lymphoid-tissue:0.4 | = | 10x8x5 | node | a bean on the lymph vessels that filters lymph: about 600 of them (estimate) | ICRP 89: 250 g all
-tonsils | tonsils | Life/Human/Immune | part | lymphoid-tissue:3 | = | 25x15x10 | node | guard the throat | ICRP 89: 3 g
+thymus | thymus | Life/Human/Immune | part | lymphoid-tissue:15 adipose-tissue:10 | = | 60x25x15*2 | gland | where T cells learn, in two lobes behind the breastbone; it turns to fat with age | ICRP 89: 25 g
+lymph-node | lymph node | Life/Human/Immune | part | lymphoid-tissue:0.4 | = | 12x9x7 | node | a bean on the lymph vessels that filters lymph: about 600 of them (estimate) | ICRP 89: 250 g all
+tonsils | tonsils | Life/Human/Immune | part | lymphoid-tissue:3 | = | 20x15x12*2 | node | the palatine pair, either side of the throat: they guard it | ICRP 89: 3 g
 immune-system | lymphatic and immune system | Life/Human/Systems | assembly | spleen thymus lymph-node*625 tonsils | = | 1700x400x200 | node | the organs of immunity: its white cells are also in blood and every tissue |
 // ---- skin ------------------------------------------------------------------------------------------------------------------
-nail | nail | Life/Human/Skin | part | keratin:0.12 water:* | 0.15 | 15x13x0.5 | sheet | hard keratin, growing about 3 mm a month: twenty of them (its mass an estimate) |
+nail | nail | Life/Human/Skin | part | keratin:0.12 water:* | 0.15 | 15x13x0.6 | sheet | hard keratin, growing about 3 mm a month: twenty of them (its mass an estimate) |
 epidermis | epidermis | Life/Human/Skin | part | epidermis-tissue:120 | = | 1900x1000x0.1 | sheet | the outer skin over 1.9 m² (ICRP 89) | ICRP 89: 120 g
 dermis | dermis | Life/Human/Skin | part | eccrine-sweat-gland*3000000 hair-follicle*100000 vellus-follicle*4900000 dermis-tissue:* | 3180 | 1900x1000x1.7 | sheet | the leather under it, with its glands and follicles: about 3 million sweat glands (2–4 million, Sato et al. 1989) and 5 million hair follicles, each with its oil gland | ICRP 89: 3,180 g
 skin | skin | Life/Human/Systems | assembly | epidermis dermis hair nail*20 ear-canal*2 axillary-apocrine*2 | = | 1900x1000x2 | skin | the largest organ, 1.9 m² and 3.3 kg: barrier, temperature, touch | ICRP 89: 3,300 g
 // ---- muscles, fat, connective tissue ----------------------------------------------------------------------------------
 muscles | the skeletal muscles | Life/Human/Systems | assembly | ${musclesOf()} other-muscles:* | 29000 | 1760x450x300 | muscle | about 600 named muscles: 29 kg, 40 % of the body (ICRP 89); here the large ones by name and mass (estimates), the rest together | ICRP 89: 29,000 g
 other-muscles | the other muscles (a gram) | Life/Human/Muscles | part | skeletal-muscle-tissue:1 | = | 9.8x9.8x9.8 | swatch | the small muscles not named here: the neck's and spine's deep ones, the larynx's, the ear's |
-connective-tissue | tendons, ligaments and fascia | Life/Human/Systems | assembly | ${bandsOf()} fascia-tissue:* | 1600 | 1760x450x300 | tendon | the separable connective tissue (ICRP 89: 1.6 kg): the named tendons and ligaments (masses estimates) and the fascia | ICRP 89: 1,600 g
-subcutaneous-fat | fat under the skin | Life/Human/Fat | part | adipose-tissue:14000 | = | 1900x1000x8 | sheet | the fat under the skin: insulation and store (about three quarters of the body's fat, an estimate) |
-visceral-fat | fat round the organs | Life/Human/Fat | part | adipose-tissue:2500 | = | 300x250x100 | fat | the fat in the belly round the organs: the omentum and mesentery (an estimate) |
-other-fat | fat between muscles and elsewhere | Life/Human/Fat | part | adipose-tissue:* | 1700 | 300x300x100 | fat | the rest (an estimate) |
-adipose | fat (adipose tissue) | Life/Human/Systems | assembly | subcutaneous-fat visceral-fat other-fat | = | 1900x1000x50 | fat | 18.2 kg of fat tissue in the reference man (ICRP 89), about 15 kg of it fat itself | ICRP 89: 18,200 g
+connective-tissue | tendons, ligaments and fascia | Life/Human/Systems | assembly | ${bandsOf()} fascia-tissue:* | 1600 | 1760x450x300 | tendon | the separable connective tissue (ICRP 89: 1.6 kg): the named tendons and ligaments (each one's mass its size's volume, an estimate) and the deep fascia and muscle sheaths that wrap every muscle and limb, what the named ones leave of the 1.6 kg | ICRP 89: 1,600 g
+subcutaneous-fat | fat under the skin | Life/Human/Fat | part | adipose-tissue:11200 | = | 1900x1000x6.5 | sheet | the fat under the skin: insulation and store (about three quarters of the body's separable fat, an estimate), about 6.5 mm under 1.9 m² |
+visceral-fat | fat round the organs | Life/Human/Fat | part | adipose-tissue:2000 | = | 300x250x100 | fat | the fat in the belly round the organs: the omentum and mesentery (an estimate) |
+other-fat | fat between muscles and elsewhere | Life/Human/Fat | part | adipose-tissue:* | 1300 | 300x300x100 | fat | the rest (an estimate) |
+adipose | fat (adipose tissue) | Life/Human/Systems | assembly | subcutaneous-fat visceral-fat other-fat | = | 1900x1000x50 | fat | 14.5 kg of separable fat tissue in the reference man, about four fifths of it fat itself; ICRP 89's 18.2 kg of all adipose tissue also counts the yellow marrow (here in the skeleton, 2.48 kg) and the fat within organs | ICRP 89: separable adipose tissue, excluding yellow marrow, 14,500 g
 // ---- the nervous system (the brain is in ./brain.ts) -------------------------------------------------------------
 spinal-cord | spinal cord | Life/Human/Nervous | part | white-matter:20 deep-grey:* | 30 | 450x10x8 | cord | 45 cm of nerve tissue in the spine: 31 pairs of spinal nerves leave it | ICRP 89: 30 g
-eye | eye | Life/Human/Senses | part | retina vitreous-humour:4 lens:0.2 cornea:0.2 sclera:1.5 smooth-muscle:0.3 extracellular-fluid:* | 7.5 | 24x24x24 | eye | a ball 24 mm across: cornea and lens focus light on the retina | ICRP 89: 15 g both, lens 0.4 g both
+eye | eye | Life/Human/Senses | part | retina vitreous-humour:4 lens:0.2 cornea:0.08 sclera:1 smooth-muscle:0.3 extracellular-fluid:* | 7.5 | 24x24x24 | eye | a ball 24 mm across: cornea and lens focus light on the retina | ICRP 89: 15 g both, lens 0.4 g both
 retina | retina | Life/Human/Senses | part | rod-cell*92000000 cone-cell*4600000 deep-grey:0.15 extracellular-fluid:* | 0.3 | 40x40x0.25 | sheet | rods for dim light (about 92 million), cones for colour (about 4.6 million) (Curcio et al. 1990), and the nerve cells that send it on through 1.2 million fibres |
 lens | lens | Life/Human/Senses | part | protein:0.07 water:* | 0.2 | 9x9x4 | lens | a lens of living cells filled with crystallin protein, about 35 % protein |
-cornea | cornea | Life/Human/Senses | part | collagen:0.04 water:* | 0.2 | 11x11x0.55 | lens | clear collagen in layers: two thirds of the eye's focusing |
-sclera | sclera | Life/Human/Senses | part | collagen:0.4 elastin:0.02 water:* | 1.5 | 24x24x0.6 | sheet | the white of the eye: tough collagen |
+cornea | cornea | Life/Human/Senses | part | collagen:0.012 water:* | 0.08 | 11.5x11x0.6 | lens | clear collagen in layers, 0.55 mm thick at its middle and about 0.65 at its edge: two thirds of the eye's focusing | its mass its dome's volume, about 124 mm² (a cap of radius 7.8 mm over 11.5 mm) 0.6 mm thick, here as that sheet; 78 % water (an estimate)
+sclera | sclera | Life/Human/Senses | part | collagen:0.25 elastin:0.01 water:* | 1 | 40x40x0.55 | sheet | the white of the eye: tough collagen, 0.4–1 mm thick (thinnest at the equator, thickest at the back) | its mass its sheet's volume: the 24 mm globe's 1,600 mm² of white unrolled, about 0.55 mm thick (an estimate)
 vitreous-humour | vitreous humour (a gram) | Life/Human/Senses | part | water:0.99 hyaluronic-acid:0.002 collagen:0.001 nacl:0.007 | = | 10x10x10 | swatch | the clear gel that fills the eye |
 inner-ear | inner ear | Life/Human/Senses | part | hair-cell*15500 deep-grey:0.03 extracellular-fluid:* | 0.2 | 10x8x6 | cochlea | the cochlea, a snail of 2.5 turns that hears 20 Hz to 20 kHz (3,500 inner hair cells and 12,000 outer), and the balance organs |
 peripheral-nerves | peripheral nerves | Life/Human/Nervous | part | nerve-tissue:300 | = | 1760x450x5 | nerve | 12 pairs of cranial and 31 of spinal nerves, branching to every part (their mass an estimate) |
