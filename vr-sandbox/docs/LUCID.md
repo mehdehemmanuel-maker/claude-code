@@ -124,6 +124,33 @@ Each is a place in the room with its own physics, a coach that measures you, and
     W/S and A/D or the arrow keys. Say "go" (five lights, then out), "restart", "practice" (alone), "race 5 karts",
     "lap times", "get out" or "get in", "behind view", or "why did I spin" for the physics.
   - Not yet: engine sound, the karts' weight shifting onto the outer tyres, kerbs as bumps.
+- **works (the roller coaster, src/nexus/coaster.ts)**: "ride a roller coaster" or "build a roller coaster that goes
+  through a volcano", and you are in the front seat with the lap bar down.
+  - The track is about a kilometre of steel, laid piece by piece as a designer lays it, each piece a straight or an arc
+    of a stated radius:
+    - a chain lift to 40 m at 2 m/s (chain lifts run about 1–3 m/s);
+    - a 38 m first drop at 62°;
+    - a teardrop loop, 8 m in radius at the top and 24 m at the bottom, so the top is fast enough to hold you in and the
+      bottom gentle enough to bear;
+    - a camelback hill for airtime;
+    - a banked helix, three low hills home, a banked turn, and the brakes.
+  - Each turn eases its bend in and out, and is banked for the speed the train actually takes it at. That speed is found
+    by running the train once over the first laying, then laying the track again.
+  - The train is six cars as one rigid body: gravity pulls it by the mean slope under its cars, its wheels lose about
+    1.5 % of the force the track presses on them, and the air holds it back. The chain carries it over the crest, the
+    brakes stop it, and the station's tyres send it out.
+  - What you feel is the track's push in your seat, as the train's acceleration less gravity:
+    - 94 km/h at the foot of the first drop (95 % of a free fall);
+    - 3.8 g at the bottom of the loop;
+    - +0.4 g into your seat upside down at its top (10.7 m/s round 8 m: v²/R is 14 m/s², more than g);
+    - −0.8 g of airtime over the camelback;
+    - about 0.2 g sideways at most.
+    - These stay inside the commonly cited limits (about +6 g, −1.5 to −2 g, ±1.5 g sideways). ASTM F2291 §7.1 sets the
+      official limits by how long a force lasts and how riders are held; its tables were not read here.
+  - Through a volcano, the helix runs round inside a breached crater over a lava lake, under rising smoke.
+  - Say "go" (or squeeze a trigger, or press space), "wait", "get off" (in the station, to watch from the platform),
+    "get on", "stats", or "why don't I fall out at the top".
+  - Not yet: wind and sound, cars that sway, a coaster you lay yourself piece by piece.
 - **works (creatures, src/nexus/creatures.ts)**:
   - a dog (a golden retriever, by age), penguins (emperor, king, Adélie), a humpback whale, a T. rex, and a dragon;
   - each at the size and mass its sources give, moving as its size lets it: walkers at the Froude number their gait keeps
@@ -135,7 +162,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Next: their legs and bodies by physics, as the people's are (now their gait is a stride timed by their size).
 - **works**: a warehouse with robots, a workshop, flying and walking.
 - **next**: the people in a place standing on its ground everywhere (it is flat for 12 m round you), spin on the pool balls,
-  old cities, games (ping pong), music.
+  old cities, games (ping pong), music, a coaster you lay yourself.
 
 ## 5. Tested blind
 
@@ -145,4 +172,5 @@ sandwich…). First run: 0 of 25 did what was asked. After places: 13 of 25. Aft
 without dinosaurs, the aquarium without whales, the snowfield without penguins, the beach without a surfboard, and "a car
 that turns into a boat" made as a car only), 6 not at all (a puppy, a dragon, ping pong, an orchestra, Rome, a roller
 coaster). Since, creatures: the puppy that follows you, the dragon you can ride, the penguins, the whales and the dinosaurs
-are there; ping pong, the orchestra, Rome, the roller coaster and "a car that turns into a boat" are still not.
+are there. Then the roller coaster through a volcano. Ping pong, the orchestra, Rome and "a car that turns into a boat" are
+still not.
