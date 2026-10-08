@@ -244,10 +244,15 @@ interface Muscle { id: string; name: string; count: number; where: string; g: nu
 export const MUSCLES: Muscle[] = MUSCLE_TABLE.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [id, name, count, where, g, does, runs, nerve] = l.split(' | ').map((x) => x.trim()) as string[]; return { id: id!, name: name!, count: Number(count), where: where!, g: Number(g), does: does!, runs: runs!, nerve: nerve! }; });
 export const MUSCLE_ENTRIES: LifeEntry[] = MUSCLES.map((m) => {
   const t = m.id === 'soleus' ? 'slow-muscle-tissue' : 'skeletal-muscle-tissue';
-  return { id: m.id, name: m.name, path: `Life/Human/Muscles/${m.where}`, kind: 'part', of: [{ id: t, n: m.g }], mass: { [t]: m.g }, g: m.g, size: muscleSize(m.g), look: 'muscle', says: `${m.does}. ${m.runs}; ${m.nerve}`, spec: `${m.count === 2 ? 'one each side' : 'one'}; about ${m.g} g (an estimate for a typical adult man)` };
+  return { id: m.id, name: m.name, path: `Life/Human/Muscles/${m.where}`, kind: 'part', of: [{ id: t, n: m.g }], mass: { [t]: m.g }, g: m.g, size: muscleSize(m.g, m.id), look: 'muscle', says: `${m.does}. ${m.runs}; ${m.nerve}`, spec: `${m.count === 2 ? 'one each side' : 'one'}; about ${m.g} g (an estimate for a typical adult man)` };
 });
-/** A spindle of a muscle's mass, mm: its length about 4 times its width (an estimate). */
-function muscleSize(g: number): [number, number, number] { const v = (g / 1.06) * 1000, w = Math.cbrt(v / (4 * 0.52)); return [Math.round(4 * w), Math.round(w), Math.round(w * 0.7)]; }
+/** A muscle belly of its mass, mm: an ellipsoid about 4 times as long as it is wide and 0.7 as deep as wide (an estimate),
+ *  at 1.06 g/ml (what src/nexus/derive.ts finds of muscle from its make-up: 1.067). A sheet of a muscle (the diaphragm)
+ *  is given its own size. */
+function muscleSize(g: number, id: string): [number, number, number] {
+  if (id === 'diaphragm') return [300, 270, 3.5]; // a dome about 30 by 27 cm, 2–5 mm thick (an estimate): 300 g at 1.06 g/ml
+  const v = (g / 1.06) * 1000, w = Math.cbrt(v / (4 * 0.7 * (Math.PI / 6))); return [Math.round(4 * w), Math.round(w), Math.round(w * 0.7)];
+}
 const musclesOf = () => MUSCLES.map((m) => (m.count === 2 ? `${m.id}*2` : m.id)).join(' ');
 
 // ---- tendons and ligaments, by name --------------------------------------------------------------------------------------
@@ -310,7 +315,7 @@ respiratory-system | respiratory system | Life/Human/Systems | assembly | right-
 tongue | tongue | Life/Human/Digestive | part | skeletal-muscle-tissue:60 gut-wall-tissue:* | 73 | 90x50x25 | tongue | muscle in three directions under a skin of papillae and about 5,000 taste buds | ICRP 89: 73 g
 salivary-glands | salivary glands | Life/Human/Digestive | part | gland-tissue:85 | = | 50x30x20 | gland | parotid, submandibular and sublingual, a pair of each: 0.5–1.5 l of saliva a day | ICRP 89: 85 g
 oesophagus | oesophagus | Life/Human/Digestive | part | gut-wall-tissue:40 | = | 250x20x20 | tube | 25 cm of muscle tube: swallowing pushes food down in waves | ICRP 89: 40 g
-stomach | stomach | Life/Human/Digestive | part | gut-wall-tissue:150 | = | 250x150x80 | stomach | churns food in acid and pepsin | ICRP 89: 150 g wall
+stomach | stomach | Life/Human/Digestive | part | parietal-cell*1.09e9 chief-cell*1e9 gut-wall-tissue:* | 150 | 250x150x80 | stomach | churns food in acid and pepsin from about 35 million gastric glands: about a billion acid cells in a man (1.09 billion, Card & Marks 1960, Clin Sci 19:147), as many pepsin cells (an estimate) | ICRP 89: 150 g wall
 small-intestine | small intestine | Life/Human/Digestive | part | gut-wall-tissue:650 | = | 300x250x100 | intestine | duodenum, jejunum and ileum, about 6 m coiled in the belly (its box here as it lies): villi and microvilli make 30 m² to take food in | ICRP 89: 650 g wall
 colon | colon | Life/Human/Digestive | part | gut-wall-tissue:370 | = | 320x260x80 | colon | about 1.5 m framing the small intestine: right, transverse, left, sigmoid and rectum; takes water back | ICRP 89: right 150, left 150, rectosigmoid 70 g
 liver | liver | Life/Human/Digestive | part | liver-tissue:1800 | = | 210x160x110 | liver | the body's chemistry works: makes albumin and bile, stores glycogen and iron, breaks down drugs; four lobes | ICRP 89: 1,800 g
@@ -342,11 +347,10 @@ lymph-node | lymph node | Life/Human/Immune | part | lymphoid-tissue:0.4 | = | 1
 tonsils | tonsils | Life/Human/Immune | part | lymphoid-tissue:3 | = | 25x15x10 | node | guard the throat | ICRP 89: 3 g
 immune-system | lymphatic and immune system | Life/Human/Systems | assembly | spleen thymus lymph-node*625 tonsils | = | 1700x400x200 | node | the organs of immunity: its white cells are also in blood and every tissue |
 // ---- skin ------------------------------------------------------------------------------------------------------------------
-hair | hair | Life/Human/Skin | part | keratin:17.5 melanin:0.3 triglyceride:0.4 water:* | 20 | 100x100x50 | hair | about 100,000 on the scalp and 5 million follicles in all, growing about 1 cm a month | ICRP 89: 20 g
 nail | nail | Life/Human/Skin | part | keratin:0.12 water:* | 0.15 | 15x13x0.5 | sheet | hard keratin, growing about 3 mm a month: twenty of them (its mass an estimate) |
 epidermis | epidermis | Life/Human/Skin | part | epidermis-tissue:120 | = | 1900x1000x0.1 | sheet | the outer skin over 1.9 m² (ICRP 89) | ICRP 89: 120 g
-dermis | dermis | Life/Human/Skin | part | dermis-tissue:3180 | = | 1900x1000x1.7 | sheet | the leather under it: holds about 2–4 million sweat glands | ICRP 89: 3,180 g
-skin | skin | Life/Human/Systems | assembly | epidermis dermis hair nail*20 | = | 1900x1000x2 | skin | the largest organ, 1.9 m² and 3.3 kg: barrier, temperature, touch | ICRP 89: 3,300 g
+dermis | dermis | Life/Human/Skin | part | eccrine-sweat-gland*3000000 hair-follicle*100000 vellus-follicle*4900000 dermis-tissue:* | 3180 | 1900x1000x1.7 | sheet | the leather under it, with its glands and follicles: about 3 million sweat glands (2–4 million, Sato et al. 1989) and 5 million hair follicles, each with its oil gland | ICRP 89: 3,180 g
+skin | skin | Life/Human/Systems | assembly | epidermis dermis hair nail*20 ear-canal*2 axillary-apocrine*2 | = | 1900x1000x2 | skin | the largest organ, 1.9 m² and 3.3 kg: barrier, temperature, touch | ICRP 89: 3,300 g
 // ---- muscles, fat, connective tissue ----------------------------------------------------------------------------------
 muscles | the skeletal muscles | Life/Human/Systems | assembly | ${musclesOf()} other-muscles:* | 29000 | 1760x450x300 | muscle | about 600 named muscles: 29 kg, 40 % of the body (ICRP 89); here the large ones by name and mass (estimates), the rest together | ICRP 89: 29,000 g
 other-muscles | the other muscles (a gram) | Life/Human/Muscles | part | skeletal-muscle-tissue:1 | = | 9.8x9.8x9.8 | swatch | the small muscles not named here: the neck's and spine's deep ones, the larynx's, the ear's |
@@ -365,10 +369,10 @@ sclera | sclera | Life/Human/Senses | part | collagen:0.4 elastin:0.02 water:* |
 vitreous-humour | vitreous humour (a gram) | Life/Human/Senses | part | water:0.99 hyaluronic-acid:0.002 collagen:0.001 nacl:0.007 | = | 10x10x10 | swatch | the clear gel that fills the eye |
 inner-ear | inner ear | Life/Human/Senses | part | hair-cell*15500 deep-grey:0.03 extracellular-fluid:* | 0.2 | 10x8x6 | cochlea | the cochlea, a snail of 2.5 turns that hears 20 Hz to 20 kHz (3,500 inner hair cells and 12,000 outer), and the balance organs |
 peripheral-nerves | peripheral nerves | Life/Human/Nervous | part | nerve-tissue:300 | = | 1760x450x5 | nerve | 12 pairs of cranial and 31 of spinal nerves, branching to every part (their mass an estimate) |
-nervous-system | nervous system | Life/Human/Systems | assembly | brain cerebrospinal-fluid-volume spinal-cord peripheral-nerves eye*2 inner-ear*2 | = | 1760x450x300 | brain | the brain, the cord, the nerves and the senses |
+nervous-system | nervous system | Life/Human/Systems | assembly | brain cerebrospinal-fluid-volume spinal-cord peripheral-nerves eye*2 lacrimal-apparatus*2 inner-ear*2 | = | 1760x450x300 | brain | the brain, the cord, the nerves and the senses |
 // ---- male reproductive ----------------------------------------------------------------------------------------------
 testis | testis | Life/Human/Reproductive | part | seminiferous-tissue:17.5 | = | 45x30x25 | gland | makes about 100 million sperm a day, and testosterone | ICRP 89: 35 g both
-seminiferous-tissue | testis tissue (a gram) | Life/Human/Reproductive | part | sperm*20000000 stem-cell:0.4 gland-tissue:0.2 extracellular-fluid:* | 1 | 9.8x9.8x9.8 | swatch | coiled tubules where sperm are made, with the cells that make testosterone between them |
+seminiferous-tissue | testis tissue (a gram) | Life/Human/Reproductive | part | sperm*211000000 stem-cell:0.4 gland-tissue:0.2 extracellular-fluid:* | 1 | 9.8x9.8x9.8 | swatch | coiled tubules where sperm are made, with the cells that make testosterone between them | its germ cells by Little's law: about 100 million made a day (typical) on a 74-day way (Heller & Clermont 1963) in 35 g of testis, 211 million a gram
 prostate | prostate | Life/Human/Reproductive | part | gland-tissue:10 smooth-muscle:* | 17 | 40x30x25 | gland | makes part of semen; round the urethra under the bladder | ICRP 89: 17 g
 reproductive-accessory | epididymides, seminal vesicles and erectile tissue | Life/Human/Reproductive | part | smooth-muscle:30 gland-tissue:15 dermis-tissue:10 extracellular-fluid:* | 60 | 150x50x40 | gland | stores and carries sperm, adds fluid; the erectile tissue (masses estimates) |
 reproductive-system | reproductive system (male) | Life/Human/Systems | assembly | testis*2 prostate reproductive-accessory | = | 200x150x100 | gland | the reference body is ICRP 89's reference man |

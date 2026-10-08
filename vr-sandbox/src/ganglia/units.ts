@@ -28,13 +28,15 @@ export const UNITS: Record<string, UnitDef> = {
   U: u(L, 0.04445), kn: u([0, 1, -1, 0, 0], 1852 / 3600), ha: u([0, 2, 0, 0, 0], 1e4),
   mg: u(M, 1e-6), ug: u(M, 1e-9), ng: u(M, 1e-12),
   // volumes: the litre is a cubic decimetre (SI Brochure, 9th ed., Table 8); the US gallon 231 cubic inches exactly
-  'm^3': u([0, 3, 0, 0, 0]), L: u([0, 3, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0], 1e-6), cL: u([0, 3, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0], 231 * 0.0254 ** 3),
+  'm^3': u([0, 3, 0, 0, 0]), L: u([0, 3, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0], 1e-6), uL: u([0, 3, 0, 0, 0], 1e-9), nL: u([0, 3, 0, 0, 0], 1e-12), cL: u([0, 3, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0], 231 * 0.0254 ** 3),
   s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600), d: u(T, 86400), wk: u(T, 604800),
   // a month and a year on average in the Gregorian calendar (365.2425 days)
   mo: u(T, 2629746), yr: u(T, 31556952),
   A: u(I), mA: u(I, 1e-3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
   N: u(N), kN: u(N, 1e3), mN: u(N, 1e-3), uN: u(N, 1e-6), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
+  // a millimetre of mercury, as medicine writes pressure: 133.322387415 Pa (ISO 80000-4 Annex)
+  mmHg: u(PA, 133.322387415),
   Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168), psf: u(PA, 47.88025898),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
