@@ -84,6 +84,10 @@ Branches beyond the standard tools (the user asked for what no one thought of; k
 - **Constraints carry their reason**: G1 across a shut line because a highlight crosses it; a crease at the belt by
   intent; clearance because a part moves.
 - **Lines are control polygons, not points forced through**: a B-spline never wavers more than its polygon.
+- **Coincidence by construction, not by checking**: a panel meeting another is built on its edge (split by knot insertion,
+  then built column for column on it), so they share knots and meet everywhere; the critic's check then only confirms.
+- **A maker checks its own output before the critic does**: the wheelhouse liner is pushed out where it is in the sweep;
+  what goes inside a body (seats, the dashboard's beam) is fitted to the body as made, measured off its skins.
 - Next: shut lines placed by draft (where one press direction stops being formable); zebra judged from where people
   stand; rule updates kept only when they help cases they were not tuned on and do not worsen the blind judge.
 

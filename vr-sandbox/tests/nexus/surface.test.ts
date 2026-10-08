@@ -2,7 +2,7 @@
 // curvature and a mean curvature of 1/(2R), a plane has none; a Coons patch keeps its boundary; a symmetric half
 // crosses its mirror with one tangent plane; a dent is seen as a wobble and as broken zebra lines.
 import { describe, expect, test } from 'vitest';
-import { comb, coons, curvature, curveAt, curvatures, draft, fair, fairness, interpolate, pull, seam, skinParams, skinThrough, surfaceAt, surfaceArea, symmetric, tessellate, zebra, type Curve, type Surface, type V3 } from '../../src/nexus/surface';
+import { comb, coons, curvature, curveAt, curvatures, draft, fair, fairness, fromEdge, interpolate, pointAt, pull, seam, skinParams, skinThrough, split, surfaceAt, surfaceArea, symmetric, tessellate, zebra, type Curve, type Surface, type V3 } from '../../src/nexus/surface';
 
 const r2 = Math.SQRT1_2;
 const quarter: Curve = { P: [[1, 0, 0], [1, 1, 0], [0, 1, 0]], w: [1, r2, 1], p: 2 };
@@ -88,5 +88,23 @@ describe('patches and the factory\'s eye', () => {
     const arc = (a0: number, a1: number): Surface => { const pts = (x: number) => Array.from({ length: 9 }, (_, k) => { const a = a0 + (a1 - a0) * k / 8, r = 0.3 * (1 + 0.6 * x * (1 - x)); return [x, Math.sin(a) * r, Math.cos(a) * r] as V3; }); return skinThrough([pts(0), pts(0.25), pts(0.5), pts(0.75), pts(1)]); };
     expect(Math.abs(draft(arc(-Math.PI / 2, Math.PI / 2)).least * 180 / Math.PI)).toBeLessThan(1.5);
     const over = draft(arc(-Math.PI * 0.7, Math.PI * 0.7)); expect(over.least).toBeLessThan(-0.05); expect(over.undercut).toBeGreaterThan(0);
+  });
+});
+
+describe('skins built on each other', () => {
+  const rows: V3[][] = [0, 0.3, 0.7, 1.1, 1.6, 2].map((x) => [0, 0.3, 0.6, 1].map((f) => [x, f * (1 + 0.15 * Math.sin(2 * x)), 0.3 * Math.sin(f * Math.PI) + 0.05 * x] as V3));
+  test('a skin split between two places is the same surface there, exactly (a rational one too)', () => {
+    const s = skinThrough(rows, { fit: { n: 5, lambda: 0.1 } }), piece = split(s, 0.23, 0.81);
+    for (const t of [0, 0.1, 0.5, 0.77, 1]) for (const v of [0, 0.4, 1]) { const a = pointAt(piece, t, v), b = pointAt(s, 0.23 + 0.58 * t, v); expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeLessThan(1e-9); }
+    const R = 0.5, row = (x: number): V3[] => [[x, 0, R], [x, R, R], [x, R, 0]], cyl: Surface = { net: [row(0), row(0.4), row(0.7), row(1)], w: [[1, Math.SQRT1_2, 1], [1, Math.SQRT1_2, 1], [1, Math.SQRT1_2, 1], [1, Math.SQRT1_2, 1]], p: 3, q: 2 }, cp = split(cyl, 0.4, 1);
+    for (const t of [0, 0.3, 1]) for (const v of [0.2, 0.6]) { const a = pointAt(cp, t, v), b = pointAt(cyl, 0.4 + 0.6 * t, v); expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeLessThan(1e-9); expect(Math.hypot(a[1], a[2])).toBeCloseTo(R, 9); }
+  });
+  test('a skin built on another\'s edge meets it along all of it, in one tangent plane, not only where sections were drawn', () => {
+    const s = skinThrough(rows, { fit: { n: 5, lambda: 0.1 } }), lid = fromEdge(split(s, 0.2, 0.9), (E, d) => [E, [E[0] + d[0] * 1.5, E[1] + d[1] * 1.5, E[2] + d[2] * 1.5], [E[0], E[1] + 0.2, E[2] * 0.5], [E[0], E[1] + 0.2, 0]]);
+    for (const t of [0, 0.13, 0.5, 0.88, 1]) {
+      const a = surfaceAt(lid, t, 0), b = surfaceAt(s, 0.2 + 0.7 * t, 1);
+      expect(Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1], a.at[2] - b.at[2])).toBeLessThan(1e-9);
+      expect(Math.abs(a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2])).toBeGreaterThan(1 - 1e-9);
+    }
   });
 });

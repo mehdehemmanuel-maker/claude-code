@@ -265,6 +265,39 @@ export function skinParams(rows: V3[][], u?: number[]): { u: number[]; v: number
 }
 
 // ---- making surfaces -------------------------------------------------------------------------------------------------
+/** The part of a skin between u = a and u = b, as a skin of its own over 0…1: the same surface there, exactly (each
+ *  end's knot inserted until the skin passes through a column of its net there, Boehm's insertion, NURBS Book A5.1, in
+ *  homogeneous coordinates so a rational skin splits too). What a panel cut from a longer skin is built on, so it meets
+ *  what is cut beside it along the whole of its edge. */
+export function split(s: Surface, a: number, b: number): Surface {
+  const p = degreeOf(s.net.length, s.p, s.U);
+  let U = [...(s.U ?? clampedKnots(s.net.length, p))], H = s.net.map((col, i) => col.map((P, j) => { const w = s.w?.[i]?.[j] ?? 1; return [P[0] * w, P[1] * w, P[2] * w, w]; }));
+  const insert = (t: number) => {
+    let k = p; while (k + 1 < U.length - p - 1 && U[k + 1]! <= t) k++;
+    const m = U.filter((x) => x === t).length, Q: number[][][] = [];
+    for (let i = 0; i <= H.length; i++) {
+      if (i <= k - p) Q.push(H[i]!); else if (i >= k - m + 1) Q.push(H[i - 1]!);
+      else { const al = (t - U[i]!) / (U[i + p]! - U[i]!); Q.push(H[i]!.map((h, j) => h.map((x, c) => al * x + (1 - al) * H[i - 1]![j]![c]!))); }
+    }
+    H = Q; U = [...U.slice(0, k + 1), t, ...U.slice(k + 1)];
+  };
+  for (const t of [a, b]) if (t > 0 && t < 1) while (U.filter((x) => x === t).length < p) insert(t);
+  // (the column the skin passes through at a: the one before the last copy of a in the knots, less the degree; at b, the
+  // one before the first copy of b)
+  const e = U.lastIndexOf(a), f = U.indexOf(b), cols = H.slice(e - p, f);
+  const K = [...Array(p + 1).fill(a), ...U.slice(e + 1, f), ...Array(p + 1).fill(b)].map((x) => (x - a) / (b - a));
+  const rational = !!s.w;
+  return { net: cols.map((col) => col.map((h) => [h[0]! / h[3]!, h[1]! / h[3]!, h[2]! / h[3]!] as V3)), w: rational ? cols.map((col) => col.map((h) => h[3]!)) : undefined, U: K, V: s.V, p, q: s.q, mirror: s.mirror };
+}
+/** A skin built on another's edge at v = 1, column for column of its net: the two share that edge's knots, so they meet
+ *  along all of it, not only where sections were drawn (coincidence by construction, not by checking). Each section is
+ *  made from the other's edge point there (E, a control point) and the last leg of its net arriving at it (d): a second
+ *  point at E plus a fixed multiple of d puts the two in one tangent plane along the whole edge (G1), since then each
+ *  skin's derivative across the edge is the other's scaled. */
+export function fromEdge(s: Surface, row: (E: V3, d: V3, i: number) => V3[], o: { q?: number; mirror?: boolean } = {}): Surface {
+  const last = s.net[0]!.length - 1, net = s.net.map((col, i) => row(col[last]!, sub(col[last]!, col[last - 1]!), i));
+  return { net, w: s.w ? s.w.map((r, i) => net[i]!.map((_, j) => (j === 0 ? r[last]! : 1))) : undefined, U: s.U, p: degreeOf(s.net.length, s.p, s.U), q: o.q ?? Math.min(3, net[0]!.length - 1), mirror: o.mirror ?? s.mirror };
+}
 /** A skin through section curves: each a row of the net (the sections must have as many control points as each other). */
 export function skin(sections: Curve[], o: { mirror?: boolean; q?: number } = {}): Surface {
   const n = sections[0]!.P.length; if (sections.some((c) => c.P.length !== n)) throw new Error('every section needs as many control points');
@@ -310,7 +343,7 @@ export interface Fairness {
   /** the most on any one line */ worstLine: number;
   /** where curvature changes fastest (u, v) */ worst: [number, number];
   /** the root mean square of how fast curvature changes along the lines, per metre (1/m²): a fair panel's is small */ roughness: number;
-  /** the tightest radius anywhere on it, m (a pressed panel's styling radii are a few millimetres at the least) */ rmin: number;
+  /** the tightest radius anywhere on it, m (a pressed panel's styling radii are a few millimetres at the least), and where */ rmin: number; rminAt: [number, number];
   /** the largest and smallest mean curvature, 1/m */ Hmax: number; Hmin: number;
   /** points left out because the surface pinches there (a pole, where a skin closes to a point): curvature is undefined */ pinched: number;
 }
@@ -327,8 +360,8 @@ function regularMask(g: SurfacePoint[][]): boolean[][] {
 export function fairness(x: Surface | Patch, nu = 24, nv = 18, band = 0.2): Fairness {
   const pt = asPatch(x), g: SurfacePoint[][] = [];
   for (let i = 0; i <= nu; i++) { g.push([]); for (let j = 0; j <= nv; j++) g[i]!.push(patchAt(pt, i / nu, j / nv)); }
-  const ok = regularMask(g); let wobbles = 0, worstLine = 0, worst: [number, number] = [0, 0], worstD = 0, sq = 0, cnt = 0, kmax = 0, Hmax = -Infinity, Hmin = Infinity, pinched = 0;
-  for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { if (!ok[i]![j]) { pinched++; continue; } const c = curvatures(g[i]![j]!); Hmax = Math.max(Hmax, c.H); Hmin = Math.min(Hmin, c.H); kmax = Math.max(kmax, Math.abs(c.k1), Math.abs(c.k2)); }
+  const ok = regularMask(g); let wobbles = 0, worstLine = 0, worst: [number, number] = [0, 0], worstD = 0, sq = 0, cnt = 0, kmax = 0, kAt: [number, number] = [0, 0], Hmax = -Infinity, Hmin = Infinity, pinched = 0;
+  for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { if (!ok[i]![j]) { pinched++; continue; } const c = curvatures(g[i]![j]!); Hmax = Math.max(Hmax, c.H); Hmin = Math.min(Hmin, c.H); const k = Math.max(Math.abs(c.k1), Math.abs(c.k2)); if (k > kmax) { kmax = k; kAt = [i / nu, j / nv]; } }
   const kU = (sp: SurfacePoint) => dot(sp.duu, sp.n) / Math.max(1e-12, dot(sp.du, sp.du)), kV = (sp: SurfacePoint) => dot(sp.dvv, sp.n) / Math.max(1e-12, dot(sp.dv, sp.dv));
   const line = (pts: [SurfacePoint, boolean, number, number][], k: (sp: SurfacePoint) => number) => {
     let sign = 0, turns = 0, prev: { k: number; at: V3 } | null = null;
@@ -342,7 +375,7 @@ export function fairness(x: Surface | Patch, nu = 24, nv = 18, band = 0.2): Fair
   };
   for (let j = 0; j <= nv; j++) line(g.map((r, i) => [r[j]!, ok[i]![j]!, i / nu, j / nv]), kU);
   for (let i = 0; i <= nu; i++) line(g[i]!.map((sp, j) => [sp, ok[i]![j]!, i / nu, j / nv]), kV);
-  return { wobbles, worstLine, worst, roughness: Math.sqrt(sq / Math.max(1, cnt)), rmin: kmax > 0 ? 1 / kmax : Infinity, Hmax, Hmin, pinched };
+  return { wobbles, worstLine, worst, roughness: Math.sqrt(sq / Math.max(1, cnt)), rmin: kmax > 0 ? 1 / kmax : Infinity, rminAt: kAt, Hmax, Hmin, pinched };
 }
 /** Continuity where two surfaces meet along a seam: sampled pairs of points (a's at its edge, b's at its own), the
  *  gap between them (G0), the angle between their normals (G1), the jump in mean curvature (G2), and the jump in how
@@ -411,4 +444,14 @@ export function draft(x: Surface | Patch, pull?: V3, na = 18, nb = 12): { pull: 
   let least = Infinity, at: [number, number] = [0, 0], under = 0;
   for (const q of ns) { const g = dot(q.n, best); if (g < 0) under++; if (g < least) { least = g; at = [q.a, q.b]; } }
   return { pull: best, least: Math.asin(Math.max(-1, Math.min(1, least))), undercut: under / ns.length, at };
+}
+
+/** The point of a patch nearest a given point: the nearest of a coarse grid, then a pattern search round it, its step
+ *  halved until it is a millionth of the patch (a grid alone is out by up to half its spacing). */
+export function closestOn(x: Surface | Patch, P: V3, grid?: { a: number; b: number; at: V3 }[]): { a: number; b: number; at: V3; d: number } {
+  const pt = asPatch(x), g = grid ?? Array.from({ length: 41 * 17 }, (_, k) => { const a = Math.floor(k / 17) / 40, b = (k % 17) / 16; return { a, b, at: patchAt(pt, a, b).at }; });
+  let best = g[0]!, bd = Infinity; for (const q of g) { const d = len(sub(q.at, P)); if (d < bd) { bd = d; best = q; } }
+  let a = best.a, b = best.b, at = best.at;
+  for (let st = 1 / 40; st > 1e-6; st *= 0.5) for (let moved = true; moved;) { moved = false; for (const [da, db] of [[st, 0], [-st, 0], [0, st], [0, -st]] as const) { const na = clamp01(a + da), nb = clamp01(b + db), q = patchAt(pt, na, nb).at, d = len(sub(q, P)); if (d < bd - 1e-12) { bd = d; a = na; b = nb; at = q; moved = true; } } }
+  return { a, b, at, d: bd };
 }

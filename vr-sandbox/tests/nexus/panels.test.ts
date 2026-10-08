@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf } from '../../src/nexus/machines';
 import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/panels';
-import { comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
+import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
 import type { Part } from '../../src/nexus/kits';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
@@ -66,5 +66,23 @@ describe('the critic changes the rules, never a body', () => {
     const on = [plan('corolla')], held = [plan('sports car')], base = { ...BODY_RULES, fit: { step: 0.25, lambda: 0.02 } };
     expect(practise('fit', [{ step: 0.35, lambda: 0.2 }], on, held, base).update).toBeNull();
     const r = practise('fit', [{ step: 0.25, lambda: 0.2 }], on, held, base); expect(r.kept).toEqual({ step: 0.25, lambda: 0.2 }); expect(r.update?.was).toMatch(/0\.02/);
+  });
+});
+
+describe('panels that meet by construction', () => {
+  test('the hood and the deck lid stand off the side\'s top edge by their shut line\'s gap all along it, not only where sections were drawn', () => {
+    for (const [lid, side] of [['hood', 'front fender'], ['deck lid', 'rear quarter panel']] as const) {
+      const pt = surf(lid), other = surf(side);
+      for (let k = 0; k <= 30; k++) { const at = patchAt(pt, 0.03 + (0.94 * k) / 30, 0).at; expect(closestOn(other, at).d, `${lid} at ${k}`).toBeLessThan(BODY_RULES.gap + 0.001); }
+    }
+  });
+  test('every point of every wheelhouse liner is clear of its tyre, steered and risen, on every style', () => {
+    for (const st of ['sedan', 'hatchback', 'SUV', 'coupe', 'van', 'sports car']) {
+      const plan = bodyPlanOf(styledCar(st, { color: 0x888888, rim: 17, rims: 'alloy', power: 'petrol', tint: 'dark' }));
+      for (const p of bodyPanels(plan).filter((q) => /liner/.test(q.name))) {
+        const w = plan.wheels.find((x) => x.z > 0 && p.name.startsWith(x.name.split(' ')[0]!))!;
+        expect(patchPoints((p.shape as { surf: Patch }).surf, 60, 30, false).filter((q) => inSweep(q, w)), `${st} ${p.name}`).toHaveLength(0);
+      }
+    }
   });
 });

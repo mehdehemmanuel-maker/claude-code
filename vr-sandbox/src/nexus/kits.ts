@@ -52,6 +52,9 @@ export interface Part {
   /** it goes on public roads (and so carries number plates and mirrors) */ road?: boolean;
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
   /** what it offers or asks of the parts it meets */ iface?: Iface[];
+  /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
+   *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
+   *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
   /** its maker's published mass, kg: what is not drawn (its part named "the rest of it") makes up the difference */ published?: number;
   /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
   /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it
