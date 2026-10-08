@@ -4,6 +4,7 @@
 // or mass, so a cell comes down, through them, to its elements.
 
 import { entries, type LifeEntry } from './core';
+import { holding } from '../boxfill';
 
 /** g a cubic micrometre: a cell is 1.05–1.10 g/ml (typical). */
 export const DENS = 1.07e-12;
@@ -46,13 +47,15 @@ lysosome | lysosome | Life/Cells/Organelles | part | membrane-um2*0.8 enzyme:1.3
 peroxisome | peroxisome | Life/Cells/Organelles | part | membrane-um2*0.8 enzyme:2e-14 water:* | 7e-14 | 0.0005x0.0005x0.0005 | sphere | burns fatty acids and breaks hydrogen peroxide down with catalase |
 nucleolus | nucleolus | Life/Cells/Organelles | part | rna:2e-12 enzyme:3e-12 nucleoplasm:* | 1.5e-11 | 0.003x0.003x0.003 | sphere | where ribosomes are made, about 3 µm across: RNA and protein, no membrane |
 lipid-droplet | lipid droplet | Life/Cells/Organelles | part | fat-droplet:* | 5e-13 | 0.001x0.001x0.001 | sphere | stored fat in a cell that is not a fat cell, about 1 µm across |
-glycogen-granule | glycogen granule | Life/Cells/Organelles | part | glycogen:* | 3.5e-17 | 0.00003x0.00003x0.00003 | sphere | a β-particle of glycogen, about 30 nm across: up to 55,000 glucoses round a protein core |
-synaptic-vesicle | synaptic vesicle | Life/Brain/Synapse | part | synaptobrevin*70 synaptophysin*32 synaptotagmin*15 vglut*10 v-atpase*1.5 rab3*10 membrane-lipids:1.23e-17 glutamate*2000 water:2.2e-17 | = | 0.00004x0.00004x0.00004 | sphere | a 40 nm bubble of glutamate: its protein copies by count (Takamori et al. 2006), about 7,000 phospholipids and 5,600 cholesterols, and about 2,000 glutamates (an estimate) | Takamori 2006
-gaba-vesicle | synaptic vesicle (GABA) | Life/Brain/Synapse | part | synaptobrevin*70 synaptophysin*32 synaptotagmin*15 vgat*10 v-atpase*1.5 rab3*10 membrane-lipids:1.23e-17 gaba*2000 water:2.2e-17 | = | 0.00004x0.00004x0.00004 | sphere | an inhibitory vesicle: GABA in place of glutamate (its counts by analogy, an estimate) |
+glycogen-granule | glycogen granule | Life/Cells/Organelles | part | glycogen:1.48e-17 water:* | 4.4e-17 | 0.000042x0.000042x0.000042 | sphere | a full β-particle of glycogen, 42 nm across: 55,000 glucoses (8.9 MDa) in 12 tiers round a protein core, the rest of it water (Meléndez-Hevia et al. 1993) |
+synaptic-vesicle | synaptic vesicle | Life/Brain/Synapse | part | synaptobrevin*70 synaptophysin*32 synaptotagmin*15 vglut*10 v-atpase*1.5 rab3*10 membrane-lipids:1.23e-17 glutamate*2000 water:2.2e-17 | = | 0.000042x0.000042x0.000042 | sphere | a 42 nm bubble of glutamate: its protein copies by count (Takamori et al. 2006), about 7,000 phospholipids and 5,600 cholesterols, and about 2,000 glutamates (an estimate) | Takamori 2006
+gaba-vesicle | synaptic vesicle (GABA) | Life/Brain/Synapse | part | synaptobrevin*70 synaptophysin*32 synaptotagmin*15 vgat*10 v-atpase*1.5 rab3*10 membrane-lipids:1.23e-17 gaba*2000 water:2.2e-17 | = | 0.000042x0.000042x0.000042 | sphere | an inhibitory vesicle: GABA in place of glutamate (its counts by analogy, an estimate) |
 ach-vesicle | synaptic vesicle (acetylcholine) | Life/Brain/Synapse | part | synaptobrevin*70 synaptophysin*32 synaptotagmin*15 v-atpase*1.5 rab3*10 membrane-lipids:1.23e-17 acetylcholine*7000 water:2.6e-17 | = | 0.00005x0.00005x0.00005 | sphere | at the neuromuscular junction: about 5,000–10,000 acetylcholines a vesicle, a quantum |
 `);
 
-/** A kind of cell, built from its volume (µm³) and what is special to it; everything else typical. */
+/** A kind of cell, built from its volume (µm³) and what is special to it; everything else typical. Its size gives its
+ *  proportions and a typical length; where that size's shape cannot hold its volume it is grown, in proportion, until it
+ *  does (src/nexus/boxfill.ts). */
 export interface CellType {
   id: string; name: string; path: string; v: number; size: [number, number, number]; says: string; spec?: string; look?: string;
   /** g/µm³ */ dens?: number;
@@ -84,7 +87,7 @@ export function cellOf(t: CellType): LifeEntry[] {
   if (nuc > 0 && t.nuclei === undefined) add('centrosome', 1);
   for (const tok of (t.also ?? '').split(/\s+/).filter(Boolean)) { const mm = /^([\w.-]+):([\d.e+-]+)$/.exec(tok), mc = /^([\w.-]+)\*([\d.e+-]+)$/.exec(tok); if (mm) { of.push({ id: mm[1]!, n: 1 }); mass[mm[1]!] = Number(mm[2]); } else if (mc) add(mc[1]!, Number(mc[2])); else throw new Error(`${t.id}: cannot read "${tok}"`); }
   const rest = t.rest ?? 'cytosol'; of.push({ id: rest, n: 1 });
-  out.push({ id: t.id, name: t.name, path: t.path, kind: 'assembly', of, mass, rest, g, size: t.size.map((x) => x / 1000) as [number, number, number], look: t.look ?? 'cell', says: t.says, ...(t.spec ? { spec: t.spec } : {}) });
+  out.push({ id: t.id, name: t.name, path: t.path, kind: 'assembly', of, mass, rest, g, size: holding(t.size, t.v, t.look ?? 'cell').map((x) => x / 1000) as [number, number, number], look: t.look ?? 'cell', says: t.says, ...(t.spec ? { spec: t.spec } : {}) });
   return out;
 }
 
@@ -108,7 +111,7 @@ export const CELL_TYPES: CellType[] = [
   { id: 'cardiomyocyte', name: 'heart muscle cell', path: 'Life/Cells/Muscle', v: 30000, size: [120, 25, 15], dens: 1.06e-12, nuc: 200, mito: 32, rer: 0.05, ser: 0, ribo: 200, actin: 0, also: 'cardiac-myofibril*190 sr-um2*30000 glycogen:6e-10 myoglobin:1.5e-10 fat-droplet:3e-10', rest: 'sarcoplasm', look: 'fibre', says: 'a branched cell joined end to end by intercalated discs, beating about 3 billion times a lifetime: a third of it mitochondria' },
   { id: 'smooth-muscle-cell', name: 'smooth muscle cell', path: 'Life/Cells/Muscle', v: 2500, size: [200, 6, 6], dens: 1.06e-12, nuc: 120, mito: 5, actin: 400000, also: 'myosin*2000000 tropomyosin*1e7', rest: 'sarcoplasm', look: 'spindle', says: 'a spindle 200 µm long with no stripes, in the walls of gut, vessels and bladder: contracts slowly and holds' },
   // ---- liver, gut, gland, fat ------------------------------------------------------------------------------------
-  { id: 'hepatocyte', name: 'liver cell (hepatocyte)', path: 'Life/Cells/Liver', v: 5000, size: [25, 25, 25], nuc: 300, mito: 22, rer: 7.7, ser: 3.5, golgi: 1.5, lyso: 60, perox: 80, pm: 2200, also: 'glycogen-granule*7500000 lipid-droplet*200', look: 'cell', says: 'the liver\'s worker: makes plasma proteins and bile, stores glycogen, breaks down drugs; its volume, membrane and organelles from Alberts (about 5,000 µm³ and 110,000 µm² of membrane)', spec: 'Alberts, Molecular Biology of the Cell, tables 12-1 and 12-2' },
+  { id: 'hepatocyte', name: 'liver cell (hepatocyte)', path: 'Life/Cells/Liver', v: 5000, size: [25, 25, 25], nuc: 300, mito: 22, rer: 7.7, ser: 3.5, golgi: 1.5, lyso: 60, perox: 80, pm: 2200, also: 'glycogen-granule*1.8e7 lipid-droplet*200', look: 'cell', says: 'the liver\'s worker: makes plasma proteins and bile, stores glycogen, breaks down drugs; its volume, membrane and organelles from Alberts (about 5,000 µm³ and 110,000 µm² of membrane)', spec: 'Alberts, Molecular Biology of the Cell, tables 12-1 and 12-2' },
   { id: 'enterocyte', name: 'gut lining cell (enterocyte)', path: 'Life/Cells/Gut', v: 1400, size: [25, 8, 8], nuc: 150, mito: 10, rer: 3, pm: 3500, look: 'column', says: 'a column with 3,000 microvilli on its top that take food in; replaced every 3–5 days' },
   { id: 'goblet-cell', name: 'goblet cell', path: 'Life/Cells/Gut', v: 1200, size: [25, 8, 8], nuc: 120, mito: 5, rer: 5, golgi: 2, also: 'glucose:3e-10 protein:2e-10', look: 'column', says: 'makes mucus, the gel that lines gut and airway' },
   { id: 'beta-cell', name: 'insulin cell (beta cell)', path: 'Life/Cells/Pancreas', v: 900, size: [12, 12, 12], nuc: 120, mito: 6, rer: 4, golgi: 2, also: 'insulin*1200000000', look: 'cell', says: 'in the islets of the pancreas: about 10,000 granules holding about 12 pg of insulin in all (typical; 10–20 pg measured), let out as blood glucose rises' },

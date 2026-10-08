@@ -65,6 +65,7 @@ export interface Item {
   /** its 3D shape where its kind says it: a shape kind of the view and a mark (src/nexus/pieces.ts) */ look?: string;
   /** grams of each of what is in it, where that is said by mass (tissue in an organ, water in a cell) */ mass?: Record<string, number>;
   /** a molecule's weight, daltons */ da?: number;
+  /** a set of so many like members, each its size (both tonsils, the 23 ligamenta flava) */ members?: number;
 }
 const items = new Map<string, Item>();
 /** The inventory's revision: one more each time an entry is added, so what is worked out from it (its categories, each
@@ -593,7 +594,7 @@ m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with
 
 // ==== life: molecules, cells, tissues, organs, the human body, the organisms used in technology (src/nexus/life) =====
 for (const mo of MOLECULES) { const da = daltonsOf(mo); put({ id: mo.id, name: mo.name, path: ['Life', 'Molecules', ...mo.group.split('/').slice(1)], kind: 'material', make: /Salts|Gases|Biominerals/.test(mo.group) ? 'stock' : 'grow', of: [], says: mo.says, ...(da ? { da: +da.toFixed(1) } : {}) }); }
-for (const e of LIFE) put({ id: e.id, name: e.name, path: e.path.split('/'), kind: e.kind, make: 'grow', of: e.of.map((c) => ({ ...c })), says: e.says, ...(e.spec ? { spec: e.spec } : {}), ...(e.size ? { size: e.size } : {}), g: e.g, ...(e.look ? { look: e.look } : {}), ...(Object.keys(e.mass).length ? { mass: { ...e.mass } } : {}) });
+for (const e of LIFE) put({ id: e.id, name: e.name, path: e.path.split('/'), kind: e.kind, make: 'grow', of: e.of.map((c) => ({ ...c })), says: e.says, ...(e.spec ? { spec: e.spec } : {}), ...(e.size ? { size: e.size } : {}), ...(e.members ? { members: e.members } : {}), g: e.g, ...(e.look ? { look: e.look } : {}), ...(Object.keys(e.mass).length ? { mass: { ...e.mass } } : {}) });
 
 // ==== the fundamentals: every material down to its elements ==========================================================
 // Every tree of the inventory, followed past its materials, ends in the same few dozen elements (src/nexus/elements.ts).

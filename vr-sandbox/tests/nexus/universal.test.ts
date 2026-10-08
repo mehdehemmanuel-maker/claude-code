@@ -14,6 +14,7 @@ import { MOLECULES } from '../../src/nexus/life';
 import { GLAND_KINDS } from '../../src/nexus/life/glands';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { leaf } from '../../src/nexus/term';
+import { holding } from '../../src/nexus/boxfill';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 
@@ -72,9 +73,24 @@ describe('every part through the same laws', () => {
     const r = valueIn(profile('liver')!.oxygen!.reach, 'mm')!; expect(r).toBeGreaterThan(0.05); expect(r).toBeLessThan(0.5); // a few tenths of a mm: why capillaries are that far apart
     expect(lawsUnder(profile('liver')!.oxygen!.reach).map((l) => l.id)).toEqual(expect.arrayContaining(['mixing.density', 'mass.volume', 'reaction.rate-from-power', 'henry.solubility', 'diffusion.sphere-limit']));
   });
-  it('finds the parts whose size and mass disagree, and the muscles are no longer among them', () => {
-    const f = profileFaults(); expect(f.length).toBeLessThanOrEqual(100);
-    expect(f.filter((x) => INVENTORY.get(x.id)!.look === 'muscle')).toEqual([]);
+  it('finds no part whose size and mass disagree', () => {
+    expect(profileFaults().map((f) => f.says)).toEqual([]);
+  });
+  it('counts a set by its members: the 23 ligamenta flava, the tendons of a forearm, both tonsils', () => {
+    const lf = profile('ligamenta-flava')!; expect(lawsUnder(lf.box!).map((l) => l.id)).toEqual(expect.arrayContaining(['total.volume', 'volume.of-box']));
+    expect(lf.fill!).toBeGreaterThan(0.85); expect(lf.fill!).toBeLessThan(1.15);
+    // a band's mass is its size's volume at its tissue's density: the Achilles tendon, 150 × 15 × 6 mm, about 12 g
+    expect(gramsOfItem(INVENTORY.get('achilles-tendon')!)!).toBeCloseTo(12, 0);
+    expect(countIn('human', 'parotid-gland')).toBe(2); expect(gramsOfItem(INVENTORY.get('salivary-glands')!)).toBe(85); // ICRP 89's 85 g, three pairs
+  });
+  it('grows a cell\'s size until it holds the volume it is measured to have', () => {
+    expect(holding([10, 10, 10], 524, 'cell')).toEqual([10, 10, 10]); // an ellipsoid 10 µm across holds 524 µm³
+    const k = holding([15, 15, 7], 1500, 'cell'); expect((Math.PI / 6) * k[0] * k[1] * k[2]).toBeCloseTo(1500, -1); expect(k[0] / k[2]).toBeCloseTo(15 / 7, 1);
+    for (const id of ['keratinocyte', 'osteoclast', 'alveolar-cell-2', 'hepatocyte']) expect(profile(id)!.fill!, id).toBeLessThanOrEqual(1.05);
+  });
+  it('spreads the cortex 2.5 mm thick: its areas add to the cortex\'s measured 1,800–2,600 cm²', () => {
+    let mm2 = 0; for (const [id, i] of INVENTORY) if (id.startsWith('brodmann-')) mm2 += countIn('brain', id) * i.size![0] * i.size![1];
+    expect(mm2 / 100).toBeGreaterThan(1800); expect(mm2 / 100).toBeLessThan(2600);
   });
 });
 
@@ -96,6 +112,10 @@ describe('what a body makes', () => {
     const bili = fs.find((f) => f.id === 'bilirubin')!;
     expect(lawsUnder(bili.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['queueing', 'total.mass', 'stoichiometry.mass']));
     expect(leavesUnder(bili.rate).every((d) => d.term.kind === 'leaf')).toBe(true);
+    // breath and blood by the same laws: the oxygen burnt from resting power, the heart's output by Fick's principle
+    const heart = fs.find((f) => f.id === 'cardiac-output')!;
+    expect(lawsUnder(heart.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['power.molar', 'transport.advection', 'stoichiometry.moles', 'saturation.share', 'amount.concentration', 'total.mass']));
+    const alb = fs.find((f) => f.id === 'albumin')!; expect(lawsUnder(alb.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['loss.first-order', 'half-life', 'share.of']));
     const hair = fs.find((f) => f.id === 'hair')!; const longest = valueIn(hair.also[0]!.d, 'cm')!; expect(longest).toBeGreaterThan(20); expect(longest).toBeLessThan(80); // its growth rate times its growing phase
   });
   it('its glands are kinds other creatures have too: silk, wax, light, venom, ink, slime', () => {
