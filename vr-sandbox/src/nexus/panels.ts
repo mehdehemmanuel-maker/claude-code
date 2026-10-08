@@ -113,10 +113,10 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
   // (rising a little to the rear: its wedge), the deck's line to where it rolls down into the tail
   const beltAt = (x: number) => belt + 0.02 * Math.min(1, Math.max(0, (xCowl - x) / Math.max(0.1, xCowl - xDeck)));
   const hoodRun = xN - xCowl, deckY = ln.bed ? beltAt(xDeck) : tailH;
-  // what it must clear, as a height over x: an engine and its strut tops under the hood, and each arch with its lip (a
-  // low car's fender rises over its wheel), ramped in and out smoothly so the line lifted over it bends but never kinks
+  // what it must clear, as a height over x: an engine and its strut tops under the hood, and each arch with its lip over
+  // the tyre risen through its whole bump (a low car's fender rises over its wheel), ramped in and out smoothly so the line lifted over it bends but never kinks
   // (lifting the drawn line's control points would not do: a B-spline only leans toward its points)
-  const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump * 0.5 + lip }))];
+  const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump + lip }))];
   const need = (x: number) => { let v = -Infinity; for (const k of clears) { const ramp = 0.18, d = x < k.x0 ? k.x0 - x : x > k.x1 ? x - k.x1 : 0; if (d >= ramp) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / ramp); v = Math.max(v, k.y - (1 - g) * 0.12); } return v; };
   const drawn = lineBy([
     [xT, deckY - (ln.bed ? 0.02 : 0.09)], [xT + 0.06, deckY - (ln.bed ? 0.005 : 0.03)], [xT + 0.2, deckY], ...(xDeck - xT > 0.6 ? [[(xT + xDeck) / 2 + 0.1, deckY + 0.004] as [number, number]] : []), [xDeck, beltAt(xDeck)],
@@ -182,13 +182,16 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const edgeSlope = (x: number) => { const zt = Math.max(1e-3, ln.plan(x) * (1 - r.side.inset / W2)); return (2 * ln.crownAt(x)) / zt; };
   // (only in the last few centimetres, where the outline closes to the middle, does a section turn to run along itself)
   const closing = (x: number) => Math.min(1, ln.plan(x) / W2 / 0.15), arrive = (x: number): V3 => { const f = closing(x), d: V3 = [0, edgeSlope(x) * f + (1 - f), -f], l = Math.hypot(d[1], d[2]) || 1; return [0, d[1] / l, d[2] / l]; };
+  // (a deck lid where there is room for one; where there is not, as a van's, the cabin runs to the tail)
+  const deckLid = !b.lines.bed && ln.xDeck - r.gap - ln.xT >= 0.08, xBack = b.lines.bed || deckLid ? ln.xDeck : ln.xT;
   // each section drawn as its control polygon, bottom to top: tucked in at the rocker, out through the lower door to the
   // shoulder (two points at its widest, so it is held there), leaning in above it, and rolled over to the top edge along
   // the direction the hood leaves it. A B-spline never wavers more than its polygon, so a convex polygon makes a section
   // with no ripple in it, whatever its neighbours are like.
   const section = (x: number): V3[] => {
     // (convex as drawn: each leg of it leans in more than the one below it, from the tuck under to the roll over the top)
-    const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x), d = sh - lo, ar = arrive(x), zt = w - r.side.inset * f, hand = Math.min(0.03, 0.3 * (top - sh)) * Math.max(0.15, f);
+    const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x), d = sh - lo, zt = w - r.side.inset * f, hand = Math.min(0.03, 0.3 * (top - sh)) * Math.max(0.15, f);
+    const ar = arrive(x);
     return [[x, lo, w - tk * f], [x, lo + Math.min(0.1, 0.25 * d), w - tk * 0.55 * f], [x, lo + 0.5 * d, w - tk * 0.12 * f], [x, sh - 0.04, w + 0.004 * f], [x, sh + 0.02, w + 0.004 * f], [x, sh + 0.02 + 0.6 * (top - sh - 0.02), w - r.side.tumble * 0.4 * f], [x, top - hand * ar[1], zt - hand * ar[2]], [x, top, zt]];
   };
   const rows = xs.map(section);
@@ -295,10 +298,11 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   };
   const hood = lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops', doors ? 'front fender' : 'body sides');
   if (hood) out.push(hood);
-  if (!b.lines.bed) { const deck = lid('deck lid', ln.xT, ln.xDeck - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)', doors ? 'rear quarter panel' : 'body sides'); if (deck) out.push(deck); }
+  if (deckLid) { const deck = lid('deck lid', ln.xT, ln.xDeck - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)', doors ? 'rear quarter panel' : 'body sides'); if (deck) out.push(deck); }
   // ---- the cabin: from the belt leaning in to the roof's rails, then across; its glass and pillars regions of it ----
   {
-    const xEnd = ln.xCowl, xStart = open ? ln.xRoofF : ln.xDeck, zRoof = W2 * r.cabin.roof;
+    // (to the tail where it has no deck lid, as a van: its roof and back glass close the body there)
+    const xEnd = ln.xCowl, xStart = open ? ln.xRoofF : xBack;
     // (built on the side skin's top edge between its ends, as the lids are: its belt edge is the doors' top edge, a
     // crease there by design, but one edge)
     const cab = fromEdge(split(side, uAt(side, xStart, 1), uAt(side, xEnd, 1)), (E): V3[] => {
@@ -307,7 +311,8 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       // not an edge: its corner a control point, its neighbours a few centimetres off it), across the roof, level at the middle
       // (its rail leaning in faster than the cabin rises, by the root of how far it has risen: so where the cabin runs out
       // into the deck and the hood, its section lies down flat as a lid does, rather than shrinking into a fold too tight to press)
-      const rail = yT - r.crown.roof * k, zR = zt - (zt - zRoof) * Math.sqrt(k), rr = 0.05 * k;
+      // (its roof as wide, as a share of the body's width there, as its rules say: so it narrows as the body does at its ends)
+      const rail = yT - r.crown.roof * k, zR = zt * (1 - (1 - r.cabin.roof) * Math.sqrt(k)), rr = 0.05 * k;
       return [[x, y0, zt], [x, y0 + (rail - y0) * 0.35, zt + (zR - zt) * 0.35 + 0.012 * k], [x, rail - rr, zR + rr * 0.35], [x, rail + rr * 0.15, zR - rr * 0.25], [x, yT - r.crown.roof * k * 0.2, zR * 0.55], [x, yT, zR * 0.18], [x, yT, 0]];
     }, { mirror: true }), cg = greville(cab.net[0]!.length, 3), Uc = (x: number) => uAt(cab, x, (cg[2]! + cg[3]!) / 2);
     const p = r.cabin.pillar / 1.2, vg0 = 0.022, v3 = (cg[2]! + cg[3]!) / 2;

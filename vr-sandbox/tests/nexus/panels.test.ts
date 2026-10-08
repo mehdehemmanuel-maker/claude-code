@@ -64,8 +64,14 @@ describe('the critic changes the rules, never a body', () => {
   });
   test('a rule that helps only the bodies it was tried on is not kept; one that helps the bodies held out too is', () => {
     const on = [plan('corolla')], held = [plan('sports car')], base = { ...BODY_RULES, fit: { step: 0.25, lambda: 0.02 } };
-    expect(practise('fit', [{ step: 0.35, lambda: 0.2 }], on, held, base).update).toBeNull();
-    const r = practise('fit', [{ step: 0.25, lambda: 0.2 }], on, held, base); expect(r.kept).toEqual({ step: 0.25, lambda: 0.2 }); expect(r.update?.was).toMatch(/0\.02/);
+    const score = (ps: typeof on, rules: typeof base) => ps.reduce((a, b) => a + bodyScore(bodyPanels(b, rules), b, rules.room).score, 0), was = { on: score(on, base), held: score(held, base) };
+    // (whatever is tried, what is kept beats the rule as it was on both the bodies practised on and those held out, and
+    // is the best of those that do; when none does, the rule stays as it was)
+    const values = [{ step: 0.35, lambda: 0.2 }, { step: 0.25, lambda: 0.2 }, { step: 0.25, lambda: 0.0 }], r = practise('fit', values, on, held, base);
+    const both = r.tried.filter((t) => t.on < was.on && t.held < was.held).sort((a, b) => a.on + a.held - (b.on + b.held));
+    expect(r.kept).toEqual(both[0]?.value ?? base.fit); expect(!!r.update).toBe(both.length > 0); if (r.update) expect(r.update.was).toMatch(/0\.02/);
+    // (and a value worse on the held-out bodies is never kept, however much it helps those it was tried on)
+    for (const t of r.tried) if (t.held >= was.held) expect(r.kept).not.toEqual(t.value);
   });
 });
 

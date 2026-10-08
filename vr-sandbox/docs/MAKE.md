@@ -106,10 +106,15 @@ Later rounds, on the panelled bodies:
   no longer cuts skins.
 - **Round 2 (3–4 of 10):** gaps at the shut lines, liners in the tyres' way, the dashboard over a van's wheels, and seats
   wider than the body. These were fixed as above.
+- **Then, from looking:** a sports car's liner stood out of its fenders, which cleared only half the tyre's bump. The
+  fender line now clears the whole bump and the lip, so a low car's fenders rise over its wheels. Where a deck is too
+  short for a lid (a van), the cabin runs to the tail, and the roof narrows with the body at its ends.
 
 Still open:
 
-- tight radii where a boxy body's tail and its cabin's ends turn (van, SUV, pickup);
+- tight radii where a boxy body's tail turns over at its top (van 0.8 mm, pickup 1.2 mm), and a van's roof rail (2.0
+  mm), against 2.4 mm. At a tail the section's tumblehome shrinks with the plan, which leaves its roll over no room. A
+  crease under the cabin was tried and undone: it rippled the front doors;
 - the face per style, layered tail lamps, mirrors placed by the panels, and an arch lip in body colour;
 - the go-kart on the track (`view/kart3d.ts`) is drawn apart from `machines.ts`;
 - planes, cranes and power tools are new architectures, not yet built.
