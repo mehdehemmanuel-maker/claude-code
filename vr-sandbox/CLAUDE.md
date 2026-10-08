@@ -47,17 +47,39 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
 | Critic (room to move, held up, walls, through, standing) | `src/nexus/make/critic.ts` |
 | The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
+| Wheeled machines of every kind, from their published figures | `src/nexus/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |
+| Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/form.ts` |
+| Vehicles as points in a want-space (not a maker) | `src/nexus/vehicle.ts` |
+| Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
+| A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
+
+## The organising principle: interfaces, envelopes, one graph
+
+Parts declare what they provide and require (`Iface`): a hub needs a shaft of its bore, a nut needs a stud of its thread, a
+driven axle carries at most a torque, a chain needs sprockets of its pitch. The critic pairs and checks every one with
+numbers, and an interface is a connection, never an interference (an axle in its hub is not "in its way"). Interference is
+judged by envelope, not by box: a wheel sweeps a ring (tyre to rim bore) with room to its arch and beside its sidewall, a
+blade sweeps a disc inside its housing, and no repair rests a part on a moving one. Grow this, rather than adding layers:
+next are mounts (bolt patterns), electrical (voltage, current), thermal (heat rejected) and service access.
+
+Capability atlas (the user's direction, 2026-10-08): learn from open engineering tools (FreeCAD and Open CASCADE for
+geometry and constraints, Gmsh and SALOME for meshing, MOOSE, Elmer, Code_Aster and OpenFOAM for physics, OpenModelica
+for systems, LinuxCNC for machines) as ideas and architecture, each operation as UI → command → data → algorithm →
+constraints → failure modes. Ideas and interfaces only: their code is GPL/LGPL and is not copied in.
 
 Known gaps (from the 2026-10-08 audit, still open):
 - the inventory knows what is in a product but not where it sits; the kits know where but not what. Joining them, so
   every placed part is an inventory item that expands into its sub-parts, is the merge that ends "two generators";
 - the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
-- the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from any maker.
+- the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
+- planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
+  architectures: add them as data on general builders, as the wheeled ones are).
 
 ## Before writing a new file or function
 
-1. `ls src/nexus` and grep for the concern. If it is in the table, extend its owner.
+1. `ls src/nexus` (the whole listing: never `| head`, which hid `vehicle.ts` once and it was overwritten) and grep for the
+   concern. If it is in the table, extend its owner. Before writing a file, check that it does not already exist.
 2. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
    that makes it and its relatives from data (a wheeled vehicle from its axles, tyres, frame, seats, power, implements).
    Per-product data (a real model's published figures) is fine; per-product code is a template.

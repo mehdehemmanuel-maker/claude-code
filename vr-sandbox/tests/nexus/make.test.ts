@@ -59,8 +59,8 @@ describe('critic', () => {
     expect(room.fixed).toBe(true);
     const opening = root.parts![0]!.parts!.find((p) => p.name === 'opening for wheel')!;
     expect(opening.kg).toBe(0); expect(massOf(root)).toBeCloseTo(m0, 6);
-    // flush: its outer face 10 mm inside the body's side (z = 0.6)
-    expect(root.parts![1]!.at![2] + 0.08).toBeCloseTo(0.6 - 0.01, 3);
+    // a box cannot be cut into an arch: the wheel set out to stand 2 mm proud of its side (z = 0.6), so it is seen
+    expect(root.parts![1]!.at![2] + 0.08).toBeCloseTo(0.6 + 0.002, 3);
     // and once opened, not opened again
     expect(critique(root).filter((x) => x.check === 'room to move')).toHaveLength(0);
   });
@@ -79,6 +79,17 @@ describe('critic', () => {
     expect(critique(kit('tree')).filter((x) => x.check === 'held up')).toHaveLength(0);
   });
 });
+
+test('a lofted body over a wheel is cut back into an arch: its lower edge over the wheel raised clear of it', () => {
+    const st = [-1, -0.5, 0, 0.5, 1].map((x) => ({ x, w: 0.6, lo: 0.15, hi: 0.9, n: 5 }));
+    const root: Part = { name: 'cart', parts: [{ name: 'body', shape: { loft: { st } }, mat: 'steel-low', shell: 0.0008 }, { name: 'wheel', at: [0.5, 0.3, 0.45], parts: [{ name: 'tyre', shape: { torus: [0.22, 0.08] }, mat: 'rubber' }] }] };
+    const f = critique(root).find((x) => x.check === 'room to move')!;
+    expect(f.fixed).toBe(true); expect(f.says).toContain('arch');
+    const l = (root.parts![0]!.shape as { loft: { st: { x: number; lo: number }[] } }).loft.st, over = l.find((s) => Math.abs(s.x - 0.5) < 1e-6)!;
+    expect(over.lo).toBeCloseTo(0.3 + 0.3 + 0.03, 3); // its middle: the wheel's top (0.3 + 0.3) and 30 mm of room
+    expect(l.find((s) => s.x === -0.5)!.lo).toBe(0.15); // away from the wheel, the sill is where it was
+    expect(critique(root).filter((x) => x.check === 'room to move')).toHaveLength(0);
+  });
 
 describe('pipeline', () => {
   test('a car: wheels bolted on a pitch circle, tyres given valves, settled in two rounds, the car given unchanged', () => {

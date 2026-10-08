@@ -7,19 +7,57 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { edgeRadius } from '../finish';
 import type { Part, Shape } from '../kits';
+import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
+import { findItem, resolve } from '../inventory';
+import { lookOf } from '../pieces';
+import { meshOfLook } from './explode';
 
 export interface KitView { group: THREE.Group; update(dt: number): void; explode(level: number): void; dispose(): void; lights: number; /** how fast its limbs go round, strides a second (0: still) */ gait: number }
 
 const mats = new Map<string, THREE.MeshStandardMaterial>();
-const matFor = (color: number, mat: string | undefined, glow: boolean): THREE.MeshStandardMaterial => {
-  const key = `${color}|${mat}|${glow}`; let m = mats.get(key);
+// how a surface takes the light, by how it was finished (a car's paint is lacquered over its colour, a chrome trim a
+// mirror, a tyre's rubber matt, cast metal dull, brushed metal satin): roughness 0 a mirror, 1 chalk (typical of
+// physically based renderers' guides for each)
+const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
+  paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, cast: { rough: 0.7, metal: 0.8 },
+  plate: { rough: 0.4, metal: 0.9 }, weld: { rough: 0.75, metal: 0.7 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
+  weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
+};
+const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
+const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
+  const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
   if (!m) {
-    const metal = /steel|al-|copper|iron/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc';
-    m = new THREE.MeshStandardMaterial({ color, roughness: glass ? 0.05 : metal ? 0.35 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6, metalness: metal ? 0.85 : 0, transparent: glass && !glow, opacity: glass && !glow ? 0.45 : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) });
+    const metal = /steel|al-|copper|iron|gold|silver|titanium/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
+    const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
+    const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
+    const base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? 0.35 : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
+    // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces)
+    m = f?.coat && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f.coat, clearcoatRoughness: 0.08 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
     mats.set(key, m);
   }
   return m;
 };
+/** A loft drawn: its stations eased into each other (a cubic through them, every span split six times), each a ring
+ *  of its superellipse, its two ends closed. */
+function loftGeometry(l: Loft): THREE.BufferGeometry {
+  // (taken from the back forward, so its faces look outward whichever way its stations were given)
+  const st = [...l.st].sort((a, b) => a.x - b.x), K = 40, out: Station[] = [], at = (i: number) => st[Math.max(0, Math.min(st.length - 1, i))]!;
+  const cub = (p0: number, p1: number, p2: number, p3: number, t: number) => { const m1 = (p2 - p0) / 2, m2 = (p3 - p1) / 2, t2 = t * t, t3 = t2 * t; return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2; };
+  for (let i = 0; i < st.length - 1; i++) for (let k = 0; k < 6; k++) { const t = k / 6, f = (g: (s: Station) => number) => cub(g(at(i - 1)), g(at(i)), g(at(i + 1)), g(at(i + 2)), t); out.push({ x: f((s) => s.x), w: Math.max(0, f((s) => s.w)), lo: f((s) => s.lo), hi: f((s) => s.hi), n: Math.max(1.5, f((s) => s.n ?? 2)), wt: Math.max(0, f((s) => s.wt ?? s.w)), nt: Math.max(1.5, f((s) => s.nt ?? s.n ?? 2)), mid: f((s) => s.mid ?? (s.lo + s.hi) / 2) }); }
+  out.push(st[st.length - 1]!);
+  const pos: number[] = [], idx: number[] = [];
+  for (const s of out) for (let j = 0; j < K; j++) { const [y, z] = sectionPoint(s, (j / K) * 2 * Math.PI); pos.push(s.x, y, z); }
+  for (let i = 0; i < out.length - 1; i++) for (let j = 0; j < K; j++) { const a = i * K + j, b = i * K + ((j + 1) % K), c = a + K, d = b + K; idx.push(a, c, b, b, c, d); }
+  for (const [ring, flip] of [[0, true], [out.length - 1, false]] as const) { const s = out[ring]!, ci = pos.length / 3; pos.push(s.x, (s.hi + s.lo) / 2, 0); for (let j = 0; j < K; j++) { const a = ring * K + j, b = ring * K + ((j + 1) % K); if (flip) idx.push(ci, a, b); else idx.push(ci, b, a); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+/** A bent tube drawn along its straights and bends. */
+function tubeGeometry(t: Tube): THREE.BufferGeometry {
+  const path = new THREE.CurvePath<THREE.Vector3>(), v = (q: number[]) => new THREE.Vector3(q[0], q[1], q[2]), legs = tubeLegs(t);
+  for (const l of legs) path.add(l.kind === 'line' ? new THREE.LineCurve3(v(l.a), v(l.b)) : new THREE.QuadraticBezierCurve3(v(l.a), v(l.c!), v(l.b)));
+  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length * 6), t.r, 12, false) : new THREE.BufferGeometry();
+}
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {
   if (f < 1e-4) return new THREE.CylinderGeometry(r1, r0, h, seg);
@@ -28,7 +66,12 @@ export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24
   return new THREE.LatheGeometry(pts, seg);
 }
 const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' in s ? Math.min(2 * s.cyl[0], s.cyl[1]) : 'cone' in s ? s.cone[0] : 1);
-function geometry(s: Shape, mat: string | undefined, make?: 'pressed'): THREE.BufferGeometry | null {
+function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+  if ('loft' in s) return loftGeometry(s.loft);
+  if ('tube' in s) return tubeGeometry(s.tube);
+  if ('lathe' in s) return new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), 40);
+  // a round part with flat sides (a hex head, a nut): its flats, its edges broken
+  if (facets && 'cyl' in s) return new THREE.CylinderGeometry(s.cyl[2] ?? s.cyl[0], s.cyl[0], s.cyl[1], facets);
   const f = edgeRadius(mat, thinnest(s), make);
   if ('box' in s) { const [w, h, d] = s.box; return f > 1e-4 ? new RoundedBoxGeometry(w, h, d, 2, f) : new THREE.BoxGeometry(w, h, d); }
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return filletCyl(r2, h, r, f); }
@@ -102,7 +145,11 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, !!p.light)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, !!p.light || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+    }
+    else if (p.item) {
+      // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size
+      const it = findItem(p.item) ?? ((r) => (r && typeof r === 'object' ? r : null))(resolve(p.item)); if (it) { try { const o = meshOfLook(lookOf(it)); o.name = p.name; o.userData.part = p; g.add(o); } catch { /* an item with no look is left undrawn */ } }
     }
     if (p.light && lights < maxL) { const l = new THREE.PointLight(p.light.color, p.light.lm / (4 * Math.PI), 0, 2); g.add(l); lights++; }
     if (p.spin) { const period = p.spin; turners.push((dt) => { g.rotation.y += (2 * Math.PI * dt) / period; }); }

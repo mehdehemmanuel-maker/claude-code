@@ -72,5 +72,8 @@ function scaleShape(s: NonNullable<Part['shape']>, k: number): NonNullable<Part[
   if ('cone' in s) return { cone: [s.cone[0] * k, s.cone[1] * k] };
   if ('torus' in s) return { torus: [s.torus[0] * k, s.torus[1] * k] };
   if ('capsule' in s) return { capsule: [s.capsule[0] * k, s.capsule[1] * k] };
+  if ('loft' in s) return { loft: { st: s.loft.st.map((x) => ({ ...x, x: x.x * k, w: x.w * k, lo: x.lo * k, hi: x.hi * k })) } };
+  if ('tube' in s) return { tube: { ...s.tube, r: s.tube.r * k, pts: s.tube.pts.map((q) => q.map((v) => v * k) as [number, number, number]), ...(s.tube.wall ? { wall: s.tube.wall * k } : {}), ...(s.tube.bend ? { bend: s.tube.bend * k } : {}) } };
+  if ('lathe' in s) return { lathe: s.lathe.map(([r, y]) => [r * k, y * k] as [number, number]) };
   return s;
 }

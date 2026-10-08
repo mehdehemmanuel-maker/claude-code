@@ -11,10 +11,11 @@
 
 import * as THREE from 'three';
 import type { Part, Shape } from '../kits';
+import { boundsOf, piecesOf, type LocalBox } from '../form';
 
 export interface OBB { c: THREE.Vector3; u: [THREE.Vector3, THREE.Vector3, THREE.Vector3]; h: [number, number, number] }
-export interface Node { p: Part; parent: Node | null; kids: Node[]; m: THREE.Matrix4; box: THREE.Box3 | null; obb: OBB | null; local: THREE.Box3 | null; sub: THREE.Box3 | null; depth: number; path: string }
-export interface Contact { a: Node; b: Node; normal: THREE.Vector3; depth: number; mid: THREE.Vector3 }
+export interface Node { p: Part; parent: Node | null; kids: Node[]; m: THREE.Matrix4; box: THREE.Box3 | null; obb: OBB | null; /** where a shape is long and bent or swept (a tube, a loft), the boxes that cover it tightly; else its one box */ pieces: OBB[]; local: THREE.Box3 | null; sub: THREE.Box3 | null; depth: number; path: string }
+export interface Contact { a: Node; b: Node; normal: THREE.Vector3; depth: number; mid: THREE.Vector3; /** the pieces of each that met */ pa: OBB; pb: OBB }
 
 /** A shape's box in its part's own frame (cylinders and capsules along y, a torus round z, as they are drawn). */
 export function shapeBox(s: Shape | undefined, base?: boolean): THREE.Box3 | null {
@@ -25,8 +26,18 @@ export function shapeBox(s: Shape | undefined, base?: boolean): THREE.Box3 | nul
   else if ('cone' in s) { const [r, h] = s.cone; min = new THREE.Vector3(-r, -h / 2, -r); max = new THREE.Vector3(r, h / 2, r); }
   else if ('torus' in s) { const [R, r] = s.torus; min = new THREE.Vector3(-R - r, -R - r, -r); max = new THREE.Vector3(R + r, R + r, r); }
   else if ('capsule' in s) { const [r, h] = s.capsule; min = new THREE.Vector3(-r, -h / 2 - r, -r); max = new THREE.Vector3(r, h / 2 + r, r); }
+  else if ('loft' in s || 'tube' in s || 'lathe' in s) { const b = boundsOf(piecesOf(s)); min = new THREE.Vector3(...b.min); max = new THREE.Vector3(...b.max); }
   else return null; // stars, fields and heaps are not solids to join
   const b = new THREE.Box3(min, max); if (base) b.translate(new THREE.Vector3(0, -min.y, 0)); return b;
+}
+/** A shape's covering boxes in the world (one, its own box, for the primitives). */
+function piecesIn(s: Shape | undefined, lb: THREE.Box3, m: THREE.Matrix4, base?: boolean): OBB[] {
+  if (!s || !('loft' in s || 'tube' in s || 'lathe' in s)) return [obbOf(lb, m)];
+  const lift = base ? -boundsOf(piecesOf(s)).min[1] : 0, x = new THREE.Vector3(), y = new THREE.Vector3(), z = new THREE.Vector3(); m.extractBasis(x, y, z);
+  return piecesOf(s).map((q: LocalBox) => {
+    const u = (q.u ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]]).map((v) => new THREE.Vector3(...v).transformDirection(m)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    return { c: new THREE.Vector3(q.c[0], q.c[1] + lift, q.c[2]).applyMatrix4(m), u, h: [...q.h] as [number, number, number] };
+  });
 }
 const obbOf = (local: THREE.Box3, m: THREE.Matrix4): OBB => {
   const c = local.getCenter(new THREE.Vector3()).applyMatrix4(m), s = local.getSize(new THREE.Vector3()).multiplyScalar(0.5), x = new THREE.Vector3(), y = new THREE.Vector3(), z = new THREE.Vector3();
@@ -40,7 +51,7 @@ export function layout(root: Part, at = new THREE.Matrix4()): Node[] {
   const walk = (p: Part, parent: Node | null, m0: THREE.Matrix4, depth: number, path: string): Node => {
     const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
     const m = m0.clone().multiply(local), lb = shapeBox(p.shape, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
-    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
+    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(p.shape, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
     (p.parts ?? []).forEach((q, i) => { const k = walk(q, n, m, depth + 1, `${path}/${i}`); if (k.sub && !q.detail) n.sub = n.sub ? n.sub.union(k.sub) : k.sub.clone(); });
     return n;
   };
@@ -83,17 +94,34 @@ export function contacts(nodes: Node[], keep: (n: Node) => boolean = () => true)
       const b = solid[j]!, B = b.box!, tol = Math.max(0.002, 0.01 * Math.min(leastH(a.obb!), leastH(b.obb!)));
       if (B.min.x > A.max.x + tol) break;
       if (B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
-      const s = sat(a.obb!, b.obb!, tol); if (!s) continue;
-      if (b.parent !== a && a.parent !== b && (within(a.obb!, b.obb!) || within(b.obb!, a.obb!))) continue;
-      out.push({ a, b, normal: s.normal, depth: s.depth, mid: a.obb!.c.clone().add(b.obb!.c).multiplyScalar(0.5) });
+      // (between their covering pieces: a part inside a kart's frame touches the tubes it meets, not the frame's bounds)
+      let s: { normal: THREE.Vector3; depth: number } | null = null, pa = a.obb!, pb = b.obb!;
+      for (const x of a.pieces) for (const y of b.pieces) { const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
+      if (!s) continue;
+      if (b.parent !== a && a.parent !== b && a.pieces.length === 1 && b.pieces.length === 1 && ((within(a.obb!, b.obb!) && !seated(b, a)) || (within(b.obb!, a.obb!) && !seated(a, b)))) continue;
+      out.push({ a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb });
     }
   }
   return out;
 }
+// a ring (a tyre: a torus or a turned section) holds what sits in its bore on its own axis (a rim), though its box holds
+// all of it: what is inside a ring's box is in its bore, not inside it
+const radial = (n: Node): [inner: number, outer: number, axis: THREE.Vector3] | null => {
+  const s = n.p.shape; if (!s || !n.obb) return null;
+  if ('torus' in s) return [s.torus[0] - s.torus[1], s.torus[0] + s.torus[1], n.obb.u[2]];
+  if ('lathe' in s) { const r = s.lathe.map(([x]) => x); return [Math.min(...r), Math.max(...r), n.obb.u[1]]; }
+  if ('cyl' in s) return [0, Math.max(s.cyl[0], s.cyl[2] ?? 0), n.obb.u[1]];
+  return null;
+};
+function seated(ring: Node, inner: Node): boolean {
+  if (!ring.p.shape || !('torus' in ring.p.shape || 'lathe' in ring.p.shape)) return false;
+  const a = radial(ring), b = radial(inner); if (!a || !b || Math.abs(a[2].dot(b[2])) < 0.95) return false;
+  return b[1] >= a[0] - 0.01 && b[1] <= a[1];
+}
 /** Where another part overlaps a part, in that part's own frame: the other's corners brought into its frame, their
  *  bounds clipped to its own box (exact for parts square to each other, a fair patch for turned ones). */
-export function patchIn(host: Node, other: Node): THREE.Box3 | null {
-  if (!host.local || !other.obb) return null; const inv = host.m.clone().invert(), o = other.obb, b = new THREE.Box3();
+export function patchIn(host: Node, other: Node, piece?: OBB): THREE.Box3 | null {
+  if (!host.local || !other.obb) return null; const inv = host.m.clone().invert(), o = piece ?? other.obb, b = new THREE.Box3();
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) b.expandByPoint(o.c.clone().addScaledVector(o.u[0], sx * o.h[0]).addScaledVector(o.u[1], sy * o.h[1]).addScaledVector(o.u[2], sz * o.h[2]).applyMatrix4(inv));
   const tol = 0.003, grown = host.local.clone().expandByScalar(tol); return grown.intersectsBox(b) ? grown.intersect(b) : null;
 }

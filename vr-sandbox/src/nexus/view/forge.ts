@@ -71,6 +71,7 @@ import { bat, pingView, type PingView } from './pingpong3d';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
 import '../creatures';
+import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
@@ -1824,6 +1825,8 @@ interface KitThing { name: string; part: KitPart; view: KitView; level: number; 
   /** brought in by a place (whales under the sea): gone when you leave it */ fromPlace?: boolean;
   creature?: { kind: 'walk' | 'waddle' | 'swim' | 'fly'; speed: number; freq: number; height: number; does: 'follow' | 'wander' | 'swim past' | 'hover' | 'stay'; home: THREE.Vector3; wp?: THREE.Vector3; angle: number; says: string } }
 let riding: KitThing | null = null;
+/** what the make pipeline last did, stage by stage (its board, and "what did you check") */
+let lastMade: MadeThing | null = null;
 let kitThings: KitThing[] = [];
 const fmtKg = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 1e4 ? 0 : 1)} t` : m >= 1 ? `${m.toFixed(m >= 10 ? 0 : 1)} kg` : `${(m * 1000).toFixed(0)} g`);
 /** Made by a kit, as many as asked, side by side in front of you (a scene laid out from where you stand). */
@@ -1832,14 +1835,17 @@ function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
   const { at: you, f, side } = facingYou(), yaw = Math.atan2(-f.x, -f.z), lays = (!!k.uses && k.choices.length === 1) || k.id === 'road', out: string[] = []; let x = 0;
   const made: KitThing[] = [];
   for (let i = 0; i < Math.min(Math.max(1, n), 6); i++) {
-    const { part, pick } = makeKit(k, words, (seed0 + i * 7919) >>> 0), view = kitView(part); view.group.rotation.y = yaw;
+    // made by its kit, then through the one make pipeline: the conditions said, the attention to detail, the critic, the
+    // interfaces checked (src/nexus/make/pipeline.ts)
+    const made0 = makeKit(k, words, (seed0 + i * 7919) >>> 0), pick = made0.pick, perfected = perfect(made0.part, words), part = perfected.part, view = kitView(part); view.group.rotation.y = yaw;
+    lastMade = perfected;
     const box = new THREE.Box3().setFromObject(view.group), w = Math.max(0.3, box.max.x - box.min.x, box.max.z - box.min.z);
     const at = lays ? new THREE.Vector3(you.x, 0, you.z) : you.clone().addScaledVector(f, Math.max(2.2, w / 2 + 1.2)).addScaledVector(side, x + w / 2); at.y = 0; x += w + 0.4;
     // set down clear of the pedestal (its radius and half the thing's size)
     if (!lays && pedestal.visible) { const R = 0.5 * pedestal.scale.x + w / 2 + 0.3; for (let o = 0; o < 40 && Math.hypot(at.x - M.x, at.z - M.z) < R; o++) at.addScaledVector(side, 0.25); }
     view.group.position.copy(at); kitGroup.add(view.group);
     const t: KitThing = { name: part.name, part, view, level: 0, kit: k.id, words }; kitThings.push(t); made.push(t);
-    const kg = kitMass(part); out.push(`${part.name}${part.says ? ` (${part.says})` : ''}: ${countParts(part).toLocaleString('en-US')} parts${kg > 0 ? `, ${fmtKg(kg)}` : ''}`);
+    const kg = kitMass(part); out.push(`${part.name}${part.says ? ` (${part.says})` : ''}: ${countParts(part).toLocaleString('en-US')} parts${kg > 0 ? `, ${fmtKg(kg)}` : ''}${i === 0 ? `. ${sayMade(perfected).replace(/\.$/, '')}` : ''}`);
     if (k.moves) { const mv = k.moves(pick), does = /\b(follow|follows|come with|with me)\b/i.test(words) ? 'follow' : /\bswim/i.test(words) ? 'swim past' : (k.does ?? 'wander'); t.creature = { ...mv, does, home: at.clone(), angle: Math.atan2(at.z - you.z, at.x - you.x) }; if (mv.kind === 'swim' || mv.kind === 'fly') view.group.position.y = mv.height; out[out.length - 1] += `; it ${mv.says}; it ${does === 'follow' ? 'follows you' : does === 'swim past' ? 'swims round you' : does === 'hover' ? 'keeps near you in the air' : 'wanders'} (say "${does === 'follow' ? 'stay' : 'follow me'}"${k.id === 'dragon' ? ', "ride the dragon"' : ''})`; }
   }
   // a row is centred on where you look
@@ -1849,7 +1855,7 @@ function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
   if (out.length > 1 && out.every((o) => o === out[0])) out.splice(0, out.length, `${out.length} × ${out[0]}`);
   const when = /\b(at night|at sunset|at sunrise|at dawn|at dusk|at noon|in the rain|in the snow|in a snowstorm)\b/i.exec(words);
   if (when) { const p = readPlace(`make it ${when[1]!.replace(/^(at|in) (the |a )?/i, '')}`, placeNow?.p); if (p) { goTo(p); out.push(`and it is ${when[1]}`); } }
-  return `${out.join('; ')}. One of ${sayKinds(log10Kinds(k))} different ${plural(k.name)} this kit makes (${sayKinds(log10All())} things across all ${KITS.length} kits). Every edge is as its material is made (say "edges" for the board). Say "take it apart", "what is the ${firstLeaf(made[0]!.part)} made of", "another", or "remove it".`;
+  return `${out.join('; ')}. One of ${sayKinds(log10Kinds(k))} different ${plural(k.name)} this kit makes (${sayKinds(log10All())} things across all ${KITS.length} kits). Every edge is as its material is made (say "edges" for the board; say "checks" for what the pipeline did and the interfaces it checked). Say "take it apart", "what is the ${firstLeaf(made[0]!.part)} made of", "another", or "remove it".`;
 }
 const firstLeaf = (p: KitPart): string => { let q = p; while (q.parts?.length) q = q.parts.find((x) => x.mat) ?? q.parts[0]!; return q.name.replace(/ \d+$/, ''); };
 const allParts = (p: KitPart): KitPart[] => [p, ...(p.parts ?? []).flatMap(allParts)];
@@ -1885,6 +1891,7 @@ function stepKits(dt: number): void {
 function kitWords(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), last = kitThings[kitThings.length - 1];
   if (/^(how many (things|kinds|different things|possibilities|variations)|what can (you|the kits) make)\b/.test(t)) return `${KITS.map((k) => `${plural(k.name)}: ${sayKinds(log10Kinds(k))}`).join('; ')}. In all, ${sayKinds(log10All())}: each kit's choices multiplied, and a kit that uses others (a street of eight houses) multiplies theirs.`;
+  if (/^(show )?(the )?(make|pipeline|checks|interfaces|critic)( board| stages)?$|^what did you (check|do to it)\??$/.test(t)) return openMake();
   if (/^(show )?(the )?edges( board| rules)?$/.test(t)) { openEdges(); return `The edges, as things are made: ${EDGE_RULES.map((r) => `${r.id} ${typeof r.mm === 'number' ? `${r.mm} mm` : 'by thickness'}`).join('; ')}. Change one by its line ("edges wood 4 mm") and run the board.`; }
   if (/^edges\s+\S/.test(t)) { const said = setEdge(t); redrawKits(); return said; }
   const critters = kitThings.filter((x) => x.creature), named = (w: string) => critters.find((x) => x.name.toLowerCase().includes(w) || x.kit === w) ?? critters[critters.length - 1];
@@ -1913,6 +1920,22 @@ function kitWords(text: string): string | null {
 /** The kits' things drawn again (after an edge rule changed): same parts, edges as the rules now say. */
 function redrawKits(): void { for (const t of kitThings) { const g = t.view.group, v = kitView(t.part); v.group.position.copy(g.position); v.group.rotation.copy(g.rotation); kitGroup.remove(g); t.view.dispose(); kitGroup.add(v.group); t.view = v; v.explode(t.level); } drawMade(); }
 function dropKits(match: (t: KitThing) => boolean): number { const go = kitThings.filter(match); for (const t of go) { kitGroup.remove(t.view.group); t.view.dispose(); } kitThings = kitThings.filter((t) => !go.includes(t)); return go.length; }
+/** The Make board: what the one make pipeline did to the last thing made, stage by stage: the conditions it read, each
+ *  rule of its attention to detail and what that rule added, what the critic found and put right, and each interface
+ *  checked with its numbers. */
+function openMake(): string {
+  if (!lastMade) return 'Nothing has been made yet: say "make a go kart", "make a forklift" or "make a corolla".';
+  const m = lastMade, lines: [string, string][] = [];
+  for (const st of m.stages) for (const d of st.did.length ? st.did : ['nothing to do']) lines.push([st.stage, d]);
+  if (boards) {
+    const b = { title: `Made: ${m.part.name}`, kind: 'flow', armed: false, about: 'The make pipeline, stage by stage: conditions, attention to detail, critic, interfaces.', nodes: {} as Record<string, unknown>, edges: {} as Record<string, unknown> };
+    b.nodes.start = { label: `WHEN I make ${m.part.name}`.slice(0, 60), step: { kind: 'trigger', what: 'when I make something' } };
+    lines.slice(0, 40).forEach(([stage, d], i) => { b.nodes[`s${i}`] = { label: `${stage}: ${d}`.slice(0, 60), step: { kind: 'action', what: d } }; b.edges[`e${i}`] = { from: i ? `s${i - 1}` : 'start', to: `s${i}`, rel: 'then' }; });
+    boards.put('make', b as unknown as Board); summonTo('boards'); boards.openBoard('make');
+  }
+  const ok = m.contracts.filter((c) => c.ok).length;
+  return `${sayMade(m)} Its interfaces: ${ok} of ${m.contracts.length} meet${m.contracts.length ? ` (for one: ${m.contracts[0]!.requirer} on the ${m.contracts[0]!.provider}, ${m.contracts[0]!.rows.map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')})` : ''}.`;
+}
 /** The Edges board: each rule a step, its words its radius; Run it to apply what you changed. */
 function openEdges(): void {
   if (!boards) return;

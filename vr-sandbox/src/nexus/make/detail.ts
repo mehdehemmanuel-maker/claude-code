@@ -25,10 +25,11 @@ import * as THREE from 'three';
 import { massOf, type Part } from '../kits';
 import type { Conditions } from './conditions';
 import { edgeRadius } from '../finish';
+import { insideBy, stationAt, surfaceZ } from '../form';
 import { contacts, dirToLocal, grownOf, layout, least, patchIn, toLocal, type Contact, type Node } from './space';
 
 export type MatClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
-export const classOf = (m?: string): MatClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon/.test(m) ? 'polymer' : m === 'rubber' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
+export const classOf = (m?: string): MatClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon|^pe$|^pu$|fibreglass/.test(m) ? 'polymer' : m === 'rubber' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
 const engineered = (n: Node) => { const c = classOf(n.p.mat); return !!c && c !== 'organic' && !n.p.detail; };
 
 export interface Ctx { root: Part; nodes: Node[]; touch: Contact[]; cond: Conditions; centre: THREE.Vector3; size: number; mass: number; doors: number[]; joined: Set<string>; /** in a living thing: what grew is not joined */ living: (n: Node) => boolean }
@@ -48,6 +49,9 @@ function put(to: Node, rule: string, d: Omit<Part, 'at' | 'rot'>, at: THREE.Vect
   const dir = new THREE.Vector3(); dir.setComponent(k, sign); const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, dir));
   const p: Part = { ...d, at: [at.x, at.y, at.z], rot: [e.x, e.y, e.z], detail: rule }; (to.p.parts ??= []).push(p); return p;
 }
+const within = (x: Node, T: Node) => { for (let y: Node | null = x; y; y = y.parent) if (y === T) return true; return false; };
+/** The eight corners of a part's oriented box, in the world. */
+const corners = (x: Node): THREE.Vector3[] => { const o = x.obb!, out: THREE.Vector3[] = []; for (const a of [-1, 1]) for (const b of [-1, 1]) for (const d of [-1, 1]) out.push(o.c.clone().addScaledVector(o.u[0], a * o.h[0]).addScaledVector(o.u[1], b * o.h[1]).addScaledVector(o.u[2], d * o.h[2])); return out; };
 /** The smallest detail worth drawing on a part: one two-thousandth of the thing it belongs to (a scene's car, not the scene). */
 const seen = (n: Node) => { let x = n; while (x.parent && x.parent.parent) x = x.parent; const b = x.sub ?? x.box; return b ? b.getSize(new THREE.Vector3()).length() / 2000 : 0; };
 const ISO = [3, 4, 5, 6, 8, 10, 12, 16, 20, 24];
@@ -55,20 +59,31 @@ const ISO = [3, 4, 5, 6, 8, 10, 12, 16, 20, 24];
 export const boltFor = (t: number) => ISO.find((d) => d >= Math.min(24, Math.max(3, t * 2000))) ?? 24;
 /** A hex head and its washer (ISO 4017 heads about 1.6 d across flats and 0.65 d high; ISO 7089 washers 2.1 d across,
  *  0.18 d thick), on a part's face in its own frame, pointing out along its axis k one way. Stainless by the sea. */
+/** Whether a point (in a part's own frame) lies on the part as it is, not just on its box: a fastener on a round part
+ *  within its circle, on a lofted panel within its section. */
+function onShape(to: Node, at: THREE.Vector3, margin: number): boolean {
+  const s = to.p.shape; if (!s) return true;
+  if ('cyl' in s) return Math.hypot(at.x, at.z) <= Math.max(s.cyl[0], s.cyl[2] ?? 0) - margin;
+  if ('lathe' in s) return Math.hypot(at.x, at.z) <= Math.max(...s.lathe.map(([r]) => r)) - margin;
+  if ('sphere' in s) return at.length() <= s.sphere + margin;
+  if ('loft' in s) { const st = stationAt(s.loft, at.x); return !!st && insideBy(st, at.y, at.z * 0.98) > -1e-3 && (surfaceZ(st, at.y) ?? 0) + 0.01 >= Math.abs(at.z) - 0.01; }
+  return true;
+}
 function boltAt(to: Node, rule: string, at: THREE.Vector3, k: number, sk: number, dmm: number, mat = 'steel-low'): void {
+  if (!onShape(to, at, 1.2 * dmm / 1000)) return;
   const d = dmm / 1000, s = 1.6 * d, kk = 0.65 * d, wd = 2.1 * d, wt = 0.18 * d, step = (x: number) => { const p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * x); return p; };
   const washer = put(to, rule, { name: `M${dmm} washer (ISO 7089)`, shape: { cyl: [wd / 2, wt] }, mat, color: 0xb8bcc0 }, step(wt / 2), k, sk);
   washer.parts = [{ name: `M${dmm} hex head (ISO 4017)`, shape: { cyl: [s / Math.sqrt(3), kk] }, facets: 6, mat, color: 0x9a9ea4, at: [0, wt / 2 + kk / 2, 0], detail: rule }];
 }
 /** A pan-head screw (about 1.9 d across, 0.35 d high, typical) on a part's face in its own frame. */
-function screwAt(to: Node, at: THREE.Vector3, k: number, sk: number, dmm: number): void { const d = dmm / 1000, p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * 0.175 * d); put(to, 'joints', { name: `${dmm} mm screw`, shape: { cyl: [0.95 * d, 0.35 * d] }, mat: 'steel-low', color: 0x8a8e94 }, p, k, sk); }
+function screwAt(to: Node, at: THREE.Vector3, k: number, sk: number, dmm: number): void { if (!onShape(to, at, dmm / 1000)) return; const d = dmm / 1000, p = at.clone(); p.setComponent(k, at.getComponent(k) + sk * 0.175 * d); put(to, 'joints', { name: `${dmm} mm screw`, shape: { cyl: [0.95 * d, 0.35 * d] }, mat: 'steel-low', color: 0x8a8e94 }, p, k, sk); }
 
 // ---- the rules ----
 /** How a pair of materials is joined (typical practice). */
 export function jointFor(a: Node, b: Node): 'weld' | 'bolts' | 'screws' | 'seal' | 'valve' | 'none' {
   const ca = classOf(a.p.mat), cb = classOf(b.p.mat), has = (c: MatClass) => ca === c || cb === c;
   if (has('glass')) return 'seal';
-  if (has('rubber')) return (a.p.mat === 'rubber' && 'torus' in (a.p.shape ?? {})) || (b.p.mat === 'rubber' && 'torus' in (b.p.shape ?? {})) ? 'valve' : 'none';
+  if (has('rubber')) return (a.p.mat === 'rubber' && ringed(a)) || (b.p.mat === 'rubber' && ringed(b)) ? 'valve' : 'none';
   if (has('soft') || has('organic')) return 'none';
   if (ca === 'masonry' && cb === 'masonry') return 'none';
   if (ca === 'metal' && cb === 'metal') return a.p.mat === b.p.mat && a.p.mat !== 'cast-iron' && !a.p.make && !b.p.make ? 'weld' : 'bolts';
@@ -76,10 +91,13 @@ export function jointFor(a: Node, b: Node): 'weld' | 'bolts' | 'screws' | 'seal'
   if (has('wood') || has('polymer')) return 'screws';
   return 'none';
 }
-const isRound = (n: Node) => !!n.p.shape && ('cyl' in n.p.shape || 'torus' in n.p.shape);
+// round parts: a cylinder or a turned profile (about its own y), a torus (about its own z)
+const isRound = (n: Node) => !!n.p.shape && ('cyl' in n.p.shape || 'torus' in n.p.shape || 'lathe' in n.p.shape);
+/** a ring round an axle: a tyre drawn as a torus or as a turned section */
+const ringed = (n: Node) => !!n.p.shape && ('torus' in n.p.shape || 'lathe' in n.p.shape);
 /** The axis a round part turns about, in the world. */
 const roundAxis = (n: Node) => new THREE.Vector3(0, 'torus' in n.p.shape! ? 0 : 1, 'torus' in n.p.shape! ? 1 : 0).transformDirection(n.m);
-const radiusOf = (n: Node) => { const s = n.p.shape!; return 'cyl' in s ? Math.max(s.cyl[0], s.cyl[2] ?? 0) : 'torus' in s ? s.torus[0] + s.torus[1] : 0; };
+const radiusOf = (n: Node) => { const s = n.p.shape!; return 'cyl' in s ? Math.max(s.cyl[0], s.cyl[2] ?? 0) : 'torus' in s ? s.torus[0] + s.torus[1] : 'lathe' in s ? Math.max(...s.lathe.map(([r]) => r)) : 0; };
 
 export const RULES: DetailRule[] = [
   {
@@ -98,15 +116,23 @@ export const RULES: DetailRule[] = [
         const how = jointFor(t.a, t.b); if (how === 'none') continue;
         // fastened from the side you can reach: the part whose face looks furthest out from the thing along the joint's axis
         const out = t.normal.clone().multiplyScalar(Math.sign(t.mid.clone().sub(c.centre).dot(t.normal)) || 1), reach = (x: Node) => { const o = x.obb!; return o.c.dot(out) + o.h[0] * Math.abs(o.u[0].dot(out)) + o.h[1] * Math.abs(o.u[1].dot(out)) + o.h[2] * Math.abs(o.u[2].dot(out)); };
-        const host = how === 'seal' ? (classOf(t.a.p.mat) === 'glass' ? t.a : t.b) : how === 'valve' ? (classOf(t.a.p.mat) === 'metal' ? t.a : t.b) : reach(t.a) >= reach(t.b) ? t.a : t.b, other = host === t.a ? t.b : t.a;
-        const patch = patchIn(host, other); if (!patch || !host.local) continue;
+        let host = how === 'seal' ? (classOf(t.a.p.mat) === 'glass' ? t.a : t.b) : how === 'valve' ? (classOf(t.a.p.mat) === 'metal' ? t.a : t.b) : reach(t.a) >= reach(t.b) ? t.a : t.b, other = host === t.a ? t.b : t.a;
+        // a bent tube or a swept body has no one face to lay a joint on: what is fixed to it is fastened from its own side;
+        // two of them (two tubes of a frame) are welded round where they meet, a bead as thick as the thinner wall
+        if (host.pieces.length > 1 && other.pieces.length === 1 && how !== 'valve' && how !== 'seal') [host, other] = [other, host];
+        if (host.pieces.length > 1) {
+          if (how !== 'weld' && how !== 'bolts') continue;
+          const r = Math.min(...[t.pa, t.pb].map((o) => Math.min(...o.h))), leg = Math.min(0.006, Math.max(0.002, (host.p.shape && 'tube' in host.p.shape ? host.p.shape.tube.wall : undefined) ?? r * 0.15)), at = toLocal(host, t.mid.clone().add(t.pa.c).add(t.pb.c).multiplyScalar(1 / 3));
+          if (leg < seen(host)) continue; put(host, 'joints', { name: 'weld bead', shape: { sphere: r * 0.55 + leg }, mat: host.p.mat, color: 0x6a6e72, finish: 'weld', says: 'a fillet weld round the cluster where the tubes meet' }, at, 1, 1); n++; continue;
+        }
+        const patch = patchIn(host, other, host === t.a ? t.pb : t.pa); if (!patch || !host.local) continue;
         const ln = dirToLocal(host, out), k = [0, 1, 2].reduce((b, i) => (Math.abs(ln.getComponent(i)) > Math.abs(ln.getComponent(b)) ? i : b), 0), sk = Math.sign(ln.getComponent(k)) || 1;
         const face = sk > 0 ? host.local.max.getComponent(k) : host.local.min.getComponent(k), u = (k + 1) % 3, v = (k + 2) % 3, ps = patch.getSize(new THREE.Vector3()), pc = patch.getCenter(new THREE.Vector3());
         const thin = Math.max(0.0005, Math.min(host.p.shell ?? least(host.local), other.p.shell ?? (other.local ? least(other.local) : 1)));
         if (how === 'valve') { // a valve through the rim near its edge, pointing out of its outer face (a TR413 valve: about 33 mm): one to a tyre
           // (through the rim, the round part it sits on: not a spoke, and not a second one through the brake disc)
-          const tyre = host === t.a ? t.b : t.a; if (!host.p.shape || !('cyl' in host.p.shape || 'torus' in host.p.shape) || c.joined.has(`valve ${tyre.path}`)) continue; c.joined.add(`valve ${tyre.path}`);
-          const ax = 'cyl' in host.p.shape ? 1 : 2, R = radiusOf(host), side = Math.sign(dirToLocal(host, out).getComponent(ax)) || 1;
+          const tyre = host === t.a ? t.b : t.a; if (!isRound(host) || c.joined.has(`valve ${tyre.path}`)) continue; c.joined.add(`valve ${tyre.path}`);
+          const ax = 'torus' in host.p.shape! ? 2 : 1, R = radiusOf(host), side = Math.sign(dirToLocal(host, out).getComponent(ax)) || 1;
           const at = new THREE.Vector3(); at.setComponent(ax === 1 ? 0 : 0, R * 0.8); at.setComponent(ax, side * (ax === 1 ? host.local.max.y : host.local.max.z) + side * 0.012);
           put(host, 'joints', { name: 'tyre valve', shape: { cyl: [0.0055, 0.033] }, mat: 'rubber', color: 0x161616 }, at, ax, side); n++; continue;
         }
@@ -176,7 +202,7 @@ export const RULES: DetailRule[] = [
         const s = x.box.getSize(new THREE.Vector3()), w = Math.max(s.x, s.z); if (s.y < 1.5 || s.y < 6 * w) continue;
         const plate = Math.max(0.2, 2.5 * w), t = 0.02, ctr = new THREE.Vector3((x.box.min.x + x.box.max.x) / 2, t / 2, (x.box.min.z + x.box.max.z) / 2);
         const bp = attach(x, 'base plates', { name: 'base plate', shape: { box: [plate, t, plate] }, mat: x.p.mat, color: x.p.color, finish: 'paint' }, ctr);
-        const holder: Node = { p: bp, parent: x, kids: [], m: new THREE.Matrix4(), box: null, obb: null, local: null, sub: null, depth: x.depth + 1, path: `${x.path}/bp` };
+        const holder: Node = { p: bp, parent: x, kids: [], m: new THREE.Matrix4(), box: null, obb: null, pieces: [], local: null, sub: null, depth: x.depth + 1, path: `${x.path}/bp` };
         for (const a of [-1, 1]) for (const b of [-1, 1]) boltAt(holder, 'base plates', new THREE.Vector3(a * plate * 0.38, t / 2, b * plate * 0.38), 1, 1, 20);
         n += 5;
       }
@@ -188,17 +214,22 @@ export const RULES: DetailRule[] = [
     run(c) {
       const seats = c.nodes.filter((x) => /\bseat\b/i.test(x.p.name) && !x.p.detail); if (!seats.length) return 0;
       const pos = (x: Node) => new THREE.Vector3().setFromMatrixPosition(x.m);
-      const shell = c.nodes.filter((x) => x.box && x.p.shell && classOf(x.p.mat) === 'metal' && seats.every((s) => x.box!.containsPoint(pos(s)) || (pos(s).y >= x.box!.min.y - 0.05 && Math.abs(pos(s).x) <= x.box!.max.x && Math.abs(pos(s).z) <= x.box!.max.z)))[0];
+      // (a cabin people sit inside: a shell round every seat, wide enough to sit in and rising well above the cushions; an
+      // ATV's fenders, a forklift's hood or a motorcycle's tank are not)
+      const shell = c.nodes.filter((x) => x.box && x.p.shell && !x.p.detail && classOf(x.p.mat) === 'metal' && x.box.max.z - x.box.min.z > 1.2 && seats.every((s) => { const q = pos(s); return x.box!.containsPoint(q) && x.box!.max.y > q.y + 0.3; }))[0];
       if (!shell) return 0;
       const B = shell.box!, rows = [...new Set(seats.map((s) => Math.round(pos(s).x * 4) / 4))].sort((a, b) => b - a), len = Math.min(1.15, (B.max.x - B.min.x) / (rows.length + 1.2));
       let n = 0; c.doors = [];
       for (const x of rows) for (const side of [-1, 1]) {
         const z = side > 0 ? B.max.z + 0.001 : B.min.z - 0.001, y0 = B.min.y + 0.08, y1 = B.max.y - 0.02, x0 = x - len / 2, x1 = x + len / 2, gap = 0.004, seam = { color: 0x15161a, kg: 0 }; // a gap: no mass
-        for (const [a, b, horiz] of [[x0, x1, true], [x0, x1, false]] as const) {
-          if (horiz) for (const y of [y0, y1]) attach(shell, 'doors', { name: 'door seam', shape: { box: [b - a, gap, gap] }, ...seam }, new THREE.Vector3((a + b) / 2, y, z), UP);
-          else for (const xx of [a, b]) attach(shell, 'doors', { name: 'door seam', shape: { box: [gap, y1 - y0, gap] }, ...seam }, new THREE.Vector3(xx, (y0 + y1) / 2, z), UP);
-        }
-        attach(shell, 'doors', { name: 'door handle', shape: { box: [0.16, 0.022, 0.03] }, mat: 'pc', color: 0x2a2c30, make: 'pressed' }, new THREE.Vector3(x1 - 0.18, y0 + (y1 - y0) * 0.72, z + side * 0.012), UP);
+        // on a lofted body the seams follow its surface, a short length at a time; on a box, its face
+        const l = shell.p.shape && 'loft' in shell.p.shape ? shell.p.shape.loft : null;
+        const on = (x: number, y: number) => { if (!l) return z; const q = toLocal(shell, new THREE.Vector3(x, y, 0)), st = stationAt(l, q.x), zz = st ? surfaceZ(st, q.y) : null; return zz === null ? null : side * (zz + 0.001); };
+        const seg = (ax: number, ay: number, bx: number, by: number) => { const k = l ? 8 : 1; for (let i = 0; i < k; i++) { const xa = ax + ((bx - ax) * i) / k, ya = ay + ((by - ay) * i) / k, xb = ax + ((bx - ax) * (i + 1)) / k, yb = ay + ((by - ay) * (i + 1)) / k, zz = on((xa + xb) / 2, (ya + yb) / 2); if (zz === null) continue; attach(shell, 'doors', { name: 'door seam', shape: { box: [Math.max(gap, Math.abs(xb - xa)), Math.max(gap, Math.abs(yb - ya)), gap] }, ...seam }, new THREE.Vector3((xa + xb) / 2, (ya + yb) / 2, zz), UP); } };
+        const top = l ? Math.min(y1, ...[x0, x1].map((xx) => { const st = stationAt(l, toLocal(shell, new THREE.Vector3(xx, 0, 0)).x); return st ? st.hi - 0.06 : y1; })) : y1;
+        seg(x0, y0, x1, y0); seg(x0, top, x1, top); seg(x0, y0, x0, top); seg(x1, y0, x1, top);
+        const hy = y0 + (top - y0) * 0.75, hz = on(x1 - 0.18, hy);
+        if (hz !== null) attach(shell, 'doors', { name: 'door handle', shape: { box: [0.16, 0.022, 0.03] }, mat: 'pc', color: 0x2a2c30, make: 'pressed' }, new THREE.Vector3(x1 - 0.18, hy, hz + side * 0.012), UP);
         n += 5; c.doors.push(x0, x1);
       }
       return n;
@@ -209,7 +240,8 @@ export const RULES: DetailRule[] = [
     run(c) {
       let n = 0;
       for (const g of c.nodes) {
-        if (!g.box || g.p.mat !== 'glass' || g.p.detail) continue; const s = g.box.getSize(new THREE.Vector3()); if (s.y < 0.3 || s.x * s.z < 0.4) continue;
+        // (a box of glass: a lofted glasshouse is made with its own roof and pillars, as its body's lines lay them)
+        if (!g.box || g.p.mat !== 'glass' || g.p.detail || !g.p.shape || !('box' in g.p.shape)) continue; const s = g.box.getSize(new THREE.Vector3()); if (s.y < 0.3 || s.x * s.z < 0.4) continue;
         const under = c.nodes.find((x) => x.box && x !== g && x.p.shell && classOf(x.p.mat) === 'metal' && Math.abs(x.box.max.y - g.box!.min.y) < 0.05); if (!under) continue;
         const col = under.p.color ?? 0x888888, t = 0.035;
         attach(g, 'framing', { name: 'roof panel', shape: { box: [s.x + 0.02, t, s.z + 0.02] }, mat: under.p.mat, color: col, make: 'pressed', shell: under.p.shell, finish: 'paint' }, new THREE.Vector3((g.box.min.x + g.box.max.x) / 2, g.box.max.y + t / 2 - 0.005, (g.box.min.z + g.box.max.z) / 2)); n++;
@@ -236,14 +268,23 @@ export const RULES: DetailRule[] = [
     },
   },
   {
-    id: 'road kit', family: 'the road', on: true, source: 'EU number plate 520 × 110 mm; UNECE R46 mirrors', says: 'a thing with wheels and seats that goes on roads carries number plates front and back and a mirror each side',
+    id: 'road kit', family: 'the road', on: true, source: 'EU number plate 520 × 110 mm; UNECE R46 mirrors', says: 'a thing that goes on public roads carries number plates front and back and a mirror each side',
     run(c) {
-      if (!hasWheels(c) || !c.nodes.some((x) => /\bseat\b/i.test(x.p.name))) return 0;
-      const body = c.nodes.filter((x) => x.box && x.p.shell && classOf(x.p.mat) === 'metal').sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0]; if (!body) return 0;
-      const B = body.box!, yp = B.min.y + (B.max.y - B.min.y) * 0.45; let n = 0;
-      for (const e of [-1, 1]) { attach(body, 'road kit', { name: 'number plate', shape: { box: [0.003, 0.11, 0.52] }, mat: 'al-6061', color: 0xf4f0d8, finish: 'plate' }, new THREE.Vector3(e > 0 ? B.max.x + 0.002 : B.min.x - 0.002, yp, 0), UP); n++; }
-      const front = c.nodes.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => new THREE.Vector3().setFromMatrixPosition(x.m).x).reduce((a, b) => Math.max(a, b), -Infinity);
-      for (const side of [-1, 1]) { attach(body, 'road kit', { name: 'wing mirror', shape: { box: [0.1, 0.11, 0.2] }, mat: 'abs', color: body.p.color, make: 'pressed', finish: 'paint' }, new THREE.Vector3(front + 0.35, B.max.y + 0.06, side * (B.max.z + 0.09)), UP); n++; }
+      // per thing that says it goes on public roads (a forklift, a kart or a motocrosser does not), in its own frame, so
+      // a car parked across a street has its plates at its own front and back
+      let n = 0;
+      for (const T of c.nodes.filter((x) => x.p.road)) {
+        const under = c.nodes.filter((x) => x !== T && x.box && !x.p.detail && within(x, T));
+        if (!under.some((x) => /\bseat\b/i.test(x.p.name)) || !under.some((x) => /\b(wheel|tyre|tire)s?\b/i.test(x.p.name))) continue;
+        const lb = new THREE.Box3(); for (const x of under) for (const q of corners(x)) lb.expandByPoint(toLocal(T, q));
+        const body = under.filter((x) => x.p.shell && classOf(x.p.mat) === 'metal').sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
+        const belt = body ? Math.max(...corners(body).map((q) => toLocal(T, q).y)) : lb.min.y + (lb.max.y - lb.min.y) * 0.6, yp = Math.min(0.55, lb.min.y + (belt - lb.min.y) * 0.45);
+        for (const e of [-1, 1]) { put(T, 'road kit', { name: 'number plate', shape: { box: [0.003, 0.11, 0.52] }, mat: 'al-6061', color: 0xf4f0d8, finish: 'plate' }, new THREE.Vector3(e > 0 ? lb.max.x + 0.002 : lb.min.x - 0.002, yp, 0), 1, 1); n++; }
+        const front = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).x));
+        // (a mirror where the driver's eye looks out: about 0.55 m above the cushion, at the front of the side glass)
+        const seatY = Math.max(...under.filter((x) => /\bseat\b/i.test(x.p.name)).map((x) => toLocal(T, new THREE.Vector3().setFromMatrixPosition(x.m)).y)), my = belt > seatY + 0.7 ? seatY + 0.5 : Math.max(belt + 0.04, seatY + 0.5); // (in a tall cab, its roof is not its window line)
+        for (const side of [-1, 1]) { put(T, 'road kit', { name: 'wing mirror', shape: { box: [0.1, 0.11, 0.2] }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, make: 'pressed', finish: 'paint' }, new THREE.Vector3(front + 0.5, my, side * (lb.max.z + 0.04)), 1, 1); n++; }
+      }
       return n;
     },
   },
@@ -272,7 +313,7 @@ export const RULES: DetailRule[] = [
     },
   },
 ];
-const hasWheels = (c: Ctx) => c.nodes.filter((x) => x.p.mat === 'rubber' && x.p.shape && 'torus' in x.p.shape).length >= 2;
+const hasWheels = (c: Ctx) => c.nodes.filter((x) => x.p.mat === 'rubber' && ringed(x)).length >= 2;
 
 /** The details added to a thing (it is changed in place: give it a copy). */
 export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => boolean = (r) => r.on): { counts: Record<string, number>; kg: Record<string, number>; total: number } {
