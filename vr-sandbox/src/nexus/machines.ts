@@ -67,6 +67,7 @@ export interface Machine {
 // ---- making parts -------------------------------------------------------------------------------------------------
 const P = (name: string, shape: Shape | undefined, at: V3, more: Partial<Part> = {}): Part => ({ name, ...(shape ? { shape } : {}), at, ...more });
 const tube = (name: string, r: number, pts: V3[], mat: string, color: number, more: Partial<Part> = {}, wall = Math.max(0.0012, r * 0.1)): Part => P(name, { tube: { r, pts, wall } }, [0, 0, 0], { mat, color, finish: 'paint', ...more });
+const subV = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], unitV = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 /** A coil spring as it is wound: its wire along a helix of so many turns, its ends closed flat (typical), along y. */
 const coil = (name: string, R: number, wire: number, L: number, turns: number, more: Partial<Part> = {}): Part => {
   const n = Math.round(turns * 14), pts: V3[] = []; for (let i = 0; i <= n; i++) { const f = i / n, th = f * turns * 2 * PI, y = -L / 2 + wire + (L - 2 * wire) * Math.min(1, Math.max(0, (f * turns - 0.5) / (turns - 1))); pts.push([R * Math.cos(th), y, R * Math.sin(th)]); }
@@ -597,7 +598,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
       // damper up to the body or the frame; on a unibody with struts, the subframe the arms pivot on, the steering rack
       // on it with a tie rod to each knuckle, and the anti-roll bar Toyota (and most makers) list, linked to each strut
       const cn = cornerOf(t, { ...m.rims, brake: a.brake }, true), zW = a.track / 2, X = (dx: number) => (s > 0 ? dx : -dx), shellStrut = k === 'strut' && m.frame === 'shell';
-      const st = strutOf(a, t, m), zA = cn.zA, armT = cn.armT, iron = { mat: 'cast-iron', color: 0x3a3a3a, finish: 'cast' } as const;
+      const st = strutOf(a, t, m), zA = cn.zA, armT = cn.armT, tieY = 0.018, iron = { mat: 'cast-iron', color: 0x3a3a3a, finish: 'cast' } as const;
       // (the knuckle's points in its own frame, the wheel's: out along +z; its x mirrored on the left, which is turned
       // half round, so what is behind the axle on one side is behind it on the other)
       // (a wishbone's two ball joints near the axle's height, so its arms leave the rim well inside its bead)
@@ -608,7 +609,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
         // (its upright above and below its bearing's housing, the hub's barrel turning in the housing between them: cast
         // round its bore, not across it)
         ...[1, -1].map((e) => { const h2 = (k === 'wishbone' ? 0.15 : 0.18) / 2, y0 = cn.rB + 0.002; return P(e > 0 ? 'upright' : 'upright foot', { box: [0.09, h2 - y0, armT] }, [0, e * (y0 + h2) / 2, zA], { ...iron }); }),
-        P('ball joint boss', { box: [0.045, 0.045, 0.045] }, [0, ball[1] + 0.008, zA], { ...iron, joint: 'ball', passes: [`lower arm ${side}`, `lower arm ${side} pressing`], says: 'the lower ball joint\'s seat: its stud in a taper in the knuckle (typical)' }),
+        P('ball joint boss', { box: [0.045, 0.045, 0.045] }, [0, ball[1] + 0.008, zA], { ...iron, joint: 'ball', passes: [`lower arm ${side}`], says: 'the lower ball joint\'s seat: its stud in a taper in the knuckle (typical)' }),
       ];
       // (a strut's foot: its tube's bracket, welded to the tube outboard of it, clamps the knuckle's top arm; the arm goes
       // up and in from the upright to it, inside it)
@@ -619,8 +620,10 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
       // (its two caliper ears, cast with it: from inside the upright out to where its caliper's carrier legs stand, in
       // the caliper's own frame (cornerOf), mirrored on the left as the wheel's caliper is)
       if (a.brake?.kind === 'disc' && cn.r > 0) { const ca = s < 0 ? PI - cn.ca0 : cn.ca0, r1 = cn.r + 0.016; for (const e of [-1, 1]) { const yL = e * (cn.ch / 2 + cn.legW / 2); kp.push(P('caliper ear', { box: [r1, cn.legW, armT] }, [Math.cos(ca) * (r1 / 2) - Math.sin(ca) * yL, Math.sin(ca) * (r1 / 2) + Math.cos(ca) * yL, zA], { rot: [0, 0, ca], ...iron })); } }
-      // (its steering arm back from the upright's edge, clear of the hub's barrel through it)
-      if (shellStrut) kp.push(P('steering arm', { box: [0.095, 0.03, armT] }, [X(-0.0875), 0.03, zA], { ...iron, passes: [`tie rod ${side}`] }));
+      // (its steering arm back from the upright's edge, clear of the hub's barrel through it, at its tie rod's height: the
+      // rack's, which runs low enough that its bellows clear the rails over them)
+      // (from 3 mm outside the hub's barrel, whatever its size, back to 135 mm behind the axle)
+      if (shellStrut) { const xi = cn.rB + 0.003, xo = 0.135; kp.push(P('steering arm', { box: [xo - xi, 0.03, armT] }, [X(-(xi + xo) / 2), tieY, zA], { ...iron, passes: [`tie rod ${side}`] })); }
       const wheelName = `${end} ${s > 0 ? 'right' : 'left'} wheel`, upright = `${side} upright`;
       // (the knuckle, its strut's tube and its caliper one link: they steer and rise together, the wheel turning in it)
       out.push(P(`knuckle ${side}`, undefined, [a.x, y, s * zW], { mat: 'cast-iron', movesWith: wheelName, link: upright, ...(s < 0 ? { rot: [0, PI, 0] as V3 } : {}), says: 'the upright the wheel turns on: cast iron, its bearing round the hub, its arms to the strut, the lower ball joint and the steering (typical)', parts: kp }));
@@ -657,14 +660,22 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
         const F: V3 = [a.x + 0.03, yP, s * zP], R2: V3 = [a.x - 0.3, yP, s * (zP + 0.008)], sub = `subframe side ${s > 0 ? 'right' : 'left'}`, Bj: V3 = [B[0], y + ball[1] + 0.008 - 0.0225 - 0.015, B[2]];
         out.push(P(`lower arm ${side}`, undefined, [0, 0, 0], { link: `${side} lower arm`, says: 'its lower control arm, pressed steel, an L on two rubber bushes (typical)', parts: [
           // (one pressing, an L: from its front bush out to the ball joint and back in to its rear bush)
-          tube(`lower arm ${side} pressing`, 0.014, [[F[0], F[1], s * (zP + 0.022)], Bj, [a.x - 0.12, yP + 0.003, s * (zP + 0.12)], R2], 'steel-low', dark, { finish: 'paint' }),
+          // (pressed, so bent tight at its corner, 20 mm: its ball joint's housing is in that corner, not 30 mm off the arc a
+          // tube bender's four diameters would round it to)
+          // (its corner's control point set out along the corner's bisector so the bend itself runs through the joint's housing,
+          // 6 mm under its middle, clear of the knuckle's boss over it)
+          ((): Part => { const A: V3 = [F[0], F[1], s * (zP + 0.022)], C: V3 = [a.x - 0.12, yP + 0.003, s * (zP + 0.12)], Rb = 0.02, u1 = unitV(subV(A, Bj)), u2 = unitV(subV(C, Bj)), cosI = Math.max(-0.999, Math.min(0.999, u1[0] * u2[0] + u1[1] * u2[1] + u1[2] * u2[2])), half = Math.acos(cosI) / 2, out2 = Rb / Math.sin(half) - Rb, bis = unitV([u1[0] + u2[0], u1[1] + u2[1], u1[2] + u2[2]]), K: V3 = [Bj[0] - bis[0] * out2, Bj[1] - bis[1] * out2 - 0.006, Bj[2] - bis[2] * out2];
+            return { ...tube(`lower arm ${side} pressing`, 0.014, [A, K, C, R2], 'steel-low', dark, { finish: 'paint' }), shape: { tube: { r: 0.014, pts: [A, K, C, R2], wall: 0.0014, bend: Rb } } }; })(),
           // (its ball joint pressed into the arm's corner under the knuckle, its stud up into the knuckle's boss)
-          P('lower ball joint', { cyl: [0.022, 0.03] }, Bj, { mat: 'steel-alloy', color: 0x3a3c3e, finish: 'plate', joint: 'ball', passes: [`lower arm ${side} pressing`], says: 'its lower ball joint: a ball stud in a housing pressed into the arm, the stud in a taper in the knuckle (typical)' }),
+          P('lower ball joint', { cyl: [0.022, 0.03] }, Bj, { mat: 'steel-alloy', color: 0x3a3c3e, finish: 'plate', joint: 'ball', passes: [`lower arm ${side} pressing`], fixed: 'its housing pressed into the corner of its arm\'s pressing', says: 'its lower ball joint: a ball stud in a housing pressed into the arm, the stud in a taper in the knuckle (typical)' }),
           P('front bush', { cyl: [0.026, 0.05] }, F, { rot: [0, 0, PI / 2], mat: 'rubber', color: 0x161616, finish: 'texture', joint: 'bush', passes: [`lower arm ${side} pressing`, sub] }),
           P('rear bush', { cyl: [0.034, 0.05] }, R2, { mat: 'rubber', color: 0x161616, finish: 'texture', joint: 'bush', passes: [`lower arm ${side} pressing`, sub] })] }));
-        // the tie rod from the rack's end (its bellows) out to the steering arm
-        const zH = zW + zA - 0.36, rackY = y + 0.03, rackX = a.x - 0.14;
-        out.push(tube(`tie rod ${side}`, 0.008, [[rackX, rackY, s * (zH + 0.06)], [a.x - 0.115, rackY, s * (zW + zA)]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: `${side} tie rod`, joint: 'ball', says: 'its tie rod: a ball joint at each end, its inner one in the rack\'s bellows, its outer one\'s stud in the steering arm (typical)' }));
+        // the tie rod from the rack's inner ball joint out to the steering arm. The rack's housing ends at zH; its bar stands
+        // out of it by its stroke (70 mm each way, typical) and a little more, so at full lock its inner joint stops short of
+        // the housing; the joint's housing is screwed on the bar's end, the tie rod comes out of it, and the bellows run
+        // from the housing's end to the tie rod, over the joint, so they stretch and fold with the stroke
+        const zH = zW + zA - 0.39, rackY = y + tieY, rackX = a.x - 0.14, stroke = 0.07, zJ = zH + stroke + 0.005, zT = zJ + 0.034;
+        out.push(tube(`tie rod ${side}`, 0.008, [[rackX, rackY, s * zT], [a.x - 0.115, rackY, s * (zW + zA)]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: `${side} tie rod`, joint: 'ball', says: 'its tie rod: a ball joint at each end, its inner one on the rack\'s end inside the bellows, its outer one\'s stud in the steering arm (typical)' }));
         // the anti-roll bar's link, from its arm's end up to a bracket on the strut's tube behind it
         const lz = st.zAt(st.yb + 0.12), lt = footAt(0.12 / Math.cos(Math.atan(st.lean)), 0);
         out.push(tube(`stabiliser link ${side}`, 0.006, [[a.x - 0.05, yP + 0.07, s * lz], [a.x - 0.05, lt[1], s * lz]], 'steel-low', dark, { finish: 'paint', link: `${side} stabiliser link`, joint: 'ball', says: 'its link to the anti-roll bar: a ball joint at each end (typical)' }));
@@ -677,9 +688,15 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
             ...[-1, 1].map((sd) => P(`subframe side ${sd > 0 ? 'right' : 'left'}`, { box: [0.42, 0.05, 0.06] }, [a.x - 0.15, yP, sd * zS], { mat: 'steel-low', color: dark, fill: 0.12, finish: 'paint' })),
             P('subframe cross member', { box: [0.06, 0.04, 2 * zS + 0.06] }, [xC, yC, 0], { mat: 'steel-low', color: dark, fill: 0.15, finish: 'paint' }),
             ...[-1, 1].map((sd) => P('subframe riser', { box: [0.06, yC - 0.02 - (yP + 0.025) + 0.004, 0.06] }, [xC, (yC - 0.02 + yP + 0.025) / 2, sd * zS], { mat: 'steel-low', color: dark, fill: 0.15, finish: 'paint', fixed: 'welded between the side and the cross member' }))] }));
+          // (the rack itself its own link, sliding in a bush at each end of its housing: on a real rack one end is held by the
+          // pinion and its yoke, not drawn; its teeth are not drawn either)
+          const sideOf = (sd: number) => sd > 0 ? 'right' : 'left';
           out.push(P('steering rack', undefined, [0, 0, 0], { mat: 'al-a380', says: 'its rack and pinion, on the subframe, with electric power steering (Toyota: EPS)', parts: [
-            tube('rack housing', 0.022, [[rackX, rackY, -zH], [rackX, rackY, zH]], 'al-a380', 0x5a5c5e, { finish: 'cast' }),
-            ...[-1, 1].map((sd) => P(`rack bellows ${sd > 0 ? 'right' : 'left'}`, { lathe: [[0.02, -0.005], [0.024, 0.02], [0.018, 0.035], [0.012, 0.06]] }, [rackX, rackY, sd * zH], { rot: [sd * PI / 2, 0, 0], mat: 'rubber', color: 0x161616, finish: 'texture', joint: 'ball', passes: [`tie rod front ${sd > 0 ? 'right' : 'left'}`, 'rack housing'], says: 'its bellows, over the tie rod\'s inner ball joint on the rack\'s end (typical)' })),
+            tube('rack housing', 0.022, [[rackX, rackY, -zH], [rackX, rackY, zH]], 'al-a380', 0x5a5c5e, { finish: 'cast' }, 0.0035),
+            tube('rack', 0.0125, [[rackX, rackY, -zJ], [rackX, rackY, zJ]], 'steel-alloy', 0x8a8c8e, { finish: 'plate', link: `${end} steering rack`, says: 'its rack: a 25 mm steel bar, toothed where the pinion meets it (the teeth not drawn), sliding 70 mm each way (typical)' }, 0.0125),
+            ...[-1, 1].map((sd) => P(`rack bush ${sideOf(sd)}`, { lathe: [[0.0125, -0.02], [0.0185, -0.02], [0.0185, 0], [0.0125, 0], [0.0125, -0.02]] }, [rackX, rackY, sd * zH], { rot: [sd * PI / 2, 0, 0], mat: 'pom', color: 0xd8d4c8, finish: 'texture', joint: 'slide', passes: ['rack'], fixed: 'pressed into the end of its housing', says: 'a plastic bush the rack slides in, pressed into its housing\'s end (typical)' })),
+            ...[-1, 1].map((sd) => P(`inner tie rod joint ${sideOf(sd)}`, { cyl: [0.017, 0.034] }, [rackX, rackY, sd * (zJ + 0.017)], { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x6a6c6e, finish: 'plate', link: `${end} steering rack`, joint: 'ball', fixed: 'screwed onto the end of its rack', says: 'its tie rod\'s inner ball joint: a ball in a housing screwed onto the rack\'s end (typical)' })),
+            ...[-1, 1].map((sd) => P(`rack bellows ${sideOf(sd)}`, { lathe: [[0.022, -0.016], [0.022, 0], [0.026, 0.012], [0.021, 0.026], [0.026, 0.04], [0.021, 0.054], [0.026, 0.068], [0.021, 0.082], [0.025, 0.094], [0.02, 0.11], [0.008, 0.118], [0.008, 0.132]] }, [rackX, rackY, sd * zH], { rot: [sd * PI / 2, 0, 0], mat: 'rubber', color: 0x161616, finish: 'texture', joint: 'ball', passes: [`tie rod front ${sideOf(sd)}`, 'rack housing', 'rack'], fixed: 'clamped over the end of its housing and onto its tie rod', says: 'its bellows: clamped over the housing\'s end and onto the tie rod, over the inner ball joint, folding and stretching with the rack\'s stroke (typical)' })),
             ...[-1, 1].map((sd) => P('rack mount', { box: [0.05, rackY - 0.022 - (yC + 0.02) + 0.004, 0.05] }, [rackX, (rackY - 0.022 + yC + 0.02) / 2, sd * zH * 0.7], { mat: 'al-a380', color: 0x5a5c5e, finish: 'cast', passes: ['rack housing', 'subframe cross member'], fixed: 'bolted to the subframe', says: 'its clamps, bolted to the subframe (typical)' }))] }));
           const xb = xC - 0.03 - 0.011 - 0.004;
           // (behind the cross member to past its ends, then forward to its links)
@@ -771,8 +788,12 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
         // (its outer joint's bell 2 mm in from the hub's inner end, its stub splined into the hub; its inner end in the
         // gearbox's side, 30 mm in)
         const Lst = cn.zSpig + 0.014 - (cn.hubIn - 0.002);
-        const bell = (z: number, dir: number): Part => P('outer joint', { lathe: [[0, 0], [0.014, 0], [0.036, 0.004], [0.04, 0.025], [0.032, 0.045], [rs + 0.004, 0.05]] }, [a.x, y, z], { rot: [dir * PI / 2, 0, 0], mat: 'steel-alloy', color: 0x4a4c4e, finish: 'cast', link: `${end2} ${dir < 0 ? 'right' : 'left'} wheel`, joint: 'cv', fixed: 'splined into the hub, its nut on the hub\'s outer face', says: 'its outer constant-velocity joint (typical)', parts: [P('outer joint stub', { cyl: [0.012, Lst] }, [0, -Lst / 2, 0], { mat: 'steel-alloy', color: 0x4a4c4e, finish: 'plate', fixed: 'forged with its bell', says: 'its splined stub, through the hub\'s bore to its nut on the spigot (typical)' })] });
-        for (const sd of [-1, 1]) { const z0 = sd > 0 ? zR : zL, z1 = sd * (Math.abs(sd * bootAt) - 0.04), zb0 = sd * (hubIn - 0.002); sh.push(tube(`drive shaft ${sd > 0 ? 'right' : 'left'}`, rs, [[a.x, y, z0 + sd * 0.02], [a.x, y, z1]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: `${end2} ${sd > 0 ? 'right' : 'left'} drive shaft`, iface: [{ kind: 'shaft', role: 'provides', d }] }), boot('inner joint boot', z0 - sd * 0.005, sd), ...(kn ? [bell(zb0, -sd), boot('outer joint boot', zb0 - sd * 0.048, -sd)] : [boot('outer joint boot', sd * bootAt, -sd)])); }
+        const bell = (z: number, dir: number): Part => P('outer joint', { lathe: [[0, 0], [0.014, 0], [0.036, 0.004], [0.04, 0.025], [0.038, 0.045], [0.036, 0.05]] }, [a.x, y, z], { rot: [dir * PI / 2, 0, 0], mat: 'steel-alloy', color: 0x4a4c4e, finish: 'cast', link: `${end2} ${dir < 0 ? 'right' : 'left'} wheel`, joint: 'cv', fixed: 'splined into the hub, its nut on the hub\'s outer face', says: 'its outer constant-velocity joint (typical)', parts: [P('outer joint stub', { cyl: [0.012, Lst] }, [0, -Lst / 2, 0], { mat: 'steel-alloy', color: 0x4a4c4e, finish: 'plate', fixed: 'forged with its bell', says: 'its splined stub, through the hub\'s bore to its nut on the spigot (typical)' })] });
+        // (its outer joint: in the bell, the inner race splined on the shaft's end, with its cage and six balls, drawn as one
+        // ring meeting the bell where it is widest; the boot's big end clamped over the bell's mouth, its small end on the shaft)
+        const race = (z: number, dir: number, sd: number): Part => P('outer joint race', { lathe: [[rs, 0.012], [0.028, 0.012], [0.0398, 0.025], [0.028, 0.038], [rs, 0.038], [rs, 0.012]] }, [a.x, y, z], { rot: [dir * PI / 2, 0, 0], mat: 'steel-alloy', color: 0x6a6c6e, finish: 'plate', link: `${end2} ${sd > 0 ? 'right' : 'left'} drive shaft`, joint: 'cv', passes: [`drive shaft ${sd > 0 ? 'right' : 'left'}`], fixed: 'splined on the end of its drive shaft, its balls and cage between it and its bell', says: 'its outer joint\'s inner race, cage and six balls, drawn as one ring (typical of a Rzeppa joint)' });
+        const bootOut = (z0: number, dir: number, sd: number): Part => P('outer joint boot', { lathe: [[0.0385, 0], [0.042, 0.02], [0.034, 0.045], [0.024, 0.07], [rs + 0.0005, 0.095]] }, [a.x, y, z0], { rot: [dir * PI / 2, 0, 0], mat: 'rubber', color: 0x161616, finish: 'texture', joint: 'cv', link: `${end2} ${sd > 0 ? 'right' : 'left'} drive shaft`, passes: [`drive shaft ${sd > 0 ? 'right' : 'left'}`], fixed: 'clamped over the mouth of its outer joint, its small end on the shaft', says: 'its outer joint\'s boot: a rubber bellows clamped over the joint\'s bell and onto the shaft (typical)' });
+        for (const sd of [-1, 1]) { const z0 = sd > 0 ? zR : zL, zb0 = sd * (hubIn - 0.002), z1 = kn ? sd * (hubIn - 0.002 - 0.024) : sd * (Math.abs(sd * bootAt) - 0.04); sh.push(tube(`drive shaft ${sd > 0 ? 'right' : 'left'}`, rs, [[a.x, y, z0 + sd * 0.02], [a.x, y, z1]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: `${end2} ${sd > 0 ? 'right' : 'left'} drive shaft`, iface: [{ kind: 'shaft', role: 'provides', d }] }), boot('inner joint boot', z0 - sd * 0.005, sd), ...(kn ? [bell(zb0, -sd), race(zb0, -sd, sd), bootOut(zb0 - sd * 0.045, -sd, sd)] : [boot('outer joint boot', sd * bootAt, -sd)])); }
         // (a housing round its gears, mostly hollow: about a fifth of its box is iron, typical)
         if (!b) { const k2 = Math.min(1, t.D / 0.65); sh.push(P('differential', { box: [0.22 * k2, 0.18 * k2, 0.2 * k2] }, [a.x, y, 0], { mat: 'cast-iron', color: 0x3a3a3a, fill: 0.2, finish: 'cast', passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'its differential, a cast housing round its gears (typical)' })); }
         out.push(P(nm, undefined, [0, 0, 0], { parts: sh, iface: [{ kind: 'drive', role: 'requires', torque: T, says: carries }] }));
