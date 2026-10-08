@@ -1,0 +1,266 @@
+// Panelled bodies drawn as their designers draw them: lines first, then skins stretched through sections across them,
+// then the skins cut into panels along their shut lines. One way for any body that wraps what it carries (a car, a van,
+// a cab; next a hull, a fuselage). The tools are src/nexus/surface.ts's; the figures each body's own (its length,
+// width, height, its lines as shares of them, its wheels).
+//
+// What is drawn:
+//   - a side skin from tail to nose, its sections from the rocker up past the shoulder to the top edge, round the nose
+//     and the tail to the middle, mirrored (the front and rear faces are its ends);
+//   - a hood and a deck lid from that top edge to the middle, crowned, meeting the side skin's edge in one tangent
+//     plane (G1: a highlight runs across the shut line unbroken) and their mirrors in another;
+//   - a cabin from the belt to the roof, leaning in (tumblehome), its glass and pillars regions of it;
+//   - each arch trimmed out of the side skin, concentric with its wheel, its radius the least that clears the tyre
+//     wherever it goes: steered through its lock either way and risen through its bump (the room is the critic's: about
+//     30 mm past the tyre and 15 mm beside it). Where the lip would stand inside the tyre's face, the skin is flared out
+//     round the arch instead of the arch opened up. The arch is derived from how the wheel moves, not drawn;
+//   - a wheelhouse liner inside each arch, sized the same way at every depth;
+//   - doors, sills, fenders and quarters as regions of the side skin, with shut lines between them; lamps and the
+//     grille as regions of its faces.
+//
+// Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
+// so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
+
+import { curveAt, skinParams, skinThrough, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import type { Part } from './kits';
+import type { Lines } from './machines';
+
+/** A wheel as the body sees it: its middle (z its mid-plane's distance out), radius, width, and how it moves. */
+export interface WheelAt { name: string; x: number; y: number; z: number; R: number; w: number; /** its lock either way, rad */ steer: number; /** how far it rises in bump, m */ bump: number }
+/** What the body must clear inside it: a box, and the room kept over it (an engine under its hood). */
+export interface KeepOut { name: string; min: V3; max: V3; room: number; why: string }
+export interface BodyPlan { L: number; W: number; H: number; c: number; lines: Lines; wheels: WheelAt[]; color: number; inside?: KeepOut[] }
+/** The rules the body is made by: each a figure a designer would set, typical where not sourced. A practising critic
+ *  changes these, never a made body's points (src/nexus/make/critic.ts, and RULE_UPDATES below). */
+export interface BodyRules {
+  /** room round a moving wheel, m (the critic's) and how many steering angles its sweep is taken at */ room: { radial: number; side: number; poses: number };
+  /** how far the arch's lip stands outside the tyre's face where the skin is flared for it, m */ flare: number;
+  /** the side's section: the shoulder so far below the belt, the side leaning in so far above it, tucked in so far at
+   *  the rocker, rolled in so far to its top edge, m */ side: { shoulder: number; tumble: number; tuck: number; inset: number };
+  /** crowns: how much higher the middle than the edges, m */ crown: { hood: number; roof: number; deck: number };
+  /** the corners in plan: their radius at the nose and the tail, m, and how square (a superellipse's exponent) */ plan: { nose: number; tail: number; k: number };
+  /** stations along the body: their spacing, m, and how many round each end's corner */ stations: { step: number; ends: number };
+  /** the cabin: its roof's half-width as a share of the body's, the pillars' width, m */ cabin: { roof: number; pillar: number };
+  /** a shut line's gap, m */ gap: number;
+}
+export const BODY_RULES: BodyRules = {
+  room: { radial: 0.03, side: 0.015, poses: 7 },
+  flare: 0.008,
+  side: { shoulder: 0.1, tumble: 0.03, tuck: 0.06, inset: 0.075 },
+  crown: { hood: 0.03, roof: 0.035, deck: 0.025 },
+  plan: { nose: 0.5, tail: 0.4, k: 2.6 },
+  stations: { step: 0.14, ends: 8 },
+  cabin: { roof: 0.72, pillar: 0.04 },
+  gap: 0.004,
+};
+/** The rules' own history: what a practising critic found, what the rule was, what it is now. */
+export interface RuleUpdate { n: number; found: string; was: string; now: string; rule: string }
+export const RULE_UPDATES: RuleUpdate[] = [];
+
+// ---- a wheel's sweep -------------------------------------------------------------------------------------------------
+/** The poses a wheel goes through: steered from full lock one way to the other, at rest and at full bump. */
+const posesOf = (w: WheelAt, n: number) => { const th = w.steer > 0 ? Array.from({ length: n }, (_, k) => -w.steer + (2 * w.steer * k) / (n - 1)) : [0]; return th; };
+/** Whether a point is inside the room a wheel needs anywhere through its motion: its tyre's cylinder grown by the room
+ *  asked, steered about the vertical through its middle (a kingpin near the wheel's plane, typical of a modern car's
+ *  small scrub radius) and risen anywhere up to its bump. */
+export function inSweep(P: V3, w: WheelAt, room = BODY_RULES.room): boolean {
+  const RR = w.R + room.radial, hw = w.w / 2 + room.side, dx = P[0] - w.x, dz = P[2] - w.z;
+  for (const th of posesOf(w, room.poses)) {
+    const t = dx * Math.sin(th) + dz * Math.cos(th); if (Math.abs(t) > hw) continue;
+    const r2 = RR * RR - (dx * dx + dz * dz - t * t); if (r2 < 0) continue;
+    const r = Math.sqrt(r2), lo = P[1] - w.y - w.bump, hi = P[1] - w.y; // the offsets from the centre it can have, risen 0…bump
+    if (hi >= -r && lo <= r) return true;
+  }
+  return false;
+}
+
+// ---- the body's lines ------------------------------------------------------------------------------------------------
+/** A line in side view (or plan), as a designer draws it: a cubic B-spline on a polygon of control points, read as y at
+ *  any x. It passes through its first and last points and is pulled toward the rest; it is C2 throughout, and it never
+ *  wavers more than its polygon does (a B-spline's variation diminishing property), so a line drawn by a few points has
+ *  no ripples between them, as one forced through them would. */
+export function lineBy(pts: [number, number][]): (x: number) => number {
+  const c: Curve = { P: pts.map(([x, y]) => [x, y, 0] as V3) };
+  const n = 600, xs: number[] = [], ys: number[] = []; for (let i = 0; i <= n; i++) { const q = curveAt(c, i / n).at; xs.push(q[0]); ys.push(q[1]); }
+  return (x: number) => { if (x <= xs[0]!) return ys[0]!; if (x >= xs[n]!) return ys[n]!; let lo = 0, hi = n; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (xs[m]! <= x) lo = m; else hi = m; } const f = (x - xs[lo]!) / Math.max(1e-9, xs[hi]! - xs[lo]!); return ys[lo]! + (ys[hi]! - ys[lo]!) * f; };
+}
+/** The smaller of two, blended over so much so the line through them has no corner. */
+const softMin = (a: number, b: number, k: number) => { const h = Math.max(0, Math.min(1, 0.5 + (0.5 * (b - a)) / k)); return b + (a - b) * h - k * h * (1 - h); };
+interface Lined { xN: number; xT: number; xCowl: number; xRoofF: number; xRoofR: number; xDeck: number; xB: number; belt: number; noseH: number; tailH: number; plan: (x: number) => number; low: (x: number) => number; top: (x: number) => number; shoulder: (x: number) => number; roof: (x: number) => number; crownAt: (x: number) => number }
+function lined(b: BodyPlan, r: BodyRules): Lined {
+  const { L, W, H, c, lines: ln } = b, xN = L / 2, xT = -L / 2, X = (f: number) => L / 2 - f * L, W2 = W / 2;
+  const xCowl = X(ln.cowl), xRoofF = X(ln.roofF), xRoofR = X(ln.roofR), xDeck = X(ln.deck), belt = ln.belt * H, noseH = ln.nose * H, tailH = ln.tail * H;
+  const front = b.wheels.filter((w) => w.x > 0), rear = b.wheels.filter((w) => w.x <= 0);
+  const fA = front.length ? Math.max(...front.map((w) => w.x + w.R)) : xN - 0.6, rA = rear.length ? Math.min(...rear.map((w) => w.x - w.R)) : xT + 0.6;
+  // in plan: a rounded rectangle, its corners superellipses (G2 where they meet the straight), flared out round each arch
+  // where the tyre's face needs it
+  const corner = (d: number, R: number) => (d >= R ? 1 : (1 - (1 - d / R) ** r.plan.k) ** (1 / r.plan.k));
+  const plan = (x: number) => {
+    let w = W2 * Math.min(corner(xN - x, r.plan.nose), corner(x - xT, r.plan.tail));
+    for (const wh of b.wheels) { const need = wh.z + wh.w / 2 + r.room.side + r.flare, reach = wh.R + r.room.radial + 0.25, d = Math.abs(x - wh.x); if (need > W2 * 0.97 && d < reach) { const t = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach), s3 = t * t * (3 - 2 * t); w = Math.max(w, Math.min(W2, need) * s3 + w * (1 - s3)); } }
+    return w;
+  };
+  // the bottom line: the rocker between the arches; the bumpers' lower edges rising to the nose and tail (approach and
+  // departure, typical), rolling up under them
+  const low = lineBy([[xT, c + 0.2], [xT + 0.08, c + 0.14], [xT + 0.3, c + 0.08], [rA, c + 0.035], [(rA + fA) / 2, c + 0.03], [fA, c + 0.035], [xN - 0.3, c + 0.06], [xN - 0.07, c + 0.1], [xN, c + 0.16]]);
+  // the top edge: the hood's line rising from where it rolls down into the nose to the cowl, the belt along the cabin
+  // (rising a little to the rear: its wedge), the deck's line to where it rolls down into the tail
+  const beltAt = (x: number) => belt + 0.02 * Math.min(1, Math.max(0, (xCowl - x) / Math.max(0.1, xCowl - xDeck)));
+  const hoodRun = xN - xCowl, deckY = ln.bed ? beltAt(xDeck) : tailH;
+  // what it must clear, as a height over x: an engine and its strut tops under the hood, and each arch with its lip (a
+  // low car's fender rises over its wheel), ramped in and out smoothly so the line lifted over it bends but never kinks
+  // (lifting the drawn line's control points would not do: a B-spline only leans toward its points)
+  const lip = 0.06, clears: { x0: number; x1: number; y: number }[] = [...(b.inside ?? []).map((k) => ({ x0: k.min[0], x1: k.max[0], y: k.max[1] + k.room })), ...b.wheels.map((w) => ({ x0: w.x - w.R * 0.6, x1: w.x + w.R * 0.6, y: w.y + w.R + r.room.radial + w.bump * 0.5 + lip }))];
+  const need = (x: number) => { let v = -Infinity; for (const k of clears) { const ramp = 0.18, d = x < k.x0 ? k.x0 - x : x > k.x1 ? x - k.x1 : 0; if (d >= ramp) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / ramp); v = Math.max(v, k.y - (1 - g) * 0.12); } return v; };
+  const drawn = lineBy([
+    [xT, deckY - (ln.bed ? 0.02 : 0.09)], [xT + 0.06, deckY - (ln.bed ? 0.005 : 0.03)], [xT + 0.2, deckY], ...(xDeck - xT > 0.6 ? [[(xT + xDeck) / 2 + 0.1, deckY + 0.004] as [number, number]] : []), [xDeck, beltAt(xDeck)],
+    [(xDeck + xCowl) / 2, beltAt((xDeck + xCowl) / 2)], [xCowl, beltAt(xCowl)],
+    [xCowl + hoodRun * 0.4, noseH + (belt - noseH) * 0.55], [xN - 0.16, noseH + 0.01], [xN - 0.05, noseH - 0.025], [xN, noseH - 0.075],
+  ]);
+  const top = (x: number) => { const n = need(x); return n === -Infinity ? drawn(x) : -softMin(-drawn(x), -n, 0.04); };
+  const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder, 0.08);
+  // the cabin's top line: the windscreen from the cowl, rounding into the roof, the roof, the back glass to the deck
+  const wsRun = xCowl - xRoofF, bgRun = xRoofR - xDeck, rb = beltAt(xCowl);
+  const roof = lineBy([
+    [xDeck, top(xDeck) + 0.004], [xDeck + bgRun * 0.45, top(xDeck) + (H - top(xDeck)) * 0.62], [xRoofR - Math.min(0.1, bgRun * 0.2), H - 0.022], [xRoofR, H - 0.012], [(xRoofF + xRoofR) / 2, H],
+    [xRoofF, H - 0.012], [xRoofF + Math.min(0.1, wsRun * 0.2), H - 0.03], [xCowl - wsRun * 0.5, rb + (H - rb) * 0.55], [xCowl, rb + 0.004],
+  ]);
+  const crownAt = (x: number) => (x >= xCowl ? r.crown.hood : x <= xDeck ? r.crown.deck : 0);
+  return { xN, xT, xCowl, xRoofF, xRoofR, xDeck, xB: (xRoofF + xRoofR) / 2, belt, noseH, tailH, plan, low, top, shoulder, roof, crownAt };
+}
+
+/** Stations' parameters across a skin: how far along its outline in plan each stands (its length, and its width's
+ *  change, together), so every station is a flat section of it and where the outline turns round a nose the skin's
+ *  parameter turns with it (a station's place along x alone crowds the nose's whole width into a sliver of the skin, and
+ *  what is interpolated there overshoots). */
+const byOutline = (xs: number[], w: (x: number) => number) => { const d = [0]; for (let i = 1; i < xs.length; i++) d.push(d[i - 1]! + Math.hypot(xs[i]! - xs[i - 1]!, w(xs[i]!) - w(xs[i - 1]!))); const T = d[d.length - 1]! || 1; return d.map((x) => x / T); };
+/** Stations along a run: about so far apart, closer round its ends where its corners turn (cosine spaced). */
+function stationsOf(x0: number, x1: number, step: number, ends: { at0?: number; at1?: number; n: number }): number[] {
+  // (kept exact, never rounded: where an outline turns square to its run at its end, as a nose does, a station a hair
+  // short of the end is a whole width short of closing)
+  const xs: number[] = [x0, x1];
+  if (ends.at0) for (let k = 1; k <= ends.n; k++) xs.push(x0 + ends.at0 * (1 - Math.cos((Math.PI / 2) * (k / ends.n))));
+  if (ends.at1) for (let k = 1; k <= ends.n; k++) xs.push(x1 - ends.at1 * (1 - Math.cos((Math.PI / 2) * (k / ends.n))));
+  const a = x0 + (ends.at0 ?? 0), b = x1 - (ends.at1 ?? 0), n = Math.max(1, Math.round((b - a) / step)); for (let k = 0; k <= n; k++) xs.push(a + ((b - a) * k) / n);
+  const out = xs.filter((x) => x >= x0 && x <= x1).sort((p, q) => p - q), kept: number[] = [];
+  for (const x of out) if (!kept.length || x - kept[kept.length - 1]! > 0.004 || x === x1) { if (x === x1 && kept.length && x1 - kept[kept.length - 1]! <= 0.004) kept.pop(); kept.push(x); }
+  if (kept[0] !== x0) kept.unshift(x0);
+  return kept;
+}
+
+/** The u at which a skin's line of constant v reaches x (its stations run along x, so x rises with u). */
+export function uAt(s: Surface, x: number, v = 0.5): number {
+  let lo = 0, hi = 1; for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (surfaceAt(s, m, v).at[0] < x) lo = m; else hi = m; } return (lo + hi) / 2;
+}
+
+/** The body made: its skins, cut into panels. */
+export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
+  const ln = lined(b, r), W2 = b.W / 2, col = b.color, out: Part[] = [];
+  const paint = (name: string, pt: Patch, more: Partial<Part> = {}): Part => ({ name, shape: { surf: pt }, at: [0, 0, 0], mat: 'steel-low', color: col, shell: 0.0008, make: 'pressed', finish: 'paint', ...more });
+  // ---- the side skin ----
+  const xs = stationsOf(ln.xT, ln.xN, r.stations.step, { at0: r.plan.tail, at1: r.plan.nose, n: r.stations.ends });
+  // round each arch the side is not tucked under: its lip stays outside the tyre's face by the room beside it, so the
+  // tyre can rise behind it (a fender's lip is what a raised tyre tucks up inside)
+  const tuckAt = (x: number) => { let t = r.side.tuck; for (const w of b.wheels) { const reach = w.R + r.room.radial + 0.25, d = Math.abs(x - w.x); if (d >= reach) continue; const g = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach), s3 = g * g * (3 - 2 * g), allowed = Math.max(0, ln.plan(x) - (w.z + w.w / 2 + r.room.side + 0.002)); t = t - (t - Math.min(t, allowed)) * s3; } return t; };
+  const section = (x: number): V3[] => {
+    const w = ln.plan(x), f = w / W2, lo = ln.low(x), top = ln.top(x), sh = Math.max(lo + 0.08, ln.shoulder(x)), tk = tuckAt(x);
+    return [[x, lo, w - tk * f], [x, lo + Math.min(0.1, 0.25 * (sh - lo)), w - tk * 0.62 * f], [x, lo + 0.45 * (sh - lo), w - tk * 0.2 * f], [x, sh, w], [x, sh + 0.55 * (top - sh), w - r.side.tumble * f], [x, top, w - r.side.inset * f]];
+  };
+  const rows = xs.map(section);
+  // arriving at its top edge going in, at the slope the hood's or deck's crown leaves it (G1 across the shut line); at
+  // the very ends, where the section closes to the middle, along itself
+  const edgeSlope = (x: number) => { const zt = Math.max(1e-3, ln.plan(x) * (1 - r.side.inset / W2)); return (2 * ln.crownAt(x)) / zt; };
+  // (only in the last few centimetres, where the outline closes to the middle, does a section turn to run along itself)
+  const closing = (x: number) => Math.min(1, ln.plan(x) / W2 / 0.15), arrive = (x: number): V3 => { const f = closing(x); return [0, edgeSlope(x) * f + (1 - f), -f]; };
+  const uo = byOutline(xs, ln.plan), side = skinThrough(rows, { mirror: true, d1: (i) => arrive(xs[i]!), u: uo, e0: [0, 0, 1], e1: [0, 0, -1] }), sp = skinParams(rows, uo), sv = sp.v; // sv: the v of each section point
+  const vSill = sv[1]!, U = (x: number) => uAt(side, x, sv[3]!);
+  // ---- each arch: concentric with its wheel, the least radius that clears its sweep on the skin ----
+  const archOf = (w: WheelAt): { line: UV[]; Ra: number } => {
+    const trimAt = (Ra: number) => { const pts: UV[] = [], u0 = U(w.x - Ra - 0.01), u1 = U(w.x + Ra + 0.01), n = 72;
+      for (let k = 0; k <= n; k++) { const u = u0 + ((u1 - u0) * k) / n, P = surfaceAt(side, u, 0).at, dx = P[0] - w.x; if (Math.abs(dx) >= Ra) { pts.push([u, 0]); continue; }
+        const yT = w.y + Math.sqrt(Ra * Ra - dx * dx); let lo = 0, hi = 1; if (surfaceAt(side, u, 1).at[1] <= yT) { pts.push([u, 1]); continue; } if (surfaceAt(side, u, 0).at[1] >= yT) { pts.push([u, 0]); continue; }
+        for (let it = 0; it < 30; it++) { const m = (lo + hi) / 2; if (surfaceAt(side, u, m).at[1] < yT) lo = m; else hi = m; } pts.push([u, hi]); }
+      return pts; };
+    let Ra = w.R + r.room.radial;
+    for (let tries = 0; tries < 40; tries++) {
+      const line = trimAt(Ra); let hit = false;
+      for (let k = 0; k < line.length && !hit; k++) { const [u, v0] = line[k]!; for (let j = 0; j <= 16 && !hit; j++) { const v = v0 + ((1 - v0) * j) / 16; if (inSweep(surfaceAt(side, u, v).at, w, r.room)) hit = true; } }
+      // (clear: and 5 mm more, so what is between the points looked at is clear too)
+      if (!hit) return { line: trimAt(Ra + 0.005), Ra: Ra + 0.005 }; Ra += 0.005;
+    }
+    return { line: trimAt(Ra), Ra };
+  };
+  const right = b.wheels.filter((w) => w.z > 0), arches = right.map((w) => ({ w, ...archOf(w) })).sort((p, q) => p.w.x - q.w.x);
+  // ---- shut lines: the doors between the arches, under the cabin ----
+  const fr = arches.filter((a) => a.w.x > 0), rr = arches.filter((a) => a.w.x <= 0);
+  const fArchRear = fr.length ? Math.min(...fr.map((a) => a.w.x - a.Ra)) : ln.xCowl, rArchFront = rr.length ? Math.max(...rr.map((a) => a.w.x + a.Ra)) : ln.xRoofR;
+  const xFD = Math.min(ln.xCowl + 0.05, fArchRear - 0.1), xRD = Math.max(rArchFront + 0.04, ln.xRoofR - 0.2), g = r.gap / 2, xB = ln.xB, open = !!b.lines.open;
+  const doors = !b.lines.bed && xFD - xRD > 0.6, twoDoors = doors && xFD - xRD > 1.6;
+  // a panel trimmed round the arches in its run: its bottom edge along v = 0, rising round each arch and falling back
+  const trimmed = (u0: number, u1: number): UV[] => { const pts: UV[] = [[u0, 0]]; for (const a of arches) for (const q of a.line) if (q[0] > u0 && q[0] < u1) pts.push(q); pts.push([u1, 0]); return pts.sort((p, q) => p[0] - q[0]); };
+  const uFD = U(xFD), uRD = U(xRD), du = (x: number) => U(x + g) - U(x - g);
+  if (doors) {
+    out.push(paint('front fender', { s: side, above: trimmed(uFD + du(xFD), 1) }, { says: 'its front fenders, and the nose and front bumper they run into: pressed steel about 0.8 mm (typical of car skins); each arch round its wheel by how far the wheel steers and rises' }));
+    out.push(paint('rear quarter panel', { s: side, above: trimmed(0, uRD - du(xRD)) }, { says: 'its rear quarters and the tail: pressed steel about 0.8 mm (typical)' }));
+    out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [uFD, vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
+    const door = (name: string, x0: number, x1: number) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1 - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
+    if (twoDoors) out.push(door('front doors', xB, xFD), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xFD));
+  } else out.push(paint('body sides', { s: side, above: trimmed(0, 1) }, { says: 'its sides: pressed steel about 0.8 mm (typical)' }));
+  // ---- lamps and the grille, on the faces at its ends ----
+  const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d);
+  out.push({ name: 'lower grille', shape: { surf: { s: side, uv: [[uN(0.01), sv[0]! + 0.02], [1, sv[0]! + 0.02], [1, sv[1]! - 0.006], [uN(0.01), sv[1]! - 0.006]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x101010, shell: 0.003, finish: 'texture', says: 'the lower intake in the front bumper (typical)' });
+  out.push({ name: 'headlights', shape: { surf: { s: side, uv: [[uN(0.4), (sv[2]! + sv[3]!) / 2], [uN(0.02), (sv[2]! + sv[3]!) / 2], [uN(0.02), sv[5]! - 0.025], [uN(0.4), sv[5]! - 0.025]], off: 0.002 } }, at: [0, 0, 0], mat: 'pc', color: 0xeef2f6, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)' });
+  out.push({ name: 'grille', shape: { surf: { s: side, uv: [[uN(0.006), sv[1]!], [1, sv[1]!], [1, sv[3]! - 0.03], [uN(0.006), sv[3]! - 0.03]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x121212, shell: 0.003, finish: 'texture', says: 'its grille across the nose (moulded ABS, typical)' });
+  out.push({ name: 'tail lights', shape: { surf: { s: side, uv: [[uTl(0.012), sv[3]! - 0.02], [uTl(0.3), sv[3]! - 0.02], [uTl(0.3), sv[5]! - 0.03], [uTl(0.012), sv[5]! - 0.03]], off: 0.002 } }, at: [0, 0, 0], mat: 'pmma', color: 0xb01818, shell: 0.003, says: 'its tail lamps round the tail\'s corners: red acrylic lenses (typical)' });
+  // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
+  for (const a of arches) {
+    const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => surfaceAt(side, q[0], q[1]).at); if (pts.length < 4) continue;
+    const w = a.w, zIn = w.z - w.w / 2 - 0.04, out2: V3[][] = [pts];
+    for (const zf of [0.5, 1]) out2.push(pts.map((P) => { const z = P[2] + (zIn - P[2]) * zf, ang = Math.atan2(P[1] - w.y, P[0] - w.x); let rr2 = Math.hypot(P[0] - w.x, P[1] - w.y); while (rr2 < w.R + 0.5 && inSweep([w.x + Math.cos(ang) * rr2, w.y + Math.sin(ang) * rr2, z], w, r.room)) rr2 += 0.005; return [w.x + Math.cos(ang) * rr2, w.y + Math.sin(ang) * rr2, z] as V3; }));
+    out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: skinThrough(out2, { mirror: true, p: 2 }) } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
+  }
+  // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
+  const lid = (name: string, x0: number, x1: number, crown: number, says: string): Part | null => {
+    if (x1 - x0 < 0.08) return null;
+    const ls = stationsOf(x0, x1, r.stations.step, x1 >= ln.xN - 1e-6 ? { at1: r.plan.nose, n: r.stations.ends } : x0 <= ln.xT + 1e-6 ? { at0: r.plan.tail, n: r.stations.ends } : { n: 0 });
+    const lr = ls.map((x): V3[] => { const zt = Math.max(0, ln.plan(x) * (1 - r.side.inset / W2) - r.gap), y = ln.top(x); return [[x, y, zt], [x, y + crown * 0.75, zt * 0.5], [x, y + crown, 0]]; });
+    const fOf = (i: number) => closing(ls[i]!);
+    const s = skinThrough(lr, { mirror: true, q: 2, u: byOutline(ls, ln.plan), d0: (i) => { const f = fOf(i); return [0, edgeSlope(ls[i]!) * f + (1 - f), -f]; }, d1: (i) => { const f = fOf(i); return [0, 1 - f, -f]; } });
+    return paint(name, { s }, { says });
+  };
+  const hood = lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops');
+  if (hood) out.push(hood);
+  if (!b.lines.bed) { const deck = lid('deck lid', ln.xT, ln.xDeck - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)'); if (deck) out.push(deck); }
+  // ---- the cabin: from the belt leaning in to the roof's rails, then across; its glass and pillars regions of it ----
+  {
+    const xEnd = ln.xCowl, xStart = open ? ln.xRoofF : ln.xDeck, zRoof = W2 * r.cabin.roof;
+    const cs = stationsOf(xStart, xEnd, r.stations.step * 0.8, { n: 0 });
+    const cr = cs.map((x): V3[] => {
+      const zt = ln.plan(x) * (1 - r.side.inset / W2), y0 = ln.top(x), yT = Math.max(y0 + 0.004, ln.roof(x)), k = Math.min(1, Math.max(0.02, (yT - y0) / Math.max(0.05, b.H - y0)));
+      const rail = yT - r.crown.roof * k, zR = zt - (zt - zRoof) * k, mid = (f: number): V3 => [x, y0 + (rail - y0) * f, zt + (zR - zt) * f + 0.012 * k * Math.sin(Math.PI * f)];
+      return [[x, y0, zt], mid(0.33), mid(0.75), [x, rail, zR], [x, yT - r.crown.roof * k * 0.25, zR * 0.5], [x, yT, 0]];
+    });
+    const cab = skinThrough(cr, { mirror: true, d1: () => [0, 0, -1], u: byOutline(cs, ln.plan) }), cv = skinParams(cr, byOutline(cs, ln.plan)).v, Uc = (x: number) => uAt(cab, x, cv[3]!);
+    const p = r.cabin.pillar / 1.2, vg0 = 0.022, v3 = cv[3]!;
+    const glass = (name: string, uv: [UV, UV, UV, UV], says: string): Part => ({ name, shape: { surf: { s: cab, uv, off: 0.0015 } }, at: [0, 0, 0], mat: 'glass', color: 0x1e2a33, shell: 0.0045, says });
+    const trim = (name: string, uv: [UV, UV, UV, UV], more: Partial<Part> = {}): Part => paint(name, { s: cab, uv }, more);
+    const uWs = Uc(ln.xRoofF), uRr = Uc(ln.xRoofR), uB0 = Uc(xB - r.cabin.pillar), uB1 = Uc(xB + r.cabin.pillar), uCe = Uc(ln.xRoofR - 0.05);
+    out.push(trim('belt mouldings', [[0, 0], [1, 0], [1, vg0], [0, vg0]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'the belt mouldings where the side glass leaves the doors (typical)' }));
+    if (!open) {
+      out.push(glass('windscreen', [[uWs, v3 + p], [1, v3 + p], [1, 1], [uWs, 1]], 'its windscreen: laminated glass, about 4.5 mm (typical)'));
+      out.push(trim('roof', [[uRr, v3 - p], [uWs, v3 - p], [uWs, 1], [uRr, 1]], { says: 'its roof panel: pressed steel about 0.7 mm (typical)' }));
+      out.push(trim('pillars and roof rails', [[0, v3 - p], [uRr, v3 - p], [uRr, v3 + p], [0, v3 + p]], { says: 'its C pillars and the rails along the roof (typical)' }));
+      out.push(trim('A pillars', [[uWs, v3 - p], [1, v3 - p], [1, v3 + p], [uWs, v3 + p]], { says: 'its A pillars beside the windscreen (typical)' }));
+      out.push(glass('back glass', [[0, v3 + p], [uRr, v3 + p], [uRr, 1], [0, 1]], 'its back glass: toughened glass about 4 mm (typical)'));
+      out.push(trim('C pillars', [[0, vg0], [uCe, vg0], [uCe, v3 - p], [0, v3 - p]], { says: 'its C pillars (typical)' }));
+      if (twoDoors) {
+        out.push(trim('B pillars', [[uB0, vg0], [uB1, vg0], [uB1, v3 - p], [uB0, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'its B pillars, trimmed black (typical)' }));
+        out.push(glass('front side windows', [[uB1, vg0], [1, vg0], [1, v3 - p], [uB1, v3 - p]], 'its front door glass: toughened, about 4 mm (typical)'));
+        out.push(glass('rear side windows', [[uCe, vg0], [uB0, vg0], [uB0, v3 - p], [uCe, v3 - p]], 'its rear door glass (typical)'));
+      } else out.push(glass('side windows', [[uCe, vg0], [1, vg0], [1, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
+    } else {
+      out.push(glass('windscreen', [[0, v3 + p], [1, v3 + p], [1, 1], [0, 1]], 'its windscreen (typical)'));
+      out.push(trim('windscreen frame', [[0, v3 - p], [1, v3 - p], [1, v3 + p], [0, v3 + p]], { says: 'its windscreen frame (typical)' }));
+    }
+  }
+  return out;
+}

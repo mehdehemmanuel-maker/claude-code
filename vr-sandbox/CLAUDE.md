@@ -20,6 +20,16 @@ the task list and lose the why. So the why lives here, and every round is checke
   exact model of the real product, expandable"
 - "ask yourself what aren't you asking yourself; don't just think of math, think of emotion: how would they think about
   this, what would they say is bad about this, and then recursively fix it"
+- "there's a lot of missing pieces … you haven't configured an environment that makes it easy for you to do certain
+  things … handling texture and complicated shells … looking at how you got through the math, what could be better …
+  recursively upgrade every process and sub-process: the car's fenders and panels, unibody, hoods" (the roadmap with it:
+  Bezier/NURBS, proportional falloff, symmetry; a creator and a critic that changes the creator's rules; wireframe boxing
+  then skinning; zebra stripes; G2/G3; practise on a front fender first)
+- the CAD toolset list (2026-10-08): automatic constraints (tangency, coincidence, symmetry), a parametric feature tree,
+  G2/G3 smoothing, clean quads, SubD cages, zebra and reflection maps, draft-angle analysis, wall-thickness checks,
+  generative design, command prediction
+- "don't just adopt all these tools: improve them, expand, find flaws, find a branch it opens that no one thought of; try
+  to be the system that future systems reference"
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -49,6 +59,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
 | Wheeled machines of every kind, from their published figures | `src/nexus/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |
 | Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/form.ts` |
+| Freeform surfaces: NURBS curves and skins, interpolation, regions and trims, fairness, zebra, draft, seams | `src/nexus/surface.ts` |
+| Panelled bodies on curve networks (side skin, hood, deck, cabin; arches from the wheels' sweep; keep-outs) | `src/nexus/panels.ts` (rules in `BODY_RULES`, their history in `RULE_UPDATES`) |
 | Vehicles as points in a want-space (not a maker) | `src/nexus/vehicle.ts` |
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
@@ -62,6 +74,18 @@ numbers, and an interface is a connection, never an interference (an axle in its
 judged by envelope, not by box: a wheel sweeps a ring (tyre to rim bore) with room to its arch and beside its sidewall, a
 blade sweeps a disc inside its housing, and no repair rests a part on a moving one. Grow this, rather than adding layers:
 next are mounts (bolt patterns), electrical (voltage, current), thermal (heat rejected) and service access.
+
+Branches beyond the standard tools (the user asked for what no one thought of; keep growing these):
+- **A skin is the fairest surface that clears everything inside it.** Arches come from the tyre's sweep through its lock
+  and bump, not drawn; the hood from the engine and strut tops under it; next the roof from the seated people's heads.
+- **The mesh is only ever a projection of the math.** Never edited, so it never needs retopology.
+- **Panels are named by what they are for** (the arch of the front wheel, the hood), so changing a figure re-makes the
+  same panels: no topological naming problem.
+- **Constraints carry their reason**: G1 across a shut line because a highlight crosses it; a crease at the belt by
+  intent; clearance because a part moves.
+- **Lines are control polygons, not points forced through**: a B-spline never wavers more than its polygon.
+- Next: shut lines placed by draft (where one press direction stops being formable); zebra judged from where people
+  stand; rule updates kept only when they help cases they were not tuned on and do not worsen the blind judge.
 
 Capability atlas (the user's direction, 2026-10-08): learn from open engineering tools (FreeCAD and Open CASCADE for
 geometry and constraints, Gmsh and SALOME for meshing, MOOSE, Elmer, Code_Aster and OpenFOAM for physics, OpenModelica

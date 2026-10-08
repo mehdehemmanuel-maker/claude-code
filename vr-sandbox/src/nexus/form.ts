@@ -11,6 +11,8 @@
 // rotary-draw benders), each cut back from its corner by R tan(θ/2); its length the straights and the arcs.
 // A turned profile's volume and surface are Pappus's: each segment of the profile a frustum.
 
+import { patchAt, type Patch } from './surface';
+
 export type V3 = [number, number, number];
 export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number }
 export interface Loft { st: Station[] }
@@ -73,6 +75,7 @@ export function loftArea(l: Loft): number { let A = 0; for (let i = 1; i < l.st.
 export interface Leg { kind: 'line' | 'arc'; a: V3; b: V3; /** an arc's corner (the control point it bends round) */ c?: V3; len: number }
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k], len3 = (a: V3) => Math.hypot(a[0], a[1], a[2]), unit = (a: V3): V3 => mul(a, 1 / (len3(a) || 1));
+const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export function tubeLegs(t: Tube): Leg[] {
   const R = t.bend ?? 4 * t.r, p = t.pts, out: Leg[] = []; if (p.length < 2) return out;
   let from = p[0]!;
@@ -102,7 +105,8 @@ const span = (min: V3, max: V3): LocalBox => ({ c: mul(add(min, max), 0.5), h: m
 /** Boxes that together cover a shape tightly, in its own frame: a loft's between each pair of stations, a tube's along
  *  each straight (turned with it) and round each bend, a turned profile's as one. What touches what is found between
  *  these, so a parts inside a kart's frame touch only the tubes they meet, not the frame's bounds. */
-export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe }): LocalBox[] {
+export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe } | { surf: Patch }): LocalBox[] {
+  if ('surf' in s) return surfPieces(s.surf);
   if ('loft' in s) return s.loft.st.slice(1).map((b, i) => { const a = s.loft.st[i]!, w = Math.max(a.w, b.w, a.wt ?? 0, b.wt ?? 0); return span([Math.min(a.x, b.x), Math.min(a.lo, b.lo), -w], [Math.max(a.x, b.x), Math.max(a.hi, b.hi), w]); });
   if ('tube' in s) return tubeLegs(s.tube).map((l): LocalBox => {
     const r = s.tube.r;
@@ -111,6 +115,35 @@ export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe }):
   });
   const rM = Math.max(...s.lathe.map(([r]) => r)), ys = s.lathe.map(([, y]) => y);
   return [span([-rM, Math.min(...ys), -rM], [rM, Math.max(...ys), rM])];
+}
+/** A freeform skin's covering boxes: one to each cell of a grid over it, turned to lie along the skin there (thin across
+ *  it), and its mirror's; a cell where the skin curves too much for one thin box (a nose's corner) split again until each
+ *  is (at most 20 mm thick, four splits deep). A wheel under a fender's arch is then near only the boxes at the arch's
+ *  edge, not inside one. */
+const surfKept = new WeakMap<Patch, LocalBox[]>();
+function surfPieces(pt: Patch, k = 3): LocalBox[] {
+  const kept = surfKept.get(pt); if (kept) return kept;
+  const out: LocalBox[] = []; surfKept.set(pt, out);
+  // as many to start with as its size needs: about one to every 40 cm along it and 25 cm across (2 to 12, 1 to 4)
+  const run = (f: (t: number) => [number, number]) => { let d = 0, q = patchAt(pt, ...f(0)).at; for (let i = 1; i <= 6; i++) { const r = patchAt(pt, ...f(i / 6)).at; d += Math.hypot(r[0] - q[0], r[1] - q[1], r[2] - q[2]); q = r; } return d; };
+  const na = Math.max(2, Math.min(12, Math.round(run((a) => [a, 0.5]) / 0.4))), nb = Math.max(1, Math.min(4, Math.round(run((b) => [0.5, b]) / 0.25)));
+  const cell = (a0: number, a1: number, b0: number, b1: number, depth: number) => {
+    const mid = patchAt(pt, (a0 + a1) / 2, (b0 + b1) / 2), e3 = unit(mid.n), t = unit(mid.du), e1 = unit(sub(t, mul(e3, dot(t, e3)))), e2: V3 = [e3[1] * e1[2] - e3[2] * e1[1], e3[2] * e1[0] - e3[0] * e1[2], e3[0] * e1[1] - e3[1] * e1[0]];
+    const ps: V3[] = []; for (let i = 0; i <= k; i++) for (let j = 0; j <= k; j++) ps.push(patchAt(pt, a0 + ((a1 - a0) * i) / k, b0 + ((b1 - b0) * j) / k).at);
+    const c = mul(ps.reduce((acc, q) => add(acc, q), [0, 0, 0] as V3), 1 / ps.length), ax = [e1, e2, e3] as [V3, V3, V3], lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (const q of ps) for (let d = 0; d < 3; d++) { const x = dot(sub(q, c), ax[d]!); lo[d] = Math.min(lo[d]!, x); hi[d] = Math.max(hi[d]!, x); }
+    if (hi[2]! - lo[2]! > 0.02 && depth < 4) {
+      // split across whichever way it is longer on the skin
+      const la = len3(sub(patchAt(pt, a1, (b0 + b1) / 2).at, patchAt(pt, a0, (b0 + b1) / 2).at)), lb = len3(sub(patchAt(pt, (a0 + a1) / 2, b1).at, patchAt(pt, (a0 + a1) / 2, b0).at));
+      if (la >= lb) { cell(a0, (a0 + a1) / 2, b0, b1, depth + 1); cell((a0 + a1) / 2, a1, b0, b1, depth + 1); } else { cell(a0, a1, b0, (b0 + b1) / 2, depth + 1); cell(a0, a1, (b0 + b1) / 2, b1, depth + 1); }
+      return;
+    }
+    const cc = add(c, add(add(mul(e1, (lo[0]! + hi[0]!) / 2), mul(e2, (lo[1]! + hi[1]!) / 2)), mul(e3, (lo[2]! + hi[2]!) / 2))), h: V3 = [(hi[0]! - lo[0]!) / 2 + 0.001, (hi[1]! - lo[1]!) / 2 + 0.001, (hi[2]! - lo[2]!) / 2 + 0.001];
+    out.push({ c: cc, u: ax, h });
+    if (pt.s.mirror) out.push({ c: [cc[0], cc[1], -cc[2]], u: ax.map((e) => [e[0], e[1], -e[2]] as V3) as [V3, V3, V3], h });
+  };
+  for (let i = 0; i < na; i++) for (let j = 0; j < nb; j++) cell(i / na, (i + 1) / na, j / nb, (j + 1) / nb, 0);
+  return out;
 }
 /** The bounds of a shape's pieces, in its own frame. */
 export function boundsOf(ps: LocalBox[]): { min: V3; max: V3 } {

@@ -24,6 +24,8 @@ import type { Part as EPart } from '../embody/part';
 import { classOf } from './detail';
 import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
 import { insideBy, stationAt, type Loft, type Station } from '../form';
+import { inSweep } from '../panels';
+import { patchPoints, type Patch } from '../surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -33,7 +35,7 @@ const TURNS = /\b(wheels?|tyres?|tires?|rims?|rotors?|propellers?|fans?|augers?|
 export function turning(p: Part): { clearance: number; why: string; /** beside it, along its axle, where that differs */ side?: number } | null {
   const tyre = p.mat === 'rubber' && !!p.shape && ('torus' in p.shape || 'lathe' in p.shape), n = p.name.toLowerCase();
   // (a steering wheel turns, but its room is a hand's round its rim inside the cab, not an arch cut in the body)
-  if (/\b(steering|hand|fifth) ?wheel|wheel (nut|bolt|stud|arch|well|base|mount|hanger)/.test(n)) return null;
+  if (/\b(steering|hand|fifth) ?wheel|wheel ?(nut|bolt|stud|arch|well|base|mount|hanger|house)/.test(n)) return null;
   if (!tyre && !TURNS.test(n)) return null;
   if (tyre || /\b(wheel|tyre|tire|rim|disc)s?\b/.test(n)) return { clearance: 0.03, side: 0.015, why: 'a wheel needs about 30 mm to its arch and 15 mm beside its sidewall (typical)' };
   if (/\b(fan|propeller|rotor|turbine|impeller)/.test(n)) return { clearance: 0.005, why: "a fan's or propeller's tip about 1.5 % of its diameter, at least 5 mm (typical)" };
@@ -121,6 +123,15 @@ export function critique(root: Part): Finding[] {
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
       if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
+      // a skin (src/nexus/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
+      // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
+      if (f.p.shape && 'surf' in f.p.shape) {
+        const ez = ax.clone().normalize(), ey = new THREE.Vector3(0, 1, 0).addScaledVector(ez, -ez.y).normalize(), ex = ey.clone().cross(ez), tr = m.p.travel ?? {};
+        const wh = { name: m.p.name, x: 0, y: 0, z: 0, R: sweep, w: 2 * along, steer: tr.steer ?? 0, bump: tr.bump ?? 0 }, room = { radial: need.clearance, side: sideRoom, poses: 7 };
+        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d) => inSweep([d.dot(ex), d.dot(ey), d.dot(ez)], wh, room));
+        if (!hit) continue;
+        say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;
+      }
       const opened = (f.p.parts ?? []).some((q) => q.detail === 'room to move' && q.name === `opening for ${m.p.name}`);
       if (opened) continue;
       // a lofted panel over a wheel (a car's body, a fender): its lower edge raised round the wheel, so the panel is

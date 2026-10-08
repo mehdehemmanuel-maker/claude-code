@@ -10,6 +10,7 @@
 
 import { VEHICLE_KITS, useMass } from './machines';
 import { latheArea, latheVolume, loftArea, loftVolume, tubeLength, tubeVolume, type Lathe, type Loft, type Tube } from './form';
+import { surfaceArea, type Patch } from './surface';
 
 export type V3 = [number, number, number];
 export type Shape =
@@ -18,6 +19,7 @@ export type Shape =
   /** a body through cross-sections along x (src/nexus/form.ts) */ | { loft: Loft }
   /** a round tube along a path, bent round at its corners */ | { tube: Tube }
   /** a profile of [radius, height] spun about y */ | { lathe: Lathe }
+  /** a freeform skin (a NURBS surface, or a part of one: src/nexus/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
@@ -35,6 +37,8 @@ export interface Part {
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
+  /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
+   *  in bump (m) — so the room kept round it is the room it sweeps through all of that */ travel?: { steer?: number; bump?: number };
   /** a limb that swings as it moves: about which axis, how far (radians), at what point in the stride (0–1) */ swing?: { axis: 'x' | 'z'; amp: number; phase: number };
   /** its mass taken as typical where its shape does not say it (a car's wiring, its fluids), kg */ kg?: number;
   /** how it is made where its material alone does not say (a car's pressed panels, round as they are styled) */ make?: 'pressed';
@@ -98,6 +102,7 @@ const area = (s: Shape): number => {
   if ('loft' in s) return loftArea(s.loft);
   if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
   if ('lathe' in s) return latheArea(s.lathe);
+  if ('surf' in s) return surfaceArea(s.surf);
   return 0;
 };
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */

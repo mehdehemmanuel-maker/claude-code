@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { edgeRadius } from '../finish';
 import type { Part, Shape } from '../kits';
 import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
+import { patchAt, tessellate, type Patch } from '../surface';
 import { findItem, resolve } from '../inventory';
 import { lookOf } from '../pieces';
 import { meshOfLook } from './explode';
@@ -66,7 +67,17 @@ export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24
   return new THREE.LatheGeometry(pts, seg);
 }
 const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' in s ? Math.min(2 * s.cyl[0], s.cyl[1]) : 'cone' in s ? s.cone[0] : 1);
+/** A freeform skin as triangles: as finely as about 3 cm a step across it (between 6 and 96 steps each way), its normals
+ *  the surface's own, so its highlights run as its curvature does. */
+function surfGeometry(pt: Patch): THREE.BufferGeometry {
+  const run = (f: (t: number) => [number, number]) => { let d = 0, q = patchAt(pt, ...f(0)).at; for (let k = 1; k <= 8; k++) { const r = patchAt(pt, ...f(k / 8)).at; d += Math.hypot(r[0] - q[0], r[1] - q[1], r[2] - q[2]); q = r; } return d; };
+  const steps = (d: number) => Math.max(6, Math.min(96, Math.round(d / 0.03)));
+  const t = tessellate(pt, steps(Math.max(run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1]))), steps(Math.max(run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])))), g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3)); g.setIndex(t.idx);
+  return g;
+}
 function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+  if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
   if ('lathe' in s) return new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), 40);
@@ -145,7 +156,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, !!p.light || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, matFor(p.color ?? 0x999999, p.mat, !!p.light || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape)); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size

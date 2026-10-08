@@ -12,6 +12,7 @@
 // one part of that mass, said as such; where they weigh more, that is said too.
 
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
+import { bodyPanels, type KeepOut, type WheelAt } from './panels';
 import { getMaterial } from '../data/materials';
 import type { Station } from './form';
 
@@ -94,67 +95,59 @@ function wheel(name: string, t: Tyre, o: { style: Machine['rims']['style']; spok
   return P(name, undefined, [0, 0, 0], { parts });
 }
 
-// ---- panels: a body lofted over the machine, by its lines ------------------------------------------------------------
-/** A car-like body: its lower body from bumper to bumper, its glasshouse narrowing to its roof (its section's upper half
- *  only above the belt; its lower half is inside the body), its roof, its pillars, its bumpers, grille and lamps. */
+// ---- panels: a body of skins over the machine, by its lines (src/nexus/panels.ts) ----------------------------------------
+/** How far a wheel steers and rises, by how its axle hangs (typical of each: a car's front wheels about 35° at full lock,
+ *  a strut's bump travel about 80 mm, a beam's 90, a wishbone's or a leaf's 100, a swingarm's 120, a rigid axle's none). */
+const BUMP: Record<string, number> = { strut: 0.08, beam: 0.09, wishbone: 0.1, leaf: 0.1, air: 0.1, swingarm: 0.12, pivot: 0.05, rigid: 0 };
+export const travelOf = (a: Axle): { steer: number; bump: number } => ({ steer: a.steer ? 0.61 : 0, bump: BUMP[a.susp ?? 'rigid'] ?? 0 });
+/** Where the power sits: as given, or as low as its sump allows (about 60 mm over the machine's lowest point, typical). */
+const powerAt = (m: Machine): Power => (m.power.y !== undefined ? m.power : { ...m.power, y: m.clearance + 0.06 + engineSize(m.power, m.kind !== 'truck' && m.kind !== 'forklift').s[1] / 2 });
+/** A car-like body: its side skins, hood, deck lid and cabin, its doors, glass, pillars, lamps and grille, each arch
+ *  trimmed round its wheel by how the wheel moves; a pickup's bed behind its cab. */
 function body(m: Machine, ln: Lines): Part[] {
-  const { L, W, H, clearance: c } = m, x = (f: number) => L / 2 - f * L, belt = ln.belt * H, nose = ln.nose * H, tail = ln.tail * H, w = W / 2, col = m.color, out: Part[] = [];
-  const top = (f: number) => (f <= ln.cowl ? nose + (belt - nose) * Math.min(1, f / ln.cowl) ** 0.6 : f >= ln.deck ? tail : belt); // the line along its top: bonnet rising to the cowl, the belt, the deck
-  const st: Station[] = [
-    { x: x(0), w: w * 0.78, lo: c + 0.16, hi: nose * 0.86, n: 3 },
-    { x: x(0.03), w: w * 0.93, lo: c + 0.06, hi: nose * 0.97, n: 4 },
-    { x: x(0.1), w: w * 0.99, lo: c, hi: top(0.1) + 0.03, n: ln.n, nt: ln.n + 1 },
-    ...[0.25, 0.45, 0.6, 0.75].filter((f) => f < ln.deck - 0.04 || !ln.bed).map((f): Station => ({ x: x(f), w, lo: c, hi: top(f) + 0.05, mid: c + (top(f) - c) * 0.62, n: ln.n, nt: ln.n + 1 })),
-    { x: x(Math.min(0.9, ln.deck + 0.04)), w: w * 0.99, lo: c, hi: tail + 0.03, n: ln.n },
-    { x: x(0.97), w: w * 0.93, lo: c + 0.06, hi: tail * 0.97, n: 4 },
-    { x: x(1), w: w * 0.82, lo: c + 0.14, hi: tail * 0.88, n: 3 },
-  ];
-  out.push(loft('body', st, 'steel-low', col, { shell: 0.0008, make: 'pressed', finish: 'paint', says: 'its outer panels: about 0.8 mm of pressed steel (typical of car skins)' }));
-  if (!ln.open) {
-    const wb = w * 0.83, wt = w * 0.72, g = (f: number, hi: number, k = 1): Station => ({ x: x(f), w: wb * k, wt: wt * k, lo: belt - 0.02, mid: belt, hi, n: 3, nt: 5 });
-    const gl = [g(ln.cowl, belt + 0.03, 0.98), g(ln.roofF, H - 0.015), g((ln.roofF + ln.roofR) / 2, H - 0.012), g(ln.roofR, H - 0.015), g(ln.deck, Math.max(tail, belt) + 0.04, 0.96)];
-    out.push(loft('glasshouse', gl, 'glass', 0x2a3c48, { shell: 0.004, says: 'its windscreen, windows and back glass: about 4 mm of toughened and laminated glass (typical)' }));
-    out.push(loft('roof', [{ x: x(ln.roofF) + 0.04, w: wt * 0.74, lo: H - 0.035, hi: H + 0.004, n: 6 }, { x: x((ln.roofF + ln.roofR) / 2), w: wt * 0.78, lo: H - 0.035, hi: H + 0.006, n: 6 }, { x: x(ln.roofR) - 0.03, w: wt * 0.74, lo: H - 0.035, hi: H + 0.004, n: 6 }], 'steel-low', col, { shell: 0.0008, make: 'pressed', finish: 'paint' }));
-    // its pillars: the A pillar up the windscreen's edge, the B between the doors, the C down the back glass's edge
-    for (const s of [-1, 1]) {
-      const at = (f: number, y: number, k: number): V3 => [x(f), y, s * k];
-      out.push(tube(`A pillar ${s > 0 ? 'right' : 'left'}`, 0.04, [at(ln.cowl, belt, wb * 0.95), at(ln.roofF, H - 0.03, wt * 0.76)], 'steel-low', col, { finish: 'paint' }));
-      out.push(tube(`B pillar ${s > 0 ? 'right' : 'left'}`, 0.045, [at((ln.roofF + ln.roofR) / 2, belt, wb * 0.99), at((ln.roofF + ln.roofR) / 2, H - 0.03, wt * 0.79)], 'steel-low', darken(col, 0.3), { finish: 'paint' }));
-      out.push(tube(`C pillar ${s > 0 ? 'right' : 'left'}`, 0.075, [at(ln.roofR, H - 0.04, wt * 0.74), at(ln.deck, Math.max(tail, belt) + 0.02, wb * 0.9)], 'steel-low', col, { finish: 'paint' }));
-    }
-  }
-  if (ln.bed) out.push(P('bed', { box: [L * (1 - ln.deck) - 0.1, 0.5, W * 0.96] }, [x((1 + ln.deck) / 2), c + 0.45, 0], { mat: 'steel-low', color: col, shell: 0.0009, make: 'pressed', finish: 'paint', parts: [P('bed floor', { box: [L * (1 - ln.deck) - 0.2, 0.02, W * 0.9] }, [0, -0.15, 0], { mat: 'steel-low', color: 0x222222, finish: 'texture' })] }));
-  // bumpers, grille, lamps (each lamp's lens and reflector is the detail pipeline's)
-  out.push(P('front bumper', { loft: { st: [{ x: -0.07, w: w * 0.8, lo: -0.1, hi: 0.1, n: 4 }, { x: 0.0, w: w * 0.9, lo: -0.11, hi: 0.11, n: 4 }, { x: 0.05, w: w * 0.86, lo: -0.1, hi: 0.1, n: 4 }] } }, [L / 2 - 0.03, c + 0.2, 0], { mat: 'pp', color: col, make: 'pressed', shell: 0.003, finish: 'paint' }));
-  out.push(P('rear bumper', { loft: { st: [{ x: -0.05, w: w * 0.86, lo: -0.1, hi: 0.1, n: 4 }, { x: 0.0, w: w * 0.92, lo: -0.11, hi: 0.11, n: 4 }, { x: 0.07, w: w * 0.84, lo: -0.1, hi: 0.1, n: 4 }] } }, [-L / 2 + 0.03, c + 0.25, 0], { mat: 'pp', color: col, make: 'pressed', shell: 0.003, finish: 'paint' }));
-  out.push(P('grille', { loft: { st: [{ x: -0.03, w: w * 0.55, lo: -0.07, hi: 0.07, n: 5 }, { x: 0.02, w: w * 0.6, lo: -0.08, hi: 0.08, n: 5 }] } }, [L / 2 - 0.04, c + 0.36, 0], { mat: 'abs', color: 0x101010, shell: 0.003, finish: 'texture' }));
-  for (const s of [-1, 1]) {
-    out.push(P(`headlight ${s > 0 ? 'right' : 'left'}`, { loft: { st: [{ x: -0.1, w: w * 0.14, lo: -0.035, hi: 0.035, n: 4 }, { x: 0.02, w: w * 0.17, lo: -0.045, hi: 0.04, n: 4 }] } }, [L / 2 - 0.08, nose * 0.84, s * w * 0.66], { mat: 'pc', color: 0xeef2f6, light: { lm: 1500, color: 0xfff4e0 } }));
-    out.push(P(`tail light ${s > 0 ? 'right' : 'left'}`, { box: [0.06, 0.1, w * 0.3] }, [-L / 2 + 0.05, tail * 0.86, s * w * 0.7], { mat: 'pmma', color: 0xb01818 }));
-  }
+  const { L, W, clearance: c } = m, front = Math.max(...m.axles.map((a) => a.x)), rear = Math.min(...m.axles.map((a) => a.x));
+  const wheels: WheelAt[] = m.axles.filter((a) => a.track > 0).map((a) => { const t = tyreOf(a.tyre)!; return { name: a.x === front ? 'front wheel' : a.x === rear ? 'rear wheel' : 'middle wheel', x: a.x, y: t.D / 2, z: a.track / 2, R: t.D / 2, w: t.W, ...travelOf(a) }; });
+  // what it must clear: its engine under the hood, with room over it (about 50 mm, typical; more where a maker designs for
+  // pedestrians' heads)
+  const pw = powerAt(m), es = engineSize(pw, true).s, inside: KeepOut[] = pw.kind === 'electric' ? [] : [{ name: 'engine', min: [pw.x - es[0] / 2, pw.y! - es[1] / 2, -es[2] / 2], max: [pw.x + es[0] / 2, pw.y! + es[1] / 2, es[2] / 2], room: 0.05, why: 'room over the engine under its hood (about 50 mm, typical)' }];
+  // and each strut's top, in its tower under the hood (suspension() puts it where it is)
+  for (const a of m.axles) if (a.susp === 'strut' && a.track > 0) { const t = tyreOf(a.tyre)!, y = t.D / 2, top = Math.min(m.H * 0.62, y + 0.55) + 0.045, kz = a.track / 2 - t.W / 2 - 0.1; inside.push({ name: 'strut tower', min: [a.x - 0.09, top - 0.05, kz - 0.09], max: [a.x + 0.09, top, kz + 0.09], room: 0.03, why: 'room over the strut towers (about 30 mm, typical)' }); }
+  const out = bodyPanels({ L, W, H: m.H, c, lines: ln, wheels, color: m.color, inside });
+  const x = (f: number) => L / 2 - f * L;
+  // a pickup's bed: its floor over the rear tyres (with the room the tyres need), its sides the body's own skin
+  const rt = Math.max(...wheels.filter((w) => w.x < 0).map((w) => w.y + w.R + w.bump), c + 0.4);
+  if (ln.bed) out.push(P('bed floor', { box: [L * (1 - ln.deck) - 0.12, 0.03, W * 0.86] }, [x((1 + ln.deck) / 2) + 0.02, rt + 0.06, 0], { mat: 'steel-low', color: 0x262626, shell: 0.0009, make: 'pressed', finish: 'texture', says: 'the bed floor, over the rear tyres (typical)' }));
   return out;
 }
 
 // ---- the rest, each placed by the machine's own figures ---------------------------------------------------------------
-const seatPart = (s: Seat, i: number, col: number): Part => {
+const seatPart = (s: Seat, i: number, col: number, floor?: number): Part => {
   const nm = `seat ${i + 1}`;
   if (s.style === 'saddle') return P(nm, undefined, [s.x, s.y, s.z], { parts: [loft('saddle', [{ x: -0.32, w: 0.12, lo: -0.06, hi: 0.02, n: 3 }, { x: 0, w: 0.15, lo: -0.07, hi: 0.03, n: 3 }, { x: 0.25, w: 0.08, lo: -0.06, hi: 0.01, n: 3 }], 'foam', 0x1a1a1a, { finish: 'leather', parts: [] })] });
   if (s.style === 'kart') return P(nm, undefined, [s.x, s.y, s.z], { parts: [loft('seat shell', [{ x: -0.2, w: 0.2, lo: -0.05, hi: 0.42, n: 2.4 }, { x: 0.05, w: 0.21, lo: -0.08, hi: 0.15, n: 2.4 }, { x: 0.25, w: 0.19, lo: -0.06, hi: 0.08, n: 2.4 }], 'fibreglass', 0x1a1a1a, { shell: 0.004, finish: 'paint' })] });
   if (s.style === 'pan') return P(nm, undefined, [s.x, s.y, s.z], { parts: [loft('seat pan', [{ x: -0.22, w: 0.22, lo: -0.02, hi: 0.32, n: 3 }, { x: 0.0, w: 0.23, lo: -0.04, hi: 0.06, n: 3 }, { x: 0.22, w: 0.22, lo: -0.03, hi: 0.05, n: 3 }], 'pp', 0x1a1a1a, { shell: 0.004, finish: 'texture' })] });
   const wd = s.style === 'bench' ? 0.62 : 0.26;
   return P(nm, undefined, [s.x, s.y, s.z], { parts: [
-    loft('cushion', [{ x: -0.22, w: wd, lo: -0.1, hi: 0.04, n: 4 }, { x: 0.25, w: wd, lo: -0.1, hi: 0.02, n: 4 }], 'foam', col, { finish: 'weave' }),
+    loft('cushion', [{ x: -0.22, w: wd, lo: -0.11, hi: 0.04, n: 4 }, { x: 0.25, w: wd, lo: -0.11, hi: 0.02, n: 4 }], 'foam', col, { finish: 'weave' }),
     loft('backrest', [{ x: -0.3, w: wd, lo: 0, hi: 0.62, n: 4 }, { x: -0.2, w: wd * 0.95, lo: 0.02, hi: 0.64, n: 4 }], 'foam', col, { rot: [0, 0, 0.18], finish: 'weave' }),
     P('seat frame', { box: [0.5, 0.04, wd * 1.8] }, [0, -0.13, 0], { mat: 'steel-low', color: 0x2a2a2a, fill: 0.15 }),
+    // down to the floor it is bolted to, on its rails (a car's seat slides on two, typical)
+    ...(floor !== undefined && s.y - 0.15 - floor > 0.01 ? [P('seat rails', { box: [0.42, s.y - 0.15 - floor, wd * 1.5] }, [0, -0.15 - (s.y - 0.15 - floor) / 2, 0], { mat: 'steel-low', color: 0x1e1e1e, fill: 0.06, says: 'the rails it slides on, bolted to the floor (typical)' })] : []),
   ] });
 };
 /** An engine sized from its displacement: its mass about 0.055 kg per cc with an aluminium block, 0.09 with cast iron,
  *  and its size that mass at its bulk density (its mass over its bounding box: about 360 kg/m³ for a small single,
  *  470 for a car's four, 870 for a truck's diesel; estimates from a Honda GX270, a 2.0 L four and a Detroit DD15), so
  *  the masses of its parts are its mass shared out. */
+/** An engine's mass and its box (its maker's where published, else from its displacement at its bulk density). */
+export function engineSize(p: Power, alu: boolean): { kg: number; s: V3 } {
+  if (p.kind === 'electric') return { kg: 0, s: [0.3, 0.26, 0.26] };
+  const cc = p.cc ?? 1000, kg = p.kg ?? cc * (alu ? 0.055 : 0.09), bulk = p.kind === 'diesel' ? 870 : cc < 1000 ? 380 : 470, side = Math.cbrt(kg / bulk);
+  return { kg, s: p.box ?? ([side * 1.05, side, side * 0.95] as V3) };
+}
 function engine(p: Power, alu: boolean, driven = 'rear axle'): Part {
   if (p.kind === 'electric') return P(`electric motor (${p.kW} kW)`, { cyl: [0.13, 0.3] }, [p.x, p.y ?? 0.4, p.z ?? 0], { rot: [PI / 2, 0, 0], mat: 'steel-low', color: 0x8a8a90, fill: 0.55, says: p.says });
-  const cc = p.cc ?? 1000, kg = p.kg ?? cc * (alu ? 0.055 : 0.09), bulk = p.kind === 'diesel' ? 870 : cc < 1000 ? 380 : 470, side = Math.cbrt(kg / bulk), s = p.box ?? ([side * 1.05, side, side * 0.95] as V3), parts: Part[] = [];
+  const cc = p.cc ?? 1000, { kg, s } = engineSize(p, alu), parts: Part[] = [];
   const fins = (r: number, h: number): [number, number][] => { const out: [number, number][] = [[0, -h / 2]]; const n = Math.max(4, Math.round(h / 0.012)); for (let i = 0; i <= n; i++) { const y = -h / 2 + (h * i) / n; out.push([i % 2 ? r : r * 1.3, y]); } out.push([0, h / 2]); return out; };
   if (p.kind === 'single' || p.kind === 'twin') {
     parts.push(P('crankcase', { box: [s[0] * 0.75, s[1] * 0.45, s[2] * 0.4] }, [0, -s[1] * 0.27, 0], { mat: 'al-a380', color: 0x8c8e90, kg: kg * 0.5, finish: 'cast', iface: [{ kind: 'shaft', role: 'provides', d: 0.0254, says: 'its output shaft (a 1 in keyed shaft, typical of small engines)' }] }));
@@ -218,7 +211,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     for (const s of sides) {
       const nm = `${a.x === front ? 'front' : a.x === rear ? 'rear' : `axle ${i + 1}`}${s ? (s > 0 ? ' right' : ' left') : ''} wheel`;
       const w = wheel(nm, t, { ...m.rims, brake: a.brake, knobs: off, dual: a.dual, single: a.track === 0 });
-      out.push({ ...w, at: [a.x, t.D / 2, (s * a.track) / 2], rot: s < 0 ? [0, PI, 0] : [0, 0, 0] });
+      const tr = travelOf(a); out.push({ ...w, at: [a.x, t.D / 2, (s * a.track) / 2], rot: s < 0 ? [0, PI, 0] : [0, 0, 0], ...(tr.steer || tr.bump ? { travel: tr } : {}) });
     }
     if (a.track === 0) { const d = 0.022; out.push(P(`${i === 0 ? 'front' : 'rear'} axle`, { cyl: [d / 2, 0.26] }, [a.x, t.D / 2, 0], { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x9a9a9a, finish: 'plate', iface: [{ kind: 'shaft', role: 'provides', d }], says: 'a solid steel axle through the hub, clamped in the fork or the swingarm (typical: 22 mm front, 25 mm rear)' })); }
     if (a.track > 0) {
@@ -348,8 +341,8 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   }
   if (ex.has('racks')) for (const [xx, nm] of [[m.L / 2 - 0.3, 'front rack'], [-m.L / 2 + 0.3, 'rear rack']] as const) { const ry = (tyres[0]!.D + 0.18); out.push(P(nm, undefined, [xx, ry, 0], { parts: [...(m.upper ? [-1, 1].map((sd) => tube('rack post', 0.01, [[0.07, 0, sd * half * 0.6], [(nm === 'front rack' ? front + 0.25 : rear - 0.25) - xx, (m.upper ?? 0) - ry, sd * half * 0.6]], 'steel-low', 0x1a1a1a)) : []),...[-1, 1].map((s) => tube('rack rail', 0.011, [[-0.22, 0, s * 0.42], [0.22, 0, s * 0.42]], 'steel-low', 0x1a1a1a)), ...[-0.2, -0.07, 0.07, 0.2].map((x) => tube('rack bar', 0.009, [[x, 0, -0.42], [x, 0, 0.42]], 'steel-low', 0x1a1a1a))] })); }
   // seats, power, controls
-  m.seats.forEach((s, i) => out.push(seatPart(s, i, m.kind === 'car' ? 0x2a2a2e : 0x1a1a1a)));
-  out.push(engine(m.power, m.kind !== 'truck' && m.kind !== 'forklift', m.axles.some((a) => a.drive && a.x === rear && a.track > 0) ? 'rear axle' : 'front axle'));
+  m.seats.forEach((s, i) => out.push(seatPart(s, i, m.kind === 'car' ? 0x2a2a2e : 0x1a1a1a, m.frame === 'shell' ? c + 0.1 : undefined)));
+  out.push(engine(powerAt(m), m.kind !== 'truck' && m.kind !== 'forklift', m.axles.some((a) => a.drive && a.x === rear && a.track > 0) ? 'rear axle' : 'front axle'));
   const drv = m.seats[0]!;
   if (m.controls === 'wheel') {
     const low = m.kind === 'mower' || m.kind === 'forklift', sx = drv.x + (m.kind === 'kart' ? 0.42 : low ? 0.42 : 0.5), sy = drv.y + (m.kind === 'kart' ? 0.24 : m.kind === 'mower' ? 0.16 : low ? 0.26 : 0.36), sz = drv.z, r = m.kind === 'kart' ? 0.15 : m.kind === 'truck' ? 0.24 : 0.19;
@@ -408,7 +401,7 @@ export const MACHINES: Machine[] = [
     axles: [{ x: (182.3 / 2 - 37) * IN, track: 60.3 * IN, tyre: '205/55R16', steer: true, drive: true, brake: { kind: 'disc', d: 10.8 * IN, vented: true }, susp: 'strut' }, { x: (182.3 / 2 - 37 - 106.3) * IN, track: 61.0 * IN, tyre: '205/55R16', brake: { kind: 'disc', d: 10.2 * IN }, susp: 'beam' }],
     lines: { cowl: 0.33, roofF: 0.45, roofR: 0.71, deck: 0.83, belt: 0.64, nose: 0.53, tail: 0.68, n: 5 },
     seats: [{ x: -0.1, z: -0.38, y: 0.55, style: 'bucket' }, { x: -0.1, z: 0.38, y: 0.55, style: 'bucket' }, { x: -0.95, z: 0, y: 0.57, style: 'bench' }],
-    power: { kind: 'inline', cc: 1987, kW: 126, x: 1.55, y: 0.6, says: '2.0 L four-cylinder Dynamic Force engine, 169 hp at 6,600 rpm (Toyota)' },
+    power: { kind: 'inline', cc: 1987, kW: 126, x: 1.55, says: '2.0 L four-cylinder Dynamic Force engine, 169 hp at 6,600 rpm (Toyota)' },
     controls: 'wheel', rims: { style: 'steel', mat: 'steel-low', lugs: 5, lug: 12 }, extras: ['exhaust'], road: true, mass: 2955 * LB, massSays: 'curb weight, Toyota', color: 0xb8bcc2,
     says: 'its tyres 205/55R16 (typical of its 16-in. wheels: Toyota gives the wheel size, not the tyre code here); its front overhang about 37 in (an estimate from its length and wheelbase)',
   },
@@ -486,7 +479,7 @@ export function styledCar(style: string, o: { color: number; rim: number; rims: 
   return {
     id: style, name: `${style}`, kind: 'car', source: 'typical of its body style', L: s.L, W: s.W, H: s.H, clearance: 0.14, frame: 'shell', hand: -1,
     axles: [{ x: fx, track, tyre, steer: true, drive: o.power !== 'rear', brake: { kind: 'disc', d: 0.3, vented: true }, susp: 'strut' }, { x: fx - s.wb, track, tyre, drive: true, brake: { kind: 'disc', d: 0.28 }, susp: style === 'pickup' || style === 'van' ? 'leaf' : 'beam' }],
-    lines: s.lines, seats, power: o.power === 'electric' ? { kind: 'electric', kW: 150, x: fx - s.wb, y: 0.35, says: 'an electric motor at the rear axle (typical)' } : { kind: o.power === 'diesel' ? 'diesel' : 'inline', cc: o.power === 'diesel' ? 2000 : 1800, kW: 110, x: fx + oh * 0.35, y: 0.6, says: 'typical' },
+    lines: s.lines, seats, power: o.power === 'electric' ? { kind: 'electric', kW: 150, x: fx - s.wb, y: 0.35, says: 'an electric motor at the rear axle (typical)' } : { kind: o.power === 'diesel' ? 'diesel' : 'inline', cc: o.power === 'diesel' ? 2000 : 1800, kW: 110, x: fx + oh * 0.35, says: 'typical' },
     controls: 'wheel', rims: { style: o.rims === 'steel' ? 'steel' : 'spokes', spokes: o.rims === '10-spoke' ? 10 : o.rims === 'mesh' ? 16 : o.rims === 'turbine' ? 12 : 5, mat: o.rims === 'steel' ? 'steel-low' : 'al-6061', lugs: 5, lug: 12 },
     extras: ['exhaust'], road: true, color: o.color, says: `${s.L} m long, ${s.W} m wide, wheelbase ${s.wb} m; tyres ${tyre}, ${Math.round(tyreOf(tyre)!.D * 1000)} mm across (typical of a ${style})`,
   };
