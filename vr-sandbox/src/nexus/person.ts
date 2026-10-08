@@ -380,7 +380,7 @@ export const factName = (name: string): string => name.toLowerCase().replace(/[^
 export class People {
   readonly jolt: InstanceType<Jolt['JoltInterface']>; readonly ps: InstanceType<Jolt['PhysicsSystem']>; readonly bi: InstanceType<Jolt['BodyInterface']>;
   readonly MOVING = 1; readonly list: Person[] = []; private acc = 0; private seed: number; readonly hz = 240;
-  constructor(readonly J: Jolt, readonly g = 9.80665, seed = 1) {
+  constructor(readonly J: Jolt, public g = 9.80665, seed = 1) {
     this.seed = seed >>> 0 || 1;
     const s = new J.JoltSettings(), pairs = new J.ObjectLayerPairFilterTable(2); pairs.EnableCollision(0, 1); pairs.EnableCollision(1, 1);
     const bp = new J.BroadPhaseLayerInterfaceTable(2, 2); bp.MapObjectToBroadPhaseLayer(0, new J.BroadPhaseLayer(0)); bp.MapObjectToBroadPhaseLayer(1, new J.BroadPhaseLayer(1));
@@ -438,11 +438,21 @@ export class People {
   hold(id: number, at: V3): void { const g = this.grips[id]; if (g) g.to = at; }
   /** A hand opening: what it held let go. */
   letGo(id: number): void { const g = this.grips[id]; if (!g) return; this.ps.RemoveConstraint(g.c); this.bi.RemoveBody(g.hand.GetID()); this.bi.DestroyBody(g.hand.GetID()); this.grips[id] = undefined as never; }
+  /** Gravity changed: the Moon's, Mars's, none. */
+  setGravity(g: number): void { this.g = g; this.ps.SetGravity(new this.J.Vec3(0, -g, 0)); for (const p of this.list) for (const l of p.parts) this.bi.ActivateBody(l.body.GetID()); }
   /** The world taken down: its bodies, constraints and memory given back. */
   dispose(): void { this.J.destroy(this.jolt); }
   facts(): Record<string, number> { const f: Record<string, number> = { people: this.list.length, people_down: this.list.filter((p) => p.down()).length }; for (const p of this.list) Object.assign(f, p.facts()); return f; }
 }
 
+/** A fit body: its genome's height, face and proportions, its build that of a healthy, active young adult: BMI 20 to
+ *  24 for a woman and 21 to 25 for a man (inside the WHO's healthy 18.5–25), fat no more than typical for its sex
+ *  (ICRP 89: a woman 22.5 kg of fat tissue, a man 18.2), muscle at least typical. The range is a choice (what "fit"
+ *  is, an estimate); anything asked of the body after ("Mia heavier", "Kai fat 1.5") is as asked. */
+export function fitBuild(p: Partial<BodyParams>): Partial<BodyParams> {
+  const female = (p.sex ?? 0) >= 0.5, h = p.height ?? (female ? 1.63 : 1.76), [lo, hi] = female ? [20, 24] : [21, 25], bmi = (p.mass ?? 22 * h * h) / (h * h);
+  return { ...p, mass: Math.min(hi, Math.max(lo, bmi)) * h * h, fat: Math.min(female ? 1.15 : 0.95, Math.max(female ? 0.9 : 0.65, p.fat ?? 1)), muscle: Math.max(female ? 0.72 : 1, p.muscle ?? 1) };
+}
 /** A fighter's body: its genome's height and face, its muscle as a trained fighter's (about a third more, an
  *  estimate), its fat half again lower, and its mass the weight class its height puts it in (the UFC's limits: men
  *  bantam 61.2 kg to heavy 120.2, women straw 52.2 to feather 65.8; a fighter's BMI about 24.5, an estimate). */

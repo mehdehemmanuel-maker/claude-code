@@ -149,12 +149,14 @@ export function plainBrain(w: WorldApi): Brain {
       if (/\b(explode|apart|inside|open)\b/.test(t)) return w.explode(target || 'all', 1);
       if (/\b(together|close it|assemble|put back)\b/.test(t)) return w.explode(target || 'all', 0);
       if (/\b(flaws?|problems?|rounds?|wrong)\b/.test(t)) return w.brief().split('\n').slice(0, 4).join(' ');
-      const said = target ? w.focus(target) : (() => { const s = w.selected(); return s ? w.focus(s.id) : ''; })();
+      // a part named is shown; words that name no part are not a part to look for
+      const asked = /\b(show|go to|where|look at|point at|tell me about|what|why|explain|focus|find|which)\b/.test(t);
+      const said = target ? (asked || w.find(target).length ? w.focus(target) : '') : (() => { const s = w.selected(); return s ? w.focus(s.id) : ''; })();
       if (said) {
         const p = target ? w.find(target)[0] : w.selected();
         return /\b(why|how|explain)\b/.test(t) && p ? describe(p, 4) : said;
       }
-      return 'Here I read your words plainly: ask me to build something new (a car for 2 people that goes 300 km, a cabin of 40 m², a drone that carries 2 kg), to show a part, why it is what it is, to take it apart, to note a flaw on it, to expand it into its subsystems, to build it step by step, or to list its flaws.';
+      return `I don't have "${text.trim().slice(0, 80)}" yet (this view reads words plainly, without Claude). What I can do: build something to a need (a cart that carries 150 kg, a bridge over 4 m, a cabin for −25 °C winters); show the inventory's real things (a drill, a kettle); bring people in ("spawn a woman", "5 random people", "fight"); take you places ("a beach at sunset", "Mars", "a cabin in a snowstorm", "under the sea", "a bar"); change the world ("make it rain", "turn gravity off", "shrink me to an ant"); or "surprise me".`;
     },
   };
 }

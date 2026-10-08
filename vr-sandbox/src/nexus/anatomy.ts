@@ -241,23 +241,27 @@ export function layOut(p0: Partial<BodyParams> = {}): Body {
   // ---- the skin's shape: capsules blended softly, girths typical ----
   const skin: Prim[] = [], C = (a: V3, b: V3, r: number, r2 = r, k = 0.03 * hs) => skin.push({ a, b, r, r2, k });
   const tw = trunkW, lw = limbW;
+  // where fat lies goes by sex: a man's more on the waist and belly (android), a woman's more on the hips, buttocks and
+  // thighs (gynoid; Vague 1956), her waist narrower for her hips (a waist-to-hip ratio about 0.75–0.8 to a man's 0.9,
+  // typical of healthy young adults; WHO's risk lines are 0.85 and 0.9). Her neck, deltoids and upper arms slighter.
+  const fem = clamp(p.sex), fatW = 1 + (fat - 1) * (1 - 0.6 * fem), fatL = 1 + (fat - 1) * (1 + 0.8 * fem);
   C(add(hc, [0, 0.005 * hk, -0.005 * hk]), add(hc, [0, -0.01 * hk, 0.012 * hk]), 0.085 * hk, 0.08 * hk, 0.02 * hs); // cranium
-  C(add(J.neck!, [0, 0.025 * H, -0.004 * H]), add(J.c7!, [0, -0.005 * H, 0.025 * H]), 0.057 * hs * Math.sqrt(lw), 0.062 * hs * Math.sqrt(lw)); // neck (about 380 mm round)
-  const chestR = 0.155 * hs * tw * Math.sqrt(mus), waistR = 0.135 * hs * tw * fat, hipR = 0.15 * hs * Math.sqrt(tw * fat) * p.hips; // chest about 1,000 mm, waist about 850, hips about 980 round (typical)
+  C(add(J.neck!, [0, 0.012 * H, -0.004 * H]), add(J.c7!, [0, -0.005 * H, 0.025 * H]), 0.057 * hs * Math.sqrt(lw) * (1 - 0.12 * fem), 0.062 * hs * Math.sqrt(lw) * (1 - 0.1 * fem)); // neck (about 380 mm round, a woman's about 320)
+  const chestR = 0.155 * hs * tw * Math.sqrt(mus) * (1 - 0.06 * fem), waistR = 0.135 * hs * tw * fatW * (1 - 0.12 * fem), hipR = 0.15 * hs * Math.sqrt(tw * fatL) * p.hips * (1 + 0.03 * fem); // chest about 1,000 mm, waist about 850, hips about 980 round (typical)
   const kt = 0.07 * hs; // the trunk blends softly: its parts one surface
   for (const [sx, y0, y1, r0, r1, dz] of [[0.05, T(0.79), T(0.69), chestR * 0.8, chestR * 0.82, 0.002], [0.036, T(0.69), T(0.6), chestR * 0.76, waistR * 0.8, 0.008], [0.042, T(0.6), hipY - 0.01 * H, waistR * 0.8, hipR * 0.84, 0.002]] as const) { C([sx * H * tw * p.shoulders ** (y0 > T(0.7) ? 1 : 0), y0, dz * H], [sx * H * tw, y1, dz * H], r0 * 0.72, r1 * 0.72, kt); C([-sx * H * tw * p.shoulders ** (y0 > T(0.7) ? 1 : 0), y0, dz * H], [-sx * H * tw, y1, dz * H], r0 * 0.72, r1 * 0.72, kt); }
-  C([0, T(0.8), -0.02 * H], [0, hipY, -0.025 * H], 0.085 * hs * tw, 0.09 * hs * tw * Math.sqrt(fat), kt); // the back
-  C([0, T(0.76), 0.025 * H * tw], [0, T(0.62), 0.03 * H * tw * fat], 0.095 * hs * tw, 0.1 * hs * tw * fat, kt); // belly and chest front
+  C([0, T(0.8), -0.02 * H], [0, hipY, -0.025 * H], 0.085 * hs * tw, 0.09 * hs * tw * Math.sqrt(fatW), kt); // the back
+  C([0, T(0.76), 0.025 * H * tw], [0, T(0.62), 0.03 * H * tw * fatW * (1 - 0.15 * fem)], 0.095 * hs * tw * (1 - 0.06 * fem), 0.1 * hs * tw * fatW * (1 - 0.1 * fem), kt); // belly and chest front
   if (p.sex >= 0.5) for (const k of [1, -1]) C([k * 0.05 * H * tw, T(0.735), 0.05 * H * tw], [k * 0.052 * H * tw, T(0.722), 0.072 * H * tw], 0.055 * hs * Math.sqrt(fat), 0.045 * hs * Math.sqrt(fat), 0.035 * hs); // breasts (about 500 g of fat and gland each pair, ICRP 89)
   both((s, k) => {
     const sh = J[`shoulder${s}`]!, el = J[`elbow${s}`]!, wr = J[`wrist${s}`]!, hip = J[`hip${s}`]!, kn = J[`knee${s}`]!, an = J[`ankle${s}`]!;
-    C(add(sh, [-k * 0.03 * H, 0.012 * H, 0]), sh, 0.06 * hs * lw, 0.055 * hs * lw); // shoulder (deltoid)
-    C(sh, el, 0.05 * hs * lw, 0.04 * hs * lw); C(el, wr, 0.042 * hs * lw, 0.028 * hs * Math.sqrt(lw)); // upper arm about 320, forearm about 280 mm round
+    C(add(sh, [-k * 0.03 * H, 0.012 * H, 0]), sh, 0.06 * hs * lw * (1 - 0.15 * fem), 0.055 * hs * lw * (1 - 0.15 * fem)); // shoulder (deltoid)
+    C(sh, el, 0.05 * hs * lw * (1 - 0.08 * fem), 0.04 * hs * lw * (1 - 0.06 * fem)); C(el, wr, 0.042 * hs * lw, 0.028 * hs * Math.sqrt(lw)); // upper arm about 320, forearm about 280 mm round
     C(wr, add(J[`knuckle${s}`]!, [0, 0, -0.003 * H]), 0.026 * hs, 0.024 * hs, 0.01 * hs); C(J[`knuckle${s}`]!, J[`fingertip${s}`]!, 0.02 * hs, 0.012 * hs, 0.008 * hs); // hand, fingers as a mitt
-    C(add(hip, [k * 0.012 * H, 0.03 * H, -0.01 * H]), kn, 0.095 * hs * lw * Math.sqrt(fat), 0.06 * hs * lw); // thigh about 600 mm round
+    C(add(hip, [k * 0.012 * H, 0.03 * H, -0.01 * H]), kn, 0.095 * hs * lw * Math.sqrt(fatL), 0.06 * hs * lw); // thigh about 600 mm round
     C(kn, an, 0.06 * hs * lw, 0.035 * hs * lw); C(add(kn, [0, -0.06 * H, -0.02 * H]), add(kn, [0, -0.13 * H, -0.015 * H]), 0.05 * hs * lw, 0.04 * hs * lw); // shin and calf (about 380 mm round)
     C(J[`heel${s}`]!, add(J[`toe${s}`]!, [0, 0.008 * H, -0.01 * H]), 0.035 * hs, 0.026 * hs, 0.015 * hs); C(an, J[`heel${s}`]!, 0.036 * hs, 0.035 * hs, 0.015 * hs);
-    C(add(hip, [k * 0.01 * H, 0.02 * H, -0.05 * H * tw]), add(hip, [k * 0.012 * H, -0.02 * H, -0.04 * H * tw]), 0.085 * hs * Math.sqrt(fat), 0.075 * hs * Math.sqrt(fat)); // buttock
+    C(add(hip, [k * 0.01 * H, 0.02 * H, -0.05 * H * tw]), add(hip, [k * 0.012 * H, -0.02 * H, -0.04 * H * tw]), 0.085 * hs * Math.sqrt(fatL) * (1 + 0.06 * fem), 0.075 * hs * Math.sqrt(fatL) * (1 + 0.06 * fem)); // buttock
   });
   // ---- the face, on the head: Farkas's thirds, the eyes, nose, mouth, jaw and ears ----
   const face: Prim[] = [], F = (a: V3, b: V3, r: number, r2 = r, k = 0.008 * hs, cut = false) => face.push({ a: add(hc, mul(a, hk)), b: add(hc, mul(b, hk)), r: r * hk, r2: r2 * hk, k: k * hk, ...(cut ? { cut } : {}) });

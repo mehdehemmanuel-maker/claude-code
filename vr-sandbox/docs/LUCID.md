@@ -67,6 +67,39 @@ Each is a place in the room with its own physics, a coach that measures you, and
 
 ## 4. The world
 
-- **works**: places (a beach, terrain, sea, sky, sun), weather, flying and walking, a warehouse with robots, a workshop.
-- **next**: summon a place by saying it ("a boxing gym", "a lake at dawn"), the room's physics shared by everything in it
-  (people, builds, boats), and anything made kept to come back to.
+- **works (places, src/nexus/places.ts)**: say where you want to be and you are there:
+  - outdoors: a beach, the surface of Mars, the Moon, a canyon rim (flying on), a snowfield, a desert, a forest, a garden, under the sea, space, a volcano, the late Cretaceous, the mountains;
+  - rooms: a cabin (fire, snow at the window), a bar (a WPA 9-foot pool table, racked, and a WDF dartboard at 1.73 m with its throw line at 2.37 m), a haunted mansion (a torch in your hand), a stadium stage.
+  - Change it as you stand in it: the time ("sunset", "night"), the weather ("make it rain", a blizzard, "raindrops of gummy bears", each falling at its own terminal speed), gravity ("turn gravity off", the Moon's 1.62, Mars's 3.71 m/s², which the people feel too), your size ("shrink me to an ant", 340 times smaller).
+  - The sea's waves go by ω² = g k. What was asked and is not there yet (dinosaurs, whales, a crowd) is said.
+- **works (kits, src/nexus/kits.ts)**: makers of things whose kinds multiply. Each is a tree of parts you can take apart level by level ("take it apart") and ask "what is the tyre made of" down to its elements:
+  - things: trees (trunk thickness by D ∝ H^1.5, palms excepted), plants, houses, cars (real dimensions by body type, tyres by their size code), roads (FHWA lanes), lamp posts (lumens by lamp), beds (named mattress sizes), swords, prop blasters, a light sword prop, sandwiches (USDA energy), toy bricks (LEGO's brick dimensions, a house-sized heap counted in millions), a solar system (NASA sizes, Kepler years), a galaxy (logarithmic arms, a flat rotation curve), terrain, a treehouse;
+  - scenes that are kits of kits: a street, a village, a park, a forest, a car park, a flower garden, a sword rack.
+  - Every choice multiplies: 23 kits make about 10^384 different things, counted exactly ("how many things can you make").
+  - Masses come from shapes and densities, with what is hollow counted as hollow. They are checked against real ones: a car 1.1–1.4 t, a tyre about 10 kg, a brick house about 90 t.
+- **works (edges, src/nexus/finish.ts)**: no edge is perfectly sharp; each is rounded as its material is made:
+  - machined edges broken by 0.5 mm, moulded plastic rounded by its wall, castings filleted, wood eased by 2 mm, concrete chamfered by 20 mm, glass arrissed, pressed car panels as round as they are styled.
+  - It applies to the forge's own builds too. The rules are a board ("edges") whose steps can be changed and run.
+- **works (the bar's games, src/nexus/games.ts)**:
+  - **pool** by its own physics:
+    - balls of 57.15 mm and 170 g, bouncing off each other at 0.93 and off the cushions at 0.8;
+    - a struck ball slides (friction 0.2) until it rolls at 5/7 of its speed, then the cloth's rolling resistance (0.01) stops it;
+    - pockets with WPA mouths.
+    - Say "break", "shoot at the 3", "rack"; in a headset, strike the cue ball with your hand.
+  - **darts**:
+    - flown from the throw line under gravity and scored by the WDF board's rings;
+    - a casual hand's spread: median miss 4.4 cm, about one in eleven off the board when aimed at treble 20.
+    - Say "throw 3 darts at treble 20"; in a headset, hold the trigger at the line and let go to throw with your hand's own speed.
+  - Spin (follow, draw, side) is not modelled yet.
+- **works**: a warehouse with robots, a workshop, flying and walking.
+- **next**: the people in a place standing on its ground everywhere (it is flat for 12 m round you), spin on the pool balls,
+  a go-kart track, creatures (a dog that follows you, a dragon, penguins, whales), old cities, games (ping pong), music.
+
+## 5. Tested blind
+
+A fresh AI with no context wrote 25 things it would say to the app (a beach at sunset, a puppy, the Grand Canyon by air,
+a lightsaber, gummy-bear rain, Mars, ping pong with a robot, a dragon, a cabin in a snowstorm, an orchestra, Rome, a
+sandwich…). First run: 0 of 25 did what was asked. After places: 13 of 25. After kits: 14 done, 5 partly (the Cretaceous
+without dinosaurs, the aquarium without whales, the snowfield without penguins, the beach without a surfboard, and "a car
+that turns into a boat" made as a car only), 6 not at all (a puppy, a dragon, ping pong, an orchestra, Rome, a roller
+coaster).

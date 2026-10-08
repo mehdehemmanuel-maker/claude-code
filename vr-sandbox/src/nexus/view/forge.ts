@@ -59,7 +59,15 @@ import type { SimTrack } from '../sim';
 import { setTestPhysics } from '../calltest';
 import { checkDirective, directivePrompt, readPlain, type Parsed } from '../directive';
 import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../surprise';
-import { People, boardOfPerson, fighterBuild, factName as personFact, type Person } from '../person';
+import { G as GRAVITY, PLACES, readPlace, sayPlace, type Place } from '../places';
+import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
+import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
+import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
+import { filletCyl, kitView, type KitView } from './kit3d';
+import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import type { Board } from '../boards';
+import { People, boardOfPerson, fighterBuild, fitBuild, factName as personFact, type Person } from '../person';
 import { personView, type PersonView } from './people3d';
 import { PARAMS as BODY_PARAMS, type BodyParams } from '../anatomy';
 import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../conceive';
@@ -119,7 +127,7 @@ const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(1.2, 3.5
 const fill = new THREE.DirectionalLight(0x80deea, 0.5); fill.position.set(-2, 1.5, -1); scene.add(fill);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(10, 72), new THREE.MeshStandardMaterial({ color: 0x060b10, roughness: 0.7, metalness: 0.3 }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
-scene.add(new THREE.GridHelper(20, 40, 0x0f3a48, 0x0a1a24));
+const grid = new THREE.GridHelper(20, 40, 0x0f3a48, 0x0a1a24); scene.add(grid);
 
 // the machine stands at full size on a pedestal in front of you
 const M = new THREE.Vector3(0, 0.5, -1.25);
@@ -1718,7 +1726,7 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 const LIFE_WORDS = /^(?:nexus[,:]?\s*)?(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions)$|what can (?!you\b|i\b|we\b|nexus\b)(?:a |an |the )?\S|abilities of\s|(?:the )?law(?:s| graph)$|find (?:a )?law for\s|(?:profile|density of|derive)\s|(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?\S.*\b(?:last|lasts|live|lives)\b|(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(?:human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?[.!]?$|how long (?:does|would|will|can)\s|lifetime of\s|(?:time|clock|lifespan)\s+(?:of\s+)?\S|turnover$|a day in (?:the|a) body|what does (?:the|a) body do in a day|age\s+\d+|3d\s+\S)/i;
 // ---- people in the room, by real physics (src/nexus/person.ts), each drawn on its own segments (people3d.ts) --------------
-let peopleWorld: People | null = null, personSeq = 0, lastPeople: Person[] = [], lastKind: 'build' | 'people' = 'build';
+let peopleWorld: People | null = null, personSeq = 0, lastPeople: Person[] = [], lastKind: 'build' | 'people' | 'kit' = 'build';
 const personViews = new Map<Person, PersonView>(), peopleGroup = new THREE.Group(); peopleGroup.name = 'people'; scene.add(peopleGroup);
 const PEOPLE_NAMES = { XY: ['Kai', 'Leo', 'Ivo', 'Teo', 'Max', 'Rio', 'Jon', 'Sol', 'Bo', 'Oz', 'Ren', 'Eli'], XX: ['Mia', 'Ana', 'Zoe', 'Nia', 'Ada', 'Lua', 'Eva', 'Uma', 'Lia', 'Ivy', 'Noa', 'Isa'] } as const;
 /** A name not yet in the room, a woman's or a man's by its genome (numbered once each is taken). */
@@ -1751,7 +1759,7 @@ async function spawnPeople(who: 'person' | 'man' | 'woman' | 'child' | 'fighter'
   const w = await peopleNow(), { at: you, f, side } = facingYou(), spots = clearSpots(you.clone().addScaledVector(f, 2.2), side, n, 0.9), made: Person[] = [];
   for (let k = 0; k < n; k++) {
     const seed = (Date.now() ^ ((personSeq + 1) * 2654435761)) >>> 0, g = randomGenome(seed, sex ?? (who === 'man' ? 'XY' : who === 'woman' ? 'XX' : undefined));
-    let params: Partial<BodyParams> = phenotype(g).params; if (who === 'fighter') params = fighterBuild(params);
+    let params: Partial<BodyParams> = phenotype(g).params; params = who === 'fighter' ? fighterBuild(params) : fitBuild(params);
     const at = spots[k]!, yaw = Math.atan2(you.x - at.x, you.z - at.z);
     const name = nameFor(g.sex); personSeq++;
     const p = w.add(name, params, { x: at.x, z: at.z, yaw }, { fighter: who === 'fighter' }); drawPerson(p); made.push(p);
@@ -1768,6 +1776,181 @@ async function setFight(): Promise<string> {
   for (const [p, q] of [[a, b], [b, a]] as const) { p.target = { person: q }; p.stance = 'guard'; p.ask('get up'); }
   lastKind = 'people';
   return `${a.name} and ${b.name} face each other a jab apart, guards up: each one's board ("${a.name}'s rules", "${b.name}'s rules") throws when it is open and in reach, covers when it is hit hard, and gets up after four seconds down. Change their rules on the boards; say "${a.name} jab", "push ${b.name}", or "stop".`;
+}
+// ---- kits: makers of things (src/nexus/kits.ts), drawn with every edge as it is made (src/nexus/view/kit3d.ts) ----
+const kitGroup = new THREE.Group(); scene.add(kitGroup); named(kitGroup, 'what the kits made');
+interface KitThing { name: string; part: KitPart; view: KitView; level: number; kit: string; words: string }
+let kitThings: KitThing[] = [];
+const fmtKg = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 1e4 ? 0 : 1)} t` : m >= 1 ? `${m.toFixed(m >= 10 ? 0 : 1)} kg` : `${(m * 1000).toFixed(0)} g`);
+/** Made by a kit, as many as asked, side by side in front of you (a scene laid out from where you stand). */
+function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
+  const k = kitFor(words); if (!k) return null;
+  const { at: you, f, side } = facingYou(), yaw = Math.atan2(-f.x, -f.z), lays = (!!k.uses && k.choices.length === 1) || k.id === 'road', out: string[] = []; let x = 0;
+  const made: KitThing[] = [];
+  for (let i = 0; i < Math.min(Math.max(1, n), 6); i++) {
+    const { part } = makeKit(k, words, (seed0 + i * 7919) >>> 0), view = kitView(part); view.group.rotation.y = yaw;
+    const box = new THREE.Box3().setFromObject(view.group), w = Math.max(0.3, box.max.x - box.min.x, box.max.z - box.min.z);
+    const at = lays ? new THREE.Vector3(you.x, 0, you.z) : you.clone().addScaledVector(f, Math.max(2.2, w / 2 + 1.2)).addScaledVector(side, x + w / 2); at.y = 0; x += w + 0.4;
+    // set down clear of the pedestal (its radius and half the thing's size)
+    if (!lays && pedestal.visible) { const R = 0.5 * pedestal.scale.x + w / 2 + 0.3; for (let o = 0; o < 40 && Math.hypot(at.x - M.x, at.z - M.z) < R; o++) at.addScaledVector(side, 0.25); }
+    view.group.position.copy(at); kitGroup.add(view.group);
+    const t: KitThing = { name: part.name, part, view, level: 0, kit: k.id, words }; kitThings.push(t); made.push(t);
+    const kg = kitMass(part); out.push(`${part.name}${part.says ? ` (${part.says})` : ''}: ${countParts(part).toLocaleString('en-US')} parts${kg > 0 ? `, ${fmtKg(kg)}` : ''}`);
+  }
+  // a row is centred on where you look
+  if (!lays && made.length > 1) for (const t of made) t.view.group.position.addScaledVector(side, -x / 2);
+  lastKind = 'kit';
+  const when = /\b(at night|at sunset|at sunrise|at dawn|at dusk|at noon|in the rain|in the snow|in a snowstorm)\b/i.exec(words);
+  if (when) { const p = readPlace(`make it ${when[1]!.replace(/^(at|in) (the |a )?/i, '')}`, placeNow?.p); if (p) { goTo(p); out.push(`and it is ${when[1]}`); } }
+  return `${out.join('; ')}. One of ${sayKinds(log10Kinds(k))} different ${plural(k.name)} this kit makes (${sayKinds(log10All())} things across all ${KITS.length} kits). Every edge is as its material is made (say "edges" for the board). Say "take it apart", "what is the ${firstLeaf(made[0]!.part)} made of", "another", or "remove it".`;
+}
+const firstLeaf = (p: KitPart): string => { let q = p; while (q.parts?.length) q = q.parts.find((x) => x.mat) ?? q.parts[0]!; return q.name.replace(/ \d+$/, ''); };
+const allParts = (p: KitPart): KitPart[] => [p, ...(p.parts ?? []).flatMap(allParts)];
+const depthOf = (p: KitPart): number => 1 + Math.max(0, ...(p.parts ?? []).map(depthOf));
+function stepKits(dt: number): void { for (const t of kitThings) t.view.update(dt); }
+/** Words about what the kits made: take it apart, put it back, what a part is made of, how many there are, edges. */
+function kitWords(text: string): string | null {
+  const t = text.trim().toLowerCase().replace(/[.!?]+$/, ''), last = kitThings[kitThings.length - 1];
+  if (/^(how many (things|kinds|different things|possibilities|variations)|what can (you|the kits) make)\b/.test(t)) return `${KITS.map((k) => `${plural(k.name)}: ${sayKinds(log10Kinds(k))}`).join('; ')}. In all, ${sayKinds(log10All())}: each kit's choices multiplied, and a kit that uses others (a street of eight houses) multiplies theirs.`;
+  if (/^(show )?(the )?edges( board| rules)?$/.test(t)) { openEdges(); return `The edges, as things are made: ${EDGE_RULES.map((r) => `${r.id} ${typeof r.mm === 'number' ? `${r.mm} mm` : 'by thickness'}`).join('; ')}. Change one by its line ("edges wood 4 mm") and run the board.`; }
+  if (/^edges\s+\S/.test(t)) { const said = setEdge(t); redrawKits(); return said; }
+  if (!last || lastKind !== 'kit') return null;
+  if (/^(take|pull|break) (it|this|that) apart$|^(explode|expand|open up|open) (it|this|that)$|^(show me )?(its|the) parts$|^take it apart more$|^further$|^deeper$/.test(t)) {
+    const max = depthOf(last.part); last.level = Math.min(max, last.level + 1); last.view.explode(last.level);
+    const at = allParts(last.part).filter((p) => p.parts?.length && p !== last.part).slice(0, 8).map((p) => `${p.name} (${p.parts!.length})`);
+    return `${last.name} taken apart to level ${last.level} of ${max}${at.length ? `: ${at.join(', ')}` : ''}. Say it again to go deeper, or "put it back".`;
+  }
+  if (/^(put it back( together)?|collapse it|close it( up)?|reassemble it)$/.test(t)) { last.level = 0; last.view.explode(0); return `${last.name}, together again.`; }
+  if (/^(another|another one|a different one|again|one more)$/.test(t)) return makeKits(last.words, 1, Date.now() + 1);
+  const mo = /^what(?:'s| is| are) (?:the |its |a )?(.+?) made (?:of|from)$/.exec(t);
+  if (mo) {
+    const w = mo[1]!, part = allParts(last.part).find((p) => p.name.toLowerCase() === w) ?? allParts(last.part).find((p) => p.name.toLowerCase().includes(w)); if (!part) return `${last.name} has no "${w}": its parts include ${allParts(last.part).slice(1, 9).map((p) => p.name).join(', ')}.`;
+    const mats = [...new Set(allParts(part).map((p) => p.mat).filter(Boolean))] as string[];
+    return `${part.name}: ${mats.map((m) => { const it = INVENTORY.get(m), r = ruleFor(m); return `${it?.name ?? m}${it?.makeup?.length ? ` (${it.makeup.slice(0, 4).map((x) => `${(INVENTORY.get(x.id)?.name ?? x.id).replace(/^el-/, '')} ${x.pct} %`).join(', ')})` : ' (its makeup is not in the inventory yet)'}, its edges ${r.says}`; }).join('; ')}; ${fmtKg(kitMass(part))}.`;
+  }
+  return null;
+}
+/** The kits' things drawn again (after an edge rule changed): same parts, edges as the rules now say. */
+function redrawKits(): void { for (const t of kitThings) { const g = t.view.group, v = kitView(t.part); v.group.position.copy(g.position); v.group.rotation.copy(g.rotation); kitGroup.remove(g); t.view.dispose(); kitGroup.add(v.group); t.view = v; v.explode(t.level); } drawMade(); }
+function dropKits(match: (t: KitThing) => boolean): number { const go = kitThings.filter(match); for (const t of go) { kitGroup.remove(t.view.group); t.view.dispose(); } kitThings = kitThings.filter((t) => !go.includes(t)); return go.length; }
+/** The Edges board: each rule a step, its words its radius; Run it to apply what you changed. */
+function openEdges(): void {
+  if (!boards) return;
+  const b: Board = { title: 'Edges, as things are made', kind: 'flow', armed: false, about: 'No edge is truly sharp: each is as its material is made. Change a radius in its step and Run.', nodes: {}, edges: {} } as unknown as Board;
+  const nodes = (b as unknown as { nodes: Record<string, unknown> }).nodes, edges = (b as unknown as { edges: Record<string, unknown> }).edges;
+  nodes.start = { label: 'WHEN I say edges', step: { kind: 'trigger', what: 'when I say edges' } };
+  edgeRuleLines().forEach((l, i) => { nodes[`r${i}`] = { label: l.split(':')[0]!, step: { kind: 'action', what: l.replace(/:.*$/, '').replace(/ by thickness$/, '') } }; edges[`e${i}`] = { from: i ? `r${i - 1}` : 'start', to: `r${i}`, rel: 'flows to' }; });
+  boards.put('edges', b); summonTo('boards'); boards.openBoard('edges');
+}
+// ---- places: where you are, from what you say (src/nexus/places.ts), drawn round you (src/nexus/view/place3d.ts) ----
+let placeNow: { p: Place; v: PlaceView } | null = null, flying = false;
+const forgeRoom = () => [floor, grid, pedestal, rim, bay, robot.root, warehouse.group, cellView.group, ...robot.senses];
+/** Taken to a place: the forge's own room put away, the place's sky, ground, sea, weather and things round you, its air
+ *  and gravity yours and the people's, you at its middle facing in, at your size there. */
+function goTo(p: Place): string {
+  placeNow?.v.dispose(); if (placeNow) scene.remove(placeNow.v.group);
+  const here = p.name === 'here', g = p.gravity, v = placeView(p, g); scene.add(v.group); placeNow = { p, v };
+  for (const o of forgeRoom()) o.visible = here;
+  if (!here) { scene.fog = v.group.userData.fog as THREE.Fog; scene.background = v.group.userData.background as THREE.Color; camera.far = Math.max(60, Math.min(4000, p.sees * 1.2)); camera.updateProjectionMatrix(); }
+  peopleWorld?.setGravity(g); if (p.alone && peopleWorld) for (const q of peopleWorld.list.slice()) dropPerson(q);
+  flying = /\bfly|hawk|bird|eagle\b/i.test(p.says.join(' ')) || g === 0;
+  // you: at its middle facing in (the room's near wall behind you), at your size there
+  const k = p.scale, eye = 1.6 * k;
+  if (renderer.xr.isPresenting) { dolly.position.set(0, flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0, 0); dolly.rotation.set(0, 0, 0); dolly.scale.setScalar(k); }
+  else { framing = false; const y0 = flying && p.props.some((x) => x.kind === 'canyon') ? 60 : 0; camera.position.set(0, y0 + eye, 0.2 * k); orbit.target.set(0, y0 + eye * 0.9, -2 * k); camera.near = Math.max(0.0005, 0.01 * k); camera.updateProjectionMatrix(); orbit.update(); }
+  if (v.torch) { const hand = renderer.xr.isPresenting ? renderer.xr.getControllerGrip(1) : camera; hand.add(v.torch, v.torch.target); v.torch.target.position.set(0, 0, -1); }
+  place = 'table'; void setUpBar();
+  return `${sayPlace(p)}${p.props.some((x) => x.kind === 'pool table') ? ' Say "break", "shoot at the 3", "rack", or "throw 3 darts at treble 20"; in a headset, strike the cue ball with your hand, and hold the trigger at the line for a dart and let go to throw it.' : ''}`;
+}
+/** Back to the forge: its room as it was, Earth's gravity, your own size. */
+function backToForge(): string {
+  if (bar) { bar.pool.dispose(); bar = null; }
+  if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
+  for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
+  camera.far = 50; camera.near = 0.01; camera.updateProjectionMatrix(); dolly.scale.setScalar(1); peopleWorld?.setGravity(GRAVITY.earth); flying = false;
+  return 'Back in the forge: its own room, Earth\'s gravity, your own size.';
+}
+/** A place asked for in words: back to the forge, a place (changed from the one you are in when only its time, weather,
+ *  gravity or your size is said), or, if no place is named, what places there are. */
+function placeWords(words: string): string {
+  const t = words.toLowerCase();
+  if (/\b(back to|return to) (the )?(forge|room|start|normal)\b|\bbeam me up\b|\bleave (this|here)\b/.test(t)) return backToForge();
+  const p = readPlace(words, placeNow?.p);
+  if (!p) return `I don't have that place yet. Places I can take you: ${PLACES.map((x) => x.make().name).join(', ')}. And I can set the time (sunset, night, noon), the weather (rain, snow, a blizzard, gummy bears), gravity (off, the Moon's, Mars's, double) and your size (an ant, a mouse, a cat, a giant).${/\b(conduct|orchestra|ping ?pong|play)\b/.test(t) ? ' Games and music are not here yet.' : ''}`;
+  return goTo(p);
+}
+function stepPlace(dt: number): void {
+  if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt);
+}
+// ---- the bar's games, by real physics (src/nexus/games.ts): the pool table's balls moved by their own physics world, and
+// darts thrown by hand (in a headset) or by saying so, landing where their flight takes them and scored by the board ----
+let bar: { pool: Pool; table: THREE.Object3D; balls: Map<number, THREE.Object3D>; board: THREE.Vector3; oche: THREE.Vector3; darts: THREE.Group; scores: number[] } | null = null;
+async function setUpBar(): Promise<void> {
+  if (bar) { bar.pool.dispose(); bar.darts.parent?.remove(bar.darts); bar = null; }
+  if (!placeNow?.p.props.some((x) => x.kind === 'pool table')) return;
+  const J = await physics(), g = placeNow.p.gravity || GRAVITY.earth, grp = placeNow.v.group, table = grp.children.find((o) => o.children.some((c) => c.name === 'cue ball'));
+  if (!table) return;
+  const balls = new Map<number, THREE.Object3D>(); for (const c of table.children) { if (c.name === 'cue ball') balls.set(0, c); const m = /^ball (\d+)$/.exec(c.name); if (m) balls.set(Number(m[1]), c); }
+  const bp = placeNow.p.props.find((x) => x.kind === 'dartboard')!, op = placeNow.p.props.find((x) => x.kind === 'oche')!, darts = new THREE.Group(); grp.add(darts);
+  bar = { pool: new Pool(J, g), table, balls, board: new THREE.Vector3(bp.at[0] - 0.04, DARTBOARD.height, bp.at[1]), oche: new THREE.Vector3(op.at[0], 0, op.at[1]), darts, scores: [] };
+}
+function stepBar(dt: number): void {
+  if (!bar) return; const dropped = bar.pool.step(dt);
+  for (const b of bar.pool.where()) { const m = bar.balls.get(b.n); if (!m) continue; m.visible = !b.potted; if (!b.potted) m.position.set(b.at[0], b.at[1], b.at[2]); }
+  if (dropped.length) say(`${dropped.map((n) => (n === 0 ? 'the cue ball' : `the ${n}`)).join(' and ')} down.`, undefined, 'nexus');
+  if (renderer.xr.isPresenting) barHands(dt);
+}
+/** A dart stuck in the board where it landed (right, up from the bull), its flights out towards you. */
+function stickDart(hit: [number, number]): void {
+  if (!bar) return; const d = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0x3a3a40, metalness: 0.6, roughness: 0.4 });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.05, 8), m); barrel.rotation.z = Math.PI / 2; barrel.position.x = -0.03; d.add(barrel);
+  const fl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.025, 0.001), new THREE.MeshStandardMaterial({ color: 0xd8382a })); fl.position.x = -0.07; d.add(fl);
+  d.position.set(bar.board.x, bar.board.y + hit[1], bar.board.z + hit[0]); bar.darts.add(d);
+}
+/** Words the bar's games answer: break, shoot at a ball, rack, throw darts at a target, pull the darts. */
+function barWords(text: string): string | null {
+  if (!bar) return null; const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  if (/^(break|break them|break off|break the rack)$/.test(t)) { const h = bar.pool.aimAt(1) ?? 0; return `${bar.pool.shoot(h, 8)} at the rack: a break (typical breaks go 7–11 m/s).`; }
+  const sh = /^(?:shoot|hit|play|pot|aim)(?: at)? (?:the )?(\d{1,2})(?: ball)?(?: (?:at|with) (\d+(?:\.\d+)?) ?(?:m\/s|metres? a second))?$/.exec(t);
+  if (sh) { const n = Number(sh[1]), h = bar.pool.aimAt(n); if (h === null) return `the ${n} ball is ${bar.pool.where().find((b) => b.n === n)?.potted ? 'already down' : 'not on the table'}.`; return `${bar.pool.shoot(h, sh[2] ? Number(sh[2]) : 2.5)} at the ${n}.`; }
+  if (/^(rack|rack them|rack them up|rack the balls|new game|reset the table)$/.test(t)) { bar.pool.rerack(); return 'Racked: fifteen in the triangle, the cue ball on the head string.'; }
+  const dt = /^throw (a|one|two|three|\d) darts?(?: at (?:the )?(.+))?$/.exec(t) ?? /^throw(?: at (?:the )?(.+))?$/.exec(t);
+  if (dt && /dart|throw/.test(t)) {
+    const n = { a: 1, one: 1, two: 2, three: 3 }[dt[1] as string] ?? (Number(dt[1]) || 1), aim = (dt[2] ?? dt[1] ?? 'bull').replace(/^(a|one|two|three|\d)$/, 'bull'), target = targetOn(aim) ?? targetOn('bull')!, said: string[] = [];
+    for (let i = 0; i < Math.min(n, 9); i++) { const d = throwDart(target, Math.random, placeNow?.p.gravity || GRAVITY.earth); if (d.hit) stickDart(d.hit); bar.scores.push(d.score); said.push(d.says); }
+    const tot = said.length ? bar.scores.slice(-said.length).reduce((a, b) => a + b, 0) : 0;
+    return `At ${targetOn(aim) ? aim : 'the bull'} from the throw line (2.37 m), let go at about 6 m/s: ${said.join('; ')}${said.length > 1 ? ` — ${tot}` : ''}. (A casual hand: its angle off by about 0.6° and its speed by 2 %.)`;
+  }
+  if (/^(pull|clear|take out|collect) (the |my )?darts$/.test(t)) { for (const d of [...bar.darts.children]) bar.darts.remove(d); bar.scores = []; return 'Darts pulled from the board.'; }
+  return null;
+}
+// in a headset: the right hand strikes the cue ball (a cue of about 0.54 kg sends a 0.17 kg ball off at about 1.3 times
+// its own speed, typical); the trigger held is a dart in the hand, let go is thrown with the hand's own velocity
+const handWas = [new THREE.Vector3(), new THREE.Vector3()], handVel = [new THREE.Vector3(), new THREE.Vector3()]; let struckAt = -1e9; const dartIn: (THREE.Object3D | null)[] = [null, null];
+function barHands(dt: number): void {
+  if (!bar) return;
+  for (let i = 0; i < 2; i++) {
+    const p = new THREE.Vector3(); renderer.xr.getControllerGrip(i).getWorldPosition(p);
+    handVel[i]!.lerp(p.clone().sub(handWas[i]!).divideScalar(Math.max(dt, 1e-3)), 0.5); handWas[i]!.copy(p);
+    const local = bar.table.worldToLocal(p.clone()), cue = bar.pool.where().find((b) => b.n === 0);
+    if (cue && !cue.potted && clock() - struckAt > 0.6 && Math.hypot(local.x - cue.at[0], local.y - cue.at[1], local.z - cue.at[2]) < POOL.r + 0.04) {
+      const v = handVel[i]!.clone(), sp = Math.hypot(v.x, v.z); if (sp > 0.3) { struckAt = clock(); bar.pool.shoot(Math.atan2(v.z, v.x), Math.min(12, sp * 1.3)); }
+    }
+  }
+}
+function dartGrab(i: number): boolean {
+  if (!bar || !renderer.xr.isPresenting) return false; const p = new THREE.Vector3(); renderer.xr.getControllerGrip(i).getWorldPosition(p);
+  if (Math.hypot(p.x - bar.oche.x, p.z - bar.oche.z) > 1.8) return false;
+  const d = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.12, 8), new THREE.MeshStandardMaterial({ color: 0x3a3a40, metalness: 0.6 })); d.rotation.x = Math.PI / 2; renderer.xr.getControllerGrip(i).add(d); dartIn[i] = d; return true;
+}
+function dartLetGo(i: number): void {
+  const d = dartIn[i]; if (!d || !bar) return; d.parent?.remove(d); dartIn[i] = null;
+  const p = new THREE.Vector3(); renderer.xr.getControllerGrip(i).getWorldPosition(p); const v = handVel[i]!, g = placeNow?.p.gravity || GRAVITY.earth;
+  // the board's face at x = its x; the throw is towards +x
+  const f = dartFlight([p.x, p.y, p.z], [v.x, v.y, v.z], { x: bar.board.x, y: bar.board.y, z: bar.board.z }, g);
+  if (!f) { say('The dart fell short.', undefined, 'nexus'); return; }
+  const s = dartScore(f.hit[0], f.hit[1]); if (s.score > 0 || Math.hypot(...f.hit) < 0.3) stickDart(f.hit); bar.scores.push(s.score);
+  say(`${s.says} (let go at ${v.length().toFixed(1)} m/s, ${(f.t * 1000).toFixed(0)} ms in the air).`, undefined, 'nexus');
 }
 const personNamed = (w: string): Person | null => peopleWorld?.list.find((p) => personFact(p.name) === personFact(w)) ?? null;
 /** A body rebuilt where it stands with what was changed (its height, mass, muscle, fat, sex, skin, hair). */
@@ -1855,7 +2038,14 @@ async function perform(p: Parsed): Promise<string> {
     // what the intent pipeline can read wants into is designed and built under the laws; what it cannot, but the
     // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
     const words = `${d.n > 1 ? `${d.n} different ` : 'a '}${d.what}`, c = conceive(words);
+    // a need said with its numbers (a cart that carries 150 kg) is designed; a thing named plainly (a red sports car, a
+    // queen bed, an oak) a kit makes, where one does
+    const needs = /\d+(?:\.\d+)?\s*(?:kg|t|tonnes?|m²|m2|m|km|km\/h|m\/s|°c|l|litres?|liters?|w|kw|kwh|people|persons?|bikes|kids|mm)\b/i.test(d.what);
+    if (c.wants.length && (needs || !kitFor(d.what))) return conceiveAndMake(words, d.n);
+    { const said = makeKits(d.what, d.n); if (said) return said; }
     if (c.wants.length) return conceiveAndMake(words, d.n);
+    // a place asked to be made ("a haunted mansion", "a cozy cabin in a snowstorm"): you are taken there
+    { const w = d.what.toLowerCase(); if (PLACES.some((x) => { const m = x.words.exec(w); return m && m.index <= 16; })) return placeWords(d.words); }
     const inv = namedInInventory(d.what);
     if (inv) { invLast = inv.id; return `${see3d(inv.id)} It is the inventory's own ${inv.name}, every part inside it down to its materials. Say "remove it" to put it away.`; }
     const near = [...INVENTORY.values()].filter((i) => i.kind === 'product' && d.what.toLowerCase().split(/\s+/).some((x) => x.length > 3 && i.name.toLowerCase().includes(x))).slice(0, 4).map((i) => i.name);
@@ -1864,6 +2054,7 @@ async function perform(p: Parsed): Promise<string> {
   if (d.act === 'person') return spawnPeople(d.who, d.n, d.sex);
   if (d.act === 'fight') return setFight();
   if (d.act === 'surprise') return surprise();
+  if (d.act === 'place') return placeWords(d.words);
   return '';
 }
 /** Something picked at random and made: Claude picks where it can be asked (its pick used only if it reads as
@@ -1888,6 +2079,13 @@ async function surprise(): Promise<string> {
 /** What was asked to go: the 3D view of an inventory thing, a thing made here by its name, the last build, or all of it. */
 function removeAsked(what: string): string {
   const said: string[] = [];
+  // things the kits made: by name, the last when they were the last thing made, or all
+  if (kitThings.length) {
+    const w = what.toLowerCase(), named = kitThings.filter((t) => t.name.toLowerCase().includes(w) || t.kit === w || `${t.kit}s` === w);
+    if (named.length && what !== 'last' && what !== 'all') { dropKits((t) => named.includes(t)); return `${named.length > 1 ? `${named.length} ${named[0]!.kit}s` : named[0]!.name} gone.`; }
+    if (what === 'last' && lastKind === 'kit') { const t = kitThings[kitThings.length - 1]!; dropKits((x) => x === t); lastKind = kitThings.length ? 'kit' : 'build'; return `${t.name} gone.`; }
+    if (what === 'all') said.push(`${dropKits(() => true)} made by kits gone`);
+  }
   // people: by name, all of them, or the last brought in when they were the last thing asked for
   if (peopleWorld?.list.length) {
     const named = personNamed(what), group = /^(?:people|persons?|humans?|everyone|everybody|them all|fighters?|men|women|man|woman|guys?|bodies|body)$/i.test(what);
@@ -1917,6 +2115,8 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
+  { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -1931,6 +2131,8 @@ async function converse(text: string): Promise<void> {
   // its questions asked first where it has any; what is not a directive goes on to be answered
   { const p = await readSaid(text); if (p.directive.act !== 'pass') { line('you', text); let said: string; try { said = p.questions.length ? askFirst(p) : await perform(p); } catch (e) { said = (e as Error).message; } say(said, undefined, 'nexus'); return; } if (pendingDirective) pendingDirective = null; }
   if (!brain) return;
+  // read plainly here, the answer is Nexus's own, not Claude's
+  if (brain.mode !== 'claude') { line('you', text); say(await brain.ask(text, () => {}, new AbortController().signal), undefined, 'nexus'); return; }
   busy?.abort(); busy = new AbortController();
   line('you', text);
   const el = line('claude', 'Thinking…');
@@ -2224,6 +2426,8 @@ async function flowAct(what: string, signal?: AbortSignal, who = 'a pipeline', i
       const said = devices.command(d, m2![2]!); if (/does not know/.test(said)) throw new Error(said); return said;
     }
     case 'surprise': return surprise();
+    case 'edges': { const r = setEdge(t); redrawKits(); return r; }
+    case 'kit': return makeKits(arg) ?? `No kit makes "${arg}": there are ${KITS.map((k) => k.name).join(', ')}.`;
     case 'person': {
       const m2 = /^(\S+)\s+(.+)$/.exec(arg), p = m2 ? personNamed(m2[1]!) : null;
       if (!p) throw new Error(`No one called ${arg.split(' ')[0] || '…'} is in the room${peopleWorld?.list.length ? `: there are ${peopleWorld.list.map((x) => x.name).join(', ')}` : ''}.`);
@@ -2363,8 +2567,9 @@ function meshOf(m: Made): THREE.Object3D {
   }
   let geo: THREE.BufferGeometry;
   switch (m.kind) {
-    case 'box': geo = new THREE.BoxGeometry(d.w!, d.h!, d.d!); break;
-    case 'cylinder': geo = new THREE.CylinderGeometry(d.D! / 2, d.D! / 2, d.h!, 40); break;
+    // no edge is truly sharp: each is as its material is made (src/nexus/finish.ts)
+    case 'box': { const f = edgeRadius(edgeMatOf(mt?.id), Math.min(d.w!, d.h!, d.d!)); geo = f > 1e-4 ? new RoundedBoxGeometry(d.w!, d.h!, d.d!, 2, f) : new THREE.BoxGeometry(d.w!, d.h!, d.d!); break; }
+    case 'cylinder': geo = filletCyl(d.D! / 2, d.h!, d.D! / 2, edgeRadius(edgeMatOf(mt?.id), Math.min(d.D!, d.h!)), 40); break;
     case 'tube': { const ro = d.D! / 2, ri = ro - d.wall!, hh = d.h! / 2; geo = new THREE.LatheGeometry([new THREE.Vector2(ri, -hh), new THREE.Vector2(ro, -hh), new THREE.Vector2(ro, hh), new THREE.Vector2(ri, hh), new THREE.Vector2(ri, -hh)], 40); break; }
     case 'sphere': geo = new THREE.SphereGeometry(d.D! / 2, 36, 18); break;
     case 'cone': geo = new THREE.ConeGeometry(d.D! / 2, d.h!, 40); break;
@@ -2738,6 +2943,8 @@ function stepPlay(now: number): void { if (!playing) return; const k = Math.floo
 /** Whether words said in the chat are generation's: its verbs, or a calculation ending in =; moving or turning only what is made. */
 function generationWords(t: string): boolean {
   const w = t.trim(); if (!shop.does(w)) return false;
+  // "put me on a beach", "place me in a garden": a place to go, not a shape to place
+  if (readPlain(w).directive.act === 'place' || /^(let|teach|help|show) (me|us)\b/i.test(w)) return false;
   if (/^(move|rotate|turn|remove|delete|split)\b/i.test(w)) return shop.all().made.some((m) => m.name === w.split(/\s+/)[1]) || shop.joined().some((j) => j.name === w.split(/\s+/)[1]);
   return true;
 }
@@ -3047,7 +3254,9 @@ for (let i = 0; i < 2; i++) {
   const laser = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }));
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   // the trigger is the clicker: it presses what it points at, and never drags (the grip holds)
+  ctl.addEventListener('selectend', () => dartLetGo(i));
   ctl.addEventListener('selectstart', () => {
+    if (dartGrab(i)) return;
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
     pointerHand = i;
@@ -3119,9 +3328,9 @@ function walk(dt: number): void {
     const ax = src.gamepad?.axes; if (!ax || ax.length < 4) continue;
     const [sx, sy] = [ax[2]!, ax[3]!];
     if (src.handedness === 'left' && Math.hypot(sx, sy) > 0.15) {
-      const head = renderer.xr.getCamera(); const fwd = new THREE.Vector3(); head.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+      const head = renderer.xr.getCamera(); const fwd = new THREE.Vector3(); head.getWorldDirection(fwd); if (!flying) fwd.y = 0; fwd.normalize();
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-      dolly.position.addScaledVector(fwd, -sy * 1.2 * dt).addScaledVector(right, sx * 1.2 * dt);
+      const speed = (flying ? 12 : 1.2) * dolly.scale.x; dolly.position.addScaledVector(fwd, -sy * speed * dt).addScaledVector(right.normalize(), sx * speed * dt);
     }
     if (src.handedness === 'right' && windows.holding) { if (Math.abs(sy) > 0.15) windows.push(-sy * 1.5 * dt); continue; }
     if (src.handedness === 'right') {
@@ -3181,7 +3390,7 @@ async function boot() {
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });
