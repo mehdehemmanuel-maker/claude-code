@@ -106,11 +106,15 @@ export function jointFor(a: Node, b: Node): 'weld' | 'bolts' | 'screws' | 'seal'
   if (has('rubber')) return (a.p.mat === 'rubber' && ringed(a)) || (b.p.mat === 'rubber' && ringed(b)) ? 'valve' : 'none';
   if (has('soft') || has('organic')) return 'none';
   if (ca === 'masonry' && cb === 'masonry') return 'none';
-  if (ca === 'metal' && cb === 'metal') return a.p.mat === b.p.mat && a.p.mat !== 'cast-iron' && !a.p.make && !b.p.make ? 'weld' : 'bolts';
+  // (a casting is bolted, never welded: cast iron, cast aluminium, zinc die-casting)
+  if (ca === 'metal' && cb === 'metal') return a.p.mat === b.p.mat && !CASTING.test(a.p.mat ?? '') && !a.p.make && !b.p.make ? 'weld' : 'bolts';
   if (has('masonry')) return has('metal') ? 'bolts' : 'none'; // metal is anchored into it; wood and plastic are tied in hidden
   if (has('wood') || has('polymer')) return 'screws';
   return 'none';
 }
+const CASTING = /cast|a380|a356|zamak|zinc/;
+/** The rigid link a part is one of (Part.link): its own, else its nearest holder's; '' the thing's own frame. */
+export const linkOf = (n: Node | null): string => (!n ? '' : n.p.link ?? linkOf(n.parent));
 /** Whether a part and what holds it, of these materials, are one piece: cast or moulded together (an alloy wheel's spokes
  *  with its barrel, a moulded bumper's bosses with its cover), as only a casting alloy or a moulded polymer is made. */
 export const onePiece = (a?: string, b?: string): boolean => !!a && a === b && /a380|cast|zamak|abs|^pp$|^pc$|nylon|^pu$|rubber|glass/.test(a);
@@ -164,6 +168,9 @@ export const RULES: DetailRule[] = [
         // (what its maker says is held some other way, as a cap clipped in, is not fastened again: nor is any piece of it,
         // as a wheel cover's moulded spokes and its rim, snapped on as one)
         if (fixedUp(t.a) || fixedUp(t.b)) continue;
+        // (two links, a wheel and its knuckle, an arm and its subframe, meet only at the joint that lets them move, a bearing,
+        // a ball joint, a bush: nothing rigid is laid across it, or the wheel could not turn nor the knuckle steer)
+        if (linkOf(t.a) !== linkOf(t.b)) continue;
         const how = jointFor(t.a, t.b); if (how === 'none') continue;
         // (what is fastened by its own studs and nuts, as a wheel and the brake disc clamped between it and its hub, is not
         // bolted again)

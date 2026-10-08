@@ -32,7 +32,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { KITS, makeKit, massOf, type Part } from '../kits';
 import '../creatures';
 import { perfect } from '../make/pipeline';
-import { meshClashes, type TriMesh } from '../make/critic';
+import { held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
 import { tryBody } from '../panels';
 import { kitView } from './kit3d';
 import { draft } from '../surface';
@@ -88,9 +88,12 @@ const pathOf = (o: THREE.Object3D) => { const n: string[] = []; for (let a: THRE
 // one panel on its own: everything not so named hidden
 const hide = q.get('hide'); if (hide) { const re = new RegExp(hide, 'i'); for (const m of meshes) if (re.test(m.name) || re.test(pathOf(m))) m.visible = false; }
 const only = q.get('only'); if (only) { const re = new RegExp(only, 'i'); const keep = new Set<THREE.Object3D>(); view.group.traverse((o) => { if (re.test(o.name)) { o.traverse((c) => keep.add(c)); for (let a = o.parent; a; a = a.parent) keep.add(a); } }); for (const m of meshes) if (!keep.has(m)) m.visible = false; }
+// (the renderer keeps a logarithmic depth, so a shader of its own must write that depth too, or everything drawn with
+// the built-in materials, the ground among them, hides it: zebra was once only a shadow for that)
+const LOGV = '#include <common>\n#include <logdepthbuf_pars_vertex>\n', LOGV1 = '\n#include <logdepthbuf_vertex>\n', LOGF = '#include <logdepthbuf_pars_fragment>\n', LOGF1 = '\n#include <logdepthbuf_fragment>\n';
 // the reflection of parallel bars of light in the skin: a stripe for each, by the reflected view ray's height
-const zebraMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { k: { value: 9 } }, vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vP = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }', fragmentShader: 'uniform float k; varying vec3 vN; varying vec3 vP; void main(){ vec3 n = normalize(vN); vec3 v = normalize(vP - cameraPosition); if (dot(n, v) > 0.0) n = -n; vec3 r = reflect(v, n); float s = step(0.5, fract(r.y * k)); gl_FragColor = vec4(vec3(0.06 + 0.9 * s), 1.0); }' });
-const draftMat = (pull: THREE.Vector3) => new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { d: { value: pull } }, vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position,1.0); }', fragmentShader: 'uniform vec3 d; varying vec3 vN; void main(){ float g = dot(normalize(vN), d); vec3 c = g < 0.0 ? vec3(0.85,0.12,0.1) : g < 0.0175 ? vec3(0.95,0.8,0.1) : vec3(0.2,0.7,0.25); gl_FragColor = vec4(c * (0.55 + 0.45 * abs(g)), 1.0); }' });
+const zebraMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { k: { value: 9 } }, vertexShader: LOGV + 'varying vec3 vN; varying vec3 vP; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vP = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; ' + LOGV1 + ' }', fragmentShader: LOGF + 'uniform float k; varying vec3 vN; varying vec3 vP; void main(){ ' + LOGF1 + ' vec3 n = normalize(vN); vec3 v = normalize(vP - cameraPosition); if (dot(n, v) > 0.0) n = -n; vec3 r = reflect(v, n); float s = step(0.5, fract(r.y * k)); gl_FragColor = vec4(vec3(0.06 + 0.9 * s), 1.0); }' });
+const draftMat = (pull: THREE.Vector3) => new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { d: { value: pull } }, vertexShader: LOGV + 'varying vec3 vN; void main(){ vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position,1.0); ' + LOGV1 + ' }', fragmentShader: LOGF + 'uniform vec3 d; varying vec3 vN; void main(){ ' + LOGF1 + ' float g = dot(normalize(vN), d); vec3 c = g < 0.0 ? vec3(0.85,0.12,0.1) : g < 0.0175 ? vec3(0.95,0.8,0.1) : vec3(0.2,0.7,0.25); gl_FragColor = vec4(c * (0.55 + 0.45 * abs(g)), 1.0); }' });
 if (q.get('zebra') === '1' || q.get('draft') === '1') {
   for (const m of meshes) {
     const p = m.userData?.part as { shape?: { surf?: Parameters<typeof draft>[0] } } | undefined;
@@ -134,24 +137,30 @@ camera.lookAt(c); renderer.render(scene, camera);
 
 // ---- what the critic may ask ----
 const hex = (m: THREE.Mesh) => { const col = (m.material as THREE.MeshStandardMaterial).color; return col ? `#${col.getHexString()}` : undefined; };
-const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes, joined: (m.userData.part as { fixed?: string; detail?: string } | undefined)?.fixed ?? (m.parent?.userData.part as { fixed?: string } | undefined)?.fixed ?? ((m.userData.part as { detail?: string } | undefined)?.detail ? `laid on it by its ${(m.userData.part as { detail?: string }).detail} rule` : undefined), joins: (m.userData.part as { joins?: string[] } | undefined)?.joins ?? (m.parent?.userData.part as { joins?: string[] } | undefined)?.joins }; };
+const worldTris = (m: THREE.Mesh): TriMesh => { const g = m.geometry, P = g.getAttribute('position'), out = new Float32Array(P.count * 3), v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return { name: m.name, path: pathOf(m.parent ?? m), pos: out, idx: g.getIndex()?.array, mat: (m.userData.part as { mat?: string } | undefined)?.mat, holder: (m.parent?.parent?.userData.part as { mat?: string } | undefined)?.mat, weld: (m.userData.part as { finish?: string } | undefined)?.finish === 'weld', passes: (m.userData.part as { passes?: string[] } | undefined)?.passes, joined: (m.userData.part as { fixed?: string; detail?: string } | undefined)?.fixed ?? (m.parent?.userData.part as { fixed?: string } | undefined)?.fixed ?? ((m.userData.part as { detail?: string } | undefined)?.detail ? `laid on it by its ${(m.userData.part as { detail?: string }).detail} rule` : undefined), joins: (m.userData.part as { joins?: string[] } | undefined)?.joins ?? (m.parent?.userData.part as { joins?: string[] } | undefined)?.joins, ...weldsOf(m), link: linkOfObj(m), joint: (m.userData.part as Part | undefined)?.joint, id: (m.parent ?? m).uuid, kg: m.userData.part ? massOf({ ...(m.userData.part as Part), parts: [] }) : 0 }; };
+// (a weld bead is one with the part it is laid on and what that part's joints join it to: nothing else it touches)
+function weldsOf(m: THREE.Mesh): { welds?: string[] } { const p = m.userData.part as Part | undefined; if (p?.finish !== 'weld') return {}; const host = m.parent?.parent?.userData.part as Part | undefined; return host ? { welds: [host.name, ...(host.joins ?? [])] } : {}; }
+// (the rigid link a mesh is one of: its part's, else its nearest holder's that says one; '' the thing's own frame)
+function linkOfObj(m: THREE.Object3D): string { for (let o: THREE.Object3D | null = m; o && o !== view.group; o = o.parent) { const l = (o.userData.part as Part | undefined)?.link; if (l !== undefined) return l; } return ''; }
 const r3 = (v: THREE.Vector3) => v.toArray().map((x) => +x.toFixed(4));
 const look = {
-  parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
+  parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
   facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says }),
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
   clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
+  // what holds what: groups held by nothing, joints across which something rigid is laid, links that rub (critic.ts)
+  held: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return held(ts, meshClashes(ts, { touch: 0.001 })); },
   gap: (a: string, b: string) => {
-    // (the least distance between the parts so named: every corner of each against every triangle of the other near it)
+    // (the least distance between the parts so named, measured as the clash finder measures, so the two agree; the pairs
+    // nearest by their boxes first, and given up on, said, after 20 s)
     const ra = new RegExp(a, 'i'), rb = new RegExp(b, 'i'), A = meshes.filter((m) => m.visible && ra.test(m.name)).map(worldTris), B = meshes.filter((m) => m.visible && rb.test(m.name)).map(worldTris);
     if (!A.length || !B.length) return null;
-    const res = meshClashes([...A.map((x) => ({ ...x, name: 'A:' + x.name })), ...B.map((x) => ({ ...x, name: 'B:' + x.name }))], { touch: 0.25, skip: (x, y) => x.name.slice(0, 2) === y.name.slice(0, 2) });
-    let best: { d: number; at: number[]; a: string; b: string } | null = null;
-    const vs = (t: TriMesh) => { const o: THREE.Vector3[] = []; for (let i = 0; i < t.pos.length; i += 3) o.push(new THREE.Vector3(t.pos[i], t.pos[i + 1], t.pos[i + 2])); return o; };
-    // (a crossing is a distance of 0; else the least corner-to-corner distance, a close upper bound at these meshes' fineness)
-    if (res.some((x) => x.kind === 'through')) { const x = res.find((y) => y.kind === 'through')!; return { d: 0, at: x.at, a: x.a.slice(2), b: x.b.slice(2), crossing: true }; }
-    for (const ta of A) { const va = vs(ta); for (const tb of B) { const vb = vs(tb); for (const p of va) for (const w of vb) { const dd = p.distanceTo(w); if (!best || dd < best.d) best = { d: dd, at: r3(p.clone().add(w).multiplyScalar(0.5)), a: ta.name, b: tb.name }; } } }
-    return best ? { ...best, d: +best.d.toFixed(4) } : null;
+    const t0 = performance.now(), box = (t: TriMesh) => { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < t.pos.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c]!, t.pos[i + c]!); hi[c] = Math.max(hi[c]!, t.pos[i + c]!); } return { lo, hi }; };
+    const bx = new Map([...A, ...B].map((t) => [t, box(t)])), bg = (x: TriMesh, y: TriMesh) => { const p = bx.get(x)!, q = bx.get(y)!; return Math.hypot(...[0, 1, 2].map((c) => Math.max(0, q.lo[c]! - p.hi[c]!, p.lo[c]! - q.hi[c]!))); };
+    const pairs = A.flatMap((x) => B.filter((y) => y !== x).map((y) => [bg(x, y), x, y] as const)).sort((p, q) => p[0] - q[0]);
+    let best: { d: number; at: number[]; a: string; b: string } | null = null, partial = false;
+    for (const [g, x, y] of pairs) { if (best && g >= best.d) break; if (performance.now() - t0 > 20000) { partial = true; break; } const r = leastDistance(x, y, best?.d ?? Infinity); if (r && (!best || r.d < best.d)) best = { d: r.d, at: r.at.map((v) => +v.toFixed(4)), a: x.name, b: y.name }; if (best?.d === 0) break; }
+    return best ? { ...best, d: +best.d.toFixed(4), ...(best.d === 0 ? { crossing: true } : {}), ...(partial ? { partial: true } : {}), method: LEAST_METHOD, ms: Math.round(performance.now() - t0) } : null;
   },
 };
 // (each part cut by a plane: where each of its triangles crosses it, a segment, in the plane's two other axes, mm)
@@ -233,4 +242,12 @@ if (holes) {
   for (let i = 0; i < W * H; i++) if (lab[i]! >= 0) { const x = i % W, y = (i - x) / W, o = ((H - 1 - y) * W + x) * 4; img.data[o] = 0; img.data[o + 1] = 255; img.data[o + 2] = 60; img.data[o + 3] = 255; }
   ctx.putImageData(img, 0, 0); holeStats = { pixels: n, clusters: clusters.sort((a2, b2) => b2.n - a2.n).slice(0, 40) };
 }
-(window as unknown as { lookReady: unknown }).lookReady = { parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), ...(holeStats ? { holes: holeStats } : {}) };
+// zebra checks itself: its stripes are its two greys and nothing else is, so a picture with too few of either has none
+// (the sheet's zebra was once the car's shadow alone, and nothing said so)
+let zebraStats: unknown = undefined;
+if (q.get('zebra') === '1') {
+  const gl = renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  let dark = 0, light = 0; for (let i = 0; i < W * H; i++) { const r = px[i * 4]!, g = px[i * 4 + 1]!, b = px[i * 4 + 2]!; if (Math.abs(r - g) > 3 || Math.abs(g - b) > 3) continue; if (r <= 20) dark++; else if (r >= 240) light++; }
+  const n = W * H; zebraStats = { dark: +(dark / n).toFixed(4), light: +(light / n).toFixed(4), stripes: dark / n > 0.002 && light / n > 0.002 };
+}
+(window as unknown as { lookReady: unknown }).lookReady = { parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };

@@ -40,6 +40,13 @@ export interface Part {
   /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
   /** the moving part it is carried with, by name (a knuckle and its strut's tube steer and rise with their wheel): no room
    *  is kept between them, and a pose of that part moves it too */ movesWith?: string;
+  /** the rigid link it is one of, by name (a wheel, its hub and its disc turn as one; a knuckle, its strut's tube and its
+   *  caliper steer as one; an arm swings on its own): its holder's when not said, else the thing's own frame. Nothing
+   *  rigid (a weld, a bolt, one casting) is laid between two links: what meets between them is a joint that lets them
+   *  move (src/nexus/make/critic.ts's held check finds any that is not) */ link?: string;
+  /** the kind of joint it is, between its own link and any other it meets: a bearing (a hub turning in its knuckle), a
+   *  ball joint, a rubber bush (an arm's pivot), a slide (a damper's rod in its tube), a spring, a constant-velocity
+   *  joint, a hinge (a door's), a rubber mount (an engine's, a strut's top) */ joint?: 'bearing' | 'ball' | 'bush' | 'slide' | 'spring' | 'cv' | 'hinge' | 'mount';
   /** the parts it is meant to meet face to face, by name: seated on, clamped against, bonded or clipped to (its maker's),
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
   /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;

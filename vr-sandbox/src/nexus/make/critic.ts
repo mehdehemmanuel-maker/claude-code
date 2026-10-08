@@ -108,7 +108,10 @@ export function critique(root: Part): Finding[] {
     // (a round thing's reach is its radius; a blade's, the farthest corner of it from its axis)
     // (a wheel sweeps a ring: inside its rim, behind its face, is where its knuckle, brake and strut foot live)
     const ringIn = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape)).map((x) => 'torus' in x.p.shape! ? x.p.shape.torus[0] - x.p.shape.torus[1] : Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    const bore = ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
+    // (inside its rim's barrel is free for what does not turn, 10 mm clear of the barrel's well, typical of a caliper's
+    // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
+    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && classOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
+    const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
     const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = m.sub!.getSize(new THREE.Vector3());
     const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(m.sub!).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(m.sub!).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
     const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
@@ -330,11 +333,11 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
 // dash) or two surfaces laid on each other so closely that the nearer flickers through (z-fighting): both found here
 // from the drawn triangles themselves, anywhere on the thing, whatever the parts are.
 /** A part as drawn: its triangles in the world, and where it is in the tree (its holders' names). */
-export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[]; /** how it is fixed to what holds it or sits beside it (Part.fixed): welded to it, seated on it, clipped into it */ joined?: string; /** the parts the joints laid on it join it to, by name (Part.joins) */ joins?: string[] }
+export interface TriMesh { name: string; path: string; pos: ArrayLike<number>; idx?: ArrayLike<number>; mat?: string; /** its holder's material */ holder?: string; /** a weld's bead, fused into what it joins */ weld?: boolean; /** what passes through an opening in it */ passes?: string[]; /** how it is fixed to what holds it or sits beside it (Part.fixed): welded to it, seated on it, clipped into it */ joined?: string; /** the parts the joints laid on it join it to, by name (Part.joins) */ joins?: string[]; /** a weld bead's: the parts it welds together, by name (it is one with those, and nothing else it touches) */ welds?: string[]; /** the rigid link it is one of (Part.link, its holders' where not said; '' the thing's own frame) */ link?: string; /** the kind of joint it is (Part.joint) */ joint?: string; /** its own mass, kg (without what it holds) */ kg?: number; /** which drawn part it is, where two share a path (a left and a right of one name under one holder) */ id?: string }
 type CV3 = [number, number, number];
 /** Where two parts meet: crossing (one through the other), touching (within the tolerance, across each other), or
  *  layered (laid parallel within it: a decal or a seam on a panel, which flickers if it is too close). */
-export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered' | /** one piece with what holds it (cast or moulded together, or welded), so not one part in another */ 'fused' | /** through an opening one of them has for it */ 'fitted' | /** face to face where a joint (welds, bolts, screws, a seal) joins them, as built */ 'joined'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** how far one passes into the other, m, where one of them is closed (a solid's surface) */ depth?: number; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart' }
+export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered' | /** one piece with what holds it (cast or moulded together, or welded), so not one part in another */ 'fused' | /** through an opening one of them has for it */ 'fitted' | /** face to face where a joint (welds, bolts, screws, a seal) joins them, as built */ 'joined'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** how far one passes into the other, m, where one of them is closed (a solid's surface) */ depth?: number; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart'; /** fitted: false where its maker says it passes through an opening but none is drawn (the two cross) */ opening?: boolean; /** joined or fused: why, as its maker or a joint says (a joint's record, or Part.fixed) */ by?: string; /** the two meshes' places in the list given */ ia?: number; ib?: number }
 interface Tris { n: number; v: Float64Array; box: Float64Array; nor: Float64Array; lo: CV3; hi: CV3; /** which of each triangle's edges is on the mesh's boundary (one triangle uses it), a bit each */ edge: Uint8Array; /** no boundary at all: the surface of a solid, which has an inside */ closed: boolean }
 function trisOf(m: TriMesh): Tris {
   const P = m.pos, I = m.idx, n = Math.floor((I ? I.length : P.length / 3) / 3), v = new Float64Array(n * 9), box = new Float64Array(n * 6), nor = new Float64Array(n * 3), lo: CV3 = [Infinity, Infinity, Infinity], hi: CV3 = [-Infinity, -Infinity, -Infinity];
@@ -365,7 +368,12 @@ function nearEdge(p: CV3, T: Tris, t: number, d: number): boolean {
 function segTri(p: CV3, q: CV3, T: Tris, t: number): CV3 | null {
   const v = T.v, o = t * 9, e1 = [v[o + 3]! - v[o]!, v[o + 4]! - v[o + 1]!, v[o + 5]! - v[o + 2]!], e2 = [v[o + 6]! - v[o]!, v[o + 7]! - v[o + 1]!, v[o + 8]! - v[o + 2]!], d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
   const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!], a = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!;
-  if (Math.abs(a) < 1e-14) return null; const f = 1 / a, s = [p[0] - v[o]!, p[1] - v[o + 1]!, p[2] - v[o + 2]!], u = f * (s[0]! * h[0]! + s[1]! * h[1]! + s[2]! * h[2]!); if (u < 0 || u > 1) return null;
+  // (a segment lying in the triangle's plane, to within rounding, does not cross it: two faces laid on each other, a
+  // disc's hat on its wheel's face, are touching, which rounding must not make a crossing)
+  const nx = e1[1]! * e2[2]! - e1[2]! * e2[1]!, ny = e1[2]! * e2[0]! - e1[0]! * e2[2]!, nz = e1[0]! * e2[1]! - e1[1]! * e2[0]!, nl = Math.hypot(nx, ny, nz) || 1e-30, dl = Math.hypot(d[0]!, d[1]!, d[2]!) || 1e-30;
+  if (Math.abs(a) < 1e-9 * nl * dl) return null;
+  { const pd = ((p[0] - v[o]!) * nx + (p[1] - v[o + 1]!) * ny + (p[2] - v[o + 2]!) * nz) / nl, qd = ((q[0] - v[o]!) * nx + (q[1] - v[o + 1]!) * ny + (q[2] - v[o + 2]!) * nz) / nl; if (Math.abs(pd) < 1e-7 || Math.abs(qd) < 1e-7) return null; }
+  const f = 1 / a, s = [p[0] - v[o]!, p[1] - v[o + 1]!, p[2] - v[o + 2]!], u = f * (s[0]! * h[0]! + s[1]! * h[1]! + s[2]! * h[2]!); if (u < 0 || u > 1) return null;
   const qq = [s[1]! * e1[2]! - s[2]! * e1[1]!, s[2]! * e1[0]! - s[0]! * e1[2]!, s[0]! * e1[1]! - s[1]! * e1[0]!], w = f * (d[0]! * qq[0]! + d[1]! * qq[1]! + d[2]! * qq[2]!); if (w < 0 || u + w > 1) return null;
   // (strictly within the segment: an end lying on the triangle is a touch, found as one, not a crossing)
   const tt = f * (e2[0]! * qq[0]! + e2[1]! * qq[1]! + e2[2]! * qq[2]!); if (tt <= 1e-6 || tt >= 1 - 1e-6) return null;
@@ -386,7 +394,7 @@ function pointTri(p: CV3, T: Tris, t: number): number {
 /** Every place two parts' surfaces cross or come within `touch` of each other (1 mm unless said), each pair once. */
 export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
   // (a holder and what it holds of its one casting, or two it holds that are: an alloy wheel's barrel, centre and spokes)
-  const fused = o.fused ?? ((a: TriMesh, b: TriMesh, kin: Clash['kin']) => a.weld || b.weld || (onePiece(a.mat, b.mat) && (kin === 'holds' || (kin === 'siblings' && (a.holder === a.mat || /^(abs|pp|pu|nylon)$/.test(a.mat ?? ''))))));
+  const fused = o.fused ?? ((a: TriMesh, b: TriMesh, kin: Clash['kin']) => (a.weld && (!a.welds || a.welds.includes(b.name))) || (b.weld && (!b.welds || b.welds.includes(a.name))) || (onePiece(a.mat, b.mat) && (kin === 'holds' || (kin === 'siblings' && (a.holder === a.mat || /^(abs|pp|pu|nylon)$/.test(a.mat ?? ''))))));
   const fitted = (a: TriMesh, b: TriMesh) => !!a.passes?.includes(b.name) || !!b.passes?.includes(a.name);
   const tol = o.touch ?? 0.001, T = meshes.map(trisOf), out: Clash[] = [];
   const kinOf = (a: TriMesh, b: TriMesh): Clash['kin'] => (b.path.startsWith(a.path + '/') || a.path.startsWith(b.path + '/') ? 'holds' : a.path.slice(0, a.path.lastIndexOf('/')) === b.path.slice(0, b.path.lastIndexOf('/')) ? 'siblings' : 'apart');
@@ -427,9 +435,16 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         const par = Math.abs(A.nor[ta * 3]! * B.nor[tb * 3]! + A.nor[ta * 3 + 1]! * B.nor[tb * 3 + 1]! + A.nor[ta * 3 + 2]! * B.nor[tb * 3 + 2]!) > 0.97;
         // (a corner on its own part's edge lying on the other's edge: the two joined there, edge to edge)
         const onEdge = (T2: Tris, t2: number, k: number) => !!(T2.edge[t2]! & ((1 << k) | (1 << ((k + 2) % 3))));
+        const before = hits.length;
         for (let k = 0; k < 3; k++) {
           if (pointTri(va(k), B, tb) < tol) hits.push({ p: va(k), k: onEdge(A, ta, k) && nearEdge(va(k), B, tb, tol) ? 1 : par ? 3 : 2, n: nAB, ta, tb });
           if (pointTri(vb(k), A, ta) < tol) hits.push({ p: vb(k), k: onEdge(B, tb, k) && nearEdge(vb(k), A, ta, tol) ? 1 : par ? 3 : 2, n: nAB, ta, tb });
+        }
+        // (and two edges passing within it, where no corner is: two tubes crossed square, a ring's rim against a tube, as
+        // the least distance measures them, so the two never disagree)
+        if (hits.length === before) for (let e = 0; e < 3; e++) for (let f = 0; f < 3; f++) {
+          const [p, q2] = segSeg(va(e), va((e + 1) % 3), vb(f), vb((f + 1) % 3)), d = Math.hypot(p[0] - q2[0], p[1] - q2[1], p[2] - q2[2]);
+          if (d < tol) { hits.push({ p: [(p[0] + q2[0]) / 2, (p[1] + q2[1]) / 2, (p[2] + q2[2]) / 2], k: (A.edge[ta]! & (1 << e)) && (B.edge[tb]! & (1 << f)) ? 1 : par ? 3 : 2, n: nAB, ta, tb }); e = 3; break; }
         }
       }
     }
@@ -464,12 +479,161 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
       const nl = Math.hypot(...ns) || 1, kin = kinOf(meshes[i]!, meshes[j]!), kind2 = kind === 'through' && depth !== undefined && depth < 0.002 ? 'touch' : kind;
       // (a part said to be fixed to what holds it or beside it, welded, seated or clipped, meets it as it is fixed: unless
       // it passes deep into it, which no fixing explains)
-      const fixedBy = kin !== 'apart' && (kind2 !== 'through' || (depth ?? 0) < 0.005) ? meshes[i]!.joined ?? meshes[j]!.joined : undefined;
-      // (and two parts a joint was laid on, face to face where it joins them: unless one passes deep into the other)
-      const joinedBy = (kind2 !== 'through' || (depth ?? 0) < 0.005) && (!!meshes[i]!.joins?.includes(meshes[j]!.name) || !!meshes[j]!.joins?.includes(meshes[i]!.name));
-      out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, kind: fitted(meshes[i]!, meshes[j]!) ? 'fitted' : joinedBy ? 'joined' : ((kin !== 'apart' || meshes[i]!.weld || meshes[j]!.weld) && fused(meshes[i]!, meshes[j]!, kin)) || /weld/.test(fixedBy ?? '') ? 'fused' : fixedBy ? 'fitted' : kind2, ...(depth !== undefined ? { depth } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
+      // (what a maker or a joint says explains only a meeting face to face: no word explains one passing into the other,
+      // and where neither is closed there is no depth to excuse a crossing by, so it stays one: a liner said to be 4 mm in
+      // from its skin that crosses it is through it, whatever it is said to be)
+      const fixedBy = kin !== 'apart' && kind2 !== 'through' ? meshes[i]!.joined ?? meshes[j]!.joined : undefined;
+      // (and two parts a joint was laid on, face to face where it joins them)
+      const joinedBy = kind2 !== 'through' && (!!meshes[i]!.joins?.includes(meshes[j]!.name) || !!meshes[j]!.joins?.includes(meshes[i]!.name));
+      // (through an opening its maker says one has for the other: where they cross, the opening is said, not drawn)
+      const fit = fitted(meshes[i]!, meshes[j]!), isFused = ((kin !== 'apart' || meshes[i]!.weld || meshes[j]!.weld) && fused(meshes[i]!, meshes[j]!, kin)) || /weld/.test(fixedBy ?? '');
+      const kindF: Clash['kind'] = fit ? 'fitted' : joinedBy ? 'joined' : isFused ? 'fused' : fixedBy ? 'joined' : kind2;
+      const by = kindF === 'joined' ? (joinedBy ? 'a joint laid on them' : fixedBy) : kindF === 'fused' ? (fixedBy && /weld/.test(fixedBy) ? fixedBy : meshes[i]!.weld || meshes[j]!.weld ? 'the weld bead between them' : 'one casting or moulding') : undefined;
+      out.push({ a: meshes[i]!.name, b: meshes[j]!.name, pa: meshes[i]!.path, pb: meshes[j]!.path, ia: i, ib: j, kind: kindF, ...(depth !== undefined ? { depth } : {}), ...(fit ? { opening: cnt[0]! === 0 } : {}), ...(by ? { by } : {}), hits: hs.length, at, min: mn, max: mx, span: Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]), normal: [ns[0] / nl, ns[1] / nl, ns[2] / nl], kin });
     }
   }
   const rank = { through: 0, touch: 1, layered: 2, meets: 3, joined: 4, fitted: 4, fused: 5 } as const;
   return out.sort((p, q) => rank[p.kind] - rank[q.kind] || q.span - p.span);
+}
+
+// ---- least distance: one measure for every question of how far apart two parts are ----
+// (the gap the bench reports and the meetings the clash finder finds are both read from this, so they cannot disagree:
+// once the gap was the least corner-to-corner distance, which for two boxes is far more than the true one)
+/** The point of triangle t of T nearest p (Ericson, Real-Time Collision Detection 5.1.5). */
+function nearestOnTri(p: CV3, T: Tris, t: number): CV3 {
+  const v = T.v, o = t * 9, a: CV3 = [v[o]!, v[o + 1]!, v[o + 2]!], b: CV3 = [v[o + 3]!, v[o + 4]!, v[o + 5]!], c: CV3 = [v[o + 6]!, v[o + 7]!, v[o + 8]!];
+  const sub3 = (x: CV3, y: CV3): CV3 => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot3 = (x: CV3, y: CV3) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+  const ab = sub3(b, a), ac = sub3(c, a), ap = sub3(p, a), d1 = dot3(ab, ap), d2 = dot3(ac, ap); if (d1 <= 0 && d2 <= 0) return a;
+  const bp = sub3(p, b), d3 = dot3(ab, bp), d4 = dot3(ac, bp); if (d3 >= 0 && d4 <= d3) return b;
+  const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) { const k = d1 / (d1 - d3); return [a[0] + ab[0] * k, a[1] + ab[1] * k, a[2] + ab[2] * k]; }
+  const cp = sub3(p, c), d5 = dot3(ab, cp), d6 = dot3(ac, cp); if (d6 >= 0 && d5 <= d6) return c;
+  const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) { const k = d2 / (d2 - d6); return [a[0] + ac[0] * k, a[1] + ac[1] * k, a[2] + ac[2] * k]; }
+  const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const k = (d4 - d3) / (d4 - d3 + (d5 - d6)); return [b[0] + (c[0] - b[0]) * k, b[1] + (c[1] - b[1]) * k, b[2] + (c[2] - b[2]) * k]; }
+  const den = 1 / (va + vb + vc), sv = vb * den, tw = vc * den; return [a[0] + ab[0] * sv + ac[0] * tw, a[1] + ab[1] * sv + ac[1] * tw, a[2] + ab[2] * sv + ac[2] * tw];
+}
+/** The nearest points of segments p1→q1 and p2→q2 (Ericson 5.1.9). */
+function segSeg(p1: CV3, q1: CV3, p2: CV3, q2: CV3): [CV3, CV3] {
+  const d1: CV3 = [q1[0] - p1[0], q1[1] - p1[1], q1[2] - p1[2]], d2: CV3 = [q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]], r: CV3 = [p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]];
+  const dot3 = (x: CV3, y: CV3) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2], a = dot3(d1, d1), e = dot3(d2, d2), f = dot3(d2, r), cl = (x: number) => Math.max(0, Math.min(1, x));
+  let s = 0, t = 0;
+  if (a < 1e-18 && e < 1e-18) { s = 0; t = 0; } else if (a < 1e-18) { t = cl(f / e); } else {
+    const c = dot3(d1, r); if (e < 1e-18) { s = cl(-c / a); } else { const b = dot3(d1, d2), den = a * e - b * b; s = den > 1e-18 ? cl((b * f - c * e) / den) : 0; t = (b * s + f) / e; if (t < 0) { t = 0; s = cl(-c / a); } else if (t > 1) { t = 1; s = cl((b - c) / a); } }
+  }
+  return [[p1[0] + d1[0] * s, p1[1] + d1[1] * s, p1[2] + d1[2] * s], [p2[0] + d2[0] * t, p2[1] + d2[1] * t, p2[2] + d2[2] * t]];
+}
+const vtx = (T: Tris, t: number, k: number): CV3 => [T.v[t * 9 + k * 3]!, T.v[t * 9 + k * 3 + 1]!, T.v[t * 9 + k * 3 + 2]!];
+/** The least distance between two triangles, and the points where it is (0 where they cross). */
+function triTri(A: Tris, ta: number, B: Tris, tb: number): { d: number; p: CV3; q: CV3 } {
+  for (let e = 0; e < 3; e++) { const x = segTri(vtx(A, ta, e), vtx(A, ta, (e + 1) % 3), B, tb) ?? segTri(vtx(B, tb, e), vtx(B, tb, (e + 1) % 3), A, ta); if (x) return { d: 0, p: x, q: x }; }
+  let best = { d: Infinity, p: [0, 0, 0] as CV3, q: [0, 0, 0] as CV3 };
+  const take = (p: CV3, q: CV3) => { const d = Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); if (d < best.d) best = { d, p, q }; };
+  for (let k = 0; k < 3; k++) { const pa = vtx(A, ta, k); take(pa, nearestOnTri(pa, B, tb)); const pb = vtx(B, tb, k); take(nearestOnTri(pb, A, ta), pb); }
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const [p, q] = segSeg(vtx(A, ta, i), vtx(A, ta, (i + 1) % 3), vtx(B, tb, j), vtx(B, tb, (j + 1) % 3)); take(p, q); }
+  return best;
+}
+const triGap = (alo: ArrayLike<number>, ahi: ArrayLike<number>, blo: ArrayLike<number>, bhi: ArrayLike<number>) => Math.hypot(Math.max(0, blo[0]! - ahi[0]!, alo[0]! - bhi[0]!), Math.max(0, blo[1]! - ahi[1]!, alo[1]! - bhi[1]!), Math.max(0, blo[2]! - ahi[2]!, alo[2]! - bhi[2]!));
+const triLo = (T: Tris, t: number) => [T.box[t * 6]!, T.box[t * 6 + 1]!, T.box[t * 6 + 2]!], triHi = (T: Tris, t: number) => [T.box[t * 6 + 3]!, T.box[t * 6 + 4]!, T.box[t * 6 + 5]!];
+/** How the least distance is measured, said with it. */
+export const LEAST_METHOD = 'triangle to triangle: every corner of each against every face of the other, and every edge against every edge, among the triangles near enough to matter; 0 where they cross';
+/** The least distance between two drawn parts and where it is, exactly as their triangles stand (0 where they cross), no
+ *  further than `beyond` looked (Infinity past it). Their triangles taken in order of how near they could be, so the
+ *  search stops as soon as nothing nearer is possible. */
+export function leastDistance(a: TriMesh | Tris, b: TriMesh | Tris, beyond = Infinity): { d: number; at: CV3; p: CV3; q: CV3 } | null {
+  const A = 'n' in a ? a : trisOf(a), B = 'n' in b ? b : trisOf(b); if (!A.n || !B.n) return null;
+  let best = { d: beyond, p: [0, 0, 0] as CV3, q: [0, 0, 0] as CV3 };
+  if (triGap(A.lo, A.hi, B.lo, B.hi) >= best.d) return null;
+  // (each one's triangles that could be within the best of the other's whole box, nearest first)
+  const near = (X: Tris, Y: Tris) => { const ids: [number, number][] = []; for (let t = 0; t < X.n; t++) { const g = triGap(triLo(X, t), triHi(X, t), Y.lo, Y.hi); if (g < best.d) ids.push([g, t]); } return ids.sort((p, q) => p[0] - q[0]); };
+  const ia = near(A, B), ib = near(B, A); if (!ia.length || !ib.length) return null;
+  // (B's in a grid, so each of A's is tried only against those near it; the grid's cells about the size of B's triangles)
+  let ext = 0; for (const [, t] of ib) for (let c = 0; c < 3; c++) ext = Math.max(ext, B.box[t * 6 + 3 + c]! - B.box[t * 6 + c]!);
+  const h = Math.max(0.002, Math.min(0.2, ext)), key = (x: number, y: number, z: number) => `${x},${y},${z}`, grid = new Map<string, number[]>(), cell = (x: number) => Math.floor(x / h);
+  for (const [, t] of ib) for (let x = cell(B.box[t * 6]!); x <= cell(B.box[t * 6 + 3]!); x++) for (let y = cell(B.box[t * 6 + 1]!); y <= cell(B.box[t * 6 + 4]!); y++) for (let z = cell(B.box[t * 6 + 2]!); z <= cell(B.box[t * 6 + 5]!); z++) { const k = key(x, y, z); let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(t); }
+  const seen = new Int32Array(B.n).fill(-1);
+  for (const [g, ta] of ia) {
+    if (g >= best.d) break;
+    // (the cells within the best so far of this triangle; where that is far, B's near triangles taken straight)
+    const r = Math.min(best.d, 1e3), lo = triLo(A, ta).map((x) => x - r), hi = triHi(A, ta).map((x) => x + r), cand: number[] = [];
+    const cells = (cell(hi[0]!) - cell(lo[0]!) + 1) * (cell(hi[1]!) - cell(lo[1]!) + 1) * (cell(hi[2]!) - cell(lo[2]!) + 1);
+    if (!isFinite(cells) || cells > ib.length) { for (const [, tb] of ib) cand.push(tb); }
+    else for (let x = cell(lo[0]!); x <= cell(hi[0]!); x++) for (let y = cell(lo[1]!); y <= cell(hi[1]!); y++) for (let z = cell(lo[2]!); z <= cell(hi[2]!); z++) for (const tb of grid.get(key(x, y, z)) ?? []) if (seen[tb] !== ta) { seen[tb] = ta; cand.push(tb); }
+    for (const tb of cand) {
+      if (triGap(triLo(A, ta), triHi(A, ta), triLo(B, tb), triHi(B, tb)) >= best.d) continue;
+      const r2 = triTri(A, ta, B, tb); if (r2.d < best.d) { best = r2; if (best.d === 0) break; }
+    }
+    if (best.d === 0) break;
+  }
+  if (!(best.d < beyond)) return null;
+  return { d: best.d, p: best.p, q: best.q, at: [(best.p[0] + best.q[0]) / 2, (best.p[1] + best.q[1]) / 2, (best.p[2] + best.q[2]) / 2] };
+}
+
+// ---- held: what holds what, and whether what should move can ----
+// (the critic's first tool, asked for in its second round: it found by hand, one gap at a time, a hub welded to its
+// knuckle, an arm welded to it, a wheel 25 mm off its hub, a caliper and a subframe touching nothing)
+//   floats    the parts are a graph, joined where they meet (any meeting the clash finder finds, within its tolerance) or
+//             stand on the ground; every group not joined to the heaviest is held by nothing, and is said with the
+//             nearest part of the rest and how far it is
+//   blocks    a link (Part.link: a wheel, a knuckle, an arm) meets another only at a joint that lets them move (a bearing,
+//             a ball joint, a bush); a weld, a fastener or one casting laid across two links stops that motion
+//   rubs      two links that meet with no joint between them (a tyre on its liner, an arm on its subframe's face)
+//   unjointed a link that meets no other through a joint: it cannot move as it is said to, or it is held by nothing
+export interface Held {
+  floats: { parts: string[]; n: number; kg: number; nearest: { a: string; b: string; d: number; at: CV3 } | null }[];
+  blocks: { links: [string, string]; by: string; a: string; b: string; at: CV3 }[];
+  rubs: { links: [string, string]; a: string; b: string; at: CV3; kind: Clash['kind'] }[];
+  joints: { links: [string, string]; joint: string; a: string; b: string }[];
+  unjointed: { link: string; parts: number; meets: string[] }[];
+  /** the heaviest group: how many parts, its mass, and whether it stands on the ground */ main: { n: number; kg: number; grounded: boolean };
+  method: string;
+}
+const FRAME = 'its frame';
+export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)): Held {
+  // (a part drawn as several meshes is one node: by which drawn part it is, else its path; a left and a right of one
+  // name under one holder are two)
+  const keyOf = (m: TriMesh) => m.id ?? m.path, ids = new Map<string, number>(), node = (key: string) => { let k = ids.get(key); if (k === undefined) { k = ids.size; ids.set(key, k); } return k; };
+  meshes.forEach((m) => node(keyOf(m))); const GROUND = node('(the ground)'), N = ids.size, par = Array.from({ length: N }, (_, i) => i);
+  const find = (k: number): number => (par[k] === k ? k : (par[k] = find(par[k]!))), join = (a: number, b: number) => { par[find(a)] = find(b); };
+  const byPath = new Map<string, TriMesh>(); for (const m of meshes) if (!byPath.has(keyOf(m))) byPath.set(keyOf(m), m);
+  const meshOf = (c: Clash, side: 0 | 1) => meshes[side ? c.ib! : c.ia!] ?? meshes.find((m) => m.path === (side ? c.pb : c.pa))!;
+  // (a constant-velocity joint carries torque, not weight: what it joins is held by it only where it is the lighter, as a
+  // drive shaft hangs between its joints; an engine is not held up by its drive shafts, but by its mounts)
+  const cvEdge = (c: Clash) => { const a = meshOf(c, 0), b = meshOf(c, 1); return (a.link || '') !== (b.link || '') && (a.joint === 'cv' || b.joint === 'cv'); };
+  for (const c of clashes) if (!cvEdge(c)) join(node(keyOf(meshOf(c, 0))), node(keyOf(meshOf(c, 1))));
+  { const kg0 = new Map<number, number>(); for (const [k2, m] of byPath) { const g = find(node(k2)); kg0.set(g, (kg0.get(g) ?? 0) + (m.kg ?? 0)); }
+    const nb = new Map<number, Set<number>>(); for (const c of clashes) if (cvEdge(c)) { const ga = find(node(keyOf(meshOf(c, 0)))), gb = find(node(keyOf(meshOf(c, 1)))); if (ga === gb) continue; (nb.get(ga) ?? nb.set(ga, new Set()).get(ga)!).add(gb); (nb.get(gb) ?? nb.set(gb, new Set()).get(gb)!).add(ga); }
+    for (const [g, ns] of nb) { const mine = kg0.get(g) ?? 0, heavier = [...ns].filter((h) => (kg0.get(h) ?? 0) > mine).sort((p, q) => (kg0.get(q) ?? 0) - (kg0.get(p) ?? 0)); if (heavier.length) join(g, heavier[0]!); } }
+  const T = new Map<TriMesh, Tris>(), tris = (m: TriMesh) => { let t = T.get(m); if (!t) T.set(m, (t = trisOf(m))); return t; };
+  for (const m of meshes) if (tris(m).n && tris(m).lo[1]! < 0.005) join(node(keyOf(m)), GROUND);
+  // (the groups, and how heavy each is)
+  const groups = new Map<number, string[]>(); for (const [p, k] of ids) { if (k === GROUND) continue; const g = find(k); let l = groups.get(g); if (!l) groups.set(g, (l = [])); l.push(p); }
+  const kgOf = (ps: string[]) => ps.reduce((s, p) => s + (byPath.get(p)?.kg ?? 0), 0);
+  const ranked = [...groups.entries()].map(([g, ps]) => ({ g, ps, kg: kgOf(ps) })).sort((p, q) => q.kg - p.kg || q.ps.length - p.ps.length);
+  const main = ranked[0]; const out: Held = { floats: [], blocks: [], rubs: [], joints: [], unjointed: [], main: { n: main?.ps.length ?? 0, kg: +(main?.kg ?? 0).toFixed(1), grounded: !!main && find(GROUND) === main.g }, method: `parts joined where the clash finder finds them meeting (within 1 mm) or on the ground; distances ${LEAST_METHOD}` };
+  const nameOf = (p: string) => byPath.get(p)?.name ?? p;
+  for (const r of ranked.slice(1)) {
+    // (its nearest part not in it: the meshes of the rest nearest by box first, measured until none nearer is possible)
+    const mine = new Set(r.ps), own = meshes.filter((m) => mine.has(keyOf(m)) && tris(m).n), rest = meshes.filter((m) => !mine.has(keyOf(m)) && tris(m).n);
+    let best: Held['floats'][number]['nearest'] = null;
+    const pairs: [number, TriMesh, TriMesh][] = []; for (const a of own) for (const b of rest) pairs.push([triGap(tris(a).lo, tris(a).hi, tris(b).lo, tris(b).hi), a, b]);
+    pairs.sort((p, q) => p[0] - q[0]);
+    for (const [g, a, b] of pairs.slice(0, 400)) { if (best && g >= best.d) break; const d = leastDistance(tris(a), tris(b), best?.d ?? Infinity); if (d && (!best || d.d < best.d)) best = { a: a.name, b: b.name, d: +d.d.toFixed(4), at: d.at.map((x) => +x.toFixed(4)) as CV3 }; }
+    // (named by its heaviest parts, so a subframe with its arms and rack reads as the subframe)
+    const names = [...new Set(r.ps.sort((p, q) => (byPath.get(q)?.kg ?? 0) - (byPath.get(p)?.kg ?? 0)).map(nameOf))];
+    out.floats.push({ parts: names.slice(0, 8), n: r.ps.length, kg: +r.kg.toFixed(2), nearest: best });
+  }
+  out.floats.sort((p, q) => q.kg - p.kg);
+  // (links: where two meet, it must be at a joint, and never by anything rigid)
+  const linkOf = (p: string) => byPath.get(p)?.link || FRAME, RIGID = /\b(hex head|washer|screw|bolt|rivet|stud|nut)\b|weld/i;
+  const meets = new Map<string, Set<string>>(), jointed = new Set<string>(), count = new Map<string, number>(); for (const p of byPath.keys()) count.set(linkOf(p), (count.get(linkOf(p)) ?? 0) + 1);
+  for (const c of clashes) {
+    const ma = meshOf(c, 0), mb = meshOf(c, 1), la = ma.link || FRAME, lb = mb.link || FRAME; if (la === lb) continue; const links = [la, lb].sort() as [string, string];
+    (meets.get(la) ?? meets.set(la, new Set()).get(la)!).add(lb); (meets.get(lb) ?? meets.set(lb, new Set()).get(lb)!).add(la);
+    const rigid = c.kind === 'fused' ? 'one piece (fused)' : ma?.weld || mb?.weld ? 'a weld bead' : RIGID.test(c.a) || RIGID.test(c.b) ? `a fastener (${RIGID.test(c.a) ? c.a : c.b})` : undefined;
+    const joint = ma?.joint ?? mb?.joint;
+    if (rigid) out.blocks.push({ links, by: rigid, a: c.a, b: c.b, at: c.at });
+    else if (joint) { jointed.add(la); jointed.add(lb); if (!out.joints.some((j) => j.links[0] === links[0] && j.links[1] === links[1] && j.joint === joint)) out.joints.push({ links, joint, a: c.a, b: c.b }); }
+    else out.rubs.push({ links, a: c.a, b: c.b, at: c.at, kind: c.kind });
+  }
+  for (const [l, n] of count) if (l !== FRAME && !jointed.has(l)) out.unjointed.push({ link: l, parts: n, meets: [...(meets.get(l) ?? [])] });
+  return out;
 }
