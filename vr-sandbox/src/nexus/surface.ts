@@ -85,6 +85,21 @@ export function surfaceAt(s: Surface, u: number, v: number): SurfacePoint {
   const duv = mul(sub(sub(sub(S['11']!, mul(du, Wt['01']!)), mul(dv, Wt['10']!)), mul(at, Wt['11']!)), 1 / w0);
   return { at, du, dv, duu, duv, dvv, n: unit(cross(du, dv)) };
 }
+/** The p + 1 non-zero basis functions at u, without their derivatives (The NURBS Book A2.2): for a point alone. */
+function basis0(i: number, u: number, p: number, U: number[]): number[] {
+  const N = new Array(p + 1).fill(0), left = new Array(p + 1).fill(0), right = new Array(p + 1).fill(0); N[0] = 1;
+  for (let j = 1; j <= p; j++) { left[j] = u - U[i + 1 - j]!; right[j] = U[i + j]! - u; let saved = 0; for (let r = 0; r < j; r++) { const t = N[r]! / ((right[r + 1] + left[j - r]) || 1e-300); N[r] = saved + right[r + 1] * t; saved = left[j - r] * t; } N[j] = saved; }
+  return N;
+}
+const knotsOf = new WeakMap<Surface, { p: number; q: number; U: number[]; V: number[] }>();
+/** A point on a surface and nothing more: a third of the work of surfaceAt, for searching along it and sampling it. */
+export function pointAt(s: Surface, u: number, v: number): V3 {
+  let k = knotsOf.get(s); if (!k) { const nu = s.net.length, nv = s.net[0]!.length, p = degreeOf(nu, s.p, s.U), q = degreeOf(nv, s.q, s.V); k = { p, q, U: s.U ?? clampedKnots(nu, p), V: s.V ?? clampedKnots(nv, q) }; knotsOf.set(s, k); }
+  const nu = s.net.length, nv = s.net[0]!.length, iu = span(nu, k.p, u, k.U), iv = span(nv, k.q, v, k.V), Nu = basis0(iu, u, k.p, k.U), Nv = basis0(iv, v, k.q, k.V);
+  let x = 0, y = 0, z = 0, W = 0;
+  for (let a = 0; a <= k.p; a++) for (let b = 0; b <= k.q; b++) { const r = iu - k.p + a, c = iv - k.q + b, w = (s.w?.[r]?.[c] ?? 1) * Nu[a]! * Nv[b]!, P = s.net[r]![c]!; x += P[0] * w; y += P[1] * w; z += P[2] * w; W += w; }
+  return [x / W, y / W, z / W];
+}
 /** Mean and Gaussian curvature at a point, from the first (E, F, G) and second (L, M, N) fundamental forms. */
 export function curvatures(sp: SurfacePoint): { H: number; K: number; k1: number; k2: number } {
   const E = dot(sp.du, sp.du), F = dot(sp.du, sp.dv), G = dot(sp.dv, sp.dv), L = dot(sp.duu, sp.n), M = dot(sp.duv, sp.n), N = dot(sp.dvv, sp.n), d = E * G - F * F || 1e-12;
@@ -123,7 +138,7 @@ export function patchAt(pt: Patch, a: number, b: number): SurfacePoint {
 /** A patch's points over a grid of na × nb (and its mirror's after them, where it has one). */
 export function patchPoints(x: Surface | Patch, na = 16, nb = 12, mirrored = true): V3[] {
   const pt = asPatch(x), out: V3[] = [];
-  for (let i = 0; i <= na; i++) for (let j = 0; j <= nb; j++) out.push(patchAt(pt, i / na, j / nb).at);
+  for (let i = 0; i <= na; i++) for (let j = 0; j <= nb; j++) { if (pt.off) { out.push(patchAt(pt, i / na, j / nb).at); continue; } const [u, v] = uvOf(pt, i / na, j / nb); out.push(pointAt(pt.s, clamp01(u), clamp01(v))); }
   if (mirrored && pt.s.mirror) for (let k = 0, n = out.length; k < n; k++) { const q = out[k]!; out.push([q[0], q[1], -q[2]]); }
   return out;
 }

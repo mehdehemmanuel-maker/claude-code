@@ -41,7 +41,7 @@ export type Susp = 'rigid' | 'pivot' | 'strut' | 'beam' | 'wishbone' | 'swingarm
 export interface Axle { /** from the machine's middle, + forward */ x: number; track: number; tyre: string; steer?: boolean; drive?: boolean; dual?: boolean; brake?: { kind: 'disc' | 'drum'; d: number; vented?: boolean }; /** how it hangs from the frame */ susp?: Susp }
 export type Frame = 'shell' | 'tube' | 'ladder' | 'backbone';
 /** Where a panelled body's lines run, as shares of its length from its nose and of its height (typical of each style). */
-export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; open?: boolean; bed?: boolean }
+export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; open?: boolean; bed?: boolean; /** doors a side: one long one (a coupe's, a roadster's) or two */ doors?: 1 | 2 }
 export interface Seat { x: number; z: number; /** its cushion's top above the ground */ y: number; style: 'bucket' | 'bench' | 'saddle' | 'pan' | 'kart' }
 export interface Power { kind: 'single' | 'twin' | 'inline' | 'diesel' | 'electric'; cc?: number; kW: number; x: number; z?: number; y?: number; says: string; /** its own size where it is published, m */ box?: V3; kg?: number; /** its most torque, N·m, and the reduction from it to the driven axle, where known */ torque?: number; ratio?: number; driveSays?: string }
 export type Extra = 'mast' | 'guard' | 'counterweight' | 'fifth wheel' | 'tanks' | 'stacks' | 'deck' | 'racks' | 'bumpers' | 'lights' | 'pods' | 'nose' | 'fenders' | 'hood' | 'cab' | 'fork' | 'swingarm' | 'tank' | 'exhaust' | 'number';
@@ -355,7 +355,9 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     const end: V3 = m.kind === 'kart' ? [sx + 0.42, c + 0.06, sz * 0.4] : low ? [sx + 0.28, m.kind === 'mower' ? sy - 0.45 : Math.max(c, tyres[0]!.D * 0.42) + 0.1 + 0.015, sz] : [sx + 0.45, sy - 0.25, sz * 0.6];
     out.push(tube('steering column', 0.012, [[sx + 0.02, sy - 0.02, sz], end], 'steel-low', 0x2a2a2a));
     if (m.kind === 'forklift') out.push(P('floor plate', { box: [0.55, 0.01, 2 * (m.axles[0]!.track / 2 - tyres[0]!.W / 2 - 0.06)] }, [end[0], end[1] - 0.01, 0], { mat: 'steel-low', color: 0x2a2a2a, finish: 'texture', says: 'its operator\'s floor, a tread plate (typical)' }));
-    if (m.lines) out.push(P('dashboard', { loft: { st: [{ x: -0.15, w: m.W * 0.42, lo: -0.12, hi: 0.08, n: 4 }, { x: 0.25, w: m.W * 0.4, lo: -0.14, hi: 0.05, n: 4 }] } }, [sx + 0.25, sy - 0.05, 0], { mat: 'abs', color: 0x1e1e20, shell: 0.003, finish: 'texture' }));
+    // (its top under the belt, where the windscreen meets the body, and behind the front wheelhouses: a dashboard is
+    // inside the cabin, not on top of it or where a steered wheel swings)
+    if (m.lines) out.push(P('dashboard', { loft: { st: [{ x: -0.15, w: m.W * 0.42, lo: -0.12, hi: 0.08, n: 4 }, { x: 0.25, w: m.W * 0.4, lo: -0.14, hi: 0.05, n: 4 }] } }, [Math.min(sx + 0.25, front - tyres[0]!.D / 2 - 0.35), Math.min(sy - 0.05, m.lines.belt * m.H - 0.1), 0], { mat: 'abs', color: 0x1e1e20, shell: 0.003, finish: 'texture' }));
   } else {
     const bx = m.kind === 'motorcycle' ? front - 0.32 + 0.03 : front - 0.45, by = m.kind === 'motorcycle' ? m.H * 0.93 : m.H * 0.92;
     out.push(tube('handlebar', 0.011, [[bx - 0.04, by + 0.02, -0.4], [bx, by, -0.2], [bx, by, 0.2], [bx - 0.04, by + 0.02, 0.4]], 'al-6061', 0x2a2a2a, { item: 'handlebar' }));
@@ -378,8 +380,8 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     if (ev) out.push(P('battery pack (75 kWh)', { box: [front - rear - 0.4, 0.12, m.W * 0.8] }, [(front + rear) / 2, c + 0.16, 0], { mat: 'battery', color: 0x2a3a4a, fill: 0.8, kg: 450, says: 'about 450 kg at 6 kg per kWh (pack level, typical)' }));
     else {
       out.push(P('fuel tank (50 L)', { box: [0.5, 0.25, 0.8] }, [rear + 0.35, c + 0.22, 0], { mat: 'pe', color: 0x1a1a1a, shell: 0.005, finish: 'texture', says: 'its tank and the fuel in it (about 50 L, typical)', parts: [P('petrol', undefined, [0, 0, 0], { kg: 50 * 0.74 * 0.5, says: 'half a tank (typical)' })] }));
-      out.push(P('gearbox', { box: [0.45, 0.35, 0.4] }, [m.power.x - 0.1, (m.power.y ?? 0.5) - 0.05, -0.35], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', says: 'about 45 kg (typical of a transverse gearbox)' }));
-      if (hy) out.push(P('battery (1.5 kWh)', { box: [0.5, 0.2, 0.6] }, [rear + 0.6, c + 0.45, 0], { mat: 'battery', color: 0x2a3a4a, kg: 40, says: 'typical' }));
+      out.push(P('gearbox', { box: [0.45, 0.35, 0.4] }, [m.power.x - 0.1, powerAt(m).y! - 0.05, -0.35], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', says: 'about 45 kg (typical of a transverse gearbox)' }));
+      if (hy) out.push(P('battery (1.5 kWh)', { box: [0.5, 0.2, 0.6] }, [rear + 0.6, c + 0.2, 0], { mat: 'battery', color: 0x2a3a4a, kg: 40, says: 'under the rear seat, on the floor (typical of a hybrid)' }));
     }
     if (!m.mass) out.push(P('wiring harness', undefined, [0, 0.6, 0], { kg: 40, says: 'about 40 kg of copper and insulation (typical)' }), P('climate system', undefined, [0.5, 0.6, 0], { kg: 20, says: 'typical' }), P('trim, carpets and sound deadening', undefined, [0, 0.5, 0], { kg: 60, says: 'typical' }), P('oil, coolant and other fluids', undefined, [0, 0.4, 0], { kg: 15, says: 'typical' }), P('body in white', undefined, [0, 0.5, 0], { kg: 230, says: 'its pressed and welded structure inside its skin: sills, pillars, floor, crossmembers (about 280–350 kg with its panels, typical)' }));
   }
@@ -407,8 +409,8 @@ export const MACHINES: Machine[] = [
     lines: { cowl: 0.33, roofF: 0.45, roofR: 0.71, deck: 0.83, belt: 0.64, nose: 0.53, tail: 0.68, n: 5 },
     seats: [{ x: -0.1, z: -0.38, y: 0.55, style: 'bucket' }, { x: -0.1, z: 0.38, y: 0.55, style: 'bucket' }, { x: -0.95, z: 0, y: 0.57, style: 'bench' }],
     power: { kind: 'inline', cc: 1987, kW: 126, x: 1.55, says: '2.0 L four-cylinder Dynamic Force engine, 169 hp at 6,600 rpm (Toyota)' },
-    controls: 'wheel', rims: { style: 'steel', mat: 'steel-low', lugs: 5, lug: 12 }, extras: ['exhaust'], road: true, mass: 2955 * LB, massSays: 'curb weight, Toyota', color: 0xb8bcc2,
-    says: 'its tyres 205/55R16 (typical of its 16-in. wheels: Toyota gives the wheel size, not the tyre code here); its front overhang about 37 in (an estimate from its length and wheelbase)',
+    controls: 'wheel', rims: { style: 'spokes', spokes: 10, mat: 'al-a380', lugs: 5, lug: 12, color: 0xc8ccd0 }, extras: ['exhaust'], road: true, mass: 2955 * LB, massSays: 'curb weight, Toyota', color: 0xb8bcc2,
+    says: 'its tyres 205/55R16 (typical of its 16-in. wheels: Toyota gives the wheel size, not the tyre code here); its front overhang about 37 in (an estimate from its length and wheelbase); its 16-in. wheels drawn as ten-spoke alloys (typical: Toyota gives their size)',
   },
   {
     id: 'rancher', short: 'rancher', name: 'Honda FourTrax Rancher 4x4 (2026)', kind: 'atv', source: 'Honda Powersports, 2026 FourTrax Rancher 4x4 specifications',
@@ -471,10 +473,10 @@ const STYLE: Record<string, { L: number; W: number; H: number; wb: number; lines
   hatchback: { L: 4.3, W: 1.8, H: 1.47, wb: 2.65, seats: 5, lines: { cowl: 0.3, roofF: 0.42, roofR: 0.84, deck: 0.97, belt: 0.62, nose: 0.53, tail: 0.66, n: 5 } },
   SUV: { L: 4.8, W: 1.95, H: 1.75, wb: 2.85, seats: 7, lines: { cowl: 0.28, roofF: 0.38, roofR: 0.9, deck: 0.98, belt: 0.6, nose: 0.6, tail: 0.64, n: 6 } },
   pickup: { L: 5.8, W: 2.0, H: 1.9, wb: 3.6, seats: 5, lines: { cowl: 0.27, roofF: 0.36, roofR: 0.52, deck: 0.56, belt: 0.6, nose: 0.62, tail: 0.55, n: 6, bed: true } },
-  coupe: { L: 4.6, W: 1.85, H: 1.35, wb: 2.75, seats: 4, lines: { cowl: 0.36, roofF: 0.49, roofR: 0.67, deck: 0.85, belt: 0.62, nose: 0.48, tail: 0.66, n: 5 } },
+  coupe: { L: 4.6, W: 1.85, H: 1.35, wb: 2.75, seats: 4, lines: { cowl: 0.36, roofF: 0.49, roofR: 0.67, deck: 0.85, belt: 0.62, nose: 0.48, tail: 0.66, n: 5 , doors: 1 } },
   van: { L: 5.3, W: 2.0, H: 2.0, wb: 3.3, seats: 8, lines: { cowl: 0.16, roofF: 0.24, roofR: 0.97, deck: 0.99, belt: 0.52, nose: 0.52, tail: 0.6, n: 7 } },
-  'sports car': { L: 4.4, W: 1.9, H: 1.2, wb: 2.45, seats: 2, lines: { cowl: 0.4, roofF: 0.52, roofR: 0.68, deck: 0.86, belt: 0.6, nose: 0.42, tail: 0.64, n: 4.5 } },
-  convertible: { L: 4.5, W: 1.85, H: 1.4, wb: 2.7, seats: 4, lines: { cowl: 0.36, roofF: 0.5, roofR: 0.66, deck: 0.84, belt: 0.62, nose: 0.48, tail: 0.66, n: 5, open: true } },
+  'sports car': { L: 4.4, W: 1.9, H: 1.2, wb: 2.45, seats: 2, lines: { cowl: 0.4, roofF: 0.52, roofR: 0.68, deck: 0.86, belt: 0.6, nose: 0.42, tail: 0.64, n: 4.5 , doors: 1 } },
+  convertible: { L: 4.5, W: 1.85, H: 1.4, wb: 2.7, seats: 4, lines: { cowl: 0.36, roofF: 0.5, roofR: 0.66, deck: 0.84, belt: 0.62, nose: 0.48, tail: 0.66, n: 5, open: true , doors: 1 } },
 };
 /** A car of a body style, its figures typical, on the wheels and power chosen. */
 export function styledCar(style: string, o: { color: number; rim: number; rims: string; power: string; tint: string }): Machine {

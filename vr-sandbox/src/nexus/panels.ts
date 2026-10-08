@@ -20,7 +20,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curveAt, fairness, greville, patchPoints, skinThrough, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import { curveAt, fairness, greville, patchPoints, pointAt, skinThrough, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
 import type { Lines } from './machines';
 
@@ -157,11 +157,18 @@ function stationsOf(x0: number, x1: number, step: number, ends: { at0?: number; 
 
 /** The u at which a skin's line of constant v reaches x (its stations run along x, so x rises with u). */
 export function uAt(s: Surface, x: number, v = 0.5): number {
-  let lo = 0, hi = 1; for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (surfaceAt(s, m, v).at[0] < x) lo = m; else hi = m; } return (lo + hi) / 2;
+  let lo = 0, hi = 1; for (let k = 0; k < 32; k++) { const m = (lo + hi) / 2; if (pointAt(s, m, v)[0] < x) lo = m; else hi = m; } return (lo + hi) / 2;
 }
 
-/** The body made: its skins, cut into panels. */
+/** The body made: its skins, cut into panels. (The same figures under the same rules make the same body, so a car park
+ *  of one model makes it once; each caller gets its own parts, the skins themselves shared, as they are never changed.) */
+const made = new Map<string, Part[]>();
+const copy = (p: Part): Part => ({ ...p, parts: p.parts?.map(copy) });
 export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
+  const key = JSON.stringify([b, r]), kept = made.get(key); if (kept) return kept.map(copy);
+  const out = makeBody(b, r); if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy);
+}
+function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const ln = lined(b, r), W2 = b.W / 2, col = b.color, out: Part[] = [];
   const paint = (name: string, pt: Patch, more: Partial<Part> = {}): Part => ({ name, shape: { surf: pt }, at: [0, 0, 0], mat: 'steel-low', color: col, shell: 0.0008, make: 'pressed', finish: 'paint', ...more });
   // ---- the side skin ----
@@ -192,14 +199,14 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
   // ---- each arch: concentric with its wheel, the least radius that clears its sweep on the skin ----
   const archOf = (w: WheelAt): { line: UV[]; Ra: number } => {
     const trimAt = (Ra: number) => { const pts: UV[] = [], u0 = U(w.x - Ra - 0.01), u1 = U(w.x + Ra + 0.01), n = 72;
-      for (let k = 0; k <= n; k++) { const u = u0 + ((u1 - u0) * k) / n, P = surfaceAt(side, u, 0).at, dx = P[0] - w.x; if (Math.abs(dx) >= Ra) { pts.push([u, 0]); continue; }
-        const yT = w.y + Math.sqrt(Ra * Ra - dx * dx); let lo = 0, hi = 1; if (surfaceAt(side, u, 1).at[1] <= yT) { pts.push([u, 1]); continue; } if (surfaceAt(side, u, 0).at[1] >= yT) { pts.push([u, 0]); continue; }
-        for (let it = 0; it < 30; it++) { const m = (lo + hi) / 2; if (surfaceAt(side, u, m).at[1] < yT) lo = m; else hi = m; } pts.push([u, hi]); }
+      for (let k = 0; k <= n; k++) { const u = u0 + ((u1 - u0) * k) / n, P = pointAt(side, u, 0), dx = P[0] - w.x; if (Math.abs(dx) >= Ra) { pts.push([u, 0]); continue; }
+        const yT = w.y + Math.sqrt(Ra * Ra - dx * dx); let lo = 0, hi = 1; if (pointAt(side, u, 1)[1] <= yT) { pts.push([u, 1]); continue; } if (pointAt(side, u, 0)[1] >= yT) { pts.push([u, 0]); continue; }
+        for (let it = 0; it < 24; it++) { const m = (lo + hi) / 2; if (pointAt(side, u, m)[1] < yT) lo = m; else hi = m; } pts.push([u, hi]); }
       return pts; };
     let Ra = w.R + r.room.radial;
     for (let tries = 0; tries < 40; tries++) {
       const line = trimAt(Ra); let hit = false;
-      for (let k = 0; k < line.length && !hit; k++) { const [u, v0] = line[k]!; for (let j = 0; j <= 16 && !hit; j++) { const v = v0 + ((1 - v0) * j) / 16; if (inSweep(surfaceAt(side, u, v).at, w, r.room)) hit = true; } }
+      for (let k = 0; k < line.length && !hit; k++) { const [u, v0] = line[k]!; for (let j = 0; j <= 16 && !hit; j++) { const v = v0 + ((1 - v0) * j) / 16; if (inSweep(pointAt(side, u, v), w, r.room)) hit = true; } }
       // (clear: and 5 mm more, so what is between the points looked at is clear too)
       if (!hit) return { line: trimAt(Ra + 0.005), Ra: Ra + 0.005 }; Ra += 0.005;
     }
@@ -209,8 +216,11 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
   // ---- shut lines: the doors between the arches, under the cabin ----
   const fr = arches.filter((a) => a.w.x > 0), rr = arches.filter((a) => a.w.x <= 0);
   const fArchRear = fr.length ? Math.min(...fr.map((a) => a.w.x - a.Ra)) : ln.xCowl, rArchFront = rr.length ? Math.max(...rr.map((a) => a.w.x + a.Ra)) : ln.xRoofR;
-  const xFD = Math.min(ln.xCowl + 0.05, fArchRear - 0.1), xRD = Math.max(rArchFront + 0.04, ln.xRoofR - 0.2), g = r.gap / 2, xB = ln.xB, open = !!b.lines.open;
-  const doors = !b.lines.bed && xFD - xRD > 0.6, twoDoors = doors && xFD - xRD > 1.6;
+  const xFD = Math.min(ln.xCowl + 0.05, fArchRear - 0.1), g = r.gap / 2, xB = ln.xB, open = !!b.lines.open; let xRD = Math.max(rArchFront + 0.04, ln.xRoofR - 0.2);
+  // its doors: two a side where it has them (its maker's count, else by its length), or one long one (a coupe's, about
+  // 1.15 m: typical), the rear quarter running forward to meet it
+  const doors = !b.lines.bed && xFD - xRD > 0.6, twoDoors = doors && (b.lines.doors ? b.lines.doors === 2 : xFD - xRD > 1.6);
+  if (doors && !twoDoors) xRD = Math.max(xRD, xFD - 1.15);
   // a panel trimmed round the arches in its run: its bottom edge along v = 0, rising round each arch and falling back
   const trimmed = (u0: number, u1: number): UV[] => { const pts: UV[] = [[u0, 0]]; for (const a of arches) for (const q of a.line) if (q[0] > u0 && q[0] < u1) pts.push(q); pts.push([u1, 0]); return pts.sort((p, q) => p[0] - q[0]); };
   const uFD = U(xFD), uRD = U(xRD), du = (x: number) => U(x + g) - U(x - g);
@@ -220,16 +230,25 @@ export function bodyPanels(b: BodyPlan, r: BodyRules = BODY_RULES): Part[] {
     out.push(paint('sills', { s: side, uv: [[uRD, 0], [uFD, 0], [uFD, vSill - 0.004], [uRD, vSill - 0.004]] }, { shell: 0.0012, says: 'the sills under the doors (rocker panels): pressed steel, thicker (typical)' }));
     const door = (name: string, x0: number, x1: number) => paint(name, { s: side, uv: [[U(x0 + g), vSill], [U(x1 - g), vSill], [U(x1 - g), 1], [U(x0 + g), 1]] }, { says: 'a door skin: pressed steel about 0.8 mm, between its shut lines (4 mm gaps, typical)' });
     if (twoDoors) out.push(door('front doors', xB, xFD), door('rear doors', xRD, xB)); else out.push(door('doors', xRD, xFD));
+    // a handle near each door's back edge, a little under its shoulder, standing a few millimetres proud (typical)
+    for (const x1 of twoDoors ? [xB, xRD] : [xRD]) out.push(paint('door handles', { s: side, uv: [[U(x1 + 0.07), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.055], [U(x1 + 0.24), sv[3]! - 0.025], [U(x1 + 0.07), sv[3]! - 0.025]], off: 0.002 }, { shell: 0.002, says: 'a door handle (typical)' }));
   } else out.push(paint('body sides', { s: side, above: trimmed(0, 1) }, { says: 'its sides: pressed steel about 0.8 mm (typical)' }));
   // ---- lamps and the grille, on the faces at its ends ----
   const uN = (d: number) => U(ln.xN - d), uTl = (d: number) => U(ln.xT + d);
-  out.push({ name: 'lower grille', shape: { surf: { s: side, uv: [[uN(0.01), sv[0]! + 0.02], [1, sv[0]! + 0.02], [1, sv[1]! - 0.006], [uN(0.01), sv[1]! - 0.006]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x101010, shell: 0.003, finish: 'texture', says: 'the lower intake in the front bumper (typical)' });
-  out.push({ name: 'headlights', shape: { surf: { s: side, uv: [[uN(0.4), (sv[2]! + sv[3]!) / 2], [uN(0.02), (sv[2]! + sv[3]!) / 2], [uN(0.02), sv[5]! - 0.025], [uN(0.4), sv[5]! - 0.025]], off: 0.002 } }, at: [0, 0, 0], mat: 'pc', color: 0xeef2f6, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)' });
-  out.push({ name: 'grille', shape: { surf: { s: side, uv: [[uN(0.006), sv[1]!], [1, sv[1]!], [1, sv[3]! - 0.03], [uN(0.006), sv[3]! - 0.03]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x121212, shell: 0.003, finish: 'texture', says: 'its grille across the nose (moulded ABS, typical)' });
+  // the face: the grille a slot between the headlamps under the hood's edge, the bumper below it in the body's colour
+  // (where the plate goes), and the intake under that (typical of a modern car's face)
+  out.push({ name: 'lower grille', shape: { surf: { s: side, uv: [[uN(0.012), sv[0]! + 0.015], [1, sv[0]! + 0.015], [1, sv[1]! + 0.02], [uN(0.012), sv[1]! + 0.02]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x101010, shell: 0.003, finish: 'texture', says: 'the lower intake in the front bumper (typical)' });
+  // a headlamp as it is built, in layers on the skin: its dark housing, two lamp units in it (projectors, typical of a
+  // modern car's), and the clear lens over them
+  const lampUV = (a0: number, a1: number, b0: number, b1: number): [UV, UV, UV, UV] => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]], hl0 = uN(0.42), hl1 = uN(0.03), hb0 = sv[3]! + 0.005, hb1 = sv[5]! - 0.03;
+  const unit = (k: number): Part => { const a = hl0 + (hl1 - hl0) * (0.22 + 0.3 * k), w2 = (hl1 - hl0) * 0.1, b = (hb0 + hb1) / 2, h2 = (hb1 - hb0) * 0.28; return { name: 'lamp unit', shape: { surf: { s: side, uv: lampUV(a - w2, a + w2, b - h2, b + h2), off: 0.0026 } }, at: [0, 0, 0], mat: 'pc', color: 0xfff4dc, glow: true, shell: 0.002, says: 'an LED projector (typical)' }; };
+  out.push({ name: 'headlights', shape: { surf: { s: side, uv: lampUV(hl0, hl1, hb0, hb1), off: 0.004 } }, at: [0, 0, 0], mat: 'pc', color: 0xd8e0e8, shell: 0.003, light: { lm: 1500, color: 0xfff4e0 }, says: 'its headlamps wrapping round the nose\'s corners: a polycarbonate lens over each (typical)',
+    parts: [{ name: 'headlamp housing', shape: { surf: { s: side, uv: lampUV(hl0, hl1, hb0, hb1), off: 0.0012 } }, at: [0, 0, 0], mat: 'pp', color: 0x0c0d0f, shell: 0.002, finish: 'texture', says: 'the dark housing behind each lens (typical)' }, unit(0), unit(1)] });
+  out.push({ name: 'grille', shape: { surf: { s: side, uv: [[uN(0.03), sv[3]! + 0.01], [1, sv[3]! + 0.01], [1, sv[5]! - 0.05], [uN(0.03), sv[5]! - 0.05]], off: 0.002 } }, at: [0, 0, 0], mat: 'abs', color: 0x121212, shell: 0.003, finish: 'texture', says: 'its grille between the headlamps (moulded ABS, typical)' });
   out.push({ name: 'tail lights', shape: { surf: { s: side, uv: [[uTl(0.012), sv[3]! - 0.02], [uTl(0.3), sv[3]! - 0.02], [uTl(0.3), sv[5]! - 0.03], [uTl(0.012), sv[5]! - 0.03]], off: 0.002 } }, at: [0, 0, 0], mat: 'pmma', color: 0xb01818, shell: 0.003, says: 'its tail lamps round the tail\'s corners: red acrylic lenses (typical)' });
   // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
   for (const a of arches) {
-    const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => surfaceAt(side, q[0], q[1]).at); if (pts.length < 4) continue;
+    const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;
     const w = a.w, zIn = w.z - w.w / 2 - 0.04, out2: V3[][] = [pts];
     for (const zf of [0.5, 1]) out2.push(pts.map((P) => { const z = P[2] + (zIn - P[2]) * zf, ang = Math.atan2(P[1] - w.y, P[0] - w.x); let rr2 = Math.hypot(P[0] - w.x, P[1] - w.y); while (rr2 < w.R + 0.5 && inSweep([w.x + Math.cos(ang) * rr2, w.y + Math.sin(ang) * rr2, z], w, r.room)) rr2 += 0.005; return [w.x + Math.cos(ang) * rr2, w.y + Math.sin(ang) * rr2, z] as V3; }));
     out.push({ name: `${w.name.replace(/ wheel$/, '')} wheelhouse liners`, shape: { surf: { s: skinThrough(out2, { mirror: true, p: 2 }) } }, at: [0, 0, 0], mat: 'pp', color: 0x161616, shell: 0.0025, finish: 'texture', says: `the liner of the arch over each ${w.name}: moulded polypropylene, its every point clear of the tyre steered ${Math.round((w.steer * 180) / Math.PI)}° either way and risen ${Math.round(w.bump * 1000)} mm (the arch ${Math.round(a.Ra * 1000)} mm round the axle)` });
