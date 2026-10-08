@@ -83,7 +83,7 @@ export type Term = Leaf | Var | App | Bind;
 
 // ---- operators: each with an identity of its own ------------------------------------------------------------------
 
-export type OpId = 'add' | 'sub' | 'mul' | 'div' | 'pow' | 'neg' | 'abs' | 'min' | 'max' | 'le' | 'ge' | 'lt' | 'gt' | 'and' | 'or' | 'exp' | 'ln' | 'log2' | 'log10' | 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan';
+export type OpId = 'add' | 'sub' | 'mul' | 'div' | 'pow' | 'neg' | 'abs' | 'min' | 'max' | 'le' | 'ge' | 'lt' | 'gt' | 'and' | 'or' | 'exp' | 'ln' | 'log2' | 'log10' | 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan' | 'erf';
 
 export interface Operator {
   id: OpId;
@@ -134,7 +134,16 @@ export const OPERATORS: Record<OpId, Operator> = {
   asin: op({ id: 'asin', arity: 1, commutative: false, meaning: 'the angle whose sine is a dimensionless value', dim: ([a]) => pure('asin', a!), eval: ([a]) => Math.asin(a!) }),
   acos: op({ id: 'acos', arity: 1, commutative: false, meaning: 'the angle whose cosine is a dimensionless value', dim: ([a]) => pure('acos', a!), eval: ([a]) => Math.acos(a!) }),
   atan: op({ id: 'atan', arity: 1, commutative: false, meaning: 'the angle whose tangent is a dimensionless value', dim: ([a]) => pure('atan', a!), eval: ([a]) => Math.atan(a!) }),
+  erf: op({ id: 'erf', arity: 1, commutative: false, meaning: 'the error function of a dimensionless value: 2/√π ∫₀ˣ e^(−t²) dt, the shape of anything spreading by diffusion from a held edge', dim: ([a]) => pure('erf', a!), eval: ([a]) => erf(a!) }),
 };
+/** The error function to double precision: its Taylor series near nought, its continued fraction (for erfc) beyond. */
+export function erf(x: number): number {
+  if (!Number.isFinite(x)) return Number.isNaN(x) ? NaN : Math.sign(x);
+  const ax = Math.abs(x);
+  if (ax < 2.5) { let term = ax, sum = ax; for (let n = 1; n < 200; n++) { term *= (-ax * ax) / n; const add = term / (2 * n + 1); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; } return Math.sign(x) * (2 / Math.sqrt(Math.PI)) * sum; }
+  let f = ax; for (let k = 80; k >= 1; k--) f = ax + k / 2 / f;
+  return Math.sign(x) * (1 - Math.exp(-ax * ax) / (Math.sqrt(Math.PI) * f));
+}
 
 // ---- construction ------------------------------------------------------------------------------------------------
 
@@ -221,6 +230,7 @@ export const tan = (a: Term) => app('tan', [a]);
 export const asin = (a: Term) => app('asin', [a]);
 export const acos = (a: Term) => app('acos', [a]);
 export const atan = (a: Term) => app('atan', [a]);
+export const erfOf = (a: Term) => app('erf', [a]);
 export const cbrt = (a: Term) => app('pow', [a], 1 / 3);
 /** π, exact in the derivation it belongs to. */
 export const PI = (): Leaf => leaf('π', Math.PI, '1', { class: 'fundamental', source: 'mathematics: π' });

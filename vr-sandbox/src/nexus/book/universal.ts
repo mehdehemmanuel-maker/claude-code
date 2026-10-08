@@ -6,7 +6,7 @@
 
 import { law, type Law, type Source } from '../law';
 import { CONST } from './constants';
-import { add, and, cbrt, cells, div, exp, ge, gt, integral, k, le, leaf, ln, lt, mul, pow, sqrt, sub, variable, zero, PI, type Term, type Var } from '../term';
+import { add, and, cbrt, cells, div, erfOf, exp, ge, gt, integral, k, le, leaf, ln, lt, mul, pow, sqrt, sub, variable, zero, PI, type Term, type Var } from '../term';
 import type { DomainCheck } from '../evaluate';
 
 type Port = [sym: string, unit: string, name: string];
@@ -189,6 +189,27 @@ export const UNIVERSAL: Law[] = [
     source: GEOMETRY, example: { inputs: { phi: Math.PI / 4, a: 0.1, b: 0.02, c: 0.02 }, output: 3.1415926535897935e-5 },
   }),
   U({
+    id: 'area.sphere-of-volume', name: 'The least surface a volume can have', statement: 'Of all shapes a sphere holds a volume in the least surface, (36π)^(1/3) V^(2/3): so surface grows as volume to the two-thirds, and a big body has less skin for its bulk (Galileo\'s square–cube law), which is why mice must eat to keep warm and elephants must shed heat.', formula: 'A = (36π)^(1/3) V^(2/3)',
+    valid: 'A sphere; a real body has more surface, by a shape factor (a person about 2.3 times its sphere\'s).',
+    inputs: [['V', 'm^3', 'volume']], output: ['A', 'm^2', 'surface'],
+    term: (v) => mul(pow(mul(k(36), PI()), 1 / 3), pow(v.V, 2 / 3)),
+    source: { cite: 'The isoperimetric inequality (Schwarz 1884); the square–cube law (Galileo, Two New Sciences, 1638)', kind: 'derivation' }, example: { inputs: { V: 0.07 }, output: 0.8213901385550366 },
+  }),
+  U({
+    id: 'area.shaped', name: 'A shape\'s surface over its sphere\'s', statement: 'A body of a given volume has more surface than the sphere of that volume by its shape factor: limbs, ears, fins and leaves are surface added.', formula: 'A = s A_sphere',
+    valid: 's at least 1 (the sphere is the least).',
+    inputs: [['s', '-', 'shape factor'], ['A0', 'm^2', 'the sphere\'s surface']], output: ['A', 'm^2', 'surface'],
+    term: (v) => mul(v.s, v.A0), domain: (v) => [{ says: 'a shape factor of at least 1', holds: ge(v.s, k(1)) }],
+    source: GEOMETRY, example: { inputs: { s: 2.3, A0: 0.8214 }, output: 1.88922 },
+  }),
+  U({
+    id: 'power.per-mass', name: 'Power from a mass that gives it', statement: 'A mass that gives a power a kilogram gives its mass times that: muscle at about 200 W/kg, a motor at its power-to-weight, a battery at its specific power.', formula: 'P = p m',
+    valid: 'p the sustained specific power.',
+    inputs: [['p', 'W/kg', 'power a kilogram'], ['m', 'kg', 'mass']], output: ['P', 'W', 'power'],
+    term: (v) => mul(v.p, v.m),
+    source: { cite: 'Counting by mass: a specific power times the mass that has it', kind: 'derivation' }, example: { inputs: { p: 200, m: 0.0051 }, output: 1.02 },
+  }),
+  U({
     id: 'mass.volume', name: 'Mass of a volume', statement: 'A volume of a uniform thing weighs its density times its volume.', formula: 'm = ρ V',
     valid: 'Uniform density (else integrate it).',
     inputs: [['rho', 'kg/m^3', 'density'], ['V', 'm^3', 'volume']], output: ['m', 'kg', 'mass'],
@@ -259,6 +280,13 @@ export const UNIVERSAL: Law[] = [
     inputs: [['D', 'm^2/s', 'diffusivity through the reacted layer'], ['C', 'mol/m^3', 'concentration at the surface'], ['t', 's', 'time'], ['a', 'mol/m^3', 'capacity to react']], output: ['x', 'm', 'depth of the front'],
     term: (v) => sqrt(div(mul(k(2), v.D, v.C, v.t), v.a)),
     source: { cite: 'Crank 1975, the moving boundary; for concrete Papadakis, Vayenas & Fardis 1991, ACI Mater J 88:363; for silicon Deal & Grove 1965, J Appl Phys 36:3770', kind: 'textbook' }, example: { inputs: { D: 3.6e-9, C: 0.0175, t: 50 * 31556952, a: 3000 }, output: 0.008140614178303748 },
+  }),
+  U({
+    id: 'diffusion.erf', name: 'Diffusion in from a held surface (Fick\'s second law)', statement: 'Where a surface is held at a concentration and nothing reacts, what diffuses in reaches a depth as the error function says: chloride into concrete to its steel, carbon into case-hardened steel, heat into the ground, a dye into a gel.', formula: 'C = C_s (1 − erf(x / (2√(D t))))',
+    valid: 'A semi-infinite body, D constant, the surface held at C_s from time nought.',
+    inputs: [['Cs', '-', 'at the surface'], ['x', 'm', 'depth'], ['D', 'm^2/s', 'diffusivity'], ['t', 's', 'time']], output: ['C', '-', 'at that depth'],
+    term: (v) => mul(v.Cs, sub(k(1), erfOf(div(v.x, mul(k(2), sqrt(mul(v.D, v.t))))))),
+    source: { cite: 'Crank, The Mathematics of Diffusion, 2nd ed., Oxford University Press 1975, eq. 2.45; for chloride in concrete, Collepardi, Marcialis & Turriziani 1972', kind: 'textbook' }, example: { inputs: { Cs: 0.003, x: 0.03, D: 1e-12, t: 3e8 }, output: 0.0006620140857595405 },
   }),
   U({
     id: 'diffusion.sphere-limit', name: 'The largest a sphere can live by diffusion', statement: 'A sphere that consumes at a rate q a volume and is fed only by diffusion from its surface runs out at its centre past √(6 D C / q): why cells are small, why a tumour spheroid dies at its core past a few tenths of a millimetre, why anything bigger needs vessels or gills.', formula: 'R = √(6 D C / q)',
@@ -395,6 +423,13 @@ export const UNIVERSAL: Law[] = [
     inputs: [['Pout', 'W', 'power out'], ['Pin', 'W', 'power in']], output: ['P', 'W', 'net power out'],
     term: (v) => sub(v.Pout, v.Pin),
     source: PHYS, example: { inputs: { Pout: 848, Pin: 300 }, output: 548 },
+  }),
+  U({
+    id: 'power.sum', name: 'Powers together', statement: 'Energy is conserved: heat coming in by two ways comes in at their sum.', formula: 'P = P₁ + P₂',
+    valid: 'Any system.',
+    inputs: [['P1', 'W', 'one'], ['P2', 'W', 'the other']], output: ['P', 'W', 'together'],
+    term: (v) => add(v.P1, v.P2),
+    source: PHYS, example: { inputs: { P1: 57, P2: 95 }, output: 152 },
   }),
   U({
     id: 'energy.power-time', name: 'Energy at a power over a time', statement: 'A steady power over a time is an energy: how long a store lasts is its energy over the power drawing it.', formula: 'E = P t',
