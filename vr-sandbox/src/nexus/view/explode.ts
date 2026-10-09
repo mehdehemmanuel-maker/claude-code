@@ -280,6 +280,8 @@ export class Exploded {
     if (up.drawn) return this.showPlan(up.id, now, true, false, up.drawn);
     return this.show(up.id, now, true, false);
   }
+  /** Put it together (or apart), whichever it is not. */
+  whole(now: number, yes = true): void { if ((this.mode === 'whole') !== yes) this.toggle(now); }
   toggle(now: number): void { this.mode = this.mode === 'apart' ? 'whole' : 'apart'; this.t0 = now; this.drawInfo(); }
   close(): void { this.release(); this.clearStage(); this.plan = null; this.build = null; this.source = null; this.trail = []; this.group.visible = false; }
   /** What a ray points at: a part's id, a chip, or nothing. */
@@ -298,6 +300,17 @@ export class Exploded {
     const i = INVENTORY.get(id); return i ? `${i.name}${i.spec ? `: ${i.spec.replace(/ \(sizes: .*\)$/, '')}` : ''}` : id;
   }
   /** What is in the hand put back: it flies home to its place round the whole. */
+  /** Turn a drawn arm's joints, its groups "<its name> joint k", to q (degrees) about their axes (x, y, or -z): what
+   *  springs back to its place springs back to that pose. True where it has joints to turn. */
+  pose(q: number[], axes: ('y' | '-z' | 'x')[]): boolean {
+    if (!this.tree) return false; let n = 0;
+    this.tree.view.group.traverse((o) => {
+      const m = / joint (\d)$/.exec(o.name); if (!m) return; const k = Number(m[1]) - 1, a = ((q[k] ?? 0) * Math.PI) / 180, ax = axes[k];
+      o.rotation.set(ax === 'x' ? a : 0, ax === 'y' ? a : 0, ax === '-z' ? -a : 0); n++;
+      for (const s of this.shown) for (const mm of s.members ?? []) if (mm.obj === o) mm.q.copy(o.quaternion);
+    });
+    return n > 0;
+  }
   release(): void { for (const s of this.shown) if (s.held) { if (s.members) for (const m of s.members) m.parent.attach(m.obj); else this.stage.attach(s.obj); s.held = false; } }
   get holding(): boolean { return this.shown.some((s) => s.held); }
   /** Where a part (or a chip) is in the room, for a test or a guide. */

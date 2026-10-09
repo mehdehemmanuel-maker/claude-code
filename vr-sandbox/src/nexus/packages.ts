@@ -291,7 +291,7 @@ export const PKG_DENSITY: Record<string, [number, string]> = {
   epoxy: [1200, 'unfilled epoxy (typical 1.1–1.25 g/cm³): a lacquer coat'], 'epoxy-clear': [1150, 'clear casting epoxy, as an LED\'s lens (typical 1.1–1.2 g/cm³)'], silicone: [1100, 'optical silicone, as an LED\'s encapsulant (typical 1.0–1.2 g/cm³)'],
   ppa: [1600, 'polyphthalamide, glass- and titania-filled, as an LED\'s white cup (typical 1.5–1.7 g/cm³)'], gan: [6150, 'gallium nitride (6.15 g/cm³)'], algainp: [4500, 'AlGaInP on GaAs (typical 4.5 g/cm³; GaAs 5.32)'],
   bt: [1900, 'BT-epoxy laminate with glass cloth, as a BGA\'s substrate (typical 1.8–2.0 g/cm³)'], solder: [7400, 'SAC305 lead-free solder (7.4 g/cm³)'],
-  pbt: [1500, 'glass-filled PBT, as connectors\' insulators (typical 1.45–1.6 g/cm³)'], ferrite: [4800, 'MnZn ferrite, as an RJ45\'s magnetics (typical 4.8 g/cm³)'],
+  pbt: [1500, 'glass-filled PBT, as connectors\' insulators (typical 1.45–1.6 g/cm³)'], 'ferrite-soft': [4800, 'MnZn ferrite, as an RJ45\'s magnetics (typical 4.8 g/cm³)'],
 };
 /** Densities a solid is weighed by, kg/m³: the kits' own for the common metals and plastics (src/nexus/mass.ts DENSITY,
  *  typical), and those above. */

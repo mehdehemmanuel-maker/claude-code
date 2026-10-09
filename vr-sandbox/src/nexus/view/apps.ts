@@ -14,6 +14,7 @@ import { callFamily } from '../families';
 import { FAMILIES, type Family } from '../families';
 import { DESIGNED, component } from '../components';
 import { grams, massOf as partMass } from '../mass';
+import { TARGETS, pinSays, type Ran, type Target } from '../codesim';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
@@ -450,5 +451,91 @@ export function dataApp(h: { sections(): DataSection[] }): PhoneApp {
       all.forEach((s, j) => { const x = 30 + (j % cols) * (tw + 12), y = 166 + Math.floor(j / cols) * (th + 12); g.fillStyle = 'rgba(255,255,255,0.05)'; g.beginPath(); g.roundRect(x, y, tw, th, 14); g.fill(); g.fillStyle = s.colour; g.fillRect(x, y + 14, 4, th - 28); text(`${s.icon} ${s.name}`, x + 18, y + 32, 17, s.colour, 800, tw - 30); const [a, b] = s.stats; if (a) { text(a.value, x + 18, y + 72, 28, INK, 800, tw - 30); text(a.label, x + 18, y + 94, 13, INK2, 500, tw - 30); } if (b && th > 120) text(`${b.label}: ${b.value}`, x + 18, y + 120, 13, INK3, 500, tw - 30); hit(x, y, x + tw, y + th, 'go', `sec:${s.id}`); });
     },
     act(act, arg, nav: Nav) { if (act === 'go') { nav.go(String(arg)); return true; } return false; },
+  };
+}
+
+// ---- the computer: programs for the boards and the arm, run here, and Claude beside them --------------------------------
+export interface ComputerHost {
+  /** run a program on its target here (Python against its board's libraries, the arm's commands on its controller) */ run(t: Target, code: string): Promise<Ran>;
+  /** ask Claude about it: what Claude says, and the program changed where it changes it */ ask(t: Target, code: string, ask: string, out: string[]): Promise<{ said: string; code?: string }>;
+  /** stand its board or its arm before you, drawn */ see(words: string): string;
+}
+/** The computer: every board and the arm, each with its maker's language and libraries; a program you can run here (its
+ *  pins' changes and its prints shown, the arm moving before you), change by asking Claude in words, step through its
+ *  examples, and take to the real thing by its steps. */
+export function computerApp(h: ComputerHost): PhoneApp {
+  const C = '#69f0ae', MONO = '"DejaVu Sans Mono", ui-monospace, monospace', ROWS = 17;
+  type St = { code: string; ex: number; out: string[]; ran?: Ran; claude?: string; busy?: string };
+  const st = new Map<string, St>();
+  const of = (t: Target): St => { let x = st.get(t.id); if (!x) st.set(t.id, (x = { code: t.examples[0]!.code, ex: 0, out: [] })); return x; };
+  const tOf = (sub: string) => TARGETS.find((t) => t.id === sub.slice(2));
+  const lines = (t: Target) => of(t).code.replace(/\n$/, '').split('\n');
+  return {
+    id: 'computer', name: 'Computer', icon: '💻', colour: C,
+    pages: (sub) => { const t = tOf(sub); return t && sub.startsWith('c:') ? Math.max(1, Math.ceil(lines(t).length / ROWS)) : 1; },
+    draw(k: Kit, v: View) {
+      const { text, wrapped, g, W, bottom, hit, button } = k, sub = v.sub, t = tOf(sub);
+      if (!t) {
+        text('Computer', 40, 118, 44, C, 800, W - 80);
+        wrapped('Program the boards and the arm in their makers\' own languages; run it here, ask Claude to change it, and take it to the real thing step by step.', 40, 150, 15, W - 80, '#c8f7dc', 3);
+        TARGETS.forEach((x, j) => { const y = 214 + j * 96; g.fillStyle = 'rgba(105,240,174,0.10)'; g.beginPath(); g.roundRect(30, y, W - 60, 86, 14); g.fill(); text(x.name, 46, y + 34, 19, '#ffffff', 600, W - 120); text(`${x.lang} · ${x.examples.length} program${x.examples.length > 1 ? 's' : ''} to start from`, 46, y + 64, 14, '#c8f7dc', 500, W - 120); text('›', W - 70, y + 52, 26, C, 700, 30); hit(30, y, W - 30, y + 86, 'open', x.id); });
+        return;
+      }
+      const s0 = of(t);
+      if (sub.startsWith('r:')) {
+        text('On the real thing', 40, 118, 30, C, 800, W - 80); text(t.name, 40, 150, 16, '#c8f7dc', 600, W - 80);
+        let y = 190; t.real.forEach((r, i) => { text(`${i + 1}`, 46, y + 20, 22, C, 800, 30); y += Math.max(54, wrapped(r, 84, y + 4, 16, W - 130, '#ffffff', 5) + 18); });
+        y += 6; wrapped(`Its pins: ${t.pins}.`, 46, y, 14, W - 92, '#c8f7dc', 3);
+        button(40, bottom - 90, W - 80, 70, '‹ Back to the program', 'go', `c:${t.id}`, C);
+        return;
+      }
+      // its program, a page of it, its lines numbered
+      text(t.name, 40, 112, 21, C, 800, W - 80); text(`${t.examples[s0.ex]!.title} · ${t.lang}`, 40, 138, 14, '#c8f7dc', 500, W - 80);
+      const ls = lines(t), top = 156, rh = 21; g.fillStyle = '#05140d'; g.beginPath(); g.roundRect(24, top, W - 48, ROWS * rh + 16, 10); g.fill();
+      g.font = `500 14px ${MONO}`;
+      ls.slice(v.page * ROWS, v.page * ROWS + ROWS).forEach((l, i) => { const n = v.page * ROWS + i + 1; g.fillStyle = '#3f7a5c'; g.fillText(String(n).padStart(2, ' '), 32, top + 22 + i * rh); g.fillStyle = /^\s*(#|\/\/)/.test(l) ? '#7fbf9a' : '#d7ffe9'; let x2 = l; while (g.measureText(x2).width > W - 110 && x2.length > 4) x2 = x2.slice(0, -2); g.fillText(x2 + (x2 !== l ? '…' : ''), 62, top + 22 + i * rh); });
+      let y = top + ROWS * rh + 30;
+      const bw = (W - 80 - 20) / 3;
+      button(40, y, bw, 58, s0.busy === 'run' ? '… running' : '▶ Run', 'run', t.id, C); button(50 + bw, y, bw, 58, s0.busy === 'ask' ? '… asking' : '🤖 Ask Claude', 'ask', t.id, '#ffd740'); button(60 + 2 * bw, y, bw, 58, '📚 Next', 'next', t.id, '#80deea');
+      y += 66; button(40, y, bw, 50, '🔧 For real', 'go', `r:${t.id}`, '#ffab91'); button(50 + bw, y, bw, 50, '🧊 See it', 'see', t.id, '#b39ddb'); button(60 + 2 * bw, y, bw, 50, '↺ Example', 'reset', t.id, '#cfd8dc');
+      y += 66;
+      // what it did: each pin's life as a bar, then its last lines; Claude's answer under them
+      const r = s0.ran;
+      if (r) {
+        text(r.end === 'error' ? '✗ it stopped with an error' : `✓ ran ${r.t.toFixed(2)} s of its own time${r.end === 'stopped' ? ' (stopped at 10 s: it loops)' : ''}`, 40, y + 8, 15, r.end === 'error' ? '#ff8a80' : C, 700, W - 80); y += 20;
+        const T = Math.max(r.t, 0.5); [...r.pins].slice(0, 3).forEach(([p, ch]) => {
+          text(p, 40, y + 18, 13, '#c8f7dc', 600, 90); const x0 = 132, x1 = W - 40; g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(x0, y + 6, x1 - x0, 16);
+          ch.forEach(([t0, v0], i) => { const t1 = i + 1 < ch.length ? ch[i + 1]![0] : T; const f = Math.max(0, Math.min(1, v0 > 1 ? v0 / 100 : v0)); if (f > 0) { g.fillStyle = `rgba(105,240,174,${0.25 + 0.75 * f})`; g.fillRect(x0 + ((x1 - x0) * t0) / T, y + 6, Math.max(1, ((x1 - x0) * (t1 - t0)) / T), 16); } });
+          y += 24;
+        });
+      }
+      const said = [...(r?.said ?? []).slice(-3), ...s0.out.slice(-4)];
+      said.forEach((l) => { g.font = `500 12px ${MONO}`; g.fillStyle = /✗|error|Error|\[10\d\d\]|\[30\d\d\]\[(?!End)/.test(l) ? '#ff8a80' : '#c8f7dc'; let x2 = l; while (g.measureText(x2).width > W - 80 && x2.length > 4) x2 = x2.slice(0, -2); g.fillText(x2, 40, y + 14); y += 17; });
+      if (s0.claude) { y += 6; text('Claude', 40, y + 12, 15, '#ffd740', 800, 100); wrapped(s0.claude, 40, y + 22, 14, W - 80, '#ffe9a8', Math.max(2, Math.floor((bottom - y - 40) / 18))); }
+    },
+    act(act, arg, nav: Nav) {
+      const t = TARGETS.find((x) => x.id === String(arg)) ?? tOf(nav.sub);
+      switch (act) {
+        case 'open': nav.go(`c:${arg}`); return true;
+        case 'go': nav.go(String(arg)); return true;
+        case 'next': { if (!t) return false; const s0 = of(t); s0.ex = (s0.ex + 1) % t.examples.length; s0.code = t.examples[s0.ex]!.code; s0.ran = undefined; s0.out = []; s0.claude = undefined; return true; }
+        case 'reset': { if (!t) return false; const s0 = of(t); s0.code = t.examples[s0.ex]!.code; s0.ran = undefined; s0.out = []; return true; }
+        case 'see': { if (!t) return false; of(t).out = [h.see(t.board)]; return true; }
+        case 'run': {
+          if (!t) return false; const s0 = of(t); if (s0.busy) return false; s0.busy = 'run'; s0.out = [];
+          void h.run(t, s0.code).then((r) => { s0.ran = r; s0.out = [...r.out, ...[...r.pins].slice(0, 4).map(([p, ch]) => pinSays(p, ch))]; }, (e) => { s0.out = [`✗ ${(e as Error).message}`]; }).finally(() => { s0.busy = undefined; nav.redraw(); });
+          return true;
+        }
+        case 'ask': {
+          if (!t) return false; const s0 = of(t);
+          nav.write('Ask Claude about this program (say what it should do)', (words) => {
+            s0.busy = 'ask'; nav.redraw();
+            void h.ask(t, s0.code, words, s0.out).then((a) => { s0.claude = a.said; if (a.code) { s0.code = a.code; s0.ran = undefined; } }, (e) => { s0.claude = `Could not ask: ${(e as Error).message}`; }).finally(() => { s0.busy = undefined; nav.redraw(); });
+          });
+          return true;
+        }
+      }
+      return false;
+    },
   };
 }

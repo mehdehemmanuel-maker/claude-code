@@ -36,7 +36,7 @@ import { foldDemand, readAsk } from '../words';
 import { intentFromSpec } from '../spec';
 import { Hud } from './hud';
 import { Keyboard } from './keyboard';
-import { describe, makeBrain, plainBrain, type Brain, type PartBrief, type WorldApi } from './brain';
+import { askClaude, describe, makeBrain, plainBrain, type Brain, type PartBrief, type WorldApi } from './brain';
 import { makeRelay, type Relay } from './relay';
 import { makeNotes, STAGES as LOOP_STAGES, type Note, type NoteKind, type Notes, type Proposal } from './notes';
 import { buildSteps, nodeAt as treeNodeAt, pathOf, treeOf, type BuildStep, type TreeNode } from '../embody/tree';
@@ -89,7 +89,7 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { dataApp, inventoryApp, libraryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { computerApp, dataApp, inventoryApp, libraryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
 import { Profile, BUDGET_MS } from '../profile';
 import { held, mergeStatic } from './merge-static';
 import { behave } from '../behave';
@@ -112,6 +112,9 @@ import { discover, graphSummary } from '../lawgraph';
 import { profileLines } from '../derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
 import { countSays } from '../inventory';
+import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../codesim';
+import { ARM_AXES } from '../components';
+import type { Frame } from '../meca';
 import { setBody } from '../anatomy';
 import { FAMILIES, callFamily } from '../families';
 import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
@@ -519,6 +522,7 @@ function tick(): void {
   if (section !== 'off') { machine.getWorldPosition(world); const c0 = machine.localToWorld(tmp.copy(centre0)); clip.set(section === 'depth' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0), section === 'depth' ? c0.z : c0.x); }
   for (const [g, to] of explodeTo) { const now2 = exploded.get(g) ?? 0; exploded.set(g, now2 + (to - now2) * Math.min(1, dt * 4)); }
   prof.time('holo', () => { holo.update(performance.now() / 1000, eye); apart3d.update(performance.now() / 1000); });
+  if (armPlay) playArm(performance.now() / 1000);
   if (machineBuild) stepMachineBuild(t);
   for (const n of pins) n.update(t);
 
@@ -2645,6 +2649,7 @@ function codeRun(lang: 'js' | 'ts' | 'python' | 'cpp', code: string, input: stri
 async function runLanguage(lang: Language, code: string, input: string, signal?: AbortSignal, who?: string): Promise<string> {
   switch (lang.id) {
     case 'gcode': return cell.gcode(code.replace(/\s*;\s*(?=[GMT]\d|$)/gi, '\n'));
+    case 'meca': { const m = runMeca(code); if (m.frames && m.frames.length > 1) { seeWhole('robotarm Meca500-R3'); armPlay = { frames: m.frames, t0: performance.now() / 1000 + 0.8 }; } return m.said!.join('\n'); }
     case 'js': case 'ts': case 'python': case 'cpp': {
       const r = await codeRun(lang.id === 'cpp' ? 'cpp' : lang.id as 'js' | 'ts' | 'python', lang.id === 'cpp' ? cppToJs(code) : code, input);
       const done: string[] = [];
@@ -3517,6 +3522,39 @@ phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = stor
 let invSaid = '';
 phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid, see: (id) => see3d(id) }));
 phone.add(libraryApp({ see: (w2) => { const x = resolve(w2); return x && typeof x === 'object' ? see3d(x.id) : String(x ?? `nothing called ${w2}`); } }));
+// ---- the computer: programs for the boards and the arm, run here (src/nexus/codesim.ts), Claude beside them ----------
+let armPlay: { frames: Frame[]; t0: number } | null = null;
+/** The arm before you moves as its program moved it, in real time, from its first frame to its last. */
+function playArm(now: number): void {
+  const p = armPlay!, t = now - p.t0, fs = p.frames, last = fs[fs.length - 1]!;
+  if (t > last.t + 1.5) { armPlay = null; return; }
+  let i = fs.findIndex((f) => f.t > t); if (i < 0) i = fs.length - 1;
+  const a = fs[Math.max(0, i - 1)]!, b = fs[i]!, u = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 1;
+  apart3d.pose(a.q.map((v, k) => v + (b.q[k]! - v) * u), ARM_AXES);
+}
+/** Stand a board or the arm before you, put together. */
+function seeWhole(words: string): string { const x = resolve(words); if (!x || typeof x !== 'object') return String(x ?? `nothing called ${words}`); const said = see3d(x.id); apart3d.whole(performance.now() / 1000, true); return said; }
+async function computerRun(t: CodeTarget, code: string): Promise<Ran> {
+  let r: Ran;
+  if (t.runner === 'meca') { const m = runMeca(code); r = { ok: m.ok, end: m.ok ? 'ended' : 'error', t: m.frames?.[m.frames.length - 1]?.t ?? 0, pins: new Map(), out: [], meca: [], frames: m.frames, said: m.said }; }
+  else { const v = await codeRun('python', PY_PRELUDE, code); r = readPy(v.value); }
+  // (the arm before you, put together, moving as its program moved it)
+  if (r.frames && r.frames.length > 1) { seeWhole(t.board); armPlay = { frames: r.frames, t0: performance.now() / 1000 + 0.8 }; }
+  return r;
+}
+async function computerAsk(t: CodeTarget, code: string, ask: string, out: string[]): Promise<{ said: string; code?: string }> {
+  const prompt = `You are Claude, helping someone program a ${t.name} inside the Nexus forge, a VR workshop. They are learning: explain plainly.\n\nTheir program (${t.lang}):\n\`\`\`\n${code}\n\`\`\`\nWhat it did when they ran it here (pins and prints in its own time):\n${out.slice(-12).join('\n') || '(not run yet)'}\n\nThey ask: ${ask}\n\nAnswer in two to four short sentences: what to change and why, and anything to wire or watch for on the real board. If the program should change, give the whole new program in one fenced code block, using only ${t.lang} and the libraries its examples use (${t.runner === 'meca' ? 'the Meca500\'s own commands' : 'gpiozero, RPi.GPIO, Hobot.GPIO, machine, wiringpi or mecademicpy'}).`;
+  let text: string | null = null;
+  try { text = await askClaude(prompt); } catch (e) { return { said: `Claude could not answer: ${(e as Error).message}` }; }
+  if (text === null) {
+    // (this copy of the forge cannot ask Claude: the ask goes to Claude Code, who writes the forge, as a note)
+    if (relay) void relay.send(`Computer (${t.name}): ${ask}\n\nProgram:\n${code}`, renderer.domElement);
+    return { said: 'Claude answers here when the forge runs as a claude.ai artifact; this copy cannot ask it. Your ask was sent to Claude Code as a note (or kept to file with ⇪ Send), and comes back in a build. Meanwhile 🔧 For real has the real steps, and 📚 Next more programs.' };
+  }
+  const m = /```[a-zA-Z0-9]*\n([\s\S]*?)```/.exec(text);
+  return { said: text.replace(/```[\s\S]*?```/g, '').trim() || 'Here is the program, changed.', ...(m ? { code: m[1]! } : {}) };
+}
+phone.add(computerApp({ run: computerRun, ask: computerAsk, see: seeWhole }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // ---- the weather: where you are, or a place you name; kept, fetched again each quarter hour, read by rules -------------
@@ -3840,6 +3878,8 @@ async function boot() {
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
     forgeSend: (t: string) => { send(t); return true; },
+    computerRun: async (id: string, code?: string) => { const { TARGETS } = await import('../codesim'); const t = TARGETS.find((x) => x.id === id)!; const r = await computerRun(t, code ?? t.examples[0]!.code); return { ok: r.ok, end: r.end, t: r.t, pins: [...r.pins].map(([p, ch]) => [p, ch.length]), out: r.out.slice(0, 8), said: r.said?.slice(-3), frames: r.frames?.length ?? 0 }; },
+    armNow: () => armPlay ? { playing: true, frames: armPlay.frames.length } : { playing: false },
     cellSay: (t: string) => cellWords(t), devicesNow: () => devices.list.map((d) => ({ id: d.id, x: +d.x.toFixed(2), z: +d.z.toFixed(2), h: +d.h.toFixed(2), doing: d.doing, read: d.read })), buildOnBoard: (id: string) => buildOnBoard(RECIPES.find((r) => r.id === id)!, true), cellNow: () => ({ ...cell.facts(), jobs: cell.jobs.map((j) => `${j.name}: ${j.stage}`), beads: cell.printer.beads.length, rail: cell.arms.rail.doing, bench: cell.arms.bench.doing, speed: cell.speed }), cellSpeed: (x: number) => { cell.speed = x; },
     holoOut: (app: string) => { eyeOf(eye); const f = new THREE.Vector3(); camera.getWorldDirection(f); return holos.spawn(app, eye.clone().addScaledVector(f, 1.1).add(new THREE.Vector3(0.35, -0.1, 0)), eye); },
     holoPress: (act: string, arg?: string | number) => { const id = holos.ids().at(-1); return id ? (phone.act(act, arg, undefined, undefined, phone.holoSurface(id.split(':')[1]!) ?? undefined), true) : false; }, phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),

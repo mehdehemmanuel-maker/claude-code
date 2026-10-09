@@ -27,6 +27,7 @@ import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 import { boardComps, boardDef, type Comp } from './sbc';
+import { LINK } from './meca';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -290,6 +291,11 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   sbc: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
   pico: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
+  robotarm: {
+    says: 'a six-axis arm at its link lengths (its user manual\'s, src/nexus/meca.ts): its base with joint 1\'s drive, its shoulder turret, its upper arm, its elbow with the forearm\'s offset, its wrist, its flange; each joint a group its program turns, its drive inside its housing',
+    leaves: 'its castings\' outer forms simplified to cylinders and boxes of its links\' sizes, hollow (0.45 of them metal, typical); its drives\' insides (motor, gear, encoder) not published and drawn as one solid each, sized so the whole weighs its published 4.6 kg; its cables, connectors and brake not drawn',
+    make: (_p, it) => armParts(it.name),
+  },
 };
 
 // ---- electronics from their solids ------------------------------------------------------------------------------------
@@ -364,6 +370,29 @@ function boardParts(id: string, nm: string): Part[] {
 function boardHoles(id: string): Port {
   const b = boardDef(id), pat = b.holes.map(([x, z]) => [(x - b.L / 2) * mm, (z - b.W / 2) * mm] as [number, number]);
   return port('mounting holes', 'holes', b.hole >= 3 ? 'M3' : b.hole >= 2.5 ? 'M2.5' : 'M2', pat, [0, -1.6 * mm, 0], [0, -1, 0], [1, 0, 0], 1.6 * mm, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
+}
+
+// ---- a six-axis arm --------------------------------------------------------------------------------------------------
+/** The axis each joint of the arm turns about in the view's frame (its base frame's z is the view's y, its y the view's
+ *  -z): joint 1 about y, 2, 3 and 5 about -z, 4 and 6 about x. */
+export const ARM_AXES: ('y' | '-z' | 'x')[] = ['y', '-z', '-z', 'x', '-z', 'x'];
+/** The Meca500 drawn at its zero joints, m: each joint a group named "<it> joint k" holding its link and the joints past
+ *  it, so turning one turns everything it carries. */
+function armParts(nm: string): Part[] {
+  const m = (v: number) => v * mm, al = { mat: 'al-6061', color: 0xe9eaec, finish: 'brushed', fill: 0.45 }, drive = { mat: 'steel-electrical', color: 0x55585c, finish: 'cast', fill: 0.5 };
+  const Z: V3 = [PI / 2, 0, 0], X: V3 = [0, 0, PI / 2], { d1, a2, a3, d4, d6 } = LINK, j0 = 90;
+  const link = (k: number, parts: Part[]) => group(`${nm} link ${k}`, 'arm-casting', parts);
+  const drv = (k: number, r: number, h: number, at: V3, rot?: V3) => P(`${nm} joint ${k} drive`, { cyl: [m(r), m(h)] }, { ...drive, item: 'joint-drive', at: at.map(m) as V3, ...(rot ? { rot } : {}), fixed: 'bolted inside its housing' });
+  const joint = (k: number, at: V3, parts: Part[]): Part => group(`${nm} joint ${k}`, '', parts, { at: at.map(m) as V3, joint: 'bearing', fixed: `turning about its axis (joint ${k})` } as Partial<Part>);
+  const flange = P(`${nm} flange`, { cyl: [m(16), m(8)] }, { mat: 'stainless-304', color: 0xcfd3d6, finish: 'brushed', item: 'robot-flange', at: [m(d6 - 4), 0, 0], rot: X });
+  const j6 = joint(6, [0, 0, 0], [flange]);
+  const j5 = joint(5, [0, 0, 0], [link(6, [P(`${nm} wrist link`, { box: [m(50), m(28), m(28)] }, { ...al, at: [m(35), 0, 0] })]), drv(6, 12, 30, [35, 0, 0], X), j6]);
+  const j4 = joint(4, [d4, a3, 0], [link(5, [P(`${nm} wrist housing`, { cyl: [m(22), m(50)] }, { ...al, rot: Z })]), drv(5, 15, 40, [0, 0, 0], Z), j5]);
+  const j3 = joint(3, [0, a2, 0], [link(4, [P(`${nm} elbow`, { cyl: [m(30), m(75)] }, { ...al, rot: Z }), P(`${nm} elbow riser`, { box: [m(40), m(a3), m(45)] }, { ...al, at: [0, m(a3 / 2), 0] }), P(`${nm} forearm`, { box: [m(d4 - 10), m(36), m(42)] }, { ...al, at: [m((d4 - 10) / 2 + 2), m(a3), 0] })]), drv(3, 24, 50, [0, 0, 0], Z), drv(4, 18, 50, [55, a3, 0], X), j4]);
+  const j2 = joint(2, [0, d1 - j0, 0], [link(3, [P(`${nm} upper arm`, { box: [m(44), m(a2), m(50)] }, { ...al, at: [0, m(a2 / 2), 0] })]), j3]);
+  const j1 = joint(1, [0, j0, 0], [link(2, [P(`${nm} shoulder turret`, { cyl: [m(40), m(d1 - j0)] }, { ...al, at: [0, m((d1 - j0) / 2), 0] }), P(`${nm} shoulder`, { cyl: [m(38), m(90)] }, { ...al, at: [0, m(d1 - j0), 0], rot: Z })]), drv(2, 28, 60, [0, d1 - j0, 0], Z), j2]);
+  const base = P(nm, lathe([[0, 0], [60, 0], [60, 12], [42, 18], [42, j0], [0, j0]]), { ...al, item: 'arm-casting', fixed: 'bolted to its table through its base' });
+  return [base, drv(1, 30, 60, [0, 50, 0]), j1];
 }
 
 /** A section drawn along z, its length L mm, turned so its length runs along y. */

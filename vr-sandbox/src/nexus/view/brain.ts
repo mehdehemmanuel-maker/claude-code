@@ -62,6 +62,15 @@ What stands in front of you now:
 ${w.brief()}
 ${(() => { const s = w.selected(); return s ? `\nThe person is pointing at: ${s.id}: ${describe(s, 6)}` : ''; })()}`;
 
+/** Ask Claude one thing (help with a program, here), where the page may ask it (an artifact's `sample` capability):
+ *  Claude's answer, or null where it cannot be asked from this page. */
+export async function askClaude(prompt: string): Promise<string | null> {
+  const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
+  const sample = claude ? ((await claude.use('sample').catch(() => null)) as Sample | null) : null;
+  if (!sample) return null;
+  const { text } = await sample(prompt, { modelTier: 'default' });
+  return text;
+}
 export async function makeBrain(world: WorldApi): Promise<Brain> {
   const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
   const sample = claude ? ((await claude.use('sample').catch(() => null)) as Sample | null) : null;

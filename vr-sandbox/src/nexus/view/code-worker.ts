@@ -15,7 +15,14 @@ async function run(m: Msg): Promise<{ value: string; logs: string[]; steps: stri
   const show = (x: unknown) => (typeof x === 'string' ? x : JSON.stringify(x));
   const api = { facts: m.facts, input: m.input, step: (w: string) => { steps.push(String(w)); }, say: (w: string) => { steps.push(`say ${w}`); }, log: (...xs: unknown[]) => { logs.push(xs.map(show).join(' ')); } };
   if (m.lang === 'python') {
-    if (!py) { let mod: { loadPyodide(o: object): Promise<typeof py> }; try { mod = (await import(/* @vite-ignore */ `${PY_URL}pyodide.mjs`)) as typeof mod; } catch { throw new Error('Python runs in Pyodide, fetched from cdn.jsdelivr.net the first time: it could not be reached from here (offline, or blocked)'); } py = await mod.loadPyodide({ indexURL: PY_URL }); }
+    // (the copy shipped beside the forge's pages first, else the CDN's)
+    if (!py) {
+      type Mod = { loadPyodide(o: object): Promise<typeof py> };
+      let mod: Mod | null = null, at = '';
+      for (const url of [new URL('../pyodide/', self.location.href).href, PY_URL]) { try { mod = (await import(/* @vite-ignore */ `${url}pyodide.mjs`)) as Mod; at = url; break; } catch { /* the next */ } }
+      if (!mod) throw new Error('Python runs in Pyodide, shipped with the forge or fetched from cdn.jsdelivr.net: neither could be reached from here');
+      py = await mod.loadPyodide({ indexURL: at });
+    }
     const p = py!;
     p.globals.set('facts', p.toPy(m.facts)); p.globals.set('input', m.input); p.globals.set('step', api.step); p.globals.set('say', api.say); p.globals.set('log', api.log);
     p.globals.set('result', undefined);
