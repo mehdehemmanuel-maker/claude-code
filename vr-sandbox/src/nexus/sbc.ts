@@ -78,7 +78,8 @@ type Port = 'usbA2' | 'usbA' | 'rj45' | 'usbc' | 'microusb' | 'hdmi' | 'microhdm
 
 const PI_HOLES: [number, number][] = [[3.5, 3.5], [61.5, 3.5], [3.5, 52.5], [61.5, 52.5]];
 /** A hole through a board and the pad round it, mm from its lower-left corner. */
-export interface Hole { at: [number, number]; d: number; pad: number; square?: boolean; castle?: number; why: string }
+export interface Hole { at: [number, number]; d: number; pad: number; square?: boolean; castle?: number;
+  /** drilled only, not plated: no pad, no wall (a bare board's mounting hole) */ bare?: boolean; why: string }
 /** A Pico's pins (Pico and Pico 2; the W's the same, its debug pads elsewhere): two rows of 20 at 2.54 mm, 17.78 apart,
  *  centred on its 51 × 21 board (1.37 mm from each end, 1.61 from each side), each a 1.02 mm plated hole in a 1.7 mm
  *  pad, its ground pins' pads square (3, 8, 13, 18 down one row, 23, 28, 33, 38 up the other), pin 1 (GP0) at its USB
@@ -114,7 +115,7 @@ const PICO_LAYOUT: Place[] = [
   { part: () => chip('SOD-123F', 'onsemi MBR120VLSFT1G Schottky diode, VBUS to VSYS (D1)', '', 'diode-smd'), at: [6.6, 16.8], name: 'Schottky diode (D1)', how: SCH('D1') + '; its SOD-123FL drawn as a SOD-123F (KiCad\'s outline 2.8 × 1.8 mm, nominal); ' + PHP('its black body x 5.29 to 7.9, z 16.08 to 17.54, its tin ends past it') },
   { part: () => chip('SOT-523', 'Diodes Inc. DMG1012T N-channel MOSFET (Q1)', '', 'sot-package'), at: [18.5, 16.95], dir: 270, name: 'MOSFET (Q1)', how: SCH('Q1') + '; ' + PHP('its body x 18.0 to 19.04, z 16.17 to 17.73, two leads out of its +x side and one out of its −x side') },
   { part: () => inductor(2.5, 2.2, 1.0, '', 0x666666), at: [10.8, 16.7], name: 'power inductor (L1, 2.2 µH)', how: SCH('L1, 2.2 µH, its package not named') + '; ' + PHP('its grey body x 9.46 to 12.1, z 15.55 to 17.9 (2.5 × 2.2 by its size, less the blur), its colour #69646b, its photo\'s faint violet cast taken out (#666666, its lightness kept)') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
-  { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xc8b6b1, src: SCH('X1, 12 MHz') + '; an Abracon ABM8-272-T3 (its datasheet\'s text), 3.2 × 2.5 mm (KiCad\'s ABM8 footprint); ' + PHP('its lid 2.6 × 1.95, #c8b6b1') }), at: [34.58, 8.27], dir: 90, name: 'crystal (X1, 12 MHz)', how: PHP('its gold-rimmed body x 33.33 to 35.83, z 6.71 to 9.83, its long side along the board') },
+  { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xbdbdbd, src: SCH('X1, 12 MHz') + '; an Abracon ABM8-272-T3 (its datasheet\'s text), 3.2 × 2.5 mm (KiCad\'s ABM8 footprint); ' + PHP('its lid 2.6 × 1.95, #c8b6b1, the photo\'s warm cast taken out (#bdbdbd): a nickel-plated Kovar lid') }), at: [34.58, 8.27], dir: 90, name: 'crystal (X1, 12 MHz)', how: PHP('its gold-rimmed body x 33.33 to 35.83, z 6.71 to 9.83, its long side along the board') },
   { part: () => tactTop({ L: 4.27, W: 3.37, H: 1.9, plunger: [3.15, 2.23], src: SCH('SW1, a TP-1221U-K9K5325') + '; ' + PHP('its body 4.27 × 3.37 mm, its oval plunger 3.15 × 2.23, its four terminals out of its ends') + '; its height 1.9, typical (its maker\'s drawing not found)' }), at: [11.9, 7.06], name: 'BOOTSEL button (SW1)', how: PHP('its body x 9.77 to 14.04, z 5.38 to 8.75') },
   ...([[7.6, 4.73], [45.02, 16.54]] as [number, number][]).map((at): Place => ({ part: () => fiducial(1.0, 1.75, { pad: 0xf6d673, bare: 0x483e23 }), at, name: 'fiducial', how: PHP(`a bare gold dot 1.0 mm across at (${at[0]}, ${at[1]}) in a dark ring 1.75 across (#483e23) where the mask is opened, one at each of two opposite corners: fiducials by their look and their places (the schematic names none)`) })),
   { part: () => chipLed(1.6, 0.8, 0.6, { name: 'user LED (green, D2)', item: 'led-chip-green', die: 'led-die-ingan', color: 0xe6ccb2 }), at: [4.8, 4.9], dir: 90, name: 'user LED (D2, GPIO25)', how: SCH('D2, green, driven by GPIO25 through R3') + '; ' + PHP('its pale body x 4.35 to 5.25, z 3.96 to 5.83 (an 0603 by its size), LED printed beside it') },
@@ -146,7 +147,7 @@ const PICOW_LAYOUT: Place[] = [
   { part: () => chip('SOD-123F', 'Schottky diode, VBUS to VSYS (D1)', '', 'diode-smd'), at: [6.6, 16.6], name: 'Schottky diode (D1)', how: DSW('VBUS is fed through a Schottky diode (D1)') + '; ' + PHW('its body x 5.38 to 7.88, z 15.75 to 17.4') },
   { part: () => chip('SOT-523', 'small three-lead part (a SOT-523 by its size; the datasheet\'s words do not name it)', '', 'sot-package'), at: [18.05, 17.1], dir: 270, name: 'three-lead part', how: PHW('its body x 17.5 to 18.6, z 16.25 to 17.9') },
   { part: () => inductor(2.5, 2.2, 1.0, '', 0x666666), at: [10.75, 16.7], name: 'power inductor', how: PHW('its grey body x 9.38 to 12.13, z 15.5 to 17.9, as the Pico\'s') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
-  { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xc8b6b1, src: DSW('a crystal') + '; 3.2 × 2.5 mm by its size (the Pico\'s ABM8\'s)' }), at: [30.35, 5.9], dir: 90, name: 'crystal', how: PHW('its gold-rimmed body x 29.1 to 31.6, z 4.3 to 7.5') },
+  { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xbdbdbd, src: DSW('a crystal') + '; 3.2 × 2.5 mm by its size (the Pico\'s ABM8\'s)' }), at: [30.35, 5.9], dir: 90, name: 'crystal', how: PHW('its gold-rimmed body x 29.1 to 31.6, z 4.3 to 7.5') },
   { part: () => tactTop({ L: 4.27, W: 3.37, H: 1.9, plunger: [3.15, 2.23], src: PHW('the Pico\'s BOOTSEL switch by its look and size') }), at: [11.8, 7.2], name: 'BOOTSEL button', how: PHW('its body x 9.5 to 14.1, z 5.6 to 8.75') },
   { part: () => chipLed(1.6, 0.8, 0.6, { name: 'user LED (green)', item: 'led-chip-green', die: 'led-die-ingan', color: 0xe6ccb2 }), at: [4.7, 5.0], dir: 90, name: 'user LED (WL_GPIO0)', how: DSW('its LED driven from the CYW43439\'s WL_GPIO0') + '; ' + PHW('its pale body x 4.25 to 5.1, z 4.0 to 6.0, an 0603 by its size') },
   { part: () => shieldCan(10.4, 11.9, 1.6, 'Infineon CYW43439 Wi-Fi and Bluetooth radio (under its can)'), at: [37.8, 10.75], name: 'radio (CYW43439, under its can)', how: DSW('an on-board 2.4 GHz wireless interface using an Infineon CYW43439') + '; ' + PHW('its can x 32.6 to 43.0, z 4.8 to 16.7') + '; 1.6 mm tall, typical (no side photo)' },
@@ -359,13 +360,19 @@ function oldPort(kind: 'microusb' | 'can'): BoardPart {
   if (kind === 'microusb') return microUsbB();
   return { comp: { name: 'CAN header', item: 'terminal-header', solids: [ins(6, 6, 7.5, 3, 'pbt', 0xf2f2f2), ...pins(3, 4, 3, 5)], at: [0, 0, 0] }, size: [6, 7.5, 6], src: 'typical' };
 }
-/** The board itself: its FR-4 core (its own straw colour at its edges), its copper (so many layers of 35 µm, each half
- *  filled: typical), its solder mask over both faces in its colour (which weighs nothing here), its holes through all,
- *  each with its plated pad, top and bottom. */
-function pcb(b: BoardDef): Comp {
+/** What a bare board is drawn from, a computer's or a prototyping board's: its size, its copper layers, its holes and
+ *  their pads, its thickness, corners and mask, its photo's copper and silk where measured (a BoardDef is one); its
+ *  underside's mask where it differs from its top's, or none; copper laid bare on its underside. */
+export type PcbSpec = Pick<BoardDef, 'L' | 'W' | 'holes' | 'hole' | 'layers'> & Partial<Pick<BoardDef, 't' | 'corner' | 'mask' | 'more' | 'pad' | 'bright' | 'copper' | 'ink' | 'maker'>> & {
+  /** its underside's mask: so coloured, or bare (no mask: its core and its copper seen, a prototyping board's) */ under?: number | 'bare';
+  /** copper on its underside: each strip's middle (mm from the lower-left corner), its length along x and its width along z */ strips?: [number, number, number, number][] };
+/** The board itself: its FR-4 core (its own pale straw colour at its edges), its copper (so many layers of 35 µm, each
+ *  half filled: typical), its solder mask over both faces in its colour (which weighs nothing here), its holes through
+ *  all, each plated with its pad top and bottom (one turned piece: pad, wall and pad), or bare where drilled only. */
+export function pcb(b: PcbSpec): Comp {
   // (its pads' gold: matte where its photos show it so, bright where they show it bright (an ENIG finish))
   const gold = { color: HUE.gold, ...(b.bright ? { finish: 'bright' as const } : {}) };
-  const t = b.t ?? 1.6, cu = b.layers * 0.035 * 0.5, all = [...b.holes.map(([x, z]) => ({ x, z, d: b.hole, pad: b.pad ?? b.hole + 2.5, square: false, castle: 0 })), ...(b.more ?? []).map((h) => ({ x: h.at[0], z: h.at[1], d: h.d, pad: h.pad, square: !!h.square, castle: h.castle ?? 0 }))];
+  const t = b.t ?? 1.6, cu = b.layers * 0.035 * 0.5, all = [...b.holes.map(([x, z]) => ({ x, z, d: b.hole, pad: b.pad ?? b.hole + 2.5, square: false, castle: 0, bare: false })), ...(b.more ?? []).map((h) => ({ x: h.at[0], z: h.at[1], d: h.d, pad: h.pad, square: !!h.square, castle: h.castle ?? 0, bare: !!h.bare }))];
   const bores = all.map((h) => ({ x: h.x - b.L / 2, z: b.W / 2 - h.z, r: h.d / 2 }));
   const mask = b.mask ?? (b.maker === 'Raspberry Pi' ? 0x1f7a3a : b.maker === 'Orange Pi' ? 0x1f2a5a : 0x1a1a1a);
   const circ = (cx: number, cz: number, r: number, n = 24): [number, number][] => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * Math.PI * i) / n), cz + r * Math.sin((2 * Math.PI * i) / n)]);
@@ -377,6 +384,9 @@ function pcb(b: BoardDef): Comp {
   // (each hole plated through: copper 25 µm thick on its wall under its gold, joining its pads top and bottom, so its
   // bore shows metal and not the board's layers; IPC-6012's class 2 minimum, typical of boards' plated holes)
   const barrel = (h: (typeof all)[number]): Solid => ({ role: 'pad', shape: { lathe: [[h.d / 2 - 0.025, -t - 0.04], [h.d / 2, -t - 0.04], [h.d / 2, 0.04], [h.d / 2 - 0.025, 0.04], [h.d / 2 - 0.025, -t - 0.04]] }, at: [h.x - b.L / 2, 0, b.W / 2 - h.z], mat: 'copper', ...gold });
+  // (a round pad's two faces and its hole's wall as one turned piece, as they are one plating: one mesh, not three)
+  const plated = (h: (typeof all)[number]): Solid => { const r0 = h.d / 2 - 0.025, r1 = h.d / 2, R = h.pad / 2;
+    return { role: 'pad', shape: { lathe: [[r0, -t - 0.04], [R, -t - 0.04], [R, -t - 0.005], [r1, -t - 0.005], [r1, 0.005], [R, 0.005], [R, 0.04], [r0, 0.04], [r0, -t - 0.04]] }, at: [h.x - b.L / 2, 0, b.W / 2 - h.z], mat: 'copper', ...gold }; };
   // (a castellated pin: the edge nearest its hole, outward n and along it d, in the board's plane; its half-hole's
   // middle on that edge)
   const edgeOf = (h: (typeof all)[number]) => { const cx = h.x - b.L / 2, cz = b.W / 2 - h.z;
@@ -412,10 +422,12 @@ function pcb(b: BoardDef): Comp {
   const inner: [number, number][] = [...ia(b.L / 2 - m, -b.W / 2 + m, -Math.PI / 2), ...ia(b.L / 2 - m, b.W / 2 - m, 0), ...ia(-b.L / 2 + m, b.W / 2 - m, Math.PI / 2), ...ia(-b.L / 2 + m, -b.W / 2 + m, Math.PI)];
   const innerHoles = bores.filter((h) => Math.abs(h.x) + h.r < b.L / 2 - e - 0.05 && Math.abs(h.z) + h.r < b.W / 2 - e - 0.05).map((h) => circ(h.x, h.z, h.r));
   return { name: 'circuit board', item: 'pcb-bare', at: [0, 0, 0], solids: [
-    layer('core', t - cu, -t / 2, 'fr4', { color: 0xc4a86a }),
+    layer('core', t - cu, -t / 2, 'fr4', { color: 0xbfb892 }),
     { role: 'frame', shape: { prism: { pts: inner, L: cu, holes: innerHoles } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', inBody: 0 },
-    layer('film', 0.02, 0.01, '', { color: mask }), layer('film', 0.02, -t - 0.01, '', { color: mask }),
-    ...all.flatMap((h) => [...(h.pad > h.d ? [ring(h, 0.005), ring(h, -t - 0.04)] : []), barrel(h)]),
+    layer('film', 0.02, 0.01, '', { color: mask }), ...(b.under === 'bare' ? [] : [layer('film', 0.02, -t - 0.01, '', { color: b.under ?? mask })]),
+    ...all.flatMap((h) => h.bare ? [] : h.square ? [...(h.pad > h.d ? [ring(h, 0.005), ring(h, -t - 0.04)] : []), barrel(h)] : [h.pad > h.d ? plated(h) : barrel(h)]),
+    // (its underside's copper strips, bare where it has no mask)
+    ...(b.strips ?? []).map(([x, z, lx, wz]) => box('pad', [lx, 0.035, wz], [x - b.L / 2, -t - 0.0175, b.W / 2 - z], 'copper', gold)),
     ...castles.flatMap((q) => [lip(q, 0.005), lip(q, -t - 0.04), wall(q)]),
     // (the copper its photo shows under the mask, painted on the mask's top: nothing to weigh, the copper is in the board)
     ...(b.copper ? [box('film', [b.L, 0.001, b.W], [0, 0.0205, 0], '', { paint: { png: b.copper.png, ink: b.copper.hue } })] : []),

@@ -64,9 +64,12 @@ export class SolderBench {
     this.obj.solder = add(drawn('solderreel ts-635050'), PLACES.reel);
     // (its free end off the top of the winding (14.9 mm round its middle 19 up: the reel's own figures), down onto the
     // bench, while no hand holds it; and the cutters the joint lesson trims with, lying beside the headers)
-    const [rx, , rz] = PLACES.reel, tail = [[rx, 33.9, rz], [rx + 10, 33.4, rz + 1], [rx + 19, 22, rz + 4], [rx + 25, 0.4, rz + 8], [rx + 33, 0.3, rz + 11]].map(([x, y, z]) => new THREE.Vector3(x! * MM, y! * MM, z! * MM));
-    this.tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tail), 24, HAND.wire / 2 * MM, 6, false), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 })); this.group.add(this.tail);
-    add(drawn('flushcutter chp-170'), [-150, 5.8, 70], [0, 0.35, 0]);
+    // (centripetal, so the curve does not swing below its points and the wire dip under the bench where it lands)
+    const [rx, , rz] = PLACES.reel, tail = [[rx, 33.9, rz], [rx + 10, 33.4, rz + 1], [rx + 19, 22, rz + 4], [rx + 23, 7, rz + 6], [rx + 27, 0.6, rz + 8], [rx + 31, 0.27, rz + 10], [rx + 38, 0.27, rz + 12]].map(([x, y, z]) => new THREE.Vector3(x! * MM, y! * MM, z! * MM));
+    this.tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tail, false, 'centripetal'), 48, HAND.wire / 2 * MM, 6, false), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 })); this.group.add(this.tail);
+    // (the cutters on the bench to the headers' left, their jaws' tips toward them and clear of the breadboard (its end
+    // at x -42): 138 mm long, turned 0.35 rad, their tips at about x -100, z 53)
+    add(drawn('flushcutter chp-170'), [-230, 5.8, 100], [0, 0.35, 0]);
     this.wire = new THREE.Mesh(new THREE.CylinderGeometry(HAND.wire / 2 * MM, HAND.wire / 2 * MM, 1, 8).translate(0, -0.5, 0).rotateX(PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
     this.wire.visible = false; this.group.add(this.wire);
     for (const k of Object.keys(this.obj) as Thing[]) this.home[k] = { at: this.obj[k].position.clone(), rot: this.obj[k].rotation.clone() };

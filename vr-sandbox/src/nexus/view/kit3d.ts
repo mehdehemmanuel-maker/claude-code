@@ -31,7 +31,8 @@ const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
   const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
   if (!m) {
-    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|^tin$/.test(mat ?? ''), glass = (mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear') && finish !== 'moulded', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    const metal = /steel|stainless|kovar|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|tungsten|platinum|^tin$/.test(mat ?? ''), glass = (mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear') && finish !== 'moulded', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    // (stainless and Kovar metals too: a connector's shell, a crystal's lid, not matte plastic)
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium|brass|bronze|solder|^tin$/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
     // (a part moulded of a thermoplastic, a connector's housing or a header's strip, takes its mould's polish: satin, so a
@@ -65,7 +66,9 @@ function loftGeometry(l: Loft): THREE.BufferGeometry {
 function tubeGeometry(t: Tube): THREE.BufferGeometry {
   const path = new THREE.CurvePath<THREE.Vector3>(), v = (q: number[]) => new THREE.Vector3(q[0], q[1], q[2]), legs = tubeLegs(t);
   for (const l of legs) path.add(l.kind === 'line' ? new THREE.LineCurve3(v(l.a), v(l.b)) : new THREE.QuadraticBezierCurve3(v(l.a), v(l.c!), v(l.b)));
-  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length * 6), t.r, 12, false) : new THREE.BufferGeometry();
+  // (six steps a leg for a few legs; a long path of many short legs, a wound wire's helix, two a leg, its legs already
+  // short)
+  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length > 100 ? legs.length * 2 : legs.length * 6), t.r, 12, false) : new THREE.BufferGeometry();
 }
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {
@@ -90,7 +93,31 @@ function paintMats(p: Part): THREE.Material[] {
   }
   return m;
 }
+/** Prints laid out on a box's top face (+y) as one picture, as a silkscreen is one print (a board's numbers, letters,
+ *  words and lines; a breadboard's legend): each word at its middle in letters its height, each line a bar its size,
+ *  in its own colour, its ground clear; about 14 pixels to the millimetre, 2048 across at most; one texture for the
+ *  lot, not one for each word. The box's other faces not drawn. */
+const laidOut = new Map<string, THREE.Material[]>();
+function printsMats(p: Part): THREE.Material[] {
+  const [w, , d] = (p.shape as { box: [number, number, number] }).box, key = `${w.toFixed(5)}|${d.toFixed(5)}|${JSON.stringify(p.prints)}`; let m = laidOut.get(key);
+  if (!m) {
+    const px = Math.min(14000, 2048 / Math.max(w, d)), c = document.createElement('canvas'); c.width = Math.max(8, Math.round(w * px)); c.height = Math.max(8, Math.round(d * px));
+    const x = c.getContext('2d')!, hex = (n: number) => '#' + new THREE.Color(n).getHexString();
+    // (its top row along the box's -z edge, its left along -x: BoxGeometry's own UVs for its +y face)
+    for (const q of p.prints!) {
+      const X = (q.at[0] + w / 2) * px, Y = (q.at[1] + d / 2) * px; x.fillStyle = hex(q.ink); x.save(); x.translate(X, Y); if (q.dir) x.rotate(q.dir);
+      if (q.t) { x.font = `600 ${Math.max(4, Math.round((q.h ?? 0.001) * px * 1.39))}px "DejaVu Sans", Arial, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(q.t, 0, 0); }
+      else x.fillRect((-(q.lx ?? 0) * px) / 2, (-(q.wz ?? 0) * px) / 2, (q.lx ?? 0) * px, (q.wz ?? 0) * px);
+      x.restore();
+    }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const face = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.25, depthWrite: false, roughness: 0.6, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2 }), none = new THREE.MeshBasicMaterial({ visible: false });
+    m = [none, none, face, none, none, none]; laidOut.set(key, m);
+  }
+  return m;
+}
 function printedMats(p: Part, base: THREE.Material): THREE.Material | THREE.Material[] {
+  if (p.prints && p.shape && 'box' in p.shape && typeof document !== 'undefined') return printsMats(p);
   if (p.paint && p.shape && 'box' in p.shape) return paintMats(p);
   if (!p.text || !p.shape || !('box' in p.shape) || typeof document === 'undefined') return base;
   const [w, h, d] = p.shape.box, k = w <= h && w <= d ? 0 : h <= d ? 1 : 2, [a, b] = k === 0 ? [d, h] : k === 1 ? [w, d] : [w, h], key = `${p.text}|${a.toFixed(3)}|${b.toFixed(3)}`;
@@ -214,20 +241,36 @@ const blobTexture = (): THREE.CanvasTexture | null => {
   const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = g; x.fillRect(0, 0, 128, 128); blob = new THREE.CanvasTexture(c); return blob;
 };
+/** A slab's shadow: its footprint (x by z, m) dark, its edges blurred out over m, drawn on a canvas its shape. */
+function rectShadow(fx: number, fz: number, m: number): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const W = fx + 2 * m, D = fz + 2 * m, px = 128 / Math.max(W, D), c = document.createElement('canvas'); c.width = Math.max(8, Math.round(W * px)); c.height = Math.max(8, Math.round(D * px));
+  const x = c.getContext('2d'); if (!x) return null;
+  const e = m * px; x.filter = `blur(${Math.max(1, e * 0.45)}px)`; x.fillStyle = 'rgba(0,0,0,1)'; x.fillRect(e * 0.6, e * 0.6, c.width - e * 1.2, c.height - e * 1.2);
+  return new THREE.CanvasTexture(c);
+}
 /** The ground's shading under a thing that rests on it: one soft patch its footprint's size, and a darker one under each
  *  part that touches the ground. Null for a thing that does not rest on the ground (or where there is no canvas). */
 function contactShadow(group: THREE.Group): THREE.Group | null {
   const tex = blobTexture(); if (!tex) return null;
   group.updateMatrixWorld(true); const all = new THREE.Box3().setFromObject(group); if (all.isEmpty() || all.min.y > 0.05) return null;
   const out = new THREE.Group(); out.name = 'contact shadow'; out.userData.decor = true;
-  const patch = (cx: number, cz: number, sx: number, sz: number, opacity: number, lift: number) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+  const patch = (cx: number, cz: number, sx: number, sz: number, opacity: number, lift: number, map: THREE.Texture = tex) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map, color: 0x000000, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(cx, all.min.y + lift, cz); m.renderOrder = 1; m.userData.decor = true; out.add(m);
   };
   // (its patches lifted off the ground so they do not fight it for depth: 2 mm under a thing 40 cm across or more, less
   // under a small one, so a solder wire lying 0.3 mm off the bench beside a reel is not drawn under the reel's shading)
   const size = all.getSize(new THREE.Vector3()), ctr = all.getCenter(new THREE.Vector3()), sc = Math.min(1, Math.max(size.x, size.z) / 0.4);
-  patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002 * sc);
+  // (a flat thing, a slab lying on the ground (a breadboard, a board, a tray), shaded close round its own outline: dark
+  // under it, fading out from its edges over about half its height; anything else a soft round patch its size)
+  // (a slab only where one piece of it lying on the ground spans most of its footprint: a board's core, a breadboard's
+  // backing; a pair of cutters is flat but open, and gets the round patch)
+  const flat = size.y < 0.5 * Math.min(size.x, size.z), foot = Math.max(1e-9, size.x * size.z), bb = new THREE.Box3();
+  let span = 0; if (flat) group.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; bb.setFromObject(me); if (bb.isEmpty() || bb.min.y > all.min.y + 0.002) return; const z = bb.getSize(new THREE.Vector3()); span = Math.max(span, (z.x * z.z) / foot); });
+  const slab = flat && span > 0.8, m = Math.min(0.03, Math.max(0.002, size.y * 0.5)), rect = slab ? rectShadow(size.x, size.z, m) : null;
+  if (rect) patch(ctr.x, ctr.z, size.x + 2 * m, size.z + 2 * m, 0.55, 0.002 * sc, rect);
+  else patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002 * sc);
   // (each touching part's patch at least 5 cm across, or for a small thing a third of its own footprint's narrow side:
   // a reel's thin flanges each a line under its rim, not two hand-wide blots that run together black)
   const b = new THREE.Box3(), least = Math.min(0.05, 0.3 * Math.min(size.x, size.z));

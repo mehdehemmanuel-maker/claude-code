@@ -7,8 +7,9 @@
 
 import type { Comp } from './sbc';
 import type { Solid } from './packages';
+import type { Print } from './kits';
 import { BOARD_PARTS, chip } from './boardparts';
-import { smallPart, type SmallRow } from './sbc';
+import { pcb, smallPart, type Hole, type SmallRow } from './sbc';
 
 type V2 = [number, number]; type V3 = [number, number, number];
 const PI = Math.PI;
@@ -128,16 +129,27 @@ export function chp170(withClip = false): Comp {
   // (each half: its jaw tapering to its tip, the blade's flat on the cut's side; its head round the pivot; its handle a
   // flat steel bar under its grip, the halves crossed at the rivet)
   const half = (s: 1 | -1, k: number): Comp => {
-    const jawPts: V2[] = [[pivot - 4, 0], [pivot + 2, 0], [Lt - 0.4, 0], [Lt, s * 0.2], [Lt - 3, s * headW * 0.22], [pivot + 2, s * headW / 2], [pivot - 4, s * headW / 2]];
-    const sol = { role: 'body' as const, shape: { prism: { pts: jawPts.map(([x, z]) => [x, -z] as V2), L: t } }, at: [0, 0, 0] as V3, rot: [-PI / 2, 0, 0] as V3, mat: 'steel-tool', ...steel };
-    const arm: Solid = { role: 'body', shape: { tube: { r: 2.1, pts: [[pivot - 3, 0, -s * 2.0], [pivot - 14, 0, -s * 4.6], [pivot - 40, 0, -s * 8.2], [62, 0, -s * 10.6], [14, 0, -s * 11.5]] } }, at: [0, 0, 0], mat: 'steel-tool', ...steel };
+    // (its jaw: its inner edge straight, the flush edge it cuts with, to its point; its outer edge curving out from the
+    // point to its head, round about the rivet; the halves lying in one plane)
+    const R = headW / 2, cx = pivot - 1, jawPts: V2[] = [[cx - R * 0.6, 0], [Lt - 0.4, 0], [Lt, s * 0.2],
+      ...Array.from({ length: 9 }, (_, i): V2 => { const u = (i + 1) / 10; return [Lt - u * (Lt - cx), s * R * Math.pow(Math.sin((u * PI) / 2), 0.7)]; }),
+      ...Array.from({ length: 6 }, (_, i): V2 => { const a = PI / 2 + ((i + 1) / 7) * (PI / 2) * 0.75; return [cx + R * Math.cos(a), s * R * Math.sin(a)]; })];
+    const flat = (pts: V2[]) => ({ prism: { pts: pts.map(([x, z]) => [x, -z] as V2), L: t } });
+    const sol = { role: 'body' as const, shape: flat(jawPts), at: [0, 0, 0] as V3, rot: [-PI / 2, 0, 0] as V3, mat: 'steel-tool', ...steel };
+    // (its handle a flat forged bar 2.5 thick out of the head on the other side of the rivet, tapering from 8 mm wide at
+    // the head to 6 at its end, under its grip: sized, with the grips, so the whole weighs Hakko's 62 g)
+    const spine: V2[] = [[pivot - 3, -s * 2.0], [pivot - 14, -s * 4.6], [pivot - 40, -s * 8.2], [62, -s * 10.6], [14, -s * 11.5]];
+    const side = (k: number): V2[] => spine.map(([x, z], i) => { const [px, pz] = spine[Math.max(0, i - 1)]!, [nx, nz] = spine[Math.min(spine.length - 1, i + 1)]!, dx = nx - px, dz = nz - pz, l = Math.hypot(dx, dz), w = 4 - (1 * i) / (spine.length - 1); return [x - (k * w * dz) / l, z + (k * w * dx) / l]; });
+    const arm: Solid = { role: 'body', shape: flat([...side(1), ...side(-1).reverse()]), at: [0, 0, 0], rot: [-PI / 2, 0, 0], mat: 'steel-tool', ...steel };
     // (its grip a dipped sleeve bowing out from the rivet to the handle's end, a cushion strip along its outer side)
-    const path = (off: number): V3[] => [[pivot - 14, 0, -s * (4.6 + off)], [pivot - 40, 0, -s * (8.2 + off)], [62, 0, -s * (10.6 + off)], [26, 0, -s * (11.6 + off)], [8, 0, -s * (11 + off)]];
-    const g = piece(`CHP-170 ${k ? 'lower' : 'upper'} grip`, 'handle-grip', [{ role: 'body', shape: { tube: { r: 5.8, pts: path(0) } }, at: [0, 0, 0], mat: 'pvc', color: 0xc4262e, finish: 'texture', share: 0.85 },
-      { role: 'body', shape: { tube: { r: 3.0, pts: path(3.3).slice(1) } }, at: [0, 0, 0], mat: 'pvc', color: 0x18191b, finish: 'texture', share: 0.85 },
+    // (its grip from 22 mm behind the rivet, where the handles are 11.4 apart, to the handle's end; 10 across (an
+    // estimate), so the two clear each other when it is closed; its PVC round the steel inside it)
+    const gr = 5.0, path = (off: number): V3[] => [[pivot - 22, 0, -s * (5.7 + off)], [pivot - 40, 0, -s * (8.2 + off)], [62, 0, -s * (10.6 + off)], [26, 0, -s * (11.6 + off)], [8, 0, -s * (11 + off)]];
+    const g = piece(`CHP-170 ${k ? 'lower' : 'upper'} grip`, 'handle-grip', [{ role: 'body', shape: { tube: { r: gr, pts: path(0) } }, at: [0, 0, 0], mat: 'pvc', color: 0xc4262e, finish: 'texture', share: 0.78 },
+      { role: 'body', shape: { tube: { r: 2.4, pts: path(3.0).slice(1) } }, at: [0, 0, 0], mat: 'pvc', color: 0x18191b, finish: 'texture', share: 0.85 },
       // (its two ends rounded shut)
-      { role: 'body', shape: { lathe: [[0, 0], [5.8, 0], [5.6, 1.4], [4.2, 3.4], [0, 4.4]] }, at: [8, 0, -s * 11], rot: [0, 0, PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' },
-      { role: 'body', shape: { lathe: [[0, 0], [5.8, 0], [5.0, 1.6], [0, 2.6]] }, at: [pivot - 14, 0, -s * 4.6], rot: [0, -s * 0.14, -PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' }]);
+      { role: 'body', shape: { lathe: [[0, 0], [gr, 0], [gr - 0.2, 1.2], [gr - 1.4, 2.9], [0, 3.6]] }, at: [8, 0, -s * 11], rot: [0, 0, PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' },
+      { role: 'body', shape: { lathe: [[0, 0], [gr, 0], [gr - 0.7, 1.4], [0, 2.2]] }, at: [pivot - 22, 0, -s * 5.7], rot: [0, -s * 0.14, -PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' }]);
     return { name: `CHP-170 ${k ? 'lower' : 'upper'} half`, item: 'plier-jaw', at: [0, 0, 0], solids: [sol, arm], kids: [g] };
   };
   const rivet = piece('CHP-170 pivot rivet', 'plier-rivet', [post('term', 2.0, 2 * t + 0.6, [pivot - 1, -t - 0.3, 0], 'steel-low', { color: 0x9fa3a6, finish: 'bright' })]);
@@ -193,18 +205,23 @@ export function breadboard(points: number): Comp {
     // it is moulded, a wall at each side)
     ...[1, -1].flatMap((s) => { const out = S.rails ? 20.79 : W / 2 - 1; return [box('body', [L - 2, deep, 1.0], [0, mid, s * 1.74], 'abs', dark), ...(out - 15.54 > 2.5 ? [box('body', [L - 2, deep, 1.0], [0, mid, s * 16.04], 'abs', dark), box('body', [L - 2, deep, 1.0], [0, mid, s * (out - 0.5)], 'abs', dark)] : [box('body', [L - 2, deep, out - 15.54], [0, mid, s * (15.54 + out) / 2], 'abs', dark)])]; }),
     // (the channel's floor, 2 mm below the top, between the slots' walls)
-    box('body', [L, 0.8, 2 * ch], [0, H - 2.4, 0], 'abs', { ...white, shade: 0.5 }) /* (a long slot 2.5 wide and 2 deep: its floor sees about half the sky, sin(atan(1.25 / 2))) */,
+    box('body', [L, 0.8, 2 * ch], [0, H - 2.4, 0], 'abs', { ...white, shade: 0.6 }) /* (a long slot 2.5 wide and 2 deep: its floor sees about half the sky, sin(atan(1.25 / 2)), and the light its white walls throw down) */,
+    // (the channel's two sides, from its floor to under the face: an open groove's walls, half the sky each, not the dark of
+    // a clip's slot behind them)
+    ...[1, -1].map((sg) => box('body', [L, 2.0 - face, 0.05], [0, H - 2.0 + (2.0 - face) / 2, sg * (ch + 0.025)], 'abs', { ...white, shade: 0.6 })),
     // (each pair of rails' slots: the wall between them, and to the frame)
     ...(S.rails ? [1, -1].flatMap((s) => [box('body', [L - 2, deep, 0.94], [0, mid, s * 22.86], 'abs', dark), box('body', [L - 2, deep, W / 2 - 1 - 24.93], [0, mid, s * (24.93 + W / 2 - 1) / 2], 'abs', dark)]) : []),
   ];
   // (its legend: each pair of rails a red line by its outer rail and a blue by its inner, as BusBoard's colour legend
   // has them (typical); its columns numbered every five and its rows lettered at both ends, ink on its top)
-  const ink = (text: string, x: number, z: number, w: number): Solid => box('film', [w, 0.02, 1.4], [x, H + 0.04, z], '', { color: 0xf3f1ea, text, ink: 0x3a3a3a, inkOnly: true });
-  const legend: Solid[] = [
-    ...(S.rails ? [1, -1].flatMap((s) => [box('film', [L - 6, 0.02, 0.5], [bbCol(points, (rcols[0]! + rcols.at(-1)!) / 2), H + 0.02, s * 25.9], '', { color: 0xd8262b }), box('film', [L - 6, 0.02, 0.5], [bbCol(points, (rcols[0]! + rcols.at(-1)!) / 2), H + 0.02, s * 19.8], '', { color: 0x2a5bd7 })]) : []),
-    ...[1, ...Array.from({ length: Math.floor(cols / 5) }, (_, i) => (i + 1) * 5)].flatMap((c) => [ink(String(c), bbCol(points, c), 16.3, 2.4), ink(String(c), bbCol(points, c), -16.3, 2.4)]),
-    ...'abcdefghij'.split('').flatMap((ch, i) => [ink(ch, -((cols - 1) / 2) * p - 2.6, BB.rowsZ[i]!, 1.4), ink(ch, ((cols - 1) / 2) * p + 2.6, BB.rowsZ[i]!, 1.4)]),
-  ];
+  // (all of it one print on its face, as it is printed: one texture, not one for each number)
+  const word = (t: string, x: number, z: number): Print => ({ t, at: [x, z], h: 1.1, ink: 0x3a3a3a });
+  const railMid = S.rails ? bbCol(points, (rcols[0]! + rcols.at(-1)!) / 2) : 0;
+  const legend: Solid[] = [{ role: 'film', shape: { box: [L, 0.01, W] }, at: [0, H + 0.02, 0], mat: '', color: 0xf3f1ea, prints: [
+    ...(S.rails ? [1, -1].flatMap((s): Print[] => [{ at: [railMid, s * 25.9], lx: L - 6, wz: 0.5, ink: 0xd8262b }, { at: [railMid, s * 19.8], lx: L - 6, wz: 0.5, ink: 0x2a5bd7 }]) : []),
+    ...[1, ...Array.from({ length: Math.floor(cols / 5) }, (_, i) => (i + 1) * 5)].flatMap((c) => [word(String(c), bbCol(points, c), 16.3), word(String(c), bbCol(points, c), -16.3)]),
+    ...'abcdefghij'.split('').flatMap((ch, i) => [word(ch, -((cols - 1) / 2) * p - 2.6, BB.rowsZ[i]!), word(ch, ((cols - 1) / 2) * p + 2.6, BB.rowsZ[i]!)]),
+  ] }];
   const body = piece(`${points}-point breadboard body`, 'breadboard-body', [...tops, ...walls, ...legend]);
   // (a clip's section: two leaves from a base, bent in to pinch and out to a mouth under the hole)
   const y0 = back + 2.0, clipPts: V2[] = ([[-0.65, 0], [0.65, 0], [0.65, 2.0], [0.23, 3.5], [0.45, 4.2], [0.27, 4.26], [0.03, 3.55], [0.45, 2.0], [0.45, 0.2], [-0.45, 0.2], [-0.45, 2.0], [-0.03, 3.55], [-0.27, 4.26], [-0.45, 4.2], [-0.23, 3.5], [-0.65, 2.0]] as V2[]).map(([u, v]) => [u, y0 + v]);
@@ -216,11 +233,55 @@ export function breadboard(points: number): Comp {
   return { name: `${points}-point breadboard`, item: `breadboard-${points}`, at: [0, 0, 0], kids: [body, ...clips, ...rails, backing] };
 }
 
+// ---- Adafruit's Perma-Proto half-sized breadboard PCB ----------------------------------------------------------------
+/** Adafruit's Perma-Proto half-sized breadboard PCB (product 1609) as its Eagle board gives it (Adafruit's
+ *  Adafruit-Perma-Proto-PCB repository, "adafruit permaproto halfbreadboard.brd"): 81.28 × 50.8 mm of 1.6 mm FR-4
+ *  (0.063", its listing); 420 holes drilled 1.2 mm and plated, each a pad 1.93 across on both faces, in 30 columns 2.54
+ *  apart (the first 3.81 in from its left edge), rows a–e and f–j 2.54 apart either side of a 7.62 gap, two pairs of
+ *  rails 19.05 and 21.59 out from its middle, 30 holes each; two mounting holes 3.2 mm, not plated, at its middle line's
+ *  ends 73.66 apart (2.9", its listing). Its underside bare (its listing: "no mask so you can easily cut traces"), each
+ *  five holes of a column joined by a strip 0.41 mm wide and each rail by one 0.81, gold over copper. Its top as
+ *  Adafruit's photo of it shows it: white (#dcdcdc lit), its numbers, letters and words black, a red line by each + rail
+ *  and a blue by each − (the board's tPlaceRed and tPlaceBlue layers, 0.41 wide), its corners round (the board file
+ *  chamfers them 2.54; the photo's taken, the radius 2.5 an estimate). Its logo not drawn. Frame: its columns along x
+ *  (1 at -x), its rows across z (a toward +z, as the BB400's), its top at y 0. */
+export const PP = { L: 81.28, W: 50.8, t: 1.6, pitch: 2.54, cols: 30, drill: 1.2, pad: 1.9304,
+  rowsZ: [13.97, 11.43, 8.89, 6.35, 3.81, -3.81, -6.35, -8.89, -11.43, -13.97], plus: [21.59, -19.05], minus: [19.05, -21.59], mount: 36.83 } as const;
+/** Where column c (1–30) of a Perma-Proto sits along x, mm from its middle. */
+export const ppCol = (c: number): number => -36.83 + (c - 1) * PP.pitch;
+export function permaProto(): Comp {
+  const { L, W, t, pitch: p, cols } = PP, cx = (c: number) => ppCol(c) + L / 2, rz = (z: number) => W / 2 - z;
+  // (its holes, each its board file's via, mm from its lower-left corner: every column's ten rows and four rails)
+  const zs = [...PP.rowsZ, ...PP.plus, ...PP.minus];
+  const more: Hole[] = [...Array.from({ length: cols }, (_, i) => zs.map((z): Hole => ({ at: [cx(i + 1), rz(z)], d: PP.drill, pad: PP.pad, why: 'its board file: drilled 1.2, its pad 1.93 (0.076")' }))).flat(),
+    ...[-1, 1].map((sx): Hole => ({ at: [L / 2 + sx * PP.mount, W / 2], d: 3.2, pad: 3.2, bare: true, why: 'its board file\'s hole: 3.2 mm, 73.66 apart (its listing\'s 2.9")' }))];
+  // (its underside's copper: each column's five holes a strip, each rail a strip its length)
+  const strips: [number, number, number, number][] = [...Array.from({ length: cols }, (_, i) => [1, -1].map((sg): [number, number, number, number] => [cx(i + 1), rz(sg * 8.89), 0.4064, 4 * p])).flat(),
+    ...[...PP.plus, ...PP.minus].map((z): [number, number, number, number] => [L / 2, rz(z), (cols - 1) * p, 0.8128])];
+  const board = pcb({ L, W, t, layers: 2, holes: [], hole: PP.drill, more, mask: 0xdcdcdc, under: 'bare', strips, corner: 2.5 });
+  // (its silk, ink on its top: its column numbers over row j and under row a, its row letters at both ends, its words
+  // across its middle; its rails' red and blue lines, a + at each + rail's ends and a short bar at each − rail's, as its
+  // board file has them)
+  const ink = 0x252221, red = 0xe1584c, blue = 0x1d8fbb;
+  const word = (t: string, x: number, z: number, h: number, colour = ink): Print => ({ t, at: [x, z], h, ink: colour });
+  const bar = (x: number, z: number, lx: number, wz: number, colour: number): Print => ({ at: [x, z], lx, wz, ink: colour });
+  const prints: Print[] = [
+    ...Array.from({ length: cols }, (_, i) => [-15.75, 15.75].map((z) => word(String(i + 1), ppCol(i + 1), z, 1.016))).flat(),
+    ...'ABCDEFGHIJ'.split('').flatMap((ch, k) => [-39.2, 39.3].map((x) => word(ch, x, PP.rowsZ[k]!, 1.27))),
+    word('Adafruit Perma-Proto 1/2 Sized Breadboard', 2.0, 0, 1.778),
+    ...[23.368, -17.272].map((z) => bar(0, z, 73.66, 0.41, red)), ...[17.272, -23.368].map((z) => bar(0, z, 73.66, 0.41, blue)),
+    ...[[-39.0, 23.6], [39.0, 23.6], [39.0, -17.0], [-39.0, -17.0]].map(([x, z]) => word('+', x!, z!, 2.0, red)),
+    ...[[-38.862, -23.241], [39.116, -23.241], [39.116, 17.399], [-38.862, 17.399]].map(([x, z]) => bar(x!, z!, 0.41, 1.27, blue)),
+  ];
+  const silk: Solid[] = [{ role: 'film', shape: { box: [L, 0.01, W] }, at: [0, 0.06, 0], mat: '', color: 0xdcdcdc, prints }];
+  return { name: 'Perma-Proto half-sized breadboard PCB', item: 'permaproto-half', at: [0, 0, 0], solids: silk, kids: [board] };
+}
+
 // ---- Atten's S-11 iron stand -----------------------------------------------------------------------------------------
 /** Atten's S-11 soldering-iron stand, Adafruit's 150, as its dimensional drawing gives it (cold-rolled sheet; 170.0 ×
  *  78.3 mm over all, its base 168.3 × 74.9, a front ring 19 mm inside and a rear one 31.8, the rings' tops 95.5 and
  *  114.3 up; which figure is which read by their sizes, the drawing's picture not to hand here: an estimate), with its
- *  sponge (60 × 60 mm, Adafruit's replacements for it). Estimated, said so: the sheet 1.0 mm, its rim folded up 6, the
+ *  sponge (60 × 60 mm, Adafruit's replacements for it; blue, as Adafruit's photos of its stand (150) show it). Estimated, said so: the sheet 1.0 mm, its rim folded up 6, the
  *  rings 10 deep, the uprights 18 wide, the rings 75 apart; the sponge 10 thick, cellulose 5 % solid; four rubber feet
  *  13.18 across (the drawing's last figure, its use read as these) and 2 high; drawn zinc-plated, its finish not said.
  *  Frame: along x from its back (x 0), up y, its middle z 0; the iron lies in its rings, its tip forward over the
@@ -277,18 +338,20 @@ export function solderReel(): Comp {
   const R = 19, rb = 10, w = 20, f = 1.2, pack = 0.78, vol = 50 / 8.4 * 1000, Rw = Math.sqrt(rb * rb + vol / (Math.PI * w * pack));
   const pp = { color: 0x2d6fb8 } as const, rot: [number, number, number] = [PI / 2, 0, 0];
   const spool = piece('solder spool', 'solder-spool', [
-    ...[-1, 1].map((s): Solid => ({ role: 'body', shape: { lathe: [[6, s * (w / 2) ], [R, s * (w / 2)], [R, s * (w / 2 + f)], [6, s * (w / 2 + f)], [6, s * (w / 2)]] }, at: [0, R, 0], rot, mat: 'pp', ...pp })),
+    // (each flange 1.2 thick, its rim a bead 2.0 thick round its edge, as a moulded spool stiffens its flanges: an
+    // estimate; its bore 12 mm through)
+    ...[-1, 1].map((s): Solid => ({ role: 'body', shape: { lathe: ([[6, w / 2], [R - 1.5, w / 2], [R - 1.5, w / 2 - 0.4], [R, w / 2 - 0.4], [R, w / 2 + f + 0.4], [R - 1.5, w / 2 + f + 0.4], [R - 1.5, w / 2 + f], [6, w / 2 + f], [6, w / 2]] as V2[]).map(([r, y]): V2 => [r, s * y]) }, at: [0, R, 0], rot, mat: 'pp', ...pp })),
     { role: 'body', shape: { lathe: [[6, -w / 2], [rb, -w / 2], [rb, w / 2], [6, w / 2], [6, -w / 2]] }, at: [0, R, 0], rot, mat: 'pp', ...pp }]);
   // (its outer layer the wire itself, wound as it is: a helix of 0.5 mm wire turn against turn across the barrel; the
   // layers under it as one body packed so that, with the outer layer, it holds the reel's 50 g)
-  const d = 0.5, Rh = Rw - d / 2, n = Math.floor((w - d) / d), per = 12, z0 = -w / 2 + d / 2;
+  const d = 0.5, Rh = Rw - d / 2, n = Math.floor((w - d) / d), per = 24, z0 = -w / 2 + d / 2;
   const helix: V3[] = Array.from({ length: n * per + 1 }, (_, i): V3 => { const a = (2 * PI * i) / per; return [Rh * Math.cos(a), R + Rh * Math.sin(a), z0 + (i / per) * ((w - d) / n)]; });
   const outer = PI * (d / 2) ** 2 * n * 2 * PI * Rh, core = PI * ((Rw - d) ** 2 - rb * rb) * w;
   const wire = piece('solder wire, wound', 'solder-wire', [{ role: 'body', shape: { lathe: [[rb, -w / 2], [Rw - d, -w / 2], [Rw - d, w / 2], [rb, w / 2], [rb, -w / 2]] }, at: [0, R, 0], rot, mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed', share: (vol - outer) / core },
     { role: 'body', shape: { tube: { r: d / 2, pts: helix } }, at: [0, 0, 0], mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed' }]);
   // (a paper label on each flange's face, its figures the reel's own: no maker's artwork, which is not to hand; its
   // weight a few hundredths of a gram, not counted)
-  const label = (s: 1 | -1): Solid => box('film', [15, 15, 0.1], [0, R, s * (w / 2 + f + 0.05)], '', { color: 0xf4f1e8, text: '63/37\n0.5 mm\n50 g', ink: 0x23262b });
+  const label = (s: 1 | -1): Solid => box('film', [16, 7, 0.1], [0, R + 10.5, s * (w / 2 + f + 0.05)], '', { color: 0xf4f1e8, text: '63/37  0.5 mm\n50 g', ink: 0x23262b });
   spool.solids!.push(label(1), label(-1));
   return { name: '50 g reel of 0.5 mm 63/37 solder', item: 'solderreel-ts-635050', at: [0, 0, 0], kids: [spool, wire] };
 }

@@ -27,7 +27,7 @@ import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 import { boardComps, boardDef, screwFor, type Comp } from './sbc';
-import { breadboard, chp170, hakko599B, pinecilV2, solderReel, standS11 } from './kit-solder';
+import { breadboard, chp170, hakko599B, pinecilV2, solderReel, standS11, permaProto } from './kit-solder';
 import { LINK } from './meca';
 
 const PI = Math.PI, mm = 1e-3;
@@ -292,6 +292,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/kit-solder.ts): two forged halves, their rivet, grips and spring (the -A\'s safety clip too)', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (p, it) => kitParts(chp170(p.model === 'chp-170-a'), it.name) },
+  permaproto: { says: 'a breadboard PCB as Adafruit makes it (src/nexus/kit-solder.ts): its FR-4 drilled and plated through, each hole\'s pads and wall one plating, its underside\'s strips and rails, its white mask and its silk where its board file has it', leaves: 'its logo; its corners\' radius an estimate (its photo rounds what its board file chamfers)', make: (_p, it) => kitParts(permaProto(), it.name) },
   breadboard: { says: 'a breadboard as BusBoard makes it (src/nexus/kit-solder.ts): its moulded body with every hole and the walls between its clips\' slots, a phosphor-bronze clip under each column of five and each rail, its backing, its legend', leaves: 'its clips\' fingers as one strip each (their slits taken as 72 % of the strip); the walls\' and clips\' sizes estimates', make: (p, it) => kitParts(breadboard(Number(p.points)), it.name) },
   ironstand: { says: 'a stand as its maker makes it (src/nexus/kit-solder.ts): its sheet base and rim, its two rings on their uprights, its sponge and feet', leaves: 'which of its drawing\'s figures is which read by their sizes (an estimate), its welds not drawn', make: (_p, it) => kitParts(standS11(), it.name) },
   tipcleaner: { says: 'a tip cleaner as Hakko makes it (src/nexus/kit-solder.ts): its holder\'s base and top, its brass wool', leaves: 'its holder\'s shape between Hakko\'s two figures an estimate, its wool one ball', make: (_p, it) => kitParts(hakko599B(), it.name) },
@@ -327,7 +328,7 @@ function solidPart(m: { s: Solid; g: number; fill: number }, name: string, item:
   const t = 'box' in sh ? sh.box[2] : 0;
   return P(name, shape, { at: [k(s.at[0]), k(s.at[1]), k(s.at[2])], ...(s.rot ? { rot: s.rot } : {}), ...(s.mat ? { mat: s.mat } : {}), ...lookOf(s), ...(item ? { item } : {}), ...(HOW[s.role] ? { fixed: HOW[s.role] } : {}),
     ...(s.shell ? { kg: m.g / 1000 } : m.fill * (s.share ?? 1) < 1 ? { fill: m.fill * (s.share ?? 1) } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}),
-    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...(s.text ? { text: s.text } : {}), ...(s.facets ? { facets: s.facets } : {}), ...(s.ink != null ? { ink: s.ink } : {}), ...(s.paint ? { paint: s.paint } : {}), ...(s.inkOnly ? { inkOnly: true } : {}), ...(s.shade !== undefined ? { shade: s.shade } : {}), ...more });
+    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...(s.text ? { text: s.text } : {}), ...(s.facets ? { facets: s.facets } : {}), ...(s.prints ? { prints: s.prints.map((q) => ({ ...q, at: [k(q.at[0]), k(q.at[1])] as [number, number], ...(q.h ? { h: k(q.h) } : {}), ...(q.lx ? { lx: k(q.lx) } : {}), ...(q.wz ? { wz: k(q.wz) } : {}) })) } : {}), ...(s.ink != null ? { ink: s.ink } : {}), ...(s.paint ? { paint: s.paint } : {}), ...(s.inkOnly ? { inkOnly: true } : {}), ...(s.shade !== undefined ? { shade: s.shade } : {}), ...more });
 }
 /** A semiconductor as drawn from its package: its body under its name (marked with its part number where it is big
  *  enough to read), its lead frame (leads, paddle, tab and pad) as one, or an axial diode's two leads each its own;

@@ -132,6 +132,13 @@ export const INDUSTRIAL: KindDef[] = [
     spec: (p) => `${p.points} tie points at 2.54 mm (0.1 in) pitch${n(p, 'points') >= 400 ? '; power rails along both sides' : ''}`, box: (p) => ({ 170: [47, 35.5, 8.5], 400: [84, 54.3, 8.5], 830: [165, 54.3, 8.5], 1660: [165, 108.6, 8.5] } as Record<number, [number, number, number]>)[n(p, 'points')]!, g: (p) => (n(p, 'points') === 400 ? 30 : n(p, 'points') * 0.075) /* BusBoard's BB400 30 g (its listing); the others in proportion to its tie points, typical */, look: 'board',
   },
   {
+    id: 'permaproto', name: 'breadboard PCB', path: 'Electrical/Boards and controllers/Prototyping', says: 'a plated-through prototyping board laid out as a breadboard is, so a circuit tried on one is soldered as it stands onto the other', std: 'the boards drawn here: Adafruit\'s Perma-Proto half-sized (product 1609; its Eagle board file)',
+    axes: [bare('size', 'size', ['half'])], title: () => 'Adafruit Perma-Proto half-sized breadboard PCB', of: () => 'pcb-bare', make: 'etch',
+    how: 'FR-4 drilled, plated through, its copper etched to its strips and rails and gold-plated, its top masked white and printed (Adafruit\'s listing: gold plate, white silkscreen, its underside unmasked)',
+    spec: () => '81.28 × 50.8 × 1.6 mm (0.063" FR-4); 420 plated holes drilled 1.2 mm in 1.93 mm pads; 30 columns of two five-hole strips; four power rails of 30; two 3.2 mm mounting holes 73.66 mm (2.9") apart (Adafruit\'s listing and board file)',
+    box: () => [81.28, 50.8, 1.6], g: () => 12 /* its FR-4 at 1.85 g/cm³ and its copper: an estimate (Adafruit gives no weight) */, look: 'board',
+  },
+  {
     id: 'icsocket', name: 'IC socket', path: 'Electrical/Connectors/IC sockets', says: 'a socket a DIP chip plugs into, so it can be changed', std: 'the pin counts and kinds sold; 2.54 mm pitch',
     axes: [unit('pins', 'pins', 'P', [6, 8, 14, 16, 18, 20, 24, 28, 40]), bare('type', 'kind', (p) => (n(p, 'pins') >= 14 ? ['dual-wipe', 'turned-pin', 'zif'] : ['dual-wipe', 'turned-pin']))],
     title: (p) => `${p.pins}-pin ${p.type === 'zif' ? 'ZIF' : p.type} DIP socket`, of: (p) => `insulator-insert contact-socket*${n(p, 'pins')}`, make: 'assemble', how: (p) => (p.type === 'zif' ? 'a lever that opens and closes every contact at once' : 'tinned or gold-plated contacts in a moulded frame'),

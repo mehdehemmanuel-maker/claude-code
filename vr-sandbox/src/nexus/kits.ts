@@ -80,6 +80,8 @@ export interface Part {
   /** a picture on its top face: its PNG's white in this colour, the rest clear (a board's copper under its mask, as its
    *  photo shows it) */ paint?: { png: string; ink: number };
   /** its printing alone drawn, its ground clear (a board's silkscreen) */ inkOnly?: boolean;
+  /** printing on its top face (+y) laid out as one print, its ground clear (a board's silkscreen, a breadboard's
+   *  legend): each a word or a line where it is, in its own colour, m in its own frame */ prints?: Print[];
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** the share of the room's light that reaches it, where it lies down in a cavity and sees the room only through its
    *  openings (a renderer without occlusion lights it as if it were in the open) */ shade?: number;
@@ -611,3 +613,6 @@ export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: 
   const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
   const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
 }
+/** One thing printed on a face: a word (its middle, its letters' height) or a line (its middle, its length along x and
+ *  its width along z), in its colour; turned dir radians where it reads another way. */
+export interface Print { t?: string; at: [number, number]; h?: number; lx?: number; wz?: number; ink: number; dir?: number }

@@ -10,6 +10,8 @@
 // Its frame: the board's surface y = 0, the body standing on it (through-hole leads go down through the board, below
 // y = 0); a body's length along x, its width along z, so two rows of leads leave its ±z sides and a quad's all four.
 
+import type { Print } from './kits';
+
 export type Form = 'dip' | 'gull' | 'quad' | 'qfn' | 'sot' | 'sot223' | 'to92' | 'to220' | 'to263' | 'axial' | 'sma';
 export interface Pkg {
   name: string; form: Form; pins: number;
@@ -35,7 +37,8 @@ export interface Solid { role: Role; shape: Shape; at: [number, number, number];
    *  shows under its mask) */ paint?: { png: string; ink: number };
   /** its printing alone drawn, its ground clear (a board's silkscreen: the letters on the mask, not a plate) */ inkOnly?: boolean;
   /** how its surface was finished where its role's is not it (a connector's shell bright nickel, not a lead's matte tin) */ finish?: string;
-  /** a turned shape drawn with so many flat sides (a square pin's pointed tip: 4) */ facets?: number }
+  /** a turned shape drawn with so many flat sides (a square pin's pointed tip: 4) */ facets?: number;
+  /** printing on its top face laid out as one print (words and lines where they are, mm in its own frame) */ prints?: Print[] }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)
