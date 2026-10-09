@@ -30,6 +30,10 @@
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { KITS, makeKit, massOf, type Part } from '../kits';
 import '../creatures';
 import { perfect } from '../make/pipeline';
@@ -79,6 +83,9 @@ const tent = (): THREE.Scene => {
   panel(10, 10, [0, 10.9, 0], [Math.PI / 2, 0, 0], Number(q.get('soft') ?? 3)); panel(10, 5, [0, 4, 9.9], [0, 0, 0], Number(q.get('front') ?? 2));
   // (the sweep the thing stands on, lit by the softbox above: brighter than the walls, as what a pin's side mirrors)
   panel(20, 20, [0, -0.95, 0], [-Math.PI / 2, 0, 0], Number(q.get('sweep') ?? 1.8));
+  // (&back=: the backdrop behind it, opposite the camera, as bright as its photo's studio had it: a shell's top seen from
+  // 40° up mirrors the backdrop, not the softbox overhead, so a photo with its sweep curving up behind sets it brighter)
+  if (q.get('back')) panel(20, 12, [0, 5, -9.9], [0, 0, 0], Number(q.get('back')));
   return st;
 };
 scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(tentOn ? tent() : new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
@@ -87,7 +94,8 @@ scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(ten
 if (q.get('env')) scene.environmentIntensity = Number(q.get('env'));
 const sun = new THREE.DirectionalLight(0xffffff, Number(q.get('sun') ?? (tentOn ? 0.6 : 1.5))); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
-const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+// (&floor=rrggbb: the surface it stands on, as the photograph's studio had it: a white sweep, a grey bench)
+const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: q.get('floor') ? Number('0x' + q.get('floor')) : 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
 scene.add(view.group);
 // (exploded, the whole set back on the floor: what moved down is lifted with the rest, not sunk under it)
@@ -174,9 +182,56 @@ if (camera.position.y < 0.02) floor.visible = false;
 if (camera.position.y < c.y) sun.position.y = -Math.abs(sun.position.y);
 { const away = camera.position.distanceTo(c); camera.near = Math.max(0.001, Math.min(0.02, away * 0.01)); camera.far = away + r * 6 + 20; camera.updateProjectionMatrix(); }
 if (q.get('mask') === '1') { const black = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }); for (const m of meshes) m.material = black; scene.background = new THREE.Color(0xffffff); scene.environment = null; floor.visible = false; renderer.shadowMap.enabled = false; renderer.toneMapping = THREE.NoToneMapping; }
-camera.lookAt(c); renderer.render(scene, camera);
+camera.lookAt(c);
+/** A material's mirrored light read from a probe as if the room were a box round it (a floor under, walls far off):
+ *  each reflected ray carried from the shaded point to the box's wall, and the probe's view read toward that point, so a
+ *  near floor is mirrored where it is and not where it lies from the probe. */
+function boxProject(mt: THREE.MeshStandardMaterial, probe: THREE.Vector3, lo: THREE.Vector3, hi: THREE.Vector3): void {
+  mt.onBeforeCompile = (sh) => {
+    sh.uniforms.uProbePos = { value: probe }; sh.uniforms.uBoxMin = { value: lo }; sh.uniforms.uBoxMax = { value: hi };
+    sh.vertexShader = 'varying vec3 vBpWorld;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvBpWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'varying vec3 vBpWorld;\nuniform vec3 uProbePos;\nuniform vec3 uBoxMin;\nuniform vec3 uBoxMax;\n' + sh.fragmentShader.replace('#include <envmap_physical_pars_fragment>',
+      THREE.ShaderChunk.envmap_physical_pars_fragment.replace('vec4 envMapColor = textureCubeUV( envMap, envMapRotation * reflectVec, roughness );',
+        'vec3 bpD = reflectVec; vec3 bpA = (uBoxMax - vBpWorld) / bpD, bpB = (uBoxMin - vBpWorld) / bpD; vec3 bpT = max(bpA, bpB); float bpt = min(min(bpT.x, bpT.y), bpT.z);\n' +
+        'reflectVec = normalize(vBpWorld + bpD * bpt - uProbePos);\nvec4 envMapColor = textureCubeUV( envMap, envMapRotation * reflectVec, roughness );'));
+  };
+  mt.customProgramCacheKey = () => 'boxproj';
+}
+// (&probe=1: each metal part's light as seen from where it stands, the part itself left out and the board and its
+// neighbours in it, so a shell's face mirrors the green board before it and the parts beside it as a photographed one
+// does, not the bare room; one probe for all from the middle mirrors far too much board for a part at the edge)
+if (q.get('probe') === '1') {
+  const pm = new THREE.PMREMGenerator(renderer), was = scene.background, root = view.group.children.find((o) => o.userData.part) ?? view.group;
+  scene.background = scene.environment;
+  const isMetal = (m: THREE.Mesh) => { const mt = m.material as THREE.MeshStandardMaterial; return !Array.isArray(mt) && (mt.metalness ?? 0) >= 0.8; };
+  for (const g of root.children) {
+    const metal: THREE.Mesh[] = []; g.traverse((o) => { if ((o as THREE.Mesh).isMesh && isMetal(o as THREE.Mesh)) metal.push(o as THREE.Mesh); });
+    if (!metal.length) continue;
+    const gb = new THREE.Box3().setFromObject(g); if (gb.isEmpty() || gb.getSize(new THREE.Vector3()).length() < 0.003) continue;
+    const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType }), cc = new THREE.CubeCamera(0.0003, 60, rt);
+    cc.position.copy(gb.getCenter(new THREE.Vector3())); g.visible = false; scene.add(cc); cc.update(renderer, scene); scene.remove(cc); g.visible = true;
+    const env = pm.fromCubemap(rt.texture).texture; rt.dispose();
+    // (each ray it mirrors followed out to the floor under it or the room's walls before the probe's view is read, so a
+    // face at the part's edge sees the floor beyond the board's edge, as it would, not the board the probe sees under it)
+    const probe = cc.position.clone(), lo = new THREE.Vector3(probe.x - 1, Number(q.get('floory') ?? 0), probe.z - 1), hi = new THREE.Vector3(probe.x + 1, probe.y + 1, probe.z + 1);
+    for (const m of metal) { const mt = (m.material as THREE.MeshStandardMaterial).clone(); mt.envMap = env; boxProject(mt, probe, lo, hi); m.material = mt; }
+  }
+  scene.background = was;
+}
+// (&ao=: ambient occlusion, mm: a room's light reaches into a socket's mouth or under a chip less than onto an open face,
+// as a photograph shows them, darker inside; the light from the room alone reaches everywhere alike)
+const aoMm = Number(q.get('ao') ?? 0);
+let composer: EffectComposer | null = null;
+if (aoMm > 0) {
+  const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
+  composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+  const ao = new GTAOPass(scene, camera, sz.x, sz.y); ao.updateGtaoMaterial({ radius: aoMm / 1000, distanceExponent: 1, thickness: aoMm / 1000, scale: 1, samples: 16 }); ao.blendIntensity = Number(q.get('aok') ?? 1);
+  composer.addPass(ao); composer.addPass(new OutputPass());
+}
+const draw = (): void => { if (composer) composer.render(); else renderer.render(scene, camera); };
+draw();
 // (a texture made from data, a board's copper, arrives after the first frame: drawn again when it has)
-THREE.DefaultLoadingManager.onLoad = () => renderer.render(scene, camera);
+THREE.DefaultLoadingManager.onLoad = draw;
 
 // ---- what the critic may ask ----
 const hex = (m: THREE.Mesh) => { const col = (m.material as THREE.MeshStandardMaterial).color; return col ? `#${col.getHexString()}` : undefined; };

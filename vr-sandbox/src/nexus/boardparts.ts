@@ -121,7 +121,11 @@ export function hdmi(type: 'A' | 'C' | 'D', depth?: number, width?: number): Boa
  *  0.6 mm wide, 2.1 mm below its seat; its legs 6.57 mm either side of its middle (a stack's four, 1.04 and 6.72 mm in;
  *  one port's two, 3.72 in), 3.94 mm below its seat (2.1 and 3.94 its drawing's unlabelled figures, read as the tails'
  *  and the legs' by their tolerances: an estimate of which is which). Stood on its side, as it was. */
-export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean; windows?: { x: number; y: number; w: number; h: number }[]; detents?: boolean; posts?: boolean } = {}): BoardPart {
+export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean; windows?: { x: number; y: number; w: number; h: number }[]; detents?: boolean; posts?: boolean;
+  /** its side springs where they differ from the Pi 5's: from `back` to `front` mm behind its face, `h` tall, centred at `ys`, rooted at its front or back */
+  lance?: { back: number; front: number; h: number; ys?: number[]; root?: 'front' | 'back' };
+  /** a marking stamped in its top (its maker's name), `x` mm from its back, centred `z` across, letters `h` tall, along its width */
+  mark?: { text: string; x: number; z: number; h: number } } = {}): BoardPart {
   const stack = ports.length === 2, W = stack ? 14.5 : 13.1, H1 = 5.72, iw = 12.5, ih = 5.12, gap = 4.0, H = stack ? 2 * H1 + gap : H1, D = o.depth ?? (stack ? 17.0 : 14.0), x0 = -D / 2;
   const kids: Comp[] = [], thru = !o.onSide, mat = stack ? 'brass' : 'steel-low', TAIL = 2.1, LEG = 3.94;
   // (a stack's body 13.64 wide, its face plate 14.5: Würth's drawing; its skins 0.25 thick, so a mouth's lining fits inside it)
@@ -145,10 +149,14 @@ export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean; wi
     return { slot: [[r, zc - 1.675], [t, zc - 0.7], [t, zc + 0.7], [r, zc + 1.675], [r, zc + 1.675 - g], [t - g, zc + 0.7 - g], [t - g, zc - 0.7 + g], [r, zc - 1.675 + g]],
       tongue: [[r - 0.01, zc - 1.675 + g], [t - g, zc - 0.7 + g], [t - g, zc + 0.7 - g], [r - 0.01, zc + 1.675 - g]], win: rect2(wx, zc, 0.8, 0.8) };
   };
-  const sSide = (yc: number): { slot: V2[]; tongue: V2[] } => { const r = F - 7.14, t = F - 1.64, h = 0.6, g = 0.25;
-    return { slot: [[r, yc - h], [t, yc - h], [t, yc + h], [r, yc + h], [r, yc + h - g], [t - g, yc + h - g], [t - g, yc - h + g], [r, yc - h + g]], tongue: [[r - 0.01, yc - h + g], [t - g, yc - h + g], [t - g, yc + h - g], [r - 0.01, yc + h - g]] }; };
+  // (a side spring: a U cut round a tongue, the tongue joined to the shell at its root, back or front, its free tip
+  // bent in where the U closes)
+  const ln = o.lance, lr = F - (ln?.back ?? 7.14), lt = F - (ln?.front ?? 1.64), lh = (ln?.h ?? 1.2) / 2, front = ln?.root === 'front';
+  const sSide = (yc: number): { slot: V2[]; tongue: V2[]; tip: number } => { const g = 0.25, [r, t, d] = front ? [lt, lr, 1] : [lr, lt, -1];
+    return { slot: [[r, yc - lh], [t, yc - lh], [t, yc + lh], [r, yc + lh], [r, yc + lh - g], [t + d * g, yc + lh - g], [t + d * g, yc - lh + g], [r, yc - lh + g]],
+      tongue: [[r + d * 0.01, yc - lh + g], [t + d * g, yc - lh + g], [t + d * g, yc + lh - g], [r + d * 0.01, yc + lh - g]], tip: t + d * 0.46 }; };
   const stackShell = (): Solid[] => {
-    const col = NI, L0 = D - 0.3, tops = [-3.0, 3.0].map(sTop), sides = mouths.map((m) => sSide(m + (H1 - ih) / 2 + ih / 2 + 0.8)), zi = Wb / 2 - sk;
+    const col = NI, L0 = D - 0.3, tops = [-3.0, 3.0].map(sTop), sides = (ln?.ys ?? mouths.map((m) => m + (H1 - ih) / 2 + ih / 2 + 0.8)).map(sSide), zi = Wb / 2 - sk;
     const wins = (o.windows ?? []).map((w) => rect2(x0 + w.x, w.y, w.w, w.h));
     const out: Solid[] = [
       plate('term', rect2(x0 + L0 / 2, 0, L0, Wb), tops.map((f) => f.slot), sk, H - sk, mat, col),
@@ -156,10 +164,12 @@ export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean; wi
       along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, col),
       // (the latch springs: each tongue in its slot with its window, its bent tip a step down into the mouth under it)
       ...tops.flatMap((f) => [plate('term', f.tongue, [f.win], sk, H - sk, mat, col), box('term', [0.8, 0.45, 1.0], [F - 1.55, H - sk - 0.22, (f.win[0]![1] + f.win[2]![1]) / 2], mat, col)]),
-      ...[-1, 1].flatMap((sg) => sides.flatMap((f) => [wall('term', f.tongue, [], sk, sg * (Wb / 2 - sk / 2), mat, col), box('term', [0.6, 0.6, 0.35], [F - 2.1, (f.tongue[0]![1] + f.tongue[2]![1]) / 2, sg * (zi - 0.17)], mat, col)])),
+      ...[-1, 1].flatMap((sg) => sides.flatMap((f) => [wall('term', f.tongue, [], sk, sg * (Wb / 2 - sk / 2), mat, col), box('term', [0.6, Math.min(0.6, 2 * lh - 0.5), 0.35], [f.tip, (f.tongue[0]![1] + f.tongue[2]![1]) / 2, sg * (zi - 0.17)], mat, col)])),
       // (each mouth's floor, and the lower's roof, plates of the shell from the insulator's block to the face plate)
       ...mouths.flatMap((m, k) => { const y = m + (H1 - ih) / 2; return [y - sk, ...(k === 0 && mouths.length > 1 ? [y + ih] : [])].map((yb) => plate('term', rect2(x0 + back + (L0 - back) / 2, 0, L0 - back, 2 * zi), [], sk, yb, mat, col)); }),
       ...(o.detents ? [-2.0, 2.0].map((z): Solid => ({ role: 'term', shape: { cyl: [0.4, 0.12] }, at: [F - 11.6, H + 0.06, z], mat, ...col })) : []),
+      // (its stamped marking: drawn as the shadow its letters' relief casts, a darker ink on the shell)
+      ...(o.mark ? [box('mark', [o.mark.h * 0.9 * o.mark.text.length, 0.01, o.mark.h * 1.3], [x0 + o.mark.x, H + 0.01, o.mark.z], '', { text: o.mark.text, ink: 0xa49d91, inkOnly: true, color: HUE.nickel, rot: [0, PI / 2, 0] })] : []),
     ];
     return out;
   };
