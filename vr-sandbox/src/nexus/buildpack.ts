@@ -234,7 +234,7 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   if (flags.has('bench')) processes.push('solder-joint');
   if (processes.some((p) => p.startsWith('solder'))) {
     add('soldering-iron', 1, 'bench', 'to solder');
-    add(have.solder === 'lead-free' ? 'solder-lead-free' : 'solder-leaded', 1, 'bench', have.solder === 'lead-free' ? 'lead-free, as you asked' : 'leaded 60/40 is the easiest to learn on (Adafruit); say lead-free for none');
+    add(have.solder === 'lead-free' ? 'solder-lead-free' : 'solder-leaded', 1, 'bench', have.solder === 'lead-free' ? 'lead-free, as you asked' : 'leaded (60/40 or 63/37) is the easiest to learn on (Adafruit); say lead-free for none');
     add('tip-cleaner', 1, 'bench', 'a clean tip is what makes solder flow');
     if (flags.has('bench')) add('flush-cutters', 1, 'bench', 'to trim leads after soldering');
     for (const [k, why] of [['iron-stand', 'somewhere safe to put it down'], ['flux-pen', 'solder flows better with more flux'], ['solder-wick', 'to take a bad joint apart'], ['helping-hands', 'holds the work'], ['silicone-mat', 'a bench that does not burn'], ['multimeter', 'to check joints and voltages']] as const) add(k, 1, 'helps', why);

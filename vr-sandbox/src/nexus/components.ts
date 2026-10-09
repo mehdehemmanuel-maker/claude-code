@@ -27,7 +27,7 @@ import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 import { boardComps, boardDef, screwFor, type Comp } from './sbc';
-import { chp170, pinecilV2 } from './kit-solder';
+import { breadboard, chp170, pinecilV2 } from './kit-solder';
 import { LINK } from './meca';
 
 const PI = Math.PI, mm = 1e-3;
@@ -292,6 +292,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/kit-solder.ts): two forged halves, their rivet, grips, spring and safety clip', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (_p, it) => kitParts(chp170(), it.name) },
+  breadboard: { says: 'a breadboard as BusBoard makes it (src/nexus/kit-solder.ts): its moulded body with every hole and the walls between its clips\' slots, a phosphor-bronze clip under each column of five and each rail, its backing, its legend', leaves: 'its clips\' fingers as one strip each (their slits taken as 72 % of the strip); the walls\' and clips\' sizes estimates', make: (p, it) => kitParts(breadboard(Number(p.points)), it.name) },
   sbc: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
   pico: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
   robotarm: {

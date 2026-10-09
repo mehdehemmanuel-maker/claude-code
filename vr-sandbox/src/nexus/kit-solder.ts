@@ -144,3 +144,62 @@ export function chp170(): Comp {
   const clip = piece('CHP-170 safety clip', 'cutter-clip', [box('body', [7, 2.6, 6], [Lt - 5.5, t + 1.3, 1.5], 'pom', { color: 0xe9e4d6 })]);
   return { name: 'Hakko CHP-170 flush cutters', item: 'flushcutter-chp-170', at: [0, 0, 0], kids: [half(1, 0), half(-1, 1), rivet, spring, clip] };
 }
+
+// ---- a solderless breadboard ----------------------------------------------------------------------------------------
+/** A breadboard's tie points as BusBoard makes them (BB400: 84 × 54.3 × 8.5 mm, 30 g, white ABS with a colour legend,
+ *  0.1" square wire holes, phosphor-bronze clips, 300 tie points in 60 columns of five plus four power rails of 25; its
+ *  datasheet, its weight its listing's); its holes where Fritzing's drawing of a half breadboard has them (rows a–e
+ *  and f–j 2.54 apart, 7.62 across the channel between e and f; each pair of rails 2.54 apart, the inner one 7.62 out
+ *  from row a or j; a rail's 25 holes in fives with a hole's gap between, from the first column to the 29th). Its 170
+ *  and 830 the same rows, 17 and 63 columns, the 830's rails 50 holes (typical of the sizes sold); a 1660 two 830s
+ *  side by side. Estimated, said so: the holes 1.0 mm square, the top 1.0 mm thick over walls 0.94 between its clips'
+ *  slots (1.6 wide: the pitch less the wall), its clips 0.2 mm phosphor bronze bent to two leaves that pinch a lead
+ *  0.16 mm apart, 4.2 mm tall, their fingers 1.8 wide on the 2.54 pitch (72 % of the strip, slit between), its channel
+ *  2.5 wide and 2 deep, its backing 0.2. Frame: its columns along x, its rows across z (a at +z), its top at y 8.5. */
+export const BB = { pitch: 2.54, rowsZ: [13.97, 11.43, 8.89, 6.35, 3.81, -3.81, -6.35, -8.89, -11.43, -13.97], rails: [24.13, 21.59, -21.59, -24.13], H: 8.5 } as const;
+const BB_SIZE: Record<number, { cols: number; L: number; W: number; rails: boolean }> = { 170: { cols: 17, L: 47, W: 35.5, rails: false }, 400: { cols: 30, L: 84, W: 54.3, rails: true }, 830: { cols: 63, L: 165, W: 54.3, rails: true } };
+/** Where column c (1-based) of a breadboard of this size sits along x, mm. */
+export const bbCol = (points: number, c: number): number => (c - ((BB_SIZE[points] ?? BB_SIZE[400]!).cols + 1) / 2) * BB.pitch;
+/** The rail holes' columns: groups of five with one left out between, centred on the columns. */
+const railCols = (cols: number): number[] => { const n = cols >= 60 ? 10 : 5, span = n * 6 - 1, s = Math.floor((cols - span) / 2) + 1; return Array.from({ length: span }, (_, k) => k).filter((k) => k % 6 !== 5).map((k) => s + k); };
+export function breadboard(points: number): Comp {
+  if (points === 1660) { const one = breadboard(830); return { name: '1660-point breadboard', item: 'breadboard-1660', at: [0, 0, 0], kids: [-1, 1].map((s, i): Comp => ({ ...one, name: `${i ? 'second' : 'first'} 830-point half`, item: undefined, at: [0, 0, s * BB_SIZE[830]!.W / 2] })) }; }
+  const S = BB_SIZE[points] ?? BB_SIZE[400]!, p = BB.pitch, { cols, L, W } = S, H = BB.H, skin = 1.0, back = 0.2, hole = 1.0, wall = 0.94;
+  const white = { color: 0xf3f1ea } as const, xs = Array.from({ length: cols }, (_, i) => bbCol(points, i + 1)), rcols = S.rails ? railCols(cols) : [];
+  const sq = (x: number, z: number, a: number, b = a): V2[] => [[x - a / 2, z - b / 2], [x + a / 2, z - b / 2], [x + a / 2, z + b / 2], [x - a / 2, z + b / 2]];
+  // (its top: every hole cut through it, and the channel between e and f; drawn flat, its holes up through y)
+  const holes = [...xs.flatMap((x) => BB.rowsZ.map((z) => sq(x, z, hole))), ...BB.rails.filter(() => S.rails).flatMap((z) => rcols.map((c) => sq(bbCol(points, c), z, hole))), sq(0, 0, (cols - 1) * p + 1.2, 2.5)];
+  const top: Solid = { role: 'body', shape: { prism: { pts: sq(0, 0, L, W), L: skin, holes } }, at: [0, H - skin / 2, 0], rot: [PI / 2, 0, 0], mat: 'abs', ...white };
+  const deep = H - skin - back, mid = back + deep / 2;
+  // (its walls: round the outside, between every column's slot in each half, along each rail's slot, and the channel's
+  // two sides and floor)
+  const walls: Solid[] = [
+    box('body', [L, deep, 1.0], [0, mid, W / 2 - 0.5], 'abs', white), box('body', [L, deep, 1.0], [0, mid, -W / 2 + 0.5], 'abs', white),
+    box('body', [1.0, deep, W - 2], [L / 2 - 0.5, mid, 0], 'abs', white), box('body', [1.0, deep, W - 2], [-L / 2 + 0.5, mid, 0], 'abs', white),
+    ...[1, -1].flatMap((s) => Array.from({ length: cols + 1 }, (_, i) => box('body', [wall, deep, 5 * p + 0.6], [bbCol(points, i + 0.5), mid, s * 8.89], 'abs', white))),
+    // (the circuit slots' long sides: by the channel, and out to the rails' slots or the frame, the band between cored as
+    // it is moulded, a wall at each side)
+    ...[1, -1].flatMap((s) => { const out = S.rails ? 20.79 : W / 2 - 1; return [box('body', [L - 2, deep, 1.0], [0, mid, s * 1.74], 'abs', white), ...(out - 15.54 > 2.5 ? [box('body', [L - 2, deep, 1.0], [0, mid, s * 16.04], 'abs', white), box('body', [L - 2, deep, 1.0], [0, mid, s * (out - 0.5)], 'abs', white)] : [box('body', [L - 2, deep, out - 15.54], [0, mid, s * (15.54 + out) / 2], 'abs', white)])]; }),
+    // (the channel's floor, 2 mm below the top, between the slots' walls)
+    box('body', [(cols - 1) * p + 1.2, 0.8, 2.5], [0, H - 2.4, 0], 'abs', white),
+    // (each pair of rails' slots: the wall between them, and to the frame)
+    ...(S.rails ? [1, -1].flatMap((s) => [box('body', [L - 2, deep, 0.94], [0, mid, s * 22.86], 'abs', white), box('body', [L - 2, deep, W / 2 - 1 - 24.93], [0, mid, s * (24.93 + W / 2 - 1) / 2], 'abs', white)]) : []),
+  ];
+  // (its legend: each pair of rails a red line by its outer rail and a blue by its inner, as BusBoard's colour legend
+  // has them (typical); its columns numbered every five and its rows lettered at both ends, ink on its top)
+  const ink = (text: string, x: number, z: number, w: number): Solid => box('film', [w, 0.02, 1.4], [x, H + 0.04, z], '', { color: 0xf3f1ea, text, ink: 0x3a3a3a, inkOnly: true });
+  const legend: Solid[] = [
+    ...(S.rails ? [1, -1].flatMap((s) => [box('film', [L - 6, 0.02, 0.5], [bbCol(points, (rcols[0]! + rcols.at(-1)!) / 2), H + 0.02, s * 25.9], '', { color: 0xd8262b }), box('film', [L - 6, 0.02, 0.5], [bbCol(points, (rcols[0]! + rcols.at(-1)!) / 2), H + 0.02, s * 19.8], '', { color: 0x2a5bd7 })]) : []),
+    ...[1, ...Array.from({ length: Math.floor(cols / 5) }, (_, i) => (i + 1) * 5)].flatMap((c) => [ink(String(c), bbCol(points, c), 16.3, 2.4), ink(String(c), bbCol(points, c), -16.3, 2.4)]),
+    ...'abcdefghij'.split('').flatMap((ch, i) => [ink(ch, -((cols - 1) / 2) * p - 2.6, BB.rowsZ[i]!, 1.4), ink(ch, ((cols - 1) / 2) * p + 2.6, BB.rowsZ[i]!, 1.4)]),
+  ];
+  const body = piece(`${points}-point breadboard body`, 'breadboard-body', [top, ...walls, ...legend]);
+  // (a clip's section: two leaves from a base, bent in to pinch and out to a mouth under the hole)
+  const y0 = back + 2.0, clipPts: V2[] = ([[-0.65, 0], [0.65, 0], [0.65, 2.0], [0.23, 3.5], [0.45, 4.2], [0.27, 4.26], [0.03, 3.55], [0.45, 2.0], [0.45, 0.2], [-0.45, 0.2], [-0.45, 2.0], [-0.03, 3.55], [-0.27, 4.26], [-0.45, 4.2], [-0.23, 3.5], [-0.65, 2.0]] as V2[]).map(([u, v]) => [u, y0 + v]);
+  const bronze = { color: 0xc9b37a, finish: 'plate', share: 0.72 } as const;
+  const clips: Comp[] = [1, -1].flatMap((s) => xs.map((x, i): Comp => piece(`clip strip ${i + 1}${s > 0 ? 'a–e' : 'f–j'}`, 'clip-strip', [{ role: 'band', shape: { prism: { pts: clipPts, L: 5 * p - 0.3 } }, at: [x, 0, s * 8.89], mat: 'phosphor-bronze', ...bronze }])));
+  const rails: Comp[] = S.rails ? BB.rails.map((z, i): Comp => { const a = bbCol(points, rcols[0]!), b = bbCol(points, rcols.at(-1)!);
+    return piece(`power rail clip ${i + 1}`, 'rail-clip', [{ role: 'band', shape: { prism: { pts: clipPts, L: b - a + p - 0.3 } }, at: [(a + b) / 2, 0, z], rot: [0, PI / 2, 0], mat: 'phosphor-bronze', ...bronze }]); }) : [];
+  const backing = piece('adhesive backing', 'adhesive-backing', [box('film', [L, back, W], [0, back / 2, 0], 'pet', { color: 0xe8e2d0 })]);
+  return { name: `${points}-point breadboard`, item: `breadboard-${points}`, at: [0, 0, 0], kids: [body, ...clips, ...rails, backing] };
+}

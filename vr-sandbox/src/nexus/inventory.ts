@@ -752,6 +752,7 @@ e('gear-train', 'gear train', 'Tools/Measuring/Indicator parts', 'part', 'machin
 e('indicator-crystal', 'indicator crystal', 'Tools/Measuring/Indicator parts', 'part', 'mould', 'pc', 'the clear cover over the dial');
 e('breadboard-body', 'breadboard body', 'Electrical/Boards and controllers/Breadboard parts', 'part', 'mould', 'abs', 'the moulded body, its grid of holes over the clip strips');
 e('clip-strip', 'clip strip', 'Electrical/Boards and controllers/Breadboard parts', 'part', 'stamp', 'phosphor-bronze', 'a strip of five spring clips joined, under a row of holes');
+e('rail-clip', 'power rail clip', 'Electrical/Boards and controllers/Breadboard parts', 'part', 'stamp', 'phosphor-bronze', 'a strip of 25 (or 50) spring clips joined, under a power rail\'s holes');
 e('adhesive-backing', 'adhesive backing', 'Materials/Adhesives/Tapes', 'part', 'laminate', 'pet', 'a foam-and-film backing with its adhesive and release paper');
 e('pallet-board', 'pallet board', 'Materials/Packaging/Pallet parts', 'part', 'machine', 'wood', 'a sawn board of the deck, the bottom or a stringer');
 e('pallet-block', 'pallet block', 'Materials/Packaging/Pallet parts', 'part', 'machine', 'wood', 'a sawn block (or one of pressed chips) between the decks');

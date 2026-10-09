@@ -18,9 +18,9 @@ export const ALLOYS: Record<string, Alloy> = {
 
 /** A through-hole joint's geometry, mm: its board's thickness, its hole, its pad's diameter, its pin's side (square). */
 export interface JointShape { board: number; hole: number; pad: number; pin: number; src: string }
-/** A Raspberry Pi Pico's pin in a 2.54 mm header: its board 1 mm thick, holes 1.0 mm in 1.7 mm pads (Raspberry Pi's
- *  Pico datasheet, its footprint), the header's pin 0.64 mm square (the 0.025" standard). */
-export const PICO_PIN: JointShape = { board: 1.0, hole: 1.0, pad: 1.7, pin: 0.64, src: 'Pico datasheet: 1 mm board, 1.0 mm holes in 1.7 mm pads; a 0.64 mm square header pin' };
+/** A Raspberry Pi Pico's pin in a 2.54 mm header: its board 1 mm thick (its datasheet), holes 1.02 mm in 1.7 mm pads
+ *  (Raspberry Pi's own footprint of it), the header's pin 0.64 mm square (the 0.025" standard). */
+export const PICO_PIN: JointShape = { board: 1.0, hole: 1.02, pad: 1.7, pin: 0.64, src: 'Pico datasheet: a 1 mm board; Raspberry Pi\'s Pico footprint (RPi_Pico_SMD_TH): 1.02 mm holes in 1.7 mm pads; a 0.64 mm square header pin' };
 
 /** The solder a good joint holds, mm³: the hole round the pin filled, and a concave fillet over the pad from its rim up
  *  the pin (a cone's frustum less the pin, its height a pad's radius: IPC-A-610's "wets the pin and the pad, concave"). */
@@ -56,6 +56,9 @@ export function step(j: JointState, h: Hands, dt: number, a: Alloy = ALLOYS.Sn60
     else if (h.touching && T < a.solidus) n.dropped += h.feed; // (onto the hot tip: it melts there and balls, the joint not hot)
     else n.cold += h.feed;
   }
+  // (what sat on it unmelted, or balled on it off the iron, flows in and wets it once the iron has the joint itself past
+  // the liquidus: a cold joint reheated until it flows is mended, as the guides say)
+  if (h.touching && T >= a.liquidus && n.cold + n.dropped > 0) { n.solder += n.cold + n.dropped; n.cold = 0; n.dropped = 0; n.wetted = true; }
   if (T > 300) n.hotFor += dt;
   return n;
 }
