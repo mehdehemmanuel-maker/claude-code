@@ -16,8 +16,9 @@ export interface Pkg {
   /** its body: length (x), width (z, a round body's diameter), height (y), mm; and how far it stands off the board */ L: number; W: number; H: number; A1: number;
   /** its leads: pitch, span tip to tip across, width, thickness (a round lead's diameter), length below the body (through-hole) */ pitch: number; span: number; lw: number; lt: number; leadL?: number;
   /** an exposed pad's side under it (QFN, HTSSOP), mm */ pad?: number; glass?: boolean; grounds: string;
+  /** a flat no-lead package with pads on two sides only (SON, WSON, DFN), not four */ sides?: 2;
 }
-type Shape = { box: [number, number, number] } | { cyl: [number, number] } | { lathe: [number, number][] } | { prism: { pts: [number, number][]; L: number } } | { tube: { r: number; pts: [number, number, number][] } };
+type Shape = { box: [number, number, number] } | { cyl: [number, number] } | { lathe: [number, number][] } | { prism: { pts: [number, number][]; L: number; holes?: [number, number][][] } } | { tube: { r: number; pts: [number, number, number][] } };
 export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 'mark' | 'film' | 'glaze' | 'term' | 'core' | 'cap' | 'band';
 /** A solid, mm: what it is, its shape, where, turned how, of what (a density's name; '' for paint, which weighs
  *  nothing here); a hole through a tab (across its thinnest side, z, at its own height y); how much of it lies inside the body (whose moulding is that much less); a thin
@@ -26,7 +27,8 @@ export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 
  *  its shape that is solid. */
 export interface Solid { role: Role; shape: Shape; at: [number, number, number]; rot?: [number, number, number]; mat: string; hole?: { r: number; y: number }; inBody?: number; shell?: number; lead?: number; color?: number;
   /** holes drilled down through a slab (a board's mounting holes), mm, in its own frame */ bores?: { x: number; z: number; r: number }[];
-  /** the share of its shape that is solid (a layer of solder balls, a hollow moulding) */ share?: number }
+  /** the share of its shape that is solid (a layer of solder balls, a hollow moulding) */ share?: number;
+  /** what is printed on its broad face (a chip's marking, a board's silkscreen), in ink of this colour where given */ text?: string; ink?: number }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)
@@ -34,7 +36,10 @@ const DIP_L: Record<number, number> = { 4: 4.6, 6: 8.9, 8: 9.6, 14: 19.05, 16: 1
 const SOIC_L: Record<number, number> = { 8: 4.9, 10: 4.9, 14: 8.65, 16: 9.9, 18: 11.55, 20: 12.8, 24: 15.4, 28: 17.9 };
 const TSSOP_L: Record<number, number> = { 8: 3.0, 14: 5.0, 16: 5.0, 20: 6.5, 24: 7.8, 28: 9.7 };
 const QFP: Record<number, [number, number]> = { 32: [7, 0.8], 44: [10, 0.8], 48: [7, 0.5], 64: [10, 0.5], 80: [12, 0.5], 100: [14, 0.5], 144: [20, 0.5] };
-const QFN: Record<number, [number, number]> = { 16: [3, 0.5], 20: [4, 0.5], 24: [4, 0.5], 28: [5, 0.5], 32: [5, 0.5], 40: [6, 0.5], 48: [7, 0.5], 56: [7, 0.4], 60: [7, 0.4], 64: [9, 0.5] };
+const QFN: Record<number, [number, number]> = { 16: [3, 0.5], 20: [4, 0.5], 24: [4, 0.5], 28: [5, 0.5], 32: [5, 0.5], 40: [6, 0.5], 48: [7, 0.5], 56: [7, 0.4], 60: [7, 0.4], 64: [9, 0.5], 68: [7, 0.35] };
+/** The widest pitch of MO-220's (0.65, 0.5, 0.4, 0.35 mm) that sets so many pads along a side of b mm with 0.45 mm
+ *  clear at each corner. */
+const qfnPitch = (n: number, b: number): number => [0.65, 0.5, 0.4, 0.35, 0.3].find((p) => (n / 4 - 1) * p <= b - 0.9) ?? 0.3;
 
 /** A package by its name ("SOIC-8", "TQFP-32", "TO-220", "DO-41"), or null where none is kept. */
 export function pkgOf(name: string): Pkg | null {
@@ -46,7 +51,17 @@ export function pkgOf(name: string): Pkg | null {
   if (/^MSOP-\d+$/.test(name)) return { name, form: 'gull', pins: n, L: 3.0, W: 3.0, H: 0.85, A1: 0.1, pitch: n === 8 ? 0.65 : 0.5, span: 4.9, lw: 0.25, lt: 0.15, grounds: 'JEDEC MO-187: 3 × 3 mm body, nominal' };
   if (/^[TL]QFP-\d+$/.test(name)) { const [b, pitch] = QFP[n] ?? [Math.max(5, (n / 4) * 0.5 + 1), 0.5]; return { name, form: 'quad', pins: n, L: b, W: b, H: name.startsWith('T') ? 1.0 : 1.4, A1: 0.1, pitch, span: b + 2, lw: pitch * 0.45, lt: 0.15, grounds: `JEDEC MS-026: ${b} mm square, ${pitch} mm pitch, leads 1 mm out each side, nominal` }; }
   if (/^QFN-\d+$/.test(name)) { const [b, pitch] = QFN[n] ?? [Math.max(3, (n / 4) * 0.5 + 1), 0.5]; return { name, form: 'qfn', pins: n, L: b, W: b, H: 0.85, A1: 0, pitch, span: b, lw: 0.25, lt: 0.2, pad: +(b * 0.6).toFixed(2), grounds: `JEDEC MO-220: ${b} mm square, ${pitch} mm pitch, an exposed pad under it, nominal` }; }
+  // (a QFN named with its body, "QFN-40-5x5": its pitch the widest that fits its pads along a side)
+  const qs = /^QFN-(\d+)-(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(name);
+  if (qs) { const k = Number(qs[1]), b = Number(qs[2]), pitch = qfnPitch(k, b); return { name, form: 'qfn', pins: k, L: b, W: Number(qs[3]), H: 0.85, A1: 0, pitch, span: b, lw: Math.min(0.25, pitch * 0.55), lt: 0.2, pad: +(b * 0.6).toFixed(2), grounds: `JEDEC MO-220: ${b} × ${qs[3]} mm, ${pitch} mm pitch, an exposed pad under it, nominal` }; }
+  // (a WSON-8, 6 × 5 mm: four pads at 1.27 mm along each long side, the exposed pad between; JEDEC MO-229, nominal)
+  if (name === 'WSON-8') return { name, form: 'qfn', sides: 2, pins: 8, L: 6, W: 5, H: 0.75, A1: 0, pitch: 1.27, span: 5, lw: 0.4, lt: 0.2, pad: 3.4, grounds: 'JEDEC MO-229 (WSON-8, 6 × 5 mm): four pads at 1.27 mm along each long side and an exposed pad, nominal' };
   if (/^SOT-23(-\d)?$/.test(name)) { const k = Number(/^SOT-23-(\d)$/.exec(name)?.[1] ?? 3); return { name, form: 'sot', pins: k, L: 2.9, W: k > 3 ? 1.6 : 1.3, H: 0.95, A1: 0.05, pitch: 0.95, span: k > 3 ? 2.8 : 2.4, lw: 0.4, lt: 0.12, grounds: k > 3 ? 'JEDEC MO-178: 0.95 mm pitch, nominal' : 'JEDEC TO-236: 0.95 mm pitch, nominal' }; }
+  if (/^SOT-323(-\d)?$/.test(name)) { const k = Number(/^SOT-323-(\d)$/.exec(name)?.[1] ?? 3); return { name, form: 'sot', pins: k, L: 2.0, W: 1.25, H: 0.95, A1: 0.05, pitch: 0.65, span: 2.1, lw: 0.3, lt: 0.12, grounds: 'JEDEC MO-203 (SC-70): a body 2.0 × 1.25 mm, its leads at 0.65 mm, 2.1 mm across them, nominal' }; }
+  // (a DFN named with its body, "DFN-6-1.6x1.6": its pads along its two long sides at the widest of MO-229's pitches that
+  // fits, an exposed pad between)
+  const ds = /^DFN-(\d+)-(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(name);
+  if (ds) { const k = Number(ds[1]), b = Number(ds[2]), w = Number(ds[3]), pitch = [0.65, 0.5, 0.4].find((q) => (k / 2 - 1) * q <= b - 0.5) ?? 0.4; return { name, form: 'qfn', sides: 2, pins: k, L: b, W: w, H: 0.55, A1: 0, pitch, span: w, lw: Math.min(0.3, pitch * 0.5), lt: 0.2, pad: +(Math.min(b, w) * 0.5).toFixed(2), grounds: `JEDEC MO-229: ${b} × ${w} mm, ${k / 2} pads at ${pitch} mm along each long side, an exposed pad between, nominal` }; }
   if (name === 'SOT-223') return { name, form: 'sot223', pins: 4, L: 6.5, W: 3.5, H: 1.6, A1: 0.05, pitch: 2.3, span: 7.0, lw: 0.7, lt: 0.26, grounds: 'JEDEC TO-261: three leads at 2.3 mm and a tab, nominal' };
   if (/^TO-92/.test(name)) return { name, form: 'to92', pins: 3, L: 4.8, W: 3.8, H: 4.8, A1: 0, pitch: 1.27, span: 0, lw: 0.45, lt: 0.4, leadL: 12.7, grounds: 'JEDEC TO-226 (TO-92): a D-shaped body, three leads at 1.27 mm, nominal' };
   if (/^TO-220/.test(name)) return { name, form: 'to220', pins: 3, L: 10.0, W: 4.5, H: 9.0, A1: 0, pitch: 2.54, span: 0, lw: 0.8, lt: 0.5, leadL: 13, grounds: 'JEDEC TO-220AB: its copper tab 1.27 mm thick with a 3.7 mm hole, three leads at 2.54 mm, nominal' };
@@ -107,12 +122,13 @@ export function pkgSolids(p: Pkg): Solid[] {
   } else if (p.form === 'qfn') {
     // (a body flush with its pads: each pad copper at its edge, under and at its side, and the pad under its middle)
     out.push({ role: 'body', shape: { box: [p.L, p.H - 0.05, p.W] }, at: [0, 0.05 + (p.H - 0.05) / 2, 0], mat: bodyMat });
-    const k = p.pins / 4, ends: V3[] = [], along = Array.from({ length: k }, (_, i) => (i - (k - 1) / 2) * p.pitch), lp = 0.4;
-    for (const [sx, sz, alongX] of [[0, -1, true], [1, 0, false], [0, 1, true], [-1, 0, false]] as [number, number, boolean][]) for (const a of along) {
+    const k = p.pins / (p.sides ?? 4), ends: V3[] = [], along = Array.from({ length: k }, (_, i) => (i - (k - 1) / 2) * p.pitch), lp = 0.4;
+    for (const [sx, sz, alongX] of ([[0, -1, true], [1, 0, false], [0, 1, true], [-1, 0, false]] as [number, number, boolean][]).filter(([, , ax]) => p.sides !== 2 || ax)) for (const a of along) {
       const at: V3 = alongX ? [a, 0.1, sz * (p.W / 2 - lp / 2)] : [sx * (p.L / 2 - lp / 2), 0.1, a];
       out.push({ role: 'lead', shape: { box: alongX ? [p.lw, 0.2, lp] : [lp, 0.2, p.lw] }, at, mat: leadMat, inBody: p.lw * lp * 0.15, lead: lead++ }); ends.push([at[0] - sx * 0.1, 0.2, at[2] - sz * 0.1]);
     }
-    out.push({ role: 'pad', shape: { box: [p.pad!, 0.2, p.pad!] }, at: [0, 0.1, 0], mat: leadMat, inBody: p.pad! * p.pad! * 0.15 });
+    const pl = p.sides === 2 ? Math.min(p.L - 1, p.pad! * 1.2) : p.pad!;
+    out.push({ role: 'pad', shape: { box: [pl, 0.2, p.pad!] }, at: [0, 0.1, 0], mat: leadMat, inBody: pl * p.pad! * 0.15 });
     die(0, 0, p.pad! * 0.85, p.pad! * 0.85, 0.2 + 0.125, ends);
   } else if (p.form === 'dip') {
     out.push({ role: 'body', shape: { box: [p.L, p.H, p.W] }, at: [0, p.A1 + p.H / 2, 0], mat: bodyMat });
@@ -295,18 +311,19 @@ export const PKG_DENSITY: Record<string, [number, string]> = {
 };
 /** Densities a solid is weighed by, kg/m³: the kits' own for the common metals and plastics (src/nexus/mass.ts DENSITY,
  *  typical), and those above. */
-const RHO: Record<string, number> = { copper: 8960, glass: 2500, fr4: 1850, 'steel-low': 7850, 'stainless-304': 8000, brass: 8500, nylon: 1140, 'al-6061': 2700, ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])) };
+const RHO: Record<string, number> = { copper: 8960, glass: 2500, fr4: 1850, 'steel-low': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, brass: 8500, nylon: 1140, pp: 905, ptfe: 2200, pet: 1380, 'phosphor-bronze': 8800, 'al-6061': 2700, ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])) };
 const area = (pts: [number, number][]) => Math.abs(pts.reduce((a, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]!; return a + x * y2 - x2 * y; }, 0)) / 2;
 /** A solid's volume, mm³ (a skin's: its outside's area times its wall). */
 export function solidVolume(s: Solid): number {
   const sh = s.shape;
   // (a skin is a cap over an end: open on its inner face, the end of what it covers, across x)
   if ('box' in sh) { const [a, b, c] = sh.box; return (s.shell ? (2 * (a * b + a * c) + b * c) * s.shell : a * b * c - (s.hole ? Math.PI * s.hole.r ** 2 * c : 0) - (s.bores ?? []).reduce((v, h) => v + Math.PI * h.r * h.r * b, 0)) * (s.share ?? 1); }
-  if ('cyl' in sh) return Math.PI * sh.cyl[0] ** 2 * sh.cyl[1];
-  if ('prism' in sh) return area(sh.prism.pts) * sh.prism.L;
-  if ('lathe' in sh) { const q = sh.lathe; let v = 0; for (let i = 0; i < q.length - 1; i++) { const [r1, y1] = q[i]!, [r2, y2] = q[i + 1]!; v += (Math.PI * (y2 - y1) * (r1 * r1 + r1 * r2 + r2 * r2)) / 3; } return Math.abs(v); }
+  const k = s.share ?? 1;
+  if ('cyl' in sh) return Math.PI * sh.cyl[0] ** 2 * sh.cyl[1] * k;
+  if ('prism' in sh) return (area(sh.prism.pts) - (sh.prism.holes ?? []).reduce((a, h) => a + area(h), 0)) * sh.prism.L * k;
+  if ('lathe' in sh) { const q = sh.lathe; let v = 0; for (let i = 0; i < q.length - 1; i++) { const [r1, y1] = q[i]!, [r2, y2] = q[i + 1]!; v += (Math.PI * (y2 - y1) * (r1 * r1 + r1 * r2 + r2 * r2)) / 3; } return Math.abs(v) * k; }
   let L = 0; for (let i = 1; i < sh.tube.pts.length; i++) L += Math.hypot(...(sh.tube.pts[i]!.map((v, k) => v - sh.tube.pts[i - 1]![k]!) as V3));
-  return Math.PI * sh.tube.r ** 2 * L;
+  return Math.PI * sh.tube.r ** 2 * L * k;
 }
 /** How much of a solid lies inside its body, mm³: a die, its paddle and its wires wholly; a lead its run inside. */
 const inside = (s: Solid) => s.inBody ?? (s.role === 'die' || s.role === 'wire' || s.role === 'frame' ? solidVolume(s) : 0);

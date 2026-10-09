@@ -102,7 +102,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A part's mass from its shape, material and fill | `src/nexus/mass.ts` (re-exported by `kits.ts`) |
 | Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/components.ts` |
 | Every electronic package drawn whole from its outline (JEDEC: DIP, SOIC, SSOP, TSSOP, MSOP, QFP, QFN, SOT, TO-92, TO-220, TO-263, DO-35/41/201, SMA; EIA chip cases; leaded resistors with IEC 60062 bands; LEDs): one list of solids each, its die on its paddle and a bond wire to each lead, from which both its mass (the kinds' and families' g) and its drawing are read, checked against makers' published weights (MCC, Yageo) | `src/nexus/packages.ts` (`pkgSolids`, `chipSolids`, `axialResistorSolids`, `ledSolids`, `smdLedSolids`, `pkgMass`, `chipCode`, `bandsOf`), drawn by `src/nexus/components.ts` (`semiParts`, `passiveParts`); `tests/nexus/packages.test.ts` |
-| Single-board computers and Picos from their makers' pages (Raspberry Pi 5, 4 B, 3 B+, Zero 2 W, CM5, Pico family; Orange Pi 5 line; D-Robotics RDK X3, X5, S100): their figures and sources, their layouts, every part on them (BGA SoC, LPDDR, QFNs, 0402s, each connector, the 40-pin header pin by pin), their holes as M2.5 mating patterns, weighed from their solids | `src/nexus/sbc.ts` (`BOARD_DEFS`, `boardComps`, `boardMass`), kinds in `src/nexus/kinds/sbc.ts`, drawn by `components.ts` (`boardParts`); `tests/nexus/sbc.test.ts` |
+| Board parts drawn from their makers' drawings, each its own pieces down to its contacts (USB-C, HDMI A/C/D, USB-A single and stacked, RJ45 with its magnetics and lights, microSD push-push, pin headers, FPC and board-to-board sockets, tact switches, the 3.5 mm jack, a PicoBlade wafer, an electret microphone, FCCSP and LPDDR packages, moulded inductors), placed by a board's layout | `src/nexus/boardparts.ts` (`BOARD_PARTS`) |
+| Single-board computers and Picos from their makers' pages (Raspberry Pi 5, 4 B, 3 B+, Zero 2 W, CM5, Pico family; Orange Pi 5 line; D-Robotics RDK X3, X5, S100): their figures and sources, their layouts (measured from photos where `layout` is given, else their class's rules and marked approximate), every part on them (BGA SoC, LPDDR, QFNs, chip passives, each connector, the header pin by pin; a measured board's small parts from its photo's table), their holes as mating patterns by bore, weighed from their solids | `src/nexus/sbc.ts` (`BOARD_DEFS`, `boardComps`, `boardMass`), kinds in `src/nexus/kinds/sbc.ts`, drawn by `components.ts` (`boardParts`); `tests/nexus/sbc.test.ts` |
 | The Meca500 (Mecademic's six-axis arm): its figures from its manuals, its kinematics (forward, and inverse over its eight postures), its controller taking its manual's commands and answering in its codes, and the arm drawn with each joint a group a program turns | `src/nexus/meca.ts` (`MECA500`, `fk`, `ik`, `Meca500`), kind `src/nexus/kinds/robots.ts`, drawn by `components.ts` (`armParts`, `ARM_AXES`); `tests/nexus/meca.test.ts` |
 | The computer in the room: programs for the boards and the arm in their makers' languages and libraries, run here (Python in Pyodide, shipped with the forge, against stand-ins for gpiozero, RPi.GPIO, Hobot.GPIO, machine, wiringpi and mecademicpy that keep every pin's change in the program's own time; the arm's commands on its controller, the arm moving before you), Claude beside it (the artifact's `sample`, else the ask sent to Claude Code), and each target's steps on the real thing | `src/nexus/codesim.ts` (`TARGETS`, `PY_PRELUDE`, `readPy`, `runMeca`), the phone's Computer app (`computerApp` in `src/nexus/view/apps.ts`), the forge's `computerRun`, `computerAsk`, `playArm`; `tests/nexus/codesim.test.ts` |
 | What things cost and where they are sold: each price a seller's own page, the figure it showed and the day seen (prices move: a sighting, never a constant), stock only where the page said it, used or asked-for marked so; the cheapest offer for so many with what it needs that you lack counted in (a Pinecil and the USB-C supply it does not come with) | `src/nexus/prices.ts` (`PRICES`, `cheapest`, `costBy`); `tests/nexus/buildpack.test.ts` |
@@ -263,7 +264,16 @@ is put together from them.
 The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python-headless, scipy and pillow:
 `pip install -r tools/measure/requirements.txt`):
 - `photo.py`: calibrate a photo by known points, its mm grid, where a pixel is, part outlines, the drawn layout over the
-  photo, and `same`: one region of the thing cut from every calibrated photo of it, side by side.
+  photo, and `same`: one region of the thing cut from every calibrated photo of it, side by side. `small`: every small
+  part a board's photo shows (tan ceramic bodies and dark bodies found in two masks so a shadow does not join them; each
+  blob eroded until it is one part; capacitors and resistors put to their EIA case by width, a resistor only with tin
+  past its ends, SOT-23 or SOT-323 by body length and their legs counted, moulded inductors near square; what is like
+  none of these listed, not guessed), `--ts` writing the board's table (`sbc-opi5-small.ts`), `--why X,Z` saying how
+  the blob at a point was taken or why not, `--skip` for a logo. `colour`: the same places in a photo and a render of
+  the drawing (a render is calibrated like any photo, by its holes), and the colour to draw it to match.
+- `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
+  `ortho=1` for a view to set beside a photo, `exposure=` to try the light); `npm run boardmap -- <id> <out.json>`
+  writes a board's drawn outlines for `photo.py overlay`.
 - `views.py`: every photo on one sheet; one photo in full-size tiles to scan; a zoom; `find`: a part boxed in one photo
   found in the others by its features (says "not found" rather than guess when the views differ too much: then
   calibrate each photo by four points of the same plane and use `photo.py same`).
@@ -273,13 +283,19 @@ When a step takes working out by hand twice, it becomes a tool here, and a line 
 ## Now (2026-10-09; read before resuming)
 
 In order; each through the breakdown queue, rendered, compared with its photos and judged blind before it is done:
-1. The Orange Pi 5 parts first (`src/nexus/boardparts.ts`: each connector, switch, header, socket and chip from its
-   maker's drawing or standard, with what fits by size said so), then placed from its measured photos (`BOARD_DEFS`
-   layouts in `sbc.ts`); its board drawn the right way round (the old drawing was mirrored, its near-edge ports facing
-   into the board). Its underside has no photo reachable here yet (orangepi.org/.net refuse this network): the M.2
-   socket is placed from its two holes, the rest said as not placed.
+1. The Orange Pi 5 (done 2026-10-09 but for its underside): its parts first (`src/nexus/boardparts.ts`: each
+   connector, switch, header, socket and chip from its maker's drawing or standard, with what fits by size said so),
+   placed from its measured photos (`BOARD_DEFS` layouts in `sbc.ts`), the right way round; its 98 small parts placed
+   where its photo shows them (`sbc-opi5-small.ts`, by `photo.py small`); its HDMI's top lanced for its two spring
+   fingers and open at the back where the contacts go down, as its photo shows; its chips marked as read off the photo;
+   its mask and its small parts coloured as the photo shows them. Its underside has no photo reachable here yet
+   (orangepi.org/.net refuse this network): the M.2 socket is placed from its two holes, the rest said as not placed.
+   The look page's bright room puts a sheen on dark saturated colours (a photo's #176ab2 renders #75b9e6 there); the
+   forge has no such environment, so a colour is kept as its photo's, not tuned to the look page.
 2. Every other board the same way (Pi 5 first, from its mechanical drawing), each marked approximate until it is.
 3. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
+   Its `joint-drive` (listed only as its materials) is the one item the breakdown queue leaves waiting: it is broken
+   out (motor, reduction, encoder, bearings, each drawn) in this round, not before.
 4. The soldering kit as real tools (iron, stand, sponge, solder, flux, helping hands, cutters), judged until real.
 5. Hands-on lessons in the room: the user holds the iron, heats pad and pin, feeds solder; a joint judged cold, good or
    bridged; a step done only when done (the Pico's headers first).

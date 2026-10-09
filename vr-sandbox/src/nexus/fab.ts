@@ -15,7 +15,7 @@
 
 import * as THREE from 'three';
 import { strToU8, zipSync } from 'fflate';
-import { boardDef } from './sbc';
+import { boardDef, screwFor } from './sbc';
 
 export interface Hole { x: number; y: number; d: number; why: string }
 /** A flat part, mm: its outline L × W with corners of radius r, its holes, what is laid on it and where. */
@@ -36,7 +36,7 @@ export function plateFor(ids: string[], o: { gap?: number; margin?: number; corn
   const holes: Hole[] = [], on: Profile['on'] = [];
   let x0 = m;
   for (const { id, b } of bs) {
-    const y0 = (W - b.W) / 2, screw = b.hole >= 3 ? 'M3' : b.hole >= 2.5 ? 'M2.5' : 'M2';
+    const y0 = (W - b.W) / 2, screw = screwFor(b.hole);
     on.push({ id, name: b.name, x: x0, y: y0, L: b.L, W: b.W, screw });
     for (const [hx, hy] of b.holes) holes.push({ x: +(x0 + hx).toFixed(3), y: +(y0 + hy).toFixed(3), d: CLEAR[screw]!, why: `${b.name}: ${screw} (its ${b.hole} mm hole, ${b.src.split(',')[0]})` });
     x0 += b.L + gap;

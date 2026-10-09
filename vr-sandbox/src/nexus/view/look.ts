@@ -45,7 +45,7 @@ if (q.get('rules') || q.get('lines')) tryBody({ rules: q.get('rules') ? JSON.par
 // (a logarithmic depth buffer, and the near plane set by how far the camera stands: so two faces a millimetre apart are
 // told apart close up, not drawn through each other as they are with a fixed 5 mm near plane and 500 m far one)
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3; renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = Number(q.get('exposure') ?? 1.3); renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
 const holes = q.get('holes') === '1';
 const scene = new THREE.Scene(); scene.background = new THREE.Color(holes ? 0xff00ff : 0xc9ccd0);
 // a car studio: a dark room with softboxes (a long one overhead, strips either side, one in front and behind), so a

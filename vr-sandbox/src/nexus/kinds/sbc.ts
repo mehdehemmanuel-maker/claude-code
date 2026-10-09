@@ -6,7 +6,7 @@
 // weighs it (src/nexus/sbc.ts) and says so.
 
 import { bare, type KindDef, type P } from './core';
-import { boardDef, BOARD_DEFS, boardMakeup, boardMass } from '../sbc';
+import { approx, boardDef, BOARD_DEFS, boardMakeup, boardMass } from '../sbc';
 
 const s = (p: P, k: string) => String(p[k]);
 
@@ -16,9 +16,10 @@ export const SBC_KINDS: KindDef[] = [
     axes: [bare('board', 'board', Object.keys(BOARD_DEFS).filter((k) => BOARD_DEFS[k]!.cls !== 'pico')), bare('ram', 'memory', (p) => boardDef(s(p, 'board')).ram.map((r) => `${r}GB`))],
     title: (p) => `${boardDef(s(p, 'board')).name}, ${s(p, 'ram').replace('GB', ' GB')}`,
     of: (p) => boardMakeup(s(p, 'board')), make: 'solder', how: 'its chips and parts printed with paste on a many-layer board, placed, reflowed; its connectors through-hole, wave- or selectively soldered',
-    spec: (p) => { const b = boardDef(s(p, 'board')); return `${b.soc}: ${b.cpu}${b.ai ? `; ${b.ai}` : ''}${b.gpu ? `; ${b.gpu}` : ''}; ${s(p, 'ram').replace('GB', ' GB')} ${b.ramType}; ${b.ports}; power ${b.power}; ${b.L} × ${b.W} mm (${b.src})`; },
+    spec: (p) => { const id = s(p, 'board'), b = boardDef(id); return `${b.soc}: ${b.cpu}${b.ai ? `; ${b.ai}` : ''}${b.gpu ? `; ${b.gpu}` : ''}; ${s(p, 'ram').replace('GB', ' GB')} ${b.ramType}; ${b.ports}; power ${b.power}; ${b.L} × ${b.W} mm (${b.src})${approx(id) ? `; its layout approximate (its parts by its class's rules, not yet measured from its photos)${b.g ? `, so its drawing weighs ${boardMass(id).toFixed(0)} g where its maker gives ${b.g} g` : ''}` : ''}`; },
     box: (p) => { const b = boardDef(s(p, 'board')); return [b.L, b.W, b.H]; },
-    g: (p) => { const b = boardDef(s(p, 'board')); return b.g ?? +boardMass(s(p, 'board')).toFixed(1); }, look: 'board',
+    // (its maker's weight where its drawing is measured, so the drawing is held to it; an approximate drawing's own)
+    g: (p) => { const id = s(p, 'board'), b = boardDef(id); return b.g && !approx(id) ? b.g : +boardMass(id).toFixed(1); }, look: 'board',
   },
   {
     id: 'pico', name: 'Raspberry Pi Pico board', path: 'Electrical/Boards and controllers/Microcontroller boards', says: 'Raspberry Pi\'s microcontroller board: its RP2040 or RP2350 on a castellated board 51 × 21 mm, programmed in MicroPython or C over USB', std: 'Raspberry Pi\'s Pico datasheets',

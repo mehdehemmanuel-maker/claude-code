@@ -75,7 +75,8 @@ export interface Part {
    *  follows what it covers and joins nothing: never a joint, it holds and carries nothing across it */ joint?: 'bearing' | 'ball' | 'bush' | 'slide' | 'spring' | 'cv' | 'hinge' | 'mount' | 'universal' | 'cover';
   /** the parts it is meant to meet face to face, by name: seated on, clamped against, bonded or clipped to (its maker's),
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
-  /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
+  /** characters printed on its broad faces (a number plate's), dark on its own colour; or, with an ink, printed in that
+   *  ink on its top face alone (a board's silkscreen, a chip's laser mark) */ text?: string; ink?: number;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far

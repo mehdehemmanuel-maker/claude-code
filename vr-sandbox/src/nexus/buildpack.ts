@@ -298,8 +298,9 @@ export function packPart(p: Pack): Part | null {
   const { profile: f, best } = m, mm = 0.001, t = best.t * mm, h = 10 * mm, L = f.L * mm, W = f.W * mm;
   // (solder mask over bare FR-4, with no copper under it, is a paler, yellower green than over a board's copper)
   const mat = best.mat === 'FR-4' ? { mat: 'fr4', color: 0x7cae52 } : best.mat.startsWith('5052') ? { mat: 'al-5052', color: 0xc9ced4 } : { mat: 'abs', color: 0xeeeeee };
-  const at = (x: number, y: number, up: number): V3 => [x * mm - L / 2, up, y * mm - W / 2];
-  const plate: Part = { name: f.name, shape: { box: [L, t, W] }, at: [0, -t / 2, 0], ...mat, cuts: f.holes.map((x) => ({ r: (x.d / 2) * mm, depth: t, at: [x.x * mm - L / 2, t / 2, x.y * mm - W / 2] as V3, dir: [0, -1, 0] as V3 })) };
+  // (the plate's drawing seen from above: its y up the page runs along -z, as a board's does)
+  const at = (x: number, y: number, up: number): V3 => [x * mm - L / 2, up, W / 2 - y * mm];
+  const plate: Part = { name: f.name, shape: { box: [L, t, W] }, at: [0, -t / 2, 0], ...mat, cuts: f.holes.map((x) => ({ r: (x.d / 2) * mm, depth: t, at: [x.x * mm - L / 2, t / 2, W / 2 - x.y * mm] as V3, dir: [0, -1, 0] as V3 })) };
   const parts: Part[] = [plate];
   for (const b of f.on) {
     const d = BOARD_DEFS[b.id]!, c = component(`sbc ${b.id} ${d.ram[0]}GB`);

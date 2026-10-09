@@ -26,7 +26,7 @@ import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
-import { boardComps, boardDef, type Comp } from './sbc';
+import { boardComps, boardDef, screwFor, type Comp } from './sbc';
 import { LINK } from './meca';
 
 const PI = Math.PI, mm = 1e-3;
@@ -316,11 +316,11 @@ const HOW: Partial<Record<Role, string>> = { lead: 'moulded into its body', fram
  *  of it that is its own (what lies inside it taken out), a skin weighed as a skin. */
 function solidPart(m: { s: Solid; g: number; fill: number }, name: string, item: string | undefined, more: Partial<Part> = {}): Part {
   const s = m.s, sh = s.shape, k = (v: number) => v * mm;
-  const shape: Part['shape'] = 'box' in sh ? { box: [k(sh.box[0]), k(sh.box[1]), k(sh.box[2])] } : 'cyl' in sh ? { cyl: [k(sh.cyl[0]), k(sh.cyl[1])] } : 'lathe' in sh ? lathe(sh.lathe) : 'prism' in sh ? { prism: { pts: sh.prism.pts.map(([x, y]) => [k(x), k(y)] as [number, number]), L: k(sh.prism.L) } } : { tube: { r: k(sh.tube.r), pts: sh.tube.pts.map((q) => [k(q[0]), k(q[1]), k(q[2])] as V3), bend: k(sh.tube.r * 4) } };
+  const shape: Part['shape'] = 'box' in sh ? { box: [k(sh.box[0]), k(sh.box[1]), k(sh.box[2])] } : 'cyl' in sh ? { cyl: [k(sh.cyl[0]), k(sh.cyl[1])] } : 'lathe' in sh ? lathe(sh.lathe) : 'prism' in sh ? { prism: { pts: sh.prism.pts.map(([x, y]) => [k(x), k(y)] as [number, number]), L: k(sh.prism.L), ...(sh.prism.holes ? { holes: sh.prism.holes.map((h) => h.map(([x, y]) => [k(x), k(y)] as [number, number])) } : {}) } } : { tube: { r: k(sh.tube.r), pts: sh.tube.pts.map((q) => [k(q[0]), k(q[1]), k(q[2])] as V3), bend: k(sh.tube.r * 4) } };
   const t = 'box' in sh ? sh.box[2] : 0;
   return P(name, shape, { at: [k(s.at[0]), k(s.at[1]), k(s.at[2])], ...(s.rot ? { rot: s.rot } : {}), ...(s.mat ? { mat: s.mat } : {}), ...lookOf(s), ...(item ? { item } : {}), ...(HOW[s.role] ? { fixed: HOW[s.role] } : {}),
     ...(s.shell ? { kg: m.g / 1000 } : m.fill * (s.share ?? 1) < 1 ? { fill: m.fill * (s.share ?? 1) } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}),
-    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...more });
+    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...(s.text ? { text: s.text } : {}), ...(s.ink != null ? { ink: s.ink } : {}), ...more });
 }
 /** A semiconductor as drawn from its package: its body under its name (marked with its part number where it is big
  *  enough to read), its lead frame (leads, paddle, tab and pad) as one, or an axial diode's two leads each its own;
@@ -368,8 +368,8 @@ function boardParts(id: string, nm: string): Part[] {
 /** A board's mounting holes as a mating face: their pattern, the screw they take (M2.5 in a 2.7 mm hole), from its
  *  maker's drawing, on its underside. */
 function boardHoles(id: string): Port {
-  const b = boardDef(id), pat = b.holes.map(([x, z]) => [(x - b.L / 2) * mm, (z - b.W / 2) * mm] as [number, number]);
-  return port('mounting holes', 'holes', b.hole >= 3 ? 'M3' : b.hole >= 2.5 ? 'M2.5' : 'M2', pat, [0, -1.6 * mm, 0], [0, -1, 0], [1, 0, 0], 1.6 * mm, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
+  const b = boardDef(id), pat = b.holes.map(([x, z]) => [(x - b.L / 2) * mm, (b.W / 2 - z) * mm] as [number, number]);
+  return port('mounting holes', 'holes', screwFor(b.hole), pat, [0, -1.6 * mm, 0], [0, -1, 0], [1, 0, 0], 1.6 * mm, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
 }
 
 // ---- a six-axis arm --------------------------------------------------------------------------------------------------
