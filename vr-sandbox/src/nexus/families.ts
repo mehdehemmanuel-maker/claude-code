@@ -6,7 +6,7 @@
 // the AWG formula, NEMA ICS 16 faces); laws are the textbooks' (a spring's rate, a gear's pitch circle).
 
 import type { Item, Process } from './inventory';
-import { METRIC } from './threads';
+import { METRIC, PAN } from './threads';
 import { KINDS } from './kinds';
 import { CLEAR, NEMA, NEMA_FACE } from './kinds/motion';
 export { NEMA, NEMA_FACE };
@@ -232,11 +232,64 @@ const fan: Family = {
   make(p) { const s2 = Number(p.size), t = Number(p.thick); return item(`fan-${s2}x${t}-${p.volts}v`, `${s2} × ${t} mm fan, ${p.volts} V`, 'Electrical/Motors and actuators/Fans', 'product', 'assemble', 'fan-frame fan-impeller winding*4 magnet-ferrite-arc ic-package sleeve-bearing wire-hookup*2', 'a small brushless motor (a wound stator and a magnet ring in the hub) turning moulded blades in a square frame, switched by a driver chip', `${s2} mm square, ${t} mm thick, holes ${s2 === 40 ? 32 : s2 === 120 ? 105 : s2 === 80 ? 71.5 : s2 === 60 ? 50 : s2 === 92 ? 82.5 : s2 === 50 ? 40 : s2 === 30 ? 24 : 20} mm apart (typical)`, [s2, s2, t], +(s2 * s2 * t * 0.00035).toFixed(0)); },
 };
 // ---- linear rails by size and length ------------------------------------------------------------------------------------
+/** HIWIN MGN miniature guideways (HIWIN MG series catalogue, 2-6-12; mm, kg): the assembly H high over the rail's foot,
+ *  the block's skirt H1 above it, the block W wide with its tapped holes (M, Ml deep) B across by C along, the rail WR by
+ *  HR, its holes counterbored D for h over d through, P apart and E from its end, the bolt it takes, its mass a metre; each
+ *  block short (C) or long (H): its holes C apart, its steel L1 long and L over its end seals, its ratings and its mass
+ *  (end caps, seals and balls in it). Its balls: MGN9's 1/16 in and MGN12's 3/32 in (rebuilders' counts, not HIWIN's);
+ *  MGN7's and MGN15's scaled from those by the rail's width (estimate). Rail, block, balls and retainers are of one
+ *  hardenable stainless (HIWIN: "a special grade of stainless steel"), drawn as 440C. */
+export const MGN: Record<number, { H: number; H1: number; N: number; W: number; B: number; M: string; Ml: number; WR: number; HR: number; D: number; h: number; d: number; P: number; E: number; bolt: string; kgm: number; ball: number; blocks: Record<'C' | 'H', { C: number; L1: number; L: number; Cd: number; C0: number; kg: number }> }> = {
+  7: { H: 8, H1: 1.5, N: 5, W: 17, B: 12, M: 'M2', Ml: 2.5, WR: 7, HR: 4.8, D: 4.2, h: 2.3, d: 2.4, P: 15, E: 5, bolt: 'M2x6', kgm: 0.22, ball: 1.31, blocks: { C: { C: 8, L1: 13.5, L: 22.5, Cd: 0.98, C0: 1.24, kg: 0.01 }, H: { C: 13, L1: 21.8, L: 30.8, Cd: 1.37, C0: 1.96, kg: 0.015 } } },
+  9: { H: 10, H1: 2, N: 5.5, W: 20, B: 15, M: 'M3', Ml: 3, WR: 9, HR: 6.5, D: 6, h: 3.5, d: 3.5, P: 20, E: 7.5, bolt: 'M3x8', kgm: 0.38, ball: 1.5875, blocks: { C: { C: 10, L1: 18.9, L: 28.9, Cd: 1.86, C0: 2.55, kg: 0.016 }, H: { C: 16, L1: 29.9, L: 39.9, Cd: 2.55, C0: 4.02, kg: 0.026 } } },
+  12: { H: 13, H1: 3, N: 7.5, W: 27, B: 20, M: 'M3', Ml: 3.5, WR: 12, HR: 8, D: 6, h: 4.5, d: 3.5, P: 25, E: 10, bolt: 'M3x8', kgm: 0.65, ball: 2.381, blocks: { C: { C: 15, L1: 21.7, L: 34.7, Cd: 2.84, C0: 3.92, kg: 0.034 }, H: { C: 20, L1: 32.4, L: 45.4, Cd: 3.72, C0: 5.88, kg: 0.054 } } },
+  15: { H: 16, H1: 4, N: 8.5, W: 32, B: 25, M: 'M3', Ml: 4, WR: 15, HR: 10, D: 6, h: 4.5, d: 3.5, P: 40, E: 15, bolt: 'M3x10', kgm: 1.06, ball: 2.81, blocks: { C: { C: 20, L1: 26.7, L: 42.1, Cd: 4.61, C0: 5.59, kg: 0.059 }, H: { C: 25, L1: 43.4, L: 58.8, Cd: 6.37, C0: 9.11, kg: 0.092 } } },
+};
+/** An MGN rail and its carriage as drawn, mm: the rail along z, its foot at y = 0, the block at the middle of its travel.
+ *  Typical where HIWIN does not say (estimates, each named): the block's slot 0.3 of a ball wider than the rail each side
+ *  and 0.2 above it; the grooves 0.52 of a ball across (a typical conformity) with 5 µm of running clearance; the ball rows
+ *  0.4 mm of wall above the block's skirt from their return holes; each circuit a load row and a return row 1.3 balls apart,
+ *  running half a ball into the end caps, turned round on 0.65 of a ball; the end caps 0.7 of what is beyond the steel and
+ *  the seals 0.3; two screws a seal (the iFixit MGN guide), M1.6 on MGN7 and 9 and M2 on MGN12 and 15 (estimate), long
+ *  enough to take 1.5 d of thread in the block, above the return rows and their heads 0.6 mm clear of the rail; a retaining wire under each load row 0.24 of a ball across. */
+export function mgnDims(p: Record<string, string | number>) {
+  const sz = Number(p.size), t = (String(p.block ?? 'H').toUpperCase() === 'C' ? 'C' : 'H') as 'C' | 'H', R = MGN[sz]!, blk = R.blocks[t], L = Number(p.length);
+  const Db = R.ball, gs = 0.3 * Db, cl = 0.005, rg = 0.52 * Db, gt = 0.2, Ht = R.H - R.Ml, rh = Db / 2 + 0.03;
+  const yb = R.H1 + rh + 0.4, xb = R.WR / 2 + gs / 2, xw = R.WR / 2 + gs, rt = 0.65 * Db, xr = xb + 2 * rt, e0 = Db / 2;
+  const e = (blk.L - blk.L1) / 2, ls = 0.3 * e, lc = e - ls;
+  const run = 2 * (blk.L1 + 2 * e0) + 2 * Math.PI * rt, n = Math.floor(run / (Db + 0.005));
+  const sd = sz <= 9 ? 'M1.6' : 'M2', sdd = Number(sd.slice(1)), SL = [4, 5, 6, 8, 10, 12, 16].find((x) => x >= ls + lc + 1.5 * sdd)!, te = SL - ls - lc;
+  const ys = yb + rh + 0.3 + sdd / 2, xs = Math.max(xr, R.WR / 2 + PAN[sd]!.dk / 2 + 0.6), rw = 0.12 * Db, yw = yb - Db / 2 - rw - 0.02;
+  const nh = Math.max(1, Math.floor((L - 2 * R.E) / R.P) + 1), E1 = (L - (nh - 1) * R.P) / 2, a = (R.D / 2 + (xb - Db / 2 - cl)) / 2;
+  return { ...R, size: sz, t, blk, L, Db, gs, cl, rg, gt, Ht, rh, yb, xb, xw, rt, xr, e0, e, ls, lc, run, n, sd, sdd, SL, te, ys, xs, rw, yw, nh, E1, a, travel: L - blk.L };
+}
 const rail: Family = {
-  id: 'rail', name: 'miniature linear rail', path: ['Mechanical', 'Linear motion', 'Rails'], says: 'MGN7, 9, 12 or 15, any length, with its carriage', params: [{ key: 'size', says: 'rail width', unit: 'mm', values: [7, 9, 12, 15], default: 12 }, { key: 'length', says: 'length', unit: 'mm', min: 50, max: 2000, default: 400 }],
-  examples: ['rail MGN12 400', 'rail MGN9 300', 'rail MGN15 1000'],
-  read(w) { const sz = num(/mgn\s*(\d+)/i.exec(w)?.[1]) || 12, L = num(/\b(\d{2,4})\s*(?:mm)?\s*$/.exec(w.replace(/mgn\s*\d+/i, ''))?.[1]) || 400; return [7, 9, 12, 15].includes(sz) ? { size: sz, length: L } : 'Which size? MGN7, 9, 12, 15.'; },
-  make(p) { const sz = Number(p.size), L = Number(p.length); return item(`rail-mgn${sz}-${L}`, `MGN${sz} rail, ${L} mm, with carriage`, 'Mechanical/Linear motion/Rails', 'product', 'assemble', 'steel-chrome*2 bearing-ball*40 pom nbr grease', 'a ground steel rail and a carriage whose balls roll along it and come back round through its end caps', `${sz} mm wide rail; holes every ${sz <= 9 ? 20 : sz === 12 ? 25 : 40} mm (typical)`, [sz, sz * 0.75, L], mm3g(sz * sz * 0.75 * L * 0.85, RHO.steel)); },
+  id: 'rail', name: 'miniature linear rail', path: ['Mechanical', 'Linear motion', 'Rails'], says: 'MGN7, 9, 12 or 15 (HIWIN), any length, with its short (C) or long (H) carriage', params: [{ key: 'size', says: 'rail width', unit: 'mm', values: [7, 9, 12, 15], default: 12 }, { key: 'block', says: 'carriage', unit: '', values: ['C', 'H'], default: 'H' }, { key: 'length', says: 'length', unit: 'mm', min: 50, max: 2000, default: 400 }],
+  examples: ['rail MGN12H 400', 'rail MGN9H 300', 'rail MGN15C 1000'],
+  read(w) {
+    const m = /mgn\s*(\d+)\s*([ch])?\b/i.exec(w), sz = num(m?.[1]) || 12, b = (m?.[2] ?? 'H').toUpperCase(), L = num(/\b(\d{2,4})\s*(?:mm)?\s*$/.exec(w.replace(/mgn\s*\d+\s*[ch]?/i, ''))?.[1]) || 400;
+    if (!MGN[sz]) return 'Which size? MGN7, 9, 12, 15.';
+    // (a rail shorter than its carriage carries it on nothing: its balls would run off its end)
+    const bl = MGN[sz]!.blocks[b as 'C' | 'H'].L; if (L < bl + 5) return `An MGN${sz}${b} carriage is ${bl} mm long: its rail must be longer than that, ${Math.ceil(bl + 5)} mm or more.`;
+    return { size: sz, block: b, length: L };
+  },
+  make(p) {
+    const d = mgnDims(p), { size: sz, t, blk, L } = d, ss = 'stainless-440c', rho = 7.8, nm = `MGN${sz}${t}`, id = `rail-mgn${sz}${t.toLowerCase()}-${L}`;
+    const ballG = +((Math.PI / 6) * d.Db ** 3 * rho / 1000).toFixed(4), U = d.W * (d.H - d.H1) - (d.WR + 2 * d.gs) * (d.HR + d.gt - d.H1);
+    const capG = +(U * d.lc * 1.41 / 1000).toFixed(3), sealG = +(U * d.ls * (0.65 * 1.0 + 0.35 * 7.9) / 1000).toFixed(3), wireG = +(Math.PI * d.rw ** 2 * (blk.L1 + 2 * d.lc) * 7.9 / 1000).toFixed(4);
+    const { of: screws, inner: si } = partsOf(`{panhead ${d.sd}x${d.SL} PH A2}*4`), screwG = si[0]?.g ?? 0;
+    const nip = sz === 15 ? [item('grease-nipple-m3', 'grease nipple, M3', 'Mechanical/Linear motion/Rail parts', 'part', 'machine', 'brass nickel', 'a ball-headed nipple a grease gun clips onto, screwed into an end cap (MGN15\'s, HIWIN)', 'M3; 4.5 mm proud (HIWIN\'s G); hex 4 mm (estimate)', [4, 4, 7.5], 0.4)] : [];
+    const parts = [
+      item(`mgn${sz}-rail-${L}`, `MGN${sz} rail, ${L} mm`, 'Mechanical/Linear motion/Rail parts', 'part', 'grind', ss, `the ground rail: a groove down each side for the balls, ${d.nh} holes counterbored for ${d.bolt} cap screws`, `${d.WR} × ${d.HR} mm; holes ${d.d} mm through, ${d.D} counterbored ${d.h} deep, every ${d.P} mm, ${d.E1.toFixed(1)} from its ends; ${d.kgm} kg/m (HIWIN)`, [d.WR, d.HR, L], +(d.kgm * L).toFixed(1)),
+      item(`mgn${sz}${t.toLowerCase()}-block`, `${nm} block`, 'Mechanical/Linear motion/Rail parts', 'part', 'grind', ss, 'the carriage\'s ground steel: its two grooves facing the rail\'s, a return hole beside each, four tapped holes on top', `${d.W} × ${blk.L1} mm, ${d.H - d.H1} high; ${d.M} × ${d.Ml} holes ${d.B} by ${blk.C} apart (HIWIN)`, [d.W, d.H - d.H1, blk.L1], +(blk.kg * 1000 - 2 * capG - 2 * sealG - 2 * d.n * ballG - 2 * wireG - 4 * screwG - nip.reduce((a, x) => a + x.g!, 0)).toFixed(2)),
+      item(`mgn${sz}-end-cap`, `MGN${sz} end cap`, 'Mechanical/Linear motion/Rail parts', 'part', 'mould', 'pom', 'the moulded cap at each end of the block whose channels turn the balls round from their load rows to their returns', `${d.lc.toFixed(1)} mm thick (estimate)`, [d.W, d.H - d.H1, d.lc], capG),
+      item(`mgn${sz}-end-seal`, `MGN${sz} end seal`, 'Mechanical/Linear motion/Rail parts', 'part', 'mould', 'nbr steel-low', 'a rubber wiper bonded to a steel plate at each end, its lip on the rail', `${d.ls.toFixed(1)} mm thick (estimate)`, [d.W, d.H - d.H1, d.ls], sealG),
+      item(`mgn${sz}-retainer`, `MGN${sz} retaining wire`, 'Mechanical/Linear motion/Rail parts', 'part', 'draw', 'stainless-304', 'a wire under each row of balls that holds them in the block when it is off its rail', `${(2 * d.rw).toFixed(2)} mm (estimate)`, [2 * d.rw, 2 * d.rw, blk.L1 + 2 * d.lc], wireG),
+      item(`steel-ball-${d.Db}`, `${d.Db} mm steel ball`, 'Mechanical/Bearings/Bearing parts', 'part', 'grind', ss, 'a ball ground and lapped round', `${d.Db} mm`, [d.Db, d.Db, d.Db], ballG),
+    ];
+    const of = [{ id: parts[0]!.id, n: 1 }, { id: parts[1]!.id, n: 1 }, { id: parts[2]!.id, n: 2 }, { id: parts[3]!.id, n: 2 }, { id: parts[4]!.id, n: 2 }, { id: parts[5]!.id, n: 2 * d.n }, ...screws, ...nip.map((x) => ({ id: x.id, n: 1 }))];
+    return { ...item(id, `${nm} rail, ${L} mm, with its carriage`, 'Mechanical/Linear motion/Rails', 'product', 'assemble', '', 'a ground stainless rail and a carriage whose balls roll in two circuits along its grooves and back round through its end caps, wiped by a seal at each end', `${d.WR} mm rail; ${blk.L} mm carriage, ${d.W} wide, ${d.H} high over the rail's foot; C ${blk.Cd} kN, C0 ${blk.C0} kN (HIWIN); ${2 * d.n} balls; travel ${d.travel.toFixed(0)} mm`, [d.W, d.H, L], +(d.kgm * L + blk.kg * 1000).toFixed(1)), of, inner: [...parts, ...si, ...nip] };
+  },
 };
 // ---- round stock: shafts, rods, tubes, threaded rod -----------------------------------------------------------------
 const MAT: Record<string, [string, number, string]> = { steel: ['steel-low', RHO.steel, 'steel'], stainless: ['stainless-304', RHO.stainless, 'stainless'], aluminium: ['al-6061', RHO.aluminium, 'aluminium'], brass: ['brass', RHO.brass, 'brass'], copper: ['copper', RHO.copper, 'copper'] };

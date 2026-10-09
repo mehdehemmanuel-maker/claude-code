@@ -123,6 +123,7 @@ export const MATERIALS: Record<string, Spec> = {
   'silver-paste': { blend: [['silver', 80], ['glass', 5], ['C10H18O', 15]], says: 'silver powder and glass frit in terpineol' },
   // the materials of the kinds of bought part (src/nexus/kinds)
   'stainless-316': { alloy: { Cr: 17, Ni: 12, Mo: 2.5, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 316, nominal' },
+  'stainless-440c': { alloy: { Cr: 17, C: 1.1, Mo: 0.6, Mn: 0.8, Si: 0.8, Fe: 'bal' }, grade: 'AISI 440C, nominal' },
   'al-7075': { alloy: { Zn: 5.6, Mg: 2.5, Cu: 1.6, Cr: 0.23, Al: 'bal' }, grade: 'AA 7075, nominal' },
   'al-5052': { alloy: { Mg: 2.5, Cr: 0.25, Al: 'bal' }, grade: 'AA 5052, nominal' },
   'ti-6al4v': { alloy: { Al: 6, V: 4, Fe: 0.25, O: 0.2, Ti: 'bal' }, grade: 'Ti-6Al-4V (grade 5), nominal' },

@@ -46,7 +46,8 @@ export interface Port {
 /** What a part offers another where they meet, or asks of it: a shaft and the bore it goes in, studs and the nuts on
  *  them, a drive and the shaft it turns. Checked where they meet, with numbers (src/nexus/make/critic.ts contracts). */
 export interface Iface {
-  kind: 'shaft' | 'studs' | 'drive' | 'chain'; role: 'provides' | 'requires';
+  /** (a mount: a face that carries what is fastened to it, a carriage's top or a tool flange, the free end of what moves) */
+  kind: 'shaft' | 'studs' | 'drive' | 'chain' | 'mount'; role: 'provides' | 'requires';
   /** a shaft's or a stud's diameter, or a chain's pitch, m */ d?: number; /** how many (studs) */ n?: number;
   /** N·m: what a drive delivers (provides), or the most a driven shaft carries (requires) */ torque?: number;
   /** the part it goes to by name, where they do not touch (a chain drive and the axle it turns) */ to?: string; says?: string;

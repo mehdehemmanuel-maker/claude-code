@@ -26,7 +26,7 @@ export const LOOKS: Record<string, string> = {
   'psu-24v': 'box 215 30 115', 'solar-cell': 'sheet 156 0.2 156', 'solar-panel': 'sheet 1700 35 1000', 'power-bank': 'case 140 15 70', 'power-cord': 'coil 7 7 1500',
   // bearings, motion, springs
   'bearing-625': 'bearing 16 16 5', 'bearing-ring': 'ring 22 22 7', 'bearing-ball': 'ball 4 4 4', 'bearing-cage': 'ring 18 18 3', 'bearing-shield': 'ring 21 21 0.4', lm8uu: 'tube 15 15 24', 'bushing-bronze': 'ring 12 12 10',
-  'worm-set': 'gear 30 30 10', 'planet-gearbox': 'can 36 36 30', 'gt2-belt': 'loop 130 130 6', 'lead-screw-t8': 'rod 8 8 300', 'linear-rail': 'tslot 12 8 300', 'smooth-rod': 'rod 8 8 300',
+  'worm-set': 'gear 30 30 10', 'planet-gearbox': 'can 36 36 30', 'gt2-belt': 'loop 130 130 6', 'lead-screw-t8': 'rod 8 8 300', 'smooth-rod': 'rod 8 8 300',
   'spring-compression': 'spring 10 10 30', 'spring-extension': 'spring 8 8 30', 'spring-torsion': 'spring 12 12 8', 'gas-spring': 'can 18 18 250', caster: 'wheel 50 50 20', 'wheel-robot': 'wheel 65 65 26', 'omni-wheel': 'wheel 58 58 25',
   'hinge-butt': 'sheet 50 2 75', 'rod-end': 'box 22 40 8', 'u-joint': 'rod 16 16 40', 'drive-gear': 'gear 11 11 11 z36', 'shock-rc': 'can 12 12 80', 'heat-pipe': 'rod 6 6 200',
   // fluid

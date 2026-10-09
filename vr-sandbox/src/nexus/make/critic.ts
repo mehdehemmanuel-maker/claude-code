@@ -704,6 +704,10 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
   for (const c of clashes) {
     const ma = meshOf(c, 0), mb = meshOf(c, 1), la = ma.link || FRAME, lb = mb.link || FRAME; if (la === lb || covers(c)) continue; const links = [la, lb].sort() as [string, string];
     (meets.get(la) ?? meets.set(la, new Set()).get(la)!).add(lb); (meets.get(lb) ?? meets.set(lb, new Set()).get(lb)!).add(la);
+    // (a fastener locks two links where it meets the other, not where it passes near it: as a rub, apart by more than 20 µm
+    // it runs clear, a seal's screw beside the rail its carriage slides on)
+    const fast = !(c.kind === 'fused' || ma?.weld || mb?.weld) && (RIGID.test(c.a) || RIGID.test(c.b)), fgap = fast && c.kind !== 'through' ? leastDistance(tris(ma), tris(mb), 0.002) : null;
+    if (fast && fgap && fgap.d > 2e-5) { if (!out.clearances.some((x) => x.a === c.a && x.b === c.b)) out.clearances.push({ links, a: c.a, b: c.b, gap: +fgap.d.toFixed(5) }); continue; }
     const rigid = c.kind === 'fused' ? 'one piece (fused)' : ma?.weld || mb?.weld ? 'a weld bead' : RIGID.test(c.a) || RIGID.test(c.b) ? `a fastener (${RIGID.test(c.a) ? c.a : c.b})` : undefined;
     // (where both sides say a joint, the one that moves most is what they make: a cup turning in its seal and a spider rolling in
     // it make a constant-velocity joint, not a bearing)
@@ -729,7 +733,8 @@ export function held(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes)):
     out.splits.push({ link: l, pieces: pieces.map((pc) => [...new Set(pc.map(nameOf))].slice(0, 6)), gap: gap === null ? null : +gap.toFixed(4) });
   }
   // (each link joined to as many others as it must be to carry anything: a wheel or a hand's control to one, a shaft or a
-  // rod to one at each end; a drive shaft by a constant-velocity joint at each)
+  // rod to one at each end; a drive shaft by a constant-velocity joint at each; an output, a shaft or a mount (a carriage's
+  // top, a tool flange) offered to what it will carry, to the one that holds it)
   for (const [l] of lp) {
     const nb = jl.get(l) ?? new Map<string, Set<string>>(), ps = lp.get(l)!, wheel = ps.some((p) => /^(tyre|outer tyre)\b/.test(nameOf(p))), hand = ps.some((p) => /^steering wheel$|handlebar/.test(nameOf(p)));
     const out1 = ps.some((p) => byPath.get(p)?.drives), need = wheel || hand || out1 ? 1 : 2, cv = [...nb.entries()].filter(([, ks]) => ks.has('cv')).length, drive = /drive shaft/.test(l);

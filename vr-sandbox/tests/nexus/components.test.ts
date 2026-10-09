@@ -40,3 +40,31 @@ describe('the component library', () => {
     const { part } = makeKit(kitById('part')!, 'extrusion 2040 500', 1); expect(part.name).toBe('2040 extrusion');
   });
 });
+
+describe('a linear guideway, drawn whole from HIWIN\'s table', () => {
+  it('draws every MGN size and carriage with every part its inventory lists, within a tenth of HIWIN\'s mass', () => {
+    for (const w of ['rail MGN7C 100', 'rail MGN9H 300', 'rail MGN12H 400', 'rail MGN15C 400', 'rail MGN15H 500']) {
+      const c = component(w); if (typeof c === 'string') throw new Error(c);
+      expect(c.faults, w).toEqual([]); expect(Math.abs(c.mass - 1), w).toBeLessThan(0.1);
+    }
+  });
+  it('runs 66 balls in an MGN12H\'s two circuits (the count rebuilders give), its carriage one link sliding on the rail', () => {
+    const c = component('rail MGN12H 400'); if (typeof c === 'string') throw new Error(c);
+    const ps = all(c.part), balls = ps.filter((p) => p.item === 'steel-ball-2.381');
+    expect(balls).toHaveLength(66);
+    expect(balls.every((b) => b.link === 'MGN12H rail carriage' && b.joint === 'slide')).toBe(true);
+    // (each of its carriage's parts on that link, its own pieces with it)
+    expect(c.part.parts!.filter((p) => /carriage|end seal|end cap|retaining wire|seal screw/.test(p.name)).every((p) => p.link === 'MGN12H rail carriage')).toBe(true);
+  });
+  it('mates by its rail\'s foot (its holes every 25 mm) and its carriage\'s top (four M3 threads 20 by 20), and refuses a rail shorter than its carriage', () => {
+    const c = component('rail MGN12H 400'); if (typeof c === 'string') throw new Error(c);
+    const [foot, top] = c.part.ports!;
+    expect(foot!.sex).toBe('holes'); expect(foot!.pattern).toHaveLength(16); expect(foot!.pattern[1]![0] - foot!.pattern[0]![0]).toBeCloseTo(0.025, 6);
+    expect(top!.sex).toBe('threads'); expect(top!.thread).toBe('M3'); expect(top!.pattern.map(([x, z]) => [Math.abs(x), Math.abs(z)])).toEqual(Array(4).fill([0.01, 0.01]));
+    expect(component('rail MGN12H 40')).toMatch(/must be longer than that/);
+  });
+  it('reads a screw said by its thread and length, "M3x10", in every fastener kind', () => {
+    for (const w of ['panhead M2x6 PH A2', 'countersunk M3x10', 'buttonhead M3x8']) { const c = component(w); expect(typeof c === 'string' ? c : c.item.id, w).not.toMatch(/I do not know/); }
+    const p = component('panhead M2x6 PH A2'); if (typeof p === 'string') throw new Error(p); expect(p.faults).toEqual([]);
+  });
+});

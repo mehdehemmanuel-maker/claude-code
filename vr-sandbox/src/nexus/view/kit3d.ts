@@ -19,9 +19,10 @@ export interface KitView { group: THREE.Group; update(dt: number): void; explode
 const mats = new Map<string, THREE.MeshStandardMaterial>();
 // how a surface takes the light, by how it was finished (a car's paint is lacquered over its colour, a chrome trim a
 // mirror, a tyre's rubber matt, cast metal dull, brushed metal satin): roughness 0 a mirror, 1 chalk (typical of
-// physically based renderers' guides for each)
+// physically based renderers' guides for each; ground steel, a rail's or a block's, satin: it takes the room's light as
+// well as mirroring it)
 const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
-  paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, cast: { rough: 0.7, metal: 0.8 },
+  paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
   plate: { rough: 0.4, metal: 0.9 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };

@@ -2,7 +2,7 @@
 // and the hardware of doors, drawers and cabinets. Sizes from their standards where they have one (ISO, DIN); where
 // they have not, the sizes makers list, said to be typical.
 
-import { METRIC } from '../threads';
+import { METRIC, PAN } from '../threads';
 import { ax, bare, cyl, gOf, hexPrism, matOf, pref, ring, unit, type KindDef, type P } from './core';
 
 const T = (p: P) => METRIC[String(p.thread)]!;
@@ -39,7 +39,7 @@ export const FASTENERS: KindDef[] = [
     id: 'panhead', name: 'pan head screw, cross recess', path: 'Hardware/Fasteners/Machine screws', says: 'a rounded flat head with a Phillips (H) or Pozidriv (Z) recess', std: 'ISO 7045, M1.6–M8',
     axes: [bare('thread', 'thread', threads('M1.6', 'M8')), ax('L', 'length', 'mm', (p) => pref(Math.max(2, dOf(p)), Math.min(60, 12 * dOf(p)))), bare('drive', 'recess', ['PH', 'PZ']), bare('matter', 'made of', ['zinc', 'A2'])],
     title: (p) => `${p.thread} × ${p.L} pan head screw, ${p.drive}, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'roll-thread', how: (p) => `cold-headed with its ${p.drive === 'PH' ? 'Phillips' : 'Pozidriv'} recess, thread-rolled${p.matter === 'zinc' ? ', class 4.8, zinc-plated' : ''}`,
-    spec: (p) => `${T(p).p} mm pitch; head about ${(2 * dOf(p)).toFixed(1)} mm across, ${(0.7 * dOf(p)).toFixed(1)} mm high (ISO 7045)`, box: (p) => [2 * dOf(p), 2 * dOf(p), Number(p.L) + 0.7 * dOf(p)], g: (p) => screwG(p, cyl(2 * dOf(p), 0.7 * dOf(p)) * 0.8),
+    spec: (p) => `${T(p).p} mm pitch; head ${PAN[String(p.thread)]!.dk} mm across, ${PAN[String(p.thread)]!.k} mm high (ISO 7045)`, box: (p) => [PAN[String(p.thread)]!.dk, PAN[String(p.thread)]!.dk, Number(p.L) + PAN[String(p.thread)]!.k], g: (p) => screwG(p, cyl(PAN[String(p.thread)]!.dk, PAN[String(p.thread)]!.k) * 0.8),
   },
   {
     id: 'carriagebolt', name: 'carriage bolt', path: 'Hardware/Fasteners/Bolts', says: 'a domed head over a square neck that bites into wood so the bolt cannot turn', std: 'DIN 603, M5–M12',

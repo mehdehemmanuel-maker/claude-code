@@ -10,3 +10,7 @@ export const METRIC: Record<string, { p: number; dk: number; k: number; s: numbe
   M12: { p: 1.75, dk: 18, k: 12, s: 18, m: 10.8, d1: 13, d2: 24, h: 2.5 }, M14: { p: 2, dk: 21, k: 14, s: 21, m: 12.8, d1: 15, d2: 28, h: 2.5 },
   M16: { p: 2, dk: 24, k: 16, s: 24, m: 14.8, d1: 17, d2: 30, h: 3 }, M20: { p: 2.5, dk: 30, k: 20, s: 30, m: 18, d1: 21, d2: 37, h: 3 }, M24: { p: 3, dk: 36, k: 24, s: 36, m: 21.5, d1: 25, d2: 44, h: 4 },
 };
+/** ISO 7045 pan head screws with a cross recess: the head's diameter dk and height k (their maxima, mm). */
+export const PAN: Record<string, { dk: number; k: number }> = {
+  'M1.6': { dk: 3.2, k: 1.3 }, M2: { dk: 4, k: 1.6 }, 'M2.5': { dk: 5, k: 2.1 }, M3: { dk: 5.6, k: 2.4 }, M4: { dk: 8, k: 3.1 }, M5: { dk: 9.5, k: 3.7 }, M6: { dk: 12, k: 4.6 }, M8: { dk: 16, k: 6 },
+};

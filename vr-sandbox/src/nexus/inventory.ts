@@ -272,7 +272,6 @@ e('gearbox-housing', 'gearbox housing', 'Mechanical/Gears and gearboxes/Gearbox 
 e('gt2-pulley', 'GT2 pulley, 20 teeth', 'Mechanical/Linear motion/Belts and pulleys', 'product', 'machine', 'al-6061 screw-set*2', 'an aluminium pulley with 20 teeth for a 2 mm pitch belt, held by two set screws', '2 mm pitch: 40 mm a turn', { alt: 'print', size: [16, 16, 16] });
 e('gt2-belt', 'GT2 belt (6 mm)', 'Mechanical/Linear motion/Belts and pulleys', 'product', 'mould', 'timing-belt-body tension-cord-glass', 'a toothed neoprene belt round glass-fibre tension cords', '2 mm pitch, 6 mm wide');
 e('lead-screw-t8', 'T8 lead screw and nut', 'Mechanical/Linear motion/Screws', 'product', 'assemble', 'lead-screw lead-nut', 'a rolled-thread stainless screw and a brass nut', '8 mm, 2 mm pitch × 4 starts: 8 mm a turn (or 2 mm single-start)');
-e('linear-rail', 'linear rail MGN12 with carriage', 'Mechanical/Linear motion/Rails', 'product', 'assemble', 'steel-chrome*2 bearing-ball*40 pom nbr grease', 'a ground steel rail and a carriage whose balls roll along it and recirculate through plastic end caps, wipers at each end', '12 mm rail');
 e('smooth-rod', 'smooth rod, 8 mm', 'Mechanical/Linear motion/Rods', 'product', 'grind', 'steel-chrome', 'a hardened, ground, chromed rod for linear bearings to run on');
 e('coupling-flex', 'flexible shaft coupling 5 × 8', 'Mechanical/Shafts and couplings/Couplings', 'product', 'machine', 'al-6061 screw-set*4', 'an aluminium cylinder cut in a helix so it bends but not twists, clamped to each shaft', '', { alt: 'print', size: [19, 19, 25] });
 e('shaft-collar', 'shaft collar', 'Mechanical/Shafts and couplings/Collars', 'product', 'machine', 'steel-low screw-set', 'a ring clamped on a shaft by a set screw', '', { alt: 'print', size: [16, 16, 8] });
@@ -350,7 +349,6 @@ e('psu-24v', 'switching power supply, 24 V', 'Electrical/Power/Power supplies', 
 e('psu-case', 'power supply case', 'Electrical/Power/Power supplies', 'part', 'stamp', 'steel-low zinc', 'a punched and folded sheet-steel case', '', { alt: 'bend', size: [215, 115, 50] });
 e('lcd-module', 'display module', 'Electrical/Instruments/Displays', 'product', 'assemble', 'lcd-glass led-5mm*4 pcb-bare ic-package', 'a liquid-crystal panel, its backlight LEDs and its driver chip on a board');
 e('printer-frame', 'printer frame', 'Mechanical/3D printer parts/Frame', 'assembly', 'assemble', 'extrusion-2020*8 bracket-corner*8 t-nut*32 screw-m3*32', 'aluminium extrusions joined by cast corner brackets and T-nuts');
-e('printer-fdm', 'FDM 3D printer', 'Electrical/Machines/3D printers', 'product', 'assemble', 'printer-frame nema17*4 hotend extruder heated-bed printer-board psu-24v lcd-module gt2-belt*2 gt2-pulley*2 linear-rail*3 lead-screw-t8 coupling-flex wire-hookup*20 jst-xh*10', 'a frame carrying a hot end on belts and rails over a heated bed, steppers moving each axis, a board reading G-code, a power supply, a display', 'e.g. 220 × 220 × 250 mm build volume');
 // a quadcopter
 e('esc', 'electronic speed controller', 'Electrical/Boards and controllers/Motor drivers', 'product', 'solder', 'pcb-bare mosfet-to220*6 ic-package capacitor-electrolytic smd-passives wire-hookup*5', 'six MOSFETs switching a brushless motor\'s three phases in turn, timed by a microcontroller');
 e('flight-controller', 'flight controller', 'Electrical/Boards and controllers/Flight controllers', 'product', 'solder', 'pcb-bare ic-package*2 mpu6050-board smd-passives pin-header', 'a microcontroller reading its gyro and accelerometer hundreds of times a second and setting each motor\'s speed to keep level');
@@ -854,6 +852,7 @@ for (const [id, fam] of [['screw-m3', 'screw'], ['screw-set', 'screw'], ['nut-m3
 // ==== more kinds of things: vehicles, home appliances, sound, light and heat, fluid, robots ===========================
 /** A part made to sizes by its family, put in the inventory for an entry's list: F('bearing 6805') gives its id. */
 const F = (words: string): string => { const it = callFamily(words); if (!it || typeof it === 'string') throw new Error(`the inventory's seed: "${words}": ${it ?? 'no such family'}`); if (!items.has(it.id)) put(it); return it.id; };
+e('printer-fdm', 'FDM 3D printer', 'Electrical/Machines/3D printers', 'product', 'assemble', `printer-frame nema17*4 hotend extruder heated-bed printer-board psu-24v lcd-module gt2-belt*2 gt2-pulley*2 ${F('rail MGN12H 400')}*3 lead-screw-t8 coupling-flex wire-hookup*20 jst-xh*10`, 'a frame carrying a hot end on belts and rails over a heated bed, steppers moving each axis, a board reading G-code, a power supply, a display', 'e.g. 220 × 220 × 250 mm build volume');
 m('mica', 'mica', 'Minerals', 'a sheet silicate that splits into thin plates: it insulates and stands red heat', 'muscovite');
 m('alnico', 'alnico', 'Metals/Magnetic alloys', 'an alloy of aluminium, nickel and cobalt with iron, cast and magnetised: the magnet of guitar pickups', 'e.g. alnico 5');
 m('bi2te3', 'bismuth telluride', 'Semiconductors', 'the thermoelectric semiconductor of Peltier modules, doped n and p', 'Bi₂Te₃');
@@ -974,6 +973,7 @@ e('led-matrix', 'LED matrix sign', 'Electrical/Displays/LED matrices', 'product'
 
 // the materials of the kinds of bought part
 m('stainless-316', '316 stainless steel', 'Metals/Stainless steels', 'stainless with molybdenum: it stands salt water and acids better than 304', 'A4');
+m('stainless-440c', '440C stainless steel', 'Metals/Stainless steels', 'a high-carbon stainless that hardens to about 58 HRC: rails, blocks and balls that do not rust', 'AISI 440C');
 m('al-7075', '7075 aluminium', 'Metals/Aluminium alloys', 'zinc-strengthened aluminium, as strong as mild steel at a third the weight', '7075-T6');
 m('al-5052', '5052 aluminium', 'Metals/Aluminium alloys', 'magnesium-strengthened sheet aluminium that bends well and stands salt water', '5052-H32');
 m('ti-6al4v', 'titanium alloy', 'Metals/Titanium', 'titanium with aluminium and vanadium: strong, light, it does not corrode', 'Ti-6Al-4V');

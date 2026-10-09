@@ -75,7 +75,11 @@ function match(a: Ax, vs: V[], t: string): V | 'bad' | undefined {
 /** A kind's sizes read from words, each token one of its axes in its own form; a size not given is the first it is sold
  *  in. A value it is not sold in is refused, saying what it is sold in, unless it is made to order. */
 export function readKind(k: KindDef, words: string): P | string {
-  const toks = words.trim().split(/\s+/).filter((t) => t && t.toLowerCase() !== k.id), p: P = {}, used = new Set<number>();
+  // (a fastener said as its thread by its length, "M3x10", is its thread and its length: "M3 L10"; a thread that is one
+  // of its threads, a fine pitch "M8x1.25", is that thread)
+  const thr = k.axes.find((a) => a.key === 'thread'), len = k.axes.find((a) => a.key === 'L' && a.tag === 'L'), threads = new Set(((): V[] => { try { return (thr ? vals(thr, {}) : undefined) ?? []; } catch { return []; } })().map((v) => String(v).toLowerCase()));
+  const pitch = (t: string) => threads.has(t.toLowerCase()) || (!threads.size && /^M\d+(?:\.\d+)?[x×][0-3]\.\d+$/i.test(t));
+  const toks = words.trim().split(/\s+/).flatMap((t) => { const m = thr && len && !pitch(t) ? /^(M\d+(?:\.\d+)?)[x×](\d+(?:\.\d+)?)$/i.exec(t) : null; return m ? [m[1]!.toUpperCase(), `L${m[2]}`] : [t]; }).filter((t) => t && t.toLowerCase() !== k.id), p: P = {}, used = new Set<number>();
   for (const a of k.axes) {
     const vs = vals(a, p); let got: V | undefined;
     if (!vs.length && !a.cut) return `${k.name}: no ${a.says} goes with ${k.axes.slice(0, k.axes.indexOf(a)).map((b) => tokenOf(b, p[b.key]!)).join(' ')}.`;
