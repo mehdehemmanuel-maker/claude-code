@@ -3,7 +3,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { catalogue } from '../../src/nexus/catalogue';
 import { componentOf } from '../../src/nexus/components';
 import { resolve } from '../../src/nexus/inventory';
-import { boardWords, haveOf, pack, packPart, packText, packZip } from '../../src/nexus/buildpack';
+import { boardWords, findThing, haveOf, pack, packPart, packText, packZip } from '../../src/nexus/buildpack';
 import { areaOf, dxf, fabPack, gerbers, plateFor, profileFaults, stl } from '../../src/nexus/fab';
 import { e12AtLeast, ledResistor, LESSONS } from '../../src/nexus/lessons';
 import { cheapest, costBy, PRICES } from '../../src/nexus/prices';
@@ -66,9 +66,27 @@ describe('a build pack', () => {
     expect(p.cheaper[0]!.saves).toBeGreaterThanOrEqual(p.cheaper.at(-1)!.saves);
     expect(p.cheaper.some((c) => /1 GB instead/.test(c.say))).toBe(true);
   });
+  it('opens anything the inventory keeps one level: bought parts as lines, shaped ones to be made, and says what it cannot price', () => {
+    expect(findThing('3d printer')!.id).toBe('printer-fdm'); expect(findThing('desk fan')!.name).toMatch(/desk fan/i);
+    const p = pack('3d printer, I have a computer');
+    expect(p.lines.map((l) => l.key)).toEqual(expect.arrayContaining(['nema17', 'hotend', 'printer-board', 'psu-24v']));
+    expect(p.lines.find((l) => l.key === 'nema17')!.n).toBe(4); expect(p.notes.join(' ')).toMatch(/opened into what it is made of/);
+    // a part with no seller's price kept is listed, and the total says it leaves it out
+    expect(p.total.unpriced).toBe(p.lines.filter((l) => l.usd == null).length); if (p.total.unpriced) expect(p.notes.join(' ')).toMatch(/no seller's price kept yet/);
+    const f = pack('desk fan, I have a computer');
+    expect(f.custom.map((c) => c.name)).toEqual(expect.arrayContaining(['fan blade'])); expect(f.custom.find((c) => c.name === 'fan blade')!.process).toBe('mould');
+    expect(f.lessons.map((l) => l.id)).toEqual(expect.arrayContaining(['assemble', 'order-custom']));
+  });
+  it('invents what the library does not keep, keeping what the ask rules out', () => {
+    const p = pack('a fridge with no electricity, I have a computer');
+    expect(p.invented.length).toBe(1); expect(p.invented[0]).toMatch(/^a fridge with no electricity: the sun/);
+    expect(p.lines.length).toBeGreaterThan(0); expect(p.invented[0]).not.toMatch(/wall socket/);
+  });
   it('says what it cannot price, never inventing a figure', () => {
+    // the bolt is a part the library makes, with no seller's price kept: a line, unpriced; the flux capacitor is no part at all
     const p = pack('bolt M2.5x6, flux capacitor');
-    expect(p.unknown.length).toBe(2); expect(p.total.all[0]).toBe(0);
+    expect(p.lines.find((l) => l.key === 'bolt-m2.5x6')!.usd).toBeNull(); expect(p.unknown).toHaveLength(1); expect(p.unknown[0]).toMatch(/flux capacitor/);
+    expect(p.total.all[0]).toBe(0); expect(p.total.unpriced).toBe(1);
   });
 });
 

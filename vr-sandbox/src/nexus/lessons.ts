@@ -123,6 +123,38 @@ export const LESSONS: Record<string, Lesson> = {
       { do: 'Try a screw in each hole; ream a tight one with a drill bit of its size by hand.' },
     ], src: 'the slicer\'s own guide',
   },
+  'assemble': {
+    id: 'assemble', title: 'Put it together', why: 'a machine is its parts held where they belong: by screws done up in order, square, and nothing forced',
+    tools: ['hex-key', 'screwdriver', 'caliper-digital'], safety: ['Nothing powered while you build it.', 'Where a part must be forced, stop: it is the wrong part, the wrong way round, or something is in its way.'],
+    steps: [
+      { do: 'Lay every part out and count it against the list before you start.', check: 'nothing is missing, and nothing is left over that should not be' },
+      { do: 'Start every screw by hand for its first turns, so it cannot cross its thread.' },
+      { do: 'Do a joint up in a cross pattern, a little at a time, until each screw is snug, then a quarter turn more (typical for small screws by hand; a part with a torque in its manual takes that torque).' },
+      { do: 'Square a frame before its last screws are tight: measure both diagonals with the caliper or a rule.', check: 'the two diagonals are equal: a rectangle\'s diagonals are, and only a rectangle\'s are' },
+      { do: 'Move every moving part through all of its travel by hand before anything is powered.', check: 'it moves freely the whole way, without catching' },
+    ], src: 'a rectangle is the only parallelogram whose diagonals are equal (geometry); the rest is common workshop practice, marked typical where it is a rule of thumb',
+  },
+  'crimp': {
+    id: 'crimp', title: 'Crimp a connector', why: 'motors, sensors and fans plug in by crimped contacts in small housings (JST-XH and the like)',
+    tools: ['crimper', 'wire-stripper'], safety: ['Cut wire ends fly: wear glasses.'],
+    steps: [
+      { do: 'Strip only as much insulation as the contact\'s own drawing says (a couple of millimetres for small contacts).' },
+      { do: 'Lay the wire in the contact: its bare end under the front pair of wings, its insulation under the back pair.' },
+      { do: 'Crimp it in the tool\'s die that matches the contact, until the ratchet lets go.', check: 'the front wings bite the bare wire, the back wings grip the insulation, no strands outside' },
+      { do: 'Tug the wire firmly.', check: 'it does not move' },
+      { do: 'Push the contact into its housing the right way up until it clicks.', check: 'a gentle pull on the wire does not draw it out' },
+    ], src: 'the contact maker\'s crimping guidance (JST, Molex handbooks): strip length and die from its drawing; a crimp tool must name the contact or its die size',
+  },
+  'order-custom': {
+    id: 'order-custom', title: 'Have a part made from its drawing', why: 'a shaped part (a moulded case, a cast bracket, a bent cover) is made from a drawing; without one no service can quote it',
+    tools: ['caliper-digital'], safety: [],
+    steps: [
+      { do: 'Ask for its drawing first ("draw the …"): this pack lists it, with its size where the inventory gives one, but it is not drawn yet.' },
+      { do: 'Check its size against what it meets with the caliper (the holes it must line up with, the board it must hold).', check: 'every hole and edge matches what it joins' },
+      { do: 'Upload its file to the way this pack names (a moulded part printed at JLC3DP or at home; a stamped part laser-cut at SendCutSend; a machined part to a CNC service) and choose its material.', check: 'the service\'s preview shows the part at its true size' },
+      { do: 'Order the made parts first: they are made, then shipped, while bought parts come from stock.' },
+    ], src: 'the services\' own upload pages (jlc3dp.com, sendcutsend.com)',
+  },
   'program-with-claude': {
     id: 'program-with-claude', title: 'Program it with Claude beside you', why: 'write it, run it here, ask why, then put it on the real board',
     tools: [], safety: [],

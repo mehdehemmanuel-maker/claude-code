@@ -74,6 +74,7 @@ export const PRICES: Record<string, Price> = {
   'screwdriver': { what: 'precision screwdrivers', item: 'screwdriver', offers: [ada('Precision screwdriver set (6 pieces)', 7.95, 424)] },
   'hex-key': { what: 'metric hex keys', item: 'hex-key', offers: [ada('Rainbow Allen Wrench / Hex Key Set - Metric 9 Piece', 12.5, 5473)] },
   'm25-standoffs': { what: 'M2.5 screws and standoffs', item: 'standoff', offers: [ada('Black Nylon Machine Screw and Stand-off Set - M2.5 Thread', 16.95, 3299)] },
+  'crimper': { what: 'crimp tool for small open-barrel contacts', offers: [ada('Universal Crimping Pliers - 1.6 to 2.5mm Size Contacts - PA-21', 49.95, 349, { note: 'check the contact\'s maker names this tool or its die size before buying' }), ada('Ratcheting Crimper Pliers - #18-28 AWG', 34.95, 1213, { note: 'its dies must fit the contact: check before buying' })] },
   'caliper-digital': { what: 'digital calipers', item: 'caliper-digital', offers: [ada('Solar Digital Calipers', 14.95, 3720)] },
   'heat-shrink': { what: 'heat-shrink tubing', offers: [ada('Pre-Cut Multi-Colored Heat Shrink Pack Kit - 280 pcs', 9.95, 4559)] },
   'tweezers': { what: 'fine tweezers', offers: [ada('Fine tip curved tweezers - ESD safe - 120mm', 3.95, 422)] },

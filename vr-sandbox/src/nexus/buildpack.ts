@@ -7,12 +7,20 @@
 // nothing else needs soldering. A custom part (a plate to hold the boards) is designed, its files written and its
 // cheapest way to be made chosen (src/nexus/fab.ts). Every step has its lesson (src/nexus/lessons.ts). Over a budget, it
 // says what would bring it under, and by how much.
+// Anything else asked for is opened the same way, so a pack can be had for anything: a thing the inventory keeps (a 3D
+// printer, a drone, a kettle) is opened one level into what it is made of, each bought whole where it is sold whole (a
+// motor, a board, a bearing), had made where it is a shaped part of its own (a moulded case, a cast bracket), bought as
+// stock where it is a material; any of those is opened in turn by asking for it. An invention (water out of the air, a
+// lamp a falling weight lights) is the best chain of effects it finds (src/nexus/invent.ts), each effect's parts bought
+// or made. What no seller's price is kept for yet is listed all the same, not priced, and the total says it is short.
 // Owner of: a build's parts list, its prices and totals, its bench, its custom parts and its lessons, as one pack.
 
 import { strToU8, zipSync } from 'fflate';
 import { component } from './components';
 import type { Part, V3 } from './kits';
 import { fabPack, plateFor, type Profile, type Route } from './fab';
+import { invent } from './invent';
+import { INVENTORY, type Item } from './inventory';
 import { lessonsFor, type Lesson } from './lessons';
 import { cheapest, PRICES, priceKeyOf, usd, type Offer } from './prices';
 import { BOARD_DEFS, boardDef } from './sbc';
@@ -27,12 +35,21 @@ export interface Line {
   offer: Offer | null; packs: number; usd: number | null; why: string; others: Offer[]; needs: { key: string; offer: Offer; usd: number }[];
 }
 export interface Made { profile: Profile; routes: Route[]; best: Route; files: Record<string, string | Uint8Array>; faults: string[] }
+/** A shaped part of a thing (moulded, stamped, cast, machined), to be had made from its drawing: how, and what for. */
+export interface Custom { id: string; name: string; n: number; process: string; size?: [number, number, number]; how: string; for: string }
 export interface Pack {
-  asked: string; lines: Line[]; made: Made[]; lessons: Lesson[]; noLesson: string[];
-  total: { buy: number; bench: number; helps: number; make: [number, number] | null; all: [number, number] };
+  asked: string; lines: Line[]; made: Made[]; custom: Custom[]; lessons: Lesson[]; noLesson: string[];
+  /** what was invented for it, said */ invented: string[];
+  total: { buy: number; bench: number; helps: number; make: [number, number] | null; all: [number, number]; /** lines with no price kept */ unpriced: number };
   budget?: number; cheaper: { say: string; saves: number }[]; notes: string[]; unknown: string[];
 }
 
+/** A shaped part's own way of being made, and how a person has one made instead, from its drawing. */
+const SHAPED: Record<string, string> = {
+  mould: 'moulded: printed instead, from its drawing (JLC3DP, or your own printer)', cast: 'cast: printed instead, or cast in a mould printed from its drawing',
+  stamp: 'stamped from sheet: laser-cut from its drawing (SendCutSend)', bend: 'bent sheet: laser-cut and bent from its drawing (SendCutSend bends too)',
+  machine: 'machined: CNC-milled or turned from its drawing (a CNC service quotes it)', print: 'printed from its drawing', forge: 'forged: machined from bar instead, from its drawing',
+};
 const compact = (s: string) => s.toLowerCase().replace(/[^a-z0-9.]/g, '');
 const ALIASES: [string, string][] = Object.entries(BOARD_DEFS).flatMap(([id, b]) => {
   const c = compact(b.name);
@@ -51,6 +68,21 @@ export function boardWords(t: string): { words: string; note?: string } | null {
   const priced = b.ram.map((r) => ({ r, p: cheapest(`sbc-${id}-${r}gb`) })).filter((x) => x.p).sort((x, y) => x.p!.usd - y.p!.usd)[0];
   const r = priced?.r ?? b.ram[0]!;
   return { words: `sbc ${id} ${r}GB`, note: `${ram ? `${ram[1]} GB is not a size it is sold in` : 'no memory size said'}: the ${r} GB, its cheapest${priced ? ` at ${usd(priced.p!.usd)}` : ''}, taken (say "${b.name} ${b.ram.at(-1)}GB" for more)` };
+}
+
+/** A thing the inventory keeps, by its id or its name: the one named exactly, else the shortest kept name holding the
+ *  words ("3d printer" is the FDM 3D printer), else the longest name the words hold ("my desk fan" holds "desk fan"). */
+export function findThing(words: string): Item | null {
+  const t = words.trim().toLowerCase().replace(/^(?:a|an|the|my|some)\s+/, ''); if (t.length < 3) return null;
+  const byId = INVENTORY.get(t.replace(/\s+/g, '-')); if (byId) return byId;
+  let holds: Item | null = null, held: Item | null = null;
+  for (const i of INVENTORY.values()) {
+    if (i.make === 'grow') continue;
+    const nm = i.name.toLowerCase(); if (nm === t) return i;
+    if (nm.includes(t) && /\s/.test(t) && (!holds || nm.length < holds.name.length)) holds = i;
+    if (t.includes(nm) && nm.length > 3 && (!held || nm.length > held.name.length)) held = i;
+  }
+  return holds ?? held;
 }
 
 /** What one piece of the ask is, as the library's words, its count and anything said about it. */
@@ -95,23 +127,77 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   const has = (k: string) => owns.has(k), lines: Line[] = [], notes: string[] = [], unknown: string[] = [], processes: string[] = [];
   const add = (key: string, n: number, section: Line['section'], why: string, pick?: (o: Offer) => boolean): Line | null => {
     const p = PRICES[key]; if (!p) return null;
-    const was = lines.find((l) => l.key === key); if (was) { if (!was.why.includes(why)) was.why += `; ${why}`; return was; }
+    const was = lines.find((l) => l.key === key);
+    if (was) {
+      if (!was.why.includes(why)) was.why += `; ${why}`;
+      if (was.offer && was.section !== 'have') { was.n += n; const c0 = cheapest(key, was.n, has); if (c0) Object.assign(was, { offer: c0.offer, packs: c0.packs, usd: c0.usd, needs: c0.needs, others: c0.others }); }
+      return was;
+    }
     if (has(key)) { const l: Line = { key, what: p.what, n, section: 'have', offer: null, packs: 0, usd: 0, why: `${why} (you have it)`, others: [], needs: [] }; lines.push(l); return l; }
     let c = cheapest(key, n, has);
     if (c && pick) { const o = p.offers.find(pick); if (o) { const per = o.per ?? 1, packs = Math.max(Math.ceil(n / per), Math.ceil((o.min ?? 1) / per)); c = { offer: o, packs, usd: +(packs * o.usd).toFixed(4), needs: [], others: p.offers.filter((x) => x !== o) }; } }
     const l: Line = { key, what: p.what, n, section, offer: c?.offer ?? null, packs: c?.packs ?? 0, usd: c?.usd ?? null, why, others: c?.others ?? [], needs: c?.needs ?? [] };
     lines.push(l); return l;
   };
+  // what is not priced yet: listed all the same, so nothing in it goes unseen
+  const addUnpriced = (id: string, what: string, n: number, why: string): Line => {
+    const was = lines.find((l) => l.key === id); if (was) { was.n += n; if (!was.why.includes(why)) was.why += `; ${why}`; return was; }
+    const l: Line = { key: id, what, n, section: has(id) ? 'have' : 'buy', offer: null, packs: 0, usd: has(id) ? 0 : null, why: has(id) ? `${why} (you have it)` : why, others: [], needs: [] }; lines.push(l); return l;
+  };
+  const custom: Custom[] = [], invented: string[] = [];
+  /** One thing from the inventory as what you buy, have made and stock: the thing asked for itself opened one level; what
+   *  is in it bought whole where sold whole, made where it is a shaped part of its own, bought as stock where a material. */
+  const openItem = (it: Item, n: number, why: string, top: boolean): void => {
+    const key = priceKeyOf(it.id);
+    if (key) { add(key, n, 'buy', why); return; }
+    if (!top || !it.of.length) {
+      if (it.kind === 'part' && SHAPED[it.make]) {
+        const was = custom.find((c) => c.id === it.id);
+        if (was) was.n += n; else custom.push({ id: it.id, name: it.name, n, process: it.make, ...(it.size ? { size: it.size } : {}), how: SHAPED[it.make]!, for: why });
+        processes.push('order-custom'); return;
+      }
+      addUnpriced(it.id, it.name, n, it.kind === 'material' ? `${why}, as stock` : why); return;
+    }
+    if (it.make === 'solder') { addUnpriced(it.id, it.name, n, why); notes.push(`${it.name} is bought whole: making one is designing its circuit board, which is not done here yet`); return; }
+    notes.push(`${it.name} opened into what it is made of; ask for any of them ("what do I need to build a ${INVENTORY.get(it.of.find((c) => INVENTORY.get(c.id)?.kind === 'assembly')?.id ?? it.of[0]!.id)!.name.toLowerCase()}") to open it in turn`);
+    for (const c of it.of) { const k = INVENTORY.get(c.id); if (k) openItem(k, n * c.n, `in the ${it.name}`, false); else unknown.push(`${c.id} (in the ${it.name}): not in the inventory`); }
+    processes.push('assemble');
+    if (it.of.some((c) => INVENTORY.get(c.id)?.make === 'crimp')) processes.push('crimp');
+  };
+  /** Words for a part, as the library draws it, a thing the inventory keeps, or a board: bought or opened. */
+  const openWords = (words: string, n: number, why: string, top: boolean): boolean => {
+    const b = boardWords(words), c = component(b?.words ?? words);
+    if (typeof c !== 'string') { const key = priceKeyOf(c.item.id); if (key) add(key, n, 'buy', why); else addUnpriced(c.item.id, c.item.name, n, why); return true; }
+    const it = findThing(words); if (it) { openItem(it, n, why, top); return true; }
+    return false;
+  };
+  /** An invention for words that ask for an effect (water out of the air, light from a weight): its best chain of effects,
+   *  each effect's parts bought or made. */
+  const inventFor = (words: string, n: number): boolean => {
+    const v = invent(words), ch = v.chains[0]; if (!ch) return false;
+    invented.push(`${words.trim()}: ${ch.says}`);
+    for (const pt of ch.parts) if (!openWords(pt.words, n, `for its ${pt.for}`, false)) unknown.push(`${pt.words} (for its ${pt.for}): not kept yet`);
+    processes.push('assemble');
+    return true;
+  };
   // what was asked for
-  const chunks = asked.split(/\s*(?:,|;|\+|\band\b|\bwith\b|\bplus\b)\s*/i).filter((s) => s.trim());
+  // (split on "with" only where it adds a thing: "with no electricity", "with only sunlight" say how, and stay with it)
+  const chunks = asked.split(/\s*(?:,|;|\+|\band\b(?!\s+(?:no|without|only)\b)|\bwith\b(?!\s+(?:no|nothing|only|out)\b)|\bplus\b)\s*/i).filter((s) => s.trim());
   const flags = new Set<string>(), boards: { id: string; n: number; line: Line | null; header?: boolean }[] = [];
   for (const ch of chunks) {
     const r = read(ch); if (r.note) notes.push(r.note);
     if (r.flag) { flags.add(r.flag); continue; }
     const c = component(r.words!);
-    if (typeof c === 'string') { unknown.push(`${ch.trim()}: ${c}`); continue; }
+    if (typeof c === 'string') {
+      // not a part the library draws: a thing the inventory keeps, named as it is (a 3D printer), else an invention for
+      // what the words ask it to do, else whatever kept thing the words hold
+      const it = findThing(r.words!), named = it && r.words!.toLowerCase().split(/\s+/).length <= it.name.split(/\s+/).length + 1;
+      if (it && named) openItem(it, r.n, 'you asked for it', true);
+      else if (!inventFor(r.words!, r.n)) { if (it) openItem(it, r.n, 'you asked for it', true); else unknown.push(`${ch.trim()}: ${c}`); }
+      continue;
+    }
     const key = priceKeyOf(c.item.id);
-    if (!key) { unknown.push(`${c.item.name}: the library draws it (${c.item.id}) but no seller's price is kept for it yet`); continue; }
+    if (!key) { addUnpriced(c.item.id, c.item.name, r.n, 'you asked for it'); continue; }
     const bm = /^(sbc|pico) (\S+)/.exec(r.words!), id = bm?.[2];
     const l = add(key, r.n, 'buy', 'you asked for it');
     if (id && BOARD_DEFS[id]) boards.push({ id, n: r.n, line: l });
@@ -177,7 +263,9 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   else if (!have.computer && (boards.length || flags.has('computer'))) add('pi5-desktop-kit-4gb', 1, 'buy', 'a computer to write the card and program the board on; if you have a laptop, say you have a computer and it goes');
   // what it costs, and how it could cost less
   const sum = (s: Line['section']) => +lines.filter((l) => l.section === s).reduce((a, l) => a + (l.usd ?? 0) + l.needs.reduce((x, y) => x + y.usd, 0), 0).toFixed(2);
-  const b0 = sum('buy'), bench = sum('bench'), helps = sum('helps');
+  const b0 = sum('buy'), bench = sum('bench'), helps = sum('helps'), unpriced = lines.filter((l) => l.usd == null).length;
+  if (unpriced) notes.push(`${unpriced} thing${unpriced === 1 ? ' has' : 's have'} no seller's price kept yet: the total leaves ${unpriced === 1 ? 'it' : 'them'} out`);
+  if (custom.length) notes.push(`${custom.length} part${custom.length === 1 ? '' : 's'} to have made from ${custom.length === 1 ? 'its drawing' : 'their drawings'}, not drawn here yet: no file or price for ${custom.length === 1 ? 'it' : 'them'} until ${custom.length === 1 ? 'it is' : 'they are'}`);
   const make: [number, number] | null = made.length && made.every((m) => m.best.lo != null) ? [made.reduce((a, m) => a + m.best.lo!, 0), made.reduce((a, m) => a + m.best.hi!, 0)] : null;
   const all: [number, number] = [+(b0 + bench + (make?.[0] ?? 0)).toFixed(2), +(b0 + bench + (make?.[1] ?? 0)).toFixed(2)];
   const cheaper: Pack['cheaper'] = [];
@@ -199,7 +287,7 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   if (have.budget != null && all[0] > have.budget) notes.push(`${usd(all[0])} is over your ${usd(have.budget)} by ${usd(all[0] - have.budget)}`);
   for (const l of lines) if (l.offer?.stock === 'out') notes.push(`${l.offer.name} was out of stock at ${l.offer.seller} when seen (${l.offer.seen})${l.others.length ? `; also: ${l.others.map((o) => `${o.name} ${usd(o.usd)}`).join(', ')}` : ''}`);
   const { lessons, none } = lessonsFor(processes);
-  return { asked: asked0, lines, made, lessons, noLesson: none, total: { buy: b0, bench, helps, make, all }, budget: have.budget, cheaper: cheaper.sort((a, b) => b.saves - a.saves), notes, unknown };
+  return { asked: asked0, lines, made, custom, invented, lessons, noLesson: none, total: { buy: b0, bench, helps, make, all, unpriced }, budget: have.budget, cheaper: cheaper.sort((a, b) => b.saves - a.saves), notes, unknown };
 }
 
 /** What the pack makes, to stand before you: each custom plate as its cheapest maker would make it (FR-4 in solder-mask

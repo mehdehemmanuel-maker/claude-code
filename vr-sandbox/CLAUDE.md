@@ -64,6 +64,13 @@ the task list and lose the why. So the why lives here, and every round is checke
   try to keep prices down … source online … create parts that would be cheapest to get custom made within my current
   constraints … hand me what I need to take to a website that makes custom parts … you will be my iron man Jarvis … make
   it as realistic as possible"
+- "every build that user requests to be taught is a 100 percent hands on walk through so don't say solder here que the
+  soldering kit generation once it looks realistic use it in the build and have the user solder … that doesn't look like
+  a orange pi 5 some logic is broken its important these builds are 100 accurate so nothing goes wrong or wasted money"
+  (2026-10-09: a lesson is done by the user's hands in the room, with the tools drawn as they are; a board is drawn from
+  its own measured layout, its maker's drawing and photo, or marked approximate where it is not yet)
+- "make sure everything including these has to run through the que solver for any new parts or specific parts"
+  (2026-10-09: every new part, the soldering kit's and a board's connectors among them, goes through the breakdown queue)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
