@@ -22,8 +22,11 @@ export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 
 /** A solid, mm: what it is, its shape, where, turned how, of what (a density's name; '' for paint, which weighs
  *  nothing here); a hole through a tab (across its thinnest side, z, at its own height y); how much of it lies inside the body (whose moulding is that much less); a thin
  *  wall's thickness where it is a skin over what it covers (a termination's plating: a box open on its inner x face);
- *  the lead it belongs to; its own colour where its role's is not its (a band's). */
-export interface Solid { role: Role; shape: Shape; at: [number, number, number]; rot?: [number, number, number]; mat: string; hole?: { r: number; y: number }; inBody?: number; shell?: number; lead?: number; color?: number }
+ *  the lead it belongs to; its own colour where its role's is not its (a band's); holes down through it; the share of
+ *  its shape that is solid. */
+export interface Solid { role: Role; shape: Shape; at: [number, number, number]; rot?: [number, number, number]; mat: string; hole?: { r: number; y: number }; inBody?: number; shell?: number; lead?: number; color?: number;
+  /** holes drilled down through a slab (a board's mounting holes), mm, in its own frame */ bores?: { x: number; z: number; r: number }[];
+  /** the share of its shape that is solid (a layer of solder balls, a hollow moulding) */ share?: number }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)
@@ -31,7 +34,7 @@ const DIP_L: Record<number, number> = { 4: 4.6, 6: 8.9, 8: 9.6, 14: 19.05, 16: 1
 const SOIC_L: Record<number, number> = { 8: 4.9, 10: 4.9, 14: 8.65, 16: 9.9, 18: 11.55, 20: 12.8, 24: 15.4, 28: 17.9 };
 const TSSOP_L: Record<number, number> = { 8: 3.0, 14: 5.0, 16: 5.0, 20: 6.5, 24: 7.8, 28: 9.7 };
 const QFP: Record<number, [number, number]> = { 32: [7, 0.8], 44: [10, 0.8], 48: [7, 0.5], 64: [10, 0.5], 80: [12, 0.5], 100: [14, 0.5], 144: [20, 0.5] };
-const QFN: Record<number, [number, number]> = { 16: [3, 0.5], 20: [4, 0.5], 24: [4, 0.5], 28: [5, 0.5], 32: [5, 0.5], 40: [6, 0.5], 48: [7, 0.5], 56: [7, 0.4], 64: [9, 0.5] };
+const QFN: Record<number, [number, number]> = { 16: [3, 0.5], 20: [4, 0.5], 24: [4, 0.5], 28: [5, 0.5], 32: [5, 0.5], 40: [6, 0.5], 48: [7, 0.5], 56: [7, 0.4], 60: [7, 0.4], 64: [9, 0.5] };
 
 /** A package by its name ("SOIC-8", "TQFP-32", "TO-220", "DO-41"), or null where none is kept. */
 export function pkgOf(name: string): Pkg | null {
@@ -287,14 +290,18 @@ export const PKG_DENSITY: Record<string, [number, string]> = {
   batio3: [5850, 'barium titanate fired with its nickel electrodes, as a ceramic capacitor\'s body (typical; BaTiO₃ 6.02 g/cm³ at full density)'], 'ruthenium-oxide': [6970, 'ruthenium dioxide (6.97 g/cm³), a thick film\'s conductor'],
   epoxy: [1200, 'unfilled epoxy (typical 1.1–1.25 g/cm³): a lacquer coat'], 'epoxy-clear': [1150, 'clear casting epoxy, as an LED\'s lens (typical 1.1–1.2 g/cm³)'], silicone: [1100, 'optical silicone, as an LED\'s encapsulant (typical 1.0–1.2 g/cm³)'],
   ppa: [1600, 'polyphthalamide, glass- and titania-filled, as an LED\'s white cup (typical 1.5–1.7 g/cm³)'], gan: [6150, 'gallium nitride (6.15 g/cm³)'], algainp: [4500, 'AlGaInP on GaAs (typical 4.5 g/cm³; GaAs 5.32)'],
+  bt: [1900, 'BT-epoxy laminate with glass cloth, as a BGA\'s substrate (typical 1.8–2.0 g/cm³)'], solder: [7400, 'SAC305 lead-free solder (7.4 g/cm³)'],
+  pbt: [1500, 'glass-filled PBT, as connectors\' insulators (typical 1.45–1.6 g/cm³)'], ferrite: [4800, 'MnZn ferrite, as an RJ45\'s magnetics (typical 4.8 g/cm³)'],
 };
-const RHO: Record<string, number> = { copper: 8960, glass: 2500, fr4: 1850, 'steel-low': 7850, ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])) };
+/** Densities a solid is weighed by, kg/m³: the kits' own for the common metals and plastics (src/nexus/mass.ts DENSITY,
+ *  typical), and those above. */
+const RHO: Record<string, number> = { copper: 8960, glass: 2500, fr4: 1850, 'steel-low': 7850, 'stainless-304': 8000, brass: 8500, nylon: 1140, 'al-6061': 2700, ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])) };
 const area = (pts: [number, number][]) => Math.abs(pts.reduce((a, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]!; return a + x * y2 - x2 * y; }, 0)) / 2;
 /** A solid's volume, mm³ (a skin's: its outside's area times its wall). */
 export function solidVolume(s: Solid): number {
   const sh = s.shape;
   // (a skin is a cap over an end: open on its inner face, the end of what it covers, across x)
-  if ('box' in sh) { const [a, b, c] = sh.box; return s.shell ? (2 * (a * b + a * c) + b * c) * s.shell : a * b * c - (s.hole ? Math.PI * s.hole.r ** 2 * c : 0); }
+  if ('box' in sh) { const [a, b, c] = sh.box; return (s.shell ? (2 * (a * b + a * c) + b * c) * s.shell : a * b * c - (s.hole ? Math.PI * s.hole.r ** 2 * c : 0) - (s.bores ?? []).reduce((v, h) => v + Math.PI * h.r * h.r * b, 0)) * (s.share ?? 1); }
   if ('cyl' in sh) return Math.PI * sh.cyl[0] ** 2 * sh.cyl[1];
   if ('prism' in sh) return area(sh.prism.pts) * sh.prism.L;
   if ('lathe' in sh) { const q = sh.lathe; let v = 0; for (let i = 0; i < q.length - 1; i++) { const [r1, y1] = q[i]!, [r2, y2] = q[i + 1]!; v += (Math.PI * (y2 - y1) * (r1 * r1 + r1 * r2 + r2 * r2)) / 3; } return Math.abs(v); }

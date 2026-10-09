@@ -10,9 +10,10 @@ import { DEVICES } from './devices';
 import { MORE } from './more';
 import { MOTION } from './motion';
 import { PLANT } from './plant';
+import { SBC_KINDS } from './sbc';
 import { SITE } from './site';
 import { STOCK } from './stock';
 import { TOOLS } from './tools';
 
-export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS, ...PLANT];
+export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS, ...PLANT, ...SBC_KINDS];
 export type { KindDef } from './core';

@@ -50,6 +50,20 @@ the task list and lose the why. So the why lives here, and every round is checke
   it's the same for any new parts added … look for even more components in the sub component … some kind of table lookup;
   if the very specific part doesn't exist in the table queue it too, but first it has to be broken down" (2026-10-08:
   `breakdown.ts`, `npm run breakdown`)
+- "break down components and break down the other components … expanding the whole library … at like a bulk crazy scale
+  like thousands and thousands … be nice on GPU and CPU … the only time you would load all that type of stuff anyways is
+  if they expand and look into it … expand your regions of CAD … industrial … augers … electrical you're gonna need to
+  know everything about circuit boards, build the machines that build the circuit boards … the microchips" (2026-10-09:
+  `packages.ts`, every electronic package drawn to its die and bond wires)
+- "we need a lot more embedded systems, raspberry pis, orange pis, all of d-robotics and the rdk x5, the worlds smallest
+  and most precise robot arm, the actual language and programming processes and code … have a in app computer for
+  programming and coding with you on the screen showing how I would use you to help me with that"
+- "this whole thing is for me … you to be able to invent or help me bring my thoughts to life and then you teach me how
+  to build things so have a training thing don't leave any part or anything unnoticed but make it infinite like anything
+  I request … I'm gonna need that computer … my phone, soldering kit … tell me all parts I need and prices and you gotta
+  try to keep prices down … source online … create parts that would be cheapest to get custom made within my current
+  constraints … hand me what I need to take to a website that makes custom parts … you will be my iron man Jarvis … make
+  it as realistic as possible"
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised

@@ -26,6 +26,7 @@ import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
+import { boardComps, boardDef, type Comp } from './sbc';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -90,6 +91,8 @@ const PKG_SAYS = 'a semiconductor in its package (its JEDEC outline, src/nexus/p
 const PKG_LEAVES = 'its outline nominal within JEDEC\'s tolerances; its die typical in size (not its maker\'s), its wires\' loops drawn as two straights; its moulding\'s draft, its leads\' plating and its mould\'s ejector marks not drawn; its mass from these solids and their materials\' densities, checked against makers\' weights (tests/nexus/packages.test.ts)';
 const TIN = 0xc4c8cb;
 const LED_TINT: Record<string, number> = { red: 0xff5a48, orange: 0xffa040, yellow: 0xffe050, green: 0x6aea7a, blue: 0x6a8cff, white: 0xf2f6ff, warmwhite: 0xfff2dc };
+const SBC_SAYS = 'a board as its maker makes it (src/nexus/sbc.ts): its many-layer circuit board with its mounting holes drilled, its system-on-chip a flip-chip ball-grid array under its lid, its memory, its power and interface chips, chip resistors and capacitors, each connector a part of its own (USB, Ethernet with its magnetics, HDMI, USB-C, microSD), its 40-pin header';
+const SBC_LEAVES = 'its traces, vias and silkscreen not drawn; its chips other than the system-on-chip and memory drawn as library QFNs of typical size; its parts placed after its maker\'s mechanical drawing where one is published (Raspberry Pi\'s), else typical of its kind; its camera, display and fan connectors, buttons and LEDs not drawn';
 const DESIGNS: Record<string, { says: string; leaves: string; make: Design; iface?: (p: Record<string, string | number>) => Iface[]; ports?: (p: Record<string, string | number>) => Port[] }> = {
   stepper: {
     says: 'a hybrid stepper (its face NEMA ICS 16): its die-cast end bells, each with a cavity for its coils\' ends and a hub round its bearing\'s pocket; its stator, a stack of laminations of eight poles of six teeth, a coil wound on each pole; its rotor, two laminated cups of fifty teeth half a tooth apart either side of an axially magnetised neodymium ring, on its shaft; a ball bearing in each bell; four tie screws from the rear clamping bells and stack; its four leads out of the rear bell to a JST XH plug',
@@ -284,8 +287,9 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'a through-hole LED: its clear epoxy lens on its flange, its cathode\'s lead ending in the anvil whose reflector cup holds the die, its anode\'s in the post, a gold wire from the die\'s top to the post',
     leaves: 'its reflector cup drawn as a block, its lens\'s flat at the cathode not drawn, its lens tinted its colour; its proportions typical of makers\' T-1 and T-1¾ drawings',
     make: (p, it) => { const c = String(p.colour); return passiveParts(ledSolids(Number(p.size), c === 'red' || c === 'yellow' ? 'algainp' : 'gan'), it.name, { lead: 'lead-frame', die: c === 'red' || c === 'yellow' ? 'led-die-algainp' : 'led-die-ingan', wire: 'bond-wire' }, '', undefined, LED_TINT[c]); },
-
   },
+  sbc: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
+  pico: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
 };
 
 // ---- electronics from their solids ------------------------------------------------------------------------------------
@@ -309,7 +313,8 @@ function solidPart(m: { s: Solid; g: number; fill: number }, name: string, item:
   const shape: Part['shape'] = 'box' in sh ? { box: [k(sh.box[0]), k(sh.box[1]), k(sh.box[2])] } : 'cyl' in sh ? { cyl: [k(sh.cyl[0]), k(sh.cyl[1])] } : 'lathe' in sh ? lathe(sh.lathe) : 'prism' in sh ? { prism: { pts: sh.prism.pts.map(([x, y]) => [k(x), k(y)] as [number, number]), L: k(sh.prism.L) } } : { tube: { r: k(sh.tube.r), pts: sh.tube.pts.map((q) => [k(q[0]), k(q[1]), k(q[2])] as V3), bend: k(sh.tube.r * 4) } };
   const t = 'box' in sh ? sh.box[2] : 0;
   return P(name, shape, { at: [k(s.at[0]), k(s.at[1]), k(s.at[2])], ...(s.rot ? { rot: s.rot } : {}), ...(s.mat ? { mat: s.mat } : {}), ...lookOf(s), ...(item ? { item } : {}), ...(HOW[s.role] ? { fixed: HOW[s.role] } : {}),
-    ...(s.shell ? { kg: m.g / 1000 } : m.fill < 1 ? { fill: m.fill } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}), ...more });
+    ...(s.shell ? { kg: m.g / 1000 } : m.fill * (s.share ?? 1) < 1 ? { fill: m.fill * (s.share ?? 1) } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}),
+    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...more });
 }
 /** A semiconductor as drawn from its package: its body under its name (marked with its part number where it is big
  *  enough to read), its lead frame (leads, paddle, tab and pad) as one, or an axial diode's two leads each its own;
@@ -341,6 +346,24 @@ function passiveParts(ss: Solid[], nm: string, items: Partial<Record<Role, strin
   if (li === 'lead-frame') out.push(group(`${nm} lead frame`, 'lead-frame', [...leads.values()].flat()));
   else for (const ps of leads.values()) out.push(ps.length === 1 ? { ...ps[0]!, ...(li ? { item: li } : {}) } : group(`${nm} lead`, li ?? '', ps));
   return out;
+}
+
+// ---- boards from their parts --------------------------------------------------------------------------------------------
+/** A board as drawn from its parts (src/nexus/sbc.ts): each part under its item, its pieces under it, placed and turned,
+ *  what is under the board turned over; the board itself under its own name, what the rest is on. */
+function boardParts(id: string, nm: string): Part[] {
+  const conv = (c: Comp): Part => {
+    const own = c.solids ? solidMasses(c.solids).map((m) => solidPart(m, `${nm} ${c.name}`, undefined)) : [], kids = (c.kids ?? []).map(conv);
+    const rot = c.turn || c.under ? ([c.under ? PI : 0, c.turn ?? 0, 0] as V3) : undefined, at: V3 = [c.at[0] * mm, c.at[1] * mm, c.at[2] * mm];
+    return group(`${nm} ${c.name}`, c.item ?? '', [...own, ...kids], { at, ...(rot ? { rot } : {}) });
+  };
+  return boardComps(id).map((c, i) => { const p = conv(c); return i === 0 ? { ...p, name: nm, parts: p.parts!.map((q, j) => (j === 0 ? { ...q, name: nm } : q)) } : p; });
+}
+/** A board's mounting holes as a mating face: their pattern, the screw they take (M2.5 in a 2.7 mm hole), from its
+ *  maker's drawing, on its underside. */
+function boardHoles(id: string): Port {
+  const b = boardDef(id), pat = b.holes.map(([x, z]) => [(x - b.L / 2) * mm, (z - b.W / 2) * mm] as [number, number]);
+  return port('mounting holes', 'holes', b.hole >= 3 ? 'M3' : b.hole >= 2.5 ? 'M2.5' : 'M2', pat, [0, -1.6 * mm, 0], [0, -1, 0], [1, 0, 0], 1.6 * mm, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
 }
 
 /** A section drawn along z, its length L mm, turned so its length runs along y. */
