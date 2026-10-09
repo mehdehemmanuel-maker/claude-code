@@ -9,8 +9,12 @@
 // material's density (estimates: the shapes are simple). A prop blaster is a shape only: it does not work as a weapon.
 
 import { VEHICLE_KITS, useMass } from './machines';
-import { latheArea, latheVolume, loftArea, loftVolume, tubeLength, tubeVolume, type Lathe, type Loft, type Tube } from './form';
-import { surfaceArea, type Patch } from './surface';
+import { DESIGNED, boltedJoint, exampleOf, partWords, use } from './components';
+import { assemble } from './mate';
+import { layout } from './make/space';
+import type { Lathe, Loft, Prism, Tube } from './form';
+import type { Patch } from './surface';
+import { DENSITY, massOf } from './mass';
 
 export type V3 = [number, number, number];
 export type Shape =
@@ -19,26 +23,65 @@ export type Shape =
   /** a body through cross-sections along x (src/nexus/form.ts) */ | { loft: Loft }
   /** a round tube along a path, bent round at its corners */ | { tube: Tube }
   /** a profile of [radius, height] spun about y */ | { lathe: Lathe }
+  /** a section of [x, y] points drawn along z, its length L (a rolled or extruded bar, angle, channel, beam) */ | { prism: Prism }
   /** a freeform skin (a NURBS surface, or a part of one: src/nexus/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
   | { heap: { n: number; size: V3; r: number; h: number; colors: number[]; seed: number } };
+/** A mating face of a part: a pattern of holes through it, threads tapped into it, or pins (studs) standing out of it, on
+ *  a face at `at` (its own frame) facing out along `n`, the pattern laid out along `u` and n × u. Two ports mate where
+ *  one's pattern is the other's seen from the other side (its mirror), turned about the face: holes onto threads (cap
+ *  screws through the holes), holes onto holes (bolts and nuts through both), pins into holes (nuts on the pins). The
+ *  part it is on is placed by it (src/nexus/mate.ts), its fasteners laid from the component library. */
+export interface Port {
+  /** what it is called on its part ("front face", "tool flange") */ name: string;
+  sex: 'holes' | 'threads' | 'pins';
+  /** the thread or bolt it takes (M3, M6, M12x1.5) and the pattern's centres in its face, m */ thread: string; pattern: [number, number][];
+  at: V3; n: V3; u: V3;
+  /** how thick the part is behind the face where the holes are (the ply a bolt passes), or how deep its threads go, m */ t: number;
+  /** a spigot or a pilot bore that centres the two (its diameter, m): + stands proud, - is sunk */ pilot?: number;
+  /** the standard the pattern is (NEMA 17, ISO 9409-1-50-4-M6, wheel 5 × 114.3) */ std?: string;
+}
 /** What a part offers another where they meet, or asks of it: a shaft and the bore it goes in, studs and the nuts on
  *  them, a drive and the shaft it turns. Checked where they meet, with numbers (src/nexus/make/critic.ts contracts). */
 export interface Iface {
-  kind: 'shaft' | 'studs' | 'drive' | 'chain'; role: 'provides' | 'requires';
+  /** (a mount: a face that carries what is fastened to it, a carriage's top or a tool flange, the free end of what moves) */
+  kind: 'shaft' | 'studs' | 'drive' | 'chain' | 'mount'; role: 'provides' | 'requires';
   /** a shaft's or a stud's diameter, or a chain's pitch, m */ d?: number; /** how many (studs) */ n?: number;
   /** N·m: what a drive delivers (provides), or the most a driven shaft carries (requires) */ torque?: number;
   /** the part it goes to by name, where they do not touch (a chain drive and the axle it turns) */ to?: string; says?: string;
 }
+/** A hole drilled into a part, in its own frame (m): round (or n-sided: a hex socket, a tapped hole drawn at its major
+ *  diameter), r across, from `at` on its face along `dir` (a unit vector into it) for `depth`. It is cut from what is
+ *  drawn, so the clash finder and every view see it, and its volume leaves the part's mass. */
+export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
+  /** holes drilled into it (its own frame) */ cuts?: Cut[];
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
+  /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
+   *  rule adds nothing to it */ fixed?: string;
+  /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
+  /** the moving part it is carried with, by name (a knuckle and its strut's tube steer and rise with their wheel): no room
+   *  is kept between them, and a pose of that part moves it too */ movesWith?: string;
+  /** the rigid link it is one of, by name (a wheel, its hub and its disc turn as one; a knuckle, its strut's tube and its
+   *  caliper steer as one; an arm swings on its own): its holder's when not said, else the thing's own frame. Nothing
+   *  rigid (a weld, a bolt, one casting) is laid between two links: what meets between them is a joint that lets them
+   *  move (src/nexus/make/critic.ts's held check finds any that is not) */ link?: string;
+  /** the kind of joint it is, between its own link and any other it meets: a bearing (a hub turning in its knuckle), a
+   *  ball joint, a rubber bush (an arm's pivot), a slide (a damper's rod in its tube), a spring, a constant-velocity
+   *  joint, a hinge (a door's), a rubber mount (an engine's, a strut's top), a universal (Cardan) joint (a steering shaft's); or 'cover', a flexible cover clamped across one (a bellows, a boot), which
+   *  follows what it covers and joins nothing: never a joint, it holds and carries nothing across it */ joint?: 'bearing' | 'ball' | 'bush' | 'slide' | 'spring' | 'cv' | 'hinge' | 'mount' | 'universal' | 'cover';
+  /** the parts it is meant to meet face to face, by name: seated on, clamped against, bonded or clipped to (its maker's),
+   *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
+  /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
-   *  in bump (m) — so the room kept round it is the room it sweeps through all of that */ travel?: { steer?: number; bump?: number };
+   *  in bump (m) — so the room kept round it is the room it sweeps through all of that; or how a part slides, with all of
+   *  its link (a carriage on its rail): along dir (its own frame) from `from` to `to` (m) of where it is drawn */
+  travel?: { steer?: number; bump?: number; slide?: { dir: V3; from: number; to: number } };
   /** a limb that swings as it moves: about which axis, how far (radians), at what point in the stride (0–1) */ swing?: { axis: 'x' | 'z'; amp: number; phase: number };
   /** its mass taken as typical where its shape does not say it (a car's wiring, its fluids), kg */ kg?: number;
   /** how it is made where its material alone does not say (a car's pressed panels, round as they are styled) */ make?: 'pressed';
@@ -49,9 +92,11 @@ export interface Part {
   /** it glows (a lamp's light, lit or not) */ glow?: boolean;
   /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
   /** how worn it is, 0 new to 1 derelict */ wear?: number;
-  /** it goes on public roads (and so carries number plates and mirrors) */ road?: boolean;
+  /** it goes on public roads (and so carries number plates and mirrors): where it is sold, so its plates are that
+   *  market's (US 12 × 6 in, AAMVA; else EU 520 × 110 mm) */ road?: boolean | 'us' | 'eu';
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
   /** what it offers or asks of the parts it meets */ iface?: Iface[];
+  /** its mating faces: where it meets another part by a pattern of holes, threads or pins (src/nexus/mate.ts) */ ports?: Port[];
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
@@ -59,6 +104,8 @@ export interface Part {
   /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
   /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it
    *  opens into what it is made of, down to the elements, and is drawn as that item looks where it has no shape of its own */ item?: string;
+  /** designed whole and checked on its own (a component from the library, src/nexus/components.ts): the make pipeline
+   *  lays no detail on it and moves nothing in it, as a bought part is fitted as it comes */ sealed?: string;
   /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
   parts?: Part[]; says?: string;
 }
@@ -75,44 +122,7 @@ export interface Kit {
   does?: 'follow' | 'wander' | 'swim past' | 'hover';
 }
 
-/** Densities, kg/m³ (typical values). */
-export const DENSITY: Record<string, number> = {
-  'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
-  wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
-  cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
-  pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680,
-  tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
-};
-const vol = (s: Shape): number => {
-  if ('box' in s) return s.box[0] * s.box[1] * s.box[2];
-  if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return (Math.PI * h * (r * r + r * r2 + r2 * r2)) / 3; }
-  if ('sphere' in s) return (4 / 3) * Math.PI * s.sphere ** 3;
-  if ('cone' in s) return (Math.PI * s.cone[0] ** 2 * s.cone[1]) / 3;
-  if ('torus' in s) return 2 * Math.PI ** 2 * s.torus[0] * s.torus[1] ** 2;
-  if ('capsule' in s) return Math.PI * s.capsule[0] ** 2 * (s.capsule[1] + (4 / 3) * s.capsule[0]);
-  if ('loft' in s) return loftVolume(s.loft);
-  if ('tube' in s) return tubeVolume(s.tube);
-  if ('lathe' in s) return latheVolume(s.lathe);
-  // a heap: each brick's solid plastic, 0.386 of its box (a 2×4 brick's 2.3 g of ABS at 1,050 kg/m³ in its 31.8 × 11.3 × 15.8 mm)
-  if ('heap' in s) return s.heap.n * s.heap.size[0] * s.heap.size[1] * s.heap.size[2] * 0.386;
-  return 0;
-};
-const area = (s: Shape): number => {
-  if ('box' in s) { const [a, b, c] = s.box; return 2 * (a * b + a * c + b * c); }
-  if ('cyl' in s) { const [r, h] = s.cyl; return 2 * Math.PI * r * (r + h); }
-  if ('sphere' in s) return 4 * Math.PI * s.sphere ** 2;
-  if ('torus' in s) return 4 * Math.PI ** 2 * s.torus[0] * s.torus[1];
-  if ('loft' in s) return loftArea(s.loft);
-  if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
-  if ('lathe' in s) return latheArea(s.lathe);
-  if ('surf' in s) return surfaceArea(s.surf);
-  return 0;
-};
-/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
-export function massOf(p: Part): number {
-  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : vol(p.shape)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
-  return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
-}
+export { DENSITY, massOf } from './mass';
 /** How many parts it has, all the way down. */
 export const countParts = (p: Part): number => 1 + (p.parts ?? []).reduce((a, q) => a + countParts(q), 0);
 
@@ -241,6 +251,18 @@ kit({
 // (src/nexus/machines.ts), each kit only what can be chosen
 for (const k of VEHICLE_KITS) kit(k);
 useMass(massOf);
+
+// ---- a part on its own: any component the library draws (src/nexus/components.ts), by its words, its sizes in them
+// ("bolt M8x30", "angle 40x4 steel 1000mm", "bolted joint M10 22"), so it can be looked at, taken apart and checked alone
+kit({
+  id: 'part', name: 'part', get words() { return partWords(); }, get choices() { return [{ key: 'family', name: 'kind of part', options: DESIGNED }]; },
+  says: 'a part from the component library: designed once from its standard, by its words (its family\'s first example where no size is said)',
+  // (parts said with "+" between them are assembled by their mates: "stepper nema17 40 + motorplate nema17 t4 aluminium")
+  // (and shown standing on its lowest point, as a part set down on a bench is)
+  build(c) { const w = String(c.said ?? ''), j = /bolted joint\s+(M[\d.]+)\s+(\d+(?:\.\d+)?)/i.exec(w);
+    const made = w.includes('+') ? ((a) => ({ ...a.part, says: `${a.part.says}${a.unplaced.length ? `; not placed: ${a.unplaced.join('; ')}` : ''}` }))(assemble(w, w.split('+').map((x) => use(x.trim())))) : j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : use(/\d/.test(w) ? w : exampleOf(String(c.family)));
+    const lo = Math.min(...layout(made).filter((n) => n.box).map((n) => n.box!.min.y)); return { name: made.name, at: [0, 0, 0], says: made.says, parts: [{ ...made, at: [0, Number.isFinite(lo) ? -lo : 0, 0] }] }; },
+});
 
 // ---- a lamp post: its light by its lamp (high-pressure sodium about 100 lm/W at 2,000 K; LED street lights about 140
 // lm/W, typical), spaced about three times its height along a road (typical) ----
@@ -573,6 +595,8 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   if (k.id === 'sword' && /\bsaber\b/.test(t)) out.type = 'sabre';
   if (k.id === 'dragon' && /\b(saddle|ride|rider|riding|fly on|mount)\b/.test(t)) out.rider = 'yes';
   if (k.id === 'dog' && /\bpupp/.test(t)) out.age = 'puppy';
+  // (a part is called by its own words, its sizes in them: "bolt M8x30")
+  if (k.id === 'part') out.said = words.trim();
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */

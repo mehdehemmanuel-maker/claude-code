@@ -37,7 +37,7 @@ export const MORE: KindDef[] = [
   {
     id: 'taperbearing', name: 'tapered roller bearing', path: 'Mechanical/Bearings/Roller bearings', says: 'tapered rollers between cone and cup: it carries a heavy radial load and thrust one way, set in pairs', std: 'ISO 355, the 302 series',
     axes: [bare('number', 'bearing number', Object.keys(T302))],
-    title: (p) => { const [d, D, T] = T302[s(p, 'number')]!; return `tapered roller bearing ${p.number} (${d} × ${D} × ${T})`; }, of: () => 'steel-chrome*2 steel-low grease', make: 'assemble', how: 'a cone carrying tapered rollers in a pressed cage, and its separate cup, case-hardened and ground',
+    title: (p) => { const [d, D, T] = T302[s(p, 'number')]!; return `tapered roller bearing ${p.number} (${d} × ${D} × ${T})`; }, of: () => 'bearing-ring*2 tapered-roller*15 bearing-cage grease', make: 'assemble', how: 'a cone carrying tapered rollers in a pressed cage, and its separate cup, case-hardened and ground',
     spec: (p) => { const [d, D, T] = T302[s(p, 'number')]!; return `${d} mm bore, ${D} mm cup, ${T} mm wide (ISO 355); takes thrust one way: mount two facing each other`; }, box: (p) => { const [, D, T] = T302[s(p, 'number')]!; return [D, D, T]; }, g: (p) => { const [d, D, T] = T302[s(p, 'number')]!; return gOf(ring(D, d, T) * 0.65, 7.83); },
   },
   {
@@ -55,7 +55,7 @@ export const MORE: KindDef[] = [
   {
     id: 'sphericalbearing', name: 'spherical roller bearing', path: 'Mechanical/Bearings/Roller bearings', says: 'two rows of barrel rollers in a spherical outer race: heavy loads and a shaft that bends', std: 'ISO 15, the 222 series',
     axes: [bare('number', 'bearing number', Object.keys(SPH))],
-    title: (p) => { const [d, D, B] = SPH[s(p, 'number')]!; return `spherical roller bearing ${p.number} (${d} × ${D} × ${B})`; }, of: () => 'steel-chrome*2 brass grease', make: 'assemble', how: 'two rows of barrel rollers in a brass (or steel) cage, the outer race ground spherical', spec: (p) => { const [d, D, B] = SPH[s(p, 'number')]!; return `${d} × ${D} × ${B} mm (ISO 15); takes about 1.5–2.5° misalignment (typical)`; },
+    title: (p) => { const [d, D, B] = SPH[s(p, 'number')]!; return `spherical roller bearing ${p.number} (${d} × ${D} × ${B})`; }, of: () => 'bearing-ring*2 spherical-roller*28 bearing-cage*2 grease', make: 'assemble', how: 'two rows of barrel rollers in a brass (or steel) cage, the outer race ground spherical', spec: (p) => { const [d, D, B] = SPH[s(p, 'number')]!; return `${d} × ${D} × ${B} mm (ISO 15); takes about 1.5–2.5° misalignment (typical)`; },
     box: (p) => { const [, D, B] = SPH[s(p, 'number')]!; return [D, D, B]; }, g: (p) => { const [d, D, B] = SPH[s(p, 'number')]!; return gOf(ring(D, d, B) * 0.68, 7.83); },
   },
   {
@@ -75,19 +75,19 @@ export const MORE: KindDef[] = [
   {
     id: 'rcd', name: 'residual current device', path: 'Electrical/Circuit protection/RCDs', says: 'a DIN-rail switch that trips when current leaks to earth: it saves a life before a fuse would notice', std: 'IEC 61008-1 ratings',
     axes: [unit('A', 'rated current', 'A', [25, 40, 63]), unit('mA', 'trips at', 'mA', [30, 100, 300]), unit('poles', 'poles', 'P', [2, 4]), bare('type', 'type', ['AC', 'A'])],
-    title: (p) => `${p.A} A ${p.mA} mA RCD, ${p.poles}-pole, type ${p.type}`, of: (p) => `pbt ferrite-soft magnet-wire copper silver steel-low*${p.poles}`, make: 'assemble', how: 'the live and neutral pass through a toroid: any difference between them (leakage) induces a current that releases the latch',
+    title: (p) => `${p.A} A ${p.mA} mA RCD, ${p.poles}-pole, type ${p.type}`, of: (p) => `switch-housing toroid-core winding*${Number(p.poles) + 1} latch-mechanism relay-armature magnetic-core contact-spring*${p.poles} contact-silver*${2 * Number(p.poles)} terminal-clamp*${2 * Number(p.poles)} terminal-screw*${2 * Number(p.poles)} switch-actuator`, make: 'assemble', how: 'the live and neutral pass through a toroid: any difference between them (leakage) induces a current that releases the latch',
     spec: (p) => `trips by ${p.mA} mA of leakage, within 300 ms (IEC 61008-1)${n(p, 'mA') === 30 ? ': personal protection' : ': fire protection'}; type ${p.type === 'A' ? 'A also sees pulsing DC leakage' : 'AC sees AC leakage only'}`, box: (p) => [17.5 * n(p, 'poles'), 85, 70], g: (p) => 120 * n(p, 'poles'),
   },
   {
     id: 'contactor', name: 'contactor', path: 'Electrical/Switches/Contactors', says: 'a heavy relay that switches a motor or heater on its coil', std: 'IEC 60947-4-1 AC-3 ratings; the coils sold',
     axes: [unit('A', 'AC-3 rating', 'A', [9, 12, 18, 25, 32, 40, 50, 65]), bare('coil', 'coil', ['24VAC', '24VDC', '230VAC'])],
-    title: (p) => `${p.A} A contactor, ${p.coil} coil`, of: () => 'pbt steel-electrical magnet-wire silver copper steel-spring', make: 'assemble', how: 'a coil pulls a laminated armature that closes three silver contacts against springs',
+    title: (p) => `${p.A} A contactor, ${p.coil} coil`, of: () => 'switch-housing coil-bobbin winding magnetic-core*2 return-spring contact-bridge*3 contact-silver*12 terminal-clamp*8 terminal-screw*8', make: 'assemble', how: 'a coil pulls a laminated armature that closes three silver contacts against springs',
     spec: (p) => `${p.A} A switching a motor (AC-3), about ${(n(p, 'A') * 0.42).toFixed(1)} kW at 400 V (typical); coil ${p.coil}`, box: (p) => [45 + n(p, 'A') * 0.2, 80, 85], g: (p) => 320 + n(p, 'A') * 6,
   },
   {
     id: 'pushbutton22', name: '22 mm panel push button', path: 'Electrical/Switches/Push buttons', says: 'a panel button in a 22 mm hole: flush, mushroom, or the red emergency stop', std: 'IEC 60947-5-1 (22.5 mm cut-out); colours by IEC 60073',
     axes: [bare('form', 'form', ['flush', 'mushroom', 'estop']), bare('colour', 'colour', (p) => (p.form === 'estop' ? ['red'] : ['green', 'red', 'yellow', 'blue', 'white', 'black'])), bare('contact', 'contact', ['NO', 'NC', 'NO+NC'])],
-    title: (p) => `22 mm ${p.form === 'estop' ? 'emergency stop' : `${p.form} push button`}, ${p.colour}, ${p.contact}`, of: () => 'nylon brass silver steel-spring', make: 'assemble', how: 'a moulded actuator in a ring nut, a contact block clipped behind', spec: (p) => `22.3 mm hole; ${p.colour} (IEC 60073: ${({ green: 'start', red: 'stop or emergency', yellow: 'abnormal', blue: 'must act', white: 'any', black: 'any' } as Record<string, string>)[s(p, 'colour')]}); 10 A contacts`,
+    title: (p) => `22 mm ${p.form === 'estop' ? 'emergency stop' : `${p.form} push button`}, ${p.colour}, ${p.contact}`, of: (p) => `switch-housing switch-actuator return-spring contact-bridge*${p.contact === 'NO+NC' ? 2 : 1} contact-silver*${p.contact === 'NO+NC' ? 8 : 4} switch-terminal*${p.contact === 'NO+NC' ? 4 : 2} terminal-screw*${p.contact === 'NO+NC' ? 4 : 2} seal-ring`, make: 'assemble', how: 'a moulded actuator in a ring nut, a contact block clipped behind', spec: (p) => `22.3 mm hole; ${p.colour} (IEC 60073: ${({ green: 'start', red: 'stop or emergency', yellow: 'abnormal', blue: 'must act', white: 'any', black: 'any' } as Record<string, string>)[s(p, 'colour')]}); 10 A contacts`,
     box: (p) => (p.form === 'flush' ? [30, 30, 45] : [40, 40, 55]), g: () => 45,
   },
   {
@@ -99,50 +99,50 @@ export const MORE: KindDef[] = [
   {
     id: 'polyvbelt', name: 'ribbed belt (poly-V)', path: 'Mechanical/Power transmission/V-belts', says: 'a flat belt with V ribs along it: thin, flexible, grips well on small pulleys', std: 'ISO 9982 sections; the rib counts and lengths sold',
     axes: [bare('section', 'section', Object.keys(PV)), ax('ribs', 'ribs', '', [3, 4, 5, 6, 8, 10, 12, 16]), unit('L', 'length', 'mm', [356, 432, 508, 610, 711, 813, 914, 1016, 1219, 1422, 1625, 2032])],
-    title: (p) => `${p.ribs}${p.section} ${p.L} ribbed belt`, of: () => 'epdm pet', make: 'mould', how: 'polyester cords in EPDM, its ribs ground', spec: (p) => { const [pt, h] = PV[s(p, 'section')]!; return `${(n(p, 'ribs') * pt).toFixed(1)} mm wide (${p.ribs} ribs at ${pt} mm), ${h} mm thick (ISO 9982)`; },
+    title: (p) => `${p.ribs}${p.section} ${p.L} ribbed belt`, of: () => 'ribbed-belt-body tension-cord-polyester', make: 'mould', how: 'polyester cords in EPDM, its ribs ground', spec: (p) => { const [pt, h] = PV[s(p, 'section')]!; return `${(n(p, 'ribs') * pt).toFixed(1)} mm wide (${p.ribs} ribs at ${pt} mm), ${h} mm thick (ISO 9982)`; },
     box: (p) => [n(p, 'L') / Math.PI, n(p, 'L') / Math.PI, n(p, 'ribs') * PV[s(p, 'section')]![0]], g: (p) => n(p, 'L') * n(p, 'ribs') * PV[s(p, 'section')]![0] * PV[s(p, 'section')]![1] * 0.0011,
   },
   {
     id: 'rfconn', name: 'RF coaxial connector', path: 'Electrical/Connectors/RF', says: 'a connector for coaxial cable that keeps its impedance through the joint', std: 'the types in use, with their impedance and the frequency each is good to (typical)',
     axes: [bare('type', 'type', Object.keys(RF)), bare('gender', 'gender', ['male', 'female']), bare('form', 'form', ['crimp', 'panel', 'pcb', 'rightangle'])],
-    title: (p) => `${p.type} ${p.gender} connector, ${p.form === 'rightangle' ? 'right-angle' : p.form}`, of: () => 'brass gold ptfe nickel', make: 'machine', how: 'turned brass bodies, a gold-plated centre pin in a PTFE insulator', spec: (p) => { const [Z, f] = RF[s(p, 'type')]!; return `${Z} Ω, good to about ${f} GHz`; },
+    title: (p) => `${p.type} ${p.gender} connector, ${p.form === 'rightangle' ? 'right-angle' : p.form}`, of: () => 'rf-body rf-centre-pin rf-insulator crimp-ferrule', make: 'machine', how: 'turned brass bodies, a gold-plated centre pin in a PTFE insulator', spec: (p) => { const [Z, f] = RF[s(p, 'type')]!; return `${Z} Ω, good to about ${f} GHz`; },
     box: (p) => (p.type === 'U.FL' ? [3, 3, 2.5] : p.type === 'N' ? [20, 20, 40] : [9, 9, 20]), g: (p) => (p.type === 'U.FL' ? 0.05 : p.type === 'N' ? 35 : 5),
   },
   {
     id: 'audiojack', name: 'audio jack', path: 'Electrical/Connectors/Audio', says: 'the round plug and socket of headphones and instruments', std: 'the 2.5, 3.5 and 6.35 mm sizes (IEC 60603-11 for 3.5 mm)',
     axes: [ax('d', 'size', 'mm', [2.5, 3.5, 6.35]), bare('poles', 'contacts', ['TS', 'TRS', 'TRRS']), bare('form', 'form', ['plug', 'panel', 'pcb'])],
-    title: (p) => `${p.d} mm ${p.poles} ${p.form === 'plug' ? 'plug' : `${p.form} socket`}`, of: () => 'brass nickel gold pbt', make: 'assemble', how: 'turned brass rings and tip separated by insulating rings; a socket of springy contacts', spec: (p) => `${p.d} mm, ${p.poles === 'TS' ? 'mono' : p.poles === 'TRS' ? 'stereo, or balanced mono' : 'stereo and a microphone'}`,
+    title: (p) => `${p.d} mm ${p.poles} ${p.form === 'plug' ? 'plug' : `${p.form} socket`}`, of: (p) => (p.form === 'plug' ? `jack-tip jack-sleeve jack-insulator*${p.poles === 'TS' ? 1 : p.poles === 'TRS' ? 2 : 3} plug-handle` : `insulator-insert contact-spring*${p.poles === 'TS' ? 2 : p.poles === 'TRS' ? 3 : 4} switch-terminal*${p.poles === 'TS' ? 2 : p.poles === 'TRS' ? 3 : 4}`), make: 'assemble', how: 'turned brass rings and tip separated by insulating rings; a socket of springy contacts', spec: (p) => `${p.d} mm, ${p.poles === 'TS' ? 'mono' : p.poles === 'TRS' ? 'stereo, or balanced mono' : 'stereo and a microphone'}`,
     box: (p) => (p.form === 'plug' ? [n(p, 'd') * 2.5, n(p, 'd') * 2.5, n(p, 'd') * 9] : [n(p, 'd') * 3, n(p, 'd') * 3, n(p, 'd') * 4]), g: (p) => n(p, 'd') * (p.form === 'plug' ? 1.5 : 0.8),
   },
   {
     id: 'xlr', name: 'XLR connector', path: 'Electrical/Connectors/Audio', says: 'the locking round connector of microphones and stage audio', std: 'IEC 61076-2-103, 3, 4 and 5 pins',
     axes: [unit('pins', 'pins', 'P', [3, 4, 5]), bare('gender', 'gender', ['male', 'female']), bare('form', 'form', ['cable', 'panel'])],
-    title: (p) => `XLR ${p.pins}-pin ${p.gender}, ${p.form}`, of: () => 'zamak brass silver nylon', make: 'assemble', how: 'a die-cast shell, silver-plated pins in a nylon insert, a latch', spec: (p) => `${p.pins} pins; balanced audio on pins 2 (hot) and 3 (cold), screen on 1 (AES14)`, box: (p) => (p.form === 'cable' ? [20, 20, 55] : [26, 31, 25]), g: () => 30,
+    title: (p) => `XLR ${p.pins}-pin ${p.gender}, ${p.form}`, of: (p) => `xlr-shell insulator-insert contact-pin*${n(p, 'pins')}${p.form === 'cable' ? ' plug-handle' : ''}`, make: 'assemble', how: 'a die-cast shell, silver-plated pins in a nylon insert, a latch', spec: (p) => `${p.pins} pins; balanced audio on pins 2 (hot) and 3 (cold), screen on 1 (AES14)`, box: (p) => (p.form === 'cable' ? [20, 20, 55] : [26, 31, 25]), g: () => 30,
   },
   {
     id: 'loudspeaker', name: 'loudspeaker driver', path: 'Electrical/Audio/Speakers', says: 'a voice coil in a magnet gap driving a cone that moves the air', std: 'the diameters, impedances and powers sold (typical)',
     axes: [unit('d', 'diameter', 'mm', [28, 40, 50, 66, 77, 100, 130, 165, 200, 250, 300]), unit('ohm', 'impedance', 'ohm', [4, 8]), unit('W', 'power', 'W', (p) => [0.5, 1, 2, 3, 5, 10, 20, 30, 50, 100, 200].filter((w) => w >= n(p, 'd') / 100 && w <= (n(p, 'd') / 40) ** 2 * 4))],
-    title: (p) => `${p.d} mm speaker, ${p.ohm} Ω, ${p.W} W`, of: () => 'paper ferrite-hard magnet-wire steel-low rubber', make: 'assemble', how: 'a paper (or polypropylene) cone on a rubber surround and spider, a voice coil in the gap of a ferrite magnet',
+    title: (p) => `${p.d} mm speaker, ${p.ohm} Ω, ${p.W} W`, of: () => 'speaker-cone voice-coil speaker-magnet top-plate speaker-yoke speaker-basket surround spider dust-cap speaker-terminal*2', make: 'assemble', how: 'a paper (or polypropylene) cone on a rubber surround and spider, a voice coil in the gap of a ferrite magnet',
     spec: (p) => `${p.ohm} Ω nominal; ${p.W} W; at that power ${Math.sqrt(n(p, 'W') * n(p, 'ohm')).toFixed(1)} V across it (V = √(P R))`, box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 'd') * 0.45], g: (p) => n(p, 'd') ** 2 * 0.06,
   },
   {
     id: 'microphone', name: 'microphone capsule', path: 'Electrical/Audio/Microphones', says: 'an electret, MEMS or dynamic capsule that turns sound into a small voltage', std: 'the capsules sold (typical sensitivities)',
     axes: [bare('type', 'type', ['electret6', 'electret10', 'mems', 'dynamic'])],
-    title: (p) => ({ electret6: '6 mm electret microphone capsule', electret10: '10 mm electret microphone capsule', mems: 'MEMS microphone', dynamic: 'dynamic microphone capsule' } as Record<string, string>)[s(p, 'type')]!, of: (p) => (p.type === 'dynamic' ? 'ndfeb magnet-wire pet steel-low' : p.type === 'mems' ? 'si-die ic-package' : 'pet steel-low si-die'), make: 'assemble', how: (p) => (p.type === 'dynamic' ? 'a light diaphragm with a coil in a magnet gap' : p.type === 'mems' ? 'a silicon membrane over a backplate, with its amplifier, in a tiny package' : 'a charged film over a backplate, with a FET inside the can'),
+    title: (p) => ({ electret6: '6 mm electret microphone capsule', electret10: '10 mm electret microphone capsule', mems: 'MEMS microphone', dynamic: 'dynamic microphone capsule' } as Record<string, string>)[s(p, 'type')]!, of: (p) => (p.type === 'dynamic' ? 'mic-diaphragm voice-coil mic-magnet mic-housing speaker-terminal*2' : p.type === 'mems' ? 'si-die ic-package' : 'electret-film mic-backplate mic-can si-die pcb-pin*2'), make: 'assemble', how: (p) => (p.type === 'dynamic' ? 'a light diaphragm with a coil in a magnet gap' : p.type === 'mems' ? 'a silicon membrane over a backplate, with its amplifier, in a tiny package' : 'a charged film over a backplate, with a FET inside the can'),
     spec: (p) => ({ electret6: 'about −44 dBV/Pa; 2–10 V bias through 2.2 kΩ', electret10: 'about −42 dBV/Pa', mems: 'about −38 dBFS/Pa, digital PDM or I²S', dynamic: 'about −54 dBV/Pa, no power needed' } as Record<string, string>)[s(p, 'type')]!,
     box: (p) => ({ electret6: [6, 6, 5], electret10: [9.7, 9.7, 6.7], mems: [3.5, 2.7, 1], dynamic: [35, 35, 20] } as Record<string, [number, number, number]>)[s(p, 'type')]!, g: (p) => (p.type === 'dynamic' ? 40 : 0.5),
   },
   {
     id: 'antenna', name: 'antenna', path: 'Electrical/RF/Antennas', says: 'a radiator cut to its band: a whip or dipole by its length, a patch by its size', std: 'the bands in use; lengths from the wavelength (λ = c / f)',
     axes: [bare('band', 'band', ['433MHz', '868MHz', '915MHz', '1575MHz', '2.4GHz', '5.8GHz']), bare('form', 'form', ['whip', 'dipole', 'pcb'])],
-    title: (p) => `${p.band} ${p.form} antenna`, of: (p) => (p.form === 'pcb' ? 'fr4 copper' : 'brass pvc nickel'), make: 'assemble', how: (p) => (p.form === 'pcb' ? 'a copper trace on a small board, on a lead with a U.FL plug' : 'a brass radiator in a moulded sleeve on an SMA'),
+    title: (p) => `${p.band} ${p.form} antenna`, of: (p) => (p.form === 'pcb' ? 'antenna-element' : 'antenna-element antenna-base antenna-sheath'), make: 'assemble', how: (p) => (p.form === 'pcb' ? 'a copper trace on a small board, on a lead with a U.FL plug' : 'a brass radiator in a moulded sleeve on an SMA'),
     spec: (p) => { const f = Number(s(p, 'band').replace(/[MG]Hz/, '')) * (s(p, 'band').includes('GHz') ? 1e9 : 1e6), l = 2.998e8 / f; return `λ = ${(l * 1000).toFixed(0)} mm: a quarter-wave whip ${(l * 250).toFixed(1)} mm, a half-wave dipole ${(l * 500 * 0.95).toFixed(1)} mm end to end (×0.95 for its ends)`; },
     box: (p) => { const f = Number(s(p, 'band').replace(/[MG]Hz/, '')) * (s(p, 'band').includes('GHz') ? 1e9 : 1e6), l = (2.998e8 / f) * 1000; return p.form === 'pcb' ? [Math.min(l / 4, 80), 1, 20] : [10, 10, p.form === 'dipole' ? l / 2 : l / 4]; }, g: (p) => (p.form === 'pcb' ? 2 : 15),
   },
   {
     id: 'hydraulichose', name: 'hydraulic hose', path: 'Fluid/Tubing and hose/Hydraulic hose', says: 'rubber hose with two braids of steel wire, for oil at hundreds of bar', std: 'SAE J517 100R2AT, with its working pressures; any length cut to the centimetre',
     axes: [bare('dash', 'size', Object.keys(R2)), unit('L', 'length', 'm', [0.5, 1, 2, 5, 10], [0.05, 50, 0.01])],
-    title: (p) => `100R2AT hose ${p.dash} (${R2[s(p, 'dash')]![0]} mm), ${p.L} m`, of: () => 'nbr steel-spring rubber', make: 'extrude', how: 'an oil-proof nitrile tube, two braids of high-tensile steel wire, a tough rubber cover', spec: (p) => { const [d, P] = R2[s(p, 'dash')]!; return `${d} mm bore; works at up to ${P} bar (SAE J517); bursts at four times that`; },
+    title: (p) => `100R2AT hose ${p.dash} (${R2[s(p, 'dash')]![0]} mm), ${p.L} m`, of: () => 'hose-tube wire-braid*2 hose-cover', make: 'extrude', how: 'an oil-proof nitrile tube, two braids of high-tensile steel wire, a tough rubber cover', spec: (p) => { const [d, P] = R2[s(p, 'dash')]!; return `${d} mm bore; works at up to ${P} bar (SAE J517); bursts at four times that`; },
     box: (p) => { const d = R2[s(p, 'dash')]![0] + 10; return [d, d, Math.min(n(p, 'L') * 1000, 400)]; }, g: (p) => n(p, 'L') * (R2[s(p, 'dash')]![0] * 35 + 120),
   },
   {
@@ -178,7 +178,7 @@ export const MORE: KindDef[] = [
   {
     id: 'biketyre', name: 'bicycle tyre', path: 'Mechanical/Vehicle parts/Wheels', says: 'a clincher tyre by its ETRTO size: width and bead seat', std: 'ETRTO (ISO 5775) widths and bead seats',
     axes: [ax('w', 'width', 'mm', [23, 25, 28, 32, 35, 38, 40, 42, 47, 50, 54, 57, 60]), unit('bead', 'bead seat', 'mm', [559, 584, 622]), bare('bead2', 'bead', ['wire', 'folding'])],
-    title: (p) => `bicycle tyre ${p.w}-${p.bead} (${BEAD[n(p, 'bead')]}), ${p.bead2}`, of: (p) => `rubber nylon ${p.bead2 === 'wire' ? 'steel-spring' : 'pet'}`, make: 'mould', how: 'rubber vulcanised over a nylon casing, beads of steel wire (or of aramid, to fold)', spec: (p) => `ETRTO ${p.w}-${p.bead}: ${BEAD[n(p, 'bead')]}, ${p.w} mm wide; about ${(n(p, 'bead') + 2 * n(p, 'w')).toFixed(0)} mm across inflated`,
+    title: (p) => `bicycle tyre ${p.w}-${p.bead} (${BEAD[n(p, 'bead')]}), ${p.bead2}`, of: (p) => `tyre-tread tyre-casing ${p.bead2 === 'folding' ? 'tyre-bead-folding' : 'tyre-bead'}*2`, make: 'mould', how: 'rubber vulcanised over a nylon casing, beads of steel wire (or of aramid, to fold)', spec: (p) => `ETRTO ${p.w}-${p.bead}: ${BEAD[n(p, 'bead')]}, ${p.w} mm wide; about ${(n(p, 'bead') + 2 * n(p, 'w')).toFixed(0)} mm across inflated`,
     box: (p) => [n(p, 'bead') + 2 * n(p, 'w'), n(p, 'bead') + 2 * n(p, 'w'), n(p, 'w')], g: (p) => n(p, 'w') * 9 + (p.bead2 === 'wire' ? 80 : 0),
   },
   {

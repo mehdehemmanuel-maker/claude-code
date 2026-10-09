@@ -135,7 +135,7 @@ export function planOf(id: string, fit = 0.3): Plan | null {
     says = `${i.name}: ${i.spec ?? i.says}. By mass: ${rows.slice(0, 6).map((r) => `${r.item.name.replace(/ \(.*\)$/, '')} ${r.pct! >= 1 ? r.pct!.toFixed(1) : r.pct!.toFixed(2)} %`).join(', ')}.`;
   } else {
     rows = i.of.map((c) => ({ item: INVENTORY.get(c.id)!, n: c.n })).filter((r) => r.item).sort((a, b) => vol(boxOf(b.item)) * b.n - vol(boxOf(a.item)) * a.n);
-    says = `${i.name}: ${rows.length} kinds of part, ${countSays(rows.reduce((a, r) => a + (/\(a gram\)$/.test(r.item.name) || (i.mass?.[r.item.id] !== undefined && !r.item.g) ? 0 : r.n), 0))} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
+    says = `${i.name}: ${rows.length} kind${rows.length === 1 ? '' : 's'} of part, ${countSays(rows.reduce((a, r) => a + (/\(a gram\)$/.test(r.item.name) || (i.mass?.[r.item.id] !== undefined && !r.item.g) ? 0 : r.n), 0))} in all, laid round it (where each sits inside it is not in the inventory)${i.spec ? `. ${i.spec}` : ''}.`;
   }
   if (i.path[0] === 'Life' && i.kind !== 'element' && i.kind !== 'material') { const p = inBodyPlan(i, rows, whole, scale, fit, says); if (p) return p; }
   const shownRows = rows.slice(0, MOST), at = ringOf(shownRows.length, fit * 1.6, fit * 1.0);

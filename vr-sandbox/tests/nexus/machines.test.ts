@@ -65,9 +65,10 @@ describe('as kits', () => {
   test('a model named in the words is made, its skin trimmed into an arch over each of its wheels by its maker', () => {
     const car = kit('car', 'a corolla'); expect(car.name).toMatch(/Corolla/);
     const r = perfect(car, 'a corolla'), panels = all(r.part).filter((p) => p.shape && 'surf' in p.shape && p.shape.surf.above);
-    // each of the front fender and the rear quarter rises over its wheel, and the critic cut nothing
-    expect(panels.map((p) => p.name).sort()).toEqual(['front fender', 'rear quarter panel']);
-    for (const p of panels) expect(Math.max(...(p.shape as { surf: { above: [number, number][] } }).surf.above.map(([, v]) => v))).toBeGreaterThan(0.2);
+    // each of the front fender and the rear quarter rises over its wheel (each a panel of pieces between the openings cut
+    // in it for its lamps and grille), and the critic cut nothing
+    expect([...new Set(panels.map((p) => p.name))].sort()).toEqual(['front fender', 'rear quarter panel']);
+    for (const nm of ['front fender', 'rear quarter panel']) expect(Math.max(...panels.filter((p) => p.name === nm).flatMap((p) => (p.shape as { surf: { above: [number, number][] } }).surf.above.map(([, v]) => v)))).toBeGreaterThan(0.2);
     expect(all(r.part).some((p) => /^opening for/.test(p.name))).toBe(false);
   });
   test('road kit only on what goes on public roads', () => {

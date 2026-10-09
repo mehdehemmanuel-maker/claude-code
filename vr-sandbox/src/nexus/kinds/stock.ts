@@ -10,7 +10,8 @@ const s = (p: P, k: string) => String(p[k]);
 const madeOf = (p: P) => matOf(p.matter);
 const LEN: [number, number, number] = [10, 6000, 1];
 /** EN 10279 UPN channels: height, flange, web, flange thickness (mm), kg a metre. */
-const UPN: Record<number, [number, number, number, number, number]> = { 50: [50, 38, 5, 7, 5.59], 65: [65, 42, 5.5, 7.5, 7.09], 80: [80, 45, 6, 8, 8.64], 100: [100, 50, 6, 8.5, 10.6], 120: [120, 55, 7, 9, 13.4], 140: [140, 60, 7, 10, 16], 160: [160, 65, 7.5, 10.5, 18.8], 180: [180, 70, 8, 11, 22], 200: [200, 75, 8.5, 11.5, 25.3] };
+/** EN 10279 UPN channels: h, b, web, flange (mean), mm; kg a metre. */
+export const UPN: Record<number, [number, number, number, number, number]> = { 50: [50, 38, 5, 7, 5.59], 65: [65, 42, 5.5, 7.5, 7.09], 80: [80, 45, 6, 8, 8.64], 100: [100, 50, 6, 8.5, 10.6], 120: [120, 55, 7, 9, 13.4], 140: [140, 60, 7, 10, 16], 160: [160, 65, 7.5, 10.5, 18.8], 180: [180, 70, 8, 11, 22], 200: [200, 75, 8.5, 11.5, 25.3] };
 const ANGLES = ['20x3', '25x3', '25x4', '30x3', '30x4', '40x4', '40x5', '50x5', '50x6', '60x6', '70x7', '80x8', '100x10'];
 const RHS = ['20x10', '30x15', '30x20', '40x20', '40x30', '50x25', '50x30', '60x30', '60x40', '80x40', '100x50', '120x60', '150x100', '200x100'];
 /** PS 20 dressed sizes of nominal timber, inches. */
@@ -88,7 +89,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'filament', name: '3D printer filament', path: 'Materials/Filament/Spools', says: 'a spool of plastic filament for a fused-deposition printer', std: 'the plastics, diameters, spool weights and colours sold',
     axes: [bare('matter', 'plastic', Object.keys(FIL)), ax('d', 'diameter', 'mm', [1.75, 2.85]), unit('kg', 'spool', 'kg', [0.25, 0.5, 1, 2, 3]), bare('colour', 'colour', ['black', 'white', 'grey', 'red', 'blue', 'green', 'yellow', 'orange', 'natural', 'silver'])],
-    title: (p) => `${String(p.matter).toUpperCase()} filament ${p.d} mm, ${p.kg} kg, ${p.colour}`, of: (p) => `${FIL[s(p, 'matter')]![0]} paper`, make: 'extrude', how: 'dried pellets extruded to diameter (held to about ±0.03 mm), cooled and wound on a card spool',
+    title: (p) => `${String(p.matter).toUpperCase()} filament ${p.d} mm, ${p.kg} kg, ${p.colour}`, of: (p) => `filament-strand spool`, make: 'extrude', how: 'dried pellets extruded to diameter (held to about ±0.03 mm), cooled and wound on a card spool',
     spec: (p) => { const [, rho, T] = FIL[s(p, 'matter')]!, m = (n(p, 'kg') * 1e6) / (rho * Math.PI * (n(p, 'd') / 2) ** 2); return `about ${(m / 1000).toFixed(0)} m on the spool (L = m / ρA, ρ ${rho}); print at about ${T} °C (typical)`; },
     box: (p) => [200, 200, n(p, 'kg') <= 0.5 ? 55 : 65], g: (p) => n(p, 'kg') * 1000 + 230,
   },
@@ -101,13 +102,13 @@ export const STOCK: KindDef[] = [
   {
     id: 'tape', name: 'adhesive tape', path: 'Hardware/Adhesives and tape/Tape', says: 'a roll of pressure-sensitive tape', std: 'the kinds, widths and roll lengths sold (typical)',
     axes: [bare('type', 'kind', Object.keys(TAPES)), unit('w', 'width', 'mm', (p) => TAPES[s(p, 'type')]![2]), unit('L', 'roll length', 'm', (p) => TAPES[s(p, 'type')]![3])],
-    title: (p) => `${TAPES[s(p, 'type')]![0]}, ${p.w} mm × ${p.L} m`, of: (p) => TAPES[s(p, 'type')]![1], make: 'laminate', how: 'a backing film or paper coated with a pressure-sensitive adhesive, slit and wound', spec: (p) => `${p.w} mm × ${p.L} m, about ${TAPES[s(p, 'type')]![4]} mm thick`,
+    title: (p) => `${TAPES[s(p, 'type')]![0]}, ${p.w} mm × ${p.L} m`, of: () => 'tape-backing rubber', make: 'laminate', how: 'a backing film or paper coated with a pressure-sensitive adhesive, slit and wound', spec: (p) => `${p.w} mm × ${p.L} m, about ${TAPES[s(p, 'type')]![4]} mm thick`,
     box: (p) => { const r = Math.sqrt((n(p, 'L') * 1000 * TAPES[s(p, 'type')]![4]) / Math.PI + 38 ** 2); return [2 * r, 2 * r, n(p, 'w')]; }, g: (p) => gOf(n(p, 'w') * n(p, 'L') * 1000 * TAPES[s(p, 'type')]![4], 1.2) + 8,
   },
   {
     id: 'adhesive', look: 'can', name: 'adhesive', path: 'Hardware/Adhesives and tape/Adhesives', says: 'a glue, by what it bonds and how it cures', std: 'the kinds and packs sold',
     axes: [bare('type', 'kind', Object.keys(GLUES)), bare('pack', 'pack', (p) => GLUES[s(p, 'type')]![2])],
-    title: (p) => `${GLUES[s(p, 'type')]![0]}, ${p.pack}`, of: (p) => `${GLUES[s(p, 'type')]![1]} pe`, make: 'chemistry', how: (p) => GLUES[s(p, 'type')]![3], spec: (p) => GLUES[s(p, 'type')]![3],
+    title: (p) => `${GLUES[s(p, 'type')]![0]}, ${p.pack}`, of: () => 'cyanoacrylate cartridge', make: 'chemistry', how: (p) => GLUES[s(p, 'type')]![3], spec: (p) => GLUES[s(p, 'type')]![3],
     box: (p) => { const q = Number(/[\d.]+/.exec(s(p, 'pack'))![0]) * (/l$/.test(s(p, 'pack')) && !/ml$/.test(s(p, 'pack')) ? 1000 : 1); return /mm$/.test(s(p, 'pack')) ? [q, q, 200] : [Math.cbrt(q * 1000) * 0.8, Math.cbrt(q * 1000) * 0.8, Math.cbrt(q * 1000) * 1.8]; }, g: (p) => { const q = Number(/[\d.]+/.exec(s(p, 'pack'))![0]) * (/l$/.test(s(p, 'pack')) && !/ml$/.test(s(p, 'pack')) ? 1000 : 1); return /mm$/.test(s(p, 'pack')) ? q * 1.6 * 10 : q * 1.15 + 10; },
   },
   {
@@ -119,7 +120,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'cablegland', name: 'cable gland', path: 'Electrical/Enclosures/Cable glands', says: 'a threaded fitting that seals and grips a cable where it enters a box', std: 'EN 62444 metric threads; clamping ranges typical; IP68',
     axes: [bare('thread', 'thread', Object.keys(GLAND)), bare('matter', 'made of', ['nylon', 'brass'])],
-    title: (p) => `${p.thread} cable gland, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} nbr`, make: (p) => (p.matter === 'nylon' ? 'mould' : 'machine'), how: 'a body, a dome nut and a split rubber seal that the nut squeezes round the cable', spec: (p) => `${p.thread} × 1.5; takes cable ${GLAND[s(p, 'thread')]} mm across (typical); IP68`,
+    title: (p) => `${p.thread} cable gland, ${madeOf(p)[2]}`, of: () => 'gland-body gland-seal gland-cap lock-nut', make: (p) => (p.matter === 'nylon' ? 'mould' : 'machine'), how: 'a body, a dome nut and a split rubber seal that the nut squeezes round the cable', spec: (p) => `${p.thread} × 1.5; takes cable ${GLAND[s(p, 'thread')]} mm across (typical); IP68`,
     box: (p) => { const d = Number(String(p.thread).slice(1)); return [d * 1.5, d * 1.5, d * 1.8]; }, g: (p) => { const d = Number(String(p.thread).slice(1)); return gOf(d ** 3 * 1.2, madeOf(p)[1]); },
   },
   {
@@ -137,13 +138,13 @@ export const STOCK: KindDef[] = [
   {
     id: 'butthinge', look: 'sheet', name: 'butt hinge', path: 'Hardware/Door and cabinet/Hinges', says: 'two leaves round a pin, set into a door\'s edge and its frame', std: 'the leaf lengths sold (typical leaf widths)',
     axes: [unit('L', 'length', 'mm', [25, 38, 50, 63, 75, 100, 125, 150]), bare('matter', 'made of', ['steel', 'brass', 'stainless'])],
-    title: (p) => `butt hinge ${p.L} mm, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]}*2 steel-low`, make: 'stamp', how: 'two leaves stamped and rolled round a pin, countersunk for screws', spec: (p) => `${p.L} mm long, about ${(n(p, 'L') * 0.7).toFixed(0)} mm open across (typical)`,
+    title: (p) => `butt hinge ${p.L} mm, ${madeOf(p)[2]}`, of: () => 'hinge-leaf*2 hinge-pin', make: 'stamp', how: 'two leaves stamped and rolled round a pin, countersunk for screws', spec: (p) => `${p.L} mm long, about ${(n(p, 'L') * 0.7).toFixed(0)} mm open across (typical)`,
     box: (p) => [n(p, 'L') * 0.7, 2 + n(p, 'L') / 50, n(p, 'L')], g: (p) => gOf(n(p, 'L') * n(p, 'L') * 0.7 * (1 + n(p, 'L') / 75), madeOf(p)[1]),
   },
   {
     id: 'pianohinge', look: 'sheet', name: 'piano hinge', path: 'Hardware/Door and cabinet/Hinges', says: 'a long continuous hinge, cut to the length of a lid', std: 'the open widths sold, cut to any length 10–2000 mm',
     axes: [unit('w', 'open width', 'mm', [25, 32, 40, 50]), bare('matter', 'made of', ['steel', 'stainless', 'aluminium']), unit('L', 'length', 'mm', [300, 600, 1000, 1800], [10, 2000, 1])],
-    title: (p) => `piano hinge ${p.w} mm, ${madeOf(p)[2]}, ${p.L} mm`, of: (p) => `${madeOf(p)[0]}*2 steel-low`, make: 'roll', how: 'two strips rolled round a long pin, punched for screws', spec: (p) => `${p.w} mm open; knuckles every 25 mm or so (typical)`,
+    title: (p) => `piano hinge ${p.w} mm, ${madeOf(p)[2]}, ${p.L} mm`, of: () => 'hinge-leaf*2 hinge-pin', make: 'roll', how: 'two strips rolled round a long pin, punched for screws', spec: (p) => `${p.w} mm open; knuckles every 25 mm or so (typical)`,
     box: (p) => [n(p, 'w'), 2, n(p, 'L')], g: (p) => gOf(n(p, 'w') * 0.8 * n(p, 'L'), madeOf(p)[1]),
   },
   {
@@ -155,7 +156,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'starknob', look: 'gear z5', name: 'star knob', path: 'Hardware/Door and cabinet/Knobs', says: 'a moulded star-shaped grip on a threaded stud or insert, to tighten by hand', std: 'DIN 6336 sizes, M4–M16',
     axes: [bare('thread', 'thread', ['M4', 'M5', 'M6', 'M8', 'M10', 'M12', 'M16']), bare('form', 'form', ['female', 'male'])],
-    title: (p) => `${p.thread} star knob, ${p.form === 'female' ? 'threaded insert' : 'threaded stud'}`, of: () => 'phenolic brass steel-low', make: 'mould', alt: 'print', how: 'phenolic moulded over a brass insert (or a steel stud)', spec: (p) => `${({ M4: 25, M5: 32, M6: 32, M8: 40, M10: 50, M12: 63, M16: 80 } as Record<string, number>)[s(p, 'thread')]} mm across (DIN 6336)`,
+    title: (p) => `${p.thread} star knob, ${p.form === 'female' ? 'threaded insert' : 'threaded stud'}`, of: () => 'knob-body threaded-insert', make: 'mould', alt: 'print', how: 'phenolic moulded over a brass insert (or a steel stud)', spec: (p) => `${({ M4: 25, M5: 32, M6: 32, M8: 40, M10: 50, M12: 63, M16: 80 } as Record<string, number>)[s(p, 'thread')]} mm across (DIN 6336)`,
     box: (p) => { const D = ({ M4: 25, M5: 32, M6: 32, M8: 40, M10: 50, M12: 63, M16: 80 } as Record<string, number>)[s(p, 'thread')]!; return [D, D, D * 0.6 + (p.form === 'male' ? 25 : 0)]; }, g: (p) => { const D = ({ M4: 25, M5: 32, M6: 32, M8: 40, M10: 50, M12: 63, M16: 80 } as Record<string, number>)[s(p, 'thread')]!; return gOf(cyl(D, D * 0.5) * 0.55, 1.4); },
   },
   {
@@ -180,7 +181,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'thermalpad', name: 'thermal pad', path: 'Electrical/Thermal/Interface', says: 'a soft silicone sheet filled with ceramic, to carry heat across a gap', std: 'the thicknesses and conductivities sold',
     axes: [unit('t', 'thickness', 'mm', [0.5, 1, 1.5, 2, 3, 5]), unit('k', 'conductivity', 'W/mK', [1.5, 3, 6, 12]), bare('size', 'sheet', ['50x50', '100x100', '200x400'])],
-    title: (p) => `thermal pad ${p.t} mm, ${p.k} W/m·K, ${String(p.size).replace('x', ' × ')} mm`, of: () => 'silicone alumina', make: 'mould', how: 'silicone loaded with alumina (or boron nitride) powder, calendered to thickness and cured',
+    title: (p) => `thermal pad ${p.t} mm, ${p.k} W/m·K, ${String(p.size).replace('x', ' × ')} mm`, of: () => 'silicone-alumina', make: 'mould', how: 'silicone loaded with alumina (or boron nitride) powder, calendered to thickness and cured',
     spec: (p) => `${((n(p, 't') / 1000) / (n(p, 'k') * 1e-4)).toFixed(2)} K/W across a square centimetre (R = t / kA)`, box: (p) => { const [a, b] = String(p.size).split('x').map(Number) as [number, number]; return [a, b, n(p, 't')]; }, g: (p) => { const [a, b] = String(p.size).split('x').map(Number) as [number, number]; return gOf(a * b * n(p, 't'), 2.8); },
   },
   {
@@ -192,7 +193,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'heatpipe', name: 'heat pipe', path: 'Electrical/Thermal/Heat pipes', says: 'a sealed copper tube with a wick and a little water: it boils at the hot end and condenses at the cold, carrying heat far better than solid copper', std: 'the diameters and lengths sold',
     axes: [ax('d', 'diameter', 'mm', [3, 4, 5, 6, 8, 10]), unit('L', 'length', 'mm', [100, 150, 200, 250, 300, 350, 400]), bare('shape', 'shape', ['round', 'flat'])],
-    title: (p) => `heat pipe ${p.d} mm × ${p.L} mm, ${p.shape}`, of: () => 'copper water', make: 'assemble', how: 'copper tube lined with sintered copper powder, evacuated, a little water put in, sealed', spec: (p) => `${p.d} mm; carries about ${(n(p, 'd') ** 2 * 1.1).toFixed(0)} W lying flat (estimate)${p.shape === 'flat' ? '; flattened, it carries less' : ''}`,
+    title: (p) => `heat pipe ${p.d} mm × ${p.L} mm, ${p.shape}`, of: () => 'heatpipe-envelope heatpipe-wick water', make: 'assemble', how: 'copper tube lined with sintered copper powder, evacuated, a little water put in, sealed', spec: (p) => `${p.d} mm; carries about ${(n(p, 'd') ** 2 * 1.1).toFixed(0)} W lying flat (estimate)${p.shape === 'flat' ? '; flattened, it carries less' : ''}`,
     box: (p) => (p.shape === 'flat' ? [n(p, 'd') * 1.5, n(p, 'd') * 0.5, n(p, 'L')] : [n(p, 'd'), n(p, 'd'), n(p, 'L')]), g: (p) => gOf(ring(n(p, 'd'), n(p, 'd') - 0.6, n(p, 'L')), 8.96) * 1.4,
   },
   {

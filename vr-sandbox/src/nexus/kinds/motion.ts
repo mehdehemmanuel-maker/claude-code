@@ -4,6 +4,17 @@
 // otherwise, said so.
 
 import { ax, bare, cyl, gOf, matOf, pref, range, ring, tagged, unit, type KindDef, type P } from './core';
+/** NEMA frame sizes, mm across the body. */
+export const NEMA: Record<string, number> = { '8': 20.3, '11': 28.2, '14': 35.2, '17': 42.3, '23': 57.15, '34': 86 };
+/** NEMA frames' faces: the four holes' square, their thread (tapped 4.5 mm deep on 8–17, through holes on 23 and 34),
+ *  the pilot boss's diameter and how far it stands proud, the shaft, mm (NEMA ICS 16; motor makers' drawings, typical). */
+export const NEMA_FACE: Record<string, { holes: number; thread: string; pilot: number; boss: number; shaft: number; out: number; through?: boolean }> = {
+  '8': { holes: 16, thread: 'M2', pilot: 15, boss: 1.5, shaft: 4, out: 15 }, '11': { holes: 23, thread: 'M2.5', pilot: 22, boss: 2, shaft: 5, out: 20 },
+  '14': { holes: 26, thread: 'M3', pilot: 22, boss: 2, shaft: 5, out: 20 }, '17': { holes: 31, thread: 'M3', pilot: 22, boss: 2, shaft: 5, out: 24 },
+  '23': { holes: 47.14, thread: 'M5', pilot: 38.1, boss: 1.6, shaft: 6.35, out: 21, through: true }, '34': { holes: 69.6, thread: 'M5', pilot: 73, boss: 2, shaft: 14, out: 32, through: true },
+};
+/** ISO 273 medium clearance holes, mm. */
+export const CLEAR: Record<string, number> = { M2: 2.4, 'M2.5': 2.9, M3: 3.4, M4: 4.5, M5: 5.5, M6: 6.6, M8: 9, M10: 11, M12: 13.5, M16: 17.5, M20: 22 };
 
 const n = (p: P, k: string) => Number(p[k]);
 const madeOf = (p: P) => matOf(p.matter);
@@ -65,6 +76,15 @@ export const MOTION: KindDef[] = [
     spec: (p) => { const [d, D, B] = HK[String(p.number)]!; return `${d} mm shaft (hardened, ground), ${D} mm housing bore (N6 press fit), ${B} mm wide (ISO 3245)`; }, box: (p) => { const [, D, B] = HK[String(p.number)]!; return [D, D, B]; }, g: (p) => { const [d, D, B] = HK[String(p.number)]!; return gOf(ring(D, d, B) * 0.7, 7.85); },
   },
   {
+    id: 'motorplate', name: 'NEMA motor plate', path: 'Mechanical/Motion/Motor mounts', says: 'a flat plate a stepper bolts to: its four clearance holes on the frame\'s square and its pilot bore, the motor\'s shaft through it',
+    std: 'the NEMA ICS 16 face it takes; holes ISO 273 medium; plate 5 mm wider than the frame each way (typical)',
+    axes: [tagged('nema', 'nema', 'frame', '', [17, 14, 23, 11, 8, 34]), ax('t', 'thickness', 'mm', [3, 4, 5, 6, 8, 10]), bare('matter', 'made of', ['aluminium', 'steel'])],
+    title: (p) => `NEMA ${p.nema} motor plate, ${p.t} mm, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'machine', alt: 'print', how: 'cut from plate, drilled and bored (or printed)',
+    spec: (p) => { const f = NEMA_FACE[String(p.nema)]!; return `4 × ${f.thread} clearance on a ${f.holes} mm square, ${(f.pilot + 0.5).toFixed(1)} mm pilot bore`; },
+    box: (p) => { const s = NEMA[String(p.nema)]! + 10; return [s, s, n(p, 't')]; },
+    g: (p) => { const f = NEMA_FACE[String(p.nema)]!, s = NEMA[String(p.nema)]! + 10, hole = CLEAR[f.thread] ?? Number(f.thread.slice(1)) * 1.1; return gOf((s * s - Math.PI * ((f.pilot + 0.5) / 2) ** 2 - 4 * Math.PI * (hole / 2) ** 2) * n(p, 't'), madeOf(p)[1]); },
+  },
+  {
     id: 'flangebearing', name: 'flanged miniature ball bearing', path: 'Mechanical/Bearings/Ball bearings', says: 'a small ball bearing with a flange on its outer ring, so it locates itself in a plate', std: 'F6xx and F69x miniature series (makers\' tables)',
     axes: [bare('number', 'bearing number', Object.keys(FB)), bare('seal', 'shields or seals', ['ZZ', '2RS'])],
     title: (p) => { const [d, D, B] = FB[String(p.number)]!; return `flanged bearing ${p.number}${p.seal} (${d} × ${D} × ${B})`; }, of: (p) => `bearing-ring*2 bearing-ball*7 bearing-cage ${p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, make: 'assemble', how: 'a deep-groove bearing whose outer ring is turned with a flange',
@@ -85,19 +105,19 @@ export const MOTION: KindDef[] = [
   {
     id: 'plainbush', name: 'plain bush, PTFE-lined', path: 'Mechanical/Bearings/Plain bearings', says: 'a steel-backed bronze sleeve lined with PTFE: a bearing with no balls that needs no oil', std: 'ISO 3547 wrapped bushes, bores 3–50 mm',
     axes: [ax('d', 'bore', 'mm', Object.keys(DU).map(Number)), ax('L', 'length', 'mm', (p) => [3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50].filter((x) => x >= Math.max(3, n(p, 'd') * 0.5) && x <= Math.max(6, n(p, 'd') * 1.6))), bare('style', 'style', ['plain', 'flanged'])],
-    title: (p) => `${p.style === 'flanged' ? 'flanged ' : ''}plain bush ${p.d} × ${DU[n(p, 'd')]} × ${p.L}`, of: () => 'steel-low bronze ptfe', make: 'roll', how: 'steel strip with sintered bronze and PTFE rolled on, cut and wrapped into a sleeve',
+    title: (p) => `${p.style === 'flanged' ? 'flanged ' : ''}plain bush ${p.d} × ${DU[n(p, 'd')]} × ${p.L}`, of: () => 'bush-strip', make: 'roll', how: 'steel strip with sintered bronze and PTFE rolled on, cut and wrapped into a sleeve',
     spec: (p) => `${p.d} mm shaft (h8), ${DU[n(p, 'd')]} mm housing (H7), ${p.L} mm long (ISO 3547); runs dry`, box: (p) => [DU[n(p, 'd')]! + (p.style === 'flanged' ? 6 : 0), DU[n(p, 'd')]! + (p.style === 'flanged' ? 6 : 0), n(p, 'L')], g: (p) => gOf(ring(DU[n(p, 'd')]!, n(p, 'd'), n(p, 'L')), 7.9),
   },
   {
     id: 'rodend', name: 'rod end, spherical', path: 'Mechanical/Linkages/Rod ends', says: 'a ball with a bore held in an eye on a threaded shank: a joint that swivels every way', std: 'DIN ISO 12240-4 series K, bores 5–30 mm',
     axes: [ax('d', 'bore', 'mm', Object.keys(RODEND).map(Number)), bare('thread', 'shank', ['male', 'female']), bare('hand', 'thread hand', ['right', 'left'])],
-    title: (p) => `rod end ${p.d} mm, ${p.thread} ${RODEND[n(p, 'd')]}${p.hand === 'left' ? ' left-hand' : ''}`, of: () => 'steel-low steel-chrome ptfe', make: 'assemble', alt: 'machine', how: 'a hardened ball swaged into a steel eye lined with PTFE fabric, the shank threaded',
+    title: (p) => `rod end ${p.d} mm, ${p.thread} ${RODEND[n(p, 'd')]}${p.hand === 'left' ? ' left-hand' : ''}`, of: () => 'rodend-housing rodend-ball rodend-liner', make: 'assemble', alt: 'machine', how: 'a hardened ball swaged into a steel eye lined with PTFE fabric, the shank threaded',
     spec: (p) => `${p.d} mm bore H7; ${p.thread === 'male' ? 'external' : 'internal'} thread ${RODEND[n(p, 'd')]} ${p.hand}-hand; swivels about ±13° (typical)`, box: (p) => [2.6 * n(p, 'd') + 4, 0.8 * n(p, 'd') + 4, 4 * n(p, 'd') + 15], g: (p) => gOf(cyl(2.6 * n(p, 'd') + 4, 0.8 * n(p, 'd') + 4) * 0.8 + cyl(n(p, 'd') * 1.2, 2.5 * n(p, 'd')), 7.85),
   },
   {
     id: 'camfollower', name: 'cam follower', path: 'Mechanical/Bearings/Track rollers', says: 'a thick-ringed needle bearing on a threaded stud, to roll along a track or cam', std: 'the KR series (makers\' tables)',
     axes: [bare('size', 'size', Object.keys(KR))],
-    title: (p) => `cam follower ${p.size}`, of: () => 'steel-chrome steel-alloy grease', make: 'assemble', how: 'a hardened outer ring on needle rollers round a hardened stud', spec: (p) => { const [D, t] = KR[String(p.size)]!; return `${D} mm roller on an ${t} stud`; },
+    title: (p) => `cam follower ${p.size}`, of: () => 'bearing-ring cam-stud needle-roller*16 bearing-cage grease', make: 'assemble', how: 'a hardened outer ring on needle rollers round a hardened stud', spec: (p) => { const [D, t] = KR[String(p.size)]!; return `${D} mm roller on an ${t} stud`; },
     box: (p) => { const [D] = KR[String(p.size)]!; return [D, D, D * 1.9]; }, g: (p) => { const [D] = KR[String(p.size)]!; return gOf(cyl(D, D * 0.5) + cyl(D * 0.4, D * 1.4), 7.85); },
   },
   {
@@ -128,7 +148,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'vbelt', name: 'V-belt', path: 'Mechanical/Power transmission/V-belts', says: 'an endless rubber belt of trapezoidal section, wedged into its pulley\'s groove so it grips by its sides', std: 'ISO 4184 classical and narrow sections, in the R20 datum lengths',
     axes: [bare('section', 'section', Object.keys(VB)), unit('L', 'datum length', 'mm', VLEN)],
-    title: (p) => `V-belt ${p.section} ${p.L}`, of: () => 'rubber pet', make: 'mould', how: 'polyester cords wound in rubber, wrapped in a fabric cover and vulcanised in a ring mould',
+    title: (p) => `V-belt ${p.section} ${p.L}`, of: () => 'vbelt-body tension-cord-polyester belt-cover', make: 'mould', how: 'polyester cords wound in rubber, wrapped in a fabric cover and vulcanised in a ring mould',
     spec: (p) => { const [w, h] = VB[String(p.section)]!; return `${w} × ${h} mm section; ${p.L} mm round its pitch line (ISO 4184)`; }, box: (p) => [n(p, 'L') / Math.PI, n(p, 'L') / Math.PI, VB[String(p.section)]![0]], g: (p) => VB[String(p.section)]![2] * n(p, 'L'),
   },
   {
@@ -140,7 +160,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'htdbelt', name: 'HTD timing belt', path: 'Mechanical/Power transmission/Timing belts', says: 'a closed toothed belt with round-topped teeth, for drive that cannot slip', std: 'HTD 3M, 5M, 8M and 14M, the widths sold, every fifth tooth count (makers stock most)',
     axes: [bare('pitch', 'pitch', Object.keys(HTD)), ax('w', 'width', 'mm', (p) => HTD[String(p.pitch)]![0]), ax('z', 'teeth', '', (p) => range(String(p.pitch) === '14M' ? 60 : 40, String(p.pitch) === '3M' ? 400 : 300, 5))],
-    title: (p) => `HTD ${p.pitch} belt, ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm, ${p.w} mm wide`, of: () => 'neoprene fibreglass nylon', make: 'mould', how: 'glass-fibre cords and neoprene moulded with its teeth, faced with nylon',
+    title: (p) => `HTD ${p.pitch} belt, ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm, ${p.w} mm wide`, of: () => 'timing-belt-body tension-cord-glass tooth-fabric', make: 'mould', how: 'glass-fibre cords and neoprene moulded with its teeth, faced with nylon',
     spec: (p) => `${p.z} teeth at ${String(p.pitch).replace('M', '')} mm: ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm round its pitch line`, box: (p) => { const L = n(p, 'z') * Number(String(p.pitch).replace('M', '')); return [L / Math.PI, L / Math.PI, n(p, 'w')]; }, g: (p) => n(p, 'z') * Number(String(p.pitch).replace('M', '')) * n(p, 'w') * Number(String(p.pitch).replace('M', '')) * 0.00045,
   },
   {
@@ -165,7 +185,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'wormset', name: 'worm and worm wheel', path: 'Mechanical/Gears and gearboxes/Worm gears', says: 'a screw-like worm turning a toothed wheel at right angles: a big reduction in one pair, often self-locking', std: 'modules 0.5–3, single-start, wheel teeth = ratio (typical)',
     axes: [ax('m', 'module', 'mm', [0.5, 0.8, 1, 1.25, 1.5, 2, 2.5, 3]), unit('i', 'ratio', ':1', [10, 15, 20, 25, 30, 40, 50, 60]), bare('matter', 'made of', ['bronze', 'nylon'])],
-    title: (p) => `worm set m${p.m}, ${p.i}:1, steel worm, ${madeOf(p)[2]} wheel`, of: (p) => `steel-alloy ${madeOf(p)[0]}`, make: 'machine', alt: 'print', how: 'the worm cut on hardened steel, the wheel hobbed in bronze (or moulded in nylon)',
+    title: (p) => `worm set m${p.m}, ${p.i}:1, steel worm, ${madeOf(p)[2]} wheel`, of: () => 'worm worm-wheel', make: 'machine', alt: 'print', how: 'the worm cut on hardened steel, the wheel hobbed in bronze (or moulded in nylon)',
     spec: (p) => { const m = n(p, 'm'), z = n(p, 'i'), q = 10, gam = Math.atan(1 / q) * 180 / Math.PI; return `wheel ${z} teeth, pitch circle ${(m * z).toFixed(1)} mm; worm about ${(q * m).toFixed(1)} mm (q = 10, typical); centres ${(m * (z + q) / 2).toFixed(1)} mm; lead angle ${gam.toFixed(1)}°: ${gam < 5 ? 'self-locking' : 'near self-locking: it may back-drive under vibration'}`; },
     box: (p) => [n(p, 'm') * (n(p, 'i') + 2), n(p, 'm') * (n(p, 'i') + 2), n(p, 'm') * 10 + 10], g: (p) => gOf(cyl(n(p, 'm') * n(p, 'i'), n(p, 'm') * 8) * 0.8 + cyl(10 * n(p, 'm'), 25 * n(p, 'm')), madeOf(p)[1]),
   },

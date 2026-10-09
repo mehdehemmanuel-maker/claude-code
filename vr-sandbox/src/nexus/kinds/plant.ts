@@ -48,7 +48,7 @@ export const PLANT: KindDef[] = [
   {
     id: 'flangegasket', name: 'flange gasket', path: 'Fluid/Seals/Gaskets', says: 'a flat ring pressed between two flanges by their bolts', std: 'EN 1514-1 inside-bolt-circle gaskets for PN16; thickness 2 or 3 mm',
     axes: [ax('DN', 'size', '', Object.keys(PN16).map(Number)), bare('matter', 'material', ['fibre', 'PTFE', 'EPDM']), ax('t', 'thickness', 'mm', [2, 3])],
-    title: (p) => `DN${p.DN} PN16 ${p.matter} gasket, ${p.t} mm`, of: (p) => (p.matter === 'fibre' ? 'nbr fibreglass' : p.matter === 'PTFE' ? 'ptfe' : 'epdm'), make: 'stamp', how: 'cut from sheet to fit inside the bolt circle',
+    title: (p) => `DN${p.DN} PN16 ${p.matter} gasket, ${p.t} mm`, of: () => 'fibre-gasket-sheet', make: 'stamp', how: 'cut from sheet to fit inside the bolt circle',
     spec: (p) => { const [, k, , M, od] = PN16[n(p, 'DN')]!; return `${od} mm bore, ${k - hole(M)} mm outside (inside its bolts, EN 1514-1); ${p.matter === 'fibre' ? 'water, steam and oil' : p.matter === 'PTFE' ? 'almost any chemical' : 'water and steam, not oil'}`; },
     box: (p) => { const [, k, , M] = PN16[n(p, 'DN')]!; return [k - hole(M), k - hole(M), n(p, 't')]; }, g: (p) => { const [, k, , M, od] = PN16[n(p, 'DN')]!; return gOf(ring(k - hole(M), od, n(p, 't')), p.matter === 'PTFE' ? 2.2 : 1.6); }, look: 'ring',
   },
@@ -61,13 +61,13 @@ export const PLANT: KindDef[] = [
   {
     id: 'pushfit', name: 'push-fit plumbing fitting', path: 'Fluid/Fittings/Push-fit fittings', says: 'a plumbing fitting that grips copper or PEX pipe pushed into it', std: 'the sizes and shapes sold for 10–28 mm pipe; pressure ratings typical',
     axes: [ax('d', 'for pipe', 'mm', [10, 15, 22, 28]), bare('type', 'type', ['straight', 'elbow', 'tee', 'reducer', 'stopend', 'tapconnector'])],
-    title: (p) => `${p.d} mm push-fit ${p.type === 'tapconnector' ? 'tap connector' : p.type === 'stopend' ? 'stop end' : p.type}`, of: (p) => `pom*${p.type === 'tee' ? 3 : 2} epdm stainless-304`, make: 'mould', how: 'an acetal body, an EPDM O-ring and a stainless grab ring at each end, a collet that releases it',
+    title: (p) => `${p.d} mm push-fit ${p.type === 'tapconnector' ? 'tap connector' : p.type === 'stopend' ? 'stop end' : p.type}`, of: () => 'pushfit-body grab-ring epdm-ring collet', make: 'mould', how: 'an acetal body, an EPDM O-ring and a stainless grab ring at each end, a collet that releases it',
     spec: (p) => `for ${p.d} mm copper or PEX; about 10 bar at 20 °C, 6 bar at 65 °C (typical); push in past its O-ring to seal`, box: (p) => { const k = n(p, 'd') * 1.9; return p.type === 'tee' ? [r1(k * 2.4), r1(k * 1.7), r1(k)] : p.type === 'elbow' ? [r1(k * 1.7), r1(k * 1.7), r1(k)] : [r1(k), r1(k), r1(k * 2.6)]; }, g: (p) => n(p, 'd') ** 2 * 0.06 * (p.type === 'tee' ? 1.5 : 1), look: (p) => (p.type === 'straight' || p.type === 'stopend' ? 'tube' : 'box'),
   },
   {
     id: 'solenoid', name: 'linear solenoid', path: 'Electrical/Motors and actuators/Solenoids', says: 'a coil that pulls an iron plunger in: a short, strong push or pull', std: 'the frame sizes, strokes and voltages sold; powers typical',
     axes: [ax('frame', 'body', 'mm', [20, 25, 30, 40, 50]), unit('L', 'stroke', 'mm', (p) => [5, 10, 15, 20].filter((x) => x <= n(p, 'frame') / 2)), unit('V', 'coil', 'V', [12, 24]), bare('duty', 'duty', ['100%', '25%'])],
-    title: (p) => `${p.frame} mm solenoid, ${p.L} mm stroke, ${p.V} V, ${p.duty} duty`, of: () => 'steel-low*2 magnet-wire steel-spring nylon', make: 'wind', how: 'a coil wound on a bobbin in a steel frame, a steel plunger sliding through it, a return spring',
+    title: (p) => `${p.frame} mm solenoid, ${p.L} mm stroke, ${p.V} V, ${p.duty} duty`, of: () => 'solenoid-frame coil-bobbin winding plunger-core return-spring', make: 'wind', how: 'a coil wound on a bobbin in a steel frame, a steel plunger sliding through it, a return spring',
     spec: (p) => { const W = (n(p, 'frame') ** 2 * 0.012) * (p.duty === '25%' ? 4 : 1); return `about ${r1(W)} W, ${r1(W / n(p, 'V'))} A at ${p.V} V (typical); its pull is strongest closed and falls steeply with stroke${p.duty === '25%' ? '; on no more than a quarter of the time' : ''}`; },
     box: (p) => [n(p, 'frame'), n(p, 'frame'), r1(n(p, 'frame') * 1.3 + n(p, 'L'))], g: (p) => gOf(n(p, 'frame') ** 2 * n(p, 'frame') * 1.3, 7.85) * 0.55, look: 'can',
   },
@@ -88,13 +88,13 @@ export const PLANT: KindDef[] = [
   {
     id: 'floatswitch', name: 'float switch', path: 'Electrical/Sensors/Level switches', says: 'a float with a magnet that closes a reed switch as the level reaches it', std: 'the forms sold; contact ratings typical',
     axes: [bare('form', 'form', ['vertical', 'side-mount', 'cable']), bare('matter', 'material', ['PP', 'stainless']), bare('contact', 'contact', ['NO', 'NC'])],
-    title: (p) => `${p.form} float switch, ${p.matter}, ${p.contact}`, of: (p) => `${p.matter === 'PP' ? 'pp' : 'stainless-316'} ferrite-hard glass nickel`, make: 'assemble', how: 'a hollow float carrying a magnet slides on a stem holding a sealed reed switch',
+    title: (p) => `${p.form} float switch, ${p.matter}, ${p.contact}`, of: () => 'float ring-magnet float-stem reed-switch insulated-conductor*2 cable-jacket', make: 'assemble', how: 'a hollow float carrying a magnet slides on a stem holding a sealed reed switch',
     spec: (p) => `${p.contact === 'NO' ? 'closes' : 'opens'} as the level lifts its float; about 10–50 W at its reed (typical): drive a relay with it, not a pump${p.form === 'cable' ? '; a tilting float on its cable, for sumps' : ''}`, box: (p) => (p.form === 'cable' ? [70, 70, 110] : p.form === 'side-mount' ? [25, 25, 85] : [30, 30, 90]), g: (p) => (p.form === 'cable' ? 300 : 40), look: 'can',
   },
   {
     id: 'limitswitch', name: 'limit switch', path: 'Electrical/Switches/Limit switches', says: 'a rugged switch worked by a machine part touching its lever or plunger', std: 'IEC 60947-5-1; EN 50041 bodies; ratings typical',
     axes: [bare('act', 'actuator', ['roller-lever', 'plunger', 'roller-plunger', 'wobble']), bare('body', 'body', ['metal', 'plastic'])],
-    title: (p) => `${s(p, 'act').replace('-', ' ')} limit switch, ${p.body} body`, of: (p) => `${p.body === 'metal' ? 'zamak' : 'pbt'} silver brass steel-spring nylon`, make: 'assemble', how: 'a snap-action contact block, 1 NO + 1 NC, in a sealed body with its head',
+    title: (p) => `${s(p, 'act').replace('-', ' ')} limit switch, ${p.body} body`, of: (p) => `switch-housing switch-actuator return-spring contact-spring contact-silver*4 switch-terminal*4 terminal-screw*4${p.body === 'metal' ? ' valve-body' : ''}`, make: 'assemble', how: 'a snap-action contact block, 1 NO + 1 NC, in a sealed body with its head',
     spec: (p) => `1 NO + 1 NC, positive opening (IEC 60947-5-1), about 3 A at 240 V AC-15 (typical); ${p.act === 'wobble' ? 'worked from any side' : 'worked by a cam or a stop'}`, box: (p) => [31, 30, p.act === 'roller-lever' ? 110 : 85], g: (p) => (p.body === 'metal' ? 180 : 90), look: 'case',
   },
   {
@@ -112,7 +112,7 @@ export const PLANT: KindDef[] = [
   {
     id: 'ujoint', name: 'universal joint', path: 'Mechanical/Shafts and hubs/Universal joints', says: 'a Cardan joint: two yokes and a cross, turning a shaft through an angle', std: 'DIN 808 bores; outside diameters typical',
     axes: [ax('d', 'bore', 'mm', Object.keys(UJ).map(Number)), bare('type', 'type', ['single', 'double'])],
-    title: (p) => `${p.type} universal joint, ${p.d} mm bore (DIN 808)`, of: (p) => `steel-alloy*${p.type === 'double' ? 3 : 2} steel-chrome`, make: 'machine', how: 'forged yokes and a cross on needle or plain bearings, hardened',
+    title: (p) => `${p.type} universal joint, ${p.d} mm bore (DIN 808)`, of: () => 'yoke*2 cross-pin*2 centre-block', make: 'machine', how: 'forged yokes and a cross on needle or plain bearings, hardened',
     spec: () => `to about 45° a joint (typical); at angle β the shaft out turns unevenly, between cos β and 1/cos β of the speed in (at 30°, 0.87 to 1.15): two joints in phase cancel it`, box: (p) => { const D = UJ[n(p, 'd')]!; return [D, D, r1(D * (p.type === 'double' ? 2.9 : 1.95))]; }, g: (p) => gOf(cyl(UJ[n(p, 'd')]!, UJ[n(p, 'd')]! * (p.type === 'double' ? 2.9 : 1.95)) * 0.6, 7.85), look: 'rod',
   },
   {
@@ -124,7 +124,7 @@ export const PLANT: KindDef[] = [
   {
     id: 'glasssheet', name: 'glass sheet', path: 'Materials/Sheet/Glass', says: 'float glass cut to size: annealed, toughened or laminated', std: 'EN 572-2 thicknesses; EN 12150 toughening; laminated 3+3 to 5+5 with 0.38 mm PVB; any size 100–3000 mm by the millimetre',
     axes: [bare('kind', 'kind', ['annealed', 'toughened', 'laminated']), ax('t', 'thickness', 'mm', (p) => (p.kind === 'laminated' ? [6.4, 8.8, 10.8] : [3, 4, 5, 6, 8, 10, 12])), ax('W', 'width', 'mm', [500, 1000], [100, 3000, 1]), ax('H', 'height', 'mm', [500, 1000], [100, 3000, 1])],
-    title: (p) => `${p.t} mm ${p.kind} glass, ${p.W} × ${p.H} mm`, of: (p) => (p.kind === 'laminated' ? 'glass pvb' : 'glass'), make: (p) => (p.kind === 'annealed' ? 'cast' : p.kind === 'toughened' ? 'heat-treat' : 'laminate'), how: (p) => (p.kind === 'annealed' ? 'float glass cut to size, its edges arrised' : p.kind === 'toughened' ? 'cut and edged first, then heated to about 620 °C and quenched by air jets' : 'two sheets bonded on a PVB interlayer under heat and pressure'),
+    title: (p) => `${p.t} mm ${p.kind} glass, ${p.W} × ${p.H} mm`, of: () => 'glass-ply*2 pvb-interlayer', make: (p) => (p.kind === 'annealed' ? 'cast' : p.kind === 'toughened' ? 'heat-treat' : 'laminate'), how: (p) => (p.kind === 'annealed' ? 'float glass cut to size, its edges arrised' : p.kind === 'toughened' ? 'cut and edged first, then heated to about 620 °C and quenched by air jets' : 'two sheets bonded on a PVB interlayer under heat and pressure'),
     spec: (p) => `${((n(p, 'W') * n(p, 'H') * n(p, 't') * 2.5) / 1e6).toFixed(1)} kg (2.5 kg/m² a millimetre); ${p.kind === 'toughened' ? 'bends to 120 MPa (EN 12150), breaks into small blunt pieces; cannot be cut after' : p.kind === 'laminated' ? 'holds together when broken' : 'bends to 45 MPa (EN 572), breaks into shards'}`,
     box: (p) => [n(p, 'W'), n(p, 'H'), n(p, 't')], g: (p) => gOf(n(p, 'W') * n(p, 'H') * n(p, 't'), 2.5), look: 'sheet',
   },
@@ -138,7 +138,7 @@ export const PLANT: KindDef[] = [
   {
     id: 'cement', name: 'cement', path: 'Materials/Building/Binders', says: 'a 25 kg bag of cement, by its EN 197-1 type and strength class', std: 'EN 197-1 types and strength classes',
     axes: [bare('type', 'type', ['CEM-I-42.5R', 'CEM-II/A-L-32.5R', 'CEM-II/B-V-32.5N', 'CEM-III/A-42.5N'])],
-    title: (p) => `${s(p, 'type').replace(/^CEM-/, 'CEM ').replace(/-(\d\d\.\d)([RN])$/, ' $1 $2')} cement, 25 kg`, of: () => 'portland paper', make: 'chemistry', how: 'limestone and clay burnt to clinker near 1450 °C, ground fine with gypsum (and limestone, fly ash or slag)',
+    title: (p) => `${s(p, 'type').replace(/^CEM-/, 'CEM ').replace(/-(\d\d\.\d)([RN])$/, ' $1 $2')} cement, 25 kg`, of: () => 'portland cement-sack', make: 'chemistry', how: 'limestone and clay burnt to clinker near 1450 °C, ground fine with gypsum (and limestone, fly ash or slag)',
     spec: (p) => { const [, cls, early] = s(p, 'type').match(/(\d\d\.\d)([RN])$/)!; return `at least ${cls} MPa at 28 days (EN 197-1)${early === 'R' ? '; gains strength early' : ''}; ${/II\/A-L/.test(s(p, 'type')) ? 'with limestone' : /II\/B-V/.test(s(p, 'type')) ? 'with fly ash' : /III/.test(s(p, 'type')) ? 'with blast-furnace slag: low heat, resists sulfates' : 'pure Portland'}`; },
     box: () => [450, 300, 120], g: () => 25200, look: 'box',
   },

@@ -14,11 +14,14 @@
 import { patchAt, type Patch } from './surface';
 
 export type V3 = [number, number, number];
-export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number }
+export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number; /** its section's middle moved across, m (0 if not said): a spoke sweeping round as it goes out */ z?: number }
 export interface Loft { st: Station[] }
 export interface Tube { r: number; pts: V3[]; /** its wall, m (solid if not said) */ wall?: number; /** bend radius at its corners, m (2 diameters if not said) */ bend?: number }
 /** a profile of [radius, height] points, spun about y */
 export type Lathe = [number, number][];
+/** a profile of [x, y] points in its own plane (closed, either way round), drawn along z from -L/2 to L/2: a bar's, an
+ *  angle's, a channel's or an I-beam's section, as it is rolled or extruded to length */
+export interface Prism { pts: [number, number][]; /** openings through it along its length (a box section's bore, an extrusion's centre hole) */ holes?: [number, number][][]; L: number }
 
 const gamma = (z: number): number => {
   // Lanczos (g = 7, n = 9), good to about 15 digits for z > 0.5
@@ -64,7 +67,7 @@ export function insideBy(s: Station, y: number, z: number): number {
 /** A loft's section where it is at x, eased between its stations (a straight blend). */
 export function stationAt(l: Loft, x: number): Station | null {
   const st = [...l.st].sort((a, b) => a.x - b.x); if (!st.length || x < st[0]!.x || x > st[st.length - 1]!.x) return null;
-  for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; if (x <= b.x) { const f = (x - a.x) / Math.max(1e-9, b.x - a.x), m = (u: number, v: number) => u + (v - u) * f; return { x, w: m(a.w, b.w), lo: m(a.lo, b.lo), hi: m(a.hi, b.hi), n: m(a.n ?? 2, b.n ?? 2), wt: m(a.wt ?? a.w, b.wt ?? b.w), nt: m(a.nt ?? a.n ?? 2, b.nt ?? b.n ?? 2), mid: m(midOf(a), midOf(b)) }; } }
+  for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; if (x <= b.x) { const f = (x - a.x) / Math.max(1e-9, b.x - a.x), m = (u: number, v: number) => u + (v - u) * f; return { x, w: m(a.w, b.w), lo: m(a.lo, b.lo), hi: m(a.hi, b.hi), n: m(a.n ?? 2, b.n ?? 2), wt: m(a.wt ?? a.w, b.wt ?? b.w), nt: m(a.nt ?? a.n ?? 2, b.nt ?? b.n ?? 2), mid: m(midOf(a), midOf(b)), z: m(a.z ?? 0, b.z ?? 0) }; } }
   return st[st.length - 1]!;
 }
 /** A loft's volume and its skin's area (the ends left open, as a shell's are). */
@@ -95,6 +98,12 @@ export const tubeLength = (t: Tube) => tubeLegs(t).reduce((s, l) => s + l.len, 0
 export const tubeVolume = (t: Tube) => tubeLength(t) * Math.PI * (t.r ** 2 - (t.wall ? Math.max(0, t.r - t.wall) ** 2 : 0));
 
 /** A turned profile's volume and surface (Pappus): each segment a frustum. */
+/** A profile's area (the shoelace sum), its perimeter, and so its prism's volume and skin. */
+export const profileArea = (pts: [number, number][]): number => { let a = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; a += x0 * y1 - x1 * y0; } return Math.abs(a) / 2; };
+const perimeterOf = (pts: [number, number][]): number => { let l = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; l += Math.hypot(x1 - x0, y1 - y0); } return l; };
+const sectionArea = (p: Prism): number => profileArea(p.pts) - (p.holes ?? []).reduce((a, h) => a + profileArea(h), 0);
+export const prismVolume = (p: Prism): number => sectionArea(p) * p.L;
+export const prismArea = (p: Prism): number => (perimeterOf(p.pts) + (p.holes ?? []).reduce((a, h) => a + perimeterOf(h), 0)) * p.L + 2 * sectionArea(p);
 export function latheVolume(p: Lathe): number { let v = 0; for (let i = 1; i < p.length; i++) { const [r0, y0] = p[i - 1]!, [r1, y1] = p[i]!; v += (Math.PI * (y1 - y0) * (r0 * r0 + r0 * r1 + r1 * r1)) / 3; } return Math.abs(v); }
 export function latheArea(p: Lathe): number { let A = 0; for (let i = 1; i < p.length; i++) { const [r0, y0] = p[i - 1]!, [r1, y1] = p[i]!; A += Math.PI * (r0 + r1) * Math.hypot(r1 - r0, y1 - y0); } return A; }
 
@@ -105,9 +114,10 @@ const span = (min: V3, max: V3): LocalBox => ({ c: mul(add(min, max), 0.5), h: m
 /** Boxes that together cover a shape tightly, in its own frame: a loft's between each pair of stations, a tube's along
  *  each straight (turned with it) and round each bend, a turned profile's as one. What touches what is found between
  *  these, so a parts inside a kart's frame touch only the tubes they meet, not the frame's bounds. */
-export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe } | { surf: Patch }): LocalBox[] {
+export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe } | { surf: Patch } | { prism: Prism }): LocalBox[] {
   if ('surf' in s) return surfPieces(s.surf);
-  if ('loft' in s) return s.loft.st.slice(1).map((b, i) => { const a = s.loft.st[i]!, w = Math.max(a.w, b.w, a.wt ?? 0, b.wt ?? 0); return span([Math.min(a.x, b.x), Math.min(a.lo, b.lo), -w], [Math.max(a.x, b.x), Math.max(a.hi, b.hi), w]); });
+  if ('prism' in s) return prismPieces(s.prism);
+  if ('loft' in s) return s.loft.st.slice(1).map((b, i) => { const a = s.loft.st[i]!, w = Math.max(a.w, b.w, a.wt ?? 0, b.wt ?? 0), z0 = Math.min(a.z ?? 0, b.z ?? 0), z1 = Math.max(a.z ?? 0, b.z ?? 0); return span([Math.min(a.x, b.x), Math.min(a.lo, b.lo), z0 - w], [Math.max(a.x, b.x), Math.max(a.hi, b.hi), z1 + w]); });
   if ('tube' in s) return tubeLegs(s.tube).map((l): LocalBox => {
     const r = s.tube.r;
     if (l.kind === 'line') { const d = unit(sub(l.b, l.a)), [e1, e2] = perp(d); return { c: mul(add(l.a, l.b), 0.5), u: [d, e1, e2], h: [l.len / 2 + r * 0.02, r, r] }; }
@@ -115,6 +125,32 @@ export function piecesOf(s: { loft: Loft } | { tube: Tube } | { lathe: Lathe } |
   });
   const rM = Math.max(...s.lathe.map(([r]) => r)), ys = s.lathe.map(([, y]) => y);
   return [span([-rM, Math.min(...ys), -rM], [rM, Math.max(...ys), rM])];
+}
+/** A prism's covering boxes: a section of square corners only (an angle, a channel, an I-beam, a box section) is cut
+ *  into the bands between its corners' heights, each band into the runs inside it, and bands alike merged; so a box lies
+ *  on each flange and each web, and nothing is taken to be in the hollow of an angle or a channel. Any other section is
+ *  covered by its own box. (Its openings cut the bands too, so a box section is four walls.) */
+const prismKept = new WeakMap<Prism, LocalBox[]>();
+function prismPieces(pr: Prism): LocalBox[] {
+  const kept = prismKept.get(pr); if (kept) return kept;
+  const loops = [pr.pts, ...(pr.holes ?? [])], P = pr.pts, h = pr.L / 2, xs = P.map(([x]) => x), ysAll = loops.flat().map(([, y]) => y);
+  const edges = loops.flatMap((L) => L.map((q, i) => [q, L[(i + 1) % L.length]!] as const));
+  const square = edges.every(([[x0, y0], [x1, y1]]) => Math.abs(x1 - x0) < 1e-9 || Math.abs(y1 - y0) < 1e-9);
+  let out: LocalBox[];
+  if (!square) out = [span([Math.min(...xs), Math.min(...ysAll), -h], [Math.max(...xs), Math.max(...ysAll), h])];
+  else {
+    const ys = [...new Set(ysAll.map((y) => +y.toFixed(9)))].sort((a, b) => a - b), bands: { y0: number; y1: number; runs: [number, number][] }[] = [];
+    for (let k = 1; k < ys.length; k++) {
+      const ym = (ys[k - 1]! + ys[k]!) / 2, cut: number[] = [];
+      for (const [[x0, y0], [x1, y1]] of edges) if (Math.abs(x1 - x0) < 1e-9 && (y0 - ym) * (y1 - ym) < 0) cut.push(x0);
+      cut.sort((a, b) => a - b); const runs: [number, number][] = []; for (let i = 0; i + 1 < cut.length; i += 2) runs.push([cut[i]!, cut[i + 1]!]);
+      const last = bands[bands.length - 1];
+      if (last && last.runs.length === runs.length && last.runs.every(([a, b], i) => Math.abs(a - runs[i]![0]) < 1e-9 && Math.abs(b - runs[i]![1]) < 1e-9)) last.y1 = ys[k]!;
+      else bands.push({ y0: ys[k - 1]!, y1: ys[k]!, runs });
+    }
+    out = bands.flatMap((b) => b.runs.map(([a, c]) => span([a, b.y0, -h], [c, b.y1, h])));
+  }
+  prismKept.set(pr, out); return out;
 }
 /** A freeform skin's covering boxes: one to each cell of a grid over it, turned to lie along the skin there (thin across
  *  it), and its mirror's; a cell where the skin curves too much for one thin box (a nose's corner) split again until each

@@ -87,7 +87,7 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { dataApp, inventoryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { dataApp, inventoryApp, libraryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
 import { Profile, BUDGET_MS } from '../profile';
 import { held, mergeStatic } from './merge-static';
 import { behave } from '../behave';
@@ -531,11 +531,12 @@ function tick(): void {
   if (holo.showing) { const hp = holo.group.position; goal = { th: clamp(Math.atan2(hp.x - M.x, hp.z - M.z) + 0.95, -2.3, 2.3), r: standR + 0.05 }; faceAt = hp; }
   else if (carry) { goal = { th: clamp(Math.atan2(bayPoint.x - M.x, bayPoint.z - M.z) - 0.35, -2.6, 2.6), r: standR }; faceAt = carry; }
   else if (target) { goal = standFor(target); faceAt = target; }
-  else { goal = { th: Math.max(-2.3, Math.min(2.3, Math.atan2(eye.x - M.x, eye.z - M.z) + 1.0)), r: Math.max(0.72, standR - 0.13) }; faceAt = eye; }
+  // (with nothing to do it stands back, off to your side, not between you and the table)
+  else { goal = { th: Math.max(-2.5, Math.min(2.5, Math.atan2(eye.x - M.x, eye.z - M.z) + 1.75)), r: standR + 0.45 }; faceAt = eye; }
   // never between you and what you are looking at: the nearest place round either way, or further out, that is clear
   const look = holo.showing ? holo.group.position : target ?? M, ex = look.x - eye.x, ez = look.z - eye.z, L2 = Math.max(1e-6, ex * ex + ez * ez);
   const inWay = (x: number, z: number, room: number) => { const u2 = ((x - eye.x) * ex + (z - eye.z) * ez) / L2, uc = clamp(u2, 0, 1); return Math.hypot(x - (eye.x + uc * ex), z - (eye.z + uc * ez)) < room && u2 < 0.98; };
-  const clearAt = (g: { th: number; r: number }) => { const gx = M.x + Math.sin(g.th) * g.r, gz = M.z + Math.cos(g.th) * g.r; return !inWay(gx, gz, 0.5) && Math.hypot(gx - eye.x, gz - eye.z) > 1.0; };
+  const idle = !holo.showing && !carry && !target, clearAt = (g: { th: number; r: number }) => { const gx = M.x + Math.sin(g.th) * g.r, gz = M.z + Math.cos(g.th) * g.r; return !inWay(gx, gz, 0.5) && Math.hypot(gx - eye.x, gz - eye.z) > (idle ? 1.6 : 1.0); };
   if (!clearAt(goal)) { const g0 = goal; search: for (let k2 = 1; k2 <= 9; k2++) for (const sg of [1, -1]) { const c = { th: clamp(g0.th + sg * k2 * 0.3, -2.6, 2.6), r: g0.r + (k2 > 5 ? 0.35 : 0) }; if (clearAt(c)) { goal = c; break search; } } }
   drive(dt);
   // and while it walks round, seen through wherever it crosses your view
@@ -556,8 +557,8 @@ function tick(): void {
   // the line of numbers, once a second: what is built and how fast the room runs (redrawn on every change, it would cost a frame)
   if (performance.now() - infoAt > 1000) { infoAt = performance.now(); const last = run.m.rounds.at(-1)!, gapsN = last.flaws.filter((f) => f.check === 'gap').length; hud.info = `${run.m.parts.length} parts · ${fmt(run.m.parts.reduce((a, p) => a + p.mass, 0))} kg · ${last.flaws.length - gapsN} flaws · ${gapsN} gaps · ${Math.round(fps)} fps`; }
   // the clock and status step aside in a headset while the board is up: they would lie over its corner
-  prof.time('hud', () => hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudOn && !on('boards'), dt));
-  if (!hudOn) hud.dom.style.display = 'none';
+  prof.time('hud', () => hud.update(renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye, renderer.xr.isPresenting && hudShown() && !on('boards'), dt));
+  if (!hudShown()) hud.dom.style.display = 'none';
   prof.time('modes', () => drawModes());
   modeStrip.visible = renderer.xr.isPresenting && modeChips.length > 0;
   if (modeStrip.visible) { modeStrip.position.copy(hud.group.position).add(tmp.set(0, -0.12, 0)); modeStrip.lookAt(eye); }
@@ -577,9 +578,12 @@ function tick(): void {
   gatesCard.mesh.visible = on('gates');
   chartWin.mesh.visible = on('chart' as Panel);
   // nothing here yet, or a new ask asked for: what you might ask, in front of you; on a screen, over the box you type in
+  // (in a headset one chip over the table asks, and opens the list; the list only when it is asked for: a room is not a menu)
   const wantNew = on('new') || (empty && !windows.top());
-  suggest.group.visible = wantNew && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
-  if (suggest.group.visible && !on('new')) { suggest.group.position.copy(M).add(tmp.set(0, 1.25, 0.35)); suggest.group.lookAt(eye); }
+  suggest.group.visible = on('new') && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
+  askChip.group.visible = !on('new') && empty && !shop.size && !windows.top() && !apart3d.visible && renderer.xr.isPresenting;
+  for (const b2 of playButtons) b2.style.display = empty ? 'none' : '';
+  if (askChip.group.visible) { askChip.group.position.copy(M).add(tmp.set(0, 1.12, 0.35)); askChip.group.lookAt(eye); }
   // the dock goes where you look, low; the menu above it when you open it
   // the dock follows you low; it steps aside while the keyboard of light is where it would be, for the board
   dock.group.visible = renderer.xr.isPresenting && dockOn && !(on('boards') && !!boards?.typing) && !phone.typing;
@@ -896,8 +900,7 @@ function pick3d(): boolean {
   const h = apart3d.pick(ray); if (!h) return false;
   const now = performance.now() / 1000;
   if ('chip' in h) { if (h.chip === 'back') say(apart3d.back(now)); else if (h.chip === 'close') apart3d.close(); else apart3d.toggle(now); return true; }
-  const i = INVENTORY.get(h.piece);
-  if (i) { say(apart3d.open(h.piece, now)); return true; }
+  if (apart3d.opens(h.piece)) { say(apart3d.open(h.piece, now)); return true; }
   const m = shop.all().made.find((x) => x.name === h.piece), mat = m?.matter ? MATTER_TO_INVENTORY[m.matter.id] : undefined;
   // a shape made here is one piece: it opens into what it is made of, and that into its elements
   if (m && mat && INVENTORY.has(mat)) { say(`${m.name}: a ${m.kind} of ${m.matter!.name}${m.mass ? `, ${m.mass.toFixed(3)} kg` : ''}, made here in one piece. Inside it: ${apart3d.open(mat, now)}`); return true; }
@@ -1411,12 +1414,15 @@ function drawModes(): void {
   all.forEach(([text, act, accent], i) => { const c2 = card(0.13, 0.03, 512); c2.draw('', [{ text, size: 2.2 }], accent); c2.mesh.position.set(((i % 3) - 1) * 0.135, -Math.floor(i / 3) * 0.034, 0); modeStrip.add(c2.mesh); modeChips.push({ mesh: c2.mesh, act }); });
 }
 // settings: the small things that make the room yours
-let settingsOpen = false, turnStep = Math.PI / 6, smoothTurn = false, hudOn = true, dockOn = false;
+// (the clock and status: one line on a screen; in a headset off until asked for, the phone's own bar has the time and the
+// room stays clear; said once in the settings, as said)
+let settingsOpen = false, turnStep = Math.PI / 6, smoothTurn = false, hudOn: boolean | null = null, dockOn = false;
+const hudShown = (): boolean => hudOn ?? !renderer.xr.isPresenting;
 const settingsGroup = new THREE.Group(); scene.add(settingsGroup); settingsGroup.visible = false;
 let settingChips: { mesh: THREE.Mesh; act: () => void }[] = [];
 const SETTINGS: [() => string, () => void][] = [
   [() => `Voice: ${voice ? 'on' : 'off'}`, () => { voice = !voice; if (!voice) speechSynthesis.cancel(); }],
-  [() => `Clock and status: ${hudOn ? 'shown' : 'hidden'}`, () => { hudOn = !hudOn; }],
+  [() => `Clock and status: ${hudShown() ? 'shown' : 'hidden'}`, () => { hudOn = !hudShown(); }],
   [() => `Dock: ${dockOn ? 'shown' : 'hidden, the phone has it all'}`, () => { dockOn = !dockOn; }],
   [() => `Turning: ${smoothTurn ? 'smooth' : `${Math.round((turnStep * 180) / Math.PI)}° steps`}`, () => { if (smoothTurn) { smoothTurn = false; turnStep = Math.PI / 6; } else if (turnStep < Math.PI / 4 - 1e-6) turnStep = Math.PI / 4; else smoothTurn = true; }],
   [() => `Reports: ${reportsMode}`, () => cycleReports()],
@@ -1559,9 +1565,8 @@ const ui = document.createElement('div');
 ui.style.cssText = 'position:fixed;right:16px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;z-index:5;max-width:calc(100vw - 32px)';
 const BTN = 'font:600 13px system-ui;padding:8px 12px;border-radius:8px;border:1px solid #2e7d8c;background:#06141c;color:#bdefff;cursor:pointer';
 const button = (text: string, on: (b: HTMLButtonElement) => void, parent: HTMLElement = ui) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = BTN; b.onclick = () => on(b); parent.appendChild(b); return b; };
-button('Pause', (b) => { togglePause(); b.textContent = paused ? 'Play' : 'Pause'; });
-button('Next', () => step());
-button('Run again', () => say(world2.replay()));
+// (the playback's buttons only while something is built to play: an empty table has nothing to pause)
+const playButtons = [button('Pause', (b) => { togglePause(); b.textContent = paused ? 'Play' : 'Pause'; }), button('Next', () => step()), button('Run again', () => say(world2.replay()))];
 button('Voice off', (b) => { voice = !voice; b.textContent = voice ? 'Voice on' : 'Voice off'; if (!voice) speechSynthesis.cancel(); });
 document.body.appendChild(ui);
 const tools = document.createElement('div');
@@ -1622,7 +1627,9 @@ function stepMind(dt: number): void {
   if (f !== felt) { felt = f; boards?.event(); }
   // its inner voice, over it, while it is not speaking: what it feels and why, a line
   if (now - thoughtAt > 2500) { thoughtAt = now; const th = `${f}: ${thought(f, mind)}`; (thoughtTag as THREE.Sprite & { userData: { said?: string } }).userData.said !== th && relabelTag(thoughtTag, th.slice(0, 90)); }
-  thoughtTag.position.copy(robot.root.position).add(tmp.set(0, 1.5, 0)); thoughtTag.visible = !voiceCard.mesh.visible;
+  // (what it is thinking hangs over it only while you look at it)
+  thoughtTag.position.copy(robot.root.position).add(tmp.set(0, 1.5, 0));
+  { const hd = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(hd); thoughtTag.visible = !voiceCard.mesh.visible && hd.dot(tmp.copy(thoughtTag.position).sub(eye).normalize()) > 0.96; }
 }
 function relabelTag(sp: THREE.Sprite, text: string): void { const fresh = label(text, 0.02, '#e0f7fa', 'rgba(4,10,16,0.55)'); (sp.material as THREE.SpriteMaterial).map?.dispose(); sp.material = fresh.material; sp.scale.copy(fresh.scale); sp.userData.said = text; }
 /** Its state as numbers its rules read: how bored, curious, rested and pleased (0–100). */
@@ -3399,10 +3406,14 @@ function chipGrid(list: [string, () => void][], cols: number, w: number, h: numb
 const SUGGESTIONS = ['a cart that carries 150 kg at 8 km/h', 'a cabin of 40 m² for 2 people where winter gets to -25 °C', 'a drone that carries a 2 kg parcel 5 km at 15 m/s', 'a boat that carries 400 kg 20 km at 3 m/s', 'an electric car for 4 people that goes 400 km at 120 km/h', 'a 3D printer for parts up to 250 mm'];
 const make = (w: string) => { newOpen = false; line('you', w); say(world2.make(w)); };
 const suggest = chipGrid([['🎲 Surprise me', () => { newOpen = false; line('you', 'surprise me'); void surprise().then(say); }], ...SUGGESTIONS.map((w): [string, () => void] => [`build ${w}`, () => make(w)]), ['… type your own', () => { summonTo('chat'); keyboard.text = 'build me a '; keyboard.draw(); }]], 1, 0.46, 0.042, (i) => (i === 0 ? '#ffd740' : i === SUGGESTIONS.length + 1 ? '#b388ff' : '#4dd0e1'), 1.9);
+const askChip = chipGrid([['✦ What shall I build?', () => line('system', summonTo('new'))]], 1, 0.26, 0.052, () => '#ffd740', 2.7);
 const suggestBox = document.createElement('div');
 suggestBox.style.cssText = 'display:none;flex-wrap:wrap;gap:6px';
 { const b2 = document.createElement('button'); b2.textContent = '🎲 Surprise me'; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #ffd740;background:rgba(3,14,22,0.85);color:#fff3c4;cursor:pointer'; b2.onclick = () => { line('you', 'surprise me'); void surprise().then(say); }; suggestBox.appendChild(b2); }
-for (const w of SUGGESTIONS) { const b2 = document.createElement('button'); b2.textContent = `Build ${w}`; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer'; b2.onclick = () => make(w); suggestBox.appendChild(b2); }
+{ const ideas: HTMLButtonElement[] = [], more = document.createElement('button'); more.textContent = '💡 Ideas'; more.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer';
+  more.onclick = () => { const open = ideas[0]!.style.display === 'none'; for (const b2 of ideas) b2.style.display = open ? '' : 'none'; more.textContent = open ? '💡 Ideas ▴' : '💡 Ideas'; };
+  suggestBox.appendChild(more);
+  for (const w of SUGGESTIONS) { const b2 = document.createElement('button'); b2.textContent = `Build ${w}`; b2.style.cssText = 'font:600 12px system-ui;padding:6px 10px;border-radius:999px;border:1px solid #4dd0e1;background:rgba(3,14,22,0.85);color:#e6f7ff;cursor:pointer'; b2.onclick = () => make(w); b2.style.display = 'none'; ideas.push(b2); suggestBox.appendChild(b2); } }
 chat.prepend(suggestBox);
 let menuOpen = false;
 const dock = chipGrid([['✗ Report', () => report()], ['🛠 Fix', () => togglePin()], ['⤓ Inside', () => line('system', openInside())], ['Ask', () => summon('chat')], ['＋ New', () => summon('new')], ['▶ Operate', () => say(operateIt())], ['Causes', () => line('system', summon('causes'))], ['Flaws', () => line('system', summon('flaws'))], ['Boards', () => say(summon('boards'))], ['✕ Exit', () => exitLatest()], ['☰ Menu', () => { menuOpen = !menuOpen; }]], 11, 0.09, 0.042, (i) => (i === 0 ? '#ff8a80' : i === 1 ? '#e0f7fa' : i === 9 ? '#ffd740' : '#80deea'), 2.5);
@@ -3510,6 +3521,7 @@ const phone = new Phone({
 phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = storeBuild(); line('system', t2); return t2; }, fetch: (id) => { const t2 = fetchBuild(id); line('system', t2); return t2; }, remove: removeKept, go: goPlace, where: () => place }));
 let invSaid = '';
 phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid, see: (id) => see3d(id) }));
+phone.add(libraryApp({ see: (w2) => { const x = resolve(w2); return x && typeof x === 'object' ? see3d(x.id) : String(x ?? `nothing called ${w2}`); } }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // ---- the weather: where you are, or a place you name; kept, fetched again each quarter hour, read by rules -------------
@@ -3608,21 +3620,24 @@ function endDrag(): void { if (!appDrag) return; if (!appDrag.id) phone.act('app
 window.setInterval(() => { if (['robots', 'warehouse', 'workshop', 'inventory'].includes(phone.app) || phone.showing(['robots', 'warehouse', 'workshop', 'inventory'])) phone.draw(); }, 500);
 
 /** On a screen, the phone in the lower left of the view, or put away. */
-function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
+/** How much bigger than a real phone the phone in your hand is drawn: read at arm's length in a headset, a phone's own
+ *  size is small print (its screen and every press on it scale with it). */
+const PHONE_SCALE = 1.5;
+function togglePhone(): void { desktopPhone = !desktopPhone; if (desktopPhone) { camera.add(phone.group); phone.group.scale.setScalar(1); phone.group.position.set(-0.17, -0.1, -0.42); phone.group.rotation.set(0, 0.25, 0); } else if (phone.group.parent === camera) camera.remove(phone.group); }
 const factory = new XRControllerModelFactory();
 const lasers: THREE.Line[] = [];
 // which hand each controller is in; the board or a window held, and by which button
 const handOf: (string | null)[] = [null, null];
 let boardBy: 'select' | 'squeeze' = 'select', winBy: 'select' | 'squeeze' = 'select';
 /** The chips a press can land on, as they stand. */
-const chipsNow = () => [...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])];
+const chipsNow = () => [...(decideChips.visible ? decideMeshes : []), ...(modeStrip.visible ? modeChips : []), ...(settingsGroup.visible ? settingChips : []), ...(dock.group.visible ? dock.chips : []), ...(menu.group.visible ? menu.chips : []), ...(suggest.group.visible ? suggest.chips : []), ...(askChip.group.visible ? askChip.chips : []), ...(execAsk.group.visible ? execAsk.chips : [])];
 for (let i = 0; i < 2; i++) {
   const ctl = renderer.xr.getController(i); dolly.add(ctl);
   const grip = renderer.xr.getControllerGrip(i); grip.add(factory.createControllerModel(grip)); dolly.add(grip);
   // the menu goes on the left hand, the pointer is the right
   // the phone goes in the left hand, held as a phone is, its screen turned up toward you; the pointer is the right
   ctl.addEventListener('disconnected', () => { handOf[i] = null; });
-  ctl.addEventListener('connected', (e) => { const hand = (e as unknown as { data?: { handedness?: string } }).data?.handedness; handOf[i] = hand ?? (i === 0 ? 'left' : 'right'); if (hand === 'left' || (!hand && i === 0)) { desktopPhone = false; grip.add(phone.group); phone.group.position.set(0, 0.06, 0.02); phone.group.rotation.set(-Math.PI / 3, 0, 0); } });
+  ctl.addEventListener('connected', (e) => { const hand = (e as unknown as { data?: { handedness?: string } }).data?.handedness; handOf[i] = hand ?? (i === 0 ? 'left' : 'right'); if (hand === 'left' || (!hand && i === 0)) { desktopPhone = false; grip.add(phone.group); phone.group.scale.setScalar(PHONE_SCALE); phone.group.position.set(0, 0.06 + 0.076 * (PHONE_SCALE - 1), 0.02); phone.group.rotation.set(-Math.PI / 3, 0, 0); } });
   const laser = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }));
   laser.scale.z = 3; ctl.add(laser); lasers.push(laser);
   // the trigger is the clicker: it presses what it points at, and never drags (the grip holds)
@@ -3755,7 +3770,12 @@ async function boot() {
     const session = await (navigator as Navigator & { xr: XRSystem }).xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
     renderer.xr.setReferenceSpaceType('local-floor');
     await renderer.xr.setSession(session as unknown as XRSession);
-  } else document.body.appendChild(VRButton.createButton(renderer));
+  } else {
+    // (the way into a headset, shown only where there is one to enter: a screen without is not told so over its chat)
+    const vb = VRButton.createButton(renderer); document.body.appendChild(vb);
+    const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
+    void (xr ? xr.isSessionSupported('immersive-vr') : Promise.resolve(false)).then((ok) => { if (!ok) vb.style.display = 'none'; }, () => { vb.style.display = 'none'; });
+  }
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;

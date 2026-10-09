@@ -57,7 +57,7 @@ const CELLS: Record<string, { dim: number[]; chem: Record<string, [number, numbe
   CR2032: { dim: [20, 3.2], chem: { lithium: [3, 225, 3] } }, CR2025: { dim: [20, 2.5], chem: { lithium: [3, 160, 2.5] } }, CR2016: { dim: [20, 1.6], chem: { lithium: [3, 90, 1.7] } }, CR1220: { dim: [12.5, 2], chem: { lithium: [3, 40, 0.8] } },
   CR1632: { dim: [16, 3.2], chem: { lithium: [3, 140, 1.8] } }, CR2450: { dim: [24.5, 5], chem: { lithium: [3, 620, 6.2] } }, CR123A: { dim: [17, 34.5], chem: { lithium: [3, 1500, 17] } }, LR44: { dim: [11.6, 5.4], chem: { alkaline: [1.5, 150, 2] } }, SR626: { dim: [6.8, 2.6], chem: { silveroxide: [1.55, 28, 0.4] } },
 };
-const CHEM_OF: Record<string, string> = { alkaline: 'zinc mno2 koh-electrolyte steel-low graphite', lithium: 'lithium mno2 electrolyte-li steel-low', nimh: 'nickel lani5 koh-electrolyte steel-low nylon', silveroxide: 'ag2o zinc koh-electrolyte steel-low' };
+const CHEM_OF: Record<string, string> = { alkaline: 'battery-can cathode-ring anode-gel cell-separator current-collector cell-seal negative-cap battery-label', lithium: 'battery-can lithium-anode cathode-ring cell-separator cell-seal negative-cap electrolyte-li', nimh: 'battery-can nimh-positive nimh-negative cell-separator*2 cap-plate cell-seal koh-electrolyte battery-label', silveroxide: 'battery-can silver-oxide-pellet anode-gel cell-separator cell-seal negative-cap' };
 /** Thermocouple types (IEC 60584): legs, the range a class 2 one is good over (°C), and its Seebeck coefficient near 25 °C (µV/K, about). */
 const TC: Record<string, [string, string, number, number, number]> = { K: ['chromel', 'alumel', -40, 1200, 41], J: ['iron', 'constantan', -40, 750, 52], T: ['copper', 'constantan', -40, 350, 41], E: ['chromel', 'constantan', -40, 900, 61], N: ['nicrosil', 'nisil', -40, 1200, 27], R: ['pt-rh13', 'platinum', 0, 1600, 6], S: ['pt-rh10', 'platinum', 0, 1600, 6], B: ['pt-rh30', 'pt-rh6', 600, 1700, 0.3] };
 const SECTIONS = [0.14, 0.25, 0.5, 0.75, 1, 1.5, 2.5];
@@ -84,59 +84,59 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'fuse', name: 'cartridge fuse', path: 'Electrical/Circuit protection/Cartridge fuses', says: 'a wire in a glass or ceramic tube that melts open when too much current flows', std: 'IEC 60127, 5 × 20 and 6.3 × 32 mm, the rated currents of its R10 series',
     axes: [bare('size', 'size', ['5x20', '6.3x32']), bare('speed', 'speed', ['F', 'T']), unit('A', 'rated current', 'A', (p) => R10A.filter((a) => a <= (p.size === '5x20' ? 10 : 20)))],
-    title: (p) => `fuse ${String(p.size).replace('x', ' × ')} mm, ${p.speed === 'F' ? 'fast' : 'time-lag'}, ${p.A} A`, of: (p) => `${n(p, 'A') > 6.3 ? 'alumina' : 'glass'} copper tin brass*2`, make: 'assemble', how: 'a fuse wire (or a spiral, for time-lag) soldered between two plated brass caps on a glass or ceramic tube',
+    title: (p) => `fuse ${String(p.size).replace('x', ' × ')} mm, ${p.speed === 'F' ? 'fast' : 'time-lag'}, ${p.A} A`, of: () => 'fuse-tube fuse-cap*2 fuse-element', make: 'assemble', how: 'a fuse wire (or a spiral, for time-lag) soldered between two plated brass caps on a glass or ceramic tube',
     spec: (p) => `${p.A} A; ${p.speed === 'F' ? 'fast-acting (F)' : 'time-lag (T): it rides out a switch-on surge'}; 250 V; opens within about 2 min at 2.1 × (IEC 60127-2)`, box: (p) => { const [d, L] = String(p.size).split('x').map(Number) as [number, number]; return [d, d, L]; }, g: (p) => (p.size === '5x20' ? 0.5 : 1.8),
   },
   {
     id: 'bladefuse', name: 'blade fuse', path: 'Electrical/Circuit protection/Blade fuses', says: 'a plastic-bodied fuse with two blades, for cars and 12 V', std: 'ISO 8820-3 mini and regular (ATO) blades, with their colours',
     axes: [bare('type', 'type', ['mini', 'regular']), unit('A', 'rating', 'A', (p) => [1, 2, 3, 4, 5, 7.5, 10, 15, 20, 25, 30, 35, 40].filter((a) => a <= (p.type === 'mini' ? 30 : 40)))],
-    title: (p) => `${p.type} blade fuse, ${p.A} A (${BLADE[n(p, 'A')]})`, of: () => 'zinc pc', make: 'assemble', how: 'a stamped zinc-alloy element moulded into a coloured polycarbonate body', spec: (p) => `${p.A} A, ${BLADE[n(p, 'A')]}; 32 V`,
+    title: (p) => `${p.type} blade fuse, ${p.A} A (${BLADE[n(p, 'A')]})`, of: () => 'fuse-element faceplate', make: 'assemble', how: 'a stamped zinc-alloy element moulded into a coloured polycarbonate body', spec: (p) => `${p.A} A, ${BLADE[n(p, 'A')]}; 32 V`,
     box: (p) => (p.type === 'mini' ? [10.9, 3.6, 16.3] : [19.1, 5.1, 18.5]), g: (p) => (p.type === 'mini' ? 0.6 : 1.4),
   },
   {
     id: 'chipresistor', name: 'chip resistor', path: 'Electrical/Passive components/Resistors', says: 'a thick-film resistor on a ceramic chip, for soldering to a board\'s surface', std: 'E96 values at 1 % and E24 values at 5 %, 1 Ω–10 MΩ (IEC 60063), in the standard packages and their usual powers',
     axes: [bare('pkg', 'package', Object.keys(CHIP)), bare('tol', 'tolerance', ['1%', '5%']), unit('R', 'resistance', 'ohm', (p) => (p.tol === '5%' ? [...decades(E24, 1, 9.99e6), 1e7] : [...decades(E96, 1, 9.99e6), 1e7]))],
-    title: (p) => `${si(n(p, 'R'))}Ω chip resistor, ${p.pkg}, ${String(p.tol).replace('%', ' %')}`, of: () => 'alumina silver-paste glass tin nickel', make: 'assemble', how: 'a ruthenium-oxide film printed on an alumina chip and fired, laser-trimmed to value, its ends plated nickel then tin',
+    title: (p) => `${si(n(p, 'R'))}Ω chip resistor, ${p.pkg}, ${String(p.tol).replace('%', ' %')}`, of: () => 'chip-substrate resistive-film overglaze chip-termination*2', make: 'assemble', how: 'a ruthenium-oxide film printed on an alumina chip and fired, laser-trimmed to value, its ends plated nickel then tin',
     spec: (p) => { const [, , , W] = CHIP[s(p, 'pkg')]!; return `${si(n(p, 'R'))}Ω ±${String(p.tol).replace('%', ' %')}; ${W} W at 70 °C; up to ${Math.sqrt(W / n(p, 'R')).toPrecision(3)} A at that power (I = √(P/R))`; },
     box: (p) => CHIP[s(p, 'pkg')]!.slice(0, 3) as [number, number, number], g: (p) => { const [l, w, h] = CHIP[s(p, 'pkg')]!; return gOf(l * w * h, 3.5); },
   },
   {
     id: 'mlcc', name: 'ceramic chip capacitor', path: 'Electrical/Passive components/Capacitors', says: 'a stack of ceramic layers and nickel electrodes fired into a chip', std: 'E6 values (IEC 60063) in each dielectric\'s usual range, in the standard packages',
     axes: [bare('dielectric', 'dielectric', ['C0G', 'X7R', 'X5R']), bare('pkg', 'package', ['0402', '0603', '0805', '1206', '1210']), unit('C', 'capacitance', 'F', (p) => decades([1, 1.5, 2.2, 3.3, 4.7, 6.8], ...(({ C0G: [1e-12, ({ '0402': 1e-9, '0603': 4.7e-9, '0805': 2.2e-8, '1206': 1e-7, '1210': 1e-7 } as Record<string, number>)[s(p, 'pkg')]!], X7R: [1e-10, ({ '0402': 1e-7, '0603': 1e-6, '0805': 4.7e-6, '1206': 1e-5, '1210': 2.2e-5 } as Record<string, number>)[s(p, 'pkg')]!], X5R: [1e-8, ({ '0402': 1e-6, '0603': 1e-5, '0805': 2.2e-5, '1206': 4.7e-5, '1210': 1e-4 } as Record<string, number>)[s(p, 'pkg')]!] } as Record<string, [number, number]>)[s(p, 'dielectric')]!))), unit('V', 'rated voltage', 'V', [6.3, 10, 16, 25, 50, 100])],
-    title: (p) => `${si(n(p, 'C'))}F ${p.dielectric} capacitor, ${p.pkg}, ${p.V} V`, of: (p) => `${p.dielectric === 'C0G' ? 'alumina' : 'batio3'} nickel copper tin`, make: 'sinter', how: 'barium titanate (or, for C0G, a stable titanate) tape printed with nickel, stacked, cut, fired, its ends terminated',
+    title: (p) => `${si(n(p, 'C'))}F ${p.dielectric} capacitor, ${p.pkg}, ${p.V} V`, of: () => 'mlcc-body chip-termination*2', make: 'sinter', how: 'barium titanate (or, for C0G, a stable titanate) tape printed with nickel, stacked, cut, fired, its ends terminated',
     spec: (p) => `${si(n(p, 'C'))}F; ${p.dielectric === 'C0G' ? 'C0G: ±30 ppm/°C, no loss of capacitance with voltage' : p.dielectric === 'X7R' ? 'X7R: ±15 % over −55…125 °C; loses some capacitance under DC bias' : 'X5R: ±15 % over −55…85 °C; loses much under DC bias'}; ${p.V} V`,
     box: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return [c[0], c[1], s(p, 'pkg') === '1210' ? 2.5 : c[1]]; }, g: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return gOf(c[0] * c[1] * c[1], 5.5); },
   },
   {
     id: 'inductor', look: 'can', name: 'inductor', path: 'Electrical/Passive components/Inductors', says: 'a coil of wire on a ferrite core, to store energy in its field and smooth a current', std: 'E12 values (IEC 60063) in the ranges each style is wound in; current ratings typical',
     axes: [bare('style', 'style', ['axial', 'radial', 'cd54', 'toroid']), unit('L', 'inductance', 'H', (p) => decades(E12, ...(({ axial: [1e-6, 1e-2], radial: [1e-6, 1e-2], cd54: [1e-6, 1e-3], toroid: [1e-5, 1e-3] } as Record<string, [number, number]>)[s(p, 'style')]!)))],
-    title: (p) => `${si(n(p, 'L'))}H ${p.style === 'cd54' ? 'SMD power (CD54)' : p.style} inductor`, of: () => 'ferrite-soft magnet-wire epoxy tin', make: 'wind', how: 'enamelled copper wound on a ferrite core (a drum, a bobbin, or a ring), its ends terminated',
+    title: (p) => `${si(n(p, 'L'))}H ${p.style === 'cd54' ? 'SMD power (CD54)' : p.style} inductor`, of: () => 'ferrite-core winding lead-wire*2 dip-coat', make: 'wind', how: 'enamelled copper wound on a ferrite core (a drum, a bobbin, or a ring), its ends terminated',
     spec: (p) => { const L = n(p, 'L'), base = ({ axial: 0.5, radial: 1.5, cd54: 2, toroid: 5 } as Record<string, number>)[s(p, 'style')]!, I = base * Math.sqrt(1e-5 / L); return `${si(L)}H ±10 %; about ${Math.min(base * 3, I).toPrecision(2)} A before its core saturates (typical: rating falls as √L)`; },
     box: (p) => ({ axial: [4, 4, 10], radial: [8, 8, 10], cd54: [5.8, 5.2, 4.5], toroid: [20, 20, 10] } as Record<string, [number, number, number]>)[s(p, 'style')]!, g: (p) => ({ axial: 0.4, radial: 1.5, cd54: 0.4, toroid: 12 } as Record<string, number>)[s(p, 'style')]!,
   },
   {
     id: 'xtal', look: 'can', name: 'quartz crystal', path: 'Electrical/Passive components/Crystals', says: 'a sliver of quartz that rings at one frequency, to clock a chip', std: 'the frequencies and load capacitances makers stock',
     axes: [bare('pkg', 'package', ['HC49S', '3225', '5032', 'tuningfork']), unit('f', 'frequency', 'Hz', (p) => (p.pkg === 'tuningfork' ? [32768] : [4e6, 6e6, 8e6, 1e7, 1.10592e7, 1.2e7, 1.47456e7, 1.6e7, 2e7, 2.4e7, 2.5e7, 2.6e7, 2.7e7, 3.2e7, 4e7, 4.8e7])), unit('CL', 'load capacitance', 'pF', [12, 18, 20])],
-    title: (p) => `${si(n(p, 'f'))}Hz crystal, ${p.pkg === 'tuningfork' ? '2 × 6 mm can' : p.pkg}, ${p.CL} pF`, of: () => 'quartz silver steel-low glass', make: 'assemble', how: 'a quartz blank cut at its angle, lapped to frequency, silvered, sealed in a can', spec: (p) => `${si(n(p, 'f'))}Hz ±20 ppm; for ${p.CL} pF load: each of its two capacitors about 2 × (${p.CL} − 3) pF`,
+    title: (p) => `${si(n(p, 'f'))}Hz crystal, ${p.pkg === 'tuningfork' ? '2 × 6 mm can' : p.pkg}, ${p.CL} pF`, of: (p) => (p.pkg === '3225' || p.pkg === '5032' ? 'quartz-blank ceramic-package seam-lid' : 'quartz-blank crystal-base crystal-can lead-wire*2'), make: 'assemble', how: 'a quartz blank cut at its angle, lapped to frequency, silvered, sealed in a can', spec: (p) => `${si(n(p, 'f'))}Hz ±20 ppm; for ${p.CL} pF load: each of its two capacitors about 2 × (${p.CL} − 3) pF`,
     box: (p) => ({ HC49S: [11, 4.5, 3.5], '3225': [3.2, 2.5, 0.8], '5032': [5, 3.2, 1], tuningfork: [2, 2, 6] } as Record<string, [number, number, number]>)[s(p, 'pkg')]!, g: (p) => (p.pkg === 'HC49S' ? 0.4 : 0.05),
   },
   {
     id: 'pot', look: 'can', name: 'potentiometer', path: 'Electrical/Passive components/Potentiometers', says: 'a resistive track with a wiper turned or slid along it: a voltage divider you set by hand', std: 'the values and tapers sold (A logarithmic, B linear)',
     axes: [bare('style', 'style', ['rotary9', 'rotary16', 'rotary24', 'slide', 'trimmer']), unit('R', 'resistance', 'ohm', [100, 500, 1e3, 2e3, 5e3, 1e4, 2e4, 5e4, 1e5, 2.5e5, 5e5, 1e6]), bare('taper', 'taper', (p) => (p.style === 'trimmer' ? ['B'] : ['B', 'A']))],
-    title: (p) => `${si(n(p, 'R'))}Ω ${p.taper === 'A' ? 'log' : 'linear'} ${({ rotary9: '9 mm rotary', rotary16: '16 mm rotary', rotary24: '24 mm rotary', slide: 'slide', trimmer: 'multi-turn trimmer (3296)' } as Record<string, string>)[s(p, 'style')]} potentiometer`, of: () => 'phenolic graphite brass steel-low', make: 'assemble', how: 'a carbon (or cermet) track on a board, a sprung wiper on a shaft, a metal case',
+    title: (p) => `${si(n(p, 'R'))}Ω ${p.taper === 'A' ? 'log' : 'linear'} ${({ rotary9: '9 mm rotary', rotary16: '16 mm rotary', rotary24: '24 mm rotary', slide: 'slide', trimmer: 'multi-turn trimmer (3296)' } as Record<string, string>)[s(p, 'style')]} potentiometer`, of: () => 'pot-track pot-wiper pot-shaft pot-cover pot-terminal*3', make: 'assemble', how: 'a carbon (or cermet) track on a board, a sprung wiper on a shaft, a metal case',
     spec: (p) => `${si(n(p, 'R'))}Ω ±20 %; ${p.taper === 'A' ? 'A (log): for volume' : 'B (linear)'}; about ${p.style === 'rotary24' ? 0.5 : p.style === 'trimmer' ? 0.5 : 0.1} W`, box: (p) => ({ rotary9: [10, 11, 20], rotary16: [17, 18, 25], rotary24: [24, 26, 30], slide: [9, 60, 15], trimmer: [9.5, 4.8, 10] } as Record<string, [number, number, number]>)[s(p, 'style')]!, g: (p) => ({ rotary9: 2, rotary16: 6, rotary24: 15, slide: 8, trimmer: 1 } as Record<string, number>)[s(p, 'style')]!,
   },
   {
     id: 'diode', look: 'rod', name: 'diode', path: 'Electrical/Discrete semiconductors/Diodes', says: 'a one-way valve for current', std: 'the common part numbers, with their datasheet ratings',
     axes: [bare('part', 'part number', Object.keys(DIODES))],
-    title: (p) => { const [k, V, A] = DIODES[s(p, 'part')]!; return `${p.part} ${k} diode, ${V} V ${A} A`; }, of: (p) => `silicon ${DIODES[s(p, 'part')]![4].startsWith('DO') ? 'glass copper tin' : 'mould-compound copper tin'}`, make: 'assemble', how: 'a doped silicon die between two leads, in glass or moulded epoxy',
+    title: (p) => { const [k, V, A] = DIODES[s(p, 'part')]!; return `${p.part} ${k} diode, ${V} V ${A} A`; }, of: () => 'si-die lead-wire*2 epoxy-body', make: 'assemble', how: 'a doped silicon die between two leads, in glass or moulded epoxy',
     spec: (p) => { const [k, V, A, Vf, pkg] = DIODES[s(p, 'part')]!; return `${k}; ${V} V reverse, ${A} A forward, about ${Vf} V dropped at ${A} A (so ${(Vf * A).toFixed(2)} W as heat); ${pkg}`; },
     box: (p) => ({ 'DO-41': [2.7, 2.7, 5.2], 'DO-201': [5.3, 5.3, 9.5], 'DO-35': [1.9, 1.9, 4], SMA: [4.3, 2.6, 2.1], 'SOT-23': [2.9, 1.3, 1] } as Record<string, [number, number, number]>)[DIODES[s(p, 'part')]![4]]!, g: (p) => ({ 'DO-41': 0.35, 'DO-201': 1.1, 'DO-35': 0.13, SMA: 0.06, 'SOT-23': 0.008 } as Record<string, number>)[DIODES[s(p, 'part')]![4]]!,
   },
   {
     id: 'zener', look: 'rod', name: 'Zener diode', path: 'Electrical/Discrete semiconductors/Diodes', says: 'a diode that conducts backwards at a set voltage: a simple voltage reference', std: 'E24 voltages 2.4–100 V (IEC 60063), 0.5 W, 1 W and 5 W',
     axes: [unit('Vz', 'Zener voltage', 'V', decades(E24, 2.4, 100)), unit('P', 'power', 'W', [0.5, 1, 5])],
-    title: (p) => `${p.Vz} V Zener diode, ${p.P} W`, of: () => 'silicon glass copper tin', make: 'assemble', how: 'a heavily doped silicon junction between two leads', spec: (p) => `${p.Vz} V ±5 %; at most ${((n(p, 'P') / n(p, 'Vz')) * 1000).toFixed(0)} mA through it (I = P/V); its series resistor (Vin − ${p.Vz}) / I`,
+    title: (p) => `${p.Vz} V Zener diode, ${p.P} W`, of: (p) => `si-die lead-wire*2 ${n(p, 'P') <= 0.5 ? 'glass-body' : 'epoxy-body'}`, make: 'assemble', how: 'a heavily doped silicon junction between two leads', spec: (p) => `${p.Vz} V ±5 %; at most ${((n(p, 'P') / n(p, 'Vz')) * 1000).toFixed(0)} mA through it (I = P/V); its series resistor (Vin − ${p.Vz}) / I`,
     box: (p) => (n(p, 'P') >= 5 ? [5.3, 5.3, 9.5] : n(p, 'P') >= 1 ? [2.7, 2.7, 5.2] : [1.9, 1.9, 4]), g: (p) => (n(p, 'P') >= 5 ? 1.1 : n(p, 'P') >= 1 ? 0.35 : 0.13),
   },
   {
@@ -182,7 +182,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'slabattery', name: 'sealed lead-acid battery', path: 'Electrical/Power/Batteries', says: 'lead plates in absorbed sulfuric acid, sealed: the battery of alarms, UPSs and ride-ons', std: 'the voltages and capacities sold; mass from about 35 Wh/kg (typical)',
     axes: [unit('V', 'voltage', 'V', [6, 12]), unit('Ah', 'capacity', 'Ah', (p) => (n(p, 'V') === 6 ? [1.2, 4.5, 7, 12] : [1.2, 2.3, 4.5, 7, 9, 12, 18, 26, 33, 40, 55, 75, 100]))],
-    title: (p) => `${p.V} V ${p.Ah} Ah sealed lead-acid battery`, of: () => 'lead pbo2 acid-electrolyte fibreglass abs', make: 'assemble', how: 'pasted lead grids with glass-mat separators soaked in acid, in an ABS case with a one-way valve',
+    title: (p) => `${p.V} V ${p.Ah} Ah sealed lead-acid battery`, of: (p) => `battery-case battery-lid battery-post*2 plate-positive*${(n(p, 'V') / 2) * Math.max(2, Math.round(n(p, 'Ah') / 4))} plate-negative*${(n(p, 'V') / 2) * (Math.max(2, Math.round(n(p, 'Ah') / 4)) + 1)} plate-separator*${(n(p, 'V') / 2) * Math.max(2, Math.round(n(p, 'Ah') / 4))} acid-electrolyte`, make: 'assemble', how: 'pasted lead grids with glass-mat separators soaked in acid, in an ABS case with a one-way valve',
     spec: (p) => `${p.V} V, ${p.Ah} Ah (${n(p, 'V') * n(p, 'Ah')} Wh at the 20-hour rate); float at ${(n(p, 'V') * 2.275).toFixed(2)} V`, box: (p) => { const v = ((n(p, 'V') * n(p, 'Ah')) / 0.08) * 1000; return [Math.cbrt(v) * 1.6, Math.cbrt(v) * 0.7, Math.cbrt(v)]; }, g: (p) => ((n(p, 'V') * n(p, 'Ah')) / 35) * 1000,
   },
   {
@@ -200,104 +200,104 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'pcbterminal', name: 'PCB terminal block', path: 'Electrical/Connectors/Terminal blocks', says: 'a row of screw or spring clamps soldered to a board, to take loose wires', std: 'the pitches and pole counts sold; current ratings typical',
     axes: [ax('p', 'pitch', 'mm', [2.54, 3.5, 3.81, 5, 5.08, 7.5]), ax('n', 'poles', '', range(2, 12, 1)), bare('clamp', 'clamp', ['screw', 'spring', 'plug'])],
-    title: (p) => `${p.n}-pole terminal block, ${p.p} mm, ${p.clamp === 'plug' ? 'pluggable' : p.clamp}`, of: (p) => `pbt brass*${p.n} steel-low*${p.n}`, make: 'assemble', how: 'brass clamps and steel screws (or springs) in a moulded PBT housing',
+    title: (p) => `${p.n}-pole terminal block, ${p.p} mm, ${p.clamp === 'plug' ? 'pluggable' : p.clamp}`, of: (p) => `terminal-housing terminal-clamp*${p.n} ${p.clamp === 'spring' ? 'terminal-spring' : 'terminal-screw'}*${p.n}`, make: 'assemble', how: 'brass clamps and steel screws (or springs) in a moulded PBT housing',
     spec: (p) => `${p.n} poles at ${p.p} mm; about ${({ 2.54: 6, 3.5: 8, 3.81: 8, 5: 16, 5.08: 16, 7.5: 24 } as Record<number, number>)[n(p, 'p')]} A, 300 V (typical)`, box: (p) => [n(p, 'n') * n(p, 'p'), n(p, 'p') * 1.6 + 2, n(p, 'p') * 2 + 4], g: (p) => n(p, 'n') * n(p, 'p') * 0.25,
   },
   {
     id: 'crimpterminal', look: 'rod', name: 'insulated crimp terminal', path: 'Electrical/Connectors/Crimp terminals', says: 'a tinned copper terminal with a coloured sleeve, crimped onto a wire\'s end', std: 'the colour bands (red 0.5–1.5, blue 1.5–2.5, yellow 4–6 mm²) and the studs and tabs sold',
     axes: [bare('type', 'type', ['ring', 'fork', 'spade', 'butt']), bare('band', 'wire band', ['red', 'blue', 'yellow']), bare('stud', 'stud or tab', (p) => (p.type === 'ring' || p.type === 'fork' ? ['M3', 'M4', 'M5', 'M6', 'M8', 'M10'] : p.type === 'spade' ? ['tab2.8', 'tab4.8', 'tab6.3'] : ['none']))],
-    title: (p) => `${p.band} ${p.type} terminal${p.stud === 'none' ? '' : `, ${String(p.stud).replace('tab', '').replace(/^(\d)/, '$1 mm tab').replace(/^M/, 'M')}`}`, of: () => 'copper tin pvc', make: 'stamp', how: 'stamped from copper strip, tin-plated, a PVC sleeve over its barrel',
+    title: (p) => `${p.band} ${p.type} terminal${p.stud === 'none' ? '' : `, ${String(p.stud).replace('tab', '').replace(/^(\d)/, '$1 mm tab').replace(/^M/, 'M')}`}`, of: () => 'terminal-barrel terminal-insulation', make: 'stamp', how: 'stamped from copper strip, tin-plated, a PVC sleeve over its barrel',
     spec: (p) => `for ${({ red: '0.5–1.5', blue: '1.5–2.5', yellow: '4–6' } as Record<string, string>)[s(p, 'band')]} mm² wire (${({ red: '22–16', blue: '16–14', yellow: '12–10' } as Record<string, string>)[s(p, 'band')]} AWG)`, box: (p) => [p.band === 'yellow' ? 9 : 7, 5, 22], g: (p) => (p.band === 'yellow' ? 1.6 : 0.8),
   },
   {
     id: 'ferrule', name: 'bootlace ferrule', path: 'Electrical/Connectors/Crimp terminals', says: 'a tinned copper tube with a plastic collar, crimped onto stranded wire so a terminal clamps it cleanly', std: 'DIN 46228-4 cross-sections, with its colour code',
     axes: [ax('cs', 'cross-section', 'mm²', Object.keys(FERRULE).map(Number)), unit('L', 'tube length', 'mm', (p) => (n(p, 'cs') <= 1.5 ? [8, 10] : n(p, 'cs') <= 6 ? [10, 12] : [12, 18]))],
-    title: (p) => `${p.cs} mm² ferrule (${FERRULE[n(p, 'cs')]}), ${p.L} mm`, of: () => 'copper tin pp', make: 'draw', how: 'a copper tube drawn and tin-plated, a polypropylene collar pressed on', spec: (p) => `${p.cs} mm², ${FERRULE[n(p, 'cs')]} (DIN 46228-4); ${p.L} mm into the terminal`,
+    title: (p) => `${p.cs} mm² ferrule (${FERRULE[n(p, 'cs')]}), ${p.L} mm`, of: () => 'ferrule-sleeve ferrule-collar', make: 'draw', how: 'a copper tube drawn and tin-plated, a polypropylene collar pressed on', spec: (p) => `${p.cs} mm², ${FERRULE[n(p, 'cs')]} (DIN 46228-4); ${p.L} mm into the terminal`,
     box: (p) => [Math.sqrt(n(p, 'cs')) * 1.6 + 2, Math.sqrt(n(p, 'cs')) * 1.6 + 2, n(p, 'L') + 6], g: (p) => 0.05 + n(p, 'cs') * 0.06,
   },
   {
     id: 'heatshrink', name: 'heat-shrink tubing', path: 'Electrical/Wire management/Heat shrink', says: 'polyolefin tubing that shrinks to half (or a third) its size when heated, to insulate a joint', std: 'the diameters and colours sold, any length cut to the centimetre',
     axes: [ax('d', 'diameter as supplied', 'mm', [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25, 30, 40, 50]), bare('ratio', 'shrink ratio', ['2to1', '3to1']), bare('colour', 'colour', ['black', 'red', 'blue', 'yellow', 'green', 'white', 'clear']), unit('L', 'length', 'm', [1, 5, 10], [0.01, 100, 0.01])],
-    title: (p) => `heat shrink ${p.d} mm ${p.ratio === '2to1' ? '2:1' : '3:1 glue-lined'}, ${p.colour}, ${p.L} m`, of: (p) => (p.ratio === '3to1' ? 'pe eva' : 'pe'), make: 'extrude', how: 'polyolefin extruded, cross-linked by radiation, expanded warm and cooled so it remembers its smaller size',
+    title: (p) => `heat shrink ${p.d} mm ${p.ratio === '2to1' ? '2:1' : '3:1 glue-lined'}, ${p.colour}, ${p.L} m`, of: (p) => (/glue|lined/.test(String(p.glue ?? p.lined ?? '')) || p.ratio === '3to1' ? 'shrink-tube adhesive-liner' : 'pe'), make: 'extrude', how: 'polyolefin extruded, cross-linked by radiation, expanded warm and cooled so it remembers its smaller size',
     spec: (p) => `${p.d} mm, to ${(n(p, 'd') / (p.ratio === '2to1' ? 2 : 3)).toFixed(2)} mm at about 90–120 °C${p.ratio === '3to1' ? '; its lining melts and seals' : ''}`, box: (p) => [n(p, 'd'), n(p, 'd'), Math.min(n(p, 'L') * 1000, 300)], g: (p) => gOf(ring(n(p, 'd'), n(p, 'd') - 0.5 - n(p, 'd') * 0.04, n(p, 'L') * 1000), 1),
   },
   {
     id: 'multicore', name: 'multicore control cable', path: 'Electrical/Wiring and connectors/Cable', says: 'insulated stranded cores twisted together under a PVC sheath', std: 'the core counts and sections sold, any length cut to the centimetre',
     axes: [ax('c', 'cores', '', [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 25]), unit('cs', 'core section', 'mm²', SECTIONS), bare('screen', 'screen', ['plain', 'screened']), unit('L', 'length', 'm', [1, 5, 10, 25, 50, 100], [0.01, 500, 0.01])],
-    title: (p) => `${p.c}-core ${p.cs} mm² ${p.screen === 'screened' ? 'screened ' : ''}cable, ${p.L} m`, of: (p) => `copper pvc${p.screen === 'screened' ? ' copper' : ''}`, make: 'extrude', how: 'fine copper strands bunched, insulated in PVC, the cores laid up and sheathed',
+    title: (p) => `${p.c}-core ${p.cs} mm² ${p.screen === 'screened' ? 'screened ' : ''}cable, ${p.L} m`, of: (p) => `insulated-conductor*${n(p, 'c')} cable-filler cable-jacket${p.screen === 'screened' ? ' cable-shield' : ''}`, make: 'extrude', how: 'fine copper strands bunched, insulated in PVC, the cores laid up and sheathed',
     spec: (p) => { const R = (1.7241e-8 * n(p, 'L')) / (n(p, 'cs') * 1e-6); return `each core ${R.toFixed(3)} Ω over ${p.L} m (IACS copper); outside about ${(Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6).toFixed(1)} mm (typical)`; },
     box: (p) => { const D = Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6; return [D, D, Math.min(n(p, 'L') * 1000, 400)]; }, g: (p) => { const D = Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6; return n(p, 'L') * (n(p, 'c') * n(p, 'cs') * 8.96 + cyl(D, 1) * 0.5 * 1.4); },
   },
   {
     id: 'mainscord', name: 'flexible mains cord', path: 'Electrical/Wiring and connectors/Cable', says: 'PVC (H05VV-F) or rubber (H07RN-F) flexible cord for mains appliances', std: 'the cores and sections sold, with the currents BS 7671 table 4F3A allows; any length to the centimetre',
     axes: [bare('type', 'type', ['H05VV-F', 'H07RN-F']), ax('c', 'cores', '', [2, 3, 4, 5]), unit('cs', 'core section', 'mm²', [0.75, 1, 1.5, 2.5, 4]), unit('L', 'length', 'm', [1, 5, 10, 25, 50], [0.01, 100, 0.01])],
-    title: (p) => `${p.type} ${p.c} × ${p.cs} mm² cord, ${p.L} m`, of: (p) => `copper ${p.type === 'H05VV-F' ? 'pvc' : 'rubber neoprene'}`, make: 'extrude', how: 'fine copper strands, each core insulated and coloured, sheathed in PVC (or in rubber and a tough neoprene)',
+    title: (p) => `${p.type} ${p.c} × ${p.cs} mm² cord, ${p.L} m`, of: (p) => `insulated-conductor*${n(p, 'c')} cable-jacket`, make: 'extrude', how: 'fine copper strands, each core insulated and coloured, sheathed in PVC (or in rubber and a tough neoprene)',
     spec: (p) => `up to ${CORD_A[n(p, 'cs')]} A (BS 7671 4F3A, two cores at 30 °C); ${p.type === 'H05VV-F' ? '300/500 V, indoors' : '450/750 V, outdoors and on sites'}`, box: (p) => [Math.sqrt(n(p, 'c')) * 3.2 + 2, Math.sqrt(n(p, 'c')) * 3.2 + 2, Math.min(n(p, 'L') * 1000, 400)], g: (p) => n(p, 'L') * (n(p, 'c') * n(p, 'cs') * 8.96 + 40),
   },
   {
     id: 'coax', name: 'coaxial cable', path: 'Electrical/Wiring and connectors/Cable', says: 'a centre conductor in a dielectric under a braided screen: radio and video', std: 'the RG and LMR types, with their impedances and sizes; any length to the centimetre',
     axes: [bare('type', 'type', Object.keys(COAX)), unit('L', 'length', 'm', [1, 5, 10, 25, 50, 100], [0.01, 500, 0.01])],
-    title: (p) => `${p.type} coax, ${p.L} m`, of: () => 'copper pe pvc al-foil', make: 'extrude', how: 'a copper centre in foamed or solid polyethylene, a copper braid (and foil), a PVC jacket', spec: (p) => { const [Z, D, d] = COAX[s(p, 'type')]!; return `${Z} Ω; ${D} mm outside, ${d} mm centre`; },
+    title: (p) => `${p.type} coax, ${p.L} m`, of: () => 'conductor-strand coax-dielectric foil-shield cable-shield cable-jacket', make: 'extrude', how: 'a copper centre in foamed or solid polyethylene, a copper braid (and foil), a PVC jacket', spec: (p) => { const [Z, D, d] = COAX[s(p, 'type')]!; return `${Z} Ω; ${D} mm outside, ${d} mm centre`; },
     box: (p) => [COAX[s(p, 'type')]![1], COAX[s(p, 'type')]![1], Math.min(n(p, 'L') * 1000, 400)], g: (p) => n(p, 'L') * COAX[s(p, 'type')]![1] ** 2 * 1.1,
   },
   {
     id: 'patchcord', name: 'Ethernet patch cord', path: 'Electrical/Wiring and connectors/Cable assemblies', says: 'four twisted pairs with an RJ45 plug at each end', std: 'categories 5e, 6 and 6A (ISO/IEC 11801), the lengths sold',
     axes: [bare('cat', 'category', ['cat5e', 'cat6', 'cat6a']), unit('L', 'length', 'm', [0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 30, 50]), bare('colour', 'colour', ['grey', 'blue', 'black', 'red', 'yellow', 'green'])],
-    title: (p) => `${String(p.cat).replace('cat', 'Cat ')} patch cord, ${p.L} m, ${p.colour}`, of: () => 'copper pe pvc pc', make: 'assemble', how: 'four twisted pairs of solid or stranded copper, sheathed, crimped into RJ45 plugs', spec: (p) => `${p.cat === 'cat5e' ? '1 Gbit/s, 100 MHz' : p.cat === 'cat6' ? '1 Gbit/s (10 to 55 m), 250 MHz' : '10 Gbit/s to 100 m, 500 MHz'}`,
+    title: (p) => `${String(p.cat).replace('cat', 'Cat ')} patch cord, ${p.L} m, ${p.colour}`, of: () => 'insulated-conductor*8 cable-jacket rj45-plug*2 boot*2', make: 'assemble', how: 'four twisted pairs of solid or stranded copper, sheathed, crimped into RJ45 plugs', spec: (p) => `${p.cat === 'cat5e' ? '1 Gbit/s, 100 MHz' : p.cat === 'cat6' ? '1 Gbit/s (10 to 55 m), 250 MHz' : '10 Gbit/s to 100 m, 500 MHz'}`,
     box: (p) => [6, 6, Math.min(n(p, 'L') * 1000, 400)], g: (p) => 10 + n(p, 'L') * 40,
   },
   {
     id: 'usbcable', name: 'USB cable', path: 'Electrical/Wiring and connectors/Cable assemblies', says: 'a USB lead with a plug at each end', std: 'the plug pairs and lengths sold',
     axes: [bare('ends', 'ends', ['A-B', 'A-microB', 'A-miniB', 'A-C', 'C-C']), unit('L', 'length', 'm', [0.25, 0.5, 1, 1.5, 2, 3])],
-    title: (p) => `USB ${String(p.ends).replace('-', ' to ')} cable, ${p.L} m`, of: () => 'copper pvc pc steel-low', make: 'assemble', how: 'two power and two data wires (more for USB 3) under a screen, moulded into plugs', spec: (p) => `${p.ends === 'C-C' ? 'USB 2.0 data, up to 3 A (60 W) at 20 V' : 'USB 2.0, 480 Mbit/s'}`,
+    title: (p) => `USB ${String(p.ends).replace('-', ' to ')} cable, ${p.L} m`, of: () => 'insulated-conductor*4 cable-shield cable-jacket usb-plug*2', make: 'assemble', how: 'two power and two data wires (more for USB 3) under a screen, moulded into plugs', spec: (p) => `${p.ends === 'C-C' ? 'USB 2.0 data, up to 3 A (60 W) at 20 V' : 'USB 2.0, 480 Mbit/s'}`,
     box: (p) => [12, 8, Math.min(n(p, 'L') * 1000, 400)], g: (p) => 12 + n(p, 'L') * 25,
   },
   {
     id: 'dcjack', name: 'DC barrel connector', path: 'Electrical/Connectors/Power connectors', says: 'the round plug or socket of low-voltage power', std: 'the barrel sizes in use (outside × pin, mm)',
     axes: [bare('size', 'size', ['5.5x2.1', '5.5x2.5', '3.5x1.35', '4.0x1.7', '2.5x0.7']), bare('form', 'form', ['plug', 'panel', 'pcb'])],
-    title: (p) => `DC ${p.form === 'plug' ? 'plug' : `${p.form} socket`} ${String(p.size).replace('x', ' × ')} mm`, of: () => 'brass nickel nylon', make: 'assemble', how: 'turned and nickel-plated brass contacts in a moulded body', spec: (p) => `${p.size} mm; centre positive by custom; about 3–5 A (typical)`,
+    title: (p) => `DC ${p.form === 'plug' ? 'plug' : `${p.form} socket`} ${String(p.size).replace('x', ' × ')} mm`, of: (p) => (p.form === 'plug' ? 'jack-sleeve contact-pin jack-insulator plug-handle' : 'insulator-insert contact-pin contact-spring*2 switch-terminal*3'), make: 'assemble', how: 'turned and nickel-plated brass contacts in a moulded body', spec: (p) => `${p.size} mm; centre positive by custom; about 3–5 A (typical)`,
     box: (p) => (p.form === 'plug' ? [9, 9, 30] : [9, 14, 11]), g: (p) => (p.form === 'plug' ? 3 : 2),
   },
   {
     id: 'powerconn', name: 'high-current DC connector', path: 'Electrical/Connectors/Power connectors', says: 'the gold-plated bullet connectors of battery packs, in a keyed housing', std: 'the XT, EC and Anderson types; continuous ratings from their makers (about)',
     axes: [bare('type', 'type', ['XT30', 'XT60', 'XT90', 'EC3', 'EC5', 'PP15', 'PP30', 'PP45']), bare('gender', 'gender', ['male', 'female', 'pair'])],
-    title: (p) => `${p.type} connector, ${p.gender}`, of: () => 'brass gold nylon', make: 'assemble', how: 'gold-plated brass contacts in a high-temperature nylon housing', spec: (p) => `about ${({ XT30: 15, XT60: 30, XT90: 40, EC3: 60, EC5: 120, PP15: 15, PP30: 30, PP45: 45 } as Record<string, number>)[s(p, 'type')]} A continuous (maker's rating)`,
+    title: (p) => `${p.type} connector, ${p.gender}`, of: (p) => `connector-housing plug-pin*${/90|45/.test(String(p.type)) ? 2 : 2}`, make: 'assemble', how: 'gold-plated brass contacts in a high-temperature nylon housing', spec: (p) => `about ${({ XT30: 15, XT60: 30, XT90: 40, EC3: 60, EC5: 120, PP15: 15, PP30: 30, PP45: 45 } as Record<string, number>)[s(p, 'type')]} A continuous (maker's rating)`,
     box: (p) => ({ XT30: [10, 5, 16], XT60: [16, 8, 16], XT90: [22, 11, 21], EC3: [16, 8, 20], EC5: [21, 10, 25], PP15: [8, 16, 24], PP30: [8, 16, 24], PP45: [8, 16, 24] } as Record<string, [number, number, number]>)[s(p, 'type')]!, g: (p) => (p.gender === 'pair' ? 2 : 1) * ({ XT30: 1, XT60: 2.5, XT90: 5, EC3: 2, EC5: 4, PP15: 4, PP30: 4, PP45: 4 } as Record<string, number>)[s(p, 'type')]!,
   },
   {
     id: 'dsub', name: 'D-subminiature connector', path: 'Electrical/Connectors/D-sub', says: 'the trapezoid-shelled connector of serial ports, VGA and old PCs', std: 'the shell sizes and pin counts (IEC 60807-3)',
     axes: [bare('type', 'type', ['DE9', 'DA15', 'DB25', 'DC37', 'DD50', 'DE15HD']), bare('gender', 'gender', ['male', 'female']), bare('term', 'termination', ['solder', 'pcb', 'idc'])],
-    title: (p) => `${p.type} ${p.gender}, ${p.term === 'pcb' ? 'PCB mount' : p.term === 'idc' ? 'ribbon (IDC)' : 'solder cup'}`, of: () => 'steel-low brass gold pbt', make: 'assemble', how: 'gold-flashed brass contacts in a PBT insert in a stamped steel shell', spec: (p) => `${({ DE9: 9, DA15: 15, DB25: 25, DC37: 37, DD50: 50, DE15HD: 15 } as Record<string, number>)[s(p, 'type')]} contacts; about 5 A each`,
+    title: (p) => `${p.type} ${p.gender}, ${p.term === 'pcb' ? 'PCB mount' : p.term === 'idc' ? 'ribbon (IDC)' : 'solder cup'}`, of: (p) => `connector-shell insulator-insert contact-pin*${({ DE9: 9, DA15: 15, DB25: 25, DC37: 37, DD50: 50, DE15HD: 15 } as Record<string, number>)[String(p.type)] ?? 9}`, make: 'assemble', how: 'gold-flashed brass contacts in a PBT insert in a stamped steel shell', spec: (p) => `${({ DE9: 9, DA15: 15, DB25: 25, DC37: 37, DD50: 50, DE15HD: 15 } as Record<string, number>)[s(p, 'type')]} contacts; about 5 A each`,
     box: (p) => [({ DE9: 31, DA15: 39, DB25: 53, DC37: 69, DD50: 67, DE15HD: 31 } as Record<string, number>)[s(p, 'type')]!, 12.5, 15], g: (p) => ({ DE9: 5, DA15: 7, DB25: 10, DC37: 14, DD50: 15, DE15HD: 6 } as Record<string, number>)[s(p, 'type')]!,
   },
   {
     id: 'sensorconn', name: 'M8/M12 sensor connector', path: 'Electrical/Connectors/Circular', says: 'the screw-locking round connector of industrial sensors, sealed to IP67', std: 'IEC 61076-2-101/104, A-coded, 3–8 poles',
     axes: [bare('thread', 'thread', ['M8', 'M12']), ax('n', 'poles', '', (p) => (p.thread === 'M8' ? [3, 4, 8] : [3, 4, 5, 8])), bare('gender', 'gender', ['male', 'female']), bare('form', 'form', ['cable', 'panel', 'fieldwire'])],
-    title: (p) => `${p.thread} ${p.n}-pole ${p.gender} ${p.form === 'cable' ? 'moulded cable, 2 m' : p.form === 'panel' ? 'panel socket' : 'field-wireable plug'}`, of: (p) => `brass gold pu nbr${p.form === 'cable' ? ' copper pvc' : ''}`, make: 'assemble', how: 'gold-plated contacts in a moulded insert, a knurled brass coupling nut, an O-ring seal', spec: (p) => `${p.n} poles, A-coded; IP67 mated; about ${p.thread === 'M8' ? 3 : 4} A`,
+    title: (p) => `${p.thread} ${p.n}-pole ${p.gender} ${p.form === 'cable' ? 'moulded cable, 2 m' : p.form === 'panel' ? 'panel socket' : 'field-wireable plug'}`, of: (p) => `connector-contact*${n(p, 'n')} connector-overmould coupling-nut seal-ring${p.form === 'cable' ? ` insulated-conductor*${n(p, 'n')} cable-jacket` : ''}`, make: 'assemble', how: 'gold-plated contacts in a moulded insert, a knurled brass coupling nut, an O-ring seal', spec: (p) => `${p.n} poles, A-coded; IP67 mated; about ${p.thread === 'M8' ? 3 : 4} A`,
     box: (p) => (p.thread === 'M8' ? [10, 10, 35] : [15, 15, 45]), g: (p) => (p.form === 'cable' ? 90 : p.thread === 'M8' ? 6 : 15),
   },
   {
     id: 'toggleswitch', name: 'toggle switch', path: 'Electrical/Switches/Toggle switches', says: 'a lever switch that snaps between positions', std: 'the poles, actions and sizes sold; ratings typical',
     axes: [bare('poles', 'poles', ['SPST', 'SPDT', 'DPDT']), bare('action', 'action', (p) => (p.poles === 'SPST' ? ['on-off', 'mom-off'] : ['on-on', 'on-off-on', 'mom-off-mom'])), bare('size', 'size', ['mini', 'standard'])],
-    title: (p) => `${p.size} toggle switch ${p.poles} ${String(p.action).replace(/mom/g, '(on)')}`, of: () => 'brass silver phenolic steel-low', make: 'assemble', how: 'a sprung lever rocking silver-plated contacts in a phenolic base, a threaded brass bushing', spec: (p) => `${p.size === 'mini' ? '6 mm bushing; about 6 A at 125 V AC' : '12 mm bushing; about 15 A at 250 V AC'} (typical)`,
+    title: (p) => `${p.size} toggle switch ${p.poles} ${String(p.action).replace(/mom/g, '(on)')}`, of: (p) => `switch-housing toggle-lever return-spring contact-spring*${p.poles === 'DPDT' ? 2 : 1} contact-silver*${p.poles === 'DPDT' ? 6 : p.poles === 'SPDT' ? 3 : 2} switch-terminal*${p.poles === 'DPDT' ? 6 : p.poles === 'SPDT' ? 3 : 2}`, make: 'assemble', how: 'a sprung lever rocking silver-plated contacts in a phenolic base, a threaded brass bushing', spec: (p) => `${p.size === 'mini' ? '6 mm bushing; about 6 A at 125 V AC' : '12 mm bushing; about 15 A at 250 V AC'} (typical)`,
     box: (p) => (p.size === 'mini' ? [8, 13, 30] : [15, 20, 45]), g: (p) => (p.size === 'mini' ? 7 : 25),
   },
   {
     id: 'rockerswitch', name: 'rocker switch', path: 'Electrical/Switches/Rocker switches', says: 'a see-saw switch that snaps into a panel cut-out', std: 'the poles and sizes sold; ratings typical',
     axes: [bare('poles', 'poles', ['SPST', 'DPST', 'SPDT']), bare('lamp', 'lit', ['plain', 'lit']), bare('size', 'size', ['small', 'large'])],
-    title: (p) => `${p.size} ${p.lamp === 'lit' ? 'lit ' : ''}rocker switch ${p.poles}`, of: (p) => `nylon silver brass${p.lamp === 'lit' ? ' gan' : ''}`, make: 'assemble', how: 'a rocker over a sprung contact in a snap-in nylon housing', spec: (p) => `cut-out ${p.size === 'small' ? '19 × 13' : '29 × 22'} mm; ${p.size === 'small' ? '6' : '16'} A at 250 V AC (typical)`,
+    title: (p) => `${p.size} ${p.lamp === 'lit' ? 'lit ' : ''}rocker switch ${p.poles}`, of: (p) => `switch-housing switch-actuator return-spring contact-spring*${p.poles === 'SPST' ? 1 : 2} contact-silver*${p.poles === 'SPDT' ? 3 : 2 * (p.poles === 'DPST' ? 2 : 1)} switch-terminal*${p.poles === 'SPDT' ? 3 : p.poles === 'DPST' ? 4 : 2}${p.lamp === 'lit' ? ' led-5mm' : ''}`, make: 'assemble', how: 'a rocker over a sprung contact in a snap-in nylon housing', spec: (p) => `cut-out ${p.size === 'small' ? '19 × 13' : '29 × 22'} mm; ${p.size === 'small' ? '6' : '16'} A at 250 V AC (typical)`,
     box: (p) => (p.size === 'small' ? [21, 15, 20] : [31, 25, 28]), g: (p) => (p.size === 'small' ? 3 : 8),
   },
   {
     id: 'tactswitch', name: 'tactile push switch', path: 'Electrical/Switches/Push buttons', says: 'the little clicking button on boards: a metal dome that snaps when pressed', std: 'the sizes, heights and forces sold',
     axes: [bare('size', 'size', ['6x6', '12x12', '3x6']), ax('h', 'height', 'mm', (p) => (p.size === '6x6' ? [4.3, 5, 7, 9.5, 13] : p.size === '12x12' ? [4.3, 7.3, 12] : [2.5, 4.3])), unit('F', 'operating force', 'gf', [160, 260])],
-    title: (p) => `tactile switch ${String(p.size).replace('x', ' × ')} × ${p.h} mm, ${p.F} gf`, of: () => 'nylon stainless-304 phosphor-bronze silver', make: 'assemble', how: 'a stainless snap dome over silver contacts in a nylon base, a plunger on top', spec: (p) => `${p.F} gf to click (${((n(p, 'F') / 1000) * 9.81).toFixed(2)} N); 50 mA at 12 V`,
+    title: (p) => `tactile switch ${String(p.size).replace('x', ' × ')} × ${p.h} mm, ${p.F} gf`, of: () => 'switch-housing snap-dome switch-actuator switch-terminal*4', make: 'assemble', how: 'a stainless snap dome over silver contacts in a nylon base, a plunger on top', spec: (p) => `${p.F} gf to click (${((n(p, 'F') / 1000) * 9.81).toFixed(2)} N); 50 mA at 12 V`,
     box: (p) => { const [a, b] = String(p.size).split('x').map(Number) as [number, number]; return [a, b, n(p, 'h')]; }, g: () => 0.3,
   },
   {
     id: 'snapswitch', name: 'snap-action micro switch', path: 'Electrical/Switches/Micro switches', says: 'a switch that snaps over at a fixed point of a short travel: limit switches, doors, endstops', std: 'the subminiature, miniature and standard bodies; ratings typical',
     axes: [bare('size', 'body', ['subminiature', 'miniature', 'standard']), bare('lever', 'actuator', ['plunger', 'lever', 'roller'])],
-    title: (p) => `${p.size} micro switch, ${p.lever}`, of: () => 'pbt phosphor-bronze silver brass steel-low', make: 'assemble', how: 'a phosphor-bronze spring that snaps a silver contact between two others, in a PBT body', spec: (p) => `${p.size === 'subminiature' ? '20 × 10 mm; 3 A' : p.size === 'miniature' ? '28 × 16 mm; 5 A' : '49 × 17 mm; 15 A'} at 250 V AC (typical); changeover`,
+    title: (p) => `${p.size} micro switch, ${p.lever}`, of: () => 'switch-housing switch-actuator contact-spring contact-silver*3 switch-terminal*3', make: 'assemble', how: 'a phosphor-bronze spring that snaps a silver contact between two others, in a PBT body', spec: (p) => `${p.size === 'subminiature' ? '20 × 10 mm; 3 A' : p.size === 'miniature' ? '28 × 16 mm; 5 A' : '49 × 17 mm; 15 A'} at 250 V AC (typical); changeover`,
     box: (p) => (p.size === 'subminiature' ? [20, 6.5, 10] : p.size === 'miniature' ? [28, 10, 16] : [49, 18, 17]), g: (p) => (p.size === 'subminiature' ? 2 : p.size === 'miniature' ? 5 : 15),
   },
   {
@@ -309,13 +309,13 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'thermocouple', name: 'thermocouple probe', path: 'Electrical/Sensors/Temperature', says: 'two different metals welded at a tip: their junction makes a voltage that grows with heat', std: 'IEC 60584 types; class 2 ranges',
     axes: [bare('type', 'type', Object.keys(TC)), bare('form', 'form', ['bead', 'sheath3', 'sheath6']), unit('L', 'probe length', 'mm', [100, 150, 200, 300, 500])],
-    title: (p) => `type ${p.type} thermocouple, ${p.form === 'bead' ? 'bare bead' : `${String(p.form).replace('sheath', '')} mm sheathed`}, ${p.L} mm`, of: (p) => `${TC[s(p, 'type')]![0]} ${TC[s(p, 'type')]![1]} ${p.form === 'bead' ? 'glass' : 'nickel-alloy mgo'}`, make: 'assemble', how: (p) => (p.form === 'bead' ? 'two alloy wires welded at a bead, insulated with glass braid' : 'two alloy wires in packed magnesia inside an Inconel sheath, welded closed at its tip'),
+    title: (p) => `type ${p.type} thermocouple, ${p.form === 'bead' ? 'bare bead' : `${String(p.form).replace('sheath', '')} mm sheathed`}, ${p.L} mm`, of: (p) => `thermoelement-${TC[s(p, 'type')]![0]} thermoelement-${TC[s(p, 'type')]![1]} ${p.form === 'bead' ? 'tc-sleeving*3' : 'tc-sheath mgo'}`, make: 'assemble', how: (p) => (p.form === 'bead' ? 'two alloy wires welded at a bead, insulated with glass braid' : 'two alloy wires in packed magnesia inside an Inconel sheath, welded closed at its tip'),
     spec: (p) => { const [, , lo, hi, sb] = TC[s(p, 'type')]!; return `${lo} to ${hi} °C (class 2, IEC 60584-2); about ${sb} µV/K near room temperature`; }, box: (p) => [p.form === 'sheath6' ? 6 : 3, p.form === 'sheath6' ? 6 : 3, n(p, 'L')], g: (p) => gOf(cyl(p.form === 'sheath6' ? 6 : 3, n(p, 'L')), 6),
   },
   {
     id: 'rtd', name: 'platinum resistance thermometer', path: 'Electrical/Sensors/Temperature', says: 'a platinum resistor whose resistance rises steadily with heat', std: 'IEC 60751: Pt100 and Pt1000, classes AA, A and B',
     axes: [bare('type', 'element', ['Pt100', 'Pt1000']), bare('cls', 'class', ['AA', 'A', 'B']), bare('form', 'form', ['film', 'probe4', 'probe6'])],
-    title: (p) => `${p.type} class ${p.cls} ${p.form === 'film' ? 'thin-film element' : `${String(p.form).replace('probe', '')} mm probe`}`, of: (p) => `platinum alumina glass${p.form === 'film' ? '' : ' stainless-304 mgo copper ptfe'}`, make: 'assemble', how: 'a platinum film laser-trimmed on an alumina chip and glazed (in a probe, sealed in a stainless tube)',
+    title: (p) => `${p.type} class ${p.cls} ${p.form === 'film' ? 'thin-film element' : `${String(p.form).replace('probe', '')} mm probe`}`, of: () => 'chip-substrate platinum-film overglaze lead-wire*2', make: 'assemble', how: 'a platinum film laser-trimmed on an alumina chip and glazed (in a probe, sealed in a stainless tube)',
     spec: (p) => { const R0 = p.type === 'Pt100' ? 100 : 1000, tol = ({ AA: [0.1, 0.0017], A: [0.15, 0.002], B: [0.3, 0.005] } as Record<string, [number, number]>)[s(p, 'cls')]!; return `R(t) = ${R0}(1 + 3.9083e-3 t − 5.775e-7 t²) Ω above 0 °C; ${(R0 * (1 + 3.9083e-3 * 100 - 5.775e-7 * 1e4)).toFixed(2)} Ω at 100 °C; ±(${tol[0]} + ${tol[1]}|t|) °C`; },
     box: (p) => (p.form === 'film' ? [2, 2.3, 0.8] : [p.form === 'probe6' ? 6 : 4, p.form === 'probe6' ? 6 : 4, 100]), g: (p) => (p.form === 'film' ? 0.02 : 25),
   },
@@ -334,7 +334,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'pressuregauge', look: 'can', name: 'dial pressure gauge', path: 'Fluid/Instruments/Gauges', says: 'a Bourdon tube that straightens under pressure and turns a needle', std: 'EN 837-1 dials, ranges and accuracy classes',
     axes: [unit('dial', 'dial', 'mm', [40, 50, 63, 100]), unit('bar', 'range', 'bar', [1, 1.6, 2.5, 4, 6, 10, 16, 25, 40, 60, 100, 160, 250, 400]), bare('port', 'port', (p) => (n(p, 'dial') <= 50 ? ['G1/8', 'G1/4'] : n(p, 'dial') === 63 ? ['G1/4'] : ['G1/2']))],
-    title: (p) => `${p.dial} mm pressure gauge 0–${p.bar} bar, ${p.port}`, of: () => 'brass phosphor-bronze steel-low pc', make: 'assemble', how: 'a curled phosphor-bronze Bourdon tube, a gear segment and pinion turning the needle over a printed dial',
+    title: (p) => `${p.dial} mm pressure gauge 0–${p.bar} bar, ${p.port}`, of: () => 'bourdon-tube gauge-movement gauge-dial gauge-case gauge-window gauge-socket', make: 'assemble', how: 'a curled phosphor-bronze Bourdon tube, a gear segment and pinion turning the needle over a printed dial',
     spec: (p) => `0–${p.bar} bar; class ${n(p, 'dial') >= 100 ? 1 : n(p, 'dial') >= 63 ? 1.6 : 2.5} (±${n(p, 'dial') >= 100 ? 1 : n(p, 'dial') >= 63 ? 1.6 : 2.5} % of span, EN 837-1)`, box: (p) => [n(p, 'dial') + 4, n(p, 'dial') * 0.5 + 15, n(p, 'dial') + 20], g: (p) => n(p, 'dial') ** 2 * 0.035,
   },
   {
@@ -358,7 +358,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'laserdiode', name: 'laser diode', path: 'Electrical/Optoelectronics/Laser diodes', says: 'a semiconductor laser in a small can', std: 'the wavelengths and powers sold; laser class by IEC 60825-1',
     axes: [unit('nm', 'wavelength', 'nm', [405, 450, 520, 638, 650, 780, 808, 980]), unit('mW', 'power', 'mW', (p) => [5, 50, 100, 200, 500, 1000, 2000, 5000].filter((w) => w <= ({ 405: 1000, 450: 5000, 520: 1000, 638: 500, 650: 200, 780: 200, 808: 5000, 980: 5000 } as Record<number, number>)[n(p, 'nm')]!))],
-    title: (p) => `${p.nm} nm laser diode, ${n(p, 'mW') >= 1000 ? `${n(p, 'mW') / 1000} W` : `${p.mW} mW`}`, of: () => 'gan copper steel-low glass gold', make: 'assemble', how: 'a cleaved semiconductor chip on a copper heat-sink in a windowed can',
+    title: (p) => `${p.nm} nm laser diode, ${n(p, 'mW') >= 1000 ? `${n(p, 'mW') / 1000} W` : `${p.mW} mW`}`, of: () => 'laser-chip submount to-header to-cap monitor-photodiode', make: 'assemble', how: 'a cleaved semiconductor chip on a copper heat-sink in a windowed can',
     spec: (p) => { const E = (6.626e-34 * 2.998e8) / (n(p, 'nm') * 1e-9), mw = n(p, 'mW'); return `each photon ${(E / 1.602e-19).toFixed(2)} eV (E = hc/λ); class ${mw <= 5 ? '3R' : mw <= 500 ? '3B' : '4'} (IEC 60825-1): ${mw <= 5 ? 'never look into it' : 'eye damage from any reflection: goggles for its wavelength'}`; },
     box: (p) => (n(p, 'mW') <= 200 ? [5.6, 5.6, 6] : [9, 9, 7]), g: (p) => (n(p, 'mW') <= 200 ? 0.4 : 1.5),
   },
@@ -372,7 +372,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'mirror', name: 'flat mirror', path: 'Optics/Mirrors/Flat', says: 'a polished glass flat with a reflecting coat on its front', std: 'the diameters sold; reflectances typical for each coat',
     axes: [ax('d', 'diameter', 'mm', [12.7, 25.4, 50.8]), bare('coat', 'coating', ['aluminium', 'silver', 'gold', 'dielectric'])],
-    title: (p) => `${p.d} mm ${p.coat} mirror`, of: (p) => `bk7 ${p.coat === 'aluminium' ? 'al-foil' : p.coat === 'dielectric' ? 'quartz' : p.coat} mgo`, make: 'coat', how: 'glass polished flat to a quarter-wave, coated in a vacuum, a protective layer over it', spec: (p) => `reflects about ${({ aluminium: 90, silver: 97, gold: 98, dielectric: 99.5 } as Record<string, number>)[s(p, 'coat')]} % ${p.coat === 'gold' ? 'of infrared' : p.coat === 'dielectric' ? 'over its design band' : 'of visible light'} (typical)`,
+    title: (p) => `${p.d} mm ${p.coat} mirror`, of: () => 'mirror-substrate mirror-coating', make: 'coat', how: 'glass polished flat to a quarter-wave, coated in a vacuum, a protective layer over it', spec: (p) => `reflects about ${({ aluminium: 90, silver: 97, gold: 98, dielectric: 99.5 } as Record<string, number>)[s(p, 'coat')]} % ${p.coat === 'gold' ? 'of infrared' : p.coat === 'dielectric' ? 'over its design band' : 'of visible light'} (typical)`,
     box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 'd') / 4], g: (p) => gOf(cyl(n(p, 'd'), n(p, 'd') / 4), 2.51),
   },
 ];

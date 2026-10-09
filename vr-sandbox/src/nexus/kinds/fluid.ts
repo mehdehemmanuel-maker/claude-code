@@ -54,7 +54,7 @@ export const FLUID: KindDef[] = [
   {
     id: 'hoseclamp', name: 'worm-drive hose clamp', path: 'Fluid/Fittings/Hose clamps', says: 'a slotted band tightened round a hose by a worm screw', std: 'DIN 3017 ranges; W1 zinc steel, W2 stainless band, W4 all stainless',
     axes: [bare('range', 'clamping range', CLAMP), bare('grade', 'grade', ['W1', 'W2', 'W4'])],
-    title: (p) => `hose clamp ${String(p.range).replace('-', '–')} mm, ${p.grade}`, of: (p) => (p.grade === 'W1' ? 'steel-low zinc' : p.grade === 'W2' ? 'stainless-304 steel-low zinc' : 'stainless-304'), make: 'stamp', how: 'a band stamped with slots, rolled, its worm screw in a housing riveted on',
+    title: (p) => `hose clamp ${String(p.range).replace('-', '–')} mm, ${p.grade}`, of: () => 'clamp-band clamp-housing worm-screw', make: 'stamp', how: 'a band stamped with slots, rolled, its worm screw in a housing riveted on',
     spec: (p) => { const hi = Number(String(p.range).split('-')[1]); return `${String(p.range).replace('-', '–')} mm; band ${hi <= 16 ? 9 : 12} mm (DIN 3017)`; }, box: (p) => { const hi = Number(String(p.range).split('-')[1]); return [hi + 12, hi + 4, hi <= 16 ? 9 : 12]; }, g: (p) => { const hi = Number(String(p.range).split('-')[1]); return gOf(Math.PI * hi * (hi <= 16 ? 9 : 12) * 0.6, 7.9) + 3; },
   },
   {
@@ -66,13 +66,13 @@ export const FLUID: KindDef[] = [
   {
     id: 'checkvalve', name: 'check valve', path: 'Fluid/Valves/Check valves', says: 'a one-way valve: flow pushes it open, back-flow shuts it', std: 'ISO 228-1 threads',
     axes: [bare('size', 'thread', Object.keys(BSP)), bare('matter', 'body', ['brass', 'stainless']), bare('style', 'style', ['spring', 'swing'])],
-    title: (p) => `${p.size} ${p.style} check valve, ${madeOf(p)[2]}`, of: (p) => { const g = G(p), D = Math.min(80, Math.max(2, Math.round(g * 5) / 10)), w = Math.max(0.3, Math.round(D) / 10); return p.style === 'spring' ? `${madeOf(p)[0]} {spring d${w} D${D} L${Math.max(5, Math.round(g))} n6} nbr` : `${madeOf(p)[0]} nbr`; }, make: 'assemble', how: (p) => (p.style === 'spring' ? 'a poppet held on its seat by a light spring' : 'a hinged flap that the flow swings open'), spec: (p) => `${p.size}; opens at about ${p.style === 'spring' ? '0.02–0.05' : '0.01'} bar (typical)`,
+    title: (p) => `${p.size} ${p.style} check valve, ${madeOf(p)[2]}`, of: (p) => (p.style === 'swing' ? 'valve-body valve-disc valve-seat-seal valve-cap' : 'valve-body valve-disc valve-seat-seal return-spring'), make: 'assemble', how: (p) => (p.style === 'spring' ? 'a poppet held on its seat by a light spring' : 'a hinged flap that the flow swings open'), spec: (p) => `${p.size}; opens at about ${p.style === 'spring' ? '0.02–0.05' : '0.01'} bar (typical)`,
     box: (p) => [G(p) * 1.6, G(p) * 1.6, G(p) * 3], g: (p) => gOf(G(p) ** 3 * 3, madeOf(p)[1]),
   },
   {
     id: 'needlevalve', name: 'needle valve', path: 'Fluid/Valves/Needle valves', says: 'a fine-pointed stem screwed into a seat, to set a small flow exactly', std: 'ISO 228-1 threads, small sizes',
     axes: [bare('size', 'thread', ['G1/8', 'G1/4', 'G3/8', 'G1/2']), bare('matter', 'body', ['brass', 'stainless'])],
-    title: (p) => `${p.size} needle valve, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} ptfe`, make: 'machine', how: 'a machined body and a tapered needle on a fine thread, packed with PTFE', spec: (p) => `${p.size}; many turns from shut to open, for fine control`, box: (p) => [G(p) * 1.8, G(p) * 1.8, G(p) * 5], g: (p) => gOf(G(p) ** 3 * 3.5, madeOf(p)[1]),
+    title: (p) => `${p.size} needle valve, ${madeOf(p)[2]}`, of: () => 'valve-body valve-needle packing', make: 'machine', how: 'a machined body and a tapered needle on a fine thread, packed with PTFE', spec: (p) => `${p.size}; many turns from shut to open, for fine control`, box: (p) => [G(p) * 1.8, G(p) * 1.8, G(p) * 5], g: (p) => gOf(G(p) ** 3 * 3.5, madeOf(p)[1]),
   },
   {
     id: 'solenoidvalve', name: 'solenoid valve', path: 'Fluid/Valves/Solenoid valves', says: 'a valve opened and shut by an electromagnet pulling a plunger', std: 'ISO 228-1 threads; the coil voltages sold',
@@ -96,7 +96,7 @@ export const FLUID: KindDef[] = [
   {
     id: 'shaftseal', name: 'rotary shaft seal', path: 'Mechanical/Seals/Shaft seals', says: 'a rubber lip, held on a turning shaft by a garter spring, in a steel-cased ring pressed into the bore', std: 'DIN 3760 sizes; type A (one lip) and AS (with a dust lip)',
     axes: [bare('size', 'shaft × bore × width', LIP), bare('type', 'type', ['A', 'AS']), bare('matter', 'rubber', ['nbr', 'fkm'])],
-    title: (p) => `shaft seal ${String(p.size).replace(/x/g, ' × ')}, ${p.type}, ${p.matter.toString().toUpperCase()}`, of: (p) => `${madeOf(p)[0]} steel-low steel-spring`, make: 'mould', how: 'rubber moulded onto a stamped steel case, its lip trimmed sharp, a garter spring fitted',
+    title: (p) => `shaft seal ${String(p.size).replace(/x/g, ' × ')}, ${p.type}, ${p.matter.toString().toUpperCase()}`, of: () => 'seal-case seal-lip garter-spring', make: 'mould', how: 'rubber moulded onto a stamped steel case, its lip trimmed sharp, a garter spring fitted',
     spec: (p) => `${p.size} mm (DIN 3760 ${p.type}); ${p.matter === 'nbr' ? '−40 to 100 °C' : '−20 to 200 °C'}`, box: (p) => { const [, D, b] = String(p.size).split('x').map(Number) as [number, number, number]; return [D, D, b]; }, g: (p) => { const [d, D, b] = String(p.size).split('x').map(Number) as [number, number, number]; return gOf(ring(D, d, b) * 0.5, 4); },
   },
   {
