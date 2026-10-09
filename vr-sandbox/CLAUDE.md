@@ -118,7 +118,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A hole drilled in any part, any way (`Part.cuts`: round, or n-sided, a hex socket): cut from what is drawn (three-bvh-csg, each shape drilled once), its volume out of the mass | `src/nexus/kits.ts` (`Cut`), `src/nexus/view/kit3d.ts` (`drill`), `src/nexus/mass.ts` |
 | A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
-| How a picture is lit: a part alone in a bright room (a light table, so metal reads as metal, exposed as for a grey card so a colour reads as itself), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it | `src/nexus/view/look.ts` |
+| How a picture is lit: a part alone in a bright room (a light table, so metal reads as metal, exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue: a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
@@ -284,15 +284,25 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   `--silk` to leave the ink out, `--keep` a picture of where it looked, `--tins` the lone ends it saw. `silk`: the
   silkscreen (pale grey ink, saturation under 45 and value over 215, a tin end's solid blob dropped) as a bilevel PNG
   with `--ts`, and the ink's colour. `traces`: the copper under the mask, its mask's hue read off the board, and the
-  bare mask's and copper's colours printed. The camera is recovered from each calibration (its focal length from the
-  homography): `at PX,PY@H` reads a point on a top H mm up, and every part hides what its solids' corners, each at its
-  own height (the boardmap's `pts`), cover when seen along the camera's rays. `colour`: the same places in a photo and
-  a render of the drawing (a render is calibrated like any photo, by its holes), and the colour to draw it to match.
+  bare mask's and copper's colours printed. The camera is recovered from each calibration as a rigid pose (solvePnP),
+  its lens from the homography or, given `calibrate --tall PX,PY=X,Z,Y` (points of known height: a pin's tip, a jack's
+  top corner), the lens that puts them where they are seen; with three holes and such points the plane itself comes
+  from the camera they fit (a fourth hole hidden), and a point given as `=X,Z!` is not pulled onto a pad: `at PX,PY@H`
+  reads a point on a top H mm up, and every part hides what its solids' corners, each at its own height (the
+  boardmap's `pts`), cover when seen along the camera's rays. `camera`: that camera as the look page's query (`cam`,
+  `aim`, `up`, `fov`; render at the photo's size with `LOOK_W`/`LOOK_H`, `--top` the look page's `lift`), so the
+  drawing is rendered as the photo saw it, with a calibration for the render: then `same` on the photo and the render
+  sets every part beside itself, and `colour` (`X,Z@Y` a place Y mm up) reads the same places in both and the colour
+  to draw to match. A feature on a part's face (a spring lanced in a shell, a seam) is measured by casting its pixel's
+  ray onto that face's plane.
 - `step.py`: a maker's STEP model read with gmsh: `boxes` (every solid's box on the board's drawing frame, top or under)
   and `check` (each drawn part against the solid it should be, coverage both ways).
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
-  `ortho=1` for a view to set beside a photo, `exposure=` to try the light); `npm run boardmap -- <id> <out.json>`
-  writes a board's drawn outlines for `photo.py overlay`.
+  `ortho=1` for a view to set beside a photo, `exposure=`, `env=`, `sun=`, `tone=aces` to try the light; it prints the
+  part's `lift`); `npm run boardmap -- <id> <out.json>` writes a board's drawn outlines for `photo.py overlay`.
+- `tools/forge-look.mjs`: the forge room as the user stands in it, what is asked stood before you as "3d <words>" does
+  (`"name|words|key=…&sky=…&env=…&lamp=…"` to try its light): a part judged in the room it is seen in, not only on
+  the look page's bench.
 - `views.py`: every photo on one sheet; one photo in full-size tiles to scan; a zoom; `find`: a part boxed in one photo
   found in the others by its features (says "not found" rather than guess when the views differ too much: then
   calibrate each photo by four points of the same plane and use `photo.py same`).
@@ -318,9 +328,17 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    footprints have them (mouths lined, insulator blocks, tails and legs through the board, soldered); its silkscreen,
    copper, mask colour, chip markings (BCM2712's lid measured at its height: 16.4 mm, pressed with a band), a crystal
    the model leaves out and 18 small parts from Raspberry Pi's own photo (raspberrypi/documentation 5.jpg). Many of its
-   0201s are past what that photo resolves and are not placed.
+   0201s are past what that photo resolves and are not placed. Then rendered from its photo's own camera and set beside
+   it part by part (photo.py camera): its header pins tin, its FPC sockets cream with brown locks, its USB stacks'
+   latch springs, side springs, windows, detents and insulator posts and its jack's skirts and marking (a Trxcom
+   TRJG0926HENL) where the photo shows them, every shell bright nickel; the forge's light, which had washed its mask
+   to a clipped mint (#63ffdd for 0x21b984), exposed for a grey card with a room for metal to mirror (its shells had
+   drawn black). Still to do: the LPDDR's marking turned and its maker's logo, RP1's logo, the micro-HDMIs' backs.
 3. Every other board the same way, each marked approximate until it is: the Pi 4B, 3B+ and Zero 2 W next (their photos
-   are in raspberrypi/documentation's computers/raspberry-pi/images; look for their makers' STEP models first).
+   are in raspberrypi/documentation's computers/raspberry-pi/images; look for their makers' STEP models first). The
+   Pi 4B's photo is calibrated (three holes and six header pin tips, its fourth hole hidden: 2.5 px rms); the
+   OpenSCAD Raspberry Pi library's Pi 4 (ext openscad-rpi-library, its frame x across, y along) agrees with Raspberry
+   Pi's drawing on every port and places its SoC, memory, Wi-Fi can and both FPC sockets, to be checked on the photo.
 4. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
    Its `joint-drive` (listed only as its materials) is the one item the breakdown queue leaves waiting: it is broken
    out (motor, reduction, encoder, bearings, each drawn) in this round, not before.

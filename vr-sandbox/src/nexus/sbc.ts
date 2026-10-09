@@ -17,7 +17,7 @@
 // y = -t.
 
 import { chipSolids, solidMasses, type Solid } from './packages';
-import { BOARD_PARTS, chip, fccsp, fcbgaLid, fpcUpright, hdmi, HUE, inductor, jstSH, lpddr, micElectret, microSD, pinHeader, refBody, shieldCan, sideLeds, tactSide, usbA, usbC, type BoardPart } from './boardparts';
+import { BOARD_PARTS, chip, fccsp, rj45, fcbgaLid, fpcUpright, hdmi, HUE, inductor, jstSH, lpddr, micElectret, microSD, pinHeader, refBody, shieldCan, sideLeds, tactSide, usbA, usbC, type BoardPart } from './boardparts';
 import { chipCase, mlccCase } from './kinds/electrical';
 import { OPI5_COPPER } from './sbc-opi5-copper';
 import { OPI5_SMALL } from './sbc-opi5-small';
@@ -76,20 +76,20 @@ const PH5 = (what: string) => `Raspberry Pi's photo of the Pi 5 (raspberrypi/doc
 /** A part of the Pi 5 the model shows only as its outline, not naming it. */
 const ref5 = (L: number, W: number, H: number, what = '') => () => refBody(L, W, H, `a ${L} × ${W} × ${H} mm part${what ? ` (${what})` : ''}, as the model shows it, not named in it`);
 const PI5_LAYOUT: Place[] = [
-  { part: 'header-2x20', at: [32.5, 52.5], name: '40-pin header', how: RP5('its GPIO header, x 7.1–57.9, y 50.0–55.0, 8.6 mm tall') },
+  { part: () => pinHeader(2, 20, 'tin'), at: [32.5, 52.5], name: '40-pin header', how: RP5('its GPIO header, x 7.1–57.9, y 50.0–55.0, 8.6 mm tall') + '; its pins tin, silver in its photo (#c8c8b1 by photo.py colour)' },
   { part: () => usbC(16), at: [11.2, 2.35], dir: 270, name: 'USB-C power in', how: RP5('its USB-C, x 6.83–15.57, y −1.3–6.0 (1.3 mm past the edge)') + '; its contacts fit a power-only receptacle by its use, not by the model' },
   { part: () => hdmi('D', 8.53, 7.2), at: [25.8, 2.6], dir: 270, name: 'micro-HDMI 0', how: RP5('x 22.2–29.39 (7.2 wide), y −1.66–6.86 (its lip 1.66 mm past the edge), 3.4 mm above the board') + '; its mouth the HDMI spec\'s type D' },
   { part: () => hdmi('D', 8.53, 7.2), at: [39.2, 2.6], dir: 270, name: 'micro-HDMI 1', how: RP5('x 35.59–42.8, y −1.66–6.86') },
-  { part: 'rj45', at: [77.35, 10.2], dir: 0, name: 'Gigabit Ethernet', how: RP5('its RJ45, x 66.75–88.0 (3.0 mm past the edge), y 2.2–18.2, 13.9 mm above the board') },
-  { part: () => usbA([3, 3]), at: [79.81, 29.05], dir: 0, name: 'USB 3.0 (two, stacked)', how: RP5('x 70.74–88.31 (3.3 mm past the edge), y 21.15–36.95, 16.5 mm tall') + '; the pair by the Ethernet jack its USB 3.0 (blue), as Raspberry Pi\'s product brief gives them' },
-  { part: () => usbA([2, 2]), at: [79.81, 47.0], dir: 0, name: 'USB 2.0 (two, stacked)', how: RP5('x 70.74–88.31, y 39.1–54.9') },
+  { part: () => rj45({ skirt: true, mark: 'Trxcom®\nTRJG0926HENL 4R\nChina  M  2322' }), at: [77.35, 10.2], dir: 0, name: 'Gigabit Ethernet', how: RP5('its RJ45, x 66.75–88.0 (3.0 mm past the edge), y 2.2–18.2, 13.9 mm above the board') + '; a Trxcom TRJG0926HENL by the marking its photo shows on it (drawn as HanRun\'s HR911105A outline, which its model\'s box fits), its top\'s cover and skirts as the photo shows' },
+  { part: () => usbA([3, 3], { detents: true, posts: true, windows: [{ x: 1.6, y: 12.42, w: 1.0, h: 1.0 }] }), at: [79.81, 29.05], dir: 0, name: 'USB 3.0 (two, stacked)', how: RP5('x 70.74–88.31 (3.3 mm past the edge), y 21.15–36.95, 16.5 mm tall') + '; the pair by the Ethernet jack its USB 3.0 (blue), as Raspberry Pi\'s product brief gives them' },
+  { part: () => usbA([2, 2], { windows: [{ x: 5.34, y: 13.08, w: 0.8, h: 0.8 }, { x: 14.87, y: 10.35, w: 1.0, h: 0.35 }] }), at: [79.81, 47.0], dir: 0, name: 'USB 2.0 (two, stacked)', how: RP5('x 70.74–88.31, y 39.1–54.9') + '; its shell\'s springs and windows as its photo shows them' },
   { part: () => fpcUpright(16, 10.5, 3.4, 4.1), at: [2.95, 30.01], dir: 180, name: 'PCIe socket', how: RP5('its PCIe FPC socket, x 1.25–4.65, y 24.76–35.26, 4.1 mm tall, open toward the left edge under its cap as its section shows') },
   { part: () => fpcUpright(22, 15.5, 2.95, 4.1), at: [48.73, 8.45], dir: 0, name: 'camera/display 0 socket', how: RP5('its CAM-DISP socket, x 47.25–50.2, y 0.7–16.2, its section a wall 2.4 thick under a cap 2.95 wide, open at +x') },
   { part: () => fpcUpright(22, 15.5, 2.95, 4.1), at: [54.92, 8.45], dir: 0, name: 'camera/display 1 socket', how: RP5('x 53.45–56.4, y 0.7–16.2') },
   { part: () => jstSH(2), at: [19.0, 4.75], dir: 90, name: 'RTC battery socket', how: RP5('its BAT header, x 17.0–21.0, y 3.3–6.2, 4.4 mm tall') + '; JST SH BM02B-SRSS-TB fits it to 0.05 mm' },
   { part: () => jstSH(3), at: [32.35, 3.9], dir: 90, name: 'UART socket', how: RP5('its UART header, x 29.7–35.0, y 2.3–5.5, 4.4 mm tall') + '; drawn as a JST SH BM03B (5.0 × 2.9), the model\'s box 0.3 mm larger' },
   { part: () => jstSH(4), at: [66.75, 52.0], dir: 0, name: 'fan socket', how: RP5('its FAN header, x 65.25–68.25, y 49.0–55.0, 4.45 mm tall') + '; JST SH BM04B-SRSS-TB fits it' },
-  { part: () => pinHeader(2, 2), at: [61.5, 9.5], name: 'PoE header', how: RP5('its PoE header, x 59.0–64.0, y 7.0–12.0, 8.5 mm tall') },
+  { part: () => pinHeader(2, 2, 'tin'), at: [61.5, 9.5], name: 'PoE header', how: RP5('its PoE header, x 59.0–64.0, y 7.0–12.0, 8.5 mm tall') + '; its pins tin, as its photo shows' },
   { part: () => tactSide({ L: 2.55, W: 4.5, H: 3.3, out: 0.85, src: RP5('its switch 2.55 × 4.5 × 3.3 mm, its plunger 0.85 mm long') }), at: [1.68, 18.4], dir: 180, name: 'power button', how: RP5('its switch, x 0.4–2.95, y 16.15–20.65, 3.3 mm tall, its plunger x −0.45–0.4: 0.45 mm past the left edge') },
   { part: () => sideLeds(1.48, 1.6, 1.0, [{ name: 'power light (red)', item: 'led-chip-red', die: 'led-die-algainp', color: 0xd8312a }, { name: 'activity light (green)', item: 'led-chip-green', die: 'led-die-ingan', color: 0x35c94a }]), at: [0.89, 13.3], dir: 180, name: 'power and activity lights', how: RP5('its LED, x 0.15–1.63, y 11.7–14.9, 1.0 mm tall') + '; red for power and green for activity as Raspberry Pi\'s documentation gives them, their order along the edge not in the model' },
   { part: () => microSD({ D: 11.43, W: 11.98, H: 1.46, eject: false, src: RP5('11.43 × 11.98 × 1.46 mm under the board') }), at: [8.0, 28.02], dir: 180, under: true, name: 'microSD socket', how: RP5('under the board, x 2.28–13.71, y 22.04–34.02, 1.46 mm deep; a card in it stands 1.7 mm past the left edge') + '; push-pull (no ejector), as the Pi 4\'s and 5\'s are' },

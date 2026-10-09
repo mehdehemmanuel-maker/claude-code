@@ -31,7 +31,8 @@ export interface Solid { role: Role; shape: Shape; at: [number, number, number];
   /** what is printed on its broad face (a chip's marking, a board's silkscreen), in ink of this colour where given */ text?: string; ink?: number;
   /** a picture on its top face, in this colour where its PNG is white and clear elsewhere (the copper a board's photo
    *  shows under its mask) */ paint?: { png: string; ink: number };
-  /** its printing alone drawn, its ground clear (a board's silkscreen: the letters on the mask, not a plate) */ inkOnly?: boolean }
+  /** its printing alone drawn, its ground clear (a board's silkscreen: the letters on the mask, not a plate) */ inkOnly?: boolean;
+  /** how its surface was finished where its role's is not it (a connector's shell bright nickel, not a lead's matte tin) */ finish?: string }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)

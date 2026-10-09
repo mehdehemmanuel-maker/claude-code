@@ -23,12 +23,24 @@ const PI = Math.PI;
  *  USB 3.0's blue (its spec's Pantone 300C), a moulded inductor's grey. A metal's colour is what it reflects head on, as
  *  the viewer draws metal: gold's about (1.0, 0.77, 0.34) in linear light (physically based renderers' tables, Real-Time
  *  Rendering 4th ed.), so its plating shows as bright as the room it mirrors. */
-export const HUE = { steel: 0xc6cacd, stainless: 0xd2d5d7, gold: 0xffe29b, tin: 0xb9bcbf, black: 0x19191b, ivory: 0xebe4d2, usb3: 0x1f5fbf, white: 0xf0efea, brown: 0x4a3324, die: 0x101216, ferrite: 0x3d3d40 };
+// (nickel: its reflectance head on, linear (0.660, 0.609, 0.526) as physically based renderers' tables give it, in sRGB;
+// a connector's shell is nickel-plated, and Raspberry Pi 5's photo shows its shells as warm as this, #988f84 in shade)
+export const HUE = { nickel: 0xd3ccbf, steel: 0xc6cacd, stainless: 0xd2d5d7, gold: 0xffe29b, tin: 0xb9bcbf, black: 0x19191b, ivory: 0xebe4d2, usb3: 0x1f5fbf, white: 0xf0efea, brown: 0x4a3324, die: 0x101216, ferrite: 0x3d3d40 };
 const box = (role: Solid['role'], b: V3, at: V3, mat: string, more: Partial<Solid> = {}): Solid => ({ role, shape: { box: b }, at, mat, ...more });
 /** A section drawn along x: its outline in (across, up) less its openings, through `len` mm from x0. */
 const along = (role: Solid['role'], outline: V2[], holes: V2[][], len: number, x0: number, mat: string, more: Partial<Solid> = {}): Solid =>
   ({ role, shape: { prism: { pts: outline, L: len, ...(holes.length ? { holes } : {}) } }, at: [x0 + len / 2, 0, 0], rot: [0, PI / 2, 0], mat, ...more });
 const piece = (name: string, item: string, solids: Solid[]): Comp => ({ name, item, solids, at: [0, 0, 0] });
+/** A flat plate lying level, its outline and holes given as [x, z] (a shell's top cut with slots), th thick from y0 up. */
+const plate = (role: Solid['role'], outline: V2[], holes: V2[][], th: number, y0: number, mat: string, more: Partial<Solid> = {}): Solid =>
+  ({ role, shape: { prism: { pts: outline.map(([x, z]) => [x, -z] as V2), L: th, ...(holes.length ? { holes: holes.map((h) => h.map(([x, z]) => [x, -z] as V2)) } : {}) } }, at: [0, y0 + th / 2, 0], rot: [-PI / 2, 0, 0], mat, ...more });
+/** A flat plate standing upright across z, its outline and holes given as [x, y] (a shell's side), th thick about zc. */
+const wall = (role: Solid['role'], outline: V2[], holes: V2[][], th: number, zc: number, mat: string, more: Partial<Solid> = {}): Solid =>
+  ({ role, shape: { prism: { pts: outline, L: th, ...(holes.length ? { holes } : {}) } }, at: [0, 0, zc], mat, ...more });
+/** A connector's shell as it is plated: bright nickel. */
+const NI = { color: HUE.nickel, finish: 'bright' } as const;
+/** A rectangle w × h about its middle (a, b). */
+const rect2 = (a: number, b: number, w: number, h: number): V2[] => [[a - w / 2, b - h / 2], [a + w / 2, b - h / 2], [a + w / 2, b + h / 2], [a - w / 2, b + h / 2]];
 /** A stadium (a USB-C mouth's shape): w × h, its ends half circles, its foot at y0. */
 function stadium(w: number, h: number, y0: number, n = 10): V2[] {
   const r = h / 2, c = w / 2 - r, pts: V2[] = [];
@@ -49,10 +61,10 @@ export interface BoardPart { comp: Comp; size: V3; src: string }
  *  at 0.5 mm on both faces, 12 a face where all 24 are fitted, eight a face (A1, A4–A9, A12) on a 16-contact one. */
 export function usbC(contacts: 16 | 24): BoardPart {
   const W = 8.94, H = 3.21, D = 7.35, iw = 8.34, ih = 2.56, t = 0.7, tw = 6.69, tl = 5.6, x0 = -D / 2, yc = H / 2;
-  const shell = piece('USB-C shell', 'usb-c-shell', [along('term', stadium(W, H, 0), [stadium(iw, ih, (H - ih) / 2)], D, x0, 'stainless-304', { color: HUE.stainless }),
+  const shell = piece('USB-C shell', 'usb-c-shell', [along('term', stadium(W, H, 0), [stadium(iw, ih, (H - ih) / 2)], D, x0, 'stainless-304', { color: HUE.stainless, finish: 'bright' }),
     // (its rear wall, folded down over the moulding; its four legs into the board)
-    box('term', [0.3, H, W - 1.2], [x0 + 0.15, H / 2, 0], 'stainless-304', { color: HUE.stainless }),
-    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Solid => box('term', [0.6, 0.8, 0.3], [a! * 2.2, -0.4, b! * (W / 2 - 0.15)], 'stainless-304', { color: HUE.stainless }))]);
+    box('term', [0.3, H, W - 1.2], [x0 + 0.15, H / 2, 0], 'stainless-304', { color: HUE.stainless, finish: 'bright' }),
+    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Solid => box('term', [0.6, 0.8, 0.3], [a! * 2.2, -0.4, b! * (W / 2 - 0.15)], 'stainless-304', { color: HUE.stainless, finish: 'bright' }))]);
   const tongue = piece('USB-C tongue', 'usb-c-tongue', [box('body', [tl, t, tw], [x0 + 0.3 + tl / 2, yc, 0], 'nylon', { color: HUE.black }), box('body', [1.4, ih, iw - 0.3], [x0 + 0.3 + 0.7, H / 2, 0], 'nylon', { color: HUE.black })]);
   const pos = contacts === 24 ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 4, 5, 6, 7, 8, 9, 12];
   const pins = [-1, 1].flatMap((face) => pos.map((k): Comp => { const z = (k - 6.5) * 0.5;
@@ -78,10 +90,10 @@ export function hdmi(type: 'A' | 'C' | 'D', depth?: number, width?: number): Boa
   // in 8° (typical) so its tip stands below the plug's top)
   const u: V2[] = [[-W / 2 + co, 0], [W / 2 - co, 0], [W / 2, co], [W / 2, Ht], [iw / 2, Ht], [iw / 2, y0 + c], [iw / 2 - c, y0], [-iw / 2 + c, y0], [-iw / 2, y0 + c], [-iw / 2, Ht], [-W / 2, Ht], [-W / 2, co]];
   const tabs = type === 'A' ? [-3.8, 3.8] : [], f = D / 2 - 1.2, r = f - 5.0, sw = 2.5, th = (8 * PI) / 180, tl = 4.7;
-  const plate: Solid = { role: 'term', shape: { prism: { pts: [[x0 + back, -W / 2], [D / 2, -W / 2], [D / 2, W / 2], [x0 + back, W / 2]], L: st, ...(tabs.length ? { holes: tabs.map((z): V2[] => [[r, z - sw / 2], [f, z - sw / 2], [f, z + sw / 2], [r, z + sw / 2]]) } : {}) } }, at: [0, H - st / 2, 0], rot: [PI / 2, 0, 0], mat: 'steel-low', color: HUE.steel };
-  const fingers = tabs.map((z): Solid => box('term', [tl, st, sw - 0.6], [r + (tl / 2) * Math.cos(th), H - st / 2 - (tl / 2) * Math.sin(th), z], 'steel-low', { color: HUE.steel, rot: [0, 0, -th] }));
-  const shell = piece('HDMI shell', 'hdmi-shell', [along('term', u, [], D, x0, 'steel-low', { color: HUE.steel }), plate, ...fingers,
-    ...[-1, 1].map((s): Solid => box('term', [1.2, 0.8, 0.3], [x0 + D * 0.6, -0.4, s * (W / 2 - 0.15)], 'steel-low', { color: HUE.steel }))]);
+  const plate: Solid = { role: 'term', shape: { prism: { pts: [[x0 + back, -W / 2], [D / 2, -W / 2], [D / 2, W / 2], [x0 + back, W / 2]], L: st, ...(tabs.length ? { holes: tabs.map((z): V2[] => [[r, z - sw / 2], [f, z - sw / 2], [f, z + sw / 2], [r, z + sw / 2]]) } : {}) } }, at: [0, H - st / 2, 0], rot: [PI / 2, 0, 0], mat: 'steel-low', ...NI };
+  const fingers = tabs.map((z): Solid => box('term', [tl, st, sw - 0.6], [r + (tl / 2) * Math.cos(th), H - st / 2 - (tl / 2) * Math.sin(th), z], 'steel-low', { ...NI, rot: [0, 0, -th] }));
+  const shell = piece('HDMI shell', 'hdmi-shell', [along('term', u, [], D, x0, 'steel-low', NI), plate, ...fingers,
+    ...[-1, 1].map((s): Solid => box('term', [1.2, 0.8, 0.3], [x0 + D * 0.6, -0.4, s * (W / 2 - 0.15)], 'steel-low', NI))]);
   const tl2 = D - 2.2, yt = y0 + ih * 0.62;
   const ins = piece('HDMI insulator', 'hdmi-insulator', [box('body', [tl2, tt, tw], [x0 + 0.4 + tl2 / 2, yt, 0], 'pbt', { color: HUE.black }), box('body', [1.6, ih, iw - 0.4], [x0 + 0.4 + 0.8, y0 + ih / 2, 0], 'pbt', { color: HUE.black })]);
   // (each contact: its blade on the tongue, its leg down the moulding's back, its tail out along the board; those on the
@@ -109,7 +121,7 @@ export function hdmi(type: 'A' | 'C' | 'D', depth?: number, width?: number): Boa
  *  0.6 mm wide, 2.1 mm below its seat; its legs 6.57 mm either side of its middle (a stack's four, 1.04 and 6.72 mm in;
  *  one port's two, 3.72 in), 3.94 mm below its seat (2.1 and 3.94 its drawing's unlabelled figures, read as the tails'
  *  and the legs' by their tolerances: an estimate of which is which). Stood on its side, as it was. */
-export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean } = {}): BoardPart {
+export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean; windows?: { x: number; y: number; w: number; h: number }[]; detents?: boolean; posts?: boolean } = {}): BoardPart {
   const stack = ports.length === 2, W = stack ? 14.5 : 13.1, H1 = 5.72, iw = 12.5, ih = 5.12, gap = 4.0, H = stack ? 2 * H1 + gap : H1, D = o.depth ?? (stack ? 17.0 : 14.0), x0 = -D / 2;
   const kids: Comp[] = [], thru = !o.onSide, mat = stack ? 'brass' : 'steel-low', TAIL = 2.1, LEG = 3.94;
   // (a stack's body 13.64 wide, its face plate 14.5: Würth's drawing; its skins 0.25 thick, so a mouth's lining fits inside it)
@@ -120,16 +132,44 @@ export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean } =
   const back = thru ? Math.max(0.3, D - 0.3 - 12) : 0.3, tl = thru ? D - back - 1.3 : D - 2.8;
   const U = (w: number, h: number): V2[] => [[-w / 2, 0], [-w / 2 + sk, 0], [-w / 2 + sk, h - sk], [w / 2 - sk, h - sk], [w / 2 - sk, 0], [w / 2, 0], [w / 2, h], [-w / 2, h]];
   const mouthsAt = mouths.map((y) => rect(iw, ih, y + (H1 - ih) / 2));
-  const legs = (stack ? [1.04, 6.72] : [3.72]).flatMap((d) => [-1, 1].map((sg): Solid => box('term', [1.5, LEG + 0.15, 0.5], [x0 + d, (0.15 - LEG) / 2, sg * 6.57], mat, { color: HUE.steel })));
+  const legs = (stack ? [1.04, 6.72] : [3.72]).flatMap((d) => [-1, 1].map((sg): Solid => box('term', [1.5, LEG + 0.15, 0.5], [x0 + d, (0.15 - LEG) / 2, sg * 6.57], mat, NI)));
+  // (a stack's shell as Raspberry Pi 5's photo shows its two (photo.py camera: each feature cast onto the shell's face
+  // from its photo's camera, to about 0.3 mm): its top a plate with the upper mouth's two latch springs lanced from it,
+  // 3.0 mm either side of its middle, each a tongue 5.5 long tapering from 3.35 to 1.4 mm wide, its root 6.25 mm back
+  // from the front, a window 2.05 back where its tip is bent down into the mouth (drawn as a step under it); its sides
+  // each a plate with a spring lanced in it beside each mouth, 5.5 long and 1.2 tall, 0.8 above the mouth's middle;
+  // each mouth floored and the lower roofed by a plate of the shell (the upper's roof its top); `o.windows`: what else
+  // its photo shows cut in its sides; `o.detents`: two round detents on its top, 11.6 back and 2.0 either side)
+  const F = x0 + D, sTop = (zc: number): { slot: V2[]; tongue: V2[]; win: V2[] } => {
+    const r = F - 6.25, t = F - 0.7, g = 0.3, wx = F - 2.05;
+    return { slot: [[r, zc - 1.675], [t, zc - 0.7], [t, zc + 0.7], [r, zc + 1.675], [r, zc + 1.675 - g], [t - g, zc + 0.7 - g], [t - g, zc - 0.7 + g], [r, zc - 1.675 + g]],
+      tongue: [[r - 0.01, zc - 1.675 + g], [t - g, zc - 0.7 + g], [t - g, zc + 0.7 - g], [r - 0.01, zc + 1.675 - g]], win: rect2(wx, zc, 0.8, 0.8) };
+  };
+  const sSide = (yc: number): { slot: V2[]; tongue: V2[] } => { const r = F - 7.14, t = F - 1.64, h = 0.6, g = 0.25;
+    return { slot: [[r, yc - h], [t, yc - h], [t, yc + h], [r, yc + h], [r, yc + h - g], [t - g, yc + h - g], [t - g, yc - h + g], [r, yc - h + g]], tongue: [[r - 0.01, yc - h + g], [t - g, yc - h + g], [t - g, yc + h - g], [r - 0.01, yc + h - g]] }; };
+  const stackShell = (): Solid[] => {
+    const col = NI, L0 = D - 0.3, tops = [-3.0, 3.0].map(sTop), sides = mouths.map((m) => sSide(m + (H1 - ih) / 2 + ih / 2 + 0.8)), zi = Wb / 2 - sk;
+    const wins = (o.windows ?? []).map((w) => rect2(x0 + w.x, w.y, w.w, w.h));
+    const out: Solid[] = [
+      plate('term', rect2(x0 + L0 / 2, 0, L0, Wb), tops.map((f) => f.slot), sk, H - sk, mat, col),
+      ...[-1, 1].map((sg) => wall('term', rect2(x0 + L0 / 2, (H - sk) / 2, L0, H - sk), [...sides.map((f) => f.slot), ...wins], sk, sg * (Wb / 2 - sk / 2), mat, col)),
+      along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, col),
+      // (the latch springs: each tongue in its slot with its window, its bent tip a step down into the mouth under it)
+      ...tops.flatMap((f) => [plate('term', f.tongue, [f.win], sk, H - sk, mat, col), box('term', [0.8, 0.45, 1.0], [F - 1.55, H - sk - 0.22, (f.win[0]![1] + f.win[2]![1]) / 2], mat, col)]),
+      ...[-1, 1].flatMap((sg) => sides.flatMap((f) => [wall('term', f.tongue, [], sk, sg * (Wb / 2 - sk / 2), mat, col), box('term', [0.6, 0.6, 0.35], [F - 2.1, (f.tongue[0]![1] + f.tongue[2]![1]) / 2, sg * (zi - 0.17)], mat, col)])),
+      // (each mouth's floor, and the lower's roof, plates of the shell from the insulator's block to the face plate)
+      ...mouths.flatMap((m, k) => { const y = m + (H1 - ih) / 2; return [y - sk, ...(k === 0 && mouths.length > 1 ? [y + ih] : [])].map((yb) => plate('term', rect2(x0 + back + (L0 - back) / 2, 0, L0 - back, 2 * zi), [], sk, yb, mat, col)); }),
+      ...(o.detents ? [-2.0, 2.0].map((z): Solid => ({ role: 'term', shape: { cyl: [0.4, 0.12] }, at: [F - 11.6, H + 0.06, z], mat, ...col })) : []),
+    ];
+    return out;
+  };
   // (a single port's shell is its mouth's skin; a stack's is a skin round both, its face plate cut for each mouth, a
   // moulded divider between them)
   kids.push(piece(stack ? 'USB-A stack shell' : 'USB-A shell', 'usb-a-shell', thru
-    ? [...(stack ? [along('term', U(Wb, H), [], D - 0.3, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, { color: HUE.steel }),
-        ...mouthsAt.map((m, k) => along('term', rect(iw + 2 * sk, ih + 2 * sk, mouths[k]! + (H1 - ih) / 2 - sk), [m], D - 0.3 - back, x0 + back, mat, { color: HUE.steel }))]
-      : [along('term', U(W, H), [], back, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, D - back, x0 + back, mat, { color: HUE.steel })]),
-      box('term', [sk, H, Wb - 2 * sk], [x0 + sk / 2, H / 2, 0], mat, { color: HUE.steel }), ...legs]
-    : [...(stack ? [along('term', rect(W, H, 0), [rect(W - 0.6, H - 0.6, 0.3)], D, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, { color: HUE.steel })] : [along('term', rect(W, H, 0), mouthsAt, D, x0, mat, { color: HUE.steel })]),
-      box('term', [0.3, H, W - 0.6], [x0 + 0.15, H / 2, 0], mat, { color: HUE.steel }), ...[-1, 1].map((sg): Solid => box('term', [1.0, 1.0, 0.3], [x0 + D * 0.5, -0.5, sg * (W / 2 - 0.15)], mat, { color: HUE.steel }))]));
+    ? [...(stack ? stackShell() : [along('term', U(W, H), [], back, x0, mat, NI), along('term', rect(W, H, 0), mouthsAt, D - back, x0 + back, mat, NI)]),
+      box('term', [sk, H, Wb - 2 * sk], [x0 + sk / 2, H / 2, 0], mat, NI), ...legs]
+    : [...(stack ? [along('term', rect(W, H, 0), [rect(W - 0.6, H - 0.6, 0.3)], D, x0, mat, NI), along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, NI)] : [along('term', rect(W, H, 0), mouthsAt, D, x0, mat, NI)]),
+      box('term', [0.3, H, W - 0.6], [x0 + 0.15, H / 2, 0], mat, NI), ...[-1, 1].map((sg): Solid => box('term', [1.0, 1.0, 0.3], [x0 + D * 0.5, -0.5, sg * (W / 2 - 0.15)], mat, NI))]));
   ports.forEach((gen, k) => {
     const y = mouths[k]! + (H1 - ih) / 2, ty = y + ih - 0.55 - 1.84 / 2, tongue = gen === 3 ? HUE.usb3 : HUE.black, xs = x0 + (thru ? back : 0.4);
     // (between the two mouths of a stack, its moulded floor; its tongue in the mouth's top half, 1.84 mm thick, out of its
@@ -137,7 +177,10 @@ export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean } =
     const block = thru ? box('body', [back - sk, ih + 2 * sk, iw + 2 * sk], [x0 + sk + (back - sk) / 2, y + ih / 2, 0], 'nylon', { color: tongue }) : box('body', [1.5, ih, iw - 0.4], [x0 + 0.4 + 0.75, y + ih / 2, 0], 'nylon', { color: tongue });
     const lo = (H1 - ih) / 2 + ih + sk, hi = (mouths[1] ?? 0) + (H1 - ih) / 2 - sk;
     const floor = thru ? box('body', [D - 0.3 - sk, hi - lo, Wb - 2 * sk], [x0 + sk + (D - 0.3 - sk) / 2, (lo + hi) / 2, 0], 'nylon', { color: HUE.black, share: 0.3 }) : box('body', [D - 0.9, gap + 0.6, W - 0.6], [x0 + 0.3 + (D - 0.9) / 2, H1 - 0.3 + (gap + 0.6) / 2, 0], 'nylon', { color: HUE.black, share: 0.3 });
-    kids.push(piece(`USB-A tongue${stack ? (k ? ' upper' : ' lower') : ''}`, 'usb-a-tongue', [box('body', [tl, 1.84, 11.2], [xs + tl / 2, ty, 0], 'nylon', { color: tongue }), block, ...(stack && k === 0 ? [floor] : [])]));
+    // (`o.posts`: the insulator's posts showing through the back of the shell's top edge, its photo's row of them 2.35
+    // mm apart)
+    const posts = o.posts && stack && k === ports.length - 1 ? Array.from({ length: 6 }, (_, i) => box('body', [0.6, 0.55, 1.1], [x0 + 0.25, H - 0.22, (i - 2.5) * 2.35], 'nylon', { color: tongue })) : [];
+    kids.push(piece(`USB-A tongue${stack ? (k ? ' upper' : ' lower') : ''}`, 'usb-a-tongue', [box('body', [tl, 1.84, 11.2], [xs + tl / 2, ty, 0], 'nylon', { color: tongue }), block, ...(stack && k === 0 ? [floor] : []), ...posts]));
     const zs = gen === 3 ? [-3.5, -1, 1, 3.5, -4.5, -2.25, 0, 2.25, 4.5] : [-3.5, -1, 1, 3.5], cy = ty - 0.92 - 0.075;
     // (each contact's tail down through its row: a stack's upper mouth's at the back, its lower's in front of them)
     const row = x0 + (stack ? (k ? 1.39 : 4.01) : 1.01);
@@ -163,12 +206,18 @@ export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean } =
  *  LEDs, per HQ Online's listing and KiCad's footprint): its moulded housing, its mouth for an 8P8C plug 11.68 mm wide
  *  (IEC 60603-7) with its latch slot down by the board, eight gold contacts at 1.02 mm sprung down into it, its
  *  isolation transformers wound on ferrite toroids in its back, its steel shield over all, its two lights in its face. */
-export function rj45(): BoardPart {
+export function rj45(o: { mark?: string; skirt?: boolean } = {}): BoardPart {
   const W = 16.04, H = 13.5, D = 21.3, x0 = -D / 2, mw = 11.9, mh = 6.9, my = 2.6, cav = 14.5;
   // (its shield bent round its top and sides, open under it where it stands on the board)
   const t = 0.25, U: V2[] = [[-W / 2, 0], [-W / 2 + t, 0], [-W / 2 + t, H - t], [W / 2 - t, H - t], [W / 2 - t, 0], [W / 2, 0], [W / 2, H], [-W / 2, H]];
-  const shield = piece('RJ45 shield', 'rj45-shield', [along('term', U, [], D, x0, 'steel-low', { color: HUE.steel }), box('term', [0.25, H, W], [x0 + 0.125, H / 2, 0], 'steel-low', { color: HUE.steel }),
-    ...[-1, 1].map((s): Solid => box('term', [1.2, 3.2 + 0.2, 0.25], [x0 + 7.45, (0.2 - 3.2) / 2, s * 7.745], 'steel-low', { color: HUE.steel }))]);
+  // (`o.skirt`: its top's skirt folded 2.8 mm down over each side behind its middle, stepping up to the top edge 2.5 mm
+  // ahead of it, as Raspberry Pi 5's photo shows its jack's (photo.py camera, cast on its side); `o.mark`: what its top
+  // is printed with, as the photo reads)
+  const skirt = o.skirt ? [-1, 1].map((sg) => wall('term', [[x0, H - 2.8], [-0.1, H - 2.8], [2.5, H + 0.2], [x0, H + 0.2]], [], 0.2, sg * (W / 2 + 0.1), 'steel-low', NI)) : [];
+  // (its lines running across it, as the photo reads them)
+  const mark = o.mark ? [box('mark', [W - 2, 0.01, D - 6], [0.5, H + 0.21, 0], '', { text: o.mark, ink: 0xefebe3, inkOnly: true, color: HUE.nickel, rot: [0, PI / 2, 0] })] : [];
+  const shield = piece('RJ45 shield', 'rj45-shield', [along('term', U, [], D, x0, 'steel-low', NI), box('term', [0.25, H, W], [x0 + 0.125, H / 2, 0], 'steel-low', NI),
+    ...[-1, 1].map((s): Solid => box('term', [1.2, 3.2 + 0.2, 0.25], [x0 + 7.45, (0.2 - 3.2) / 2, s * 7.745], 'steel-low', NI)), ...skirt, ...(o.skirt ? [box('term', [D, 0.2, W + 0.4], [0, H + 0.1, 0], 'steel-low', NI)] : []), ...mark]);
   // (its mouth for the plug with the latch's slot under it, one opening)
   const mouth: V2[] = [[-mw / 2, my], [-3.2, my], [-3.2, my - 1.5], [3.2, my - 1.5], [3.2, my], [mw / 2, my], [mw / 2, my + mh], [-mw / 2, my + mh]];
   const housing = piece('RJ45 housing', 'rj45-housing', [along('body', rect(W - 0.5, H - 0.25, 0), [mouth], cav, x0 + D - cav, 'pbt', { color: HUE.black, share: 0.6 }), box('body', [D - cav - 0.3, H - 0.25, W - 0.5], [x0 + 0.25 + (D - cav - 0.3) / 2, (H - 0.25) / 2, 0], 'pbt', { color: HUE.black, share: 0.55 }),
@@ -206,12 +255,12 @@ export function microSD(o: { D?: number; W?: number; H?: number; eject?: boolean
 /** A 2.54 mm pin header, rows × cols: its moulded strip 2.54 tall, its pins 0.64 mm square, 6.0 above the strip and 3.0
  *  through the board below it (Würth WR-PHD 6130xx21121, as KiCad's 3D models take them). Pins along x, rows along z,
  *  pin 1 at -x in the +z row. */
-export function pinHeader(rows: 1 | 2, cols: number): BoardPart {
+export function pinHeader(rows: 1 | 2, cols: number, plate: 'gold' | 'tin' = 'gold'): BoardPart {
   const p = 2.54, L = cols * p, W = rows * p, base = 2.54, up = 6.0, down = 3.0, len = up + base + down;
   const strip = piece('header insulator', 'header-insulator', [box('body', [L, base, W], [0, base / 2, 0], 'pbt', { color: HUE.black })]);
   const pins: Comp[] = [];
   // (numbered as headers are: pin 1 in the first row (+z), pin 2 beside it in the second, odd pins along the first row)
-  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: HUE.gold, lead: c * rows + r })]));
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: plate === 'tin' ? HUE.tin : HUE.gold, lead: c * rows + r })]));
   return { comp: { name: `${rows * cols}-pin header`, item: `pin-header-${rows}x${cols}`, at: [0, 0, 0], kids: [strip, ...pins] }, size: [L, W, base + up], src: 'Würth WR-PHD 6130xx21121 (via KiCad\'s 3D model parameters): 2.54 mm pitch, 0.64 mm pins 6.0 mm above a 2.54 mm strip; their tails 3.0 mm below its seat (RS\'s listing of the WR-PHD: mating length 6 mm, tail 3 mm), through the board and out under it' };
 }
 
@@ -354,11 +403,13 @@ export function jstSH(n: number): BoardPart {
   return { comp: { name: `JST SH header, ${n} pins (vertical)`, item: `jst-sh-${n}v`, at: [0, 0, 0], kids: [housing, ...pins, ...nails] }, size: [D, W, H], src: `JST BM0${n}B-SRSS-TB (${W} × 2.9 mm, KiCad's footprint from JST's eSH datasheet), 4.25 mm tall (JST's drawing)` };
 }
 /** A 0.5 mm FPC socket as a maker's 3D model gives its section (Raspberry Pi 5's camera/display and PCIe sockets): an
- *  upright wall D - 0.55 thick, its cap D wide and 1.0 thick over it, open at +x under the cap where the cable goes in;
+ *  upright wall D - 0.55 thick (cream), its cap D wide and 1.0 thick over it (its flip lock, brown), open at +x under the cap where the cable goes in;
  *  n contacts at 0.5 mm along it, each a spring on the wall's open face and a tail out to its pad. W wide, H tall. */
 export function fpcUpright(n: number, W: number, D: number, H: number): BoardPart {
   const x0 = -D / 2, wt = D - 0.55;
-  const housing = piece('FPC housing', 'fpc-housing', [box('body', [wt, H - 1.0, W - 0.6], [x0 + wt / 2, (H - 1.0) / 2, 0], 'nylon', { color: HUE.black }), box('body', [D, 1.0, W], [0, H - 0.5, 0], 'nylon', { color: HUE.black })]);
+  // (its moulded base cream, its flip lock along its top brown, as Raspberry Pi 5's photo shows them: the lock's top
+  // measured #9a7352 by photo.py colour, its photo and a render from its camera side by side)
+  const housing = piece('FPC housing', 'fpc-housing', [box('body', [wt, H - 1.0, W - 0.6], [x0 + wt / 2, (H - 1.0) / 2, 0], 'nylon', { color: HUE.ivory }), box('body', [D, 1.0, W], [0, H - 0.5, 0], 'nylon', { color: 0x9a7352 })]);
   const contacts = Array.from({ length: n }, (_, i): Comp => { const z = (i - (n - 1) / 2) * 0.5;
     return piece(`FPC contact ${i + 1}`, 'fpc-contact', [box('lead', [0.1, H - 1.6, 0.2], [x0 + wt + 0.05, 0.3 + (H - 1.6) / 2, z], 'phosphor-bronze', { color: HUE.gold }), box('lead', [0.8, 0.1, 0.22], [D / 2 + 0.2, 0.05, z], 'phosphor-bronze', { color: HUE.gold })]); });
   const tabs = [-1, 1].map((sg): Comp => piece('FPC hold-down tab', 'fpc-tab', [box('term', [1.6, 1.2, 0.3], [x0 + 0.8, 0.6, sg * (W / 2 - 0.15)], 'brass', { color: HUE.tin })]));

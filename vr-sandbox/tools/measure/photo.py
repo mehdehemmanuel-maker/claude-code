@@ -5,7 +5,9 @@ A photo is calibrated by four or more points whose places are known in millimetr
 maker's drawing): each guessed point is pulled onto the round pad or hole nearest it, and the photo's plane is mapped to
 millimetres by the homography through them. Then:
 
-  calibrate  photo.jpg --point PX,PY=X,Z ... [--pad] --out cal.json   (X right, Z up, from the lower-left corner)
+  calibrate  photo.jpg --point PX,PY=X,Z ... [--pad] --out cal.json   (X right, Z up, from the lower-left corner;
+             [--tall PX,PY=X,Z,Y ...]                                 a point ending ! is not pulled onto a pad; --tall:
+                                                                      points Y mm up, a pin's tip, to fix the lens)
   grid       cal.json --region NAME:X0:Z0:X1:Z1 ... --out PREFIX      a crop of each region with its millimetre grid
   at         cal.json PX,PY[@H] ...                                   where a pixel is, mm (@H: on a top H mm up)
   px         cal.json X,Z ...                                         where a point in mm is in the photo
@@ -21,7 +23,7 @@ millimetres by the homography through them. Then:
                                                                       length, width and angle in mm, and what it looks
                                                                       like (a tan capacitor, a black resistor or chip,
                                                                       a grey inductor, a white LED)
-  colour     REAL.json DRAWN.json --at X,Z[:R] ... [--now 0xRRGGBB]  the same places' colour in a photo and a render
+  colour     REAL.json DRAWN.json --at X,Z[@Y][:R] ... [--now 0xRRGGBB]  the same places' colour in a photo and a render
                                                                       of the drawing, and the colour to draw it to match
   traces     cal.json [--map boardmap.json] --out traces.png [--ts NAME:file.ts] [--res 10] [--lift 8]
                                                                       the copper under a board's mask as its photo shows
@@ -30,6 +32,11 @@ millimetres by the homography through them. Then:
                                                                       the silkscreen as its photo shows it (its words,
                                                                       logos, outlines: the white ink on its mask), on the
                                                                       board's own mm, with the ink's colour
+  camera     cal.json --L 85 --W 56 --top LIFT [--render r.png --render-cal r.json]
+                                                                      the photo's camera as the look page's query
+                                                                      (cam, aim, up, fov; render at the photo's size), so
+                                                                      the drawing is rendered as the photo saw it, and a
+                                                                      calibration for that render, for same and colour
   same       CAL... --region X0:Z0:X1:Z1 [--up H] --out out.png       one region of the thing cut from every calibrated
                                                                       photo of it, side by side: the same part from
                                                                       each angle (each photo calibrated by four points
@@ -58,29 +65,67 @@ def to_mm(c, px, py):
     v = c['Hi'] @ [px, py, 1.0]; return v[0] / v[2], v[1] / v[2]
 
 
+def fit_camera(obj, img, shape):
+    """A camera fitted to points known in 3D (board mm: x, z, y) and seen at pixels: its principal point the photo's
+    middle, square pixels, its lens the one whose rigid pose (solvePnP) puts them where they are seen, searched over
+    every lens from half the photo's width to thirty times it. Returns K, R, t and the fit's rms, px."""
+    h, w = shape[:2]; obj, img = np.float64(obj), np.float64(img)
+    def fit(f):
+        K = np.array([[f, 0, w / 2], [0, f, h / 2], [0, 0, 1.0]])
+        ok, rv, tv = cv2.solvePnP(obj, img, K, None, flags=cv2.SOLVEPNP_SQPNP)
+        if not ok: return 1e9, K, None, None
+        ok, rv, tv = cv2.solvePnP(obj, img, K, None, rv, tv, True, cv2.SOLVEPNP_ITERATIVE)
+        pr, _ = cv2.projectPoints(obj, rv, tv, K, None); return float(np.sqrt(np.mean(np.sum((pr.reshape(-1, 2) - img) ** 2, 1)))), K, rv, tv
+    fs = np.geomspace(0.5 * w, 30 * w, 90); best = min(fs, key=lambda f: fit(f)[0])
+    lo, hi = math.log(best / 1.1), math.log(best * 1.1); g = (math.sqrt(5) - 1) / 2
+    for _ in range(50):
+        m1, m2 = hi - g * (hi - lo), lo + g * (hi - lo)
+        if fit(math.exp(m1))[0] < fit(math.exp(m2))[0]: hi = m2
+        else: lo = m1
+    err, K, rv, tv = fit(math.exp((lo + hi) / 2)); R, _ = cv2.Rodrigues(rv)
+    return K, R, tv.reshape(3), err
+
+
 def camera(c, shape):
-    """The camera a photo was taken with, from its calibration's homography (the board's plane in mm to the photo's
-    pixels): its principal point the photo's middle, square pixels; its focal length the one that makes the plane's two
-    directions square and of a length (Zhang's constraints on H), and so its turn and place. Returns project(x, z, y):
-    the pixel a point y mm above the board at (x, z) is seen at; None when the photo is too square-on to tell (an
-    orthographic view, where nothing leans)."""
+    """The camera a photo was taken with, from its calibration: its principal point the photo's middle, square pixels; its
+    focal length the one that makes the plane's two directions square and of a length (Zhang's constraints on H), or,
+    where the calibration has points of known height (`tall`: a pin's tip, a jack's top corner), the one that puts them
+    where the photo shows them; its turn and place a rigid pose fitted to every point (solvePnP). Returns
+    project(x, z, y): the pixel a point y mm above the board at (x, z) is seen at; None when the photo is too square-on
+    to tell (an orthographic view, where nothing leans). project.R, project.t, project.f: the pose (board mm, its axes
+    x, z, y, to the camera's), project.err: the fit's rms, px."""
     h, w = shape[:2]; T = np.array([[1, 0, -w / 2], [0, 1, -h / 2], [0, 0, 1.0]]); A = T @ c['H']; a1, a2 = A[:, 0], A[:, 1]
     fs = []
     if abs(a1[2] * a2[2]) > 1e-12: fs.append(-(a1[0] * a2[0] + a1[1] * a2[1]) / (a1[2] * a2[2]))
     if abs(a1[2] ** 2 - a2[2] ** 2) > 1e-12: fs.append(-((a1[0] ** 2 + a1[1] ** 2) - (a2[0] ** 2 + a2[1] ** 2)) / (a1[2] ** 2 - a2[2] ** 2))
     fs = [f for f in fs if f > 0]
     if not fs: return None
-    f = math.sqrt(float(np.median(fs))); K = np.array([[f, 0, w / 2], [0, f, h / 2], [0, 0, 1.0]]); Ki = np.linalg.inv(K)
-    B = Ki @ c['H']; lam = (np.linalg.norm(B[:, 0]) + np.linalg.norm(B[:, 1])) / 2; r1, r2, t = B[:, 0] / lam, B[:, 1] / lam, B[:, 2] / lam
-    if t[2] < 0: r1, r2, t = -r1, -r2, -t
-    n = np.cross(r1, r2); n /= np.linalg.norm(n)
-    # (up from the board is toward the camera: the photo is of its top)
-    if n @ (-t) < 0: n = -n
+    f0 = math.sqrt(float(np.median(fs)))
+    obj = [[*p['mm'], 0.0] for p in c['points']] + [list(p['mm']) for p in c.get('tall', [])]
+    img = [p['px'] for p in c['points']] + [p['px'] for p in c.get('tall', [])]
+    obj, img = np.float64(obj), np.float64(img)
+    def fit(f):
+        K = np.array([[f, 0, w / 2], [0, f, h / 2], [0, 0, 1.0]])
+        ok, rv, tv = cv2.solvePnP(obj, img, K, None, flags=cv2.SOLVEPNP_ITERATIVE)
+        if not ok: return 1e9, K, None, None
+        pr, _ = cv2.projectPoints(obj, rv, tv, K, None); return float(np.sqrt(np.mean(np.sum((pr.reshape(-1, 2) - img) ** 2, 1)))), K, rv, tv
+    f = f0
+    if c.get('tall'):
+        # (a golden search for the lens over a decade either side of the plane's own estimate)
+        lo, hi = math.log(f0 / 4), math.log(f0 * 4); g = (math.sqrt(5) - 1) / 2
+        for _ in range(60):
+            m1, m2 = hi - g * (hi - lo), lo + g * (hi - lo)
+            if fit(math.exp(m1))[0] < fit(math.exp(m2))[0]: hi = m2
+            else: lo = m1
+        f = math.exp((lo + hi) / 2)
+    err, K, rv, tv = fit(f)
+    if rv is None: return None
+    R, _ = cv2.Rodrigues(rv); t = tv.reshape(3)
     def project(x, z, y):
-        v = K @ (x * r1 + z * r2 + y * n + t); return v[0] / v[2], v[1] / v[2]
+        v = K @ (R @ [x, z, y] + t); return v[0] / v[2], v[1] / v[2]
     def unproject(px, py, y):   # (the point y mm above the board seen at a pixel: the plane at that height, inverted)
-        Hy = K @ np.c_[r1, r2, y * n + t]; v = np.linalg.solve(Hy, [px, py, 1.0]); return v[0] / v[2], v[1] / v[2]
-    project.f = f; project.unproject = unproject
+        Hy = K @ np.c_[R[:, 0], R[:, 1], y * R[:, 2] + t]; v = np.linalg.solve(Hy, [px, py, 1.0]); return v[0] / v[2], v[1] / v[2]
+    project.f = f; project.unproject = unproject; project.R = R; project.t = t; project.err = err
     return project
 
 
@@ -123,11 +168,20 @@ def pad_centre(im, px, py, rlo=10, rhi=34):
 def cmd_calibrate(a):
     im = cv2.imread(a.photo); px, mm = [], []
     for p in a.point:
-        l, r = p.split('='); x, y = map(float, l.split(',')); X, Z = map(float, r.split(','))
-        if a.pad: x, y = pad_centre(im, x, y)
+        # (a point ending in ! is taken where it is given, not pulled onto a pad: a board's corner, a hole hidden)
+        l, r = p.split('='); keep = r.endswith('!'); x, y = map(float, l.split(',')); X, Z = map(float, r.rstrip('!').split(','))
+        if a.pad and not keep: x, y = pad_centre(im, x, y)
         px.append([x, y]); mm.append([X, Z])
-    H, _ = cv2.findHomography(np.float32(mm), np.float32(px), 0)
+    # (points of known height, PX,PY=X,Z,Y: a pin's tip, a jack's corner; they fix the camera's lens, and, where fewer
+    # than four points of the plane are seen, the plane itself through the camera they fit)
+    tall = [{'px': list(map(float, l.split(','))), 'mm': list(map(float, r.split(',')))} for l, r in (t.split('=') for t in a.tall or [])]
+    if len(px) >= 4: H, _ = cv2.findHomography(np.float32(mm), np.float32(px), 0)
+    elif len(px) + len(tall) >= 5:
+        K, R, t, err = fit_camera([[*m, 0.0] for m in mm] + [p['mm'] for p in tall], px + [p['px'] for p in tall], im.shape)
+        H = K @ np.c_[R[:, 0], R[:, 1], t]; H = H / H[2, 2]; print('the plane from the camera fitted to %d points, %.2f px rms (lens %.0f px)' % (len(px) + len(tall), err, K[0, 0]))
+    else: sys.exit('four points of the plane, or three and two of known height, are needed')
     c = {'photo': a.photo, 'H': H.tolist(), 'points': [{'px': p, 'mm': m} for p, m in zip(px, mm)]}
+    if tall: c['tall'] = tall
     c2 = dict(c); c2['H'] = np.array(H); c2['Hi'] = np.linalg.inv(H)
     res = [math.hypot(*(np.subtract(to_mm(c2, *p), m))) for p, m in zip(px, mm)]
     c['residual_mm'] = [round(r, 3) for r in res]; c['scale_px_per_mm'] = round(float(np.hypot(*(np.subtract(to_px(c2, 1, 0), to_px(c2, 0, 0))))), 3)
@@ -368,14 +422,16 @@ def cmd_colour(a):
     light taken as fixed)."""
     cr, cd = load(a.real), load(a.drawn); ir, idr = cv2.imread(cr['photo']), cv2.imread(cd['photo'])
     lin = lambda v: np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4); srgb = lambda v: np.where(v <= 0.0031308, v * 12.92, 1.055 * v ** (1 / 2.4) - 0.055)
-    def med(c, im, x, z, r):
-        X, Y = to_px(c, x, z); R = max(1, r * c['scale_px_per_mm']); yy, xx = np.mgrid[0:im.shape[0], 0:im.shape[1]]
+    # (a place y mm up, X,Z@Y, is where each picture's camera sees it: a pin's side, a housing's top)
+    cams = {id(cr): camera(cr, ir.shape), id(cd): camera(cd, idr.shape)}
+    def med(c, im, x, z, r, y=0.0):
+        X, Y = cams[id(c)](x, z, y) if y and cams[id(c)] else to_px(c, x, z); R = max(1, r * c['scale_px_per_mm']); yy, xx = np.mgrid[0:im.shape[0], 0:im.shape[1]]
         return np.median(im[(xx - X) ** 2 + (yy - Y) ** 2 <= R * R], axis=0)[::-1] / 255.0   # (RGB, 0..1)
     ratios = []
     for spec in a.at:
-        xz, _, r = spec.partition(':'); x, z = map(float, xz.split(',')); r = float(r or 1.5)
-        pr, pd = med(cr, ir, x, z, r), med(cd, idr, x, z, r); ratios.append(lin(pr) / np.maximum(lin(pd), 1e-4))
-        print('(%.1f, %.1f) r %.1f mm: real #%s, drawn #%s' % (x, z, r, ''.join('%02x' % int(round(v * 255)) for v in pr), ''.join('%02x' % int(round(v * 255)) for v in pd)))
+        xz, _, r = spec.partition(':'); xz, _, y = xz.partition('@'); x, z = map(float, xz.split(',')); r = float(r or 1.5); y = float(y or 0)
+        pr, pd = med(cr, ir, x, z, r, y), med(cd, idr, x, z, r, y); ratios.append(lin(pr) / np.maximum(lin(pd), 1e-4))
+        print('(%.1f, %.1f%s) r %.1f mm: real #%s, drawn #%s' % (x, z, ' @%.1f' % y if y else '', r, ''.join('%02x' % int(round(v * 255)) for v in pr), ''.join('%02x' % int(round(v * 255)) for v in pd)))
     if a.now:
         now = np.array([int(a.now.replace('0x', '').replace('#', '')[i:i + 2], 16) / 255 for i in (0, 2, 4)])
         new = srgb(np.clip(lin(now) * np.median(np.array(ratios), axis=0), 0, 1))
@@ -490,9 +546,25 @@ def cmd_same(a):
     if tiles: cv2.imwrite(a.out, np.hstack(tiles)); print(a.out, '·', len(tiles), 'views')
 
 
+def cmd_camera(a):
+    """The look page's camera for a photo: where it stood, what it looked at, its up and its lens, in the room's frame
+    (x across the board from its middle, y up from its top, z toward the viewer: drawing z = W/2 - z), so the drawing is
+    rendered as that photo saw it; and a calibration for the render (the same plane on the same pixels)."""
+    c = load(a.cal); im = cv2.imread(c['photo']); h, w = im.shape[:2]; cam = camera(c, im.shape)
+    if cam is None: sys.exit('the photo is too square-on to recover its camera')
+    R, t, f = cam.R, cam.t, cam.f
+    C = -R.T @ t; look, up = R.T @ [0, 0, 1.0], R.T @ [0, -1.0, 0]      # (board mm: x, z, y)
+    P = np.array([C[0] - a.L / 2, C[2] + a.top, a.W / 2 - C[1]]); room = lambda v: np.array([v[0], v[2], -v[1]])
+    A = P + room(look) * np.linalg.norm(t); U = room(up)
+    fov = math.degrees(2 * math.atan(h / 2 / f)); m = lambda v: ','.join('%.5f' % (x / 1000) for x in v)
+    print('lens %.0f px (fov %.3f°), fitted to %d points to %.2f px rms' % (f, fov, len(c['points']) + len(c.get('tall', [])), cam.err))
+    print('LOOK_W=%d LOOK_H=%d' % (w, h)); print('cam=%s&aim=%s&up=%s&fov=%.3f' % (m(P), m(A), ','.join('%.4f' % x for x in U / np.linalg.norm(U)), fov))
+    if a.render: json.dump({'photo': a.render, 'H': c['H'].tolist(), 'points': c['points'], 'scale_px_per_mm': c.get('scale_px_per_mm'), **({'tall': c['tall']} if c.get('tall') else {})}, open(a.render_cal, 'w'), indent=1); print('written', a.render_cal)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter); sp = ap.add_subparsers(dest='cmd', required=True)
-    p = sp.add_parser('calibrate'); p.add_argument('photo'); p.add_argument('--point', action='append', required=True); p.add_argument('--pad', action='store_true'); p.add_argument('--out', required=True); p.set_defaults(f=cmd_calibrate)
+    p = sp.add_parser('calibrate'); p.add_argument('photo'); p.add_argument('--point', action='append', required=True); p.add_argument('--pad', action='store_true'); p.add_argument('--tall', action='append', help='PX,PY=X,Z,Y: a point Y mm above the board, for the camera'); p.add_argument('--out', required=True); p.set_defaults(f=cmd_calibrate)
     p = sp.add_parser('grid'); p.add_argument('cal'); p.add_argument('--region', action='append', required=True); p.add_argument('--out', required=True); p.add_argument('--scale', type=float, default=3); p.set_defaults(f=cmd_grid)
     p = sp.add_parser('at'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_at)
     p = sp.add_parser('px'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_px)
@@ -502,6 +574,7 @@ def main():
     p = sp.add_parser('colour'); p.add_argument('real'); p.add_argument('drawn'); p.add_argument('--at', action='append', required=True); p.add_argument('--now'); p.set_defaults(f=cmd_colour)
     p = sp.add_parser('traces'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=10); p.add_argument('--win', type=int, default=15); p.add_argument('--lift', type=int, default=8); p.add_argument('--speck', type=int, default=12); p.add_argument('--run', type=int, default=7); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_traces)
     p = sp.add_parser('silk'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=20); p.add_argument('--sat', type=int, default=45); p.add_argument('--val', type=int, default=215); p.add_argument('--speck', type=int, default=6); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_silk)
+    p = sp.add_parser('camera'); p.add_argument('cal'); p.add_argument('--L', type=float, required=True); p.add_argument('--W', type=float, required=True); p.add_argument('--top', type=float, default=0, help='the board top\'s height in the room, mm: the look page\'s lift (look.mjs prints it)'); p.add_argument('--render', help='the render this camera will make'); p.add_argument('--render-cal', dest='render_cal', help='its calibration, written'); p.set_defaults(f=cmd_camera)
     p = sp.add_parser('same'); p.add_argument('cals', nargs='+'); p.add_argument('--region', required=True); p.add_argument('--up', type=float, default=0); p.add_argument('--h', type=int, default=360); p.add_argument('--out', required=True); p.set_defaults(f=cmd_same)
     a = ap.parse_args(); a.f(a)
 

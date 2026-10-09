@@ -59,13 +59,19 @@ const studio = (): THREE.Scene => {
 // (a part alone is lit as on a light table, by a bright room, so its metal reads as metal; a vehicle in the studio, so
 // its skin shows its shape in the softboxes' reflections; &room=1 or &room=0 says which)
 const lightRoom = q.get('room') === '1' || (q.get('room') !== '0' && kit.id === 'part');
-// (exposed as a photographer exposes for a grey card: in the light room at 0.44 its floor, 0xb8bbbf, reads its own grey
-// and a Raspberry Pi's mask, 0x1f7a3a, its own green, measured from renders at 0.4–1.3 (at 1.3, nearly three times too
-// bright: the mask read mint and metal white); the studio as it was judged; &exposure= to try another)
-renderer.toneMappingExposure = Number(q.get('exposure') ?? (lightRoom ? 0.44 : 1.3));
+// (exposed as a photographer exposes for a grey card, so its floor, 0xb8bbbf, reads its own grey (at 1.3, nearly three
+// times too bright: a mask read mint and metal white); the studio as it was judged; &exposure= to try another)
+// (the light room on Khronos' PBR Neutral curve, which keeps a base colour its own hue and saturation as a product
+// photograph does, where ACES washed a saturated green toward mint: at 0.6 its floor reads its own grey, 0xb8bbbf as
+// #bbbec3, and a Raspberry Pi 5's mask its photo's, #1ac189 against #0fbb8e–#27b683, with its photo's camera laid over
+// it (photo.py camera); &tone=aces for the old curve)
+const neutral = lightRoom && q.get('tone') !== 'aces'; if (neutral) renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = Number(q.get('exposure') ?? (neutral ? 0.6 : lightRoom ? 0.44 : 1.3));
 scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
 // (biased, or every curved skin shadows itself in fine rings: shadow acne)
-const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+// (&env=, &sun=: the room's reflections' and the sun's strength, to try the light against a photograph's)
+if (q.get('env')) scene.environmentIntensity = Number(q.get('env'));
+const sun = new THREE.DirectionalLight(0xffffff, Number(q.get('sun') ?? 1.5)); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
 const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
@@ -298,4 +304,6 @@ if (q.get('zebra') === '1') {
   let dark = 0, light = 0; for (let i = 0; i < W * H; i++) { const r = px[i * 4]!, g = px[i * 4 + 1]!, b = px[i * 4 + 2]!; if (Math.abs(r - g) > 3 || Math.abs(g - b) > 3) continue; if (r <= 20) dark++; else if (r >= 240) light++; }
   const n = W * H; zebraStats = { dark: +(dark / n).toFixed(4), light: +(light / n).toFixed(4), stripes: dark / n > 0.002 && light / n > 0.002 };
 }
-(window as unknown as { lookReady: unknown }).lookReady = { parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };
+// (lift: how far the thing was stood up so its lowest point sits on the floor, its own frame's height in the room: a board's
+// top is there, for laying a photograph's camera over it, photo.py camera --top)
+(window as unknown as { lookReady: unknown }).lookReady = { parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), lift: +((part.parts?.[0]?.at?.[1] ?? 0) * 1000).toFixed(3), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };

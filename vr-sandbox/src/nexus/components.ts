@@ -308,7 +308,7 @@ function lookOf(s: Solid): Partial<Part> {
     mark: { color: 0xb5b5b0, finish: 'texture' }, film: { color: 0x2a2a2a, finish: 'texture' }, glaze: { color: 0x161616, finish: 'texture' }, term: { color: TIN, finish: 'plate' },
     core: { color: s.mat === 'ppa' ? 0xf4f4f0 : s.mat === 'fr4' ? 0xe8e0c8 : 0xf1eee6, finish: 'texture' }, cap: { color: 0xb8bcc0, finish: 'plate' }, band: { finish: 'paint' },
   };
-  return { ...L[s.role], ...(s.color !== undefined ? { color: s.color } : {}) };
+  return { ...L[s.role], ...(s.color !== undefined ? { color: s.color } : {}), ...(s.finish ? { finish: s.finish } : {}) };
 }
 const NAME: Record<Role, string> = { body: '', lead: 'lead', pad: 'exposed pad', tab: 'tab', frame: 'die paddle', die: 'die', wire: 'bond wire', mark: 'band', film: 'resistive film', glaze: 'overcoat', term: 'termination', core: 'core', cap: 'end cap', band: 'colour band' };
 const HOW: Partial<Record<Role, string>> = { lead: 'moulded into its body', frame: 'moulded into its body', tab: 'moulded into its body', pad: 'moulded into its body', die: 'bonded to what it sits on', wire: 'ball-bonded to the die, stitch-bonded to its lead', film: 'printed and fired on its substrate', glaze: 'printed and fired over its film', term: 'dipped and plated over its end', cap: 'pressed on the end of its rod', band: 'painted on its coat', mark: 'printed on its body' };

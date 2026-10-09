@@ -21,10 +21,10 @@ const mats = new Map<string, THREE.MeshStandardMaterial>();
 // how a surface takes the light, by how it was finished (a car's paint is lacquered over its colour, a chrome trim a
 // mirror, a tyre's rubber matt, cast metal dull, brushed metal satin): roughness 0 a mirror, 1 chalk (typical of
 // physically based renderers' guides for each; ground steel, a rail's or a block's, satin: it takes the room's light as
-// well as mirroring it)
+// well as mirroring it; matte tin, a chip's leads, plate; bright nickel, a connector's shell, bright)
 const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
   paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
-  plate: { rough: 0.4, metal: 0.9 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
+  plate: { rough: 0.4, metal: 0.9 }, bright: { rough: 0.22, metal: 1 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };
 const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
@@ -34,7 +34,10 @@ const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: 
     const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|^tin$/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium|brass|bronze|solder|^tin$/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
-    const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
+    // (a part moulded of a thermoplastic, a connector's housing or a header's strip, takes its mould's polish: satin, so a
+    // black one shows the room's light along its faces as Raspberry Pi 5's photo shows its header's, #63625c on black)
+    const moulded = /^(pbt|nylon|lcp|abs|pc|pom|pa\d*|pps|ppa)$/.test(mat ?? '');
+    const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : moulded ? 0.38 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
     // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
     const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
     // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear

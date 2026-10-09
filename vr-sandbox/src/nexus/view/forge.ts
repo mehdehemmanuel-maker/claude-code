@@ -78,6 +78,7 @@ import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitM
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Board } from '../boards';
 import { People, boardOfPerson, fighterBuild, fitBuild, factName as personFact, type Person } from '../person';
 import { personView, type PersonView } from './people3d';
@@ -139,8 +140,15 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04070b);
 scene.fog = new THREE.Fog(0x04070b, 6, 16);
 const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.01, 50);
-scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x0b1218, 0.9));
-const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(1.2, 3.5, 1.8); scene.add(key);
+// (a room for metal to mirror, made once: without one a metal has nothing to reflect and a connector's nickel shell, a
+// bolt's zinc, drew black. The light exposed as for a grey card, so what is stood before you reads its own colour on its
+// lit face: a Raspberry Pi 5's mask, 0x21b984, read #63ffdd (green clipped, the mint it was faulted for) under the old
+// key 1.6, sky 0.9 and a lamp 1.4 a hand's length above it, and #36bd8b under these (tools/forge-look.mjs, its board
+// sampled); &env=, &sky=, &key=, &lamp= to try)
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = Number(params.get('env') ?? 0.4);
+scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x0b1218, Number(params.get('sky') ?? 0.3)));
+const key = new THREE.DirectionalLight(0xffffff, Number(params.get('key') ?? 0.8)); key.position.set(1.2, 3.5, 1.8); scene.add(key);
 const fill = new THREE.DirectionalLight(0x80deea, 0.5); fill.position.set(-2, 1.5, -1); scene.add(fill);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(10, 72), new THREE.MeshStandardMaterial({ color: 0x060b10, roughness: 0.7, metalness: 0.3 }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -154,7 +162,7 @@ const rim = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.006, 8, 96), new THRE
 rim.rotation.x = Math.PI / 2; rim.position.set(M.x, M.y + 0.002, M.z); scene.add(rim);
 // the machine stands on its feet on the pedestal's top
 const machine = new THREE.Group(); machine.position.copy(M).add(new THREE.Vector3(0, 0.015, 0)); scene.add(machine);
-const lamp = new THREE.PointLight(0xffffff, 1.4, 2.5); lamp.position.set(0.3, 1.9, -0.6); scene.add(lamp);
+if (params.get('lamp')) { const lamp = new THREE.PointLight(0xffffff, Number(params.get('lamp')), 2.5); lamp.position.set(0.3, 1.9, -0.6); scene.add(lamp); }
 
 // ---- the pipeline, above and behind it: shown while it runs, or when you ask for it ---------------------------------------
 const pipelineGroup = new THREE.Group(); scene.add(pipelineGroup);
