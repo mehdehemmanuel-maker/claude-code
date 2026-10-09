@@ -89,7 +89,9 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { computerApp, dataApp, inventoryApp, libraryApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { computerApp, dataApp, inventoryApp, libraryApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { pack, packPart, packZip, type Pack } from '../buildpack';
+import { usd } from '../prices';
 import { Profile, BUDGET_MS } from '../profile';
 import { held, mergeStatic } from './merge-static';
 import { behave } from '../behave';
@@ -2491,6 +2493,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the warehouse[.!]?$|^warehouse$/i.test(text.trim())) { line('you', text); say(goPlace('warehouse'), undefined, 'nexus'); return; }
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
+  { const said = packWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3554,7 +3557,38 @@ async function computerAsk(t: CodeTarget, code: string, ask: string, out: string
   const m = /```[a-zA-Z0-9]*\n([\s\S]*?)```/.exec(text);
   return { said: text.replace(/```[\s\S]*?```/g, '').trim() || 'Here is the program, changed.', ...(m ? { code: m[1]! } : {}) };
 }
-phone.add(computerApp({ run: computerRun, ask: computerAsk, see: seeWhole }));
+phone.add(computerApp({ run: computerRun, ask: computerAsk, see: seeWhole, buy: (t) => packFor(t.runner === 'meca' || /^robotarm/.test(t.board) ? t.board : `${t.board}, red led`) }));
+// ---- the build pack: what you want to make for real, priced at its cheapest real offers, its bench, the part to have
+// made and who makes it cheapest, and a lesson for every step (src/nexus/buildpack.ts) -----------------------------------
+let packNow: Pack | null = null;
+const range$ = (x: [number, number]) => (x[0] === x[1] ? usd(x[0]) : `${usd(x[0])}-${usd(x[1])}`);
+/** A pack made from words and opened on the phone; what it comes to, said. */
+function packFor(asked: string): string {
+  packNow = pack(asked); phone.act('app', 'pack');
+  const p = packNow, n = p.lines.filter((l) => l.section === 'buy' || l.section === 'bench').length, m = p.made[0];
+  return `Build pack for "${asked}": ${range$(p.total.all)} for ${n} thing${n === 1 ? '' : 's'}${m ? `, its ${m.profile.L.toFixed(0)} × ${m.profile.W.toFixed(0)} mm plate made cheapest by ${m.best.who}` : ''}${p.budget != null ? ` (${p.total.all[0] > p.budget ? 'over' : 'within'} your ${usd(p.budget)})` : ''}; ${p.lessons.length} lessons. On the phone: where to buy each and why, the plate's files, what would cost less, and every step taught.${p.unknown.length ? ` Not found: ${p.unknown.map((u) => u.split(':')[0]).join(', ')}.` : ''}`;
+}
+/** Its page and its parts' files, saved as one zip (in a headset, to its browser's downloads). */
+function savePack(): string {
+  if (!packNow) return 'No pack yet.';
+  const url = URL.createObjectURL(new Blob([packZip(packNow) as BlobPart], { type: 'application/zip' })), a = document.createElement('a');
+  a.href = url; a.download = 'build-pack.zip'; document.body.appendChild(a); a.click(); a.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const said = `Saved build-pack.zip: pack.md${packNow.made[0] ? `, ${Object.keys(packNow.made[0].files).join(', ')}` : ''}.`; line('system', `🧰 ${said}`); return said;
+}
+/** What the pack makes, stood before you: the plate as its maker would make it, its standoffs and its boards on them. */
+function seePack(): string {
+  const part = packNow ? packPart(packNow) : null; if (!part) return 'Nothing in this pack to stand before you: ask for a plate for your boards.';
+  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f);
+  apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d();
+  const said = apart3d.showPart(part, 'build-pack', performance.now() / 1000); apart3d.whole(performance.now() / 1000, true); return said;
+}
+/** "What do I need to build …", "parts list for …", "how much would … cost", "pack …": a build pack for it. */
+function packWords(text: string): string | null {
+  const m = /^(?:nexus[,:]?\s*)?(?:what (?:do|would|will) i need (?:to (?:build|make|get|buy) )?(?:for )?|(?:give me |make me |get me )?(?:a |the )?(?:parts? list|shopping list|build pack|bill of materials|bom)(?: for| of)? |how much (?:does |would |will |do |is |are )?(?:it cost to (?:build|make|get) )?|prices? (?:of |for )|pack )(.+?)[?.!]*$/i.exec(text.trim());
+  if (!m) return null;
+  return packFor(m[1]!.replace(/\s+cost$/i, '').replace(/^(?:a|an|the|my)\s+/i, ''));
+}
+phone.add(packApp({ now: () => packNow, make: (w) => { packFor(w); return packNow!; }, save: savePack, see: seePack }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
 // ---- the weather: where you are, or a place you name; kept, fetched again each quarter hour, read by rules -------------

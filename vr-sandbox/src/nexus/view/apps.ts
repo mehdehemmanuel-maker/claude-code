@@ -15,6 +15,8 @@ import { FAMILIES, type Family } from '../families';
 import { DESIGNED, component } from '../components';
 import { grams, massOf as partMass } from '../mass';
 import { TARGETS, pinSays, type Ran, type Target } from '../codesim';
+import type { Line, Pack } from '../buildpack';
+import { usd } from '../prices';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
@@ -459,6 +461,7 @@ export interface ComputerHost {
   /** run a program on its target here (Python against its board's libraries, the arm's commands on its controller) */ run(t: Target, code: string): Promise<Ran>;
   /** ask Claude about it: what Claude says, and the program changed where it changes it */ ask(t: Target, code: string, ask: string, out: string[]): Promise<{ said: string; code?: string }>;
   /** stand its board or its arm before you, drawn */ see(words: string): string;
+  /** what it takes to have it for real: its build pack, opened */ buy?(t: Target): string;
 }
 /** The computer: every board and the arm, each with its maker's language and libraries; a program you can run here (its
  *  pins' changes and its prints shown, the arm moving before you), change by asking Claude in words, step through its
@@ -486,6 +489,7 @@ export function computerApp(h: ComputerHost): PhoneApp {
         text('On the real thing', 40, 118, 30, C, 800, W - 80); text(t.name, 40, 150, 16, '#c8f7dc', 600, W - 80);
         let y = 190; t.real.forEach((r, i) => { text(`${i + 1}`, 46, y + 20, 22, C, 800, 30); y += Math.max(54, wrapped(r, 84, y + 4, 16, W - 130, '#ffffff', 5) + 18); });
         y += 6; wrapped(`Its pins: ${t.pins}.`, 46, y, 14, W - 92, '#c8f7dc', 3);
+        if (h.buy) button(40, bottom - 168, W - 80, 64, '🧰 What it takes: parts, prices, lessons', 'buy', t.id, '#ffb74d');
         button(40, bottom - 90, W - 80, 70, '‹ Back to the program', 'go', `c:${t.id}`, C);
         return;
       }
@@ -521,6 +525,7 @@ export function computerApp(h: ComputerHost): PhoneApp {
         case 'next': { if (!t) return false; const s0 = of(t); s0.ex = (s0.ex + 1) % t.examples.length; s0.code = t.examples[s0.ex]!.code; s0.ran = undefined; s0.out = []; s0.claude = undefined; return true; }
         case 'reset': { if (!t) return false; const s0 = of(t); s0.code = t.examples[s0.ex]!.code; s0.ran = undefined; s0.out = []; return true; }
         case 'see': { if (!t) return false; of(t).out = [h.see(t.board)]; return true; }
+        case 'buy': { if (!t || !h.buy) return false; h.buy(t); return true; }
         case 'run': {
           if (!t) return false; const s0 = of(t); if (s0.busy) return false; s0.busy = 'run'; s0.out = [];
           void h.run(t, s0.code).then((r) => { s0.ran = r; s0.out = [...r.out, ...[...r.pins].slice(0, 4).map(([p, ch]) => pinSays(p, ch))]; }, (e) => { s0.out = [`✗ ${(e as Error).message}`]; }).finally(() => { s0.busy = undefined; nav.redraw(); });
@@ -534,6 +539,136 @@ export function computerApp(h: ComputerHost): PhoneApp {
           });
           return true;
         }
+      }
+      return false;
+    },
+  };
+}
+
+export interface PackHost {
+  /** the pack being looked at, if any */ now(): Pack | null;
+  /** a new pack from words (what you want, what you have, your budget): made the one looked at */ make(asked: string): Pack;
+  /** its page and files, saved as one zip: what was done */ save(): string;
+  /** what it makes, stood before you */ see(): string;
+}
+/** The build pack: what you asked for priced at its cheapest real offer and where, the bench its steps need, the part to
+ *  have made and who makes it cheapest, what would spend less, and a lesson for every step, gone through one step at a
+ *  time, each done when its check is. */
+export function packApp(h: PackHost): PhoneApp {
+  const C = '#ffb74d', ROWS = 6, QUICK = ['Pico 2 W and an LED, I have a laptop', 'Pi 5, a plate for it, soldering kit, under $250', 'RDK X5 8GB and a Pi 5 on one plate, I have a computer'];
+  const step = new Map<string, number>();
+  const SECT: Record<string, [string, string]> = { buy: ['Buy', '🛒'], bench: ['Bench', '🔧'], helps: ['Nice to have', '➕'], have: ['You have', '✓'] };
+  const of = (p: Pack, s: string) => p.lines.filter((l) => l.section === s);
+  const cost = (l: Line) => (l.usd == null ? 'not priced' : usd(l.usd + l.needs.reduce((a, x) => a + x.usd, 0)));
+  const range = (x: [number, number]) => (x[0] === x[1] ? usd(x[0]) : `${usd(x[0])}–${usd(x[1])}`);
+  return {
+    id: 'pack', name: 'Build pack', icon: '🧰', colour: C,
+    pages: (sub) => { const p = h.now(); if (!p) return 1; if (SECT[sub]) return Math.max(1, Math.ceil(of(p, sub).length / ROWS)); if (sub === 'learn') return Math.max(1, Math.ceil(p.lessons.length / ROWS)); return 1; },
+    draw(k: Kit, v: View) {
+      const { text, wrapped, g, W, bottom, button } = k, p = h.now(), sub = v.sub;
+      const back = (to = '', label = '‹ Back') => button(40, bottom - 76, W - 80, 60, label, 'go', to, '#cfd8dc');
+      if (!p) {
+        text('Build pack', 40, 118, 44, C, 800, W - 80);
+        wrapped('Say what you want to make, what you have and what you would spend. It finds every part at its cheapest real price and where, the tools the steps need, the custom part and who makes it cheapest, and a lesson for every step.', 40, 150, 15, W - 80, '#ffe0b2', 5);
+        QUICK.forEach((q, j) => button(40, 270 + j * 76, W - 80, 64, q, 'quick', q, C));
+        button(40, 270 + QUICK.length * 76 + 10, W - 80, 64, '✎ Say what you want', 'new', undefined, '#ffd740');
+        return;
+      }
+      if (!sub) {
+        text('Build pack', 40, 112, 30, C, 800, W - 80); wrapped(p.asked, 40, 132, 14, W - 80, '#ffe0b2', 2);
+        text(range(p.total.all), 40, 200, 40, '#ffffff', 800, W - 80);
+        const over = p.budget != null && p.total.all[0] > p.budget, m0 = p.made[0];
+        // what the total is, and is not: the parts and the bench, and the plate made with its shipping and tariff as
+        // estimated; not the nice-to-haves, tax, or the shops' own shipping
+        wrapped(`Buy + bench${m0 ? ` + the plate made (${m0.best.lo == null ? 'its quote, not in this' : 'shipping and tariff estimated'})` : ''}. Not in it: ${p.total.helps ? `nice-to-haves (${usd(p.total.helps)}), ` : ''}tax, the shops' shipping.`, 40, 222, 13, W - 80, '#ffe0b2', 2);
+        const sellers = [...new Set(p.lines.flatMap((l) => (l.offer && l.section !== 'have' ? [l.offer.seller.replace(/ \(.*\)$/, '')] : [])))];
+        text(`${p.budget != null ? `${over ? '✗ over' : '✓ within'} your ${usd(p.budget)} · ` : ''}seen ${p.lines.find((l) => l.offer)?.offer?.seen ?? ''} at ${sellers.slice(0, 3).join(', ')}${sellers.length > 3 ? ' …' : ''}`, 40, 278, 13, over ? '#ff8a80' : '#b9f6ca', 600, W - 80);
+        wrapped(m0 ? `First: order the plate (it is made, then shipped), then buy the rest; learn while you wait.` : 'First: buy, then go through Learn in order.', 40, 294, 14, W - 80, '#ffffff', 2);
+        let y = 348; const row = (label: string, to: string, col = C) => { button(40, y, W - 80, 54, label, 'go', to, col); y += 62; };
+        for (const s0 of ['buy', 'bench', 'helps', 'have']) { const ls = of(p, s0); if (ls.length) row(`${SECT[s0]![1]} ${SECT[s0]![0]} · ${ls.length} · ${s0 === 'have' ? 'yours' : usd(ls.reduce((a, l) => a + (l.usd ?? 0), 0))}`, s0); }
+        if (m0) row(`🏭 Plate · ${m0.best.who} · ${m0.best.lo == null ? 'its quote' : range([m0.best.lo, m0.best.hi!])}`, 'make');
+        row(`📚 Learn · ${p.lessons.length} lessons`, 'learn', '#80cbc4');
+        if (p.cheaper.length) row(`💸 Spend less · up to ${usd(Math.max(...p.cheaper.map((c) => c.saves)))}`, 'less', '#b9f6ca');
+        if (p.notes.length + p.unknown.length) row(`📝 Good to know · ${p.notes.length + p.unknown.length}`, 'said', '#cfd8dc');
+        const bw = (W - 80 - 20) / 3; y = Math.max(y + 6, bottom - 80);
+        button(40, y, bw, 60, '✎ New', 'new', undefined, '#ffd740'); button(50 + bw, y, bw, 60, '💾 Save all', 'save', undefined, C); button(60 + 2 * bw, y, bw, 60, '🧊 See it', 'see', undefined, '#b39ddb');
+        return;
+      }
+      if (SECT[sub]) {
+        const ls = of(p, sub); text(SECT[sub]![0], 40, 112, 30, C, 800, W - 80);
+        ls.slice(v.page * ROWS, v.page * ROWS + ROWS).forEach((l, j) => {
+          const y = 132 + j * 92, i = p.lines.indexOf(l); g.fillStyle = 'rgba(255,183,77,0.10)'; g.beginPath(); g.roundRect(30, y, W - 60, 82, 12); g.fill(); k.hit(30, y, W - 30, y + 82, 'go', `i:${i}`);
+          text(`${l.what}${l.n > 1 ? ` × ${l.n}` : ''}`, 44, y + 28, 16, '#ffffff', 600, W - 200); text(cost(l), W - 44 - g.measureText(cost(l)).width, y + 28, 17, C, 800, 150);
+          text(l.offer ? `${l.offer.seller.replace(/ \(.*\)$/, '')}${l.offer.stock === 'out' ? ' · out of stock when seen' : ''}` : l.why, 44, y + 52, 13, l.offer?.stock === 'out' ? '#ff8a80' : '#ffe0b2', 500, W - 100);
+          text(l.why, 44, y + 72, 12, '#bcaaa4', 400, W - 100);
+        });
+        return;
+      }
+      if (sub.startsWith('i:')) {
+        const l = p.lines[Number(sub.slice(2))]; if (!l) { back(); return; }
+        text(l.what, 40, 112, 22, C, 800, W - 80); let y = 128;
+        if (l.offer) {
+          y += wrapped(l.offer.name, 40, y + 6, 16, W - 80, '#ffffff', 3) + 10;
+          text(`${cost(l)}${l.packs > 1 ? ` (${l.packs} × ${usd(l.offer.usd)})` : ''} · ${l.offer.seller}`, 40, y + 18, 15, C, 700, W - 80); y += 30;
+          y += wrapped(l.offer.url, 40, y + 4, 13, W - 80, '#90caf9', 3) + 8;
+          y += wrapped(`seen ${l.offer.seen}${l.offer.stock ? `, ${l.offer.stock === 'in' ? 'in stock' : 'out of stock'}` : ''}${l.offer.cond === 'used' ? ', used' : ''}${l.offer.note ? `. ${l.offer.note}` : ''}`, 40, y + 4, 13, W - 80, '#ffe0b2', 5) + 8;
+        }
+        y += wrapped(`Why: ${l.why}`, 40, y + 4, 14, W - 80, '#ffffff', 3) + 8;
+        for (const n of l.needs) y += wrapped(`Needs ${n.offer.name}: ${usd(n.usd)} (${n.offer.seller})`, 40, y + 4, 13, W - 80, '#ffcc80', 3) + 6;
+        if (l.others.length) { text('Also sold as', 40, y + 18, 14, C, 700, W - 80); y += 24; for (const o of l.others.slice(0, 3)) y += wrapped(`${o.name}: ${usd(o.usd)}${o.stock === 'out' ? ' (out of stock)' : ''}, ${o.seller}`, 40, y + 4, 13, W - 80, '#ffe0b2', 2) + 6; }
+        back(l.section, `‹ ${SECT[l.section]![0]}`); return;
+      }
+      if (sub === 'make') {
+        const m = p.made[0]; if (!m) { back(); return; }
+        text('Make', 40, 112, 30, C, 800, W - 80); wrapped(`${m.profile.name}: ${m.profile.L.toFixed(1)} × ${m.profile.W.toFixed(1)} mm, ${m.profile.holes.length} holes. ${m.profile.why}.`, 40, 132, 14, W - 80, '#ffe0b2', 4);
+        let y = 214; m.routes.forEach((r, j) => {
+          const best = j === 0; g.fillStyle = best ? 'rgba(185,246,202,0.14)' : 'rgba(255,183,77,0.08)'; g.beginPath(); g.roundRect(30, y, W - 60, 70, 12); g.fill();
+          text(`${best ? '★ ' : ''}${r.who}`, 44, y + 26, 16, best ? '#b9f6ca' : '#ffffff', 700, W - 220); const c = r.lo == null ? 'its quote' : range([r.lo, r.hi!]); text(c, W - 44 - g.measureText(c).width, y + 26, 16, C, 800, 160);
+          text(`${r.how} · ${r.n} · ${r.file}`, 44, y + 52, 12, '#ffe0b2', 500, W - 100); y += 78;
+        });
+        if (m.faults.length) { y += wrapped(`✗ ${m.faults.join('; ')}`, 40, y + 8, 13, W - 80, '#ff8a80', 3) + 8; }
+        const bw = (W - 80 - 10) / 2; button(40, bottom - 76, bw, 60, '💾 Files', 'save', undefined, C); button(50 + bw, bottom - 76, bw, 60, '🧊 See it', 'see', undefined, '#b39ddb');
+        return;
+      }
+      if (sub === 'learn') {
+        text('Learn', 40, 112, 30, C, 800, W - 80);
+        p.lessons.slice(v.page * ROWS, v.page * ROWS + ROWS).forEach((l, j) => { const done = (step.get(l.id) ?? 0) > l.steps.length; button(40, 132 + j * 72, W - 80, 62, `${done ? '✓' : `${(step.get(l.id) ?? 0) > 0 ? '…' : '○'}`} ${l.title}`, 'go', `k:${l.id}`, done ? '#b9f6ca' : '#80cbc4'); });
+        if (p.noLesson.length) wrapped(`No lesson yet for: ${p.noLesson.join(', ')}`, 40, 132 + ROWS * 72 + 10, 13, W - 80, '#ffab91', 2);
+        return;
+      }
+      if (sub.startsWith('k:')) {
+        const l = p.lessons.find((x) => x.id === sub.slice(2)); if (!l) { back('learn', '‹ Lessons'); return; }
+        const i = step.get(l.id) ?? 0; text(l.title, 40, 112, 21, '#80cbc4', 800, W - 80);
+        let y = 132;
+        if (i === 0) {
+          y += wrapped(`${l.why[0]!.toUpperCase()}${l.why.slice(1)}.`, 40, y + 4, 15, W - 80, '#ffffff', 3) + 10;
+          if (l.tools.length) y += wrapped(`Tools: ${l.tools.join(', ').replace(/-/g, ' ')}.`, 40, y + 4, 14, W - 80, '#ffe0b2', 3) + 10;
+          if (l.safety.length) { text('⚠ First', 40, y + 18, 16, '#ffab91', 800, W - 80); y += 26; for (const s0 of l.safety) y += wrapped(`• ${s0}`, 40, y + 4, 14, W - 80, '#ffccbc', 4) + 6; }
+        } else if (i <= l.steps.length) {
+          const s0 = l.steps[i - 1]!; text(`Step ${i} of ${l.steps.length}`, 40, y + 22, 16, '#80cbc4', 700, W - 80); y += 44;
+          y += wrapped(s0.do, 40, y + 6, 20, W - 80, '#ffffff', 9) + 18;
+          if (s0.check) { text('Done when', 40, y + 18, 15, '#b9f6ca', 800, W - 80); y += 24; wrapped(s0.check, 40, y + 4, 16, W - 80, '#b9f6ca', 4); }
+        } else { text('✓ Done', 40, y + 40, 34, '#b9f6ca', 800, W - 80); wrapped(`Source: ${l.src}.`, 40, y + 70, 13, W - 80, '#ffe0b2', 4); }
+        const bw = (W - 80 - 10) / 2; button(40, bottom - 76, bw, 60, i === 0 || i > l.steps.length ? '‹ Lessons' : '‹ Step back', i === 0 || i > l.steps.length ? 'go' : 'step', i === 0 || i > l.steps.length ? 'learn' : `${l.id}|-1`, '#cfd8dc');
+        if (i <= l.steps.length) button(50 + bw, bottom - 76, bw, 60, i === 0 ? 'Start ›' : i === l.steps.length ? 'Done ✓' : 'Done, next ›', 'step', `${l.id}|1`, '#80cbc4');
+        return;
+      }
+      if (sub === 'less' || sub === 'said') {
+        text(sub === 'less' ? 'Spend less' : 'Good to know', 40, 112, 30, C, 800, W - 80); let y = 128;
+        const items = sub === 'less' ? p.cheaper.map((c) => `${c.say}: saves ${usd(c.saves)}`) : [...p.notes, ...p.unknown];
+        for (const t of items) { if (y > bottom - 40) break; y += wrapped(`• ${t}`, 40, y + 6, 14, W - 80, sub === 'less' ? '#b9f6ca' : '#ffe0b2', 4) + 10; }
+        return;
+      }
+      back();
+    },
+    act(act, arg, nav: Nav) {
+      switch (act) {
+        case 'go': nav.go(String(arg ?? '')); return true;
+        case 'quick': h.make(String(arg)); nav.go(''); return true;
+        case 'new': nav.write('What do you want to make? (what you have, and your budget, too)', (w) => { h.make(w); nav.go(''); }); return true;
+        case 'save': h.save(); return true;
+        case 'see': h.see(); return true;
+        case 'step': { const [id, d] = String(arg).split('|'); const l = h.now()?.lessons.find((x) => x.id === id); if (!l) return false; step.set(id!, Math.max(0, Math.min(l.steps.length + 1, (step.get(id!) ?? 0) + Number(d)))); return true; }
       }
       return false;
     },
