@@ -14,7 +14,10 @@ import type { Flaw, V3, Value } from './part';
 
 /** One lead of a part and the net it belongs to. */
 export interface Pin { name: string; net: string; /** the current through this lead at its worst, A */ I?: number }
-export interface Component { id: string; name: string; pins: Pin[]; body: V3; colour: number; values?: Value[]; /** where it leaves the board, for a header or a terminal */ to?: string; /** rows between its pins: 2 for a 5.08 mm terminal */ every?: number }
+export interface Component { id: string; name: string; pins: Pin[]; body: V3; colour: number; values?: Value[]; /** where it leaves the board, for a header or a terminal */ to?: string; /** rows between its pins: 2 for a 5.08 mm terminal */ every?: number;
+  /** a two-lead part's leads at least so many rows apart along one side, its body lying between them (a 1/4 W resistor's
+   *  four: its body and its bends, IPC-A-610's lead forming): never across the channel, which is too short for it */ span?: number;
+  /** off the board on its own leads (a battery holder), into the rails */ flying?: boolean }
 /** A hole: a row 0…62 along the board, and a column: 0–4 a–e, 5–9 f–j; the rails -1 top +, -2 top −, 10 bottom +, 11 bottom −. */
 export interface Hole { row: number; col: number }
 export interface Placed { comp: Component; holes: Hole[] }
@@ -26,7 +29,10 @@ const HALF = 5;
 /** The conductor a hole is on. */
 export const conductorOf = (h: Hole): string => (h.col === -1 ? 'rail top +' : h.col === -2 ? 'rail top −' : h.col === 10 ? 'rail bottom +' : h.col === 11 ? 'rail bottom −' : `${h.col < 5 ? 'upper' : 'lower'} ${h.row + 1}`);
 
-export function layOut(all: Component[], rails: Rails, rating = Infinity): Layout {
+/** A circuit laid on a board of this topology: an 830-point breadboard by default, or another of `rows` columns of
+ *  half-rows (a Perma-Proto half: 30). */
+export function layOut(all: Component[], rails: Rails, rating = Infinity, o: { rows?: number } = {}): Layout {
+  const ROWS = o.rows ?? BREADBOARD.rows;
   // what its clips cannot carry stays off it, with every part that serves it on a net of their own: what is left is
   // joined to them only by a supply or by a net that leaves the board through a header
   const railNets0 = new Set([rails.topPlus, rails.topMinus, rails.bottomPlus, rails.bottomMinus]);
@@ -56,14 +62,14 @@ export function layOut(all: Component[], rails: Rails, rating = Infinity): Layou
   const isRail = (net: string) => railCol(net, 'top') !== null;
   /** A free hole in a half-row, so long as `keep` more stay free after it (a lead leaves one for the jumper an extension needs). */
   const freeIn = (row: number, upper: boolean, keep = 0): Hole | null => { const free = Array.from({ length: HALF }, (_, c) => ({ row, col: upper ? 4 - c : 5 + c })).filter((h) => !used.has(key(h))); return free.length > keep ? free[0]! : null; };
-  const halfFree = (row: number, upper: boolean) => row >= 0 && row < BREADBOARD.rows && !owner.has(conductorOf({ row, col: upper ? 0 : 5 }));
+  const halfFree = (row: number, upper: boolean) => row >= 0 && row < ROWS && !owner.has(conductorOf({ row, col: upper ? 0 : 5 }));
   let cursor = 1;
-  const nextRow = (upper: boolean, from = cursor) => { let r = from; while (r < BREADBOARD.rows && !halfFree(r, upper)) r++; return r; };
+  const nextRow = (upper: boolean, from = cursor) => { let r = from; while (r < ROWS && !halfFree(r, upper)) r++; return r; };
   const claim = (net: string, row: number, upper: boolean): Hole => { const first = { row, col: upper ? 4 : 5 }; owner.set(conductorOf(first), net); halves.set(net, [...(halves.get(net) ?? []), first]); return first; };
   /** A free hole on `net`: in the rail by `row`, or in one of its half-rows, opening another (and its jumper) when they are full. */
   const holeOn = (net: string, row: number, upper: boolean): Hole => {
     const rc = railCol(net, upper ? 'top' : 'bottom');
-    if (rc !== null) { for (let d = 0; d < BREADBOARD.rows; d++) for (const r of [row + d, row - d]) { if (r < 0 || r >= BREADBOARD.rows) continue; const h = { row: r, col: rc }; if (!used.has(key(h))) return take(h); } }
+    if (rc !== null) { for (let d = 0; d < ROWS; d++) for (const r of [row + d, row - d]) { if (r < 0 || r >= ROWS) continue; const h = { row: r, col: rc }; if (!used.has(key(h))) return take(h); } }
     for (const first of halves.get(net) ?? []) { const h = freeIn(first.row, first.col < 5, 1); if (h) return take(h); }
     const prev = (halves.get(net) ?? []).at(-1);
     const r = nextRow(upper, Math.max(row, cursor)), first = claim(net, r, upper); cursor = Math.max(cursor, r + 1);
@@ -88,7 +94,7 @@ export function layOut(all: Component[], rails: Rails, rating = Infinity): Layou
     if (n >= 3 || comp.to) {
       // down consecutive half-rows of the upper side, one pin to each, each joined to its net where the net is already
       const e = comp.every ?? 1;
-      let r = cursor; while (r + (n - 1) * e < BREADBOARD.rows && !Array.from({ length: n }, (_, k) => halfFree(r + k * e, true)).every(Boolean)) r++;
+      let r = cursor; while (r + (n - 1) * e < ROWS && !Array.from({ length: n }, (_, k) => halfFree(r + k * e, true)).every(Boolean)) r++;
       const holes: Hole[] = [];
       comp.pins.forEach((p, k) => {
         const already = isRail(p.net) || (halves.get(p.net)?.length ?? 0) > 0;
@@ -105,6 +111,12 @@ export function layOut(all: Component[], rails: Rails, rating = Infinity): Layou
     const [p1, p2] = comp.pins as [Pin, Pin];
     const h1 = holeOn(p1.net, cursor, true);
     let h2: Hole;
+    // (a part that must span so many rows lies along its side, its second net given the half-row that far on, its lead
+    // in the same row of holes as the first where it is free)
+    if (comp.span && !isRail(p1.net) && !isRail(p2.net) && !(halves.get(p2.net)?.length)) {
+      const upper = h1.col < 5, r2 = nextRow(upper, h1.row + comp.span);
+      if (r2 < ROWS) { claim(p2.net, r2, upper); const same = { row: r2, col: h1.col }; h2 = take(used.has(key(same)) ? freeIn(r2, upper)! : same); cursor = Math.max(cursor, r2 + 1); placed.push({ comp, holes: [h1, h2] }); continue; }
+    }
     const across = h1.col >= 0 && h1.col < 5 && !isRail(p2.net) && !(halves.get(p2.net)?.length) && halfFree(h1.row, false);
     if (across) { claim(p2.net, h1.row, false); h2 = take(freeIn(h1.row, false)!); }
     else h2 = holeOn(p2.net, h1.row + (isRail(p2.net) ? 0 : 3), h1.col < 5);
@@ -117,6 +129,58 @@ export function layOut(all: Component[], rails: Rails, rating = Infinity): Layou
     ...shorts.map((s) => ({ check: 'short', where: 'breadboard', says: `short: ${s}`, law: 'two nets never share a conductor', value: 1, limit: 0, remedy: null })),
   ];
   return { placed, jumpers, rails, refused: [...refused].map(([id, why]) => ({ id, why })), opens, shorts, flaws };
+}
+
+/** A circuit laid tidily on a stripboard to be soldered (a Perma-Proto half: 30 columns of half-rows, its rails along
+ *  both sides), from its nets: a part off the board on flying leads into the top rails two columns apart at the left
+ *  (two rails' pads side by side would bridge); the outer rail's net (the top +) brought to a column's half-row by an
+ *  insulated link, as a bare lead across the inner rail's pads would join the rails; every other net a column's
+ *  upper half-row, the next free; a part with a span lying flat along row c from its first net's column to its second's,
+ *  at least that many columns on, the holes under its body taken; a part from a half-row to the inner rail standing in
+ *  its half-row's column, its first lead in row a and its second in the rail beside it, standing parts as many
+ *  columns apart as their bodies are wide (a 5 mm LED's 5.8 mm rim: three). What fits none of these is
+ *  refused with why. Then the board's joins are checked against the nets, as a breadboard's are. */
+export function layProto(all: Component[], rails: Rails, rows = 30): Layout {
+  const used = new Set<string>(), key = (h: Hole) => `${h.row}:${h.col}`, take = (h: Hole) => { used.add(key(h)); return h; };
+  const free = (h: Hole) => h.row >= 0 && h.row < rows && !used.has(key(h));
+  const outer = rails.topPlus, inner = rails.topMinus, strips = new Map<string, number>(), placed: Placed[] = [], jumpers: Jumper[] = [], refused: { id: string; why: string }[] = [];
+  let next = 0, lastStand = -Infinity, lastW = 0;
+  // (the nets a standing part goes on, and how wide its body is: their columns kept clear of each other's bodies)
+  const hosts = new Map<string, number>();
+  for (const c of all) if (!c.flying && c.pins.length === 2 && c.pins[1]!.net === inner && c.pins[0]!.net !== inner) hosts.set(c.pins[0]!.net, Math.max(hosts.get(c.pins[0]!.net) ?? 0, c.body[0]));
+  for (const c of all.filter((d) => d.flying)) {
+    const cols = c.pins.map((p) => (p.net === outer ? -1 : p.net === inner ? -2 : null));
+    if (cols.some((k) => k === null) || c.pins.length !== 2) { refused.push({ id: c.id, why: 'its flying leads go only to the top rails' }); continue; }
+    const gap = c.span ?? 2, holes = [take({ row: next, col: cols[0]! }), take({ row: next + gap, col: cols[1]! })]; next += gap + 2; placed.push({ comp: c, holes });
+  }
+  const stripOf = (net: string, at?: number): number => {
+    const had = strips.get(net); if (had !== undefined) return had;
+    let r = Math.max(next, at ?? next); const w = hosts.get(net);
+    if (w !== undefined) { r = Math.max(r, lastStand + Math.ceil(Math.max(w, lastW) / BREADBOARD.pitch)); lastStand = r; lastW = w; }
+    strips.set(net, r); next = Math.max(next, r + 1);
+    if (net === outer) { const a = take({ row: r, col: 0 }), b = take({ row: r, col: -1 }); jumpers.push({ net, from: a, to: b }); }
+    return r;
+  };
+  for (const c of all.filter((d) => !d.flying)) {
+    if (c.pins.length !== 2) { refused.push({ id: c.id, why: 'only two-lead parts are laid on a stripboard here yet' }); continue; }
+    const [p1, p2] = c.pins as [Pin, Pin];
+    if (p2.net === inner && p1.net !== inner) {
+      const r = stripOf(p1.net), a = { row: r, col: 0 }, b = { row: r, col: -2 };
+      if (!free(a) || !free(b)) { refused.push({ id: c.id, why: `its column (${r + 1}) is taken at row a or the rail` }); continue; }
+      placed.push({ comp: c, holes: [take(a), take(b)] }); continue;
+    }
+    if (p1.net === inner || p2.net === outer || p1.net === outer && !c.span) { refused.push({ id: c.id, why: `${p1.net} to ${p2.net}: lay it with its lead to the inner rail second, or give it a span` }); continue; }
+    const s = c.span ?? 1, A = stripOf(p1.net), B = strips.get(p2.net) ?? stripOf(p2.net, A + s);
+    if (Math.abs(B - A) < s) { refused.push({ id: c.id, why: `its nets' columns are ${Math.abs(B - A)} apart: it needs ${s}` }); continue; }
+    const row = [2, 3, 1, 4].find((k) => free({ row: A, col: k }) && free({ row: B, col: k }) && Array.from({ length: Math.abs(B - A) - 1 }, (_, i) => free({ row: Math.min(A, B) + 1 + i, col: k })).every(Boolean));
+    if (row === undefined) { refused.push({ id: c.id, why: `no row free from column ${A + 1} to ${B + 1}` }); continue; }
+    for (let i = Math.min(A, B) + 1; i < Math.max(A, B); i++) take({ row: i, col: row });
+    placed.push({ comp: c, holes: [take({ row: A, col: row }), take({ row: B, col: row })] });
+  }
+  const { opens, shorts } = check({ placed, jumpers });
+  const flaws: Flaw[] = [...opens.map((x) => ({ check: 'open', where: 'stripboard', says: `open: ${x}`, law: 'a net is one conductor: every lead of it joined', value: 1, limit: 0, remedy: null })),
+    ...shorts.map((x) => ({ check: 'short', where: 'stripboard', says: `short: ${x}`, law: 'two nets never share a conductor', value: 1, limit: 0, remedy: null }))];
+  return { placed, jumpers, rails, refused, opens, shorts, flaws };
 }
 
 /** What the board joins, by its strips and rails and the jumpers laid on it, against the nets the circuit has. */

@@ -11,6 +11,7 @@
 // before anyone tries it.
 // Owner of: the edge kinds, a build's edges, the steps said from them, and the current cells light an LED with.
 
+import type { Hole, Layout } from './embody/breadboard';
 import { PP, ppCol } from './kit-solder';
 import { axialBody } from './packages';
 import { ALLOYS, idealVolume, timeToMelt, type JointShape } from './solder-joint';
@@ -60,6 +61,22 @@ export interface Thing {
   /** a link's wire: its gauge, its stripped ends, mm */ wire?: { awg: number; strip: number };
   /** made ready before it goes in, and how that is seen ("two AA cells in it, its knife switch up (open)") */ ready?: { do: string; check: string };
   /** off the board on its own leads: in once the board is held, so it does not hang from the board as it is turned */ hangs?: boolean;
+  /** how high it stands off the board, mm: the lowest go in first, so each lies flat on the bench when the board is
+   *  turned over (typical practice) */ height?: number;
+}
+/** A Perma-Proto's hole for a stripboard layout's (src/nexus/embody/breadboard.ts): its column the layout's row + 1,
+ *  rows a–j its columns 0–9, the top rails −1 (+) and −2 (−), the bottom 10 (+) and 11 (−). */
+export const ppAt = (h: Hole): XZ => [ppCol(h.row + 1), h.col === -1 ? PP.plus[0] : h.col === -2 ? PP.minus[0] : h.col === 10 ? PP.plus[1] : h.col === 11 ? PP.minus[1] : PP.rowsZ[h.col]!];
+/** How a laid-out part goes in (the layout knows only its nets and holes): its name, its form, its leads' names in
+ *  its pins' order, and the rest a Thing says. */
+export type PartHow = Omit<Thing, 'id' | 'leads'> & { leads: Omit<Lead, 'at'>[] };
+/** A build from a circuit laid on a Perma-Proto: each part where the layout put it, each of the layout's links a piece
+ *  of 22 AWG solid hook-up wire stripped 6 mm (Adafruit's 1311), with the tools and the circuit closed at the end. */
+export function buildOn(board: Board, l: Layout, how: Record<string, PartHow>, tools: Tool[], power?: Power): Build {
+  const things: Thing[] = l.placed.map((p) => { const h = how[p.comp.id]; if (!h) throw new Error(`no words for how ${p.comp.id} goes in`); return { ...h, id: p.comp.id, leads: h.leads.map((q, i) => ({ ...q, at: ppAt(p.holes[i]!) })) }; });
+  l.jumpers.forEach((j, i) => things.push({ id: `link${i ? i + 1 : ''}`, name: i ? `link ${i + 1}` : 'the link', form: 'link', wire: { awg: 22, strip: 6 }, height: 1.5,
+    leads: [{ name: 'its end', tag: board.hole(ppAt(j.from))?.replace(/^the /, '') ?? 'one end', pin: 0.644, round: true, at: ppAt(j.from) }, { name: 'its other end', tag: board.hole(ppAt(j.to))?.replace(/^the /, '').replace(/ at column \d+$/, '') ?? 'other end', pin: 0.644, round: true, at: ppAt(j.to) }] }));
+  return { board, things, tools, ...(power ? { power } : {}) };
 }
 export type Role = 'iron' | 'solder' | 'cleaner' | 'cutters' | 'hands' | 'stand';
 /** A tool as an edge reads it: its role, its name in a sentence, its price key, its figures. */
@@ -114,14 +131,14 @@ const dist = (a: XZ, c: XZ): number => Math.hypot(a[0] - c[0], a[1] - c[1]);
 function joined(b: Board, at: XZ, before: Thing[]): string {
   const s = b.strip(at); if (!s) return '';
   const on = before.flatMap((t) => t.leads.filter((l) => b.strip(l.at) === s).map(() => t.name));
-  return on.length ? `, on ${on[0]}'s strip` : '';
+  return !on.length ? '' : /rail/.test(s) ? `, on the ${s.replace(/^(upper|lower) /, '')} with ${on[0]}'s` : `, on ${on[0]}'s strip`;
 }
 /** An insert edge said: how its form goes in, from its holes. */
 function insertSaid(b: Board, t: Thing, before: Thing[]): Said {
   const [a, c] = t.leads as [Lead, Lead], src = `${ADAFRUIT_GUIDE}; ${b.src}`;
   if (t.form === 'axial') {
-    const n = Math.round(dist(a.at, c.at) / b.pitch);
-    return { kind: 'insert', things: [t.id], do: `Bend ${t.name}'s leads down at its body to span ${count(n)} holes (${mm(dist(a.at, c.at))} mm) and push it into ${both(b, a.at, c.at)}; bend its leads out a little under the board so it stays.`, check: 'it lies flat on the board', src: `${src}; IPC-A-610's lead forming` };
+    const n = Math.round(dist(a.at, c.at) / b.pitch), on = t.leads.map((l) => [l, joined(b, l.at, before)] as const).filter(([, j]) => j).map(([l, j]) => `its ${l.tag} lead${j.replace(/^,/, '')}`);
+    return { kind: 'insert', things: [t.id], do: `Bend ${t.name}'s leads down at its body to span ${count(n)} holes (${mm(dist(a.at, c.at))} mm) and push it into ${both(b, a.at, c.at)}${on.length ? ` (${on.join('; ')})` : ''}; bend its leads out a little under the board so it stays.`, check: 'it lies flat on the board', src: `${src}; IPC-A-610's lead forming` };
   }
   if (t.form === 'radial') {
     const m = t.mark, marked = m ? t.leads[m.by]! : null;
@@ -161,7 +178,8 @@ export function lessonOf(build: Build): { steps: Said[]; refused: string[] } {
   if (refused.length) return { steps: [], refused };
   // (things on the board in, in the build's order, each said with what it is joined to among those before it)
   const before: Thing[] = [], sayIn = (t: Thing) => { steps.push(insertSaid(b, t, before)); before.push(t); };
-  for (const t of build.things) if (!t.hangs) sayIn(t);
+  const low = build.things.filter((t) => !t.hangs).map((t, i) => ({ t, i })).sort((a, c) => (a.t.height ?? 0) - (c.t.height ?? 0) || a.i - c.i).map((x) => x.t);
+  for (const t of low) sayIn(t);
   if (hands) steps.push({ kind: 'hold', things: ['board'], do: `Clip the board in ${hands.name} by its ends, its underside up.`, check: 'the board level in both clips, every lead standing up out of it', src: hands.src });
   for (const t of build.things) if (t.hangs) sayIn(t);
   steps.push({ kind: 'tin', things: ['iron'], do: `Heat ${iron!.name} to ${set} °C; wipe its tip ${cleaner ? `in ${cleaner.name}` : 'on a damp sponge'} and melt a little solder onto it.`, check: 'the tip is shiny silver, not black', src: `${ADAFRUIT_GUIDE}; ${iron!.src}` });

@@ -81,10 +81,12 @@ describe('a hands-on soldering lesson: an LED and its resistor on a Perma-Proto'
     const b = newBench('proto'); expect(b.joints.length).toBe(8); expect(b.joints.filter((q) => q.part === 'battery').length).toBe(2);
     expect(letGo(b, 'proto', protoHold())).toMatch(/parts in first/);
     expect(letGo(b, 'resistor', [0, 12, 0])).toMatch(/not over its holes/);
-    letGo(b, 'resistor', over('resistor')); tick(b, dt, null, null); expect(b.step).toBe(1);
+    // (the lowest first: the link, the resistor, the LED)
+    letGo(b, 'link', over('link')); tick(b, dt, null, null); expect(b.step).toBe(1);
+    letGo(b, 'resistor', over('resistor')); tick(b, dt, null, null); expect(b.step).toBe(2);
     expect(letGo(b, 'led', over('led'), { reversed: true })).toMatch(/wrong way.*long lead.*anode/); expect(b.placed.led).toBe(false);
     expect(letGo(b, 'led', over('led'), { upright: false })).toMatch(/upright.*legs down/); expect(b.placed.led).toBe(false);
-    letGo(b, 'led', over('led')); letGo(b, 'link', over('link')); tick(b, dt, null, null); expect(b.step).toBe(3);
+    letGo(b, 'led', over('led')); tick(b, dt, null, null); expect(b.step).toBe(3);
     expect(letGo(b, 'proto', protoHold(), { over: false })).toMatch(/turn the board over first/); expect(b.placed.proto).toBe(false);
     expect(letGo(b, 'proto', protoHold())).toMatch(/underside up/); tick(b, dt, null, null); expect(b.step).toBe(4);
     expect(kind(b)).toBe('insert'); expect(PROTO_STEPS[b.step]!.src).toMatch(/battery/);
