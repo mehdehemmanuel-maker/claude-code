@@ -28,7 +28,7 @@ function drawn(words: string): Part {
 /** Where things wait on the bench, mm (the user stands toward +z): the headers to the left, the Pico to the right, the
  *  stand beyond it pointing away (its rear ring, where the handle lies, toward you), the cleaner behind it, the solder's
  *  reel behind the breadboard. */
-const PLACES = { stand: [150, 0, 70] as V3, cleaner: [215, 0, -40] as V3, reel: [-95, 0, -60] as V3, cutters: [-230, 5.8, 100] as V3 };
+const PLACES = { stand: [150, 0, 70] as V3, cleaner: [215, 0, -40] as V3, reel: [-95, 0, -60] as V3, cutters: [-230, 5.8, 100] as V3, flux: [-175, 8, 5] as V3 };
 /** The stand turned a quarter so its front (where the tip lies) points away from you (−z). */
 const STAND_YAW = PI / 2;
 type Seated = 'resistor' | 'led' | 'link';
@@ -104,6 +104,8 @@ export class SolderBench {
     // (the cutters on the bench to the headers' left, their jaws' tips toward them and clear of the breadboard (its end
     // at x -42): 138 mm long, turned 0.35 rad, their tips at about x -100, z 53)
     const cutters = drawn('flushcutter chp-170'); this.obj.cutters = add(cutters, PLACES.cutters, [0, 0.35, 0]);
+    // (the flux pen the pack buys lying capped beside them, on its side: seldom needed for through-hole work (Adafruit))
+    add(drawn('fluxpen cq4lf'), PLACES.flux, [0, 0.25, PI / 2]);
     { const hs: THREE.Object3D[] = []; this.obj.cutters.traverse((o) => { if (o.userData.part === cutters.parts?.[0] || o.userData.part === cutters.parts?.[1]) hs.push(o); }); if (hs.length === 2) this.jaws = { halves: [hs[0]!, hs[1]!], shut: 0 }; }
     this.wire = new THREE.Mesh(new THREE.CylinderGeometry(HAND.wire / 2 * MM, HAND.wire / 2 * MM, 1, 8).translate(0, -0.5, 0).rotateX(PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
     this.wire.visible = false; this.group.add(this.wire);

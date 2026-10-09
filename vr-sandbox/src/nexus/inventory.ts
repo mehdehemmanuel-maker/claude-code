@@ -433,6 +433,10 @@ e('tip-sleeve', 'tip sleeve', 'Hardware/Hand tools/Soldering', 'part', 'draw', '
 e('tip-heater', 'tip heater', 'Hardware/Hand tools/Soldering', 'part', 'sinter', 'alumina nichrome chromel alumel', 'a heating track fired on an alumina rod in the sleeve, a thermocouple at its front', '', { size: [26, 2.4, 2.4] });
 e('tip-core', 'tip point', 'Hardware/Hand tools/Soldering', 'part', 'machine', 'copper iron-plating', 'the copper point that carries the heat to the joint, plated with iron so solder wets it without dissolving it', '', { size: [6.4, 4.2, 4.2] });
 e('spring-leaf', 'leaf spring', 'Mechanical/Springs/Leaf', 'part', 'stamp', 'steel-spring', 'a strip of spring steel bent to push two parts apart', '', { size: [22, 5.6, 0.35] });
+e('pen-barrel', 'pen barrel', 'Tools/Soldering/Flux pen parts', 'part', 'mould', 'pp', 'a moulded tube closed at its back, its front a collar the cap grips and a nose that holds the nib', '', { size: [14, 118, 14] });
+e('pen-cap', 'pen cap', 'Tools/Soldering/Flux pen parts', 'part', 'mould', 'pp', 'a moulded cup over the nib that keeps it from drying, gripping the barrel\'s collar', '', { size: [16, 31, 16] });
+e('felt-nib', 'felt nib', 'Tools/Soldering/Flux pen parts', 'part', 'extrude', 'pet', 'polyester fibres bonded into a rod, its end rounded: the liquid wicks through it to the work', '', { size: [4.1, 21, 4.1] });
+e('flux-no-clean', 'no-clean liquid flux', 'Chemicals/Fluxes', 'part', 'chemistry', 'water organic-acid', 'weak organic acids in water: they lift a metal\'s oxide at soldering heat and leave little behind (no halide, no rosin)', '10 ml in a pen', { size: [11.3, 97, 11.3] });
 e('hands-base', 'helping hands base', 'Tools/Soldering/Helping hands parts', 'part', 'cast', 'cast-iron', 'a cast-iron block, painted, heavy enough that the work held out over it does not tip it', '', { size: [90, 60, 12] });
 e('hands-rod', 'helping hands rod', 'Tools/Soldering/Helping hands parts', 'part', 'draw', 'steel-low nickel', 'drawn steel rod, nickel-plated: an upright, a bar, an arm', 'its size as drawn, the largest (its bar)', { size: [150, 6.35, 6.35] });
 e('hands-swivel', 'helping hands swivel', 'Tools/Soldering/Helping hands parts', 'part', 'cast', 'zamak nickel', 'a die-cast block an upright and a bar pass through, each locked by a wing nut', 'its size as drawn', { size: [22, 14, 14] });
@@ -1133,6 +1137,7 @@ m('pbo2', 'lead dioxide', 'Chemicals', 'the positive plate of a charged lead-aci
 m('ag2o', 'silver oxide', 'Chemicals', 'the cathode of silver-oxide button cells');
 m('lani5', 'lanthanum-nickel alloy', 'Metals/Hydrogen storage', 'an alloy that soaks up hydrogen: the negative of NiMH cells');
 m('rosin', 'rosin', 'Chemicals', 'pine resin: the flux in cored solder');
+m('organic-acid', 'organic acids', 'Chemicals', 'weak carboxylic acids (adipic, succinic: typical of no-clean fluxes) that lift oxide at soldering heat');
 m('cyanoacrylate', 'cyanoacrylate', 'Chemicals', 'the monomer of super glue, polymerised by moisture');
 m('algainp', 'AlGaInP', 'Semiconductors', 'the semiconductor of red, orange and yellow LEDs');
 m('yag-phosphor', 'YAG:Ce phosphor', 'Ceramics', 'a yellow phosphor over a blue LED that makes it white');

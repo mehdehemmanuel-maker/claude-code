@@ -9,6 +9,7 @@ dist-view/
 view/public/world.json
 dist-view-dev/
 dist-view-b/
+dist-view-c/
 dist-view-survey/
 bench-out/
 __pycache__/

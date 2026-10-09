@@ -378,6 +378,30 @@ export function hakko599B(): Comp {
   return { name: 'Hakko 599B tip cleaner', item: 'tipcleaner-599b', at: [0, 0, 0], kids: [base, top, wool] };
 }
 
+// ---- Chip Quik's CQ4LF flux pen ------------------------------------------------------------------------------------
+/** Chip Quik's CQ4LF no-clean liquid flux pen, as Adafruit sells it (its 3468): 10 ml of flux (INM0: no halide; Chip
+ *  Quik's own showcase calls it VOC-, halide- and rosin-free, so water-borne: its density taken as water's, an
+ *  estimate) behind a felt nib, under a cap; 132.0 × 16.0 × 16.0 mm and 19.5 g as listed. Its barrel white, its cap
+ *  black, its nib pale yellow (as two image listings describe its photos; this network cannot reach them). Estimated,
+ *  said so: its barrel 14 mm across, polypropylene 1.3 mm thick round a bore 11.4 that holds its 10 ml in 97 mm, a
+ *  collar the cap grips and a nose holding the nib 4.1 mm across and 7 out; its cap 16 across and 31 long; its valve,
+ *  its label and its print not drawn. Drawn so it weighs about 18.6 g. Frame: standing, its axis up y, its back end
+ *  at the origin, its nib up. */
+export const CQ4LF = { L: 132, D: 16, barrel: 14, bore: 11.4, ml: 10, g: 19.5 } as const;
+export function cq4lf(): Comp {
+  const R = CQ4LF.barrel / 2, rb = CQ4LF.bore / 2, white = { color: 0xf1f1ee, finish: 'moulded' } as const, black = { color: 0x1b1b1c, finish: 'moulded' } as const;
+  // (its barrel: a tube closed at its back 3 mm thick; its front a collar 13 across the cap grips, tapering to a nose
+  // round the nib's bore 4.2 across)
+  const barrel = piece('CQ4LF barrel', 'pen-barrel', [{ role: 'body', shape: { lathe: [[0, 0], [R, 0], [R, 100], [6.5, 100.5], [6.5, 112], [3.4, 117.5], [2.1, 118], [2.1, 100.5], [rb, 100], [rb, 3], [0, 3], [0, 0]] }, at: [0, 0, 0], mat: 'pp', ...white }]);
+  // (the flux filling its bore: 97 mm of it, 9.7 ml, drawn though the barrel hides it)
+  const flux = piece('CQ4LF flux', 'flux-no-clean', [post('body', rb - 0.05, 97, [0, 3, 0], 'water', { color: 0xd9c98f })]);
+  // (its nib: a rod of bonded polyester fibre, its end rounded, from inside the nose to 7 mm past it)
+  const nib = piece('CQ4LF nib', 'felt-nib', [{ role: 'body', shape: { lathe: [[0, 104], [2.05, 104], [2.05, 121], [1.8, 123.5], [1.0, 124.7], [0, 125], [0, 104]] }, at: [0, 0, 0], mat: 'pet', color: 0xe8dc9c, finish: 'texture' }]);
+  // (its cap: a cup 16 across gripping the collar, its top 2 mm thick, its rim rounded)
+  const cap = piece('CQ4LF cap', 'pen-cap', [{ role: 'body', shape: { lathe: [[6.55, 100.8], [8, 100.8], [8, 131.2], [7.2, 132], [0, 132], [0, 130], [6.55, 130], [6.55, 100.8]] }, at: [0, 0, 0], mat: 'pp', ...black }]);
+  return { name: 'Chip Quik CQ4LF flux pen', item: 'fluxpen-cq4lf', at: [0, 0, 0], kids: [barrel, flux, nib, cap] };
+}
+
 // ---- a reel of solder ------------------------------------------------------------------------------------------------
 /** A 50 g reel of 0.5 mm rosin-core tin-lead solder, Adafruit's 1886 (Atten TS-635050: 63/37 since 2019, its listing).
  *  Its 50 g is 5.95 cm³ of 63/37 (8.4 g/cm³: 30 m of 0.5 mm wire), its rosin 2.2 % of its weight (typical of cored

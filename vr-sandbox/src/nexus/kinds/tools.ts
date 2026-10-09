@@ -124,6 +124,13 @@ export const TOOLS: KindDef[] = [
     box: () => [155, 12.8, 16.2], g: () => 28,
   },
   {
+    id: 'fluxpen', look: 'box', name: 'flux pen', path: 'Tools/Soldering/Flux', says: 'a pen of liquid flux behind a felt nib, drawn onto a joint to lift its oxide and let the solder wet it', std: 'the pens drawn here: Chip Quik\'s CQ4LF (Adafruit\'s 3468)',
+    axes: [bare('model', 'model', ['cq4lf'])], title: () => 'Chip Quik CQ4LF no-clean flux pen, 10 ml', of: () => 'pen-barrel flux-no-clean felt-nib pen-cap', make: 'assemble',
+    how: 'its moulded barrel filled with flux, its felt nib pressed into its nose, its cap pressed on',
+    spec: () => 'no-clean liquid flux, INM0 (no halide), for leaded and lead-free solder, 10 ml; 132.0 × 16.0 × 16.0 mm, 19.5 g (Adafruit\'s listing, $7.95); most needed for surface-mount work, seldom for through-hole (Adafruit)',
+    box: () => [16, 132, 16], g: () => 19.5,
+  },
+  {
     id: 'helpinghands', look: 'box', name: 'helping hands', path: 'Tools/Soldering/Helping hands', says: 'a weighted stand with clips on jointed arms that holds the work, and a magnifier over it, so both hands are free', std: 'the stands drawn here: the MZ101 Adafruit sells as its 291 (Adafruit\'s, SE\'s and Micro-Mark\'s listings)',
     axes: [bare('model', 'model', ['mz101'])], title: () => 'MZ101 helping hands with magnifier', of: () => 'hands-base hands-rod*5 hands-swivel hands-ball*2 {wingnut M4 zinc}*3 alligator-clip*2 magnifier-lens', make: 'assemble',
     how: 'its rods pressed into its cast base and its die-cast swivel and balls, its clips on its arms, every joint locked by a wing nut, its metal nickel-plated',
