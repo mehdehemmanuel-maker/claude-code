@@ -64,6 +64,7 @@ export function pkgOf(name: string): Pkg | null {
   if (name === 'WSON-8') return { name, form: 'qfn', sides: 2, pins: 8, L: 6, W: 5, H: 0.75, A1: 0, pitch: 1.27, span: 5, lw: 0.4, lt: 0.2, pad: 3.4, grounds: 'JEDEC MO-229 (WSON-8, 6 × 5 mm): four pads at 1.27 mm along each long side and an exposed pad, nominal' };
   if (/^SOT-23(-\d)?$/.test(name)) { const k = Number(/^SOT-23-(\d)$/.exec(name)?.[1] ?? 3); return { name, form: 'sot', pins: k, L: 2.9, W: k > 3 ? 1.6 : 1.3, H: 0.95, A1: 0.05, pitch: 0.95, span: k > 3 ? 2.8 : 2.4, lw: 0.4, lt: 0.12, grounds: k > 3 ? 'JEDEC MO-178: 0.95 mm pitch, nominal' : 'JEDEC TO-236: 0.95 mm pitch, nominal' }; }
   if (/^SOT-323(-\d)?$/.test(name)) { const k = Number(/^SOT-323-(\d)$/.exec(name)?.[1] ?? 3); return { name, form: 'sot', pins: k, L: 2.0, W: 1.25, H: 0.95, A1: 0.05, pitch: 0.65, span: 2.1, lw: 0.3, lt: 0.12, grounds: 'JEDEC MO-203 (SC-70): a body 2.0 × 1.25 mm, its leads at 0.65 mm, 2.1 mm across them, nominal' }; }
+  if (name === 'SOT-523') return { name, form: 'sot', pins: 3, L: 1.6, W: 0.8, H: 0.75, A1: 0.05, pitch: 0.5, span: 1.6, lw: 0.2, lt: 0.12, grounds: 'SOT-523 (SC-89): a body 1.6 × 0.8 mm, its leads at 0.5 mm, 1.6 mm across them (Diodes Inc.\'s SOT523 outline via KiCad\'s footprint, its pads 1.29 mm apart); its height 0.75, typical of the outline' };
   // (a DFN named with its body, "DFN-6-1.6x1.6": its pads along its two long sides at the widest of MO-229's pitches that
   // fits, an exposed pad between)
   const ds = /^DFN-(\d+)-(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(name);

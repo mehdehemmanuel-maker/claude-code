@@ -89,6 +89,80 @@ export function usbCPlug(): BoardPart {
     src: 'USB Type-C spec: plug shell 8.25 × 2.40 mm, 6.65 mm from its end; overmould within 12.35 × 6.5 mm (its length typical)' };
 }
 
+// ---- USB Micro-B --------------------------------------------------------------------------------------------------
+/** A top-mount USB Micro-B receptacle, its mouth at +x: its stamped stainless shell a trapezoid round the Micro-USB
+ *  spec's opening (its plug 6.85 × 1.80 mm, its two lower corners cut at 45°: the mouth here 6.9 × 1.85, cut 0.6),
+ *  0.25 thick at its sides; its moulded tongue hanging under the shell's top inside, its five contacts under the tongue
+ *  at 0.65 mm (the spec's), their tails out of the back to their pads; two latch springs lanced in the shell's top; two
+ *  tabs out at its back corners to the board. Its outside per board (W wide, D deep, H tall); where not measured, 7.5 ×
+ *  5.5 × 2.5 (the outline of Molex 105017 and Amphenol 10118194 through KiCad's footprints: 7.3–7.5 × 5.0–5.5; their
+ *  height typical). */
+export function microUsbB(o: { W?: number; D?: number; H?: number; latch?: number; src?: string } = {}): BoardPart {
+  const W = o.W ?? 7.5, D = o.D ?? 5.5, H = o.H ?? 2.5, x0 = -D / 2, mw = 6.9, mh = 1.85, mc = 0.6, y0 = (H - mh) / 2, c = mc + (W - mw) / 2;
+  const trap = (w: number, h: number, cut: number, y: number): V2[] => [[-w / 2 + cut, y], [w / 2 - cut, y], [w / 2, y + cut], [w / 2, y + h], [-w / 2, y + h], [-w / 2, y + cut]];
+  const S = { color: HUE.stainless, finish: 'bright' } as const;
+  const latch = o.latch ?? 2.5;
+  const shell = piece('micro-USB shell', 'usb-micro-shell', [
+    along('term', trap(W, H, c, 0), [trap(mw, mh, mc, y0)], D, x0, 'stainless-304', S),
+    box('term', [0.25, H, W - 0.5], [x0 + 0.125, H / 2, 0], 'stainless-304', S),
+    // (its latch springs lanced down from its top, dark in the slot round each)
+    ...[-1, 1].map((s): Solid => box('term', [0.9, 0.04, 0.5], [D / 2 - latch, H + 0.01, s * 2.5], 'stainless-304', { color: 0x55585c })),
+    // (its two tabs out of its back corners, soldered flat to their pads)
+    ...[-1, 1].map((s): Solid => box('term', [1.1, 0.2, 1.4], [x0 - 0.55, 0.1, s * (W / 2 - 0.7)], 'stainless-304', S))]);
+  const yt = y0 + mh - 0.1 - 0.3;
+  const tongue = piece('micro-USB tongue', 'usb-micro-tongue', [box('body', [D - 1.0, 0.6, 3.6], [x0 + 0.25 + (D - 1.0) / 2, yt, 0], 'nylon', { color: HUE.black }),
+    box('body', [0.8, H - 0.25, W - 0.6], [x0 + 0.25 + 0.4, (H - 0.25) / 2, 0], 'nylon', { color: HUE.black })]);
+  const pins = Array.from({ length: 5 }, (_, k): Comp => { const z = (k - 2) * 0.65;
+    return piece(`micro-USB contact ${k + 1}`, 'usb-micro-contact', [box('lead', [D - 1.6, 0.05, 0.25], [x0 + 1.2 + (D - 1.6) / 2, yt - 0.325, z], 'phosphor-bronze', { color: HUE.gold }),
+      box('lead', [1.0, 0.1, 0.3], [x0 - 0.5, 0.05, z], 'phosphor-bronze', { color: HUE.gold })]); });
+  return { comp: { name: 'micro-USB receptacle', item: 'usb-micro-socket', at: [0, 0, 0], kids: [shell, tongue, ...pins] }, size: [D, W, H],
+    src: o.src ?? 'USB Micro-B spec (its plug 6.85 × 1.80 mm, contacts at 0.65 mm); outside 7.5 × 5.5 mm (Molex 105017 and Amphenol 10118194 through KiCad\'s footprints), 2.5 tall (typical)' };
+}
+
+// ---- crystals -----------------------------------------------------------------------------------------------------
+/** A quartz crystal in a ceramic SMD package (a 3225's, 3.2 × 2.5 mm, Abracon ABM8's outline through KiCad's
+ *  footprint): its alumina base, its gold seal ring, the Kovar lid seam-welded on it, its four gold pads under its
+ *  corners; inside, its quartz blank on its two mounts. Its height 0.8 mm (typical of the size); its lid as its photo
+ *  shows it on a board, where measured. */
+export function crystalSmd(o: { L?: number; W?: number; H?: number; lid?: [number, number]; lidHue?: number; src?: string } = {}): BoardPart {
+  const L = o.L ?? 3.2, W = o.W ?? 2.5, H = o.H ?? 0.8, [ll, lw] = o.lid ?? [L - 0.5, W - 0.5], hb = H - 0.12;
+  const base = piece('crystal base', 'crystal-smd-base', [
+    box('body', [L, hb, W], [0, hb / 2, 0], 'alumina', { color: 0xe8e2d6 }),
+    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Solid => box('lead', [1.0, 0.03, 0.8], [a! * (L / 2 - 0.55), 0.015, b! * (W / 2 - 0.45)], 'gold', { color: HUE.gold })),
+    // (its seal ring: the gold-plated band round the top of the base the lid is welded to)
+    plate('term', rect2(0, 0, L - 0.1, W - 0.1), [rect2(0, 0, ll + 0.1, lw + 0.1)], 0.04, hb, 'gold', { color: HUE.gold, finish: 'bright', share: 0.4 })]);
+  const lid = piece('crystal lid', 'crystal-smd-lid', [box('cap', [ll, H - hb, lw], [0, hb + (H - hb) / 2, 0], 'kovar', { color: o.lidHue ?? 0xc8bcb4, finish: 'bright' })]);
+  const blank = piece('quartz blank', 'quartz-blank', [box('core', [L * 0.6, 0.08, W * 0.55], [0, hb * 0.55, 0], 'quartz', { color: 0xf4f4f0 })]);
+  return { comp: { name: 'quartz crystal (3225)', item: 'crystal-smd', at: [0, 0, 0], kids: [base, lid, blank] }, size: [L, W, H],
+    src: o.src ?? 'Abracon ABM8: 3.2 × 2.5 mm (KiCad\'s footprint, from its datasheet); 0.8 mm tall (typical of the size)' };
+}
+
+/** A fiducial mark: a bare copper dot d across, gold-flashed (ENIG), in an opening of the solder mask `ring` across,
+ *  the laminate showing dark round it; as its board's photo shows it, where measured. */
+export function fiducial(d = 1.0, ring = 1.75, o: { pad?: number; bare?: number } = {}): BoardPart {
+  const circ = (r: number): V2[] => Array.from({ length: 28 }, (_, i): V2 => [r * Math.cos((2 * PI * i) / 28), r * Math.sin((2 * PI * i) / 28)]);
+  const comp = piece('fiducial', 'fiducial', [
+    { role: 'lead', shape: { cyl: [d / 2, 0.035] }, at: [0, 0.0175, 0], mat: 'copper-foil', color: o.pad ?? HUE.gold, finish: 'bright' },
+    // (the laminate where the mask is opened round it, drawn as its face 4 µm proud of the mask so it shows)
+    plate('body', circ(ring / 2), [circ(d / 2)], 0.004, 0, 'fr4', { color: o.bare ?? 0x483e23 })]);
+  return { comp, size: [ring, ring, 0.035], src: 'a fiducial as its photo shows it' };
+}
+
+/** A small top-pushed tactile switch as its photo shows it: its moulded base, white at its corners; its steel cover
+ *  over it with an oval window, its white plunger standing in the window, a dome under it; four terminals out at its
+ *  corners. Its sizes measured on its board's photo (L × W, its plunger a × b); its height typical. */
+export function tactTop(o: { L: number; W: number; H: number; plunger: [number, number]; src: string }): BoardPart {
+  const { L, W, H } = o, [pa, pb] = o.plunger, hc = H - 0.35, oval = (a: number, b: number): V2[] => Array.from({ length: 24 }, (_, i): V2 => [(a / 2) * Math.cos((2 * PI * i) / 24), (b / 2) * Math.sin((2 * PI * i) / 24)]);
+  const kids: Comp[] = [
+    piece('switch base', 'tact-base', [box('body', [L, hc - 0.15, W], [0, (hc - 0.15) / 2, 0], 'nylon', { color: HUE.white })]),
+    piece('switch frame', 'tact-frame', [plate('term', rect2(0, 0, L - 0.5, W - 0.2), [oval(pa + 0.15, pb + 0.15)], 0.15, hc - 0.15, 'steel-low', { color: 0x8e9196 })]),
+    piece('switch dome', 'tact-dome', [{ role: 'cap', shape: { cyl: [Math.min(pa, pb) / 2, 0.1] }, at: [0, hc - 0.4, 0], mat: 'stainless-304', color: HUE.stainless }]),
+    piece('switch plunger', 'tact-plunger', [plate('cap', oval(pa, pb), [], H - hc + 0.3, hc - 0.3, 'nylon', { color: HUE.white })]),
+    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b], i): Comp => piece(`switch terminal ${i + 1}`, 'tact-terminal', [box('lead', [0.4, 0.15, 0.6], [a! * (L / 2 + 0.15), 0.075, b! * (W / 2 - 0.55)], 'copper', { color: HUE.tin })])),
+  ];
+  return { comp: { name: 'tactile switch', item: 'tact-switch', at: [0, 0, 0], kids }, size: [L + 0.7, W, H], src: o.src };
+}
+
 // ---- HDMI -----------------------------------------------------------------------------------------------------------
 /** HDMI receptacles: type A (full size), C (mini), D (micro). Its stamped shell round its keyed mouth (the lower corners
  *  cut, as the plug is), its moulded tongue with its 19 contacts, ten on its top face and nine under, alternating at

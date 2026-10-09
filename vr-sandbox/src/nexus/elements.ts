@@ -79,6 +79,7 @@ export const MATERIALS: Record<string, Spec> = {
   'steel-chrome': { alloy: { C: 1.0, Cr: 1.45, Mn: 0.35, Si: 0.25, Fe: 'bal' }, grade: 'AISI 52100, nominal' },
   'steel-tool': { alloy: { C: 0.95, Mn: 1.2, Cr: 0.5, W: 0.5, V: 0.2, Fe: 'bal' }, grade: 'AISI O1, nominal' },
   'stainless-304': { alloy: { Cr: 18.5, Ni: 9, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 304, nominal' },
+  kovar: { alloy: { Ni: 29, Co: 17, Fe: 'bal' }, grade: 'ASTM F15 (Kovar), nominal' },
   'steel-electrical': { alloy: { Si: 3.2, Al: 0.5, Fe: 'bal' }, grade: 'silicon electrical steel, nominal' },
   'al-6061': { alloy: { Mg: 1.0, Si: 0.6, Cu: 0.28, Cr: 0.2, Fe: 0.35, Al: 'bal' }, grade: 'AA 6061, nominal' },
   'al-6063': { alloy: { Mg: 0.7, Si: 0.4, Fe: 0.2, Al: 'bal' }, grade: 'AA 6063, nominal' },

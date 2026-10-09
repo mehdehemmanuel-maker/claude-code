@@ -17,7 +17,7 @@
 // y = -t.
 
 import { chipSolids, solidMasses, type Solid } from './packages';
-import { BOARD_PARTS, chip, fccsp, rj45, fcbgaLid, fpcUpright, hdmi, HUE, inductor, jstSH, lpddr, micElectret, microSD, pinHeader, refBody, shieldCan, sideLeds, chipLed, tactSide, usbA, usbC, type BoardPart } from './boardparts';
+import { BOARD_PARTS, chip, crystalSmd, fccsp, fiducial, microUsbB, tactTop, rj45, fcbgaLid, fpcUpright, hdmi, HUE, inductor, jstSH, lpddr, micElectret, microSD, pinHeader, refBody, shieldCan, sideLeds, chipLed, tactSide, usbA, usbC, type BoardPart } from './boardparts';
 import { chipCase, mlccCase } from './kinds/electrical';
 import { OPI5_COPPER } from './sbc-opi5-copper';
 import { OPI5_SMALL } from './sbc-opi5-small';
@@ -27,6 +27,8 @@ import { PI5_SMALL } from './sbc-pi5-small';
 import { PI4_COPPER } from './sbc-pi4-copper';
 import { PI4_INK } from './sbc-pi4-ink';
 import { PI4_SMALL } from './sbc-pi4-small';
+import { PICO_COPPER } from './sbc-pico-copper';
+import { PICO_INK } from './sbc-pico-ink';
 
 const hdmiOn = (depth: number): BoardPart => hdmi('A', depth);
 
@@ -48,6 +50,7 @@ export interface BoardDef {
    *  ground pin's); a pin's castellation, a half-hole of that bore cut in the edge nearest it, its pad run out to it */
   more?: Hole[];
   /** its holes' pads, mm across (where measured) */ pad?: number;
+  /** its pads' gold bright as its photos show it (an ENIG finish), not matte */ bright?: boolean;
   /** its board's thickness, mm (where its maker gives it; 1.6 otherwise, typical); its corners' radius (square where
    *  not given) */ t?: number; corner?: number;
   /** its solder mask's colour, as its photos show it; its silkscreen's words, where measured */ mask?: number; silk?: Silk[];
@@ -88,6 +91,46 @@ export const picoPinAt = (n: number): [number, number] => { const k = n <= 20 ? 
 const PICO_WHY = 'Raspberry Pi\'s Pico footprint (RPi_Pico_SMD_TH): 1.02 mm in a 1.7 mm pad; its castellation measured on its photo';
 export const PICO_PINS: Hole[] = Array.from({ length: 40 }, (_, i): Hole => ({ at: picoPinAt(i + 1), d: 1.02, pad: 1.7, ...(/GND$/.test(PICO_PIN_NAMES[i]!) ? { square: true } : {}), castle: 1.0, why: `pin ${i + 1} (${PICO_PIN_NAMES[i]}): ${PICO_WHY}` }));
 export const PICO_DEBUG: Hole[] = (['SWCLK', 'GND', 'SWDIO'] as const).map((nm, i): Hole => ({ at: [49.4, +(10.5 + (i - 1) * 2.54).toFixed(2)], d: 1.02, pad: 1.7, ...(nm === 'GND' ? { square: true } : {}), castle: 1.0, why: `debug pad ${nm}: ${PICO_WHY}` }));
+/** Where a part of the Pico sits: Raspberry Pi's photo of it (its documentation's pico-series/images/pico-1s.png, the
+ *  first of the four boards), calibrated by its 47 holes (four mounting holes, its 40 pins' and its 3 debug pads', each
+ *  the centre of the backdrop seen through it: photo.py, 0.03 mm rms at 8.8 px/mm), its parts' outlines read off it
+ *  square-on; what each part is from Raspberry Pi's schematic of it (RPI-PICO rev 3, 15 January 2021, as
+ *  passionelectronique.fr keeps it), its package from its maker's datasheet or KiCad's footprint of it. */
+const PHP = (what: string) => `Raspberry Pi's photo of the Pico (raspberrypi/documentation pico-1s.png, calibrated by its 47 holes, 0.03 mm rms): ${what}`;
+const SCH = (what: string) => `Raspberry Pi's Pico schematic (RPI-PICO rev 3): ${what}`;
+/** A chip with its pin 1 marked as its photo shows it: a laser-marked spot r across on its top, at (x, z) from its
+ *  middle in its own frame (its first lead at its −x, −z corner). */
+function dotted(c: Comp, x: number, z: number, r: number): Comp {
+  return { ...c, kids: (c.kids ?? []).map((k): Comp => { const s = k.solids?.find((q) => q.role === 'body' && q.shape && 'box' in q.shape); if (!s || !('box' in s.shape!)) return k;
+    const top = s.at[1] + s.shape.box[1] / 2; return { ...k, solids: [...k.solids!, { role: 'body', shape: { cyl: [r, 0.004] }, at: [x, top + 0.002, z], mat: s.mat, color: 0x77797c }] }; }) };
+}
+const PICO_LAYOUT: Place[] = [
+  { part: () => microUsbB({ W: 7.4, D: 5.66, latch: 2.5, src: SCH('J1, an EDAC 690-005-298-486 micro-USB B') + '; ' + PHP('its shell 7.4 wide and 5.66 deep, its latch springs 2.5 mm behind its mouth, its five tails at 0.65 mm') + '; its mouth the Micro-USB spec\'s, its height 2.5 typical (EDAC\'s drawing not reached)' }), at: [1.38, 10.6], dir: 180, name: 'micro-USB (J1)', how: PHP('its shell x −1.45 to 4.21 (its mouth 1.45 mm past the edge), z 6.9 to 14.3') },
+  { part: () => dotted(chip('QFN-56', 'Raspberry Pi RP2040 microcontroller (U1)', 'RP2-B0  20/21\nP64M15.00 TTT'), -2.51, -2.6, 0.3), at: [26.04, 10.51], dir: 90, name: 'RP2040 (U1)', how: PHP('its body x 22.5 to 29.58, z 6.92 to 14.1 (7 × 7 by its datasheet), its pin 1 dot at (23.44, 8.0), its marking reading across the board, its top toward the USB end, as the photo reads it') },
+  { part: () => chip('DFN-10-3x3', 'Richtek RT6150B-33GQW buck-boost converter (U2)'), at: [11.04, 13.53], name: 'buck-boost converter (U2)', how: SCH('U2') + '; its package Richtek\'s WDFN-10L 3 × 3, its five pads a side at 0.5 mm; ' + PHP('its body x 9.71 to 12.38, z 12.13 to 14.94, its pads along its two sides at z 12.0 and 15.0') },
+  { part: () => chip('DFN-8-2x3', 'Winbond W25Q16JVUXIQ 2 MB QSPI flash (U3)'), at: [19.04, 6.6], dir: 90, name: 'flash (U3)', how: SCH('U3') + '; its package Winbond\'s USON-8 2 × 3 × 0.6 mm (UX); ' + PHP('its body x 17.38 to 20.71, z 5.54 to 7.67, four pads up each of its short sides') },
+  { part: () => chip('SOD-123F', 'onsemi MBR120VLSFT1G Schottky diode, VBUS to VSYS (D1)', '', 'diode-smd'), at: [6.6, 16.8], name: 'Schottky diode (D1)', how: SCH('D1') + '; its SOD-123FL drawn as a SOD-123F (KiCad\'s outline 2.8 × 1.8 mm, nominal); ' + PHP('its black body x 5.29 to 7.9, z 16.08 to 17.54, its tin ends past it') },
+  { part: () => chip('SOT-523', 'Diodes Inc. DMG1012T N-channel MOSFET (Q1)', '', 'sot-package'), at: [18.5, 16.95], dir: 90, name: 'MOSFET (Q1)', how: SCH('Q1') + '; ' + PHP('its body x 18.0 to 19.04, z 16.17 to 17.73, two leads out of its +x side and one out of its −x side') },
+  { part: () => inductor(2.5, 2.2, 1.0, '', 0x69646b), at: [10.8, 16.7], name: 'power inductor (L1, 2.2 µH)', how: SCH('L1, 2.2 µH, its package not named') + '; ' + PHP('its grey body x 9.46 to 12.1, z 15.55 to 17.9 (2.5 × 2.2 by its size, less the blur), its colour #69646b') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
+  { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xc8b6b1, src: SCH('X1, 12 MHz') + '; an Abracon ABM8-272-T3 (its datasheet\'s text), 3.2 × 2.5 mm (KiCad\'s ABM8 footprint); ' + PHP('its lid 2.6 × 1.95, #c8b6b1') }), at: [34.58, 8.27], dir: 90, name: 'crystal (X1, 12 MHz)', how: PHP('its gold-rimmed body x 33.33 to 35.83, z 6.71 to 9.83, its long side along the board') },
+  { part: () => tactTop({ L: 4.27, W: 3.37, H: 1.9, plunger: [3.15, 2.23], src: SCH('SW1, a TP-1221U-K9K5325') + '; ' + PHP('its body 4.27 × 3.37 mm, its oval plunger 3.15 × 2.23, its four terminals out of its ends') + '; its height 1.9, typical (its maker\'s drawing not found)' }), at: [11.9, 7.06], name: 'BOOTSEL button (SW1)', how: PHP('its body x 9.77 to 14.04, z 5.38 to 8.75') },
+  ...([[7.6, 4.73], [45.02, 16.54]] as [number, number][]).map((at): Place => ({ part: () => fiducial(1.0, 1.75, { pad: 0xf6d673, bare: 0x483e23 }), at, name: 'fiducial', how: PHP(`a bare gold dot 1.0 mm across at (${at[0]}, ${at[1]}) in a dark ring 1.75 across (#483e23) where the mask is opened, one at each of two opposite corners: fiducials by their look and their places (the schematic names none)`) })),
+  { part: () => chipLed(1.6, 0.8, 0.6, { name: 'user LED (green, D2)', item: 'led-chip-green', die: 'led-die-ingan', color: 0xe6ccb2 }), at: [4.8, 4.9], dir: 90, name: 'user LED (D2, GPIO25)', how: SCH('D2, green, driven by GPIO25 through R3') + '; ' + PHP('its pale body x 4.35 to 5.25, z 3.96 to 5.83 (an 0603 by its size), LED printed beside it') },
+];
+/** The Pico's small parts, read by eye off its photo square-on at 48 px a mm (its own 8.8 px a mm, so good to about
+ *  0.2 mm): a black top a resistor, a tan one a capacitor, the case by its length between its tin ends. Its schematic
+ *  has 18 capacitors (two 47 µF 0805s, four 2.2 µF 0402s, twelve 0201s) and 13 resistors fitted (ten 0402s, two 0201s,
+ *  one 0603); 19 and 15 are read here, so two of each kind are unsure (the two under the flash, z 5.04, among them). */
+const PICO_SMALL: SmallRow[] = [
+  ['c', 8.35, 13.3, 2.0, 1.25, 90], ['c', 13.35, 13.3, 2.0, 1.25, 90],
+  ['c', 16.05, 16.6, 0.6, 0.3, 0], ['c', 17.05, 14.95, 1.0, 0.5, 0], ['c', 20.85, 15.2, 1.0, 0.5, 0], ['c', 20.8, 13.65, 1.0, 0.5, 0], ['c', 20.8, 12.7, 1.0, 0.5, 0],
+  ['c', 20.8, 10.55, 0.6, 0.3, 0], ['c', 20.8, 9.83, 0.6, 0.3, 0], ['c', 23.1, 15.1, 0.6, 0.3, 90], ['c', 27.3, 15.15, 0.6, 0.3, 45], ['c', 31.0, 11.2, 0.6, 0.3, 0],
+  ['c', 31.0, 10.55, 0.6, 0.3, 0], ['c', 34.0, 10.5, 0.6, 0.3, 0], ['c', 34.95, 5.9, 0.6, 0.3, 0], ['c', 22.4, 5.85, 1.0, 0.5, 90], ['c', 23.25, 6.05, 0.6, 0.3, 90],
+  ['c', 27.05, 6.05, 0.6, 0.3, 90], ['c', 16.65, 6.0, 0.6, 0.3, 0],
+  ['r', 15.45, 17.5, 1.0, 0.5, 0], ['r', 16.33, 17.5, 1.0, 0.5, 0], ['r', 20.85, 16.95, 1.0, 0.5, 0], ['r', 20.85, 16.15, 1.0, 0.5, 0], ['r', 25.5, 16.75, 1.0, 0.5, 90],
+  ['r', 26.45, 16.75, 1.0, 0.5, 90], ['r', 32.6, 9.35, 1.0, 0.5, 90], ['r', 6.7, 7.85, 1.0, 0.5, 90], ['r', 7.7, 7.85, 1.0, 0.5, 90], ['r', 6.85, 14.2, 1.0, 0.5, 90],
+  ['r', 15.5, 14.95, 1.0, 0.5, 0], ['r', 20.75, 11.8, 0.6, 0.3, 0], ['r', 20.75, 11.25, 0.6, 0.3, 0], ['r', 18.13, 5.04, 1.0, 0.5, 0], ['r', 20.1, 5.04, 1.0, 0.5, 0],
+];
 /** Where a part sits in Raspberry Pi's mechanical reference 3D model of the Pi 5 (RP-004882-DD, issue 1, 2023-09-06), read
  *  by tools/measure/step.py: its box's x and y on the board's drawing (mm from its lower-left corner) and its size. */
 const RP5 = (box: string) => `Raspberry Pi's mechanical reference 3D model of the Pi 5 (RP-004882-DD): ${box}`;
@@ -187,7 +230,7 @@ export const BOARD_DEFS: Record<string, BoardDef> = {
   'pi3bplus': { name: 'Raspberry Pi 3 Model B+', maker: 'Raspberry Pi', cls: 'pi-b', soc: 'Broadcom BCM2837B0', cpu: '4 × Arm Cortex-A53 at 1.4 GHz', gpu: 'VideoCore IV', ram: [1], ramType: 'LPDDR2', ports: '4 × USB 2.0, Gigabit Ethernet over USB 2.0 (300 Mbit/s), full-size HDMI, MIPI CSI and DSI, Wi-Fi 802.11ac, Bluetooth 4.2, 40-pin header, 3.5 mm AV', power: '5 V / 2.5 A over micro-USB', L: 85, W: 56, H: 19.5, holes: PI_HOLES, hole: 2.7, socMm: 14, rams: 1, layers: 6, edge: [{ kind: 'rj45', at: 10.25, side: 'right' }, { kind: 'usbA2', at: 29, side: 'right' }, { kind: 'usbA2', at: 47, side: 'right' }, { kind: 'microusb', at: 10.6, side: 'bottom' }, { kind: 'hdmi', at: 32, side: 'bottom' }, { kind: 'audio', at: 53.5, side: 'bottom' }], header: 'pins', src: 'raspberrypi.com, Raspberry Pi 3 Model B+ product brief and mechanical drawing' },
   'pizero2w': { name: 'Raspberry Pi Zero 2 W', maker: 'Raspberry Pi', cls: 'zero', soc: 'Broadcom BCM2710A1 (in the RP3A0 package with its memory)', cpu: '4 × Arm Cortex-A53 at 1 GHz', gpu: 'VideoCore IV', ram: [0.5], ramType: 'LPDDR2', ports: 'mini-HDMI, micro-USB OTG, Wi-Fi 802.11b/g/n, Bluetooth 4.2, CSI-2 camera, 40-pin header (unpopulated)', power: '5 V / 2.5 A over micro-USB', L: 65, W: 30, H: 5.2, g: 10, holes: [[3.5, 3.5], [61.5, 3.5], [3.5, 26.5], [61.5, 26.5]], hole: 2.7, socMm: 12, rams: 0, layers: 6, edge: [{ kind: 'minihdmi', at: 12.4, side: 'bottom' }, { kind: 'microusb', at: 41.4, side: 'bottom' }, { kind: 'microusb', at: 54, side: 'bottom' }], header: 'holes', src: 'Raspberry Pi Zero 2 W product brief RP-008359; its weight, 10 g, from PiCockpit' },
   'cm5': { name: 'Raspberry Pi Compute Module 5', maker: 'Raspberry Pi', cls: 'cm', soc: 'Broadcom BCM2712', cpu: '4 × Arm Cortex-A76 at 2.4 GHz', gpu: 'VideoCore VII', ram: [2, 4, 8, 16], ramType: 'LPDDR4X-4267', ports: 'two 100-pin board-to-board connectors (to its carrier), optional eMMC and Wi-Fi', power: '5 V from its carrier', L: 55, W: 40, H: 4.7, holes: [[3.5, 3.5], [51.5, 3.5], [3.5, 36.5], [51.5, 36.5]], hole: 2.7, socMm: 16, rams: 1, layers: 10, edge: [], src: 'Raspberry Pi Compute Module 5 datasheet RP-008180 (four M2.5 holes inset 3.5 mm)' },
-  'pico1': { name: 'Raspberry Pi Pico', maker: 'Raspberry Pi', cls: 'pico', soc: 'RP2040 (QFN-56, 7 × 7 mm)', cpu: '2 × Arm Cortex-M0+ at 133 MHz', ram: [0], ramType: '264 KB SRAM, 2 MB QSPI flash', ports: 'micro-USB 1.1, 26 GPIO (3 ADC), 2 × UART, 2 × SPI, 2 × I²C, 16 PWM, 8 PIO state machines; 40 castellated pads', power: '1.8–5.5 V into VSYS', L: 51, W: 21, H: 3.9, holes: [[2, 4.8], [49, 4.8], [2, 16.2], [49, 16.2]], hole: 2.1, pad: 3.0 /* its rings, measured on Raspberry Pi's photo of it */, t: 1.0 /* its datasheet: 51 × 21 × 1 mm */, more: [...PICO_PINS, ...PICO_DEBUG], socMm: 7, rams: 0, layers: 2, edge: [{ kind: 'microusb', at: 10.5, side: 'left' }], src: 'Raspberry Pi Pico datasheet' },
+  'pico1': { name: 'Raspberry Pi Pico', maker: 'Raspberry Pi', cls: 'pico', soc: 'RP2040 (QFN-56, 7 × 7 mm)', cpu: '2 × Arm Cortex-M0+ at 133 MHz', ram: [0], ramType: '264 KB SRAM, 2 MB QSPI flash', ports: 'micro-USB 1.1, 26 GPIO (3 ADC), 2 × UART, 2 × SPI, 2 × I²C, 16 PWM, 8 PIO state machines; 40 castellated pads', power: '1.8–5.5 V into VSYS', L: 51, W: 21, H: 3.9, holes: [[2, 4.8], [49, 4.8], [2, 16.2], [49, 16.2]], hole: 2.1, pad: 3.0 /* its rings, measured on Raspberry Pi's photo of it */, t: 1.0 /* its datasheet: 51 × 21 × 1 mm */, more: [...PICO_PINS, ...PICO_DEBUG], socMm: 7, rams: 0, layers: 2, edge: [{ kind: 'microusb', at: 10.5, side: 'left' }], layout: PICO_LAYOUT, small: PICO_SMALL, photos: 'raspberrypi/documentation pico-1s.png (its top)', mask: 0x0c8855 /* its photo's bare mask, the median off its copper (photo.py traces) */, copper: { ...PICO_COPPER, hue: 0x33885a /* the mask over its copper, the same photo's median */ }, ink: PICO_INK, bright: true /* its pads bright gold in its photo */, src: 'Raspberry Pi Pico datasheet; its layout from its schematic and Raspberry Pi\'s photo of it (see each part)' },
   'pico1w': { name: 'Raspberry Pi Pico W', maker: 'Raspberry Pi', cls: 'pico', soc: 'RP2040 (QFN-56) and Infineon CYW43439', cpu: '2 × Arm Cortex-M0+ at 133 MHz', ram: [0], ramType: '264 KB SRAM, 2 MB QSPI flash', ports: 'micro-USB, 26 GPIO, Wi-Fi 802.11n (2.4 GHz), Bluetooth 5.2; 40 castellated pads', power: '1.8–5.5 V into VSYS', L: 51, W: 21, H: 3.9, holes: [[2, 4.8], [49, 4.8], [2, 16.2], [49, 16.2]], hole: 2.1, pad: 3.0 /* its rings, measured on Raspberry Pi's photo of it */, t: 1.0 /* its datasheet: 51 × 21 × 1 mm */, more: PICO_PINS /* its debug pads in its middle, not yet placed */, socMm: 7, rams: 0, layers: 2, edge: [{ kind: 'microusb', at: 10.5, side: 'left' }], src: 'Raspberry Pi Pico W datasheet' },
   'pico2': { name: 'Raspberry Pi Pico 2', maker: 'Raspberry Pi', cls: 'pico', soc: 'RP2350 (QFN-60, 7 × 7 mm)', cpu: '2 × Arm Cortex-M33 or 2 × Hazard3 RISC-V at 150 MHz', ram: [0], ramType: '520 KB SRAM, 4 MB QSPI flash', ports: 'micro-USB 1.1, 26 GPIO, 12 PIO state machines; 40 castellated pads', power: '1.8–5.5 V into VSYS', L: 51, W: 21, H: 3.9, holes: [[2, 4.8], [49, 4.8], [2, 16.2], [49, 16.2]], hole: 2.1, pad: 3.0 /* its rings, measured on Raspberry Pi's photo of it */, t: 1.0 /* its datasheet: 51 × 21 × 1 mm */, more: [...PICO_PINS, ...PICO_DEBUG], socMm: 7, rams: 0, layers: 2, edge: [{ kind: 'microusb', at: 10.5, side: 'left' }], src: 'Raspberry Pi Pico 2 datasheet' },
   'pico2w': { name: 'Raspberry Pi Pico 2 W', maker: 'Raspberry Pi', cls: 'pico', soc: 'RP2350 (QFN-60) and Infineon CYW43439', cpu: '2 × Arm Cortex-M33 or 2 × Hazard3 RISC-V at 150 MHz', ram: [0], ramType: '520 KB SRAM, 4 MB QSPI flash', ports: 'micro-USB, 26 GPIO, Wi-Fi 802.11n, Bluetooth 5.2; 40 castellated pads', power: '1.8–5.5 V into VSYS', L: 51, W: 21, H: 3.9, holes: [[2, 4.8], [49, 4.8], [2, 16.2], [49, 16.2]], hole: 2.1, pad: 3.0 /* its rings, measured on Raspberry Pi's photo of it */, t: 1.0 /* its datasheet: 51 × 21 × 1 mm */, more: PICO_PINS /* its debug pads in its middle, not yet placed */, socMm: 7, rams: 0, layers: 2, edge: [{ kind: 'microusb', at: 10.5, side: 'left' }], src: 'Raspberry Pi Pico 2 W datasheet' },
@@ -271,29 +314,32 @@ function fcbga(a: number): Comp[] {
 }
 /** The library part a port of an unmeasured board is drawn as. */
 const PORT_PART: Record<Port, string | null> = { usbA2: 'usb-a-2x2', usbA: 'usb-a-3', rj45: 'rj45', usbc: 'usb-c-16', microusb: null, hdmi: 'hdmi-a', microhdmi: 'hdmi-d', minihdmi: 'hdmi-c', audio: 'jack-3.5', can: null };
-/** The two ports drawn here, not yet from a maker's drawing of their own: a micro-USB socket, a CAN header. */
+/** A port drawn by kind where its board's layout is not measured: a micro-USB socket (its spec's mouth in its family's
+ *  outline), a CAN header (typical, not yet from a maker's drawing). */
 function oldPort(kind: 'microusb' | 'can'): BoardPart {
   const ins = (L: number, H: number, W: number, y: number, mat = 'pbt', col = 0x222224): Solid => box('body', [L, H, W], [0, y, 0], mat, { color: col });
   const pins = (n: number, L: number, y: number, W: number): Solid[] => Array.from({ length: n }, (_, i) => box('lead', [L, 0.1, 0.4], [0, y, (i - (n - 1) / 2) * (W / n)], 'copper', { color: HUE.gold }));
-  if (kind === 'microusb') return { comp: { name: 'micro-USB socket', item: 'usb-micro-socket', solids: [shellOf(5.6, 2.6, 7.5), ins(4.5, 0.6, 5.5, 1.3, 'nylon'), ...pins(5, 4, 1.9, 3.3)], at: [0, 0, 0] }, size: [5.6, 7.5, 2.6], src: 'typical' };
+  if (kind === 'microusb') return microUsbB();
   return { comp: { name: 'CAN header', item: 'terminal-header', solids: [ins(6, 6, 7.5, 3, 'pbt', 0xf2f2f2), ...pins(3, 4, 3, 5)], at: [0, 0, 0] }, size: [6, 7.5, 6], src: 'typical' };
 }
 /** The board itself: its FR-4 core (its own straw colour at its edges), its copper (so many layers of 35 µm, each half
  *  filled: typical), its solder mask over both faces in its colour (which weighs nothing here), its holes through all,
  *  each with its plated pad, top and bottom. */
 function pcb(b: BoardDef): Comp {
+  // (its pads' gold: matte where its photos show it so, bright where they show it bright (an ENIG finish))
+  const gold = { color: HUE.gold, ...(b.bright ? { finish: 'bright' as const } : {}) };
   const t = b.t ?? 1.6, cu = b.layers * 0.035 * 0.5, all = [...b.holes.map(([x, z]) => ({ x, z, d: b.hole, pad: b.pad ?? b.hole + 2.5, square: false, castle: 0 })), ...(b.more ?? []).map((h) => ({ x: h.at[0], z: h.at[1], d: h.d, pad: h.pad, square: !!h.square, castle: h.castle ?? 0 }))];
   const bores = all.map((h) => ({ x: h.x - b.L / 2, z: b.W / 2 - h.z, r: h.d / 2 }));
   const mask = b.mask ?? (b.maker === 'Raspberry Pi' ? 0x1f7a3a : b.maker === 'Orange Pi' ? 0x1f2a5a : 0x1a1a1a);
   const circ = (cx: number, cz: number, r: number, n = 24): [number, number][] => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * Math.PI * i) / n), cz + r * Math.sin((2 * Math.PI * i) / n)]);
   // (a flat of copper 35 µm thick, its outline in the board's own plane, drawn as the board's layers are)
-  const flat = (pts: [number, number][], holes: [number, number][][], at: V3, mat = 'copper'): Solid => ({ role: 'pad', shape: { prism: { pts, L: 0.035, holes } }, at, rot: [Math.PI / 2, 0, 0], mat, color: HUE.gold });
+  const flat = (pts: [number, number][], holes: [number, number][][], at: V3, mat = 'copper'): Solid => ({ role: 'pad', shape: { prism: { pts, L: 0.035, holes } }, at, rot: [Math.PI / 2, 0, 0], mat, ...gold });
   const ring = (h: (typeof all)[number], y: number): Solid => h.square
     ? flat([[-h.pad / 2, -h.pad / 2], [h.pad / 2, -h.pad / 2], [h.pad / 2, h.pad / 2], [-h.pad / 2, h.pad / 2]], [circ(0, 0, h.d / 2)], [h.x - b.L / 2, y + 0.0175, b.W / 2 - h.z])
-    : { role: 'pad', shape: { lathe: [[h.d / 2, 0], [h.pad / 2, 0], [h.pad / 2, 0.035], [h.d / 2, 0.035], [h.d / 2, 0]] }, at: [h.x - b.L / 2, y, b.W / 2 - h.z], mat: 'copper', color: HUE.gold };
+    : { role: 'pad', shape: { lathe: [[h.d / 2, 0], [h.pad / 2, 0], [h.pad / 2, 0.035], [h.d / 2, 0.035], [h.d / 2, 0]] }, at: [h.x - b.L / 2, y, b.W / 2 - h.z], mat: 'copper', ...gold };
   // (each hole plated through: copper 25 µm thick on its wall under its gold, joining its pads top and bottom, so its
   // bore shows metal and not the board's layers; IPC-6012's class 2 minimum, typical of boards' plated holes)
-  const barrel = (h: (typeof all)[number]): Solid => ({ role: 'pad', shape: { lathe: [[h.d / 2 - 0.025, -t - 0.04], [h.d / 2, -t - 0.04], [h.d / 2, 0.04], [h.d / 2 - 0.025, 0.04], [h.d / 2 - 0.025, -t - 0.04]] }, at: [h.x - b.L / 2, 0, b.W / 2 - h.z], mat: 'copper', color: HUE.gold });
+  const barrel = (h: (typeof all)[number]): Solid => ({ role: 'pad', shape: { lathe: [[h.d / 2 - 0.025, -t - 0.04], [h.d / 2, -t - 0.04], [h.d / 2, 0.04], [h.d / 2 - 0.025, 0.04], [h.d / 2 - 0.025, -t - 0.04]] }, at: [h.x - b.L / 2, 0, b.W / 2 - h.z], mat: 'copper', ...gold });
   // (a castellated pin: the edge nearest its hole, outward n and along it d, in the board's plane; its half-hole's
   // middle on that edge)
   const edgeOf = (h: (typeof all)[number]) => { const cx = h.x - b.L / 2, cz = b.W / 2 - h.z;
@@ -320,7 +366,7 @@ function pcb(b: BoardDef): Comp {
     const pts = [P(-w, 0), P(-rh, 0), ...Array.from({ length: 9 }, (_, i) => P(-rh * Math.cos((Math.PI * (i + 1)) / 10), rh * Math.sin((Math.PI * (i + 1)) / 10))), P(rh, 0), P(w, 0), P(w, e), P(rc, e), ...Array.from({ length: 9 }, (_, i) => P(rc * Math.cos((Math.PI * (i + 1)) / 10), e - rc * Math.sin((Math.PI * (i + 1)) / 10))), P(-rc, e), P(-w, e)];
     return flat(pts, [], [h.x - b.L / 2, y + 0.0175, b.W / 2 - h.z]); };
   const wall = (q: (typeof castles)[number]): Solid => { const rc = q.h.castle / 2, o = bite(q.c, q.n, q.d, rc), i = bite(q.c, q.n, q.d, rc - 0.025).reverse();
-    return { role: 'pad', shape: { prism: { pts: [...o, ...i], L: t + 0.08 } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', color: HUE.gold }; };
+    return { role: 'pad', shape: { prism: { pts: [...o, ...i], L: t + 0.08 } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', ...gold }; };
   return { name: 'circuit board', item: 'pcb-bare', at: [0, 0, 0], solids: [
     layer('core', t - cu, -t / 2, 'fr4', { color: 0xc4a86a }),
     layer('frame', cu, -t / 2, 'copper', { inBody: 0 }),
@@ -329,8 +375,9 @@ function pcb(b: BoardDef): Comp {
     ...castles.flatMap((q) => [lip(q, 0.005), lip(q, -t - 0.04), wall(q)]),
     // (the copper its photo shows under the mask, painted on the mask's top: nothing to weigh, the copper is in the board)
     ...(b.copper ? [box('film', [b.L, 0.001, b.W], [0, 0.0205, 0], '', { paint: { png: b.copper.png, ink: b.copper.hue } })] : []),
-    // (and its silkscreen over all, the ink where its photo shows it)
-    ...(b.ink ? [box('film', [b.L, 0.001, b.W], [0, 0.0215, 0], '', { paint: { png: b.ink.png, ink: Number(b.ink.ink) } })] : []),
+    // (and its silkscreen over all, the ink where its photo shows it: 4 µm over the copper's paint, so the two do not
+    // fight for the same depth seen from afar)
+    ...(b.ink ? [box('film', [b.L, 0.001, b.W], [0, 0.0255, 0], '', { paint: { png: b.ink.png, ink: Number(b.ink.ink) } })] : []),
   ] };
 }
 /** Chip resistors and capacitors round the system-on-chip (0402s, ten of each, as the inventory's own part says): on a

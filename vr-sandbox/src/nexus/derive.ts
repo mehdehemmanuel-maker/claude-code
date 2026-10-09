@@ -43,7 +43,7 @@ const BY_GROUP: [RegExp, Dens][] = [
   [/Small molecules|Neurotransmitters|Hormones|Pigments|Antibiotics|Resins/, D(1330, 'small organic', 'a typical organic solute adds about 0.75 ml/g (urea 0.745, Cohn & Edsall 1943)')],
 ];
 const ENGINEERED: Record<string, number> = {
-  'steel-low': 7850, 'steel-alloy': 7850, 'steel-spring': 7850, 'steel-chrome': 7830, 'steel-tool': 7800, 'steel-hss': 8100, 'steel-electrical': 7650, 'stainless-304': 8000, 'stainless-316': 8000, 'cast-iron': 7200, iron: 7874,
+  'steel-low': 7850, 'steel-alloy': 7850, 'steel-spring': 7850, 'steel-chrome': 7830, 'steel-tool': 7800, 'steel-hss': 8100, 'steel-electrical': 7650, 'stainless-304': 8000, kovar: 8360, 'stainless-316': 8000, 'cast-iron': 7200, iron: 7874,
   'al-6061': 2700, 'al-6063': 2690, 'al-7075': 2810, 'al-2024': 2780, 'al-5052': 2680, 'al-a380': 2710, 'al-foil': 2700, 'al-4043': 2690, 'al-5356': 2640, copper: 8960, 'copper-foil': 8960, brass: 8500, bronze: 8800, 'phosphor-bronze': 8860,
   nickel: 8908, tin: 7265, zinc: 7140, gold: 19320, silver: 10490, lead: 11340, tungsten: 19250, 'ti-6al4v': 4430, platinum: 21450, chromium: 7190, lithium: 534, zamak: 6600, 'tungsten-carbide': 15600,
   pla: 1240, abs: 1050, nylon: 1140, pom: 1410, pc: 1200, pbt: 1310, pp: 905, pe: 950, pvc: 1380, pmma: 1180, ptfe: 2200, peek: 1300, ps: 1050, pet: 1380, asa: 1070, silicone: 1100, rubber: 920, nbr: 1000, neoprene: 1230, epdm: 860, fkm: 1800, epoxy: 1200, phenolic: 1300, pu: 1200, eva: 940,
