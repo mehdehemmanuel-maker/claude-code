@@ -369,7 +369,8 @@ function boardParts(id: string, nm: string): Part[] {
  *  maker's drawing, on its underside. */
 function boardHoles(id: string): Port {
   const b = boardDef(id), pat = b.holes.map(([x, z]) => [(x - b.L / 2) * mm, (b.W / 2 - z) * mm] as [number, number]);
-  return port('mounting holes', 'holes', screwFor(b.hole), pat, [0, -1.6 * mm, 0], [0, -1, 0], [1, 0, 0], 1.6 * mm, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
+  const t = (b.t ?? 1.6) * mm;
+  return port('mounting holes', 'holes', screwFor(b.hole), pat, [0, -t, 0], [0, -1, 0], [1, 0, 0], t, { std: `${b.name}'s mechanical drawing`, pilot: b.hole * mm });
 }
 
 // ---- a six-axis arm --------------------------------------------------------------------------------------------------

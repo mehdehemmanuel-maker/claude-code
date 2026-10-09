@@ -17,6 +17,7 @@ export const EDGE_RULES: EdgeRule[] = [
   { id: 'soft things', says: 'as round as it is soft: a quarter of its thickness', mm: (t) => t * 0.25, source: 'an estimate for foam, fabric and leather', mats: ['foam', 'cotton', 'leather', 'silk'] },
   { id: 'rubber', says: 'moulded round', mm: (t) => Math.min(6, t * 0.2), source: 'an estimate', mats: ['rubber'] },
   { id: 'paving', says: 'its kerbs and edges rounded', mm: 10, source: 'kerb units have a 10–15 mm radius on their arris (typical)', mats: ['asphalt', 'soil'] },
+  { id: 'stamped contacts', says: 'stamped, or cut from square wire: its edges only as round as the die rolls them, about a tenth of its thickness', mm: (t) => 0.1 * t, source: 'stamping practice: die roll 5–10 % of the stock\'s thickness (typical)', mats: ['brass', 'phosphor-bronze', 'beryllium-copper'] },
   { id: 'anything else', says: 'no edge is quite sharp', mm: 0.3, source: 'an estimate', mats: [] },
 ];
 

@@ -3,6 +3,8 @@ import { component } from '../../src/nexus/components';
 import { massOf } from '../../src/nexus/mass';
 import { approx, BOARD_DEFS, boardMass } from '../../src/nexus/sbc';
 import { OPI5_SMALL } from '../../src/nexus/sbc-opi5-small';
+import { PI5_SMALL } from '../../src/nexus/sbc-pi5-small';
+import { BOARD_DEFS as DEFS, boardComps, JOINTS } from '../../src/nexus/sbc';
 import { pkgOf } from '../../src/nexus/packages';
 import type { Part } from '../../src/nexus/kits';
 
@@ -20,18 +22,48 @@ describe('single-board computers', () => {
   it('weighs within a fifth of what its maker says it weighs, where its layout is measured; the rest named as approximate', () => {
     for (const [id, b] of Object.entries(BOARD_DEFS)) if (b.g && !approx(id)) expect(Math.abs(boardMass(id) / b.g - 1), `${id}: ${boardMass(id).toFixed(1)} g against ${b.g} g`).toBeLessThan(0.2);
     // (each leaves this list when its layout is measured from its photos and drawings)
-    expect(Object.keys(BOARD_DEFS).filter(approx)).toEqual(['pi5', 'pi4b', 'pi3bplus', 'pizero2w', 'cm5', 'pico1', 'pico1w', 'pico2', 'pico2w', 'opi5plus', 'opi5pro', 'opi5max', 'rdkx3', 'rdkx5', 'rdks100', 'rdks100p']);
+    expect(Object.keys(BOARD_DEFS).filter(approx)).toEqual(['pi4b', 'pi3bplus', 'pizero2w', 'cm5', 'pico1', 'pico1w', 'pico2', 'pico2w', 'opi5plus', 'opi5pro', 'opi5max', 'rdkx3', 'rdkx5', 'rdks100', 'rdks100p']);
     const c = component('sbc opi5plus 4GB'); if (typeof c === 'string') throw new Error(c);
     expect(c.item.spec).toMatch(/its layout approximate/);
   });
   it('gives a Raspberry Pi 5 its 40-pin header, its holes 58 by 49 mm for M2.5 screws, and its maker\'s figures', () => {
     const c = component('sbc pi5 8GB'); if (typeof c === 'string') throw new Error(c);
-    expect(all(c.part).filter((p) => p.item === 'header-pin')).toHaveLength(40);
+    // (its 40-pin header's pins, and the four of its PoE header beside them)
+    expect(all(all(c.part).find((p) => p.name.endsWith('40-pin header'))!).filter((p) => p.item === 'header-pin')).toHaveLength(40);
+    expect(all(c.part).filter((p) => p.item === 'header-pin')).toHaveLength(44);
     const h = c.part.ports!.find((p) => p.name === 'mounting holes')!;
     expect(h.thread).toBe('M2.5');
     const xs = [...new Set(h.pattern.map(([x]) => +(x * 1000).toFixed(1)))].sort((a, b) => a - b), zs = [...new Set(h.pattern.map(([, z]) => +(z * 1000).toFixed(1)))].sort((a, b) => a - b);
     expect(xs[1]! - xs[0]!).toBeCloseTo(58, 5); expect(zs[1]! - zs[0]!).toBeCloseTo(49, 5);
     expect(c.item.spec).toMatch(/Cortex-A76 at 2\.4 GHz/); expect(c.item.spec).toMatch(/8 GB LPDDR4X/);
+  });
+  it('draws a Raspberry Pi 5 from Raspberry Pi\'s own 3D model: its ports where the model puts them, its board 1.4 mm thick, its microSD under it', () => {
+    const c = component('sbc pi5 8GB'); if (typeof c === 'string') throw new Error(c);
+    expect(c.faults).toEqual([]);
+    const ps = all(c.part), named = (s: string) => ps.find((p) => p.name.endsWith(s))!, x = (s: string) => +(named(s).at![0] * 1000 + 42.5).toFixed(2), y = (s: string) => +(28 - named(s).at![2] * 1000).toFixed(2);
+    // (the drawing's x and y of each port's middle, from where it is drawn: the model's and the mechanical drawing's)
+    expect(x('USB-C power in')).toBeCloseTo(11.2, 1); expect(x('micro-HDMI 0')).toBeCloseTo(25.8, 1); expect(x('micro-HDMI 1')).toBeCloseTo(39.2, 1);
+    expect(y('Gigabit Ethernet')).toBeCloseTo(10.2, 1); expect(y('USB 3.0 (two, stacked)')).toBeCloseTo(29.05, 1); expect(y('USB 2.0 (two, stacked)')).toBeCloseTo(47.0, 1);
+    expect(x('40-pin header')).toBeCloseTo(32.5, 1); expect(y('40-pin header')).toBeCloseTo(52.5, 1);
+    expect(named('microSD socket').at![1]).toBeLessThan(-0.0013);
+    expect(ps.filter((p) => p.item === 'fpc-socket-22')).toHaveLength(2); expect(ps.filter((p) => p.item === 'jst-sh-4v')).toHaveLength(1);
+    expect(c.item.spec).not.toMatch(/approximate/);
+  });
+  it('gives the Raspberry Pi 5 what its maker\'s photo shows: its silkscreen and copper on its own millimetres, its chips\' markings, the small parts it shows, each in its case', () => {
+    const b = DEFS.pi5!; expect(b.ink?.res).toBe(20); expect(b.ink?.w).toBe(85 * 20); expect(b.copper?.w).toBe(85 * 14);
+    const c = component('sbc pi5 8GB'); if (typeof c === 'string') throw new Error(c);
+    const ps = all(c.part); expect(PI5_SMALL.length).toBeGreaterThan(10);
+    expect(ps.filter((p) => p.item === 'chip-capacitor' || p.item === 'chip-resistor' || p.item === 'sot-package').length).toBe(PI5_SMALL.length);
+    for (const r of PI5_SMALL) { expect(r[1]).toBeGreaterThan(0); expect(r[1]).toBeLessThan(85); expect(r[2]).toBeGreaterThan(0); expect(r[2]).toBeLessThan(56); }
+    expect(ps.some((p) => p.text?.startsWith('BROADCOM'))).toBe(true); expect(ps.some((p) => /DA9091/.test(p.text ?? ''))).toBe(true);
+  });
+  it('solders every through-hole lead it draws: a pad and a fillet under the board where each comes through', () => {
+    const j = boardComps('pi5').find((c) => c.name === JOINTS)!;
+    // (its 40-pin and PoE headers' 44 pins, its two USB stacks' 18 + 8 contacts and 8 legs, its RJ45's 8 contacts, 2 shield
+    // legs and 4 lights' leads)
+    expect(j.kids).toHaveLength(44 + 18 + 8 + 8 + 8 + 2 + 4);
+    const c = component('sbc pi5 8GB'); if (typeof c === 'string') throw new Error(c);
+    expect(all(c.part).filter((p) => p.item === 'solder-joint')).toHaveLength(92);
   });
   it('keeps D-Robotics\' RDK X5 as its maker gives it: 8 Cortex-A55 at 1.5 GHz, a 10 TOPS BPU, 100 × 80 mm', () => {
     const c = component('sbc rdkx5 8GB'); if (typeof c === 'string') throw new Error(c);

@@ -31,9 +31,9 @@ const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
   const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
   if (!m) {
-    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|^tin$/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
-    const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
+    const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium|brass|bronze|solder|^tin$/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
     const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
     // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
     const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };

@@ -20,8 +20,10 @@ type V3 = [number, number, number];
 type V2 = [number, number];
 const PI = Math.PI;
 /** Colours as the parts are: a stamped steel or stainless shell, gold contacts, black LCP or PBT, an FPC's ivory LCP,
- *  USB 3.0's blue (its spec's Pantone 300C), a moulded inductor's grey. */
-export const HUE = { steel: 0xc6cacd, stainless: 0xd2d5d7, gold: 0xd9b24c, tin: 0xb9bcbf, black: 0x19191b, ivory: 0xebe4d2, usb3: 0x1f5fbf, white: 0xf0efea, brown: 0x4a3324, die: 0x101216, ferrite: 0x3d3d40 };
+ *  USB 3.0's blue (its spec's Pantone 300C), a moulded inductor's grey. A metal's colour is what it reflects head on, as
+ *  the viewer draws metal: gold's about (1.0, 0.77, 0.34) in linear light (physically based renderers' tables, Real-Time
+ *  Rendering 4th ed.), so its plating shows as bright as the room it mirrors. */
+export const HUE = { steel: 0xc6cacd, stainless: 0xd2d5d7, gold: 0xffe29b, tin: 0xb9bcbf, black: 0x19191b, ivory: 0xebe4d2, usb3: 0x1f5fbf, white: 0xf0efea, brown: 0x4a3324, die: 0x101216, ferrite: 0x3d3d40 };
 const box = (role: Solid['role'], b: V3, at: V3, mat: string, more: Partial<Solid> = {}): Solid => ({ role, shape: { box: b }, at, mat, ...more });
 /** A section drawn along x: its outline in (across, up) less its openings, through `len` mm from x0. */
 const along = (role: Solid['role'], outline: V2[], holes: V2[][], len: number, x0: number, mat: string, more: Partial<Solid> = {}): Solid =>
@@ -66,8 +68,8 @@ export function usbC(contacts: 16 | 24): BoardPart {
  *  0.5 mm. Openings from the plugs' sizes in the HDMI spec (A 13.9 × 4.45 mm, C 10.42 × 2.42, D 6.4 × 2.8) with room
  *  round them; outsides: A 15.0 × 5.6 (typical: makers' type A SMT receptacles are 14.5–15.0 wide, 5.6–6.2 tall), its
  *  depth per board measured; D 6.5 × 3.4 × 7.5 (Molex 46765's drawing via KiCad's footprint); C 11.2 × 3.2 × 7.5. */
-export function hdmi(type: 'A' | 'C' | 'D', depth?: number): BoardPart {
-  const [W, H, iw, ih, c, D0, tw, tt] = type === 'A' ? [15.0, 5.6, 14.0, 4.55, 1.05, 11.6, 10.4, 1.3] : type === 'C' ? [11.2, 3.2, 10.5, 2.5, 0.6, 7.5, 7.2, 0.6] : [6.5, 3.4, 6.5 - 0.5, 2.9, 0.5, 7.5, 4.4, 0.6];
+export function hdmi(type: 'A' | 'C' | 'D', depth?: number, width?: number): BoardPart {
+  const [W0, H, iw, ih, c, D0, tw, tt] = type === 'A' ? [15.0, 5.6, 14.0, 4.55, 1.05, 11.6, 10.4, 1.3] : type === 'C' ? [11.2, 3.2, 10.5, 2.5, 0.6, 7.5, 7.2, 0.6] : [6.5, 3.4, 6.5 - 0.5, 2.9, 0.5, 7.5, 4.4, 0.6], W = width ?? W0;
   const D = depth ?? D0, x0 = -D / 2, y0 = (H - ih) / 2, st = 0.3, Ht = H - st, back = 1.8, co = c + 0.25;
   // (its shell: the sides and floor one section along its depth, open at the top; its top a flat plate 0.3 thick from
   // its mouth to 1.8 mm short of its back, where the moulding and the contacts going down to the board show (as the
@@ -97,24 +99,55 @@ export function hdmi(type: 'A' | 'C' | 'D', depth?: number): BoardPart {
  *  outline via KiCad), 14 deep (Stewart SS-52100's) or as measured; its tongue in the top half of the mouth, its
  *  contacts under it (four for USB 2.0 at 2.5 mm; USB 3.0's five more behind them, and its tongue blue). One port, or a
  *  stack of two in one shell 14.5 wide, 17 deep (Würth 61400826021's footprint) and 15.6 tall (typical). `onSide`: a
- *  single port stood on its side, its slot upright (the Orange Pi 5's USB 2.0). */
+ *  single port stood on its side, its slot upright (the Orange Pi 5's USB 2.0).
+ *
+ *  Inside and under, as its maker's footprint has it (Würth 61400826021's for a stack, Stewart SS-52100's for one port,
+ *  via KiCad): its moulded insulator a block at the back of each mouth as deep as leaves the plug's shell its 12 mm
+ *  (typical of an A plug), the tongue standing out of it; each mouth of a stack lined with its own skin of the shell, so
+ *  a plug meets metal all round (the stack's shell nickel-plated brass, Würth's datasheet); the shell open under its back
+ *  where the contacts' tails come down, in their rows (a stack's 1.39 and 4.01 mm in from its back, one port's 1.01),
+ *  0.6 mm wide, 2.1 mm below its seat; its legs 6.57 mm either side of its middle (a stack's four, 1.04 and 6.72 mm in;
+ *  one port's two, 3.72 in), 3.94 mm below its seat (2.1 and 3.94 its drawing's unlabelled figures, read as the tails'
+ *  and the legs' by their tolerances: an estimate of which is which). Stood on its side, as it was. */
 export function usbA(ports: (2 | 3)[], o: { depth?: number; onSide?: boolean } = {}): BoardPart {
   const stack = ports.length === 2, W = stack ? 14.5 : 13.1, H1 = 5.72, iw = 12.5, ih = 5.12, gap = 4.0, H = stack ? 2 * H1 + gap : H1, D = o.depth ?? (stack ? 17.0 : 14.0), x0 = -D / 2;
-  const kids: Comp[] = [];
-  const mouths = ports.map((_, k) => stack ? k * (H1 + gap) : 0);
+  const kids: Comp[] = [], thru = !o.onSide, mat = stack ? 'brass' : 'steel-low', TAIL = 2.1, LEG = 3.94;
+  // (a stack's body 13.64 wide, its face plate 14.5: Würth's drawing; its skins 0.25 thick, so a mouth's lining fits inside it)
+  const Wb = stack && thru ? 13.64 : W, sk = stack && thru ? 0.25 : 0.3;
+  // (a stack's upper mouth 0.2 mm lower where its mouths are lined, so its lining meets the shell's top inside it)
+  const mouths = ports.map((_, k) => stack ? k * (H1 + gap - (thru ? 0.2 : 0)) : 0);
+  // (the insulator's block at the back of each mouth: the plug's 12 mm in front of it, the face plate 0.3)
+  const back = thru ? Math.max(0.3, D - 0.3 - 12) : 0.3, tl = thru ? D - back - 1.3 : D - 2.8;
+  const U = (w: number, h: number): V2[] => [[-w / 2, 0], [-w / 2 + sk, 0], [-w / 2 + sk, h - sk], [w / 2 - sk, h - sk], [w / 2 - sk, 0], [w / 2, 0], [w / 2, h], [-w / 2, h]];
+  const mouthsAt = mouths.map((y) => rect(iw, ih, y + (H1 - ih) / 2));
+  const legs = (stack ? [1.04, 6.72] : [3.72]).flatMap((d) => [-1, 1].map((sg): Solid => box('term', [1.5, LEG + 0.15, 0.5], [x0 + d, (0.15 - LEG) / 2, sg * 6.57], mat, { color: HUE.steel })));
   // (a single port's shell is its mouth's skin; a stack's is a skin round both, its face plate cut for each mouth, a
   // moulded divider between them)
-  kids.push(piece(stack ? 'USB-A stack shell' : 'USB-A shell', 'usb-a-shell', [...(stack ? [along('term', rect(W, H, 0), [rect(W - 0.6, H - 0.6, 0.3)], D, x0, 'steel-low', { color: HUE.steel }), along('term', rect(W, H, 0), mouths.map((y) => rect(iw, ih, y + (H1 - ih) / 2)), 0.3, x0 + D - 0.3, 'steel-low', { color: HUE.steel })] : [along('term', rect(W, H, 0), mouths.map((y) => rect(iw, ih, y + (H1 - ih) / 2)), D, x0, 'steel-low', { color: HUE.steel })]),
-    box('term', [0.3, H, W - 0.6], [x0 + 0.15, H / 2, 0], 'steel-low', { color: HUE.steel }), ...[-1, 1].map((s): Solid => box('term', [1.0, 1.0, 0.3], [x0 + D * 0.5, -0.5, s * (W / 2 - 0.15)], 'steel-low', { color: HUE.steel }))]));
+  kids.push(piece(stack ? 'USB-A stack shell' : 'USB-A shell', 'usb-a-shell', thru
+    ? [...(stack ? [along('term', U(Wb, H), [], D - 0.3, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, { color: HUE.steel }),
+        ...mouthsAt.map((m, k) => along('term', rect(iw + 2 * sk, ih + 2 * sk, mouths[k]! + (H1 - ih) / 2 - sk), [m], D - 0.3 - back, x0 + back, mat, { color: HUE.steel }))]
+      : [along('term', U(W, H), [], back, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, D - back, x0 + back, mat, { color: HUE.steel })]),
+      box('term', [sk, H, Wb - 2 * sk], [x0 + sk / 2, H / 2, 0], mat, { color: HUE.steel }), ...legs]
+    : [...(stack ? [along('term', rect(W, H, 0), [rect(W - 0.6, H - 0.6, 0.3)], D, x0, mat, { color: HUE.steel }), along('term', rect(W, H, 0), mouthsAt, 0.3, x0 + D - 0.3, mat, { color: HUE.steel })] : [along('term', rect(W, H, 0), mouthsAt, D, x0, mat, { color: HUE.steel })]),
+      box('term', [0.3, H, W - 0.6], [x0 + 0.15, H / 2, 0], mat, { color: HUE.steel }), ...[-1, 1].map((sg): Solid => box('term', [1.0, 1.0, 0.3], [x0 + D * 0.5, -0.5, sg * (W / 2 - 0.15)], mat, { color: HUE.steel }))]));
   ports.forEach((gen, k) => {
-    const y = mouths[k]! + (H1 - ih) / 2, tl = D - 2.8, ty = y + ih - 0.55 - 1.84 / 2, tongue = gen === 3 ? HUE.usb3 : HUE.black;
-    // (between the two mouths of a stack, its moulded floor; its tongue in the mouth's top half, 1.84 mm thick)
-    kids.push(piece(`USB-A tongue${stack ? (k ? ' upper' : ' lower') : ''}`, 'usb-a-tongue', [box('body', [tl, 1.84, 11.2], [x0 + 0.4 + tl / 2, ty, 0], 'nylon', { color: tongue }), box('body', [1.5, ih, iw - 0.4], [x0 + 0.4 + 0.75, y + ih / 2, 0], 'nylon', { color: tongue }),
-      ...(stack && k === 0 ? [box('body', [D - 0.9, gap + 0.6, W - 0.6], [x0 + 0.3 + (D - 0.9) / 2, H1 - 0.3 + (gap + 0.6) / 2, 0], 'nylon', { color: HUE.black, share: 0.3 })] : [])]));
-    const zs = gen === 3 ? [-3.5, -1, 1, 3.5, -4.5, -2.25, 0, 2.25, 4.5] : [-3.5, -1, 1, 3.5];
-    zs.forEach((z, i) => { const front = i < 4;
-      kids.push(piece(`USB-A contact ${k ? 'upper' : 'lower'} ${i + 1}`, 'usb-a-contact', [box('lead', [front ? tl - 2 : 2.2, 0.15, front ? 1.0 : 0.7], [front ? x0 + 1.8 + (tl - 2) / 2 : x0 + 1.4 + 1.1, ty - 0.92 - 0.075, z], 'phosphor-bronze', { color: HUE.gold }),
-        box('lead', [0.5, Math.max(0.1, ty), 0.4], [x0 - 0.3 - (front ? 0 : 1.5), ty / 2, z], 'phosphor-bronze', { color: HUE.gold })])); });
+    const y = mouths[k]! + (H1 - ih) / 2, ty = y + ih - 0.55 - 1.84 / 2, tongue = gen === 3 ? HUE.usb3 : HUE.black, xs = x0 + (thru ? back : 0.4);
+    // (between the two mouths of a stack, its moulded floor; its tongue in the mouth's top half, 1.84 mm thick, out of its
+    // block at the mouth's back)
+    const block = thru ? box('body', [back - sk, ih + 2 * sk, iw + 2 * sk], [x0 + sk + (back - sk) / 2, y + ih / 2, 0], 'nylon', { color: tongue }) : box('body', [1.5, ih, iw - 0.4], [x0 + 0.4 + 0.75, y + ih / 2, 0], 'nylon', { color: tongue });
+    const lo = (H1 - ih) / 2 + ih + sk, hi = (mouths[1] ?? 0) + (H1 - ih) / 2 - sk;
+    const floor = thru ? box('body', [D - 0.3 - sk, hi - lo, Wb - 2 * sk], [x0 + sk + (D - 0.3 - sk) / 2, (lo + hi) / 2, 0], 'nylon', { color: HUE.black, share: 0.3 }) : box('body', [D - 0.9, gap + 0.6, W - 0.6], [x0 + 0.3 + (D - 0.9) / 2, H1 - 0.3 + (gap + 0.6) / 2, 0], 'nylon', { color: HUE.black, share: 0.3 });
+    kids.push(piece(`USB-A tongue${stack ? (k ? ' upper' : ' lower') : ''}`, 'usb-a-tongue', [box('body', [tl, 1.84, 11.2], [xs + tl / 2, ty, 0], 'nylon', { color: tongue }), block, ...(stack && k === 0 ? [floor] : [])]));
+    const zs = gen === 3 ? [-3.5, -1, 1, 3.5, -4.5, -2.25, 0, 2.25, 4.5] : [-3.5, -1, 1, 3.5], cy = ty - 0.92 - 0.075;
+    // (each contact's tail down through its row: a stack's upper mouth's at the back, its lower's in front of them)
+    const row = x0 + (stack ? (k ? 1.39 : 4.01) : 1.01);
+    zs.forEach((z, i) => { const front = i < 4, w = front ? 0.6 : 0.4, b0 = thru ? xs + (front ? 1.4 : 0.3) : 0, b1 = b0 + (front ? tl - 2 : 2.2);
+      kids.push(piece(`USB-A contact ${k ? 'upper' : 'lower'} ${i + 1}`, 'usb-a-contact', thru
+        ? [box('lead', [b1 - b0, 0.15, front ? 1.0 : 0.7], [(b0 + b1) / 2, cy, z], 'phosphor-bronze', { color: HUE.gold }),
+          box('lead', [b0 - row + 0.15, 0.15, w], [(row + b0) / 2, cy, z], 'phosphor-bronze', { color: HUE.gold }),
+          box('lead', [0.3, cy + TAIL, w], [row, (cy - TAIL) / 2, z], 'phosphor-bronze', { color: HUE.gold })]
+        : [box('lead', [front ? tl - 2 : 2.2, 0.15, front ? 1.0 : 0.7], [front ? x0 + 1.8 + (tl - 2) / 2 : x0 + 1.4 + 1.1, cy, z], 'phosphor-bronze', { color: HUE.gold }),
+          box('lead', [0.5, Math.max(0.1, ty), 0.4], [x0 - 0.3 - (front ? 0 : 1.5), ty / 2, z], 'phosphor-bronze', { color: HUE.gold })])); });
   });
   const comp: Comp = { name: stack ? `USB-A stack (${ports.map((g) => (g === 3 ? 'USB 3.0' : 'USB 2.0')).join(' under ')})` : `USB-A receptacle (USB ${ports[0] === 3 ? '3.0' : '2.0'})`, item: stack ? (ports.includes(3) ? 'usb3-a-stack' : 'usb-a-stack') : ports[0] === 3 ? 'usb3-a-socket' : 'usb-a-socket', at: [0, 0, 0], kids };
   if (o.onSide) { // (stood on its side: its width upright, its slot vertical, the whole turned a quarter about its depth)
@@ -135,18 +168,22 @@ export function rj45(): BoardPart {
   // (its shield bent round its top and sides, open under it where it stands on the board)
   const t = 0.25, U: V2[] = [[-W / 2, 0], [-W / 2 + t, 0], [-W / 2 + t, H - t], [W / 2 - t, H - t], [W / 2 - t, 0], [W / 2, 0], [W / 2, H], [-W / 2, H]];
   const shield = piece('RJ45 shield', 'rj45-shield', [along('term', U, [], D, x0, 'steel-low', { color: HUE.steel }), box('term', [0.25, H, W], [x0 + 0.125, H / 2, 0], 'steel-low', { color: HUE.steel }),
-    ...[-1, 1].map((s): Solid => box('term', [1.2, 1.2, 0.25], [x0 + 6, -0.6, s * (W / 2 - 0.12)], 'steel-low', { color: HUE.steel }))]);
+    ...[-1, 1].map((s): Solid => box('term', [1.2, 3.2 + 0.2, 0.25], [x0 + 7.45, (0.2 - 3.2) / 2, s * 7.745], 'steel-low', { color: HUE.steel }))]);
   // (its mouth for the plug with the latch's slot under it, one opening)
   const mouth: V2[] = [[-mw / 2, my], [-3.2, my], [-3.2, my - 1.5], [3.2, my - 1.5], [3.2, my], [mw / 2, my], [mw / 2, my + mh], [-mw / 2, my + mh]];
-  const housing = piece('RJ45 housing', 'rj45-housing', [along('body', rect(W - 0.5, H - 0.25, 0), [mouth], cav, x0 + D - cav, 'pbt', { color: HUE.black, share: 0.6 }), box('body', [D - cav - 0.3, H - 0.25, W - 0.5], [x0 + 0.25 + (D - cav - 0.3) / 2, (H - 0.25) / 2, 0], 'pbt', { color: HUE.black, share: 0.55 })]);
-  const contacts = Array.from({ length: 8 }, (_, i): Comp => piece(`RJ45 contact ${i + 1}`, 'rj45-contact', [box('lead', [6.5, 0.3, 0.45], [x0 + D - 7.5, my + mh - 1.2, (i - 3.5) * 1.02], 'phosphor-bronze', { color: HUE.gold, rot: [0, 0, -0.35] }), box('lead', [0.4, 3.2, 0.4], [x0 + 3 + (i % 2) * 1.27, -1.6, (i - 3.5) * 1.02], 'phosphor-bronze', { color: HUE.gold })]));
+  const housing = piece('RJ45 housing', 'rj45-housing', [along('body', rect(W - 0.5, H - 0.25, 0), [mouth], cav, x0 + D - cav, 'pbt', { color: HUE.black, share: 0.6 }), box('body', [D - cav - 0.3, H - 0.25, W - 0.5], [x0 + 0.25 + (D - cav - 0.3) / 2, (H - 0.25) / 2, 0], 'pbt', { color: HUE.black, share: 0.55 }),
+    // (its two moulded pegs down into the board's 3.25 mm holes, 2 mm below its seat: typical)
+    ...[-1, 1].map((s): Solid => ({ role: 'body', shape: { cyl: [1.5, 2.0] }, at: [x0 + 10.5, -1.0, s * 5.715], mat: 'pbt', color: HUE.black }))]);
+  const contacts = Array.from({ length: 8 }, (_, i): Comp => piece(`RJ45 contact ${i + 1}`, 'rj45-contact', [box('lead', [6.5, 0.3, 0.45], [x0 + D - 7.5, my + mh - 1.2, (i - 3.5) * 1.02], 'phosphor-bronze', { color: HUE.gold, rot: [0, 0, -0.35] }), box('lead', [0.4, 3.2, 0.4], [x0 + (i % 2 ? 1.6 : 4.14), -1.6, (i - 3.5) * 1.27], 'phosphor-bronze', { color: HUE.gold })]));
   // (four transformers and four common-mode chokes, each turns of magnet wire on a ferrite toroid, in its back)
   const mag: Comp = { name: 'RJ45 magnetics', item: 'rj45-magnetics', at: [0, 0, 0], kids: [...Array.from({ length: 8 }, (_, i): Comp => piece(`toroid ${i + 1}`, 'toroid-core', [{ role: 'core', shape: { lathe: [[1.0, 0], [1.75, 0], [1.75, 1.2], [1.0, 1.2], [1.0, 0]] }, at: [x0 + 1.8 + (i % 2) * 3.6, 6.0 + Math.floor(i / 4) * 2.4, ((i >> 1) % 2 ? 1 : -1) * 3.5], mat: 'ferrite-soft', color: HUE.ferrite }])),
     piece('windings', 'magnet-wire', [box('core', [5.5, 4.0, 10], [x0 + 3.6, 7.0, 0], 'copper', { share: 0.04, color: 0xb87333 })])] };
   // (each light a die on its small lead frame under its clear epoxy lens, in the jack's face by the board)
-  const led = (name: string, item: string, die: string, z: number, color: number): Comp => ({ name, item, at: [0, 0, 0], solids: [box('cap', [0.4, 1.8, 2.6], [D / 2 - 0.15, 1.6, z], 'epoxy', { color })], kids: [piece(`${name} die`, die, [box('die', [0.1, 0.3, 0.3], [D / 2 - 0.3, 1.6, z], 'silicon', { color: 0x222222 })]), piece(`${name} lead frame`, 'lead-frame', [box('lead', [1.6, 0.15, 0.5], [D / 2 - 1.0, 0.6, z], 'copper', { color: HUE.tin })])] });
-  return { comp: { name: 'RJ45 jack with magnetics', item: 'rj45-jack', at: [0, 0, 0], kids: [shield, housing, ...contacts, mag, led('green light', 'led-chip-green', 'led-die-ingan', -W / 2 + 2.2, 0x35c94a), led('yellow light', 'led-chip-yellow', 'led-die-algainp', W / 2 - 2.2, 0xf2c12e)] }, size: [D, W, H],
-    src: 'HanRun HR911105A outline (16.04 × 21.30 × 13.5 mm, green and yellow LEDs: HQ Online, KiCad footprint); 8P8C mouth per IEC 60603-7' };
+  // (its two leads back through the housing and down through the board 1.27 mm either side of it, 15.4 mm in from the
+  // jack's back: the footprint's pads 9–12)
+  const led = (name: string, item: string, die: string, z: number, color: number): Comp => ({ name, item, at: [0, 0, 0], solids: [box('cap', [0.4, 1.8, 2.6], [D / 2 - 0.15, 1.6, z], 'epoxy', { color })], kids: [piece(`${name} die`, die, [box('die', [0.1, 0.3, 0.3], [D / 2 - 0.3, 1.6, z], 'silicon', { color: 0x222222 })]), piece(`${name} lead frame`, 'lead-frame', [-1, 1].flatMap((s): Solid[] => [box('lead', [D / 2 - 0.4 - (x0 + 15.4), 0.5, 0.5], [(D / 2 - 0.4 + x0 + 15.4) / 2, 1.6, z + s * 1.27], 'copper', { color: HUE.tin }), box('lead', [0.5, 1.6 + 3.2, 0.5], [x0 + 15.4, (1.6 - 3.2) / 2, z + s * 1.27], 'copper', { color: HUE.tin })]))] });
+  return { comp: { name: 'RJ45 jack with magnetics', item: 'rj45-jack', at: [0, 0, 0], kids: [shield, housing, ...contacts, mag, led('green light', 'led-chip-green', 'led-die-ingan', -5.355, 0x35c94a), led('yellow light', 'led-chip-yellow', 'led-die-algainp', 5.355, 0xf2c12e)] }, size: [D, W, H],
+    src: 'HanRun HR911105A outline (16.04 × 21.30 × 13.5 mm, green and yellow LEDs: HQ Online, KiCad footprint); its tails, shield legs, pegs and lights\' leads where KiCad\'s footprint puts them (contacts in two rows 1.27 mm apart, 1.6 and 4.14 mm in from its back); 8P8C mouth per IEC 60603-7' };
 }
 
 // ---- microSD ------------------------------------------------------------------------------------------------------------
@@ -154,15 +191,15 @@ export function rj45(): BoardPart {
  *  (eight and the card-detect) and its push-push ejector. 13.7 × 13.75 mm measured on the Orange Pi 5 (Würth's hinged
  *  693072010801 has that outline, 13.60 × 13.70, but not its push-push action, so this is no part of theirs); 1.85 mm tall
  *  (typical of push-push sockets); its slot for a card 11 × 1.0 mm (the SD Association's microSD). */
-export function microSD(): BoardPart {
-  const D = 13.75, W = 13.7, H = 1.85, x0 = -D / 2;
+export function microSD(o: { D?: number; W?: number; H?: number; eject?: boolean; src?: string } = {}): BoardPart {
+  const D = o.D ?? 13.75, W = o.W ?? 13.7, H = o.H ?? 1.85, x0 = -D / 2, eject = o.eject ?? true;
   const cover = piece('microSD cover', 'microsd-shell', [box('term', [D, 0.15, W], [0, H - 0.075, 0], 'stainless-304', { color: HUE.stainless }), ...[-1, 1].map((s): Solid => box('term', [D - 1.5, H - 0.15, 0.15], [-0.75, (H - 0.15) / 2, s * (W / 2 - 0.075)], 'stainless-304', { color: HUE.stainless })),
     box('term', [0.15, H - 0.15, W - 0.3], [x0 + 0.075, (H - 0.15) / 2, 0], 'stainless-304', { color: HUE.stainless })]);
   const base = piece('microSD base', 'microsd-base', [box('body', [D - 0.3, 0.5, W - 0.3], [0.15 - 0.15, 0.25, 0], 'nylon', { color: HUE.black }), box('body', [2.0, H - 0.65, W - 0.3], [x0 + 1.2, 0.5 + (H - 0.65) / 2, 0], 'nylon', { color: HUE.black })]);
   const contacts = Array.from({ length: 9 }, (_, i): Comp => piece(`microSD contact ${i + 1}`, 'microsd-contact', [box('lead', [4.5, 0.1, 0.7], [x0 + 5.5, 0.6, (i - 4) * 1.1], 'phosphor-bronze', { color: HUE.gold, rot: [0, 0, 0.12] }), box('lead', [1.0, 0.1, 0.6], [x0 - 0.5, 0.05, (i - 4) * 1.1], 'phosphor-bronze', { color: HUE.gold })]));
   const ejector: Comp = { name: 'push-push ejector', item: 'microsd-ejector', at: [0, 0, 0], kids: [piece('ejector slider', 'microsd-slider', [box('body', [6, 0.6, 1.6], [1.0, 0.9, -W / 2 + 1.2], 'nylon', { color: HUE.black })]), piece('ejector spring', 'spring-compression', [{ role: 'lead', shape: { tube: { r: 0.2, pts: [[x0 + 3, 0.9, -W / 2 + 1.0], [x0 + 6, 0.9, -W / 2 + 1.0]] } }, at: [0, 0, 0], mat: 'steel-alloy', color: HUE.steel }])] };
-  return { comp: { name: 'microSD socket (push-push)', item: 'microsd-socket', at: [0, 0, 0], kids: [cover, base, ...contacts, ejector] }, size: [D, W, H],
-    src: 'measured on the Orange Pi 5 (13.7 × 13.75 mm); 1.85 mm tall typical of push-push sockets; microSD card 11 × 15 × 1.0 mm (SD Association)' };
+  return { comp: { name: eject ? 'microSD socket (push-push)' : 'microSD socket (push-pull)', item: eject ? 'microsd-socket' : 'microsd-socket-pull', at: [0, 0, 0], kids: [cover, base, ...contacts, ...(eject ? [ejector] : [])] }, size: [D, W, H],
+    src: o.src ?? 'measured on the Orange Pi 5 (13.7 × 13.75 mm); 1.85 mm tall typical of push-push sockets; microSD card 11 × 15 × 1.0 mm (SD Association)' };
 }
 
 // ---- pin headers -----------------------------------------------------------------------------------------------------
@@ -170,12 +207,12 @@ export function microSD(): BoardPart {
  *  through the board below it (Würth WR-PHD 6130xx21121, as KiCad's 3D models take them). Pins along x, rows along z,
  *  pin 1 at -x in the +z row. */
 export function pinHeader(rows: 1 | 2, cols: number): BoardPart {
-  const p = 2.54, L = cols * p, W = rows * p, base = 2.54, up = 6.0, down = 3.0 + 1.6, len = up + base + down;
+  const p = 2.54, L = cols * p, W = rows * p, base = 2.54, up = 6.0, down = 3.0, len = up + base + down;
   const strip = piece('header insulator', 'header-insulator', [box('body', [L, base, W], [0, base / 2, 0], 'pbt', { color: HUE.black })]);
   const pins: Comp[] = [];
   // (numbered as headers are: pin 1 in the first row (+z), pin 2 beside it in the second, odd pins along the first row)
   for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: HUE.gold, lead: c * rows + r })]));
-  return { comp: { name: `${rows * cols}-pin header`, item: `pin-header-${rows}x${cols}`, at: [0, 0, 0], kids: [strip, ...pins] }, size: [L, W, base + up], src: 'Würth WR-PHD 6130xx21121 (via KiCad\'s 3D model parameters): 2.54 mm pitch, 0.64 mm pins 6.0 mm above a 2.54 mm strip, 3.0 mm below the board' };
+  return { comp: { name: `${rows * cols}-pin header`, item: `pin-header-${rows}x${cols}`, at: [0, 0, 0], kids: [strip, ...pins] }, size: [L, W, base + up], src: 'Würth WR-PHD 6130xx21121 (via KiCad\'s 3D model parameters): 2.54 mm pitch, 0.64 mm pins 6.0 mm above a 2.54 mm strip; their tails 3.0 mm below its seat (RS\'s listing of the WR-PHD: mating length 6 mm, tail 3 mm), through the board and out under it' };
 }
 
 // ---- FPC and board-to-board sockets -----------------------------------------------------------------------------------
@@ -216,16 +253,16 @@ export function tactKMR2(): BoardPart {
 }
 /** A side-pushed tactile switch, its plunger out at +x: its body 2.8 × 4.6 mm measured on the Orange Pi 5 (its power
  *  button), 3.5 tall (typical), its round plunger 1.5 mm across standing out 1.0 mm. */
-export function tactSide(): BoardPart {
-  const L = 2.8, W = 4.6, H = 3.5;
+export function tactSide(o: { L?: number; W?: number; H?: number; out?: number; src?: string } = {}): BoardPart {
+  const L = o.L ?? 2.8, W = o.W ?? 4.6, H = o.H ?? 3.5, out = o.out ?? 1.0;
   const kids: Comp[] = [
     piece('switch base', 'tact-base', [box('body', [L, H - 0.2, W - 0.6], [0, (H - 0.2) / 2, 0], 'nylon', { color: HUE.black })]),
     piece('switch dome', 'tact-dome', [box('cap', [0.1, 1.6, 1.6], [L / 2 - 0.4, H / 2, 0], 'stainless-304', { color: HUE.stainless })]),
-    piece('switch plunger', 'tact-plunger', [{ role: 'cap', shape: { cyl: [0.75, 1.0] }, at: [L / 2 + 0.5, H / 2, 0], rot: [0, 0, PI / 2], mat: 'nylon', color: HUE.black }]),
+    piece('switch plunger', 'tact-plunger', [{ role: 'cap', shape: { cyl: [0.75, out] }, at: [L / 2 + out / 2, H / 2, 0], rot: [0, 0, PI / 2], mat: 'nylon', color: HUE.black }]),
     piece('switch frame', 'tact-frame', [box('term', [L, H, 0.15], [0, H / 2, -(W / 2 - 0.075)], 'steel-low', { color: HUE.steel }), box('term', [L, H, 0.15], [0, H / 2, W / 2 - 0.075], 'steel-low', { color: HUE.steel })]),
     ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b], i): Comp => piece(`switch terminal ${i + 1}`, 'tact-terminal', [box('lead', [0.6, 0.15, 0.7], [a! * (L / 2 - 0.3), 0.075, b! * (W / 2 + 0.2)], 'copper', { color: HUE.tin })])),
   ];
-  return { comp: { name: 'side-pushed tactile switch', item: 'tact-switch-side', at: [0, 0, 0], kids }, size: [L, W, H], src: 'measured on the Orange Pi 5 (2.8 × 4.6 mm body, plunger out at the board\'s edge as its side photo shows); height typical' };
+  return { comp: { name: 'side-pushed tactile switch', item: 'tact-switch-side', at: [0, 0, 0], kids }, size: [L, W, H], src: o.src ?? 'measured on the Orange Pi 5 (2.8 × 4.6 mm body, plunger out at the board\'s edge as its side photo shows); height typical' };
 }
 
 // ---- audio, fan, microphone ---------------------------------------------------------------------------------------------
@@ -303,6 +340,69 @@ export function inductor(a: number, b: number, h: number, mark = '', color = 0x6
   return { name: `power inductor${mark ? ` ${mark}` : ''}`, item: 'inductor-power', at: [0, 0, 0], kids: [
     piece('ferrite body', 'ferrite-core', [box('core', [a, h, b], [0, h / 2, 0], 'ferrite-soft', { color, ...(mark ? { text: mark, ink: 0x2a2a2a } : {}) })]),
     piece('winding', 'winding', [box('core', [a * 0.6, h * 0.6, b * 0.6], [0, h / 2, 0], 'copper', { share: 0.5, color: 0xb87333 })]),
+  ] };
+}
+
+/** A JST SH vertical header (1.0 mm pitch, its plug from above), n pins: its moulded housing (n + 2) × 2.9 mm (JST's
+ *  BM0nB-SRSS-TB, via KiCad's footprints), 4.25 tall (JST's SH drawing), open at its top for the plug, its pins upright
+ *  in it, a fitting nail each end. */
+export function jstSH(n: number): BoardPart {
+  const W = n + 2, D = 2.9, H = 4.25, x0 = -D / 2;
+  const housing = piece('JST SH housing', 'wafer-housing', [along('body', rect(W, H, 0), [rect(n + 0.4, H - 1.0, 1.0)], D, x0, 'nylon', { color: HUE.ivory, share: 0.62 }), box('body', [D, 1.0, W], [0, 0.5, 0], 'nylon', { color: HUE.ivory })]);
+  const pins = Array.from({ length: n }, (_, i): Comp => piece(`pin ${i + 1}`, 'wafer-pin', [box('lead', [0.32, H - 1.3, 0.32], [-0.3, 1.0 + (H - 1.3) / 2, (i - (n - 1) / 2) * 1.0], 'phosphor-bronze', { color: HUE.tin }), box('lead', [1.2, 0.1, 0.32], [x0 - 0.4, 0.05, (i - (n - 1) / 2) * 1.0], 'phosphor-bronze', { color: HUE.tin })]));
+  const nails = [-1, 1].map((sg, i): Comp => piece(`fitting nail ${i + 1}`, 'solder-tab', [box('term', [1.2, 1.6, 0.3], [0.4, 0.8, sg * (W / 2 + 0.15)], 'brass', { color: HUE.tin })]));
+  return { comp: { name: `JST SH header, ${n} pins (vertical)`, item: `jst-sh-${n}v`, at: [0, 0, 0], kids: [housing, ...pins, ...nails] }, size: [D, W, H], src: `JST BM0${n}B-SRSS-TB (${W} × 2.9 mm, KiCad's footprint from JST's eSH datasheet), 4.25 mm tall (JST's drawing)` };
+}
+/** A 0.5 mm FPC socket as a maker's 3D model gives its section (Raspberry Pi 5's camera/display and PCIe sockets): an
+ *  upright wall D - 0.55 thick, its cap D wide and 1.0 thick over it, open at +x under the cap where the cable goes in;
+ *  n contacts at 0.5 mm along it, each a spring on the wall's open face and a tail out to its pad. W wide, H tall. */
+export function fpcUpright(n: number, W: number, D: number, H: number): BoardPart {
+  const x0 = -D / 2, wt = D - 0.55;
+  const housing = piece('FPC housing', 'fpc-housing', [box('body', [wt, H - 1.0, W - 0.6], [x0 + wt / 2, (H - 1.0) / 2, 0], 'nylon', { color: HUE.black }), box('body', [D, 1.0, W], [0, H - 0.5, 0], 'nylon', { color: HUE.black })]);
+  const contacts = Array.from({ length: n }, (_, i): Comp => { const z = (i - (n - 1) / 2) * 0.5;
+    return piece(`FPC contact ${i + 1}`, 'fpc-contact', [box('lead', [0.1, H - 1.6, 0.2], [x0 + wt + 0.05, 0.3 + (H - 1.6) / 2, z], 'phosphor-bronze', { color: HUE.gold }), box('lead', [0.8, 0.1, 0.22], [D / 2 + 0.2, 0.05, z], 'phosphor-bronze', { color: HUE.gold })]); });
+  const tabs = [-1, 1].map((sg): Comp => piece('FPC hold-down tab', 'fpc-tab', [box('term', [1.6, 1.2, 0.3], [x0 + 0.8, 0.6, sg * (W / 2 - 0.15)], 'brass', { color: HUE.tin })]));
+  return { comp: { name: `${n}-contact FPC socket (0.5 mm)`, item: `fpc-socket-${n}`, at: [0, 0, 0], kids: [housing, ...contacts, ...tabs] }, size: [D, W, H], src: `its outline and section as its board maker's 3D model gives it (${W} × ${D} × ${H} mm); ${n} contacts at 0.5 mm` };
+}
+/** A part as its board maker's mechanical 3D model gives it, there only as its outline (L × W × H mm) and not named in
+ *  it: drawn as that, a moulded body, and said so. */
+export function refBody(L: number, W: number, H: number, name: string, color: number = HUE.black, mat = 'emc', mark = ''): Comp {
+  return { name, item: 'ref-body', at: [0, 0, 0], solids: [box('body', [L, H, W], [0, H / 2, 0], mat, { color, ...(mark ? { text: mark, ink: 0x9a9ca0 } : {}) })] };
+}
+/** A shield can over a radio, L × W × H mm (its outline as a board maker's 3D model gives it): its drawn steel, its
+ *  radio's die inside. */
+export function shieldCan(L: number, W: number, H: number, name = 'Wi-Fi and Bluetooth radio'): Comp {
+  return { name, item: 'wifi-module', at: [0, 0, 0], kids: [{ name: 'shield can', solids: [{ role: 'term', shape: { box: [L, H, W] }, at: [0, H / 2, 0], mat: 'steel-low', color: HUE.steel, shell: 0.15 }], at: [0, 0, 0] }, piece('radio die', 'si-die', [box('die', [4, 0.6, 4], [0, 0.4, 0], 'silicon')])] };
+}
+/** Side-looking LEDs side by side (a board's power and activity lights at its edge), each L × W × H mm, their light out at
+ *  +x: each its die on its lead frame under its moulded lens, in its colour. */
+export function sideLeds(L: number, W: number, H: number, lights: { name: string; item: string; die: string; color: number }[]): Comp {
+  const kids = lights.map((l, i): Comp => { const z = (i - (lights.length - 1) / 2) * W;
+    return { name: l.name, item: l.item, at: [0, 0, 0], solids: [box('cap', [L, H, W * 0.92], [0, H / 2, z], 'epoxy', { color: l.color })], kids: [piece(`${l.name} die`, l.die, [box('die', [0.1, 0.25, 0.25], [L / 2 - 0.2, H / 2, z], 'silicon', { color: 0x222222 })]), piece(`${l.name} lead frame`, 'lead-frame', [box('lead', [L * 0.8, 0.12, W * 0.5], [0, 0.06, z], 'copper', { color: HUE.tin })])] }; });
+  return { name: 'indicator lights', item: 'led-pair', at: [0, 0, 0], kids };
+}
+/** A flip-chip BGA under a metal lid, a mm square and H tall over all (a board maker's 3D model's): its balls, its
+ *  substrate, its die, its nickel-plated copper lid over 86 % of it (typical of lidded FCBGAs), or as measured (`o.lid`
+ *  mm across; `o.band`: a lid pressed with a raised band across its middle, so wide, its two edges' flanges `o.drop` mm
+ *  lower, as a photo of it shows). */
+export function fcbgaLid(a: number, H: number, mark = '', o: { lid?: number; band?: number; drop?: number } = {}): Comp {
+  const ball = 0.3, sub = 0.7, lid = H - ball - sub, la = o.lid ?? a * 0.86, share = (PI / 6) * (0.4 / 0.65) ** 2;
+  if (o.band) {
+    const d = o.drop ?? 0.3, top = ball + sub + lid;
+    return { name: 'system-on-chip', item: 'soc-package', at: [0, 0, 0], kids: [
+      piece('solder balls', 'solder-balls', [box('lead', [a * 0.94, ball, a * 0.94], [0, ball / 2, 0], 'solder', { inBody: 0, share, color: 0xb8bcc0 })]),
+      piece('substrate', 'bga-substrate', [box('core', [a, sub, a], [0, ball + sub / 2, 0], 'bt', { color: 0x2e3a2c })]),
+      piece('die', 'si-die', [box('die', [a * 0.45, 0.6, a * 0.45], [0, ball + sub + 0.3, 0], 'silicon')]),
+      // (its flanges along two edges, the band raised between them carrying its marking)
+      piece('lid', 'heat-spreader', [{ role: 'tab', shape: { box: [la, lid - d, la] }, at: [0, ball + sub + (lid - d) / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3 },
+        { role: 'tab', shape: { box: [la, d, o.band] }, at: [0, top - d / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3, ...(mark ? { text: mark, ink: 0x5a5c60 } : {}) }]),
+    ] };
+  }
+  return { name: 'system-on-chip', item: 'soc-package', at: [0, 0, 0], kids: [
+    piece('solder balls', 'solder-balls', [box('lead', [a * 0.94, ball, a * 0.94], [0, ball / 2, 0], 'solder', { inBody: 0, share, color: 0xb8bcc0 })]),
+    piece('substrate', 'bga-substrate', [box('core', [a, sub, a], [0, ball + sub / 2, 0], 'bt', { color: 0x2e3a2c })]),
+    piece('die', 'si-die', [box('die', [a * 0.45, 0.6, a * 0.45], [0, ball + sub + 0.3, 0], 'silicon')]),
+    piece('lid', 'heat-spreader', [{ role: 'tab', shape: { box: [la, lid, la] }, at: [0, ball + sub + lid / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3, ...(mark ? { text: mark, ink: 0x5a5c60 } : {}) }]),
   ] };
 }
 

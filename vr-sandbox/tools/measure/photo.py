@@ -7,7 +7,7 @@ millimetres by the homography through them. Then:
 
   calibrate  photo.jpg --point PX,PY=X,Z ... [--pad] --out cal.json   (X right, Z up, from the lower-left corner)
   grid       cal.json --region NAME:X0:Z0:X1:Z1 ... --out PREFIX      a crop of each region with its millimetre grid
-  at         cal.json PX,PY ...                                       where a pixel is, mm
+  at         cal.json PX,PY[@H] ...                                   where a pixel is, mm (@H: on a top H mm up)
   px         cal.json X,Z ...                                         where a point in mm is in the photo
   outline    cal.json --mode bright|dark|notblue NAME:X:Z ... [--box=X0:Z0:X1:Z1] [--ground 240]
                                                                       the outline of the part round each point, mm
@@ -26,6 +26,10 @@ millimetres by the homography through them. Then:
   traces     cal.json [--map boardmap.json] --out traces.png [--ts NAME:file.ts] [--res 10] [--lift 8]
                                                                       the copper under a board's mask as its photo shows
                                                                       it (traces, planes, vias), on the board's own mm
+  silk       cal.json [--map boardmap.json] --out silk.png [--ts NAME:file.ts] [--res 20] [--sat 45] [--val 215]
+                                                                      the silkscreen as its photo shows it (its words,
+                                                                      logos, outlines: the white ink on its mask), on the
+                                                                      board's own mm, with the ink's colour
   same       CAL... --region X0:Z0:X1:Z1 [--up H] --out out.png       one region of the thing cut from every calibrated
                                                                       photo of it, side by side: the same part from
                                                                       each angle (each photo calibrated by four points
@@ -52,6 +56,45 @@ def to_px(c, x, z):
 
 def to_mm(c, px, py):
     v = c['Hi'] @ [px, py, 1.0]; return v[0] / v[2], v[1] / v[2]
+
+
+def camera(c, shape):
+    """The camera a photo was taken with, from its calibration's homography (the board's plane in mm to the photo's
+    pixels): its principal point the photo's middle, square pixels; its focal length the one that makes the plane's two
+    directions square and of a length (Zhang's constraints on H), and so its turn and place. Returns project(x, z, y):
+    the pixel a point y mm above the board at (x, z) is seen at; None when the photo is too square-on to tell (an
+    orthographic view, where nothing leans)."""
+    h, w = shape[:2]; T = np.array([[1, 0, -w / 2], [0, 1, -h / 2], [0, 0, 1.0]]); A = T @ c['H']; a1, a2 = A[:, 0], A[:, 1]
+    fs = []
+    if abs(a1[2] * a2[2]) > 1e-12: fs.append(-(a1[0] * a2[0] + a1[1] * a2[1]) / (a1[2] * a2[2]))
+    if abs(a1[2] ** 2 - a2[2] ** 2) > 1e-12: fs.append(-((a1[0] ** 2 + a1[1] ** 2) - (a2[0] ** 2 + a2[1] ** 2)) / (a1[2] ** 2 - a2[2] ** 2))
+    fs = [f for f in fs if f > 0]
+    if not fs: return None
+    f = math.sqrt(float(np.median(fs))); K = np.array([[f, 0, w / 2], [0, f, h / 2], [0, 0, 1.0]]); Ki = np.linalg.inv(K)
+    B = Ki @ c['H']; lam = (np.linalg.norm(B[:, 0]) + np.linalg.norm(B[:, 1])) / 2; r1, r2, t = B[:, 0] / lam, B[:, 1] / lam, B[:, 2] / lam
+    if t[2] < 0: r1, r2, t = -r1, -r2, -t
+    n = np.cross(r1, r2); n /= np.linalg.norm(n)
+    # (up from the board is toward the camera: the photo is of its top)
+    if n @ (-t) < 0: n = -n
+    def project(x, z, y):
+        v = K @ (x * r1 + z * r2 + y * n + t); return v[0] / v[2], v[1] / v[2]
+    def unproject(px, py, y):   # (the point y mm above the board seen at a pixel: the plane at that height, inverted)
+        Hy = K @ np.c_[r1, r2, y * n + t]; v = np.linalg.solve(Hy, [px, py, 1.0]); return v[0] / v[2], v[1] / v[2]
+    project.f = f; project.unproject = unproject
+    return project
+
+
+def shadow(c, cam, corners, top, pts3=None):
+    """What of the board's plane a part hides in a photo: its footprint, and each corner of its solids seen along the
+    camera's rays down onto the plane from its own height (or, given only the part's box, its top's outline), as one
+    hull, mm."""
+    pts = [tuple(p) for p in corners]
+    if cam and pts3:
+        for x, z, y in pts3:
+            if y > 0.05: px, py = cam(x, z, y); pts.append(to_mm(c, px, py))
+    elif cam and top > 0.05:
+        for x, z in corners: px, py = cam(x, z, top); pts.append(to_mm(c, px, py))
+    return cv2.convexHull(np.float32(pts)).reshape(-1, 2)
 
 
 def blue_mask(im):
@@ -112,8 +155,15 @@ def cmd_grid(a):
 
 
 def cmd_at(a):
-    c = load(a.cal)
-    for p in a.pts: x, y = map(float, p.split(',')); print('pixel (%s) is (%.2f, %.2f) mm' % (p, *to_mm(c, x, y)))
+    # (PX,PY on the board's plane; PX,PY@H on a part's top H mm above it, by the camera the calibration gives)
+    c = load(a.cal); cam = None
+    for p in a.pts:
+        xy, _, hh = p.partition('@'); x, y = map(float, xy.split(','))
+        if hh:
+            cam = cam or camera(c, cv2.imread(c['photo']).shape)
+            if not cam: print('pixel (%s): the photo is too square-on to tell a height' % p); continue
+            print('pixel (%s) is (%.2f, %.2f) mm, %s mm up' % (xy, *cam.unproject(x, y, float(hh)), hh))
+        else: print('pixel (%s) is (%.2f, %.2f) mm' % (p, *to_mm(c, x, y)))
 
 
 def cmd_px(a):
@@ -161,30 +211,45 @@ def cmd_small(a):
     x0, z0, x1, z1 = map(float, (a.box or '0.8:0.8:99.2:61.2').split(':'))
     cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]])], 1)
     if a.map:   # leave out what the drawing already places (each footprint a little larger) and its holes' pads
-        m = json.load(open(a.map))
+        m = json.load(open(a.map)); cam = camera(c, im.shape); hid = np.zeros_like(keep)
         for p in m['parts']:
             if p.get('side', 'top') != 'top': continue
-            cs = np.array(p['corners']); mid = cs.mean(axis=0); cs = mid + (cs - mid) * 1.06 + np.sign(cs - mid) * 0.35
-            cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in cs])], 0)
+            # (each footprint a little larger, and the plane its top hides in a photo taken from aside)
+            cs = np.array(p['corners']); mid = cs.mean(axis=0); cs = cs + (cs - mid) * 0.06 + np.sign(cs - mid) * 0.35
+            cv2.fillPoly(hid, [np.int32([to_px(c, x, z) for x, z in shadow(c, cam, cs, p.get('top', 0), p.get('pts'))])], 1)
+        # (all of it widened 0.3 mm: the camera's lean is good to about 0.5 mm, its footprint already a little larger, and a
+        # part's bright edge is no small part)
+        r_ = max(1, int(round(0.3 * (c.get('scale_px_per_mm') or 9.7)))); keep[cv2.dilate(hid, np.ones((2 * r_ + 1, 2 * r_ + 1), np.uint8)) > 0] = 0
         for w in m.get('silk', []):
             cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in w['corners']])], 0)
         for h in m.get('holes', []):
             X, Y = to_px(c, *h['at']); cv2.circle(keep, (int(X), int(Y)), int(h['pad'] / 2 * c['scale_px_per_mm'] + 3), 0, -1)
+    if a.silk:   # (the board's ink as photo.py silk found it, laid back onto the photo: words and logos are not parts)
+        ink = cv2.imread(a.silk, 0); m_ = json.load(open(a.map)) if a.map else {}; Wb = m_.get('W', 62); Rs = ink.shape[1] / m_.get('L', 100)
+        Mi = c['H'] @ np.array([[1 / Rs, 0, 0.5 / Rs], [0, -1 / Rs, Wb - 0.5 / Rs], [0, 0, 1]])
+        inkp = cv2.warpPerspective(ink, Mi, (im.shape[1], im.shape[0]), flags=cv2.INTER_NEAREST)
+        keep[cv2.dilate(inkp, np.ones((5, 5), np.uint8)) > 0] = 0
     for sk in a.skip or []:   # (regions known to hold no part: a logo, a drawing printed on the board)
         x0_, z0_, x1_, z1_ = map(float, sk.split(':')); cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in [(x0_, z0_), (x1_, z0_), (x1_, z1_), (x0_, z1_)]])], 0)
     keep = keep.astype(bool)
+    if a.keep: cv2.imwrite(a.keep, np.where(keep[:, :, None], im, im // 4))   # (where it looked: the rest darkened)
     # (a part is tan (a ceramic body, a moulded inductor's) with its bright tin ends, or dark (a resistor's body, a small
     # chip's or transistor's): two masks, so a dark shadow between two tan parts does not join them, each opened to drop
     # thin traces; the board's blue mask, its white silkscreen and the ground are neither)
-    blue = (H_ >= 90) & (H_ <= 130) & (S_ >= 90); white = (S_ < 30) & (V_ > 215)
-    bright = (V_ > 170) & (S_ < 70) & ~white
-    tanpx = (H_ >= 5) & (H_ <= 35) & (S_ >= 12) & (V_ >= 100) & ~white
+    # (the board's mask by its own hue, blue or green, and how saturated and bright it is: tin is far paler than any mask,
+    # under half its saturation and brighter, whatever the mask's colour; a ceramic body is a dull tan, a copper pad's
+    # orange far more saturated)
+    blue, _ = mask_of(hsv, keep); Sm, Vm = float(np.median(S_[blue & keep])), float(np.median(V_[blue & keep]))
+    # (white is ink when the ink is not known; when photo.py silk has found it, white is tin's highlight, the ink left out)
+    blue &= S_ >= 0.5 * Sm; white = np.zeros_like(blue) if a.silk else (S_ < 30) & (V_ > 215)
+    bright = (V_ > max(170, Vm + 10)) & (S_ < max(70, 0.5 * Sm)) & ~white
+    tanpx = (H_ >= 5) & (H_ <= 35) & (S_ >= 12) & (S_ < 120) & (V_ >= 100) & ~white
     darkpx = (V_ < 125) & ~blue & ~tanpx
     # (a body's holes filled: its marking, a greyer patch, a highlight are still the part)
     masks = [(k, ndimage.binary_fill_holes(ndimage.binary_opening(m & keep, iterations=1))) for k, m in (('tan', (tanpx | bright) & ~blue), ('dark', darkpx))]
     # (parts side by side touch through their pads: each blob eroded until it is one part, a little more each pass,
     # what is taken at one pass left out of the next; each measured with what erosion took from it put back)
-    pxmm = c.get('scale_px_per_mm') or 9.7; out = []; unnamed = []
+    pxmm = c.get('scale_px_per_mm') or 9.7; out = []; unnamed = []; tins = []
     CASES = [(0.42, '0201', 0.6, 0.3), (0.66, '0402', 1.0, 0.5), (1.0, '0603', 1.6, 0.8), (1.45, '0805', 2.0, 1.25), (9, '1206', 3.2, 1.6)]
     why = [to_px(c, *map(float, w.split(','))) for w in (a.why or [])]
     for src, left in masks:
@@ -200,6 +265,8 @@ def cmd_small(a):
                 print(f'  why: {src} mask, eroded {er}: a blob {L:.2f} × {W:.2f} mm, {dens:.2f} of its box filled' + ('' if (dens >= 0.62 and L <= 4.4) or last else ': not one part yet, split further'))
             if (dens < 0.62 or L > 4.4) and not last: continue        # (not one part yet: split further next pass)
             took = np.zeros_like(left); took[ys, xs] = True; left &= ~ndimage.binary_dilation(took, iterations=er + 1)
+            if src == 'tan' and L < 0.45 and W >= 0.12 and dens >= 0.6:
+                mx_, mz_ = to_mm(c, cx, cy); tins.append((mx_, mz_, L, W)); continue   # (a tin end alone: paired below)
             if dens < 0.45 or W < 0.25 or L < 0.45 or L > 4.4: continue
             th = math.radians(ang if w >= h else ang + 90); mx, mz = to_mm(c, cx, cy)
             # (where each pixel is along the part (u) and across it (v), as a share of its half-length and half-width)
@@ -246,6 +313,23 @@ def cmd_small(a):
                 # between its tin ends at this photo's scale; what it is not seen, drawn as the commoner, a capacitor)
                 out.append({'at': at, 'kind': 'capacitor', 'case': '0201', 'L': 0.6, 'W': 0.3, 'dir': d, 'seen': [round(L, 2), round(W, 2)], 'unseen': 'kind'}); continue
             unnamed.append({'at': at, 'L': round(L, 2), 'W': round(W, 2), 'mask': src, 'hsv': [round(cH), round(cS), round(cV)], 'ends': round(eV), 'sides': round(sV)})   # (seen, but like none of these: left out and listed, not guessed)
+    # (where a part's body is too small to show between its ends at the photo's scale, its two tin ends are seen as two
+    # pale blobs: a pair of them, alike, their middles as far apart as an EIA case's ends are (an 0201's about 0.45 mm,
+    # an 0402's 0.75), is that part; what it is (capacitor or resistor) not seen, drawn as the commoner)
+    if a.tins: json.dump([[round(v, 3) for v in t] for t in tins], open(a.tins, 'w'))
+    used = set()
+    for i, (x1, z1, l1, w1) in enumerate(tins):
+        if i in used: continue
+        best = None
+        for j, (x2, z2, l2, w2) in enumerate(tins):
+            if j == i or j in used: continue
+            d = math.hypot(x2 - x1, z2 - z1)
+            if 0.3 <= d <= 0.9 and max(l1, l2) < 1.8 * min(l1, l2) + 0.1 and (best is None or d < best[0]): best = (d, j)
+        if not best: continue
+        d, j = best; x2, z2 = tins[j][:2]; used |= {i, j}
+        a_ = math.degrees(math.atan2(z2 - z1, x2 - x1)) % 180; dd = round(a_ / 90) * 90 % 180 if min(a_ % 90, 90 - a_ % 90) < 15 else round(a_)
+        case = ('0201', 0.6, 0.3) if d < 0.6 else ('0402', 1.0, 0.5)
+        out.append({'at': [round((x1 + x2) / 2, 2), round((z1 + z2) / 2, 2)], 'kind': 'capacitor', 'case': case[0], 'L': case[1], 'W': case[2], 'dir': dd, 'seen': [round(d, 2), round((tins[i][3] + tins[j][3]) / 2, 2)], 'unseen': 'kind', 'pair': True})
     json.dump({'photo': c['photo'], 'count': len(out), 'parts': out, 'unnamed': unnamed}, open(a.out, 'w'), indent=0)
     if a.ts:   # the same as a TypeScript table a board's data imports: NAME:path.ts
         name, path = a.ts.split(':', 1); k = {'capacitor': 'c', 'resistor': 'r', 'sot23': 't', 'chip': 'q', 'inductor': 'l', 'unseen': 'p'}
@@ -254,9 +338,11 @@ def cmd_small(a):
         open(path, 'w').write(f"""// {a.board or 'A board'}'s small parts, as its photo shows them: found by tools/measure/photo.py small on its photo
 // calibrated by known points (what is neither its mask nor its silkscreen, outside the parts and words its layout
 // places, 0.45-4 mm across; rows of chips touching split by their width; each put to the nearest EIA case by its width).
-// Generated: re-run the tool and this file is written again. The smallest (0201s in dense clusters, three pixels wide in
-// a photo of 10 px/mm) are below what the photo resolves, so some are missed; none is placed that the photo does not
-// show. Each row: c capacitor, r resistor, t a small transistor package (its package last, SOT-23 or SOT-323 by its
+// Made with: small --erode {a.erode}{''.join(' --skip ' + k for k in (a.skip or []))}{' --silk (its ink, from photo.py silk)' if a.silk else ''}
+// (each skipped region checked by eye against the photo: what was found there was words, a test pad or a hole's rim).
+// Generated: re-run the tool and this file is written again. The smallest (0201s in dense clusters, {0.3 * pxmm:.0f} pixels wide in
+// a photo of {pxmm:.1f} px/mm) are at the edge of what the photo resolves, so many are missed; none is placed that the photo
+// does not show. Each row: c capacitor, r resistor, t a small transistor package (its package last, SOT-23 or SOT-323 by its
 // body's length, its pins by the legs counted), q a small dark no-lead chip (its size as seen), l a moulded inductor,
 // p a chip as small as an 0201 whose kind its photo does not show; middle x, z (mm from the lower-left corner); length
 // and width (mm); its angle (degrees from +x).
@@ -296,47 +382,97 @@ def cmd_colour(a):
         print('drawn now 0x%s; to match: 0x%s' % (a.now.replace('0x', '').replace('#', ''), ''.join('%02x' % int(round(v * 255)) for v in new)))
 
 
-def cmd_traces(a):
-    """Where a board's photo shows copper under its solder mask: its traces, planes' edges and vias, lighter than the bare
-    mask round them. The photo is rectified to the board's own millimetres (R px/mm, its far edge at the top), the mask
-    told by its hue, and a pixel taken as copper where it stands lighter than the mask's median round it by more than
-    --lift; specks smaller than --speck pixels dropped; the parts and words the drawing places left out. Written as a
-    grey PNG (copper white), and with --ts as a data URL a board's data imports."""
+def board_view(a):
+    """The photo rectified to the board's own millimetres (R px/mm, its far edge at the top), and where on it the drawing
+    places nothing (no part on top, no word, no hole's pad): what traces and silk read."""
     c = load(a.cal); im = cv2.imread(c['photo']); R = a.res; m = json.load(open(a.map)) if a.map else {'parts': [], 'silk': []}
     L, W = m.get('L', a.L), m.get('W', a.W); w, h = int(round(L * R)), int(round(W * R))
     # (each output pixel's place in mm, mapped into the photo by its calibration)
     M = c['H'] @ np.array([[1 / R, 0, 0.5 / R], [0, -1 / R, W - 0.5 / R], [0, 0, 1]])
     rect = cv2.warpPerspective(im, M, (w, h), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
-    hsv = cv2.cvtColor(rect, cv2.COLOR_BGR2HSV).astype(int); H_, S_, V_ = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
-    blue = (H_ >= 90) & (H_ <= 130) & (S_ >= 90)
     keep = np.ones((h, w), np.uint8)
     tp = lambda x, z: (x * R, (W - z) * R)
+    # (each part hides its footprint and, in a photo taken from aside, the plane behind it out to where its top is seen)
+    cam = camera(c, im.shape)
     for p in m.get('parts', []):
         if p.get('side', 'top') != 'top': continue
-        cs = np.array(p['corners']); mid = cs.mean(axis=0); cs = mid + (cs - mid) * 1.04 + np.sign(cs - mid) * 0.25
-        cv2.fillPoly(keep, [np.int32([tp(x, z) for x, z in cs])], 0)
+        cs = np.array(p['corners']); mid = cs.mean(axis=0); cs = cs + np.sign(cs - mid) * 0.15
+        hull = shadow(c, cam, cs, p.get('top', p.get('h', 0)), p.get('pts'))
+        cv2.fillPoly(keep, [np.int32([tp(x, z) for x, z in hull])], 0)
     for s_ in m.get('silk', []): cv2.fillPoly(keep, [np.int32([tp(x, z) for x, z in s_['corners']])], 0)
     for hl in m.get('holes', []): X, Y = tp(*hl['at']); cv2.circle(keep, (int(X), int(Y)), int(hl['pad'] / 2 * R + 2), 0, -1)
+    if cam: print('camera: focal length %.0f px' % cam.f)
+    # (the board's own outline: what lies past its edges is the ground the photo was taken on)
+    edge = int(round(0.3 * R)); keep[:edge, :] = 0; keep[-edge:, :] = 0; keep[:, :edge] = 0; keep[:, -edge:] = 0
+    hsv = cv2.cvtColor(rect, cv2.COLOR_BGR2HSV).astype(int)
+    return c, rect, hsv, keep.astype(bool), (L, W, R, w, h)
+
+
+def mask_of(hsv, keep):
+    """The solder mask told by its own hue: the median hue of the board's strongly coloured pixels where nothing is
+    placed (a blue mask's about 105 of OpenCV's 180, a green one's about 60), and every pixel within 18 of it."""
+    H_, S_ = hsv[:, :, 0], hsv[:, :, 1]
+    hm = int(np.median(H_[keep & (S_ >= 90)])); return (np.abs(H_ - hm) <= 18) & (S_ >= 60), hm
+
+
+def hexof(bgr):
+    return '0x' + ''.join('%02x' % int(round(v)) for v in bgr[::-1])
+
+
+def write_ts(a, out, w, h, R, what, says, extra=''):
+    import base64
+    name, path = a.ts.split(':', 1); ok, png = cv2.imencode('.png', out, [cv2.IMWRITE_PNG_BILEVEL, 1]); b64 = base64.b64encode(png.tobytes()).decode()
+    open(path, 'w').write(f"""// {a.board or 'A board'}'s {what}, as its photo shows it: found by tools/measure/photo.py {a.cmd}
+// on its photo calibrated by known points (rectified to the board at {R:g} px/mm, its far edge at the top; {says}; the
+// parts and words its layout places left out, so under them it is not known). Generated: re-run the tool and this file
+// is written again. A PNG, {what} white, {w} x {h} px.
+export const {name} = {{ res: {R:g}, w: {w}, h: {h}{extra}, png: 'data:image/png;base64,{b64}' }};
+"""); print(path, len(b64), 'chars')
+
+
+def cmd_traces(a):
+    """Where a board's photo shows copper under its solder mask: its traces, planes' edges and vias, lighter than the bare
+    mask round them. The photo is rectified to the board's own millimetres (R px/mm, its far edge at the top), the mask
+    told by its hue, and a pixel taken as copper where it stands lighter than the mask's median round it by more than
+    --lift; specks smaller than --speck pixels dropped; the parts and words the drawing places left out. Written as a
+    grey PNG (copper white), and with --ts as a data URL a board's data imports. Prints the bare mask's colour and the
+    copper's, each the median of its pixels."""
+    c, rect, hsv, keep, (L, W, R, w, h) = board_view(a); V_ = hsv[:, :, 2]
+    blue, hm = mask_of(hsv, keep)
     v = V_.astype(np.uint8); bg = cv2.medianBlur(v, a.win | 1); d = V_ - bg.astype(int)
-    # (copper is a little lighter, still the mask's blue: not the bright metal of a pad or a part, nor its halo)
-    cu = blue & (d > a.lift) & (d < 45) & keep.astype(bool)
-    near = ndimage.binary_dilation(~blue | ~keep.astype(bool), iterations=2); cu &= ~near
+    # (copper is a little lighter, still the mask's hue: not the bright metal of a pad or a part, nor its halo)
+    cu = blue & (d > a.lift) & (d < 45) & keep
+    near = ndimage.binary_dilation(~blue | ~keep, iterations=2); cu &= ~near
     # (a trace is a line: kept where a run of --run pixels along one of four directions lies in it)
     k = a.run; lines = np.zeros_like(cu)
     for ker in (np.ones((1, k), bool), np.ones((k, 1), bool), np.eye(k, dtype=bool), np.fliplr(np.eye(k, dtype=bool))):
         lines |= ndimage.binary_opening(cu, structure=ker)
     lab, n = ndimage.label(lines); sizes = ndimage.sum(lines, lab, range(1, n + 1)); big = np.isin(lab, 1 + np.nonzero(sizes >= a.speck)[0])
     out = (big * 255).astype(np.uint8); cv2.imwrite(a.out, out)
-    print('%s: %d × %d px at %g px/mm, %.1f %% of the board copper under its mask' % (a.out, w, h, R, 100 * big.mean()))
-    if a.ts:
-        import base64
-        name, path = a.ts.split(':', 1); ok, png = cv2.imencode('.png', out, [cv2.IMWRITE_PNG_BILEVEL, 1]); b64 = base64.b64encode(png.tobytes()).decode()
-        open(path, 'w').write(f"""// {a.board or 'A board'}'s copper under its solder mask, as its photo shows it: found by tools/measure/photo.py traces
-// on its photo calibrated by known points (rectified to the board at {R:g} px/mm, its far edge at the top; copper where
-// the photo stands lighter than the mask round it; the parts and words its layout places left out, so under them it is
-// not known). Generated: re-run the tool and this file is written again. A PNG, copper white, {w} x {h} px.
-export const {name} = {{ res: {R:g}, w: {w}, h: {h}, png: 'data:image/png;base64,{b64}' }};
-"""); print(path, len(b64), 'chars')
+    bare = blue & keep & ~ndimage.binary_dilation(big, iterations=2)
+    print('%s: %d × %d px at %g px/mm, %.1f %% of the board copper under its mask (its mask\'s hue %d)' % (a.out, w, h, R, 100 * big.mean(), hm))
+    print('bare mask %s, over copper %s (medians)' % (hexof(np.median(rect[bare], axis=0)), hexof(np.median(rect[big.astype(bool)], axis=0)) if big.any() else '-'))
+    if a.ts: write_ts(a, out, w, h, R, 'copper under its solder mask', 'copper where the photo stands lighter than the mask round it')
+
+
+def cmd_silk(a):
+    """A board's silkscreen as its photo shows it: the white ink on its mask, its words, logos and outlines, every one
+    where it is. Ink is what is pale and grey (saturation under --sat, value over --val) on the board where the drawing
+    places nothing; a solid little blob (fuller than 0.75 of its box and under 1 mm) is a part's tinned end, not ink, and
+    is dropped, as are specks under --speck pixels. Written as a PNG (ink white), and with --ts as a data URL, with the
+    ink's colour (the median of its pixels)."""
+    c, rect, hsv, keep, (L, W, R, w, h) = board_view(a); S_, V_ = hsv[:, :, 1], hsv[:, :, 2]
+    ink = (S_ < a.sat) & (V_ > a.val) & keep
+    lab, n = ndimage.label(ink); out = np.zeros((h, w), np.uint8)
+    for i, sl in enumerate(ndimage.find_objects(lab)):
+        blob = lab[sl] == i + 1; area = int(blob.sum())
+        if area < a.speck: continue
+        bh, bw = blob.shape
+        if max(bh, bw) < R * 1.0 and area > 0.75 * bh * bw: continue
+        out[sl][blob] = 255
+    cv2.imwrite(a.out, out); col = np.median(rect[out > 0], axis=0) if (out > 0).any() else np.array([240, 240, 240])
+    print('%s: %d × %d px at %g px/mm, %.2f %% of the board ink; the ink %s (median)' % (a.out, w, h, R, 100 * (out > 0).mean(), hexof(col)))
+    if a.ts: write_ts(a, out, w, h, R, 'silkscreen', 'ink where the photo is pale and grey on its mask', f", ink: {hexof(col)}")
 
 
 def cmd_same(a):
@@ -362,9 +498,10 @@ def main():
     p = sp.add_parser('px'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_px)
     p = sp.add_parser('outline'); p.add_argument('cal'); p.add_argument('--mode', choices=['bright', 'dark', 'notblue'], required=True); p.add_argument('--dark', type=int, default=110); p.add_argument('--ground', type=int, default=240, help='brighter than this is the ground the photo was taken on, not metal'); p.add_argument('--box'); p.add_argument('--open', type=int, default=0, help='part blobs that touch by this many pixels of opening'); p.add_argument('at', nargs='+'); p.set_defaults(f=cmd_outline)
     p = sp.add_parser('overlay'); p.add_argument('cal'); p.add_argument('map'); p.add_argument('--out', required=True); p.add_argument('--side', default='top'); p.add_argument('--scale', type=float, default=1.5); p.set_defaults(f=cmd_overlay)
-    p = sp.add_parser('small'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--erode', type=int, default=2); p.add_argument('--ts'); p.add_argument('--board'); p.add_argument('--box'); p.add_argument('--out', required=True); p.add_argument('--show'); p.add_argument('--why', action='append', help='X,Z (mm): say how the blob there was taken or why it was not'); p.add_argument('--skip', action='append', help='X0:Z0:X1:Z1 (mm): a region known to hold no part (a logo)'); p.set_defaults(f=cmd_small)
+    p = sp.add_parser('small'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--erode', type=int, default=2); p.add_argument('--ts'); p.add_argument('--board'); p.add_argument('--box'); p.add_argument('--out', required=True); p.add_argument('--show'); p.add_argument('--why', action='append', help='X,Z (mm): say how the blob there was taken or why it was not'); p.add_argument('--skip', action='append', help='X0:Z0:X1:Z1 (mm): a region known to hold no part (a logo)'); p.add_argument('--silk', help='the ink photo.py silk found: left out'); p.add_argument('--keep', help='a PNG of where it looked'); p.add_argument('--tins', help='a JSON of the lone tin ends seen'); p.set_defaults(f=cmd_small)
     p = sp.add_parser('colour'); p.add_argument('real'); p.add_argument('drawn'); p.add_argument('--at', action='append', required=True); p.add_argument('--now'); p.set_defaults(f=cmd_colour)
     p = sp.add_parser('traces'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=10); p.add_argument('--win', type=int, default=15); p.add_argument('--lift', type=int, default=8); p.add_argument('--speck', type=int, default=12); p.add_argument('--run', type=int, default=7); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_traces)
+    p = sp.add_parser('silk'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=20); p.add_argument('--sat', type=int, default=45); p.add_argument('--val', type=int, default=215); p.add_argument('--speck', type=int, default=6); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_silk)
     p = sp.add_parser('same'); p.add_argument('cals', nargs='+'); p.add_argument('--region', required=True); p.add_argument('--up', type=float, default=0); p.add_argument('--h', type=int, default=360); p.add_argument('--out', required=True); p.set_defaults(f=cmd_same)
     a = ap.parse_args(); a.f(a)
 

@@ -4,6 +4,8 @@ model gives it. A maker's mechanical reference model (Raspberry Pi's RP-004882-D
 exactly; its boxes are what a layout is taken from.
 
   boxes  model.step [--flip] [--json out.json]
+  check  boxes.json boardmap.json        each part the drawing places beside the model's box nearest it: how much of
+                                         each the other covers (1.0 both ways: the same footprint), worst first
 
 The board is the largest flat solid. Its frame: x right from its left edge, y up the drawing from its near edge (the
 model's +z taken as toward the near edge; --flip for a model the other way), each part's height above the board's top
@@ -20,10 +22,30 @@ def boxes(path):
     gmsh.finalize(); return out
 
 
+def check(a):
+    m, d = json.load(open(a.boxes)), json.load(open(a.map))
+    area = lambda b: max(0, b[1] - b[0]) * max(0, b[3] - b[2])
+    rows = []
+    for p in d['parts']:
+        xs, ys = [c[0] for c in p['corners']], [c[1] for c in p['corners']]; pb = [min(xs), max(xs), min(ys), max(ys)]
+        best = None
+        for q in m['parts']:
+            if q['board'] or q['side'] != p.get('side', 'top'): continue
+            qb = [*q['x'], *q['y']]; ov = [max(pb[0], qb[0]), min(pb[1], qb[1]), max(pb[2], qb[2]), min(pb[3], qb[3])]; o = area(ov)
+            sc = (o / max(area(pb), 1e-6), o / max(area(qb), 1e-6))
+            if not best or min(sc) > min(best[0]): best = (sc, q)
+        rows.append((min(best[0]) if best else 0, p['name'], best))
+    for sc, name, best in sorted(rows, key=lambda r: r[0]):
+        print('%5.2f  %-44s %s' % (sc, name[:44], ('model %s %s × %s mm, covered %.2f / covers %.2f' % (best[1]['name'] or '(not named)', *best[1]['size'], *best[0])) if best else 'no box in the model'))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter); sp = ap.add_subparsers(dest='cmd', required=True)
     p = sp.add_parser('boxes'); p.add_argument('step'); p.add_argument('--flip', action='store_true'); p.add_argument('--json')
-    a = ap.parse_args(); bs = boxes(a.step)
+    p = sp.add_parser('check'); p.add_argument('boxes'); p.add_argument('map')
+    a = ap.parse_args()
+    if a.cmd == 'check': return check(a)
+    bs = boxes(a.step)
     # (the board: the solid with the most area and the least height)
     board = max(bs, key=lambda o: (o['b'][3] - o['b'][0]) * (o['b'][5] - o['b'][2]) / max(1e-6, o['b'][4] - o['b'][1]))
     x0, y0, z0, x1, y1, z1 = board['b']; L, W = x1 - x0, z1 - z0

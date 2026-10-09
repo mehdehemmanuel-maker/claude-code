@@ -60,6 +60,8 @@ describe('edges as things are made', () => {
   it('rounds every edge by how its material is made, never past a third of its thinnest side', () => {
     expect(edgeRadius('steel-low', 0.01)).toBeCloseTo(0.0005, 6); expect(edgeRadius('concrete', 0.3)).toBeCloseTo(0.02, 6); expect(edgeRadius('wood', 0.02)).toBeCloseTo(0.002, 6);
     expect(edgeRadius('abs', 0.002)).toBeCloseTo(0.003 > 0.002 / 3 ? 0.002 / 3 : 0.003, 6); expect(edgeRadius('foam', 0.2)).toBeCloseTo(0.05, 6); expect(edgeRadius('concrete', 0.03)).toBeCloseTo(0.01, 6);
+    // (a header's square pin, 0.64 mm, keeps its corners: a stamped contact's die roll, not a moulding's round)
+    expect(edgeRadius('brass', 0.00064)).toBeCloseTo(0.000064, 7);
     expect(ruleFor('mystery').id).toBe('anything else'); for (const r of EDGE_RULES) expect(r.source.length, r.id).toBeGreaterThan(5);
     expect(setEdge('edges wood 4 mm')).toMatch(/4 mm/); expect(edgeRadius('wood', 0.05)).toBeCloseTo(0.004, 6); setEdge('edges wood 2 mm');
   });
