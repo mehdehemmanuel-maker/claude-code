@@ -157,7 +157,9 @@ export function chp170(withClip = false): Comp {
     const th = -s * CHP170_OPEN, cx0 = pivot - 1;
     return { name: `CHP-170 ${k ? 'lower' : 'upper'} half`, item: 'plier-jaw', at: [cx0 * (1 - Math.cos(th)), 0, cx0 * Math.sin(th)], turn: th, solids: [sol, arm], kids: [g] };
   };
-  const rivet = piece('CHP-170 pivot rivet', 'plier-rivet', [post('term', 2.0, 2 * t + 0.6, [pivot - 1, -t - 0.3, 0], 'steel-low', { color: 0x9fa3a6, finish: 'bright' })]);
+  // (its rivet: a shank through both halves, its heads domed over them, the halves' own steel colour (Hakko's photos: a
+  // dark round head, not a bright disc); its sizes an estimate)
+  const rivet = piece('CHP-170 pivot rivet', 'plier-rivet', [{ role: 'term', shape: { lathe: [[0, -t - 0.75], [1.6, -t - 0.68], [2.35, -t - 0.42], [2.6, -t - 0.15], [2.6, -t], [2.0, -t], [2.0, t], [2.6, t], [2.6, t + 0.15], [2.35, t + 0.42], [1.6, t + 0.68], [0, t + 0.75]] }, at: [pivot - 1, 0, 0], mat: 'steel-low', color: 0x5d6164, finish: 'ground' }]);
   // (its return spring: a strip bent to a V, its bend just behind the rivet, each leaf back to its own handle's inner
   // side 34 mm behind the rivet, so it holds the jaws open (Adafruit: "spring-loaded"); its shape an estimate)
   // (each leaf turned open with the half whose handle it presses, about the rivet)
@@ -306,7 +308,8 @@ export function helpingHands(): Comp {
   // (a wing nut, M4 zinc (DIN 315's proportions), its wings across a)
   const wing = (name: string, at: V3): Comp => ({ name, item: 'wingnut-m4-zinc', at, solids: [{ role: 'body', shape: { cyl: [4, 6] }, at: [0, 3, 0], mat: 'zinc', ...ni },
     ...[-1, 1].map((sg): Solid => box('body', [6, 8, 1.6], [sg * 6, 5, 0], 'zinc', ni))] });
-  const base = piece('MZ101 base', 'hands-base', [box('body', [bl, bh, bw], [0, bh / 2, 0], 'cast-iron', { color: 0x1d1e20, finish: 'paint' })]);
+  // (its cast base painted black in a crinkle finish, matte, as such stands are (an estimate: its listing says weighted))
+  const base = piece('MZ101 base', 'hands-base', [box('body', [bl, bh, bw], [0, bh / 2, 0], 'cast-iron', { color: 0x1d1e20, finish: 'crinkle' })]);
   const upright = rod('MZ101 upright', 'hands-rod', [[0, bh - 6, z0], [0, bh + H.upright.h, z0]], H.upright.d);
   // (the swivel on the upright, its bar through it in front, a wing nut locking each)
   const swivel = piece('MZ101 swivel', 'hands-swivel', [box('body', [14, 14, 22], [0, H.bar.y, z0 + 5], 'zamak', ni)]);
@@ -315,15 +318,23 @@ export function helpingHands(): Comp {
   // jaws, the board 1.6 thick and its edge 8 mm in)
   const clip = (sx: 1 | -1): Comp => {
     const x0 = sx * (H.hold.span / 2 - 8), tip = (u: number) => x0 + sx * u, L = H.clip;
-    const jaw = (sy: 1 | -1): Solid => { const y = (v: number) => yb + sy * v;
-      // (its side: teeth along its first 16 mm, a pressed channel tapering to the pivot at 30, its lever out behind)
-      // (teeth 1 mm deep on a 2 mm pitch biting the board's faces, the jaws closed square on it: their inner edges
-      // parallel to the pivot; typical of 50 mm clips)
-      const teeth: V2[] = Array.from({ length: 9 }, (_, i): V2 => [tip(i * 2), y(i % 2 ? 0.8 : 1.8)]);
-      return { role: 'body', shape: { prism: { pts: [...teeth, [tip(18), y(1.8)], [tip(30), y(1.9)], [tip(L), y(7)], [tip(L), y(9)], [tip(30), y(4.4)], [tip(0), y(3.4)]], L: 6 } }, at: [0, 0, zb], mat: 'steel-low', ...ni, finish: 'plate' }; };
-    const coil: V3[] = Array.from({ length: 49 }, (_, i): V3 => { const a = (i / 12) * 2 * PI; return [tip(32) + 1.8 * Math.cos(a) * sx, yb + 1.8 * Math.sin(a), zb - 3 + (i / 48) * 6]; });
+    // (each jaw pressed from 0.5 mm sheet into a channel 6 wide: two sides, toothed along their gripping edge, and the
+    // web across their back; teeth 1 mm deep on a 2 mm pitch over its first 22 mm biting the board's faces, the jaws
+    // closed square on it (their inner edges parallel to the pivot), tapering to the pivot at 30, its lever out behind;
+    // satin nickel; typical of 50 mm clips)
+    const t = 0.5, jaw = (sy: 1 | -1): Solid[] => { const y = (v: number) => yb + sy * v;
+      const teeth: V2[] = Array.from({ length: 12 }, (_, i): V2 => [tip(i * 2), y(i % 2 ? 0.8 : 1.8)]);
+      const side: V2[] = [...teeth, [tip(24), y(1.8)], [tip(30), y(1.9)], [tip(L), y(7)], [tip(L), y(9)], [tip(30), y(4.4)], [tip(0), y(3.4)]];
+      const web: V2[] = [[tip(0), y(3.4)], [tip(30), y(4.4)], [tip(L), y(9)], [tip(L), y(9 - t)], [tip(30), y(4.4 - t)], [tip(0), y(3.4 - t)]];
+      return [...[-1, 1].map((sz): Solid => ({ role: 'body', shape: { prism: { pts: side, L: t } }, at: [0, 0, zb + sz * (3 - t / 2)], mat: 'steel-low', ...ni, finish: 'ground' })),
+        { role: 'body', shape: { prism: { pts: web, L: 6 } }, at: [0, 0, zb], mat: 'steel-low', ...ni, finish: 'ground' }]; };
+    // (the rivet through both jaws' sides at the pivot, its heads domed; the spring wound on it, a leg along each lever's
+    // inside pressing them apart, so the jaws close)
+    const rivet: V2[] = [[0, -3.7], [0.9, -3.6], [1.25, -3.25], [1.25, -3.05], [0.75, -3.05], [0.75, 3.05], [1.25, 3.05], [1.25, 3.25], [0.9, 3.6], [0, 3.7]];
+    const helix: V3[] = Array.from({ length: 37 }, (_, i): V3 => { const a = (i / 12) * 2 * PI; return [tip(30) + 1.55 * Math.cos(a) * sx, yb + 1.55 * Math.sin(a), zb - 2.1 + (i / 36) * 4.2]; });
+    const coil: V3[] = [[tip(44), yb + 5.1, zb - 2.1], [tip(36), yb + 3.2, zb - 2.1], ...helix, [tip(36), yb - 3.2, zb + 2.1], [tip(44), yb - 5.1, zb + 2.1]];
     return { name: `MZ101 ${sx > 0 ? 'right' : 'left'} clip`, item: 'alligator-clip', at: [0, 0, 0], kids: [
-      piece('clip jaws', 'alligator-jaw', [jaw(1), jaw(-1), { role: 'body', shape: { cyl: [0.8, 7] }, at: [tip(30), yb, zb], rot: [PI / 2, 0, 0], mat: 'steel-low', ...ni }]),
+      piece('clip jaws', 'alligator-jaw', [...jaw(1), ...jaw(-1), { role: 'body', shape: { lathe: rivet }, at: [tip(30), yb, zb], rot: [PI / 2, 0, 0], mat: 'steel-low', ...ni }]),
       piece('clip spring', 'spring-torsion', [{ role: 'body', shape: { tube: { r: 0.3, pts: coil } }, at: [0, 0, 0], mat: 'steel-spring', ...ni }])] };
   };
   const arm = (sx: 1 | -1): Comp[] => [
@@ -390,9 +401,23 @@ export function hakko599B(): Comp {
   const top = piece('599B holder top', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[29.5, 22], [29.5, 52], [25, 66], [17.5, 71], [16, 71]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
   // (the wool packed to the holder's mouth, filling the cup and the sleeve's dome, its top showing in the opening
   // (Hakko's photos of it in use); its share of solid brass what makes its 9 g)
-  const woolPts: V2[] = [[0, w], [27.5, w], [28.6, 10], [28.6, 50], [24.5, 63.5], [16.8, 69.6], [10, 70.6], [0, 70.9]];
+  const woolPts: V2[] = [[0, w], [27.5, w], [28.6, 10], [28.6, 50], [24.5, 63.5], [16.8, 69.2], [10, 70.2], [0, 70.5]];
   const woolVol = (Math.PI / 3) * Math.abs(woolPts.reduce((a, [r, y], i) => { const [r2, y2] = woolPts[(i + 1) % woolPts.length]!; return a + (y2 - y) * (r * r + r * r2 + r2 * r2); }, 0));
-  const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: [...woolPts, [0, w]] }, at: [0, 0, 0], mat: 'brass', color: 0xd4a640, finish: 'brushed', share: 9 / (woolVol * 0.0085) }]);
+  // (on its top, where the opening shows it, the wool as it is: a shaving of brass about 0.4 mm wide curled in loops 3 to
+  // 5 mm round, wandering over the bed and over itself (Hakko's photos: a tangle, not a surface), the bed dark between
+  // its turns; one strand of five sides, so one light mesh; the bed under it carries the rest of the 9 g. Its width and
+  // loops typical of brass shavings, an estimate)
+  let seed = 599; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }, bedTop = (r: number) => (r < 10 ? 70.5 - 0.03 * r : 70.2 - ((r - 10) / 6.8) * 1.0), curl: V3[] = [];
+  { let cx = 0, cz = 0, tx = 0, tz = 0, a = 0, R = 2;
+    for (let i = 0; i < 1500; i++) {
+      if (i % 14 === 0) { const g = rnd() * 2 * PI, rr = 15 * Math.sqrt(rnd()); tx = rr * Math.cos(g); tz = rr * Math.sin(g); R = 1.5 + rnd(); }
+      cx += (tx - cx) * 0.1; cz += (tz - cz) * 0.1; a += 0.75 + 0.4 * rnd();
+      let x = cx + R * Math.cos(a), z = cz + R * Math.sin(a) * 0.8; const rr = Math.hypot(x, z); if (rr > 15.4) { x *= 15.4 / rr; z *= 15.4 / rr; }
+      curl.push([x, bedTop(Math.hypot(x, z)) + 0.05 + 0.5 * Math.sin(a * 0.5 + i * 0.07), z]);
+    } }
+  const strandR = 0.2, strandL = curl.reduce((t, q, i) => (i ? t + Math.hypot(q[0] - curl[i - 1]![0], q[1] - curl[i - 1]![1], q[2] - curl[i - 1]![2]) : 0), 0), strandG = Math.PI * strandR * strandR * strandL * 0.0085;
+  const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: [...woolPts, [0, w]] }, at: [0, 0, 0], mat: 'brass', color: 0x5e4a22, finish: 'cast', share: (9 - strandG) / (woolVol * 0.0085) },
+    { role: 'body', shape: { tube: { r: strandR, pts: curl, sides: 5 } }, at: [0, 0, 0], mat: 'brass', color: 0xd9b25a, finish: 'bright' }]);
   return { name: 'Hakko 599B tip cleaner', item: 'tipcleaner-599b', at: [0, 0, 0], kids: [base, top, wool] };
 }
 

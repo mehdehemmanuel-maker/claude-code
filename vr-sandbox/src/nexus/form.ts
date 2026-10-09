@@ -16,7 +16,7 @@ import { patchAt, type Patch } from './surface';
 export type V3 = [number, number, number];
 export interface Station { /** along the loft, m */ x: number; /** half its width (its lower half's, where its upper half is said apart) */ w: number; /** its bottom and top */ lo: number; hi: number; /** how square its section (2 an ellipse) */ n?: number; /** its upper half's half-width and squareness, where they differ (a car's glasshouse narrowing to its roof) */ wt?: number; nt?: number; /** where it is widest, between its bottom and top (its middle if not said: a car's flank is widest at its shoulder) */ mid?: number; /** its section's middle moved across, m (0 if not said): a spoke sweeping round as it goes out */ z?: number }
 export interface Loft { st: Station[] }
-export interface Tube { r: number; pts: V3[]; /** its wall, m (solid if not said) */ wall?: number; /** bend radius at its corners, m (2 diameters if not said) */ bend?: number }
+export interface Tube { r: number; pts: V3[]; /** its wall, m (solid if not said) */ wall?: number; /** bend radius at its corners, m (2 diameters if not said) */ bend?: number; /** sides round it as drawn (12 if not said): a fine strand's few */ sides?: number }
 /** a profile of [radius, height] points, spun about y */
 export type Lathe = [number, number][];
 /** a profile of [x, y] points in its own plane (closed, either way round), drawn along z from -L/2 to L/2: a bar's, an

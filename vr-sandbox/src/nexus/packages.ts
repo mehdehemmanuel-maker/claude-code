@@ -20,7 +20,7 @@ export interface Pkg {
   /** an exposed pad's side under it (QFN, HTSSOP), mm */ pad?: number; glass?: boolean; grounds: string;
   /** a flat no-lead package with pads on two sides only (SON, WSON, DFN), not four */ sides?: 2;
 }
-type Shape = { box: [number, number, number] } | { cyl: [number, number] } | { lathe: [number, number][] } | { prism: { pts: [number, number][]; L: number; holes?: [number, number][][] } } | { tube: { r: number; pts: [number, number, number][] } };
+type Shape = { box: [number, number, number] } | { cyl: [number, number] } | { lathe: [number, number][] } | { prism: { pts: [number, number][]; L: number; holes?: [number, number][][] } } | { tube: { r: number; pts: [number, number, number][]; sides?: number } };
 export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 'mark' | 'film' | 'glaze' | 'term' | 'core' | 'cap' | 'band';
 /** A solid, mm: what it is, its shape, where, turned how, of what (a density's name; '' for paint, which weighs
  *  nothing here); a hole through a tab (across its thinnest side, z, at its own height y); how much of it lies inside the body (whose moulding is that much less); a thin

@@ -30,7 +30,7 @@ for (const s of steps) {
     if (kind === 'js') { const r = await p.evaluate(async (e) => { const v = await (0, eval)(e); return typeof v === 'object' ? JSON.stringify(v) : String(v); }, arg); console.log(`${arg.slice(0, 60)} → ${String(r).slice(0, Number(process.env.FORGE_OUT ?? 400))}`); }
     else if (kind === 'say') { await p.evaluate((w) => window.forgeSend(w), arg); console.log(`said: ${arg}`); }
     else if (kind === 'wait') await p.waitForTimeout(Number(arg));
-    else if (kind === 'shot') { await p.screenshot({ path: `${out}/${arg}.png` }); console.log(`shot ${arg}`); }
+    else if (kind === 'shot') { await p.screenshot({ path: `${out}/${arg}.png`, timeout: Number(process.env.FORGE_SHOT_MS ?? 30000) }); console.log(`shot ${arg}`); }
     else if (kind === 'view') { const v = arg.split(',').map(Number); await p.evaluate((a) => window.lookFrom(...a), v); }
     else console.log(`? ${s}`);
   } catch (e) { console.log(`${s} failed: ${e.message.slice(0, 300)}`); }

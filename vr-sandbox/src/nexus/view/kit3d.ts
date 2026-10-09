@@ -23,7 +23,7 @@ const mats = new Map<string, THREE.MeshStandardMaterial>();
 // physically based renderers' guides for each; ground steel, a rail's or a block's, satin: it takes the room's light as
 // well as mirroring it; matte tin, a chip's leads, plate; bright nickel, a connector's shell, bright)
 const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
-  paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
+  paint: { rough: 0.35, metal: 0.1, coat: 1 }, crinkle: { rough: 0.86, metal: 0.05 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
   plate: { rough: 0.4, metal: 0.9 }, diffused: { rough: 0.45, metal: 0 }, moulded: { rough: 0.36, metal: 0 }, bright: { rough: 0.22, metal: 1 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };
@@ -68,7 +68,7 @@ function tubeGeometry(t: Tube): THREE.BufferGeometry {
   for (const l of legs) path.add(l.kind === 'line' ? new THREE.LineCurve3(v(l.a), v(l.b)) : new THREE.QuadraticBezierCurve3(v(l.a), v(l.c!), v(l.b)));
   // (six steps a leg for a few legs; a long path of many short legs, a wound wire's helix, two a leg, its legs already
   // short)
-  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length > 100 ? legs.length * 2 : legs.length * 6), t.r, 12, false) : new THREE.BufferGeometry();
+  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length > 100 ? legs.length * 2 : legs.length * 6), t.r, t.sides ?? 12, false) : new THREE.BufferGeometry();
 }
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {

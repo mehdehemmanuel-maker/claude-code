@@ -365,8 +365,9 @@ export class SolderBench {
       f.rosin.visible = q.j.solder > 0.01;
       if (f.stub) { f.stub.visible = !!q.part && b.placed[q.part] === true && q.lead > 0.05; f.stub.scale.set(1, Math.max(1e-4, q.lead * MM), 1); }
       const molten = q.j.T >= ALLOY.liquidus, cold = g === 'cold', burnt = g === 'overheated';
-      // (63/37 set bright but satin, not a mirror; molten, a mirror; cold, grey and grainy)
-      m.color.setHex(burnt ? 0x8a8072 : cold ? 0x9a9da1 : molten ? 0xe8ecf0 : 0xc2c6ca); m.roughness = cold ? 0.75 : burnt ? 0.6 : molten ? 0.08 : 0.34; });
+      // (63/37 set bright but satin, not a mirror, and warmer than chrome: tin's own grey with the flux's film on it;
+      // molten, a mirror; cold, grey and grainy)
+      m.color.setHex(burnt ? 0x8a8072 : cold ? 0x9a9da1 : molten ? 0xe8ecf0 : 0xc6c3bb); m.roughness = cold ? 0.75 : burnt ? 0.6 : molten ? 0.08 : 0.42; });
     // (a cut-off lead falls (9.81 m/s²) and lies where it lands: on the hands' base, or the bench)
     for (const p of this.pieces) { if (p.down) continue; p.v += 9.81 * dt; p.m.position.y -= p.v * dt; const x = p.m.position.x / MM - PROTO.hands[0], z = p.m.position.z / MM - PROTO.hands[2];
       const floor = (Math.abs(x) < HANDS.base[0] / 2 && Math.abs(z) < HANDS.base[2] / 2 ? HANDS.base[1] : 0) * MM, r = (p.m.geometry as THREE.CylinderGeometry).parameters.radiusTop;
@@ -441,9 +442,14 @@ export class SolderBench {
       if (this.plan === 'pico') { const p = pinAt(i + 1); at.position.set(p[0] * MM, p[1] * MM, p[2] * MM); this.group.add(at); }
       else { const k = this.bench.joints.slice(0, i).filter((r) => r.part === q.part).length, [x, z] = PROTO.seats[q.part!][k]!; at.position.set(x * MM, -1.6 * MM, z * MM); at.rotation.set(PI, 0, 0); this.obj.proto!.add(at); }
       const cone = new THREE.Mesh(coneOf(q.shape), m), ball = new THREE.Mesh(ballGeo, m); cone.visible = false; ball.visible = false; at.add(cone, ball);
-      // (what the wire's rosin core leaves: a glassy amber ring flowed about a millimetre past the pad (2 % rosin in
-      // the reel's wire; its spread an estimate))
-      const rosin = new THREE.Mesh(new THREE.RingGeometry(q.shape.pad / 2 * MM, (q.shape.pad / 2 + 1.1) * MM, 32).rotateX(-PI / 2), new THREE.MeshStandardMaterial({ color: 0xb8792c, transparent: true, opacity: 0.5, roughness: 0.12, depthWrite: false }));
+      // (what the wire's rosin core leaves: a thin glassy film flowed out past the pad, its edge uneven as it ran, a
+      // third to three quarters of a millimetre (2 % rosin in the reel's wire; its spread an estimate), each joint's own)
+      const ring = new THREE.Shape(), R0 = q.shape.pad / 2; let sd = (i + 1) * 7919; const rn = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+      const reach = Array.from({ length: 9 }, () => 0.3 + 0.45 * rn());
+      for (let k = 0; k <= 48; k++) { const a = (k / 48) * 2 * PI, u = (a / (2 * PI)) * 9, k0 = Math.floor(u) % 9, f = u - Math.floor(u), r = (R0 + reach[k0]! + (reach[(k0 + 1) % 9]! - reach[k0]!) * (1 - Math.cos(f * PI)) / 2) * MM;
+        if (k === 0) ring.moveTo(r, 0); else ring.lineTo(r * Math.cos(a), r * Math.sin(a)); }
+      const hole = new THREE.Path(); hole.absarc(0, 0, R0 * MM, 0, 2 * PI, true); ring.holes.push(hole);
+      const rosin = new THREE.Mesh(new THREE.ShapeGeometry(ring, 2).rotateX(-PI / 2), new THREE.MeshStandardMaterial({ color: 0xa8691f, transparent: true, opacity: 0.26, roughness: 0.15, depthWrite: false }));
       rosin.position.y = 0.02 * MM; rosin.visible = false; at.add(rosin);
       let stub: THREE.Mesh | null = null;
       if (q.part) { const sq = !q.shape.round, r = (sq ? q.shape.pin / Math.SQRT2 : q.shape.pin / 2) * MM, lead = this.looks[q.part as Seated]?.bent[0] as THREE.Mesh | undefined;

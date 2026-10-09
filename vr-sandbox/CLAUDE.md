@@ -78,6 +78,18 @@ the task list and lose the why. So the why lives here, and every round is checke
   movement etc … it shouldn't just be the photo for things that hard to see grab multiple photos … make more advanced
   tools for yourself to make life a lot easier and add them to the process" (2026-10-09: parts first, each from its
   maker's drawing; then the thing they make, placed from several measured photos; see "Measuring a real product")
+- "perfect the language of the tutorials … make tools just for it … soldering iron and solderable parts have some type
+  of universal edge and every setup that would be the same have a edge … we need a lot of edges, advanced ones,
+  specific ones … so you don't gotta take as much time with everything … generate 100% accurate tutorials real soon …
+  get all tools out the way, even tools for other builds: the most advanced 3D printer … the things that make its parts
+  … a kiln type of workflow and a basic 3D printer, maybe a robotic arm … a robot that can weld, solder, type on a
+  computer, it can see, sense, hear, smell … grab … change its own grip or use any tools … a materials processor type
+  of engine, it can process anything … submit some images of me and you put a model of me in the app … a node graph,
+  every node I connect to any other node will be able to see it when I click on either node: time, people, places,
+  memories, dopamine, melatonin, oxytocin, adrenaline, cortisol, endorphins, serotonin, acetylcholine, norepinephrine,
+  GABA, glutamate … a map of all the brain regions … no room for context drift … use md to keep yourself on point …
+  use the fuck out of edges … turn everything into a loop" (2026-10-09: `edges.ts`, the lesson language; the rest in
+  "Now" in this order)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -442,6 +454,23 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    and drawn (holder on the hands' base, leads up to the rails, the switch closed into its clip, the lens lit).
    Next: the round-2 judge's findings by cause; re-judge blind.
 7. Prices for the common parts the build packs list without one (motors, hot ends, boards, belts, rails…).
+8. Edges (the user, 2026-10-09: "universal edge … every setup that would be the same have a edge"): one graph of what
+   works on what. A tool's capability meets a part's feature (an iron and a plated hole with a lead in it; cutters and
+   a lead; a kiln and a fired body; a printer and a filament), by a process, its figures read from both ends (the
+   alloy's liquidus, the pad and lead, the cutters' largest wire, the protrusion IPC allows), its dangers and its
+   source. A lesson is the edges a build's parts and tools make, in the order each edge needs (insert before solder
+   before trim before power), each step's words generated from its edge's figures: the same setup, the same edge, the
+   same step. The hand-written lessons are checked against what the edges generate, then replaced by it.
+9. Tools for every build, through the breakdown queue and judged like the soldering kit: a basic 3D printer, the most
+   advanced, the machines that make their parts, a kiln and its firing workflow, robot arms.
+10. The robot the user wants: welds, solders, types on a computer, sees, hears, senses touch and smell, grabs, changes
+   its own grip, uses any tool: each sense and each hand from real parts, on the same edges as a person's lessons.
+11. A materials processor: what any material becomes by what process (melt, cast, fire, mill, print, refine), on edges.
+12. The user's likeness from their photos: the parametric human fitted to measured photos (a likeness, said so; not a
+   scan). Waiting on the photos.
+13. The life graph: a node graph where a link between two nodes shows each to the other when either is clicked: time,
+   people, places, memories, and the eleven messengers (dopamine, melatonin, oxytocin, adrenaline, cortisol,
+   endorphins, serotonin, acetylcholine, norepinephrine, GABA, glutamate), sourced; and a map of every brain region.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
