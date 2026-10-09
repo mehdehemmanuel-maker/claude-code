@@ -21,6 +21,7 @@
 // moves it until let go; X or Y on the left puts the phone away, and back; the left stick walks, the right stick turns.
 // Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|pipeline|wide, ?xr=quest3.
 
+import { processWords } from '../processor';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -2542,6 +2543,7 @@ async function converse(text: string): Promise<void> {
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = processWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   if (/^(?:stop|stop fighting|break|break it up)$/i.test(text.trim()) && peopleWorld?.list.some((p) => p.target)) { line('you', text); for (const p of peopleWorld.list) { p.target = null; p.move = null; } say('They stop: no target, guards held.', undefined, 'nexus'); return; }

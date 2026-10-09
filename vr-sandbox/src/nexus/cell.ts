@@ -231,14 +231,14 @@ export class Kiln {
  *  3.5 W/K through its walls; the crucible takes heat from the chamber across about 8 W/K (estimates, of a small hobby
  *  furnace, which reaches 1000 °C in about 20 minutes). */
 export class Furnace {
-  t = 20; P = 15000; C = 8000; h = 3.5; hA = 8; burner = 0; lid = true; charge: Charge | null = null; energy = 0;
+  t = 20; P = 15000; kept = 0.35; top = 1300; C = 8000; h = 3.5; hA = 8; burner = 0; lid = true; charge: Charge | null = null; energy = 0;
   load(m: Metal, g: number): void { this.charge = { metal: m, g, H: 0 }; }
   metal(): { T: number; liquid: number } | null { return this.charge ? stateOf(this.charge) : null; }
   step(dt: number): void {
     const steps = Math.max(1, Math.ceil(dt / 1)), d = dt / steps;
     for (let k = 0; k < steps; k++) {
       const m = this.charge ? stateOf(this.charge) : null, q = m ? this.hA * (this.t - m.T) : 0;
-      const p = this.t > 1300 ? 0 : this.burner * this.P * 0.35; // what of the burner's power stays in the chamber (estimate); its controller keeps it under 1300 °C
+      const p = this.t > this.top ? 0 : this.burner * this.P * this.kept; // what of the burner's power stays in the chamber (estimate); its controller keeps it under `top`
       this.t += ((p - (this.h + (this.lid ? 0 : 25)) * (this.t - 20) - q) * d) / this.C; this.energy += this.burner * this.P * d;
       if (this.charge) this.charge.H = Math.max(0, this.charge.H + q * d);
     }
