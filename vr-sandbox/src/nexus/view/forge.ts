@@ -92,7 +92,8 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { computerApp, dataApp, inventoryApp, libraryApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { computerApp, dataApp, inventoryApp, libraryApp, lifeApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { LifeGraph, type Saved as LifeSaved } from '../life/graph';
 import { pack, packPart, packZip, type Pack } from '../buildpack';
 import { usd } from '../prices';
 import { Profile, BUDGET_MS } from '../profile';
@@ -3630,6 +3631,9 @@ function packWords(text: string): string | null {
   if (!m) return null;
   return packFor(m[1]!.replace(/\s+cost$/i, '').replace(/^(?:a|an|the|my)\s+/i, ''));
 }
+// (the life graph: the user's own nodes and links kept in this browser, the textbooks' as they are)
+const LIFE_KEY = 'forge:life', life = new LifeGraph((() => { try { return JSON.parse(localStorage.getItem(LIFE_KEY) ?? 'null') as LifeSaved | undefined ?? undefined; } catch { return undefined; } })());
+phone.add(lifeApp({ graph: () => life, save: () => { try { localStorage.setItem(LIFE_KEY, JSON.stringify(life.saved())); } catch { /* kept for this visit */ } } }));
 phone.add(packApp({ now: () => packNow, make: (w) => { packFor(w); return packNow!; }, save: savePack, see: seePack }));
 phone.add(workshopApp({ cell, go: () => goPlace('workshop'), print: (p2) => cell.print(p2), cast: (p2, mt) => cell.cast(p2, mt), build: (id) => { const r = RECIPES.find((x) => x.id === id); if (!r) return 'No such recipe.'; void buildOnBoard(r).then((t2) => line('system', `🔩 ${t2}`)); return `"Build a ${r.name}" is running on the board: each step done before the next. Change any step there.`; }, gcode: (t2) => cell.gcode(t2), stop: () => cell.stopAll() }));
 phone.add(robotsApp({ fleet, rename: renameBot, toggle: toggleAbility, command: (b, w) => { const t2 = fleet.command(b, w); line('system', t2); return t2; }, rules: openRules, go: goPlace }));
@@ -3977,6 +3981,7 @@ async function boot() {
     letGoPerson: (id: number) => peopleWorld?.letGo(id),
     restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
+    phonePeek: (app: string, sub?: string, page?: number) => phone.peek(app, sub, page),
     benchStart: (plan?: string) => startBench(plan === 'proto' ? 'proto' : 'pico'), benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
     benchPoint: (what: string) => (bench ? bench.point(what as Parameters<SolderBench['point']>[0]) : null),
     // (an emulated headset's hands, for a test: a controller put so its grip is at a point in the room, level and facing

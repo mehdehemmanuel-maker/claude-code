@@ -4,6 +4,7 @@
 //   say:<words>        sent as if typed (the forge's own words)
 //   wait:<ms>          the room runs on for so long
 //   shot:<name>        a screenshot, <out>/<name>.png
+//   png:<name>|<expr>  a picture the page makes (a PNG data URL, as phonePeek('life', 'map') gives), <out>/<name>.png
 //   view:x,y,z,tx,ty,tz  the camera put at x,y,z looking at tx,ty,tz (metres)
 // Run after building the viewer:
 //   node tools/forge-run.mjs <built viewer dir> <out dir> "js:benchStart()" "wait:3000" "shot:bench" "js:benchAct('place the headers')" …
@@ -30,6 +31,7 @@ for (const s of steps) {
     if (kind === 'js') { const r = await p.evaluate(async (e) => { const v = await (0, eval)(e); return typeof v === 'object' ? JSON.stringify(v) : String(v); }, arg); console.log(`${arg.slice(0, 60)} → ${String(r).slice(0, Number(process.env.FORGE_OUT ?? 400))}`); }
     else if (kind === 'say') { await p.evaluate((w) => window.forgeSend(w), arg); console.log(`said: ${arg}`); }
     else if (kind === 'wait') await p.waitForTimeout(Number(arg));
+    else if (kind === 'png') { const [name, ...e] = arg.split('|'); const d = await p.evaluate(async (x) => String(await (0, eval)(x)), e.join('|')); fs.writeFileSync(`${out}/${name}.png`, Buffer.from(d.replace(/^data:image\/png;base64,/, ''), 'base64')); console.log(`png ${name}`); }
     else if (kind === 'shot') { await p.screenshot({ path: `${out}/${arg}.png`, timeout: Number(process.env.FORGE_SHOT_MS ?? 30000) }); console.log(`shot ${arg}`); }
     else if (kind === 'view') { const v = arg.split(',').map(Number); await p.evaluate((a) => window.lookFrom(...a), v); }
     else console.log(`? ${s}`);

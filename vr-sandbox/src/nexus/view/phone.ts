@@ -287,6 +287,8 @@ export class Phone {
 
   // ---- drawing the screen ----------------------------------------------------------------------------------------------
   draw(): void { this.paint(this.own); for (const h of this.holos) this.paint(h); }
+  /** For a test: the phone's own screen turned to an app's screen and page, drawn, as a picture (a PNG's data URL). */
+  peek(app: string, sub = '', page = 0): string { this.own.view.app = app; this.own.view.sub = sub; this.own.view.page = page; this.paint(this.own); return this.own.canvas.toDataURL('image/png'); }
   /** One surface drawn: the phone's own screen, or a holographic screen an app was dragged out to. */
   private paint(s: Surface): void {
     const g = s.g, v = s.view; s.hits = [];
