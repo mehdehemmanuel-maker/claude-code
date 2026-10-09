@@ -77,6 +77,9 @@ export interface Part {
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
   /** characters printed on its broad faces (a number plate's), dark on its own colour; or, with an ink, printed in that
    *  ink on its top face alone (a board's silkscreen, a chip's laser mark) */ text?: string; ink?: number;
+  /** a picture on its top face: its PNG's white in this colour, the rest clear (a board's copper under its mask, as its
+   *  photo shows it) */ paint?: { png: string; ink: number };
+  /** its printing alone drawn, its ground clear (a board's silkscreen) */ inkOnly?: boolean;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far

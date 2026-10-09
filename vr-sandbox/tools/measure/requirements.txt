@@ -2,3 +2,4 @@ numpy>=1.26
 opencv-python-headless>=4.9
 scipy>=1.11
 pillow>=10.0
+gmsh  # step.py: reads makers' STEP models (links OpenCASCADE; needs libGLU and libXft)

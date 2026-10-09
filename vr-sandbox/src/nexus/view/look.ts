@@ -148,6 +148,8 @@ if (camera.position.y < 0.02) floor.visible = false;
 { const away = camera.position.distanceTo(c); camera.near = Math.max(0.001, Math.min(0.02, away * 0.01)); camera.far = away + r * 6 + 20; camera.updateProjectionMatrix(); }
 if (q.get('mask') === '1') { const black = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }); for (const m of meshes) m.material = black; scene.background = new THREE.Color(0xffffff); scene.environment = null; floor.visible = false; renderer.shadowMap.enabled = false; renderer.toneMapping = THREE.NoToneMapping; }
 camera.lookAt(c); renderer.render(scene, camera);
+// (a texture made from data, a board's copper, arrives after the first frame: drawn again when it has)
+THREE.DefaultLoadingManager.onLoad = () => renderer.render(scene, camera);
 
 // ---- what the critic may ask ----
 const hex = (m: THREE.Mesh) => { const col = (m.material as THREE.MeshStandardMaterial).color; return col ? `#${col.getHexString()}` : undefined; };

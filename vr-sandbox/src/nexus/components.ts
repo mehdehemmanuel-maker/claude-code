@@ -320,7 +320,7 @@ function solidPart(m: { s: Solid; g: number; fill: number }, name: string, item:
   const t = 'box' in sh ? sh.box[2] : 0;
   return P(name, shape, { at: [k(s.at[0]), k(s.at[1]), k(s.at[2])], ...(s.rot ? { rot: s.rot } : {}), ...(s.mat ? { mat: s.mat } : {}), ...lookOf(s), ...(item ? { item } : {}), ...(HOW[s.role] ? { fixed: HOW[s.role] } : {}),
     ...(s.shell ? { kg: m.g / 1000 } : m.fill * (s.share ?? 1) < 1 ? { fill: m.fill * (s.share ?? 1) } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}),
-    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...(s.text ? { text: s.text } : {}), ...(s.ink != null ? { ink: s.ink } : {}), ...more });
+    ...(s.bores?.length && 'box' in sh ? { cuts: s.bores.map((h) => ({ r: k(h.r), depth: k(sh.box[1]), at: [k(h.x), k(sh.box[1] / 2), k(h.z)] as V3, dir: [0, -1, 0] as V3 })) } : {}), ...(s.text ? { text: s.text } : {}), ...(s.ink != null ? { ink: s.ink } : {}), ...(s.paint ? { paint: s.paint } : {}), ...(s.inkOnly ? { inkOnly: true } : {}), ...more });
 }
 /** A semiconductor as drawn from its package: its body under its name (marked with its part number where it is big
  *  enough to read), its lead frame (leads, paddle, tab and pad) as one, or an axial diode's two leads each its own;

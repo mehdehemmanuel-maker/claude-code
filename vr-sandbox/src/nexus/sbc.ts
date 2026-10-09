@@ -19,6 +19,7 @@
 import { chipSolids, solidMasses, type Solid } from './packages';
 import { BOARD_PARTS, chip, fccsp, hdmi, HUE, inductor, lpddr, micElectret, pinHeader, type BoardPart } from './boardparts';
 import { chipCase, mlccCase } from './kinds/electrical';
+import { OPI5_COPPER } from './sbc-opi5-copper';
 import { OPI5_SMALL } from './sbc-opi5-small';
 
 const hdmiOn = (depth: number): BoardPart => hdmi('A', depth);
@@ -42,6 +43,8 @@ export interface BoardDef {
   /** its solder mask's colour, as its photos show it; its silkscreen's words, where measured */ mask?: number; silk?: Silk[];
   /** which photos its layout was measured from */ photos?: string;
   /** its small parts as its photo shows them, found by tools/measure/photo.py small (see the table's own notes) */ small?: SmallRow[];
+  /** the copper its photo shows under its mask (photo.py traces: a PNG on the board's own millimetres) and its colour
+   *  there */ copper?: { res: number; w: number; h: number; png: string; hue: number };
 }
 /** A small part as a photo shows it: c capacitor, r resistor, t a small transistor package (its package last), q a small
  *  dark no-lead chip, l a moulded inductor, p an 0201 whose kind its photo does not show; its middle x, z (mm from the
@@ -71,7 +74,8 @@ export const BOARD_DEFS: Record<string, BoardDef> = {
   'opi5': { name: 'Orange Pi 5', maker: 'Orange Pi', cls: 'opi5', soc: 'Rockchip RK3588S (8 nm)', cpu: '4 × Cortex-A76 at 2.4 GHz and 4 × Cortex-A55 at 1.8 GHz', ai: 'NPU, 6 TOPS (INT4/INT8/INT16)', gpu: 'Mali-G610', ram: [4, 8, 16, 32], ramType: 'LPDDR4/4X',
     ports: 'USB 3.0 (the upper port of a stack whose lower is USB 2.0), USB 2.0 (stood on its side; shared with the Type-C), USB-C (USB 3.0 and DisplayPort 1.4), Gigabit Ethernet (YT8531C), HDMI 2.1 (8K60), M.2 M-key under it (PCIe 2.0 x1, a 2230 or 2242 SSD), 26-pin header, 3-pin debug UART, 3.5 mm headphone jack, onboard microphone, two MIPI camera sockets and a 30-pin LCD socket on top, 16 MB SPI flash',
     power: '5 V / 4 A over USB-C (no Power Delivery: a fixed 5 V)', L: 100, W: 62, H: 20, g: 46,
-    holes: [[3.075, 3.055], [96.925, 3.055], [3.075, 58.945], [96.925, 58.945]], hole: 3.0, pad: 5.5, socMm: 17, rams: 2, layers: 8, edge: [], extras: ['m2'], mask: 0x176ab2 /* its photo's: the median of bare patches (photo.py colour); the look page's bright room puts a sheen on it */,
+    holes: [[3.075, 3.055], [96.925, 3.055], [3.075, 58.945], [96.925, 58.945]], hole: 3.0, pad: 5.5, socMm: 17, rams: 2, layers: 8, edge: [], extras: ['m2'], mask: 0x1d64a6 /* its photo's bare mask, the median off its copper (photo.py traces); the look page's bright room puts a sheen on it */,
+    copper: { ...OPI5_COPPER, hue: 0x186bb6 /* its photo's, over its copper */ },
     more: [{ at: [70.51, 59.28], d: 3.5, pad: 5.3, why: 'the M.2 card\'s screw, a 2242' }, { at: [70.55, 47.25], d: 3.5, pad: 5.3, why: 'the M.2 card\'s screw, a 2230' }, { at: [28.04, 51.21], d: 3.0, pad: 6.3, why: 'in its photo, not named in its manual (its bore read as 2.7–3.1 mm)' }, { at: [71.71, 11.19], d: 3.0, pad: 6.3, why: 'in its photo, not named in its manual (its bore read as 2.7–3.1 mm)' }],
     small: OPI5_SMALL,
     photos: 'its maker\'s top photo of board V1.3.2, calibrated by its four corner holes (each centre fitted to its pad; 9.73 px/mm; its edges then fall within 0.3 mm of 100 × 62); four photos of a board from its corners and sides (github.com/berin-aquaquad/orange-pi-5) for what the top view hides; no photo of its underside reachable here',
@@ -170,6 +174,8 @@ function pcb(b: BoardDef): Comp {
     box('frame', [b.L, cu, b.W], [0, -t / 2, 0], 'copper', { inBody: 0, bores }),
     box('film', [b.L, 0.02, b.W], [0, 0.01, 0], '', { color: mask, bores }), box('film', [b.L, 0.02, b.W], [0, -t - 0.01, 0], '', { color: mask, bores }),
     ...all.flatMap((h) => [ring(h, 0.005), ring(h, -t - 0.04), barrel(h)]),
+    // (the copper its photo shows under the mask, painted on the mask's top: nothing to weigh, the copper is in the board)
+    ...(b.copper ? [box('film', [b.L, 0.001, b.W], [0, 0.0205, 0], '', { paint: { png: b.copper.png, ink: b.copper.hue } })] : []),
   ] };
 }
 /** Chip resistors and capacitors round the system-on-chip (0402s, ten of each, as the inventory's own part says): on a
@@ -221,7 +227,7 @@ function drawn(pl: Place): Comp {
 /** Words printed on the board's top: white ink on its mask, nothing to weigh. */
 function silk(b: BoardDef, w: Silk): Comp {
   const a = ((w.dir ?? 0) * Math.PI) / 180, len = Math.max(w.h * 0.62 * w.text.length, w.h);
-  return { name: `printed "${w.text}"`, solids: [box('mark', [len / 0.86, 0.01, w.h / 0.42], [0, 0.025, 0], '', { color: b.mask ?? 0x1f2a5a, text: w.text, ink: 0xf4f4f0 })], at: [w.at[0] - b.L / 2, 0, b.W / 2 - w.at[1]], turn: a };
+  return { name: `printed "${w.text}"`, solids: [box('mark', [len / 0.86, 0.01, w.h / 0.42], [0, 0.025, 0], '', { color: b.mask ?? 0x1f2a5a, text: w.text, ink: 0xf4f4f0, inkOnly: true })], at: [w.at[0] - b.L / 2, 0, b.W / 2 - w.at[1]], turn: a };
 }
 /** Every part of a board, placed. */
 export function boardComps(id: string): Comp[] {

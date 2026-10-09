@@ -75,18 +75,32 @@ export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24
  *  the rest plain; or, on a dark moulding (a chip's, a resistor's overcoat), laser-marked: pale characters on its top
  *  face alone, as wide as it allows. Drawn on a canvas where there is a document; plain where there is none. */
 const printed = new Map<string, THREE.CanvasTexture>();
+const painted = new Map<string, THREE.Material[]>();
+/** A picture painted on a box's top face (+y): its PNG's white in its ink, clear elsewhere, the box's other faces not
+ *  drawn; the image's top row along the box's -z edge, its left along -x (BoxGeometry's own UVs). */
+function paintMats(p: Part): THREE.Material[] {
+  const pt = p.paint!, key = `${pt.ink}|${pt.png.length}|${pt.png.slice(-24)}`; let m = painted.get(key);
+  if (!m) {
+    const tex = new THREE.TextureLoader().load(pt.png); tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = 8;
+    const face = new THREE.MeshStandardMaterial({ color: pt.ink, alphaMap: tex, transparent: true, depthWrite: false, roughness: 0.6, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2 }), none = new THREE.MeshBasicMaterial({ visible: false });
+    m = [none, none, face, none, none, none]; painted.set(key, m);
+  }
+  return m;
+}
 function printedMats(p: Part, base: THREE.Material): THREE.Material | THREE.Material[] {
+  if (p.paint && p.shape && 'box' in p.shape) return paintMats(p);
   if (!p.text || !p.shape || !('box' in p.shape) || typeof document === 'undefined') return base;
   const [w, h, d] = p.shape.box, k = w <= h && w <= d ? 0 : h <= d ? 1 : 2, [a, b] = k === 0 ? [d, h] : k === 1 ? [w, d] : [w, h], key = `${p.text}|${a.toFixed(3)}|${b.toFixed(3)}`;
   const dark = p.ink != null || new THREE.Color(p.color ?? 0xffffff).getHSL({ h: 0, s: 0, l: 0 }).l < 0.15, ink = p.ink != null ? '#' + new THREE.Color(p.ink).getHexString() : '#b9bab5';
-  let tex = printed.get(`${key}|${dark}|${ink}`);
-  if (!tex && dark) { const c = document.createElement('canvas'); c.width = 512; c.height = Math.max(32, Math.round((512 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0).getHexString(); x.fillRect(0, 0, c.width, c.height); const ls = p.text.split('\n'); let fs = Math.round((c.height * (ls.length > 1 ? 0.62 : 0.42)) / ls.length); if (ls.length > 1) fs = Math.min(fs, Math.round((1.1 / (a * 1000)) * c.width)); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; const tw = Math.max(...ls.map((l) => x.measureText(l).width)); if (tw > c.width * 0.86) { fs = Math.floor((fs * c.width * 0.86) / tw); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; } x.fillStyle = ink; x.textAlign = 'center'; x.textBaseline = 'middle'; ls.forEach((l, i) => x.fillText(l, c.width / 2, c.height / 2 + (i - (ls.length - 1) / 2) * fs * 1.35)); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(`${key}|${dark}|${ink}`, tex); }
+  let tex = printed.get(`${key}|${dark}|${ink}|${!!p.inkOnly}`);
+  if (!tex && dark) { const c = document.createElement('canvas'); c.width = 512; c.height = Math.max(32, Math.round((512 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0).getHexString(); if (p.inkOnly) x.clearRect(0, 0, c.width, c.height); else x.fillRect(0, 0, c.width, c.height); const ls = p.text.split('\n'); let fs = Math.round((c.height * (ls.length > 1 ? 0.62 : 0.42)) / ls.length); if (ls.length > 1) fs = Math.min(fs, Math.round((1.1 / (a * 1000)) * c.width)); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; const tw = Math.max(...ls.map((l) => x.measureText(l).width)); if (tw > c.width * 0.86) { fs = Math.floor((fs * c.width * 0.86) / tw); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; } x.fillStyle = ink; x.textAlign = 'center'; x.textBaseline = 'middle'; ls.forEach((l, i) => x.fillText(l, c.width / 2, c.height / 2 + (i - (ls.length - 1) / 2) * fs * 1.35)); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(`${key}|${dark}|${ink}|${!!p.inkOnly}`, tex); }
   if (!tex) { const c = document.createElement('canvas'); c.width = 1024; c.height = Math.max(64, Math.round((1024 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0xffffff).getHexString(); x.fillRect(0, 0, c.width, c.height); x.strokeStyle = '#1a1a1a'; x.lineWidth = c.height * 0.05; x.strokeRect(c.height * 0.04, c.height * 0.04, c.width - c.height * 0.08, c.height - c.height * 0.08); x.fillStyle = '#141414'; x.font = `bold ${Math.round(c.height * 0.68)}px "DejaVu Sans Mono", monospace`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(p.text, c.width / 2, c.height * 0.54); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(`${key}|${dark}|${ink}`, tex); }
   // (a plate's face is a printed film, not bare metal; a laser mark is the moulding's own matt surface; ink printed on a
   // surface (a board's silkscreen, a chip's marking) takes that surface's finish, so only its letters show; a marking of
   // several lines in letters about 1.1 mm tall, as chips are marked)
   const face = (base as THREE.MeshStandardMaterial).clone(); face.map = tex; face.color = new THREE.Color(0xffffff); face.metalness = 0.05; face.roughness = p.ink != null ? (base as THREE.MeshStandardMaterial).roughness : dark ? 0.8 : 0.45;
   // (BoxGeometry's faces in order: +x, -x, +y, -y, +z, -z)
+  if (p.inkOnly) { face.transparent = true; face.alphaTest = 0.4; face.depthWrite = false; const none = new THREE.MeshBasicMaterial({ visible: false }); return [0, 1, 2, 3, 4, 5].map((i) => (i === 2 * k ? face : none)); }
   return [0, 1, 2, 3, 4, 5].map((i) => (dark ? i === 2 * k : Math.floor(i / 2) === k) ? face : base);
 }
 const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' in s ? Math.min(2 * s.cyl[0], s.cyl[1]) : 'cone' in s ? s.cone[0] : 1);

@@ -28,7 +28,10 @@ export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 
 export interface Solid { role: Role; shape: Shape; at: [number, number, number]; rot?: [number, number, number]; mat: string; hole?: { r: number; y: number }; inBody?: number; shell?: number; lead?: number; color?: number;
   /** holes drilled down through a slab (a board's mounting holes), mm, in its own frame */ bores?: { x: number; z: number; r: number }[];
   /** the share of its shape that is solid (a layer of solder balls, a hollow moulding) */ share?: number;
-  /** what is printed on its broad face (a chip's marking, a board's silkscreen), in ink of this colour where given */ text?: string; ink?: number }
+  /** what is printed on its broad face (a chip's marking, a board's silkscreen), in ink of this colour where given */ text?: string; ink?: number;
+  /** a picture on its top face, in this colour where its PNG is white and clear elsewhere (the copper a board's photo
+   *  shows under its mask) */ paint?: { png: string; ink: number };
+  /** its printing alone drawn, its ground clear (a board's silkscreen: the letters on the mask, not a plate) */ inkOnly?: boolean }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)
