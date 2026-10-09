@@ -74,6 +74,21 @@ export function usbC(contacts: 16 | 24): BoardPart {
     src: 'USB Type-C spec (receptacle opening 8.34 × 2.56 mm, tongue 6.69 × 0.70 mm); HRO TYPE-C-31-M-12 drawing via KiCad footprint (8.94 × 7.35 mm) and HQ Online (3.21 mm tall)' };
 }
 
+/** A USB Type-C plug as the Type-C spec has it: its shell a stadium 8.25 × 2.40 mm (to go into the receptacle's 8.34 ×
+ *  2.56), 6.65 long from its end to its overmould; inside it a moulded insulator with the slot the receptacle's tongue
+ *  (6.69 × 0.70) goes into, and its contacts on the slot's two faces at 0.5 mm (12 a face, a full-featured cable's); its
+ *  overmould within the spec's 12.35 × 6.5 limit, 20 long (typical of a cable's moulding). Frame: along x, its mating end
+ *  at x 0 facing −x (it goes in toward −x), its overmould toward +x where its cable leaves. */
+export function usbCPlug(): BoardPart {
+  const W = 8.25, H = 2.4, L = 6.65, sw = 7.85, sh = 2.0, slotW = 6.9, slotH = 0.78, mw = 12.0, mh = 6.2, ml = 20;
+  const shell = piece('USB-C plug shell', 'usb-c-plug', [along('term', stadium(W, H, -H / 2), [stadium(sw, sh, -sh / 2)], L, 0, 'stainless-304', { color: HUE.stainless, finish: 'bright' })]);
+  const ins = piece('USB-C plug insulator', 'usb-c-plug', [along('body', stadium(sw, sh, -sh / 2), [[[-slotW / 2, -slotH / 2], [slotW / 2, -slotH / 2], [slotW / 2, slotH / 2], [-slotW / 2, slotH / 2]]], L - 0.4, 0.4, 'pbt', { color: HUE.black })]);
+  const pins = [-1, 1].flatMap((face) => Array.from({ length: 12 }, (_, k): Comp => piece(`USB-C plug contact ${face > 0 ? 'A' : 'B'}${k + 1}`, 'usb-c-plug', [box('lead', [L - 1.2, 0.08, 0.25], [0.8 + (L - 1.2) / 2, face * (slotH / 2 - 0.04), (k - 5.5) * 0.5], 'phosphor-bronze', { color: HUE.gold })])));
+  const mould = piece('USB-C plug overmould', 'usb-c-plug', [along('body', stadium(mw, mh, -mh / 2, 12), [], ml, L, 'pvc', { color: 0x1c1c1e, finish: 'moulded' })]);
+  return { comp: { name: 'USB-C plug', item: 'usb-c-plug', at: [0, 0, 0], kids: [shell, ins, ...pins, mould] }, size: [L + ml, mw, mh],
+    src: 'USB Type-C spec: plug shell 8.25 × 2.40 mm, 6.65 mm from its end; overmould within 12.35 × 6.5 mm (its length typical)' };
+}
+
 // ---- HDMI -----------------------------------------------------------------------------------------------------------
 /** HDMI receptacles: type A (full size), C (mini), D (micro). Its stamped shell round its keyed mouth (the lower corners
  *  cut, as the plug is), its moulded tongue with its 19 contacts, ten on its top face and nine under, alternating at

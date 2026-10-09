@@ -81,6 +81,8 @@ export interface Part {
    *  photo shows it) */ paint?: { png: string; ink: number };
   /** its printing alone drawn, its ground clear (a board's silkscreen) */ inkOnly?: boolean;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
+  /** the share of the room's light that reaches it, where it lies down in a cavity and sees the room only through its
+   *  openings (a renderer without occlusion lights it as if it were in the open) */ shade?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
    *  in bump (m) — so the room kept round it is the room it sweeps through all of that; or how a part slides, with all of

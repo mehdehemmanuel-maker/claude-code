@@ -28,6 +28,8 @@ export type Role = 'body' | 'lead' | 'pad' | 'tab' | 'frame' | 'die' | 'wire' | 
 export interface Solid { role: Role; shape: Shape; at: [number, number, number]; rot?: [number, number, number]; mat: string; hole?: { r: number; y: number }; inBody?: number; shell?: number; lead?: number; color?: number;
   /** holes drilled down through a slab (a board's mounting holes), mm, in its own frame */ bores?: { x: number; z: number; r: number }[];
   /** the share of its shape that is solid (a layer of solder balls, a hollow moulding) */ share?: number;
+  /** the share of the room's light that reaches it, where it lies down in a cavity and sees the room only through its
+   *  openings (a breadboard's clips under their holes) */ shade?: number;
   /** what is printed on its broad face (a chip's marking, a board's silkscreen), in ink of this colour where given */ text?: string; ink?: number;
   /** a picture on its top face, in this colour where its PNG is white and clear elsewhere (the copper a board's photo
    *  shows under its mask) */ paint?: { png: string; ink: number };

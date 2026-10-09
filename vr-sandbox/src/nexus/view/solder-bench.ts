@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { kitView, type KitView } from './kit3d';
 import { compPart, componentOf } from '../components';
-import { pinHeader } from '../boardparts';
+import { pinHeader, usbCPlug } from '../boardparts';
 import { resolve } from '../inventory';
 import type { Part } from '../kits';
 import { ironInStand } from '../kit-solder';
@@ -42,6 +42,7 @@ export class SolderBench {
   private card: THREE.Mesh; private cardCtx: CanvasRenderingContext2D | null; private cardTex: THREE.CanvasTexture; private cardText = ''; private cardAt = 0;
   private puffs: { s: THREE.Sprite; t: number }[] = [];
   private legs: THREE.Mesh[] = [];
+  private cable: THREE.Mesh; private cableFrom = new THREE.Vector3(1e9, 0, 0); private tail: THREE.Mesh;
   /** for words and tests: where the tip and the wire's end are, bench mm, when no hand holds them */
   private script: { tip: V3 | null; wire: V3 | null } = { tip: null, wire: null };
 
@@ -61,9 +62,19 @@ export class SolderBench {
     this.obj.iron = add(drawn('solderiron pinecil-v2'), [0, 0, 0]); this.placeIronInStand();
     // (the solder: its reel behind the breadboard, the wire out of the fingers when it is in a hand)
     this.obj.solder = add(drawn('solderreel ts-635050'), PLACES.reel);
+    // (its free end off the top of the winding (14.9 mm round its middle 19 up: the reel's own figures), down onto the
+    // bench, while no hand holds it; and the cutters the joint lesson trims with, lying beside the headers)
+    const [rx, , rz] = PLACES.reel, tail = [[rx, 33.9, rz], [rx + 10, 33.4, rz + 1], [rx + 19, 22, rz + 4], [rx + 25, 0.4, rz + 8], [rx + 33, 0.3, rz + 11]].map(([x, y, z]) => new THREE.Vector3(x! * MM, y! * MM, z! * MM));
+    this.tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tail), 24, HAND.wire / 2 * MM, 6, false), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 })); this.group.add(this.tail);
+    add(drawn('flushcutter chp-170'), [-150, 5.8, 70], [0, 0.35, 0]);
     this.wire = new THREE.Mesh(new THREE.CylinderGeometry(HAND.wire / 2 * MM, HAND.wire / 2 * MM, 1, 8).translate(0, -0.5, 0).rotateX(PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
     this.wire.visible = false; this.group.add(this.wire);
     for (const k of Object.keys(this.obj) as Thing[]) this.home[k] = { at: this.obj[k].position.clone(), rot: this.obj[k].rotation.clone() };
+    // (its power: a USB-C cable's plug in the iron's socket at its back (6 mm in, its overmould against the handle), its
+    // cord, 4 mm across (typical of a 3 A cable), over the bench and off its right edge to the charger the pack buys)
+    const plug = kitView(compPart(usbCPlug().comp, 'USB-C cable'), { maxLights: 0 }); this.views.push(plug);
+    plug.group.position.set(6.0 * MM, -3.6 * MM, 0); plug.group.rotation.set(0, PI, 0); this.obj.iron.add(plug.group);
+    this.cable = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.6 })); this.cable.castShadow = true; this.group.add(this.cable);
     this.obj.iron.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && /point|iron plating/i.test(m.name)) { m.material = (m.material as THREE.MeshStandardMaterial).clone(); this.tipMeshes.push(m); } });
     // (each joint's solder: a concave cone round its pin, or a ball where there is far too much)
     const R = PICO_PIN.pad / 2, rp = PICO_PIN.pin / 2, prof: THREE.Vector2[] = [];
@@ -185,6 +196,7 @@ export class SolderBench {
     else if (this.script.wire && b.wire.inHand) { const e = new THREE.Vector3(...this.script.wire).multiplyScalar(MM), d = new THREE.Vector3(0.6, -0.5, -0.62).normalize(); if (this.wire.parent !== this.group) this.group.add(this.wire);
       this.wire.visible = true; this.wire.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d); this.wire.scale.set(1, 1, Math.max(0.001, b.wire.out * MM)); this.wire.position.copy(e).addScaledVector(d, -b.wire.out * MM); }
     else if (!wireHand) this.wire.visible = false;
+    this.tail.visible = !this.wire.visible;
     // (each joint as its solder is)
     const v = idealVolume(PICO_PIN);
     b.joints.forEach((q, i) => { const f = this.fillets[i]!, fill = q.j.solder / v, g = grade(q.j).grade, m = f.cone.material as THREE.MeshStandardMaterial;
@@ -196,6 +208,7 @@ export class SolderBench {
     // (the tip bright where it is tinned, dark where it has oxidised)
     for (const m of this.tipMeshes) { const mat = m.material as THREE.MeshStandardMaterial; mat.color.setHex(b.iron.tinned > 0 ? 0xd9dcde : 0x4a4038); mat.roughness = b.iron.tinned > 0 ? 0.15 : 0.7; }
     for (const p of this.puffs) { p.t += dt; p.s.position.y += 0.03 * dt; p.s.scale.multiplyScalar(1 + 0.6 * dt); (p.s.material as THREE.SpriteMaterial).opacity = Math.max(0, 0.35 * (1 - p.t / 1.6)); p.s.visible = p.t < 1.6; }
+    this.drawCable();
     this.cardAt -= dt; if (this.cardAt <= 0) { this.cardAt = 0.25; this.drawCard(); }
   }
   /** On a screen: the iron held to a point as a hand would, its tip on it from 35° above. */
@@ -206,6 +219,16 @@ export class SolderBench {
     const d = new THREE.Vector3(-0.62, -Math.sin(0.61), -0.45).normalize(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), d);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q); if (up.y < 0) q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), PI));
     o.quaternion.copy(q); o.position.set(p[0] * MM, p[1] * MM, p[2] * MM).addScaledVector(d, -0.155);
+  }
+  /** The cord from the plug's back, out along the iron, down onto the bench and off its right edge (redrawn when the iron
+   *  has moved a millimetre). */
+  private drawCable(): void {
+    this.obj.iron.updateMatrixWorld(); const from = this.group.worldToLocal(this.obj.iron.localToWorld(new THREE.Vector3(-20.65 * MM, -3.6 * MM, 0)));
+    if (from.distanceTo(this.cableFrom) < 0.001) return; this.cableFrom.copy(from);
+    const out = this.group.worldToLocal(this.obj.iron.localToWorld(new THREE.Vector3(-60 * MM, -3.6 * MM, 0))), edge = new THREE.Vector3(0.36, 0.002, 0.06), down = new THREE.Vector3(0.375, -0.3, 0.07);
+    const mid = out.clone().lerp(edge, 0.5).setY(Math.max(0.002, Math.min(out.y, edge.y) - 0.01));
+    const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([from, out, mid, edge, down]), 48, 2 * MM, 8, false);
+    this.cable.geometry.dispose(); this.cable.geometry = g;
   }
   private puff(at: V3): void {
     if (typeof document === 'undefined') return; let p = this.puffs.find((x) => x.t >= 1.6);

@@ -171,19 +171,22 @@ export function breadboard(points: number): Comp {
   const holes = [...xs.flatMap((x) => BB.rowsZ.map((z) => sq(x, z, hole))), ...BB.rails.filter(() => S.rails).flatMap((z) => rcols.map((c) => sq(bbCol(points, c), z, hole))), sq(0, 0, (cols - 1) * p + 1.2, 2.5)];
   const top: Solid = { role: 'body', shape: { prism: { pts: sq(0, 0, L, W), L: skin, holes } }, at: [0, H - skin / 2, 0], rot: [PI / 2, 0, 0], mat: 'abs', ...white };
   const deep = H - skin - back, mid = back + deep / 2;
+  // (what lies under its top sees the room only through its holes: a 1 mm square opening 2 mm above a clip's mouth
+  // takes in its projected solid angle over π, about 8 % of the light in the open)
+  const dark = { ...white, shade: 0.08 } as const;
   // (its walls: round the outside, between every column's slot in each half, along each rail's slot, and the channel's
   // two sides and floor)
   const walls: Solid[] = [
     box('body', [L, deep, 1.0], [0, mid, W / 2 - 0.5], 'abs', white), box('body', [L, deep, 1.0], [0, mid, -W / 2 + 0.5], 'abs', white),
     box('body', [1.0, deep, W - 2], [L / 2 - 0.5, mid, 0], 'abs', white), box('body', [1.0, deep, W - 2], [-L / 2 + 0.5, mid, 0], 'abs', white),
-    ...[1, -1].flatMap((s) => Array.from({ length: cols + 1 }, (_, i) => box('body', [wall, deep, 5 * p + 0.6], [bbCol(points, i + 0.5), mid, s * 8.89], 'abs', white))),
+    ...[1, -1].flatMap((s) => Array.from({ length: cols + 1 }, (_, i) => box('body', [wall, deep, 5 * p + 0.6], [bbCol(points, i + 0.5), mid, s * 8.89], 'abs', dark))),
     // (the circuit slots' long sides: by the channel, and out to the rails' slots or the frame, the band between cored as
     // it is moulded, a wall at each side)
-    ...[1, -1].flatMap((s) => { const out = S.rails ? 20.79 : W / 2 - 1; return [box('body', [L - 2, deep, 1.0], [0, mid, s * 1.74], 'abs', white), ...(out - 15.54 > 2.5 ? [box('body', [L - 2, deep, 1.0], [0, mid, s * 16.04], 'abs', white), box('body', [L - 2, deep, 1.0], [0, mid, s * (out - 0.5)], 'abs', white)] : [box('body', [L - 2, deep, out - 15.54], [0, mid, s * (15.54 + out) / 2], 'abs', white)])]; }),
+    ...[1, -1].flatMap((s) => { const out = S.rails ? 20.79 : W / 2 - 1; return [box('body', [L - 2, deep, 1.0], [0, mid, s * 1.74], 'abs', dark), ...(out - 15.54 > 2.5 ? [box('body', [L - 2, deep, 1.0], [0, mid, s * 16.04], 'abs', dark), box('body', [L - 2, deep, 1.0], [0, mid, s * (out - 0.5)], 'abs', dark)] : [box('body', [L - 2, deep, out - 15.54], [0, mid, s * (15.54 + out) / 2], 'abs', dark)])]; }),
     // (the channel's floor, 2 mm below the top, between the slots' walls)
-    box('body', [(cols - 1) * p + 1.2, 0.8, 2.5], [0, H - 2.4, 0], 'abs', white),
+    box('body', [(cols - 1) * p + 1.2, 0.8, 2.5], [0, H - 2.4, 0], 'abs', { ...white, shade: 0.5 }) /* (a long slot 2.5 wide and 2 deep: its floor sees about half the sky, sin(atan(1.25 / 2))) */,
     // (each pair of rails' slots: the wall between them, and to the frame)
-    ...(S.rails ? [1, -1].flatMap((s) => [box('body', [L - 2, deep, 0.94], [0, mid, s * 22.86], 'abs', white), box('body', [L - 2, deep, W / 2 - 1 - 24.93], [0, mid, s * (24.93 + W / 2 - 1) / 2], 'abs', white)]) : []),
+    ...(S.rails ? [1, -1].flatMap((s) => [box('body', [L - 2, deep, 0.94], [0, mid, s * 22.86], 'abs', dark), box('body', [L - 2, deep, W / 2 - 1 - 24.93], [0, mid, s * (24.93 + W / 2 - 1) / 2], 'abs', dark)]) : []),
   ];
   // (its legend: each pair of rails a red line by its outer rail and a blue by its inner, as BusBoard's colour legend
   // has them (typical); its columns numbered every five and its rows lettered at both ends, ink on its top)
@@ -196,7 +199,7 @@ export function breadboard(points: number): Comp {
   const body = piece(`${points}-point breadboard body`, 'breadboard-body', [top, ...walls, ...legend]);
   // (a clip's section: two leaves from a base, bent in to pinch and out to a mouth under the hole)
   const y0 = back + 2.0, clipPts: V2[] = ([[-0.65, 0], [0.65, 0], [0.65, 2.0], [0.23, 3.5], [0.45, 4.2], [0.27, 4.26], [0.03, 3.55], [0.45, 2.0], [0.45, 0.2], [-0.45, 0.2], [-0.45, 2.0], [-0.03, 3.55], [-0.27, 4.26], [-0.45, 4.2], [-0.23, 3.5], [-0.65, 2.0]] as V2[]).map(([u, v]) => [u, y0 + v]);
-  const bronze = { color: 0xc9b37a, finish: 'plate', share: 0.72 } as const;
+  const bronze = { color: 0xc9b37a, finish: 'plate', share: 0.72, shade: 0.08 } as const;
   const clips: Comp[] = [1, -1].flatMap((s) => xs.map((x, i): Comp => piece(`clip strip ${i + 1}${s > 0 ? 'a–e' : 'f–j'}`, 'clip-strip', [{ role: 'band', shape: { prism: { pts: clipPts, L: 5 * p - 0.3 } }, at: [x, 0, s * 8.89], mat: 'phosphor-bronze', ...bronze }])));
   const rails: Comp[] = S.rails ? BB.rails.map((z, i): Comp => { const a = bbCol(points, rcols[0]!), b = bbCol(points, rcols.at(-1)!);
     return piece(`power rail clip ${i + 1}`, 'rail-clip', [{ role: 'band', shape: { prism: { pts: clipPts, L: b - a + p - 0.3 } }, at: [(a + b) / 2, 0, z], rot: [0, PI / 2, 0], mat: 'phosphor-bronze', ...bronze }]); }) : [];
