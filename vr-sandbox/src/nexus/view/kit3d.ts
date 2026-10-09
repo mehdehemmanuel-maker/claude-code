@@ -140,7 +140,8 @@ function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: 
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
   // (turned, or with flat sides where it has them: a nut's six, round its bore)
-  if ('lathe' in s) return new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), facets ?? 40);
+  // (with few flat sides, each side flat: a hex nut's six, a square pin's four, not shaded as if round)
+  if ('lathe' in s) { const g = new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), facets ?? 40); if (!facets || facets > 12) return g; const h = g.toNonIndexed(); h.computeVertexNormals(); return h; }
   if ('prism' in s) { const sh = new THREE.Shape(s.prism.pts.map(([x, y]) => new THREE.Vector2(x, y))); for (const h of s.prism.holes ?? []) sh.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))); const g = new THREE.ExtrudeGeometry(sh, { depth: s.prism.L, bevelEnabled: false, curveSegments: 1 }); g.translate(0, 0, -s.prism.L / 2); return g; }
   // a round part with flat sides (a hex head, a nut): its flats, its edges broken
   if (facets && 'cyl' in s) return new THREE.CylinderGeometry(s.cyl[2] ?? s.cyl[0], s.cyl[0], s.cyl[1], facets);
@@ -223,10 +224,14 @@ function contactShadow(group: THREE.Group): THREE.Group | null {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(cx, all.min.y + lift, cz); m.renderOrder = 1; m.userData.decor = true; out.add(m);
   };
-  const size = all.getSize(new THREE.Vector3()), ctr = all.getCenter(new THREE.Vector3());
-  patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002);
-  const b = new THREE.Box3();
-  group.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh) return; b.setFromObject(m); if (b.isEmpty() || b.min.y > all.min.y + 0.01 || b.max.y - b.min.y < 0.02) return; const s2 = b.getSize(new THREE.Vector3()), c2 = b.getCenter(new THREE.Vector3()); patch(c2.x, c2.z, Math.max(0.05, s2.x) * 1.3, Math.max(0.05, s2.z) * 1.3, 0.55, 0.003); });
+  // (its patches lifted off the ground so they do not fight it for depth: 2 mm under a thing 40 cm across or more, less
+  // under a small one, so a solder wire lying 0.3 mm off the bench beside a reel is not drawn under the reel's shading)
+  const size = all.getSize(new THREE.Vector3()), ctr = all.getCenter(new THREE.Vector3()), sc = Math.min(1, Math.max(size.x, size.z) / 0.4);
+  patch(ctr.x, ctr.z, size.x * 1.15, size.z * 1.2, 0.45, 0.002 * sc);
+  // (each touching part's patch at least 5 cm across, or for a small thing a third of its own footprint's narrow side:
+  // a reel's thin flanges each a line under its rim, not two hand-wide blots that run together black)
+  const b = new THREE.Box3(), least = Math.min(0.05, 0.3 * Math.min(size.x, size.z));
+  group.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh) return; b.setFromObject(m); if (b.isEmpty() || b.min.y > all.min.y + 0.01 || b.max.y - b.min.y < 0.02) return; const s2 = b.getSize(new THREE.Vector3()), c2 = b.getCenter(new THREE.Vector3()); patch(c2.x, c2.z, Math.max(least, s2.x) * 1.3, Math.max(least, s2.z) * 1.3, 0.55, 0.003 * sc); });
   return out;
 }
 /** A material as it is seen down in a cavity: only so much of the room's light reaching it, direct and reflected alike

@@ -14,7 +14,7 @@
 // or a cable goes in) at +x, its width along z, centred on its footprint. A board places it (src/nexus/sbc.ts).
 
 import type { Comp } from './sbc';
-import { pkgItem, pkgOf, pkgSolids, type Solid } from './packages';
+import { pkgItem, pkgOf, pkgSolids, smdLedSolids, type Solid } from './packages';
 
 type V3 = [number, number, number];
 type V2 = [number, number];
@@ -112,9 +112,13 @@ export function microUsbB(o: { W?: number; D?: number; H?: number; latch?: numbe
   const yt = y0 + mh - 0.1 - 0.3;
   const tongue = piece('micro-USB tongue', 'usb-micro-tongue', [box('body', [D - 1.0, 0.6, 3.6], [x0 + 0.25 + (D - 1.0) / 2, yt, 0], 'nylon', { color: HUE.black }),
     box('body', [0.8, H - 0.25, W - 0.6], [x0 + 0.25 + 0.4, (H - 0.25) / 2, 0], 'nylon', { color: HUE.black })]);
-  const pins = Array.from({ length: 5 }, (_, k): Comp => { const z = (k - 2) * 0.65;
-    return piece(`micro-USB contact ${k + 1}`, 'usb-micro-contact', [box('lead', [D - 1.6, 0.05, 0.25], [x0 + 1.2 + (D - 1.6) / 2, yt - 0.325, z], 'phosphor-bronze', { color: HUE.gold }),
-      box('lead', [1.0, 0.1, 0.3], [x0 - 0.5, 0.05, z], 'phosphor-bronze', { color: HUE.gold })]); });
+  // (each contact gold where it mates, along the tongue's underside; run back through the rear wall, down inside it and
+  // out under it to its tail on the board, tin-plated there to take solder: gold flash on the contact, tin on the tail,
+  // as micro-USB makers plate them (typical))
+  const pins = Array.from({ length: 5 }, (_, k): Comp => { const z = (k - 2) * 0.65, yc = yt - 0.325;
+    return piece(`micro-USB contact ${k + 1}`, 'usb-micro-contact', [box('lead', [D - 1.6, 0.05, 0.25], [x0 + 1.2 + (D - 1.6) / 2, yc, z], 'phosphor-bronze', { color: HUE.gold }),
+      box('lead', [0.95, 0.05, 0.25], [x0 + 0.3 + 0.95 / 2, yc, z], 'phosphor-bronze', { color: HUE.tin }), box('lead', [0.1, yc - 0.1, 0.25], [x0 + 0.35, 0.1 + (yc - 0.1) / 2, z], 'phosphor-bronze', { color: HUE.tin }),
+      box('lead', [1.4, 0.1, 0.3], [x0 - 0.3, 0.05, z], 'phosphor-bronze', { color: HUE.tin })]); });
   return { comp: { name: 'micro-USB receptacle', item: 'usb-micro-socket', at: [0, 0, 0], kids: [shell, tongue, ...pins] }, size: [D, W, H],
     src: o.src ?? 'USB Micro-B spec (its plug 6.85 × 1.80 mm, contacts at 0.65 mm); outside 7.5 × 5.5 mm (Molex 105017 and Amphenol 10118194 through KiCad\'s footprints), 2.5 tall (typical)' };
 }
@@ -381,8 +385,10 @@ export function microSD(o: { D?: number; W?: number; H?: number; eject?: boolean
 
 // ---- pin headers -----------------------------------------------------------------------------------------------------
 /** A 2.54 mm pin header, rows × cols: its moulded strip 2.54 tall, its pins 0.64 mm square, 6.0 above the strip and 3.0
- *  through the board below it (Würth WR-PHD 6130xx21121, as KiCad's 3D models take them). Pins along x, rows along z,
- *  pin 1 at -x in the +z row. */
+ *  through the board below it (Würth WR-PHD 6130xx21121, as KiCad's 3D models take them), each end pointed (chamfered on
+ *  its four sides over 0.45 mm to a 0.25 mm square end: typical of headers' pins). A single row's strip notched across
+ *  its top between every two pins so it snaps to length (a V 0.5 wide and 0.4 deep: typical of break-away headers).
+ *  Pins along x, rows along z, pin 1 at -x in the +z row. */
 export function pinHeader(rows: 1 | 2, cols: number, plate: 'gold' | 'tin' = 'gold', blocks = 0): BoardPart {
   const p = 2.54, L = cols * p, W = rows * p, base = 2.54, up = 6.0, down = 3.0, len = up + base + down;
   // (`blocks`: its insulator moulded in blocks of so many columns, each its top's long edges chamfered 0.35 mm, a groove
@@ -390,10 +396,16 @@ export function pinHeader(rows: 1 | 2, cols: number, plate: 'gold' | 'tin' = 'go
   const c = 0.35, g = 0.25, sec: V2[] = [[-W / 2, 0], [W / 2, 0], [W / 2, base - c], [W / 2 - c, base], [-W / 2 + c, base], [-W / 2, base - c]];
   const strip = piece('header insulator', 'header-insulator', blocks > 0
     ? Array.from({ length: Math.ceil(cols / blocks) }, (_, b): Solid => { const n = Math.min(blocks, cols - b * blocks), x0 = -L / 2 + b * blocks * p; return along('body', sec, [], n * p - g, x0 + g / 2, 'pbt', { color: HUE.black }); })
+    : rows === 1 ? [{ role: 'body', shape: { prism: { pts: [[-L / 2, 0], [L / 2, 0], [L / 2, base], ...Array.from({ length: cols - 1 }, (_, k): V2[] => { const x = L / 2 - (k + 1) * p; return [[x + 0.25, base], [x, base - 0.4], [x - 0.25, base]]; }).flat(), [-L / 2, base]], L: W } }, at: [0, 0, 0], mat: 'pbt', color: HUE.black }]
     : [box('body', [L, base, W], [0, base / 2, 0], 'pbt', { color: HUE.black })]);
   const pins: Comp[] = [];
   // (numbered as headers are: pin 1 in the first row (+z), pin 2 beside it in the second, odd pins along the first row)
-  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: plate === 'tin' ? HUE.tin : HUE.gold, finish: 'bright', lead: c * rows + r })]));
+  const tip = 0.45, rc = 0.64 / Math.SQRT2, re = 0.25 / Math.SQRT2;
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) { const x = (c - (cols - 1) / 2) * p, z = ((rows - 1) / 2 - r) * p, top = base + up, look = { color: plate === 'tin' ? HUE.tin : HUE.gold, finish: 'bright', lead: c * rows + r } as const;
+    // (each point turned on its axis a quarter of a right angle so its four sides face as the pin's do; the lower one
+    // the upper turned over)
+    const point = (y0: number, s: 1 | -1): Solid => ({ role: 'lead', shape: { lathe: [[0, 0], [rc, 0], [re, tip], [0, tip]] }, at: [x, y0, z], rot: [s > 0 ? 0 : Math.PI, Math.PI / 4, 0], mat: 'brass', facets: 4, ...look });
+    pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len - 2 * tip, 0.64], [x, top - len / 2, z], 'brass', look), point(top - tip, 1), point(top - len + tip, -1)])); }
   return { comp: { name: `${rows * cols}-pin header`, item: `pin-header-${rows}x${cols}`, at: [0, 0, 0], kids: [strip, ...pins] }, size: [L, W, base + up], src: 'Würth WR-PHD 6130xx21121 (via KiCad\'s 3D model parameters): 2.54 mm pitch, 0.64 mm pins 6.0 mm above a 2.54 mm strip; their tails 3.0 mm below its seat (RS\'s listing of the WR-PHD: mating length 6 mm, tail 3 mm), through the board and out under it' };
 }
 
@@ -603,9 +615,11 @@ export function sideLeds(L: number, W: number, H: number, lights: { name: string
 /** A top-looking chip LED, L × W × H mm (an 0603 is 1.6 × 0.8 × 0.6), its length along x: its die on its lead frame
  *  under its clear moulded lens, which looks the colour its photo gives it unlit, the frame's two ends its pads. */
 export function chipLed(L: number, W: number, H: number, l: { name: string; item: string; die: string; color: number }): Comp {
-  return { name: l.name, item: l.item, at: [0, 0, 0], solids: [box('cap', [L * 0.7, H - 0.1, W], [0, 0.1 + (H - 0.1) / 2, 0], 'epoxy', { color: l.color })],
-    kids: [piece(`${l.name} die`, l.die, [box('die', [0.25, 0.1, 0.25], [0, 0.15, 0], 'silicon', { color: 0x222222 })]),
-      piece(`${l.name} lead frame`, 'lead-frame', [...[-1, 1].map((s): Solid => box('lead', [L * 0.15 + 0.05, H, W], [s * (L / 2 - (L * 0.15 + 0.05) / 2), H / 2, 0], 'copper', { color: HUE.tin })), box('lead', [L * 0.7, 0.1, W * 0.8], [0, 0.05, 0], 'copper', { color: HUE.tin })])] };
+  // (drawn as every chip LED is (smdLedSolids): its laminate base with its pads, its die on the one wired to the other,
+  // under a clear block; its colour, as its photo shows it, the base's seen through the block)
+  const ss = smdLedSolids(L, W, H, l.die === 'led-die-algainp' ? 'algainp' : 'gan', false), of = (r: Solid['role']) => ss.filter((s) => s.role === r);
+  return { name: l.name, item: l.item, at: [0, 0, 0], solids: [...of('body'), ...of('core').map((s): Solid => ({ ...s, color: l.color }))],
+    kids: [piece(`${l.name} die`, l.die, of('die')), piece(`${l.name} lead frame`, 'lead-frame', of('lead')), piece(`${l.name} bond wire`, 'bond-wire', of('wire'))] };
 }
 /** A flip-chip BGA under a metal lid, a mm square and H tall over all (a board maker's 3D model's): its balls, its
  *  substrate, its die, its nickel-plated copper lid over 86 % of it (typical of lidded FCBGAs), or as measured (`o.lid`

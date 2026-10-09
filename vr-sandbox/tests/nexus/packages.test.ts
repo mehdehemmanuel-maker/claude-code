@@ -26,6 +26,14 @@ describe('electronic packages', () => {
       expect(Math.abs(die.at[1] - body.at[1]), `${n}: its die within its body's height`).toBeLessThan(('box' in body.shape ? body.shape.box[1] : 'cyl' in body.shape ? body.shape.cyl[0] * 2 : 10) / 2);
     }
   });
+  it('keeps its die and every wire under the moulding\'s top, a thin DFN\'s and a SOT-523\'s too', () => {
+    for (const n of ['DFN-8-2x3', 'DFN-10-3x3', 'DFN-14-4x3', 'SOT-523', 'SOT-23', 'SOIC-8', 'QFN-56', 'TQFP-100', 'DIP-8']) {
+      const ss = pkgSolids(pkgOf(n)!), body = ss.find((s) => s.role === 'body')!, die = ss.find((s) => s.role === 'die')!;
+      const top = body.at[1] + ('box' in body.shape ? body.shape.box[1] / 2 : 0), dieTop = die.at[1] + ('box' in die.shape ? die.shape.box[1] / 2 : 0);
+      expect(dieTop, `${n}: its die`).toBeLessThan(top - 0.05);
+      for (const w of ss.filter((s) => s.role === 'wire')) if ('tube' in w.shape) for (const q of w.shape.tube.pts) expect(q[1] + w.shape.tube.r, `${n}: a wire`).toBeLessThan(top - 0.05);
+    }
+  });
   it('weighs a drawn part as its solids weigh: what is inside the moulding taken out of it once', () => {
     for (const w of ['chip NE555 DIP-8', 'chip ATMEGA2560 TQFP-100', 'chip RP2040 QFN-56', 'transistor IRLZ44N', 'regulator AMS1117-3.3', 'diode 1N4148', 'zener 5.1V 5W', 'chipresistor 0603 1% 10kohm', 'mlcc X7R 0805 100nF 50V', 'smdled 5050 white', 'resistor 4.7k', 'led red 5mm']) {
       const c = component(w); if (typeof c === 'string') throw new Error(`${w}: ${c}`);

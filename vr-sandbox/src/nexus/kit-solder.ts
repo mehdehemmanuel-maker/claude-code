@@ -119,9 +119,10 @@ export function tsTip(at = 103): Comp {
 // ---- Hakko CHP-170 flush cutters ------------------------------------------------------------------------------------
 /** Hakko's CHP-170 micro cutter, closed: high-carbon steel 2.5 mm thick, about 138 mm over all, 62 g (Hakko's bulletin
  *  PB489), hardened to HRC 56; its jaws 8 mm long, its head 13.5 mm wide (Hisco's listing); its grips red and black
- *  (Adafruit's listing), a spring holding it open and the -A's safety clip keeping a cut lead; cutting 1.3 mm (16 AWG)
- *  copper at most with 5 kg on its grips (Hakko). Its outline between those an estimate. */
-export function chp170(): Comp {
+ *  (Adafruit's listing), a spring holding it open; cutting 1.3 mm (16 AWG) copper at most with 5 kg on its grips (Hakko).
+ *  The CHP-170-A the same with a safety clip on its jaws that keeps a cut lead (Hakko's "type AF"): the plain one, as
+ *  Adafruit sells it, has none. Its outline between those, and the clip's shape, an estimate. */
+export function chp170(withClip = false): Comp {
   const Lt = 138, jaw = 8, pivot = Lt - jaw - 6, headW = 13.5, t = 2.5;
   const steel = { color: 0x55595c, finish: 'ground' } as const;
   // (each half: its jaw tapering to its tip, the blade's flat on the cut's side; its head round the pivot; its handle a
@@ -142,7 +143,7 @@ export function chp170(): Comp {
   const rivet = piece('CHP-170 pivot rivet', 'plier-rivet', [post('term', 2.0, 2 * t + 0.6, [pivot - 1, -t - 0.3, 0], 'steel-low', { color: 0x9fa3a6, finish: 'bright' })]);
   const spring = piece('CHP-170 spring', 'spring-leaf', [box('band', [22, 0.35, 5.6], [pivot - 22, 0, 0], 'steel-spring', { color: 0x8a8d90, finish: 'bright' })]);
   const clip = piece('CHP-170 safety clip', 'cutter-clip', [box('body', [7, 2.6, 6], [Lt - 5.5, t + 1.3, 1.5], 'pom', { color: 0xe9e4d6 })]);
-  return { name: 'Hakko CHP-170 flush cutters', item: 'flushcutter-chp-170', at: [0, 0, 0], kids: [half(1, 0), half(-1, 1), rivet, spring, clip] };
+  return { name: `Hakko CHP-170${withClip ? '-A' : ''} flush cutters`, item: `flushcutter-chp-170${withClip ? '-a' : ''}`, at: [0, 0, 0], kids: [half(1, 0), half(-1, 1), rivet, spring, ...(withClip ? [clip] : [])] };
 }
 
 // ---- a solderless breadboard ----------------------------------------------------------------------------------------
@@ -167,24 +168,32 @@ export function breadboard(points: number): Comp {
   const S = BB_SIZE[points] ?? BB_SIZE[400]!, p = BB.pitch, { cols, L, W } = S, H = BB.H, skin = 1.0, back = 0.2, hole = 1.0, wall = 0.94;
   const white = { color: 0xf3f1ea } as const, xs = Array.from({ length: cols }, (_, i) => bbCol(points, i + 1)), rcols = S.rails ? railCols(cols) : [];
   const sq = (x: number, z: number, a: number, b = a): V2[] => [[x - a / 2, z - b / 2], [x + a / 2, z - b / 2], [x + a / 2, z + b / 2], [x - a / 2, z + b / 2]];
-  // (its top: every hole cut through it, and the channel between e and f; drawn flat, its holes up through y)
-  const holes = [...xs.flatMap((x) => BB.rowsZ.map((z) => sq(x, z, hole))), ...BB.rails.filter(() => S.rails).flatMap((z) => rcols.map((c) => sq(bbCol(points, c), z, hole))), sq(0, 0, (cols - 1) * p + 1.2, 2.5)];
-  const top: Solid = { role: 'body', shape: { prism: { pts: sq(0, 0, L, W), L: skin, holes } }, at: [0, H - skin / 2, 0], rot: [PI / 2, 0, 0], mat: 'abs', ...white };
+  // (its top: every hole cut through it; the channel between e and f its whole length, open at both its ends as
+  // breadboards' photos show it (typical), so its top is two halves either side of it; drawn flat, its holes up through
+  // y. Each half its white face 0.3 mm thick over the rest of its thickness, the same plastic in the shade of its holes:
+  // a hole's wall 1 mm square and 1 mm deep sees little of the room, so a hole reads dark, not as its lit far wall)
+  const ch = 1.25, face = 0.3, holes = [...xs.flatMap((x) => BB.rowsZ.map((z) => sq(x, z, hole))), ...BB.rails.filter(() => S.rails).flatMap((z) => rcols.map((c) => sq(bbCol(points, c), z, hole)))];
+  const halfPts = (sg: number, inset: number): V2[] => { const z0 = sg * ch, z1 = sg * (W / 2 - inset); return [[-L / 2 + inset, Math.min(z0, z1)], [L / 2 - inset, Math.min(z0, z1)], [L / 2 - inset, Math.max(z0, z1)], [-L / 2 + inset, Math.max(z0, z1)]]; };
   const deep = H - skin - back, mid = back + deep / 2;
   // (what lies under its top sees the room only through its holes: a 1 mm square opening 2 mm above a clip's mouth
   // takes in its projected solid angle over π, about 8 % of the light in the open)
   const dark = { ...white, shade: 0.08 } as const;
+  const tops: Solid[] = [1, -1].flatMap((sg): Solid[] => { const hs = holes.filter((h) => Math.sign(h[0]![1]) === sg);
+    return [{ role: 'body', shape: { prism: { pts: halfPts(sg, 0), L: face, holes: hs } }, at: [0, H - face / 2, 0], rot: [PI / 2, 0, 0], mat: 'abs', ...white },
+      { role: 'body', shape: { prism: { pts: halfPts(sg, 1.0), L: skin - face, holes: hs } }, at: [0, H - face - (skin - face) / 2, 0], rot: [PI / 2, 0, 0], mat: 'abs', ...white, shade: 0.25 }]; });
   // (its walls: round the outside, between every column's slot in each half, along each rail's slot, and the channel's
   // two sides and floor)
   const walls: Solid[] = [
-    box('body', [L, deep, 1.0], [0, mid, W / 2 - 0.5], 'abs', white), box('body', [L, deep, 1.0], [0, mid, -W / 2 + 0.5], 'abs', white),
-    box('body', [1.0, deep, W - 2], [L / 2 - 0.5, mid, 0], 'abs', white), box('body', [1.0, deep, W - 2], [-L / 2 + 0.5, mid, 0], 'abs', white),
+    // (round the outside up to under its face: the long sides, each end either side of the channel and under its floor)
+    ...[1, -1].map((sg) => box('body', [L, deep + skin - face, 1.0], [0, back + (deep + skin - face) / 2, sg * (W / 2 - 0.5)], 'abs', white)),
+    ...[1, -1].flatMap((sx) => [1, -1].map((sg) => box('body', [1.0, deep + skin - face, W / 2 - 1 - ch], [sx * (L / 2 - 0.5), back + (deep + skin - face) / 2, sg * (ch + (W / 2 - 1 - ch) / 2)], 'abs', white))),
+    ...[1, -1].map((sx) => box('body', [1.0, H - 2.8 - back, 2 * ch], [sx * (L / 2 - 0.5), back + (H - 2.8 - back) / 2, 0], 'abs', white)),
     ...[1, -1].flatMap((s) => Array.from({ length: cols + 1 }, (_, i) => box('body', [wall, deep, 5 * p + 0.6], [bbCol(points, i + 0.5), mid, s * 8.89], 'abs', dark))),
     // (the circuit slots' long sides: by the channel, and out to the rails' slots or the frame, the band between cored as
     // it is moulded, a wall at each side)
     ...[1, -1].flatMap((s) => { const out = S.rails ? 20.79 : W / 2 - 1; return [box('body', [L - 2, deep, 1.0], [0, mid, s * 1.74], 'abs', dark), ...(out - 15.54 > 2.5 ? [box('body', [L - 2, deep, 1.0], [0, mid, s * 16.04], 'abs', dark), box('body', [L - 2, deep, 1.0], [0, mid, s * (out - 0.5)], 'abs', dark)] : [box('body', [L - 2, deep, out - 15.54], [0, mid, s * (15.54 + out) / 2], 'abs', dark)])]; }),
     // (the channel's floor, 2 mm below the top, between the slots' walls)
-    box('body', [(cols - 1) * p + 1.2, 0.8, 2.5], [0, H - 2.4, 0], 'abs', { ...white, shade: 0.5 }) /* (a long slot 2.5 wide and 2 deep: its floor sees about half the sky, sin(atan(1.25 / 2))) */,
+    box('body', [L, 0.8, 2 * ch], [0, H - 2.4, 0], 'abs', { ...white, shade: 0.5 }) /* (a long slot 2.5 wide and 2 deep: its floor sees about half the sky, sin(atan(1.25 / 2))) */,
     // (each pair of rails' slots: the wall between them, and to the frame)
     ...(S.rails ? [1, -1].flatMap((s) => [box('body', [L - 2, deep, 0.94], [0, mid, s * 22.86], 'abs', dark), box('body', [L - 2, deep, W / 2 - 1 - 24.93], [0, mid, s * (24.93 + W / 2 - 1) / 2], 'abs', dark)]) : []),
   ];
@@ -196,7 +205,7 @@ export function breadboard(points: number): Comp {
     ...[1, ...Array.from({ length: Math.floor(cols / 5) }, (_, i) => (i + 1) * 5)].flatMap((c) => [ink(String(c), bbCol(points, c), 16.3, 2.4), ink(String(c), bbCol(points, c), -16.3, 2.4)]),
     ...'abcdefghij'.split('').flatMap((ch, i) => [ink(ch, -((cols - 1) / 2) * p - 2.6, BB.rowsZ[i]!, 1.4), ink(ch, ((cols - 1) / 2) * p + 2.6, BB.rowsZ[i]!, 1.4)]),
   ];
-  const body = piece(`${points}-point breadboard body`, 'breadboard-body', [top, ...walls, ...legend]);
+  const body = piece(`${points}-point breadboard body`, 'breadboard-body', [...tops, ...walls, ...legend]);
   // (a clip's section: two leaves from a base, bent in to pinch and out to a mouth under the hole)
   const y0 = back + 2.0, clipPts: V2[] = ([[-0.65, 0], [0.65, 0], [0.65, 2.0], [0.23, 3.5], [0.45, 4.2], [0.27, 4.26], [0.03, 3.55], [0.45, 2.0], [0.45, 0.2], [-0.45, 0.2], [-0.45, 2.0], [-0.03, 3.55], [-0.27, 4.26], [-0.45, 4.2], [-0.23, 3.5], [-0.65, 2.0]] as V2[]).map(([u, v]) => [u, y0 + v]);
   const bronze = { color: 0xc9b37a, finish: 'plate', share: 0.72, shade: 0.08 } as const;
@@ -270,6 +279,16 @@ export function solderReel(): Comp {
   const spool = piece('solder spool', 'solder-spool', [
     ...[-1, 1].map((s): Solid => ({ role: 'body', shape: { lathe: [[6, s * (w / 2) ], [R, s * (w / 2)], [R, s * (w / 2 + f)], [6, s * (w / 2 + f)], [6, s * (w / 2)]] }, at: [0, R, 0], rot, mat: 'pp', ...pp })),
     { role: 'body', shape: { lathe: [[6, -w / 2], [rb, -w / 2], [rb, w / 2], [6, w / 2], [6, -w / 2]] }, at: [0, R, 0], rot, mat: 'pp', ...pp }]);
-  const wire = piece('solder wire, wound', 'solder-wire', [{ role: 'body', shape: { lathe: [[rb, -w / 2], [Rw, -w / 2], [Rw, w / 2], [rb, w / 2], [rb, -w / 2]] }, at: [0, R, 0], rot, mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed', share: pack }]);
+  // (its outer layer the wire itself, wound as it is: a helix of 0.5 mm wire turn against turn across the barrel; the
+  // layers under it as one body packed so that, with the outer layer, it holds the reel's 50 g)
+  const d = 0.5, Rh = Rw - d / 2, n = Math.floor((w - d) / d), per = 12, z0 = -w / 2 + d / 2;
+  const helix: V3[] = Array.from({ length: n * per + 1 }, (_, i): V3 => { const a = (2 * PI * i) / per; return [Rh * Math.cos(a), R + Rh * Math.sin(a), z0 + (i / per) * ((w - d) / n)]; });
+  const outer = PI * (d / 2) ** 2 * n * 2 * PI * Rh, core = PI * ((Rw - d) ** 2 - rb * rb) * w;
+  const wire = piece('solder wire, wound', 'solder-wire', [{ role: 'body', shape: { lathe: [[rb, -w / 2], [Rw - d, -w / 2], [Rw - d, w / 2], [rb, w / 2], [rb, -w / 2]] }, at: [0, R, 0], rot, mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed', share: (vol - outer) / core },
+    { role: 'body', shape: { tube: { r: d / 2, pts: helix } }, at: [0, 0, 0], mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed' }]);
+  // (a paper label on each flange's face, its figures the reel's own: no maker's artwork, which is not to hand; its
+  // weight a few hundredths of a gram, not counted)
+  const label = (s: 1 | -1): Solid => box('film', [15, 15, 0.1], [0, R, s * (w / 2 + f + 0.05)], '', { color: 0xf4f1e8, text: '63/37\n0.5 mm\n50 g', ink: 0x23262b });
+  spool.solids!.push(label(1), label(-1));
   return { name: '50 g reel of 0.5 mm 63/37 solder', item: 'solderreel-ts-635050', at: [0, 0, 0], kids: [spool, wire] };
 }

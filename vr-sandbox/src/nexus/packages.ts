@@ -34,7 +34,8 @@ export interface Solid { role: Role; shape: Shape; at: [number, number, number];
   /** a picture on its top face, in this colour where its PNG is white and clear elsewhere (the copper a board's photo
    *  shows under its mask) */ paint?: { png: string; ink: number };
   /** its printing alone drawn, its ground clear (a board's silkscreen: the letters on the mask, not a plate) */ inkOnly?: boolean;
-  /** how its surface was finished where its role's is not it (a connector's shell bright nickel, not a lead's matte tin) */ finish?: string }
+  /** how its surface was finished where its role's is not it (a connector's shell bright nickel, not a lead's matte tin) */ finish?: string;
+  /** a turned shape drawn with so many flat sides (a square pin's pointed tip: 4) */ facets?: number }
 
 // (DIP lengths by pin count from MS-001's variations; SOIC from MS-012 (narrow) and MS-013 (wide); TSSOP from MO-153;
 // QFP body and pitch from MS-026; QFN from MO-220; all nominal)
@@ -100,11 +101,15 @@ export function pkgSolids(p: Pkg): Solid[] {
   const yb = p.A1 + p.H / 2;
   let lead = 0;
   // the die and its wires: a square of silicon a little under half the body across, a gold wire from its edge in a low
-  // loop to each lead's inner end; and, where it sits on a lead frame, the frame's copper paddle under it
-  const die = (cx: number, cz: number, w: number, l: number, y: number, ends: V3[], paddle = 0) => {
-    if (paddle) out.push({ role: 'frame', shape: { box: [l + 0.4, paddle, w + 0.4] }, at: [cx, y - 0.125 - paddle / 2, cz], mat: leadMat });
-    out.push({ role: 'die', shape: { box: [l, 0.25, w] }, at: [cx, y, cz], mat: 'silicon' });
-    for (const e of ends) { const fx = Math.max(-l / 2 + 0.05, Math.min(l / 2 - 0.05, e[0] - cx)) + cx, fz = Math.max(-w / 2 + 0.05, Math.min(w / 2 - 0.05, e[2] - cz)) + cz, top = y + 0.125; out.push({ role: 'wire', shape: { tube: { r: 0.0125, pts: [[fx, top, fz], [(fx + e[0]) / 2, top + 0.15, (fz + e[2]) / 2], e] } }, at: [0, 0, 0], mat: 'gold' }); }
+  // loop to each lead's inner end; and, where it sits on a lead frame, the frame's copper paddle under it. All of it under
+  // the moulding's top (ceil): a die 0.25 mm thick and a loop 0.15 mm over it where there is room, a thin package's die
+  // ground thinner and its loop lower (an ultra-thin DFN's die about 0.15 mm, its loop about 0.1: typical), the wire
+  // kept 0.08 mm under the top
+  const die = (cx: number, cz: number, w: number, l: number, y: number, ends: V3[], paddle = 0, ceil = Infinity) => {
+    const y0 = y - 0.125, t = Math.min(0.25, Math.max(0.08, (ceil - 0.1 - y0) * 0.6)), top = y0 + t, loop = Math.min(0.15, Math.max(0.02, ceil - 0.08 - 0.0125 - top));
+    if (paddle) out.push({ role: 'frame', shape: { box: [l + 0.4, paddle, w + 0.4] }, at: [cx, y0 - paddle / 2, cz], mat: leadMat });
+    out.push({ role: 'die', shape: { box: [l, t, w] }, at: [cx, y0 + t / 2, cz], mat: 'silicon' });
+    for (const e of ends) { const fx = Math.max(-l / 2 + 0.05, Math.min(l / 2 - 0.05, e[0] - cx)) + cx, fz = Math.max(-w / 2 + 0.05, Math.min(w / 2 - 0.05, e[2] - cz)) + cz; out.push({ role: 'wire', shape: { tube: { r: 0.0125, pts: [[fx, top, fz], [(fx + e[0]) / 2, top + loop, (fz + e[2]) / 2], e] } }, at: [0, 0, 0], mat: 'gold' }); }
   };
   if (p.form === 'gull' || p.form === 'sot' || p.form === 'sot223' || p.form === 'quad') {
     out.push({ role: 'body', shape: { box: [p.L, p.H, p.W] }, at: [0, yb, 0], mat: bodyMat });
@@ -126,7 +131,7 @@ export function pkgSolids(p: Pkg): Solid[] {
     // (a SOT-223's tab is its paddle and its middle lead: wired to the outer two)
     else { row('nz', [-p.pitch, p.pitch]); row('nz', [0], p.lw, false); row('pz', [0], 3.0, false); }
     if (p.pad) { const top = dieY - 0.125, t = top - p.A1 * 0.5, a = Math.min(p.pad, p.L * 0.8), b = Math.min(p.pad, p.W * 0.8); out.push({ role: 'pad', shape: { box: [a, t, b] }, at: [0, p.A1 * 0.5 + t / 2, 0], mat: leadMat, inBody: a * b * Math.max(0, top - p.A1) }); }
-    die(0, 0, dw, dl, dieY, ends, p.pad ? 0 : p.lt);
+    die(0, 0, dw, dl, dieY, ends, p.pad ? 0 : p.lt, p.A1 + p.H);
   } else if (p.form === 'qfn') {
     // (a body flush with its pads: each pad copper at its edge, under and at its side, and the pad under its middle)
     out.push({ role: 'body', shape: { box: [p.L, p.H - 0.05, p.W] }, at: [0, 0.05 + (p.H - 0.05) / 2, 0], mat: bodyMat });
@@ -137,7 +142,7 @@ export function pkgSolids(p: Pkg): Solid[] {
     }
     const pl = p.sides === 2 ? Math.min(p.L - 1, p.pad! * 1.2) : p.pad!;
     out.push({ role: 'pad', shape: { box: [pl, 0.2, p.pad!] }, at: [0, 0.1, 0], mat: leadMat, inBody: pl * p.pad! * 0.15 });
-    die(0, 0, p.pad! * 0.85, p.pad! * 0.85, 0.2 + 0.125, ends);
+    die(0, 0, p.pad! * 0.85, p.pad! * 0.85, 0.2 + 0.125, ends, 0, p.H);
   } else if (p.form === 'dip') {
     out.push({ role: 'body', shape: { box: [p.L, p.H, p.W] }, at: [0, p.A1 + p.H / 2, 0], mat: bodyMat });
     const k = p.pins / 2, ends: V3[] = [], y0 = p.A1 + p.H * 0.3, u1 = (p.span - p.W) / 2, sh = 1.5;
@@ -149,7 +154,7 @@ export function pkgSolids(p: Pkg): Solid[] {
       out.push({ role: 'lead', shape: { box: [p.lw, p.leadL!, p.lt] }, at: [x, -p.leadL! / 2, sz * (p.span / 2)], mat: leadMat, lead: l });
       ends.push([x, y0 + p.lt / 2, z - sz * 0.5]);
     }
-    die(0, 0, p.W * 0.35, Math.min(p.L * 0.4, 4), y0 + p.lt / 2 + 0.125, ends, p.lt);
+    die(0, 0, p.W * 0.35, Math.min(p.L * 0.4, 4), y0 + p.lt / 2 + 0.125, ends, p.lt, p.A1 + p.H);
   } else if (p.form === 'to92') {
     // (a D: a circle of its length across, its front cut flat so it is its width deep; standing on the board, its die on
     // the middle lead's flattened top, wired to the outer two)
@@ -287,9 +292,14 @@ export function smdLedSolids(L: number, W: number, H: number, die: 'gan' | 'alga
     const bt = Math.min(0.2, H * 0.3);
     out.push({ role: 'core', shape: { box: [L, bt, W] }, at: [0, bt / 2, 0], mat: 'fr4' });
     out.push({ role: 'body', shape: { box: [L - 0.1, H - bt, W - 0.05] }, at: [0, bt + (H - bt) / 2, 0], mat: 'epoxy-clear' });
-    for (const s of [-1, 1]) out.push({ role: 'lead', shape: { box: [pl, 0.035, W] }, at: [s * (L / 2 - pl / 2), 0.0175, 0], mat: 'copper', lead: s < 0 ? 0 : 1 });
-    out.push({ role: 'die', shape: { box: [0.25, 0.1, 0.25] }, at: [-0.15, bt + 0.05, 0], mat: die });
-    out.push({ role: 'wire', shape: { tube: { r: 0.0125, pts: [[-0.15, bt + 0.1, 0], [0.1, bt + 0.3, 0], [L / 2 - pl / 2, bt, 0]] } }, at: [0, 0, 0], mat: 'gold' });
+    // (each end's pad under it, up its end in a plated half-hole, and on its top under the block, where the die sits on
+    // the one and its wire lands on the other; gold over nickel, typical of laminate chip LEDs)
+    const au = { color: 0xd9b24c, finish: 'plate' };
+    for (const s of [-1, 1]) out.push({ role: 'lead', shape: { box: [pl, 0.035, W] }, at: [s * (L / 2 - pl / 2), 0.0175, 0], mat: 'copper', lead: s < 0 ? 0 : 1, ...au },
+      { role: 'lead', shape: { box: [0.05, bt, W * 0.6] }, at: [s * (L / 2 - 0.025), bt / 2, 0], mat: 'copper', lead: s < 0 ? 0 : 1, ...au },
+      { role: 'lead', shape: { box: [s < 0 ? L * 0.45 : pl, 0.02, W * 0.8] }, at: [s * (L / 2 - (s < 0 ? L * 0.45 : pl) / 2), bt + 0.01, 0], mat: 'copper', lead: s < 0 ? 0 : 1, ...au });
+    out.push({ role: 'die', shape: { box: [0.25, 0.1, 0.25] }, at: [-0.15, bt + 0.07, 0], mat: die });
+    out.push({ role: 'wire', shape: { tube: { r: 0.0125, pts: [[-0.15, bt + 0.12, 0], [0.1, bt + Math.min(0.3, (H - bt) * 0.6), 0], [L / 2 - pl / 2, bt + 0.02, 0]] } }, at: [0, 0, 0], mat: 'gold' });
     return out;
   }
   // (the cup's wall a sixth of its width, its floor the lead frame, 0.2 mm, flush with the cup's base)
@@ -329,7 +339,8 @@ export function solidVolume(s: Solid): number {
   const k = s.share ?? 1;
   if ('cyl' in sh) return Math.PI * sh.cyl[0] ** 2 * sh.cyl[1] * k;
   if ('prism' in sh) return (area(sh.prism.pts) - (sh.prism.holes ?? []).reduce((a, h) => a + area(h), 0)) * sh.prism.L * k;
-  if ('lathe' in sh) { const q = sh.lathe; let v = 0; for (let i = 0; i < q.length - 1; i++) { const [r1, y1] = q[i]!, [r2, y2] = q[i + 1]!; v += (Math.PI * (y2 - y1) * (r1 * r1 + r1 * r2 + r2 * r2)) / 3; } return Math.abs(v) * k; }
+  // (turned with so many flat sides: its section the polygon's, not the circle's, as mass.ts takes it)
+  if ('lathe' in sh) { const q = sh.lathe, flats = s.facets ? (s.facets * Math.sin((2 * Math.PI) / s.facets)) / (2 * Math.PI) : 1; let v = 0; for (let i = 0; i < q.length - 1; i++) { const [r1, y1] = q[i]!, [r2, y2] = q[i + 1]!; v += (Math.PI * (y2 - y1) * (r1 * r1 + r1 * r2 + r2 * r2)) / 3; } return Math.abs(v) * flats * k; }
   let L = 0; for (let i = 1; i < sh.tube.pts.length; i++) L += Math.hypot(...(sh.tube.pts[i]!.map((v, k) => v - sh.tube.pts[i - 1]![k]!) as V3));
   return Math.PI * sh.tube.r ** 2 * L * k;
 }

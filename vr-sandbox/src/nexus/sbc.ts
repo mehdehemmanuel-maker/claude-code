@@ -113,7 +113,7 @@ const PICO_LAYOUT: Place[] = [
   { part: () => chip('DFN-8-2x3', 'Winbond W25Q16JVUXIQ 2 MB QSPI flash (U3)'), at: [19.04, 6.6], dir: 90, name: 'flash (U3)', how: SCH('U3') + '; its package Winbond\'s USON-8 2 × 3 × 0.6 mm (UX); ' + PHP('its body x 17.38 to 20.71, z 5.54 to 7.67, four pads up each of its short sides') },
   { part: () => chip('SOD-123F', 'onsemi MBR120VLSFT1G Schottky diode, VBUS to VSYS (D1)', '', 'diode-smd'), at: [6.6, 16.8], name: 'Schottky diode (D1)', how: SCH('D1') + '; its SOD-123FL drawn as a SOD-123F (KiCad\'s outline 2.8 × 1.8 mm, nominal); ' + PHP('its black body x 5.29 to 7.9, z 16.08 to 17.54, its tin ends past it') },
   { part: () => chip('SOT-523', 'Diodes Inc. DMG1012T N-channel MOSFET (Q1)', '', 'sot-package'), at: [18.5, 16.95], dir: 270, name: 'MOSFET (Q1)', how: SCH('Q1') + '; ' + PHP('its body x 18.0 to 19.04, z 16.17 to 17.73, two leads out of its +x side and one out of its −x side') },
-  { part: () => inductor(2.5, 2.2, 1.0, '', 0x69646b), at: [10.8, 16.7], name: 'power inductor (L1, 2.2 µH)', how: SCH('L1, 2.2 µH, its package not named') + '; ' + PHP('its grey body x 9.46 to 12.1, z 15.55 to 17.9 (2.5 × 2.2 by its size, less the blur), its colour #69646b') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
+  { part: () => inductor(2.5, 2.2, 1.0, '', 0x666666), at: [10.8, 16.7], name: 'power inductor (L1, 2.2 µH)', how: SCH('L1, 2.2 µH, its package not named') + '; ' + PHP('its grey body x 9.46 to 12.1, z 15.55 to 17.9 (2.5 × 2.2 by its size, less the blur), its colour #69646b, its photo\'s faint violet cast taken out (#666666, its lightness kept)') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
   { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xc8b6b1, src: SCH('X1, 12 MHz') + '; an Abracon ABM8-272-T3 (its datasheet\'s text), 3.2 × 2.5 mm (KiCad\'s ABM8 footprint); ' + PHP('its lid 2.6 × 1.95, #c8b6b1') }), at: [34.58, 8.27], dir: 90, name: 'crystal (X1, 12 MHz)', how: PHP('its gold-rimmed body x 33.33 to 35.83, z 6.71 to 9.83, its long side along the board') },
   { part: () => tactTop({ L: 4.27, W: 3.37, H: 1.9, plunger: [3.15, 2.23], src: SCH('SW1, a TP-1221U-K9K5325') + '; ' + PHP('its body 4.27 × 3.37 mm, its oval plunger 3.15 × 2.23, its four terminals out of its ends') + '; its height 1.9, typical (its maker\'s drawing not found)' }), at: [11.9, 7.06], name: 'BOOTSEL button (SW1)', how: PHP('its body x 9.77 to 14.04, z 5.38 to 8.75') },
   ...([[7.6, 4.73], [45.02, 16.54]] as [number, number][]).map((at): Place => ({ part: () => fiducial(1.0, 1.75, { pad: 0xf6d673, bare: 0x483e23 }), at, name: 'fiducial', how: PHP(`a bare gold dot 1.0 mm across at (${at[0]}, ${at[1]}) in a dark ring 1.75 across (#483e23) where the mask is opened, one at each of two opposite corners: fiducials by their look and their places (the schematic names none)`) })),
@@ -145,7 +145,7 @@ const PICOW_LAYOUT: Place[] = [
   { part: () => chip('DFN-8-2x3', 'Winbond W25Q16JV 2 MB QSPI flash'), at: [16.8, 7.2], name: 'flash', how: DSW('flash memory (Winbond W25Q16JV)') + '; in the Pico\'s USON-8 2 × 3 by its size; ' + PHW('its body x 15.75 to 17.9, z 5.5 to 8.9, four pads along each of its short sides') },
   { part: () => chip('SOD-123F', 'Schottky diode, VBUS to VSYS (D1)', '', 'diode-smd'), at: [6.6, 16.6], name: 'Schottky diode (D1)', how: DSW('VBUS is fed through a Schottky diode (D1)') + '; ' + PHW('its body x 5.38 to 7.88, z 15.75 to 17.4') },
   { part: () => chip('SOT-523', 'small three-lead part (a SOT-523 by its size; the datasheet\'s words do not name it)', '', 'sot-package'), at: [18.05, 17.1], dir: 270, name: 'three-lead part', how: PHW('its body x 17.5 to 18.6, z 16.25 to 17.9') },
-  { part: () => inductor(2.5, 2.2, 1.0, '', 0x69646b), at: [10.75, 16.7], name: 'power inductor', how: PHW('its grey body x 9.38 to 12.13, z 15.5 to 17.9, as the Pico\'s') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
+  { part: () => inductor(2.5, 2.2, 1.0, '', 0x666666), at: [10.75, 16.7], name: 'power inductor', how: PHW('its grey body x 9.38 to 12.13, z 15.5 to 17.9, as the Pico\'s') + '; 1.0 mm tall, typical of a 2520 moulded inductor' },
   { part: () => crystalSmd({ lid: [2.6, 1.95], lidHue: 0xc8b6b1, src: DSW('a crystal') + '; 3.2 × 2.5 mm by its size (the Pico\'s ABM8\'s)' }), at: [30.35, 5.9], dir: 90, name: 'crystal', how: PHW('its gold-rimmed body x 29.1 to 31.6, z 4.3 to 7.5') },
   { part: () => tactTop({ L: 4.27, W: 3.37, H: 1.9, plunger: [3.15, 2.23], src: PHW('the Pico\'s BOOTSEL switch by its look and size') }), at: [11.8, 7.2], name: 'BOOTSEL button', how: PHW('its body x 9.5 to 14.1, z 5.6 to 8.75') },
   { part: () => chipLed(1.6, 0.8, 0.6, { name: 'user LED (green)', item: 'led-chip-green', die: 'led-die-ingan', color: 0xe6ccb2 }), at: [4.7, 5.0], dir: 90, name: 'user LED (WL_GPIO0)', how: DSW('its LED driven from the CYW43439\'s WL_GPIO0') + '; ' + PHW('its pale body x 4.25 to 5.1, z 4.0 to 6.0, an 0603 by its size') },
@@ -404,9 +404,16 @@ function pcb(b: BoardDef): Comp {
     return flat(pts, [], [h.x - b.L / 2, y + 0.0175, b.W / 2 - h.z]); };
   const wall = (q: (typeof castles)[number]): Solid => { const rc = q.h.castle / 2, o = bite(q.c, q.n, q.d, rc), i = bite(q.c, q.n, q.d, rc - 0.025).reverse();
     return { role: 'pad', shape: { prism: { pts: [...o, ...i], L: t + 0.08 } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', ...gold }; };
+  // (its inner copper pulled back from the board's edge, as board houses ask (0.25 mm or more; 0.4 here, typical, and
+  // clear of its castellations' bites), so none shows at the cut edge: an outline inset so far, its corners round the
+  // board's own corners' middles, its holes those wholly inside it)
+  const e = Math.max(0.4, ...castles.map((q) => q.h.castle / 2 + 0.15)), m = Math.max(r, e), ri = m - e;
+  const ia = (cx: number, cz: number, a0: number): [number, number][] => Array.from({ length: ri > 0 ? 7 : 1 }, (_, i) => { const a = a0 + (i / 6) * (Math.PI / 2); return [cx + ri * Math.cos(a), cz + ri * Math.sin(a)]; });
+  const inner: [number, number][] = [...ia(b.L / 2 - m, -b.W / 2 + m, -Math.PI / 2), ...ia(b.L / 2 - m, b.W / 2 - m, 0), ...ia(-b.L / 2 + m, b.W / 2 - m, Math.PI / 2), ...ia(-b.L / 2 + m, -b.W / 2 + m, Math.PI)];
+  const innerHoles = bores.filter((h) => Math.abs(h.x) + h.r < b.L / 2 - e - 0.05 && Math.abs(h.z) + h.r < b.W / 2 - e - 0.05).map((h) => circ(h.x, h.z, h.r));
   return { name: 'circuit board', item: 'pcb-bare', at: [0, 0, 0], solids: [
     layer('core', t - cu, -t / 2, 'fr4', { color: 0xc4a86a }),
-    layer('frame', cu, -t / 2, 'copper', { inBody: 0 }),
+    { role: 'frame', shape: { prism: { pts: inner, L: cu, holes: innerHoles } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', inBody: 0 },
     layer('film', 0.02, 0.01, '', { color: mask }), layer('film', 0.02, -t - 0.01, '', { color: mask }),
     ...all.flatMap((h) => [...(h.pad > h.d ? [ring(h, 0.005), ring(h, -t - 0.04)] : []), barrel(h)]),
     ...castles.flatMap((q) => [lip(q, 0.005), lip(q, -t - 0.04), wall(q)]),
