@@ -72,6 +72,8 @@ import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
 import '../creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
+import { boardOfInvention, sayInvention, type Invention } from '../invent';
+import { routeMake } from '../route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
@@ -1837,6 +1839,12 @@ let lastMade: MadeThing | null = null;
 let kitThings: KitThing[] = [];
 const fmtKg = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 1e4 ? 0 : 1)} t` : m >= 1 ? `${m.toFixed(m >= 10 ? 0 : 1)} kg` : `${(m * 1000).toFixed(0)} g`);
 /** Made by a kit, as many as asked, side by side in front of you (a scene laid out from where you stand). */
+/** An invention said, and laid out on a board: what it starts from, each effect and gear train, what it gives. */
+function showInvention(v: Invention): string {
+  const b = boardOfInvention(v); let on = '';
+  if (b && boards) { const id = `invent-${v.asked.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)}`; boards.put(id, b); summonTo('boards'); boards.openBoard(id); on = ` It is on the board "${b.title}": each stage, the power along each link, and the parts that make it.`; }
+  return `${sayInvention(v)}${on}`;
+}
 function makeKits(words: string, n = 1, seed0 = Date.now()): string | null {
   const k = kitFor(words); if (!k) return null;
   const { at: you, f, side } = facingYou(), yaw = Math.atan2(-f.x, -f.z), lays = (!!k.uses && k.choices.length === 1) || k.id === 'road', out: string[] = []; let x = 0;
@@ -2394,16 +2402,6 @@ async function readSaid(text: string): Promise<Parsed> {
 }
 /** Its questions first: kept, and the next thing said is read as their answer. */
 function askFirst(p: Parsed): string { pendingDirective = { parsed: p, answers: [...(pendingDirective?.answers ?? [])] }; return p.questions.join(' '); }
-/** The inventory's own thing the words name: by its whole name (a kettle, a 3D printer), else the name it ends on (a
- *  drill: the cordless drill), never a word inside another's name (a car is not a carabiner). */
-function namedInInventory(words: string): Item | null {
-  const w = words.trim().toLowerCase().replace(/\s+/g, ' '), forms = [...new Set([w, w.replace(/(?<=[^s])s$/, ''), w.replace(/es$/, '')])], ok = (i: Item) => i.kind !== 'material' && i.kind !== 'element';
-  for (const f of forms) { const byId = INVENTORY.get(f.replace(/ /g, '-')); if (byId && ok(byId)) return byId; }
-  const base = (i: Item) => i.name.toLowerCase().replace(/\s*\(.*\)\s*$/, '').replace(/,.*$/, '');
-  const all = [...INVENTORY.values()].filter(ok);
-  // its whole name, else the name it ends on (a drill: the cordless drill), products first
-  return all.find((i) => forms.includes(base(i))) ?? all.filter((i) => forms.some((f) => base(i).endsWith(` ${f}`))).sort((a, b) => (a.kind === 'product' ? 0 : 1) - (b.kind === 'product' ? 0 : 1))[0] ?? null;
-}
 /** A directive carried out: what it made, brought in or took away, said back. */
 async function perform(p: Parsed): Promise<string> {
   const d = p.directive;
@@ -2414,17 +2412,14 @@ async function perform(p: Parsed): Promise<string> {
     // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
     // a ride or a track to ride on is a place built round you: you are put on it
     if (/\b(roller ?coasters?|rollercoasters?|go[- ]?kart tracks?|kart tracks?|race ?tracks?|theme park|amusement park)\b/i.test(d.what)) return placeWords(d.words);
-    const words = `${d.n > 1 ? `${d.n} different ` : 'a '}${d.what}`, c = conceive(words);
-    // a need said with its numbers (a cart that carries 150 kg) is designed; a thing named plainly (a red sports car, a
-    // queen bed, an oak) a kit makes, where one does
-    const needs = /\d+(?:\.\d+)?\s*(?:kg|t|tonnes?|m²|m2|m|km|km\/h|m\/s|°c|l|litres?|liters?|w|kw|kwh|people|persons?|bikes|kids|mm)\b/i.test(d.what);
-    if (c.wants.length && (needs || !kitFor(d.what))) return conceiveAndMake(words, d.n);
-    { const said = makeKits(d.what, d.n); if (said) return said; }
-    if (c.wants.length) return conceiveAndMake(words, d.n);
-    // a place asked to be made ("a haunted mansion", "a cozy cabin in a snowstorm"): you are taken there
-    { const w = d.what.toLowerCase(); if (PLACES.some((x) => { const m = x.words.exec(w); return m && m.index <= 16; })) return placeWords(d.words); }
-    const inv = namedInInventory(d.what);
-    if (inv) { invLast = inv.id; return `${see3d(inv.id)} It is the inventory's own ${inv.name}, every part inside it down to its materials. Say "remove it" to put it away.`; }
+    // where it goes is decided from the ask itself (src/nexus/route.ts): designed, invented, a kit, a place, or the
+    // inventory's own; and what of the ask was not done is said beside what was made
+    const r = routeMake(d.what, d.n), words = r.words;
+    if (r.by === 'design') return conceiveAndMake(words, d.n);
+    if (r.by === 'invent') return showInvention(r.invention!);
+    if (r.by === 'kit') { const said = makeKits(r.head, d.n); if (said) return `${said}${r.notDone}`; }
+    if (r.by === 'place') return placeWords(d.words);
+    if (r.by === 'inventory') { invLast = r.item!.id; return `${see3d(r.item!.id)} It is the inventory's own ${r.item!.name}, every part inside it down to its materials. Say "remove it" to put it away.${r.notDone}`; }
     const near = [...INVENTORY.values()].filter((i) => i.kind === 'product' && d.what.toLowerCase().split(/\s+/).some((x) => x.length > 3 && i.name.toLowerCase().includes(x))).slice(0, 4).map((i) => i.name);
     return `I can't make "${d.what}" yet: I design what a thing must do (hold a weight up, carry a load, turn, swing open, slide, hold a liquid, enclose a space, keep warm, lift itself, float), and the inventory has no ${d.what}. Say what it must do${near.length ? `, or ask for ${near.join(', ')}` : ''}${brain?.mode === 'claude' ? '' : ' (where Claude can be asked, Claude reads anything into what it must do)'}.`;
   }
@@ -3844,6 +3839,7 @@ async function boot() {
     storeBuild: () => storeBuild(), fetchBuild: (i = 0) => fetchBuild(kept[i]?.id ?? ''), goPlace: (p2: 'warehouse' | 'table' | 'workshop') => goPlace(p2),
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
+    forgeSend: (t: string) => { send(t); return true; },
     cellSay: (t: string) => cellWords(t), devicesNow: () => devices.list.map((d) => ({ id: d.id, x: +d.x.toFixed(2), z: +d.z.toFixed(2), h: +d.h.toFixed(2), doing: d.doing, read: d.read })), buildOnBoard: (id: string) => buildOnBoard(RECIPES.find((r) => r.id === id)!, true), cellNow: () => ({ ...cell.facts(), jobs: cell.jobs.map((j) => `${j.name}: ${j.stage}`), beads: cell.printer.beads.length, rail: cell.arms.rail.doing, bench: cell.arms.bench.doing, speed: cell.speed }), cellSpeed: (x: number) => { cell.speed = x; },
     holoOut: (app: string) => { eyeOf(eye); const f = new THREE.Vector3(); camera.getWorldDirection(f); return holos.spawn(app, eye.clone().addScaledVector(f, 1.1).add(new THREE.Vector3(0.35, -0.1, 0)), eye); },
     holoPress: (act: string, arg?: string | number) => { const id = holos.ids().at(-1); return id ? (phone.act(act, arg, undefined, undefined, phone.holoSurface(id.split(':')[1]!) ?? undefined), true) : false; }, phoneScreen: () => phone.screenUrl(), pipeNow: () => ({ ask: phone.pipeAsk, busy: phone.pipeBusy, run: phone.pipeRun, said: phone.pipeSaid }),

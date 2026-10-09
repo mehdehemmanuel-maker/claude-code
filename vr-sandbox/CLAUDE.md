@@ -64,6 +64,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Concern | Owner |
 | --- | --- |
 | Words to wants, figures, questions; designs from laws | `src/nexus/conceive.ts` |
+| Where a make ask goes (designed, invented, a kit by the thing's own name, a place, the inventory's own) and what of it was not done, said beside what was made | `src/nexus/route.ts` (`routeMake`; the forge's `perform` carries it out) |
+| Inventing what turns one thing into another (waves into drinking water, a weight's fall into light, a flame into cold): a chain of real effects whose ports mate (power as effort × flow, a bond graph's rule; shafts of one kind but not one speed matched by as many gear stages as the ratio needs), sized by conservation from its source, under the floor of the laws, each effect made of inventory parts or said as a gap; on a board as steps | `src/nexus/invent.ts` (`invent`, `boardOfInvention`) |
 | Generated structure for any intent; its body in space | `src/nexus/generate.ts`, `src/nexus/realize-space.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/inventory.ts` (about 1,500 items) |
@@ -151,7 +153,7 @@ Known gaps (from the 2026-10-08 audit, still open):
   of their own. Still
   drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
   each is next to become a component, smallest and commonest first;
-- the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
+- the forge routes a make ask by `route.ts` (2026-10-09: a kit found by the thing's own name, never by a word in what it does, which had made nine sunflowers of "a drone that plants trees"; what it does that was not done, said); `embodyAny` is still apart from it;
 - the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
 - planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
   architectures: add them as data on general builders, as the wheeled ones are).

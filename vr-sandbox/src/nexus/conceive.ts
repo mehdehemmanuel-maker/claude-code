@@ -120,6 +120,8 @@ function readVerb(v: string, obj: string, all: string): VerbRead {
   if (/^(stay|remain)/.test(w) && /\d|\b(under|below|above|over|within|cool|cooler|warm|warmer|dry|level|stable)\b/.test(o)) return { context: true };
   // "rides in a pickup bed": carried in a vehicle, which is not made
   if (/^rides?$/.test(w) && /^\s*(in|on)\s+(?:\S+\s+){0,3}(beds?|trucks?|trailers?|vans?|boots?|trunks?|pickups?|vehicles?|cars?|racks?)\b/.test(o)) return { note: 'carried in a vehicle: what it rides in is not made, and its size against it is not checked' };
+  // "pulls water out of the air", "draws power from the sun": taking one thing out of another, a conversion, not a load moved
+  if (/^(pull|draw|extract|harvest|collect|take|get|make|produce|pump)s?$/.test(w) && /\b(out of|from)\s+(the\s+)?(air|sea|ocean|atmosphere|fog|mist|sun|sunlight|wind|waves?|ground|earth|heat|river)\b/.test(o)) return { note: 'taking one thing out of another (water out of the air, power from the sun): a conversion of energy or matter is not something kept' };
   if (/^(roll|drive|move|travel|deliver|ride|wheel|cruise|tow|haul|drag|push|pull)/.test(w)) return /^(push|pull|tow|haul|drag)/.test(w) && !/\b(on wheels|along|across)\b/.test(o) ? { load: true, fn: 'move' } : { fn: 'move' };
   if (/^(spin|rotat|revolv)/.test(w)) return { fn: 'turn' };
   if (/^turn/.test(w)) return /\binto\b/.test(o) ? { note: 'turning one thing into another (a conversion of energy or matter) is not something kept' } : { fn: 'turn' };

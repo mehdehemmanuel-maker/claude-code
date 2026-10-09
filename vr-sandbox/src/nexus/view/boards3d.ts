@@ -138,7 +138,7 @@ export class Boards3D {
     let last: string | null = null; try { last = localStorage.getItem('nexus-boards:open'); } catch { /* fine */ }
     this.id = last && this.store.boards.has(last) ? last : [...this.store.boards.entries()].sort((a, b) => (b[1].updatedAt ?? 0) - (a[1].updatedAt ?? 0))[0]?.[0] ?? null;
   }
-  private open(id: string | null): void { this.id = id; this.sel = null; this.page = 0; this.find = ''; this.log = false; this.callGroup = null; { const nb = id ? this.store.boards.get(id) : undefined; if (nb && triggersOf(nb).length) this.view = 'pipeline'; } try { if (id) localStorage.setItem('nexus-boards:open', id); } catch { /* fine */ } this.refresh(); }
+  private open(id: string | null): void { this.id = id; this.sel = null; this.page = 0; this.find = ''; this.log = false; this.callGroup = null; { const nb = id ? this.store.boards.get(id) : undefined; if (nb && (triggersOf(nb).length || nb.kind === 'chain')) this.view = 'pipeline'; } try { if (id) localStorage.setItem('nexus-boards:open', id); } catch { /* fine */ } this.refresh(); }
   refresh(): void {
     this.pick();
     const b = this.board();
