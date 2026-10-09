@@ -27,7 +27,7 @@ import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 import { boardComps, boardDef, screwFor, type Comp } from './sbc';
-import { breadboard, chp170, pinecilV2 } from './kit-solder';
+import { breadboard, chp170, hakko599B, pinecilV2, solderReel, standS11 } from './kit-solder';
 import { LINK } from './meca';
 
 const PI = Math.PI, mm = 1e-3;
@@ -293,6 +293,9 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   solderiron: { says: 'an iron as its maker makes it (src/nexus/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/kit-solder.ts): two forged halves, their rivet, grips, spring and safety clip', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (_p, it) => kitParts(chp170(), it.name) },
   breadboard: { says: 'a breadboard as BusBoard makes it (src/nexus/kit-solder.ts): its moulded body with every hole and the walls between its clips\' slots, a phosphor-bronze clip under each column of five and each rail, its backing, its legend', leaves: 'its clips\' fingers as one strip each (their slits taken as 72 % of the strip); the walls\' and clips\' sizes estimates', make: (p, it) => kitParts(breadboard(Number(p.points)), it.name) },
+  ironstand: { says: 'a stand as its maker makes it (src/nexus/kit-solder.ts): its sheet base and rim, its two rings on their uprights, its sponge and feet', leaves: 'which of its drawing\'s figures is which read by their sizes (an estimate), its welds not drawn', make: (_p, it) => kitParts(standS11(), it.name) },
+  tipcleaner: { says: 'a tip cleaner as Hakko makes it (src/nexus/kit-solder.ts): its holder\'s base and top, its brass wool', leaves: 'its holder\'s shape between Hakko\'s two figures an estimate, its wool one ball', make: (_p, it) => kitParts(hakko599B(), it.name) },
+  solderreel: { says: 'a reel of solder (src/nexus/kit-solder.ts): its spool and its wire wound on it', leaves: 'its spool\'s size an estimate; its wire as one wound body, its rosin core inside it not drawn apart', make: (_p, it) => kitParts(solderReel(), it.name) },
   sbc: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
   pico: { says: SBC_SAYS, leaves: SBC_LEAVES, make: (p, it) => boardParts(String(p.board), it.name), ports: (p) => [boardHoles(String(p.board))] },
   robotarm: {
@@ -366,7 +369,7 @@ function boardParts(id: string, nm: string): Part[] {
 }
 /** A thing drawn from its parts as a board's are (src/nexus/sbc.ts's Comp): each part under its item, its pieces under
  *  it, placed and turned. */
-function compPart(c: Comp, nm: string): Part {
+export function compPart(c: Comp, nm: string): Part {
   const own = c.solids ? solidMasses(c.solids).map((m) => solidPart(m, `${nm} ${c.name}`, undefined)) : [], kids = (c.kids ?? []).map((k) => compPart(k, nm));
   const rot = c.turn || c.under ? ([c.under ? PI : 0, c.turn ?? 0, 0] as V3) : undefined, at: V3 = [c.at[0] * mm, c.at[1] * mm, c.at[2] * mm];
   return group(`${nm} ${c.name}`, c.item ?? '', [...own, ...kids], { at, ...(rot ? { rot } : {}) });

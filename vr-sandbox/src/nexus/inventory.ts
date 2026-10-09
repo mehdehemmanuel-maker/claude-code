@@ -428,6 +428,13 @@ e('tip-heater', 'tip heater', 'Hardware/Hand tools/Soldering', 'part', 'sinter',
 e('tip-core', 'tip point', 'Hardware/Hand tools/Soldering', 'part', 'machine', 'copper iron-plating', 'the copper point that carries the heat to the joint, plated with iron so solder wets it without dissolving it', '', { size: [6.4, 4.2, 4.2] });
 e('spring-leaf', 'leaf spring', 'Mechanical/Springs/Leaf', 'part', 'stamp', 'steel-spring', 'a strip of spring steel bent to push two parts apart', '', { size: [22, 5.6, 0.35] });
 e('cutter-clip', 'safety clip', 'Tools/Hand tools/Plier parts', 'part', 'mould', 'pom', 'a moulded clip on a cutter\'s jaw that holds a cut lead so it does not fly (Hakko\'s -A)', '', { size: [7, 6, 2.6] });
+e('stand-base', 'iron stand base', 'Hardware/Hand tools/Soldering', 'part', 'stamp', 'steel-low zinc', 'a soldering-iron stand\'s base: a cold-rolled sheet stamped with its rim folded up, zinc-plated', 'Atten S-11: 168.3 × 74.9 mm (its drawing)', { size: [168.3, 8, 74.9] });
+e('stand-ring', 'iron stand ring', 'Hardware/Hand tools/Soldering', 'part', 'stamp', 'steel-low zinc', 'a sheet ring on its upright that an iron lies in', 'Atten S-11: 19 and 31.8 mm inside (its drawing)', { size: [10, 115, 34] });
+e('stand-foot', 'rubber foot', 'Hardware/Hand tools/Soldering', 'part', 'mould', 'rubber', 'a moulded rubber foot that keeps a stand from sliding', '', { size: [13.2, 2, 13.2] });
+e('tip-sponge', 'tip sponge', 'Hardware/Hand tools/Soldering', 'part', 'mould', 'paper', 'a cellulose sponge, used damp to wipe a hot tip', '60 × 60 mm (Adafruit\'s replacements)', { size: [60, 10, 60] });
+e('cleaner-holder', 'tip cleaner holder', 'Hardware/Hand tools/Soldering', 'part', 'cast', 'zamak', 'the die-cast cup and its top that hold a tip cleaner\'s brass wool', 'Hakko 599B: 70 × 71 mm (Hakko)', { size: [70, 71, 70] });
+e('brass-wool', 'brass wool', 'Hardware/Hand tools/Soldering', 'part', 'draw', 'brass', 'brass wire wound in a loose ball: a hot tip pushed through it is wiped of old solder and flux without cooling it', 'Hakko 599B-02: 9 g', { g: 9, size: [50, 50, 50] });
+e('solder-spool', 'solder spool', 'Electrical/Soldering/Solder parts', 'part', 'mould', 'pp', 'the moulded spool solder wire is wound on', '', { size: [38, 38, 22.4] });
 e('soldering-iron', 'soldering iron', 'Hardware/Hand tools/Soldering', 'product', 'assemble', 'heater-cartridge copper iron-plating driver-handle wire-hookup*3 thermistor-ntc', 'a heater in a copper tip plated with iron, its temperature read by a sensor, in an insulated handle');
 e('iron-plating', 'iron-plated tip', 'Hardware/Hand tools/Soldering', 'part', 'coat', 'steel-low', 'the iron plating that keeps solder from eating a copper tip');
 

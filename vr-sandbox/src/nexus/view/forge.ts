@@ -76,6 +76,8 @@ import { boardOfInvention, sayInvention, type Invention } from '../invent';
 import { routeMake } from '../route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
+import { SolderBench } from './solder-bench';
+import { STEPS as SOLDER_STEPS } from '../solder-lesson';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -2277,6 +2279,29 @@ function coasterWords(text: string): string | null {
   return null;
 }
 window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement).tagName; if (!coaster?.seated || e.key !== ' ' || tag === 'INPUT' || tag === 'TEXTAREA') return; e.preventDefault(); e.stopImmediatePropagation(); if (coaster.ride.phase === 'waiting') say(sendTrain(), undefined, 'nexus'); }, true);
+// ---- the soldering bench (src/nexus/view/solder-bench.ts, src/nexus/solder-lesson.ts): the Pico's headers soldered by
+// your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
+// put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
+let bench: SolderBench | null = null;
+function startBench(): string {
+  if (bench) { bench.reset(); return `The bench is set out again. ${SOLDER_STEPS[0]!.do}`; }
+  bench = new SolderBench(); scene.add(bench.group); named(bench.group, 'the soldering bench');
+  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+  // (its top at a standing bench's height under your eyes, 42 cm before you, its near side toward you)
+  const at = eye.clone().addScaledVector(f, 0.42); at.y = Math.max(0.75, eye.y - 0.6); bench.place(at, Math.atan2(-f.x, -f.z), 0);
+  if (!renderer.xr.isPresenting) { camera.position.copy(at).add(new THREE.Vector3(0, 0.32, 0).addScaledVector(f, -0.3)); orbit.target.copy(at).addScaledVector(f, 0.02); orbit.update(); }
+  const hands = renderer.xr.isPresenting ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
+  return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${SOLDER_STEPS[0]!.do}`;
+}
+function benchWords(text: string): string | null {
+  const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
+  if (!bench) return null;
+  if (/^(close|end|stop|put away) (the )?(soldering )?(bench|lesson)/.test(t)) { bench.dispose(); bench = null; return 'The bench put away.'; }
+  if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the iron)\b/.test(t)) return bench.act(t);
+  if (/^(what now|what next|next step|which step|where am i)\b/.test(t)) { const n = bench.now(); return `Step ${n.step} of ${n.of}: ${n.do}`; }
+  return null;
+}
 // ---- table tennis against a robot (src/nexus/pingpong.ts): in a headset your bat is in your right hand and hits by its
 // own motion; on a screen the bat follows the ball and you swing it (space or a click) and aim it (the mouse, left to
 // right); the robot plays the other end ----
@@ -2503,6 +2528,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = packWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3719,6 +3745,8 @@ for (let i = 0; i < 2; i++) {
   ctl.addEventListener('selectend', () => dartLetGo(i));
   ctl.addEventListener('selectstart', () => {
     if (karting?.seated || coaster?.seated) return; // in the kart the triggers are its throttle and brake; on the coaster, its go
+    // (the trigger of the hand holding the solder pulls more wire off the reel)
+    if (bench && bench.holding(handOf[i] === 'left' ? 'left' : 'right') === 'solder') { bench.feedMore(); return; }
     if (dartGrab(i)) return;
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
@@ -3744,6 +3772,8 @@ for (let i = 0; i < 2; i++) {
   // the grip on the right hand holds: a node on the board to move it, the board's sheet to slide it, a window (its bar,
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
   ctl.addEventListener('squeezestart', () => {
+    // a thing of the soldering bench within reach of either hand is taken by it
+    if (bench) { const said = bench.grab(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i), ctl); if (said) { say(said, undefined, 'nexus'); return; } }
     // a person within reach of either hand is held by it
     { const said = gripPerson(i); if (said) { say(said, undefined, 'nexus'); return; } }
     if (handOf[i] !== 'right') { togglePause(); return; }
@@ -3756,6 +3786,7 @@ for (let i = 0; i < 2; i++) {
     if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
     if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
   });
+  ctl.addEventListener('squeezeend', () => { if (bench) { const said = bench.release(handOf[i] === 'left' ? 'left' : 'right'); if (said) say(said, undefined, 'nexus'); } });
   ctl.addEventListener('squeezeend', () => { ungripPerson(i); if (gripHeld3d === i) { apart3d.release(); gripHeld3d = -1; } });
   ctl.addEventListener('squeezeend', () => { if (boardHand === i && boardBy === 'squeeze') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'squeeze') { winHand = -1; windows.release(); } });
 }
@@ -3859,7 +3890,7 @@ async function boot() {
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else if (!coaster?.seated) orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });
@@ -3936,6 +3967,18 @@ async function boot() {
     letGoPerson: (id: number) => peopleWorld?.letGo(id),
     restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
+    benchStart: () => startBench(), benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
+    benchPoint: (what: string) => (bench ? bench.point(what as Parameters<SolderBench['point']>[0]) : null),
+    // (an emulated headset's hands, for a test: a controller put so its grip is at a point in the room, level and facing
+    // ahead; its grip or trigger pressed or let go)
+    xrGripTo: async (hand: 'left' | 'right', x: number, y: number, z: number) => {
+      const dev = (window as unknown as { xrDevice?: { controllers: Record<string, { position: THREE.Vector3; quaternion: THREE.Quaternion }> } }).xrDevice, i = handOf.indexOf(hand); if (!dev || i < 0) return null;
+      const c = dev.controllers[hand]!, want = new THREE.Vector3(x, y, z), grip = renderer.xr.getControllerGrip(i); c.quaternion.set(0, 0, 0, 1);
+      for (let k = 0; k < 4; k++) { const f0 = frames; while (frames < f0 + 2) await new Promise((r) => setTimeout(r, 15)); const g = grip.getWorldPosition(new THREE.Vector3()); c.position.set(c.position.x + want.x - g.x, c.position.y + want.y - g.y, c.position.z + want.z - g.z); }
+      const f1 = frames; while (frames < f1 + 2) await new Promise((r) => setTimeout(r, 15)); return grip.getWorldPosition(new THREE.Vector3()).toArray();
+    },
+    xrPress: (hand: 'left' | 'right', button: 'squeeze' | 'trigger', value: number) => { const dev = (window as unknown as { xrDevice?: { controllers: Record<string, { updateButtonValue: (id: string, v: number) => void }> } }).xrDevice; dev?.controllers[hand]?.updateButtonValue(button, value); return !!dev; }, benchNow: () => (bench ? bench.now() : null), benchWorld: (x: number, y: number, z: number) => (bench ? bench.world([x, y, z]) : null),
+    benchLook: (x: number, y: number, z: number, d = 0.12) => { if (!bench) return null; const a = bench.world([x, y, z]), k = (d * 1000) / Math.hypot(0.3, 0.7, 0.8), c = bench.world([x + 0.3 * k, y + 0.7 * k, z + 0.8 * k]); camera.position.set(...c); orbit.target.set(...a); orbit.update(); return a; },
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first
   (window as unknown as { causalPoint: () => [number, number] | null }).causalPoint = () => {

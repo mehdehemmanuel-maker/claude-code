@@ -101,6 +101,22 @@ export const TOOLS: KindDef[] = [
     box: (p) => [n(p, 's') * 2.2, 6, n(p, 's') * 11 + 60], g: (p) => n(p, 's') ** 2 * 0.9 + 20,
   },
   {
+    id: 'ironstand', look: 'case', name: 'soldering iron stand', path: 'Tools/Soldering/Stands', says: 'a stand an iron lies in between uses, its tip held clear of the bench, a sponge to wipe it on', std: 'the stands drawn here: Atten\'s S-11 (Adafruit\'s 150, its drawing)',
+    axes: [bare('model', 'model', ['s-11'])], title: () => 'Atten S-11 soldering iron stand', of: () => 'stand-base stand-ring*2 tip-sponge stand-foot*4', make: 'assemble',
+    how: 'a cold-rolled sheet base stamped and zinc-plated, its two rings on uprights spot-welded to it, rubber feet under it, a sponge in its front',
+    spec: () => '170.0 × 78.3 mm, its rings 19 and 31.8 mm inside (its drawing); its weight not published: about 160 g as drawn (an estimate)', box: () => [170, 114.3, 78.3], g: () => 160,
+  },
+  {
+    id: 'tipcleaner', look: 'case', name: 'tip cleaner', path: 'Tools/Soldering/Tip cleaners', says: 'brass wool in a weighted holder: a hot tip pushed through it is wiped clean without cooling it', std: 'Hakko\'s 599B (its page)',
+    axes: [bare('model', 'model', ['599b'])], title: () => 'Hakko 599B tip cleaner', of: () => 'cleaner-holder*2 brass-wool', make: 'assemble', how: 'brass wool (its 599B-02 refill) in a die-cast holder whose top lifts off',
+    spec: () => '70 × 71 mm high (Hakko); 86 g (QSource\'s listing)', box: () => [70, 71, 70], g: () => 86,
+  },
+  {
+    id: 'solderreel', look: 'can', name: 'solder reel', path: 'Electrical/Soldering/Solder', says: 'rosin-core solder wire wound on a spool', std: 'the reels drawn here: Adafruit\'s 1886 (Atten TS-635050)',
+    axes: [bare('model', 'model', ['ts-635050'])], title: () => '50 g reel of 0.5 mm 63/37 rosin-core solder', of: () => 'solder-spool solder-wire', make: 'assemble', how: 'tin-lead wire drawn round a rosin core, wound on a moulded spool',
+    spec: () => '50 g of 0.5 mm 63/37 (since 2019; sold as 60/40), rosin core (Adafruit\'s listing); about 30 m of wire', box: () => [38, 38, 22.4], g: () => 55,
+  },
+  {
     id: 'solderiron', look: 'rod', name: 'soldering iron', path: 'Tools/Soldering/Irons', says: 'a soldering iron whose temperature its own controller holds, its tip a cartridge with its heater and sensor inside', std: 'the irons drawn here: PINE64\'s Pinecil V2 (its wiki)',
     axes: [bare('model', 'model', ['pinecil-v2'])], title: () => 'PINE64 Pinecil V2 soldering iron', of: () => 'pinecil-shell pinecil-grip pinecil-barrel pinecil-button*2 pinecil-board tip-contact*2 screw-m2*3 soldering-tip', make: 'assemble',
     how: 'its board soldered and fitted to its stainless core, the shell closed round them with three M2 screws, its grip slid on, the tip pushed into the core and held by the top front screw',

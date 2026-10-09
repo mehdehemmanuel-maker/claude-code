@@ -203,3 +203,70 @@ export function breadboard(points: number): Comp {
   const backing = piece('adhesive backing', 'adhesive-backing', [box('film', [L, back, W], [0, back / 2, 0], 'pet', { color: 0xe8e2d0 })]);
   return { name: `${points}-point breadboard`, item: `breadboard-${points}`, at: [0, 0, 0], kids: [body, ...clips, ...rails, backing] };
 }
+
+// ---- Atten's S-11 iron stand -----------------------------------------------------------------------------------------
+/** Atten's S-11 soldering-iron stand, Adafruit's 150, as its dimensional drawing gives it (cold-rolled sheet; 170.0 ×
+ *  78.3 mm over all, its base 168.3 × 74.9, a front ring 19 mm inside and a rear one 31.8, the rings' tops 95.5 and
+ *  114.3 up; which figure is which read by their sizes, the drawing's picture not to hand here: an estimate), with its
+ *  sponge (60 × 60 mm, Adafruit's replacements for it). Estimated, said so: the sheet 1.0 mm, its rim folded up 6, the
+ *  rings 10 deep, the uprights 18 wide, the rings 75 apart; the sponge 10 thick, cellulose 5 % solid; four rubber feet
+ *  13.18 across (the drawing's last figure, its use read as these) and 2 high; drawn zinc-plated, its finish not said.
+ *  Frame: along x from its back (x 0), up y, its middle z 0; the iron lies in its rings, its tip forward over the
+ *  sponge. */
+export const S11 = { L: 168.3, W: 74.9, feet: 2, t: 1.0, rear: { x: 20, top: 114.3, id: 31.8 }, front: { x: 95, top: 95.5, id: 19 } } as const;
+export function standS11(): Comp {
+  const { L, W, t, feet } = S11, rim = 6, zinc = { color: 0xb7bcc1, finish: 'plate' } as const, y0 = feet;
+  const base = piece('S-11 base', 'stand-base', [
+    box('body', [L, t, W], [L / 2, y0 + t / 2, 0], 'steel-low', zinc),
+    ...[1, -1].map((s) => box('body', [L, rim, t], [L / 2, y0 + rim / 2, s * (W / 2 - t / 2)], 'steel-low', zinc)),
+    ...[t / 2, L - t / 2].map((x) => box('body', [t, rim, W - 2 * t], [x, y0 + rim / 2, 0], 'steel-low', zinc)),
+  ]);
+  // (each ring a short tube round the iron's line on an upright from the base)
+  const ring = (nm: string, r: { x: number; top: number; id: number }): Comp => { const ri = r.id / 2, ro = ri + t, cy = y0 + r.top - ro, x0 = r.x - 5;
+    return piece(nm, 'stand-ring', [turned('body', [[ri, x0], [ro, x0], [ro, x0 + 10], [ri, x0 + 10], [ri, x0]], 'steel-low', zinc, [0, cy, 0]), box('body', [t, cy - ro - y0 - t, 18], [r.x, y0 + t + (cy - ro - y0 - t) / 2, 0], 'steel-low', zinc)]); };
+  const sponge = piece('S-11 sponge', 'tip-sponge', [box('body', [60, 10, 60], [L - 34, y0 + t + 5, 0], 'paper', { color: 0x3a6fd0, share: 0.05 })]);
+  const foot = (x: number, z: number, i: number) => piece(`S-11 foot ${i + 1}`, 'stand-foot', [post('body', 13.18 / 2, feet, [x, 0, z], 'rubber', { color: 0x1c1c1e })]);
+  return { name: 'Atten S-11 soldering iron stand', item: 'ironstand-s-11', at: [0, 0, 0], kids: [base, ring('S-11 rear ring', S11.rear), ring('S-11 front ring', S11.front), sponge, ...[[12, 28], [12, -28], [L - 12, 28], [L - 12, -28]].map(([x, z], i) => foot(x!, z!, i))] };
+}
+/** Where the Pinecil lies in the S-11, in the stand's frame (mm): its line through the rings, resting on their bottoms
+ *  (its handle 16.2 high in the rear ring, its nose 11.2 across in the front), and the point along it (the iron's own
+ *  x) that sits in the front ring. */
+export function ironInStand(): { at: V3; dir: V3; frontX: number } {
+  const y0 = S11.feet, rear: V2 = [S11.rear.x, y0 + S11.rear.top - S11.t - S11.rear.id / 2 - (S11.rear.id / 2 - 8.1)], front: V2 = [S11.front.x, y0 + S11.front.top - S11.t - S11.front.id / 2 - (S11.front.id / 2 - 5.6)];
+  const dx = front[0] - rear[0], dy = front[1] - rear[1], n = Math.hypot(dx, dy), dir: V3 = [dx / n, dy / n, 0], frontX = 100;
+  return { at: [front[0] - dir[0] * frontX, front[1] - dir[1] * frontX, 0], dir, frontX };
+}
+
+// ---- Hakko's 599B tip cleaner -----------------------------------------------------------------------------------------
+/** Hakko's 599B tip cleaner: 70 mm across and 71 high (Hakko's page), 86 g (QSource's listing: 0.19 lb), a round
+ *  holder whose top lifts off (Adafruit's photo of it apart, its brass ball inside) round its brass wool (599B-02;
+ *  9 g, ItGresa's listing). Estimated, said so: the holder die-cast zinc, its material not published, its walls 0.7 mm
+ *  (what brings the whole to its 86 g); its base 70 across rising to a cup 56 across, its top a sleeve over the cup with
+ *  an opening 32 across where the tip goes in; the wool a ball 50 across, 2 % brass by volume. Frame: on its base at
+ *  y 0, its axis y. */
+export function hakko599B(): Comp {
+  const zinc = { color: 0x8d9194, finish: 'cast' } as const, w = 0.7;
+  // (each part a shell w thick along its outline: the base's floor, skirt and cup; the top's sleeve over the cup, its
+  // shoulder and the lip of its opening)
+  const shell = (pts: V2[]): V2[] => [...pts, ...pts.slice().reverse().map(([r, y], i, a) => { const q = a[Math.min(i + 1, a.length - 1)]!, p0 = a[Math.max(i - 1, 0)]!, dr = q[0] - p0[0], dy = q[1] - p0[1], n = Math.hypot(dr, dy) || 1; return [Math.max(0, r - (dy / n) * w), y + (dr / n) * w] as V2; })];
+  const base = piece('599B holder base', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[0, 0], [35, 0], [35, 4], [30.5, 9], [28, 26]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
+  const top = piece('599B holder top', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[29.5, 22], [29.5, 52], [25, 66], [17.5, 71], [16, 71]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
+  const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: Array.from({ length: 13 }, (_, i): V2 => [25 * Math.sin((PI * i) / 12), -25 * Math.cos((PI * i) / 12)]) }, at: [0, w + 25, 0], mat: 'brass', color: 0xd4a640, finish: 'brushed', share: 0.02 }]);
+  return { name: 'Hakko 599B tip cleaner', item: 'tipcleaner-599b', at: [0, 0, 0], kids: [base, top, wool] };
+}
+
+// ---- a reel of solder ------------------------------------------------------------------------------------------------
+/** A 50 g reel of 0.5 mm rosin-core tin-lead solder, Adafruit's 1886 (Atten TS-635050: 63/37 since 2019, its listing).
+ *  Its 50 g is 5.95 cm³ of 63/37 (8.4 g/cm³: 30 m of 0.5 mm wire), its rosin 2.2 % of its weight (typical of cored
+ *  solder); its spool an estimate (a typical 50 g spool: flanges 38 across and 1.2 thick, a barrel 20 across and 20 long
+ *  round a 12 mm bore, moulded polypropylene), the wire wound on it to the diameter that holds it, packed 78 % (round
+ *  wire wound in layers, typical). Frame: its axis along z, standing on its flanges' rims (its middle 19 up). */
+export function solderReel(): Comp {
+  const R = 19, rb = 10, w = 20, f = 1.2, pack = 0.78, vol = 50 / 8.4 * 1000, Rw = Math.sqrt(rb * rb + vol / (Math.PI * w * pack));
+  const pp = { color: 0x2d6fb8 } as const, rot: [number, number, number] = [PI / 2, 0, 0];
+  const spool = piece('solder spool', 'solder-spool', [
+    ...[-1, 1].map((s): Solid => ({ role: 'body', shape: { lathe: [[6, s * (w / 2) ], [R, s * (w / 2)], [R, s * (w / 2 + f)], [6, s * (w / 2 + f)], [6, s * (w / 2)]] }, at: [0, R, 0], rot, mat: 'pp', ...pp })),
+    { role: 'body', shape: { lathe: [[6, -w / 2], [rb, -w / 2], [rb, w / 2], [6, w / 2], [6, -w / 2]] }, at: [0, R, 0], rot, mat: 'pp', ...pp }]);
+  const wire = piece('solder wire, wound', 'solder-wire', [{ role: 'body', shape: { lathe: [[rb, -w / 2], [Rw, -w / 2], [Rw, w / 2], [rb, w / 2], [rb, -w / 2]] }, at: [0, R, 0], rot, mat: 'solder-snpb', color: 0xc6cacd, finish: 'brushed', share: pack }]);
+  return { name: '50 g reel of 0.5 mm 63/37 solder', item: 'solderreel-ts-635050', at: [0, 0, 0], kids: [spool, wire] };
+}

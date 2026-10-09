@@ -135,6 +135,7 @@ export function tick(b: Bench, dt: number, tip: V3 | null, wireEnd: V3 | null): 
   for (const q of b.joints) {
     const touching = tipOn === q.pin; let feed = 0, why = '';
     // (the wire on the joint melts once the joint is past the solder's solidus; on the tip once the tip is past its liquidus)
+    if (wireOn === q.pin && q.j.T < a.solidus && !(touching && wireOnTip)) say(b, `pin ${q.pin}: the solder does not melt on a cold joint: heat its pad and pin with the tip first`);
     if (wireOn === q.pin && q.j.T >= a.solidus) { feed = melt; why = q.j.T >= a.liquidus ? 'flows onto the pad and the pin' : 'goes soft on it but does not flow: the joint is not hot enough yet'; }
     else if (touching && wireOnTip && ir.T >= a.liquidus) { feed = melt; why = q.j.T >= a.liquidus ? 'melts on the tip and runs into the joint' : 'melts on the tip and balls on the cold joint: feed the joint, not the iron'; }
     // (solder carried on the tip goes onto what it touches: into it if it is hot, as a cold ball if not)
@@ -148,7 +149,7 @@ export function tick(b: Bench, dt: number, tip: V3 | null, wireEnd: V3 | null): 
   }
   // (the wire on the hot tip with no joint under it tins the tip; what more melts beads on it)
   if (wireOnTip && !tipOn && ir.T >= a.liquidus) { const add = melt; b.wire.out = Math.max(0, b.wire.out - HAND.feedMm * dt); b.wire.used += add; ir.tinned = HAND.tinLasts; ir.load = Math.min(HAND.holds, ir.load + add * 0.3); say(b, 'the tip tinned: bright with fresh solder'); }
-  if (wireOnTip && ir.T < a.liquidus && ir.inHand) say(b, `the tip is ${Math.round(ir.T)} °C: not hot enough to melt the solder yet`);
+  if (wireOnTip && ir.T < a.liquidus && ir.inHand) say(b, `the tip is not hot enough to melt the solder yet: wait for it to reach ${ir.set} °C`);
   while (b.step < STEPS.length && STEPS[b.step]!.done(b)) { b.step++; say(b, b.step < STEPS.length ? `done. Next: ${STEPS[b.step]!.do}` : 'the lesson is done: all 40 joints good'); }
 }
 /** The pin whose joint is nearest a point, within r mm, else null. */
