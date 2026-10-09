@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { edgeRadius } from '../finish';
 import type { Part, Shape } from '../kits';
+import { massOf } from '../mass';
 import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
 import { patchAt, tessellate, type Patch } from '../surface';
 import { findItem, resolve } from '../inventory';
@@ -225,11 +226,28 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
     explode(level) {
       for (const n of nodes) n.obj.position.copy(n.home);
       if (level <= 0) return;
+      // (each part out from the middle of what holds it, along the line from that middle to its own, so a motor's bells,
+      // stack, rotor and bearings part along its axis and a bearing's balls go out round it; the pieces of one part, under
+      // its own name, stay together)
+      group.updateMatrixWorld(true); const mids = new Map<THREE.Object3D, { c: THREE.Vector3; size: number }>(), cores = new Map<THREE.Object3D, THREE.Object3D[]>(), moves: [THREE.Object3D, THREE.Vector3][] = [], q = new THREE.Quaternion(), pc = new THREE.Vector3(), cc = new THREE.Vector3();
       for (const n of nodes) {
-        if (n.depth === 0 || n.depth > level || !n.obj.parent) continue;
-        box.setFromObject(n.obj.parent); const size = box.getSize(new THREE.Vector3()).length() || 1, dir = n.home.clone(); if (dir.lengthSq() < 1e-8) dir.set(0, 1, 0);
-        n.obj.position.add(dir.normalize().multiplyScalar(size * 0.25 / n.depth));
+        const par = n.obj.parent; if (n.depth === 0 || n.depth > level || !par || n.obj.name === par.name) continue;
+        // (the middle of what holds it: its parts' middles weighed by their mass, so a motor's long light leads do not draw it aside)
+        let mid = mids.get(par); if (!mid) { const acc = new THREE.Vector3(); let w = 0; for (const k of par.children) { box.setFromObject(k); if (box.isEmpty()) continue; const sz = box.getSize(new THREE.Vector3()), kp = k.userData.part as Part | undefined, v = Math.max(1e-12, kp ? massOf(kp) || sz.x * sz.y * sz.z : sz.x * sz.y * sz.z); acc.add(box.getCenter(new THREE.Vector3()).multiplyScalar(v)); w += v; } box.setFromObject(par); mid = { c: w ? acc.divideScalar(w) : box.getCenter(new THREE.Vector3()), size: box.getSize(new THREE.Vector3()).length() || 1 }; mids.set(par, mid); }
+        pc.copy(mid.c); const size = mid.size; box.setFromObject(n.obj); if (box.isEmpty()) continue; box.getCenter(cc);
+        const dir = cc.sub(pc);
+        // (a part at the middle of what holds it, a rotor in its stator, is drawn out along the length of what is there: the
+        // heaviest there stays, the others out one way and the next the other, each further than the last)
+        if (dir.length() < 0.05 * size) { const core = cores.get(par) ?? cores.set(par, []).get(par)!; core.push(n.obj); continue; }
+        par.getWorldQuaternion(q); dir.normalize().applyQuaternion(q.invert());
+        moves.push([n.obj, dir.multiplyScalar((size * 0.6) / n.depth)]);
       }
+      for (const [par, objs] of cores) {
+        if (objs.length < 2) continue; box.makeEmpty(); for (const o of objs) box.expandByObject(o); const sz = box.getSize(new THREE.Vector3()), ax = sz.x >= sz.y && sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : sz.y >= sz.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+        par.getWorldQuaternion(q); ax.applyQuaternion(q.invert()); const kg = (o: THREE.Object3D) => massOf((o.userData.part as Part | undefined) ?? { name: '' }), order = [...objs].sort((a, b) => kg(b) - kg(a)), depth = nodes.find((x) => x.obj === order[0])?.depth ?? 1;
+        order.slice(1).forEach((o, i) => moves.push([o, ax.clone().multiplyScalar(((i % 2 ? -1 : 1) * (Math.floor(i / 2) + 1) * sz.length() * 0.6) / depth)]));
+      }
+      for (const [o, d] of moves) o.position.add(d);
     },
     dispose: () => group.traverse((x) => { (x as THREE.Mesh).geometry?.dispose(); }),
   };

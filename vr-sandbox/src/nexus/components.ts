@@ -14,14 +14,15 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { FAMILIES, callFamily } from './families';
-import { HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40 } from './families';
+import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, stepperDims } from './families';
+import { tubeLength } from './form';
 import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
 import { UPN } from './kinds/stock';
 import { WHEEL } from './kinds/fasteners';
 import { itemOf, type Item } from './inventory';
 import type { Iface, Part, Port, V3 } from './kits';
-import { massOf } from './mass';
+import { DENSITY, massOf } from './mass';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -82,14 +83,17 @@ const port = (name: string, sex: Port['sex'], thread: string, pattern: [number, 
 const sq = (side: number): [number, number][] => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [(x! * side) / 2, (y! * side) / 2] as [number, number]);
 const DESIGNS: Record<string, { says: string; leaves: string; make: Design; iface?: (p: Record<string, string | number>) => Iface[]; ports?: (p: Record<string, string | number>) => Port[] }> = {
   stepper: {
-    says: 'a hybrid stepper: its die-cast front and rear end bells, the laminated stator stack between them, its pilot boss and shaft; its face tapped on the NEMA square (NEMA ICS 16)', leaves: 'its rotor, windings and bearings inside not drawn (their mass in the stack\'s); its wires\' connector not drawn',
-    make: (p, it) => { const n = String(p.nema), F = NEMA[n]!, f = NEMA_FACE[n]!, L = Number(p.length), bell = Math.min(10, 0.2 * L), c = 0.1 * F, oct: [number, number][] = [[-F / 2 + c, -F / 2], [F / 2 - c, -F / 2], [F / 2, -F / 2 + c], [F / 2, F / 2 - c], [F / 2 - c, F / 2], [-F / 2 + c, F / 2], [-F / 2, F / 2 - c], [-F / 2, -F / 2 + c]];
-      const at = (y: number): V3 => [0, y * mm, 0], al = { mat: 'al-a380', color: 0x2a2b2e, finish: 'cast' };
-      return [P(`${it.name} front end bell`, section(oct, [], bell), { ...al, rot: ALONG_Y, at: at(-bell / 2), fixed: 'clamped to its stator by four long screws through it from the rear bell (not drawn)' }), P(`${it.name} stator`, section(oct.map(([x, y]) => [x * 0.985, y * 0.985] as [number, number]), [], L - 2 * bell), { mat: 'steel-low', color: 0x6a6e72, finish: 'texture', rot: ALONG_Y, at: at(-L / 2), fill: 0.62, fixed: 'clamped between its end bells', passes: [`${it.name} shaft`] }),
-        P(`${it.name} rear end bell`, section(oct, [], bell), { ...al, rot: ALONG_Y, at: at(-L + bell / 2), fixed: 'clamped to its stator by four long screws through it into the front bell (not drawn)' }), P(`${it.name} front end bell`, lathe([[f.shaft / 2 + 1, 0], [f.pilot / 2, 0], [f.pilot / 2, f.boss], [f.shaft / 2 + 1, f.boss], [f.shaft / 2 + 1, 0]]), al),
-        P(`${it.name} shaft`, lathe([[0, -L + bell], [f.shaft / 2, -L + bell], [f.shaft / 2, f.out], [0, f.out]]), { mat: 'steel-alloy', color: 0xb9bdc1, finish: 'brushed', link: `${it.name} rotor`, joint: 'bearing', fixed: 'its rotor\'s shaft, turning in the end bells\' bearings (not drawn)' })]; },
+    says: 'a hybrid stepper (its face NEMA ICS 16): its die-cast end bells, each with a cavity for its coils\' ends and a hub round its bearing\'s pocket; its stator, a stack of laminations of eight poles of six teeth, a coil wound on each pole; its rotor, two laminated cups of fifty teeth half a tooth apart either side of an axially magnetised neodymium ring, on its shaft; a ball bearing in each bell; four tie screws from the rear clamping bells and stack; its four leads out of the rear bell to a JST XH plug',
+    leaves: 'its proportions typical of makers\' drawings, not one maker\'s (the rotor 0.52 of the frame across, the air gap 0.05 mm, the coils\' copper 0.6 of their section, the leads 300 mm); its coils\' joins into two phases and to the leads, its shaft\'s flat, its bells\' ribs and its leads\' grommet not drawn',
+    make: (p, it) => stepperParts(p, it.name),
     iface: (p) => [{ kind: 'shaft', role: 'provides', d: NEMA_FACE[String(p.nema)]!.shaft * mm }],
-    ports: (p) => { const f = NEMA_FACE[String(p.nema)]!; return [port('front face', f.through ? 'holes' : 'threads', f.thread, sq(f.holes * mm), [0, 0, 0], [0, 1, 0], [1, 0, 0], f.through ? 0.008 : 0.0045, { pilot: f.pilot * mm, std: `NEMA ${p.nema}` })]; },
+    ports: (p) => { const f = NEMA_FACE[String(p.nema)]!, d = stepperDims(p); return [port('front face', f.through ? 'holes' : 'threads', f.thread, sq(f.holes * mm), [0, 0, 0], [0, 1, 0], [1, 0, 0], f.through ? d.tf * mm : 0.0045, { pilot: f.pilot * mm, std: `NEMA ${p.nema}` })]; },
+  },
+  bearing: {
+    says: 'a deep-groove ball bearing (ISO 15): its outer and inner rings, each with its raceway ground into a groove 0.52 of a ball across (a typical conformity), its balls on the pitch circle between them, the two pressed halves of its cage riveted between the balls, and its shields (ZZ, pressed steel) or seals (2RS, rubber) set in recesses in its outer ring',
+    leaves: 'its balls about 0.3 of its rings\' section across and counted by the Conrad rule (typical, within one of makers\' counts); its cage\'s halves drawn flat beside the balls, not wrapped round them; its grease not drawn',
+    make: (p, it) => bearingParts(p, it.name),
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: BEARINGS[String(p.number)]![0] * mm }],
   },
   motorplate: {
     says: 'a NEMA motor plate: its clearance holes (ISO 273 medium) and pilot bore cut', leaves: 'its edges drawn square',
@@ -236,8 +240,144 @@ function tslot(cell: number, n: number): [number, number][] {
   return out;
 }
 
+// ---- the designs made of parts within parts ----------------------------------------------------------------------------
+/** A point on a circle, mm, by its angle from x toward z: as world x and z. */
+const polar = (r: number, a: number): [number, number] => [r * Math.cos(a), r * Math.sin(a)];
+/** World x, z (mm) as a section's x, y: a section drawn along z and turned by ALONG_Y lies with its y along world -z. */
+const S = (pts: [number, number][]): [number, number][] => pts.map(([x, z]) => [x, -z] as [number, number]);
+/** A square of side F with its corners cut c back each way (a NEMA frame's outline), world x, z. */
+const octagon = (F: number, c: number): [number, number][] => { const h = F / 2; return [[h, -h + c], [h, h - c], [h - c, h], [-h + c, h], [-h, h - c], [-h, -h + c], [-h + c, -h], [h - c, -h]]; };
+/** A round hole of radius r at world x, z, as a section's opening. */
+const hole = (r: number, x: number, z: number, n = 16) => circle(r, x, -z, n);
+/** A part made of pieces, filed under its item: what it is in the inventory, so what is in it can be counted. */
+const group = (name: string, item: string, parts: Part[], more: Partial<Part> = {}): Part => ({ name, item, at: [0, 0, 0], parts, ...more });
+/** A prism along y, mm: its section's outline and openings in world x, z, from y0 to y1. */
+const slab = (name: string, outline: [number, number][], holes: [number, number][][], y0: number, y1: number, more: Partial<Part>): Part =>
+  P(name, section(S(outline), holes, y1 - y0), { rot: ALONG_Y, at: [0, ((y0 + y1) / 2) * mm, 0], ...more });
+
+/** A deep-groove ball bearing, mm, centred, its axis y. */
+function bearingParts(p: Record<string, string | number>, nm: string): Part[] {
+  const n = String(p.number), [d, D, B] = BEARINGS[n]!, { Db, dm, z } = ballsOf(d, D), seal = String(p.seal), shut = seal !== 'open';
+  // (a radial internal clearance of 10 µm, CN-class, typical: half of it at each raceway)
+  const cl = 0.005, rg = 0.52 * Db, sh = 0.22 * Db, ri = dm / 2 - Db / 2 - cl, ro = dm / 2 + Db / 2 + cl, Ri = ri + sh, Ro = ro - sh, ch = Math.max(0.1, Math.min(0.5, 0.03 * D));
+  const phi0 = Math.acos(1 - sh / rg), yg = rg * Math.sin(phi0);
+  // (a raceway's groove: an arc of its radius rg, from shoulder to shoulder)
+  const groove = (r0: number, s: number, a0: number, a1: number) => Array.from({ length: 13 }, (_, k) => { const f = a0 + ((a1 - a0) * k) / 12; return [r0 + s * (rg - rg * Math.cos(f)), rg * Math.sin(f)] as [number, number]; });
+  // (its cage's halves beside the balls, its shields outside them in recesses in the outer ring's bore)
+  const tc = Math.max(0.15, 0.06 * Db), y0 = Db / 2 + 0.03 * Db, ys = y0 + tc + 0.04 * Db, ts = Math.min((seal === '2RS' ? 2 : 1) * (0.02 * D + 0.05), B / 2 - 0.05 - ys), Rr = shut ? Ro + 0.4 * (D / 2 - Ro) : Ro;
+  const ring = { mat: 'steel-chrome', color: 0xb9bdc1, finish: 'brushed' };
+  const outer: [number, number][] = [[Rr, -B / 2], [D / 2 - ch, -B / 2], [D / 2, -B / 2 + ch], [D / 2, B / 2 - ch], [D / 2 - ch, B / 2], [Rr, B / 2], ...(shut ? [[Rr, ys], [Ro, ys]] as [number, number][] : []), [Ro, yg], ...groove(ro, -1, phi0, -phi0), [Ro, -yg], ...(shut ? [[Ro, -ys], [Rr, -ys]] as [number, number][] : []), [Rr, -B / 2]];
+  const inner: [number, number][] = [[d / 2, -B / 2 + ch], [d / 2 + ch, -B / 2], [Ri, -B / 2], [Ri, -yg], ...groove(ri, 1, -phi0, phi0), [Ri, yg], [Ri, B / 2], [d / 2 + ch, B / 2], [d / 2, B / 2 - ch], [d / 2, -B / 2 + ch]];
+  const out: Part[] = [P(nm, lathe(outer), { ...ring, item: 'bearing-ring' }), P(`${nm} inner ring`, lathe(inner), { ...ring, item: 'bearing-ring' })];
+  for (let k = 0; k < z; k++) { const [x, zz] = polar(dm / 2, (2 * PI * k) / z); out.push(P(`${nm} ball`, { sphere: (Db / 2) * mm }, { at: [x * mm, 0, zz * mm], mat: 'steel-chrome', color: 0xd5d8db, finish: 'brushed', item: 'bearing-ball', joint: 'bearing', fixed: 'rolling in the grooves of its rings' })); }
+  const wc = 0.24 * Db, half = (s: number) => P(`${nm} cage`, lathe(s > 0 ? [[dm / 2 - wc, y0], [dm / 2 + wc, y0], [dm / 2 + wc, y0 + tc], [dm / 2 - wc, y0 + tc], [dm / 2 - wc, y0]] : [[dm / 2 - wc, -y0 - tc], [dm / 2 + wc, -y0 - tc], [dm / 2 + wc, -y0], [dm / 2 - wc, -y0], [dm / 2 - wc, -y0 - tc]]), { mat: 'steel-low', color: 0x9a9286, finish: 'plate', joint: 'bearing', fixed: 'riding on its balls' });
+  const rivets = Array.from({ length: z }, (_, k) => { const [x, zz] = polar(dm / 2, (2 * PI * (k + 0.5)) / z); return P(`${nm} cage`, { cyl: [0.11 * Db * mm, 2 * y0 * mm] }, { at: [x * mm, 0, zz * mm], mat: 'steel-low', color: 0x9a9286, finish: 'plate', fixed: 'riveted between the halves of its cage' }); });
+  out.push(group(`${nm} cage`, 'bearing-cage', [half(1), half(-1), ...rivets]));
+  if (shut) for (const s of [1, -1]) {
+    const gap = seal === '2RS' ? 0 : 0.1, yA = s > 0 ? ys : -ys - ts, yB = s > 0 ? ys + ts : -ys;
+    out.push(P(`${nm} ${seal === '2RS' ? 'seal' : 'shield'}`, lathe([[Ri + gap, yA], [Rr, yA], [Rr, yB], [Ri + gap, yB], [Ri + gap, yA]]), seal === '2RS' ? { mat: 'nbr', color: 0x2a2a2c, finish: 'texture', fixed: 'pressed into the recess of its outer ring, its lip on its inner ring' } : { mat: 'steel-low', color: 0xc4c8cc, finish: 'plate', item: 'bearing-shield', fixed: 'snapped into the recess of its outer ring' }));
+  }
+  return out;
+}
+
+/** The stator's laminations' opening, world x, z: the bore of eight pole shoes of six teeth each (the rotor's tooth
+ *  pitch, 7.2°), the slots between the poles out to the back iron. */
+function statorBore(d: ReturnType<typeof stepperDims>): [number, number][] {
+  const pitch = (2 * PI) / 50, wt = 0.45 * pitch, as = 2.5 * pitch + wt / 2, out: [number, number][] = [];
+  const pole = (k: number, u: number, v: number): [number, number] => { const a = (k * PI) / 4; return [u * Math.cos(a) - v * Math.sin(a), u * Math.sin(a) + v * Math.cos(a)]; };
+  const uc = Math.sqrt(d.Rb ** 2 - (d.wp / 2) ** 2);
+  for (let k = 0; k < 8; k++) {
+    const a = (k * PI) / 4; out.push(polar(d.Rs + d.hs, a - as), polar(d.Rs, a - as));
+    for (let j = 0; j < 6; j++) { const cj = a + (j - 2.5) * pitch; out.push(polar(d.Rs, cj - wt / 2), polar(d.Rs, cj + wt / 2)); if (j < 5) out.push(polar(d.Rs + d.td, cj + wt / 2), polar(d.Rs + d.td, cj + pitch - wt / 2)); }
+    out.push(polar(d.Rs, a + as), polar(d.Rs + d.hs, a + as), pole(k, d.Rs + d.hs, d.wp / 2), pole(k, uc, d.wp / 2));
+    const da = Math.atan2(d.wp / 2, uc), a0 = a + da, a1 = a + PI / 4 - da;
+    for (let i = 1; i < 6; i++) out.push(polar(d.Rb, a0 + ((a1 - a0) * i) / 6));
+    out.push(pole(k + 1, uc, -d.wp / 2), pole(k + 1, d.Rs + d.hs, -d.wp / 2));
+  }
+  return out;
+}
+/** A rotor cup's outline, world x, z: fifty teeth round it, turned by `turn`. */
+const rotorTeeth = (d: ReturnType<typeof stepperDims>, turn: number): [number, number][] => { const pitch = (2 * PI) / 50, wt = 0.42 * pitch, r = d.Dr / 2, out: [number, number][] = []; for (let k = 0; k < 50; k++) { const a = turn + k * pitch; out.push(polar(r, a - wt / 2), polar(r, a + wt / 2), polar(r - d.td, a + wt / 2), polar(r - d.td, a + pitch - wt / 2)); } return out; };
+/** A ring cut open across +x (the rear bell's skirt, its leads' slot), world x, z: the outline round, in along the slot,
+ *  round the inside, and out. */
+function slotted(F: number, c: number, R: number, wg: number): [number, number][] {
+  const h = F / 2, t = Math.asin(wg / 2 / R), out: [number, number][] = [[h, wg / 2], [h, h - c], [h - c, h], [-h + c, h], [-h, h - c], [-h, -h + c], [-h + c, -h], [h - c, -h], [h, -h + c], [h, -wg / 2]];
+  for (let i = 0; i <= 40; i++) out.push(polar(R, -t - ((2 * PI - 2 * t) * i) / 40));
+  return out;
+}
+/** A hybrid stepper, its face at y = 0, its body down -y, its shaft out +y. */
+function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
+  const d = stepperDims(p), { F, f, L, fb, tf, rb, P1, Bb, D, dm, hw, through, c, cb } = d, al = { mat: 'al-a380', color: 0x2a2b2e, finish: 'cast' };
+  const clear = CLEAR[d.tie] ?? d.dt * 1.1;
+  const tieName = `${nm} tie screw`, leads = ['A+ (black)', 'A− (green)', 'B+ (red)', 'B− (blue)'].map((x) => `${nm} lead ${x}`), passes = [tieName];
+  // (a tapped hole drawn at its thread's major diameter, as the screw in it is drawn: its thread fills it)
+  const body = through ? octagon(F, cb) : octagon(F, c), tapped = (x: number, z: number) => hole(Number(d.tie.slice(1)) / 2 / Math.cos(PI / 12) + 0.02, x, z, 12);
+  // the front end bell: its face (the NEMA square's tapped holes, or a through frame's flange and its clearance holes), its
+  // skirt round the cavity the coils' ends turn in, its hub round the front bearing's pocket, its pilot boss
+  const fbell = { ...al, fixed: 'clamped to its stator by its tie screws', passes };
+  const face = through ? slab(`${nm} front end bell`, octagon(F, 0.08 * F), [hole(dm / 2, 0, 0, 32), ...sq(f.holes).map(([x, z]) => hole((CLEAR[f.thread] ?? 5.5) / 2, x, z, 12))], -tf, 0, fbell)
+    : slab(`${nm} front end bell`, body, [hole(dm / 2, 0, 0, 32), ...d.ties.map(([x, z]) => tapped(x, z))], -tf, 0, fbell);
+  const skirtF = slab(`${nm} front end bell`, body, [hole(d.Rcav, 0, 0, 48), ...d.ties.map(([x, z]) => tapped(x, z))], -fb, -tf, fbell);
+  const lip = fb - tf - Bb > 0.05, hubF = P(`${nm} front end bell`, lathe(lip ? [[D / 2, -fb], [D / 2 + hw, -fb], [D / 2 + hw, -tf], [dm / 2, -tf], [dm / 2, -fb + Bb], [D / 2, -fb + Bb], [D / 2, -fb]] : [[D / 2, -fb], [D / 2 + hw, -fb], [D / 2 + hw, -tf], [D / 2, -tf], [D / 2, -fb]]), fbell);
+  const boss = P(`${nm} front end bell`, lathe([[f.shaft / 2 + 1, 0], [f.pilot / 2, 0], [f.pilot / 2, f.boss], [f.shaft / 2 + 1, f.boss], [f.shaft / 2 + 1, 0]]), fbell);
+  // the stator: its stack of laminations (the bore, the slots, the tie screws' holes), a coil wound round each pole
+  const yS = -L + rb, yF = -fb, mid = (yS + yF) / 2;
+  const stack = slab(`${nm} stator`, through ? body : body.map(([x, z]) => [x * 0.985, z * 0.985] as [number, number]), [S(statorBore(d)), ...d.ties.map(([x, z]) => hole(clear / 2, x, z, 12))], yS, yF, { mat: 'steel-electrical', color: 0x6a6e72, finish: 'texture', fill: 0.95, item: 'lamination-stack', fixed: 'clamped between its end bells by its tie screws', passes });
+  const coil = (k: number) => { const a = (k * PI) / 4, w2 = d.wp / 2 + d.g, Lz = d.r2 - d.r1, rc = (d.r1 + d.r2) / 2, hy = d.Ls / 2 + d.g, [x, z] = polar(rc, a);
+    return P(`${nm} winding`, section([[-d.w, -hy - d.tc], [d.w, -hy - d.tc], [d.w, hy + d.tc], [-d.w, hy + d.tc]], [[[-w2, -hy], [w2, -hy], [w2, hy], [-w2, hy]]], Lz), { rot: [0, PI / 2 - a, 0], at: [x * mm, mid * mm, z * mm], mat: 'magnet-wire', color: 0xb4643c, finish: 'plate', fill: 0.6, item: 'winding', fixed: 'wound round a pole of its stator' }); };
+  const stator = group(`${nm} stator`, 'stator-stepper', [stack, ...Array.from({ length: 8 }, (_, k) => coil(k))]);
+  // the rotor: on its shaft, two toothed cups half a tooth apart either side of its magnet; the shaft in its bearings
+  const rj = d.db / 2, rs = f.shaft / 2, yR0 = -L + rb - Bb, yr0 = yS + 0.5, yr1 = yF - 0.5, tm = Math.max(1, 0.1 * d.Ls), lc = (yr1 - yr0 - tm) / 2, rotor = { link: `${nm} rotor` };
+  const cup = (y0: number, turn: number) => slab(`${nm} rotor cup`, rotorTeeth(d, turn), [hole(rj / Math.cos(PI / 24), 0, 0, 24)], y0, y0 + lc, { ...rotor, mat: 'steel-electrical', color: 0x7a7e82, finish: 'texture', fill: 0.95, item: 'lamination-stack', fixed: 'pressed onto its shaft' });
+  const shaft = P(`${nm} shaft`, lathe(rj > rs + 1e-6 ? [[0, yR0], [rj, yR0], [rj, -fb + Bb], [rs, -fb + Bb], [rs, f.out], [0, f.out]] : [[0, yR0], [rs, yR0], [rs, f.out], [0, f.out]]), { ...rotor, mat: 'steel-alloy', color: 0xb9bdc1, finish: 'brushed', item: 'shaft-steel', joint: 'bearing', iface: [{ kind: 'shaft', role: 'provides', d: rs * 2 * mm }], fixed: 'its rotor\'s shaft, turning in its bearings\' inner rings' });
+  const magnet = P(`${nm} rotor magnet`, lathe([[rj, yr0 + lc], [0.4 * d.Dr, yr0 + lc], [0.4 * d.Dr, yr0 + lc + tm], [rj, yr0 + lc + tm], [rj, yr0 + lc]]), { ...rotor, mat: 'ndfeb', color: 0xc8ccd0, finish: 'plate', item: 'magnet-ndfeb', fixed: 'bonded between the cups of its rotor on its shaft' });
+  const rotorG = group(`${nm} rotor`, 'rotor-stepper', [cup(yr0, 0), magnet, cup(yr0 + lc + tm, PI / 50), shaft], rotor);
+  // its bearings, each pressed into its bell's pocket and onto the shaft
+  const brg = (y: number, which: string) => { const b = use(`bearing ${d.bearing}`, [0, y * mm, 0], { name: `${nm} ${which} bearing`, fixed: `pressed into the pocket of its ${which} end bell` });
+    const ir = (q: Part): void => { if (/inner ring$/.test(q.name)) Object.assign(q, rotor, { fixed: 'pressed onto its shaft' }); for (const r of q.parts ?? []) ir(r); }; ir(b); return b; };
+  // the rear end bell: its back (the tie screws' counterbores, or their holes), a relief behind the bearing's inner ring,
+  // its skirt slotted for the leads, its hub round the rear bearing's pocket
+  // (the tie screws run clear through it, their heads bearing on its skirt: nothing passes through it but its leads)
+  const rbell = { ...al, fixed: 'clamped to its stator by its tie screws', passes: leads }, cbr = (d.T.dk + 0.6) / 2;
+  const tieHoles = (sink: boolean) => d.ties.map(([x, z]) => hole(sink ? cbr : clear / 2, x, z, 16));
+  const back = [slab(`${nm} rear end bell`, body, tieHoles(d.sunk), -L, -L + Math.min(1, P1 / 2), rbell), slab(`${nm} rear end bell`, body, [hole(dm / 2, 0, 0, 32), ...tieHoles(d.sunk)], -L + Math.min(1, P1 / 2), -L + P1, rbell)];
+  const wg = 6.8, skirtR = slab(`${nm} rear end bell`, slotted(F, through ? cb : c, d.Rcav, wg), d.ties.map(([x, z]) => hole(clear / 2, x, z, 12)), -L + P1, -L + rb, rbell);
+  const lipR = rb - P1 - Bb > 0.05, hubR = P(`${nm} rear end bell`, lathe(lipR ? [[dm / 2, -L + P1], [D / 2 + hw, -L + P1], [D / 2 + hw, -L + rb], [D / 2, -L + rb], [D / 2, -L + rb - Bb], [dm / 2, -L + rb - Bb], [dm / 2, -L + P1]] : [[D / 2, -L + P1], [D / 2 + hw, -L + P1], [D / 2 + hw, -L + rb], [D / 2, -L + rb], [D / 2, -L + P1]]), rbell);
+  // the tie screws, from the rear, their heads in its counterbores (or on its back), their ends short of the face's holes
+  const yHead = -L + (d.sunk ? P1 : 0), tieL = d.tieL;
+  const screws = d.ties.map(([x, z]) => use(`screw ${d.tie}x${tieL}`, [x * mm, yHead * mm, z * mm], { rot: [PI, 0, 0], name: tieName, fixed: 'through its rear end bell and stator, threaded into its front end bell' }));
+  // its leads: out of the rear bell's slot between its back and the coils' ends, along the ground 300 mm to a JST XH plug
+  // (four ways, 2.5 mm pitch: a housing 12.4 × 5.75 × 9.8 mm, its contacts crimped on the leads; JST's XH, typical)
+  const rw = 0.7, yL = -L + P1 + rw + 0.01, x0 = D / 2 + hw + rw + 0.05, X0 = F / 2 + 300, yc = -L + 5.75 / 2, colours = [0x1d1d1f, 0x2f8f3a, 0xc0392b, 0x2c5aa0];
+  const cu = PI * 0.2025 ** 2, pvc = PI * rw * rw - cu;
+  const leadParts = leads.map((ln, i) => { const zi = (i - 1.5) * 1.6, zp = (i - 1.5) * 2.5, pts: V3[] = ([[x0, yL, zi], [F / 2 + 6, yL, zi], [F / 2 + 6 + 4 * (yL + L), -L + rw, zi], [X0 - 25, -L + rw, zi], [X0 - 6, yc, zp], [X0 + 6, yc, zp]] as V3[]).map((q) => q.map((v) => v * mm) as V3);
+    const tube = { r: rw * mm, pts, bend: 3 * mm }; return P(ln, { tube }, { mat: 'pvc', color: colours[i]!, item: 'wire-hookup', kg: tubeLength(tube) * (cu * 8960 + pvc * 1400) * 1e-6, fixed: 'out through the slot in its rear end bell, its end soldered to its coils (not drawn), crimped into its plug' }); });
+  const plug = P(`${nm} plug`, section([[-6.2, -5.75 / 2], [6.2, -5.75 / 2], [6.2, 5.75 / 2], [-6.2, 5.75 / 2]], [0, 1, 2, 3].map((i) => [[-0.75, -0.75], [0.75, -0.75], [0.75, 0.75], [-0.75, 0.75]].map(([x, y]) => [x! - (i - 1.5) * 2.5, y!] as [number, number])), 9.8), { rot: [0, PI / 2, 0], at: [(X0 + 4.9) * mm, yc * mm, 0], mat: 'nylon', color: 0xf1ede2, finish: 'texture', item: 'connector-housing', passes: leads, fixed: 'on the ends of its leads' });
+  const contacts = [0, 1, 2, 3].map((i) => P(`${nm} plug contact`, { box: [3.6 * mm, 1.1 * mm, 1.1 * mm] }, { at: [(X0 + 6 + 1.8) * mm, yc * mm, (i - 1.5) * 2.5 * mm], mat: 'brass', color: 0xd9d6cc, finish: 'plate', item: 'crimp-contact', fixed: 'crimped on its lead, clicked into its plug' }));
+  return [group(`${nm} front end bell`, 'end-bell', [face, skirtF, hubF, boss]), stator, rotorG, brg(-fb + Bb / 2, 'front'), brg(-L + rb - Bb / 2, 'rear'),
+    group(`${nm} rear end bell`, 'end-bell', [...back, skirtR, hubR]), ...screws, group(`${nm} leads and plug`, 'jst-xh', [...leadParts, plug, ...contacts])];
+}
+
+/** What a part's inventory says is in it that is not drawn in it: for each thing it is made of (not its materials), as
+ *  many pieces drawn in it filed under that thing (or a size of it: "screw-m3" is any M3 screw, "bearing-625" a 625 of
+ *  any seal), and so on in each of those, all the way down. Empty when it is whole. */
+export function missingIn(p: Part, it: Item | null | undefined = p.item ? itemOf(p.item) ?? keptByItem.get(p.item) ?? null : null, where = p.name): string[] {
+  const out: string[] = [], is = (got: string, want: string) => got === want || (got.startsWith(want) && !/\d/.test(got[want.length] ?? ''));
+  if (it) {
+    const found = (q: Part, want: string): number => (q.item && is(q.item, want) ? 1 : (q.parts ?? []).reduce((a, r) => a + found(r, want), 0));
+    for (const c of it.of) { const ci = itemOf(c.id); if (ci && (ci.kind === 'material' || ci.kind === 'element')) continue; if (!ci && DENSITY_KNOWN.has(c.id)) continue;
+      const got = (p.parts ?? []).reduce((a, r) => a + found(r, c.id), 0); if (got < c.n) out.push(`${where}: ${c.n - got} of ${c.n} ${ci?.name ?? c.id} not drawn in it`); }
+  }
+  for (const q of p.parts ?? []) out.push(...missingIn(q, undefined, q.name));
+  return out;
+}
+
 // ---- the library: made once, kept, used by every build ----------------------------------------------------------------
 const kept = new Map<string, Component | string>();
+/** Each made component by its item's id, so what is in a drawn part can be found where the inventory has no entry for its size. */
+const keptByItem = new Map<string, Item>();
+/** Materials the drawing knows by density, though the inventory may not list them. */
+const DENSITY_KNOWN = new Set(Object.keys(DENSITY));
 /** The families drawn here (every size each family makes). */
 export const DESIGNED = Object.keys(DESIGNS);
 /** A component by its words ("bolt M8x30", "angle 40x4 steel 1000mm"), designed the first time it is asked for and kept;
@@ -250,8 +390,9 @@ export function component(words: string): Component | string {
   else {
     // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
     // reads its head noun; its class and its make in what it says)
-    const d = DESIGNS[r.sized.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized.params) } : {}), ...(d.ports ? { ports: d.ports(r.sized.params) } : {}) };
-    const g = massOf(part) * 1000, ratio = r.g ? g / r.g : 1, faults: string[] = [];
+    const d = DESIGNS[r.sized.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, sealed: 'designed whole from its standard in the component library', says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized.params) } : {}), ...(d.ports ? { ports: d.ports(r.sized.params) } : {}) };
+    keptByItem.set(r.id, r);
+    const g = massOf(part) * 1000, ratio = r.g ? g / r.g : 1, faults: string[] = [...missingIn(part, r)];
     // (a part a family weighs to a hundredth of a gram is not faulted for its rounding)
     if (r.g && Math.abs(ratio - 1) > 0.2 && Math.abs(g - r.g) > 0.01) faults.push(`drawn ${g.toFixed(2)} g against ${r.g.toFixed(2)} g from its standard (${((ratio - 1) * 100).toFixed(0)} %)`);
     out = { words, item: r, part, path: r.path, mass: ratio, leaves: d.leaves, faults };
@@ -268,8 +409,10 @@ export function use(words: string, at: V3 = [0, 0, 0], more: Partial<Part> = {})
   // a piece of its own, a lock nut's ring, keeps its own)
   // (and what is said of it here, how it is fixed, what passes through it, what it is joined to, its link and joint, is
   // said of each of its pieces, which are what is drawn and met)
-  const said = (['fixed', 'passes', 'joins', 'link', 'joint', 'movesWith'] as const).filter((k) => more[k] !== undefined);
-  for (const q of p.parts ?? []) if (q.name === c.part.name) { if (more.name) q.name = more.name; for (const k of said) (q as unknown as Record<string, unknown>)[k] = structuredClone(more[k]); }
+  // (and a piece of its own under its name, "… inner ring", is named after it here: "front bearing inner ring")
+  const said = (['fixed', 'passes', 'joins', 'link', 'joint', 'movesWith'] as const).filter((k) => more[k] !== undefined), base = c.part.name;
+  const walk = (q: Part): void => { if (q.name === base) { for (const k of said) (q as unknown as Record<string, unknown>)[k] = structuredClone(more[k]); if (more.name) q.name = more.name; } else if (more.name && q.name.startsWith(`${base} `)) q.name = more.name + q.name.slice(base.length); for (const r of q.parts ?? []) walk(r); };
+  for (const q of p.parts ?? []) walk(q);
   return p;
 }
 /** The words that call a drawn part: its family's id or the thing it is ("bolt", "hex nut", "flat bar", "I-beam"),

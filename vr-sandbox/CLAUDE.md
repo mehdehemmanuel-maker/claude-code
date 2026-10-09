@@ -41,6 +41,15 @@ the task list and lose the why. So the why lives here, and every round is checke
   stark level engineering" (2026-10-08: manufacturing built from the library)
 - "money manager / business agent with employees on computers and a board room with a giant screen I can edit, basically
   a node tree that maps things in my situation out; don't lose context, find time for it" (2026-10-08: queued)
+- "go through every part and make sure that every other part is inside and every part that's in those parts … almost
+  100% visually accurate … scaling build up from tiny parts to full builds has 100 realistic shape and complexity; delete
+  all the old build things off the app, they're old and low quality … upgrade the whole app's UI and abilities"
+  (2026-10-08: `missingIn` in `components.ts`; old builds to be listed before they are removed)
+- "don't forget bearings have sub components as well" (2026-10-08: rings, balls, cage, shields drawn)
+- "for each new part stored it has to be queued for a break down just in case it has sub components, and then if it does
+  it's the same for any new parts added … look for even more components in the sub component … some kind of table lookup;
+  if the very specific part doesn't exist in the table queue it too, but first it has to be broken down" (2026-10-08:
+  `breakdown.ts`, `npm run breakdown`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -61,6 +70,9 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts`, `partspace.ts` |
 | Parts designed once in 3D from their standard, saved by name and category, used by every build (`use("bolt M8x30")`); assemblies of them (a bolted joint) | `src/nexus/components.ts` (kit `part`; checked over every catalogue size in `tests/nexus/components.test.ts`) |
 | A part's mass from its shape, material and fill | `src/nexus/mass.ts` (re-exported by `kits.ts`) |
+| Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/components.ts` |
+| The breakdown queue: every item stored is queued, each thing in it looked up in the table (the inventory, its inner parts, the family that makes that size), what is not there or is listed only as its materials waits, said with what wants it | `src/nexus/breakdown.ts` (`npm run breakdown -- report.md`) |
+| A part designed whole (`Part.sealed`, set on every library component) is fitted as it comes: the make pipeline's detail rules, its finish strip and its critic's moves leave it | `src/nexus/make/detail.ts` (`sealedIn`) |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
@@ -115,7 +127,12 @@ Known gaps (from the 2026-10-08 audit, still open):
   every placed part is an inventory item that expands into its sub-parts, is the merge that ends "two generators".
   Begun (2026-10-08, the user: "design each sub component … save that component under its name and category and now
   every other build using any of them is already ready"): `components.ts` draws stock and fasteners from their standards
-  (9,074 catalogue sizes), and the wheel nuts, wheel studs, the detail pass's bolts and anchor bolts come from it. Still
+  (9,074 catalogue sizes), and the wheel nuts, wheel studs, the detail pass's bolts and anchor bolts come from it; the
+  ball bearings (rings, raceways, balls, cage, shields or seals) and the steppers (bells, stator and coils, rotor cups
+  and magnet, shaft, bearings, tie screws, leads and plug) are drawn whole, every part their inventory lists inside them.
+  The breakdown queue (2026-10-08) lists 107 families and entries still made of only their materials (chip resistors,
+  boxes, terminal blocks, patch cords, screwdrivers, crystals, speakers, hydraulic cylinders …): each to have its parts
+  broken out, family by family. Still
   drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
   each is next to become a component, smallest and commonest first;
 - the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
@@ -164,6 +181,9 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
    patterns)" was already written here; holes cut, fits and tolerances, placement by constraints, fasteners sized by
    load, motion, electrical and fluid ports, shape from process and cost were absent with it). Act on what it names
    before polishing what the critic counts: a missing concept costs every build, a patched overlap costs one.
+8. Run the breakdown queue (`npm run breakdown -- report.md`). Nothing new may wait as "not in the table", and the families
+   at the top of "only its materials listed" are broken out before new ones are added: a part is not stored until it is
+   broken down.
 
 ## Working here
 

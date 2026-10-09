@@ -8,9 +8,9 @@
 import type { Item, Process } from './inventory';
 import { METRIC } from './threads';
 import { KINDS } from './kinds';
-import { NEMA, NEMA_FACE } from './kinds/motion';
+import { CLEAR, NEMA, NEMA_FACE } from './kinds/motion';
 export { NEMA, NEMA_FACE };
-import { familyOf, useFamilies } from './kinds/core';
+import { familyOf, partsOf, useFamilies } from './kinds/core';
 
 export { METRIC };
 
@@ -57,12 +57,32 @@ export const BEARINGS: Record<string, [number, number, number]> = {
   '6300': [10, 35, 11], '6301': [12, 37, 12], '6302': [15, 42, 13], '6303': [17, 47, 14], '6304': [20, 52, 15], '6305': [25, 62, 17],
   '6800': [10, 19, 5], '6801': [12, 21, 5], '6802': [15, 24, 5], '6803': [17, 26, 5], '6804': [20, 32, 7], '6805': [25, 37, 7],
   '6900': [10, 22, 6], '6901': [12, 24, 6], '6902': [15, 28, 7], '6903': [17, 30, 7], '6904': [20, 37, 9], '6905': [25, 42, 9],
+  // (miniatures, shielded widths: the 684 and 685 a small stepper's bells hold; and the inch R4, 1/4 × 5/8 × 0.196 in,
+  // ABMA, for a 1/4 in shaft)
+  '684': [4, 9, 4], '685': [5, 11, 5], 'R4': [6.35, 15.875, 4.978],
 };
+/** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
+ *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad
+ *  assembly: about half the pitch circle full, and one more; typical, within one of makers' counts). */
+export const ballsOf = (d: number, D: number): { Db: number; dm: number; z: number } => { const Db = 0.3 * (D - d), dm = (d + D) / 2; return { Db, dm, z: Math.max(6, Math.round((0.5 * Math.PI * dm) / Db + 1)) }; };
+/** The bearing a stepper's shaft runs in at each end: of the bearings with the shaft's bore (or the next bore up, the
+ *  shaft turned up to it where it sits), the 62 series where its bell's hub round it clears the coils' ends, else a
+ *  thinner one; and the tie screws that clamp its bells to its stator: the face's thread where the face is tapped, else M4
+ *  (M5 on frames over 70 mm). */
+export function stepperBuild(nema: string): { bearing: string; tie: string } {
+  const F = NEMA[nema]!, f = NEMA_FACE[nema]!, coils = 0.29 * F + 0.2, hub = Math.max(0.8, 0.04 * F);
+  const bores = [...new Set(Object.values(BEARINGS).map(([d]) => d))].sort((a, b) => a - b), bore = bores.find((d) => d >= f.shaft - 1e-6)!;
+  const rank = (k: string) => (/^62/.test(k) ? 0 : /^R/.test(k) ? 1 : /^60/.test(k) ? 2 : /^69/.test(k) ? 3 : 4);
+  const fits = Object.keys(BEARINGS).filter((k) => BEARINGS[k]![0] === bore).sort((a, b) => rank(a) - rank(b) || BEARINGS[b]![1] - BEARINGS[a]![1]);
+  const bearing = fits.find((k) => BEARINGS[k]![1] / 2 + hub + 0.3 < coils) ?? fits[fits.length - 1]!;
+  return { bearing, tie: f.through ? (F < 70 ? 'M4' : 'M5') : f.thread };
+}
 const bearing: Family = {
-  id: 'bearing', name: 'deep-groove ball bearing', path: ['Mechanical', 'Bearings', 'Ball bearings'], says: 'any bearing number of the 62x, 60xx and 62xx series, its bore, outside and width from ISO 15', params: [{ key: 'number', says: 'bearing number', unit: '', values: Object.keys(BEARINGS), default: '608' }, { key: 'seal', says: 'shields or seals', unit: '', values: ['ZZ', '2RS', 'open'], default: 'ZZ' }],
+  id: 'bearing', name: 'deep-groove ball bearing', path: ['Mechanical', 'Bearings', 'Ball bearings'], says: 'any bearing number of the 62x, 60xx, 62xx, 63xx, 68xx and 69xx series and the miniatures, its bore, outside and width from ISO 15 (the inch R4 from ABMA)', params: [{ key: 'number', says: 'bearing number', unit: '', values: Object.keys(BEARINGS), default: '608' }, { key: 'seal', says: 'shields or seals', unit: '', values: ['ZZ', '2RS', 'open'], default: 'ZZ' }],
   examples: ['bearing 608', 'bearing 6201 2RS', 'bearing 625'],
-  read(w) { const n = /\b(6\d{2,3})\b/.exec(w)?.[1]; if (!n || !BEARINGS[n]) return `Which bearing? ${Object.keys(BEARINGS).join(', ')}.`; return { number: n, seal: /2rs/i.test(w) ? '2RS' : /open/i.test(w) ? 'open' : 'ZZ' }; },
-  make(p) { const n = String(p.number), [d, D, B] = BEARINGS[n]!, v = Math.PI * ((D / 2) ** 2 - (d / 2) ** 2) * B * 0.55; return item(`bearing-${n}${p.seal === 'ZZ' ? 'zz' : String(p.seal).toLowerCase()}`, `ball bearing ${n}${p.seal === 'open' ? '' : ` ${p.seal}`} (${d} × ${D} × ${B})`, 'Mechanical/Bearings/Ball bearings', 'product', 'assemble', `bearing-ring*2 bearing-ball*${Math.max(6, Math.round((Math.PI * (d + D) / 2) / ((D - d) * 0.3 * 2)))} bearing-cage ${p.seal === 'open' ? '' : p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, `two rings and a row of balls in a cage${p.seal === 'open' ? '' : p.seal === '2RS' ? ', rubber seals both sides' : ', steel shields both sides'}, greased`, `${d} mm bore, ${D} mm outside, ${B} mm wide (ISO 15); balls counted from its size (typical)`, [D, D, B], mm3g(v, RHO.steel)); },
+  read(w) { const n = /\b(6\d{2,3}|R\d{1,2})\b/i.exec(w)?.[1]?.toUpperCase(); if (!n || !BEARINGS[n]) return `Which bearing? ${Object.keys(BEARINGS).join(', ')}.`; return { number: n, seal: /2rs/i.test(w) ? '2RS' : /open/i.test(w) ? 'open' : 'ZZ' }; },
+  // (about 0.68 of its rings' envelope is steel: SKF's 608-2Z weighs 12 g, its 6204-2Z 110 g)
+  make(p) { const n = String(p.number), [d, D, B] = BEARINGS[n]!, v = Math.PI * ((D / 2) ** 2 - (d / 2) ** 2) * B * 0.68; return item(`bearing-${n.toLowerCase()}${p.seal === 'ZZ' ? 'zz' : String(p.seal).toLowerCase()}`, `ball bearing ${n}${p.seal === 'open' ? '' : ` ${p.seal}`} (${d} × ${D} × ${B})`, 'Mechanical/Bearings/Ball bearings', 'product', 'assemble', `bearing-ring*2 bearing-ball*${ballsOf(d, D).z} bearing-cage ${p.seal === 'open' ? '' : p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, `two rings and a row of balls in a cage${p.seal === 'open' ? '' : p.seal === '2RS' ? ', rubber seals both sides' : ', steel shields both sides'}, greased`, `${d} mm bore, ${D} mm outside, ${B} mm wide (${/^R/.test(n) ? 'ABMA' : 'ISO 15'}); ${ballsOf(d, D).z} balls of about ${ballsOf(d, D).Db.toFixed(1)} mm (typical)`, [D, D, B], mm3g(v, RHO.steel)); },
 };
 // ---- spur gears by module and teeth -----------------------------------------------------------------------------------
 const gear: Family = {
@@ -107,6 +127,38 @@ const resistor: Family = {
   make(p) { const R = Number(p.ohms), W = Number(p.watts), say = R >= 1e6 ? `${R / 1e6} MΩ` : R >= 1e3 ? `${R / 1e3} kΩ` : `${R} Ω`, L = W <= 0.25 ? 6.3 : W <= 0.5 ? 9 : 12, D = W <= 0.25 ? 2.5 : W <= 0.5 ? 3.5 : 5;
     return item(`resistor-${R}-${W}w`, `${say} resistor, ${W} W`, 'Electrical/Passive components/Resistors', 'product', 'assemble', 'alumina nichrome lead-wire*2 epoxy', 'a metal film on a ceramic rod, a spiral cut to set its value, end caps, leads, a lacquer coat', `${say} ±1 %; carries up to ${Math.sqrt(W / R).toFixed(4)} A at ${W} W (I = √(P/R)); ${L} × ${D} mm body (typical)`, [D, D, L], 0.3); },
 };
+const PI = Math.PI, polarXZ = (r: number, a: number): [number, number] => [r * Math.cos(a), r * Math.sin(a)];
+const insideOct = (x: number, z: number, F: number, c: number) => Math.min(F / 2 - Math.abs(x), F / 2 - Math.abs(z), (F - c - Math.abs(x) - Math.abs(z)) / Math.SQRT2);
+/** A stepper's build, mm, from its frame and length: its magnetic parts, bells and stack, bearing and tie screws (the
+ *  component library draws it, src/nexus/components.ts; its family lists what is in it by these) */
+export function stepperDims(p: Record<string, string | number>) {
+  const n = String(p.nema), F = NEMA[n]!, f = NEMA_FACE[n]!, L = Number(p.length), { bearing, tie } = stepperBuild(n), [db, D, Bb] = BEARINGS[bearing]!, { dm } = ballsOf(db, D);
+  const through = !!f.through, T = METRIC[tie]!, dt = Number(tie.slice(1)), c = 0.1 * F;
+  // (its magnetic parts, by the frame: rotor, air gap, teeth, pole shoes and bodies, back iron, coils; typical)
+  const Dr = 0.52 * F, Rs = Dr / 2 + 0.05, td = 0.0106 * F, hs = 0.03 * F, wp = 0.105 * F, Rb = 0.43 * F, g = 0.15, r1 = Rs + hs + g;
+  const tc = (r1 * Math.sin(PI / 8) - 0.25) / Math.cos(PI / 8) - wp / 2 - g, w = wp / 2 + g + tc;
+  // (through-hole frames: the body behind the flange cut back at its corners, room for the mounting bolts' nuts; their
+  // tie screws in the back iron between the poles; tapped frames' tie screws through the corners, into the face's holes)
+  const nutR = (METRIC[f.thread]!.s / Math.cos(PI / 6)) / 2, rh = (f.holes / 2) * Math.SQRT2, cb = through ? Math.max(c, F - Math.SQRT2 * (rh - nutR - 0.5)) : c;
+  const ties: [number, number][] = through ? [0, 1, 2, 3].map((k) => polarXZ(Rb + 0.8 + (CLEAR[tie] ?? dt * 1.1) / 2, PI / 8 + (k * PI) / 2)) : ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as [number, number][]).map(([x, z]) => [(x * f.holes) / 2, (z * f.holes) / 2] as [number, number]);
+  const r2 = Math.min(Math.sqrt((Rb - 0.2) ** 2 - w * w), Rb);
+  // (the face: tapped holes 4.5 mm deep, then the tie screws' ends, one and a half diameters in; a through frame's flange)
+  const tf0 = through ? 0.085 * F : Math.max(1.5, 0.07 * F);
+  let fb = through ? Math.max(Bb + tf0, tf0 + 1.5 * dt + 1) : Math.max(Bb + tf0, 4.5 + 0.5 + 1.5 * dt);
+  // (the rear plate: deep enough to sink the screws' heads where their counterbores fit inside its outline, else thin with
+  // the heads proud)
+  const cbR = (T.dk + 0.6) / 2, sinks = ties.every(([x, z]) => insideOct(x, z, F, cb) >= cbR + 0.3);
+  let P1 = sinks ? T.k : Math.max(1.5, 0.06 * F), sunk = sinks;
+  // (a short body: its heads proud, then its front bell thinner, so its stack is at least 0.3 of it)
+  if (L - fb - (Bb + P1) < 0.3 * L && sunk) { P1 = Math.max(1.5, 0.06 * F); sunk = false; }
+  if (L - fb - (Bb + P1) < 0.3 * L) fb = Math.max(Bb + 1.5, L - 0.3 * L - (Bb + P1));
+  // (and deep enough for its leads, laid on its floor, to pass under the coils' ends; its front bell for the coils' ends)
+  const rb = Math.max(Bb + P1, P1 + 1.42 + g + tc + 0.2); fb = Math.max(fb, Math.min(tf0, fb - Bb) + g + tc + 0.4);
+  const Ls = L - fb - rb, tf = Math.min(tf0, fb - Bb);
+  // (the bells' cavities 0.4 mm clear of the coils' ends)
+  const tieL = Math.round((through ? -tf - 1 : -5) - (-L + (sunk ? P1 : 0)));
+  return { tieL, Rcav: Rb + 0.4, n, F, f, L, bearing, tie, T, dt, db, D, Bb, dm, through, c, cb, Dr, Rs, td, hs, wp, Rb, g, r1, r2, tc, w, ties, fb, tf, P1, rb, Ls, sunk, hw: Math.max(0.8, 0.04 * F) };
+}
 // ---- stepper motors by NEMA frame (face sizes, NEMA ICS 16) -------------------------------------------------------------
 // (NEMA frames and faces: src/nexus/kinds/motion.ts, where the motor plate's kind reads them too)
 
@@ -114,9 +166,12 @@ const stepper: Family = {
   id: 'stepper', name: 'stepper motor', path: ['Electrical', 'Motors and actuators', 'Stepper motors'], says: 'any NEMA frame and body length, 1.8° a step', params: [{ key: 'nema', says: 'frame', unit: 'NEMA', values: Object.keys(NEMA), default: '17' }, { key: 'length', says: 'body length', unit: 'mm', min: 20, max: 120, default: 40 }],
   examples: ['stepper nema17 40', 'stepper nema23 56', 'stepper nema14 34'],
   read(w) { const n = /nema\s*(\d+)/i.exec(w)?.[1] ?? '17'; if (!NEMA[n]) return `Which frame? NEMA ${Object.keys(NEMA).join(', ')}.`; const L = num(/\b(\d{2,3})\s*(?:mm)?\s*$/.exec(w.replace(/nema\s*\d+/i, ''))?.[1]) || 40; return { nema: n, length: L }; },
-  // (about half its box is iron and copper: a 40 mm NEMA 17 weighs about 280 g, typical of makers' sheets)
-  make(p) { const n = String(p.nema), F = NEMA[n]!, L = Number(p.length), g = mm3g(F * F * L * 0.5, RHO.steel);
-    return item(`stepper-nema${n}-${L}`, `NEMA ${n} stepper, ${L} mm`, 'Electrical/Motors and actuators/Stepper motors', 'product', 'assemble', `stator-stepper rotor-stepper end-bell*2 bearing-625*2 screw-m3*4 jst-xh`, 'two phases of coils on a toothed stator, a toothed magnet rotor, end bells, two bearings', `${F} mm face (NEMA ICS 16); 1.8° a step (200 a turn); holding torque grows with body length; mass from its shape: about ${g} g`, [F, F, L], g); },
+  // (its mass rises with its stack, its bells light: steel 0.62 of its square face over its length less 4.8 mm, fitted to
+  // STEPPERONLINE's NEMA 17 sheets: 17HS08-1004S 20 mm 0.14 kg, 17HS4401 40 mm 280 g, 17HS19-2004S1 48 mm 0.40 kg; other
+  // frames scaled by their face, typical)
+  make(p) { const n = String(p.nema), F = NEMA[n]!, L = Number(p.length), g = mm3g(F * F * Math.max(0.3 * L, L - 4.8) * 0.62, RHO.steel), b = stepperBuild(n);
+    const { of, inner } = partsOf(`stator-stepper rotor-stepper end-bell*2 {bearing ${b.bearing}}*2 {screw ${b.tie}x${stepperDims(p).tieL}}*4 wire-hookup*4 jst-xh`);
+    return { ...item(`stepper-nema${n}-${L}`, `NEMA ${n} stepper, ${L} mm`, 'Electrical/Motors and actuators/Stepper motors', 'product', 'assemble', '', 'two phases of coils on a toothed stator, a toothed magnet rotor, end bells, a bearing in each, four tie screws, four leads to a plug', `${F} mm face (NEMA ICS 16); 1.8° a step (200 a turn); holding torque grows with body length; mass from its shape: about ${g} g`, [F, F, L], g), of, inner }; },
 };
 // ---- cells by their size code --------------------------------------------------------------------------------------------
 const CELLS: Record<string, [number, number, number]> = { '18650': [18, 65, 47], '21700': [21, 70, 68], '14500': [14, 50, 20], '26650': [26, 65, 90] };

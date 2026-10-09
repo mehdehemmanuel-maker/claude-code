@@ -15,7 +15,8 @@
     "nexus:scene": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/scene.mjs",
     "nexus:census": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/census.mjs",
     "nexus:view": "npm run nexus:scene && vite build --config vite.view.config.ts --logLevel error",
-    "invent": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/invent.mjs"
+    "invent": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/invent.mjs",
+    "breakdown": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/breakdown.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

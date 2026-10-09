@@ -32,7 +32,7 @@ import { patchAt, patchPoints, type V3 } from '../surface';
 import { contacts, dirToLocal, grownOf, layout, least, patchIn, sat, toLocal, type Contact, type Node, type OBB } from './space';
 
 export type MatClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
-export const classOf = (m?: string): MatClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon|^pe$|^pu$|fibreglass/.test(m) ? 'polymer' : m === 'rubber' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
+export const classOf = (m?: string): MatClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver|brass|bronze|ndfeb|magnet-wire|zinc|nickel|^tin$/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon|^pe$|^pu$|fibreglass|^pom$|ptfe|^pvc$|fr4|epoxy/.test(m) ? 'polymer' : m === 'rubber' || m === 'nbr' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
 const engineered = (n: Node) => { const c = classOf(n.p.mat); return !!c && c !== 'organic' && !n.p.detail; };
 
 export interface Ctx { root: Part; nodes: Node[]; touch: Contact[]; cond: Conditions; centre: THREE.Vector3; size: number; mass: number; doors: number[]; joined: Set<string>; /** in a living thing: what grew is not joined */ living: (n: Node) => boolean }
@@ -492,12 +492,15 @@ export const RULES: DetailRule[] = [
 const hasWheels = (c: Ctx) => c.nodes.filter((x) => x.p.mat === 'rubber' && ringed(x)).length >= 2;
 
 /** The details added to a thing (it is changed in place: give it a copy). */
+/** Whether a laid-out part is, or is in, one designed whole (Part.sealed). */
+export const sealedIn = (n: Node): boolean => { for (let x: Node | null = n; x; x = x.parent) if (x.p.sealed) return true; return false; };
 export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => boolean = (r) => r.on): { counts: Record<string, number>; kg: Record<string, number>; total: number } {
   const counts: Record<string, number> = {}, kg: Record<string, number> = {}, base = { root, cond, doors: [] as number[], joined: new Set<string>() };
   for (const r of RULES) {
     if (!on(r)) continue;
     // laid out afresh for each rule: what one adds, the next can see
-    const nodes = layout(root), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
+    // (a part designed whole, a component from the library, is fitted as it comes: nothing laid on it or in it)
+    const nodes = layout(root).filter((n) => !sealedIn(n)), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
     const m0 = massOf(root), ctx: Ctx = { ...base, living: grown, nodes, touch: r.id === 'joints' ? contacts(nodes, engineered) : [], centre: all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3()), size: all.isEmpty() ? 1 : all.getSize(new THREE.Vector3()).length(), mass: massOf(root) };
     counts[r.id] = r.run(ctx); base.doors = ctx.doors; kg[r.id] = massOf(root) - m0;
   }
@@ -505,4 +508,4 @@ export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => 
 }
 /** A thing without the details a pipeline added (to add them again after it is changed). */
 /** (what the critic cut, an opening for a wheel, is a change to the thing itself, and stays) */
-export function stripDetails(p: Part): Part { return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: undefined, wear: undefined }; }
+export function stripDetails(p: Part): Part { if (p.sealed) return p; return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: undefined, wear: undefined }; }

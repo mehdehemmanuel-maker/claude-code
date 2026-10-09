@@ -96,6 +96,8 @@ export interface Part {
   /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
   /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it
    *  opens into what it is made of, down to the elements, and is drawn as that item looks where it has no shape of its own */ item?: string;
+  /** designed whole and checked on its own (a component from the library, src/nexus/components.ts): the make pipeline
+   *  lays no detail on it and moves nothing in it, as a bought part is fitted as it comes */ sealed?: string;
   /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
   parts?: Part[]; says?: string;
 }
