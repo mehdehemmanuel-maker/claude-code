@@ -55,25 +55,25 @@ export const TOOLS: KindDef[] = [
   {
     id: 'sawblade', look: (p) => `gear z${p.z}`, name: 'circular saw blade', path: 'Tools/Cutting tools/Saw blades', says: 'a steel disc with carbide-tipped teeth', std: 'the diameters, tooth counts and bores sold',
     axes: [ax('d', 'diameter', 'mm', [140, 160, 165, 184, 190, 210, 216, 235, 250, 254, 305]), unit('z', 'teeth', 'T', (p) => [24, 40, 48, 60, 80, 96].filter((z) => z <= n(p, 'd') / 2.5)), unit('bore', 'bore', 'mm', (p) => (n(p, 'd') <= 190 ? [20] : [30]))],
-    title: (p) => `${p.d} mm saw blade, ${p.z} teeth, ${p.bore} mm bore`, of: () => 'steel-tool tungsten-carbide', make: 'grind', how: 'a tensioned steel plate laser-cut, carbide tips brazed on and ground',
+    title: (p) => `${p.d} mm saw blade, ${p.z} teeth, ${p.bore} mm bore`, of: (p) => `blade-plate carbide-tip*${n(p, 'z')}`, make: 'grind', how: 'a tensioned steel plate laser-cut, carbide tips brazed on and ground',
     spec: (p) => `${p.z} teeth: ${n(p, 'z') <= 24 ? 'fast rip cuts' : n(p, 'z') <= 48 ? 'general purpose' : 'fine cross-cuts and sheet'}; kerf about ${n(p, 'd') <= 190 ? 2.4 : 3} mm (typical)`, box: (p) => [n(p, 'd'), n(p, 'd'), 2.8], g: (p) => gOf(cyl(n(p, 'd'), 1.8), 7.85),
   },
   {
     id: 'abrasive', name: 'abrasive paper', path: 'Tools/Abrasives/Sanding', says: 'abrasive grit bonded to paper or cloth, by its FEPA grit', std: 'FEPA P-grits P40–P2000 with their median grain sizes; the sheets, discs and belts sold',
     axes: [tagged('P', 'P', 'grit', '', Object.keys(FEPA).map(Number)), bare('form', 'form', ['sheet', 'disc125', 'disc150', 'belt75x533']), bare('grain', 'grain', ['alox', 'sic'])],
-    title: (p) => `P${p.P} ${p.grain === 'sic' ? 'silicon carbide wet-and-dry' : 'aluminium oxide'} ${p.form === 'sheet' ? 'sheet 230 × 280 mm' : p.form === 'belt75x533' ? 'belt 75 × 533 mm' : `disc ${String(p.form).replace('disc', '')} mm`}`, of: (p) => `${p.grain === 'sic' ? 'sic' : 'alumina'} paper phenolic`, make: 'laminate', how: 'graded grit dropped electrostatically onto a resin-coated backing, sized with more resin, cured',
+    title: (p) => `P${p.P} ${p.grain === 'sic' ? 'silicon carbide wet-and-dry' : 'aluminium oxide'} ${p.form === 'sheet' ? 'sheet 230 × 280 mm' : p.form === 'belt75x533' ? 'belt 75 × 533 mm' : `disc ${String(p.form).replace('disc', '')} mm`}`, of: () => 'abrasive-backing abrasive-coat', make: 'laminate', how: 'graded grit dropped electrostatically onto a resin-coated backing, sized with more resin, cured',
     spec: (p) => `P${p.P}: median grain about ${FEPA[n(p, 'P')]} µm (FEPA 43-2); ${n(p, 'P') <= 80 ? 'coarse: removes stock' : n(p, 'P') <= 220 ? 'medium: smooths' : 'fine: finishing'}`, box: (p) => (p.form === 'sheet' ? [230, 280, 0.5] : p.form === 'belt75x533' ? [75, 170, 75] : [Number(String(p.form).replace('disc', '')), Number(String(p.form).replace('disc', '')), 0.6]), g: (p) => (p.form === 'sheet' ? 12 : p.form === 'belt75x533' ? 30 : 4),
   },
   {
     id: 'cutdisc', look: 'ring', name: 'cutting or grinding disc', path: 'Tools/Abrasives/Discs', says: 'a resin-bonded abrasive disc for an angle grinder', std: 'the diameters and thicknesses sold',
     axes: [unit('d', 'diameter', 'mm', [115, 125, 180, 230]), unit('t', 'thickness', 'mm', [1, 1.6, 3, 6]), bare('for', 'for', ['metal', 'stone', 'inox'])],
-    title: (p) => `${p.d} × ${p.t} mm ${n(p, 't') >= 6 ? 'grinding' : 'cutting'} disc for ${p.for === 'inox' ? 'stainless' : p.for}`, of: (p) => `${p.for === 'stone' ? 'sic' : 'alumina'} phenolic fibreglass`, make: 'mould', how: 'grit and phenolic resin pressed between glass-fibre webs and baked', spec: (p) => `${p.d} mm, 22.23 mm bore; up to ${(80 / (Math.PI * n(p, 'd') / 1000) * 60).toFixed(0)} rpm (80 m/s, EN 12413)`,
+    title: (p) => `${p.d} × ${p.t} mm ${n(p, 't') >= 6 ? 'grinding' : 'cutting'} disc for ${p.for === 'inox' ? 'stainless' : p.for}`, of: () => 'abrasive-disc reinforcing-mesh*2 centre-ring', make: 'mould', how: 'grit and phenolic resin pressed between glass-fibre webs and baked', spec: (p) => `${p.d} mm, 22.23 mm bore; up to ${(80 / (Math.PI * n(p, 'd') / 1000) * 60).toFixed(0)} rpm (80 m/s, EN 12413)`,
     box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 't')], g: (p) => gOf(cyl(n(p, 'd'), n(p, 't')), 2.5),
   },
   {
     id: 'hexkey', look: 'rod', name: 'hex key', path: 'Tools/Hand tools/Hex keys', says: 'an L-shaped hexagon bar for socket screws', std: 'ISO 2936 sizes and arm lengths',
     axes: [ax('af', 'size', 'mm', Object.keys(HEXKEY).map(Number)), bare('form', 'form', ['L', 'ballend', 'Thandle'])],
-    title: (p) => `${p.af} mm hex key, ${p.form === 'ballend' ? 'ball-end' : p.form === 'Thandle' ? 'T-handle' : 'plain L'}`, of: (p) => `steel-tool${p.form === 'Thandle' ? ' pp' : ''}`, make: 'forge', alt: 'machine', how: 'chrome-vanadium hex bar cut, bent, hardened and tempered', spec: (p) => { const [l1, l2] = HEXKEY[n(p, 'af')]!; return `${p.af} mm A/F; arms ${l1} × ${l2} mm (ISO 2936)${p.form === 'ballend' ? '; its ball end turns a screw from up to about 25° off' : ''}`; },
+    title: (p) => `${p.af} mm hex key, ${p.form === 'ballend' ? 'ball-end' : p.form === 'Thandle' ? 'T-handle' : 'plain L'}`, of: () => 'hex-key-bar t-handle', make: 'forge', alt: 'machine', how: 'chrome-vanadium hex bar cut, bent, hardened and tempered', spec: (p) => { const [l1, l2] = HEXKEY[n(p, 'af')]!; return `${p.af} mm A/F; arms ${l1} × ${l2} mm (ISO 2936)${p.form === 'ballend' ? '; its ball end turns a screw from up to about 25° off' : ''}`; },
     box: (p) => { const [l1, l2] = HEXKEY[n(p, 'af')]!; return [l2, n(p, 'af'), l1]; }, g: (p) => { const [l1, l2] = HEXKEY[n(p, 'af')]!; return gOf((Math.sqrt(3) / 2) * n(p, 'af') ** 2 * (l1 + l2), 7.85) + (p.form === 'Thandle' ? 25 : 0); },
   },
   {
@@ -103,7 +103,7 @@ export const TOOLS: KindDef[] = [
   {
     id: 'solderwire', name: 'solder wire', path: 'Tools/Soldering/Solder', says: 'a reel of flux-cored solder wire', std: 'the alloys, diameters and reels sold',
     axes: [bare('alloy', 'alloy', Object.keys(SOLDER)), ax('d', 'diameter', 'mm', [0.3, 0.5, 0.6, 0.8, 1, 1.2, 1.5]), unit('g', 'reel', 'g', [50, 100, 250, 500, 1000])],
-    title: (p) => `${String(p.alloy).replace('Sn99Cu07', 'Sn99.3Cu0.7')} solder wire ${p.d} mm, ${p.g} g`, of: (p) => `${SOLDER[s(p, 'alloy')]![0]} rosin pp`, make: 'extrude', how: 'the alloy extruded round a core of rosin flux (about 2 %) and drawn to diameter',
+    title: (p) => `${String(p.alloy).replace('Sn99Cu07', 'Sn99.3Cu0.7')} solder wire ${p.d} mm, ${p.g} g`, of: () => 'solder-wire spool', make: 'extrude', how: 'the alloy extruded round a core of rosin flux (about 2 %) and drawn to diameter',
     spec: (p) => `melts at ${SOLDER[s(p, 'alloy')]![1]}; about ${(n(p, 'g') / (7.4 * Math.PI * (n(p, 'd') / 2) ** 2)).toFixed(0)} m on the reel`, box: (p) => [Math.cbrt(n(p, 'g')) * 12, Math.cbrt(n(p, 'g')) * 12, Math.cbrt(n(p, 'g')) * 6], g: (p) => n(p, 'g') * 1.1,
   },
 ];

@@ -117,7 +117,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     make: (p, it) => { const { T, d, P: P0 } = thr(p), lock = p.lock === 'yes', e = T.s / Math.cos(PI / 6), r1 = (d - 1.0825 * P0) / 2, m = lock ? T.m * 0.72 : T.m, mat = matIn(it), lk = looks(it, mat);
       const out = [P(it.name, lathe([[r1, 0], [0.88 * (e / 2), 0], [e / 2, 0.12 * m], [e / 2, m - 0.12 * m], [0.88 * (e / 2), m], [r1, m], [r1, 0]]), { mat, ...lk, facets: 6, fill: nutFill(T.s, d, P0) })];
       // (a lock nut's ring of nylon in its collar over the hex, the ring's bore a little under the thread, so it grips it)
-      if (lock) { const hN = (it.size?.[2] ?? T.m * 1.25) - m; out.push(P(`${it.name} ring`, lathe([[r1, m], [0.9 * (T.s / 2), m], [0.85 * (T.s / 2), m + hN], [r1, m + hN], [r1, m]]), { mat: 'nylon', color: 0xe8e4d4, finish: 'texture', fixed: 'held in its nut\'s crimped collar' })); }
+      if (lock) { const hN = (it.size?.[2] ?? T.m * 1.25) - m; out.push(P(`${it.name} ring`, lathe([[r1, m], [0.9 * (T.s / 2), m], [0.85 * (T.s / 2), m + hN], [r1, m + hN], [r1, m]]), { mat: 'nylon', color: 0xe8e4d4, finish: 'texture', item: 'nylon-insert', fixed: 'held in its nut\'s crimped collar' })); }
       return out; },
     iface: (p) => [{ kind: 'studs', role: 'requires', d: thr(p).d * mm }],
   },
@@ -157,7 +157,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'ISO 15977: a domed head twice its body across, its hollow body, its mandrel through it (before it is set)', leaves: 'shown before setting: the far end not yet swelled',
     make: (p, it) => { const d = Number(p.d), L = Number(p.L), mat = matIn(it), hd = 2 * d, hk = 0.3 * d, dm = 0.55 * d;
       return [P(it.name, lathe([[dm / 2, 0], [hd / 2, 0], [hd / 2 * 0.8, hk], [dm / 2, hk], [dm / 2, 0]]), { mat, ...looks(it, mat) }), P(it.name, lathe([[dm / 2, 0], [d / 2, 0], [d / 2, -L], [dm / 2, -L], [dm / 2, 0]]), { mat, ...looks(it, mat) }),
-        P(`${it.name} mandrel`, lathe([[0, -L - 1], [dm / 2 * 1.2, -L - 1], [0.25 * d, -L], [0.25 * d, 25], [0, 25]]), { mat: 'steel-low', color: 0xa0a4a8, finish: 'plate', fixed: 'drawn through its rivet\'s body, its head under the rivet\'s far end' })]; },
+        P(`${it.name} mandrel`, lathe([[0, -L - 1], [dm / 2 * 1.2, -L - 1], [0.25 * d, -L], [0.25 * d, 25], [0, 25]]), { mat: p.matter === 'stainless' ? 'stainless-304' : 'steel-low', color: 0xa0a4a8, finish: 'plate', item: p.matter === 'stainless' ? 'rivet-mandrel-stainless' : 'rivet-mandrel', fixed: 'drawn through its rivet\'s body, its head under the rivet\'s far end' })]; },
   },
   wheelnut: {
     says: 'a wheel nut: its hex over a 60° cone seat (DIN 74361 A) that centres the wheel on its studs, or over a flange (ISO 4107)', leaves: 'its thread drawn as its root cylinder',

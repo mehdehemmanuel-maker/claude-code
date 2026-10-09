@@ -75,7 +75,7 @@ export const MORE: KindDef[] = [
   {
     id: 'rcd', name: 'residual current device', path: 'Electrical/Circuit protection/RCDs', says: 'a DIN-rail switch that trips when current leaks to earth: it saves a life before a fuse would notice', std: 'IEC 61008-1 ratings',
     axes: [unit('A', 'rated current', 'A', [25, 40, 63]), unit('mA', 'trips at', 'mA', [30, 100, 300]), unit('poles', 'poles', 'P', [2, 4]), bare('type', 'type', ['AC', 'A'])],
-    title: (p) => `${p.A} A ${p.mA} mA RCD, ${p.poles}-pole, type ${p.type}`, of: (p) => `switch-housing toroid-core winding*${Number(p.poles) + 1} latch-mechanism armature magnetic-core contact-spring*${p.poles} contact-silver*${2 * Number(p.poles)} terminal-clamp*${2 * Number(p.poles)} terminal-screw*${2 * Number(p.poles)} switch-actuator`, make: 'assemble', how: 'the live and neutral pass through a toroid: any difference between them (leakage) induces a current that releases the latch',
+    title: (p) => `${p.A} A ${p.mA} mA RCD, ${p.poles}-pole, type ${p.type}`, of: (p) => `switch-housing toroid-core winding*${Number(p.poles) + 1} latch-mechanism relay-armature magnetic-core contact-spring*${p.poles} contact-silver*${2 * Number(p.poles)} terminal-clamp*${2 * Number(p.poles)} terminal-screw*${2 * Number(p.poles)} switch-actuator`, make: 'assemble', how: 'the live and neutral pass through a toroid: any difference between them (leakage) induces a current that releases the latch',
     spec: (p) => `trips by ${p.mA} mA of leakage, within 300 ms (IEC 61008-1)${n(p, 'mA') === 30 ? ': personal protection' : ': fire protection'}; type ${p.type === 'A' ? 'A also sees pulsing DC leakage' : 'AC sees AC leakage only'}`, box: (p) => [17.5 * n(p, 'poles'), 85, 70], g: (p) => 120 * n(p, 'poles'),
   },
   {
@@ -99,13 +99,13 @@ export const MORE: KindDef[] = [
   {
     id: 'polyvbelt', name: 'ribbed belt (poly-V)', path: 'Mechanical/Power transmission/V-belts', says: 'a flat belt with V ribs along it: thin, flexible, grips well on small pulleys', std: 'ISO 9982 sections; the rib counts and lengths sold',
     axes: [bare('section', 'section', Object.keys(PV)), ax('ribs', 'ribs', '', [3, 4, 5, 6, 8, 10, 12, 16]), unit('L', 'length', 'mm', [356, 432, 508, 610, 711, 813, 914, 1016, 1219, 1422, 1625, 2032])],
-    title: (p) => `${p.ribs}${p.section} ${p.L} ribbed belt`, of: () => 'epdm pet', make: 'mould', how: 'polyester cords in EPDM, its ribs ground', spec: (p) => { const [pt, h] = PV[s(p, 'section')]!; return `${(n(p, 'ribs') * pt).toFixed(1)} mm wide (${p.ribs} ribs at ${pt} mm), ${h} mm thick (ISO 9982)`; },
+    title: (p) => `${p.ribs}${p.section} ${p.L} ribbed belt`, of: () => 'ribbed-belt-body tension-cord-polyester', make: 'mould', how: 'polyester cords in EPDM, its ribs ground', spec: (p) => { const [pt, h] = PV[s(p, 'section')]!; return `${(n(p, 'ribs') * pt).toFixed(1)} mm wide (${p.ribs} ribs at ${pt} mm), ${h} mm thick (ISO 9982)`; },
     box: (p) => [n(p, 'L') / Math.PI, n(p, 'L') / Math.PI, n(p, 'ribs') * PV[s(p, 'section')]![0]], g: (p) => n(p, 'L') * n(p, 'ribs') * PV[s(p, 'section')]![0] * PV[s(p, 'section')]![1] * 0.0011,
   },
   {
     id: 'rfconn', name: 'RF coaxial connector', path: 'Electrical/Connectors/RF', says: 'a connector for coaxial cable that keeps its impedance through the joint', std: 'the types in use, with their impedance and the frequency each is good to (typical)',
     axes: [bare('type', 'type', Object.keys(RF)), bare('gender', 'gender', ['male', 'female']), bare('form', 'form', ['crimp', 'panel', 'pcb', 'rightangle'])],
-    title: (p) => `${p.type} ${p.gender} connector, ${p.form === 'rightangle' ? 'right-angle' : p.form}`, of: () => 'brass gold ptfe nickel', make: 'machine', how: 'turned brass bodies, a gold-plated centre pin in a PTFE insulator', spec: (p) => { const [Z, f] = RF[s(p, 'type')]!; return `${Z} Ω, good to about ${f} GHz`; },
+    title: (p) => `${p.type} ${p.gender} connector, ${p.form === 'rightangle' ? 'right-angle' : p.form}`, of: () => 'rf-body rf-centre-pin rf-insulator crimp-ferrule', make: 'machine', how: 'turned brass bodies, a gold-plated centre pin in a PTFE insulator', spec: (p) => { const [Z, f] = RF[s(p, 'type')]!; return `${Z} Ω, good to about ${f} GHz`; },
     box: (p) => (p.type === 'U.FL' ? [3, 3, 2.5] : p.type === 'N' ? [20, 20, 40] : [9, 9, 20]), g: (p) => (p.type === 'U.FL' ? 0.05 : p.type === 'N' ? 35 : 5),
   },
   {
@@ -142,7 +142,7 @@ export const MORE: KindDef[] = [
   {
     id: 'hydraulichose', name: 'hydraulic hose', path: 'Fluid/Tubing and hose/Hydraulic hose', says: 'rubber hose with two braids of steel wire, for oil at hundreds of bar', std: 'SAE J517 100R2AT, with its working pressures; any length cut to the centimetre',
     axes: [bare('dash', 'size', Object.keys(R2)), unit('L', 'length', 'm', [0.5, 1, 2, 5, 10], [0.05, 50, 0.01])],
-    title: (p) => `100R2AT hose ${p.dash} (${R2[s(p, 'dash')]![0]} mm), ${p.L} m`, of: () => 'nbr steel-spring rubber', make: 'extrude', how: 'an oil-proof nitrile tube, two braids of high-tensile steel wire, a tough rubber cover', spec: (p) => { const [d, P] = R2[s(p, 'dash')]!; return `${d} mm bore; works at up to ${P} bar (SAE J517); bursts at four times that`; },
+    title: (p) => `100R2AT hose ${p.dash} (${R2[s(p, 'dash')]![0]} mm), ${p.L} m`, of: () => 'hose-tube wire-braid*2 hose-cover', make: 'extrude', how: 'an oil-proof nitrile tube, two braids of high-tensile steel wire, a tough rubber cover', spec: (p) => { const [d, P] = R2[s(p, 'dash')]!; return `${d} mm bore; works at up to ${P} bar (SAE J517); bursts at four times that`; },
     box: (p) => { const d = R2[s(p, 'dash')]![0] + 10; return [d, d, Math.min(n(p, 'L') * 1000, 400)]; }, g: (p) => n(p, 'L') * (R2[s(p, 'dash')]![0] * 35 + 120),
   },
   {
@@ -178,7 +178,7 @@ export const MORE: KindDef[] = [
   {
     id: 'biketyre', name: 'bicycle tyre', path: 'Mechanical/Vehicle parts/Wheels', says: 'a clincher tyre by its ETRTO size: width and bead seat', std: 'ETRTO (ISO 5775) widths and bead seats',
     axes: [ax('w', 'width', 'mm', [23, 25, 28, 32, 35, 38, 40, 42, 47, 50, 54, 57, 60]), unit('bead', 'bead seat', 'mm', [559, 584, 622]), bare('bead2', 'bead', ['wire', 'folding'])],
-    title: (p) => `bicycle tyre ${p.w}-${p.bead} (${BEAD[n(p, 'bead')]}), ${p.bead2}`, of: (p) => `rubber nylon ${p.bead2 === 'wire' ? 'steel-spring' : 'pet'}`, make: 'mould', how: 'rubber vulcanised over a nylon casing, beads of steel wire (or of aramid, to fold)', spec: (p) => `ETRTO ${p.w}-${p.bead}: ${BEAD[n(p, 'bead')]}, ${p.w} mm wide; about ${(n(p, 'bead') + 2 * n(p, 'w')).toFixed(0)} mm across inflated`,
+    title: (p) => `bicycle tyre ${p.w}-${p.bead} (${BEAD[n(p, 'bead')]}), ${p.bead2}`, of: (p) => `tyre-tread tyre-casing ${p.bead2 === 'folding' ? 'tyre-bead-folding' : 'tyre-bead'}*2`, make: 'mould', how: 'rubber vulcanised over a nylon casing, beads of steel wire (or of aramid, to fold)', spec: (p) => `ETRTO ${p.w}-${p.bead}: ${BEAD[n(p, 'bead')]}, ${p.w} mm wide; about ${(n(p, 'bead') + 2 * n(p, 'w')).toFixed(0)} mm across inflated`,
     box: (p) => [n(p, 'bead') + 2 * n(p, 'w'), n(p, 'bead') + 2 * n(p, 'w'), n(p, 'w')], g: (p) => n(p, 'w') * 9 + (p.bead2 === 'wire' ? 80 : 0),
   },
   {

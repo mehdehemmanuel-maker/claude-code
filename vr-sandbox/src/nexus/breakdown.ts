@@ -4,7 +4,8 @@
 // words its id spells ("screw-m3x32" is "screw m3x32"), made and stored; a thing found with things in it is queued in
 // its turn, down to its materials and their elements. A thing in nothing of that is not in the table: it waits to be
 // found and broken down itself (by research, a family, an entry), and so does a thing made by joining parts whose
-// contents are only its materials (its parts not yet broken out of it), and one with nothing in it at all.
+// contents are only its materials (its parts not yet broken out of it), a thing shaped in one process from two
+// structural materials or more (a housing with its contacts moulded in), and one with nothing in it at all.
 //
 // The queue is the inventory itself: what is stored after a run (a family's new size, an entry added) is what the next
 // run takes. Run: npm run breakdown [-- report.md]
@@ -45,7 +46,7 @@ export function judge(it: Item, find: (id: string) => Item | undefined): Waiting
   const things = it.of.filter((c) => !isStuff(find(c.id)));
   if (things.length) return null;
   if (it.kind === 'assembly' || JOINED.has(it.make) || (FUSED.has(it.make) && new Set(it.of.map((c) => c.id)).size > 1)) return 'only its materials listed';
-  if (it.kind !== 'part' && new Set(it.of.map((c) => c.id).filter((id) => !SURFACE.has(id))).size >= 2) return 'several materials in one shaping';
+  if (it.kind !== 'part' && it.make !== 'grow' && new Set(it.of.map((c) => c.id).filter((id) => !SURFACE.has(id))).size >= 2) return 'several materials in one shaping';
   return null;
 }
 /** Takes every item stored and not yet broken down off the queue, and breaks each down; what it wants that is not in
@@ -63,11 +64,18 @@ export function breakdown(): Breakdown {
       let got = INVENTORY.get(c.id) ?? it.inner?.find((x) => x.id === c.id) ?? null;
       if (!got) { got = makeFrom(c.id); if (got) out.made.push(got.id); }
       if (!got) { out.waiting.push({ id: c.id, in: it.id, n: c.n, why: 'not in the table' }); whole = false; continue; }
-      const d = (depthOf.get(it.id) ?? 0) + 1; if (d > (depthOf.get(got.id) ?? 0)) depthOf.set(got.id, d); out.depth = Math.max(out.depth, d);
       if (!done.has(got.id)) queue.push(got);
     }
     if (whole) out.broken++;
   }
+  // (the deepest chain of things in things, each counted from itself down to its materials: an item queued before what
+  // holds it is still as deep as it is)
+  const deep = (id: string, on: Set<string>): number => {
+    const had = depthOf.get(id); if (had !== undefined) return had; if (on.has(id)) return 0;
+    const it = INVENTORY.get(id); if (!it || isStuff(it)) return 0;
+    on.add(id); const d = 1 + Math.max(0, ...it.of.map((c) => deep(c.id, on))); on.delete(id); depthOf.set(id, d); return d;
+  };
+  for (const id of INVENTORY.keys()) out.depth = Math.max(out.depth, deep(id, new Set()));
   return out;
 }
 /** What is still waiting over every run so far: run the queue first. */

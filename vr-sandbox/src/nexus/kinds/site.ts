@@ -69,7 +69,7 @@ export const SITE: KindDef[] = [
   {
     id: 'plasterboard', name: 'plasterboard', path: 'Materials/Building/Boards', says: 'a gypsum core between paper faces: the walls and ceilings of a building', std: 'EN 520 types and thicknesses; the sheet sizes sold; densities typical',
     axes: [bare('type', 'type', Object.keys(BOARD)), ax('t', 'thickness', 'mm', (p) => (p.type === 'F' ? [12.5, 15] : [9.5, 12.5, 15])), bare('sheet', 'sheet', (p) => (p.type === 'A' && n(p, 't') <= 12.5 ? ['2400x1200', '2700x1200', '3000x1200', '1800x900'] : ['2400x1200', '2700x1200', '3000x1200']))],
-    title: (p) => `${p.t} mm plasterboard type ${p.type}, ${String(p.sheet).replace('x', ' × ')} mm`, of: (p) => `gypsum paper${p.type === 'F' ? ' fibreglass' : ''}`, make: 'cast', how: 'gypsum slurry poured between two papers on a line, set, cut and dried',
+    title: (p) => `${p.t} mm plasterboard type ${p.type}, ${String(p.sheet).replace('x', ' × ')} mm`, of: () => 'gypsum-core board-facing*2', make: 'cast', how: 'gypsum slurry poured between two papers on a line, set, cut and dried',
     spec: (p) => { const [L, W] = dims(s(p, 'sheet')), kgm2 = BOARD[s(p, 'type')]![0] * n(p, 't'); return `type ${p.type} (EN 520): ${BOARD[s(p, 'type')]![1]}; about ${kgm2.toFixed(1)} kg/m², ${((kgm2 * L * W) / 1e6).toFixed(1)} kg a sheet (typical)`; },
     box: (p) => { const [L, W] = dims(s(p, 'sheet')); return [L, W, n(p, 't')]; }, g: (p) => { const [L, W] = dims(s(p, 'sheet')); return gOf(L * W * n(p, 't'), BOARD[s(p, 'type')]![0]); }, look: 'sheet',
   },
@@ -90,7 +90,7 @@ export const SITE: KindDef[] = [
   {
     id: 'insulation', name: 'insulation board', path: 'Materials/Building/Insulation', says: 'a board that slows heat through a wall, roof or floor: its thickness over its conductivity is its resistance', std: 'the boards and thicknesses sold; λ declared values typical',
     axes: [bare('type', 'type', Object.keys(INSUL)), ax('t', 'thickness', 'mm', (p) => INSUL[s(p, 'type')]![1])],
-    title: (p) => `${p.t} mm ${p.type === 'mineralwool' ? 'mineral wool slab' : `${p.type} board`}`, of: (p) => INSUL[s(p, 'type')]![4], make: (p) => (p.type === 'mineralwool' ? 'blow' : 'mould'), how: (p) => ({ PIR: 'polyisocyanurate foamed between foil facings', EPS: 'polystyrene beads expanded with steam and moulded into blocks, then cut', XPS: 'polystyrene extruded as a closed-cell foam', mineralwool: 'molten glass or stone spun into fibres, bound with resin and pressed' } as Record<string, string>)[s(p, 'type')]!,
+    title: (p) => `${p.t} mm ${p.type === 'mineralwool' ? 'mineral wool slab' : `${p.type} board`}`, of: () => 'pir-core foil-facing*2', make: (p) => (p.type === 'mineralwool' ? 'blow' : 'mould'), how: (p) => ({ PIR: 'polyisocyanurate foamed between foil facings', EPS: 'polystyrene beads expanded with steam and moulded into blocks, then cut', XPS: 'polystyrene extruded as a closed-cell foam', mineralwool: 'molten glass or stone spun into fibres, bound with resin and pressed' } as Record<string, string>)[s(p, 'type')]!,
     spec: (p) => { const lam = INSUL[s(p, 'type')]![0], R = n(p, 't') / 1000 / lam; return `λ = ${lam} W/m·K (declared, typical): R = t / λ = ${R.toFixed(2)} m²·K/W; alone, U = 1/R = ${(1 / R).toFixed(2)} W/m²·K`; },
     box: (p) => [...INSUL[s(p, 'type')]![2], n(p, 't')] as [number, number, number], g: (p) => { const [L, W] = INSUL[s(p, 'type')]![2]; return ((L * W * n(p, 't')) / 1e9) * INSUL[s(p, 'type')]![3] * 1000; }, look: 'sheet',
   },
@@ -116,14 +116,14 @@ export const SITE: KindDef[] = [
   {
     id: 'twinearth', name: 'twin and earth cable', path: 'Electrical/Wiring and connectors/Building cable', says: 'flat cable of two insulated cores and a bare earth: the fixed wiring of British homes', std: 'BS 6004 (6242Y) sizes; current clipped direct from BS 7671 Table 4D5; any length to the metre',
     axes: [unit('A', 'conductor', 'mm²', Object.keys(TE).map(Number)), unit('L', 'length', 'm', [10, 25, 50, 100], [1, 250, 1])],
-    title: (p) => `${p.A} mm² twin and earth (6242Y), ${p.L} m`, of: () => 'copper*3 pvc', make: 'extrude', how: 'two copper cores in PVC with a bare earth between, in a flat PVC sheath',
+    title: (p) => `${p.A} mm² twin and earth (6242Y), ${p.L} m`, of: () => 'insulated-conductor*2 earth-conductor cable-jacket', make: 'extrude', how: 'two copper cores in PVC with a bare earth between, in a flat PVC sheath',
     spec: (p) => { const [E, I] = TE[n(p, 'A')]!; return `${p.A} mm² cores, ${E} mm² earth; carries ${I} A clipped direct (BS 7671 Table 4D5, method C)`; },
     box: (p) => (n(p, 'L') >= 25 ? [300, 300, 100] : [200, 200, 60]), g: (p) => { const A = n(p, 'A'); return n(p, 'L') * ((2 * A + TE[A]![0]) * 8.96 + A * 12 + 35); }, look: (p) => `coil w${r1(2 * Math.sqrt(n(p, 'A')) + 5)}`,
   },
   {
     id: 'nmcable', name: 'NM-B cable', path: 'Electrical/Wiring and connectors/Building cable', says: 'non-metallic sheathed cable, two conductors and a ground: the house wiring of North America', std: 'UL 719 sizes; ampacity at 60 °C from NEC 310.16; any length to the metre',
     axes: [unit('awg', 'size', 'AWG', Object.keys(NM).map(Number)), unit('L', 'length', 'm', [7.6, 15.2, 30.5, 76.2], [1, 250, 1])],
-    title: (p) => `${p.awg}/2 NM-B with ground, ${p.L} m`, of: () => 'copper*3 pvc nylon paper', make: 'extrude', how: 'two copper conductors in PVC with a nylon skin and a bare ground, wrapped in paper, in a PVC sheath',
+    title: (p) => `${p.awg}/2 NM-B with ground, ${p.L} m`, of: () => 'insulated-conductor*2 earth-conductor cable-filler cable-jacket', make: 'extrude', how: 'two copper conductors in PVC with a nylon skin and a bare ground, wrapped in paper, in a PVC sheath',
     spec: (p) => { const [mm2, gnd, I] = NM[n(p, 'awg')]!; return `${p.awg} AWG (${mm2} mm²), ${gnd} AWG ground; ${I} A at 60 °C (NEC 310.16)`; },
     box: (p) => (n(p, 'L') >= 25 ? [300, 300, 100] : [200, 200, 60]), g: (p) => { const [mm2] = NM[n(p, 'awg')]!; return n(p, 'L') * (3 * mm2 * 8.96 + mm2 * 12 + 40); }, look: (p) => `coil w${r1(2 * Math.sqrt(NM[n(p, 'awg')]![0]) + 6)}`,
   },
@@ -144,14 +144,14 @@ export const SITE: KindDef[] = [
   {
     id: 'migwire', name: 'MIG welding wire', path: 'Tools/Welding/Consumables', says: 'solid filler wire on a spool, fed through a MIG torch', std: 'AWS A5.18, A5.9 and A5.10 classes; EN ISO 544 spools',
     axes: [bare('class', 'class', Object.keys(MIG)), ax('d', 'diameter', 'mm', (p) => MIG[s(p, 'class')]![1]), unit('kg', 'spool', 'kg', (p) => MIG[s(p, 'class')]![2])],
-    title: (p) => `${p.class} MIG wire ${p.d} mm, ${p.kg} kg spool`, of: (p) => `${MIG[s(p, 'class')]![3]} ${n(p, 'kg') > 5 ? 'steel-low' : 'abs'}`, make: 'draw', how: 'rod drawn down to wire, cleaned (copper-coated for steel), layer-wound on its spool',
+    title: (p) => `${p.class} MIG wire ${p.d} mm, ${p.kg} kg spool`, of: () => 'mig-wire spool', make: 'draw', how: 'rod drawn down to wire, cleaned (copper-coated for steel), layer-wound on its spool',
     spec: (p) => { const [sp, D, W] = spool(n(p, 'kg')); return `${MIG[s(p, 'class')]![0]}; run in ${MIG[s(p, 'class')]![4]}; spool ${sp} (${D} × ${W} mm, EN ISO 544)`; },
     box: (p) => { const [, D, W] = spool(n(p, 'kg')); return [D, D, W]; }, g: (p) => n(p, 'kg') * 1000 + (n(p, 'kg') > 5 ? 1500 : 150), look: 'ring',
   },
   {
     id: 'electrode', name: 'welding electrode', path: 'Tools/Welding/Consumables', says: 'a flux-coated rod for stick (MMA) welding', std: 'AWS A5.1 and A5.4 classes; diameters, lengths and currents typical',
     axes: [bare('class', 'class', Object.keys(ROD)), ax('d', 'diameter', 'mm', (p) => ROD[s(p, 'class')]![2]), unit('kg', 'pack', 'kg', [1, 5])],
-    title: (p) => `${p.class} electrode ${p.d} mm, ${p.kg} kg`, of: (p) => ROD[s(p, 'class')]![1], make: 'extrude', how: 'a core wire cut to length and coated with its flux paste, baked dry',
+    title: (p) => `${p.class} electrode ${p.d} mm, ${p.kg} kg`, of: () => 'core-wire flux-coating', make: 'extrude', how: 'a core wire cut to length and coated with its flux paste, baked dry',
     spec: (p) => `${ROD[s(p, 'class')]![0]}; for ${ROD[s(p, 'class')]![3]}; about ${AMPS[n(p, 'd')]} A (typical); ${n(p, 'd') <= 2 ? 300 : n(p, 'd') <= 3.2 ? 350 : 450} mm long`,
     box: (p) => [60, 40, n(p, 'd') <= 2 ? 310 : n(p, 'd') <= 3.2 ? 360 : 460], g: (p) => n(p, 'kg') * 1000 + 60, look: 'rod',
   },
@@ -165,13 +165,13 @@ export const SITE: KindDef[] = [
   {
     id: 'caliper', look: 'sheet', name: 'caliper', path: 'Tools/Measuring/Calipers', says: 'a sliding jaw gauge: outside, inside and depth', std: 'the ranges and readings sold; accuracy typical of datasheets',
     axes: [bare('type', 'reading', ['vernier', 'dial', 'digital']), ax('range', 'range', 'mm', [150, 200, 300])],
-    title: (p) => `${p.range} mm ${p.type} caliper`, of: (p) => `stainless-304${p.type === 'digital' ? ' abs pcb-bare' : p.type === 'dial' ? ' brass pc' : ''}`, make: 'machine', how: 'a hardened stainless beam and slider ground true, its scale etched (or read by a dial or a capacitive sensor)',
+    title: (p) => `${p.range} mm ${p.type} caliper`, of: () => 'caliper-beam caliper-slider gear-train gauge-dial indicator-crystal', make: 'machine', how: 'a hardened stainless beam and slider ground true, its scale etched (or read by a dial or a capacitive sensor)',
     spec: (p) => `reads ${p.type === 'digital' ? '0.01' : '0.02'} mm; within about ±${n(p, 'range') <= 200 ? '0.03' : '0.04'} mm (typical)`, box: (p) => [n(p, 'range') + 85, n(p, 'range') / 4 + 35, 16], g: (p) => 0.0045 * n(p, 'range') ** 2 + 70,
   },
   {
     id: 'micrometer', name: 'micrometer', path: 'Tools/Measuring/Micrometers', says: 'a screw gauge: a fine thread turns a spindle onto the work', std: 'DIN 863 ranges; readings and accuracy typical of datasheets',
     axes: [bare('range', 'range', ['0-25', '25-50', '50-75', '75-100']), bare('type', 'reading', ['analog', 'digital'])],
-    title: (p) => `${p.range} mm ${p.type} micrometer`, of: (p) => `steel-tool cast-iron tungsten-carbide${p.type === 'digital' ? ' abs pcb-bare' : ''}`, make: 'machine', how: 'a frame with a 0.5 mm pitch spindle lapped to its nut, carbide-tipped faces',
+    title: (p) => `${p.range} mm ${p.type} micrometer`, of: () => 'micrometer-frame micrometer-spindle anvil-face*2 return-spring', make: 'machine', how: 'a frame with a 0.5 mm pitch spindle lapped to its nut, carbide-tipped faces',
     spec: (p) => `${p.range} mm; a turn moves its spindle 0.5 mm, so 50 marks read 0.01 mm${p.type === 'digital' ? '; reads 0.001 mm' : ''}; within about ±2 µm (typical)`, box: (p) => { const hi = Number(s(p, 'range').split('-')[1]); return [hi + 120, hi + 40, 20]; }, g: (p) => 180 + Number(s(p, 'range').split('-')[1]) * 3, look: 'box',
   },
   {
@@ -195,7 +195,7 @@ export const SITE: KindDef[] = [
   {
     id: 'hammer', look: 'rod', name: 'hammer', path: 'Tools/Hand tools/Hammers', says: 'a head on a handle: what it does is the energy its head carries in', std: 'the head masses sold (oz and lb); the energy at 10 m/s an estimate of a full swing',
     axes: [bare('type', 'type', Object.keys(HAMMER)), unit('oz', 'head', 'oz', (p) => HAMMER[s(p, 'type')]![0])],
-    title: (p) => `${n(p, 'oz') >= 40 ? `${n(p, 'oz') / 16} lb` : `${p.oz} oz`} ${p.type} hammer`, of: (p) => HAMMER[s(p, 'type')]![2], make: (p) => (p.type === 'mallet' ? 'mould' : 'forge'), how: (p) => (p.type === 'mallet' ? 'a rubber head moulded on a wooden handle' : 'a head drop-forged, hardened on its face, fixed on its handle'),
+    title: (p) => `${n(p, 'oz') >= 40 ? `${n(p, 'oz') / 16} lb` : `${p.oz} oz`} ${p.type} hammer`, of: () => 'hammer-head hammer-handle rubber-grip', make: (p) => (p.type === 'mallet' ? 'mould' : 'forge'), how: (p) => (p.type === 'mallet' ? 'a rubber head moulded on a wooden handle' : 'a head drop-forged, hardened on its face, fixed on its handle'),
     spec: (p) => { const m = (n(p, 'oz') * 28.35) / 1000; return `${(m * 1000).toFixed(0)} g head (1 oz = 28.35 g); at 10 m/s it carries ½mv² = ${(0.5 * m * 100).toFixed(0)} J`; }, box: (p) => { const L = HAMMER[s(p, 'type')]![1]; return [r1(L * 0.35), 35, L]; }, g: (p) => n(p, 'oz') * 28.35 + HAMMER[s(p, 'type')]![1] * 0.6,
   },
   {
@@ -215,7 +215,7 @@ export const SITE: KindDef[] = [
   {
     id: 'wirerope', name: 'steel wire rope', path: 'Hardware/Lifting/Wire rope', says: 'strands of steel wire laid round a core: for lifting, hauling and guying', std: 'EN 12385-4: breaking load K·d²·R/1000 at grade 1770, mass W′·d²; any length to the metre',
     axes: [bare('build', 'construction', Object.keys(ROPE)), ax('d', 'diameter', 'mm', [3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26]), unit('L', 'length', 'm', [10, 20, 50, 100, 200], [1, 1000, 1])],
-    title: (p) => `${p.d} mm ${p.build} wire rope, ${p.L} m`, of: (p) => ROPE[s(p, 'build')]![2], make: 'draw', how: (p) => (p.build === '6x19-FC' ? 'galvanised wires laid into six strands of 19, closed round a fibre core' : 'galvanised wires laid into six strands of 36, closed round a steel rope core'),
+    title: (p) => `${p.d} mm ${p.build} wire rope, ${p.L} m`, of: () => 'rope-strand*6 fibre-core', make: 'draw', how: (p) => (p.build === '6x19-FC' ? 'galvanised wires laid into six strands of 19, closed round a fibre core' : 'galvanised wires laid into six strands of 36, closed round a steel rope core'),
     spec: (p) => { const [K, W] = ROPE[s(p, 'build')]!, d = n(p, 'd'), F = (K * d * d * 1770) / 1000; return `grade 1770: breaks at ${F.toFixed(1)} kN (EN 12385-4: K d² R / 1000, K = ${K}); ${((W * d * d)).toFixed(1)} kg per 100 m; works at ${(F / 5).toFixed(1)} kN at 5 : 1 (a common factor)`; },
     box: (p) => (n(p, 'L') >= 20 ? [400, 400, 150] : [250, 250, 80]), g: (p) => ROPE[s(p, 'build')]![1] * n(p, 'd') ** 2 * n(p, 'L') * 10, look: (p) => `coil w${p.d}`,
   },

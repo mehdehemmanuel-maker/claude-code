@@ -119,7 +119,7 @@ export const MATERIALS: Record<string, Spec> = {
   'solder-mask': { blend: [['epoxy', 80], ['quartz', 20]], says: 'epoxy with a silica filler' },
   grease: { blend: [['oil', 88], ['C18H35LiO2', 12]], says: 'mineral oil thickened with lithium stearate' },
   'al-laminate': { blend: [['al-foil', 40], ['nylon', 25], ['pp', 35]], says: 'nylon, aluminium foil and polypropylene' },
-  'ruthenium-oxide': { formula: 'RuO2', says: 'ruthenium dioxide' }, aramid: { formula: 'C14H10N2O2', says: 'poly-paraphenylene terephthalamide' },
+  'ruthenium-oxide': { formula: 'RuO2', says: 'ruthenium dioxide' }, 'silicone-alumina': { blend: [['silicone', 35], ['alumina', 65]], says: 'silicone filled with alumina, typical shares' }, 'fibre-gasket-sheet': { blend: [['fibreglass', 55], ['aramid', 15], ['nbr', 30]], says: 'glass and aramid fibre in nitrile, typical shares' }, 'cotton-fabric': { formula: 'C6H10O5', says: 'cellulose' }, aramid: { formula: 'C14H10N2O2', says: 'poly-paraphenylene terephthalamide' },
   'silver-paste': { blend: [['silver', 80], ['glass', 5], ['C10H18O', 15]], says: 'silver powder and glass frit in terpineol' },
   // the materials of the kinds of bought part (src/nexus/kinds)
   'stainless-316': { alloy: { Cr: 17, Ni: 12, Mo: 2.5, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 316, nominal' },

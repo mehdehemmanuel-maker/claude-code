@@ -105,7 +105,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'plainbush', name: 'plain bush, PTFE-lined', path: 'Mechanical/Bearings/Plain bearings', says: 'a steel-backed bronze sleeve lined with PTFE: a bearing with no balls that needs no oil', std: 'ISO 3547 wrapped bushes, bores 3–50 mm',
     axes: [ax('d', 'bore', 'mm', Object.keys(DU).map(Number)), ax('L', 'length', 'mm', (p) => [3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50].filter((x) => x >= Math.max(3, n(p, 'd') * 0.5) && x <= Math.max(6, n(p, 'd') * 1.6))), bare('style', 'style', ['plain', 'flanged'])],
-    title: (p) => `${p.style === 'flanged' ? 'flanged ' : ''}plain bush ${p.d} × ${DU[n(p, 'd')]} × ${p.L}`, of: () => 'steel-low bronze ptfe', make: 'roll', how: 'steel strip with sintered bronze and PTFE rolled on, cut and wrapped into a sleeve',
+    title: (p) => `${p.style === 'flanged' ? 'flanged ' : ''}plain bush ${p.d} × ${DU[n(p, 'd')]} × ${p.L}`, of: () => 'bush-strip', make: 'roll', how: 'steel strip with sintered bronze and PTFE rolled on, cut and wrapped into a sleeve',
     spec: (p) => `${p.d} mm shaft (h8), ${DU[n(p, 'd')]} mm housing (H7), ${p.L} mm long (ISO 3547); runs dry`, box: (p) => [DU[n(p, 'd')]! + (p.style === 'flanged' ? 6 : 0), DU[n(p, 'd')]! + (p.style === 'flanged' ? 6 : 0), n(p, 'L')], g: (p) => gOf(ring(DU[n(p, 'd')]!, n(p, 'd'), n(p, 'L')), 7.9),
   },
   {
@@ -148,7 +148,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'vbelt', name: 'V-belt', path: 'Mechanical/Power transmission/V-belts', says: 'an endless rubber belt of trapezoidal section, wedged into its pulley\'s groove so it grips by its sides', std: 'ISO 4184 classical and narrow sections, in the R20 datum lengths',
     axes: [bare('section', 'section', Object.keys(VB)), unit('L', 'datum length', 'mm', VLEN)],
-    title: (p) => `V-belt ${p.section} ${p.L}`, of: () => 'rubber pet', make: 'mould', how: 'polyester cords wound in rubber, wrapped in a fabric cover and vulcanised in a ring mould',
+    title: (p) => `V-belt ${p.section} ${p.L}`, of: () => 'vbelt-body tension-cord-polyester belt-cover', make: 'mould', how: 'polyester cords wound in rubber, wrapped in a fabric cover and vulcanised in a ring mould',
     spec: (p) => { const [w, h] = VB[String(p.section)]!; return `${w} × ${h} mm section; ${p.L} mm round its pitch line (ISO 4184)`; }, box: (p) => [n(p, 'L') / Math.PI, n(p, 'L') / Math.PI, VB[String(p.section)]![0]], g: (p) => VB[String(p.section)]![2] * n(p, 'L'),
   },
   {
@@ -160,7 +160,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'htdbelt', name: 'HTD timing belt', path: 'Mechanical/Power transmission/Timing belts', says: 'a closed toothed belt with round-topped teeth, for drive that cannot slip', std: 'HTD 3M, 5M, 8M and 14M, the widths sold, every fifth tooth count (makers stock most)',
     axes: [bare('pitch', 'pitch', Object.keys(HTD)), ax('w', 'width', 'mm', (p) => HTD[String(p.pitch)]![0]), ax('z', 'teeth', '', (p) => range(String(p.pitch) === '14M' ? 60 : 40, String(p.pitch) === '3M' ? 400 : 300, 5))],
-    title: (p) => `HTD ${p.pitch} belt, ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm, ${p.w} mm wide`, of: () => 'neoprene fibreglass nylon', make: 'mould', how: 'glass-fibre cords and neoprene moulded with its teeth, faced with nylon',
+    title: (p) => `HTD ${p.pitch} belt, ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm, ${p.w} mm wide`, of: () => 'timing-belt-body tension-cord-glass tooth-fabric', make: 'mould', how: 'glass-fibre cords and neoprene moulded with its teeth, faced with nylon',
     spec: (p) => `${p.z} teeth at ${String(p.pitch).replace('M', '')} mm: ${n(p, 'z') * Number(String(p.pitch).replace('M', ''))} mm round its pitch line`, box: (p) => { const L = n(p, 'z') * Number(String(p.pitch).replace('M', '')); return [L / Math.PI, L / Math.PI, n(p, 'w')]; }, g: (p) => n(p, 'z') * Number(String(p.pitch).replace('M', '')) * n(p, 'w') * Number(String(p.pitch).replace('M', '')) * 0.00045,
   },
   {
@@ -185,7 +185,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'wormset', name: 'worm and worm wheel', path: 'Mechanical/Gears and gearboxes/Worm gears', says: 'a screw-like worm turning a toothed wheel at right angles: a big reduction in one pair, often self-locking', std: 'modules 0.5–3, single-start, wheel teeth = ratio (typical)',
     axes: [ax('m', 'module', 'mm', [0.5, 0.8, 1, 1.25, 1.5, 2, 2.5, 3]), unit('i', 'ratio', ':1', [10, 15, 20, 25, 30, 40, 50, 60]), bare('matter', 'made of', ['bronze', 'nylon'])],
-    title: (p) => `worm set m${p.m}, ${p.i}:1, steel worm, ${madeOf(p)[2]} wheel`, of: (p) => `steel-alloy ${madeOf(p)[0]}`, make: 'machine', alt: 'print', how: 'the worm cut on hardened steel, the wheel hobbed in bronze (or moulded in nylon)',
+    title: (p) => `worm set m${p.m}, ${p.i}:1, steel worm, ${madeOf(p)[2]} wheel`, of: () => 'worm worm-wheel', make: 'machine', alt: 'print', how: 'the worm cut on hardened steel, the wheel hobbed in bronze (or moulded in nylon)',
     spec: (p) => { const m = n(p, 'm'), z = n(p, 'i'), q = 10, gam = Math.atan(1 / q) * 180 / Math.PI; return `wheel ${z} teeth, pitch circle ${(m * z).toFixed(1)} mm; worm about ${(q * m).toFixed(1)} mm (q = 10, typical); centres ${(m * (z + q) / 2).toFixed(1)} mm; lead angle ${gam.toFixed(1)}°: ${gam < 5 ? 'self-locking' : 'near self-locking: it may back-drive under vibration'}`; },
     box: (p) => [n(p, 'm') * (n(p, 'i') + 2), n(p, 'm') * (n(p, 'i') + 2), n(p, 'm') * 10 + 10], g: (p) => gOf(cyl(n(p, 'm') * n(p, 'i'), n(p, 'm') * 8) * 0.8 + cyl(10 * n(p, 'm'), 25 * n(p, 'm')), madeOf(p)[1]),
   },

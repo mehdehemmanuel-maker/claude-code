@@ -130,9 +130,10 @@ Known gaps (from the 2026-10-08 audit, still open):
   (9,074 catalogue sizes), and the wheel nuts, wheel studs, the detail pass's bolts and anchor bolts come from it; the
   ball bearings (rings, raceways, balls, cage, shields or seals) and the steppers (bells, stator and coils, rotor cups
   and magnet, shaft, bearings, tie screws, leads and plug) are drawn whole, every part their inventory lists inside them.
-  The breakdown queue (2026-10-08) lists 107 families and entries still made of only their materials (chip resistors,
-  boxes, terminal blocks, patch cords, screwdrivers, crystals, speakers, hydraulic cylinders …): each to have its parts
-  broken out, family by family. Still
+  The breakdown queue (2026-10-09) waits on nothing: 59,046 items taken, none listed only as its materials, none
+  shaped from several materials in one process, nothing missing from the table, its deepest chain of things in
+  things 12. The ~410 parts broken out of them have typical sizes and looks (`looks.ts`), not yet drawn as components
+  of their own. Still
   drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
   each is next to become a component, smallest and commonest first;
 - the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
@@ -182,8 +183,9 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
    load, motion, electrical and fluid ports, shape from process and cost were absent with it). Act on what it names
    before polishing what the critic counts: a missing concept costs every build, a patched overlap costs one.
 8. Run the breakdown queue (`npm run breakdown -- report.md`). Nothing new may wait as "not in the table", and the families
-   at the top of "only its materials listed" are broken out before new ones are added: a part is not stored until it is
-   broken down.
+   at the top of "only its materials listed" and "several materials in one shaping" are broken out before new ones are
+   added: a part is not stored until it is broken down. A new id is checked against the table first: an id written twice
+   replaces the first unseen (`WRITTEN_TWICE` in `inventory.ts` must stay empty).
 
 ## Working here
 

@@ -103,14 +103,14 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'mlcc', name: 'ceramic chip capacitor', path: 'Electrical/Passive components/Capacitors', says: 'a stack of ceramic layers and nickel electrodes fired into a chip', std: 'E6 values (IEC 60063) in each dielectric\'s usual range, in the standard packages',
     axes: [bare('dielectric', 'dielectric', ['C0G', 'X7R', 'X5R']), bare('pkg', 'package', ['0402', '0603', '0805', '1206', '1210']), unit('C', 'capacitance', 'F', (p) => decades([1, 1.5, 2.2, 3.3, 4.7, 6.8], ...(({ C0G: [1e-12, ({ '0402': 1e-9, '0603': 4.7e-9, '0805': 2.2e-8, '1206': 1e-7, '1210': 1e-7 } as Record<string, number>)[s(p, 'pkg')]!], X7R: [1e-10, ({ '0402': 1e-7, '0603': 1e-6, '0805': 4.7e-6, '1206': 1e-5, '1210': 2.2e-5 } as Record<string, number>)[s(p, 'pkg')]!], X5R: [1e-8, ({ '0402': 1e-6, '0603': 1e-5, '0805': 2.2e-5, '1206': 4.7e-5, '1210': 1e-4 } as Record<string, number>)[s(p, 'pkg')]!] } as Record<string, [number, number]>)[s(p, 'dielectric')]!))), unit('V', 'rated voltage', 'V', [6.3, 10, 16, 25, 50, 100])],
-    title: (p) => `${si(n(p, 'C'))}F ${p.dielectric} capacitor, ${p.pkg}, ${p.V} V`, of: (p) => `${p.dielectric === 'C0G' ? 'alumina' : 'batio3'} nickel copper tin`, make: 'sinter', how: 'barium titanate (or, for C0G, a stable titanate) tape printed with nickel, stacked, cut, fired, its ends terminated',
+    title: (p) => `${si(n(p, 'C'))}F ${p.dielectric} capacitor, ${p.pkg}, ${p.V} V`, of: () => 'mlcc-body chip-termination*2', make: 'sinter', how: 'barium titanate (or, for C0G, a stable titanate) tape printed with nickel, stacked, cut, fired, its ends terminated',
     spec: (p) => `${si(n(p, 'C'))}F; ${p.dielectric === 'C0G' ? 'C0G: ±30 ppm/°C, no loss of capacitance with voltage' : p.dielectric === 'X7R' ? 'X7R: ±15 % over −55…125 °C; loses some capacitance under DC bias' : 'X5R: ±15 % over −55…85 °C; loses much under DC bias'}; ${p.V} V`,
     box: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return [c[0], c[1], s(p, 'pkg') === '1210' ? 2.5 : c[1]]; }, g: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return gOf(c[0] * c[1] * c[1], 5.5); },
   },
   {
     id: 'inductor', look: 'can', name: 'inductor', path: 'Electrical/Passive components/Inductors', says: 'a coil of wire on a ferrite core, to store energy in its field and smooth a current', std: 'E12 values (IEC 60063) in the ranges each style is wound in; current ratings typical',
     axes: [bare('style', 'style', ['axial', 'radial', 'cd54', 'toroid']), unit('L', 'inductance', 'H', (p) => decades(E12, ...(({ axial: [1e-6, 1e-2], radial: [1e-6, 1e-2], cd54: [1e-6, 1e-3], toroid: [1e-5, 1e-3] } as Record<string, [number, number]>)[s(p, 'style')]!)))],
-    title: (p) => `${si(n(p, 'L'))}H ${p.style === 'cd54' ? 'SMD power (CD54)' : p.style} inductor`, of: () => 'ferrite-soft magnet-wire epoxy tin', make: 'wind', how: 'enamelled copper wound on a ferrite core (a drum, a bobbin, or a ring), its ends terminated',
+    title: (p) => `${si(n(p, 'L'))}H ${p.style === 'cd54' ? 'SMD power (CD54)' : p.style} inductor`, of: () => 'ferrite-core winding lead-wire*2 dip-coat', make: 'wind', how: 'enamelled copper wound on a ferrite core (a drum, a bobbin, or a ring), its ends terminated',
     spec: (p) => { const L = n(p, 'L'), base = ({ axial: 0.5, radial: 1.5, cd54: 2, toroid: 5 } as Record<string, number>)[s(p, 'style')]!, I = base * Math.sqrt(1e-5 / L); return `${si(L)}H ±10 %; about ${Math.min(base * 3, I).toPrecision(2)} A before its core saturates (typical: rating falls as √L)`; },
     box: (p) => ({ axial: [4, 4, 10], radial: [8, 8, 10], cd54: [5.8, 5.2, 4.5], toroid: [20, 20, 10] } as Record<string, [number, number, number]>)[s(p, 'style')]!, g: (p) => ({ axial: 0.4, radial: 1.5, cd54: 0.4, toroid: 12 } as Record<string, number>)[s(p, 'style')]!,
   },
@@ -206,38 +206,38 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'crimpterminal', look: 'rod', name: 'insulated crimp terminal', path: 'Electrical/Connectors/Crimp terminals', says: 'a tinned copper terminal with a coloured sleeve, crimped onto a wire\'s end', std: 'the colour bands (red 0.5–1.5, blue 1.5–2.5, yellow 4–6 mm²) and the studs and tabs sold',
     axes: [bare('type', 'type', ['ring', 'fork', 'spade', 'butt']), bare('band', 'wire band', ['red', 'blue', 'yellow']), bare('stud', 'stud or tab', (p) => (p.type === 'ring' || p.type === 'fork' ? ['M3', 'M4', 'M5', 'M6', 'M8', 'M10'] : p.type === 'spade' ? ['tab2.8', 'tab4.8', 'tab6.3'] : ['none']))],
-    title: (p) => `${p.band} ${p.type} terminal${p.stud === 'none' ? '' : `, ${String(p.stud).replace('tab', '').replace(/^(\d)/, '$1 mm tab').replace(/^M/, 'M')}`}`, of: () => 'copper tin pvc', make: 'stamp', how: 'stamped from copper strip, tin-plated, a PVC sleeve over its barrel',
+    title: (p) => `${p.band} ${p.type} terminal${p.stud === 'none' ? '' : `, ${String(p.stud).replace('tab', '').replace(/^(\d)/, '$1 mm tab').replace(/^M/, 'M')}`}`, of: () => 'terminal-barrel terminal-insulation', make: 'stamp', how: 'stamped from copper strip, tin-plated, a PVC sleeve over its barrel',
     spec: (p) => `for ${({ red: '0.5–1.5', blue: '1.5–2.5', yellow: '4–6' } as Record<string, string>)[s(p, 'band')]} mm² wire (${({ red: '22–16', blue: '16–14', yellow: '12–10' } as Record<string, string>)[s(p, 'band')]} AWG)`, box: (p) => [p.band === 'yellow' ? 9 : 7, 5, 22], g: (p) => (p.band === 'yellow' ? 1.6 : 0.8),
   },
   {
     id: 'ferrule', name: 'bootlace ferrule', path: 'Electrical/Connectors/Crimp terminals', says: 'a tinned copper tube with a plastic collar, crimped onto stranded wire so a terminal clamps it cleanly', std: 'DIN 46228-4 cross-sections, with its colour code',
     axes: [ax('cs', 'cross-section', 'mm²', Object.keys(FERRULE).map(Number)), unit('L', 'tube length', 'mm', (p) => (n(p, 'cs') <= 1.5 ? [8, 10] : n(p, 'cs') <= 6 ? [10, 12] : [12, 18]))],
-    title: (p) => `${p.cs} mm² ferrule (${FERRULE[n(p, 'cs')]}), ${p.L} mm`, of: () => 'copper tin pp', make: 'draw', how: 'a copper tube drawn and tin-plated, a polypropylene collar pressed on', spec: (p) => `${p.cs} mm², ${FERRULE[n(p, 'cs')]} (DIN 46228-4); ${p.L} mm into the terminal`,
+    title: (p) => `${p.cs} mm² ferrule (${FERRULE[n(p, 'cs')]}), ${p.L} mm`, of: () => 'ferrule-sleeve ferrule-collar', make: 'draw', how: 'a copper tube drawn and tin-plated, a polypropylene collar pressed on', spec: (p) => `${p.cs} mm², ${FERRULE[n(p, 'cs')]} (DIN 46228-4); ${p.L} mm into the terminal`,
     box: (p) => [Math.sqrt(n(p, 'cs')) * 1.6 + 2, Math.sqrt(n(p, 'cs')) * 1.6 + 2, n(p, 'L') + 6], g: (p) => 0.05 + n(p, 'cs') * 0.06,
   },
   {
     id: 'heatshrink', name: 'heat-shrink tubing', path: 'Electrical/Wire management/Heat shrink', says: 'polyolefin tubing that shrinks to half (or a third) its size when heated, to insulate a joint', std: 'the diameters and colours sold, any length cut to the centimetre',
     axes: [ax('d', 'diameter as supplied', 'mm', [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25, 30, 40, 50]), bare('ratio', 'shrink ratio', ['2to1', '3to1']), bare('colour', 'colour', ['black', 'red', 'blue', 'yellow', 'green', 'white', 'clear']), unit('L', 'length', 'm', [1, 5, 10], [0.01, 100, 0.01])],
-    title: (p) => `heat shrink ${p.d} mm ${p.ratio === '2to1' ? '2:1' : '3:1 glue-lined'}, ${p.colour}, ${p.L} m`, of: (p) => (p.ratio === '3to1' ? 'pe eva' : 'pe'), make: 'extrude', how: 'polyolefin extruded, cross-linked by radiation, expanded warm and cooled so it remembers its smaller size',
+    title: (p) => `heat shrink ${p.d} mm ${p.ratio === '2to1' ? '2:1' : '3:1 glue-lined'}, ${p.colour}, ${p.L} m`, of: (p) => (/glue|lined/.test(String(p.glue ?? p.lined ?? '')) || p.ratio === '3to1' ? 'shrink-tube adhesive-liner' : 'pe'), make: 'extrude', how: 'polyolefin extruded, cross-linked by radiation, expanded warm and cooled so it remembers its smaller size',
     spec: (p) => `${p.d} mm, to ${(n(p, 'd') / (p.ratio === '2to1' ? 2 : 3)).toFixed(2)} mm at about 90–120 °C${p.ratio === '3to1' ? '; its lining melts and seals' : ''}`, box: (p) => [n(p, 'd'), n(p, 'd'), Math.min(n(p, 'L') * 1000, 300)], g: (p) => gOf(ring(n(p, 'd'), n(p, 'd') - 0.5 - n(p, 'd') * 0.04, n(p, 'L') * 1000), 1),
   },
   {
     id: 'multicore', name: 'multicore control cable', path: 'Electrical/Wiring and connectors/Cable', says: 'insulated stranded cores twisted together under a PVC sheath', std: 'the core counts and sections sold, any length cut to the centimetre',
     axes: [ax('c', 'cores', '', [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 25]), unit('cs', 'core section', 'mm²', SECTIONS), bare('screen', 'screen', ['plain', 'screened']), unit('L', 'length', 'm', [1, 5, 10, 25, 50, 100], [0.01, 500, 0.01])],
-    title: (p) => `${p.c}-core ${p.cs} mm² ${p.screen === 'screened' ? 'screened ' : ''}cable, ${p.L} m`, of: (p) => `copper pvc${p.screen === 'screened' ? ' copper' : ''}`, make: 'extrude', how: 'fine copper strands bunched, insulated in PVC, the cores laid up and sheathed',
+    title: (p) => `${p.c}-core ${p.cs} mm² ${p.screen === 'screened' ? 'screened ' : ''}cable, ${p.L} m`, of: (p) => `insulated-conductor*${n(p, 'c')} cable-filler cable-jacket${p.screen === 'screened' ? ' cable-shield' : ''}`, make: 'extrude', how: 'fine copper strands bunched, insulated in PVC, the cores laid up and sheathed',
     spec: (p) => { const R = (1.7241e-8 * n(p, 'L')) / (n(p, 'cs') * 1e-6); return `each core ${R.toFixed(3)} Ω over ${p.L} m (IACS copper); outside about ${(Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6).toFixed(1)} mm (typical)`; },
     box: (p) => { const D = Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6; return [D, D, Math.min(n(p, 'L') * 1000, 400)]; }, g: (p) => { const D = Math.sqrt(n(p, 'c')) * (Math.sqrt(n(p, 'cs')) * 1.6 + 1.4) + 1.6; return n(p, 'L') * (n(p, 'c') * n(p, 'cs') * 8.96 + cyl(D, 1) * 0.5 * 1.4); },
   },
   {
     id: 'mainscord', name: 'flexible mains cord', path: 'Electrical/Wiring and connectors/Cable', says: 'PVC (H05VV-F) or rubber (H07RN-F) flexible cord for mains appliances', std: 'the cores and sections sold, with the currents BS 7671 table 4F3A allows; any length to the centimetre',
     axes: [bare('type', 'type', ['H05VV-F', 'H07RN-F']), ax('c', 'cores', '', [2, 3, 4, 5]), unit('cs', 'core section', 'mm²', [0.75, 1, 1.5, 2.5, 4]), unit('L', 'length', 'm', [1, 5, 10, 25, 50], [0.01, 100, 0.01])],
-    title: (p) => `${p.type} ${p.c} × ${p.cs} mm² cord, ${p.L} m`, of: (p) => `copper ${p.type === 'H05VV-F' ? 'pvc' : 'rubber neoprene'}`, make: 'extrude', how: 'fine copper strands, each core insulated and coloured, sheathed in PVC (or in rubber and a tough neoprene)',
+    title: (p) => `${p.type} ${p.c} × ${p.cs} mm² cord, ${p.L} m`, of: (p) => `insulated-conductor*${n(p, 'c')} cable-jacket`, make: 'extrude', how: 'fine copper strands, each core insulated and coloured, sheathed in PVC (or in rubber and a tough neoprene)',
     spec: (p) => `up to ${CORD_A[n(p, 'cs')]} A (BS 7671 4F3A, two cores at 30 °C); ${p.type === 'H05VV-F' ? '300/500 V, indoors' : '450/750 V, outdoors and on sites'}`, box: (p) => [Math.sqrt(n(p, 'c')) * 3.2 + 2, Math.sqrt(n(p, 'c')) * 3.2 + 2, Math.min(n(p, 'L') * 1000, 400)], g: (p) => n(p, 'L') * (n(p, 'c') * n(p, 'cs') * 8.96 + 40),
   },
   {
     id: 'coax', name: 'coaxial cable', path: 'Electrical/Wiring and connectors/Cable', says: 'a centre conductor in a dielectric under a braided screen: radio and video', std: 'the RG and LMR types, with their impedances and sizes; any length to the centimetre',
     axes: [bare('type', 'type', Object.keys(COAX)), unit('L', 'length', 'm', [1, 5, 10, 25, 50, 100], [0.01, 500, 0.01])],
-    title: (p) => `${p.type} coax, ${p.L} m`, of: () => 'copper pe pvc al-foil', make: 'extrude', how: 'a copper centre in foamed or solid polyethylene, a copper braid (and foil), a PVC jacket', spec: (p) => { const [Z, D, d] = COAX[s(p, 'type')]!; return `${Z} Ω; ${D} mm outside, ${d} mm centre`; },
+    title: (p) => `${p.type} coax, ${p.L} m`, of: () => 'conductor-strand coax-dielectric foil-shield cable-shield cable-jacket', make: 'extrude', how: 'a copper centre in foamed or solid polyethylene, a copper braid (and foil), a PVC jacket', spec: (p) => { const [Z, D, d] = COAX[s(p, 'type')]!; return `${Z} Ω; ${D} mm outside, ${d} mm centre`; },
     box: (p) => [COAX[s(p, 'type')]![1], COAX[s(p, 'type')]![1], Math.min(n(p, 'L') * 1000, 400)], g: (p) => n(p, 'L') * COAX[s(p, 'type')]![1] ** 2 * 1.1,
   },
   {
@@ -372,7 +372,7 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'mirror', name: 'flat mirror', path: 'Optics/Mirrors/Flat', says: 'a polished glass flat with a reflecting coat on its front', std: 'the diameters sold; reflectances typical for each coat',
     axes: [ax('d', 'diameter', 'mm', [12.7, 25.4, 50.8]), bare('coat', 'coating', ['aluminium', 'silver', 'gold', 'dielectric'])],
-    title: (p) => `${p.d} mm ${p.coat} mirror`, of: (p) => `bk7 ${p.coat === 'aluminium' ? 'al-foil' : p.coat === 'dielectric' ? 'quartz' : p.coat} mgo`, make: 'coat', how: 'glass polished flat to a quarter-wave, coated in a vacuum, a protective layer over it', spec: (p) => `reflects about ${({ aluminium: 90, silver: 97, gold: 98, dielectric: 99.5 } as Record<string, number>)[s(p, 'coat')]} % ${p.coat === 'gold' ? 'of infrared' : p.coat === 'dielectric' ? 'over its design band' : 'of visible light'} (typical)`,
+    title: (p) => `${p.d} mm ${p.coat} mirror`, of: () => 'mirror-substrate mirror-coating', make: 'coat', how: 'glass polished flat to a quarter-wave, coated in a vacuum, a protective layer over it', spec: (p) => `reflects about ${({ aluminium: 90, silver: 97, gold: 98, dielectric: 99.5 } as Record<string, number>)[s(p, 'coat')]} % ${p.coat === 'gold' ? 'of infrared' : p.coat === 'dielectric' ? 'over its design band' : 'of visible light'} (typical)`,
     box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 'd') / 4], g: (p) => gOf(cyl(n(p, 'd'), n(p, 'd') / 4), 2.51),
   },
 ];

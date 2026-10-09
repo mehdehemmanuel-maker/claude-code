@@ -2,7 +2,7 @@
 // adjustable families that make any size from their standards; entries fed fast and checked; all of it as boards.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, PROCESSES, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
+import { INVENTORY, PROCESSES, WRITTEN_TWICE, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
 import type { Item } from '../../src/nexus/inventory';
 import { FAMILIES, callFamily } from '../../src/nexus/families';
 import { triggersOf } from '../../src/nexus/flows';
@@ -14,6 +14,9 @@ describe('the inventory', () => {
     expect([...cats.get('Electrical')!.keys()].length).toBeGreaterThanOrEqual(8);
     expect([...INVENTORY.values()].filter((i) => i.kind !== 'material').length).toBeGreaterThanOrEqual(100);
     for (const i of INVENTORY.values()) expect(i.path.length, i.id).toBeGreaterThanOrEqual(2);
+  });
+  it('writes each id once: no entry replaces another unseen (a gear pump is not one of its own gears)', () => {
+    expect(WRITTEN_TWICE).toEqual([]);
   });
   it('maps everything to what is in it: every part known, nothing inside itself, every branch down to materials', () => {
     for (const i of INVENTORY.values()) {

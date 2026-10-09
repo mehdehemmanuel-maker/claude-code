@@ -71,7 +71,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'innertube', name: 'bicycle inner tube', path: 'Mechanical/Vehicle parts/Wheels', says: 'a butyl rubber tube inside a tyre, by its ETRTO bead seat and the widths it fits', std: 'ETRTO bead seats and the width ranges sold; valves in use',
     axes: [unit('bead', 'bead seat', 'mm', Object.keys(TUBE).map(Number)), bare('w', 'fits widths', (p) => TUBE[n(p, 'bead')]!), bare('valve', 'valve', ['Presta-48', 'Presta-60', 'Presta-80', 'Schrader', 'Dunlop'])],
-    title: (p) => `inner tube ${p.bead} × ${p.w} mm, ${s(p, 'valve').replace('-', ' ')}${/Presta/.test(s(p, 'valve')) ? ' mm' : ''}`, of: (p) => (/Presta/.test(s(p, 'valve')) ? 'rubber brass al-6061' : 'rubber brass'), make: 'mould', how: 'butyl rubber extruded as a tube, cut, its ends joined round in a mould, its valve vulcanised in',
+    title: (p) => `inner tube ${p.bead} × ${p.w} mm, ${s(p, 'valve').replace('-', ' ')}${/Presta/.test(s(p, 'valve')) ? ' mm' : ''}`, of: () => 'tube-body valve-stem', make: 'mould', how: 'butyl rubber extruded as a tube, cut, its ends joined round in a mould, its valve vulcanised in',
     spec: (p) => `for tyres ${p.w} mm wide on a ${p.bead} mm bead seat (ETRTO); ${/Presta/.test(s(p, 'valve')) ? `a Presta valve ${s(p, 'valve').split('-')[1]} mm long, for a 6 mm hole` : p.valve === 'Schrader' ? 'a Schrader (car) valve, for an 8.5 mm hole' : 'a Dunlop (Woods) valve, for an 8.5 mm hole'}`,
     box: (p) => { const w = Number(s(p, 'w').split('-')[1]), D = n(p, 'bead') + 2 * w; return [D, D, w]; }, g: (p) => { const [a, b] = s(p, 'w').split('-').map(Number) as [number, number], w = (a + b) / 2; return Math.PI * (n(p, 'bead') + w) * w * 0.002 + 8; }, look: 'torus',
   },
@@ -105,7 +105,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'carabiner', name: 'carabiner', path: 'Hardware/Lifting/Carabiners', says: 'a sprung-gate link of aluminium alloy, for ropes', std: 'EN 12275 (at least 20 kN closed along its spine); strengths typical',
     axes: [bare('shape', 'shape', Object.keys(KARABINER)), bare('gate', 'gate', (p) => (p.shape === 'HMS' ? ['screwgate', 'autolock'] : ['screwgate', 'snapgate', 'wiregate']))],
-    title: (p) => `${p.shape === 'HMS' ? 'HMS pear' : p.shape === 'D' ? 'D' : 'oval'} carabiner, ${p.gate}`, of: (p) => `al-7075 steel-spring${p.gate === 'wiregate' ? '' : ' steel-low'}`, make: 'forge', how: 'hot-forged from 7075 aluminium bar, anodised, its gate sprung',
+    title: (p) => `${p.shape === 'HMS' ? 'HMS pear' : p.shape === 'D' ? 'D' : 'oval'} carabiner, ${p.gate}`, of: () => 'carabiner-frame carabiner-gate return-spring gate-rivet', make: 'forge', how: 'hot-forged from 7075 aluminium bar, anodised, its gate sprung',
     spec: (p) => { const [maj, min, open] = KARABINER[s(p, 'shape')]!; return `closed along its spine ${maj} kN, across ${min} kN, gate open ${open} kN (typical; EN 12275: at least 20 kN closed)${p.gate === 'screwgate' || p.gate === 'autolock' ? '; its gate locks' : ''}`; },
     box: (p) => (p.shape === 'HMS' ? [70, 12, 110] : [58, 12, 105]), g: (p) => KARABINER[s(p, 'shape')]![3], look: 'ring',
   },
@@ -130,7 +130,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'syringe', name: 'syringe', path: 'Lab/Consumables/Syringes', says: 'a plastic barrel and plunger: a measured volume drawn in and pushed out', std: 'ISO 7886-1 sizes, Luer ends (ISO 80369-7); barrels typical',
     axes: [unit('ml', 'volume', 'ml', Object.keys(SYRINGE).map(Number)), bare('tip', 'tip', ['luer-slip', 'luer-lock'])],
-    title: (p) => `${p.ml} ml syringe, ${s(p, 'tip').replace('-', ' ')}`, of: () => 'pp rubber', make: 'mould', how: 'a moulded polypropylene barrel and plunger with a rubber stopper',
+    title: (p) => `${p.ml} ml syringe, ${s(p, 'tip').replace('-', ' ')}`, of: () => 'syringe-barrel plunger-rod plunger-stopper', make: 'mould', how: 'a moulded polypropylene barrel and plunger with a rubber stopper',
     spec: (p) => { const d = SYRINGE[n(p, 'ml')]!, A = (Math.PI * (d / 1000) ** 2) / 4; return `${d} mm barrel (typical): 10 N on its plunger makes p = F / A = ${((10 / A) / 1000).toFixed(0)} kPa; ${p.tip === 'luer-lock' ? 'a needle or line screws on' : 'a needle pushes on'}`; },
     box: (p) => { const d = SYRINGE[n(p, 'ml')]!, L = (n(p, 'ml') * 1000) / ((Math.PI * d * d) / 4) + 30; return [r1(d * 1.6), r1(d * 1.6), r1(L * 1.6)]; }, g: (p) => 1 + n(p, 'ml') * 0.45, look: 'tube',
   },
@@ -169,7 +169,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'plywood', name: 'plywood', path: 'Materials/Sheet/Wood sheet', says: 'veneers glued cross-grain: a board that is strong both ways and does not split', std: 'the grades, thicknesses and sheets sold; densities typical',
     axes: [bare('grade', 'grade', Object.keys(PLY)), ax('t', 'thickness', 'mm', (p) => PLY[s(p, 'grade')]![0]), bare('sheet', 'sheet', (p) => PLY[s(p, 'grade')]![1])],
-    title: (p) => `${p.t} mm ${p.grade} plywood, ${String(p.sheet).replace('x', ' × ')} mm`, of: (p) => PLY[s(p, 'grade')]![3], make: 'laminate', how: (p) => `${p.grade === 'birch' ? 'birch' : p.grade === 'marine' ? 'tropical hardwood' : 'softwood'} veneers peeled, dried, glued cross-grain and pressed hot${p.grade === 'marine' ? ' with a waterproof phenolic glue' : ''}`,
+    title: (p) => `${p.t} mm ${p.grade} plywood, ${String(p.sheet).replace('x', ' × ')} mm`, of: () => 'veneer-ply*5 phenolic', make: 'laminate', how: (p) => `${p.grade === 'birch' ? 'birch' : p.grade === 'marine' ? 'tropical hardwood' : 'softwood'} veneers peeled, dried, glued cross-grain and pressed hot${p.grade === 'marine' ? ' with a waterproof phenolic glue' : ''}`,
     spec: (p) => { const [L, W] = dims(s(p, 'sheet')), rho = PLY[s(p, 'grade')]![2], plies = Math.max(3, 2 * Math.round(n(p, 't') / 2.8) + 1); return `about ${plies} plies (typical); ${((L * W * n(p, 't') * rho) / 1e6).toFixed(1)} kg a sheet at ${rho} g/cm³ (typical)`; },
     box: (p) => { const [L, W] = dims(s(p, 'sheet')); return [L, W, n(p, 't')]; }, g: (p) => { const [L, W] = dims(s(p, 'sheet')); return gOf(L * W * n(p, 't'), PLY[s(p, 'grade')]![2]); }, look: 'sheet',
   },
@@ -183,7 +183,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'sealant', name: 'sealant', path: 'Hardware/Adhesives and tape/Sealants', says: 'a gun-grade sealant in a cartridge: it fills a joint and moves with it', std: 'ISO 11600 movement classes (typical of each kind); EU cartridge sizes',
     axes: [bare('type', 'type', Object.keys(SEAL)), unit('ml', 'cartridge', 'ml', [290, 310]), bare('colour', 'colour', ['clear', 'white', 'grey', 'black'])],
-    title: (p) => `${s(p, 'type').replace('-', ' ')} sealant, ${p.colour}, ${p.ml} ml`, of: (p) => SEAL[s(p, 'type')]![1], make: 'chemistry', how: 'a curing polymer paste with its fillers, filled into a polyethylene cartridge',
+    title: (p) => `${s(p, 'type').replace('-', ' ')} sealant, ${p.colour}, ${p.ml} ml`, of: () => 'silicone cartridge', make: 'chemistry', how: 'a curing polymer paste with its fillers, filled into a polyethylene cartridge',
     spec: (p) => { const [cls, , use] = SEAL[s(p, 'type')]!; return `ISO 11600 class ${cls}: a joint may move ±${cls.replace(/[A-Z]+$/, '')} % of its width (typical of the kind); for ${use}; a ${p.ml} ml cartridge fills about ${((n(p, 'ml') * 1000) / 100 / 1000).toFixed(1)} m of a 10 × 10 mm joint`; },
     box: () => [50, 50, 215], g: (p) => n(p, 'ml') * 1.3 + 40, look: 'can',
   },

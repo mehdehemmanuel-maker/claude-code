@@ -92,7 +92,7 @@ export const FASTENERS: KindDef[] = [
   {
     id: 'blindrivet', look: 'rod', name: 'blind rivet', path: 'Hardware/Fasteners/Rivets', says: 'a hollow rivet set from one side: its mandrel pulled until it snaps, swelling the far end', std: 'ISO 15977/15983 diameters, in the lengths makers sell (typical)',
     axes: [ax('d', 'diameter', 'mm', [2.4, 3.2, 4, 4.8, 6.4]), ax('L', 'length', 'mm', (p) => ({ 2.4: [4, 6, 8, 10], 3.2: [6, 8, 10, 12, 16], 4: [6, 8, 10, 12, 14, 16, 20], 4.8: [8, 10, 12, 14, 16, 20, 25], 6.4: [10, 12, 16, 20, 25, 30] } as Record<number, number[]>)[Number(p.d)]!), bare('matter', 'made of', ['aluminium', 'steel', 'stainless'])],
-    title: (p) => `blind rivet ${p.d} × ${p.L}, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} ${p.matter === 'aluminium' ? 'steel-low' : madeOf(p)[0]}`, make: 'cold-head', how: 'its body cold-headed and drawn hollow, a mandrel put through it with a neck to snap',
+    title: (p) => `blind rivet ${p.d} × ${p.L}, ${madeOf(p)[2]}`, of: (p) => `${madeOf(p)[0]} ${p.matter === 'stainless' ? 'rivet-mandrel-stainless' : 'rivet-mandrel'}`, make: 'cold-head', how: 'its body cold-headed and drawn hollow, a mandrel put through it with a neck to snap',
     spec: (p) => `drill ${(Number(p.d) + 0.1).toFixed(1)} mm; grips about ${Math.max(0.5, Number(p.L) - 1.6 * Number(p.d)).toFixed(1)}–${(Number(p.L) - 1.1 * Number(p.d)).toFixed(1)} mm of plate (typical)`, box: (p) => [2 * Number(p.d), 2 * Number(p.d), Number(p.L) + 25], g: (p) => gOf(ring(Number(p.d), 0.55 * Number(p.d), Number(p.L)) + ring(1.8 * Number(p.d), 0.55 * Number(p.d), 0.3 * Number(p.d)), madeOf(p)[1]) + gOf(cyl(0.5 * Number(p.d), Number(p.L) + 25), 7.85), // (its body, its domed head about 2 d across and 0.3 d high, and its mandrel)
   },
   {
@@ -194,7 +194,7 @@ export const FASTENERS: KindDef[] = [
   {
     id: 'hookloop', name: 'hook-and-loop tape', path: 'Hardware/Fasteners/Hook and loop', says: 'two tapes, one of tiny hooks and one of loops, that grip when pressed together', std: 'the widths sold, any length cut to the centimetre',
     axes: [unit('w', 'width', 'mm', [16, 20, 25, 38, 50, 100]), bare('side', 'side', ['hook', 'loop', 'pair']), bare('back', 'backing', ['sewon', 'adhesive']), unit('L', 'length', 'm', [1, 5, 25], [0.01, 25, 0.01])],
-    title: (p) => `hook-and-loop tape ${p.w} mm, ${p.side}, ${p.back === 'sewon' ? 'sew-on' : 'self-adhesive'}, ${p.L} m`, of: (p) => (p.back === 'adhesive' ? 'nylon pp epoxy' : 'nylon pp'), make: 'laminate', how: 'nylon woven with monofilament loops, cut into hooks on one tape and brushed into loops on the other',
+    title: (p) => `hook-and-loop tape ${p.w} mm, ${p.side}, ${p.back === 'sewon' ? 'sew-on' : 'self-adhesive'}, ${p.L} m`, of: (p) => `fastener-tape${p.side === 'pair' ? '*2' : ''}${p.back === 'adhesive' ? ' adhesive-backing' : ''}`, make: 'laminate', how: 'nylon woven with monofilament loops, cut into hooks on one tape and brushed into loops on the other',
     spec: (p) => `${p.w} mm × ${p.L} m; peel about 1 N/cm (typical)`, box: (p) => [Number(p.w), 3, Math.min(Number(p.L) * 1000, 400)], g: (p) => Number(p.w) * Number(p.L) * 0.45 * (p.side === 'pair' ? 2 : 1),
   },
 ];

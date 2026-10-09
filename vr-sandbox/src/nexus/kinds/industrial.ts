@@ -109,7 +109,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'supercap', name: 'supercapacitor', path: 'Electrical/Passive components/Supercapacitors', says: 'a double-layer capacitor: far more charge than any other kind, less than a cell', std: 'the capacitances sold at 2.7 V a cell; ESR and sizes typical',
     axes: [unit('F', 'capacitance', 'F', [0.1, 1, 5, 10, 22, 50, 100, 300, 500, 3000])],
-    title: (p) => `${p.F} F 2.7 V supercapacitor`, of: () => 'graphite al-foil electrolyte-li pp', make: 'wind', how: 'activated-carbon electrodes on aluminium foil, wound with a separator, soaked in electrolyte, sealed in a can',
+    title: (p) => `${p.F} F 2.7 V supercapacitor`, of: () => 'electrode-sheet*2 separator-film electrolyte-li cell-can-al cell-seal', make: 'wind', how: 'activated-carbon electrodes on aluminium foil, wound with a separator, soaked in electrolyte, sealed in a can',
     spec: (p) => { const C = n(p, 'F'), E = 0.5 * C * 2.7 * 2.7; return `holds ½CV² = ${E < 10 ? E.toFixed(2) : E.toFixed(0)} J (${(E / 3600).toFixed(4)} Wh) at 2.7 V; charges and discharges in seconds, for hundreds of thousands of cycles (typical)`; },
     box: (p) => { const d = r1(5 + Math.cbrt(n(p, 'F')) * 7.5); return [d, d, r1(d * 1.8)]; }, g: (p) => 0.5 + n(p, 'F') * 0.17, look: 'can',
   },
@@ -122,7 +122,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'batteryholder', name: 'battery holder', path: 'Electrical/Power/Battery holders', says: 'a moulded holder with spring contacts for cells', std: 'the cells and counts sold',
     axes: [bare('cell', 'cell', Object.keys(CELL)), ax('count', 'cells', '', (p) => (p.cell === 'CR2032' || p.cell === '9V' ? [1] : [1, 2, 3, 4, 6, 8])), bare('form', 'mount', ['pcb', 'leads'])],
-    title: (p) => `${p.count} × ${p.cell} battery holder, ${p.form === 'pcb' ? 'PCB' : 'with leads'}`, of: () => 'abs steel-spring nickel', make: 'mould', alt: 'print', how: 'a moulded ABS tray with nickel-plated spring contacts',
+    title: (p) => `${p.count} × ${p.cell} battery holder, ${p.form === 'pcb' ? 'PCB' : 'with leads'}`, of: (p) => `holder-body battery-contact*${2 * n(p, 'count')}`, make: 'mould', alt: 'print', how: 'a moulded ABS tray with nickel-plated spring contacts',
     spec: (p) => `${p.count} × ${p.cell} in series: ${(n(p, 'count') * CELL[s(p, 'cell')]![0]).toFixed(1)} V nominal`, box: (p) => { const [w, h, l] = CELL[s(p, 'cell')]![1], k = n(p, 'count'); return [r1(w * k + 4), r1(h + 3), r1(l + 8)]; }, g: (p) => 3 + n(p, 'count') * 3, look: 'case',
   },
   {
@@ -160,14 +160,14 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'gearpump', name: 'hydraulic gear pump', path: 'Fluid/Hydraulics/Pumps', says: 'two gears meshing in a close case: oil carried round their teeth, pushed out at pressure', std: 'the displacements sold (group 1 and 2); 250 bar; efficiencies typical',
     axes: [unit('cc', 'displacement', 'cc', [1, 2, 4, 6, 8, 10, 12, 16, 20, 25])],
-    title: (p) => `${p.cc} cc/rev hydraulic gear pump`, of: () => 'pump-housing pump-gear*2 bushing*4 shaft-seal seal-ring*2', make: 'assemble', how: 'two hardened gears in bronze bushings in an aluminium body, a shaft seal',
+    title: (p) => `${p.cc} cc/rev hydraulic gear pump`, of: () => 'pump-housing gear-pump-gear*2 bushing*4 shaft-seal seal-ring*2', make: 'assemble', how: 'two hardened gears in bronze bushings in an aluminium body, a shaft seal',
     spec: (p) => { const Q = (n(p, 'cc') * 1500 * 0.93) / 1000, P = (250e5 * (Q / 60000)) / 0.85; return `at 1500 rpm: Q = V n η_v = ${Q.toFixed(2)} l/min (η_v 0.93, typical); at 250 bar it takes P = p Q / η = ${(P / 1000).toFixed(1)} kW (η 0.85, typical)`; },
     box: (p) => [80, 80, r1(70 + n(p, 'cc') * 2.2)], g: (p) => 1000 + n(p, 'cc') * 90, look: 'box',
   },
   {
     id: 'directionalvalve', name: 'hydraulic directional valve', path: 'Fluid/Hydraulics/Valves', says: 'a solenoid valve on a standard subplate that sends oil one way or the other to a cylinder or motor', std: 'ISO 4401 mounting sizes (CETOP 3 and 5); flows and pressures typical',
     axes: [bare('size', 'size', Object.keys(NG)), bare('spool', 'spool', ['4/3-closed', '4/3-tandem', '4/3-open', '4/2']), bare('coil', 'coil', ['24VDC', '230VAC'])],
-    title: (p) => `${p.size} ${s(p, 'spool').replace('-', ' ')} directional valve, ${p.coil}`, of: (p) => `valve-body spool solenoid-coil*${p.spool === '4/2' ? 1 : 2} return-spring*2 seal-ring*6`, make: 'assemble', how: 'a hardened spool sliding in a cast-iron body, pushed by wet-pin solenoids and centred by springs',
+    title: (p) => `${p.size} ${s(p, 'spool').replace('-', ' ')} directional valve, ${p.coil}`, of: (p) => `valve-body valve-spool solenoid-coil*${p.spool === '4/2' ? 1 : 2} return-spring*2 seal-ring*6`, make: 'assemble', how: 'a hardened spool sliding in a cast-iron body, pushed by wet-pin solenoids and centred by springs',
     spec: (p) => `${NG[s(p, 'size')]![1]}; to about ${NG[s(p, 'size')]![0]} l/min and 315 bar (typical); ${({ '4/3-closed': 'centred, every port closed: the load held', '4/3-tandem': 'centred, the pump to tank: the load held, the pump unloaded', '4/3-open': 'centred, every port to tank: the load free', '4/2': 'two positions, sprung back' } as Record<string, string>)[s(p, 'spool')]}`,
     box: (p) => (p.size === 'NG6' ? [45, 210, 90] : [70, 260, 110]), g: (p) => (p.size === 'NG6' ? 1500 : 4200), look: 'box',
   },
@@ -181,7 +181,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'aircoupling', name: 'air quick coupling', path: 'Fluid/Pneumatics/Couplings', says: 'a coupler and plug that snap an air line on and off without tools', std: 'the profiles in use (ISO 6150 B, ARO 210, Orion) and the threads sold',
     axes: [bare('profile', 'profile', ['ISO6150-B', 'ARO210', 'Orion']), bare('part', 'part', ['coupler', 'plug']), bare('thread', 'thread', ['G1/4', 'G3/8', 'G1/2'])],
-    title: (p) => `${s(p, 'profile').replace('-', ' ')} ${p.part}, ${p.thread}`, of: (p) => (p.part === 'coupler' ? 'brass steel-spring nbr steel-low' : 'steel-low zinc'), make: 'machine', how: (p) => (p.part === 'coupler' ? 'a brass body with a sprung sleeve and locking balls, a valve that shuts when unplugged' : 'a hardened plug turned to its profile'),
+    title: (p) => `${s(p, 'profile').replace('-', ' ')} ${p.part}, ${p.thread}`, of: () => 'coupler-body coupler-sleeve locking-ball*6 return-spring*2 seal-ring', make: 'machine', how: (p) => (p.part === 'coupler' ? 'a brass body with a sprung sleeve and locking balls, a valve that shuts when unplugged' : 'a hardened plug turned to its profile'),
     spec: (p) => `${p.profile === 'ISO6150-B' ? 'the European profile (ISO 6150 B)' : p.profile === 'ARO210' ? 'the ARO 210 profile' : 'the Orion profile'}: only plugs of the same profile fit; ${p.thread}`, box: (p) => (p.part === 'coupler' ? [25, 25, 55] : [16, 16, 38]), g: (p) => (p.part === 'coupler' ? 70 : 20), look: 'rod',
   },
   {
@@ -193,7 +193,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'waterfilter', name: 'water filter cartridge', path: 'Fluid/Filters/Water filters', says: 'a cartridge for a filter housing under a sink or on a supply', std: 'the housings in use (10 in standard, 10 and 20 in big) and the media sold',
     axes: [bare('size', 'size', ['10in', '10in-big', '20in-big']), bare('media', 'media', ['sediment-5um', 'sediment-20um', 'carbon-block', 'GAC'])],
-    title: (p) => `${s(p, 'size').replace('in', ' in').replace('-big', ' big')} ${s(p, 'media').replace('-', ' ').replace('um', ' µm')} cartridge`, of: (p) => (/carbon|GAC/.test(s(p, 'media')) ? 'graphite pp' : 'pp'), make: (p) => (/carbon/.test(s(p, 'media')) ? 'mould' : 'extrude'), how: (p) => (/sediment/.test(s(p, 'media')) ? 'polypropylene melt-blown into a depth filter' : 'activated carbon (bonded, or as granules) in a polypropylene shell'),
+    title: (p) => `${s(p, 'size').replace('in', ' in').replace('-big', ' big')} ${s(p, 'media').replace('-', ' ').replace('um', ' µm')} cartridge`, of: () => 'carbon-block filter-endcap*2', make: (p) => (/carbon/.test(s(p, 'media')) ? 'mould' : 'extrude'), how: (p) => (/sediment/.test(s(p, 'media')) ? 'polypropylene melt-blown into a depth filter' : 'activated carbon (bonded, or as granules) in a polypropylene shell'),
     spec: (p) => `${/sediment/.test(s(p, 'media')) ? `stops particles down to ${s(p, 'media').match(/\d+/)![0]} µm` : 'takes out chlorine, taste and smell'}; for a ${s(p, 'size').replace('in', ' in').replace('-big', ' big blue')} housing`, box: (p) => (p.size === '10in' ? [63, 63, 250] : p.size === '10in-big' ? [114, 114, 250] : [114, 114, 508]), g: (p) => (p.size === '10in' ? 120 : p.size === '10in-big' ? 450 : 900) * (/carbon|GAC/.test(s(p, 'media')) ? 2.5 : 1), look: 'tube',
   },
   {
