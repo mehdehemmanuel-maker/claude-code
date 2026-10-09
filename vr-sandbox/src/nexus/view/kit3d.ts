@@ -24,14 +24,14 @@ const mats = new Map<string, THREE.MeshStandardMaterial>();
 // well as mirroring it; matte tin, a chip's leads, plate; bright nickel, a connector's shell, bright)
 const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
   paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
-  plate: { rough: 0.4, metal: 0.9 }, bright: { rough: 0.22, metal: 1 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
+  plate: { rough: 0.4, metal: 0.9 }, moulded: { rough: 0.36, metal: 0 }, bright: { rough: 0.22, metal: 1 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };
 const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
   const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
   if (!m) {
-    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|^tin$/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel|brass|bronze|solder|zinc|chrom|^tin$/.test(mat ?? ''), glass = (mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear') && finish !== 'moulded', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium|brass|bronze|solder|^tin$/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
     // (a part moulded of a thermoplastic, a connector's housing or a header's strip, takes its mould's polish: satin, so a

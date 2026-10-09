@@ -101,6 +101,20 @@ export const TOOLS: KindDef[] = [
     box: (p) => [n(p, 's') * 2.2, 6, n(p, 's') * 11 + 60], g: (p) => n(p, 's') ** 2 * 0.9 + 20,
   },
   {
+    id: 'solderiron', look: 'rod', name: 'soldering iron', path: 'Tools/Soldering/Irons', says: 'a soldering iron whose temperature its own controller holds, its tip a cartridge with its heater and sensor inside', std: 'the irons drawn here: PINE64\'s Pinecil V2 (its wiki)',
+    axes: [bare('model', 'model', ['pinecil-v2'])], title: () => 'PINE64 Pinecil V2 soldering iron', of: () => 'pinecil-shell pinecil-grip pinecil-barrel pinecil-button*2 pinecil-board tip-contact*2 screw-m2*3 soldering-tip', make: 'assemble',
+    how: 'its board soldered and fitted to its stainless core, the shell closed round them with three M2 screws, its grip slid on, the tip pushed into the core and held by the top front screw',
+    spec: () => '155 mm with its tip, 103 without, 12.8 × 16.2 mm; 28 g with its tip; 12–20 V USB-C PD or 12–24 V DC 5525 (24 V, 88 W with EPR); 100–400 °C; its tip PINE64\'s short 6.2 Ω cartridge (64 W at 20 V) (PINE64 wiki)',
+    box: () => [155, 12.8, 16.2], g: () => 28,
+  },
+  {
+    id: 'flushcutter', look: 'box', name: 'flush cutters', path: 'Tools/Hand tools/Cutters', says: 'side cutters whose jaws meet flush, to trim a lead level with its joint', std: 'the cutters drawn here: Hakko\'s CHP-170 (Hakko; Hisco\'s and Adafruit\'s listings)',
+    axes: [bare('model', 'model', ['chp-170'])], title: () => 'Hakko CHP-170 flush cutters', of: () => 'plier-jaw*2 plier-rivet handle-grip*2 spring-leaf cutter-clip', make: 'assemble',
+    how: 'its two carbon-steel halves forged, ground to their flush edges and hardened to HRC 56, riveted, their handles dipped in their grips, its spring and safety clip fitted',
+    spec: () => 'cuts copper to 1.3 mm (16 AWG) with 5 kg on its grips, flush; high-carbon steel 2.5 mm thick, about 138 mm over all, 62 g (Hakko, bulletin PB489); its jaws 8 mm, its head 13.5 mm wide (Hisco)',
+    box: () => [138, 36, 10], g: () => 62,
+  },
+  {
     id: 'solderwire', name: 'solder wire', path: 'Tools/Soldering/Solder', says: 'a reel of flux-cored solder wire', std: 'the alloys, diameters and reels sold',
     axes: [bare('alloy', 'alloy', Object.keys(SOLDER)), ax('d', 'diameter', 'mm', [0.3, 0.5, 0.6, 0.8, 1, 1.2, 1.5]), unit('g', 'reel', 'g', [50, 100, 250, 500, 1000])],
     title: (p) => `${String(p.alloy).replace('Sn99Cu07', 'Sn99.3Cu0.7')} solder wire ${p.d} mm, ${p.g} g`, of: () => 'solder-wire spool', make: 'extrude', how: 'the alloy extruded round a core of rosin flux (about 2 %) and drawn to diameter',
