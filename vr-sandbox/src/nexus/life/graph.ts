@@ -18,7 +18,9 @@ export interface Node {
   src?: string; mine?: boolean; made?: number;
 }
 export interface Link { a: string; b: string; how: string; src?: string; mine?: boolean }
-export interface Saved { nodes: Node[]; links: Link[] }
+export interface Saved { nodes: Node[]; links: Link[]; day?: Day }
+
+import { clock, hourOf, RHYTHMS, TYPICAL_DAY, type Day } from './rhythm';
 
 const K = 'Kandel et al., Principles of Neural Science, 6th ed. (2021), summarised', P = 'Purves et al., Neuroscience, 6th ed. (2018), summarised';
 const MAP = 'its place on the map schematic: a midline view, laid out by eye from the textbooks\' figures';
@@ -114,8 +116,10 @@ function builtIn(): { nodes: Node[]; links: Link[] } {
 /** A life graph: the textbooks' nodes and links, and the user's own on top. */
 export class LifeGraph {
   readonly nodes = new Map<string, Node>(); links: Link[] = [];
+  /** when the user sleeps and wakes, which sets the messengers' daily rhythms (./rhythm.ts); typical till they say */
+  day: Day = { ...TYPICAL_DAY };
   constructor(saved?: Saved) {
-    const b = builtIn(); for (const n of b.nodes) this.nodes.set(n.id, n); this.links = b.links;
+    const b = builtIn(); for (const n of b.nodes) this.nodes.set(n.id, n); this.links = b.links; if (saved?.day && typeof saved.day.sleep === 'number') this.day = { ...saved.day };
     if (saved) { for (const n of saved.nodes ?? []) if (n?.id && !this.nodes.has(n.id)) this.nodes.set(n.id, { ...n, mine: true }); for (const l of saved.links ?? []) if (l && this.nodes.has(l.a) && this.nodes.has(l.b)) this.link(l.a, l.b, l.how); }
   }
   /** A node of the user's own: a time, a person, a place, a memory or a note. */
@@ -138,6 +142,11 @@ export class LifeGraph {
   of(id: string): { node: Node; linked: { node: Node; how: string; out: boolean; mine: boolean; src?: string }[] } | null {
     const node = this.nodes.get(id); if (!node) return null;
     const linked = this.links.filter((l) => l.a === id || l.b === id).map((l) => ({ node: this.nodes.get(l.a === id ? l.b : l.a)!, how: l.how, out: l.a === id, mine: !!l.mine, ...(l.src ? { src: l.src } : {}) }));
+    // (a time of day and each messenger with a daily rhythm, linked by what it is doing then: read off its curve for the
+    // user's own sleep, so either end shows the other)
+    const at = (t: Node, r: (typeof RHYTHMS)[string]) => { const h = hourOf(t.name)!; return `at ${clock(h)}: ${r.at(h, this.day).toFixed(1)} ${r.unit}, ${r.says(h, this.day)}`; };
+    if (node.kind === 'time' && hourOf(node.name) !== null) for (const r of Object.values(RHYTHMS)) { const m = this.nodes.get(r.id); if (m) linked.push({ node: m, how: at(node, r), out: true, mine: false, src: r.src }); }
+    const r = RHYTHMS[id]; if (r) for (const t of this.ofKind('time')) if (hourOf(t.name) !== null) linked.push({ node: t, how: at(t, r), out: false, mine: false, src: r.src });
     return { node, linked };
   }
   /** The nodes of a kind, in a steady order (the user's newest first). */
@@ -145,7 +154,7 @@ export class LifeGraph {
   /** The nodes whose names hold the words. */
   find(words: string): Node[] { const t = words.trim().toLowerCase(); return t ? [...this.nodes.values()].filter((n) => n.name.toLowerCase().includes(t)) : []; }
   /** What is the user's own, to keep. */
-  saved(): Saved { return { nodes: [...this.nodes.values()].filter((n) => n.mine), links: this.links.filter((l) => l.mine) }; }
+  saved(): Saved { return { nodes: [...this.nodes.values()].filter((n) => n.mine), links: this.links.filter((l) => l.mine), day: this.day }; }
 }
 /** The brain map's regions (those placed on it). */
 export const BRAIN_MAP = (): Node[] => REGIONS.map(({ part: _p, ...n }) => n);

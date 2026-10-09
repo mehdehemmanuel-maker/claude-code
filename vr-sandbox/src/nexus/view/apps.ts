@@ -18,6 +18,7 @@ import { TARGETS, pinSays, type Ran, type Target } from '../codesim';
 import type { Line, Pack } from '../buildpack';
 import { usd } from '../prices';
 import { BRAIN_MAP, MESSENGER_IDS, type Kind, type LifeGraph, type Node as LifeNode } from '../life/graph';
+import { clock, dayOf, RHYTHMS } from '../life/rhythm';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
@@ -729,6 +730,22 @@ export function lifeApp(h: LifeHost): PhoneApp {
         wrapped('Pink: a messenger is made or acts there. Places schematic (the textbooks\' figures, by eye); the temporal lobe drawn from the side.', 40, Y(1) + 22, 13, W - 80, INK3, 2);
         back(); return;
       }
+      if (sub.startsWith('day:')) {
+        // (its level over the clock for the user's own sleep: the night shaded, now marked, its figures' source below)
+        const r = RHYTHMS[sub.slice(4)]; if (!r) { back(); return; } const d = gr.day, x0 = 50, x1 = W - 30, y0 = 180, y1 = 470, X = (hh: number) => x0 + ((x1 - x0) * hh) / 24;
+        text(`${r.id[0]!.toUpperCase()}${r.id.slice(1)} through the day`, 40, 112, 28, C, 800, W - 80);
+        text(`Sleeping ${clock(d.sleep)} to ${clock(d.wake)}, ${d.age} years old`, 40, 146, 15, INK2, 500, W - 80);
+        const vs = Array.from({ length: 97 }, (_, i) => r.at(i / 4, d)), top = Math.max(...vs) * 1.1, Y = (v: number) => y1 - ((y1 - y0) * v) / top;
+        g.save(); g.fillStyle = 'rgba(144,202,249,0.12)'; const s0 = d.sleep, s1 = d.wake; if (s0 < s1) g.fillRect(X(s0), y0, X(s1) - X(s0), y1 - y0); else { g.fillRect(X(s0), y0, X(24) - X(s0), y1 - y0); g.fillRect(X(0), y0, X(s1) - X(0), y1 - y0); }
+        g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y1); g.lineTo(x1, y1); g.moveTo(x0, y0); g.lineTo(x0, y1); g.stroke();
+        g.strokeStyle = C; g.lineWidth = 3; g.beginPath(); vs.forEach((v, i) => (i ? g.lineTo(X(i / 4), Y(v)) : g.moveTo(X(0), Y(v)))); g.stroke();
+        const now = new Date(), hn = now.getHours() + now.getMinutes() / 60; g.strokeStyle = '#ffd740'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(hn), y0); g.lineTo(X(hn), y1); g.stroke(); g.restore();
+        for (const hh of [0, 6, 12, 18, 24]) text(hh === 24 ? '' : clock(hh), X(hh) - 18, y1 + 22, 12, INK3, 500, 60);
+        text(`${top < 10 ? (top / 1.1).toFixed(1) : Math.round(top / 1.1)}`, 6, Y(top / 1.1) + 4, 12, INK3, 500, 42); text(r.unit, x0 + 6, y0 - 8, 12, INK3, 500, W - 100);
+        let y = y1 + 56; y += wrapped(`Now, ${clock(hn)}: ${r.at(hn, d).toFixed(1)} ${r.unit}, ${r.says(hn, d)}.`, 40, y, 16, W - 80, '#ffd740', 3) + 10;
+        wrapped(r.src, 40, y, 12, W - 80, INK3, 7);
+        button(30, bottom - 140, W - 60, 56, '◷ When I sleep and wake', 'setday', undefined, C); tell(); back(`node:${r.id}`); return;
+      }
       if (sub.startsWith('list:')) {
         const all = listOf(sub), k0 = sub.slice(5), page = all.slice(v.page * ROWS, v.page * ROWS + ROWS);
         text(k0 === 'mine' ? 'Yours' : k0 === 'messenger' ? 'The messengers' : k0 === 'state' ? 'States' : k0, 40, 112, 32, C, 800, W - 80);
@@ -760,6 +777,7 @@ export function lifeApp(h: LifeHost): PhoneApp {
         if (linking && linking !== n.id) button(30, by, W - 60, 56, `🔗 Link ${gr.nodes.get(linking)?.name ?? ''} to this`, 'link', n.id, '#ffd740');
         else { button(30, by, bw, 56, '🔗 Link to…', 'linkfrom', n.id, C); button(40 + bw, by, bw, 56, '+ 💭 A memory of it', 'memory', n.id, TINT.memory); }
         if (n.mine) button(W - 150, 92, 120, 36, '✕ Remove', 'remove', n.id, '#ef9a9a');
+        else if (RHYTHMS[n.id]) button(W - 150, 92, 120, 36, '◷ Its day', 'go', `day:${n.id}`, C);
         tell(); back(); return;
       }
     },
@@ -775,6 +793,7 @@ export function lifeApp(h: LifeHost): PhoneApp {
         case 'link': { const from = linking; if (!from) return true; nav.write('how they are linked (with, at, felt, when…), or leave it', (t) => { const l = gr.link(from, id, t.trim() || 'linked to'); linking = null; h.save(); said = l ? `${gr.nodes.get(from)?.name} ${l.how} ${gr.nodes.get(id)?.name}` : 'not linked'; nav.redraw(); }); return true; }
         case 'memory': nav.write(`what you remember of ${gr.nodes.get(id)?.name}`, (t) => { if (!t.trim()) return; const m = gr.add('memory', t); gr.link(m.id, id, 'of'); h.save(); said = 'kept'; nav.go(`node:${m.id}`); nav.redraw(); }); return true;
         case 'remove': if (gr.remove(id)) { h.save(); said = 'removed'; nav.go('list:mine'); } return true;
+        case 'setday': nav.write('when you sleep and wake (as 23:00 to 7:00), and your age if you like', (t) => { const age = Number(/\b(?:age|aged|i am|i'm)\s*(\d{1,3})\b/i.exec(t)?.[1] ?? gr.day.age), d = dayOf(t.replace(/\b(?:age|aged|i am|i'm)\s*\d{1,3}\b/i, ''), age); if (!d) { said = 'say two times, as 23:00 to 7:00'; nav.redraw(); return; } gr.day = d; h.save(); said = `kept: sleeping ${clock(d.sleep)} to ${clock(d.wake)}`; nav.redraw(); }); return true;
       }
       return false;
     },
