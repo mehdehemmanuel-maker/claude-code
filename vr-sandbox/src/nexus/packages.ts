@@ -267,15 +267,18 @@ export const axialBody = (W: number): [number, number, number] => (W <= 0.125 ? 
 
 // ---- LEDs -------------------------------------------------------------------------------------------------------------
 /** A through-hole LED of s mm (T-1 3 mm, T-1¾ 5 mm, 10 mm; typical of makers' drawings): its clear epoxy lens, a domed
- *  cylinder on a flange; its two leads 2.54 mm apart, the cathode's (shorter) ending in the anvil whose reflector cup
+ *  cylinder on a flange, the flange cut flat on the cathode's side (the mark a hand finds it by; cut to the lens's own
+ *  radius, an estimate); its two leads 2.54 mm apart, the cathode's (shorter) ending in the anvil whose reflector cup
  *  holds the die, the anode's in the post; a bond wire from the die's top to the post. */
 export function ledSolids(s: number, die: 'gan' | 'algainp'): Solid[] {
   const D = s, F = s + (s <= 3 ? 0.8 : 0.8 + 0.1 * (s - 3)), H = s <= 3 ? 5.3 : s <= 5 ? 8.6 : 13.8, fl = 1.0, R = D / 2, y = 0.42 * H, lw = 0.5;
-  const lens: [number, number][] = [[0, 0], [F / 2, 0], [F / 2, fl], [R, fl], [R, H - R]];
+  const lens: [number, number][] = [[0, fl], [R, fl], [R, H - R]];
   for (let k = 1; k <= 12; k++) { const a = (Math.PI / 2) * (k / 12); lens.push([R * Math.cos(a), H - R + R * Math.sin(a)]); }
+  const rim: [number, number][] = Array.from({ length: 48 }, (_, k): [number, number] => { const a = (2 * Math.PI * k) / 48; return [Math.max((F / 2) * Math.cos(a), -R), (F / 2) * Math.sin(a)]; });
   const aw = Math.min(1.8, 0.32 * s), ah = 0.9, px = 1.27;
   return [
-    { role: 'body', shape: { lathe: [...lens, [0, 0]] }, at: [0, 0, 0], mat: 'epoxy-clear' },
+    { role: 'body', shape: { lathe: [...lens, [0, fl]] }, at: [0, 0, 0], mat: 'epoxy-clear' },
+    { role: 'body', shape: { prism: { pts: rim, L: fl } }, at: [0, fl / 2, 0], rot: [-Math.PI / 2, 0, 0], mat: 'epoxy-clear' },
     { role: 'lead', shape: { box: [lw, 25 + y, lw] }, at: [-px, (y - 25) / 2, 0], mat: 'copper', inBody: lw * lw * y, lead: 0 },
     { role: 'lead', shape: { box: [aw, ah, lw] }, at: [-px + aw / 2 - lw / 2, y + ah / 2, 0], mat: 'copper', inBody: aw * ah * lw, lead: 0 },
     { role: 'lead', shape: { box: [lw, 27 + y, lw] }, at: [px, (y - 27) / 2, 0], mat: 'copper', inBody: lw * lw * y, lead: 1 },

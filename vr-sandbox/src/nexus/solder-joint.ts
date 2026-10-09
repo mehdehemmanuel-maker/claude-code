@@ -16,8 +16,9 @@ export const ALLOYS: Record<string, Alloy> = {
   SAC305: { name: 'SAC305 (lead-free)', solidus: 217, liquidus: 220, rho: 7.4, c: 0.23, L: 61, src: '217–220 °C; 7.4 g/cm³; c 0.23 J/g·K, L 61 J/g (typical)' },
 };
 
-/** A through-hole joint's geometry, mm: its board's thickness, its hole, its pad's diameter, its pin's side (square). */
-export interface JointShape { board: number; hole: number; pad: number; pin: number; src: string }
+/** A through-hole joint's geometry, mm: its board's thickness, its hole, its pad's diameter, its pin's side (square) or,
+ *  round, its lead's diameter. */
+export interface JointShape { board: number; hole: number; pad: number; pin: number; round?: boolean; src: string }
 /** A Raspberry Pi Pico's pin in a 2.54 mm header: its board 1 mm thick (its datasheet), holes 1.02 mm in 1.7 mm pads
  *  (Raspberry Pi's own footprint of it), the header's pin 0.64 mm square (the 0.025" standard). */
 export const PICO_PIN: JointShape = { board: 1.0, hole: 1.02, pad: 1.7, pin: 0.64, src: 'Pico datasheet: a 1 mm board; Raspberry Pi\'s Pico footprint (RPi_Pico_SMD_TH): 1.02 mm holes in 1.7 mm pads; a 0.64 mm square header pin' };
@@ -25,8 +26,8 @@ export const PICO_PIN: JointShape = { board: 1.0, hole: 1.02, pad: 1.7, pin: 0.6
 /** The solder a good joint holds, mm³: the hole round the pin filled, and a concave fillet over the pad from its rim up
  *  the pin (a cone's frustum less the pin, its height a pad's radius: IPC-A-610's "wets the pin and the pad, concave"). */
 export function idealVolume(s: JointShape): number {
-  const pinA = s.pin * s.pin, hole = (Math.PI / 4) * s.hole * s.hole * s.board - pinA * s.board;
-  const R = s.pad / 2, r = s.pin / 2 * Math.SQRT2 * 0.8, h = R * 0.9, cone = (Math.PI * h / 3) * (R * R + R * r + r * r) - pinA * h;
+  const pinA = s.round ? (Math.PI / 4) * s.pin * s.pin : s.pin * s.pin, hole = (Math.PI / 4) * s.hole * s.hole * s.board - pinA * s.board;
+  const R = s.pad / 2, r = s.round ? s.pin / 2 : s.pin / 2 * Math.SQRT2 * 0.8, h = R * 0.9, cone = (Math.PI * h / 3) * (R * R + R * r + r * r) - pinA * h;
   // (a concave fillet is a cone's frustum less the hollow of its curve: about 60 % of it, typical)
   return hole + cone * 0.6;
 }

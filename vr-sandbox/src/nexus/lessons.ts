@@ -47,6 +47,18 @@ export const LESSONS: Record<string, Lesson> = {
       { do: 'Solder the other 36, one at a time, letting each cool.', check: 'every pin has its cone; no joint runs into its neighbour (a multimeter on continuity stays silent between neighbours)' },
     ], src: `${ADA}; raspberrypi.com, "Raspberry Pi Pico" documentation`,
   },
+  'solder-proto': {
+    id: 'solder-proto', title: 'Solder an LED and its resistor onto a Perma-Proto', why: 'every leaded part goes in this way: through its holes, bent to hold, soldered from underneath, its leads trimmed',
+    tools: ['soldering-iron', 'solder-leaded', 'tip-cleaner', 'flush-cutters', 'helping-hands', 'hookup-wire'], safety: [...SAFE_IRON, 'Hold a lead\'s end as you cut it, or point it down: a cut lead flies.'],
+    steps: [
+      { do: 'Bend the resistor\'s leads down at its body to span four holes (10.16 mm) and push it into row c, columns 5 and 9; bend its leads out a little under the board so it stays.', check: 'it lies flat on the board' },
+      { do: 'Push the LED in: its long lead, the anode, into column 9, row a, by the resistor\'s end; its short lead, by the flat on its rim, into the − rail beside it.', check: 'the flat of its rim toward the − rail' },
+      { do: 'Strip 6 mm off each end of a piece of 22 AWG solid hook-up wire, bend it to a staple three holes across, and push it from column 5, row a, into the + rail beyond the − rail.', check: 'its insulation lies over the − rail\'s pads: bare wire there would join + to −' },
+      { do: 'Clip the board in the helping hands by its ends, its underside up.' },
+      { do: 'Solder each of the six leads, the joint lesson\'s way: pad and lead heated together, the solder fed to them.', check: 'each a smooth cone, the hole filled' },
+      { do: 'Trim each lead close above its joint with the flush cutters, their flat side to the board, holding the lead\'s end.', check: 'its end still in sight in the solder, at most 2.5 mm standing (IPC-A-610\'s lead protrusion)' },
+    ], src: `${ADA}, "Common Problems" and "Making a good solder joint"; Adafruit's Perma-Proto listing; IPC-A-610's lead protrusion`,
+  },
   'flash-pi-os': {
     id: 'flash-pi-os', title: 'Put Raspberry Pi OS on a card and start the Pi', why: 'a Pi has no OS until its card holds one',
     tools: ['microsd-32gb', 'pi-27w-psu'], safety: ['Plug the power in last, once the card is in.'],

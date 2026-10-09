@@ -77,7 +77,7 @@ import { routeMake } from '../route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
-import { STEPS as SOLDER_STEPS } from '../solder-lesson';
+import { stepsOf, type PlanId } from '../solder-lesson';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -2283,22 +2283,30 @@ window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement
 // your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
 // put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
 let bench: SolderBench | null = null;
-function startBench(): string {
-  if (bench) { bench.reset(); return `The bench is set out again. ${SOLDER_STEPS[0]!.do}`; }
-  bench = new SolderBench(); scene.add(bench.group); named(bench.group, 'the soldering bench');
+function startBench(plan: PlanId = 'pico'): string {
+  if (bench && bench.plan === plan) { bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
+  if (bench) { bench.dispose(); bench = null; }
+  bench = new SolderBench(plan); scene.add(bench.group); named(bench.group, 'the soldering bench');
   eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
   // (its top at a standing bench's height under your eyes, 42 cm before you, its near side toward you)
   const at = eye.clone().addScaledVector(f, 0.42); at.y = Math.max(0.75, eye.y - 0.6); bench.place(at, Math.atan2(-f.x, -f.z), 0);
   if (!renderer.xr.isPresenting) { camera.position.copy(at).add(new THREE.Vector3(0, 0.32, 0).addScaledVector(f, -0.3)); orbit.target.copy(at).addScaledVector(f, 0.02); orbit.update(); }
+  const first = stepsOf(bench.bench)[0]!.do;
+  if (plan === 'proto') {
+    const hands = renderer.xr.isPresenting ? 'Grip with either hand to take a part, the board or (right) the iron or the flush cutters; let a part go over its holes and it goes in. Pull the right trigger with the cutters round a lead to cut it; grip with your left for the solder, its trigger for more wire.' : 'On a screen, say the moves: "place the resistor", "place the led", "place the link", "board in the hands", "take the iron", "take the solder", "tin the tip", "heat joint 1", "feed joint 1", "lift", "wipe", "take the cutters", "cut lead 1 at 1.5", "iron down".';
+    return `A soldering bench before you: Adafruit's Perma-Proto half-sized board, a 330 Ω resistor, a red 5 mm LED, a link of red 22 AWG hook-up wire, the MZ101 helping hands, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner, a reel of 63/37 solder and Hakko's CHP-170 flush cutters. ${hands} First: ${first}`;
+  }
   const hands = renderer.xr.isPresenting ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
-  return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${SOLDER_STEPS[0]!.do}`;
+  return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${first}`;
 }
 function benchWords(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  // (the second lesson first: its words begin as the first's do)
+  if (/^((teach me (to|how to) )?solder (an? |the )?(led|resistor)\b|(the )?(second|led|perma-?proto) (soldering )?lesson|(teach me (to|how to) )?solder (on|onto) (a |the )?perma-?proto|solder (the |a )?perma-?proto|trim(ming)? leads lesson)/.test(t)) return startBench('proto');
   if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
   if (!bench) return null;
   if (/^(close|end|stop|put away) (the )?(soldering )?(bench|lesson)/.test(t)) { bench.dispose(); bench = null; return 'The bench put away.'; }
-  if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the iron)\b/.test(t)) return bench.act(t);
+  if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the (iron|board|cutters)|board|clip|mount|unclip|cut|trim|snip|cutters?)\b/.test(t)) return bench.act(t);
   if (/^(what now|what next|next step|which step|where am i)\b/.test(t)) { const n = bench.now(); return `Step ${n.step} of ${n.of}: ${n.do}`; }
   return null;
 }
@@ -3747,6 +3755,8 @@ for (let i = 0; i < 2; i++) {
     if (karting?.seated || coaster?.seated) return; // in the kart the triggers are its throttle and brake; on the coaster, its go
     // (the trigger of the hand holding the solder pulls more wire off the reel)
     if (bench && bench.holding(handOf[i] === 'left' ? 'left' : 'right') === 'solder') { bench.feedMore(); return; }
+    // (the trigger of the hand holding the flush cutters closes their jaws)
+    if (bench && bench.holding(handOf[i] === 'left' ? 'left' : 'right') === 'cutters') { say(bench.snip(), undefined, 'nexus'); return; }
     if (dartGrab(i)) return;
     // a sprite (a label) is hit only with the eye it faces: the headset's camera
     ray.setFromXRController(ctl); ray.camera = renderer.xr.getCamera();
@@ -3967,17 +3977,17 @@ async function boot() {
     letGoPerson: (id: number) => peopleWorld?.letGo(id),
     restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
-    benchStart: () => startBench(), benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
+    benchStart: (plan?: string) => startBench(plan === 'proto' ? 'proto' : 'pico'), benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
     benchPoint: (what: string) => (bench ? bench.point(what as Parameters<SolderBench['point']>[0]) : null),
     // (an emulated headset's hands, for a test: a controller put so its grip is at a point in the room, level and facing
-    // ahead; its grip or trigger pressed or let go)
-    xrGripTo: async (hand: 'left' | 'right', x: number, y: number, z: number) => {
+    // ahead, or turned by a quaternion; its grip or trigger pressed or let go)
+    xrGripTo: async (hand: 'left' | 'right', x: number, y: number, z: number, q?: [number, number, number, number]) => {
       const dev = (window as unknown as { xrDevice?: { controllers: Record<string, { position: THREE.Vector3; quaternion: THREE.Quaternion }> } }).xrDevice, i = handOf.indexOf(hand); if (!dev || i < 0) return null;
-      const c = dev.controllers[hand]!, want = new THREE.Vector3(x, y, z), grip = renderer.xr.getControllerGrip(i); c.quaternion.set(0, 0, 0, 1);
+      const c = dev.controllers[hand]!, want = new THREE.Vector3(x, y, z), grip = renderer.xr.getControllerGrip(i); if (q) c.quaternion.set(...q); else c.quaternion.set(0, 0, 0, 1);
       for (let k = 0; k < 4; k++) { const f0 = frames; while (frames < f0 + 2) await new Promise((r) => setTimeout(r, 15)); const g = grip.getWorldPosition(new THREE.Vector3()); c.position.set(c.position.x + want.x - g.x, c.position.y + want.y - g.y, c.position.z + want.z - g.z); }
       const f1 = frames; while (frames < f1 + 2) await new Promise((r) => setTimeout(r, 15)); return grip.getWorldPosition(new THREE.Vector3()).toArray();
     },
-    xrPress: (hand: 'left' | 'right', button: 'squeeze' | 'trigger', value: number) => { const dev = (window as unknown as { xrDevice?: { controllers: Record<string, { updateButtonValue: (id: string, v: number) => void }> } }).xrDevice; dev?.controllers[hand]?.updateButtonValue(button, value); return !!dev; }, benchNow: () => (bench ? bench.now() : null), benchWorld: (x: number, y: number, z: number) => (bench ? bench.world([x, y, z]) : null),
+    xrPress: (hand: 'left' | 'right', button: 'squeeze' | 'trigger', value: number) => { const dev = (window as unknown as { xrDevice?: { controllers: Record<string, { updateButtonValue: (id: string, v: number) => void }> } }).xrDevice; dev?.controllers[hand]?.updateButtonValue(button, value); return !!dev; }, benchNow: () => (bench ? bench.now() : null), benchJoint: (n: number, t?: number) => (bench ? bench.jointAt(n, t) : null), benchWorld: (x: number, y: number, z: number) => (bench ? bench.world([x, y, z]) : null),
     benchLook: (x: number, y: number, z: number, d = 0.12) => { if (!bench) return null; const a = bench.world([x, y, z]), k = (d * 1000) / Math.hypot(0.3, 0.7, 0.8), c = bench.world([x + 0.3 * k, y + 0.7 * k, z + 0.8 * k]); camera.position.set(...c); orbit.target.set(...a); orbit.update(); return a; },
   });
   // where a node of the causal space stands on the screen, for a test that points at it: a motor's, else the first

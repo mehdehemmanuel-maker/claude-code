@@ -287,7 +287,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   led: {
     says: 'a through-hole LED: its clear epoxy lens on its flange, its cathode\'s lead ending in the anvil whose reflector cup holds the die, its anode\'s in the post, a gold wire from the die\'s top to the post',
-    leaves: 'its reflector cup drawn as a block, its lens\'s flat at the cathode not drawn, its lens tinted its colour; its proportions typical of makers\' T-1 and T-1¾ drawings',
+    leaves: 'its reflector cup drawn as a block, its rim\'s flat at the cathode cut to its lens\'s radius (an estimate), its lens tinted its colour; its proportions typical of makers\' T-1 and T-1¾ drawings',
     make: (p, it) => { const c = String(p.colour); return passiveParts(ledSolids(Number(p.size), c === 'red' || c === 'yellow' ? 'algainp' : 'gan'), it.name, { lead: 'lead-frame', die: c === 'red' || c === 'yellow' ? 'led-die-algainp' : 'led-die-ingan', wire: 'bond-wire' }, '', undefined, LED_TINT[c]); },
   },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
