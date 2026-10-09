@@ -71,6 +71,13 @@ the task list and lose the why. So the why lives here, and every round is checke
   its own measured layout, its maker's drawing and photo, or marked approximate where it is not yet)
 - "make sure everything including these has to run through the que solver for any new parts or specific parts"
   (2026-10-09: every new part, the soldering kit's and a board's connectors among them, goes through the breakdown queue)
+- "before confirming any measurements at the higher scale you gotta make sure the smallest sub sub components are
+  accurate and then so on and then you will have 100% accuracy don't do anything mock every build has to be treated as
+  such … do the same with the other stuff you recently made its flawed because you decided to skip the build process …
+  make sure everything is 100 percent accurate internally at each sub component scale and externally from texture
+  movement etc … it shouldn't just be the photo for things that hard to see grab multiple photos … make more advanced
+  tools for yourself to make life a lot easier and add them to the process" (2026-10-09: parts first, each from its
+  maker's drawing; then the thing they make, placed from several measured photos; see "Measuring a real product")
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -232,6 +239,54 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
    at the top of "only its materials listed" and "several materials in one shaping" are broken out before new ones are
    added: a part is not stored until it is broken down. A new id is checked against the table first: an id written twice
    replaces the first unseen (`WRITTEN_TWICE` in `inventory.ts` must stay empty).
+
+## Measuring a real product (a board, a tool, a machine)
+
+Bottom up, never the whole first: the smallest parts are drawn from their makers' drawings before the thing they make
+is put together from them.
+
+1. Name each part: the maker's own list (its schematic, its manual's parts), else the part whose drawing fits what the
+   photos show, said as "fits by its size", never as its part number.
+2. Each part's sizes from its maker's drawing or its standard. KiCad's footprints (github.com/KiCad/kicad-footprints)
+   are drawn from datasheets and name them: `python3 tools/measure/kicad.py '<library>.pretty/<glob>'` gives each one's
+   outline, pads and datasheet. A size from nowhere is labelled typical or measured, with how.
+3. Where it sits: calibrate every photo by four points known in millimetres (its mounting holes):
+   `tools/measure/photo.py calibrate`, then read positions off its millimetre grid (`photo.py grid`) and outlines
+   (`photo.py outline`). Tall parts lean out from the photo's middle: their tops are not their footprints.
+4. More than one photo: a top view for where things are, the sides and corners for what a top view hides (a port on
+   its side, a button pushed sideways, what lights are in a jack's face), the underside for what is under it. Where a
+   side has no photo, its parts are marked as not placed from one.
+5. Check the drawing against every photo: `npm run boardmap -- <id> <out.json>` writes each placed part's outline, and
+   `photo.py overlay` draws them on each calibrated photo. A part not on its own outline is wrong.
+6. Then the room: render it, compare it beside its photos, and a blind judge (the round's steps 2 and 3).
+
+The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python-headless, scipy and pillow:
+`pip install -r tools/measure/requirements.txt`):
+- `photo.py`: calibrate a photo by known points, its mm grid, where a pixel is, part outlines, the drawn layout over the
+  photo, and `same`: one region of the thing cut from every calibrated photo of it, side by side.
+- `views.py`: every photo on one sheet; one photo in full-size tiles to scan; a zoom; `find`: a part boxed in one photo
+  found in the others by its features (says "not found" rather than guess when the views differ too much: then
+  calibrate each photo by four points of the same plane and use `photo.py same`).
+- `kicad.py`: a part's drawing from KiCad's footprints, with the datasheet it was drawn from.
+When a step takes working out by hand twice, it becomes a tool here, and a line in this list.
+
+## Now (2026-10-09; read before resuming)
+
+In order; each through the breakdown queue, rendered, compared with its photos and judged blind before it is done:
+1. The Orange Pi 5 parts first (`src/nexus/boardparts.ts`: each connector, switch, header, socket and chip from its
+   maker's drawing or standard, with what fits by size said so), then placed from its measured photos (`BOARD_DEFS`
+   layouts in `sbc.ts`); its board drawn the right way round (the old drawing was mirrored, its near-edge ports facing
+   into the board). Its underside has no photo reachable here yet (orangepi.org/.net refuse this network): the M.2
+   socket is placed from its two holes, the rest said as not placed.
+2. Every other board the same way (Pi 5 first, from its mechanical drawing), each marked approximate until it is.
+3. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
+4. The soldering kit as real tools (iron, stand, sponge, solder, flux, helping hands, cutters), judged until real.
+5. Hands-on lessons in the room: the user holds the iron, heats pad and pin, feeds solder; a joint judged cold, good or
+   bridged; a step done only when done (the Pico's headers first).
+6. Prices for the common parts the build packs list without one (motors, hot ends, boards, belts, rails…).
+The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
+Firecrawl (its credits are low) or GitHub (KiCad's libraries, community repos); the user can widen it under the
+environment's Network access.
 
 ## Working here
 
