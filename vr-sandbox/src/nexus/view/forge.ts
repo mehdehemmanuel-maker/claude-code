@@ -581,7 +581,8 @@ function tick(): void {
   // (in a headset one chip over the table asks, and opens the list; the list only when it is asked for: a room is not a menu)
   const wantNew = on('new') || (empty && !windows.top());
   suggest.group.visible = on('new') && renderer.xr.isPresenting; suggestBox.style.display = wantNew && !renderer.xr.isPresenting ? 'flex' : 'none';
-  askChip.group.visible = !on('new') && empty && !windows.top() && !apart3d.visible && renderer.xr.isPresenting;
+  askChip.group.visible = !on('new') && empty && !shop.size && !windows.top() && !apart3d.visible && renderer.xr.isPresenting;
+  for (const b2 of playButtons) b2.style.display = empty ? 'none' : '';
   if (askChip.group.visible) { askChip.group.position.copy(M).add(tmp.set(0, 1.12, 0.35)); askChip.group.lookAt(eye); }
   // the dock goes where you look, low; the menu above it when you open it
   // the dock follows you low; it steps aside while the keyboard of light is where it would be, for the board
@@ -1564,9 +1565,8 @@ const ui = document.createElement('div');
 ui.style.cssText = 'position:fixed;right:16px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;z-index:5;max-width:calc(100vw - 32px)';
 const BTN = 'font:600 13px system-ui;padding:8px 12px;border-radius:8px;border:1px solid #2e7d8c;background:#06141c;color:#bdefff;cursor:pointer';
 const button = (text: string, on: (b: HTMLButtonElement) => void, parent: HTMLElement = ui) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = BTN; b.onclick = () => on(b); parent.appendChild(b); return b; };
-button('Pause', (b) => { togglePause(); b.textContent = paused ? 'Play' : 'Pause'; });
-button('Next', () => step());
-button('Run again', () => say(world2.replay()));
+// (the playback's buttons only while something is built to play: an empty table has nothing to pause)
+const playButtons = [button('Pause', (b) => { togglePause(); b.textContent = paused ? 'Play' : 'Pause'; }), button('Next', () => step()), button('Run again', () => say(world2.replay()))];
 button('Voice off', (b) => { voice = !voice; b.textContent = voice ? 'Voice on' : 'Voice off'; if (!voice) speechSynthesis.cancel(); });
 document.body.appendChild(ui);
 const tools = document.createElement('div');
@@ -3770,7 +3770,12 @@ async function boot() {
     const session = await (navigator as Navigator & { xr: XRSystem }).xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
     renderer.xr.setReferenceSpaceType('local-floor');
     await renderer.xr.setSession(session as unknown as XRSession);
-  } else document.body.appendChild(VRButton.createButton(renderer));
+  } else {
+    // (the way into a headset, shown only where there is one to enter: a screen without is not told so over its chat)
+    const vb = VRButton.createButton(renderer); document.body.appendChild(vb);
+    const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
+    void (xr ? xr.isSessionSupported('immersive-vr') : Promise.resolve(false)).then((ok) => { if (!ok) vb.style.display = 'none'; }, () => { vb.style.display = 'none'; });
+  }
   let last = performance.now();
   // the frames drawn, for a test that must wait for the room to see what it did
   let frames = 0; (window as unknown as { frames: () => number }).frames = () => frames;

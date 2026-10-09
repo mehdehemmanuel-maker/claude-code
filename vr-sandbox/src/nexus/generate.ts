@@ -420,6 +420,8 @@ export class Workshop {
   takeChart(): Chart | null { const c = this.chartKept; this.chartKept = null; return c; }
   usePhysics(J: Jolt): void { this.J = J; }
   get hasPhysics(): boolean { return !!this.J; }
+  /** How many things are made (said), without making them: cheap enough for every frame. */
+  get size(): number { return this.specs.size; }
   /** The last motion worked out, taken once: the room shows it as it happened. */
   takeTrack(): SimTrack | null { const t = this.track; this.track = null; return t; }
   constructor(private readonly world: World, seed = 1) { this.rand = { s: seed | 0 }; for (const a of STANDING) this.define(a, true); }
