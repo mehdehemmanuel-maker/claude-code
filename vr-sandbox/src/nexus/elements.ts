@@ -51,6 +51,7 @@ export const ELEMENTS: Record<string, { name: string; w: number; group: string; 
   Bi: { name: 'bismuth', w: 208.98, group: 'Metals', from: 'a by-product of refining lead' },
   Y: { name: 'yttrium', w: 88.906, group: 'Rare earths', from: 'rare-earth ores (xenotime, ion-adsorption clays), separated by solvent extraction' },
   Rh: { name: 'rhodium', w: 102.91, group: 'Metals', from: 'a by-product of refining platinum and nickel' },
+  Ru: { name: 'ruthenium', w: 101.07, group: 'Metals', from: 'a by-product of refining platinum and nickel' },
   Cd: { name: 'cadmium', w: 112.41, group: 'Metals', from: 'a by-product of refining zinc ore' },
   In: { name: 'indium', w: 114.82, group: 'Metals', from: 'a by-product of refining zinc ore' },
   La: { name: 'lanthanum', w: 138.91, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
@@ -118,6 +119,7 @@ export const MATERIALS: Record<string, Spec> = {
   'solder-mask': { blend: [['epoxy', 80], ['quartz', 20]], says: 'epoxy with a silica filler' },
   grease: { blend: [['oil', 88], ['C18H35LiO2', 12]], says: 'mineral oil thickened with lithium stearate' },
   'al-laminate': { blend: [['al-foil', 40], ['nylon', 25], ['pp', 35]], says: 'nylon, aluminium foil and polypropylene' },
+  'ruthenium-oxide': { formula: 'RuO2', says: 'ruthenium dioxide' }, aramid: { formula: 'C14H10N2O2', says: 'poly-paraphenylene terephthalamide' },
   'silver-paste': { blend: [['silver', 80], ['glass', 5], ['C10H18O', 15]], says: 'silver powder and glass frit in terpineol' },
   // the materials of the kinds of bought part (src/nexus/kinds)
   'stainless-316': { alloy: { Cr: 17, Ni: 12, Mo: 2.5, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 316, nominal' },

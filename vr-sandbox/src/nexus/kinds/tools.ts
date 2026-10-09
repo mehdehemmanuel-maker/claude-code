@@ -49,7 +49,7 @@ export const TOOLS: KindDef[] = [
   {
     id: 'holesaw', look: 'tube', name: 'hole saw', path: 'Tools/Cutting tools/Hole saws', says: 'a toothed cup on an arbor that cuts a round hole, leaving a plug', std: 'the diameters sold',
     axes: [ax('d', 'diameter', 'mm', [14, 16, 19, 20, 22, 25, 29, 30, 32, 35, 38, 40, 44, 51, 57, 60, 64, 68, 76, 83, 89, 102, 114, 127, 152]), bare('type', 'teeth', ['bimetal', 'carbide', 'diamond'])],
-    title: (p) => `${p.d} mm hole saw, ${p.type === 'bimetal' ? 'bi-metal' : p.type}`, of: (p) => `steel-low ${p.type === 'bimetal' ? 'steel-hss' : p.type === 'carbide' ? 'tungsten-carbide' : 'graphite'}`, make: 'weld', how: (p) => (p.type === 'bimetal' ? 'an HSS tooth strip electron-beam welded to a spring-steel cup' : p.type === 'carbide' ? 'carbide tips brazed to a steel cup' : 'diamond grit bonded to a steel cup\'s rim'),
+    title: (p) => `${p.d} mm hole saw, ${p.type === 'bimetal' ? 'bi-metal' : p.type}`, of: (p) => (p.type === 'bimetal' ? 'holesaw-cup saw-edge' : `holesaw-cup ${p.type === 'carbide' ? 'tungsten-carbide' : 'graphite'}`), make: 'weld', how: (p) => (p.type === 'bimetal' ? 'an HSS tooth strip electron-beam welded to a spring-steel cup' : p.type === 'carbide' ? 'carbide tips brazed to a steel cup' : 'diamond grit bonded to a steel cup\'s rim'),
     spec: (p) => `${p.d} mm hole, about 38 mm deep; at about ${((1000 * 25) / (Math.PI * n(p, 'd'))).toFixed(0)} rpm in steel (typical)`, box: (p) => [n(p, 'd'), n(p, 'd'), 45], g: (p) => gOf(Math.PI * n(p, 'd') * 1.2 * 45 + cyl(n(p, 'd'), 3), 7.85),
   },
   {
@@ -85,7 +85,7 @@ export const TOOLS: KindDef[] = [
   {
     id: 'screwdriver', look: 'rod', name: 'screwdriver', path: 'Tools/Hand tools/Screwdrivers', says: 'a screwdriver: a hardened blade in a handle', std: 'the tips and blade lengths sold',
     axes: [bare('tip', 'tip', DRIVES.filter((d) => !d.startsWith('SQ'))), unit('L', 'blade', 'mm', [50, 75, 100, 125, 150, 200])],
-    title: (p) => `${p.tip} screwdriver, ${p.L} mm blade`, of: () => 'steel-tool pp rubber', make: 'assemble', how: 'a chrome-vanadium blade, its tip formed and hardened, moulded into a two-part handle', spec: (p) => `${p.tip}; ${p.L} mm blade`,
+    title: (p) => `${p.tip} screwdriver, ${p.L} mm blade`, of: () => 'screwdriver-blade screwdriver-handle', make: 'assemble', how: 'a chrome-vanadium blade, its tip formed and hardened, moulded into a two-part handle', spec: (p) => `${p.tip}; ${p.L} mm blade`,
     box: (p) => [30, 30, n(p, 'L') + 100], g: (p) => 40 + n(p, 'L') * 0.35,
   },
   {

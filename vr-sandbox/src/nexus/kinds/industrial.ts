@@ -89,7 +89,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'tvsdiode', name: 'TVS diode', path: 'Electrical/Circuit protection/Surge protection', says: 'a diode that clamps a fast spike: across a line it guards', std: 'the series and stand-off voltages sold; breakdown and clamping from typical datasheets',
     axes: [bare('series', 'series', ['SMAJ', 'SMBJ', 'SMCJ', 'P6KE', '1.5KE']), unit('V', 'stand-off', 'V', [5, 6.5, 12, 15, 24, 33, 48, 58]), bare('dir', 'direction', ['uni', 'bi'])],
-    title: (p) => `${p.series}${p.V}${p.dir === 'bi' ? 'CA' : 'A'} TVS diode`, of: () => 'silicon copper epoxy tin', make: 'assemble', how: 'a large silicon junction in a moulded package',
+    title: (p) => `${p.series}${p.V}${p.dir === 'bi' ? 'CA' : 'A'} TVS diode`, of: () => 'si-die lead-frame epoxy-body', make: 'assemble', how: 'a large silicon junction in a moulded package',
     spec: (p) => { const W = ({ SMAJ: 400, SMBJ: 600, SMCJ: 1500, P6KE: 600, '1.5KE': 1500 } as Record<string, number>)[s(p, 'series')]!, V = n(p, 'V'); return `${W} W peak (10/1000 µs); stands off ${V} V, breaks down near ${r1(V * 1.11)} V, clamps near ${r1(V * 1.62)} V (typical); ${p.dir === 'bi' ? 'both ways' : 'one way'}`; },
     box: (p) => (/^SM/.test(s(p, 'series')) ? [5, 3, 2.3] : [4, 4, 9]), g: () => 0.2, look: (p) => (/^SM/.test(s(p, 'series')) ? 'chip' : 'can'),
   },
@@ -102,7 +102,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'bridgerectifier', name: 'bridge rectifier', path: 'Electrical/Discrete semiconductors/Rectifiers', says: 'four diodes in one package: AC in, DC out', std: 'the currents, voltages and packages sold; forward drop typical',
     axes: [unit('A', 'current', 'A', [1, 2, 4, 6, 8, 10, 15, 25, 35, 50]), unit('V', 'reverse voltage', 'V', [100, 200, 400, 600, 800, 1000])],
-    title: (p) => `${p.A} A ${p.V} V bridge rectifier (${BRIDGE(n(p, 'A'))[0]})`, of: () => 'silicon copper epoxy tin', make: 'assemble', how: 'four silicon diodes on copper, in a moulded (or metal-cased) block',
+    title: (p) => `${p.A} A ${p.V} V bridge rectifier (${BRIDGE(n(p, 'A'))[0]})`, of: () => 'si-die*4 lead-frame epoxy-body', make: 'assemble', how: 'four silicon diodes on copper, in a moulded (or metal-cased) block',
     spec: (p) => `${p.A} A, ${p.V} V; two diodes conduct at a time, about 2 × 1 V: ${(2 * n(p, 'A')).toFixed(0)} W lost at full current (P = 2 V_f I, typical); ${n(p, 'A') > 4 ? 'needs a heatsink' : ''}`.replace(/; $/, ''),
     box: (p) => BRIDGE(n(p, 'A'))[1], g: (p) => BRIDGE(n(p, 'A'))[2], look: 'chip',
   },

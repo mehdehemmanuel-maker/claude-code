@@ -99,7 +99,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'hydrauliccylinder', name: 'hydraulic cylinder', path: 'Fluid/Hydraulics/Cylinders', says: 'oil under pressure pushes a piston and its rod out, and back', std: 'ISO 6020/2 bores and rods at 160 bar; any stroke 10–1500 mm',
     axes: [ax('D', 'bore', 'mm', Object.keys(RODS).map(Number)), ax('d', 'rod', 'mm', (p) => RODS[n(p, 'D')]!), unit('L', 'stroke', 'mm', [50, 100, 150, 200, 250, 300, 400, 500], [10, 1500, 1])],
-    title: (p) => `hydraulic cylinder ${p.D}/${p.d} × ${p.L} mm`, of: () => 'steel-alloy chromium nbr*2 ptfe steel-low oil', make: 'assemble', how: 'a honed steel barrel, a piston with its seals on a hard-chromed rod, end caps tied or welded on',
+    title: (p) => `hydraulic cylinder ${p.D}/${p.d} × ${p.L} mm`, of: () => 'cylinder-barrel piston-rod cylinder-piston cylinder-gland cylinder-cap rod-seal piston-seal wiper-seal seal-ring*2 oil', make: 'assemble', how: 'a honed steel barrel, a piston with its seals on a hard-chromed rod, end caps tied or welded on',
     spec: (p) => { const D = n(p, 'D') / 1000, d = n(p, 'd') / 1000, pa = 16e6; return `at 160 bar (ISO 6020/2): pushes ${((pa * Math.PI * D * D) / 4 / 1000).toFixed(1)} kN, pulls ${((pa * Math.PI * (D * D - d * d)) / 4 / 1000).toFixed(1)} kN (F = p·A); ${(((Math.PI * D * D) / 4) * n(p, 'L')).toFixed(2)} l of oil to push it out (A × stroke)`; },
     box: (p) => [n(p, 'D') * 1.6, n(p, 'D') * 1.6, n(p, 'L') + n(p, 'D') * 2.5 + 40], g: (p) => { const D = n(p, 'D'), L = n(p, 'L') + D * 1.5; return gOf(ring(D * 1.24, D, L) + cyl(n(p, 'd'), L) + 2 * (1.6 * D) ** 2 * 0.6 * D, 7.85); }, look: 'can',
   },
@@ -147,7 +147,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'fibrepatch', name: 'fibre patch cord', path: 'Electrical/Wiring and connectors/Fibre optic', says: 'optical fibre with a connector on each end, for networks', std: 'ISO/IEC 11801 fibre classes; reaches from IEEE 802.3ae; jacket colours TIA-598',
     axes: [bare('mode', 'fibre', Object.keys(FIBRE)), bare('ends', 'connectors', ['LC-LC', 'SC-SC', 'LC-SC']), bare('lanes', 'fibres', ['simplex', 'duplex']), unit('L', 'length', 'm', [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 50])],
-    title: (p) => `${p.mode} ${p.ends} ${p.lanes} fibre patch cord, ${p.L} m`, of: () => 'quartz pvc zirconia pbt', make: 'assemble', how: 'a glass fibre in a buffered, jacketed cord, its ends glued into ceramic ferrules and polished',
+    title: (p) => `${p.mode} ${p.ends} ${p.lanes} fibre patch cord, ${p.L} m`, of: () => 'optical-fibre tight-buffer strength-yarn cable-jacket fibre-connector*2 boot*2', make: 'assemble', how: 'a glass fibre in a buffered, jacketed cord, its ends glued into ceramic ferrules and polished',
     spec: (p) => { const [core, carries, col] = FIBRE[s(p, 'mode')]!; return `${core}: ${carries}; ${col} jacket`; }, box: (p) => (n(p, 'L') >= 2 ? [120, 120, 20] : [n(p, 'L') * 1000, 6, 6]), g: (p) => n(p, 'L') * 6 * (p.lanes === 'duplex' ? 2 : 1) + 10, look: (p) => `coil w${p.lanes === 'duplex' ? 4 : 2}`,
   },
   {

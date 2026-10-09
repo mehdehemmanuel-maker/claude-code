@@ -193,7 +193,7 @@ export const STOCK: KindDef[] = [
   {
     id: 'heatpipe', name: 'heat pipe', path: 'Electrical/Thermal/Heat pipes', says: 'a sealed copper tube with a wick and a little water: it boils at the hot end and condenses at the cold, carrying heat far better than solid copper', std: 'the diameters and lengths sold',
     axes: [ax('d', 'diameter', 'mm', [3, 4, 5, 6, 8, 10]), unit('L', 'length', 'mm', [100, 150, 200, 250, 300, 350, 400]), bare('shape', 'shape', ['round', 'flat'])],
-    title: (p) => `heat pipe ${p.d} mm × ${p.L} mm, ${p.shape}`, of: () => 'copper water', make: 'assemble', how: 'copper tube lined with sintered copper powder, evacuated, a little water put in, sealed', spec: (p) => `${p.d} mm; carries about ${(n(p, 'd') ** 2 * 1.1).toFixed(0)} W lying flat (estimate)${p.shape === 'flat' ? '; flattened, it carries less' : ''}`,
+    title: (p) => `heat pipe ${p.d} mm × ${p.L} mm, ${p.shape}`, of: () => 'heatpipe-envelope heatpipe-wick water', make: 'assemble', how: 'copper tube lined with sintered copper powder, evacuated, a little water put in, sealed', spec: (p) => `${p.d} mm; carries about ${(n(p, 'd') ** 2 * 1.1).toFixed(0)} W lying flat (estimate)${p.shape === 'flat' ? '; flattened, it carries less' : ''}`,
     box: (p) => (p.shape === 'flat' ? [n(p, 'd') * 1.5, n(p, 'd') * 0.5, n(p, 'L')] : [n(p, 'd'), n(p, 'd'), n(p, 'L')]), g: (p) => gOf(ring(n(p, 'd'), n(p, 'd') - 0.6, n(p, 'L')), 8.96) * 1.4,
   },
   {

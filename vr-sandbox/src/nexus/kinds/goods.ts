@@ -65,7 +65,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'wiperblade', name: 'wiper blade', path: 'Mechanical/Vehicle parts/Wipers', says: 'a rubber blade on a frame or a spring band that sweeps a windscreen', std: 'the lengths sold, in inches',
     axes: [unit('in', 'length', 'in', [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28]), bare('type', 'type', ['conventional', 'flat', 'hybrid'])],
-    title: (p) => `${p.in} in (${Math.round(n(p, 'in') * 25.4)} mm) ${p.type} wiper blade`, of: (p) => (p.type === 'conventional' ? 'steel-low zinc rubber' : p.type === 'flat' ? 'steel-spring rubber pom' : 'steel-spring rubber pom abs'), make: 'assemble', how: (p) => (p.type === 'conventional' ? 'a rubber blade held along a sprung steel frame of yokes' : 'a rubber blade on a curved spring-steel band that presses it on the glass evenly'),
+    title: (p) => `${p.in} in (${Math.round(n(p, 'in') * 25.4)} mm) ${p.type} wiper blade`, of: (p) => (p.type === 'conventional' ? 'wiper-rubber wiper-frame wiper-adapter' : p.type === 'flat' ? 'wiper-rubber wiper-spine wiper-spoiler wiper-adapter' : 'wiper-rubber wiper-spine wiper-frame wiper-spoiler wiper-adapter'), make: 'assemble', how: (p) => (p.type === 'conventional' ? 'a rubber blade held along a sprung steel frame of yokes' : 'a rubber blade on a curved spring-steel band that presses it on the glass evenly'),
     spec: (p) => `${Math.round(n(p, 'in') * 25.4)} mm (1 in = 25.4 mm); ${p.type === 'conventional' ? 'pressed at points by its frame' : 'pressed all along by its band'}`, box: (p) => [r1(n(p, 'in') * 25.4), 20, 25], g: (p) => n(p, 'in') * (p.type === 'conventional' ? 9 : 6), look: 'rod',
   },
   {
@@ -78,7 +78,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'bikechain', name: 'bicycle chain', path: 'Mechanical/Vehicle parts/Drivetrain', says: 'a roller chain at half-inch pitch, as wide as the speeds of its cassette allow', std: 'ISO 9633 pitch; widths typical by speeds; the link counts sold',
     axes: [unit('sp', 'speeds', 'sp', Object.keys(CHAINW).map(Number)), unit('links', 'links', 'L', [112, 114, 116, 118, 120, 126])],
-    title: (p) => `${n(p, 'sp') === 1 ? 'single-speed' : `${p.sp}-speed`} bicycle chain, ${p.links} links`, of: () => 'steel-alloy*2 nickel', make: 'assemble', how: 'inner and outer plates stamped from steel, pressed with pins and rollers, hardened, plated',
+    title: (p) => `${n(p, 'sp') === 1 ? 'single-speed' : `${p.sp}-speed`} bicycle chain, ${p.links} links`, of: (p) => `chain-plate-inner*${n(p, 'links')} chain-plate-outer*${n(p, 'links')} chain-pin*${n(p, 'links') / 2} chain-roller*${n(p, 'links') / 2}`, make: 'assemble', how: 'inner and outer plates stamped from steel, pressed with pins and rollers, hardened, plated',
     spec: (p) => `12.7 mm (½ in) pitch (ISO 9633); ${n(p, 'sp') === 1 ? '1/8 in rollers' : '3/32 in rollers'}, about ${CHAINW[n(p, 'sp')]} mm wide (typical); ${r1((n(p, 'links') * 12.7) / 10)} cm long`,
     box: (p) => [r1(n(p, 'links') * 12.7 / Math.PI), r1(n(p, 'links') * 12.7 / Math.PI), CHAINW[n(p, 'sp')]!], g: (p) => n(p, 'links') * (n(p, 'sp') >= 10 ? 2.2 : 2.5), look: 'loop',
   },
@@ -92,14 +92,14 @@ export const GOODS: KindDef[] = [
   {
     id: 'liftingsling', name: 'lifting sling', path: 'Hardware/Lifting/Slings', says: 'a polyester sling, flat webbing or a round sling, coloured by what it lifts', std: 'EN 1492-1 and -2: colours by WLL, mode factors, 7 : 1; lengths to the half metre',
     axes: [bare('form', 'form', ['flat', 'round']), unit('t', 'working load limit', 't', Object.keys(SLING).map(Number)), unit('L', 'length', 'm', [1, 1.5, 2, 3, 4, 5, 6], [1, 20, 0.5])],
-    title: (p) => `${p.t} t ${p.form === 'flat' ? 'flat webbing' : 'round'} sling, ${p.L} m (${SLING[n(p, 't')]})`, of: () => 'pet', make: 'assemble', how: (p) => (p.form === 'flat' ? 'polyester webbing woven, its ends sewn back into eyes' : 'a core of polyester yarn loops in a tubular woven cover'),
+    title: (p) => `${p.t} t ${p.form === 'flat' ? 'flat webbing' : 'round'} sling, ${p.L} m (${SLING[n(p, 't')]})`, of: () => 'webbing sewing-thread', make: 'assemble', how: (p) => (p.form === 'flat' ? 'polyester webbing woven, its ends sewn back into eyes' : 'a core of polyester yarn loops in a tubular woven cover'),
     spec: (p) => { const t = n(p, 't'); return `${SLING[t]}: ${t} t straight, ${r1(t * 0.8)} t choked, ${t * 2} t in a basket hung straight, ${r1(t * 1.4)} t at up to 45° (EN 1492); breaks at no less than ${7 * t} t (7 : 1)`; },
     box: (p) => [p.form === 'flat' ? 30 * n(p, 't') : 20 + 8 * n(p, 't'), 10, r1((n(p, 'L') * 1000) / 2)], g: (p) => n(p, 'L') * n(p, 't') * 120, look: 'loop',
   },
   {
     id: 'ratchetstrap', name: 'ratchet strap', path: 'Hardware/Lifting/Lashing', says: 'polyester webbing tightened by a ratchet: what holds a load on a vehicle', std: 'EN 12195-2 lashing capacities; the widths and lengths sold',
     axes: [ax('w', 'width', 'mm', Object.keys(STRAP).map(Number)), unit('LC', 'lashing capacity', 'daN', (p) => STRAP[n(p, 'w')]![0]), unit('L', 'length', 'm', [4, 5, 6, 8, 10, 12])],
-    title: (p) => `${p.w} mm ratchet strap, LC ${p.LC} daN, ${p.L} m`, of: () => 'pet steel-low zinc', make: 'assemble', how: 'polyester webbing sewn to hooks, threaded through a pressed-steel ratchet',
+    title: (p) => `${p.w} mm ratchet strap, LC ${p.LC} daN, ${p.L} m`, of: () => 'webbing sewing-thread ratchet strap-hook*2', make: 'assemble', how: 'polyester webbing sewn to hooks, threaded through a pressed-steel ratchet',
     spec: (p) => { const kN = n(p, 'LC') / 100; return `LC ${p.LC} daN (${kN} kN, ${((kN * 1000) / 9806.65).toFixed(2)} t-force) pulled straight (EN 12195-2); over a load, both of its legs hold: up to ${2 * kN} kN in all`; }, box: (p) => [n(p, 'w'), 60, 250], g: (p) => n(p, 'L') * n(p, 'w') * 0.9 + STRAP[n(p, 'w')]![1], look: 'loop',
   },
   {
@@ -155,7 +155,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'cardboardbox', name: 'cardboard box', path: 'Materials/Packaging/Boxes', says: 'a corrugated box of the regular slotted style, made to any size', std: 'FEFCO 0201; any inside size 50–1500 mm by the millimetre; board weights typical',
     axes: [ax('L', 'length', 'mm', [200, 300, 400, 500, 600], [50, 1500, 1]), ax('W', 'width', 'mm', [150, 200, 300, 400], [50, 1500, 1]), ax('H', 'height', 'mm', [100, 150, 200, 300, 400], [50, 1500, 1]), bare('flute', 'board', ['C', 'BC'])],
-    title: (p) => `${p.L} × ${p.W} × ${p.H} mm box, ${p.flute === 'C' ? 'single wall' : 'double wall'}`, of: () => 'paper glue', make: 'assemble', how: 'kraft liners glued to fluted paper, cut and creased to its blank, its maker\'s joint glued',
+    title: (p) => `${p.L} × ${p.W} × ${p.H} mm box, ${p.flute === 'C' ? 'single wall' : 'double wall'}`, of: () => 'corrugated-board glue', make: 'assemble', how: 'kraft liners glued to fluted paper, cut and creased to its blank, its maker\'s joint glued',
     spec: (p) => { const L = n(p, 'L'), W = n(p, 'W'), H = n(p, 'H'), a = ((2 * L + 2 * W + 35) * (H + W)) / 1e6; return `FEFCO 0201: its blank (2L + 2W + 35) × (H + W) = ${a.toFixed(2)} m² of ${p.flute === 'C' ? 'C flute, about 4 mm' : 'BC double wall, about 7 mm'}; holds ${((L * W * H) / 1e6).toFixed(1)} l`; },
     box: (p) => [n(p, 'L') + 8, n(p, 'W') + 8, n(p, 'H') + 8], g: (p) => (((2 * n(p, 'L') + 2 * n(p, 'W') + 35) * (n(p, 'H') + n(p, 'W'))) / 1e6) * (p.flute === 'C' ? 500 : 800), look: 'box',
   },

@@ -111,7 +111,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'rodend', name: 'rod end, spherical', path: 'Mechanical/Linkages/Rod ends', says: 'a ball with a bore held in an eye on a threaded shank: a joint that swivels every way', std: 'DIN ISO 12240-4 series K, bores 5–30 mm',
     axes: [ax('d', 'bore', 'mm', Object.keys(RODEND).map(Number)), bare('thread', 'shank', ['male', 'female']), bare('hand', 'thread hand', ['right', 'left'])],
-    title: (p) => `rod end ${p.d} mm, ${p.thread} ${RODEND[n(p, 'd')]}${p.hand === 'left' ? ' left-hand' : ''}`, of: () => 'steel-low steel-chrome ptfe', make: 'assemble', alt: 'machine', how: 'a hardened ball swaged into a steel eye lined with PTFE fabric, the shank threaded',
+    title: (p) => `rod end ${p.d} mm, ${p.thread} ${RODEND[n(p, 'd')]}${p.hand === 'left' ? ' left-hand' : ''}`, of: () => 'rodend-housing rodend-ball rodend-liner', make: 'assemble', alt: 'machine', how: 'a hardened ball swaged into a steel eye lined with PTFE fabric, the shank threaded',
     spec: (p) => `${p.d} mm bore H7; ${p.thread === 'male' ? 'external' : 'internal'} thread ${RODEND[n(p, 'd')]} ${p.hand}-hand; swivels about ±13° (typical)`, box: (p) => [2.6 * n(p, 'd') + 4, 0.8 * n(p, 'd') + 4, 4 * n(p, 'd') + 15], g: (p) => gOf(cyl(2.6 * n(p, 'd') + 4, 0.8 * n(p, 'd') + 4) * 0.8 + cyl(n(p, 'd') * 1.2, 2.5 * n(p, 'd')), 7.85),
   },
   {

@@ -122,7 +122,7 @@ export const MORE: KindDef[] = [
   {
     id: 'loudspeaker', name: 'loudspeaker driver', path: 'Electrical/Audio/Speakers', says: 'a voice coil in a magnet gap driving a cone that moves the air', std: 'the diameters, impedances and powers sold (typical)',
     axes: [unit('d', 'diameter', 'mm', [28, 40, 50, 66, 77, 100, 130, 165, 200, 250, 300]), unit('ohm', 'impedance', 'ohm', [4, 8]), unit('W', 'power', 'W', (p) => [0.5, 1, 2, 3, 5, 10, 20, 30, 50, 100, 200].filter((w) => w >= n(p, 'd') / 100 && w <= (n(p, 'd') / 40) ** 2 * 4))],
-    title: (p) => `${p.d} mm speaker, ${p.ohm} Ω, ${p.W} W`, of: () => 'paper ferrite-hard magnet-wire steel-low rubber', make: 'assemble', how: 'a paper (or polypropylene) cone on a rubber surround and spider, a voice coil in the gap of a ferrite magnet',
+    title: (p) => `${p.d} mm speaker, ${p.ohm} Ω, ${p.W} W`, of: () => 'speaker-cone voice-coil speaker-magnet top-plate speaker-yoke speaker-basket surround spider dust-cap speaker-terminal*2', make: 'assemble', how: 'a paper (or polypropylene) cone on a rubber surround and spider, a voice coil in the gap of a ferrite magnet',
     spec: (p) => `${p.ohm} Ω nominal; ${p.W} W; at that power ${Math.sqrt(n(p, 'W') * n(p, 'ohm')).toFixed(1)} V across it (V = √(P R))`, box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 'd') * 0.45], g: (p) => n(p, 'd') ** 2 * 0.06,
   },
   {
