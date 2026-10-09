@@ -305,12 +305,21 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   before are not counted as drawn; a blob is left out for the ink only where it is ink with no tan body; tin is told
   from a tan body by its greyness as well as its brightness. Where a photo is too soft for it, its parts are read by
   eye off the photo at its own size (a native-pixel grid), located through the camera at their tops' height, and
-  kept beside the finder's rows (`PI4_HAND`), the finder skipping that region.
+  kept beside the finder's rows (`PI4_HAND`), the finder skipping that region. `rectify CAL y=H|x=X|z=Z
+  LO1:HI1:LO2:HI2 --ppmm --blobs dark|bright --edge --both`: a part's face warped square-on through the camera, a mm
+  grid on it, its cuts, slots and ribs listed as mm boxes; run on a render's calibration too and the two lists are
+  what the model has wrong. A plane a little off the true face, or a camera fitted far from that part, shifts all it
+  reads alike: read features against the face's own edges, and the camera's error at a known hole near it.
 - `step.py`: a maker's STEP model read with gmsh: `boxes` (every solid's box on the board's drawing frame, top or under)
   and `check` (each drawn part against the solid it should be, coverage both ways).
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
   `ortho=1` for a view to set beside a photo, `exposure=`, `env=`, `sun=`, `tone=aces` to try the light; it prints the
-  part's `lift`); `npm run boardmap -- <id> <out.json>` writes a board's drawn outlines for `photo.py overlay`.
+  part's `lift`; the light tent's `back=` (a backdrop as bright as the photo's studio had it), `floor=rrggbb` (what it
+  stands on), `probe=1` (each metal face's reflection captured from where it stands, itself left out, box-projected:
+  a socket's mouth dark inside as photographed; each plate (two sizes over `probeown=` mm, 4 by default, the third a
+  millimetre or less) its own, a shield bent round a part sharing its part's; a board in about 90 s on software GL:
+  `LOOK_WAIT=` ms for longer); `ao=` mm, screen-space occlusion, does not darken
+  a mouth yet and drops the sun's shadow: not to be trusted); `npm run boardmap -- <id> <out.json>` writes a board's drawn outlines for `photo.py overlay`.
 - `tools/forge-look.mjs`: the forge room as the user stands in it, what is asked stood before you as "3d <words>" does
   (`"name|words|key=…&sky=…&env=…&lamp=…"` to try its light): a part judged in the room it is seen in, not only on
   the look page's bench.
@@ -359,8 +368,21 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    to a pixel). Its two lights at its left edge (paler than any capacitor, ACT and PWR printed by them; 0603s by their
    blur, the photo soft there). Its power chip's corner read by eye: a SOD-123F diode, two DFNs, a SOT-23-6, its
    capacitors 0603 and 0805 (the finder had taken some for inductors), its R47 inductor 3.6 × 4.0 × 2.5 (its base's
-   edge, not its top, gave its place), J2's three unfitted holes. Still to do: the DFN under its power chip larger
-   than drawn, its USB-C's rear legs, its underside (no photo).
+   edge, not its top, gave its place), J2's three unfitted holes. Its USB-A tongues' tips 0.6 mm behind their faces
+   (the photo shows a band of tongue under each lip, which a tip 1.3 mm in hides) and their four USB 2.0 contacts
+   springs bowed 0.5 mm under them. Its USB 2.0 stack 0.8 mm further out than the OpenSCAD model put it (its face
+   2.95 mm past the edge, not 2.1): its legs' plated holes by J11 read on the board at 71.88 and 77.55, its footprint's
+   0.98 and 6.65 from its back; its side read square-on (rectify): springs U-cuts 7.0 to 1.55 behind its face, rooted
+   in front and tapering, two embossed slots near its face, a rib between its mouths, its back plate's flap 2.6 mm onto
+   each side with two latch windows. Its USB 3.0 stack 0.5 mm further out (its top's front edge against the render's,
+   read as the USB 2.0's was: 0.08 mm off once its legs placed it). Its Ethernet jack Trxcom's outline (TRJG0926HENL's
+   listing: 15.90 × 21.30 × 13.40; its face reads 15.8 wide) 0.7 mm further out by its top's back edge (±0.5: the
+   photo's camera is fitted far from that corner and its two edges disagree); its face read square-on: the shield
+   across it, the moulded mouth 11.6 × 8.4 a millimetre under its top with the latch's notch under it, the shield's
+   cut 12.7 wide round it, its green light in the corner toward the USB ports. Still to do: its Ethernet's place to
+   0.2 (a photo with that corner in view, or its own drawing), its marking's sizes (Trxcom's logo large), the
+   metal's tone (the photo's shells grey with deep reflections, the tent's all bright), the DFN under its power chip
+   larger than drawn, its USB-C's rear legs, its underside (no photo).
 4. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
    Its `joint-drive` (listed only as its materials) is the one item the breakdown queue leaves waiting: it is broken
    out (motor, reduction, encoder, bearings, each drawn) in this round, not before.

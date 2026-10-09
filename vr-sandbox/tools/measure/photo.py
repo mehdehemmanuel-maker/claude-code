@@ -240,6 +240,48 @@ def cmd_wall(a):
     cv2.imwrite(a.out, crop); print(a.out)
 
 
+def cmd_rectify(a):
+    """A face of a part seen square-on: the photo warped by its camera onto a plane (y=H: a top, x=X or z=Z: a side) at
+    `--ppmm` pixels a millimetre, a mm grid over it, and what is darker or brighter than round it listed by where it lies
+    in mm: a cut, a slot or a rib on a shell's side read as numbers. Run over a render made from the photo's own camera
+    it reads the model's the same way, so the two lists side by side are what the model has wrong. A plane a little off
+    the true face shifts all it reads alike (the camera's ray meets it early or late), so features are read against the
+    face's own edges, which `--edge` finds (the strongest straight edges across and along it)."""
+    c = load(a.cal); im = cv2.imread(c['photo']); cam = camera(c, im.shape)
+    if not cam: sys.exit('the photo is too square-on to tell a height')
+    axis, v = a.plane.split('='); v = float(v); lo1, hi1, lo2, hi2 = map(float, a.span.split(':'))
+    P = lambda u, w: {'y': (u, w, v), 'x': (v, u, w), 'z': (u, v, w)}[axis]
+    k = a.ppmm; W, H = int(round((hi1 - lo1) * k)), int(round((hi2 - lo2) * k))
+    # (the image's right is the plane's first coordinate, its up the second)
+    src = np.float32([cam(*P(u, w)) for u, w in [(lo1, hi2), (hi1, hi2), (hi1, lo2), (lo1, lo2)]])
+    M = cv2.getPerspectiveTransform(src, np.float32([[0, 0], [W, 0], [W, H], [0, H]]))
+    flat = cv2.warpPerspective(im, M, (W, H), flags=cv2.INTER_LANCZOS4, borderValue=(0, 0, 0))
+    mm = lambda i, j: (lo1 + i / k, hi2 - j / k)
+    g = cv2.cvtColor(flat, cv2.COLOR_BGR2GRAY).astype(np.float32); bk = max(3, int(a.blur * k) | 1)
+    d = g - cv2.GaussianBlur(g, (bk, bk), 0); shown = flat.copy(); found = []
+    for kind in (['dark', 'bright'] if a.blobs == 'both' else [a.blobs] if a.blobs else []):
+        m = (d < -a.thr) if kind == 'dark' else (d > a.thr)
+        n, lab, st, _ = cv2.connectedComponentsWithStats(m.astype(np.uint8), 8)
+        for i in range(1, n):
+            x, y, w, h, area = st[i]
+            if area / k / k < a.min: continue
+            u0, w1 = mm(x, y); u1, w0 = mm(x + w, y + h)
+            found.append((kind, u0, u1, w0, w1, area / k / k))
+            cv2.rectangle(shown, (x, y), (x + w, y + h), (0, 0, 255) if kind == 'dark' else (255, 160, 0), 1)
+    for kind, u0, u1, w0, w1, ar in sorted(found, key=lambda f: (-f[4], f[1])):
+        print(f'{kind:6s} {u0:7.2f}–{u1:6.2f}  {w0:6.2f}–{w1:6.2f}  ({u1 - u0:.2f} × {w1 - w0:.2f} mm, {ar:.2f} mm²)')
+    if a.edge:
+        # (the face's edges: where brightness changes most along a column (an edge across it) or a row (along it))
+        gy = np.abs(cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3)).mean(1); gx = np.abs(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)).mean(0)
+        top = sorted(range(2, H - 2), key=lambda j: -gy[j])[:6]; side = sorted(range(2, W - 2), key=lambda i: -gx[i])[:6]
+        print('edges along it at', ', '.join(f'{mm(0, j)[1]:.2f}' for j in sorted(top)), '| across it at', ', '.join(f'{mm(i, 0)[0]:.2f}' for i in sorted(side)))
+    for t in np.arange(math.ceil(lo1), hi1 + 1e-6, 1.0):
+        i = int(round((t - lo1) * k)); cv2.line(shown, (i, 0), (i, H), (0, 200, 255) if t % 5 == 0 else (0, 120, 160), 1); cv2.putText(shown, f'{t:g}', (i + 2, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 255), 1)
+    for t in np.arange(math.ceil(lo2), hi2 + 1e-6, 1.0):
+        j = int(round((hi2 - t) * k)); cv2.line(shown, (0, j), (W, j), (255, 0, 255) if t % 5 == 0 else (150, 0, 150), 1); cv2.putText(shown, f'{t:g}', (2, j - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 0, 255), 1)
+    cv2.imwrite(a.out, np.hstack([flat, shown]) if a.both else shown); print(a.out, f'{W}×{H} px, {k:g} px/mm')
+
+
 def cmd_mark(a):
     """Points in the board's frame (X,Z or X,Z@Y mm, a name after = if wanted) drawn where the calibration's camera
     sees them, over the photo, enlarged: a guess at a part's corner checked against the photo by eye; LO:HI ranges
@@ -692,6 +734,7 @@ def main():
     p = sp.add_parser('px'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_px)
     p = sp.add_parser('rise', help='how tall an edge stands, from its foot and its top'); p.add_argument('cal'); p.add_argument('pairs', nargs='+', help='FX,FY:TX,TY pixels'); p.add_argument('--on', type=float, default=0, help='the foot stands on a face this many mm up, not the board'); p.set_defaults(f=cmd_rise)
     p = sp.add_parser('wall', help='a mm grid on a plane above the board (y=H, x=X or z=Z) over the photo'); p.add_argument('cal'); p.add_argument('plane', help='y=H, x=X or z=Z'); p.add_argument('span', help='LO1:HI1:LO2:HI2 of the plane\'s two coordinates (y=: x then z; x=: z then y; z=: x then y)'); p.add_argument('--step', type=float, default=0.5); p.add_argument('--scale', type=float, default=4); p.add_argument('--out', required=True); p.set_defaults(f=cmd_wall)
+    p = sp.add_parser('rectify', help='a face (y=H, x=X or z=Z) warped square-on at --ppmm, a mm grid on it, its dark or bright marks listed in mm'); p.add_argument('cal'); p.add_argument('plane'); p.add_argument('span', help='LO1:HI1:LO2:HI2 (y=: x then z; x=: z then y; z=: x then y)'); p.add_argument('--ppmm', type=float, default=20); p.add_argument('--blobs', choices=['dark', 'bright', 'both']); p.add_argument('--thr', type=float, default=30); p.add_argument('--blur', type=float, default=2.0, help='mm: what a mark is darker or brighter than'); p.add_argument('--min', type=float, default=0.08, help='mm²: smaller marks left out'); p.add_argument('--edge', action='store_true'); p.add_argument('--both', action='store_true', help='the bare face beside the marked one'); p.add_argument('--out', required=True); p.set_defaults(f=cmd_rectify)
     p = sp.add_parser('mark', help='points or edges in mm (X,Z@Y; ranges LO:HI) drawn over the photo by its camera'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.add_argument('--pad', type=int, default=30); p.add_argument('--scale', type=float, default=5); p.add_argument('--out', required=True); p.set_defaults(f=cmd_mark)
     p = sp.add_parser('outline'); p.add_argument('cal'); p.add_argument('--mode', choices=['bright', 'dark', 'notblue'], required=True); p.add_argument('--dark', type=int, default=110); p.add_argument('--ground', type=int, default=240, help='brighter than this is the ground the photo was taken on, not metal'); p.add_argument('--box'); p.add_argument('--open', type=int, default=0, help='part blobs that touch by this many pixels of opening'); p.add_argument('at', nargs='+'); p.set_defaults(f=cmd_outline)
     p = sp.add_parser('overlay'); p.add_argument('cal'); p.add_argument('map'); p.add_argument('--out', required=True); p.add_argument('--side', default='top'); p.add_argument('--scale', type=float, default=1.5); p.set_defaults(f=cmd_overlay)

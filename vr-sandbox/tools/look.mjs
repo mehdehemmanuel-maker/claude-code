@@ -17,11 +17,12 @@ const server = http.createServer((req, res) => { const p = path.join(root, decod
 await new Promise((ok) => server.listen(0, ok)); const port = server.address().port;
 const b = await pw.chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await b.newPage({ viewport: { width: Number(process.env.LOOK_W ?? 1280), height: Number(process.env.LOOK_H ?? 820) } });
-const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(m.text().slice(0, 300)); });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(m.text().slice(0, 300)); else if (/^probes:/.test(m.text())) console.log(m.text()); });
 for (const a of asks) {
   const [name, query] = a.split('|');
-  await p.goto(`http://localhost:${port}/look.html?kit=part&${query}`);
-  try { await p.waitForFunction(() => window.lookReady, null, { timeout: 90000 }); } catch { console.log(name, 'NOT READY', errs.slice(-3).join(' | ')); continue; }
+  // (a page that works long before it is ready, its reflection probes on software GL: waited on past its load, LOOK_WAIT ms)
+  await p.goto(`http://localhost:${port}/look.html?kit=part&${query}`, { waitUntil: 'commit' });
+  try { await p.waitForFunction(() => window.lookReady, null, { timeout: Number(process.env.LOOK_WAIT ?? 90000), polling: 1000 }); } catch { console.log(name, 'NOT READY', errs.slice(-3).join(' | ')); continue; }
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.lookReady)).slice(0, 300));
 }
 console.log('errors:', errs.slice(0, 5).join(' | ') || 'none');

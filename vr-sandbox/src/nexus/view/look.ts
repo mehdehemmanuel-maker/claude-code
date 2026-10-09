@@ -204,18 +204,35 @@ if (q.get('probe') === '1') {
   const pm = new THREE.PMREMGenerator(renderer), was = scene.background, root = view.group.children.find((o) => o.userData.part) ?? view.group;
   scene.background = scene.environment;
   const isMetal = (m: THREE.Mesh) => { const mt = m.material as THREE.MeshStandardMaterial; return !Array.isArray(mt) && (mt.metalness ?? 0) >= 0.8; };
+  // (a probe seen from `at` with `hide` left out of it, each ray it mirrors followed out to the floor under it or the
+  // room's walls before the probe's view is read, so a face at the part's edge sees the floor beyond the board's edge,
+  // as it would, not the board the probe sees under it)
+  const capture = (at: THREE.Vector3, hide: THREE.Object3D, size: number, metal: THREE.Mesh[]): void => {
+    const rt = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType }), cc = new THREE.CubeCamera(0.0002, 60, rt);
+    cc.position.copy(at); hide.visible = false; scene.add(cc); cc.update(renderer, scene); scene.remove(cc); hide.visible = true;
+    const env = pm.fromCubemap(rt.texture).texture; rt.dispose();
+    const probe = at.clone(), lo = new THREE.Vector3(probe.x - 1, Number(q.get('floory') ?? 0), probe.z - 1), hi = new THREE.Vector3(probe.x + 1, probe.y + 1, probe.z + 1);
+    for (const m of metal) { const mt = (m.material as THREE.MeshStandardMaterial).clone(); mt.envMap = env; boxProject(mt, probe, lo, hi); m.material = mt; }
+  };
+  // (a part's own large metal faces each probed from its own middle, the face left out and the rest of the part in: a
+  // socket's floor inside its mouth sees the tongue over it and the mouth's walls, dark, as a photograph shows it, not
+  // the room a probe outside the part sees; its small metal (pins, tabs) shares one probe from the part's middle)
+  const own = Number(q.get('probeown') ?? 4) / 1000; let probes = 0;
   for (const g of root.children) {
     const metal: THREE.Mesh[] = []; g.traverse((o) => { if ((o as THREE.Mesh).isMesh && isMetal(o as THREE.Mesh)) metal.push(o as THREE.Mesh); });
     if (!metal.length) continue;
     const gb = new THREE.Box3().setFromObject(g); if (gb.isEmpty() || gb.getSize(new THREE.Vector3()).length() < 0.003) continue;
-    const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType }), cc = new THREE.CubeCamera(0.0003, 60, rt);
-    cc.position.copy(gb.getCenter(new THREE.Vector3())); g.visible = false; scene.add(cc); cc.update(renderer, scene); scene.remove(cc); g.visible = true;
-    const env = pm.fromCubemap(rt.texture).texture; rt.dispose();
-    // (each ray it mirrors followed out to the floor under it or the room's walls before the probe's view is read, so a
-    // face at the part's edge sees the floor beyond the board's edge, as it would, not the board the probe sees under it)
-    const probe = cc.position.clone(), lo = new THREE.Vector3(probe.x - 1, Number(q.get('floory') ?? 0), probe.z - 1), hi = new THREE.Vector3(probe.x + 1, probe.y + 1, probe.z + 1);
-    for (const m of metal) { const mt = (m.material as THREE.MeshStandardMaterial).clone(); mt.envMap = env; boxProject(mt, probe, lo, hi); m.material = mt; }
+    const rest: THREE.Mesh[] = [];
+    for (const m of metal) {
+      // (a face: a plate, two of its sizes `own` or more and its third a millimetre or less; a pin, a lead or a tab, long
+      // but thin, shares its part's probe, and so does a shield bent round a part (a U whose middle is inside the part,
+      // where its own probe would see only the housing it covers))
+      const mb = new THREE.Box3().setFromObject(m), sz = mb.getSize(new THREE.Vector3()), [, mid, least] = [sz.x, sz.y, sz.z].sort((u, v) => v - u);
+      if (own > 0 && (mid ?? 0) >= own && (least ?? 1) <= 0.001) { capture(mb.getCenter(new THREE.Vector3()), m, 128, [m]); probes++; } else rest.push(m);
+    }
+    if (rest.length) { capture(gb.getCenter(new THREE.Vector3()), g, 256, rest); probes++; }
   }
+  console.log(`probes: ${probes}`);
   scene.background = was;
 }
 // (&ao=: ambient occlusion, mm: a room's light reaches into a socket's mouth or under a chip less than onto an open face,
