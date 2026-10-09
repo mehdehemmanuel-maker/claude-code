@@ -14,3 +14,11 @@ export const METRIC: Record<string, { p: number; dk: number; k: number; s: numbe
 export const PAN: Record<string, { dk: number; k: number }> = {
   'M1.6': { dk: 3.2, k: 1.3 }, M2: { dk: 4, k: 1.6 }, 'M2.5': { dk: 5, k: 2.1 }, M3: { dk: 5.6, k: 2.4 }, M4: { dk: 8, k: 3.1 }, M5: { dk: 9.5, k: 3.7 }, M6: { dk: 12, k: 4.6 }, M8: { dk: 16, k: 6 },
 };
+/** ISO 7380-1 button head socket screws: the head's diameter dk and height k, its hex key s and the socket's depth t
+ *  (mm; dk and k their maxima, t its minimum). */
+export const BUTTON: Record<string, { dk: number; k: number; s: number; t: number }> = {
+  M3: { dk: 5.7, k: 1.65, s: 2, t: 1.04 }, M4: { dk: 7.6, k: 2.2, s: 2.5, t: 1.3 }, M5: { dk: 9.5, k: 2.75, s: 3, t: 1.56 }, M6: { dk: 10.5, k: 3.3, s: 4, t: 2.08 },
+  M8: { dk: 14, k: 4.4, s: 5, t: 2.6 }, M10: { dk: 17.5, k: 5.5, s: 6, t: 3.12 }, M12: { dk: 21, k: 6.6, s: 8, t: 4.16 }, M14: { dk: 24.5, k: 7.7, s: 10, t: 4.68 }, M16: { dk: 28, k: 8.8, s: 10, t: 5.2 },
+};
+/** ISO 4029 set screws (cup point): the hex key s across flats (mm). */
+export const SETSCREW_KEY: Record<string, number> = { 'M1.6': 0.7, M2: 0.9, 'M2.5': 1.3, M3: 1.5, M4: 2, M5: 2.5, M6: 3, M8: 4, M10: 5, M12: 6, M16: 8, M20: 10, M24: 12 };

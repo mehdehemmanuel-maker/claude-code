@@ -8,6 +8,9 @@
 //                  CEMA's are 3–10), a gear or pulley 2 mm. A fixed part in that room is in its way: a shell it turns
 //                  inside is given an opening round it with that clearance (an arch), and the turning part set flush
 //                  with the shell's side; anything else in its way is said
+//   room to slide  a part that slides (a carriage on its rail, a rod in its tube), with all of its link, swept from one
+//                  end of its travel to the other: a fixed part clear of it where it is drawn but in that sweep is in its
+//                  way: said
 //   held up        everything rests, through what it touches, on the ground: a part held by nothing is found by the
 //                  embodiment's own load path (src/nexus/embody/tree.ts) and set down onto what is nearest beneath or
 //                  beside it, when that is near (a fifth of its size); else said
@@ -185,6 +188,18 @@ export function critique(root: Part): Finding[] {
       }
       say('room to move', m.p.name, `${need.why}: the ${f.p.name} is in its way`, false);
     }
+  }
+  // ---- room to slide: each part that slides (its travel along an axis said: a carriage on its rail, a rod in its tube),
+  // with everything on its link, swept from one end of its travel to the other against the fixed parts near it: one
+  // clear of it where it is drawn but inside that sweep is in its way ----
+  const linkAt = (x: Node): string | undefined => { for (let y: Node | null = x; y; y = y.parent) if (y.p.link !== undefined) return y.p.link; return undefined; };
+  for (const s0 of nodes.filter((n) => n.p.travel?.slide && !n.p.detail)) {
+    const sl = s0.p.travel!.slide!, link = linkAt(s0), dir = new THREE.Vector3(...sl.dir).transformDirection(s0.m).normalize();
+    const mine = nodes.filter((x) => x.box && (isUnder(x, s0) || (link !== undefined && linkAt(x) === link)));
+    if (!mine.length) continue;
+    const rest = mine.reduce((b, x) => b.union(x.box!), new THREE.Box3()), swept = rest.clone().translate(dir.clone().multiplyScalar(sl.from)).union(rest.clone().translate(dir.clone().multiplyScalar(sl.to)));
+    const inWay = nodes.filter((f) => f.box && f.p.shape && !f.p.detail && !mine.includes(f) && !isUnder(s0, f) && !f.box.intersectsBox(rest) && f.box.intersectsBox(swept));
+    for (const f of inWay.slice(0, 8)) say('room to slide', s0.p.name, `it slides ${((sl.to - sl.from) * 1000).toFixed(0)} mm along its travel: the ${f.p.name} is in its way`, false);
   }
   // ---- held up: the embodiment's load path, from the ground (or, for a thing held or flying, its heaviest piece) ----
   nodes = layout(root);

@@ -3,6 +3,7 @@ import { DESIGNED, boltedJoint, component, library, use } from '../../src/nexus/
 import { catalogue } from '../../src/nexus/catalogue';
 import { FAMILIES } from '../../src/nexus/families';
 import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/kits';
+import { critique } from '../../src/nexus/make/critic';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 
@@ -66,5 +67,14 @@ describe('a linear guideway, drawn whole from HIWIN\'s table', () => {
   it('reads a screw said by its thread and length, "M3x10", in every fastener kind', () => {
     for (const w of ['panhead M2x6 PH A2', 'countersunk M3x10', 'buttonhead M3x8']) { const c = component(w); expect(typeof c === 'string' ? c : c.item.id, w).not.toMatch(/I do not know/); }
     const p = component('panhead M2x6 PH A2'); if (typeof p === 'string') throw new Error(p); expect(p.faults).toEqual([]);
+  });
+});
+
+describe('room to slide', () => {
+  it('sweeps a carriage along its rail\'s travel: a stop clear of it where it is drawn but in its travel is in its way; one beyond is not', () => {
+    const rail = use('rail MGN12H 200'), stop = (z: number): Part => ({ name: 'end stop', shape: { box: [0.03, 0.006, 0.01] }, at: [0, 0.011, z], mat: 'al-6061' });
+    const said = (z: number) => critique({ name: 'slide', parts: [structuredClone(rail), stop(z)] }).filter((f) => f.check === 'room to slide');
+    expect(said(0.07)).toHaveLength(1); expect(said(0.07)[0]!.says).toMatch(/end stop is in its way/);
+    expect(said(0.12)).toEqual([]);
   });
 });

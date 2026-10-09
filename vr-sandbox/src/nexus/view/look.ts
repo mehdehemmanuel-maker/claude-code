@@ -7,7 +7,8 @@
 //                &fov=<deg>
 //   what         &only=<regex> (only the parts so named), &hi=<regexA;regexB…> (those parts coloured red, blue, green,
 //                yellow), &ghost=1 (everything else faint), &explode=<levels> (taken apart that deep), &cut=<x|y|z><op><m>
-//                (a cutaway: &cut=z<0 keeps the near half, &cut=x>1.2 the nose, drawn both sides so its inside shows)
+//                (a cutaway: &cut=z<0 keeps the near half, &cut=x>1.2 the nose, drawn both sides so its inside shows,
+//                a solid's section flat and hatched)
 //   how lit      &room=1 (a room's light instead of the studio's), &zebra=1 (stripes reflected in its skin: they run on
 //                smoothly only where its tangent and curvature do), &draft=1 (each panel by how it parts from its die:
 //                green cleanly, yellow barely, red undercut), &holes=1 (every part flat and opaque on magenta, and where
@@ -55,7 +56,10 @@ const studio = (): THREE.Scene => {
   box(14, 4, [0, 13.5, 0], [Math.PI / 2, 0, 0], 4); for (const z of [-1, 1]) box(16, 1.2, [0, 4, z * 12], [0, 0, 0], 3); for (const x of [-1, 1]) box(1.5, 6, [x * 14, 4, 0], [0, Math.PI / 2, 0], 2.2); box(30, 0.4, [0, 0.4, -15], [0, 0, 0], 1.5);
   return st;
 };
-scene.environment = q.get('room') === '1' ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
+// (a part alone is lit as on a light table, by a bright room, so its metal reads as metal; a vehicle in the studio, so
+// its skin shows its shape in the softboxes' reflections; &room=1 or &room=0 says which)
+const lightRoom = q.get('room') === '1' || (q.get('room') !== '0' && kit.id === 'part');
+scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
 // (biased, or every curved skin shadows itself in fine rings: shadow acne)
 const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
@@ -122,7 +126,11 @@ const cut = (q.get('cut') ?? '').match(/^([xyz])([<>])(-?[\d.]+)$/);
 if (cut) {
   const ax = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }[cut[1] as 'x' | 'y' | 'z'], v = Number(cut[3]), keepBelow = cut[2] === '<';
   renderer.clippingPlanes = [new THREE.Plane(keepBelow ? ax.clone().negate() : ax.clone(), keepBelow ? v : -v)];
-  for (const m of meshes) { const mm = m.material as THREE.Material; if (!Array.isArray(mm)) { m.material = mm.clone(); (m.material as THREE.Material).side = THREE.DoubleSide; } }
+  // (a solid cut open shows its section as a draughtsman draws one: flat in its own colour, hatched at 45°, so material
+  // reads as material and a hollow as a hollow; a shell, a panel, shows its inside face as it is; a section a hair nearer
+  // than a face it rests flush on, so the two do not flicker)
+  const hatch = (mat: THREE.Material) => { mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (!gl_FrontFacing) { float h = mod(gl_FragCoord.x + gl_FragCoord.y, 7.0); gl_FragColor = vec4(diffuseColor.rgb * (h < 1.6 ? 0.32 : 0.82), 1.0); gl_FragDepth = gl_FragCoord.z - 0.00002; } else { gl_FragDepth = gl_FragCoord.z; }'); }; mat.customProgramCacheKey = () => 'hatched'; };
+  for (const m of meshes) { const mm = m.material as THREE.Material; if (!Array.isArray(mm)) { m.material = mm.clone(); (m.material as THREE.Material).side = THREE.DoubleSide; const pt = m.userData.part as Part | undefined; if (pt?.shape && !pt.shell && !('surf' in pt.shape) && !('loft' in pt.shape)) hatch(m.material as THREE.Material); } }
 }
 const box = new THREE.Box3(); for (const m of meshes) if (m.visible) box.expandByObject(m); if (box.isEmpty()) box.setFromObject(view.group); const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()), r = size.length() / 2;
 const s = sun.shadow.camera as THREE.OrthographicCamera; s.left = s.bottom = -r * 1.5; s.right = s.top = r * 1.5; s.far = 60; s.updateProjectionMatrix(); sun.target.position.copy(c); scene.add(sun.target);

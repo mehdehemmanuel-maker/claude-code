@@ -6,7 +6,7 @@
 // the AWG formula, NEMA ICS 16 faces); laws are the textbooks' (a spring's rate, a gear's pitch circle).
 
 import type { Item, Process } from './inventory';
-import { METRIC, PAN } from './threads';
+import { METRIC, PAN, SETSCREW_KEY } from './threads';
 import { KINDS } from './kinds';
 import { CLEAR, NEMA, NEMA_FACE } from './kinds/motion';
 export { NEMA, NEMA_FACE };
@@ -182,11 +182,26 @@ const cell: Family = {
   make(p) { const s = String(p.size), [d, L, g] = CELLS[s]!; return item(`cell-${s}`, `lithium-ion cell ${s}`, 'Electrical/Power/Cells', 'product', 'assemble', 'jelly-roll electrolyte-li cell-can cell-cap', 'a wound roll of cathode, separator and anode in a steel can, sealed under a vented cap', `${d} mm × ${L} mm; 3.6 V nominal; about ${g} g (typical)`, [d, d, L], g); },
 };
 // ---- GT2 pulleys and belts ---------------------------------------------------------------------------------------------
+/** A GT2 pulley as drawn, mm: its pitch diameter its teeth × 2 / π and its outside 0.508 mm under that, one set screw to
+ *  16 teeth and two at 90° above (PowerDrive's GT2 catalogue); its flanges 1 mm, 2 mm proud of its teeth, its face 7 mm
+ *  for a 6 mm belt and its hub 7 mm long, a little over its teeth across (at most 18 mm), set screws M3 to an 8 mm bore and
+ *  M4 above, as long as its hub's wall allows (typical of printer pulleys: a 20 tooth, 5 mm bore is 16 mm long, its hub
+ *  13 mm across). */
+export function gt2Dims(p: Record<string, string | number>) {
+  const teeth = Number(p.teeth), bore = Number(p.bore), rb = bore / 2, PD = (2 * teeth) / Math.PI, Ro = (PD - 0.508) / 2, Rf = Ro + 2, fl = 1, face = 7, hubL = 7;
+  const ss = bore <= 8 ? 3 : 4, Rh = Math.max(rb + ss + 0.5, Math.min(Ro + 0.4, 9)), sL = [2, 2.5, 3, 4, 5, 6, 8, 10].filter((x) => x <= Rh - rb).pop() ?? 2;
+  const angles = teeth <= 16 ? [0] : [0, Math.PI / 2], groove = 0.6 * 1.15 * 0.75;
+  const vol = Math.PI * (Rh ** 2 - rb ** 2) * hubL + 2 * Math.PI * (Rf ** 2 - rb ** 2) * fl + (Math.PI * (Ro ** 2 - rb ** 2) - teeth * groove) * face;
+  return { teeth, bore, PD, Ro, Rf, fl, face, hubL, ss, Rh, sL, angles, vol, L: hubL + 2 * fl + face };
+}
 const pulley: Family = {
   id: 'pulley', name: 'GT2 pulley', path: ['Mechanical', 'Linear motion', 'Belts and pulleys'], says: 'any number of teeth: 2 mm of belt a tooth; pitch diameter teeth × 2 / π', params: [{ key: 'teeth', says: 'teeth', unit: '', min: 12, max: 80, default: 20 }, { key: 'bore', says: 'bore', unit: 'mm', min: 3, max: 12, default: 5 }],
   examples: ['pulley 20t 5mm', 'pulley 16t 5mm', 'pulley 60t 8mm'],
   read(w) { const t = num(/(\d+)\s*t\b/i.exec(w)?.[1] ?? /(\d+)\s*teeth/i.exec(w)?.[1]) || 20, b = num(/(\d+)\s*mm/i.exec(w)?.[1]) || 5; return { teeth: t, bore: b }; },
-  make(p) { const t = Number(p.teeth), b = Number(p.bore), pd = (t * 2) / Math.PI; return item(`pulley-gt2-${t}t-${b}`, `GT2 pulley, ${t} teeth, ${b} mm bore`, 'Mechanical/Linear motion/Belts and pulleys', 'product', 'machine', 'al-6061 screw-set*2', 'an aluminium pulley for a 2 mm pitch belt, held by two set screws', `pitch diameter ${pd.toFixed(2)} mm; ${2 * t} mm of belt a turn`, [pd + 4, pd + 4, 16], mm3g(Math.PI * ((pd + 4) / 2) ** 2 * 16 * 0.7, RHO.aluminium), 'print'); },
+  make(p) {
+    const d = gt2Dims(p), t = d.teeth, b = d.bore, n = d.angles.length, { of: screws, inner } = partsOf(`{setscrew M${d.ss}x${d.sL}}*${n}`), sg = inner[0]?.g ?? 0;
+    return { ...item(`pulley-gt2-${t}t-${b}`, `GT2 pulley, ${t} teeth, ${b} mm bore`, 'Mechanical/Linear motion/Belts and pulleys', 'product', 'machine', 'al-6061', `an aluminium pulley for a 2 mm pitch belt, held on its shaft by ${n === 1 ? 'a set screw' : 'two set screws at 90°'}`, `pitch diameter ${d.PD.toFixed(2)} mm, outside ${(2 * d.Ro).toFixed(2)} mm (PowerDrive); ${2 * t} mm of belt a turn; ${d.L} mm long, flanges ${(2 * d.Rf).toFixed(1)} mm (typical)`, [2 * d.Rf, 2 * d.Rf, d.L], +(mm3g(d.vol, RHO.aluminium) + n * sg).toFixed(2), 'print'), of: [{ id: 'al-6061', n: 1 }, ...screws], inner };
+  },
 };
 const leadscrew: Family = {
   id: 'leadscrew', name: 'lead screw', path: ['Mechanical', 'Linear motion', 'Screws'], says: 'any diameter, pitch, starts and length: its lead is pitch × starts', params: [{ key: 'd', says: 'diameter', unit: 'mm', values: [5, 6, 8, 10, 12], default: 8 }, { key: 'pitch', says: 'pitch', unit: 'mm', min: 1, max: 5, default: 2 }, { key: 'starts', says: 'starts', unit: '', min: 1, max: 4, default: 4 }, { key: 'length', says: 'length', unit: 'mm', min: 50, max: 1500, default: 300 }],
@@ -391,7 +406,7 @@ const setscrew: Family = {
   params: [{ key: 'thread', says: 'thread size', unit: '', values: Object.keys(METRIC), default: 'M4' }, { key: 'length', says: 'length', unit: 'mm', min: 2, max: 60, default: 6 }],
   examples: ['setscrew M3x4', 'setscrew M4x6', 'setscrew M8x10'],
   read(w) { const t = thread(w); if (!t || !METRIC[t]) return threadAsk; return { thread: t, length: lengthIn(w, 6) }; },
-  make(p) { const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!; return item(`setscrew-${t.toLowerCase()}x${L}`, `${t} × ${L} set screw, cup point`, 'Hardware/Fasteners/Set screws', 'product', 'roll-thread', 'steel-alloy', 'cold-formed with its socket, thread-rolled and hardened to class 45H', `${T.p} mm pitch; cup point (ISO 4029); hardness class 45H`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L * 0.85, RHO.steel)); },
+  make(p) { const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!; return item(`setscrew-${t.toLowerCase()}x${L}`, `${t} × ${L} set screw, cup point`, 'Hardware/Fasteners/Set screws', 'product', 'roll-thread', 'steel-alloy', 'cold-formed with its socket, thread-rolled and hardened to class 45H', `${T.p} mm pitch; cup point (ISO 4029); hardness class 45H; a ${SETSCREW_KEY[t] ?? 0.5 * d} mm key`, [d, d, L], mm3g((Math.PI / 4) * (d - 0.6495 * T.p) ** 2 * L - (Math.sqrt(3) / 2) * (SETSCREW_KEY[t] ?? 0.5 * d) ** 2 * Math.min(0.45 * d, 0.6 * L) - (Math.PI / 4) * (0.5 * d) ** 2 * 0.15 * d, RHO.steel)); },
 };
 const dowel: Family = {
   id: 'dowel', name: 'dowel pin', path: ['Hardware', 'Fasteners', 'Pins'], says: 'a hardened, ground dowel pin of any diameter and length (ISO 8734), to locate one part on another',

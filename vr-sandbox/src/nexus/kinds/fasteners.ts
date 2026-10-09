@@ -2,7 +2,7 @@
 // and the hardware of doors, drawers and cabinets. Sizes from their standards where they have one (ISO, DIN); where
 // they have not, the sizes makers list, said to be typical.
 
-import { METRIC, PAN } from '../threads';
+import { BUTTON, METRIC, PAN } from '../threads';
 import { ax, bare, cyl, gOf, hexPrism, matOf, pref, ring, unit, type KindDef, type P } from './core';
 
 const T = (p: P) => METRIC[String(p.thread)]!;
@@ -32,8 +32,8 @@ export const FASTENERS: KindDef[] = [
     id: 'buttonhead', name: 'button head socket screw', path: 'Hardware/Fasteners/Button head screws', says: 'a low domed head with a hex socket, for a smooth outside', std: 'ISO 7380-1, M3–M16',
     axes: [bare('thread', 'thread', threads('M3', 'M16')), ax('L', 'length', 'mm', (p) => pref(Math.max(4, dOf(p)), Math.min(60, 12 * dOf(p)))), bare('matter', 'made of', ['black', 'A2'])],
     title: (p) => `${p.thread} × ${p.L} button head screw, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'roll-thread', how: (p) => `cold-headed from ${madeOf(p)[2]} wire, thread-rolled${p.matter === 'black' ? ', hardened (10.9) and black-oxided' : ''}`,
-    spec: (p) => { const BH: Record<string, [number, number]> = { M3: [5.7, 1.65], M4: [7.6, 2.2], M5: [9.5, 2.75], M6: [10.5, 3.3], M8: [14, 4.4], M10: [17.5, 5.5], M12: [21, 6.6], M14: [24.5, 7.7], M16: [28, 8.8] }; const [dk, k] = BH[String(p.thread)]!; return `${T(p).p} mm pitch; head ${dk} mm across, ${k} mm high (ISO 7380-1)`; },
-    box: (p) => [1.75 * dOf(p) + 0.5, 1.75 * dOf(p) + 0.5, Number(p.L) + 0.55 * dOf(p)], g: (p) => screwG(p, (Math.PI / 4) * (1.75 * dOf(p)) ** 2 * 0.55 * dOf(p) * 0.55),
+    spec: (p) => { const { dk, k, s: key } = BUTTON[String(p.thread)]!; return `${T(p).p} mm pitch; head ${dk} mm across, ${k} mm high, a ${key} mm hex key (ISO 7380-1)`; },
+    box: (p) => [BUTTON[String(p.thread)]!.dk, BUTTON[String(p.thread)]!.dk, Number(p.L) + BUTTON[String(p.thread)]!.k], g: (p) => screwG(p, cyl(BUTTON[String(p.thread)]!.dk, BUTTON[String(p.thread)]!.k) * 0.6),
   },
   {
     id: 'panhead', name: 'pan head screw, cross recess', path: 'Hardware/Fasteners/Machine screws', says: 'a rounded flat head with a Phillips (H) or Pozidriv (Z) recess', std: 'ISO 7045, M1.6–M8',

@@ -14,15 +14,15 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { FAMILIES, callFamily } from './families';
-import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, mgnDims, stepperDims } from './families';
+import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
-import { PAN } from './threads';
+import { BUTTON, PAN, SETSCREW_KEY } from './threads';
 import { UPN } from './kinds/stock';
 import { WHEEL } from './kinds/fasteners';
 import { itemOf, type Item } from './inventory';
-import type { Iface, Part, Port, V3 } from './kits';
+import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
 
 const PI = Math.PI, mm = 1e-3;
@@ -79,6 +79,8 @@ const shank = (name: string, d: number, P0: number, L: number, a: number, at: Pa
 };
 const P = (name: string, shape: Part['shape'], more: Partial<Part> = {}): Part => ({ name, shape, at: [0, 0, 0], ...more });
 
+/** A hex socket for a key s across flats (m), dep deep, in a head's top at height k (m): a six-sided hole down its axis. */
+const socket = (s: number, dep: number, k: number): Cut => ({ r: s / Math.sqrt(3), depth: dep, at: [0, k, 0], dir: [0, -1, 0], n: 6 });
 /** A port on a part, its pattern in metres (src/nexus/kits.ts Port). */
 const port = (name: string, sex: Port['sex'], thread: string, pattern: [number, number][], at: V3, n: V3, u: V3, t: number, more: Partial<Port> = {}): Port => ({ name, sex, thread, pattern, at, n, u, t, ...more });
 const sq = (side: number): [number, number][] => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [(x! * side) / 2, (y! * side) / 2] as [number, number]);
@@ -98,7 +100,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   rail: {
     says: 'a HIWIN MGN miniature guideway: its ground rail, a groove down each side and its holes counterbored; its carriage\'s ground block, a groove facing each of the rail\'s with a return hole beside it and four tapped holes on top; its two circuits of balls, a load row between the grooves and a return row in the hole, turned round through channels in the moulded end cap at each end; a retaining wire under each load row; a rubber seal on a steel plate at each end, its lip on the rail, held with the cap by two screws',
-    leaves: 'its sizes HIWIN\'s, its balls rebuilders\' counts (MGN9, 12) or scaled (MGN7, 15), and its inner proportions typical (mgnDims names each); its grooves drawn as one arc each (not the two of a gothic arch), its end caps\' turnarounds as a straight channel through the cap, its seals\' lips square to the rail (not following its grooves); the steel\'s edges drawn square and the rail holes\' plugs not drawn; drawn in pieces where it is cut two ways (its rail in layers, its block\'s top on its body), a fine seam can show where they meet',
+    leaves: 'its sizes HIWIN\'s, its balls rebuilders\' counts (MGN9, 12) or scaled (MGN7, 15), and its inner proportions typical (mgnDims names each); its grooves drawn as one arc each (not the two of a gothic arch), its end caps\' turnarounds as a straight channel through the cap, its seals\' lips square to the rail (not following its grooves); the steel\'s edges drawn square and the rail holes\' plugs not drawn',
     make: (p, it) => railParts(p, it.name),
     ports: (p) => { const d = mgnDims(p), holes = Array.from({ length: d.nh }, (_, k) => [(-d.L / 2 + d.E1 + k * d.P) * mm, 0] as [number, number]);
       return [port('rail foot', 'holes', d.bolt.split('x')[0]!, holes, [0, 0, 0], [0, -1, 0], [0, 0, 1], (d.HR - d.h) * mm, { std: `HIWIN MGN${d.size} rail, ${d.P} mm pitch` }),
@@ -116,9 +118,9 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
   },
   screw: {
-    says: 'ISO 4762: a round head dk across and k high, its hex socket, threaded for 2d + 12 mm (or its whole length when shorter)', leaves: 'the socket drawn round at its key\'s corners; the thread its major cylinder',
-    make: (p, it) => { const { t, d, P: P0, T } = thr(p), L = Number(p.length), mat = matIn(it), lk = looks(it, mat), at = { mat, ...lk }, sk = SOCKET_HEAD[t.replace('.', '_')]?.s ?? 0.75 * d * mm, rs = (sk / mm) / Math.sqrt(3), dep = 0.55 * T.k, ch = 0.08 * T.k, b = 2 * d + 12;
-      return [P(it.name, lathe([[0, 0], [T.dk / 2, 0], [T.dk / 2, T.k - ch], [T.dk / 2 - ch, T.k], [rs, T.k], [rs, T.k - dep], [0, T.k - dep]]), at), ...shank(it.name, d, P0, L, Math.max(0, L - b), at)]; },
+    says: 'ISO 4762: a round head dk across and k high, its hex socket, threaded for 2d + 12 mm (or its whole length when shorter)', leaves: 'the thread its major cylinder',
+    make: (p, it) => { const { t, d, P: P0, T } = thr(p), L = Number(p.length), mat = matIn(it), lk = looks(it, mat), at = { mat, ...lk }, sk = SOCKET_HEAD[t.replace('.', '_')]?.s ?? 0.75 * d * mm, dep = 0.55 * T.k, ch = 0.08 * T.k, b = 2 * d + 12;
+      return [P(it.name, lathe([[0, 0], [T.dk / 2, 0], [T.dk / 2, T.k - ch], [T.dk / 2 - ch, T.k], [0, T.k]]), { ...at, cuts: [socket(sk, dep * mm, T.k * mm)] }), ...shank(it.name, d, P0, L, Math.max(0, L - b), at)]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
   },
   panhead: {
@@ -127,6 +129,27 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
       // (the head: its side straight for 0.45 of its height, then its top rounding in to a flat 0.55 of it across)
       return [P(it.name, lathe([[0, 0], [dk / 2, 0], [dk / 2, 0.45 * k], [0.44 * dk, 0.8 * k], [0.36 * dk, 0.96 * k], [rr, k], [0, k - dep]]), at), ...shank(it.name, d, P0, L, 0, at)]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
+  },
+  buttonhead: {
+    says: 'ISO 7380-1: a low domed head dk across and k high, its hex socket, threaded to its head', leaves: 'the thread its major cylinder',
+    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.L), mat = matIn(it), at = { mat, ...looks(it, mat) }, B = BUTTON[String(p.thread)]!;
+      // (its dome: straight at its rim for an eighth of its height, then one arc, a sphere's, from the rim up to its crown)
+      const a = B.dk / 2, yc = (0.9856 * B.k ** 2 - a * a) / (1.76 * B.k), R = B.k - yc, a0 = Math.atan2(0.12 * B.k - yc, a);
+      const dome = Array.from({ length: 13 }, (_, i) => { const q = a0 + ((PI / 2 - a0) * i) / 12; return [R * Math.cos(q), yc + R * Math.sin(q)] as [number, number]; });
+      return [P(it.name, lathe([[0, 0], [B.dk / 2, 0], ...dome]), { ...at, cuts: [socket(B.s * mm, B.t * mm, B.k * mm)] }), ...shank(it.name, d, P0, L, 0, at)]; },
+    iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
+  },
+  setscrew: {
+    says: 'ISO 4029: a headless screw with a hex socket in its top and a cup point at its end', leaves: 'its thread its major cylinder; its socket\'s depth and cup typical (0.45 d deep, the cup 0.5 d across)',
+    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), at = { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) }, s = SETSCREW_KEY[String(p.thread)] ?? 0.5 * d, c = 0.1 * d, cup = 0.25 * d;
+      // (its top at y = 0, chamfered; its end cupped)
+      return [P(it.name, lathe([[0, 0], [d / 2 - c, 0], [d / 2, -c], [d / 2, -L + c], [d / 2 - c, -L], [cup, -L], [0.7 * cup, -L + 0.15 * d], [0, -L + 0.15 * d]]), { ...at, cuts: [socket(s * mm, Math.min(0.45 * d, 0.6 * L) * mm, 0)] })]; },
+  },
+  pulley: {
+    says: 'a GT2 timing pulley: its teeth on their pitch circle (2 mm a tooth), a flange each side, its hub with its set screws in tapped holes, bored for its shaft',
+    leaves: 'its pitch and outside diameters PowerDrive\'s (the outside 0.508 mm under the pitch), its set screws\' count theirs (one to 16 teeth, two at 90° above); its flanges, hub and face typical of 5 mm bore printer pulleys (flanges 1 mm, 4 mm proud of the teeth; hub 7 mm long; face 7 mm for a 6 mm belt); its grooves drawn as round-bottomed slots, not the GT2 curve',
+    make: (p, it) => pulleyParts(p, it.name),
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: Number(p.bore) * mm }],
   },
   nut: {
     says: 'ISO 4032 (ISO 10511 with its nylon ring): a hex s across flats and m high, chamfered 30° both faces, bored at the thread\'s root', leaves: 'its thread drawn as its root cylinder',
@@ -297,35 +320,29 @@ function bearingParts(p: Record<string, string | number>, nm: string): Part[] {
 }
 
 /** An MGN rail and its carriage, mm (src/nexus/families.ts mgnDims): the rail along z with its foot at y = 0, the
- *  carriage at the middle of its travel. A part cut across two ways is drawn in pieces of one name: the rail's middle
- *  as layers across it with its holes, its sides along it with their grooves; the block's body along it with its grooves
- *  and return holes, its top across it with its tapped holes. */
+ *  carriage at the middle of its travel: the rail and the block each one piece, their holes drilled in them. */
 function railParts(p: Record<string, string | number>, nm: string): Part[] {
   const d = mgnDims(p), { L, Db, rg, cl, yb, xb, xw, xr, rh } = d, L1 = d.blk.L1, Lb = d.blk.L, steel = { mat: 'stainless-440c', color: 0xc9cdd0, finish: 'ground' };
   // (a groove: an arc of rg about its centre cx, facing out (s = 1, the rail's) or in (s = -1, the block's), from where it
   // leaves the face at x0 to where it meets it again)
   const groove = (cx: number, s: 1 | -1, x0: number): [number, number][] => { const f = Math.acos(Math.min(1, Math.abs(x0 - cx) / rg)); return Array.from({ length: 11 }, (_, k) => { const q = -f + (2 * f * k) / 10; return [cx - s * rg * Math.cos(q), yb + rg * Math.sin(q)] as [number, number]; }); };
   const cxr = xb - Db / 2 - cl + rg, cxb = xb + Db / 2 + cl - rg, out: Part[] = [];
-  // ---- the rail: in layers across it with its holes (through below its counterbores, counterbored above), full width
-  // over and under its grooves; in the band of its grooves, its middle in those layers and its sides along it with them
-  // (so its top and its foot are each one face: where the pieces meet is in its grooves' edges)
-  const zs = Array.from({ length: d.nh }, (_, k) => -L / 2 + d.E1 + k * d.P), hr = rg * Math.sin(Math.acos(Math.min(1, (cxr - d.WR / 2) / rg)));
-  const y1 = yb - hr - 0.05, y2 = yb + hr + 0.05, yc = d.HR - d.h, plan = (w: number): [number, number][] => [[-w, -L / 2], [w, -L / 2], [w, L / 2], [-w, L / 2]];
-  const layers = (w: number, a0: number, a1: number): Part[] => [[a0, Math.min(a1, yc), d.d], [Math.max(a0, yc), a1, d.D]].filter(([u, v]) => v! > u! + 1e-6).map(([u, v, dia]) => slab(nm, plan(w), zs.map((z) => hole(dia! / 2, 0, z)), u!, v!, steel));
-  const side = (sx: 1 | -1): Part => {
-    const pts: [number, number][] = [[d.a, y1], [d.WR / 2, y1], ...[...groove(cxr, 1, d.WR / 2)].reverse().map(([x, y]) => [x, 2 * yb - y] as [number, number]), [d.WR / 2, y2], [d.a, y2]];
-    return P(nm, section(sx > 0 ? pts : pts.map(([x, y]) => [-x, y] as [number, number]).reverse(), [], L), steel);
-  };
-  out.push(group(nm, `mgn${d.size}-rail-${L}`, [...layers(d.WR / 2, 0, y1), ...layers(d.a, y1, y2), side(1), side(-1), ...layers(d.WR / 2, y2, d.HR)]));
+  // ---- the rail: one ground bar, a groove down each side, its holes drilled through and counterbored from its top
+  const zs = Array.from({ length: d.nh }, (_, k) => -L / 2 + d.E1 + k * d.P), c0 = Math.min(0.3, 0.04 * d.WR), yc = d.HR - d.h;
+  const right: [number, number][] = [[d.WR / 2 - c0, 0], [d.WR / 2, c0], ...[...groove(cxr, 1, d.WR / 2)].reverse().map(([x, y]) => [x, 2 * yb - y] as [number, number]), [d.WR / 2, d.HR - c0], [d.WR / 2 - c0, d.HR]];
+  const bar = [...right, ...[...right].reverse().map(([x, y]) => [-x, y] as [number, number])];
+  const bores: Cut[] = zs.flatMap((z) => [{ r: (d.D / 2) * mm, depth: d.h * mm, at: [0, d.HR * mm, z * mm] as V3, dir: [0, -1, 0] as V3 }, { r: (d.d / 2) * mm, depth: yc * mm, at: [0, yc * mm, z * mm] as V3, dir: [0, -1, 0] as V3 }]);
+  out.push(P(nm, section(bar, [], L), { ...steel, item: `mgn${d.size}-rail-${L}`, cuts: bores }));
   // ---- the carriage, one link sliding on the rail: its block, end caps, seals, wires, balls and screws
   const car = { link: `${nm} carriage` }, rs = d.sdd / 2 / Math.cos(PI / 16) + 0.02, td = d.te + 0.5;
   const hb = (x0: number) => Math.sqrt(Math.max(0, rg * rg - (x0 - cxb) ** 2)), hB = hb(xw);
-  const body: [number, number][] = [[-d.W / 2, d.H1], [-xw, d.H1], [-xw, yb - hB], ...groove(cxb, -1, xw).map(([x, y]) => [-x, y] as [number, number]), [-xw, yb + hB], [-xw, d.HR + d.gt], [xw, d.HR + d.gt], [xw, yb + hB], ...[...groove(cxb, -1, xw)].reverse(), [xw, yb - hB], [xw, d.H1], [d.W / 2, d.H1], [d.W / 2, d.Ht], [-d.W / 2, d.Ht]];
-  const ret = [circle(rh, xr, yb), circle(rh, -xr, yb)], tapped = [circle(rs, d.xs, d.ys), circle(rs, -d.xs, d.ys)];
-  const seg = (z0: number, z1: number, holes: [number, number][][]) => P(`${nm} carriage`, section(body, holes, z1 - z0), { ...steel, ...car, at: [0, 0, ((z0 + z1) / 2) * mm] });
-  const rM = Number(d.M.slice(1)) / 2 / Math.cos(PI / 16) + 0.02, top: [number, number][] = [[-d.W / 2, -L1 / 2], [d.W / 2, -L1 / 2], [d.W / 2, L1 / 2], [-d.W / 2, L1 / 2]];
-  out.push(group(`${nm} carriage`, `mgn${d.size}${d.t.toLowerCase()}-block`, [seg(-L1 / 2, -L1 / 2 + td, [...ret, ...tapped]), seg(-L1 / 2 + td, L1 / 2 - td, ret), seg(L1 / 2 - td, L1 / 2, [...ret, ...tapped]),
-    slab(`${nm} carriage`, top, [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => hole(rM, (sx! * d.B) / 2, (sz! * d.blk.C) / 2)), d.Ht, d.H, { ...steel, ...car, iface: [{ kind: 'mount', role: 'provides', says: `its four ${d.M} holes carry what rides on it` }] })], car));
+  const ret = [circle(rh, xr, yb), circle(rh, -xr, yb)], rM = Number(d.M.slice(1)) / 2 / Math.cos(PI / 16) + 0.02;
+  // ---- the block: one piece along the rail (its grooves, return holes), its four holes tapped from the top and the seal
+  // screws' tapped into its ends (drawn at their major diameter)
+  const block: [number, number][] = [[-d.W / 2, d.H1], [-xw, d.H1], [-xw, yb - hB], ...groove(cxb, -1, xw).map(([x, y]) => [-x, y] as [number, number]), [-xw, yb + hB], [-xw, d.HR + d.gt], [xw, d.HR + d.gt], [xw, yb + hB], ...[...groove(cxb, -1, xw)].reverse(), [xw, yb - hB], [xw, d.H1], [d.W / 2, d.H1], [d.W / 2, d.H], [-d.W / 2, d.H]];
+  const taps: Cut[] = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => ({ r: rM * mm, depth: d.Ml * mm, at: [((sx! * d.B) / 2) * mm, d.H * mm, ((sz! * d.blk.C) / 2) * mm] as V3, dir: [0, -1, 0] as V3, n: 16 }));
+  const ends: Cut[] = [1, -1].flatMap((s) => [1, -1].map((sx) => ({ r: rs * mm, depth: td * mm, at: [sx * d.xs * mm, d.ys * mm, ((s * L1) / 2) * mm] as V3, dir: [0, 0, -s] as V3, n: 16 })));
+  out.push(P(`${nm} carriage`, section(block, ret, L1), { ...steel, ...car, item: `mgn${d.size}${d.t.toLowerCase()}-block`, cuts: [...taps, ...ends], travel: { slide: { dir: [0, 0, 1], from: (-d.travel / 2) * mm, to: (d.travel / 2) * mm } }, iface: [{ kind: 'mount', role: 'provides', says: `its four ${d.M} holes carry what rides on it` }] }));
   // (an end cap: the block's outline less 0.2 mm, the slot round the rail, a channel each side at the balls' height out past
   // the return row where the balls turn round, the screws' holes; MGN15's a port for its grease nipple)
   const Wc = d.W / 2 - 0.2, Hc = d.H - 0.3, xo = xr + rh, yn = (d.HR + d.gt + Hc) / 2;
@@ -348,6 +365,20 @@ function railParts(p: Record<string, string | number>, nm: string): Part[] {
   const run = d.run, A = L1 + 2 * d.e0, half = PI * d.rt, xm = (xb + xr) / 2;
   const at = (q: number): [number, number] => { if (q < A) return [xb, -A / 2 + q]; q -= A; if (q < half) { const th = q / d.rt; return [xm - d.rt * Math.cos(th), A / 2 + d.rt * Math.sin(th)]; } q -= half; if (q < A) return [xr, A / 2 - q]; q -= A; const th = q / d.rt; return [xm + d.rt * Math.cos(th), -A / 2 - d.rt * Math.sin(th)]; };
   for (const sx of [1, -1]) for (let k = 0; k < d.n; k++) { const [x, z] = at(((k + 0.5) * run) / d.n); out.push(P(`${nm} ball`, { sphere: (Db / 2) * mm }, { at: [sx * x * mm, yb * mm, z * mm], mat: 'stainless-440c', color: 0xd5d8db, finish: 'brushed', item: `steel-ball-${Db}`, ...car, joint: 'slide', fixed: 'rolling in the grooves of the rail and the block, round through the end caps' })); }
+  return out;
+}
+
+/** A GT2 pulley, mm (src/nexus/families.ts gt2Dims), its axis y: its hub at the bottom, a flange, its teeth, a flange. */
+function pulleyParts(p: Record<string, string | number>, nm: string): Part[] {
+  const d = gt2Dims(p), al = { mat: 'al-6061', color: 0xc9ced3, finish: 'brushed' }, rb = d.bore / 2, out: Part[] = [];
+  // (its teeth: the outside circle with a groove each pitch, round-bottomed, 0.75 mm deep and 1.15 mm across at the top)
+  const teeth: [number, number][] = [], hg = 0.575 / d.Ro, phi = (2 * PI) / d.teeth;
+  for (let k = 0; k < d.teeth; k++) { const a = k * phi; for (let i = 0; i <= 6; i++) { const u = -1 + i / 3; teeth.push(polar(d.Ro - 0.75 * Math.cos((u * PI) / 2), a + u * hg)); } teeth.push(polar(d.Ro, a + phi / 2)); }
+  const y1 = d.hubL, y2 = y1 + d.fl, y3 = y2 + d.face, y4 = y3 + d.fl, ring = (r: number, a: number, b: number) => lathe([[rb, a], [r, a], [r, b], [rb, b], [rb, a]]);
+  const taps: Cut[] = d.angles.map((t) => ({ r: (d.ss / 2 / Math.cos(PI / 16) + 0.02) * mm, depth: (d.Rh - rb + 0.05) * mm, at: [d.Rh * Math.cos(t) * mm, (d.hubL / 2) * mm, d.Rh * Math.sin(t) * mm] as V3, dir: [-Math.cos(t), 0, -Math.sin(t)] as V3, n: 16 }));
+  out.push(P(nm, ring(d.Rh, 0, y1), { ...al, cuts: taps }), P(nm, ring(d.Rf, y1, y2), al), slab(nm, teeth, [hole(rb, 0, 0, 32)], y2, y3, al), P(nm, ring(d.Rf, y3, y4), al));
+  // (its set screws in their tapped holes, each cupped onto the shaft, its top within the hub)
+  for (const t of d.angles) out.push(use(`setscrew M${d.ss}x${d.sL}`, [(rb + d.sL) * Math.cos(t) * mm, (d.hubL / 2) * mm, (rb + d.sL) * Math.sin(t) * mm], { name: `${nm} set screw`, rot: Math.abs(t) < 1e-6 ? [0, 0, -PI / 2] : [PI / 2, 0, 0], joins: [nm], fixed: 'threaded into its hub, its cup on the shaft' }));
   return out;
 }
 

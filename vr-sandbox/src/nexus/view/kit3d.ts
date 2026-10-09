@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { edgeRadius } from '../finish';
-import type { Part, Shape } from '../kits';
+import type { Cut, Part, Shape } from '../kits';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
 import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
 import { patchAt, tessellate, type Patch } from '../surface';
@@ -94,6 +95,23 @@ function surfGeometry(pt: Patch): THREE.BufferGeometry {
   const t = tessellate(pt, steps([run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1])]), steps([run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])])), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3)); g.setIndex(t.idx);
   return g;
+}
+// ---- holes drilled in a part (Part.cuts): each a round (or n-sided) hole subtracted from its drawn shape --------------
+// (a part's geometry with its holes is the same for every part shaped and drilled alike: a car's hundred M6 bolts are
+// drilled once)
+const drilled = new Map<string, THREE.BufferGeometry>(), csg = new Evaluator(), UP = new THREE.Vector3(0, 1, 0);
+csg.attributes = ['position', 'normal']; csg.useGroups = false;
+const clean = (g: THREE.BufferGeometry) => { const h = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(h.attributes)) if (k !== 'position' && k !== 'normal') h.deleteAttribute(k); if (!h.getAttribute('normal')) h.computeVertexNormals(); h.clearGroups(); return h; };
+function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferGeometry {
+  const had = drilled.get(key); if (had) return had;
+  let a = new Brush(clean(g)); a.updateMatrixWorld();
+  for (const c of cuts) {
+    // (a cylinder from just outside its face to its depth inside, its axis along the hole)
+    const dir = new THREE.Vector3(...c.dir).normalize(), b = new Brush(clean(new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, c.n ?? 24)));
+    b.quaternion.setFromUnitVectors(UP, dir); b.position.set(...c.at).addScaledVector(dir, c.depth / 2 - 1e-4); b.updateMatrixWorld();
+    a = csg.evaluate(a, b, SUBTRACTION);
+  }
+  const out = a.geometry; drilled.set(key, out); return out;
 }
 function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
   if ('surf' in s) return surfGeometry(s.surf);
@@ -200,7 +218,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item && !p.parts?.length) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size (not

@@ -52,8 +52,13 @@ export interface Iface {
   /** N·m: what a drive delivers (provides), or the most a driven shaft carries (requires) */ torque?: number;
   /** the part it goes to by name, where they do not touch (a chain drive and the axle it turns) */ to?: string; says?: string;
 }
+/** A hole drilled into a part, in its own frame (m): round (or n-sided: a hex socket, a tapped hole drawn at its major
+ *  diameter), r across, from `at` on its face along `dir` (a unit vector into it) for `depth`. It is cut from what is
+ *  drawn, so the clash finder and every view see it, and its volume leaves the part's mass. */
+export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
+  /** holes drilled into it (its own frame) */ cuts?: Cut[];
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
   /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
    *  rule adds nothing to it */ fixed?: string;
@@ -74,7 +79,9 @@ export interface Part {
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
-   *  in bump (m) — so the room kept round it is the room it sweeps through all of that */ travel?: { steer?: number; bump?: number };
+   *  in bump (m) — so the room kept round it is the room it sweeps through all of that; or how a part slides, with all of
+   *  its link (a carriage on its rail): along dir (its own frame) from `from` to `to` (m) of where it is drawn */
+  travel?: { steer?: number; bump?: number; slide?: { dir: V3; from: number; to: number } };
   /** a limb that swings as it moves: about which axis, how far (radians), at what point in the stride (0–1) */ swing?: { axis: 'x' | 'z'; amp: number; phase: number };
   /** its mass taken as typical where its shape does not say it (a car's wiring, its fluids), kg */ kg?: number;
   /** how it is made where its material alone does not say (a car's pressed panels, round as they are styled) */ make?: 'pressed';

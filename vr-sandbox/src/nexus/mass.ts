@@ -46,6 +46,8 @@ const area = (s: Shape): number => {
 export function massOf(p: Part): number {
   // (a round shape drawn with flat sides, a nut's six, is that polygon round its axis, not the circle through its corners)
   const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
-  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : vol(p.shape) * flats) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
+  // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
+  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * c.depth, 0);
+  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
 }

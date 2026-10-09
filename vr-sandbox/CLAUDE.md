@@ -76,6 +76,10 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A miniature guideway's sizes (HIWIN's MGN table) and how it is drawn (every inner proportion named as typical) | `src/nexus/families.ts` (`MGN`, `mgnDims`), `src/nexus/components.ts` (`railParts`) |
 | A face that carries what is fastened to it (a carriage's top, a tool flange: `Iface` kind `mount`), the free end of what moves, joined only to what holds it | `src/nexus/kits.ts`, `src/nexus/make/critic.ts` (chains) |
 | A fastener locks two links only where it meets the other (apart by more than 20 µm it runs clear, as a rub does) | `src/nexus/make/critic.ts` (held) |
+| A hole drilled in any part, any way (`Part.cuts`: round, or n-sided, a hex socket): cut from what is drawn (three-bvh-csg, each shape drilled once), its volume out of the mass | `src/nexus/kits.ts` (`Cut`), `src/nexus/view/kit3d.ts` (`drill`), `src/nexus/mass.ts` |
+| A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
+| Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
+| How a picture is lit: a part alone in a bright room (a light table, so metal reads as metal), a vehicle in the softbox studio | `src/nexus/view/look.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
@@ -135,9 +139,8 @@ Known gaps (from the 2026-10-08 audit, still open):
   and magnet, shaft, bearings, tie screws, leads and plug) and the HIWIN MGN7–15 guideways, C and H (rail, block,
   end caps, seals, retaining wires, both circuits of balls, seal screws; MGN15's grease nipple; within 6 % of HIWIN's
   masses, 66 balls in an MGN12H as rebuilders count) are drawn whole, every part their inventory lists inside them.
-  Still not ruled: room for what slides (a carriage's travel along its rail, a damper's rod) as the critic keeps room
-  for what turns; a part drawn in pieces where it is cut two ways (the rail in layers, the block's top on its body)
-  can show a fine seam where they meet.
+  GT2 pulleys (any tooth count and bore: PowerDrive's pitch and outside diameters and set-screw rule) and their ISO 4029
+  set screws, in tapped holes drilled through the hub, are drawn whole too.
   The breakdown queue (2026-10-09) waits on nothing: 59,046 items taken, none listed only as its materials, none
   shaped from several materials in one process, nothing missing from the table, its deepest chain of things in
   things 12. The ~410 parts broken out of them have typical sizes and looks (`looks.ts`), not yet drawn as components
