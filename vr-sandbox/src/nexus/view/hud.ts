@@ -105,12 +105,14 @@ export class Hud {
   private drawDom(now: Date): void {
     const st = STATUS[this.status], w = this.weather, time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), date = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
     const mins = Math.floor((Date.now() - this.since) / 60000), extra = `${this.battery !== null ? `battery ${Math.round(this.battery * 100)} % · ` : ''}in the forge ${mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}`;
+    // (one line: the time, the weather when it is known, and what Claude is doing; the date and the numbers when you
+    // point at it, not always in your way)
     this.dom.replaceChildren(
-      Object.assign(document.createElement('span'), { textContent: `${time} · ${date}` }),
-      Object.assign(document.createElement('span'), { textContent: w ? `${w.temperature.toFixed(0)} °C ${sky(w.code)}` : this.weatherNote, style: `color:${w ? '#ffe082' : '#7fb3c8'};font-weight:500` }),
-      Object.assign(document.createElement('span'), { textContent: `● Claude · ${st.text}${this.detail ? ` · ${this.detail}` : ''}`, style: `color:${st.color}` }),
-      Object.assign(document.createElement('span'), { textContent: `${this.info ? `${this.info} · ` : ''}${extra}`, style: 'color:#7fb3c8;font-weight:500' }),
+      Object.assign(document.createElement('span'), { textContent: time }),
+      ...(w ? [Object.assign(document.createElement('span'), { textContent: `${w.temperature.toFixed(0)} °C ${sky(w.code)}`, style: 'color:#ffe082;font-weight:500' })] : []),
+      Object.assign(document.createElement('span'), { textContent: `● Claude · ${st.text}`, style: `color:${st.color}` }),
     );
+    this.dom.title = [date, this.detail, w ? '' : this.weatherNote, this.info, extra].filter(Boolean).join(' · ');
   }
 
   /** Each frame: the seconds sweep turns; once a second the face is drawn; in a headset it follows your head. */

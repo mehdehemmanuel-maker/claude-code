@@ -476,6 +476,8 @@ export function missingIn(p: Part, it: Item | null | undefined = p.item ? itemOf
 
 // ---- the library: made once, kept, used by every build ----------------------------------------------------------------
 const kept = new Map<string, Component | string>();
+/** Each component made, by its item's id: one drawing of each part, however it was asked for. */
+const byItem = new Map<string, Component>();
 /** Each made component by its item's id, so what is in a drawn part can be found where the inventory has no entry for its size. */
 const keptByItem = new Map<string, Item>();
 /** Materials the drawing knows by density, though the inventory may not list them. */
@@ -489,17 +491,25 @@ export function component(words: string): Component | string {
   const r = callFamily(words); let out: Component | string;
   if (!r || typeof r === 'string') out = r ?? `"${words}" is not a part any family makes.`;
   else if (!r.sized || !DESIGNS[r.sized.family]) out = `${r.name} is known (${r.path.join(' / ')}) but not drawn yet: its family has no design.`;
-  else {
-    // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
-    // reads its head noun; its class and its make in what it says)
-    const d = DESIGNS[r.sized.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, sealed: 'designed whole from its standard in the component library', says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized.params) } : {}), ...(d.ports ? { ports: d.ports(r.sized.params) } : {}) };
-    keptByItem.set(r.id, r);
-    const g = massOf(part) * 1000, ratio = r.g ? g / r.g : 1, faults: string[] = [...missingIn(part, r)];
-    // (a part a family weighs to a hundredth of a gram is not faulted for its rounding)
-    if (r.g && Math.abs(ratio - 1) > 0.2 && Math.abs(g - r.g) > 0.01) faults.push(`drawn ${g.toFixed(2)} g against ${r.g.toFixed(2)} g from its standard (${((ratio - 1) * 100).toFixed(0)} %)`);
-    out = { words, item: r, part, path: r.path, mass: ratio, leaves: d.leaves, faults };
-  }
+  else out = byItem.get(r.id) ?? designed(r, words);
   kept.set(k, out); return out;
+}
+/** The component an item is drawn as, by its id (an item made to sizes by a family the library draws, in the inventory or
+ *  drawn inside another component), or null: so what the inventory lists, and what is inside a drawn part, opens as drawn. */
+export function componentOf(id: string): Component | null {
+  const was = byItem.get(id); if (was) return was;
+  const r = itemOf(id) ?? keptByItem.get(id); return r?.sized && DESIGNS[r.sized.family] ? designed(r, r.name) : null;
+}
+function designed(r: Item, words: string): Component {
+  // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
+  // reads its head noun; its class and its make in what it says)
+  const d = DESIGNS[r.sized!.family]!, base = r.name.split(',')[0]!.trim() + (/nylon lock/.test(r.name) ? ' (nylon lock)' : ''), parts = d.make(r.sized!.params, { ...r, name: base }), part: Part = { name: base, at: [0, 0, 0], item: r.id, sealed: 'designed whole from its standard in the component library', says: `${r.name}: ${d.says} (${r.path.join(' / ')})`, parts, ...(d.iface ? { iface: d.iface(r.sized!.params) } : {}), ...(d.ports ? { ports: d.ports(r.sized!.params) } : {}) };
+  keptByItem.set(r.id, r);
+  const g = massOf(part) * 1000, ratio = r.g ? g / r.g : 1, faults: string[] = [...missingIn(part, r)];
+  // (a part a family weighs to a hundredth of a gram is not faulted for its rounding)
+  if (r.g && Math.abs(ratio - 1) > 0.2 && Math.abs(g - r.g) > 0.01) faults.push(`drawn ${g.toFixed(2)} g against ${r.g.toFixed(2)} g from its standard (${((ratio - 1) * 100).toFixed(0)} %)`);
+  const out: Component = { words, item: r, part, path: r.path, mass: ratio, leaves: d.leaves, faults };
+  byItem.set(r.id, out); return out;
 }
 /** A copy of a component to place in a build: its root at `at`, turned by `rot`, with anything else said of it (a name
  *  in this build, how it is fixed here, what passes through it). Throws where the words are not a drawn part, so a build
@@ -523,7 +533,7 @@ export const partWords = (): RegExp => new RegExp(`\\b(${[...DESIGNED, 'bolted j
 /** A family's first example, as its family writes it ("bolt M8x30"). */
 export const exampleOf = (family: string): string => FAMILIES.find((f) => f.id === family)?.examples[0] ?? 'bolt M8x30';
 /** Every component made so far, by category: the saved library. */
-export function library(): Map<string, Component[]> { const m = new Map<string, Component[]>(); for (const c of kept.values()) if (typeof c !== 'string') { const k = c.path.join(' / '); (m.get(k) ?? m.set(k, []).get(k)!).push(c); } return m; }
+export function library(): Map<string, Component[]> { const m = new Map<string, Component[]>(); for (const c of byItem.values()) { const k = c.path.join(' / '); (m.get(k) ?? m.set(k, []).get(k)!).push(c); } return m; }
 
 // ---- assemblies of components -----------------------------------------------------------------------------------------
 /** The ISO preferred lengths a bolt is sold in, mm. */

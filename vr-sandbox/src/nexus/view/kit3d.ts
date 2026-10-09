@@ -259,12 +259,46 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
         // heaviest there stays, the others out one way and the next the other, each further than the last)
         if (dir.length() < 0.05 * size) { const core = cores.get(par) ?? cores.set(par, []).get(par)!; core.push(n.obj); continue; }
         par.getWorldQuaternion(q); dir.normalize().applyQuaternion(q.invert());
-        moves.push([n.obj, dir.multiplyScalar((size * 0.6) / n.depth)]);
+        // (its own vector: the middle it was found from is reused for the next part)
+        moves.push([n.obj, dir.clone().multiplyScalar((size * 0.6) / n.depth)]);
       }
+      // (those at the middle of what holds it go out along its length, each kind beyond the last: what it is itself, the
+      // pieces under its own name (a guideway's rail), stays, else its heaviest kind (a motor's stator); then, heaviest
+      // first, one kind past its one end and the next past the other, every piece of one name together (a carriage's
+      // balls), each clear of the last by a quarter of its own length and a twentieth of what stays)
+      const span = (os: THREE.Object3D[], a: THREE.Vector3): [number, number] => { box.makeEmpty(); for (const o of os) box.expandByObject(o); if (box.isEmpty()) return [0, 0]; let lo = Infinity, hi = -Infinity; for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) { const t = a.x * x + a.y * y + a.z * z; lo = Math.min(lo, t); hi = Math.max(hi, t); } return [lo, hi]; };
       for (const [par, objs] of cores) {
-        if (objs.length < 2) continue; box.makeEmpty(); for (const o of objs) box.expandByObject(o); const sz = box.getSize(new THREE.Vector3()), ax = sz.x >= sz.y && sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : sz.y >= sz.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
-        par.getWorldQuaternion(q); ax.applyQuaternion(q.invert()); const kg = (o: THREE.Object3D) => massOf((o.userData.part as Part | undefined) ?? { name: '' }), order = [...objs].sort((a, b) => kg(b) - kg(a)), depth = nodes.find((x) => x.obj === order[0])?.depth ?? 1;
-        order.slice(1).forEach((o, i) => moves.push([o, ax.clone().multiplyScalar(((i % 2 ? -1 : 1) * (Math.floor(i / 2) + 1) * sz.length() * 0.6) / depth)]));
+        const own = par.children.filter((k) => k.name === par.name && k.userData.part), kg = (o: THREE.Object3D) => massOf((o.userData.part as Part | undefined) ?? { name: '' }), kinds = new Map<string, { objs: THREE.Object3D[]; kg: number }>();
+        for (const o of objs) { const k = kinds.get(o.name) ?? kinds.set(o.name, { objs: [], kg: 0 }).get(o.name)!; k.objs.push(o); k.kg += kg(o); }
+        const order = [...kinds.values()].sort((a, b) => b.kg - a.kg), stay = own.length ? own : order[0]!.objs, go = own.length ? order : order.slice(1);
+        if (!go.length) continue;
+        box.makeEmpty(); for (const o of [...stay, ...objs]) box.expandByObject(o); const sz = box.getSize(new THREE.Vector3()), ax = sz.x >= sz.y && sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : sz.y >= sz.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+        const [s0, s1] = span(stay, ax), gap0 = 0.05 * (s1 - s0); let hi = s1, lo = s0;
+        par.getWorldQuaternion(q); const inv = q.clone().invert();
+        go.forEach((k, i) => {
+          const [k0, k1] = span(k.objs, ax), gap = gap0 + 0.25 * (k1 - k0), t = i % 2 ? lo - gap - k1 : hi + gap - k0;
+          if (i % 2) lo = k0 + t; else hi = k1 + t;
+          const d = ax.clone().multiplyScalar(t).applyQuaternion(inv); for (const o of k.objs) moves.push([o, d]);
+        });
+      }
+      // (and nothing parted onto another: each out in turn, the nearest first, on along its own way until it is clear of
+      // what stays and of what is already out, the pieces that move as one tested as one)
+      const units = new Map<THREE.Vector3, THREE.Object3D[]>(); for (const [o, d] of moves) (units.get(d) ?? units.set(d, []).get(d)!).push(o);
+      const byPar = new Map<THREE.Object3D, { d: THREE.Vector3; objs: THREE.Object3D[] }[]>();
+      for (const [d, objs] of units) { const par = objs[0]!.parent; if (par) (byPar.get(par) ?? byPar.set(par, []).get(par)!).push({ d, objs }); }
+      const bbOf = (os: THREE.Object3D[]) => { const b = new THREE.Box3(); for (const o of os) b.expandByObject(o); return b; };
+      for (const [par, us] of byPar) {
+        const moving = new Set(us.flatMap((u) => u.objs)), placed = par.children.filter((k) => !moving.has(k)).map((k) => new THREE.Box3().setFromObject(k)).filter((b) => !b.isEmpty());
+        par.getWorldQuaternion(q); const back = q.clone().invert(), ws = par.getWorldScale(new THREE.Vector3()).x || 1, m = 1e-5;
+        us.sort((a, b) => a.d.lengthSq() - b.d.lengthSq());
+        for (const u of us) {
+          const home = bbOf(u.objs); if (home.isEmpty() || u.d.lengthSq() < 1e-14) continue;
+          const dw = u.d.clone().applyQuaternion(q).multiplyScalar(ws), step = dw.clone().normalize().multiplyScalar(Math.max(dw.length() * 0.15, home.getSize(new THREE.Vector3()).length() * 0.5)), at = home.clone().translate(dw);
+          const hits = () => placed.some((b) => at.min.x < b.max.x - m && at.max.x > b.min.x + m && at.min.y < b.max.y - m && at.max.y > b.min.y + m && at.min.z < b.max.z - m && at.max.z > b.min.z + m);
+          let k = 0; while (k < 24 && hits()) { at.translate(step); dw.add(step); k++; }
+          if (k) u.d.copy(dw.divideScalar(ws).applyQuaternion(back));
+          placed.push(at);
+        }
       }
       for (const [o, d] of moves) o.position.add(d);
     },

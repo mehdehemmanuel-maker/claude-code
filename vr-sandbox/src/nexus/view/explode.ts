@@ -4,6 +4,9 @@
 // Point at a part (the trigger, or a click) and it comes forward and opens in turn: down through its parts, then the
 // material, then the elements, the same few dozen under everything. Back goes up a level; close puts it away.
 // A build on the table comes apart where it stands, from its real places, and its parts open the same way.
+// A part the component library draws (a bearing, a guideway, a screw) is shown as drawn, 1:1 to its standard and only
+// scaled to be seen: its own pieces part as the viewer's explode parts them, each opens into its own pieces, and a piece
+// with none opens into what it is made of.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -13,6 +16,10 @@ import { card, label } from './holo';
 import { mergeStatic } from './merge-static';
 import { organicInto } from './organic';
 import { clockOf } from '../life/time';
+import { componentOf } from '../components';
+import type { Part } from '../kits';
+import { massOf } from '../mass';
+import { kitView, type KitView } from './kit3d';
 
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const matOf = (l: Look, ghost = false) => {
@@ -92,7 +99,14 @@ export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
   return g;
 }
 
-interface Shown { /** in a hand, held */ held?: boolean; id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean }
+interface Shown { /** in a hand, held */ held?: boolean; id: string; obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; tag: THREE.Sprite; delay: number; /** how far below its middle its name hangs */ drop: number; /** a build's own part: its geometry is the room's, not to be freed */ borrowed?: boolean;
+  /** a drawn part's pieces of one name (a bearing's balls): each moves on its own from where it is drawn to where the
+   *  explode puts it, under the one name; its middle (own frame) is where the name hangs from, and its turn to come home to */
+  members?: { obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; parent: THREE.Object3D; q: THREE.Quaternion; mid: THREE.Vector3 }[] }
+const objsOf = (s: Shown): THREE.Object3D[] => s.members?.map((m) => m.obj) ?? [s.obj];
+/** The pieces a drawn part is made of: each of its parts, those under its own name one piece between them (a pulley's
+ *  hub, flanges and teeth are one turning), a part drawn in one piece its own. */
+const piecesOf = (p: Part): number => { const q = p.parts ?? []; const own = q.filter((r) => r.name === p.name).length; return Math.max(1, q.length - own + (own ? 1 : 0)); };
 const free = (o: THREE.Object3D) => o.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh && !(x as THREE.LineSegments).isLineSegments) return; m.geometry?.dispose(); for (const mt of Array.isArray(m.material) ? m.material : [m.material]) if (mt && !(mt as THREE.Material & { shared?: boolean }).shared) mt.dispose(); });
 /** A source of parts to take apart: the inventory (by its plans), or a build's own parts (from where they stand). */
 export interface BuildPiece { id: string; name: string; obj: THREE.Object3D; note: string; /** where it stood and how it was scaled, kept the first time it is shown so it can be shown again */ at?: THREE.Vector3; scale0?: THREE.Vector3 }
@@ -102,11 +116,13 @@ export class Exploded {
   private readonly stage = new THREE.Group();
   private wholeObj: THREE.Object3D | null = null;
   private shown: Shown[] = [];
-  private trail: { id: string; name: string }[] = [];
+  private trail: { id: string; name: string; part?: Part; drawn?: Part }[] = [];
   private mode: 'whole' | 'apart' = 'whole';
   private t0 = 0;
   private plan: Plan | null = null;
   private build: { name: string; pieces: BuildPiece[] } | null = null;
+  /** a part as the library draws it: its view, and its pieces by the id each is pointed at by */
+  private tree: { part: Part; id: string; view: KitView; byId: Map<string, Part>; scale: number } | null = null;
   /** the build last taken apart, kept while its parts are opened, to come back to */
   private source: { name: string; pieces: BuildPiece[]; c: THREE.Vector3; ext: number } | null = null;
   readonly info = card(0.5, 0.3, 768);
@@ -114,7 +130,7 @@ export class Exploded {
   /** The chips under it: back up a level, put it away. */
   readonly chips: { mesh: THREE.Mesh; act: 'back' | 'close' | 'whole' }[] = [];
   get visible(): boolean { return this.group.visible; }
-  get showing(): string | null { return this.plan?.id ?? (this.build ? `build:${this.build.name}` : null); }
+  get showing(): string | null { return this.tree ? `part:${this.tree.id}` : this.plan?.id ?? (this.build ? `build:${this.build.name}` : null); }
   get path(): string { return this.trail.map((t) => t.name).join(' › '); }
 
   constructor(scene: THREE.Scene) {
@@ -137,17 +153,26 @@ export class Exploded {
     this.release();
     for (const s of this.shown) { this.stage.remove(s.obj); if (!s.borrowed) free(s.obj); this.group.remove(s.tag); s.tag.material.map?.dispose(); s.tag.material.dispose(); }
     if (this.wholeObj) { this.stage.remove(this.wholeObj); free(this.wholeObj); }
+    // (a drawn part's geometry and finishes are the viewer's, shared and cached: its view frees what it made)
+    if (this.tree) { this.stage.clear(); this.tree.view.dispose(); this.tree = null; }
     this.shown = []; this.wholeObj = null;
   }
   /** An item of the inventory, whole, then apart. */
   show(id: string, now: number, apart = true, fresh = true): string {
+    const c = componentOf(id); if (c) return this.showPart(c.part, id, now, fresh);
+    return this.showPlan(id, now, apart, fresh);
+  }
+  /** An item as the inventory's plan of it looks: its look (or, a piece of a drawn part, that piece as drawn), and what
+   *  it is made of round it. */
+  private showPlan(id: string, now: number, apart = true, fresh = true, drawn?: Part): string {
     const p = planOf(id, fitFor(id)); if (!p) return `Nothing in the inventory called ${id}.`;
     this.clearStage(); this.build = null; this.plan = p;
     if (fresh) this.trail = [];
-    this.trail.push({ id, name: p.name });
-    // the whole fades to a ghost when apart: its own copies of the shared finishes, so the parts keep theirs
-    this.wholeObj = meshOfLook(p.whole);
-    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if ((m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) { c = m0.clone(); c.userData.base = m0.opacity; mine.set(m0, c); } me.material = c; } }); }
+    this.trail.push({ id, name: p.name, drawn });
+    // the whole fades to a ghost when apart: its own copies of the shared finishes, so the parts keep theirs (a drawn
+    // piece's finishes are the viewer's, cached for every view: all of them copied)
+    this.wholeObj = drawn ? this.drawnWhole(drawn, p.scale) : meshOfLook(p.whole);
+    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if (drawn || (m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) { c = m0.clone(); c.userData.base = m0.opacity; mine.set(m0, c); } me.material = c; } }); }
     mergeStatic(this.wholeObj); this.stage.add(this.wholeObj);
     p.pieces.forEach((pc, k) => {
       const obj = meshOfLook(pc.look); mergeStatic(obj); obj.userData.piece = pc.id; obj.visible = false; this.stage.add(obj);
@@ -180,12 +205,75 @@ export class Exploded {
     this.mode = 'apart'; this.t0 = now; this.group.visible = true; this.drawInfo();
     return `${name}: ${pieces.length} parts, pushed out from where they stand. Point at one to open it.`;
   }
-  /** Go into a part: its own parts round it (a build's part goes into the inventory if the inventory has it). */
-  open(id: string, now: number): string { const i = INVENTORY.get(id); if (!i) return `${id} is a shape made here, not in the inventory: it has no parts inside.`; return this.show(id, now, true, false); }
+  /** A part as the library draws it, whole, then its pieces parted as the viewer's explode parts them (each out from the
+   *  middle of what holds it, those at the middle along its length), every piece of one name under that name. */
+  showPart(part: Part, id: string, now: number, fresh = true): string {
+    this.clearStage(); this.plan = null; this.build = null; this.source = null;
+    if (fresh) this.trail = [];
+    this.trail.push({ id, name: part.name, part });
+    const view = kitView(part, { maxLights: 0 }), root = view.group.children[0]!;
+    // (the ground's shade under it is the room's, not the part's: a part held up to be seen has none)
+    for (const o of [...view.group.children]) if (o !== root) view.group.remove(o);
+    view.explode(1); const nodes = root.children.filter((o) => o.userData.part), to = nodes.map((o) => o.position.clone());
+    view.explode(0);
+    const box = new THREE.Box3().setFromObject(view.group), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), ext = Math.max(1e-4, sz.x, sz.y, sz.z), k = 0.42 / ext;
+    // (its middle at the middle of the view; a long part laid across you, not end on, and the whole tipped a little to
+    // you, so its top is seen as well as its side)
+    const inner = new THREE.Group(); inner.position.copy(c).negate(); inner.add(view.group);
+    const holder = new THREE.Group(); holder.scale.setScalar(k); holder.rotation.set(0.32, sz.z > sz.x && sz.z >= sz.y ? Math.PI / 2 : 0, 0, 'XYZ'); holder.add(inner); this.stage.add(holder); this.group.updateMatrixWorld(true);
+    const byId = new Map<string, Part>(), groups = new Map<string, Shown>(); let j = 0;
+    nodes.forEach((o, n) => {
+      const q = o.userData.part as Part, key = `${q.name}|${q.item ?? ''}`;
+      let s = groups.get(key);
+      if (!s) {
+        const sid = `piece:${q.item ?? q.name}:${groups.size}`; byId.set(sid, q);
+        s = { id: sid, obj: o, from: o.position.clone(), to: to[n]!, tag: label('', 0.017), delay: j++ * 0.03, drop: 0.016, borrowed: true, members: [] };
+        s.tag.visible = false; this.group.add(s.tag); groups.set(key, s); this.shown.push(s);
+      }
+      o.userData.piece = s.id;
+      const bb = new THREE.Box3().setFromObject(o), mid = o.worldToLocal(bb.getCenter(new THREE.Vector3()));
+      s.members!.push({ obj: o, from: o.position.clone(), to: to[n]!, parent: root, q: o.quaternion.clone(), mid });
+    });
+    for (const s of this.shown) {
+      const q = byId.get(s.id)!, n = s.members!.length, text = `${n > 1 ? `${n} × ` : ''}${q.name}`;
+      this.group.remove(s.tag); s.tag.material.map?.dispose(); s.tag.material.dispose();
+      s.tag = label(text.length > 44 ? `${text.slice(0, 42)}…` : text, 0.017); s.tag.visible = false; this.group.add(s.tag);
+    }
+    this.tree = { part, id, view, byId, scale: k };
+    this.mode = this.shown.length > 1 ? 'apart' : 'whole'; this.t0 = now; this.group.visible = true; this.drawInfo();
+    const c0 = componentOf(id), g = massOf(part) * 1000;
+    return `${part.name}: drawn ${piecesOf(part) > 1 ? `in ${piecesOf(part)} pieces` : 'in one piece'}, ${g < 10 ? g.toFixed(2) : g.toFixed(0)} g${c0?.item.g ? ` (its standard's ${c0.item.g < 10 ? c0.item.g.toFixed(2) : c0.item.g.toFixed(0)} g)` : ''}. Point at a piece to open it.`;
+  }
+  /** A piece as the library draws it, at a plan's scale, its middle at the origin, standing as it is drawn in its whole. */
+  private drawnWhole(q: Part, scale: number): THREE.Object3D {
+    const v = kitView({ ...q, at: [0, 0, 0], rot: [0, 0, 0] }, { maxLights: 0 }), root = v.group.children[0]!;
+    for (const o of [...v.group.children]) if (o !== root) v.group.remove(o);
+    const c = new THREE.Box3().setFromObject(v.group).getCenter(new THREE.Vector3()), out = new THREE.Group(); root.position.sub(c); out.add(root); out.scale.setScalar(scale);
+    return out;
+  }
+  /** Whether pointing at this opens something: a drawn part's piece, or an item of the inventory. */
+  opens(id: string): boolean { return !!this.tree?.byId.has(id) || INVENTORY.has(id); }
+  /** Go into a part: its own parts round it (a build's part goes into the inventory if the inventory has it). A drawn
+   *  part's piece opens into its own pieces (an end seal's lip and plate), or the part the library draws it as (a seal
+   *  screw, its own part), or, one piece with nothing in it, into what it is made of. */
+  open(id: string, now: number): string {
+    const q = this.tree?.byId.get(id);
+    if (q) {
+      if ((q.parts?.length ?? 0) > 1) return this.showPart(q, q.item ?? q.name, now, false);
+      const c = q.item ? componentOf(q.item) : null;
+      if (c && c.part.item !== this.tree!.part.item && (c.part.parts?.length ?? 0) > 1) return this.showPart(c.part, q.item!, now, false);
+      const solid = q.parts?.length === 1 ? q.parts[0]! : q, of = [q.item, solid.mat, q.mat].find((x) => x && INVENTORY.has(x));
+      if (of) return `${q.name}: one piece${solid.mat ? ` of ${INVENTORY.get(solid.mat)?.name ?? solid.mat}` : ''}. Inside it: ${this.showPlan(of, now, true, false, q)}`;
+      return `${q.name}: one piece${solid.mat ? ` of ${solid.mat}` : ''}, with nothing more inside it.`;
+    }
+    const i = INVENTORY.get(id); if (!i) return `${id} is a shape made here, not in the inventory: it has no parts inside.`; return this.show(id, now, true, false);
+  }
   back(now: number): string {
     if (this.trail.length < 2) { this.close(); return 'Put away.'; }
     this.trail.pop(); const up = this.trail.pop()!;
     if (up.id.startsWith('build:') && this.source) { this.trail = []; return this.showBuild(this.source.name, this.source.pieces, now); }
+    if (up.part) return this.showPart(up.part, up.id, now, false);
+    if (up.drawn) return this.showPlan(up.id, now, true, false, up.drawn);
     return this.show(up.id, now, true, false);
   }
   toggle(now: number): void { this.mode = this.mode === 'apart' ? 'whole' : 'apart'; this.t0 = now; this.drawInfo(); }
@@ -194,29 +282,32 @@ export class Exploded {
   pick(ray: THREE.Raycaster): { piece: string } | { chip: 'back' | 'close' | 'whole' } | null {
     if (!this.group.visible) return null;
     const chip = ray.intersectObjects(this.chips.map((c) => c.mesh), false)[0]; if (chip) return { chip: this.chips.find((c) => c.mesh === chip.object)!.act };
-    const hits = ray.intersectObjects(this.shown.filter((s) => s.obj.visible).map((s) => s.obj), true);
+    const hits = ray.intersectObjects(this.shown.filter((s) => s.obj.visible).flatMap(objsOf), true);
     for (const h of hits) { let o: THREE.Object3D | null = h.object; while (o && !o.userData.piece) o = o.parent; if (o) return { piece: String(o.userData.piece) }; }
     return null;
   }
   /** A part taken in the hand: it leaves its place and goes with the hand, as it is, until let go. */
   grab(id: string, hand: THREE.Object3D): string | null {
     const s = this.shown.find((x) => x.id === id && x.obj.visible); if (!s) return null;
-    this.release(); hand.attach(s.obj); s.held = true; s.tag.visible = false;
+    this.release(); for (const o of objsOf(s)) hand.attach(o); s.held = true; s.tag.visible = false;
+    const q = this.tree?.byId.get(id); if (q) return `${q.name}${q.says ? `: ${q.says}` : ''}`;
     const i = INVENTORY.get(id); return i ? `${i.name}${i.spec ? `: ${i.spec.replace(/ \(sizes: .*\)$/, '')}` : ''}` : id;
   }
   /** What is in the hand put back: it flies home to its place round the whole. */
-  release(): void { for (const s of this.shown) if (s.held) { this.stage.attach(s.obj); s.held = false; } }
+  release(): void { for (const s of this.shown) if (s.held) { if (s.members) for (const m of s.members) m.parent.attach(m.obj); else this.stage.attach(s.obj); s.held = false; } }
   get holding(): boolean { return this.shown.some((s) => s.held); }
   /** Where a part (or a chip) is in the room, for a test or a guide. */
   pointOf(id: string): THREE.Vector3 | null {
     const c = this.chips.find((x) => x.act === id); if (c) return c.mesh.getWorldPosition(new THREE.Vector3());
-    const s = this.shown.find((x) => x.id === id); return s ? s.obj.getWorldPosition(new THREE.Vector3()) : null;
+    const s = this.shown.find((x) => x.id === id); if (!s) return null;
+    if (s.members) { const m = s.members[0]!; return m.obj.localToWorld(m.mid.clone()); }
+    return s.obj.getWorldPosition(new THREE.Vector3());
   }
   /** The parts shown now, by id. */
   ids(): string[] { return this.shown.map((s) => s.id); }
   distance(ray: THREE.Raycaster): number {
     if (!this.group.visible) return Infinity;
-    const hit = ray.intersectObjects([...this.chips.map((c) => c.mesh), ...this.shown.filter((s) => s.obj.visible).map((s) => s.obj), ...(this.wholeObj ? [this.wholeObj] : [])], true)[0];
+    const hit = ray.intersectObjects([...this.chips.map((c) => c.mesh), ...this.shown.filter((s) => s.obj.visible).flatMap(objsOf), ...(this.wholeObj ? [this.wholeObj] : [])], true)[0];
     return hit?.distance ?? Infinity;
   }
   update(now: number): void {
@@ -224,6 +315,15 @@ export class Exploded {
     const k = now - this.t0, apart = this.mode === 'apart';
     const still = !!this.plan?.inPlace;
     if (this.wholeObj) { if (!still) this.wholeObj.rotation.y = now * 0.4; this.wholeObj.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m && 'opacity' in m) { const base = (m.userData.base as number | undefined) ?? 1, ghost = (apart ? 0.22 : 1) * base; m.transparent = ghost < 1 || m.transparent; m.opacity += (ghost - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; } }); }
+    if (this.tree) { this.group.updateMatrixWorld(true); const at = new THREE.Vector3(), w = new THREE.Vector3();
+      for (const s of this.shown) {
+        if (s.held) continue;
+        const u = ease((apart ? k - s.delay : 1.2 - k) / 1.1); at.set(0, 0, 0);
+        for (const m of s.members!) { const home = new THREE.Vector3().lerpVectors(m.from, m.to, u); m.obj.position.lerp(home, u >= 1 || u <= 0 ? 0.18 : 1); m.obj.quaternion.slerp(m.q, 0.18); at.add(this.group.worldToLocal(m.obj.localToWorld(w.copy(m.mid)))); }
+        at.divideScalar(s.members!.length); s.tag.visible = apart && u > 0.95; s.tag.position.copy(at).add(new THREE.Vector3(0, -0.03, 0.03));
+      }
+      return;
+    }
     for (const s of this.shown) {
       if (s.held) continue;
       const u = ease((apart ? k - s.delay : 1.2 - k) / 1.1);
@@ -236,7 +336,19 @@ export class Exploded {
     }
   }
   private drawInfo(): void {
-    const p = this.plan;
+    const p = this.plan, t = this.tree;
+    if (t) {
+      const c = componentOf(t.id), g = massOf(t.part) * 1000, n = piecesOf(t.part), x = t.scale, fmt = (v: number) => (v < 10 ? v.toFixed(2) : v.toFixed(0));
+      this.info.draw(t.part.name, [
+        { text: this.path, color: '#7fb3c8', size: 0.75 },
+        { text: (t.part.says ?? c?.item.says ?? '').slice(0, 220), color: '#e6fbff', size: 0.78 },
+        { text: `drawn 1:1 to its standard, shown ${x >= 1 ? `${x.toFixed(x < 10 ? 1 : 0)} × life size` : `at 1:${(1 / x).toFixed(1 / x < 10 ? 1 : 0)}`} · ${fmt(g)} g drawn${c?.item.g ? `, ${fmt(c.item.g)} g by its standard` : ''}`, color: '#ffe082', size: 0.76 },
+        ...(c?.leaves && c.leaves !== 'nothing' ? [{ text: `left out: ${c.leaves}`, color: '#b0bec5', size: 0.7 }] : []),
+        ...(c?.faults.length ? [{ text: `⚠ ${c.faults.slice(0, 2).join('; ')}`, color: '#ff8a80', size: 0.72 }] : []),
+        { text: n > 1 ? `${n} pieces, ${this.shown.length} kinds: point at one to open it` : 'one piece: point at it to see what it is made of', color: '#69f0ae', size: 0.82 },
+      ], '#4dd0e1');
+      return;
+    }
     if (this.build) { this.info.draw(this.build.name, [{ text: `${this.build.pieces.length} parts, apart from where they stand`, color: '#a5f3ff', size: 1 }, { text: 'Point at a part to open it; ⟳ puts it back together.', color: '#7fb3c8', size: 0.85 }], '#ffd740'); return; }
     if (!p) return;
     const i = INVENTORY.get(p.id)!;

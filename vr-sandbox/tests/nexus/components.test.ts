@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DESIGNED, boltedJoint, component, library, use } from '../../src/nexus/components';
+import * as THREE from 'three';
+import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/components';
 import { catalogue } from '../../src/nexus/catalogue';
 import { FAMILIES } from '../../src/nexus/families';
 import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/kits';
 import { critique } from '../../src/nexus/make/critic';
+import { kitView } from '../../src/nexus/view/kit3d';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 
@@ -76,5 +78,27 @@ describe('room to slide', () => {
     const said = (z: number) => critique({ name: 'slide', parts: [structuredClone(rail), stop(z)] }).filter((f) => f.check === 'room to slide');
     expect(said(0.07)).toHaveLength(1); expect(said(0.07)[0]!.says).toMatch(/end stop is in its way/);
     expect(said(0.12)).toEqual([]);
+  });
+});
+
+describe('taken apart', () => {
+  it('parts a drawn part with no piece on another, each piece out its own way, what is the part itself staying', () => {
+    for (const w of ['rail MGN12H 400', 'bearing 608 2RS', 'pulley GT2 20 5']) {
+      const c = component(w) as Component, v = kitView(c.part, { maxLights: 0 }), root = v.group.children[0]!, nodes = root.children.filter((o) => o.userData.part);
+      const home = nodes.map((o) => o.position.clone()); v.explode(1); v.group.updateMatrixWorld(true);
+      const moved = nodes.map((o, i) => o.position.distanceTo(home[i]!) > 1e-6), box = nodes.map((o) => new THREE.Box3().setFromObject(o)), m = 1e-5;
+      const meet = (a: THREE.Box3, b: THREE.Box3) => a.min.x < b.max.x - m && a.max.x > b.min.x + m && a.min.y < b.max.y - m && a.max.y > b.min.y + m && a.min.z < b.max.z - m && a.max.z > b.min.z + m;
+      for (let i = 0; i < nodes.length; i++) for (let j = 0; j < nodes.length; j++) if (i !== j && moved[i] && nodes[i]!.name !== nodes[j]!.name) expect(meet(box[i]!, box[j]!), `${w}: ${nodes[i]!.name} on ${nodes[j]!.name}`).toBe(false);
+      expect(nodes.filter((o, i) => o.name === c.part.name && moved[i]), w).toEqual([]);
+      // (the pieces out round it go each its own way, not all by the last one's: a bearing's balls round it)
+      const ways = (re: RegExp) => new Set(nodes.map((o, i) => [o, o.position.clone().sub(home[i]!)] as const).filter(([o, d]) => re.test(o.name) && d.length() > 1e-6).map(([, d]) => d.toArray().map((x) => x.toFixed(4)).join())).size;
+      if (/bearing/.test(w)) expect(ways(/ball$/), w).toBe(nodes.filter((o) => /ball$/.test(o.name)).length);
+      if (/rail/.test(w)) expect(ways(/seal screw$/), w).toBe(4);
+    }
+  });
+  it('finds the drawn part an item is, by its id, however it was asked for', () => {
+    const c = component('rail MGN12H 400') as Component;
+    expect(componentOf(c.item.id)).toBe(c); expect(component('rail mgn12h 400')).toBe(c);
+    expect(componentOf('no-such-part')).toBeNull();
   });
 });

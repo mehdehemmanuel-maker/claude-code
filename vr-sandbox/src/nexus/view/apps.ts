@@ -11,7 +11,9 @@ import { flatBom, massOf, typeOf } from '../outputs';
 import { catalogue, SERIES } from '../catalogue';
 import { numberOf, partAt, randomPart, spaceSize } from '../partspace';
 import { callFamily } from '../families';
-import { FAMILIES } from '../families';
+import { FAMILIES, type Family } from '../families';
+import { DESIGNED, component } from '../components';
+import { massOf as partMass } from '../mass';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
@@ -248,6 +250,52 @@ export function inventoryApp(h: InventoryHost): PhoneApp {
         case 'fam': { const x = resolve(String(arg)); if (x && typeof x === 'object') { said = ''; nav.go(`item:${(x as Item).id}`); } else said = String(x ?? 'not found'); return true; }
         case 'find': nav.write('a part, or a size of one: "nema17", "screw M4x20", "bearing 6201", "gear m1 z30"', (t) => { const x = resolve(t); if (x && typeof x === 'object') nav.go(`item:${(x as Item).id}`); else said = String(x ?? `Nothing called "${t}".`); nav.redraw(); }); return true;
         case 'feed': nav.write('entries: id | name | Category/Sub | kind | process | child*n child | what it is   (;; between entries)', (t) => { said = h.feed(t); nav.redraw(); }); return true;
+      }
+      return false;
+    },
+  };
+}
+
+export interface LibraryHost { /** stand it before you, drawn 1:1 to its standard, to take apart */ see(words: string): string }
+/** The library on the phone: every kind of part it draws whole from its standard, by trade, each in every size it is
+ *  sold in, with what the drawing weighs against what its standard says; press a size and it stands before you, drawn,
+ *  to take apart piece by piece down to its elements. Three presses from home to any part. */
+export function libraryApp(h: LibraryHost): PhoneApp {
+  const C = '#ffd740', per = 8; let said = '';
+  const fams = (): Family[] => DESIGNED.map((id) => FAMILIES.find((f) => f.id === id)).filter((f): f is Family => !!f);
+  const trade = (f: Family) => f.path.slice(0, 2).join(' › ');
+  const sizes = (f: Family): string[] => { const l = catalogue(f.id); return l.length ? l : f.examples; };
+  const g3 = (v: number) => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0));
+  type Row = { label: string; note: string; act: string; arg: string };
+  const list = (sub: string): Row[] => {
+    if (sub === '') { const by = new Map<string, Family[]>(); for (const f of fams()) (by.get(trade(f)) ?? by.set(trade(f), []).get(trade(f))!).push(f); return [...by].sort((a, b) => b[1].length - a[1].length).map(([t, fs]) => ({ label: t, note: `${fs.length} kind${fs.length > 1 ? 's' : ''} of part · ${fs.reduce((a, f) => a + sizes(f).length, 0).toLocaleString('en-GB')} sizes`, act: 'go', arg: `t:${t}` })); }
+    if (sub.startsWith('t:')) return fams().filter((f) => trade(f) === sub.slice(2)).map((f) => ({ label: f.name, note: `${sizes(f).length} size${sizes(f).length > 1 ? 's' : ''} · ${f.path.slice(2).join(' › ') || f.says.slice(0, 50)}`, act: 'go', arg: `f:${f.id}` }));
+    if (sub.startsWith('f:')) { const f = FAMILIES.find((x) => x.id === sub.slice(2)); return f ? sizes(f).map((w) => ({ label: w, note: '', act: 'see', arg: w })) : []; }
+    return [];
+  };
+  return {
+    id: 'library', name: 'Library', icon: '🔩', colour: C,
+    pages: (sub) => Math.max(1, Math.ceil(list(sub).length / per)),
+    draw(k: Kit, v: View) {
+      const { text, wrapped, g, W, bottom, hit } = k, sub = v.sub, f = sub.startsWith('f:') ? FAMILIES.find((x) => x.id === sub.slice(2)) : undefined;
+      text(sub === '' ? 'Library' : f ? f.name : sub.slice(2), 40, 118, sub === '' ? 44 : 28, C, 800, W - 80);
+      wrapped(sub === '' ? `${DESIGNED.length} kinds of part, each drawn whole from its standard, every piece inside it drawn too. Press one to see it before you, 1:1.` : f ? f.says : 'press one for its sizes', 40, 148, 15, W - 80, '#ffe9a8', 2);
+      const y0 = 196, rows = list(sub).slice(v.page * per, v.page * per + per), rh = Math.min(84, (bottom - y0 - (said ? 110 : 50)) / per - 6);
+      rows.forEach((r, j) => {
+        const ry = y0 + j * (rh + 6);
+        // (a size's line says what its drawing weighs against its standard, and whether its own check holds: drawn when shown)
+        let note = r.note; if (r.act === 'see') { const c = component(r.arg); note = typeof c === 'string' ? c : `${g3(partMass(c.part) * 1000)} g drawn${c.item.g ? `, ${g3(c.item.g)} g by its standard` : ''} · ${c.faults.length ? `⚠ ${c.faults[0]}` : 'whole, every piece in it'}`; }
+        g.fillStyle = 'rgba(255,215,64,0.10)'; g.beginPath(); g.roundRect(30, ry, W - 60, rh, 12); g.fill();
+        text(r.label, 46, ry + rh * 0.42, 19, '#ffffff', 600, W - 130); text(note, 46, ry + rh * 0.78, 14, '#ffe9a8', 500, W - 130);
+        text(r.act === 'see' ? '🧊' : '›', W - 74, ry + rh * 0.6, 24, C, 700, 40);
+        hit(30, ry, W - 30, ry + rh, r.act, r.arg);
+      });
+      if (said) wrapped(said, 40, bottom - 40, 15, W - 80, C, 3);
+    },
+    act(act, arg, nav: Nav) {
+      switch (act) {
+        case 'go': said = ''; nav.go(String(arg)); return true;
+        case 'see': said = h.see(String(arg)); return true;
       }
       return false;
     },
