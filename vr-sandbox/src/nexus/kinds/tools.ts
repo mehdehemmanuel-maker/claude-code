@@ -124,6 +124,13 @@ export const TOOLS: KindDef[] = [
     box: () => [155, 12.8, 16.2], g: () => 28,
   },
   {
+    id: 'helpinghands', look: 'box', name: 'helping hands', path: 'Tools/Soldering/Helping hands', says: 'a weighted stand with clips on jointed arms that holds the work, and a magnifier over it, so both hands are free', std: 'the stands drawn here: the MZ101 Adafruit sells as its 291 (Adafruit\'s, SE\'s and Micro-Mark\'s listings)',
+    axes: [bare('model', 'model', ['mz101'])], title: () => 'MZ101 helping hands with magnifier', of: () => 'hands-base hands-rod*5 hands-swivel hands-ball*2 {wingnut M4 zinc}*3 alligator-clip*2 magnifier-lens', make: 'assemble',
+    how: 'its rods pressed into its cast base and its die-cast swivel and balls, its clips on its arms, every joint locked by a wing nut, its metal nickel-plated',
+    spec: () => 'two alligator clips on ball joints; a 2.5" (63.5 mm) 4x glass magnifier; every part turns on a thumbscrew or wing nut; a weighted base (Adafruit\'s listing, $6.95); 127 × 81 × 61 mm as listed (Micro-Mark)',
+    box: () => [150, 185, 90], g: () => 660 /* its estimated sizes' weight, its base most of it: its listings' weights disagree (Amazon's "0.27", TrueGether's "0.000625", neither in a unit that fits) */,
+  },
+  {
     id: 'flushcutter', look: 'box', name: 'flush cutters', path: 'Tools/Hand tools/Cutters', says: 'side cutters whose jaws meet flush, to trim a lead level with its joint', std: 'the cutters drawn here: Hakko\'s CHP-170 (Hakko; Hisco\'s and Adafruit\'s listings)',
     axes: [bare('model', 'model', ['chp-170', 'chp-170-a'])], title: (p) => (p.model === 'chp-170-a' ? 'Hakko CHP-170-A flush cutters, with safety clip' : 'Hakko CHP-170 flush cutters'), of: (p) => `plier-jaw*2 plier-rivet handle-grip*2 spring-leaf${p.model === 'chp-170-a' ? ' cutter-clip' : ''}`, make: 'assemble',
     how: 'its two carbon-steel halves forged, ground to their flush edges and hardened to HRC 56, riveted, their handles dipped in their grips, its spring fitted (and on the -A its safety clip)',

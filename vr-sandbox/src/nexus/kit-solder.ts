@@ -277,6 +277,56 @@ export function permaProto(): Comp {
   return { name: 'Perma-Proto half-sized breadboard PCB', item: 'permaproto-half', at: [0, 0, 0], solids: silk, kids: [board] };
 }
 
+// ---- helping hands (Adafruit's 291, the MZ101) ----------------------------------------------------------------------
+/** The "third hand" Adafruit sells as its 291 (the MZ101): a weighted base, an upright, a bar across it on a swivel, an
+ *  alligator clip on a ball joint at each of the bar's ends, and a 2.5" (63.5 mm) 4x glass magnifier on its own arm,
+ *  every joint turned by a thumbscrew or a wingnut, nickel-plated (Adafruit's and SE's listings); 127 × 81 × 61 mm as
+ *  listed (Micro-Mark: its size folded, as boxed). Estimated, said so: its base cast iron 90 × 12 × 60, painted black (inside its box, 5.0 × 3.3 × 2.9" as listed, and light enough that
+ *  its buyers call it a little tippy);
+ *  its upright a 6.35 mm (1/4") rod 118 tall over the base; its bar a 4.8 mm rod 150 long, 120 up; each ball 10 across, each clip 50
+ *  long on an arm of 3.2 mm rod; the magnifier's rim 4 thick, its arm a 3.2 rod. Posed holding a board 81 mm long by its
+ *  ends, upside down, 95 mm over the bench: the lesson's hold. Frame: its base's middle on the bench at the origin, its
+ *  bar along x, y up. */
+export const HANDS = { base: [90, 12, 60] as V3, upright: { d: 6.35, h: 118 }, bar: { d: 4.8, L: 150, y: 120 }, ball: 10, clip: 50, hold: { y: 95, span: 81.28 }, lens: { d: 63.5, rim: 4 } } as const;
+export function helpingHands(): Comp {
+  const H = HANDS, [bl, bh, bw] = H.base, ni = { color: 0xc9ccce, finish: 'bright' } as const, z0 = -20, zb = 20, yb = H.hold.y;
+  const rod = (name: string, item: string, pts: V3[], d: number): Comp => piece(name, item, [{ role: 'body', shape: { tube: { r: d / 2, pts } }, at: [0, 0, 0], mat: 'steel-low', ...ni }]);
+  // (a wing nut, M4 zinc (DIN 315's proportions), its wings across a)
+  const wing = (name: string, at: V3): Comp => ({ name, item: 'wingnut-m4-zinc', at, solids: [{ role: 'body', shape: { cyl: [4, 6] }, at: [0, 3, 0], mat: 'zinc', ...ni },
+    ...[-1, 1].map((sg): Solid => box('body', [6, 8, 1.6], [sg * 6, 5, 0], 'zinc', ni))] });
+  const base = piece('MZ101 base', 'hands-base', [box('body', [bl, bh, bw], [0, bh / 2, 0], 'cast-iron', { color: 0x1d1e20, finish: 'paint' })]);
+  const upright = rod('MZ101 upright', 'hands-rod', [[0, bh - 6, z0], [0, bh + H.upright.h, z0]], H.upright.d);
+  // (the swivel on the upright, its bar through it in front, a wing nut locking each)
+  const swivel = piece('MZ101 swivel', 'hands-swivel', [box('body', [14, 14, 22], [0, H.bar.y, z0 + 5], 'zamak', ni)]);
+  const bar = rod('MZ101 bar', 'hands-rod', [[-H.bar.L / 2, H.bar.y, z0 + 11], [H.bar.L / 2, H.bar.y, z0 + 11]], H.bar.d);
+  // (each end's ball joint, its arm down and forward to its clip, the clip along x holding the board's end between its
+  // jaws, the board 1.6 thick and its edge 8 mm in)
+  const clip = (sx: 1 | -1): Comp => {
+    const x0 = sx * (H.hold.span / 2 - 8), tip = (u: number) => x0 + sx * u, L = H.clip;
+    const jaw = (sy: 1 | -1): Solid => { const y = (v: number) => yb + sy * v;
+      // (its side: teeth along its first 16 mm, a pressed channel tapering to the pivot at 30, its lever out behind)
+      const teeth: V2[] = Array.from({ length: 9 }, (_, i): V2 => [tip(i * 2), y(i % 2 ? 0.8 : 1.3)]);
+      return { role: 'body', shape: { prism: { pts: [...teeth, [tip(30), y(2.2)], [tip(L), y(7)], [tip(L), y(9)], [tip(30), y(4.4)], [tip(0), y(3.0)]], L: 6 } }, at: [0, 0, zb], mat: 'steel-low', ...ni }; };
+    const coil: V3[] = Array.from({ length: 49 }, (_, i): V3 => { const a = (i / 12) * 2 * PI; return [tip(32) + 1.8 * Math.cos(a) * sx, yb + 1.8 * Math.sin(a), zb - 3 + (i / 48) * 6]; });
+    return { name: `MZ101 ${sx > 0 ? 'right' : 'left'} clip`, item: 'alligator-clip', at: [0, 0, 0], kids: [
+      piece('clip jaws', 'alligator-jaw', [jaw(1), jaw(-1), { role: 'body', shape: { cyl: [0.8, 7] }, at: [tip(30), yb, zb], rot: [PI / 2, 0, 0], mat: 'steel-low', ...ni }]),
+      piece('clip spring', 'spring-torsion', [{ role: 'body', shape: { tube: { r: 0.3, pts: coil } }, at: [0, 0, 0], mat: 'steel-spring', ...ni }])] };
+  };
+  const arm = (sx: 1 | -1): Comp[] => [
+    piece(`MZ101 ${sx > 0 ? 'right' : 'left'} ball`, 'hands-ball', [{ role: 'body', shape: { lathe: Array.from({ length: 13 }, (_, i): V2 => [(H.ball / 2) * Math.sin((PI * i) / 12), -(H.ball / 2) * Math.cos((PI * i) / 12)]) }, at: [sx * H.bar.L / 2, H.bar.y, z0 + 11], mat: 'zamak', ...ni }]),
+    rod(`MZ101 ${sx > 0 ? 'right' : 'left'} arm`, 'hands-rod', [[sx * H.bar.L / 2, H.bar.y, z0 + 11], [sx * (H.hold.span / 2 + 44), yb + 14, zb - 4], [sx * (H.hold.span / 2 + 42), yb + 2, zb]], 3.2),
+    wing(`MZ101 ${sx > 0 ? 'right' : 'left'} ball's wing nut`, [sx * H.bar.L / 2, H.bar.y + H.ball / 2, z0 + 11]), clip(sx)];
+  // (the magnifier on its arm from the swivel, up and out over the work, its rim chromed, its lens glass 2.5" across and
+  // 8 thick at its middle (its 4x a sales figure; its curves an estimate), turned to look down at the board)
+  const R = H.lens.d / 2, lens: V2[] = [[0, -4], ...Array.from({ length: 8 }, (_, i): V2 => [R * Math.sin(((i + 1) * PI) / 16), -4 + 3 * (1 - Math.cos(((i + 1) * PI) / 16))]), [R, 1], ...Array.from({ length: 8 }, (_, i): V2 => [R * Math.cos(((i + 1) * PI) / 16), 1 + 3 * Math.sin(((i + 1) * PI) / 16)]), [0, 4]];
+  const mag: V3 = [0, H.bar.y + 55, zb + 30];
+  const tilt: V3 = [-0.9, 0, 0], magnifier: Comp = { name: 'MZ101 magnifier', item: 'magnifier-lens', at: [0, 0, 0], solids: [
+    { role: 'body', shape: { lathe: [[R - 0.5, -H.lens.rim / 2], [R + 3, -H.lens.rim / 2], [R + 3, H.lens.rim / 2], [R - 0.5, H.lens.rim / 2], [R - 0.5, -H.lens.rim / 2]] }, at: mag, rot: tilt, mat: 'steel-low', ...ni },
+    { role: 'body', shape: { lathe: lens }, at: mag, rot: tilt, mat: 'glass', color: 0xeef4f2 }] };
+  const magArm = rod('MZ101 magnifier arm', 'hands-rod', [[0, H.bar.y + 7, z0 + 5], [0, H.bar.y + 40, z0 + 8], [0, mag[1] - (R + 3) * Math.cos(0.9), mag[2] - (R + 3) * Math.sin(0.9)]], 3.2);
+  return { name: 'MZ101 helping hands with magnifier', item: 'helpinghands-mz101', at: [0, 0, 0], kids: [base, upright, swivel, bar, wing('MZ101 swivel wing nut', [0, H.bar.y + 7, z0 - 2]), ...arm(1), ...arm(-1), magArm, magnifier] };
+}
+
 // ---- Atten's S-11 iron stand -----------------------------------------------------------------------------------------
 /** Atten's S-11 soldering-iron stand, Adafruit's 150, as its dimensional drawing gives it (cold-rolled sheet; 170.0 ×
  *  78.3 mm over all, its base 168.3 × 74.9, a front ring 19 mm inside and a rear one 31.8, the rings' tops 95.5 and
