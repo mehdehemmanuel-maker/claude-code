@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bridges, cut, HAND, jointPoint, LAYOUT, leadAt, letGo, lit, throwSwitch, newBench, payOut, PROTO, PROTO_STEPS, protoHold, readout, STEPS, takeUp, tick, TRIM, wipe, type Bench, type V3 } from '../../src/nexus/solder-lesson';
+import { bridges, cut, HAND, jointPoint, LAYOUT, leadAt, letGo, lit, throwSwitch, newBench, payOut, PROTO, PROTO_STEPS, protoHold, readout, STEPS, stepsOf, takeUp, tick, TRIM, wipe, type Bench, type V3 } from '../../src/nexus/solder-lesson';
+import { ledBuild, ledsAsked } from '../../src/nexus/lessons';
 import { grade, idealVolume } from '../../src/nexus/solder-joint';
 
 const dt = 1 / 60;
@@ -125,5 +126,40 @@ describe('a hands-on soldering lesson: an LED and its resistor on a Perma-Proto'
     expect(throwSwitch(b, true)).toMatch(/the LED lights, 4\.\d mA/); const l = lit(b); expect(l.mA).toBeGreaterThan(3.5); expect(l.mA).toBeLessThan(4.5);
     tick(b, dt, null, null); expect(kind(b)).toBe('rest');
     letGo(b, 'iron', null); hold(b, 3, null, null); expect(b.step).toBe(PROTO_STEPS.length); expect(readout(b).do).toMatch(/Done/);
+  });
+});
+
+describe('any LED circuit asked for, laid out, taught and soldered by hand on the same bench', () => {
+  const at = (b: Bench, id: string): V3 => { const q = b.build!.things.find((t) => t.id === id)!.leads.map((l) => l.at); return [PROTO.at[0] + (q[0]![0] + q[1]![0]) / 2, 12, PROTO.at[2] + (q[0]![1] + q[1]![1]) / 2]; };
+  const solderAt = (b: Bench, n: number) => { const q = b.joints[n - 1]!, p = q.at, feed = idealVolume(q.shape) / (HAND.feedMm * (Math.PI / 4) * HAND.wire ** 2);
+    while (b.wire.out < 25) payOut(b); hold(b, 1.6, p, null); hold(b, feed, p, p); hold(b, 0.3, p, null); hold(b, 2, away, null); };
+  it('reads the LEDs asked for from words', () => {
+    expect(ledsAsked('teach me to solder two LEDs')).toEqual(['red', 'red']);
+    expect(ledsAsked('solder a green LED')).toEqual(['green']);
+    expect(ledsAsked('Solder red, green and yellow LEDs')).toEqual(['red', 'green', 'yellow']);
+    expect(ledsAsked('solder 3 leds')).toEqual(['red', 'red', 'red']);
+    expect(ledsAsked('teach me to solder')).toBeNull(); expect(ledsAsked('an LED lamp')).toBeNull();
+  });
+  it('refuses what the cells cannot light, and a colour it does not know, with why', () => {
+    expect(ledBuild(['blue']).refused.join()).toMatch(/3\.20 V from the cells is too little to light the LED \(it drops 3\.3 V\)/);
+    expect(ledBuild(['purple']).refused.join()).toMatch(/no purple LED in the library/);
+  });
+  it('teaches a red and a green LED, each with its resistor, and lights both by their own currents', () => {
+    const { build, lesson, refused } = ledBuild(['red', 'green']); expect(refused).toEqual([]);
+    const said = lesson.steps.map((q) => q.do).join(' ');
+    expect(said).toMatch(/Push the green LED in/); expect(said).toMatch(/the green LED's resistor/);
+    expect(said).toMatch(/the LEDs light, the red LED about 4\.0 mA .*, the green LED about 3\.0 mA/);
+    const b = newBench('proto', build!); expect(b.joints.length).toBe(build!.things.reduce((n, t) => n + t.leads.length, 0));
+    const steps = stepsOf(b), kind = () => steps[b.step]?.src.split(' ')[0] ?? 'done';
+    for (const t of build!.things.filter((x) => !x.hangs).sort((x, y) => (x.height ?? 0) - (y.height ?? 0))) { expect(letGo(b, t.id, at(b, t.id))).not.toMatch(/back|wrong|first/); tick(b, dt, null, null); }
+    letGo(b, 'proto', protoHold()); tick(b, dt, null, null); expect(kind()).toBe('insert');
+    expect(letGo(b, 'battery', protoHold())).toMatch(/\+ rail.*− rail/); tick(b, dt, null, null);
+    takeUp(b, 'iron'); takeUp(b, 'solder'); hold(b, 8, away, null); hold(b, 0.3, away, away); tick(b, dt, null, null); expect(kind()).toBe('solder');
+    for (let n = 1; n <= b.joints.length; n++) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); }
+    expect(b.joints.every((q) => grade(q.j, q.shape).grade === 'good')).toBe(true); expect(kind()).toBe('trim');
+    for (const r of b.joints) cut(b, leadAt(r, 1.2)); tick(b, dt, null, null); expect(kind()).toBe('power');
+    expect(throwSwitch(b, true)).toMatch(/the LEDs light, the red LED 4\.0 mA, the green LED 3\.0 mA/);
+    expect(lit(b).lamps.map((l) => l.mA > 0.5)).toEqual([true, true]);
+    tick(b, dt, null, null); letGo(b, 'iron', null); hold(b, 3, null, null); expect(b.step).toBe(steps.length); expect(b.log.join(' ')).toMatch(/the LEDs lit/);
   });
 });

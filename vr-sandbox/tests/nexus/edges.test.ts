@@ -55,7 +55,7 @@ describe('edges: lessons said from what works on what', () => {
     expect(lessonOf(changed((_, t) => { t('led').leads[0]!.pin = 0.9; })).refused.join()).toMatch(/LED's anode lead is 1\.27 mm across corner to corner.*1\.2 mm/);
     expect(lessonOf(changed((_, t) => { t('link').leads[0]!.at = [ppCol(5) + 1, 13.97]; })).refused.join()).toMatch(/link's .* lead is not over a hole/);
     expect(lessonOf(changed((b) => { b.tools[0]!.fig.set = 170; })).refused.join()).toMatch(/170 °C never brings a joint to .*183 °C/);
-    expect(lessonOf(changed((b) => { b.power!.ohms = 47; })).refused.join()).toMatch(/past its 20 mA/);
+    expect(lessonOf(changed((b) => { b.power!.lamps[0]!.ohms = 47; })).refused.join()).toMatch(/past its 20 mA/);
     expect(lessonOf(changed((b) => { b.power!.cells = 1; })).refused.join()).toMatch(/too little to light the LED/);
     expect(lessonOf(changed((b) => { b.power!.cells = 1; })).steps).toEqual([]);
   });
@@ -65,7 +65,7 @@ describe('edges: lessons said from what works on what', () => {
   });
   it('finds an LED\'s current where its drop and its current agree', () => {
     const p = PROTO_BUILD.power!, l = ledCurrent(p);
-    expect(Math.abs((l.v - l.vf) / (p.ohms + p.cells * p.rCell) * 1000 - l.mA)).toBeLessThan(1e-6);
+    expect(Math.abs((l.v - l.vf) / (p.lamps[0]!.ohms + p.cells * p.rCell) * 1000 - l.mA)).toBeLessThan(1e-6);
     expect(l.mA).toBeGreaterThan(3.5); expect(l.mA).toBeLessThan(4.5);
   });
 });

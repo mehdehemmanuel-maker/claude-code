@@ -6,7 +6,7 @@
 // Owner of: the lessons, and which a set of processes needs.
 
 import { BAND, bandsOf } from './packages';
-import { ADAFRUIT_GUIDE, buildOn, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow } from './edges';
+import { ADAFRUIT_GUIDE, buildOn, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow, type Tool } from './edges';
 import { layProto, type Component, type Rails } from './embody/breadboard';
 
 export interface Step { do: string; /** how you can tell it is done */ check?: string }
@@ -29,40 +29,92 @@ const red = ledResistor(3.3, 2.0, 5);
 
 /** The tip's temperature for leaded solder, °C (typical: lead-free wants more heat, and often more flux). */
 export const LEADED_TIP = 330;
-/** The LED lesson's circuit, as nets: two AA cells in Adafruit's 3951 holder, off the board on their leads, across the
- *  top rails; the 330 Ω from the + supply to the LED's anode; the LED's cathode to the − rail. Laid on the Perma-Proto
- *  by its nets (src/nexus/embody/breadboard.ts's layProto): the holder into the rails at columns 1 and 3, the + rail
- *  brought to column 5 by a link, the resistor along row c from column 5 to 9 (four holes: its body and bends), the LED
- *  in column 9 from row a into the − rail. */
-export const LED_CIRCUIT: Component[] = [
-  { id: 'battery', name: 'battery holder', flying: true, span: 2, body: [0.058, 0.014, 0.032], colour: 0x1a1a1b, pins: [{ name: '+', net: 'V+' }, { name: '−', net: '0 V' }] },
-  { id: 'resistor', name: '330 Ω resistor', span: 4, body: [0.0063, 0.0025, 0.0025], colour: 0x6f9fd8, pins: [{ name: '1', net: 'V+' }, { name: '2', net: 'LED anode' }] },
-  { id: 'led', name: 'red LED', body: [0.0058, 0.0086, 0.0058], colour: 0xd8262e, pins: [{ name: 'anode', net: 'LED anode' }, { name: 'cathode', net: '0 V' }] },
-];
-export const LED_RAILS: Rails = { topPlus: 'V+', topMinus: '0 V', bottomPlus: 'none', bottomMinus: 'none' };
-/** How each of its parts goes in, in words the edges say (src/nexus/edges.ts). */
-const LED_HOW: Record<string, PartHow> = {
-  resistor: { name: 'the resistor', form: 'axial', watts: 0.25, height: 2.5, leads: [{ name: 'its first lead', tag: 'first', pin: 0.6, round: true }, { name: 'its second lead', tag: 'second', pin: 0.6, round: true }] },
-  led: { name: 'the LED', form: 'radial', height: 11.6, mark: { what: 'the flat of its rim', by: 1 }, leads: [{ name: 'its long lead, the anode,', tag: 'anode', pin: 0.5, round: false }, { name: 'its short lead, by the flat on its rim,', tag: 'cathode', pin: 0.5, round: false }] },
-  battery: { name: 'the battery holder', form: 'flying', hangs: true, ready: { do: 'Put two AA cells in the battery holder, its knife switch up (open)', check: 'the switch open' },
-    leads: [{ name: 'its red lead\'s pin', tag: 'red', pin: 0.64, round: false }, { name: 'its black lead\'s', tag: 'black', pin: 0.64, round: false }] },
+/** The LEDs a lesson's circuit can light, as their sellers list them: each one's drop at 20 mA (inside its listing's
+ *  range), how that falls below 20 mA (n·kT/q·ln(I/20 mA), n about 2: an estimate typical of these dies), its largest
+ *  current, its lens's colour. */
+export interface LedKind { colour: string; vf20: number; nVt: number; max: number; hex: number; src: string }
+export const LED_KINDS: Record<string, LedKind> = {
+  red: { colour: 'red', vf20: 1.95, nVt: 0.0514, max: 20, hex: 0xd8262e, src: 'Adafruit\'s 299, diffused red, 660 nm: 1.85–2.5 V at 20 mA (taken as 1.95)' },
+  green: { colour: 'green', vf20: 2.3, nVt: 0.0514, max: 20, hex: 0x37a84a, src: 'Adafruit\'s 298, diffused green, 565 nm: 2.2–2.5 V at 20 mA (taken as 2.3)' },
+  yellow: { colour: 'yellow', vf20: 2.0, nVt: 0.0514, max: 20, hex: 0xe8c21e, src: 'Adafruit\'s 4203 pack: its red, yellow and green about 2 V at 20 mA' },
+  blue: { colour: 'blue', vf20: 3.3, nVt: 0.0514, max: 20, hex: 0x2a5bd8, src: 'Adafruit\'s 4203 pack: its blue and white about 3.3 V at 20 mA' },
+  white: { colour: 'white', vf20: 3.3, nVt: 0.0514, max: 20, hex: 0xeeeee6, src: 'Adafruit\'s 4203 pack: its blue and white about 3.3 V at 20 mA' },
 };
-/** The LED lesson's build: its circuit laid on the board by its nets, the soldering kit, two fresh alkaline AAs
- *  through the 330 Ω and Adafruit's red LED (its 299: 1.85–2.5 V at 20 mA, taken as 1.95 there, falling by
- *  n·kT/q·ln(I/20 mA) below it with n about 2, an estimate typical of red AlGaInP LEDs; each cell 1.6 V fresh (its
- *  listing) and about 0.15 Ω (typical of alkaline AAs)). Its lesson's steps are its edges, said. */
-const LED_LAYOUT = layProto(LED_CIRCUIT, LED_RAILS);
-if (LED_LAYOUT.refused.length || LED_LAYOUT.opens.length || LED_LAYOUT.shorts.length) throw new Error(`the LED circuit does not lay out: ${[...LED_LAYOUT.refused.map((r) => `${r.id}: ${r.why}`), ...LED_LAYOUT.opens, ...LED_LAYOUT.shorts].join('; ')}`);
-export const PROTO_BUILD: Build = buildOn(PERMA_PROTO_HALF, LED_LAYOUT, LED_HOW, [
-    { role: 'iron', name: 'the iron', key: 'soldering-iron', fig: { set: LEADED_TIP }, src: 'PINE64\'s Pinecil; 330 °C for leaded solder (typical)' },
-    { role: 'solder', name: 'the solder', key: 'solder-leaded', fig: { d: 0.5 }, alloy: 'Sn63Pb37', src: 'Adafruit\'s 1886 reel: 0.5 mm 63/37 with a rosin core' },
-    { role: 'cleaner', name: 'the brass wool', key: 'tip-cleaner', fig: {}, src: 'Hakko\'s 599B: dry brass, cools the tip less than a wet sponge' },
-    { role: 'cutters', name: 'the flush cutters', key: 'flush-cutters', fig: { cu: 1.3, jaw: 8 }, src: 'Hakko\'s CHP-170: copper to 1.3 mm (16 AWG), its jaws 8 mm' },
-    { role: 'hands', name: 'the helping hands', key: 'helping-hands', fig: { span: 150 }, src: 'Adafruit\'s 291, the MZ101: its clips on a 150 mm bar (its reach an estimate)' },
-    { role: 'stand', name: 'its stand', key: 'iron-stand', fig: {}, src: 'Atten\'s S-11' },
-], { source: 'battery', cells: 2, cell: 1.6, rCell: 0.15, ohms: 330, led: { vf20: 1.95, nVt: 0.0514, max: 20 }, closes: 'the knife switch', src: 'Adafruit\'s 3951 holder and LR6 cells (1.6 V fresh); its 299 LED (1.85–2.5 V at 20 mA); 0.15 Ω a cell (typical)' });
-const PROTO_LESSON = lessonOf(PROTO_BUILD);
-if (PROTO_LESSON.refused.length) throw new Error(`the LED lesson's build cannot be done: ${PROTO_LESSON.refused.join('; ')}`);
+const ORD = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+export const LED_RAILS: Rails = { topPlus: 'V+', topMinus: '0 V', bottomPlus: 'none', bottomMinus: 'none' };
+/** An LED circuit as nets: two AA cells in Adafruit's 3951 holder, off the board on their leads, across the top rails;
+ *  each LED with its own 330 Ω from the + supply to its anode, its cathode to the − rail, side by side; and how each part
+ *  goes in, in the words the edges say (src/nexus/edges.ts), each named by its colour where they differ, else first,
+ *  second… Laid on the Perma-Proto by its nets (src/nexus/embody/breadboard.ts's layProto): for one red LED, the holder
+ *  into the rails at columns 1 and 3, the + rail brought to column 5 by a link, the resistor along row c from column 5
+ *  to 9 (four holes: its body and bends), the LED in column 9 from row a into the − rail. */
+export function ledCircuit(colours: string[]): { circuit: Component[]; how: Record<string, PartHow> } {
+  const n = colours.length, distinct = new Set(colours).size === n, id = (k: string, i: number) => (i ? `${k}${i + 1}` : k);
+  const ledName = (i: number) => (n === 1 ? 'the LED' : distinct ? `the ${colours[i]} LED` : `the ${ORD[i]} LED`), resName = (i: number) => (n === 1 ? 'the resistor' : distinct ? `the ${colours[i]} LED's resistor` : `the ${ORD[i]} resistor`);
+  const anode = (i: number) => (n === 1 ? 'LED anode' : `LED ${i + 1} anode`);
+  const circuit: Component[] = [{ id: 'battery', name: 'battery holder', flying: true, span: 2, body: [0.058, 0.014, 0.032], colour: 0x1a1a1b, pins: [{ name: '+', net: 'V+' }, { name: '−', net: '0 V' }] }];
+  const how: Record<string, PartHow> = { battery: { name: 'the battery holder', form: 'flying', hangs: true, draw: 'switchholder 3951', ready: { do: 'Put two AA cells in the battery holder, its knife switch up (open)', check: 'the switch open' },
+    leads: [{ name: 'its red lead\'s pin', tag: 'red', pin: 0.64, round: false }, { name: 'its black lead\'s', tag: 'black', pin: 0.64, round: false }] } };
+  colours.forEach((c, i) => {
+    circuit.push({ id: id('resistor', i), name: '330 Ω resistor', span: 4, body: [0.0063, 0.0025, 0.0025], colour: 0x6f9fd8, pins: [{ name: '1', net: 'V+' }, { name: '2', net: anode(i) }] },
+      { id: id('led', i), name: `${c} LED`, body: [0.0058, 0.0086, 0.0058], colour: LED_KINDS[c]?.hex ?? 0xd8262e, pins: [{ name: 'anode', net: anode(i) }, { name: 'cathode', net: '0 V' }] });
+    how[id('resistor', i)] = { name: resName(i), form: 'axial', watts: 0.25, height: 2.5, draw: 'resistor 330', leads: [{ name: 'its first lead', tag: 'first', pin: 0.6, round: true }, { name: 'its second lead', tag: 'second', pin: 0.6, round: true }] };
+    how[id('led', i)] = { name: ledName(i), form: 'radial', height: 11.6, draw: `led ${c} 5mm`, mark: { what: 'the flat of its rim', by: 1 }, leads: [{ name: 'its long lead, the anode,', tag: 'anode', pin: 0.5, round: false }, { name: 'its short lead, by the flat on its rim,', tag: 'cathode', pin: 0.5, round: false }] };
+  });
+  return { circuit, how };
+}
+/** The soldering kit the lessons' builds are made with (src/nexus/kit-solder.ts draws each). */
+export const SOLDER_KIT: Tool[] = [
+  { role: 'iron', name: 'the iron', key: 'soldering-iron', fig: { set: LEADED_TIP }, src: 'PINE64\'s Pinecil; 330 °C for leaded solder (typical)' },
+  { role: 'solder', name: 'the solder', key: 'solder-leaded', fig: { d: 0.5 }, alloy: 'Sn63Pb37', src: 'Adafruit\'s 1886 reel: 0.5 mm 63/37 with a rosin core' },
+  { role: 'cleaner', name: 'the brass wool', key: 'tip-cleaner', fig: {}, src: 'Hakko\'s 599B: dry brass, cools the tip less than a wet sponge' },
+  { role: 'cutters', name: 'the flush cutters', key: 'flush-cutters', fig: { cu: 1.3, jaw: 8 }, src: 'Hakko\'s CHP-170: copper to 1.3 mm (16 AWG), its jaws 8 mm' },
+  { role: 'hands', name: 'the helping hands', key: 'helping-hands', fig: { span: 150 }, src: 'Adafruit\'s 291, the MZ101: its clips on a 150 mm bar (its reach an estimate)' },
+  { role: 'stand', name: 'its stand', key: 'iron-stand', fig: {}, src: 'Atten\'s S-11' },
+];
+/** An LED circuit's build: laid on the board by its nets, the soldering kit, two fresh alkaline AAs (each 1.6 V fresh,
+ *  its listing, and about 0.15 Ω, typical of alkaline AAs) through each LED's 330 Ω; its lesson its edges said, or what
+ *  stops it (a colour not known, a layout that does not fit, an LED the cells cannot light), said. */
+export function ledBuild(colours: string[]): { build: Build | null; lesson: ReturnType<typeof lessonOf>; refused: string[] } {
+  const unknown = colours.filter((c) => !LED_KINDS[c]), none = { steps: [], refused: [] };
+  if (!colours.length) return { build: null, lesson: none, refused: ['no LED asked for'] };
+  if (unknown.length) return { build: null, lesson: none, refused: [`no ${unknown.join(' or ')} LED in the library: ${Object.keys(LED_KINDS).join(', ')}`] };
+  const { circuit, how } = ledCircuit(colours), l = layProto(circuit, LED_RAILS), bad = [...l.refused.map((r) => `${r.id}: ${r.why}`), ...l.opens, ...l.shorts];
+  if (bad.length) return { build: null, lesson: none, refused: [`it does not lay out on the Perma-Proto: ${bad.join('; ')}`] };
+  const n = colours.length, srcs = [...new Set(colours.map((c) => LED_KINDS[c]!.src))];
+  const build = buildOn(PERMA_PROTO_HALF, l, how, SOLDER_KIT, { source: 'battery', cells: 2, cell: 1.6, rCell: 0.15, closes: 'the knife switch',
+    lamps: colours.map((c, i) => ({ id: i ? `led${i + 1}` : 'led', name: how[i ? `led${i + 1}` : 'led']!.name, ohms: 330, vf20: LED_KINDS[c]!.vf20, nVt: LED_KINDS[c]!.nVt, max: LED_KINDS[c]!.max })),
+    src: `Adafruit's 3951 holder and LR6 cells (1.6 V fresh); ${srcs.join('; ')}; 0.15 Ω a cell (typical)${n > 1 ? '; each LED its own resistor, side by side' : ''}` });
+  const lesson = lessonOf(build); return { build, lesson, refused: lesson.refused };
+}
+/** "Solder two LEDs", "teach me to solder a green LED", "solder red, green and yellow LEDs", "3 leds": the LEDs asked
+ *  for, by colour (red where none is said), or null where the words are not about soldering LEDs. */
+export function ledsAsked(text: string): string[] | null {
+  const t = text.toLowerCase();
+  if (!/\bleds?\b/.test(t) || !/\b(solder|teach|lesson|learn|build|wire)\b/.test(t)) return null;
+  const NUM: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, both: 2, pair: 2 };
+  const m = /\b(\d+|a|an|one|two|three|four|five|six|both|pair)\b(?:\s+of)?(?:\s+(?:red|green|yellow|blue|white|,|and))*\s+leds?\b/.exec(t), count = m ? NUM[m[1]!] ?? Number(m[1]) : null;
+  const named = [...t.matchAll(/\b(red|green|yellow|blue|white)\b/g)].map((x) => x[1]!);
+  const list = named.length ? named : ['red'];
+  return count && count > 1 && list.length === 1 ? Array.from({ length: count }, () => list[0]!) : list;
+}
+/** What a build's bench has on it besides the kit, in words: "two 330 Ω resistors, a red and a green 5 mm LED, a link
+ *  of red 22 AWG hook-up wire and Adafruit's 3951 holder with two AA cells". */
+export function partsSaid(build: Build): string {
+  const N = ['no', 'a', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'], n = (k: number) => N[k] ?? String(k), of = (f: string) => build.things.filter((t) => t.form === f);
+  const res = of('axial'), leds = of('radial').map((t) => /led (\w+)/.exec(t.draw ?? '')?.[1] ?? 'red'), links = of('link'), out: string[] = [];
+  if (res.length) out.push(`${n(res.length)} 330 Ω resistor${res.length > 1 ? 's' : ''}`);
+  if (leds.length) out.push(new Set(leds).size === 1 ? `${n(leds.length)} ${leds[0]} 5 mm LED${leds.length > 1 ? 's' : ''}` : `${leds.slice(0, -1).map((c) => `a ${c}`).join(', ')} and a ${leds.at(-1)} 5 mm LED`);
+  if (links.length) out.push(`${links.length > 1 ? `${n(links.length)} links` : 'a link'} of red 22 AWG hook-up wire`);
+  if (of('flying').length) out.push('Adafruit\'s 3951 holder with two AA cells');
+  return out.length > 1 ? `${out.slice(0, -1).join(', ')} and ${out.at(-1)}` : out[0] ?? '';
+}
+/** The LED lesson's build: one red LED, Adafruit's 299. */
+const ONE_RED = ledBuild(['red']);
+if (!ONE_RED.build || ONE_RED.refused.length) throw new Error(`the LED lesson's build cannot be done: ${ONE_RED.refused.join('; ')}`);
+export const PROTO_BUILD: Build = ONE_RED.build;
+export const LED_CIRCUIT: Component[] = ledCircuit(['red']).circuit;
+const PROTO_LESSON = ONE_RED.lesson;
 export const LESSONS: Record<string, Lesson> = {
   'solder-joint': {
     id: 'solder-joint', title: 'Solder a through-hole joint', why: 'every header, every leaded part and every wire is held and joined this way',

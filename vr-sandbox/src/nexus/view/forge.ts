@@ -22,6 +22,7 @@
 // Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|pipeline|wide, ?xr=quest3.
 
 import { processWords } from '../processor';
+import { robotWords as robotDesign } from '../robot';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -79,6 +80,8 @@ import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitM
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
 import { stepsOf, type PlanId } from '../solder-lesson';
+import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../lessons';
+import type { Build } from '../edges';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -2285,24 +2288,29 @@ window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement
 // your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
 // put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
 let bench: SolderBench | null = null;
-function startBench(plan: PlanId = 'pico'): string {
-  if (bench && bench.plan === plan) { bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
+function startBench(plan: PlanId = 'pico', build: Build = PROTO_BUILD): string {
+  if (bench && bench.plan === plan && (plan === 'pico' || bench.bench.build === build)) { bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
   if (bench) { bench.dispose(); bench = null; }
-  bench = new SolderBench(plan); scene.add(bench.group); named(bench.group, 'the soldering bench');
+  bench = new SolderBench(plan, build); scene.add(bench.group); named(bench.group, 'the soldering bench');
   eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
   // (its top at a standing bench's height under your eyes, 42 cm before you, its near side toward you)
   const at = eye.clone().addScaledVector(f, 0.42); at.y = Math.max(0.75, eye.y - 0.6); bench.place(at, Math.atan2(-f.x, -f.z), 0);
   if (!renderer.xr.isPresenting) { camera.position.copy(at).add(new THREE.Vector3(0, 0.32, 0).addScaledVector(f, -0.3)); orbit.target.copy(at).addScaledVector(f, 0.02); orbit.update(); }
   const first = stepsOf(bench.bench)[0]!.do;
   if (plan === 'proto') {
-    const hands = renderer.xr.isPresenting ? 'Grip with either hand to take a part, the board or (right) the iron or the flush cutters; let a part go over its holes and it goes in. Pull the right trigger with the cutters round a lead to cut it; grip with your left for the solder, its trigger for more wire.' : 'On a screen, say the moves: "place the resistor", "place the led", "place the link", "board in the hands", "take the iron", "take the solder", "tin the tip", "heat joint 1", "feed joint 1", "lift", "wipe", "take the cutters", "cut lead 1 at 1.5", "iron down".';
-    return `A soldering bench before you: Adafruit's Perma-Proto half-sized board, a 330 Ω resistor, a red 5 mm LED, a link of red 22 AWG hook-up wire, the MZ101 helping hands, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner, a reel of 63/37 solder and Hakko's CHP-170 flush cutters. ${hands} First: ${first}`;
+    const places = build.things.filter((t) => !t.hangs).map((t) => `"place ${t.name.toLowerCase()}"`).join(', ');
+    const hands = renderer.xr.isPresenting ? 'Grip with either hand to take a part, the board or (right) the iron or the flush cutters; let a part go over its holes and it goes in. Pull the right trigger with the cutters round a lead to cut it; grip with your left for the solder, its trigger for more wire.' : `On a screen, say the moves: ${places} (or "place all"), "board in the hands", "take the iron", "take the solder", "tin the tip", "heat joint 1", "feed joint 1", "lift", "wipe", "take the cutters", "cut lead 1 at 1.5", "iron down".`;
+    return `A soldering bench before you: Adafruit's Perma-Proto half-sized board, ${partsSaid(build)}, the MZ101 helping hands, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner, a reel of 63/37 solder and Hakko's CHP-170 flush cutters. ${stepsOf(bench.bench).length} steps, ${bench.bench.joints.length} joints. ${hands} First: ${first}`;
   }
   const hands = renderer.xr.isPresenting ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
   return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${first}`;
 }
 function benchWords(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  // (an LED circuit asked for by its LEDs ("solder two LEDs", "teach me to solder a red and a green LED"): laid out,
+  // taught and set out on the bench; one red LED is the LED lesson itself)
+  const leds = ledsAsked(t);
+  if (leds && !(leds.length === 1 && leds[0] === 'red')) { const r = ledBuild(leds); if (!r.build || r.refused.length) return `That circuit cannot be built here: ${r.refused.join('; ')}.`; return startBench('proto', r.build); }
   // (the second lesson first: its words begin as the first's do)
   if (/^((teach me (to|how to) )?solder (an? |the )?(led|resistor)\b|(the )?(second|led|perma-?proto) (soldering )?lesson|(teach me (to|how to) )?solder (on|onto) (a |the )?perma-?proto|solder (the |a )?perma-?proto|trim(ming)? leads lesson)/.test(t)) return startBench('proto');
   if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
@@ -2537,6 +2545,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = packWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = robotDesign(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3984,7 +3993,7 @@ async function boot() {
     restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
     phonePeek: (app: string, sub?: string, page?: number) => phone.peek(app, sub, page),
-    benchStart: (plan?: string) => startBench(plan === 'proto' ? 'proto' : 'pico'), benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
+    benchStart: (plan?: string) => { const leds = plan && plan !== 'proto' && plan !== 'pico' ? ledsAsked(`solder ${plan}`) : null, r = leds ? ledBuild(leds) : null; return r ? (r.build && !r.refused.length ? startBench('proto', r.build) : r.refused.join('; ')) : startBench(plan === 'proto' ? 'proto' : 'pico'); }, benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
     benchPoint: (what: string) => (bench ? bench.point(what as Parameters<SolderBench['point']>[0]) : null),
     // (an emulated headset's hands, for a test: a controller put so its grip is at a point in the room, level and facing
     // ahead, or turned by a quaternion; its grip or trigger pressed or let go)

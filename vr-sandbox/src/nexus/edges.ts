@@ -63,6 +63,7 @@ export interface Thing {
   /** off the board on its own leads: in once the board is held, so it does not hang from the board as it is turned */ hangs?: boolean;
   /** how high it stands off the board, mm: the lowest go in first, so each lies flat on the bench when the board is
    *  turned over (typical practice) */ height?: number;
+  /** the library's words for it, which the bench draws it by ("resistor 330", "led green 5mm") */ draw?: string;
 }
 /** A Perma-Proto's hole for a stripboard layout's (src/nexus/embody/breadboard.ts): its column the layout's row + 1,
  *  rows a–j its columns 0–9, the top rails −1 (+) and −2 (−), the bottom 10 (+) and 11 (−). */
@@ -81,18 +82,29 @@ export function buildOn(board: Board, l: Layout, how: Record<string, PartHow>, t
 export type Role = 'iron' | 'solder' | 'cleaner' | 'cutters' | 'hands' | 'stand';
 /** A tool as an edge reads it: its role, its name in a sentence, its price key, its figures. */
 export interface Tool { role: Role; name: string; key: string; fig: Record<string, number>; alloy?: string; src: string }
-/** The circuit closed at the end: so many cells (their voltage fresh and inside resistance), a resistor and an LED
- *  (its drop at 20 mA and how it moves with current, its largest current), the switch that closes it. */
-export interface Power { source: string; cells: number; cell: number; rCell: number; ohms: number; led: { vf20: number; nVt: number; max: number }; closes: string; src: string }
+/** An LED of the circuit and the resistor in series with it: its drop at 20 mA and how that moves with current
+ *  (n·kT/q), its largest current. */
+export interface Lamp { id: string; name: string; ohms: number; vf20: number; nVt: number; max: number }
+/** The circuit closed at the end: so many cells (their voltage fresh and inside resistance), each LED with its
+ *  resistor across them side by side, the switch that closes it. */
+export interface Power { source: string; cells: number; cell: number; rCell: number; lamps: Lamp[]; closes: string; src: string }
 export interface Build { board: Board; things: Thing[]; tools: Tool[]; power?: Power }
 
-/** The current a set of cells drives through a resistor and an LED: the LED's drop at the current found, the current
- *  from that drop, till they agree. */
-export function ledCurrent(p: Power): { mA: number; v: number; vf: number } {
-  const v = p.cell * p.cells, r = p.ohms + p.cells * p.rCell; let mA = Math.max(0, (v - p.led.vf20) / r) * 1000, vf = p.led.vf20;
-  for (let k = 0; k < 8; k++) { vf = p.led.vf20 + p.led.nVt * Math.log(Math.max(1e-3, mA) / 20); mA = Math.max(0, (v - vf) / r) * 1000; }
-  return { mA, v, vf };
+/** The current a set of cells drives through each LED and its resistor, the branches side by side: each LED's drop at
+ *  the current found and the current from that drop till they agree, the cells' own resistance taking its share of
+ *  them all. */
+export function ledCurrents(p: Power): { v: number; lamps: { id: string; name: string; ohms: number; mA: number; vf: number }[] } {
+  const v = p.cell * p.cells, r = p.cells * p.rCell; let at = v, lamps: { id: string; name: string; ohms: number; mA: number; vf: number }[] = [];
+  for (let k = 0; k < 40; k++) {
+    lamps = p.lamps.map((l) => { let mA = Math.max(0, (at - l.vf20) / l.ohms) * 1000, vf = l.vf20;
+      for (let j = 0; j < 12; j++) { vf = l.vf20 + l.nVt * Math.log(Math.max(1e-3, mA) / 20); mA = Math.max(0, (at - vf) / l.ohms) * 1000; }
+      return { id: l.id, name: l.name, ohms: l.ohms, mA, vf }; });
+    at = v - (r * lamps.reduce((a, l) => a + l.mA, 0)) / 1000;
+  }
+  return { v, lamps };
 }
+/** The first LED's current, its drop, and the cells' voltage. */
+export function ledCurrent(p: Power): { mA: number; v: number; vf: number } { const c = ledCurrents(p), l = c.lamps[0]; return { mA: l?.mA ?? 0, v: c.v, vf: l?.vf ?? 0 }; }
 
 export type EdgeKind = 'insert' | 'hold' | 'tin' | 'solder' | 'trim' | 'power' | 'rest';
 /** A step said from an edge (or from several alike): what to do, how you can tell it is done, the things it is on,
@@ -172,9 +184,10 @@ export function lessonOf(build: Build): { steps: Said[]; refused: string[] } {
   const leads = build.things.flatMap((t) => t.leads.map((l) => ({ t, l })));
   if (cutters) for (const { t, l } of leads) if (across(l) > cutters.fig.cu!) refused.push(`${t.name}'s ${l.tag} lead is ${mm(across(l))} mm: ${cutters.name} cut copper to ${mm(cutters.fig.cu!)} mm at most`);
   if (hands && b.L > hands.fig.span!) refused.push(`${b.name} is ${mm(b.L)} mm long: ${hands.name} reach ${mm(hands.fig.span!)} mm`);
-  const lit = build.power ? ledCurrent(build.power) : null;
-  if (build.power && lit && lit.mA > build.power.led.max) refused.push(`the cells would drive ${lit.mA.toFixed(0)} mA through the LED, past its ${build.power.led.max} mA`);
-  if (build.power && lit && lit.mA < 0.5) refused.push(`${lit.v.toFixed(2)} V from the cells is too little to light the LED (it drops ${build.power.led.vf20} V)`);
+  const lit = build.power ? ledCurrents(build.power) : null, one = build.power?.lamps.length === 1;
+  if (build.power && lit) build.power.lamps.forEach((l, i) => { const c = lit.lamps[i]!, who = one ? 'the LED' : l.name;
+    if (c.mA > l.max) refused.push(`the cells would drive ${c.mA.toFixed(0)} mA through ${who}, past its ${l.max} mA`);
+    if (c.mA < 0.5) refused.push(`${lit.v.toFixed(2)} V from the cells is too little to light ${who} (it drops ${l.vf20} V)`); });
   if (refused.length) return { steps: [], refused };
   // (things on the board in, in the build's order, each said with what it is joined to among those before it)
   const before: Thing[] = [], sayIn = (t: Thing) => { steps.push(insertSaid(b, t, before)); before.push(t); };
@@ -190,7 +203,9 @@ export function lessonOf(build: Build): { steps: Said[]; refused: string[] } {
     check: 'each a smooth cone, the hole filled, wetting both pad and lead', src: `${ADAFRUIT_GUIDE}; the joint model (src/nexus/solder-joint.ts, its heat an estimate); ${wire!.src}` });
   if (cutters) steps.push({ kind: 'trim', things: build.things.map((t) => t.id), do: `Trim each lead to ${PROTRUSION.min}–${PROTRUSION.max} mm above its joint with ${cutters.name}, their flat side to the board, holding the lead's end.`,
     check: `its end still in sight in the solder, at most ${PROTRUSION.max} mm standing (IPC-A-610's lead protrusion)`, src: `IPC-A-610's lead protrusion; ${cutters.src}` });
-  if (build.power && lit) { const p = build.power; steps.push({ kind: 'power', things: [p.source], do: `Close ${p.closes}: the LED lights, about ${lit.mA.toFixed(1)} mA (${lit.v.toFixed(2)} V from the cells, less the LED's ${lit.vf.toFixed(2)} V, over the ${p.ohms} Ω).`, check: 'the LED lit', src: p.src }); }
+  if (build.power && lit) { const p = build.power, l = lit.lamps;
+    steps.push({ kind: 'power', things: [p.source], do: one ? `Close ${p.closes}: the LED lights, about ${l[0]!.mA.toFixed(1)} mA (${lit.v.toFixed(2)} V from the cells, less the LED's ${l[0]!.vf.toFixed(2)} V, over the ${l[0]!.ohms} Ω).`
+      : `Close ${p.closes}: the LEDs light, ${l.map((c) => `${c.name} about ${c.mA.toFixed(1)} mA (less its ${c.vf.toFixed(2)} V, over its ${c.ohms} Ω)`).join(', ')}, from the cells' ${lit.v.toFixed(2)} V.`, check: one ? 'the LED lit' : l.length === 2 ? 'both LEDs lit' : `all ${count(l.length)} LEDs lit`, src: p.src }); }
   const stand = tool(build, 'stand'); steps.push({ kind: 'rest', things: ['iron'], do: `Put the iron back in ${stand ? stand.name : 'its stand'}.`, check: 'the iron in its stand, the joints cooled', src: 'the safety rule: the iron in its stand every time it leaves your hand' });
   return { steps, refused };
 }
