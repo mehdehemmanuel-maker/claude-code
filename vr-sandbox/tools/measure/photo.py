@@ -28,7 +28,7 @@ millimetres by the homography through them. Then:
   traces     cal.json [--map boardmap.json] --out traces.png [--ts NAME:file.ts] [--res 10] [--lift 8]
                                                                       the copper under a board's mask as its photo shows
                                                                       it (traces, planes, vias), on the board's own mm
-  silk       cal.json [--map boardmap.json] --out silk.png [--ts NAME:file.ts] [--res 20] [--sat 45] [--val 215]
+  silk       cal.json [--map boardmap.json] --out silk.png [--ts NAME:file.ts] [--res 20] [--sat 45] [--val 215] [--skip X0:Z0:X1:Z1]
                                                                       the silkscreen as its photo shows it (its words,
                                                                       logos, outlines: the white ink on its mask), on the
                                                                       board's own mm, with the ink's colour
@@ -681,9 +681,13 @@ def cmd_silk(a):
         bh, bw = blob.shape
         if max(bh, bw) < R * 1.0 and area > 0.75 * bh * bw: continue
         out[sl][blob] = 255
+    # (regions vetted by eye against the photo as no ink: a part's tin past its drawn body, a lead, a pad)
+    for sk in a.skip or []:
+        x0_, z0_, x1_, z1_ = map(float, sk.split(':'))
+        out[max(0, int((W - z1_) * R)):max(0, int((W - z0_) * R) + 1), max(0, int(x0_ * R)):max(0, int(x1_ * R) + 1)] = 0
     cv2.imwrite(a.out, out); col = np.median(rect[out > 0], axis=0) if (out > 0).any() else np.array([240, 240, 240])
     print('%s: %d × %d px at %g px/mm, %.2f %% of the board ink; the ink %s (median)' % (a.out, w, h, R, 100 * (out > 0).mean(), hexof(col)))
-    if a.ts: write_ts(a, out, w, h, R, 'silkscreen', 'ink where the photo is pale and grey on its mask', f", ink: {hexof(col)}")
+    if a.ts: write_ts(a, out, w, h, R, 'silkscreen', 'ink where the photo is pale and grey on its mask' + (f' (value over {a.val})' if a.val != 215 else '') + ''.join(f'; {sk} skipped, checked by eye as tin, a lead or a pad' for sk in (a.skip or [])), f", ink: {hexof(col)}")
 
 
 def cmd_same(a):
@@ -741,7 +745,7 @@ def main():
     p = sp.add_parser('small'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--erode', type=int, default=2); p.add_argument('--ts'); p.add_argument('--board'); p.add_argument('--box'); p.add_argument('--out', required=True); p.add_argument('--show'); p.add_argument('--why', action='append', help='X,Z (mm): say how the blob there was taken or why it was not'); p.add_argument('--skip', action='append', help='X0:Z0:X1:Z1 (mm): a region known to hold no part (a logo)'); p.add_argument('--silk', help='the ink photo.py silk found: left out'); p.add_argument('--keep', help='a PNG of where it looked'); p.add_argument('--tins', help='a JSON of the lone tin ends seen'); p.set_defaults(f=cmd_small)
     p = sp.add_parser('colour'); p.add_argument('real'); p.add_argument('drawn'); p.add_argument('--at', action='append', required=True); p.add_argument('--now'); p.set_defaults(f=cmd_colour)
     p = sp.add_parser('traces'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=10); p.add_argument('--win', type=int, default=15); p.add_argument('--lift', type=int, default=8); p.add_argument('--speck', type=int, default=12); p.add_argument('--run', type=int, default=7); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_traces)
-    p = sp.add_parser('silk'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=20); p.add_argument('--sat', type=int, default=45); p.add_argument('--val', type=int, default=215); p.add_argument('--speck', type=int, default=6); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_silk)
+    p = sp.add_parser('silk'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=20); p.add_argument('--sat', type=int, default=45); p.add_argument('--val', type=int, default=215); p.add_argument('--speck', type=int, default=6); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.add_argument('--skip', action='append', help='X0:Z0:X1:Z1 (mm): a region vetted as no ink (a part\'s tin past its body)'); p.set_defaults(f=cmd_silk)
     p = sp.add_parser('camera'); p.add_argument('cal'); p.add_argument('--L', type=float, required=True); p.add_argument('--W', type=float, required=True); p.add_argument('--top', type=float, default=0, help='the board top\'s height in the room, mm: the look page\'s lift (look.mjs prints it)'); p.add_argument('--render', help='the render this camera will make'); p.add_argument('--render-cal', dest='render_cal', help='its calibration, written'); p.set_defaults(f=cmd_camera)
     p = sp.add_parser('same'); p.add_argument('cals', nargs='+'); p.add_argument('--region', required=True); p.add_argument('--up', type=float, default=0); p.add_argument('--h', type=int, default=360); p.add_argument('--edges', action='store_true', help='a render from the photo\'s camera: its edges over the photo'); p.add_argument('--out', required=True); p.set_defaults(f=cmd_same)
     a = ap.parse_args(); a.f(a)

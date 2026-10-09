@@ -23,7 +23,7 @@ describe('single-board computers', () => {
   it('weighs within a fifth of what its maker says it weighs, where its layout is measured; the rest named as approximate', () => {
     for (const [id, b] of Object.entries(BOARD_DEFS)) if (b.g && !approx(id)) expect(Math.abs(boardMass(id) / b.g - 1), `${id}: ${boardMass(id).toFixed(1)} g against ${b.g} g`).toBeLessThan(0.2);
     // (each leaves this list when its layout is measured from its photos and drawings)
-    expect(Object.keys(BOARD_DEFS).filter(approx)).toEqual(['pi3bplus', 'pizero2w', 'cm5', 'pico1w', 'pico2', 'pico2w', 'opi5plus', 'opi5pro', 'opi5max', 'rdkx3', 'rdkx5', 'rdks100', 'rdks100p']);
+    expect(Object.keys(BOARD_DEFS).filter(approx)).toEqual(['pi3bplus', 'pizero2w', 'cm5', 'pico2', 'pico2w', 'opi5plus', 'opi5pro', 'opi5max', 'rdkx3', 'rdkx5', 'rdks100', 'rdks100p']);
     const c = component('sbc opi5plus 4GB'); if (typeof c === 'string') throw new Error(c);
     expect(c.item.spec).toMatch(/its layout approximate/);
   });
