@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { component } from '../../src/nexus/components';
 import { massOf } from '../../src/nexus/mass';
-import { approx, BOARD_DEFS, boardMass } from '../../src/nexus/sbc';
+import { approx, BOARD_DEFS, boardMass, PI4_HAND } from '../../src/nexus/sbc';
 import { OPI5_SMALL } from '../../src/nexus/sbc-opi5-small';
 import { PI5_SMALL } from '../../src/nexus/sbc-pi5-small';
 import { PI4_SMALL } from '../../src/nexus/sbc-pi4-small';
@@ -62,12 +62,19 @@ describe('single-board computers', () => {
     const c = component('sbc pi4b 4GB'); if (typeof c === 'string') throw new Error(c);
     expect(c.faults).toEqual([]); expect(c.item.spec).not.toMatch(/approximate/);
     const ps = all(c.part), named = (s: string) => ps.find((p) => p.name.endsWith(s))!, x = (s: string) => +(named(s).at![0] * 1000 + 42.5).toFixed(2), y = (s: string) => +(28 - named(s).at![2] * 1000).toFixed(2);
-    // (the drawing's figures: USB-C at 11.2, the micro-HDMIs at 26.0 and 39.5, the jack at 53.5; Ethernet 45.75 up the
-    // right edge, the USB 3.0 pair at 27 and the USB 2.0 at 9: the Pi 5's the other way round)
-    expect(x('USB-C power in')).toBeCloseTo(11.2, 1); expect(x('micro-HDMI 0')).toBeCloseTo(26.0, 1); expect(x('micro-HDMI 1')).toBeCloseTo(39.5, 1); expect(x('audio and video jack')).toBeCloseTo(53.5, 1);
+    // (the drawing's figures: USB-C at 11.2, the micro-HDMIs at 26.0 and 39.5; Ethernet 45.75 up the right edge, the
+    // USB 3.0 pair at 27 and the USB 2.0 at 9: the Pi 5's the other way round; the jack where its photo puts it, 53.85,
+    // 0.35 from its drawing's 53.5, the mounting hole beside it true to a pixel; its own body, not a headphone jack's)
+    expect(x('USB-C power in')).toBeCloseTo(11.2, 1); expect(x('micro-HDMI 0')).toBeCloseTo(26.0, 1); expect(x('micro-HDMI 1')).toBeCloseTo(39.5, 1);
+    expect(Math.abs(x('audio and video jack') - 53.5)).toBeLessThan(0.4); expect(named('audio and video jack').item).toBe('av-jack-4p');
     expect(y('Gigabit Ethernet')).toBeCloseTo(45.75, 1); expect(y('USB 3.0 (two, stacked)')).toBeCloseTo(27.0, 1); expect(y('USB 2.0 (two, stacked)')).toBeCloseTo(9.0, 1);
     expect(ps.filter((p) => p.item === 'fpc-socket-15')).toHaveLength(2);
-    expect(ps.filter((p) => p.item === 'chip-capacitor' || p.item === 'chip-resistor' || p.item === 'sot-package').length).toBe(PI4_SMALL.length);
+    // (its small parts: the finder's, and those read by eye round its power chip where its photo is soft; its J2's three
+    // unfitted holes, its two lights at its left edge)
+    expect(ps.filter((p) => p.item === 'chip-capacitor' || p.item === 'chip-resistor' || p.item === 'sot-package' || p.item === 'diode-smd').length).toBe(PI4_SMALL.length + PI4_HAND.filter((r) => r[0] !== 'q').length);
+    expect(ps.filter((p) => p.item === 'dfn-package').length).toBe(PI4_HAND.filter((r) => r[0] === 'q').length);
+    expect((BOARD_DEFS.pi4b!.more ?? []).filter((h) => /J2/.test(h.why ?? ''))).toHaveLength(3);
+    expect(ps.filter((p) => /(activity|power) light \((ACT|PWR)\)$/.test(p.name) && /^led-chip/.test(p.item ?? "")).length).toBeGreaterThanOrEqual(2);
     expect(DEFS.pi4b!.ink?.res).toBe(20); expect(DEFS.pi4b!.copper?.w).toBe(85 * 14);
     expect(ps.some((p) => /VL805/.test(p.text ?? ''))).toBe(true); expect(ps.some((p) => /BCM54213PE/.test(p.text ?? ''))).toBe(true);
   });

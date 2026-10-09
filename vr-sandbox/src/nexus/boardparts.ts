@@ -334,6 +334,38 @@ export function jack35(): BoardPart {
     return piece(`jack contact ${i + 1}`, 'jack-spring', [box('lead', top ? [0.5, 0.15, 2.4] : [2.2, 3.2, 0.2], top ? [x, H + 0.05, z + 0.8] : [x, 1.9, z], 'phosphor-bronze', { color: HUE.gold, ...(top ? { rot: [0.25, 0, 0] as V3 } : {}) }), box('lead', [0.9, 0.1, 1.0], [x, 0.05, top ? -W / 2 - 0.6 : W / 2 + 0.6], 'phosphor-bronze', { color: HUE.gold })]); });
   return { comp: { name: '3.5 mm headphone jack', item: 'audio-jack', at: [0, 0, 0], kids: [body, ...springs] }, size: [D, W, H], src: 'Bsun PJ31060-I outline (6.2 × 14.0 mm) via KiCad footprint; fits the Orange Pi 5\'s jack by size; height typical' };
 }
+/** The four-pole audio and video jack of the Raspberry Pi 3B+ and 4B (J7 on both), its mouth at +x, as their photos
+ *  show it (its maker's part is not published; every figure here read off Raspberry Pi's two photos through their
+ *  cameras, photo.py mark, wall and same --edges): a black moulded face 6.7 wide and 6.1 tall, its bore (r 1.75, fitted
+ *  to the bore's ellipse) centred on it 3.05 up, its round nose r 2.85 standing 2.6 out of it, 1.5 past the board's
+ *  edge; a tin-plated steel shell over the top and sides of the 2.8 mm behind it, 6.0 tall, a square window in each side
+ *  and a leg off each side down through the board, soldered; a black back housing 8.2 long, open on top where its switch
+ *  lever lies and its two contacts' tops show at its back corners, a tail off each side at its back, soldered. Its left side is hidden in both photos: drawn as its right. Its contacts'
+ *  tails under it are not drawn (no photo of its underside). */
+export function avJack(o: { th?: number } = {}): BoardPart {
+  const t = o.th ?? 1.4, W = 6.7, Hf = 6.1, Tf = 0.6, Ln = 2.6, rn = 2.85, ya = 3.05, Ls = 2.8, Ws = 6.6, Hs = 6.0, st = 0.3, Lb = 8.2, Wb = 6.6, Hb = 6.4;
+  const D = Ln + Tf + Ls + Lb, xb = -D / 2, xs = xb + Lb, xf = xs + Ls, xn = xf + Tf;   // (back, shell's back, face's back, nose's root)
+  const ring = (r: number, n = 32): V2[] => Array.from({ length: n }, (_, i): V2 => [r * Math.cos((2 * PI * i) / n), ya + r * Math.sin((2 * PI * i) / n)]);
+  const bore = ring(1.75, 24), BLK = { color: HUE.black }, TIN = { color: HUE.tin };
+  const face = piece('jack face', 'jack-socket-body', [along('body', rect(W, Hf, 0), [bore], Tf, xf, 'pbt', BLK), along('body', ring(rn), [bore], Ln, xn, 'pbt', BLK),
+    // (the moulding under the shell that carries the bore back to the contacts)
+    along('body', rect(Ws - 2 * st, Hs - st, 0), [bore], Ls, xs, 'pbt', { ...BLK, share: 0.7 })]);
+  const win = rect2(xs + Ls / 2, Hs / 2 - 0.2, 1.0, 1.3);
+  const shell = piece('jack shell', 'jack-shell', [plate('term', rect2(xs + Ls / 2, 0, Ls, Ws), [], st, Hs - st, 'steel-low', TIN),
+    ...[-1, 1].map((s): Solid => wall('term', rect2(xs + Ls / 2, (Hs - st) / 2, Ls, Hs - st), [win], st, s * (Ws / 2 - st / 2), 'steel-low', TIN)),
+    // (a leg off each side near its back, down through the board)
+    ...[-1, 1].map((s): Solid => box('term', [0.8, t + 0.9, st], [xs + 0.7, -(t + 0.9) / 2 + 0.3, s * (Ws / 2 - st / 2)], 'steel-low', TIN))]);
+  // (the back housing: a U open on top, its cavity 4.2 wide and 2.0 deep, closed by its back wall 1.6 thick)
+  const cav: V2[] = [[-Wb / 2, 0], [Wb / 2, 0], [Wb / 2, Hb], [2.0, Hb], [2.0, Hb - 2.0], [-2.0, Hb - 2.0], [-2.0, Hb], [-Wb / 2, Hb]];
+  const back = piece('jack housing', 'jack-socket-body', [along('body', cav, [], Lb - 1.6, xb + 1.6, 'pbt', { ...BLK, share: 0.75 }), box('body', [1.6, Hb, Wb], [xb + 0.8, Hb / 2, 0], 'pbt', BLK)]);
+  const lever = piece('jack switch lever', 'jack-lever', [box('body', [Lb - 2.4, 0.9, 1.4], [xb + 1.6 + (Lb - 2.4) / 2, Hb - 1.4, -0.3], 'pbt', { ...BLK, rot: [0, 0.18, 0] as V3 })]);
+  const contacts = [-1, 1].map((s, i): Comp => piece(`jack contact ${i + 1}`, 'jack-spring-tin', [
+    box('lead', [1.1, 0.12, 1.0], [xb + 0.6, Hb + 0.06, s * (Wb / 2 - 0.7)], 'phosphor-bronze', TIN),
+    // (its tail off the side at the back, down through the board)
+    box('lead', [0.8, t + 0.9, 0.3], [xb + 0.8, -(t + 0.9) / 2 + 0.3, s * (Wb / 2 + 0.15)], 'phosphor-bronze', TIN)]));
+  return { comp: { name: 'audio and video jack (4 poles)', item: 'av-jack-4p', at: [0, 0, 0], kids: [face, shell, back, lever, ...contacts] }, size: [D, W, Hb],
+    src: 'measured off Raspberry Pi\'s photos of its 3B+ and 4B (J7) through their calibrated cameras; its maker\'s part not published; its left side drawn as its right' };
+}
 /** A 1.25 mm two-pin wafer, right-angle (a fan's): Molex PicoBlade 53261-0271's outline, 7.65 × 4.2 mm with its two
  *  solder tabs, via KiCad (fits the Orange Pi 5's by size); 3.0 mm tall (typical); its mouth at +x. */
 export function wafer2(): BoardPart {
@@ -440,6 +472,13 @@ export function sideLeds(L: number, W: number, H: number, lights: { name: string
     return { name: l.name, item: l.item, at: [0, 0, 0], solids: [box('cap', [L, H, W * 0.92], [0, H / 2, z], 'epoxy', { color: l.color })], kids: [piece(`${l.name} die`, l.die, [box('die', [0.1, 0.25, 0.25], [L / 2 - 0.2, H / 2, z], 'silicon', { color: 0x222222 })]), piece(`${l.name} lead frame`, 'lead-frame', [box('lead', [L * 0.8, 0.12, W * 0.5], [0, 0.06, z], 'copper', { color: HUE.tin })])] }; });
   return { name: 'indicator lights', item: 'led-pair', at: [0, 0, 0], kids };
 }
+/** A top-looking chip LED, L × W × H mm (an 0603 is 1.6 × 0.8 × 0.6), its length along x: its die on its lead frame
+ *  under its clear moulded lens, which looks the colour its photo gives it unlit, the frame's two ends its pads. */
+export function chipLed(L: number, W: number, H: number, l: { name: string; item: string; die: string; color: number }): Comp {
+  return { name: l.name, item: l.item, at: [0, 0, 0], solids: [box('cap', [L * 0.7, H - 0.1, W], [0, 0.1 + (H - 0.1) / 2, 0], 'epoxy', { color: l.color })],
+    kids: [piece(`${l.name} die`, l.die, [box('die', [0.25, 0.1, 0.25], [0, 0.15, 0], 'silicon', { color: 0x222222 })]),
+      piece(`${l.name} lead frame`, 'lead-frame', [...[-1, 1].map((s): Solid => box('lead', [L * 0.15 + 0.05, H, W], [s * (L / 2 - (L * 0.15 + 0.05) / 2), H / 2, 0], 'copper', { color: HUE.tin })), box('lead', [L * 0.7, 0.1, W * 0.8], [0, 0.05, 0], 'copper', { color: HUE.tin })])] };
+}
 /** A flip-chip BGA under a metal lid, a mm square and H tall over all (a board maker's 3D model's): its balls, its
  *  substrate, its die, its nickel-plated copper lid over 86 % of it (typical of lidded FCBGAs), or as measured (`o.lid`
  *  mm across; `o.band`: a lid pressed with a raised band across its middle, so wide, its two edges' flanges `o.drop` mm
@@ -472,5 +511,5 @@ export const BOARD_PARTS: Record<string, () => BoardPart> = {
   'hdmi-a': () => hdmi('A'), 'hdmi-c': () => hdmi('C'), 'hdmi-d': () => hdmi('D'),
   'usb-a-2': () => usbA([2]), 'usb-a-3': () => usbA([3]), 'usb-a-2x2': () => usbA([2, 2]), 'usb-a-3x3': () => usbA([3, 3]), 'usb-a-2-side': () => usbA([2], { depth: 16.3, onSide: true }),
   'rj45': rj45, 'microsd-push': microSD, 'header-2x13': () => pinHeader(2, 13), 'header-2x20': () => pinHeader(2, 20), 'header-1x3': () => pinHeader(1, 3),
-  'fpc-30': fpc30, 'b2b-30': b2b30, 'tact-kmr2': tactKMR2, 'tact-side': tactSide, 'jack-3.5': jack35, 'wafer-2': wafer2, 'mic-4': () => micElectret(4.0, 1.5),
+  'fpc-30': fpc30, 'b2b-30': b2b30, 'tact-kmr2': tactKMR2, 'tact-side': tactSide, 'jack-3.5': jack35, 'av-jack-4p': () => avJack(), 'wafer-2': wafer2, 'mic-4': () => micElectret(4.0, 1.5),
 };

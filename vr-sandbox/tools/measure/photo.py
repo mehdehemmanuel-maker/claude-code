@@ -208,6 +208,63 @@ def cmd_grid(a):
         out = '%s_%s.png' % (a.out, name); cv2.imwrite(out, crop); print(out)
 
 
+def cmd_wall(a):
+    """A millimetre grid drawn on a plane above the board, by the calibration's camera, over the photo: a part's top
+    (y=H: x and z lines at that height) or its side (x=X or z=Z: lines of height and of the other coordinate), so an
+    edge on a part's face is read in mm off the photo as one is read off the board with grid."""
+    c = load(a.cal); im = cv2.imread(c['photo']); cam = camera(c, im.shape); S = a.scale
+    if not cam: print('the photo is too square-on to tell a height'); return
+    axis, v = a.plane.split('='); v = float(v); lo1, hi1, lo2, hi2 = map(float, a.span.split(':'))
+    def P(u, w):   # (u, w): the plane's two coordinates, as (x, z, y)
+        return {'y': (u, w, v), 'x': (v, u, w), 'z': (u, v, w)}[axis]
+    pts = [cam(*P(u, w)) for u in (lo1, hi1) for w in (lo2, hi2)]
+    X0, Y0 = max(int(min(p[0] for p in pts)) - 20, 0), max(int(min(p[1] for p in pts)) - 20, 0)
+    X1, Y1 = int(max(p[0] for p in pts)) + 20, int(max(p[1] for p in pts)) + 20
+    crop = cv2.resize(im[Y0:Y1, X0:X1], None, fx=S, fy=S, interpolation=cv2.INTER_LANCZOS4)
+    q = lambda u, w: tuple(int((t - o) * S) for t, o in zip(cam(*P(u, w)), (X0, Y0)))
+    step = a.step
+    u = math.ceil(lo1 / step) * step
+    while u <= hi1 + 1e-9:
+        major = abs(u - round(u)) < 1e-9 and round(u) % 5 == 0
+        cv2.line(crop, q(u, lo2), q(u, hi2), (0, 0, 255) if major else (0, 200, 255), 2 if major else 1)
+        if abs(u - round(u)) < 1e-9: cv2.putText(crop, '%g' % u, (q(u, hi2)[0] + 3, q(u, hi2)[1] - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        u += step
+    w = math.ceil(lo2 / step) * step
+    while w <= hi2 + 1e-9:
+        major = abs(w - round(w)) < 1e-9 and round(w) % 5 == 0
+        cv2.line(crop, q(lo1, w), q(hi1, w), (255, 0, 255) if major else (255, 180, 0), 2 if major else 1)
+        if abs(w - round(w)) < 1e-9: cv2.putText(crop, '%g' % w, (q(lo1, w)[0] - 34, q(lo1, w)[1] + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+        w += step
+    names = {'y': ('x', 'z'), 'x': ('z', 'y'), 'z': ('x', 'y')}[axis]
+    cv2.putText(crop, '%s=%g  lines: %s (red) %s (magenta)' % (axis, v, *names), (6, crop.shape[0] - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+    cv2.imwrite(a.out, crop); print(a.out)
+
+
+def cmd_mark(a):
+    """Points in the board's frame (X,Z or X,Z@Y mm, a name after = if wanted) drawn where the calibration's camera
+    sees them, over the photo, enlarged: a guess at a part's corner checked against the photo by eye; LO:HI ranges
+    (X0:X1,Z@Y) draw the edge between, so a guessed outline is seen whole."""
+    c = load(a.cal); im = cv2.imread(c['photo']); cam = camera(c, im.shape)
+    pts = []
+    for p in a.pts:
+        spec, _, name = p.partition('='); xz, _, hh = spec.partition('@'); xs, zs = xz.split(',')
+        rng = lambda v: tuple(map(float, v.split(':'))) if ':' in v else (float(v), float(v))
+        (xa, xb), (za, zb), (ya, yb) = rng(xs), rng(zs), rng(hh) if hh else (0.0, 0.0)
+        seg = [(xa + (xb - xa) * k / 20, za + (zb - za) * k / 20, ya + (yb - ya) * k / 20) for k in range(21)]
+        px = [cam(*q) if cam else to_px(c, q[0], q[1]) for q in seg]; pts.append((px, name or spec))
+    allp = [q for ps, _ in pts for q in ps]
+    X0, Y0 = max(int(min(q[0] for q in allp)) - a.pad, 0), max(int(min(q[1] for q in allp)) - a.pad, 0)
+    X1, Y1 = min(int(max(q[0] for q in allp)) + a.pad, im.shape[1]), min(int(max(q[1] for q in allp)) + a.pad, im.shape[0])
+    S = a.scale; crop = cv2.resize(im[Y0:Y1, X0:X1], None, fx=S, fy=S, interpolation=cv2.INTER_CUBIC)
+    for i, (ps, name) in enumerate(pts):
+        col = [(255, 0, 255), (0, 255, 255), (0, 128, 255), (255, 255, 0), (0, 255, 0)][i % 5]
+        q = [(int((x - X0) * S), int((y - Y0) * S)) for x, y in ps]
+        if len(set(q)) > 1: cv2.polylines(crop, [np.int32(q)], False, col, 1)
+        else: cv2.circle(crop, q[0], 4, col, 1)
+        cv2.putText(crop, name, (q[0][0] + 5, q[0][1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, col, 1)
+    cv2.imwrite(a.out, crop); print(a.out, 'pixels %d–%d × %d–%d' % (X0, X1, Y0, Y1))
+
+
 def cmd_at(a):
     # (PX,PY on the board's plane; PX,PY@H on a part's top H mm above it, by the camera the calibration gives)
     c = load(a.cal); cam = None
@@ -221,8 +278,34 @@ def cmd_at(a):
 
 
 def cmd_px(a):
-    c = load(a.cal)
-    for p in a.pts: x, z = map(float, p.split(',')); print('(%s) mm is pixel (%.1f, %.1f)' % (p, *to_px(c, x, z)))
+    # (X,Z on the board's plane; X,Z@Y a point Y mm above it, by the calibration's camera)
+    c = load(a.cal); cam = None
+    for p in a.pts:
+        xz, _, hh = p.partition('@'); x, z = map(float, xz.split(','))
+        if hh:
+            cam = cam or camera(c, cv2.imread(c['photo']).shape)
+            if not cam: print('(%s): the photo is too square-on to tell a height' % p); continue
+            print('(%s) mm is pixel (%.1f, %.1f)' % (p, *cam(x, z, float(hh))))
+        else: print('(%s) mm is pixel (%.1f, %.1f)' % (p, *to_px(c, x, z)))
+
+
+def cmd_rise(a):
+    """How tall an edge stands: its foot's pixel on the board and its top's pixel straight above it. The foot is cast
+    onto the board's plane (or onto a face --on mm up); the height is the one whose point over the foot the camera sees
+    nearest the top's pixel, with how far off it is, which says whether the top is truly over the foot."""
+    c = load(a.cal); cam = camera(c, cv2.imread(c['photo']).shape)
+    if not cam: print('the photo is too square-on to tell a height'); return
+    for p in a.pairs:
+        f, t = p.split(':'); fx, fy = map(float, f.split(',')); tx, ty = map(float, t.split(','))
+        x, z = cam.unproject(fx, fy, a.on) if a.on else to_mm(c, fx, fy)
+        miss = lambda y: math.hypot(*np.subtract(cam(x, z, y), (tx, ty)))
+        lo, hi = a.on - 5.0, a.on + 60.0
+        for _ in range(80):
+            m1, m2 = lo + (hi - lo) / 3, hi - (hi - lo) / 3
+            if miss(m1) < miss(m2): hi = m2
+            else: lo = m1
+        y = (lo + hi) / 2
+        print('foot (%s) is (%.2f, %.2f) mm; top (%s) is %.2f mm above it (%.1f px off the vertical)' % (f, x, z, t, y - a.on, miss(y)))
 
 
 def cmd_outline(a):
@@ -254,6 +337,9 @@ def cmd_overlay(a):
     cv2.imwrite(a.out, big); print(a.out)
 
 
+SMALL_NAMES = ('chip capacitor', 'chip resistor', 'small transistor', 'small no-lead chip', 'moulded inductor')
+
+
 def cmd_small(a):
     """Small parts by what their bodies look like: a ceramic capacitor's tan, a resistor's or a small chip's black, an
     inductor's or a part's grey; each body's blob measured (its ends' tin not in it, so a part is its body's length
@@ -261,30 +347,48 @@ def cmd_small(a):
     within 15°."""
     c = load(a.cal); im = cv2.imread(c['photo']); hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV).astype(int)
     H_, S_, V_ = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
-    keep = np.zeros(im.shape[:2], np.uint8)
+    keep = np.zeros(im.shape[:2], np.uint8); inkd = np.zeros(im.shape[:2], bool)
     x0, z0, x1, z1 = map(float, (a.box or '0.8:0.8:99.2:61.2').split(':'))
     cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]])], 1)
+    why_px = [to_px(c, *map(float, w.split(','))) for w in (a.why or [])]; blame: dict = {}
     if a.map:   # leave out what the drawing already places (each footprint a little larger) and its holes' pads
         m = json.load(open(a.map)); cam = camera(c, im.shape); hid = np.zeros_like(keep)
+        r_ = max(1, int(round(0.3 * (c.get('scale_px_per_mm') or 9.7))))
         for p in m['parts']:
             if p.get('side', 'top') != 'top': continue
+            # (the small parts this tool placed last time are what it looks for, not what the drawing places)
+            if p['name'].startswith(SMALL_NAMES): continue
             # (each footprint a little larger, and the plane its top hides in a photo taken from aside)
             cs = np.array(p['corners']); mid = cs.mean(axis=0); cs = cs + (cs - mid) * 0.06 + np.sign(cs - mid) * 0.35
-            cv2.fillPoly(hid, [np.int32([to_px(c, x, z) for x, z in shadow(c, cam, cs, p.get('top', 0), p.get('pts'))])], 1)
+            poly = np.int32([to_px(c, x, z) for x, z in shadow(c, cam, cs, p.get('top', 0), p.get('pts'))])
+            cv2.fillPoly(hid, [poly], 1)
+            for w, (X, Y) in zip(a.why or [], why_px):
+                if cv2.pointPolygonTest(poly.reshape(-1, 1, 2).astype(np.float32), (float(X), float(Y)), True) > -r_: blame.setdefault(w, []).append(p['name'])
         # (all of it widened 0.3 mm: the camera's lean is good to about 0.5 mm, its footprint already a little larger, and a
         # part's bright edge is no small part)
-        r_ = max(1, int(round(0.3 * (c.get('scale_px_per_mm') or 9.7)))); keep[cv2.dilate(hid, np.ones((2 * r_ + 1, 2 * r_ + 1), np.uint8)) > 0] = 0
+        keep[cv2.dilate(hid, np.ones((2 * r_ + 1, 2 * r_ + 1), np.uint8)) > 0] = 0
         for w in m.get('silk', []):
-            cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in w['corners']])], 0)
+            poly = np.int32([to_px(c, x, z) for x, z in w['corners']]); cv2.fillPoly(keep, [poly], 0)
+            for q, (X, Y) in zip(a.why or [], why_px):
+                if cv2.pointPolygonTest(poly.reshape(-1, 1, 2).astype(np.float32), (float(X), float(Y)), False) >= 0: blame.setdefault(q, []).append('the word ' + repr(w.get('text', '')))
         for h in m.get('holes', []):
-            X, Y = to_px(c, *h['at']); cv2.circle(keep, (int(X), int(Y)), int(h['pad'] / 2 * c['scale_px_per_mm'] + 3), 0, -1)
+            X, Y = to_px(c, *h['at']); R = int(h['pad'] / 2 * c['scale_px_per_mm'] + 3); cv2.circle(keep, (int(X), int(Y)), R, 0, -1)
+            for q, (X2, Y2) in zip(a.why or [], why_px):
+                if math.hypot(X2 - X, Y2 - Y) <= R: blame.setdefault(q, []).append('the hole at %s' % (h['at'],))
     if a.silk:   # (the board's ink as photo.py silk found it, laid back onto the photo: words and logos are not parts)
         ink = cv2.imread(a.silk, 0); m_ = json.load(open(a.map)) if a.map else {}; Wb = m_.get('W', 62); Rs = ink.shape[1] / m_.get('L', 100)
         Mi = c['H'] @ np.array([[1 / Rs, 0, 0.5 / Rs], [0, -1 / Rs, Wb - 0.5 / Rs], [0, 0, 1]])
         inkp = cv2.warpPerspective(ink, Mi, (im.shape[1], im.shape[0]), flags=cv2.INTER_NEAREST)
-        keep[cv2.dilate(inkp, np.ones((5, 5), np.uint8)) > 0] = 0
+        # (a blob mostly under it, with next to no tan body, is a word's letters and is left out; a part is not left out
+        # for the ink alone, for a tin end's highlight is as white as a word and photo.py silk takes some for ink)
+        inkd = cv2.dilate(inkp, np.ones((5, 5), np.uint8)) > 0
+        for q, (X, Y) in zip(a.why or [], why_px):
+            if inkd[int(round(Y)), int(round(X))]: blame.setdefault(q, []).append('the board\'s ink (photo.py silk): left out only if its blob is ink with no tan body')
     for sk in a.skip or []:   # (regions known to hold no part: a logo, a drawing printed on the board)
         x0_, z0_, x1_, z1_ = map(float, sk.split(':')); cv2.fillPoly(keep, [np.int32([to_px(c, x, z) for x, z in [(x0_, z0_), (x1_, z0_), (x1_, z1_), (x0_, z1_)]])], 0)
+        for q in a.why or []:
+            qx, qz = map(float, q.split(','))
+            if x0_ <= qx <= x1_ and z0_ <= qz <= z1_: blame.setdefault(q, []).append('the skip ' + sk)
     keep = keep.astype(bool)
     if a.keep: cv2.imwrite(a.keep, np.where(keep[:, :, None], im, im // 4))   # (where it looked: the rest darkened)
     # (a part is tan (a ceramic body, a moulded inductor's) with its bright tin ends, or dark (a resistor's body, a small
@@ -310,7 +414,7 @@ def cmd_small(a):
     # its colour falls in)
     for w, (X, Y) in zip(a.why or [], why):
         X_, Y_ = int(round(X)), int(round(Y))
-        print(f'  why {w}: ' + ('left out (under a drawn part or its shadow, a word, a hole or a skip)' if not keep[Y_, X_] else
+        print(f'  why {w}: ' + (('left out: under ' + '; '.join(dict.fromkeys(blame.get(w, ['the drawn parts\' widened edges'])))) if not keep[Y_, X_] else
               f'HSV {hsv[Y_, X_].tolist()}: ' + ', '.join(n for n, m_ in (('mask', blue), ('tan', tanpx), ('bright', bright), ('dark', darkpx)) if m_[Y_, X_]) or 'in no mask'))
     for src, left in masks:
       for er in range(a.erode, a.erode + 4):
@@ -325,6 +429,8 @@ def cmd_small(a):
                 print(f'  why: {src} mask, eroded {er}: a blob {L:.2f} × {W:.2f} mm, {dens:.2f} of its box filled' + ('' if (dens >= 0.62 and L <= 4.4) or last else ': not one part yet, split further'))
             if (dens < 0.62 or L > 4.4) and not last: continue        # (not one part yet: split further next pass)
             took = np.zeros_like(left); took[ys, xs] = True; left &= ~ndimage.binary_dilation(took, iterations=er + 1)
+            # (a blob mostly under the board's ink with next to no tan body in it is a word's letters, not a part)
+            if inkd[ys, xs].mean() > 0.6 and tanpx[ys, xs].mean() < 0.25: continue
             if src == 'tan' and L < 0.45 and W >= 0.12 and dens >= 0.6:
                 mx_, mz_ = to_mm(c, cx, cy); tins.append((mx_, mz_, L, W)); continue   # (a tin end alone: paired below)
             if dens < 0.45 or W < 0.25 or L < 0.45 or L > 4.4: continue
@@ -335,7 +441,7 @@ def cmd_small(a):
             core = (abs(u) < 0.45) & (abs(v) < 0.45); ends = (abs(u) > 0.62) & (abs(u) < 1.0) & (abs(v) < 0.6); sides = (abs(v) > 0.62) & (abs(v) < 1.0) & (abs(u) < 0.6)
             med = lambda v: float(np.median(v)) if v.size else 0.0
             cH, cS, cV = (med(ch[gy[core], gx[core]]) for ch in (H_, S_, V_))
-            eV, sV = med(V_[gy[ends], gx[ends]]), med(V_[gy[sides], gx[sides]])
+            eV, sV, eS = med(V_[gy[ends], gx[ends]]), med(V_[gy[sides], gx[sides]]), med(S_[gy[ends], gx[ends]])
             beyond = (abs(u) > 1.0) & (abs(u) < 1.7) & (abs(v) < 0.7); bV = med(V_[gy[beyond], gx[beyond]])
             ex, ez = np.subtract(to_mm(c, cx + math.cos(th), cy + math.sin(th)), (mx, mz)); a_ = math.degrees(math.atan2(ez, ex)) % 180
             # (to the nearest right angle within 15°, or always where it is under 1 mm long: its angle not measurable)
@@ -359,8 +465,9 @@ def cmd_small(a):
                         off = (j - (k - 1) / 2) * (L / k)
                         out.append({'at': [round(mx + off * math.cos(math.radians(a_)), 2), round(mz + off * math.sin(math.radians(a_)), 2)], 'kind': 'capacitor', 'case': case[1], 'L': case[2], 'W': case[3], 'dir': (d + 90) % 180, 'seen': [round(L / k, 2), round(W, 2)], 'row': k})
                     continue
-            if tan and L >= 1.5 and L / W < 1.45 and eV < cV + 25:
-                # (tan, near square, no bright ends: a moulded power inductor, its size as seen)
+            if tan and L >= 1.5 and L / W < 1.45 and eV < cV + 25 and eS > 0.7 * cS:
+                # (tan, near square, no tin ends: a moulded power inductor, its size as seen; tin is told from a tan body by
+                # its greyness as well as its brightness, for a lit tan body can be as bright as tin)
                 out.append({'at': at, 'kind': 'inductor', 'L': round(L, 2), 'W': round(W, 2), 'dir': d}); continue
             if (tan or (dark and bV > cV + 40)) and L <= 3.4 and W < 1.75:
                 # (a resistor: its black body between bright tin ends, which lie past the ends of the dark blob)
@@ -538,17 +645,26 @@ def cmd_silk(a):
 
 
 def cmd_same(a):
-    x0, z0, x1, z1 = map(float, a.region.split(':')); tiles = []
+    x0, z0, x1, z1 = map(float, a.region.split(':')); tiles = []; raws = []
     for f in a.cals:
         c = load(f); im = cv2.imread(c['photo'])
         pts = [to_px(c, x, z) for x in (x0 - a.up, x1 + a.up) for z in (z0 - a.up, z1 + a.up)]
         X0, Y0 = max(int(min(p[0] for p in pts)), 0), max(int(min(p[1] for p in pts)), 0)
         X1, Y1 = min(int(max(p[0] for p in pts)), im.shape[1]), min(int(max(p[1] for p in pts)), im.shape[0])
         if X1 - X0 < 4 or Y1 - Y0 < 4: print(f'{f}: the region is outside its photo'); continue
-        cut = im[Y0:Y1, X0:X1].copy(); poly = np.int32([[to_px(c, x, z)[0] - X0, to_px(c, x, z)[1] - Y0] for x, z in [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]])
+        raw = im[Y0:Y1, X0:X1].copy(); cut = raw.copy(); poly = np.int32([[to_px(c, x, z)[0] - X0, to_px(c, x, z)[1] - Y0] for x, z in [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]])
         cv2.polylines(cut, [poly], True, (0, 255, 255), 2)
         h = a.h; cut = cv2.resize(cut, (max(1, int(cut.shape[1] * h / cut.shape[0])), h), interpolation=cv2.INTER_LANCZOS4)
         cv2.putText(cut, c['photo'].split('/')[-1][:24], (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1); tiles.append(cut)
+        raws.append((raw, (X0, Y0, X1, Y1), h))
+    if a.edges and len(raws) == 2 and raws[0][1] == raws[1][1]:
+        # (a render made from the photo's own camera lies pixel for pixel on it: its edges drawn over the photo show
+        # every edge of the part that is not where the photo has it)
+        (ph, _, h), (rd, _, _) = raws
+        e = cv2.Canny(cv2.GaussianBlur(cv2.cvtColor(rd, cv2.COLOR_BGR2GRAY), (3, 3), 0), 30, 90)
+        big = lambda m: cv2.resize(m, (max(1, int(m.shape[1] * h / m.shape[0])), h), interpolation=cv2.INTER_LANCZOS4)
+        ov = big(ph); eb = big(e) > 60; ov[eb] = (255, 0, 255)
+        cv2.putText(ov, 'render edges on the photo', (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1); tiles.append(ov)
     if tiles: cv2.imwrite(a.out, np.hstack(tiles)); print(a.out, '·', len(tiles), 'views')
 
 
@@ -574,6 +690,9 @@ def main():
     p = sp.add_parser('grid'); p.add_argument('cal'); p.add_argument('--region', action='append', required=True); p.add_argument('--out', required=True); p.add_argument('--scale', type=float, default=3); p.set_defaults(f=cmd_grid)
     p = sp.add_parser('at'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_at)
     p = sp.add_parser('px'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.set_defaults(f=cmd_px)
+    p = sp.add_parser('rise', help='how tall an edge stands, from its foot and its top'); p.add_argument('cal'); p.add_argument('pairs', nargs='+', help='FX,FY:TX,TY pixels'); p.add_argument('--on', type=float, default=0, help='the foot stands on a face this many mm up, not the board'); p.set_defaults(f=cmd_rise)
+    p = sp.add_parser('wall', help='a mm grid on a plane above the board (y=H, x=X or z=Z) over the photo'); p.add_argument('cal'); p.add_argument('plane', help='y=H, x=X or z=Z'); p.add_argument('span', help='LO1:HI1:LO2:HI2 of the plane\'s two coordinates (y=: x then z; x=: z then y; z=: x then y)'); p.add_argument('--step', type=float, default=0.5); p.add_argument('--scale', type=float, default=4); p.add_argument('--out', required=True); p.set_defaults(f=cmd_wall)
+    p = sp.add_parser('mark', help='points or edges in mm (X,Z@Y; ranges LO:HI) drawn over the photo by its camera'); p.add_argument('cal'); p.add_argument('pts', nargs='+'); p.add_argument('--pad', type=int, default=30); p.add_argument('--scale', type=float, default=5); p.add_argument('--out', required=True); p.set_defaults(f=cmd_mark)
     p = sp.add_parser('outline'); p.add_argument('cal'); p.add_argument('--mode', choices=['bright', 'dark', 'notblue'], required=True); p.add_argument('--dark', type=int, default=110); p.add_argument('--ground', type=int, default=240, help='brighter than this is the ground the photo was taken on, not metal'); p.add_argument('--box'); p.add_argument('--open', type=int, default=0, help='part blobs that touch by this many pixels of opening'); p.add_argument('at', nargs='+'); p.set_defaults(f=cmd_outline)
     p = sp.add_parser('overlay'); p.add_argument('cal'); p.add_argument('map'); p.add_argument('--out', required=True); p.add_argument('--side', default='top'); p.add_argument('--scale', type=float, default=1.5); p.set_defaults(f=cmd_overlay)
     p = sp.add_parser('small'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--erode', type=int, default=2); p.add_argument('--ts'); p.add_argument('--board'); p.add_argument('--box'); p.add_argument('--out', required=True); p.add_argument('--show'); p.add_argument('--why', action='append', help='X,Z (mm): say how the blob there was taken or why it was not'); p.add_argument('--skip', action='append', help='X0:Z0:X1:Z1 (mm): a region known to hold no part (a logo)'); p.add_argument('--silk', help='the ink photo.py silk found: left out'); p.add_argument('--keep', help='a PNG of where it looked'); p.add_argument('--tins', help='a JSON of the lone tin ends seen'); p.set_defaults(f=cmd_small)
@@ -581,7 +700,7 @@ def main():
     p = sp.add_parser('traces'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=10); p.add_argument('--win', type=int, default=15); p.add_argument('--lift', type=int, default=8); p.add_argument('--speck', type=int, default=12); p.add_argument('--run', type=int, default=7); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_traces)
     p = sp.add_parser('silk'); p.add_argument('cal'); p.add_argument('--map'); p.add_argument('--res', type=float, default=20); p.add_argument('--sat', type=int, default=45); p.add_argument('--val', type=int, default=215); p.add_argument('--speck', type=int, default=6); p.add_argument('--L', type=float, default=100); p.add_argument('--W', type=float, default=62); p.add_argument('--out', required=True); p.add_argument('--ts'); p.add_argument('--board'); p.set_defaults(f=cmd_silk)
     p = sp.add_parser('camera'); p.add_argument('cal'); p.add_argument('--L', type=float, required=True); p.add_argument('--W', type=float, required=True); p.add_argument('--top', type=float, default=0, help='the board top\'s height in the room, mm: the look page\'s lift (look.mjs prints it)'); p.add_argument('--render', help='the render this camera will make'); p.add_argument('--render-cal', dest='render_cal', help='its calibration, written'); p.set_defaults(f=cmd_camera)
-    p = sp.add_parser('same'); p.add_argument('cals', nargs='+'); p.add_argument('--region', required=True); p.add_argument('--up', type=float, default=0); p.add_argument('--h', type=int, default=360); p.add_argument('--out', required=True); p.set_defaults(f=cmd_same)
+    p = sp.add_parser('same'); p.add_argument('cals', nargs='+'); p.add_argument('--region', required=True); p.add_argument('--up', type=float, default=0); p.add_argument('--h', type=int, default=360); p.add_argument('--edges', action='store_true', help='a render from the photo\'s camera: its edges over the photo'); p.add_argument('--out', required=True); p.set_defaults(f=cmd_same)
     a = ap.parse_args(); a.f(a)
 
 

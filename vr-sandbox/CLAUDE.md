@@ -294,7 +294,18 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   drawing is rendered as the photo saw it, with a calibration for the render: then `same` on the photo and the render
   sets every part beside itself, and `colour` (`X,Z@Y` a place Y mm up) reads the same places in both and the colour
   to draw to match. A feature on a part's face (a spring lanced in a shell, a seam) is measured by casting its pixel's
-  ray onto that face's plane.
+  ray onto that face's plane. Tools for reading a part off a photo by its camera: `px X,Z@Y` (where a point Y mm up is
+  seen), `rise FX,FY:TX,TY` (how tall an edge stands, from its foot and its top), `wall CAL y=H|x=X|z=Z LO1:HI1:LO2:HI2`
+  (a millimetre grid on a part's top or side plane over the photo), `mark CAL X,Z@Y …` (guessed corners and edges,
+  ranges `X0:X1,Z@Y`, drawn over the photo: a guess checked by eye) and `same --edges` (a render from the photo's own
+  camera, its edges drawn over the photo: every edge that is not where the photo has it shows). A circle (a jack's
+  bore) is fitted to its ellipse in the photo through the camera; its size does not fix how far along the ray it is,
+  so hold one coordinate (a drawing's centre) or match a second feature. `small --why X,Z` names what hides a point
+  (the part, its shadow, a word, the ink, a hole or a skip) or the mask its colour falls in; the small parts it placed
+  before are not counted as drawn; a blob is left out for the ink only where it is ink with no tan body; tin is told
+  from a tan body by its greyness as well as its brightness. Where a photo is too soft for it, its parts are read by
+  eye off the photo at its own size (a native-pixel grid), located through the camera at their tops' height, and
+  kept beside the finder's rows (`PI4_HAND`), the finder skipping that region.
 - `step.py`: a maker's STEP model read with gmsh: `boxes` (every solid's box on the board's drawing frame, top or under)
   and `check` (each drawn part against the solid it should be, coverage both ways).
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
@@ -342,8 +353,14 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    along: our z = 56 − its x), which agrees with the drawing on every port; its VL805, PHY, PMIC, inductors and PoE
    header cast down from the photo; its silk, copper, mask and 28 small parts from the photo; its camera and display
    sockets 15 contacts at 1 mm, their lock a grey bar up the outer side, contacts tin; every chip's marking as read.
-   Still to do: its audio jack (drawn as a 3.5 mm jack of its size, not its own body), its LEDs, the small parts by its
-   power chip that its inductors' footprints hide, its underside (no photo).
+   Its AV jack (J7, the 3B+'s too) its own body off both photos: a black face 6.7 × 6.1 with its bore (r 1.75, fitted
+   to its ellipse) centred 3.05 up, its nose 1.5 past the edge, a tin-plated shell with windows and soldered legs, a
+   back housing open on its lever; at 53.85 mm, as its photo puts it (its drawing says 53.5, the hole beside it true
+   to a pixel). Its two lights at its left edge (paler than any capacitor, ACT and PWR printed by them; 0603s by their
+   blur, the photo soft there). Its power chip's corner read by eye: a SOD-123F diode, two DFNs, a SOT-23-6, its
+   capacitors 0603 and 0805 (the finder had taken some for inductors), its R47 inductor 3.6 × 4.0 × 2.5 (its base's
+   edge, not its top, gave its place), J2's three unfitted holes. Still to do: the DFN under its power chip larger
+   than drawn, its USB-C's rear legs, its underside (no photo).
 4. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
    Its `joint-drive` (listed only as its materials) is the one item the breakdown queue leaves waiting: it is broken
    out (motor, reduction, encoder, bearings, each drawn) in this round, not before.

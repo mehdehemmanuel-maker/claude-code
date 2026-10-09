@@ -74,6 +74,7 @@ export function pkgOf(name: string): Pkg | null {
   if (name === 'DO-35') return { name, form: 'axial', pins: 2, L: 4.0, W: 1.9, H: 1.9, A1: 0, pitch: 0, span: 0, lw: 0.5, lt: 0.5, leadL: 27, glass: true, grounds: 'JEDEC DO-35: a glass body 1.9 × 4 mm, leads 0.5 mm, nominal' };
   if (name === 'DO-201') return { name, form: 'axial', pins: 2, L: 9.5, W: 5.3, H: 5.3, A1: 0, pitch: 0, span: 0, lw: 1.3, lt: 1.3, leadL: 27, grounds: 'JEDEC DO-201AD: 5.3 × 9.5 mm, leads 1.3 mm, nominal' };
   if (name === 'SMA') return { name, form: 'sma', pins: 2, L: 4.3, W: 2.6, H: 2.1, A1: 0.1, pitch: 0, span: 5.2, lw: 1.4, lt: 0.2, grounds: 'JEDEC DO-214AC (SMA): 4.3 × 2.6 mm, J-bent leads, nominal' };
+  if (name === 'SOD-123F') return { name, form: 'sma', pins: 2, L: 2.6, W: 1.6, H: 1.0, A1: 0.05, pitch: 0, span: 3.55, lw: 0.8, lt: 0.15, grounds: 'SOD-123F: a moulded body 2.6 × 1.6 × 1.0 mm, 3.55 mm over its two flat leads (Nexperia\'s outline, nominal); drawn in the SMA\'s form' };
   return null;
 }
 
