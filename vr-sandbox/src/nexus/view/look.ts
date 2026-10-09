@@ -66,12 +66,26 @@ const lightRoom = q.get('room') === '1' || (q.get('room') !== '0' && kit.id === 
 // #bbbec3, and a Raspberry Pi 5's mask its photo's, #1ac189 against #0fbb8e–#27b683, with its photo's camera laid over
 // it (photo.py camera); &tone=aces for the old curve)
 const neutral = lightRoom && q.get('tone') !== 'aces'; if (neutral) renderer.toneMapping = THREE.NeutralToneMapping;
-renderer.toneMappingExposure = Number(q.get('exposure') ?? (neutral ? 0.6 : lightRoom ? 0.44 : 1.3));
-scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
+// (the light room a light tent unless &tent=0: Raspberry Pi 5's photo and a render from its camera agree under it, its
+// shells #9b968a against the photo's #988f84, its mask #1ab883 against #0fbb8e–#27b683, its floor its own grey; in the
+// grey room its shells read #746f66, too dark, having no white to mirror)
+const tentOn = lightRoom && q.get('tent') !== '0';
+renderer.toneMappingExposure = Number(q.get('exposure') ?? (neutral ? (tentOn ? 0.62 : 0.6) : lightRoom ? 0.44 : 1.3));
+// (a light tent, as a maker's product photograph is taken in: white all round, a broad softbox overhead and one in front,
+// so metal mirrors white as a photographed pin or shell does; &wall=, &soft=, &front= its brightnesses)
+const tent = (): THREE.Scene => {
+  const st = new THREE.Scene(), room = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(Number(q.get('wall') ?? 0.9)), side: THREE.BackSide })); room.position.y = 5; st.add(room);
+  const panel = (w: number, h: number, at: [number, number, number], rot: [number, number, number], k: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(k), side: THREE.DoubleSide })); m.position.set(...at); m.rotation.set(...rot); st.add(m); };
+  panel(10, 10, [0, 10.9, 0], [Math.PI / 2, 0, 0], Number(q.get('soft') ?? 3)); panel(10, 5, [0, 4, 9.9], [0, 0, 0], Number(q.get('front') ?? 2));
+  // (the sweep the thing stands on, lit by the softbox above: brighter than the walls, as what a pin's side mirrors)
+  panel(20, 20, [0, -0.95, 0], [-Math.PI / 2, 0, 0], Number(q.get('sweep') ?? 1.8));
+  return st;
+};
+scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(tentOn ? tent() : new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
 // (biased, or every curved skin shadows itself in fine rings: shadow acne)
 // (&env=, &sun=: the room's reflections' and the sun's strength, to try the light against a photograph's)
 if (q.get('env')) scene.environmentIntensity = Number(q.get('env'));
-const sun = new THREE.DirectionalLight(0xffffff, Number(q.get('sun') ?? 1.5)); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+const sun = new THREE.DirectionalLight(0xffffff, Number(q.get('sun') ?? (tentOn ? 0.6 : 1.5))); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
 const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });

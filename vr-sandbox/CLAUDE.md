@@ -118,7 +118,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A hole drilled in any part, any way (`Part.cuts`: round, or n-sided, a hex socket): cut from what is drawn (three-bvh-csg, each shape drilled once), its volume out of the mass | `src/nexus/kits.ts` (`Cut`), `src/nexus/view/kit3d.ts` (`drill`), `src/nexus/mass.ts` |
 | A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
-| How a picture is lit: a part alone in a bright room (a light table, so metal reads as metal, exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue: a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
+| How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
@@ -336,9 +336,14 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    drawn black). Still to do: the LPDDR's marking turned and its maker's logo, RP1's logo, the micro-HDMIs' backs.
 3. Every other board the same way, each marked approximate until it is: the Pi 4B, 3B+ and Zero 2 W next (their photos
    are in raspberrypi/documentation's computers/raspberry-pi/images; look for their makers' STEP models first). The
-   Pi 4B's photo is calibrated (three holes and six header pin tips, its fourth hole hidden: 2.5 px rms); the
-   OpenSCAD Raspberry Pi library's Pi 4 (ext openscad-rpi-library, its frame x across, y along) agrees with Raspberry
-   Pi's drawing on every port and places its SoC, memory, Wi-Fi can and both FPC sockets, to be checked on the photo.
+   Pi 4B (measured 2026-10-09, no longer approximate): its photo calibrated by three holes and six header pin tips (its
+   fourth hole hidden: 2.5 px rms); its ports from Raspberry Pi's drawing (its Ethernet on the far side, the USB stacks
+   nearer); its sockets, SoC, memory and can from the OpenSCAD Raspberry Pi library's Pi 4 (its frame x across, y
+   along: our z = 56 − its x), which agrees with the drawing on every port; its VL805, PHY, PMIC, inductors and PoE
+   header cast down from the photo; its silk, copper, mask and 28 small parts from the photo; its camera and display
+   sockets 15 contacts at 1 mm, their lock a grey bar up the outer side, contacts tin; every chip's marking as read.
+   Still to do: its audio jack (drawn as a 3.5 mm jack of its size, not its own body), its LEDs, the small parts by its
+   power chip that its inductors' footprints hide, its underside (no photo).
 4. The Meca500 checked the same way: each link and drive against its manual's drawing; how it moves against its limits.
    Its `joint-drive` (listed only as its materials) is the one item the breakdown queue leaves waiting: it is broken
    out (motor, reduction, encoder, bearings, each drawn) in this round, not before.

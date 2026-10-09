@@ -255,12 +255,17 @@ export function microSD(o: { D?: number; W?: number; H?: number; eject?: boolean
 /** A 2.54 mm pin header, rows × cols: its moulded strip 2.54 tall, its pins 0.64 mm square, 6.0 above the strip and 3.0
  *  through the board below it (Würth WR-PHD 6130xx21121, as KiCad's 3D models take them). Pins along x, rows along z,
  *  pin 1 at -x in the +z row. */
-export function pinHeader(rows: 1 | 2, cols: number, plate: 'gold' | 'tin' = 'gold'): BoardPart {
+export function pinHeader(rows: 1 | 2, cols: number, plate: 'gold' | 'tin' = 'gold', blocks = 0): BoardPart {
   const p = 2.54, L = cols * p, W = rows * p, base = 2.54, up = 6.0, down = 3.0, len = up + base + down;
-  const strip = piece('header insulator', 'header-insulator', [box('body', [L, base, W], [0, base / 2, 0], 'pbt', { color: HUE.black })]);
+  // (`blocks`: its insulator moulded in blocks of so many columns, each its top's long edges chamfered 0.35 mm, a groove
+  // 0.25 mm wide between them, as Raspberry Pi's photos show their headers'; else one strip)
+  const c = 0.35, g = 0.25, sec: V2[] = [[-W / 2, 0], [W / 2, 0], [W / 2, base - c], [W / 2 - c, base], [-W / 2 + c, base], [-W / 2, base - c]];
+  const strip = piece('header insulator', 'header-insulator', blocks > 0
+    ? Array.from({ length: Math.ceil(cols / blocks) }, (_, b): Solid => { const n = Math.min(blocks, cols - b * blocks), x0 = -L / 2 + b * blocks * p; return along('body', sec, [], n * p - g, x0 + g / 2, 'pbt', { color: HUE.black }); })
+    : [box('body', [L, base, W], [0, base / 2, 0], 'pbt', { color: HUE.black })]);
   const pins: Comp[] = [];
   // (numbered as headers are: pin 1 in the first row (+z), pin 2 beside it in the second, odd pins along the first row)
-  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: plate === 'tin' ? HUE.tin : HUE.gold, lead: c * rows + r })]));
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) pins.push(piece(`header pin ${c * rows + r + 1}`, 'header-pin', [box('lead', [0.64, len, 0.64], [(c - (cols - 1) / 2) * p, base + up - len / 2, ((rows - 1) / 2 - r) * p], 'brass', { color: plate === 'tin' ? HUE.tin : HUE.gold, finish: 'bright', lead: c * rows + r })]));
   return { comp: { name: `${rows * cols}-pin header`, item: `pin-header-${rows}x${cols}`, at: [0, 0, 0], kids: [strip, ...pins] }, size: [L, W, base + up], src: 'Würth WR-PHD 6130xx21121 (via KiCad\'s 3D model parameters): 2.54 mm pitch, 0.64 mm pins 6.0 mm above a 2.54 mm strip; their tails 3.0 mm below its seat (RS\'s listing of the WR-PHD: mating length 6 mm, tail 3 mm), through the board and out under it' };
 }
 
@@ -405,15 +410,18 @@ export function jstSH(n: number): BoardPart {
 /** A 0.5 mm FPC socket as a maker's 3D model gives its section (Raspberry Pi 5's camera/display and PCIe sockets): an
  *  upright wall D - 0.55 thick (cream), its cap D wide and 1.0 thick over it (its flip lock, brown), open at +x under the cap where the cable goes in;
  *  n contacts at 0.5 mm along it, each a spring on the wall's open face and a tail out to its pad. W wide, H tall. */
-export function fpcUpright(n: number, W: number, D: number, H: number): BoardPart {
-  const x0 = -D / 2, wt = D - 0.55;
+export function fpcUpright(n: number, W: number, D: number, H: number, o: { pitch?: number; body?: number; lock?: number; side?: boolean; tin?: boolean; src?: string } = {}): BoardPart {
+  const x0 = -D / 2, wt = D - 0.55, pitch = o.pitch ?? 0.5, lead = o.tin ? HUE.tin : HUE.gold;
   // (its moulded base cream, its flip lock along its top brown, as Raspberry Pi 5's photo shows them: the lock's top
-  // measured #9a7352 by photo.py colour, its photo and a render from its camera side by side)
-  const housing = piece('FPC housing', 'fpc-housing', [box('body', [wt, H - 1.0, W - 0.6], [x0 + wt / 2, (H - 1.0) / 2, 0], 'nylon', { color: HUE.ivory }), box('body', [D, 1.0, W], [0, H - 0.5, 0], 'nylon', { color: 0x9a7352 })]);
-  const contacts = Array.from({ length: n }, (_, i): Comp => { const z = (i - (n - 1) / 2) * 0.5;
-    return piece(`FPC contact ${i + 1}`, 'fpc-contact', [box('lead', [0.1, H - 1.6, 0.2], [x0 + wt + 0.05, 0.3 + (H - 1.6) / 2, z], 'phosphor-bronze', { color: HUE.gold }), box('lead', [0.8, 0.1, 0.22], [D / 2 + 0.2, 0.05, z], 'phosphor-bronze', { color: HUE.gold })]); });
+  // measured #9a7352 by photo.py colour, its photo and a render from its camera side by side; another board's as its
+  // photo shows, `o.body` and `o.lock`; `o.side`: its lock an upright bar along its closed side, its full height, as a
+  // Pi 4's photo shows its camera and display sockets', its body's top bare; `o.tin`: its contacts tin)
+  const lockBar = o.side ? box('body', [0.9, H, W], [x0 + 0.45, H / 2, 0], 'nylon', { color: o.lock ?? 0x9a7352 }) : box('body', [D, 1.0, W], [0, H - 0.5, 0], 'nylon', { color: o.lock ?? 0x9a7352 });
+  const housing = piece('FPC housing', 'fpc-housing', [o.side ? box('body', [wt - 0.9, H - 0.3, W - 0.6], [x0 + 0.9 + (wt - 0.9) / 2, (H - 0.3) / 2, 0], 'nylon', { color: o.body ?? HUE.ivory }) : box('body', [wt, H - 1.0, W - 0.6], [x0 + wt / 2, (H - 1.0) / 2, 0], 'nylon', { color: o.body ?? HUE.ivory }), lockBar]);
+  const contacts = Array.from({ length: n }, (_, i): Comp => { const z = (i - (n - 1) / 2) * pitch;
+    return piece(`FPC contact ${i + 1}`, 'fpc-contact', [box('lead', [0.1, H - 1.6, 0.2], [x0 + wt + 0.05, 0.3 + (H - 1.6) / 2, z], 'phosphor-bronze', { color: lead }), box('lead', [0.8, 0.1, 0.22], [D / 2 + 0.2, 0.05, z], 'phosphor-bronze', { color: lead })]); });
   const tabs = [-1, 1].map((sg): Comp => piece('FPC hold-down tab', 'fpc-tab', [box('term', [1.6, 1.2, 0.3], [x0 + 0.8, 0.6, sg * (W / 2 - 0.15)], 'brass', { color: HUE.tin })]));
-  return { comp: { name: `${n}-contact FPC socket (0.5 mm)`, item: `fpc-socket-${n}`, at: [0, 0, 0], kids: [housing, ...contacts, ...tabs] }, size: [D, W, H], src: `its outline and section as its board maker's 3D model gives it (${W} × ${D} × ${H} mm); ${n} contacts at 0.5 mm` };
+  return { comp: { name: `${n}-contact FPC socket (${pitch} mm)`, item: `fpc-socket-${n}`, at: [0, 0, 0], kids: [housing, ...contacts, ...tabs] }, size: [D, W, H], src: o.src ?? `its outline and section as its board maker's 3D model gives it (${W} × ${D} × ${H} mm); ${n} contacts at ${pitch} mm` };
 }
 /** A part as its board maker's mechanical 3D model gives it, there only as its outline (L × W × H mm) and not named in
  *  it: drawn as that, a moulded body, and said so. */
@@ -436,8 +444,9 @@ export function sideLeds(L: number, W: number, H: number, lights: { name: string
  *  substrate, its die, its nickel-plated copper lid over 86 % of it (typical of lidded FCBGAs), or as measured (`o.lid`
  *  mm across; `o.band`: a lid pressed with a raised band across its middle, so wide, its two edges' flanges `o.drop` mm
  *  lower, as a photo of it shows). */
-export function fcbgaLid(a: number, H: number, mark = '', o: { lid?: number; band?: number; drop?: number } = {}): Comp {
+export function fcbgaLid(a: number, H: number, mark = '', o: { lid?: number; band?: number; drop?: number; square?: boolean } = {}): Comp {
   const ball = 0.3, sub = 0.7, lid = H - ball - sub, la = o.lid ?? a * 0.86, share = (PI / 6) * (0.4 / 0.65) ** 2;
+  // (`o.square`: the band a square in the lid's middle, its rim round it lower: a Pi 4's BCM2711's, as its photo shows)
   if (o.band) {
     const d = o.drop ?? 0.3, top = ball + sub + lid;
     return { name: 'system-on-chip', item: 'soc-package', at: [0, 0, 0], kids: [
@@ -446,7 +455,7 @@ export function fcbgaLid(a: number, H: number, mark = '', o: { lid?: number; ban
       piece('die', 'si-die', [box('die', [a * 0.45, 0.6, a * 0.45], [0, ball + sub + 0.3, 0], 'silicon')]),
       // (its flanges along two edges, the band raised between them carrying its marking)
       piece('lid', 'heat-spreader', [{ role: 'tab', shape: { box: [la, lid - d, la] }, at: [0, ball + sub + (lid - d) / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3 },
-        { role: 'tab', shape: { box: [la, d, o.band] }, at: [0, top - d / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3, ...(mark ? { text: mark, ink: 0x5a5c60 } : {}) }]),
+        { role: 'tab', shape: { box: [o.square ? o.band : la, d, o.band] }, at: [0, top - d / 2, 0], mat: 'copper', color: 0xc9cbcd, shell: 0.3, ...(mark ? { text: mark, ink: 0x5a5c60 } : {}) }]),
     ] };
   }
   return { name: 'system-on-chip', item: 'soc-package', at: [0, 0, 0], kids: [

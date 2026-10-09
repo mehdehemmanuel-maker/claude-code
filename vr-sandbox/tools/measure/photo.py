@@ -306,6 +306,12 @@ def cmd_small(a):
     pxmm = c.get('scale_px_per_mm') or 9.7; out = []; unnamed = []; tins = []
     CASES = [(0.42, '0201', 0.6, 0.3), (0.66, '0402', 1.0, 0.5), (1.0, '0603', 1.6, 0.8), (1.45, '0805', 2.0, 1.25), (9, '1206', 3.2, 1.6)]
     why = [to_px(c, *map(float, w.split(','))) for w in (a.why or [])]
+    # (what each point asked about is, before any blob: left out as under a drawn part, a word or a hole, or which mask
+    # its colour falls in)
+    for w, (X, Y) in zip(a.why or [], why):
+        X_, Y_ = int(round(X)), int(round(Y))
+        print(f'  why {w}: ' + ('left out (under a drawn part or its shadow, a word, a hole or a skip)' if not keep[Y_, X_] else
+              f'HSV {hsv[Y_, X_].tolist()}: ' + ', '.join(n for n, m_ in (('mask', blue), ('tan', tanpx), ('bright', bright), ('dark', darkpx)) if m_[Y_, X_]) or 'in no mask'))
     for src, left in masks:
       for er in range(a.erode, a.erode + 4):
         lab, n = ndimage.label(ndimage.binary_erosion(left, iterations=er) if er else left); last = er == a.erode + 3
