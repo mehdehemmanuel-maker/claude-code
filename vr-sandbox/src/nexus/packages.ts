@@ -266,25 +266,27 @@ export function axialResistorSolids(L: number, D: number, R: number, leadD = 0.6
 export const axialBody = (W: number): [number, number, number] => (W <= 0.125 ? [3.6, 1.6, 0.5] : W <= 0.25 ? [6.3, 2.5, 0.6] : W <= 0.5 ? [9, 3.5, 0.6] : [12, 5, 0.8]);
 
 // ---- LEDs -------------------------------------------------------------------------------------------------------------
-/** A through-hole LED of s mm (T-1 3 mm, T-1¾ 5 mm, 10 mm; typical of makers' drawings): its clear epoxy lens, a domed
+/** A through-hole LED of s mm (T-1 3 mm, T-1¾ 5 mm, 10 mm; typical of makers' drawings): its epoxy lens (diffused, as
+ *  Adafruit's own 5 mm LEDs are, e.g. its 299; or water clear), a domed
  *  cylinder on a flange, the flange cut flat on the cathode's side (the mark a hand finds it by; cut to the lens's own
  *  radius, an estimate); its two leads 2.54 mm apart, the cathode's (shorter) ending in the anvil whose reflector cup
  *  holds the die, the anode's in the post; a bond wire from the die's top to the post. */
-export function ledSolids(s: number, die: 'gan' | 'algainp'): Solid[] {
+export function ledSolids(s: number, die: 'gan' | 'algainp', lens: 'diffused' | 'clear' = 'diffused'): Solid[] {
   const D = s, F = s + (s <= 3 ? 0.8 : 0.8 + 0.1 * (s - 3)), H = s <= 3 ? 5.3 : s <= 5 ? 8.6 : 13.8, fl = 1.0, R = D / 2, y = 0.42 * H, lw = 0.5;
-  const lens: [number, number][] = [[0, fl], [R, fl], [R, H - R]];
-  for (let k = 1; k <= 12; k++) { const a = (Math.PI / 2) * (k / 12); lens.push([R * Math.cos(a), H - R + R * Math.sin(a)]); }
+  const lens0: [number, number][] = [[0, fl], [R, fl], [R, H - R]], look = lens === 'diffused' ? { finish: 'diffused' } : {};
+  for (let k = 1; k <= 12; k++) { const a = (Math.PI / 2) * (k / 12); lens0.push([R * Math.cos(a), H - R + R * Math.sin(a)]); }
   const rim: [number, number][] = Array.from({ length: 48 }, (_, k): [number, number] => { const a = (2 * Math.PI * k) / 48; return [Math.max((F / 2) * Math.cos(a), -R), (F / 2) * Math.sin(a)]; });
   const aw = Math.min(1.8, 0.32 * s), ah = 0.9, px = 1.27;
   return [
-    { role: 'body', shape: { lathe: [...lens, [0, fl]] }, at: [0, 0, 0], mat: 'epoxy-clear' },
-    { role: 'body', shape: { prism: { pts: rim, L: fl } }, at: [0, fl / 2, 0], rot: [-Math.PI / 2, 0, 0], mat: 'epoxy-clear' },
+    { role: 'body', shape: { lathe: [...lens0, [0, fl]] }, at: [0, 0, 0], mat: 'epoxy-clear', ...look },
+    { role: 'body', shape: { prism: { pts: rim, L: fl } }, at: [0, fl / 2, 0], rot: [-Math.PI / 2, 0, 0], mat: 'epoxy-clear', ...look },
     { role: 'lead', shape: { box: [lw, 25 + y, lw] }, at: [-px, (y - 25) / 2, 0], mat: 'copper', inBody: lw * lw * y, lead: 0 },
     { role: 'lead', shape: { box: [aw, ah, lw] }, at: [-px + aw / 2 - lw / 2, y + ah / 2, 0], mat: 'copper', inBody: aw * ah * lw, lead: 0 },
     { role: 'lead', shape: { box: [lw, 27 + y, lw] }, at: [px, (y - 27) / 2, 0], mat: 'copper', inBody: lw * lw * y, lead: 1 },
     { role: 'lead', shape: { box: [0.8, 0.6, lw] }, at: [px - 0.15, y + 0.3, 0], mat: 'copper', inBody: 0.8 * 0.6 * lw, lead: 1 },
+    ...[-1, 1].map((sg): Solid => ({ role: 'lead', shape: { box: [0.2, 0.3, lw] }, at: [-px + aw / 2 - lw / 2 + sg * (aw / 2 - 0.1), y + ah + 0.15, 0], mat: 'copper', inBody: 0.2 * 0.3 * lw, lead: 0 })),
     { role: 'die', shape: { box: [0.25, 0.12, 0.25] }, at: [-px + aw / 2 - lw / 2, y + ah + 0.06, 0], mat: die },
-    { role: 'wire', shape: { tube: { r: 0.0125, pts: [[-px + aw / 2 - lw / 2, y + ah + 0.12, 0], [0, y + ah + 0.9, 0], [px - 0.15, y + 0.6, 0]] } }, at: [0, 0, 0], mat: 'gold' },
+    { role: 'wire', shape: { tube: { r: 0.0125, pts: [[-px + aw / 2 - lw / 2, y + ah + 0.12, 0], [-0.2, y + ah + 0.42, 0], [px - 0.15, y + 0.6, 0]] } }, at: [0, 0, 0], mat: 'gold' },
   ];
 }
 /** A surface LED's dies: three in a 5050 (one for each colour of an RGB, or three of one), else one. */

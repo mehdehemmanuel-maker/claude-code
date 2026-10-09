@@ -15,7 +15,7 @@ import { compPart, componentOf } from '../components';
 import { pinHeader, usbCPlug } from '../boardparts';
 import { resolve } from '../inventory';
 import type { Part } from '../kits';
-import { HANDS, ironInStand } from '../kit-solder';
+import { CHP170_OPEN, HANDS, ironInStand, S11 } from '../kit-solder';
 import { grade, idealVolume, type JointShape } from '../solder-joint';
 import { ALLOY, cut, HAND, LAYOUT, leadAt, letGo, newBench, payOut, pinAt, PROTO, protoHold, readout, takeUp, tick, wipe, type Bench, type BenchJoint, type PlanId, type Thing, type V3 } from '../solder-lesson';
 
@@ -29,6 +29,11 @@ function drawn(words: string): Part {
  *  stand beyond it pointing away (its rear ring, where the handle lies, toward you), the cleaner behind it, the solder's
  *  reel behind the breadboard. */
 const PLACES = { stand: [150, 0, 70] as V3, cleaner: [215, 0, -40] as V3, reel: [-95, 0, -60] as V3, cutters: [-230, 5.8, 100] as V3, flux: [-175, 8, 5] as V3 };
+/** The second lesson's: the stand further right and nearer you, so the iron lying in it points past the helping hands'
+ *  right clip, not at it (their bar's end at x 125); the cleaner beyond it, out of the iron's way. */
+const PLACES_PROTO = { ...PLACES, stand: [185, 0, 95] as V3, cleaner: [270, 0, -30] as V3 };
+/** Whether a mesh is only drawn for looks (a contact shadow), not a thing's surface. */
+const decor = (o: THREE.Object3D): boolean => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.userData.decor) return true; return false; };
 /** The stand turned a quarter so its front (where the tip lies) points away from you (−z). */
 const STAND_YAW = PI / 2;
 type Seated = 'resistor' | 'led' | 'link';
@@ -39,9 +44,9 @@ const WAIT: Record<Seated, { at: V3; rot: V3 }> = { resistor: { at: [-35, 0, 22]
 const midOf = (k: Seated): [number, number] => { const q = PROTO.seats[k]; return [(q[0]![0] + q[1]![0]) / 2, (q[0]![1] + q[1]![1]) / 2]; };
 const SEAT: Record<Seated, { at: V3; rot: V3 }> = { resistor: { at: [midOf('resistor')[0], 0, midOf('resistor')[1]], rot: [0, 0, 0] }, led: { at: [midOf('led')[0], 3, midOf('led')[1]], rot: [0, PI / 2, 0] }, link: { at: [midOf('link')[0], 0, midOf('link')[1]], rot: [0, 0, 0] } };
 /** The cutters' jaws' tip and their rivet, in their own frame (m): Hakko's 138 mm over all, the rivet 15 mm behind the
- *  tip (src/nexus/kit-solder.ts); how far each half swings open about it, held, its spring opening them (rad: the
- *  jaws about 3 mm apart at the tip, an estimate). */
-const JAWS = { tip: 0.138, rivet: 0.123, open: 0.1 };
+ *  tip (src/nexus/kit-solder.ts); how far each half stands open about it, its spring holding them so till a hand
+ *  closes them (rad: the jaws about 5 mm apart at the tip, the grips about 20° apart: an estimate). */
+const JAWS = { tip: 0.138, rivet: 0.123, open: CHP170_OPEN };
 /** A tube along points given in mm. */
 const tubeMm = (pts: [number, number, number][], r: number, sides = 6): THREE.TubeGeometry => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x * MM, y * MM, z * MM)), false, 'centripetal'), 32, r * MM, sides, false);
 
@@ -53,13 +58,13 @@ export class SolderBench {
   private home = {} as Partial<Record<Thing, { at: THREE.Vector3; rot: THREE.Euler }>>;
   private held: Record<'right' | 'left', Thing | null> = { right: null, left: null };
   /** each joint's pad face (its +y out of the pad), its solder as a cone or a ball, and the lead standing out of it */
-  private fillets: { at: THREE.Group; cone: THREE.Mesh; ball: THREE.Mesh; stub: THREE.Mesh | null }[] = [];
+  private fillets: { at: THREE.Group; cone: THREE.Mesh; ball: THREE.Mesh; stub: THREE.Mesh | null; rosin: THREE.Mesh }[] = [];
   /** a seated part's leads as they are bent into its holes, and the straight ones it came with */
   private looks: Partial<Record<Seated, { straight: THREE.Object3D[]; bent: THREE.Object3D[] }>> = {};
   /** cut-off leads falling to the bench and lying there */
   private pieces: { m: THREE.Mesh; v: number; down: boolean; len: number }[] = [];
   /** the cutters' two halves, swung about their rivet, and how long they stay shut after a cut */
-  private jaws: { halves: [THREE.Object3D, THREE.Object3D]; shut: number } | null = null;
+  private jaws: { halves: [THREE.Object3D, THREE.Object3D]; leaves: THREE.Object3D[]; home: Map<THREE.Object3D, { p: THREE.Vector3; q: THREE.Quaternion }>; shut: number } | null = null;
   private wire: THREE.Mesh; private wireDir = new THREE.Vector3(0.3, -0.45, -0.84).normalize();
   private tipMeshes: THREE.Mesh[] = [];
   private card: THREE.Mesh; private cardCtx: CanvasRenderingContext2D | null; private cardTex: THREE.CanvasTexture; private cardText = ''; private cardAt = 0;
@@ -69,8 +74,12 @@ export class SolderBench {
   /** for words and tests: where the tip and the wire's end are, bench mm, when no hand holds them */
   private script: { tip: V3 | null; wire: V3 | null; cutters: boolean } = { tip: null, wire: null, cutters: false };
 
+  private places: typeof PLACES;
+  /** where the iron lies in its stand, found once by letting it down onto the rings (restIron) */
+  private ironRest: { at: THREE.Vector3; q: THREE.Quaternion } | null = null;
+
   constructor(readonly plan: PlanId = 'pico') {
-    this.bench = newBench(plan);
+    this.bench = newBench(plan); this.places = plan === 'proto' ? PLACES_PROTO : PLACES;
     // (the bench: a plywood top 25 mm thick on four legs, as a workbench is (its height set where it is placed); the
     // lesson's things on it)
     const wood = new THREE.MeshStandardMaterial({ color: 0x9a7a55, roughness: 0.75 }), top = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.025, 0.38), wood);
@@ -92,21 +101,23 @@ export class SolderBench {
       this.obj.link = this.link(); this.obj.link.position.set(...WAIT.link.at.map((v) => v * MM) as V3); this.obj.link.rotation.set(...WAIT.link.rot); this.group.add(this.obj.link);
       this.bendLeads();
     }
-    add(drawn('ironstand s-11'), PLACES.stand, [0, STAND_YAW, 0]); add(drawn('tipcleaner 599b'), PLACES.cleaner);
+    add(drawn('ironstand s-11'), this.places.stand, [0, STAND_YAW, 0]); add(drawn('tipcleaner 599b'), this.places.cleaner);
     this.obj.iron = add(drawn('solderiron pinecil-v2'), [0, 0, 0]); this.placeIronInStand();
     // (the solder: its reel behind the breadboard, the wire out of the fingers when it is in a hand)
-    this.obj.solder = add(drawn('solderreel ts-635050'), PLACES.reel);
+    this.obj.solder = add(drawn('solderreel ts-635050'), this.places.reel);
     // (its free end off the top of the winding (14.9 mm round its middle 19 up: the reel's own figures), down onto the
     // bench, while no hand holds it; and the cutters the joint lesson trims with, lying beside the headers)
     // (centripetal, so the curve does not swing below its points and the wire dip under the bench where it lands)
-    const [rx, , rz] = PLACES.reel, tail = [[rx, 33.9, rz], [rx + 10, 33.4, rz + 1], [rx + 19, 22, rz + 4], [rx + 23, 7, rz + 6], [rx + 27, 0.6, rz + 8], [rx + 31, 0.27, rz + 10], [rx + 38, 0.27, rz + 12]].map(([x, y, z]) => new THREE.Vector3(x! * MM, y! * MM, z! * MM));
+    const [rx, , rz] = this.places.reel, tail = [[rx, 33.9, rz], [rx + 10, 33.4, rz + 1], [rx + 19, 22, rz + 4], [rx + 23, 7, rz + 6], [rx + 27, 0.6, rz + 8], [rx + 31, 0.27, rz + 10], [rx + 38, 0.27, rz + 12]].map(([x, y, z]) => new THREE.Vector3(x! * MM, y! * MM, z! * MM));
     this.tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tail, false, 'centripetal'), 48, HAND.wire / 2 * MM, 6, false), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 })); this.group.add(this.tail);
     // (the cutters on the bench to the headers' left, their jaws' tips toward them and clear of the breadboard (its end
     // at x -42): 138 mm long, turned 0.35 rad, their tips at about x -100, z 53)
-    const cutters = drawn('flushcutter chp-170'); this.obj.cutters = add(cutters, PLACES.cutters, [0, 0.35, 0]);
+    const cutters = drawn('flushcutter chp-170'); this.obj.cutters = add(cutters, this.places.cutters, [0, 0.35, 0]);
     // (the flux pen the pack buys lying capped beside them, on its side: seldom needed for through-hole work (Adafruit))
-    add(drawn('fluxpen cq4lf'), PLACES.flux, [0, 0.25, PI / 2]);
-    { const hs: THREE.Object3D[] = []; this.obj.cutters.traverse((o) => { if (o.userData.part === cutters.parts?.[0] || o.userData.part === cutters.parts?.[1]) hs.push(o); }); if (hs.length === 2) this.jaws = { halves: [hs[0]!, hs[1]!], shut: 0 }; }
+    add(drawn('fluxpen cq4lf'), this.places.flux, [0, 0.25, PI / 2]);
+    { const hs: THREE.Object3D[] = [], ls: THREE.Object3D[] = [], spring = cutters.parts?.find((p) => /spring/.test(p.name));
+      this.obj.cutters.traverse((o) => { if (o.userData.part === cutters.parts?.[0] || o.userData.part === cutters.parts?.[1]) hs.push(o); if (spring && spring.parts?.includes(o.userData.part)) ls.push(o); });
+      if (hs.length === 2) { const home = new Map<THREE.Object3D, { p: THREE.Vector3; q: THREE.Quaternion }>(); for (const o of [...hs, ...ls]) home.set(o, { p: o.position.clone(), q: o.quaternion.clone() }); this.jaws = { halves: [hs[0]!, hs[1]!], leaves: ls, home, shut: 0 }; this.swing(JAWS.open); } }
     this.wire = new THREE.Mesh(new THREE.CylinderGeometry(HAND.wire / 2 * MM, HAND.wire / 2 * MM, 1, 8).translate(0, -0.5, 0).rotateX(PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
     this.wire.visible = false; this.group.add(this.wire);
     for (const k of Object.keys(this.obj) as Thing[]) this.home[k] = { at: this.obj[k]!.position.clone(), rot: this.obj[k]!.rotation.clone() };
@@ -138,9 +149,27 @@ export class SolderBench {
    *  the sponge (the stand's own frame, turned and placed as the stand is). */
   private placeIronInStand(): void {
     const o = this.obj.iron!; if (o.parent !== this.group) this.group.attach(o);
-    const r = ironInStand(), turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), STAND_YAW);
-    const at = new THREE.Vector3(...r.at).multiplyScalar(MM).applyQuaternion(turn).add(new THREE.Vector3(...PLACES.stand).multiplyScalar(MM));
-    o.position.copy(at); o.quaternion.copy(turn).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(r.dir[1], r.dir[0])));
+    if (!this.ironRest) this.ironRest = this.restIron();
+    o.position.copy(this.ironRest.at); o.quaternion.copy(this.ironRest.q);
+  }
+  /** The iron as it lies in the S-11 by its own weight: laid first along the line ironInStand gives, then pitched and
+   *  let down until its underside, its own shape where it passes each ring, meets the bottom of that ring's inside. */
+  private restIron(): { at: THREE.Vector3; q: THREE.Quaternion } {
+    const o = this.obj.iron!, r = ironInStand(), turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), STAND_YAW), base = new THREE.Vector3(...this.places.stand).multiplyScalar(MM);
+    o.position.copy(new THREE.Vector3(...r.at).multiplyScalar(MM).applyQuaternion(turn).add(base)); o.quaternion.copy(turn).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(r.dir[1], r.dir[0])));
+    const rings = [S11.rear, S11.front].map((g) => ({ x: g.x, bottom: S11.feet + g.top - S11.t - g.id, r: g.id / 2 })), inv = turn.clone().invert(), v = new THREE.Vector3(), axis = new THREE.Vector3(0, 0, 1).applyQuaternion(turn);
+    for (let k = 0; k < 4; k++) {
+      this.group.updateMatrixWorld(true); const low = [Infinity, Infinity];
+      o.traverse((m) => { const mesh = m as THREE.Mesh, pos = mesh.isMesh && !decor(mesh) ? mesh.geometry.attributes.position : undefined; if (!pos) return;
+        for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld); this.group.worldToLocal(v); v.sub(base).applyQuaternion(inv).divideScalar(MM);
+          rings.forEach((g, j) => { if (Math.abs(v.x - g.x) < 5 && Math.abs(v.z) < g.r) low[j] = Math.min(low[j]!, v.y); }); } });
+      if (!Number.isFinite(low[0]) || !Number.isFinite(low[1])) break;
+      // (pitched about the stand's across-axis through the rear contact, then let down onto the rear ring)
+      const d0 = rings[0]!.bottom - low[0]!, d1 = rings[1]!.bottom - low[1]!, q = new THREE.Quaternion().setFromAxisAngle(axis, Math.atan2(d1 - d0, rings[1]!.x - rings[0]!.x));
+      const pivot = new THREE.Vector3(rings[0]!.x, low[0]!, 0).multiplyScalar(MM).applyQuaternion(turn).add(base);
+      o.position.sub(pivot).applyQuaternion(q).add(pivot); o.quaternion.premultiply(q); o.position.y += d0 * MM;
+    }
+    return { at: o.position.clone(), q: o.quaternion.clone() };
   }
   /** The tip's point, where it is now, in the bench's mm. */
   private tipNow(): V3 { const w = this.obj.iron!.localToWorld(new THREE.Vector3(0.155, 0, 0)); const l = this.group.worldToLocal(w); return [l.x / MM, l.y / MM, l.z / MM]; }
@@ -206,7 +235,7 @@ export class SolderBench {
     if (k === 'proto' && b.placed.proto) { if (o.parent !== this.group) this.group.add(o); const h = protoHold(); o.position.set(h[0] * MM, (h[1] - 0.8) * MM, h[2] * MM); o.rotation.set(PI, 0, 0); return; }
     if ((k === 'resistor' || k === 'led' || k === 'link') && b.placed[k]) { this.obj.proto!.add(o); o.position.set(...SEAT[k].at.map((v) => v * MM) as V3); o.rotation.set(...SEAT[k].rot); this.look(k, true); return; }
     if (k === 'resistor' || k === 'led' || k === 'link') this.look(k, false);
-    if (k === 'cutters') this.swing(0);
+    if (k === 'cutters') this.swing(JAWS.open);
     home();
   }
   /** Is the LED held the wrong way round over its holes: its long lead (its anode) nearer the − rail's hole than its
@@ -242,10 +271,12 @@ export class SolderBench {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r * MM, r * MM, len * MM, q.shape.round ? 8 : 4), f.stub?.material ?? new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
     m.position.copy(mid); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); m.castShadow = true; this.group.add(m); this.pieces.push({ m, v: 0, down: false, len });
   }
-  /** The cutters' halves swung open by a (rad) each about their rivet. */
+  /** The cutters' halves swung open by a (rad) each about their rivet (as drawn they stand open by JAWS.open). */
   private swing(a: number): void {
-    if (!this.jaws) return; const piv = new THREE.Vector3(JAWS.rivet, 0, 0), Y = new THREE.Vector3(0, 1, 0);
-    this.jaws.halves.forEach((h, i) => { const th = i === 0 ? -a : a; h.rotation.set(0, th, 0); h.position.copy(piv).sub(piv.clone().applyAxisAngle(Y, th)); });
+    if (!this.jaws) return; const j = this.jaws, piv = new THREE.Vector3(JAWS.rivet, 0, 0), Y = new THREE.Vector3(0, 1, 0);
+    // (each half, and its own leaf of the spring (the first leaf the first half's), turned about the rivet)
+    const turn = (o: THREE.Object3D, th: number) => { const h = j.home.get(o)!, q = new THREE.Quaternion().setFromAxisAngle(Y, th); o.position.copy(h.p).sub(piv).applyQuaternion(q).add(piv); o.quaternion.copy(q).multiply(h.q); };
+    const d = a - JAWS.open; j.halves.forEach((h, i) => turn(h, i === 0 ? -d : d)); j.leaves.forEach((l, i) => turn(l, i === 0 ? -d : d));
   }
 
   // ---- words, for a screen and for tests -----------------------------------------------------------------------------
@@ -300,7 +331,7 @@ export class SolderBench {
     if (!ironHand && this.script.tip && b.iron.inHand) this.poseIronAt(this.script.tip);
     if (!b.iron.inHand) tip = null; if (!b.wire.inHand) wire = null;
     // (the tip drawn through the brass wipes it)
-    if (tip && Math.hypot(tip[0] - PLACES.cleaner[0], tip[1] - 35, tip[2] - PLACES.cleaner[2]) < 26) wipe(b);
+    if (tip && Math.hypot(tip[0] - this.places.cleaner[0], tip[1] - 35, tip[2] - this.places.cleaner[2]) < 26) wipe(b);
     const used = b.wire.used; tick(b, dt, tip, wire);
     if (b.wire.used > used && (tip || wire)) this.puff(wire ?? tip!);
     if (wireHand) this.wire.scale.set(1, 1, Math.max(0.001, b.wire.out * MM));
@@ -314,15 +345,17 @@ export class SolderBench {
       const any = q.j.solder + q.j.cold + q.j.dropped > 0.01; f.cone.visible = any && fill <= 1.6 && q.j.dropped < 0.2; f.ball.visible = any && !f.cone.visible;
       if (f.cone.visible) f.cone.scale.set(1, Math.min(1, Math.max(0.15, (fill - 0.35) / 0.65)), 1);
       if (f.ball.visible) { const r = Math.cbrt((3 * (q.j.solder + q.j.cold + q.j.dropped)) / (4 * PI)) * MM; f.ball.scale.setScalar(r); f.ball.position.y = r * 0.7; }
+      f.rosin.visible = q.j.solder > 0.01;
       if (f.stub) { f.stub.visible = !!q.part && b.placed[q.part] === true && q.lead > 0.05; f.stub.scale.set(1, Math.max(1e-4, q.lead * MM), 1); }
       const molten = q.j.T >= ALLOY.liquidus, cold = g === 'cold', burnt = g === 'overheated';
-      m.color.setHex(burnt ? 0x8a8072 : cold ? 0x9a9da1 : molten ? 0xe8ecf0 : 0xc8ccd0); m.roughness = cold ? 0.75 : burnt ? 0.6 : molten ? 0.08 : 0.22; });
+      // (63/37 set bright but satin, not a mirror; molten, a mirror; cold, grey and grainy)
+      m.color.setHex(burnt ? 0x8a8072 : cold ? 0x9a9da1 : molten ? 0xe8ecf0 : 0xc2c6ca); m.roughness = cold ? 0.75 : burnt ? 0.6 : molten ? 0.08 : 0.34; });
     // (a cut-off lead falls (9.81 m/s²) and lies where it lands: on the hands' base, or the bench)
     for (const p of this.pieces) { if (p.down) continue; p.v += 9.81 * dt; p.m.position.y -= p.v * dt; const x = p.m.position.x / MM - PROTO.hands[0], z = p.m.position.z / MM - PROTO.hands[2];
       const floor = (Math.abs(x) < HANDS.base[0] / 2 && Math.abs(z) < HANDS.base[2] / 2 ? HANDS.base[1] : 0) * MM, r = (p.m.geometry as THREE.CylinderGeometry).parameters.radiusTop;
       if (p.m.position.y - r <= floor + (p.len / 2) * MM * Math.abs(new THREE.Vector3(0, 1, 0).applyQuaternion(p.m.quaternion).y)) { p.down = true; p.m.position.y = floor + r; p.m.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (x * 7.3) % PI).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), PI / 2)); } }
     // (the cutters' spring holds their jaws open in a hand; the trigger shuts them a moment)
-    if (this.jaws) { const inHand = this.held.right === 'cutters' || this.script.cutters; this.jaws.shut = Math.max(0, this.jaws.shut - dt); this.swing(inHand && this.jaws.shut <= 0 ? JAWS.open : 0); }
+    if (this.jaws) { this.jaws.shut = Math.max(0, this.jaws.shut - dt); this.swing(this.jaws.shut > 0 ? 0 : JAWS.open); }
     // (the tip bright where it is tinned, dark where it has oxidised)
     for (const m of this.tipMeshes) { const mat = m.material as THREE.MeshStandardMaterial; mat.color.setHex(b.iron.tinned > 0 ? 0xd9dcde : 0x4a4038); mat.roughness = b.iron.tinned > 0 ? 0.15 : 0.7; }
     for (const p of this.puffs) { p.t += dt; p.s.position.y += 0.03 * dt; p.s.scale.multiplyScalar(1 + 0.6 * dt); (p.s.material as THREE.SpriteMaterial).opacity = Math.max(0, 0.35 * (1 - p.t / 1.6)); p.s.visible = p.t < 1.6; }
@@ -388,11 +421,15 @@ export class SolderBench {
       if (this.plan === 'pico') { const p = pinAt(i + 1); at.position.set(p[0] * MM, p[1] * MM, p[2] * MM); this.group.add(at); }
       else { const [x, z] = PROTO.seats[q.part!][q.part === 'resistor' ? i : q.part === 'led' ? i - 2 : i - 4]!; at.position.set(x * MM, -1.6 * MM, z * MM); at.rotation.set(PI, 0, 0); this.obj.proto!.add(at); }
       const cone = new THREE.Mesh(coneOf(q.shape), m), ball = new THREE.Mesh(ballGeo, m); cone.visible = false; ball.visible = false; at.add(cone, ball);
+      // (what the wire's rosin core leaves: a glassy amber ring flowed about a millimetre past the pad (2 % rosin in
+      // the reel's wire; its spread an estimate))
+      const rosin = new THREE.Mesh(new THREE.RingGeometry(q.shape.pad / 2 * MM, (q.shape.pad / 2 + 1.1) * MM, 32).rotateX(-PI / 2), new THREE.MeshStandardMaterial({ color: 0xb8792c, transparent: true, opacity: 0.5, roughness: 0.12, depthWrite: false }));
+      rosin.position.y = 0.02 * MM; rosin.visible = false; at.add(rosin);
       let stub: THREE.Mesh | null = null;
       if (q.part) { const sq = !q.shape.round, r = (sq ? q.shape.pin / Math.SQRT2 : q.shape.pin / 2) * MM, lead = this.looks[q.part]?.bent[0] as THREE.Mesh | undefined;
         stub = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, sq ? 4 : 8).translate(0, 0.5, 0), lead?.material ?? new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
         if (sq) stub.geometry.rotateY(PI / 4); stub.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...q.dir)); stub.castShadow = true; stub.visible = false; at.add(stub); }
-      this.fillets.push({ at, cone, ball, stub });
+      this.fillets.push({ at, cone, ball, stub, rosin });
     });
   }
   /** The link: Adafruit's 22 AWG solid hook-up wire (its 1311: 1.5 mm over its red PVC, UL1007), stripped at each end

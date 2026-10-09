@@ -420,8 +420,18 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    joints, each lead trimmed with the cutters in the right hand; played through by words in the browser (every step
    done, each lead left 1.5 mm) and drawn (parts seated, board upside down in the clips, leads splayed and standing,
    offcuts on the hands' base). Still simplified, said so: a part's leads bend themselves as it goes in (the hand does
-   not bend them), the board lies flat on the bench with leads through it while parts go in. Next: judge it blind;
-   the Pico lesson's re-judge.
+   not bend them), the board lies flat on the bench with leads through it while parts go in. Played by hand on an
+   emulated Quest 3 too (parts in, the LED refused lying and reversed, the board refused until turned over: done; the
+   joints and trimming by hand still to finish, the emulator's trigger presses held till the bench answers). Judged
+   blind (2026-10-09): the Perma-Proto's top, the resistor, the link, the offcuts and the circuit taken for real;
+   mended by cause from its findings: the iron let down onto its rings by its own shape (it hovered on an assumed
+   radius), the second bench's stand moved so the iron points past the clips, the underside's strips cut at every
+   hole (they ran across them), its gold bright (its listing: gold-plated), the joints satin with a rosin ring, the
+   LED diffused deep red (Adafruit's 299, priced as its own line beside the pack's resistor LED) with a low bond
+   wire and a cupped anvil, the clips' teeth a millimetre deep and closed square on the board, the cleaner's brass
+   packed to its mouth, the CHP-170 drawn standing open on a V spring. Still from that judge: the iron's tip and
+   cord's strain relief, the S-11's look, the magnifier (flat glass), wound solder's texture, the bench's mat and the
+   missing kit (power to light the LED, wick, glasses, a lamp). Next: re-judge blind; light the LED from a supply.
 7. Prices for the common parts the build packs list without one (motors, hot ends, boards, belts, rails…).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,

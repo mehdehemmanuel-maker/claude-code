@@ -426,8 +426,13 @@ export function pcb(b: PcbSpec): Comp {
     { role: 'frame', shape: { prism: { pts: inner, L: cu, holes: innerHoles } }, at: [0, -t / 2, 0], rot: [Math.PI / 2, 0, 0], mat: 'copper', inBody: 0 },
     layer('film', 0.02, 0.01, '', { color: mask }), ...(b.under === 'bare' ? [] : [layer('film', 0.02, -t - 0.01, '', { color: b.under ?? mask })]),
     ...all.flatMap((h) => h.bare ? [] : h.square ? [...(h.pad > h.d ? [ring(h, 0.005), ring(h, -t - 0.04)] : []), barrel(h)] : [h.pad > h.d ? plated(h) : barrel(h)]),
-    // (its underside's copper strips, bare where it has no mask)
-    ...(b.strips ?? []).map(([x, z, lx, wz]) => box('pad', [lx, 0.035, wz], [x - b.L / 2, -t - 0.0175, b.W / 2 - z], 'copper', gold)),
+    // (its underside's copper strips, bare where it has no mask: each run of copper between the pads it joins, the
+    // holes left open through it, as an etched strip is)
+    ...(b.strips ?? []).flatMap(([x, z, lx, wz]) => { const cx = x - b.L / 2, cz = b.W / 2 - z, along = lx >= wz, len = along ? lx : wz, wide = along ? wz : lx, cut: [number, number][] = [];
+      for (const h of all) { const hx = h.x - b.L / 2 - cx, hz = b.W / 2 - h.z - cz, u = along ? hx : hz, v = along ? hz : hx, r = h.pad / 2 - 0.05; if (Math.abs(v) < wide / 2 + r && Math.abs(u) < len / 2 + r) cut.push([u - r, u + r]); }
+      cut.sort((p, q) => p[0] - q[0]); const runs: [number, number][] = []; let from = -len / 2;
+      for (const [a0, a1] of cut) { if (a0 > from) runs.push([from, Math.min(a0, len / 2)]); from = Math.max(from, a1); } if (from < len / 2) runs.push([from, len / 2]);
+      return runs.filter(([a0, a1]) => a1 - a0 > 0.02).map(([a0, a1]) => { const m = (a0 + a1) / 2, l = a1 - a0; return box('pad', along ? [l, 0.035, wz] : [lx, 0.035, l], [cx + (along ? m : 0), -t - 0.0175, cz + (along ? 0 : m)], 'copper', gold); }); }),
     ...castles.flatMap((q) => [lip(q, 0.005), lip(q, -t - 0.04), wall(q)]),
     // (the copper its photo shows under the mask, painted on the mask's top: nothing to weigh, the copper is in the board)
     ...(b.copper ? [box('film', [b.L, 0.001, b.W], [0, 0.0205, 0], '', { paint: { png: b.copper.png, ink: b.copper.hue } })] : []),

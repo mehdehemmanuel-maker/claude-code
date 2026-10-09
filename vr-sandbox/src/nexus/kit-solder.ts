@@ -123,6 +123,9 @@ export function tsTip(at = 103): Comp {
  *  (Adafruit's listing), a spring holding it open; cutting 1.3 mm (16 AWG) copper at most with 5 kg on its grips (Hakko).
  *  The CHP-170-A the same with a safety clip on its jaws that keeps a cut lead (Hakko's "type AF"): the plain one, as
  *  Adafruit sells it, has none. Its outline between those, and the clip's shape, an estimate. */
+/** How far each half of the CHP-170 stands open about its rivet, its spring holding it so (rad: its jaws about 5 mm
+ *  apart at the tip, its grips about 20° apart: an estimate, its maker gives no figure). */
+export const CHP170_OPEN = 0.17;
 export function chp170(withClip = false): Comp {
   const Lt = 138, jaw = 8, pivot = Lt - jaw - 6, headW = 13.5, t = 2.5;
   const steel = { color: 0x55595c, finish: 'ground' } as const;
@@ -150,10 +153,18 @@ export function chp170(withClip = false): Comp {
       // (its two ends rounded shut)
       { role: 'body', shape: { lathe: [[0, 0], [gr, 0], [gr - 0.2, 1.2], [gr - 1.4, 2.9], [0, 3.6]] }, at: [8, 0, -s * 11], rot: [0, 0, PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' },
       { role: 'body', shape: { lathe: [[0, 0], [gr, 0], [gr - 0.7, 1.4], [0, 2.2]] }, at: [pivot - 22, 0, -s * 5.7], rot: [0, -s * 0.14, -PI / 2], mat: 'pvc', color: 0xc4262e, finish: 'texture' }]);
-    return { name: `CHP-170 ${k ? 'lower' : 'upper'} half`, item: 'plier-jaw', at: [0, 0, 0], solids: [sol, arm], kids: [g] };
+    // (standing open about the rivet as its spring holds it: the upper half turned one way, the lower the other)
+    const th = -s * CHP170_OPEN, cx0 = pivot - 1;
+    return { name: `CHP-170 ${k ? 'lower' : 'upper'} half`, item: 'plier-jaw', at: [cx0 * (1 - Math.cos(th)), 0, cx0 * Math.sin(th)], turn: th, solids: [sol, arm], kids: [g] };
   };
   const rivet = piece('CHP-170 pivot rivet', 'plier-rivet', [post('term', 2.0, 2 * t + 0.6, [pivot - 1, -t - 0.3, 0], 'steel-low', { color: 0x9fa3a6, finish: 'bright' })]);
-  const spring = piece('CHP-170 spring', 'spring-leaf', [box('band', [22, 0.35, 5.6], [pivot - 22, 0, 0], 'steel-spring', { color: 0x8a8d90, finish: 'bright' })]);
+  // (its return spring: a strip bent to a V, its bend just behind the rivet, each leaf back to its own handle's inner
+  // side 34 mm behind the rivet, so it holds the jaws open (Adafruit: "spring-loaded"); its shape an estimate)
+  // (each leaf turned open with the half whose handle it presses, about the rivet)
+  const open = (p: V2, th: number): V2 => { const cx0 = pivot - 1, x = p[0] - cx0, z = p[1]; return [cx0 + x * Math.cos(th) + z * Math.sin(th), -x * Math.sin(th) + z * Math.cos(th)]; };
+  const leaf = (s: 1 | -1): Solid => { const th = s * CHP170_OPEN, a = open([pivot - 9, 0], th), b = open([pivot - 34, s * 3.9], th), len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return box('band', [len, 2.4, 0.35], [(a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2], 'steel-spring', { color: 0x8a8d90, finish: 'bright', rot: [0, -Math.atan2(b[1] - a[1], b[0] - a[0]), 0] }); };
+  const spring = piece('CHP-170 spring', 'spring-leaf', [leaf(-1), leaf(1)]);
   const clip = piece('CHP-170 safety clip', 'cutter-clip', [box('body', [7, 2.6, 6], [Lt - 5.5, t + 1.3, 1.5], 'pom', { color: 0xe9e4d6 })]);
   return { name: `Hakko CHP-170${withClip ? '-A' : ''} flush cutters`, item: `flushcutter-chp-170${withClip ? '-a' : ''}`, at: [0, 0, 0], kids: [half(1, 0), half(-1, 1), rivet, spring, ...(withClip ? [clip] : [])] };
 }
@@ -240,7 +251,8 @@ export function breadboard(points: number): Comp {
  *  apart (the first 3.81 in from its left edge), rows a–e and f–j 2.54 apart either side of a 7.62 gap, two pairs of
  *  rails 19.05 and 21.59 out from its middle, 30 holes each; two mounting holes 3.2 mm, not plated, at its middle line's
  *  ends 73.66 apart (2.9", its listing). Its underside bare (its listing: "no mask so you can easily cut traces"), each
- *  five holes of a column joined by a strip 0.41 mm wide and each rail by one 0.81, gold over copper. Its top as
+ *  five holes of a column joined by a strip 0.41 mm wide and each rail by one 0.81, gold over copper (its
+ *  listing: gold-plated pads; drawn bright, as plated gold is). Its top as
  *  Adafruit's photo of it shows it: white (#dcdcdc lit), its numbers, letters and words black, a red line by each + rail
  *  and a blue by each − (the board's tPlaceRed and tPlaceBlue layers, 0.41 wide), its corners round (the board file
  *  chamfers them 2.54; the photo's taken, the radius 2.5 an estimate). Its logo not drawn. Frame: its columns along x
@@ -258,7 +270,7 @@ export function permaProto(): Comp {
   // (its underside's copper: each column's five holes a strip, each rail a strip its length)
   const strips: [number, number, number, number][] = [...Array.from({ length: cols }, (_, i) => [1, -1].map((sg): [number, number, number, number] => [cx(i + 1), rz(sg * 8.89), 0.4064, 4 * p])).flat(),
     ...[...PP.plus, ...PP.minus].map((z): [number, number, number, number] => [L / 2, rz(z), (cols - 1) * p, 0.8128])];
-  const board = pcb({ L, W, t, layers: 2, holes: [], hole: PP.drill, more, mask: 0xdcdcdc, under: 'bare', strips, corner: 2.5 });
+  const board = pcb({ L, W, t, layers: 2, holes: [], hole: PP.drill, more, mask: 0xdcdcdc, under: 'bare', strips, corner: 2.5, bright: true });
   // (its silk, ink on its top: its column numbers over row j and under row a, its row letters at both ends, its words
   // across its middle; its rails' red and blue lines, a + at each + rail's ends and a short bar at each − rail's, as its
   // board file has them)
@@ -305,8 +317,10 @@ export function helpingHands(): Comp {
     const x0 = sx * (H.hold.span / 2 - 8), tip = (u: number) => x0 + sx * u, L = H.clip;
     const jaw = (sy: 1 | -1): Solid => { const y = (v: number) => yb + sy * v;
       // (its side: teeth along its first 16 mm, a pressed channel tapering to the pivot at 30, its lever out behind)
-      const teeth: V2[] = Array.from({ length: 9 }, (_, i): V2 => [tip(i * 2), y(i % 2 ? 0.8 : 1.3)]);
-      return { role: 'body', shape: { prism: { pts: [...teeth, [tip(30), y(2.2)], [tip(L), y(7)], [tip(L), y(9)], [tip(30), y(4.4)], [tip(0), y(3.0)]], L: 6 } }, at: [0, 0, zb], mat: 'steel-low', ...ni }; };
+      // (teeth 1 mm deep on a 2 mm pitch biting the board's faces, the jaws closed square on it: their inner edges
+      // parallel to the pivot; typical of 50 mm clips)
+      const teeth: V2[] = Array.from({ length: 9 }, (_, i): V2 => [tip(i * 2), y(i % 2 ? 0.8 : 1.8)]);
+      return { role: 'body', shape: { prism: { pts: [...teeth, [tip(18), y(1.8)], [tip(30), y(1.9)], [tip(L), y(7)], [tip(L), y(9)], [tip(30), y(4.4)], [tip(0), y(3.4)]], L: 6 } }, at: [0, 0, zb], mat: 'steel-low', ...ni, finish: 'plate' }; };
     const coil: V3[] = Array.from({ length: 49 }, (_, i): V3 => { const a = (i / 12) * 2 * PI; return [tip(32) + 1.8 * Math.cos(a) * sx, yb + 1.8 * Math.sin(a), zb - 3 + (i / 48) * 6]; });
     return { name: `MZ101 ${sx > 0 ? 'right' : 'left'} clip`, item: 'alligator-clip', at: [0, 0, 0], kids: [
       piece('clip jaws', 'alligator-jaw', [jaw(1), jaw(-1), { role: 'body', shape: { cyl: [0.8, 7] }, at: [tip(30), yb, zb], rot: [PI / 2, 0, 0], mat: 'steel-low', ...ni }]),
@@ -365,7 +379,7 @@ export function ironInStand(): { at: V3; dir: V3; frontX: number } {
  *  holder whose top lifts off (Adafruit's photo of it apart, its brass ball inside) round its brass wool (599B-02;
  *  9 g, ItGresa's listing). Estimated, said so: the holder die-cast zinc, its material not published, its walls 0.7 mm
  *  (what brings the whole to its 86 g); its base 70 across rising to a cup 56 across, its top a sleeve over the cup with
- *  an opening 32 across where the tip goes in; the wool a ball 50 across, 2 % brass by volume. Frame: on its base at
+ *  an opening 32 across where the tip goes in; the wool packed to that opening, under 1 % brass by volume (its 9 g). Frame: on its base at
  *  y 0, its axis y. */
 export function hakko599B(): Comp {
   const zinc = { color: 0x8d9194, finish: 'cast' } as const, w = 0.7;
@@ -374,7 +388,11 @@ export function hakko599B(): Comp {
   const shell = (pts: V2[]): V2[] => [...pts, ...pts.slice().reverse().map(([r, y], i, a) => { const q = a[Math.min(i + 1, a.length - 1)]!, p0 = a[Math.max(i - 1, 0)]!, dr = q[0] - p0[0], dy = q[1] - p0[1], n = Math.hypot(dr, dy) || 1; return [Math.max(0, r - (dy / n) * w), y + (dr / n) * w] as V2; })];
   const base = piece('599B holder base', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[0, 0], [35, 0], [35, 4], [30.5, 9], [28, 26]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
   const top = piece('599B holder top', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[29.5, 22], [29.5, 52], [25, 66], [17.5, 71], [16, 71]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
-  const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: Array.from({ length: 13 }, (_, i): V2 => [25 * Math.sin((PI * i) / 12), -25 * Math.cos((PI * i) / 12)]) }, at: [0, w + 25, 0], mat: 'brass', color: 0xd4a640, finish: 'brushed', share: 0.02 }]);
+  // (the wool packed to the holder's mouth, filling the cup and the sleeve's dome, its top showing in the opening
+  // (Hakko's photos of it in use); its share of solid brass what makes its 9 g)
+  const woolPts: V2[] = [[0, w], [27.5, w], [28.6, 10], [28.6, 50], [24.5, 63.5], [16.8, 69.6], [10, 70.6], [0, 70.9]];
+  const woolVol = (Math.PI / 3) * Math.abs(woolPts.reduce((a, [r, y], i) => { const [r2, y2] = woolPts[(i + 1) % woolPts.length]!; return a + (y2 - y) * (r * r + r * r2 + r2 * r2); }, 0));
+  const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: [...woolPts, [0, w]] }, at: [0, 0, 0], mat: 'brass', color: 0xd4a640, finish: 'brushed', share: 9 / (woolVol * 0.0085) }]);
   return { name: 'Hakko 599B tip cleaner', item: 'tipcleaner-599b', at: [0, 0, 0], kids: [base, top, wool] };
 }
 

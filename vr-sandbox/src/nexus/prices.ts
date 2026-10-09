@@ -79,6 +79,7 @@ export const PRICES: Record<string, Price> = {
   'heat-shrink': { what: 'heat-shrink tubing', offers: [ada('Pre-Cut Multi-Colored Heat Shrink Pack Kit - 280 pcs', 9.95, 4559)] },
   'tweezers': { what: 'fine tweezers', offers: [ada('Fine tip curved tweezers - ESD safe - 120mm', 3.95, 422)] },
   // ---- parts ---------------------------------------------------------------------------------------------------------
+  'led-red-5mm-plain': { what: 'red LED, 5 mm, diffused, no resistor (for a circuit with its own: the Perma-Proto lesson\'s)', item: 'led-red-5mm', offers: [ada('Diffused Red 5mm LED (25 pack)', 4.0, 299, { per: 25, note: '660 nm, 1.85–2.5 V at 20 mA, 250 mcd (its listing): through a 330 Ω resistor on 5 V about 9 mA' })] },
   'led-red-5mm': { what: 'red LED, 5 mm', item: 'led-red-5mm', offers: [{ name: 'LED - Red with Resistor 5mm (25 pack)', usd: 12.5, per: 25, seller: 'SparkFun', url: 'https://www.sparkfun.com/led-red-with-resistor-5mm-25-pack.html', seen: D, stock: 'in', note: 'each with its resistor already on its lead' }] },
   'chipresistor-0603-1-10000': { what: '10 kΩ chip resistor, 0603, 1 %', item: 'chipresistor-0603-1-10000', offers: [lcsc('YAGEO RC0603FR-0710KL', 0.0034, 'C98220', 100)] },
   'mlcc-x7r-0805-1e-7-100': { what: '100 nF X7R capacitor, 0805, 100 V', item: 'mlcc-x7r-0805-1e-7-100', offers: [lcsc('Samsung CL21B104KCFNNNE', 0.0332, 'C28233', 50, { stock: 'out' })] },
