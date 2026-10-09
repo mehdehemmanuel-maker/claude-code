@@ -335,11 +335,13 @@ export function helpingHands(): Comp {
     const coil: V3[] = [[tip(44), yb + 5.1, zb - 2.1], [tip(36), yb + 3.2, zb - 2.1], ...helix, [tip(36), yb - 3.2, zb + 2.1], [tip(44), yb - 5.1, zb + 2.1]];
     return { name: `MZ101 ${sx > 0 ? 'right' : 'left'} clip`, item: 'alligator-clip', at: [0, 0, 0], kids: [
       piece('clip jaws', 'alligator-jaw', [...jaw(1), ...jaw(-1), { role: 'body', shape: { lathe: rivet }, at: [tip(30), yb, zb], rot: [PI / 2, 0, 0], mat: 'steel-low', ...ni }]),
-      piece('clip spring', 'spring-torsion', [{ role: 'body', shape: { tube: { r: 0.3, pts: coil } }, at: [0, 0, 0], mat: 'steel-spring', ...ni }])] };
+      piece('clip spring', 'spring-torsion', [{ role: 'body', shape: { tube: { r: 0.3, pts: coil } }, at: [0, 0, 0], mat: 'steel-spring', ...ni }]),
+      // (the arm's end held in a sleeve on the upper lever's back, crimped round it (typical of such stands))
+      piece('clip sleeve', 'alligator-jaw', [{ role: 'body', shape: { cyl: [2.2, 6] }, at: [tip(37.9), yb + 8.6, zb], rot: [0, 0, -0.62 * sx], mat: 'steel-low', ...ni, finish: 'ground' }])] };
   };
   const arm = (sx: 1 | -1): Comp[] => [
     piece(`MZ101 ${sx > 0 ? 'right' : 'left'} ball`, 'hands-ball', [{ role: 'body', shape: { lathe: Array.from({ length: 13 }, (_, i): V2 => [(H.ball / 2) * Math.sin((PI * i) / 12), -(H.ball / 2) * Math.cos((PI * i) / 12)]) }, at: [sx * H.bar.L / 2, H.bar.y, z0 + 11], mat: 'zamak', ...ni }]),
-    rod(`MZ101 ${sx > 0 ? 'right' : 'left'} arm`, 'hands-rod', [[sx * H.bar.L / 2, H.bar.y, z0 + 11], [sx * (H.hold.span / 2 + 44), yb + 14, zb - 4], [sx * (H.hold.span / 2 + 42), yb + 2, zb]], 3.2),
+    rod(`MZ101 ${sx > 0 ? 'right' : 'left'} arm`, 'hands-rod', [[sx * H.bar.L / 2, H.bar.y, z0 + 11], [sx * (H.hold.span / 2 + 46), yb + 20, zb - 3], [sx * (H.hold.span / 2 + 39), yb + 10.2, zb]], 3.2),
     wing(`MZ101 ${sx > 0 ? 'right' : 'left'} ball's wing nut`, [sx * H.bar.L / 2, H.bar.y + H.ball / 2, z0 + 11]), clip(sx)];
   // (the magnifier on its arm from the swivel, up and out over the work, its rim chromed, its lens glass 2.5" across and
   // 8 thick at its middle (its 4x a sales figure; its curves an estimate), turned to look down at the board)
@@ -401,19 +403,19 @@ export function hakko599B(): Comp {
   const top = piece('599B holder top', 'cleaner-holder', [{ role: 'body', shape: { lathe: shell([[29.5, 22], [29.5, 52], [25, 66], [17.5, 71], [16, 71]]) }, at: [0, 0, 0], mat: 'zamak', ...zinc }]);
   // (the wool packed to the holder's mouth, filling the cup and the sleeve's dome, its top showing in the opening
   // (Hakko's photos of it in use); its share of solid brass what makes its 9 g)
-  const woolPts: V2[] = [[0, w], [27.5, w], [28.6, 10], [28.6, 50], [24.5, 63.5], [16.8, 69.2], [10, 70.2], [0, 70.5]];
+  const woolPts: V2[] = [[0, w], [27.5, w], [28.6, 10], [28.6, 50], [24.5, 63.5], [16.8, 69.4], [10, 71.0], [0, 71.6]];
   const woolVol = (Math.PI / 3) * Math.abs(woolPts.reduce((a, [r, y], i) => { const [r2, y2] = woolPts[(i + 1) % woolPts.length]!; return a + (y2 - y) * (r * r + r * r2 + r2 * r2); }, 0));
   // (on its top, where the opening shows it, the wool as it is: a shaving of brass about 0.4 mm wide curled in loops 3 to
   // 5 mm round, wandering over the bed and over itself (Hakko's photos: a tangle, not a surface), the bed dark between
   // its turns; one strand of five sides, so one light mesh; the bed under it carries the rest of the 9 g. Its width and
   // loops typical of brass shavings, an estimate)
-  let seed = 599; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }, bedTop = (r: number) => (r < 10 ? 70.5 - 0.03 * r : 70.2 - ((r - 10) / 6.8) * 1.0), curl: V3[] = [];
+  let seed = 599; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }, bedTop = (r: number) => (r < 10 ? 71.6 - 0.06 * r : 71.0 - ((r - 10) / 6.8) * 1.6), curl: V3[] = [];
   { let cx = 0, cz = 0, tx = 0, tz = 0, a = 0, R = 2;
     for (let i = 0; i < 1500; i++) {
       if (i % 14 === 0) { const g = rnd() * 2 * PI, rr = 15 * Math.sqrt(rnd()); tx = rr * Math.cos(g); tz = rr * Math.sin(g); R = 1.5 + rnd(); }
       cx += (tx - cx) * 0.1; cz += (tz - cz) * 0.1; a += 0.75 + 0.4 * rnd();
       let x = cx + R * Math.cos(a), z = cz + R * Math.sin(a) * 0.8; const rr = Math.hypot(x, z); if (rr > 15.4) { x *= 15.4 / rr; z *= 15.4 / rr; }
-      curl.push([x, bedTop(Math.hypot(x, z)) + 0.05 + 0.5 * Math.sin(a * 0.5 + i * 0.07), z]);
+      curl.push([x, bedTop(Math.hypot(x, z)) + 0.2 + 0.9 * Math.sin(a * 0.5 + i * 0.07), z]);
     } }
   const strandR = 0.2, strandL = curl.reduce((t, q, i) => (i ? t + Math.hypot(q[0] - curl[i - 1]![0], q[1] - curl[i - 1]![1], q[2] - curl[i - 1]![2]) : 0), 0), strandG = Math.PI * strandR * strandR * strandL * 0.0085;
   const wool = piece('599B brass wool', 'brass-wool', [{ role: 'body', shape: { lathe: [...woolPts, [0, w]] }, at: [0, 0, 0], mat: 'brass', color: 0x5e4a22, finish: 'cast', share: (9 - strandG) / (woolVol * 0.0085) },
@@ -451,7 +453,7 @@ export function aaCell(): Comp {
  *  top (its 32 mm the holder's width): a phenolic base, a brass blade 26 long hinged at one side, closing into a brass
  *  clip at the other, a black knob on its end; the leads 22 AWG, laid straight out. Frame: along x (its switch end
  *  +x), across z, up y, its floor on y 0. */
-export const H3951 = { L: 58, W: 32, H: 14, wall: 1.2, lead: 130, blade: 26 } as const;
+export const H3951 = { L: 58, W: 32, H: 14, wall: 1.2, lead: 130, blade: 26, sx: 27.1 } as const;
 export function holder3951(open = true): Comp {
   const { L, W, H, wall: t } = H3951, black = { color: 0x1a1a1b, finish: 'moulded' } as const, ni = { color: 0xc6c9cb, finish: 'bright' } as const, br = { color: 0xc89b45, finish: 'bright' } as const;
   const body = piece('3951 holder', 'holder-body', [box('body', [L, t, W], [0, t / 2, 0], 'abs', black), ...[-1, 1].map((sz): Solid => box('body', [L, H - t, t], [0, t + (H - t) / 2, sz * (W / 2 - t / 2)], 'abs', black)),
@@ -462,10 +464,11 @@ export function holder3951(open = true): Comp {
   const plate = (x: number, z: number): Solid => box('body', [0.4, 8, 8], [x, t + 7.1, z], 'steel-spring', ni);
   const contacts = [piece('3951 − spring, cell A', 'battery-contact', [spring(-x0, zA, -1)]), piece('3951 + plate, cell B', 'battery-contact', [plate(-x0 + 0.2, -zA), box('body', [0.4, 3, 2 * zA], [-x0 + 0.2, t + 3, 0], 'steel-spring', ni)]),
     piece('3951 + plate, cell A', 'battery-contact', [plate(x0 - 0.2, zA)]), piece('3951 − spring, cell B', 'battery-contact', [spring(x0, -zA, 1)])];
-  // (its knife switch across the + end's top: base, hinge post, clip, blade (up when open), knob)
-  const sx = L / 2 - 3, yb = H, hz = -(W / 2 - 3), cz = W / 2 - 3, B = H3951.blade;
+  // (its knife switch across the + end's top, over its end wall and past the cells' ends (they stand 1.4 above the
+  // walls): base, hinge post, clip, blade (up when open), knob)
+  const sx = H3951.sx, yb = H, hz = -(W / 2 - 3), cz = W / 2 - 3, B = H3951.blade;
   const bladeAt: { at: V3; rot: V3 } = open ? { at: [sx, yb + 3 + B / 2, hz], rot: [0, 0, 0] } : { at: [sx, yb + 3, hz + B / 2], rot: [PI / 2, 0, 0] };
-  const knife = piece('3951 knife switch', 'knife-switch', [box('body', [6, 1.6, W - 2], [sx, yb + 0.8, 0], 'abs', { color: 0x3b2a1e, finish: 'moulded' }), box('body', [3, 4.5, 1.6], [sx, yb + 3.8, hz], 'brass', br),
+  const knife = piece('3951 knife switch', 'knife-switch', [box('body', [3.6, 1.6, W - 2], [sx, yb + 0.8, 0], 'abs', { color: 0x3b2a1e, finish: 'moulded' }), box('body', [3, 4.5, 1.6], [sx, yb + 3.8, hz], 'brass', br),
     ...[-1, 1].map((d): Solid => box('body', [0.5, 4.5, 2.2], [sx + d * 1.0, yb + 3.8, cz], 'brass', br)),
     { role: 'body', shape: { box: [1.2, B, 0.8] }, at: bladeAt.at, rot: [bladeAt.rot[0], 0, 0], mat: 'brass', ...br },
     { role: 'body', shape: { cyl: [2.2, 6] }, at: open ? [sx, yb + 3 + B + 2.5, hz] : [sx, yb + 3, hz + B + 2.5], rot: open ? [0, 0, 0] : [PI / 2, 0, 0], mat: 'abs', ...black }]);

@@ -6,6 +6,8 @@
 // Owner of: the lessons, and which a set of processes needs.
 
 import { BAND, bandsOf } from './packages';
+import { ADAFRUIT_GUIDE, lessonOf, PERMA_PROTO_HALF, type Build } from './edges';
+import { ppCol } from './kit-solder';
 
 export interface Step { do: string; /** how you can tell it is done */ check?: string }
 export interface Lesson { id: string; title: string; why: string; tools: string[]; safety: string[]; steps: Step[]; src: string }
@@ -22,9 +24,39 @@ export function ledResistor(supply: number, vf: number, mA: number): { R: number
 }
 
 const SAFE_IRON = ['The tip runs above 300 °C: hold the iron only by its grip and put it in its stand every time it leaves your hand.', 'Solder where air moves (a window, or a fan drawing the smoke away from your face).', 'Wear glasses when you trim leads: clipped ends fly.', 'Wash your hands after handling solder, before eating; leaded solder most of all.', 'Never use acid-core solder or acid flux (for plumbing): it eats electronics (Adafruit\'s guide).'];
-const ADA = 'Adafruit Guide to Excellent Soldering (learn.adafruit.com/adafruit-guide-excellent-soldering)';
+const ADA = ADAFRUIT_GUIDE;
 const red = ledResistor(3.3, 2.0, 5);
 
+/** The tip's temperature for leaded solder, °C (typical: lead-free wants more heat, and often more flux). */
+export const LEADED_TIP = 330;
+/** The LED lesson's build, as its edges read it (src/nexus/edges.ts): a 1/4 W resistor in row c across columns 5 and
+ *  9; the LED's anode in row a, column 9, its cathode in the − rail; a link of 22 AWG wire from row a, column 5, over
+ *  the − rail into the + rail; the battery holder's red pin in the + rail at column 1 and its black in the − rail at
+ *  column 3 (two columns apart: two rails' pads side by side would bridge); the soldering kit; two fresh alkaline AAs
+ *  through the 330 Ω and Adafruit's red LED (its 299: 1.85–2.5 V at 20 mA, taken as 1.95 there, falling by
+ *  n·kT/q·ln(I/20 mA) below it with n about 2, an estimate typical of red AlGaInP LEDs; each cell 1.6 V fresh (its
+ *  listing) and about 0.15 Ω (typical of alkaline AAs)). Its lesson's steps are its edges, said. */
+export const PROTO_BUILD: Build = {
+  board: PERMA_PROTO_HALF,
+  things: [
+    { id: 'resistor', name: 'the resistor', form: 'axial', watts: 0.25, leads: [{ name: 'its first lead', tag: 'first', pin: 0.6, round: true, at: [ppCol(5), 8.89] }, { name: 'its second lead', tag: 'second', pin: 0.6, round: true, at: [ppCol(9), 8.89] }] },
+    { id: 'led', name: 'the LED', form: 'radial', mark: { what: 'the flat of its rim', by: 1 }, leads: [{ name: 'its long lead, the anode,', tag: 'anode', pin: 0.5, round: false, at: [ppCol(9), 13.97] }, { name: 'its short lead, by the flat on its rim,', tag: 'cathode', pin: 0.5, round: false, at: [ppCol(9), 19.05] }] },
+    { id: 'link', name: 'the link', form: 'link', wire: { awg: 22, strip: 6 }, leads: [{ name: 'its end', tag: 'row a', pin: 0.644, round: true, at: [ppCol(5), 13.97] }, { name: 'its other end', tag: '+ rail', pin: 0.644, round: true, at: [ppCol(5), 21.59] }] },
+    { id: 'battery', name: 'the battery holder', form: 'flying', hangs: true, ready: { do: 'Put two AA cells in the battery holder, its knife switch up (open)', check: 'the switch open' },
+      leads: [{ name: 'its red lead\'s pin', tag: 'red', pin: 0.64, round: false, at: [ppCol(1), 21.59] }, { name: 'its black lead\'s', tag: 'black', pin: 0.64, round: false, at: [ppCol(3), 19.05] }] },
+  ],
+  tools: [
+    { role: 'iron', name: 'the iron', key: 'soldering-iron', fig: { set: LEADED_TIP }, src: 'PINE64\'s Pinecil; 330 °C for leaded solder (typical)' },
+    { role: 'solder', name: 'the solder', key: 'solder-leaded', fig: { d: 0.5 }, alloy: 'Sn63Pb37', src: 'Adafruit\'s 1886 reel: 0.5 mm 63/37 with a rosin core' },
+    { role: 'cleaner', name: 'the brass wool', key: 'tip-cleaner', fig: {}, src: 'Hakko\'s 599B: dry brass, cools the tip less than a wet sponge' },
+    { role: 'cutters', name: 'the flush cutters', key: 'flush-cutters', fig: { cu: 1.3, jaw: 8 }, src: 'Hakko\'s CHP-170: copper to 1.3 mm (16 AWG), its jaws 8 mm' },
+    { role: 'hands', name: 'the helping hands', key: 'helping-hands', fig: { span: 150 }, src: 'Adafruit\'s 291, the MZ101: its clips on a 150 mm bar (its reach an estimate)' },
+    { role: 'stand', name: 'its stand', key: 'iron-stand', fig: {}, src: 'Atten\'s S-11' },
+  ],
+  power: { source: 'battery', cells: 2, cell: 1.6, rCell: 0.15, ohms: 330, led: { vf20: 1.95, nVt: 0.0514, max: 20 }, closes: 'the knife switch', src: 'Adafruit\'s 3951 holder and LR6 cells (1.6 V fresh); its 299 LED (1.85–2.5 V at 20 mA); 0.15 Ω a cell (typical)' },
+};
+const PROTO_LESSON = lessonOf(PROTO_BUILD);
+if (PROTO_LESSON.refused.length) throw new Error(`the LED lesson's build cannot be done: ${PROTO_LESSON.refused.join('; ')}`);
 export const LESSONS: Record<string, Lesson> = {
   'solder-joint': {
     id: 'solder-joint', title: 'Solder a through-hole joint', why: 'every header, every leaded part and every wire is held and joined this way',
@@ -50,17 +82,8 @@ export const LESSONS: Record<string, Lesson> = {
   'solder-proto': {
     id: 'solder-proto', title: 'Solder an LED and its resistor onto a Perma-Proto', why: 'every leaded part goes in this way: through its holes, bent to hold, soldered from underneath, its leads trimmed',
     tools: ['soldering-iron', 'solder-leaded', 'tip-cleaner', 'flush-cutters', 'helping-hands', 'hookup-wire'], safety: [...SAFE_IRON, 'Hold a lead\'s end as you cut it, or point it down: a cut lead flies.'],
-    steps: [
-      { do: 'Bend the resistor\'s leads down at its body to span four holes (10.16 mm) and push it into row c, columns 5 and 9; bend its leads out a little under the board so it stays.', check: 'it lies flat on the board' },
-      { do: 'Push the LED in: its long lead, the anode, into column 9, row a, by the resistor\'s end; its short lead, by the flat on its rim, into the − rail beside it.', check: 'the flat of its rim toward the − rail' },
-      { do: 'Strip 6 mm off each end of a piece of 22 AWG solid hook-up wire, bend it to a staple three holes across, and push it from column 5, row a, into the + rail beyond the − rail.', check: 'its insulation lies over the − rail\'s pads: bare wire there would join + to −' },
-      { do: 'Clip the board in the helping hands by its ends, its underside up.' },
-      { do: 'Solder each of the six leads, the joint lesson\'s way: pad and lead heated together, the solder fed to them.', check: 'each a smooth cone, the hole filled' },
-      { do: 'Trim each lead close above its joint with the flush cutters, their flat side to the board, holding the lead\'s end.', check: 'its end still in sight in the solder, at most 2.5 mm standing (IPC-A-610\'s lead protrusion)' },
-      { do: 'Put two AA cells in the battery holder, its knife switch up (open); push its red lead\'s pin into the + rail at column 1 and its black lead\'s into the − rail at column 3, through from the top.', check: 'red to +, black to −, and the switch open' },
-      { do: 'Solder the two pins and trim them, as you did the leads.', check: 'two more good joints, their pins at most 2.5 mm standing' },
-      { do: 'Close the knife switch: the LED lights.', check: 'about 4 mA through it: two fresh cells\' 3.2 V less the LED\'s 1.9, over the 330 Ω' },
-    ], src: `${ADA}, "Common Problems" and "Making a good solder joint"; Adafruit's Perma-Proto listing; IPC-A-610's lead protrusion`,
+    steps: PROTO_LESSON.steps.map((q) => ({ do: q.do, ...(q.check ? { check: q.check } : {}) })),
+    src: `${ADA}, "Common Problems" and "Making a good solder joint"; Adafruit's Perma-Proto listing; IPC-A-610's lead protrusion`,
   },
   'flash-pi-os': {
     id: 'flash-pi-os', title: 'Put Raspberry Pi OS on a card and start the Pi', why: 'a Pi has no OS until its card holds one',

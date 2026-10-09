@@ -8,8 +8,9 @@
 // breadboard's columns, z across them (its row a toward +z).
 // Owner of: a hands-on lesson's state, its steps and their checks, and what the hands' moves do to the joints.
 
-import { BB, HANDS, ppCol } from './kit-solder';
-import { LESSONS } from './lessons';
+import { BB, HANDS } from './kit-solder';
+import { LEADED_TIP, LESSONS, PROTO_BUILD } from './lessons';
+import { ledCurrent, lessonOf, PROTRUSION, type EdgeKind } from './edges';
 import { PICO_PIN_NAMES } from './sbc';
 import { ALLOYS, freshJoint, grade, idealVolume, PICO_PIN, step, timeToMelt, type Grade, type JointShape, type JointState } from './solder-joint';
 
@@ -41,7 +42,8 @@ export const jointPoint = (n: number): V3 => { const p = pinAt(n); return [p[0],
  *  its underside 0.8 above the hold's middle. */
 export const PROTO = {
   at: [50, 0, 45] as V3, hands: [50, 0, -55] as V3,
-  seats: { resistor: [[ppCol(5), 8.89], [ppCol(9), 8.89]], led: [[ppCol(9), 13.97], [ppCol(9), 19.05]], link: [[ppCol(5), 13.97], [ppCol(5), 21.59]], battery: [[ppCol(1), 21.59], [ppCol(3), 19.05]] } as Record<Part, [number, number][]>,
+  /** where each thing's leads go: the lesson's build's (src/nexus/lessons.ts), so the bench and the words agree */
+  seats: Object.fromEntries(PROTO_BUILD.things.map((t) => [t.id, t.leads.map((l) => l.at)])) as Record<Part, [number, number][]>,
   /** each lead, mm out of the underside once it is in (estimates: a 1/4 W resistor's 28 mm leads less their bend down
    *  to the holes and the board, about 23; the LED's 27 and 25 mm legs less its rim 3 mm off the board, their spread and
    *  the board, 22 and 20; a link's stripped ends 4; the battery holder's crimped pins 6 long, less the board) */ out: { resistor: [23, 23], led: [22, 20], link: [4, 4], battery: [4.4, 4.4] } as Record<Part, number[]>,
@@ -69,17 +71,13 @@ export const PROTO_LEG: JointShape = { board: 1.6, hole: 1.2, pad: 1.9304, pin: 
 /** The battery holder's leads end in crimped pins, 0.64 mm square (typical of the "premium" ends Adafruit's 3951 has
  *  had since 2022, its listing: for breadboards), in the Perma-Proto's holes. */
 export const PROTO_PIN: JointShape = { board: 1.6, hole: 1.2, pad: 1.9304, pin: 0.64, src: 'Adafruit Perma-Proto board file; a 0.64 mm square crimped pin (typical)' };
-/** The lesson's power: Adafruit's 3951, two AA cells in a holder with a knife switch (58 × 32 × 14 mm, its leads 130
- *  long: its listing), Adafruit's alkaline cells (LR6: 1.6 V fresh to 0.8 V dead, its listing); each cell's resistance
- *  about 0.15 Ω fresh (typical of alkaline AAs). Its red lead to the + rail at column 1, its black to the − rail at
- *  column 3 (two columns apart: two rails' pads side by side would bridge). The LED's drop at a current (Adafruit's
- *  299: 1.85–2.5 V at 20 mA; taken as 1.95 there, falling by n·kT/q·ln(I/20 mA) below it with n about 2, an estimate
- *  typical of red AlGaInP LEDs). */
-export const POWER = { cell: 1.6, cells: 2, rCell: 0.15, ohms: 330, vf20: 1.95, nVt: 0.0514 } as const;
+/** The lesson's power: its build's (src/nexus/lessons.ts: Adafruit's 3951 holder, two fresh AAs, the 330 Ω, its red
+ *  LED's drop), the current from it by the edges' own figure (src/nexus/edges.ts). */
+export const POWER = PROTO_BUILD.power!;
 export const PROTO_WIRE: JointShape = { board: 1.6, hole: 1.2, pad: 1.9304, pin: 0.644, round: true, src: 'Adafruit Perma-Proto board file; 22 AWG solid copper, 0.644 mm' };
-/** A trimmed lead's good height over its pad, mm: its end in sight in the solder, at most 2.5 standing (IPC-A-610's
- *  lead protrusion, class 2); below the fillet's top (about 0.6 here) the cutters bite the solder. */
-export const TRIM = { min: 0.6, max: 2.5 } as const;
+/** A trimmed lead's good height over its pad, mm: the edges' (IPC-A-610's lead protrusion, class 2: its end in sight
+ *  in the solder, at most 2.5 standing; below the fillet's top, about 0.6 here, the cutters bite the solder). */
+export const TRIM = PROTRUSION;
 
 // ---- how the hands work on it (estimates, each said) -------------------------------------------------------------------
 export const HAND = {
@@ -96,7 +94,7 @@ export const HAND = {
   /** a joint so full it runs into its neighbour, its share of a good joint, or two neighbours' together (estimate:
    *  the gap between 1.7 mm pads at 2.54 is 0.84 mm) */ bridgeOne: 2.4, bridgeTwo: 3.6,
   /** the iron's set temperature, °C, and how fast it heats, its time constant, s (the joint lesson's 330 for leaded
-   *  solder; PINE64 publishes no heat-up time, so an estimate: about 7 s to 300 °C) */ set: 330, tau: 3,
+   *  solder; PINE64 publishes no heat-up time, so an estimate: about 7 s to 300 °C) */ set: LEADED_TIP, tau: 3,
 } as const;
 const mm3PerMm = (Math.PI / 4) * HAND.wire * HAND.wire;
 /** The lesson's solder: the reel the build pack buys, 63/37 since 2019 (Adafruit's listing), melting at 183 °C at once. */
@@ -146,25 +144,22 @@ export const STEPS: Step[] = [
   { do: 'Put the iron back in its stand.', check: 'the iron in its stand, the joints cooled', done: (b) => !b.iron.inHand && b.joints.every((q) => q.j.T < ALLOY.solidus), src: 'the safety rule: the iron in its stand every time it leaves your hand' },
 ];
 
-const P = LESSONS['solder-proto']!.steps;
 const good = (q: BenchJoint) => grade(q.j, q.shape).grade === 'good';
-const ofParts = (b: Bench) => b.joints.filter((q) => q.part !== 'battery'), ofBattery = (b: Bench) => b.joints.filter((q) => q.part === 'battery');
-/** The Perma-Proto lesson's steps, each done only when done: its parts in, the board in the hands, the tip tinned, its
- *  six joints good, its six leads trimmed to height, the battery holder's leads in, soldered and trimmed, its switch
- *  closed and the LED lit, the iron back in its stand. */
-export const PROTO_STEPS: Step[] = [
-  { do: P[0]!.do, check: P[0]!.check, done: (b) => b.placed.resistor === true, src: 'solder-proto 1' },
-  { do: P[1]!.do, check: P[1]!.check, done: (b) => b.placed.led === true, src: 'solder-proto 2' },
-  { do: P[2]!.do, done: (b) => b.placed.link === true, src: 'solder-proto 3' },
-  { do: P[3]!.do, done: (b) => b.placed.proto === true, src: 'solder-proto 4' },
-  { do: J[0]!.do, check: J[0]!.check, done: (b) => b.iron.T >= 300 && b.iron.tinned > 0, src: 'solder-joint 1' },
-  { do: P[4]!.do, check: P[4]!.check, done: (b) => ofParts(b).every(good), src: 'solder-proto 5, solder-joint 2–4' },
-  { do: P[5]!.do, check: P[5]!.check, done: (b) => ofParts(b).every((q) => good(q) && q.lead <= TRIM.max), src: 'solder-proto 6, solder-joint 5' },
-  { do: P[6]!.do, check: P[6]!.check, done: (b) => b.placed.battery === true && !b.on, src: 'solder-proto 7' },
-  { do: P[7]!.do, check: P[7]!.check, done: (b) => ofBattery(b).every((q) => good(q) && q.lead <= TRIM.max), src: 'solder-proto 8' },
-  { do: P[8]!.do, check: P[8]!.check, done: (b) => b.on && lit(b).mA > 0.5, src: 'solder-proto 9: the circuit lit' },
-  { do: 'Put the iron back in its stand.', check: 'the iron in its stand, the joints cooled', done: (b) => !b.iron.inHand && b.joints.every((q) => q.j.T < ALLOY.solidus), src: 'the safety rule: the iron in its stand every time it leaves your hand' },
-];
+/** When a step said from an edge is done on the bench, by the edge's kind: the thing in; the board in the hands; the tip
+ *  hot and tinned; every joint of its things good; and trimmed to height; the circuit lit; the iron in its stand. */
+const DONE: Record<EdgeKind, (things: string[]) => (b: Bench) => boolean> = {
+  insert: (t) => (b) => b.placed[t[0] as Thing] === true && !(t[0] === 'battery' && b.on),
+  hold: () => (b) => b.placed.proto === true,
+  tin: () => (b) => b.iron.T >= 300 && b.iron.tinned > 0,
+  solder: (t) => (b) => b.joints.filter((q) => t.includes(q.part ?? '')).every(good),
+  trim: (t) => (b) => b.joints.filter((q) => t.includes(q.part ?? '')).every((q) => good(q) && q.lead <= TRIM.max),
+  power: () => (b) => b.on && lit(b).mA > 0.5,
+  rest: () => (b) => !b.iron.inHand && b.joints.every((q) => q.j.T < ALLOY.solidus),
+};
+/** The Perma-Proto lesson's steps, each done only when done: its build's edges said (src/nexus/edges.ts), the same
+ *  words the written lesson has: its parts in, the board in the hands, the battery holder's pins in, the tip tinned,
+ *  its eight joints good, its eight leads trimmed to height, its switch closed and the LED lit, the iron put away. */
+export const PROTO_STEPS: Step[] = lessonOf(PROTO_BUILD).steps.map((q) => ({ do: q.do, ...(q.check ? { check: q.check } : {}), done: DONE[q.kind](q.things), src: `${q.kind} ${q.things.join(', ')}: ${q.src}` }));
 /** A bench's steps: its lesson's. */
 export const stepsOf = (b: Bench): Step[] => (b.plan === 'proto' ? PROTO_STEPS : STEPS);
 
@@ -206,7 +201,7 @@ export function takeUp(b: Bench, what: Thing): string {
   if (what === 'cutters') return 'the flush cutters in your hand, their flat side toward the work';
   if (b.plan === 'proto' && what !== 'iron' && what !== 'solder') {
     if (what === 'proto' && b.placed.proto) { b.placed.proto = false; return b.joints.some((q) => q.j.solder > 0) ? 'the board out of the hands, its parts soldered in' : 'the board out of the hands'; }
-    if (what === 'battery' && b.placed.battery) { if (ofBattery(b).some((q) => q.j.solder > 0)) return 'its leads are soldered in: it stays; close its switch to light the LED'; b.placed.battery = false; b.on = false; return 'the holder\'s pins pulled out'; }
+    if (what === 'battery' && b.placed.battery) { if (b.joints.some((q) => q.part === 'battery' && q.j.solder > 0)) return 'its leads are soldered in: it stays; close its switch to light the LED'; b.placed.battery = false; b.on = false; return 'the holder\'s pins pulled out'; }
     if (what !== 'proto' && b.placed[what]) { if (b.placed.proto) return 'it is in the board, the board in the hands: take the board out first'; if (b.joints.some((q) => q.part === what && q.j.solder > 0)) return `the ${what === 'led' ? 'LED' : what} is soldered in: it stays`; b.placed[what] = false; return `the ${what === 'led' ? 'LED' : what} pulled out`; }
     return `the ${what === 'proto' ? 'Perma-Proto' : what === 'led' ? 'LED' : what === 'battery' ? 'battery holder' : what} in your hand`;
   }
@@ -269,7 +264,7 @@ function closest(p: V3, d: V3, ls: number, q: V3, e: V3, lu: number): { s: numbe
 export function throwSwitch(b: Bench, on: boolean): string {
   if (b.plan !== 'proto') return 'there is no switch on this bench';
   b.on = on; if (!on) { say(b, 'the switch open: the LED dark'); return 'the switch open: the LED dark'; }
-  const l = lit(b), s = l.mA > 0.5 ? `the switch closed: the LED lights, ${l.mA.toFixed(1)} mA through it (${l.v.toFixed(2)} V from the cells less its ${l.vf.toFixed(2)}, over the 330 Ω)` : `the switch closed, but the LED stays dark: ${l.why}`;
+  const l = lit(b), s = l.mA > 0.5 ? `the switch closed: the LED lights, ${l.mA.toFixed(1)} mA through it (${l.v.toFixed(2)} V from the cells, less its ${l.vf.toFixed(2)} V, over the ${POWER.ohms} Ω)` : `the switch closed, but the LED stays dark: ${l.why}`;
   say(b, s); return s;
 }
 /** What the circuit does: the cells in series through the switch, the + rail, the link, column 5, the resistor, column
@@ -282,10 +277,7 @@ export function lit(b: Bench): { mA: number; v: number; vf: number; why: string 
   if (!b.on) return none('the switch is open');
   const open = b.joints.find((q) => { const g = grade(q.j, q.shape).grade; return g === 'not soldered' || g === 'cold'; });
   if (open) return none(`${open.name} is ${grade(open.j, open.shape).grade}: no current through it`);
-  // (the drop at the current found, the current from the drop, till they agree)
-  let mA = (v - p.vf20) / (p.ohms + p.cells * p.rCell) * 1000, vf = p.vf20;
-  for (let k = 0; k < 8; k++) { vf = p.vf20 + p.nVt * Math.log(Math.max(1e-3, mA) / 20); mA = Math.max(0, (v - vf) / (p.ohms + p.cells * p.rCell)) * 1000; }
-  return { mA, v, vf, why: '' };
+  return { ...ledCurrent(p), why: '' };
 }
 /** More wire pulled off the reel, mm (the fingers let out so much more). */
 export function payOut(b: Bench, mm = 10): void { b.wire.out = Math.min(60, b.wire.out + mm); }
@@ -324,7 +316,7 @@ export function tick(b: Bench, dt: number, tip: V3 | null, wireEnd: V3 | null): 
   if (wireOnTip && !tipOn && ir.T >= a.liquidus) { const add = melt; b.wire.out = Math.max(0, b.wire.out - HAND.feedMm * dt); b.wire.used += add; ir.tinned = HAND.tinLasts; ir.load = Math.min(HAND.holds, ir.load + add * 0.3); say(b, 'the tip tinned: bright with fresh solder'); }
   if (wireOnTip && ir.T < a.liquidus && ir.inHand) say(b, `the tip is not hot enough to melt the solder yet: wait for it to reach ${ir.set} °C`);
   const steps = stepsOf(b);
-  while (b.step < steps.length && steps[b.step]!.done(b)) { b.step++; say(b, b.step < steps.length ? `done. Next: ${steps[b.step]!.do}` : b.plan === 'proto' ? 'the lesson is done: six good joints, their leads trimmed' : 'the lesson is done: all 40 joints good'); }
+  while (b.step < steps.length && steps[b.step]!.done(b)) { b.step++; say(b, b.step < steps.length ? `done. Next: ${steps[b.step]!.do}` : b.plan === 'proto' ? `the lesson is done: all ${b.joints.length} joints good, their leads trimmed, the LED lit` : `the lesson is done: all ${b.joints.length} joints good`); }
 }
 /** The pin whose joint is nearest a point, within r mm, else null. */
 function nearest(b: Bench, p: V3, r: number): number | null {
@@ -341,7 +333,7 @@ export function readout(b: Bench): Readout {
   const q = b.at ? b.joints[b.at - 1]! : null, g = q ? grade(q.j, q.shape) : null;
   return { step: Math.min(b.step + 1, steps.length), of: steps.length, do: b.step >= steps.length ? 'Done: every joint good, the iron in its stand.' : s.do, check: s.check,
     iron: `${Math.round(ir.T)} °C${ir.T < 300 ? ` (heating to ${ir.set})` : ''}, ${ir.tinned > 0 ? 'tinned' : 'dull: tin it'}${ir.load > 0.1 ? ', solder on the tip: wipe it' : ''}, ${ir.inHand ? 'in your hand' : 'in its stand'}`,
-    joint: q && g ? `${b.plan === 'proto' ? q.name : `pin ${q.pin} (${q.name})`}: ${Math.round(q.j.T)} °C, ${g.grade}${g.grade === 'not soldered' ? '' : ` (${Math.round(g.fill * 100)} %)`}: ${g.says}` : null,
+    joint: q && g ? `${b.plan === 'proto' ? q.name : `pin ${q.pin} (${q.name})`}: ${g.grade}, now ${Math.round(q.j.T)} °C: ${g.says}` : null,
     good: graded.good, graded, bridges: bridges(b).map(([m, n]) => `pins ${m} and ${n} bridged: draw the excess off with a clean tip`), last: b.log.slice(-4) };
 }
 /** The wait the lesson tells you of before feeding: how long a tinned tip at its set temperature takes to bring a joint to

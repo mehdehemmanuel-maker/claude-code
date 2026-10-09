@@ -68,10 +68,15 @@ describe('a hands-on soldering lesson: an LED and its resistor on a Perma-Proto'
   // through 1.6 mm holds about two and a half times a Pico's)
   const solderAt = (b: Bench, n: number) => { const q = b.joints[n - 1]!, p = q.at, feed = idealVolume(q.shape) / (HAND.feedMm * (Math.PI / 4) * HAND.wire ** 2);
     while (b.wire.out < 25) payOut(b); hold(b, 1.6, p, null); hold(b, feed, p, p); hold(b, 0.3, p, null); hold(b, 2, away, null); };
-  function protoReady(): Bench {
+  // (the board clipped in the hands with its three parts in; the battery holder too unless asked not to; the iron hot
+  // in hand and tinned, the solder in the other hand)
+  function protoReady(battery = true): Bench {
     const b = newBench('proto'); for (const k of ['resistor', 'led', 'link'] as const) letGo(b, k, over(k)); letGo(b, 'proto', protoHold());
+    if (battery) letGo(b, 'battery', protoHold());
     takeUp(b, 'iron'); takeUp(b, 'solder'); hold(b, 8, away, null); hold(b, 0.3, away, away); return b;
   }
+  const kind = (b: Bench): string => PROTO_STEPS[b.step]?.src.split(' ')[0] ?? 'done';
+  const solderAll = (b: Bench, ns: number[]) => { for (const n of ns) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); } };
   it('takes its parts in over their holes, the LED only the right way round, and the board into the hands only with them in', () => {
     const b = newBench('proto'); expect(b.joints.length).toBe(8); expect(b.joints.filter((q) => q.part === 'battery').length).toBe(2);
     expect(letGo(b, 'proto', protoHold())).toMatch(/parts in first/);
@@ -82,16 +87,17 @@ describe('a hands-on soldering lesson: an LED and its resistor on a Perma-Proto'
     letGo(b, 'led', over('led')); letGo(b, 'link', over('link')); tick(b, dt, null, null); expect(b.step).toBe(3);
     expect(letGo(b, 'proto', protoHold(), { over: false })).toMatch(/turn the board over first/); expect(b.placed.proto).toBe(false);
     expect(letGo(b, 'proto', protoHold())).toMatch(/underside up/); tick(b, dt, null, null); expect(b.step).toBe(4);
+    expect(kind(b)).toBe('insert'); expect(PROTO_STEPS[b.step]!.src).toMatch(/battery/);
     expect(takeUp(b, 'led')).toMatch(/take the board out first/);
   });
-  it('solders its six joints good, the leads 0.6 mm round and the LED\'s legs 0.5 square in 1.2 mm holes', () => {
-    const b = protoReady(); expect(PROTO_STEPS[b.step]!.src).toMatch(/solder-proto 5/);
-    for (let n = 1; n <= 6; n++) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); }
-    expect(b.joints.slice(0, 6).map((q) => grade(q.j, q.shape).grade)).toEqual(Array(6).fill('good'));
-    expect(PROTO_STEPS[b.step]!.src).toMatch(/solder-proto 6/);
+  it('solders its eight joints good: leads 0.6 mm round, the LED\'s legs 0.5 square and the holder\'s pins 0.64 square in 1.2 mm holes', () => {
+    const b = protoReady(); tick(b, dt, null, null); expect(kind(b)).toBe('solder');
+    solderAll(b, [1, 2, 3, 4, 5, 6]); expect(b.joints.slice(0, 6).map((q) => grade(q.j, q.shape).grade)).toEqual(Array(6).fill('good'));
+    expect(kind(b)).toBe('solder');
+    solderAll(b, [7, 8]); expect(b.joints.map((q) => grade(q.j, q.shape).grade)).toEqual(Array(8).fill('good')); expect(kind(b)).toBe('trim');
   });
-  it('trims each lead to IPC-A-610\'s protrusion: too high says cut closer, into the fillet says it bit the joint; done with all six', () => {
-    const b = protoReady(); for (let n = 1; n <= 6; n++) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); }
+  it('trims each lead to IPC-A-610\'s protrusion: too high says cut closer, into the fillet says it bit the joint; done with all eight', () => {
+    const b = protoReady(); solderAll(b, [1, 2, 3, 4, 5, 6, 7, 8]);
     const q = b.joints[2]!, p = leadAt(q, 1);
     expect(cut(b, leadAt(q, 5))).toMatch(/still stands: cut closer/); expect(q.lead).toBeCloseTo(5);
     expect(cut(b, [p[0] + 5, p[1], p[2]])).toMatch(/closed on nothing/);
@@ -99,23 +105,23 @@ describe('a hands-on soldering lesson: an LED and its resistor on a Perma-Proto'
     // (the jaws' edge across a lead, its tip 3 mm past it, levelled 1.2 mm along it: cut where the edge crosses it)
     const r0 = b.joints[0]!, x = leadAt(r0, 1.2), side: V3 = [r0.dir[2], 0, -r0.dir[0]], l = Math.hypot(side[0], side[2]);
     expect(cut(b, [x[0] - (side[0] / l) * 3, x[1], x[2] - (side[2] / l) * 3], [side[0] / l, 0, side[2] / l])).toMatch(/1\.2 mm standing/);
-    for (const r of b.joints.slice(0, 6)) cut(b, leadAt(r, 1.2));
-    expect(b.joints.slice(0, 6).every((r) => r.lead <= TRIM.max)).toBe(true);
-    // (the bitten joint heated again mends; then every joint good and every lead trimmed: on to the battery)
+    for (const r of b.joints) cut(b, leadAt(r, 1.2));
+    expect(b.joints.every((r) => r.lead <= TRIM.max)).toBe(true);
+    // (the bitten joint heated again mends; then every joint good and every lead trimmed: on to the switch)
     hold(b, 2.5, q.at, null); hold(b, 2, away, null); tick(b, dt, null, null);
-    expect(PROTO_STEPS[b.step]!.src).toMatch(/solder-proto 7/);
+    expect(kind(b)).toBe('power');
   });
   it('powers it: the holder\'s pins in the rails, soldered and trimmed, its switch closed lights the LED at about 4 mA', () => {
-    const b = protoReady(); for (let n = 1; n <= 6; n++) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); }
-    for (const r of b.joints.slice(0, 6)) cut(b, leadAt(r, 1.2)); tick(b, dt, null, null);
+    const b = protoReady(false); tick(b, dt, null, null); expect(kind(b)).toBe('insert');
     expect(throwSwitch(b, true)).toMatch(/stays dark: the battery is not in/); throwSwitch(b, false);
     expect(letGo(b, 'battery', [0, 0, 0])).toMatch(/not by the board/);
     expect(letGo(b, 'battery', protoHold())).toMatch(/red lead.*\+ rail at column 1.*black.*− rail at column 3/); tick(b, dt, null, null);
-    expect(PROTO_STEPS[b.step]!.src).toMatch(/solder-proto 8/);
-    throwSwitch(b, true); expect(lit(b).why).toMatch(/battery's red \(\+\) lead is not soldered/); throwSwitch(b, false);
-    for (const n of [7, 8]) { if (b.iron.tinned < 5) hold(b, 0.3, away, away); wipe(b); solderAt(b, n); cut(b, leadAt(b.joints[n - 1]!, 1.2)); }
-    tick(b, dt, null, null); expect(PROTO_STEPS[b.step]!.src).toMatch(/solder-proto 9/);
+    expect(kind(b)).toBe('solder');
+    solderAll(b, [1, 2, 3, 4, 5, 6]); throwSwitch(b, true); expect(lit(b).why).toMatch(/battery's red \(\+\) lead is not soldered/); throwSwitch(b, false);
+    solderAll(b, [7, 8]); for (const r of b.joints) cut(b, leadAt(r, 1.2));
+    tick(b, dt, null, null); expect(kind(b)).toBe('power');
     expect(throwSwitch(b, true)).toMatch(/the LED lights, 4\.\d mA/); const l = lit(b); expect(l.mA).toBeGreaterThan(3.5); expect(l.mA).toBeLessThan(4.5);
+    tick(b, dt, null, null); expect(kind(b)).toBe('rest');
     letGo(b, 'iron', null); hold(b, 3, null, null); expect(b.step).toBe(PROTO_STEPS.length); expect(readout(b).do).toMatch(/Done/);
   });
 });

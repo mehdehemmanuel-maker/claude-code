@@ -46,7 +46,7 @@ const midOf = (k: Seated): [number, number] => { const q = PROTO.seats[k]; retur
  *  the helping hands' base under the board (its floor on the base's top, 12 up), its leads up to the rails. Its leads'
  *  roots in its own frame (src/nexus/kit-solder.ts's holder3951): the red from the switch's clip, the black from a
  *  spring. */
-const BATTERY = { wait: [-75, 0, 0] as V3, seated: [PROTO.hands[0] - 20, HANDS.base[1], PROTO.hands[2] + 10] as V3, red: [H3951.L / 2, H3951.H - 3, H3951.W / 2 - 5] as V3, black: [H3951.L / 2, H3951.H - 3, -7.6] as V3 };
+const BATTERY = { wait: [-75, 0, 0] as V3, seated: [PROTO.hands[0] - 20, HANDS.base[1], PROTO.hands[2] + 10] as V3, red: [H3951.L / 2 - 1.5, H3951.H - 3, H3951.W / 2 - 5] as V3, black: [H3951.L / 2 - 1.5, H3951.H - 3, -7.6] as V3 };
 const SEAT: Record<Seated, { at: V3; rot: V3 }> = { resistor: { at: [midOf('resistor')[0], 0, midOf('resistor')[1]], rot: [0, 0, 0] }, led: { at: [midOf('led')[0], 3, midOf('led')[1]], rot: [0, PI / 2, 0] }, link: { at: [midOf('link')[0], 0, midOf('link')[1]], rot: [0, 0, 0] } };
 /** The cutters' jaws' tip and their rivet, in their own frame (m): Hakko's 138 mm over all, the rivet 15 mm behind the
  *  tip (src/nexus/kit-solder.ts); how far each half stands open about it, its spring holding them so till a hand
@@ -68,6 +68,8 @@ export class SolderBench {
   private looks: Partial<Record<Seated, { straight: THREE.Object3D[]; bent: THREE.Object3D[] }>> = {};
   /** the battery holder's parts that change: its leads as laid out, its knife switch's blade and knob (and where they
    *  stand open), its leads as run up to the board, the LED's lens to light */
+  /** the LED's light once lit: a halo round its lens and the little light it throws on the board (4 mA of 20) */
+  private glow: { sprite: THREE.Sprite; light: THREE.PointLight } | null = null;
   private power: { laid: THREE.Object3D[]; blade: THREE.Object3D[]; home: Map<THREE.Object3D, THREE.Quaternion>; hinge: THREE.Vector3; run: THREE.Object3D[]; lens: THREE.MeshStandardMaterial[] } | null = null;
   /** cut-off leads falling to the bench and lying there */
   private pieces: { m: THREE.Mesh; v: number; down: boolean; len: number }[] = [];
@@ -111,6 +113,12 @@ export class SolderBench {
       this.obj.battery = this.holder(add); this.obj.battery.position.set(...BATTERY.wait.map((v) => v * MM) as V3); this.group.add(this.obj.battery);
       const lens: THREE.MeshStandardMaterial[] = []; this.obj.led.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.userData.part as Part | undefined)?.mat === 'epoxy-clear') { m.material = (m.material as THREE.MeshStandardMaterial).clone(); lens.push(m.material as THREE.MeshStandardMaterial); } });
       this.power!.lens = lens;
+      // (its halo: a soft red disc facing you about its dome, drawn over what is behind it; and its light on the board)
+      const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d')!, gr = x.createRadialGradient(32, 32, 2, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,90,60,1)'); gr.addColorStop(0.35, 'rgba(255,40,20,0.55)'); gr.addColorStop(1, 'rgba(255,20,10,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      sprite.scale.setScalar(16 * MM); sprite.position.set(0, 6 * MM, 0); sprite.visible = false; this.obj.led.add(sprite);
+      const light = new THREE.PointLight(0xff2a14, 0, 0.12, 2); light.position.set(0, 6 * MM, 0); this.obj.led.add(light); this.glow = { sprite, light };
     }
     add(drawn('ironstand s-11'), this.places.stand, [0, STAND_YAW, 0]); add(drawn('tipcleaner 599b'), this.places.cleaner);
     this.obj.iron = add(drawn('solderiron pinecil-v2'), [0, 0, 0]); this.placeIronInStand();
@@ -373,7 +381,8 @@ export class SolderBench {
       const floor = (Math.abs(x) < HANDS.base[0] / 2 && Math.abs(z) < HANDS.base[2] / 2 ? HANDS.base[1] : 0) * MM, r = (p.m.geometry as THREE.CylinderGeometry).parameters.radiusTop;
       if (p.m.position.y - r <= floor + (p.len / 2) * MM * Math.abs(new THREE.Vector3(0, 1, 0).applyQuaternion(p.m.quaternion).y)) { p.down = true; p.m.position.y = floor + r; p.m.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (x * 7.3) % PI).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), PI / 2)); } }
     // (the LED glows by the current the circuit gives it: 250 mcd at 20 mA (Adafruit's 299), its light in proportion)
-    if (this.power) { const mA = lit(b).mA, k = Math.min(3, mA / 20 * 6); for (const m of this.power.lens) { m.emissive.setHex(0xff2414); m.emissiveIntensity = mA > 0.5 ? 0.4 + k : 0; } }
+    if (this.power) { const mA = lit(b).mA, k = Math.min(3, mA / 20 * 6); for (const m of this.power.lens) { m.emissive.setHex(0xff2414); m.emissiveIntensity = mA > 0.5 ? 0.4 + k : 0; }
+      if (this.glow) { this.glow.sprite.visible = mA > 0.5; this.glow.light.intensity = mA > 0.5 ? 0.004 * mA : 0; (this.glow.sprite.material as THREE.SpriteMaterial).opacity = Math.min(1, 0.35 + mA / 20); } }
     // (the cutters' spring holds their jaws open in a hand; the trigger shuts them a moment)
     if (this.jaws) { this.jaws.shut = Math.max(0, this.jaws.shut - dt); this.swing(this.jaws.shut > 0 ? 0 : JAWS.open); }
     // (the tip bright where it is tinned, dark where it has oxidised)
@@ -396,9 +405,12 @@ export class SolderBench {
   private drawCable(): void {
     const iron = this.obj.iron!; iron.updateMatrixWorld(); const from = this.group.worldToLocal(iron.localToWorld(new THREE.Vector3(-20.65 * MM, -3.6 * MM, 0)));
     if (from.distanceTo(this.cableFrom) < 0.001) return; this.cableFrom.copy(from);
-    const out = this.group.worldToLocal(iron.localToWorld(new THREE.Vector3(-60 * MM, -3.6 * MM, 0))), edge = new THREE.Vector3(0.36, 0.002, 0.06), down = new THREE.Vector3(0.375, -0.3, 0.07);
+    const out = this.group.worldToLocal(iron.localToWorld(new THREE.Vector3(-60 * MM, -3.6 * MM, 0))), edge = new THREE.Vector3(0.36, 0.002, 0.06), over = new THREE.Vector3(0.378, -0.02, 0.065);
+    // (over the bench's edge, down to the floor and along it toward the wall socket the charger is in)
+    this.group.updateMatrixWorld(true); const floor = this.group.worldToLocal(this.group.localToWorld(new THREE.Vector3(0.39, 0, 0.08)).setY(0.004)).y;
+    const fall = new THREE.Vector3(0.392, floor + 0.08, 0.075), lie = new THREE.Vector3(0.43, floor + 0.002, 0.09), away = new THREE.Vector3(0.9, floor + 0.002, 0.35);
     const mid = out.clone().lerp(edge, 0.5).setY(Math.max(0.002, Math.min(out.y, edge.y) - 0.01));
-    const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([from, out, mid, edge, down]), 48, 2 * MM, 8, false);
+    const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([from, out, mid, edge, over, fall, lie, away], false, 'centripetal'), 96, 2 * MM, 8, false);
     this.cable.geometry.dispose(); this.cable.geometry = g;
   }
   private puff(at: V3): void {
@@ -499,7 +511,7 @@ export class SolderBench {
     const laid: THREE.Object3D[] = [], blade: THREE.Object3D[] = [], sw = part.parts?.find((p) => p.name.endsWith('3951 knife switch'));
     v.traverse((o) => { const pp = o.userData.part as Part | undefined; if (!pp) return; if (/lead$/.test(pp.name) && o.type === 'Group') laid.push(o); if (sw && o.type === 'Group' && (pp === sw.parts?.[4] || pp === sw.parts?.[5])) blade.push(o); });
     const home = new Map<THREE.Object3D, THREE.Quaternion>(); for (const o of blade) home.set(o, o.quaternion.clone());
-    this.power = { laid, blade, home, hinge: new THREE.Vector3(H3951.L / 2 - 3, H3951.H + 3, -(H3951.W / 2 - 3)).multiplyScalar(MM), run: [], lens: [] };
+    this.power = { laid, blade, home, hinge: new THREE.Vector3(H3951.sx, H3951.H + 3, -(H3951.W / 2 - 3)).multiplyScalar(MM), run: [], lens: [] };
     return g;
   }
   /** The knife switch as the lesson has it: its blade standing up (open) or turned down into its clip (closed). */
@@ -507,17 +519,18 @@ export class SolderBench {
     const p = this.power; if (!p) return; const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.bench.on ? PI / 2 : 0);
     for (const o of p.blade) { const h = p.home.get(o)!; if (!o.userData.homeAt) o.userData.homeAt = o.position.clone(); const at = (o.userData.homeAt as THREE.Vector3).clone().sub(p.hinge).applyQuaternion(q).add(p.hinge); o.position.copy(at); o.quaternion.copy(q).multiply(h); }
   }
-  /** The holder's leads: laid out as made while it waits; run up to the board once its pins are in, each from its root
-   *  on the holder to its crimped end's housing, standing 14 mm off the board's top over its hole. */
+  /** The holder's leads: laid out as made while it waits; run up to the board once its pins are in, each out of the
+   *  holder's end wall to its crimped end: a tinned barrel 5 mm long on the board's top over its hole, its pin through
+   *  (the barrel's size typical of crimp pins for 22 AWG). */
   private runLeads(inBoard: boolean): void {
     const p = this.power, board = this.obj.proto; if (!p || !board) return;
     for (const o of p.run) { (o as THREE.Mesh).geometry?.dispose(); o.removeFromParent(); } p.run = [];
     for (const o of p.laid) o.visible = !inBoard; if (!inBoard) return;
     this.group.updateMatrixWorld(true); const pins = PROTO.seats.battery, colours = [0xc62828, 0x1e1e1e];
     [BATTERY.red, BATTERY.black].forEach((root, i) => {
-      const [hx, hz] = pins[i]!, housing = new THREE.Mesh(new THREE.BoxGeometry(2.54 * MM, 14 * MM, 2.54 * MM).translate(0, 7 * MM, 0), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.5 }));
+      const [hx, hz] = pins[i]!, housing = new THREE.Mesh(new THREE.CylinderGeometry(0.9 * MM, 0.9 * MM, 5 * MM, 12).translate(0, 2.5 * MM, 0), new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.35 }));
       housing.position.set(hx * MM, 0, hz * MM); board.add(housing); p.run.push(housing);
-      const end = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 14 * MM, hz * MM))), out = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 30 * MM, hz * MM)));
+      const end = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 5 * MM, hz * MM))), out = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 22 * MM, hz * MM)));
       const r0 = new THREE.Vector3(...BATTERY.seated).add(new THREE.Vector3(...root)).multiplyScalar(MM), r1 = r0.clone().add(new THREE.Vector3(0.015, 0.004, 0)), mid = out.clone().lerp(r1, 0.5).add(new THREE.Vector3(0, -0.012, 0));
       const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([end, out, mid, r1, r0], false, 'centripetal'), 48, 0.75 * MM, 8, false), new THREE.MeshStandardMaterial({ color: colours[i], roughness: 0.45 }));
       wire.castShadow = true; this.group.add(wire); p.run.push(wire);

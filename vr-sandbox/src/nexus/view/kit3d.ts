@@ -68,7 +68,21 @@ function tubeGeometry(t: Tube): THREE.BufferGeometry {
   for (const l of legs) path.add(l.kind === 'line' ? new THREE.LineCurve3(v(l.a), v(l.b)) : new THREE.QuadraticBezierCurve3(v(l.a), v(l.c!), v(l.b)));
   // (six steps a leg for a few legs; a long path of many short legs, a wound wire's helix, two a leg, its legs already
   // short)
-  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length > 100 ? legs.length * 2 : legs.length * 6), t.r, t.sides ?? 12, false) : new THREE.BufferGeometry();
+  if (!legs.length) return new THREE.BufferGeometry();
+  const sides = t.sides ?? 12, g = new THREE.TubeGeometry(path, Math.max(8, legs.length > 100 ? legs.length * 2 : legs.length * 6), t.r, sides, false);
+  if (t.wall) return g;
+  // (a solid rod or wire is closed at its ends: a disc across each, facing out along it, its rim its own vertices so
+  // the rod's sides keep their shading)
+  const P = g.attributes.position!, N = g.attributes.normal!, U = g.attributes.uv!, pos = Array.from(P.array as Float32Array), nor = Array.from(N.array as Float32Array), uv = Array.from(U.array as Float32Array), idx = Array.from(g.index!.array);
+  const ring = sides + 1, rings = P.count / ring, vx = (i: number) => new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  for (const [k, u] of [[0, 0], [rings - 1, 1]] as const) {
+    const out = path.getTangent(u).multiplyScalar(u === 0 ? -1 : 1), c = path.getPoint(u), base = pos.length / 3;
+    pos.push(c.x, c.y, c.z); nor.push(out.x, out.y, out.z); uv.push(0.5, 0.5);
+    for (let j = 0; j < ring; j++) { const q = vx(k * ring + j); pos.push(q.x, q.y, q.z); nor.push(out.x, out.y, out.z); uv.push(0.5 + 0.5 * Math.cos((j / sides) * 2 * Math.PI), 0.5 + 0.5 * Math.sin((j / sides) * 2 * Math.PI)); }
+    const a0 = vx(base + 1).sub(c), b0 = vx(base + 2).sub(c), flip = a0.cross(b0).dot(out) < 0;
+    for (let j = 0; j < sides; j++) { const a1 = base + 1 + j, b1 = base + 2 + j; if (flip) idx.push(base, b1, a1); else idx.push(base, a1, b1); }
+  }
+  const res = new THREE.BufferGeometry(); res.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); res.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); res.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); res.setIndex(idx); g.dispose(); return res;
 }
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {
